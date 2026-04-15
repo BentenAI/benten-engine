@@ -1,0 +1,21 @@
+[package]
+name = "benten-graph"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Storage abstraction (KVBackend trait) and redb implementation for the Benten graph engine."
+
+[lints]
+workspace = true
+
+[dependencies]
+benten-core = { path = "../benten-core" }
+redb = { workspace = true }
+serde_ipld_dagcbor = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
