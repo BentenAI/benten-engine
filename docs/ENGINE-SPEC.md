@@ -342,23 +342,33 @@ File storage and DDL are the least natural fits. Modules that depend heavily on 
 
 ## 14. Build Order
 
-### Phase 1: Core Engine
-- benten-core (Node, Edge, Value, content hashing, version chains)
-- benten-graph (storage, indexes, MVCC, persistence via redb v4)
-- benten-eval (12 primitives, evaluator, structural validation, capability enforcement, IVM views)
-- benten-engine (orchestrator, public API)
-- napi-rs v3 bindings (TypeScript can create/read/query Nodes; same codebase also compiles to WASM)
-- Storage abstraction trait (redb for native; network-fetch stub for WASM)
-- Benchmark suite via `criterion 0.8` (validate sub-100-microsecond handler execution for typical 10-node handlers; compare against PostgreSQL + AGE for Thrum's actual query patterns)
-- Property-based testing infrastructure via `proptest` (MVCC correctness, version chain invariants, crash recovery)
-- `cargo-nextest` as default test runner (3x faster, per-test isolation)
+### Phase 1: Core Engine ("tight middle" scope, reconciled 2026-04-14)
 
-### Phase 2: Evaluator + Capabilities
-- benten-eval (12 primitives, evaluator, structural validation)
-- Capability enforcement (UCAN grants as Nodes, checked on every WRITE)
-- IVM (materialized views for capabilities, event handlers, content listings)
-- SANDBOX integration (@sebastianwessel/quickjs)
-- Prerequisite: paper-prototype 5 representative handlers as operation subgraphs before implementation. Measure what percentage of logic fits in the 12 primitives vs. requires SANDBOX. If >30% SANDBOX, revise the primitive vocabulary.
+Scope reconciled with CLAUDE.md "Phase 1 Scope" and `FULL-ROADMAP.md` Phase 1 to a single coherent shape. Phase 1 ships everything Phase 1's exit criteria (`crud('post')` + audit-trail viz) actually exercises, plus the primitives and invariants needed to prove the architectural thesis. WAIT / STREAM / SUBSCRIBE-as-user-op / SANDBOX and the remaining invariants ship in Phase 2 alongside evaluator completion.
+
+- **benten-core**: Node, Edge, Value, content hashing (BLAKE3 + DAG-CBOR + CIDv1), version chain primitives (opt-in)
+- **benten-graph**: storage via `KVBackend` trait (redb v4 impl), indexes, MVCC via redb snapshot isolation, change-notification stream that IVM subscribes to
+- **benten-ivm**: 5 hand-written IVM views from the prototype benchmark (capability grants, event handler dispatch, content listing, governance inheritance, version-chain CURRENT). Subscribes to the graph change stream. Evaluator-agnostic. Generalized Algorithm B ships Phase 2.
+- **benten-caps**: `CapabilityPolicy` pre-write hook trait, `NoAuthBackend` default, UCAN backend stub
+- **benten-eval**: all 12 primitive *types* defined; iterative evaluator executes **8 primitives** (READ, WRITE, TRANSFORM, RESPOND, BRANCH, ITERATE, CALL, EMIT); registration-time structural validation for **invariants 1-6, 9-10, 12**; transaction primitive (begin/commit/rollback); TRANSFORM expression evaluator (arithmetic, built-ins, object construction)
+- **benten-engine**: public API composing the 5 crates above; wires capability backend, storage backend, IVM subscriber
+- napi-rs v3 bindings (TypeScript creates/reads/updates/deletes Nodes + Edges, reads IVM views, registers and evaluates 8-primitive operation subgraphs); WASM runtime is Phase 2
+- Storage abstraction trait (redb for native; network-fetch stub defined but implementation deferred to Phase 2)
+- Benchmark suite via `criterion 0.8` (validate honest §14.6 targets; compare against PostgreSQL + AGE for CRUD hot paths)
+- Property-based testing via `proptest` (Node CID round-trip, MVCC correctness, version chain invariants)
+- `cargo-nextest` as default test runner
+- Developer tooling: `create-benten-app` scaffolder, `subgraph.toMermaid()`, `engine.trace()`, error-catalog integration
+
+### Phase 2: Evaluator Completion + WASM + SANDBOX
+- **4 remaining primitives executed**: WAIT (suspend/resume with serializable execution state), STREAM (chunked output with back-pressure, SSE/WebSocket), SUBSCRIBE (reactive change notification as a user-visible operation), SANDBOX (wasmtime-hosted fuel-metered computation)
+- **6 remaining invariants enforced**: 4 (SANDBOX nesting), 7 (SANDBOX output ≤1MB), 8 (cumulative iteration budget multiplicative), 11 (system-zone labels unreachable), 13 (immutability enforcement, TOCTOU protection), 14 (causal attribution unsuppressible)
+- wasmtime SANDBOX host (Rust-native, fuel metering) with instance pool and host-function manifest
+- Capability enforcement hardened across all 12 primitives (Phase 1 covered the 8-primitive subset)
+- Generalized IVM Algorithm B + per-view strategy selection (A/B/C per view based on access pattern)
+- WASM build target via napi-rs v3 with network-fetch `KVBackend` backend
+- Transaction-primitive API shape finalized (closure-based vs. `WriteBatch`) based on Phase 1 usage feedback
+- Module manifest format (requires-caps, provides-subgraphs, migrations)
+- Paper-prototype re-validation: confirm <30% SANDBOX rate against the revised 12-primitive vocabulary (original 12 saw 2.5%; re-measure against the 2026-04-14 set with SUBSCRIBE + STREAM added, VALIDATE + GATE removed)
 
 ### Phase 3: Sync + Networking
 - CRDT merge for version chains

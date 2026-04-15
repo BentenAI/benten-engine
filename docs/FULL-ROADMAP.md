@@ -14,30 +14,35 @@ The committed scope reflects the three-pillar vision (see [`VISION.md`](VISION.m
 
 ### Phase 1: Core Engine
 
-**The foundation.** A working Rust graph engine with TypeScript bindings.
+**The foundation.** A working Rust graph engine with TypeScript bindings that proves the code-as-graph thesis for real CRUD handlers. Scope reconciled 2026-04-14 with CLAUDE.md "Phase 1 Scope" — the shape below is what meets Phase 1's exit criteria without deferring the central architectural claims.
 
 - 6 crates: `benten-core`, `benten-graph`, `benten-ivm`, `benten-caps`, `benten-eval`, `benten-engine`
 - Node, Edge, Value types; content hashing (BLAKE3 + DAG-CBOR + CIDv1); version chains (opt-in)
-- Storage via `KVBackend` trait (redb native implementation)
-- Capability system as pluggable policy (UCAN + `NoAuthBackend` default)
-- 12 operation primitives (READ, WRITE, TRANSFORM, BRANCH, ITERATE, WAIT, CALL, RESPOND, EMIT, SANDBOX, SUBSCRIBE, STREAM)
-- napi-rs v3 TypeScript bindings (same codebase compiles to WASM)
-- Hand-written IVM views for the 5 benchmark patterns from the prototype
-- Debug tooling: `subgraph.toMermaid()`, evaluation trace
+- Storage via `KVBackend` trait (redb native implementation) with change-notification stream that IVM subscribes to
+- Capability system as pluggable policy (`NoAuthBackend` default, UCAN backend stub)
+- All 12 operation primitive *types* defined (READ, WRITE, TRANSFORM, BRANCH, ITERATE, WAIT, CALL, RESPOND, EMIT, SANDBOX, SUBSCRIBE, STREAM)
+- **Evaluator executes 8 primitives**: READ, WRITE, TRANSFORM, RESPOND, BRANCH, ITERATE, CALL, EMIT — sufficient for `crud('post')` and all IVM view maintenance. WAIT / STREAM / SUBSCRIBE-as-user-op / SANDBOX ship in Phase 2.
+- **Structural invariants 1-6, 9-10, 12** enforced at registration time: DAG-ness, depth, fan-out, node/edge size, determinism classification, content-hash, registration-time validation. Invariants 4, 7, 8, 11, 13, 14 ship in Phase 2 alongside the completed evaluator.
+- Transaction primitive (begin/commit/rollback) exposed as first-class API
+- napi-rs v3 TypeScript bindings (same codebase compiles to WASM — runtime WASM is Phase 2)
+- 5 hand-written IVM views from the prototype benchmark (capability grants, event handlers, content listing, governance inheritance, version-chain CURRENT); generalized Algorithm B ships Phase 2
+- Debug tooling: `subgraph.toMermaid()`, `engine.trace()` evaluation trace
 - Error catalog with stable codes (spec'd in [`ERROR-CATALOG.md`](ERROR-CATALOG.md))
 - `create-benten-app` scaffolder for the 10-minute DX path
 
-**Exit criteria:** Developer can `npm install @benten/engine`, write `crud('post')`, get a working CRUD handler with audit trail visualization.
+**Exit criteria:** Developer can `npm install @benten/engine`, write `crud('post')`, get a working CRUD handler with audit trail visualization. All 8-primitive handler evaluations complete with causal attribution; the 5 IVM views maintain incrementally on writes; capability-gated writes route denials correctly.
 
-### Phase 2: Evaluator + WASM + SANDBOX
+### Phase 2: Evaluator Completion + WASM + SANDBOX
 
-**Completion.** The evaluator handles all primitives production-quality, WASM builds work, SANDBOX is live.
+**Completion.** The evaluator handles all 12 primitives production-quality, WASM builds work, SANDBOX is live, and the full invariant set is enforced.
 
-- 14 structural invariants enforced at registration time
-- Transactional subgraph evaluation (begin/commit/rollback primitive)
-- wasmtime SANDBOX with fuel metering + instance pool
+- Remaining 4 primitives executed: **WAIT** (suspend/resume with serializable execution state), **STREAM** (chunked output with back-pressure, SSE/WebSocket integration), **SUBSCRIBE** (reactive change notification as a user-visible operation beyond the IVM internal subscriber), **SANDBOX** (wasmtime-hosted fuel-metered computation)
+- Remaining structural invariants enforced: **4** (SANDBOX nesting), **7** (SANDBOX output ≤1MB), **8** (cumulative iteration budget multiplicative through ITERATE/CALL), **11** (system-zone labels unreachable from user operations), **13** (immutability enforcement — TOCTOU protection), **14** (causal attribution emitted on every evaluation, unsuppressible)
+- wasmtime SANDBOX host with fuel metering + instance pool + host-function manifest
 - WASM build target via napi-rs v3 with network-fetch `KVBackend` stub
+- Generalized IVM Algorithm B + per-view strategy selection (A/B/C per view based on access pattern)
 - Module manifest format (requires-caps, provides-subgraphs, migrations)
+- Transaction-primitive API shape finalized (closure-based vs. `WriteBatch`) based on Phase 1 usage feedback
 
 ### Phase 3: P2P Sync — **Atriums Ship Here**
 
