@@ -1,7 +1,8 @@
 # Benten Business and Economics Plan
 
 **Created:** 2026-04-13
-**Status:** WORKING DRAFT -- economic model and regulatory path defined, security controls for financial operations require specification.
+**Last Updated:** 2026-04-14 (Section 11 rewritten with three-pillar business model replacing earlier three-products framing; Credits promoted to Phase 8 committed)
+**Status:** WORKING DRAFT -- economic model and regulatory path defined, security controls for financial operations require specification. Section 12 (2026-04-14) reflects vision evolution from pre-work.
 **Audience:** Investors, advisors, business partners, and legal counsel evaluating the economic viability and regulatory compliance of the Benten platform.
 **Related documents:** [Engine Spec](./ENGINE-SPEC.md) (technical foundation) | [Platform Design](./PLATFORM-DESIGN.md) (networking, governance, identity)
 
@@ -329,7 +330,53 @@ Benten's economic model is designed for GENIUS Act compliance: 100% reserves in 
 
 ---
 
-## 11. Open Questions (Business/Economics)
+## 11. The Three-Pillar Business Model (revised 2026-04-14)
+
+Benten is one coherent business with three interdependent pillars. The previous "three products, one engine" framing implied three separate companies sharing code; critic review (2026-04-14) showed this was inaccurate and created commitment inflation. The three-pillar framing is truer to how the business actually works.
+
+### 11.1 The Three Pillars
+
+**Pillar 1: The Engine (what we build).** A Rust graph execution engine where every platform capability composes on top. The engine itself is not monetized directly — it's the foundation.
+
+**Pillar 2: The Adoption Driver (how users come).** Personal AI assistants (Phase 6 committed) that organize knowledge via PARA and generate tools on demand. The pitch to end users: "stop paying for ten pieces of software; one assistant on hardware you trust does it all." The assistant itself is free (drives adoption); indirect revenue comes through credits usage.
+
+**Pillar 3: The Economic Engine (how it's funded).** Benten Credits (Phase 8 committed) are USD-pegged, treasury-backed, zero transaction fees. Revenue is treasury bond interest (~4-5%) on reserves — scales passively with credit adoption. Secondary revenue comes from a peer-to-peer compute network (exploratory broader marketplace) that drives credit utilization.
+
+### 11.2 How They Depend On Each Other
+
+- **Engine → AI Assistant:** because the engine is composable (code-as-graph), the assistant can generate tools by composing primitives rather than generating opaque code. Without the engine's design, the assistant is just another chatbot.
+- **AI Assistant → Credits:** the assistant drives user adoption; adopted users hold credits (to pay for peer compute, LLM inference, external services); credits require reserves; reserves earn interest.
+- **Credits → Engine:** revenue from credit reserves funds engine development and the team. Without the economic layer, the project is grant-funded or unfunded.
+
+Each pillar reinforces the others. None of the three works alone.
+
+### 11.3 Revenue Summary
+
+| Revenue Stream | Pillar | Status | Model |
+|----------------|--------|--------|-------|
+| **Treasury interest on Credits reserves** | 3 (primary) | Phase 8 committed | Passive, scales with adoption, ~4-5% of reserve balance |
+| **Peer compute network utilization** | 3 (secondary) | Exploratory | Small transaction fee on marketplace, or none (just drives credit demand) |
+| **Premium features / enterprise support / API access** | 1 / 2 | Phase 2+ exploratory | Subscription, usage-based, or tiered |
+| **Managed hosting** (BentenAI-operated peer nodes) | 3 | Exploratory | Pay-per-use, competes with Cloudflare/etc on trust + integration |
+
+### 11.4 Why This Model Works At Any Scale
+
+The treasury interest model has no minimum viable size. $1M in reserves earns $40K+/year. $10M earns $400K+/year. $100M earns $4M+/year. Revenue scales linearly with adoption; there is no "we need 10M users to break even" threshold.
+
+Credits don't extract value from users — users hold credits that Benten holds reserves for. Users' funds are protected (Treasury-backed, redeemable), and Benten earns on the time-value of the reserves. This aligns incentives: Benten succeeds by growing credit circulation, which requires making the platform useful, which requires the engine and assistant pillars to work.
+
+### 11.5 What This Replaces
+
+The previous three-products framing was:
+- Application (communities, CMS) → now Pillar 1 (engine) and Pillar 2 (AI assistant as adoption)
+- Runtime (WinterTC host, bentend) → now exploratory, not a committed product line
+- Economy (credits + marketplaces) → now Pillar 3
+
+The important simplification: BentenAI is not building three companies. It's building one company with three interlocking value streams. Investors fund one thesis, not three.
+
+---
+
+## 12. Open Questions (Business/Economics)
 
 1. **Token governance design:** The Phase 2 governance token needs a detailed tokenomics design: supply schedule, distribution mechanism, staking mechanics, and governance voting weight formula. This is a separate design exercise from the platform architecture.
 

@@ -1,126 +1,184 @@
-# Benten Full Roadmap — From Engine to Ecosystem
+# Benten Roadmap — Committed Scope + Exploratory
 
-## The Big Picture
+**Last Updated:** 2026-04-14 (committed scope expanded to 8 phases reflecting the three pillars: engine + adoption + economics)
 
-```
-FOUNDATION (the engine)
-  └── Phase 1: Core engine (storage, indexes, MVCC, persistence, napi-rs bindings)
-  └── Phase 2: Evaluator + IVM + capabilities (12 primitives, operation subgraphs)
-  └── Phase 3: Sync + networking (CRDT, libp2p, Atrium P2P)
+## The Partition
 
-PLATFORM (the application layer on the engine)
-  └── Phase 4: Migrate Thrum CMS (content types, blocks, compositions on the engine)
-  └── Phase 5: Rendering pipeline (materializer as operation subgraphs, schema-driven rendering)
-  └── Phase 6: Self-composing admin (admin UI configurable via graph)
-  └── Phase 7: AI agent integration (MCP tools as capability-gated operation subgraphs)
+Benten's roadmap has two sections: **committed** (what we are actually building, 8 phases) and **exploratory** (proposals that earn committed status only after demand materializes).
 
-COMMUNITY (the networking layer)
-  └── Phase 8: Digital Gardens (community spaces, member-mesh, configurable governance)
-  └── Phase 9: Groves (fractal governance, voting, fork-and-compete)
-  └── Phase 10: Garden/Grove federation (polycentric, cross-community sync)
+The committed scope reflects the three-pillar vision (see [`VISION.md`](VISION.md)): ship the engine, prove it with Thrum, build the platform layer that makes it self-composing, ship the AI assistant that drives adoption, ship the Gardens that make community use real, and ship the Credits that fund the whole thing.
 
-ECONOMY (the business model)
-  └── Phase 11: Benten Credits (mint/burn, FedNow on/off ramp, treasury bonds)
-  └── Phase 12: Knowledge attestation marketplace (speculative attestation, AI trust signals)
-  └── Phase 13: Decentralized compute marketplace (idle compute rental)
-  └── Phase 14: Token float (unpeg from USD — the "independence" moment)
+---
 
-GOVERNANCE EVOLUTION
-  └── Phase 15: DAO transition (BentenAI → governed foundation)
-  └── Phase 16: Governance Grove (community governs the platform itself)
-```
+## Committed Scope (Phases 1-8)
 
-## What Each Phase Delivers
+### Phase 1: Core Engine
 
-### Foundation Phases (the Rust engine)
+**The foundation.** A working Rust graph engine with TypeScript bindings.
 
-**Phase 1: Core Engine**
-A working graph engine that can store/retrieve Nodes and Edges, persist to disk, and expose a TypeScript API. Proves the Rust stack works.
+- 6 crates: `benten-core`, `benten-graph`, `benten-ivm`, `benten-caps`, `benten-eval`, `benten-engine`
+- Node, Edge, Value types; content hashing (BLAKE3 + DAG-CBOR + CIDv1); version chains (opt-in)
+- Storage via `KVBackend` trait (redb native implementation)
+- Capability system as pluggable policy (UCAN + `NoAuthBackend` default)
+- 12 operation primitives (READ, WRITE, TRANSFORM, BRANCH, ITERATE, WAIT, CALL, RESPOND, EMIT, SANDBOX, SUBSCRIBE, STREAM)
+- napi-rs v3 TypeScript bindings (same codebase compiles to WASM)
+- Hand-written IVM views for the 5 benchmark patterns from the prototype
+- Debug tooling: `subgraph.toMermaid()`, evaluation trace
+- Error catalog with stable codes (spec'd in [`ERROR-CATALOG.md`](ERROR-CATALOG.md))
+- `create-benten-app` scaffolder for the 10-minute DX path
 
-**Phase 2: Evaluator + IVM + Capabilities**
-The engine can evaluate operation subgraphs (code-as-graph). IVM maintains materialized views. Capabilities enforce security at the engine level. This is when the engine becomes more than a database — it becomes a runtime.
+**Exit criteria:** Developer can `npm install @benten/engine`, write `crud('post')`, get a working CRUD handler with audit trail visualization.
 
-**Phase 3: Sync + Networking**
-CRDT sync between instances. libp2p for peer discovery and transport. Atriums work — two people can sync subgraphs peer-to-peer. This is when the "decentralized" part becomes real.
+### Phase 2: Evaluator + WASM + SANDBOX
 
-### Platform Phases (applications on the engine)
+**Completion.** The evaluator handles all primitives production-quality, WASM builds work, SANDBOX is live.
 
-**Phase 4: Migrate Thrum CMS**
-The existing Thrum CMS (content types, blocks, compositions, field types) runs on the Benten engine instead of PostgreSQL+AGE. The 3,200+ tests validate the migration. The web app serves pages.
+- 14 structural invariants enforced at registration time
+- Transactional subgraph evaluation (begin/commit/rollback primitive)
+- wasmtime SANDBOX with fuel metering + instance pool
+- WASM build target via napi-rs v3 with network-fetch `KVBackend` stub
+- Module manifest format (requires-caps, provides-subgraphs, migrations)
 
-**Phase 5: Rendering Pipeline**
-Schema-driven rendering. New block types render without custom Svelte components. Three-tier fallback: custom component → category template → schema auto-render. Headless JSON API.
+### Phase 3: P2P Sync — **Atriums Ship Here**
 
-**Phase 6: Self-Composing Admin**
-The admin UI is configurable by editing compositions in the graph. No code deployment to change the admin layout. The admin eats its own dog food.
+**Distribution.** Two or more trusted peers share subgraphs. This is the Atrium tier.
 
-**Phase 7: AI Agent Integration**
-AI agents are first-class citizens. MCP tools as capability-gated operation subgraphs. Agents discover schema, create content, operate within their capability boundaries. The platform is AI-native.
+- `benten-sync` + `benten-id` crates
+- iroh transport (QUIC, holepunch, relay)
+- CRDT merge (per-property LWW + HLC; Loro for rich types)
+- Merkle Search Tree diff for subgraph sync
+- Light-client verification against content-addressed root
+- DID-based identity (did:key baseline)
+- Device mesh + Shamir threshold key recovery
 
-### Community Phases (networking and governance)
+**Exit criteria:** Two instances sync a shared subgraph bidirectionally. Key recovery works across a device mesh. An Atrium (trusted peer group) is a working social unit.
 
-**Phase 8: Digital Gardens**
-Community spaces. Member-mesh (no central server). Admin/moderator governance. Content moderation. Public and private Gardens. Anyone can create a Garden and invite members.
+### Phase 4: Thrum Migration
 
-**Phase 9: Groves**
-Formal governance. Configurable voting mechanisms (1p1v, quadratic, conviction, liquid delegation). Governance rules as operation subgraphs. Sub-Groves with inheritance/override. Fork-and-compete dynamics.
+**Proof of use.** Thrum CMS runs on the engine. The architecture is validated at production scope.
 
-**Phase 10: Federation**
-Groves can federate with other Groves (polycentric). Multiple parent Groves. Cross-community sync. The mesh of communities becomes a network.
+- CMS domain expressed as operation subgraphs (content types, blocks, compositions, field types)
+- Existing Thrum modules migrate (retain module system and lifecycle hooks)
+- Existing Thrum admin UI works on Benten
+- 3,200+ behavioral tests pass against the Benten engine
+- Performance competitive with or better than PostgreSQL + AGE baseline
+- Web app renders pages; admin manages content
 
-### Economy Phases (the business model)
+**Exit criteria:** Thrum's full test suite green; web app serves real pages; migration is reproducible for future modules.
 
-**Phase 11: Benten Credits**
-USD-pegged platform currency. Mint/burn via BentenAI. FedNow on/off ramp. Zero transaction fees. Treasury bond revenue for BentenAI. Regulatory compliance (stored-value → GENIUS Act PPSI).
+### Phase 5: Platform Features
 
-**Phase 12: Knowledge Attestation Marketplace**
-Accessing knowledge is free. Attesting costs a fee (community-configurable). Fees flow to existing attestors. Creates AI-consumable trust signals. Communities compete on knowledge quality. Speculation on which knowledge is most valuable.
+**Self-composition.** The platform layer becomes configurable via the graph.
 
-**Phase 13: Compute Marketplace**
-Small businesses run Benten servers. Idle compute rented out at near-cost. Benten Credits for purchases. Communities rent always-online nodes. Dramatically cheaper than centralized data centers.
+- Schema-driven rendering (materializer pipeline as operation subgraphs — new content types render without custom components)
+- Self-composing admin (admin UI layout is a graph composition that admins edit in the admin itself)
+- Declarative plugin manifest format (name, version, required capabilities, provided subgraphs, migrations)
+- Plugin ecosystem tooling (install/uninstall/upgrade flows)
 
-**Phase 14: Token Float**
-The big moment. Benten Credits unpeg from USD. The token's value is backed by real economic activity (attestations, compute, transactions). "The Benten economy is independent." Two-token model: pegged credits for payments + floating governance token.
+**Exit criteria:** A third-party developer can ship a Benten module without modifying core crates. Admin UI is configurable without code changes.
 
-### Governance Evolution
+### Phase 6: Personal AI Assistant MVP
 
-**Phase 15: DAO Transition**
-BentenAI gradually decentralizes. Phase 1: sole operator. Phase 2: governance Grove has oversight. Phase 3: operations become operation subgraphs governed by the Grove. Phase 4: full DAO.
+**The adoption driver becomes real.** An AI assistant anchored to the user's own data that organizes their life and builds tools on demand.
 
-**Phase 16: Governance Grove**
-The platform itself is governed by its community. Rule changes go through the governance Grove. BentenAI becomes a service provider within the ecosystem, not the controller of it.
+- MCP (Model Context Protocol) integration — assistant calls out to LLM providers (OpenAI, Anthropic, local models)
+- PARA knowledge organization (Projects, Areas, Resources, Archives as graph structures)
+- On-demand tool generation — assistant composes new subgraphs from primitives to fulfill user intents ("I need a task tracker that integrates with my email")
+- UCAN capability grants for the assistant's authority (spending caps, rate limits, peer-selection rules)
+- Intent declaration + provenance — every agent action traces back to a user-signed intent
+- Local-first execution (assistant runs on user's Benten instance, calls out to remote LLMs as needed)
 
-## What Drives Adoption at Each Stage
+**Exit criteria:** A user can talk to their assistant, have their knowledge organized PARA-style, request a tool, and have it generated and usable in minutes — all running on their own hardware with audit trails for every agent action.
 
-| Phase | What attracts users |
-|-------|-------------------|
-| 4-6 (Platform) | Better CMS than Payload/Strapi. Schema-driven rendering. Self-composing admin. AI-native. |
-| 7 (AI) | "The only platform where AI agents are graph-native citizens" |
-| 8-9 (Community) | "Own your community. No platform risk. Fork if you disagree." |
-| 10 (Federation) | "Connect your community to others without losing sovereignty." |
-| 11-12 (Economy) | "Zero-fee transactions. Get paid for curating knowledge." |
-| 13 (Compute) | "Run a server, earn credits. Cheaper than AWS." |
-| 14-16 (Independence) | "The platform governs itself. No single company controls it." |
+### Phase 7: Digital Gardens MVP
 
-## The Competitive Moat
+**Community becomes real.** Beyond direct Atrium sharing — actual community spaces with admin governance.
 
-At each phase, the moat deepens:
-- Phase 2: Only platform where code IS graph (inspectable, forkable, syncable)
-- Phase 3: Only platform with native P2P sync
-- Phase 7: Only platform where AI agents operate in the same graph as human users
-- Phase 9: Only platform where governance is forkable and communities compete on governance quality
-- Phase 12: Only platform with graph-native knowledge attestation for AI trust signals
-- Phase 13: Only decentralized compute marketplace integrated with a full application platform
+- Garden creation flow (promote an Atrium to a Garden, or create new)
+- Admin-configured governance (invitation flow, member roles, basic moderation)
+- Content policies (what can be posted, how sync scope extends to new members)
+- Member-mesh replication for Garden data
+- Moderation tooling (content removal, member muting/banning)
+- Bootstrap strategy for new-member onboarding (Merkle diff + parallel peer serving)
+
+**Exit criteria:** A non-technical user can create a Garden, invite friends, and have a working community space with moderation. Full fractal Groves remain exploratory.
+
+### Phase 8: Benten Credits MVP
+
+**The economic engine turns on.** USD-pegged stable currency with treasury-backed reserves.
+
+- Benten Credits 1:1 USD peg
+- Treasury bond reserve management (70% short-term T-bills, 20% medium-term T-notes, 10% operating cash)
+- FedNow on/off ramp for mint/burn
+- Tab-based periodic net settlement between peers (hourly default, configurable)
+- Multi-signature mint/burn with FIPS 140-3 HSMs, geographically separated signers
+- Per-key rate limits, atomic mint-with-FedNow-ack
+- Real-time reserve monitoring (pre-commit, not post)
+- MSB registration, state money transmitter licenses as needed
+
+**Exit criteria:** Users can buy credits with USD via FedNow, transact zero-fee within the network, redeem credits for USD. Reserves fully backed, auditable, regulatorily compliant.
+
+---
+
+## Exploratory Scope (Phase 9+ / Candidate Future Products)
+
+Documented in [`future/`](future/). Each is a candidate product that earns committed status only after the committed scope ships AND real demand materializes.
+
+### Community evolution
+- **Full Groves** — fractal/polycentric governance, configurable voting mechanisms (1p1v, quadratic, conviction, liquid delegation with decay), REPLACE/EXTEND/EXEMPT override modes
+- **Garden/Grove federation** — polycentric, cross-community sync, parent authority domains
+- **Knowledge attestation marketplace** — speculative attestation, AI trust signals, fee distribution
+
+### Infrastructure products
+- **Benten Runtime** — WinterTC-compliant edge host, peer-distributed alternative to Cloudflare Workers — see [`future/benten-runtime.md`](future/benten-runtime.md)
+- **`bentend` peer daemon** — general-purpose compute orchestration with Nomad-style pluggable drivers (containers, VMs, WASM workloads beyond ours) — see [`future/bentend-daemon.md`](future/bentend-daemon.md)
+- **Peer-to-peer compute marketplace (broad)** — hardware-renting for arbitrary workloads, beyond the Benten-specific compute paid for in Phase 8 — see [`future/compute-marketplace.md`](future/compute-marketplace.md)
+
+### Governance evolution
+- **DAO transition** — four-phase shift from sole operator to community-governed foundation
+- **Governance Grove** — the meta-community that governs the platform itself
+
+---
+
+## Revival Criteria (Exploratory → Committed)
+
+For any `future/` proposal to move into committed scope, it must meet all four:
+
+1. **Committed scope has shipped** and external users depend on it
+2. **Concrete demand exists** for the specific feature (not inferred from architecture)
+3. **A dedicated owner** (team, founder, or funded contributor) can commit to the scope
+4. **The critic review** that kept it exploratory has been revisited with new information
+
+Until then, `future/` proposals inform thinking but not engineering.
+
+---
+
+## Adoption Path
+
+**Phase 1-3 (developers only):** Rust engineers and TypeScript developers interested in a new paradigm for structured, auditable, capability-gated data + logic. Research users. Niche but real.
+
+**Phase 4-5 (developer ecosystem):** CMS developers + regulated-AI teams. Thrum on Benten is the concrete proof. Platform features make third-party module development viable. Wedge market: compliance-sensitive content workflows.
+
+**Phase 6 (end users arrive):** Personal AI Assistant is the first user-facing product. Early adopters: people who want a self-owned alternative to Notion + ChatGPT + Zapier. The pitch shifts from technical to "you stop paying for 10 subscriptions; one system organizes everything."
+
+**Phase 7 (community adoption):** Gardens give early adopters a way to bring friends/family/small teams onto the platform. Network effects begin.
+
+**Phase 8 (economic flywheel):** Credits enable zero-fee transactions within the network. Peers start providing compute/storage to each other. Treasury interest scales with adoption.
+
+**Phase 9+ (if reached):** Each exploratory proposal has its own adoption story.
+
+---
 
 ## Timeline Philosophy
 
-"Do it right, not fast." AI-accelerated development compresses traditional timelines by 5-10x. The V3 Thrum project (15 packages, 3,200+ tests) took ~10 days. But database engines and distributed systems have non-linear complexity. Honest estimates:
+"Do it right, not fast" applies. But "do it right, not forever" also applies — Holochain's 8 years of zero production apps is the cautionary tale.
 
-- Foundation (Phases 1-3): 2-4 months
-- Platform (Phases 4-7): 2-3 months
-- Community (Phases 8-10): 2-3 months
-- Economy (Phases 11-14): 3-6 months (regulatory timeline is the bottleneck)
-- Governance Evolution (Phases 15-16): ongoing
+Phase 1-8 is multi-year work. The partition exists so each phase produces something usable on its own, rather than being held hostage to a full vision that keeps expanding.
 
-Total to "functional decentralized platform with economy": 9-16 months.
-Total to "fully community-governed": 18-30 months.
+Honest estimates for committed scope (AI-accelerated development):
+- Phase 1-3: 8-14 months (engine + sync)
+- Phase 4-5: 4-8 months (Thrum + platform features)
+- Phase 6-7: 4-8 months (AI Assistant + Gardens)
+- Phase 8: 6-12 months (Credits — regulatory timeline dominates)
+
+Total committed scope: ~2-4 years to a shipped platform with engine, sync, CMS, AI assistant, community spaces, and stable currency. Exploratory scope adds years if pursued; that's why it's exploratory.
