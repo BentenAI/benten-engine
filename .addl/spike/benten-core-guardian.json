@@ -1,0 +1,86 @@
+{
+  "agent": "benten-core-guardian",
+  "stage": "critic",
+  "target": "crates/benten-core",
+  "findings": [
+    {
+      "severity": "major",
+      "area": "serialization",
+      "location": "crates/benten-core/src/lib.rs:76-93",
+      "claim": "The Value enum is missing a Float variant. The review criteria explicitly list Float as one of the DAG-CBOR types the spike should cover (Null, Bool, Int, Float, String, Bytes, List, Map), and the module-level doc at line 8 advertises 'float' as part of the representable set, but no Float(f64) variant exists in the enum.",
+      "evidence": "`pub enum Value { Null, Bool(bool), Int(i64), Text(String), Bytes(Vec<u8>), List(Vec<Value>), Map(BTreeMap<String, Value>) }` — no Float. Module doc line 8: 'DAG-CBOR representable: null, bool, integer, float, text, bytes, list, map'. Doc and code disagree. Float handling in DAG-CBOR is also subtle (finite floats that round-trip as ints must encode as ints in strict profile; serde_ipld_dagcbor handles this) and a round-trip test pinning this behavior is exactly the kind of thing the spike should validate before Phase 1.",
+      "fix": "Either (a) add `Float(f64)` to Value and add a determinism test covering a float property (e.g., 3.14, -0.0 vs 0.0, NaN rejection), or (b) remove 'float' from the module doc and add an explicit note that Float is deferred to Phase 1 proper with a rationale. Option (a) is preferred given DAG-CBOR already supports it and the hash invariant needs nailing down early."
+    },
+    {
+      "severity": "major",
+      "area": "version-chain",
+      "location": "crates/benten-core/src/lib.rs (whole file)",
+      "claim": "ENGINE-SPEC Section 6 and the Phase 1 scope (CLAUDE.md) both call for version-chain primitives — Anchor, Version Node, NEXT_VERSION, CURRENT pointer — to live in benten-core as opt-in scaffolding. None of these types exist, and there is no explicit deferred-with-note comment justifying the omission.",
+      "evidence": "CLAUDE.md 'benten-core' bullet for Phase 1: 'Version chain primitives as opt-in pattern (Anchor + Version Node + CURRENT/NEXT_VERSION edges)'. ENGINE-SPEC Section 6 lines 142-158. lib.rs has only Node + Value + Cid. The `anchor_id: Option<u64>` field on Node is a placeholder but there is no Anchor type, no NEXT_VERSION / CURRENT edge convention, and no Edge type at all.",
+      "fix": "Acceptable for the spike as-is if the omission is explicitly documented. Either add a `// TODO(phase-1): Anchor/Version/CURRENT per ENGINE-SPEC §6 — intentionally deferred to keep spike minimal` at the top of lib.rs and in SPIKE-RESULTS, or add skeletal `Anchor` and edge-label constants now. Flag this in the Phase 1 kickoff so it does not get lost."
+    },
+    {
+      "severity": "minor",
+      "area": "serialization",
+      "location": "crates/benten-core/src/lib.rs:77",
+      "claim": "`#[serde(untagged)]` on Value is correct for encoding but creates a subtle deserialization hazard: a CBOR boolean `true` could in principle deserialize as `Value::Bool(true)` or `Value::Int(1)` depending on variant order. This matters the moment benten-graph starts round-tripping Nodes from storage.",
+      "evidence": "serde's untagged tries variants in declaration order. For the current spike where we only serialize (hash), this is fine. But Node derives `Deserialize` and a user calling `serde_ipld_dagcbor::from_slice::<Node>` on a persisted byte string will walk this deserializer. DAG-CBOR's major-type tagging means the mapping is actually unambiguous in practice (major 7 for bool, major 0/1 for int), but the property depends on serde_ipld_dagcbor's visitor dispatch rather than a property of Value itself.",
+      "fix": "Add a round-trip determinism proptest (hash → decode → hash again, assert equal CID) before benten-graph lands. If any variant ambiguity surfaces, switch to an internally-tagged or adjacently-tagged representation. For the spike, a one-line comment at the `#[serde(untagged)]` attribute documenting the assumption is sufficient."
+    },
+    {
+      "severity": "minor",
+      "area": "doc",
+      "location": "crates/benten-core/src/lib.rs:33",
+      "claim": "Module doc references 'D3 wasm32 compile-check' as a shipped test, but there is no D3 test in the crate — it's a cargo check invocation documented in SPIKE-RESULTS. The doc reads as if all three D* checks are unit-testable.",
+      "evidence": "lib.rs:33 'The spike ships three tests validating these properties (D1 intra-process, D2 cross-process, D3 wasm32 compile-check).' D3 is `cargo check --target wasm32-unknown-unknown -p benten-core` (SPIKE-RESULTS line 40), which is a build-time check run in CI, not a test the crate ships.",
+      "fix": "Reword to: 'The spike validates these three properties: D1 intra-process (tests), D2 cross-process (tests + pinned fixture), D3 wasm32-unknown-unknown compile-check (CI cargo check).'"
+    },
+    {
+      "severity": "minor",
+      "area": "doc",
+      "location": "crates/benten-core/src/lib.rs:294-296",
+      "claim": "Base32 encoder comment is confusingly worded. It says 'Extended Hex lowercase-equivalent is NOT used here; we use the standard base32 alphabet (a-z + 2-7)'. Standard RFC 4648 base32 is uppercase A-Z + 2-7; a-z is the multibase-`b` lowercase variant.",
+      "evidence": "lib.rs:294-296. The alphabet on line 298 is correct (`abcdefghijklmnopqrstuvwxyz234567`) and matches what multibase `b` requires. The comment itself, however, claims this is 'the standard base32 alphabet' which is imprecise.",
+      "fix": "Clarify: 'We use the lowercase form of the RFC 4648 standard base32 alphabet (a-z + 2-7), which is what multibase prefix `b` specifies. This is NOT the Extended Hex alphabet (0-9 + a-v).'"
+    },
+    {
+      "severity": "minor",
+      "area": "determinism",
+      "location": "crates/benten-core/tests/d2_cross_process.rs:44-50",
+      "claim": "The D2 bootstrap branch silently writes the fixture on first run. If a developer deletes the fixture and CI or a dev machine is configured to allow the test to 'pass' on bootstrap, a hash regression could go unnoticed across the bootstrap event.",
+      "evidence": "Lines 44-50: if the fixture file is absent, the test writes it and returns without asserting anything. In practice, deletion is a deliberate act by a human who is intentionally re-pinning. But a corrupted checkout or a branch that lost the fixture via merge could bootstrap a wrong CID and 'pass'.",
+      "fix": "Consider gating the bootstrap branch behind `env::var(\"BENTEN_D2_BOOTSTRAP\").is_ok()` so the default path on a missing fixture is a hard failure. Minor: current behavior is fine if documented; the risk is low because the pinned CID is committed to git."
+    },
+    {
+      "severity": "minor",
+      "area": "api",
+      "location": "crates/benten-core/src/lib.rs:464-492",
+      "claim": "`testing::canonical_test_node` is duplicated verbatim between the `tests` module (line 368-378) and the public `testing` module (line 481-491). If one drifts from the other, the cross-process fixture and the intra-process test will silently diverge.",
+      "evidence": "Two identical function bodies. The private copy exists because tests/ can't import pub-in-test-cfg items that aren't in `testing::`, but the `testing::` module is already unconditionally public.",
+      "fix": "Delete the private copy in `mod tests` and have the unit tests call `super::testing::canonical_test_node()` directly. One source of truth for the canonical fixture."
+    }
+  ],
+  "invariant_check": {
+    "hash_inputs_labels_and_properties_only": "pass",
+    "anchor_id_excluded": "pass",
+    "timestamps_excluded": "pass (no timestamp fields exist)",
+    "edges_excluded": "pass (no Edge type yet — vacuously true)",
+    "blake3_multihash_code_0x1e": "pass",
+    "blake3_digest_length_32": "pass",
+    "serde_ipld_dagcbor_used": "pass",
+    "no_ciborium_no_serde_cbor": "pass",
+    "cidv1_version_byte_0x01": "pass",
+    "multicodec_0x71_dag_cbor": "pass",
+    "cid_total_length_36_bytes": "pass",
+    "base32_lowercase_no_padding_b_prefix": "pass",
+    "canonical_fixture_cid_matches": "pass (bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda verified via cargo run --example print_canonical_cid)",
+    "thiserror_used": "pass",
+    "no_unwrap_expect_in_library_code": "pass (only in tests and examples, each with #[allow(..., reason = \"...\")])",
+    "no_unsafe_code": "pass (#![forbid(unsafe_code)])",
+    "btreemap_not_hashmap": "pass",
+    "no_derive_hash_on_graph_types": "pass (Cid derives Hash — acceptable for a canonical content ID; Node does not)",
+    "no_forbidden_cross_crate_deps": "pass (benten-core depends only on blake3, serde, serde_bytes, serde_ipld_dagcbor, thiserror)",
+    "wasm32_compile_check": "pass (per SPIKE-RESULTS D3 cargo check --target wasm32-unknown-unknown)"
+  },
+  "verdict": "pass"
+}
