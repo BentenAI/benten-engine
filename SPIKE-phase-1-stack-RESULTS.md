@@ -2,7 +2,7 @@
 
 ## Verdict
 
-**STACK VALIDATED** — proceed to Phase 1 proper. The original `core2`-yank dependency concern raised during the spike is now resolved with our BentenAlignmentInc/rust-cid fork and filed upstream PR ([multiformats/rust-cid#185](https://github.com/multiformats/rust-cid/pull/185)); see "Surprises" #1 and "Next Actions" #1 for the remaining upstream-merge watch.
+**STACK VALIDATED** — proceed to Phase 1 proper. The original `core2`-yank dependency concern raised during the spike is now resolved with our BentenAI/rust-cid fork and filed upstream PR ([multiformats/rust-cid#185](https://github.com/multiformats/rust-cid/pull/185)); see "Surprises" #1 and "Next Actions" #1 for the remaining upstream-merge watch.
 
 ## Assumption Tested
 
@@ -128,12 +128,12 @@ Raw criterion output is in `target/criterion/`.
    open since 2020), a direct migration to `core` is not currently possible.
 
    We forked `multiformats/rust-cid` to
-   [`BentenAlignmentInc/rust-cid`](https://github.com/BentenAlignmentInc/rust-cid)
+   [`BentenAI/rust-cid`](https://github.com/BentenAI/rust-cid)
    and replaced `core2` with [`no_std_io2`](https://crates.io/crates/no_std_io2)
    (an API-compatible drop-in), mirroring the approach used in the sibling
    crate's PR [multiformats/rust-multihash#407](https://github.com/multiformats/rust-multihash/pull/407)
    for multiformats-org consistency. Fork commit:
-   [`e11cf45399c951597725a9bc3ed49c805f7aa640`](https://github.com/BentenAlignmentInc/rust-cid/commit/e11cf45399c951597725a9bc3ed49c805f7aa640).
+   [`e11cf45399c951597725a9bc3ed49c805f7aa640`](https://github.com/BentenAI/rust-cid/commit/e11cf45399c951597725a9bc3ed49c805f7aa640).
    Upstream PR: [multiformats/rust-cid#185](https://github.com/multiformats/rust-cid/pull/185)
    (open, tracking #184).
 
@@ -209,7 +209,7 @@ spike or pivot dependencies.
 Numbered so a different agent can pick any of these up:
 
 1. **Land the `core2` resolution.** Current state (per "Surprises" #1
-   above): `cid` is patched to our `BentenAlignmentInc/rust-cid` fork at
+   above): `cid` is patched to our `BentenAI/rust-cid` fork at
    commit `e11cf45…`, and `core2` itself is temporarily patched to
    `technocreatives/core2@545e84b…` to unblock the `multihash` chain.
 
@@ -226,7 +226,7 @@ Numbered so a different agent can pick any of these up:
        releases together remove all `core2` traces from Benten's dep tree.
 
    (c) If either PR stalls indefinitely, file a matching PR to the other
-       sibling crate (`rust-multihash` migration under BentenAlignmentInc,
+       sibling crate (`rust-multihash` migration under BentenAI,
        or offer to co-maintain). Avoid vendoring a shim — the
        `no_std_io2` approach is already the emerging multiformats-org
        precedent; diverging from it is strictly worse than keeping the
@@ -267,7 +267,7 @@ Numbered so a different agent can pick any of these up:
 6. **Watch upstream PR responses.** `multiformats/rust-cid#185` and
    `multiformats/rust-multihash#407` are the two open PRs whose merge
    eliminates Benten's `[patch.crates-io]` entries. Revisit weekly; file
-   a matching migration PR under `BentenAlignmentInc` if either stalls
+   a matching migration PR under `BentenAI` if either stalls
    past four weeks with no maintainer engagement.
    **Owner:** orchestrator.
 

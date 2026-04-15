@@ -228,7 +228,7 @@ dependencies = [
 [[package]]
 name = "cid"
 version = "0.11.1"
-source = "git+https://github.com/BentenAlignmentInc/rust-cid?rev=e11cf45399c951597725a9bc3ed49c805f7aa640#e11cf45399c951597725a9bc3ed49c805f7aa640"
+source = "git+https://github.com/BentenAI/rust-cid?rev=e11cf45399c951597725a9bc3ed49c805f7aa640#e11cf45399c951597725a9bc3ed49c805f7aa640"
 dependencies = [
  "multibase",
  "multihash",
