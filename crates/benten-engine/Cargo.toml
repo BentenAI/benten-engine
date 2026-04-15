@@ -1,0 +1,28 @@
+[package]
+name = "benten-engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Orchestrator crate composing the Benten graph engine public API."
+
+[lints]
+workspace = true
+
+[dependencies]
+benten-caps = { path = "../benten-caps" }
+benten-core = { path = "../benten-core" }
+benten-eval = { path = "../benten-eval" }
+benten-graph = { path = "../benten-graph" }
+benten-ivm = { path = "../benten-ivm" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+tempfile = { workspace = true }
+
+[[bench]]
+name = "roundtrip"
+harness = false
