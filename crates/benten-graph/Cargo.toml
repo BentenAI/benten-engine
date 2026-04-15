@@ -25,6 +25,19 @@ criterion = { workspace = true }
 # the engine to round-trip a persisted node. Dev-dep cycle is safe.
 benten-engine = { path = "../benten-engine" }
 
+[[bin]]
+# Test-fixture binary used by d2_cross_process_graph.rs to prove PID
+# separation. Writes the canonical fixture node to the path given in
+# argv[1] then exits. Kept lean so the spawn cost on `cargo test` is
+# tolerable. CARGO_BIN_EXE_write-canonical-and-exit is resolved by the
+# test via the `env!()` macro.
+name = "write-canonical-and-exit"
+path = "bin/write_canonical_and_exit.rs"
+# Required-features guard keeps the binary out of `cargo build` when
+# benten-graph is consumed as a library dep.
+test = false
+bench = false
+
 [[bench]]
 name = "get_create_node"
 harness = false

@@ -36,12 +36,17 @@ use benten_engine::testing::iterate_write_handler;
 const DEFAULT_BATCH_BOUNDARY: u32 = 100;
 
 /// Attack simulation: grant a WRITE capability, start a 300-iter handler,
-/// revoke the cap after batch 1 (iteration ~150). Assert:
-///   - iterations 1..=DEFAULT_BATCH_BOUNDARY ran and wrote successfully,
-///   - iterations beyond the NEXT boundary (200+) were denied with the
-///     `E_CAP_REVOKED_MID_EVAL` code,
+/// revoke the cap mid batch 1 (iteration ~50). Per the r4-triage reconciliation
+/// of the Phase 1 TOCTOU window: writes 1..=100 succeed (cap snapshot held
+/// within batch 1); write 101 sits at the next batch boundary where the
+/// evaluator re-reads caps and sees the revocation, so it fails with the
+/// distinguished code.
+///
+/// Asserts:
+///   - exactly `DEFAULT_BATCH_BOUNDARY` writes succeed (not 99, not 200),
+///   - write 101 fails with `E_CAP_REVOKED_MID_EVAL`,
 ///   - the error is `E_CAP_REVOKED_MID_EVAL`, NOT `E_CAP_DENIED` and NOT
-///     `E_CAP_REVOKED` (which is reserved for Phase 3 sync revocation).
+///     `E_CAP_REVOKED` (reserved for Phase 3 sync revocation).
 #[test]
 fn capability_revoked_mid_iteration_denies_subsequent_batches() {
     let dir = tempfile::tempdir().unwrap();
@@ -53,44 +58,48 @@ fn capability_revoked_mid_iteration_denies_subsequent_batches() {
     let handler = iterate_write_handler(/* max = */ 300);
     let handler_id = engine.register_subgraph(&handler).unwrap();
 
-    // Grant the cap, then schedule a revocation at ~iter 150 (mid-batch-2).
+    // Grant the cap, then schedule a revocation at iter 50 (mid batch 1).
     let grant_cid = engine
         .grant_capability("post:write", "test-subject")
         .unwrap();
     engine
-        .schedule_revocation_at_iteration(grant_cid, 150)
+        .schedule_revocation_at_iteration(grant_cid, 50)
         .unwrap();
 
-    // Run the handler. We expect partial success: ~200 writes land before the
-    // revocation is seen at the next 100-iter boundary, remaining writes fail.
+    // Run the handler. Writes 1..=100 land under the held snapshot; write 101
+    // triggers batch-boundary cap re-read, sees revocation, fires the code.
     let outcome = engine
         .call(&handler_id, "default", benten_core::Node::empty())
         .expect("call returns Ok wrapper");
 
     let successful_writes = outcome.successful_write_count();
-    assert!(
-        successful_writes >= DEFAULT_BATCH_BOUNDARY && successful_writes < 300,
-        "expected partial progress: at least one full batch pre-revocation \
-         ({DEFAULT_BATCH_BOUNDARY}) but short of full 300; got {successful_writes}"
+    assert_eq!(
+        successful_writes, DEFAULT_BATCH_BOUNDARY,
+        "writes 1..=100 must succeed under held cap snapshot; got {successful_writes}"
     );
 
-    // The terminating error must be the distinguished mid-eval code.
+    // The terminating error must be the distinguished mid-eval code, fired by
+    // write 101 at the next batch-boundary cap refresh.
     let err = outcome.terminal_error().expect("handler must error out");
     assert_eq!(
         err.code(),
         ErrorCode::CapRevokedMidEval,
-        "mid-iteration revocation must fire E_CAP_REVOKED_MID_EVAL, not a \
-         generic E_CAP_DENIED or the Phase-3 E_CAP_REVOKED. Got: {:?}",
+        "write 101 must fire E_CAP_REVOKED_MID_EVAL at the batch-boundary \
+         cap refresh, not a generic E_CAP_DENIED or the Phase-3 \
+         E_CAP_REVOKED. Got: {:?}",
         err.code()
     );
     assert_ne!(err.code(), ErrorCode::CapDenied);
     assert_ne!(err.code(), ErrorCode::CapRevoked);
 }
 
-/// Named-compromise regression: writes INSIDE the revocation window (between
-/// revocation and the next boundary) are intentionally NOT retroactively
-/// denied. This is the Phase 1 TOCTOU window the triage calls out explicitly.
-/// If Phase 2 closes this window, this test will need to flip its assertion.
+/// Named-compromise regression: writes INSIDE the current batch are
+/// intentionally NOT retroactively denied — the snapshot held for the batch
+/// is exactly what the R1 triage calls "the TOCTOU window". Revocation at
+/// iter 50 does not clobber writes 50..=100 because the batch-1 snapshot
+/// covers them; write 101 (batch-2 boundary) is the first to see the
+/// revocation. If Phase 2 closes this window (per-iter cap check), this test
+/// will need to flip its assertion.
 #[test]
 fn writes_in_current_batch_are_not_retroactively_denied() {
     let dir = tempfile::tempdir().unwrap();
@@ -105,21 +114,31 @@ fn writes_in_current_batch_are_not_retroactively_denied() {
         .grant_capability("post:write", "test-subject")
         .unwrap();
 
-    // Revoke AT iter 120 — mid batch 2. Writes 101..=120 land pre-revocation;
-    // writes 121..=200 land post-revocation but pre-next-boundary (Phase 1
-    // named compromise); writes 201+ denied at the batch boundary refresh.
-    engine.schedule_revocation_at_iteration(grant, 120).unwrap();
+    // Revoke AT iter 50 — mid batch 1. Writes 1..=100 MUST all land; write 101
+    // is where the revocation is observed at the batch-2 boundary refresh.
+    engine.schedule_revocation_at_iteration(grant, 50).unwrap();
 
     let outcome = engine
         .call(&handler_id, "default", benten_core::Node::empty())
         .expect("call returns Ok wrapper");
 
-    assert!(
-        outcome.successful_write_count() >= 200,
-        "Phase 1 TOCTOU window is explicit: revocation between boundaries \
-         does not retroactively deny in-flight writes. Writes 121..=200 must \
+    assert_eq!(
+        outcome.successful_write_count(),
+        DEFAULT_BATCH_BOUNDARY,
+        "Phase 1 TOCTOU window is explicit: revocation inside a batch does \
+         not retroactively deny in-flight writes. Writes 1..=100 must all \
          land. Got: {}",
         outcome.successful_write_count()
+    );
+
+    // And write 101 is denied at the boundary — not retroactive.
+    let err = outcome
+        .terminal_error()
+        .expect("handler must error out at 101");
+    assert_eq!(
+        err.code(),
+        ErrorCode::CapRevokedMidEval,
+        "write 101 at the batch-2 boundary observes the revocation"
     );
     // Remove this test (or flip the assertion direction) when Phase 2
     // Invariant 13 lands and the window closes.

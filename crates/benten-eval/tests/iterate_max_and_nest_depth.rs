@@ -88,20 +88,12 @@ fn iterate_max_zero_accepted_as_noop() {
         .expect("max=0 must parse cleanly; runtime will evaluate 0 times");
 }
 
-#[test]
-fn iterate_max_negative_is_parse_error() {
-    // The builder API types `max` as a u64, so negative is impossible
-    // from Rust. But the DSL (TypeScript) can pass a negative literal;
-    // napi boundary must catch that as E_INPUT_LIMIT before the subgraph
-    // reaches the Rust-side invariant checker. This test pins that the
-    // Rust side's u64 contract is actually u64 — if someone changes it
-    // to i64 as a convenience, this test must fire to force a design
-    // discussion.
-    //
-    // Compile-time check: `iterate` signature must accept u64.
-    fn _typecheck_iterate_max_is_u64() {
-        let mut sb = SubgraphBuilder::new("t");
-        let r = sb.read("r");
-        let _ = sb.iterate(r, "body", 0u64);
-    }
-}
+// R4 triage M8: removed `iterate_max_negative_is_parse_error`. The test's
+// sole body was a never-called `_typecheck_iterate_max_is_u64` inner fn that
+// added zero value — the u64 typing is already enforced by the compiler
+// wherever other tests construct `SubgraphBuilder::iterate(..., u64)`. A
+// dedicated "no-run" test is redundant.
+//
+// If the DSL-side (TypeScript napi boundary) negative-literal rejection
+// behavior needs explicit coverage, that belongs in `bindings/napi/index.test.ts`
+// or a dedicated napi-surface Rust test — not here.

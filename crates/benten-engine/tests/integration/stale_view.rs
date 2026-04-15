@@ -23,19 +23,28 @@ fn stale_view_returns_error_not_stale_data() {
         .build().unwrap();
     let handler_id = engine.register_crud("post").unwrap();
 
-    // Force a handful of writes; at least one will exceed the budget and mark View 3 stale.
-    for i in 0..5u32 {
-        let mut props = std::collections::BTreeMap::new();
-        props.insert("title".into(), benten_core::Value::Text(format!("p{i}")));
-        let outcome = engine
-            .call(
-                &handler_id,
-                "post:create",
-                Node::new(vec!["post".into()], props),
-            )
-            .unwrap();
-        assert!(outcome.is_ok_edge(), "write commits even if IVM is stale");
-    }
+    // Force a handful of writes; at least one will exceed the budget and mark
+    // View 3 stale. R4 triage (m4): collect non-ok outcomes via `filter` so
+    // an assertion failure names the offending iteration rather than bailing
+    // on the first inner `assert!` misfire.
+    let failed: Vec<u32> = (0..5u32)
+        .filter(|i| {
+            let mut props = std::collections::BTreeMap::new();
+            props.insert("title".into(), benten_core::Value::Text(format!("p{i}")));
+            let outcome = engine
+                .call(
+                    &handler_id,
+                    "post:create",
+                    Node::new(vec!["post".into()], props),
+                )
+                .unwrap();
+            !outcome.is_ok_edge()
+        })
+        .collect();
+    assert!(
+        failed.is_empty(),
+        "write must commit even if IVM is stale; non-ok at iterations: {failed:?}"
+    );
 
     // Strict read_view surfaces stale error.
     let strict = engine.read_view_strict("content_listing_post");

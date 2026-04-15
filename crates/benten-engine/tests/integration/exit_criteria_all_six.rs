@@ -43,21 +43,35 @@ fn exit_1_registration_succeeds() {
 }
 
 /// **Exit-criterion #2.** Three creates + list reflects all three in createdAt order.
+///
+/// At R4 triage (M2) this also locks in the two createdAt-determinism
+/// properties that the v1 test only asserted implicitly:
+///   (a) the three createdAt values form a strictly-increasing sequence
+///       (HLC monotonicity across successive writes),
+///   (b) re-reading a post returns the same createdAt (stamped-once, not
+///       re-stamped on every read — the Phase 1 HLC contract).
 #[test]
 fn exit_2_three_creates_list_returns_them() {
     let (_dir, engine) = fresh_engine();
     let handler_id = engine.register_crud("post").unwrap();
 
+    let mut created_cids: Vec<String> = Vec::new();
     for title in ["first", "second", "third"] {
         let mut p = BTreeMap::new();
         p.insert("title".into(), Value::Text(title.into()));
-        engine
+        let outcome = engine
             .call(
                 &handler_id,
                 "post:create",
                 Node::new(vec!["post".into()], p),
             )
             .unwrap();
+        created_cids.push(
+            outcome
+                .created_cid()
+                .expect("create returns cid")
+                .to_base32(),
+        );
     }
 
     let listed = engine
@@ -83,12 +97,67 @@ fn exit_2_three_creates_list_returns_them() {
         ],
         "createdAt order preserved"
     );
+
+    // (a) Strict-increase property on createdAt values.
+    let created_ats: Vec<i64> = items
+        .iter()
+        .map(|n| match n.properties.get("createdAt") {
+            Some(Value::Int(t)) => *t,
+            other => panic!("createdAt must be Int, got {other:?}"),
+        })
+        .collect();
+    assert_eq!(created_ats.len(), 3);
+    assert!(
+        created_ats[0] < created_ats[1],
+        "createdAt[0] < createdAt[1] required; got {} < {}",
+        created_ats[0],
+        created_ats[1]
+    );
+    assert!(
+        created_ats[1] < created_ats[2],
+        "createdAt[1] < createdAt[2] required; got {} < {}",
+        created_ats[1],
+        created_ats[2]
+    );
+
+    // (b) Stamped-once: re-reading a post returns the same createdAt value.
+    let mut input = BTreeMap::new();
+    input.insert("cid".into(), Value::Text(created_cids[0].clone()));
+    let reread = engine
+        .call(
+            &handler_id,
+            "post:get",
+            Node::new(vec!["input".into()], input),
+        )
+        .unwrap();
+    // post:get outcome surfaces a single Node via as_list()[0] (single-entry
+    // list). If R5 chooses a different API shape (e.g. dedicated as_node()),
+    // this test updates to match.
+    let reread_items = reread.as_list().expect("post:get returns a list");
+    let reread_node = &reread_items[0];
+    match reread_node.properties.get("createdAt") {
+        Some(Value::Int(t)) => assert_eq!(
+            *t, created_ats[0],
+            "re-read of first post must return the same createdAt (stamped once, not re-stamped)"
+        ),
+        other => panic!("createdAt must be Int, got {other:?}"),
+    }
 }
 
 /// **Exit-criterion #3.** Capability denial routes to ON_DENIED.
+///
+/// R4 triage (m18): explicit `.capability_policy_grant_backed()` in the
+/// builder. The v1 test inherited NoAuthBackend silently (the default),
+/// so the "denial" check was vacuous in that configuration. Exit-3 must
+/// run under a grant-backed policy.
 #[test]
 fn exit_3_cap_denial_routes_on_denied() {
-    let (_dir, engine) = fresh_engine();
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::builder()
+        .path(dir.path().join("benten.redb"))
+        .capability_policy_grant_backed()
+        .build()
+        .unwrap();
     let handler_id = engine
         .register_crud_with_grants("post")
         .expect("grant-backed crud registers");

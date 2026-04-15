@@ -1,10 +1,20 @@
 //! MVCC snapshot isolation via redb (G6 — R2 landscape §2.2 row 15).
 //!
 //! Reader A opens a snapshot; writer B commits a new value; reader A still
-//! sees the old value until they drop and re-open. redb provides this via
-//! read-transactions that outlive concurrent writes.
+//! sees the old value until the snapshot is dropped and re-opened. redb
+//! provides this via read-transactions that outlive concurrent writes.
 //!
-//! R3 writer: `rust-test-writer-unit`.
+//! Rewritten at R4 triage (M6) — the v1 body exercised sequential puts with
+//! different CIDs, which does not actually test point-in-time isolation.
+//! The corrected body:
+//!   (a) opens a snapshot (read-side handle),
+//!   (b) writes to the same backend concurrently,
+//!   (c) asserts the snapshot reader still observes pre-write state,
+//!   (d) drops the snapshot,
+//!   (e) asserts a fresh reader now sees post-write state.
+//!
+//! R3 writer: `rust-test-writer-unit`. R5 must expose `snapshot()` on
+//! `RedbBackend` for this test to compile.
 
 #![allow(clippy::unwrap_used)]
 
@@ -22,25 +32,42 @@ fn temp() -> (RedbBackend, TempDir) {
 
 #[test]
 fn snapshot_reader_sees_point_in_time_state() {
-    let (b, _d) = temp();
-    let v1 = canonical_test_node();
-    let cid = b.put_node(&v1).unwrap();
+    let (backend, _d) = temp();
 
-    // Read before update — sees v1.
-    let fetched_before = b.get_node(&cid).unwrap();
-    assert_eq!(fetched_before, Some(v1));
+    // Seed v1 under a distinct key so the snapshot has something non-empty
+    // to observe.
+    let seed = canonical_test_node();
+    let seed_cid = backend.put_node(&seed).unwrap();
 
-    // Writer commits a "different" node — but same CID would overwrite, so
-    // construct a distinct node and store it under a distinct CID instead.
+    // (a) Open a snapshot (pre-write view).
+    let snapshot = backend.snapshot().expect("snapshot() handle");
+
+    // (b) Concurrent write that arrives AFTER the snapshot opened.
     let mut p = BTreeMap::new();
     p.insert("v".to_string(), Value::Int(99));
     let v2 = Node::new(vec!["Other".to_string()], p);
-    let cid2 = b.put_node(&v2).unwrap();
+    let v2_cid = backend.put_node(&v2).unwrap();
 
-    // Reader still sees the original cid → original node.
-    assert_eq!(b.get_node(&cid).unwrap().unwrap().labels, vec!["Post"]);
-    // And the second CID points at v2.
-    assert_eq!(b.get_node(&cid2).unwrap().unwrap().labels, vec!["Other"]);
+    // (c) Snapshot reader must still see the pre-write state — seed is
+    // visible, v2 (written after snapshot) is NOT.
+    assert_eq!(
+        snapshot.get_node(&seed_cid).unwrap(),
+        Some(seed),
+        "snapshot must see the pre-write seed value"
+    );
+    assert!(
+        snapshot.get_node(&v2_cid).unwrap().is_none(),
+        "snapshot must NOT observe writes that arrived after it opened"
+    );
+
+    // (d) Drop the snapshot.
+    drop(snapshot);
+
+    // (e) A fresh reader (no snapshot held) now sees post-write state.
+    assert!(
+        backend.get_node(&v2_cid).unwrap().is_some(),
+        "after snapshot drop, a fresh read must observe the committed write"
+    );
 }
 
 #[test]

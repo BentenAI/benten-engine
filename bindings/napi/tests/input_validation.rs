@@ -27,6 +27,16 @@
 //! - `.addl/phase-1/r1-triage.md` B8 napi input validation
 //! - `.addl/phase-1/r2-test-landscape.md` §7 napi input validation
 
+// R4 triage (m12): the napi-export crate is a cdylib and its public-facing
+// `napi` symbols cannot be linked from a regular integration test binary.
+// These tests exercise the Rust-side `benten_napi::testing::*` helpers that
+// B8 wires up behind the `in-process-test` feature. Run via:
+//
+//     cargo test -p benten-napi --features in-process-test --no-default-features
+//
+// The cfg-gate below keeps the workspace test-all invocation green by
+// compiling an empty test binary when the feature is off.
+#![cfg(feature = "in-process-test")]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_core::ErrorCode;

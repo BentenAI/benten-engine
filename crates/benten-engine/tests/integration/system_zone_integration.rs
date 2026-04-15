@@ -81,12 +81,17 @@ fn system_write_does_not_emit_change_event_to_user_views() {
         .path(dir.path().join("benten.redb"))
         .build()
         .unwrap();
-    let probe = engine.test_subscribe_change_events_matching_label("post");
+    // R4 triage (m8): use the real public `subscribe_change_events` API
+    // rather than the test-only helper — the test must exercise the same
+    // surface end-users see.
+    let probe = engine.subscribe_change_events();
     let actor = engine.create_principal("alice").unwrap();
     let _ = engine.grant_capability(&actor, "store:post:write").unwrap();
-    assert_eq!(
-        probe.drain().len(),
-        0,
-        "system-zone writes do not route to non-system views"
+    let events = probe.drain();
+    let post_events: Vec<_> = events.iter().filter(|e| e.label == "post").collect();
+    assert!(
+        post_events.is_empty(),
+        "system-zone writes do not route to non-system views; saw {}",
+        post_events.len()
     );
 }

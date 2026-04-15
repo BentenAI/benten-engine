@@ -1,0 +1,25 @@
+{
+  "name": "@benten/engine-native",
+  "version": "0.1.0",
+  "private": true,
+  "description": "napi-rs v3 native bindings for the Benten engine. Consumed by @benten/engine as the compiled back-end.",
+  "type": "module",
+  "main": "./index.node",
+  "files": [
+    "index.node",
+    "index.js",
+    "index.d.ts"
+  ],
+  "napi": {
+    "name": "benten-napi"
+  },
+  "scripts": {
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.0.0",
+    "vitest": "^2.1.0"
+  }
+}

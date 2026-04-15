@@ -51,20 +51,33 @@ fn phase_1_executable_subset_is_eight_primitives() {
         PrimitiveKind::Subscribe,
         PrimitiveKind::Stream,
     ];
-    let executable: Vec<_> = all
+    // R4 triage (m2): set equality rather than count-plus-containment. The
+    // former accepted any 8-subset that happened to include the canonical
+    // eight; the latter closes that loophole.
+    use std::collections::HashSet;
+    let executable: HashSet<_> = all
         .iter()
         .filter(|k| k.is_phase_1_executable())
         .copied()
+        .map(|k| format!("{k:?}"))
         .collect();
-    assert_eq!(executable.len(), 8);
-    assert!(executable.contains(&PrimitiveKind::Read));
-    assert!(executable.contains(&PrimitiveKind::Write));
-    assert!(executable.contains(&PrimitiveKind::Transform));
-    assert!(executable.contains(&PrimitiveKind::Branch));
-    assert!(executable.contains(&PrimitiveKind::Iterate));
-    assert!(executable.contains(&PrimitiveKind::Call));
-    assert!(executable.contains(&PrimitiveKind::Respond));
-    assert!(executable.contains(&PrimitiveKind::Emit));
+    let expected: HashSet<String> = [
+        "Read",
+        "Write",
+        "Transform",
+        "Branch",
+        "Iterate",
+        "Call",
+        "Respond",
+        "Emit",
+    ]
+    .iter()
+    .map(|s| (*s).to_string())
+    .collect();
+    assert_eq!(
+        executable, expected,
+        "phase-1 executable set must be exactly the eight canonical primitives"
+    );
 }
 
 #[test]

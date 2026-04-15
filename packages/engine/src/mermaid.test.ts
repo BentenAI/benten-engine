@@ -32,11 +32,16 @@ describe("handler.toMermaid()", () => {
     expect(mermaid).toContain("-->");
 
     // Authoritative grammar check: if @mermaid-js/parser accepts it, Mermaid renders it.
+    // R4 triage (m17): removed the `??` fallback — if the parser throws or
+    // returns an unexpected shape, let the exception propagate so the test
+    // fails cleanly rather than silently passing on a wrong-API call.
     const parsed = await mermaidParse("flowchart", mermaid);
     expect(parsed).toBeTruthy();
-    // No parse errors surfaced.
-    expect((parsed as { lexerErrors?: unknown[] }).lexerErrors ?? []).toHaveLength(0);
-    expect((parsed as { parserErrors?: unknown[] }).parserErrors ?? []).toHaveLength(0);
+    const asParsed = parsed as { lexerErrors?: unknown[]; parserErrors?: unknown[] };
+    expect(asParsed.lexerErrors).toBeDefined();
+    expect(asParsed.parserErrors).toBeDefined();
+    expect(asParsed.lexerErrors!).toHaveLength(0);
+    expect(asParsed.parserErrors!).toHaveLength(0);
   });
 
   it("mermaid_output_is_pure_and_deterministic", async () => {

@@ -93,9 +93,14 @@ fn governance_cycle_does_not_infinite_loop() {
     view.add_edge(&c1, &c0);
 
     let effective = view.effective_rules(&c0);
+    // R4 triage (m5): cycle detection is distinct from depth-exceeded —
+    // both scenarios truncate but the reason differs. A cycle can happen
+    // well below MAX_GOVERNANCE_DEPTH (here at depth 2). Use a dedicated
+    // `cycle_detected()` accessor so a fix that silently conflates the two
+    // is caught.
     assert!(
-        effective.was_truncated(),
-        "cycle must trigger the same truncation flag as depth-exceeded — the detection path is shared"
+        effective.cycle_detected(),
+        "cycle must set the dedicated cycle-detection flag, not just truncated"
     );
     assert!(
         effective.depth() <= MAX_GOVERNANCE_DEPTH,

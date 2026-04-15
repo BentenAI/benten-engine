@@ -1,9 +1,10 @@
 //! Integration test aggregator for the benten-engine crate.
 //!
 //! Each integration scenario is a module under `tests/integration/`. This
-//! wrapper compiles them into a single test binary so we share the crate-
-//! test compilation cost across all scenarios instead of paying it once
-//! per scenario.
+//! wrapper compiles them into a single test binary so the crate-test
+//! compilation cost is paid ONCE for the whole set rather than once per
+//! scenario. (R4 triage (m21): causality was backwards in the v1 comment —
+//! sharing the cost IS the point; paying-per-scenario is what we avoid.)
 //!
 //! Owned by `qa-expert` per R2 landscape §4.3 + §4.6.
 

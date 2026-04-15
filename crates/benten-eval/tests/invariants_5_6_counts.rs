@@ -93,6 +93,34 @@ fn rejects_too_many_edges() {
     assert_eq!(err.edges_max().unwrap(), edge_cap);
 }
 
+// R4 triage (m9): explicit `_one_over_with_actual_field` tests for the
+// diagnostic accessors. Duplicates assertions from `rejects_too_many_nodes`
+// / `rejects_too_many_edges` but under the named grep target; per R2
+// landscape the per-invariant diagnostic-accessor surface wants a dedicated
+// test name for each code so future critics can match test-name → error-code
+// → accessor triples mechanically.
+
+#[test]
+fn invariant_5_nodes_rejects_one_over_with_actual_field() {
+    let cap = benten_eval::limits::DEFAULT_MAX_NODES;
+    let err = subgraph_with_exactly_n_nodes(cap + 1).expect_err("rejection");
+    assert_eq!(err.code(), ErrorCode::InvTooManyNodes);
+    assert_eq!(err.nodes_actual().unwrap(), cap + 1);
+    assert_eq!(err.nodes_max().unwrap(), cap);
+}
+
+#[test]
+fn invariant_6_edges_rejects_one_over_with_actual_field() {
+    let edge_cap = benten_eval::limits::DEFAULT_MAX_EDGES;
+    let mut sb = SubgraphBuilder::new("edge_bomb_m9");
+    let _root = sb.read("root");
+    sb.force_add_cross_edges_for_testing(edge_cap + 1);
+    let err = sb.build_validated().expect_err("rejection");
+    assert_eq!(err.code(), ErrorCode::InvTooManyEdges);
+    assert_eq!(err.edges_actual().unwrap(), edge_cap + 1);
+    assert_eq!(err.edges_max().unwrap(), edge_cap);
+}
+
 #[test]
 fn single_node_subgraph_passes_node_and_edge_caps() {
     // Boundary: the minimum subgraph (1 node, 0 edges) passes both caps.

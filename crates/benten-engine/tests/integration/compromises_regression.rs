@@ -21,6 +21,13 @@ use benten_engine::Engine;
 use std::collections::BTreeMap;
 
 // Phase 1 compromise; remove when Phase 2 implements per-iteration capability re-check.
+//
+// Named-compromise #1 scope (per R1 triage clarification in r4-triage.md):
+// the evaluator refreshes the capability snapshot at commit / CALL entry /
+// ITERATE batch boundaries. Default batch size is 100 iterations. Writes
+// 1..=100 succeed under the granted cap (snapshot held); at iteration 101
+// the next batch re-reads and sees the revoked cap, so write 101 fails with
+// E_CAP_REVOKED_MID_EVAL.
 #[test]
 fn compromise_1_toctou_window_bound_at_100_iter_batch() {
     let dir = tempfile::tempdir().unwrap();
@@ -30,7 +37,8 @@ fn compromise_1_toctou_window_bound_at_100_iter_batch() {
         .build()
         .unwrap();
 
-    // 300-iter handler, revoke at iter 150.
+    // 300-iter handler, revoke mid batch 1 (iter 50). Batch size 100 means
+    // writes 1..=100 land before the next boundary re-reads caps.
     let sg = benten_engine::SubgraphSpec::builder()
         .handler_id("toctou")
         .iterate(300, |b| {
@@ -53,17 +61,20 @@ fn compromise_1_toctou_window_bound_at_100_iter_batch() {
             Node::empty(),
             &actor,
             "store:post:write",
-            150,
+            50,
         )
         .unwrap();
-    let completed = outcome.completed_iterations().unwrap();
-    assert!(
-        completed >= 149,
-        "iter 149 must complete before revoke is observed (bounds window below)"
+    let successful = outcome.successful_write_count();
+    assert_eq!(
+        successful, 100,
+        "iterations 1..=100 must complete (first batch holds cap snapshot); got {successful}"
     );
-    assert!(
-        completed < 250,
-        "iter 250 must NOT complete (bounds window above); got {completed}"
+    // Write 101 sits at the next batch boundary where cap is re-read and
+    // found revoked.
+    assert_eq!(
+        outcome.error_code(),
+        Some("E_CAP_REVOKED_MID_EVAL"),
+        "write 101 must fail with E_CAP_REVOKED_MID_EVAL (batch boundary cap refresh saw revocation)"
     );
 }
 
@@ -128,18 +139,79 @@ fn compromise_3_error_code_enum_in_benten_core() {
 }
 
 // Phase 1 compromise; remove when Phase 2 ships network-fetch KVBackend + WASM runtime tests.
+//
+// Rewritten at R4 triage (M15) — the v1 version grepped filenames, which was
+// brittle to workflow-name drift. The semantic checks are:
+//   (a) `benten-napi`'s Cargo.toml does NOT declare `wasmtime` as a runtime
+//       dep (would be a Phase 2 surface),
+//   (b) `.github/workflows/wasm-checks.yml` exists and contains a
+//       `cargo check --target wasm32-unknown-unknown` invocation (the
+//       compile-check gate is the Phase 1 contract),
+//   (c) no workflow invokes `cargo test --target wasm32-wasip1` (runtime
+//       testing is Phase 2).
 #[test]
-fn compromise_4_wasm_runtime_only_compile_check() {
-    // Verify CI workflow documents the compromise — scan for the canary comment.
-    let ci = std::fs::read_to_string(".github/workflows/ci.yml").expect("CI file present");
+fn compromise_4_wasm_runtime_is_phase_2() {
+    // (a) bindings/napi Cargo.toml does NOT declare `wasmtime`. We check the
+    // `[dependencies]` section specifically — `wasmtime` appears in workspace
+    // deps but must NOT reach the napi crate in Phase 1.
+    let napi_manifest = std::fs::read_to_string("../../bindings/napi/Cargo.toml")
+        .or_else(|_| std::fs::read_to_string("bindings/napi/Cargo.toml"))
+        .expect("bindings/napi/Cargo.toml present");
+    // A naive string-grep is brittle, but `wasmtime =` at line start or after
+    // whitespace is the canonical TOML form for a dependency declaration.
+    let has_wasmtime_dep = napi_manifest.lines().any(|l| {
+        let t = l.trim();
+        t.starts_with("wasmtime =") || t.starts_with("wasmtime=")
+    });
     assert!(
-        ci.contains("napi-wasm32-compile-check") || ci.contains("wasm32-unknown-unknown"),
-        "CI must have a compile-check job for napi; got no match"
+        !has_wasmtime_dep,
+        "bindings/napi/Cargo.toml must NOT declare `wasmtime` as a direct \
+         dep in Phase 1 — the WASM runtime landing is Phase 2"
     );
-    // No runtime test for napi under wasmtime yet; protect against accidental addition.
+
+    // (b) wasm-checks workflow exists and invokes the compile-check target.
+    let wasm_workflow = std::fs::read_to_string("../../.github/workflows/wasm-checks.yml")
+        .or_else(|_| std::fs::read_to_string(".github/workflows/wasm-checks.yml"))
+        .expect(".github/workflows/wasm-checks.yml must exist in Phase 1");
     assert!(
-        !ci.contains("napi-wasm-runtime"),
-        "napi WASM runtime test is Phase 2; see PLATFORM-DESIGN"
+        wasm_workflow.contains("wasm32-unknown-unknown"),
+        "wasm-checks.yml must contain the `wasm32-unknown-unknown` compile-check target"
+    );
+    assert!(
+        wasm_workflow.contains("cargo check"),
+        "wasm-checks.yml must invoke `cargo check` (not `cargo test`) per the Phase 1 gate"
+    );
+
+    // (c) No workflow runs `cargo test --target wasm32-wasip1` — runtime
+    // testing of WASM is Phase 2 scope.
+    let workflow_dir = if std::path::Path::new("../../.github/workflows").exists() {
+        std::path::PathBuf::from("../../.github/workflows")
+    } else {
+        std::path::PathBuf::from(".github/workflows")
+    };
+    for entry in std::fs::read_dir(&workflow_dir).expect("read workflow dir") {
+        let entry = entry.expect("readdir entry");
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("yml") {
+            continue;
+        }
+        let content = std::fs::read_to_string(&path).expect("read yml");
+        assert!(
+            !content.contains("wasm32-wasip1"),
+            "no workflow may invoke `cargo test --target wasm32-wasip1` in \
+             Phase 1; got reference in {}",
+            path.display()
+        );
+    }
+
+    // R4 triage (m16 minor): fixture-CID canary — protects against encoding
+    // drift slipping through alongside a WASM-scope change.
+    let expected_fixture = "bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda";
+    let canonical = benten_core::testing::canonical_test_node().cid().unwrap();
+    assert_eq!(
+        canonical.to_base32(),
+        expected_fixture,
+        "canonical fixture CID drift detected — investigate encoding path before merging"
     );
 }
 

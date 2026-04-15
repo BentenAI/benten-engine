@@ -70,9 +70,19 @@ fn incremental_view_lag_never_exceeds_one_write() {
             .unwrap();
         let observed = listed.as_list().unwrap().len();
         let expected = usize::try_from(i + 1).unwrap();
+        // Tightened at R4 triage (M5): the v1 `observed + 1 >= expected`
+        // assertion was tautologically true (see r4-qa-expert.json). The
+        // correct form is two-sided: the view is at most 1 write behind
+        // (expected - observed <= 1) AND it has actually advanced (observed
+        // > 0 post-first-write — liveness check).
+        let lag = expected.saturating_sub(observed);
         assert!(
-            observed + 1 >= expected,
+            lag <= 1,
             "View 3 lag exceeded 1 write: observed={observed}, expected={expected}"
+        );
+        assert!(
+            observed > 0,
+            "IVM did not advance after write {i}: observed=0 (liveness check)"
         );
     }
 }

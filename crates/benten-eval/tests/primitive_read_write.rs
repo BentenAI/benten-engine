@@ -11,7 +11,7 @@
 #![allow(clippy::unwrap_used)]
 
 use benten_core::Value;
-use benten_eval::{EvalError, Evaluator, OperationNode, PrimitiveKind};
+use benten_eval::{Evaluator, OperationNode, PrimitiveKind};
 
 fn read_op(id: &str) -> OperationNode {
     OperationNode::new(id, PrimitiveKind::Read)
@@ -73,14 +73,22 @@ fn write_primitive_delete_returns_ok() {
 /// "write_cas_wrong_version_routes_on_conflict".
 #[test]
 fn write_cas_wrong_version_routes_on_conflict() {
+    // R4 triage (m3): canonicalize to the routed-edge form per plan §2.5 E3.
+    // The "either Ok(ON_CONFLICT) or Err(WriteConflict)" escape hatch allowed
+    // R5 to pick the wrong one silently. Conflict routes through the
+    // ON_CONFLICT edge — the error-edge routing pattern every other error
+    // class uses in Phase 1. `Err(WriteConflict)` is reserved for the
+    // transaction primitive, not the WRITE primitive.
     let mut ev = Evaluator::new();
     let op = write_op("w1")
         .with_property("op", Value::text("cas"))
         .with_property("expected_version", Value::Int(1))
         .with_property("actual_version", Value::Int(2));
-    match ev.step(&op) {
-        Ok(r) => assert_eq!(r.edge_label, "ON_CONFLICT"),
-        Err(EvalError::WriteConflict) => {}
-        Err(e) => panic!("expected ON_CONFLICT edge or E_WRITE_CONFLICT, got {e:?}"),
-    }
+    let r = ev
+        .step(&op)
+        .expect("WRITE CAS conflict routes through ON_CONFLICT, not Err");
+    assert_eq!(
+        r.edge_label, "ON_CONFLICT",
+        "CAS version mismatch routes via edge, not error"
+    );
 }
