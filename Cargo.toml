@@ -69,11 +69,18 @@ tempfile = "3"
 napi = { version = "3", default-features = false }
 napi-derive = "3"
 
+# HLC time source — pulled forward to Phase 1 per R2 gap #2 resolution.
+# `crud('post')` zero-config path injects a deterministic `createdAt` timestamp
+# on WRITE, and `createdAt` enters the Node content-hash input. A plain
+# wall-clock source would break D2 cross-process determinism and force a
+# per-Anchor counter hack for Phase 1 that gets thrown away at Phase 3. One
+# HLC implementation for all phases is cleaner.
+uhlc = "0.2"
+
 # Phase 3 (sync/identity) — reserved versions for future use:
 # iroh = "0.97"
 # loro = "1"
 # ed25519-dalek = "2"
-# uhlc = "0.2"
 
 # Dependency workaround: the `core2` 0.4.0 crate was archived upstream on
 # 2026-04-14 ("No longer supported. Use core directly.") and yanked from
