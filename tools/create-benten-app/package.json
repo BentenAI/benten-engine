@@ -14,7 +14,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@benten/engine": "workspace:*"
+    "@benten/engine": "file:../../packages/engine"
   },
   "devDependencies": {
     "@mermaid-js/parser": "^0.6.0",
