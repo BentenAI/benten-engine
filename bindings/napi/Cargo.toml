@@ -1,0 +1,25 @@
+[package]
+name = "benten-napi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Node.js bindings for the Benten graph engine via napi-rs v3."
+
+[lints]
+workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+benten-core = { path = "../../crates/benten-core" }
+benten-engine = { path = "../../crates/benten-engine" }
+napi = { workspace = true, features = ["napi4", "serde-json"] }
+napi-derive = { workspace = true }
+serde_json = { workspace = true }
+
+[build-dependencies]
+napi-build = "2"
