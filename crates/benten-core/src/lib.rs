@@ -51,6 +51,7 @@
 
 #![forbid(unsafe_code)]
 #![no_std]
+#![allow(clippy::todo, reason = "R3 red-phase stubs; R5 removes todos")]
 
 extern crate alloc;
 
@@ -108,6 +109,13 @@ pub enum Value {
     Bool(bool),
     /// CBOR signed integer (-2^63 .. 2^63-1).
     Int(i64),
+    /// CBOR 64-bit float. NaN and ±Infinity must be rejected at serialization
+    /// time (see [`CoreError::FloatNan`] / [`CoreError::FloatNonFinite`]).
+    ///
+    /// **Phase 1 G1-A stub** — the concrete encoding contract and the
+    /// NaN/Inf rejection path ship in Phase 1 proper. Today this variant is
+    /// reachable but unused.
+    Float(f64),
     /// CBOR text string (UTF-8).
     Text(String),
     /// CBOR byte string.
@@ -159,6 +167,13 @@ impl Node {
             properties,
             anchor_id: None,
         }
+    }
+
+    /// Convenience empty-Node constructor. No labels, no properties.
+    /// Used by integration tests calling `engine.call(handler, op, Node::empty())`.
+    #[must_use]
+    pub fn empty() -> Self {
+        Self::new(Vec::new(), BTreeMap::new())
     }
 
     /// Produce the canonical DAG-CBOR byte string used as the hash input.
@@ -295,6 +310,14 @@ impl Cid {
         &self.0
     }
 
+    /// Parse a base32-multibase-prefixed CIDv1 string (e.g.
+    /// `"bafyr4i..."`). See [`Cid::to_base32`] for the inverse.
+    ///
+    /// **Phase 1 G1 stub** — lands with the `cid`-crate migration (see C4).
+    pub fn from_str(_s: &str) -> Result<Self, CoreError> {
+        todo!("Cid::from_str — G1 (Phase 1)")
+    }
+
     /// Base32 (RFC 4648, lowercase, no padding) string accessor, prefixed with
     /// multibase `b` per the multibase spec. This is the standard IPLD string
     /// representation of a CIDv1 and what the spike reports as the canonical
@@ -359,6 +382,337 @@ pub enum CoreError {
     /// The bytes supplied to [`Cid::from_bytes`] are not a valid Benten CIDv1.
     #[error("invalid CID: {0}")]
     InvalidCid(&'static str),
+
+    /// A `Value::Float(f64::NAN)` was submitted for hashing (Phase 1 G1-A).
+    #[error("float NaN is not permitted in the hash path")]
+    FloatNan,
+
+    /// A `Value::Float(±Infinity)` was submitted for hashing (Phase 1 G1-A).
+    #[error("non-finite float is not permitted in the hash path")]
+    FloatNonFinite,
+
+    /// A concurrent append created a branched version chain (C6).
+    #[error("version chain has diverging branches")]
+    VersionBranched,
+
+    /// String couldn't parse into a `Cid`.
+    #[error("failed to parse CID string: {0}")]
+    CidParse(&'static str),
+
+    /// CIDv1 with an unsupported multicodec (must be dag-cbor / 0x71).
+    #[error("unsupported multicodec in CID")]
+    CidUnsupportedCodec,
+
+    /// CIDv1 with an unsupported multihash (must be blake3 / 0x1e).
+    #[error("unsupported multihash in CID")]
+    CidUnsupportedHash,
+
+    /// Generic not-found error (version-chain anchor, etc.). **Phase 1 stub.**
+    #[error("not found")]
+    NotFound,
+}
+
+impl CoreError {
+    /// Map a `CoreError` variant to its ERROR-CATALOG stable code.
+    ///
+    /// **Phase 1 G1-A stub** — implementation lands in Phase 1 proper.
+    #[must_use]
+    pub fn code(&self) -> ErrorCode {
+        match self {
+            CoreError::FloatNan => ErrorCode::ValueFloatNan,
+            CoreError::FloatNonFinite => ErrorCode::ValueFloatNonFinite,
+            CoreError::CidParse(_) | CoreError::InvalidCid(_) => ErrorCode::CidParse,
+            CoreError::CidUnsupportedCodec => ErrorCode::CidUnsupportedCodec,
+            CoreError::CidUnsupportedHash => ErrorCode::CidUnsupportedHash,
+            CoreError::VersionBranched => ErrorCode::VersionBranched,
+            CoreError::Serialize(_) => ErrorCode::Unknown(alloc::string::String::new()),
+            CoreError::NotFound => ErrorCode::NotFound,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ErrorCode enum (C7 — source of truth for stable catalog codes)
+// ---------------------------------------------------------------------------
+
+/// Stable error-catalog discriminants. Every `CoreError` / `GraphError` /
+/// `CapError` / `EngineError` variant maps to one of these via a `.code()`
+/// method so the TS layer sees the same identifier on every error.
+///
+/// **Phase 1 G1-A stub** — full variant list + bidirectional drift-detector
+/// parity with `docs/ERROR-CATALOG.md` lands with G1-A implementation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ErrorCode {
+    InvCycle,
+    InvDepthExceeded,
+    InvFanoutExceeded,
+    InvTooManyNodes,
+    InvTooManyEdges,
+    InvDeterminism,
+    InvContentHash,
+    InvRegistration,
+    InvIterateNestDepth,
+    InvIterateMaxMissing,
+    CapDenied,
+    CapDeniedRead,
+    /// Phase 3 sync revocation code (distinct from `CapRevokedMidEval`).
+    CapRevoked,
+    CapRevokedMidEval,
+    CapNotImplemented,
+    CapAttenuation,
+    WriteConflict,
+    IvmViewStale,
+    TxAborted,
+    NestedTransactionNotSupported,
+    PrimitiveNotImplemented,
+    SystemZoneWrite,
+    ValueFloatNan,
+    ValueFloatNonFinite,
+    CidParse,
+    CidUnsupportedCodec,
+    CidUnsupportedHash,
+    VersionBranched,
+    BackendNotFound,
+    TransformSyntax,
+    InputLimit,
+    /// Generic not-found (version-chain anchor miss, etc.).
+    NotFound,
+    /// Fallback for drift detector — holds the unknown raw string.
+    Unknown(alloc::string::String),
+}
+
+impl ErrorCode {
+    /// Return the stable string identifier (e.g. `"E_INV_CYCLE"`).
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            ErrorCode::InvCycle => "E_INV_CYCLE",
+            ErrorCode::InvDepthExceeded => "E_INV_DEPTH_EXCEEDED",
+            ErrorCode::InvFanoutExceeded => "E_INV_FANOUT_EXCEEDED",
+            ErrorCode::InvTooManyNodes => "E_INV_TOO_MANY_NODES",
+            ErrorCode::InvTooManyEdges => "E_INV_TOO_MANY_EDGES",
+            ErrorCode::InvDeterminism => "E_INV_DETERMINISM",
+            ErrorCode::InvContentHash => "E_INV_CONTENT_HASH",
+            ErrorCode::InvRegistration => "E_INV_REGISTRATION",
+            ErrorCode::InvIterateNestDepth => "E_INV_ITERATE_NEST_DEPTH",
+            ErrorCode::InvIterateMaxMissing => "E_INV_ITERATE_MAX_MISSING",
+            ErrorCode::CapDenied => "E_CAP_DENIED",
+            ErrorCode::CapDeniedRead => "E_CAP_DENIED_READ",
+            ErrorCode::CapRevoked => "E_CAP_REVOKED",
+            ErrorCode::CapRevokedMidEval => "E_CAP_REVOKED_MID_EVAL",
+            ErrorCode::CapNotImplemented => "E_CAP_NOT_IMPLEMENTED",
+            ErrorCode::CapAttenuation => "E_CAP_ATTENUATION",
+            ErrorCode::WriteConflict => "E_WRITE_CONFLICT",
+            ErrorCode::IvmViewStale => "E_IVM_VIEW_STALE",
+            ErrorCode::TxAborted => "E_TX_ABORTED",
+            ErrorCode::NestedTransactionNotSupported => "E_NESTED_TRANSACTION_NOT_SUPPORTED",
+            ErrorCode::PrimitiveNotImplemented => "E_PRIMITIVE_NOT_IMPLEMENTED",
+            ErrorCode::SystemZoneWrite => "E_SYSTEM_ZONE_WRITE",
+            ErrorCode::ValueFloatNan => "E_VALUE_FLOAT_NAN",
+            ErrorCode::ValueFloatNonFinite => "E_VALUE_FLOAT_NONFINITE",
+            ErrorCode::CidParse => "E_CID_PARSE",
+            ErrorCode::CidUnsupportedCodec => "E_CID_UNSUPPORTED_CODEC",
+            ErrorCode::CidUnsupportedHash => "E_CID_UNSUPPORTED_HASH",
+            ErrorCode::VersionBranched => "E_VERSION_BRANCHED",
+            ErrorCode::BackendNotFound => "E_BACKEND_NOT_FOUND",
+            ErrorCode::TransformSyntax => "E_TRANSFORM_SYNTAX",
+            ErrorCode::InputLimit => "E_INPUT_LIMIT",
+            ErrorCode::NotFound => "E_NOT_FOUND",
+            ErrorCode::Unknown(s) => s.as_str(),
+        }
+    }
+
+    /// Parse a stable catalog code string into an `ErrorCode`, falling back to
+    /// [`ErrorCode::Unknown`] for forward-compat drift.
+    #[must_use]
+    pub fn from_str(s: &str) -> ErrorCode {
+        match s {
+            "E_INV_CYCLE" => ErrorCode::InvCycle,
+            "E_INV_DEPTH_EXCEEDED" => ErrorCode::InvDepthExceeded,
+            "E_INV_FANOUT_EXCEEDED" => ErrorCode::InvFanoutExceeded,
+            "E_INV_TOO_MANY_NODES" => ErrorCode::InvTooManyNodes,
+            "E_INV_TOO_MANY_EDGES" => ErrorCode::InvTooManyEdges,
+            "E_INV_DETERMINISM" => ErrorCode::InvDeterminism,
+            "E_INV_CONTENT_HASH" => ErrorCode::InvContentHash,
+            "E_INV_REGISTRATION" => ErrorCode::InvRegistration,
+            "E_INV_ITERATE_NEST_DEPTH" => ErrorCode::InvIterateNestDepth,
+            "E_INV_ITERATE_MAX_MISSING" => ErrorCode::InvIterateMaxMissing,
+            "E_CAP_DENIED" => ErrorCode::CapDenied,
+            "E_CAP_DENIED_READ" => ErrorCode::CapDeniedRead,
+            "E_CAP_REVOKED" => ErrorCode::CapRevoked,
+            "E_CAP_REVOKED_MID_EVAL" => ErrorCode::CapRevokedMidEval,
+            "E_CAP_NOT_IMPLEMENTED" => ErrorCode::CapNotImplemented,
+            "E_CAP_ATTENUATION" => ErrorCode::CapAttenuation,
+            "E_WRITE_CONFLICT" => ErrorCode::WriteConflict,
+            "E_IVM_VIEW_STALE" => ErrorCode::IvmViewStale,
+            "E_TX_ABORTED" => ErrorCode::TxAborted,
+            "E_NESTED_TRANSACTION_NOT_SUPPORTED" => ErrorCode::NestedTransactionNotSupported,
+            "E_PRIMITIVE_NOT_IMPLEMENTED" => ErrorCode::PrimitiveNotImplemented,
+            "E_SYSTEM_ZONE_WRITE" => ErrorCode::SystemZoneWrite,
+            "E_VALUE_FLOAT_NAN" => ErrorCode::ValueFloatNan,
+            "E_VALUE_FLOAT_NONFINITE" => ErrorCode::ValueFloatNonFinite,
+            "E_CID_PARSE" => ErrorCode::CidParse,
+            "E_CID_UNSUPPORTED_CODEC" => ErrorCode::CidUnsupportedCodec,
+            "E_CID_UNSUPPORTED_HASH" => ErrorCode::CidUnsupportedHash,
+            "E_VERSION_BRANCHED" => ErrorCode::VersionBranched,
+            "E_BACKEND_NOT_FOUND" => ErrorCode::BackendNotFound,
+            "E_TRANSFORM_SYNTAX" => ErrorCode::TransformSyntax,
+            "E_INPUT_LIMIT" => ErrorCode::InputLimit,
+            "E_NOT_FOUND" => ErrorCode::NotFound,
+            other => ErrorCode::Unknown(alloc::string::ToString::to_string(other)),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Edge (C2 — Phase 1 G1-B stub)
+// ---------------------------------------------------------------------------
+
+/// A graph Edge. Content-addressed over `(source_cid, target_cid, label, properties)`.
+///
+/// Endpoint Node CIDs are **not** affected by edge creation — the Node's CID
+/// is determined only by its own labels+properties (see ENGINE-SPEC §7).
+///
+/// **Phase 1 G1-B stub** — real impl lands in Phase 1 proper.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Edge {
+    pub source: Cid,
+    pub target: Cid,
+    pub label: String,
+    pub properties: Option<BTreeMap<String, Value>>,
+}
+
+impl Edge {
+    /// Construct a new Edge.
+    #[must_use]
+    pub fn new(
+        _source: Cid,
+        _target: Cid,
+        _label: impl Into<String>,
+        _properties: Option<BTreeMap<String, Value>>,
+    ) -> Self {
+        todo!("Edge::new — G1-B (Phase 1)")
+    }
+
+    /// Canonical CBOR bytes for hashing (source, target, label, properties).
+    pub fn canonical_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        todo!("Edge::canonical_bytes — G1-B (Phase 1)")
+    }
+
+    /// Content-addressed Edge CID.
+    pub fn cid(&self) -> Result<Cid, CoreError> {
+        todo!("Edge::cid — G1-B (Phase 1)")
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Anchor + version-chain helpers (C6 — Phase 1 G1-B stub)
+// ---------------------------------------------------------------------------
+
+/// The `CURRENT` edge label — anchor → current-version Node pointer.
+pub const LABEL_CURRENT: &str = "CURRENT";
+
+/// The `NEXT_VERSION` edge label — previous-version → next-version Node.
+pub const LABEL_NEXT_VERSION: &str = "NEXT_VERSION";
+
+/// An opt-in version-chain Anchor Node identity.
+///
+/// **Phase 1 G1-B stub** — real impl lands in Phase 1 proper.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Anchor {
+    pub id: u64,
+}
+
+impl Anchor {
+    #[must_use]
+    pub fn new() -> Self {
+        todo!("Anchor::new — G1-B (Phase 1)")
+    }
+}
+
+impl Default for Anchor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Append a Version Node to an Anchor, returning the updated CURRENT Cid.
+///
+/// **Phase 1 G1-B stub.**
+pub fn append_version(_anchor: &Anchor, _version: &Node) -> Result<Cid, CoreError> {
+    todo!("append_version — G1-B (Phase 1)")
+}
+
+/// Resolve the Anchor's current (latest) version Cid via the CURRENT edge.
+///
+/// **Phase 1 G1-B stub.**
+pub fn current_version(_anchor: &Anchor) -> Result<Cid, CoreError> {
+    todo!("current_version — G1-B (Phase 1)")
+}
+
+/// Walk an Anchor's version chain, yielding Version Node CIDs in oldest-first order.
+///
+/// **Phase 1 G1-B stub.**
+pub fn walk_versions(_anchor: &Anchor) -> Result<Vec<Cid>, CoreError> {
+    todo!("walk_versions — G1-B (Phase 1)")
+}
+
+/// Alternative version-chain surface used by the branched-chain edge-case
+/// tests (`version_branched.rs`). Shape mirrors the prior-CID-threaded
+/// protocol: each `append_version(anchor, prior_head, new_head)` requires
+/// the caller to name the head they're building on. Concurrent appenders
+/// naming the same prior head fork the chain -> `VersionError::Branched`.
+///
+/// **Phase 1 G1-B stub.** Distinct from the top-level `Anchor` /
+/// `append_version` pair — they co-exist for Phase 1, with the final
+/// canonical shape chosen post-R5 once the evaluator lands.
+pub mod version {
+    use super::Cid;
+    use alloc::string::String;
+
+    /// Alternative Anchor shape that stores the current head CID inline.
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct Anchor {
+        pub head: Cid,
+    }
+
+    impl Anchor {
+        /// Construct an anchor rooted at `head`. **Phase 1 G1-B stub.**
+        #[must_use]
+        pub fn new(head: Cid) -> Self {
+            Self { head }
+        }
+    }
+
+    /// Error surface for the prior-threaded append API.
+    #[derive(Debug, thiserror::Error)]
+    pub enum VersionError {
+        /// Two appends against the same prior head -> chain forks.
+        #[error("chain branched; seen head {seen:?}")]
+        Branched { seen: Cid, attempted: Cid },
+
+        /// Caller supplied a prior head the anchor has never seen.
+        #[error("unknown prior head")]
+        UnknownPrior { supplied: Cid },
+
+        /// Other internal error.
+        #[error("version error: {0}")]
+        Other(String),
+    }
+
+    /// Append `new_head` against `prior_head`. **Phase 1 G1-B stub.**
+    pub fn append_version(
+        _anchor: &Anchor,
+        _prior_head: &Cid,
+        _new_head: &Cid,
+    ) -> Result<(), VersionError> {
+        todo!("version::append_version — G1-B (Phase 1)")
+    }
+
+    /// Walk the chain from oldest to newest, yielding CIDs. **Phase 1 G1-B stub.**
+    pub fn walk_versions(_anchor: &Anchor) -> alloc::vec::IntoIter<Cid> {
+        todo!("version::walk_versions — G1-B (Phase 1)")
+    }
 }
 
 /// Format any `Display`able error into an owned `String`. Kept out of the

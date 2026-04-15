@@ -1,0 +1,98 @@
+name: Error Catalog Drift Detector (T7)
+
+# Phase 1 R3 security harness. Fails if `docs/ERROR-CATALOG.md`, the Rust
+# `ErrorCode` enum at `crates/benten-core/src/error_code.rs`, and the
+# generated TS types at `packages/engine/src/errors.ts` diverge.
+#
+# The detector is bidirectional: a variant present in any one source but
+# missing from the other two triggers a named-variant failure. This matches
+# the R1 triage T7 spec + the security-auditor finding #11 remediation:
+#
+#   - CI status check is REQUIRED on every PR (blocking merge).
+#   - The unknown-code runtime fallback (`ErrorCode::Unknown(String)`) is
+#     tested separately in `crates/benten-core/tests/error_codes.rs`; the
+#     drift-detector's own failure mode is tested here by running it against
+#     a deliberately-missing-variant fixture in `test-drift-detector-fails`.
+#
+# Cross-refs:
+#   - .addl/phase-1/r1-security-auditor.json finding #11
+#   - .addl/phase-1/r1-triage.md T7 disposition
+#   - .addl/phase-1/r2-test-landscape.md §8 `T7 error-catalog drift detector`
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: drift-detect-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  drift-detect:
+    name: docs ↔ Rust enum ↔ TS types parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deno for the drift-detect script
+        # The script is Deno/TS so it can cross-reference the Markdown
+        # catalog, the Rust source, and the generated TS types without
+        # a build step.
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v2.x
+
+      - name: Run the drift detector (bidirectional)
+        run: deno run --allow-read scripts/drift-detect-errors.ts
+        # The script exits non-zero on ANY of:
+        #   - variant in ERROR-CATALOG but not in Rust enum
+        #   - variant in Rust enum but not in ERROR-CATALOG
+        #   - variant in Rust enum but not in errors.ts
+        #   - variant in errors.ts but not in Rust enum
+        # The error message names the specific missing variant for lightning-
+        # fast triage. This is load-bearing for R1 security finding #11.
+
+  test-drift-detector-fails:
+    name: self-test (meta-assertion that the detector actually detects)
+    runs-on: ubuntu-latest
+    # This job exercises the drift-detector against a fixture that INJECTS
+    # a missing variant. If the detector passes on the fixture, the
+    # detector itself is broken (silent-pass) and the primary drift-detect
+    # job is vacuous. Catches the degenerate "detector always succeeds"
+    # regression.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: denoland/setup-deno@v1
+        with:
+          deno-version: v2.x
+
+      - name: Drift-detector must FAIL on a doctored fixture
+        run: |
+          set +e
+          deno run --allow-read scripts/drift-detect-errors.ts \
+            --catalog test-fixtures/drift/catalog-missing-variant.md \
+            --rust test-fixtures/drift/rust-enum.rs \
+            --ts test-fixtures/drift/errors.ts
+          EXIT=$?
+          if [ "$EXIT" = "0" ]; then
+            echo "::error::Drift detector passed on a known-broken fixture."
+            echo "::error::The detector is not actually detecting drift."
+            echo "::error::This is the `drift_detector_fails_on_missing_rust_variant` regression."
+            exit 1
+          fi
+          echo "Drift detector correctly failed on doctored fixture (exit=$EXIT)"

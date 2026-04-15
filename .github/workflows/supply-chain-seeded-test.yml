@@ -1,0 +1,145 @@
+name: Supply Chain (seeded-vuln integration test)
+
+# R3 integration test for T10. The cargo-deny + cargo-audit harness
+# already lives in `.github/workflows/supply-chain.yml` and the config is
+# in `deny.toml`. This workflow proves the harness actually fires when a
+# known-vulnerable dep is introduced — without it, we only know the
+# harness runs cleanly against our current (by-assumption-clean) tree;
+# we don't know it would catch a regression.
+#
+# Runs weekly on a cron to avoid PR-time noise, and manually via
+# workflow_dispatch so R6 and post-incident reviews can retrigger it.
+# Does NOT gate PR merges — a transient advisory-db fetch failure
+# shouldn't block Ben's work; the weekly run catches regressions that
+# deny.toml's real-time checks in `supply-chain.yml` miss (e.g., the
+# advisory-db was stale at PR time but updated by the time the weekly
+# fires).
+#
+# R3 ownership: rust-test-writer-performance (system prompt explicitly
+# assigns the supply-chain integration test here).
+
+on:
+  schedule:
+    # Weekly, Mondays 13:00 UTC (an hour after the main supply-chain
+    # weekly audit so advisory-db is warm).
+    - cron: "0 13 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: supply-chain-seeded-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  seeded-vuln-must-fail-cargo-deny:
+    name: cargo-deny fires on seeded vulnerable dep
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
+      - name: Seed a known-vulnerable dep into a throwaway crate
+        # We do NOT touch the committed Cargo.toml. Instead we create a
+        # sibling throwaway crate that cargo-deny walks when invoked
+        # against the workspace manifest. The throwaway crate's manifest
+        # references `time = "0.1.43"` which has RUSTSEC-2020-0071 (local
+        # time soundness) — a stable long-lived RUSTSEC advisory that is
+        # a safe canary (no real CVE exploitation risk, just a stable
+        # advisory-db entry).
+        #
+        # If the advisory db marks this resolved in future, swap for
+        # another stable long-lived RUSTSEC entry — the list of
+        # candidates is maintained in CONTRIBUTING.md "Supply chain
+        # canary rotation".
+        shell: bash
+        run: |
+          mkdir -p /tmp/seeded-vuln
+          cat > /tmp/seeded-vuln/Cargo.toml <<'EOF'
+          [package]
+          name = "seeded-vuln-canary"
+          version = "0.0.1"
+          edition = "2021"
+
+          [dependencies]
+          # RUSTSEC-2020-0071 — a stable long-lived advisory used as a
+          # supply-chain canary. If this build STARTS passing, either the
+          # advisory was resolved upstream (swap canaries) or cargo-deny
+          # is misconfigured (fail loudly).
+          time = "=0.1.43"
+          EOF
+          mkdir -p /tmp/seeded-vuln/src
+          echo "fn main() {}" > /tmp/seeded-vuln/src/main.rs
+
+      - name: Run cargo-deny against the seeded crate using our deny.toml
+        shell: bash
+        run: |
+          # Use our repo's deny.toml so we're testing the project's actual
+          # policy, not cargo-deny defaults. The --manifest-path points at
+          # the seeded canary.
+          set +e
+          cargo deny --manifest-path /tmp/seeded-vuln/Cargo.toml \
+                     --config "${GITHUB_WORKSPACE}/deny.toml" \
+                     check advisories
+          exit_code=$?
+          set -e
+          if [ $exit_code -eq 0 ]; then
+            echo "FAIL: cargo-deny did NOT fire on the seeded vulnerable dep (RUSTSEC-2020-0071)."
+            echo "This means the T10 harness would not catch a real regression."
+            echo "Check: (a) is the advisory still active in the rustsec db?"
+            echo "       (b) is deny.toml's [advisories] block still configured to fail?"
+            echo "       (c) has the canary crate been removed from crates.io?"
+            exit 1
+          fi
+          echo "OK: cargo-deny correctly failed on the seeded vulnerable dep."
+
+  seeded-vuln-must-fail-cargo-audit:
+    name: cargo-audit fires on seeded vulnerable dep
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install --locked cargo-audit
+
+      - name: Seed + lock a known-vulnerable dep
+        shell: bash
+        run: |
+          mkdir -p /tmp/seeded-vuln-audit
+          cat > /tmp/seeded-vuln-audit/Cargo.toml <<'EOF'
+          [package]
+          name = "seeded-vuln-audit-canary"
+          version = "0.0.1"
+          edition = "2021"
+
+          [dependencies]
+          time = "=0.1.43"
+          EOF
+          mkdir -p /tmp/seeded-vuln-audit/src
+          echo "fn main() {}" > /tmp/seeded-vuln-audit/src/main.rs
+          (cd /tmp/seeded-vuln-audit && cargo generate-lockfile)
+
+      - name: Run cargo-audit — must fail
+        shell: bash
+        run: |
+          set +e
+          (cd /tmp/seeded-vuln-audit && cargo audit)
+          exit_code=$?
+          set -e
+          if [ $exit_code -eq 0 ]; then
+            echo "FAIL: cargo-audit did NOT fire on the seeded vulnerable dep."
+            echo "The T10 harness's cargo-audit leg would miss regressions."
+            exit 1
+          fi
+          echo "OK: cargo-audit correctly failed on the seeded vulnerable dep."

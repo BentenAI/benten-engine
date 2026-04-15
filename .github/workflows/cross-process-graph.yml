@@ -1,0 +1,56 @@
+name: Cross-Process Graph CID
+
+# Extends D2 (cross-process determinism of benten-core's CID) to
+# benten-graph: write a Node in one process, read it in a second process,
+# assert the CID survives the redb serialize -> deserialize roundtrip
+# byte-identical.
+#
+# R3 ownership: rust-test-writer-performance. Referenced as the "cross-
+# process determinism extension" in implementation plan §4.6.
+#
+# The actual integration test that implements this lives in
+# `crates/benten-engine/tests/integration/cross_process_graph.rs`
+# (owned by qa-expert-integration per R2 landscape). This workflow is
+# the CI gate that runs it as a dedicated job so a failure here is
+# attributable rather than getting lost in the main test output.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: cross-process-graph-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  graph-cross-process:
+    name: benten-graph cross-process CID roundtrip
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: Run cross-process graph integration test
+        # `nextest` runs each integration test binary in its own process,
+        # so writing in one #[test] and reading in another genuinely
+        # exercises cross-process round-trip. If the test is split across
+        # two processes (parent spawns child), the harness handles that.
+        # Flag is fatal so a hang here doesn't wedge the whole workflow.
+        timeout-minutes: 5
+        run: cargo nextest run -p benten-engine --test cross_process_graph

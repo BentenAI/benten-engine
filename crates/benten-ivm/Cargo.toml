@@ -13,3 +13,14 @@ workspace = true
 
 [dependencies]
 benten-core = { path = "../benten-core" }
+benten-graph = { path = "../benten-graph" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+proptest = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "view_maintenance"
+harness = false

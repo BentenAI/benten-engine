@@ -14,10 +14,12 @@
 //! Phase 1 proper proceeds.
 
 #![forbid(unsafe_code)]
+#![allow(clippy::todo, reason = "R3 red-phase stubs; R5 removes todos")]
 
 use std::path::Path;
 
-use benten_core::{Cid, CoreError, Node};
+pub use benten_core::ErrorCode;
+use benten_core::{Cid, CoreError, Edge, Node};
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 
 // ---------------------------------------------------------------------------
@@ -60,6 +62,48 @@ pub enum GraphError {
     /// or a format drift.
     #[error("decode: {0}")]
     Decode(String),
+
+    /// `open_existing` was called on a path where no database file exists.
+    /// Phase 1 G2-B stub.
+    #[error("backend not found at path")]
+    BackendNotFound {
+        /// Path supplied to the failed `open_existing` call (Phase 1 stub
+        /// — the PathBuf plumbing lands in R5; today this is a placeholder).
+        path: std::path::PathBuf,
+    },
+
+    /// A write was attempted on a system-zone label (label starting with
+    /// `"system:"`) without the privileged flag set. Phase 1 SC1 stopgap.
+    #[error("system-zone write not permitted from user path: {label}")]
+    SystemZoneWrite { label: String },
+
+    /// A nested transaction was rejected. Phase 1 G3 stub.
+    #[error("nested transactions are not supported")]
+    NestedTransactionNotSupported {},
+
+    /// The transaction's closure returned `Err`, so the write batch was rolled back.
+    #[error("transaction aborted: {reason}")]
+    TxAborted { reason: String },
+}
+
+impl GraphError {
+    /// Map a `GraphError` to its stable ERROR-CATALOG code. **Phase 1 stub —
+    /// R5 refines the mapping for `Core` / `Decode` / `Redb`.**
+    #[must_use]
+    pub fn code(&self) -> ErrorCode {
+        match self {
+            GraphError::Core(e) => e.code(),
+            GraphError::Redb(_) | GraphError::Decode(_) => {
+                ErrorCode::Unknown(String::from("graph_internal"))
+            }
+            GraphError::BackendNotFound { .. } => ErrorCode::BackendNotFound,
+            GraphError::SystemZoneWrite { .. } => ErrorCode::SystemZoneWrite,
+            GraphError::NestedTransactionNotSupported {} => {
+                ErrorCode::NestedTransactionNotSupported
+            }
+            GraphError::TxAborted { .. } => ErrorCode::TxAborted,
+        }
+    }
 }
 
 impl From<redb::Error> for GraphError {
@@ -128,36 +172,28 @@ pub type ScanResult = Vec<(Vec<u8>, Vec<u8>)>;
 ///   `type Error` so backends don't lie through a redb-named variant.
 /// - Scan shape (see [`ScanResult`] doc): return an iterator, not a `Vec`.
 pub trait KVBackend {
+    /// Backend-specific error type. `RedbBackend` sets this to [`GraphError`];
+    /// alternative backends (in-memory mock, WASM peer-fetch, iroh-fetch) each
+    /// choose their own so they aren't forced to lie through a redb-named
+    /// variant. See the `backend_error_polymorphism` edge-case test for the
+    /// property this enables.
+    type Error;
+
     /// Fetch the value stored under `key`. Returns `Ok(None)` on a clean miss.
-    ///
-    /// # Errors
-    /// Returns [`GraphError::Redb`] on storage errors.
-    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, GraphError>;
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
     /// Insert or overwrite the value at `key`.
-    ///
-    /// # Errors
-    /// Returns [`GraphError::Redb`] on storage errors.
-    fn put(&self, key: &[u8], value: &[u8]) -> Result<(), GraphError>;
+    fn put(&self, key: &[u8], value: &[u8]) -> Result<(), Self::Error>;
 
     /// Delete the value at `key`. Idempotent: returns `Ok(())` even if the key
     /// was absent.
-    ///
-    /// # Errors
-    /// Returns [`GraphError::Redb`] on storage errors.
-    fn delete(&self, key: &[u8]) -> Result<(), GraphError>;
+    fn delete(&self, key: &[u8]) -> Result<(), Self::Error>;
 
     /// Return every (key, value) pair whose key starts with `prefix`.
-    ///
-    /// # Errors
-    /// Returns [`GraphError::Redb`] on storage errors.
-    fn scan(&self, prefix: &[u8]) -> Result<ScanResult, GraphError>;
+    fn scan(&self, prefix: &[u8]) -> Result<ScanResult, Self::Error>;
 
     /// Commit multiple puts atomically. Either every pair lands or none do.
-    ///
-    /// # Errors
-    /// Returns [`GraphError::Redb`] on storage errors.
-    fn put_batch(&self, pairs: &[(Vec<u8>, Vec<u8>)]) -> Result<(), GraphError>;
+    fn put_batch(&self, pairs: &[(Vec<u8>, Vec<u8>)]) -> Result<(), Self::Error>;
 }
 
 // ---------------------------------------------------------------------------
@@ -210,6 +246,12 @@ pub struct RedbBackend {
     db: Database,
 }
 
+impl core::fmt::Debug for RedbBackend {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RedbBackend").finish_non_exhaustive()
+    }
+}
+
 impl RedbBackend {
     /// Open or create a redb database at `path`. The parent directory must
     /// already exist (redb does not `mkdir -p`).
@@ -246,6 +288,19 @@ impl RedbBackend {
         Ok(cid)
     }
 
+    /// Store a Node under a caller-supplied `WriteContext`. The context
+    /// controls system-zone prefix enforcement (SC1 stopgap for Invariant 11).
+    ///
+    /// **Phase 1 SC1 stub.** R5 wires the actual enforcement; the surface is
+    /// here so tests can pin the contract before the implementation lands.
+    pub fn put_node_with_context(
+        &self,
+        _node: &Node,
+        _ctx: &WriteContext,
+    ) -> Result<Cid, GraphError> {
+        todo!("RedbBackend::put_node_with_context — SC1 (Phase 1)")
+    }
+
     /// Retrieve a Node by CID. Returns `Ok(None)` on a clean miss.
     ///
     /// # Errors
@@ -262,6 +317,8 @@ impl RedbBackend {
 }
 
 impl KVBackend for RedbBackend {
+    type Error = GraphError;
+
     fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, GraphError> {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(NODES_TABLE)?;
@@ -330,6 +387,249 @@ impl KVBackend for RedbBackend {
         write_txn.commit()?;
         Ok(())
     }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 1 stubs — expanded in G2/G3/G5
+// ---------------------------------------------------------------------------
+
+impl RedbBackend {
+    /// Open a redb database that must already exist at `path`. Distinct from
+    /// [`RedbBackend::open`] which creates on miss.
+    ///
+    /// **Phase 1 G2-B stub.**
+    pub fn open_existing(_path: impl AsRef<Path>) -> Result<Self, GraphError> {
+        todo!("RedbBackend::open_existing — G2-B (Phase 1)")
+    }
+
+    /// Open-or-create semantics (equivalent to [`RedbBackend::open`] today,
+    /// kept as an explicit name for the G2-B split).
+    pub fn open_or_create(path: impl AsRef<Path>) -> Result<Self, GraphError> {
+        RedbBackend::open(path)
+    }
+
+    /// Transaction primitive — a closure over a write transaction handle.
+    /// Atomic: all writes inside the closure commit together, or none do.
+    ///
+    /// **Phase 1 G3-A stub.**
+    pub fn transaction<F, R>(&self, _f: F) -> Result<R, GraphError>
+    where
+        F: FnOnce(&mut Transaction<'_>) -> Result<R, GraphError>,
+    {
+        todo!("RedbBackend::transaction — G3-A (Phase 1)")
+    }
+
+    /// Transaction variant used by the commit-denial edge-case test. The
+    /// closure runs to completion; a deny-on-commit hook fires before the
+    /// redb commit actually persists. **Phase 1 G3-A stub.**
+    pub fn transaction_with_deny_on_commit<F, R>(&self, _f: F) -> Result<R, GraphError>
+    where
+        F: FnOnce(&mut Transaction<'_>) -> Result<R, GraphError>,
+    {
+        todo!("RedbBackend::transaction_with_deny_on_commit — G3-A (Phase 1)")
+    }
+
+    /// Subscribe to the post-commit change stream.
+    ///
+    /// **Phase 1 G3-A stub.**
+    pub fn subscribe(&self) -> ChangeReceiver {
+        todo!("RedbBackend::subscribe — G3-A (Phase 1)")
+    }
+
+    /// Enqueue a Node put into a label-index update. **G5 stub.**
+    pub fn get_by_label(&self, _label: &str) -> Result<Vec<Cid>, GraphError> {
+        todo!("RedbBackend::get_by_label — G5 (Phase 1)")
+    }
+
+    /// Property-value index lookup. **G5 stub.**
+    pub fn get_by_property(
+        &self,
+        _label: &str,
+        _prop: &str,
+        _value: &benten_core::Value,
+    ) -> Result<Vec<Cid>, GraphError> {
+        todo!("RedbBackend::get_by_property — G5 (Phase 1)")
+    }
+
+    /// Put an Edge (separate from put_node). **G4 stub.**
+    pub fn put_edge(&self, _edge: &Edge) -> Result<Cid, GraphError> {
+        todo!("RedbBackend::put_edge — G4 (Phase 1)")
+    }
+
+    /// Get an Edge by CID. **G4 stub.**
+    pub fn get_edge(&self, _cid: &Cid) -> Result<Option<Edge>, GraphError> {
+        todo!("RedbBackend::get_edge — G4 (Phase 1)")
+    }
+
+    /// All edges whose `source == cid`. **G4 stub.**
+    pub fn edges_from(&self, _cid: &Cid) -> Result<Vec<Edge>, GraphError> {
+        todo!("RedbBackend::edges_from — G4 (Phase 1)")
+    }
+
+    /// All edges whose `target == cid`. **G4 stub.**
+    pub fn edges_to(&self, _cid: &Cid) -> Result<Vec<Edge>, GraphError> {
+        todo!("RedbBackend::edges_to — G4 (Phase 1)")
+    }
+}
+
+/// Durability knob for writes.
+///
+/// **Phase 1 G2-B stub** — semantics finalized in Phase 1 proper.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DurabilityMode {
+    /// fsync before commit returns. Safest, slowest.
+    Immediate,
+    /// Batch commits, single fsync per batch window.
+    Group,
+    /// Commit returns before fsync.
+    Async,
+}
+
+/// A write transaction handle, passed into the `transaction` closure. All
+/// writes are atomic at commit.
+///
+/// **Phase 1 G3-A stub.**
+pub struct Transaction<'a> {
+    _phantom: core::marker::PhantomData<&'a ()>,
+}
+
+impl<'a> Transaction<'a> {
+    /// Put a Node inside the transaction.
+    pub fn put_node(&mut self, _node: &Node) -> Result<Cid, GraphError> {
+        todo!("Transaction::put_node — G3-A (Phase 1)")
+    }
+
+    /// Put an Edge inside the transaction.
+    pub fn put_edge(&mut self, _edge: &Edge) -> Result<Cid, GraphError> {
+        todo!("Transaction::put_edge — G3-A (Phase 1)")
+    }
+
+    /// Open a nested transaction. Phase 1 always rejects with
+    /// [`GraphError::NestedTransactionNotSupported`].
+    pub fn transaction<F, R>(&mut self, _f: F) -> Result<R, GraphError>
+    where
+        F: FnOnce(&mut Transaction<'_>) -> Result<R, GraphError>,
+    {
+        todo!("Transaction::transaction (nested) — G3-A (Phase 1)")
+    }
+}
+
+/// Category of change emitted on the change stream.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChangeKind {
+    Created,
+    Updated,
+    Deleted,
+}
+
+/// A post-commit change event. Emitted for every write once the redb commit
+/// completes. Consumed by IVM subscribers.
+///
+/// **Phase 1 G3-A stub.**
+#[derive(Debug, Clone)]
+pub struct ChangeEvent {
+    pub cid: Cid,
+    pub label: String,
+    pub kind: ChangeKind,
+    pub tx_id: u64,
+    pub actor_cid: Option<Cid>,
+    pub handler_cid: Option<Cid>,
+    pub capability_grant_cid: Option<Cid>,
+}
+
+impl ChangeEvent {
+    /// Stable string form of the event kind, used by integration tests.
+    #[must_use]
+    pub fn kind_str(&self) -> &'static str {
+        match self.kind {
+            ChangeKind::Created => "Created",
+            ChangeKind::Updated => "Updated",
+            ChangeKind::Deleted => "Deleted",
+        }
+    }
+}
+
+/// Abstract subscriber shape for change events. Decouples `benten-graph` from
+/// any specific async runtime (R1 architect major #1: no tokio in graph).
+///
+/// **Phase 1 G3-A stub.**
+pub trait ChangeSubscriber: Send + Sync {
+    fn on_change(&self, event: &ChangeEvent);
+}
+
+/// Return handle from [`RedbBackend::subscribe`]. **Phase 1 G3-A stub.**
+pub struct ChangeReceiver;
+
+impl ChangeReceiver {
+    /// Receive the next change event (blocking).
+    pub fn recv(&self) -> Result<ChangeEvent, GraphError> {
+        todo!("ChangeReceiver::recv — G3-A (Phase 1)")
+    }
+}
+
+/// Metadata passed to the capability pre-write hook.
+///
+/// `is_privileged = true` marks an engine-API-only path (grant_capability,
+/// create_view, revoke_capability), bypassing the system-zone label ban.
+///
+/// **Phase 1 G3-A / SC1 stub.**
+#[derive(Debug, Clone)]
+pub struct WriteContext {
+    pub label: String,
+    pub is_privileged: bool,
+}
+
+impl Default for WriteContext {
+    fn default() -> Self {
+        Self {
+            label: String::new(),
+            is_privileged: false,
+        }
+    }
+}
+
+impl WriteContext {
+    #[must_use]
+    pub fn new(label: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            is_privileged: false,
+        }
+    }
+
+    /// Construct a WriteContext flagged as privileged (engine-API-only path).
+    /// This is the only constructor that bypasses the SC1 system-zone ban.
+    /// User code cannot call this without going through `Engine::grant_capability`,
+    /// `Engine::create_view`, or `Engine::revoke_capability`.
+    #[must_use]
+    pub fn privileged_for_engine_api() -> Self {
+        Self {
+            label: String::new(),
+            is_privileged: true,
+        }
+    }
+
+    /// Called by the transaction primitive to enforce the SC1 stopgap. Rejects
+    /// writes to any label starting with `"system:"` unless
+    /// `is_privileged == true`.
+    pub fn enforce_system_zone(&self) -> Result<(), GraphError> {
+        todo!("WriteContext::enforce_system_zone — SC1 (Phase 1)")
+    }
+}
+
+/// Blanket Node store API — available for any [`KVBackend`] via a key schema
+/// rule (CID prefix, schema-versioned). **Phase 1 G4 stub.**
+pub trait NodeStore {
+    fn put_node(&self, node: &Node) -> Result<Cid, GraphError>;
+    fn get_node(&self, cid: &Cid) -> Result<Option<Node>, GraphError>;
+}
+
+/// Blanket Edge store API. **Phase 1 G4 stub.**
+pub trait EdgeStore {
+    fn put_edge(&self, edge: &Edge) -> Result<Cid, GraphError>;
+    fn get_edge(&self, cid: &Cid) -> Result<Option<Edge>, GraphError>;
+    fn edges_from(&self, cid: &Cid) -> Result<Vec<Edge>, GraphError>;
+    fn edges_to(&self, cid: &Cid) -> Result<Vec<Edge>, GraphError>;
 }
 
 // ---------------------------------------------------------------------------

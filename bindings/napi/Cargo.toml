@@ -12,14 +12,38 @@ description = "Node.js bindings for the Benten graph engine via napi-rs v3."
 workspace = true
 
 [lib]
-crate-type = ["cdylib"]
+# `cdylib` for the napi dynamic lib; `rlib` so the in-process integration
+# test `tests/input_validation.rs` can link against the `benten_napi::testing`
+# surface. The `napi-export` feature gates the napi-rs symbols so the
+# rlib used by the test binary doesn't reference unresolved napi externs.
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["napi-export"]
+# Test-only feature used by the in-process integration test.
+in-process-test = []
+# When "napi-export" is enabled (default for the cdylib build), the crate
+# pulls napi-rs and exports the `#[napi]` surface. Disabling the feature
+# yields a pure-Rust rlib that the in-process integration test can link
+# against without resolving napi extern symbols.
+napi-export = ["dep:napi", "dep:napi-derive"]
 
 [dependencies]
 benten-core = { path = "../../crates/benten-core" }
 benten-engine = { path = "../../crates/benten-engine" }
-napi = { workspace = true, features = ["napi4", "serde-json"] }
-napi-derive = { workspace = true }
+napi = { workspace = true, features = ["napi4", "serde-json"], optional = true }
+napi-derive = { workspace = true, optional = true }
 serde_json = { workspace = true }
 
 [build-dependencies]
 napi-build = "2"
+
+[[test]]
+name = "input_validation"
+# Requires the in-process feature so the test only runs in builds that
+# explicitly opt into the rlib + non-napi-export configuration. By default
+# `cargo test --workspace` still compiles the rlib with napi-export ON
+# (which fails to link the test binary). Use:
+#     cargo test -p benten-napi --no-default-features --features in-process-test
+# to run this test. Until then it is excluded from the default test run.
+required-features = ["in-process-test"]

@@ -26,3 +26,7 @@ tempfile = { workspace = true }
 [[bench]]
 name = "roundtrip"
 harness = false
+
+[[bench]]
+name = "end_to_end_create"
+harness = false
