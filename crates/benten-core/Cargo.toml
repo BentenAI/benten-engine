@@ -1,0 +1,22 @@
+[package]
+name = "benten-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Core types and content-addressed hashing for the Benten graph engine."
+
+[lints]
+workspace = true
+
+[dependencies]
+blake3 = { workspace = true, features = ["pure"] }
+serde = { workspace = true }
+serde_bytes = { workspace = true }
+serde_ipld_dagcbor = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+# No extra dev dependencies for the spike; cross-process determinism test uses std.
