@@ -1,0 +1,65 @@
+{
+  "agent": "benten-core-guardian",
+  "stage": "pre-r1",
+  "target": ".addl/phase-1/00-implementation-plan.md",
+  "summary": "The plan holds the content-addressed invariants, lands the reconciled Phase 1 scope exactly (8 executable primitives, 8 enforced invariants, all 12 primitive types defined so the type surface is exercised), integrates every P1.*.* spike-triage tag into a named deliverable, and preserves every validated decision (BLAKE3+DAG-CBOR+CIDv1 via serde_ipld_dagcbor; transaction primitive; capability hook; opt-in version chains; code-as-graph; non-Turing-complete; crud('post') zero-config). Performance targets in Section 4.4 align with ENGINE-SPEC §14.6 realism. A small number of minor hardening asks remain around the C2 Edge type and C6 version-chain work to ensure they cannot silently leak into Node.cid(), plus one minor scope-boundary flag around 'diag feature default enabled' whose inflation risk should be tracked.",
+  "findings": [
+    {
+      "severity": "minor",
+      "area": "content-hash-invariant",
+      "location": "plan §2.1 C2 (Edge type) + §2.1 C6 (version chain)",
+      "claim": "C2 correctly calls out 'inclusion in Node hash stays excluded per §7' and C6 adds Anchor + CURRENT/NEXT_VERSION + walk_versions helpers. However the plan does not add an explicit regression test obligation that (a) a Node with outgoing/incoming edges produces the same CID as the same Node with no edges, and (b) adding CURRENT/NEXT_VERSION edges to a Version Node does not shift that Version Node's CID. The canonical fixture `bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda` is checked at D2/D3 but those tests predate Edge + version-chain work.",
+      "evidence": "Section 4.1 lists 'Node hash determinism (4 cases from spike + float cases from G1-A); Edge hash determinism' but does not explicitly name a 'Node hash is invariant under edge-graph mutations' or 'Version Node hash is invariant under version-chain linking' test. The spike's `anchor_id_excluded_from_hash` test (crates/benten-core/src/lib.rs:409) is the closest analog and needs siblings for the new C2/C6 surfaces.",
+      "fix": "Add two explicit tests to G1-B's must-pass list in §3 and to §4.1: `test edge_creation_does_not_change_endpoint_node_cids` and `test version_chain_linking_does_not_change_version_node_cids`. Each asserts byte-for-byte equality of the CID before and after the edge/version operation. These are cheap guardrails against the exact regression class most likely to break the canonical fixture."
+    },
+    {
+      "severity": "minor",
+      "area": "content-hash-invariant",
+      "location": "plan §2.1 C4 (cid/multihash crate migration)",
+      "claim": "C4 proposes migrating from the hand-rolled 36-byte envelope to the `cid` + `multihash` + `multibase` crates, gated on upstream PRs merging. The plan asserts this is 'byte-compat' but doesn't require a proof artifact in CI guarding the migration.",
+      "evidence": "SPIKE 'Surprises' #1 already confirmed the `BentenAI/rust-cid` fork produces the byte-identical fixture; the further migration to upstream-released `cid` crate is another swap that should be proven equivalent in CI, not asserted.",
+      "fix": "Add to §4.5 / §4.6: the multi-arch CI job (T4) and wasm-runtime CI job (T6) must both assert the canonical fixture against the final `Cid` type — whether that's our current hand-rolled envelope or the post-migration `cid`-crate type. Phrase T4/T6 as 'assert `Node::cid()?.to_string()` equals the pinned fixture' so the test survives the cosmetic migration."
+    },
+    {
+      "severity": "minor",
+      "area": "scope-fidelity",
+      "location": "plan §2.5 E7/E8 + §5 Rank 5 (debug tooling crate home)",
+      "claim": "The plan puts `toMermaid()` and `engine.trace()` in `benten-eval` 'behind a `diag` feature flag (default enabled)'. A default-enabled feature inside `benten-eval` is functionally the same as unconditional inclusion for 99% of consumers and grows the thin-engine crate. It is a scope-boundary risk for the thinness test.",
+      "evidence": "CLAUDE.md thinness test: 'A developer should be able to use benten-core + benten-graph + benten-engine with NoAuthBackend, versioning disabled, and no IVM subscribers -- and get a pure content-addressed graph database with no Benten-specific conventions.' The thinness test in §3 G7 (`thinness_no_ivm_no_caps_still_works`) doesn't cover 'does benten-eval stay small'; a default-enabled diag feature makes it easy for eval to accrete diagnostic weight over time.",
+      "fix": "Flip the default: ship `diag` as a feature flag that is **off by default** in `benten-eval` itself, and opt-in via `benten-engine` (which turns it on by default for the engine-facing API). This keeps `benten-eval` thin for anyone who embeds it standalone while preserving DX through `benten-engine`. Alternative: track LOC of diag surface as a CI gate (fail if `src/diag/**` exceeds 500 LOC) and promote to `benten-diag` crate on first breach."
+    },
+    {
+      "severity": "minor",
+      "area": "primitive-coverage",
+      "location": "plan §2.5 E1 (twelve primitive types defined)",
+      "claim": "E1 correctly defines all 12 primitive types in Rust and has the executor return `E_PRIMITIVE_NOT_IMPLEMENTED` for the 4 deferred. But the plan does not require that the structural validator (E5, invariants 1/2/3/5/6/9/10/12) runs successfully on subgraphs containing the 4 Phase-2 primitives. If validation rejects them at registration, the 'type surface exercised' goal is defeated.",
+      "evidence": "ENGINE-SPEC §4 invariant 9 is 'Determinism classification per operation type' — this must know the classification of WAIT/STREAM/SUBSCRIBE/SANDBOX. Invariant 12 is registration-time structural validation. If a user registers a subgraph with SANDBOX today, the intent is 'register succeeds, invocation returns E_PRIMITIVE_NOT_IMPLEMENTED' — not 'registration fails'. The plan does not pin this distinction.",
+      "fix": "Add an explicit §2.5 E5 clarification: 'Invariants 1/2/3/5/6/9/10/12 apply to all 12 primitive types. WAIT/STREAM/SUBSCRIBE/SANDBOX pass structural validation at registration; only their executor paths return E_PRIMITIVE_NOT_IMPLEMENTED at call time.' Add an R3 test `test phase_two_primitives_pass_structural_validation` to §4.1. This prevents a silent Phase 2 regression where enabling the executors requires re-running registration on existing stored subgraphs."
+    },
+    {
+      "severity": "minor",
+      "area": "determinism-axis",
+      "location": "plan §4.6 + §2.8 T4/T5/T6",
+      "claim": "T4 (multi-arch), T5 (MSRV), T6 (wasm-runtime) each individually assert the canonical fixture. The plan does not explicitly require a **cross-leg byte-for-byte comparison** — i.e., that macOS-arm64-stable, Linux-x86_64-MSRV, and wasm32-wasip1-wasmtime all produce the identical byte sequence, not just the identical string-formatted CID.",
+      "evidence": "SPIKE `.addl/spike/determinism-verifier.json` called out the full D1/D2/D3 axes and SPIKE results extended them. The plan lands each leg but the verification is implicit: each job asserts against the same fixture string, so transitively they agree. However, if the fixture is regenerated for any reason (C3 Float addition; C6 version chain) the CI jobs can drift and only one leg may notice.",
+      "fix": "Add one CI job in T7's orbit: a 'determinism gate' that depends on T4 + T5 + T6 all completing, downloads the CID string each produced (or runs them in the same job), and asserts they are mutually byte-equal. Failure message: 'Determinism drift across {leg}; fixture is <hash>; this leg produced <hash>'. This makes cross-target agreement explicit rather than transitive."
+    },
+    {
+      "severity": "minor",
+      "area": "validated-decisions",
+      "location": "plan §2.3 I5 (content listing) + §2.7 B6 (crud zero-config)",
+      "claim": "Decision #11 requires `crud('post')` zero-config to ship in Phase 1. The plan lands this in B6 and depends on I5 (View 3). However, I5's 'sorted-by-createdAt' is hardcoded — if the `post` label doesn't have a `createdAt` property the zero-config path silently breaks, not loudly.",
+      "evidence": "§2.3 I5: 'On post-labeled node create/update/delete, maintain sorted-by-createdAt list'. §2.7 B6: 'zero-config crud('post') path'. Neither calls out: what if properties don't include `createdAt`? The DSL should either inject it (like `cid`/`anchor_id` are system-added) or surface a clear registration-time error.",
+      "fix": "Add to §2.7 B6 must-pass: the zero-config path must inject a `createdAt: now()` property on WRITE if not present, using a deterministic-per-write timestamp (HLC when available; wall-clock stamped once at create and never re-computed). Add test `test crud_post_zero_config_injects_createdat_deterministically`. This also preempts the Decision #11 failure mode where devs write their first `crud('post')` and get a cryptic 'view read returned empty' error."
+    },
+    {
+      "severity": "minor",
+      "area": "spike-triage-preservation",
+      "location": "plan §5 Rank 9 (P1.*.* tag integration)",
+      "claim": "All 13 P1.*.* tags are integrated, but one deserves a named test coverage owner that the plan currently leaves implicit: P1.graph.stress-tests (multi-MB round-trip, concurrent reader+writer, failure-injection atomicity). The plan routes this to 'G2 R3 tests' but the R3 test writers will receive a test landscape from R2 that is seeded from §4 — and §4.1 mentions 'transaction atomicity under simulated failure' under benten-graph, but does not explicitly name multi-MB or concurrent-reader+writer.",
+      "evidence": "SPIKE 'Critic Triage' P1.graph.stress-tests: 'Multi-MB value round-trip, concurrent reader+writer, failure-injection atomicity test'. Plan §4.1 benten-graph: 'transaction atomicity under simulated failure' — missing the other two categories.",
+      "fix": "Add to §4.1 benten-graph bullet: 'multi-MB value round-trip (assert 1MB/10MB/100MB blobs round-trip with BLAKE3 integrity intact), concurrent reader+writer (N threads read while 1 thread writes; no torn reads; MVCC snapshot semantics hold)'. This makes the P1.graph.stress-tests landing explicit in R3 seeds rather than inferred."
+    }
+  ],
+  "verdict": "pass"
+}
