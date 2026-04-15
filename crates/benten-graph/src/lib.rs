@@ -426,7 +426,10 @@ mod tests {
         sorted.sort();
         assert_eq!(keys, sorted);
         keys.sort();
-        assert_eq!(keys, [b"alpha".as_ref(), b"beta".as_ref(), b"gamma".as_ref()]);
+        assert_eq!(
+            keys,
+            [b"alpha".as_ref(), b"beta".as_ref(), b"gamma".as_ref()]
+        );
     }
 
     #[test]
