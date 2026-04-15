@@ -1,0 +1,198 @@
+{
+  "agent": "qa-expert",
+  "stage": "r4",
+  "target": "integration + e2e + cross-process tests",
+  "scope": {
+    "files_reviewed": [
+      "crates/benten-engine/tests/integration.rs",
+      "crates/benten-engine/tests/integration/cap_toctou.rs",
+      "crates/benten-engine/tests/integration/caps_crud.rs",
+      "crates/benten-engine/tests/integration/change_stream.rs",
+      "crates/benten-engine/tests/integration/compromises_regression.rs",
+      "crates/benten-engine/tests/integration/cross_process_graph.rs",
+      "crates/benten-engine/tests/integration/exit_criteria_all_six.rs",
+      "crates/benten-engine/tests/integration/ivm_propagation.rs",
+      "crates/benten-engine/tests/integration/nested_tx.rs",
+      "crates/benten-engine/tests/integration/stale_view.rs",
+      "crates/benten-engine/tests/integration/system_zone_integration.rs",
+      "crates/benten-engine/tests/integration/tx_atomicity.rs",
+      "crates/benten-engine/tests/integration/version_current.rs",
+      "crates/benten-engine/tests/spike_survivors.rs",
+      "crates/benten-engine/tests/engine_builder_thinness.rs",
+      "crates/benten-engine/tests/engine_read_view_stale.rs",
+      "crates/benten-graph/tests/d2_cross_process_graph.rs",
+      "bindings/napi/index.test.ts",
+      "packages/engine/src/crud.test.ts",
+      "packages/engine/src/trace.test.ts",
+      "packages/engine/src/mermaid.test.ts",
+      "packages/engine/src/errors.test.ts",
+      "tools/create-benten-app/test/scaffolder.test.ts"
+    ],
+    "lens": "cross-crate integration correctness + TS end-to-end fidelity + exit-criterion mapping; NOT unit-test quality or coverage completeness"
+  },
+  "findings": [
+    {
+      "id": "r4-qa-1",
+      "severity": "major",
+      "area": "ts-infra",
+      "title": "No package.json exists under packages/engine, bindings/napi, or tools/create-benten-app \u2014 all 6 Vitest files are unrunnable as written",
+      "detail": "Every TS test file imports from @benten/engine, @mermaid-js/parser, or vitest but a Glob for **/package.json returns only docs/research/ivm-benchmark/node_modules \u2014 no package.json declaring these deps exists in packages/, bindings/napi/, or tools/create-benten-app/. Rust-side integration/ aggregator compiles and will run once R5 fills stubs; TS side cannot even be installed. Plan section 1 specifically calls out @mermaid-js/parser as a dev-dep of the scaffolder test environment. Blocks exit #5 (mermaid parse), exit #6 (napi round-trip), and the headline scaffolder test.",
+      "recommendation": "Either confirm a separate R3 owner handles the three package.json files and track as hand-off boundary, or add minimal package.json files in the consolidator pass before R5. @mermaid-js/parser belongs in packages/engine/package.json devDependencies (not scaffolder pkg.json) since mermaid.test.ts is the consumer.",
+      "files": [
+        "packages/engine/",
+        "bindings/napi/",
+        "tools/create-benten-app/"
+      ]
+    },
+    {
+      "id": "r4-qa-2",
+      "severity": "major",
+      "area": "scaffolder-test",
+      "title": "scaffolder.test.ts npm test path cannot pass: @benten/engine is not a published package and the test has no workspace-link mechanism",
+      "detail": "Line 37 runs npm install inside generated my-app/, then npm test. The generated package.json (not yet written) will depend on @benten/engine which is not published to npm and has no file: / workspace protocol path in the scaffolder template. Unless the scaffolder template uses file:../../../packages/engine (or CI sets up verdaccio / npm link), npm install ENOENT-fails. Separately, the meta-test regex /\\bit\\s*\\(/g matches identifiers starting with it inside other strings \u2014 tighten to /^\\s*it\\s*\\(/gm. Six substrings the test greps for must match exact identifiers in scaffolder template.",
+      "recommendation": "Document scaffolder template workspace-link strategy in R5 plan. Cheapest Phase 1 path: file: protocol dep to local packages/engine build output behind a --local flag on the scaffolder used by Vitest but not end-users. Tighten the meta-regex.",
+      "files": [
+        "tools/create-benten-app/test/scaffolder.test.ts"
+      ]
+    },
+    {
+      "id": "r4-qa-3",
+      "severity": "major",
+      "area": "exit-criterion-mapping",
+      "title": "Exit-criterion #2 (createdAt ordering) has a correctness hole: deterministic HLC injection never actually asserted",
+      "detail": "Plan section 1 exit #2 says the assertion exercises deterministic createdAt injection. Rust partner exit_criteria_all_six.rs::exit_2 creates three posts WITHOUT a createdAt property and asserts list order purely by title. No assertion that each Node carries createdAt: Int, no assertion of monotonicity, no assertion of determinism. Same gap in crud.test.ts line 42 (title order). ivm_propagation.rs DOES assert createdAt as Int + sorted \u2014 exit tests should match.",
+      "recommendation": "Add to exit_2: for n in items assert Value::Int createdAt present and strict-monotonic across the three items. Mirror in crud.test.ts. ~4 lines, closes an exit-criterion loophole.",
+      "files": [
+        "crates/benten-engine/tests/integration/exit_criteria_all_six.rs:47",
+        "packages/engine/src/crud.test.ts:32"
+      ]
+    },
+    {
+      "id": "r4-qa-4",
+      "severity": "major",
+      "area": "cross-process-fidelity",
+      "title": "d2_cross_process_graph.rs does NOT span processes \u2014 admits as much in its own doc comment",
+      "detail": "R4 checklist asks d2_cross_process_graph.rs genuinely spans processes. It does not. Lines 10-14 explicitly document the two-processes property is modeled by: create engine handle 1, write, drop it (flushing redb + closing the file), then open engine handle 2. That is same-process drop-reopen \u2014 proves flush-on-drop and reopen correctness but NOT cross-process determinism. True cross-process would come transitively from cargo-nextest forking each test, which is not a CI-visible contract. The duplicate at crates/benten-engine/tests/integration/cross_process_graph.rs adds integration-compile cost without new coverage over the graph-level copy.",
+      "recommendation": "Phase 1: name as explicit compromise (add to compromises_regression.rs) OR delete the duplicate benten-engine copy. Phase 2: real std::process::Command child-process harness invoking a tiny examples/ crate writing canonical node to a shared db_path, parent asserts CID post-exit.",
+      "files": [
+        "crates/benten-graph/tests/d2_cross_process_graph.rs",
+        "crates/benten-engine/tests/integration/cross_process_graph.rs"
+      ]
+    },
+    {
+      "id": "r4-qa-5",
+      "severity": "major",
+      "area": "ivm-integration",
+      "title": "incremental_view_lag_never_exceeds_one_write assertion is tautologically true",
+      "detail": "integration/ivm_propagation.rs lines 72-77: assert!(observed + 1 >= expected). With expected=i+1 and observed in [0..=i+1], observed+1 is in [1..=i+2], always >= i+1. Assertion can never fail regardless of IVM correctness \u2014 passes even if View 3 is never maintained (observed stays 0). Test name promises after write N, view shows at least N-1 items \u2014 correct form is observed >= expected.saturating_sub(1).",
+      "recommendation": "Replace with assert!(observed >= expected.saturating_sub(1)) AND, per R1 triage per-tx IVM barrier on engine.call default, assert eventual exact equality: assert_eq!(observed, expected). Plan promises barrier-synchronous visibility \u2014 test should pin it.",
+      "files": [
+        "crates/benten-engine/tests/integration/ivm_propagation.rs:58"
+      ]
+    },
+    {
+      "id": "r4-qa-6",
+      "severity": "minor",
+      "area": "fixture-cid-coverage",
+      "title": "Canonical CID fixture coverage OK but not in compromise_4 WASM canary",
+      "detail": "Fixture appears in exit_criteria_all_six.rs (exit #6), both cross_process files, bindings/napi/index.test.ts \u2014 correct. Not in compromises_regression.rs compromise_4 (WASM compile-check) even though that compromise is about WASM determinism. Currently only greps the CI yaml. When T9 cross-leg gate lands, add a canary asserting CI references the fixture string so rename regressions get caught.",
+      "recommendation": "Add post-T9. Not required for Phase 1 exit.",
+      "files": [
+        "crates/benten-engine/tests/integration/compromises_regression.rs"
+      ]
+    },
+    {
+      "id": "r4-qa-7",
+      "severity": "minor",
+      "area": "mermaid-parser-api",
+      "title": "mermaid.test.ts parser-shape assertions use optional chaining that masks wrong-API-call failures",
+      "detail": "Line 38: expect((parsed as { lexerErrors?: unknown[] }).lexerErrors ?? []).toHaveLength(0). If the field is missing (e.g. @mermaid-js/parser version mismatch or the export is not named parse), the ?? fallback gives an empty array and toHaveLength(0) passes vacuously \u2014 exactly the wrong-failure-mode R4 is supposed to catch. Pin the package version in the future packages/engine/package.json and tighten the assertion.",
+      "recommendation": "Add expect(parsed).toHaveProperty(lexerErrors); expect(parsed).toHaveProperty(parserErrors); before the toHaveLength assertions so a missing field fails loudly. Pin @mermaid-js/parser to a specific minor.",
+      "files": [
+        "packages/engine/src/mermaid.test.ts:38"
+      ]
+    },
+    {
+      "id": "r4-qa-8",
+      "severity": "minor",
+      "area": "exit-criterion-mapping",
+      "title": "exit_3 cap-denial test builds Engine without capability_policy_grant_backed() yet expects grants to enforce denial",
+      "detail": "exit_criteria_all_six.rs exit_3 line 92-94: Engine::builder().path(...).build() \u2014 NoAuth by default. Calls register_crud_with_grants + grant_capability + revoke_capability and expects the second call to deny via ON_DENIED. Plan section 2.4 P3 says NoAuthBackend permits everything. Contrast caps_crud.rs::revoked_cap_routes_to_on_denied line 39 which correctly uses .capability_policy_grant_backed(). Either exit_3 needs the same builder call, or R5 must implement register_crud_with_grants so it implicitly swaps the policy for that handler. Currently both interpretations are live in test code \u2014 possible consolidator gap.",
+      "recommendation": "R5 plan must pin the semantics: either add .capability_policy_grant_backed() to exit_3, or document that register_crud_with_grants swaps policy implicitly. Latter is cleaner DX but needs explicit API contract.",
+      "files": [
+        "crates/benten-engine/tests/integration/exit_criteria_all_six.rs:90"
+      ]
+    },
+    {
+      "id": "r4-qa-9",
+      "severity": "minor",
+      "area": "ts-roundtrip-fidelity",
+      "title": "bindings/napi/index.test.ts uses CommonJS require() \u2014 may not resolve under Vitest ESM loader",
+      "detail": "Line 10: const native = require(./index.node); with eslint-disable. Vitest 1.x+ runs through Vites ESM loader by default; require is not defined in ESM context without createRequire. The .node native addon load fails at module-init time before any assertions run.",
+      "recommendation": "Replace with: import { createRequire } from node:module; const require = createRequire(import.meta.url); const native = require(./index.node). Two lines.",
+      "files": [
+        "bindings/napi/index.test.ts:9-10"
+      ]
+    },
+    {
+      "id": "r4-qa-10",
+      "severity": "minor",
+      "area": "engine-api-drift",
+      "title": "spike_survivors.rs uses Engine::open(path), all other tests use builder form \u2014 consolidator gap or intentional?",
+      "detail": "Post-consolidator, 13 integration files + 3 root tests use Engine::builder().path(p).build(). spike_survivors.rs alone uses Engine::open(path) directly. Both compile (lib.rs 168 and 513/525). The divergence suggests either spike_survivors was intentionally left as the simplest public path canary or the consolidator missed it. The lib.rs Engine::open bypasses the builder entirely rather than delegating to it, so they are two paths not one.",
+      "recommendation": "R5 decision: either make Engine::open a thin Engine::builder().path(p).build() wrapper, or document the two-path policy in rustdoc. Pick one.",
+      "files": [
+        "crates/benten-engine/tests/spike_survivors.rs",
+        "crates/benten-engine/src/lib.rs:168"
+      ]
+    },
+    {
+      "id": "r4-qa-11",
+      "severity": "minor",
+      "area": "integration-aggregator",
+      "title": "tests/integration.rs mod aggregator comment has the causality backwards",
+      "detail": "integration.rs lines 4-6 say: This wrapper compiles them into a single test binary so we share the crate-test compilation cost across all scenarios instead of paying it once per scenario. Cargo integration tests already compile each .rs in tests/ to its own binary; mod-aggregation ATTACHES nested files to a single binary \u2014 so aggregation is what produces the saving, not what avoids a non-existent per-test cost. Pattern is correct, prose is muddled.",
+      "recommendation": "Rewrite the doc comment for accuracy. Trivial.",
+      "files": [
+        "crates/benten-engine/tests/integration.rs:4"
+      ]
+    },
+    {
+      "id": "r4-qa-12",
+      "severity": "minor",
+      "area": "outcome-semantics",
+      "title": "tx_atomicity pins E_TX_ABORTED to ON_ERROR edge \u2014 plan does not specify which edge tx-abort routes to",
+      "detail": "integration/tx_atomicity.rs line 46 asserts outcome.routed_through_edge(ON_ERROR) + error_code == E_TX_ABORTED. Plan section 2.5 E3 typed edges are ON_NOT_FOUND, ON_EMPTY, ON_CONFLICT, ON_DENIED, ON_ERROR, ON_LIMIT. Which edge a tx-abort routes to is not explicitly specified. If R5 chooses ON_CONFLICT (defensible \u2014 two WRITEs conflict), this test pins semantics prematurely.",
+      "recommendation": "R5 E3 impl plan should pin which edge E_TX_ABORTED uses. Likely ON_ERROR as written, but codify it.",
+      "files": [
+        "crates/benten-engine/tests/integration/tx_atomicity.rs:46"
+      ]
+    }
+  ],
+  "counts": {
+    "critical": 0,
+    "major": 5,
+    "minor": 7,
+    "total": 12
+  },
+  "verdict": "revise",
+  "revise_rationale": "Zero critical. Five majors cluster on: (a) TS-side infrastructure gaps (no package.json exists \u2014 blocks 6 of 23 test files from running at all, blocks the scaffolder end-to-end path); (b) two exit-criterion assertions semantically weaker than plan promises (deterministic createdAt injection never asserted; IVM lag bound tautological); (c) cross-process determinism is single-process drop-reopen \u2014 plan-claimed cross-process property not actually proven. Each is cheap to fix at R5. Recommend revise-then-dispatch rather than block: R5 can absorb these into the first implementation pass.",
+  "what_i_ignored": [
+    "Rust unit-test quality (owned by rust-test-reviewer)",
+    "Coverage completeness vs R2 landscape (owned by rust-test-coverage)",
+    "R1 findings already dispositioned in r1-triage.md",
+    "Security test quality except where it affects integration semantics"
+  ],
+  "top_3_integration_concerns": [
+    "TS test infrastructure missing \u2014 6 Vitest files reference packages (@benten/engine, @mermaid-js/parser, vitest) that no package.json declares. Scaffolders npm install + npm test chain cannot complete until workspace-link semantics are named.",
+    "Exit-criterion #2 asserts title-order return, not that createdAt is Int + monotonic + deterministic. A regression stamping 0 for every post would still pass.",
+    "d2_cross_process_graph.rs is misnamed \u2014 tests drop-and-reopen in one process. The cross-process property depends transitively on cargo-nextest forking, which is not a CI-visible contract. Either name as explicit Phase 1 compromise or add a real child-process harness."
+  ],
+  "confidence": "high \u2014 all 12 findings traceable to file + line references",
+  "scope_notes": [
+    "All 12 integration/ scenarios compile into one binary via tests/integration.rs aggregator \u2014 verified mod list matches disk.",
+    "6-exit-criterion Rust matrix maps 1:1 to 6 #[test] fns in exit_criteria_all_six.rs. 6 named compromises map 1:1 to 6 #[test] fns in compromises_regression.rs. Both clean.",
+    "register_subgraph_failures.rs + production_refuses_noauth.rs live at tests/ root (not integration/) \u2014 reviewed for consistency with builder surface, no integration-level findings.",
+    "engine_builder_thinness.rs doc lines 17-19 still say Engine::builder does not exist today \u2014 it does exist (lib.rs:175). Stale, non-blocking."
+  ]
+}

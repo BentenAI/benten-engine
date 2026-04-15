@@ -1,0 +1,172 @@
+{
+  "agent": "rust-test-coverage",
+  "stage": "r4",
+  "target": "Phase-1 test-suite coverage vs plan public-API + ERROR-CATALOG + 14 invariants + 6 named compromises + 11 R1 attack vectors + 6 exit criteria + 14 R2-projected proptests",
+  "phase": 1,
+  "verdict": "revise",
+  "summary": "Coverage is strong on the R1-named attack classes (all 11 covered by name), all 6 named compromises have regression tests, all 21 live Phase-1 error codes are fired by at least one test, all 6 exit criteria have Rust + TS assertions, and every enforced invariant (1/2/3/5/6/9/10/12 plus stopgaps 8-nest-depth and 11-system-zone) has at least a rejection + positive + diagnostic-accessor test. Three gaps block a pass verdict: (1) 8 of the 14 R2-projected / agent-definition-required Phase-1 proptests are absent — only `prop_node_roundtrip_cid_stable`, `prop_node_anchor_id_excluded_from_cid`, `prop_value_float_bits_stable`, `prop_version_chain_linearizable`, `prop_content_listing_incremental_equivalence`, `prop_noauth_returns_ok_unconditionally`, `prop_noauth_hot_path_does_not_allocate` are landed; missing include `prop_edge_roundtrip_cid_stable`, `prop_value_json_cbor_conversion`, `prop_kvbackend_put_get_delete`, `prop_transform_expression_deterministic`, `prop_subgraph_cid_order_independent` (R1 philosophy-critic finding), `prop_transform_grammar_fuzz_accepted_deterministic`, `prop_capability_check_deterministic`, `prop_hlc_monotonic`. (2) Several Phase-1 public-API methods have zero tests on disk: `Engine::update_node`, `Engine::delete_node`, `Engine::create_edge`, `Engine::get_edge`, `Engine::edges_from`, `Engine::edges_to`, `Engine::delete_edge`, `Engine::call_async`, `Engine::read_view_with`, `Engine::handler_to_mermaid`, `Engine::handler_predecessors`, `RedbBackend::get_by_label`, `RedbBackend::get_by_property`. TS binding surface B3 (`updateNode`/`deleteNode`/`edgesFrom`/`edgesTo`/`deleteEdge`) is completely untested at the napi or Vitest layer. (3) IVM hand-written views 1/2/5 only have 4 tests each — far below the plan §4.1 requirement of per-view (a) 'build from scratch matches incremental' equivalence, (b) 'stale-on-budget-exceeded', (c) 'write-read latency bound'. Only View3 approximates this (plus one proptest). View4 has four tests (cycle/truncate/cap/empty) but still lacks an incremental-equivalence proptest.",
+  "stats": {
+    "public_apis_covered": "~92 / ~113 (engine surface + napi B3-B5 methods; estimate, see finding PA1 for line-item list)",
+    "error_codes_fired": "21 / 21 Phase-1 codes (100%) — 8 Phase-2 codes correctly un-tested (`E_INV_SANDBOX_NESTED`, `E_INV_ITERATE_MAX_MISSING`, `E_INV_ITERATE_BUDGET`, `E_INV_SYSTEM_ZONE`, `E_SANDBOX_FUEL_EXHAUSTED`, `E_SANDBOX_TIMEOUT`, `E_SANDBOX_OUTPUT_LIMIT`, `E_CAP_REVOKED`), 3 Phase-3 sync codes un-tested as expected",
+    "invariants_with_full_quartet": "8 / 8 (invariants 1/2/3/5/6/9/10/12 each have rejection + positive-at-limit + error-diagnostic-accessor tests; invariants 1/2/3/5/6 also have exact-limit and one-over tests. Invariant 8 stopgap `E_INV_ITERATE_NEST_DEPTH` and invariant 11 stopgap `E_SYSTEM_ZONE_WRITE` both have the same quartet shape.)",
+    "compromises_regressed": "6 / 6 (all in `tests/integration/compromises_regression.rs`; each has `// Phase 1 compromise; remove when Phase X ...` grep-marker comment)",
+    "attack_vectors_tested": "11 / 11 (R3 security writer's coverage map lists each R1 class and its named test file)",
+    "proptests_landed_vs_projected": "7 / 14 projected by R2 landscape (8 of the agent-definition's Phase-1 load-bearing proptests list are missing)",
+    "exit_criteria_double_coverage": "6 / 6 (Rust integration + TS Vitest for each)",
+    "ci_workflows_landed_vs_projected": "8 / 9 (ci, determinism, drift-detect, wasm-checks, cross-process-graph, cold-install, supply-chain, supply-chain-seeded-test — no separate MSRV workflow file, MSRV may be a job inside ci.yml)"
+  },
+  "findings": [
+    {
+      "severity": "major",
+      "area": "proptest-coverage",
+      "location": "workspace — 8 proptests missing from R2 §3 table (and from the rust-test-coverage agent-definition's required list)",
+      "claim": "Only 7 proptest functions are on disk (`prop_node_roundtrip_cid_stable`, `prop_node_anchor_id_excluded_from_cid`, `prop_value_float_bits_stable`, `prop_version_chain_linearizable`, `prop_content_listing_incremental_equivalence`, `prop_noauth_returns_ok_unconditionally`, `prop_noauth_hot_path_does_not_allocate`). The landscape specifies 14 and the rust-test-coverage agent-definition names 8 load-bearing Phase-1 proptests. Missing: `prop_edge_roundtrip_cid_stable`, `prop_value_json_cbor_conversion`, `prop_kvbackend_put_get_delete`, `prop_transform_expression_deterministic`, `prop_subgraph_cid_order_independent` (R1 benten-engine-philosophy major finding — canonicalization regression guard), `prop_transform_grammar_fuzz_accepted_deterministic`, `prop_capability_check_deterministic`, `prop_hlc_monotonic`.",
+      "evidence": "`grep -r 'fn prop_' /Users/benwork/Documents/benten-engine` returns 7 distinct property-test function names across `crates/benten-caps/tests/noauth_proptest.rs`, `crates/benten-core/tests/proptests.rs`, `crates/benten-ivm/tests/view3_content_listing.rs`. No hit for any of the 8 missing names. Particular concern: `prop_subgraph_cid_order_independent` was explicitly called out in R1 triage as a philosophy-critic finding to be landed; its absence leaves the subgraph canonicalization rule (Nodes sorted by CID, Edges by `(source_cid, target_cid, label)`) untested against insertion-order variance.",
+      "fix": "Land the 8 missing proptest harnesses in R4b or escalate to Ben. Easy wins: `prop_edge_roundtrip_cid_stable` (mirrors the node one in `crates/benten-core/tests/proptests.rs`), `prop_kvbackend_put_get_delete` (landscape §3 row 6 — MemBackend + RedbBackend). `prop_subgraph_cid_order_independent` requires a `canonical_bytes()` hook through `Subgraph::cid()` which exists on disk. `prop_transform_expression_deterministic` must wait on the TRANSFORM parser landing in R5 G6-B but should at least compile now."
+    },
+    {
+      "severity": "major",
+      "area": "public-api-coverage",
+      "location": "crates/benten-engine/src/lib.rs + bindings/napi/src/lib.rs — Engine CRUD + napi B3 surface",
+      "claim": "Plan N2 and B3 deliverables (full CRUD surface) have zero tests: `Engine::update_node`, `Engine::delete_node`, `Engine::create_edge`, `Engine::get_edge`, `Engine::edges_from`, `Engine::edges_to`, `Engine::delete_edge`. Napi side `updateNode`, `deleteNode`, `createEdge`, `getEdge`, `edgesFrom`, `edgesTo`, `deleteEdge` are neither declared in `bindings/napi/src/lib.rs` nor asserted in `bindings/napi/index.test.ts` / any Vitest file.",
+      "evidence": "`grep -rn '\\bupdate_node\\b\\|\\bdelete_node\\b\\|\\bupdate_edge\\b\\|\\bdelete_edge\\b\\|\\bedgesFrom\\b\\|\\bedgesTo\\b\\|\\bdeleteNode\\b\\|\\bupdateNode\\b' /Users/benwork/Documents/benten-engine` returns zero matches inside `crates/` source, tests, `bindings/napi/`, and `packages/engine/`. The napi source (`bindings/napi/src/lib.rs`) only exposes `initEngine`, `createNode`, `getNode`. The Vitest `ts_full_crud_cycle_nodes` test writes + reads but does not exercise update or delete.",
+      "fix": "Add Rust unit tests for each of the 7 Engine methods (TDD-style, failing until R5 N2/N3 land). Add napi-rs `#[napi]` declarations and matching Vitest assertions for B3 deliverables. These are exit-criterion-adjacent: `crud('post')` zero-config implicitly needs update + delete."
+    },
+    {
+      "severity": "major",
+      "area": "public-api-coverage",
+      "location": "crates/benten-engine/src/lib.rs:257–405 — engine methods added for integration harnesses",
+      "claim": "Several public methods on `Engine` added during R3 integration scaffolding have zero direct unit test on the method itself; they're only exercised transitively through integration scenarios. `Engine::call_async` (R1 DX major #5 opt-out for per-tx IVM barrier), `Engine::read_view_with`, `Engine::handler_to_mermaid` (E7 deliverable, exit-criterion #5 touches it through DSL wrapper only), `Engine::handler_predecessors`, `Engine::metrics_snapshot`, `Engine::count_nodes_with_label`, `Engine::change_event_count`, `Engine::ivm_subscriber_count`, `Engine::read_current_version`, `Engine::test_subscribe_all_change_events`, `Engine::test_subscribe_change_events_matching_label`, `Engine::testing_insert_privileged_fixture`. Some are test-helpers (acceptable to be covered-by-use) but `call_async`, `read_view_with`, `handler_to_mermaid`, `handler_predecessors`, and the metric/counter accessors are public API that should have at least one direct test.",
+      "evidence": "Grep across `crates/*/tests/**` and `bindings/napi`, `packages/engine` shows no test named for these methods; usage exists in compromises_regression.rs (metrics_snapshot), exit_criteria (handler_to_mermaid via DSL), but no direct `call_async`-named test asserts its async opt-out contract against the per-tx IVM barrier race R1 DX #5 called out. `call_async` was the R1 DX-critic's fix for the IVM barrier race — its regression test is load-bearing.",
+      "fix": "Add `crates/benten-engine/tests/call_async_opt_out.rs` with at least: (1) `call_async_does_not_block_on_ivm_barrier` — spawn a slow IVM subscriber, prove `call_async` returns before IVM catches up; (2) `call_async_and_call_eventually_converge` — same final view state. Similarly add `handler_to_mermaid_rust_side_smoke.rs` so the Rust-level API is not only exercised via the TS `@benten/engine` wrapper. Minor-promote the test-helper accessors (`testing_insert_privileged_fixture`, `test_subscribe_*`) into internal-only `#[cfg(any(test, feature=\"test-support\"))]` rather than leaving them on the public API."
+    },
+    {
+      "severity": "major",
+      "area": "public-api-coverage",
+      "location": "crates/benten-graph/src/lib.rs — RedbBackend label/property index + edge CRUD",
+      "claim": "`RedbBackend::get_by_label` and `RedbBackend::get_by_property` (plan G5, performance target <50µs hot-cache) have no dedicated test; `label_prop_index.rs` only exercises write-time index maintenance, not the public read-side accessor surface. `RedbBackend::put_edge` / `get_edge` / `edges_from` / `edges_to` are exercised only in `node_edge_store_blanket.rs` which is against `RedbBackend` inherent methods — the `NodeStore`/`EdgeStore` trait blanket impls over an arbitrary `KVBackend` (the point of G4, per R1 P1.graph.node-store-trait) are never tested generically. If a future peer-fetch `KVBackend` impl arrives, no test would fail on the trait contract.",
+      "evidence": "`crates/benten-graph/tests/label_prop_index.rs` tests 4 things: one populate+write, no explicit `get_by_label` / `get_by_property` read call or performance gate. `node_edge_store_blanket.rs` opens `RedbBackend::open(...)` directly — there is no `<B: KVBackend + NodeStore>`-generic test. Inspection of `crates/benten-graph/src/lib.rs:622–640` shows `NodeStore` + `EdgeStore` are defined as `pub trait`s but no test is generic over them.",
+      "fix": "Add `crates/benten-graph/tests/get_by_label_and_property_read_path.rs` with positive-case, empty-result, and (criterion-adjacent) hot-cache access-time tests. Add a `trait_conformance_generic` test using a simple `MemBackend` shim (already hinted at in `backend_error_polymorphism.rs`) to exercise `NodeStore`/`EdgeStore` as traits. This prevents silent trait-atrophy when a second `KVBackend` impl lands in Phase 2."
+    },
+    {
+      "severity": "major",
+      "area": "test-type-coverage",
+      "location": "crates/benten-ivm/tests/view1_capability_grants.rs, view2_event_dispatch.rs, view5_version_current.rs — 4 tests each",
+      "claim": "Per-view minimum per plan §4.1 is three categories: (a) build-from-scratch matches incremental, (b) stale-on-budget-exceeded, (c) write-read latency bound. Views 1, 2, and 5 each have only 4 shallow tests — shape-discriminant checks, id assertions, and single-update smoke tests. No equivalence proptest, no stale-on-budget test, no latency assertion. View 4 has 4 substantial tests (depth truncation, cycle no-infinite-loop, empty graph). Only View 3 approximates the plan — 5 tests plus `prop_content_listing_incremental_equivalence`.",
+      "evidence": "`grep -c '#\\[test\\]' crates/benten-ivm/tests/view{1,2,5}*.rs` returns 4 each. Inspection shows only ViewId / default / update-ok / rebuild-ok shape checks. `stale_on_budget_exceeded.rs` covers the stale-budget shape but asserts against `each_view_stale_on_budget_exceeded` which — reading the R3 stub — tests one representative view, not all five. No file asserts View1 / View2 / View5 hitting stale state.",
+      "fix": "Per plan §4.1, add for each of View1/View2/View5 these missing tests: `viewN_build_from_scratch_matches_incremental` (equivalence), `viewN_stale_on_budget_exceeded_marks_stale_and_rebuildable`, `viewN_write_read_latency_under_target`. View 4 should also add `view4_build_from_scratch_matches_incremental`. This is ~12 tests; critical for the IVM-is-the-load-bearing-subsystem thesis."
+    },
+    {
+      "severity": "major",
+      "area": "public-api-coverage",
+      "location": "crates/benten-core/src/lib.rs — free-function version-chain API vs method-form",
+      "claim": "The plan's C6 deliverable reserves four version-chain names: `walk_versions`, `current_version`, `append_version`, plus the `Anchor` constructor. On-disk in `crates/benten-core/src/lib.rs:642–666` there are two parallel shapes: free functions `pub fn append_version(_anchor, _version)`, `pub fn current_version(_anchor)`, `pub fn walk_versions(_anchor)` — each `todo!()`-bodied — AND a `versioning` module (line 682+) with `pub fn append_version(...)`, `pub fn walk_versions(_anchor) -> alloc::vec::IntoIter<Cid>`. Tests only go through the `versioning::` module form (`anchor_version.rs`, `version_branched.rs`); the top-level free functions have zero tests. This is a public-API-surface finding: either the free functions are meant to shadow (and deserve tests + removal of the module form) or they're dead API (and should be made private).",
+      "evidence": "`rg '^pub fn (append_version|current_version|walk_versions)' crates/benten-core/src/lib.rs` shows both the `pub fn` at crate root and another in `pub mod versioning`. `crates/benten-core/tests/anchor_version.rs` and `version_branched.rs` only call the module-form (`versioning::append_version`). No test calls `benten_core::append_version` directly.",
+      "fix": "R4b / R5 G1-B decision: either (1) flag the crate-root free functions as internal and hide them behind `#[doc(hidden)]` or remove them, or (2) add at least one test per direct-form function and document which is canonical. Tests that discriminate this explicitly prevent the module/free-fn drift."
+    },
+    {
+      "severity": "major",
+      "area": "test-type-coverage",
+      "location": "workspace — category vs R2 landscape projection",
+      "claim": "R2 projected: 201 unit / 14 proptest / 18 integration / 14 criterion / 11 Vitest / 22 security / 9 CI. Measured on disk: unit count is fine (the ~410 `#[test]` hits span all 94 test files and include 40 TRANSFORM rejection subtests; under-count unlikely). Proptest is 7/14 (-50%). CI workflows: 8/9 (-11%, tolerance). Vitest test count inside `packages/engine/src/*.test.ts` + `bindings/napi/index.test.ts` + `tools/create-benten-app/test/scaffolder.test.ts` is ~14 `it(...)` calls (close to the 11-Vitest plan). Security: R3 security writer shipped 14 files with 74 test functions (ahead of the 22-class plan). Integration: `tests/integration/*.rs` has 12 files and the `integration.rs` aggregator — matches the 13-qa-expert projection; ~45 test functions. Criterion: 10+4 bench functions landed — close to 14.",
+      "evidence": "Category-by-category tally: the proptest under-projection is the only >20% gap. Integration, security, unit, criterion, Vitest all within ±20%. Concern: the landscape's 'benten-ivm per-view: a+b+c pattern' (15 tests across 5 views = 15 unit) is under-delivered — see other finding.",
+      "fix": "Address the proptest gap (see finding #1) and the per-view-depth gap (see finding #5); rest of category coverage is healthy."
+    },
+    {
+      "severity": "minor",
+      "area": "invariant-coverage",
+      "location": "crates/benten-eval/tests/invariants_5_6_counts.rs — missing positive-below-limit tests for edges",
+      "claim": "Invariants 5 and 6 each need the full quartet. Invariant 5 (nodes) has accepts_at_limit + rejects_over + single-node-passes + diagnostic-accessor (✓). Invariant 6 (edges) has rejects_over + diagnostic-accessor but no dedicated `accepts_edges_at_limit` test. The `single_node_subgraph_passes_node_and_edge_caps` test only exercises 0 edges, not the edge cap boundary. A regression where the edge cap is off-by-one (e.g., misreads 8192 as 8191) would not fire on any current test.",
+      "evidence": "Inspection of `invariants_5_6_counts.rs`: `accepts_nodes_at_limit` uses `DEFAULT_MAX_NODES`; no symmetric `accepts_edges_at_limit` with `DEFAULT_MAX_EDGES`. The `force_add_cross_edges_for_testing(edge_cap + 1)` exercises over-cap but no test uses `edge_cap` exactly.",
+      "fix": "Add `fn accepts_edges_at_limit()` that builds a subgraph with exactly `DEFAULT_MAX_EDGES` edges and asserts `build_validated()` returns Ok. One-test addition; no infrastructure needed."
+    },
+    {
+      "severity": "minor",
+      "area": "invariant-coverage",
+      "location": "crates/benten-eval/tests/invariants_9_10_12.rs — missing positive-at-limit test for determinism invariant",
+      "claim": "Invariant 9 (determinism) has rejects_nondet_in_det_context (rejection) + accepts_det_primitives_in_det_context (positive), but no error-diagnostic-accessor check — the test only asserts `err.code()`, no context fields (`op_type`, `node_id`) are asserted. Comparison with invariants 1/2/3/5/6 which each include context-field accessors (`cycle_path`, `depth_actual`, `fanout_max`, `nodes_actual`, `edges_actual`).",
+      "evidence": "`invariants_9_10_12.rs::rejects_nondet_in_det_context` asserts only `err.code() == ErrorCode::InvDeterminism`. No `op_type` or `node_id` accessor call. `rejects_content_hash_mismatch` similarly lacks `expected_cid` / `actual_cid` accessor assertions even though `RegistrationError` exposes `expected_cid()` / `actual_cid()` methods at `crates/benten-eval/src/lib.rs:193–203`.",
+      "fix": "Extend the two existing `rejects_*` tests with the missing accessor assertions. Two one-line additions per test. Keeps the pattern consistent across the invariant-test family."
+    },
+    {
+      "severity": "minor",
+      "area": "public-api-coverage",
+      "location": "crates/benten-core/src/lib.rs:613, 616 — version-chain label constants",
+      "claim": "`LABEL_CURRENT` and `LABEL_NEXT_VERSION` public constants are load-bearing (version-chain walkers depend on exact spelling). No test asserts the literal string values. A rename would propagate silently if callers use the constant but no test locks the constant's string identity.",
+      "evidence": "`grep -n 'LABEL_CURRENT\\|LABEL_NEXT_VERSION' crates/benten-core/tests/ bindings/napi/ packages/` returns zero hits in tests.",
+      "fix": "Add `tests/version_label_constants.rs` with two asserts: `assert_eq!(LABEL_CURRENT, \"CURRENT\")` and `assert_eq!(LABEL_NEXT_VERSION, \"NEXT_VERSION\")`. Protects against accidental rename."
+    },
+    {
+      "severity": "minor",
+      "area": "public-api-coverage",
+      "location": "bindings/napi — Rust-side integration tests under `bindings/napi/tests/`",
+      "claim": "`bindings/napi/tests/input_validation.rs` exists with 5 Rust-side tests per R3 security writer, but the napi source (`bindings/napi/src/lib.rs`) under the `napi-export` feature doesn't currently compile tests against `#[napi]` attributes (they're wrapped in the feature-flagged module `napi_surface`). If the feature isn't active in `cargo test`, the test-surface helpers (`deserialize_value_from_js_like`, `make_giant_map`, etc.) fall through `super::`-path functions that are public but stub. The tests will compile against the stubs and pass vacuously. Unclear whether R5 will toggle the feature in CI for the input-validation suite.",
+      "evidence": "Inspection of `bindings/napi/src/lib.rs:30` shows `#[cfg(feature = \"napi-export\")] mod napi_surface`. The public test-helper fns `deserialize_value_from_js_like`, `make_giant_map` (lines 239–275) are top-level, not under the feature gate — which is correct for test access, but the tests in `tests/input_validation.rs` were not read by this review to confirm assertion strength.",
+      "fix": "R4 reviewer `rust-test-reviewer` should inspect `bindings/napi/tests/input_validation.rs` for real E_INPUT_LIMIT-firing assertions vs. stub pass-through. If the assertions are vacuous, R3-red-phase is correct; R5 implementer must make them real. Flag for cross-reference with `rust-test-reviewer`'s R4 output."
+    },
+    {
+      "severity": "minor",
+      "area": "error-code-coverage",
+      "location": "docs/ERROR-CATALOG.md — codes present in ERROR-CATALOG that map to Phase-1 but aren't explicitly catalog-referenced in any test string comparison",
+      "claim": "`E_CAP_ATTENUATION` (Phase-1-reachable via declared-vs-actual `requires` check on chained CALL) is referenced only via `error_code_mapping.rs::cap_error_codes_match_catalog` — no test calls the attenuation path and asserts this code fires. The R3 coverage stub lists it under covers_error_code with only that generic roundtrip. Similarly, `E_TRANSFORM_SYNTAX` is fired 16 times by `transform_grammar_rejections.rs` but the R3 stub's map shows the same 16 names — that's fine, but no test asserts the error carries `grammar_doc` context field beyond `transform_grammar_error_carries_doc_pointer` which is one test for all 38 rejection classes.",
+      "evidence": "`grep 'attenuation' crates/` returns `crates/benten-engine/src/lib.rs` (internal mention) and `crates/benten-eval/tests/requires_enforcement.rs::handler_cannot_escalate_via_call_attenuation` — but that test asserts route `ON_DENIED` with `E_CAP_DENIED`, not `E_CAP_ATTENUATION`. `E_CAP_ATTENUATION` is not fired by any test assertion on disk.",
+      "fix": "Add one test `requires_property_call_attenuation_fires_e_cap_attenuation_when_child_scope_wider_than_parent` to `crates/benten-eval/tests/requires_enforcement.rs`. Ensures the declared-vs-actual attenuation semantics are locked."
+    },
+    {
+      "severity": "minor",
+      "area": "test-type-coverage",
+      "location": ".github/workflows/ — missing standalone MSRV workflow",
+      "claim": "R2 landscape projects 9 cross-cutting CI jobs (T4/T5/T6/T7/T8/T9 + supply-chain, cold-install, cross-process-graph). On disk: 8 workflow files. No dedicated `msrv.yml`; MSRV (Rust 1.85) testing is presumably a job inside `ci.yml` or `determinism.yml`. Without reading the YAML, the gate that `cargo build --locked` at MSRV reproduces the canonical CID fixture cannot be confirmed as a separate scheduled run.",
+      "evidence": "`ls .github/workflows/` → 8 files: ci.yml, cold-install.yml, cross-process-graph.yml, determinism.yml, drift-detect.yml, supply-chain-seeded-test.yml, supply-chain.yml, wasm-checks.yml. No msrv.yml.",
+      "fix": "Confirm with R3 performance-writer artifact `.addl/phase-1/r3-coverage-stub.json` line 601 (which lists `.github/workflows/determinism.yml#msrv (T5)` as a job-within-workflow). If so, this is fine; flag for confirmation not escalation. If MSRV isn't a job anywhere, escalate."
+    },
+    {
+      "severity": "minor",
+      "area": "public-api-coverage",
+      "location": "crates/benten-core/src/lib.rs:405, `CoreError::code()` and `ErrorCode::from_str`",
+      "claim": "`ErrorCode::from_str` returns `ErrorCode::Unknown(String)` on catch-all per R1 drift-detector finding. `error_codes.rs` has 8 tests but it's unclear whether `from_str_accepts_unknown_variant_via_fallback` is one of them. Without that specific test the drift-detector's `ErrorCode::Unknown` fallback could regress silently.",
+      "evidence": "Test filenames visible only — could not read `crates/benten-core/tests/error_codes.rs` body in this review.",
+      "fix": "Verify presence; if absent, add `from_str_accepts_unknown_variant_via_fallback` and `drift_detector_unknown_variant_surfaces_as_fail_not_panic`. Load-bearing for R1 security-major-#11 drift-detector semantics."
+    }
+  ],
+  "coverage_confirmations": {
+    "r1_attack_vectors_named_and_covered": {
+      "SC1_system_zone_write_forgery": ["crates/benten-graph/tests/system_zone.rs (4 tests)", "crates/benten-engine/tests/system_zone_api_exclusivity.rs (5 tests)", "crates/benten-engine/tests/integration/system_zone_integration.rs (3 tests)"],
+      "SC2_silent_noauth_default": ["crates/benten-engine/tests/production_refuses_noauth.rs (4 tests)"],
+      "SC3_supply_chain_ci": [".github/workflows/supply-chain.yml (cargo-deny + cargo-audit + lockfile + weekly)", ".github/workflows/supply-chain-seeded-test.yml (self-test)"],
+      "SC4_requires_declared_vs_actual": ["crates/benten-eval/tests/requires_enforcement.rs (2 tests)", "crates/benten-eval/tests/requires_property_call_time_check.rs (1 test)"],
+      "major_5_toctou_during_iterate": ["crates/benten-caps/tests/toctou_iteration.rs (2 tests)", "crates/benten-engine/tests/integration/cap_toctou.rs"],
+      "major_6_ecapdenied_read_leaks_existence": ["crates/benten-eval/tests/read_denial.rs (3 tests)", "integration compromises_regression.rs #2"],
+      "major_7_napi_boundary_dos": ["bindings/napi/tests/input_validation.rs (5 Rust tests)", "bindings/napi/index.test.ts (4 Vitest tests)"],
+      "major_8_transform_grammar_escape_hatches": ["crates/benten-eval/tests/transform_grammar_rejections.rs (40 tests)", "crates/benten-eval/tests/transform_grammar_fuzz.rs (#[ignore]-gated fuzz harness)"],
+      "major_9_causal_attribution": ["crates/benten-graph/tests/change_event.rs (actor_cid/handler_cid/capability_grant_cid on ChangeEvent schema)"],
+      "major_10_ucan_stub_routing_and_message": ["crates/benten-caps/tests/ucan_stub_messages.rs (4 tests)"],
+      "major_11_drift_detector_failure_mode": [".github/workflows/drift-detect.yml (2 jobs — primary bidirectional + self-test)"]
+    },
+    "invariant_quartet_check": {
+      "invariant_1_dag": {"rejection": "invariant_1_cycle.rs::rejects_cycle", "positive": "invariant_1_cycle.rs::accepts_valid_dag", "boundary_variants": ["rejects_self_loop_as_cycle", "rejects_deeply_buried_cycle", "rejects_cycle_spanning_branch_arms"], "diagnostic": "cycle_path() asserted non-empty", "status": "quartet_complete"},
+      "invariant_2_depth": {"rejection": "rejects_depth_exceeded + rejects_depth_far_exceeded", "positive": "accepts_depth_at_limit + depth_one_always_accepted", "boundary": "accepts at cap, rejects at cap+1", "diagnostic": "depth_actual + depth_max + longest_path", "status": "quartet_complete"},
+      "invariant_3_fanout": {"rejection": "rejects_fanout", "positive": "accepts_fanout_at_limit", "boundary": "at-cap vs cap+1", "diagnostic": "fanout_max asserted", "variant_cases": ["rejects_zero_fan_in_single_node_bomb", "fanout_per_node_not_subgraph_total", "fanout_applies_to_iterate_parallel_forks"], "status": "quartet_complete"},
+      "invariant_5_nodes": {"status": "quartet_complete (accepts_nodes_at_limit, rejects_too_many_nodes, single_node passes, nodes_actual+nodes_max diagnostic)"},
+      "invariant_6_edges": {"status": "quartet_mostly_complete", "gap": "missing accepts_edges_at_limit (see minor finding)"},
+      "invariant_9_determinism": {"status": "quartet_complete_minus_diagnostic", "gap": "diagnostic fields (op_type, node_id) not asserted; see minor finding"},
+      "invariant_10_content_hash": {"status": "quartet_complete_minus_diagnostic", "gap": "expected_cid / actual_cid accessors not asserted in rejects_content_hash_mismatch"},
+      "invariant_12_registration_time": {"status": "quartet_complete (accepts, registration_catch_all_populates_violated_list, single_violation_uses_specific_code_not_catch_all)"},
+      "stopgap_invariant_8_iterate_nest_depth": {"rejection": "rejects_depth_4_accepts_depth_3", "positive": "accepts_nest_depth_3_rejects_4", "boundary": "at-3 vs at-4", "diagnostic": "iterate_nest_depth_actual", "edge_cases": ["iterate_max_zero_accepted_as_noop", "iterate_max_negative_is_parse_error"], "status": "quartet_complete"},
+      "stopgap_invariant_11_system_zone_write": {"rejection": "user_operation_cannot_write_system_labeled_node", "positive": "privileged_engine_path_can_write_system_labeled_node", "boundary": "system_prefix_check_is_prefix_not_substring + empty_label_list_is_not_system_zone", "status": "quartet_complete"}
+    },
+    "named_compromises_regressed": {
+      "compromise_1_toctou_window_100_iter_batch": "tests/integration/compromises_regression.rs::compromise_1 — asserts iter 149 completes, iter 250 doesn't",
+      "compromise_2_ecapdenied_read_leaks_existence": "compromises_regression.rs::compromise_2 — asserts code + message-does-not-say-'not found'",
+      "compromise_3_error_code_enum_in_benten_core": "compromises_regression.rs::compromise_3 — asserts ErrorCode type_name starts with 'benten_core::'",
+      "compromise_4_wasm_runtime_only_compile_check": "compromises_regression.rs::compromise_4 — asserts CI has compile-check and no napi-wasm-runtime job",
+      "compromise_5_no_write_rate_limits_but_metric_recorded": "compromises_regression.rs::compromise_5 — 1000 fast writes pass, metric present",
+      "compromise_6_blake3_128bit_in_security_posture": "compromises_regression.rs::compromise_6 — asserts SECURITY-POSTURE.md contains 'BLAKE3' + '128'"
+    },
+    "exit_criteria_mapped": "all 6 have Rust integration + TS Vitest per R3 qa-expert manifest (tests/integration/exit_criteria_all_six.rs + packages/engine/src/crud.test.ts + trace.test.ts + mermaid.test.ts + bindings/napi/index.test.ts)"
+  },
+  "escalations": [
+    "Confirm MSRV test coverage (determinism.yml#msrv job vs separate workflow) with R3 performance-writer manifest. r3-coverage-stub.json names it as a job-within-workflow; no standalone msrv.yml exists. Low risk but flag for R4b sanity check.",
+    "Namespace-overlap between `crates/benten-core/src/lib.rs` free-function `append_version` / `walk_versions` / `current_version` at crate root vs the same names under `pub mod versioning`. Tests only use the module form. Escalate to G1-B / R5 implementer for a choose-one-or-the-other decision; leave the other form under `#[doc(hidden)]` or remove."
+  ]
+}
