@@ -1,0 +1,113 @@
+{
+  "agent": "qa-expert",
+  "stage": "r4-pass2",
+  "commit_reviewed": "5c60c31",
+  "lens": "integration semantics + cross-crate correctness + TS end-to-end fidelity",
+  "verdict": "accept-with-minors",
+  "pass1_findings_disposition": {
+    "r4-qa-1 TS infra missing": "RESOLVED. Root + 3 package.json files in place. Caveat: workspace:* protocol is pnpm/yarn-native; npm <11 may not resolve it (see p2-qa-1).",
+    "r4-qa-2 scaffolder workspace-link + regex": "PARTIAL. Regex correctly written; word-boundary rejects commit/exit/wait. Workspace-link chose workspace:* protocol (see p2-qa-1).",
+    "r4-qa-3 exit-criterion #2 deterministic createdAt": "RESOLVED. exit_2 asserts (a) strict-monotonic createdAt across three writes, (b) stamped-once re-read. crud.test.ts mirrors at lines 45-57. Single most impactful pass-1 fix.",
+    "r4-qa-4 cross-process fidelity": "RESOLVED. d2_cross_process_graph.rs spawns real child PID via Command::new(env!(CARGO_BIN_EXE_write-canonical-and-exit)); new bin/write_canonical_and_exit.rs writes in child and prints CID on stdout, parent reopens redb. Genuine PID separation.",
+    "r4-qa-5 IVM lag tautology": "RESOLVED. New form is lag <= 1 + observed > 0 liveness check. Tighter assert_eq!(observed, expected) NOT adopted; triage chose two-sided form (M5). Acceptable.",
+    "r4-qa-6 fixture CID in compromise_4": "RESOLVED. compromise_4 asserts canonical fixture CID unchanged (m16).",
+    "r4-qa-7 mermaid ?? fallback": "RESOLVED. ?? removed; lexerErrors/parserErrors presence asserted before length check.",
+    "r4-qa-8 exit_3 missing capability_policy_grant_backed": "RESOLVED. Builder calls .capability_policy_grant_backed(). See p2-qa-2 for composition overlap.",
+    "r4-qa-9 napi require() under Vitest ESM": "RESOLVED. createRequire(import.meta.url) bridges CJS .node addon into ESM.",
+    "r4-qa-10 Engine::open vs builder drift": "INTENTIONAL PUNT per triage m20. Not a regression.",
+    "r4-qa-11 integration aggregator comment": "RESOLVED.",
+    "r4-qa-12 E_TX_ABORTED edge pin": "RESOLVED. ENGINE-SPEC lines 140-147 confirm ON_ERROR is sole routing edge for tx aborts."
+  },
+  "findings": [
+    {
+      "id": "p2-qa-1",
+      "severity": "minor",
+      "area": "ts-infra-npm-compat",
+      "title": "workspace:* protocol is pnpm/yarn-native; npm <11 does not resolve it, package manager must be pinned",
+      "detail": "tools/create-benten-app/package.json:17 declares @benten/engine: workspace:* and packages/engine/package.json:17 declares @benten/engine-native: workspace:*. The workspace:* protocol is a pnpm/yarn convention; npm added initial support in v11 (Oct 2024) but historical npm releases treat it as a literal version string and fail. Root package.json does not pin a package manager (no packageManager field, no pnpm-workspace.yaml). The scaffolder test execs npm install at line 37; pre-v11 npm will fail before any assertion runs.",
+      "recommendation": "Add packageManager: pnpm@9.x (or npm>=11) to root package.json AND document the matrix in CONTRIBUTING.md. Alternative: switch scaffolder template to emit file:../../packages/engine (per triage M4 recommendation, which was not applied).",
+      "files": [
+        "package.json",
+        "tools/create-benten-app/package.json:17",
+        "packages/engine/package.json:17"
+      ]
+    },
+    {
+      "id": "p2-qa-2",
+      "severity": "minor",
+      "area": "exit-criterion-mapping",
+      "title": "exit_3 sets capability_policy_grant_backed AND uses register_crud_with_grants; R5 must pin composition semantics",
+      "detail": "exit_criteria_all_six.rs:156-191 uses .capability_policy_grant_backed() per m18 AND calls register_crud_with_grants(post). These two operate at different layers but Engine stubs are todo!(). If R5 makes register_crud_with_grants implicitly swap engine policy to grant-backed, the builder call is redundant. If they conflict, the test inadvertently pins composition semantics R5 has not decided. One of the four fix-pass-surfaced findings.",
+      "recommendation": "R5 G4 brief must name composition rule. Recommend: engine-policy gates enforcement, per-handler grant-registration scopes capabilities the handler requires; orthogonal, both required. Document in rustdoc on register_crud_with_grants.",
+      "files": [
+        "crates/benten-engine/tests/integration/exit_criteria_all_six.rs:154-191"
+      ]
+    },
+    {
+      "id": "p2-qa-3",
+      "severity": "minor",
+      "area": "subprocess-fixture-hygiene",
+      "title": "cross-process [[bin]] should gate on required-features to avoid downstream compile tax",
+      "detail": "crates/benten-graph/bin/write_canonical_and_exit.rs is a [[bin]] target in benten-graph. Bin main uses RedbBackend::open directly. [[bin]] has test=false, bench=false which prevents cargo building during cargo test. However when benten-graph is consumed as lib dep by downstream crates, cargo still compiles the [[bin]] unless gated by required-features. Compile-time tax, not correctness bug.",
+      "recommendation": "Add required-features = [test-fixtures] on the [[bin]] with a corresponding feature flag test-fixtures = [] in [features].",
+      "files": [
+        "crates/benten-graph/Cargo.toml:28-39",
+        "crates/benten-graph/bin/write_canonical_and_exit.rs"
+      ]
+    },
+    {
+      "id": "p2-qa-4",
+      "severity": "minor",
+      "area": "ivm-assertion-strength",
+      "title": "incremental_view_lag does not pin barrier-synchronous visibility (follow-on from r4-qa-5)",
+      "detail": "Fix-pass chose lag <= 1 + observed > 0 over stricter assert_eq!(observed, expected) pass-1 recommended as follow-on. Both correct; tighter form would pin plan-promised barrier-synchronous IVM visibility (R1 triage). Current form permits 1-write lag; plan is ambiguous.",
+      "recommendation": "R5 G5-C brief must pin barrier-visibility contract: either (a) assert_eq!(observed, expected) per-write with per-tx barrier default, or (b) document 1-write lag as Phase 1 contract. Pick one.",
+      "files": [
+        "crates/benten-engine/tests/integration/ivm_propagation.rs:58-88"
+      ]
+    },
+    {
+      "id": "p2-qa-5",
+      "severity": "minor",
+      "area": "scaffolder-meta-test-fragility",
+      "title": "scaffolder.test.ts meta-test regex will match standalone it identifiers in comments",
+      "detail": "The regex correctly rejects commit(, exit(, wait( (word char preceding i, no word boundary) but will match any standalone it( in a doc comment or fixture string embedded in the template smoke.test.ts. Template does not yet exist (R5 T1); once drafted the test is one careless comment away from false-matching to 7 and failing.",
+      "recommendation": "Tighten to ^\\s*it\\s*\\( with gm flags (line-start only). OR count via AST (overkill).",
+      "files": [
+        "tools/create-benten-app/test/scaffolder.test.ts:50"
+      ]
+    }
+  ],
+  "counts": {
+    "critical": 0,
+    "major": 0,
+    "minor": 5,
+    "total": 5
+  },
+  "key_integration_checks_verified": [
+    "TS infrastructure: root + 3 package.json files exist; Vitest + workspace wiring declared (caveat p2-qa-1)",
+    "Cross-process test actually spans processes: new [[bin]] + CARGO_BIN_EXE_ resolution + Command::new spawn; child prints CID on stdout, parent reopens redb",
+    "Exit-criterion #2 asserts deterministic createdAt: strict-monotonic across three writes + stamped-once re-read",
+    "Exit-criterion #3 runs under grant-backed policy: .capability_policy_grant_backed() + ON_DENIED + E_CAP_DENIED",
+    "IVM lag assertion no longer tautological: lag <= 1 + observed > 0 liveness",
+    "Mermaid parser wrong-API failures propagate: ?? fallback removed; lexer/parser errors presence asserted first",
+    "napi test uses ESM-compat createRequire",
+    "tx abort routing pinned in ENGINE-SPEC: ON_ERROR is sole edge",
+    "Compromise_4 carries fixture-CID canary alongside semantic WASM checks",
+    "integration aggregator comment corrected"
+  ],
+  "regressions_introduced_by_fix_pass": [
+    "None that compromise correctness. p2-qa-1 (workspace:* protocol) is infra-compat risk introduced by choosing pnpm/yarn conventions over file: protocol; resolvable with packageManager field or switch to file: refs. p2-qa-3 (bin without required-features) is minor compile-time tax, not correctness issue."
+  ],
+  "scenarios_fix_pass_weakened": [
+    "None observed. ivm_propagation lag assertion is STRICTLY stronger than v1 tautology. exit_2 createdAt assertions strictly stronger. Cross-process went from same-process drop-reopen (proved nothing about PIDs) to real subprocess (proves PID separation); strict strengthening."
+  ],
+  "four_new_findings_observed_not_raised": [
+    "Outcome::as_node() missing: exit_2 re-read uses as_list() with inline comment acknowledging API may change. Documented.",
+    "Top-level Anchor vs version::Anchor divergence: inline rustdoc (benten-core/src/lib.rs:625-630) documents dual-shape. Documented.",
+    "RegistrationError::determinism_class() accessor deferred: invariants_9_10_12.rs:119 pins code only with doc comment deferring to R5. Acceptable.",
+    "Exit-3 capability_policy_grant_backed + register_crud_with_grants overlap: raised as p2-qa-2."
+  ],
+  "confidence": "high; all five findings minor and well-scoped; fix-pass resolved 11/12 pass-1 findings tractable, intentionally-punted m20 documented not regressed",
+  "recommended_disposition": "Proceed to R5. Fold p2-qa-1 into R5 T1 scaffolder brief. Fold p2-qa-2 into R5 G4 brief. p2-qa-3/4/5 are fix-during-R5-touches, not pre-R5 blockers."
+}
