@@ -25,6 +25,24 @@ use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 // ---------------------------------------------------------------------------
 
 /// Errors from the storage layer.
+///
+/// Phase 1 follow-up — `GraphError` currently names `Redb` directly and erases
+/// the underlying `redb::Error` chain via `to_string()`. Both decisions are
+/// spike-stage compromises flagged by the `code-reviewer` critic:
+///
+/// - The `Redb` variant forces any non-redb `KVBackend` impl (in-memory mock,
+///   iroh-fetch, WASM peer-fetch) to stringify its errors into a variant that
+///   lies about where they came from. Phase 1 proper will rename to
+///   `Backend(String)` or, better, make `KVBackend` carry an associated
+///   `type Error` so each backend picks its own error type.
+/// - Stringifying `redb::*` errors loses `std::error::Error::source`, so
+///   callers cannot distinguish I/O failure from corruption from capacity.
+///   Phase 1 proper will preserve the chain via `#[from]` + `#[source]` or a
+///   boxed source field.
+///
+/// Tracked in SPIKE-phase-1-stack-RESULTS.md Next Actions; see
+/// `.addl/spike/code-reviewer-benten-graph.json` findings for the full
+/// rationale.
 #[derive(Debug, thiserror::Error)]
 pub enum GraphError {
     /// Propagated from `benten-core` (CID construction, canonical serialization).
@@ -33,7 +51,8 @@ pub enum GraphError {
 
     /// redb I/O or transactional failure. Wrapped into a string because
     /// `redb`'s error enum is not `Clone` and its variants are internal
-    /// details the caller does not need to switch on in the spike.
+    /// details the caller does not need to switch on in the spike. See the
+    /// type-level doc above for the Phase 1 refactor plan.
     #[error("redb: {0}")]
     Redb(String),
 
@@ -79,6 +98,14 @@ impl From<redb::CommitError> for GraphError {
 // ---------------------------------------------------------------------------
 
 /// Alias for the vector of `(key, value)` pairs returned by a prefix scan.
+///
+/// Phase 1 follow-up — returning the full result as a `Vec` is a spike-stage
+/// footgun: it forecloses pagination, streaming, and early termination, and
+/// forces any future network-fetch backend to download the full result before
+/// yielding anything. Phase 1 proper will reshape `scan` to return an iterator
+/// (likely `Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>), GraphError>>>`
+/// or a custom `Scan` type). Tracked in SPIKE-phase-1-stack-RESULTS.md Next
+/// Actions and `.addl/spike/code-reviewer-benten-graph.json`.
 pub type ScanResult = Vec<(Vec<u8>, Vec<u8>)>;
 
 /// Minimal key/value backend trait for the Benten graph.
@@ -91,6 +118,15 @@ pub type ScanResult = Vec<(Vec<u8>, Vec<u8>)>;
 /// `put_batch` must be atomic: either all pairs are committed or none are.
 /// This is the primitive the transaction primitive (`begin`/`commit`/`rollback`)
 /// will be built on in `benten-eval`.
+///
+/// # Spike-stage shape
+///
+/// This trait is deliberately minimal to prove out the abstraction. Two
+/// Phase 1 follow-ups already documented above:
+///
+/// - Error typing (see [`GraphError`] doc): likely move to an associated
+///   `type Error` so backends don't lie through a redb-named variant.
+/// - Scan shape (see [`ScanResult`] doc): return an iterator, not a `Vec`.
 pub trait KVBackend {
     /// Fetch the value stored under `key`. Returns `Ok(None)` on a clean miss.
     ///
@@ -131,11 +167,45 @@ pub trait KVBackend {
 /// Single table that stores every Node keyed by its CID bytes.
 const NODES_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("benten_nodes");
 
+/// Lexicographic successor of `prefix` — the smallest byte string strictly
+/// greater than every string that begins with `prefix`. Used to turn a
+/// prefix scan into a bounded range scan.
+///
+/// Returns `None` when `prefix` is all-`0xff` (no successor exists in the
+/// byte-string ordering), signalling that the caller should do an
+/// unbounded `prefix..` scan instead.
+fn next_prefix(prefix: &[u8]) -> Option<Vec<u8>> {
+    let mut out = prefix.to_vec();
+    while let Some(last) = out.last_mut() {
+        if *last < 0xff {
+            *last += 1;
+            return Some(out);
+        }
+        out.pop();
+    }
+    None
+}
+
 /// A [`KVBackend`] implementation backed by a local redb v4 database file.
 ///
 /// redb provides serializable isolation (single writer, multiple readers) and
 /// durable commits via a two-phase commit with checksummed pages. We rely on
 /// those guarantees rather than rolling our own WAL.
+///
+/// # Concurrency
+///
+/// `RedbBackend` is not `Clone`. To share a single backend across threads,
+/// wrap it in an `Arc`: `let backend = Arc::new(RedbBackend::open(path)?)`.
+/// redb's own API is `&self`, so multiple readers and a single writer can
+/// proceed concurrently through the shared `Arc`.
+///
+/// # Path handling
+///
+/// `RedbBackend::open` does not canonicalize or validate the database path.
+/// Callers that receive paths from an untrusted source (capability-delegated
+/// subgraphs, multi-tenant configurations) are responsible for path
+/// sanitization before invoking `open`. A future `benten-engine` wrapper will
+/// constrain paths to a configured data directory.
 pub struct RedbBackend {
     db: Database,
 }
@@ -222,17 +292,30 @@ impl KVBackend for RedbBackend {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(NODES_TABLE)?;
         let mut out = Vec::new();
-        // redb ranges take slice bounds; a prefix scan is (prefix..=prefix+0xff*N)
-        // — simpler to iterate everything and filter for the spike. The key
-        // space is small (O(thousands) of test nodes) so the scan cost is
-        // negligible and the correctness is obvious.
-        for item in table.iter()? {
-            let (k, v) = item?;
-            let k_bytes = k.value();
-            if k_bytes.starts_with(prefix) {
-                out.push((k_bytes.to_vec(), v.value().to_vec()));
+
+        // For a non-empty prefix we use redb's ordered range to bound the scan
+        // to keys in [prefix, next_prefix). This turns an O(n) full-table walk
+        // into O(matches + log n). `next_prefix` is the lexicographic successor
+        // of `prefix` obtained by incrementing the last non-0xff byte and
+        // dropping the tail; if `prefix` is all 0xff (no successor exists),
+        // the upper bound is open-ended and the scan continues to the end.
+        if prefix.is_empty() {
+            for item in table.iter()? {
+                let (k, v) = item?;
+                out.push((k.value().to_vec(), v.value().to_vec()));
+            }
+        } else {
+            let next = next_prefix(prefix);
+            let iter = match next.as_deref() {
+                Some(upper) => table.range::<&[u8]>(prefix..upper)?,
+                None => table.range::<&[u8]>(prefix..)?,
+            };
+            for item in iter {
+                let (k, v) = item?;
+                out.push((k.value().to_vec(), v.value().to_vec()));
             }
         }
+
         Ok(out)
     }
 
@@ -320,5 +403,107 @@ mod tests {
         backend.put_batch(&pairs).unwrap();
         assert_eq!(backend.get(b"k1").unwrap().as_deref(), Some(b"v1".as_ref()));
         assert_eq!(backend.get(b"k2").unwrap().as_deref(), Some(b"v2".as_ref()));
+    }
+
+    #[test]
+    fn scan_empty_prefix_returns_everything() {
+        let (backend, _dir) = temp_backend();
+        let pairs = vec![
+            (b"alpha".to_vec(), b"1".to_vec()),
+            (b"beta".to_vec(), b"2".to_vec()),
+            (b"gamma".to_vec(), b"3".to_vec()),
+        ];
+        backend.put_batch(&pairs).unwrap();
+
+        let hits = backend.scan(&[]).unwrap();
+        assert_eq!(hits.len(), 3, "empty prefix must match every key");
+
+        // Confirm redb returns results in sorted key order so callers can rely
+        // on it for deterministic downstream processing (content listings, IVM
+        // bootstrap).
+        let mut keys: Vec<&[u8]> = hits.iter().map(|(k, _)| k.as_slice()).collect();
+        let mut sorted = keys.clone();
+        sorted.sort();
+        assert_eq!(keys, sorted);
+        keys.sort();
+        assert_eq!(keys, [b"alpha".as_ref(), b"beta".as_ref(), b"gamma".as_ref()]);
+    }
+
+    #[test]
+    fn scan_zero_hit_prefix_returns_empty() {
+        let (backend, _dir) = temp_backend();
+        backend
+            .put_batch(&[(b"alpha".to_vec(), b"1".to_vec())])
+            .unwrap();
+
+        // A prefix that sorts after every stored key (and cannot be a prefix
+        // of any stored key) must return an empty vec, not an error.
+        let hits = backend.scan(b"zzz").unwrap();
+        assert!(hits.is_empty());
+
+        // A prefix on an empty store must also return empty.
+        let (empty_backend, _empty_dir) = temp_backend();
+        let hits = empty_backend.scan(b"anything").unwrap();
+        assert!(hits.is_empty());
+    }
+
+    #[test]
+    fn scan_prefix_bounds_the_range() {
+        // Regression test for the earlier O(n) implementation that iterated
+        // the full table regardless of prefix. Populate three disjoint prefix
+        // groups and confirm each scan returns only its group.
+        let (backend, _dir) = temp_backend();
+        let pairs = vec![
+            (b"post:1".to_vec(), b"p1".to_vec()),
+            (b"post:2".to_vec(), b"p2".to_vec()),
+            (b"user:1".to_vec(), b"u1".to_vec()),
+            (b"user:2".to_vec(), b"u2".to_vec()),
+            (b"zzz".to_vec(), b"z".to_vec()),
+        ];
+        backend.put_batch(&pairs).unwrap();
+
+        let posts = backend.scan(b"post:").unwrap();
+        assert_eq!(posts.len(), 2);
+        assert!(posts.iter().all(|(k, _)| k.starts_with(b"post:")));
+
+        let users = backend.scan(b"user:").unwrap();
+        assert_eq!(users.len(), 2);
+        assert!(users.iter().all(|(k, _)| k.starts_with(b"user:")));
+    }
+
+    #[test]
+    fn scan_all_0xff_prefix_is_open_ended() {
+        // Edge case: a prefix of all-0xff has no lexicographic successor, so
+        // the scan falls back to an unbounded `prefix..` range. Verify no
+        // panic and that a matching key is still found.
+        let (backend, _dir) = temp_backend();
+        backend.put(&[0xff, 0xff, 0xff], b"sentinel").unwrap();
+        backend.put(b"unrelated", b"nope").unwrap();
+
+        let hits = backend.scan(&[0xff, 0xff]).unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].0, vec![0xff, 0xff, 0xff]);
+    }
+
+    #[test]
+    fn batch_put_empty_slice_is_a_noop() {
+        let (backend, _dir) = temp_backend();
+        backend.put_batch(&[]).unwrap();
+        // Store remains empty.
+        assert!(backend.scan(&[]).unwrap().is_empty());
+    }
+
+    #[test]
+    fn next_prefix_increments_and_trims() {
+        // Direct unit tests for the range-scan helper.
+        assert_eq!(next_prefix(b"a"), Some(b"b".to_vec()));
+        assert_eq!(next_prefix(b"az"), Some(b"a{".to_vec())); // b'z' + 1 = b'{'
+        assert_eq!(next_prefix(&[0xff]), None, "all-0xff has no successor");
+        assert_eq!(
+            next_prefix(&[0x01, 0xff, 0xff]),
+            Some(vec![0x02]),
+            "trailing 0xff bytes are dropped and the last non-0xff increments"
+        );
+        assert_eq!(next_prefix(&[]), None, "empty prefix has no successor");
     }
 }
