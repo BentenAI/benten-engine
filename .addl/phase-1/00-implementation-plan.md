@@ -576,5 +576,140 @@ R1 (spec review) ─── Ben triage ──► R2 (test landscape) ─── Be
 | T7 error codegen | G8-C |
 | T8 napi-rs wasm32 compile-check | G8-C |
 | T9 determinism gate (cross-leg byte equality) | G8-C |
+| T10 supply-chain CI (cargo-audit / cargo-deny / lockfile verify / response protocol) | G8-C |
+| T11 SECURITY-POSTURE.md — NoAuthBackend semantics, production() builder guide, threat-model notes | G8-C |
+| T12 TRANSFORM-GRAMMAR.md — allowlist BNF + rejected-constructs appendix | G6-B |
+| B8 napi input validation (size / depth / CID shape / pre-parse invariant checks) | G8-A |
+| B9 DSL source-map + error.dslLocation | G8-B |
+| N5-b Engine::builder().production() — refuses NoAuthBackend, requires explicit capability policy | G7 |
+| N8 Engine private write-context flag — system-label rejection at benten-graph write-path (Phase 1 Invariant-11 stopgap) | G3-A + G7 |
 
-Every deliverable has an owner group. Every "P1.*.*" tag from SPIKE "Critic Triage" has a landing spot. Nothing is orphaned.
+Every deliverable has an owner group. Every "P1.*.*" tag from SPIKE "Critic Triage" has a landing spot. Every R1-criticality finding has a mapped deliverable. Nothing is orphaned.
+
+---
+
+## R1 Triage Addendum (2026-04-15)
+
+This section extends the plan with the R1 spec-review dispositions. 5 critics (architect-reviewer, code-reviewer, security-auditor, dx-optimizer, benten-engine-philosophy) returned 61 findings total across 4 critical / 27 major / 30 minor. Raw JSON at `.addl/phase-1/r1-<agent>.json`. Consolidated triage at `.addl/phase-1/r1-triage.md`. Applying all fix-now dispositions here so R2 and R3 agents see the corrected plan as ground truth.
+
+### Scope-shape changes
+
+**(Security Critical #1 — system-zone stopgap.)** Even though full Invariant 11 is Phase 2, Phase 1 ships a write-context privilege flag: every WRITE through `benten-graph`'s transaction primitive carries a `WriteContext { is_privileged: bool }`. Only the engine's `grant_capability` / `create_view` / `revoke_capability` / internal paths set `is_privileged = true`; every user-operation WRITE sets it false. Writes to any Node labeled with a `system:` prefix are rejected with `E_SYSTEM_ZONE_WRITE` when `is_privileged` is false. New deliverable **N8**. Test `user_operation_cannot_write_system_labeled_node`.
+
+**(Security Critical #2 — NoAuth guardrails.)** `NoAuthBackend` remains the builder default for DX, but Phase 1 ships `Engine::builder().production()` (new deliverable **N5-b**) which returns `Err(EngineError::NoCapabilityPolicyConfigured)` unless a capability policy is explicitly set. Startup emits an info-level log line naming the backend. `SECURITY-POSTURE.md` (new deliverable **T11**) documents the default's intended scope (embedded / single-user). Test `engine_builder_production_refuses_noauth`.
+
+**(Security Critical #3 — supply chain.)** New deliverable **T10** (lands in G8-C): `cargo-audit` + `cargo-deny` in CI on every PR (fail on HIGH/CRITICAL), `cargo-deny.toml` with license allowlist (MIT/Apache-2.0/BSD-3/CC0) + banned crates, `cargo build --locked` verification in CI, `CONTRIBUTING.md` yank-response protocol section, weekly `cargo update --dry-run` + `cargo audit` workflow opening issues on new advisories.
+
+**(Security Critical #4 — `requires` property semantics.)** Decision: `requires` declares the **minimum** capability; the evaluator additionally checks each primitive's effective requirement at call time. A handler with `requires: "post:read"` that internally WRITEs to `admin:*` gets the WRITE denied individually even if the declared read capability is granted. Update §2.4 P6 prose accordingly. New tests: `handler_with_understated_requires_denies_excess_writes`, `handler_cannot_escalate_via_call_attenuation`. This is the correct model for Phase 6 AI-agent attack surface — declared-only is the canonical AI-handler escalation path.
+
+**(Architect Major #1 — change-stream refactor.)** `benten-graph` exposes a `ChangeSubscriber` trait; it does NOT depend on tokio. `benten-engine` ships a default tokio-broadcast `ChangeSubscriber` impl (bounded with stale-on-overflow semantics per Rank 2). WASM builds plug a synchronous callback-list impl. This preserves the thin-engine test and honors the architect-reviewer + philosophy + security critics' convergent finding. Section 2.2 G7 updated; Section 2.6 N4 gains subscriber-impl wiring; Rank 2 recommendation ratified with this architectural placement.
+
+**(Architect Major #2 — evaluator frame model.)** `Vec<ExecutionFrame>` + `frame_index: usize` on the stack. No self-referential borrows. Tracing-snapshot refactor to arena/IDs is a Phase 2 option if trace state needs frame lifetime > stack lifetime. Section 2.5 E2 + G6-C updated.
+
+**(Architect Major — IVM base trait.)** Add a shared `View` trait to `benten-ivm` that all five hand-written views implement. Phase 2's generalized Algorithm B slots in as another `View` impl. Forecloses less than the plan's current "5 independent implementations" shape. Section 2.3 I1–I7 gets a shared trait; G5-A owns the trait definition.
+
+**(Architect Major — error-catalog crate split.)** Conflating `CoreError` with the workspace-wide `ErrorCode` enum is architecturally awkward — they're different types. Move the `ErrorCode` enum to a tiny new shared crate `benten-errors` (or keep in `benten-core` if the critic's arg is weaker after implementation). Decision: **keep in `benten-core` for Phase 1** (one fewer crate; the `ErrorCode` enum only grows at phase boundaries). Revisit at Phase 2 if the coupling surfaces concretely. Named compromise.
+
+### Error-catalog gaps (code-reviewer + security)
+
+Add to `docs/ERROR-CATALOG.md` before G1 begins:
+
+- `E_PRIMITIVE_NOT_IMPLEMENTED` — reserved for WAIT/STREAM/SUBSCRIBE-as-user-op/SANDBOX call-time rejection
+- `E_SYSTEM_ZONE_WRITE` — Phase 1 stopgap (N8)
+- `E_CAP_NOT_IMPLEMENTED` — UCANBackend-configured-in-Phase-1 operator error (distinct from `E_CAP_DENIED`)
+- `E_CAP_REVOKED_MID_EVAL` — explicit Phase-1 TOCTOU window marker (distinct from `E_CAP_REVOKED` which is Phase-3 sync-revocation)
+- `E_CAP_DENIED_READ` — Phase-1-ships-Option-A (leaky-but-honest); Phase-3 revisit for existence-hiding per sync threat model
+- `E_INPUT_LIMIT` — napi boundary rejection (B8)
+- `E_TRANSFORM_SYNTAX` — TRANSFORM parser rejection (T12 BNF)
+- `E_INV_CONTENT_HASH` — maps Invariant 10 enforcement
+- `E_INV_REGISTRATION` — maps Invariant 12 enforcement
+
+Remove from `ERROR-CATALOG.md` (prematurely present; they're Phase 2):
+
+- `E_INV_ITERATE_MAX_MISSING` / `E_INV_ITERATE_BUDGET` → Phase 2 with Invariant 8
+- `E_INV_SANDBOX_NESTED` → Phase 2 with Invariant 4
+- `E_INV_SYSTEM_ZONE` → Phase 2 with full Invariant 11 (the Phase 1 stopgap uses `E_SYSTEM_ZONE_WRITE` instead)
+
+### TRANSFORM grammar (code-reviewer + security + philosophy)
+
+- G6-B commits to publishing `docs/TRANSFORM-GRAMMAR.md` as new deliverable **T12** (BNF + rejected-constructs appendix).
+- Grammar is **allowlist** — every token/AST shape that isn't explicitly in the BNF is a parse error with `E_TRANSFORM_SYNTAX`. This is stronger than a denylist for a language whose security depends on what CAN'T appear.
+- Expand §4.1 benten-eval rejection tests from 4 constructs to the full class: closures, `this`, imports, prototype access (`__proto__`, `constructor`, `prototype`), tagged templates, template literals with expressions, optional-chained calls exposing prototype, computed property names resolving to `__proto__`/`constructor`/`Symbol.*`, `new` in any position, `with`, destructuring with getters, spread-into-call, comma operator.
+- G6-B also ships a fuzz-test harness (`cargo test -p benten-eval -- --ignored fuzz_transform_parser`) running generated JS snippets through the TRANSFORM parser; accepted strings must evaluate deterministically.
+
+### IVM semantics (code-reviewer + dx-optimizer)
+
+- **Stale-reader behavior explicit:** a read on a stale view returns `Err(E_IVM_VIEW_STALE)`, not stale data. Caller can opt into "stale is fine" via a new method `engine.read_view_allow_stale(view_id, query)` if desired.
+- **Exit-criterion IVM barrier:** `engine.call(handler, input)` blocks on IVM propagation by default (per-tx barrier). Asynchronous fire-and-forget caller semantics opt-in via `engine.call_async(handler, input)`. Preserves the exit criterion's determinism and fixes the dx-optimizer flakiness concern.
+- **Transaction edge cases:** closure-panic-in-transaction → rollback + re-raise; commit-time capability failure → `engine.trace()` returns the partial trace up to the failed commit boundary plus a final `TraceStep::Aborted { error: E_CAP_DENIED }`.
+- **Nested transactions:** not supported in Phase 1. A `transaction(|tx| tx.transaction(|inner| ...))` call returns `E_NESTED_TRANSACTION_NOT_SUPPORTED`. Phase 2 may lift; Phase 1 keeps it deterministic.
+
+### Attribution (security major, for Phase 6 foundations)
+
+Both `ChangeEvent` and `TraceStep` gain minimum-attribution fields in Phase 1 even though Invariant 14 enforcement is Phase 2:
+
+- `ChangeEvent { cid, label, kind, tx_id, actor_cid: Option<Cid>, handler_cid: Option<Cid>, capability_grant_cid: Option<Cid> }`
+- `TraceStep { node_cid, inputs, outputs, duration_us, error, actor_cid: Option<Cid>, capability_grant_cid_used: Option<Cid> }`
+- NoAuthBackend populates `actor_cid` with `noauth:<session-uuid>` synthetic marker so the field is never silently None.
+
+Ensures Phase 2 Invariant 14 is a tightening, not a schema migration.
+
+### Thin-engine test expanded (philosophy major)
+
+`EngineBuilder` gains `without_versioning()` alongside the existing `without_ivm()` and `without_caps()` — Validated Decision #8 requires ephemeral data not pay versioning cost. Test renamed to `thinness_no_ivm_no_caps_no_versioning_still_works`.
+
+### Subgraph CID order-independence (philosophy major)
+
+Add proptest `prop_subgraph_cid_order_independent` in §4.2: two Subgraphs constructed via different insertion orders but equivalent structure must produce identical CIDs. Subgraph canonicalization rule (Nodes sorted by Cid; Edges sorted by `(source_cid, target_cid, label)`) published as part of T12 grammar doc or a new §7 sub-section.
+
+### Iteration budget stopgap (philosophy major)
+
+Invariant 8 (cumulative budget) is Phase 2, but Phase 1 enforces a hardcoded `MAX_ITERATE_NEST_DEPTH = 3` at registration (Invariant 12 slot). This prevents a handler from silently unbounded-nesting ITERATEs within per-level limits. Named compromise: "Phase 1 bounds nesting structurally; Phase 2 adds cumulative-budget enforcement." Documented in §2.5 E5 and Rank 10.
+
+### DX hardening (dx-optimizer)
+
+- **B8 prebuilt binaries.** napi-rs per-platform prebuilts for at least (aarch64-apple-darwin, x86_64-apple-darwin, x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, x86_64-pc-windows-msvc). CI gate on cold-install < 60s. Source-compile fallback works but warns.
+- **B9 DSL source-maps.** Thrown errors carry `error.dslLocation` (file:line:col from TS authoring) + synthetic stack frame so developers see their handler code, not Rust Node CIDs. Attached at register-time via `subgraph` DSL builder.
+- **`crud` injection completeness.** `crud('post')` zero-config injects `createdAt`, `updatedAt`, `id` deterministically. `authorId` is NOT auto-injected — that requires a capability context the zero-config path doesn't have.
+- **Mermaid consumer UX.** `toMermaid()` has a sibling `toMermaidUrl()` that wraps output in a mermaid.live URL for direct paste.
+- **Trace pretty-print.** `TraceStep[]` has a `.toString()` that renders a tree view with per-step timing; raw array still available for programmatic use.
+- **Scaffolder template.** `npx create-benten-app` output ends with a "next steps" banner pointing to docs + the Phase-1 tutorial in QUICKSTART.md.
+- **`fixHint` surfacing.** Error codes carry `fixHint` from ERROR-CATALOG into the thrown `Error`; `error.toString()` includes `"Hint: <fix-hint>"`.
+- **Doc deliverable.** QUICKSTART.md section marked "not yet built" updated at Phase 1 exit to reflect the shipped scaffolder + `crud('post')` workflow.
+
+### Test-landscape additions
+
+New subsection in §4.1 — **security-class tests** (seeds rust-test-writer-security in R3):
+
+- `napi_rejects_oversized_value_map` / `napi_rejects_deep_nested_value` / `napi_rejects_oversized_bytes` / `napi_rejects_malformed_cid` (B8)
+- `transform_grammar_rejects_tagged_templates` / `transform_grammar_rejects_computed_proto_keys` / `transform_grammar_rejects_new_Function` / `transform_grammar_rejects_with_statement` / `transform_grammar_rejects_destructuring_getter` / fuzz harness
+- `capability_revoked_mid_iteration_denies_subsequent_batches` (TOCTOU window test)
+- `handler_with_understated_requires_denies_excess_writes`
+- `handler_cannot_escalate_via_call_attenuation`
+- `user_operation_cannot_write_system_labeled_node`
+- `read_denied_returns_cap_denied_read` (Option-A existence-visibility)
+- `ucan_stub_error_message_names_phase_and_alternative`
+- `ucan_stub_error_routes_to_ON_ERROR_not_ON_DENIED`
+- `supply_chain_ci_green_on_clean_lockfile`
+
+### ADDL dispatch adjustments (code-reviewer minor)
+
+- §6 R5 row adds `cargo-runner` + `rust-engineer` with scoped roles — already done in pre-R1, verified here.
+- `tests/evaluator_stack_*` glob in G6-C expanded to named tests: `tests/evaluator_pushes_next_on_ok`, `tests/evaluator_pops_on_respond`, `tests/evaluator_follows_error_edge`, `tests/evaluator_preserves_frame_order`, `tests/evaluator_stack_overflow_is_err_not_panic`.
+- G5/G6 `mod.rs` ownership: each sub-file carries its own `pub(crate) mod …` reference; no agent writes to the `mod.rs` collector. Explicitly a `G5-A owns src/views/mod.rs; G5-B and G5-C add their view files via pub statements G5-A aggregates on merge` rule.
+- Exit-criterion #4 trace-order assertion narrowed to topological order (non-strict total order for handlers with BRANCH/ITERATE/CALL — the test checks that every executed step appears in a topologically-valid order, not that the sequence is unique).
+
+### Named compromises (things we chose to NOT fully fix in Phase 1)
+
+Each is documented explicitly rather than silently deferred.
+
+1. **Invariant 13 TOCTOU window** — Phase 1 checks capabilities at every commit boundary and at every CALL entry. Revocation during a long ITERATE is visible only at iteration-batch boundaries (configurable, default 100 iters). Phase 2 tightens to per-operation via Invariant 13. Docs (Rank 10 + §2.4 P1) name the window size.
+2. **E_CAP_DENIED_READ leaks existence** (Option A chosen). Phase 3 sync revisits with per-grant `existence_visibility: visible|hidden` option.
+3. **`benten-errors` stays inside `benten-core`** for Phase 1. Revisit at Phase 2 if coupling surfaces.
+4. **WASM runtime still Phase 2.** T8 is compile-check only. When runtime ships, default capability backend for browser contexts will NOT be NoAuthBackend — `BrowserOriginCapBackend` will scope writes to origin. Named for Phase 2.
+5. **Per-capability write rate limits** — Phase 1 records `benten.ivm.view_stale_count{view_id}` metric; Phase 3 enforces per-peer rate limits when sync ships.
+6. **BLAKE3 128-bit collision resistance assumption.** Phase 1 usage (dedup + integrity) relies only on collision resistance, not full preimage. Phase 3 UCAN capability-by-CID paths revisit; `SECURITY-POSTURE.md` documents the property.
+
+### Disagreements
+
+None across all 61 findings.

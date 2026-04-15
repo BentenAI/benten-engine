@@ -1,0 +1,199 @@
+{
+  "agent": "code-reviewer",
+  "stage": "R1",
+  "target": ".addl/phase-1/00-implementation-plan.md",
+  "verdict": "revise",
+  "lens": "correctness + implementation quality — is every deliverable tight enough for R5 agents to write correct code without guessing?",
+  "summary": "Plan is substantially stronger than pre-R1: ownership columns, exit-criterion, error-code source of truth, determinism gate, and thin-engine test are all sharp. Remaining gaps are concentrated in four areas: (1) error-code taxonomy has one code referenced but unreserved in ERROR-CATALOG.md (E_PRIMITIVE_NOT_IMPLEMENTED) plus an ambiguous invariant-to-code mapping, (2) TRANSFORM grammar publication commitment referenced in Rank 4 but not actually wired into G6 deliverables, (3) several semantic edges around transaction + trace interaction, IVM stale-reader semantics, and napi error lossiness are under-specified enough that two R5 agents will make incompatible choices, (4) `crud('post')` zero-config completeness is only spot-checked on create + list + cap-denied in the exit criterion. None are architectural; all are implementation-specification tightening. Fix-in-plan before R5 dispatch.",
+  "findings": [
+    {
+      "id": "R1-CR-1",
+      "severity": "major",
+      "area": "error-code taxonomy",
+      "location": "§2.5 E1, §2.5 E5, §2.5 E9, docs/ERROR-CATALOG.md",
+      "claim": "`E_PRIMITIVE_NOT_IMPLEMENTED` is referenced in E1 (\"Error code `E_PRIMITIVE_NOT_IMPLEMENTED` to be reserved in ERROR-CATALOG pre-R1\"), E5, E9, §4.1, and the pre-R1 triage JSON — but grepping `docs/ERROR-CATALOG.md` confirms it is not actually present. The `pre-R1` reservation never happened. If G1-A is the hand-authored source-of-truth per T7, and G1-A fires before ERROR-CATALOG gets the entry, the Rust enum and the catalog will diverge on day one and the drift detector (§4.6) will fire on the first G1-A commit.",
+      "evidence": "Grep `docs/ERROR-CATALOG.md` for `E_PRIMITIVE_NOT_IMPLEMENTED` → zero hits. Plan line §2.5 E1: 'Error code `E_PRIMITIVE_NOT_IMPLEMENTED` to be reserved in ERROR-CATALOG pre-R1' — this is a forward-reference commitment the plan makes against itself, not a disposition. The same applies to `E_CAP_ATTENUATION` for the dynamic-CALL case (plan references it but ERROR-CATALOG only lists it for static chains + evaluation for dynamic CALL — the dynamic CALL error surface is undefined).",
+      "fix": "(a) Before R5 begins, add `E_PRIMITIVE_NOT_IMPLEMENTED` to ERROR-CATALOG.md under 'Evaluation-time errors' with the same fields as siblings (message template, context, fix, thrown-at). (b) Add to the plan a new §2.8 row T10 or extend T7: 'Error-catalog pre-R5 readiness gate — all error codes referenced in the plan exist as catalog entries before G1-A begins'. The drift detector is too late to catch pre-G1 gaps because it compares the Rust enum (produced by G1-A) against the catalog; if both are wrong in the same way it passes.",
+      "blocking": true
+    },
+    {
+      "id": "R1-CR-2",
+      "severity": "major",
+      "area": "error-code taxonomy / invariant enforcement",
+      "location": "§2.5 E5, §4.1 (benten-eval bullet), docs/ERROR-CATALOG.md",
+      "claim": "E5 says invariants 1/2/3/5/6/9/10/12 each map to an `E_INV_*` code, and §4.1 says 'each has a registration-time rejection test and a positive-case test'. But ERROR-CATALOG has ten `E_INV_*` codes, two of which (`E_INV_ITERATE_MAX_MISSING`, `E_INV_ITERATE_BUDGET`) enforce invariant 8 — which Rank 10 explicitly flags as Phase 2. Invariants 10 (content-addressed hash per subgraph) and 12 (registration-time structural validation itself) are meta-invariants that don't have obvious rejection codes. The mapping is neither one-to-one nor complete, and R5 (specifically G6-C) is going to invent codes ad-hoc when they find invariant 10 has no corresponding E_INV_*.",
+      "evidence": "ERROR-CATALOG §'Registration-time errors': E_INV_CYCLE (inv 1), E_INV_DEPTH_EXCEEDED (inv 2), E_INV_FANOUT_EXCEEDED (inv 3), E_INV_SANDBOX_NESTED (inv 4 — Phase 2!), E_INV_TOO_MANY_NODES (inv 5), E_INV_TOO_MANY_EDGES (inv 6), E_INV_SYSTEM_ZONE (inv 11 — Phase 2!), E_INV_DETERMINISM (inv 9), E_INV_ITERATE_MAX_MISSING (inv 8 — Phase 2!), E_INV_ITERATE_BUDGET (inv 8 — Phase 2!). So of the ten catalog codes: 4 are for Phase-2-only invariants (4/8/11), 6 are for Phase-1 invariants (1/2/3/5/6/9). Invariants 10 and 12 have zero codes.",
+      "fix": "Add an explicit mapping table to §2.5 E5: { invariant_id → error_code }. For invariants 10 and 12, decide: either (a) they are meta-invariants that never fail-loud (invariant 12 is 'validation runs'; invariant 10 is 'hash is computed and stored') and document that in the plan, or (b) reserve `E_INV_HASH_MISMATCH` + `E_INV_STRUCTURAL_REJECTED` as catch-alls. Also: either remove the claim that invariant 8 is Phase 2 (because ITERATE_MAX_MISSING and ITERATE_BUDGET are already in the catalog and ITERATE is a Phase-1 primitive) or strike the two codes from the catalog pending Phase 2. Currently the catalog and Rank 10 contradict each other.",
+      "blocking": true
+    },
+    {
+      "id": "R1-CR-3",
+      "severity": "major",
+      "area": "TRANSFORM expression language — deliverable commitment",
+      "location": "§2.5 E4, §5 Rank 4, Appendix A",
+      "claim": "Rank 4's recommendation explicitly says 'Publish the BNF as `docs/TRANSFORM-GRAMMAR.md` as part of G6's deliverable.' But §2.5 E4 only lists the expression language features narratively and gestures at Section 5 risk #4; there is no BNF commitment, no `docs/TRANSFORM-GRAMMAR.md` row in Appendix A, and G6-B's files owned column is `src/expr/parser.rs` + `src/expr/eval.rs` — no grammar document. The commitment slipped between Rank 4 and the deliverable tables. Without a published BNF, R5's parser and R3's `tests/transform_no_closures` / `tests/transform_expression_coverage` tests will be written from different mental models of what is valid.",
+      "evidence": "§5 Rank 4 final sentence: 'Publish the BNF as `docs/TRANSFORM-GRAMMAR.md` as part of G6's deliverable.' §2.5 E4 row: 'See Section 5 risk #4 — parser choice' (no deliverable-doc commitment). §3 G6-B files owned: 'src/expr/parser.rs + src/expr/eval.rs' (no grammar doc). Appendix A: no TRANSFORM-GRAMMAR row.",
+      "fix": "(a) Add a deliverable `E4b` to §2.5: 'Publish docs/TRANSFORM-GRAMMAR.md — Pratt-precedence BNF for the TRANSFORM subset; source of truth for parser + test writer + future maintainers.' (b) Add `docs/TRANSFORM-GRAMMAR.md` to G6-B's files owned. (c) Add row to Appendix A: 'E4b TRANSFORM grammar doc | G6-B'. (d) Make R3's transform tests reference the grammar doc as the source of truth for valid/invalid constructs.",
+      "blocking": true
+    },
+    {
+      "id": "R1-CR-4",
+      "severity": "major",
+      "area": "IVM semantics / reader-side contract",
+      "location": "§2.3 I8, §2.2 G7, §4.3 'IVM write-propagation', docs/ERROR-CATALOG.md E_IVM_VIEW_STALE",
+      "claim": "I8 says 'on exceed, mark view stale and emit `E_IVM_VIEW_STALE`.' The exit criterion says 'the error surfaces correctly.' But there is no definition of what a READ against a stale view returns to the caller: does View 3's `content_listing` return an empty Vec? The last-good-data snapshot? An `Err(E_IVM_VIEW_STALE)`? ERROR-CATALOG says 'Thrown at: Evaluation (READ from IVM view)' — implying the call fails — but if that's the case the `exit-criterion #2 three creates + list reflects all three` test will flake if a write ever trips a budget during the test run. Two R5 agents could plausibly implement (a) error-on-read and (b) stale-data-on-read; both satisfy 'the error surfaces correctly' in isolation.",
+      "evidence": "I8: 'Phase 1 minimum: each view has a hardcoded max-work-per-update budget; on exceed, mark view stale and emit `E_IVM_VIEW_STALE`. Async recompute is Phase 2.' ERROR-CATALOG E_IVM_VIEW_STALE fix hint: 'Usually not an error the developer should handle; wait and retry, or accept eventually-consistent semantics.' These two statements are incompatible: either READ returns Err (developer must handle) or it returns stale data (eventually consistent). Pick one.",
+      "fix": "Decide and document: Phase 1 READ on a stale view returns `Err(E_IVM_VIEW_STALE)` with last-good CID in context (so callers can opt into stale-read). Add R3 test: `content_listing_read_on_stale_view_returns_error_with_last_good_cid`. Update ERROR-CATALOG fix hint to match. This makes the exit-criterion test deterministic: if it flakes because a budget trips, the test has a concrete error class to key off of.",
+      "blocking": false
+    },
+    {
+      "id": "R1-CR-5",
+      "severity": "major",
+      "area": "transaction + trace semantics",
+      "location": "§2.5 E6, §2.5 E8, §2.6 N6, §4.3 'Transaction atomicity end-to-end'",
+      "claim": "Three edge cases are undefined, any of which will produce two incompatible R5 implementations: (1) Closure-based transaction API — what happens if the closure panics? Does the redb txn abort? Does the panic propagate to the caller or get caught and converted to `E_TX_ABORTED`? (2) Capability check fires at commit (per §9). If it fails, what does `engine.trace(handler, input)` surface — partial trace with the denial step, or only the pre-write trace plus an error? (3) The transaction primitive is exposed as a public `Engine::transaction` in N6 and also wraps every subgraph evaluation automatically in E6. Can a subgraph author start a nested transaction inside a WRITE closure? If so, do they compose, or does the outer write see the inner's change-events before commit?",
+      "evidence": "§2.5 E6: 'Thin wrapper over G3. All WRITEs inside a single subgraph evaluation are atomic. Capability check at commit.' §2.5 E8: 'Produces `Vec<TraceStep { node_cid, inputs, outputs, duration_us, error }>`.' No statement about partial traces on mid-flight failure. §2.2 G3-A must-pass test `failure_injection_rollback` implies rollback works on errors but doesn't specify panic-vs-Err. ERROR-CATALOG E_TX_ABORTED.Context: `{ reason, failed_node }` — single failed node, so nesting is ambiguous.",
+      "fix": "Add three sub-rows to §2.5 E6: (a) 'Closure panics are caught via `catch_unwind`, redb txn aborted, `E_TX_ABORTED` returned with reason=\"panic: <msg>\"'; (b) 'A failed capability check at commit produces `E_CAP_DENIED`; engine.trace() returns the full trace up through the commit attempt, with the final step having `error: Some(E_CAP_DENIED)`'; (c) 'Nested transactions in Phase 1: the inner transaction call on the same engine flattens into the outer txn (savepoints are Phase 2). Document in rustdoc; R3 test `nested_transaction_flattens_to_outer`.' Add the three R3 tests to §4.1 benten-engine.",
+      "blocking": false
+    },
+    {
+      "id": "R1-CR-6",
+      "severity": "major",
+      "area": "napi binding error fidelity",
+      "location": "§2.7 B7, §2.8 T7",
+      "claim": "B7 says 'typed error classes (`ECapDenied`, `EInvCycle`, …)' generated from ERROR-CATALOG.md. But the mapping from Rust `thiserror` variants to TS error classes is under-specified: are the `context` fields preserved (typed) on the TS side? The ERROR-CATALOG specifies context as e.g. `{ cycle_path: NodeId[] }` — if T7's codegen drops this to `any` or to `Record<string, unknown>` the DX-critic concern that motivated the catalog is undone. Also: is the `fixHint` string shipped to the TS side, or only the code + message? And do errors preserve the stack-trace boundary (JS stack up to the napi call, then Rust's `caused_by` chain)?",
+      "evidence": "B7: 'Generated from `docs/ERROR-CATALOG.md` via a small script, consumed by `@benten/engine/errors`'. T7: 'generates `packages/engine/src/errors.ts` from the catalog + runs a bidirectional drift detector in CI.' No mention of: context typing, fixHint propagation, stack preservation, `instanceof` checks for narrowing.",
+      "fix": "Extend T7 contract in §2.8 to specify four requirements: (1) each catalog entry emits a TS class extending `BentenError` with strongly-typed `context` (codegenned from the context spec in the catalog — `NodeId[]` becomes `string[]` or a branded type), (2) `fixHint` is shipped as a readonly property on every error instance, (3) `instanceof ECapDenied` narrows correctly (classes, not interfaces), (4) the `cause` field preserves the Rust error chain via napi-rs v3's error-propagation hook. Add R3 test `packages/engine/src/errors.test.ts: typed_context_survives_napi_boundary` exercising a multi-field context error.",
+      "blocking": false
+    },
+    {
+      "id": "R1-CR-7",
+      "severity": "major",
+      "area": "zero-config `crud('post')` completeness",
+      "location": "§1 Executive Summary (exit criterion), §2.7 B6, §3 G8-B, §4.5 crud.test.ts",
+      "claim": "The exit criterion exercises only create + list + cap-denied. B6 promises 'zero-config `crud('post')` path' works. §4.5 says `crud.test.ts` covers 'create / read / list / update / delete' — but nothing in §2.7 B6 commits to update + delete + single-read + list-with-filter working zero-config. Without a filter predicate, View 3's paginated-listing API has an ambiguous surface (what if the user wants only published posts?). Two R5 implementations could plausibly ship: (a) zero-config gives you create + list only, update/delete require options; (b) zero-config gives you all five but the filter API shape is invented ad-hoc by G8-B.",
+      "evidence": "§2.7 B6 final paragraph lists `subgraph`, `crud`, `read`, `write`, `transform`, `branch`, `iterate`, `call`, `respond`, `emit` — but only commits to `crud('post')` injecting `createdAt`. No scope statement for what the `crud` shorthand's default actions are. §4.5 crud.test.ts: 'register `crud('post')` with zero-config, create / read / list / update / delete' — listed but not committed in §2.7. Gap between test and scope.",
+      "fix": "Add to §2.7 B6 an explicit bullet list of the actions `crud('post')` synthesizes by default: `create`, `read` (by id), `list` (paginated by createdAt DESC), `update`, `delete`. For list-with-filter, either (a) commit to Phase 1 shape `crud('post', { filters: { published: 'boolean' } })` and name the test, or (b) explicitly defer filters to Phase 2 and add to Rank 10. Also: update the exit criterion's test-name list in §1 to reference the full crud.test.ts coverage, not only the three behaviors called out in the six-assertion smoke test.",
+      "blocking": false
+    },
+    {
+      "id": "R1-CR-8",
+      "severity": "major",
+      "area": "test-glob expansion",
+      "location": "§3 G6-C must-pass tests, §4.1 benten-eval",
+      "claim": "G6-C's test glob `tests/evaluator_stack_*` is not expanded anywhere. R3 writers have to guess what invariants the glob covers. Comparable globs elsewhere in the plan (e.g. `tests/invariant_*`) are spec'd in prose in §4.1 but not for the evaluator-stack suite. Two R3 writers could plausibly produce (a) `evaluator_stack_depth`, `evaluator_stack_overflow`, `evaluator_stack_frame_isolation` and (b) `evaluator_stack_push_pop`, `evaluator_stack_serialization` — entirely different coverage.",
+      "evidence": "§3 G6-C row: 'tests/evaluator_stack_*, tests/evaluator_no_recursion, tests/invariant_*'. §4.1 benten-eval does specify 'invariants 1/2/3/5/6/9/10/12 each have a registration-time rejection test' (expansion for `invariant_*`) but has no corresponding expansion for `evaluator_stack_*`. §5 Rank 1 mentions the ExecutionFrame shape but doesn't name tests.",
+      "fix": "Expand `tests/evaluator_stack_*` to a named list in §4.1 benten-eval, at minimum: `evaluator_stack_depth_bounded`, `evaluator_stack_frame_capability_attenuation` (consume Rank 1's recommendation), `evaluator_stack_frame_iteration_budget_decrements`, `evaluator_stack_call_returns_to_caller_frame`, `evaluator_stack_no_heap_recursion`. That last one replaces `evaluator_no_recursion` or subsumes it — pick one.",
+      "blocking": true
+    },
+    {
+      "id": "R1-CR-9",
+      "severity": "minor",
+      "area": "file ownership — parallel-writer safety",
+      "location": "§3 G5 (three parallel agents), §3 G6 (three parallel agents)",
+      "claim": "G5 splits three views across G5-B + G5-C, and all three agents (G5-A, G5-B, G5-C) touch `crates/benten-ivm/src/views/mod.rs` at minimum (registering new view modules). G6 splits primitives across G6-A + G6-B, and both will need to touch `crates/benten-eval/src/primitives/mod.rs` to register their submodules. The 'files owned' column doesn't include these shared re-export points, so two agents writing in parallel will collide on `mod.rs` files.",
+      "evidence": "§3 G5-A files: 'src/subscriber.rs, src/view.rs'. G5-B: 'src/views/capability_grants.rs, src/views/event_handler_dispatch.rs, src/views/governance_inheritance.rs'. G5-C: 'src/views/content_listing.rs, src/views/version_current.rs'. Rust requires a `views/mod.rs` declaring `pub mod capability_grants; pub mod event_handler_dispatch; …` — not listed in any agent's ownership.",
+      "fix": "Add a note under §3 G5 and G6: 'The `views/mod.rs` and `primitives/mod.rs` re-export files are owned by the first agent in the group (G5-A, G6-A); other agents append their modules via a sequenced follow-up commit, not a parallel write. Alternatively, the first agent stubs all submodule declarations up-front and later agents fill in the files.' The latter is cheaper. Same pattern applies to any crate where multiple parallel agents add submodules.",
+      "blocking": false
+    },
+    {
+      "id": "R1-CR-10",
+      "severity": "minor",
+      "area": "scope leak — determinism classification is a data contract",
+      "location": "§2.5 E1, §2.5 E5",
+      "claim": "E1 says 'WAIT/STREAM/SUBSCRIBE/SANDBOX are valid types with a defined determinism classification'. E5 says invariant 9 (determinism classification per operation type) is enforced in Phase 1. But the classifications themselves — which of the 12 primitives is deterministic-local, deterministic-pure, non-deterministic-external, side-effectful — are not tabulated anywhere in the plan. R5 will invent them ad-hoc, and the invariant-9 test cases depend on a canonical mapping to even write.",
+      "evidence": "ENGINE-SPEC §4 invariant 9 is referenced but the classification table isn't in the plan. ERROR-CATALOG E_INV_DETERMINISM message is 'Operation {op_type} is classified non-deterministic but appears in a context declared deterministic' — implies a known classification per op_type. No table in the plan specifies it.",
+      "fix": "Add to §2.5 E1 (or an appendix) a 12-row table: { primitive → determinism class }. E.g. READ=deterministic-read, WRITE=side-effectful, TRANSFORM=deterministic-pure, BRANCH=deterministic-pure, ITERATE=deterministic-aggregate, WAIT=deterministic-pause, CALL=inherits-from-target, RESPOND=side-effectful, EMIT=side-effectful-fire-and-forget, SANDBOX=non-deterministic-external, SUBSCRIBE=side-effectful, STREAM=deterministic-streaming. Names are placeholders; the point is R5 and R3 work from the same table. Reference the table from the invariant-9 R3 test spec.",
+      "blocking": false
+    },
+    {
+      "id": "R1-CR-11",
+      "severity": "minor",
+      "area": "performance target — IVM slice decomposition",
+      "location": "§4.4 `view_incremental_maintenance`",
+      "claim": "§4.4 annotates this target as '§14.6 derived — decomposition of the 100–500µs Node creation + IVM update envelope: reserve ~50µs for the IVM slice and the balance for storage + hash.' The decomposition is a reasonable rule-of-thumb but not a validated split. The spike shows create_node at 4ms (fsync-bounded), so the 100–500µs total is contingent on DurabilityMode::Group landing at <500µs (which is G3-B's target). If Group hits 450µs (still passing), the IVM slice is squeezed to <50µs or the total target is blown. R5 will chase a target that implies a different budget than R3's test asserts.",
+      "evidence": "§4.4: IVM <50µs derived from 100-500µs total. §5 Rank 2 implies the channel type affects the IVM slice. No wiring between G3-B's actual achieved number and G5's IVM budget.",
+      "fix": "Add to §4.4 a note: 'If G3-B's measured Group-commit median exceeds 300µs, re-compute the IVM budget as (measured_group_commit_ceiling - 50µs for hash & BLAKE3 - measured index-update latency), and update the `view_incremental_maintenance` criterion threshold for the affected views before R4b.' Makes the interdependency explicit instead of implicit. Alternatively, set the IVM target as 'measured by independent bench, not by subtraction' — and accept that the sum might exceed §14.6 if G3 misses.",
+      "blocking": false
+    },
+    {
+      "id": "R1-CR-12",
+      "severity": "minor",
+      "area": "content-hash regression — Node::properties insertion order",
+      "location": "§3 G1-B must-pass tests, §4.1 benten-core",
+      "claim": "The plan adds `edge_creation_does_not_change_endpoint_node_cids` and `version_chain_linking_does_not_change_version_node_cids` (good). But there's no equivalent regression for `Node::properties` insertion-order invariance — the spike asserts BTreeMap iteration is the load-bearing guarantee (per the 'Determinism guarantees' rewrite). If a future refactor swaps the internal map to a non-sorted one (e.g. FxHashMap for perf), CID drifts silently and only the cross-arch / cross-process fixture catches it — by which time the drift is already in git history.",
+      "evidence": "Spike RESULTS notes the doc was rewritten to credit `serde_ipld_dagcbor`'s encode-time canonicalization as the load-bearing guarantee with BTreeMap as belt-and-suspenders. §4.1 benten-core: 'Node hash determinism (4 cases from spike + float cases from G1-A)' — doesn't name an insertion-order-permutation test.",
+      "fix": "Judgment call — can be skipped if the existing proptest `prop_node_roundtrip_cid_stable` is instrumented to shuffle property insertion order. If not, add one-liner test `node_cid_invariant_under_property_insertion_order_permutation` to §4.1 benten-core. The spike's BTreeMap use already covers this in practice; this just locks it into the regression suite so a future swap-to-HashMap can't sneak through.",
+      "blocking": false
+    },
+    {
+      "id": "R1-CR-13",
+      "severity": "minor",
+      "area": "scope leak — tokio dependency for change stream",
+      "location": "§2.2 G7, §5 Rank 2",
+      "claim": "Rank 2's recommendation is 'start with a bounded tokio broadcast … verify tokio is already in the napi crate's transitive deps'. The `verify` is not discharged anywhere. If tokio is NOT in the transitive deps today, adding it to `benten-graph` violates the thinness test ('a developer should be able to use `benten-core` + `benten-graph` + `benten-engine` with NoAuthBackend… and get a pure content-addressed graph database'). A developer who doesn't want async runtime dragged in has to eat tokio for the change stream.",
+      "evidence": "CLAUDE.md thinness test: 'benten-core + benten-graph + benten-engine with NoAuthBackend, versioning disabled, and no IVM subscribers… should get a pure content-addressed graph database with no Benten-specific conventions.' Rank 2 defers the decision to R1 but sets the default as tokio broadcast. Plan does not state what the WASM target consumes (Rank 2 says 'synchronous callback-list wrapper' but doesn't commit).",
+      "fix": "Before R5, do the verification: grep Cargo.lock for `tokio` after `cargo check --workspace`. If it's present only transitively via napi, make the change-stream impl feature-gated: `benten-graph` exposes a minimal `ChangeListener` trait synchronously; the tokio-broadcast impl lives behind a `change-stream-tokio` feature, default-on for `benten-engine`, default-off for `benten-graph`. Document in §2.2 G7. This preserves the thinness test.",
+      "blocking": false
+    },
+    {
+      "id": "R1-CR-14",
+      "severity": "minor",
+      "area": "error-code taxonomy — dynamic CALL attenuation",
+      "location": "§2.4 P?, §2.5 E3 (CALL), docs/ERROR-CATALOG E_CAP_ATTENUATION",
+      "claim": "ERROR-CATALOG E_CAP_ATTENUATION says 'Thrown at: Registration (for static chains), evaluation (for dynamic CALL with `isolated: false`).' But the plan's E3 row for CALL doesn't specify the `isolated` flag behavior, and G6-B's `tests/call_attenuation` is under-specified (is it testing the static or dynamic case, or both?). Under-specification means R5 could skip the dynamic attenuation check entirely and `call_attenuation` passes vacuously.",
+      "evidence": "§3 G6-B: 'tests/call_attenuation, tests/call_timeout'. §2.5 E3: 'CALL' appears in the eight-primitive list but no sub-specification. ENGINE-SPEC §9 attenuation text is implied but not restated in the plan.",
+      "fix": "Expand in §4.1 benten-eval: 'CALL attenuation has two cases — (a) static chain attenuation fires at registration with E_CAP_ATTENUATION; (b) dynamic CALL with `isolated: false` fires at evaluation with E_CAP_ATTENUATION. Both cases have R3 tests: `call_attenuation_static_registration_rejects_widening`, `call_attenuation_dynamic_evaluation_rejects_widening`.' This also feeds back into R1-CR-2's invariant-to-code mapping.",
+      "blocking": false
+    },
+    {
+      "id": "R1-CR-15",
+      "severity": "minor",
+      "area": "`engine.trace()` semantic edges",
+      "location": "§2.5 E8, §4.1 benten-eval, exit-criterion #4",
+      "claim": "Exit criterion #4 asserts '`durationUs > 0` for every step and the step sequence matches the subgraph's topological order.' But (a) a BRANCH node executes one of its edges, not all — so the trace sequence is not the subgraph's topological order, it's the realized execution path. (b) ITERATE produces N copies of its body in the trace? Or one aggregate entry? (c) CALL into a sub-subgraph — does the outer trace include the inner steps inline (flattened) or as a nested TraceStep? The assertion is unfalsifiable without these decisions.",
+      "evidence": "§1 exit criterion #4: 'step sequence matches the subgraph's topological order'. Topological order includes all nodes; realized execution only includes taken branches. The two are equivalent only for non-branching, non-iterating, non-calling handlers.",
+      "fix": "Rewrite exit criterion #4: 'every TraceStep has `durationUs >= 1` (1 microsecond resolution floor from monotonic clock) AND the step sequence is a valid realized execution trace: each step's `node_cid` has a predecessor in the subgraph (or is the root), each BRANCH expands to exactly one downstream step, each ITERATE expands to at most `max` body repetitions, each CALL appears as a step with a nested `inner_trace: Option<Vec<TraceStep>>`. Tested by `trace_realized_path_of_crud_post_create`.' Also rewrite §2.5 E8 TraceStep type to include `inner_trace` field, or decide nested-vs-flat and document.",
+      "blocking": false
+    },
+    {
+      "id": "R1-CR-16",
+      "severity": "minor",
+      "area": "CI gate — `npm test` exit criterion in practice",
+      "location": "§1 Executive Summary, §2.8 T1 scaffolder",
+      "claim": "The scaffolder is in `tools/create-benten-app/`; the produced `my-app` depends on `@benten/engine` (a published npm package). The exit criterion `npm install @benten/engine && npx create-benten-app my-app && cd my-app && npm install && npm test` assumes `@benten/engine` is published to npm. Is Phase 1's exit gate blocked on a publish step? Or is the gate satisfied against a local `npm link` / file: dependency? If the former, 'declared done' depends on a registry publish, which is a side-channel. If the latter, exit test doesn't match the user command documented.",
+      "evidence": "§1 exit criterion runs against `@benten/engine` literal name. §3 G8-C ships `packages/engine/src/**`. No §2.8 row specifies the npm publish as a Phase 1 deliverable. CI job to publish is also unscoped.",
+      "fix": "Pick one: (a) commit to `@benten/engine` npm publish as a Phase 1 deliverable (add row T11 in §2.8), or (b) run the exit criterion in CI using a packed tarball / file: dep and document that the published gate is Phase 1.5 / pre-Phase-2. Option (b) is cheaper. Either way, rewrite exit criterion to be literally the command CI runs — not an aspirational user-facing command.",
+      "blocking": false
+    },
+    {
+      "id": "R1-CR-17",
+      "severity": "minor",
+      "area": "concurrent-writer bench — ceiling not enforced",
+      "location": "§4.4 concurrent_writers",
+      "claim": "§4.4 marks `concurrent_writers` as 'informational, not a gate'. Given that redb is single-writer-at-a-time (per redb's model), this benchmark measures writer queue throughput, not write parallelism. The number is potentially misleading without context. Also, 'informational' means a regression from 800/sec to 50/sec passes CI. If we're proving Phase 1's 'out-compete PostgreSQL + AGE on hot-path CRUD' thesis (§1), a silent 16x regression would undermine the headline claim.",
+      "evidence": "§4.4: 'concurrent_writers — benchmark the 100–1000 writes/sec single-community ceiling. (§14.6 direct) — surface in CI as informational, not a gate.' §1 thesis: 'out-compete PostgreSQL + AGE on hot-path CRUD'.",
+      "fix": "Upgrade to a soft gate: warn in CI if median concurrent_writers drops below the §14.6 floor (100 writes/sec); fail if it drops below 50 writes/sec. Or: explicitly state 'this is a ceiling measurement, not a regression gate; track via criterion's saved-history and flag regressions in R6 not CI.' Either way, make the 'not a gate' stance intentional rather than convenient.",
+      "blocking": false
+    }
+  ],
+  "not_raised_because_pre_r1": [
+    "G3 gates-next-group contradiction — fixed per pre-R1 M1",
+    "exit criterion `npm run dev` — replaced with `npm test` per pre-R1 M3 (separately flagged by R1-CR-16 for publish-dependency, different angle)",
+    "napi-rs wasm32 compile-check — added per pre-R1 M4 (T8)",
+    "determinism cross-leg gate — added per pre-R1 m10 (T9)",
+    "BTreeMap determinism doc — corrected per spike critic-triage",
+    "R6 council sizing 14 seats — fixed per pre-R1 m2",
+    "every bench annotated with §14.6 source — fixed per pre-R1 m3 (R1-CR-11 is a different concern: the IVM decomposition is dependent on G3-B's achieved number)",
+    "Phase-2-primitives-pass-structural-validation — added per pre-R1 m9",
+    "crud('post') createdAt injection — added per pre-R1 m11 (R1-CR-7 is a different concern: what actions the shorthand covers, not createdAt specifically)",
+    "multi-MB + concurrent-reader+writer named — fixed per pre-R1 m12",
+    "edge-creation-does-not-change-endpoint CIDs — added per pre-R1 m6"
+  ],
+  "top_correctness_concerns": [
+    "R1-CR-1 + R1-CR-2: error-code taxonomy has a code referenced but not reserved (E_PRIMITIVE_NOT_IMPLEMENTED) and an invariant-to-code mapping that contradicts Rank 10 (E_INV_ITERATE_* for Phase-2 invariant 8).",
+    "R1-CR-3: TRANSFORM grammar publication commitment in Rank 4 did not land as a G6 deliverable; without a published BNF, parser + tests drift.",
+    "R1-CR-4 + R1-CR-5: IVM stale-reader contract and transaction/trace interaction are under-specified enough that two R5 agents will ship incompatible semantics."
+  ],
+  "verdict_rationale": "`revise` not `pass` because the eight blocking findings are all cheap plan edits that, if skipped, will produce incompatible R5 implementations or silent catalog/code drift. None are architecturally contentious; all can be dispositioned in a single pre-R5 triage pass. Once the blocking eight land, the plan is sharp enough to dispatch G1-G8."
+}
