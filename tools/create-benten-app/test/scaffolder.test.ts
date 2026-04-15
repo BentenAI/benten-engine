@@ -47,7 +47,7 @@ describe("create-benten-app scaffolder (headline exit criterion)", () => {
     // that drops one of them is caught here.
     const templatePath = join(__dirname, "..", "template", "test", "smoke.test.ts");
     const template = readFileSync(templatePath, "utf8");
-    const itCount = (template.match(/\\bit\\s*\\(/g) ?? []).length;
+    const itCount = (template.match(/\bit\s*\(/g) ?? []).length;
     expect(itCount).toBe(6);
   });
 });

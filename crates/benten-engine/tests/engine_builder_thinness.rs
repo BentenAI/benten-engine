@@ -94,13 +94,15 @@ fn thin_engine_rejects_view_reads() {
 }
 
 #[test]
-fn thin_engine_survives_workspace_lint_budget() {
-    // Paranoia: a thin Engine's memory footprint must remain small. If
-    // R5 accidentally pulls in all of `benten-ivm` at a build level even
-    // under `.without_ivm()`, the binary size balloons.
+fn thin_engine_has_no_ivm_subscribers_when_disabled() {
+    // R4 triage (m7): renamed from `thin_engine_survives_workspace_lint_budget`.
+    // The v1 name implied CI lint-budget enforcement; the body only counts
+    // subscribers. The lint-budget aspect is deferred to a future phase CI
+    // check — this test just asserts the subscriber-count contract.
     //
-    // Exact LOC / byte-size budget is Phase 1 R4 to pin; this test just
-    // ensures the Engine handle is created without running any IVM code.
+    // If R5 accidentally pulls in all of `benten-ivm` at a build level even
+    // under `.without_ivm()`, the subscriber-count assertion fires before
+    // any runtime path exercises the IVM machinery.
     let dir = tempdir().unwrap();
     let engine = benten_engine::Engine::builder()
         .path(dir.path().join("thin.redb"))

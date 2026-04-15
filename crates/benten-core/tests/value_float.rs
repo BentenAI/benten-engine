@@ -1,5 +1,10 @@
 //! `Value::Float(f64)` contract tests (C3, R2 landscape §2.1 row 2).
 //!
+//! Canonical location for float-related tests. Merged at R4 triage (M10) —
+//! the former `float_nan_inf.rs` contained overlapping tests with divergent
+//! contracts; its unique coverage (three NaN bit patterns, finite extremes
+//! boundary) is folded into this file.
+//!
 //! Phase 1 G1-A ships NaN + ±Inf rejection plus shortest-form encoding. These
 //! tests are the R3 TDD spec — they fail until G1-A lands.
 //!
@@ -79,4 +84,44 @@ fn float_nested_in_map_roundtrips() {
     let n = Node::new(vec!["T".to_string()], p);
     let decoded: Node = serde_ipld_dagcbor::from_slice(&n.canonical_bytes().unwrap()).unwrap();
     assert_eq!(decoded.properties.get("m").unwrap(), &Value::Map(inner));
+}
+
+// -- Folded in from float_nan_inf.rs at R4 triage (M10) --------------------
+
+/// Canonical NaN, signalling NaN, and NaN with non-default payload must all
+/// be rejected identically — the engine does not canonicalize NaN payloads.
+#[test]
+fn float_nan_multiple_bit_patterns_all_rejected() {
+    for nan_bits in [
+        0x7ff8_0000_0000_0000u64,
+        0x7ff8_0000_0000_0001u64,
+        0xfff8_0000_0000_0000u64,
+    ] {
+        let nan = f64::from_bits(nan_bits);
+        assert!(nan.is_nan(), "test setup: bit pattern must be NaN");
+        let node = node_with_float(nan);
+        let err = node.cid().unwrap_err();
+        assert!(
+            matches!(err, CoreError::FloatNan),
+            "all NaN payloads must reject with FloatNan; got {err:?}"
+        );
+    }
+}
+
+/// Positive-boundary pair to the NaN/Inf rejection: finite extremes
+/// (MIN, MAX, MIN_POSITIVE, EPSILON, smallest subnormal) all hash
+/// successfully.
+#[test]
+fn float_finite_extremes_accepted() {
+    for f in [
+        f64::MIN,
+        f64::MAX,
+        f64::MIN_POSITIVE,
+        f64::EPSILON,
+        f64::from_bits(1),
+    ] {
+        assert!(f.is_finite(), "test setup");
+        let node = node_with_float(f);
+        let _cid = node.cid().expect("finite float must hash without error");
+    }
 }

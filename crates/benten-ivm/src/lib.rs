@@ -440,6 +440,7 @@ pub mod views {
         pub struct EffectiveRules {
             depth: usize,
             was_truncated: bool,
+            cycle_detected: bool,
             rules: Vec<benten_core::Cid>,
         }
 
@@ -451,6 +452,13 @@ pub mod views {
             #[must_use]
             pub fn was_truncated(&self) -> bool {
                 self.was_truncated
+            }
+            /// Distinguishes a cycle-induced truncation from a depth-cap-induced
+            /// one. Added at R4 triage (m5): the two reasons must be separable
+            /// for callers to reason about graph shape.
+            #[must_use]
+            pub fn cycle_detected(&self) -> bool {
+                self.cycle_detected
             }
             #[must_use]
             pub fn rules(&self) -> &[benten_core::Cid] {

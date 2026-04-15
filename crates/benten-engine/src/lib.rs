@@ -187,6 +187,56 @@ impl Engine {
         Ok(self.backend.get_node(cid)?)
     }
 
+    /// Update an existing Node. Returns the new (content-addressed) CID
+    /// that results from the updated labels/properties.
+    ///
+    /// **Phase 1 G7 stub** — landed at R4 triage (M17) so the CRUD-surface
+    /// tests pin the method shape. R5 wires the body.
+    pub fn update_node(&self, _old_cid: &Cid, _new: &Node) -> Result<Cid, EngineError> {
+        todo!("Engine::update_node — G7 (Phase 1)")
+    }
+
+    /// Delete a Node by CID.
+    ///
+    /// **Phase 1 G7 stub.**
+    pub fn delete_node(&self, _cid: &Cid) -> Result<(), EngineError> {
+        todo!("Engine::delete_node — G7 (Phase 1)")
+    }
+
+    /// Create an Edge between two Nodes with the given label, returning the
+    /// Edge's content-addressed CID.
+    ///
+    /// **Phase 1 G8 stub.**
+    pub fn create_edge(
+        &self,
+        _source: &Cid,
+        _target: &Cid,
+        _label: &str,
+    ) -> Result<Cid, EngineError> {
+        todo!("Engine::create_edge — G8 (Phase 1)")
+    }
+
+    /// Retrieve an Edge by CID. Returns `Ok(None)` on a clean miss.
+    ///
+    /// **Phase 1 G8 stub.**
+    pub fn get_edge(&self, _cid: &Cid) -> Result<Option<benten_core::Edge>, EngineError> {
+        todo!("Engine::get_edge — G8 (Phase 1)")
+    }
+
+    /// Delete an Edge by CID.
+    ///
+    /// **Phase 1 G8 stub.**
+    pub fn delete_edge(&self, _cid: &Cid) -> Result<(), EngineError> {
+        todo!("Engine::delete_edge — G8 (Phase 1)")
+    }
+
+    /// Return every Edge whose `source == cid`.
+    ///
+    /// **Phase 1 G8 stub.**
+    pub fn edges_from(&self, _cid: &Cid) -> Result<Vec<benten_core::Edge>, EngineError> {
+        todo!("Engine::edges_from — G8 (Phase 1)")
+    }
+
     // -------- Phase 1 stubs below — R5 fills bodies. --------
 
     /// Register the zero-config `crud('<label>')` handler set. Returns the
@@ -311,6 +361,25 @@ impl Engine {
     /// Register a test-only probe filtered to a given label.
     pub fn test_subscribe_change_events_matching_label(&self, _label: &str) -> ChangeProbe {
         todo!("Engine::test_subscribe_change_events_matching_label — N6 (Phase 1)")
+    }
+
+    /// Subscribe to ChangeEvents via the public engine API. Returns a probe
+    /// identical in shape to the test-only helpers, but sourced through the
+    /// real public surface every end-user consumes.
+    ///
+    /// **Phase 1 N6 stub** — landed at R4 triage (m8) so
+    /// `system_zone_integration` exercises the non-test surface.
+    pub fn subscribe_change_events(&self) -> ChangeProbe {
+        todo!("Engine::subscribe_change_events — N6 (Phase 1)")
+    }
+
+    /// Open a MVCC snapshot handle observing the engine state at the call
+    /// instant. Forwards to the graph layer's `RedbBackend::snapshot`.
+    ///
+    /// **Phase 1 G6 stub** — landed at R4 triage (M18) so direct Engine-API
+    /// tests can pin the snapshot contract without going through a subgraph.
+    pub fn snapshot(&self) -> Result<benten_graph::SnapshotHandle, EngineError> {
+        todo!("Engine::snapshot — G6 (Phase 1)")
     }
 
     /// Metric snapshot for compromise-5 regression tests.

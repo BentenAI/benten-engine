@@ -27,9 +27,38 @@
 use benten_core::ErrorCode;
 use benten_eval::transform::{TransformParseError, parse_transform};
 
-/// Assert that `expr` is rejected with `E_TRANSFORM_SYNTAX` at `expected_offset`.
-/// Every test in this file goes through this helper to keep the rejection
-/// contract consistent.
+/// Assert that `expr` is rejected with `E_TRANSFORM_SYNTAX`. The expected
+/// offset is computed from the input string by locating `token` (the FIRST
+/// rejected token per the grammar-doc contract). Rewritten at R4 triage
+/// (M24) — hardcoded integers were brittle to parser error-message-format
+/// refactors. Computing the offset from the source text makes every
+/// rejection test robust to re-tokenization changes.
+#[track_caller]
+fn assert_rejected_with(expr: &str, token: &str) {
+    let expected_offset = expr
+        .find(token)
+        .unwrap_or_else(|| panic!("test setup: `{token}` must appear in `{expr}`"));
+    let err: TransformParseError =
+        parse_transform(expr).expect_err(&format!("expected rejection of `{expr}`"));
+    assert_eq!(
+        err.code(),
+        ErrorCode::TransformSyntax,
+        "wrong error code for `{expr}`: {:?}",
+        err.code()
+    );
+    assert_eq!(
+        err.offset(),
+        expected_offset,
+        "error offset must point at the FIRST rejected token per grammar \
+         doc contract. expr=`{expr}` token=`{token}` expected={expected_offset} got={}",
+        err.offset()
+    );
+    assert_eq!(err.expression(), expr);
+}
+
+/// Legacy wrapper for existing tests that pass an absolute offset. Still
+/// supported for statements that start at offset 0 (the entire token IS the
+/// reject point) where the offset-from-text form adds no clarity.
 #[track_caller]
 fn assert_rejected_at(expr: &str, expected_offset: usize) {
     let err: TransformParseError =
@@ -47,9 +76,6 @@ fn assert_rejected_at(expr: &str, expected_offset: usize) {
          doc contract. expr=`{expr}` expected={expected_offset} got={}",
         err.offset()
     );
-    // Context contract: the error carries the expression back to the caller
-    // so DX layers can render it without re-threading. (B9 source-map relies
-    // on this.)
     assert_eq!(err.expression(), expr);
 }
 
@@ -57,8 +83,8 @@ fn assert_rejected_at(expr: &str, expected_offset: usize) {
 
 #[test]
 fn transform_grammar_rejects_closure_arrow() {
-    // `(x) => x + 1` — arrow function. First rejected token is the `=>` at 4.
-    assert_rejected_at("(x) => x + 1", 4);
+    // `(x) => x + 1` — arrow function. First rejected token is the `=>`.
+    assert_rejected_with("(x) => x + 1", "=>");
 }
 
 #[test]
@@ -93,26 +119,26 @@ fn transform_grammar_rejects_require_call() {
 
 #[test]
 fn transform_grammar_rejects_proto_access() {
-    // `obj.__proto__` — rejected at the `.` preceding `__proto__` (offset 3).
-    assert_rejected_at("obj.__proto__", 3);
+    // `obj.__proto__` — rejected at the `.__proto__` span.
+    assert_rejected_with("obj.__proto__", ".__proto__");
 }
 
 #[test]
 fn transform_grammar_rejects_constructor_access() {
-    assert_rejected_at("obj.constructor", 3);
+    assert_rejected_with("obj.constructor", ".constructor");
 }
 
 #[test]
 fn transform_grammar_rejects_prototype_access() {
-    assert_rejected_at("obj.prototype", 3);
+    assert_rejected_with("obj.prototype", ".prototype");
 }
 
 // -- Class 5: tagged templates ---------------------------------------------
 
 #[test]
 fn transform_grammar_rejects_tagged_template() {
-    // `tag`lit`` — backtick at offset 3.
-    assert_rejected_at("tag`literal`", 3);
+    // `tag`lit`` — backtick.
+    assert_rejected_with("tag`literal`", "`");
 }
 
 // -- Class 6: template literals with expressions ---------------------------
@@ -127,16 +153,16 @@ fn transform_grammar_rejects_template_literal_with_expression() {
 
 #[test]
 fn transform_grammar_rejects_optional_chaining() {
-    // `obj?.method?.()` — `?.` at offset 3.
-    assert_rejected_at("obj?.method?.()", 3);
+    // `obj?.method?.()` — `?.` token (first occurrence).
+    assert_rejected_with("obj?.method?.()", "?.");
 }
 
 // -- Class 8: computed property names --------------------------------------
 
 #[test]
 fn transform_grammar_rejects_computed_property_name() {
-    // `{ [expr]: 1 }` — `[` at offset 2.
-    assert_rejected_at("{ [expr]: 1 }", 2);
+    // `{ [expr]: 1 }` — `[` at the computed-property opener.
+    assert_rejected_with("{ [expr]: 1 }", "[");
 }
 
 // -- Class 9: new ----------------------------------------------------------
@@ -210,24 +236,24 @@ fn transform_grammar_rejects_proxy_construction() {
 
 #[test]
 fn transform_grammar_rejects_spread_in_call() {
-    // `fn(...args)` — `...` at offset 3.
-    assert_rejected_at("fn(...args)", 3);
+    // `fn(...args)` — `...` token.
+    assert_rejected_with("fn(...args)", "...");
 }
 
 // -- Class 16: comma operator ----------------------------------------------
 
 #[test]
 fn transform_grammar_rejects_comma_operator() {
-    // `(a, b)` — comma at offset 2 (inside parens — NOT an arg separator).
-    assert_rejected_at("(a, b)", 2);
+    // `(a, b)` — comma inside parens (NOT an arg separator).
+    assert_rejected_with("(a, b)", ",");
 }
 
 // -- Class 17: instanceof / typeof / in ------------------------------------
 
 #[test]
 fn transform_grammar_rejects_instanceof() {
-    // `x instanceof Y` — `instanceof` at offset 2.
-    assert_rejected_at("x instanceof Y", 2);
+    // `x instanceof Y` — `instanceof` keyword.
+    assert_rejected_with("x instanceof Y", "instanceof");
 }
 
 #[test]
@@ -237,8 +263,9 @@ fn transform_grammar_rejects_typeof() {
 
 #[test]
 fn transform_grammar_rejects_in_operator() {
-    // `'k' in obj` — `in` at offset 4.
-    assert_rejected_at("'k' in obj", 4);
+    // `'k' in obj` — `in` keyword (the `find` will hit the first `i` which is
+    // the start of `in`; there's no earlier `in` substring in the expression).
+    assert_rejected_with("'k' in obj", "in");
 }
 
 // -- Class 18: regex literals ----------------------------------------------
@@ -254,55 +281,50 @@ fn transform_grammar_rejects_regex_literal() {
 
 #[test]
 fn transform_grammar_rejects_bitwise_and() {
-    assert_rejected_at("a & b", 2);
+    assert_rejected_with("a & b", "&");
 }
 
 #[test]
 fn transform_grammar_rejects_bitwise_or() {
-    assert_rejected_at("a | b", 2);
+    assert_rejected_with("a | b", "|");
 }
 
 #[test]
 fn transform_grammar_rejects_bitwise_xor() {
-    assert_rejected_at("a ^ b", 2);
+    assert_rejected_with("a ^ b", "^");
 }
 
 #[test]
 fn transform_grammar_rejects_bitshift() {
-    // `a << b` — `<<` at offset 2.
-    assert_rejected_at("a << b", 2);
+    assert_rejected_with("a << b", "<<");
 }
 
 // -- Class 20: assignment --------------------------------------------------
 
 #[test]
 fn transform_grammar_rejects_assignment() {
-    // `a = b` — `=` at offset 2. Expressions are pure.
-    assert_rejected_at("a = b", 2);
+    assert_rejected_with("a = b", "=");
 }
 
 // -- Class 21: increment / decrement ---------------------------------------
 
 #[test]
 fn transform_grammar_rejects_increment() {
-    // `x++` — `++` at offset 1.
-    assert_rejected_at("x++", 1);
+    assert_rejected_with("x++", "++");
 }
 
 // -- Class 22: exponentiation ----------------------------------------------
 
 #[test]
 fn transform_grammar_rejects_exponent() {
-    // `a ** b` — `**` at offset 2.
-    assert_rejected_at("a ** b", 2);
+    assert_rejected_with("a ** b", "**");
 }
 
 // -- Class 23: nullish coalescing ------------------------------------------
 
 #[test]
 fn transform_grammar_rejects_nullish_coalescing() {
-    // `a ?? b` — `??` at offset 2.
-    assert_rejected_at("a ?? b", 2);
+    assert_rejected_with("a ?? b", "??");
 }
 
 // -- Class 24: statements --------------------------------------------------

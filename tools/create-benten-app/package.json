@@ -1,0 +1,23 @@
+{
+  "name": "create-benten-app",
+  "version": "0.1.0",
+  "description": "Scaffolder for the Benten 10-minute DX path. Invoked via `npx create-benten-app <name>`; produces a project that points at @benten/engine via a local workspace link.",
+  "type": "module",
+  "bin": {
+    "create-benten-app": "./bin.mjs"
+  },
+  "files": [
+    "bin.mjs",
+    "template"
+  ],
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@benten/engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@mermaid-js/parser": "^0.6.0",
+    "vitest": "^2.1.0"
+  }
+}

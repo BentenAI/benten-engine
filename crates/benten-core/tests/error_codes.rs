@@ -66,3 +66,21 @@ fn core_error_cid_unsupported_hash_maps_to_cid_unsupported_hash_code() {
         ErrorCode::CidUnsupportedHash
     );
 }
+
+/// R4 triage (m15) — R1 drift-detector finding: the catch-all
+/// `ErrorCode::Unknown(String)` variant must preserve the original string,
+/// not panic, not lossy-convert. Without this test a future refactor that
+/// drops the payload (e.g. unifying to a single `Unknown` unit variant) would
+/// silently lose the code identity.
+#[test]
+fn unknown_error_code_preserves_string_not_panic() {
+    let arbitrary = "E_SOMETHING_WE_HAVE_NOT_SPECCED_YET";
+    let code = ErrorCode::from_str(arbitrary);
+    match &code {
+        ErrorCode::Unknown(s) => assert_eq!(s, arbitrary, "payload must be preserved verbatim"),
+        other => panic!("expected Unknown variant, got {other:?}"),
+    }
+    // And round-trip via as_str: an unknown code's `.as_str()` returns the
+    // stored string so downstream printers can render it.
+    assert_eq!(code.as_str(), arbitrary);
+}

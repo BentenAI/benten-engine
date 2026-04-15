@@ -1,0 +1,39 @@
+# R4 triage (m14) — standalone MSRV workflow.
+#
+# Phase 1 MSRV is 1.85 (pinned in `rust-toolchain.toml`). CI runs the main
+# workflow on stable; this workflow runs separately on MSRV to catch
+# accidental use of newer language features before they reach a user.
+#
+# Also verifies the canonical fixture CID remains stable at MSRV — the cheap
+# determinism gate from SPIKE-phase-1-stack-RESULTS.md.
+
+name: msrv
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-fixture-check:
+    name: cargo build --workspace --locked @1.85
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MSRV toolchain
+        run: |
+          rustup toolchain install 1.85 --profile minimal
+          rustup default 1.85
+
+      - name: Build workspace
+        run: cargo +1.85 build --workspace --locked
+
+      - name: Fixture-match check (canonical CID)
+        run: |
+          # The canonical fixture CID must remain stable across Rust versions.
+          # If MSRV drift changes the encoding path, this catches it before
+          # merge.
+          cargo +1.85 test --workspace --locked --no-fail-fast -- \
+            exit_6_canonical_cid_matches_spike_fixture

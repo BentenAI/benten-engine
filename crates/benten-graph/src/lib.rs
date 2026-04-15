@@ -436,6 +436,17 @@ impl RedbBackend {
         todo!("RedbBackend::subscribe — G3-A (Phase 1)")
     }
 
+    /// Open a MVCC snapshot handle. The returned handle observes the database
+    /// state at open-time; writes committed to the backend after the snapshot
+    /// opens are NOT visible through it until it is dropped and a fresh
+    /// snapshot is acquired.
+    ///
+    /// **Phase 1 G6 stub** — landed at R4 triage (M6) so the MVCC test pins
+    /// the point-in-time isolation contract before R5 wires the body.
+    pub fn snapshot(&self) -> Result<SnapshotHandle, GraphError> {
+        todo!("RedbBackend::snapshot — G6 (Phase 1)")
+    }
+
     /// Enqueue a Node put into a label-index update. **G5 stub.**
     pub fn get_by_label(&self, _label: &str) -> Result<Vec<Cid>, GraphError> {
         todo!("RedbBackend::get_by_label — G5 (Phase 1)")
@@ -555,6 +566,34 @@ impl ChangeEvent {
 /// **Phase 1 G3-A stub.**
 pub trait ChangeSubscriber: Send + Sync {
     fn on_change(&self, event: &ChangeEvent);
+}
+
+/// A MVCC snapshot handle returned by [`RedbBackend::snapshot`]. Reads through
+/// this handle observe the database state at the instant the snapshot was
+/// opened; concurrent writes to the backend are invisible until the handle
+/// is dropped. **Phase 1 G6 stub.**
+///
+/// Implements `Drop` so explicit `drop(handle)` in tests is the idiomatic way
+/// to release the snapshot's read-transaction lifetime.
+pub struct SnapshotHandle;
+
+impl Drop for SnapshotHandle {
+    fn drop(&mut self) {
+        // R5 wires the underlying redb ReadTransaction release here.
+    }
+}
+
+impl SnapshotHandle {
+    /// Retrieve a Node by CID from the snapshot view. **Phase 1 G6 stub.**
+    pub fn get_node(&self, _cid: &Cid) -> Result<Option<Node>, GraphError> {
+        todo!("SnapshotHandle::get_node — G6 (Phase 1)")
+    }
+
+    /// Scan all nodes with a given label from the snapshot view. **Phase 1
+    /// G6 stub.**
+    pub fn scan_label(&self, _label: &str) -> Result<Vec<Cid>, GraphError> {
+        todo!("SnapshotHandle::scan_label — G6 (Phase 1)")
+    }
 }
 
 /// Return handle from [`RedbBackend::subscribe`]. **Phase 1 G3-A stub.**

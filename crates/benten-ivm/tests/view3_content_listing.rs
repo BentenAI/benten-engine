@@ -95,26 +95,30 @@ fn content_listing_id_is_content_listing() {
 proptest! {
     /// `prop_content_listing_incremental_equivalence` (R2 landscape §3 row 7)
     /// — after N random creates, the incremental view state equals a
-    /// full rebuild. Reduced case count for R3 TDD; raised in CI.
+    /// full rebuild. Widened at R4 triage (M7) to 0..256 cases and to assert
+    /// payload equality (actual `Vec<Cid>`), not just variant discriminant.
     #[test]
-    fn prop_content_listing_incremental_equivalence(n in 0usize..5) {
+    fn prop_content_listing_incremental_equivalence(n in 0usize..256) {
         let mut incremental = ContentListingView::new("Post");
         for _ in 0..n {
             incremental.update(&post_created()).unwrap();
         }
         let mut rebuilt = ContentListingView::new("Post");
         rebuilt.rebuild().unwrap();
-        // Phase 1 stub equivalence: both views answer the same read query
-        // shape with the same result type. Exact equality requires the
-        // rebuild-from-backend plumbing that lands in R5.
+
         let q = ViewQuery {
             label: Some("Post".to_string()),
-            limit: Some(100),
+            limit: Some(1024),
             offset: Some(0),
             ..ViewQuery::default()
         };
         let r_inc = incremental.read(&q).unwrap();
         let r_reb = rebuilt.read(&q).unwrap();
-        prop_assert!(std::mem::discriminant(&r_inc) == std::mem::discriminant(&r_reb));
+        match (r_inc, r_reb) {
+            (ViewResult::Cids(a), ViewResult::Cids(b)) => {
+                prop_assert_eq!(a, b, "incremental and rebuilt payloads must match");
+            }
+            (a, b) => prop_assert!(false, "expected Cids/Cids, got {:?} and {:?}", a, b),
+        }
     }
 }

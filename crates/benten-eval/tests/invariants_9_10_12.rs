@@ -111,6 +111,55 @@ fn registration_catch_all_populates_violated_list() {
     assert!(violations.contains(&3), "Invariant 3 (fan-out) must appear");
 }
 
+// R4 triage (m10): positive-at-limit diagnostic-accessor tests. The earlier
+// tests covered determinism and hash-mismatch via code checks; these pin the
+// accessor return values so a silently-renamed field is caught.
+
+#[test]
+fn invariant_9_rejection_exposes_determinism_class_accessor() {
+    // R4 triage (m10): Invariant-9 rejection must surface enough context
+    // for callers to act. The code is the primary signal; additional
+    // accessors (e.g. `determinism_class()`) land in R5 alongside the
+    // check itself. Until then, pin the code and the rejection path.
+    let mut sb = SubgraphBuilder::new("det_accessor_check");
+    sb.declare_deterministic(true);
+    let root = sb.read("r");
+    let _ = sb.sandbox(root, "m");
+    let err = sb.build_validated().expect_err("rejection");
+    assert_eq!(err.code(), ErrorCode::InvDeterminism);
+}
+
+#[test]
+fn invariant_10_rejection_exposes_cid_expected_and_actual_accessors() {
+    let sg = SubgraphBuilder::new("hash_mismatch_accessor")
+        .read("r")
+        .build_validated_for_corruption_test();
+    let cid = sg.cid().unwrap();
+    let mut bytes = sg.canonical_bytes().unwrap();
+    *bytes.last_mut().unwrap() ^= 0x01;
+    let err = benten_eval::Subgraph::load_verified(&cid, &bytes).expect_err("hash mismatch");
+    assert_eq!(err.code(), ErrorCode::InvContentHash);
+    // `expected_cid()` / `actual_cid()` are the established accessor names
+    // (per the existing `rejects_content_hash_mismatch` test). `cid_expected`
+    // naming was a doc-triage typo; the canonical spelling is kept here.
+    assert!(err.expected_cid().is_some(), "expected_cid() accessor");
+    assert!(err.actual_cid().is_some(), "actual_cid() accessor");
+}
+
+#[test]
+fn invariant_12_rejection_violated_invariants_accessor_lists_all() {
+    let cap = benten_eval::limits::DEFAULT_MAX_FANOUT;
+    let mut sb = SubgraphBuilder::new("multi_violation_accessor");
+    let root = sb.read("r");
+    sb.add_edge(root, root);
+    for _ in 0..(cap + 1) {
+        let _ = sb.transform(root, "$input");
+    }
+    let err = sb.build_validated_aggregate_all().expect_err("aggregate");
+    let violations = err.violated_invariants().expect("accessor populated");
+    assert!(violations.len() >= 2, "both violations must list");
+}
+
 #[test]
 fn single_violation_uses_specific_code_not_catch_all() {
     // Partner boundary: when exactly one invariant fires, the error must

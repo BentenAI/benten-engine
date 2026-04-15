@@ -47,12 +47,15 @@ fn evaluator_pops_on_respond_terminal() {
         OperationNode::new("t", PrimitiveKind::Transform).with_property("expr", Value::text("1"));
     ev.step(&t).unwrap();
     let before = ev.stack.len();
-    // RESPOND terminates — stack clears down.
+    // RESPOND terminates — stack clears down. R4 triage (m1): strict
+    // stack-delta assertion — RESPOND must pop at least one frame; the
+    // v1 `<= before` was satisfied by a no-op step too.
     let r = OperationNode::new("r", PrimitiveKind::Respond);
     ev.step(&r).unwrap();
     assert!(
-        ev.stack.len() <= before,
-        "RESPOND must not grow the stack beyond its pre-state"
+        ev.stack.len() < before,
+        "RESPOND must pop at least one frame (delta < 0); before={before} after={}",
+        ev.stack.len()
     );
 }
 

@@ -62,40 +62,54 @@ fn put_batch_stub(backend: &RedbBackend, nodes: &[Node]) -> Result<Vec<Cid>, Gra
 }
 
 fn bench_create_node_group_commit(c: &mut Criterion) {
-    let dir = tempdir().expect("tempdir");
-    let backend = open_group_commit(dir.path().join("benten.redb")).expect("open");
+    // R4 triage (M13): silent fall-through to default `RedbBackend::open` is
+    // explicitly a failure mode, not a valid bench path. The sentinel panic
+    // below makes the bench fail LOUDLY until R5 G2 wires the real
+    // `DurabilityMode::Group` constructor. Before that: the bench body is
+    // unreachable.
+    todo!("durability_modes::group: R5 must wire DurabilityMode::Group (G2)");
 
-    // Amortize across a batch of 32. Real Phase 1 group-commit batches are
-    // bounded by the transaction primitive's shape (G3).
-    let batch: Vec<Node> = (0..32).map(|_| canonical_test_node()).collect();
+    #[allow(unreachable_code)]
+    {
+        let dir = tempdir().expect("tempdir");
+        let backend = open_group_commit(dir.path().join("benten.redb")).expect("open");
+        let batch: Vec<Node> = (0..32).map(|_| canonical_test_node()).collect();
 
-    let mut group = c.benchmark_group("create_node_group_commit");
-    group.warm_up_time(std::time::Duration::from_secs(1));
-    group.measurement_time(std::time::Duration::from_secs(5));
-    group.bench_function("batch_of_32", |b| {
-        b.iter(|| {
-            let cids = put_batch_stub(&backend, black_box(&batch)).expect("batch");
-            black_box(cids);
+        let mut group = c.benchmark_group("create_node_group_commit");
+        group.warm_up_time(std::time::Duration::from_secs(1));
+        group.measurement_time(std::time::Duration::from_secs(5));
+        group.bench_function("batch_of_32", |b| {
+            b.iter(|| {
+                let cids = put_batch_stub(&backend, black_box(&batch)).expect("batch");
+                black_box(cids);
+            });
         });
-    });
-    group.finish();
+        group.finish();
+    }
 }
 
 fn bench_create_node_async(c: &mut Criterion) {
-    let dir = tempdir().expect("tempdir");
-    let backend = open_async(dir.path().join("benten.redb")).expect("open");
-    let node = canonical_test_node();
+    // R4 triage (M13): same sentinel as group-commit — Async must be wired
+    // in R5 before the bench measures anything meaningful.
+    todo!("durability_modes::async: R5 must wire DurabilityMode::Async (G2)");
 
-    let mut group = c.benchmark_group("create_node_async");
-    group.warm_up_time(std::time::Duration::from_secs(1));
-    group.measurement_time(std::time::Duration::from_secs(3));
-    group.bench_function("no_fsync", |b| {
-        b.iter(|| {
-            let cid = backend.put_node(black_box(&node)).expect("put");
-            black_box(cid);
+    #[allow(unreachable_code)]
+    {
+        let dir = tempdir().expect("tempdir");
+        let backend = open_async(dir.path().join("benten.redb")).expect("open");
+        let node = canonical_test_node();
+
+        let mut group = c.benchmark_group("create_node_async");
+        group.warm_up_time(std::time::Duration::from_secs(1));
+        group.measurement_time(std::time::Duration::from_secs(3));
+        group.bench_function("no_fsync", |b| {
+            b.iter(|| {
+                let cid = backend.put_node(black_box(&node)).expect("put");
+                black_box(cid);
+            });
         });
-    });
-    group.finish();
+        group.finish();
+    }
 }
 
 criterion_group!(

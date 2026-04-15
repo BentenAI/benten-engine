@@ -240,11 +240,24 @@ impl CapabilityGrant {
 
 /// Test-only helpers kept public-but-internal to the test scaffold.
 pub mod testing {
+    use super::{CapError, GrantScope};
+
     /// Return a monotonically-increasing alloc counter. **Phase 1 stub** —
     /// returns a constant so the "no allocation" proptest compiles; R5
     /// replaces with a real counter.
     #[must_use]
     pub fn alloc_count() -> u64 {
         0
+    }
+
+    /// R4 triage (m13) — attenuation check helper. Returns `Ok(())` if the
+    /// child's required scope is within the parent's held scope, otherwise
+    /// `Err(CapError::Attenuation)`. **Phase 1 G4 stub** — R5 replaces with
+    /// the evaluator-path-integrated check.
+    pub fn check_attenuation(
+        _parent_scope: &GrantScope,
+        _child_required: &GrantScope,
+    ) -> Result<(), CapError> {
+        todo!("check_attenuation — G4 (Phase 1)")
     }
 }

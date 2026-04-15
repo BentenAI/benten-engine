@@ -123,12 +123,40 @@ fn option_a_existence_leak_is_documented_compromise() {
     // compromise #2. If this test is removed, update the compromise
     // regression in `compromises_regression.rs` in the same PR.
     //
-    // This is a pure marker test — no assertion body needed beyond
-    // confirming the code is reachable.
-    // R3 wrote `as u32` here; ErrorCode is a non-primitive enum so cast is
-    // illegal. Compare via `as_str` (semantic-equivalent, same runtime intent).
+    // Rewritten at R4 triage (M9) — the v1 body was a self-comparison
+    // tautology. The three actual assertions that enforce the compromise:
+    //   (a) CapDeniedRead and NotFound are distinct ErrorCode variants (so
+    //       a caller CAN distinguish them — the leak is by design of
+    //       option A),
+    //   (b) CapDeniedRead.as_str() is the exact documented string
+    //       `"E_CAP_DENIED_READ"` (the canonical catalog name),
+    //   (c) SECURITY-POSTURE.md documents this explicitly as option A.
+
+    // (a) Distinct error-code variants.
+    assert_ne!(
+        ErrorCode::CapDeniedRead,
+        ErrorCode::NotFound,
+        "option A: cap-denial-on-read and not-found must be distinct codes — \
+         hiding this distinction is Phase 3's option-B migration"
+    );
+
+    // (b) Canonical catalog string.
     assert_eq!(
         ErrorCode::CapDeniedRead.as_str(),
-        ErrorCode::CapDeniedRead.as_str()
+        "E_CAP_DENIED_READ",
+        "catalog string must match the documented ERROR-CATALOG entry"
+    );
+
+    // (c) Documented-in-posture check.
+    let posture = std::fs::read_to_string("../../docs/SECURITY-POSTURE.md")
+        .or_else(|_| std::fs::read_to_string("docs/SECURITY-POSTURE.md"))
+        .expect("SECURITY-POSTURE.md must be present at repo root");
+    assert!(
+        posture.contains("option A") || posture.contains("Option A"),
+        "SECURITY-POSTURE.md must document the existence-leak as option A"
+    );
+    assert!(
+        posture.contains("E_CAP_DENIED_READ"),
+        "SECURITY-POSTURE.md must reference the E_CAP_DENIED_READ code"
     );
 }

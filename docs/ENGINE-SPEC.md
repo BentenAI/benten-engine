@@ -137,6 +137,15 @@ while let Some(node) = stack.pop() {
 - Can step-through debug (pop one node, execute, inspect context)
 - Shared context with declared read/write keys per operation
 
+**Transaction-abort routing (Phase 1 confirmation, R4 triage m22):** When a
+transaction aborts (closure returns `Err`, commit hook refuses, or an inner
+primitive raises a fatal error), the evaluator routes through the aborting
+node's `ON_ERROR` edge. There is no separate `ON_TX_ABORT` edge — the
+error-edge routing machinery is the single surface for every failure class,
+and transactions compose through it the same way WRITE/CAS conflicts,
+capability denials, and primitive-level errors do. `E_TX_ABORTED` is
+surfaced as the error code on the routed error context.
+
 ---
 
 ## 6. Version Chains

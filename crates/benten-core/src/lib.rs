@@ -607,6 +607,13 @@ impl Edge {
 
 // ---------------------------------------------------------------------------
 // Anchor + version-chain helpers (C6 — Phase 1 G1-B stub)
+//
+// R4 triage (M21): the `version` submodule is the canonical location for
+// the prior-head-threaded API. The top-level `Anchor` / `append_version` /
+// `current_version` / `walk_versions` names are retained as a thinner
+// compatibility surface (u64-id-based anchor) so existing call sites keep
+// compiling; new code should prefer `benten_core::version::*`. R5 may
+// unify the two under a single `Anchor` trait once the evaluator lands.
 // ---------------------------------------------------------------------------
 
 /// The `CURRENT` edge label — anchor → current-version Node pointer.
@@ -615,9 +622,10 @@ pub const LABEL_CURRENT: &str = "CURRENT";
 /// The `NEXT_VERSION` edge label — previous-version → next-version Node.
 pub const LABEL_NEXT_VERSION: &str = "NEXT_VERSION";
 
-/// An opt-in version-chain Anchor Node identity.
+/// Top-level opt-in version-chain Anchor identity (u64-id shape).
 ///
-/// **Phase 1 G1-B stub** — real impl lands in Phase 1 proper.
+/// **Phase 1 G1-B stub.** Co-exists with `version::Anchor` (Cid-head shape);
+/// R5 may converge them.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Anchor {
     pub id: u64,
@@ -657,15 +665,12 @@ pub fn walk_versions(_anchor: &Anchor) -> Result<Vec<Cid>, CoreError> {
     todo!("walk_versions — G1-B (Phase 1)")
 }
 
-/// Alternative version-chain surface used by the branched-chain edge-case
-/// tests (`version_branched.rs`). Shape mirrors the prior-CID-threaded
+/// Canonical version-chain surface (M21). Use the prior-CID-threaded
 /// protocol: each `append_version(anchor, prior_head, new_head)` requires
 /// the caller to name the head they're building on. Concurrent appenders
-/// naming the same prior head fork the chain -> `VersionError::Branched`.
+/// naming the same prior head fork the chain → `VersionError::Branched`.
 ///
-/// **Phase 1 G1-B stub.** Distinct from the top-level `Anchor` /
-/// `append_version` pair — they co-exist for Phase 1, with the final
-/// canonical shape chosen post-R5 once the evaluator lands.
+/// **Phase 1 G1-B stub.**
 pub mod version {
     use super::Cid;
     use alloc::string::String;
