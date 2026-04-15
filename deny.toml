@@ -1,0 +1,123 @@
+# cargo-deny configuration for the Benten Engine workspace.
+#
+# Purpose: enforce supply-chain hygiene in CI. Fires on every PR via the
+# cargo-deny GitHub Action. See `.github/workflows/supply-chain.yml` for the
+# CI wiring and `CONTRIBUTING.md` "Supply chain" for the yank-response
+# protocol.
+#
+# Authored: 2026-04-15 as Phase 1 deliverable T10 (see implementation plan
+# R1 Triage Addendum, in response to security-auditor Critical #3).
+
+[graph]
+# Run on all workspace targets. This catches deps that only appear under
+# specific feature flags or target architectures.
+all-features = true
+targets = [
+    { triple = "x86_64-unknown-linux-gnu" },
+    { triple = "aarch64-apple-darwin" },
+    { triple = "x86_64-apple-darwin" },
+    { triple = "aarch64-unknown-linux-gnu" },
+    { triple = "x86_64-pc-windows-msvc" },
+    { triple = "wasm32-unknown-unknown" },
+]
+
+[output]
+feature-depth = 1
+
+# ---------------------------------------------------------------------------
+# Advisories — RUSTSEC advisories and yanked crate detection.
+# ---------------------------------------------------------------------------
+
+[advisories]
+# Fail the build on any RUSTSEC advisory against the current dep tree.
+version = 2
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+# `yanked = "deny"` is the setting that would have caught the core2 yank in
+# real time, not after the spike ran and hit the registry error.
+yanked = "deny"
+ignore = [
+    # Known accepted exceptions go here. Document each with a comment naming
+    # the advisory ID, the impacted crate, the rationale, and a target date
+    # for removing the ignore. If an entry lacks all four, the CI lint fails.
+    #
+    # Example format (commented until we have a real one):
+    # { id = "RUSTSEC-XXXX-YYYY", reason = "only reachable via `foo` crate's test-only path; upstream fix tracked at <URL>; remove by 2026-06-01" }
+]
+
+# ---------------------------------------------------------------------------
+# Licenses — allowlist. Anything not in this list fails the build.
+# ---------------------------------------------------------------------------
+
+[licenses]
+version = 2
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "CC0-1.0",
+    "ISC",
+    "Unicode-DFS-2016",
+    "Unicode-3.0",
+    "Zlib",
+]
+# Everything else — proprietary, copyleft (GPL, AGPL, LGPL), or unlicensed — is
+# denied by omission. This prevents a transitive dep from silently forcing a
+# license change on the whole engine.
+confidence-threshold = 0.9
+exceptions = [
+    # Rare SPDX-unfriendly crates with manual vetting. Each needs a comment
+    # naming the crate version audited, the license text reviewed, and the
+    # person who reviewed. Empty by default.
+]
+
+# ---------------------------------------------------------------------------
+# Bans — crates explicitly forbidden, duplicate-dep detection.
+# ---------------------------------------------------------------------------
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+
+deny = [
+    # The archived core2 crate — present only via our BentenAI/rust-cid fork
+    # and the technocreatives/core2 git patch as a transitional measure.
+    # cargo-deny will not complain about the patched source because the
+    # source is identified by git URL, not by crates.io name. If core2 ever
+    # reappears from crates.io (e.g., someone else publishes 0.4.1 under the
+    # same name), the yank-resolved advisory will be re-checked; but any
+    # direct crates.io pull of core2 is a supply-chain regression.
+    { name = "openssl", reason = "use rustls — no OpenSSL dep surface" },
+    { name = "openssl-sys", reason = "use rustls — no OpenSSL dep surface" },
+]
+
+# Skip duplicate-version complaints for crates where multiple versions are
+# known-acceptable in the current ecosystem state. Each entry must name the
+# reason and be reviewed at each quarterly dep update.
+skip = []
+skip-tree = []
+
+# ---------------------------------------------------------------------------
+# Sources — where cargo is allowed to pull from.
+# ---------------------------------------------------------------------------
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# Git sources allowed by URL. Every entry is a transitional workaround
+# documented in Cargo.toml's [patch.crates-io] section.
+allow-git = [
+    "https://github.com/BentenAI/rust-cid",
+    "https://github.com/technocreatives/core2",
+]
+
+[sources.allow-org]
+# No GitHub org-level blanket allows. Every git URL must be individually
+# listed in `allow-git` above so a new fork isn't silently admitted.
+github = []

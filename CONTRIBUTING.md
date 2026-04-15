@@ -97,6 +97,23 @@ Critics are AI agents with specific perspectives (architecture-purity, developer
 
 "Noted" is not an acceptable response.
 
+## Supply chain
+
+The workspace enforces supply-chain hygiene via CI. See `deny.toml` + `.github/workflows/supply-chain.yml`.
+
+- **License allowlist** — MIT / Apache-2.0 (with LLVM-exception) / BSD-2 / BSD-3 / CC0 / ISC / Unicode-DFS-2016 / Unicode-3.0 / Zlib. Anything else fails the build. If a transitive dep pulls in a non-allowed license, either (a) replace the dep, (b) add a narrowly-scoped exception in `deny.toml` naming the reviewer + rationale, or (c) pin a pre-license-change version.
+- **RUSTSEC advisories** — `cargo-deny check` fails on any advisory against the current dep tree. `yanked = "deny"` catches yanks in real time (this is the setting that would have caught the 2026-04-14 core2 event before the spike hit it). A weekly scheduled job re-runs `cargo audit` against the committed lockfile and opens a GitHub issue when new advisories land, so the dep watch doesn't rely on someone pushing a PR.
+- **`cargo build --locked`** — CI rebuilds from the committed lockfile and fails if resolution would change. This catches forgotten `cargo update` commits.
+- **Git patches** — every `[patch.crates-io]` git source must be listed in `deny.toml`'s `allow-git`. New forks require updating both the `Cargo.toml` patch entry and `deny.toml`.
+
+### If a dep is yanked mid-phase (the protocol)
+
+1. **Open a tracking issue** labeled `supply-chain` + `needs-triage` within 24h of the yank notification (the weekly audit issue is the canonical trigger).
+2. **Pin by commit SHA** — if the upstream needs work, fork to `BentenAI/<crate>` and add a pinned-by-hash `[patch.crates-io]` entry. Update `deny.toml`'s `allow-git` in the same PR.
+3. **File the upstream fix** if one is needed. The rust-cid#185 fork + upstream PR pattern is the template — minimal diff, co-ordinate with sibling-crate PRs when possible, add a corresponding issue comment on the tracking thread.
+4. **Block the PR merge** until the dep tree is green again. A yanked transitive is never an acceptable merge state.
+5. **Track the revert** — when the upstream fix merges and a new release is cut, remove the `[patch.crates-io]` entry and close the tracking issue. `deny.toml`'s `allow-git` entry is removed in the same PR.
+
 ## Reporting Issues
 
 For the current pre-implementation phase: raise questions directly with Ben. Once code lands, use GitHub issues with the relevant phase label.

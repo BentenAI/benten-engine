@@ -1,0 +1,108 @@
+name: Supply Chain
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly audit of the committed lockfile against the latest advisory DB.
+    # Opens an issue when new advisories appear even if no PR is in flight.
+    - cron: '0 12 * * 1'
+
+concurrency:
+  group: supply-chain-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cargo-deny:
+    name: cargo-deny (licenses / bans / advisories / sources)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run cargo-deny
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+          arguments: --all-features
+          # Fail on any advisory with CVSS HIGH or CRITICAL. Medium/low
+          # advisories surface as warnings. The deny.toml `yanked = "deny"`
+          # setting catches yanked crates regardless of severity (which would
+          # have caught the core2 event in real time).
+
+  cargo-audit:
+    name: cargo-audit (belt-and-suspenders)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install --locked cargo-audit
+
+      - name: Audit
+        run: cargo audit --deny warnings
+
+  lockfile-verify:
+    name: Cargo.lock integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify Cargo.lock is the fully-resolved source of truth
+        # --locked fails if Cargo.lock would need to change. If it fails in
+        # CI but not locally, the author forgot to commit an updated lock.
+        run: cargo build --locked --workspace
+
+  weekly-audit-issue:
+    # Only runs on the scheduled weekly cron. Opens a GitHub issue when new
+    # advisories land, so the dep watch doesn't rely on someone happening to
+    # push a PR.
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install --locked cargo-audit
+
+      - name: Run audit and collect output
+        id: audit
+        run: |
+          set +e
+          cargo audit --json > audit-report.json 2>&1
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Open tracking issue on new advisories
+        if: steps.audit.outputs.exit_code != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('audit-report.json', 'utf8');
+            const body = `Weekly cargo-audit detected one or more advisories against the current committed lockfile.\n\n\`\`\`json\n${report}\n\`\`\`\n\nResponse protocol: see CONTRIBUTING.md "Supply chain" section.`;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[supply-chain] cargo-audit advisory detected (${new Date().toISOString().slice(0, 10)})`,
+              body: body,
+              labels: ['supply-chain', 'needs-triage']
+            });
