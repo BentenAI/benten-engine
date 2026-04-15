@@ -50,3 +50,18 @@ jobs:
         run: cargo doc --workspace --no-deps
         env:
           RUSTDOCFLAGS: "-D warnings"
+
+      # Error-catalog drift detector (T7). The detector script lives at
+      # `scripts/drift-detect-error-catalog.mjs` (R3 deliverable). A
+      # dedicated workflow (`.github/workflows/drift-detect.yml`, owned by
+      # rust-test-writer-security) invokes this same script on a wider
+      # trigger matrix; keeping an inline call here means a broken
+      # catalog surfaces on the main CI summary, not just in a peripheral
+      # workflow.
+      - name: Setup Node.js for drift detector
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Error-catalog drift detector
+        run: node scripts/drift-detect-error-catalog.mjs

@@ -1,0 +1,95 @@
+name: Cold Install Latency
+
+# Cold-install gate — per R1 DX finding + implementation plan Rank 10:
+# `npm install @benten/engine` from a machine without a Rust toolchain
+# must complete in under 60s. If the prebuilt napi-rs binaries aren't
+# published (or are missing for a platform), npm falls back to source
+# compile, which requires Rust and blows past 60s.
+#
+# The runner intentionally does NOT install Rust. If the install needs
+# Rust, the job fails — which is the signal that prebuilt binaries have
+# regressed for this platform.
+#
+# R3 ownership: rust-test-writer-performance.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Also run on release so a freshly-published package is validated
+  # against a truly cold machine, not the PR's CI cache.
+  release:
+    types: [published]
+
+concurrency:
+  group: cold-install-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cold-install:
+    name: npm install @benten/engine < 60s, no Rust
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, macos-13, windows-2022]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # DELIBERATELY no `dtolnay/rust-toolchain@...` step. If the install
+      # path needs Rust, it will fail here — which is the exact failure
+      # mode we want to catch.
+      - name: Sanity check — Rust must NOT be available
+        shell: bash
+        run: |
+          if command -v cargo >/dev/null 2>&1; then
+            echo "ERROR: cargo is on PATH. This runner is supposed to be Rust-free so the"
+            echo "cold-install test reflects real user experience. If this is a runner-image"
+            echo "change, update this step; otherwise fail."
+            exit 1
+          fi
+          echo "OK: no Rust toolchain on PATH."
+
+      - name: Create fresh npm workspace
+        shell: bash
+        run: |
+          mkdir -p /tmp/cold-install-test
+          cd /tmp/cold-install-test
+          npm init -y > /dev/null
+
+      - name: Time npm install of @benten/engine
+        shell: bash
+        run: |
+          cd /tmp/cold-install-test
+          # Use GNU `date +%s%3N` on Linux; the Python fallback makes this
+          # portable to macOS (no GNU date) and Windows (git-bash).
+          start=$(python3 -c "import time; print(int(time.time()*1000))")
+          # Install from the local tarball if this is a PR (before publish),
+          # otherwise from the registry. Local tarball path is set by the
+          # release pipeline; for PRs we pack and install.
+          if [ -f "${GITHUB_WORKSPACE}/packages/engine/dist/benten-engine-local.tgz" ]; then
+            npm install "${GITHUB_WORKSPACE}/packages/engine/dist/benten-engine-local.tgz" --no-audit --no-fund
+          else
+            npm install @benten/engine --no-audit --no-fund
+          fi
+          end=$(python3 -c "import time; print(int(time.time()*1000))")
+          elapsed_ms=$((end - start))
+          echo "Elapsed: ${elapsed_ms}ms"
+          if [ "$elapsed_ms" -gt 60000 ]; then
+            echo "FAIL: cold install took ${elapsed_ms}ms (>60000ms budget)."
+            echo "Likely cause: missing prebuilt napi binary for this platform, forcing a source compile."
+            exit 1
+          fi
+          echo "OK: cold install within 60s budget."
+
+      - name: Sanity — imported module loads
+        shell: bash
+        run: |
+          cd /tmp/cold-install-test
+          node -e "const b = require('@benten/engine'); console.log('loaded', Object.keys(b).slice(0,5));"

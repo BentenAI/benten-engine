@@ -19,3 +19,24 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+proptest = { workspace = true }
+criterion = { workspace = true }
+# Cross-process graph integration test (`d2_cross_process_graph.rs`) opens
+# the engine to round-trip a persisted node. Dev-dep cycle is safe.
+benten-engine = { path = "../benten-engine" }
+
+[[bench]]
+name = "get_create_node"
+harness = false
+
+[[bench]]
+name = "durability_modes"
+harness = false
+
+[[bench]]
+name = "concurrent_writers"
+harness = false
+
+[[bench]]
+name = "multi_mb_roundtrip"
+harness = false

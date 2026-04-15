@@ -1,0 +1,240 @@
+name: Determinism
+
+# Cross-target determinism matrix: reproduces the canonical CID fixture on
+# every supported target and asserts byte-for-byte equality across legs.
+# Owned by rust-test-writer-performance (R3). CI harnesses T4 (multi-arch),
+# T5 (MSRV), T6 (wasm-runtime), T9 (cross-leg gate).
+#
+# Each job prints its observed CID to a build artifact. The final `gate`
+# job downloads every artifact and asserts they are all byte-identical —
+# per implementation plan §4.6 and R2 landscape §7.4:
+#
+#   > Cross-leg determinism gate (T9): a CI job that depends on T4 + T5 +
+#   > T6 all completing, collects the CID each produced, and asserts they
+#   > are byte-for-byte equal — not just "each matches a fixture string"
+#   > but "each leg produces the same bytes as every other leg." Failure
+#   > message identifies the drift leg and the divergent bytes.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: determinism-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # T4 — Multi-arch native matrix. Each leg reproduces the canonical CID
+  # and uploads it for the T9 cross-leg gate.
+  # ---------------------------------------------------------------------------
+  multi-arch:
+    name: T4 multi-arch ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-14,     target: aarch64-apple-darwin,       leg: macos-arm64 }
+          - { os: macos-13,     target: x86_64-apple-darwin,        leg: macos-x86_64 }
+          - { os: ubuntu-24.04, target: x86_64-unknown-linux-gnu,   leg: linux-x86_64 }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, leg: linux-arm64 }
+          - { os: windows-2022, target: x86_64-pc-windows-msvc,     leg: windows-x86_64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Reproduce canonical CID
+        # Prints the CID to stdout; we redirect to a file for upload.
+        # The example is defined in crates/benten-core/examples/print_canonical_cid.rs.
+        shell: bash
+        run: |
+          cargo run --release -p benten-core --example print_canonical_cid --target ${{ matrix.target }} > cid-${{ matrix.leg }}.txt
+          cat cid-${{ matrix.leg }}.txt
+
+      - name: Assert fixture match
+        shell: bash
+        run: |
+          recorded=$(tr -d '[:space:]' < crates/benten-core/tests/fixtures/canonical_cid.txt)
+          observed=$(tr -d '[:space:]' < cid-${{ matrix.leg }}.txt)
+          if [ "$recorded" != "$observed" ]; then
+            echo "DRIFT on ${{ matrix.leg }}: fixture=$recorded observed=$observed"
+            exit 1
+          fi
+          echo "OK on ${{ matrix.leg }}: $observed"
+
+      - name: Upload CID artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cid-${{ matrix.leg }}
+          path: cid-${{ matrix.leg }}.txt
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # T5 — MSRV (1.85) and latest stable, both reproducing the fixture.
+  # ---------------------------------------------------------------------------
+  msrv:
+    name: T5 msrv ${{ matrix.rust }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: ["1.85", "stable"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Reproduce canonical CID
+        run: |
+          cargo run --release -p benten-core --example print_canonical_cid > cid-msrv-${{ matrix.rust }}.txt
+          cat cid-msrv-${{ matrix.rust }}.txt
+
+      - name: Assert fixture match
+        run: |
+          recorded=$(tr -d '[:space:]' < crates/benten-core/tests/fixtures/canonical_cid.txt)
+          observed=$(tr -d '[:space:]' < cid-msrv-${{ matrix.rust }}.txt)
+          if [ "$recorded" != "$observed" ]; then
+            echo "DRIFT on msrv=${{ matrix.rust }}: fixture=$recorded observed=$observed"
+            exit 1
+          fi
+
+      - name: Upload CID artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cid-msrv-${{ matrix.rust }}
+          path: cid-msrv-${{ matrix.rust }}.txt
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # T6 — wasm32-wasip1 runtime via wasmtime. Upgrades the prior
+  # compile-check to a full runtime CID assertion.
+  # ---------------------------------------------------------------------------
+  wasm-runtime:
+    name: T6 wasm32-wasip1 runtime
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable + wasm32-wasip1)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+
+      - name: Install wasmtime
+        uses: bytecodealliance/actions/wasmtime/setup@v1
+        with:
+          version: "latest"
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build print_canonical_cid for wasm32-wasip1
+        # The example compiles to a single .wasm binary; wasmtime runs it
+        # and stdout is the CID.
+        run: |
+          cargo build --release --target wasm32-wasip1 -p benten-core --example print_canonical_cid
+
+      - name: Run under wasmtime and capture CID
+        run: |
+          wasmtime target/wasm32-wasip1/release/examples/print_canonical_cid.wasm > cid-wasm32-wasip1.txt
+          cat cid-wasm32-wasip1.txt
+
+      - name: Assert fixture match (phrased per plan §2.8 T6)
+        # `Node::cid()?.to_string() == <fixture>` as the assertion shape so
+        # the test survives the C4 `cid`-crate migration without edit.
+        run: |
+          recorded=$(tr -d '[:space:]' < crates/benten-core/tests/fixtures/canonical_cid.txt)
+          observed=$(tr -d '[:space:]' < cid-wasm32-wasip1.txt)
+          if [ "$recorded" != "$observed" ]; then
+            echo "DRIFT on wasm32-wasip1: fixture=$recorded observed=$observed"
+            exit 1
+          fi
+
+      - name: Upload CID artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cid-wasm32-wasip1
+          path: cid-wasm32-wasip1.txt
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # T9 — Cross-leg determinism gate. Depends on T4+T5+T6. Asserts EVERY
+  # leg produces the same bytes as every other leg. Catches drift that a
+  # per-leg fixture match would miss (e.g., if the fixture itself drifted
+  # at commit time, per-leg matches would pass silently).
+  # ---------------------------------------------------------------------------
+  cross-leg-gate:
+    name: T9 cross-leg byte-equality gate
+    needs: [multi-arch, msrv, wasm-runtime]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all CID artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: cids/
+
+      - name: Assert byte-for-byte equality across all legs
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Collect every CID into a single space-separated list, one per leg.
+          declare -A legs
+          for dir in cids/cid-*; do
+            leg=$(basename "$dir" | sed 's/^cid-//')
+            # Each artifact dir contains a single .txt file.
+            file=$(find "$dir" -type f -name '*.txt' | head -n 1)
+            value=$(tr -d '[:space:]' < "$file")
+            legs[$leg]="$value"
+          done
+
+          echo "Legs observed:"
+          for leg in "${!legs[@]}"; do
+            printf '  %-24s %s\n' "$leg" "${legs[$leg]}"
+          done
+
+          # Pick any leg as the reference; every other leg must match its
+          # bytes exactly.
+          reference_leg=""
+          reference_value=""
+          for leg in "${!legs[@]}"; do
+            reference_leg="$leg"
+            reference_value="${legs[$leg]}"
+            break
+          done
+
+          drift=0
+          for leg in "${!legs[@]}"; do
+            if [ "${legs[$leg]}" != "$reference_value" ]; then
+              echo "DRIFT: $leg produced ${legs[$leg]}, reference $reference_leg produced $reference_value"
+              drift=1
+            fi
+          done
+
+          if [ $drift -ne 0 ]; then
+            echo "T9 CROSS-LEG DETERMINISM GATE FAILED — see above for the diverging leg(s)."
+            exit 1
+          fi
+
+          echo "T9 OK: all $(echo "${!legs[@]}" | wc -w) legs produced the same CID: $reference_value"

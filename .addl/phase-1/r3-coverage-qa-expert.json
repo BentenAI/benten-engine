@@ -1,0 +1,62 @@
+{
+  "phase": 1,
+  "schema_version": "1.0",
+  "source_landscape": ".addl/phase-1/r2-test-landscape.md",
+  "generated_by": "benten-test-landscape-analyst (R2) + R3 agents",
+  "status": "in-progress — R3 qa-expert integration slice WRITTEN (12 Rust + 6 TS files); awaiting other R3 agents",
+  "last_updated_by": "qa-expert (R3 integration) 2026-04-15",
+  "total_test_artifacts_planned": 289,
+  "qa_expert_integration": {
+    "files_written": [
+      "crates/benten-engine/tests/integration.rs",
+      "crates/benten-engine/tests/integration/caps_crud.rs",
+      "crates/benten-engine/tests/integration/ivm_propagation.rs",
+      "crates/benten-engine/tests/integration/tx_atomicity.rs",
+      "crates/benten-engine/tests/integration/version_current.rs",
+      "crates/benten-engine/tests/integration/change_stream.rs",
+      "crates/benten-engine/tests/integration/system_zone_integration.rs",
+      "crates/benten-engine/tests/integration/cap_toctou.rs",
+      "crates/benten-engine/tests/integration/stale_view.rs",
+      "crates/benten-engine/tests/integration/nested_tx.rs",
+      "crates/benten-engine/tests/integration/exit_criteria_all_six.rs",
+      "crates/benten-engine/tests/integration/compromises_regression.rs",
+      "crates/benten-engine/tests/integration/cross_process_graph.rs",
+      "crates/benten-graph/tests/d2_cross_process_graph.rs",
+      "bindings/napi/index.test.ts",
+      "packages/engine/src/crud.test.ts",
+      "packages/engine/src/trace.test.ts",
+      "packages/engine/src/mermaid.test.ts",
+      "packages/engine/src/errors.test.ts",
+      "tools/create-benten-app/test/scaffolder.test.ts"
+    ],
+    "test_functions_written": 40,
+    "exit_criteria_mapped": {
+      "1_registration_succeeds": ["crates/benten-engine/tests/integration/exit_criteria_all_six.rs::exit_1_registration_succeeds", "packages/engine/src/crud.test.ts::register_succeeds"],
+      "2_three_creates_list_returns_them": ["crates/benten-engine/tests/integration/exit_criteria_all_six.rs::exit_2_three_creates_list_returns_them", "packages/engine/src/crud.test.ts::crud_post_zero_config_full_cycle", "crates/benten-engine/tests/integration/ivm_propagation.rs::ivm_ten_writes_reflected_in_list_in_order"],
+      "3_cap_denial_routes_on_denied": ["crates/benten-engine/tests/integration/exit_criteria_all_six.rs::exit_3_cap_denial_routes_on_denied", "crates/benten-engine/tests/integration/caps_crud.rs::revoked_cap_routes_to_on_denied"],
+      "4_trace_non_zero_timing": ["crates/benten-engine/tests/integration/exit_criteria_all_six.rs::exit_4_trace_non_zero_timing_and_topological_order", "packages/engine/src/trace.test.ts::trace_returns_topo_ordered_steps"],
+      "5_mermaid_output_parses": ["crates/benten-engine/tests/integration/exit_criteria_all_six.rs::exit_5_mermaid_output_parses_minimal_shape", "packages/engine/src/mermaid.test.ts::mermaid_output_parses_as_flowchart"],
+      "6_ts_rust_cid_roundtrip": ["bindings/napi/index.test.ts::ts_rust_cid_roundtrip_matches_fixture", "crates/benten-engine/tests/integration/exit_criteria_all_six.rs::exit_6_canonical_cid_matches_spike_fixture", "crates/benten-engine/tests/integration/cross_process_graph.rs::engine_level_persisted_cid_deterministic_across_reopen"]
+    },
+    "named_compromises_covered": {
+      "1": "compromises_regression.rs::compromise_1_toctou_window_bound_at_100_iter_batch",
+      "2": "compromises_regression.rs::compromise_2_ecapdenied_read_leaks_existence",
+      "3": "compromises_regression.rs::compromise_3_error_code_enum_in_benten_core",
+      "4": "compromises_regression.rs::compromise_4_wasm_runtime_only_compile_check",
+      "5": "compromises_regression.rs::compromise_5_no_write_rate_limits_but_metric_recorded",
+      "6": "compromises_regression.rs::compromise_6_blake3_collision_resistance_note_in_security_posture"
+    },
+    "error_codes_fired": ["E_CAP_DENIED", "E_CAP_DENIED_READ", "E_CAP_REVOKED_MID_EVAL", "E_TX_ABORTED", "E_SYSTEM_ZONE_WRITE", "E_IVM_VIEW_STALE", "E_NESTED_TRANSACTION_NOT_SUPPORTED", "E_INPUT_LIMIT"],
+    "conflicts_with_other_r3_agents": [],
+    "notes": [
+      "Integration test binary uses mod aggregator pattern (tests/integration.rs) to compile all 12 scenarios into one binary; reduces parallel-compile cost and makes file ownership disjoint from the security/unit/edge writer files in tests/ root.",
+      "Exit-criterion #4 assertion uses partial-order (topological) rather than strict sequence — handlers with BRANCH/ITERATE/CALL have no unique traversal order.",
+      "Exit-criterion #5 Mermaid check uses @mermaid-js/parser as a dev-dep of packages/engine (per R2 gap-for-Ben #1 disposition in landscape).",
+      "Vitest tests consume @benten/engine wrapper (not raw napi) to verify the DX surface; napi index.test.ts is the only file that bypasses the wrapper (for exit-criterion #6 round-trip fidelity)."
+    ],
+    "landscape_rows_needing_clarification": [
+      "R2 §4.3 lists both tests/integration/exit_criteria_X.rs AND exit_criteria_all_six.rs (§9 partition) — resolved in favor of single exit_criteria_all_six.rs aggregator with six #[test] fns, matching partition §9 file list.",
+      "R2 §4.5 ts_napi_input_validation_rejects_oversized listed under bindings/napi/index.test.ts — consolidated B8 checks into the single Vitest file rather than bindings/napi/tests/input_validation.rs which is owned by rust-test-writer-security for Rust-side validation."
+    ]
+  }
+}

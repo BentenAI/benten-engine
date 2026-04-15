@@ -1,0 +1,46 @@
+name: WASM Checks
+
+# T8 — `cargo check --target wasm32-unknown-unknown -p benten-napi`.
+# Proves the napi-rs v3 dual-target promise holds at the binding-crate
+# level, not just for benten-core. Runtime WASM with a network-fetch
+# KVBackend is Phase 2; this is compile-check only.
+#
+# Distinct from the runtime T6 job in determinism.yml (which runs
+# benten-core under wasmtime via wasm32-wasip1). T8 covers the full
+# bindings/napi crate under wasm32-unknown-unknown, which is the target
+# browser / edge runtimes consume.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: wasm-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  napi-wasm32-compile-check:
+    name: T8 benten-napi wasm32-unknown-unknown
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable + wasm32-unknown-unknown)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo check napi binding for wasm32
+        # The napi-rs v3 build matrix compiles this crate to both native
+        # (Node.js N-API) and wasm32. We assert the wasm32 leg still
+        # compiles; runtime behavior is Phase 2 scope when the
+        # network-fetch KVBackend lands.
+        run: cargo check --target wasm32-unknown-unknown -p benten-napi

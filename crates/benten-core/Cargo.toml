@@ -19,4 +19,14 @@ serde_ipld_dagcbor = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-# No extra dev dependencies for the spike; cross-process determinism test uses std.
+# Cross-process determinism test uses std.
+proptest = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "hash_only"
+harness = false
+
+[[bench]]
+name = "cid_parse"
+harness = false

@@ -3,7 +3,7 @@
   "schema_version": "1.0",
   "source_landscape": ".addl/phase-1/r2-test-landscape.md",
   "generated_by": "benten-test-landscape-analyst (R2)",
-  "status": "stub — R3 agents fill in as tests land",
+  "status": "partial — rust-test-writer-security + rust-test-writer-performance R3 artifacts landed 2026-04-15",
   "total_test_artifacts_planned": 289,
   "totals_by_category": {
     "unit": 201,
@@ -117,7 +117,9 @@
         "crates/benten-eval/tests/evaluator_stack.rs",
         "crates/benten-engine/tests/spike_survivors.rs"
       ],
-      "tests_planned": 98
+      "tests_planned": 98,
+      "tests_written": 176,
+      "r3_dispatch_notes": "R3 unit agent landed all 34 landscape-assigned files. Test count is higher than the 98-test plan because proptest harnesses each count as ≥1 case, and TRANSFORM built-in coverage (19 tests vs the 20-test plan) plus several primitive variants broke out to one-behavior-per-test per the rust-test-writer-unit style contract. See agent summary for partition repairs (none)."
     },
     "rust-test-writer-edge-cases": {
       "files_owned": [
@@ -145,7 +147,241 @@
         "crates/benten-engine/tests/engine_read_view_stale.rs",
         "crates/benten-engine/tests/register_subgraph_failures.rs"
       ],
-      "tests_planned": 48
+      "tests_planned": 48,
+      "tests_landed": 88,
+      "landed_status": "r3-red-phase — tests fail at compile (APIs under test are introduced by R5 G1-A/G1-B/G2/G3/G4/G5/G6/G7)",
+      "landed_breakdown": {
+        "crates/benten-core/tests/cid_malformed.rs": {
+          "count": 4,
+          "tests": [
+            "cid_parse_errors",
+            "cid_unsupported_codec",
+            "cid_unsupported_hash",
+            "cid_parse_rejects_noncontiguous_corruption"
+          ],
+          "covers_error_codes": ["E_CID_PARSE", "E_CID_UNSUPPORTED_CODEC", "E_CID_UNSUPPORTED_HASH"]
+        },
+        "crates/benten-core/tests/float_nan_inf.rs": {
+          "count": 4,
+          "tests": [
+            "float_nan_rejected",
+            "float_infinity_rejected",
+            "float_zero_and_negative_zero_are_equal_cid",
+            "float_finite_extremes_accepted"
+          ],
+          "covers_error_codes": ["E_VALUE_FLOAT_NAN", "E_VALUE_FLOAT_NONFINITE"]
+        },
+        "crates/benten-core/tests/version_branched.rs": {
+          "count": 3,
+          "tests": [
+            "concurrent_append_creates_branched_chain",
+            "append_after_current_head_succeeds",
+            "append_against_unknown_prior_head_errors"
+          ],
+          "covers_error_codes": ["E_VERSION_BRANCHED"]
+        },
+        "crates/benten-core/tests/anchor_id_excluded_from_cid.rs": {
+          "count": 3,
+          "tests": [
+            "anchor_id_never_changes_cid",
+            "changing_content_does_change_cid",
+            "label_order_normalised_but_label_content_matters"
+          ],
+          "covers_invariant": "10 (content-hash scope — anchor_id excluded)"
+        },
+        "crates/benten-graph/tests/open_existing_vs_create.rs": {
+          "count": 4,
+          "tests": [
+            "open_existing_missing_errors",
+            "open_or_create_missing_succeeds",
+            "open_existing_existing_file_succeeds",
+            "open_or_create_idempotent_on_existing_file"
+          ],
+          "covers_error_codes": ["E_BACKEND_NOT_FOUND"]
+        },
+        "crates/benten-graph/tests/failure_injection_rollback.rs": {
+          "count": 3,
+          "tests": [
+            "tx_closure_err_rolls_back_all_writes",
+            "tx_closure_panic_rolls_back_and_repropagates",
+            "tx_commit_cap_failure_surfaces_partial_trace_with_aborted_step"
+          ],
+          "covers_error_codes": ["E_TX_ABORTED"],
+          "notes": "tx_closure_panic_rolls_back_and_repropagates pins R1 Triage transaction-closure-panic regression contract"
+        },
+        "crates/benten-graph/tests/nested_tx_rejected.rs": {
+          "count": 2,
+          "tests": ["nested_tx_returns_error", "nested_tx_does_not_deadlock"],
+          "covers_error_codes": ["E_NESTED_TRANSACTION_NOT_SUPPORTED"],
+          "covers_named_compromise": "named-compromise#3 (nested transactions refused; Phase 2 may lift)"
+        },
+        "crates/benten-graph/tests/scan_zero_hit.rs": {
+          "count": 4,
+          "tests": [
+            "scan_on_empty_store_returns_empty_iterator",
+            "scan_with_no_matches_on_populated_store_returns_empty",
+            "scan_returns_consistent_empty_shape",
+            "scan_single_byte_prefix_matching_zero_keys"
+          ]
+        },
+        "crates/benten-graph/tests/backend_error_polymorphism.rs": {
+          "count": 3,
+          "tests": [
+            "mem_backend_errors_never_route_through_graph_error",
+            "polymorphic_fn_over_kvbackend_does_not_require_graph_error",
+            "injected_backend_error_does_not_say_redb"
+          ]
+        },
+        "crates/benten-ivm/tests/view4_governance_inheritance.rs": {
+          "count": 4,
+          "tests": [
+            "governance_depth_exactly_max_resolved_cleanly",
+            "governance_depth_exceeding_max_truncates_at_cap",
+            "governance_cycle_does_not_infinite_loop",
+            "governance_empty_graph_returns_empty_rules"
+          ]
+        },
+        "crates/benten-ivm/tests/stale_on_budget_exceeded.rs": {
+          "count": 3,
+          "tests": [
+            "each_view_stale_on_budget_exceeded",
+            "view_recovers_on_rebuild_after_stale",
+            "budget_zero_is_rejected_at_construction"
+          ],
+          "covers_error_codes": ["E_IVM_VIEW_STALE"]
+        },
+        "crates/benten-ivm/tests/view_read_allow_stale.rs": {
+          "count": 3,
+          "tests": [
+            "read_view_allow_stale_returns_last_known_good",
+            "read_view_allow_stale_on_fresh_view_returns_live_data",
+            "read_view_allow_stale_before_first_update_returns_empty"
+          ],
+          "covers_error_codes": ["E_IVM_VIEW_STALE"]
+        },
+        "crates/benten-caps/tests/grant_uniqueness_on_cid.rs": {
+          "count": 6,
+          "tests": [
+            "identical_grants_hash_to_identical_cid",
+            "grant_scope_difference_changes_cid",
+            "grant_entity_difference_changes_cid",
+            "grant_issuer_difference_changes_cid",
+            "grant_empty_scope_rejected_at_construction",
+            "grant_whitespace_only_scope_rejected"
+          ]
+        },
+        "crates/benten-caps/tests/check_write_called_at_commit.rs": {
+          "count": 4,
+          "tests": [
+            "check_write_called_once_per_commit_regardless_of_write_count",
+            "check_write_at_commit_denies_all_writes_atomically",
+            "no_writes_means_no_check_write_call",
+            "noauth_backend_never_denies_but_still_conforms_to_commit_model"
+          ],
+          "covers_error_codes": ["E_CAP_DENIED"],
+          "covers_named_compromise": "named-compromise#1 (commit-boundary cap check anchors TOCTOU window)"
+        },
+        "crates/benten-eval/tests/invariant_1_cycle.rs": {
+          "count": 5,
+          "tests": [
+            "rejects_cycle",
+            "accepts_valid_dag",
+            "rejects_self_loop_as_cycle",
+            "rejects_deeply_buried_cycle",
+            "rejects_cycle_spanning_branch_arms"
+          ],
+          "covers_error_codes": ["E_INV_CYCLE"],
+          "covers_invariant": "1"
+        },
+        "crates/benten-eval/tests/invariant_2_depth.rs": {
+          "count": 5,
+          "tests": [
+            "accepts_depth_at_limit",
+            "rejects_depth_exceeded",
+            "rejects_depth_far_exceeded",
+            "depth_one_always_accepted",
+            "depth_cap_configurable_via_capability_grant"
+          ],
+          "covers_error_codes": ["E_INV_DEPTH_EXCEEDED"],
+          "covers_invariant": "2"
+        },
+        "crates/benten-eval/tests/invariant_3_fanout.rs": {
+          "count": 5,
+          "tests": [
+            "accepts_fanout_at_limit",
+            "rejects_fanout",
+            "rejects_zero_fan_in_single_node_bomb",
+            "fanout_per_node_not_subgraph_total",
+            "fanout_applies_to_iterate_parallel_forks"
+          ],
+          "covers_error_codes": ["E_INV_FANOUT_EXCEEDED"],
+          "covers_invariant": "3"
+        },
+        "crates/benten-eval/tests/invariants_5_6_counts.rs": {
+          "count": 4,
+          "tests": [
+            "accepts_nodes_at_limit",
+            "rejects_too_many_nodes",
+            "rejects_too_many_edges",
+            "single_node_subgraph_passes_node_and_edge_caps"
+          ],
+          "covers_error_codes": ["E_INV_TOO_MANY_NODES", "E_INV_TOO_MANY_EDGES"],
+          "covers_invariant": "5, 6"
+        },
+        "crates/benten-eval/tests/invariants_9_10_12.rs": {
+          "count": 5,
+          "tests": [
+            "rejects_nondet_in_det_context",
+            "accepts_det_primitives_in_det_context",
+            "rejects_content_hash_mismatch",
+            "registration_catch_all_populates_violated_list",
+            "single_violation_uses_specific_code_not_catch_all"
+          ],
+          "covers_error_codes": ["E_INV_DETERMINISM", "E_INV_CONTENT_HASH", "E_INV_REGISTRATION"],
+          "covers_invariant": "9, 10, 12"
+        },
+        "crates/benten-eval/tests/iterate_max_and_nest_depth.rs": {
+          "count": 5,
+          "tests": [
+            "accepts_nest_depth_3_rejects_4",
+            "rejects_depth_4_accepts_depth_3",
+            "iterate_missing_max_is_phase_2_not_phase_1",
+            "iterate_max_zero_accepted_as_noop",
+            "iterate_max_negative_is_parse_error"
+          ],
+          "covers_error_codes": ["E_INV_ITERATE_NEST_DEPTH"],
+          "covers_named_compromise": "invariant-8 stopgap MAX_ITERATE_NEST_DEPTH=3 (Phase 1 Rank 10)"
+        },
+        "crates/benten-engine/tests/engine_builder_thinness.rs": {
+          "count": 4,
+          "tests": [
+            "thinness_no_ivm_no_caps_no_versioning_still_works",
+            "thin_engine_rejects_caps_dependent_apis",
+            "thin_engine_rejects_view_reads",
+            "thin_engine_survives_workspace_lint_budget"
+          ]
+        },
+        "crates/benten-engine/tests/engine_read_view_stale.rs": {
+          "count": 3,
+          "tests": [
+            "read_view_strict_returns_stale_error",
+            "read_view_relaxed_returns_last_known_good",
+            "read_view_unknown_view_id_errors"
+          ],
+          "covers_error_codes": ["E_IVM_VIEW_STALE"]
+        },
+        "crates/benten-engine/tests/register_subgraph_failures.rs": {
+          "count": 5,
+          "tests": [
+            "register_cycle_fails_with_inv_cycle",
+            "register_depth_exceeded_fails_with_inv_depth",
+            "register_returns_inv_registration_on_multiple_violations",
+            "register_duplicate_handler_id_errors",
+            "idempotent_re_registration_of_identical_subgraph_succeeds"
+          ],
+          "covers_error_codes": ["E_INV_CYCLE", "E_INV_DEPTH_EXCEEDED", "E_INV_REGISTRATION"]
+        }
+      }
     },
     "rust-test-writer-security": {
       "files_owned": [
@@ -164,7 +400,187 @@
         ".github/workflows/supply-chain.yml",
         ".github/workflows/drift-detect.yml"
       ],
-      "tests_planned": 37
+      "tests_planned": 37,
+      "tests_landed": 74,
+      "landed_status": "r3-red-phase — tests fail at compile or runtime; R5 makes them pass",
+      "landed_breakdown": {
+        "crates/benten-graph/tests/system_zone.rs": {
+          "count": 4,
+          "tests": [
+            "user_operation_cannot_write_system_labeled_node",
+            "privileged_engine_path_can_write_system_labeled_node",
+            "system_prefix_check_is_prefix_not_substring",
+            "empty_label_list_is_not_system_zone"
+          ],
+          "attack_class": "R1 SC1 system-zone write forgery"
+        },
+        "crates/benten-caps/tests/ucan_stub_messages.rs": {
+          "count": 4,
+          "tests": [
+            "ucan_stub_errors_cleanly",
+            "ucan_stub_error_message_names_phase_and_alternative",
+            "ucan_stub_error_code_is_distinct_from_denied",
+            "ucan_stub_error_routes_to_ON_ERROR_not_ON_DENIED"
+          ],
+          "attack_class": "R1 major #10 UCAN stub routing + message"
+        },
+        "crates/benten-caps/tests/toctou_iteration.rs": {
+          "count": 2,
+          "tests": [
+            "capability_revoked_mid_iteration_denies_subsequent_batches",
+            "writes_in_current_batch_are_not_retroactively_denied"
+          ],
+          "attack_class": "R1 major #5 TOCTOU during ITERATE"
+        },
+        "crates/benten-caps/tests/noauth_proptest.rs": {
+          "count": 2,
+          "tests": [
+            "prop_noauth_returns_ok_unconditionally",
+            "prop_noauth_hot_path_does_not_allocate"
+          ],
+          "attack_class": "NoAuth default correctness under fuzz (defense-in-depth for R1 SC2)"
+        },
+        "crates/benten-eval/tests/transform_grammar_rejections.rs": {
+          "count": 38,
+          "tests": [
+            "transform_grammar_rejects_closure_arrow",
+            "transform_grammar_rejects_closure_function_expression",
+            "transform_grammar_rejects_this_keyword",
+            "transform_grammar_rejects_import_statement",
+            "transform_grammar_rejects_require_call",
+            "transform_grammar_rejects_proto_access",
+            "transform_grammar_rejects_constructor_access",
+            "transform_grammar_rejects_prototype_access",
+            "transform_grammar_rejects_tagged_template",
+            "transform_grammar_rejects_template_literal_with_expression",
+            "transform_grammar_rejects_optional_chaining",
+            "transform_grammar_rejects_computed_property_name",
+            "transform_grammar_rejects_new_keyword",
+            "transform_grammar_rejects_with_statement",
+            "transform_grammar_rejects_destructuring_pattern",
+            "transform_grammar_rejects_eval_call",
+            "transform_grammar_rejects_new_function",
+            "transform_grammar_rejects_yield",
+            "transform_grammar_rejects_async_await",
+            "transform_grammar_rejects_symbol_access",
+            "transform_grammar_rejects_reflect_access",
+            "transform_grammar_rejects_proxy_construction",
+            "transform_grammar_rejects_spread_in_call",
+            "transform_grammar_rejects_comma_operator",
+            "transform_grammar_rejects_instanceof",
+            "transform_grammar_rejects_typeof",
+            "transform_grammar_rejects_in_operator",
+            "transform_grammar_rejects_regex_literal",
+            "transform_grammar_rejects_bitwise_and",
+            "transform_grammar_rejects_bitwise_or",
+            "transform_grammar_rejects_bitwise_xor",
+            "transform_grammar_rejects_bitshift",
+            "transform_grammar_rejects_assignment",
+            "transform_grammar_rejects_increment",
+            "transform_grammar_rejects_exponent",
+            "transform_grammar_rejects_nullish_coalescing",
+            "transform_grammar_rejects_return_statement",
+            "transform_grammar_rejects_throw_statement",
+            "transform_grammar_rejects_delete_statement",
+            "transform_grammar_error_carries_doc_pointer"
+          ],
+          "count_note": "38 named rejection tests from docs/TRANSFORM-GRAMMAR.md §Rejection test matrix, plus 1 cross-cutting error-format contract test (grammar_doc pointer). All 38 BNF rejection classes covered 1:1 with the grammar doc's named-test list.",
+          "attack_class": "R1 major #8 + T12 TRANSFORM grammar escape hatches"
+        },
+        "crates/benten-eval/tests/transform_grammar_fuzz.rs": {
+          "count": 1,
+          "tests": ["fuzz_transform_parser (#[ignore])"],
+          "harness_invocation": "cargo test -p benten-eval -- --ignored fuzz_transform_parser",
+          "attack_class": "T12 fuzz harness — unknown syntactic shapes"
+        },
+        "crates/benten-eval/tests/requires_enforcement.rs": {
+          "count": 2,
+          "tests": [
+            "handler_with_understated_requires_denies_excess_writes",
+            "handler_cannot_escalate_via_call_attenuation"
+          ],
+          "attack_class": "R1 SC4 requires declared-vs-actual (critical)"
+        },
+        "crates/benten-eval/tests/requires_property_call_time_check.rs": {
+          "count": 1,
+          "tests": ["requires_checked_at_primitive_not_just_declaration"],
+          "attack_class": "R1 SC4 per-primitive checking contract"
+        },
+        "crates/benten-eval/tests/read_denial.rs": {
+          "count": 3,
+          "tests": [
+            "read_denied_returns_cap_denied_read",
+            "read_missing_returns_not_found",
+            "option_a_existence_leak_is_documented_compromise"
+          ],
+          "attack_class": "R1 major #6 existence leakage via E_CAP_DENIED_READ (option A)"
+        },
+        "crates/benten-engine/tests/production_refuses_noauth.rs": {
+          "count": 4,
+          "tests": [
+            "engine_builder_production_refuses_noauth",
+            "engine_builder_production_accepts_explicit_noauth",
+            "engine_builder_production_accepts_ucan_stub",
+            "engine_builder_default_path_still_permits_silent_noauth"
+          ],
+          "attack_class": "R1 SC2 silent NoAuth default (critical)"
+        },
+        "crates/benten-engine/tests/system_zone_api_exclusivity.rs": {
+          "count": 5,
+          "tests": [
+            "create_node_rejects_system_labeled_write",
+            "grant_capability_only_via_engine_api",
+            "create_view_only_via_engine_api",
+            "revoke_capability_only_via_engine_api",
+            "transaction_cannot_smuggle_system_zone_write"
+          ],
+          "attack_class": "R1 SC1 engine-level N8 exclusivity"
+        },
+        "bindings/napi/tests/input_validation.rs": {
+          "count": 5,
+          "tests": [
+            "napi_rejects_oversized_value_map",
+            "napi_rejects_deep_nested_value",
+            "napi_rejects_oversized_bytes",
+            "napi_rejects_malformed_cid",
+            "napi_rejects_recursive_cbor_bomb"
+          ],
+          "attack_class": "R1 major #7 + B8 napi boundary DoS (5-subtest matrix)"
+        },
+        ".github/workflows/supply-chain.yml": {
+          "count": 4,
+          "tests": ["cargo-deny", "cargo-audit", "lockfile-verify", "weekly-audit-issue"],
+          "attack_class": "R1 SC3 supply-chain CI (pre-existing; confirmed covers 4 required jobs)"
+        },
+        ".github/workflows/drift-detect.yml": {
+          "count": 2,
+          "tests": ["drift-detect (primary bidirectional)", "test-drift-detector-fails (self-test)"],
+          "attack_class": "R1 major #11 drift-detector failure-mode correctness"
+        }
+      },
+      "r1_named_attack_classes_covered": {
+        "total": 11,
+        "covered": 11,
+        "items": [
+          "SC1 system-zone write forgery → system_zone.rs + system_zone_api_exclusivity.rs",
+          "SC2 silent NoAuth default → production_refuses_noauth.rs",
+          "SC3 supply-chain CI → supply-chain.yml (pre-existing, confirmed)",
+          "SC4 requires declared-vs-actual → requires_enforcement.rs × 2 + requires_property_call_time_check.rs",
+          "major #5 TOCTOU during ITERATE → toctou_iteration.rs × 2",
+          "major #6 E_CAP_DENIED_READ existence leak → read_denial.rs × 3",
+          "major #7 napi boundary DoS → bindings/napi/tests/input_validation.rs × 5",
+          "major #8 TRANSFORM grammar escape hatches → transform_grammar_rejections.rs × 38 + fuzz × 1",
+          "major #10 UCAN stub routing + message → ucan_stub_messages.rs × 4",
+          "major #11 drift-detector failure mode → drift-detect.yml × 2",
+          "major #9 causal attribution (ChangeEvent/TraceStep schema) → covered at schema level by rust-test-writer-unit's change_event.rs per R1 triage disposition"
+        ]
+      },
+      "transform_rejection_bnf_coverage": {
+        "total_bnf_rejection_classes": 38,
+        "covered": 38,
+        "coverage_pct": 100,
+        "source_of_truth": "docs/TRANSFORM-GRAMMAR.md §Rejection test matrix"
+      }
     },
     "rust-test-writer-performance": {
       "files_owned": [
@@ -180,15 +596,47 @@
         "crates/benten-engine/benches/end_to_end_create.rs"
       ],
       "ci_harnesses_owned": [
-        ".github/workflows/ci.yml#multi-arch-matrix",
-        ".github/workflows/ci.yml#msrv-matrix",
-        ".github/workflows/ci.yml#wasm-runtime-fixture",
-        ".github/workflows/ci.yml#napi-wasm32-compile-check",
-        ".github/workflows/ci.yml#determinism-gate-cross-leg",
-        ".github/workflows/ci.yml#cold-install-latency",
-        ".github/workflows/ci.yml#graph-cross-process"
+        ".github/workflows/determinism.yml#multi-arch (T4)",
+        ".github/workflows/determinism.yml#msrv (T5)",
+        ".github/workflows/determinism.yml#wasm-runtime (T6)",
+        ".github/workflows/determinism.yml#cross-leg-gate (T9)",
+        ".github/workflows/wasm-checks.yml#napi-wasm32-compile-check (T8)",
+        ".github/workflows/cross-process-graph.yml#graph-cross-process",
+        ".github/workflows/cold-install.yml#cold-install",
+        ".github/workflows/supply-chain-seeded-test.yml#seeded-vuln-must-fail-cargo-deny",
+        ".github/workflows/supply-chain-seeded-test.yml#seeded-vuln-must-fail-cargo-audit",
+        ".github/workflows/ci.yml#error-catalog-drift-detector (T7 wiring)",
+        "scripts/drift-detect-error-catalog.mjs (T7 detector logic)"
       ],
-      "tests_planned": 14
+      "tests_planned": 14,
+      "tests_landed_r3": 14,
+      "bench_functions_landed": {
+        "gated": [
+          {"fn": "get_node", "file": "crates/benten-graph/benches/get_create_node.rs", "target": "1-50us hot cache", "source": "§14.6 direct — Node lookup by ID"},
+          {"fn": "get_node_batch_100", "file": "crates/benten-graph/benches/get_create_node.rs", "target": "< 5ms for 100 lookups (<50us amortized)", "source": "§14.6 derived — Node lookup × batch"},
+          {"fn": "create_node_immediate", "file": "crates/benten-graph/benches/get_create_node.rs", "target": "100-500us realistic", "source": "§14.6 direct — Node creation + IVM update"},
+          {"fn": "create_node_group_commit", "file": "crates/benten-graph/benches/durability_modes.rs", "target": "< 500us median", "source": "§14.6 derived — group-commit amortization of creation envelope"},
+          {"fn": "create_node_async", "file": "crates/benten-graph/benches/durability_modes.rs", "target": "< 250us median", "source": "§14.6 derived — no-fsync below group-commit ceiling"},
+          {"fn": "view_read_content_listing", "file": "crates/benten-ivm/benches/view_maintenance.rs", "target": "< 1us hot cache", "source": "§14.6 direct — IVM view read (clean) 0.04-1us"},
+          {"fn": "view_read_governance_inheritance", "file": "crates/benten-ivm/benches/view_maintenance.rs", "target": "< 1us hot cache", "source": "§14.6 direct — IVM view read (clean)"},
+          {"fn": "view_incremental_maintenance", "file": "crates/benten-ivm/benches/view_maintenance.rs", "target": "< 50us per write", "source": "§14.6 derived — IVM slice of 100-500us creation envelope"},
+          {"fn": "10_node_handler_eval", "file": "crates/benten-eval/benches/ten_node_handler.rs", "target": "150-300us mixed", "source": "§14.6 direct — 10-node handler evaluation"},
+          {"fn": "end_to_end_create", "file": "crates/benten-engine/benches/end_to_end_create.rs", "target": "100-500us composed", "source": "§14.6 direct — Node creation + IVM update (full path)"}
+        ],
+        "informational": [
+          {"fn": "hash_only", "file": "crates/benten-core/benches/hash_only.rs", "source": "non-§14.6 baseline — spike reference 892ns"},
+          {"fn": "cid_parse", "file": "crates/benten-core/benches/cid_parse.rs", "source": "non-§14.6 — parse cost amortized into lookup gate"},
+          {"fn": "concurrent_writers", "file": "crates/benten-graph/benches/concurrent_writers.rs", "source": "§14.6 direct (explicitly listed informational per plan §4.4)"},
+          {"fn": "multi_mb_roundtrip", "file": "crates/benten-graph/benches/multi_mb_roundtrip.rs", "source": "non-§14.6 — large payload regression guard"}
+        ]
+      },
+      "stub_graceful_notes": [
+        "cid_parse depends on Cid::from_str (G1 — currently todo!())",
+        "durability_modes benches use local open_group_commit/open_async shims pending G2",
+        "view_maintenance benches use read_content_view_stub/apply_change_event_stub pending I2/I5/I6",
+        "ten_node_handler bench uses build_canonical_10_node_handler_stub/evaluate_stub pending E1/E2/E3/E5",
+        "Benches COMPILE against current spike tree; run-time failures pre-R5 are the correct TDD signal."
+      ]
     },
     "qa-expert-integration": {
       "files_owned": [
@@ -228,10 +676,10 @@
     "E_INV_ITERATE_NEST_DEPTH": ["crates/benten-eval/tests/iterate_max_and_nest_depth.rs::rejects_depth_4_accepts_depth_3"],
     "E_INV_CONTENT_HASH": ["crates/benten-eval/tests/invariants_9_10_12.rs::rejects_content_hash_mismatch"],
     "E_INV_REGISTRATION": ["crates/benten-eval/tests/invariants_9_10_12.rs::registration_catch_all_populates_violated_list", "crates/benten-engine/tests/register_subgraph_failures.rs::register_returns_inv_registration_on_multiple_violations"],
-    "E_CAP_DENIED": ["crates/benten-engine/tests/integration/caps_crud.rs::revoked_cap_routes_to_on_denied", "crates/benten-eval/tests/requires_enforcement.rs::handler_with_understated_requires_denies_excess_writes", "crates/benten-eval/tests/requires_enforcement.rs::handler_cannot_escalate_via_call_attenuation"],
-    "E_CAP_DENIED_READ": ["crates/benten-eval/tests/read_denial.rs::read_denied_returns_cap_denied_read"],
-    "E_CAP_REVOKED_MID_EVAL": ["crates/benten-caps/tests/toctou_iteration.rs::capability_revoked_mid_iteration_denies_subsequent_batches", "crates/benten-engine/tests/integration/cap_toctou.rs::capability_revoked_mid_eval_surfaces_at_batch_boundary"],
-    "E_CAP_NOT_IMPLEMENTED": ["crates/benten-caps/tests/ucan_stub_messages.rs::ucan_stub_errors_cleanly", "crates/benten-caps/tests/ucan_stub_messages.rs::ucan_stub_error_message_names_phase_and_alternative", "crates/benten-caps/tests/ucan_stub_messages.rs::ucan_stub_error_routes_to_ON_ERROR_not_ON_DENIED"],
+    "E_CAP_DENIED": ["crates/benten-engine/tests/integration/caps_crud.rs::revoked_cap_routes_to_on_denied", "crates/benten-eval/tests/requires_enforcement.rs::handler_with_understated_requires_denies_excess_writes", "crates/benten-eval/tests/requires_enforcement.rs::handler_cannot_escalate_via_call_attenuation", "crates/benten-caps/tests/error_code_mapping.rs::cap_error_codes_match_catalog"],
+    "E_CAP_DENIED_READ": ["crates/benten-eval/tests/read_denial.rs::read_denied_returns_cap_denied_read", "crates/benten-caps/tests/error_code_mapping.rs::cap_error_codes_match_catalog"],
+    "E_CAP_REVOKED_MID_EVAL": ["crates/benten-caps/tests/toctou_iteration.rs::capability_revoked_mid_iteration_denies_subsequent_batches", "crates/benten-engine/tests/integration/cap_toctou.rs::capability_revoked_mid_eval_surfaces_at_batch_boundary", "crates/benten-caps/tests/error_code_mapping.rs::cap_error_codes_match_catalog"],
+    "E_CAP_NOT_IMPLEMENTED": ["crates/benten-caps/tests/ucan_stub_messages.rs::ucan_stub_errors_cleanly", "crates/benten-caps/tests/ucan_stub_messages.rs::ucan_stub_error_message_names_phase_and_alternative", "crates/benten-caps/tests/ucan_stub_messages.rs::ucan_stub_error_routes_to_ON_ERROR_not_ON_DENIED", "crates/benten-caps/tests/error_code_mapping.rs::cap_error_codes_match_catalog"],
     "E_CAP_REVOKED": [],
     "E_CAP_ATTENUATION": ["crates/benten-caps/tests/error_code_mapping.rs::cap_error_codes_match_catalog"],
     "E_WRITE_CONFLICT": ["crates/benten-eval/tests/primitive_read_write.rs::write_cas_wrong_version_routes_on_conflict"],
@@ -250,8 +698,8 @@
     "E_SYNC_CAP_UNVERIFIED": [],
     "E_DSL_INVALID_SHAPE": ["packages/engine/src/errors.test.ts::dsl_invalid_shape_thrown_on_malformed_input"],
     "E_DSL_UNREGISTERED_HANDLER": ["packages/engine/src/errors.test.ts::dsl_unregistered_handler_has_suggestions"],
-    "E_VALUE_FLOAT_NAN": ["crates/benten-core/tests/value_float.rs::float_nan_rejected"],
-    "E_VALUE_FLOAT_NONFINITE": ["crates/benten-core/tests/value_float.rs::float_infinity_rejected"],
+    "E_VALUE_FLOAT_NAN": ["crates/benten-core/tests/value_float.rs::float_nan_rejected", "crates/benten-core/tests/error_codes.rs::core_error_float_nan_maps_to_value_float_nan_code"],
+    "E_VALUE_FLOAT_NONFINITE": ["crates/benten-core/tests/value_float.rs::float_infinity_rejected", "crates/benten-core/tests/value_float.rs::float_negative_infinity_rejected", "crates/benten-core/tests/error_codes.rs::core_error_float_nonfinite_maps_to_value_float_nonfinite_code"],
     "E_CID_PARSE": ["crates/benten-core/tests/cid_malformed.rs::cid_parse_errors"],
     "E_CID_UNSUPPORTED_CODEC": ["crates/benten-core/tests/cid_malformed.rs::cid_unsupported_codec"],
     "E_CID_UNSUPPORTED_HASH": ["crates/benten-core/tests/cid_malformed.rs::cid_unsupported_hash"],
