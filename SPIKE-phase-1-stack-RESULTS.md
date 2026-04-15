@@ -264,38 +264,94 @@ Numbered so a different agent can pick any of these up:
    question (§8, §14.6, Open Question 5).
    **Owner:** `implementation-developer` per crate.
 
-6. **Have the critics review this spike** (Step 5 of the pre-work process).
-   Dispatch the `architecture-purity`, `composability-extensibility`,
-   `performance-scalability`, and `developer-experience` critics in
-   parallel against the spike artifacts; consolidate findings before
-   starting Phase 1 proper. See `.claude/skills/critic/` for the dispatch
-   pattern.
-   **Owner:** orchestrator (Ben or the `/critic` dispatcher).
+6. **Watch upstream PR responses.** `multiformats/rust-cid#185` and
+   `multiformats/rust-multihash#407` are the two open PRs whose merge
+   eliminates Benten's `[patch.crates-io]` entries. Revisit weekly; file
+   a matching migration PR under `BentenAlignmentInc` if either stalls
+   past four weeks with no maintainer engagement.
+   **Owner:** orchestrator.
 
-7. **Human task: commit the spike in logical slices.** The implementing
-   agent could not complete the commit sequence because the sandboxed shell
-   blocked `git reset` / `git restore --staged` (flagged as destructive).
-   The spike files are on disk and the full pipeline is green. A human
-   with shell access should:
-   - `git restore --staged .` to unstage the 1091 pre-existing changes
-     accidentally picked up during slice-1 staging.
-   - stage the spike files in 5–7 slices per the brief (scaffold →
-     benten-core → benten-graph → benten-engine → bindings/napi →
-     benchmark → determinism tests + RESULTS).
-   - use `/commit-rust` for each slice. Pipeline already passes, so each
-     commit should land cleanly.
-   Files to commit (all absolute paths under workspace root):
-   ```
-   Cargo.toml                                 (workspace + deps + patch)
-   Cargo.lock                                 (new)
-   clippy.toml                                (doc-valid-idents allowlist)
-   crates/benten-core/                        (real code)
-   crates/benten-graph/                       (real code)
-   crates/benten-engine/                      (real code + benches)
-   crates/benten-ivm/                         (stub)
-   crates/benten-caps/                        (stub)
-   crates/benten-eval/                        (stub)
-   bindings/napi/                             (real code)
-   SPIKE-phase-1-stack-RESULTS.md             (this file)
-   ```
-   **Owner:** human (Ben).
+---
+
+## Critic Triage (R5-equivalent, first pass)
+
+Three critics reviewed the spike after the six-slice commit landed. All three
+returned verdict `pass`. Raw JSON findings persisted at
+`.addl/spike/{benten-core-guardian,determinism-verifier,code-reviewer-benten-graph}.json`.
+Every finding has a disposition below — fix-now (code already updated in the
+critic-triage commit), defer-with-explicit-phase-target, or
+disagree-with-rationale.
+
+### Fixed in the critic-triage commit
+
+| Finding | Source | What landed |
+|---|---|---|
+| Prefix scan was O(n) full-table walk | `code-reviewer` M5 | Rewrote `RedbBackend::scan` to use `table.range(prefix..next_prefix)` with a `next_prefix` helper; added `scan_prefix_bounds_the_range`, `scan_all_0xff_prefix_is_open_ended`, and `next_prefix_increments_and_trims` tests |
+| Test suite missed empty-prefix scan, zero-hit scan, empty-batch | `code-reviewer` m17 (partial) | Added `scan_empty_prefix_returns_everything`, `scan_zero_hit_prefix_returns_empty`, `batch_put_empty_slice_is_a_noop` |
+| `canonical_test_node` duplicated between `mod tests` and `pub mod testing` | `benten-core-guardian` | Unit tests now import from `super::testing::canonical_test_node`; one source of truth |
+| D2 bootstrap branch could silently re-pin a lost fixture | `benten-core-guardian` + `determinism-verifier` | Gated the bootstrap behind `BENTEN_D2_BOOTSTRAP=1`; missing fixture now fails loudly by default |
+| Module doc claimed D3 was a shipped test | `benten-core-guardian` m1 | Reworded to call out D3 as a CI `cargo check`, not a unit test |
+| Base32 comment confused RFC 4648 alphabet with Extended Hex | `benten-core-guardian` m2 | Rewrote the doc comment to clarify multibase `b` uses the lowercase standard alphabet, not Extended Hex |
+| `#[serde(untagged)]` round-trip hazard undocumented | `benten-core-guardian` m4 | Added a doc comment on `Value` explaining why DAG-CBOR major-type tagging keeps this unambiguous; proptest validation deferred to Phase 1 (below) |
+| BTreeMap's role in determinism overstated in doc | `determinism-verifier` cbor-determinism | Rewrote the `Determinism guarantees` section to credit `serde_ipld_dagcbor`'s encode-time canonicalization as the load-bearing guarantee, with BTreeMap as belt-and-suspenders |
+| `RedbBackend` Clone/Arc ergonomics and path-validation responsibility were undocumented | `code-reviewer` m15 + m19 | Added `# Concurrency` and `# Path handling` sections to `RedbBackend` rustdoc |
+| `Value::Float` deferral + version-chain deferral not called out in module doc | `benten-core-guardian` M1 + M2 | Added explicit deferred-to-Phase-1 paragraphs at the top of `benten-core` and on the `Value` enum doc |
+| `GraphError` leaks redb bias; trait doesn't express error polymorphism | `code-reviewer` M3 | Added Phase 1 follow-up doc on `GraphError` explaining the `type Error` reshape plan |
+| `scan` returning unbounded `Vec` locks out streaming/pagination | `code-reviewer` M4 | Added Phase 1 follow-up doc on `ScanResult` + `KVBackend` explaining the iterator reshape plan |
+
+### Deferred to Phase 1 with explicit phase targets
+
+All deferrals live in code comments (`Phase 1 follow-up — ...`) or below.
+Each entry names the Phase 1 sub-phase where the work lands.
+
+- **P1.core.float** — Add `Value::Float(f64)` with NaN rejection, shortest-form
+  encoding test, and a property test over arbitrary `f64` bit patterns.
+  Source: `benten-core-guardian` M1, `determinism-verifier` Float variant. Land
+  alongside the `benten-core` proptest harness in Phase 1 R3.
+- **P1.core.version-chain** — Implement Anchor type, Version Node, `CURRENT`
+  and `NEXT_VERSION` edge labels, and version-walking helpers per
+  ENGINE-SPEC §6. Source: `benten-core-guardian` M2. Phase 1 R5 work for the
+  `benten-core` crate.
+- **P1.core.proptest** — Add `proptest` dev-dep and a `prop_node_roundtrip_cid_stable`
+  property test (100k+ instances) exercising hash → decode → re-hash. Source:
+  `benten-core-guardian` untagged-enum hazard, `determinism-verifier` proptest
+  gap. Phase 1 R3 when the test harness lands.
+- **P1.ci.wasm-runtime** — Run `print_canonical_cid` under
+  `wasm32-wasip1` via wasmtime in CI and assert the output matches the
+  committed fixture. Source: `determinism-verifier` cross-target-wasm. Phase 1
+  CI setup.
+- **P1.ci.multi-arch** — CI matrix across `{aarch64-apple-darwin,
+  x86_64-apple-darwin, x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu}`
+  reproducing the fixture CID. Source: `determinism-verifier` cross-arch. Phase
+  1 CI setup.
+- **P1.ci.msrv** — CI builds at both MSRV (1.85) and latest stable, both
+  reproducing the fixture. Source: `determinism-verifier` cross-Rust-version.
+  Phase 1 CI setup.
+- **P1.graph.error-polymorphism** — Reshape `KVBackend` so each backend can
+  surface its own error type (`type Error: std::error::Error + Send + Sync + 'static`),
+  or rename `GraphError::Redb` to a neutral `Backend(String)` and preserve the
+  `redb::Error` source chain via `#[source]`. Source: `code-reviewer` M3, m13.
+  Phase 1 R5 work on `benten-graph`.
+- **P1.graph.scan-iterator** — Reshape `scan` to return an iterator instead of
+  a Vec. Consider a `Scan` type or `Box<dyn Iterator<Item = Result<_, _>>>`.
+  Source: `code-reviewer` M4. Phase 1 R5.
+- **P1.graph.open-vs-create** — Separate `RedbBackend::open_existing` from
+  `RedbBackend::open_or_create`; default the former. Source: `code-reviewer` m14.
+  Phase 1 R5.
+- **P1.graph.transaction-primitive** — Expose a `transaction(|tx| ...)`
+  closure-based API or `WriteBatch` builder that accepts heterogeneous
+  operations. Co-designed with the transaction primitive in `benten-eval`.
+  Source: `code-reviewer` single-key-txn finding. Phase 1 R5.
+- **P1.graph.node-store-trait** — Lift `put_node`/`get_node` off `RedbBackend`
+  into a generic `NodeStore: KVBackend` trait with a blanket impl, so node
+  helpers are not coupled to redb. Source: `code-reviewer` m20. Phase 1 R5.
+- **P1.graph.doctests** — Add `# Examples` doctests to the `KVBackend` trait
+  methods and `RedbBackend`. Source: `code-reviewer` m16. Phase 1 R5.
+- **P1.graph.stress-tests** — Multi-MB value round-trip, concurrent
+  reader+writer, failure-injection atomicity test. Source: `code-reviewer` m17
+  (remainder). Phase 1 R3.
+
+### Disagreed (with rationale)
+
+None. Every finding is accepted as either a spike-stage fix or a Phase 1
+deferral. The critics did not surface any claim we consider incorrect.

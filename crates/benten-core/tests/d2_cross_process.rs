@@ -4,11 +4,14 @@
 //! compiled to their own binary, so every `cargo test` / `cargo nextest run`
 //! invocation exercises the "new process" property).
 //!
-//! Strategy: the first time this test runs, it writes the canonical CID to
-//! `tests/fixtures/canonical_cid.txt`. On every subsequent run (and on CI,
-//! where the fixture is committed to git), it re-computes the CID and asserts
-//! byte-for-byte equality against the fixture. Running the test twice in CI
-//! therefore actually exercises the property across two separate processes.
+//! Strategy: the fixture file `tests/fixtures/canonical_cid.txt` is committed
+//! to the repo. Every test run re-computes the canonical CID and asserts byte-
+//! for-byte equality against the committed fixture. If the fixture is missing,
+//! the test fails loudly by default — a lost fixture must be a deliberate
+//! re-pin, not a silent bootstrap. To intentionally bootstrap a new fixture
+//! (when the hash algorithm, canonical serialization, or canonical test Node
+//! is deliberately changed), set the environment variable
+//! `BENTEN_D2_BOOTSTRAP=1`.
 
 #![allow(
     clippy::unwrap_used,
@@ -41,9 +44,16 @@ fn d2_cross_process_determinism() {
         fs::create_dir_all(parent).expect("create fixtures dir");
     }
 
+    let bootstrap = env::var_os("BENTEN_D2_BOOTSTRAP").is_some();
+
     if !path.exists() {
-        // First-run bootstrap: record the canonical CID. Subsequent runs (and
-        // all CI runs after this commit) assert against the fixture.
+        assert!(
+            bootstrap,
+            "D2 fixture missing at {path:?} and BENTEN_D2_BOOTSTRAP is not set.\n\
+             A missing fixture must be a deliberate re-pin, not a silent \
+             bootstrap. Set `BENTEN_D2_BOOTSTRAP=1` in the environment to \
+             create the fixture from the current canonical CID."
+        );
         fs::write(&path, &current).expect("write fixture");
         eprintln!("D2 bootstrap: wrote canonical CID fixture to {path:?}");
         return;
@@ -56,6 +66,7 @@ fn d2_cross_process_determinism() {
         recorded, current,
         "cross-process determinism violated:\n  recorded: {recorded}\n  current:  {current}\n\
          If this failure is intentional (e.g., the hash algorithm or canonical \
-         serialization changed), delete the fixture and re-run once to bootstrap."
+         serialization changed), delete the fixture and re-run with \
+         BENTEN_D2_BOOTSTRAP=1 to re-pin."
     );
 }

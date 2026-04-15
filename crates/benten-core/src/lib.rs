@@ -4,11 +4,23 @@
 //!
 //! This crate is deliberately minimal for the Phase 1 stack spike. It defines:
 //!
-//! - [`Value`] — the graph value type (DAG-CBOR representable: null, bool, integer,
-//!   float, text, bytes, list, map).
+//! - [`Value`] — the graph value type. The spike covers `null`, `bool`, `int`,
+//!   `text`, `bytes`, `list`, and `map`. A `Float(f64)` variant is intentionally
+//!   deferred to Phase 1 proper (it needs NaN rejection, shortest-form encoding,
+//!   and a dedicated proptest before it can enter the hash path; see
+//!   [`SPIKE-phase-1-stack-RESULTS.md`](../../../SPIKE-phase-1-stack-RESULTS.md)
+//!   critic triage).
 //! - [`Node`] — a content-addressed graph Node (label list + ordered property map).
 //! - [`Cid`] — a CIDv1 newtype (multicodec `0x71` dag-cbor, multihash `0x1e` blake3)
 //!   produced by [`Node::cid`].
+//!
+//! Version-chain primitives from ENGINE-SPEC §6 (Anchor / Version Node /
+//! `CURRENT` / `NEXT_VERSION` edges) are **not** implemented in the spike. The
+//! `Node::anchor_id` field is a placeholder for future use; the Anchor type,
+//! edge labels, and version-walking helpers will land in Phase 1 proper. The
+//! `benten-core` crate already excludes `anchor_id` from the content hash, so
+//! a future Anchor wrapper can attach version chains without disturbing the
+//! hash invariant.
 //!
 //! ## What gets hashed
 //!
@@ -20,17 +32,22 @@
 //!
 //! ## Determinism guarantees
 //!
-//! 1. [`Value::Map`] is backed by [`alloc::collections::BTreeMap`], so property
-//!    keys are iterated in Unicode code point order.
-//! 2. Serialization uses `serde_ipld_dagcbor`, which enforces DAG-CBOR canonical
-//!    form (length-first key sort, no indefinite-length items, no floats-that-
-//!    would-round-trip-as-ints, etc.).
-//! 3. The CID encoding (version byte `0x01`, multicodec `0x71`, multihash
+//! 1. The load-bearing guarantee is `serde_ipld_dagcbor`'s encode-time
+//!    canonicalization: it emits DAG-CBOR canonical form with RFC 7049
+//!    length-first key sort regardless of the source type's iteration order.
+//!    [`Value::Map`]'s [`alloc::collections::BTreeMap`] backing is a
+//!    belt-and-suspenders defense; the on-wire bytes (and therefore the CID)
+//!    are determined by the CBOR canonicalization, not by the map's iteration
+//!    order.
+//! 2. The CID encoding (version byte `0x01`, multicodec `0x71`, multihash
 //!    `0x1e` + length `0x20` + 32-byte digest) is fixed by this crate and is
 //!    wire-compatible with the IPLD CIDv1 spec.
 //!
-//! The spike ships three tests validating these properties (D1 intra-process,
-//! D2 cross-process, D3 wasm32 compile-check).
+//! The spike validates these properties in three ways:
+//! - **D1 intra-process** — unit test in this crate
+//! - **D2 cross-process** — integration test against a committed fixture
+//! - **D3 wasm32-unknown-unknown** — `cargo check` in CI (compile-check only;
+//!   a runtime WASM check against the fixture is a Phase 1 CI follow-up)
 
 #![forbid(unsafe_code)]
 #![no_std]
@@ -70,9 +87,18 @@ pub const CID_LEN: usize = 1 + 1 + 1 + 1 + BLAKE3_DIGEST_LEN as usize;
 
 /// A graph Value. This is the subset of DAG-CBOR we expose in the spike.
 ///
-/// Maps use [`BTreeMap`] so serialization is deterministic regardless of
-/// insertion order. `serde_ipld_dagcbor` additionally enforces DAG-CBOR's
-/// length-first key sort at encode time.
+/// Maps use [`BTreeMap`] so in-memory iteration order is deterministic;
+/// the on-wire canonical form is separately enforced by `serde_ipld_dagcbor`
+/// at encode time (DAG-CBOR length-first key sort).
+///
+/// `#[serde(untagged)]` is safe here because DAG-CBOR's major-type tagging
+/// makes each variant's wire encoding unambiguous: a boolean cannot
+/// deserialize as an integer because CBOR major type 7 (simple) and major
+/// types 0/1 (unsigned/negative integer) are distinct. A round-trip proptest
+/// (hash → decode → hash → assert equal CID) is a Phase 1 follow-up that
+/// will validate this assumption empirically; see
+/// [`SPIKE-phase-1-stack-RESULTS.md`](../../../SPIKE-phase-1-stack-RESULTS.md)
+/// critic triage.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Value {
@@ -288,12 +314,12 @@ impl fmt::Display for Cid {
     }
 }
 
-/// Minimal RFC 4648 base32 lowercase, no padding, writing to a [`String`].
+/// Minimal base32 lowercase, no padding, writing to a [`String`].
 ///
 /// We roll our own tiny encoder to avoid pulling in a multibase/base32 crate
-/// for the spike. The alphabet is the RFC 4648 "Extended Hex" lowercase-
-/// equivalent is NOT used here; we use the standard base32 alphabet
-/// (a-z + 2-7), which matches what multibase `b` requires.
+/// for the spike. The alphabet is the lowercase form of the RFC 4648 standard
+/// base32 alphabet (`a-z` + `2-7`), which is what the IPLD multibase prefix
+/// `b` specifies. This is NOT the RFC 4648 Extended Hex alphabet (`0-9` + `a-v`).
 fn base32_lower_nopad_encode(input: &[u8], out: &mut String) {
     const ALPHABET: &[u8; 32] = b"abcdefghijklmnopqrstuvwxyz234567";
     let mut buffer: u32 = 0;
@@ -358,24 +384,13 @@ fn format_err<E: fmt::Display>(e: &E) -> String {
 )]
 mod tests {
     use super::*;
+    // Single source of truth for the canonical fixture — re-use the public
+    // constructor from `testing` rather than defining a second private copy
+    // that could drift.
+    use super::testing::canonical_test_node;
     extern crate std;
     use alloc::string::ToString;
     use alloc::vec;
-
-    /// Build the canonical test Node used across the spike's determinism
-    /// checks. Kept here (not hidden behind a feature) so `cargo test` and
-    /// the cross-process fixture test share the same definition.
-    pub(crate) fn canonical_test_node() -> Node {
-        let mut props = BTreeMap::new();
-        props.insert("title".to_string(), Value::text("Hello, Benten"));
-        props.insert("published".to_string(), Value::Bool(true));
-        props.insert("views".to_string(), Value::Int(42));
-        props.insert(
-            "tags".to_string(),
-            Value::List(vec![Value::text("rust"), Value::text("graph")]),
-        );
-        Node::new(vec!["Post".to_string()], props)
-    }
 
     /// D1 — Intra-process determinism: hashing the same Node twice in the
     /// same process produces identical CIDs.
