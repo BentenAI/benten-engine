@@ -1,7 +1,8 @@
 # Benten Platform Design Document
 
 **Created:** 2026-04-13
-**Status:** WORKING DRAFT -- architecture defined, protocol details require specification before Phase 3 implementation.
+**Last Updated:** 2026-04-14 (Atrium sync marked Phase 3 committed; Gardens MVP Phase 7 committed; broader compute marketplace stays exploratory)
+**Status:** WORKING DRAFT -- architecture defined, protocol details require specification before Phase 3 implementation. Sections 6-8 captured exploratory directions during vision evolution; the ones that became committed (Atriums → Phase 3, Gardens MVP → Phase 7, Credits → Phase 8) are noted inline. Full Groves and broader marketplace remain exploratory.
 **Audience:** Platform architects, protocol engineers, and governance designers who need to understand the system above the engine layer.
 **Related documents:** [Engine Spec](./ENGINE-SPEC.md) (Rust engine internals, 12 primitives, IVM, capabilities) | [Business Plan](./BUSINESS-PLAN.md) (economics, revenue, regulatory)
 
@@ -71,6 +72,8 @@ It is not a database. It is not a CMS. It is not a blockchain. It is the foundat
 
 ## 3. Networking
 
+**Status note (2026-04-14):** Atrium-tier P2P sync is Phase 3 **committed** scope — two or more trusted peers share subgraphs. Digital Gardens MVP (community spaces beyond Atriums with admin governance) is Phase 7 committed. Full Groves (fractal/polycentric governance) remains exploratory. See [`research/explore-gardens-mvp.md`](research/explore-gardens-mvp.md) for the Gardens MVP scoping.
+
 ### 3.1 Member-Mesh Model
 
 Communities are NOT hosted on servers. They are the distributed copies across members' instances. Each member syncs the community graph locally. There is no single point of failure or control.
@@ -80,7 +83,11 @@ Communities are NOT hosted on servers. They are the distributed copies across me
 - **Cost:** Each member pays for their own storage/bandwidth. No pooled hosting.
 - **Always-online nodes:** Communities that want reliability can rent a persistent node from the compute marketplace -- it's just another member that happens to be always-on.
 
-**Honest availability assessment:** The member-mesh model provides censorship resistance and data sovereignty. It does NOT provide reliability without infrastructure. A 5-person community in the same timezone has zero availability during sleeping hours. For production reliability, an always-on node is effectively required -- "just another member" that happens to have 99.9% uptime. The cost model should account for this: someone pays for the always-on node, even if the platform does not mandate it.
+**Honest availability assessment:** The member-mesh model provides censorship resistance and data sovereignty. It does NOT provide reliability without sufficient peer coverage.
+
+The correct formulation: **every community needs at least one peer online at any given moment** -- not "a dedicated always-on peer." Availability is emergent from the union of member activity patterns. A community with enough members across enough time zones is naturally always-reachable without anyone running dedicated infrastructure. A 5-person community in the same timezone will experience gaps during sleeping hours; these cause temporary desync or splitting that self-heals when any member comes back online (graceful degradation, not binary failure).
+
+For production reliability of smaller or time-zone-concentrated communities, always-on coverage can be provided by: a dedicated member choosing to run their device 24/7, opportunistic sync from old phones on postmarketOS, rented edge-node peers on the compute marketplace, or any combination. The cost model accounts for this: coverage is market-priced, not assumed free.
 
 **New member bootstrap:** When a new member joins, they need the community graph. Any online member can serve the initial sync via Merkle tree comparison and delta transfer. For large communities, bootstrap load should be distributed across multiple serving members (round-robin or load-aware selection) to prevent bandwidth concentration on a single member.
 
@@ -271,7 +278,103 @@ Phases 1-3 are specified in the [Engine Spec, Section 14](./ENGINE-SPEC.md). The
 
 ---
 
-## 6. Open Questions (Platform-Level)
+---
+
+## 6. Distributed Storage and Compute (Exploratory, added 2026-04-14)
+
+**Status:** These directions emerged during pre-work vision evolution. They are captured as design intent for Phase 2+ and inform Phase 1 abstraction boundaries, but are not committed specification. Full details: `docs/research/explore-distributed-compute-vision.md`.
+
+### 6.1 Data Has No Home
+
+The original design assumes each user runs a persistent "instance" -- a server or device that owns their data. An alternative framing: the user's data is encrypted, content-addressed, and distributed across the instances of peers and communities they trust. Peers hold ciphertext they cannot read. The user's "instance" is a runtime that materializes the graph from encrypted peer storage on demand, wherever they are.
+
+This does not conflict with the existing architecture. Content addressing already makes data location-independent. Capability grants already define the trust topology. Version chains already handle multi-device writes. The change is in the deployment/persistence model, not the computational model.
+
+### 6.2 Unified Compute Marketplace
+
+Rather than having separate concepts for "always-on nodes," "compute marketplace" (Phase 13), and member-hosted storage, the exploratory model unifies them: every interaction with a peer's hardware is a micro-transaction in Benten Credits. Reads, compute jobs, community serving, and availability are all resource usage paid with Credits. This makes the always-on coverage problem an economic equilibrium rather than an infrastructure mandate.
+
+Enablers:
+- Zero-fee credits make granularity viable (no blockchain can match)
+- Tab-based periodic net settlement (not payment channels)
+- Proof of Sampling verification (5-10% random re-execution with reputation penalty)
+- Content-addressed data is self-verifying on reads
+- Bounded DAG operation subgraphs are deterministic and cheap to verify
+
+### 6.3 Benten Runtime as Infrastructure Layer
+
+Rather than deploying Benten communities INSIDE proprietary edge runtimes (Cloudflare Workers), the exploratory direction builds Benten's own WinterTC-compliant runtime that anyone can install. Peers become nodes in a peer-distributed edge network. Three products share one engine: Application (communities), Runtime (WinterTC host), Economy (marketplace).
+
+Enablers:
+- WinterCG became Ecma TC55 in December 2024 (real cross-platform standard)
+- napi-rs v3 compiles to wasm32-wasip1-threads from the same Rust codebase
+- Open-source foundations available (Deno, workerd, wasmtime)
+
+### 6.4 `bentend` Peer Daemon for General-Purpose Compute
+
+Rather than building a Linux distribution or reinventing Proxmox/K8s, a single Rust daemon (`bentend`) composes commodity runtimes: containerd for containers, firecracker for VMs, wasmtime for WASM, Nomad-style pluggable drivers. Workloads are graph Nodes with capabilities; the graph IS the control plane.
+
+### 6.5 Mobile Devices' Realistic Role
+
+Primary phones (App Store distributed): consumers and clients only. Local compute for the owner, opportunistic sync when charging+WiFi. "Earn compute" framing is forbidden by Google Play (Oct 2025) and Apple. Old/retired phones running postmarketOS/LineageOS: first-class full peers with no App Store or background restrictions.
+
+---
+
+## 7. Trust Tiers as Composable Primitives (Exploratory, added 2026-04-14)
+
+**Insight:** Trust is not a hierarchy -- it is four orthogonal primitives that workloads declare requirements across.
+
+### 7.1 The Four Primitives
+
+1. **Cryptographic identity gating** (Tailnet Lock, PGP WoT) -- binary, social, no score. Atriums use this: family members sign each other's keys.
+2. **Reputation-weighted routing** (EigenTrust, staking+slashing) -- numeric scores, appropriate for open marketplace tier.
+3. **TEE remote attestation** (Intel TDX, AMD SEV-SNP, NVIDIA GPU TEE) -- hardware substitutes for social trust. Lets low-reputation peers handle high-sensitivity workloads.
+4. **Verifiable Credentials + Soulbound Tokens** -- cryptographic claims for KYC, insurance, jurisdiction, community membership.
+
+### 7.2 Workload Trust Declaration
+
+Each workload declares requirements as a graph Node:
+```
+trust_requirement: {
+  min_tier: atrium | garden | grove | open,
+  required_attestation: [TEE vendors],
+  required_credentials: [VC schemas],
+  min_reputation: number,
+  insurance_coverage: amount
+}
+```
+
+The scheduler (typically the user's AI agent) filters the peer set by intersection. Trust requirements become edges from the workload subgraph. Pricing is reputation-weighted (higher trust = higher price), so the market surfaces tradeoffs rather than hardcoding them.
+
+### 7.3 Key Nuances
+
+- **E2EE does NOT eliminate trust requirements.** Encrypted workloads can still leak execution metadata, be withheld/delayed, or selectively DoS'd. Trust tier matters for liveness even when data is encrypted.
+- **TEEs as one signal, not sole gate.** Vendor-key compromise is catastrophic and correlated across peers with same silicon. Treat TEE-attested-open-peer as equivalent to Garden-tier, not Atrium-tier.
+- **Trusted third-party provider communities.** Groves can form around providing high-reliability compute: "we verify members' hardware, stake credits as insurance, offer SLAs." Fractal governance accommodates this naturally.
+
+---
+
+## 8. Identity, Key Management, and Device Independence (Exploratory, added 2026-04-14)
+
+### 8.1 The Model
+
+- ed25519 keypair is the root of trust (unchanged from existing design)
+- Biometrics (WebAuthn/passkeys) unlock the stored private key; they do not derive keys (fuzzy extractors provide no security for real biometric sources)
+- Device mesh: the user's own enrolled devices hold key shares. New device enrollment via QR + ephemeral Diffie-Hellman over local network or relay. No Apple/Google custodial dependency.
+- M-of-N Shamir threshold recovery via trusted peers as fallback when all devices are lost (Web3Auth tKey SDK is the most battle-tested implementation)
+- Social recovery guardians are graph Nodes with GRANTED_TO edges
+
+### 8.2 Known Unsolved Problem: Guardian UX
+
+Cryptography is mature. Shamir threshold recovery works mathematically. It fails in practice when guardians lose shares, change devices, or become unreachable. No project has made guardian management effortless for non-technical users. This is a UX design challenge for Benten, not a cryptographic one.
+
+### 8.3 Why Synced Passkeys Are Incompatible
+
+iCloud Keychain and Google Password Manager sync passkeys with E2EE, but Apple/Google become key custodians. No decentralized passkey sync exists in 2026 (FIDO Credential Exchange Protocol still in draft). For Benten's "no centralized custodian" requirement, synced passkeys are architecturally incompatible as the root of trust.
+
+---
+
+## 9. Open Questions (Platform-Level)
 
 These are design decisions affecting the platform layers above the engine. Engine-level open questions are in the [Engine Spec, Section 15](./ENGINE-SPEC.md).
 

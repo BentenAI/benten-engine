@@ -5,6 +5,22 @@
 **Package:** `@benten/engine/operations`
 **Audience:** Module developers who compose operation subgraphs using TypeScript
 
+> **⚠️ Primitive set revised 2026-04-14.** The DSL was designed around the original 12 primitives. After critic review, two primitives were dropped (**VALIDATE**, **GATE**) and two were added (**SUBSCRIBE**, **STREAM**). The authoritative primitive list is in [`ENGINE-SPEC.md`](ENGINE-SPEC.md) Section 3. Examples in this document that use VALIDATE or GATE are historical — see the migration notes below.
+>
+> **Migration:**
+> - **VALIDATE** → compose from BRANCH (on schema predicate) + TRANSFORM (to format error) + RESPOND (with error) + error edges. Or let it register as a validation function hooked to the engine's 14 structural invariants.
+> - **GATE** → capability checks use the `requires` property on any Node (engine-enforced automatic BRANCH). Custom validation logic uses TRANSFORM or SANDBOX.
+> - **SUBSCRIBE** (new) → reactive change notification; IVM views, sync delta propagation, and event-driven handlers all compose on top.
+> - **STREAM** (new) → partial output with back-pressure; replaces patterns that previously attempted to use RESPOND for streaming.
+>
+> A DSL rewrite against the revised primitives is a Phase 1 deliverable. Until then, treat occurrences of VALIDATE and GATE in examples as illustrative of the *pattern*, not the final API shape.
+
+**Also pending (DX critic findings, Phase 1 scope):**
+- Zero-config `crud('post')` path (currently requires `{schema, capability}`)
+- Error catalog integration (see [`ERROR-CATALOG.md`](ERROR-CATALOG.md))
+- Debug tooling: `.toMermaid()` method, evaluation trace
+- TypeScript wrapper layer (`@benten/engine` over `@benten/engine-native`)
+
 ---
 
 ## Table of Contents

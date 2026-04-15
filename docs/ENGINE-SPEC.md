@@ -1,7 +1,8 @@
 # Benten Engine Technical Specification
 
 **Created:** 2026-04-13
-**Status:** WORKING DRAFT -- core architecture defined, open questions flagged for resolution before implementation.
+**Last Updated:** 2026-04-14 (post-critic revisions: primitives revised to new 12, 6-crate structure, performance honesty, capability hook extraction)
+**Status:** WORKING DRAFT -- core architecture defined. Dependencies validated against 2026 Rust ecosystem. Primitives and crate structure revised after 8-critic review. Open questions flagged for resolution before/during Phase 1 implementation.
 **Audience:** Rust engineers building the engine. TypeScript developers building bindings and modules.
 **Related documents:** [Platform Design](./PLATFORM-DESIGN.md) (networking, governance, identity) | [Business Plan](./BUSINESS-PLAN.md) (economics, revenue, regulatory)
 
@@ -18,13 +19,14 @@ Benten is a self-evaluating graph -- a platform where data and code are both Nod
 The Benten engine is a Rust-native system where code is represented AS graph structure, not stored IN graph properties. A route handler is not a string of source code -- it is a subgraph of operation Nodes connected by control-flow Edges. "Executing" a handler means the engine walks the subgraph, performing each operation.
 
 ```
-[RouteHandler: GET /api/posts]
-    |--[FIRST_STEP]--> [GATE: require capability store:read:post/*]
-    |                      +--[NEXT]--> [READ: query posts where published=true]
-    |                                      +--[NEXT]--> [TRANSFORM: to JSON]
-    |                                                      +--[NEXT]--> [RESPOND: 200]
+[RouteHandler: GET /api/posts, requires=store:read:post/*]
+    |--[FIRST_STEP]--> [READ: query posts where published=true]
+    |                      +--[NEXT]--> [TRANSFORM: to JSON]
+    |                                      +--[NEXT]--> [RESPOND: 200]
     +--[ON_DENIED]--> [RESPOND: 403]
 ```
+
+(The `requires` property on any Node is checked automatically by the evaluator; capability denial routes to `ON_DENIED` edges. No separate GATE primitive is needed — that was in the original 12 and was dropped during the 2026-04-14 revision.)
 
 **Why code-as-graph:**
 - **Inspectable.** An AI agent can read any handler by traversing its subgraph.
@@ -35,26 +37,54 @@ The Benten engine is a Rust-native system where code is represented AS graph str
 
 ---
 
-## 3. The 12 Operation Primitives
+## 3. The 12 Operation Primitives (revised 2026-04-14)
 
 Every computation in Benten is composed from 12 primitive operation Node types. The vocabulary is deliberately NOT Turing complete -- subgraphs are DAGs with bounded iteration. This guarantees termination, enables static analysis, and prevents denial-of-service.
+
+The set was revised on 2026-04-14 after critic review. See "Revision history" at the end of this section for what changed and why.
 
 | # | Primitive | Purpose | Key Property |
 |---|-----------|---------|-------------|
 | 1 | **READ** | Retrieve from graph (by ID, query, materialized view) | Typed error edges: ON_NOT_FOUND, ON_EMPTY |
-| 2 | **WRITE** | Mutate graph (create, update, delete, conditional CAS) | Auto version-stamp. Typed error: ON_CONFLICT, ON_DENIED |
+| 2 | **WRITE** | Mutate graph (create, update, delete, conditional CAS) | Auto version-stamp (if versioning enabled). Typed error: ON_CONFLICT, ON_DENIED |
 | 3 | **TRANSFORM** | Pure data reshaping | Sandboxed expression with arithmetic, array built-ins (filter, map, sum, etc.), object construction. No I/O. |
 | 4 | **BRANCH** | Conditional routing | Forward-only, no cycles |
 | 5 | **ITERATE** | Bounded collection processing | Mandatory maxIterations. Optional parallel. Multiplicative cost through nesting. |
 | 6 | **WAIT** | Suspend until signal/timeout | For workflows, approval patterns. Decomposes to data Nodes for cross-instance. |
-| 7 | **GATE** | Custom logic escape hatch | For complex validation/transformation that can't be expressed as TRANSFORM. Capability checking via `requires` property on any Node. |
-| 8 | **CALL** | Execute another subgraph | `isolated` flag for capability attenuation. Mandatory timeout. |
-| 9 | **RESPOND** | Terminal: produce output | HTTP response, event result, agent action result |
-| 10 | **EMIT** | Fire-and-forget notification | `deliveryMode`: local, exactly-once, broadcast |
-| 11 | **SANDBOX** | WASM computation escape hatch | No re-entrancy. Fuel-metered. Time-limited. Max output 1MB. For complex computation that can't be expressed as operation Nodes. |
-| 12 | **VALIDATE** | Schema + referential integrity check | Before writes, on sync receive |
+| 7 | **CALL** | Execute another subgraph | `isolated` defaults to `true` for capability attenuation. Mandatory timeout. |
+| 8 | **RESPOND** | Terminal: single output | HTTP response, event result, agent action result |
+| 9 | **EMIT** | Fire-and-forget notification | `deliveryMode` as subscriber-side strategy, not primitive flag. `audience` restriction for exfiltration prevention. |
+| 10 | **SANDBOX** | WASM computation escape hatch | No re-entrancy. Fuel-metered per-subgraph (not per-call). Time-limited. Max output 1MB. Uses `wasmtime`. |
+| 11 | **SUBSCRIBE** | Reactive change notification | Base primitive that IVM, sync, and EMIT delivery compose on. Added in 2026-04-14 revision. |
+| 12 | **STREAM** | Partial/ongoing output with back-pressure | SSE, WebSocket messages, LLM token streams, progress updates. Added in 2026-04-14 revision. |
 
-**Composed from the 12 (NOT primitives):** Retry (ITERATE + BRANCH + CALL), Parallel (ITERATE with parallel flag), Compensate (BRANCH on error + CALL undo subgraph), DryRun (evaluation mode property), Audit (EMIT to audit channel), Map/Filter/Reduce (ITERATE + TRANSFORM).
+**Composed from the 12 (NOT primitives):**
+- Retry (ITERATE + BRANCH + CALL)
+- Parallel (ITERATE with parallel flag)
+- Compensate (BRANCH on error + CALL undo subgraph)
+- DryRun (evaluation mode property)
+- Audit (EMIT to audit channel)
+- Map/Filter/Reduce (ITERATE + TRANSFORM)
+- **Validate (BRANCH on schema predicate + RESPOND with error)** -- was a primitive, now a stdlib pattern
+- **Capability check on any Node (`requires` property + automatic BRANCH on failure)** -- was GATE, now a property the evaluator honors
+- **Event handler (SUBSCRIBE + trigger subgraph registration)** -- was implicit inside IVM, now explicit composition
+- **IVM materialized view (SUBSCRIBE + TRANSFORM + WRITE to view Node)** -- was engine-internal, now a composable pattern `benten-ivm` implements using SUBSCRIBE
+
+### Revision history
+
+**2026-04-14 revision (after 8-critic review):**
+
+*Dropped:*
+- **VALIDATE** -- redundant with (BRANCH + TRANSFORM + RESPOND on error) plus the 14 structural invariants enforced at registration time. Provided as stdlib pattern, not primitive.
+- **GATE** -- "custom logic escape hatch" semantics were undefined (Open Question 8 in earlier draft). Capability checking uses the `requires` property on any Node (engine-enforced automatic BRANCH). Custom validation uses TRANSFORM or SANDBOX. No residual need for GATE.
+
+*Added:*
+- **SUBSCRIBE** -- identified by engine-philosophy critic as the primitive that IVM, sync, and reactive event dispatch all build on. Making it explicit means IVM becomes a composable module (`benten-ivm`) rather than engine-internal. Keeps the engine thinner.
+- **STREAM** -- identified by composability critic as missing for SSE, WebSocket, LLM token streams, and large JSON responses. WinterTC targets make streaming table stakes for 2026 web APIs. Cannot be cleanly composed from RESPOND (terminal) + ITERATE (no back-pressure).
+
+*Unchanged behavior but revised framing:*
+- **EMIT `deliveryMode`** is now a subscriber-side strategy, not a primitive flag. Enforced via SUBSCRIBE configuration.
+- **CALL `isolated`** defaults to `true` (previously ambiguous).
 
 ---
 
@@ -141,7 +171,11 @@ Every version Node is hashed using BLAKE3 with a multihash prefix for algorithm 
 - Governance decision anchoring (votes reference specific hashes)
 - Merkle trees for efficient sync (compare roots, transfer only differences)
 
-**Canonical serialization:** CBOR with RFC 8949 deterministic encoding.
+**Canonical serialization:** DAG-CBOR via the `serde_ipld_dagcbor` crate. This produces deterministic encoding by default (map keys sorted during serialization, no caller-side canonicalization needed). DAG-CBOR is a strict subset of CBOR used by the IPLD ecosystem; its sort order (RFC 7049 length-first) is equivalent to RFC 8949 bytewise sort for string-keyed maps, which is Benten's case. This replaces the initial choice of `ciborium`, which does not sort map keys and would require a custom canonicalization wrapper.
+
+**CIDv1 format:** Benten content hashes adopt the IPLD CIDv1 format (version byte + multicodec + multihash). Every Benten content hash is a valid CIDv1 at a cost of 2 extra bytes. This gives us tooling interop with the entire IPLD ecosystem, AT Protocol compatibility, and a well-understood standard instead of a custom format. The multicodec is 0x71 (dag-cbor); the multihash uses BLAKE3 (code 0x1e).
+
+**Dependency note (2026-04-14):** The `cid` crate (v0.11.1) and the `multihash` crate (v0.19.3) both transitively depend on `core2`, which was archived upstream on 2026-04-14 and whose sole published 0.4.0 version is yanked from crates.io. Until upstream releases a `core2`-free version, BentenAlignmentInc maintains a minimal fork of `rust-cid` at [`BentenAlignmentInc/rust-cid`](https://github.com/BentenAlignmentInc/rust-cid) that replaces `core2` with `no_std_io2` (an API-compatible drop-in), pinned to commit `e11cf45399c951597725a9bc3ed49c805f7aa640`. An upstream PR is open at [multiformats/rust-cid#185](https://github.com/multiformats/rust-cid/pull/185); a matching PR for the sibling crate is tracked at [multiformats/rust-multihash#407](https://github.com/multiformats/rust-multihash/pull/407). Workspace `[patch.crates-io]` will be reverted to crates.io once both merge and release. See `SPIKE-phase-1-stack-RESULTS.md` Surprises #1 and Next Actions #1.
 
 **Note on edge exclusion:** Edges are excluded from the content hash for performance and to allow the same version content to exist in different structural contexts. This means edge tampering (adding or removing relationships) is not detectable via content hash alone. Edge integrity during sync is verified separately through the sync protocol's Merkle tree comparison, which covers both node content and edge structure. See [Platform Design, Section 4.2](./PLATFORM-DESIGN.md) for the sync protocol's integrity guarantees.
 
@@ -198,7 +232,7 @@ Capabilities are UCAN-compatible typed objects stored as Nodes with GRANTED_TO e
 
 ## 10. WASM Sandbox (SANDBOX Primitive)
 
-For computation that can't be expressed as operation Nodes, the SANDBOX primitive calls into a WASM runtime (@sebastianwessel/quickjs v3.x):
+For computation that can't be expressed as operation Nodes, the SANDBOX primitive calls into `wasmtime` (v35+, Rust-native, Bytecode Alliance). The initial spec referenced `@sebastianwessel/quickjs`; this was a JavaScript library and inappropriate for a Rust engine. `wasmtime` provides fuel-based execution metering that maps directly to SANDBOX's fuel budget (guaranteed termination via fuel exhaustion), AArch64 support, and Component Model support for composability.
 
 - **No re-entrancy.** The sandbox receives data, returns data. Cannot call back into the graph.
 - **Fuel-metered.** Every WASM instruction costs fuel. Execution terminates when fuel runs out.
@@ -210,26 +244,37 @@ For computation that can't be expressed as operation Nodes, the SANDBOX primitiv
 
 ---
 
-## 11. Rust Crate Structure
+## 11. Rust Crate Structure (revised 2026-04-14)
 
-Revised from critic feedback (10 crates -> 4-5 for V1):
+Revised after critic review from 4 crates to **6**. The architecture-purity and engine-philosophy critics independently identified that IVM and capability enforcement were inside `benten-graph`/`benten-eval` in ways that made the engine thicker than its "thin engine" tagline promised. Extracting `benten-ivm` (so the evaluator doesn't know IVM exists) and `benten-caps` (so capability policy is pluggable) brings the total to 6 crates. Version chains stayed in `benten-core` as an opt-in convention rather than a separate crate.
 
 ```
 benten-engine/
 |-- crates/
-|   |-- benten-core/       # Node, Edge, Value types, content hashing, version chain primitives
-|   |-- benten-graph/      # Graph storage, indexes (hash + B-tree), MVCC, persistence (redb), IVM
-|   |-- benten-eval/       # Operation evaluator, 12 primitives, capability enforcement
-|   +-- benten-engine/     # Orchestrator: public API, ties crates together
+|   |-- benten-core/       # Node, Edge, Value types; content hashing (BLAKE3 + DAG-CBOR + CIDv1);
+|   |                      # version chain primitives (Anchor + Version Node + CURRENT Edge pattern)
+|   |-- benten-graph/      # Graph storage via KVBackend trait (redb impl); indexes (hash + B-tree);
+|   |                      # MVCC via redb transactions; change notification stream
+|   |-- benten-ivm/        # Incremental View Maintenance; subscribes to graph change stream;
+|   |                      # per-view strategy selection (Algorithm B default, A / C optional)
+|   |-- benten-caps/       # Capability types + pre-write hook trait + `NoAuthBackend` default.
+|   |                      # UCAN implementation as one pluggable backend (in `benten-id`, Phase 3)
+|   |-- benten-eval/       # 12 operation primitives; iterative evaluator; structural validation (14 invariants);
+|   |                      # transaction primitive (begin/commit/rollback); wasmtime SANDBOX host
+|   +-- benten-engine/     # Orchestrator: composes the crates above into the public API;
+|                           # wires capability backend, storage backend, IVM subscriber
 |-- bindings/
-|   |-- napi/              # Node.js bindings (@benten/engine-native)
-|   +-- wasm/              # WASM bindings (@benten/engine-wasm)
-+-- tests/
+|   +-- napi/              # Node.js bindings via napi-rs v3; same codebase compiles to WASM target
++-- tests/                 # Cross-crate integration tests and benchmarks
 ```
 
-Additional crates (added incrementally): `benten-sync` (CRDT merge, sync protocol), `benten-query` (Cypher/query parser, if needed beyond operation subgraphs).
+**Phase 3+ additional crates:** `benten-sync` (CRDT merge, Merkle Search Tree diff, sync protocol over iroh), `benten-id` (Ed25519, UCAN as capability backend, DID/VC support), optional `benten-query` (Cypher parser if demand emerges beyond operation subgraphs).
 
-**Persistence:** `benten-graph` uses redb for crash-safe persistence. redb provides serializable isolation with copy-on-write B-trees, WAL-equivalent crash recovery via two-phase commit with checksummed pages, and automatic garbage collection of old page versions. The engine relies on redb's durability guarantees rather than implementing a custom WAL.
+**The thinness test:** A developer should be able to use `benten-core` + `benten-graph` + `benten-engine` with `NoAuthBackend`, version chains disabled, no IVM subscribers, and get a pure content-addressed graph database with no Benten-specific conventions. If that configuration requires anything from `benten-eval`, `benten-ivm`, or `benten-caps`, the engine is too thick.
+
+**Persistence:** `benten-graph` uses `redb` v4 (validated April 2026, actively maintained, production-ready). redb provides serializable isolation with copy-on-write B-trees, WAL-equivalent crash recovery via two-phase commit with checksummed pages, MVCC (concurrent readers with single writer), multiple named tables, range queries, and automatic garbage collection of old page versions. The engine relies on redb's durability guarantees rather than implementing a custom WAL.
+
+**Storage abstraction:** `benten-graph` exposes a `GraphBackend` trait. The native implementation uses redb. A future WASM implementation will fetch content-addressed data from the peer network (via iroh or HTTP) with an in-memory cache. This abstraction is defined in Phase 1 but only redb is implemented. The trait boundary is critical: it preserves the option to run the engine inside a browser, an edge function, or an encrypted peer-distributed model without requiring changes to the evaluator or the application layer. See `docs/research/explore-distributed-compute-vision.md` for the motivation.
 
 **MVCC:** Snapshot isolation via redb's built-in transaction model. Read transactions see a consistent snapshot; write transactions are serialized. Graph-level version chains (Section 6) are an application-level pattern built on top of the storage layer -- from redb's perspective, creating a version Node is just a write like any other. MVCC operates on storage pages; version chains operate on graph Nodes. They do not interact directly.
 
@@ -241,12 +286,14 @@ Additional crates (added incrementally): `benten-sync` (CRDT merge, sync protoco
 |----------|---------|-------|
 | BLAKE3 | Hashing (content addressing, Merkle trees) | 1 |
 | Ed25519 | Signatures (votes, attestations, UCAN, sync) | 1 |
-| CBOR (RFC 8949) | Canonical serialization | 1 |
+| DAG-CBOR (IPLD, equivalent to deterministic RFC 8949 for our use) | Canonical serialization | 1 |
 | Multihash | Algorithm-agile hash format | 1 |
+| CIDv1 (IPLD) | Content identifier format | 1 |
 | UCAN | Authorization tokens | 1 |
 | did:key | Default identity | 1 |
 | Hybrid Logical Clocks | Causal ordering for CRDT | 1 |
-| libp2p | P2P networking (NAT traversal, DHT, GossipSub) | 2 |
+| WinterTC (Ecma TC55) | Edge runtime API surface | 2+ |
+| iroh | P2P networking (QUIC, holepunch, relay) | 2 |
 | W3C Verifiable Credentials | Identity attestations | 2 |
 | Merkle Search Trees | Efficient sync negotiation | 2 |
 
@@ -297,10 +344,14 @@ File storage and DDL are the least natural fits. Modules that depend heavily on 
 
 ### Phase 1: Core Engine
 - benten-core (Node, Edge, Value, content hashing, version chains)
-- benten-graph (storage, indexes, MVCC, persistence via redb)
-- napi-rs bindings (TypeScript can create/read/query Nodes)
-- Benchmark suite (validate sub-100-microsecond handler execution for typical 10-node handlers; compare against PostgreSQL + AGE for Thrum's actual query patterns)
-- Property-based testing infrastructure (MVCC correctness, version chain invariants, crash recovery)
+- benten-graph (storage, indexes, MVCC, persistence via redb v4)
+- benten-eval (12 primitives, evaluator, structural validation, capability enforcement, IVM views)
+- benten-engine (orchestrator, public API)
+- napi-rs v3 bindings (TypeScript can create/read/query Nodes; same codebase also compiles to WASM)
+- Storage abstraction trait (redb for native; network-fetch stub for WASM)
+- Benchmark suite via `criterion 0.8` (validate sub-100-microsecond handler execution for typical 10-node handlers; compare against PostgreSQL + AGE for Thrum's actual query patterns)
+- Property-based testing infrastructure via `proptest` (MVCC correctness, version chain invariants, crash recovery)
+- `cargo-nextest` as default test runner (3x faster, per-test isolation)
 
 ### Phase 2: Evaluator + Capabilities
 - benten-eval (12 primitives, evaluator, structural validation)
@@ -315,6 +366,74 @@ File storage and DDL are the least natural fits. Modules that depend heavily on 
 - Atrium sync (peer-to-peer)
 - Sync protocol (delta exchange, Merkle comparison)
 - See [Platform Design, Section 4](./PLATFORM-DESIGN.md) for the full networking specification
+
+---
+
+## 14.5. Validated Dependencies (2026-04-14)
+
+All Phase 1 dependencies were validated against the 2026 Rust ecosystem during pre-work Step 2. Five spec changes emerged:
+
+| Concern | Original Choice | Validated Choice | Reason |
+|---------|-----------------|------------------|--------|
+| CBOR serialization | ciborium | **serde_ipld_dagcbor** | ciborium does not sort map keys; serde_ipld_dagcbor is deterministic by default and IPLD-native |
+| Benchmarking | divan | **criterion 0.8** | criterion was revived with a new maintainer; divan is pre-1.0 and stalled |
+| SANDBOX runtime | @sebastianwessel/quickjs | **wasmtime** | Rust-native, fuel metering built in, appropriate for a Rust engine |
+| WASM bindings | wasm-bindgen (separate from napi-rs) | **napi-rs v3** handles both | v3 compiles to WASM target from the same codebase |
+| Test runner | cargo test | **cargo-nextest** (with cargo test fallback) | 3x faster, per-test isolation, widely adopted in 2026 |
+
+Confirmed stack with versions (April 2026):
+
+| Crate | Version | Status |
+|-------|---------|--------|
+| blake3 | 1.8.4 | Actively maintained |
+| serde_ipld_dagcbor | 0.6.1 | Actively maintained, IPLD-native |
+| multihash | 0.19.3 | Stable, use with custom codetable for BLAKE3 only |
+| redb | 4.0.1 | Production-ready, actively maintained |
+| napi | 3.8.4 | Active (v3 launched July 2025) |
+| papaya | 0.2.4 | Active, lock-free, read-optimized |
+| mimalloc | 0.1.48 | Stable |
+| thiserror | 2.0.18 | Active, v2 stable |
+| tracing | 0.1.44 | Active (0.1.x still standard) |
+| proptest | 1.11.0 | Active |
+| criterion | 0.8.2 | Active (revived) |
+| wasmtime | 35+ | Production, fuel metering |
+| cargo-nextest | current | Adopted as default test runner |
+
+Rust toolchain: 1.94.1 (2024 edition stable since 1.85.0, February 2025).
+
+---
+
+## 14.6. Performance Targets and Honest Caveats (revised 2026-04-14)
+
+The performance critic identified that several targets were aspirational and the spec's "Rust will be 10-100x faster" language was misleading for algorithmic costs (not all speedups are language-based).
+
+**Revised targets with honest caveats:**
+
+| Target | Realistic Range | Caveat |
+|--------|----------------|--------|
+| Node lookup by ID | 1-50us | <0.01ms (10us) requires hot cache; cold redb lookup is 5-50us due to DAG-CBOR deserialization + multihash decode + capability check |
+| IVM view read (clean) | 0.04us-1us | Achievable for HashMap/sorted-list strategies; measured in TypeScript prototype |
+| Node creation + IVM update | 100-500us realistic, 0.1ms aspirational | fsync to disk is 0.1-10ms; spec must define durability policy per write class (group commit for bulk, immediate for capability grants) |
+| 10-node handler evaluation | 150-300us for mixed handlers | <100us achievable for pure TRANSFORM pipelines; handlers with 2+ WRITEs + IVM miss the target by 2-3x |
+| Concurrent writers (per community/instance) | 100-1000 writes/sec | redb single-writer serialization is a hard ceiling. Multi-tenant shared-replica scenarios hit this. Benchmark explicitly during spike. |
+| SANDBOX instantiation | 100us-1ms per call | wasmtime module instantiate + fuel meter setup dominates. Requires instance pool in Phase 2 to avoid 5-50x target miss on SANDBOX-heavy handlers. |
+
+**What Rust DOES fix vs what it does NOT:**
+
+- **Rust fixes:** V8 sort overhead (Content Listing Algorithm C), GC pauses, Z-set creation costs, TypeScript iteration loops. Real gains of 10-100x on these patterns.
+- **Rust does NOT fix:** the Capability Check delete pattern showing 2.3s p50 in the prototype. That's an **algorithmic** O(E×G) cost of rebuilding from entities × grants. Rust makes the rebuild ~20-50x faster (50-100ms), still unacceptable. The real fix is the Hybrid A+B algorithm (HashMap for O(1) reads + targeted invalidation for edges + eager rebuild only on rare node deletions), as identified in `research/ivm-benchmark/RESULTS.md`. The algorithm is the fix, not the language.
+
+**WASM target constraints acknowledged:**
+
+- BLAKE3 has no SIMD on WASM until SIMD128 fully lands -- 3-10x slower than native
+- redb does NOT work inside WASM (no filesystem in WASI Preview 2). WASM builds use a network-fetch `KVBackend` backend with 50-500ms uncached read latency
+- **SANDBOX does not nest in WASM builds.** wasmtime cannot embed in a WASM host; the browser/edge WASM runtime IS the SANDBOX. WASM builds expose SANDBOX as the host's WASM facility, not as a nested wasmtime.
+- Target binary size 2-5MB achievable with wasmtime excluded from the WASM build
+
+**Scalability ceilings (document honestly, don't claim unlimited scale):**
+
+- **~1000-peer community** without hierarchical relays. Beyond that, GossipSub message amplification creates 60k+ message deliveries per write at 10k peers. AT Protocol works at scale because of centralized relays; a pure P2P mesh does not.
+- **~1000 writes/sec per community** against a single redb replica. Sharding via community partitioning or multi-replica writers is a Phase 3+ design problem.
 
 ---
 
@@ -336,6 +455,6 @@ These are design decisions that must be resolved before Phase 2 implementation b
 
 7. **Binary size for WASM target:** PGlite is 860MB. Target for benten-engine-wasm? This constrains which dependencies can be included in the WASM build.
 
-8. **GATE semantics:** GATE is described as a "custom logic escape hatch" but its execution model is undefined. What does GATE execute? Options: (a) a restricted expression (same as TRANSFORM but with I/O capabilities), (b) a CALL to another subgraph (overlaps with CALL primitive), (c) a WASM module (overlaps with SANDBOX). Recommended: GATE evaluates a condition expression and routes to success/failure edges. Complex validation uses VALIDATE. Complex computation uses SANDBOX. Capability checking is automatic (via `requires` property on any Node, enforced by the evaluator).
+8. **GATE semantics:** **RESOLVED 2026-04-14.** GATE has been removed from the primitive set. Capability checking uses the `requires` property on any Node (engine-enforced). Complex validation uses TRANSFORM or composition of BRANCH + TRANSFORM + RESPOND. Complex computation uses SANDBOX. No residual need for a GATE primitive.
 
 9. **Multi-node transaction semantics:** The 12 primitives include WRITE for single mutations but no TRANSACTION primitive. Real use cases (credit transfers, governance vote tallying, multi-party fee distribution) require multi-node atomicity. Recommended: a subgraph evaluation IS a transaction -- all WRITEs in a single subgraph evaluation are atomic. If any WRITE fails, all WRITEs in that evaluation are rolled back. This is feasible because subgraphs are bounded DAGs.

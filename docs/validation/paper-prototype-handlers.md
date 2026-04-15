@@ -1,8 +1,22 @@
 # Paper Prototype: 5 Real Handlers with 12 Operation Primitives
 
 **Created:** 2026-04-11
-**Purpose:** Empirical validation that 12 primitives (READ, WRITE, TRANSFORM, BRANCH, ITERATE, WAIT, GATE, CALL, RESPOND, EMIT, SANDBOX, VALIDATE) can express real handlers without degenerating into SANDBOX calls.
+**Purpose:** Empirical validation that 12 primitives can express real handlers without degenerating into SANDBOX calls.
 **Context:** Feasibility critic demanded paper-prototyping before building. Completeness critic identified gaps in multi-node transactions, collaborative editing, and ephemeral state.
+
+> **⚠️ Primitive set revised 2026-04-14 — this document uses the ORIGINAL 12.**
+>
+> The validation below was performed against the original set: READ, WRITE, TRANSFORM, BRANCH, ITERATE, WAIT, **GATE**, CALL, RESPOND, EMIT, SANDBOX, **VALIDATE**.
+>
+> Current authoritative set (see [`../ENGINE-SPEC.md`](../ENGINE-SPEC.md) Section 3): READ, WRITE, TRANSFORM, BRANCH, ITERATE, WAIT, CALL, RESPOND, EMIT, SANDBOX, **SUBSCRIBE**, **STREAM**. GATE and VALIDATE were dropped; SUBSCRIBE and STREAM were added.
+>
+> **What this means for readers of this document:**
+> - The 2.5% SANDBOX-rate finding still holds — neither GATE nor VALIDATE was SANDBOX-adjacent.
+> - Handler examples that use GATE should be read as "capability check" (now expressed via the `requires` property on any Node).
+> - Handler examples that use VALIDATE should be read as composition of BRANCH + TRANSFORM + RESPOND(error).
+> - **Re-validation against the revised 12 is a Phase 1 task.** The revised set is expected to maintain or improve the SANDBOX rate (SUBSCRIBE + STREAM cover patterns previously forced into awkward compositions).
+>
+> The original validation is retained here for historical accuracy. Do not build Phase 1 handlers from this document — use ENGINE-SPEC + DSL-SPECIFICATION for the current primitive set.
 
 ---
 
