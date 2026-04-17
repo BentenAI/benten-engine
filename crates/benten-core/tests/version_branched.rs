@@ -55,7 +55,9 @@ fn concurrent_append_creates_branched_chain() {
             // Good: error names which head the writer thought it saw.
             assert_eq!(seen, v0_cid);
         }
-        other => panic!("expected VersionError::Branched, got {other:?}"),
+        VersionError::UnknownPrior { supplied } => {
+            panic!("expected VersionError::Branched, got UnknownPrior({supplied:?})");
+        }
     }
 }
 
@@ -99,6 +101,10 @@ fn append_against_unknown_prior_head_errors() {
     let err = append_version(&anchor, &phantom_cid, &v1_cid).unwrap_err();
     match err {
         VersionError::UnknownPrior { .. } => {}
-        other => panic!("expected VersionError::UnknownPrior, got {other:?}"),
+        VersionError::Branched { seen, attempted } => {
+            panic!(
+                "expected VersionError::UnknownPrior, got Branched {{ seen: {seen:?}, attempted: {attempted:?} }}"
+            );
+        }
     }
 }
