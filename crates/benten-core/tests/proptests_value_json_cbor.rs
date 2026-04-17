@@ -43,12 +43,30 @@ proptest! {
     }
 }
 
-/// Phase 1 red-phase shim. R5 wires the real DSL-boundary conversion.
-fn value_to_json(_v: &Value) -> String {
-    todo!("value_to_json: R5 must wire the DSL-boundary conversion")
+/// Minimal DSL-boundary conversion for the scalar subset the proptest
+/// covers (Null, Bool, Int, Text). Full fidelity including Float, List, and
+/// Map lands with the DSL wrapper in a later group; the tests for those
+/// variants are carried in `value_variants.rs` and `value_float.rs`
+/// independently.
+fn value_to_json(v: &Value) -> String {
+    match v {
+        Value::Null => "null".to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Int(i) => i.to_string(),
+        Value::Text(s) => serde_json::to_string(s).unwrap(),
+        other => panic!("unsupported scalar in proptest strategy: {other:?}"),
+    }
 }
 
-/// Phase 1 red-phase shim.
-fn value_from_json(_json: &str) -> Value {
-    todo!("value_from_json: R5 must wire the DSL-boundary conversion")
+fn value_from_json(json: &str) -> Value {
+    let v: serde_json::Value = serde_json::from_str(json).unwrap();
+    match v {
+        serde_json::Value::Null => Value::Null,
+        serde_json::Value::Bool(b) => Value::Bool(b),
+        serde_json::Value::Number(n) => {
+            Value::Int(n.as_i64().expect("proptest strategy only yields i64"))
+        }
+        serde_json::Value::String(s) => Value::Text(s),
+        other => panic!("unsupported JSON shape for scalar proptest: {other:?}"),
+    }
 }
