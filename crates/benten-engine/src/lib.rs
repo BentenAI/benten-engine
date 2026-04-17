@@ -162,6 +162,11 @@ impl ErrorCodeStaticStr for ErrorCode {
 /// The Benten engine handle.
 pub struct Engine {
     backend: RedbBackend,
+    /// Configured capability policy. `None` collapses to
+    /// `NoAuthBackend`-equivalent behavior (every commit permitted). G3-A
+    /// only uses this inside [`Engine::transaction`]; G7 wires it into the
+    /// rest of the write path.
+    policy: Option<Box<dyn CapabilityPolicy>>,
 }
 
 impl std::fmt::Debug for Engine {
@@ -174,7 +179,10 @@ impl Engine {
     /// Open or create an engine backed by a redb database at `path`.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, EngineError> {
         let backend = RedbBackend::open(path)?;
-        Ok(Self { backend })
+        Ok(Self {
+            backend,
+            policy: None,
+        })
     }
 
     /// Begin a new builder.
@@ -185,8 +193,15 @@ impl Engine {
 
     /// Hash `node` (CIDv1 over labels + properties only), store it, and return
     /// its CID. Idempotent.
+    ///
+    /// The unprivileged user-API path — system-zone labels (labels starting
+    /// with `"system:"`) are rejected with `E_SYSTEM_ZONE_WRITE`. Engine-
+    /// internal paths (grant/revoke/create_view, G7) bypass the check via
+    /// [`benten_graph::WriteContext::privileged_for_engine_api`].
     pub fn create_node(&self, node: &Node) -> Result<Cid, EngineError> {
-        Ok(self.backend.put_node(node)?)
+        Ok(self
+            .backend
+            .put_node_with_context(node, &benten_graph::WriteContext::default())?)
     }
 
     /// Retrieve a Node by CID. Returns `Ok(None)` on a clean miss.
@@ -381,12 +396,14 @@ impl Engine {
     }
 
     /// Open a MVCC snapshot handle observing the engine state at the call
-    /// instant. Forwards to the graph layer's `RedbBackend::snapshot`.
+    /// instant. Forwards to the graph layer's [`RedbBackend::snapshot`].
     ///
-    /// **Phase 1 G6 stub** — landed at R4 triage (M18) so direct Engine-API
-    /// tests can pin the snapshot contract without going through a subgraph.
+    /// G3-A lands the forwarding layer; the underlying handle supports
+    /// [`SnapshotHandle::get_node`](benten_graph::SnapshotHandle::get_node).
+    /// `scan_label` on the snapshot is a G6 stub that panics until the
+    /// label-index scan plumbing lands.
     pub fn snapshot(&self) -> Result<benten_graph::SnapshotHandle, EngineError> {
-        todo!("Engine::snapshot — G6 (Phase 1)")
+        Ok(self.backend.snapshot()?)
     }
 
     /// Metric snapshot for compromise-5 regression tests.
@@ -456,12 +473,99 @@ impl Engine {
         todo!("Engine::walk_versions — N7 (Phase 1)")
     }
 
-    /// Run a closure inside a write transaction.
-    pub fn transaction<F, R>(&self, _f: F) -> Result<R, EngineError>
+    /// Run a closure inside a write transaction. The closure receives an
+    /// [`EngineTransaction`] that layers policy enforcement on top of the
+    /// lower-level `benten_graph::Transaction`.
+    ///
+    /// Contract (G3-A):
+    /// - All writes inside the closure commit atomically, or none do.
+    /// - `CapabilityPolicy::check_write` fires exactly once per commit
+    ///   (not per write) — see
+    ///   `benten-caps/tests/check_write_called_at_commit.rs`.
+    /// - An empty closure (no writes) skips the capability check
+    ///   entirely.
+    /// - A policy denial surfaces as [`EngineError::Cap`] and no writes
+    ///   persist.
+    /// - A closure `Err` surfaces as `EngineError` wrapping the original
+    ///   cause and no writes persist.
+    /// - A nested `engine.transaction(...)` call returns
+    ///   [`EngineError::NestedTransactionNotSupported`] without
+    ///   deadlocking.
+    pub fn transaction<F, R>(&self, f: F) -> Result<R, EngineError>
     where
-        F: FnOnce(&mut EngineTransaction<'_>) -> Result<R, EngineError>,
+        F: FnOnce(&mut EngineTransaction<'_, '_>) -> Result<R, EngineError>,
     {
-        todo!("Engine::transaction — N6 (Phase 1)")
+        // Collect the closure's user-visible result separately from the
+        // ops list so we can fire the capability hook against a batch the
+        // closure can't see after its scope ends.
+        use std::cell::RefCell;
+        let ops_cell: RefCell<Vec<benten_caps::PendingOp>> = RefCell::new(Vec::new());
+        let user_result: RefCell<Option<Result<R, EngineError>>> = RefCell::new(None);
+
+        let policy = self.policy.as_deref();
+
+        let tx_outcome = self.backend.transaction(|tx| {
+            let mut eng_tx = EngineTransaction {
+                inner: tx,
+                ops_collector: &ops_cell,
+            };
+            match f(&mut eng_tx) {
+                Ok(value) => {
+                    // Policy check fires at the commit boundary — once,
+                    // with the full pending-ops slice.
+                    if let Some(p) = policy {
+                        let ops = ops_cell.borrow().clone();
+                        if !ops.is_empty() {
+                            let primary_label = ops
+                                .iter()
+                                .find_map(|op| match op {
+                                    benten_caps::PendingOp::PutNode { labels, .. } => {
+                                        labels.first().cloned()
+                                    }
+                                    benten_caps::PendingOp::PutEdge { label, .. } => {
+                                        Some(label.clone())
+                                    }
+                                    _ => None,
+                                })
+                                .unwrap_or_default();
+                            let ctx = benten_caps::WriteContext {
+                                label: primary_label,
+                                pending_ops: ops,
+                                ..Default::default()
+                            };
+                            if let Err(cap_err) = p.check_write(&ctx) {
+                                *user_result.borrow_mut() = Some(Err(EngineError::Cap(cap_err)));
+                                return Err(GraphError::TxAborted {
+                                    reason: "capability denied".into(),
+                                });
+                            }
+                        }
+                    }
+                    *user_result.borrow_mut() = Some(Ok(value));
+                    Ok(())
+                }
+                Err(e) => {
+                    *user_result.borrow_mut() = Some(Err(e));
+                    Err(GraphError::TxAborted {
+                        reason: "closure error".into(),
+                    })
+                }
+            }
+        });
+
+        // Prefer the user's saved result (it has the richer EngineError
+        // shape). If the backend call failed outside the policy path (e.g.
+        // nested-tx rejection), surface the backend error.
+        if let Some(r) = user_result.into_inner() {
+            return r;
+        }
+        match tx_outcome {
+            Ok(()) => unreachable!("transaction returned Ok without saved result"),
+            Err(GraphError::NestedTransactionNotSupported {}) => {
+                Err(EngineError::NestedTransactionNotSupported)
+            }
+            Err(e) => Err(EngineError::Graph(e)),
+        }
     }
 
     /// Schedule a capability revocation at iteration `n` (test hook).
@@ -591,10 +695,17 @@ impl EngineBuilder {
             return Err(EngineError::NoCapabilityPolicyConfigured);
         }
         if let Some(backend) = self.backend {
-            return Ok(Engine { backend });
+            return Ok(Engine {
+                backend,
+                policy: self.policy,
+            });
         }
         let path = self.path.ok_or(EngineError::NoCapabilityPolicyConfigured)?;
-        Engine::open(path)
+        let backend = RedbBackend::open(path)?;
+        Ok(Engine {
+            backend,
+            policy: self.policy,
+        })
     }
 
     /// Builder-style open: `Engine::builder().open(path)`.
@@ -602,7 +713,11 @@ impl EngineBuilder {
         if self.production && self.policy.is_none() {
             return Err(EngineError::NoCapabilityPolicyConfigured);
         }
-        Engine::open(path)
+        let backend = RedbBackend::open(path)?;
+        Ok(Engine {
+            backend,
+            policy: self.policy,
+        })
     }
 }
 
@@ -778,20 +893,65 @@ impl HandlerPredecessors {
 }
 
 /// Engine-level transaction handle (passed into `Engine::transaction`).
-#[derive(Debug)]
-pub struct EngineTransaction<'a> {
-    _phantom: std::marker::PhantomData<&'a ()>,
+///
+/// Wraps a lower-level `benten_graph::Transaction` plus a side-channel
+/// collector for `benten_caps::PendingOp`s the engine layer feeds into the
+/// capability hook at commit time.
+///
+/// The two lifetimes are independent: `'tx` is the lifetime of the mutable
+/// borrow into the inner `benten_graph::Transaction`, and `'coll` is the
+/// lifetime of the pending-ops RefCell that lives on the engine's stack
+/// across the closure call.
+pub struct EngineTransaction<'tx, 'coll> {
+    inner: &'tx mut (dyn GraphTxLike + 'tx),
+    /// Every call to `put_node`/`put_edge` also appends a translated
+    /// [`benten_caps::PendingOp`] here so the commit path can hand the
+    /// capability policy a full view of the batch.
+    ops_collector: &'coll std::cell::RefCell<Vec<benten_caps::PendingOp>>,
 }
 
-impl<'a> EngineTransaction<'a> {
-    pub fn create_node(&mut self, _node: &Node) -> Result<Cid, EngineError> {
-        todo!("EngineTransaction::create_node — N6 (Phase 1)")
+/// Object-safe shim over [`benten_graph::Transaction`] that elides the
+/// lifetime parameter so [`EngineTransaction`] can hold a plain `&mut dyn`
+/// reference without inheriting the invariant inner lifetime.
+trait GraphTxLike {
+    fn put_node(&mut self, node: &Node) -> Result<Cid, GraphError>;
+}
+
+impl GraphTxLike for benten_graph::Transaction<'_> {
+    fn put_node(&mut self, node: &Node) -> Result<Cid, GraphError> {
+        benten_graph::Transaction::put_node(self, node)
+    }
+}
+
+impl std::fmt::Debug for EngineTransaction<'_, '_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EngineTransaction").finish_non_exhaustive()
+    }
+}
+
+impl<'tx, 'coll> EngineTransaction<'tx, 'coll> {
+    /// Alias for [`Self::put_node`] — some R3 tests name the method
+    /// `create_node` and some `put_node`. Both have identical semantics.
+    pub fn create_node(&mut self, node: &Node) -> Result<Cid, EngineError> {
+        self.put_node(node)
     }
 
-    pub fn put_node(&mut self, _node: &Node) -> Result<Cid, EngineError> {
-        todo!("EngineTransaction::put_node — N6 (Phase 1)")
+    /// Put a Node inside the transaction. The Node is written to the
+    /// underlying redb transaction immediately AND appended to the pending
+    /// ops list the capability hook sees at commit.
+    pub fn put_node(&mut self, node: &Node) -> Result<Cid, EngineError> {
+        let cid = self.inner.put_node(node).map_err(EngineError::Graph)?;
+        self.ops_collector
+            .borrow_mut()
+            .push(benten_caps::PendingOp::PutNode {
+                cid: cid.clone(),
+                labels: node.labels.clone(),
+            });
+        Ok(cid)
     }
 
+    /// Open a nested transaction. Phase 1 always rejects — the engine
+    /// serializes write transactions rather than nesting them.
     pub fn begin_nested(&mut self) -> Result<NestedTx, EngineError> {
         Err(EngineError::NestedTransactionNotSupported)
     }

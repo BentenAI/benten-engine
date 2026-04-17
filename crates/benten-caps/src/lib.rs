@@ -50,7 +50,7 @@ pub use grant::{
     CAPABILITY_GRANT_LABEL, CapabilityGrant, GRANTED_TO_LABEL, GrantScope, REVOKED_AT_LABEL,
 };
 pub use noauth::NoAuthBackend;
-pub use policy::{CapabilityPolicy, ReadContext, WriteContext};
+pub use policy::{CapabilityPolicy, PendingOp, ReadContext, WriteContext};
 pub use ucan_stub::UcanBackend;
 
 /// Default ITERATE batch size for capability-refresh boundaries.
