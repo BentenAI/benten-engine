@@ -22,16 +22,16 @@
 #![forbid(unsafe_code)]
 #![allow(clippy::todo, reason = "Phase 1 stubs cleared as G2-B/G3/G5/G6 land")]
 
-use std::path::Path;
-
 pub use benten_core::ErrorCode;
 use benten_core::{Cid, CoreError, Edge, Node};
-use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 
 pub mod backend;
+pub mod indexes;
+pub mod redb_backend;
 pub mod store;
 
 pub use backend::{BatchOp, DurabilityMode, KVBackend, ScanResult};
+pub use redb_backend::RedbBackend;
 pub use store::{ChangeEvent, ChangeKind, ChangeSubscriber, EdgeStore, NodeStore};
 
 // ---------------------------------------------------------------------------
@@ -150,326 +150,19 @@ impl From<redb::CommitError> for GraphError {
 }
 
 // ---------------------------------------------------------------------------
-// redb backend
+// RedbBackend
 // ---------------------------------------------------------------------------
-
-/// Single table that stores every opaque (key, value) pair. The graph-level
-/// [`NodeStore`] and [`EdgeStore`] blanket impls layer a key-schema (`n:`,
-/// `e:`, `es:`, `et:`) on top of this table.
-const NODES_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("benten_nodes");
-
-/// Lexicographic successor of `prefix` — the smallest byte string strictly
-/// greater than every string that begins with `prefix`. Used to turn a
-/// prefix scan into a bounded range scan.
-///
-/// Returns `None` when `prefix` is all-`0xff` (no successor exists in the
-/// byte-string ordering), signalling that the caller should do an
-/// unbounded `prefix..` scan instead.
-fn next_prefix(prefix: &[u8]) -> Option<Vec<u8>> {
-    let mut out = prefix.to_vec();
-    while let Some(last) = out.last_mut() {
-        if *last < 0xff {
-            *last += 1;
-            return Some(out);
-        }
-        out.pop();
-    }
-    None
-}
-
-/// A [`KVBackend`] implementation backed by a local redb v4 database file.
-///
-/// redb provides serializable isolation (single writer, multiple readers) and
-/// durable commits via a two-phase commit with checksummed pages. We rely on
-/// those guarantees rather than rolling our own WAL.
-///
-/// # Concurrency
-///
-/// `RedbBackend` is not `Clone`. To share a single backend across threads,
-/// wrap it in an `Arc`: `let backend = Arc::new(RedbBackend::open(path)?)`.
-/// redb's own API is `&self`, so multiple readers and a single writer can
-/// proceed concurrently through the shared `Arc`.
-///
-/// # Path handling
-///
-/// `RedbBackend::open` does not canonicalize or validate the database path.
-/// Callers that receive paths from an untrusted source (capability-delegated
-/// subgraphs, multi-tenant configurations) are responsible for path
-/// sanitization before invoking `open`. A future `benten-engine` wrapper will
-/// constrain paths to a configured data directory.
-pub struct RedbBackend {
-    db: Database,
-}
-
-impl core::fmt::Debug for RedbBackend {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("RedbBackend").finish_non_exhaustive()
-    }
-}
-
-impl RedbBackend {
-    /// Open or create a redb database at `path`. The parent directory must
-    /// already exist (redb does not `mkdir -p`).
-    ///
-    /// # Errors
-    /// Returns [`GraphError::Redb`] if redb cannot open or create the file,
-    /// or if the initial table creation transaction fails.
-    pub fn open(path: impl AsRef<Path>) -> Result<Self, GraphError> {
-        let db = Database::create(path.as_ref())?;
-        // Make sure the nodes table exists so subsequent reads don't fail on
-        // a cold database. Creating an existing table is a no-op.
-        let write_txn = db.begin_write()?;
-        {
-            let _ = write_txn.open_table(NODES_TABLE)?;
-        }
-        write_txn.commit()?;
-        Ok(Self { db })
-    }
-
-    /// Inherent `put_node` — kept so existing call sites that don't `use
-    /// NodeStore` still compile. Delegates to the [`NodeStore`] blanket
-    /// impl so the key schema (`n:CID`) is identical.
-    ///
-    /// # Errors
-    /// Propagates the [`NodeStore`] blanket-impl error shape
-    /// ([`GraphError`]).
-    pub fn put_node(&self, node: &Node) -> Result<Cid, GraphError> {
-        <Self as NodeStore>::put_node(self, node)
-    }
-
-    /// Inherent `get_node` — delegates to [`NodeStore`] blanket impl. See
-    /// [`Self::put_node`] for the rationale.
-    ///
-    /// # Errors
-    /// Propagates the [`NodeStore`] blanket-impl error shape.
-    pub fn get_node(&self, cid: &Cid) -> Result<Option<Node>, GraphError> {
-        <Self as NodeStore>::get_node(self, cid)
-    }
-
-    /// Inherent `delete_node` — delegates to [`NodeStore`] blanket impl.
-    ///
-    /// # Errors
-    /// Propagates the [`NodeStore`] blanket-impl error shape.
-    pub fn delete_node(&self, cid: &Cid) -> Result<(), GraphError> {
-        <Self as NodeStore>::delete_node(self, cid)
-    }
-
-    /// Inherent `put_edge` — delegates to [`EdgeStore`] blanket impl.
-    ///
-    /// # Errors
-    /// Propagates the [`EdgeStore`] blanket-impl error shape.
-    pub fn put_edge(&self, edge: &Edge) -> Result<Cid, GraphError> {
-        <Self as EdgeStore>::put_edge(self, edge)
-    }
-
-    /// Inherent `get_edge` — delegates to [`EdgeStore`] blanket impl.
-    ///
-    /// # Errors
-    /// Propagates the [`EdgeStore`] blanket-impl error shape.
-    pub fn get_edge(&self, cid: &Cid) -> Result<Option<Edge>, GraphError> {
-        <Self as EdgeStore>::get_edge(self, cid)
-    }
-
-    /// Inherent `edges_from` — delegates to [`EdgeStore`] blanket impl.
-    ///
-    /// # Errors
-    /// Propagates the [`EdgeStore`] blanket-impl error shape.
-    pub fn edges_from(&self, cid: &Cid) -> Result<Vec<Edge>, GraphError> {
-        <Self as EdgeStore>::edges_from(self, cid)
-    }
-
-    /// Inherent `edges_to` — delegates to [`EdgeStore`] blanket impl.
-    ///
-    /// # Errors
-    /// Propagates the [`EdgeStore`] blanket-impl error shape.
-    pub fn edges_to(&self, cid: &Cid) -> Result<Vec<Edge>, GraphError> {
-        <Self as EdgeStore>::edges_to(self, cid)
-    }
-
-    /// Store a Node under a caller-supplied [`WriteContext`]. The context
-    /// controls system-zone prefix enforcement (SC1 stopgap for Invariant 11).
-    ///
-    /// **Phase 1 SC1 stub.** R5 G3/G7 wires the actual enforcement; the
-    /// surface is here so tests can pin the contract before the
-    /// implementation lands.
-    ///
-    /// # Errors
-    /// Stub — currently `todo!()`.
-    pub fn put_node_with_context(
-        &self,
-        _node: &Node,
-        _ctx: &WriteContext,
-    ) -> Result<Cid, GraphError> {
-        todo!("RedbBackend::put_node_with_context — SC1 (Phase 1)")
-    }
-}
-
-impl KVBackend for RedbBackend {
-    type Error = GraphError;
-
-    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, GraphError> {
-        let read_txn = self.db.begin_read()?;
-        let table = read_txn.open_table(NODES_TABLE)?;
-        Ok(table.get(key)?.map(|v| v.value().to_vec()))
-    }
-
-    fn put(&self, key: &[u8], value: &[u8]) -> Result<(), GraphError> {
-        let write_txn = self.db.begin_write()?;
-        {
-            let mut table = write_txn.open_table(NODES_TABLE)?;
-            table.insert(key, value)?;
-        }
-        write_txn.commit()?;
-        Ok(())
-    }
-
-    fn delete(&self, key: &[u8]) -> Result<(), GraphError> {
-        let write_txn = self.db.begin_write()?;
-        {
-            let mut table = write_txn.open_table(NODES_TABLE)?;
-            table.remove(key)?;
-        }
-        write_txn.commit()?;
-        Ok(())
-    }
-
-    fn scan(&self, prefix: &[u8]) -> Result<ScanResult, GraphError> {
-        let read_txn = self.db.begin_read()?;
-        let table = read_txn.open_table(NODES_TABLE)?;
-        let mut out: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
-
-        // For a non-empty prefix we use redb's ordered range to bound the scan
-        // to keys in [prefix, next_prefix). This turns an O(n) full-table walk
-        // into O(matches + log n). `next_prefix` is the lexicographic successor
-        // of `prefix` obtained by incrementing the last non-0xff byte and
-        // dropping the tail; if `prefix` is all 0xff (no successor exists),
-        // the upper bound is open-ended and the scan continues to the end.
-        if prefix.is_empty() {
-            for item in table.iter()? {
-                let (k, v) = item?;
-                out.push((k.value().to_vec(), v.value().to_vec()));
-            }
-        } else {
-            let next = next_prefix(prefix);
-            let iter = match next.as_deref() {
-                Some(upper) => table.range::<&[u8]>(prefix..upper)?,
-                None => table.range::<&[u8]>(prefix..)?,
-            };
-            for item in iter {
-                let (k, v) = item?;
-                out.push((k.value().to_vec(), v.value().to_vec()));
-            }
-        }
-
-        Ok(ScanResult::from_vec(out))
-    }
-
-    fn put_batch(&self, pairs: &[(Vec<u8>, Vec<u8>)]) -> Result<(), GraphError> {
-        let write_txn = self.db.begin_write()?;
-        {
-            let mut table = write_txn.open_table(NODES_TABLE)?;
-            for (k, v) in pairs {
-                table.insert(k.as_slice(), v.as_slice())?;
-            }
-        }
-        write_txn.commit()?;
-        Ok(())
-    }
-}
+//
+// The concrete `RedbBackend` struct, its `KVBackend` impl, the three
+// construction entry points (`open` / `open_existing` / `open_or_create`),
+// and the label + property-value index plumbing all live in
+// [`redb_backend`]. `pub use redb_backend::RedbBackend` re-exports it at
+// crate root so existing call sites (and the integration tests) don't need
+// to know about the module split.
 
 // ---------------------------------------------------------------------------
-// Phase 1 stubs — expanded in G2-B / G3 / G5 / G6
+// Phase 1 stubs — expanded in G3 / G6
 // ---------------------------------------------------------------------------
-
-impl RedbBackend {
-    /// Open a redb database that must already exist at `path`. Distinct from
-    /// [`RedbBackend::open`] which creates on miss.
-    ///
-    /// **Phase 1 G2-B stub.**
-    ///
-    /// # Errors
-    /// Stub — currently `todo!()`.
-    pub fn open_existing(_path: impl AsRef<Path>) -> Result<Self, GraphError> {
-        todo!("RedbBackend::open_existing — G2-B (Phase 1)")
-    }
-
-    /// Open-or-create semantics (equivalent to [`RedbBackend::open`] today,
-    /// kept as an explicit name for the G2-B split).
-    ///
-    /// # Errors
-    /// Propagates [`RedbBackend::open`] errors.
-    pub fn open_or_create(path: impl AsRef<Path>) -> Result<Self, GraphError> {
-        RedbBackend::open(path)
-    }
-
-    /// Transaction primitive — a closure over a write transaction handle.
-    /// Atomic: all writes inside the closure commit together, or none do.
-    ///
-    /// **Phase 1 G3-A stub.**
-    ///
-    /// # Errors
-    /// Stub — currently `todo!()`.
-    pub fn transaction<F, R>(&self, _f: F) -> Result<R, GraphError>
-    where
-        F: FnOnce(&mut Transaction<'_>) -> Result<R, GraphError>,
-    {
-        todo!("RedbBackend::transaction — G3-A (Phase 1)")
-    }
-
-    /// Transaction variant used by the commit-denial edge-case test. The
-    /// closure runs to completion; a deny-on-commit hook fires before the
-    /// redb commit actually persists. **Phase 1 G3-A stub.**
-    ///
-    /// # Errors
-    /// Stub — currently `todo!()`.
-    pub fn transaction_with_deny_on_commit<F, R>(&self, _f: F) -> Result<R, GraphError>
-    where
-        F: FnOnce(&mut Transaction<'_>) -> Result<R, GraphError>,
-    {
-        todo!("RedbBackend::transaction_with_deny_on_commit — G3-A (Phase 1)")
-    }
-
-    /// Subscribe to the post-commit change stream.
-    ///
-    /// **Phase 1 G3-A stub.**
-    pub fn subscribe(&self) -> ChangeReceiver {
-        todo!("RedbBackend::subscribe — G3-A (Phase 1)")
-    }
-
-    /// Open a MVCC snapshot handle. The returned handle observes the
-    /// database state at open-time; writes committed to the backend after
-    /// the snapshot opens are NOT visible through it until it is dropped
-    /// and a fresh snapshot is acquired.
-    ///
-    /// **Phase 1 G6 stub.**
-    ///
-    /// # Errors
-    /// Stub — currently `todo!()`.
-    pub fn snapshot(&self) -> Result<SnapshotHandle, GraphError> {
-        todo!("RedbBackend::snapshot — G6 (Phase 1)")
-    }
-
-    /// Label-index lookup. **G5 stub.**
-    ///
-    /// # Errors
-    /// Stub — currently `todo!()`.
-    pub fn get_by_label(&self, _label: &str) -> Result<Vec<Cid>, GraphError> {
-        todo!("RedbBackend::get_by_label — G5 (Phase 1)")
-    }
-
-    /// Property-value index lookup. **G5 stub.**
-    ///
-    /// # Errors
-    /// Stub — currently `todo!()`.
-    pub fn get_by_property(
-        &self,
-        _label: &str,
-        _prop: &str,
-        _value: &benten_core::Value,
-    ) -> Result<Vec<Cid>, GraphError> {
-        todo!("RedbBackend::get_by_property — G5 (Phase 1)")
-    }
-}
 
 /// A write transaction handle, passed into the `transaction` closure. All
 /// writes are atomic at commit.
@@ -766,16 +459,6 @@ mod tests {
         assert!(backend.scan(&[]).unwrap().is_empty());
     }
 
-    #[test]
-    fn next_prefix_increments_and_trims() {
-        assert_eq!(next_prefix(b"a"), Some(b"b".to_vec()));
-        assert_eq!(next_prefix(b"az"), Some(b"a{".to_vec())); // b'z' + 1 = b'{'
-        assert_eq!(next_prefix(&[0xff]), None, "all-0xff has no successor");
-        assert_eq!(
-            next_prefix(&[0x01, 0xff, 0xff]),
-            Some(vec![0x02]),
-            "trailing 0xff bytes are dropped and the last non-0xff increments"
-        );
-        assert_eq!(next_prefix(&[]), None, "empty prefix has no successor");
-    }
+    // `next_prefix_increments_and_trims` — moved to `redb_backend.rs` in G2-B
+    // alongside the helper it exercises.
 }
