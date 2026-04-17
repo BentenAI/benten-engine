@@ -8,13 +8,19 @@
 //! and the evaluator should not notice the difference. Defining `KVBackend`
 //! in Phase 1 preserves that option.
 //!
-//! This spike implements the minimum surface: `get`, `put`, `delete`, a
-//! prefix `scan`, and an atomic `put_batch`. A real engine will grow the
-//! trait (range scans, transaction handles, change notification streams) as
-//! Phase 1 proper proceeds.
+//! ## Module layout
+//!
+//! - [`backend`] — the [`KVBackend`] trait, [`ScanResult`], [`BatchOp`],
+//!   [`DurabilityMode`].
+//! - [`store`] — [`NodeStore`] / [`EdgeStore`] blanket impls over any
+//!   `KVBackend`, plus the [`ChangeSubscriber`] trait and [`ChangeEvent`]
+//!   schema.
+//! - this module — the concrete [`RedbBackend`], [`GraphError`], and the
+//!   Phase-1 stubs (`Transaction`, `WriteContext`, `SnapshotHandle`,
+//!   `ChangeReceiver`) owned by G2-B / G3 / G5 / G6.
 
 #![forbid(unsafe_code)]
-#![allow(clippy::todo, reason = "R3 red-phase stubs; R5 removes todos")]
+#![allow(clippy::todo, reason = "Phase 1 stubs cleared as G2-B/G3/G5/G6 land")]
 
 use std::path::Path;
 
@@ -22,44 +28,43 @@ pub use benten_core::ErrorCode;
 use benten_core::{Cid, CoreError, Edge, Node};
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 
+pub mod backend;
+pub mod store;
+
+pub use backend::{BatchOp, DurabilityMode, KVBackend, ScanResult};
+pub use store::{ChangeEvent, ChangeKind, ChangeSubscriber, EdgeStore, NodeStore};
+
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
 
 /// Errors from the storage layer.
 ///
-/// Phase 1 follow-up — `GraphError` currently names `Redb` directly and erases
-/// the underlying `redb::Error` chain via `to_string()`. Both decisions are
-/// spike-stage compromises flagged by the `code-reviewer` critic:
+/// R1 triage `P1.graph.error-polymorphism` (G2-A) moved backend errors behind
+/// an associated [`KVBackend::Error`] type. `GraphError` remains the concrete
+/// error for `RedbBackend` and the type into which `CoreError` (serialization,
+/// CID parsing) flows; other backends are free to pick their own.
 ///
-/// - The `Redb` variant forces any non-redb `KVBackend` impl (in-memory mock,
-///   iroh-fetch, WASM peer-fetch) to stringify its errors into a variant that
-///   lies about where they came from. Phase 1 proper will rename to
-///   `Backend(String)` or, better, make `KVBackend` carry an associated
-///   `type Error` so each backend picks its own error type.
-/// - Stringifying `redb::*` errors loses `std::error::Error::source`, so
-///   callers cannot distinguish I/O failure from corruption from capacity.
-///   Phase 1 proper will preserve the chain via `#[from]` + `#[source]` or a
-///   boxed source field.
-///
-/// Tracked in SPIKE-phase-1-stack-RESULTS.md Next Actions; see
-/// `.addl/spike/code-reviewer-benten-graph.json` findings for the full
-/// rationale.
+/// Phase 1 follow-up tracked in G2-B: the `Redb(String)` variant still
+/// stringifies `redb::*` errors and loses `std::error::Error::source`.
+/// G2-B refines this to preserve the chain via `#[from] + #[source]`.
 #[derive(Debug, thiserror::Error)]
 pub enum GraphError {
-    /// Propagated from `benten-core` (CID construction, canonical serialization).
+    /// Propagated from `benten-core` (CID construction, canonical
+    /// serialization, DAG-CBOR decode via `CoreError::Serialize`).
     #[error("core: {0}")]
     Core(#[from] CoreError),
 
-    /// redb I/O or transactional failure. Wrapped into a string because
-    /// `redb`'s error enum is not `Clone` and its variants are internal
-    /// details the caller does not need to switch on in the spike. See the
-    /// type-level doc above for the Phase 1 refactor plan.
+    /// redb I/O or transactional failure. G2-B will preserve the source
+    /// chain; spike-era String coercion documented above.
     #[error("redb: {0}")]
     Redb(String),
 
     /// DAG-CBOR decode of a stored Node failed. Indicates on-disk corruption
-    /// or a format drift.
+    /// or a format drift. The [`NodeStore`] / [`EdgeStore`] blanket impls
+    /// route decode errors through [`CoreError::Serialize`] → `Core` instead;
+    /// this variant is retained for any direct-decode call path (notably the
+    /// retained inherent `RedbBackend::get_node` helper).
     #[error("decode: {0}")]
     Decode(String),
 
@@ -68,27 +73,34 @@ pub enum GraphError {
     #[error("backend not found at path")]
     BackendNotFound {
         /// Path supplied to the failed `open_existing` call (Phase 1 stub
-        /// — the PathBuf plumbing lands in R5; today this is a placeholder).
+        /// — the PathBuf plumbing lands in G2-B; today this is a
+        /// placeholder).
         path: std::path::PathBuf,
     },
 
     /// A write was attempted on a system-zone label (label starting with
     /// `"system:"`) without the privileged flag set. Phase 1 SC1 stopgap.
     #[error("system-zone write not permitted from user path: {label}")]
-    SystemZoneWrite { label: String },
+    SystemZoneWrite {
+        /// The `system:` label the user-zone path tried to write.
+        label: String,
+    },
 
     /// A nested transaction was rejected. Phase 1 G3 stub.
     #[error("nested transactions are not supported")]
     NestedTransactionNotSupported {},
 
-    /// The transaction's closure returned `Err`, so the write batch was rolled back.
+    /// The transaction's closure returned `Err`, so the write batch was
+    /// rolled back.
     #[error("transaction aborted: {reason}")]
-    TxAborted { reason: String },
+    TxAborted {
+        /// Human-readable reason the closure returned `Err`.
+        reason: String,
+    },
 }
 
 impl GraphError {
-    /// Map a `GraphError` to its stable ERROR-CATALOG code. **Phase 1 stub —
-    /// R5 refines the mapping for `Core` / `Decode` / `Redb`.**
+    /// Map a `GraphError` to its stable ERROR-CATALOG code.
     #[must_use]
     pub fn code(&self) -> ErrorCode {
         match self {
@@ -138,69 +150,12 @@ impl From<redb::CommitError> for GraphError {
 }
 
 // ---------------------------------------------------------------------------
-// KVBackend trait
-// ---------------------------------------------------------------------------
-
-/// Alias for the vector of `(key, value)` pairs returned by a prefix scan.
-///
-/// Phase 1 follow-up — returning the full result as a `Vec` is a spike-stage
-/// footgun: it forecloses pagination, streaming, and early termination, and
-/// forces any future network-fetch backend to download the full result before
-/// yielding anything. Phase 1 proper will reshape `scan` to return an iterator
-/// (likely `Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>), GraphError>>>`
-/// or a custom `Scan` type). Tracked in SPIKE-phase-1-stack-RESULTS.md Next
-/// Actions and `.addl/spike/code-reviewer-benten-graph.json`.
-pub type ScanResult = Vec<(Vec<u8>, Vec<u8>)>;
-
-/// Minimal key/value backend trait for the Benten graph.
-///
-/// Values are opaque byte blobs from the trait's perspective; the graph layer
-/// above is responsible for (de)serializing Nodes. Keys are also opaque bytes
-/// so the graph layer can choose its own key schema (the spike uses CIDs
-/// directly as keys).
-///
-/// `put_batch` must be atomic: either all pairs are committed or none are.
-/// This is the primitive the transaction primitive (`begin`/`commit`/`rollback`)
-/// will be built on in `benten-eval`.
-///
-/// # Spike-stage shape
-///
-/// This trait is deliberately minimal to prove out the abstraction. Two
-/// Phase 1 follow-ups already documented above:
-///
-/// - Error typing (see [`GraphError`] doc): likely move to an associated
-///   `type Error` so backends don't lie through a redb-named variant.
-/// - Scan shape (see [`ScanResult`] doc): return an iterator, not a `Vec`.
-pub trait KVBackend {
-    /// Backend-specific error type. `RedbBackend` sets this to [`GraphError`];
-    /// alternative backends (in-memory mock, WASM peer-fetch, iroh-fetch) each
-    /// choose their own so they aren't forced to lie through a redb-named
-    /// variant. See the `backend_error_polymorphism` edge-case test for the
-    /// property this enables.
-    type Error;
-
-    /// Fetch the value stored under `key`. Returns `Ok(None)` on a clean miss.
-    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
-
-    /// Insert or overwrite the value at `key`.
-    fn put(&self, key: &[u8], value: &[u8]) -> Result<(), Self::Error>;
-
-    /// Delete the value at `key`. Idempotent: returns `Ok(())` even if the key
-    /// was absent.
-    fn delete(&self, key: &[u8]) -> Result<(), Self::Error>;
-
-    /// Return every (key, value) pair whose key starts with `prefix`.
-    fn scan(&self, prefix: &[u8]) -> Result<ScanResult, Self::Error>;
-
-    /// Commit multiple puts atomically. Either every pair lands or none do.
-    fn put_batch(&self, pairs: &[(Vec<u8>, Vec<u8>)]) -> Result<(), Self::Error>;
-}
-
-// ---------------------------------------------------------------------------
 // redb backend
 // ---------------------------------------------------------------------------
 
-/// Single table that stores every Node keyed by its CID bytes.
+/// Single table that stores every opaque (key, value) pair. The graph-level
+/// [`NodeStore`] and [`EdgeStore`] blanket impls layer a key-schema (`n:`,
+/// `e:`, `es:`, `et:`) on top of this table.
 const NODES_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("benten_nodes");
 
 /// Lexicographic successor of `prefix` — the smallest byte string strictly
@@ -271,48 +226,81 @@ impl RedbBackend {
         Ok(Self { db })
     }
 
-    // ------------------------------------------------------------------
-    // Node-level convenience API (built on top of the KV trait). This is
-    // what `benten-engine` calls through.
-    // ------------------------------------------------------------------
-
-    /// Store a Node under its CID. Returns the CID for caller convenience.
+    /// Inherent `put_node` — kept so existing call sites that don't `use
+    /// NodeStore` still compile. Delegates to the [`NodeStore`] blanket
+    /// impl so the key schema (`n:CID`) is identical.
     ///
     /// # Errors
-    /// Returns [`GraphError::Core`] if the Node cannot be DAG-CBOR encoded,
-    /// or [`GraphError::Redb`] on storage errors.
+    /// Propagates the [`NodeStore`] blanket-impl error shape
+    /// ([`GraphError`]).
     pub fn put_node(&self, node: &Node) -> Result<Cid, GraphError> {
-        let cid = node.cid()?;
-        let bytes = node.canonical_bytes()?;
-        self.put(cid.as_bytes(), &bytes)?;
-        Ok(cid)
+        <Self as NodeStore>::put_node(self, node)
     }
 
-    /// Store a Node under a caller-supplied `WriteContext`. The context
+    /// Inherent `get_node` — delegates to [`NodeStore`] blanket impl. See
+    /// [`Self::put_node`] for the rationale.
+    ///
+    /// # Errors
+    /// Propagates the [`NodeStore`] blanket-impl error shape.
+    pub fn get_node(&self, cid: &Cid) -> Result<Option<Node>, GraphError> {
+        <Self as NodeStore>::get_node(self, cid)
+    }
+
+    /// Inherent `delete_node` — delegates to [`NodeStore`] blanket impl.
+    ///
+    /// # Errors
+    /// Propagates the [`NodeStore`] blanket-impl error shape.
+    pub fn delete_node(&self, cid: &Cid) -> Result<(), GraphError> {
+        <Self as NodeStore>::delete_node(self, cid)
+    }
+
+    /// Inherent `put_edge` — delegates to [`EdgeStore`] blanket impl.
+    ///
+    /// # Errors
+    /// Propagates the [`EdgeStore`] blanket-impl error shape.
+    pub fn put_edge(&self, edge: &Edge) -> Result<Cid, GraphError> {
+        <Self as EdgeStore>::put_edge(self, edge)
+    }
+
+    /// Inherent `get_edge` — delegates to [`EdgeStore`] blanket impl.
+    ///
+    /// # Errors
+    /// Propagates the [`EdgeStore`] blanket-impl error shape.
+    pub fn get_edge(&self, cid: &Cid) -> Result<Option<Edge>, GraphError> {
+        <Self as EdgeStore>::get_edge(self, cid)
+    }
+
+    /// Inherent `edges_from` — delegates to [`EdgeStore`] blanket impl.
+    ///
+    /// # Errors
+    /// Propagates the [`EdgeStore`] blanket-impl error shape.
+    pub fn edges_from(&self, cid: &Cid) -> Result<Vec<Edge>, GraphError> {
+        <Self as EdgeStore>::edges_from(self, cid)
+    }
+
+    /// Inherent `edges_to` — delegates to [`EdgeStore`] blanket impl.
+    ///
+    /// # Errors
+    /// Propagates the [`EdgeStore`] blanket-impl error shape.
+    pub fn edges_to(&self, cid: &Cid) -> Result<Vec<Edge>, GraphError> {
+        <Self as EdgeStore>::edges_to(self, cid)
+    }
+
+    /// Store a Node under a caller-supplied [`WriteContext`]. The context
     /// controls system-zone prefix enforcement (SC1 stopgap for Invariant 11).
     ///
-    /// **Phase 1 SC1 stub.** R5 wires the actual enforcement; the surface is
-    /// here so tests can pin the contract before the implementation lands.
+    /// **Phase 1 SC1 stub.** R5 G3/G7 wires the actual enforcement; the
+    /// surface is here so tests can pin the contract before the
+    /// implementation lands.
+    ///
+    /// # Errors
+    /// Stub — currently `todo!()`.
     pub fn put_node_with_context(
         &self,
         _node: &Node,
         _ctx: &WriteContext,
     ) -> Result<Cid, GraphError> {
         todo!("RedbBackend::put_node_with_context — SC1 (Phase 1)")
-    }
-
-    /// Retrieve a Node by CID. Returns `Ok(None)` on a clean miss.
-    ///
-    /// # Errors
-    /// Returns [`GraphError::Redb`] on storage errors or
-    /// [`GraphError::Decode`] if the stored bytes cannot be parsed as a Node.
-    pub fn get_node(&self, cid: &Cid) -> Result<Option<Node>, GraphError> {
-        let Some(bytes) = self.get(cid.as_bytes())? else {
-            return Ok(None);
-        };
-        let node: Node = serde_ipld_dagcbor::from_slice(&bytes)
-            .map_err(|e| GraphError::Decode(e.to_string()))?;
-        Ok(Some(node))
     }
 }
 
@@ -348,7 +336,7 @@ impl KVBackend for RedbBackend {
     fn scan(&self, prefix: &[u8]) -> Result<ScanResult, GraphError> {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(NODES_TABLE)?;
-        let mut out = Vec::new();
+        let mut out: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
 
         // For a non-empty prefix we use redb's ordered range to bound the scan
         // to keys in [prefix, next_prefix). This turns an O(n) full-table walk
@@ -373,7 +361,7 @@ impl KVBackend for RedbBackend {
             }
         }
 
-        Ok(out)
+        Ok(ScanResult::from_vec(out))
     }
 
     fn put_batch(&self, pairs: &[(Vec<u8>, Vec<u8>)]) -> Result<(), GraphError> {
@@ -390,7 +378,7 @@ impl KVBackend for RedbBackend {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 1 stubs — expanded in G2/G3/G5
+// Phase 1 stubs — expanded in G2-B / G3 / G5 / G6
 // ---------------------------------------------------------------------------
 
 impl RedbBackend {
@@ -398,12 +386,18 @@ impl RedbBackend {
     /// [`RedbBackend::open`] which creates on miss.
     ///
     /// **Phase 1 G2-B stub.**
+    ///
+    /// # Errors
+    /// Stub — currently `todo!()`.
     pub fn open_existing(_path: impl AsRef<Path>) -> Result<Self, GraphError> {
         todo!("RedbBackend::open_existing — G2-B (Phase 1)")
     }
 
     /// Open-or-create semantics (equivalent to [`RedbBackend::open`] today,
     /// kept as an explicit name for the G2-B split).
+    ///
+    /// # Errors
+    /// Propagates [`RedbBackend::open`] errors.
     pub fn open_or_create(path: impl AsRef<Path>) -> Result<Self, GraphError> {
         RedbBackend::open(path)
     }
@@ -412,6 +406,9 @@ impl RedbBackend {
     /// Atomic: all writes inside the closure commit together, or none do.
     ///
     /// **Phase 1 G3-A stub.**
+    ///
+    /// # Errors
+    /// Stub — currently `todo!()`.
     pub fn transaction<F, R>(&self, _f: F) -> Result<R, GraphError>
     where
         F: FnOnce(&mut Transaction<'_>) -> Result<R, GraphError>,
@@ -422,6 +419,9 @@ impl RedbBackend {
     /// Transaction variant used by the commit-denial edge-case test. The
     /// closure runs to completion; a deny-on-commit hook fires before the
     /// redb commit actually persists. **Phase 1 G3-A stub.**
+    ///
+    /// # Errors
+    /// Stub — currently `todo!()`.
     pub fn transaction_with_deny_on_commit<F, R>(&self, _f: F) -> Result<R, GraphError>
     where
         F: FnOnce(&mut Transaction<'_>) -> Result<R, GraphError>,
@@ -436,23 +436,31 @@ impl RedbBackend {
         todo!("RedbBackend::subscribe — G3-A (Phase 1)")
     }
 
-    /// Open a MVCC snapshot handle. The returned handle observes the database
-    /// state at open-time; writes committed to the backend after the snapshot
-    /// opens are NOT visible through it until it is dropped and a fresh
-    /// snapshot is acquired.
+    /// Open a MVCC snapshot handle. The returned handle observes the
+    /// database state at open-time; writes committed to the backend after
+    /// the snapshot opens are NOT visible through it until it is dropped
+    /// and a fresh snapshot is acquired.
     ///
-    /// **Phase 1 G6 stub** — landed at R4 triage (M6) so the MVCC test pins
-    /// the point-in-time isolation contract before R5 wires the body.
+    /// **Phase 1 G6 stub.**
+    ///
+    /// # Errors
+    /// Stub — currently `todo!()`.
     pub fn snapshot(&self) -> Result<SnapshotHandle, GraphError> {
         todo!("RedbBackend::snapshot — G6 (Phase 1)")
     }
 
-    /// Enqueue a Node put into a label-index update. **G5 stub.**
+    /// Label-index lookup. **G5 stub.**
+    ///
+    /// # Errors
+    /// Stub — currently `todo!()`.
     pub fn get_by_label(&self, _label: &str) -> Result<Vec<Cid>, GraphError> {
         todo!("RedbBackend::get_by_label — G5 (Phase 1)")
     }
 
     /// Property-value index lookup. **G5 stub.**
+    ///
+    /// # Errors
+    /// Stub — currently `todo!()`.
     pub fn get_by_property(
         &self,
         _label: &str,
@@ -461,39 +469,6 @@ impl RedbBackend {
     ) -> Result<Vec<Cid>, GraphError> {
         todo!("RedbBackend::get_by_property — G5 (Phase 1)")
     }
-
-    /// Put an Edge (separate from put_node). **G4 stub.**
-    pub fn put_edge(&self, _edge: &Edge) -> Result<Cid, GraphError> {
-        todo!("RedbBackend::put_edge — G4 (Phase 1)")
-    }
-
-    /// Get an Edge by CID. **G4 stub.**
-    pub fn get_edge(&self, _cid: &Cid) -> Result<Option<Edge>, GraphError> {
-        todo!("RedbBackend::get_edge — G4 (Phase 1)")
-    }
-
-    /// All edges whose `source == cid`. **G4 stub.**
-    pub fn edges_from(&self, _cid: &Cid) -> Result<Vec<Edge>, GraphError> {
-        todo!("RedbBackend::edges_from — G4 (Phase 1)")
-    }
-
-    /// All edges whose `target == cid`. **G4 stub.**
-    pub fn edges_to(&self, _cid: &Cid) -> Result<Vec<Edge>, GraphError> {
-        todo!("RedbBackend::edges_to — G4 (Phase 1)")
-    }
-}
-
-/// Durability knob for writes.
-///
-/// **Phase 1 G2-B stub** — semantics finalized in Phase 1 proper.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DurabilityMode {
-    /// fsync before commit returns. Safest, slowest.
-    Immediate,
-    /// Batch commits, single fsync per batch window.
-    Group,
-    /// Commit returns before fsync.
-    Async,
 }
 
 /// A write transaction handle, passed into the `transaction` closure. All
@@ -504,19 +479,28 @@ pub struct Transaction<'a> {
     _phantom: core::marker::PhantomData<&'a ()>,
 }
 
-impl<'a> Transaction<'a> {
+impl Transaction<'_> {
     /// Put a Node inside the transaction.
+    ///
+    /// # Errors
+    /// Stub — currently `todo!()`.
     pub fn put_node(&mut self, _node: &Node) -> Result<Cid, GraphError> {
         todo!("Transaction::put_node — G3-A (Phase 1)")
     }
 
     /// Put an Edge inside the transaction.
+    ///
+    /// # Errors
+    /// Stub — currently `todo!()`.
     pub fn put_edge(&mut self, _edge: &Edge) -> Result<Cid, GraphError> {
         todo!("Transaction::put_edge — G3-A (Phase 1)")
     }
 
     /// Open a nested transaction. Phase 1 always rejects with
     /// [`GraphError::NestedTransactionNotSupported`].
+    ///
+    /// # Errors
+    /// Stub — currently `todo!()`.
     pub fn transaction<F, R>(&mut self, _f: F) -> Result<R, GraphError>
     where
         F: FnOnce(&mut Transaction<'_>) -> Result<R, GraphError>,
@@ -525,72 +509,35 @@ impl<'a> Transaction<'a> {
     }
 }
 
-/// Category of change emitted on the change stream.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ChangeKind {
-    Created,
-    Updated,
-    Deleted,
-}
-
-/// A post-commit change event. Emitted for every write once the redb commit
-/// completes. Consumed by IVM subscribers.
+/// A MVCC snapshot handle returned by [`RedbBackend::snapshot`]. Reads
+/// through this handle observe the database state at the instant the
+/// snapshot was opened; concurrent writes to the backend are invisible until
+/// the handle is dropped. **Phase 1 G6 stub.**
 ///
-/// **Phase 1 G3-A stub.**
-#[derive(Debug, Clone)]
-pub struct ChangeEvent {
-    pub cid: Cid,
-    pub label: String,
-    pub kind: ChangeKind,
-    pub tx_id: u64,
-    pub actor_cid: Option<Cid>,
-    pub handler_cid: Option<Cid>,
-    pub capability_grant_cid: Option<Cid>,
-}
-
-impl ChangeEvent {
-    /// Stable string form of the event kind, used by integration tests.
-    #[must_use]
-    pub fn kind_str(&self) -> &'static str {
-        match self.kind {
-            ChangeKind::Created => "Created",
-            ChangeKind::Updated => "Updated",
-            ChangeKind::Deleted => "Deleted",
-        }
-    }
-}
-
-/// Abstract subscriber shape for change events. Decouples `benten-graph` from
-/// any specific async runtime (R1 architect major #1: no tokio in graph).
-///
-/// **Phase 1 G3-A stub.**
-pub trait ChangeSubscriber: Send + Sync {
-    fn on_change(&self, event: &ChangeEvent);
-}
-
-/// A MVCC snapshot handle returned by [`RedbBackend::snapshot`]. Reads through
-/// this handle observe the database state at the instant the snapshot was
-/// opened; concurrent writes to the backend are invisible until the handle
-/// is dropped. **Phase 1 G6 stub.**
-///
-/// Implements `Drop` so explicit `drop(handle)` in tests is the idiomatic way
-/// to release the snapshot's read-transaction lifetime.
+/// Implements `Drop` so explicit `drop(handle)` in tests is the idiomatic
+/// way to release the snapshot's read-transaction lifetime.
 pub struct SnapshotHandle;
 
 impl Drop for SnapshotHandle {
     fn drop(&mut self) {
-        // R5 wires the underlying redb ReadTransaction release here.
+        // G6 wires the underlying redb ReadTransaction release here.
     }
 }
 
 impl SnapshotHandle {
     /// Retrieve a Node by CID from the snapshot view. **Phase 1 G6 stub.**
+    ///
+    /// # Errors
+    /// Stub — currently `todo!()`.
     pub fn get_node(&self, _cid: &Cid) -> Result<Option<Node>, GraphError> {
         todo!("SnapshotHandle::get_node — G6 (Phase 1)")
     }
 
-    /// Scan all nodes with a given label from the snapshot view. **Phase 1
-    /// G6 stub.**
+    /// Scan all nodes with a given label from the snapshot view.
+    /// **Phase 1 G6 stub.**
+    ///
+    /// # Errors
+    /// Stub — currently `todo!()`.
     pub fn scan_label(&self, _label: &str) -> Result<Vec<Cid>, GraphError> {
         todo!("SnapshotHandle::scan_label — G6 (Phase 1)")
     }
@@ -601,6 +548,9 @@ pub struct ChangeReceiver;
 
 impl ChangeReceiver {
     /// Receive the next change event (blocking).
+    ///
+    /// # Errors
+    /// Stub — currently `todo!()`.
     pub fn recv(&self) -> Result<ChangeEvent, GraphError> {
         todo!("ChangeReceiver::recv — G3-A (Phase 1)")
     }
@@ -614,7 +564,10 @@ impl ChangeReceiver {
 /// **Phase 1 G3-A / SC1 stub.**
 #[derive(Debug, Clone)]
 pub struct WriteContext {
+    /// The Node's primary label — used for the system-zone prefix check.
     pub label: String,
+    /// Marks an engine-API-only path. User code cannot reach this without
+    /// going through one of the engine's privileged methods.
     pub is_privileged: bool,
 }
 
@@ -628,6 +581,8 @@ impl Default for WriteContext {
 }
 
 impl WriteContext {
+    /// Construct a non-privileged write context for a given label. This is
+    /// the constructor user-authored code paths use.
     #[must_use]
     pub fn new(label: impl Into<String>) -> Self {
         Self {
@@ -636,10 +591,11 @@ impl WriteContext {
         }
     }
 
-    /// Construct a WriteContext flagged as privileged (engine-API-only path).
-    /// This is the only constructor that bypasses the SC1 system-zone ban.
-    /// User code cannot call this without going through `Engine::grant_capability`,
-    /// `Engine::create_view`, or `Engine::revoke_capability`.
+    /// Construct a WriteContext flagged as privileged (engine-API-only
+    /// path). This is the only constructor that bypasses the SC1
+    /// system-zone ban. User code cannot call this without going through
+    /// `Engine::grant_capability`, `Engine::create_view`, or
+    /// `Engine::revoke_capability`.
     #[must_use]
     pub fn privileged_for_engine_api() -> Self {
         Self {
@@ -648,27 +604,15 @@ impl WriteContext {
         }
     }
 
-    /// Called by the transaction primitive to enforce the SC1 stopgap. Rejects
-    /// writes to any label starting with `"system:"` unless
+    /// Called by the transaction primitive to enforce the SC1 stopgap.
+    /// Rejects writes to any label starting with `"system:"` unless
     /// `is_privileged == true`.
+    ///
+    /// # Errors
+    /// Stub — currently `todo!()`.
     pub fn enforce_system_zone(&self) -> Result<(), GraphError> {
         todo!("WriteContext::enforce_system_zone — SC1 (Phase 1)")
     }
-}
-
-/// Blanket Node store API — available for any [`KVBackend`] via a key schema
-/// rule (CID prefix, schema-versioned). **Phase 1 G4 stub.**
-pub trait NodeStore {
-    fn put_node(&self, node: &Node) -> Result<Cid, GraphError>;
-    fn get_node(&self, cid: &Cid) -> Result<Option<Node>, GraphError>;
-}
-
-/// Blanket Edge store API. **Phase 1 G4 stub.**
-pub trait EdgeStore {
-    fn put_edge(&self, edge: &Edge) -> Result<Cid, GraphError>;
-    fn get_edge(&self, cid: &Cid) -> Result<Option<Edge>, GraphError>;
-    fn edges_from(&self, cid: &Cid) -> Result<Vec<Edge>, GraphError>;
-    fn edges_to(&self, cid: &Cid) -> Result<Vec<Edge>, GraphError>;
 }
 
 // ---------------------------------------------------------------------------
@@ -718,18 +662,10 @@ mod tests {
         let (backend, _dir) = temp_backend();
         let node = canonical_test_node();
         let cid = backend.put_node(&node).unwrap();
-        backend.delete(cid.as_bytes()).unwrap();
-        backend.delete(cid.as_bytes()).unwrap(); // second delete must not panic
+        // Delete via the Node-level API (uses the `n:` key schema).
+        backend.delete_node(&cid).unwrap();
+        backend.delete_node(&cid).unwrap(); // second delete must not panic
         assert!(backend.get_node(&cid).unwrap().is_none());
-    }
-
-    #[test]
-    fn scan_with_prefix() {
-        let (backend, _dir) = temp_backend();
-        backend.put_node(&canonical_test_node()).unwrap();
-        // Every Benten CID starts with the version byte 0x01.
-        let hits = backend.scan(&[0x01]).unwrap();
-        assert_eq!(hits.len(), 1);
     }
 
     #[test]
@@ -757,9 +693,9 @@ mod tests {
         let hits = backend.scan(&[]).unwrap();
         assert_eq!(hits.len(), 3, "empty prefix must match every key");
 
-        // Confirm redb returns results in sorted key order so callers can rely
-        // on it for deterministic downstream processing (content listings, IVM
-        // bootstrap).
+        // Confirm redb returns results in sorted key order so callers can
+        // rely on it for deterministic downstream processing (content
+        // listings, IVM bootstrap).
         let mut keys: Vec<&[u8]> = hits.iter().map(|(k, _)| k.as_slice()).collect();
         let mut sorted = keys.clone();
         sorted.sort();
@@ -778,8 +714,8 @@ mod tests {
             .put_batch(&[(b"alpha".to_vec(), b"1".to_vec())])
             .unwrap();
 
-        // A prefix that sorts after every stored key (and cannot be a prefix
-        // of any stored key) must return an empty vec, not an error.
+        // A prefix that sorts after every stored key (and cannot be a
+        // prefix of any stored key) must return an empty result, not error.
         let hits = backend.scan(b"zzz").unwrap();
         assert!(hits.is_empty());
 
@@ -792,8 +728,7 @@ mod tests {
     #[test]
     fn scan_prefix_bounds_the_range() {
         // Regression test for the earlier O(n) implementation that iterated
-        // the full table regardless of prefix. Populate three disjoint prefix
-        // groups and confirm each scan returns only its group.
+        // the full table regardless of prefix.
         let (backend, _dir) = temp_backend();
         let pairs = vec![
             (b"post:1".to_vec(), b"p1".to_vec()),
@@ -815,9 +750,6 @@ mod tests {
 
     #[test]
     fn scan_all_0xff_prefix_is_open_ended() {
-        // Edge case: a prefix of all-0xff has no lexicographic successor, so
-        // the scan falls back to an unbounded `prefix..` range. Verify no
-        // panic and that a matching key is still found.
         let (backend, _dir) = temp_backend();
         backend.put(&[0xff, 0xff, 0xff], b"sentinel").unwrap();
         backend.put(b"unrelated", b"nope").unwrap();
@@ -831,13 +763,11 @@ mod tests {
     fn batch_put_empty_slice_is_a_noop() {
         let (backend, _dir) = temp_backend();
         backend.put_batch(&[]).unwrap();
-        // Store remains empty.
         assert!(backend.scan(&[]).unwrap().is_empty());
     }
 
     #[test]
     fn next_prefix_increments_and_trims() {
-        // Direct unit tests for the range-scan helper.
         assert_eq!(next_prefix(b"a"), Some(b"b".to_vec()));
         assert_eq!(next_prefix(b"az"), Some(b"a{".to_vec())); // b'z' + 1 = b'{'
         assert_eq!(next_prefix(&[0xff]), None, "all-0xff has no successor");
