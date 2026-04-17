@@ -1,4 +1,4 @@
-//! Label and property-value indexes for [`RedbBackend`].
+//! Label and property-value indexes for `RedbBackend`.
 //!
 //! R1 triage `P1.graph.indexes-on-write` (G5, landed here as part of G2-B).
 //! Two `MultimapTable`s are maintained as a side-effect of every

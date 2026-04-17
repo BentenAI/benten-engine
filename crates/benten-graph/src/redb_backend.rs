@@ -4,17 +4,16 @@
 //! - the explicit `open_existing` / `open_or_create` split
 //!   (R1 triage `P1.graph.open-vs-create`);
 //! - the [`DurabilityMode`] wiring (R1 triage `P1.graph.durability`);
-//! - the label and property-value indexes in [`crate::indexes`]
-//!   (R1 triage `P1.graph.indexes-on-write`).
+//! - the label and property-value indexes (crate-private `indexes` module,
+//!   R1 triage `P1.graph.indexes-on-write`).
 //!
 //! The module owns the redb table definitions and all of the redb-specific
 //! plumbing. The `KVBackend` trait it implements lives in [`crate::backend`],
-//! and the higher-level `NodeStore` / `EdgeStore` behaviour layers over the
-//! blanket impls in [`crate::store`]. Inherent methods on [`RedbBackend`]
-//! (`put_node`, `delete_node`, …) override the blanket behaviour in exactly
-//! one respect: they also maintain the label and property-value indexes as
-//! part of the same write transaction, so the indexes are always in sync
-//! with the node store.
+//! and the higher-level `NodeStore` / `EdgeStore` traits it implements live
+//! in [`crate::store`]. Inherent methods on [`RedbBackend`] (`put_node`,
+//! `delete_node`, …) are the single source of truth for the index contract:
+//! they maintain the label and property-value indexes as part of the same
+//! write transaction, so the indexes are always in sync with the node store.
 
 use std::path::Path;
 
@@ -29,7 +28,10 @@ use crate::indexes::{
     LABEL_INDEX_TABLE, PROP_INDEX_TABLE, cid_from_index_bytes, property_index_key,
     value_index_bytes,
 };
-use crate::store::{EdgeStore, NodeStore};
+use crate::store::{
+    ChangeSubscriber, EDGE_SRC_PREFIX, EDGE_TGT_PREFIX, EdgeStore, NodeStore, decode_err, edge_key,
+    edge_src_index_key, edge_src_index_prefix, edge_tgt_index_key, edge_tgt_index_prefix, node_key,
+};
 use crate::{GraphError, WriteContext};
 
 /// Primary key/value table storing every `(key, value)` pair. The Node and
@@ -68,6 +70,32 @@ fn to_redb_durability(mode: DurabilityMode) -> Durability {
     match mode {
         DurabilityMode::Immediate | DurabilityMode::Group => Durability::Immediate,
         DurabilityMode::Async => Durability::None,
+    }
+}
+
+/// Emit a one-shot warning when a caller requests `DurabilityMode::Group` so
+/// benchmarks and production tuning don't silently compare Group to
+/// Immediate and conclude grouped-fsync "doesn't help" — it simply isn't
+/// wired yet. Fires at most once per process.
+///
+/// Written to stderr directly (no `tracing` dep on this crate); `clippy::
+/// print_stderr` is allowed for this one callsite with an explicit reason.
+#[allow(
+    clippy::print_stderr,
+    reason = "one-shot operator-visible warning about a Phase-1 API gap; \
+              benten-graph has no tracing dep"
+)]
+fn warn_if_group_durability_collapsed(mode: DurabilityMode) {
+    use std::sync::Once;
+    static WARNED: Once = Once::new();
+    if matches!(mode, DurabilityMode::Group) {
+        WARNED.call_once(|| {
+            eprintln!(
+                "benten-graph: DurabilityMode::Group collapses to Immediate in \
+                 Phase 1 — redb v4 does not yet expose grouped-commit. \
+                 Benchmarks comparing Group vs. Immediate will see no delta."
+            );
+        });
     }
 }
 
@@ -175,6 +203,13 @@ impl RedbBackend {
         path: impl AsRef<Path>,
         durability: DurabilityMode,
     ) -> Result<Self, GraphError> {
+        // Note: the `path.exists()` check below races with external
+        // filesystem mutations (TOCTOU). In Phase 1 the value is a clean
+        // `GraphError::BackendNotFound` instead of an opaque
+        // "unable to allocate page" leak through `GraphError::Redb` —
+        // acceptable for single-user local stores under redb's exclusive
+        // lock. Phase 3 P2P workloads may revisit.
+        warn_if_group_durability_collapsed(durability);
         let path = path.as_ref();
         if !path.exists() {
             return Err(GraphError::BackendNotFound {
@@ -236,6 +271,7 @@ impl RedbBackend {
         path: impl AsRef<Path>,
         durability: DurabilityMode,
     ) -> Result<Self, GraphError> {
+        warn_if_group_durability_collapsed(durability);
         let db = Database::create(path.as_ref())?;
         let backend = Self {
             db,
@@ -292,11 +328,10 @@ impl RedbBackend {
     /// Store a Node under its CID, and maintain the label and property-value
     /// indexes in the same write transaction.
     ///
-    /// This overrides the [`NodeStore`] blanket impl on [`RedbBackend`]: the
-    /// blanket impl would only write the `n:CID` key; the inherent method
-    /// additionally inserts one multimap entry per `(node, label)` pair into
-    /// [`LABEL_INDEX_TABLE`] and one per `(node, label, prop_name)` triple
-    /// into [`PROP_INDEX_TABLE`]. All writes commit atomically.
+    /// Inserts one multimap entry per `(node, label)` pair into the
+    /// crate-private label index, and one per `(node, label, prop_name)`
+    /// triple into the crate-private property-value index. All writes —
+    /// body plus every index entry — commit atomically.
     ///
     /// # Errors
     /// - [`GraphError::Core`] if the Node cannot be DAG-CBOR encoded or its
@@ -320,12 +355,12 @@ impl RedbBackend {
     pub fn put_node(&self, node: &Node) -> Result<Cid, GraphError> {
         let cid = node.cid()?;
         let bytes = node.canonical_bytes()?;
-        let node_key = node_storage_key(&cid);
+        let n_key = node_key(&cid);
 
         let write_txn = self.begin_write_txn()?;
         {
             let mut nodes = write_txn.open_table(NODES_TABLE)?;
-            nodes.insert(node_key.as_slice(), bytes.as_slice())?;
+            nodes.insert(n_key.as_slice(), bytes.as_slice())?;
         }
         {
             let mut label_idx = write_txn.open_multimap_table(LABEL_INDEX_TABLE)?;
@@ -350,7 +385,7 @@ impl RedbBackend {
     /// Retrieve a Node by CID. Returns `Ok(None)` on a clean miss.
     ///
     /// # Errors
-    /// Propagates the [`NodeStore`] blanket-impl error shape.
+    /// Propagates the [`NodeStore`] error shape.
     ///
     /// # Examples
     /// ```rust
@@ -365,7 +400,13 @@ impl RedbBackend {
     /// assert_eq!(b.get_node(&cid).unwrap().unwrap(), node);
     /// ```
     pub fn get_node(&self, cid: &Cid) -> Result<Option<Node>, GraphError> {
-        <Self as NodeStore>::get_node(self, cid)
+        let Some(bytes) = self.get(&node_key(cid))? else {
+            return Ok(None);
+        };
+        let node: Node = serde_ipld_dagcbor::from_slice(&bytes)
+            .map_err(decode_err)
+            .map_err(GraphError::from)?;
+        Ok(Some(node))
     }
 
     /// Delete a Node by CID, and remove it from the label and property-value
@@ -392,15 +433,22 @@ impl RedbBackend {
     /// assert!(b.get_node(&cid).unwrap().is_none());
     /// ```
     pub fn delete_node(&self, cid: &Cid) -> Result<(), GraphError> {
-        // Load the Node first so we know which index entries to strip. If it
-        // is already absent this is a no-op commit.
-        let existing = <Self as NodeStore>::get_node(self, cid)?;
-        let node_key = node_storage_key(cid);
+        // SAFETY-REASONING: reading the existing Node outside the delete's
+        // write transaction is safe under the content-addressed invariant.
+        // A concurrent `put_node(same CID)` writes identical body bytes and
+        // identical index keys (labels + DAG-CBOR-encoded values are a
+        // pure function of the CID), so our read-view index-key set cannot
+        // diverge from the current state — the removal targets the same
+        // keys either way, and redb multimap `remove` is idempotent. This
+        // invariant breaks for Phase-2 mutable identities (Anchor.CURRENT
+        // pointer, named roots); re-evaluate when those land.
+        let existing = self.get_node(cid)?;
+        let n_key = node_key(cid);
 
         let write_txn = self.begin_write_txn()?;
         {
             let mut nodes = write_txn.open_table(NODES_TABLE)?;
-            nodes.remove(node_key.as_slice())?;
+            nodes.remove(n_key.as_slice())?;
         }
         if let Some(node) = existing {
             {
@@ -424,36 +472,90 @@ impl RedbBackend {
         Ok(())
     }
 
-    /// Inherent `put_edge` — delegates to the [`EdgeStore`] blanket impl.
+    // ---- Edge CRUD -------------------------------------------------------
+
+    /// Store an Edge and its source/target indexes. Returns the Edge CID.
     ///
     /// # Errors
-    /// Propagates the [`EdgeStore`] blanket-impl error shape.
+    /// - [`GraphError::Core`] if the Edge cannot be DAG-CBOR encoded.
+    /// - [`GraphError::Redb`] on any underlying redb failure.
     pub fn put_edge(&self, edge: &Edge) -> Result<Cid, GraphError> {
-        <Self as EdgeStore>::put_edge(self, edge)
+        let cid = edge.cid()?;
+        let bytes = edge.canonical_bytes()?;
+        // Body first, then indexes. The body/index pair is idempotent
+        // (re-putting the same edge writes identical bytes to the same
+        // keys), so ordering under the non-transactional path is not
+        // load-bearing at Phase 1. G3 wraps these in a single redb txn.
+        self.put(&edge_key(&cid), &bytes)?;
+        self.put(&edge_src_index_key(&edge.source, &cid), &[])?;
+        self.put(&edge_tgt_index_key(&edge.target, &cid), &[])?;
+        Ok(cid)
     }
 
-    /// Inherent `get_edge` — delegates to [`EdgeStore`] blanket impl.
+    /// Retrieve an Edge by CID. Returns `Ok(None)` on a clean miss.
     ///
     /// # Errors
-    /// Propagates the [`EdgeStore`] blanket-impl error shape.
+    /// Propagates the [`EdgeStore`] error shape.
     pub fn get_edge(&self, cid: &Cid) -> Result<Option<Edge>, GraphError> {
-        <Self as EdgeStore>::get_edge(self, cid)
+        let Some(bytes) = self.get(&edge_key(cid))? else {
+            return Ok(None);
+        };
+        let edge: Edge = serde_ipld_dagcbor::from_slice(&bytes)
+            .map_err(decode_err)
+            .map_err(GraphError::from)?;
+        Ok(Some(edge))
     }
 
-    /// Inherent `edges_from` — delegates to [`EdgeStore`] blanket impl.
+    /// Delete an Edge and its source/target indexes. Idempotent.
     ///
     /// # Errors
-    /// Propagates the [`EdgeStore`] blanket-impl error shape.
-    pub fn edges_from(&self, cid: &Cid) -> Result<Vec<Edge>, GraphError> {
-        <Self as EdgeStore>::edges_from(self, cid)
+    /// Propagates the [`EdgeStore`] error shape.
+    pub fn delete_edge(&self, cid: &Cid) -> Result<(), GraphError> {
+        if let Some(edge) = self.get_edge(cid)? {
+            self.delete(&edge_src_index_key(&edge.source, cid))?;
+            self.delete(&edge_tgt_index_key(&edge.target, cid))?;
+        }
+        self.delete(&edge_key(cid))
     }
 
-    /// Inherent `edges_to` — delegates to [`EdgeStore`] blanket impl.
+    /// All edges whose `source == cid`.
     ///
     /// # Errors
-    /// Propagates the [`EdgeStore`] blanket-impl error shape.
-    pub fn edges_to(&self, cid: &Cid) -> Result<Vec<Edge>, GraphError> {
-        <Self as EdgeStore>::edges_to(self, cid)
+    /// Propagates the [`EdgeStore`] error shape.
+    pub fn edges_from(&self, source: &Cid) -> Result<Vec<Edge>, GraphError> {
+        let hits = self.scan(&edge_src_index_prefix(source))?;
+        let mut out = Vec::with_capacity(hits.len());
+        for (k, _v) in hits.iter() {
+            let Some(edge_cid_bytes) = k.get(EDGE_SRC_PREFIX.len() + source.as_bytes().len()..)
+            else {
+                continue;
+            };
+            let edge_cid = Cid::from_bytes(edge_cid_bytes).map_err(GraphError::from)?;
+            if let Some(edge) = self.get_edge(&edge_cid)? {
+                out.push(edge);
+            }
+        }
+        Ok(out)
+    }
+
+    /// All edges whose `target == cid`.
+    ///
+    /// # Errors
+    /// Propagates the [`EdgeStore`] error shape.
+    pub fn edges_to(&self, target: &Cid) -> Result<Vec<Edge>, GraphError> {
+        let hits = self.scan(&edge_tgt_index_prefix(target))?;
+        let mut out = Vec::with_capacity(hits.len());
+        for (k, _v) in hits.iter() {
+            let Some(edge_cid_bytes) = k.get(EDGE_TGT_PREFIX.len() + target.as_bytes().len()..)
+            else {
+                continue;
+            };
+            let edge_cid = Cid::from_bytes(edge_cid_bytes).map_err(GraphError::from)?;
+            if let Some(edge) = self.get_edge(&edge_cid)? {
+                out.push(edge);
+            }
+        }
+        Ok(out)
     }
 
     // ---- Indexes ---------------------------------------------------------
@@ -595,9 +697,25 @@ impl RedbBackend {
         todo!("RedbBackend::transaction_with_deny_on_commit — G3-A (Phase 1)")
     }
 
-    /// Subscribe to the post-commit change stream. **Phase 1 G3-A stub.**
-    pub fn subscribe(&self) -> crate::ChangeReceiver {
-        todo!("RedbBackend::subscribe — G3-A (Phase 1)")
+    /// Register a change subscriber. The transaction primitive (G3) fans
+    /// change events out synchronously to every registered subscriber after
+    /// a successful commit. The subscriber is stored as an `Arc<dyn
+    /// ChangeSubscriber>` so heterogeneous IVM views can coexist.
+    ///
+    /// Per the plan's R1 architect ratification (§line-605), the pull-shaped
+    /// channel concretion — tokio-broadcast on native, synchronous
+    /// `Vec<Box<dyn ChangeSubscriber>>` fan-out on WASM — lives in
+    /// [`benten-engine::change`](https://docs.rs/benten-engine), NOT here.
+    /// `benten-graph` stays runtime-agnostic.
+    ///
+    /// # Errors
+    /// Stub — currently `todo!()`. G3 wires the subscriber list into the
+    /// transaction primitive's post-commit callback fan-out.
+    pub fn register_subscriber(
+        &self,
+        _subscriber: std::sync::Arc<dyn ChangeSubscriber>,
+    ) -> Result<(), GraphError> {
+        todo!("RedbBackend::register_subscriber — G3-A (Phase 1)")
     }
 
     /// Open a MVCC snapshot handle. **Phase 1 G6 stub.**
@@ -685,23 +803,54 @@ impl KVBackend for RedbBackend {
 }
 
 // ---------------------------------------------------------------------------
-// Key-schema helper — mirrors store.rs's node_key for the inherent put/delete
-// override. Duplicated rather than exported from store.rs to keep the key
-// schema module-private.
+// NodeStore / EdgeStore — concrete impls for RedbBackend
 // ---------------------------------------------------------------------------
+//
+// The blanket `impl<T: KVBackend>` was removed (g2-cr-1) to close a latent
+// footgun where generic trait dispatch silently skipped index maintenance.
+// RedbBackend now implements NodeStore / EdgeStore directly; the impls
+// forward to the inherent methods above, which are the single source of
+// truth for the index contract.
 
-const NODE_PREFIX: &[u8] = b"n:";
+impl NodeStore for RedbBackend {
+    type Error = GraphError;
 
-fn node_storage_key(cid: &Cid) -> Vec<u8> {
-    let mut k = Vec::with_capacity(NODE_PREFIX.len() + cid.as_bytes().len());
-    k.extend_from_slice(NODE_PREFIX);
-    k.extend_from_slice(cid.as_bytes());
-    k
+    fn put_node(&self, node: &Node) -> Result<Cid, Self::Error> {
+        RedbBackend::put_node(self, node)
+    }
+
+    fn get_node(&self, cid: &Cid) -> Result<Option<Node>, Self::Error> {
+        RedbBackend::get_node(self, cid)
+    }
+
+    fn delete_node(&self, cid: &Cid) -> Result<(), Self::Error> {
+        RedbBackend::delete_node(self, cid)
+    }
 }
 
-// `From<CoreError> for GraphError` is provided by the `#[from]` attribute on
-// `GraphError::Core` in `lib.rs`; the `NodeStore` / `EdgeStore` blanket impls
-// consume it through their `T::Error: From<CoreError>` bound.
+impl EdgeStore for RedbBackend {
+    type Error = GraphError;
+
+    fn put_edge(&self, edge: &Edge) -> Result<Cid, Self::Error> {
+        RedbBackend::put_edge(self, edge)
+    }
+
+    fn get_edge(&self, cid: &Cid) -> Result<Option<Edge>, Self::Error> {
+        RedbBackend::get_edge(self, cid)
+    }
+
+    fn delete_edge(&self, cid: &Cid) -> Result<(), Self::Error> {
+        RedbBackend::delete_edge(self, cid)
+    }
+
+    fn edges_from(&self, source: &Cid) -> Result<Vec<Edge>, Self::Error> {
+        RedbBackend::edges_from(self, source)
+    }
+
+    fn edges_to(&self, target: &Cid) -> Result<Vec<Edge>, Self::Error> {
+        RedbBackend::edges_to(self, target)
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Tests for module-private helpers

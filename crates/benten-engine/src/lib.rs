@@ -11,6 +11,8 @@
 #![forbid(unsafe_code)]
 #![allow(clippy::todo, reason = "R3 red-phase stubs; R5 removes todos")]
 
+pub mod change;
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 

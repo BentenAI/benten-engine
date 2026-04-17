@@ -1,6 +1,6 @@
 //! Test-fixture binary for `d2_cross_process_graph.rs`.
 //!
-//! Opens a `RedbBackend` at argv[1], writes the canonical test node, exits 0.
+//! Opens a `RedbBackend` at `argv\[1\]`, writes the canonical test node, exits 0.
 //! The integration test invokes this binary with `CARGO_BIN_EXE_write-canonical-and-exit`
 //! to prove PID separation in the cross-process round-trip (R4 triage M3).
 

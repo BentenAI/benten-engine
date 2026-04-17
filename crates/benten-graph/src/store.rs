@@ -1,22 +1,34 @@
-//! Higher-level stores layered on top of [`KVBackend`]:
-//! [`NodeStore`] / [`EdgeStore`] (blanket impls over any `KVBackend`), plus
+//! Higher-level node / edge CRUD traits: [`NodeStore`] / [`EdgeStore`], plus
 //! the [`ChangeSubscriber`] trait and [`ChangeEvent`] schema.
 //!
 //! R1 triage deliverable **`P1.graph.node-store-trait`**: node and edge CRUD
-//! ride a blanket `impl<T: KVBackend>` so any future backend (in-memory mock,
-//! WASM peer-fetch) gets the Benten node/edge API for free. The inherent
-//! methods on `RedbBackend` remain for backward compatibility with existing
-//! call sites — Rust's method resolution picks the inherent method when the
-//! trait is not in scope and is unambiguous either way.
+//! are expressed as traits that each backend implements directly. Phase 1
+//! ships a single backend — [`RedbBackend`](crate::RedbBackend) — whose impl
+//! lives in [`redb_backend`](crate::redb_backend) and is the one place that
+//! maintains the label + property-value indexes atomically with the node body.
+//!
+//! ## Why no blanket `impl<T: KVBackend>`
+//!
+//! An earlier G2-A pass carried a blanket `impl<T: KVBackend> NodeStore for T`
+//! that wrote only the `n:CID` body (no index maintenance). Rust method
+//! resolution preferred the inherent `RedbBackend::put_node` so the common
+//! case was safe — but generic dispatch (`fn f<T: NodeStore>(…)`) and explicit
+//! trait paths (`<RedbBackend as NodeStore>::put_node`) silently bypassed the
+//! index maintenance. The mini-review (g2-cr-1) elevated the footgun to
+//! major and the fix (this file) drops the blanket. Each backend now opts
+//! into `NodeStore` / `EdgeStore` explicitly, and the index contract is
+//! visible at the impl site.
+//!
+//! A future in-memory mock backend that needs the node API without indexes
+//! writes a direct `impl NodeStore for MemBackend`; that is a deliberate
+//! per-backend decision, not a silent inheritance.
 //!
 //! Change-stream plumbing: [`ChangeSubscriber`] declares the trait shape here
 //! in `benten-graph`; the concrete broadcast channel and the actual emission
-//! on commit land in G3 per the R1 architect decision (no tokio dep in
-//! benten-graph).
+//! on commit land in `benten-engine::change` per the R1 architect decision
+//! (plan §ratifications line 605 — no tokio dep in benten-graph).
 
 use benten_core::{Cid, CoreError, Edge, Node};
-
-use crate::backend::KVBackend;
 
 // ---------------------------------------------------------------------------
 // Key schema
@@ -36,26 +48,29 @@ use crate::backend::KVBackend;
 // The edge indexes let `edges_from` / `edges_to` resolve in O(matches)
 // without touching the body of every stored edge.
 
-const NODE_PREFIX: &[u8] = b"n:";
-const EDGE_PREFIX: &[u8] = b"e:";
-const EDGE_SRC_PREFIX: &[u8] = b"es:";
-const EDGE_TGT_PREFIX: &[u8] = b"et:";
+pub(crate) const NODE_PREFIX: &[u8] = b"n:";
+pub(crate) const EDGE_PREFIX: &[u8] = b"e:";
+pub(crate) const EDGE_SRC_PREFIX: &[u8] = b"es:";
+pub(crate) const EDGE_TGT_PREFIX: &[u8] = b"et:";
 
-fn node_key(cid: &Cid) -> Vec<u8> {
+/// `"n:" ++ cid_bytes`. Single source of truth for the Node key schema —
+/// crate-private so `RedbBackend`'s inherent put/delete and the trait impl
+/// can share one definition and cannot drift.
+pub(crate) fn node_key(cid: &Cid) -> Vec<u8> {
     let mut k = Vec::with_capacity(NODE_PREFIX.len() + cid.as_bytes().len());
     k.extend_from_slice(NODE_PREFIX);
     k.extend_from_slice(cid.as_bytes());
     k
 }
 
-fn edge_key(cid: &Cid) -> Vec<u8> {
+pub(crate) fn edge_key(cid: &Cid) -> Vec<u8> {
     let mut k = Vec::with_capacity(EDGE_PREFIX.len() + cid.as_bytes().len());
     k.extend_from_slice(EDGE_PREFIX);
     k.extend_from_slice(cid.as_bytes());
     k
 }
 
-fn edge_src_index_key(source: &Cid, edge: &Cid) -> Vec<u8> {
+pub(crate) fn edge_src_index_key(source: &Cid, edge: &Cid) -> Vec<u8> {
     let mut k =
         Vec::with_capacity(EDGE_SRC_PREFIX.len() + source.as_bytes().len() + edge.as_bytes().len());
     k.extend_from_slice(EDGE_SRC_PREFIX);
@@ -64,14 +79,14 @@ fn edge_src_index_key(source: &Cid, edge: &Cid) -> Vec<u8> {
     k
 }
 
-fn edge_src_index_prefix(source: &Cid) -> Vec<u8> {
+pub(crate) fn edge_src_index_prefix(source: &Cid) -> Vec<u8> {
     let mut k = Vec::with_capacity(EDGE_SRC_PREFIX.len() + source.as_bytes().len());
     k.extend_from_slice(EDGE_SRC_PREFIX);
     k.extend_from_slice(source.as_bytes());
     k
 }
 
-fn edge_tgt_index_key(target: &Cid, edge: &Cid) -> Vec<u8> {
+pub(crate) fn edge_tgt_index_key(target: &Cid, edge: &Cid) -> Vec<u8> {
     let mut k =
         Vec::with_capacity(EDGE_TGT_PREFIX.len() + target.as_bytes().len() + edge.as_bytes().len());
     k.extend_from_slice(EDGE_TGT_PREFIX);
@@ -80,7 +95,7 @@ fn edge_tgt_index_key(target: &Cid, edge: &Cid) -> Vec<u8> {
     k
 }
 
-fn edge_tgt_index_prefix(target: &Cid) -> Vec<u8> {
+pub(crate) fn edge_tgt_index_prefix(target: &Cid) -> Vec<u8> {
     let mut k = Vec::with_capacity(EDGE_TGT_PREFIX.len() + target.as_bytes().len());
     k.extend_from_slice(EDGE_TGT_PREFIX);
     k.extend_from_slice(target.as_bytes());
@@ -91,7 +106,7 @@ fn edge_tgt_index_prefix(target: &Cid) -> Vec<u8> {
 /// rather than introducing a parallel enum variant: the DAG-CBOR decoder
 /// surfaces the same class of problem (bytes ↔ typed value), and CoreError
 /// already tracks the same error category for the encode direction.
-fn decode_err<E: core::fmt::Display>(e: E) -> CoreError {
+pub(crate) fn decode_err<E: core::fmt::Display>(e: E) -> CoreError {
     CoreError::Serialize(format!("decode: {e}"))
 }
 
@@ -99,15 +114,17 @@ fn decode_err<E: core::fmt::Display>(e: E) -> CoreError {
 // NodeStore
 // ---------------------------------------------------------------------------
 
-/// Node-level storage API. Any [`KVBackend`] whose error type can absorb a
-/// [`CoreError`] (via `From`) gets a working `NodeStore` for free via the
-/// blanket impl below.
+/// Node-level storage API. Each backend implements this trait directly —
+/// there is no blanket `impl<T: KVBackend>` on purpose (see the module-level
+/// docstring for the footgun that drove the removal).
 ///
-/// The trait sits above `KVBackend` (which is pure bytes) and owns the
-/// Node ↔ bytes DAG-CBOR transition plus the `n:`-prefix key schema.
+/// The trait sits above `KVBackend` conceptually — it owns the Node ↔ bytes
+/// DAG-CBOR transition plus the `n:`-prefix key schema — but the shared
+/// per-trait blanket would silently skip the label/property index
+/// maintenance that the production `RedbBackend` guarantees.
 pub trait NodeStore {
     /// Error type. In practice equal to the underlying
-    /// [`KVBackend::Error`] — the blanket impl forwards unchanged.
+    /// `KVBackend::Error` for the concrete backend.
     type Error;
 
     /// Store a Node under its CID. Returns the CID for caller convenience.
@@ -134,55 +151,18 @@ pub trait NodeStore {
     fn delete_node(&self, cid: &Cid) -> Result<(), Self::Error>;
 }
 
-#[allow(
-    clippy::useless_conversion,
-    reason = "The `Into::into` calls below adapt CoreError to T::Error via the \
-              `T::Error: From<CoreError>` bound. Clippy fires when T::Error is \
-              inferred as CoreError itself (e.g., in some benchmarks); the \
-              conversion is still required for any backend whose Error isn't \
-              CoreError — GraphError, future in-memory mocks, peer-fetch, etc."
-)]
-impl<T> NodeStore for T
-where
-    T: KVBackend,
-    T::Error: From<CoreError>,
-{
-    type Error = T::Error;
-
-    fn put_node(&self, node: &Node) -> Result<Cid, Self::Error> {
-        let cid = node.cid().map_err(Into::into)?;
-        let bytes = node.canonical_bytes().map_err(Into::into)?;
-        self.put(&node_key(&cid), &bytes)?;
-        Ok(cid)
-    }
-
-    fn get_node(&self, cid: &Cid) -> Result<Option<Node>, Self::Error> {
-        let Some(bytes) = self.get(&node_key(cid))? else {
-            return Ok(None);
-        };
-        let node: Node = serde_ipld_dagcbor::from_slice(&bytes)
-            .map_err(decode_err)
-            .map_err(Into::into)?;
-        Ok(Some(node))
-    }
-
-    fn delete_node(&self, cid: &Cid) -> Result<(), Self::Error> {
-        self.delete(&node_key(cid))
-    }
-}
-
 // ---------------------------------------------------------------------------
 // EdgeStore
 // ---------------------------------------------------------------------------
 
-/// Edge-level storage API. Any [`KVBackend`] whose error type can absorb a
-/// [`CoreError`] gets a working `EdgeStore` for free via the blanket impl.
+/// Edge-level storage API. Each backend implements this trait directly —
+/// no blanket impl, for the same reason `NodeStore` doesn't have one.
 ///
 /// Edges are content-addressed over `(source, target, label, properties)`;
-/// `put_edge` also writes the two index keys (`es:SRC|EDGE` and
+/// the `RedbBackend` impl also writes the two index keys (`es:SRC|EDGE` and
 /// `et:TGT|EDGE`) so `edges_from` and `edges_to` resolve in O(matches).
 pub trait EdgeStore {
-    /// Error type — equal to the underlying [`KVBackend::Error`].
+    /// Error type — equal to the underlying `KVBackend::Error`.
     type Error;
 
     /// Store an Edge and its source/target indexes. Returns the Edge CID.
@@ -221,85 +201,6 @@ pub trait EdgeStore {
     fn edges_to(&self, target: &Cid) -> Result<Vec<Edge>, Self::Error>;
 }
 
-#[allow(
-    clippy::useless_conversion,
-    reason = "See NodeStore blanket impl — same rationale: Into::into adapts \
-              CoreError through the From<CoreError> bound on T::Error."
-)]
-impl<T> EdgeStore for T
-where
-    T: KVBackend,
-    T::Error: From<CoreError>,
-{
-    type Error = T::Error;
-
-    fn put_edge(&self, edge: &Edge) -> Result<Cid, Self::Error> {
-        let cid = edge.cid().map_err(Into::into)?;
-        let bytes = edge.canonical_bytes().map_err(Into::into)?;
-
-        // Body first, then indexes. `put_batch` would be the atomic shape,
-        // but the body/index pair is idempotent (re-putting the same edge
-        // writes identical bytes to the same keys), so ordering under a
-        // non-transactional call is not load-bearing at Phase 1.
-        self.put(&edge_key(&cid), &bytes)?;
-        self.put(&edge_src_index_key(&edge.source, &cid), &[])?;
-        self.put(&edge_tgt_index_key(&edge.target, &cid), &[])?;
-        Ok(cid)
-    }
-
-    fn get_edge(&self, cid: &Cid) -> Result<Option<Edge>, Self::Error> {
-        let Some(bytes) = self.get(&edge_key(cid))? else {
-            return Ok(None);
-        };
-        let edge: Edge = serde_ipld_dagcbor::from_slice(&bytes)
-            .map_err(decode_err)
-            .map_err(Into::into)?;
-        Ok(Some(edge))
-    }
-
-    fn delete_edge(&self, cid: &Cid) -> Result<(), Self::Error> {
-        // Read the edge first so we know which index entries to remove.
-        if let Some(edge) = self.get_edge(cid)? {
-            self.delete(&edge_src_index_key(&edge.source, cid))?;
-            self.delete(&edge_tgt_index_key(&edge.target, cid))?;
-        }
-        self.delete(&edge_key(cid))
-    }
-
-    fn edges_from(&self, source: &Cid) -> Result<Vec<Edge>, Self::Error> {
-        let hits = self.scan(&edge_src_index_prefix(source))?;
-        let mut out = Vec::with_capacity(hits.len());
-        for (k, _v) in &*hits {
-            // Edge CID is the suffix after `es:` + source-CID bytes.
-            let Some(edge_cid_bytes) = k.get(EDGE_SRC_PREFIX.len() + source.as_bytes().len()..)
-            else {
-                continue;
-            };
-            let edge_cid = Cid::from_bytes(edge_cid_bytes).map_err(Into::into)?;
-            if let Some(edge) = self.get_edge(&edge_cid)? {
-                out.push(edge);
-            }
-        }
-        Ok(out)
-    }
-
-    fn edges_to(&self, target: &Cid) -> Result<Vec<Edge>, Self::Error> {
-        let hits = self.scan(&edge_tgt_index_prefix(target))?;
-        let mut out = Vec::with_capacity(hits.len());
-        for (k, _v) in &*hits {
-            let Some(edge_cid_bytes) = k.get(EDGE_TGT_PREFIX.len() + target.as_bytes().len()..)
-            else {
-                continue;
-            };
-            let edge_cid = Cid::from_bytes(edge_cid_bytes).map_err(Into::into)?;
-            if let Some(edge) = self.get_edge(&edge_cid)? {
-                out.push(edge);
-            }
-        }
-        Ok(out)
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Change stream (trait shape only — emission is G3)
 // ---------------------------------------------------------------------------
@@ -332,6 +233,13 @@ pub enum ChangeKind {
 /// because the IVM views and CDC consumers index on a single primary label;
 /// multi-label nodes still emit one `ChangeEvent` per event with the primary
 /// label filled in. R5 reconsiders for Phase 2 if the view surface demands it.
+///
+/// **Asymmetry note:** the on-disk label index (`LABEL_INDEX_TABLE`) emits
+/// one entry per label on multi-label nodes, while this event field carries
+/// only the primary label (`labels[0]`). IVM views rebuilt from the change
+/// stream observe only the primary-label path; views that need non-primary
+/// labels must rebuild from the label index directly. This is an accepted
+/// Phase 1 gap; the hand-written IVM views do not use multi-label nodes.
 #[derive(Debug, Clone)]
 pub struct ChangeEvent {
     /// CID of the Node the event concerns.

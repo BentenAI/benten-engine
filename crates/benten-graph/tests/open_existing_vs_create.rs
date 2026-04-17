@@ -72,8 +72,11 @@ fn open_or_create_idempotent_on_existing_file() {
     let dir = tempdir().unwrap();
     let db_path = dir.path().join("idempotent.redb");
 
-    let _first = RedbBackend::open_or_create(&db_path).unwrap();
-    // File now exists. Second call must not error and must not truncate.
+    {
+        let _first = RedbBackend::open_or_create(&db_path).unwrap();
+    }
+    // File now exists and the first handle's redb exclusive lock is released.
+    // Second call must not error and must not truncate.
     let _second = RedbBackend::open_or_create(&db_path)
         .expect("open_or_create must be idempotent on an existing file");
 }
