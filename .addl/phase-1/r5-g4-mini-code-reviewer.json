@@ -1,0 +1,118 @@
+{
+  "agent": "code-reviewer",
+  "stage": "R5-G4-mini-review",
+  "verdict": "revise",
+  "verified": {
+    "cargo_fmt_all_check": "green (exit 0)",
+    "cargo_clippy_benten_caps_all_targets_D_warnings": "green (exit 0)",
+    "commit_touched_test_files": "no (0 files under crates/benten-caps/tests/ in 30cfb34; test contract preserved)",
+    "unwrap_expect_in_src": "none (grep crates/benten-caps/src returned zero)",
+    "forbid_unsafe_code": "present at lib.rs:31"
+  },
+  "summary": {
+    "files_reviewed": 7,
+    "critical": 0,
+    "major": 3,
+    "minor": 8
+  },
+  "findings": [
+    {
+      "id": "g4-cr-1",
+      "severity": "major",
+      "location": "crates/benten-caps/src/lib.rs:22",
+      "claim": "Doc link `[CapabilityPolicy::check_read]` is dangling — the trait has no `check_read` method.",
+      "detail": "Named compromise #2 (E_CAP_DENIED_READ leaks existence) is documented at lib.rs lines 20–23 with the anchor prose 'Documented on [CapabilityPolicy::check_read]'. The trait in policy.rs defines only `check_write`; `check_read` is a forward-declaration for G6 (evaluator). A reader clicking the intra-doc link in rustdoc lands on a 404. This is also the exact concern item 8 of the audit brief flagged: the compromise doc at module level is NOT mirrored on the method it will eventually live on, and the method does not yet exist. Because G4 ships the surface that G3/G6 consume, this means the compromise is effectively invisible to anyone browsing the trait today — they see only `check_write` with no hint that a sibling READ path is going to land and carry a named compromise.",
+      "suggested_fix": "Either (a) delete the `[CapabilityPolicy::check_read]` reference in the lib.rs doc and replace with a pointer to `CapError::DeniedRead` which DOES exist + a TODO(phase-2) to port the prose to `check_read` once the method lands, or (b) add a placeholder default method `fn check_read(&self, _: &ReadContext) -> Result<(), CapError> { Ok(()) }` on the trait now with the compromise doc attached. Option (a) is lower-risk — adding `check_read` to the trait now breaks G3/G6 downstream test shape."
+    },
+    {
+      "id": "g4-cr-2",
+      "severity": "major",
+      "location": "crates/benten-caps/src/grant.rs:115-128 and :140-156",
+      "claim": "`CapabilityGrant::new` and `CapabilityGrant::as_node` emit materially different Node shapes — they are NOT two construction paths to the same grant, they are two DIFFERENT grants.",
+      "detail": "The docstring claims the struct-literal path and `new` are 'two construction paths'. In reality: (1) `new` emits a Node with properties {grantee, issuer, scope, hlc_stamp=0}; (2) `as_node` emits a Node with properties {grantee, scope, hlc_stamp=<caller-supplied>} — NO issuer. The two paths therefore produce DIFFERENT CIDs even for 'the same' logical grant (different property set). The `new` path also hardcodes `hlc_stamp: 0` unconditionally, ignoring any HLC consideration, while the struct-literal path takes it verbatim. Test `grant_uniqueness_on_cid.rs` exercises the `new` path; test `capability_grant.rs` exercises the struct-literal path — neither test crosses the gap, so the discrepancy is invisible to the test suite. This is API-stability risk for G3/G6/G7: any downstream code that constructs a grant one way and reads one the other way produces a CID mismatch.",
+      "suggested_fix": "Reconcile the two paths: (a) rename `CapabilityGrant::new` to `CapabilityGrant::new_node_with_issuer` to signal the shape difference explicitly, OR (b) add `issuer: Option<Cid>` + `hlc_stamp: u64` to the struct-literal form and have `new` call `as_node` internally. Option (b) is the 'two paths to the same grant' the docstring promises. Block a G3/G6 dispatch until this is resolved — a churning `CapabilityGrant` Node shape invalidates content-addressed assertions downstream."
+    },
+    {
+      "id": "g4-cr-3",
+      "severity": "major",
+      "location": "crates/benten-caps/tests/toctou_iteration.rs:36 vs crates/benten-caps/src/lib.rs:58",
+      "claim": "`DEFAULT_BATCH_BOUNDARY` is duplicated (not shared) between the public const and the TOCTOU test — the 'lockstep' invariant in the lib doc is enforced by convention only.",
+      "detail": "lib.rs line 58 declares `pub const DEFAULT_BATCH_BOUNDARY: usize = 100;` and the doc at lines 54–57 warns 'If this default changes, the following must move in lockstep: tests/toctou_iteration.rs::DEFAULT_BATCH_BOUNDARY, ...'. But `tests/toctou_iteration.rs:36` hardcodes its own local `const DEFAULT_BATCH_BOUNDARY: u32 = 100;` and does not import `benten_caps::DEFAULT_BATCH_BOUNDARY`. Grep confirms: zero callers reference `benten_caps::DEFAULT_BATCH_BOUNDARY` anywhere in the repo. If someone changes the public const to 200 and forgets the test, CI stays green and the named-compromise regression silently passes against the old value. The test is a `u32`; the pub is `usize` — they can't be literally compared without a cast, but they CAN be cross-checked.",
+      "suggested_fix": "In tests/toctou_iteration.rs:36 replace the local const with `const DEFAULT_BATCH_BOUNDARY: u32 = benten_caps::DEFAULT_BATCH_BOUNDARY as u32;`. Fixed at test-compile time; keeps type ergonomics; enforces lockstep at the type system, not convention. Zero functional change, closes the invariant gap."
+    },
+    {
+      "id": "g4-cr-4",
+      "severity": "minor",
+      "location": "crates/benten-caps/src/grant.rs:110-114",
+      "claim": "The `#[allow(clippy::new_ret_no_self)]` reason is accurate but the name `new` is the root cause; a better-named function would sidestep the lint entirely.",
+      "detail": "The allow's reason= explains the asymmetry well — issuer folds into CID, caller reads .cid() off the Node. That said: a function named `new` conventionally returns `Self`, and a fresh-eyes reviewer reading `CapabilityGrant::new(...) -> Node` at a call site loses the type hint. Names like `::to_node_with_issuer(...)`, `::build_node(...)`, or a free function `make_grant_node(...)` communicate intent at the call site without needing an allow attribute. Because this API is consumed by G3 (transaction commit writes grant Nodes) and G7 (engine builder's `grant_capability` helper), renaming now is cheaper than renaming after downstream call sites land.",
+      "suggested_fix": "Rename to `CapabilityGrant::into_node(grantee, issuer, scope) -> Node`. Drop the allow attribute. Keep the existing signature as a deprecated alias for one release if needed. This is cosmetic-but-preventive; mark as minor, but address before G3 consumes it."
+    },
+    {
+      "id": "g4-cr-5",
+      "severity": "minor",
+      "location": "crates/benten-caps/src/error.rs:21-38",
+      "claim": "Two `Denied` variants (unit + struct) both map to `E_CAP_DENIED`; the doc rationale is plausible but there is no path to deprecate the unit form.",
+      "detail": "`CapError::Denied` (unit, used by GrantScope::parse and test fixtures) and `CapError::DeniedDetail { required, entity }` (structured, used by the evaluator at commit time via G3) both map to `E_CAP_DENIED` via `code()`. That is a stable split in principle — tests that don't care about the payload pattern-match `CapError::Denied`. But the grep shows `DeniedDetail` is already used by `check_write_called_at_commit.rs`, i.e. the integration-level test surface; and `Denied` is fired from `GrantScope::parse` for a syntactic condition (empty scope), which is semantically different from a capability denial. Over time this bifurcates into 'denial-style Deniedʼ and 'syntax-style Denied', which is the API duplication the audit brief warned about.",
+      "suggested_fix": "Either (a) add a `CapError::InvalidScope` variant for the parse-side refusal (empty / whitespace-only) and reserve `Denied`/`DeniedDetail` strictly for capability denials, OR (b) document explicitly in the variant doc that `CapError::Denied` is 'the catch-all denial variant and is used by GrantScope::parse for degenerate input — this is intentional because a zero-authority grant is a denial-at-construction'. The current doc gestures at this but does not commit. Option (a) has better long-term API shape; option (b) is a one-line doc fix."
+    },
+    {
+      "id": "g4-cr-6",
+      "severity": "minor",
+      "location": "crates/benten-caps/src/error.rs:68",
+      "claim": "`CapError::NotImplemented` is a unit variant with a hard-coded message; Phase 3 backends will want to parameterize the 'which backend / which phase' string.",
+      "detail": "The `#[error(...)]` attribute hard-codes 'UCANBackend is not implemented in Phase 1 (lands in Phase 3); configure NoAuthBackend or a custom CapabilityPolicy until then'. Any future backend (e.g. a DID-based backend shipping in Phase 4, or a third-party backend) that wants to return `NotImplemented` would emit the UCAN-specific message, which is wrong. Today only `UcanBackend` uses this error, so it's cosmetic; tomorrow it's a correctness issue.",
+      "suggested_fix": "Change to `NotImplemented { backend: &'static str, lands_in_phase: u8 }` with an `#[error(\"{backend} is not implemented in Phase 1 (lands in Phase {lands_in_phase}); ...\")]` fmt string. UcanBackend supplies `{ backend: \"UCANBackend\", lands_in_phase: 3 }`. Low-cost refactor; keeps the ERROR-CATALOG code stable; future-proof. Alternatively, defer to Phase 3 and document the intent here with a TODO — minor either way."
+    },
+    {
+      "id": "g4-cr-7",
+      "severity": "minor",
+      "location": "crates/benten-caps/src/lib.rs:60-69",
+      "claim": "`STUB_MARKER` is retained with a `TODO(phase-1-cleanup)` but owner/group is unstated.",
+      "detail": "The comment says 'G8 removes this once the engine-side reference is retired'. Owner IS stated — G8. But the cross-crate reference at crates/benten-engine/src/lib.rs:24 is `const _: &str = benten_caps::STUB_MARKER;` with no accompanying TODO. Fresh-eyes reviewer following the chain from benten-engine's `const _:` will not find the cleanup plan unless they read benten-caps first. Low-severity process hygiene.",
+      "suggested_fix": "Add a parallel `TODO(phase-1-cleanup, G8): remove when benten-caps and benten-eval are no longer STUB_MARKER-gated` comment at crates/benten-engine/src/lib.rs:24 so the two sides of the cross-crate assertion point at each other."
+    },
+    {
+      "id": "g4-cr-8",
+      "severity": "minor",
+      "location": "crates/benten-caps/src/lib.rs:77-94 (testing module)",
+      "claim": "`testing::alloc_count()` returning a constant `0` makes the zero-alloc proptest tautological today.",
+      "detail": "tests/noauth_proptest.rs:67-70 asserts `prop_assert_eq!(before, after, \"NoAuth check_write must not allocate\")`. With `alloc_count()` hard-coded to `0`, the proptest passes unconditionally for all 256 generated inputs — even if `check_write` allocated 1000 bytes per call. The doc comment acknowledges this ('the real counter will catch regressions in Phase 2'), but a test whose assertion is trivially `0 == 0` is misleading on a red/green dashboard: it claims to exercise the zero-alloc contract but actually exercises nothing. Compromise is well-documented; test is still net-negative because it gives false confidence. Same 'tautological-assertion' failure mode R4 triage M9 flagged for `option_a_existence_leak_is_documented_compromise` and required a meaningful replacement assertion for.",
+      "suggested_fix": "Two options: (a) wire a real counter now — `std::alloc::System` with a tracking allocator behind a `testing-alloc` feature flag; the infra is small and solves Phase 2 problem early. (b) drop the proptest assertion until a real counter lands and replace it with a meaningful check (e.g. assert the NoAuth trait dispatch is via a `#[inline]` function and measure via a criterion micro-benchmark). Keeping the tautological assertion is the worst of the three options because it looks like coverage."
+    },
+    {
+      "id": "g4-cr-9",
+      "severity": "minor",
+      "location": "crates/benten-caps/src/ucan_stub.rs:34-35",
+      "claim": "`UCANBackend` alias via `pub type UCANBackend = UcanBackend;` with `#[allow(non_camel_case_types)]` is code-for-two-name-schemes rather than one canonical name.",
+      "detail": "The alias exists because some call sites use `UCANBackend` (SCREAMING-ACRONYM) and others use `UcanBackend`. Rust naming convention is `UcanBackend` (treat acronyms as words). The alias is live — lib.rs re-exports both. This forces every future reader to wonder which spelling is canonical and check both docs. The comment says 'until the Phase 3 implementation settles a canonical name', but the settling can happen now by grepping the one or two call sites (test files only in Phase 1).",
+      "suggested_fix": "Grep repo for `UCANBackend` usages (should be exactly the tests/ucan_stub_messages.rs file); change them to `UcanBackend`; delete the alias + the `#[allow]`. Canonical-name decision lands today, not Phase 3. If call sites resist, the minimum is to move the `#[deprecated(note = \"use UcanBackend\")]` attribute onto the alias so new uses generate a warning."
+    },
+    {
+      "id": "g4-cr-10",
+      "severity": "minor",
+      "location": "crates/benten-caps/src/policy.rs:23-42 (WriteContext)",
+      "claim": "`WriteContext` has `label` and `target_label` fields that the own doc admits are redundant.",
+      "detail": "policy.rs:34 says 'target_label — redundant with label, kept for the proptest surface that names it explicitly.' A struct field kept ONLY for test ergonomics is a smell — tests should adapt to the type, not the other way around. Worse: G3 (transaction) and G6 (evaluator) will both write against `WriteContext` at commit time; if one of them populates `label` and the other populates `target_label`, policies that match on only one field will behave inconsistently. Item 5 of the audit brief notes `ops` is deferred to G3 but no placeholder exists — this is the placeholder-making-the-missing-field-obvious concern, inverted: instead of a missing field, there's a duplicate one that will mislead G3/G6 implementers.",
+      "suggested_fix": "Drop `target_label`. Have the proptest generator emit a single `label` field and adjust the proptest to use it. Alternatively, if the proptest surface truly needs two independent axes, rename `target_label` to something semantically distinct (e.g. `resolved_label`) and document why both exist. Also: leave a visible `// TODO(G3): pub ops: Vec<PendingOp>` placeholder in the struct so G3 cannot forget the deferred field — not a compile placeholder, but a doc placeholder matches the plan §3 principle 'make the missing field obvious'."
+    },
+    {
+      "id": "g4-cr-11",
+      "severity": "minor",
+      "location": "crates/benten-caps/Cargo.toml:28 (dev-dep on benten-engine)",
+      "claim": "benten-caps dev-deps on benten-engine for integration tests — creates a latent cyclic concern even though the test binaries link separately.",
+      "detail": "Cargo.toml:24-28 comments correctly that 'dev-deps cycle between benten-caps and benten-engine is safe because test binaries link separately from the lib crate graph'. That is technically accurate for the compiler; however, the dev-dep means `cargo check -p benten-caps --all-targets` transitively compiles benten-engine, which compiles benten-caps again — the benten-caps-lib-crate change-signal pipeline runs the full workspace. The integration tests using benten-engine could equivalently live under `crates/benten-engine/tests/` (where `Engine::builder` is defined) with no loss of coverage. Moving them simplifies Cargo graph and reduces incremental-rebuild work during G3/G6 development.",
+      "suggested_fix": "Move `check_write_called_at_commit.rs`, `toctou_iteration.rs`, and the `ucan_stub_messages.rs` sub-test that uses benten-engine to `crates/benten-engine/tests/` (new sub-directory `cap_integration/`). Drop the benten-engine dev-dep. Keep unit-tests for benten-caps in this crate. This is consistent with the crate boundaries: benten-caps owns the trait; benten-engine owns the wiring; tests that exercise wiring belong with the wiring."
+    }
+  ],
+  "quality_observations": {
+    "module_split": "Sensible. error / grant / noauth / policy / ucan_stub each pull their weight. No circular imports. Each file does what its name says.",
+    "doc_completeness": "Every pub item has a rustdoc comment. Crate-level lib.rs doc accurately names what ships vs. what's stubbed. Named compromises #1 and #2 are called out at crate level. One dangling intra-doc link (g4-cr-1).",
+    "error_messages": "Stable, bounded, non-leaking. DeniedDetail carries caller-supplied strings (`required`, `entity`) — if those strings are ever derived from attacker input, size-bounding them is a Phase 2 concern but out of scope here.",
+    "trait_object_safety": "Verified. `CapabilityPolicy: Send + Sync` with single method `check_write(&self, ctx: &WriteContext) -> Result<(), CapError>`. No generic methods, no Self-returning, no where Self: Sized. Object-safe.",
+    "derives": "NoAuthBackend has Debug + Default + Clone + Copy. UcanBackend matches. CapError has Debug via thiserror. GrantScope has PartialEq+Eq. CapabilityGrant has Debug + Clone but no PartialEq/Eq — acceptable because content equality is via .cid(), but worth noting for API ergonomics.",
+    "cargo_toml": "Minimal. benten-core (required) + thiserror (workspace). Dev-deps: proptest + tempfile + benten-graph + benten-engine. The two dev-deps on sibling crates are the concern flagged in g4-cr-11; otherwise clean.",
+    "test_file_edits": "Verified: git show 30cfb34 --stat shows ONLY src/ files changed (6 files, 535+/240-). Zero tests/ files in the commit. TDD contract preserved."
+  },
+  "notes": "Overall G4 is solid shape — 27/34 green with the 7 reds cleanly attributable to G3/G6/G7 wiring. Three major-severity quality issues: (g4-cr-1) dangling doc link for compromise #2's anchor, (g4-cr-2) CapabilityGrant has two incompatible Node-construction paths despite claiming they're equivalent, (g4-cr-3) DEFAULT_BATCH_BOUNDARY is duplicated not shared between lib and test. All three should be fixed before G3 dispatches because G3 and G6 will both consume CapabilityGrant + WriteContext + DEFAULT_BATCH_BOUNDARY and any churn here invalidates their tests. Verdict `revise` (not `block`) — the issues are fixable inside G4's own scope without reopening G3/G6, and clippy+fmt are already clean. Recommend Ben dispatch a small G4-follow-up PR fixing g4-cr-1/2/3 before G3. The 8 minor findings are quality-of-life: the UcanBackend alias decision, the redundant target_label field, the tautological alloc_count proptest, the dev-dep cycle. None are blocking but they'd all be trivial to address in the same G4-follow-up PR. Pipeline state verified: cargo fmt --all --check green, cargo clippy -p benten-caps --all-targets -D warnings green, commit touched zero test files."
+}

@@ -21,6 +21,10 @@ use benten_eval::RegistrationError;
 use benten_graph::{GraphError, RedbBackend};
 
 // Touch the stub crates so the dependency graph is real, not just declared.
+// TODO(phase-1-cleanup, G8): retire these three `const _:` assertions together
+// with the `STUB_MARKER` constants in benten-caps / benten-eval / benten-ivm
+// once those crates are no longer stub-phase (G4 mini-review g4-cr-7 mirrored
+// this TODO from `benten-caps/src/lib.rs`).
 const _: &str = benten_caps::STUB_MARKER;
 const _: &str = benten_eval::STUB_MARKER;
 const _: &str = benten_ivm::STUB_MARKER;

@@ -12,8 +12,15 @@
 //! This proptest exhaustively fuzzes `check_write` with structurally-valid
 //! `WriteContext`s and asserts it returns `Ok(())` unconditionally.
 //!
-//! TDD contract: FAIL at R3 (`NoAuthBackend`, `WriteContext`, the
-//! `CapabilityPolicy` trait are P1/P3 deliverables). R5 lands them.
+//! G4 mini-review (g4-cr-8): the second proptest (a "zero-alloc" assertion
+//! that compared `alloc_count() before` vs `after`) was removed. The helper
+//! returned a constant `0`, which made the assertion trivially `0 == 0` for
+//! every generated context — false coverage. A real allocation counter
+//! lands behind a `testing-alloc` feature flag in Phase 2 alongside the
+//! global allocator decision (mimalloc vs snmalloc-rs).
+//!
+//! G4 mini-review (g4-cr-10): the redundant `target_label` field on
+//! `WriteContext` was dropped; this generator now populates `label` only.
 //!
 //! Cross-refs:
 //! - `.addl/phase-1/r1-security-auditor.json` finding #2 (critical — the
@@ -34,9 +41,9 @@ fn any_write_context() -> impl Strategy<Value = WriteContext> {
         any::<bool>(),
         proptest::option::of(proptest::string::string_regex("[a-z0-9]{4,32}").unwrap()),
     )
-        .prop_map(|(target_label, is_priv, actor)| {
+        .prop_map(|(label, is_priv, actor)| {
             let mut ctx = WriteContext::default();
-            ctx.target_label = target_label;
+            ctx.label = label;
             ctx.is_privileged = is_priv;
             ctx.actor_hint = actor;
             ctx
@@ -56,17 +63,5 @@ proptest! {
             "NoAuthBackend rejected a write — contract violation. ctx: {:?}",
             ctx
         );
-    }
-
-    /// Zero-allocation invariant: the NoAuth hot path must not allocate.
-    /// This guards against a later refactor (e.g. building a diagnostic
-    /// message eagerly) silently regressing DX for the default deployment.
-    #[test]
-    fn prop_noauth_hot_path_does_not_allocate(ctx in any_write_context()) {
-        let backend = NoAuthBackend::new();
-        let before = benten_caps::testing::alloc_count();
-        let _ = backend.check_write(&ctx);
-        let after = benten_caps::testing::alloc_count();
-        prop_assert_eq!(before, after, "NoAuth check_write must not allocate");
     }
 }

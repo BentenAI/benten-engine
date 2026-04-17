@@ -31,9 +31,11 @@ use benten_engine::Engine;
 use benten_engine::testing::iterate_write_handler;
 
 /// Batch boundary size is configurable per grant; this default matches the
-/// R1-triage documented value (100 iterations). If the default changes, this
-/// constant and the named compromise prose must change together.
-const DEFAULT_BATCH_BOUNDARY: u32 = 100;
+/// R1-triage documented value (100 iterations). Imported from
+/// `benten_caps::DEFAULT_BATCH_BOUNDARY` (G4 mini-review g4-cr-3) so the two
+/// sides stay in lockstep — change the pub const in the crate and the test
+/// follows automatically.
+const DEFAULT_BATCH_BOUNDARY: u32 = benten_caps::DEFAULT_BATCH_BOUNDARY as u32;
 
 /// Attack simulation: grant a WRITE capability, start a 300-iter handler,
 /// revoke the cap mid batch 1 (iteration ~50). Per the r4-triage reconciliation

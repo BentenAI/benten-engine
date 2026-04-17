@@ -16,7 +16,9 @@ use crate::error::CapError;
 use crate::policy::{CapabilityPolicy, WriteContext};
 
 /// UCAN capability backend stub. Every `check_write` call returns
-/// [`CapError::NotImplemented`].
+/// [`CapError::NotImplemented`] with `backend = "UCANBackend"` and
+/// `lands_in_phase = 3` so the displayed message names both the backend and
+/// the scheduled landing phase.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct UcanBackend;
 
@@ -28,14 +30,11 @@ impl UcanBackend {
     }
 }
 
-/// Alias preserving the SCREAMING-ACRONYM naming some call sites use. Prefer
-/// [`UcanBackend`] (Rust casing); this alias keeps the SCREAMING path open
-/// until the Phase 3 implementation settles a canonical name.
-#[allow(non_camel_case_types)]
-pub type UCANBackend = UcanBackend;
-
 impl CapabilityPolicy for UcanBackend {
     fn check_write(&self, _ctx: &WriteContext) -> Result<(), CapError> {
-        Err(CapError::NotImplemented)
+        Err(CapError::NotImplemented {
+            backend: "UCANBackend",
+            lands_in_phase: 3,
+        })
     }
 }

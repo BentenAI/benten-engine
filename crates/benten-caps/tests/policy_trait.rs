@@ -36,5 +36,6 @@ fn two_backends_implement_the_same_trait() {
         policies.iter().map(|p| p.check_write(&ctx)).collect();
     assert_eq!(outcomes.len(), 2);
     assert!(outcomes[0].is_ok());
-    assert!(matches!(outcomes[1], Err(CapError::NotImplemented)));
+    // g4-cr-6: NotImplemented carries `backend` + `lands_in_phase` fields.
+    assert!(matches!(outcomes[1], Err(CapError::NotImplemented { .. })));
 }

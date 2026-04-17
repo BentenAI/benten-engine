@@ -52,11 +52,16 @@ impl GrantScope {
     /// Returns [`CapError::Denied`] for the empty / whitespace-only case.
     /// `Denied` is reused (rather than a dedicated `InvalidScope`) so the
     /// ERROR-CATALOG surface stays minimal — a refusal at parse IS a
-    /// capability denial at construction.
+    /// capability denial at construction. The `required` and `entity`
+    /// payload fields are empty strings because there is no write-context
+    /// to attribute.
     pub fn parse(s: &str) -> Result<Self, CapError> {
         let trimmed = s.trim();
         if trimmed.is_empty() {
-            return Err(CapError::Denied);
+            return Err(CapError::Denied {
+                required: String::new(),
+                entity: String::new(),
+            });
         }
         Ok(GrantScope(trimmed.to_string()))
     }
@@ -70,26 +75,31 @@ impl GrantScope {
 
 /// A typed capability grant.
 ///
-/// The Phase-1 grant carries exactly three fields in its public struct
-/// surface: `grantee`, `scope`, `hlc_stamp`. This is the minimal shape the
-/// R3 unit tests construct via struct literal. The issuer-aware construction
-/// path is a free-function-shaped [`CapabilityGrant::new`] that returns a
-/// [`Node`] directly — the issuer participates in the resulting CID, but
-/// never materializes as a visible field on the struct (which would force
-/// every call site to name it).
+/// Four public fields: `grantee`, `issuer`, `scope`, and `hlc_stamp`. All
+/// four feed the content-addressed CID via [`CapabilityGrant::as_node`] →
+/// [`Node::cid`], so two grants differing in any field produce distinct
+/// CIDs — load-bearing for UCAN-style attenuation chains in Phase 3 where
+/// the issuer is a first-class identity axis.
 ///
-/// Two construction paths:
+/// # Construction
 ///
-/// - Struct literal: `CapabilityGrant { grantee, scope, hlc_stamp }` +
-///   [`CapabilityGrant::as_node`] + [`CapabilityGrant::cid`]. No issuer.
-/// - [`CapabilityGrant::new`] — takes `(grantee, issuer, scope)` and returns
-///   a [`Node`]. The Node has a `"issuer"` property, so two grants that
-///   differ only by issuer produce distinct CIDs. Load-bearing for
-///   UCAN-style attenuation chains in Phase 3.
+/// - [`CapabilityGrant::new`] — the convenience constructor: takes
+///   `(grantee, issuer, scope)` and zero-initializes `hlc_stamp`. Returns a
+///   `CapabilityGrant` (NOT a `Node`), sidestepping Clippy's
+///   `new_ret_no_self` lint and letting callers read `.cid()` / `.as_node()`
+///   / the public fields off one typed handle.
+/// - Struct literal: `CapabilityGrant { grantee, issuer, scope, hlc_stamp }`
+///   — the path R3 unit tests use. Every field must be named; this is the
+///   correctness guardrail against the g4-cr-2 "two incompatible
+///   construction paths" bug where an issuer could be silently omitted.
 #[derive(Debug, Clone)]
 pub struct CapabilityGrant {
     /// The entity the capability is granted to.
     pub grantee: Cid,
+    /// The entity that issued the grant. Load-bearing for attenuation
+    /// chains: two grants with the same grantee + scope but different
+    /// issuers MUST have different CIDs (Phase 3 UCAN depends on this).
+    pub issuer: Cid,
     /// The capability scope (e.g. `"store:post:write"`).
     pub scope: String,
     /// Hybrid-logical-clock stamp at grant time. Phase 3 wires a real HLC
@@ -99,49 +109,49 @@ pub struct CapabilityGrant {
 }
 
 impl CapabilityGrant {
-    /// High-level constructor — returns the grant as a [`Node`], with the
-    /// issuer folded into the Node's property map so the Node's CID is
-    /// distinct per `(grantee, issuer, scope)` triple.
+    /// Construct a grant from `(grantee, issuer, scope)`. HLC stamp is
+    /// zero-initialized; set it manually via the public field if the
+    /// caller has a real HLC to stamp with.
     ///
-    /// Returning a [`Node`] (rather than a `CapabilityGrant` struct) is a
-    /// deliberate asymmetry: the struct has three fields for tests that pin
-    /// them directly; the issuer-aware path produces a Node and the caller
-    /// reads `.cid()` off the Node directly.
+    /// Returns `Self` (not `Node`), sidestepping the Clippy
+    /// `new_ret_no_self` asymmetry the original G4 draft had. Callers who
+    /// need the Node representation call [`CapabilityGrant::as_node`] or
+    /// [`CapabilityGrant::cid`] directly off the returned handle.
     #[must_use]
-    #[allow(
-        clippy::new_ret_no_self,
-        reason = "asymmetric return: the issuer-aware construction path materializes a Node (so the issuer can feed into the content hash without forcing every struct-literal call site to name an `issuer` field)"
-    )]
-    pub fn new(grantee: Cid, issuer: Cid, scope: GrantScope) -> Node {
-        let mut props: BTreeMap<String, Value> = BTreeMap::new();
-        props.insert(
-            "grantee".to_string(),
-            Value::Bytes(grantee.as_bytes().to_vec()),
-        );
-        props.insert(
-            "issuer".to_string(),
-            Value::Bytes(issuer.as_bytes().to_vec()),
-        );
-        props.insert("scope".to_string(), Value::text(scope.0));
-        props.insert("hlc_stamp".to_string(), Value::Int(0));
-        Node::new(vec![CAPABILITY_GRANT_LABEL.to_string()], props)
+    pub fn new(grantee: Cid, issuer: Cid, scope: GrantScope) -> Self {
+        Self {
+            grantee,
+            issuer,
+            scope: scope.0,
+            hlc_stamp: 0,
+        }
     }
 
     /// Produce the graph representation of this grant: a [`Node`] with
-    /// label `"CapabilityGrant"` and the three struct fields flattened into
+    /// label `"CapabilityGrant"` and the four struct fields flattened into
     /// properties. Being a Node means the grant participates in
     /// content-addressing like any other graph entity.
     ///
     /// Properties emitted:
     /// - `"grantee"` — [`Value::Bytes`] of the grantee CID's raw bytes.
+    /// - `"issuer"` — [`Value::Bytes`] of the issuer CID's raw bytes.
     /// - `"scope"` — [`Value::text`] of the scope string.
     /// - `"hlc_stamp"` — [`Value::Int`] of the HLC value (cast `i64`).
+    ///
+    /// Every grant has an issuer property (even if the issuer is a
+    /// "self-issued" sentinel) — this is the g4-cr-2 correctness-by-
+    /// construction fix against the "unauthenticated-root issuer" principal-
+    /// confusion vector.
     #[must_use]
     pub fn as_node(&self) -> Node {
         let mut props: BTreeMap<String, Value> = BTreeMap::new();
         props.insert(
             "grantee".to_string(),
             Value::Bytes(self.grantee.as_bytes().to_vec()),
+        );
+        props.insert(
+            "issuer".to_string(),
+            Value::Bytes(self.issuer.as_bytes().to_vec()),
         );
         props.insert("scope".to_string(), Value::text(self.scope.clone()));
         // Phase 1 HLC stamps are caller-supplied test literals; u64 → i64
