@@ -20,8 +20,21 @@
 //! the *trend* across releases is the signal.
 //!
 //! The bench reports writes-per-second at several writer-thread counts
-//! (1, 2, 4, 8) so we can see the contention curve rather than a single
-//! aggregate number.
+//! (1, 2, 4, 8, 16) so the contention curve is visible rather than
+//! collapsed into a single aggregate number. Under redb's single-writer
+//! serialization, throughput should be roughly constant across thread
+//! counts — the extra threads queue on the write lock rather than
+//! speeding anything up. The curve's *shape* (flat vs. declining vs.
+//! pathological) is the signal.
+//!
+//! ## Tail-latency characterization
+//!
+//! Per-op p50/p95/p99 are NOT produced by criterion's default output.
+//! The `iter_custom` closure does collect per-op durations, but
+//! reporting them as a distribution would need a side-channel.
+//! Characterization of write-lock queuing tail is owned by the
+//! integration-test landscape (see `tests/integration/contention_*`);
+//! this bench's job is to surface the throughput envelope.
 
 #![allow(
     clippy::unwrap_used,
@@ -46,7 +59,7 @@ fn bench_concurrent_writers(c: &mut Criterion) {
     group.measurement_time(std::time::Duration::from_secs(8));
     group.sample_size(20);
 
-    for writer_count in [1usize, 2, 4, 8] {
+    for writer_count in [1usize, 2, 4, 8, 16] {
         group.throughput(Throughput::Elements(writer_count as u64));
         group.bench_with_input(
             BenchmarkId::from_parameter(writer_count),
