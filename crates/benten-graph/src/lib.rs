@@ -31,10 +31,12 @@ pub mod backend;
 pub(crate) mod indexes;
 pub mod redb_backend;
 pub mod store;
+pub mod transaction;
 
 pub use backend::{BatchOp, DurabilityMode, KVBackend, ScanIter, ScanResult};
 pub use redb_backend::RedbBackend;
 pub use store::{ChangeEvent, ChangeKind, ChangeSubscriber, EdgeStore, NodeStore};
+pub use transaction::{PendingOp, Transaction};
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -168,66 +170,55 @@ impl From<redb::CommitError> for GraphError {
 // Phase 1 stubs — expanded in G3 / G6
 // ---------------------------------------------------------------------------
 
-/// A write transaction handle, passed into the `transaction` closure. All
-/// writes are atomic at commit.
-///
-/// **Phase 1 G3-A stub.**
-pub struct Transaction<'a> {
-    _phantom: core::marker::PhantomData<&'a ()>,
-}
-
-impl Transaction<'_> {
-    /// Put a Node inside the transaction.
-    ///
-    /// # Errors
-    /// Stub — currently `todo!()`.
-    pub fn put_node(&mut self, _node: &Node) -> Result<Cid, GraphError> {
-        todo!("Transaction::put_node — G3-A (Phase 1)")
-    }
-
-    /// Put an Edge inside the transaction.
-    ///
-    /// # Errors
-    /// Stub — currently `todo!()`.
-    pub fn put_edge(&mut self, _edge: &benten_core::Edge) -> Result<Cid, GraphError> {
-        todo!("Transaction::put_edge — G3-A (Phase 1)")
-    }
-
-    /// Open a nested transaction. Phase 1 always rejects with
-    /// [`GraphError::NestedTransactionNotSupported`].
-    ///
-    /// # Errors
-    /// Stub — currently `todo!()`.
-    pub fn transaction<F, R>(&mut self, _f: F) -> Result<R, GraphError>
-    where
-        F: FnOnce(&mut Transaction<'_>) -> Result<R, GraphError>,
-    {
-        todo!("Transaction::transaction (nested) — G3-A (Phase 1)")
-    }
-}
-
 /// A MVCC snapshot handle returned by [`RedbBackend::snapshot`]. Reads
 /// through this handle observe the database state at the instant the
 /// snapshot was opened; concurrent writes to the backend are invisible until
-/// the handle is dropped. **Phase 1 G6 stub.**
+/// the handle is dropped.
+///
+/// G3-A lands a partial shape: [`SnapshotHandle::get_node`] is implemented
+/// (thin wrapper over a `redb::ReadTransaction` held across the handle's
+/// lifetime). [`SnapshotHandle::scan_label`] stays a G6 stub — it depends
+/// on the label-index scan plumbing that G6 owns.
 ///
 /// Implements `Drop` so explicit `drop(handle)` in tests is the idiomatic
 /// way to release the snapshot's read-transaction lifetime.
-pub struct SnapshotHandle;
+pub struct SnapshotHandle {
+    /// redb ReadTransaction captured at snapshot-open time. redb's read
+    /// transactions are lightweight (no writer lock held) and observe the
+    /// committed state at the instant `begin_read()` returned.
+    pub(crate) read_txn: Option<redb::ReadTransaction>,
+}
 
 impl Drop for SnapshotHandle {
     fn drop(&mut self) {
-        // G6 wires the underlying redb ReadTransaction release here.
+        // Dropping the `ReadTransaction` releases the snapshot naturally.
+        self.read_txn.take();
     }
 }
 
 impl SnapshotHandle {
-    /// Retrieve a Node by CID from the snapshot view. **Phase 1 G6 stub.**
+    /// Retrieve a Node by CID from the snapshot view. Reads through the
+    /// handle observe the point-in-time state captured when
+    /// [`RedbBackend::snapshot`] was called; concurrent writes are
+    /// invisible until the handle is dropped and a fresh snapshot is
+    /// opened.
     ///
     /// # Errors
-    /// Stub — currently `todo!()`.
-    pub fn get_node(&self, _cid: &Cid) -> Result<Option<Node>, GraphError> {
-        todo!("SnapshotHandle::get_node — G6 (Phase 1)")
+    /// - [`GraphError::Redb`] on any redb I/O failure.
+    /// - [`GraphError::Decode`] if a stored Node fails to decode.
+    pub fn get_node(&self, cid: &Cid) -> Result<Option<Node>, GraphError> {
+        use redb::ReadableTable;
+        let Some(read_txn) = self.read_txn.as_ref() else {
+            return Ok(None);
+        };
+        let table = read_txn.open_table(redb_backend::NODES_TABLE)?;
+        let key = store::node_key(cid);
+        let Some(v) = table.get(key.as_slice())? else {
+            return Ok(None);
+        };
+        let node: Node = serde_ipld_dagcbor::from_slice(&v.value())
+            .map_err(|e| GraphError::Decode(format!("snapshot get_node decode: {e}")))?;
+        Ok(Some(node))
     }
 
     /// Scan all nodes with a given label from the snapshot view.
@@ -302,12 +293,20 @@ impl WriteContext {
 
     /// Called by the transaction primitive to enforce the SC1 stopgap.
     /// Rejects writes to any label starting with `"system:"` unless
-    /// `is_privileged == true`.
+    /// `is_privileged == true`. Returns the `label` string in the error so
+    /// diagnostics can point at the exact reserved label the write
+    /// attempted.
     ///
     /// # Errors
-    /// Stub — currently `todo!()`.
+    /// [`GraphError::SystemZoneWrite`] on an unprivileged system-zone
+    /// label.
     pub fn enforce_system_zone(&self) -> Result<(), GraphError> {
-        todo!("WriteContext::enforce_system_zone — SC1 (Phase 1)")
+        if !self.is_privileged && self.label.starts_with("system:") {
+            return Err(GraphError::SystemZoneWrite {
+                label: self.label.clone(),
+            });
+        }
+        Ok(())
     }
 }
 

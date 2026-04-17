@@ -22,15 +22,48 @@ use crate::error::CapError;
 /// `TODO(phase-3)`: `actor_hint` is a `String` placeholder for the eventual
 /// DID / VC identity. Phase 3 `benten-id` replaces it with a typed principal.
 ///
-/// `TODO(G3)`: a `Vec<PendingOp>` of pending writes is deliberately NOT
-/// present today — G3 will add the pending-writes list so a policy can make
-/// per-write decisions at commit time. The auditor (g4-uc-5) flagged the
-/// missing surface; the shape is a G3 concern because only G3 knows the
-/// transaction primitive's batch structure. Pre-landing the field without
-/// the wiring would freeze a shape G3 hasn't yet designed.
+/// A pending write enqueued inside the transaction primitive's batch.
+/// G3-A landed the [`WriteContext::pending_ops`] surface (R4 pass-2 residual
+/// g4-uc-5) so commit-time policies can reason about the whole batch — not
+/// just the "primary" op reflected in the convenience fields.
+///
+/// The enum is deliberately lean — policies only need the label and CID of
+/// each op to route denials. Richer shapes (full Node body, property diffs)
+/// are a Phase-2 concern and would require `benten-caps` to take a direct
+/// dep on `benten-graph` (a layering break).
+#[derive(Debug, Clone)]
+pub enum PendingOp {
+    /// A Node write. `labels` is the full label set of the Node being put.
+    PutNode {
+        /// The content-addressed CID of the Node after encoding.
+        cid: Cid,
+        /// Every label the Node carries.
+        labels: Vec<String>,
+    },
+    /// An Edge write. `label` is the Edge's single label.
+    PutEdge {
+        /// The content-addressed CID of the Edge after encoding.
+        cid: Cid,
+        /// The Edge's label.
+        label: String,
+    },
+    /// A Node deletion by CID.
+    DeleteNode {
+        /// The target Node CID.
+        cid: Cid,
+    },
+    /// An Edge deletion by CID.
+    DeleteEdge {
+        /// The target Edge CID.
+        cid: Cid,
+    },
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct WriteContext {
-    /// Label of the Node about to be written.
+    /// Label of the Node about to be written. For multi-op batches this
+    /// carries the primary label of the first op (convenience field;
+    /// structured routing should use [`WriteContext::pending_ops`]).
     pub label: String,
     /// Actor CID identity (Phase 3). `None` in Phase 1; reserved so the
     /// struct shape is stable across phases.
@@ -44,6 +77,13 @@ pub struct WriteContext {
     /// Non-Cid actor hint (a string identifier) used in test fixtures and
     /// Phase-1 in-process policies.
     pub actor_hint: Option<String>,
+    /// Full pending-writes batch the transaction will commit atomically.
+    /// Empty for check paths outside a transaction; G3-A populates this
+    /// from the transaction primitive's pending-ops list at commit time.
+    ///
+    /// Closes R4 pass-2 residual `g4-uc-5`: policies can now inspect the
+    /// full batch rather than just the primary op reflected by `label`.
+    pub pending_ops: Vec<PendingOp>,
 }
 
 impl WriteContext {
@@ -58,6 +98,7 @@ impl WriteContext {
             scope: "synthetic:write".into(),
             is_privileged: false,
             actor_hint: Some("synthetic-actor".into()),
+            pending_ops: Vec::new(),
         }
     }
 }

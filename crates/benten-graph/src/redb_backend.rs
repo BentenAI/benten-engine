@@ -16,6 +16,8 @@
 //! write transaction, so the indexes are always in sync with the node store.
 
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use benten_core::{Cid, Edge, Node, Value};
 use redb::{
@@ -32,7 +34,8 @@ use crate::store::{
     ChangeSubscriber, EDGE_SRC_PREFIX, EDGE_TGT_PREFIX, EdgeStore, NodeStore, decode_err, edge_key,
     edge_src_index_key, edge_src_index_prefix, edge_tgt_index_key, edge_tgt_index_prefix, node_key,
 };
-use crate::{GraphError, WriteContext};
+use crate::transaction::{TxGuard, fan_out};
+use crate::{GraphError, Transaction, WriteContext};
 
 /// Primary key/value table storing every `(key, value)` pair. The Node and
 /// Edge stores layer the `n:CID`, `e:CID`, `es:SRC|EDGE`, `et:TGT|EDGE` key
@@ -140,6 +143,23 @@ fn warn_if_group_durability_collapsed(mode: DurabilityMode) {
 pub struct RedbBackend {
     db: Database,
     durability: Durability,
+    /// Registered change-event subscribers. Behind a `Mutex<Vec<...>>` so
+    /// `register_subscriber` and the post-commit fan-out can share one
+    /// list without forcing callers to hold an `Arc<RedbBackend>`.
+    subscribers: Arc<Mutex<Vec<Arc<dyn ChangeSubscriber>>>>,
+    /// In-transaction flag. Set via [`TxGuard`] at the start of a
+    /// closure-based transaction, cleared on drop. Prevents nested
+    /// `backend.transaction(|_| backend.transaction(...))` calls from
+    /// deadlocking on redb's single-writer lock; the second
+    /// `RedbBackend::transaction` sees `true` and returns
+    /// [`GraphError::NestedTransactionNotSupported`] without ever asking
+    /// redb to open a second write txn.
+    tx_flag: Arc<Mutex<bool>>,
+    /// Monotonically increasing transaction id stamped onto
+    /// [`crate::ChangeEvent::tx_id`]. Starts at 1 so that tests can reserve
+    /// 0 as "no event". Atomic because the backend may be shared across
+    /// threads behind an `Arc`.
+    next_tx_id: Arc<AtomicU64>,
 }
 
 impl core::fmt::Debug for RedbBackend {
@@ -220,6 +240,9 @@ impl RedbBackend {
         let backend = Self {
             db,
             durability: to_redb_durability(durability),
+            subscribers: Arc::new(Mutex::new(Vec::new())),
+            tx_flag: Arc::new(Mutex::new(false)),
+            next_tx_id: Arc::new(AtomicU64::new(1)),
         };
         backend.ensure_tables()?;
         Ok(backend)
@@ -276,6 +299,9 @@ impl RedbBackend {
         let backend = Self {
             db,
             durability: to_redb_durability(durability),
+            subscribers: Arc::new(Mutex::new(Vec::new())),
+            tx_flag: Arc::new(Mutex::new(false)),
+            next_tx_id: Arc::new(AtomicU64::new(1)),
         };
         backend.ensure_tables()?;
         Ok(backend)
@@ -655,75 +681,180 @@ impl RedbBackend {
         Ok(out)
     }
 
-    // ---- Stubs owned by later groups (G3 / G6 / SC1) ----------------------
+    // ---- G3-A transaction + change-stream surface ------------------------
 
-    /// Store a Node under a caller-supplied [`WriteContext`]. G3/G6 own the
-    /// full semantics; this stub is invoked by the SC1 system-zone tests.
+    /// Store a Node under a caller-supplied [`WriteContext`]. The R1 SC1
+    /// system-zone stopgap: an unprivileged context (`is_privileged ==
+    /// false`) rejects any Node whose label list contains a `"system:"`-
+    /// prefixed label. A privileged context (set only by the engine-API
+    /// paths `grant_capability` / `create_view` / `revoke_capability`) may
+    /// write system-zone labels.
+    ///
+    /// On success this delegates to the inherent [`RedbBackend::put_node`]
+    /// — the system-zone guard is the only thing this method adds; label
+    /// and property-index maintenance and the actual redb write happen
+    /// identically to the direct-path call.
     ///
     /// # Errors
-    /// Stub — currently `todo!()`.
+    /// - [`GraphError::SystemZoneWrite`] on an unprivileged system-zone
+    ///   label.
+    /// - Every error [`RedbBackend::put_node`] can surface.
     pub fn put_node_with_context(
         &self,
-        _node: &Node,
-        _ctx: &WriteContext,
+        node: &Node,
+        ctx: &WriteContext,
     ) -> Result<Cid, GraphError> {
-        todo!("RedbBackend::put_node_with_context — SC1 (Phase 1)")
+        if !ctx.is_privileged {
+            for label in &node.labels {
+                if label.starts_with("system:") {
+                    return Err(GraphError::SystemZoneWrite {
+                        label: label.clone(),
+                    });
+                }
+            }
+        }
+        self.put_node(node)
     }
 
     /// Transaction primitive — a closure over a write transaction handle.
     /// Atomic: all writes inside the closure commit together, or none do.
     ///
-    /// **Phase 1 G3-A stub.**
+    /// Execution shape:
+    /// 1. Acquire the in-transaction guard. A concurrent or nested
+    ///    `.transaction()` call short-circuits here with
+    ///    [`GraphError::NestedTransactionNotSupported`] without ever
+    ///    touching redb's single-writer lock.
+    /// 2. Begin a redb write transaction at the configured durability.
+    /// 3. Run the closure against a [`Transaction`] wrapper. Writes go
+    ///    straight to the inner redb txn AND accumulate in a pending-ops
+    ///    list used for post-commit change-event fan-out.
+    /// 4. On closure `Ok`: commit the redb txn, then fan
+    ///    [`crate::ChangeEvent`]s to every registered subscriber. Events
+    ///    are only emitted after commit succeeds — a commit-time I/O
+    ///    failure swallows the batch.
+    /// 5. On closure `Err`: drop the txn (redb aborts automatically),
+    ///    return [`GraphError::TxAborted`] wrapping the inner reason.
+    /// 6. On closure panic: the txn drops cleanly, the guard releases via
+    ///    RAII, and the panic propagates to the caller.
     ///
     /// # Errors
-    /// Stub — currently `todo!()`.
-    pub fn transaction<F, R>(&self, _f: F) -> Result<R, GraphError>
+    /// - [`GraphError::NestedTransactionNotSupported`] on a nested or
+    ///   concurrent call.
+    /// - [`GraphError::Redb`] on a redb commit failure.
+    /// - [`GraphError::TxAborted`] wrapping the closure's `Err`.
+    pub fn transaction<F, R>(&self, f: F) -> Result<R, GraphError>
     where
-        F: FnOnce(&mut crate::Transaction<'_>) -> Result<R, GraphError>,
+        F: FnOnce(&mut Transaction<'_>) -> Result<R, GraphError>,
     {
-        todo!("RedbBackend::transaction — G3-A (Phase 1)")
+        let _guard = TxGuard::try_acquire(Arc::clone(&self.tx_flag))?;
+        let write_txn = self.db.begin_write()?;
+        let mut tx = Transaction::new(write_txn, self.durability, /* privileged */ false)?;
+
+        match f(&mut tx) {
+            Ok(value) => {
+                let pending = tx.commit()?;
+                if !pending.is_empty() {
+                    let tx_id = self.next_tx_id.fetch_add(1, Ordering::SeqCst);
+                    let subs = {
+                        let guard = self.subscribers.lock().unwrap_or_else(|e| e.into_inner());
+                        guard.clone()
+                    };
+                    fan_out(&subs, &pending, tx_id);
+                }
+                Ok(value)
+            }
+            Err(inner) => {
+                // `tx` drops here without commit — redb aborts automatically.
+                drop(tx);
+                Err(GraphError::TxAborted {
+                    reason: inner.to_string(),
+                })
+            }
+        }
     }
 
-    /// Transaction variant used by the commit-denial edge-case test. The
-    /// closure runs to completion; a deny-on-commit hook fires before the
-    /// redb commit actually persists. **Phase 1 G3-A stub.**
+    /// Transaction variant used by the commit-denial edge-case test
+    /// (`failure_injection_rollback.rs::tx_commit_cap_failure_surfaces_
+    /// partial_trace_with_aborted_step`). The closure runs to completion;
+    /// immediately before the redb commit fires, a synthetic "capability
+    /// denied" hook rejects the batch. This models the behavior the engine
+    /// orchestrator will produce when the real
+    /// `CapabilityPolicy::check_write` returns `Err` at the commit
+    /// boundary.
+    ///
+    /// Phase 1 keeps this as a dedicated test hook rather than forcing a
+    /// public `CapabilityPolicy` dep into `benten-graph` — the engine
+    /// orchestrator (`benten-engine`) is the sole policy-aware caller.
     ///
     /// # Errors
-    /// Stub — currently `todo!()`.
-    pub fn transaction_with_deny_on_commit<F, R>(&self, _f: F) -> Result<R, GraphError>
+    /// - [`GraphError::TxAborted`] with a `reason` naming "capability" on
+    ///   simulated commit-time denial.
+    /// - [`GraphError::TxAborted`] with the closure's inner reason if the
+    ///   closure itself returned `Err`.
+    /// - [`GraphError::NestedTransactionNotSupported`] on a nested call.
+    pub fn transaction_with_deny_on_commit<F, R>(&self, f: F) -> Result<R, GraphError>
     where
-        F: FnOnce(&mut crate::Transaction<'_>) -> Result<R, GraphError>,
+        F: FnOnce(&mut Transaction<'_>) -> Result<R, GraphError>,
     {
-        todo!("RedbBackend::transaction_with_deny_on_commit — G3-A (Phase 1)")
+        let _guard = TxGuard::try_acquire(Arc::clone(&self.tx_flag))?;
+        let write_txn = self.db.begin_write()?;
+        let mut tx = Transaction::new(write_txn, self.durability, /* privileged */ false)?;
+        let _closure_value = f(&mut tx).map_err(|inner| GraphError::TxAborted {
+            reason: inner.to_string(),
+        })?;
+        // Simulated deny-at-commit hook: always refuses. The redb txn drops
+        // without commit, so no writes persist.
+        drop(tx);
+        Err(GraphError::TxAborted {
+            reason: "capability denied at commit (test hook)".to_string(),
+        })
     }
 
-    /// Register a change subscriber. The transaction primitive (G3) fans
-    /// change events out synchronously to every registered subscriber after
-    /// a successful commit. The subscriber is stored as an `Arc<dyn
+    /// Register a change subscriber. The transaction primitive fans change
+    /// events out synchronously to every registered subscriber after a
+    /// successful commit. The subscriber is stored as an `Arc<dyn
     /// ChangeSubscriber>` so heterogeneous IVM views can coexist.
     ///
     /// Per the plan's R1 architect ratification (§line-605), the pull-shaped
     /// channel concretion — tokio-broadcast on native, synchronous
     /// `Vec<Box<dyn ChangeSubscriber>>` fan-out on WASM — lives in
-    /// [`benten-engine::change`](https://docs.rs/benten-engine), NOT here.
+    /// [`benten-engine::change`](https://docs.rs/benten-engine), not here.
     /// `benten-graph` stays runtime-agnostic.
     ///
     /// # Errors
-    /// Stub — currently `todo!()`. G3 wires the subscriber list into the
-    /// transaction primitive's post-commit callback fan-out.
+    /// Returns `Ok(())` unconditionally in Phase 1. The fallible signature
+    /// is preserved for forward-compat with Phase 3 WASM backends that may
+    /// reject subscribers whose fan-out shape is incompatible with the
+    /// peer-fetch runtime.
     pub fn register_subscriber(
         &self,
-        _subscriber: std::sync::Arc<dyn ChangeSubscriber>,
+        subscriber: Arc<dyn ChangeSubscriber>,
     ) -> Result<(), GraphError> {
-        todo!("RedbBackend::register_subscriber — G3-A (Phase 1)")
+        let mut guard = self.subscribers.lock().unwrap_or_else(|e| e.into_inner());
+        guard.push(subscriber);
+        Ok(())
     }
 
-    /// Open a MVCC snapshot handle. **Phase 1 G6 stub.**
+    /// Count of currently-registered change subscribers. Used by thinness
+    /// tests that assert the subscriber list stays empty when IVM is
+    /// disabled.
+    #[must_use]
+    pub fn subscriber_count(&self) -> usize {
+        self.subscribers.lock().map(|g| g.len()).unwrap_or(0)
+    }
+
+    /// Open a MVCC snapshot handle. The handle captures redb's read-txn at
+    /// the call instant; subsequent writes to the backend are invisible to
+    /// the snapshot until it is dropped and a fresh one is opened.
     ///
     /// # Errors
-    /// Stub — currently `todo!()`.
+    /// [`GraphError::Redb`] if redb refuses to open a read transaction
+    /// (an I/O failure or a severely corrupt file).
     pub fn snapshot(&self) -> Result<crate::SnapshotHandle, GraphError> {
-        todo!("RedbBackend::snapshot — G6 (Phase 1)")
+        let read_txn = self.db.begin_read()?;
+        Ok(crate::SnapshotHandle {
+            read_txn: Some(read_txn),
+        })
     }
 }
 
