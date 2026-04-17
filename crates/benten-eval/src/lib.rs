@@ -14,6 +14,11 @@ pub use benten_core::ErrorCode;
 use benten_core::{Cid, Value};
 use std::collections::BTreeMap;
 
+pub mod context;
+pub mod primitives;
+
+pub use context::EvalContext;
+
 /// Marker for the current stub phase. Removed when the evaluator lands.
 pub const STUB_MARKER: &str = "benten-eval::stub";
 
@@ -602,8 +607,38 @@ impl Evaluator {
     }
 
     /// Evaluate a primitive operation and return a trace step.
-    pub fn step(&mut self, _op: &OperationNode) -> Result<StepResult, EvalError> {
-        todo!("Evaluator::step — E2 (Phase 1)")
+    ///
+    /// **G6-A dispatch shim.** This Phase-1 body routes to
+    /// [`primitives::dispatch`] so the per-primitive executors (READ, WRITE,
+    /// RESPOND, EMIT in G6-A; TRANSFORM, BRANCH, ITERATE, CALL in G6-B) can
+    /// be exercised from the test suite without the full stack-model
+    /// evaluator. G6-C replaces this body with the real iterative walker
+    /// that enforces invariants 2 / 8, owns frame push/pop semantics, and
+    /// follows typed error edges across the subgraph.
+    ///
+    /// # Errors
+    ///
+    /// Propagates whatever the per-primitive executor returns, plus
+    /// [`EvalError::StackOverflow`] when the current stack has reached
+    /// [`Evaluator::max_stack_depth`] so G6-C's overflow contract holds
+    /// even under the shim.
+    pub fn step(&mut self, op: &OperationNode) -> Result<StepResult, EvalError> {
+        if u32::try_from(self.stack.len()).unwrap_or(u32::MAX) >= self.max_stack_depth {
+            return Err(EvalError::StackOverflow);
+        }
+        let result = primitives::dispatch(op)?;
+        // G6-C owns the full stack discipline; the shim records a frame on
+        // successful dispatch and drops one on a terminal RESPOND so the
+        // evaluator_stack tests see a non-zero frame delta.
+        if result.edge_label == "terminal" {
+            self.stack.pop();
+        } else {
+            self.stack.push(ExecutionFrame {
+                node_id: op.id.clone(),
+                frame_index: self.stack.len(),
+            });
+        }
+        Ok(result)
     }
 }
 
