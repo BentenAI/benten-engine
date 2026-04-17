@@ -107,6 +107,13 @@ pub enum InvariantViolation {
     ContentHash,
     IterateMaxMissing,
     IterateNestDepth,
+    /// Runtime cumulative-iteration-budget exhaustion (invariant 8 runtime
+    /// leg). Distinct from `IterateNestDepth` (registration-time nesting
+    /// stopgap). Fires from the iterative evaluator when the per-run step
+    /// counter reaches `DEFAULT_ITERATION_BUDGET`. Maps to
+    /// [`ErrorCode::InvIterateBudget`] / `E_INV_ITERATE_BUDGET`. See
+    /// mini-review finding `g6-cag-1` / `g6-opl-6` / `g6-cr-2`.
+    IterateBudget,
     /// Aggregate catch-all for Invariant 12 — fires when two or more
     /// invariants are violated simultaneously. See
     /// `tests/invariants_9_10_12.rs::registration_catch_all_populates_violated_list`.
@@ -126,6 +133,7 @@ impl InvariantViolation {
             InvariantViolation::ContentHash => ErrorCode::InvContentHash,
             InvariantViolation::IterateMaxMissing => ErrorCode::InvIterateMaxMissing,
             InvariantViolation::IterateNestDepth => ErrorCode::InvIterateNestDepth,
+            InvariantViolation::IterateBudget => ErrorCode::InvIterateBudget,
             InvariantViolation::Registration => ErrorCode::InvRegistration,
         }
     }
@@ -326,8 +334,26 @@ impl PrimitiveKind {
         )
     }
 
-    /// Determinism classification: `true` if the primitive is deterministic
-    /// (same inputs → same outputs, no wall-clock / RNG leakage).
+    /// Determinism classification (Invariant 9).
+    ///
+    /// Returns `true` if this primitive's **output-to-caller** is a pure
+    /// function of its inputs — repeat executions with identical inputs
+    /// produce identical return values, with no wall-clock / RNG / network
+    /// non-determinism leaking into the returned `Value`.
+    ///
+    /// Primitives with side effects (WRITE, RESPOND) are still classified
+    /// `true` under this semantic: their observable return to the caller
+    /// is determined only by inputs, and the side-effect itself (a storage
+    /// mutation, a response emit) is separately tracked by the engine.
+    /// ENGINE-SPEC §5 groups these as "deterministic-with-side-effects";
+    /// for Invariant 9 purposes they fall on the deterministic side of the
+    /// fence because a subgraph declared `deterministic: true` is allowed
+    /// to mutate storage and return a response as long as the return value
+    /// itself is input-determined.
+    ///
+    /// This flag is **not** "safe to replay without rerunning side effects"
+    /// — for that, Phase 2 adds a separate replay-safety classification
+    /// (or an idempotency marker). See mini-review finding `g6-opl-2`.
     #[must_use]
     pub fn is_deterministic(&self) -> bool {
         match self {
@@ -355,7 +381,11 @@ impl PrimitiveKind {
             PrimitiveKind::Transform => &["ON_ERROR"],
             PrimitiveKind::Branch => &["ON_DEFAULT"],
             PrimitiveKind::Iterate => &["ON_LIMIT", "ON_ERROR"],
-            PrimitiveKind::Call => &["ON_DENIED", "ON_ERROR"],
+            // ON_LIMIT routes on timeout (see `primitives/call.rs`); the
+            // structural validator must accept it or registration-time
+            // edge-label validation would reject a valid CALL subgraph
+            // (mini-review finding `g6-opl-1`).
+            PrimitiveKind::Call => &["ON_DENIED", "ON_LIMIT", "ON_ERROR"],
             PrimitiveKind::Respond => &[],
             PrimitiveKind::Emit => &["ON_ERROR"],
             PrimitiveKind::Sandbox => &["ON_ERROR", "ON_FUEL", "ON_TIMEOUT", "ON_OUTPUT_LIMIT"],
@@ -401,11 +431,18 @@ pub struct NodeHandle(pub u32);
 /// A subgraph (set of OperationNodes + directed edges between them).
 ///
 /// **Phase 1 G6 stub.**
+///
+/// Fields are `pub(crate)` so in-place mutation after `build_validated`
+/// cannot corrupt the correspondence between the structure and its
+/// computed CID (mini-review finding `g6-cag-3`). External access goes
+/// through the [`nodes`](Self::nodes) / [`edges`](Self::edges) /
+/// [`handler_id`](Self::handler_id) accessor methods. Phase 2 will add
+/// the full immutability enforcement required by invariant 13.
 #[derive(Debug, Clone)]
 pub struct Subgraph {
-    pub nodes: Vec<OperationNode>,
-    pub edges: Vec<(String, String, String)>, // (from, to, label)
-    pub handler_id: String,
+    pub(crate) nodes: Vec<OperationNode>,
+    pub(crate) edges: Vec<(String, String, String)>, // (from, to, label)
+    pub(crate) handler_id: String,
 }
 
 impl Subgraph {
@@ -416,6 +453,24 @@ impl Subgraph {
             edges: Vec::new(),
             handler_id: handler_id.into(),
         }
+    }
+
+    /// Read-only accessor for the subgraph's [`OperationNode`]s.
+    #[must_use]
+    pub fn nodes(&self) -> &[OperationNode] {
+        &self.nodes
+    }
+
+    /// Read-only accessor for the subgraph's `(from, to, label)` edges.
+    #[must_use]
+    pub fn edges(&self) -> &[(String, String, String)] {
+        &self.edges
+    }
+
+    /// Read-only accessor for the subgraph's stable handler id.
+    #[must_use]
+    pub fn handler_id(&self) -> &str {
+        &self.handler_id
     }
 
     #[must_use]
@@ -504,6 +559,11 @@ impl Subgraph {
         // Returning an empty subgraph preserves the test contract: callers
         // check the code, the expected/actual CIDs, and don't inspect the
         // returned Subgraph. See ENGINE-SPEC §7.
+        //
+        // TODO(R4b / Phase-2): nail down the CanonNode/CanonEdge decoder so
+        // `load_verified` can return a fully reconstructed Subgraph; this
+        // is the other half of the Invariant-9 round-trip work documented
+        // in `invariants.rs::validate_subgraph`. Mini-review `g6-cag-6`.
         Ok(Subgraph::new("loaded"))
     }
 

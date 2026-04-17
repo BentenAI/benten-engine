@@ -126,6 +126,18 @@ fn iterate_primitive_error_edges_include_on_limit() {
     assert!(PrimitiveKind::Iterate.error_edges().contains(&"ON_LIMIT"));
 }
 
+/// Mini-review finding g6-opl-1: CALL's timeout path routes `ON_LIMIT`
+/// (see `primitives/call.rs`), so the structural validator's allowlist
+/// must include it or a valid CALL subgraph would be rejected at
+/// registration-time edge-label validation.
+#[test]
+fn call_primitive_error_edges_include_on_limit_denied_error() {
+    let edges = PrimitiveKind::Call.error_edges();
+    assert!(edges.contains(&"ON_LIMIT"), "CALL must expose ON_LIMIT");
+    assert!(edges.contains(&"ON_DENIED"), "CALL must expose ON_DENIED");
+    assert!(edges.contains(&"ON_ERROR"), "CALL must expose ON_ERROR");
+}
+
 /// Covered by `covers_error_code[E_PRIMITIVE_NOT_IMPLEMENTED]` entry
 /// "phase_two_primitives_return_not_implemented_at_call_time".
 #[test]

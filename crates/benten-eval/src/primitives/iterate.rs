@@ -65,6 +65,11 @@ pub fn execute(op: &OperationNode) -> Result<StepResult, EvalError> {
     // Happy-path result: an empty accumulator list. The real engine-backed
     // body invocation (G7) replaces this with the accumulated per-iteration
     // results.
+    //
+    // TODO(R4b / G7): staged-primitive observability — ensure a chained
+    // `iterate(items, body).map(...)` handler produces non-empty output
+    // once G7 wires body invocation. Add an integration test that pins
+    // accumulated output. Mini-review `g6-cr-9` / `g6-cr-10`.
     Ok(StepResult {
         next: None,
         edge_label: "ok".to_string(),

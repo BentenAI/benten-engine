@@ -138,6 +138,15 @@ pub(crate) fn validate_subgraph(
     // was set; the projection from builder carries it via no-op here
     // (validation on finalized Subgraph has no determinism flag). The
     // builder snapshot path handles it.
+    //
+    // TODO(phase-2): Invariant 9 is silently skipped on the finalized
+    // `Subgraph` path because the struct does not carry the
+    // `deterministic` flag through serialization. Phase 2 adds the flag
+    // to the DAG-CBOR schema (alongside `load_verified`'s decoder work;
+    // see lib.rs `Subgraph::load_verified`) so round-tripped Subgraphs
+    // can be re-validated here. Until then, determinism is enforced only
+    // at builder-snapshot registration time (`validate_builder`).
+    // References mini-review findings `g6-cag-4` / `g6-opl-5`.
 
     // Edge references to undeclared nodes don't fire a typed invariant in
     // Phase 1; the structural-catch-all path handles it in Phase 2.
@@ -348,7 +357,9 @@ fn invariant_number(v: &InvariantViolation) -> u8 {
         InvariantViolation::Determinism => 9,
         InvariantViolation::ContentHash => 10,
         InvariantViolation::Registration => 12,
-        InvariantViolation::IterateMaxMissing | InvariantViolation::IterateNestDepth => 8,
+        InvariantViolation::IterateMaxMissing
+        | InvariantViolation::IterateNestDepth
+        | InvariantViolation::IterateBudget => 8,
     }
 }
 

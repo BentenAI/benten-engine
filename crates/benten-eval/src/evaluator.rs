@@ -124,6 +124,11 @@ impl Evaluator {
             subgraph.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
 
         // Entry is the first node without an incoming edge.
+        //
+        // TODO(R4b / G7): when engine registration lands, validate that
+        // exactly one node has no incoming edges so multi-root handlers
+        // are rejected at registration instead of silently picking the
+        // first-constructed root. Mini-review `g6-cr-10`.
         let Some(entry) = subgraph
             .nodes
             .iter()
@@ -150,8 +155,12 @@ impl Evaluator {
 
         while let Some(op) = cursor {
             if steps >= budget {
+                // Runtime cumulative-step-budget exhaustion — distinct from
+                // the registration-time nesting-depth stopgap
+                // (`IterateNestDepth`). Mini-review findings g6-cag-1 /
+                // g6-opl-6 / g6-cr-2. Maps to `E_INV_ITERATE_BUDGET`.
                 return Err(EvalError::Invariant(
-                    crate::InvariantViolation::IterateNestDepth,
+                    crate::InvariantViolation::IterateBudget,
                 ));
             }
             let start = Instant::now();
@@ -162,6 +171,11 @@ impl Evaluator {
             // at 1µs when `Instant::now()` returns an identical value — on
             // mac+Linux the monotonic clock is typically 1–10ns granular, so
             // this only triggers on zero-work primitives.
+            //
+            // TODO(R4b): document in `diag/trace.rs` that trace timing is NOT
+            // included in any content-addressed hash; a trace artifact is an
+            // observability output, not a deterministic-replay fixture.
+            // Mini-review `g6-cr-11` / `g6-cr-12`.
             let elapsed = elapsed.max(1);
             match step_res {
                 Ok(r) => {

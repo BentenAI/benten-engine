@@ -88,8 +88,8 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Message:** "Cumulative iteration budget {actual} exceeds max {max} through nested ITERATE/CALL"
 - **Context:** `{ actual: number, max: number, path: NodeId[] }`
 - **Fix:** Reduce the multiplicative iteration space. Total iterations across nested ITERATE/CALL is bounded by the capability grant.
-- **Thrown at:** Registration
-- **Phase:** 2 (invariant 8 cumulative-budget enforcement; Phase 1 stopgap is `E_INV_ITERATE_NEST_DEPTH`, a hardcoded nesting cap of 3)
+- **Thrown at:** Evaluation (Phase 1 flat budget) / Registration (Phase 2 multiplicative-through-CALL)
+- **Phase:** 1 (runtime flat `DEFAULT_ITERATION_BUDGET` from `crates/benten-eval/src/evaluator.rs`; distinct from `E_INV_ITERATE_NEST_DEPTH`, which is the registration-time nesting-cap stopgap of 3). Phase 2 adds the multiplicative-through-CALL registration-time enforcement under the same code.
 
 ### E_INV_ITERATE_NEST_DEPTH
 
