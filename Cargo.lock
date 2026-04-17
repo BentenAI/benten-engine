@@ -121,8 +121,11 @@ dependencies = [
  "benten-core",
  "benten-engine",
  "benten-graph",
+ "blake3",
  "criterion",
  "proptest",
+ "serde",
+ "serde_ipld_dagcbor",
  "tempfile",
  "thiserror",
 ]
