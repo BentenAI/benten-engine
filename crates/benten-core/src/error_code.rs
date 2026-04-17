@@ -59,6 +59,11 @@ pub enum ErrorCode {
     InputLimit,
     /// Generic not-found (version-chain anchor miss, etc.).
     NotFound,
+    /// DAG-CBOR serialization failure at the hash path (e.g. encoder
+    /// integer-overflow). Distinct from the catalog's registration-time
+    /// invariants; the payload is a human-readable message held on the
+    /// corresponding [`CoreError::Serialize`] variant.
+    Serialize,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -103,6 +108,7 @@ impl ErrorCode {
             ErrorCode::TransformSyntax => "E_TRANSFORM_SYNTAX",
             ErrorCode::InputLimit => "E_INPUT_LIMIT",
             ErrorCode::NotFound => "E_NOT_FOUND",
+            ErrorCode::Serialize => "E_SERIALIZE",
             ErrorCode::Unknown(s) => s.as_str(),
         }
     }
@@ -145,6 +151,7 @@ impl ErrorCode {
             "E_TRANSFORM_SYNTAX" => ErrorCode::TransformSyntax,
             "E_INPUT_LIMIT" => ErrorCode::InputLimit,
             "E_NOT_FOUND" => ErrorCode::NotFound,
+            "E_SERIALIZE" => ErrorCode::Serialize,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }
@@ -161,7 +168,7 @@ impl CoreError {
             CoreError::CidUnsupportedCodec => ErrorCode::CidUnsupportedCodec,
             CoreError::CidUnsupportedHash => ErrorCode::CidUnsupportedHash,
             CoreError::VersionBranched => ErrorCode::VersionBranched,
-            CoreError::Serialize(_) => ErrorCode::Unknown(String::new()),
+            CoreError::Serialize(_) => ErrorCode::Serialize,
             CoreError::NotFound => ErrorCode::NotFound,
         }
     }

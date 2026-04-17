@@ -2,25 +2,35 @@
 //!
 //! Core types and content-addressed hashing for the Benten graph engine.
 //!
-//! This crate is deliberately minimal for the Phase 1 stack spike. It defines:
+//! This crate defines the Phase 1 hash-path surface:
 //!
-//! - [`Value`] — the graph value type. The spike covers `null`, `bool`, `int`,
-//!   `text`, `bytes`, `list`, and `map`. A `Float(f64)` variant is intentionally
-//!   deferred to Phase 1 proper (it needs NaN rejection, shortest-form encoding,
-//!   and a dedicated proptest before it can enter the hash path; see
-//!   [`SPIKE-phase-1-stack-RESULTS.md`](../../../SPIKE-phase-1-stack-RESULTS.md)
-//!   critic triage).
-//! - [`Node`] — a content-addressed graph Node (label list + ordered property map).
-//! - [`Cid`] — a CIDv1 newtype (multicodec `0x71` dag-cbor, multihash `0x1e` blake3)
-//!   produced by [`Node::cid`].
+//! - [`Value`] — the graph value type. Variants: `null`, `bool`, `int`,
+//!   `float`, `text`, `bytes`, `list`, and `map`. The `Float` variant rejects
+//!   `NaN` and `±Infinity` at `canonical_bytes` time and normalizes `-0.0` to
+//!   `+0.0`; see the [`value`] module docs for the full contract.
+//! - [`Node`] — a content-addressed graph Node (label list + ordered property
+//!   map). Content-addressed via BLAKE3 over DAG-CBOR; see ENGINE-SPEC §7.
+//! - [`Edge`] — a content-addressed edge (source, target, label, properties).
+//!   Hashed independently of `Node`; edges are excluded from Node hash input.
+//! - [`Cid`] — a thin CIDv1 newtype (multicodec `0x71` dag-cbor, multihash
+//!   `0x1e` blake3) produced by [`Node::cid`] / [`Edge::cid`].
 //!
-//! Version-chain primitives from ENGINE-SPEC §6 (Anchor / Version Node /
-//! `CURRENT` / `NEXT_VERSION` edges) are **not** implemented in the spike. The
-//! `Node::anchor_id` field is a placeholder for future use; the Anchor type,
-//! edge labels, and version-walking helpers will land in Phase 1 proper. The
-//! `benten-core` crate already excludes `anchor_id` from the content hash, so
-//! a future Anchor wrapper can attach version chains without disturbing the
-//! hash invariant.
+//! Version chains ship in **two coexisting shapes** (R4 triage cov-f3; R5 G7
+//! picks a canonical one):
+//!
+//! - [`crate::Anchor`] + [`crate::append_version`] / [`crate::current_version`]
+//!   / [`crate::walk_versions`] — thin `u64`-id surface keyed by a
+//!   process-unique monotonic counter. Simplest shape; no prior-head
+//!   declaration; cannot detect concurrent-fork hazards.
+//! - [`version::Anchor`] + [`version::append_version`] /
+//!   [`version::walk_versions`] — prior-head-threaded surface. Each append
+//!   names the head the caller observed, so concurrent writers forking the
+//!   chain surface as [`version::VersionError::Branched`] /
+//!   [`version::VersionError::UnknownPrior`].
+//!
+//! The [`Node::anchor_id`] field is version-chain identity; it is **excluded
+//! from the content hash** so the same content under a different anchor
+//! produces the same CID.
 //!
 //! ## What gets hashed
 //!
@@ -51,7 +61,6 @@
 
 #![forbid(unsafe_code)]
 #![no_std]
-#![allow(clippy::todo, reason = "R3 red-phase stubs; R5 removes todos")]
 
 extern crate alloc;
 
@@ -200,6 +209,16 @@ struct NodeHashView<'a> {
 /// This is intentionally a thin newtype for the spike. Phase 1 proper will
 /// migrate to the `cid` crate for full IPLD interop; the byte layout is
 /// compatible, so the migration is a drop-in.
+///
+/// ## Ordering note
+///
+/// `Ord` / `PartialOrd` is a **byte-lexicographic** comparison over the
+/// fixed CIDv1 layout. It is well-defined and stable (the layout never
+/// varies in length), which makes `Cid` suitable as a key for ordered
+/// containers such as `BTreeMap`. The ordering carries **no semantic
+/// meaning**: two CIDs where `a < b` says nothing about content relationship,
+/// causality, version precedence, or any other graph-level property — those
+/// must be derived from the graph itself.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Cid(
     // serde does not derive `Serialize`/`Deserialize` for `[u8; N]` where N > 32
@@ -280,9 +299,18 @@ impl Cid {
     /// Parse a base32-multibase-prefixed CIDv1 string (e.g.
     /// `"bafyr4i..."`). See [`Cid::to_base32`] for the inverse.
     ///
-    /// **Phase 1 G1 stub** — lands with the `cid`-crate migration (see C4).
+    /// **Phase 2 deliverable.** The parsing path needs a multibase decoder
+    /// which lands with the `cid`-crate migration (C4). In the interim this
+    /// returns a typed, recoverable error rather than panicking so production
+    /// call sites can degrade gracefully.
+    ///
+    /// # Errors
+    ///
+    /// Always returns [`CoreError::CidParse`] in Phase 1.
     pub fn from_str(_s: &str) -> Result<Self, CoreError> {
-        todo!("Cid::from_str — G1 (Phase 1)")
+        Err(CoreError::CidParse(
+            "Cid::from_str is a Phase 2 deliverable (needs multibase decoder; see C4)",
+        ))
     }
 
     /// Base32 (RFC 4648, lowercase, no padding) string accessor, prefixed with
@@ -407,17 +435,37 @@ pub const LABEL_NEXT_VERSION: &str = "NEXT_VERSION";
 /// id from a process-wide counter, so two independent anchors never collide.
 /// The id itself is not content-addressed (see ENGINE-SPEC §7) — it is
 /// identity only, and [`Node::anchor_id`] is excluded from the Node CID.
+///
+/// `TODO(phase-2)`: `id` is `pub` today because the G1 tests assert
+/// `assert_ne!(a.id, b.id)` against freshly-constructed anchors. Tightening
+/// to `pub(crate)` + `fn id(&self) -> u64` is deferred to Phase 2; external
+/// callers should use [`Anchor::new`] only (hand-constructed `Anchor { id: 0 }`
+/// would collide with the sentinel reservation).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Anchor {
+    /// Monotonic process-unique id. Allocated by [`Anchor::new`] only.
     pub id: u64,
 }
 
 /// Counter for [`Anchor::new`]. Starts at 1 so `0` remains a sentinel value
 /// for future "unset" / "null-anchor" encodings if they become useful.
+///
+/// `Ordering::Relaxed` is the correct ordering here: the counter's sole
+/// correctness requirement is that `fetch_add` produces a distinct value for
+/// each call within the process. No other state is synchronized through the
+/// counter (the `U64_CHAINS` table is separately protected by a `Mutex`), so
+/// the stronger Acquire/Release / SeqCst orderings would be paying for a
+/// happens-before edge nothing consumes.
 static ANCHOR_COUNTER: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(1);
 
 /// Per-process u64-id version-chain table. `BTreeMap<id, Vec<Cid>>` keyed by
 /// anchor id; vec stores version CIDs in oldest-first insertion order.
+///
+/// `TODO(phase-2-anchorstore)`: this table grows unbounded for the life of
+/// the process — every [`Anchor::new`] + [`append_version`] call adds
+/// entries, and there is no `drop_anchor` or GC. Fine for Phase 1 (short
+/// test runs, bounded integration tests); a long-running bench or the
+/// eventual evaluator with churn would want G7's caller-owned `AnchorStore`.
 static U64_CHAINS: spin::Lazy<spin::Mutex<BTreeMap<u64, Vec<Cid>>>> =
     spin::Lazy::new(|| spin::Mutex::new(BTreeMap::new()));
 
@@ -482,9 +530,14 @@ pub fn walk_versions(anchor: &Anchor) -> Result<Vec<Cid>, CoreError> {
     Ok(table.get(&anchor.id).cloned().unwrap_or_default())
 }
 
-/// Format any `Display`able error into an owned `String`. Kept out of the
-/// error constructor so we don't accidentally pull `alloc::format!` in from
-/// a place that can't see `alloc`.
+/// Format any `Display`able error into an owned `String`.
+///
+/// Centralized so call sites in the hash path (e.g. [`Node::canonical_bytes`]
+/// / [`Edge::canonical_bytes`]) don't each need to silence the
+/// `expect`-on-`write!` idiom — writing into a freshly-allocated `String`
+/// cannot fail, but the workspace's `clippy::unwrap_used` +
+/// `clippy::expect_used` lints deny the ergonomic escapes. This helper
+/// swallows the infallible `Result` at one site instead of N.
 pub(crate) fn format_err<E: fmt::Display>(e: &E) -> String {
     use core::fmt::Write as _;
     let mut s = String::new();

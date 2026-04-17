@@ -2,14 +2,17 @@
 //!
 //! The DSL surface feeds JSON-shaped values (objects, numbers, strings, bools,
 //! arrays) into the engine; the engine canonicalizes through DAG-CBOR for
-//! hashing. The round-trip contract is:
+//! hashing.
 //!
-//!   `value -> JSON -> Value -> DAG-CBOR -> Value`  must preserve every
-//!   variant that fits in the shared subset (null, bool, int, text, list, map
-//!   — Float is handled separately in value_float.rs due to NaN/Inf rules).
+//! ## Current scope: scalar variants only (R4 triage M16 narrowing).
 //!
-//! Red-phase: `value_from_json` and `value_to_json` are stubs until R5 wires
-//! the DSL boundary.
+//! The strategy [`any_scalar_value`] and the `value_to_json` /
+//! `value_from_json` helpers cover **null, bool, int, text** only. Float is
+//! exercised separately in `value_float.rs` because of the NaN/Inf rules;
+//! List, Map, and Bytes fidelity is deferred to the DSL wrapper group (G8)
+//! where the JSON↔Value boundary is load-bearing. If the strategy is widened
+//! to generate collection variants, the helpers here must be widened in
+//! lockstep — they currently `panic!` on non-scalar input as a tripwire.
 //!
 //! R3 writer: `rust-test-writer-proptest`.
 

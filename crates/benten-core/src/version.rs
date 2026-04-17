@@ -14,40 +14,27 @@
 //!
 //! ## State storage
 //!
-//! The chain history is maintained in a process-wide `BTreeMap` keyed by the
-//! anchor's initial head CID. Access is serialized through a `spin::Mutex`,
-//! which is sufficient for Phase 1 (in-process) guarantees. Phase 3 will
-//! replace this with CRDT merge under the sync protocol.
+//! Chain state lives inside each [`Anchor`] behind an `Arc<spin::Mutex<...>>`.
+//! Cloning an `Anchor` shares state — this is the "two writers hold the same
+//! anchor handle" scenario. Calling [`Anchor::new`] twice with the same `head`
+//! CID produces two **independent** anchors with independent chains; the
+//! previous design (a process-global `BTreeMap` keyed by root CID) caused
+//! cross-test state leakage and could not distinguish two independent forks
+//! that happen to share a root CID.
 //!
-//! `TODO(phase-2)`: thread chain state through an explicit `AnchorStore`
-//! handle rather than a process-global. The R5 contract is "make tests pass
-//! with minimal scope," and the tests expect the chain to persist across
-//! multiple `append_version` calls on the same anchor without any store
-//! parameter.
+//! `TODO(phase-2-anchorstore)`: Phase 3 sync will replace per-anchor state
+//! with CRDT merge under the sync protocol; R5 G7 may still prefer an explicit
+//! `AnchorStore` handle for bulk operations. The per-anchor `Arc<Mutex<...>>`
+//! is the minimum that passes Phase 1 tests without leaking state between
+//! unrelated anchors.
 
-use alloc::collections::BTreeMap;
 use alloc::string::String;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use spin::{Lazy, Mutex};
+use spin::Mutex;
 
 use crate::Cid;
-
-// ---------------------------------------------------------------------------
-// Process-global chain table
-//
-// Keyed by the anchor's *initial* head CID (captured at `Anchor::new` time).
-// Value is the list of recorded `(prior_head, new_head)` appends in insertion
-// order.
-// ---------------------------------------------------------------------------
-
-type ChainTable = BTreeMap<Cid, Vec<(Cid, Cid)>>;
-
-#[allow(
-    clippy::type_complexity,
-    reason = "alias keeps the static declaration readable without a nominal type"
-)]
-static CHAINS: Lazy<Mutex<ChainTable>> = Lazy::new(|| Mutex::new(BTreeMap::new()));
 
 // ---------------------------------------------------------------------------
 // Anchor
@@ -56,22 +43,41 @@ static CHAINS: Lazy<Mutex<ChainTable>> = Lazy::new(|| Mutex::new(BTreeMap::new()
 /// Cid-head-threaded Anchor identity. The anchor is rooted at its initial
 /// head CID (captured at [`Anchor::new`]); subsequent appends supply the
 /// prior head they observed so the chain can refuse forks.
-#[derive(Debug, Clone, PartialEq)]
+///
+/// Chain history lives inside the anchor behind an `Arc<Mutex<...>>`.
+/// Cloning an `Anchor` shares state (both clones see and append to the same
+/// chain). Two independent [`Anchor::new`] calls — even with the same `head`
+/// CID — produce **independent** chains.
+#[derive(Debug, Clone)]
 pub struct Anchor {
-    /// The initial head the anchor was constructed against. Chain lookup key.
+    /// The initial head the anchor was constructed against.
     pub head: Cid,
+    /// Chain history: list of `(prior_head, new_head)` appends in insertion
+    /// order. Shared across clones of the same Anchor; independent across
+    /// separate `Anchor::new` calls.
+    chain: Arc<Mutex<Vec<(Cid, Cid)>>>,
+}
+
+// Two anchors are equal iff they point to the same chain instance (same
+// `Arc` allocation) AND have the same head. Independent `Anchor::new`
+// calls — even with the same `head` — are not equal, which prevents the
+// cross-test state-leak hazard the previous process-global design had.
+impl PartialEq for Anchor {
+    fn eq(&self, other: &Self) -> bool {
+        self.head == other.head && Arc::ptr_eq(&self.chain, &other.chain)
+    }
 }
 
 impl Anchor {
-    /// Construct an anchor rooted at `head`.
-    ///
-    /// Multiple `Anchor::new` calls with the same `head` share chain state —
-    /// this is intentional for the test scenario where a second "writer"
-    /// would observe the same starting head. In practice, anchor identity
-    /// for independent version chains should use distinct root heads.
+    /// Construct an anchor rooted at `head`. Each `Anchor::new` call creates
+    /// an **independent** chain; to share chain state between writers, clone
+    /// the anchor rather than calling `new` twice with the same head.
     #[must_use]
     pub fn new(head: Cid) -> Self {
-        Self { head }
+        Self {
+            head,
+            chain: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 }
 
@@ -90,13 +96,29 @@ pub enum VersionError {
     /// prior head the duplicate was stacked on; `attempted` is the
     /// caller-supplied new head that would have forked the chain.
     #[error("chain branched on prior head (attempted new head would fork)")]
-    Branched { seen: Cid, attempted: Cid },
+    Branched {
+        /// The prior head that was already observed to have a successor.
+        seen: Cid,
+        /// The `new_head` the caller attempted to append against it.
+        attempted: Cid,
+    },
 
     /// Caller supplied a prior head the anchor has never observed.
     #[error("prior head was never observed by this anchor")]
-    UnknownPrior { supplied: Cid },
+    UnknownPrior {
+        /// The prior head the caller claimed was current.
+        supplied: Cid,
+    },
 
     /// Catch-all for internal failures (serialization, table poisoning, etc.).
+    ///
+    /// `TODO(phase-2)`: no call site constructs `Other` today —
+    /// `append_version` only validates head lineage and mutates an in-memory
+    /// `Vec` behind a poison-free `spin::Mutex`. The variant is retained as
+    /// a forward-compat slot for G2 (persistent backend I/O) and Phase 3
+    /// (sync conflict paths). Exhaustive-match tests in
+    /// `tests/version_branched.rs` use its presence to justify a wildcard
+    /// arm; removing it without fixing those sites makes clippy fail.
     #[error("version error: {0}")]
     Other(String),
 }
@@ -119,8 +141,7 @@ pub fn append_version(
     prior_head: &Cid,
     new_head: &Cid,
 ) -> Result<(), VersionError> {
-    let mut table = CHAINS.lock();
-    let chain = table.entry(anchor.head.clone()).or_default();
+    let mut chain = anchor.chain.lock();
 
     // Determine whether `prior_head` is a legitimate head the anchor has
     // observed. It is legitimate iff:
@@ -154,13 +175,11 @@ pub fn append_version(
 /// `Anchor::new(v0) ; append(v0, v1) ; append(v1, v2)`
 /// this returns `[v0, v1, v2]`.
 pub fn walk_versions(anchor: &Anchor) -> alloc::vec::IntoIter<Cid> {
-    let table = CHAINS.lock();
-    let mut out = Vec::new();
+    let chain = anchor.chain.lock();
+    let mut out = Vec::with_capacity(1 + chain.len());
     out.push(anchor.head.clone());
-    if let Some(chain) = table.get(&anchor.head) {
-        for (_, new) in chain {
-            out.push(new.clone());
-        }
+    for (_, new) in chain.iter() {
+        out.push(new.clone());
     }
     out.into_iter()
 }
