@@ -6,9 +6,9 @@
 //! - [`parser`] — hand-rolled Pratt-style recursive descent parser. Rejects
 //!   any construct not in the BNF with `E_TRANSFORM_SYNTAX` carrying the
 //!   byte offset of the first rejected token.
-//! - [`eval`] — pure deterministic evaluator. Walks a parsed [`Expr`] against
-//!   an [`EvalContext`] binding frame stack. No engine access, no clock, no
-//!   I/O, no RNG.
+//! - [`eval`] — pure deterministic evaluator. Walks a parsed [`Expr`]
+//!   against an [`eval::Env`] binding frame stack. No engine access, no
+//!   clock, no I/O, no RNG.
 //! - [`builtins`] — the 50+ built-in call dispatchers (arithmetic, string,
 //!   array, object, coercion, number formatting).
 //!

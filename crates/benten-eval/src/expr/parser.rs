@@ -2,9 +2,10 @@
 //!
 //! Implements the BNF in `docs/TRANSFORM-GRAMMAR.md`. The parser is a
 //! positive allowlist: every production is individually admitted. Any token
-//! or grammatical shape outside the BNF produces
-//! [`ParseError::TransformSyntax`] whose `offset` points at the byte index
-//! of the first rejected token.
+//! or grammatical shape outside the BNF produces a [`ParseError`] whose
+//! `offset` points at the byte index of the first rejected token; the
+//! crate-public entry point [`crate::transform::parse_transform`] remaps
+//! this to `E_TRANSFORM_SYNTAX`.
 //!
 //! ## Design notes
 //!
