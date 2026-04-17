@@ -1,31 +1,35 @@
 //! View 2 — Event handler dispatch table (I4).
 //!
-//! Maintains `event_name → {handler_cids}` so event dispatch is O(1). Inputs:
+//! Maintains `event_name → {handler_cids}` so event dispatch is O(1) per
+//! event name.
 //!
-//! - `ChangeEvent` with label `"SubscribesTo"` and kind `Created` / `Updated`
-//!   adds the handler CID to the subscriber set.
-//! - `ChangeEvent` with label `"SubscribesTo"` and kind `Deleted` removes the
-//!   handler CID.
+//! ## Ingress paths
 //!
-//! ## G5-B coordination note (ChangeEvent shape)
+//! With the widened `ChangeEvent`, node-shaped handler events carry the
+//! originating handler's `subscribes_to` property — a `Value::List` of
+//! `Value::Text` event names. The view partitions the dispatch table by
+//! event name using that list when present. When the event does not carry
+//! a node (identity-only legacy harness) the view falls back to a single
+//! global set keyed under the empty-string event name for back-compat.
 //!
-//! The `ChangeEvent` shape delivered by G3 does not carry the
-//! `subscribesTo: [...]` property list of the originating edge; it carries
-//! only identity fields (cid, labels, kind, tx_id). Phase 1 stores the
-//! handler CIDs in a single global dispatch set — any query with a non-empty
-//! `event_name` resolves to that set. This degrades cleanly: the total set of
-//! handlers is correct; the per-event-name partitioning is the Phase-2
-//! refinement once `ChangeEvent` grows property attachment.
+//! Edge-shaped `SubscribesTo` events are ALSO accepted: the edge's source
+//! is the handler CID and the edge carries an `event_name` — Phase 1
+//! doesn't see properties on edges, so edge-event routing is bucketed into
+//! the global set for now (the edge-endpoint widening still dominates over
+//! the previous identity-only degenerate path).
 //!
 //! ## Budget
 //!
 //! See the analogous discussion on [`super::capability_grants`].
 
-use alloc::collections::BTreeSet;
+extern crate alloc;
+
+use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::{String, ToString};
+use alloc::vec;
 use alloc::vec::Vec;
 
-use benten_core::Cid;
+use benten_core::{Cid, Value};
 use benten_graph::{ChangeEvent, ChangeKind};
 
 use crate::{View, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
@@ -33,29 +37,39 @@ use crate::{View, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
 const VIEW_ID: &str = "event_dispatch";
 const UNLIMITED_BUDGET: u64 = u64::MAX;
 
+/// Event-name bucket used when the event doesn't carry an explicit
+/// `subscribes_to` list. Keeps the back-compat single-set path for the
+/// identity-only test harness on a clearly-labeled key.
+const GLOBAL_BUCKET: &str = "";
+
 /// Back-compat alias used by some R3 tests.
 pub type EventHandlerDispatchView = EventDispatchView;
 
 /// View 2 — event handler dispatch table.
 #[derive(Debug)]
 pub struct EventDispatchView {
-    /// Current handlers. A Phase-1 global set (see module-level note); a
-    /// query for any event name resolves to this set in sorted order.
-    handlers: BTreeSet<Cid>,
+    /// Per-event-name dispatch set. The `""` key is the global bucket for
+    /// identity-only legacy events (see module doc).
+    by_event: BTreeMap<String, BTreeSet<Cid>>,
     remaining_budget: u64,
+    /// Original budget for uniform `rebuild` restore (g5-cr-3).
+    original_budget: u64,
     stale: bool,
 }
 
 impl EventDispatchView {
+    /// Construct a fresh view with an effectively-unbounded budget.
     #[must_use]
     pub fn new() -> Self {
         Self {
-            handlers: BTreeSet::new(),
+            by_event: BTreeMap::new(),
             remaining_budget: UNLIMITED_BUDGET,
+            original_budget: UNLIMITED_BUDGET,
             stale: false,
         }
     }
 
+    /// Content-addressed definition for this view.
     pub fn definition() -> ViewDefinition {
         ViewDefinition {
             view_id: VIEW_ID.to_string(),
@@ -64,11 +78,13 @@ impl EventDispatchView {
         }
     }
 
+    /// Low-budget test constructor.
     #[must_use]
     pub fn with_budget_for_testing(budget: u64) -> Self {
         Self {
-            handlers: BTreeSet::new(),
+            by_event: BTreeMap::new(),
             remaining_budget: budget,
+            original_budget: budget,
             stale: false,
         }
     }
@@ -83,8 +99,11 @@ impl EventDispatchView {
             return;
         }
         self.remaining_budget -= 1;
-        if let Ok(cid) = node.cid() {
-            self.handlers.insert(cid);
+        let Ok(cid) = node.cid() else {
+            return;
+        };
+        for bucket in extract_event_names(&node) {
+            self.by_event.entry(bucket).or_default().insert(cid.clone());
         }
     }
 
@@ -98,15 +117,23 @@ impl EventDispatchView {
         }
     }
 
-    /// Direct read (bypasses the trait). `_event` is currently ignored (see
-    /// module-level coordination note); the Phase-1 dispatch set is global.
-    pub fn read_handlers_for_event(&self, _event: &str) -> Result<Vec<Cid>, ViewError> {
+    /// Direct read (bypasses the trait). Returns handlers subscribed to
+    /// `event`. When the event isn't partitioned (legacy harness), returns
+    /// the global bucket.
+    pub fn read_handlers_for_event(&self, event: &str) -> Result<Vec<Cid>, ViewError> {
         if self.stale {
             return Err(ViewError::Stale {
                 view_id: VIEW_ID.to_string(),
             });
         }
-        Ok(self.handlers.iter().cloned().collect())
+        let mut out: BTreeSet<Cid> = BTreeSet::new();
+        if let Some(set) = self.by_event.get(event) {
+            out.extend(set.iter().cloned());
+        }
+        if let Some(set) = self.by_event.get(GLOBAL_BUCKET) {
+            out.extend(set.iter().cloned());
+        }
+        Ok(out.into_iter().collect())
     }
 
     fn apply_event(&mut self, event: &ChangeEvent) -> Result<(), ViewError> {
@@ -121,18 +148,85 @@ impl EventDispatchView {
         }
         self.remaining_budget -= 1;
 
+        // Edge path: SubscribesTo edges route into the global bucket for
+        // Phase 1 — edge events don't carry a property payload.
+        if matches!(
+            event.kind,
+            ChangeKind::EdgeCreated | ChangeKind::EdgeDeleted
+        ) {
+            if !event.has_label("SubscribesTo") {
+                return Ok(());
+            }
+            if let Some((source, _target, _label)) = &event.edge_endpoints {
+                match event.kind {
+                    ChangeKind::EdgeCreated => {
+                        self.by_event
+                            .entry(GLOBAL_BUCKET.to_string())
+                            .or_default()
+                            .insert(source.clone());
+                    }
+                    ChangeKind::EdgeDeleted => {
+                        if let Some(set) = self.by_event.get_mut(GLOBAL_BUCKET) {
+                            set.remove(source);
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            return Ok(());
+        }
+
         if !event.has_label("SubscribesTo") {
             return Ok(());
         }
+        // Determine bucket set: prefer the node's subscribes_to list; fall
+        // back to the global bucket.
+        let buckets: Vec<String> = event
+            .node
+            .as_ref()
+            .map(extract_event_names)
+            .unwrap_or_default();
+        let buckets = if buckets.is_empty() {
+            vec![GLOBAL_BUCKET.to_string()]
+        } else {
+            buckets
+        };
         match event.kind {
             ChangeKind::Created | ChangeKind::Updated => {
-                self.handlers.insert(event.cid.clone());
+                for b in buckets {
+                    self.by_event
+                        .entry(b)
+                        .or_default()
+                        .insert(event.cid.clone());
+                }
             }
             ChangeKind::Deleted => {
-                self.handlers.remove(&event.cid);
+                for b in &buckets {
+                    if let Some(set) = self.by_event.get_mut(b) {
+                        set.remove(&event.cid);
+                    }
+                }
+                // Drop empty buckets.
+                self.by_event.retain(|_, v| !v.is_empty());
             }
+            _ => {}
         }
         Ok(())
+    }
+}
+
+/// Extract the handler's `subscribes_to` property as a list of event names.
+/// Returns empty when the property is absent or not a list-of-strings.
+fn extract_event_names(node: &benten_core::Node) -> Vec<String> {
+    match node.properties.get("subscribes_to") {
+        Some(Value::List(items)) => items
+            .iter()
+            .filter_map(|v| match v {
+                Value::Text(s) => Some(s.clone()),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
     }
 }
 
@@ -153,17 +247,25 @@ impl View for EventDispatchView {
                 view_id: VIEW_ID.to_string(),
             });
         }
-        // Phase 1: any event_name query resolves to the global handler set.
-        let cids: Vec<Cid> = if query.event_name.is_some() {
-            self.handlers.iter().cloned().collect()
-        } else {
-            Vec::new()
+        let cids: Vec<Cid> = match &query.event_name {
+            Some(name) => {
+                let mut out: BTreeSet<Cid> = BTreeSet::new();
+                if let Some(set) = self.by_event.get(name) {
+                    out.extend(set.iter().cloned());
+                }
+                if let Some(set) = self.by_event.get(GLOBAL_BUCKET) {
+                    out.extend(set.iter().cloned());
+                }
+                out.into_iter().collect()
+            }
+            None => Vec::new(),
         };
         Ok(ViewResult::Cids(cids))
     }
 
     fn rebuild(&mut self) -> Result<(), ViewError> {
-        self.handlers.clear();
+        self.by_event.clear();
+        self.remaining_budget = self.original_budget;
         self.stale = false;
         Ok(())
     }

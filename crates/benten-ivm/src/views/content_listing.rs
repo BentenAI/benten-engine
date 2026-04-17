@@ -10,30 +10,26 @@
 //! - **Single-label per view.** Each `ContentListingView` watches one label
 //!   passed at construction. Multi-label listings compose by registering
 //!   multiple views.
-//! - **Sort key.** `on_change(Node)` reads the Node's `createdAt` property
-//!   (expected type: `Value::Int`). Absent or wrong-typed, the entry is
-//!   skipped with no error — the zero-config `crud('post')` path is
+//! - **Sort key.** Both ingress paths prefer the Node's `createdAt` property
+//!   (expected type: `Value::Int`). The trait `update(&ChangeEvent)` path
+//!   reads it from `event.node` when present; absence falls back to `tx_id`
+//!   (monotonic per-process) so legacy identity-only tests still order
+//!   stably. Duplicates under equal `createdAt` are disambiguated by a
+//!   per-view monotonic counter. The `on_change(Node)` path skips entries
+//!   with no `createdAt` property — the zero-config `crud('post')` path is
 //!   contractually required (plan §2.7 row B6) to inject `createdAt` at
-//!   WRITE time, so a missing key is a mis-wired caller.
-//! - **Trait `update(&ChangeEvent)` fallback.** `ChangeEvent` currently
-//!   carries only `(cid, labels, kind, tx_id, ...)` — NOT the Node's
-//!   properties. There is no way for the trait method to read `createdAt`,
-//!   so it uses `tx_id` (monotonic per-process) as the sort key for
-//!   label-matched events. This is a **named Phase-1 compromise**: the
-//!   subscriber→view handoff needs to carry the Node (or properties)
-//!   alongside the event for a proper end-to-end createdAt path. Phase 2
-//!   widens `ChangeEvent` or introduces a property-carrying variant.
+//!   WRITE time.
 //! - **Duplicates are preserved.** The view has list semantics (the R3 test
 //!   `content_listing_all_returned_after_three_writes` asserts 3 creates of
-//!   the same CID yield 3 entries). We key BTreeMap entries by a composite
-//!   `(sort_key, disambiguator)` so equal `createdAt` values don't collide.
+//!   the same CID yield 3 entries).
 //! - **Delete semantics.** `Deleted` events remove ALL entries with the
 //!   matching CID (regardless of sort key). Matches the R3 test
 //!   `content_listing_delete_removes_entry`.
 //! - **Budget model.** `with_budget_for_testing(N)` allows `N` successful
 //!   `on_change` calls; the `(N+1)`th flips the view to `Stale` without
 //!   applying the update. Last-known-good state is preserved for
-//!   `read_page_allow_stale`. `rebuild_from_scratch` resets to Fresh.
+//!   `read_page_allow_stale`. `rebuild_from_scratch` resets to Fresh and
+//!   restores the original budget (g5-cr-3 uniform budget-on-rebuild).
 
 use alloc::collections::BTreeMap;
 use alloc::string::String;
@@ -47,7 +43,25 @@ use crate::{View, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
 /// Composite sort key: `(createdAt, disambiguator)`. The disambiguator is a
 /// per-view monotonic counter so two inserts with equal `createdAt` don't
 /// collide in the `BTreeMap` (list semantics, not set semantics).
-type SortKey = (i64, u64);
+///
+/// The primary key is `u64` (not `i64`) per mini-review g5-ivm-10 so the
+/// full `tx_id` range orders without the `unwrap_or(i64::MAX)` clamp that
+/// collapsed writes past 2^63 onto the same key. We store an offset applied
+/// to `createdAt` when it arrives: negative `createdAt` values (unusual,
+/// but permitted by the `Value::Int` type) are biased into the `u64` range.
+type SortKey = (u64, u64);
+
+/// Bias applied so `i64::MIN` maps to `u64::MIN` and `i64::MAX` maps to
+/// `u64::MAX`. Preserves total order.
+const SORT_BIAS: u64 = 1u64 << 63;
+
+/// Convert an `i64` `createdAt` into the `u64` sort key. `i64::MIN` becomes
+/// `0`, `0` becomes `SORT_BIAS`, and `i64::MAX` becomes `u64::MAX` — a
+/// simple affine bias that preserves total order.
+#[inline]
+fn bias_i64_to_u64(v: i64) -> u64 {
+    (v as u64).wrapping_add(SORT_BIAS)
+}
 
 /// View 3 — paginated sorted-by-`createdAt` content listing per label.
 #[derive(Debug)]
@@ -63,6 +77,9 @@ pub struct ContentListingView {
     /// Budget: max number of `on_change` / `update` calls before the view
     /// flips to `Stale`. `u64::MAX` disables the trip in normal construction.
     remaining_budget: u64,
+    /// Originally-configured budget, stashed at construction so `rebuild`
+    /// restores the same cap (mini-review g5-cr-3).
+    original_budget: u64,
     /// Runtime state. Reads under `Stale` either error (`read_page`) or
     /// return the last-known-good snapshot (`read_page_allow_stale`).
     state: ViewState,
@@ -81,6 +98,7 @@ impl ContentListingView {
             entries: BTreeMap::new(),
             next_disambiguator: 0,
             remaining_budget: u64::MAX,
+            original_budget: u64::MAX,
             state: ViewState::Fresh,
             last_known_good: Vec::new(),
         }
@@ -103,6 +121,7 @@ impl ContentListingView {
     pub fn with_budget_for_testing(budget: u64) -> Self {
         let mut v = Self::new("post");
         v.remaining_budget = budget;
+        v.original_budget = budget;
         v
     }
 
@@ -134,13 +153,11 @@ impl ContentListingView {
         self.next_disambiguator = 0;
         self.last_known_good.clear();
         self.state = ViewState::Fresh;
-        // Rebuild restores budget — a stale view recovering must be able to
-        // accept new updates. Use the original budget sentinel: if the view
-        // was constructed with a finite budget, we can't recover it here
-        // without carrying the original around, so Phase 1 restores to
-        // unbounded (matches the `view_recovers_on_rebuild_after_stale`
-        // test which only checks `state == Fresh` + `read_page` succeeds).
-        self.remaining_budget = u64::MAX;
+        // Rebuild restores the originally-configured budget so a view
+        // constructed with a finite budget, tripped stale, and rebuilt,
+        // accepts the same number of updates again. Uniform across all
+        // 5 views per mini-review g5-cr-3.
+        self.remaining_budget = self.original_budget;
         Ok(())
     }
 
@@ -177,7 +194,7 @@ impl ContentListingView {
         if !node.labels.iter().any(|l| l == &self.label) {
             return;
         }
-        let Some(sort_key) = extract_created_at(&node) else {
+        let Some(created_at) = extract_created_at(&node) else {
             return;
         };
         let Ok(cid) = node.cid() else {
@@ -185,7 +202,8 @@ impl ContentListingView {
         };
         let disambiguator = self.next_disambiguator;
         self.next_disambiguator = self.next_disambiguator.wrapping_add(1);
-        self.entries.insert((sort_key, disambiguator), cid);
+        self.entries
+            .insert((bias_i64_to_u64(created_at), disambiguator), cid);
     }
 
     /// Strict paginated read. Returns `Err(ViewError::Stale)` when the view
@@ -248,11 +266,16 @@ impl ContentListingView {
 }
 
 impl View for ContentListingView {
-    /// Ingest a `ChangeEvent`. The event does not carry the Node's
-    /// properties, so this path uses `tx_id` as the sort key (Phase-1
-    /// compromise documented at the module top). For tests that need real
-    /// `createdAt` ordering, use [`ContentListingView::on_change`] which
-    /// consumes the full Node.
+    /// Ingest a `ChangeEvent`. Prefers `event.node.createdAt` when present
+    /// (post-G5 fix-pass); falls back to `tx_id` (monotonic per-process)
+    /// when the event is identity-only. The `tx_id` fallback is
+    /// defense-in-depth for callers that still construct ChangeEvents
+    /// without a node; chronologically-correct ordering requires that
+    /// the emitter populate `event.node`.
+    #[allow(
+        clippy::print_stderr,
+        reason = "Phase 1 fallback warn; Phase 2 routes to tracing"
+    )]
     fn update(&mut self, event: &ChangeEvent) -> Result<(), ViewError> {
         if self.state == ViewState::Stale {
             return Err(ViewError::Stale {
@@ -268,19 +291,33 @@ impl View for ContentListingView {
                     self.trip_to_stale();
                     return Err(ViewError::BudgetExceeded("content_listing".into()));
                 }
-                // Phase-1 compromise: tx_id (i64-cast) as sort key stand-in
-                // when the event doesn't carry createdAt. Monotonic within
-                // a process, so ordering is still stable.
-                let sort_key = i64::try_from(event.tx_id).unwrap_or(i64::MAX);
+                // Prefer event.node.createdAt; fall back to tx_id on
+                // identity-only events (legacy test harness). The fallback
+                // is announced on stderr so operators can notice when the
+                // emitter forgot to populate the Node.
+                let sort_primary: u64 = match event.node.as_ref().and_then(extract_created_at) {
+                    Some(c) => bias_i64_to_u64(c),
+                    None => {
+                        eprintln!(
+                            "benten-ivm: content_listing received identity-only event (no node, \
+                             no createdAt); falling back to tx_id={} — this is a Phase-1 \
+                             defense-in-depth path (see module docs)",
+                            event.tx_id
+                        );
+                        event.tx_id
+                    }
+                };
                 let disambiguator = self.next_disambiguator;
                 self.next_disambiguator = self.next_disambiguator.wrapping_add(1);
                 self.entries
-                    .insert((sort_key, disambiguator), event.cid.clone());
+                    .insert((sort_primary, disambiguator), event.cid.clone());
                 self.remaining_budget = self.remaining_budget.saturating_sub(1);
             }
             ChangeKind::Deleted => {
                 self.remove_all_with_cid(&event.cid);
             }
+            // Edge events are not relevant to a label-based content listing.
+            ChangeKind::EdgeCreated | ChangeKind::EdgeDeleted => {}
         }
         Ok(())
     }

@@ -66,40 +66,59 @@ use crate::store::{
 /// hook firing.
 #[derive(Debug, Clone)]
 pub enum PendingOp {
-    /// Node put.
+    /// Node put. Carries the full [`Node`] so the emitted [`ChangeEvent`]
+    /// surfaces property data (required by the IVM views that key on
+    /// `createdAt`, `grantee`, `subscribes_to`, etc.). `labels` is derived
+    /// from `node.labels`.
     PutNode {
         /// The CID of the put node.
         cid: Cid,
-        /// Full label set on the node.
-        labels: Vec<String>,
+        /// The Node being written. `labels` and all properties are
+        /// reachable through `node.labels` / `node.properties`.
+        node: Node,
     },
-    /// Edge put.
+    /// Edge put. Carries source, target, and label so edge-driven IVM views
+    /// (governance inheritance, version current) see endpoints directly on
+    /// the emitted [`ChangeEvent`].
     PutEdge {
         /// The CID of the put edge.
         cid: Cid,
+        /// Edge source endpoint.
+        source: Cid,
+        /// Edge target endpoint.
+        target: Cid,
         /// Edge label (wrapped single-element when translated to a
         /// [`ChangeEvent`] so the same `labels` contract holds node- and
         /// edge-side).
         label: String,
     },
-    /// Node delete by CID. Carries the deleted Node's labels (captured by
+    /// Node delete by CID. Carries the deleted Node (captured by
     /// read-before-delete inside the same redb txn) so label-filtered
-    /// subscribers see deletes.
+    /// subscribers see deletes and property-driven IVM views can unseat
+    /// their derived state. `node` is `None` on an idempotent-delete miss.
     DeleteNode {
         /// The target Node CID.
         cid: Cid,
         /// Labels of the Node that was deleted, or empty when the delete
         /// targeted an already-absent CID (idempotent miss).
         labels: Vec<String>,
+        /// The pre-delete Node, if any. Carried so subscribers can inspect
+        /// the Node's property body at the moment of deletion.
+        node: Option<Node>,
     },
-    /// Edge delete by CID. Carries the deleted Edge's label for the same
-    /// reason DeleteNode carries its Node's labels.
+    /// Edge delete by CID. Carries source/target/label captured via
+    /// read-before-delete for the same reason `DeleteNode` carries the
+    /// Node. Fields are `None` on an idempotent-delete miss.
     DeleteEdge {
         /// The target Edge CID.
         cid: Cid,
         /// Label of the deleted Edge, or `None` when the delete targeted an
         /// already-absent CID (idempotent miss).
         label: Option<String>,
+        /// Source endpoint, captured via read-before-delete.
+        source: Option<Cid>,
+        /// Target endpoint, captured via read-before-delete.
+        target: Option<Cid>,
     },
 }
 
@@ -118,25 +137,34 @@ impl PendingOp {
     /// views downstream treat the two as semantically distinct.
     pub(crate) fn to_change_event(&self, tx_id: u64) -> ChangeEvent {
         match self {
-            PendingOp::PutNode { cid, labels } => ChangeEvent {
+            PendingOp::PutNode { cid, node } => ChangeEvent {
                 cid: cid.clone(),
-                labels: labels.clone(),
+                labels: node.labels.clone(),
                 kind: ChangeKind::Created,
                 tx_id,
                 actor_cid: None,
                 handler_cid: None,
                 capability_grant_cid: None,
+                node: Some(node.clone()),
+                edge_endpoints: None,
             },
-            PendingOp::PutEdge { cid, label } => ChangeEvent {
+            PendingOp::PutEdge {
+                cid,
+                source,
+                target,
+                label,
+            } => ChangeEvent {
                 cid: cid.clone(),
                 labels: vec![label.clone()],
-                kind: ChangeKind::Created,
+                kind: ChangeKind::EdgeCreated,
                 tx_id,
                 actor_cid: None,
                 handler_cid: None,
                 capability_grant_cid: None,
+                node: None,
+                edge_endpoints: Some((source.clone(), target.clone(), label.clone())),
             },
-            PendingOp::DeleteNode { cid, labels } => ChangeEvent {
+            PendingOp::DeleteNode { cid, labels, node } => ChangeEvent {
                 cid: cid.clone(),
                 labels: labels.clone(),
                 kind: ChangeKind::Deleted,
@@ -144,15 +172,27 @@ impl PendingOp {
                 actor_cid: None,
                 handler_cid: None,
                 capability_grant_cid: None,
+                node: node.clone(),
+                edge_endpoints: None,
             },
-            PendingOp::DeleteEdge { cid, label } => ChangeEvent {
+            PendingOp::DeleteEdge {
+                cid,
+                label,
+                source,
+                target,
+            } => ChangeEvent {
                 cid: cid.clone(),
                 labels: label.clone().into_iter().collect(),
-                kind: ChangeKind::Deleted,
+                kind: ChangeKind::EdgeDeleted,
                 tx_id,
                 actor_cid: None,
                 handler_cid: None,
                 capability_grant_cid: None,
+                node: None,
+                edge_endpoints: match (source, target, label) {
+                    (Some(s), Some(t), Some(l)) => Some((s.clone(), t.clone(), l.clone())),
+                    _ => None,
+                },
             },
         }
     }
@@ -271,7 +311,7 @@ impl<'a> Transaction<'a> {
         }
         self.pending.push(PendingOp::PutNode {
             cid: cid.clone(),
-            labels: node.labels.clone(),
+            node: node.clone(),
         });
         Ok(cid)
     }
@@ -310,6 +350,8 @@ impl<'a> Transaction<'a> {
         }
         self.pending.push(PendingOp::PutEdge {
             cid: cid.clone(),
+            source: edge.source.clone(),
+            target: edge.target.clone(),
             label: edge.label.clone(),
         });
         Ok(cid)
@@ -361,7 +403,7 @@ impl<'a> Transaction<'a> {
             .as_ref()
             .map(|n| n.labels.clone())
             .unwrap_or_default();
-        if let Some(node) = existing {
+        if let Some(node) = existing.as_ref() {
             {
                 let mut label_idx = txn.open_multimap_table(LABEL_INDEX_TABLE)?;
                 for label in &node.labels {
@@ -382,6 +424,7 @@ impl<'a> Transaction<'a> {
         self.pending.push(PendingOp::DeleteNode {
             cid: cid.clone(),
             labels,
+            node: existing,
         });
         Ok(())
     }
@@ -414,6 +457,8 @@ impl<'a> Transaction<'a> {
             }
         };
         let label = edge.as_ref().map(|e| e.label.clone());
+        let source = edge.as_ref().map(|e| e.source.clone());
+        let target = edge.as_ref().map(|e| e.target.clone());
         {
             let mut table = txn.open_table(NODES_TABLE)?;
             if let Some(e) = &edge {
@@ -425,6 +470,8 @@ impl<'a> Transaction<'a> {
         self.pending.push(PendingOp::DeleteEdge {
             cid: cid.clone(),
             label,
+            source,
+            target,
         });
         Ok(())
     }

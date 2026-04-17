@@ -138,28 +138,41 @@ impl Subscriber {
 /// Extract the per-view dispatch into a free function so
 /// [`ChangeSubscriber::on_change`] (which has `&self`, not `&mut self`) can
 /// call the exact same path as [`Subscriber::route_change_event`].
+///
+/// Wraps each view's `update` call in [`std::panic::catch_unwind`] so a
+/// panicking view marks itself stale and logs, but does not take down the
+/// commit thread or poison the fan-out for other views (mini-review
+/// g5-ivm-6). `View` is not `UnwindSafe` by default because `&mut self`
+/// gives update access to interior state, but a panicked view is already
+/// ill — we mark it stale and continue, which is sound.
 fn apply_event(view: &mut dyn View, event: &ChangeEvent, applied: &mut usize) {
     // A stale view stays stale; feeding it more events won't unstick it
     // until an explicit rebuild. Skip for cheapness.
     if view.is_stale() {
         return;
     }
-    match view.update(event) {
-        Ok(()) => {
+    let view_id: String = String::from(view.id());
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| view.update(event)));
+    match result {
+        Ok(Ok(())) => {
             *applied += 1;
         }
-        Err(ViewError::BudgetExceeded(_)) => {
+        Ok(Err(ViewError::BudgetExceeded(_))) => {
             view.mark_stale();
         }
-        Err(ViewError::Stale { .. }) => {
+        Ok(Err(ViewError::Stale { .. })) => {
             // Idempotent: the view flipped stale between our is_stale check
             // and the update call. Nothing to do.
         }
-        Err(other) => {
+        Ok(Err(other)) => {
             // PatternMismatch and similar are not fatal — log and keep
             // fanning out. TODO(phase-2): route to a telemetry channel
             // instead of stderr.
-            log_view_error(view.id(), &other);
+            log_view_error(&view_id, &other);
+        }
+        Err(_panic_payload) => {
+            log_view_panic(&view_id);
+            view.mark_stale();
         }
     }
 }
@@ -177,6 +190,16 @@ fn apply_event(view: &mut dyn View, event: &ChangeEvent, applied: &mut usize) {
 )]
 fn log_view_error(view_id: &str, err: &dyn fmt::Display) {
     eprintln!("benten-ivm: view {view_id} returned non-fatal error: {err}");
+}
+
+/// Log a view panic. Paired with `apply_event`'s `catch_unwind` so a
+/// panicking view marks stale and the fan-out continues.
+#[allow(
+    clippy::print_stderr,
+    reason = "stderr sink is the Phase 1 placeholder; Phase 2 wires tracing"
+)]
+fn log_view_panic(view_id: &str) {
+    eprintln!("benten-ivm: view {view_id} panicked during update; marking stale");
 }
 
 impl Default for Subscriber {

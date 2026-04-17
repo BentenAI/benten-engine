@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Incremental View Maintenance for the Benten graph engine (Phase 1 stub)."
+description = "Incremental View Maintenance for the Benten graph engine — Phase 1 hand-written views (capability grants, event dispatch, content listing, governance inheritance, version current)."
 
 [lints]
 workspace = true

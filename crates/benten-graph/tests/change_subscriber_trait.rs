@@ -39,6 +39,8 @@ fn change_subscriber_is_object_safe() {
         actor_cid: None,
         handler_cid: None,
         capability_grant_cid: None,
+        node: None,
+        edge_endpoints: None,
     };
     sub.on_change(&ev);
     assert_eq!(count.load(Ordering::SeqCst), 1);

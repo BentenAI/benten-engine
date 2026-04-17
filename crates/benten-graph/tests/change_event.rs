@@ -24,6 +24,8 @@ fn change_event_exposes_cid_label_kind_and_tx_id() {
         actor_cid: None,
         handler_cid: None,
         capability_grant_cid: None,
+        node: None,
+        edge_endpoints: None,
     };
     assert_eq!(e.cid, cid);
     assert_eq!(e.primary_label(), "Post");
@@ -48,6 +50,8 @@ fn change_event_supports_attribution_fields() {
         actor_cid: Some(actor.clone()),
         handler_cid: Some(handler.clone()),
         capability_grant_cid: Some(grant.clone()),
+        node: None,
+        edge_endpoints: None,
     };
     assert_eq!(e.actor_cid, Some(actor));
     assert_eq!(e.handler_cid, Some(handler));

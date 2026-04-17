@@ -206,6 +206,14 @@ pub trait EdgeStore {
 // ---------------------------------------------------------------------------
 
 /// Category of change emitted on the change stream.
+///
+/// Node events use [`ChangeKind::Created`] / [`ChangeKind::Updated`] /
+/// [`ChangeKind::Deleted`]. Edge events use the explicit
+/// [`ChangeKind::EdgeCreated`] / [`ChangeKind::EdgeDeleted`] variants so
+/// subscribers can route without having to inspect `edge_endpoints` and so
+/// IVM views driven off edge ingress (governance inheritance, version
+/// current) can fire directly on the trait path rather than degenerate to
+/// identity-only acknowledgements.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChangeKind {
     /// Node created (or re-materialized at this CID after a delete).
@@ -216,6 +224,13 @@ pub enum ChangeKind {
     Updated,
     /// Node deleted.
     Deleted,
+    /// Edge created. Consumers that care about endpoints inspect
+    /// [`ChangeEvent::edge_endpoints`] for the `(source, target, label)`
+    /// triple. The event's own `cid` is the edge's CID.
+    EdgeCreated,
+    /// Edge deleted. Endpoints were captured via read-before-delete and are
+    /// carried on [`ChangeEvent::edge_endpoints`] when recoverable.
+    EdgeDeleted,
 }
 
 /// A post-commit change event. Emitted for every graph write once the redb
@@ -262,6 +277,75 @@ pub struct ChangeEvent {
     /// Optional capability-grant attribution — the grant CID authorizing
     /// the write, if any.
     pub capability_grant_cid: Option<Cid>,
+    /// Full Node content, populated for Node events
+    /// ([`ChangeKind::Created`] / [`ChangeKind::Updated`] /
+    /// [`ChangeKind::Deleted`]). For `Created`/`Updated`, the Node being
+    /// written; for `Deleted`, the Node captured via read-before-delete
+    /// (may be `None` on an idempotent-delete miss). `None` for edge events.
+    ///
+    /// IVM views that need property data (e.g. `createdAt`, `grantee`,
+    /// `subscribes_to`) read it from here — the widen replaces the
+    /// previously-degenerate identity-only trait path described in the
+    /// G5 mini-review.
+    pub node: Option<Node>,
+    /// Edge endpoints `(source, target, label)` populated for
+    /// [`ChangeKind::EdgeCreated`] / [`ChangeKind::EdgeDeleted`]. For a
+    /// create, derived from the edge being written; for a delete, captured
+    /// via read-before-delete. `None` for node events or when a delete
+    /// missed an already-absent edge.
+    pub edge_endpoints: Option<(Cid, Cid, String)>,
+}
+
+impl ChangeEvent {
+    /// Construct a Node-event [`ChangeEvent`]. Shields callers (tests,
+    /// integration harnesses) from the full field list.
+    ///
+    /// `attribution` is `(actor_cid, handler_cid, capability_grant_cid)`.
+    #[must_use]
+    pub fn new_node(
+        cid: Cid,
+        labels: Vec<String>,
+        kind: ChangeKind,
+        tx_id: u64,
+        node: Option<Node>,
+    ) -> Self {
+        Self {
+            cid,
+            labels,
+            kind,
+            tx_id,
+            actor_cid: None,
+            handler_cid: None,
+            capability_grant_cid: None,
+            node,
+            edge_endpoints: None,
+        }
+    }
+
+    /// Construct an Edge-event [`ChangeEvent`]. `kind` must be
+    /// [`ChangeKind::EdgeCreated`] or [`ChangeKind::EdgeDeleted`] — anything
+    /// else is a caller-side misuse but is not runtime-checked.
+    #[must_use]
+    pub fn new_edge(
+        cid: Cid,
+        source: Cid,
+        target: Cid,
+        label: String,
+        kind: ChangeKind,
+        tx_id: u64,
+    ) -> Self {
+        Self {
+            cid,
+            labels: vec![label.clone()],
+            kind,
+            tx_id,
+            actor_cid: None,
+            handler_cid: None,
+            capability_grant_cid: None,
+            node: None,
+            edge_endpoints: Some((source, target, label)),
+        }
+    }
 }
 
 impl ChangeEvent {
@@ -273,6 +357,8 @@ impl ChangeEvent {
             ChangeKind::Created => "Created",
             ChangeKind::Updated => "Updated",
             ChangeKind::Deleted => "Deleted",
+            ChangeKind::EdgeCreated => "EdgeCreated",
+            ChangeKind::EdgeDeleted => "EdgeDeleted",
         }
     }
 
