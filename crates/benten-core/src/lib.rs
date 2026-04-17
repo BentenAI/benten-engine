@@ -62,9 +62,12 @@ use core::fmt;
 
 use serde::{Deserialize, Serialize};
 
+pub mod edge;
 pub mod error_code;
 pub mod value;
+pub mod version;
 
+pub use edge::Edge;
 pub use error_code::ErrorCode;
 pub use value::Value;
 
@@ -197,7 +200,7 @@ struct NodeHashView<'a> {
 /// This is intentionally a thin newtype for the spike. Phase 1 proper will
 /// migrate to the `cid` crate for full IPLD interop; the byte layout is
 /// compatible, so the migration is a drop-in.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Cid(
     // serde does not derive `Serialize`/`Deserialize` for `[u8; N]` where N > 32
     // (the trait is only impl'd for arrays up to length 32). Wrap in `Vec<u8>`
@@ -377,55 +380,19 @@ pub enum CoreError {
 }
 
 // ---------------------------------------------------------------------------
-// Edge (C2 — Phase 1 G1-B stub)
-// ---------------------------------------------------------------------------
-
-/// A graph Edge. Content-addressed over `(source_cid, target_cid, label, properties)`.
-///
-/// Endpoint Node CIDs are **not** affected by edge creation — the Node's CID
-/// is determined only by its own labels+properties (see ENGINE-SPEC §7).
-///
-/// **Phase 1 G1-B stub** — real impl lands in Phase 1 proper.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Edge {
-    pub source: Cid,
-    pub target: Cid,
-    pub label: String,
-    pub properties: Option<BTreeMap<String, Value>>,
-}
-
-impl Edge {
-    /// Construct a new Edge.
-    #[must_use]
-    pub fn new(
-        _source: Cid,
-        _target: Cid,
-        _label: impl Into<String>,
-        _properties: Option<BTreeMap<String, Value>>,
-    ) -> Self {
-        todo!("Edge::new — G1-B (Phase 1)")
-    }
-
-    /// Canonical CBOR bytes for hashing (source, target, label, properties).
-    pub fn canonical_bytes(&self) -> Result<Vec<u8>, CoreError> {
-        todo!("Edge::canonical_bytes — G1-B (Phase 1)")
-    }
-
-    /// Content-addressed Edge CID.
-    pub fn cid(&self) -> Result<Cid, CoreError> {
-        todo!("Edge::cid — G1-B (Phase 1)")
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Anchor + version-chain helpers (C6 — Phase 1 G1-B stub)
+// Anchor + version-chain helpers (C6)
 //
-// R4 triage (M21): the `version` submodule is the canonical location for
-// the prior-head-threaded API. The top-level `Anchor` / `append_version` /
-// `current_version` / `walk_versions` names are retained as a thinner
-// compatibility surface (u64-id-based anchor) so existing call sites keep
-// compiling; new code should prefer `benten_core::version::*`. R5 may
-// unify the two under a single `Anchor` trait once the evaluator lands.
+// R4 triage (M21): `benten_core::version::*` is the canonical prior-head-
+// threaded surface (see `src/version.rs`). The `u64`-id-based Anchor + free
+// functions exposed here at the crate root are the thinner compatibility
+// surface for the Phase 1 "simple" case where callers don't need to detect
+// concurrent appends. R5 keeps both; R5 G7 picks a canonical shape once the
+// evaluator lands (cov-f3 residual — `TODO(phase-2)`).
+//
+// State storage: each u64-id anchor owns a `Vec<Cid>` of appended version
+// CIDs (oldest-first), held in a process-wide spinlocked table keyed by
+// `Anchor::id`. This matches the Cid-head surface's storage strategy and is
+// sufficient for Phase 1 (in-process only).
 // ---------------------------------------------------------------------------
 
 /// The `CURRENT` edge label — anchor → current-version Node pointer.
@@ -436,17 +403,32 @@ pub const LABEL_NEXT_VERSION: &str = "NEXT_VERSION";
 
 /// Top-level opt-in version-chain Anchor identity (u64-id shape).
 ///
-/// **Phase 1 G1-B stub.** Co-exists with `version::Anchor` (Cid-head shape);
-/// R5 may converge them.
+/// Each call to [`Anchor::new`] allocates a fresh monotonically-increasing
+/// id from a process-wide counter, so two independent anchors never collide.
+/// The id itself is not content-addressed (see ENGINE-SPEC §7) — it is
+/// identity only, and [`Node::anchor_id`] is excluded from the Node CID.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Anchor {
     pub id: u64,
 }
 
+/// Counter for [`Anchor::new`]. Starts at 1 so `0` remains a sentinel value
+/// for future "unset" / "null-anchor" encodings if they become useful.
+static ANCHOR_COUNTER: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(1);
+
+/// Per-process u64-id version-chain table. `BTreeMap<id, Vec<Cid>>` keyed by
+/// anchor id; vec stores version CIDs in oldest-first insertion order.
+static U64_CHAINS: spin::Lazy<spin::Mutex<BTreeMap<u64, Vec<Cid>>>> =
+    spin::Lazy::new(|| spin::Mutex::new(BTreeMap::new()));
+
 impl Anchor {
+    /// Allocate a fresh Anchor with a distinct id. Distinct calls never
+    /// produce equal ids (monotonic u64 counter, wraps after 2^64-1 calls —
+    /// practically unreachable).
     #[must_use]
     pub fn new() -> Self {
-        todo!("Anchor::new — G1-B (Phase 1)")
+        let id = ANCHOR_COUNTER.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+        Self { id }
     }
 }
 
@@ -456,86 +438,54 @@ impl Default for Anchor {
     }
 }
 
-/// Append a Version Node to an Anchor, returning the updated CURRENT Cid.
+/// Append a Version Node to an Anchor's chain, returning the Node's CID.
 ///
-/// **Phase 1 G1-B stub.**
-pub fn append_version(_anchor: &Anchor, _version: &Node) -> Result<Cid, CoreError> {
-    todo!("append_version — G1-B (Phase 1)")
+/// The appended Node's CID becomes the anchor's new [`current_version`].
+/// Per ENGINE-SPEC §6 / §7, chain membership is expressed via edges
+/// (`CURRENT`, `NEXT_VERSION`); the Node's own content hash is unaffected
+/// by position in the chain.
+///
+/// # Errors
+///
+/// Propagates [`CoreError::Serialize`] from [`Node::cid`] if the version
+/// Node fails to encode.
+pub fn append_version(anchor: &Anchor, version: &Node) -> Result<Cid, CoreError> {
+    let cid = version.cid()?;
+    let mut table = U64_CHAINS.lock();
+    table.entry(anchor.id).or_default().push(cid.clone());
+    Ok(cid)
 }
 
-/// Resolve the Anchor's current (latest) version Cid via the CURRENT edge.
+/// Resolve the Anchor's current (latest) version Cid.
 ///
-/// **Phase 1 G1-B stub.**
-pub fn current_version(_anchor: &Anchor) -> Result<Cid, CoreError> {
-    todo!("current_version — G1-B (Phase 1)")
+/// # Errors
+///
+/// Returns [`CoreError::NotFound`] if the anchor has no appended versions.
+pub fn current_version(anchor: &Anchor) -> Result<Cid, CoreError> {
+    let table = U64_CHAINS.lock();
+    table
+        .get(&anchor.id)
+        .and_then(|chain| chain.last().cloned())
+        .ok_or(CoreError::NotFound)
 }
 
-/// Walk an Anchor's version chain, yielding Version Node CIDs in oldest-first order.
+/// Walk an Anchor's version chain, yielding Version Node CIDs in oldest-first
+/// order.
 ///
-/// **Phase 1 G1-B stub.**
-pub fn walk_versions(_anchor: &Anchor) -> Result<Vec<Cid>, CoreError> {
-    todo!("walk_versions — G1-B (Phase 1)")
-}
-
-/// Canonical version-chain surface (M21). Use the prior-CID-threaded
-/// protocol: each `append_version(anchor, prior_head, new_head)` requires
-/// the caller to name the head they're building on. Concurrent appenders
-/// naming the same prior head fork the chain → `VersionError::Branched`.
+/// # Errors
 ///
-/// **Phase 1 G1-B stub.**
-pub mod version {
-    use super::Cid;
-    use alloc::string::String;
-
-    /// Alternative Anchor shape that stores the current head CID inline.
-    #[derive(Debug, Clone, PartialEq)]
-    pub struct Anchor {
-        pub head: Cid,
-    }
-
-    impl Anchor {
-        /// Construct an anchor rooted at `head`. **Phase 1 G1-B stub.**
-        #[must_use]
-        pub fn new(head: Cid) -> Self {
-            Self { head }
-        }
-    }
-
-    /// Error surface for the prior-threaded append API.
-    #[derive(Debug, thiserror::Error)]
-    pub enum VersionError {
-        /// Two appends against the same prior head -> chain forks.
-        #[error("chain branched; seen head {seen:?}")]
-        Branched { seen: Cid, attempted: Cid },
-
-        /// Caller supplied a prior head the anchor has never seen.
-        #[error("unknown prior head")]
-        UnknownPrior { supplied: Cid },
-
-        /// Other internal error.
-        #[error("version error: {0}")]
-        Other(String),
-    }
-
-    /// Append `new_head` against `prior_head`. **Phase 1 G1-B stub.**
-    pub fn append_version(
-        _anchor: &Anchor,
-        _prior_head: &Cid,
-        _new_head: &Cid,
-    ) -> Result<(), VersionError> {
-        todo!("version::append_version — G1-B (Phase 1)")
-    }
-
-    /// Walk the chain from oldest to newest, yielding CIDs. **Phase 1 G1-B stub.**
-    pub fn walk_versions(_anchor: &Anchor) -> alloc::vec::IntoIter<Cid> {
-        todo!("version::walk_versions — G1-B (Phase 1)")
-    }
+/// Currently infallible (returns an empty `Vec` for a never-appended anchor).
+/// The `Result` return type reserves space for future revocation / backend
+/// failures without a breaking API change.
+pub fn walk_versions(anchor: &Anchor) -> Result<Vec<Cid>, CoreError> {
+    let table = U64_CHAINS.lock();
+    Ok(table.get(&anchor.id).cloned().unwrap_or_default())
 }
 
 /// Format any `Display`able error into an owned `String`. Kept out of the
 /// error constructor so we don't accidentally pull `alloc::format!` in from
 /// a place that can't see `alloc`.
-fn format_err<E: fmt::Display>(e: &E) -> String {
+pub(crate) fn format_err<E: fmt::Display>(e: &E) -> String {
     use core::fmt::Write as _;
     let mut s = String::new();
     // Writing to a String cannot fail; ignore the Result to avoid `expect`
