@@ -7,15 +7,17 @@
 //! via a visited-set and reported through a dedicated `cycle_detected` flag
 //! so the two truncation reasons remain distinguishable (R4 triage m5).
 //!
-//! ## G5-B coordination note (ChangeEvent shape)
+//! ## Ingress paths
 //!
-//! `ChangeEvent` identifies the affected CID and label, not the edge's
-//! `(source, target)` pair. Phase 1 exposes a direct `add_edge(child, parent)`
-//! test surface so the depth-cap and cycle-detection logic is reachable
-//! through unit tests without waiting on a richer event shape. The
-//! `update(ChangeEvent)` path is a minimal budget-consuming acknowledgement
-//! — it records the event for `stale_on_budget_exceeded.rs`'s budget test
-//! but does not try to reconstruct edge endpoints from an identity-only event.
+//! After the G5 fix-pass, `ChangeEvent::edge_endpoints` carries
+//! `(source, target, label)` for `EdgeCreated`/`EdgeDeleted` kinds, so the
+//! trait `update` path wires `GovernedBy` edges directly into the parent
+//! adjacency map. `add_edge(child, parent)` remains a direct-ingress
+//! convenience used by unit tests and by engine-internal batches.
+//!
+//! A Node-event delete on a `GovernedBy`-labeled Node (rare — governance
+//! is usually edge-shaped) invalidates any adjacency whose value equals the
+//! deleted Cid as a best-effort cleanup (mini-review g5-cr-7).
 //!
 //! ## Budget
 //!
@@ -26,7 +28,7 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use benten_core::Cid;
-use benten_graph::ChangeEvent;
+use benten_graph::{ChangeEvent, ChangeKind};
 
 use crate::{View, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
 
@@ -43,19 +45,24 @@ pub struct GovernanceInheritanceView {
     /// Phase-1 `GovernedBy` cardinality; Phase 2 extends to multi-parent).
     parent: BTreeMap<Cid, Cid>,
     remaining_budget: u64,
+    /// Original budget for uniform `rebuild` restore (g5-cr-3).
+    original_budget: u64,
     stale: bool,
 }
 
 impl GovernanceInheritanceView {
+    /// Construct a fresh view with an effectively-unbounded budget.
     #[must_use]
     pub fn new() -> Self {
         Self {
             parent: BTreeMap::new(),
             remaining_budget: UNLIMITED_BUDGET,
+            original_budget: UNLIMITED_BUDGET,
             stale: false,
         }
     }
 
+    /// Content-addressed definition for this view.
     pub fn definition() -> ViewDefinition {
         ViewDefinition {
             view_id: VIEW_ID.to_string(),
@@ -64,11 +71,13 @@ impl GovernanceInheritanceView {
         }
     }
 
+    /// Low-budget test constructor.
     #[must_use]
     pub fn with_budget_for_testing(budget: u64) -> Self {
         Self {
             parent: BTreeMap::new(),
             remaining_budget: budget,
+            original_budget: budget,
             stale: false,
         }
     }
@@ -164,7 +173,7 @@ impl GovernanceInheritanceView {
         Ok(self.effective_rules(entity))
     }
 
-    fn apply_event(&mut self, _event: &ChangeEvent) -> Result<(), ViewError> {
+    fn apply_event(&mut self, event: &ChangeEvent) -> Result<(), ViewError> {
         if self.stale {
             return Err(ViewError::Stale {
                 view_id: VIEW_ID.to_string(),
@@ -175,8 +184,31 @@ impl GovernanceInheritanceView {
             return Err(ViewError::BudgetExceeded(VIEW_ID.to_string()));
         }
         self.remaining_budget -= 1;
-        // See module note: identity-only events are acknowledged without
-        // state mutation. `add_edge` is the real ingress.
+
+        match event.kind {
+            ChangeKind::EdgeCreated if event.has_label("GovernedBy") => {
+                if let Some((source, target, _)) = &event.edge_endpoints {
+                    // `GovernedBy` edge: source is the child (governed),
+                    // target is the parent (governor).
+                    self.parent.insert(source.clone(), target.clone());
+                }
+            }
+            ChangeKind::EdgeDeleted if event.has_label("GovernedBy") => {
+                if let Some((source, _target, _)) = &event.edge_endpoints {
+                    self.parent.remove(source);
+                }
+            }
+            ChangeKind::Deleted => {
+                // A node-delete of a governance participant invalidates any
+                // adjacency that pointed AT it; best-effort cleanup per
+                // mini-review g5-cr-7.
+                self.parent.retain(|_, v| v != &event.cid);
+                self.parent.remove(&event.cid);
+            }
+            _ => {
+                // Non-governance events are acknowledged but not acted on.
+            }
+        }
         Ok(())
     }
 }
@@ -256,6 +288,7 @@ impl View for GovernanceInheritanceView {
 
     fn rebuild(&mut self) -> Result<(), ViewError> {
         self.parent.clear();
+        self.remaining_budget = self.original_budget;
         self.stale = false;
         Ok(())
     }

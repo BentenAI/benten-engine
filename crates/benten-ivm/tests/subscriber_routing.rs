@@ -22,6 +22,8 @@ fn post_event() -> ChangeEvent {
         actor_cid: None,
         handler_cid: None,
         capability_grant_cid: None,
+        node: None,
+        edge_endpoints: None,
     }
 }
 

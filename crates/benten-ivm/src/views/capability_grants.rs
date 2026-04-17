@@ -1,37 +1,35 @@
 //! View 1 — Capability grants indexed by entity (I3).
 //!
 //! Maintains a map `entity_cid → {grant_cids}` so capability lookups for a
-//! given entity are O(1) after a one-time hash-map hit. Inputs:
+//! given entity are O(1) after a one-time hash-map hit.
 //!
-//! - `ChangeEvent` with label `"CapabilityGrant"` and kind `Created` / `Updated`
-//!   adds the grant CID to the entity's grant set. Phase 1 uses the event's
-//!   own CID as the entity key (the `ChangeEvent` shape does not yet carry
-//!   property data — see the G5-B coordination note below).
-//! - `ChangeEvent` with label `"CapabilityGrant"` and kind `Deleted` removes
-//!   the grant from every entity's set.
+//! ## Ingress paths
 //!
-//! ## G5-B coordination note (ChangeEvent shape)
+//! The widened `ChangeEvent` (post-G5 fix-pass) carries the full Node body
+//! for `ChangeKind::{Created, Updated, Deleted}` events. When the event's
+//! `node` carries a `grantee` property (Cid-valued), the view keys the grant
+//! under that CID — the proper `entity → {grants}` mapping. When the event
+//! only carries identity (no node, or node without a `grantee` property),
+//! the view falls back to keying under `event.cid` for back-compat with the
+//! original identity-only test harness.
 //!
-//! The current `ChangeEvent` (post-G3) carries only `cid`, `labels`, `kind`,
-//! `tx_id`, and optional attribution CIDs — not the Node's property body. The
-//! Phase-1 "entity" key is therefore the event's own CID. When `ChangeEvent`
-//! grows to carry the grant's `grantee` property (Phase 2 or a G3 fix-pass),
-//! this view's `update` path extracts that property instead. The public
-//! read shape (`entity_cid → {grant_cids}`) is stable across that refactor.
+//! Edge events (`ChangeKind::EdgeCreated` with label `GRANTED_TO`) are
+//! treated as the canonical grant-to-entity wiring: the edge's source is the
+//! grant Cid, the target is the entity Cid. Phase 1 accepts either the Node
+//! path or the edge path; which one production code prefers depends on how
+//! the capability Node shape is finalized in `benten-caps` (see G4).
 //!
 //! ## Budget
 //!
-//! `with_budget_for_testing(N)` caps the number of `on_change` applications to
-//! `N` successful updates; the `(N+1)`th flips the view to `ViewState::Stale`
-//! and subsequent reads return `ViewError::Stale { view_id: "capability_grants" }`
-//! (the stable error code is `E_IVM_VIEW_STALE`). The default constructor
-//! `new()` installs an effectively-unlimited budget.
+//! `with_budget_for_testing(N)` caps the number of `on_change` applications
+//! to `N` successful updates; the `(N+1)`th flips the view to
+//! `ViewState::Stale` and subsequent reads return `ViewError::Stale`.
 
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
-use benten_core::Cid;
+use benten_core::{Cid, Value};
 use benten_graph::{ChangeEvent, ChangeKind};
 
 use crate::{View, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
@@ -50,6 +48,10 @@ pub struct CapabilityGrantsView {
     /// Remaining update budget. Decremented by each `on_change` / `update`
     /// call; when it would go negative, the view flips to `Stale`.
     remaining_budget: u64,
+    /// Originally-configured budget, stashed at construction so `rebuild`
+    /// restores the same cap rather than silently bumping to `u64::MAX`.
+    /// Uniform across all 5 views per mini-review g5-cr-3.
+    original_budget: u64,
     /// Whether the view is currently stale.
     stale: bool,
 }
@@ -64,6 +66,7 @@ impl CapabilityGrantsView {
         Self {
             by_entity: BTreeMap::new(),
             remaining_budget: UNLIMITED_BUDGET,
+            original_budget: UNLIMITED_BUDGET,
             stale: false,
         }
     }
@@ -85,6 +88,7 @@ impl CapabilityGrantsView {
         Self {
             by_entity: BTreeMap::new(),
             remaining_budget: budget,
+            original_budget: budget,
             stale: false,
         }
     }
@@ -102,12 +106,23 @@ impl CapabilityGrantsView {
         }
         self.remaining_budget -= 1;
 
-        // Phase 1: use the node CID as both the entity key and the grant CID.
-        // See the crate-level coordination note; the mapping is stable when
-        // ChangeEvent grows property attachment in Phase 2.
-        if let Ok(cid) = node.cid() {
-            self.by_entity.entry(cid.clone()).or_default().insert(cid);
-        }
+        // Prefer the node's `grantee` property (Cid-valued) as entity key.
+        // Fall back to the node's own CID when absent (identity-only path).
+        let entity_key = match extract_grantee(&node) {
+            Some(gcid) => gcid,
+            None => match node.cid() {
+                Ok(c) => c,
+                Err(_) => return,
+            },
+        };
+        let grant_cid = match node.cid() {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+        self.by_entity
+            .entry(entity_key)
+            .or_default()
+            .insert(grant_cid);
     }
 
     /// Current runtime state.
@@ -151,33 +166,91 @@ impl CapabilityGrantsView {
         }
         self.remaining_budget -= 1;
 
-        // Filter: only `CapabilityGrant`-labeled events are relevant.
+        // Edge path: GRANTED_TO edge wiring — source is grant, target is entity.
+        if matches!(
+            event.kind,
+            ChangeKind::EdgeCreated | ChangeKind::EdgeDeleted
+        ) {
+            if !event.has_label("GRANTED_TO") {
+                return Ok(());
+            }
+            if let Some((source, target, _)) = &event.edge_endpoints {
+                match event.kind {
+                    ChangeKind::EdgeCreated => {
+                        self.by_entity
+                            .entry(target.clone())
+                            .or_default()
+                            .insert(source.clone());
+                    }
+                    ChangeKind::EdgeDeleted => {
+                        if let Some(set) = self.by_entity.get_mut(target) {
+                            set.remove(source);
+                            if set.is_empty() {
+                                self.by_entity.remove(target);
+                            }
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            return Ok(());
+        }
+
+        // Node path: CapabilityGrant-labeled node events.
         if !event.has_label("CapabilityGrant") {
             return Ok(());
         }
         match event.kind {
             ChangeKind::Created | ChangeKind::Updated => {
+                // Prefer the node's `grantee` property as entity key. When
+                // absent (identity-only legacy path), fall back to event.cid
+                // so the original single-entity test harness still works.
+                let entity_key = event
+                    .node
+                    .as_ref()
+                    .and_then(extract_grantee)
+                    .unwrap_or_else(|| event.cid.clone());
                 self.by_entity
-                    .entry(event.cid.clone())
+                    .entry(entity_key)
                     .or_default()
                     .insert(event.cid.clone());
             }
             ChangeKind::Deleted => {
-                // Remove the grant from every entity's set. The set is
-                // insert-keyed by event.cid so only the entries whose entity
-                // key equals event.cid can actually hold it under Phase-1
-                // semantics, but iterating keeps the shape resilient if the
-                // Phase-2 property-bearing path is added without a Deleted
-                // fix-up.
-                for set in self.by_entity.values_mut() {
-                    set.remove(&event.cid);
+                // Prefer the pre-delete node's `grantee` property; fall back
+                // to iterating every entity's set to clean up the grant CID.
+                if let Some(entity) = event.node.as_ref().and_then(extract_grantee) {
+                    if let Some(set) = self.by_entity.get_mut(&entity) {
+                        set.remove(&event.cid);
+                        if set.is_empty() {
+                            self.by_entity.remove(&entity);
+                        }
+                    }
+                } else {
+                    // Legacy identity-only path: remove event.cid from any
+                    // set that carries it, then drop empty sets.
+                    for set in self.by_entity.values_mut() {
+                        set.remove(&event.cid);
+                    }
+                    self.by_entity.retain(|_, v| !v.is_empty());
                 }
-                // Drop empty sets so post-revocation reads return an empty
-                // Vec via the `None` branch of `get`.
-                self.by_entity.retain(|_, v| !v.is_empty());
             }
+            _ => {}
         }
         Ok(())
+    }
+}
+
+/// Extract the `grantee` property from a Node as a `Cid`. Returns `None`
+/// when the property is absent or not CID-shaped.
+///
+/// Phase 1 encodes CID-valued properties as `Value::Bytes` carrying the raw
+/// CID byte representation (`Cid::as_bytes`). A Phase-2 string-CID parse
+/// path (`Cid::from_str`, currently deferred — see benten-core) will accept
+/// `Value::Text` too; until then the bytes form is canonical.
+fn extract_grantee(node: &benten_core::Node) -> Option<Cid> {
+    match node.properties.get("grantee") {
+        Some(Value::Bytes(b)) => Cid::from_bytes(b).ok(),
+        _ => None,
     }
 }
 
@@ -210,11 +283,12 @@ impl View for CapabilityGrantsView {
     }
 
     fn rebuild(&mut self) -> Result<(), ViewError> {
-        // Phase 1 rebuild clears state and resets the stale flag. A
-        // full-history replay from the graph belongs to the subscriber
-        // (G5-A) and the engine (G7); the view itself is the pure
-        // maintainer, and `rebuild` is the reset hook.
+        // Phase 1 rebuild clears state, resets the stale flag, and restores
+        // the originally-configured budget. A view constructed with a finite
+        // budget that's tripped then rebuilt must accept up to the same
+        // number of events again — see mini-review g5-cr-3.
         self.by_entity.clear();
+        self.remaining_budget = self.original_budget;
         self.stale = false;
         Ok(())
     }
@@ -267,5 +341,22 @@ mod tests {
         assert_eq!(v.state(), ViewState::Stale);
         v.rebuild().unwrap();
         assert_eq!(v.state(), ViewState::Fresh);
+    }
+
+    #[test]
+    fn rebuild_restores_original_budget() {
+        // g5-cr-3: rebuild must restore the budget to the original cap so a
+        // view that's rebuilt can accept the same number of events again.
+        let mut v = CapabilityGrantsView::with_budget_for_testing(1);
+        v.on_change(grant_node(1)); // consumes the 1-unit budget
+        v.on_change(grant_node(2)); // trips the view stale
+        assert_eq!(v.state(), ViewState::Stale);
+        v.rebuild().unwrap();
+        assert_eq!(v.state(), ViewState::Fresh);
+        // Post-rebuild: budget is back to 1, so one more update is accepted.
+        v.on_change(grant_node(3));
+        assert_eq!(v.state(), ViewState::Fresh);
+        v.on_change(grant_node(4));
+        assert_eq!(v.state(), ViewState::Stale);
     }
 }

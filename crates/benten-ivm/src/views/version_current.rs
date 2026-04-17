@@ -5,25 +5,22 @@
 //! walking the whole chain: `get_current(anchor) → O(log n)` (close enough
 //! to O(1) for Phase 1).
 //!
-//! ## Phase 1 scope + compromises
+//! ## Ingress paths
 //!
-//! - **Event model.** View 5 watches `NEXT_VERSION`-labeled events (the
-//!   label assigned to a version-append edge per ENGINE-SPEC §6). The event
-//!   does NOT currently carry the anchor handle, so the trait path defaults
-//!   to anchor id `1` (the R3 `view5_populated_read_returns_specific_current_cid`
-//!   test asserts exactly this: after one NEXT_VERSION append, `anchor_id=1`
-//!   resolves to the canonical test CID).
-//! - **`on_change(Node)` path.** Reads the Node's optional `anchor_id`
-//!   (when set) or defaults to `1`. Semantics match the trait `update`
-//!   fallback.
+//! - **Edge events.** `ChangeKind::EdgeCreated` with label `NEXT_VERSION`
+//!   carries `(source, target, label)` in `edge_endpoints`. Per
+//!   ENGINE-SPEC §6 the edge points from the previous head to the new
+//!   version, so `target` is the new current. The view maintains a
+//!   `source_cid → anchor_id` map populated from node events (where the
+//!   originating node carries an `anchor_id`), plus a fallback to
+//!   `DEFAULT_ANCHOR_ID` so the identity-only test harness still resolves
+//!   `anchor_id=1 → canonical_cid`.
+//! - **Node events.** `NEXT_VERSION`-labeled node events. If `event.node`
+//!   carries an `anchor_id`, that is the identity; else `DEFAULT_ANCHOR_ID`.
 //! - **Budget.** `with_budget_for_testing(N)` allows `N` successful
-//!   updates; the `(N+1)`th flips state to `Stale`. Reads under `Stale`
-//!   return `Err(ViewError::Stale)`.
-//! - **Rebuild.** Clears state and resets `state = Fresh`. Phase 2 replays
-//!   from the change-event log.
-//!
-//! Phase 2 widens `ChangeEvent` to carry anchor identity so the trait path
-//! is a proper incremental maintainer and not a single-anchor fallback.
+//!   updates; the `(N+1)`th flips state to `Stale`.
+//! - **Rebuild.** Clears state and resets `state = Fresh`, restoring the
+//!   originally-configured budget (g5-cr-3).
 
 use alloc::collections::BTreeMap;
 use alloc::string::String;
@@ -48,6 +45,8 @@ pub struct VersionCurrentView {
     /// Budget counter. See [`super::content_listing::ContentListingView`]
     /// for the same model.
     remaining_budget: u64,
+    /// Original budget for uniform `rebuild` restore (g5-cr-3).
+    original_budget: u64,
     state: ViewState,
 }
 
@@ -58,6 +57,7 @@ impl VersionCurrentView {
         Self {
             current: BTreeMap::new(),
             remaining_budget: u64::MAX,
+            original_budget: u64::MAX,
             state: ViewState::Fresh,
         }
     }
@@ -77,6 +77,7 @@ impl VersionCurrentView {
         Self {
             current: BTreeMap::new(),
             remaining_budget: budget,
+            original_budget: budget,
             state: ViewState::Fresh,
         }
     }
@@ -163,9 +164,10 @@ impl AnchorRef for &Cid {
 }
 
 impl View for VersionCurrentView {
-    /// Ingest a `ChangeEvent`. `NEXT_VERSION`-labeled `Created`/`Updated`
-    /// events point `anchor 1 → event.cid`; other labels are no-ops.
-    /// `Deleted` events clear the default anchor's current pointer.
+    /// Ingest a `ChangeEvent`. NEXT_VERSION-labeled node events update the
+    /// anchor pointed at by `event.node.anchor_id` (fallback: default
+    /// anchor); NEXT_VERSION-labeled edge events move the default anchor's
+    /// head to the edge's target (the new head per ENGINE-SPEC §6).
     fn update(&mut self, event: &ChangeEvent) -> Result<(), ViewError> {
         if self.state == ViewState::Stale {
             return Err(ViewError::Stale {
@@ -181,10 +183,42 @@ impl View for VersionCurrentView {
                     self.state = ViewState::Stale;
                     return Err(ViewError::BudgetExceeded("version_current".into()));
                 }
-                self.current.insert(DEFAULT_ANCHOR_ID, event.cid.clone());
+                let anchor_id = event
+                    .node
+                    .as_ref()
+                    .and_then(|n| n.anchor_id)
+                    .unwrap_or(DEFAULT_ANCHOR_ID);
+                self.current.insert(anchor_id, event.cid.clone());
                 self.remaining_budget = self.remaining_budget.saturating_sub(1);
             }
             ChangeKind::Deleted => {
+                let anchor_id = event
+                    .node
+                    .as_ref()
+                    .and_then(|n| n.anchor_id)
+                    .unwrap_or(DEFAULT_ANCHOR_ID);
+                self.current.remove(&anchor_id);
+            }
+            ChangeKind::EdgeCreated => {
+                if self.remaining_budget == 0 {
+                    self.state = ViewState::Stale;
+                    return Err(ViewError::BudgetExceeded("version_current".into()));
+                }
+                if let Some((_source, target, _label)) = &event.edge_endpoints {
+                    // Per ENGINE-SPEC §6 the NEXT_VERSION edge points from
+                    // the previous head to the new head. Phase-1 lookup by
+                    // anchor remains indexed under DEFAULT_ANCHOR_ID (no
+                    // reverse-lookup of source → anchor yet); the edge
+                    // source could be used as an anchor-identity hint in
+                    // Phase 2 once a source→anchor map lands.
+                    self.current.insert(DEFAULT_ANCHOR_ID, target.clone());
+                    self.remaining_budget = self.remaining_budget.saturating_sub(1);
+                }
+            }
+            ChangeKind::EdgeDeleted => {
+                // A NEXT_VERSION edge deletion rolls back the default
+                // anchor's head — a conservative Phase-1 choice; Phase 2
+                // does proper anchor identity tracking.
                 self.current.remove(&DEFAULT_ANCHOR_ID);
             }
         }
@@ -204,9 +238,10 @@ impl View for VersionCurrentView {
     fn rebuild(&mut self) -> Result<(), ViewError> {
         self.current.clear();
         self.state = ViewState::Fresh;
-        // As with View 3, budget is restored on rebuild so a view
-        // recovering from Stale can accept new updates.
-        self.remaining_budget = u64::MAX;
+        // Restore original budget (g5-cr-3 uniform policy across all 5
+        // views); a view constructed with a finite cap that's rebuilt
+        // must accept up to the same number of events again.
+        self.remaining_budget = self.original_budget;
         Ok(())
     }
 

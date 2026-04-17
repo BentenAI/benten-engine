@@ -71,9 +71,15 @@ impl ViewError {
             ViewError::Stale { .. } | ViewError::BudgetExceeded(_) => {
                 benten_core::ErrorCode::IvmViewStale
             }
-            // PatternMismatch is a caller-side input issue; catalog code
-            // E_INPUT_LIMIT is the closest match in the current catalog.
-            ViewError::PatternMismatch(_) => benten_core::ErrorCode::InputLimit,
+            // PatternMismatch: the caller asked the view for an index
+            // partition it doesn't maintain (query shape invalid). That's
+            // closer to a registration-style invariant than to an input-
+            // limit trip — mini-review g5-cr-11 pinned the mismatch.
+            // `E_INV_REGISTRATION` is the catch-all for registration-time
+            // structural issues; it's the most faithful of the existing
+            // catalog codes until a dedicated `E_IVM_PATTERN_MISMATCH`
+            // lands (which the catalog freeze defers to Phase 2).
+            ViewError::PatternMismatch(_) => benten_core::ErrorCode::InvRegistration,
         }
     }
 }
