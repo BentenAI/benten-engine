@@ -25,6 +25,26 @@
 //!   propagates to the caller. The backend's in-tx flag is released via
 //!   an internal RAII guard so subsequent calls to `.transaction()`
 //!   don't see a stuck lock.
+//!
+//! # Privileged vs unprivileged transactions (G7 reservation)
+//!
+//! Phase-1 transactions opened via `RedbBackend::transaction` are always
+//! unprivileged — the `is_privileged` flag on [`Transaction`] is hard-coded
+//! to `false` at the backend entry points. Engine-internal multi-write
+//! operations that need to write `"system:"`-prefixed nodes or edges
+//! atomically (grant_capability / create_view / revoke_capability, G7) will
+//! land a dedicated privileged entry point later; user-authored closures
+//! never gain a path to set `is_privileged = true`.
+//!
+//! # Subscriber ordering and dead-letter observability (R4b follow-ups)
+//!
+//! `fan_out` snapshots the subscribers list after the redb commit but
+//! before invoking any callback. A subscriber registered strictly before
+//! the commit's tx-id fetch observes the event; one registered afterwards
+//! does not. Panics inside a subscriber are caught and discarded; Phase 1
+//! has no dead-letter counter so repeated panics are invisible to operators
+//! — adding a counter (TODO(R4b) tracked in the chaos-engineer mini-review
+//! finding g3-ce-5) is pending the `tracing` dep landing on this crate.
 
 use std::sync::{Arc, Mutex};
 
@@ -35,8 +55,8 @@ use crate::GraphError;
 use crate::indexes::{LABEL_INDEX_TABLE, PROP_INDEX_TABLE, property_index_key, value_index_bytes};
 use crate::redb_backend::NODES_TABLE;
 use crate::store::{
-    ChangeEvent, ChangeKind, ChangeSubscriber, EDGE_SRC_PREFIX, EDGE_TGT_PREFIX, edge_key,
-    edge_src_index_key, edge_tgt_index_key, node_key,
+    ChangeEvent, ChangeKind, ChangeSubscriber, edge_key, edge_src_index_key, edge_tgt_index_key,
+    node_key,
 };
 
 /// A pending write inside the transaction's batch. Mirrors `benten_caps::PendingOp`
@@ -57,18 +77,29 @@ pub enum PendingOp {
     PutEdge {
         /// The CID of the put edge.
         cid: Cid,
-        /// Edge label.
+        /// Edge label (wrapped single-element when translated to a
+        /// [`ChangeEvent`] so the same `labels` contract holds node- and
+        /// edge-side).
         label: String,
     },
-    /// Node delete by CID.
+    /// Node delete by CID. Carries the deleted Node's labels (captured by
+    /// read-before-delete inside the same redb txn) so label-filtered
+    /// subscribers see deletes.
     DeleteNode {
         /// The target Node CID.
         cid: Cid,
+        /// Labels of the Node that was deleted, or empty when the delete
+        /// targeted an already-absent CID (idempotent miss).
+        labels: Vec<String>,
     },
-    /// Edge delete by CID.
+    /// Edge delete by CID. Carries the deleted Edge's label for the same
+    /// reason DeleteNode carries its Node's labels.
     DeleteEdge {
         /// The target Edge CID.
         cid: Cid,
+        /// Label of the deleted Edge, or `None` when the delete targeted an
+        /// already-absent CID (idempotent miss).
+        label: Option<String>,
     },
 }
 
@@ -77,11 +108,19 @@ impl PendingOp {
     /// emit [`ChangeKind::Deleted`]; puts emit [`ChangeKind::Created`] (the
     /// Phase-1 content-addressed invariant — every logical "update" is a
     /// new CID, hence always a `Created` event).
+    ///
+    /// # Phase-2 reservation
+    ///
+    /// `ChangeKind::Updated` is reserved for the Phase-2 anchor CURRENT
+    /// pointer path and similar non-content-addressed identities. A Phase-2
+    /// implementer adding a `PendingOp::UpdateAnchor` variant must emit
+    /// `ChangeKind::Updated` rather than collapsing into `Created` — IVM
+    /// views downstream treat the two as semantically distinct.
     pub(crate) fn to_change_event(&self, tx_id: u64) -> ChangeEvent {
         match self {
             PendingOp::PutNode { cid, labels } => ChangeEvent {
                 cid: cid.clone(),
-                label: labels.first().cloned().unwrap_or_default(),
+                labels: labels.clone(),
                 kind: ChangeKind::Created,
                 tx_id,
                 actor_cid: None,
@@ -90,16 +129,25 @@ impl PendingOp {
             },
             PendingOp::PutEdge { cid, label } => ChangeEvent {
                 cid: cid.clone(),
-                label: label.clone(),
+                labels: vec![label.clone()],
                 kind: ChangeKind::Created,
                 tx_id,
                 actor_cid: None,
                 handler_cid: None,
                 capability_grant_cid: None,
             },
-            PendingOp::DeleteNode { cid } | PendingOp::DeleteEdge { cid } => ChangeEvent {
+            PendingOp::DeleteNode { cid, labels } => ChangeEvent {
                 cid: cid.clone(),
-                label: String::new(),
+                labels: labels.clone(),
+                kind: ChangeKind::Deleted,
+                tx_id,
+                actor_cid: None,
+                handler_cid: None,
+                capability_grant_cid: None,
+            },
+            PendingOp::DeleteEdge { cid, label } => ChangeEvent {
+                cid: cid.clone(),
+                labels: label.clone().into_iter().collect(),
                 kind: ChangeKind::Deleted,
                 tx_id,
                 actor_cid: None,
@@ -231,9 +279,23 @@ impl<'a> Transaction<'a> {
     /// Put an Edge inside the transaction. Also writes the source and target
     /// index entries so `edges_from` / `edges_to` see the edge after commit.
     ///
+    /// Enforces the R1 SC1 system-zone stopgap for edges: an unprivileged
+    /// transaction rejects any Edge whose label begins with `"system:"`.
+    /// Edges in the system-zone label namespace are the obvious smuggling
+    /// vector for capability-grant forgery (an edge labeled `"system:Grant"`
+    /// connecting an attacker's principal to a privileged capability), so
+    /// the stopgap extends to them even though the R1 SC1 text named only
+    /// Node labels explicitly.
+    ///
     /// # Errors
-    /// Propagates encoding or redb failures.
+    /// - [`GraphError::SystemZoneWrite`] on an unprivileged system-zone edge.
+    /// - Encoding or redb failures.
     pub fn put_edge(&mut self, edge: &Edge) -> Result<Cid, GraphError> {
+        if !self.is_privileged && edge.label.starts_with("system:") {
+            return Err(GraphError::SystemZoneWrite {
+                label: edge.label.clone(),
+            });
+        }
         let cid = edge.cid()?;
         let bytes = edge.canonical_bytes()?;
         let txn = self
@@ -257,8 +319,17 @@ impl<'a> Transaction<'a> {
     /// indexes in the same write transaction. Idempotent — deleting an absent
     /// CID is not an error.
     ///
+    /// Captures the Node's labels via a read-before-delete inside the same
+    /// redb txn so the emitted `ChangeEvent` carries the full label set.
+    /// Label-filtered subscribers (IVM views, CDC consumers) therefore see
+    /// delete events on the same routing API as puts.
+    ///
     /// # Errors
-    /// Propagates decode or redb failures.
+    /// Propagates decode or redb failures. Previously the decode error was
+    /// silently `.ok()`-dropped; that concealed on-disk corruption (a
+    /// partially-readable body would get removed from the `n:` table but
+    /// leave dangling label / property index entries behind). The decode
+    /// failure now propagates so callers can surface it.
     pub fn delete_node(&mut self, cid: &Cid) -> Result<(), GraphError> {
         // Read the existing body (if any) inside the same txn so the index
         // removals target the right keys. The content-addressed invariant
@@ -274,9 +345,10 @@ impl<'a> Transaction<'a> {
             match table.get(n_key.as_slice())? {
                 Some(v) => {
                     let bytes: &[u8] = v.value();
-                    serde_ipld_dagcbor::from_slice::<Node>(bytes)
-                        .map_err(|e| GraphError::Decode(format!("delete_node decode: {e}")))
-                        .ok()
+                    Some(
+                        serde_ipld_dagcbor::from_slice::<Node>(bytes)
+                            .map_err(|e| GraphError::Decode(format!("delete_node decode: {e}")))?,
+                    )
                 }
                 None => None,
             }
@@ -285,6 +357,10 @@ impl<'a> Transaction<'a> {
             let mut nodes = txn.open_table(NODES_TABLE)?;
             nodes.remove(n_key.as_slice())?;
         }
+        let labels: Vec<String> = existing
+            .as_ref()
+            .map(|n| n.labels.clone())
+            .unwrap_or_default();
         if let Some(node) = existing {
             {
                 let mut label_idx = txn.open_multimap_table(LABEL_INDEX_TABLE)?;
@@ -303,12 +379,16 @@ impl<'a> Transaction<'a> {
                 }
             }
         }
-        self.pending
-            .push(PendingOp::DeleteNode { cid: cid.clone() });
+        self.pending.push(PendingOp::DeleteNode {
+            cid: cid.clone(),
+            labels,
+        });
         Ok(())
     }
 
-    /// Delete an Edge by CID. Idempotent.
+    /// Delete an Edge by CID. Idempotent. Captures the Edge's label
+    /// via read-before-delete so the emitted `ChangeEvent` carries the
+    /// routing info.
     ///
     /// # Errors
     /// Propagates decode or redb failures.
@@ -317,19 +397,23 @@ impl<'a> Transaction<'a> {
             .inner
             .as_mut()
             .ok_or_else(|| GraphError::Redb("delete_edge after commit/abort".into()))?;
-        // Read the edge to compute its index keys.
+        // Read the edge to compute its index keys. Decode errors now
+        // propagate rather than silently `.ok()`-dropping — matches the
+        // delete_node rationale above.
         let edge: Option<Edge> = {
             let table = txn.open_table(NODES_TABLE)?;
             match table.get(edge_key(cid).as_slice())? {
                 Some(v) => {
                     let bytes: &[u8] = v.value();
-                    serde_ipld_dagcbor::from_slice::<Edge>(bytes)
-                        .map_err(|e| GraphError::Decode(format!("delete_edge decode: {e}")))
-                        .ok()
+                    Some(
+                        serde_ipld_dagcbor::from_slice::<Edge>(bytes)
+                            .map_err(|e| GraphError::Decode(format!("delete_edge decode: {e}")))?,
+                    )
                 }
                 None => None,
             }
         };
+        let label = edge.as_ref().map(|e| e.label.clone());
         {
             let mut table = txn.open_table(NODES_TABLE)?;
             if let Some(e) = &edge {
@@ -338,11 +422,10 @@ impl<'a> Transaction<'a> {
             }
             table.remove(edge_key(cid).as_slice())?;
         }
-        self.pending
-            .push(PendingOp::DeleteEdge { cid: cid.clone() });
-        // Suppress unused-prefix warnings — used above via helpers.
-        let _ = EDGE_SRC_PREFIX;
-        let _ = EDGE_TGT_PREFIX;
+        self.pending.push(PendingOp::DeleteEdge {
+            cid: cid.clone(),
+            label,
+        });
         Ok(())
     }
 
@@ -371,17 +454,33 @@ impl<'a> Transaction<'a> {
 /// subscriber callbacks are caught and discarded so a single misbehaving
 /// subscriber cannot poison the commit path. Emission happens after the
 /// redb commit has already returned success.
+///
+/// TODO(R4b): a permanently-broken subscriber drifts invisibly today —
+/// Phase 2 will land a dead-letter counter alongside a `tracing::warn!`
+/// once the tracing dep arrives on this crate (mini-review g3-ce-5).
+#[allow(
+    clippy::print_stderr,
+    reason = "operator-visible warning on subscriber panic; benten-graph has no tracing dep"
+)]
 pub(crate) fn fan_out(subscribers: &[Arc<dyn ChangeSubscriber>], ops: &[PendingOp], tx_id: u64) {
     for sub in subscribers {
         for op in ops {
             let event = op.to_change_event(tx_id);
             let sub_clone = Arc::clone(sub);
             // Ignore panics from individual subscribers — they must not
-            // take down the commit thread. Phase 2 revisits when the
-            // tracing dep lands on this crate.
-            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
-                sub_clone.on_change(&event);
-            }));
+            // take down the commit thread. Phase 2 will replace the stderr
+            // breadcrumb with tracing::warn! when tracing lands.
+            if let Err(_panic_payload) =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+                    sub_clone.on_change(&event);
+                }))
+            {
+                eprintln!(
+                    "benten-graph: change subscriber panicked while processing \
+                     tx_id={tx_id}; event discarded (Phase-2 will add a \
+                     dead-letter counter)"
+                );
+            }
         }
     }
 }

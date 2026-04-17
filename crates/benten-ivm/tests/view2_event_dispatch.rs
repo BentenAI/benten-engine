@@ -19,7 +19,7 @@ use benten_ivm::{View, ViewQuery, ViewResult};
 fn subscribe_event(kind: ChangeKind) -> ChangeEvent {
     ChangeEvent {
         cid: canonical_test_node().cid().unwrap(),
-        label: "SubscribesTo".to_string(),
+        labels: vec!["SubscribesTo".to_string()],
         kind,
         tx_id: 1,
         actor_cid: None,

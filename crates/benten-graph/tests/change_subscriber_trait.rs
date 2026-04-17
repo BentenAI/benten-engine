@@ -33,7 +33,7 @@ fn change_subscriber_is_object_safe() {
     let cid = canonical_test_node().cid().unwrap();
     let ev = ChangeEvent {
         cid,
-        label: "Post".to_string(),
+        labels: vec!["Post".to_string()],
         kind: ChangeKind::Created,
         tx_id: 1,
         actor_cid: None,

@@ -229,23 +229,24 @@ pub enum ChangeKind {
 ///
 /// # Field shape
 ///
-/// Phase 1 uses `label: String` (single label) rather than `labels: Vec<String>`
-/// because the IVM views and CDC consumers index on a single primary label;
-/// multi-label nodes still emit one `ChangeEvent` per event with the primary
-/// label filled in. R5 reconsiders for Phase 2 if the view surface demands it.
+/// The `labels` field carries the full label set for the affected Node.
+/// Multi-label nodes emit a single `ChangeEvent` whose `labels` vector holds
+/// every label so label-filtered subscribers (IVM views, CDC consumers) can
+/// route deterministically without having to re-read the Node body after the
+/// commit. Delete events also populate `labels` by reading the Node before
+/// deletion — empty `labels` on a delete means the target was already absent.
 ///
-/// **Asymmetry note:** the on-disk label index (`LABEL_INDEX_TABLE`) emits
-/// one entry per label on multi-label nodes, while this event field carries
-/// only the primary label (`labels[0]`). IVM views rebuilt from the change
-/// stream observe only the primary-label path; views that need non-primary
-/// labels must rebuild from the label index directly. This is an accepted
-/// Phase 1 gap; the hand-written IVM views do not use multi-label nodes.
+/// Edge events populate `labels` with a single-element vector (`vec![edge.label]`)
+/// so the same routing API handles both node and edge events.
 #[derive(Debug, Clone)]
 pub struct ChangeEvent {
-    /// CID of the Node the event concerns.
+    /// CID of the Node (or Edge) the event concerns.
     pub cid: Cid,
-    /// Primary label of the affected Node, in its display form.
-    pub label: String,
+    /// Full label set of the affected Node at the moment the event was
+    /// emitted. For edges, a single-element vector holding the edge's label.
+    /// For a delete that targeted an already-absent CID, the vector is
+    /// empty (idempotent-delete miss — no labels were recoverable).
+    pub labels: Vec<String>,
     /// What kind of change happened.
     pub kind: ChangeKind,
     /// Monotonically increasing transaction id (assigned by the engine at
@@ -273,6 +274,21 @@ impl ChangeEvent {
             ChangeKind::Updated => "Updated",
             ChangeKind::Deleted => "Deleted",
         }
+    }
+
+    /// Convenience accessor for callers that only care about the primary
+    /// label. Returns `""` when the event carries no labels (idempotent
+    /// delete of an already-absent target).
+    #[must_use]
+    pub fn primary_label(&self) -> &str {
+        self.labels.first().map_or("", String::as_str)
+    }
+
+    /// True if any of this event's labels equals `label`. Cheap helper for
+    /// label-filtered subscribers (IVM views, CDC consumers).
+    #[must_use]
+    pub fn has_label(&self, label: &str) -> bool {
+        self.labels.iter().any(|l| l == label)
     }
 }
 

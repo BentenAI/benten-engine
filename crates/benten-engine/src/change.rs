@@ -102,15 +102,25 @@ impl ChangeBroadcast {
     /// panics are caught and discarded. Phase 2 revisits once the `tracing`
     /// dep lands on this crate (panics will then log their payload).
     pub fn publish(&self, event: &ChangeEvent) {
+        // Snapshot the subscriber list under a short lock. Avoid cloning
+        // when the list is empty so the thinness path (no IVM) pays a
+        // single lock-probe per commit rather than a lock + vec-clone.
         let subs = {
             let guard = self.callbacks.lock().unwrap_or_else(|e| e.into_inner());
-            guard.clone()
+            if guard.is_empty() {
+                Vec::new()
+            } else {
+                guard.clone()
+            }
         };
+        // `AssertUnwindSafe` is sound here: `catch_unwind` runs on the
+        // current thread, the `&ChangeEvent` borrow is inert across the
+        // unwind boundary, and `Arc<Fn>` is `UnwindSafe` by construction.
+        // Skipping the per-subscriber `event.clone()` (mini-review
+        // g3-cr-13) halves the per-publish allocation cost.
         for cb in subs {
-            let cb_clone = Arc::clone(&cb);
-            let event = event.clone();
-            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
-                cb_clone(&event);
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                cb(event);
             }));
         }
     }
@@ -144,7 +154,7 @@ mod tests {
         let cid = canonical_test_node().cid().unwrap();
         ChangeEvent {
             cid,
-            label: "Post".into(),
+            labels: vec!["Post".into()],
             kind: ChangeKind::Created,
             tx_id: 1,
             actor_cid: None,

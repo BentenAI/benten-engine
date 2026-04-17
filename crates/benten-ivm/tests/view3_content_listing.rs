@@ -18,7 +18,7 @@ use proptest::prelude::*;
 fn post_created() -> ChangeEvent {
     ChangeEvent {
         cid: canonical_test_node().cid().unwrap(),
-        label: "Post".to_string(),
+        labels: vec!["Post".to_string()],
         kind: ChangeKind::Created,
         tx_id: 1,
         actor_cid: None,
