@@ -62,6 +62,12 @@ use core::fmt;
 
 use serde::{Deserialize, Serialize};
 
+pub mod error_code;
+pub mod value;
+
+pub use error_code::ErrorCode;
+pub use value::Value;
+
 // ---------------------------------------------------------------------------
 // Multicodec / multihash constants
 // ---------------------------------------------------------------------------
@@ -81,57 +87,6 @@ pub const BLAKE3_DIGEST_LEN: u8 = 32;
 /// Total length in bytes of a Benten CIDv1 (BLAKE3 + dag-cbor):
 /// version (1) + codec (1) + multihash-code (1) + digest-length (1) + digest (32).
 pub const CID_LEN: usize = 1 + 1 + 1 + 1 + BLAKE3_DIGEST_LEN as usize;
-
-// ---------------------------------------------------------------------------
-// Value
-// ---------------------------------------------------------------------------
-
-/// A graph Value. This is the subset of DAG-CBOR we expose in the spike.
-///
-/// Maps use [`BTreeMap`] so in-memory iteration order is deterministic;
-/// the on-wire canonical form is separately enforced by `serde_ipld_dagcbor`
-/// at encode time (DAG-CBOR length-first key sort).
-///
-/// `#[serde(untagged)]` is safe here because DAG-CBOR's major-type tagging
-/// makes each variant's wire encoding unambiguous: a boolean cannot
-/// deserialize as an integer because CBOR major type 7 (simple) and major
-/// types 0/1 (unsigned/negative integer) are distinct. A round-trip proptest
-/// (hash → decode → hash → assert equal CID) is a Phase 1 follow-up that
-/// will validate this assumption empirically; see
-/// [`SPIKE-phase-1-stack-RESULTS.md`](../../../SPIKE-phase-1-stack-RESULTS.md)
-/// critic triage.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum Value {
-    /// CBOR null.
-    Null,
-    /// CBOR boolean.
-    Bool(bool),
-    /// CBOR signed integer (-2^63 .. 2^63-1).
-    Int(i64),
-    /// CBOR 64-bit float. NaN and ±Infinity must be rejected at serialization
-    /// time (see [`CoreError::FloatNan`] / [`CoreError::FloatNonFinite`]).
-    ///
-    /// **Phase 1 G1-A stub** — the concrete encoding contract and the
-    /// NaN/Inf rejection path ship in Phase 1 proper. Today this variant is
-    /// reachable but unused.
-    Float(f64),
-    /// CBOR text string (UTF-8).
-    Text(String),
-    /// CBOR byte string.
-    Bytes(Vec<u8>),
-    /// CBOR array.
-    List(Vec<Value>),
-    /// CBOR map with text keys (DAG-CBOR restricts map keys to strings).
-    Map(BTreeMap<String, Value>),
-}
-
-impl Value {
-    /// Convenience constructor for text values.
-    pub fn text(s: impl Into<String>) -> Self {
-        Value::Text(s.into())
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Node
@@ -187,13 +142,22 @@ impl Node {
     /// the Node (e.g., non-UTF-8 in a text field, which the type system
     /// already prevents, or integer overflow in the CBOR encoder).
     pub fn canonical_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        // Canonicalize the property tree up-front: reject NaN / ±Inf so the
+        // rejection surfaces as a real `CoreError` (with a stable
+        // `E_VALUE_FLOAT_*` code) rather than a `Serialize` variant holding a
+        // `serde` error message, and normalize `-0.0 → +0.0` so the CID is
+        // stable across the sign of zero.
+        let mut canonical_props = BTreeMap::new();
+        for (k, v) in &self.properties {
+            canonical_props.insert(k.clone(), v.to_canonical()?);
+        }
         // We intentionally re-serialize only labels + properties rather than
         // the full Node. This is belt-and-suspenders: `#[serde(skip)]` on
         // `anchor_id` already excludes it, but going through a dedicated
         // struct makes the hash input contract explicit.
         let view = NodeHashView {
             labels: &self.labels,
-            properties: &self.properties,
+            properties: &canonical_props,
         };
         serde_ipld_dagcbor::to_vec(&view).map_err(|e| CoreError::Serialize(format_err(&e)))
     }
@@ -410,158 +374,6 @@ pub enum CoreError {
     /// Generic not-found error (version-chain anchor, etc.). **Phase 1 stub.**
     #[error("not found")]
     NotFound,
-}
-
-impl CoreError {
-    /// Map a `CoreError` variant to its ERROR-CATALOG stable code.
-    ///
-    /// **Phase 1 G1-A stub** — implementation lands in Phase 1 proper.
-    #[must_use]
-    pub fn code(&self) -> ErrorCode {
-        match self {
-            CoreError::FloatNan => ErrorCode::ValueFloatNan,
-            CoreError::FloatNonFinite => ErrorCode::ValueFloatNonFinite,
-            CoreError::CidParse(_) | CoreError::InvalidCid(_) => ErrorCode::CidParse,
-            CoreError::CidUnsupportedCodec => ErrorCode::CidUnsupportedCodec,
-            CoreError::CidUnsupportedHash => ErrorCode::CidUnsupportedHash,
-            CoreError::VersionBranched => ErrorCode::VersionBranched,
-            CoreError::Serialize(_) => ErrorCode::Unknown(alloc::string::String::new()),
-            CoreError::NotFound => ErrorCode::NotFound,
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// ErrorCode enum (C7 — source of truth for stable catalog codes)
-// ---------------------------------------------------------------------------
-
-/// Stable error-catalog discriminants. Every `CoreError` / `GraphError` /
-/// `CapError` / `EngineError` variant maps to one of these via a `.code()`
-/// method so the TS layer sees the same identifier on every error.
-///
-/// **Phase 1 G1-A stub** — full variant list + bidirectional drift-detector
-/// parity with `docs/ERROR-CATALOG.md` lands with G1-A implementation.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ErrorCode {
-    InvCycle,
-    InvDepthExceeded,
-    InvFanoutExceeded,
-    InvTooManyNodes,
-    InvTooManyEdges,
-    InvDeterminism,
-    InvContentHash,
-    InvRegistration,
-    InvIterateNestDepth,
-    InvIterateMaxMissing,
-    CapDenied,
-    CapDeniedRead,
-    /// Phase 3 sync revocation code (distinct from `CapRevokedMidEval`).
-    CapRevoked,
-    CapRevokedMidEval,
-    CapNotImplemented,
-    CapAttenuation,
-    WriteConflict,
-    IvmViewStale,
-    TxAborted,
-    NestedTransactionNotSupported,
-    PrimitiveNotImplemented,
-    SystemZoneWrite,
-    ValueFloatNan,
-    ValueFloatNonFinite,
-    CidParse,
-    CidUnsupportedCodec,
-    CidUnsupportedHash,
-    VersionBranched,
-    BackendNotFound,
-    TransformSyntax,
-    InputLimit,
-    /// Generic not-found (version-chain anchor miss, etc.).
-    NotFound,
-    /// Fallback for drift detector — holds the unknown raw string.
-    Unknown(alloc::string::String),
-}
-
-impl ErrorCode {
-    /// Return the stable string identifier (e.g. `"E_INV_CYCLE"`).
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        match self {
-            ErrorCode::InvCycle => "E_INV_CYCLE",
-            ErrorCode::InvDepthExceeded => "E_INV_DEPTH_EXCEEDED",
-            ErrorCode::InvFanoutExceeded => "E_INV_FANOUT_EXCEEDED",
-            ErrorCode::InvTooManyNodes => "E_INV_TOO_MANY_NODES",
-            ErrorCode::InvTooManyEdges => "E_INV_TOO_MANY_EDGES",
-            ErrorCode::InvDeterminism => "E_INV_DETERMINISM",
-            ErrorCode::InvContentHash => "E_INV_CONTENT_HASH",
-            ErrorCode::InvRegistration => "E_INV_REGISTRATION",
-            ErrorCode::InvIterateNestDepth => "E_INV_ITERATE_NEST_DEPTH",
-            ErrorCode::InvIterateMaxMissing => "E_INV_ITERATE_MAX_MISSING",
-            ErrorCode::CapDenied => "E_CAP_DENIED",
-            ErrorCode::CapDeniedRead => "E_CAP_DENIED_READ",
-            ErrorCode::CapRevoked => "E_CAP_REVOKED",
-            ErrorCode::CapRevokedMidEval => "E_CAP_REVOKED_MID_EVAL",
-            ErrorCode::CapNotImplemented => "E_CAP_NOT_IMPLEMENTED",
-            ErrorCode::CapAttenuation => "E_CAP_ATTENUATION",
-            ErrorCode::WriteConflict => "E_WRITE_CONFLICT",
-            ErrorCode::IvmViewStale => "E_IVM_VIEW_STALE",
-            ErrorCode::TxAborted => "E_TX_ABORTED",
-            ErrorCode::NestedTransactionNotSupported => "E_NESTED_TRANSACTION_NOT_SUPPORTED",
-            ErrorCode::PrimitiveNotImplemented => "E_PRIMITIVE_NOT_IMPLEMENTED",
-            ErrorCode::SystemZoneWrite => "E_SYSTEM_ZONE_WRITE",
-            ErrorCode::ValueFloatNan => "E_VALUE_FLOAT_NAN",
-            ErrorCode::ValueFloatNonFinite => "E_VALUE_FLOAT_NONFINITE",
-            ErrorCode::CidParse => "E_CID_PARSE",
-            ErrorCode::CidUnsupportedCodec => "E_CID_UNSUPPORTED_CODEC",
-            ErrorCode::CidUnsupportedHash => "E_CID_UNSUPPORTED_HASH",
-            ErrorCode::VersionBranched => "E_VERSION_BRANCHED",
-            ErrorCode::BackendNotFound => "E_BACKEND_NOT_FOUND",
-            ErrorCode::TransformSyntax => "E_TRANSFORM_SYNTAX",
-            ErrorCode::InputLimit => "E_INPUT_LIMIT",
-            ErrorCode::NotFound => "E_NOT_FOUND",
-            ErrorCode::Unknown(s) => s.as_str(),
-        }
-    }
-
-    /// Parse a stable catalog code string into an `ErrorCode`, falling back to
-    /// [`ErrorCode::Unknown`] for forward-compat drift.
-    #[must_use]
-    pub fn from_str(s: &str) -> ErrorCode {
-        match s {
-            "E_INV_CYCLE" => ErrorCode::InvCycle,
-            "E_INV_DEPTH_EXCEEDED" => ErrorCode::InvDepthExceeded,
-            "E_INV_FANOUT_EXCEEDED" => ErrorCode::InvFanoutExceeded,
-            "E_INV_TOO_MANY_NODES" => ErrorCode::InvTooManyNodes,
-            "E_INV_TOO_MANY_EDGES" => ErrorCode::InvTooManyEdges,
-            "E_INV_DETERMINISM" => ErrorCode::InvDeterminism,
-            "E_INV_CONTENT_HASH" => ErrorCode::InvContentHash,
-            "E_INV_REGISTRATION" => ErrorCode::InvRegistration,
-            "E_INV_ITERATE_NEST_DEPTH" => ErrorCode::InvIterateNestDepth,
-            "E_INV_ITERATE_MAX_MISSING" => ErrorCode::InvIterateMaxMissing,
-            "E_CAP_DENIED" => ErrorCode::CapDenied,
-            "E_CAP_DENIED_READ" => ErrorCode::CapDeniedRead,
-            "E_CAP_REVOKED" => ErrorCode::CapRevoked,
-            "E_CAP_REVOKED_MID_EVAL" => ErrorCode::CapRevokedMidEval,
-            "E_CAP_NOT_IMPLEMENTED" => ErrorCode::CapNotImplemented,
-            "E_CAP_ATTENUATION" => ErrorCode::CapAttenuation,
-            "E_WRITE_CONFLICT" => ErrorCode::WriteConflict,
-            "E_IVM_VIEW_STALE" => ErrorCode::IvmViewStale,
-            "E_TX_ABORTED" => ErrorCode::TxAborted,
-            "E_NESTED_TRANSACTION_NOT_SUPPORTED" => ErrorCode::NestedTransactionNotSupported,
-            "E_PRIMITIVE_NOT_IMPLEMENTED" => ErrorCode::PrimitiveNotImplemented,
-            "E_SYSTEM_ZONE_WRITE" => ErrorCode::SystemZoneWrite,
-            "E_VALUE_FLOAT_NAN" => ErrorCode::ValueFloatNan,
-            "E_VALUE_FLOAT_NONFINITE" => ErrorCode::ValueFloatNonFinite,
-            "E_CID_PARSE" => ErrorCode::CidParse,
-            "E_CID_UNSUPPORTED_CODEC" => ErrorCode::CidUnsupportedCodec,
-            "E_CID_UNSUPPORTED_HASH" => ErrorCode::CidUnsupportedHash,
-            "E_VERSION_BRANCHED" => ErrorCode::VersionBranched,
-            "E_BACKEND_NOT_FOUND" => ErrorCode::BackendNotFound,
-            "E_TRANSFORM_SYNTAX" => ErrorCode::TransformSyntax,
-            "E_INPUT_LIMIT" => ErrorCode::InputLimit,
-            "E_NOT_FOUND" => ErrorCode::NotFound,
-            other => ErrorCode::Unknown(alloc::string::ToString::to_string(other)),
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
