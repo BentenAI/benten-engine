@@ -1,263 +1,140 @@
-//! # benten-caps — Capability policy (Phase 1 stubs)
+//! # benten-caps — Capability policy
 //!
-//! Phase 1 ships:
+//! Pluggable capability policy for the Benten graph engine. Phase 1 ships:
 //!
-//! - The [`CapabilityPolicy`] pre-write hook trait.
-//! - The [`NoAuthBackend`] default (permits all writes — the zero-cost path
-//!   for embedded/local-only users).
-//! - A [`UcanBackend`] stub that errors with `E_CAP_NOT_IMPLEMENTED` so the
-//!   trait shape is exercised against a second backend.
-//! - Typed [`CapError`] mapped to the ERROR-CATALOG stable codes.
+//! - The [`CapabilityPolicy`] pre-write hook trait + [`WriteContext`].
+//! - [`NoAuthBackend`] — the zero-cost Phase 1 default; permits every write.
+//! - [`UcanBackend`] — a stub that cleanly errors with
+//!   [`CapError::NotImplemented`] so operator misconfiguration in Phase 1
+//!   surfaces as a distinct error code, not a denial.
+//! - [`CapabilityGrant`] — the typed grant Node + [`GrantScope`] parsing +
+//!   the canonical [`GRANTED_TO_LABEL`] / [`REVOKED_AT_LABEL`] edge labels.
+//! - [`CapError`] — mapped 1:1 to the stable ERROR-CATALOG codes.
 //!
-//! R3 stub scaffold — R5 implementation lands in Phase 1 proper.
+//! # Named compromises preserved here
+//!
+//! - **#1 — TOCTOU window on long ITERATE.** The evaluator refreshes cap
+//!   snapshots on batch boundaries only; the boundary size is
+//!   [`DEFAULT_BATCH_BOUNDARY`]. Revocations between boundaries are invisible
+//!   to in-flight writes. Phase 2 Invariant 13 tightens to per-operation.
+//! - **#2 — `E_CAP_DENIED_READ` leaks existence.** Option A: returning a
+//!   denial error for unauthorized reads tells the caller "this CID exists".
+//!   Documented on [`CapabilityPolicy::check_read`]. Phase 3 revisits once
+//!   the identity surface lands and silent-`None` becomes safe to attribute.
+//!
+//! # What is *not* in this crate
+//!
+//! - Actual cap-check wiring into the transaction primitive (G3).
+//! - `requires` property recognition on operation Nodes (G6).
+//! - UCAN verification + principal types (Phase 3, `benten-id`).
 
 #![forbid(unsafe_code)]
-#![allow(clippy::todo, reason = "R3 red-phase stubs; R5 removes todos")]
 
-use benten_core::{Cid, ErrorCode};
+pub mod error;
+pub mod grant;
+pub mod noauth;
+pub mod policy;
+pub mod ucan_stub;
 
-/// Marker for the current stub phase. Removed when real capability policy lands.
-pub const STUB_MARKER: &str = "benten-caps::stub";
+pub use error::CapError;
+pub use grant::{
+    CAPABILITY_GRANT_LABEL, CapabilityGrant, GRANTED_TO_LABEL, GrantScope, REVOKED_AT_LABEL,
+};
+pub use noauth::NoAuthBackend;
+pub use policy::{CapabilityPolicy, WriteContext};
+pub use ucan_stub::{UCANBackend, UcanBackend};
 
-/// Capability errors. Each variant maps to an ERROR-CATALOG code.
+/// Default ITERATE batch size for capability-refresh boundaries.
 ///
-/// **Phase 1 G4 stub.**
+/// G6 (evaluator) uses this constant to schedule cap-snapshot refreshes; a
+/// revocation arriving during a batch is not observed until the next
+/// multiple of `DEFAULT_BATCH_BOUNDARY` iterations. See named compromise
+/// #1 above.
 ///
-/// Variants are struct-form (empty braces) so both `CapError::Denied` and
-/// `CapError::Denied { required, entity }` match patterns compile. The
-/// evaluator plumbing lands in R5; these fields are reserved for the
-/// concrete denial record but today the stub accepts any struct-literal
-/// field set.
-#[derive(Debug, thiserror::Error)]
-pub enum CapError {
-    /// The capability was denied at commit time.
-    #[error("capability denied")]
-    Denied,
+/// If this default changes, the following must move in lockstep:
+/// - `tests/toctou_iteration.rs::DEFAULT_BATCH_BOUNDARY`,
+/// - `.addl/phase-1/r1-triage.md` named compromise #1 prose,
+/// - `docs/SECURITY-POSTURE.md` once that doc lands.
+pub const DEFAULT_BATCH_BOUNDARY: usize = 100;
 
-    /// The capability was denied with a structured (required, entity) detail
-    /// — used by some R3 test fixtures. R5 unifies these once the cap-denial
-    /// surface is finalized; for now both forms are exposed so unit tests
-    /// (which match `CapError::Denied`) and integration tests (which match
-    /// `CapError::DeniedDetail { .. }`) both compile.
-    #[error("capability denied (required={required:?}, entity={entity:?})")]
-    DeniedDetail { required: String, entity: String },
-
-    /// A READ primitive was denied. Option-A existence leak documented.
-    #[error("read denied")]
-    DeniedRead,
-
-    /// The capability was revoked mid-evaluation (TOCTOU window).
-    #[error("capability revoked mid-evaluation")]
-    RevokedMidEval,
-
-    /// The configured backend is not yet implemented (e.g. UCAN in Phase 1).
-    /// Message intentionally names the target Phase 3 landing + the Phase 1
-    /// alternative (NoAuthBackend) so operators read it as a config pointer,
-    /// not a bug.
-    #[error(
-        "UCANBackend is not implemented in Phase 1 (lands in Phase 3); configure NoAuthBackend or a custom CapabilityPolicy until then"
-    )]
-    NotImplemented,
-
-    /// Capability attenuation violation (sub-CALL exceeds parent caps).
-    #[error("capability attenuation violation")]
-    Attenuation,
-}
-
-impl CapError {
-    /// Map to the stable ERROR-CATALOG code.
-    #[must_use]
-    pub fn code(&self) -> ErrorCode {
-        match self {
-            CapError::Denied | CapError::DeniedDetail { .. } => ErrorCode::CapDenied,
-            CapError::DeniedRead => ErrorCode::CapDeniedRead,
-            CapError::RevokedMidEval => ErrorCode::CapRevokedMidEval,
-            CapError::NotImplemented => ErrorCode::CapNotImplemented,
-            CapError::Attenuation => ErrorCode::CapAttenuation,
-        }
-    }
-}
-
-/// Write context handed to the capability policy at commit time.
+/// Legacy stub marker. Kept as a compile-time cross-crate link anchor because
+/// `benten-engine` references it in a `const _:` assertion pinned at R3 — the
+/// assertion exists so a fresh-eyes reviewer can tell, at a glance, which
+/// crate modules are still pre-implementation. The constant's value is
+/// cosmetic; only its presence (and `&str` type) are load-bearing for the
+/// cross-crate assertion.
 ///
-/// **Phase 1 G4 stub.** The field set is a union of what different R3 test
-/// writers named — unifying into a single struct so every test compiles
-/// against the same type. R5 may rename fields once the evaluator lands.
-#[derive(Debug, Clone, Default)]
-pub struct WriteContext {
-    /// Top-level label of the Node about to be written.
-    pub label: String,
-    /// Actor CID identity (HLC-stamped). Preserved for `noauth.rs`-style usage.
-    pub actor_cid: Option<Cid>,
-    /// Capability scope the operation targets.
-    pub scope: String,
-    /// Fully-resolved target label (redundant with `label`; kept for the
-    /// proptest surface that names it explicitly).
-    pub target_label: String,
-    /// True if the caller has engine-privileged access to the system zone.
-    pub is_privileged: bool,
-    /// Non-Cid actor hint (string identifier) used in test fixtures.
-    pub actor_hint: Option<String>,
-}
+/// `TODO(phase-1-cleanup)`: G8 removes this once the engine-side reference is
+/// retired.
+pub const STUB_MARKER: &str = "benten-caps::phase-1";
 
-impl WriteContext {
-    /// Construct a lightweight synthetic context for unit tests. Fields are
-    /// stable-but-synthetic placeholders so the stub compile target doesn't
-    /// rely on the real evaluator wiring.
-    #[must_use]
-    pub fn synthetic_for_test() -> Self {
-        Self {
-            label: "synthetic".into(),
-            actor_cid: None,
-            scope: "synthetic:write".into(),
-            target_label: "synthetic".into(),
-            is_privileged: false,
-            actor_hint: Some("synthetic-actor".into()),
-        }
-    }
-}
-
-/// The capability pre-write hook trait.
+/// Test-only helpers exposed for unit / integration tests.
 ///
-/// Called by the transaction primitive at commit time (not per-WRITE), so a
-/// multi-write subgraph is either permitted atomically or denied atomically.
-///
-/// **Phase 1 G4 stub.**
-pub trait CapabilityPolicy: Send + Sync {
-    fn check_write(&self, ctx: &WriteContext) -> Result<(), CapError>;
-}
-
-/// The default zero-auth backend. Permits every write, no allocations on the
-/// hot path.
-///
-/// **Phase 1 G4 stub.**
-#[derive(Debug, Default, Clone, Copy)]
-pub struct NoAuthBackend;
-
-impl NoAuthBackend {
-    /// Construct a new NoAuth backend (zero-sized; the `new` constructor
-    /// matches the UCAN shape so the builder API is symmetric).
-    #[must_use]
-    pub fn new() -> Self {
-        Self
-    }
-
-    /// Stable pseudo-actor-CID used when `NoAuthBackend` stamps change events.
-    #[must_use]
-    pub fn pseudo_actor_label() -> &'static str {
-        "noauth"
-    }
-}
-
-impl CapabilityPolicy for NoAuthBackend {
-    fn check_write(&self, _ctx: &WriteContext) -> Result<(), CapError> {
-        Ok(())
-    }
-}
-
-/// UCAN backend stub — errors cleanly until Phase 3 `benten-id` lands.
-///
-/// **Phase 1 G4 stub.**
-#[derive(Debug, Default, Clone, Copy)]
-pub struct UcanBackend;
-
-impl UcanBackend {
-    /// Construct a UCAN backend stub.
-    #[must_use]
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-/// Alias preserving the SCREAMING-ACRONYM naming some tests use. Prefer
-/// `UcanBackend` per Rust casing convention; this alias keeps both compile
-/// paths open.
-#[allow(non_camel_case_types)]
-pub type UCANBackend = UcanBackend;
-
-impl CapabilityPolicy for UcanBackend {
-    fn check_write(&self, _ctx: &WriteContext) -> Result<(), CapError> {
-        Err(CapError::NotImplemented)
-    }
-}
-
-/// A capability-scope string, parsed into a typed form.
-///
-/// **Phase 1 G4 stub.**
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GrantScope(pub String);
-
-impl GrantScope {
-    /// Parse a scope string. Empty / whitespace-only inputs are rejected.
-    ///
-    /// **Phase 1 G4 stub** — actual parsing rules land in R5.
-    pub fn parse(s: &str) -> Result<Self, CapError> {
-        let trimmed = s.trim();
-        if trimmed.is_empty() {
-            return Err(CapError::Denied);
-        }
-        Ok(GrantScope(trimmed.to_string()))
-    }
-}
-
-/// A typed capability grant. Serializes as a plain Node with label
-/// `"CapabilityGrant"` plus a `GRANTED_TO` edge to the grantee.
-///
-/// **Phase 1 G4 stub.**
-#[derive(Debug, Clone)]
-pub struct CapabilityGrant {
-    pub grantee: Cid,
-    pub scope: String,
-    pub hlc_stamp: u64,
-}
-
-impl CapabilityGrant {
-    /// Construct a grant with a typed scope + explicit issuer. This is the
-    /// shape used by `grant_uniqueness_on_cid` tests. The issuer + typed
-    /// scope are kept inside the constructor's HLC stamp derivation so the
-    /// resulting CID differs by both axes; the public struct keeps the
-    /// minimal three-field surface for the unit tests' literal syntax.
-    #[must_use]
-    pub fn new(grantee: Cid, _issuer: Cid, scope: GrantScope) -> Self {
-        let scope_str = scope.0;
-        Self {
-            grantee,
-            scope: scope_str,
-            hlc_stamp: 0,
-        }
-    }
-
-    /// Construct a grant Node (the graph representation).
-    pub fn as_node(&self) -> benten_core::Node {
-        todo!("CapabilityGrant::as_node — G4 (Phase 1)")
-    }
-
-    /// CID of the grant Node.
-    pub fn cid(&self) -> Result<Cid, benten_core::CoreError> {
-        todo!("CapabilityGrant::cid — G4 (Phase 1)")
-    }
-}
-
-/// Test-only helpers kept public-but-internal to the test scaffold.
+/// Kept public-but-internal (the module name `testing` signals the scope)
+/// because unit tests in this crate and integration tests in sibling crates
+/// both reach into the helpers; gating behind `#[cfg(test)]` would hide them
+/// from the integration test binaries.
 pub mod testing {
     use super::{CapError, GrantScope};
 
-    /// Return a monotonically-increasing alloc counter. **Phase 1 stub** —
-    /// returns a constant so the "no allocation" proptest compiles; R5
-    /// replaces with a real counter.
+    /// Allocation-counter stub. Phase 1 returns a constant so the NoAuth
+    /// "zero-alloc" proptest compiles; wiring a real counter is a Phase 2
+    /// deliverable once the global allocator choice settles (mimalloc vs
+    /// snmalloc-rs) and a `tracking-allocator` feature lands behind a flag.
+    ///
+    /// The proptest asserts `alloc_count()` is unchanged across a
+    /// `check_write` call. Returning a constant `0` makes the assertion
+    /// trivially hold — which is correct-by-construction for NoAuth today
+    /// (zero-sized, zero-alloc hot path), and the real counter will catch
+    /// regressions in Phase 2.
     #[must_use]
     pub fn alloc_count() -> u64 {
         0
     }
 
-    /// R4 triage (m13) — attenuation check helper. Returns `Ok(())` if the
-    /// child's required scope is within the parent's held scope, otherwise
-    /// `Err(CapError::Attenuation)`. **Phase 1 G4 stub** — R5 replaces with
-    /// the evaluator-path-integrated check.
+    /// Attenuation check: does `parent_scope` permit everything
+    /// `child_required` requires?
+    ///
+    /// Phase 1 semantics (colon-segment match with `*` wildcard):
+    /// - Scopes split on `':'`.
+    /// - Parent `"*"` segment matches any child segment.
+    /// - Parent non-wildcard segment must exactly equal the child segment.
+    /// - Parent is permitted to be a strict prefix of the child: a parent
+    ///   `"store:post"` permits any sub-scope `"store:post:*"`. The inverse
+    ///   (child shorter than parent) is rejected — a child that does not
+    ///   name the parent's full depth is ambiguous, and the "honest no"
+    ///   for ambiguity is a denial.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapError::Attenuation`] if the child exceeds the parent on
+    /// any segment. Phase 3 UCAN lands a lattice-based check that supersedes
+    /// this string comparison.
     pub fn check_attenuation(
-        _parent_scope: &GrantScope,
-        _child_required: &GrantScope,
+        parent_scope: &GrantScope,
+        child_required: &GrantScope,
     ) -> Result<(), CapError> {
-        todo!("check_attenuation — G4 (Phase 1)")
+        let parent_segments: Vec<&str> = parent_scope.as_str().split(':').collect();
+        let child_segments: Vec<&str> = child_required.as_str().split(':').collect();
+
+        // Child must be at least as deep as parent — a shorter child is
+        // ambiguous (does it mean "broader", or does it mean "same"?). The
+        // unambiguous parent-prefix case is handled by iterating only over
+        // the parent's segments; any tail the child has beyond the parent
+        // is permitted when the parent's last segment is `*` OR when the
+        // parent is a strict prefix.
+        if child_segments.len() < parent_segments.len() {
+            return Err(CapError::Attenuation);
+        }
+
+        for (p, c) in parent_segments.iter().zip(child_segments.iter()) {
+            if *p == "*" {
+                continue;
+            }
+            if p != c {
+                return Err(CapError::Attenuation);
+            }
+        }
+        Ok(())
     }
 }
