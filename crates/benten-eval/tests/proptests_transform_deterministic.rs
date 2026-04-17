@@ -42,7 +42,18 @@ proptest! {
     }
 }
 
-/// Phase 1 red-phase shim. R5 wires the real evaluator (T12 + E4).
-fn evaluate_transform(_expr: &str) -> Value {
-    todo!("evaluate_transform: R5 must wire the TRANSFORM evaluator (T12 + E4)")
+/// R5 wiring (G6-B): parse + evaluate a TRANSFORM expression against an
+/// empty context. Returns the evaluated [`Value`], or `Value::Null` on
+/// parse / runtime failure (the determinism property still holds: a stable
+/// failure is still stable).
+fn evaluate_transform(expr: &str) -> Value {
+    use benten_eval::{Evaluator, OperationNode, PrimitiveKind};
+    let mut ev = Evaluator::new();
+    let op = OperationNode::new("t", PrimitiveKind::Transform)
+        .with_property("expr", Value::text(expr))
+        .with_property("input", Value::Null);
+    match ev.step(&op) {
+        Ok(step) => step.output,
+        Err(_) => Value::Null,
+    }
 }

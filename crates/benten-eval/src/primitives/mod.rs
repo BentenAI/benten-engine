@@ -20,9 +20,13 @@
 
 use crate::{EvalError, OperationNode, PrimitiveKind, StepResult};
 
+pub mod branch;
+pub mod call;
 pub mod emit;
+pub mod iterate;
 pub mod read;
 pub mod respond;
+pub mod transform;
 pub mod write;
 
 /// Dispatch a single primitive execution by kind.
@@ -52,10 +56,10 @@ pub fn dispatch(op: &OperationNode) -> Result<StepResult, EvalError> {
         PrimitiveKind::Respond => respond::execute(op),
         PrimitiveKind::Emit => emit::execute(op),
         // G6-B scope — TRANSFORM, BRANCH, ITERATE, CALL.
-        PrimitiveKind::Transform
-        | PrimitiveKind::Branch
-        | PrimitiveKind::Iterate
-        | PrimitiveKind::Call => Err(EvalError::PrimitiveNotImplemented(op.kind)),
+        PrimitiveKind::Transform => transform::execute(op),
+        PrimitiveKind::Branch => branch::execute(op),
+        PrimitiveKind::Iterate => iterate::execute(op),
+        PrimitiveKind::Call => call::execute(op),
         // Phase-2 primitives — structural validation accepts them, the
         // executor rejects at call time.
         PrimitiveKind::Wait
