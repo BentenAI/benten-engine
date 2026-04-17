@@ -6,6 +6,39 @@
 
 **Audience:** The R5 implementer building `crates/benten-eval/src/expr/{parser,eval}.rs`; the R3 security test writer enumerating the rejection test matrix; developers authoring handler subgraphs.
 
+## Phase-1 implementation notes
+
+The Phase-1 parser accepts a small set of syntactic forms that expand the
+surface beyond the strict BNF below. None of these divergences enlarges
+the computed power of the language or introduces non-determinism; each
+exists to support Phase-1 test fixtures or JS-familiar ergonomics.
+
+- **Single-quoted string literals** (`'x'` equivalent to `"x"`). The
+  denylist rejection tests exercise keywords inside single-quoted
+  invocations (`require('x')`); the parser accepts either quote form so
+  the rejection fires on the rejected keyword rather than on the quote
+  style. Semantics are identical to double-quoted strings. See
+  `crates/benten-eval/src/expr/parser.rs` `lex_string_single`.
+- **Namespaced built-in aliases** (`Math.min(a, b)`, `Math.max(...)`,
+  `Math.abs(x)`, `Math.floor(x)`, `Math.ceil(x)`, `Math.round(x)`,
+  `Math.sqrt(x)`, `Math.pow(b, e)`, `Math.log(x)`, `Math.log10(x)`,
+  `Math.log2(x)`, `Math.exp(x)`, `Math.sign(x)`, `Math.trunc(x)`;
+  `String.lower(s)`, `String.upper(s)`; `Array.from(...)`,
+  `Object.keys(o)`, `Number.toNumber(x)`). Accepted as aliases for the
+  canonical bare-name forms (`min`, `max`, `abs`, …). See
+  `crates/benten-eval/src/expr/eval.rs` `try_namespaced_call`.
+- **JavaScript-style method calls on receivers** — `s.toLowerCase()`,
+  `s.toUpperCase()`, `s.trim()`, `s.startsWith(p)`, `s.endsWith(p)`,
+  `s.slice(a, b)`, `s.concat(x)`, and array methods
+  `arr.map`/`.filter`/`.reduce`/`.find`/`.findIndex`/`.every`/`.some`/`.sortBy`/`.uniqueBy`/`.groupBy`/`.count`.
+  Array methods additionally admit lambda arguments (the only lambda
+  form the grammar accepts at all). See `dispatch_method` in
+  `expr/eval.rs`.
+
+Phase 2 may tighten the parser to match the strict grammar below if the
+divergence proves costly. Mini-review findings `g6-opl-3` / `g6-opl-4`
+/ `g6-cr-7` track this discussion.
+
 ## Design philosophy
 
 - **Allowlist, not denylist.** Every production is positively defined. Any syntactic construct not listed is rejected at parse time. Adding new constructs requires a spec update + grammar version bump.

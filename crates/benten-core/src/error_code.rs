@@ -35,6 +35,15 @@ pub enum ErrorCode {
     InvRegistration,
     InvIterateNestDepth,
     InvIterateMaxMissing,
+    /// Runtime cumulative-iteration-budget exhaustion.
+    ///
+    /// Phase 1 surfaces this when the iterative evaluator's per-run step
+    /// counter reaches `DEFAULT_ITERATION_BUDGET`. Distinct from
+    /// [`ErrorCode::InvIterateNestDepth`] (registration-time stopgap for
+    /// invariant 8's nesting-depth aspect). Phase 2 replaces the scalar
+    /// budget with multiplicative-through-CALL accounting but keeps this
+    /// same code.
+    InvIterateBudget,
     CapDenied,
     CapDeniedRead,
     /// Phase 3 sync revocation code (distinct from `CapRevokedMidEval`).
@@ -86,6 +95,7 @@ impl ErrorCode {
             ErrorCode::InvRegistration => "E_INV_REGISTRATION",
             ErrorCode::InvIterateNestDepth => "E_INV_ITERATE_NEST_DEPTH",
             ErrorCode::InvIterateMaxMissing => "E_INV_ITERATE_MAX_MISSING",
+            ErrorCode::InvIterateBudget => "E_INV_ITERATE_BUDGET",
             ErrorCode::CapDenied => "E_CAP_DENIED",
             ErrorCode::CapDeniedRead => "E_CAP_DENIED_READ",
             ErrorCode::CapRevoked => "E_CAP_REVOKED",
@@ -129,6 +139,7 @@ impl ErrorCode {
             "E_INV_REGISTRATION" => ErrorCode::InvRegistration,
             "E_INV_ITERATE_NEST_DEPTH" => ErrorCode::InvIterateNestDepth,
             "E_INV_ITERATE_MAX_MISSING" => ErrorCode::InvIterateMaxMissing,
+            "E_INV_ITERATE_BUDGET" => ErrorCode::InvIterateBudget,
             "E_CAP_DENIED" => ErrorCode::CapDenied,
             "E_CAP_DENIED_READ" => ErrorCode::CapDeniedRead,
             "E_CAP_REVOKED" => ErrorCode::CapRevoked,

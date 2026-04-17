@@ -8,6 +8,10 @@
 //! match-table). An ITERATE that forks too many parallel child subgraphs.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::result_large_err,
+    reason = "RegistrationError carries ~360 bytes of diagnostic context per R1 triage; test helpers mirror the crate-internal API. Public engine surface boxes it."
+)]
 
 use benten_eval::{ErrorCode, Subgraph, SubgraphBuilder};
 

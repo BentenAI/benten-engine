@@ -47,8 +47,13 @@ pub enum EngineError {
     #[error("capability: {0}")]
     Cap(#[from] CapError),
 
+    /// Structural-invariant rejection. Boxed so `Result<T, EngineError>`
+    /// stays below clippy's `result_large_err` 128-byte threshold —
+    /// `RegistrationError` itself carries ~360 bytes of diagnostic context
+    /// (paths, expected/actual CIDs, per-invariant counts). Mini-review
+    /// findings `g6-cr-1` / `g6-cag-7`.
     #[error("invariant: {0:?}")]
-    Invariant(RegistrationError),
+    Invariant(Box<RegistrationError>),
 
     /// Handler ID already registered with different content.
     #[error("duplicate handler: {handler_id}")]
@@ -123,6 +128,7 @@ impl ErrorCodeStaticStr for ErrorCode {
                     ErrorCode::InvRegistration => "E_INV_REGISTRATION",
                     ErrorCode::InvIterateNestDepth => "E_INV_ITERATE_NEST_DEPTH",
                     ErrorCode::InvIterateMaxMissing => "E_INV_ITERATE_MAX_MISSING",
+                    ErrorCode::InvIterateBudget => "E_INV_ITERATE_BUDGET",
                     ErrorCode::CapDenied => "E_CAP_DENIED",
                     ErrorCode::CapDeniedRead => "E_CAP_DENIED_READ",
                     ErrorCode::CapRevoked => "E_CAP_REVOKED",

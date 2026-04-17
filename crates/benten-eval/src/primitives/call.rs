@@ -22,6 +22,13 @@
 //!
 //! CALL-depth tracking (invariant 8) is handled by the iterative
 //! evaluator's stack accounting in G6-C; CALL itself is unaware of depth.
+//!
+//! TODO(R4b / G7): when G7 wires real callee-subgraph invocation, add an
+//! `Evaluator.call_depth: usize` counter that increments on CALL entry
+//! and decrements on callee terminate, and propagate remaining iteration
+//! budget multiplicatively through the CALL boundary. Mini-review
+//! findings `g6-cag-5` and the ITERATE/CALL observability concern in
+//! `g6-cr-10`.
 
 use benten_core::Value;
 

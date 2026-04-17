@@ -10,6 +10,10 @@
 //! checker. These tests compile-fail until then.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::result_large_err,
+    reason = "RegistrationError intentionally carries ~360 bytes of diagnostic context per R1 triage; test helpers mirror the crate-internal API. Public engine surface boxes it (see benten-engine::EngineError::Invariant)."
+)]
 
 use benten_eval::{ErrorCode, RegistrationError, Subgraph, SubgraphBuilder};
 
