@@ -436,15 +436,13 @@ pub const LABEL_NEXT_VERSION: &str = "NEXT_VERSION";
 /// The id itself is not content-addressed (see ENGINE-SPEC §7) — it is
 /// identity only, and [`Node::anchor_id`] is excluded from the Node CID.
 ///
-/// `TODO(phase-2)`: `id` is `pub` today because the G1 tests assert
-/// `assert_ne!(a.id, b.id)` against freshly-constructed anchors. Tightening
-/// to `pub(crate)` + `fn id(&self) -> u64` is deferred to Phase 2; external
-/// callers should use [`Anchor::new`] only (hand-constructed `Anchor { id: 0 }`
-/// would collide with the sentinel reservation).
+/// The id field is `pub(crate)` so external callers cannot hand-construct an
+/// anchor that collides with the counter's live range or with the reserved
+/// sentinel `0`. Read access is via [`Anchor::id`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct Anchor {
     /// Monotonic process-unique id. Allocated by [`Anchor::new`] only.
-    pub id: u64,
+    pub(crate) id: u64,
 }
 
 /// Counter for [`Anchor::new`]. Starts at 1 so `0` remains a sentinel value
@@ -477,6 +475,13 @@ impl Anchor {
     pub fn new() -> Self {
         let id = ANCHOR_COUNTER.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
         Self { id }
+    }
+
+    /// The anchor's process-unique identity. Stable for the life of the
+    /// `Anchor` value; use as a chain-lookup key.
+    #[must_use]
+    pub fn id(&self) -> u64 {
+        self.id
     }
 }
 

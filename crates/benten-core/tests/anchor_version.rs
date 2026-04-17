@@ -29,7 +29,8 @@ fn anchor_new_produces_stable_identity() {
     // accidentally (probabilistic; a 64-bit space makes same-bit collision
     // extraordinarily unlikely).
     assert_ne!(
-        a.id, b.id,
+        a.id(),
+        b.id(),
         "distinct Anchor::new() calls yield distinct ids"
     );
 }

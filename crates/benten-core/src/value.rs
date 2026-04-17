@@ -166,9 +166,13 @@ impl<'de> Deserialize<'de> for Value {
                 Ok(Value::List(out))
             }
 
+            /// DAG-CBOR restricts map keys to strings (see [`Value::Map`]);
+            /// `next_entry::<String, Value>` lets serde's type system reject
+            /// non-string keys at decode time — a non-string key surfaces as
+            /// a `Custom` deserializer error rather than silently coercing.
             fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Value, A::Error> {
                 let mut out = BTreeMap::new();
-                while let Some((k, v)) = map.next_entry()? {
+                while let Some((k, v)) = map.next_entry::<String, Value>()? {
                     out.insert(k, v);
                 }
                 Ok(Value::Map(out))

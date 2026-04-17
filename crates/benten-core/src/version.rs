@@ -109,18 +109,6 @@ pub enum VersionError {
         /// The prior head the caller claimed was current.
         supplied: Cid,
     },
-
-    /// Catch-all for internal failures (serialization, table poisoning, etc.).
-    ///
-    /// `TODO(phase-2)`: no call site constructs `Other` today —
-    /// `append_version` only validates head lineage and mutates an in-memory
-    /// `Vec` behind a poison-free `spin::Mutex`. The variant is retained as
-    /// a forward-compat slot for G2 (persistent backend I/O) and Phase 3
-    /// (sync conflict paths). Exhaustive-match tests in
-    /// `tests/version_branched.rs` use its presence to justify a wildcard
-    /// arm; removing it without fixing those sites makes clippy fail.
-    #[error("version error: {0}")]
-    Other(String),
 }
 
 // ---------------------------------------------------------------------------
