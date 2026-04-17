@@ -196,8 +196,17 @@ fn compromise_4_wasm_runtime_is_phase_2() {
             continue;
         }
         let content = std::fs::read_to_string(&path).expect("read yml");
+        // G7 test-authoring fix: the v1 check `content.contains("wasm32-wasip1")`
+        // was too broad — determinism.yml legitimately references the
+        // `wasm32-wasip1` target in its `cargo build --release` step that
+        // feeds a cross-runtime CID-determinism canary (T6). The compromise
+        // prohibits `cargo test --target wasm32-wasip1`, not `cargo build`.
+        // Check for the narrower form per the comment above.
+        let has_cargo_test_wasip1 = content
+            .lines()
+            .any(|l| l.contains("cargo test") && l.contains("wasm32-wasip1"));
         assert!(
-            !content.contains("wasm32-wasip1"),
+            !has_cargo_test_wasip1,
             "no workflow may invoke `cargo test --target wasm32-wasip1` in \
              Phase 1; got reference in {}",
             path.display()
@@ -249,10 +258,17 @@ fn compromise_5_no_write_rate_limits_but_metric_recorded() {
 }
 
 // Phase 1 compromise; remove when a 256-bit collision-resistance posture is adopted.
+//
+// G7 test-authoring fix: integration tests run from the crate directory
+// (`crates/benten-engine/`), not the repo root. The v1 `"docs/..."` path
+// resolved to `crates/benten-engine/docs/...` (which does not exist). This
+// mirrors the `or_else` fallback pattern compromise_4_wasm_runtime_is_phase_2
+// already uses a few tests above.
 #[test]
 fn compromise_6_blake3_collision_resistance_note_in_security_posture() {
-    let posture =
-        std::fs::read_to_string("docs/SECURITY-POSTURE.md").expect("SECURITY-POSTURE.md present");
+    let posture = std::fs::read_to_string("../../docs/SECURITY-POSTURE.md")
+        .or_else(|_| std::fs::read_to_string("docs/SECURITY-POSTURE.md"))
+        .expect("SECURITY-POSTURE.md present");
     assert!(
         posture.contains("BLAKE3") && posture.contains("128"),
         "SECURITY-POSTURE.md must document 128-bit collision-resistance of BLAKE3 as a Phase 1 compromise"
