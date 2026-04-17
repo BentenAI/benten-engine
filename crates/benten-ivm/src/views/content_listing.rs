@@ -295,6 +295,13 @@ impl View for ContentListingView {
                 // identity-only events (legacy test harness). The fallback
                 // is announced on stderr so operators can notice when the
                 // emitter forgot to populate the Node.
+                //
+                // g5-p2-ivm-1: both sort-key sources flow through
+                // `bias_i64_to_u64` so they inhabit the SAME linear
+                // order-preserving `u64` space. Without the parity bias a
+                // legacy `tx_id=100` event would sort BEFORE a Node-bearing
+                // `createdAt=0` event (biased to `2^63`), reversing the
+                // intended chronology on mixed streams.
                 let sort_primary: u64 = match event.node.as_ref().and_then(extract_created_at) {
                     Some(c) => bias_i64_to_u64(c),
                     None => {
@@ -304,7 +311,12 @@ impl View for ContentListingView {
                              defense-in-depth path (see module docs)",
                             event.tx_id
                         );
-                        event.tx_id
+                        // Cast to i64 before biasing: tx_ids are small
+                        // monotonic u64 in practice, so reinterpretation
+                        // through `as i64` preserves ordering within the
+                        // operating range; the bias puts them in the same
+                        // `u64` half as non-negative createdAt values.
+                        bias_i64_to_u64(event.tx_id as i64)
                     }
                 };
                 let disambiguator = self.next_disambiguator;
@@ -314,7 +326,21 @@ impl View for ContentListingView {
                 self.remaining_budget = self.remaining_budget.saturating_sub(1);
             }
             ChangeKind::Deleted => {
+                // g5-p2-ivm-2: match budget cost to work done. A flood of
+                // Deleted events against a large `entries` map is O(n) per
+                // event (see `remove_all_with_cid`) — without this charge a
+                // delete storm bypasses the stale-on-budget backpressure.
+                // Option A per the brief: decrement by the entries removed
+                // (or by 1 if none, so every probe still costs something).
+                let before = self.entries.len();
                 self.remove_all_with_cid(&event.cid);
+                let removed = before - self.entries.len();
+                let cost = (removed.max(1)) as u64;
+                self.remaining_budget = self.remaining_budget.saturating_sub(cost);
+                if self.remaining_budget == 0 && !self.entries.is_empty() {
+                    // Optional Phase-2 perf upgrade: `cid → sort_key`
+                    // reverse map makes this O(log n). Deferred.
+                }
             }
             // Edge events are not relevant to a label-based content listing.
             ChangeKind::EdgeCreated | ChangeKind::EdgeDeleted => {}

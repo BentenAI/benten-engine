@@ -201,13 +201,23 @@ impl EventDispatchView {
                 }
             }
             ChangeKind::Deleted => {
+                // g5-p2-ivm-2: match cost to work done. The per-event base
+                // charge (line ~149) covers one probe; additional charge
+                // here is proportional to the number of bucket removals
+                // performed, so a delete storm against many buckets
+                // consumes budget at the same rate as the incremental
+                // rebuild would. `retain` is O(n_buckets) on the map.
+                let mut extra_cost: u64 = 0;
                 for b in &buckets {
                     if let Some(set) = self.by_event.get_mut(b) {
-                        set.remove(&event.cid);
+                        if set.remove(&event.cid) {
+                            extra_cost = extra_cost.saturating_add(1);
+                        }
                     }
                 }
                 // Drop empty buckets.
                 self.by_event.retain(|_, v| !v.is_empty());
+                self.remaining_budget = self.remaining_budget.saturating_sub(extra_cost);
             }
             _ => {}
         }
