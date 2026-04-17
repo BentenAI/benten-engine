@@ -50,6 +50,15 @@ impl GrantScope {
     /// # Errors
     ///
     /// Returns [`CapError::Denied`] for the empty / whitespace-only case.
+    /// Also rejects any scope containing an empty inner, leading, or trailing
+    /// segment (e.g. `"store::write"`, `":store"`, `"store:"`, `":::"`).
+    /// Rationale: empty segments enable visual confusion attacks against
+    /// human reviewers and introduce encoding-trick surface for automated
+    /// lattice comparisons — an attacker could construct `"store::post"` to
+    /// shadow a `"store:post"` scope the victim already trusts while
+    /// presenting nearly-identical glyphs to a reviewer and a different CID
+    /// to the content-addressing layer. See auditor finding g4-p2-uc-4.
+    ///
     /// `Denied` is reused (rather than a dedicated `InvalidScope`) so the
     /// ERROR-CATALOG surface stays minimal — a refusal at parse IS a
     /// capability denial at construction. The `required` and `entity`
@@ -58,6 +67,15 @@ impl GrantScope {
     pub fn parse(s: &str) -> Result<Self, CapError> {
         let trimmed = s.trim();
         if trimmed.is_empty() {
+            return Err(CapError::Denied {
+                required: String::new(),
+                entity: String::new(),
+            });
+        }
+        // Reject empty segments — any empty-string segment is a parse error.
+        // Covers `"store::write"` (empty middle), `":store"` (empty leading),
+        // `"store:"` (empty trailing), and `":::"` (all empty).
+        if trimmed.split(':').any(str::is_empty) {
             return Err(CapError::Denied {
                 required: String::new(),
                 entity: String::new(),

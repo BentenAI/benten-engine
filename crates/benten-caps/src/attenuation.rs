@@ -39,6 +39,15 @@
 //! Phase 3 replaces this with a UCAN-style lattice check that treats the
 //! scope as a typed resource / action / qualifier triple; Phase 1 is a
 //! deliberately simple colon-segmented subset.
+//!
+//! # Phase 1 semantic note
+//!
+//! A parent scope consisting of the lone segment `"*"` grants unrestricted
+//! authority to any child. This is intentional for Phase 1 (matches UCAN
+//! 0.10/1.0 spirit of a trailing wildcard) but is weaker than UCAN's
+//! requirement that `*` always qualify a grounded resource. Phase 3 will
+//! reject lone-`*` scopes at `GrantScope::parse` time once the UCAN-lattice
+//! backend lands; existing Phase-1 grants will require re-issuance.
 
 use std::cmp::Ordering;
 
