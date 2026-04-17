@@ -37,7 +37,8 @@ impl CapabilityPolicy for CountingPolicy {
     fn check_write(&self, _ctx: &WriteContext) -> Result<(), CapError> {
         *self.count.lock().unwrap() += 1;
         if self.should_deny {
-            Err(CapError::DeniedDetail {
+            // g4-cr-5: `DeniedDetail` merged into `Denied`.
+            Err(CapError::Denied {
                 required: "store:post:write".into(),
                 entity: "alice".into(),
             })
@@ -119,7 +120,7 @@ fn check_write_at_commit_denies_all_writes_atomically() {
     assert!(
         matches!(
             err,
-            benten_engine::EngineError::Cap(CapError::DeniedDetail { .. })
+            benten_engine::EngineError::Cap(CapError::Denied { .. })
         ),
         "commit denial must produce CapError::Denied, got {err:?}"
     );

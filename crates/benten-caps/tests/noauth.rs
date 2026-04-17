@@ -5,10 +5,10 @@
 //! by the out-of-the-box Engine builder (Phase 1 DX requirement).
 //!
 //! Canonicalized at R4 triage (M14) across `noauth.rs`, `noauth_proptest.rs`,
-//! and `production_refuses_noauth.rs`. All three now use:
-//!   - `NoAuthBackend::new()` constructor (not the unit-struct literal),
-//!   - `WriteContext` with `target_label`, `is_privileged`, `actor_hint`
-//!     fields (the superset honored by the crate's `WriteContext` struct).
+//! and `production_refuses_noauth.rs`. All three use `NoAuthBackend::new()`
+//! constructor and a `WriteContext` with `label` / `is_privileged` /
+//! `actor_hint` fields. The redundant `target_label` field was dropped at
+//! the G4 mini-review (g4-cr-10) — `label` is the single label axis now.
 //!
 //! R3 writer: `rust-test-writer-unit`.
 
@@ -27,7 +27,7 @@ fn noauth_permits_empty_context() {
 fn noauth_permits_populated_context() {
     let policy = NoAuthBackend::new();
     let ctx = WriteContext {
-        target_label: "Post".to_string(),
+        label: "Post".to_string(),
         is_privileged: false,
         actor_hint: Some("alice".to_string()),
         ..WriteContext::default()
@@ -42,7 +42,7 @@ fn noauth_permits_system_zone_context() {
     // zero-cost at the capability layer.
     let policy = NoAuthBackend::new();
     let ctx = WriteContext {
-        target_label: "system:IVMView".to_string(),
+        label: "system:IVMView".to_string(),
         is_privileged: true,
         ..WriteContext::default()
     };

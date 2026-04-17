@@ -30,7 +30,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_caps::{NoAuthBackend, UCANBackend};
+use benten_caps::{NoAuthBackend, UcanBackend};
 use benten_engine::{Engine, EngineError};
 
 /// The guard test: calling `.production()` on the builder without a policy
@@ -76,20 +76,20 @@ fn engine_builder_production_accepts_explicit_noauth() {
     );
 }
 
-/// Third: an explicit non-NoAuth policy (e.g. `UCANBackend`, even though
+/// Third: an explicit non-NoAuth policy (e.g. `UcanBackend`, even though
 /// it's Phase 1 stub) also satisfies the guard. This proves the guard is
 /// "any policy set" not "specifically not-NoAuth-by-type-name".
 #[test]
 fn engine_builder_production_accepts_ucan_stub() {
     let dir = tempfile::tempdir().unwrap();
     let result = Engine::builder()
-        .capability_policy(Box::new(UCANBackend::new()))
+        .capability_policy(Box::new(UcanBackend::new()))
         .production()
         .open(dir.path().join("benten.redb"));
-    // The engine opens fine; the UCANBackend will fail at first write with
+    // The engine opens fine; the UcanBackend will fail at first write with
     // E_CAP_NOT_IMPLEMENTED (see `ucan_stub_messages.rs`) — but build
     // succeeds, which is what this test locks in.
-    assert!(result.is_ok(), "UCANBackend is a valid explicit policy");
+    assert!(result.is_ok(), "UcanBackend is a valid explicit policy");
 }
 
 /// NON-production path retains the permissive default — don't regress the

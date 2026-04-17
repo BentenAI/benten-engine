@@ -1,6 +1,6 @@
 //! Phase 1 R3 security test — UCAN stub error routing (R1 major #10).
 //!
-//! Attack class: operator misconfigures `UCANBackend` in Phase 1 believing
+//! Attack class: operator misconfigures `UcanBackend` in Phase 1 believing
 //! it's usable (reasonable, because the crate exposes the type and the docs
 //! name UCAN as the Phase 3 plan). Every write fails with
 //! `CapError::NotImplemented`. The security-auditor named three distinct
@@ -17,7 +17,7 @@
 //!    operators debug in the wrong direction (they'd audit their grants when
 //!    the real problem is backend selection).
 //!
-//! TDD contract: FAIL at R3 — `UCANBackend`, `CapError::NotImplemented`, the
+//! TDD contract: FAIL at R3 — `UcanBackend`, `CapError::NotImplemented`, the
 //! error-code mapping, and the evaluator routing are all Phase 1 deliverables
 //! owned by P4 + E3. R5 lands them.
 //!
@@ -28,17 +28,17 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_caps::{CapError, CapabilityPolicy, UCANBackend, WriteContext};
+use benten_caps::{CapError, CapabilityPolicy, UcanBackend, WriteContext};
 use benten_core::ErrorCode;
 
-/// The operator-hostile baseline: UCANBackend must cleanly error, not panic.
+/// The operator-hostile baseline: UcanBackend must cleanly error, not panic.
 #[test]
 fn ucan_stub_errors_cleanly() {
-    let backend = UCANBackend::new();
+    let backend = UcanBackend::new();
     let ctx = WriteContext::synthetic_for_test();
     let err = backend
         .check_write(&ctx)
-        .expect_err("UCANBackend in Phase 1 must reject all writes");
+        .expect_err("UcanBackend in Phase 1 must reject all writes");
     assert!(matches!(err, CapError::NotImplemented { .. }));
 }
 
@@ -47,7 +47,7 @@ fn ucan_stub_errors_cleanly() {
 /// phase reads as a configuration pointer.
 #[test]
 fn ucan_stub_error_message_names_phase_and_alternative() {
-    let backend = UCANBackend::new();
+    let backend = UcanBackend::new();
     let ctx = WriteContext::synthetic_for_test();
     let err = backend.check_write(&ctx).unwrap_err();
     let msg = err.to_string();
@@ -73,7 +73,7 @@ fn ucan_stub_error_message_names_phase_and_alternative() {
 /// audit their grants instead of fixing their backend choice.
 #[test]
 fn ucan_stub_error_code_is_distinct_from_denied() {
-    let backend = UCANBackend::new();
+    let backend = UcanBackend::new();
     let ctx = WriteContext::synthetic_for_test();
     let err = backend.check_write(&ctx).unwrap_err();
     assert_eq!(err.code(), ErrorCode::CapNotImplemented);
@@ -82,7 +82,7 @@ fn ucan_stub_error_code_is_distinct_from_denied() {
 }
 
 /// The evaluator routing test — critical piece. When a handler in an
-/// evaluator with UCANBackend attempts a WRITE, the resulting error MUST
+/// evaluator with UcanBackend attempts a WRITE, the resulting error MUST
 /// route through the `ON_ERROR` typed edge, not `ON_DENIED`. This prevents
 /// the misdiagnosis where operators see a config error as an auth failure.
 ///
@@ -98,7 +98,7 @@ fn ucan_stub_error_routes_to_ON_ERROR_not_ON_DENIED() {
 
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
-        .capability_policy(Box::new(UCANBackend::new()))
+        .capability_policy(Box::new(UcanBackend::new()))
         .open(dir.path().join("benten.redb"))
         .unwrap();
 
@@ -112,7 +112,7 @@ fn ucan_stub_error_routes_to_ON_ERROR_not_ON_DENIED() {
 
     assert_eq!(
         taken_edge, "ON_ERROR",
-        "UCANBackend::NotImplemented must route via ON_ERROR — routing it via \
+        "UcanBackend::NotImplemented must route via ON_ERROR — routing it via \
          ON_DENIED would make operators audit their grants instead of changing \
          their backend. Got: {taken_edge}"
     );
