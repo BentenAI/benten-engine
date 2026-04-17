@@ -16,6 +16,7 @@ blake3 = { workspace = true, features = ["pure"] }
 serde = { workspace = true }
 serde_bytes = { workspace = true }
 serde_ipld_dagcbor = { workspace = true }
+spin = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]

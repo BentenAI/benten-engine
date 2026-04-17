@@ -146,6 +146,12 @@ mimalloc = { version = "0.1", default-features = false }
 thiserror = "2"
 tracing = "0.1"
 
+# Lightweight no_std spinlock + lazy-init primitive. benten-core uses this to
+# serialize access to the process-wide version-chain anchor tables (Phase 1
+# in-process only; Phase 3 replaces with CRDT merge). Chosen over `once_cell`
+# because `spin` needs no feature flags for no_std+alloc.
+spin = { version = "0.10", default-features = false, features = ["mutex", "spin_mutex", "lazy"] }
+
 # WASM sandbox (SANDBOX primitive)
 wasmtime = "35"
 
