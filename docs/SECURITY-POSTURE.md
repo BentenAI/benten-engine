@@ -27,4 +27,37 @@ Benten uses **BLAKE3-256** with a 32-byte digest embedded in every CIDv1. The ac
 
 ---
 
+### Compromise #8 — `Engine::call` bypasses the evaluator for CRUD ops (Phase 1)
+
+**Landed:** R5 G7 fix-pass (commit `3b714bf`).
+
+The Phase 1 `Engine::call` dispatches CRUD operations (`create`, `list`, `get`, `delete`) via direct backend transactions rather than walking the registered handler Subgraph through `benten_eval::Evaluator`. The registered Subgraph is content-addressed, invariant-checked at registration, and stored — but it is NOT the execution path at call time for the CRUD fast-path.
+
+**Where this matters:**
+
+- The 14 structural invariants enforce at **registration** (correct). A malformed handler cannot be registered. At CALL time, the hardcoded CRUD path does not re-exercise the registered subgraph — it directly invokes `backend.transaction(|tx| tx.put_node(...))`.
+- Typed error-edge routing is synthesized for the CRUD ops (`ON_NOT_FOUND`, `ON_CONFLICT`, `OK`). A user-registered handler with custom error edges beyond the CRUD set is unreachable via the fast-path.
+- Handler-level `requires:` property enforcement for CRUD ops runs through the capability hook at transaction commit (correct), but primitive-level `requires:` annotations inside a registered Subgraph are not exercised.
+
+**What this does NOT affect:**
+
+- **Content-addressing:** the registered handler's CID is genuine; invariant-10 (order-independence) holds.
+- **Thin-engine external contract:** `benten-eval` still knows nothing about `benten-graph`; `benten-engine` composes the two. The compromise is internal to how `Engine::call` resolves the dispatch.
+- **Phase-1 exit criterion:** `crud('post').list` returns the paginated sorted listing; the external DX path works end-to-end at the surface level.
+- **Non-CRUD handlers:** Subgraphs registered via `register_subgraph` with non-CRUD shapes follow the `dispatch_spec` path, which DOES dispatch through the stored spec. Only the `crud:<label>` fast-path short-circuits.
+
+**Security consequence:**
+
+A user who registers a handler expecting `Engine::call` to walk its registered subgraph receives the hardcoded CRUD semantics instead. This is a TRUST mismatch between the declared handler shape and the actual execution path. Auditors relying on "the registered subgraph IS what executes" must read the Phase-1 fast-path exception. Phase 2 MUST close this gap.
+
+**Phase 2 action items:**
+
+- Add `benten_eval::PrimitiveHost` trait; `Evaluator` takes `&dyn PrimitiveHost`; primitive executors dispatch through the host.
+- `Engine` implements `PrimitiveHost`; `Engine::call` wraps `Evaluator::run(&handler, input, self)` in a transaction.
+- Remove the CRUD fast-path in `dispatch_call`; all `Engine::call`s route through the evaluator uniformly.
+- Re-run the full G6/G7 mini-review panel (operation-primitive-linter, code-as-graph-reviewer, benten-engine-philosophy) against the unified dispatch path.
+- `Engine::trace` returns real per-primitive steps via `Evaluator::run_with_trace` instead of the fabricated 2-step placeholder.
+
+---
+
 *Future compromises with security implications will be appended as sections here, each tagged with the compromise number from the R1 Triage Addendum.*
