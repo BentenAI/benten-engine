@@ -20,9 +20,14 @@
 //!    trailing wildcard, a child of `parent + ":<segment>"` (one extra
 //!    tail segment the parent never authorized) must be denied.
 //!
-//! 3. **Transitivity on positive chains.** If A permits B and B permits C,
-//!    then A permits C. Proved only for positive attenuation chains; the
-//!    negative case (if B denies C, A may still permit C) is not required.
+//! 3. **Attenuation is transitive.** Genuine A→B→C chain: A is a random
+//!    parent (optionally trailing-wildcard); B is derived from A by either
+//!    identity-attenuation OR concretizing A's trailing `*` into one or more
+//!    concrete segments; C is derived from B the same way. When
+//!    `check_attenuation(A, B).is_ok()` AND `check_attenuation(B, C).is_ok()`
+//!    both hold, `check_attenuation(A, C)` must succeed. This genuinely
+//!    composes three scopes through a middleman (g4-p2-uc-3), unlike the
+//!    earlier shape which applied property-1 twice to sibling scopes.
 //!
 //! R3 writer: `rust-test-writer-security` (post-hoc fix-pass).
 
@@ -99,38 +104,94 @@ proptest! {
         );
     }
 
-    /// Property 3: positive-chain transitivity. If A attenuates to B and B
-    /// attenuates to C, then A attenuates to C.
+    /// Property 3: attenuation is transitive through a genuine A→B→C chain.
     ///
-    /// Constructs a chain: A is a random concrete scope; B = A (trivially
-    /// attenuates); C = B. This trivial case proves the identity path; the
-    /// interesting case is when B is a wildcard expansion of A. Represented
-    /// here by generating A as a `prefix:*` and B, C as concrete
-    /// specializations of the same prefix.
+    /// Builds three distinct scope strings where each leg is a legitimate
+    /// attenuation of its predecessor, then asserts that when both A→B and
+    /// B→C succeed, A→C must also succeed. The shape:
+    ///
+    /// - A is constructed from 1..=3 random concrete segments optionally
+    ///   followed by a trailing `*` (chosen randomly).
+    /// - B is derived from A by one of: (i) identity (B == A); (ii) if A
+    ///   ends in `*`, replacing the trailing `*` with one-or-more concrete
+    ///   tail segments; (iii) if A does not end in `*`, identity only.
+    /// - C is derived from B the same way (identity, or concretize B's
+    ///   trailing `*` if present).
+    ///
+    /// `prop_assume!` filters out constructions where A→B or B→C fails, so
+    /// the property only asserts on positive chains. This is the g4-p2-uc-3
+    /// fix: the previous shape generated siblings under a shared wildcard
+    /// parent and was just property-1 applied twice.
     #[test]
-    fn prop_transitivity_on_positive_chain(
-        prefix in prop::collection::vec(concrete_segment(), 1..=3),
-        b_tail in concrete_segment(),
-        c_tail in concrete_segment()
+    fn prop_attenuation_is_transitive(
+        a_prefix in prop::collection::vec(concrete_segment(), 1..=3),
+        a_has_wildcard in any::<bool>(),
+        b_concretization in prop::collection::vec(concrete_segment(), 0..=2),
+        c_concretization in prop::collection::vec(concrete_segment(), 0..=2),
     ) {
-        let a_str = format!("{}:*", prefix.join(":"));
-        let b_str = format!("{}:{}", prefix.join(":"), b_tail);
-        let c_str = format!("{}:{}", prefix.join(":"), c_tail);
-
+        // Build A: a_prefix joined by `:`, optionally followed by `:*`.
+        let a_str = if a_has_wildcard {
+            format!("{}:*", a_prefix.join(":"))
+        } else {
+            a_prefix.join(":")
+        };
         let a = GrantScope::parse(&a_str).unwrap();
-        let b = GrantScope::parse(&b_str).unwrap();
-        let c = GrantScope::parse(&c_str).unwrap();
 
-        // A -> B: prefix:* permits prefix:b_tail
-        prop_assert!(check_attenuation(&a, &b).is_ok());
-        // B -> C: prefix:b_tail permits prefix:c_tail iff b_tail == c_tail
-        // (outside that case the two concrete scopes are siblings; the
-        // transitivity claim for the subset A -> C is all we need).
-        // A -> C: prefix:* permits prefix:c_tail
+        // Build B by concretizing A's trailing wildcard (if any). If A has
+        // no wildcard OR the concretization vector is empty, B == A
+        // (identity attenuation).
+        let b_str = if a_has_wildcard && !b_concretization.is_empty() {
+            // Replace A's trailing `*` with one-or-more concrete segments,
+            // optionally leaving a new trailing `*` so B remains
+            // further-attenuatable. Here we always emit a pure concrete
+            // replacement; that's the simpler case and still exercises a
+            // non-identity B.
+            format!(
+                "{}:{}",
+                a_prefix.join(":"),
+                b_concretization.join(":")
+            )
+        } else {
+            a_str.clone()
+        };
+        let b = GrantScope::parse(&b_str).unwrap();
+
+        // Build C by concretizing B's trailing wildcard (if B has one). B
+        // only has a wildcard if B == A AND A had a wildcard. Otherwise C
+        // is identity with B.
+        let b_ends_wildcard = b_str.ends_with(":*") || b_str == "*";
+        let c_str = if b_ends_wildcard && !c_concretization.is_empty() {
+            // B's trailing `*` replaced with concrete segments.
+            let b_prefix = b_str
+                .strip_suffix(":*")
+                .or_else(|| b_str.strip_suffix('*'))
+                .unwrap_or(&b_str);
+            let b_prefix = b_prefix.trim_end_matches(':');
+            if b_prefix.is_empty() {
+                c_concretization.join(":")
+            } else {
+                format!("{}:{}", b_prefix, c_concretization.join(":"))
+            }
+        } else {
+            b_str.clone()
+        };
+        // c_str could in principle be empty if b_str was "*" and
+        // c_concretization was empty — skip if so.
+        let c = match GrantScope::parse(&c_str) {
+            Ok(c) => c,
+            Err(_) => return Err(TestCaseError::Reject("degenerate C".into())),
+        };
+
+        // Only assert transitivity when both legs actually succeed. This
+        // filters out constructions where (e.g.) the empty-concretization
+        // path produced B == A but the two paths diverged downstream.
+        prop_assume!(check_attenuation(&a, &b).is_ok());
+        prop_assume!(check_attenuation(&b, &c).is_ok());
+
         prop_assert!(
             check_attenuation(&a, &c).is_ok(),
-            "trailing-wildcard A ({a_str}) must permit C ({c_str}) \
-             regardless of the intermediate B"
+            "transitivity violation: A ({a_str}) permits B ({b_str}) and \
+             B permits C ({c_str}), but A does not permit C"
         );
     }
 

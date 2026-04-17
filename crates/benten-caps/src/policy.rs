@@ -152,6 +152,12 @@ pub trait CapabilityPolicy: Send + Sync {
     /// widens the TOCTOU window. Keep in lockstep with the named compromise
     /// prose in `.addl/phase-1/r1-triage.md` if the default is ever
     /// adjusted.
+    // TODO(G6): honor wall-clock bound in addition to iteration count per
+    // R4b compromise #1 tightening (auditor finding g4-p2-uc-2). A
+    // TRANSFORM-heavy or CALL-heavy handler at 1 iter/10sec pushes past 10
+    // minutes between refreshes under iteration-count alone; the first real
+    // capability backend MUST additionally enforce a wall-clock ceiling
+    // (min(iteration_count, wall_clock_seconds), default ≤300s).
     fn iterate_batch_boundary(&self) -> usize {
         DEFAULT_BATCH_BOUNDARY
     }

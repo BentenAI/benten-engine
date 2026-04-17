@@ -120,3 +120,40 @@ fn grant_whitespace_only_scope_rejected() {
     assert!(GrantScope::parse("   ").is_err());
     assert!(GrantScope::parse("\t\n").is_err());
 }
+
+// ---------------------------------------------------------------------------
+// g4-p2-uc-4 — empty-segment parse rejection.
+//
+// Scopes with empty inner / leading / trailing segments are an
+// encoding-trick surface: an attacker can produce a distinct-CID scope that
+// attenuates identically to a hand-written scope the victim already trusts,
+// while presenting nearly-identical glyphs to a human reviewer. Reject at
+// parse.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn parse_rejects_empty_inner_segment() {
+    // `"store::write"` — split(':') produces ["store", "", "write"]; the
+    // middle empty segment must fail.
+    assert!(GrantScope::parse("store::write").is_err());
+}
+
+#[test]
+fn parse_rejects_leading_colon() {
+    // `":store:write"` — produces ["", "store", "write"]; leading empty
+    // segment must fail.
+    assert!(GrantScope::parse(":store:write").is_err());
+}
+
+#[test]
+fn parse_rejects_trailing_colon() {
+    // `"store:write:"` — produces ["store", "write", ""]; trailing empty
+    // segment must fail.
+    assert!(GrantScope::parse("store:write:").is_err());
+}
+
+#[test]
+fn parse_rejects_all_colons() {
+    // `":::"` — every segment empty. Degenerate input; must fail.
+    assert!(GrantScope::parse(":::").is_err());
+}
