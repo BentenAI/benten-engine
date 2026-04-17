@@ -11,6 +11,17 @@ description = "Orchestrator crate composing the Benten graph engine public API."
 [lints]
 workspace = true
 
+[features]
+# Expose test-only helper methods on Engine (e.g.
+# `test_subscribe_all_change_events`, `testing_insert_privileged_fixture`).
+# The helpers are also available unconditionally under `cfg(test)`; this
+# feature lights them up for integration tests under tests/ (which are
+# compiled against the non-test library). See code-reviewer finding
+# g7-cr-4. Enabled by default so `cargo test` works without --features;
+# publishers of release artifacts disable via `--no-default-features`.
+default = ["test-helpers"]
+test-helpers = []
+
 [dependencies]
 benten-caps = { path = "../benten-caps" }
 benten-core = { path = "../benten-core" }

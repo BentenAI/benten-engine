@@ -102,6 +102,22 @@ impl Subscriber {
         guard.iter().map(|v| String::from(v.id())).collect()
     }
 
+    /// Is the named view currently stale? Returns `None` if the view is not
+    /// registered. Used by the engine-level `read_view_with` to decide
+    /// strict vs. relaxed semantics without exposing the view's internal
+    /// state machine.
+    #[must_use]
+    pub fn view_is_stale(&self, view_id: &str) -> Option<bool> {
+        let guard = self
+            .views
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard
+            .iter()
+            .find(|v| v.id() == view_id)
+            .map(|v| v.is_stale())
+    }
+
     /// Route a single change event to every registered view.
     ///
     /// Returns the number of views that accepted the event successfully

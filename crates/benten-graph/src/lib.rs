@@ -222,12 +222,32 @@ impl SnapshotHandle {
     }
 
     /// Scan all nodes with a given label from the snapshot view.
-    /// **Phase 1 G6 stub.**
+    ///
+    /// Uses the label-index multimap table opened against the snapshot's
+    /// read-transaction so results reflect the point-in-time state captured
+    /// when [`RedbBackend::snapshot`] was called; concurrent writes are
+    /// invisible to this scan.
     ///
     /// # Errors
-    /// Stub — currently `todo!()`.
-    pub fn scan_label(&self, _label: &str) -> Result<Vec<Cid>, GraphError> {
-        todo!("SnapshotHandle::scan_label — G6 (Phase 1)")
+    ///
+    /// - [`GraphError::Redb`] on any redb I/O failure.
+    /// - [`GraphError::Core`] if an index entry fails to decode.
+    pub fn scan_label(&self, label: &str) -> Result<Vec<Cid>, GraphError> {
+        if label.is_empty() {
+            return Ok(Vec::new());
+        }
+        let Some(read_txn) = self.read_txn.as_ref() else {
+            return Ok(Vec::new());
+        };
+        let table = read_txn.open_multimap_table(crate::indexes::LABEL_INDEX_TABLE)?;
+        let values = table.get(label.as_bytes())?;
+        let mut out = Vec::new();
+        for v in values {
+            let v = v?;
+            let cid = crate::indexes::cid_from_index_bytes(v.value())?;
+            out.push(cid);
+        }
+        Ok(out)
     }
 }
 

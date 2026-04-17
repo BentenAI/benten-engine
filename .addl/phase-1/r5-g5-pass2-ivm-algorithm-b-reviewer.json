@@ -1,0 +1,77 @@
+{
+  "agent": "ivm-algorithm-b-reviewer",
+  "stage": "R5-G5-pass2",
+  "verdict": "accept-with-minors",
+  "summary": "Fix-pass 8a19445 addresses all six pass-1 majors at the root cause (ChangeEvent widened to carry Option<Node> + edge_endpoints + two new ChangeKind variants, panic isolation via catch_unwind + AssertUnwindSafe, uniform rebuild budget restore across all 5 views). Trait-driven IVM paths now produce real state rather than degenerate identity-only mappings. Four pass-1 minors (g5-ivm-7, 8, 9, 11) are either resolved (8 via original_budget field now present in all views) or no-longer-applicable (9 was about degenerate mapping that no longer exists). Two remaining concerns: (a) the back-compat fallback paths are silent for most events, with a warn only on content_listing's tx_id fallback — a legacy caller emitting identity-only ChangeEvents for grant/dispatch/version views would get silently-wrong-but-healthy state; (b) architecturally, every Node is cloned into every ChangeEvent and clone-per-subscriber fans that cost out — Arc<Node> would halve heap churn once the subscriber count or the Node size grows. Neither blocks merge; both are R4b/Phase-2 follow-ups. The four R3 rebuild-equivalence tests remain deferred as declared (TODO(R4b)) and reproduce cleanly (1 failure each in view1/view2/view3/view5 suites; 50+ passing).",
+  "pass1_dispositions": {
+    "g5-ivm-1": "accept",
+    "g5-ivm-2": "accept",
+    "g5-ivm-3": "accept",
+    "g5-ivm-4": "accept",
+    "g5-ivm-5": "accept",
+    "g5-ivm-6": "accept",
+    "g5-ivm-7": "partial",
+    "g5-ivm-8": "accept"
+  },
+  "pass1_disposition_details": {
+    "g5-ivm-1": "Resolved. capability_grants.rs:199-239 — Node events extract `grantee` (Value::Bytes CID) via `extract_grantee`; entity_key = grantee when present, event.cid fallback only for legacy identity-only path. Edge path (ChangeKind::EdgeCreated/Deleted + GRANTED_TO label, lines 169-197) wires edge.source → by_entity[edge.target] as the canonical grant→entity mapping. The map is now genuinely `entity → {grants}`, not the `cid → {cid}` degenerate shape pass-1 flagged.",
+    "g5-ivm-2": "Resolved. event_handler_dispatch.rs:184-214 — Node events partition by `subscribes_to: Value::List(Value::Text)` via `extract_event_names`. Multi-event-subscribe reads correctly: a handler subscribed to ['a','b'] populates by_event['a'] AND by_event['b']. The read path (lines 244-263) unions the event-name bucket with the GLOBAL_BUCKET for back-compat — this is correct: an event-name query returns every handler subscribed to that event PLUS legacy handlers registered before the widen. Edge-path (SubscribesTo, lines 152-177) buckets into GLOBAL because edges don't carry event-name payload in Phase 1 — acceptable and documented.",
+    "g5-ivm-3": "Resolved with a soundness caveat. Node-bearing events read `createdAt: Value::Int` through `extract_created_at` and produce correct chronological order. Fallback to tx_id (content_listing.rs:298-309) is sound IFF tx_id is monotonic per-backend. Confirmed: transaction.rs:492-497 has a single commit path and the RedbBackend.transaction flow assigns tx_id monotonically at commit time (pre-existing G3 invariant). The SortKey widen from (i64,u64) to (u64,u64) via affine bias (bias_i64_to_u64, SORT_BIAS=2^63) is correct — it preserves total order over the full i64 range without the clamp-to-MAX collapse the pass-1 text implicitly assumed. One caveat: tx_id and createdAt live in different numeric spaces, so a mixed stream (some events with Node-bearing createdAt, others with tx_id fallback) WILL interleave incorrectly. Acceptable for Phase 1 because production writes always flow through the Node-bearing path; the fallback is the legacy defense-in-depth.",
+    "g5-ivm-4": "Resolved. governance_inheritance.rs:188-213 — ChangeKind::EdgeCreated + GovernedBy label reads edge_endpoints (source,target) and stores parent[source] = target. EdgeDeleted removes parent[source]. The `add_edge(child, parent)` direct-ingress method is preserved for tests and engine-internal batches. Best-effort node-delete cleanup (ChangeKind::Deleted, lines 201-207) retains `parent.retain(|_, v| v != &event.cid)` + `parent.remove(&event.cid)` which handles both inbound and outbound references to the deleted cid. Cascade-deletion correctness is partially wired (edge events land directly; node events invalidate back-refs) but cascade-deletion-on-node-delete-causes-edges-to-be-deleted is NOT tested end-to-end — still a TODO(R4b) per lib.rs:53-55.",
+    "g5-ivm-5": "Resolved with a documented scope boundary. version_current.rs:202-217 — ChangeKind::EdgeCreated + NEXT_VERSION label reads edge_endpoints.target and sets current[DEFAULT_ANCHOR_ID] = target. Node events (lines 181-192) honor `event.node.anchor_id` when present (benten_core::Node has `pub anchor_id: Option<u64>`, crates/benten-core/src/lib.rs:125), falling back to DEFAULT_ANCHOR_ID only when absent. The hardcoded DEFAULT_ANCHOR_ID=1 is retained as explicit fallback and documented on the constant (lines 33-37). Multi-anchor resolution through the EDGE path still collapses to DEFAULT_ANCHOR_ID because edges don't carry anchor identity — this is the documented Phase-1 scope (edge-driven version chains use a single anchor per chain; engine callers use the Node-driven path for multi-anchor scenarios). Acceptable.",
+    "g5-ivm-6": "Resolved. subscriber.rs:148-178 `apply_event` wraps `view.update(event)` in `std::panic::catch_unwind(AssertUnwindSafe(...))`. On panic: the view is marked stale via `view.mark_stale()`, a breadcrumb is logged to stderr via `log_view_panic`, and the fan-out continues to subsequent views. AssertUnwindSafe is sound because a panicked view is already ill — we flip it to the Stale terminal state and move on. Pre-panic-check early-return on `view.is_stale()` (line 151-153) means subsequent events to a panicked view are cheap no-ops until rebuild. Test coverage: no dedicated panic-isolation test exists (see finding g5-p2-ivm-3 below).",
+    "g5-ivm-7": "Partial. Pass-1 minor: with_budget_for_testing(0) vs ViewBudget::new(0) mismatch. Still present — with_budget_for_testing(0) is accepted by all 5 views and the `budget_zero_trips_immediately_on_change` test on EventDispatchView (event_handler_dispatch.rs:298-302) actually depends on this behavior. Not addressed in the fix-pass. Deferred is acceptable given the test-only naming convention, but still worth a future cleanup.",
+    "g5-ivm-8": "Resolved. Uniform `original_budget: u64` field added to all 5 views (capability_grants.rs:54, event_handler_dispatch.rs:56, content_listing.rs:82, governance_inheritance.rs:49, version_current.rs:49). Every `rebuild()` / `rebuild_from_scratch()` restores `remaining_budget = self.original_budget`. `rebuild_restores_original_budget` test lands on view 1 (capability_grants.rs:347-361) as the canonical regression."
+  },
+  "findings": [
+    {
+      "id": "g5-p2-ivm-1",
+      "severity": "minor",
+      "location": "crates/benten-ivm/src/views/capability_grants.rs:208-216, version_current.rs:185-200, event_handler_dispatch.rs:182-193",
+      "claim": "Back-compat fallback paths are silent on views 1, 2, and 5 — only content_listing emits a stderr warn on the tx_id fallback. A legacy caller emitting identity-only ChangeEvents (no node) for grant / dispatch / version events would get silently-wrong-state (identity-keyed maps, global-bucket dispatch, DEFAULT_ANCHOR_ID attribution) with no telemetry.",
+      "detail": "content_listing.rs:301-306 correctly emits `eprintln!(... 'identity-only event ... falling back to tx_id ...')` when event.node is absent. Views 1, 2, 5 take the same fallback path but silently. The pass-1 root cause (silent-wrong-state via identity-only events) is reduced in scope but not eliminated — production paths always populate event.node via transaction.rs:140-197 PendingOp::to_change_event (PutNode/DeleteNode always carry Some(node)), so the silent path only fires on hand-constructed ChangeEvents from test fixtures or future external event sources. Low-risk today; worth a warn to match content_listing's vigilance.",
+      "suggested_fix": "Add a `eprintln!` breadcrumb in each view's identity-only fallback branch mirroring content_listing's shape, or centralize the warn in a helper on ChangeEvent (`fn warn_if_identity_only(&self, view_id: &str)`) so all five views share one sink."
+    },
+    {
+      "id": "g5-p2-ivm-2",
+      "severity": "minor",
+      "location": "crates/benten-graph/src/store.rs:280-297, transaction.rs:140-150",
+      "claim": "ChangeEvent carries `node: Option<Node>` by value, which is cloned once per subscriber in transaction.rs:fan_out (line 515: `op.to_change_event(tx_id)` is called per subscriber). For a large Node with Bytes-heavy properties and N subscribers, heap churn is O(N * |node|) per commit.",
+      "detail": "Phase 1 has a single IVM Subscriber so the amplification is 1x, but the architecture scales subscribers (CDC consumers, remote replicas, audit loggers are all future subscribers per R1 architect plan). At 5 subscribers and a 1MB Node payload, each commit allocates 5MB. Alternative: `node: Option<Arc<Node>>` so the heap body is shared across subscribers and only the Arc header is cloned. Trait boundary stays identical from the subscriber's perspective (they already take `&ChangeEvent`). The fan_out loop in transaction.rs:513-532 already calls `op.to_change_event(tx_id)` inside the subscribers loop which is redundant (the event is identical per subscriber); hoisting that out would be another 5x win.",
+      "suggested_fix": "Two independent improvements: (1) hoist `let event = op.to_change_event(tx_id);` outside the subscribers loop in fan_out so the event is built once per op rather than once per (subscriber, op). (2) Phase 2 (not Phase 1 blocking): change `ChangeEvent::node` to `Option<Arc<Node>>`. Requires a breaking shape change on the public ChangeEvent struct, so defer."
+    },
+    {
+      "id": "g5-p2-ivm-3",
+      "severity": "minor",
+      "location": "crates/benten-ivm/src/subscriber.rs:148-178 + crates/benten-ivm/tests/*",
+      "claim": "No test exercises the panic-isolation path. The `catch_unwind + AssertUnwindSafe` wrapper is load-bearing for the 'one broken view cannot take down a whole engine' contract but has no regression test.",
+      "detail": "Grep of crates/benten-ivm/tests/ shows no test that registers a panicking view (`std::panic!` or indexing out of bounds inside a mock View::update) and then verifies (a) the panicking view is marked stale afterward, (b) a second registered view still received the event, and (c) a subsequent event does not re-panic. The commit message claims 'a panicked view marks stale + logs ... other views continue' — this is untested. Low priority because the pattern is standard, but a follow-up test should land before the contract calcifies.",
+      "suggested_fix": "Add `crates/benten-ivm/tests/subscriber_panic_isolation.rs` with a `PanickingView` stub (impl View) whose update always panics, register it alongside a counter-view, feed one ChangeEvent, assert the panicking view is stale, the counter-view incremented, and the subscriber's view_count is unchanged. Approximately 40 lines. Fits R4b naturally."
+    },
+    {
+      "id": "g5-p2-ivm-4",
+      "severity": "minor",
+      "location": "crates/benten-ivm/src/subscriber.rs:161-162",
+      "claim": "If `view.mark_stale()` itself panics inside apply_event, the panic is NOT caught — mark_stale is called after the catch_unwind boundary on the BudgetExceeded branch (line 161) and as a post-catch action on the panic branch (line 175). A pathological mark_stale impl would escape.",
+      "detail": "Line 160-162: `Ok(Err(ViewError::BudgetExceeded(_))) => { view.mark_stale(); }` is outside the catch_unwind closure — the closure captured `view.update(event)` only. If a (custom future) view's mark_stale panics, the fan-out thread dies. The default trait impl (view.rs:259-261) is a no-op so Phase 1 is safe. The five Phase-1 views implement mark_stale as a single boolean flip (capability_grants.rs:304-306, etc.) which cannot panic. Low-risk but the contract doesn't match the in-code comment 'one broken view cannot take down a whole engine' once a user registers a custom View.",
+      "suggested_fix": "Either (a) move the mark_stale call INTO the catch_unwind closure by having the closure return `Result<(), ViewError>` and do mark_stale based on the returned variant inside — requires re-shape — or (b) wrap the mark_stale call in its own catch_unwind. (b) is cheaper. Phase 2 when user-custom views become possible."
+    },
+    {
+      "id": "g5-p2-ivm-5",
+      "severity": "minor",
+      "location": "crates/benten-ivm/src/lib.rs:48-63",
+      "claim": "The four TODO(R4b) markers are specific enough (file:line + test name in comment) but do not cross-reference the pass-2 findings above or carry a ticket id for tracking.",
+      "detail": "Comments at lib.rs:48-63 enumerate: (1) criterion benchmarks against RESULTS.md §1; (2) cascade-deletion integration test; (3) 4 rebuild-equivalence R3 defects; (4) cosmetic mod-path normalization. These are actionable — a future agent reading them knows what to do. But: no cross-reference to the pass-1 mini-review JSON, no TODO id convention (`TODO(R4b-cascade)` vs `TODO(R4b)`). Minor hygiene point.",
+      "suggested_fix": "Rename markers to `TODO(R4b-cascade)`, `TODO(R4b-criterion)`, `TODO(R4b-rebuild-equiv)`, `TODO(R4b-mod-path)` and add a one-line pointer to .addl/phase-1/r5-g5-mini-ivm-algorithm-b-reviewer.json in the crate-level doc comment. Non-blocking."
+    },
+    {
+      "id": "g5-p2-ivm-6",
+      "severity": "minor",
+      "location": "crates/benten-ivm/src/views/capability_grants.rs:110-121",
+      "claim": "on_change(node) direct-ingress path (used by `budget_one_trips_on_second_update` test) reads `node.cid()` TWICE — once for entity_key fallback (line 113) and once for grant_cid (line 118). Cheap, but the second call re-runs BLAKE3 over DAG-CBOR.",
+      "detail": "Not a correctness concern. `Node::cid()` is deterministic by construction but not cached on the Node. Benchmarks will tell if this is worth memoizing. Flag as hygiene for the Phase-2 criterion work — content hashing is not free.",
+      "suggested_fix": "Compute cid once: `let grant_cid = match node.cid() { Ok(c) => c, Err(_) => return }; let entity_key = extract_grantee(&node).unwrap_or_else(|| grant_cid.clone());`"
+    }
+  ],
+  "notes": "Final shape: 6 pass-1 majors all accepted as resolved, 1 pass-1 minor partial (g5-ivm-7), 1 pass-1 minor accepted (g5-ivm-8). 6 new minor findings, none blocking. IVM tests: 50+ passing, 4 failing — all 4 are pre-declared TODO(R4b) rebuild-equivalence R3 defects (view1/view2/view3/view5 suites each report one FAILED, a fifth suite reports a prop_content_listing_incremental_equivalence failure that is part of the same defect class). Recommend merge. R4b follow-ups: (a) panic-isolation regression test, (b) cascade-deletion integration test (already on TODO list), (c) warn-on-identity-only-fallback for views 1/2/5, (d) hoist to_change_event out of fan_out's per-subscriber loop, (e) memoize Node::cid() where called twice. The five views now correctly map to their RESULTS.md §4 benchmark patterns via enriched ChangeEvent data; G6 evaluator integration can proceed."
+}

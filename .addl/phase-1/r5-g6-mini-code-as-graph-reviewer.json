@@ -1,0 +1,91 @@
+{
+  "agent": "code-as-graph-reviewer",
+  "stage": "R5-G6-mini-review",
+  "verdict": "accept-with-minors",
+  "invariant_check": {
+    "1_dag": "pass — DFS-coloring cycle detection at invariants::find_cycle/find_cycle_indices; self-loop detected (tests/invariant_1_cycle.rs::rejects_self_loop_as_cycle green); multi-node cycle detected (rejects_cycle); deep cycle (50-node chain with back-edge) detected (rejects_deeply_buried_cycle); branch-arm cycle detected (rejects_cycle_spanning_branch_arms). Reconstructed cycle-path exposed via RegistrationError::cycle_path().",
+    "2_depth": "pass — but semantics refined: invariants::validate_builder counts CALL primitives on the longest path (per R1 triage), not raw path length. InvariantConfig::max_depth defaults to 64. Diagnostic: longest_path() returns the full path nodes.",
+    "3_fanout": "pass — per-node fan-out = max(explicit outgoing edges, declared iterate_parallel size). Enforced at invariants.rs:217-231. Diagnostic fanout_node_id/fanout_actual/fanout_max populated.",
+    "4_sandbox_nest": "deferred (Phase 2) — confirmed no enforcement in Phase 1; SANDBOX primitive type exists but executor returns PrimitiveNotImplemented. Consistent with plan.",
+    "5_node_cap": "pass — 4096 default, enforced both on Subgraph (validate_subgraph) and builder snapshot paths.",
+    "6_edge_cap": "pass — 8192 default, includes synthetic extra_edges from test escape hatch. Enforced on both paths.",
+    "7_sandbox_output": "deferred (Phase 2) — not enforced; consistent with plan.",
+    "8_iter_budget": "partial (Phase-1 stopgap) — max iterate-nest-depth of 3 enforced at registration via invariants.rs:234-265; full multiplicative-through-CALL budget is Phase 2. BUT see finding g6-cag-1 below — the run-time budget overrun at evaluator.rs:152-155 reuses the InvariantViolation::IterateNestDepth code for a cumulative-step-budget exhaustion, which is a semantic mismatch.",
+    "9_determinism": "pass — PrimitiveKind::is_deterministic classifies all 12 primitives; invariants::validate_builder rejects any non-deterministic primitive inside a `declare_deterministic(true)` subgraph (invariants.rs:306-318). Finalized-Subgraph path (validate_subgraph) has a no-op note because the determinism flag is builder-only — see finding g6-cag-4.",
+    "10_hash": "pass — canonical_subgraph_bytes sorts nodes by (id, kind) AND edges by (from, to, label) before DAG-CBOR encoding (invariants.rs:577, 588). Unit test `cid_order_independent_over_edges` green. Encoded via serde_ipld_dagcbor which canonicalizes CBOR map keys at encode time. Hash is BLAKE3 over the canonical bytes, wrapped in Cid::from_blake3_digest. load_verified() re-hashes bytes and rejects on mismatch with expected_cid/actual_cid populated. See finding g6-cag-2 for a caveat: the proptest that would lock order-independence across arbitrary builder op sequences (`prop_subgraph_cid_order_independent`) is still a `todo!()` red-phase stub in crates/benten-core/tests/proptests_subgraph_order.rs.",
+    "11_system_zone": "deferred (Phase 2) — no enforcement; consistent with plan.",
+    "12_registration_validate": "pass — all 8 Phase-1 checks run before Subgraph becomes usable via build_validated/build_validated_aggregate_all; aggregate mode populates violated_invariants with per-invariant numeric tags; single-violation path returns the specific code (test single_violation_uses_specific_code_not_catch_all green).",
+    "13_immutable": "partial — CID/hash mechanism would detect tampering on re-load, but see finding g6-cag-3 below: Subgraph.nodes and Subgraph.edges are `pub`, meaning code inside the crate (or any downstream whose API surface exposes a Subgraph) can mutate a validated subgraph in place without re-validation or re-hashing. Phase-2 invariant 13 is not yet enforced at the type-system level.",
+    "14_attribution": "deferred (Phase 2) — no causal-attribution plumbing; consistent with plan."
+  },
+  "structural_findings": {
+    "subgraph_module": "crates/benten-eval/src",
+    "node_count_limit": 4096,
+    "edge_count_limit": 8192,
+    "default_max_depth": 64,
+    "default_max_fanout": 16,
+    "default_max_iterate_nest": 3,
+    "cid_algo": "BLAKE3 over DAG-CBOR (serde_ipld_dagcbor) of sorted-nodes+sorted-edges CanonView",
+    "evaluator_recursion_absence": "confirmed — evaluator.rs uses explicit `while let Some(op) = cursor` loop with no recursive function calls; find_cycle/longest_path helpers also explicit-stack. StackOverflow returned as typed Err, never panics (tests/evaluator_stack.rs::evaluator_stack_overflow_is_err_not_panic green).",
+    "diag_feature_gate": "pass — src/diag/mod.rs gates mermaid+trace submodules behind `#[cfg(feature = \"diag\")]` with empty stub modules for slim build; Subgraph::to_mermaid returns empty String when feature off. `cargo check -p benten-eval --no-default-features` green. diag LOC = 227 (budget 500)."
+  },
+  "findings": [
+    {
+      "id": "g6-cag-1",
+      "severity": "major",
+      "location": "crates/benten-eval/src/evaluator.rs:152-155",
+      "claim": "Run-time cumulative-step-budget overrun is surfaced via InvariantViolation::IterateNestDepth, conflating invariant 8's two distinct stopgaps (registration-time nesting depth vs. run-time step budget).",
+      "detail": "`if steps >= budget { return Err(EvalError::Invariant(InvariantViolation::IterateNestDepth)); }`. The registration-time stopgap `IterateNestDepth` fires when a subgraph nests ITERATE deeper than 3 — strictly a structural property. The run-time branch here fires when the evaluator has already executed `DEFAULT_ITERATION_BUDGET` (100k) primitive steps, which is a cumulative-iteration-budget (invariant 8 full form) concern. Callers reading the error code cannot tell whether their subgraph was rejected at registration or ran away at eval; the diagnostic context (iterate_nest_depth_*, iterate_nest_path) is not populated on the run-time path. ErrorCode::InvIterateNestDepth maps to `E_INV_ITERATE_NEST_DEPTH` which is documented as the registration-time stopgap in ERROR-CATALOG.md. Phase 2 reserves `E_INV_ITERATE_BUDGET` for exactly this run-time case.",
+      "suggested_fix": "Introduce a dedicated InvariantViolation variant (e.g. `IterateBudgetExhausted`) that maps to ErrorCode::InvIterateBudget, even if the code is Phase-2-reserved. Alternatively, return EvalError::StackOverflow with a note — but a distinct variant is cleaner. At minimum, document the conflation in the return site so G7 doesn't paper over it."
+    },
+    {
+      "id": "g6-cag-2",
+      "severity": "minor",
+      "location": "crates/benten-core/tests/proptests_subgraph_order.rs:64-66",
+      "claim": "The proptest that locks subgraph CID order-independence across arbitrary builder op sequences (`prop_subgraph_cid_order_independent`) is still a red-phase `todo!()` stub.",
+      "detail": "The build_and_hash helper is `todo!(\"build_and_hash: R5 must wire SubgraphBuilder + canonical_bytes + cid path\")`. G6 ships the canonical_bytes path and the unit test `cid_order_independent_over_edges` (invariants.rs:654) covers the minimal case (2 nodes, reversed order), but the fuzz-level invariant (Op::Label/Op::Prop permutations of arbitrary size 1..16) is not actually being exercised. Invariant 10 therefore has its unit-level contract pinned but not its proptest-level contract.",
+      "suggested_fix": "Wire build_and_hash to use SubgraphBuilder (or a benten-core Node-level equivalent) + Subgraph::cid(), and verify the proptest goes green. If the test belongs in benten-core but needs SubgraphBuilder (which lives in benten-eval), move the test to benten-eval or expose the minimal node-level canonicalizer in benten-core."
+    },
+    {
+      "id": "g6-cag-3",
+      "severity": "minor",
+      "location": "crates/benten-eval/src/lib.rs:405-409",
+      "claim": "Subgraph's `nodes` and `edges` fields are `pub`, permitting in-place mutation of a validated subgraph without re-validation or CID recomputation.",
+      "detail": "`pub struct Subgraph { pub nodes: Vec<OperationNode>, pub edges: Vec<(String, String, String)>, pub handler_id: String }`. Phase-2 invariant 13 (immutability after registration) is not enforced yet, and the plan acknowledges this, but the field visibility means today any caller (inside or outside the crate) can do `sg.nodes.push(...)` after `build_validated`, corrupting the correspondence between the structure and any previously computed CID. G7's Engine orchestrator needs to either clone+rehash on every read, or this needs to become private-with-accessors.",
+      "suggested_fix": "Before G7 wires the storage round-trip, demote `nodes`/`edges` to `pub(crate)` with `nodes()`/`edges()` accessors returning slices, and route the test helpers (`build_unvalidated_for_test`, `build_validated_for_corruption_test`) through constructor methods. This is a one-line visibility flip now and a breaking API change later."
+    },
+    {
+      "id": "g6-cag-4",
+      "severity": "minor",
+      "location": "crates/benten-eval/src/invariants.rs:137-141",
+      "claim": "`validate_subgraph` (the finalized-Subgraph path) silently skips invariant 9 because the determinism flag is builder-only metadata.",
+      "detail": "The comment says \"validation on finalized Subgraph has no determinism flag; the builder snapshot path handles it.\" This means a Subgraph loaded from storage (via `load_verified` in Phase 2) cannot have its determinism-classification re-checked because the flag isn't part of the serialized shape. Parallel-fanout and iterate_depth annotations on the builder also have this property — they live only in SubgraphBuilder, not in Subgraph. If a stored subgraph round-trips through the canonical bytes, it loses the builder annotations. The current `canonical_subgraph_bytes` serialization doesn't include the `deterministic` flag either, which means two structurally identical subgraphs (same nodes+edges) with different determinism-context declarations hash to the same CID.",
+      "suggested_fix": "Decide on the canonical representation of determinism context: either it's a property on the subgraph (include it in CanonView + canonical bytes + Subgraph struct) or it's a registration-time assertion by the caller (document it explicitly and add validate_subgraph_with_determinism(sg, flag) so the finalized path can re-check after a storage round-trip). The former is cleaner and matches how invariant 9's classification is intended to be a property of the subgraph itself."
+    },
+    {
+      "id": "g6-cag-5",
+      "severity": "minor",
+      "location": "crates/benten-eval/src/lib.rs:851-868 (Evaluator::step shim)",
+      "claim": "The `step()` shim's stack-push heuristic does not distinguish CALL from other primitives, so it cannot model the CALL-depth tracking required for invariant 8 (CUMULATIVE through CALL).",
+      "detail": "The shim pushes one frame on every non-terminal dispatch result and pops one on `terminal`. There is no separate CALL-depth counter, no handling of CALL-return semantics (when a callee subgraph terminates the caller must continue), and no multiplicative iteration-budget accounting. The comment acknowledges G6-C was supposed to land the 'real iterative walker that enforces invariants 2/8, owns frame push/pop semantics, and follows typed error edges.' G6-C's `run_inner` in evaluator.rs is closer to the real walker but also does not special-case CALL — the CALL executor (primitives/call.rs) returns `ok`/`ON_DENIED`/`ON_LIMIT` edges but never actually invokes a callee subgraph (noted at call.rs:19-21). So today, a subgraph that uses CALL routes to whatever edge is labeled, but the callee is not executed, meaning iteration-budget accounting across CALL boundaries is not exercised at all.",
+      "suggested_fix": "G7 is already on the hook for wiring real CALL invocation + capability re-check. When that lands, add Evaluator.call_depth (usize), increment on CALL entry, decrement on callee terminate, and propagate remaining iteration budget multiplicatively. Add a test `evaluator_multiplies_iteration_budget_through_call` to pin the contract. This is explicitly plan-scoped to Phase 2 invariant 8 full form, so the finding is advisory for G7's design."
+    },
+    {
+      "id": "g6-cag-6",
+      "severity": "minor",
+      "location": "crates/benten-eval/src/lib.rs:493-508 (Subgraph::load_verified)",
+      "claim": "`load_verified` verifies the hash but returns an empty Subgraph (`Subgraph::new(\"loaded\")`) rather than actually decoding the bytes.",
+      "detail": "The comment notes this is 'Phase-1: byte encoding is opaque to the loader beyond hash verification — re-decoding into a full Subgraph is a Phase-2 deliverable (needs stable DAG-CBOR schema for Subgraph itself). Returning an empty subgraph preserves the test contract.' This is fine for the hash-mismatch test, but means the only path from stored bytes back to an executable Subgraph today is via the original in-memory Subgraph that was validated — there's no round-trip through storage. Invariant 13 (immutability after registration) and invariant 10 (content-addressed hash) together imply that the loader must be able to reconstruct the subgraph from its canonical bytes and return the same structure. Returning an empty Subgraph masks whatever drift may exist between the canonical bytes and the in-memory representation.",
+      "suggested_fix": "Nail down the CanonNode/CanonEdge decoder in Phase 2 (next to Phase-2 invariants 11/13/14). Until then, document in the module that storage round-trip is not supported and callers should keep the in-memory Subgraph live."
+    },
+    {
+      "id": "g6-cag-7",
+      "severity": "minor",
+      "location": "crates/benten-eval/src/lib.rs:136 (RegistrationError)",
+      "claim": "G6-C self-flagged the ~360-byte RegistrationError triggering clippy::result_large_err; the cost/benefit of boxing is G7's call but deserves explicit disposition.",
+      "detail": "The 19 Option fields (depth_actual/max, longest_path, cycle_path, fanout_{actual,max,node_id}, nodes_{actual,max}, edges_{actual,max}, iterate_nest_*, violated_invariants, expected_cid/actual_cid) each carry useful diagnostic context — the DX layer uses them to render 'your handler has N nodes, max is M' style errors. The size is *justified* by the context breadth. Boxing the Err variant (Box<RegistrationError>) in benten-engine's wrapper Result type would resolve the lint without losing any information, at the cost of one heap allocation per registration failure (rare). The rejected alternatives would be splitting into per-invariant variant-specific error types (more ceremony, more test churn) or dropping some of the accessors (regression against R4 triage m10).",
+      "suggested_fix": "G7's benten-engine wrapper should use `Result<T, Box<RegistrationError>>` at the Engine::register_subgraph boundary. Leave the benten-eval crate's inner shape unchanged; the boxing is purely a caller-side concern. No change needed in G6."
+    }
+  ],
+  "notes": "G6 delivers the code-as-graph contract cleanly for Phase 1 scope: the 8 intended invariants are all enforced at registration, subgraphs are DAG-validated before acceptance, CIDs are structurally order-independent, and the evaluator is genuinely iterative. No handler is storing source code in a property — handlers ARE subgraphs. Phase-2 primitives (WAIT/STREAM/SUBSCRIBE/SANDBOX) correctly accept at registration and reject at call time (tests/phase_two_primitives_structural.rs green), so stored subgraphs will survive Phase-1→2 upgrades without re-registration. The 7 findings above are all minors or scope-flags for G7/Phase-2 — none block acceptance. The most notable is g6-cag-1 (run-time budget overrun conflated with registration-time nest-depth); easy to fix now with a dedicated variant. Verdict: accept-with-minors. Severity count: critical=0, major=1, minor=6."
+}

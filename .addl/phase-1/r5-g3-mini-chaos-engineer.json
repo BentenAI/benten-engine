@@ -1,0 +1,167 @@
+{
+  "agent": "chaos-engineer",
+  "stage": "R5-G3-mini-review",
+  "verdict": "revise",
+  "summary": "Core txn atomicity and panic-safety are well-constructed: TxGuard RAII, redb's drop-aborts-on-panic, post-commit subscriber fan-out, nested rejection before redb lock acquisition. The rollback path holds. However: (1) two critical system-zone bypasses exist on the non-context write paths, (2) the change-event stream has silent-drop failure modes with no observability, (3) Delete events carry empty labels (breaks label-filtered IVM subscribers), (4) Engine::transaction's RefCell orchestration is not panic-safe, and (5) several high-value chaos scenarios lack explicit tests (tx_id non-monotonic across restart, register-during-fan-out ordering, reader-sees-pre-commit during long txn). Recommend G3 re-spin to close the two criticals + one major + land explicit tests for the gaps. The test suite as-is asserts existence-of-rollback but does NOT prove no-partial-state in all the ways it matters.",
+  "findings": [
+    {
+      "id": "g3-ce-1",
+      "severity": "critical",
+      "location": "crates/benten-graph/src/redb_backend.rs:381-409",
+      "claim": "RedbBackend::put_node (the inherent/direct call, NOT put_node_with_context) bypasses the system-zone prefix check entirely. A caller that invokes backend.put_node(&forged_system_node) writes a system:CapabilityGrant with no rejection.",
+      "detail": "The system-zone stopgap (R1 SC1) is enforced only in put_node_with_context and inside Transaction::put_node. The inherent RedbBackend::put_node has no guard. Both the NodeStore blanket delegate (line 949-951) and direct call-sites hit this unguarded path. The napi binding layer (G8) and any Phase-2 consumer that calls NodeStore::put_node via trait dispatch bypasses SC1 silently. The existing system_zone.rs test only exercises put_node_with_context, so this gap has zero test coverage. A determined attacker or a careless binding author forges a system:CapabilityGrant through the plain put_node path and no defense fires.",
+      "suggested_fix": "Make the inherent put_node fail-closed: either accept a WriteContext argument (breaking change to the direct API, acceptable at Phase 1), or route every put_node through a mandatory system-zone check with an internal privileged variant for engine-API paths. Add a test: backend.put_node(&forged_system_node) must error with SystemZoneWrite."
+    },
+    {
+      "id": "g3-ce-2",
+      "severity": "critical",
+      "location": "crates/benten-graph/src/transaction.rs:236-254 and redb_backend.rs:508-519",
+      "claim": "Transaction::put_edge and RedbBackend::put_edge have no system-zone label check at all. An Edge whose label begins with 'system:' commits unchallenged from unprivileged contexts.",
+      "detail": "put_node (both inherent and transactional) checks the label prefix for 'system:'. put_edge does neither. The ERROR-CATALOG names E_SYSTEM_ZONE_WRITE as a Node-label-level defense, but the plan and R1 SC1 name 'system-zone' as a prefix-namespace reservation — Edges living in the same label namespace are equally in-scope. A user-authored subgraph can write an edge labeled 'system:Grant' connecting an attacker's principal to a privileged capability, and the stopgap does nothing.",
+      "suggested_fix": "Apply the same prefix check to Transaction::put_edge and inherent put_edge. Add a regression test that asserts put_edge with a system-labeled Edge fails with SystemZoneWrite under an unprivileged context."
+    },
+    {
+      "id": "g3-ce-3",
+      "severity": "major",
+      "location": "crates/benten-engine/src/lib.rs:494-569",
+      "claim": "Engine::transaction orchestrates the closure via two RefCells (ops_cell, user_result). If the closure panics mid-way while a borrow is live, OR if CapabilityPolicy::check_write panics, the RefCell is poisoned and any subsequent borrow_mut() panics with 'already borrowed'. The outer backend.transaction does not catch panics at this layer.",
+      "detail": "The panic-path goes: user closure panics -> unwinds through the inner backend.transaction closure -> the TxGuard Drop runs cleanly (good) -> redb WriteTransaction drops without commit (good) -> BUT the RefCells on the outer stack are in whatever state they were in when the panic fired. If user_result.borrow_mut() was held when check_write panicked, the RefCell is poisoned for this and all future calls on this stack. Because RefCell is single-threaded the next borrow_mut in the `user_result.into_inner()` or the error-path `*user_result.borrow_mut() = ...` will itself panic, masking the original panic reason. Tests do not cover 'policy panics at commit'.",
+      "suggested_fix": "Either (a) hoist ops_cell/user_result out of the Engine::transaction body and hand them to the inner closure via move semantics (no RefCell needed if the closure is FnOnce and the outer consumer runs after closure return), or (b) wrap the inner closure body in catch_unwind and normalize to EngineError. Add tests for both 'closure panics' and 'policy check_write panics' scenarios at the engine layer."
+    },
+    {
+      "id": "g3-ce-4",
+      "severity": "major",
+      "location": "crates/benten-graph/src/transaction.rs:100-109",
+      "claim": "ChangeEvent for DeleteNode / DeleteEdge carries an empty-string label. Label-filtered subscribers (IVM views, CDC consumers) receive NO delete notifications.",
+      "detail": "PendingOp::DeleteNode { cid } / DeleteEdge { cid } do not retain the Node/Edge label. to_change_event builds ChangeEvent { label: String::new(), ... } for deletes. A subscriber registered to receive events matching label == 'Post' will miss every Post deletion. G5 IVM views that rebuild-by-label from the change stream will drift: the create event arrives, but the delete event is invisible to the filter and the view retains a phantom entry. This is not a hypothetical — it is the exact contract the five hand-written IVM views in G5 will consume.",
+      "suggested_fix": "Capture the label at delete-time inside put_edge/put_node deletion paths: read the existing Node/Edge (already happens for index cleanup, lines 272-283 and 321-332), and carry its primary label into PendingOp::DeleteNode/DeleteEdge. When the label is unavailable (node absent — idempotent delete miss), emit NO event at all rather than an empty-labeled one. Add a subscriber test: put then delete a labeled node, assert the subscriber observes both events with correct labels."
+    },
+    {
+      "id": "g3-ce-5",
+      "severity": "major",
+      "location": "crates/benten-graph/src/transaction.rs:374-387",
+      "claim": "Subscriber panic at fan-out time is caught and silently discarded — no visibility, no dead-letter, no observable signal. A permanently-broken subscriber drifts forever with no way for operators to detect it.",
+      "detail": "fan_out catches panics from on_change to avoid poisoning the commit thread. That is correct. But the doc-comment promises 'Phase 2 revisits when the tracing dep lands' — meanwhile Phase 1 has zero observability. If an IVM view panics on every event (stuck on the first delete-with-empty-label event, see g3-ce-4), the graph keeps committing writes, the view drifts unboundedly, and no alert fires. The 'catch and continue' policy is chaos-acceptable only if there is EITHER a counter EXPOSED via subscriber_count/dead-letter-count OR a persistent log. Today neither exists.",
+      "suggested_fix": "At minimum, track a dead-letter counter per subscriber (atomic AtomicU64 alongside each Arc<dyn ChangeSubscriber>) and expose it via a new RedbBackend::subscriber_dead_letter_counts() accessor for monitoring. Alternatively: the ChangeSubscriber trait grows an on_error() callback the fan-out calls from within catch_unwind's Err arm. Phase 2 can replace with tracing; Phase 1 needs at least a counter. Add a test: subscriber that panics on every event does NOT prevent other subscribers from running, AND the dead-letter count increments."
+    },
+    {
+      "id": "g3-ce-6",
+      "severity": "major",
+      "location": "crates/benten-graph/src/redb_backend.rs:795-811",
+      "claim": "transaction_with_deny_on_commit is a test-only hook that ALWAYS denies — it never consults a real policy. The test failure_injection_rollback.rs::tx_commit_cap_failure_surfaces_partial_trace_with_aborted_step uses it, but this tests the mocked rejection, not the production deny path.",
+      "detail": "The hook runs the closure, drops the txn, and unconditionally returns TxAborted{reason: 'capability denied at commit (test hook)'}. It is a 'green' test that verifies the rollback-on-deny shape — but the REAL commit-denial path (Engine::transaction -> CapabilityPolicy::check_write at commit -> backend abort) is a different call chain in benten-engine::lib.rs:494-569 with the RefCell orchestration above. No existing test exercises the production deny-at-commit path end-to-end (closure completes, policy denies, writes rolled back, Engine::transaction returns EngineError::Cap, no partial state visible). The two paths could diverge without any test failing.",
+      "suggested_fix": "Add an end-to-end test in benten-engine (not benten-graph) that builds an Engine with a denying CapabilityPolicy, runs engine.transaction(|tx| { tx.put_node(...); Ok(()) }), asserts EngineError::Cap, AND asserts no writes visible after return. This closes the g3-A contract as advertised in the transaction() docstring (line 480-493)."
+    },
+    {
+      "id": "g3-ce-7",
+      "severity": "major",
+      "location": "crates/benten-graph/src/redb_backend.rs:749 and transaction.rs:113-139",
+      "claim": "The TxGuard in-transaction flag is per-RedbBackend (per Arc), not per-underlying-redb-file. Two distinct Arc<RedbBackend> instances opened on the same file don't coordinate their tx_flag — concurrent .transaction() calls through the two handles acquire redb's single-writer lock one after the other (blocking, not deadlocking) but DO NOT surface as NestedTransactionNotSupported.",
+      "detail": "The contract says 'nested rejection is fast, no redb lock touched.' That is true for same-Arc re-entry. Cross-Arc on same file: the first handle acquires the write-txn, the second handle's backend.transaction() acquires its OWN tx_flag (false → true, fine), then calls self.db.begin_write() which blocks on redb's lock. Blocking (not deadlocking) until the first handle commits. Correctness-wise not broken (eventually serializes), but the behavior is surprising and the typed NestedTransactionNotSupported guarantee is restricted to same-Arc. The docstring on RedbBackend::transaction (line 720-738) does not call this out.",
+      "suggested_fix": "Either (a) document this explicitly — 'nested-rejection applies to same-Arc re-entry; cross-handle calls on the same file serialize via redb's write lock', or (b) harden by keying tx_flag on the canonical DB path (a process-wide static<PathBuf, Arc<Mutex<bool>>>). Option (a) is the minimum. Add a test: two Arc<RedbBackend> open on the same path, both call .transaction() from different threads — both must either complete or one must deterministically get NestedTransactionNotSupported."
+    },
+    {
+      "id": "g3-ce-8",
+      "severity": "major",
+      "location": "crates/benten-graph/src/redb_backend.rs:158-163 (next_tx_id)",
+      "claim": "tx_id starts at AtomicU64::new(1) on every backend open. A subscriber that persists 'last_seen_tx_id' and compares across process restarts will see tx_id=1 arrive after having previously seen tx_id=500, either dropping 'already-seen' events (gap) or rejecting legitimate new events.",
+      "detail": "ChangeEvent.tx_id is documented as 'monotonically increasing' — true within one process lifetime, false across restarts. The IVM views G5 will build cannot safely use tx_id for durability-gated replay without either (a) persisting tx_id's high-water-mark into the db on commit or (b) using CID as the event identity. Phase 1 has no IVM persistence, so the bug is latent — but G5 will land soon and the tx_id contract will mislead the implementer.",
+      "suggested_fix": "Either (a) persist next_tx_id into a dedicated redb table, load on open, or (b) document that tx_id is process-lifetime-only and IVM views must rebuild from scratch on restart. Add a test that demonstrates behavior across a drop-and-reopen cycle to pin the contract."
+    },
+    {
+      "id": "g3-ce-9",
+      "severity": "major",
+      "location": "crates/benten-graph/src/transaction.rs + store.rs",
+      "claim": "No test explicitly verifies MVCC snapshot isolation during an active transaction. The claim 'a reader observing mid-txn sees pre-commit state, not partial writes' is asserted by the soak test for independent put_nodes but NOT for within-transaction-closure midpoint reads.",
+      "detail": "Scenario: thread A enters backend.transaction(|tx| { tx.put_node(a); /* sleep */ tx.put_node(b); Ok(()) }). During the sleep, thread B calls backend.get_node(&a_cid). Expected: B sees None (pre-commit). Observed: unclear — the concurrent_reader_writer_soak test pounds independent put_node calls but never pauses a transaction and reads through another handle. The correctness is implied by redb's MVCC but not proven by a test. If a future refactor accidentally has get() open a write-txn or touch the committing-txn's buffer, this bug would land silently.",
+      "suggested_fix": "Add a targeted test: spawn thread A that enters a transaction, writes one node, blocks on a channel; spawn thread B that reads the just-written CID and asserts None; release thread A; after the transaction commits, assert thread C reading the same CID gets Some. This pins the MVCC contract at the test-suite level."
+    },
+    {
+      "id": "g3-ce-10",
+      "severity": "major",
+      "location": "crates/benten-graph/src/redb_backend.rs:829-836",
+      "claim": "register_subscriber is not documented as safe-to-call during a pending transaction. A subscriber registered between the closure's Ok return and the fan_out call WOULD observe the just-committed batch as its first-ever event, which may surprise implementors expecting 'only events from now onward'.",
+      "detail": "The sequence inside RedbBackend::transaction is: commit -> tx_id = fetch_add -> clone subscribers list -> fan_out. If register_subscriber is called between 'commit' and 'clone subscribers list' from another thread, the new subscriber receives the just-committed event. If called between 'clone' and 'fan_out', it does NOT. Either order is defensible; neither is documented. The deeper chaos concern: a race between register_subscriber and transaction() gives non-deterministic first-event-observed-by-new-subscriber. An IVM view rebuild that registers itself and begins by reading a snapshot of graph state would double-apply any events in the race window.",
+      "suggested_fix": "Either (a) document the exact ordering guarantee (e.g., 'subscribers registered strictly before the commit's fetch_add observe the event; subscribers registered after do not'), or (b) enforce a cleaner contract by holding the subscribers lock across commit+fan-out (introduces lock-in-commit-thread overhead). For G5 correctness: recommend (a) plus a test that asserts the documented order. IVM views should snapshot-read the graph AFTER register_subscriber to avoid the race."
+    },
+    {
+      "id": "g3-ce-11",
+      "severity": "major",
+      "location": "crates/benten-graph/tests/failure_injection_rollback.rs",
+      "claim": "The failure-injection test file covers three cases — closure-Err, closure-panic, deny-at-commit — but does not cover (a) subscriber-panic during fan-out, (b) commit-time redb I/O failure (disk full / permission denied), (c) policy-panic during Engine::transaction, (d) mid-transaction concurrent reader race, (e) put_edge system-zone bypass. The 'failure injection' label is aspirational given the gap.",
+      "detail": "For a G3 commit that introduces a named transaction primitive + change stream, the failure-injection coverage should target every externally-injectable fault domain. Current coverage: closure returns Err (done), closure panics (done), simulated deny-at-commit (done — via mock hook). Missing: real redb I/O failure (hardest; requires filesystem chaos or a mock backend), subscriber panics (tested in benten-engine::change but not at the graph-layer fan-out), concurrent reader during txn (g3-ce-9), edge-system-zone attempt (g3-ce-2).",
+      "suggested_fix": "Extend failure_injection_rollback.rs with: (1) subscriber_panic_does_not_prevent_commit_or_other_subscribers — proves 'catch and continue' holds under the graph-layer fan_out path, not just the engine-layer publish path; (2) Add a helper for simulated commit-time I/O failure (e.g., custom Drop-err redb wrapper, or mock). If (2) is too expensive at Phase 1, document the gap in the file header and track for R4b."
+    },
+    {
+      "id": "g3-ce-12",
+      "severity": "minor",
+      "location": "crates/benten-graph/src/transaction.rs:349-359",
+      "claim": "Transaction::transaction (the inner nested-rejection method) returns NestedTransactionNotSupported but discards the closure without calling it. A closure with side effects (e.g., 'reserve a CID via backend.put_node from an outer-scope handle') would not observe those effects — correct, but could be surprising.",
+      "detail": "Not a chaos hazard per se but a documentation gap: the nested rejection is eager, not lazy. A future maintainer might refactor to 'run closure, THEN reject' (silly but possible).",
+      "suggested_fix": "Add a single-line test that the inner closure's side effect (e.g., a counter increment) does NOT fire when nested transaction is rejected. Documents the eager-rejection semantics."
+    },
+    {
+      "id": "g3-ce-13",
+      "severity": "minor",
+      "location": "crates/benten-graph/src/transaction.rs:187-229 (put_node within txn)",
+      "claim": "No test verifies 'writes within a txn are visible to subsequent reads within the same txn'. The code comment (lines 9-11) promises this semantic but there is no Transaction::get_node — reads within a txn must go through the outer backend, which sees the pre-commit snapshot.",
+      "detail": "Phase 1 may not need intra-txn reads, but the docstring's promise of 'future G6 snapshot-reads within txn use this' implies the plumbing is there. Currently there is no way for the closure to read what it just wrote. This is a semantic gap that will trip up G6 implementors if not surfaced now.",
+      "suggested_fix": "Either (a) add Transaction::get_node that reads through self.inner's WriteTransaction (redb supports this — readable-table from inside the txn sees its own writes), with a test that put-then-get within one txn returns the just-written Node, or (b) remove the aspirational sentence from the module docstring until G6 lands it. Current behavior: reads-inside-txn-via-outer-backend see pre-commit — a silent gotcha."
+    },
+    {
+      "id": "g3-ce-14",
+      "severity": "minor",
+      "location": "crates/benten-graph/benches/multi_mb_roundtrip.rs:68-103",
+      "claim": "100MB bench variant allocates ~300MB transient heap (encode + decode + redb pages) with no low-memory guard. On CI runners with <2GB RAM the bench OOM-kills the process with no graceful degradation.",
+      "detail": "The module docstring warns about the footprint but does not act on it. A `skip if available_memory < 2GB` check, or at minimum a cargo feature gate (bench-100mb), would prevent surprise CI failures. This is informational-bench territory — not a correctness gate — so OOM on a low-memory runner is 'acceptable' in the plan sense, but the failure mode is opaque (process killed, no message).",
+      "suggested_fix": "Gate the 100MB variant behind an env var (e.g., BENTEN_BENCH_LARGE=1) or a feature flag. Default to [1MB, 10MB] only. The trend signal across releases still captures regression; the 100MB variant opts in locally."
+    },
+    {
+      "id": "g3-ce-15",
+      "severity": "minor",
+      "location": "crates/benten-graph/src/redb_backend.rs:222-249 (open_existing race)",
+      "claim": "path.exists() TOCTOU window between the existence check and Database::open. If the file is removed between these two calls, the user sees GraphError::Redb (opaque) rather than BackendNotFound. The code comment acknowledges 'acceptable for single-user local stores under redb's exclusive lock', but there is no test proving the window is narrow in practice.",
+      "detail": "Chaos scenario: user opens existing DB while antivirus/backup scanner moves the file. Existing -> open race fires opaque 'redb: ...' error. Phase 1 local use is probably fine; multi-process or multi-tenant later surfaces this. No test covers it.",
+      "suggested_fix": "Document the explicit behavior in the error message: when Database::open fails with ENOENT, remap to BackendNotFound even after path.exists() passed. Add a regression test that synthesizes the race (rename the file between existence check and open — not trivial but doable via a wrapping FS mock)."
+    },
+    {
+      "id": "g3-ce-16",
+      "severity": "minor",
+      "location": "crates/benten-graph/src/transaction.rs:100-109",
+      "claim": "PendingOp::to_change_event emits ChangeKind::Created for every put. The comment says 'Phase-1 content-addressed invariant — every logical update is a new CID, hence always Created'. True for Nodes/Edges. False for the future anchor-CURRENT-pointer path.",
+      "detail": "Phase 2 lands anchor's CURRENT pointer which IS an update-in-place of a non-CID-keyed identity. If a G7 implementer reuses PendingOp::PutNode for the anchor-update path, the event stream will say 'Created' when an IVM view observes 'Updated'. ChangeKind::Updated exists in the enum but no write path emits it. Land-mine for G7.",
+      "suggested_fix": "Either (a) rename ChangeKind::Created to ChangeKind::Put to match the content-addressed reality and drop Updated until it's needed, or (b) add a PendingOp::UpdateAnchor variant now (empty/stub) so G7 has an obvious hook. Alternatively, add a module-level doc-note on ChangeKind that Updated is reserved for Phase 2 and MUST NOT be collapsed into Created."
+    },
+    {
+      "id": "g3-ce-17",
+      "severity": "minor",
+      "location": "crates/benten-graph/src/redb_backend.rs:755-763 (fan-out list snapshot)",
+      "claim": "Per-commit subscribers.lock() runs even when the subscribers Vec is empty — 16K lock-acquires/sec at 1K writes/sec × 16 writers. Uncontended mutex is cheap but not free.",
+      "detail": "Not a correctness issue. A micro-optimization chaos-concern: if G5 IVM adds 5-10 subscribers and the bench shows a cliff, the lock contention is a credible culprit. Currently the lock is held briefly (just to clone()) so contention should be bounded. Worth a micro-bench as G5 lands.",
+      "suggested_fix": "No fix required for G3 acceptance. Flag for G5: add a variant of the concurrent_writers bench that registers N subscribers and measures throughput delta. If the curve degrades, switch to RwLock or arc_swap."
+    },
+    {
+      "id": "g3-ce-18",
+      "severity": "minor",
+      "location": "crates/benten-graph/src/transaction.rs:382 (AssertUnwindSafe)",
+      "claim": "AssertUnwindSafe wraps a call into user-supplied ChangeSubscriber::on_change. If the subscriber holds internally-mutable state that becomes logically-inconsistent when on_change panics, the 'assert' is a promise we cannot audit. Chaos-acceptable but undocumented.",
+      "detail": "Rust's UnwindSafe is opt-in — AssertUnwindSafe tells the compiler 'trust me'. For unknown third-party subscribers we can't assert this honestly. The right posture is 'catch panics, discard the event, count the panic, continue'. We do catch; we don't count (g3-ce-5); we don't warn subscribers about the safety expectation.",
+      "suggested_fix": "Add a doc-note to ChangeSubscriber::on_change: 'Implementors MUST ensure a panic in on_change leaves the subscriber's state either unchanged or consistent. The engine catches panics but does not re-invoke, so the subscriber will miss this event.' Combined with g3-ce-5's dead-letter counter, this closes the observability gap."
+    }
+  ],
+  "counts_by_severity": {
+    "critical": 2,
+    "major": 9,
+    "minor": 7
+  },
+  "untested_scenarios_most_dangerous": [
+    "direct put_node path writes system-labeled Node (g3-ce-1) — no test, critical bypass",
+    "put_edge with system-labeled Edge (g3-ce-2) — no test, critical bypass",
+    "Engine::transaction where policy.check_write panics (g3-ce-3) — RefCell poison risk",
+    "subscriber-panics-every-event produces no observable signal (g3-ce-5) — silent IVM drift",
+    "Delete event with preserved label (g3-ce-4) — label-filtered subscribers miss deletes",
+    "mid-transaction reader through separate Arc sees pre-commit state (g3-ce-9) — MVCC assumed, not proven",
+    "tx_id monotonicity across process-restart (g3-ce-8) — latent G5 persistence bug"
+  ],
+  "notes": "G3 atomicity primitive is sound in the rollback / panic-unwind / nested-rejection axes — the TxGuard + redb-drop-aborts dance is correct and the test suite proves it. The gaps are in coverage-breadth (system-zone applies only to one of the four write paths; Edge labels bypass entirely; deletes drop their label; subscribers that panic vanish into the void without a counter) rather than in the commit primitive itself. Two criticals need code changes before G3 closes: (g3-ce-1) inherent put_node must enforce system-zone, (g3-ce-2) put_edge must enforce system-zone. Engine::transaction's RefCell panic-safety (g3-ce-3) should also land pre-G5 since G5 will register real subscribers. The remaining majors can be accepted with explicit docs + follow-up tests. Recommend: revise G3 for the two criticals + g3-ce-3 + g3-ce-4 (label-on-delete is a G5 blocker), then accept-with-minors on the rest."
+}
