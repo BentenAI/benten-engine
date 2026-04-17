@@ -11,10 +11,21 @@ description = "Operation primitives and evaluator for the Benten graph engine (P
 [lints]
 workspace = true
 
+[features]
+# `diag` gates `subgraph.to_mermaid()` + `engine.trace()`. Default off in
+# `benten-eval` (keeps the thin-engine slim-build viable). `benten-engine`
+# enables it via its own default feature list so every real user gets
+# diagnostics; minimal embedders can opt out.
+default = []
+diag = []
+
 [dependencies]
 benten-core = { path = "../benten-core" }
 benten-graph = { path = "../benten-graph" }
 benten-caps = { path = "../benten-caps" }
+blake3 = { workspace = true }
+serde = { workspace = true }
+serde_ipld_dagcbor = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
