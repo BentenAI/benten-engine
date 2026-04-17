@@ -243,6 +243,14 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** Napi binding (before any Rust allocation)
 - **Phase:** 1
 
+### E_SERIALIZE
+
+- **Message:** "DAG-CBOR serialization failed: {detail}"
+- **Context:** `{ detail: string }`
+- **Fix:** The hash path's DAG-CBOR encoder refused the value. In Phase 1 this is effectively unreachable for well-typed input (all `Value` variants encode cleanly); the catalog entry exists so rare edge cases (e.g., encoder integer-overflow) surface a stable, non-empty code rather than an opaque "unknown" placeholder. Report as a bug.
+- **Thrown at:** `Node::cid` / `Edge::cid` (pre-hash canonicalization)
+- **Phase:** 1
+
 ### E_SYNC_HASH_MISMATCH
 
 - **Message:** "Received content hash {received} does not match expected {expected}"

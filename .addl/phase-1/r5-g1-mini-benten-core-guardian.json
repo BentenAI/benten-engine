@@ -1,0 +1,81 @@
+{
+  "agent": "benten-core-guardian",
+  "stage": "R5-G1-mini-review",
+  "verdict": "revise",
+  "summary": {
+    "content_hash_invariants": "pass — Node::cid excludes anchor_id, Edge::cid covers all four fields, Value::to_canonical recurses into List/Map and normalizes -0.0. Canonical fixture CID bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda still stable (node_cid tests green).",
+    "dagcbor_determinism": "pass — hand-written Deserialize correctly dispatches str/bytes/seq/map channels. Float normalization applied pre-encode.",
+    "cidv1_format": "pass — layout unchanged, Ord/PartialOrd on fixed-layout byte array is semantically safe.",
+    "version_chain_semantics": "critical regression in the Cid-head surface — process-global state with no test isolation causes deterministic test failure when version_branched binary runs standalone.",
+    "no_std_discipline": "pass — #![no_std] + forbid(unsafe_code) intact; spin dep configured with no_std-friendly features.",
+    "compromises_honored": "mixed — ErrorCode stays in core (#3 honored); SECURITY-POSTURE.md still absent (#6 test still red, pre-existing but G1-A explicitly punted).",
+    "wasm_check": "cargo check --target wasm32-unknown-unknown -p benten-core PASS"
+  },
+  "findings": [
+    {
+      "id": "g1-cg-1",
+      "severity": "critical",
+      "location": "crates/benten-core/src/version.rs:50, crates/benten-core/tests/version_branched.rs:33-60",
+      "claim": "Process-global `CHAINS` table with no test isolation makes `concurrent_append_creates_branched_chain` fail deterministically when the test binary runs in isolation.",
+      "detail": "Running `cargo test -p benten-core --test version_branched` reproduces failure 5/5 runs: `first append against seen head must succeed: Branched { seen: ..., attempted: ... }`. Root cause: all three tests in the binary construct `Anchor::new(versioned_node(\"initial\", 0).cid())` with the SAME root CID. The tests run in a single process, so the `static CHAINS` `BTreeMap<Cid, Vec<(Cid, Cid)>>` accumulates entries. When `append_after_current_head_succeeds` runs first and records `(v0_cid → v1_cid)` under key v0_cid, then `concurrent_append_creates_branched_chain` runs and attempts `append(v0_cid → v1_a_cid)`, the fork-detection loop finds `(v0_cid, v1_cid)` already present and returns `Branched` on what should be a first-append. The G1-B commit message claims `version_branched (3)` is green, but this is only accidentally true when `cargo test -p benten-core` runs all binaries and earlier tests happen not to collide. This is exactly the 'leak between tests' anchor-identity confusion the audit checklist asked about. cov-f3 is supposed to be 'acceptable per R4 triage' — R4 triage accepted two surfaces coexisting, not broken test isolation.",
+      "suggested_fix": "Three options ordered by preference: (a) Give `Anchor::new(head)` an opaque nonce suffix so two anchors rooted at the same head CID get distinct chain-table keys (matches the u64-id surface's monotonic counter design). (b) Add a `#[cfg(test)] fn reset_chain_table()` helper and call it at the top of each version_branched test. (c) Add a `clear()` call inside test setup with a `std::sync::Once` gate per unique test name. Option (a) is the only one that fixes the real-world hazard — two independent anchors rooted at the same content hash genuinely exist (e.g., two forks of the same Node) and today they silently share chain state."
+    },
+    {
+      "id": "g1-cg-2",
+      "severity": "major",
+      "location": "crates/benten-core/src/value.rs:42-45",
+      "claim": "Docstring claims `#[serde(untagged)]` is 'safe here because DAG-CBOR's major-type tagging makes each variant's wire encoding unambiguous' — this is contradicted by lines 70-75 which explain the entire reason for the hand-written Deserialize impl is that `#[serde(untagged)]` was NOT safe (it collapsed text/byte and seq/byte channels).",
+      "detail": "The file still carries `#[serde(untagged)]` on the enum for the Serialize side, and that IS fine for Serialize (each variant's serializer method is unambiguous). But the guardian-lens concern is that a reader encountering line 42's doc comment will be actively misled about why the channel separation works. The fix is to update the Serialize-side doc to say 'untagged is safe for Serialize because each variant selects a distinct CBOR major type at encode time; Deserialize is hand-written below because the serde data model collapses text/byte and seq/byte channels that CBOR distinguishes.'",
+      "suggested_fix": "Replace the paragraph at lines 42-45 with one that clearly scopes the 'safe' claim to Serialize only and forward-references the hand-written Deserialize impl. Stops future readers from assuming the derived codec is symmetric."
+    },
+    {
+      "id": "g1-cg-3",
+      "severity": "major",
+      "location": "crates/benten-core/src/version.rs:65-76 (Anchor::new); crates/benten-core/tests/version_branched.rs:38",
+      "claim": "`version::Anchor::new(head)` intentionally shares chain state when two anchors are rooted at the same head CID, but the Cid-head surface leaks no anchor-identity nonce through the table key — this makes two logically independent forks indistinguishable.",
+      "detail": "The docstring at version.rs:68-71 says 'Multiple `Anchor::new` calls with the same `head` share chain state — this is intentional for the test scenario where a second writer would observe the same starting head.' That comment justifies the design for concurrent writers of the SAME chain, but the guardian concern is the opposite scenario: two independent content-addressed forks that happen to share a root CID (e.g., two users start from the same Post v0 then diverge intentionally). Today those forks silently share the CHAINS table entry and one writer's append blocks the other's. This is the same content-addressing leak that Node::anchor_id exists to prevent — but here the surface re-introduces it for version chains. Combined with g1-cg-1, this is why the test binary has isolation problems.",
+      "suggested_fix": "Either (a) make `Anchor::new(head)` take a caller-supplied anchor id (Cid or u64) as a second arg so the chain-table key is `(anchor_id, head)` not just `head`, or (b) add a `TODO(phase-2)` note that this surface cannot distinguish two independent chains sharing a root CID — R5 G7's canonicalization call must pick one. Today the docstring waves the concern away without naming it."
+    },
+    {
+      "id": "g1-cg-4",
+      "severity": "major",
+      "location": "crates/benten-engine/tests/integration/compromises_regression.rs:258, docs/",
+      "claim": "Named compromise #6 test (BLAKE3 128-bit collision resistance documented in `docs/SECURITY-POSTURE.md`) is still red — `docs/SECURITY-POSTURE.md` does not exist.",
+      "detail": "G1-A's report acknowledged this and explicitly punted creating the file. The R4 triage pass-2 verdict (r4-pass2-triage.md) says '6/6 named compromises with regression tests' — but compromise #6 has a test that asserts the doc exists, and the doc is absent. This is NOT a G1 regression — it was red before G1 — but a guardian audit of 'compromises still honored' has to flag it. The fix is a 3-paragraph markdown file stating Phase 1 only relies on BLAKE3 collision resistance (not preimage), with Phase 3 UCAN paths to revisit. The doc was written into the R1 triage compromises list and shouldn't wait for a later group.",
+      "suggested_fix": "Create `docs/SECURITY-POSTURE.md` with a `## BLAKE3 128-bit posture` section that states Phase 1 treats BLAKE3 as having ~128-bit collision resistance (birthday bound on the 256-bit digest), explicitly flagging Phase 3 UCAN capability-by-CID as the path that would require preimage assumptions. The test at compromises_regression.rs:258 already expects phrasing like '128-bit collision resistance'. This unblocks G8's drift detector that will cross-check the catalog against this file."
+    },
+    {
+      "id": "g1-cg-5",
+      "severity": "minor",
+      "location": "crates/benten-core/src/lib.rs:417-422",
+      "claim": "Top-level `ANCHOR_COUNTER` uses `Ordering::Relaxed` and `static U64_CHAINS: spin::Lazy<...>` — thread-safety is fine for Phase 1, but the soundness argument is not documented.",
+      "detail": "`fetch_add(1, Relaxed)` is correct for a monotonic unique-id generator that does not synchronize anything else — the atomic ordering doesn't matter when the only observable property is 'values are eventually distinct.' However, a future reviewer pairing this counter with the spin::Lazy<Mutex> table might assume the Relaxed load happens-before the mutex acquire, which it does NOT. If Phase 1.5 ever replaces the Mutex with a lock-free structure that keys on `Anchor::id`, the weak ordering becomes observable. Add a `// Relaxed: we only need uniqueness, not ordering with CHAINS.` comment.",
+      "suggested_fix": "One-line comment at lib.rs:430 documenting that Relaxed is correct *because* the counter isn't a synchronization point for any other state. Cheap insurance against a subtle future bug."
+    },
+    {
+      "id": "g1-cg-6",
+      "severity": "minor",
+      "location": "crates/benten-core/src/lib.rs:203",
+      "claim": "Adding `Ord, PartialOrd` to `Cid` is semantically defensible (fixed-layout CIDv1 has byte-lex ordering) but is a new public-surface capability that future callers may rely on — document it.",
+      "detail": "The G1-B commit message notes the derive is for the chain-table BTreeMap. The derive will leak to any downstream consumer. Two concerns: (1) a caller may accidentally rely on `Cid` comparison to imply content ordering, which it does NOT — two CIDs where `a < b` says nothing about their underlying Node content. (2) The byte-lex ordering happens to be stable for a fixed CIDv1 layout but would not be if Benten ever added a variable-length multihash variant. Add a rustdoc note to the `Cid` type explaining the ordering is byte-lex over the wire representation and is used internally for BTreeMap keying only.",
+      "suggested_fix": "Add a doc comment on the `Cid` type (lib.rs:197-202) stating: 'Comparison is byte-lex over the wire representation. It is suitable for keying ordered containers; it carries no content-meaningful semantics. Do not use `Cid` ordering to establish causality, version precedence, or content relationships — those are graph-level properties.'"
+    },
+    {
+      "id": "g1-cg-7",
+      "severity": "minor",
+      "location": "crates/benten-core/src/lib.rs:8-12 (module docstring)",
+      "claim": "The crate-level module docstring still describes `Value::Float` as 'intentionally deferred to Phase 1 proper' — but G1-A just implemented Float with NaN/Inf rejection and -0.0 normalization. Doc drift.",
+      "detail": "The paragraph at lib.rs:7-12 says Float 'is intentionally deferred to Phase 1 proper (it needs NaN rejection, shortest-form encoding, and a dedicated proptest before it can enter the hash path)' — G1-A shipped all of that. The doc should now describe Float as active and reference the module-level docs in `value.rs` for the NaN/Inf/-0.0 contract. As-is, a reader skimming lib.rs will think Float is absent.",
+      "suggested_fix": "Replace the spike-era Float paragraph with one sentence: '[`Value`] — the graph value type including `null`, `bool`, `int`, `float` (NaN/±Inf rejected, `-0.0` normalized), `text`, `bytes`, `list`, and `map`. See the `value` module docs for the float canonicalization contract.'"
+    },
+    {
+      "id": "g1-cg-8",
+      "severity": "minor",
+      "location": "crates/benten-core/tests/proptests_value_json_cbor.rs:51-72",
+      "claim": "Test helpers `value_to_json` / `value_from_json` panic on non-scalar variants, which silently narrows the proptest from the module docstring's claim of 'every variant that fits in the shared subset (null, bool, int, text, list, map)' to just scalar variants.",
+      "detail": "The helpers at lines 51-72 panic on List, Map, Bytes, Float. The `any_scalar_value()` strategy at line 21 does not generate those variants, so the proptest will never trip the panic. But the module docstring at line 7-9 promises List and Map coverage. G1-A's minimal stub replacement is reasonable for TDD red-phase → green-phase, but the scope narrowing should be called out. Confirm with G8 orchestrator that List/Map JSON↔Value fidelity lands in a later group so this does not get quietly forgotten.",
+      "suggested_fix": "Either update the module docstring to scope the current proptest to scalars only (with a `TODO(G3?): extend to List/Map/Bytes/Float`), or delete the panic branches so proptest failure gives a proper test error. The current shape can hide a regression if `any_scalar_value` is later widened without widening the helpers."
+    }
+  ],
+  "notes": "Verdict 'revise' is driven by finding g1-cg-1 (a genuinely broken test under a non-exotic invocation) and g1-cg-2 (documentation that actively misleads). g1-cg-3 and g1-cg-4 are pre-existing compromises the orchestrator should schedule but are not strictly G1 blockers. Canonical fixture CID bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda is stable. Content-hash invariants (anchor_id exclusion, labels+properties-only, Edge None vs empty-map preservation, -0.0 normalization recursion, NaN/Inf rejection pre-encode) all verified. WASM target compiles. benten-core still has no forbidden deps on benten-graph/ivm/caps/eval."
+}

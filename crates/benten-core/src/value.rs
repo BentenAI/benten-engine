@@ -19,9 +19,15 @@
 //!   not distinguish the two (they compare equal, and the shortest-form encoder
 //!   emits the same bytes), so the CID is stable across the sign of zero.
 //!
-//! Validation is performed up-front in
-//! [`Value::validate_no_nonfinite`] before the value is handed to the CBOR
-//! encoder, which keeps the rejection path out of `serde`'s error channel.
+//! Validation + normalization is performed up-front in
+//! [`Value::to_canonical`] before the value is handed to the CBOR encoder,
+//! which keeps the rejection path out of `serde`'s error channel.
+//!
+//! ## Map keys
+//!
+//! `Value::Map` accepts only text-string keys (DAG-CBOR's restriction). A
+//! CBOR map with integer or byte-string keys produces a serde
+//! deserialization error at decode time, not a [`CoreError`].
 
 use alloc::collections::BTreeMap;
 use alloc::string::String;
@@ -39,10 +45,22 @@ use crate::CoreError;
 /// the on-wire canonical form is separately enforced by `serde_ipld_dagcbor`
 /// at encode time (DAG-CBOR length-first key sort).
 ///
-/// `#[serde(untagged)]` is safe here because DAG-CBOR's major-type tagging
-/// makes each variant's wire encoding unambiguous: a boolean cannot
-/// deserialize as an integer because CBOR major type 7 (simple) and major
-/// types 0/1 (unsigned/negative integer) are distinct.
+/// ## Codec split: Serialize is derived, Deserialize is hand-written.
+///
+/// **Serialization** uses `#[serde(untagged)]` and is safe because each
+/// variant's encoder selects a distinct CBOR major type at encode time — a
+/// `Value::Bool` writes major type 7 (simple), a `Value::Int` writes major
+/// type 0/1, a `Value::Bytes` writes major type 2, etc. There is no
+/// encode-time ambiguity.
+///
+/// **Deserialization** is hand-written (see the [`Visitor`] impl below)
+/// because `#[serde(untagged)]` deserialization routes through serde's
+/// self-describing data model, and that data model collapses channels CBOR
+/// distinguishes: text strings and byte strings both land on
+/// `visit_str` / `visit_bytes` depending on the decoder, and small-integer
+/// arrays can round-trip as byte sequences. The hand-written visitor
+/// dispatches on the actual data-model type the CBOR decoder surfaces,
+/// preserving variant identity.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(untagged)]
 pub enum Value {
@@ -53,7 +71,7 @@ pub enum Value {
     /// CBOR signed integer (-2^63 .. 2^63-1).
     Int(i64),
     /// CBOR 64-bit float. NaN and ±Infinity are rejected at hash time — see
-    /// [`Value::validate_no_nonfinite`] and the module docs.
+    /// [`Value::to_canonical`] and the module docs.
     Float(f64),
     /// CBOR text string (UTF-8).
     Text(String),
@@ -167,48 +185,6 @@ impl Value {
         Value::Text(s.into())
     }
 
-    /// Recursively walk the value tree and reject any non-finite
-    /// [`Value::Float`]. Called from
-    /// [`Node::canonical_bytes`](crate::Node::canonical_bytes) before the
-    /// DAG-CBOR encoder runs, so the error surface is a real
-    /// [`CoreError`] rather than a `serde` error wrapped in a `Serialize`
-    /// variant.
-    ///
-    /// # Errors
-    ///
-    /// - [`CoreError::FloatNan`] — any encountered float is `NaN` (all
-    ///   payloads, including signalling and non-default).
-    /// - [`CoreError::FloatNonFinite`] — any encountered float is `+∞` or
-    ///   `-∞`.
-    pub fn validate_no_nonfinite(&self) -> Result<(), CoreError> {
-        match self {
-            Value::Null | Value::Bool(_) | Value::Int(_) | Value::Text(_) | Value::Bytes(_) => {
-                Ok(())
-            }
-            Value::Float(f) => {
-                if f.is_nan() {
-                    Err(CoreError::FloatNan)
-                } else if !f.is_finite() {
-                    Err(CoreError::FloatNonFinite)
-                } else {
-                    Ok(())
-                }
-            }
-            Value::List(items) => {
-                for item in items {
-                    item.validate_no_nonfinite()?;
-                }
-                Ok(())
-            }
-            Value::Map(entries) => {
-                for v in entries.values() {
-                    v.validate_no_nonfinite()?;
-                }
-                Ok(())
-            }
-        }
-    }
-
     /// Produce a hashing-canonical clone of this value: validates that no
     /// non-finite floats are present, and normalizes `-0.0` to `+0.0` so the
     /// CID is stable across the sign of zero. Used by
@@ -216,8 +192,10 @@ impl Value {
     ///
     /// # Errors
     ///
-    /// Propagates [`CoreError::FloatNan`] / [`CoreError::FloatNonFinite`]
-    /// from [`Value::validate_no_nonfinite`].
+    /// - [`CoreError::FloatNan`] — any encountered float is `NaN` (all
+    ///   payloads, including signalling and non-default).
+    /// - [`CoreError::FloatNonFinite`] — any encountered float is `+∞` or
+    ///   `-∞`.
     pub fn to_canonical(&self) -> Result<Value, CoreError> {
         match self {
             Value::Null => Ok(Value::Null),

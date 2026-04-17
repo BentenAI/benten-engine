@@ -141,6 +141,7 @@ impl ErrorCodeStaticStr for ErrorCode {
                     ErrorCode::TransformSyntax => "E_TRANSFORM_SYNTAX",
                     ErrorCode::InputLimit => "E_INPUT_LIMIT",
                     ErrorCode::NotFound => "E_NOT_FOUND",
+                    ErrorCode::Serialize => "E_SERIALIZE",
                     ErrorCode::Unknown(_) => "E_UNKNOWN",
                 }
             }
