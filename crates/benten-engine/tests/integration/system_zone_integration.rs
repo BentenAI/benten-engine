@@ -88,7 +88,7 @@ fn system_write_does_not_emit_change_event_to_user_views() {
     let actor = engine.create_principal("alice").unwrap();
     let _ = engine.grant_capability(&actor, "store:post:write").unwrap();
     let events = probe.drain();
-    let post_events: Vec<_> = events.iter().filter(|e| e.label == "post").collect();
+    let post_events: Vec<_> = events.iter().filter(|e| e.has_label("post")).collect();
     assert!(
         post_events.is_empty(),
         "system-zone writes do not route to non-system views; saw {}",

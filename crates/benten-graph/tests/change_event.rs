@@ -18,7 +18,7 @@ fn change_event_exposes_cid_label_kind_and_tx_id() {
     let cid = canonical_test_node().cid().unwrap();
     let e = ChangeEvent {
         cid: cid.clone(),
-        label: "Post".to_string(),
+        labels: vec!["Post".to_string()],
         kind: ChangeKind::Created,
         tx_id: 42,
         actor_cid: None,
@@ -26,7 +26,8 @@ fn change_event_exposes_cid_label_kind_and_tx_id() {
         capability_grant_cid: None,
     };
     assert_eq!(e.cid, cid);
-    assert_eq!(e.label, "Post");
+    assert_eq!(e.primary_label(), "Post");
+    assert!(e.has_label("Post"));
     assert_eq!(e.kind, ChangeKind::Created);
     assert_eq!(e.tx_id, 42);
 }
@@ -41,7 +42,7 @@ fn change_event_supports_attribution_fields() {
     let grant = cid.clone();
     let e = ChangeEvent {
         cid: cid.clone(),
-        label: "Post".to_string(),
+        labels: vec!["Post".to_string()],
         kind: ChangeKind::Updated,
         tx_id: 7,
         actor_cid: Some(actor.clone()),

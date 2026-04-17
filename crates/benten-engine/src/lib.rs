@@ -498,9 +498,17 @@ impl Engine {
         // Collect the closure's user-visible result separately from the
         // ops list so we can fire the capability hook against a batch the
         // closure can't see after its scope ends.
-        use std::cell::RefCell;
-        let ops_cell: RefCell<Vec<benten_caps::PendingOp>> = RefCell::new(Vec::new());
-        let user_result: RefCell<Option<Result<R, EngineError>>> = RefCell::new(None);
+        //
+        // Panic-safety (mini-review g3-ce-3): `Mutex` replaces `RefCell`
+        // here so a panic inside the closure or the `CapabilityPolicy`
+        // callback does not leave an orphaned borrow that poisons subsequent
+        // `borrow_mut()` calls. `Mutex::lock()` observes poisoning (the
+        // `PoisonError` arm); we unwrap via `into_inner` so the outer
+        // observer can still recover the slot — the original panic
+        // propagates to the caller unchanged.
+        use std::sync::Mutex;
+        let ops_cell: Mutex<Vec<benten_caps::PendingOp>> = Mutex::new(Vec::new());
+        let user_result: Mutex<Option<Result<R, EngineError>>> = Mutex::new(None);
 
         let policy = self.policy.as_deref();
 
@@ -514,7 +522,7 @@ impl Engine {
                     // Policy check fires at the commit boundary — once,
                     // with the full pending-ops slice.
                     if let Some(p) = policy {
-                        let ops = ops_cell.borrow().clone();
+                        let ops = ops_cell.lock().unwrap_or_else(|e| e.into_inner()).clone();
                         if !ops.is_empty() {
                             let primary_label = ops
                                 .iter()
@@ -534,18 +542,19 @@ impl Engine {
                                 ..Default::default()
                             };
                             if let Err(cap_err) = p.check_write(&ctx) {
-                                *user_result.borrow_mut() = Some(Err(EngineError::Cap(cap_err)));
+                                *user_result.lock().unwrap_or_else(|e| e.into_inner()) =
+                                    Some(Err(EngineError::Cap(cap_err)));
                                 return Err(GraphError::TxAborted {
                                     reason: "capability denied".into(),
                                 });
                             }
                         }
                     }
-                    *user_result.borrow_mut() = Some(Ok(value));
+                    *user_result.lock().unwrap_or_else(|e| e.into_inner()) = Some(Ok(value));
                     Ok(())
                 }
                 Err(e) => {
-                    *user_result.borrow_mut() = Some(Err(e));
+                    *user_result.lock().unwrap_or_else(|e| e.into_inner()) = Some(Err(e));
                     Err(GraphError::TxAborted {
                         reason: "closure error".into(),
                     })
@@ -556,11 +565,21 @@ impl Engine {
         // Prefer the user's saved result (it has the richer EngineError
         // shape). If the backend call failed outside the policy path (e.g.
         // nested-tx rejection), surface the backend error.
-        if let Some(r) = user_result.into_inner() {
+        let saved = user_result.into_inner().unwrap_or_else(|e| e.into_inner());
+        if let Some(r) = saved {
             return r;
         }
         match tx_outcome {
-            Ok(()) => unreachable!("transaction returned Ok without saved result"),
+            Ok(()) => {
+                // Unreachable in normal control flow; debug_assert surfaces
+                // a regression loudly in dev builds, falls through to a
+                // typed error in release. (mini-review g3-cr-10 reservation)
+                debug_assert!(false, "transaction returned Ok without saved result");
+                Err(EngineError::Other {
+                    code: ErrorCode::Unknown(String::from("engine_internal")),
+                    message: "transaction returned Ok without saved result".into(),
+                })
+            }
             Err(GraphError::NestedTransactionNotSupported {}) => {
                 Err(EngineError::NestedTransactionNotSupported)
             }
@@ -907,7 +926,12 @@ pub struct EngineTransaction<'tx, 'coll> {
     /// Every call to `put_node`/`put_edge` also appends a translated
     /// [`benten_caps::PendingOp`] here so the commit path can hand the
     /// capability policy a full view of the batch.
-    ops_collector: &'coll std::cell::RefCell<Vec<benten_caps::PendingOp>>,
+    ///
+    /// Mutex-backed (not `RefCell`): a panic inside the collector would
+    /// otherwise orphan an active borrow and poison every subsequent
+    /// `borrow_mut()`. See `Engine::transaction`'s panic-safety comment
+    /// (mini-review g3-ce-3).
+    ops_collector: &'coll std::sync::Mutex<Vec<benten_caps::PendingOp>>,
 }
 
 /// Object-safe shim over [`benten_graph::Transaction`] that elides the
@@ -942,7 +966,8 @@ impl<'tx, 'coll> EngineTransaction<'tx, 'coll> {
     pub fn put_node(&mut self, node: &Node) -> Result<Cid, EngineError> {
         let cid = self.inner.put_node(node).map_err(EngineError::Graph)?;
         self.ops_collector
-            .borrow_mut()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
             .push(benten_caps::PendingOp::PutNode {
                 cid: cid.clone(),
                 labels: node.labels.clone(),

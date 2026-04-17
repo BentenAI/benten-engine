@@ -24,9 +24,11 @@
 //! - `ScanResult` is shape-opaque. Do **not** name its `IntoIter` type; do
 //!   **not** rely on slice semantics beyond the explicit `.as_slice()`
 //!   accessor. Phase 2 may swap the backing storage to a boxed iterator.
-//! - `ChangeEvent.label: String` carries only the primary label today. A
-//!   migration to `labels: Vec<String>` is on the table for Phase 2 if the
-//!   view surface demands it; consumers should destructure by field name.
+//! - `ChangeEvent.labels: Vec<String>` carries the full label set on Node
+//!   events and a single-element vector on Edge events. Callers that need
+//!   only the primary label should prefer the `primary_label()` accessor
+//!   rather than indexing into the vec directly — the accessor is stable
+//!   across any future changes to how the vec is populated (e.g., ordering).
 //! - `KVBackend::put_batch` is Put-only. Heterogeneous write sets (node put
 //!   + edge delete + index remove in a single commit) belong on the G3
 //!     transaction primitive, not on `put_batch`.

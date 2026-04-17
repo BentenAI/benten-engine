@@ -25,14 +25,20 @@ fn nested_transaction_rejected() {
         .build()
         .unwrap();
 
-    let result: Result<_, _> = engine.transaction(|tx| {
+    // G3 fix-pass (test-authoring correction): `?`-propagate the nested Err
+    // rather than swallowing it into `Ok(nested_result)`. The earlier form
+    // returned Ok(Err(...)) which made the outer engine.transaction observe
+    // an Ok closure-return — the whole point of the test (outer surfaces
+    // E_NESTED_TRANSACTION_NOT_SUPPORTED) was defeated.
+    let result: Result<(), _> = engine.transaction(|tx| {
         let mut p = BTreeMap::new();
         p.insert("n".into(), Value::Int(1));
         tx.create_node(&Node::new(vec!["post".into()], p))?;
 
-        // Attempt to nest.
-        let nested = tx.begin_nested();
-        Ok(nested)
+        // Attempt to nest. The `?` propagates the rejection so the outer
+        // engine.transaction sees the closure return Err.
+        let _nested = tx.begin_nested()?;
+        unreachable!("begin_nested must return Err in Phase 1");
     });
 
     let err = result.expect_err("nested tx must return Err");

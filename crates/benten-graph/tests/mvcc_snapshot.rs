@@ -72,10 +72,13 @@ fn snapshot_reader_sees_point_in_time_state() {
 
 #[test]
 fn delete_then_read_returns_none() {
-    use benten_graph::KVBackend;
+    // G3 fix-pass (test-authoring correction): use the Node-level `delete_node`
+    // so the `n:`-prefixed body AND the label/property indexes are removed
+    // atomically. The earlier raw-key `delete(cid.as_bytes())` bypassed the
+    // prefix and so did not actually remove the stored body.
     let (b, _d) = temp();
     let n = canonical_test_node();
     let cid = b.put_node(&n).unwrap();
-    b.delete(cid.as_bytes()).unwrap();
-    assert_eq!(b.get_node(&cid).unwrap(), None);
+    b.delete_node(&cid).unwrap();
+    assert!(b.get_node(&cid).unwrap().is_none());
 }

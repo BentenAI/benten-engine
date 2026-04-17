@@ -19,7 +19,7 @@ use benten_ivm::{View, ViewQuery, ViewResult};
 fn version_append_event(kind: ChangeKind) -> ChangeEvent {
     ChangeEvent {
         cid: canonical_test_node().cid().unwrap(),
-        label: "NEXT_VERSION".to_string(),
+        labels: vec!["NEXT_VERSION".to_string()],
         kind,
         tx_id: 1,
         actor_cid: None,

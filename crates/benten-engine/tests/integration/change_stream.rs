@@ -41,7 +41,11 @@ fn change_stream_routes_to_matching_view_and_skips_non_matching() {
     let events = probe.drain();
     assert_eq!(events.len(), 3, "one ChangeEvent per commit");
     for e in &events {
-        assert_eq!(e.label, "post");
+        assert!(
+            e.has_label("post"),
+            "event must carry the post label; got labels={:?}",
+            e.labels
+        );
         assert_eq!(e.kind_str(), "Created");
         assert!(e.tx_id > 0, "tx_id must be non-zero");
     }

@@ -37,6 +37,45 @@ use crate::store::{
 use crate::transaction::{TxGuard, fan_out};
 use crate::{GraphError, Transaction, WriteContext};
 
+/// Shared system-zone label-prefix check used by every write entry point on
+/// [`RedbBackend`] — both the `WriteContext`-aware paths and the inherent
+/// `put_node` / `put_edge` that the [`NodeStore`] / [`EdgeStore`] trait
+/// delegates route through. An unprivileged write whose Node has any label
+/// starting with `"system:"` returns `E_SYSTEM_ZONE_WRITE`.
+///
+/// Extracted at the G3 mini-review fix-pass (chaos-engineer g3-ce-1). Before
+/// this helper existed, the inherent `RedbBackend::put_node` bypassed the
+/// guard entirely — a binding caller or trait-dispatching generic code could
+/// forge a `system:CapabilityGrant` via the plain `put_node` path while the
+/// `put_node_with_context` path correctly rejected.
+fn guard_system_zone_node(node: &Node, is_privileged: bool) -> Result<(), GraphError> {
+    if is_privileged {
+        return Ok(());
+    }
+    for label in &node.labels {
+        if label.starts_with("system:") {
+            return Err(GraphError::SystemZoneWrite {
+                label: label.clone(),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Edge counterpart of [`guard_system_zone_node`]. R1 SC1 named only Node
+/// labels explicitly, but edges with `"system:"`-prefixed labels are the
+/// obvious smuggling vector (an edge `system:Grant` from an attacker's
+/// principal to a privileged capability), so the prefix reservation
+/// extends to edge labels as well.
+fn guard_system_zone_edge(edge: &Edge, is_privileged: bool) -> Result<(), GraphError> {
+    if !is_privileged && edge.label.starts_with("system:") {
+        return Err(GraphError::SystemZoneWrite {
+            label: edge.label.clone(),
+        });
+    }
+    Ok(())
+}
+
 /// Primary key/value table storing every `(key, value)` pair. The Node and
 /// Edge stores layer the `n:CID`, `e:CID`, `es:SRC|EDGE`, `et:TGT|EDGE` key
 /// schema on top of this table.
@@ -154,11 +193,25 @@ pub struct RedbBackend {
     /// `RedbBackend::transaction` sees `true` and returns
     /// [`GraphError::NestedTransactionNotSupported`] without ever asking
     /// redb to open a second write txn.
+    ///
+    /// TODO(phase-2): the flag is per-`Arc<RedbBackend>`; two distinct Arc
+    /// handles opened on the same redb file do not coordinate and fall
+    /// through to redb's single-writer lock (which blocks rather than
+    /// deadlocking). Mini-review g3-ce-7 proposes keying the flag on the
+    /// canonical DB path via a process-wide static. Phase 1 treats the
+    /// single-handle invariant as documented.
     tx_flag: Arc<Mutex<bool>>,
     /// Monotonically increasing transaction id stamped onto
     /// [`crate::ChangeEvent::tx_id`]. Starts at 1 so that tests can reserve
     /// 0 as "no event". Atomic because the backend may be shared across
     /// threads behind an `Arc`.
+    ///
+    /// TODO(phase-2): `tx_id` is process-lifetime-only; reopening the
+    /// backend restarts the counter at 1. An IVM persistence layer that
+    /// uses `tx_id` as a durable high-water-mark would see a monotonicity
+    /// violation across restart. Mini-review g3-ce-8 proposes persisting
+    /// the counter into a dedicated redb table; Phase 1 documents the
+    /// limitation (IVM views rebuild from scratch on restart in Phase 1).
     next_tx_id: Arc<AtomicU64>,
 }
 
@@ -379,6 +432,20 @@ impl RedbBackend {
     /// assert!(b.get_by_label("Post").unwrap().contains(&cid));
     /// ```
     pub fn put_node(&self, node: &Node) -> Result<Cid, GraphError> {
+        // Fail-closed on the inherent path: the `NodeStore::put_node` trait
+        // delegate and any direct user/binding call route here, so the
+        // system-zone guard MUST fire before any redb write. Engine-internal
+        // privileged paths go through `put_node_with_context` with a
+        // privileged `WriteContext`.
+        guard_system_zone_node(node, /* is_privileged= */ false)?;
+        self.put_node_unchecked(node)
+    }
+
+    /// Internal helper: the indexed put without the system-zone guard.
+    /// Callers (the guarded `put_node`, the context-aware
+    /// `put_node_with_context`) enforce the guard before calling; this body
+    /// runs the redb write and index maintenance under a single commit.
+    fn put_node_unchecked(&self, node: &Node) -> Result<Cid, GraphError> {
         let cid = node.cid()?;
         let bytes = node.canonical_bytes()?;
         let n_key = node_key(&cid);
@@ -502,10 +569,45 @@ impl RedbBackend {
 
     /// Store an Edge and its source/target indexes. Returns the Edge CID.
     ///
+    /// Fail-closed system-zone guard: an edge whose label begins with
+    /// `"system:"` is rejected on the user path with `E_SYSTEM_ZONE_WRITE`
+    /// (R1 SC1 extension to edges; mini-review g3-ce-2). Engine-internal
+    /// privileged paths go through [`Self::put_edge_with_context`] with a
+    /// privileged `WriteContext`.
+    ///
     /// # Errors
+    /// - [`GraphError::SystemZoneWrite`] on an unprivileged system-zone edge.
     /// - [`GraphError::Core`] if the Edge cannot be DAG-CBOR encoded.
     /// - [`GraphError::Redb`] on any underlying redb failure.
     pub fn put_edge(&self, edge: &Edge) -> Result<Cid, GraphError> {
+        guard_system_zone_edge(edge, /* is_privileged= */ false)?;
+        self.put_edge_unchecked(edge)
+    }
+
+    /// Put an Edge under a caller-supplied [`WriteContext`]. Mirrors
+    /// [`Self::put_node_with_context`] — privileged contexts bypass the
+    /// `"system:"` label guard; unprivileged contexts enforce it.
+    ///
+    /// Phase 1 exposes this primarily for symmetry with `put_node_with_context`
+    /// and for G7 engine-internal code that needs to write system-zone
+    /// edges (grant-backed capability edges).
+    ///
+    /// # Errors
+    /// - [`GraphError::SystemZoneWrite`] on an unprivileged system-zone edge.
+    /// - Every error [`Self::put_edge`] can surface.
+    pub fn put_edge_with_context(
+        &self,
+        edge: &Edge,
+        ctx: &WriteContext,
+    ) -> Result<Cid, GraphError> {
+        guard_system_zone_edge(edge, ctx.is_privileged)?;
+        self.put_edge_unchecked(edge)
+    }
+
+    /// Internal helper — the edge write and index maintenance without the
+    /// system-zone guard. Used by `put_edge` (guarded) and
+    /// `put_edge_with_context` (context-driven guard).
+    fn put_edge_unchecked(&self, edge: &Edge) -> Result<Cid, GraphError> {
         let cid = edge.cid()?;
         let bytes = edge.canonical_bytes()?;
         // Body first, then indexes. The body/index pair is idempotent
@@ -704,16 +806,10 @@ impl RedbBackend {
         node: &Node,
         ctx: &WriteContext,
     ) -> Result<Cid, GraphError> {
-        if !ctx.is_privileged {
-            for label in &node.labels {
-                if label.starts_with("system:") {
-                    return Err(GraphError::SystemZoneWrite {
-                        label: label.clone(),
-                    });
-                }
-            }
-        }
-        self.put_node(node)
+        guard_system_zone_node(node, ctx.is_privileged)?;
+        // Route around the inherent put_node's guard (already enforced above)
+        // so a privileged context can land a system-zone write.
+        self.put_node_unchecked(node)
     }
 
     /// Transaction primitive — a closure over a write transaction handle.
@@ -747,7 +843,11 @@ impl RedbBackend {
         F: FnOnce(&mut Transaction<'_>) -> Result<R, GraphError>,
     {
         let _guard = TxGuard::try_acquire(Arc::clone(&self.tx_flag))?;
-        let write_txn = self.db.begin_write()?;
+        let write_txn = self.begin_write_txn()?;
+        // `begin_write_txn` already sets durability on the inner txn, so
+        // `Transaction::new` sees a fresh WriteTransaction with the
+        // backend's configured durability already in place. Transaction::new
+        // re-applies it defensively (cheap; idempotent).
         let mut tx = Transaction::new(write_txn, self.durability, /* privileged */ false)?;
 
         match f(&mut tx) {
@@ -755,11 +855,23 @@ impl RedbBackend {
                 let pending = tx.commit()?;
                 if !pending.is_empty() {
                     let tx_id = self.next_tx_id.fetch_add(1, Ordering::SeqCst);
+                    // Skip the clone entirely when no subscribers are
+                    // registered (thinness path — every commit skips a
+                    // vec-clone when IVM isn't wired). Chaos-engineer
+                    // g3-ce-10 reservation: a subscriber registered between
+                    // the commit and the snapshot below observes the just-
+                    // committed event; one registered afterwards does not.
                     let subs = {
                         let guard = self.subscribers.lock().unwrap_or_else(|e| e.into_inner());
-                        guard.clone()
+                        if guard.is_empty() {
+                            Vec::new()
+                        } else {
+                            guard.clone()
+                        }
                     };
-                    fan_out(&subs, &pending, tx_id);
+                    if !subs.is_empty() {
+                        fan_out(&subs, &pending, tx_id);
+                    }
                 }
                 Ok(value)
             }
@@ -773,14 +885,20 @@ impl RedbBackend {
         }
     }
 
-    /// Transaction variant used by the commit-denial edge-case test
-    /// (`failure_injection_rollback.rs::tx_commit_cap_failure_surfaces_
-    /// partial_trace_with_aborted_step`). The closure runs to completion;
-    /// immediately before the redb commit fires, a synthetic "capability
-    /// denied" hook rejects the batch. This models the behavior the engine
-    /// orchestrator will produce when the real
+    /// Transaction variant that ALWAYS denies at commit, used by the commit-
+    /// denial edge-case test (`failure_injection_rollback.rs::
+    /// tx_commit_cap_failure_surfaces_partial_trace_with_aborted_step`). The
+    /// closure runs to completion; immediately before the redb commit fires,
+    /// a synthetic "capability denied" hook rejects the batch. This models
+    /// the behavior the engine orchestrator will produce when the real
     /// `CapabilityPolicy::check_write` returns `Err` at the commit
     /// boundary.
+    ///
+    /// Name history: this method is a dedicated test hook rather than a
+    /// configurable predicate — a future caller that needs a configurable
+    /// `deny_at_commit` should land a new method rather than layering config
+    /// onto this one. Renaming to make the intent obvious is tracked as an
+    /// R4b docket item (mini-review g3-cr-9).
     ///
     /// Phase 1 keeps this as a dedicated test hook rather than forcing a
     /// public `CapabilityPolicy` dep into `benten-graph` — the engine
@@ -797,7 +915,7 @@ impl RedbBackend {
         F: FnOnce(&mut Transaction<'_>) -> Result<R, GraphError>,
     {
         let _guard = TxGuard::try_acquire(Arc::clone(&self.tx_flag))?;
-        let write_txn = self.db.begin_write()?;
+        let write_txn = self.begin_write_txn()?;
         let mut tx = Transaction::new(write_txn, self.durability, /* privileged */ false)?;
         let _closure_value = f(&mut tx).map_err(|inner| GraphError::TxAborted {
             reason: inner.to_string(),
@@ -820,6 +938,24 @@ impl RedbBackend {
     /// `Vec<Box<dyn ChangeSubscriber>>` fan-out on WASM — lives in
     /// [`benten-engine::change`](https://docs.rs/benten-engine), not here.
     /// `benten-graph` stays runtime-agnostic.
+    ///
+    /// # Ordering contract (mini-review g3-ce-10)
+    ///
+    /// A subscriber registered **strictly before** a commit's post-commit
+    /// subscribers snapshot observes that commit's event batch. A subscriber
+    /// registered **after** the snapshot does not. The snapshot is taken
+    /// inside the transaction method after the redb commit returns success.
+    /// An IVM view that snapshot-reads the graph to bootstrap should register
+    /// first and read second to avoid double-applying events in the race
+    /// window.
+    ///
+    /// # Subscriber lifecycle
+    ///
+    /// Phase 1 has no deregister path — subscribers live for the backend's
+    /// lifetime. Dropping the `RedbBackend` (or the last `Arc`) releases the
+    /// subscriber list. Phase 2 will land a `Subscription` handle with
+    /// drop-deregister semantics (tracked as a G5 follow-up per mini-review
+    /// g3-cr-15).
     ///
     /// # Errors
     /// Returns `Ok(())` unconditionally in Phase 1. The fallible signature
