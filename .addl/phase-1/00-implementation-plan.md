@@ -709,6 +709,7 @@ Each is documented explicitly rather than silently deferred.
 4. **WASM runtime still Phase 2.** T8 is compile-check only. When runtime ships, default capability backend for browser contexts will NOT be NoAuthBackend — `BrowserOriginCapBackend` will scope writes to origin. Named for Phase 2.
 5. **Per-capability write rate limits** — Phase 1 records `benten.ivm.view_stale_count{view_id}` metric; Phase 3 enforces per-peer rate limits when sync ships.
 6. **BLAKE3 128-bit collision resistance assumption.** Phase 1 usage (dedup + integrity) relies only on collision resistance, not full preimage. Phase 3 UCAN capability-by-CID paths revisit; `SECURITY-POSTURE.md` documents the property.
+7. **`[[bin]]` required-features gating for `benten-graph::write-canonical-and-exit`.** Phase 1 builds a small test-fixture binary under `crates/benten-graph/bin/` used by the cross-process determinism test. Currently gated with `test = false, bench = false` but not `required-features`, so `cargo build` still compiles it. Since `benten-graph` has no external consumers in Phase 1, the compile tax is zero. When `benten-graph` publishes to crates.io (Phase 2+ release), add a `test-fixtures` feature and gate the `[[bin]]` with `required-features = ["test-fixtures"]` so downstream consumers don't pay the compile cost. Tracked at `.addl/phase-1/r4-pass2-triage.md` finding qa-p2-3.
 
 ### Disagreements
 
