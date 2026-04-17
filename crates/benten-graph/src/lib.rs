@@ -12,25 +12,27 @@
 //!
 //! - [`backend`] — the [`KVBackend`] trait, [`ScanResult`], [`BatchOp`],
 //!   [`DurabilityMode`].
-//! - [`store`] — [`NodeStore`] / [`EdgeStore`] blanket impls over any
-//!   `KVBackend`, plus the [`ChangeSubscriber`] trait and [`ChangeEvent`]
-//!   schema.
-//! - this module — the concrete [`RedbBackend`], [`GraphError`], and the
-//!   Phase-1 stubs (`Transaction`, `WriteContext`, `SnapshotHandle`,
-//!   `ChangeReceiver`) owned by G2-B / G3 / G5 / G6.
+//! - [`store`] — [`NodeStore`] / [`EdgeStore`] traits plus the
+//!   [`ChangeSubscriber`] trait and [`ChangeEvent`] schema. Each backend
+//!   implements `NodeStore` / `EdgeStore` directly (no blanket impl — the
+//!   index-maintenance contract is per-backend).
+//! - [`redb_backend`] — the concrete [`RedbBackend`], its `KVBackend` /
+//!   `NodeStore` / `EdgeStore` impls, and the index maintenance.
+//! - this module — [`GraphError`] and the Phase-1 stubs (`Transaction`,
+//!   `WriteContext`, `SnapshotHandle`) owned by G3 / G6.
 
 #![forbid(unsafe_code)]
 #![allow(clippy::todo, reason = "Phase 1 stubs cleared as G2-B/G3/G5/G6 land")]
 
 pub use benten_core::ErrorCode;
-use benten_core::{Cid, CoreError, Edge, Node};
+use benten_core::{Cid, CoreError, Node};
 
 pub mod backend;
-pub mod indexes;
+pub(crate) mod indexes;
 pub mod redb_backend;
 pub mod store;
 
-pub use backend::{BatchOp, DurabilityMode, KVBackend, ScanResult};
+pub use backend::{BatchOp, DurabilityMode, KVBackend, ScanIter, ScanResult};
 pub use redb_backend::RedbBackend;
 pub use store::{ChangeEvent, ChangeKind, ChangeSubscriber, EdgeStore, NodeStore};
 
@@ -45,9 +47,11 @@ pub use store::{ChangeEvent, ChangeKind, ChangeSubscriber, EdgeStore, NodeStore}
 /// error for `RedbBackend` and the type into which `CoreError` (serialization,
 /// CID parsing) flows; other backends are free to pick their own.
 ///
-/// Phase 1 follow-up tracked in G2-B: the `Redb(String)` variant still
-/// stringifies `redb::*` errors and loses `std::error::Error::source`.
-/// G2-B refines this to preserve the chain via `#[from] + #[source]`.
+/// Phase 1 follow-up tracked in R4b: the `Redb(String)` variant still
+/// stringifies `redb::*` errors and drops `std::error::Error::source`.
+/// The source-chain refactor requires updating R3 tests that construct
+/// `GraphError::Redb("...".into())` as an injected error; deferred to keep
+/// the TDD red-phase test surface stable.
 #[derive(Debug, thiserror::Error)]
 pub enum GraphError {
     /// Propagated from `benten-core` (CID construction, canonical
@@ -55,8 +59,8 @@ pub enum GraphError {
     #[error("core: {0}")]
     Core(#[from] CoreError),
 
-    /// redb I/O or transactional failure. G2-B will preserve the source
-    /// chain; spike-era String coercion documented above.
+    /// redb I/O or transactional failure. The string coercion drops the
+    /// source chain; R4b tracks the `#[from] redb::Error` refactor.
     #[error("redb: {0}")]
     Redb(String),
 
@@ -69,12 +73,9 @@ pub enum GraphError {
     Decode(String),
 
     /// `open_existing` was called on a path where no database file exists.
-    /// Phase 1 G2-B stub.
-    #[error("backend not found at path")]
+    #[error("backend not found at path: {}", path.display())]
     BackendNotFound {
-        /// Path supplied to the failed `open_existing` call (Phase 1 stub
-        /// — the PathBuf plumbing lands in G2-B; today this is a
-        /// placeholder).
+        /// Path supplied to the failed `open_existing` call.
         path: std::path::PathBuf,
     },
 
@@ -118,6 +119,9 @@ impl GraphError {
     }
 }
 
+// Phase 1: stringify redb error kinds into `GraphError::Redb(String)`.
+// R4b tracks the `#[from] redb::Error` refactor that preserves the full
+// `std::error::Error::source()` chain — see `GraphError::Redb` docstring.
 impl From<redb::Error> for GraphError {
     fn from(e: redb::Error) -> Self {
         GraphError::Redb(e.to_string())
@@ -185,7 +189,7 @@ impl Transaction<'_> {
     ///
     /// # Errors
     /// Stub — currently `todo!()`.
-    pub fn put_edge(&mut self, _edge: &Edge) -> Result<Cid, GraphError> {
+    pub fn put_edge(&mut self, _edge: &benten_core::Edge) -> Result<Cid, GraphError> {
         todo!("Transaction::put_edge — G3-A (Phase 1)")
     }
 
@@ -236,18 +240,17 @@ impl SnapshotHandle {
     }
 }
 
-/// Return handle from [`RedbBackend::subscribe`]. **Phase 1 G3-A stub.**
-pub struct ChangeReceiver;
-
-impl ChangeReceiver {
-    /// Receive the next change event (blocking).
-    ///
-    /// # Errors
-    /// Stub — currently `todo!()`.
-    pub fn recv(&self) -> Result<ChangeEvent, GraphError> {
-        todo!("ChangeReceiver::recv — G3-A (Phase 1)")
-    }
-}
+// ChangeReceiver intentionally does NOT live in benten-graph.
+//
+// Per the implementation plan (R1 architect addendum, line ~605), the
+// channel concretion — tokio-broadcast on native, synchronous
+// `Vec<Box<dyn ChangeSubscriber>>` fan-out on WASM — lives in
+// `benten-engine::change`. The graph crate exposes only the
+// [`ChangeSubscriber`] callback trait ([`store::ChangeSubscriber`]) so it
+// carries no async-runtime dependency. Backends register subscribers via
+// `RedbBackend::register_subscriber(Arc<dyn ChangeSubscriber>)`; the
+// transaction primitive (G3) fans change events out to registered
+// subscribers synchronously after a successful commit.
 
 /// Metadata passed to the capability pre-write hook.
 ///
@@ -449,7 +452,7 @@ mod tests {
 
         let hits = backend.scan(&[0xff, 0xff]).unwrap();
         assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0].0, vec![0xff, 0xff, 0xff]);
+        assert_eq!(hits.as_slice()[0].0, vec![0xff, 0xff, 0xff]);
     }
 
     #[test]

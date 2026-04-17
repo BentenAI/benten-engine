@@ -13,11 +13,24 @@
 //! - **`P1.graph.scan-iterator`** — `scan` returns a [`ScanResult`] newtype
 //!   (rather than a raw `Vec<(Vec<u8>, Vec<u8>)>`), giving the trait a stable
 //!   return shape we can evolve toward true lazy iteration in Phase 2 without
-//!   re-breaking the call sites. [`ScanResult`] exposes slice-like ergonomics
-//!   (via `Deref`) and iterator-like consumption (via `IntoIterator`) in the
-//!   same type.
+//!   re-breaking the call sites. [`ScanResult`] is deliberately shape-opaque:
+//!   callers see `.len()` / `.is_empty()` / `.iter()` / `.as_slice()` /
+//!   `IntoIterator` through inherent methods, and the backing storage (today
+//!   a `Vec`) is not part of the public contract. Phase 2 can swap in a boxed
+//!   streaming iterator without a semver break.
+//!
+//! ## Phase 2 evolution points (read before adding call sites downstream)
+//!
+//! - `ScanResult` is shape-opaque. Do **not** name its `IntoIter` type; do
+//!   **not** rely on slice semantics beyond the explicit `.as_slice()`
+//!   accessor. Phase 2 may swap the backing storage to a boxed iterator.
+//! - `ChangeEvent.label: String` carries only the primary label today. A
+//!   migration to `labels: Vec<String>` is on the table for Phase 2 if the
+//!   view surface demands it; consumers should destructure by field name.
+//! - `KVBackend::put_batch` is Put-only. Heterogeneous write sets (node put
+//!   + edge delete + index remove in a single commit) belong on the G3
+//!     transaction primitive, not on `put_batch`.
 
-use core::ops::Deref;
 use core::slice::Iter;
 
 /// A batch operation enqueued into [`KVBackend::put_batch`] or the transaction
@@ -58,6 +71,14 @@ pub enum DurabilityMode {
     Immediate,
     /// Group commits into a batched fsync window. Higher throughput, bounded
     /// tail latency on the fsync flush.
+    ///
+    /// **Phase 1 note:** redb v4 does not yet expose grouped-commit
+    /// durability (the underlying API only offers `Durability::Immediate`
+    /// and `Durability::None`). This variant currently collapses to
+    /// [`DurabilityMode::Immediate`] — the safe default — and the
+    /// construction path emits a one-shot warning so operators are not
+    /// misled by benchmark numbers. Phase 2 revisits if redb grows the
+    /// capability; the enum variant is retained to avoid a semver break.
     Group,
     /// Commit returns before the durable fsync; durability is best-effort and
     /// a crash may lose the last few commits. Test-only / in-memory-mock
@@ -73,23 +94,20 @@ impl Default for DurabilityMode {
     }
 }
 
-/// Return type of [`KVBackend::scan`] — an owned list of (key, value) byte
-/// pairs matching the supplied prefix.
+/// Return type of [`KVBackend::scan`] — an opaque collection of (key, value)
+/// byte pairs matching the supplied prefix.
 ///
-/// `ScanResult` is deliberately a *newtype* rather than a raw `Vec<...>` or
-/// `Box<dyn Iterator<...>>` because two consumer shapes must both compile:
+/// `ScanResult` is deliberately a *shape-opaque* newtype. Callers consume it
+/// through inherent methods ([`ScanResult::len`], [`ScanResult::is_empty`],
+/// [`ScanResult::iter`], [`ScanResult::as_slice`]) or `IntoIterator` (the
+/// associated iterator type is the opaque [`ScanIter`]); the backing
+/// storage (today a `Vec`) is not part of the public contract.
 ///
-/// - slice-like — `hits.len()`, `hits.is_empty()`, `hits.iter()`, `hits[0]`
-///   (via [`Deref`] to `[(Vec<u8>, Vec<u8>)]`);
-/// - iterator-like — `for (k, v) in hits { ... }` (via [`IntoIterator`]).
-///
-/// The newtype also gives Phase 2 a migration path: when a true-lazy
-/// streaming scan lands, `ScanResult` can wrap a boxed iterator internally
-/// without changing the public return type on [`KVBackend::scan`].
-///
-/// `ScanResult` implements [`FromIterator`] so backends can `.collect()` the
-/// results of an internal iteration directly into the trait-visible return
-/// type.
+/// This is load-bearing for Phase 2: when a true lazy-streaming backend
+/// lands (WASM peer-fetch, iroh-fetch), `ScanResult` can wrap a boxed
+/// iterator or a streaming handle without changing the public surface.
+/// Removing the former `Deref<Target=[...]>` impl keeps slice-semantics
+/// from leaking into consumer code.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ScanResult(Vec<(Vec<u8>, Vec<u8>)>);
 
@@ -100,36 +118,67 @@ impl ScanResult {
         Self(Vec::new())
     }
 
-    /// Construct a scan result from an owned vector of pairs.
+    /// Construct a scan result from an owned vector of pairs. Crate-private
+    /// so the Vec-backed shape is not part of the public contract. Backends
+    /// outside this crate should `.collect()` through [`FromIterator`].
     #[must_use]
-    pub fn from_vec(pairs: Vec<(Vec<u8>, Vec<u8>)>) -> Self {
+    pub(crate) fn from_vec(pairs: Vec<(Vec<u8>, Vec<u8>)>) -> Self {
         Self(pairs)
     }
 
-    /// Consume the scan result and return the underlying vector of pairs.
+    /// Number of (key, value) pairs in the result. O(1) for the Phase-1
+    /// backing, but part of the stable public contract — Phase-2 streaming
+    /// backends materialize the count on construction.
     #[must_use]
-    pub fn into_inner(self) -> Vec<(Vec<u8>, Vec<u8>)> {
-        self.0
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 
-    /// Borrow the underlying pairs as a slice. Equivalent to `&*result`.
+    /// `true` if the scan matched zero keys.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Borrow the results as `&[(Vec<u8>, Vec<u8>)]`. Explicit accessor —
+    /// prefer `.iter()` when you just want to walk the pairs; use this only
+    /// when you genuinely need slice semantics (indexing, windowing, etc.).
     #[must_use]
     pub fn as_slice(&self) -> &[(Vec<u8>, Vec<u8>)] {
         &self.0
     }
-}
 
-impl Deref for ScanResult {
-    type Target = [(Vec<u8>, Vec<u8>)];
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+    /// Iterator over `&(key, value)` pairs. Stable replacement for the
+    /// deprecated `Deref`-based `.iter()` call path.
+    pub fn iter(&self) -> Iter<'_, (Vec<u8>, Vec<u8>)> {
+        self.0.iter()
     }
 }
 
-impl AsRef<[(Vec<u8>, Vec<u8>)]> for ScanResult {
-    fn as_ref(&self) -> &[(Vec<u8>, Vec<u8>)] {
-        &self.0
+/// Opaque owning iterator returned by `ScanResult::into_iter`. Internals are
+/// intentionally not part of the public contract — a Phase-2 streaming
+/// backend may replace the backing representation without a semver break.
+//
+// Implementation note: we wrap `std::vec::IntoIter` today rather than a
+// `Box<dyn Iterator>` so iteration is allocation-free for Phase 1. The
+// newtype is the forward-compat shim.
+pub struct ScanIter(std::vec::IntoIter<(Vec<u8>, Vec<u8>)>);
+
+impl Iterator for ScanIter {
+    type Item = (Vec<u8>, Vec<u8>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+impl ExactSizeIterator for ScanIter {
+    fn len(&self) -> usize {
+        self.0.len()
     }
 }
 
@@ -141,10 +190,10 @@ impl FromIterator<(Vec<u8>, Vec<u8>)> for ScanResult {
 
 impl IntoIterator for ScanResult {
     type Item = (Vec<u8>, Vec<u8>);
-    type IntoIter = std::vec::IntoIter<(Vec<u8>, Vec<u8>)>;
+    type IntoIter = ScanIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+        ScanIter(self.0.into_iter())
     }
 }
 
@@ -154,18 +203,6 @@ impl<'a> IntoIterator for &'a ScanResult {
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter()
-    }
-}
-
-impl From<Vec<(Vec<u8>, Vec<u8>)>> for ScanResult {
-    fn from(v: Vec<(Vec<u8>, Vec<u8>)>) -> Self {
-        Self(v)
-    }
-}
-
-impl From<ScanResult> for Vec<(Vec<u8>, Vec<u8>)> {
-    fn from(r: ScanResult) -> Self {
-        r.0
     }
 }
 
@@ -190,6 +227,14 @@ impl From<ScanResult> for Vec<(Vec<u8>, Vec<u8>)> {
 /// [`put_batch`](KVBackend::put_batch) must be atomic: either every pair in
 /// the batch commits or none do. This is the primitive the G3 transaction
 /// primitive (`begin`/`commit`/`rollback`) builds on.
+///
+/// # Phase 2 async note
+///
+/// `KVBackend` is synchronous today — every method returns `Result<_, _>`
+/// directly. Phase-2 network-backed implementations (WASM peer-fetch,
+/// iroh-fetch) will need either async mirror methods or a parallel
+/// `AsyncKVBackend` trait; the `Self::Error` bound is already permissive
+/// enough for the error shapes those backends will surface.
 ///
 /// # Example — a trivial in-memory backend
 ///
@@ -274,9 +319,11 @@ pub trait KVBackend: Send + Sync {
     /// [`ScanResult`]. A zero-hit scan returns an empty [`ScanResult`], never
     /// an error.
     ///
-    /// Consumers may treat the result as a slice (via [`Deref`] —
-    /// `.len()`, `.iter()`, indexing) or as an iterator (via `for (k, v) in
-    /// hits`). See [`ScanResult`] for the full ergonomic surface.
+    /// Consumers walk the result through [`ScanResult::iter`] /
+    /// [`ScanResult::len`] / [`ScanResult::is_empty`] /
+    /// [`ScanResult::as_slice`], or iterate directly via `for (k, v) in hits`.
+    /// The result is shape-opaque: Phase 2 may swap the backing storage
+    /// without breaking call sites.
     ///
     /// # Errors
     /// Implementation-defined. A zero-hit prefix is *not* an error.
