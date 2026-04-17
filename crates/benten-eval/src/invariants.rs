@@ -43,14 +43,14 @@ use crate::{
 /// Used by [`Subgraph::validate`](crate::Subgraph::validate) when the caller
 /// already has a `Subgraph` (e.g. after round-tripping through storage).
 /// `SubgraphBuilder::build_validated` takes the richer builder-snapshot path
-/// via [`validate_builder`].
+/// via `validate_builder` (crate-private).
 ///
 /// # Errors
 ///
 /// Returns a [`RegistrationError`] carrying the first invariant violation
 /// encountered. `aggregate=true` runs every check and reports all failures
 /// via [`InvariantViolation::Registration`]-style context.
-pub(crate) fn validate_subgraph(
+pub fn validate_subgraph(
     sg: &Subgraph,
     config: &InvariantConfig,
     aggregate: bool,
