@@ -10,7 +10,7 @@
 #![allow(clippy::unwrap_used)]
 
 use benten_core::Value;
-use benten_eval::{EvalError, Evaluator, ExecutionFrame, OperationNode, PrimitiveKind};
+use benten_eval::{EvalError, Evaluator, ExecutionFrame, NullHost, OperationNode, PrimitiveKind};
 
 #[test]
 fn evaluator_new_has_empty_stack() {
@@ -34,7 +34,7 @@ fn evaluator_pushes_next_on_ok() {
     let mut ev = Evaluator::new();
     let op =
         OperationNode::new("t", PrimitiveKind::Transform).with_property("expr", Value::text("1"));
-    let _r = ev.step(&op).unwrap();
+    let _r = ev.step(&op, &NullHost).unwrap();
     // Post-step the evaluator has recorded this frame in its stack.
     assert!(!ev.stack.is_empty());
 }
@@ -45,13 +45,13 @@ fn evaluator_pops_on_respond_terminal() {
     // Push a transform first.
     let t =
         OperationNode::new("t", PrimitiveKind::Transform).with_property("expr", Value::text("1"));
-    ev.step(&t).unwrap();
+    ev.step(&t, &NullHost).unwrap();
     let before = ev.stack.len();
     // RESPOND terminates — stack clears down. R4 triage (m1): strict
     // stack-delta assertion — RESPOND must pop at least one frame; the
     // v1 `<= before` was satisfied by a no-op step too.
     let r = OperationNode::new("r", PrimitiveKind::Respond);
-    ev.step(&r).unwrap();
+    ev.step(&r, &NullHost).unwrap();
     assert!(
         ev.stack.len() < before,
         "RESPOND must pop at least one frame (delta < 0); before={before} after={}",
@@ -66,7 +66,7 @@ fn evaluator_follows_error_edge_on_primitive_error() {
         .with_property("op", Value::text("cas"))
         .with_property("expected_version", Value::Int(1))
         .with_property("actual_version", Value::Int(2));
-    match ev.step(&op) {
+    match ev.step(&op, &NullHost) {
         Ok(r) => assert_eq!(r.edge_label, "ON_CONFLICT"),
         Err(EvalError::WriteConflict) => {}
         Err(e) => panic!("expected routed error or WriteConflict, got {e:?}"),
@@ -91,7 +91,7 @@ fn evaluator_stack_overflow_is_err_not_panic() {
     // Attempting another step under an over-deep stack surfaces StackOverflow,
     // not a Rust panic.
     let op = OperationNode::new("next", PrimitiveKind::Transform);
-    match ev.step(&op) {
+    match ev.step(&op, &NullHost) {
         Err(EvalError::StackOverflow) => {}
         Err(EvalError::Invariant(benten_eval::InvariantViolation::DepthExceeded)) => {}
         other => panic!("expected StackOverflow / DepthExceeded, got {other:?}"),

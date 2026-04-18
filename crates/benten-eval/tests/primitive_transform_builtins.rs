@@ -10,7 +10,7 @@
 #![allow(clippy::unwrap_used)]
 
 use benten_core::Value;
-use benten_eval::{Evaluator, OperationNode, PrimitiveKind};
+use benten_eval::{Evaluator, NullHost, OperationNode, PrimitiveKind};
 use std::collections::BTreeMap;
 
 fn transform(expr: &str, input: Value) -> Value {
@@ -18,7 +18,7 @@ fn transform(expr: &str, input: Value) -> Value {
     let op = OperationNode::new("t", PrimitiveKind::Transform)
         .with_property("expr", Value::text(expr))
         .with_property("input", input);
-    ev.step(&op).unwrap().output
+    ev.step(&op, &NullHost).unwrap().output
 }
 
 #[test]

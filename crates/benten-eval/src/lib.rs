@@ -26,10 +26,12 @@ pub mod context;
 pub mod diag;
 pub mod evaluator;
 pub mod expr;
+pub mod host;
 pub mod invariants;
 pub mod primitives;
 
 pub use context::EvalContext;
+pub use host::{NullHost, PrimitiveHost, ViewQuery};
 
 /// Marker for the current stub phase. Removed when the evaluator lands.
 pub const STUB_MARKER: &str = "benten-eval::stub";
@@ -77,6 +79,14 @@ pub enum EvalError {
 
     #[error("stack overflow in iterative evaluator")]
     StackOverflow,
+
+    /// Backend / host-side error surfaced through a [`PrimitiveHost`] call.
+    /// Used by primitive executors (READ, WRITE, CALL, EMIT, ITERATE) when
+    /// the host implementation rejects or fails. The engine's `impl
+    /// PrimitiveHost` populates this with a debug rendering of its own
+    /// `EngineError`.
+    #[error("backend: {0}")]
+    Backend(String),
 }
 
 impl EvalError {
@@ -90,7 +100,9 @@ impl EvalError {
             EvalError::WriteConflict => ErrorCode::WriteConflict,
             EvalError::TransformSyntax(_) => ErrorCode::TransformSyntax,
             EvalError::StackOverflow => ErrorCode::InvDepthExceeded,
-            EvalError::Graph(_) | EvalError::Core(_) => ErrorCode::Unknown(String::new()),
+            EvalError::Backend(_) | EvalError::Graph(_) | EvalError::Core(_) => {
+                ErrorCode::Unknown(String::new())
+            }
         }
     }
 }
@@ -471,6 +483,34 @@ impl Subgraph {
     #[must_use]
     pub fn handler_id(&self) -> &str {
         &self.handler_id
+    }
+
+    /// Mutable accessor for the first `OperationNode`. Used by
+    /// `benten-engine`'s `dispatch_call` to backfill properties on a
+    /// synthesized READ / WRITE node after the builder has finalized the
+    /// shape.
+    ///
+    /// # Safety / invariants
+    ///
+    /// Mutating the property set after `build_unvalidated_for_test` does NOT
+    /// change the Subgraph's structural shape (node count, edge topology),
+    /// so invariants 1–6 remain valid. The subgraph's CID will change —
+    /// callers that mutate must re-compute `cid()` if they rely on it.
+    pub fn first_op_mut(&mut self) -> Option<&mut OperationNode> {
+        self.nodes.first_mut()
+    }
+
+    /// Mutable accessor for the (only) `Write` primitive node. Used by the
+    /// `crud:create` / `crud:delete` dispatch shims in `benten-engine`.
+    pub fn write_op_mut(&mut self) -> Option<&mut OperationNode> {
+        self.nodes
+            .iter_mut()
+            .find(|n| matches!(n.kind, PrimitiveKind::Write))
+    }
+
+    /// Mutable accessor for the `OperationNode` whose id matches `id`.
+    pub fn op_by_id_mut(&mut self, id: &str) -> Option<&mut OperationNode> {
+        self.nodes.iter_mut().find(|n| n.id == id)
     }
 
     #[must_use]
@@ -908,11 +948,15 @@ impl Evaluator {
     /// [`EvalError::StackOverflow`] when the current stack has reached
     /// [`Evaluator::max_stack_depth`] so G6-C's overflow contract holds
     /// even under the shim.
-    pub fn step(&mut self, op: &OperationNode) -> Result<StepResult, EvalError> {
+    pub fn step(
+        &mut self,
+        op: &OperationNode,
+        host: &dyn PrimitiveHost,
+    ) -> Result<StepResult, EvalError> {
         if u32::try_from(self.stack.len()).unwrap_or(u32::MAX) >= self.max_stack_depth {
             return Err(EvalError::StackOverflow);
         }
-        let result = primitives::dispatch(op)?;
+        let result = primitives::dispatch(op, host)?;
         // G6-C owns the full stack discipline; the shim records a frame on
         // successful dispatch and drops one on a terminal RESPOND so the
         // evaluator_stack tests see a non-zero frame delta.

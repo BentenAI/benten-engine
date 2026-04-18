@@ -25,19 +25,23 @@
 
 use benten_core::Value;
 
-use crate::{EvalError, OperationNode, StepResult};
+use crate::{EvalError, OperationNode, PrimitiveHost, StepResult};
 
 /// Execute an EMIT primitive.
 ///
-/// Returns a [`StepResult`] on the `"ok"` edge with a `Value::Null`
-/// payload. EMIT is fire-and-forget — it never blocks and never surfaces
-/// subscriber failures.
+/// Routes the emit through [`PrimitiveHost::emit_event`] so the engine's
+/// change-broadcast can fan it out. Returns `"ok"` unconditionally; EMIT is
+/// fire-and-forget and never surfaces subscriber failures.
 ///
 /// # Errors
 ///
 /// EMIT does not currently surface any error variants; the function
 /// signature preserves the dispatcher shape used by the other executors.
-pub fn execute(_op: &OperationNode) -> Result<StepResult, EvalError> {
+pub fn execute(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResult, EvalError> {
+    if let Some(Value::Text(channel)) = op.properties.get("channel") {
+        let payload = op.properties.get("payload").cloned().unwrap_or(Value::Null);
+        host.emit_event(channel, payload);
+    }
     Ok(StepResult {
         next: None,
         edge_label: "ok".to_string(),

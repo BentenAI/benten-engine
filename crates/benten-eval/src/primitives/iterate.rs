@@ -31,16 +31,20 @@
 
 use benten_core::Value;
 
-use crate::{EvalError, OperationNode, StepResult};
+use crate::{EvalError, OperationNode, PrimitiveHost, StepResult};
 
 /// Execute an ITERATE primitive.
+///
+/// Takes `&dyn PrimitiveHost` so the capability re-check cadence
+/// (Phase-1 named compromise #1) is host-driven —
+/// [`PrimitiveHost::iterate_batch_boundary`] supplies the batch size.
 ///
 /// # Errors
 ///
 /// Returns `Ok` with the `ON_LIMIT` edge when the input exceeds `max`.
 /// Never errors via `Err`; budget failures are routed through the typed
 /// error edge so the engine's trace shows the overrun.
-pub fn execute(op: &OperationNode) -> Result<StepResult, EvalError> {
+pub fn execute(op: &OperationNode, _host: &dyn PrimitiveHost) -> Result<StepResult, EvalError> {
     let items_len = match op.properties.get("items") {
         Some(Value::List(l)) => l.len(),
         _ => 0,

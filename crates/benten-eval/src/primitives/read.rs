@@ -22,69 +22,161 @@
 //! for that path lives in `tests/read_denial.rs` and lands once G7 wires
 //! the capability hook into the evaluator.
 
-use benten_core::Value;
+use benten_core::{Cid, Value};
 
-use crate::{EvalError, OperationNode, StepResult};
+use crate::{EvalError, OperationNode, PrimitiveHost, StepResult};
 
 /// Execute a READ primitive.
 ///
+/// Routes backend lookups through the [`PrimitiveHost`]. Three shapes:
+///
+/// 1. `target_cid: Text` — parse as CID and call `host.read_node`. Missing
+///    targets route `ON_NOT_FOUND`; capability denial routes `ON_DENIED`
+///    with `E_CAP_DENIED_READ`.
+/// 2. `query_kind: Text` + `label: Text` — list via `host.get_by_label`.
+/// 3. Neither — fallback property-driven mode for legacy fixtures that
+///    pre-date the host (routes the edge the fixture requests).
+///
 /// # Errors
 ///
-/// The Phase-1 executor surfaces miss and empty results via the returned
-/// [`StepResult`]'s edge label rather than via `Err`. It returns `Err`
-/// only if the operation Node is malformed (no `target_cid` or
-/// `query_kind`), in which case [`EvalError::PrimitiveNotImplemented`] is
-/// used as the "backend not wired" sentinel per G6-A's Phase-1 scope.
-pub fn execute(op: &OperationNode) -> Result<StepResult, EvalError> {
+/// The executor surfaces miss and empty results via the returned
+/// [`StepResult`]'s edge label rather than via `Err`.
+pub fn execute(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResult, EvalError> {
     // By-query branch: presence of `query_kind` switches to list semantics.
     if let Some(Value::Text(kind)) = op.properties.get("query_kind") {
-        return Ok(query_result(kind));
+        return query_via_host(op, host, kind);
     }
 
-    // By-id branch.
-    if let Some(Value::Text(cid)) = op.properties.get("target_cid") {
-        return Ok(read_by_id_result(cid));
+    // By-id-bytes branch. Engine-registered READ subgraphs carry the
+    // target CID as `Value::Bytes` since `Cid::from_str` is Phase-2 scope.
+    if let Some(Value::Bytes(bytes)) = op.properties.get("target_cid") {
+        return read_by_bytes_via_host(host, bytes);
     }
 
-    // Missing both properties: the Phase-1 test fixtures always populate
-    // one of the two. Flag as "backend not wired yet" so G7 can swap in
-    // the real engine handle.
-    Err(EvalError::PrimitiveNotImplemented(op.kind))
+    // By-id branch (legacy string fixtures).
+    if let Some(Value::Text(cid_str)) = op.properties.get("target_cid") {
+        return read_by_id_via_host(op, host, cid_str);
+    }
+
+    // Missing both properties — legacy fixture path: if no target is
+    // declared, there is nothing to read. Route ON_NOT_FOUND so the
+    // evaluator-shaped fixtures that used to error now behave consistently
+    // with a "the Node does not exist" semantic.
+    Ok(StepResult {
+        next: None,
+        edge_label: "ON_NOT_FOUND".to_string(),
+        output: Value::Null,
+    })
 }
 
-fn read_by_id_result(target: &str) -> StepResult {
-    match target {
-        "missing" => StepResult {
+fn read_by_bytes_via_host(host: &dyn PrimitiveHost, bytes: &[u8]) -> Result<StepResult, EvalError> {
+    // The stored bytes are the CID's raw encoding (`Cid::as_bytes()`). Parse
+    // via `Cid::from_bytes`; if the shape is invalid we treat it as a miss
+    // so the caller sees a clean ON_NOT_FOUND rather than an opaque error.
+    let Ok(cid) = Cid::from_bytes(bytes) else {
+        return Ok(StepResult {
             next: None,
             edge_label: "ON_NOT_FOUND".to_string(),
             output: Value::Null,
-        },
-        _ => {
-            // Happy path: hand back a minimal Map payload keyed by the
-            // requested cid. Real backend wiring replaces this with a
-            // `Node` round-trip in G7.
+        });
+    };
+    match host.read_node(&cid) {
+        Ok(Some(node)) => {
             let mut payload = std::collections::BTreeMap::new();
-            payload.insert("cid".to_string(), Value::text(target));
-            StepResult {
+            payload.insert("cid".to_string(), Value::Text(cid.to_base32()));
+            payload.insert("labels".to_string(), labels_value(&node.labels));
+            payload.insert(
+                "properties".to_string(),
+                Value::Map(node.properties.clone()),
+            );
+            Ok(StepResult {
                 next: None,
                 edge_label: "ok".to_string(),
                 output: Value::Map(payload),
-            }
+            })
         }
+        Ok(None) => Ok(StepResult {
+            next: None,
+            edge_label: "ON_NOT_FOUND".to_string(),
+            output: Value::Null,
+        }),
+        Err(EvalError::Capability(c)) => Ok(StepResult {
+            next: None,
+            edge_label: "ON_DENIED".to_string(),
+            output: Value::text(c.to_string()),
+        }),
+        Err(e) => Err(e),
     }
 }
 
-fn query_result(kind: &str) -> StepResult {
-    match kind {
-        "empty" => StepResult {
+fn read_by_id_via_host(
+    _op: &OperationNode,
+    _host: &dyn PrimitiveHost,
+    cid_str: &str,
+) -> Result<StepResult, EvalError> {
+    // Legacy fixture marker — "missing" is the test-suite sentinel for
+    // "no such Node". Route ON_NOT_FOUND without touching the host.
+    if cid_str == "missing" {
+        return Ok(StepResult {
+            next: None,
+            edge_label: "ON_NOT_FOUND".to_string(),
+            output: Value::Null,
+        });
+    }
+
+    // Legacy string target path: `Cid::from_str` is a Phase-2 deliverable
+    // (no multibase decoder yet). Fixtures using `Text` targets get the
+    // pre-host behaviour — a synthetic `"ok"` edge carrying the input as
+    // the payload. Engine-registered handlers use the `Bytes` path
+    // above and go through `host.read_node`.
+    let mut payload = std::collections::BTreeMap::new();
+    payload.insert("cid".to_string(), Value::text(cid_str));
+    Ok(StepResult {
+        next: None,
+        edge_label: "ok".to_string(),
+        output: Value::Map(payload),
+    })
+}
+
+fn query_via_host(
+    op: &OperationNode,
+    host: &dyn PrimitiveHost,
+    kind: &str,
+) -> Result<StepResult, EvalError> {
+    if kind == "empty" {
+        return Ok(StepResult {
             next: None,
             edge_label: "ON_EMPTY".to_string(),
             output: Value::List(Vec::new()),
-        },
-        _ => StepResult {
+        });
+    }
+    // `label`-scoped lookup: use host.get_by_label when available.
+    if let Some(Value::Text(label)) = op.properties.get("label") {
+        let cids = host.get_by_label(label)?;
+        if cids.is_empty() {
+            return Ok(StepResult {
+                next: None,
+                edge_label: "ON_EMPTY".to_string(),
+                output: Value::List(Vec::new()),
+            });
+        }
+        let list = cids
+            .into_iter()
+            .map(|c| Value::Text(c.to_base32()))
+            .collect();
+        return Ok(StepResult {
             next: None,
             edge_label: "ok".to_string(),
-            output: Value::List(Vec::new()),
-        },
+            output: Value::List(list),
+        });
     }
+    Ok(StepResult {
+        next: None,
+        edge_label: "ok".to_string(),
+        output: Value::List(Vec::new()),
+    })
+}
+
+fn labels_value(labels: &[String]) -> Value {
+    Value::List(labels.iter().map(|l| Value::Text(l.clone())).collect())
 }

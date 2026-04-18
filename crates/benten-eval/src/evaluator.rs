@@ -27,7 +27,7 @@ use benten_core::Value;
 use std::collections::HashMap;
 use std::time::Instant;
 
-use crate::{EvalError, Evaluator, OperationNode, StepResult, Subgraph, TraceStep};
+use crate::{EvalError, Evaluator, OperationNode, PrimitiveHost, StepResult, Subgraph, TraceStep};
 
 /// Terminal outcome of [`Evaluator::run`].
 ///
@@ -67,8 +67,13 @@ impl Evaluator {
     /// Returns whatever [`Evaluator::step`] surfaces, plus
     /// [`EvalError::StackOverflow`] if the walker overruns
     /// [`Evaluator::max_stack_depth`].
-    pub fn run(&mut self, subgraph: &Subgraph) -> Result<RunResult, EvalError> {
-        self.run_with_budget(subgraph, DEFAULT_ITERATION_BUDGET)
+    pub fn run(
+        &mut self,
+        subgraph: &Subgraph,
+        input: Value,
+        host: &dyn PrimitiveHost,
+    ) -> Result<RunResult, EvalError> {
+        self.run_with_budget(subgraph, input, host, DEFAULT_ITERATION_BUDGET)
     }
 
     /// Variant of [`Evaluator::run`] with a caller-supplied iteration budget.
@@ -84,9 +89,11 @@ impl Evaluator {
     pub fn run_with_budget(
         &mut self,
         subgraph: &Subgraph,
+        input: Value,
+        host: &dyn PrimitiveHost,
         budget: u64,
     ) -> Result<RunResult, EvalError> {
-        let (result, _trace) = self.run_inner(subgraph, budget, false)?;
+        let (result, _trace) = self.run_inner(subgraph, input, host, budget, false)?;
         Ok(result)
     }
 
@@ -103,13 +110,17 @@ impl Evaluator {
     pub fn run_with_trace(
         &mut self,
         subgraph: &Subgraph,
+        input: Value,
+        host: &dyn PrimitiveHost,
     ) -> Result<(RunResult, Vec<TraceStep>), EvalError> {
-        self.run_inner(subgraph, DEFAULT_ITERATION_BUDGET, true)
+        self.run_inner(subgraph, input, host, DEFAULT_ITERATION_BUDGET, true)
     }
 
     fn run_inner(
         &mut self,
         subgraph: &Subgraph,
+        _input: Value,
+        host: &dyn PrimitiveHost,
         budget: u64,
         collect_trace: bool,
     ) -> Result<(RunResult, Vec<TraceStep>), EvalError> {
@@ -164,7 +175,7 @@ impl Evaluator {
                 ));
             }
             let start = Instant::now();
-            let step_res = self.step(op);
+            let step_res = self.step(op, host);
             let elapsed_us = start.elapsed().as_micros();
             let elapsed = u64::try_from(elapsed_us).unwrap_or(u64::MAX);
             // Per R4 triage: trace steps must have non-zero timing. Saturate
@@ -193,9 +204,24 @@ impl Evaluator {
                     if last.edge_label == "terminal" {
                         break;
                     }
+                    // Try the specific edge label; if the graph doesn't
+                    // declare one, fall back to the generic continuation
+                    // edge (`"next"` — what `SubgraphBuilder` emits by
+                    // default for non-error transitions). The fallback is
+                    // only consulted when the step returned a success-shape
+                    // edge (`"ok"`), so typed error edges remain
+                    // unambiguous.
                     cursor = next_by_edge
                         .get(&(op.id.as_str(), last.edge_label.as_str()))
-                        .and_then(|id| by_id.get(*id).copied());
+                        .copied()
+                        .or_else(|| {
+                            if last.edge_label == "ok" {
+                                next_by_edge.get(&(op.id.as_str(), "next")).copied()
+                            } else {
+                                None
+                            }
+                        })
+                        .and_then(|id| by_id.get(id).copied());
                 }
                 Err(e) => {
                     if collect_trace {
@@ -226,13 +252,15 @@ impl Evaluator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{PrimitiveKind, Subgraph};
+    use crate::{NullHost, PrimitiveKind, Subgraph};
 
     #[test]
     fn run_empty_subgraph_yields_ok_terminal() {
         let mut ev = Evaluator::new();
         let sg = Subgraph::new("empty");
-        let r = ev.run(&sg).expect("empty subgraph is a no-op");
+        let r = ev
+            .run(&sg, Value::Null, &NullHost)
+            .expect("empty subgraph is a no-op");
         assert_eq!(r.terminal_edge, "ok");
         assert_eq!(r.steps_executed, 0);
     }
@@ -242,7 +270,9 @@ mod tests {
         let mut ev = Evaluator::new();
         let sg = Subgraph::new("single_respond")
             .with_node(OperationNode::new("r", PrimitiveKind::Respond));
-        let r = ev.run(&sg).expect("single respond terminates cleanly");
+        let r = ev
+            .run(&sg, Value::Null, &NullHost)
+            .expect("single respond terminates cleanly");
         assert_eq!(r.terminal_edge, "terminal");
         assert_eq!(r.steps_executed, 1);
     }

@@ -142,7 +142,7 @@ fn call_primitive_error_edges_include_on_limit_denied_error() {
 /// "phase_two_primitives_return_not_implemented_at_call_time".
 #[test]
 fn phase_two_primitives_return_not_implemented_at_call_time() {
-    use benten_eval::{EvalError, Evaluator, OperationNode};
+    use benten_eval::{EvalError, Evaluator, NullHost, OperationNode};
 
     let mut ev = Evaluator::new();
     for kind in [
@@ -153,7 +153,7 @@ fn phase_two_primitives_return_not_implemented_at_call_time() {
     ] {
         let op = OperationNode::new(format!("op_{kind:?}"), kind);
         let err = ev
-            .step(&op)
+            .step(&op, &NullHost)
             .expect_err("Phase-2 primitive must error at call time");
         assert!(
             matches!(err, EvalError::PrimitiveNotImplemented(k) if k == kind),

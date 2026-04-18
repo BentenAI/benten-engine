@@ -30,17 +30,21 @@
 //! findings `g6-cag-5` and the ITERATE/CALL observability concern in
 //! `g6-cr-10`.
 
-use benten_core::Value;
+use benten_core::{Node, Value};
 
-use crate::{EvalError, OperationNode, StepResult};
+use crate::{EvalError, OperationNode, PrimitiveHost, StepResult};
 
 /// Execute a CALL primitive.
+///
+/// Takes `&dyn PrimitiveHost` so the engine can recursively dispatch the
+/// callee handler via `host.call_handler`. Attenuation and timeout remain
+/// property-driven (R3 tests stage both on the Node).
 ///
 /// # Errors
 ///
 /// Does not surface errors via `Err`; attenuation / timeout failures route
 /// through the typed error edges `ON_DENIED` / `ON_LIMIT`.
-pub fn execute(op: &OperationNode) -> Result<StepResult, EvalError> {
+pub fn execute(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResult, EvalError> {
     // Attenuation check.
     if let (Some(Value::Text(parent)), Some(Value::Text(child))) = (
         op.properties.get("parent_scope"),
@@ -73,8 +77,34 @@ pub fn execute(op: &OperationNode) -> Result<StepResult, EvalError> {
         }
     }
 
-    // Happy path: the evaluator (G7) threads the callee's RESPOND payload
-    // through. Phase-1 surface hands back a null placeholder.
+    // Dispatch through the host when a `target` + `op` are staged. Real
+    // handler-to-handler dispatch. Capability denial routes ON_DENIED.
+    if let (Some(Value::Text(target)), Some(Value::Text(callee_op))) =
+        (op.properties.get("target"), op.properties.get("call_op"))
+    {
+        let input = Node::empty();
+        match host.call_handler(target, callee_op, input) {
+            Ok(v) => {
+                return Ok(StepResult {
+                    next: None,
+                    edge_label: "ok".to_string(),
+                    output: v,
+                });
+            }
+            Err(EvalError::Capability(c)) => {
+                return Ok(StepResult {
+                    next: None,
+                    edge_label: "ON_DENIED".to_string(),
+                    output: Value::text(c.to_string()),
+                });
+            }
+            Err(e) => return Err(e),
+        }
+    }
+
+    // Legacy no-target path: Phase-1 fixtures that only stage attenuation /
+    // timeout properties still work — they hit the happy path with a null
+    // placeholder.
     Ok(StepResult {
         next: None,
         edge_label: "ok".to_string(),
