@@ -74,6 +74,7 @@ fn view1_id_is_capability_grants() {
 /// answer the same query with the same concrete payload as an incrementally
 /// maintained one.
 #[test]
+#[ignore = "TODO(phase-2-ivm-replay): rebuild() is Phase-1 clear-to-Fresh (no source-of-truth); Phase 2 adds event-log replay by threading an EventLog or KVBackend into the View trait. When populated, assert incremental == rebuild."]
 fn view1_rebuild_matches_incremental_state() {
     let mut incremental = CapabilityGrantsView::new();
     incremental

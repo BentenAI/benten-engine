@@ -64,4 +64,23 @@ proptest! {
             ctx
         );
     }
+
+    /// Determinism proptest (R2 landscape §3 row for
+    /// `prop_capability_check_deterministic`). For every structurally-valid
+    /// context, two consecutive `check_write` calls with identical inputs
+    /// must return equivalent results. NoAuth is trivially deterministic;
+    /// this pins the contract so a future grant-backed policy (Phase 2)
+    /// cannot silently introduce non-determinism without failing.
+    #[test]
+    fn prop_capability_check_deterministic(ctx in any_write_context()) {
+        let backend = NoAuthBackend::new();
+        let a = backend.check_write(&ctx).is_ok();
+        let b = backend.check_write(&ctx).is_ok();
+        prop_assert_eq!(
+            a,
+            b,
+            "check_write must be deterministic for identical contexts; ctx={:?}",
+            ctx
+        );
+    }
 }

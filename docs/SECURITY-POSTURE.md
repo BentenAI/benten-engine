@@ -27,4 +27,18 @@ Benten uses **BLAKE3-256** with a 32-byte digest embedded in every CIDv1. The ac
 
 ---
 
+### Compromise #2 — `E_CAP_DENIED_READ` leaks existence (Option A)
+
+Phase 1 ships the stricter error route: a denied read returns `CapError::DeniedRead { required, entity }` (code `E_CAP_DENIED_READ`) rather than silently returning `None` (which would be indistinguishable from not-found).
+
+**Why:** Option A surfaces the denial to the caller, enabling the application layer to distinguish "you don't have access" from "this resource doesn't exist." This leaks the fact that the Cid EXISTS in the backend to an unauthorized reader.
+
+**Attack class:** an unauthorized reader can probe the CID space to enumerate what is stored, without ever reading contents.
+
+**Phase 3 revisit:** sync + federation will revisit this. Options: (a) return indistinguishable `None` (the option-B plan); (b) add a capability level that permits existence-check but not read; (c) rotate CIDs per-reader (privacy-preserving addressing).
+
+**Regression test:** `option_a_existence_leak_is_documented_compromise` greps this doc for `option A` + `E_CAP_DENIED_READ` — keeping this section load-bearing for the test.
+
+---
+
 *Future compromises with security implications will be appended as sections here, each tagged with the compromise number from the R1 Triage Addendum.*
