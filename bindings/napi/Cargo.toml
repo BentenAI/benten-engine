@@ -30,6 +30,7 @@ napi-export = ["dep:napi", "dep:napi-derive"]
 
 [dependencies]
 benten-core = { path = "../../crates/benten-core" }
+benten-caps = { path = "../../crates/benten-caps" }
 benten-engine = { path = "../../crates/benten-engine" }
 napi = { workspace = true, features = ["napi4", "serde-json"], optional = true }
 napi-derive = { workspace = true, optional = true }
