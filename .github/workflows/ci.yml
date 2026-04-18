@@ -1,5 +1,27 @@
 name: CI
 
+# Main Phase 1 CI workflow (T4/T5/T6/T7/T9/T10 + scaffolder cold-install).
+#
+# Jobs:
+#   1. build-and-test   — multi-arch matrix (macOS arm64/x86_64, Linux
+#                         x86_64/arm64) x (MSRV 1.85, stable).
+#                         Runs fmt, clippy, nextest, doc. Emits canonical
+#                         CID for the cross-leg gate.
+#   2. wasm-runtime     — wasm32-wasip1 under wasmtime (canonical CID
+#                         reproduction) + wasm32-unknown-unknown compile
+#                         check for bindings/napi.
+#   3. cross-leg-gate   — asserts every leg's CID is byte-identical.
+#   4. supply-chain     — cargo-audit + cargo-deny on every PR.
+#   5. drift-detector   — docs/ERROR-CATALOG.md vs Rust enum vs TS types.
+#   6. cold-install     — `npx create-benten-app test-project &&
+#                         cd test-project && npm install && npm run test`.
+#
+# Companion workflows (determinism.yml, wasm-checks.yml, supply-chain.yml,
+# drift-detect.yml, cold-install.yml) run the same checks on wider trigger
+# matrices (weekly cron, release events, seeded-vuln canaries). The set of
+# jobs here is the PR-gate subset — every one of these must be green for
+# a PR to merge.
+
 on:
   push:
     branches: [main]
@@ -15,53 +37,313 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  check:
-    name: Format, lint, test
-    runs-on: ubuntu-latest
+  # --------------------------------------------------------------------------
+  # T4 (multi-arch) + T5 (MSRV) — one matrix leg per (os, rust) pair.
+  # --------------------------------------------------------------------------
+  build-and-test:
+    name: build+test ${{ matrix.leg }} @ ${{ matrix.rust }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-14,         leg: macos-arm64,   target: aarch64-apple-darwin,       rust: "1.85.0" }
+          - { os: macos-14,         leg: macos-arm64,   target: aarch64-apple-darwin,       rust: stable   }
+          - { os: macos-13,         leg: macos-x86_64,  target: x86_64-apple-darwin,        rust: "1.85.0" }
+          - { os: macos-13,         leg: macos-x86_64,  target: x86_64-apple-darwin,        rust: stable   }
+          - { os: ubuntu-24.04,     leg: linux-x86_64,  target: x86_64-unknown-linux-gnu,   rust: "1.85.0" }
+          - { os: ubuntu-24.04,     leg: linux-x86_64,  target: x86_64-unknown-linux-gnu,   rust: stable   }
+          - { os: ubuntu-24.04-arm, leg: linux-arm64,   target: aarch64-unknown-linux-gnu,  rust: "1.85.0" }
+          - { os: ubuntu-24.04-arm, leg: linux-arm64,   target: aarch64-unknown-linux-gnu,  rust: stable   }
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ matrix.rust }}
+          targets: ${{ matrix.target }}
           components: rustfmt, clippy
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.leg }}-${{ matrix.rust }}
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
 
-      - name: Check formatting
+      - name: cargo fmt --check
+        # fmt + clippy only on stable to avoid MSRV-chasing lint churn; the
+        # MSRV legs still build+test to catch accidental post-1.85 features.
+        if: matrix.rust == 'stable'
         run: cargo fmt --all -- --check
 
-      - name: Clippy
+      - name: cargo clippy
+        if: matrix.rust == 'stable'
         run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: Build
-        run: cargo build --workspace --all-targets
+      - name: cargo build --locked
+        run: cargo build --workspace --all-targets --locked
 
-      - name: Test
-        run: cargo nextest run --workspace
+      - name: cargo nextest run
+        run: cargo nextest run --workspace --locked
 
-      - name: Doc build
-        run: cargo doc --workspace --no-deps
+      - name: cargo doc
+        if: matrix.rust == 'stable'
         env:
           RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc --workspace --no-deps
 
-      # Error-catalog drift detector (T7). The detector script lives at
-      # `scripts/drift-detect-error-catalog.mjs` (R3 deliverable). A
-      # dedicated workflow (`.github/workflows/drift-detect.yml`, owned by
-      # rust-test-writer-security) invokes this same script on a wider
-      # trigger matrix; keeping an inline call here means a broken
-      # catalog surfaces on the main CI summary, not just in a peripheral
-      # workflow.
-      - name: Setup Node.js for drift detector
+      - name: Reproduce canonical CID for cross-leg gate
+        # Emits the CID to a file; the cross-leg-gate job downloads every
+        # matrix leg's artifact and asserts byte-for-byte equality.
+        shell: bash
+        run: |
+          cargo run --release -p benten-core --example print_canonical_cid --locked > "cid-${{ matrix.leg }}-${{ matrix.rust }}.txt"
+          cat "cid-${{ matrix.leg }}-${{ matrix.rust }}.txt"
+
+      - name: Upload CID artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cid-${{ matrix.leg }}-${{ matrix.rust }}
+          path: cid-${{ matrix.leg }}-${{ matrix.rust }}.txt
+          if-no-files-found: error
+
+  # --------------------------------------------------------------------------
+  # T6 (wasm32-wasip1 runtime) + T8 (wasm32-unknown-unknown compile check).
+  # --------------------------------------------------------------------------
+  wasm-runtime:
+    name: wasm32 (wasip1 runtime + unknown-unknown compile)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1,wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: wasm
+
+      - name: Install wasmtime
+        uses: bytecodealliance/actions/wasmtime/setup@v1
+        with:
+          version: "latest"
+
+      - name: Compile-check bindings/napi for wasm32-unknown-unknown
+        run: cargo check --target wasm32-unknown-unknown -p benten-napi
+
+      - name: Compile benten-core example for wasm32-wasip1
+        run: cargo build --release --target wasm32-wasip1 -p benten-core --example print_canonical_cid --locked
+
+      - name: Run under wasmtime and capture CID
+        run: |
+          wasmtime target/wasm32-wasip1/release/examples/print_canonical_cid.wasm > cid-wasm32-wasip1.txt
+          cat cid-wasm32-wasip1.txt
+
+      - name: Upload wasm CID artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cid-wasm32-wasip1
+          path: cid-wasm32-wasip1.txt
+          if-no-files-found: error
+
+  # --------------------------------------------------------------------------
+  # T9 — cross-leg byte-equality gate. Asserts every native leg and the
+  # wasm leg produced identical CID bytes. Not just "each matches the
+  # committed fixture" — that would mask a drift that sneaks into the
+  # fixture itself. Every leg must match every other leg.
+  # --------------------------------------------------------------------------
+  cross-leg-determinism:
+    name: cross-leg byte-equality gate (T9)
+    needs: [build-and-test, wasm-runtime]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all CID artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: cids/
+          pattern: cid-*
+
+      - name: Assert byte-for-byte equality across every leg
+        shell: bash
+        run: |
+          set -euo pipefail
+          declare -A legs
+          for dir in cids/cid-*; do
+            leg=$(basename "$dir" | sed 's/^cid-//')
+            file=$(find "$dir" -type f -name '*.txt' | head -n 1)
+            if [ -z "$file" ]; then
+              echo "WARN: no .txt inside $dir"
+              continue
+            fi
+            value=$(tr -d '[:space:]' < "$file")
+            legs[$leg]="$value"
+          done
+
+          echo "Legs observed (${#legs[@]}):"
+          for leg in "${!legs[@]}"; do
+            printf '  %-40s %s\n' "$leg" "${legs[$leg]}"
+          done
+
+          reference_leg=""
+          reference_value=""
+          for leg in "${!legs[@]}"; do
+            reference_leg="$leg"
+            reference_value="${legs[$leg]}"
+            break
+          done
+
+          # Also assert the reference matches the committed fixture so a
+          # cross-leg-consistent-but-fixture-drifted state is caught.
+          recorded=$(tr -d '[:space:]' < crates/benten-core/tests/fixtures/canonical_cid.txt)
+          if [ "$recorded" != "$reference_value" ]; then
+            echo "FIXTURE DRIFT: committed fixture is $recorded, legs produced $reference_value"
+            echo "If the engine change is intentional, update the fixture in the same PR."
+            exit 1
+          fi
+
+          drift=0
+          for leg in "${!legs[@]}"; do
+            if [ "${legs[$leg]}" != "$reference_value" ]; then
+              echo "DRIFT: $leg produced ${legs[$leg]}, reference $reference_leg produced $reference_value"
+              drift=1
+            fi
+          done
+
+          if [ $drift -ne 0 ]; then
+            echo "T9 CROSS-LEG DETERMINISM GATE FAILED — see above for diverging leg(s)."
+            exit 1
+          fi
+
+          echo "T9 OK: all ${#legs[@]} legs produced the same CID: $reference_value"
+
+  # --------------------------------------------------------------------------
+  # T10 — supply chain. cargo-audit + cargo-deny on every PR. Fails on any
+  # HIGH/CRITICAL advisory or banned license. A weekly sibling workflow
+  # (supply-chain-seeded-test.yml) validates the harness itself fires on a
+  # known-vulnerable canary.
+  # --------------------------------------------------------------------------
+  supply-chain:
+    name: supply-chain (cargo-audit + cargo-deny)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit + cargo-deny
+        run: |
+          cargo install --locked cargo-audit
+          cargo install --locked cargo-deny
+
+      - name: cargo audit
+        run: cargo audit --deny warnings
+
+      - name: cargo deny check
+        run: cargo deny check
+
+  # --------------------------------------------------------------------------
+  # T7 — error-catalog drift detector. Bidirectional parity check across
+  # docs/ERROR-CATALOG.md, crates/benten-core/src/error_code.rs, and
+  # packages/engine/src/errors.generated.ts (+ errors.ts fallback).
+  # --------------------------------------------------------------------------
+  drift-detector:
+    name: error-catalog drift detector (T7)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Error-catalog drift detector
-        run: node scripts/drift-detect-error-catalog.mjs
+      - name: Regenerate TS error classes from catalog
+        # Runs the codegen; if the checked-in errors.generated.ts diverges
+        # from what the catalog would produce, the drift-detector will
+        # surface it.
+        run: node --experimental-strip-types scripts/codegen-errors.ts
+
+      - name: Verify errors.generated.ts is checked in and up to date
+        run: |
+          if ! git diff --quiet -- packages/engine/src/errors.generated.ts; then
+            echo "errors.generated.ts is out of date. Run 'node --experimental-strip-types scripts/codegen-errors.ts' and commit the result."
+            git --no-pager diff -- packages/engine/src/errors.generated.ts
+            exit 1
+          fi
+
+      - name: Run drift detector (TS sources of truth)
+        run: node --experimental-strip-types scripts/drift-detect.ts
+
+  # --------------------------------------------------------------------------
+  # Scaffolder cold-install sanity. `npx create-benten-app` produces a
+  # project where `npm install && npm run test` exits 0 (the Phase 1
+  # headline exit criterion from implementation plan §1).
+  # --------------------------------------------------------------------------
+  cold-install:
+    name: create-benten-app cold install
+    runs-on: ubuntu-24.04
+    # Depends on build-and-test so the bindings/napi artifact is compiled
+    # at least once on Linux (the local workspace link path resolves the
+    # compiled binary). If we ever publish prebuilt napi binaries, this
+    # dependency can be dropped for a truly cold install path.
+    needs: [build-and-test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: cold-install
+
+      - name: Build napi binding
+        # The scaffolder's generated project points at @benten/engine via
+        # the repo-root workspace link. That link requires the napi crate
+        # to be compiled before `npm install` inside the scaffolded app
+        # resolves @benten/engine-native.
+        run: |
+          cd bindings/napi
+          npm install --no-audit --no-fund
+          npx @napi-rs/cli build --platform --release
+
+      - name: Install workspace deps
+        run: npm install --no-audit --no-fund
+
+      - name: Run scaffolder and test the generated project
+        shell: bash
+        run: |
+          set -euo pipefail
+          workdir=$(mktemp -d)
+          pushd "$workdir"
+          node "$GITHUB_WORKSPACE/tools/create-benten-app/bin.mjs" test-project --skip-install
+          cd test-project
+          # Re-point @benten/engine at the checked-out repo via npm install.
+          # In the scaffolder's default path (outside the repo) this would
+          # resolve against the published registry; inside CI we use the
+          # local file: link.
+          npm install \
+            --no-audit --no-fund \
+            "$GITHUB_WORKSPACE/packages/engine" \
+            "$GITHUB_WORKSPACE/bindings/napi"
+          npm install --no-audit --no-fund
+          npm run test
+          popd
+          rm -rf "$workdir"
