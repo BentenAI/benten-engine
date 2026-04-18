@@ -7,20 +7,24 @@
 // Error message) and `mapNativeError` (wrap a napi Error in the right
 // typed subclass).
 //
-// The drift-detect CI script (`scripts/drift-detect-error-catalog.mjs`)
-// reads `errors.generated.ts` and asserts it stays in sync with the
-// catalog and the Rust `ErrorCode` enum.
+// The drift-detect CI script (`scripts/drift-detect.ts`) reads
+// `errors.generated.ts` and asserts it stays in sync with the catalog
+// and the Rust `ErrorCode` enum.
 
 export {
   BentenError,
   CATALOG_CODES,
   type CatalogCode,
+  EBackendNotFound,
   ECapAttenuation,
   ECapDenied,
   ECapDeniedRead,
   ECapNotImplemented,
   ECapRevoked,
   ECapRevokedMidEval,
+  ECidParse,
+  ECidUnsupportedCodec,
+  ECidUnsupportedHash,
   EDslInvalidShape,
   EDslUnregisteredHandler,
   EInputLimit,
@@ -39,6 +43,7 @@ export {
   EInvTooManyNodes,
   EIvmViewStale,
   ENestedTransactionNotSupported,
+  ENotFound,
   EPrimitiveNotImplemented,
   ESandboxFuelExhausted,
   ESandboxOutputLimit,
@@ -50,17 +55,24 @@ export {
   ESystemZoneWrite,
   ETransformSyntax,
   ETxAborted,
+  EValueFloatNan,
+  EValueFloatNonfinite,
+  EVersionBranched,
   EWriteConflict,
 } from "./errors.generated.js";
 
 import {
   BentenError,
+  EBackendNotFound,
   ECapAttenuation,
   ECapDenied,
   ECapDeniedRead,
   ECapNotImplemented,
   ECapRevoked,
   ECapRevokedMidEval,
+  ECidParse,
+  ECidUnsupportedCodec,
+  ECidUnsupportedHash,
   EDslInvalidShape,
   EDslUnregisteredHandler,
   EInputLimit,
@@ -79,6 +91,7 @@ import {
   EInvTooManyNodes,
   EIvmViewStale,
   ENestedTransactionNotSupported,
+  ENotFound,
   EPrimitiveNotImplemented,
   ESandboxFuelExhausted,
   ESandboxOutputLimit,
@@ -90,6 +103,9 @@ import {
   ESystemZoneWrite,
   ETransformSyntax,
   ETxAborted,
+  EValueFloatNan,
+  EValueFloatNonfinite,
+  EVersionBranched,
   EWriteConflict,
 } from "./errors.generated.js";
 
@@ -139,6 +155,14 @@ const CODE_TO_CTOR: Record<string, BentenErrorCtor> = {
   E_SYNC_CAP_UNVERIFIED: ESyncCapUnverified,
   E_DSL_INVALID_SHAPE: EDslInvalidShape,
   E_DSL_UNREGISTERED_HANDLER: EDslUnregisteredHandler,
+  E_VALUE_FLOAT_NAN: EValueFloatNan,
+  E_VALUE_FLOAT_NONFINITE: EValueFloatNonfinite,
+  E_CID_PARSE: ECidParse,
+  E_CID_UNSUPPORTED_CODEC: ECidUnsupportedCodec,
+  E_CID_UNSUPPORTED_HASH: ECidUnsupportedHash,
+  E_VERSION_BRANCHED: EVersionBranched,
+  E_BACKEND_NOT_FOUND: EBackendNotFound,
+  E_NOT_FOUND: ENotFound,
 };
 
 // Match-at-any-position regex for a stable `E_*` code. Codes look like

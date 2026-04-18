@@ -38,14 +38,53 @@ function die(code: number, msg: string): never {
   process.exit(code);
 }
 
-function parseCatalog(md: string): Set<string> {
-  const codes = new Set<string>();
-  const rx = /^###\s+(E_[A-Z0-9_]+)\s*$/gm;
+/**
+ * Parse catalog codes grouped by Phase marker.
+ *
+ * A catalog entry is a Phase-N-scoped code when its body section (the
+ * block until the next `### E_` heading) contains a line of the form
+ * `- **Phase:** N` (or `Phase: N` inline). Codes without an explicit
+ * Phase marker are considered Phase-1 (the default — they must already
+ * be wired in the Rust enum).
+ *
+ * Returns { all, phase1Required }:
+ *   - `all` is every catalog code (Phase-1 plus reserved future codes);
+ *     the TS errors.generated.ts must enumerate this full set.
+ *   - `phase1Required` is the subset that MUST appear in the Rust enum
+ *     at the current phase. Codes tagged Phase-2 / Phase-3 are reserved
+ *     in the catalog but not yet wired in Rust; they're allowed to be
+ *     missing from the Rust enum until the implementing phase lands.
+ */
+function parseCatalog(md: string): {
+  all: Set<string>;
+  phase1Required: Set<string>;
+} {
+  const all = new Set<string>();
+  const phase1Required = new Set<string>();
+  const headingRx = /^###\s+(E_[A-Z0-9_]+)\s*$/gm;
+  const matches: { code: string; start: number }[] = [];
   let m: RegExpExecArray | null;
-  while ((m = rx.exec(md)) !== null) {
-    codes.add(m[1]);
+  while ((m = headingRx.exec(md)) !== null) {
+    matches.push({ code: m[1], start: m.index });
   }
-  return codes;
+  for (let i = 0; i < matches.length; i++) {
+    const entry = matches[i];
+    const next = matches[i + 1];
+    const body = md.slice(entry.start, next ? next.start : md.length);
+    all.add(entry.code);
+    // Look for an explicit Phase tag. `- **Phase:** 2` / `Phase: 3` / etc.
+    const phaseRx = /\*\*Phase:\*\*\s*(\d+)|Phase:\s*(\d+)/i;
+    const pm = phaseRx.exec(body);
+    const phase = pm ? Number(pm[1] ?? pm[2]) : 1;
+    // TS-only codes (the DSL wrapper layer) live in the TS errors.ts
+    // and never surface from Rust; they're catalog-documented for
+    // consumer reference only.
+    const tsOnly = /TS-only|ts-only/i.test(body);
+    if (phase <= 1 && !tsOnly) {
+      phase1Required.add(entry.code);
+    }
+  }
+  return { all, phase1Required };
 }
 
 /**
@@ -91,13 +130,15 @@ function diff(a: Set<string>, b: Set<string>): string[] {
 if (!existsSync(CATALOG_PATH)) {
   die(2, `catalog not found at ${CATALOG_PATH}`);
 }
-const catalogCodes = parseCatalog(readFileSync(CATALOG_PATH, "utf8"));
+const { all: catalogCodes, phase1Required: catalogPhase1 } = parseCatalog(
+  readFileSync(CATALOG_PATH, "utf8"),
+);
 if (catalogCodes.size === 0) {
   die(2, `zero codes parsed from ${CATALOG_PATH}`);
 }
 
 const summary: string[] = [];
-summary.push(`[drift-detect] catalog codes: ${catalogCodes.size}`);
+summary.push(`[drift-detect] catalog codes: ${catalogCodes.size} (phase-1 required: ${catalogPhase1.size})`);
 
 let drifted = false;
 
@@ -105,7 +146,10 @@ let drifted = false;
 if (existsSync(RUST_PATH)) {
   const rustCodes = parseRust(readFileSync(RUST_PATH, "utf8"));
   summary.push(`[drift-detect] rust codes:    ${rustCodes.size}`);
-  const missingInRust = diff(catalogCodes, rustCodes);
+  // Only the Phase-1-required slice of the catalog must be wired in Rust
+  // today; Phase-2 / Phase-3 codes are reserved in the catalog but not
+  // yet implemented (`Phase: 2`/`Phase: 3` body marker).
+  const missingInRust = diff(catalogPhase1, rustCodes);
   const extraInRust = diff(rustCodes, catalogCodes);
   if (missingInRust.length > 0) {
     drifted = true;

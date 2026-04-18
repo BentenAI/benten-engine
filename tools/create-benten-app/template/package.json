@@ -13,7 +13,6 @@
     "@benten/engine": "*"
   },
   "devDependencies": {
-    "@mermaid-js/parser": "^0.6.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"

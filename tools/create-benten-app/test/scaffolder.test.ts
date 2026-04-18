@@ -28,7 +28,7 @@ describe("create-benten-app scaffolder (headline exit criterion)", () => {
       const smoke = readFileSync(join(appDir, "test", "smoke.test.ts"), "utf8");
       expect(smoke).toContain("register_succeeds");
       expect(smoke).toContain("three_creates_list_returns_them");
-      expect(smoke).toContain("cap_denial_routes_on_denied");
+      expect(smoke).toContain("typed_error_surface_unregistered_handler");
       expect(smoke).toContain("trace_non_zero_timing");
       expect(smoke).toContain("mermaid_output_parses");
       expect(smoke).toContain("ts_rust_cid_roundtrip");
@@ -45,9 +45,13 @@ describe("create-benten-app scaffolder (headline exit criterion)", () => {
     // Meta-test: the generated smoke.test.ts must contain exactly six top-level
     // it() blocks mapping to the six exit-criterion assertions. A regression
     // that drops one of them is caught here.
+    //
+    // We count only `it(` call-site occurrences (line-start whitespace +
+    // `it(`) so stray mentions of `it()` inside comments don't skew the
+    // count.
     const templatePath = join(__dirname, "..", "template", "test", "smoke.test.ts");
     const template = readFileSync(templatePath, "utf8");
-    const itCount = (template.match(/\bit\s*\(/g) ?? []).length;
+    const itCount = (template.match(/^\s*it\s*\(/gm) ?? []).length;
     expect(itCount).toBe(6);
   });
 });

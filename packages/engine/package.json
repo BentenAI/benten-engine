@@ -28,7 +28,6 @@
     "@benten/engine-native": "file:../../bindings/napi"
   },
   "devDependencies": {
-    "@mermaid-js/parser": "^0.6.0",
     "@types/node": "^20.0.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"

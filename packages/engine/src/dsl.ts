@@ -125,17 +125,16 @@ export interface SandboxArgs {
 // Builder
 // ---------------------------------------------------------------------------
 
-let __nodeCounter = 0;
-function nextNodeId(prefix: string): string {
-  __nodeCounter = (__nodeCounter + 1) | 0;
-  return `${prefix}-${__nodeCounter}`;
-}
-
 /**
  * SubgraphBuilder — fluent, append-only DSL over the 12 primitives.
  *
  * One instance represents one Subgraph under construction. Call
  * `.build()` to materialize the JSON-serializable shape.
+ *
+ * Node ids are counted per-instance so concurrent builders produce
+ * independent, stable id sequences — two `crud('post')` calls in
+ * parallel Vitest workers both assign `read-1`, `write-2`, etc. and
+ * therefore yield identical content-addressed handler CIDs.
  */
 export class SubgraphBuilder {
   protected readonly handlerId: string;
@@ -143,6 +142,8 @@ export class SubgraphBuilder {
   protected rootId?: string;
   protected lastId?: string;
   protected readonly actions: Set<string> = new Set();
+  // Per-instance node counter. See class-level JSDoc above.
+  protected nodeCounter = 0;
 
   public constructor(handlerId: string) {
     if (typeof handlerId !== "string" || handlerId.length === 0) {
@@ -151,11 +152,16 @@ export class SubgraphBuilder {
     this.handlerId = handlerId;
   }
 
+  protected nextNodeId(prefix: string): string {
+    this.nodeCounter = (this.nodeCounter + 1) | 0;
+    return `${prefix}-${this.nodeCounter}`;
+  }
+
   protected addNode(
     primitive: Primitive,
     args: Record<string, JsonValue>,
   ): this {
-    const id = nextNodeId(primitive);
+    const id = this.nextNodeId(primitive);
     const node: SubgraphNode = { id, primitive, args, edges: {} };
     // Link previous node via a default `NEXT` edge (unless the previous
     // was a BRANCH — its edges are managed by `.case()`).
@@ -282,7 +288,10 @@ export class BranchBuilder {
     value: string,
     body: (s: CaseBuilder) => unknown,
   ): BranchBuilder {
-    const scope = new CaseBuilder((this.parent as unknown as InternalParent).handlerIdInternal());
+    const parentInternal = this.parent as unknown as InternalParent;
+    const scope = new CaseBuilder(parentInternal.handlerIdInternal(), (p) =>
+      parentInternal.mintNodeIdInternal(p),
+    );
     body(scope);
     const caseNodes = scope.drain();
     if (caseNodes.length === 0) {
@@ -317,6 +326,7 @@ export class BranchBuilder {
 interface InternalParent {
   handlerIdInternal(): string;
   nodesInternal(): SubgraphNode[];
+  mintNodeIdInternal(prefix: string): string;
 }
 
 // Add internals lazily via prototype extension (keeps the public class API clean).
@@ -332,21 +342,43 @@ Object.defineProperty(SubgraphBuilder.prototype, "nodesInternal", {
   },
   enumerable: false,
 });
+Object.defineProperty(SubgraphBuilder.prototype, "mintNodeIdInternal", {
+  value(this: SubgraphBuilder, prefix: string): string {
+    // Delegate to the instance method so the per-instance counter is
+    // shared with `CaseBuilder`s spawned off this SubgraphBuilder.
+    return (this as unknown as { nextNodeId(p: string): string }).nextNodeId(
+      prefix,
+    );
+  },
+  enumerable: false,
+});
 
 /** Lightweight builder used inside a `.case()` body. */
 export class CaseBuilder {
   private readonly scopeNodes: SubgraphNode[] = [];
   private lastId?: string;
 
-  // Parent handler id is passed for diagnostics — referenced only via
-  // `this.handlerId` in error paths, not retained long-term.
-  public constructor(public readonly handlerId: string) {}
+  // Parent handler id + an id-minting closure threaded from the owning
+  // SubgraphBuilder. Using the parent's per-instance counter keeps node
+  // ids deterministic across concurrent builder instances (each chain
+  // gets `read-1`, `write-2`, ... from its own counter).
+  public constructor(
+    public readonly handlerId: string,
+    private readonly mintId: (prefix: string) => string = (p) =>
+      `${p}-${++CaseBuilder.__fallbackCounter}`,
+  ) {}
+
+  // Fallback counter used only when a CaseBuilder is constructed
+  // without a parent id-minter (legacy callers / direct `new
+  // CaseBuilder(id)` sites). New code routes through the parent's
+  // counter via the constructor's second argument.
+  private static __fallbackCounter = 0;
 
   private addNode(
     primitive: Primitive,
     args: Record<string, JsonValue>,
   ): this {
-    const id = nextNodeId(primitive);
+    const id = this.mintId(primitive);
     const node: SubgraphNode = { id, primitive, args, edges: {} };
     if (this.lastId) {
       const prev = this.scopeNodes.find((n) => n.id === this.lastId);

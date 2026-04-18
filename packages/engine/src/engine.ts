@@ -66,7 +66,7 @@ interface NativeEngine {
   };
   handlerToMermaid?: (handlerId: string) => string;
   grantCapability?: (grant: unknown) => string;
-  revokeCapability?: (cid: string) => void;
+  revokeCapability?: (grantCid: string, actor: string) => void;
   createView?: (viewDef: unknown) => string;
   readView?: (viewId: string, query: unknown) => unknown;
   emitEvent?: (name: string, payload: unknown) => void;
@@ -85,51 +85,21 @@ let __native: NativeModule | undefined;
 function loadNative(): NativeModule {
   if (__native) return __native;
   try {
+    // `@benten/engine-native` is a CJS package (its napi-rs-generated
+    // `index.js` dispatcher uses `require`). We load it via
+    // `createRequire` so a consumer `import`ing `@benten/engine` from
+    // an ESM context still resolves the CJS dispatcher cleanly. The
+    // dispatcher handles platform triplet / musl / Android / etc.
+    // detection itself — we no longer maintain a parallel triplet map.
     const require = createRequire(import.meta.url);
-
-    // G8-A's `bindings/napi/package.json` declares `"type": "module"`,
-    // which causes the napi-rs-generated CJS `index.js` to fail under
-    // ESM loading (`require is not defined`). Work around the mismatch
-    // by resolving the platform-specific `.node` artifact directly —
-    // the `.node` binary is a bindings module (no JS wrapping needed)
-    // and is the authoritative export surface. We try the dispatcher
-    // `index.js` first for environments where it works, then fall back
-    // to the platform-specific filename.
-    const candidates: string[] = [];
-    const { platform, arch } = process;
-    // The napi-rs binary filename convention used by v3.
-    const tripletName = (): string => {
-      const map: Record<string, string> = {
-        "darwin-arm64": "benten-napi.darwin-arm64.node",
-        "darwin-x64": "benten-napi.darwin-x64.node",
-        "linux-x64": "benten-napi.linux-x64-gnu.node",
-        "linux-arm64": "benten-napi.linux-arm64-gnu.node",
-        "win32-x64": "benten-napi.win32-x64-msvc.node",
-        "win32-arm64": "benten-napi.win32-arm64-msvc.node",
-      };
-      return map[`${platform}-${arch}`] ?? "";
-    };
-    const triplet = tripletName();
-    if (triplet) candidates.push(`@benten/engine-native/${triplet}`);
-    candidates.push("@benten/engine-native/index.js");
-    candidates.push("@benten/engine-native");
-
-    let mod: unknown;
-    const errors: string[] = [];
-    for (const cand of candidates) {
-      try {
-        mod = require(cand);
-        if (mod && typeof (mod as NativeModule).Engine === "function") {
-          __native = mod as NativeModule;
-          return __native;
-        }
-      } catch (e) {
-        errors.push(`${cand}: ${(e as Error).message ?? e}`);
-      }
+    const mod = require("@benten/engine-native") as NativeModule;
+    if (!mod || typeof mod.Engine !== "function") {
+      throw new Error(
+        "@benten/engine-native did not export an `Engine` class — binding may be stale",
+      );
     }
-    throw new Error(
-      `no usable binding. Tried: ${candidates.join(", ")}. Errors: ${errors.join(" | ")}`,
-    );
+    __native = mod;
+    return __native;
   } catch (err) {
     const e = new Error(
       `@benten/engine-native not loadable — did \`napi build\` run in bindings/napi? (${(err as Error).message ?? err})`,
@@ -233,15 +203,18 @@ export class Engine {
   }
 
   /**
-   * Close the engine. Phase 1 delegates to GC (napi drops the handle
-   * when the wrapper is unreferenced); later phases may wire an
-   * explicit `close` method on the native class.
+   * Close the engine.
+   *
+   * Phase-1: the native Engine class holds an `Arc<InnerEngine>` whose
+   * redb file handle is released when napi-rs drops the wrapper (GC).
+   * We mark the wrapper as closed so subsequent calls throw cleanly.
+   * Tests that need deterministic file-handle release between
+   * open/close cycles should avoid in-process re-open of the same
+   * file until Phase-2 wires an explicit native `close()` method.
    */
   public async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
-    // Hint the napi wrapper that it can release; napi-rs classes clean
-    // up via their destructor, so there's no explicit method to call.
   }
 
   private assertOpen(): void {
@@ -473,10 +446,10 @@ export class Engine {
    * Trace a handler invocation step-by-step. Returns the per-Node
    * timings alongside the final result.
    *
-   * When the native binding's trace shape does not include a `result`
-   * field, we synthesize one by running a parallel non-traced call so
-   * the `Trace.result` contract (exit-criterion #4) is satisfied with
-   * no caller-facing shape difference.
+   * The native binding's trace payload carries the terminal Outcome as
+   * its `result` field (Phase 1 fix for write-amplification: we no
+   * longer fire a second non-traced `call()` to synthesize a result —
+   * the traced invocation already produced one).
    */
   public async trace(
     handlerId: string,
@@ -498,10 +471,6 @@ export class Engine {
         ? op.slice(crud.label.length + 1)
         : op;
 
-    // Dispatch the trace + a parallel non-traced call. The parallel
-    // call is idempotent in shape but produces a separate Node (the
-    // content-address differs by createdAt); we surface ITS result as
-    // `Trace.result` so the caller can inspect the handler's output.
     let rawTrace: { steps: unknown[]; result?: unknown };
     try {
       rawTrace = this.inner.trace(handlerId, dispatchOp, input);
@@ -509,20 +478,8 @@ export class Engine {
       throw mapNativeError(err);
     }
 
-    let result: JsonValue =
+    const result: JsonValue =
       rawTrace.result !== undefined ? (rawTrace.result as JsonValue) : null;
-    if (result === null && this.inner.call) {
-      // Synthesize the result via a non-traced call. We reuse the
-      // public `call()` path so createdAt injection + normalization
-      // stays consistent.
-      try {
-        result = (await this.call(handlerId, op, input)) as JsonValue;
-      } catch {
-        // swallow — the trace's steps are still useful even if the
-        // follow-up call fails; the test contract only requires
-        // `steps.length > 0`.
-      }
-    }
 
     return {
       steps: (rawTrace.steps as Array<Record<string, unknown>>).map((s) => ({
