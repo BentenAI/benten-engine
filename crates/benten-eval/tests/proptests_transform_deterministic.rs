@@ -47,12 +47,12 @@ proptest! {
 /// parse / runtime failure (the determinism property still holds: a stable
 /// failure is still stable).
 fn evaluate_transform(expr: &str) -> Value {
-    use benten_eval::{Evaluator, OperationNode, PrimitiveKind};
+    use benten_eval::{Evaluator, NullHost, OperationNode, PrimitiveKind};
     let mut ev = Evaluator::new();
     let op = OperationNode::new("t", PrimitiveKind::Transform)
         .with_property("expr", Value::text(expr))
         .with_property("input", Value::Null);
-    match ev.step(&op) {
+    match ev.step(&op, &NullHost) {
         Ok(step) => step.output,
         Err(_) => Value::Null,
     }

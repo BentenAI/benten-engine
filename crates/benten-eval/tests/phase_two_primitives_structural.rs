@@ -15,7 +15,9 @@
 
 #![allow(clippy::unwrap_used)]
 
-use benten_eval::{EvalError, Evaluator, InvariantConfig, OperationNode, PrimitiveKind, Subgraph};
+use benten_eval::{
+    EvalError, Evaluator, InvariantConfig, NullHost, OperationNode, PrimitiveKind, Subgraph,
+};
 
 fn single_primitive_subgraph(kind: PrimitiveKind) -> Subgraph {
     Subgraph::new("h").with_node(OperationNode::new("n", kind))
@@ -58,7 +60,7 @@ fn wait_stream_subscribe_sandbox_call_time_error() {
     ] {
         let op = OperationNode::new(format!("{kind:?}"), kind);
         let err = ev
-            .step(&op)
+            .step(&op, &NullHost)
             .expect_err("Phase-2 primitives must fail at call time");
         assert!(
             matches!(err, EvalError::PrimitiveNotImplemented(k) if k == kind),

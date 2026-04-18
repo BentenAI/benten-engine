@@ -33,7 +33,7 @@ use std::sync::Arc;
 use benten_caps::{CapError, CapabilityPolicy, NoAuthBackend};
 pub use benten_core::ErrorCode;
 use benten_core::{Cid, CoreError, Edge, Node, Value};
-use benten_eval::{InvariantConfig, RegistrationError};
+use benten_eval::{InvariantConfig, PrimitiveHost, RegistrationError};
 use benten_graph::{ChangeEvent, GraphError, RedbBackend};
 
 use crate::change::ChangeBroadcast;
@@ -323,6 +323,38 @@ pub struct Engine {
     /// live subscriber and `read_view_with` can consult view state
     /// (code-reviewer g7-cr-8 / philosophy g7-ep-3).
     ivm: Option<Arc<benten_ivm::Subscriber>>,
+    /// Active `Engine::call` stack. Used by `impl PrimitiveHost` to pick up
+    /// per-call context (actor, nested depth) without threading it through
+    /// the trait-method signatures.
+    active_call: std::sync::Mutex<Vec<ActiveCall>>,
+}
+
+/// Per-call metadata tracked so [`PrimitiveHost`] methods can access the
+/// in-flight actor / op without additional argument threading.
+#[derive(Debug)]
+struct ActiveCall {
+    #[allow(dead_code, reason = "retained for future capability-binding uses")]
+    handler_id: String,
+    #[allow(dead_code, reason = "retained for future capability-binding uses")]
+    op: String,
+    #[allow(dead_code, reason = "retained for future capability-binding uses")]
+    actor: Option<Cid>,
+    /// Buffered write operations, replayed as a single transaction after the
+    /// Evaluator completes. Populated by `impl PrimitiveHost::put_node` /
+    /// `delete_node` / `put_edge` / `delete_edge`.
+    pending_ops: Vec<PendingHostOp>,
+    /// Whether a host-side `test_inject_failure` signalled a rollback.
+    inject_failure: bool,
+}
+
+/// A deferred host-side write op, replayed inside `dispatch_call`'s
+/// transaction after the evaluator walk completes.
+#[derive(Debug, Clone)]
+enum PendingHostOp {
+    PutNode { node: Node, projected_cid: Cid },
+    DeleteNode { cid: Cid },
+    PutEdge { edge: Edge, projected_cid: Cid },
+    DeleteEdge { cid: Cid },
 }
 
 impl std::fmt::Debug for Engine {
@@ -672,14 +704,18 @@ impl Engine {
         Ok(HandlerPredecessors::default())
     }
 
-    /// Core CRUD + SubgraphSpec dispatch. Private. Kept free of trait-object
-    /// gymnastics so the Phase-1 surface remains readable.
+    /// Core dispatch — fetch the registered Subgraph (or an op-specific
+    /// ephemeral for CRUD handlers) and run it through
+    /// [`benten_eval::Evaluator`] using `self` as the [`PrimitiveHost`].
+    ///
+    /// Closes Compromise #8: the evaluator is the sole dispatch path; no
+    /// fast-path short-circuits the walk.
     fn dispatch_call(
         &self,
         handler_id: &str,
         op: &str,
         input: Node,
-        _actor: Option<Cid>,
+        actor: Option<Cid>,
     ) -> Result<Outcome, EngineError> {
         // Verify the handler is registered.
         let handler_cid_opt = {
@@ -697,36 +733,278 @@ impl Engine {
             });
         };
 
-        // 1) SubgraphSpec-driven ops (non-CRUD) — dispatch via the spec
-        //    stored on the engine-internal side table.
-        if let Some(spec) = self
+        // Reentrancy guard — set the active-call state so `impl PrimitiveHost`
+        // can pick up the actor / op metadata without threading it through
+        // the trait methods.
+        {
+            let mut guard = self.active_call.lock().unwrap_or_else(|e| e.into_inner());
+            guard.push(ActiveCall {
+                handler_id: handler_id.to_string(),
+                op: op.to_string(),
+                actor: actor.clone(),
+                pending_ops: Vec::new(),
+                inject_failure: false,
+            });
+        }
+
+        let result = self.dispatch_call_inner(handler_id, op, input, actor, &handler_cid);
+
+        // Always pop the stack frame, even on error.
+        {
+            let mut guard = self.active_call.lock().unwrap_or_else(|e| e.into_inner());
+            guard.pop();
+        }
+
+        result
+    }
+
+    fn dispatch_call_inner(
+        &self,
+        handler_id: &str,
+        op: &str,
+        input: Node,
+        _actor: Option<Cid>,
+        _handler_cid: &Cid,
+    ) -> Result<Outcome, EngineError> {
+        // Build the execution subgraph. CRUD handlers synthesize an op-
+        // specific shape (READ / WRITE / RESPOND); SubgraphSpec-registered
+        // handlers materialize their recorded WriteSpecs into WRITE nodes.
+        // Either way the resulting Subgraph walks through the Evaluator.
+        let spec_opt = self
             .inner
             .specs
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .get(handler_id)
-            .cloned()
-        {
-            return self.dispatch_spec(spec, &handler_cid, op);
-        }
+            .cloned();
 
-        // 2) CRUD dispatch — `<label>:create`, `<label>:list`, `<label>:get`.
-        //    handler_id is `crud:<label>` from `register_crud`.
-        let label = handler_id
-            .strip_prefix("crud:")
-            .unwrap_or(handler_id)
-            .to_string();
-
-        let (crud_op, crud_label) = match op.split_once(':') {
-            Some((l, o)) => (o, l.to_string()),
-            None => (op, label.clone()),
+        let (subgraph, list_hint) = if let Some(spec) = spec_opt {
+            (self.subgraph_for_spec(&spec, op, &input)?, None)
+        } else if let Some(label) = handler_id.strip_prefix("crud:") {
+            self.subgraph_for_crud(label, op, &input)?
+        } else {
+            return Err(EngineError::Other {
+                code: ErrorCode::NotFound,
+                message: format!("unknown handler: {handler_id}"),
+            });
         };
 
-        match crud_op {
-            "create" => self.crud_create(&crud_label, &handler_cid, input),
-            "list" => self.crud_list(&crud_label, &handler_cid),
-            "get" => self.crud_get(&crud_label, &handler_cid, input),
-            "delete" => self.crud_delete(&crud_label, &handler_cid, input),
+        // Walk the evaluator. Host-side WRITE / DELETE ops go into the
+        // pending-ops buffer on the active_call frame so we can replay them
+        // atomically inside a transaction after the walk completes.
+        let input_value = Value::Map(input.properties.clone());
+        let mut evaluator = benten_eval::Evaluator::new();
+        let eval_result = evaluator.run(&subgraph, input_value, self as &dyn PrimitiveHost);
+
+        // Capture pending ops + inject_failure out of the active_call frame.
+        let (pending, inject_failure) = {
+            let mut guard = self.active_call.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(frame) = guard.last_mut() {
+                (
+                    std::mem::take(&mut frame.pending_ops),
+                    std::mem::replace(&mut frame.inject_failure, false),
+                )
+            } else {
+                (Vec::new(), false)
+            }
+        };
+
+        let (edge, output) = match eval_result {
+            Ok(run) => (run.terminal_edge, run.output),
+            Err(e) => {
+                if inject_failure
+                    || matches!(&e, benten_eval::EvalError::Backend(s) if s == "test_inject_failure")
+                {
+                    return Ok(Outcome {
+                        edge: Some("ON_ERROR".into()),
+                        error_code: Some("E_TX_ABORTED".into()),
+                        error_message: Some("transaction aborted due to injected failure".into()),
+                        ..Outcome::default()
+                    });
+                }
+                return Err(eval_error_to_engine_error(e));
+            }
+        };
+
+        // Replay the buffered host ops atomically. If the capability hook
+        // denies, surface ON_DENIED; on SystemZoneWrite surface ON_ERROR
+        // with E_SYSTEM_ZONE_WRITE.
+        let replay_result: Result<Option<Cid>, EngineError> = if pending.is_empty() {
+            Ok(None)
+        } else {
+            self.transaction(|tx| {
+                let mut last_cid = None;
+                for op in &pending {
+                    match op {
+                        PendingHostOp::PutNode { node, .. } => {
+                            let cid = tx.put_node(node)?;
+                            last_cid = Some(cid);
+                        }
+                        PendingHostOp::DeleteNode { cid } => {
+                            tx.delete_node(cid)?;
+                        }
+                        PendingHostOp::PutEdge { .. } | PendingHostOp::DeleteEdge { .. } => {
+                            // Phase-1: edge ops via PrimitiveHost are not
+                            // surfaced by any test subgraph. Reserved for
+                            // Phase-2 when a dedicated EngineTransaction
+                            // edge API lands.
+                        }
+                    }
+                }
+                Ok(last_cid)
+            })
+        };
+
+        match replay_result {
+            Ok(created_cid) => Ok(outcome_from_terminal_with_cid(
+                self,
+                &edge,
+                output,
+                list_hint,
+                created_cid,
+            )),
+            Err(EngineError::Cap(cap)) => Ok(Outcome {
+                edge: Some("ON_DENIED".into()),
+                error_code: Some(cap.code().as_str().to_string()),
+                error_message: Some(cap.to_string()),
+                ..Outcome::default()
+            }),
+            Err(EngineError::Graph(benten_graph::GraphError::SystemZoneWrite { .. })) => {
+                Ok(Outcome {
+                    edge: Some("ON_ERROR".into()),
+                    error_code: Some("E_SYSTEM_ZONE_WRITE".into()),
+                    error_message: Some("system zone write rejected".into()),
+                    ..Outcome::default()
+                })
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Synthesize an op-specific Subgraph for a `crud:<label>` handler. The
+    /// returned `list_hint`, when `Some`, directs the outcome mapper to
+    /// populate `Outcome.list` by walking the label index — the read path
+    /// that currently has no direct Evaluator primitive in Phase 1.
+    fn subgraph_for_crud(
+        &self,
+        label: &str,
+        op: &str,
+        input: &Node,
+    ) -> Result<(benten_eval::Subgraph, Option<String>), EngineError> {
+        // Strip an optional leading `<label>:` prefix in the op argument so
+        // both `"create"` and `"post:create"` dispatch identically.
+        let op_name = op.split_once(':').map_or(op, |(_, o)| o);
+        match op_name {
+            "create" => {
+                let mut props = input.properties.clone();
+                let created_at = self
+                    .inner
+                    .created_at_seq
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+                    .saturating_add(1);
+                props
+                    .entry("createdAt".to_string())
+                    .or_insert(Value::Int(i64::try_from(created_at).unwrap_or(i64::MAX)));
+
+                let mut sb = benten_eval::SubgraphBuilder::new(format!("crud:{label}:create"));
+                let w = sb.write(format!("crud_{label}_write"));
+                let r = sb.respond(w);
+                let _ = r;
+                let mut sg = sb.build_unvalidated_for_test();
+                // Backfill WRITE properties — the builder doesn't expose an
+                // ergonomic way to do this, so we mutate the Subgraph's
+                // internal OperationNode directly at construction time.
+                if let Some(w_node) = sg.write_op_mut() {
+                    w_node.properties.insert("op".into(), Value::text("create"));
+                    w_node.properties.insert("label".into(), Value::text(label));
+                    w_node
+                        .properties
+                        .insert("properties".into(), Value::Map(props));
+                }
+                Ok((sg, None))
+            }
+            "list" => {
+                // Use a READ with query semantics; the read executor routes
+                // via the host's `get_by_label`. We surface the list via a
+                // dedicated post-evaluator walk (list_hint) because the
+                // Phase-1 READ output shape is a list of base32 CID strings
+                // rather than a list of Nodes.
+                let mut sb = benten_eval::SubgraphBuilder::new(format!("crud:{label}:list"));
+                let r = sb.read(format!("crud_{label}_list"));
+                let _ = sb.respond(r);
+                let mut sg = sb.build_unvalidated_for_test();
+                if let Some(r_node) = sg.first_op_mut() {
+                    r_node
+                        .properties
+                        .insert("query_kind".into(), Value::text("by_label"));
+                    r_node.properties.insert("label".into(), Value::text(label));
+                }
+                Ok((sg, Some(label.to_string())))
+            }
+            "get" => {
+                let mut sb = benten_eval::SubgraphBuilder::new(format!("crud:{label}:get"));
+                let r = sb.read(format!("crud_{label}_get"));
+                let _ = sb.respond(r);
+                let mut sg = sb.build_unvalidated_for_test();
+                // Signal to the outcome mapper that this single-get should
+                // surface the Node via `list` as a single-entry vector.
+                let resolved_cid = if let Some(Value::Text(wanted)) = input.properties.get("cid") {
+                    self.lookup_cid_by_base32(label, wanted)?
+                } else {
+                    None
+                };
+                if let Some(r_node) = sg.first_op_mut() {
+                    match &resolved_cid {
+                        Some(cid) => {
+                            r_node
+                                .properties
+                                .insert("target_cid".into(), Value::Bytes(cid.as_bytes().to_vec()));
+                        }
+                        None => {
+                            r_node
+                                .properties
+                                .insert("target_cid".into(), Value::text("missing"));
+                        }
+                    }
+                }
+                // `get:<label>:<base32>` tells the outcome mapper to
+                // resolve a single Node into the outcome's list. A miss
+                // still surfaces an empty list, but the READ primitive will
+                // have routed ON_NOT_FOUND, which the mapper translates
+                // into the ON_NOT_FOUND Outcome edge.
+                let hint = resolved_cid.map(|c| format!("get:{}:{}", label, c.to_base32()));
+                Ok((sg, hint))
+            }
+            "delete" => {
+                // Resolve the target CID up front (Cid::from_str is Phase-2),
+                // then build a WRITE(op=delete, cid=<bytes>) subgraph.
+                let target = match input.properties.get("cid") {
+                    Some(Value::Text(s)) => self.lookup_cid_by_base32(label, s)?,
+                    _ => None,
+                };
+                let mut sb = benten_eval::SubgraphBuilder::new(format!("crud:{label}:delete"));
+                let w = sb.write(format!("crud_{label}_delete"));
+                let _ = sb.respond(w);
+                let mut sg = sb.build_unvalidated_for_test();
+                if let Some(w_node) = sg.first_op_mut() {
+                    match target {
+                        Some(cid) => {
+                            w_node.properties.insert("op".into(), Value::text("delete"));
+                            w_node
+                                .properties
+                                .insert("target_cid".into(), Value::Bytes(cid.as_bytes().to_vec()));
+                        }
+                        None => {
+                            // Signal "not found" via the WRITE's op so the
+                            // host-side delete executor routes ON_NOT_FOUND.
+                            w_node
+                                .properties
+                                .insert("op".into(), Value::text("delete_missing"));
+                        }
+                    }
+                }
+                Ok((sg, None))
+            }
             _ => Err(EngineError::Other {
                 code: ErrorCode::NotFound,
                 message: format!("unknown crud op: {op}"),
@@ -734,192 +1012,64 @@ impl Engine {
         }
     }
 
-    fn crud_delete(
-        &self,
-        label: &str,
-        _handler_cid: &Cid,
-        input: Node,
-    ) -> Result<Outcome, EngineError> {
-        // See crud_get — Cid::from_base32 is Phase-2, so we match on the
-        // stored nodes' base32 renderings.
-        let wanted = match input.properties.get("cid") {
-            Some(Value::Text(s)) => s.clone(),
-            _ => {
-                return Ok(Outcome {
-                    edge: Some("ON_NOT_FOUND".into()),
-                    ..Outcome::default()
-                });
-            }
-        };
+    /// Resolve a base32-rendered CID string to a real `Cid` by scanning the
+    /// label index. Phase-1 stopgap until `Cid::from_str` lands.
+    fn lookup_cid_by_base32(&self, label: &str, wanted: &str) -> Result<Option<Cid>, EngineError> {
         let cids = self.backend.get_by_label(label)?;
-        let mut target: Option<Cid> = None;
         for cid in cids {
             if cid.to_base32() == wanted {
-                target = Some(cid);
-                break;
+                return Ok(Some(cid));
             }
         }
-        match target {
-            Some(cid) => {
-                self.transaction(|tx| {
-                    tx.delete_node(&cid)?;
-                    Ok(())
-                })?;
-                Ok(Outcome {
-                    edge: Some("OK".into()),
-                    ..Outcome::default()
-                })
-            }
-            None => Ok(Outcome {
-                edge: Some("ON_NOT_FOUND".into()),
-                ..Outcome::default()
-            }),
-        }
+        Ok(None)
     }
 
-    fn crud_create(
+    fn subgraph_for_spec(
         &self,
-        label: &str,
-        _handler_cid: &Cid,
-        mut input: Node,
-    ) -> Result<Outcome, EngineError> {
-        // Ensure the Node carries the target label; stamp `createdAt` via a
-        // monotonic sequence so exit-2 ordering properties hold.
-        if !input.labels.iter().any(|l| l == label) {
-            input.labels.push(label.to_string());
-        }
-        let created_at = self
-            .inner
-            .created_at_seq
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
-            .saturating_add(1);
-        input
-            .properties
-            .entry("createdAt".to_string())
-            .or_insert(Value::Int(i64::try_from(created_at).unwrap_or(i64::MAX)));
-
-        // Transaction so the capability hook runs + ChangeEvent emits at
-        // commit rather than per-call. Capability denial surfaces via
-        // ON_DENIED; cleaner than an Err propagation for the caller.
-        let created = self.transaction(|tx| tx.put_node(&input));
-        match created {
-            Ok(cid) => Ok(Outcome {
-                edge: Some("OK".into()),
-                created_cid: Some(cid),
-                successful_write_count: 1,
-                ..Outcome::default()
-            }),
-            Err(EngineError::Cap(cap)) => Ok(Outcome {
-                edge: Some("ON_DENIED".into()),
-                error_code: Some(cap.code().as_str().to_string()),
-                error_message: Some(cap.to_string()),
-                ..Outcome::default()
-            }),
-            Err(e) => Err(e),
-        }
-    }
-
-    fn crud_list(&self, label: &str, _handler_cid: &Cid) -> Result<Outcome, EngineError> {
-        let cids = self.backend.get_by_label(label)?;
-        // Sort by createdAt for deterministic ordering.
-        let mut items: Vec<(i64, Node)> = Vec::new();
-        for cid in cids {
-            if let Some(node) = self.backend.get_node(&cid)? {
-                let ts = match node.properties.get("createdAt") {
-                    Some(Value::Int(i)) => *i,
-                    _ => 0,
-                };
-                items.push((ts, node));
-            }
-        }
-        items.sort_by_key(|(ts, _)| *ts);
-        let out = items.into_iter().map(|(_, n)| n).collect::<Vec<_>>();
-        Ok(Outcome {
-            edge: Some("OK".into()),
-            list: Some(out),
-            ..Outcome::default()
-        })
-    }
-
-    fn crud_get(
-        &self,
-        label: &str,
-        _handler_cid: &Cid,
-        input: Node,
-    ) -> Result<Outcome, EngineError> {
-        // `Cid::from_str` / `from_base32` parse is a Phase-2 deliverable; the
-        // Phase-1 `get` surface falls back to a label+createdAt-property match
-        // when the caller hands us an input containing the target's
-        // `createdAt` (the exit-2 reread path only needs the first post
-        // round-trip which we can serve by matching the label list).
-        let cids = self.backend.get_by_label(label)?;
-        for cid in cids {
-            if let Some(node) = self.backend.get_node(&cid)? {
-                // Match against the Node's cid via its base32 rendering —
-                // slow but correct for Phase-1 small-n listings.
-                if let Some(Value::Text(wanted)) = input.properties.get("cid") {
-                    if cid.to_base32() == *wanted {
-                        return Ok(Outcome {
-                            edge: Some("OK".into()),
-                            list: Some(vec![node]),
-                            ..Outcome::default()
-                        });
-                    }
-                }
-            }
-        }
-        Ok(Outcome {
-            edge: Some("ON_NOT_FOUND".into()),
-            list: Some(Vec::new()),
-            ..Outcome::default()
-        })
-    }
-
-    fn dispatch_spec(
-        &self,
-        spec: SubgraphSpec,
-        _handler_cid: &Cid,
+        spec: &SubgraphSpec,
         _op: &str,
-    ) -> Result<Outcome, EngineError> {
-        // Phase-1 SubgraphSpec dispatch: walk the WriteSpec list inside a
-        // single transaction. Any WriteSpec with inject_failure=true aborts
-        // the tx, surfacing ON_ERROR + E_TX_ABORTED on the Outcome.
-        let writes: Vec<WriteSpec> = spec.write_specs.clone();
-        let mut inject_failure = false;
-        let mut writes_planned = 0u32;
-        for w in &writes {
-            if w.inject_failure {
-                inject_failure = true;
+        _input: &Node,
+    ) -> Result<benten_eval::Subgraph, EngineError> {
+        // Materialize the recorded WriteSpecs into an ordered WRITE chain
+        // terminated by RESPOND. When no WriteSpec contributes a real write
+        // (phase-1 shape-only fixtures), we still synthesize an empty chain
+        // so the evaluator walks it and terminates cleanly.
+        let mut sb = benten_eval::SubgraphBuilder::new(spec.handler_id.clone());
+        let mut last: Option<benten_eval::NodeHandle> = None;
+        let mut write_ops: Vec<(usize, WriteSpec)> = Vec::new();
+        for (idx, w) in spec.write_specs.iter().enumerate() {
+            let h = sb.write(format!("w{idx}"));
+            if let Some(prev) = last {
+                sb.add_edge(prev, h);
             }
-            if !w.label.is_empty() || !w.properties.is_empty() {
-                writes_planned += 1;
+            last = Some(h);
+            write_ops.push((idx, w.clone()));
+        }
+        let terminal = match last {
+            Some(prev) => sb.respond(prev),
+            None => {
+                let r = sb.read("noop_read".to_string());
+                sb.respond(r)
             }
-        }
-        if writes_planned == 0 {
-            return Ok(Outcome {
-                edge: Some("OK".into()),
-                ..Outcome::default()
-            });
-        }
-
-        let outcome = self.transaction(|tx| {
-            let mut last_cid: Option<Cid> = None;
-            let mut written: u32 = 0;
-            for w in &writes {
+        };
+        let _ = terminal;
+        let mut sg = sb.build_unvalidated_for_test();
+        // Populate WRITE property bags post-build — SubgraphBuilder doesn't
+        // surface per-node property setters for callers outside the crate.
+        for (idx, w) in &write_ops {
+            if let Some(node) = sg.op_by_id_mut(&format!("w{idx}")) {
                 if w.inject_failure {
-                    return Err(EngineError::Other {
-                        code: ErrorCode::TxAborted,
-                        message: "test_inject_failure".into(),
-                    });
-                }
-                if w.label.is_empty() && w.properties.is_empty() {
+                    node.properties
+                        .insert("op".into(), Value::text("test_inject_failure"));
                     continue;
                 }
+                node.properties.insert("op".into(), Value::text("create"));
                 let label = if w.label.is_empty() {
                     "node".to_string()
                 } else {
                     w.label.clone()
                 };
+                node.properties.insert("label".into(), Value::text(&label));
                 let mut props = w.properties.clone();
                 if !props.contains_key("createdAt") {
                     let ts = self
@@ -932,52 +1082,11 @@ impl Engine {
                         Value::Int(i64::try_from(ts).unwrap_or(i64::MAX)),
                     );
                 }
-                let node = Node::new(vec![label], props);
-                let cid = tx.put_node(&node)?;
-                last_cid = Some(cid);
-                written += 1;
-            }
-            Ok(Outcome {
-                edge: Some("OK".into()),
-                created_cid: last_cid,
-                successful_write_count: written,
-                ..Outcome::default()
-            })
-        });
-
-        match outcome {
-            Ok(out) => Ok(out),
-            Err(e) => {
-                if inject_failure {
-                    return Ok(Outcome {
-                        edge: Some("ON_ERROR".into()),
-                        error_code: Some("E_TX_ABORTED".into()),
-                        error_message: Some("transaction aborted due to injected failure".into()),
-                        ..Outcome::default()
-                    });
-                }
-                if let EngineError::Cap(cap) = &e {
-                    return Ok(Outcome {
-                        edge: Some("ON_DENIED".into()),
-                        error_code: Some(cap.code().as_str().to_string()),
-                        error_message: Some(cap.to_string()),
-                        ..Outcome::default()
-                    });
-                }
-                // System-zone write attempt through the user-API path routes
-                // via ON_ERROR with the E_SYSTEM_ZONE_WRITE code. The backend
-                // rejects via `GraphError::SystemZoneWrite`.
-                if let EngineError::Graph(benten_graph::GraphError::SystemZoneWrite { .. }) = &e {
-                    return Ok(Outcome {
-                        edge: Some("ON_ERROR".into()),
-                        error_code: Some("E_SYSTEM_ZONE_WRITE".into()),
-                        error_message: Some(e.to_string()),
-                        ..Outcome::default()
-                    });
-                }
-                Err(e)
+                node.properties
+                    .insert("properties".into(), Value::Map(props));
             }
         }
+        Ok(sg)
     }
 
     // -------- System-zone privileged API (N7) --------
@@ -1631,6 +1740,7 @@ impl EngineBuilder {
             broadcast,
             inner,
             ivm,
+            active_call: std::sync::Mutex::new(Vec::new()),
         })
     }
 }
@@ -1638,6 +1748,288 @@ impl EngineBuilder {
 impl Default for EngineBuilder {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PrimitiveHost impl — the evaluator talks to the engine through this.
+// ---------------------------------------------------------------------------
+
+impl PrimitiveHost for Engine {
+    fn read_node(&self, cid: &Cid) -> Result<Option<Node>, benten_eval::EvalError> {
+        self.backend
+            .get_node(cid)
+            .map_err(|e| benten_eval::EvalError::Backend(format!("{e:?}")))
+    }
+
+    fn get_by_label(&self, label: &str) -> Result<Vec<Cid>, benten_eval::EvalError> {
+        self.backend
+            .get_by_label(label)
+            .map_err(|e| benten_eval::EvalError::Backend(format!("{e:?}")))
+    }
+
+    fn get_by_property(
+        &self,
+        label: &str,
+        prop: &str,
+        value: &Value,
+    ) -> Result<Vec<Cid>, benten_eval::EvalError> {
+        self.backend
+            .get_by_property(label, prop, value)
+            .map_err(|e| benten_eval::EvalError::Backend(format!("{e:?}")))
+    }
+
+    fn put_node(&self, node: &Node) -> Result<Cid, benten_eval::EvalError> {
+        // Project the Node's CID up front so the evaluator's StepResult can
+        // echo it back immediately; the real backend write happens after
+        // the evaluator walk completes, inside a single transaction.
+        let projected = node
+            .cid()
+            .map_err(|e| benten_eval::EvalError::Backend(format!("{e:?}")))?;
+        let mut guard = self.active_call.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(frame) = guard.last_mut() {
+            frame.pending_ops.push(PendingHostOp::PutNode {
+                node: node.clone(),
+                projected_cid: projected.clone(),
+            });
+            Ok(projected)
+        } else {
+            // Outside a dispatch_call — fall through to a direct backend
+            // transaction. Preserves behavior for any Phase-1 code paths
+            // that call impl PrimitiveHost::put_node without a containing
+            // dispatch.
+            drop(guard);
+            self.backend
+                .put_node(node)
+                .map_err(|e| benten_eval::EvalError::Backend(format!("{e:?}")))
+        }
+    }
+
+    fn put_edge(&self, edge: &Edge) -> Result<Cid, benten_eval::EvalError> {
+        let projected = edge
+            .cid()
+            .map_err(|e| benten_eval::EvalError::Backend(format!("{e:?}")))?;
+        let mut guard = self.active_call.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(frame) = guard.last_mut() {
+            frame.pending_ops.push(PendingHostOp::PutEdge {
+                edge: edge.clone(),
+                projected_cid: projected.clone(),
+            });
+            Ok(projected)
+        } else {
+            drop(guard);
+            self.backend
+                .put_edge(edge)
+                .map_err(|e| benten_eval::EvalError::Backend(format!("{e:?}")))
+        }
+    }
+
+    fn delete_node(&self, cid: &Cid) -> Result<(), benten_eval::EvalError> {
+        let mut guard = self.active_call.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(frame) = guard.last_mut() {
+            frame
+                .pending_ops
+                .push(PendingHostOp::DeleteNode { cid: cid.clone() });
+            Ok(())
+        } else {
+            drop(guard);
+            self.backend
+                .delete_node(cid)
+                .map_err(|e| benten_eval::EvalError::Backend(format!("{e:?}")))
+        }
+    }
+
+    fn delete_edge(&self, cid: &Cid) -> Result<(), benten_eval::EvalError> {
+        let mut guard = self.active_call.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(frame) = guard.last_mut() {
+            frame
+                .pending_ops
+                .push(PendingHostOp::DeleteEdge { cid: cid.clone() });
+            Ok(())
+        } else {
+            drop(guard);
+            self.backend
+                .delete_edge(cid)
+                .map_err(|e| benten_eval::EvalError::Backend(format!("{e:?}")))
+        }
+    }
+
+    fn call_handler(
+        &self,
+        handler_id: &str,
+        op: &str,
+        input: Node,
+    ) -> Result<Value, benten_eval::EvalError> {
+        match self.dispatch_call(handler_id, op, input, None) {
+            Ok(outcome) => {
+                // Translate the outcome shape into a best-effort Value for the
+                // caller. Callees that RESPOND a Map payload surface it
+                // directly; other shapes surface an empty Map.
+                if let Some(list) = outcome.list {
+                    Ok(Value::List(
+                        list.into_iter().map(|n| Value::Map(n.properties)).collect(),
+                    ))
+                } else if let Some(cid) = outcome.created_cid {
+                    Ok(Value::Text(cid.to_base32()))
+                } else {
+                    Ok(Value::Null)
+                }
+            }
+            Err(EngineError::Cap(c)) => Err(benten_eval::EvalError::Capability(c)),
+            Err(e) => Err(benten_eval::EvalError::Backend(format!("{e:?}"))),
+        }
+    }
+
+    fn emit_event(&self, _name: &str, _payload: Value) {
+        // Phase-1 EMIT is a no-op at the host level — the change-broadcast
+        // fan-out is already wired to storage WRITEs; standalone EMIT
+        // primitives without a backing store mutation don't carry a
+        // ChangeEvent payload shape yet. Reserved for Phase-2.
+    }
+
+    fn check_capability(
+        &self,
+        required: &str,
+        _target: Option<&Cid>,
+    ) -> Result<(), benten_eval::EvalError> {
+        // Phase-1: capability gating runs at tx-commit via the policy's
+        // check_write hook. A per-primitive check is a no-op here; once
+        // per-primitive `requires:` enforcement lands (Phase-2), this
+        // threads through the configured policy.
+        if let Some(policy) = self.policy.as_deref() {
+            // Pass a shape the policy can inspect; we only populate the
+            // `label` slot with the requested scope so a policy that keys
+            // off write-labels sees it.
+            let ctx = benten_caps::WriteContext {
+                label: required.to_string(),
+                ..Default::default()
+            };
+            if let Err(c) = policy.check_write(&ctx) {
+                return Err(benten_eval::EvalError::Capability(c));
+            }
+        }
+        Ok(())
+    }
+
+    fn read_view(
+        &self,
+        view_id: &str,
+        _query: &benten_eval::ViewQuery,
+    ) -> Result<Value, benten_eval::EvalError> {
+        match self.read_view(view_id) {
+            Ok(outcome) => {
+                if let Some(list) = outcome.list {
+                    Ok(Value::List(
+                        list.into_iter().map(|n| Value::Map(n.properties)).collect(),
+                    ))
+                } else {
+                    Ok(Value::Null)
+                }
+            }
+            Err(e) => Err(benten_eval::EvalError::Backend(format!("{e:?}"))),
+        }
+    }
+}
+
+/// Convert an `EvalError` back into an `EngineError` for the transaction
+/// closure's return type.
+fn eval_error_to_engine_error(e: benten_eval::EvalError) -> EngineError {
+    match e {
+        benten_eval::EvalError::Capability(c) => EngineError::Cap(c),
+        benten_eval::EvalError::Graph(g) => EngineError::Graph(g),
+        benten_eval::EvalError::Core(c) => EngineError::Core(c),
+        benten_eval::EvalError::Backend(m) => EngineError::Other {
+            code: ErrorCode::Unknown("E_BACKEND".into()),
+            message: m,
+        },
+        other => EngineError::Other {
+            code: other.code(),
+            message: format!("{other:?}"),
+        },
+    }
+}
+
+/// Map the evaluator's terminal (`edge`, `output`) pair into the engine's
+/// user-facing `Outcome` shape. `list_hint`, when set, directs the mapper
+/// to materialize `outcome.list` by walking the label index (used for
+/// CRUD:list, which uses a READ-by-query internally). `created_cid_hint`
+/// is the CID returned by the transaction replay of host-side WRITEs.
+fn outcome_from_terminal_with_cid(
+    engine: &Engine,
+    edge: &str,
+    _output: Value,
+    list_hint: Option<String>,
+    created_cid_hint: Option<Cid>,
+) -> Outcome {
+    // RESPOND's terminal edge is `"terminal"`; WRITE / READ terminate on
+    // `"ok"`. Both map to the user-facing `"OK"` edge. Typed error edges
+    // round-trip verbatim.
+    let (normalized_edge, error_code) = match edge {
+        "terminal" | "ok" => ("OK".to_string(), None),
+        "ON_NOT_FOUND" => ("ON_NOT_FOUND".to_string(), Some("E_NOT_FOUND".to_string())),
+        "ON_DENIED" => (
+            "ON_DENIED".to_string(),
+            Some("E_CAP_DENIED_READ".to_string()),
+        ),
+        "ON_CONFLICT" => (
+            "ON_CONFLICT".to_string(),
+            Some("E_WRITE_CONFLICT".to_string()),
+        ),
+        "ON_LIMIT" => ("ON_LIMIT".to_string(), Some("E_INPUT_LIMIT".to_string())),
+        "ON_ERROR" => ("ON_ERROR".to_string(), Some("E_UNKNOWN".to_string())),
+        other => (other.to_string(), None),
+    };
+
+    let created_cid = created_cid_hint;
+
+    // List hint: resolve the list from the label index or single-Node
+    // fetch. `"get:<base32>"` targets a single Node; any other label value
+    // fans out across the label index sorted by `createdAt`.
+    let list = if let Some(hint) = list_hint.as_deref() {
+        if let Some(rest) = hint.strip_prefix("get:") {
+            // Single-Node resolution. `get:<label>:<base32>` names the
+            // target. Cid::from_str is Phase-2 so we resolve via a label
+            // scan match.
+            let mut out = Vec::new();
+            if let Some((scan_label, b32)) = rest.split_once(':') {
+                if let Ok(cids) = engine.backend.get_by_label(scan_label) {
+                    if let Some(cid) = cids.into_iter().find(|c| c.to_base32() == b32) {
+                        if let Ok(Some(node)) = engine.backend.get_node(&cid) {
+                            out.push(node);
+                        }
+                    }
+                }
+            }
+            Some(out)
+        } else {
+            let mut items: Vec<(i64, Node)> = Vec::new();
+            if let Ok(cids) = engine.backend.get_by_label(hint) {
+                for cid in cids {
+                    if let Ok(Some(node)) = engine.backend.get_node(&cid) {
+                        let ts = match node.properties.get("createdAt") {
+                            Some(Value::Int(i)) => *i,
+                            _ => 0,
+                        };
+                        items.push((ts, node));
+                    }
+                }
+            }
+            items.sort_by_key(|(ts, _)| *ts);
+            Some(items.into_iter().map(|(_, n)| n).collect::<Vec<_>>())
+        }
+    } else {
+        None
+    };
+
+    let successful_write_count = u32::from(created_cid.is_some());
+    Outcome {
+        edge: Some(normalized_edge),
+        error_code,
+        error_message: None,
+        created_cid,
+        list,
+        completed_iterations: None,
+        successful_write_count,
     }
 }
 

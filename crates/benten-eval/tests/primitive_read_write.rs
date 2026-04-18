@@ -11,7 +11,7 @@
 #![allow(clippy::unwrap_used)]
 
 use benten_core::Value;
-use benten_eval::{Evaluator, OperationNode, PrimitiveKind};
+use benten_eval::{Evaluator, NullHost, OperationNode, PrimitiveKind};
 
 fn read_op(id: &str) -> OperationNode {
     OperationNode::new(id, PrimitiveKind::Read)
@@ -25,7 +25,7 @@ fn write_op(id: &str) -> OperationNode {
 fn read_primitive_step_returns_ok_on_happy_path() {
     let mut ev = Evaluator::new();
     let op = read_op("r1").with_property("target_cid", Value::text("found"));
-    let r = ev.step(&op).unwrap();
+    let r = ev.step(&op, &NullHost).unwrap();
     assert_eq!(r.edge_label, "ok");
 }
 
@@ -33,7 +33,7 @@ fn read_primitive_step_returns_ok_on_happy_path() {
 fn read_primitive_missing_routes_to_on_not_found() {
     let mut ev = Evaluator::new();
     let op = read_op("r1").with_property("target_cid", Value::text("missing"));
-    let r = ev.step(&op).unwrap();
+    let r = ev.step(&op, &NullHost).unwrap();
     assert_eq!(r.edge_label, "ON_NOT_FOUND");
 }
 
@@ -41,7 +41,7 @@ fn read_primitive_missing_routes_to_on_not_found() {
 fn read_primitive_empty_query_routes_to_on_empty() {
     let mut ev = Evaluator::new();
     let op = read_op("r1").with_property("query_kind", Value::text("empty"));
-    let r = ev.step(&op).unwrap();
+    let r = ev.step(&op, &NullHost).unwrap();
     assert_eq!(r.edge_label, "ON_EMPTY");
 }
 
@@ -49,7 +49,7 @@ fn read_primitive_empty_query_routes_to_on_empty() {
 fn write_primitive_create_returns_ok() {
     let mut ev = Evaluator::new();
     let op = write_op("w1").with_property("op", Value::text("create"));
-    let r = ev.step(&op).unwrap();
+    let r = ev.step(&op, &NullHost).unwrap();
     assert_eq!(r.edge_label, "ok");
 }
 
@@ -57,7 +57,7 @@ fn write_primitive_create_returns_ok() {
 fn write_primitive_update_returns_ok() {
     let mut ev = Evaluator::new();
     let op = write_op("w1").with_property("op", Value::text("update"));
-    let r = ev.step(&op).unwrap();
+    let r = ev.step(&op, &NullHost).unwrap();
     assert_eq!(r.edge_label, "ok");
 }
 
@@ -65,7 +65,7 @@ fn write_primitive_update_returns_ok() {
 fn write_primitive_delete_returns_ok() {
     let mut ev = Evaluator::new();
     let op = write_op("w1").with_property("op", Value::text("delete"));
-    let r = ev.step(&op).unwrap();
+    let r = ev.step(&op, &NullHost).unwrap();
     assert_eq!(r.edge_label, "ok");
 }
 
@@ -85,7 +85,7 @@ fn write_cas_wrong_version_routes_on_conflict() {
         .with_property("expected_version", Value::Int(1))
         .with_property("actual_version", Value::Int(2));
     let r = ev
-        .step(&op)
+        .step(&op, &NullHost)
         .expect("WRITE CAS conflict routes through ON_CONFLICT, not Err");
     assert_eq!(
         r.edge_label, "ON_CONFLICT",

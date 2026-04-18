@@ -18,7 +18,7 @@
 //! executors are deliberately pure over the `OperationNode` so the
 //! evaluator-scoped tests don't need an engine at all.
 
-use crate::{EvalError, OperationNode, PrimitiveKind, StepResult};
+use crate::{EvalError, OperationNode, PrimitiveHost, PrimitiveKind, StepResult};
 
 pub mod branch;
 pub mod call;
@@ -49,17 +49,17 @@ pub mod write;
 /// Returns [`EvalError::PrimitiveNotImplemented`] for any primitive whose
 /// executor is not yet implemented. Individual primitives may surface
 /// other [`EvalError`] variants per their own contracts.
-pub fn dispatch(op: &OperationNode) -> Result<StepResult, EvalError> {
+pub fn dispatch(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResult, EvalError> {
     match op.kind {
-        PrimitiveKind::Read => read::execute(op),
-        PrimitiveKind::Write => write::execute(op),
+        PrimitiveKind::Read => read::execute(op, host),
+        PrimitiveKind::Write => write::execute(op, host),
         PrimitiveKind::Respond => respond::execute(op),
-        PrimitiveKind::Emit => emit::execute(op),
+        PrimitiveKind::Emit => emit::execute(op, host),
         // G6-B scope — TRANSFORM, BRANCH, ITERATE, CALL.
         PrimitiveKind::Transform => transform::execute(op),
         PrimitiveKind::Branch => branch::execute(op),
-        PrimitiveKind::Iterate => iterate::execute(op),
-        PrimitiveKind::Call => call::execute(op),
+        PrimitiveKind::Iterate => iterate::execute(op, host),
+        PrimitiveKind::Call => call::execute(op, host),
         // Phase-2 primitives — structural validation accepts them, the
         // executor rejects at call time.
         PrimitiveKind::Wait
