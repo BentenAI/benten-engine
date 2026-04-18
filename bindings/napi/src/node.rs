@@ -31,6 +31,12 @@ const JSON_MAX_DEPTH: usize = 128;
 const JSON_MAX_MAP_KEYS: usize = 10_000;
 
 /// Byte payload ceiling (1 MiB) applied to any `Uint8Array`-shaped property.
+///
+/// Reserved for Phase-2 when a dedicated `JsBuffer` / `JsTypedArray`
+/// branch lands in `json_to_value` — the Phase-1 boundary routes both
+/// plain arrays and Uint8Arrays via `serde_json::Value`, which does
+/// not distinguish them on the input side.
+#[allow(dead_code, reason = "reserved for Phase-2 typed-array decode path")]
 const JSON_MAX_BYTES: usize = 1024 * 1024;
 
 /// Decode a JSON object into the property map of a Benten Node.
@@ -67,42 +73,48 @@ fn json_to_value(v: serde_json::Value, depth: usize) -> napi::Result<Value> {
         serde_json::Value::Null => Ok(Value::Null),
         serde_json::Value::Bool(b) => Ok(Value::Bool(b)),
         serde_json::Value::Number(n) => {
+            // Prefer Int when the number is integer-representable (even
+            // when serde_json internally stores it as f64 — the JS
+            // boundary doesn't distinguish `1` from `1.0`). This keeps
+            // CRUD timestamps (`createdAt`, HLC stamps) in `Value::Int`
+            // where sort-by-key and downstream consumers expect them.
             if let Some(i) = n.as_i64() {
-                Ok(Value::Int(i))
-            } else if let Some(f) = n.as_f64() {
-                if f.is_finite() {
-                    Ok(Value::Float(f))
-                } else {
-                    Err(napi::Error::new(
+                return Ok(Value::Int(i));
+            }
+            if let Some(f) = n.as_f64() {
+                if !f.is_finite() {
+                    return Err(napi::Error::new(
                         Status::InvalidArg,
                         "numbers must be finite",
-                    ))
+                    ));
                 }
-            } else {
-                Err(napi::Error::new(
-                    Status::InvalidArg,
-                    "unsupported numeric shape",
-                ))
+                // Integer-valued float within i64 range → Int.
+                #[allow(
+                    clippy::cast_precision_loss,
+                    reason = "comparing against exact conversion bounds"
+                )]
+                if f.fract() == 0.0 && f >= i64::MIN as f64 && f <= i64::MAX as f64 {
+                    #[allow(clippy::cast_possible_truncation, reason = "bounds-checked above")]
+                    return Ok(Value::Int(f as i64));
+                }
+                return Ok(Value::Float(f));
             }
+            Err(napi::Error::new(
+                Status::InvalidArg,
+                "unsupported numeric shape",
+            ))
         }
         serde_json::Value::String(s) => Ok(Value::Text(s)),
         serde_json::Value::Array(items) => {
-            // Detect the Uint8Array-shaped payload (every element is an integer
-            // in `0..=255`) and route those into `Value::Bytes`. Otherwise a
-            // plain `Value::List`.
-            if items.iter().all(is_byte_number) {
-                if items.len() > JSON_MAX_BYTES {
-                    return Err(input_limit("bytes: exceeds 1MiB limit"));
-                }
-                // Already validated by `is_byte_number` — every entry fits in
-                // `0..=255`; the truncating cast is safe.
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let bytes: Vec<u8> = items
-                    .into_iter()
-                    .map(|i| i.as_i64().unwrap_or(0).clamp(0, 255) as u8)
-                    .collect();
-                return Ok(Value::Bytes(bytes));
-            }
+            // JS arrays are always `Value::List`. The previous heuristic
+            // collapsed numeric arrays into `Value::Bytes` when every
+            // element fit in `0..=255`, but that broke content-addressing:
+            // a user-constructed `List([Int(0), Int(1), Int(2)])` and a
+            // `Bytes([0,1,2])` hashed to the same CID. Bytes must come
+            // across the boundary as a typed-array / Buffer shape
+            // (handled by napi-rs's `serde_json::Value::Object` with
+            // numeric-string keys — not a plain Array), so we can
+            // preserve List-vs-Bytes intent unambiguously.
             let mut out = Vec::with_capacity(items.len());
             for item in items {
                 out.push(json_to_value(item, depth + 1)?);
@@ -119,14 +131,6 @@ fn json_to_value(v: serde_json::Value, depth: usize) -> napi::Result<Value> {
             }
             Ok(Value::Map(out))
         }
-    }
-}
-
-/// True if a JSON number is an integer in the `0..=255` byte range.
-fn is_byte_number(v: &serde_json::Value) -> bool {
-    match v {
-        serde_json::Value::Number(n) => n.as_i64().is_some_and(|i| (0..=255).contains(&i)),
-        _ => false,
     }
 }
 

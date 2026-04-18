@@ -1,24 +1,42 @@
 //! Decode a JSON subgraph spec into a `benten_engine::SubgraphSpec`.
 //!
-//! The JS-side shape is minimal; fuller DSL surfaces land in Phase 2 when the
-//! TypeScript `@benten/engine` wrapper exposes a builder.
+//! Two JSON shapes are accepted at the napi boundary:
 //!
-//! ```json
-//! {
-//!   "handlerId": "create_post",
-//!   "primitives": [
-//!     { "kind": "write", "label": "post",
-//!       "properties": { "title": "..." } },
-//!     { "kind": "respond" }
-//!   ]
-//! }
-//! ```
+//! 1. The legacy `{ handlerId, primitives: [{ kind, label, properties }] }`
+//!    shape — retained for tests that construct spec payloads by hand.
+//!
+//! 2. The DSL `{ handlerId, nodes: [{ id, primitive, args, edges }], actions, root }`
+//!    shape — what `@benten/engine`'s `Subgraph` / `SubgraphBuilder`
+//!    emits. All 12 primitive kinds parse structurally; Phase-2-only
+//!    primitives (`wait`, `stream`, `subscribe`, `sandbox`) register
+//!    cleanly and surface `E_PRIMITIVE_NOT_IMPLEMENTED` at call time
+//!    (wired by the evaluator, not here).
 
 use benten_core::Value;
-use benten_engine::{SubgraphSpec, WriteSpec};
+use benten_engine::{PrimitiveKind, SubgraphSpec, WriteSpec};
 use napi::bindgen_prelude::*;
 
 use crate::node::{json_to_props, value_to_json};
+
+/// Map a DSL `primitive` string to an evaluator [`PrimitiveKind`]. Returns
+/// `None` on unknown kinds so the caller can surface `InvalidArg`.
+fn kind_from_str(s: &str) -> Option<PrimitiveKind> {
+    match s.to_lowercase().as_str() {
+        "read" => Some(PrimitiveKind::Read),
+        "write" => Some(PrimitiveKind::Write),
+        "transform" => Some(PrimitiveKind::Transform),
+        "branch" => Some(PrimitiveKind::Branch),
+        "iterate" => Some(PrimitiveKind::Iterate),
+        "wait" => Some(PrimitiveKind::Wait),
+        "call" => Some(PrimitiveKind::Call),
+        "respond" => Some(PrimitiveKind::Respond),
+        "emit" => Some(PrimitiveKind::Emit),
+        "sandbox" => Some(PrimitiveKind::Sandbox),
+        "subscribe" => Some(PrimitiveKind::Subscribe),
+        "stream" => Some(PrimitiveKind::Stream),
+        _ => None,
+    }
+}
 
 /// Convert the JS-side JSON shape into a `SubgraphSpec`.
 ///
@@ -44,6 +62,142 @@ pub(crate) fn json_to_subgraph_spec(v: serde_json::Value) -> napi::Result<Subgra
             "spec.handlerId: required non-empty string",
         ));
     }
+
+    // Prefer the DSL `nodes` shape when present; fall back to the
+    // legacy `primitives` shape otherwise.
+    if obj.contains_key("nodes") {
+        return decode_dsl_shape(&handler_id, &obj);
+    }
+    decode_legacy_shape(&handler_id, &obj)
+}
+
+/// Decode the DSL shape: `{ handlerId, nodes: [{ id, primitive, args, edges }] }`.
+fn decode_dsl_shape(
+    handler_id: &str,
+    obj: &serde_json::Map<String, serde_json::Value>,
+) -> napi::Result<SubgraphSpec> {
+    let nodes = match obj.get("nodes") {
+        Some(serde_json::Value::Array(arr)) => arr.clone(),
+        Some(_) => {
+            return Err(napi::Error::new(
+                Status::InvalidArg,
+                "spec.nodes: must be an array",
+            ));
+        }
+        None => Vec::new(),
+    };
+    let mut builder = SubgraphSpec::builder().handler_id(handler_id);
+    for (idx, node) in nodes.into_iter().enumerate() {
+        let nm = match node {
+            serde_json::Value::Object(m) => m,
+            _ => {
+                return Err(napi::Error::new(
+                    Status::InvalidArg,
+                    format!("nodes[{idx}]: must be an object"),
+                ));
+            }
+        };
+        let id = nm
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let prim_str = nm
+            .get("primitive")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let Some(kind) = kind_from_str(&prim_str) else {
+            return Err(napi::Error::new(
+                Status::InvalidArg,
+                format!("nodes[{idx}].primitive: unsupported kind `{prim_str}`"),
+            ));
+        };
+        // Extract WRITE-specific args (label + properties + requires) so
+        // the engine-side WriteSpec list stays populated for dispatch.
+        if matches!(kind, PrimitiveKind::Write) {
+            let args = nm
+                .get("args")
+                .cloned()
+                .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+            let (label, properties, requires) = extract_write_args(args)?;
+            let prop_map = json_to_props(properties)?;
+            let effective_id = if id.is_empty() {
+                format!("n{idx}")
+            } else {
+                id.clone()
+            };
+            let _ = effective_id;
+            builder = builder.write(move |mut w: WriteSpec| {
+                w = w.label(&label);
+                for (k, v) in prop_map {
+                    w = w.property(&k, v);
+                }
+                for scope in requires {
+                    w = w.requires(&scope);
+                }
+                w
+            });
+            continue;
+        }
+        // Non-WRITE kinds: register structurally so the subgraph's
+        // primitive list reflects the shape. Dispatch-time execution
+        // of Phase-2-only primitives returns `E_PRIMITIVE_NOT_IMPLEMENTED`.
+        let effective_id = if id.is_empty() {
+            format!("n{idx}")
+        } else {
+            id.as_str().to_string()
+        };
+        builder = builder.primitive(&effective_id, kind);
+    }
+    Ok(builder.build())
+}
+
+/// Extract `(label, properties, requires)` from a WRITE node's `args`.
+///
+/// Supports two argument shapes:
+///   * DSL `write({ label, properties, requires? })` — `args.label`,
+///     `args.properties`, optional `args.requires`.
+///   * Legacy `{ label, properties }` at the args root (same as above
+///     but without the top-level wrapper).
+fn extract_write_args(
+    args: serde_json::Value,
+) -> napi::Result<(String, serde_json::Value, Vec<String>)> {
+    let map = match args {
+        serde_json::Value::Object(m) => m,
+        _ => {
+            return Err(napi::Error::new(
+                Status::InvalidArg,
+                "write.args: must be an object",
+            ));
+        }
+    };
+    let label = map
+        .get("label")
+        .and_then(|v| v.as_str())
+        .unwrap_or("post")
+        .to_string();
+    let properties = map
+        .get("properties")
+        .cloned()
+        .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+    let requires: Vec<String> = map
+        .get("requires")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|x| x.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    Ok((label, properties, requires))
+}
+
+/// Decode the legacy `{ primitives: [{ kind, ... }] }` shape.
+fn decode_legacy_shape(
+    handler_id: &str,
+    obj: &serde_json::Map<String, serde_json::Value>,
+) -> napi::Result<SubgraphSpec> {
     let primitives = match obj.get("primitives") {
         Some(serde_json::Value::Array(arr)) => arr.clone(),
         Some(_) => {
@@ -54,8 +208,8 @@ pub(crate) fn json_to_subgraph_spec(v: serde_json::Value) -> napi::Result<Subgra
         }
         None => Vec::new(),
     };
-    let mut builder = SubgraphSpec::builder().handler_id(&handler_id);
-    for prim in primitives {
+    let mut builder = SubgraphSpec::builder().handler_id(handler_id);
+    for (idx, prim) in primitives.into_iter().enumerate() {
         let pm = match prim {
             serde_json::Value::Object(m) => m,
             _ => {
@@ -65,13 +219,19 @@ pub(crate) fn json_to_subgraph_spec(v: serde_json::Value) -> napi::Result<Subgra
                 ));
             }
         };
-        let kind = pm
+        let kind_str = pm
             .get("kind")
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_lowercase();
-        match kind.as_str() {
-            "write" => {
+        let Some(kind) = kind_from_str(&kind_str) else {
+            return Err(napi::Error::new(
+                Status::InvalidArg,
+                format!("primitive.kind: unsupported kind `{kind_str}`"),
+            ));
+        };
+        match kind {
+            PrimitiveKind::Write => {
                 let label = pm
                     .get("label")
                     .and_then(|v| v.as_str())
@@ -102,14 +262,12 @@ pub(crate) fn json_to_subgraph_spec(v: serde_json::Value) -> napi::Result<Subgra
                     w
                 });
             }
-            "respond" => {
-                builder = builder.respond();
-            }
-            other => {
-                return Err(napi::Error::new(
-                    Status::InvalidArg,
-                    format!("primitive.kind: unsupported kind `{other}`"),
-                ));
+            _ => {
+                let id = pm
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .map_or_else(|| format!("p{idx}"), str::to_string);
+                builder = builder.primitive(&id, kind);
             }
         }
     }

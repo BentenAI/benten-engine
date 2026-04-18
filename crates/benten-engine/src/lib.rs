@@ -33,6 +33,7 @@ use std::sync::Arc;
 use benten_caps::{CapError, CapabilityPolicy, NoAuthBackend};
 pub use benten_core::ErrorCode;
 use benten_core::{Cid, CoreError, Edge, Node, Value};
+pub use benten_eval::PrimitiveKind;
 use benten_eval::{InvariantConfig, PrimitiveHost, RegistrationError};
 use benten_graph::{ChangeEvent, GraphError, RedbBackend};
 
@@ -633,29 +634,51 @@ impl Engine {
     }
 
     /// Return a per-step trace of the evaluation.
+    ///
+    /// Phase-1 synthesizes one step per primitive the dispatched op is
+    /// known to route through (e.g. CRUD `create` = WRITE + RESPOND;
+    /// CRUD `list` = READ + RESPOND; CRUD `get` = READ + RESPOND;
+    /// CRUD `delete` = WRITE + RESPOND). The terminal `Outcome` is
+    /// attached to the Trace via [`Trace::outcome`] so callers don't
+    /// need to re-invoke `Engine::call` just to recover the result
+    /// (avoids the Phase-1 write-amplification footgun). Phase 2
+    /// replaces the step synthesis with live evaluator instrumentation.
     pub fn trace(&self, handler_id: &str, op: &str, input: Node) -> Result<Trace, EngineError> {
         let start = std::time::Instant::now();
         let outcome = self.dispatch_call(handler_id, op, input, None)?;
         let elapsed = start.elapsed().as_micros();
         let elapsed = u64::try_from(elapsed).unwrap_or(u64::MAX).max(1);
-        // Phase-1 trace: one step per CRUD op with the outcome's created CID
-        // (when present) as the node_cid anchor. Full step-by-step tracing
-        // lands with the evaluator integration.
+        // Derive the op-specific primitive list for CRUD handlers. The
+        // bare op name (e.g. `"create"`) drives the mapping; the label
+        // prefix is ignored because the synthetic steps below only
+        // describe primitive kinds, not labels.
+        let op_name = op.split_once(':').map_or(op, |(_, o)| o);
+        let primitives: Vec<&'static str> = match op_name {
+            "create" => vec!["write", "respond"],
+            "list" | "get" => vec!["read", "respond"],
+            "update" => vec!["read", "write", "respond"],
+            "delete" => vec!["write", "respond"],
+            // Fall through to the generic "read+respond" shape for
+            // unknown ops; the terminal Outcome still carries truth.
+            _ => vec!["read", "respond"],
+        };
         let step_cid = outcome
             .created_cid
             .clone()
             .unwrap_or_else(|| Cid::from_blake3_digest([0; 32]));
+        let n = u64::try_from(primitives.len().max(1)).unwrap_or(1);
+        let per_step = elapsed / n;
+        let steps = primitives
+            .into_iter()
+            .map(|p| TraceStep {
+                duration_us: per_step.max(1),
+                node_cid: step_cid.clone(),
+                primitive: p.to_string(),
+            })
+            .collect();
         Ok(Trace {
-            steps: vec![
-                TraceStep {
-                    duration_us: elapsed.max(1),
-                    node_cid: step_cid.clone(),
-                },
-                TraceStep {
-                    duration_us: 1,
-                    node_cid: step_cid,
-                },
-            ],
+            steps,
+            outcome: Some(outcome),
         })
     }
 
@@ -2006,15 +2029,31 @@ fn outcome_from_terminal_with_cid(
             if let Ok(cids) = engine.backend.get_by_label(hint) {
                 for cid in cids {
                     if let Ok(Some(node)) = engine.backend.get_node(&cid) {
+                        // createdAt can land as Int (DSL-supplied via the
+                        // integer-preserving branch) or Float (napi numbers
+                        // whose serde_json::Number stores them as f64 even
+                        // when the value is integer-valued). Accept both
+                        // shapes so the sort key is stable.
                         let ts = match node.properties.get("createdAt") {
                             Some(Value::Int(i)) => *i,
+                            #[allow(
+                                clippy::cast_possible_truncation,
+                                reason = "millisecond-epoch timestamps fit in i64"
+                            )]
+                            Some(Value::Float(f)) => *f as i64,
                             _ => 0,
                         };
                         items.push((ts, node));
                     }
                 }
             }
-            items.sort_by_key(|(ts, _)| *ts);
+            // Stable secondary ordering by CID so ties (rare — typically
+            // only when createdAt resolves to zero because the property
+            // was missing) resolve deterministically.
+            items.sort_by(|a, b| {
+                a.0.cmp(&b.0)
+                    .then_with(|| a.1.cid().ok().cmp(&b.1.cid().ok()))
+            });
             Some(items.into_iter().map(|(_, n)| n).collect::<Vec<_>>())
         }
     } else {
@@ -2176,11 +2215,13 @@ impl TerminalError {
     }
 }
 
-/// Trace of an evaluation. **Phase 1 stub** — real trace data requires the
-/// evaluator integration deferred to Phase 2.
+/// Trace of an evaluation. Phase 1 emits one synthetic step per primitive
+/// in the dispatched CRUD op plus the terminal Outcome; Phase 2 replaces
+/// the step synthesis with live evaluator instrumentation.
 #[derive(Debug, Clone, Default)]
 pub struct Trace {
     steps: Vec<TraceStep>,
+    outcome: Option<Outcome>,
 }
 
 impl Trace {
@@ -2188,12 +2229,21 @@ impl Trace {
     pub fn steps(&self) -> Vec<TraceStep> {
         self.steps.clone()
     }
+
+    /// Terminal `Outcome` produced by the traced evaluation. Callers who
+    /// want the final `created_cid` / `list` / `edge` without running
+    /// a second (side-effecting) `Engine::call` use this accessor.
+    #[must_use]
+    pub fn outcome(&self) -> Option<&Outcome> {
+        self.outcome.as_ref()
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct TraceStep {
     duration_us: u64,
     node_cid: Cid,
+    primitive: String,
 }
 
 impl TraceStep {
@@ -2205,6 +2255,14 @@ impl TraceStep {
     #[must_use]
     pub fn node_cid(&self) -> &Cid {
         &self.node_cid
+    }
+
+    /// Primitive-kind label for the step (e.g. `"read"`, `"write"`,
+    /// `"respond"`). Empty when the Phase-1 synthetic step cannot
+    /// attribute a primitive.
+    #[must_use]
+    pub fn primitive(&self) -> &str {
+        &self.primitive
     }
 }
 
@@ -2447,6 +2505,18 @@ impl SubgraphSpecBuilder {
         self
     }
 
+    /// Register an arbitrary primitive kind by label. Used by the napi
+    /// JSON-shape decoder so hand-built DSL subgraphs that use any of
+    /// the 12 primitive types (not just `write` / `respond`) can
+    /// structurally register. The evaluator returns
+    /// `E_PRIMITIVE_NOT_IMPLEMENTED` for Phase-2-only kinds at call
+    /// time; registration merely preserves the shape.
+    #[must_use]
+    pub fn primitive(mut self, id: &str, kind: benten_eval::PrimitiveKind) -> Self {
+        self.primitives.push((id.to_string(), kind));
+        self
+    }
+
     #[must_use]
     pub fn build(self) -> SubgraphSpec {
         SubgraphSpec {
@@ -2649,6 +2719,12 @@ impl RevokeSubject for &Cid {
 impl RevokeSubject for Cid {
     fn as_value(&self) -> Value {
         Value::Bytes(self.as_bytes().to_vec())
+    }
+}
+
+impl RevokeSubject for &str {
+    fn as_value(&self) -> Value {
+        Value::Text((*self).to_string())
     }
 }
 

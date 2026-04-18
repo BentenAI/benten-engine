@@ -68,7 +68,7 @@ mod napi_surface {
     use napi_derive::napi;
 
     use crate::edge::edge_to_json;
-    use crate::error::{core_err, engine_err};
+    use crate::error::engine_err;
     use crate::node::{json_to_props, node_json_to_node, node_to_json, parse_cid};
     use crate::policy::{PolicyKind, parse_grant_json};
     use crate::subgraph::{json_to_subgraph_spec, outcome_to_json};
@@ -297,21 +297,27 @@ mod napi_surface {
             Ok(cid.to_base32())
         }
 
-        /// Revoke a previously-granted capability by its CID.
+        /// Revoke a previously-granted capability.
         ///
-        /// Phase-1 stub: engines with capabilities disabled surface
-        /// `E_SUBSYSTEM_DISABLED`; otherwise the revocation Node is written
-        /// via the privileged-engine path. Reading the grant's original
-        /// `(actor, scope)` pair to reconstruct the revoke call is a
-        /// Phase-2 lookup that requires CID parsing (also Phase-2). In
-        /// Phase-1 we pass the CID string as the actor to form a valid
-        /// revocation record — TS consumers that want full semantics stage
-        /// through `grantCapability(...)` and await Phase-2.
+        /// Phase-1 contract: the caller passes both the grant CID (so the
+        /// engine can cross-reference the Node to be revoked) and an
+        /// explicit `actor` — the principal issuing the revocation. The
+        /// grant's *original* actor is the one named in the grant Node's
+        /// `actor` property; the revocation record's `actor` is the one
+        /// issuing the revocation (typically the grant's issuer, but
+        /// callers MAY pass a different actor when the policy allows).
+        /// This keeps the revocation record's audit chain intact for
+        /// Phase-2 / Phase-3 verification.
         #[napi]
-        pub fn revoke_capability(&self, cid: String) -> napi::Result<()> {
-            let _parsed = parse_cid(&cid)?;
+        pub fn revoke_capability(&self, grant_cid: String, actor: String) -> napi::Result<()> {
+            let grant = parse_cid(&grant_cid)?;
+            // `actor` is the principal issuing the revoke. The engine's
+            // `revoke_capability` takes a subject impl that can be an
+            // actor string; we pass it straight through so Phase-2 can
+            // resolve it to a principal CID via its policy backend.
+            let _ = grant;
             self.inner
-                .revoke_capability(&_parsed, cid.as_str())
+                .revoke_capability(actor.as_str(), grant_cid.as_str())
                 .map_err(engine_err)
         }
 
@@ -343,12 +349,23 @@ mod napi_surface {
 
         // -------- Misc --------
 
-        /// Emit a named event with a JSON payload. Phase-1 is a no-op at the
-        /// host level — standalone EMIT without an accompanying WRITE does
-        /// not carry a ChangeEvent payload; reserved for Phase-2.
+        /// Emit a named event with a JSON payload.
+        ///
+        /// Phase-1: EMIT as a standalone host operation is deferred to
+        /// Phase-2. The change-stream fan-out is driven by storage
+        /// WRITEs today; a standalone EMIT without a backing Node
+        /// mutation doesn't carry a ChangeEvent payload shape yet.
+        /// Rather than silently no-op, we surface
+        /// `E_PRIMITIVE_NOT_IMPLEMENTED` so callers learn their
+        /// `engine.emit_event(...)` had no visible effect. Per-WRITE
+        /// ChangeEvents flow via `create_node` / `register_crud:create`
+        /// unchanged.
         #[napi]
-        pub fn emit_event(&self, _name: String, _payload: serde_json::Value) {
-            // Intentionally no-op: storage writes drive the change stream.
+        pub fn emit_event(&self, _name: String, _payload: serde_json::Value) -> napi::Result<()> {
+            Err(napi::Error::new(
+                Status::GenericFailure,
+                "E_PRIMITIVE_NOT_IMPLEMENTED: emit is deferred to Phase 2 — storage writes drive the change stream today",
+            ))
         }
 
         /// Count of Nodes stored under `label`.

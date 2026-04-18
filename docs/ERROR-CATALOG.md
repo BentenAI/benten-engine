@@ -174,6 +174,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Context:** `{ node_id: NodeId, budget: number }`
 - **Fix:** Increase fuel budget (via capability), or reduce computational complexity. Fuel is per-subgraph, not per-call.
 - **Thrown at:** Evaluation
+- **Phase:** 2 (SANDBOX executor + wasmtime host land in Phase 2; Phase 1 defines SANDBOX structurally but returns `E_PRIMITIVE_NOT_IMPLEMENTED`)
 
 ### E_SANDBOX_TIMEOUT
 
@@ -181,6 +182,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Context:** `{ node_id: NodeId, timeout: number }`
 - **Fix:** Increase timeout or split into smaller SANDBOX calls.
 - **Thrown at:** Evaluation
+- **Phase:** 2 (SANDBOX executor, see `E_SANDBOX_FUEL_EXHAUSTED`)
 
 ### E_SANDBOX_OUTPUT_LIMIT
 
@@ -188,6 +190,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Context:** `{ node_id: NodeId, actual: number, max: number }`
 - **Fix:** Return smaller output. Use STREAM for progressive output.
 - **Thrown at:** Evaluation
+- **Phase:** 2 (SANDBOX executor, see `E_SANDBOX_FUEL_EXHAUSTED`)
 
 ### E_IVM_VIEW_STALE
 
@@ -257,6 +260,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Context:** `{ node_id: NodeId, received: CidV1, expected: CidV1, peer: PeerId }`
 - **Fix:** Possible tampering or corruption. Sync is aborted; investigate the peer.
 - **Thrown at:** Sync-receive
+- **Phase:** 3 (sync subsystem lands in Phase 3 with the Atrium stack)
 
 ### E_SYNC_HLC_DRIFT
 
@@ -264,6 +268,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Context:** `{ received: HlcTimestamp, local: HlcTimestamp, max_drift: Duration, peer: PeerId }`
 - **Fix:** Peer's clock is outside tolerance. Triggers clock reconciliation handshake; if that fails, sync pauses.
 - **Thrown at:** Sync-receive
+- **Phase:** 3 (sync subsystem, see `E_SYNC_HASH_MISMATCH`)
 
 ### E_SYNC_CAP_UNVERIFIED
 
@@ -271,6 +276,73 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Context:** `{ peer: PeerId, node_id: NodeId, missing: string }`
 - **Fix:** Peer sent a change without proper authority. Sync-receive rejects; investigate peer trust level.
 - **Thrown at:** Sync-receive
+- **Phase:** 3 (sync subsystem, see `E_SYNC_HASH_MISMATCH`)
+
+## Value / CID / backend errors
+
+### E_VALUE_FLOAT_NAN
+
+- **Message:** "Floating-point value is NaN; Value::Float rejects NaN for deterministic content-addressing"
+- **Context:** `{ source_path: string }`
+- **Fix:** The content-hash must be canonical; NaN compares unequal to itself and breaks hash determinism. Replace NaN with a sentinel (e.g. `Value::Null`) or with a specific finite value.
+- **Thrown at:** Value construction / deserialization
+- **Phase:** 1
+
+### E_VALUE_FLOAT_NONFINITE
+
+- **Message:** "Floating-point value is non-finite (Infinity / -Infinity); Value::Float requires finite numbers"
+- **Context:** `{ source_path: string }`
+- **Fix:** DAG-CBOR's canonical form rejects ±Infinity. Clamp to a finite bound or use `Value::Null`.
+- **Thrown at:** Value construction / deserialization
+- **Phase:** 1
+
+### E_CID_PARSE
+
+- **Message:** "CID bytes could not be parsed into a CIDv1: {detail}"
+- **Context:** `{ detail: string, bytes_len: number }`
+- **Fix:** Phase 1 accepts only base32-lower-nopad multibase (`b`-prefixed) CIDv1. Check that the caller is not passing a base58btc / base64 / hex form, and that the bytes are not truncated.
+- **Thrown at:** CID deserialization / napi boundary
+- **Phase:** 1
+
+### E_CID_UNSUPPORTED_CODEC
+
+- **Message:** "CID codec {codec} is not supported; Phase 1 recognizes DAG-CBOR (0x71)"
+- **Context:** `{ codec: number }`
+- **Fix:** Phase 1 only accepts DAG-CBOR multicodec (0x71). Re-encode under the expected codec or await later-phase codec support.
+- **Thrown at:** CID deserialization
+- **Phase:** 1
+
+### E_CID_UNSUPPORTED_HASH
+
+- **Message:** "CID hash function {code} is not supported; Phase 1 recognizes BLAKE3 (0x1e)"
+- **Context:** `{ code: number }`
+- **Fix:** Phase 1 only accepts BLAKE3 multihash (0x1e). Re-hash with BLAKE3 or await later-phase multi-hash support.
+- **Thrown at:** CID deserialization
+- **Phase:** 1
+
+### E_VERSION_BRANCHED
+
+- **Message:** "Version chain has branched — multiple NEXT_VERSION edges from the same Version Node"
+- **Context:** `{ anchor_cid: CidV1, branch_cids: CidV1[] }`
+- **Fix:** A Version Node should have at most one NEXT_VERSION successor on any linear chain. Branches are a Phase-3 sync consequence; in Phase 1 this indicates a programming error writing two NEXT_VERSION edges. Walk the chain, pick the intended successor, and remove the other NEXT_VERSION edge.
+- **Thrown at:** Version-chain traversal
+- **Phase:** 1
+
+### E_BACKEND_NOT_FOUND
+
+- **Message:** "Named backend '{name}' is not registered on this engine"
+- **Context:** `{ name: string }`
+- **Fix:** Phase 1 wires a single in-memory + redb backend pair; alternate backends land with Phase-2. This error fires when a sub-component addresses a backend that is not configured.
+- **Thrown at:** Engine builder / backend resolution
+- **Phase:** 1
+
+### E_NOT_FOUND
+
+- **Message:** "Requested entity not found: {kind} {identifier}"
+- **Context:** `{ kind: "node"|"edge"|"anchor"|"handler"|"view"|"grant", identifier: string }`
+- **Fix:** Generic not-found — version-chain anchor miss, unregistered handler lookup, unknown view id, etc. Check that the caller has the correct CID / id; for handlers, confirm `registerSubgraph` / `registerCrud` ran successfully.
+- **Thrown at:** Engine lookups
+- **Phase:** 1
 
 ## TypeScript binding-layer errors
 
@@ -280,6 +352,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Context:** `{ reason: string, received: unknown }`
 - **Fix:** Check the DSL API documentation for the expected shape.
 - **Thrown at:** DSL wrapper (TypeScript layer, before engine call)
+- **Phase:** 1 (TS-only — never surfaces from the Rust engine)
 
 ### E_DSL_UNREGISTERED_HANDLER
 
@@ -287,6 +360,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Context:** `{ handler_id: string, suggestions: string[] }`
 - **Fix:** Check spelling; register via `ctx.registerSubgraphs()` or `crud()`.
 - **Thrown at:** DSL wrapper
+- **Phase:** 1 (TS-only — never surfaces from the Rust engine)
 
 ## Extending the catalog
 

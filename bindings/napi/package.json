@@ -3,8 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "napi-rs v3 native bindings for the Benten engine. Consumed by @benten/engine as the compiled back-end.",
-  "type": "module",
-  "main": "./index.node",
+  "main": "./index.js",
   "files": [
     "index.node",
     "index.js",
