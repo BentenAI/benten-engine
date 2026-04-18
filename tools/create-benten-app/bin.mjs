@@ -31,6 +31,30 @@ import { execSync } from "node:child_process";
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const TEMPLATE_DIR = resolve(SCRIPT_DIR, "template");
 
+/**
+ * Resolve the `@benten/engine` dependency spec to inject into the
+ * generated project's package.json. When the scaffolder is invoked
+ * from INSIDE the benten-engine monorepo (detected via the presence
+ * of `packages/engine/package.json` three levels up), we emit a
+ * `file:` link to the local workspace copy so `npm install` in the
+ * generated project resolves offline. Otherwise we fall back to a
+ * pinned npm version; this is the future path for external users
+ * once `@benten/engine` is published.
+ */
+function resolveBentenEngineSpec(targetDir) {
+  const candidate = resolve(SCRIPT_DIR, "..", "..", "packages", "engine", "package.json");
+  if (existsSync(candidate)) {
+    const packagesEngineDir = resolve(SCRIPT_DIR, "..", "..", "packages", "engine");
+    // Emit an absolute file: URL so `npm install` works regardless of
+    // where the scaffolder placed the generated project (the test
+    // generates into `os.tmpdir()`, users generate into arbitrary cwd).
+    return `file:${packagesEngineDir}`;
+  }
+  // TODO(phase-2-npm-publish): pin to the published version once
+  // `@benten/engine` is on the npm registry.
+  return "^0.1.0";
+}
+
 function die(msg) {
   process.stderr.write(`create-benten-app: ${msg}\n`);
   process.exit(1);
@@ -57,9 +81,17 @@ if (!existsSync(TEMPLATE_DIR)) {
   die(`template directory missing at ${TEMPLATE_DIR} — scaffolder package is broken`);
 }
 
+const bentenEngineSpec = resolveBentenEngineSpec(targetDir);
+
 /**
- * Recursively copy src -> dst, substituting `{{name}}` in both file
- * contents and file/directory basenames.
+ * Recursively copy src -> dst, substituting template tokens in both
+ * file contents and file/directory basenames.
+ *
+ * Tokens:
+ *   * `{{name}}`              — the generated project's name.
+ *   * `{{bentenEngineSpec}}`  — the resolved `@benten/engine` package
+ *                               spec (a `file:` URL inside the monorepo,
+ *                               a semver range for external users).
  */
 function copyTemplate(src, dst) {
   const stat = statSync(src);
@@ -76,7 +108,9 @@ function copyTemplate(src, dst) {
   // doesn't get mangled.
   const textExt = /\.(ts|tsx|js|mjs|json|md|yml|yaml|txt|toml|html|css)$/i;
   if (textExt.test(src)) {
-    const body = readFileSync(src, "utf8").replaceAll("{{name}}", name);
+    const body = readFileSync(src, "utf8")
+      .replaceAll("{{name}}", name)
+      .replaceAll("{{bentenEngineSpec}}", bentenEngineSpec);
     writeFileSync(dst, body);
   } else {
     cpSync(src, dst);

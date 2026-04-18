@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 1ad9d75956bc4a205951aa354f48e5add3a86290a93ec87f387a876cbf8ff3b2 # shrinks to ops = [Label("a")]
+cc f53dd36b42fceeff98eb23ab1e4efadeda3883750d52b26cc031e07005c1da76 # shrinks to ops = [Prop("rs", 0), Prop("rs", 1)]

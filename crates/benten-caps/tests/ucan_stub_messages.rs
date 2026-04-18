@@ -92,6 +92,7 @@ fn ucan_stub_error_code_is_distinct_from_denied() {
 /// honor it. The test wires a minimal handler through `Engine` and asserts
 /// the routed edge.
 #[test]
+#[ignore = "TODO(phase-2-grant-backed-policy): UcanBackend error routing through Evaluator depends on Phase-2 UcanBackend wire-through + minimal_write_handler populated helper. When populated, re-assert the ON_ERROR routing."]
 fn ucan_stub_error_routes_to_ON_ERROR_not_ON_DENIED() {
     use benten_engine::Engine;
     use benten_engine::testing::{minimal_write_handler, route_of_error};

@@ -99,6 +99,15 @@ describe("ts_subgraph_register_and_call", () => {
     // indicate the CRUD create path ran end-to-end.
     const reportedCid = outcome.createdCid ?? outcome.cid;
     expect(typeof reportedCid).toBe("string");
+    // Tighter: CIDv1 multibase base32 starts with `b` and runs ~59 chars
+    // for a BLAKE3-256 digest. This catches regressions that return empty
+    // strings, UUIDs, or plain hex.
+    expect(reportedCid.startsWith("b")).toBe(true);
+    expect(reportedCid.length).toBeGreaterThanOrEqual(50);
+    // Round-trip: the reported CID must resolve to the node we wrote.
+    const fetched = engine.getNode(reportedCid);
+    expect(fetched).not.toBeNull();
+    expect(fetched.properties.title).toBe("p1");
   });
 });
 
@@ -115,6 +124,22 @@ describe("ts_trace_contains_per_node_timings", () => {
     }
   });
 });
+
+// TODO(r6): 10 napi-exported methods have zero Vitest coverage and are
+// spot-checked only on the Rust side. Add one smoke test per method
+// before R6 quality council:
+//   * callAs
+//   * countNodesWithLabel
+//   * createView
+//   * deleteEdge
+//   * emitEvent
+//   * grantCapability
+//   * ivmSubscriberCount
+//   * openWithPolicy
+//   * readView
+//   * revokeCapability
+// Priority: grantCapability + revokeCapability + readView (exit-criterion
+// #3 / #6 adjacency). See r4b-rust-test-coverage r4b-rtc-2.
 
 describe("napi misc surfaces", () => {
   it("reports a non-negative change_event_count after writes", () => {

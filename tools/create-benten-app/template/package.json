@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@benten/engine": "*"
+    "@benten/engine": "{{bentenEngineSpec}}"
   },
   "devDependencies": {
     "tsx": "^4.19.0",

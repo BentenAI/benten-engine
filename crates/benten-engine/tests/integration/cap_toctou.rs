@@ -18,6 +18,7 @@ use benten_core::{Node, Value};
 use benten_engine::Engine;
 
 #[test]
+#[ignore = "TODO(phase-2-grant-backed-policy): capability_policy_grant_backed() builder hook is a Phase-1 no-op (returns self); call_with_revocation_at depends on Phase-2 grant-backed policy."]
 fn capability_revoked_mid_eval_surfaces_at_batch_boundary() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()

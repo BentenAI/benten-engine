@@ -240,22 +240,15 @@ export class Engine {
       );
     }
 
-    // Injection: crud(...) WRITEs get a deterministic createdAt stamp
-    // if the caller hasn't supplied one. This keeps View 3 (content
-    // listing, sorted by createdAt) functional out of the box.
-    const injector = crud
-      ? (args: Record<string, JsonValue>): Record<string, JsonValue> => {
-          if (args.properties && typeof args.properties === "object") {
-            const props = args.properties as Record<string, JsonValue>;
-            if (props.createdAt === undefined) {
-              props.createdAt = crud.stampCreatedAt();
-            }
-          }
-          return args;
-        }
-      : undefined;
-
-    const payload = toNativePayload(sg, injector);
+    // NB: the crud createdAt stamp is applied ONCE at call-time (below
+    // in `Engine.call`), not here at registration time. A prior
+    // registration-time injector was dead code — the crud branch
+    // immediately below routes through `registerCrud(label)` which
+    // ignores the payload, and the Rust side stamps `created_at_seq`
+    // defensively at `subgraph_for_crud` WRITE expansion as a fallback.
+    // Keeping the stamp in one place (call-time) removes the
+    // three-sources-of-truth hazard r4b-qa-3 flagged.
+    const payload = toNativePayload(sg);
 
     let id: string;
     let actions: string[] = sg.actions;

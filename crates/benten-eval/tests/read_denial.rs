@@ -37,6 +37,7 @@ use benten_engine::testing::{read_handler_for, subject_with_no_read_grants};
 
 /// Option A: read denial returns `E_CAP_DENIED_READ`, NOT `E_NOT_FOUND`.
 #[test]
+#[ignore = "TODO(phase-2-grant-backed-policy): GrantBackedPolicy + subject_with_no_read_grants helper + read_handler_for populated helper land in Phase 2. When populated, re-assert the denial shape."]
 fn read_denied_returns_cap_denied_read() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()

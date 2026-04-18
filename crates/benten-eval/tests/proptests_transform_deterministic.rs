@@ -40,6 +40,26 @@ proptest! {
             expr
         );
     }
+
+    /// Companion to the grammar-fuzz harness (R2 row
+    /// `prop_transform_grammar_fuzz_accepted_deterministic`, M16-deferred).
+    /// For every grammar-accepted expression, repeated evaluation against
+    /// the same (empty) input must produce the same `Value`. Named
+    /// separately from `prop_transform_expression_deterministic` so the
+    /// grammar-fuzz and determinism harnesses stay individually traceable.
+    #[test]
+    fn prop_transform_grammar_fuzz_accepted_deterministic(
+        expr in any_accepted_expr()
+    ) {
+        let r1 = evaluate_transform(&expr);
+        let r2 = evaluate_transform(&expr);
+        prop_assert_eq!(
+            r1,
+            r2,
+            "grammar-accepted TRANSFORM `{}` must evaluate deterministically",
+            expr
+        );
+    }
 }
 
 /// R5 wiring (G6-B): parse + evaluate a TRANSFORM expression against an

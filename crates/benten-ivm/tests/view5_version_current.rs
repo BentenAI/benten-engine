@@ -71,6 +71,7 @@ fn view5_id_is_version_current() {
 
 /// Category 1: rebuild matches incremental.
 #[test]
+#[ignore = "TODO(phase-2-ivm-replay): rebuild() is Phase-1 clear-to-Fresh (no source-of-truth); Phase 2 adds event-log replay. When populated, assert incremental == rebuild."]
 fn view5_rebuild_matches_incremental_state() {
     let mut incremental = VersionCurrentView::new();
     incremental

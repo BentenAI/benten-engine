@@ -578,9 +578,16 @@ impl Engine {
         Ok(handler_id)
     }
 
-    /// Grant-backed variant of `register_crud`. Phase 1 is identical to
-    /// `register_crud` — the capability-grant backing is a Phase-2 policy
-    /// concern.
+    /// PLACEHOLDER alias. **Phase 1 stub; behaves identically to
+    /// `register_crud`.**
+    ///
+    /// Grant-backed variant of `register_crud`. Phase 1 is a direct
+    /// pass-through — the capability-grant backing is a Phase-2 policy
+    /// concern and this method exists so tests that spell the
+    /// grant-backed intent survive across the Phase-1 / Phase-2
+    /// boundary.
+    // TODO(phase-2-grant-backed-policy): route through GrantBackedPolicy
+    // registration so the handler honours grants at call-time.
     pub fn register_crud_with_grants(&self, label: &str) -> Result<String, EngineError> {
         self.register_crud(label)
     }
@@ -688,6 +695,18 @@ impl Engine {
     /// `flowchart LR` header, nodes labeled by primitive kind, and one or
     /// more `-->` edges. The handler must have been registered via
     /// `register_crud` or `register_subgraph`.
+    ///
+    /// # Phase-1 note
+    /// Returns a canonical 3-node CRUD diagram (READ -> WRITE -> RESPOND)
+    /// REGARDLESS of the actual handler structure. The real mermaid
+    /// renderer for user-registered subgraphs lives in
+    /// `benten_eval::diag::mermaid` (diag feature) and is wired through
+    /// in Phase 2. Tests that rely on this output currently validate
+    /// only that SOMETHING shaped like a flowchart is returned. The
+    /// `%% canonical-placeholder` comment below is the marker for
+    /// consumers reading the raw text.
+    // TODO(phase-2-diag-mermaid): wire through benten_eval::diag::mermaid
+    // so that the rendered shape reflects the actual registered subgraph.
     pub fn handler_to_mermaid(&self, handler_id: &str) -> Result<String, EngineError> {
         let guard = self
             .inner
@@ -704,7 +723,7 @@ impl Engine {
         // RESPOND). The authoritative mermaid shape lives in benten-eval's
         // diag module once primitive dispatch is live.
         Ok(format!(
-            "flowchart LR\n  n0[READ]\n  n1[WRITE]\n  n2[RESPOND]\n  n0 --> n1\n  n1 --> n2\n  %% handler={handler_id}"
+            "flowchart LR\n  %% canonical-placeholder: Phase-1 canned CRUD shape; see Engine::handler_to_mermaid docs\n  n0[READ]\n  n1[WRITE]\n  n2[RESPOND]\n  n0 --> n1\n  n1 --> n2\n  %% handler={handler_id}"
         ))
     }
 
@@ -920,6 +939,13 @@ impl Engine {
         match op_name {
             "create" => {
                 let mut props = input.properties.clone();
+                // Defense-in-depth fallback stamp. Primary stamping happens
+                // at the DSL's call-time entry (packages/engine/src/engine.ts
+                // Engine.call, crud create branch); if a caller reaches the
+                // Rust surface without a DSL-side stamp the `or_insert` below
+                // preserves the View-3 sort key so content listing stays
+                // functional. Not a primary path — see r4b-qa-3 for the
+                // stamp-once-per-call contract.
                 let created_at = self
                     .inner
                     .created_at_seq
@@ -1601,15 +1627,30 @@ impl EngineBuilder {
         self
     }
 
-    /// Placeholder: the grant-backed capability policy. **Phase 1 stub** —
-    /// the default NoAuth remains in force; Phase 2 lands the grant-backed
-    /// policy that reads `system:CapabilityGrant` Nodes.
+    /// PLACEHOLDER — NO-OP. **Phase 1 stub; returns `self` unchanged.**
+    ///
+    /// The grant-backed capability policy is a Phase-2 deliverable: it
+    /// reads `system:CapabilityGrant` Nodes from the backend and
+    /// enforces on pre-write. Until Phase 2 lands it, callers of this
+    /// builder method continue to run under whatever policy was
+    /// previously configured (default: `NoAuthBackend`).
+    ///
+    /// Tests that depend on grant-backed semantics are `#[ignore]`'d
+    /// with `TODO(phase-2-grant-backed-policy)` markers so they do not
+    /// silently pass under `NoAuthBackend`.
+    // TODO(phase-2-grant-backed-policy): wire benten_caps::GrantBackedPolicy here.
     #[must_use]
     pub fn capability_policy_grant_backed(self) -> Self {
         self
     }
 
-    /// Placeholder: a policy with built-in revocation hooks. **Phase 2.**
+    /// PLACEHOLDER — NO-OP. **Phase 2 stub; returns `self` unchanged.**
+    ///
+    /// A policy with built-in revocation hooks (paired with
+    /// `Engine::schedule_revocation_at_iteration`, also Phase-2) ships
+    /// in Phase 2. Tests depending on revocation semantics are
+    /// `#[ignore]`'d with `TODO(phase-2-grant-backed-policy)`.
+    // TODO(phase-2-grant-backed-policy): wire revocation-aware policy here.
     #[must_use]
     pub fn with_policy_allowing_revocation(self) -> Self {
         self
@@ -1977,6 +2018,16 @@ fn eval_error_to_engine_error(e: benten_eval::EvalError) -> EngineError {
 /// to materialize `outcome.list` by walking the label index (used for
 /// CRUD:list, which uses a READ-by-query internally). `created_cid_hint`
 /// is the CID returned by the transaction replay of host-side WRITEs.
+///
+/// # Phase-1 note
+/// The `list_hint` path reads the backend label index directly, not
+/// View 3 (content listing). The IVM subscriber IS exercised end-to-end
+/// for write propagation (`ivm_ten_writes_reflected_in_list_in_order`
+/// passes), but the READ side currently fans out via `get_by_label` +
+/// in-memory sort by `createdAt`. Phase-2 restoration: route through
+/// View 3 for the O(log n + page_size) read via a dedicated
+/// `Engine::read_view_strict("content_listing")` path.
+// TODO(phase-2-list-via-ivm): route post:list through View 3's read_page.
 fn outcome_from_terminal_with_cid(
     engine: &Engine,
     edge: &str,

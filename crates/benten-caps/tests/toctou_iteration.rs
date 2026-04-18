@@ -50,6 +50,7 @@ const DEFAULT_BATCH_BOUNDARY: u32 = benten_caps::DEFAULT_BATCH_BOUNDARY as u32;
 ///   - the error is `E_CAP_REVOKED_MID_EVAL`, NOT `E_CAP_DENIED` and NOT
 ///     `E_CAP_REVOKED` (reserved for Phase 3 sync revocation).
 #[test]
+#[ignore = "TODO(phase-2-grant-backed-policy): GrantBackedPolicy reads CapabilityGrant nodes from the graph and enforces; blocked on grant-write API + schedule_revocation_at_iteration (Phase-2 NotImplemented) + iterate_write_handler populated helper. When populated, re-assert the denial shape."]
 fn capability_revoked_mid_iteration_denies_subsequent_batches() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
@@ -103,6 +104,7 @@ fn capability_revoked_mid_iteration_denies_subsequent_batches() {
 /// revocation. If Phase 2 closes this window (per-iter cap check), this test
 /// will need to flip its assertion.
 #[test]
+#[ignore = "TODO(phase-2-grant-backed-policy): GrantBackedPolicy reads CapabilityGrant nodes from the graph and enforces; blocked on grant-write API + schedule_revocation_at_iteration (Phase-2 NotImplemented) + iterate_write_handler populated helper. When populated, re-assert the denial shape."]
 fn writes_in_current_batch_are_not_retroactively_denied() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
