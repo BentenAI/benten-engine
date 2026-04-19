@@ -1,0 +1,152 @@
+{
+  "agent": "dx-optimizer",
+  "round": "R6",
+  "head_sha": "fc3f0d1",
+  "scope": "10-minute DX from `npx create-benten-app` — scaffolder, `npm run dev`, `npm run test`, `npm run build`, engine.call, engine.trace, handler.toMermaid, typed errors, capability surface discoverability.",
+  "verdict": "REVISE",
+  "summary": "The scaffolder/smoke path is a real Phase-1 win — `npx create-benten-app` through `npm test` hits six green gates end-to-end and the error-surface contract carries a stable `code`/`fixHint`. The G8 criticals from my last pass are all closed (mermaid structural check, ESM/CJS, real trace steps, View-3 list ordering). However, the DX surface OUTSIDE the smoke test has regressed under its own weight: `npm run dev` and `npm run build` — both advertised in README.md and the scaffolded project's own README — crash or fail on a fresh machine, and the new GrantBackedPolicy work has no TypeScript-side discoverability at all. `trace()` has silent side effects and is missing the per-step inputs/outputs that make it worth calling. Four criticals and seven majors block a REVISE-to-PASS transition; no blockers are deep, most are tightening.",
+  "counts": {
+    "critical": 4,
+    "major": 7,
+    "minor": 6
+  },
+  "criticals": [
+    {
+      "id": "r6-dx-C1",
+      "title": "`npm run dev` fails on a freshly scaffolded project — `.benten/` directory not created, bubbles `E_UNKNOWN` instead of a real code",
+      "where": "tools/create-benten-app/template/src/index.ts + packages/engine/src/engine.ts:Engine.open",
+      "observed": "Running `npx create-benten-app my-app && cd my-app && npm install && npm run dev` (the exact three-command sequence promised in README.md:19-22 and template/README.md:7-12) crashes with `BentenError: E_UNKNOWN: graph: redb: I/O error: No such file or directory (os error 2)`. Root cause: `index.ts` constructs `join(process.cwd(), '.benten', '{{name}}.redb')` but the `.benten/` directory is never created. The redb open fails; the native error message has no `E_*` prefix so `mapNativeError` falls through to the synthetic `E_UNKNOWN` catalog-miss path with `fixHint: '(no catalog match)'`.",
+      "why_it_matters": "This is the flagship onboarding command, advertised verbatim on the README. A first-time developer's second-ever interaction with the project crashes with a cryptic error that provides zero guidance. The README even frames `npm run dev` as the experience, right above the `toMermaid()` + `trace()` demo. A `E_BACKEND_NOT_FOUND` or `E_BACKEND_INIT_FAILED` with a fix-hint (\"parent directory does not exist; mkdir it or pass `.benten` = already handled by scaffolder\") is the minimum bar; the right fix is for `Engine.open` to `mkdir -p dirname(path)` itself (redb is the authority on the file; the parent dir is the wrapper's job).",
+      "fix": "Either (a) have `Engine.open` (TS wrapper) create the parent directory if missing before calling the native constructor, OR (b) patch the scaffolder template's `src/index.ts` to `mkdirSync(dirname(dbPath), { recursive: true })` before `Engine.open`. Prefer (a) — the wrapper is the right place because every user hits this. Also extend `mapNativeError` to recognize bare `I/O error: No such file or directory` substrings and surface `E_BACKEND_NOT_FOUND` with a useful fixHint until the native side emits stable codes."
+    },
+    {
+      "id": "r6-dx-C2",
+      "title": "`npm run build` (tsc) fails on a freshly scaffolded project — `@types/node` is missing from template devDependencies",
+      "where": "tools/create-benten-app/template/package.json + template/src/index.ts",
+      "observed": "`npm run build` exits with four TS errors — `Cannot find module 'node:path'` and `Cannot find name 'process'` (three sites). The template `src/index.ts` imports `node:path` and references `process.cwd()`, `process.argv`, `process.exit`, but `devDependencies` only contains `tsx`, `typescript`, `vitest`. `@types/node` is missing. The scaffolder smoke test `scaffolder.test.ts` runs `npm test` but NOT `npm run build`, so this regression has been silently present. Note also `tsconfig.json` has no `types`/`lib` directives, so there's no fallback types surface.",
+      "why_it_matters": "README.md:15, template/README.md:13 both advertise `npm run build` as a headline command. A developer who pastes the three advertised commands hits an error on the third. The fix is a one-line addition to devDependencies, but the drift is systemic: the smoke test doesn't exercise the build path, so nothing was catching it.",
+      "fix": "(a) Add `\"@types/node\": \"^22.0.0\"` to `tools/create-benten-app/template/package.json` devDependencies. (b) Extend `tools/create-benten-app/test/scaffolder.test.ts` to run `npm run build` after `npm test` — catches this class of regression for future phases."
+    },
+    {
+      "id": "r6-dx-C3",
+      "title": "GrantBackedPolicy has no TypeScript-side path — the Rust builder chain is invisible to the DSL consumer",
+      "where": "bindings/napi/src/policy.rs + packages/engine/src/engine.ts",
+      "observed": "`benten_engine::EngineBuilder::capability_policy_grant_backed` exists and is exercised by integration tests (`crates/benten-engine/tests/integration/caps_crud.rs`, `cap_toctou.rs`). But the napi `PolicyKind` enum (bindings/napi/src/policy.rs:16) exposes only `NoAuth` and `Ucan`; there is no `GrantBacked` variant. The TS wrapper has no `openWithPolicy` method at all (Engine prototype is `open`, `close`, `registerSubgraph`, `call`, `trace`, `handlerPredecessors`, `createNode`, `getNode` — nothing else). The only way a TS consumer can enable capability enforcement is via `openWithPolicy(path, PolicyKind.Ucan)`, which falls through to a stub that returns `E_CAP_NOT_IMPLEMENTED` on every check.",
+      "why_it_matters": "R6 prompt explicitly flags this as an audit target: \"GrantBackedPolicy unlocks `engine.capability_policy_grant_backed()` — is the builder chain discoverable from TS side?\". The answer is no. A Phase-1 Rust capability you can't reach from the Phase-1 DSL is — from the developer's point of view — a Phase-2 feature. The scaffolder template's README even suggests `crud('post', { capability: 'store:post:*' })` + `engine.grantCapability(...)` as the capability onboarding path, but `grantCapability` isn't on the TS `Engine` class at all, and there's no policy to enforce grants against.",
+      "fix": "(a) Add a `GrantBacked` variant to `PolicyKind` in `bindings/napi/src/policy.rs`; route `into_policy` to construct `GrantBackedPolicy` wired to the engine's `GrantReader`. (b) Add `Engine.openWithPolicy(path, policy)` static factory to `packages/engine/src/engine.ts` (thin pass-through — NativeEngine already has `openWithPolicy`). (c) Add `Engine.prototype.grantCapability(grant)` and `revokeCapability(grantCid, actor)` — both exist on the native side, neither is wrapped. (d) Add a 2-line example to `template/README.md` showing the builder chain. Without (a)-(c), the entire Phase-1 capability story is locked behind Rust-only integration tests."
+    },
+    {
+      "id": "r6-dx-C4",
+      "title": "`engine.trace()` has silent side effects — tracing a `post:create` persists a Node (with bogus `createdAt: 1`)",
+      "where": "packages/engine/src/engine.ts:447 (Engine.trace) + the createdAt-injection path that's only in Engine.call",
+      "observed": "Tracing `post:create` via `engine.trace(handlerId, 'post:create', { title: 'via-trace' })` writes the Node to storage and subsequent `engine.call(handler.id, 'post:list', {})` returns it. The injected `createdAt` comes from the Rust-side `created_at_seq` fallback (value `1`, not an HLC ms-since-epoch), because the DSL wrapper's `stampCreatedAt()` injection is wired only in `Engine.call` (engine.ts:366-382), not in `Engine.trace`. Net effect: a developer using `trace()` to debug a create corrupts their local data with a malformed Node.",
+      "why_it_matters": "Two compounding problems. (1) Trace is advertised as a debugging tool; persistent side effects surprise every developer who uses it. The README literally shows `engine.trace('post:create', {...})` right next to `engine.call`, implying symmetry, but only `call` goes through the stamping path. (2) The side-effect Node has `createdAt: 1`, which then sorts ahead of every real post in View-3 `:list` output — any developer who traces once then lists sees their trace-created node at the top forever. Either trace should route through a sandbox transaction that rolls back at the end, OR trace should apply the same createdAt injection as call, OR (simpler) trace should refuse mutating ops and only run read-only handlers until Phase 2. Current behaviour is the worst of the three options.",
+      "fix": "Short-term: make `Engine.trace` apply the same `stampCreatedAt` injection that `Engine.call` applies when the op is a crud `:create`. Medium-term: wrap the trace in a redb transaction that rolls back at the end (Phase-2 scope if wanted). Document which choice is the Phase-1 contract in `docs/QUICKSTART.md` — currently it's silent."
+    }
+  ],
+  "majors": [
+    {
+      "id": "r6-dx-M1",
+      "title": "Native `handlerToMermaid` produces visibly worse output than the pure TS `toMermaid` — and the wrapper prefers it",
+      "where": "packages/engine/src/engine.ts:149-163 + the Rust side of `handlerToMermaid` in benten-engine",
+      "observed": "Pure TS `toMermaid(crud('post').subgraph)` renders 11 nodes with primitive-typed shapes (`{BRANCH}`, `([RESPOND])`, `[READ]`, etc.) and labeled edges (`|CASE:create|` etc.) — the full CRUD DAG. Native `handler.toMermaid()` renders 3 flat rectangular nodes (`[READ]`, `[WRITE]`, `[RESPOND]`), one LR orientation, no edge labels, no shapes, plus a trailing `%% handler=crud:post` comment. The Rust side appears to be rendering only the happy `post:create` path, or a flattened view that discards the BRANCH entirely. The TS wrapper prefers the native output (engine.ts:154) and falls back to TS only on throw.",
+      "why_it_matters": "The advertised DX is \"`console.log(handler.toMermaid())` renders the actual registered subgraph.\" The current behaviour renders a lossy fiction of the subgraph. For a CRUD handler that is literally a BRANCH with five cases, showing only one case is a correctness issue for the debug tool. The pass-one fix (use the native) was the right instinct because the engine's view is authoritative, but the engine's view is wrong — it's missing 8 of the 11 Nodes.",
+      "fix": "Either (a) fix the Rust-side `handlerToMermaid` to render the registered subgraph faithfully, OR (b) invert the preference in engine.ts: call the pure-TS `toMermaid(sg)` first and offer `nativeMermaid()` as an opt-in for users who specifically want the engine's internal view. I recommend (b) for now (the TS version is demonstrably richer) plus a tracking issue for (a)."
+    },
+    {
+      "id": "r6-dx-M2",
+      "title": "Trace steps are missing `inputs`/`outputs` — the TS type declares them; the native side omits them",
+      "where": "packages/engine/src/types.ts:95-108 (TraceStep.inputs/outputs typed) + Rust-side tracer emission + bindings/napi trace payload shape",
+      "observed": "`TraceStep.inputs` and `TraceStep.outputs` are declared on the type (types.ts:103-105) with the docstring \"Optional input binding observed at step entry\" / \"Optional output produced by the step\". In practice they are always `undefined` — observed on a fresh run (`step 0 has inputs? false outputs? false`). The native tracer (per `bindings/napi/index.d.ts` line 49) returns `{steps: [...]}` but the step payload only populates `nodeCid`, `primitive`, `durationUs`.",
+      "why_it_matters": "Trace without per-step inputs/outputs is just a list of primitive names and timings. The debugging value — \"what did TRANSFORM produce?\", \"what did READ find?\" — is exactly what's missing. This pushes developers to printf-debug primitives by modifying subgraphs, which defeats the whole purpose of having a trace API.",
+      "fix": "Wire the Rust evaluator's per-step bindings into the trace record. The evaluator already has the data (it's the `$result` chain). Surface it as JSON on each `TraceStepRecord`. Update napi projection. (Ideally covered by existing test `test_trace_captures_inputs_outputs` if one exists — grep says not yet.)"
+    },
+    {
+      "id": "r6-dx-M3",
+      "title": "Trace step durations are identical across all steps — appears to be total elapsed time attributed per-step",
+      "where": "Rust-side tracer + bindings/napi",
+      "observed": "A `trace(post:create)` with 2 steps returns `[1804, 1804]`. A second run on a fresh engine returns `[3974, 3974]`. Both always identical. The pattern suggests the tracer records a single end-timestamp and reports `(end - start)` for every step, rather than per-step delta.",
+      "why_it_matters": "The headline Phase-1 exit criterion `trace_non_zero_timing` passes trivially — any per-step reading is non-zero. But the actual semantics are broken: you cannot tell which primitive is slow, because they all report the same number. A developer who traces to find a hot primitive gets a false answer.",
+      "fix": "Record `Instant::now()` before and after each primitive's `execute`. Compute per-step delta. Phase-2 can add pre-host-call + post-host-call timings for more granularity. Add a test: two-step trace where step 1 is a `transform` with a deliberate sleep — assert durationUs differ by at least the sleep amount."
+    },
+    {
+      "id": "r6-dx-M4",
+      "title": "Error fixHint references a non-existent API: `ctx.registerSubgraphs()`",
+      "where": "docs/ERROR-CATALOG.md:361 (E_DSL_UNREGISTERED_HANDLER) + packages/engine/src/errors.generated.ts (codegen product)",
+      "observed": "A typed `E_DSL_UNREGISTERED_HANDLER` carries `fixHint: \"Check spelling; register via `ctx.registerSubgraphs()` or `crud()`.\"`. But the TS public surface has no `ctx` object and no `registerSubgraphs` method (note the plural `s`). The real API is `engine.registerSubgraph(...)` (singular, on the `Engine` instance).",
+      "why_it_matters": "The error catalog is the onboarding runbook for every runtime error. Pointing developers at `ctx.registerSubgraphs()` — a method that doesn't exist on any class — sends them on a wild-goose hunt through docs. The drift-detect CI script (mentioned in errors.ts:12) verifies sync between `errors.generated.ts` and the catalog, but does NOT verify that the API names mentioned in fixHints actually exist.",
+      "fix": "(a) Update `docs/ERROR-CATALOG.md:361` to `Check spelling; register via \\`engine.registerSubgraph(...)\\` or \\`engine.registerSubgraph(crud('<label>'))\\`.`. (b) Regenerate `errors.generated.ts` via the codegen script. (c) Consider a test that greps all catalog fixHints for `E.*()` patterns and asserts the functions exist on the public exports."
+    },
+    {
+      "id": "r6-dx-M5",
+      "title": "TS `Engine` class exposes only 6 of 23 native Engine methods — most of the Phase-1 surface is unreachable from the DSL",
+      "where": "packages/engine/src/engine.ts:173-547 (Engine class public methods)",
+      "observed": "`bindings/napi/index.d.ts` exposes 23 methods on the native Engine class. `packages/engine/src/engine.ts` wraps only: `open`, `close`, `registerSubgraph`, `call`, `trace`, `handlerPredecessors`, `createNode`, `getNode` (6 + static `open` + private `assertOpen`). Unwrapped: `openWithPolicy`, `updateNode`, `deleteNode`, `createEdge`, `getEdge`, `deleteEdge`, `edgesFrom`, `edgesTo`, `callAs`, `handlerToMermaid` (bypassed via pure TS), `grantCapability`, `revokeCapability`, `createView`, `readView`, `emitEvent`, `countNodesWithLabel`, `changeEventCount`, `ivmSubscriberCount`.",
+      "why_it_matters": "The scaffolded README (template/README.md:29) says \"grant the capability to your entity via `engine.grantCapability(...)`\". That call literally doesn't exist on the TS Engine class. A developer following the template README hits a runtime error. Similarly `createView` / `readView` are how IVM views are exposed in Phase 1, but they're Rust-only. The DSL wrapper is not covering the Phase-1 contract.",
+      "fix": "Wrap all 23 native methods through the TS Engine class, even if the wrapper is a one-line pass-through. Run through `mapNativeError`. Add an `engine.ts` integration test that introspects `Object.getOwnPropertyNames(Engine.prototype)` and asserts the count matches a pinned list of Phase-1 methods. The current 6-of-23 coverage is a drift pattern that will compound in Phase 2."
+    },
+    {
+      "id": "r6-dx-M6",
+      "title": "`QUICKSTART.md` \"What works / what doesn't\" section is stale — every Phase-1 deliverable is checked as `[ ]` not done",
+      "where": "docs/QUICKSTART.md:97-106",
+      "observed": "The section titled \"What works / what doesn't (honest status as of 2026-04-14)\" lists six items — scaffolder, `@benten/engine`, `crud('post')`, `toMermaid()`, `engine.trace()`, dev server — all marked `[ ]` (not done) with the note \"Phase 1 deliverable, not yet built.\" At HEAD `fc3f0d1`, all five of these EXCEPT dev server are working (items 1-5 pass the smoke test; dev server is still Phase-2 as the doc says). The doc is 3 days stale and tells visitors the engine is unbuilt.",
+      "why_it_matters": "QUICKSTART.md is the first doc linked from README.md. \"Treat it as a specification of intent rather than a working tutorial\" is the doc's current self-description — but the scaffolder actually works now. Leaving this stale undersells what Phase 1 shipped, and in a future Phase-2 PR someone will forget to update it again.",
+      "fix": "Update the section to reflect reality: items 1-5 to `[x]` with links to the test that proves each one; item 6 (dev server HMR) stays `[ ]` Phase 2. Better: write a small node script that greps the repo for Phase-1 checklist items and auto-generates this section from test presence. Now is the time because it's less than 15 minutes."
+    },
+    {
+      "id": "r6-dx-M7",
+      "title": "`handlerPredecessors` returns an empty table — a hidden no-op that makes trace topological-order tests vacuous",
+      "where": "packages/engine/src/engine.ts:504-516",
+      "observed": "`Engine.handlerPredecessors(_handlerId)` is defined, typed, exported, used by tests — and always returns `{predecessorsOf: (_) => []}`. The docstring (lines 506-510) admits this: \"The native binding does not currently expose a predecessor-table read.\" Tests that build a partial-order check on this helper silently pass because the predecessor set is always empty.",
+      "why_it_matters": "This is a vacuous-assertion hazard of the type R4b-qa flagged in previous rounds. Any test that uses `handlerPredecessors` to verify trace ordering is passing without actually checking anything. In a phase with 392 tests, a silently-no-op helper is a cavity waiting to deepen.",
+      "fix": "Either (a) wire a native `handlerPredecessors(handlerId)` method on the Rust side (the evaluator has the adjacency — it walks it every call), OR (b) drop the helper entirely and replace it with `handler.subgraph` introspection (the Subgraph structure has all the edges). Pick one. Tests that use it should then be rewritten to use the real source."
+    }
+  ],
+  "minors": [
+    {
+      "id": "r6-dx-m1",
+      "title": "Scaffolder README suggests a capability example that doesn't compile",
+      "where": "tools/create-benten-app/template/README.md:29",
+      "fix": "Remove `crud('post', { capability: 'store:post:*' })` until a Phase-1 DSL supports the `capability` option (or implement it). Currently the `CrudOptions` type has only `label` and `hlc`."
+    },
+    {
+      "id": "r6-dx-m2",
+      "title": "Engine.close is a no-op marker — file handles held until GC",
+      "where": "packages/engine/src/engine.ts:215-218",
+      "fix": "Add a native `close()` method and call it. The docstring admits this is Phase-2 territory; at minimum upgrade the JSDoc to warn that tests must not re-open the same file in-process until a proper close lands."
+    },
+    {
+      "id": "r6-dx-m3",
+      "title": "Trace suggests EMIT primitive via `emitEvent` — but `emitEvent` throws E_PRIMITIVE_NOT_IMPLEMENTED in Phase 1",
+      "where": "bindings/napi/index.d.ts:80-89",
+      "fix": "The docstring is honest about the deferral; just make sure `Engine.emitEvent` in the TS wrapper (if added in M5) surfaces the code cleanly rather than raw-throwing."
+    },
+    {
+      "id": "r6-dx-m4",
+      "title": "Mermaid rendering strips parens/brackets too aggressively from labels",
+      "where": "packages/engine/src/mermaid.ts:135-139",
+      "fix": "`escapeLabel` strips `[]{}()|<>` from labels. A TRANSFORM expr like `x[0].title` becomes `x0.title` — subtly wrong when rendered to a developer. Consider Mermaid's `\"quoted label\"` escape instead of strip."
+    },
+    {
+      "id": "r6-dx-m5",
+      "title": "No `--help` output from the scaffolder",
+      "where": "tools/create-benten-app/bin.mjs:63-66",
+      "fix": "`node bin.mjs --help` dies with `missing project name`. Add a `--help` / `-h` handler that prints usage (5 lines of work)."
+    },
+    {
+      "id": "r6-dx-m6",
+      "title": "`npx create-benten-app my-app` prints \"Running npm install (use --skip-install to skip)\" to stdout even if install succeeds instantly — no completion signal",
+      "where": "tools/create-benten-app/bin.mjs:123-133",
+      "fix": "Pipe npm's stderr separately so a silent-failure install doesn't silently mislead. Also consider a final \"Install succeeded\" line before the \"Done\" banner so the two phases are distinguishable."
+    }
+  ],
+  "positive_notes": [
+    "The G8 fix-pass criticals are all closed and verified at HEAD: (g8-dx-1) Mermaid structural regex check in place and green; (g8-dx-2) `\"type\": \"module\"` dropped from bindings/napi, CJS/ESM mismatch resolved; (g8-dx-3) trace returns real per-step records (shape-wise, though see M2/M3); (g8-dx-4) `post:list` returns View-3-sorted items with `items` flattened for DX parity.",
+    "The scaffolder + smoke test flow is genuinely smooth once you stay on the `npm test` rail: 50-package install in 11s on a fresh cache, 6/6 gates green in 554ms. That's excellent Phase-1 feel.",
+    "Typed error classes with stable `code` + `fixHint` + `context` is the right contract. The extractor regex + class table in `errors.ts` correctly routes 44 codes. The dynamic suggestion augmentation (engine.ts:338-348) that adds \"Did you mean: ...?\" is a nice touch.",
+    "`crud('post')` zero-config one-liner works on the first try. `handler.actions` returns the bare action strings. The `<label>:op` prefix stripping in `Engine.call` (engine.ts:357-360) makes the label-prefixed dispatch readable from the DSL side without polluting the native handler matcher.",
+    "Error catalog drift-detect CI integration is the right shape — the generated `errors.generated.ts` + catalog cross-check script is load-bearing discipline for scale."
+  ],
+  "top_dx_gap_remaining": "The capability story is inaccessible from TypeScript. The Phase-1 README, the scaffolder README, and `docs/QUICKSTART.md` all advertise `crud('post', { capability: 'store:post:*' })` + `engine.grantCapability(...)` as the capability onboarding path, and GrantBackedPolicy is implemented and test-covered in Rust — but neither `crud({capability:...})` nor `engine.grantCapability(...)` nor `Engine.openWithPolicy(PolicyKind.GrantBacked)` exists on the TypeScript surface. A developer reading the docs cannot actually enable capability enforcement from the DSL in Phase 1. The Rust builder chain exists; it is hidden behind Rust-only integration tests. Closing this gap is worth more DX than any other single fix (r6-dx-C3).",
+  "recommended_action": "Address criticals C1-C4 and majors M1-M5 before R6-gate-close. M6-M7 and all minors can bundle into the R6 fix-pass commit. C3 is the load-bearing one — the capability story needs to be reachable from the DSL for Phase 1 to close honestly."
+}

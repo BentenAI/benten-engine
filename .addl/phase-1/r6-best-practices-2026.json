@@ -1,0 +1,141 @@
+{
+  "agent": "best-practices-2026",
+  "stage": "R6-quality-council",
+  "verdict": "accept-with-minors",
+  "summary": {
+    "severity_counts": { "critical": 0, "major": 3, "minor": 13 },
+    "note": "Phase 1 is broadly ecosystem-current for 2026 Rust + TypeScript + napi-rs v3. Toolchain (1.85 MSRV, Edition 2024, resolver 3), dependency pins (thiserror 2, redb 4, criterion 0.8, napi-rs 3, proptest 1.11, blake3 1.8, serde_ipld_dagcbor 0.6), workspace lints table, supply-chain gating (cargo-audit + cargo-deny with yanked=deny, license allowlist, source pinning), CI action versions (checkout@v4, dtolnay/rust-toolchain, Swatinem/rust-cache@v2, upload-artifact@v4), concurrency matrix cancellation, #![forbid(unsafe_code)] on every crate, and reasons-on-#[allow(…)] pattern are all 2026-idiomatic. The gaps are concentrated in (1) a few deferred error-chain refactors that drop source context via String coercion, (2) missing repo-hygiene files (LICENSE, SECURITY.md, CODE_OF_CONDUCT.md, issue/PR templates, Dependabot/Renovate), and (3) a handful of small drifts (no ProptestConfig tuning on most proptests, no insta for the snapshot-friendly diagnostic outputs, no cargo-llvm-cov/cargo-mutants wired into CI, workspace-level clippy pedantic set has an unusually large allow-list that dulls the check)."
+  },
+  "findings": [
+    {
+      "id": "bp-1",
+      "severity": "major",
+      "location": "Cargo.toml:30-130",
+      "claim": "Workspace clippy pedantic opt-in is mostly defeated by a ~95-entry allow-list at `[workspace.lints.clippy]`.",
+      "detail": "The workspace sets `pedantic = warn` and then globally allows ~95 specific pedantic/nursery lints (module_name_repetitions, similar_names, doc_markdown, cast_possible_truncation, cast_sign_loss, cast_lossless, missing_panics_doc, match_same_arms, manual_let_else, shadow_unrelated, ptr_arg, type_complexity, needless_pass_by_value, etc.). The net effect is that the 'pedantic' gate fires on only the residual ~30% of lints — essentially a bespoke lint profile labelled `pedantic`. Several of the allowed lints are the very ones 2026 best practice flags hardest (cast_possible_truncation is a real foot-gun; doc_markdown catches missing backticks that will break rustdoc intra-doc links; shadow_unrelated is a readability gate; manual_let_else is an Edition-2024 readability win; needless_pass_by_value is a perf gate). The in-file comment says 'R3 test files trip these liberally'. In 2026-idiomatic practice the fix is to split: keep pedantic=warn with a minimal deny-list at workspace level, and move the test-file relaxations to `[lints]` on the test-only crates or `#![allow(...)]` inside the test harness files (which R5 already does liberally, so the workspace relaxation is double coverage).",
+      "suggested_fix": "R5-cleanup task (tracked in plan as 'tighten clippy allow-list'): audit each of the ~95 entries, keep only those that are idiomatic red-phase noise (e.g. unwrap_used/expect_used in tests), remove the rest, and rely on per-file `#![allow(..., reason = \"...\")]` where still needed. Targeted deny-list that's non-negotiable: cast_possible_truncation, cast_sign_loss, shadow_unrelated, needless_pass_by_value, manual_let_else, doc_markdown."
+    },
+    {
+      "id": "bp-2",
+      "severity": "major",
+      "location": "crates/benten-graph/src/lib.rs:58-76",
+      "claim": "Error-source chain is dropped via `String` coercion for `GraphError::Redb` and `GraphError::Decode`.",
+      "detail": "`GraphError::Redb(String)` and `GraphError::Decode(String)` carry a human-readable message but drop the underlying `redb::Error` / `serde_ipld_dagcbor` source chain. 2026 thiserror-2 idiom is `#[source] err: redb::Error` (or `#[from]`) so `std::error::Error::source()` walks to the root cause. The in-file comment already acknowledges 'R4b tracks the #[from] redb::Error refactor' — this is a known defer. Calling it out here as the sole thiserror-idiom drift worth tracking at R6. Every other error enum in the workspace (CoreError except Serialize(String), CapError, EvalError, ViewError, VersionError, EngineError) uses #[from]/#[source] correctly.",
+      "suggested_fix": "R5-followup or R4b: change to `Redb(#[source] redb::Error)` + `Decode(#[source] serde_ipld_dagcbor::DecodeError<std::convert::Infallible>)` (or equivalent). The Display impl can still format the message; the source chain preserves the root cause. Same treatment recommended for `CoreError::Serialize(String)` — swap to `Serialize(#[source] serde_ipld_dagcbor::EncodeError<...>)` now that serde_ipld_dagcbor 0.6 has stable error types."
+    },
+    {
+      "id": "bp-3",
+      "severity": "major",
+      "location": "repo-root (LICENSE, SECURITY.md, CODE_OF_CONDUCT.md, .github/ISSUE_TEMPLATE/, .github/PULL_REQUEST_TEMPLATE.md, .github/dependabot.yml)",
+      "claim": "Repo-hygiene files expected by 2026 OSS norms are absent.",
+      "detail": "Workspace Cargo.toml declares `license = \"MIT OR Apache-2.0\"` but no `LICENSE` / `LICENSE-MIT` / `LICENSE-APACHE` file exists at repo root, which is what crates.io / GitHub's license detector / downstream redistributors read. Similarly missing: `SECURITY.md` (the SECURITY tab on GitHub points to a 404, and security-auditor R1 findings explicitly call for a disclosure channel), `CODE_OF_CONDUCT.md`, `.github/ISSUE_TEMPLATE/*.yml`, `.github/PULL_REQUEST_TEMPLATE.md`. No Dependabot or Renovate config means supply-chain rot creeps in between quarterly manual passes — which is specifically the gap the security-auditor-critical-#3 supply-chain item at R1 was designed to close, but the resolution only put cargo-audit/cargo-deny in CI; it didn't wire automatic dep-bump PRs.",
+      "suggested_fix": "Add `LICENSE-MIT` + `LICENSE-APACHE` files (plain text, the canonical texts), `SECURITY.md` with the disclosure contact (e.g. security@bentenai or equivalent) + supported-version table, `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1 is the 2026 default), `.github/ISSUE_TEMPLATE/bug.yml` + `feature.yml` + `config.yml` (YAML forms, not legacy markdown), `.github/PULL_REQUEST_TEMPLATE.md` matching the PR checklist from CONTRIBUTING.md, and `.github/dependabot.yml` with weekly ecosystem updates for cargo + npm + github-actions. These are additive and unblock the 'serious OSS project' signal before Phase 2's Atrium-sync adoption push."
+    },
+    {
+      "id": "bp-4",
+      "severity": "minor",
+      "location": "workspace (all 6 crates)",
+      "claim": "No crate sets `#![warn(missing_docs)]` at crate root.",
+      "detail": "Crate-level `//!` docs are present and rich on every crate, and `cargo doc --workspace --no-deps` runs under `RUSTDOCFLAGS=\"-D warnings\"` in CI. But the compiler's own `missing_docs` lint is not set, so a public item added without a doc comment compiles clean. 2026 idiom for an engine of this scale is `#![warn(missing_docs)]` (or deny) on every `pub` crate — it forces the doc-as-API-contract discipline the codebase already mostly follows.",
+      "suggested_fix": "Add `#![warn(missing_docs)]` to each crate's `lib.rs`. (Not `deny` yet — let it shake out on the first R5 build.) Wire it into the workspace `[workspace.lints.rust]` table as `missing_docs = \"warn\"` for uniformity."
+    },
+    {
+      "id": "bp-5",
+      "severity": "minor",
+      "location": "workspace proptest usage",
+      "claim": "ProptestConfig is tuned on 2 of 15+ proptest files; the rest use defaults.",
+      "detail": "`ProptestConfig` appears in only 3 locations total. Default proptest cases = 256, max-shrink-iters = ~1024 — fine for quick locals but meaningfully under the 2026 recommended baseline for an engine with 14 structural invariants and content-addressed hashing (proptest-book §ci-vs-local recommends `cases = 2048, max_shrink_iters = 100_000, result_cache = basic` for CI runs to catch the tail). Today's green run could be passing because the tail is under-explored.",
+      "suggested_fix": "Add a `proptest_config!` macro helper in a test-utils module (or a `proptest.toml` at repo root, which proptest 1.11 auto-loads) that bumps cases to 2048 in CI via `PROPTEST_CASES=2048` env, result-cache to basic, and max-shrink to 100k. Keep local defaults unchanged. This lives alongside existing rust-cache and nextest wiring — low invasive, high tail-coverage payoff."
+    },
+    {
+      "id": "bp-6",
+      "severity": "minor",
+      "location": "CI workflows (ci.yml + companions)",
+      "claim": "No `cargo-llvm-cov` coverage job and no `cargo-mutants` mutation job.",
+      "detail": "Phase 1's 'tests ARE the specification' contract is the strongest argument in the codebase for wiring mutation testing — mutants escaping indicate the spec has a gap. 2026 Rust ecosystem default for engines of this caliber is at minimum a `cargo llvm-cov nextest --lcov` report uploaded weekly (for Codecov/coveralls visibility), and ideally `cargo mutants --in-diff main --check` on every PR (scoped to changed crates to fit the budget). Neither is wired. The R4 report claims '108/113 public APIs covered' but the number is hand-derived from R2 inventory, not machine-measured.",
+      "suggested_fix": "Add a `coverage.yml` workflow running weekly (cron) + on push-to-main: `cargo install cargo-llvm-cov && cargo llvm-cov nextest --workspace --lcov --output-path lcov.info` + upload to Codecov. Separately, a `mutants.yml` workflow running on PR: `cargo install cargo-mutants --locked && cargo mutants --in-diff origin/main --timeout 120` — start with `--check` mode so mutants are reported but not gating until the baseline is known. This is the canonical 2026 follow-up to 'tests are the spec'."
+    },
+    {
+      "id": "bp-7",
+      "severity": "minor",
+      "location": "bindings/napi/Cargo.toml:40",
+      "claim": "`napi-build = \"2\"` is a direct dep in `[build-dependencies]` but not declared in `[workspace.dependencies]`.",
+      "detail": "Every other shared dep (napi, napi-derive, thiserror, redb, ...) flows through `[workspace.dependencies]` so version bumps happen in one place. `napi-build` is pinned directly in bindings/napi. Minor — only one crate uses it — but breaks the 'one source of truth for versions' discipline that the rest of the workspace follows.",
+      "suggested_fix": "Add `napi-build = \"2\"` to `[workspace.dependencies]` at workspace root and reference as `napi-build.workspace = true` in `bindings/napi/Cargo.toml`."
+    },
+    {
+      "id": "bp-8",
+      "severity": "minor",
+      "location": "bindings/napi/package.json",
+      "claim": "No `\"engines\"` field pinning Node.js LTS; only two of four package.jsons declare `\"type\": \"module\"`.",
+      "detail": "CI installs Node 22 (current LTS) but neither `bindings/napi/package.json` nor `bindings/napi/package.json`'s consumers pin `\"engines\": { \"node\": \">=20\" }`. Consumers on Node 18 (EOL 2025-04) would hit the `--experimental-strip-types` flag that CI relies on and fail cryptically. The scaffolder template (`tools/create-benten-app/template/package.json`) likewise ships without `\"engines\"`, so generated projects inherit this gap. Additionally, `bindings/napi/package.json` intentionally omits `\"type\"` (it's CJS because `index.js` uses `require()`) — this is correct for napi-rs v3 CLI output, but since the root workspace is ESM-first, a `\"type\": \"commonjs\"` explicit declaration is the 2026-idiomatic signal (versus inferring from absence) so lint tools don't flag the mixed state.",
+      "suggested_fix": "Add `\"engines\": { \"node\": \">=20.0.0\" }` to all four package.jsons (workspace root, bindings/napi, packages/engine, tools/create-benten-app). Add `\"type\": \"commonjs\"` explicit to bindings/napi/package.json. Add the same `engines` clause to the scaffolder template so generated projects carry it."
+    },
+    {
+      "id": "bp-9",
+      "severity": "minor",
+      "location": "bindings/napi/index.d.ts (auto-generated)",
+      "claim": "Generated `.d.ts` uses `any` 14 times for Node/Edge/properties inputs and outputs.",
+      "detail": "`createNode(labels, properties: any): string`, `getNode(cid): any | null`, `registerSubgraph(spec: any): string`, `call(..., input: any): any`, etc. This is expected for the napi-rs auto-gen layer — napi has no way to infer the serde_json::Value shape. The mitigation is the `packages/engine/src/types.ts` + `engine.ts` wrapper, which I confirmed contains zero `any` and wraps with `Node`, `Edge`, `Value`, `SubgraphSpec`, etc. So the public DX surface is typed; the private boundary isn't. That is the 2026-idiomatic pattern for napi-rs v3 (auto-gen is a JSON pass-through, DSL layer enforces types). The only minor is that nothing in CONTRIBUTING.md or DSL-SPECIFICATION.md calls out 'do not import from @benten/engine-native directly' — which is the invariant this setup depends on.",
+      "suggested_fix": "Add a one-paragraph note to DSL-SPECIFICATION.md and the top of `packages/engine/src/index.ts`: '@benten/engine-native is an internal transport layer; always import from @benten/engine.' Optionally, add an `exports` field block in bindings/napi/package.json that marks only `./index.node` as public and everything else as `null` so TS-via-path tooling refuses the direct import."
+    },
+    {
+      "id": "bp-10",
+      "severity": "minor",
+      "location": "workspace (no use of 2024-Edition readability features)",
+      "claim": "Zero workspace usage of `let-else`, `gen` blocks, async closures, or `#[diagnostic::on_unimplemented]` despite Edition 2024.",
+      "detail": "Grepped the full crates/ tree: 0 occurrences of let-else, gen blocks, async closures, or the 1.78+ `#[diagnostic::on_unimplemented]` attribute. Not all are applicable — there's no async code in Phase 1 by design — but `let-else` is a meaningful readability win for the many 'unwrap the Option or return early' patterns in benten-core and benten-graph, and `#[diagnostic::on_unimplemented]` on the `KVBackend`, `CapabilityPolicy`, and `ChangeSubscriber` traits would produce much better error messages when a downstream crate (or R5 impl agent) tries to pass the wrong type. Neither is load-bearing; both are idiom-currency signals.",
+      "suggested_fix": "R5-cleanup pass: convert 3-5 of the longest `match` expressions in benten-core/src/value.rs and benten-graph/src/store.rs to `let-else`. Add `#[diagnostic::on_unimplemented(message = \"...\")]` on `KVBackend`, `CapabilityPolicy`, `ChangeSubscriber`, and `View` trait definitions. Both are 10-minute drive-by changes that raise the 'this is 2024-Edition Rust, not Rust-2018-with-a-new-edition-tag' signal."
+    },
+    {
+      "id": "bp-11",
+      "severity": "minor",
+      "location": "workspace (criterion baseline management)",
+      "claim": "criterion 0.8 is correctly used with `black_box`, but no `baseline.toml` / stored baselines and no `target/criterion` artifact persistence in CI.",
+      "detail": "10 bench files are present, all use `black_box` correctly, harness=false declared, html_reports feature enabled. Good. Missing: there's no CI job that runs `cargo bench -- --save-baseline main` on push to main and compares on PR via `--baseline main`. The `bench` skill in the Claude harness mentions comparing against baselines, but the baselines aren't checked in or generated. Result: perf regression catches depend on Ben noticing p95 shifts, not an automated signal.",
+      "suggested_fix": "Add a `benches.yml` workflow, weekly cron: runs `cargo bench --workspace -- --save-baseline main`, uploads the criterion report as an artifact. Add a PR-gate job: `cargo bench --workspace -- --baseline main --noplot` that fails on >10% regression on any named benchmark. Keep the baseline artifact per branch in the cache. This is the canonical 2026 criterion workflow for engines with tight perf targets (and Phase 1 has explicit sub-0.1ms targets in CLAUDE.md)."
+    },
+    {
+      "id": "bp-12",
+      "severity": "minor",
+      "location": "scripts/ (codegen-errors.ts, drift-detect.ts)",
+      "claim": "TypeScript codegen scripts rely on `--experimental-strip-types` flag from Node 22.",
+      "detail": "Scripts are invoked in CI as `node --experimental-strip-types scripts/codegen-errors.ts`. This flag is experimental in Node 22 and stabilized in Node 22.6+ as `--experimental-transform-types`. It will be promoted to stable in Node 24 (Oct 2026). Until then, a minor Node version bump could break CI silently. The 2026-idiomatic fix is to either (a) compile the scripts to .js via the same tsc that already runs, or (b) use `tsx` (already a devDep in the scaffolder template) as the loader. Option (b) is one-line.",
+      "suggested_fix": "Add `tsx` to the workspace-root devDependencies and change CI to `node --import tsx scripts/codegen-errors.ts`. Or: pin Node exact version in CI to `22.x` (currently it's just `node-version: \"22\"` which follows the minor stream). Either removes the experimental-flag dependency."
+    },
+    {
+      "id": "bp-13",
+      "severity": "minor",
+      "location": ".github/workflows/supply-chain.yml + ci.yml",
+      "claim": "`cargo install --locked cargo-audit` / `cargo-deny` in CI is slower and less reproducible than the pinned-action alternatives.",
+      "detail": "Both `supply-chain` job steps run `cargo install --locked cargo-audit` and `cargo install --locked cargo-deny`, which compiles from source every run (cache-warm it's ~90s each; cold ~5min). The 2026 idiomatic replacements are `rustsec/audit-check@v2` and `EmbarkStudios/cargo-deny-action@v2` — both install prebuilt binaries and are pinned to action tags that the supply-chain gate can audit. The `taiki-e/install-action@v2` already in use for nextest can also do both tools via `taiki-e/install-action@v2` with `tool: cargo-audit,cargo-deny` — ~5s install.",
+      "suggested_fix": "Replace the two `cargo install --locked` steps with a single `taiki-e/install-action@v2` step: `tool: cargo-audit,cargo-deny`. Same action already trusted elsewhere in the workflow."
+    },
+    {
+      "id": "bp-14",
+      "severity": "minor",
+      "location": "workspace (diagnostic outputs)",
+      "claim": "`subgraph.toMermaid()` and `engine.trace(...)` outputs are verified via string-equality tests; no snapshot tool (`insta`) is used.",
+      "detail": "The mermaid and trace outputs are structurally stable and format-sensitive — exactly the case `insta` was designed for. Today's tests construct expected strings inline, which means every intentional format refinement (spacing, node-labelling, line order) is a manual multi-file edit. 2026 idiom for stable-format diagnostic output in Rust is `insta` (the `.snap` files are checked in, and `cargo insta review` is the diff tool). Zero usage across the workspace. This is a pure dev-ergonomics finding, not a correctness one.",
+      "suggested_fix": "Add `insta = { version = \"1.41\", features = [\"yaml\"] }` to `[workspace.dependencies]` (dev-only). Convert `crates/benten-eval/tests/` mermaid and trace tests to use `insta::assert_snapshot!`. Add the `.snap` files to the repo. This is low-risk, high-ergonomics; implement in R4b or early Phase 2."
+    },
+    {
+      "id": "bp-15",
+      "severity": "minor",
+      "location": "Cargo.toml [patch.crates-io] (core2, cid)",
+      "claim": "Two git-sourced patches (technocreatives/core2, BentenAI/rust-cid) are correctly gated via cargo-deny `allow-git` but lack a tracked upstream-resolution ticket.",
+      "detail": "The comment block at Cargo.toml:180-199 correctly documents the core2 yank and the multiformats/rust-multihash#407 pending upstream PR. deny.toml allows the specific URLs. Good. What's missing from 2026-best-practice for supply-chain-critical patches: an entry in a SUPPLY-CHAIN.md (or similar) that the cargo-deny CI lint can cross-check, *and* the patches' target-date-for-removal. Today the comment says 'remove once multiformats/rust-multihash#407 merges' but no mechanism nudges the team when it does merge. A calendar-date re-check in Dependabot/Renovate or a GitHub issue with a check-in date is the 2026 norm.",
+      "suggested_fix": "Add `SUPPLY-CHAIN.md` at repo root (or append to CONTRIBUTING.md): tabulate each [patch.crates-io] entry with (crate, source URL, upstream ticket, target removal date). Open a GitHub issue 'Track: remove core2 + rust-cid patches once upstream merges' and set a 2026-06-01 check-in. Link it from deny.toml's `allow-git` comment block."
+    },
+    {
+      "id": "bp-16",
+      "severity": "minor",
+      "location": "workspace (no `[profile.release.package.*]` overrides)",
+      "claim": "Release profile uses uniform `lto = \"thin\", codegen-units = 1, opt-level = 3, strip = \"symbols\"` for every crate.",
+      "detail": "For an engine with a small hot path (benten-core content hashing, benten-graph redb access) and much larger cool paths (benten-eval validator, diagnostic/mermaid rendering), 2026 idiomatic profile tuning is `[profile.release.package.benten-core] opt-level = 3, lto = \"fat\"` for the hash-path hot loops while keeping the rest on `thin` LTO. Current uniform tuning is safe and correct but under-exploits the small-hot-path structure. Also missing: `[profile.test]` with `opt-level = 1` — the 466-test nextest run would likely shave ~20% wall time with that single setting (test binaries link fast but run slow).",
+      "suggested_fix": "Phase 2 perf-tuning pass: add `[profile.release.package.benten-core] lto = \"fat\"` + `[profile.test] opt-level = 1`. Measure wall-clock delta on the ten_node_handler and hash_only benches; accept if >5% gain."
+    }
+  ],
+  "orthogonality_notes": "Everything above is ecosystem-currency / idiom drift. Correctness, security, and performance questions were not in-scope for this audit:\n- No comments on the capability policy semantics (security-auditor territory).\n- No comments on IVM algorithm choice or view correctness (qa-expert / benten-core-guardian territory).\n- No comments on content-hash determinism verification (determinism-verifier territory).\n- No comments on the 14 structural invariants' completeness (benten-engine-philosophy territory).\n- One correctness-adjacent observation worth flagging to the specialist critics: `GraphError::Redb(String)` drops the error source chain (bp-2) — this is partly idiom drift but has a real debuggability cost if a redb transaction abort cascades through three layers and the root-cause source chain is string-coerced away. qa-expert may want to verify the R4 test suite's error-propagation assertions still catch the right bugs when this refactor lands.",
+  "notes": "Headline: the Phase 1 codebase is broadly 2026-current and visibly cares about idiom discipline (every #[allow(...)] has a reason =, every crate has #![forbid(unsafe_code)], workspace.dependencies is used, MSRV 1.85 + Edition 2024 + resolver 3, supply-chain is wired correctly via cargo-audit/deny with yanked=deny and sources allowlisted, CI actions are current at v4/v2). The gaps are the ones that matter less for correctness and more for OSS-project signal (bp-3) and long-term drift prevention (bp-5, bp-6, bp-11, bp-14). One findings cluster — bp-1 (clippy allow-list bloat) and bp-4 (missing_docs not warned) — is the R5-cleanup backlog and can legitimately be deferred to the 'tighten clippy + docs' pass that's already on Ben's radar. Zero blockers. Recommend verdict: accept-with-minors with bp-1/bp-2/bp-3 folded into the R4b/R5-cleanup queue, bp-5/bp-6/bp-11 tracked as Phase-2 CI-hardening tasks, and the rest (bp-4, bp-7 through bp-16) as ambient drive-by improvements."
+}
