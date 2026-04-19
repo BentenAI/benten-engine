@@ -525,6 +525,18 @@ export interface CrudOptions {
   label?: string;
   /** Supply your own HLC source (useful for deterministic tests). */
   hlc?: () => number;
+  /**
+   * Capability expression required to execute the mutating actions
+   * (`create`, `update`, `delete`) of this handler. Stamped as a
+   * `requires` property on each WRITE Node in the produced subgraph.
+   *
+   * When the engine is opened with `PolicyKind.GrantBacked`, the
+   * capability is checked at commit time: an unrevoked
+   * `system:CapabilityGrant` Node whose `scope` matches the
+   * expression must exist. With `PolicyKind.NoAuth` (default) the
+   * property is informational only.
+   */
+  capability?: string;
 }
 
 /**
@@ -570,6 +582,7 @@ export function crud(label: string, opts: CrudOptions = {}): CrudHandler {
   }
   const actualLabel = opts.label ?? label;
   const stamp = opts.hlc ?? hlcNow;
+  const cap = opts.capability;
 
   // The canonical shape: one dispatch BRANCH on `$input.action`, five
   // cases. Each case is a tiny linear chain. Action names are bare
@@ -585,7 +598,11 @@ export function crud(label: string, opts: CrudOptions = {}): CrudHandler {
     .branch({ on: "$input.action" })
     .case("create", (s) =>
       s
-        .write({ label: actualLabel, properties: { from: "$input" } })
+        .write({
+          label: actualLabel,
+          properties: { from: "$input" },
+          ...(cap ? { requires: cap } : {}),
+        })
         .respond({ body: "$result" }),
     )
     .case("get", (s) =>
@@ -603,6 +620,7 @@ export function crud(label: string, opts: CrudOptions = {}): CrudHandler {
         .write({
           label: actualLabel,
           properties: { cid: "$input.cid", patch: "$input.patch" },
+          ...(cap ? { requires: cap } : {}),
         })
         .respond({ body: "$result" }),
     )
@@ -611,6 +629,7 @@ export function crud(label: string, opts: CrudOptions = {}): CrudHandler {
         .write({
           label: actualLabel,
           properties: { cid: "$input.cid", tombstone: true },
+          ...(cap ? { requires: cap } : {}),
         })
         .respond({ body: "$result" }),
     )

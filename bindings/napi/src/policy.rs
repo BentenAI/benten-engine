@@ -5,31 +5,24 @@
 //! - `NoAuth` → `NoAuthBackend` (default)
 //! - `Ucan` → `UcanBackend` stub (Phase-3 will return real errors; today the
 //!   backend returns `E_CAP_NOT_IMPLEMENTED` on any check)
+//! - `GrantBacked` → `GrantBackedPolicy` backed by the engine's own
+//!   `system:CapabilityGrant` / `system:CapabilityRevocation` Nodes. The
+//!   Rust-side builder wires a `GrantReader` against the engine's own
+//!   backend — we just flip a flag here and the `EngineBuilder` handles
+//!   the reader construction.
 
 /// Policy-kind identifiers accepted by `Engine.openWithPolicy`.
 ///
 /// Strings rather than numeric discriminants because `#[napi(string_enum)]`
-/// in napi-rs v3 projects to TypeScript as `'NoAuth' | 'Ucan'` which gives
-/// the JS caller autocomplete without needing a TS wrapper rebuild.
+/// in napi-rs v3 projects to TypeScript as `'NoAuth' | 'Ucan' | 'GrantBacked'`
+/// which gives the JS caller autocomplete without needing a TS wrapper
+/// rebuild.
 #[cfg(feature = "napi-export")]
 #[napi_derive::napi(string_enum)]
 pub enum PolicyKind {
     NoAuth,
     Ucan,
-}
-
-#[cfg(feature = "napi-export")]
-impl PolicyKind {
-    /// Materialize a policy backend for the engine builder. `Ucan` falls back
-    /// to a `Box<dyn CapabilityPolicy>` wrapper around the Phase-1 stub.
-    pub(crate) fn into_policy(self) -> Option<Box<dyn benten_caps::CapabilityPolicy>> {
-        match self {
-            // NoAuth is the implicit default in `EngineBuilder::new`; returning
-            // `None` lets the builder keep its existing zero-policy path.
-            PolicyKind::NoAuth => None,
-            PolicyKind::Ucan => Some(Box::new(benten_caps::UcanBackend)),
-        }
-    }
+    GrantBacked,
 }
 
 /// JSON-shape of a capability grant as accepted by `Engine.grantCapability`.

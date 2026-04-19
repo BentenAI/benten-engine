@@ -36,10 +36,19 @@ describe("create-benten-app scaffolder (headline exit criterion)", () => {
       // Install + test roundtrip.
       execSync("npm install --silent --no-audit --no-fund", { cwd: appDir, stdio: "inherit" });
       execSync("npm test", { cwd: appDir, stdio: "inherit" });
+      // `npm run build` (tsc) must also pass — the README advertises it
+      // alongside `npm test` and `npm run dev`, and a prior regression
+      // (missing `@types/node`) silently broke it because this harness
+      // only exercised the test script. Enforce the full trio.
+      execSync("npm run build", { cwd: appDir, stdio: "inherit" });
+      // `npm run dev` runs main() and exits cleanly. It must not crash
+      // on a freshly-generated project — the dbPath's parent directory
+      // is created by Engine.open().
+      execSync("npm run dev", { cwd: appDir, stdio: "inherit" });
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }
-  }, 180_000); // 3-minute timeout covers npm install + test.
+  }, 180_000); // 3-minute timeout covers npm install + test + build + dev.
 
   it("scaffolder_smoke_test_asserts_all_six_exit_criteria", () => {
     // Meta-test: the generated smoke.test.ts must contain exactly six top-level

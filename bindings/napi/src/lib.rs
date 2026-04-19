@@ -97,10 +97,24 @@ mod napi_surface {
         /// Factory: open an engine with an explicit capability policy.
         #[napi(factory)]
         pub fn open_with_policy(path: String, policy: PolicyKind) -> napi::Result<Self> {
-            let mut builder = EngineBuilder::new();
-            if let Some(p) = policy.into_policy() {
-                builder = builder.capability_policy(p);
-            }
+            // Each `PolicyKind` variant wires a different builder chain:
+            // - `NoAuth` falls through to the default (zero policy).
+            // - `Ucan` installs the Phase-1 stub via `capability_policy(...)`.
+            // - `GrantBacked` flips the dedicated builder flag so the engine
+            //   constructs a `GrantBackedPolicy` against a `GrantReader`
+            //   pointing at its own backend (the Rust-side test
+            //   `grant_backed_policy_denies_unauthorized_writes` exercises
+            //   this path). We can't thread a `Box<dyn CapabilityPolicy>`
+            //   containing a `GrantReader` from here because the reader
+            //   needs the engine's `Arc<RedbBackend>`, which only exists
+            //   after `.open(&path)` runs.
+            let builder = match policy {
+                PolicyKind::NoAuth => EngineBuilder::new(),
+                PolicyKind::Ucan => {
+                    EngineBuilder::new().capability_policy(Box::new(benten_caps::UcanBackend))
+                }
+                PolicyKind::GrantBacked => EngineBuilder::new().capability_policy_grant_backed(),
+            };
             let inner = builder.open(&path).map_err(engine_err)?;
             Ok(Self {
                 inner: Arc::new(inner),

@@ -26,9 +26,18 @@ npm run build        # tsc -> dist/
 
 ## Next steps
 
-- **Add a capability.** Replace `crud('post')` with `crud('post', { capability: 'store:post:*' })` and grant the capability to your entity via `engine.grantCapability(...)`.
-- **Add a schema.** Extend `crud('post', { schema: { title: { type: 'string', required: true } } })` to get registration-time input validation.
-- **Inspect the subgraph.** `console.log(postHandlers.create.toMermaid())` renders the create handler as a Mermaid flowchart — paste into any Mermaid renderer.
-- **Trace an evaluation.** `engine.trace(handler.id, 'post:create', { title: 'x' })` returns per-node timings.
+- **Add a capability.** Open the engine with the grant-backed policy and stamp a `capability` on your CRUD handler:
+
+  ```ts
+  import { Engine, PolicyKind, crud } from "@benten/engine";
+  const engine = await Engine.openWithPolicy("./.benten/{{name}}.redb", PolicyKind.GrantBacked);
+  const handler = await engine.registerSubgraph(crud("post", { capability: "store:post:write" }));
+  await engine.grantCapability({ actor: "alice", scope: "store:post:write" });
+  await engine.call(handler.id, "post:create", { title: "x" });
+  ```
+
+  Unrevoked `system:CapabilityGrant` Nodes authorize matching writes; `engine.revokeCapability(grantCid, "alice")` turns them off.
+- **Inspect the subgraph.** `console.log(handler.toMermaid())` renders the handler as a Mermaid flowchart — paste into any Mermaid renderer.
+- **Trace an evaluation.** `engine.trace(handler.id, 'post:create', { title: 'x' })` returns per-node timings and (when the native tracer surfaces them) per-step inputs / outputs.
 
 See `docs/QUICKSTART.md` in the Benten repo for the full walkthrough.

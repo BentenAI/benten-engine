@@ -7,7 +7,7 @@
 //
 // Typed errors live in `@benten/engine/errors` (sibling subpath export).
 
-export { Engine } from "./engine.js";
+export { Engine, PolicyKind } from "./engine.js";
 
 export {
   branch,
@@ -48,6 +48,8 @@ export {
 export { toMermaid } from "./mermaid.js";
 
 export type {
+  CapabilityGrant,
+  Edge,
   HandlerAdjacencies,
   JsonValue,
   Primitive,
@@ -57,4 +59,5 @@ export type {
   Trace,
   TraceStep,
   Value,
+  ViewDef,
 } from "./types.js";

@@ -94,13 +94,23 @@ console.log(trace.steps);
 - [`GLOSSARY.md`](GLOSSARY.md) -- Benten-specific terms
 - [`VISION.md`](VISION.md) -- what Benten is and isn't
 
-## What works / what doesn't (honest status as of 2026-04-14)
+## What works / what doesn't (honest status as of 2026-04-17)
 
-- [ ] `npx create-benten-app` scaffolder -- Phase 1 deliverable, not yet built
-- [ ] `@benten/engine` npm package -- Phase 1 deliverable, engine crates not yet built
-- [ ] `crud('post')` zero-config path -- designed, not yet implemented
-- [ ] `toMermaid()` visualization -- Phase 1 deliverable
-- [ ] `engine.trace()` debugging -- Phase 1 deliverable
-- [ ] Dev server with hot reload -- Phase 2 deliverable (needs registered-subgraph reload semantics)
+Phase 1 delivered:
 
-If you're reading this pre-Phase-1, treat it as a specification of intent rather than a working tutorial.
+- [x] `npx create-benten-app` scaffolder -- produces a project that runs `npm install && npm test && npm run build && npm run dev` green on a clean machine (`tools/create-benten-app/test/scaffolder.test.ts`).
+- [x] `@benten/engine` npm package -- the TypeScript DSL wrapper over `@benten/engine-native`. Exposes `Engine`, `crud()`, `PolicyKind`, the 12 primitive helpers, and the typed error catalog.
+- [x] `crud('post')` zero-config path -- one-liner that produces a five-action handler (`create`, `get`, `list`, `update`, `delete`). Optional `capability` / `hlc` / `label` overrides.
+- [x] `handler.toMermaid()` visualization -- renders the registered subgraph as a Mermaid flowchart, sourced authoritatively from the Rust engine.
+- [x] `engine.trace()` debugging -- per-step records carrying `nodeCid`, `primitive`, `durationUs`, plus `inputs` / `outputs` when the native tracer surfaces them.
+- [x] Capability enforcement via `Engine.openWithPolicy(path, PolicyKind.GrantBacked)` + `engine.grantCapability({ actor, scope })` + `engine.revokeCapability(grantCid, actor)` -- the Phase-1 revocation-aware grant policy.
+
+Deferred:
+
+- [ ] Dev server with hot reload -- Phase 2 (needs registered-subgraph reload semantics).
+- [ ] Version chains (`anchor.createVersion(...)`) as a first-class DSL shape -- Phase 2.
+- [ ] P2P sync across Atriums -- Phase 3 (`benten-sync` crate, iroh transport).
+- [ ] UCAN capabilities -- Phase 3 (`PolicyKind.Ucan` opens but its check path surfaces `E_CAP_NOT_IMPLEMENTED` today).
+- [ ] WASM `SANDBOX` primitive -- Phase 2 (the primitive is type-defined; executor throws `E_PRIMITIVE_NOT_IMPLEMENTED`).
+
+If you hit anything in the "delivered" list that doesn't behave as documented, please file an issue against `benten-engine` -- the scaffolder's smoke gate is the stability contract.
