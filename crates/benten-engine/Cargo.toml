@@ -25,7 +25,7 @@ test-helpers = []
 [dependencies]
 benten-caps = { path = "../benten-caps" }
 benten-core = { path = "../benten-core" }
-benten-eval = { path = "../benten-eval" }
+benten-eval = { path = "../benten-eval", features = ["diag"] }
 benten-graph = { path = "../benten-graph" }
 benten-ivm = { path = "../benten-ivm" }
 thiserror = { workspace = true }

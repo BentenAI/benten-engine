@@ -37,9 +37,9 @@ pub fn render(sg: &Subgraph) -> String {
         out.push_str(&sanitize_id(from));
         out.push_str(" -->");
         if !label.is_empty() && label != "next" {
-            out.push_str("|");
+            out.push('|');
             out.push_str(&escape_label(label));
-            out.push_str("|");
+            out.push('|');
         }
         out.push(' ');
         out.push_str(&sanitize_id(to));

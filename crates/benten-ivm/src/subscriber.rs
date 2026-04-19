@@ -29,7 +29,7 @@ use core::fmt;
 
 use benten_graph::{ChangeEvent, ChangeSubscriber};
 
-use crate::view::{View, ViewError};
+use crate::view::{View, ViewError, ViewQuery, ViewResult};
 
 extern crate alloc;
 
@@ -116,6 +116,34 @@ impl Subscriber {
             .iter()
             .find(|v| v.id() == view_id)
             .map(|v| v.is_stale())
+    }
+
+    /// Read a named view under `query`. Returns `Ok(None)` when no view with
+    /// that id is registered — distinct from `Ok(Some(Err(...)))` which
+    /// surfaces a stale / pattern-mismatch error from the view itself.
+    ///
+    /// The engine consumes this via `read_view_*` to back the Phase-1
+    /// `post:list` route through View 3 (content_listing) — falling back
+    /// to the backend label index only when the view is absent.
+    ///
+    /// # Errors
+    ///
+    /// Per-view errors (`Stale`, `PatternMismatch`) propagate through the
+    /// returned `Result`. The outer `Option` distinguishes "view not
+    /// registered" from "view erred".
+    pub fn read_view(
+        &self,
+        view_id: &str,
+        query: &ViewQuery,
+    ) -> Option<Result<ViewResult, ViewError>> {
+        let guard = self
+            .views
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard
+            .iter()
+            .find(|v| v.id() == view_id)
+            .map(|v| v.read(query))
     }
 
     /// Route a single change event to every registered view.

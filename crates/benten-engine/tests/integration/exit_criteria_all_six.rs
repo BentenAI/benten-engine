@@ -151,7 +151,6 @@ fn exit_2_three_creates_list_returns_them() {
 /// so the "denial" check was vacuous in that configuration. Exit-3 must
 /// run under a grant-backed policy.
 #[test]
-#[ignore = "TODO(phase-2-grant-backed-policy): capability_policy_grant_backed() + register_crud_with_grants are Phase-1 no-ops; exit-criterion #3 ON_DENIED routing depends on Phase-2 grant-backed policy. The TS-side mirror (template/smoke.test.ts) re-scopes to `typed_error_surface_unregistered_handler` — same contract surface, different denial source."]
 fn exit_3_cap_denial_routes_on_denied() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
@@ -264,14 +263,12 @@ fn exit_4_trace_non_zero_timing_and_topological_order() {
 /// **Exit-criterion #5.** Mermaid output parses.
 /// Rust-side partner to the TS `@mermaid-js/parser` check. We assert the
 /// string starts with a valid `flowchart <direction>` header, contains one
-/// edge `-->`, and names at least one labelled node `[LABEL]`.
+/// edge `-->`, and names at least one labelled primitive kind.
 ///
-/// # Phase-1 note
-/// `handler_to_mermaid` returns a canned 3-node placeholder regardless of
-/// the actual handler structure. The assertions here validate the
-/// placeholder shape, not the fidelity of the render. Phase-2 wires
-/// `benten_eval::diag::mermaid` and this test promotes to a real shape
-/// check.
+/// Post-R5 gap-closure (R4b M17): `handler_to_mermaid` now delegates to
+/// `benten_eval::diag::mermaid::render` against the reconstructed subgraph,
+/// so the assertion tests the real renderer's shape — `flowchart TD`
+/// header, `nodeId([\"KIND: label\"])` per node, `from --> to` edges.
 #[test]
 fn exit_5_mermaid_output_parses_minimal_shape() {
     let (_dir, engine) = fresh_engine();
@@ -294,11 +291,13 @@ fn exit_5_mermaid_output_parses_minimal_shape() {
     );
 
     assert!(mermaid.contains("-->"), "must contain at least one edge");
-    // Labelled-node shape `name[LABEL]`: regex-free assertion via substring
-    // of the canonical placeholder primitives.
+    // Labelled primitive kind appears in each rendered node (format:
+    // `nodeId(["KIND: label"])`). The crud('post'):create synthesis emits
+    // WRITE + RESPOND so we assert at least one of the upper-case primitive
+    // kind names lands in the output.
     assert!(
-        mermaid.contains("[READ]") || mermaid.contains("[WRITE]") || mermaid.contains("[RESPOND]"),
-        "must reference at least one labelled primitive node"
+        mermaid.contains("READ") || mermaid.contains("WRITE") || mermaid.contains("RESPOND"),
+        "must reference at least one labelled primitive node; got: {mermaid}"
     );
 }
 

@@ -40,6 +40,7 @@
 pub mod attenuation;
 pub mod error;
 pub mod grant;
+pub mod grant_backed;
 pub mod noauth;
 pub mod policy;
 pub mod ucan_stub;
@@ -49,6 +50,7 @@ pub use error::CapError;
 pub use grant::{
     CAPABILITY_GRANT_LABEL, CapabilityGrant, GRANTED_TO_LABEL, GrantScope, REVOKED_AT_LABEL,
 };
+pub use grant_backed::{GrantBackedPolicy, GrantReader};
 pub use noauth::NoAuthBackend;
 pub use policy::{CapabilityPolicy, PendingOp, ReadContext, WriteContext};
 pub use ucan_stub::UcanBackend;

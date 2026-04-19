@@ -30,7 +30,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use benten_caps::{CapError, CapabilityPolicy, NoAuthBackend};
+use benten_caps::{CapError, CapabilityPolicy, GrantBackedPolicy, GrantReader, NoAuthBackend};
 pub use benten_core::ErrorCode;
 use benten_core::{Cid, CoreError, Edge, Node, Value};
 pub use benten_eval::PrimitiveKind;
@@ -302,7 +302,7 @@ impl EngineInner {
 
 /// The Benten engine handle.
 pub struct Engine {
-    backend: RedbBackend,
+    backend: Arc<RedbBackend>,
     /// Configured capability policy. `None` collapses to
     /// `NoAuthBackend`-equivalent behavior (every commit permitted).
     policy: Option<Box<dyn CapabilityPolicy>>,
@@ -575,6 +575,21 @@ impl Engine {
                 guard.insert(handler_id.clone(), cid);
             }
         }
+        drop(guard);
+
+        // Auto-register a content_listing view for this label so
+        // `crud('<label>').list` routes through View 3. The default "post"
+        // view is already registered at assembly time; other labels land
+        // here. Skipped when IVM is disabled — the resolver falls back to
+        // the backend label index.
+        if let Some(ivm) = self.ivm.as_ref() {
+            let view_id = format!("content_listing_{label}");
+            let already = ivm.view_ids().iter().any(|id| id == &view_id);
+            if !already && label != "post" {
+                let view = benten_ivm::views::ContentListingView::new(label);
+                ivm.register_view(Box::new(view));
+            }
+        }
         Ok(handler_id)
     }
 
@@ -691,22 +706,14 @@ impl Engine {
 
     /// Render a handler as a Mermaid flowchart string.
     ///
-    /// Returns a minimal shape that passes the exit-criterion parser: a
-    /// `flowchart LR` header, nodes labeled by primitive kind, and one or
-    /// more `-->` edges. The handler must have been registered via
-    /// `register_crud` or `register_subgraph`.
+    /// Reconstructs the registered Subgraph (from the cached SubgraphSpec
+    /// for DSL handlers, or from the `crud:<label>` synthesis for the
+    /// zero-config path) and delegates to
+    /// [`benten_eval::diag::mermaid::render`].
     ///
-    /// # Phase-1 note
-    /// Returns a canonical 3-node CRUD diagram (READ -> WRITE -> RESPOND)
-    /// REGARDLESS of the actual handler structure. The real mermaid
-    /// renderer for user-registered subgraphs lives in
-    /// `benten_eval::diag::mermaid` (diag feature) and is wired through
-    /// in Phase 2. Tests that rely on this output currently validate
-    /// only that SOMETHING shaped like a flowchart is returned. The
-    /// `%% canonical-placeholder` comment below is the marker for
-    /// consumers reading the raw text.
-    // TODO(phase-2-diag-mermaid): wire through benten_eval::diag::mermaid
-    // so that the rendered shape reflects the actual registered subgraph.
+    /// The output starts with `flowchart TD` and contains one labelled
+    /// primitive per registered node plus one `-->` per edge. See the
+    /// renderer module for the exact format.
     pub fn handler_to_mermaid(&self, handler_id: &str) -> Result<String, EngineError> {
         let guard = self
             .inner
@@ -719,12 +726,31 @@ impl Engine {
                 message: format!("handler not registered: {handler_id}"),
             });
         }
-        // Phase 1: render a canonical 3-node CRUD diagram (READ -> WRITE ->
-        // RESPOND). The authoritative mermaid shape lives in benten-eval's
-        // diag module once primitive dispatch is live.
-        Ok(format!(
-            "flowchart LR\n  %% canonical-placeholder: Phase-1 canned CRUD shape; see Engine::handler_to_mermaid docs\n  n0[READ]\n  n1[WRITE]\n  n2[RESPOND]\n  n0 --> n1\n  n1 --> n2\n  %% handler={handler_id}"
-        ))
+        drop(guard);
+
+        // Reconstruct the subgraph. DSL (SubgraphSpec) path takes priority;
+        // CRUD synthesis falls back to the `:create` shape because mermaid
+        // rendering is op-agnostic (all CRUD ops share the same structural
+        // READ/WRITE/RESPOND shape for the diagram). An unknown handler_id
+        // shape propagates via the normal error path.
+        let spec_opt = self
+            .inner
+            .specs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(handler_id)
+            .cloned();
+        let subgraph = if let Some(spec) = spec_opt {
+            self.subgraph_for_spec(&spec, "default", &Node::empty())?
+        } else if let Some(label) = handler_id.strip_prefix("crud:") {
+            self.subgraph_for_crud(label, "create", &Node::empty())?.0
+        } else {
+            return Err(EngineError::Other {
+                code: ErrorCode::NotFound,
+                message: format!("unknown handler: {handler_id}"),
+            });
+        };
+        Ok(benten_eval::diag::mermaid::render(&subgraph))
     }
 
     /// Return the predecessor adjacency of the handler.
@@ -1589,6 +1615,16 @@ pub struct EngineBuilder {
     without_versioning: bool,
     test_ivm_budget: Option<u64>,
     backend: Option<RedbBackend>,
+    /// Set by `.capability_policy_grant_backed()`. At assemble time this
+    /// flag routes the policy construction through [`GrantBackedPolicy`]
+    /// with a reader pointing at the engine's own backend.
+    use_grant_backed: bool,
+    /// Set by `.with_policy_allowing_revocation()`. Phase-1 alias for
+    /// `.capability_policy_grant_backed()` — the revocation-aware policy
+    /// is the grant-backed one. Phase-2 tightens this to a per-iteration
+    /// cap refresh policy (see named compromise #1 / R4b finding
+    /// `g4-p2-uc-2`).
+    allow_revocation: bool,
 }
 
 impl EngineBuilder {
@@ -1603,6 +1639,8 @@ impl EngineBuilder {
             without_versioning: false,
             test_ivm_budget: None,
             backend: None,
+            use_grant_backed: false,
+            allow_revocation: false,
         }
     }
 
@@ -1627,32 +1665,34 @@ impl EngineBuilder {
         self
     }
 
-    /// PLACEHOLDER — NO-OP. **Phase 1 stub; returns `self` unchanged.**
+    /// Route the builder through [`benten_caps::GrantBackedPolicy`].
     ///
-    /// The grant-backed capability policy is a Phase-2 deliverable: it
-    /// reads `system:CapabilityGrant` Nodes from the backend and
-    /// enforces on pre-write. Until Phase 2 lands it, callers of this
-    /// builder method continue to run under whatever policy was
-    /// previously configured (default: `NoAuthBackend`).
+    /// At [`EngineBuilder::build`] time the backend is wrapped in an
+    /// `Arc<RedbBackend>`, a [`GrantReader`] handle is constructed against
+    /// that Arc, and the policy is installed. Subsequent `call()` paths see
+    /// write denials whenever the derived scope (`"store:<label>:write"`)
+    /// has no unrevoked `system:CapabilityGrant` Node.
     ///
-    /// Tests that depend on grant-backed semantics are `#[ignore]`'d
-    /// with `TODO(phase-2-grant-backed-policy)` markers so they do not
-    /// silently pass under `NoAuthBackend`.
-    // TODO(phase-2-grant-backed-policy): wire benten_caps::GrantBackedPolicy here.
+    /// Phase-1 scope: actor threading is not yet wired — any unrevoked
+    /// grant for the derived scope permits the write. Phase-2 `benten-id`
+    /// tightens to principal-scoped lookups.
     #[must_use]
-    pub fn capability_policy_grant_backed(self) -> Self {
+    pub fn capability_policy_grant_backed(mut self) -> Self {
+        self.use_grant_backed = true;
         self
     }
 
-    /// PLACEHOLDER — NO-OP. **Phase 2 stub; returns `self` unchanged.**
-    ///
-    /// A policy with built-in revocation hooks (paired with
-    /// `Engine::schedule_revocation_at_iteration`, also Phase-2) ships
-    /// in Phase 2. Tests depending on revocation semantics are
-    /// `#[ignore]`'d with `TODO(phase-2-grant-backed-policy)`.
-    // TODO(phase-2-grant-backed-policy): wire revocation-aware policy here.
+    /// Phase-1 alias for [`Self::capability_policy_grant_backed`]: the
+    /// revocation-aware policy shape IS the grant-backed one (revocation is
+    /// observed as a `system:CapabilityRevocation` Node matching an existing
+    /// grant's scope). The name is preserved so tests that spell the
+    /// revocation-aware intent keep compiling; the Phase-2 per-iteration
+    /// wall-clock refresh policy (R4b finding `g4-p2-uc-2`) replaces the
+    /// body when it lands.
     #[must_use]
-    pub fn with_policy_allowing_revocation(self) -> Self {
+    pub fn with_policy_allowing_revocation(mut self) -> Self {
+        self.allow_revocation = true;
+        self.use_grant_backed = true;
         self
     }
 
@@ -1744,6 +1784,7 @@ impl EngineBuilder {
 
     /// Assemble the engine from a fully-configured backend.
     fn assemble(self, backend: RedbBackend) -> Result<Engine, EngineError> {
+        let backend = Arc::new(backend);
         let inner = Arc::new(EngineInner::new());
         let broadcast = Arc::new(ChangeBroadcast::new());
 
@@ -1787,11 +1828,16 @@ impl EngineBuilder {
 
         let caps_enabled = !self.without_caps;
         let ivm_enabled = !self.without_ivm;
-        let policy = if caps_enabled {
-            Some(
-                self.policy
-                    .unwrap_or_else(|| Box::new(NoAuthBackend::new())),
-            )
+        let policy: Option<Box<dyn CapabilityPolicy>> = if caps_enabled {
+            if let Some(explicit) = self.policy {
+                Some(explicit)
+            } else if self.use_grant_backed {
+                let reader: Arc<dyn GrantReader> =
+                    Arc::new(BackendGrantReader::new(Arc::clone(&backend)));
+                Some(Box::new(GrantBackedPolicy::new(reader)))
+            } else {
+                Some(Box::new(NoAuthBackend::new()))
+            }
         } else {
             None
         };
@@ -1806,6 +1852,100 @@ impl EngineBuilder {
             ivm,
             active_call: std::sync::Mutex::new(Vec::new()),
         })
+    }
+}
+
+/// [`GrantReader`] implementation backed by the engine's
+/// [`RedbBackend`]. Looks up `system:CapabilityGrant` Nodes by their
+/// canonical label and matches on the `scope` property; presence of a
+/// `system:CapabilityRevocation` Node with the same `scope` marks the
+/// family revoked.
+struct BackendGrantReader {
+    backend: Arc<RedbBackend>,
+}
+
+impl BackendGrantReader {
+    fn new(backend: Arc<RedbBackend>) -> Self {
+        Self { backend }
+    }
+
+    /// Iterate every `system:CapabilityRevocation` Node and collect the set
+    /// of revoked scopes. Phase-1 signal is scope-only (actor threading is
+    /// Phase-3 scope). The label-index walk is O(revocations); a revocation
+    /// count high enough to matter is a symptom of a different problem.
+    fn revoked_scopes(&self) -> Result<std::collections::BTreeSet<String>, CapError> {
+        let cids = self
+            .backend
+            .get_by_label("system:CapabilityRevocation")
+            .map_err(|e| CapError::Denied {
+                required: format!("backend read: {e:?}"),
+                entity: String::new(),
+            })?;
+        let mut out = std::collections::BTreeSet::new();
+        for cid in cids {
+            match self.backend.get_node(&cid) {
+                Ok(Some(node)) => {
+                    if let Some(Value::Text(scope)) = node.properties.get("scope") {
+                        out.insert(scope.clone());
+                    }
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    return Err(CapError::Denied {
+                        required: format!("backend read: {e:?}"),
+                        entity: String::new(),
+                    });
+                }
+            }
+        }
+        Ok(out)
+    }
+}
+
+impl GrantReader for BackendGrantReader {
+    fn has_unrevoked_grant_for_scope(&self, scope: &str) -> Result<bool, CapError> {
+        let revoked = self.revoked_scopes()?;
+        if revoked.contains(scope) {
+            return Ok(false);
+        }
+        let cids = self
+            .backend
+            .get_by_label("system:CapabilityGrant")
+            .map_err(|e| CapError::Denied {
+                required: format!("backend read: {e:?}"),
+                entity: String::new(),
+            })?;
+        for cid in cids {
+            match self.backend.get_node(&cid) {
+                Ok(Some(node)) => {
+                    let grant_scope = match node.properties.get("scope") {
+                        Some(Value::Text(s)) => s.as_str(),
+                        _ => continue,
+                    };
+                    if grant_scope != scope {
+                        continue;
+                    }
+                    // A grant whose `revoked` property is explicitly `true`
+                    // is treated as revoked in addition to the separate
+                    // revocation-Node path (belt-and-braces — both write
+                    // paths can be used independently).
+                    let explicitly_revoked =
+                        matches!(node.properties.get("revoked"), Some(Value::Bool(true)));
+                    if explicitly_revoked {
+                        continue;
+                    }
+                    return Ok(true);
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    return Err(CapError::Denied {
+                        required: format!("backend read: {e:?}"),
+                        entity: String::new(),
+                    });
+                }
+            }
+        }
+        Ok(false)
     }
 }
 
@@ -2015,19 +2155,10 @@ fn eval_error_to_engine_error(e: benten_eval::EvalError) -> EngineError {
 
 /// Map the evaluator's terminal (`edge`, `output`) pair into the engine's
 /// user-facing `Outcome` shape. `list_hint`, when set, directs the mapper
-/// to materialize `outcome.list` by walking the label index (used for
-/// CRUD:list, which uses a READ-by-query internally). `created_cid_hint`
-/// is the CID returned by the transaction replay of host-side WRITEs.
-///
-/// # Phase-1 note
-/// The `list_hint` path reads the backend label index directly, not
-/// View 3 (content listing). The IVM subscriber IS exercised end-to-end
-/// for write propagation (`ivm_ten_writes_reflected_in_list_in_order`
-/// passes), but the READ side currently fans out via `get_by_label` +
-/// in-memory sort by `createdAt`. Phase-2 restoration: route through
-/// View 3 for the O(log n + page_size) read via a dedicated
-/// `Engine::read_view_strict("content_listing")` path.
-// TODO(phase-2-list-via-ivm): route post:list through View 3's read_page.
+/// to materialize `outcome.list` by consulting View 3 (content_listing)
+/// when the IVM subscriber has a view registered for that label; otherwise
+/// falls back to a direct label-index walk. `created_cid_hint` is the CID
+/// returned by the transaction replay of host-side WRITEs.
 fn outcome_from_terminal_with_cid(
     engine: &Engine,
     edge: &str,
@@ -2056,14 +2187,14 @@ fn outcome_from_terminal_with_cid(
 
     let created_cid = created_cid_hint;
 
-    // List hint: resolve the list from the label index or single-Node
-    // fetch. `"get:<base32>"` targets a single Node; any other label value
-    // fans out across the label index sorted by `createdAt`.
+    // List hint: resolve the list.
+    // - `"get:<label>:<base32>"` — single-Node resolution via label scan.
+    // - any other `<label>` — plural listing. Prefer View 3 (content_listing)
+    //   when the IVM subscriber has a view registered for that label; fall
+    //   back to the backend label index (`without_ivm` engines + views that
+    //   haven't been created yet).
     let list = if let Some(hint) = list_hint.as_deref() {
         if let Some(rest) = hint.strip_prefix("get:") {
-            // Single-Node resolution. `get:<label>:<base32>` names the
-            // target. Cid::from_str is Phase-2 so we resolve via a label
-            // scan match.
             let mut out = Vec::new();
             if let Some((scan_label, b32)) = rest.split_once(':') {
                 if let Ok(cids) = engine.backend.get_by_label(scan_label) {
@@ -2076,36 +2207,7 @@ fn outcome_from_terminal_with_cid(
             }
             Some(out)
         } else {
-            let mut items: Vec<(i64, Node)> = Vec::new();
-            if let Ok(cids) = engine.backend.get_by_label(hint) {
-                for cid in cids {
-                    if let Ok(Some(node)) = engine.backend.get_node(&cid) {
-                        // createdAt can land as Int (DSL-supplied via the
-                        // integer-preserving branch) or Float (napi numbers
-                        // whose serde_json::Number stores them as f64 even
-                        // when the value is integer-valued). Accept both
-                        // shapes so the sort key is stable.
-                        let ts = match node.properties.get("createdAt") {
-                            Some(Value::Int(i)) => *i,
-                            #[allow(
-                                clippy::cast_possible_truncation,
-                                reason = "millisecond-epoch timestamps fit in i64"
-                            )]
-                            Some(Value::Float(f)) => *f as i64,
-                            _ => 0,
-                        };
-                        items.push((ts, node));
-                    }
-                }
-            }
-            // Stable secondary ordering by CID so ties (rare — typically
-            // only when createdAt resolves to zero because the property
-            // was missing) resolve deterministically.
-            items.sort_by(|a, b| {
-                a.0.cmp(&b.0)
-                    .then_with(|| a.1.cid().ok().cmp(&b.1.cid().ok()))
-            });
-            Some(items.into_iter().map(|(_, n)| n).collect::<Vec<_>>())
+            Some(resolve_list_via_view_or_backend(engine, hint))
         }
     } else {
         None
@@ -2121,6 +2223,78 @@ fn outcome_from_terminal_with_cid(
         completed_iterations: None,
         successful_write_count,
     }
+}
+
+/// Route a `<label>` listing through View 3 (`content_listing:<label>`)
+/// when IVM is enabled and a view is registered for that label; falls back
+/// to the backend label index otherwise (defense-in-depth for `without_ivm`
+/// engines and for views that haven't been `create_view`-registered yet).
+///
+/// The View 3 path returns CIDs in the view's native sort order
+/// (`createdAt` ascending with disambiguator for ties); the fallback path
+/// reads the label index and sorts in-memory by the same `createdAt`
+/// property so the observable ordering matches across the two paths.
+fn resolve_list_via_view_or_backend(engine: &Engine, label: &str) -> Vec<Node> {
+    // Try View 3 first. View ids registered by the engine's `create_view`
+    // use `"content_listing"` for the default "post" view (auto-registered
+    // at assembly) and `"content_listing_<label>"` for any per-label view
+    // registered via `register_crud`. Probe both shapes.
+    if let Some(subscriber) = engine.ivm.as_ref() {
+        let view_id_candidates = [
+            format!("content_listing_{label}"),
+            "content_listing".to_string(),
+        ];
+        for view_id in &view_id_candidates {
+            let query = benten_ivm::ViewQuery {
+                label: Some(label.to_string()),
+                limit: None,
+                offset: None,
+                ..Default::default()
+            };
+            match subscriber.read_view(view_id, &query) {
+                Some(Ok(benten_ivm::ViewResult::Cids(cids))) if !cids.is_empty() => {
+                    let mut out = Vec::new();
+                    for cid in cids {
+                        if let Ok(Some(node)) = engine.backend.get_node(&cid) {
+                            out.push(node);
+                        }
+                    }
+                    // View 3 sorts by createdAt; preserve that order. If any
+                    // Node is missing (post-delete concurrency), it's just
+                    // elided — the view is the source of truth for order.
+                    return out;
+                }
+                // Fall through to the next candidate / backend fallback if
+                // the view returned empty, errored (stale), or isn't
+                // registered under that id.
+                Some(Ok(_) | Err(_)) | None => {}
+            }
+        }
+    }
+
+    // Backend label-index fallback.
+    let mut items: Vec<(i64, Node)> = Vec::new();
+    if let Ok(cids) = engine.backend.get_by_label(label) {
+        for cid in cids {
+            if let Ok(Some(node)) = engine.backend.get_node(&cid) {
+                let ts = match node.properties.get("createdAt") {
+                    Some(Value::Int(i)) => *i,
+                    #[allow(
+                        clippy::cast_possible_truncation,
+                        reason = "millisecond-epoch timestamps fit in i64"
+                    )]
+                    Some(Value::Float(f)) => *f as i64,
+                    _ => 0,
+                };
+                items.push((ts, node));
+            }
+        }
+    }
+    items.sort_by(|a, b| {
+        a.0.cmp(&b.0)
+            .then_with(|| a.1.cid().ok().cmp(&b.1.cid().ok()))
+    });
+    items.into_iter().map(|(_, n)| n).collect()
 }
 
 // ---------------------------------------------------------------------------

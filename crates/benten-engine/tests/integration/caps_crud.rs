@@ -31,7 +31,6 @@ fn post_node(title: &str, body: &str) -> Node {
 }
 
 #[test]
-#[ignore = "TODO(phase-2-grant-backed-policy): capability_policy_grant_backed() builder hook is a Phase-1 no-op (returns self); revocation semantics depend on Phase-2 grant-backed policy."]
 fn revoked_cap_routes_to_on_denied() {
     // GIVEN: an engine with the NoAuth default swapped for a grant-backed policy
     let dir = tempfile::tempdir().unwrap();
