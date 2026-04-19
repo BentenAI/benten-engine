@@ -218,6 +218,7 @@ fn static_for(c: &ErrorCode) -> &'static str {
         ErrorCode::InputLimit => "E_INPUT_LIMIT",
         ErrorCode::NotFound => "E_NOT_FOUND",
         ErrorCode::Serialize => "E_SERIALIZE",
+        ErrorCode::GraphInternal => "E_GRAPH_INTERNAL",
         ErrorCode::Unknown(_) => "E_UNKNOWN",
     }
 }
@@ -338,8 +339,12 @@ struct ActiveCall {
     handler_id: String,
     #[allow(dead_code, reason = "retained for future capability-binding uses")]
     op: String,
-    #[allow(dead_code, reason = "retained for future capability-binding uses")]
     actor: Option<Cid>,
+    /// Content-addressed identifier of the handler subgraph that issued
+    /// the in-flight call. Captured alongside `handler_id` so the
+    /// PrimitiveHost write path can stamp emitted ChangeEvents with
+    /// `handler_cid` for audit attribution (r6-sec-3).
+    handler_cid: Option<Cid>,
     /// Buffered write operations, replayed as a single transaction after the
     /// Evaluator completes. Populated by `impl PrimitiveHost::put_node` /
     /// `delete_node` / `put_edge` / `delete_edge`.
@@ -350,12 +355,30 @@ struct ActiveCall {
 
 /// A deferred host-side write op, replayed inside `dispatch_call`'s
 /// transaction after the evaluator walk completes.
+///
+/// `PutNode` carries the per-op attribution triple so the replayed
+/// `ChangeEvent` can surface the audit trail (r6-sec-3). The triple is
+/// captured from the `ActiveCall` frame at buffer time — by replay time
+/// the frame has already popped.
 #[derive(Debug, Clone)]
 enum PendingHostOp {
-    PutNode { node: Node, projected_cid: Cid },
-    DeleteNode { cid: Cid },
-    PutEdge { edge: Edge, projected_cid: Cid },
-    DeleteEdge { cid: Cid },
+    PutNode {
+        node: Node,
+        projected_cid: Cid,
+        actor_cid: Option<Cid>,
+        handler_cid: Option<Cid>,
+        capability_grant_cid: Option<Cid>,
+    },
+    DeleteNode {
+        cid: Cid,
+    },
+    PutEdge {
+        edge: Edge,
+        projected_cid: Cid,
+    },
+    DeleteEdge {
+        cid: Cid,
+    },
 }
 
 impl std::fmt::Debug for Engine {
@@ -810,6 +833,7 @@ impl Engine {
                 handler_id: handler_id.to_string(),
                 op: op.to_string(),
                 actor: actor.clone(),
+                handler_cid: Some(handler_cid.clone()),
                 pending_ops: Vec::new(),
                 inject_failure: false,
             });
@@ -826,6 +850,10 @@ impl Engine {
         result
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "r6-sec-4 adds the NotImplemented→ON_ERROR routing arm; further decomposition would obscure the top-to-bottom dispatch flow (subgraph build → evaluator run → replay → outcome mapping)"
+    )]
     fn dispatch_call_inner(
         &self,
         handler_id: &str,
@@ -904,8 +932,23 @@ impl Engine {
                 let mut last_cid = None;
                 for op in &pending {
                     match op {
-                        PendingHostOp::PutNode { node, .. } => {
-                            let cid = tx.put_node(node)?;
+                        // r6-perf-3 + r6-sec-3: reuse the already-computed CID
+                        // (skip the redundant BLAKE3+DAG-CBOR hash) and thread
+                        // the attribution triple into the emitted ChangeEvent.
+                        PendingHostOp::PutNode {
+                            node,
+                            projected_cid,
+                            actor_cid,
+                            handler_cid,
+                            capability_grant_cid,
+                        } => {
+                            let cid = tx.put_node_with_attribution(
+                                node,
+                                Some(projected_cid.clone()),
+                                actor_cid.clone(),
+                                handler_cid.clone(),
+                                capability_grant_cid.clone(),
+                            )?;
                             last_cid = Some(cid);
                         }
                         PendingHostOp::DeleteNode { cid } => {
@@ -931,12 +974,23 @@ impl Engine {
                 list_hint,
                 created_cid,
             )),
-            Err(EngineError::Cap(cap)) => Ok(Outcome {
-                edge: Some("ON_DENIED".into()),
-                error_code: Some(cap.code().as_str().to_string()),
-                error_message: Some(cap.to_string()),
-                ..Outcome::default()
-            }),
+            Err(EngineError::Cap(cap)) => {
+                // NotImplemented routes through ON_ERROR (operator config
+                // pointer) — everything else is a denial through ON_DENIED.
+                // Conflating the two makes Phase 3 operators audit their
+                // grants when the real problem is backend selection.
+                // See `crates/benten-caps/src/error.rs` + r6-sec-4.
+                let edge = match &cap {
+                    CapError::NotImplemented { .. } => "ON_ERROR",
+                    _ => "ON_DENIED",
+                };
+                Ok(Outcome {
+                    edge: Some(edge.into()),
+                    error_code: Some(cap.code().as_str().to_string()),
+                    error_message: Some(cap.to_string()),
+                    ..Outcome::default()
+                })
+            }
             Err(EngineError::Graph(benten_graph::GraphError::SystemZoneWrite { .. })) => {
                 Ok(Outcome {
                     edge: Some("ON_ERROR".into()),
@@ -1960,16 +2014,17 @@ impl Default for EngineBuilder {
 // ---------------------------------------------------------------------------
 
 impl PrimitiveHost for Engine {
+    // r6-err-2: typed conversions (via `?`) preserve the origin error's
+    // stable catalog code through the EvalError → EngineError → napi → TS
+    // pipeline. Prior to this, GraphError was stringified into
+    // `EvalError::Backend(String)` and the catalog code collapsed to
+    // `E_EVAL_BACKEND` at the boundary.
     fn read_node(&self, cid: &Cid) -> Result<Option<Node>, benten_eval::EvalError> {
-        self.backend
-            .get_node(cid)
-            .map_err(|e| benten_eval::EvalError::Backend(format!("{e:?}")))
+        Ok(self.backend.get_node(cid)?)
     }
 
     fn get_by_label(&self, label: &str) -> Result<Vec<Cid>, benten_eval::EvalError> {
-        self.backend
-            .get_by_label(label)
-            .map_err(|e| benten_eval::EvalError::Backend(format!("{e:?}")))
+        Ok(self.backend.get_by_label(label)?)
     }
 
     fn get_by_property(
@@ -1978,23 +2033,37 @@ impl PrimitiveHost for Engine {
         prop: &str,
         value: &Value,
     ) -> Result<Vec<Cid>, benten_eval::EvalError> {
-        self.backend
-            .get_by_property(label, prop, value)
-            .map_err(|e| benten_eval::EvalError::Backend(format!("{e:?}")))
+        Ok(self.backend.get_by_property(label, prop, value)?)
     }
 
     fn put_node(&self, node: &Node) -> Result<Cid, benten_eval::EvalError> {
         // Project the Node's CID up front so the evaluator's StepResult can
         // echo it back immediately; the real backend write happens after
         // the evaluator walk completes, inside a single transaction.
-        let projected = node
-            .cid()
-            .map_err(|e| benten_eval::EvalError::Backend(format!("{e:?}")))?;
+        let projected = node.cid()?;
         let mut guard = self.active_call.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(frame) = guard.last_mut() {
+            // r6-sec-3 attribution: capture actor/handler so the replay
+            // path can stamp each emitted ChangeEvent with the originating
+            // audit context. capability_grant_cid is intentionally None
+            // under NoAuthBackend (no grant entity); populated Phase 3.
+            //
+            // If the caller did not supply an explicit actor, synthesize a
+            // stable pseudo-actor CID from the NoAuth label so audit
+            // consumers can distinguish "no one supplied an actor" from
+            // "the write wasn't attributed at all". The seed is fixed so
+            // every noauth call produces the same CID process-wide.
+            let actor_cid = frame
+                .actor
+                .clone()
+                .or_else(|| Some(noauth_pseudo_actor_cid()));
+            let handler_cid = frame.handler_cid.clone();
             frame.pending_ops.push(PendingHostOp::PutNode {
                 node: node.clone(),
                 projected_cid: projected.clone(),
+                actor_cid,
+                handler_cid,
+                capability_grant_cid: None,
             });
             Ok(projected)
         } else {
@@ -2003,16 +2072,12 @@ impl PrimitiveHost for Engine {
             // that call impl PrimitiveHost::put_node without a containing
             // dispatch.
             drop(guard);
-            self.backend
-                .put_node(node)
-                .map_err(|e| benten_eval::EvalError::Backend(format!("{e:?}")))
+            Ok(self.backend.put_node(node)?)
         }
     }
 
     fn put_edge(&self, edge: &Edge) -> Result<Cid, benten_eval::EvalError> {
-        let projected = edge
-            .cid()
-            .map_err(|e| benten_eval::EvalError::Backend(format!("{e:?}")))?;
+        let projected = edge.cid()?;
         let mut guard = self.active_call.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(frame) = guard.last_mut() {
             frame.pending_ops.push(PendingHostOp::PutEdge {
@@ -2022,9 +2087,7 @@ impl PrimitiveHost for Engine {
             Ok(projected)
         } else {
             drop(guard);
-            self.backend
-                .put_edge(edge)
-                .map_err(|e| benten_eval::EvalError::Backend(format!("{e:?}")))
+            Ok(self.backend.put_edge(edge)?)
         }
     }
 
@@ -2037,9 +2100,8 @@ impl PrimitiveHost for Engine {
             Ok(())
         } else {
             drop(guard);
-            self.backend
-                .delete_node(cid)
-                .map_err(|e| benten_eval::EvalError::Backend(format!("{e:?}")))
+            self.backend.delete_node(cid)?;
+            Ok(())
         }
     }
 
@@ -2052,9 +2114,8 @@ impl PrimitiveHost for Engine {
             Ok(())
         } else {
             drop(guard);
-            self.backend
-                .delete_edge(cid)
-                .map_err(|e| benten_eval::EvalError::Backend(format!("{e:?}")))
+            self.backend.delete_edge(cid)?;
+            Ok(())
         }
     }
 
@@ -2137,6 +2198,18 @@ impl PrimitiveHost for Engine {
 
 /// Convert an `EvalError` back into an `EngineError` for the transaction
 /// closure's return type.
+/// Return the stable pseudo-actor CID used when NoAuthBackend issues a write
+/// without a caller-supplied actor. Derived from a fixed seed so every
+/// noauth write process-wide attributes to the same CID — audit consumers
+/// can then tell "noauth" writes apart from cross-principal writes without
+/// needing the capability policy to carry identity state.
+fn noauth_pseudo_actor_cid() -> Cid {
+    // Fixed 32-byte BLAKE3 digest of the UTF-8 bytes of "noauth-pseudo-actor-v1".
+    // Computed at compile time via `blake3::hash` → stable across releases.
+    let digest: [u8; 32] = *blake3::hash(b"noauth-pseudo-actor-v1").as_bytes();
+    Cid::from_blake3_digest(digest)
+}
+
 fn eval_error_to_engine_error(e: benten_eval::EvalError) -> EngineError {
     match e {
         benten_eval::EvalError::Capability(c) => EngineError::Cap(c),
@@ -2561,12 +2634,38 @@ pub struct EngineTransaction<'tx, 'coll> {
 /// lifetime parameter.
 trait GraphTxLike {
     fn put_node(&mut self, node: &Node) -> Result<Cid, GraphError>;
+    fn put_node_with_attribution(
+        &mut self,
+        node: &Node,
+        precomputed_cid: Option<Cid>,
+        actor_cid: Option<Cid>,
+        handler_cid: Option<Cid>,
+        capability_grant_cid: Option<Cid>,
+    ) -> Result<Cid, GraphError>;
     fn delete_node(&mut self, cid: &Cid) -> Result<(), GraphError>;
 }
 
 impl GraphTxLike for benten_graph::Transaction<'_> {
     fn put_node(&mut self, node: &Node) -> Result<Cid, GraphError> {
         benten_graph::Transaction::put_node(self, node)
+    }
+
+    fn put_node_with_attribution(
+        &mut self,
+        node: &Node,
+        precomputed_cid: Option<Cid>,
+        actor_cid: Option<Cid>,
+        handler_cid: Option<Cid>,
+        capability_grant_cid: Option<Cid>,
+    ) -> Result<Cid, GraphError> {
+        benten_graph::Transaction::put_node_with_attribution(
+            self,
+            node,
+            precomputed_cid,
+            actor_cid,
+            handler_cid,
+            capability_grant_cid,
+        )
     }
 
     fn delete_node(&mut self, cid: &Cid) -> Result<(), GraphError> {
@@ -2589,6 +2688,40 @@ impl EngineTransaction<'_, '_> {
     /// Put a Node inside the transaction.
     pub fn put_node(&mut self, node: &Node) -> Result<Cid, EngineError> {
         let cid = self.inner.put_node(node).map_err(EngineError::Graph)?;
+        self.ops_collector
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(benten_caps::PendingOp::PutNode {
+                cid: cid.clone(),
+                labels: node.labels.clone(),
+            });
+        Ok(cid)
+    }
+
+    /// Put a Node with attribution and an optional pre-computed CID.
+    ///
+    /// Replay path used by `Engine::dispatch_call` — the caller already ran
+    /// `node.cid()` when buffering the op, so the precomputed CID skips the
+    /// double-hash (r6-perf-3). Attribution flows through to the emitted
+    /// `ChangeEvent` (r6-sec-3).
+    pub(crate) fn put_node_with_attribution(
+        &mut self,
+        node: &Node,
+        precomputed_cid: Option<Cid>,
+        actor_cid: Option<Cid>,
+        handler_cid: Option<Cid>,
+        capability_grant_cid: Option<Cid>,
+    ) -> Result<Cid, EngineError> {
+        let cid = self
+            .inner
+            .put_node_with_attribution(
+                node,
+                precomputed_cid,
+                actor_cid,
+                handler_cid,
+                capability_grant_cid,
+            )
+            .map_err(EngineError::Graph)?;
         self.ops_collector
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -3014,10 +3147,20 @@ pub mod testing {
         SubgraphSpec::empty("iterate_write")
     }
 
-    /// Build a minimal single-WRITE handler.
+    /// Build a minimal single-WRITE handler — WRITE(label=`minimal`) → RESPOND.
+    ///
+    /// Used by the UCAN stub routing test (r6-sec-4) to verify that a
+    /// configured `UcanBackend` routes its `NotImplemented` error through
+    /// the `ON_ERROR` typed edge rather than `ON_DENIED`. The minimal WRITE
+    /// must reach the capability hook, so the spec carries one `WriteSpec`
+    /// and a RESPOND terminal — not the earlier empty shell.
     #[must_use]
     pub fn minimal_write_handler() -> SubgraphSpec {
-        SubgraphSpec::empty("minimal_write")
+        super::SubgraphSpec::builder()
+            .handler_id("minimal_write")
+            .write(|w| w.label("minimal"))
+            .respond()
+            .build()
     }
 
     /// Inspect the edge taken by the terminal step of an Outcome.

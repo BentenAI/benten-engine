@@ -68,6 +68,15 @@ pub enum ErrorCode {
     InputLimit,
     /// Generic not-found (version-chain anchor miss, etc.).
     NotFound,
+    /// Storage-layer internal failure (redb I/O, decode). Stable code for
+    /// the `GraphError::Redb` / `GraphError::Decode` variants. Replaces the
+    /// prior `Unknown("graph_internal")` so consumers can match on a typed
+    /// catalog code rather than a lowercase ad-hoc string.
+    ///
+    /// Phase 2 will refactor `GraphError::Redb(String)` into a
+    /// `#[source]`-preserving `redb::Error` chain; this code survives the
+    /// refactor.
+    GraphInternal,
     /// DAG-CBOR serialization failure at the hash path (e.g. encoder
     /// integer-overflow). Distinct from the catalog's registration-time
     /// invariants; the payload is a human-readable message held on the
@@ -119,6 +128,7 @@ impl ErrorCode {
             ErrorCode::InputLimit => "E_INPUT_LIMIT",
             ErrorCode::NotFound => "E_NOT_FOUND",
             ErrorCode::Serialize => "E_SERIALIZE",
+            ErrorCode::GraphInternal => "E_GRAPH_INTERNAL",
             ErrorCode::Unknown(s) => s.as_str(),
         }
     }
@@ -163,6 +173,7 @@ impl ErrorCode {
             "E_INPUT_LIMIT" => ErrorCode::InputLimit,
             "E_NOT_FOUND" => ErrorCode::NotFound,
             "E_SERIALIZE" => ErrorCode::Serialize,
+            "E_GRAPH_INTERNAL" => ErrorCode::GraphInternal,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }

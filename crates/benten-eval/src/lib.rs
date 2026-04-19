@@ -100,9 +100,14 @@ impl EvalError {
             EvalError::WriteConflict => ErrorCode::WriteConflict,
             EvalError::TransformSyntax(_) => ErrorCode::TransformSyntax,
             EvalError::StackOverflow => ErrorCode::InvDepthExceeded,
-            EvalError::Backend(_) | EvalError::Graph(_) | EvalError::Core(_) => {
-                ErrorCode::Unknown(String::new())
-            }
+            // Preserve the stable catalog code across the cross-crate
+            // boundary. Prior to r6-err-1 these three collapsed into
+            // `Unknown("")`, which made `EvalError → EngineError → napi → TS`
+            // lose the origin error code. Dispatch to inner `.code()` so the
+            // catalog identifier survives the round-trip.
+            EvalError::Graph(e) => e.code(),
+            EvalError::Core(e) => e.code(),
+            EvalError::Backend(_) => ErrorCode::Unknown(String::from("E_EVAL_BACKEND")),
         }
     }
 }
