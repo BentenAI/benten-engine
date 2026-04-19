@@ -120,3 +120,43 @@ export interface Trace {
 export interface HandlerAdjacencies {
   predecessorsOf(nodeCid: string): Iterable<string>;
 }
+
+/**
+ * Shape of an Edge as returned by `Engine.getEdge` / `edgesFrom` /
+ * `edgesTo`. CIDs are base32-multibase strings (prefix `b`).
+ */
+export interface Edge {
+  cid: string;
+  source: string;
+  target: string;
+  label: string;
+}
+
+/**
+ * Input shape for `Engine.grantCapability`. Phase-1 uses a flat
+ * `{ actor, scope }` pair; Phase-3 adds optional `{ issuer, hlc, ... }`
+ * fields for UCAN-grounded grants. Extra fields are tolerated on the
+ * wire — the Rust parser consults only `actor` + `scope`.
+ */
+export interface CapabilityGrant {
+  /** Principal (actor CID or string id in Phase 1) the grant applies to. */
+  actor: string;
+  /** Scope expression (e.g. `"store:post:write"`). */
+  scope: string;
+  /** Optional issuer CID (Phase-3 UCAN grounding — ignored in Phase 1). */
+  issuer?: string;
+  /** Optional HLC stamp (Phase-3 — ignored in Phase 1). */
+  hlc?: number;
+}
+
+/**
+ * Input shape for `Engine.createView`. Phase-1 recognizes the well-known
+ * id family `content_listing_<label>`; extra fields are reserved for
+ * Phase-2 user-defined views.
+ */
+export interface ViewDef {
+  /** View id string (e.g. `"content_listing_post"`). */
+  viewId: string;
+  /** Reserved for Phase-2 user-defined views. Ignored in Phase 1. */
+  [key: string]: JsonValue;
+}

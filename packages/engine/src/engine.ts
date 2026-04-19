@@ -15,7 +15,9 @@
 // capability checks, and evaluation happen Rust-side. We transport
 // shapes, not semantics.
 
+import { mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
+import { dirname } from "node:path";
 
 import {
   isCrudHandler,
@@ -29,11 +31,14 @@ import {
 } from "./errors.js";
 import { toMermaid } from "./mermaid.js";
 import type {
+  CapabilityGrant,
+  Edge,
   HandlerAdjacencies,
   JsonValue,
   RegisteredHandler,
   Subgraph,
   Trace,
+  ViewDef,
 } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -75,10 +80,43 @@ interface NativeEngine {
   ivmSubscriberCount?: () => number;
 }
 
-interface NativeModule {
-  Engine: new (path: string) => NativeEngine;
-  PolicyKind?: { NoAuth: string; Ucan: string };
+interface NativeEngineCtor {
+  new (path: string): NativeEngine;
+  openWithPolicy?: (path: string, policy: string) => NativeEngine;
 }
+
+interface NativeModule {
+  Engine: NativeEngineCtor;
+  PolicyKind?: {
+    NoAuth: string;
+    Ucan: string;
+    GrantBacked: string;
+  };
+}
+
+// ---------------------------------------------------------------------------
+// PolicyKind — TS-side enum, string-keyed to match napi-rs v3 string_enum
+// projection. Exposed so `Engine.openWithPolicy(path, PolicyKind.GrantBacked)`
+// reads naturally on the DSL side.
+// ---------------------------------------------------------------------------
+
+/**
+ * Capability-policy kinds accepted by `Engine.openWithPolicy`.
+ *
+ * - `NoAuth` — default. No capability checks; all writes allowed.
+ * - `Ucan` — Phase-3 UCAN stub. Opens but surfaces
+ *   `E_CAP_NOT_IMPLEMENTED` at check time.
+ * - `GrantBacked` — Phase-1 revocation-aware policy backed by the
+ *   engine's own `system:CapabilityGrant` Nodes. Call
+ *   `engine.grantCapability({ actor, scope })` to seed permissions
+ *   before dispatching writes through `engine.call(...)`.
+ */
+export const PolicyKind = {
+  NoAuth: "NoAuth",
+  Ucan: "Ucan",
+  GrantBacked: "GrantBacked",
+} as const;
+export type PolicyKind = (typeof PolicyKind)[keyof typeof PolicyKind];
 
 let __native: NativeModule | undefined;
 
@@ -188,14 +226,49 @@ export class Engine {
    * Open a Benten engine instance backed by the given redb file.
    * Creates the file if it does not exist. Returns once the engine is
    * ready.
+   *
+   * The wrapper ensures the file's parent directory exists before
+   * handing the path to the native binding — redb surfaces a bare
+   * `I/O error: No such file or directory` when the parent doesn't
+   * exist, which is a poor first-run DX (the scaffolder's default
+   * path is `.benten/<name>.redb`, which requires `.benten/` to exist
+   * first). Pre-creating the dir here removes the class of error.
    */
   public static async open(path: string): Promise<Engine> {
     if (typeof path !== "string" || path.length === 0) {
       throw new EDslInvalidShape("Engine.open requires a non-empty path");
     }
+    ensureParentDir(path);
     const native = loadNative();
     try {
       const inner = new native.Engine(path);
+      return new Engine(inner);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /**
+   * Open an engine with an explicit capability policy. Use
+   * `PolicyKind.GrantBacked` to enable the Phase-1 revocation-aware
+   * grant policy backed by `system:CapabilityGrant` Nodes.
+   */
+  public static async openWithPolicy(
+    path: string,
+    policy: PolicyKind,
+  ): Promise<Engine> {
+    if (typeof path !== "string" || path.length === 0) {
+      throw new EDslInvalidShape("Engine.openWithPolicy requires a non-empty path");
+    }
+    ensureParentDir(path);
+    const native = loadNative();
+    if (!native.Engine.openWithPolicy) {
+      throw new EDslInvalidShape(
+        "Engine.openWithPolicy unavailable on this native binding — rebuild @benten/engine-native",
+      );
+    }
+    try {
+      const inner = native.Engine.openWithPolicy(path, policy);
       return new Engine(inner);
     } catch (err) {
       throw mapNativeError(err);
@@ -464,9 +537,29 @@ export class Engine {
         ? op.slice(crud.label.length + 1)
         : op;
 
+    // Apply the same createdAt stamping that `Engine.call` applies on
+    // `<label>:create` inputs. Without this, tracing a `post:create`
+    // persists a Node with a missing / malformed `createdAt` — which
+    // then mis-sorts in the `:list` View 3 output for the rest of the
+    // engine's lifetime. Keeping trace symmetric with call here is
+    // the minimum bar until Phase 2 adds a rolled-back trace tx.
+    let effectiveInput: JsonValue = input;
+    if (
+      crud &&
+      dispatchOp === "create" &&
+      typeof input === "object" &&
+      input !== null &&
+      !Array.isArray(input)
+    ) {
+      const obj = input as Record<string, JsonValue>;
+      if (obj.createdAt === undefined) {
+        effectiveInput = { ...obj, createdAt: crud.stampCreatedAt() };
+      }
+    }
+
     let rawTrace: { steps: unknown[]; result?: unknown };
     try {
-      rawTrace = this.inner.trace(handlerId, dispatchOp, input);
+      rawTrace = this.inner.trace(handlerId, dispatchOp, effectiveInput);
     } catch (err) {
       throw mapNativeError(err);
     }
@@ -544,6 +637,284 @@ export class Engine {
       throw mapNativeError(err);
     }
   }
+
+  /**
+   * Replace the Node at `oldCid` with a fresh content-addressed Node
+   * built from `(labels, properties)`. Returns the new CID.
+   */
+  public async updateNode(
+    oldCid: string,
+    labels: string[],
+    properties: Record<string, JsonValue>,
+  ): Promise<string> {
+    this.assertOpen();
+    if (!this.inner.updateNode) {
+      throw new EDslInvalidShape("Engine.updateNode unavailable on this binding");
+    }
+    try {
+      return this.inner.updateNode(oldCid, labels, properties);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /** Delete a Node by CID. */
+  public async deleteNode(cid: string): Promise<void> {
+    this.assertOpen();
+    if (!this.inner.deleteNode) {
+      throw new EDslInvalidShape("Engine.deleteNode unavailable on this binding");
+    }
+    try {
+      this.inner.deleteNode(cid);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /**
+   * Create an Edge linking `source` -> `target` with the given label.
+   * Returns the content-addressed Edge CID.
+   */
+  public async createEdge(
+    source: string,
+    target: string,
+    label: string,
+  ): Promise<string> {
+    this.assertOpen();
+    if (!this.inner.createEdge) {
+      throw new EDslInvalidShape("Engine.createEdge unavailable on this binding");
+    }
+    try {
+      return this.inner.createEdge(source, target, label);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /** Retrieve an Edge by CID. Returns `null` on miss. */
+  public async getEdge(cid: string): Promise<Edge | null> {
+    this.assertOpen();
+    if (!this.inner.getEdge) {
+      throw new EDslInvalidShape("Engine.getEdge unavailable on this binding");
+    }
+    try {
+      return (this.inner.getEdge(cid) ?? null) as Edge | null;
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /** Delete an Edge by CID. */
+  public async deleteEdge(cid: string): Promise<void> {
+    this.assertOpen();
+    if (!this.inner.deleteEdge) {
+      throw new EDslInvalidShape("Engine.deleteEdge unavailable on this binding");
+    }
+    try {
+      this.inner.deleteEdge(cid);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /** All Edges whose `source` is `cid`. */
+  public async edgesFrom(cid: string): Promise<Edge[]> {
+    this.assertOpen();
+    if (!this.inner.edgesFrom) {
+      throw new EDslInvalidShape("Engine.edgesFrom unavailable on this binding");
+    }
+    try {
+      return (this.inner.edgesFrom(cid) ?? []) as Edge[];
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /** All Edges whose `target` is `cid`. */
+  public async edgesTo(cid: string): Promise<Edge[]> {
+    this.assertOpen();
+    if (!this.inner.edgesTo) {
+      throw new EDslInvalidShape("Engine.edgesTo unavailable on this binding");
+    }
+    try {
+      return (this.inner.edgesTo(cid) ?? []) as Edge[];
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /**
+   * Dispatch a handler action on behalf of an explicit actor CID.
+   * Used by capability-aware policies (e.g. `GrantBacked`) to resolve
+   * the writer's grants.
+   */
+  public async callAs(
+    handlerId: string,
+    op: string,
+    input: JsonValue,
+    actor: string,
+  ): Promise<Record<string, JsonValue> & { cid?: string }> {
+    this.assertOpen();
+    if (!this.inner.callAs) {
+      throw new EDslInvalidShape("Engine.callAs unavailable on this binding");
+    }
+    // Honor the same `<label>:op` dispatch rule that `call` uses so
+    // the two methods are symmetric.
+    const crud = this.crudLabels.get(handlerId);
+    const dispatchOp =
+      crud && op.startsWith(`${crud.label}:`)
+        ? op.slice(crud.label.length + 1)
+        : op;
+    let raw: unknown;
+    try {
+      raw = this.inner.callAs(handlerId, dispatchOp, input, actor);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+    return flattenCallResult(raw);
+  }
+
+  /**
+   * Grant a capability. `grant` is a `{ actor, scope, ... }` object;
+   * the Rust side writes a `system:CapabilityGrant` Node and returns
+   * its CID.
+   */
+  public async grantCapability(grant: CapabilityGrant): Promise<string> {
+    this.assertOpen();
+    if (!this.inner.grantCapability) {
+      throw new EDslInvalidShape(
+        "Engine.grantCapability unavailable on this binding",
+      );
+    }
+    try {
+      return this.inner.grantCapability(grant);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /**
+   * Revoke a previously-granted capability. `grantCid` is the CID
+   * returned by `grantCapability`; `actor` is the principal issuing
+   * the revocation.
+   */
+  public async revokeCapability(
+    grantCid: string,
+    actor: string,
+  ): Promise<void> {
+    this.assertOpen();
+    if (!this.inner.revokeCapability) {
+      throw new EDslInvalidShape(
+        "Engine.revokeCapability unavailable on this binding",
+      );
+    }
+    try {
+      this.inner.revokeCapability(grantCid, actor);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /**
+   * Register / materialize an IVM view definition. The `viewDef`
+   * object must carry a `viewId` string (e.g. `"content_listing_post"`).
+   * Returns the view definition Node's CID.
+   */
+  public async createView(viewDef: ViewDef): Promise<string> {
+    this.assertOpen();
+    if (!this.inner.createView) {
+      throw new EDslInvalidShape("Engine.createView unavailable on this binding");
+    }
+    try {
+      return this.inner.createView(viewDef);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /**
+   * Read a materialized view. Phase-1 accepts a `query` argument for
+   * forward-compatibility but does not consult it.
+   */
+  public async readView(
+    viewId: string,
+    query: JsonValue = {},
+  ): Promise<JsonValue> {
+    this.assertOpen();
+    if (!this.inner.readView) {
+      throw new EDslInvalidShape("Engine.readView unavailable on this binding");
+    }
+    try {
+      return this.inner.readView(viewId, query) as JsonValue;
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /**
+   * Emit a named event with a JSON payload.
+   *
+   * Phase-1 contract: surfaces `E_PRIMITIVE_NOT_IMPLEMENTED` — the
+   * standalone EMIT primitive is deferred to Phase 2. Per-WRITE
+   * change-stream fan-out still flows via `createNode` /
+   * `registerCrud:create`.
+   */
+  public async emitEvent(name: string, payload: JsonValue): Promise<void> {
+    this.assertOpen();
+    if (!this.inner.emitEvent) {
+      throw new EDslInvalidShape("Engine.emitEvent unavailable on this binding");
+    }
+    try {
+      this.inner.emitEvent(name, payload);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /** Count of Nodes stored under `label`. */
+  public async countNodesWithLabel(label: string): Promise<number> {
+    this.assertOpen();
+    if (!this.inner.countNodesWithLabel) {
+      throw new EDslInvalidShape(
+        "Engine.countNodesWithLabel unavailable on this binding",
+      );
+    }
+    try {
+      return this.inner.countNodesWithLabel(label);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /** Total `ChangeEvent`s emitted since the engine opened. */
+  public async changeEventCount(): Promise<number> {
+    this.assertOpen();
+    if (!this.inner.changeEventCount) {
+      throw new EDslInvalidShape(
+        "Engine.changeEventCount unavailable on this binding",
+      );
+    }
+    try {
+      return this.inner.changeEventCount();
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /** Number of live IVM view subscribers. */
+  public async ivmSubscriberCount(): Promise<number> {
+    this.assertOpen();
+    if (!this.inner.ivmSubscriberCount) {
+      throw new EDslInvalidShape(
+        "Engine.ivmSubscriberCount unavailable on this binding",
+      );
+    }
+    try {
+      return this.inner.ivmSubscriberCount();
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -574,6 +945,24 @@ function flattenCallResult(
     };
   }
   return r as Record<string, JsonValue> & { cid?: string };
+}
+
+/**
+ * Ensure the parent directory of `path` exists. Redb surfaces a bare
+ * `I/O error: No such file or directory` when its target file's
+ * parent doesn't exist; pre-creating the dir here (recursive, no-op
+ * when it already exists) turns that class of error into a silent
+ * success — the DX contract first-run developers need.
+ */
+function ensureParentDir(path: string): void {
+  const parent = dirname(path);
+  if (!parent || parent === "." || parent === "/") return;
+  try {
+    mkdirSync(parent, { recursive: true });
+  } catch {
+    // Fall through — let the native open surface the real error via
+    // mapNativeError rather than obscure it with an mkdir failure.
+  }
 }
 
 /**

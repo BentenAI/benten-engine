@@ -358,7 +358,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 - **Message:** "No handler registered for '{handler_id}'"
 - **Context:** `{ handler_id: string, suggestions: string[] }`
-- **Fix:** Check spelling; register via `ctx.registerSubgraphs()` or `crud()`.
+- **Fix:** Check spelling; register via `engine.registerSubgraph(handler)` or `engine.registerSubgraph(crud('<label>'))`.
 - **Thrown at:** DSL wrapper
 - **Phase:** 1 (TS-only — never surfaces from the Rust engine)
 

@@ -734,9 +734,9 @@ export class EDslInvalidShape extends BentenError {
  */
 export class EDslUnregisteredHandler extends BentenError {
   static readonly code = "E_DSL_UNREGISTERED_HANDLER";
-  static readonly fixHint = "Check spelling; register via `ctx.registerSubgraphs()` or `crud()`.";
+  static readonly fixHint = "Check spelling; register via `engine.registerSubgraph(handler)` or `engine.registerSubgraph(crud('<label>'))`.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_DSL_UNREGISTERED_HANDLER", "Check spelling; register via `ctx.registerSubgraphs()` or `crud()`.", message, context);
+    super("E_DSL_UNREGISTERED_HANDLER", "Check spelling; register via `engine.registerSubgraph(handler)` or `engine.registerSubgraph(crud('<label>'))`.", message, context);
     this.name = "EDslUnregisteredHandler";
   }
 }
