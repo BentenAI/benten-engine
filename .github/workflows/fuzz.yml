@@ -1,0 +1,42 @@
+name: Transform grammar fuzz
+
+# Runs the 10k-iteration TRANSFORM grammar fuzz test nightly and on manual
+# dispatch. The test body lives in `crates/benten-eval/tests/transform_grammar_fuzz.rs`
+# and is marked `#[ignore]` so `cargo test` / `cargo nextest run` in CI's
+# normal path don't pay the multi-minute cost; this workflow is the only
+# scheduled runner that exercises it.
+
+on:
+  schedule:
+    # Nightly at 02:00 UTC — off-peak for the shared GitHub Actions fleet.
+    - cron: '0 2 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz-transform:
+    name: TRANSFORM grammar fuzz (10k iter)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: fuzz-transform
+
+      - name: Run TRANSFORM grammar fuzz
+        run: >-
+          cargo test -p benten-eval
+          --test transform_grammar_fuzz
+          --release
+          --
+          --ignored
+          --nocapture

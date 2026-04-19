@@ -108,6 +108,7 @@ dependencies = [
  "benten-eval",
  "benten-graph",
  "benten-ivm",
+ "blake3",
  "criterion",
  "tempfile",
  "thiserror",
@@ -150,6 +151,7 @@ version = "0.1.0"
 dependencies = [
  "benten-core",
  "benten-graph",
+ "blake3",
  "criterion",
  "proptest",
  "tempfile",

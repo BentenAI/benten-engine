@@ -28,6 +28,7 @@ benten-core = { path = "../benten-core" }
 benten-eval = { path = "../benten-eval", features = ["diag"] }
 benten-graph = { path = "../benten-graph" }
 benten-ivm = { path = "../benten-ivm" }
+blake3 = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]

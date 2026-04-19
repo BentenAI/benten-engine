@@ -58,7 +58,6 @@ fn change_stream_routes_to_matching_view_and_skips_non_matching() {
 }
 
 #[test]
-#[ignore = "TODO(r4b-attribution): populate actor_cid/handler_cid/capability_grant_cid from ActiveCall state at PrimitiveHost::put_node emit site. Cross-crate wire-through deferred to Phase 2 per R1 attack-vector #9."]
 fn change_event_attribution_fields_populated() {
     // R1 named field: ChangeEvent must carry actor_cid / handler_cid /
     // capability_grant_cid for audit-trail.

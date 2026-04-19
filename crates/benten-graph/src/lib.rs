@@ -108,9 +108,13 @@ impl GraphError {
     pub fn code(&self) -> ErrorCode {
         match self {
             GraphError::Core(e) => e.code(),
-            GraphError::Redb(_) | GraphError::Decode(_) => {
-                ErrorCode::Unknown(String::from("graph_internal"))
-            }
+            // TODO(phase-2-error-chain): `GraphError::Redb(String)` drops the
+            // `std::error::Error::source` chain; replacing with `#[from]
+            // redb::Error` cascades into R3 tests that construct `Redb(String)`
+            // directly (`failure_injection_rollback.rs`). A typed catalog code
+            // now travels with the error (r6-err-3) so the TS layer sees a
+            // stable identifier regardless of the underlying refactor.
+            GraphError::Redb(_) | GraphError::Decode(_) => ErrorCode::GraphInternal,
             GraphError::BackendNotFound { .. } => ErrorCode::BackendNotFound,
             GraphError::SystemZoneWrite { .. } => ErrorCode::SystemZoneWrite,
             GraphError::NestedTransactionNotSupported {} => {

@@ -70,12 +70,24 @@ pub enum PendingOp {
     /// surfaces property data (required by the IVM views that key on
     /// `createdAt`, `grantee`, `subscribes_to`, etc.). `labels` is derived
     /// from `node.labels`.
+    ///
+    /// Attribution triple (`actor_cid`, `handler_cid`, `capability_grant_cid`)
+    /// is carried through to the emitted `ChangeEvent` so audit consumers
+    /// can trace every write back to the actor + handler that issued it.
+    /// Populated by the engine's `PrimitiveHost::put_node` replay path;
+    /// direct `Transaction::put_node` callers leave all three `None`.
     PutNode {
         /// The CID of the put node.
         cid: Cid,
         /// The Node being written. `labels` and all properties are
         /// reachable through `node.labels` / `node.properties`.
         node: Node,
+        /// Actor CID — the principal that initiated the write.
+        actor_cid: Option<Cid>,
+        /// Handler CID — the subgraph whose WRITE primitive produced this.
+        handler_cid: Option<Cid>,
+        /// Capability-grant CID — the grant authorizing the write.
+        capability_grant_cid: Option<Cid>,
     },
     /// Edge put. Carries source, target, and label so edge-driven IVM views
     /// (governance inheritance, version current) see endpoints directly on
@@ -137,14 +149,20 @@ impl PendingOp {
     /// views downstream treat the two as semantically distinct.
     pub(crate) fn to_change_event(&self, tx_id: u64) -> ChangeEvent {
         match self {
-            PendingOp::PutNode { cid, node } => ChangeEvent {
+            PendingOp::PutNode {
+                cid,
+                node,
+                actor_cid,
+                handler_cid,
+                capability_grant_cid,
+            } => ChangeEvent {
                 cid: cid.clone(),
                 labels: node.labels.clone(),
                 kind: ChangeKind::Created,
                 tx_id,
-                actor_cid: None,
-                handler_cid: None,
-                capability_grant_cid: None,
+                actor_cid: actor_cid.clone(),
+                handler_cid: handler_cid.clone(),
+                capability_grant_cid: capability_grant_cid.clone(),
                 node: Some(node.clone()),
                 edge_endpoints: None,
             },
@@ -273,6 +291,29 @@ impl<'a> Transaction<'a> {
     /// - [`GraphError::Core`] on Node serialization / CID failure.
     /// - [`GraphError::Redb`] on any redb I/O failure.
     pub fn put_node(&mut self, node: &Node) -> Result<Cid, GraphError> {
+        self.put_node_with_attribution(node, None, None, None, None)
+    }
+
+    /// Put a Node, stamping the emitted [`ChangeEvent`] with the supplied
+    /// attribution triple and (optionally) a pre-computed CID.
+    ///
+    /// The CID argument exists so replay paths that already hashed the Node
+    /// (e.g. `PrimitiveHost::put_node`'s projected-CID contract) can skip the
+    /// double hash. If `None`, the CID is computed here.
+    ///
+    /// The three attribution fields surface on the emitted `ChangeEvent` and
+    /// on downstream `PendingOp` records. See [`PendingOp::PutNode`].
+    ///
+    /// # Errors
+    /// Same as [`Self::put_node`].
+    pub fn put_node_with_attribution(
+        &mut self,
+        node: &Node,
+        precomputed_cid: Option<Cid>,
+        actor_cid: Option<Cid>,
+        handler_cid: Option<Cid>,
+        capability_grant_cid: Option<Cid>,
+    ) -> Result<Cid, GraphError> {
         if !self.is_privileged {
             for label in &node.labels {
                 if label.starts_with("system:") {
@@ -282,7 +323,13 @@ impl<'a> Transaction<'a> {
                 }
             }
         }
-        let cid = node.cid()?;
+        // r6-perf-3: the caller (PrimitiveHost replay) already ran
+        // `node.cid()` when buffering the op, so accept a precomputed CID
+        // and skip the redundant BLAKE3+DAG-CBOR hash here.
+        let cid = match precomputed_cid {
+            Some(c) => c,
+            None => node.cid()?,
+        };
         let bytes = node.canonical_bytes()?;
         let n_key = node_key(&cid);
         let txn = self
@@ -312,6 +359,9 @@ impl<'a> Transaction<'a> {
         self.pending.push(PendingOp::PutNode {
             cid: cid.clone(),
             node: node.clone(),
+            actor_cid,
+            handler_cid,
+            capability_grant_cid,
         });
         Ok(cid)
     }
@@ -510,16 +560,21 @@ impl<'a> Transaction<'a> {
     reason = "operator-visible warning on subscriber panic; benten-graph has no tracing dep"
 )]
 pub(crate) fn fan_out(subscribers: &[Arc<dyn ChangeSubscriber>], ops: &[PendingOp], tx_id: u64) {
+    // r6-perf-4: build each ChangeEvent once, not once per subscriber.
+    // Previously this nested `for sub in subs { for op in ops }` loop
+    // rebuilt the event S times (O(N·M) event constructions); invert to
+    // O(M) construction + O(N·M) dispatch.
+    let events: Vec<ChangeEvent> = ops.iter().map(|op| op.to_change_event(tx_id)).collect();
     for sub in subscribers {
-        for op in ops {
-            let event = op.to_change_event(tx_id);
+        for event in &events {
             let sub_clone = Arc::clone(sub);
+            let event_clone = event.clone();
             // Ignore panics from individual subscribers — they must not
             // take down the commit thread. Phase 2 will replace the stderr
             // breadcrumb with tracing::warn! when tracing lands.
             if let Err(_panic_payload) =
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
-                    sub_clone.on_change(&event);
+                    sub_clone.on_change(&event_clone);
                 }))
             {
                 eprintln!(
