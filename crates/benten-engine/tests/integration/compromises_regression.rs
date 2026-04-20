@@ -29,7 +29,7 @@ use std::collections::BTreeMap;
 // the next batch re-reads and sees the revoked cap, so write 101 fails with
 // E_CAP_REVOKED_MID_EVAL.
 #[test]
-#[ignore = "TODO(phase-2-grant-backed-policy): capability_policy_grant_backed() builder hook is a Phase-1 no-op; the TOCTOU-window 100-iter batch semantics depend on Phase-2 grant-backed policy + call_with_revocation_at."]
+#[ignore = "TODO(phase-2-iterate-subgraph): GrantBackedPolicy IS wired for the static cap check, but the TOCTOU-window 100-iter batch semantics need (a) the `SubgraphSpec::iterate(n, ...)` builder (currently fails registration with RegistrationError), (b) a per-batch capability re-read at the ITERATE boundary inside the evaluator, and (c) `call_with_revocation_at` driving an actual mid-evaluation revocation. All three land in Phase 2."]
 fn compromise_1_toctou_window_bound_at_100_iter_batch() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
@@ -81,7 +81,7 @@ fn compromise_1_toctou_window_bound_at_100_iter_batch() {
 
 // Phase 1 compromise; remove when Phase 2 introduces option-B (existence-hiding) read semantics.
 #[test]
-#[ignore = "TODO(phase-2-grant-backed-policy): capability_policy_grant_backed() + register_crud_with_grants are Phase-1 no-ops; the option-A denial path depends on Phase-2 grant-backed policy. The written Compromise #2 section in SECURITY-POSTURE.md is the Phase-1 doc-side regression."]
+#[ignore = "TODO(phase-2-read-denial): GrantBackedPolicy IS wired for writes, but the READ denial path for `crud:<label>:get` (option-A: emit ON_DENIED + E_CAP_DENIED_READ instead of ON_OK/empty) requires the evaluator to call CapabilityPolicy::check_read at READ-primitive entry. Phase-1 ships the doc-side regression in SECURITY-POSTURE.md §Compromise #2 instead. Phase 2 wires the check."]
 fn compromise_2_ecapdenied_read_leaks_existence() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()

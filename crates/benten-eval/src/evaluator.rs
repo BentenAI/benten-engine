@@ -183,7 +183,7 @@ impl Evaluator {
             // mac+Linux the monotonic clock is typically 1–10ns granular, so
             // this only triggers on zero-work primitives.
             //
-            // TODO(R4b): document in `diag/trace.rs` that trace timing is NOT
+            // TODO(phase-2-trace-docs): document in `diag/trace.rs` that trace timing is NOT
             // included in any content-addressed hash; a trace artifact is an
             // observability output, not a deterministic-replay fixture.
             // Mini-review `g6-cr-11` / `g6-cr-12`.

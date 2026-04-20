@@ -25,15 +25,26 @@ use crate::CoreError;
 ///    may produce it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ErrorCode {
+    /// Registration-time: subgraph contains a cycle (invariant 1 violation).
     InvCycle,
+    /// Registration-time: subgraph exceeds configured max depth (invariant 2).
     InvDepthExceeded,
+    /// Registration-time: a node exceeds max fan-out (invariant 3).
     InvFanoutExceeded,
+    /// Registration-time: subgraph exceeds max total node count (invariant 5).
     InvTooManyNodes,
+    /// Registration-time: subgraph exceeds max total edge count (invariant 6).
     InvTooManyEdges,
+    /// Registration-time: determinism classification conflict (invariant 9).
     InvDeterminism,
+    /// Registration-time: computed content hash mismatch (invariant 10).
     InvContentHash,
+    /// Registration-time catch-all for invariants lacking a distinct code.
     InvRegistration,
+    /// Registration-time: nested `ITERATE` deeper than the policy allows
+    /// (a Phase-1 stopgap for invariant 8's nesting aspect).
     InvIterateNestDepth,
+    /// Registration-time: `ITERATE` node is missing its required `max` bound.
     InvIterateMaxMissing,
     /// Runtime cumulative-iteration-budget exhaustion.
     ///
@@ -44,27 +55,50 @@ pub enum ErrorCode {
     /// budget with multiplicative-through-CALL accounting but keeps this
     /// same code.
     InvIterateBudget,
+    /// Capability policy denied a write (generic `E_CAP_DENIED`).
     CapDenied,
+    /// Capability policy denied a READ (option-A existence leak, see
+    /// SECURITY-POSTURE.md §Compromise 2).
     CapDeniedRead,
     /// Phase 3 sync revocation code (distinct from `CapRevokedMidEval`).
     CapRevoked,
+    /// Mid-evaluation revocation surfaced at an ITERATE batch boundary.
     CapRevokedMidEval,
+    /// Capability backend returned `NotImplemented` (e.g. UCAN stub in Phase 1).
     CapNotImplemented,
+    /// Capability-chain attenuation failed across a CALL (outer grant does not
+    /// subsume callee requires).
     CapAttenuation,
+    /// Optimistic-concurrency write conflict at commit.
     WriteConflict,
+    /// Consumer read a View whose maintenance lag exceeds the freshness bound.
     IvmViewStale,
+    /// Transaction aborted (explicit rollback, or closure returned `Err`).
     TxAborted,
+    /// Nested transactions are not supported (redb constraint).
     NestedTransactionNotSupported,
+    /// Primitive not implemented at the evaluator (WAIT / STREAM / SUBSCRIBE /
+    /// SANDBOX in Phase 1).
     PrimitiveNotImplemented,
+    /// A user subgraph attempted to write a system-zone-labelled Node.
     SystemZoneWrite,
+    /// `Value::Float` rejected a NaN payload at canonical-bytes time.
     ValueFloatNan,
+    /// `Value::Float` rejected a `±Infinity` payload at canonical-bytes time.
     ValueFloatNonFinite,
+    /// Failed to parse a CID string (multicodec / multihash / base32).
     CidParse,
+    /// CID uses a multicodec Benten does not support (non-`dag-cbor`).
     CidUnsupportedCodec,
+    /// CID uses a multihash Benten does not support (non-BLAKE3).
     CidUnsupportedHash,
+    /// Version chain append detected a concurrent fork.
     VersionBranched,
+    /// Backend lookup miss (storage-layer not-found distinct from `NotFound`).
     BackendNotFound,
+    /// TRANSFORM expression failed to parse.
     TransformSyntax,
+    /// Input exceeded a configured size limit (property count, byte cap, …).
     InputLimit,
     /// Generic not-found (version-chain anchor miss, etc.).
     NotFound,

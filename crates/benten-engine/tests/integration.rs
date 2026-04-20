@@ -19,6 +19,7 @@ mod integration {
     pub mod nested_tx;
     pub mod stale_view;
     pub mod system_zone_integration;
+    pub mod trace_no_persist;
     pub mod tx_atomicity;
     pub mod version_current;
 }

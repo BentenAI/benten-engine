@@ -537,29 +537,15 @@ export class Engine {
         ? op.slice(crud.label.length + 1)
         : op;
 
-    // Apply the same createdAt stamping that `Engine.call` applies on
-    // `<label>:create` inputs. Without this, tracing a `post:create`
-    // persists a Node with a missing / malformed `createdAt` — which
-    // then mis-sorts in the `:list` View 3 output for the rest of the
-    // engine's lifetime. Keeping trace symmetric with call here is
-    // the minimum bar until Phase 2 adds a rolled-back trace tx.
-    let effectiveInput: JsonValue = input;
-    if (
-      crud &&
-      dispatchOp === "create" &&
-      typeof input === "object" &&
-      input !== null &&
-      !Array.isArray(input)
-    ) {
-      const obj = input as Record<string, JsonValue>;
-      if (obj.createdAt === undefined) {
-        effectiveInput = { ...obj, createdAt: crud.stampCreatedAt() };
-      }
-    }
-
+    // r6-dx-C4: `Engine::trace` on the Rust side now runs in
+    // "trace-mode" — buffered host writes are discarded rather than
+    // replayed, so tracing a `post:create` no longer persists a Node
+    // nor perturbs IVM. No createdAt pre-stamping is needed here; the
+    // walk-time fallback inside `subgraph_for_crud` keeps the View-3
+    // sort key valid for the synthetic trace outcome.
     let rawTrace: { steps: unknown[]; result?: unknown };
     try {
-      rawTrace = this.inner.trace(handlerId, dispatchOp, effectiveInput);
+      rawTrace = this.inner.trace(handlerId, dispatchOp, input);
     } catch (err) {
       throw mapNativeError(err);
     }

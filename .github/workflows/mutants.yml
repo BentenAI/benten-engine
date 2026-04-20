@@ -1,0 +1,87 @@
+name: mutants
+
+# cargo-mutants — mutation-testing baseline (R6-TA-4).
+#
+# Phase 1: INFORMATIONAL ONLY. Runs weekly + on-demand, uploads the
+# mutation report as an artifact, never fails the build. Phase 2 will gate
+# on a mutation-test-coverage threshold once we have a baseline distribution.
+#
+# Why informational: a full workspace mutant run can take hours on cold
+# runners, and Phase-1 test distribution is not yet optimized for mutation
+# score. Establishing the baseline first is the right sequence.
+
+on:
+  # Weekly on Sunday at 04:00 UTC — off the regular cadence so the long
+  # runtime doesn't queue behind normal PR validation.
+  schedule:
+    - cron: "0 4 * * 0"
+  # Manual dispatch so Ben can kick it ad-hoc after a large test change.
+  workflow_dispatch:
+
+concurrency:
+  group: mutants-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mutants:
+    name: cargo-mutants baseline
+    runs-on: ubuntu-latest
+    # Mutation runs are O(hours) on a cold runner; cap at 6h so a stuck
+    # run doesn't burn the monthly minutes budget.
+    timeout-minutes: 360
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + build
+        uses: Swatinem/rust-cache@v2
+        with:
+          # Separate cache key so the mutation run doesn't pollute the
+          # regular CI cache.
+          shared-key: "mutants"
+
+      - name: Install cargo-mutants
+        run: cargo install cargo-mutants --locked
+
+      # Per-mutant cap of 180s so an accidentally-infinite mutant (e.g.
+      # removing a loop bound) doesn't stall the whole job.
+      - name: Run cargo-mutants (informational)
+        id: mutants
+        continue-on-error: true
+        run: |
+          cargo mutants \
+            --workspace \
+            --timeout 180 \
+            --jobs 2 \
+            --no-shuffle \
+            --output ./mutants-out \
+            || echo "mutants exited non-zero — informational, not gating"
+
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutants-report
+          path: |
+            mutants-out/
+            !mutants-out/log/
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Summary (informational)
+        if: always()
+        run: |
+          echo "### cargo-mutants run complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "This job is **informational only** for Phase 1. Phase 2" >> "$GITHUB_STEP_SUMMARY"
+          echo "will introduce a mutation-coverage gate once the baseline" >> "$GITHUB_STEP_SUMMARY"
+          echo "distribution is known." >> "$GITHUB_STEP_SUMMARY"
+          if [ -f mutants-out/outcomes.json ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Outcomes JSON landed at \`mutants-out/outcomes.json\`." >> "$GITHUB_STEP_SUMMARY"
+          fi

@@ -36,6 +36,7 @@
 //! - UCAN verification + principal types (Phase 3, `benten-id`).
 
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 
 pub mod attenuation;
 pub mod error;

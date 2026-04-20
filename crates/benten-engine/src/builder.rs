@@ -76,7 +76,7 @@ impl EngineBuilder {
 
     /// Configure an explicit capability policy.
     ///
-    /// TODO(G8): napi v3 cannot serialize `Box<dyn CapabilityPolicy>` across
+    /// TODO(phase-2-policy-kind): napi v3 cannot serialize `Box<dyn CapabilityPolicy>` across
     /// the JS boundary. G8 will wrap this surface in a `PolicyKind` enum
     /// (`NoAuth | GrantBacked | Ucan(...) | Custom(Box<dyn...>)`) so the
     /// native-only `Custom` variant is gated behind

@@ -37,6 +37,11 @@
 //! paths like `benten_engine::Engine` stay stable.
 
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
+#![allow(
+    missing_docs,
+    reason = "TODO(phase-2-docs): benten-engine orchestrator exposes ~60 pub items across EngineBuilder, Engine, SubgraphSpec builder, Outcome/Trace response shapes, and EngineError variants. Crate-root + module-root docs land in R6 (see lib.rs / engine.rs / outcome.rs module headers); per-item sweep deferred to Phase-2 when the public surface is re-audited post-evaluator-completion and the SubgraphSpec DSL stabilises."
+)]
 #![allow(
     clippy::todo,
     reason = "Phase-1 scope: primitive-dispatch deliverables remain as typed todos until benten-eval's evaluator gains a PrimitiveHost trait (Phase 2)."

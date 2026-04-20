@@ -44,7 +44,7 @@ use benten_engine::testing::{counting_capability_policy, handler_with_read_write
 /// (e.g. refactor adds a WRITE) won't be re-audited. Per-primitive checking
 /// makes declaration ↔ execution drift observable.
 #[test]
-#[ignore = "TODO(phase-2-grant-backed-policy): per-primitive capability check + counting_capability_policy real handler + handler_with_read_write_read_sequence populated helper land in Phase 2 (per-op Invariant 13). When populated, assert delta == 3."]
+#[ignore = "TODO(phase-2-per-primitive-cap-check): GrantBackedPolicy IS wired for static check_write (delta=1 per call via the two-phase replay), but per-primitive enforcement (Invariant 13 — each READ/WRITE step invokes check individually, delta==3 for R-W-R) needs (a) `handler_with_read_write_read_sequence` populated subgraph, (b) evaluator invoking check_* per op step, not only at replay. Phase 2."]
 fn requires_checked_at_primitive_not_just_declaration() {
     let dir = tempfile::tempdir().unwrap();
     let policy = counting_capability_policy();

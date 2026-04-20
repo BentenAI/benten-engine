@@ -28,6 +28,7 @@
 //! Phase 1 is hand-written maintainers for five concrete views.
 
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 #![allow(
     clippy::todo,
     reason = "Phase 1 leaves some per-view methods as todo!() for later groups"
@@ -49,19 +50,19 @@ pub use view::{
 /// Algorithm B lands in Phase 2.
 pub const STUB_MARKER: &str = "benten-ivm::phase-1";
 
-// TODO(R4b): criterion benchmarks against RESULTS.md §1 targets — one target
-// per view (capability lookup, event dispatch, content listing, governance
-// traversal, version-current resolve). See mini-review g5-ivm-14.
+// TODO(phase-2-ivm-bench): criterion benchmarks against RESULTS.md §1 targets
+// — one target per view (capability lookup, event dispatch, content listing,
+// governance traversal, version-current resolve). See mini-review g5-ivm-14.
 //
-// TODO(R4b): integration test that exercises cascade-deletion correctness
-// (RESULTS.md §3). Construct a small graph, feed Create events through the
-// subscriber, then the cascade of Delete events, and assert every view
-// converges to empty. See mini-review g5-ivm-13.
+// TODO(phase-2-ivm-cascade): integration test that exercises cascade-deletion
+// correctness (RESULTS.md §3). Construct a small graph, feed Create events
+// through the subscriber, then the cascade of Delete events, and assert every
+// view converges to empty. See mini-review g5-ivm-13.
 //
-// TODO(R4b): 4 rebuild-equivalence tests in view1/2/3/5 are R3 defects —
-// they construct an empty rebuilt view and assert equality with a populated
-// incremental one. Fixing requires event-replay, beyond the fix-pass scope.
-// See mini-review g5-ivm-12.
+// TODO(phase-2-ivm-replay): 4 rebuild-equivalence tests in view1/2/3/5 are R3
+// defects — they construct an empty rebuilt view and assert equality with a
+// populated incremental one. Fixing requires event-replay, beyond the fix-
+// pass scope. See mini-review g5-ivm-12.
 // ---------------------------------------------------------------------------
 // The five Phase 1 views — each in its own submodule under `src/views/`.
 // Normalized to a proper `src/views/mod.rs` (see R-minor-12 / g5-cr-1).

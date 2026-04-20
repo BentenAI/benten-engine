@@ -43,8 +43,9 @@
 //! the commit's tx-id fetch observes the event; one registered afterwards
 //! does not. Panics inside a subscriber are caught and discarded; Phase 1
 //! has no dead-letter counter so repeated panics are invisible to operators
-//! — adding a counter (TODO(R4b) tracked in the chaos-engineer mini-review
-//! finding g3-ce-5) is pending the `tracing` dep landing on this crate.
+//! — adding a counter (TODO(phase-2-dead-letter) tracked in the
+//! chaos-engineer mini-review finding g3-ce-5) is pending the `tracing`
+//! dep landing on this crate.
 
 use std::sync::{Arc, Mutex};
 
@@ -564,7 +565,7 @@ impl<'a> Transaction<'a> {
 /// subscriber cannot poison the commit path. Emission happens after the
 /// redb commit has already returned success.
 ///
-/// TODO(R4b): a permanently-broken subscriber drifts invisibly today —
+/// TODO(phase-2-dead-letter): a permanently-broken subscriber drifts invisibly today —
 /// Phase 2 will land a dead-letter counter alongside a `tracing::warn!`
 /// once the tracing dep arrives on this crate (mini-review g3-ce-5).
 #[allow(

@@ -77,6 +77,11 @@ pub enum PendingOp {
     },
 }
 
+/// Context passed to [`CapabilityPolicy::check_write`].
+///
+/// Carries the pending-ops batch, the actor identity (Phase-3), and a
+/// privileged-flag for engine-internal writes. Backends inspect these to
+/// decide whether to authorize the transaction.
 #[derive(Debug, Clone, Default)]
 pub struct WriteContext {
     /// Label of the Node about to be written. For multi-op batches this
@@ -211,7 +216,7 @@ pub trait CapabilityPolicy: Send + Sync {
     /// widens the TOCTOU window. Keep in lockstep with the named compromise
     /// prose in `.addl/phase-1/r1-triage.md` if the default is ever
     /// adjusted.
-    // TODO(G6): honor wall-clock bound in addition to iteration count per
+    // TODO(phase-2-wallclock-toctou): honor wall-clock bound in addition to iteration count per
     // R4b compromise #1 tightening (auditor finding g4-p2-uc-2). A
     // TRANSFORM-heavy or CALL-heavy handler at 1 iter/10sec pushes past 10
     // minutes between refreshes under iteration-count alone; the first real
