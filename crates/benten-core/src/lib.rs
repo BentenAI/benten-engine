@@ -73,13 +73,13 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 
 pub mod edge;
-pub mod error_code;
 pub mod value;
 pub mod version;
 
 pub use edge::Edge;
-pub use error_code::ErrorCode;
 pub use value::Value;
+
+use benten_errors::ErrorCode;
 
 // ---------------------------------------------------------------------------
 // Multicodec / multihash constants
@@ -406,6 +406,23 @@ pub enum CoreError {
     /// Generic not-found error (version-chain anchor, etc.). **Phase 1 stub.**
     #[error("not found")]
     NotFound,
+}
+
+impl CoreError {
+    /// Map this [`CoreError`] variant to its stable ERROR-CATALOG code.
+    #[must_use]
+    pub fn code(&self) -> ErrorCode {
+        match self {
+            CoreError::FloatNan => ErrorCode::ValueFloatNan,
+            CoreError::FloatNonFinite => ErrorCode::ValueFloatNonFinite,
+            CoreError::CidParse(_) | CoreError::InvalidCid(_) => ErrorCode::CidParse,
+            CoreError::CidUnsupportedCodec => ErrorCode::CidUnsupportedCodec,
+            CoreError::CidUnsupportedHash => ErrorCode::CidUnsupportedHash,
+            CoreError::VersionBranched => ErrorCode::VersionBranched,
+            CoreError::Serialize(_) => ErrorCode::Serialize,
+            CoreError::NotFound => ErrorCode::NotFound,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

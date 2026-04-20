@@ -1,0 +1,19 @@
+[package]
+name = "benten-errors"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Stable error-catalog discriminants for the Benten graph engine. Root crate with zero deps on other workspace members."
+
+[lints]
+workspace = true
+
+[dependencies]
+# Intentionally no workspace dependencies — benten-errors sits at the
+# root of the crate graph so any crate can depend on it without pulling
+# benten-core or any other Benten surface. thiserror et al. belong in
+# the consumers; this crate exposes a plain enum + string accessors only.
+

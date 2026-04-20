@@ -11,9 +11,9 @@
 // asserts the generated file is in sync with both the catalog and the
 // Rust enum.
 //
-// The Rust enum at `crates/benten-core/src/error_code.rs` is ALREADY
-// hand-authored (and R5 crates depend on its exact shape). We deliberately
-// DO NOT regenerate it — the drift detector's job is to surface
+// The Rust enum at `crates/benten-errors/src/lib.rs` is ALREADY
+// hand-authored (and every workspace crate depends on its exact shape).
+// We deliberately DO NOT regenerate it — the drift detector's job is to surface
 // divergence so a human reconciles it. Mechanical regeneration of both
 // sides defeats the purpose of the detector. (The G8-C brief lists the
 // Rust output as "optionally" generated; we take "no" here.)
@@ -113,7 +113,7 @@ function generateTs(entries: CatalogEntry[]): string {
 // exposes them as instance properties so \`err.code\` / \`err.fixHint\`
 // work on any thrown instance. The drift-detect script asserts this
 // file stays in sync with the catalog and the Rust \`ErrorCode\` enum
-// at \`crates/benten-core/src/error_code.rs\`.
+// at \`crates/benten-errors/src/lib.rs\`.
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 

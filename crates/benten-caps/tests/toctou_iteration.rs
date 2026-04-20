@@ -26,9 +26,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_core::ErrorCode;
 use benten_engine::Engine;
 use benten_engine::testing::iterate_write_handler;
+use benten_errors::ErrorCode;
 
 /// Batch boundary size is configurable per grant; this default matches the
 /// R1-triage documented value (100 iterations). Imported from

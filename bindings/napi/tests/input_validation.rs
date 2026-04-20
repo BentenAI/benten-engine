@@ -39,7 +39,7 @@
 #![cfg(feature = "in-process-test")]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_core::ErrorCode;
+use benten_errors::ErrorCode;
 use benten_napi::testing::{
     deserialize_cid_from_js_like, deserialize_value_from_js_like, make_cbor_bomb, make_deep_list,
     make_giant_bytes, make_giant_map,

@@ -5,7 +5,7 @@
 //
 // Compares three sources of truth for the error catalog:
 //   1. `docs/ERROR-CATALOG.md` — `### E_XXX` headings.
-//   2. `crates/benten-core/src/error_code.rs` — `ErrorCode` enum + its
+//   2. `crates/benten-errors/src/lib.rs` — `ErrorCode` enum + its
 //      `as_str` match arms.
 //   3. `packages/engine/src/errors.generated.ts` (or `errors.ts` if the
 //      hand-authored variant exists) — exported BentenError subclasses.
@@ -29,7 +29,7 @@ const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, "..");
 
 const CATALOG_PATH = resolve(REPO_ROOT, "docs/ERROR-CATALOG.md");
-const RUST_PATH = resolve(REPO_ROOT, "crates/benten-core/src/error_code.rs");
+const RUST_PATH = resolve(REPO_ROOT, "crates/benten-errors/src/lib.rs");
 const TS_GEN_PATH = resolve(REPO_ROOT, "packages/engine/src/errors.generated.ts");
 const TS_HAND_PATH = resolve(REPO_ROOT, "packages/engine/src/errors.ts");
 

@@ -29,7 +29,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_caps::{CapError, CapabilityPolicy, UcanBackend, WriteContext};
-use benten_core::ErrorCode;
+use benten_errors::ErrorCode;
 
 /// The operator-hostile baseline: UcanBackend must cleanly error, not panic.
 #[test]

@@ -1,7 +1,7 @@
 name: Error Catalog Drift Detector (T7)
 
 # Phase 1 R3 security harness. Fails if `docs/ERROR-CATALOG.md`, the Rust
-# `ErrorCode` enum at `crates/benten-core/src/error_code.rs`, and the
+# `ErrorCode` enum at `crates/benten-errors/src/lib.rs`, and the
 # generated TS types at `packages/engine/src/errors.ts` diverge.
 #
 # The detector is bidirectional: a variant present in any one source but
@@ -10,9 +10,10 @@ name: Error Catalog Drift Detector (T7)
 #
 #   - CI status check is REQUIRED on every PR (blocking merge).
 #   - The unknown-code runtime fallback (`ErrorCode::Unknown(String)`) is
-#     tested separately in `crates/benten-core/tests/error_codes.rs`; the
-#     drift-detector's own failure mode is tested here by running it against
-#     a deliberately-missing-variant fixture in `test-drift-detector-fails`.
+#     tested separately in `crates/benten-errors/tests/stable_shape.rs` and
+#     `crates/benten-core/tests/error_codes.rs`; the drift-detector's own
+#     failure mode is tested here by running it against a deliberately-
+#     missing-variant fixture in `test-drift-detector-fails`.
 #
 # Cross-refs:
 #   - .addl/phase-1/r1-security-auditor.json finding #11

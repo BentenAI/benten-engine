@@ -2,6 +2,7 @@
 resolver = "3"
 
 members = [
+    "crates/benten-errors",   # Stable error-catalog discriminants (ErrorCode enum); root crate, zero workspace deps
     "crates/benten-core",     # Node, Edge, Value, content hashing, version chains
     "crates/benten-graph",    # Storage (KVBackend trait + redb impl), indexes, MVCC
     "crates/benten-ivm",      # IVM (Algorithm B) — subscribes to graph changes (STUB)
@@ -186,6 +187,9 @@ byte_char_slices = "allow"
 field_reassign_with_default = "allow"
 
 [workspace.dependencies]
+# Internal workspace crates
+benten-errors = { path = "crates/benten-errors" }
+
 # Core engine
 blake3 = { version = "1.8", default-features = false }
 serde = { version = "1", default-features = false, features = ["derive", "alloc"] }

@@ -16,7 +16,7 @@
 //!
 //! Per option A (R1 triage named compromise #2), a READ denied for
 //! capability reasons routes via `ON_DENIED` with
-//! [`ErrorCode::CapDeniedRead`](benten_core::ErrorCode::CapDeniedRead) — a
+//! [`ErrorCode::CapDeniedRead`](benten_errors::ErrorCode::CapDeniedRead) — a
 //! code distinct from `E_NOT_FOUND`. Phase-1 leaves the capability
 //! consultation to the engine layer (`Engine::call`); the test contract
 //! for that path lives in `tests/read_denial.rs` and lands once G7 wires

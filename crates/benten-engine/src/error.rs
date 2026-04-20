@@ -7,7 +7,7 @@
 
 use benten_caps::CapError;
 use benten_core::CoreError;
-pub use benten_core::ErrorCode;
+pub use benten_errors::ErrorCode;
 use benten_eval::RegistrationError;
 use benten_graph::GraphError;
 

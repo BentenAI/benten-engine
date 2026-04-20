@@ -18,7 +18,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use benten_caps::{CapError, CapabilityPolicy, GrantBackedPolicy, GrantReader, NoAuthBackend};
-use benten_core::{ErrorCode, Value};
+use benten_core::Value;
+use benten_errors::ErrorCode;
 use benten_graph::{ChangeSubscriber, RedbBackend};
 
 use crate::change::ChangeBroadcast;

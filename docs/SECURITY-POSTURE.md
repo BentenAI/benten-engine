@@ -96,17 +96,34 @@ GrantReader + a populated `iterate_write_handler` fixture.
 
 ---
 
-### Compromise #3 — `ErrorCode` enum lives in `benten-core`
+### Compromise #3 — `ErrorCode` enum lives in `benten-core` — CLOSED
 
-The canonical catalog enum [`ErrorCode`](../crates/benten-core/src/error_code.rs) lives in `benten-core` instead of a dedicated `benten-errors` crate.
+Originally open: the canonical catalog enum `ErrorCode` lived in `benten-core`
+instead of a dedicated `benten-errors` crate, which forced every workspace crate
+that only needed the stable string identifiers to carry a `benten-core`
+dependency edge.
 
-**Why:** every crate in the workspace maps its own error variants to `ErrorCode::<Variant>` via a `.code()` accessor. Putting the enum in `benten-core` avoids a crate-graph node for what is effectively a namespaced constant table. A dedicated crate was considered at R1 and deferred — the argument for extracting it is crate-graph purity, not a security or correctness property.
+**Closure (2026-04-17).** `ErrorCode` (plus `as_str` / `as_static_str` /
+`from_str`) extracted to a new [`benten-errors`](../crates/benten-errors/src/lib.rs)
+root crate with zero workspace dependencies. Every workspace crate now
+depends directly on `benten-errors` for the catalog; `benten-core` keeps its
+own `CoreError::code()` mapping but is no longer the source of truth for the
+enum itself. The drift-detector (`scripts/drift-detect.ts`) reads the enum
+from its new home; the codegen script's comment is updated to match.
 
-**Posture claim:** the `ErrorCode` string forms (`"E_CAP_DENIED"`, `"E_INV_CYCLE"`, …) are **frozen**. Drift between this enum and `docs/ERROR-CATALOG.md` is detected by a G8 lint run in CI. Adding a variant requires (a) the enum entry, (b) a catalog doc entry, (c) the `.code()` mapping.
+**Posture claim (unchanged):** the `ErrorCode` string forms (`"E_CAP_DENIED"`,
+`"E_INV_CYCLE"`, …) remain **frozen**. Drift between this enum and
+`docs/ERROR-CATALOG.md` is detected by the drift lint in CI. Adding a
+variant requires (a) the enum entry, (b) a catalog doc entry, (c) the
+`.code()` mapping in the owning crate.
 
-**Phase-2 revisit:** if an additional Benten crate outside this workspace needs to import the enum without pulling `benten-core`, extract to `benten-errors`. Until then, the compromise is purely structural.
-
-**Regression test:** `compromise_3_error_code_enum_in_benten_core` in `crates/benten-engine/tests/integration/compromises_regression.rs` pins the type path via `std::any::type_name`.
+**Regression test:** `compromise_3_error_code_enum_in_benten_errors` in
+`crates/benten-engine/tests/integration/compromises_regression.rs` pins
+the type path via `std::any::type_name` (the assertion now requires
+`benten_errors::` — any accidental re-introduction of an `ErrorCode` back
+in `benten_core` fails the test). A second pin lives in
+`crates/benten-errors/tests/stable_shape.rs` which counts variants and
+round-trips the catalog-code strings through `as_str` / `from_str`.
 
 ---
 

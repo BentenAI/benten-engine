@@ -1,28 +1,46 @@
-//! Stable error-catalog discriminants ([`ErrorCode`]) + the
-//! [`CoreError::code`](crate::CoreError::code) mapping.
+//! # benten-errors
 //!
-//! Every [`CoreError`], `GraphError`, `CapError`, and
-//! `EngineError` variant maps to one of these via a `.code()` method so the TS
-//! layer sees a stable identifier on every error. The string forms
-//! (`"E_VALUE_FLOAT_NAN"` etc.) are frozen — drift between this enum and
-//! `docs/ERROR-CATALOG.md` is detected by a G8 lint.
+//! Stable error-catalog discriminants for the Benten graph engine.
+//!
+//! This crate sits at the root of the workspace dependency graph: it has zero
+//! dependencies on other Benten crates. Every other crate (`benten-core`,
+//! `benten-graph`, `benten-caps`, `benten-ivm`, `benten-eval`, `benten-engine`,
+//! the napi bindings) imports [`ErrorCode`] from here and maps its own
+//! error variants to the stable catalog codes via a `.code()` accessor.
+//!
+//! Extracted from `benten-core::error_code` in Phase 1 (closes SECURITY-POSTURE
+//! compromise #3) so the catalog enum no longer forces a `benten-core` edge on
+//! any crate that only needs the stable string identifiers.
+//!
+//! ## Stability contract
+//!
+//! The string forms returned by [`ErrorCode::as_str`] (`"E_VALUE_FLOAT_NAN"`,
+//! `"E_CAP_DENIED"`, …) are **frozen**. Drift between this enum and
+//! `docs/ERROR-CATALOG.md` is detected by the G8 drift lint
+//! (`scripts/drift-detect.ts`).
+//!
+//! Adding a variant requires:
+//! 1. Append a `match` arm in [`ErrorCode::as_str`], [`ErrorCode::as_static_str`],
+//!    and [`ErrorCode::from_str`].
+//! 2. Reserve the code in the catalog doc.
+//! 3. Update any `.code()` mapper in the owning crate that may produce it.
 //!
 //! [`ErrorCode::from_str`] round-trips [`ErrorCode::as_str`] for every known
 //! variant and returns [`ErrorCode::Unknown`] for unrecognized codes so a
 //! future server emitting a newer code doesn't crash an older client.
 
-use alloc::string::{String, ToString};
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
+#![no_std]
 
-use crate::CoreError;
+extern crate alloc;
+
+use alloc::string::{String, ToString};
 
 /// Stable error-catalog discriminants.
 ///
-/// The set mirrors `docs/ERROR-CATALOG.md`. Adding a variant requires:
-/// 1. Append a `match` arm in both [`ErrorCode::as_str`] and
-///    [`ErrorCode::from_str`].
-/// 2. Reserve the code in the catalog doc.
-/// 3. Update any [`CoreError::code`](crate::CoreError::code)-style mappers that
-///    may produce it.
+/// The set mirrors `docs/ERROR-CATALOG.md`. See the crate-level docs for the
+/// adding-a-variant checklist.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ErrorCode {
     /// Registration-time: subgraph contains a cycle (invariant 1 violation).
@@ -49,7 +67,7 @@ pub enum ErrorCode {
     /// Runtime cumulative-iteration-budget exhaustion.
     ///
     /// Phase 1 surfaces this when the iterative evaluator's per-run step
-    /// counter reaches `DEFAULT_ITERATION_BUDGET`. Distinct from
+    /// counter reaches the default iteration budget. Distinct from
     /// [`ErrorCode::InvIterateNestDepth`] (registration-time stopgap for
     /// invariant 8's nesting-depth aspect). Phase 2 replaces the scalar
     /// budget with multiplicative-through-CALL accounting but keeps this
@@ -114,7 +132,7 @@ pub enum ErrorCode {
     /// DAG-CBOR serialization failure at the hash path (e.g. encoder
     /// integer-overflow). Distinct from the catalog's registration-time
     /// invariants; the payload is a human-readable message held on the
-    /// corresponding [`CoreError::Serialize`] variant.
+    /// corresponding `CoreError::Serialize` variant.
     Serialize,
     /// Handler id already registered with different content (engine-layer).
     DuplicateHandler,
@@ -305,23 +323,6 @@ impl ErrorCode {
             "E_IVM_PATTERN_MISMATCH" => ErrorCode::IvmPatternMismatch,
             "E_VERSION_UNKNOWN_PRIOR" => ErrorCode::VersionUnknownPrior,
             other => ErrorCode::Unknown(other.to_string()),
-        }
-    }
-}
-
-impl CoreError {
-    /// Map this [`CoreError`] variant to its stable ERROR-CATALOG code.
-    #[must_use]
-    pub fn code(&self) -> ErrorCode {
-        match self {
-            CoreError::FloatNan => ErrorCode::ValueFloatNan,
-            CoreError::FloatNonFinite => ErrorCode::ValueFloatNonFinite,
-            CoreError::CidParse(_) | CoreError::InvalidCid(_) => ErrorCode::CidParse,
-            CoreError::CidUnsupportedCodec => ErrorCode::CidUnsupportedCodec,
-            CoreError::CidUnsupportedHash => ErrorCode::CidUnsupportedHash,
-            CoreError::VersionBranched => ErrorCode::VersionBranched,
-            CoreError::Serialize(_) => ErrorCode::Serialize,
-            CoreError::NotFound => ErrorCode::NotFound,
         }
     }
 }

@@ -27,12 +27,12 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_core::ErrorCode;
 use benten_engine::Engine;
 use benten_engine::testing::{
     handler_declaring_read_but_writing_admin, handler_with_call_attenuation_escalation,
     policy_with_grants,
 };
+use benten_errors::ErrorCode;
 
 /// The canonical attack: handler declares `requires: "post:read"` but its
 /// operation subgraph contains a `WRITE` primitive targeting `admin:*`. The

@@ -15,7 +15,7 @@
 #![allow(clippy::unwrap_used)]
 
 use benten_caps::{CapError, CapabilityPolicy, GrantScope, NoAuthBackend, WriteContext};
-use benten_core::ErrorCode;
+use benten_errors::ErrorCode;
 
 #[test]
 fn chained_call_exceeding_parent_caps_fires_attenuation() {

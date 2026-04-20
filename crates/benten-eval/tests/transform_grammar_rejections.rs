@@ -24,7 +24,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_core::ErrorCode;
+use benten_errors::ErrorCode;
 use benten_eval::transform::{TransformParseError, parse_transform};
 
 /// Assert that `expr` is rejected with `E_TRANSFORM_SYNTAX`. The expected

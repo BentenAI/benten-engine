@@ -13,7 +13,8 @@
 
 #![allow(clippy::unwrap_used)]
 
-use benten_core::{CoreError, ErrorCode, Node, Value};
+use benten_core::{CoreError, Node, Value};
+use benten_errors::ErrorCode;
 use std::collections::BTreeMap;
 
 fn node_with_float(f: f64) -> Node {

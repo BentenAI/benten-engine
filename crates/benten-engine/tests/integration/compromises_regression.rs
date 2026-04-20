@@ -127,16 +127,17 @@ fn compromise_2_ecapdenied_read_leaks_existence() {
     );
 }
 
-// Phase 1 compromise; remove when Phase 2 extracts ErrorCode into its own crate.
+// Compromise #3 CLOSED (Phase 1): the canonical ErrorCode enum was extracted
+// from benten_core into a dedicated `benten_errors` root crate. This test now
+// pins the new home so any accidental re-introduction of an `ErrorCode` type in
+// benten_core (or any other crate) surfaces as a CI failure.
 #[test]
-fn compromise_3_error_code_enum_in_benten_core() {
-    // Regression marker: the canonical ErrorCode enum lives in benten_core,
-    // not in a dedicated crate. Verify by importing from benten_core directly.
-    let _code = benten_core::ErrorCode::from_str("E_CAP_DENIED");
-    let type_name = std::any::type_name::<benten_core::ErrorCode>();
+fn compromise_3_error_code_enum_in_benten_errors() {
+    let _code = benten_errors::ErrorCode::from_str("E_CAP_DENIED");
+    let type_name = std::any::type_name::<benten_errors::ErrorCode>();
     assert!(
-        type_name.starts_with("benten_core::"),
-        "ErrorCode must live in benten_core crate (Phase 2 may extract); got {type_name}"
+        type_name.starts_with("benten_errors::"),
+        "ErrorCode must live in benten_errors crate (compromise #3 closed); got {type_name}"
     );
 }
 

@@ -89,7 +89,7 @@ const _BENTEN_IVM_MARKER: &str = benten_ivm::STUB_MARKER;
 // R6 Wave 2 split.
 // ---------------------------------------------------------------------------
 
-pub use benten_core::ErrorCode;
+pub use benten_errors::ErrorCode;
 pub use benten_eval::PrimitiveKind;
 
 pub use builder::EngineBuilder;
