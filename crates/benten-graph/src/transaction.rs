@@ -56,10 +56,10 @@ use redb::{Durability, ReadableMultimapTable, ReadableTable};
 
 use crate::GraphError;
 use crate::indexes::{LABEL_INDEX_TABLE, PROP_INDEX_TABLE, property_index_key, value_index_bytes};
-use crate::redb_backend::NODES_TABLE;
+use crate::redb_backend::{NODES_TABLE, next_prefix};
 use crate::store::{
-    ChangeEvent, ChangeKind, ChangeSubscriber, edge_key, edge_src_index_key, edge_tgt_index_key,
-    node_key,
+    ChangeEvent, ChangeKind, ChangeSubscriber, EDGE_SRC_PREFIX, EDGE_TGT_PREFIX, edge_key,
+    edge_src_index_key, edge_src_index_prefix, edge_tgt_index_key, edge_tgt_index_prefix, node_key,
 };
 
 /// A pending write inside the transaction's batch. Mirrors `benten_caps::PendingOp`
@@ -419,6 +419,21 @@ impl<'a> Transaction<'a> {
     /// Label-filtered subscribers (IVM views, CDC consumers) therefore see
     /// delete events on the same routing API as puts.
     ///
+    /// ## Cascade edge delete (r6b-ivm-1)
+    ///
+    /// Every Edge whose `source` or `target` is `cid` is deleted in the
+    /// same transaction **before** the Node body itself, and each cascaded
+    /// edge removal emits a [`PendingOp::DeleteEdge`] so downstream IVM
+    /// views see a `ChangeKind::EdgeDeleted` event per dangling edge. The
+    /// prior implementation dropped the Node alone, leaving the edges
+    /// pointing at a non-existent CID — the prototype bug the R5 MUST
+    /// clause explicitly forbids regressing, and the one that corrupts the
+    /// governance-inheritance / version-chain views on cascade.
+    ///
+    /// Edges whose source AND target are both `cid` (self-loops) are
+    /// deleted exactly once — a `BTreeSet` dedupes the union of the two
+    /// index scans.
+    ///
     /// # Errors
     /// Propagates decode or redb failures. Previously the decode error was
     /// silently `.ok()`-dropped; that concealed on-disk corruption (a
@@ -435,6 +450,23 @@ impl<'a> Transaction<'a> {
         // them into `benten_caps::PendingOp::DeleteNode` for capability-
         // policy scope derivation (r6-sec-8). An idempotent-miss delete
         // returns an empty vec.
+
+        // r6b-ivm-1 — cascade edge delete. Collect every Edge CID whose
+        // source or target is this Node, then call `delete_edge` on each
+        // (within the same txn) so the index + body removals stay atomic
+        // with the Node delete. Must run BEFORE the Node body removal so a
+        // concurrent read inside the same txn can still decode the Node if
+        // needed (edge delete doesn't touch the Node body, but the ordering
+        // matches the "logical delete order" a cascade implies).
+        let cascaded_edge_cids = self.collect_edges_referencing(cid)?;
+        for edge_cid in &cascaded_edge_cids {
+            // `delete_edge` is idempotent; if two scans both picked it up
+            // (self-loop on the same node → appears in both es: and et:
+            // ranges) the BTreeSet above already deduped, but even a stray
+            // double-call wouldn't error.
+            self.delete_edge(edge_cid)?;
+        }
+
         let n_key = node_key(cid);
         let txn = self
             .inner
@@ -485,6 +517,45 @@ impl<'a> Transaction<'a> {
             node: existing,
         });
         Ok(labels)
+    }
+
+    /// Collect every Edge CID that references `node_cid` as source or
+    /// target, scanning the `es:` and `et:` prefix indexes inside the
+    /// current write transaction. Order is ascending by CID (BTreeSet
+    /// iteration order); deduplicated across the two scans so a self-loop
+    /// only surfaces once.
+    ///
+    /// Uses the same `NODES_TABLE` the edge put/delete paths use for index
+    /// storage — a single range scan per prefix.
+    fn collect_edges_referencing(
+        &mut self,
+        node_cid: &Cid,
+    ) -> Result<std::collections::BTreeSet<Cid>, GraphError> {
+        let src_prefix = edge_src_index_prefix(node_cid);
+        let tgt_prefix = edge_tgt_index_prefix(node_cid);
+        let txn = self.inner.as_mut().ok_or_else(|| {
+            GraphError::Redb("collect_edges_referencing after commit/abort".into())
+        })?;
+        let mut out: std::collections::BTreeSet<Cid> = std::collections::BTreeSet::new();
+        let table = txn.open_table(NODES_TABLE)?;
+
+        // Scan the `es:` index for edges whose source is node_cid.
+        scan_edge_index(
+            &table,
+            &src_prefix,
+            EDGE_SRC_PREFIX.len(),
+            node_cid,
+            &mut out,
+        )?;
+        // Scan the `et:` index for edges whose target is node_cid.
+        scan_edge_index(
+            &table,
+            &tgt_prefix,
+            EDGE_TGT_PREFIX.len(),
+            node_cid,
+            &mut out,
+        )?;
+        Ok(out)
     }
 
     /// Delete an Edge by CID. Idempotent. Captures the Edge's label
@@ -558,6 +629,45 @@ impl<'a> Transaction<'a> {
         }
         Ok(std::mem::take(&mut self.pending))
     }
+}
+
+/// Bounded range-scan over the `NODES_TABLE` for an `es:`/`et:` index
+/// prefix, extracting the edge CID suffix from each matching key and
+/// inserting it into `out`. Used by cascade-delete to discover every edge
+/// whose endpoint is the Node being deleted.
+///
+/// `prefix_len` is the length of the index-prefix header (`es:` / `et:`
+/// bytes) PLUS the source/target CID the prefix encodes — everything after
+/// that offset is the edge's own CID. A malformed entry (key shorter than
+/// the expected prefix, or an un-parseable CID suffix) is skipped silently;
+/// on-disk corruption at the index level manifests as a missed cascade
+/// rather than an aborted delete, which is the same degradation model the
+/// rest of the scan paths use.
+fn scan_edge_index(
+    table: &redb::Table<'_, &[u8], &[u8]>,
+    prefix: &[u8],
+    prefix_len: usize,
+    endpoint_cid: &Cid,
+    out: &mut std::collections::BTreeSet<Cid>,
+) -> Result<(), GraphError> {
+    let full_header_len = prefix_len + endpoint_cid.as_bytes().len();
+    let next = next_prefix(prefix);
+    let iter = match next.as_deref() {
+        Some(upper) => table.range::<&[u8]>(prefix..upper)?,
+        None => table.range::<&[u8]>(prefix..)?,
+    };
+    for item in iter {
+        let (k, _v) = item?;
+        let key = k.value();
+        let Some(edge_cid_bytes) = key.get(full_header_len..) else {
+            continue;
+        };
+        let Ok(edge_cid) = Cid::from_bytes(edge_cid_bytes) else {
+            continue;
+        };
+        out.insert(edge_cid);
+    }
+    Ok(())
 }
 
 /// Fan a change-event batch out to every registered subscriber. Panics in

@@ -1,6 +1,7 @@
 //! [`CapabilityGrant`] — the typed grant Node.
 //!
-//! A grant is a plain [`benten_core::Node`] with label `"CapabilityGrant"`
+//! A grant is a plain [`benten_core::Node`] with label
+//! `"system:CapabilityGrant"` (namespaced — see [`CAPABILITY_GRANT_LABEL`])
 //! and a small, fixed property schema. Being a Node means the grant is
 //! content-addressed like every other graph entity: two grants with
 //! byte-identical content share a CID; a one-byte difference produces a
@@ -30,7 +31,17 @@ pub const GRANTED_TO_LABEL: &str = "GRANTED_TO";
 pub const REVOKED_AT_LABEL: &str = "REVOKED_AT";
 
 /// Node label applied to every [`CapabilityGrant`].
-pub const CAPABILITY_GRANT_LABEL: &str = "CapabilityGrant";
+///
+/// The `"system:"` prefix is load-bearing: capability grants are engine-
+/// internal state, written exclusively through the privileged engine path
+/// (`Engine::grant_capability`), and matched on the system-zone label by
+/// the `BackendGrantReader` and by IVM View 1 (`capability_grants`).
+/// Earlier drafts used the unqualified `"CapabilityGrant"` label; the
+/// namespace mismatch meant the `GrantReader` (privileged-side) and View 1
+/// (unqualified-side) looked at different Node sets — a silent drift that
+/// r6b-ivm-2 flagged. Aligning on `"system:CapabilityGrant"` everywhere
+/// makes the three write/read paths match by construction.
+pub const CAPABILITY_GRANT_LABEL: &str = "system:CapabilityGrant";
 
 /// A typed, validated capability-scope string.
 ///
@@ -146,9 +157,10 @@ impl CapabilityGrant {
     }
 
     /// Produce the graph representation of this grant: a [`Node`] with
-    /// label `"CapabilityGrant"` and the four struct fields flattened into
-    /// properties. Being a Node means the grant participates in
-    /// content-addressing like any other graph entity.
+    /// label `"system:CapabilityGrant"` (the namespaced
+    /// [`CAPABILITY_GRANT_LABEL`] constant) and the four struct fields
+    /// flattened into properties. Being a Node means the grant
+    /// participates in content-addressing like any other graph entity.
     ///
     /// Properties emitted:
     /// - `"grantee"` — [`Value::Bytes`] of the grantee CID's raw bytes.

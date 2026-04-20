@@ -92,6 +92,40 @@ pub enum EvalError {
     /// `EngineError`.
     #[error("backend: {0}")]
     Backend(String),
+
+    /// An operation on the `PrimitiveHost` boundary is not yet supported by
+    /// any Phase-1 replay path (r6b-ce-2). Distinct from
+    /// `PrimitiveNotImplemented` (which names a structural primitive that
+    /// the evaluator cannot execute) — `Unsupported` names a host-boundary
+    /// method whose backing replay is not yet wired. Maps to
+    /// `E_NOT_IMPLEMENTED` at the catalog layer so TS callers get the same
+    /// stable code used elsewhere for deferred surfaces.
+    #[error("unsupported host operation: {operation}")]
+    Unsupported {
+        /// Name of the unsupported operation, e.g. `"put_edge"`.
+        operation: String,
+    },
+
+    /// Typed pass-through of an engine-side "unknown view" rejection
+    /// (r6b-err-1). Carried so the origin catalog code
+    /// (`ErrorCode::UnknownView`) survives the `PrimitiveHost::read_view`
+    /// boundary; previously this collapsed into an opaque
+    /// `EvalError::Backend(String)` with a debug-formatted payload.
+    #[error("unknown view: {0}")]
+    UnknownView(String),
+
+    /// Typed pass-through of an engine-side "IVM view stale" rejection.
+    /// Carried so `ErrorCode::IvmViewStale` survives the
+    /// `PrimitiveHost::read_view` boundary (r6b-err-1).
+    #[error("IVM view stale: {0}")]
+    IvmViewStale(String),
+
+    /// Typed pass-through of an engine-side "subsystem disabled"
+    /// rejection — the thin-engine honest-no (`without_ivm`,
+    /// `without_caps`). Carried so `ErrorCode::SubsystemDisabled` survives
+    /// the host-boundary (r6b-err-1).
+    #[error("subsystem disabled: {0}")]
+    SubsystemDisabled(String),
 }
 
 impl EvalError {
@@ -112,7 +146,15 @@ impl EvalError {
             // catalog identifier survives the round-trip.
             EvalError::Graph(e) => e.code(),
             EvalError::Core(e) => e.code(),
+            // r6b-err-3: both `EvalError::Backend` and the engine-side
+            // `eval_error_to_engine_error` now spell the stable string the
+            // same way — the prior `E_BACKEND` / `E_EVAL_BACKEND` split
+            // gave one conceptual state two catalog identifiers.
             EvalError::Backend(_) => ErrorCode::Unknown(String::from("E_EVAL_BACKEND")),
+            EvalError::Unsupported { .. } => ErrorCode::NotImplemented,
+            EvalError::UnknownView(_) => ErrorCode::UnknownView,
+            EvalError::IvmViewStale(_) => ErrorCode::IvmViewStale,
+            EvalError::SubsystemDisabled(_) => ErrorCode::SubsystemDisabled,
         }
     }
 }
