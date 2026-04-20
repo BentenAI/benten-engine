@@ -95,6 +95,28 @@ await engine.callAs(handler.id, "post:create", { title: "x" }, "alice");
 
 The engine ships with `PolicyKind.NoAuth` by default (every call permitted); swap in `PolicyKind.GrantBacked` when you want the revocation-aware Phase-1 policy. UCAN backends land in Phase 3.
 
+## Diagnosing denied reads (Option C)
+
+Under the grant-backed policy, a denied read returns `null` from `engine.getNode(cid)` — byte-identical with a genuine miss. That's the Phase-1 posture for named compromise #2 (see `docs/SECURITY-POSTURE.md`): an unauthorised caller cannot fish existence out of the CID space.
+
+If you're the operator and need to tell "denied" apart from "not found" (to debug a missing grant, say), grant yourself the `debug:read` capability and use `engine.diagnoseRead`:
+
+```typescript
+await engine.grantCapability({ actor: "alice", scope: "store:debug:read" });
+
+const info = await engine.diagnoseRead(cid);
+// { cid, existsInBackend: boolean, deniedByPolicy: string | null, notFound: boolean }
+if (info.notFound) {
+  console.log("never written (or deleted)");
+} else if (info.deniedByPolicy) {
+  console.log(`exists, missing grant for ${info.deniedByPolicy}`);
+} else {
+  console.log("exists and is readable");
+}
+```
+
+Without `store:debug:read`, `diagnoseRead` throws `E_CAP_DENIED` — so ordinary callers still cannot distinguish the two cases. Under `PolicyKind.NoAuth` the method is open (matches the embedded / single-user trust model).
+
 ## Viewing your operation subgraph
 
 Benten's handlers are subgraphs you can inspect:

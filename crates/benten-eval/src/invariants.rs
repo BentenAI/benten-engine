@@ -32,8 +32,9 @@
 use benten_core::{CoreError, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+use crate::expr::parser;
 use crate::{
-    InvariantConfig, InvariantViolation, NodeHandle, OperationNode, PrimitiveKind,
+    EvalError, InvariantConfig, InvariantViolation, NodeHandle, OperationNode, PrimitiveKind,
     RegistrationError, Subgraph, SubgraphSnapshot,
 };
 
@@ -50,6 +51,31 @@ use crate::{
 /// Returns a [`RegistrationError`] carrying the first invariant violation
 /// encountered. `aggregate=true` runs every check and reports all failures
 /// via [`InvariantViolation::Registration`]-style context.
+/// Parse every TRANSFORM operation-node's `expr` property at registration
+/// time. 5d-J workstream 3: gives the fail-fast guarantee that an
+/// unparseable expression surfaces at `register_subgraph` rather than
+/// waiting for `engine.call` to trip the parser mid-dispatch.
+///
+/// # Errors
+///
+/// Returns [`EvalError::TransformSyntax`] carrying the parser's diagnostic
+/// message when any TRANSFORM node fails to parse.
+pub fn validate_transform_expressions(sg: &Subgraph) -> Result<(), EvalError> {
+    for node in &sg.nodes {
+        if !matches!(node.kind, PrimitiveKind::Transform) {
+            continue;
+        }
+        let Some(Value::Text(src)) = node.properties.get("expr") else {
+            // Missing `expr` is a runtime `ON_ERROR` (route) rather than a
+            // hard registration reject — a TRANSFORM node without an expr
+            // is legal but useless. Runtime path handles it.
+            continue;
+        };
+        parser::parse(src).map_err(|e| EvalError::TransformSyntax(e.message))?;
+    }
+    Ok(())
+}
+
 pub fn validate_subgraph(
     sg: &Subgraph,
     config: &InvariantConfig,
@@ -134,19 +160,26 @@ pub fn validate_subgraph(
         }
     }
 
-    // Invariant 9 — determinism. Only meaningful if a Subgraph-level flag
-    // was set; the projection from builder carries it via no-op here
-    // (validation on finalized Subgraph has no determinism flag). The
-    // builder snapshot path handles it.
-    //
-    // TODO(phase-2): Invariant 9 is silently skipped on the finalized
-    // `Subgraph` path because the struct does not carry the
-    // `deterministic` flag through serialization. Phase 2 adds the flag
-    // to the DAG-CBOR schema (alongside `load_verified`'s decoder work;
-    // see lib.rs `Subgraph::load_verified`) so round-tripped Subgraphs
-    // can be re-validated here. Until then, determinism is enforced only
-    // at builder-snapshot registration time (`validate_builder`).
-    // References mini-review findings `g6-cag-4` / `g6-opl-5`.
+    // Invariant 9 — determinism. 5d-J workstream 4: the finalized
+    // Subgraph now carries the `deterministic` flag (still in-memory
+    // only; DAG-CBOR serialization is Phase-2 scope per the earlier
+    // `load_verified` decoder TODO), so a builder-to-finalized
+    // round-trip re-runs the same per-primitive classification check
+    // the builder-snapshot path applied. See mini-review findings
+    // `g6-cag-4` / `g6-opl-5` for the earlier state.
+    if sg.deterministic {
+        for n in &sg.nodes {
+            if !n.kind.is_deterministic() {
+                violations.push(InvariantViolation::Determinism);
+                if !aggregate {
+                    let mut err = RegistrationError::new(InvariantViolation::Determinism);
+                    err.fanout_node_id = Some(n.id.clone());
+                    return Err(err);
+                }
+                break;
+            }
+        }
+    }
 
     // Edge references to undeclared nodes don't fire a typed invariant in
     // Phase 1; the structural-catch-all path handles it in Phase 2.
@@ -669,12 +702,14 @@ mod tests {
             handler_id: "h".into(),
             nodes: vec![n1.clone(), n2.clone()],
             edges: vec![("a".into(), "b".into(), "next".into())],
+            deterministic: false,
         };
         let sg2 = Subgraph {
             handler_id: "h".into(),
             // Same edges + nodes but the nodes vec is reversed.
             nodes: vec![n2, n1],
             edges: vec![("a".into(), "b".into(), "next".into())],
+            deterministic: false,
         };
         assert_eq!(
             canonical_subgraph_bytes(&sg1).expect("encode"),

@@ -148,6 +148,32 @@ mod napi_surface {
             }
         }
 
+        /// Option-C diagnostic for a denied / missing read. Gated on
+        /// `debug:read` — ordinary callers see `E_CAP_DENIED`.
+        ///
+        /// Returns `{ cid, existsInBackend, deniedByPolicy, notFound }`.
+        /// See named compromise #2 in `docs/SECURITY-POSTURE.md`.
+        #[napi]
+        pub fn diagnose_read(&self, cid: String) -> napi::Result<serde_json::Value> {
+            let parsed = parse_cid(&cid)?;
+            let info = self.inner.diagnose_read(&parsed).map_err(engine_err)?;
+            let mut map = serde_json::Map::new();
+            map.insert("cid".into(), serde_json::Value::from(info.cid.to_base32()));
+            map.insert(
+                "existsInBackend".into(),
+                serde_json::Value::Bool(info.exists_in_backend),
+            );
+            map.insert(
+                "deniedByPolicy".into(),
+                match info.denied_by_policy {
+                    Some(s) => serde_json::Value::from(s),
+                    None => serde_json::Value::Null,
+                },
+            );
+            map.insert("notFound".into(), serde_json::Value::Bool(info.not_found));
+            Ok(serde_json::Value::Object(map))
+        }
+
         /// Replace the Node stored at `old_cid` with a newly-content-addressed
         /// Node built from `labels + properties`. Returns the new CID.
         #[napi]

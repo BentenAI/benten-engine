@@ -507,6 +507,14 @@ pub struct Subgraph {
     pub(crate) nodes: Vec<OperationNode>,
     pub(crate) edges: Vec<(String, String, String)>, // (from, to, label)
     pub(crate) handler_id: String,
+    /// Invariant 9 — declared determinism context. Preserved across the
+    /// builder-to-finalized projection (5d-J workstream 4) so the
+    /// `validate_subgraph` path can re-run the per-primitive
+    /// determinism check on a round-tripped Subgraph. Defaults `false`
+    /// (unconstrained) so the semantics of legacy builders that never
+    /// set the flag are unchanged. Phase-2 threads this through the
+    /// DAG-CBOR schema; until then the flag is in-memory only.
+    pub(crate) deterministic: bool,
 }
 
 impl Subgraph {
@@ -516,7 +524,26 @@ impl Subgraph {
             nodes: Vec::new(),
             edges: Vec::new(),
             handler_id: handler_id.into(),
+            deterministic: false,
         }
+    }
+
+    /// True when the builder declared this handler deterministic via
+    /// [`SubgraphBuilder::declare_deterministic`]. Invariant 9 rejects
+    /// any non-deterministic primitive inside a deterministic handler
+    /// at both builder and finalized-subgraph validation time.
+    #[must_use]
+    pub fn is_declared_deterministic(&self) -> bool {
+        self.deterministic
+    }
+
+    /// Declare this finalized Subgraph's determinism context after the
+    /// fact. Useful when a Subgraph is materialised outside the builder
+    /// path and the caller still wants Invariant 9 to fire at
+    /// [`Subgraph::validate`] time. Mirrors
+    /// [`SubgraphBuilder::declare_deterministic`].
+    pub fn set_deterministic(&mut self, value: bool) {
+        self.deterministic = value;
     }
 
     /// Read-only accessor for the subgraph's [`OperationNode`]s.
@@ -820,6 +847,11 @@ impl SubgraphBuilder {
             nodes: self.nodes,
             edges,
             handler_id: self.handler_id,
+            // Invariant 9 (5d-J workstream 4): propagate the builder's
+            // declared determinism flag into the finalized Subgraph so a
+            // subsequent `validate_subgraph` call can re-run the Invariant-9
+            // check without requiring the caller to re-declare.
+            deterministic: self.deterministic,
         }
     }
 
@@ -933,6 +965,7 @@ impl NodeHandle {
             handler_id: "corruption_test".to_string(),
             nodes: vec![OperationNode::new("r", PrimitiveKind::Read)],
             edges: Vec::new(),
+            deterministic: false,
         }
     }
 }

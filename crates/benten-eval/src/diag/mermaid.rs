@@ -102,6 +102,7 @@ mod tests {
                 OperationNode::new("done", PrimitiveKind::Respond),
             ],
             edges: vec![("start".into(), "done".into(), "ok".into())],
+            deterministic: false,
         }
     }
 

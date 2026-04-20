@@ -146,6 +146,28 @@ pub trait PrimitiveHost: Send + Sync {
     fn iterate_batch_boundary(&self) -> usize {
         100
     }
+
+    /// Capability check for a READ primitive against `target_cid` carrying
+    /// `label`. 5d-J workstream 1 (Option C) — the engine-layer public
+    /// read surface (`get_node`, `read_view`, `edges_from`, `edges_to`)
+    /// consults this method; a `CapError::DeniedRead` is mapped to
+    /// `Ok(None)` at the public boundary so an unauthorised reader
+    /// cannot distinguish a denied CID from a missing one. Diagnostic
+    /// insight lives behind the engine's own `diagnose_read` method,
+    /// gated on the `debug:read` capability.
+    ///
+    /// Default: permit — matches NoAuth posture and every existing Phase-1
+    /// host test that does not wire a read-gating policy.
+    ///
+    /// # Errors
+    /// Returns [`EvalError::Capability`] when the configured policy denies.
+    fn check_read_capability(
+        &self,
+        _label: &str,
+        _target_cid: Option<&Cid>,
+    ) -> Result<(), EvalError> {
+        Ok(())
+    }
 }
 
 /// A no-op [`PrimitiveHost`] for unit tests and benchmarks that exercise

@@ -270,6 +270,32 @@ impl PrimitiveHost for Engine {
         // ChangeEvent payload shape yet. Reserved for Phase-2.
     }
 
+    fn check_read_capability(
+        &self,
+        label: &str,
+        target_cid: Option<&Cid>,
+    ) -> Result<(), benten_eval::EvalError> {
+        // Option C (5d-J workstream 1): evaluate the configured policy's
+        // `check_read` hook and route a `DeniedRead` back across the
+        // boundary via `EvalError::Capability`. The engine's own public
+        // read API (`Engine::get_node`, `read_view`, `edges_from`,
+        // `edges_to`) maps that to `Ok(None)` / empty-vec so an
+        // unauthorized reader cannot distinguish denial from not-found;
+        // the evaluator-visible path surfaces the typed error for
+        // routing through typed error edges.
+        if let Some(policy) = self.policy() {
+            let ctx = benten_caps::ReadContext {
+                label: label.to_string(),
+                target_cid: target_cid.cloned(),
+                ..Default::default()
+            };
+            if let Err(c) = policy.check_read(&ctx) {
+                return Err(benten_eval::EvalError::Capability(c));
+            }
+        }
+        Ok(())
+    }
+
     fn check_capability(
         &self,
         required: &str,

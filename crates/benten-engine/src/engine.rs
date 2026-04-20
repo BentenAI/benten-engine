@@ -45,7 +45,7 @@ use crate::change_probe::ChangeProbe;
 use crate::engine_transaction::{EngineTransaction, GraphTxLike};
 use crate::error::EngineError;
 use crate::outcome::{
-    AnchorHandle, HandlerPredecessors, Outcome, ReadViewOptions, Trace, TraceStep,
+    AnchorHandle, DiagnosticInfo, HandlerPredecessors, Outcome, ReadViewOptions, Trace, TraceStep,
     ViewCreateOptions,
 };
 use crate::primitive_host::{
@@ -438,8 +438,37 @@ impl Engine {
     }
 
     /// Retrieve a Node by CID. Returns `Ok(None)` on a clean miss.
+    ///
+    /// # Named compromise #2 (Option C, 5d-J workstream 1)
+    ///
+    /// When a capability policy is configured and `policy.check_read`
+    /// rejects the read, the return collapses to `Ok(None)` — symmetric
+    /// with a genuine backend miss. An unauthorised caller cannot
+    /// distinguish denial from not-found via this API. To introspect
+    /// the difference (e.g. for operator diagnostics), use
+    /// [`Engine::diagnose_read`], which is gated on a separate
+    /// `debug:read` capability.
     pub fn get_node(&self, cid: &Cid) -> Result<Option<Node>, EngineError> {
-        Ok(self.backend.get_node(cid)?)
+        let node = self.backend.get_node(cid)?;
+        let Some(node) = node else {
+            return Ok(None);
+        };
+        // Gate on the primary label. A Node with no labels collapses to
+        // an empty-label ReadContext; GrantBackedPolicy permits the
+        // empty-label path (introspection reads) so this stays
+        // backwards-compatible for hand-constructed Nodes.
+        let label = node.labels.first().cloned().unwrap_or_default();
+        if let Some(policy) = self.policy.as_deref() {
+            let ctx = benten_caps::ReadContext {
+                label,
+                target_cid: Some(cid.clone()),
+                ..Default::default()
+            };
+            if let Err(CapError::DeniedRead { .. }) = policy.check_read(&ctx) {
+                return Ok(None);
+            }
+        }
+        Ok(Some(node))
     }
 
     /// Update an existing Node. The old CID entry is deleted and the new node
@@ -477,13 +506,50 @@ impl Engine {
     }
 
     /// Return every Edge whose `source == cid`.
+    ///
+    /// Option C applies: when the policy's `check_read` denies a read on
+    /// the source Node, the returned Vec is empty (symmetric with a
+    /// source CID that has no outgoing edges). See [`Engine::get_node`]
+    /// for the full semantics.
     pub fn edges_from(&self, cid: &Cid) -> Result<Vec<Edge>, EngineError> {
+        if self.read_denied_for_cid(cid)? {
+            return Ok(Vec::new());
+        }
         Ok(self.backend.edges_from(cid)?)
     }
 
     /// Return every Edge whose `target == cid`.
+    ///
+    /// Option C applies: see [`Engine::edges_from`].
     pub fn edges_to(&self, cid: &Cid) -> Result<Vec<Edge>, EngineError> {
+        if self.read_denied_for_cid(cid)? {
+            return Ok(Vec::new());
+        }
         Ok(self.backend.edges_to(cid)?)
+    }
+
+    /// Internal helper: does `policy.check_read` deny a read against the
+    /// Node stored at `cid`? Looks up the Node's primary label and runs
+    /// it through the policy. Returns `Ok(false)` when the backend has
+    /// no Node at `cid` (no leakage signal — we fall through to the
+    /// normal empty-list / None path).
+    fn read_denied_for_cid(&self, cid: &Cid) -> Result<bool, EngineError> {
+        let Some(policy) = self.policy.as_deref() else {
+            return Ok(false);
+        };
+        let Some(node) = self.backend.get_node(cid)? else {
+            return Ok(false);
+        };
+        let label = node.labels.first().cloned().unwrap_or_default();
+        let ctx = benten_caps::ReadContext {
+            label,
+            target_cid: Some(cid.clone()),
+            ..Default::default()
+        };
+        Ok(matches!(
+            policy.check_read(&ctx),
+            Err(CapError::DeniedRead { .. })
+        ))
     }
 
     // -------- Registration / invariants --------
@@ -511,6 +577,17 @@ impl Engine {
                 code: other.code(),
                 message: format!("{other:?}"),
             },
+        })?;
+        // 5d-J workstream 3: parse every TRANSFORM node's expression at
+        // registration time so an unparseable grammar trips `register_*`
+        // rather than surviving to `engine.call`. The runtime executor
+        // still re-parses per-call (Phase-2 completes the AST-cache
+        // perf pass); this is the fail-fast guarantee only.
+        benten_eval::invariants::validate_transform_expressions(&sg).map_err(|e| {
+            EngineError::Other {
+                code: e.code(),
+                message: format!("{e}"),
+            }
         })?;
         let cid = sg.cid().map_err(EngineError::Core)?;
         let handler_id = sg.handler_id().to_string();
@@ -547,6 +624,16 @@ impl Engine {
         let cfg = InvariantConfig::default();
         benten_eval::invariants::validate_subgraph(&sg, &cfg, true)
             .map_err(|reg| EngineError::Invariant(Box::new(reg)))?;
+        // 5d-J workstream 3: same registration-time TRANSFORM parse as
+        // `register_subgraph`. Aggregate mode collects structural
+        // invariants (1/2/3/5/6/9/10/12); TRANSFORM syntax is a
+        // separate hazard class and always fail-fast.
+        benten_eval::invariants::validate_transform_expressions(&sg).map_err(|e| {
+            EngineError::Other {
+                code: e.code(),
+                message: format!("{e}"),
+            }
+        })?;
         let cid = sg.cid().map_err(EngineError::Core)?;
         let handler_id = sg.handler_id().to_string();
         let mut guard = self.inner.handlers.lock_recover();
@@ -775,6 +862,14 @@ impl Engine {
     }
 
     /// Return the predecessor adjacency of the handler.
+    ///
+    /// Computes a `target_cid -> [predecessor_cids]` map by reconstructing
+    /// the registered subgraph (DSL path when a SubgraphSpec was stored;
+    /// CRUD-synthesised `:create` shape otherwise) and mapping each
+    /// handler-scoped OperationNode id through the same BLAKE3 derivation
+    /// `Engine::trace` uses for each TraceStep's `node_cid`, so callers
+    /// can correlate a predecessor adjacency entry with a trace step
+    /// without additional bookkeeping. See 5d-J workstream 5.
     pub fn handler_predecessors(
         &self,
         handler_id: &str,
@@ -786,7 +881,40 @@ impl Engine {
                 message: format!("handler not registered: {handler_id}"),
             });
         }
-        Ok(HandlerPredecessors::default())
+        drop(guard);
+
+        // Reconstruct the subgraph via the same code path `handler_to_mermaid`
+        // uses so the node set + edge set match what the walker saw.
+        let spec_opt = self.inner.specs.lock_recover().get(handler_id).cloned();
+        let subgraph = if let Some(spec) = spec_opt {
+            self.subgraph_for_spec(&spec, "default", &Node::empty())?
+        } else if let Some(label) = handler_id.strip_prefix("crud:") {
+            self.subgraph_for_crud(label, "create", &Node::empty())?.0
+        } else {
+            return Err(EngineError::Other {
+                code: ErrorCode::NotFound,
+                message: format!("unknown handler: {handler_id}"),
+            });
+        };
+
+        // Walk (from, to, _label) tuples and resolve each endpoint through
+        // the derive_op_node_cid BLAKE3-keyed derivation so the adjacency
+        // map is keyed the same way TraceStep::node_cid is.
+        let mut adjacency: BTreeMap<Cid, Vec<Cid>> = BTreeMap::new();
+        for (from_id, to_id, _label) in subgraph.edges() {
+            let from_cid = derive_op_node_cid(handler_id, from_id);
+            let to_cid = derive_op_node_cid(handler_id, to_id);
+            let list = adjacency.entry(to_cid).or_default();
+            if !list.contains(&from_cid) {
+                list.push(from_cid);
+            }
+        }
+        // Stable ordering so test assertions over the predecessor list
+        // don't depend on HashMap iteration order.
+        for preds in adjacency.values_mut() {
+            preds.sort_by_key(benten_core::Cid::to_base32);
+        }
+        Ok(HandlerPredecessors::from_adjacency(adjacency))
     }
 
     /// Core dispatch — fetch the registered Subgraph (or an op-specific
@@ -1614,6 +1742,11 @@ impl Engine {
     /// state; strict reads of a stale view error with `E_IVM_VIEW_STALE`;
     /// relaxed reads of a stale view return the empty last-known-good.
     /// Unknown view ids error with `E_UNKNOWN_VIEW`.
+    ///
+    /// Option C (5d-J workstream 1): when the view id encodes a label
+    /// (`content_listing_<label>`) and the policy denies a read on
+    /// that label, the return collapses to an empty list — symmetric
+    /// with an empty view.
     pub fn read_view_with(
         &self,
         view_id: &str,
@@ -1621,6 +1754,28 @@ impl Engine {
     ) -> Result<Outcome, EngineError> {
         if !self.ivm_enabled {
             return Err(EngineError::SubsystemDisabled { subsystem: "ivm" });
+        }
+        // Derive a label from the view id for the read-gate. Only
+        // content_listing_<label> views carry a Phase-1 label hint;
+        // other view ids pass through unchanged.
+        if let Some(policy) = self.policy.as_deref() {
+            let label = view_id
+                .strip_prefix("content_listing_")
+                .or_else(|| view_id.strip_prefix("system:ivm:content_listing_"))
+                .unwrap_or("");
+            if !label.is_empty() {
+                let ctx = benten_caps::ReadContext {
+                    label: label.to_string(),
+                    target_cid: None,
+                    ..Default::default()
+                };
+                if let Err(CapError::DeniedRead { .. }) = policy.check_read(&ctx) {
+                    return Ok(Outcome {
+                        list: Some(Vec::new()),
+                        ..Outcome::default()
+                    });
+                }
+            }
         }
         // Normalize the namespaced alias `system:ivm:<id>` → `<id>`.
         let normalized = view_id.strip_prefix("system:ivm:").unwrap_or(view_id);
@@ -1893,6 +2048,88 @@ impl Engine {
     #[must_use]
     pub fn ivm_subscriber_count(&self) -> usize {
         self.ivm.as_ref().map_or(0, |s| s.view_count())
+    }
+
+    /// Option-C diagnostic for a denied / missing read.
+    ///
+    /// Requires the caller to hold a `debug:read` capability — the
+    /// configured policy's `check_read` is consulted with label
+    /// `"debug"` and `target_cid = Some(cid)`. When the policy denies,
+    /// `diagnose_read` returns `Err(EngineError::Cap(CapError::Denied))`
+    /// so an ordinary caller cannot fish the existence signal.
+    ///
+    /// When permitted, the returned [`DiagnosticInfo`] distinguishes
+    /// three states: "not in backend", "in backend but policy denied",
+    /// "in backend and policy permitted". See named compromise #2 in
+    /// `docs/SECURITY-POSTURE.md` for the full semantics.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EngineError::Cap`] when the caller lacks `debug:read`.
+    /// Backend read failures bubble through [`EngineError::Graph`].
+    pub fn diagnose_read(&self, cid: &Cid) -> Result<DiagnosticInfo, EngineError> {
+        // Gate on `debug:read`. We thread the probe through the configured
+        // policy's check_read with a canonical `"debug"` label so a
+        // Phase-1 GrantBackedPolicy + grant("...", "store:debug:read")
+        // unlocks the diagnostic surface. Absent a policy, diagnose_read
+        // is open (matches NoAuth posture — embedded single-user
+        // deployments get diagnostics out of the box).
+        if let Some(policy) = self.policy.as_deref() {
+            let ctx = benten_caps::ReadContext {
+                label: "debug".into(),
+                target_cid: Some(cid.clone()),
+                ..Default::default()
+            };
+            if let Err(e) = policy.check_read(&ctx) {
+                // Normalise to CapError::Denied on the diagnostic path —
+                // a DeniedRead on this gate is itself the denial signal.
+                let required = match &e {
+                    CapError::DeniedRead { required, .. } | CapError::Denied { required, .. } => {
+                        required.clone()
+                    }
+                    _ => "store:debug:read".to_string(),
+                };
+                return Err(EngineError::Cap(CapError::Denied {
+                    required,
+                    entity: cid.to_base32(),
+                }));
+            }
+        }
+
+        // Now inspect actual state. Probe the backend unconditionally —
+        // we already gated on the debug:read capability.
+        let existing = self.backend.get_node(cid)?;
+        let (exists_in_backend, label) = match &existing {
+            Some(n) => (true, n.labels.first().cloned().unwrap_or_default()),
+            None => (false, String::new()),
+        };
+
+        // Recompute the policy's verdict on the *real* label so the
+        // DiagnosticInfo carries an accurate `denied_by_policy` signal.
+        let denied_by_policy = if exists_in_backend {
+            if let Some(policy) = self.policy.as_deref() {
+                let ctx = benten_caps::ReadContext {
+                    label: label.clone(),
+                    target_cid: Some(cid.clone()),
+                    ..Default::default()
+                };
+                match policy.check_read(&ctx) {
+                    Err(CapError::DeniedRead { required, .. }) => Some(required),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        Ok(DiagnosticInfo {
+            cid: cid.clone(),
+            exists_in_backend,
+            denied_by_policy,
+            not_found: !exists_in_backend,
+        })
     }
 
     // -------- Version chains (Phase 1 stubs) --------

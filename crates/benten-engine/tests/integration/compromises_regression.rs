@@ -79,52 +79,98 @@ fn compromise_1_toctou_window_bound_at_100_iter_batch() {
     );
 }
 
-// Phase 1 compromise; remove when Phase 2 introduces option-B (existence-hiding) read semantics.
+// 5d-J workstream 1: migrated to Option C (symmetric-None +
+// diagnose_read escape hatch). The old Option-A test has been replaced.
 #[test]
-#[ignore = "TODO(phase-2-read-denial): GrantBackedPolicy IS wired for writes, but the READ denial path for `crud:<label>:get` (option-A: emit ON_DENIED + E_CAP_DENIED_READ instead of ON_OK/empty) requires the evaluator to call CapabilityPolicy::check_read at READ-primitive entry. Phase-1 ships the doc-side regression in SECURITY-POSTURE.md §Compromise #2 instead. Phase 2 wires the check."]
-fn compromise_2_ecapdenied_read_leaks_existence() {
+fn compromise_2_option_c_symmetric_none_plus_diagnose_read() {
+    use benten_engine::EngineError;
+
+    // A deny-all-reads policy that permits the `debug:read` probe so
+    // diagnose_read still surfaces the distinction.
+    #[derive(Debug)]
+    struct DenyReadsPermitDebug;
+    impl benten_caps::CapabilityPolicy for DenyReadsPermitDebug {
+        fn check_write(
+            &self,
+            _ctx: &benten_caps::WriteContext,
+        ) -> Result<(), benten_caps::CapError> {
+            Ok(())
+        }
+        fn check_read(&self, ctx: &benten_caps::ReadContext) -> Result<(), benten_caps::CapError> {
+            if ctx.label == "debug" || ctx.label.is_empty() {
+                return Ok(());
+            }
+            Err(benten_caps::CapError::DeniedRead {
+                required: format!("store:{}:read", ctx.label),
+                entity: String::new(),
+            })
+        }
+    }
+
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
         .path(dir.path().join("benten.redb"))
-        .capability_policy_grant_backed()
+        .capability_policy(Box::new(DenyReadsPermitDebug))
         .build()
         .unwrap();
 
-    // Create a secret post via engine-privileged path.
+    // Insert a secret post via the NoAuth-equivalent write path.
     let mut p = BTreeMap::new();
     p.insert("title".into(), Value::Text("secret".into()));
     let secret_cid = engine
         .create_node(&Node::new(vec!["post".into()], p))
         .unwrap();
 
-    // Register a read handler; do NOT grant read capability.
-    let handler_id = engine.register_crud_with_grants("post").unwrap();
-    let actor = engine.create_principal("bob").unwrap();
-
-    let mut input = BTreeMap::new();
-    input.insert("cid".into(), Value::Text(secret_cid.to_base32()));
-    let outcome = engine
-        .call_as(
-            &handler_id,
-            "post:get",
-            Node::new(vec!["input".into()], input),
-            &actor,
-        )
-        .unwrap();
-
-    assert!(outcome.routed_through_edge("ON_DENIED"));
-    assert_eq!(
-        outcome.error_code(),
-        Some("E_CAP_DENIED_READ"),
-        "option A: denial code identifies capability, not existence — documented in SECURITY-POSTURE.md"
-    );
+    // Option C primary path: engine.get_node returns Ok(None) — the
+    // caller cannot distinguish denial from miss.
+    let opt = engine.get_node(&secret_cid).unwrap();
     assert!(
-        !outcome
-            .error_message()
-            .unwrap_or_default()
-            .contains("not found"),
-        "error message must not reveal existence/non-existence"
+        opt.is_none(),
+        "Option C: denied reads collapse to Ok(None), symmetric with a miss"
     );
+
+    // Option C escape hatch: diagnose_read surfaces the distinction
+    // under `debug:read`.
+    let info = engine
+        .diagnose_read(&secret_cid)
+        .expect("debug:read permitted");
+    assert!(info.exists_in_backend);
+    assert!(info.denied_by_policy.is_some());
+    assert!(!info.not_found);
+
+    // Sanity: a completely unheld `debug:read` (via a policy that denies
+    // everything including debug) fires CapDenied at diagnose_read time.
+    #[derive(Debug)]
+    struct DenyAllIncludingDebug;
+    impl benten_caps::CapabilityPolicy for DenyAllIncludingDebug {
+        fn check_write(
+            &self,
+            _ctx: &benten_caps::WriteContext,
+        ) -> Result<(), benten_caps::CapError> {
+            Ok(())
+        }
+        fn check_read(&self, _ctx: &benten_caps::ReadContext) -> Result<(), benten_caps::CapError> {
+            Err(benten_caps::CapError::DeniedRead {
+                required: "store:debug:read".into(),
+                entity: String::new(),
+            })
+        }
+    }
+    let dir2 = tempfile::tempdir().unwrap();
+    let eng2 = Engine::builder()
+        .path(dir2.path().join("benten.redb"))
+        .capability_policy(Box::new(DenyAllIncludingDebug))
+        .build()
+        .unwrap();
+    // Insert with the *permissive* engine first (writes permitted under both).
+    let cid2 = eng2
+        .create_node(&Node::new(vec!["post".into()], BTreeMap::new()))
+        .unwrap();
+    let err = eng2.diagnose_read(&cid2).unwrap_err();
+    assert!(matches!(
+        err,
+        EngineError::Cap(benten_caps::CapError::Denied { .. })
+    ));
 }
 
 // Compromise #3 CLOSED (Phase 1): the canonical ErrorCode enum was extracted
