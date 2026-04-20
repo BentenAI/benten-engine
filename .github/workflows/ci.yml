@@ -89,6 +89,14 @@ jobs:
         run: cargo build --workspace --all-targets --locked
 
       - name: cargo nextest run
+        env:
+          # R6-TA-3: the `PROPTEST_CASES` env var was designed in at R3 but
+          # never set in CI — every PR was running the proptest default of
+          # 256 cases. 1024 on PR gives a meaningfully-stronger signal
+          # without blowing PR wall-clock; the nightly `fuzz.yml` workflow
+          # owns the 10 000-case heavy runs.
+          PROPTEST_CASES: "1024"
+          PROPTEST_MAX_SHRINK_ITERS: "4096"
         run: cargo nextest run --workspace --locked
 
       - name: cargo doc

@@ -422,11 +422,16 @@ impl<'a> Transaction<'a> {
     /// partially-readable body would get removed from the `n:` table but
     /// leave dangling label / property index entries behind). The decode
     /// failure now propagates so callers can surface it.
-    pub fn delete_node(&mut self, cid: &Cid) -> Result<(), GraphError> {
+    pub fn delete_node(&mut self, cid: &Cid) -> Result<Vec<String>, GraphError> {
         // Read the existing body (if any) inside the same txn so the index
         // removals target the right keys. The content-addressed invariant
         // makes this race-free: a concurrent put of the same CID writes
         // identical label/property bytes, so the index-key set can't drift.
+        //
+        // Returns the captured labels so the engine-layer caller can thread
+        // them into `benten_caps::PendingOp::DeleteNode` for capability-
+        // policy scope derivation (r6-sec-8). An idempotent-miss delete
+        // returns an empty vec.
         let n_key = node_key(cid);
         let txn = self
             .inner
@@ -473,19 +478,24 @@ impl<'a> Transaction<'a> {
         }
         self.pending.push(PendingOp::DeleteNode {
             cid: cid.clone(),
-            labels,
+            labels: labels.clone(),
             node: existing,
         });
-        Ok(())
+        Ok(labels)
     }
 
     /// Delete an Edge by CID. Idempotent. Captures the Edge's label
     /// via read-before-delete so the emitted `ChangeEvent` carries the
     /// routing info.
     ///
+    /// Returns the captured label (or `None` when the delete targeted an
+    /// already-absent CID) so the engine-layer caller can thread it into
+    /// `benten_caps::PendingOp::DeleteEdge` for capability-policy scope
+    /// derivation (r6-sec-8).
+    ///
     /// # Errors
     /// Propagates decode or redb failures.
-    pub fn delete_edge(&mut self, cid: &Cid) -> Result<(), GraphError> {
+    pub fn delete_edge(&mut self, cid: &Cid) -> Result<Option<String>, GraphError> {
         let txn = self
             .inner
             .as_mut()
@@ -519,11 +529,11 @@ impl<'a> Transaction<'a> {
         }
         self.pending.push(PendingOp::DeleteEdge {
             cid: cid.clone(),
-            label,
+            label: label.clone(),
             source,
             target,
         });
-        Ok(())
+        Ok(label)
     }
 
     /// Open a nested transaction. Phase 1 always rejects with

@@ -75,6 +75,16 @@ export const CATALOG_CODES = [
   "E_VERSION_BRANCHED",
   "E_BACKEND_NOT_FOUND",
   "E_NOT_FOUND",
+  "E_GRAPH_INTERNAL",
+  "E_UNKNOWN",
+  "E_DUPLICATE_HANDLER",
+  "E_NO_CAPABILITY_POLICY_CONFIGURED",
+  "E_PRODUCTION_REQUIRES_CAPS",
+  "E_SUBSYSTEM_DISABLED",
+  "E_UNKNOWN_VIEW",
+  "E_NOT_IMPLEMENTED",
+  "E_IVM_PATTERN_MISMATCH",
+  "E_VERSION_UNKNOWN_PRIOR",
   "E_DSL_INVALID_SHAPE",
   "E_DSL_UNREGISTERED_HANDLER",
 ] as const;
@@ -708,6 +718,156 @@ export class ENotFound extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_NOT_FOUND", "Generic not-found — version-chain anchor miss, unregistered handler lookup, unknown view id, etc. Check that the caller has the correct CID / id; for handlers, confirm `registerSubgraph` / `registerCrud` ran successfully.", message, context);
     this.name = "ENotFound";
+  }
+}
+
+/**
+ * E_GRAPH_INTERNAL
+ *
+ * Thrown at: Graph backend (storage I/O)
+ * Message template: "Graph storage internal error: {detail}"
+ */
+export class EGraphInternal extends BentenError {
+  static readonly code = "E_GRAPH_INTERNAL";
+  static readonly fixHint = "Stable code for `GraphError::RedbSource` / `GraphError::Redb` / `GraphError::Decode` — a storage-layer failure (redb I/O, transactional abort, DAG-CBOR decode of a stored Node). The underlying `std::error::Error::source()` chain is preserved on the Rust side for diagnostics; at the TS boundary only the stable code is surfaced. Inspect logs or retry; persistent errors indicate on-disk corruption and should prompt a restore from backup.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_GRAPH_INTERNAL", "Stable code for `GraphError::RedbSource` / `GraphError::Redb` / `GraphError::Decode` — a storage-layer failure (redb I/O, transactional abort, DAG-CBOR decode of a stored Node). The underlying `std::error::Error::source()` chain is preserved on the Rust side for diagnostics; at the TS boundary only the stable code is surfaced. Inspect logs or retry; persistent errors indicate on-disk corruption and should prompt a restore from backup.", message, context);
+    this.name = "EGraphInternal";
+  }
+}
+
+/**
+ * E_UNKNOWN
+ *
+ * Thrown at: Forward-compat deserialization
+ * Message template: "Unknown error code (forward-compat fallback)"
+ */
+export class EUnknown extends BentenError {
+  static readonly code = "E_UNKNOWN";
+  static readonly fixHint = "The drift-detect / catalog contract reserves `ErrorCode::Unknown(s)` as a forward-compat escape valve so a newer server emitting an unrecognized code does not crash an older client. If this code reaches a caller, update the engine / bindings to the latest release — the payload carries the raw code string the server actually emitted. Never thrown by Phase-1 Rust code deliberately; exists only to make the enum round-trip through `from_str` infallible.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_UNKNOWN", "The drift-detect / catalog contract reserves `ErrorCode::Unknown(s)` as a forward-compat escape valve so a newer server emitting an unrecognized code does not crash an older client. If this code reaches a caller, update the engine / bindings to the latest release — the payload carries the raw code string the server actually emitted. Never thrown by Phase-1 Rust code deliberately; exists only to make the enum round-trip through `from_str` infallible.", message, context);
+    this.name = "EUnknown";
+  }
+}
+
+/**
+ * E_DUPLICATE_HANDLER
+ *
+ * Thrown at: Engine (`register_subgraph` / `register_crud`)
+ * Message template: "Handler id '{handler_id}' already registered with different subgraph content"
+ */
+export class EDuplicateHandler extends BentenError {
+  static readonly code = "E_DUPLICATE_HANDLER";
+  static readonly fixHint = "Handler ids are unique within an engine. Either choose a distinct id, re-register with the same content (idempotent), or unregister the existing handler first. Two subgraphs with different CIDs cannot share an id.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_DUPLICATE_HANDLER", "Handler ids are unique within an engine. Either choose a distinct id, re-register with the same content (idempotent), or unregister the existing handler first. Two subgraphs with different CIDs cannot share an id.", message, context);
+    this.name = "EDuplicateHandler";
+  }
+}
+
+/**
+ * E_NO_CAPABILITY_POLICY_CONFIGURED
+ *
+ * Thrown at: Engine builder
+ * Message template: "No capability policy configured for .production() builder — call .capability_policy(...) or drop .production()"
+ */
+export class ENoCapabilityPolicyConfigured extends BentenError {
+  static readonly code = "E_NO_CAPABILITY_POLICY_CONFIGURED";
+  static readonly fixHint = "`Engine::builder().production()` refuses to build without an explicit `CapabilityPolicy` (R1 SC2 fail-early guardrail). Call `.capability_policy(policy)` before `.open(...)`, or drop `.production()` if the engine should accept the `NoAuthBackend` default for local/embedded use.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_NO_CAPABILITY_POLICY_CONFIGURED", "`Engine::builder().production()` refuses to build without an explicit `CapabilityPolicy` (R1 SC2 fail-early guardrail). Call `.capability_policy(policy)` before `.open(...)`, or drop `.production()` if the engine should accept the `NoAuthBackend` default for local/embedded use.", message, context);
+    this.name = "ENoCapabilityPolicyConfigured";
+  }
+}
+
+/**
+ * E_PRODUCTION_REQUIRES_CAPS
+ *
+ * Thrown at: Engine builder
+ * Message template: "Production mode requires capabilities — .production() and .without_caps() are mutually exclusive"
+ */
+export class EProductionRequiresCaps extends BentenError {
+  static readonly code = "E_PRODUCTION_REQUIRES_CAPS";
+  static readonly fixHint = "`.production()` enforces that a capability policy must be configured. `.without_caps()` explicitly tears one down. Picking both is a misconfiguration — drop one. Code-reviewer finding `g7-cr-1`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PRODUCTION_REQUIRES_CAPS", "`.production()` enforces that a capability policy must be configured. `.without_caps()` explicitly tears one down. Picking both is a misconfiguration — drop one. Code-reviewer finding `g7-cr-1`.", message, context);
+    this.name = "EProductionRequiresCaps";
+  }
+}
+
+/**
+ * E_SUBSYSTEM_DISABLED
+ *
+ * Thrown at: Engine operations (`read_view`, `grant_capability`, `create_view`, …)
+ * Message template: "Subsystem disabled: {subsystem}"
+ */
+export class ESubsystemDisabled extends BentenError {
+  static readonly code = "E_SUBSYSTEM_DISABLED";
+  static readonly fixHint = "A thin engine configured with `.without_ivm()` or `.without_caps()` refuses operations that require the disabled subsystem — the \"honest no\" boundary. Either rebuild the engine without the opt-out, or restructure the caller to avoid the dependent surface.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SUBSYSTEM_DISABLED", "A thin engine configured with `.without_ivm()` or `.without_caps()` refuses operations that require the disabled subsystem — the \"honest no\" boundary. Either rebuild the engine without the opt-out, or restructure the caller to avoid the dependent surface.", message, context);
+    this.name = "ESubsystemDisabled";
+  }
+}
+
+/**
+ * E_UNKNOWN_VIEW
+ *
+ * Thrown at: Engine (`read_view`)
+ * Message template: "Unknown view: {view_id}"
+ */
+export class EUnknownView extends BentenError {
+  static readonly code = "E_UNKNOWN_VIEW";
+  static readonly fixHint = "The view id was not registered via `create_view` / `registerView`. Check spelling, confirm the IVM subscriber has the view wired, and that `.without_ivm()` was not used on the builder.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_UNKNOWN_VIEW", "The view id was not registered via `create_view` / `registerView`. Check spelling, confirm the IVM subscriber has the view wired, and that `.without_ivm()` was not used on the builder.", message, context);
+    this.name = "EUnknownView";
+  }
+}
+
+/**
+ * E_NOT_IMPLEMENTED
+ *
+ * Thrown at: Engine (primitive-dispatch surfaces)
+ * Message template: "Not implemented in Phase 1: {feature}"
+ */
+export class ENotImplemented extends BentenError {
+  static readonly code = "E_NOT_IMPLEMENTED";
+  static readonly fixHint = "The engine method is a typed-todo that is wired for Phase 2+ evaluator integration. Avoid the surface in Phase-1 code or pick an equivalent Phase-1-landed alternative. See the per-method rustdoc for the target phase.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_NOT_IMPLEMENTED", "The engine method is a typed-todo that is wired for Phase 2+ evaluator integration. Avoid the surface in Phase-1 code or pick an equivalent Phase-1-landed alternative. See the per-method rustdoc for the target phase.", message, context);
+    this.name = "ENotImplemented";
+  }
+}
+
+/**
+ * E_IVM_PATTERN_MISMATCH
+ *
+ * Thrown at: IVM view read
+ * Message template: "IVM view query pattern does not match any maintained index: {detail}"
+ */
+export class EIvmPatternMismatch extends BentenError {
+  static readonly code = "E_IVM_PATTERN_MISMATCH";
+  static readonly fixHint = "The caller asked a view for an index partition it doesn't maintain (e.g. an `entity_cid` query against a view that only keys on `label`). Consult the view's maintained-pattern list and restrict the `ViewQuery` to supported keys. Distinct from `E_INV_REGISTRATION` — the view is healthy; the query shape is wrong.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_IVM_PATTERN_MISMATCH", "The caller asked a view for an index partition it doesn't maintain (e.g. an `entity_cid` query against a view that only keys on `label`). Consult the view's maintained-pattern list and restrict the `ViewQuery` to supported keys. Distinct from `E_INV_REGISTRATION` — the view is healthy; the query shape is wrong.", message, context);
+    this.name = "EIvmPatternMismatch";
+  }
+}
+
+/**
+ * E_VERSION_UNKNOWN_PRIOR
+ *
+ * Thrown at: Version-chain `append_version`
+ * Message template: "Prior head was never observed by this anchor: {supplied}"
+ */
+export class EVersionUnknownPrior extends BentenError {
+  static readonly code = "E_VERSION_UNKNOWN_PRIOR";
+  static readonly fixHint = "Surfaces from the prior-head-threaded `benten_core::version::append_version` when the caller names a `prior_head` that is neither the anchor's root head nor any new_head from a previous successful append. Re-read the anchor's current head (`walk_versions`) and retry against the observed head. Distinct from `E_VERSION_BRANCHED` (which fires when two appends race the same legitimate prior).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_VERSION_UNKNOWN_PRIOR", "Surfaces from the prior-head-threaded `benten_core::version::append_version` when the caller names a `prior_head` that is neither the anchor's root head nor any new_head from a previous successful append. Re-read the anchor's current head (`walk_versions`) and retry against the observed head. Distinct from `E_VERSION_BRANCHED` (which fires when two appends race the same legitimate prior).", message, context);
+    this.name = "EVersionUnknownPrior";
   }
 }
 

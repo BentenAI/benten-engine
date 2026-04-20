@@ -48,14 +48,32 @@ pub enum PendingOp {
         label: String,
     },
     /// A Node deletion by CID.
+    ///
+    /// `labels` is the label set captured at delete time via read-before-
+    /// delete (see `benten_graph::Transaction::delete_node`). The engine
+    /// threads the captured labels into this variant so the capability
+    /// policy can derive the same `store:<label>:write` scope it uses for
+    /// the PutNode side. An empty `labels` means the delete targeted an
+    /// already-absent CID (idempotent miss); the policy treats that as a
+    /// no-op scope with no grant required. See r6-sec-8.
     DeleteNode {
         /// The target Node CID.
         cid: Cid,
+        /// Labels of the Node being deleted (captured via read-before-
+        /// delete). Empty on idempotent miss.
+        labels: Vec<String>,
     },
     /// An Edge deletion by CID.
+    ///
+    /// `label` is the Edge's single label captured at delete time.
+    /// `None` means the delete targeted an already-absent CID (idempotent
+    /// miss); the policy treats that as a no-op scope. See r6-sec-8.
     DeleteEdge {
         /// The target Edge CID.
         cid: Cid,
+        /// Label of the Edge being deleted (captured via read-before-
+        /// delete). `None` on idempotent miss.
+        label: Option<String>,
     },
 }
 

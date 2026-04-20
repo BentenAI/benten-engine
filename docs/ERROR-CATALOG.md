@@ -344,6 +344,88 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** Engine lookups
 - **Phase:** 1
 
+### E_GRAPH_INTERNAL
+
+- **Message:** "Graph storage internal error: {detail}"
+- **Context:** `{ detail: string }`
+- **Fix:** Stable code for `GraphError::RedbSource` / `GraphError::Redb` / `GraphError::Decode` — a storage-layer failure (redb I/O, transactional abort, DAG-CBOR decode of a stored Node). The underlying `std::error::Error::source()` chain is preserved on the Rust side for diagnostics; at the TS boundary only the stable code is surfaced. Inspect logs or retry; persistent errors indicate on-disk corruption and should prompt a restore from backup.
+- **Thrown at:** Graph backend (storage I/O)
+- **Phase:** 1
+
+### E_UNKNOWN
+
+- **Message:** "Unknown error code (forward-compat fallback)"
+- **Context:** `{ raw: string }`
+- **Fix:** The drift-detect / catalog contract reserves `ErrorCode::Unknown(s)` as a forward-compat escape valve so a newer server emitting an unrecognized code does not crash an older client. If this code reaches a caller, update the engine / bindings to the latest release — the payload carries the raw code string the server actually emitted. Never thrown by Phase-1 Rust code deliberately; exists only to make the enum round-trip through `from_str` infallible.
+- **Thrown at:** Forward-compat deserialization
+- **Phase:** 1
+
+## Engine-orchestrator errors
+
+### E_DUPLICATE_HANDLER
+
+- **Message:** "Handler id '{handler_id}' already registered with different subgraph content"
+- **Context:** `{ handler_id: string, existing_cid: CidV1, attempted_cid: CidV1 }`
+- **Fix:** Handler ids are unique within an engine. Either choose a distinct id, re-register with the same content (idempotent), or unregister the existing handler first. Two subgraphs with different CIDs cannot share an id.
+- **Thrown at:** Engine (`register_subgraph` / `register_crud`)
+- **Phase:** 1
+
+### E_NO_CAPABILITY_POLICY_CONFIGURED
+
+- **Message:** "No capability policy configured for .production() builder — call .capability_policy(...) or drop .production()"
+- **Context:** `{}`
+- **Fix:** `Engine::builder().production()` refuses to build without an explicit `CapabilityPolicy` (R1 SC2 fail-early guardrail). Call `.capability_policy(policy)` before `.open(...)`, or drop `.production()` if the engine should accept the `NoAuthBackend` default for local/embedded use.
+- **Thrown at:** Engine builder
+- **Phase:** 1
+
+### E_PRODUCTION_REQUIRES_CAPS
+
+- **Message:** "Production mode requires capabilities — .production() and .without_caps() are mutually exclusive"
+- **Context:** `{}`
+- **Fix:** `.production()` enforces that a capability policy must be configured. `.without_caps()` explicitly tears one down. Picking both is a misconfiguration — drop one. Code-reviewer finding `g7-cr-1`.
+- **Thrown at:** Engine builder
+- **Phase:** 1
+
+### E_SUBSYSTEM_DISABLED
+
+- **Message:** "Subsystem disabled: {subsystem}"
+- **Context:** `{ subsystem: "ivm" | "caps" }`
+- **Fix:** A thin engine configured with `.without_ivm()` or `.without_caps()` refuses operations that require the disabled subsystem — the "honest no" boundary. Either rebuild the engine without the opt-out, or restructure the caller to avoid the dependent surface.
+- **Thrown at:** Engine operations (`read_view`, `grant_capability`, `create_view`, …)
+- **Phase:** 1
+
+### E_UNKNOWN_VIEW
+
+- **Message:** "Unknown view: {view_id}"
+- **Context:** `{ view_id: string, registered: string[] }`
+- **Fix:** The view id was not registered via `create_view` / `registerView`. Check spelling, confirm the IVM subscriber has the view wired, and that `.without_ivm()` was not used on the builder.
+- **Thrown at:** Engine (`read_view`)
+- **Phase:** 1
+
+### E_NOT_IMPLEMENTED
+
+- **Message:** "Not implemented in Phase 1: {feature}"
+- **Context:** `{ feature: string, target_phase: number }`
+- **Fix:** The engine method is a typed-todo that is wired for Phase 2+ evaluator integration. Avoid the surface in Phase-1 code or pick an equivalent Phase-1-landed alternative. See the per-method rustdoc for the target phase.
+- **Thrown at:** Engine (primitive-dispatch surfaces)
+- **Phase:** 1
+
+### E_IVM_PATTERN_MISMATCH
+
+- **Message:** "IVM view query pattern does not match any maintained index: {detail}"
+- **Context:** `{ view_id: string, detail: string }`
+- **Fix:** The caller asked a view for an index partition it doesn't maintain (e.g. an `entity_cid` query against a view that only keys on `label`). Consult the view's maintained-pattern list and restrict the `ViewQuery` to supported keys. Distinct from `E_INV_REGISTRATION` — the view is healthy; the query shape is wrong.
+- **Thrown at:** IVM view read
+- **Phase:** 1
+
+### E_VERSION_UNKNOWN_PRIOR
+
+- **Message:** "Prior head was never observed by this anchor: {supplied}"
+- **Context:** `{ supplied: CidV1 }`
+- **Fix:** Surfaces from the prior-head-threaded `benten_core::version::append_version` when the caller names a `prior_head` that is neither the anchor's root head nor any new_head from a previous successful append. Re-read the anchor's current head (`walk_versions`) and retry against the observed head. Distinct from `E_VERSION_BRANCHED` (which fires when two appends race the same legitimate prior).
+- **Thrown at:** Version-chain `append_version`
+- **Phase:** 1
+
 ## TypeScript binding-layer errors
 
 ### E_DSL_INVALID_SHAPE

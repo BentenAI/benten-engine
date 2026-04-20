@@ -49,11 +49,12 @@ pub use transaction::{PendingOp, Transaction};
 /// error for `RedbBackend` and the type into which `CoreError` (serialization,
 /// CID parsing) flows; other backends are free to pick their own.
 ///
-/// Phase 1 follow-up tracked in R4b: the `Redb(String)` variant still
-/// stringifies `redb::*` errors and drops `std::error::Error::source`.
-/// The source-chain refactor requires updating R3 tests that construct
-/// `GraphError::Redb("...".into())` as an injected error; deferred to keep
-/// the TDD red-phase test surface stable.
+/// r6-err-3 added `RedbSource(#[from] redb::Error)` so the six redb sub-type
+/// `From` impls funnel the original error through `redb::Error` with
+/// `std::error::Error::source()` preserved. The string-payload `Redb(String)`
+/// variant is retained for test-fixture injection (see
+/// `tests/failure_injection_rollback.rs`) and for internal
+/// "missing transaction handle" bookkeeping.
 #[derive(Debug, thiserror::Error)]
 pub enum GraphError {
     /// Propagated from `benten-core` (CID construction, canonical
@@ -61,8 +62,21 @@ pub enum GraphError {
     #[error("core: {0}")]
     Core(#[from] CoreError),
 
-    /// redb I/O or transactional failure. The string coercion drops the
-    /// source chain; R4b tracks the `#[from] redb::Error` refactor.
+    /// redb I/O or transactional failure with the original `redb::Error`
+    /// preserved behind `#[source]` so `std::error::Error::source()` walks
+    /// the chain. The six redb sub-error types (`DatabaseError`,
+    /// `TransactionError`, `TableError`, `StorageError`, `CommitError`)
+    /// each have a native `From<X> for redb::Error`; our `From` impls
+    /// funnel through that so the origin kind is preserved.
+    #[error("redb: {0}")]
+    RedbSource(#[from] redb::Error),
+
+    /// redb I/O or transactional failure, string-payload form. Retained
+    /// for test-fixture injection (e.g.
+    /// `GraphError::Redb("injected failure".into())`) and for internal
+    /// "post-commit handle missing" bookkeeping inside the transaction
+    /// primitive. Production conversion sites should use [`GraphError::RedbSource`]
+    /// instead so the `std::error::Error::source` chain is preserved.
     #[error("redb: {0}")]
     Redb(String),
 
@@ -75,7 +89,14 @@ pub enum GraphError {
     Decode(String),
 
     /// `open_existing` was called on a path where no database file exists.
-    #[error("backend not found at path: {}", path.display())]
+    ///
+    /// The Display form shows only the basename (e.g. `benten.redb`) so the
+    /// rendered message — which flows through napi into JS `Error.message`
+    /// — does not leak the absolute filesystem path (r6-err-7: avoids
+    /// leaking the caller's home-directory / username). The full `PathBuf`
+    /// remains on the struct field for programmatic introspection and
+    /// Debug rendering.
+    #[error("backend not found: {}", redact_path_for_display(path))]
     BackendNotFound {
         /// Path supplied to the failed `open_existing` call.
         path: std::path::PathBuf,
@@ -108,13 +129,14 @@ impl GraphError {
     pub fn code(&self) -> ErrorCode {
         match self {
             GraphError::Core(e) => e.code(),
-            // TODO(phase-2-error-chain): `GraphError::Redb(String)` drops the
-            // `std::error::Error::source` chain; replacing with `#[from]
-            // redb::Error` cascades into R3 tests that construct `Redb(String)`
-            // directly (`failure_injection_rollback.rs`). A typed catalog code
-            // now travels with the error (r6-err-3) so the TS layer sees a
-            // stable identifier regardless of the underlying refactor.
-            GraphError::Redb(_) | GraphError::Decode(_) => ErrorCode::GraphInternal,
+            // `RedbSource` preserves the full `std::error::Error::source`
+            // chain (r6-err-3); the catalog code is still `E_GRAPH_INTERNAL`
+            // because the underlying redb error kind is opaque to
+            // cross-language consumers. The string-payload `Redb` and
+            // `Decode` variants carry the same catalog code for parity.
+            GraphError::RedbSource(_) | GraphError::Redb(_) | GraphError::Decode(_) => {
+                ErrorCode::GraphInternal
+            }
             GraphError::BackendNotFound { .. } => ErrorCode::BackendNotFound,
             GraphError::SystemZoneWrite { .. } => ErrorCode::SystemZoneWrite,
             GraphError::NestedTransactionNotSupported {} => {
@@ -125,37 +147,45 @@ impl GraphError {
     }
 }
 
-// Phase 1: stringify redb error kinds into `GraphError::Redb(String)`.
-// R4b tracks the `#[from] redb::Error` refactor that preserves the full
-// `std::error::Error::source()` chain — see `GraphError::Redb` docstring.
-impl From<redb::Error> for GraphError {
-    fn from(e: redb::Error) -> Self {
-        GraphError::Redb(e.to_string())
+/// Render a `Path` for the Display of [`GraphError::BackendNotFound`] with
+/// only its basename + a placeholder prefix so the rendered message does
+/// not leak the absolute filesystem path through to user-facing error
+/// strings. The full path is still available on the struct variant for
+/// programmatic use and for `Debug` rendering.
+fn redact_path_for_display(path: &std::path::Path) -> String {
+    match path.file_name() {
+        Some(name) => format!("<redacted>/{}", name.to_string_lossy()),
+        None => "<redacted>".to_string(),
     }
 }
+
+// r6-err-3: preserve `std::error::Error::source()` on redb failures.
+// Each redb sub-error type has a native `From<X> for redb::Error` in the
+// redb crate, so we funnel through `redb::Error` and store it under
+// `RedbSource` with `#[source]` preservation via `thiserror`'s `#[from]`.
 impl From<redb::DatabaseError> for GraphError {
     fn from(e: redb::DatabaseError) -> Self {
-        GraphError::Redb(e.to_string())
+        GraphError::RedbSource(e.into())
     }
 }
 impl From<redb::TransactionError> for GraphError {
     fn from(e: redb::TransactionError) -> Self {
-        GraphError::Redb(e.to_string())
+        GraphError::RedbSource(e.into())
     }
 }
 impl From<redb::TableError> for GraphError {
     fn from(e: redb::TableError) -> Self {
-        GraphError::Redb(e.to_string())
+        GraphError::RedbSource(e.into())
     }
 }
 impl From<redb::StorageError> for GraphError {
     fn from(e: redb::StorageError) -> Self {
-        GraphError::Redb(e.to_string())
+        GraphError::RedbSource(e.into())
     }
 }
 impl From<redb::CommitError> for GraphError {
     fn from(e: redb::CommitError) -> Self {
-        GraphError::Redb(e.to_string())
+        GraphError::RedbSource(e.into())
     }
 }
 

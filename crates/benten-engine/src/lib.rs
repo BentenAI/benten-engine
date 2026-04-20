@@ -132,94 +132,27 @@ impl EngineError {
             EngineError::Graph(e) => e.code(),
             EngineError::Cap(e) => e.code(),
             EngineError::Invariant(e) => e.code(),
-            EngineError::DuplicateHandler { .. } => {
-                ErrorCode::Unknown("E_DUPLICATE_HANDLER".into())
-            }
-            EngineError::NoCapabilityPolicyConfigured => {
-                ErrorCode::Unknown("E_NO_CAPABILITY_POLICY_CONFIGURED".into())
-            }
-            EngineError::ProductionRequiresCaps => {
-                ErrorCode::Unknown("E_PRODUCTION_REQUIRES_CAPS".into())
-            }
-            EngineError::SubsystemDisabled { .. } => {
-                ErrorCode::Unknown("E_SUBSYSTEM_DISABLED".into())
-            }
+            // r6-err-4: promoted from `ErrorCode::Unknown(...)` strings to
+            // first-class catalog variants so the drift detector and TS
+            // codegen see them via the catalog path.
+            EngineError::DuplicateHandler { .. } => ErrorCode::DuplicateHandler,
+            EngineError::NoCapabilityPolicyConfigured => ErrorCode::NoCapabilityPolicyConfigured,
+            EngineError::ProductionRequiresCaps => ErrorCode::ProductionRequiresCaps,
+            EngineError::SubsystemDisabled { .. } => ErrorCode::SubsystemDisabled,
             EngineError::IvmViewStale { .. } => ErrorCode::IvmViewStale,
-            EngineError::UnknownView { .. } => ErrorCode::Unknown("E_UNKNOWN_VIEW".into()),
+            EngineError::UnknownView { .. } => ErrorCode::UnknownView,
             EngineError::NestedTransactionNotSupported => ErrorCode::NestedTransactionNotSupported,
-            EngineError::NotImplemented { .. } => ErrorCode::Unknown("E_NOT_IMPLEMENTED".into()),
+            EngineError::NotImplemented { .. } => ErrorCode::NotImplemented,
             EngineError::Other { code, .. } => code.clone(),
         }
     }
 
-    /// Stable catalog code as a static string. Variants local to this crate
-    /// map to stable literals; variants that wrap a catalog code delegate to
-    /// [`benten_core::ErrorCode::as_str`] via an inline match — the
-    /// single-source-of-truth `as_str` on benten-core owns the content,
-    /// this wrapper just pins the `'static` lifetime.
+    /// Stable catalog code as a `'static str`. Delegates to
+    /// [`ErrorCode::as_static_str`] — the former `static_for` local helper
+    /// duplicated the match arms and risked silent drift (r6-err-10).
     #[must_use]
     pub fn code(&self) -> &'static str {
-        match self {
-            EngineError::Core(e) => static_for(&e.code()),
-            EngineError::Graph(e) => static_for(&e.code()),
-            EngineError::Cap(e) => static_for(&e.code()),
-            EngineError::Invariant(e) => static_for(&e.code()),
-            EngineError::Other { code, .. } => static_for(code),
-            EngineError::DuplicateHandler { .. } => "E_DUPLICATE_HANDLER",
-            EngineError::NoCapabilityPolicyConfigured => "E_NO_CAPABILITY_POLICY_CONFIGURED",
-            EngineError::ProductionRequiresCaps => "E_PRODUCTION_REQUIRES_CAPS",
-            EngineError::SubsystemDisabled { .. } => "E_SUBSYSTEM_DISABLED",
-            EngineError::IvmViewStale { .. } => "E_IVM_VIEW_STALE",
-            EngineError::UnknownView { .. } => "E_UNKNOWN_VIEW",
-            EngineError::NestedTransactionNotSupported => "E_NESTED_TRANSACTION_NOT_SUPPORTED",
-            EngineError::NotImplemented { .. } => "E_NOT_IMPLEMENTED",
-        }
-    }
-}
-
-/// Pin a [`benten_core::ErrorCode`] to a `'static str`. Known catalog
-/// variants return their canonical stable literal (matching
-/// [`benten_core::ErrorCode::as_str`]); the [`ErrorCode::Unknown`] variant
-/// degrades to `"E_UNKNOWN"` because we cannot promote the owned String to
-/// `'static` without leaking.
-fn static_for(c: &ErrorCode) -> &'static str {
-    match c {
-        ErrorCode::InvCycle => "E_INV_CYCLE",
-        ErrorCode::InvDepthExceeded => "E_INV_DEPTH_EXCEEDED",
-        ErrorCode::InvFanoutExceeded => "E_INV_FANOUT_EXCEEDED",
-        ErrorCode::InvTooManyNodes => "E_INV_TOO_MANY_NODES",
-        ErrorCode::InvTooManyEdges => "E_INV_TOO_MANY_EDGES",
-        ErrorCode::InvDeterminism => "E_INV_DETERMINISM",
-        ErrorCode::InvContentHash => "E_INV_CONTENT_HASH",
-        ErrorCode::InvRegistration => "E_INV_REGISTRATION",
-        ErrorCode::InvIterateNestDepth => "E_INV_ITERATE_NEST_DEPTH",
-        ErrorCode::InvIterateMaxMissing => "E_INV_ITERATE_MAX_MISSING",
-        ErrorCode::InvIterateBudget => "E_INV_ITERATE_BUDGET",
-        ErrorCode::CapDenied => "E_CAP_DENIED",
-        ErrorCode::CapDeniedRead => "E_CAP_DENIED_READ",
-        ErrorCode::CapRevoked => "E_CAP_REVOKED",
-        ErrorCode::CapRevokedMidEval => "E_CAP_REVOKED_MID_EVAL",
-        ErrorCode::CapNotImplemented => "E_CAP_NOT_IMPLEMENTED",
-        ErrorCode::CapAttenuation => "E_CAP_ATTENUATION",
-        ErrorCode::WriteConflict => "E_WRITE_CONFLICT",
-        ErrorCode::IvmViewStale => "E_IVM_VIEW_STALE",
-        ErrorCode::TxAborted => "E_TX_ABORTED",
-        ErrorCode::NestedTransactionNotSupported => "E_NESTED_TRANSACTION_NOT_SUPPORTED",
-        ErrorCode::PrimitiveNotImplemented => "E_PRIMITIVE_NOT_IMPLEMENTED",
-        ErrorCode::SystemZoneWrite => "E_SYSTEM_ZONE_WRITE",
-        ErrorCode::ValueFloatNan => "E_VALUE_FLOAT_NAN",
-        ErrorCode::ValueFloatNonFinite => "E_VALUE_FLOAT_NONFINITE",
-        ErrorCode::CidParse => "E_CID_PARSE",
-        ErrorCode::CidUnsupportedCodec => "E_CID_UNSUPPORTED_CODEC",
-        ErrorCode::CidUnsupportedHash => "E_CID_UNSUPPORTED_HASH",
-        ErrorCode::VersionBranched => "E_VERSION_BRANCHED",
-        ErrorCode::BackendNotFound => "E_BACKEND_NOT_FOUND",
-        ErrorCode::TransformSyntax => "E_TRANSFORM_SYNTAX",
-        ErrorCode::InputLimit => "E_INPUT_LIMIT",
-        ErrorCode::NotFound => "E_NOT_FOUND",
-        ErrorCode::Serialize => "E_SERIALIZE",
-        ErrorCode::GraphInternal => "E_GRAPH_INTERNAL",
-        ErrorCode::Unknown(_) => "E_UNKNOWN",
+        self.error_code().as_static_str()
     }
 }
 
@@ -230,6 +163,17 @@ fn static_for(c: &ErrorCode) -> &'static str {
 /// State shared across Engine methods. Behind an `Arc` so change-event
 /// callbacks can hold a weak-style reference without borrowing from the
 /// Engine struct itself.
+/// Default upper bound on the in-memory change-event buffer held by the
+/// engine for `subscribe_change_events` probes. When no subscriber drains the
+/// buffer, older events are dropped (oldest-first) rather than growing the
+/// buffer unboundedly — an unbounded `Vec<ChangeEvent>` is a memory-
+/// exhaustion vector against a long-running engine (r6-sec-5).
+///
+/// Operators can tune this per-engine via
+/// [`EngineBuilder::change_stream_capacity`]. Drops are surfaced via
+/// `metrics_snapshot["benten.change_stream.dropped_events"]`.
+pub const CHANGE_STREAM_MAX_BUFFERED: usize = 16_384;
+
 struct EngineInner {
     /// Registered handler ids → subgraph CIDs. Populated by
     /// `register_subgraph` and consulted for the idempotent re-registration
@@ -243,7 +187,19 @@ struct EngineInner {
     /// Observed ChangeEvents (post-commit). Populated by the
     /// `ChangeBroadcast` subscriber; drained by
     /// `engine.subscribe_change_events().drain()`.
+    ///
+    /// Bounded by [`EngineInner::change_stream_capacity`] — on overflow the
+    /// oldest event is evicted and [`EngineInner::dropped_events`] is
+    /// incremented. See r6-sec-5.
     observed_events: std::sync::Mutex<Vec<(u64, ChangeEvent)>>,
+    /// Configured upper bound for `observed_events`. Populated from
+    /// [`EngineBuilder::change_stream_capacity`] at engine-build time;
+    /// defaults to [`CHANGE_STREAM_MAX_BUFFERED`].
+    change_stream_capacity: usize,
+    /// Counter of ChangeEvents dropped because the buffer reached
+    /// `change_stream_capacity` before a subscriber drained. Surfaced via
+    /// `metrics_snapshot["benten.change_stream.dropped_events"]`.
+    dropped_events: std::sync::atomic::AtomicU64,
     /// Counter of total change events observed (for `change_event_count()`).
     event_count: std::sync::atomic::AtomicU64,
     /// Monotonic per-engine sequence used to stamp `createdAt` on CRUD
@@ -251,16 +207,30 @@ struct EngineInner {
     /// deterministic across rapid-fire creates that might otherwise collide
     /// on a wall-clock timestamp.
     created_at_seq: std::sync::atomic::AtomicU64,
+    /// Pre-built subgraph templates keyed on `(handler_id, op)`. See
+    /// [`SubgraphCache`] — closes r6-perf-5.
+    subgraph_cache: SubgraphCache,
 }
 
 impl EngineInner {
     fn new() -> Self {
+        Self::with_change_stream_capacity(CHANGE_STREAM_MAX_BUFFERED)
+    }
+
+    fn with_change_stream_capacity(capacity: usize) -> Self {
+        // Defensive: a capacity of 0 would reject every event. Clamp to 1 so
+        // the bounded-drain invariant still holds and at least the most
+        // recent event is visible to a late-attached probe.
+        let capacity = capacity.max(1);
         Self {
             handlers: std::sync::Mutex::new(BTreeMap::new()),
             specs: std::sync::Mutex::new(BTreeMap::new()),
             observed_events: std::sync::Mutex::new(Vec::new()),
+            change_stream_capacity: capacity,
+            dropped_events: std::sync::atomic::AtomicU64::new(0),
             event_count: std::sync::atomic::AtomicU64::new(0),
             created_at_seq: std::sync::atomic::AtomicU64::new(0),
+            subgraph_cache: SubgraphCache::new(),
         }
     }
 
@@ -272,6 +242,16 @@ impl EngineInner {
             .observed_events
             .lock()
             .unwrap_or_else(|e| e.into_inner());
+        // Drop-oldest overflow policy (r6-sec-5). The attacker vector is an
+        // unlimited producer racing a stalled subscriber; retaining the
+        // newest-N means the live consumer sees up-to-date state the moment
+        // it drains, at the cost of losing the oldest-N. The dropped-count
+        // metric surfaces the lag loud.
+        while guard.len() >= self.change_stream_capacity {
+            guard.remove(0);
+            self.dropped_events
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
         guard.push((seq, event.clone()));
     }
 
@@ -294,6 +274,84 @@ impl EngineInner {
             }
         });
         out
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Subgraph cache (r6-perf-5)
+// ---------------------------------------------------------------------------
+
+/// Thread-safe cache of pre-built `benten_eval::Subgraph` templates keyed on
+/// `(handler_id, op_name)`.
+///
+/// Rationale: `dispatch_call` previously rebuilt the op-specific Subgraph on
+/// every invocation — a fresh `SubgraphBuilder` + edges + `build_unvalidated_
+/// for_test`, for every `engine.call(...)`. For a hot-loop caller (1k calls/s
+/// against a `crud('post').create` handler), that is 1k fully-allocated
+/// Subgraph instances per second plus the per-call BLAKE3 + DAG-CBOR that
+/// `build_unvalidated_for_test` performs internally. r6-perf-5 flagged this
+/// as a major hotspot.
+///
+/// Contract:
+/// * Handlers in Phase-1 are immutable once registered; the cache does NOT
+///   invalidate on re-register (re-register itself is an idempotent no-op
+///   or a `DuplicateHandler` error).
+/// * The cache stores *templates* — the static shape of the subgraph for a
+///   given `(handler_id, op_name)`. Per-call inputs (stamped `createdAt`,
+///   resolved target CIDs, serialized property bags) are patched onto the
+///   cloned template in `subgraph_for_crud` after the cache lookup. The
+///   cache itself holds no per-call state.
+/// * Thread-safe via `RwLock` — the hot path is all reads; misses briefly
+///   hold a write lock to `insert`.
+///
+/// Backed by a simple `HashMap` rather than a bounded LRU because the
+/// cache key space is bounded by (registered handlers × primitive ops),
+/// which is tiny in Phase-1 (a handful of CRUD labels × 5 ops). Phase-2
+/// should revisit when user-registered subgraphs are long-lived and
+/// handler_id count can grow large.
+#[derive(Default)]
+struct SubgraphCache {
+    entries: std::sync::RwLock<std::collections::HashMap<SubgraphCacheKey, benten_eval::Subgraph>>,
+}
+
+/// Cache key. Owned-string so the cache can outlive the dispatch stack that
+/// produced the lookup.
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct SubgraphCacheKey {
+    handler_id: String,
+    op: String,
+}
+
+impl SubgraphCache {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    /// Return a clone of the cached template for `(handler_id, op)`, or
+    /// `None` on a miss. Callers then build the subgraph and store it via
+    /// [`Self::insert`].
+    fn get(&self, handler_id: &str, op: &str) -> Option<benten_eval::Subgraph> {
+        let guard = self.entries.read().unwrap_or_else(|e| e.into_inner());
+        guard
+            .get(&SubgraphCacheKey {
+                handler_id: handler_id.to_string(),
+                op: op.to_string(),
+            })
+            .cloned()
+    }
+
+    /// Insert a fresh template under `(handler_id, op)`. Safe to call
+    /// concurrently — last writer wins, but since handlers are immutable
+    /// the value is identical across concurrent constructors.
+    fn insert(&self, handler_id: &str, op: &str, sg: benten_eval::Subgraph) {
+        let mut guard = self.entries.write().unwrap_or_else(|e| e.into_inner());
+        guard.insert(
+            SubgraphCacheKey {
+                handler_id: handler_id.to_string(),
+                op: op.to_string(),
+            },
+            sg,
+        );
     }
 }
 
@@ -1007,6 +1065,16 @@ impl Engine {
     /// returned `list_hint`, when `Some`, directs the outcome mapper to
     /// populate `Outcome.list` by walking the label index — the read path
     /// that currently has no direct Evaluator primitive in Phase 1.
+    ///
+    /// Caches the static template for each `(crud:<label>, op)` pair via
+    /// [`SubgraphCache`] — r6-perf-5. The cache stores the shape + static
+    /// properties (`op`, `label`, `query_kind`); per-call inputs (stamped
+    /// `createdAt`, resolved target CIDs, serialized property bags) are
+    /// patched onto the cloned template.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "four-op dispatch arm + cache-miss template construction; splitting hurts local readability more than it helps"
+    )]
     fn subgraph_for_crud(
         &self,
         label: &str,
@@ -1016,6 +1084,7 @@ impl Engine {
         // Strip an optional leading `<label>:` prefix in the op argument so
         // both `"create"` and `"post:create"` dispatch identically.
         let op_name = op.split_once(':').map_or(op, |(_, o)| o);
+        let cache_handler = format!("crud:{label}");
         match op_name {
             "create" => {
                 let mut props = input.properties.clone();
@@ -1035,17 +1104,29 @@ impl Engine {
                     .entry("createdAt".to_string())
                     .or_insert(Value::Int(i64::try_from(created_at).unwrap_or(i64::MAX)));
 
-                let mut sb = benten_eval::SubgraphBuilder::new(format!("crud:{label}:create"));
-                let w = sb.write(format!("crud_{label}_write"));
-                let r = sb.respond(w);
-                let _ = r;
-                let mut sg = sb.build_unvalidated_for_test();
-                // Backfill WRITE properties — the builder doesn't expose an
-                // ergonomic way to do this, so we mutate the Subgraph's
-                // internal OperationNode directly at construction time.
+                let mut sg = self
+                    .inner
+                    .subgraph_cache
+                    .get(&cache_handler, "create")
+                    .unwrap_or_else(|| {
+                        let mut sb =
+                            benten_eval::SubgraphBuilder::new(format!("crud:{label}:create"));
+                        let w = sb.write(format!("crud_{label}_write"));
+                        let _ = sb.respond(w);
+                        let mut sg = sb.build_unvalidated_for_test();
+                        // Backfill STATIC WRITE properties — everything that
+                        // is invariant across calls for this (label, op).
+                        if let Some(w_node) = sg.write_op_mut() {
+                            w_node.properties.insert("op".into(), Value::text("create"));
+                            w_node.properties.insert("label".into(), Value::text(label));
+                        }
+                        self.inner
+                            .subgraph_cache
+                            .insert(&cache_handler, "create", sg.clone());
+                        sg
+                    });
+                // Patch the per-call property bag onto the cloned template.
                 if let Some(w_node) = sg.write_op_mut() {
-                    w_node.properties.insert("op".into(), Value::text("create"));
-                    w_node.properties.insert("label".into(), Value::text(label));
                     w_node
                         .properties
                         .insert("properties".into(), Value::Map(props));
@@ -1058,23 +1139,44 @@ impl Engine {
                 // dedicated post-evaluator walk (list_hint) because the
                 // Phase-1 READ output shape is a list of base32 CID strings
                 // rather than a list of Nodes.
-                let mut sb = benten_eval::SubgraphBuilder::new(format!("crud:{label}:list"));
-                let r = sb.read(format!("crud_{label}_list"));
-                let _ = sb.respond(r);
-                let mut sg = sb.build_unvalidated_for_test();
-                if let Some(r_node) = sg.first_op_mut() {
-                    r_node
-                        .properties
-                        .insert("query_kind".into(), Value::text("by_label"));
-                    r_node.properties.insert("label".into(), Value::text(label));
-                }
+                let sg = self
+                    .inner
+                    .subgraph_cache
+                    .get(&cache_handler, "list")
+                    .unwrap_or_else(|| {
+                        let mut sb =
+                            benten_eval::SubgraphBuilder::new(format!("crud:{label}:list"));
+                        let r = sb.read(format!("crud_{label}_list"));
+                        let _ = sb.respond(r);
+                        let mut sg = sb.build_unvalidated_for_test();
+                        if let Some(r_node) = sg.first_op_mut() {
+                            r_node
+                                .properties
+                                .insert("query_kind".into(), Value::text("by_label"));
+                            r_node.properties.insert("label".into(), Value::text(label));
+                        }
+                        self.inner
+                            .subgraph_cache
+                            .insert(&cache_handler, "list", sg.clone());
+                        sg
+                    });
                 Ok((sg, Some(label.to_string())))
             }
             "get" => {
-                let mut sb = benten_eval::SubgraphBuilder::new(format!("crud:{label}:get"));
-                let r = sb.read(format!("crud_{label}_get"));
-                let _ = sb.respond(r);
-                let mut sg = sb.build_unvalidated_for_test();
+                let mut sg = self
+                    .inner
+                    .subgraph_cache
+                    .get(&cache_handler, "get")
+                    .unwrap_or_else(|| {
+                        let mut sb = benten_eval::SubgraphBuilder::new(format!("crud:{label}:get"));
+                        let r = sb.read(format!("crud_{label}_get"));
+                        let _ = sb.respond(r);
+                        let sg = sb.build_unvalidated_for_test();
+                        self.inner
+                            .subgraph_cache
+                            .insert(&cache_handler, "get", sg.clone());
+                        sg
+                    });
                 // Signal to the outcome mapper that this single-get should
                 // surface the Node via `list` as a single-entry vector.
                 let resolved_cid = if let Some(Value::Text(wanted)) = input.properties.get("cid") {
@@ -1111,10 +1213,21 @@ impl Engine {
                     Some(Value::Text(s)) => self.lookup_cid_by_base32(label, s)?,
                     _ => None,
                 };
-                let mut sb = benten_eval::SubgraphBuilder::new(format!("crud:{label}:delete"));
-                let w = sb.write(format!("crud_{label}_delete"));
-                let _ = sb.respond(w);
-                let mut sg = sb.build_unvalidated_for_test();
+                let mut sg = self
+                    .inner
+                    .subgraph_cache
+                    .get(&cache_handler, "delete")
+                    .unwrap_or_else(|| {
+                        let mut sb =
+                            benten_eval::SubgraphBuilder::new(format!("crud:{label}:delete"));
+                        let w = sb.write(format!("crud_{label}_delete"));
+                        let _ = sb.respond(w);
+                        let sg = sb.build_unvalidated_for_test();
+                        self.inner
+                            .subgraph_cache
+                            .insert(&cache_handler, "delete", sg.clone());
+                        sg
+                    });
                 if let Some(w_node) = sg.first_op_mut() {
                     match target {
                         Some(cid) => {
@@ -1547,6 +1660,16 @@ impl Engine {
     }
 
     /// Metric snapshot for compromise-5 regression tests.
+    ///
+    /// Surfaces:
+    /// - `benten.writes.total` — cumulative ChangeEvents observed.
+    /// - `benten.ivm.view_stale_count` — Phase-1 placeholder; Phase-2 wires
+    ///   the real counter.
+    /// - `benten.change_stream.dropped_events` — ChangeEvents evicted from
+    ///   the bounded observed-events buffer because a subscriber fell behind
+    ///   the write path (r6-sec-5). Non-zero means an operator should
+    ///   increase the capacity via
+    ///   [`EngineBuilder::change_stream_capacity`] or ensure probes drain.
     #[must_use]
     pub fn metrics_snapshot(&self) -> BTreeMap<String, f64> {
         let mut out = BTreeMap::new();
@@ -1554,13 +1677,32 @@ impl Engine {
             .inner
             .event_count
             .load(std::sync::atomic::Ordering::SeqCst);
+        let dropped = self
+            .inner
+            .dropped_events
+            .load(std::sync::atomic::Ordering::SeqCst);
         #[allow(
             clippy::cast_precision_loss,
             reason = "Phase-1 metric is best-effort; lossy cast from u64 to f64 is acceptable for the compromise-5 regression test."
         )]
-        out.insert("benten.writes.total".to_string(), n as f64);
+        {
+            out.insert("benten.writes.total".to_string(), n as f64);
+            out.insert(
+                "benten.change_stream.dropped_events".to_string(),
+                dropped as f64,
+            );
+        }
         out.insert("benten.ivm.view_stale_count".to_string(), 0.0);
         out
+    }
+
+    /// Configured upper bound on the in-memory change-event buffer. Matches
+    /// the value passed to [`EngineBuilder::change_stream_capacity`] (or
+    /// [`CHANGE_STREAM_MAX_BUFFERED`] when the default was taken). See
+    /// r6-sec-5.
+    #[must_use]
+    pub fn change_stream_capacity(&self) -> usize {
+        self.inner.change_stream_capacity
     }
 
     /// IVM subscriber count — used by thinness tests. Excludes the
@@ -1679,6 +1821,9 @@ pub struct EngineBuilder {
     /// cap refresh policy (see named compromise #1 / R4b finding
     /// `g4-p2-uc-2`).
     allow_revocation: bool,
+    /// Upper bound on the in-memory change-event buffer. `None` defaults to
+    /// [`CHANGE_STREAM_MAX_BUFFERED`]. See r6-sec-5.
+    change_stream_capacity: Option<usize>,
 }
 
 impl EngineBuilder {
@@ -1695,6 +1840,7 @@ impl EngineBuilder {
             backend: None,
             use_grant_backed: false,
             allow_revocation: false,
+            change_stream_capacity: None,
         }
     }
 
@@ -1786,6 +1932,24 @@ impl EngineBuilder {
         self
     }
 
+    /// Configure the upper bound on the in-memory change-event buffer held
+    /// by the engine for [`Engine::subscribe_change_events`] probes.
+    ///
+    /// When a subscriber lags behind the write path and the buffer reaches
+    /// this capacity, older events are dropped (oldest-first) and
+    /// `benten.change_stream.dropped_events` is incremented (observable via
+    /// [`Engine::metrics_snapshot`]). Defaults to
+    /// [`CHANGE_STREAM_MAX_BUFFERED`].
+    ///
+    /// Values of `0` are clamped to `1` so at least the most recent event
+    /// stays visible; use `.without_ivm()` plus refraining from subscribing
+    /// if you truly need a zero-buffer engine. See r6-sec-5.
+    #[must_use]
+    pub fn change_stream_capacity(mut self, n: usize) -> Self {
+        self.change_stream_capacity = Some(n);
+        self
+    }
+
     /// Provide a pre-opened backend.
     #[must_use]
     pub fn backend(mut self, b: RedbBackend) -> Self {
@@ -1839,7 +2003,10 @@ impl EngineBuilder {
     /// Assemble the engine from a fully-configured backend.
     fn assemble(self, backend: RedbBackend) -> Result<Engine, EngineError> {
         let backend = Arc::new(backend);
-        let inner = Arc::new(EngineInner::new());
+        let capacity = self
+            .change_stream_capacity
+            .unwrap_or(CHANGE_STREAM_MAX_BUFFERED);
+        let inner = Arc::new(EngineInner::with_change_stream_capacity(capacity));
         let broadcast = Arc::new(ChangeBroadcast::new());
 
         // Always attach a tap that records every ChangeEvent into the
@@ -2642,7 +2809,12 @@ trait GraphTxLike {
         handler_cid: Option<Cid>,
         capability_grant_cid: Option<Cid>,
     ) -> Result<Cid, GraphError>;
-    fn delete_node(&mut self, cid: &Cid) -> Result<(), GraphError>;
+    /// Delete a Node and return its captured labels so the engine-layer
+    /// transaction handle can thread them into
+    /// `benten_caps::PendingOp::DeleteNode` for capability-policy scope
+    /// derivation (r6-sec-8). An idempotent-miss delete returns an empty
+    /// vec.
+    fn delete_node(&mut self, cid: &Cid) -> Result<Vec<String>, GraphError>;
 }
 
 impl GraphTxLike for benten_graph::Transaction<'_> {
@@ -2668,7 +2840,7 @@ impl GraphTxLike for benten_graph::Transaction<'_> {
         )
     }
 
-    fn delete_node(&mut self, cid: &Cid) -> Result<(), GraphError> {
+    fn delete_node(&mut self, cid: &Cid) -> Result<Vec<String>, GraphError> {
         benten_graph::Transaction::delete_node(self, cid)
     }
 }
@@ -2733,12 +2905,22 @@ impl EngineTransaction<'_, '_> {
     }
 
     /// Delete a Node by CID inside the transaction.
+    ///
+    /// Threads the Node's labels (captured via read-before-delete inside
+    /// the lower-level redb transaction) into
+    /// `benten_caps::PendingOp::DeleteNode` so the capability policy can
+    /// derive the `store:<label>:write` scope for the delete. An
+    /// idempotent-miss delete yields an empty `labels` vec, which the
+    /// policy treats as a no-op. See r6-sec-8.
     pub fn delete_node(&mut self, cid: &Cid) -> Result<(), EngineError> {
-        self.inner.delete_node(cid).map_err(EngineError::Graph)?;
+        let labels = self.inner.delete_node(cid).map_err(EngineError::Graph)?;
         self.ops_collector
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .push(benten_caps::PendingOp::DeleteNode { cid: cid.clone() });
+            .push(benten_caps::PendingOp::DeleteNode {
+                cid: cid.clone(),
+                labels,
+            });
         Ok(())
     }
 

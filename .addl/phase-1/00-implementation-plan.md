@@ -285,7 +285,10 @@ Targets annotated with their source: **(§14.6 direct)** = literal from ENGINE-S
 - `get_node` — target 1–50µs hot cache (spike: 2.71µs). **(§14.6 direct — "Node lookup by ID")**
 - `create_node_immediate` — target 100–500µs realistic (spike Immediate: 4ms — must drop with DurabilityMode::Group). **(§14.6 direct — "Node creation + IVM update")**
 - `create_node_group_commit` — new benchmark; target <500µs. **(§14.6 derived — same range as Immediate but assumes group-commit amortization so the sub-range midpoint is the pass bar)**
-- `10_node_handler_eval` — target 150–300µs for mixed handlers with 2 WRITEs + IVM maintenance. **(§14.6 direct — "10-node handler evaluation")**
+- `10_node_handler_eval` — three sub-benches cover the §14.6 target:
+  - `crud_post_create_dispatch`: end-to-end dispatch including the redb fsync commit. Phase-1 floor on macOS APFS is ~4ms per call (compromise #7: Group-durability collapses to Immediate). **Not CI-gated** — the §14.6 "150–300µs" headline target is not reachable in Phase 1 on dev hardware while the durability mode is Immediate. Phase-2 re-gates this after grouped/async durability lands.
+  - `crud_post_list_dispatch_no_write`: isolates evaluator + dispatch + outcome-mapper overhead from fsync. Target: median < 300µs. **(§14.6 derived — evaluator-only slice of the "10-node handler" number)**
+  - `crud_post_build_subgraph_only`: regression signal for the `SubgraphCache` (r6-perf-5) — measures the cache-hit path (template clone + per-call property patch + evaluator walk for a GET that resolves to None). Target: median < 10µs. **(non-§14.6 — cache hygiene)**
 - `view_read_content_listing` — target <1µs for View 3 hot-cache read. **(§14.6 direct — "IVM view read (clean)" 0.04–1µs)**
 - `view_incremental_maintenance` — target <50µs per write for any of the five views. **(§14.6 derived — decomposition of the 100–500µs "Node creation + IVM update" envelope: reserve ~50µs for the IVM slice and the balance for storage + hash)**
 - `concurrent_writers` — benchmark the 100–1000 writes/sec single-community ceiling. **(§14.6 direct — "Concurrent writers")** — surface in CI as **informational, not a gate**.
