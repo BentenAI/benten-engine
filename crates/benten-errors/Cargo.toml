@@ -11,6 +11,12 @@ description = "Stable error-catalog discriminants for the Benten graph engine. R
 [lints]
 workspace = true
 
+[lib]
+# Disable the implicit libtest bench harness so `cargo bench --workspace`
+# passes Criterion CLI flags through without libtest rejecting them. See
+# benten-core/Cargo.toml for the longer rationale.
+bench = false
+
 [dependencies]
 # Intentionally no workspace dependencies — benten-errors sits at the
 # root of the crate graph so any crate can depend on it without pulling

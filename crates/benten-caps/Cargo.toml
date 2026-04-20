@@ -11,6 +11,12 @@ description = "Capability policy hook + NoAuthBackend for the Benten graph engin
 [lints]
 workspace = true
 
+[lib]
+# Disable the implicit libtest bench harness so `cargo bench --workspace`
+# passes Criterion CLI flags through without libtest rejecting them. See
+# benten-core/Cargo.toml for the longer rationale.
+bench = false
+
 [dependencies]
 benten-core = { path = "../benten-core" }
 benten-errors = { workspace = true }

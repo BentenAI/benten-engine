@@ -32,7 +32,7 @@
 //!   restores the original budget (g5-cr-3 uniform budget-on-rebuild).
 
 use alloc::collections::BTreeMap;
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use benten_core::{Cid, Node, Value};
@@ -345,11 +345,16 @@ impl View for ContentListingView {
             return Err(BudgetTracker::stale_error(VIEW_ID));
         }
         // Phase-1: if the query names a label, it must match this view's
-        // watched label. If it doesn't, return empty (the query is for a
-        // different listing).
+        // watched label. A mismatch is an `E_IVM_PATTERN_MISMATCH` rather
+        // than a silently-empty result (r6b §5.5 audit: silent-empty made
+        // "no entries" and "queried a different listing" look identical).
+        // Queries with no `label` filter still return the full listing.
         if let Some(ref wanted) = query.label {
             if wanted != &self.label {
-                return Ok(ViewResult::Cids(Vec::new()));
+                return Err(ViewError::PatternMismatch(
+                    "content_listing: query label does not match this view's watched label"
+                        .to_string(),
+                ));
             }
         }
         let offset = query.offset.unwrap_or(0);

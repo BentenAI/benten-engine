@@ -11,6 +11,12 @@ description = "Operation primitives and evaluator for the Benten graph engine (P
 [lints]
 workspace = true
 
+[lib]
+# Disable the implicit libtest bench harness so `cargo bench --workspace`
+# passes Criterion CLI flags through without libtest rejecting them. See
+# benten-core/Cargo.toml for the longer rationale.
+bench = false
+
 [features]
 # `diag` gates `subgraph.to_mermaid()` + `engine.trace()`. Default off in
 # `benten-eval` (keeps the thin-engine slim-build viable). `benten-engine`

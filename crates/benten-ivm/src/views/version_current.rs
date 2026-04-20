@@ -23,6 +23,7 @@
 //!   originally-configured budget (g5-cr-3).
 
 use alloc::collections::BTreeMap;
+use alloc::string::ToString;
 
 use benten_core::{Cid, Node};
 use benten_graph::{ChangeEvent, ChangeKind};
@@ -210,7 +211,18 @@ impl View for VersionCurrentView {
         if self.budget.is_stale() {
             return Err(BudgetTracker::stale_error(VIEW_ID));
         }
-        let anchor_id = query.anchor_id.unwrap_or(DEFAULT_ANCHOR_ID);
+        // This view keys on `anchor_id`. A query that supplies no
+        // `anchor_id` has no partition to serve; fail fast with
+        // `E_IVM_PATTERN_MISMATCH` rather than silently falling through to
+        // the `DEFAULT_ANCHOR_ID` convenience default (r6b §5.5). The
+        // default-anchor fallback survives on the ingress path (`on_change`
+        // / Node writes without an `anchor_id` property still attribute to
+        // anchor 1) — this change only tightens the read contract.
+        let Some(anchor_id) = query.anchor_id else {
+            return Err(ViewError::PatternMismatch(
+                "version_current: query missing required `anchor_id`".to_string(),
+            ));
+        };
         Ok(ViewResult::Current(self.current.get(&anchor_id).cloned()))
     }
 

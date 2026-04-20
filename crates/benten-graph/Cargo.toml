@@ -11,6 +11,12 @@ description = "Storage abstraction (KVBackend trait) and redb implementation for
 [lints]
 workspace = true
 
+[lib]
+# Disable the implicit libtest bench harness so `cargo bench --workspace`
+# passes Criterion CLI flags through without libtest rejecting them. See
+# benten-core/Cargo.toml for the longer rationale.
+bench = false
+
 [features]
 # `test-fixtures` gates the `write-canonical-and-exit` binary target so a
 # downstream `cargo install benten-graph --no-default-features` does not

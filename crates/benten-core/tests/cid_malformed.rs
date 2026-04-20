@@ -32,13 +32,28 @@ fn well_formed_cid_bytes() -> [u8; CID_LEN] {
     buf
 }
 
-/// Helper: every parse failure must be typed `CoreError::InvalidCid(_)` and
-/// carry the catalog code the catalog prescribes. When the ErrorCode enum
-/// lands in R5, swap the string-match for `e.code() == ErrorCode::*`.
+/// Helper: a structural parse failure must be `CoreError::InvalidCid(_)`
+/// (maps to `E_CID_PARSE`).
 fn assert_core_error_is_invalid_cid(err: &CoreError) {
     match err {
         CoreError::InvalidCid(_) => {}
         other => panic!("expected CoreError::InvalidCid, got {other:?}"),
+    }
+}
+
+/// Helper: a catalogued-but-typed parse failure — any of the three
+/// `from_bytes` failure classes is acceptable for inputs where multiple
+/// bytes are corrupted at once (the checker short-circuits on the first
+/// mismatch).
+fn assert_core_error_is_cid_class(err: &CoreError) {
+    match err {
+        CoreError::InvalidCid(_)
+        | CoreError::CidUnsupportedCodec
+        | CoreError::CidUnsupportedHash => {}
+        other => panic!(
+            "expected CoreError::{{InvalidCid, CidUnsupportedCodec, CidUnsupportedHash}}, \
+             got {other:?}"
+        ),
     }
 }
 
@@ -84,12 +99,16 @@ fn cid_parse_errors() {
 fn cid_unsupported_codec() {
     // E_CID_UNSUPPORTED_CODEC — replace `dag-cbor` (0x71) with `raw` (0x55)
     // or `dag-json` (0x0129 truncated). Both must be rejected because Benten
-    // CIDs are dag-cbor-only in Phase 1.
+    // CIDs are dag-cbor-only in Phase 1. Post r6b the error is typed
+    // `CidUnsupportedCodec` rather than folding to `InvalidCid`.
     for rogue_codec in [0x55, 0x70, 0x00, 0xff] {
         let mut buf = well_formed_cid_bytes();
         buf[1] = rogue_codec;
         let err = Cid::from_bytes(&buf).unwrap_err();
-        assert_core_error_is_invalid_cid(&err);
+        match err {
+            CoreError::CidUnsupportedCodec => {}
+            other => panic!("expected CoreError::CidUnsupportedCodec, got {other:?}"),
+        }
     }
 }
 
@@ -97,23 +116,30 @@ fn cid_unsupported_codec() {
 fn cid_unsupported_hash() {
     // E_CID_UNSUPPORTED_HASH — replace BLAKE3 (0x1e) with SHA-256 (0x12),
     // SHA-512 (0x13), or Keccak-256 (0x1b). All must be rejected —
-    // Benten CIDs are BLAKE3-only.
+    // Benten CIDs are BLAKE3-only. Post r6b the error is typed
+    // `CidUnsupportedHash` rather than folding to `InvalidCid`.
     for rogue_hash in [0x12, 0x13, 0x1b, 0x00, 0xff] {
         let mut buf = well_formed_cid_bytes();
         buf[2] = rogue_hash;
         let err = Cid::from_bytes(&buf).unwrap_err();
-        assert_core_error_is_invalid_cid(&err);
+        match err {
+            CoreError::CidUnsupportedHash => {}
+            other => panic!("expected CoreError::CidUnsupportedHash, got {other:?}"),
+        }
     }
 }
 
 #[test]
 fn cid_parse_rejects_noncontiguous_corruption() {
     // Belt-and-suspenders: corrupt *every* header byte position. None of
-    // these produce a valid Benten CID, and none may panic.
+    // these produce a valid Benten CID, and none may panic. Accepts any of
+    // the three typed failure classes (r6b split: version/length corruption
+    // still hits `InvalidCid`; multicodec corruption hits
+    // `CidUnsupportedCodec`; multihash corruption hits `CidUnsupportedHash`).
     for idx in 0..4usize {
         let mut buf = well_formed_cid_bytes();
         buf[idx] = buf[idx].wrapping_add(1);
         let err = Cid::from_bytes(&buf).unwrap_err();
-        assert_core_error_is_invalid_cid(&err);
+        assert_core_error_is_cid_class(&err);
     }
 }

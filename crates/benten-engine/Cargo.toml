@@ -11,6 +11,12 @@ description = "Orchestrator crate composing the Benten graph engine public API."
 [lints]
 workspace = true
 
+[lib]
+# Disable the implicit libtest bench harness so `cargo bench --workspace`
+# passes Criterion CLI flags through without libtest rejecting them. See
+# benten-core/Cargo.toml for the longer rationale.
+bench = false
+
 [features]
 # Expose test-only helper methods on Engine (e.g.
 # `test_subscribe_all_change_events`, `testing_insert_privileged_fixture`).

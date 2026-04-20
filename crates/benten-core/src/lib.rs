@@ -268,8 +268,21 @@ impl Cid {
     ///
     /// # Errors
     ///
-    /// Returns [`CoreError::InvalidCid`] with a reason if the bytes are
-    /// malformed.
+    /// The error arms distinguish three catalogued failure classes:
+    ///
+    /// - [`CoreError::InvalidCid`] (maps to `E_CID_PARSE`) — structural
+    ///   failures: wrong length, wrong CID version byte, wrong advertised
+    ///   digest length.
+    /// - [`CoreError::CidUnsupportedCodec`] (maps to `E_CID_UNSUPPORTED_CODEC`)
+    ///   — CID uses a multicodec other than `dag-cbor` (`0x71`).
+    /// - [`CoreError::CidUnsupportedHash`] (maps to `E_CID_UNSUPPORTED_HASH`)
+    ///   — CID uses a multihash other than BLAKE3 (`0x1e`).
+    ///
+    /// Splitting the three classes was a spec-to-code audit finding
+    /// (r6b audit §5.4): the catalog promises distinct codes so a Phase-3
+    /// sync layer or operator can tell "malformed bytes" apart from
+    /// "protocol-mismatch". Before the split every case folded to
+    /// `E_CID_PARSE` and the other two catalog codes were unreachable.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, CoreError> {
         if bytes.len() != CID_LEN {
             return Err(CoreError::InvalidCid("wrong length"));
@@ -278,10 +291,10 @@ impl Cid {
             return Err(CoreError::InvalidCid("wrong CID version"));
         }
         if bytes[1] != MULTICODEC_DAG_CBOR {
-            return Err(CoreError::InvalidCid("wrong multicodec"));
+            return Err(CoreError::CidUnsupportedCodec);
         }
         if bytes[2] != MULTIHASH_BLAKE3 {
-            return Err(CoreError::InvalidCid("wrong multihash code"));
+            return Err(CoreError::CidUnsupportedHash);
         }
         if bytes[3] != BLAKE3_DIGEST_LEN {
             return Err(CoreError::InvalidCid("wrong digest length"));

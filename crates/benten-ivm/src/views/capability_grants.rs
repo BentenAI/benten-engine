@@ -245,14 +245,22 @@ impl View for CapabilityGrantsView {
         if self.budget.is_stale() {
             return Err(BudgetTracker::stale_error(VIEW_ID));
         }
-        let cids = match &query.entity_cid {
-            Some(entity) => self
-                .by_entity
-                .get(entity)
-                .map(|s| s.iter().cloned().collect())
-                .unwrap_or_default(),
-            None => Vec::new(),
+        // This view maintains a single index: `entity_cid → Set<Cid>`. A
+        // query that names no `entity_cid` has no partition to serve; fail
+        // fast with `E_IVM_PATTERN_MISMATCH` rather than silently returning
+        // an empty `Cids` set (r6b §5.5 audit: the catalog documents this
+        // code and the TS binding raises a typed error — returning empty
+        // silently makes every mismatched query look like an empty result).
+        let Some(entity) = query.entity_cid.as_ref() else {
+            return Err(ViewError::PatternMismatch(
+                "capability_grants: query missing required `entity_cid`".to_string(),
+            ));
         };
+        let cids = self
+            .by_entity
+            .get(entity)
+            .map(|s| s.iter().cloned().collect())
+            .unwrap_or_default();
         Ok(ViewResult::Cids(cids))
     }
 

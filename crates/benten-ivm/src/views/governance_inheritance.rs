@@ -247,22 +247,25 @@ impl View for GovernanceInheritanceView {
         if self.budget.is_stale() {
             return Err(BudgetTracker::stale_error(VIEW_ID));
         }
-        let rules_map: BTreeMap<String, benten_core::Value> = match &query.entity_cid {
-            Some(entity) => {
-                let resolved = self.effective_rules(entity);
-                let mut m = BTreeMap::new();
-                m.insert(
-                    "depth".into(),
-                    benten_core::Value::Int(resolved.depth as i64),
-                );
-                m.insert(
-                    "rule_count".into(),
-                    benten_core::Value::Int(resolved.rules.len() as i64),
-                );
-                m
-            }
-            None => BTreeMap::new(),
+        // This view maintains `entity_cid → effective_rules`. A query that
+        // names no `entity_cid` has no partition to serve; fail fast with
+        // `E_IVM_PATTERN_MISMATCH` rather than silently returning an empty
+        // rules map (r6b §5.5).
+        let Some(entity) = query.entity_cid.as_ref() else {
+            return Err(ViewError::PatternMismatch(
+                "governance_inheritance: query missing required `entity_cid`".to_string(),
+            ));
         };
+        let resolved = self.effective_rules(entity);
+        let mut rules_map: BTreeMap<String, benten_core::Value> = BTreeMap::new();
+        rules_map.insert(
+            "depth".into(),
+            benten_core::Value::Int(resolved.depth as i64),
+        );
+        rules_map.insert(
+            "rule_count".into(),
+            benten_core::Value::Int(resolved.rules.len() as i64),
+        );
         Ok(ViewResult::Rules(rules_map))
     }
 
