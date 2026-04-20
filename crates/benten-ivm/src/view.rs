@@ -10,7 +10,7 @@
 //! subscriber marks the view [`ViewState::Stale`] and strict reads return
 //! [`ErrorCode::IvmViewStale`].
 //!
-//! [`ErrorCode::IvmViewStale`]: benten_core::ErrorCode::IvmViewStale
+//! [`ErrorCode::IvmViewStale`]: benten_errors::ErrorCode::IvmViewStale
 
 use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
@@ -32,13 +32,13 @@ extern crate alloc;
 /// Mapped to stable codes in the [`ErrorCode`] catalog so cross-language
 /// consumers (TS bindings, CLI) see the same string at every boundary.
 ///
-/// [`ErrorCode`]: benten_core::ErrorCode
+/// [`ErrorCode`]: benten_errors::ErrorCode
 #[derive(Debug, thiserror::Error)]
 pub enum ViewError {
     /// The view's incremental state is stale — a prior update tripped its
     /// budget and the view has not been rebuilt since. Strict reads refuse;
     /// relaxed reads (`allow_stale = true`) return the last-known-good
-    /// snapshot. Maps to [`ErrorCode::IvmViewStale`](benten_core::ErrorCode::IvmViewStale).
+    /// snapshot. Maps to [`ErrorCode::IvmViewStale`](benten_errors::ErrorCode::IvmViewStale).
     #[error("view stale: {view_id}")]
     Stale {
         /// Stable view identifier (e.g. `"content_listing"`).
@@ -63,20 +63,20 @@ impl ViewError {
     /// Stable error-catalog code for this error. Lets cross-language bindings
     /// surface the same string every time.
     #[must_use]
-    pub fn code(&self) -> benten_core::ErrorCode {
+    pub fn code(&self) -> benten_errors::ErrorCode {
         match self {
             // Stale and BudgetExceeded both map to E_IVM_VIEW_STALE — the
             // budget trip IS the reason the view is stale, so they share a
             // single stable catalog code.
             ViewError::Stale { .. } | ViewError::BudgetExceeded(_) => {
-                benten_core::ErrorCode::IvmViewStale
+                benten_errors::ErrorCode::IvmViewStale
             }
             // PatternMismatch: the caller asked the view for an index
             // partition it doesn't maintain (query shape invalid). r6-err-5
             // introduced `E_IVM_PATTERN_MISMATCH` so this runtime-query
             // shape error no longer shares a code with the registration-
             // time `E_INV_REGISTRATION` catch-all.
-            ViewError::PatternMismatch(_) => benten_core::ErrorCode::IvmPatternMismatch,
+            ViewError::PatternMismatch(_) => benten_errors::ErrorCode::IvmPatternMismatch,
         }
     }
 }

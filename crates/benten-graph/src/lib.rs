@@ -25,8 +25,8 @@
 #![warn(missing_docs)]
 #![allow(clippy::todo, reason = "Phase 1 stubs cleared as G2-B/G3/G5/G6 land")]
 
-pub use benten_core::ErrorCode;
 use benten_core::{Cid, CoreError, Node};
+pub use benten_errors::ErrorCode;
 
 pub mod backend;
 pub(crate) mod indexes;

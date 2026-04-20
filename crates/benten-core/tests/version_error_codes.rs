@@ -4,7 +4,8 @@
 #![allow(clippy::unwrap_used)]
 
 use benten_core::version::VersionError;
-use benten_core::{Cid, ErrorCode, Node};
+use benten_core::{Cid, Node};
+use benten_errors::ErrorCode;
 
 fn fake_cid() -> Cid {
     // Any well-formed Node CID is fine here — the test only needs a stable

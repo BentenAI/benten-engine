@@ -8,7 +8,7 @@
 #![allow(clippy::unwrap_used)]
 
 use benten_caps::CapError;
-use benten_core::ErrorCode;
+use benten_errors::ErrorCode;
 
 #[test]
 fn cap_error_codes_match_catalog() {

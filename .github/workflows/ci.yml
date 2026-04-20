@@ -262,7 +262,7 @@ jobs:
 
   # --------------------------------------------------------------------------
   # T7 — error-catalog drift detector. Bidirectional parity check across
-  # docs/ERROR-CATALOG.md, crates/benten-core/src/error_code.rs, and
+  # docs/ERROR-CATALOG.md, crates/benten-errors/src/lib.rs, and
   # packages/engine/src/errors.generated.ts (+ errors.ts fallback).
   # --------------------------------------------------------------------------
   drift-detector:

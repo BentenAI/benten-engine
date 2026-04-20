@@ -9,7 +9,7 @@
 //! (fuzzing, DoS-shaped CIDs) is owned by rust-test-writer-security.
 //!
 //! R3 contract: these tests fail today because the Phase-1 error-code enum
-//! (`benten_core::ErrorCode`) does not yet exist and `Cid::from_bytes` currently
+//! (`benten_errors::ErrorCode`) does not yet exist and `Cid::from_bytes` currently
 //! returns a free-form `&'static str`. R5 lands the `ErrorCode` surface and
 //! wires each parse failure to the canonical code. The assertions below pin
 //! the mapping so R5 cannot drift.

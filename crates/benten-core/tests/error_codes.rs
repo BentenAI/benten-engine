@@ -8,7 +8,8 @@
 
 #![allow(clippy::unwrap_used)]
 
-use benten_core::{CoreError, ErrorCode};
+use benten_core::CoreError;
+use benten_errors::ErrorCode;
 
 #[test]
 fn error_code_as_str_stable_for_inv_cycle() {

@@ -31,9 +31,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_core::ErrorCode;
 use benten_engine::Engine;
 use benten_engine::testing::{read_handler_for, subject_with_no_read_grants};
+use benten_errors::ErrorCode;
 
 /// Option A: read denial returns `E_CAP_DENIED_READ`, NOT `E_NOT_FOUND`.
 #[test]

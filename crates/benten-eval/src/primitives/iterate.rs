@@ -11,7 +11,7 @@
 //! - `max: Int` — the iteration cap. Required at *registration* time
 //!   (enforced by [`SubgraphBuilder`](crate::SubgraphBuilder) — missing
 //!   `max` is impossible to express in Phase 1, see
-//!   [`ErrorCode::InvIterateMaxMissing`](benten_core::ErrorCode)). The
+//!   [`ErrorCode::InvIterateMaxMissing`](benten_errors::ErrorCode)). The
 //!   executor additionally routes `ON_LIMIT` if the actual item count
 //!   exceeds `max`.
 //! - `parallel: Bool` — when `true`, the evaluator invokes the body on

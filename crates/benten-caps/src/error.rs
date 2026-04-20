@@ -10,7 +10,7 @@
 //! See `docs/ENGINE-SPEC.md` §9 for the capability posture and the R1
 //! triage for the TOCTOU window named compromise.
 
-use benten_core::ErrorCode;
+use benten_errors::ErrorCode;
 
 /// Typed capability errors.
 ///

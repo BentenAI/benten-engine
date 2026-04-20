@@ -7,7 +7,7 @@
 //!   denials as on write denials.
 
 use benten_caps::CapError;
-use benten_core::ErrorCode;
+use benten_errors::ErrorCode;
 
 #[test]
 fn denied_display_does_not_contain_escaped_quotes() {

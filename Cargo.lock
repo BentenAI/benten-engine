@@ -78,6 +78,7 @@ version = "0.1.0"
 dependencies = [
  "benten-core",
  "benten-engine",
+ "benten-errors",
  "benten-graph",
  "proptest",
  "tempfile",
@@ -88,6 +89,7 @@ dependencies = [
 name = "benten-core"
 version = "0.1.0"
 dependencies = [
+ "benten-errors",
  "blake3",
  "criterion",
  "proptest",
@@ -105,6 +107,7 @@ version = "0.1.0"
 dependencies = [
  "benten-caps",
  "benten-core",
+ "benten-errors",
  "benten-eval",
  "benten-graph",
  "benten-ivm",
@@ -115,12 +118,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "benten-errors"
+version = "0.1.0"
+
+[[package]]
 name = "benten-eval"
 version = "0.1.0"
 dependencies = [
  "benten-caps",
  "benten-core",
  "benten-engine",
+ "benten-errors",
  "benten-graph",
  "blake3",
  "criterion",
@@ -137,6 +145,7 @@ version = "0.1.0"
 dependencies = [
  "benten-core",
  "benten-engine",
+ "benten-errors",
  "criterion",
  "proptest",
  "redb",
@@ -150,6 +159,7 @@ name = "benten-ivm"
 version = "0.1.0"
 dependencies = [
  "benten-core",
+ "benten-errors",
  "benten-graph",
  "blake3",
  "criterion",
@@ -165,6 +175,7 @@ dependencies = [
  "benten-caps",
  "benten-core",
  "benten-engine",
+ "benten-errors",
  "napi",
  "napi-build",
  "napi-derive",

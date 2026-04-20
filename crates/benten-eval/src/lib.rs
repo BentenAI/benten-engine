@@ -23,8 +23,8 @@
     reason = "Invariant-validation pass is intentionally linear so the code reads top-to-bottom as the invariant list"
 )]
 
-pub use benten_core::ErrorCode;
 use benten_core::{Cid, Value};
+pub use benten_errors::ErrorCode;
 use std::collections::BTreeMap;
 
 pub mod context;

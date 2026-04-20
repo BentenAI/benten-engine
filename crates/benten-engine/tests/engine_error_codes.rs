@@ -5,8 +5,8 @@
 //! - `EngineError::code()` delegates to `ErrorCode::as_static_str()` — the
 //!   engine no longer duplicates the match arms from `benten-core`.
 
-use benten_core::ErrorCode;
 use benten_engine::EngineError;
+use benten_errors::ErrorCode;
 
 #[test]
 fn duplicate_handler_routes_to_catalog_variant() {

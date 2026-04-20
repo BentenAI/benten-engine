@@ -21,6 +21,7 @@ diag = []
 
 [dependencies]
 benten-core = { path = "../benten-core" }
+benten-errors = { workspace = true }
 benten-graph = { path = "../benten-graph" }
 benten-caps = { path = "../benten-caps" }
 blake3 = { workspace = true }

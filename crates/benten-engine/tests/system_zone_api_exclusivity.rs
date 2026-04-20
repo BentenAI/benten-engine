@@ -22,8 +22,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_core::{ErrorCode, Node, Value};
+use benten_core::{Node, Value};
 use benten_engine::{Engine, EngineError};
+use benten_errors::ErrorCode;
 
 fn system_labeled_node() -> Node {
     let mut props = std::collections::BTreeMap::new();

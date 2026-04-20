@@ -308,7 +308,7 @@ pub(crate) fn eval_error_to_engine_error(e: benten_eval::EvalError) -> EngineErr
         benten_eval::EvalError::Graph(g) => EngineError::Graph(g),
         benten_eval::EvalError::Core(c) => EngineError::Core(c),
         benten_eval::EvalError::Backend(m) => EngineError::Other {
-            code: benten_core::ErrorCode::Unknown("E_BACKEND".into()),
+            code: benten_errors::ErrorCode::Unknown("E_BACKEND".into()),
             message: m,
         },
         other => EngineError::Other {

@@ -31,7 +31,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_core::ErrorCode;
+use benten_errors::ErrorCode;
 use benten_eval::transform::{AstIntrospect, parse_transform};
 use proptest::prelude::*;
 

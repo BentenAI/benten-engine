@@ -117,10 +117,10 @@ impl VersionError {
     /// boundary callers receive a stable identifier regardless of the
     /// wrapper type (r6-err-11).
     #[must_use]
-    pub fn code(&self) -> crate::ErrorCode {
+    pub fn code(&self) -> benten_errors::ErrorCode {
         match self {
-            VersionError::Branched { .. } => crate::ErrorCode::VersionBranched,
-            VersionError::UnknownPrior { .. } => crate::ErrorCode::VersionUnknownPrior,
+            VersionError::Branched { .. } => benten_errors::ErrorCode::VersionBranched,
+            VersionError::UnknownPrior { .. } => benten_errors::ErrorCode::VersionUnknownPrior,
         }
     }
 }

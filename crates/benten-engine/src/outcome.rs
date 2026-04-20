@@ -9,7 +9,8 @@
 //! [`HandlerPredecessors`], [`NestedTx`], [`ReadViewOptions`], and
 //! [`ViewCreateOptions`] are small supporting types.
 
-use benten_core::{Cid, ErrorCode, Node};
+use benten_core::{Cid, Node};
+use benten_errors::ErrorCode;
 
 /// Options passed to `Engine::create_view`. Currently a placeholder shape so
 /// `Default::default()` resolves unambiguously at the call site.

@@ -13,6 +13,7 @@ workspace = true
 
 [dependencies]
 benten-core = { path = "../benten-core" }
+benten-errors = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
