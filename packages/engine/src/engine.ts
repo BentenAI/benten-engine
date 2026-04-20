@@ -78,6 +78,9 @@ interface NativeEngine {
   countNodesWithLabel?: (label: string) => number;
   changeEventCount?: () => number;
   ivmSubscriberCount?: () => number;
+  metricsSnapshot?: () => Record<string, number>;
+  capabilityWritesCommitted?: () => Record<string, number>;
+  capabilityWritesDenied?: () => Record<string, number>;
 }
 
 interface NativeEngineCtor {
@@ -897,6 +900,66 @@ export class Engine {
     }
     try {
       return this.inner.ivmSubscriberCount();
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /**
+   * Flattened operational metrics snapshot. Keys are metric names; values are
+   * numbers. Named compromise #5 fans per-capability-scope write counters
+   * out as `benten.writes.committed.<scope>` /
+   * `benten.writes.denied.<scope>` keys on top of the aggregate
+   * `benten.writes.committed` / `benten.writes.denied` totals.
+   */
+  public async metricsSnapshot(): Promise<Record<string, number>> {
+    this.assertOpen();
+    if (!this.inner.metricsSnapshot) {
+      throw new EDslInvalidShape(
+        "Engine.metricsSnapshot unavailable on this binding",
+      );
+    }
+    try {
+      return this.inner.metricsSnapshot();
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /**
+   * Per-capability-scope committed-write tally. Keys are the derived scope
+   * strings (`store:<label>:write`). Named compromise #5 — the Phase-1
+   * posture is "record, don't enforce"; Phase-3 layers rate-limit
+   * enforcement on these counters.
+   */
+  public async capabilityWritesCommitted(): Promise<Record<string, number>> {
+    this.assertOpen();
+    if (!this.inner.capabilityWritesCommitted) {
+      throw new EDslInvalidShape(
+        "Engine.capabilityWritesCommitted unavailable on this binding",
+      );
+    }
+    try {
+      return this.inner.capabilityWritesCommitted();
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /**
+   * Per-capability-scope denied-write tally. Mirrors
+   * {@link Engine.capabilityWritesCommitted} for batches the policy
+   * rejected.
+   */
+  public async capabilityWritesDenied(): Promise<Record<string, number>> {
+    this.assertOpen();
+    if (!this.inner.capabilityWritesDenied) {
+      throw new EDslInvalidShape(
+        "Engine.capabilityWritesDenied unavailable on this binding",
+      );
+    }
+    try {
+      return this.inner.capabilityWritesDenied();
     } catch (err) {
       throw mapNativeError(err);
     }

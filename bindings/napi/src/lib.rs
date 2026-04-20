@@ -403,6 +403,54 @@ mod napi_surface {
         pub fn ivm_subscriber_count(&self) -> u32 {
             u32::try_from(self.inner.ivm_subscriber_count()).unwrap_or(u32::MAX)
         }
+
+        /// Flattened operational metrics. Keyed by metric name; values are
+        /// f64 because napi-rs routes integer metrics through the JS Number
+        /// type either way. See `Engine::metrics_snapshot` for the catalog.
+        ///
+        /// Named compromise #5: per-capability-scope write counters surface
+        /// under `benten.writes.committed.<scope>` and
+        /// `benten.writes.denied.<scope>` keys.
+        #[napi]
+        pub fn metrics_snapshot(&self) -> serde_json::Value {
+            let snap = self.inner.metrics_snapshot();
+            let mut map = serde_json::Map::with_capacity(snap.len());
+            for (k, v) in snap {
+                // NaN/±Inf should not be producible by Phase-1 counters
+                // (all u64-sourced), but f64-keyed maps require the guard
+                // at the JSON boundary. Fall back to 0 for the pathological
+                // case rather than erroring.
+                let num = serde_json::Number::from_f64(if v.is_finite() { v } else { 0.0 })
+                    .unwrap_or_else(|| serde_json::Number::from(0));
+                map.insert(k, serde_json::Value::Number(num));
+            }
+            serde_json::Value::Object(map)
+        }
+
+        /// Per-capability-scope committed-write tally. Keys are the derived
+        /// scope strings (`store:<label>:write`); values are the cumulative
+        /// count of commits observed under each scope. Named compromise #5.
+        #[napi]
+        pub fn capability_writes_committed(&self) -> serde_json::Value {
+            let map = self.inner.capability_writes_committed();
+            let mut out = serde_json::Map::with_capacity(map.len());
+            for (scope, count) in map {
+                out.insert(scope, serde_json::Value::from(count));
+            }
+            serde_json::Value::Object(out)
+        }
+
+        /// Per-capability-scope denied-write tally. Mirrors
+        /// `capability_writes_committed` for batches the policy rejected.
+        #[napi]
+        pub fn capability_writes_denied(&self) -> serde_json::Value {
+            let map = self.inner.capability_writes_denied();
+            let mut out = serde_json::Map::with_capacity(map.len());
+            for (scope, count) in map {
+                out.insert(scope, serde_json::Value::from(count));
+            }
+            serde_json::Value::Object(out)
+        }
     }
 
     // Keep a lint-silencer so the imports stay live even when every helper
