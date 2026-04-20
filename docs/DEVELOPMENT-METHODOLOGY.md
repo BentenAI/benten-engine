@@ -244,6 +244,43 @@ R3 test-writing agents produce REAL test files, not test plans. R5 implementatio
 
 Non-negotiable per Rule 4. One correctness agent (typically `code-reviewer` or a crate-specific guardian) briefed with files changed. Fix all findings before next group. Commit only after fixes.
 
+### Pattern 6: Reviewer Composition Follows Lens Surface
+
+The 14-agent R6 council is a **composition** for Phase 1 (deep-technical engine work that touches security / architecture / invariants / primitive vocabulary / IVM / napi / CI / error catalog / performance / DX / etc). It is NOT a fixed "big review = 14 agents" rule. Every review round's composition is derived from the work's lens surface.
+
+**Rule:** For any review round, do this:
+
+1. **Enumerate the lenses the work touches.** What can go wrong? What quality dimensions matter? ("security" / "concurrency" / "cryptography" / "regulatory compliance" / "api ergonomics" / "type-theory" / "UI accessibility" / etc.)
+2. **Map each lens to an existing agent** from `.claude/agents/`. Include crate-specific guardians when the work lives in their crate.
+3. **Identify gaps — work whose lens has no existing agent.** Create a new agent definition with a focused role description before the review round dispatches.
+4. **Always include `code-reviewer` as the generic-quality baseline.** Other agents provide the specialist lenses on top.
+5. **Drop agents whose lens doesn't apply.** No point dispatching `operation-primitive-linter` on a scaffolder fix; no point dispatching `ivm-algorithm-b-reviewer` on a TS wrapper PR.
+
+**Examples from Phase 1:**
+
+| Work | Composition |
+|---|---|
+| Core engine Phase 1 (R6) | Full 14-agent council — many lenses in play |
+| Per-group mini-review (R5-G5 IVM) | 2 agents: `ivm-algorithm-b-reviewer` + `code-reviewer` |
+| Per-group mini-review (R5-G7 engine orchestrator) | 2 agents: `benten-engine-philosophy` + `code-reviewer` |
+| Error-ergonomics fix-pass validation | 1 agent: `error-detective` |
+| Scaffolder template smoke test | 1 agent: `dx-optimizer` |
+
+**Examples of lens→agent gaps we're likely to hit in future phases:**
+
+| Phase / work | Lens | Existing agent | Gap — new agent to create |
+|---|---|---|---|
+| Phase 3 iroh sync | Network protocol design | — | `p2p-protocol-reviewer` |
+| Phase 3 CRDT merge | Commutativity/idempotence | `crdt-correctness-reviewer` (exists) | — |
+| Phase 3 DID/UCAN | Cryptographic protocol | `ucan-capability-auditor` (exists) | — |
+| Phase 6 AI assistant | Prompt safety + MCP boundary | `prompt-engineer`, `mcp-developer` (exist) | — |
+| Phase 6 AI assistant | LLM adversarial-input | — | `llm-safety-auditor` |
+| Phase 7 Gardens | Governance / polycentric voting design | — | `governance-design-reviewer` |
+| Phase 8 Credits | Financial regulation (FedNow, BSA, state MTL) | `compliance-auditor` (exists, generic) | `financial-regulation-auditor` or extend compliance-auditor |
+| Phase 8 Credits | Treasury operations | — | `treasury-ops-reviewer` |
+
+Create missing agents before the review round runs. Never assign a lens to the wrong-specialty agent as a "close enough" — either the right agent exists or it gets created. Agent definitions live at `.claude/agents/<name>.md` with YAML frontmatter + body describing the lens.
+
 ### Anti-Patterns (Observed and Confirmed)
 
 - **Hand-editing team config.json** — overwritten on next state update
