@@ -174,8 +174,22 @@ impl CapabilityPolicy for GrantBackedPolicy {
         };
 
         for scope in &scopes {
-            let ok = self.grants.has_unrevoked_grant_for_scope(scope)?;
-            if !ok {
+            // r6b-dx-C1: wildcard-aware match. A stored grant whose scope is
+            // an ancestor wildcard of `scope` (e.g. stored `store:post:*`
+            // satisfies required `store:post:write`) must permit. We
+            // enumerate every wildcard variant of the required concrete scope
+            // and check whether the reader has any of them. This preserves
+            // the opaque `has_unrevoked_grant_for_scope(exact)` reader
+            // contract while letting the policy share the wildcard semantics
+            // used by `attenuation::check_attenuation`.
+            let mut granted = false;
+            for candidate in wildcard_variants(scope) {
+                if self.grants.has_unrevoked_grant_for_scope(&candidate)? {
+                    granted = true;
+                    break;
+                }
+            }
+            if !granted {
                 return Err(CapError::Denied {
                     required: scope.clone(),
                     entity: ctx.label.clone(),
@@ -199,8 +213,16 @@ impl CapabilityPolicy for GrantBackedPolicy {
             return Ok(());
         }
         let scope = Self::derive_read_scope(&ctx.label);
-        let ok = self.grants.has_unrevoked_grant_for_scope(&scope)?;
-        if ok {
+        // r6b-dx-C1: same wildcard enumeration used by `check_write` — a
+        // grant of `store:post:*` satisfies a required `store:post:read`.
+        let mut granted = false;
+        for candidate in wildcard_variants(&scope) {
+            if self.grants.has_unrevoked_grant_for_scope(&candidate)? {
+                granted = true;
+                break;
+            }
+        }
+        if granted {
             Ok(())
         } else {
             Err(CapError::DeniedRead {
@@ -208,5 +230,95 @@ impl CapabilityPolicy for GrantBackedPolicy {
                 entity: ctx.label.clone(),
             })
         }
+    }
+}
+
+/// Enumerate every parent-scope spelling that would attenuate to the
+/// concrete required scope, including the scope itself.
+///
+/// For an N-segment required scope, returns up to 2^N candidates: each
+/// segment position may either stay concrete or be replaced with `"*"`.
+/// Ordered for readability (exact match first, bare `"*"` last). Empty
+/// input yields one empty candidate so trivial inputs still round-trip.
+///
+/// This mirrors the semantics in [`crate::attenuation::check_attenuation`]
+/// without requiring the opaque [`GrantReader`] to carry any wildcard
+/// awareness — callers that already store a typed `GrantScope` can use
+/// `check_attenuation` directly; the `GrantBackedPolicy` path goes
+/// through this enumerator because the backend reader only answers
+/// exact-match queries.
+fn wildcard_variants(required: &str) -> Vec<String> {
+    if required.is_empty() {
+        return vec![String::new()];
+    }
+    let segments: Vec<&str> = required.split(':').collect();
+    let n = segments.len();
+    // Small-N path: N is typically 2-4 for Phase 1 scopes
+    // (`store:<label>:write` is 3; future namespaced scopes might reach 5).
+    // 2^5 = 32 candidates — cheap to enumerate. For unexpectedly large N we
+    // bail out to just the exact match + bare `"*"` to avoid quadratic
+    // reader traffic.
+    if n > 6 {
+        return vec![required.to_string(), "*".to_string()];
+    }
+    let total = 1_usize << n;
+    let mut out: Vec<String> = Vec::with_capacity(total);
+    // i == 0 → all segments concrete (the required scope itself).
+    // i == (1<<n)-1 → every segment is `"*"`.
+    // Bit k set means segment k is replaced by `"*"`.
+    for i in 0..total {
+        let mut parts: Vec<&str> = Vec::with_capacity(n);
+        for (k, seg) in segments.iter().enumerate() {
+            if (i >> k) & 1 == 1 {
+                parts.push("*");
+            } else {
+                parts.push(seg);
+            }
+        }
+        // Collapse trailing `"*"` runs into a single trailing `"*"`:
+        // `store:*:*` is semantically equivalent to `store:*` under the
+        // trailing-wildcard rule, so we deduplicate to reduce reader
+        // traffic. Non-trailing wildcard spellings (`store:*:write`)
+        // are preserved — they still match via the mid-scope wildcard
+        // rule in `check_attenuation`, and some callers may have
+        // stored a grant in exactly that form.
+        let mut end = parts.len();
+        while end > 1 && parts[end - 1] == "*" && parts[end - 2] == "*" {
+            end -= 1;
+        }
+        parts.truncate(end);
+        out.push(parts.join(":"));
+    }
+    // Dedupe while preserving first-seen order so the exact scope is tried
+    // first (hot path) and the catch-all `"*"` last.
+    let mut seen = std::collections::BTreeSet::new();
+    out.retain(|s| seen.insert(s.clone()));
+    out
+}
+
+#[cfg(test)]
+mod wildcard_tests {
+    use super::wildcard_variants;
+
+    #[test]
+    fn three_segment_required_enumerates_expected_wildcards() {
+        let got = wildcard_variants("store:post:write");
+        // Must contain the exact match, the conventional Phase-1 wildcards,
+        // and the bare catch-all. Order is not asserted — only membership.
+        assert!(got.contains(&"store:post:write".to_string()));
+        assert!(got.contains(&"store:post:*".to_string()));
+        assert!(got.contains(&"store:*".to_string()));
+        assert!(got.contains(&"*".to_string()));
+    }
+
+    #[test]
+    fn exact_match_is_always_first_candidate() {
+        let got = wildcard_variants("store:post:write");
+        assert_eq!(got[0], "store:post:write");
+    }
+
+    #[test]
+    fn empty_input_yields_single_empty_candidate() {
+        assert_eq!(wildcard_variants(""), vec![String::new()]);
     }
 }

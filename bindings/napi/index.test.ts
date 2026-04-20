@@ -228,6 +228,25 @@ describe("napi engine — extended surface", () => {
     expect(fetched.properties.title).toBe("via-callAs");
   });
 
+  // r6b-dx-C5: callAs must accept a friendly principal string in
+  // addition to a real CID — the QUICKSTART example uses `"alice"`
+  // without minting a Node first. The napi layer hashes the string
+  // into a deterministic synthetic CID.
+  it("callAs accepts a friendly principal string and synthesizes a stable CID", () => {
+    const handlerId = ext.registerCrud("post");
+    const first = ext.callAs(handlerId, "create", { title: "alice-1" }, "alice");
+    const second = ext.callAs(handlerId, "create", { title: "alice-2" }, "alice");
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    const c1 = first.createdCid ?? first.cid;
+    const c2 = second.createdCid ?? second.cid;
+    expect(typeof c1).toBe("string");
+    expect(typeof c2).toBe("string");
+    // Different Node contents yield different CIDs (not a static actor
+    // echo) — the actor is threaded in for attribution, not returned.
+    expect(c1).not.toBe(c2);
+  });
+
   it("createView registers a view that bumps ivmSubscriberCount", () => {
     const before = ext.ivmSubscriberCount();
     // `content_listing_<label>` is a Phase-1 canonical id family that the

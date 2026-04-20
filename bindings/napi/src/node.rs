@@ -384,3 +384,25 @@ pub(crate) fn parse_cid(s: &str) -> napi::Result<benten_core::Cid> {
     })?;
     benten_core::Cid::from_bytes(&bytes).map_err(core_err)
 }
+
+/// Parse a string as a CID, falling back to a deterministic synthesized
+/// CID when the string isn't a valid multibase-base32 CID.
+///
+/// Used by `Engine::callAs` so a QUICKSTART caller can pass a friendly
+/// principal string (`"alice"`) without first minting a Node whose CID
+/// they then thread back in. The synthesized CID hashes the bytes
+/// `"benten-napi-synthetic-principal-v1\0<input>"` so the same input
+/// string always maps to the same CID process-wide — enough to make the
+/// NoAuthBackend path happy and keep audit attribution stable for the
+/// given friendly name. Phase 3 replaces this with a typed principal
+/// from `benten-id` (r6b-dx-C5).
+pub(crate) fn parse_actor_cid_or_derive(s: &str) -> benten_core::Cid {
+    if let Ok(cid) = parse_cid(s) {
+        return cid;
+    }
+    let mut material = Vec::with_capacity(40 + s.len());
+    material.extend_from_slice(b"benten-napi-synthetic-principal-v1\0");
+    material.extend_from_slice(s.as_bytes());
+    let digest: [u8; 32] = *blake3::hash(&material).as_bytes();
+    benten_core::Cid::from_blake3_digest(digest)
+}

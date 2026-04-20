@@ -474,40 +474,10 @@ export class Engine {
     if (crud && dispatchOp === "create" && typeof flattened.cid === "string" && typeof flattened.createdAt === "number") {
       this.stampedCreatedAt.set(`${handlerId}:${flattened.cid}`, flattened.createdAt);
     }
-    // On a GET, re-attach the stamped createdAt if the native response
-    // omitted it (tests assert that re-reads return the same value).
-    if (crud && dispatchOp === "get" && typeof input === "object" && input !== null && !Array.isArray(input)) {
-      const reqCid = (input as Record<string, JsonValue>).cid;
-      if (typeof reqCid === "string") {
-        const remembered = this.stampedCreatedAt.get(`${handlerId}:${reqCid}`);
-        if (remembered !== undefined && flattened.createdAt === undefined) {
-          flattened.createdAt = remembered;
-        }
-        if (flattened.cid === undefined) flattened.cid = reqCid;
-      }
-    }
-    // For `list`, surface the native's `.list` as `.items` for DX
-    // parity with the test contract.
-    if (crud && dispatchOp === "list") {
-      const list = (flattened as Record<string, unknown>).list;
-      if (Array.isArray(list) && flattened.items === undefined) {
-        flattened.items = list.map((entry) => {
-          if (entry && typeof entry === "object" && !Array.isArray(entry)) {
-            const e = entry as Record<string, JsonValue>;
-            // Flatten {labels, properties} -> properties so consumers
-            // can read `.title` directly.
-            if (
-              e.properties &&
-              typeof e.properties === "object" &&
-              !Array.isArray(e.properties)
-            ) {
-              return e.properties as JsonValue;
-            }
-          }
-          return entry as JsonValue;
-        }) as JsonValue;
-      }
-    }
+    applyCrudPostProcessing(flattened, crud, dispatchOp, input, {
+      handlerId,
+      stampTable: this.stampedCreatedAt,
+    });
     return flattened;
   }
 
@@ -760,7 +730,11 @@ export class Engine {
     } catch (err) {
       throw mapNativeError(err);
     }
-    return flattenCallResult(raw);
+    const flattened = flattenCallResult(raw);
+    // Apply the same crud-specific shaping that `call` uses so callers
+    // of `callAs` see `reread.title` instead of `reread.list[0].properties.title`.
+    applyCrudPostProcessing(flattened, crud, dispatchOp, input);
+    return flattened;
   }
 
   /**
@@ -977,7 +951,33 @@ function flattenCallResult(
     return { result: raw as JsonValue };
   }
   const r = raw as Record<string, unknown>;
-  if ("result" in r && r.ok !== false) {
+
+  // r6b-dx-C3: a native response of shape
+  // `{ ok: false, edge, errorCode, errorMessage }` is a failed call
+  // (e.g. a capability denial routed via ON_DENIED). Surfacing it as
+  // a silent success is the bug that bit `cap_denial_routes_on_denied`
+  // — the caller's `await engine.call(...)` resolved, they treated
+  // the write as committed, and only later noticed the Node was
+  // missing. Raise a typed error built from the reported `errorCode`
+  // so the caller gets the same shape as a thrown napi error.
+  if (r.ok === false) {
+    const code =
+      typeof r.errorCode === "string" && r.errorCode.length > 0
+        ? r.errorCode
+        : "E_UNKNOWN";
+    const msg =
+      typeof r.errorMessage === "string" && r.errorMessage.length > 0
+        ? r.errorMessage
+        : typeof r.edge === "string"
+          ? `handler routed via ${r.edge}`
+          : "handler reported failure";
+    const edge = typeof r.edge === "string" ? r.edge : undefined;
+    // Compose a message that `extractCode` will find the stable
+    // `E_*` token in, so `mapNativeError` reconstructs the right
+    // typed subclass end-to-end.
+    throw mapNativeError(`${code}: ${msg}${edge ? ` (edge=${edge})` : ""}`);
+  }
+  if ("result" in r) {
     const inner = r.result as JsonValue;
     if (inner && typeof inner === "object" && !Array.isArray(inner)) {
       const merged = {
@@ -994,6 +994,82 @@ function flattenCallResult(
     };
   }
   return r as Record<string, JsonValue> & { cid?: string };
+}
+
+/**
+ * Post-process the raw native outcome shape for crud `get` / `list`
+ * dispatches: flatten `list[0].properties` onto the root for GETs so
+ * callers can read `.title` directly, and surface `items` alongside
+ * `list` for LISTs. Optional `ctx` carries the per-handler stampedCreatedAt
+ * side-table so GETs can re-attach the stamp the native side doesn't echo.
+ *
+ * Extracted so `Engine.call` and `Engine.callAs` apply the identical
+ * shaping rules — a divergence between the two paths was the bug that
+ * let `engine.callAs(..., "post:get", { cid }, actor).title` read
+ * `undefined` while `engine.call(..., "post:get", { cid }).title`
+ * returned the value (r6b-dx-C2).
+ */
+function applyCrudPostProcessing(
+  flattened: Record<string, JsonValue> & { cid?: string },
+  crud: CrudHandler | undefined,
+  dispatchOp: string,
+  input: JsonValue,
+  ctx?: { handlerId: string; stampTable: Map<string, number> },
+): void {
+  if (!crud) return;
+  if (dispatchOp === "get") {
+    const listVal = (flattened as Record<string, unknown>).list;
+    if (Array.isArray(listVal) && listVal.length > 0) {
+      const first = listVal[0];
+      if (first && typeof first === "object" && !Array.isArray(first)) {
+        const f = first as Record<string, JsonValue>;
+        if (
+          f.properties &&
+          typeof f.properties === "object" &&
+          !Array.isArray(f.properties)
+        ) {
+          for (const [k, v] of Object.entries(
+            f.properties as Record<string, JsonValue>,
+          )) {
+            if (flattened[k] === undefined) flattened[k] = v;
+          }
+        }
+      }
+    }
+    if (
+      typeof input === "object" &&
+      input !== null &&
+      !Array.isArray(input)
+    ) {
+      const reqCid = (input as Record<string, JsonValue>).cid;
+      if (typeof reqCid === "string") {
+        if (ctx) {
+          const remembered = ctx.stampTable.get(`${ctx.handlerId}:${reqCid}`);
+          if (remembered !== undefined && flattened.createdAt === undefined) {
+            flattened.createdAt = remembered;
+          }
+        }
+        if (flattened.cid === undefined) flattened.cid = reqCid;
+      }
+    }
+  } else if (dispatchOp === "list") {
+    const list = (flattened as Record<string, unknown>).list;
+    if (Array.isArray(list) && flattened.items === undefined) {
+      flattened.items = list.map((entry) => {
+        if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+          const e = entry as Record<string, JsonValue>;
+          if (
+            e.properties &&
+            typeof e.properties === "object" &&
+            !Array.isArray(e.properties)
+          ) {
+            return e.properties as JsonValue;
+          }
+        }
+        return entry as JsonValue;
+      }) as JsonValue;
+    }
+  }
 }
 
 /**

@@ -55,4 +55,42 @@ describe("engine.trace", () => {
     expect(traced.result.cid).toBeTruthy();
     expect(normal.cid).toBeTruthy();
   });
+
+  // r6b-dx-C4 + r6b-dx-C6: trace must return real per-step records
+  // from the evaluator, not a hardcoded lookup table keyed on the op
+  // name. Each step's `nodeCid` must be the subgraph operation-node
+  // CID (distinct per OperationNode), not the outcome's `created_cid`.
+  it("trace_returns_real_per_step_data", async () => {
+    const handler = await engine.registerSubgraph(crud("post"));
+    const trace = await engine.trace(handler.id, "post:create", { title: "real" });
+
+    // Non-trivial step count and distinct CIDs per step.
+    expect(trace.steps.length).toBeGreaterThan(0);
+    const cids = new Set<string>();
+    for (const s of trace.steps) {
+      expect(typeof s.nodeCid).toBe("string");
+      expect(s.nodeCid.length).toBeGreaterThan(10);
+      cids.add(s.nodeCid);
+    }
+    // Each OperationNode in the walked subgraph gets its own CID — no
+    // single CID echoed across every step (the pre-fix bug).
+    expect(cids.size).toBe(trace.steps.length);
+
+    // Per-step primitive must be a recognized kind, not the empty
+    // string the synthetic fabrication fell back to.
+    const kinds = new Set(trace.steps.map((s) => s.primitive));
+    // Create path walks through at least write+respond.
+    expect(kinds.has("write")).toBe(true);
+    expect(kinds.has("respond")).toBe(true);
+
+    // Trace's nodeCid stream must NOT include the outcome's created_cid —
+    // the two are semantically different (op identity vs persisted Node
+    // identity). Before the fix, every step's nodeCid WAS the created_cid.
+    if (trace.result && typeof (trace.result as { cid?: unknown }).cid === "string") {
+      const createdCid = (trace.result as { cid: string }).cid;
+      for (const s of trace.steps) {
+        expect(s.nodeCid).not.toBe(createdCid);
+      }
+    }
+  });
 });

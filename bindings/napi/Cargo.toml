@@ -33,6 +33,10 @@ benten-core = { path = "../../crates/benten-core" }
 benten-caps = { path = "../../crates/benten-caps" }
 benten-engine = { path = "../../crates/benten-engine" }
 benten-errors = { workspace = true }
+# r6b-dx-C5: used by `parse_actor_cid_or_derive` to hash friendly
+# principal strings into deterministic synthetic CIDs. Same version the
+# engine crates use for content hashing.
+blake3 = { workspace = true }
 napi = { workspace = true, features = ["napi4", "serde-json"], optional = true }
 napi-derive = { workspace = true, optional = true }
 serde_json = { workspace = true }

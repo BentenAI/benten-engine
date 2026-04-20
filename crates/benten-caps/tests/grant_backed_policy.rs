@@ -193,3 +193,94 @@ fn grant_backed_policy_denies_unauthorized_edge_delete() {
     };
     assert_eq!(required, "store:AUTHORED_BY:write");
 }
+
+/// r6b-dx-C1: wildcard capability must permit every matching concrete scope.
+///
+/// A subject holds `store:post:*` (the scope spelled in QUICKSTART + the
+/// scaffolder README). The evaluator issues a WRITE whose primary label is
+/// `"post"`; the policy derives required scope `store:post:write`. Before
+/// the fix the grant never matched because the reader only returns exact-
+/// scope equality and `store:post:*` ≠ `store:post:write`. After the fix,
+/// the policy enumerates wildcard ancestors of the required scope and
+/// succeeds as long as any ancestor is stored.
+#[test]
+fn grant_backed_policy_wildcard_permits_create_get_list_delete_under_same_label() {
+    let grants = MockGrants::new(&["store:post:*"]);
+    let policy = GrantBackedPolicy::new(grants);
+
+    // Create path — derived required scope is `store:post:write`.
+    let create_ctx = WriteContext {
+        label: "post".into(),
+        pending_ops: vec![PendingOp::PutNode {
+            cid: fake_cid(),
+            labels: vec!["post".into()],
+        }],
+        ..Default::default()
+    };
+    policy
+        .check_write(&create_ctx)
+        .expect("wildcard `store:post:*` must permit `store:post:write`");
+
+    // Delete path — same derived required scope via captured labels.
+    let delete_ctx = WriteContext {
+        label: "post".into(),
+        pending_ops: vec![PendingOp::DeleteNode {
+            cid: fake_cid(),
+            labels: vec!["post".into()],
+        }],
+        ..Default::default()
+    };
+    policy
+        .check_write(&delete_ctx)
+        .expect("wildcard `store:post:*` must permit delete under the same label");
+
+    // Read path — `check_read` must honour the same ancestor set.
+    let read_ctx = benten_caps::ReadContext {
+        label: "post".into(),
+        ..Default::default()
+    };
+    policy
+        .check_read(&read_ctx)
+        .expect("wildcard `store:post:*` must permit `store:post:read`");
+}
+
+/// Bare `*` (the UCAN-spirit catch-all) is the broadest wildcard and must
+/// satisfy any derived concrete scope.
+#[test]
+fn grant_backed_policy_bare_wildcard_permits_everything() {
+    let grants = MockGrants::new(&["*"]);
+    let policy = GrantBackedPolicy::new(grants);
+
+    let ctx = WriteContext {
+        label: "post".into(),
+        pending_ops: vec![PendingOp::PutNode {
+            cid: fake_cid(),
+            labels: vec!["post".into()],
+        }],
+        ..Default::default()
+    };
+    policy
+        .check_write(&ctx)
+        .expect("bare `*` wildcard must permit `store:post:write`");
+}
+
+/// Narrower wildcard at the wrong segment must NOT permit a mismatched
+/// concrete scope. `store:comment:*` is unrelated to `store:post:write`.
+#[test]
+fn grant_backed_policy_wildcard_denies_wrong_label() {
+    let grants = MockGrants::new(&["store:comment:*"]);
+    let policy = GrantBackedPolicy::new(grants);
+
+    let ctx = WriteContext {
+        label: "post".into(),
+        pending_ops: vec![PendingOp::PutNode {
+            cid: fake_cid(),
+            labels: vec!["post".into()],
+        }],
+        ..Default::default()
+    };
+    let err = policy
+        .check_write(&ctx)
+        .expect_err("wildcard on a different label must NOT permit");
+    assert!(matches!(err, CapError::Denied { .. }));
+}

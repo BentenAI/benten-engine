@@ -176,6 +176,7 @@ dependencies = [
  "benten-core",
  "benten-engine",
  "benten-errors",
+ "blake3",
  "napi",
  "napi-build",
  "napi-derive",
