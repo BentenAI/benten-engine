@@ -11,10 +11,11 @@
   "scripts": {
     "test": "vitest run --reporter=verbose",
     "test:watch": "vitest",
-    "codegen:errors": "node --experimental-strip-types scripts/codegen-errors.ts",
-    "drift:errors": "node --experimental-strip-types scripts/drift-detect.ts"
+    "codegen:errors": "node --import tsx scripts/codegen-errors.ts",
+    "drift:errors": "node --import tsx scripts/drift-detect.ts"
   },
   "devDependencies": {
+    "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }

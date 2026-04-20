@@ -276,22 +276,28 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Install workspace dev dependencies (tsx for TS script runner)
+        # tsx replaces `node --experimental-strip-types` (Node 22 default
+        # was always gated behind the flag; tsx is the unflagged 2026
+        # idiom and is already bundled with the scaffolder template).
+        run: npm install --ignore-scripts --no-audit --no-fund
+
       - name: Regenerate TS error classes from catalog
         # Runs the codegen; if the checked-in errors.generated.ts diverges
         # from what the catalog would produce, the drift-detector will
         # surface it.
-        run: node --experimental-strip-types scripts/codegen-errors.ts
+        run: node --import tsx scripts/codegen-errors.ts
 
       - name: Verify errors.generated.ts is checked in and up to date
         run: |
           if ! git diff --quiet -- packages/engine/src/errors.generated.ts; then
-            echo "errors.generated.ts is out of date. Run 'node --experimental-strip-types scripts/codegen-errors.ts' and commit the result."
+            echo "errors.generated.ts is out of date. Run 'npm run codegen:errors' and commit the result."
             git --no-pager diff -- packages/engine/src/errors.generated.ts
             exit 1
           fi
 
       - name: Run drift detector (TS sources of truth)
-        run: node --experimental-strip-types scripts/drift-detect.ts
+        run: node --import tsx scripts/drift-detect.ts
 
   # --------------------------------------------------------------------------
   # Scaffolder cold-install sanity. `npx create-benten-app` produces a

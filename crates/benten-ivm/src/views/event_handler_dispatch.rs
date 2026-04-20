@@ -238,19 +238,23 @@ impl View for EventDispatchView {
         if self.budget.is_stale() {
             return Err(BudgetTracker::stale_error(VIEW_ID));
         }
-        let cids: Vec<Cid> = match &query.event_name {
-            Some(name) => {
-                let mut out: BTreeSet<Cid> = BTreeSet::new();
-                if let Some(set) = self.by_event.get(name) {
-                    out.extend(set.iter().cloned());
-                }
-                if let Some(set) = self.by_event.get(GLOBAL_BUCKET) {
-                    out.extend(set.iter().cloned());
-                }
-                out.into_iter().collect()
-            }
-            None => Vec::new(),
+        // This view maintains a single index: `event_name → Set<Cid>`. A
+        // query that names no `event_name` has no partition to serve; fail
+        // fast with `E_IVM_PATTERN_MISMATCH` rather than silently returning
+        // an empty `Cids` set (r6b §5.5).
+        let Some(name) = query.event_name.as_ref() else {
+            return Err(ViewError::PatternMismatch(
+                "event_dispatch: query missing required `event_name`".to_string(),
+            ));
         };
+        let mut out: BTreeSet<Cid> = BTreeSet::new();
+        if let Some(set) = self.by_event.get(name) {
+            out.extend(set.iter().cloned());
+        }
+        if let Some(set) = self.by_event.get(GLOBAL_BUCKET) {
+            out.extend(set.iter().cloned());
+        }
+        let cids: Vec<Cid> = out.into_iter().collect();
         Ok(ViewResult::Cids(cids))
     }
 

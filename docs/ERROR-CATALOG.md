@@ -163,10 +163,12 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_WRITE_CONFLICT
 
+<!-- reachability: ignore -->
+
 - **Message:** "Expected version {expected}, found {actual} on {target}"
 - **Context:** `{ target: NodeId, expected: VersionHash, actual: VersionHash }`
 - **Fix:** Re-read, rebase changes, retry. Typical optimistic concurrency pattern.
-- **Thrown at:** Evaluation (CAS WRITE)
+- **Thrown at:** Evaluation (CAS WRITE). **Runtime surface is edge-routed, not Rust-enum-valued:** WRITE's `cas` mode routes conflicts via the `ON_CONFLICT` edge; the engine stamps `error_code: "E_WRITE_CONFLICT"` on the routed step (`crates/benten-engine/src/primitive_host.rs:~362`). Callers read the code off the edge-routing metadata, not via a `match` on an `Err(EvalError::WriteConflict)` — the enum variant exists for forward-compat with a Phase-2 native Rust path but has no construction site in Phase-1 production code. The drift-detector's `reachability: ignore` annotation reflects this asymmetry.
 
 ### E_SANDBOX_FUEL_EXHAUSTED
 
@@ -309,7 +311,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Message:** "CID codec {codec} is not supported; Phase 1 recognizes DAG-CBOR (0x71)"
 - **Context:** `{ codec: number }`
 - **Fix:** Phase 1 only accepts DAG-CBOR multicodec (0x71). Re-encode under the expected codec or await later-phase codec support.
-- **Thrown at:** CID deserialization
+- **Thrown at:** CID deserialization (`Cid::from_bytes` — distinct from `E_CID_PARSE`, which is reserved for length / version / digest-length structural failures)
 - **Phase:** 1
 
 ### E_CID_UNSUPPORTED_HASH
@@ -317,7 +319,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Message:** "CID hash function {code} is not supported; Phase 1 recognizes BLAKE3 (0x1e)"
 - **Context:** `{ code: number }`
 - **Fix:** Phase 1 only accepts BLAKE3 multihash (0x1e). Re-hash with BLAKE3 or await later-phase multi-hash support.
-- **Thrown at:** CID deserialization
+- **Thrown at:** CID deserialization (`Cid::from_bytes` — distinct from `E_CID_PARSE`, which is reserved for length / version / digest-length structural failures)
 - **Phase:** 1
 
 ### E_VERSION_BRANCHED
@@ -414,8 +416,14 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 - **Message:** "IVM view query pattern does not match any maintained index: {detail}"
 - **Context:** `{ view_id: string, detail: string }`
-- **Fix:** The caller asked a view for an index partition it doesn't maintain (e.g. an `entity_cid` query against a view that only keys on `label`). Consult the view's maintained-pattern list and restrict the `ViewQuery` to supported keys. Distinct from `E_INV_REGISTRATION` — the view is healthy; the query shape is wrong.
-- **Thrown at:** IVM view read
+- **Fix:** The caller asked a view for an index partition it doesn't maintain. Each of the five Phase-1 views keys on a specific field and rejects queries that omit it:
+  - `capability_grants` requires `entity_cid`
+  - `event_dispatch` requires `event_name`
+  - `content_listing` accepts `label` (optional — omitted returns full listing; a non-matching label is rejected)
+  - `governance_inheritance` requires `entity_cid`
+  - `version_current` requires `anchor_id`
+  Consult the view's maintained-pattern list and restrict the `ViewQuery` to supported keys. Distinct from `E_INV_REGISTRATION` — the view is healthy; the query shape is wrong.
+- **Thrown at:** IVM view read (`View::read` on any of the five Phase-1 views)
 - **Phase:** 1
 
 ### E_VERSION_UNKNOWN_PRIOR

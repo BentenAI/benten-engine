@@ -60,7 +60,17 @@ fn bench_concurrent_writers(c: &mut Criterion) {
     group.sample_size(20);
 
     for writer_count in [1usize, 2, 4, 8, 16] {
-        group.throughput(Throughput::Elements(writer_count as u64));
+        // r6b-perf-2: each `iter_custom` closure performs exactly one write
+        // per thread per iteration, and criterion measures wall-clock per
+        // iteration — so the emitted throughput is "writes per iteration
+        // interval," which is `1` element, not `writer_count`. Reporting
+        // `Throughput::Elements(writer_count)` inflated the number linearly
+        // with thread count and made the graph read as "more threads = more
+        // throughput" when in reality redb serializes writes and per-iter
+        // time is flat. Use `Elements(1)` so the number reflects reality:
+        // per-iteration throughput stays flat across thread counts and the
+        // contention curve is visible through per-iter wall-clock instead.
+        group.throughput(Throughput::Elements(1));
         group.bench_with_input(
             BenchmarkId::from_parameter(writer_count),
             &writer_count,

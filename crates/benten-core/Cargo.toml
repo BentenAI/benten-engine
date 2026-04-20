@@ -11,6 +11,14 @@ description = "Core types and content-addressed hashing for the Benten graph eng
 [lints]
 workspace = true
 
+[lib]
+# Disable the implicit libtest bench harness. Every bench in this crate uses
+# criterion (`harness = false`), but the default library bench target still
+# advertises libtest's harness to `cargo bench`, which then rejects Criterion
+# CLI flags like `--measurement-time` with `Unrecognized option`. Opting the
+# library out of the implicit bench target fixes `cargo bench --workspace`.
+bench = false
+
 [dependencies]
 benten-errors = { workspace = true }
 blake3 = { workspace = true, features = ["pure"] }
