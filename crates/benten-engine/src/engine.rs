@@ -110,6 +110,23 @@ pub(crate) struct EngineInner {
     /// Pre-built subgraph templates keyed on `(handler_id, op)`. See
     /// [`SubgraphCache`] — closes r6-perf-5.
     subgraph_cache: SubgraphCache,
+    /// Per-capability-scope tally of writes that passed the policy's
+    /// `check_write` gate (i.e. committed). Keyed by the derived scope
+    /// string (`store:<label>:write`). Closes named compromise #5 — the
+    /// Phase-1 posture is "record, don't enforce"; Phase-2 adds the
+    /// rate-limit enforcement pass on top of these counters.
+    cap_write_committed: std::sync::Mutex<BTreeMap<String, u64>>,
+    /// Per-capability-scope tally of writes the policy DENIED. Scope keys
+    /// match the committed side; incremented when `check_write` returns
+    /// `Err(CapError::Denied)` / `Err(CapError::DeniedRead)` so operators
+    /// can spot abnormal denial patterns out-of-band.
+    cap_write_denied: std::sync::Mutex<BTreeMap<String, u64>>,
+    /// Aggregate count of capability-policy `check_write` calls that
+    /// returned `Ok`. Surfaced via `metrics_snapshot["benten.writes.committed"]`.
+    writes_committed_total: std::sync::atomic::AtomicU64,
+    /// Aggregate count of capability-policy `check_write` calls that
+    /// returned `Err`. Surfaced via `metrics_snapshot["benten.writes.denied"]`.
+    writes_denied_total: std::sync::atomic::AtomicU64,
 }
 
 impl EngineInner {
@@ -127,7 +144,51 @@ impl EngineInner {
             event_count: std::sync::atomic::AtomicU64::new(0),
             created_at_seq: std::sync::atomic::AtomicU64::new(0),
             subgraph_cache: SubgraphCache::new(),
+            cap_write_committed: std::sync::Mutex::new(BTreeMap::new()),
+            cap_write_denied: std::sync::Mutex::new(BTreeMap::new()),
+            writes_committed_total: std::sync::atomic::AtomicU64::new(0),
+            writes_denied_total: std::sync::atomic::AtomicU64::new(0),
         }
+    }
+
+    /// Increment the per-scope + aggregate committed-write counters once per
+    /// transaction commit. `scopes` is the deduplicated list of
+    /// `store:<label>:write` scopes the batch exercises; the aggregate
+    /// `writes_committed_total` bumps by exactly 1 per commit regardless of
+    /// scope-fan-out so the metric counts commits, not ops.
+    pub(crate) fn record_cap_write_committed(&self, scopes: &[String]) {
+        self.writes_committed_total
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let mut guard = self.cap_write_committed.lock_recover();
+        for scope in scopes {
+            let slot = guard.entry(scope.clone()).or_insert(0);
+            *slot = slot.saturating_add(1);
+        }
+    }
+
+    /// Increment the per-scope + aggregate denied-write counters when the
+    /// capability policy rejects a batch. `scopes` is best-effort — an
+    /// unstructured `WriteContext` may surface with an empty scope list, in
+    /// which case only the aggregate tally moves.
+    pub(crate) fn record_cap_write_denied(&self, scopes: &[String]) {
+        self.writes_denied_total
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let mut guard = self.cap_write_denied.lock_recover();
+        for scope in scopes {
+            let slot = guard.entry(scope.clone()).or_insert(0);
+            *slot = slot.saturating_add(1);
+        }
+    }
+
+    /// Snapshot the per-scope committed-writes map. Returned clone so the
+    /// caller can inspect without holding the Engine's lock.
+    pub(crate) fn cap_write_committed_snapshot(&self) -> BTreeMap<String, u64> {
+        self.cap_write_committed.lock_recover().clone()
+    }
+
+    /// Snapshot the per-scope denied-writes map.
+    pub(crate) fn cap_write_denied_snapshot(&self) -> BTreeMap<String, u64> {
+        self.cap_write_denied.lock_recover().clone()
     }
 
     pub(crate) fn record_event(&self, event: &ChangeEvent) {
@@ -1488,8 +1549,14 @@ impl Engine {
             let mut eng_tx = make_engine_tx(tx, &ops_cell);
             match f(&mut eng_tx) {
                 Ok(value) => {
+                    let ops = ops_cell.lock_recover().clone();
+                    // Derive the per-capability-scope list from the batch
+                    // (Phase-1 posture: `store:<label>:write` per op; system
+                    // zone skipped since user subgraphs cannot reach it).
+                    // Empty labels collapse to `store:write`. Closes named
+                    // compromise #5 — record, don't enforce.
+                    let scopes = derive_committed_scopes(&ops);
                     if let Some(p) = policy {
-                        let ops = ops_cell.lock_recover().clone();
                         if !ops.is_empty() {
                             let primary_label = ops
                                 .iter()
@@ -1509,12 +1576,21 @@ impl Engine {
                                 ..Default::default()
                             };
                             if let Err(cap_err) = p.check_write(&ctx) {
+                                self.inner.record_cap_write_denied(&scopes);
                                 *user_result.lock_recover() = Some(Err(EngineError::Cap(cap_err)));
                                 return Err(GraphError::TxAborted {
                                     reason: "capability denied".into(),
                                 });
                             }
                         }
+                    }
+                    // Record committed writes regardless of whether a policy
+                    // was configured — the metric is operational, not a gate.
+                    // Under NoAuthBackend the scope list still derives from
+                    // the batch's labels so dashboards can spot traffic-by-
+                    // label without a policy plumbed in.
+                    if !scopes.is_empty() {
+                        self.inner.record_cap_write_committed(&scopes);
                     }
                     *user_result.lock_recover() = Some(Ok(value));
                     Ok(())
@@ -1576,6 +1652,14 @@ impl Engine {
             .inner
             .dropped_events
             .load(std::sync::atomic::Ordering::SeqCst);
+        let committed_total = self
+            .inner
+            .writes_committed_total
+            .load(std::sync::atomic::Ordering::SeqCst);
+        let denied_total = self
+            .inner
+            .writes_denied_total
+            .load(std::sync::atomic::Ordering::SeqCst);
         #[allow(
             clippy::cast_precision_loss,
             reason = "Phase-1 metric is best-effort; lossy cast from u64 to f64 is acceptable for the compromise-5 regression test."
@@ -1586,9 +1670,44 @@ impl Engine {
                 "benten.change_stream.dropped_events".to_string(),
                 dropped as f64,
             );
+            // Named compromise #5: per-capability write metrics. The totals
+            // are aggregate (one tick per commit); the per-scope keys
+            // `benten.writes.committed.<scope>` fan-out so operators can
+            // spot abnormal traffic per label before Phase-3 enforcement
+            // lands.
+            out.insert(
+                "benten.writes.committed".to_string(),
+                committed_total as f64,
+            );
+            out.insert("benten.writes.denied".to_string(), denied_total as f64);
+            for (scope, count) in self.inner.cap_write_committed_snapshot() {
+                out.insert(format!("benten.writes.committed.{scope}"), count as f64);
+            }
+            for (scope, count) in self.inner.cap_write_denied_snapshot() {
+                out.insert(format!("benten.writes.denied.{scope}"), count as f64);
+            }
         }
         out.insert("benten.ivm.view_stale_count".to_string(), 0.0);
         out
+    }
+
+    /// Per-capability-scope committed-write counter snapshot. Keys are the
+    /// derived scope strings (`store:<label>:write`); values are the number
+    /// of batches committed under each scope since the engine opened. Used
+    /// by the compromise-#5 regression test and by napi callers that want
+    /// the map shape directly without the flattened `metrics_snapshot`
+    /// string-keyed projection.
+    #[must_use]
+    pub fn capability_writes_committed(&self) -> BTreeMap<String, u64> {
+        self.inner.cap_write_committed_snapshot()
+    }
+
+    /// Per-capability-scope denied-write counter snapshot. Mirrors
+    /// [`Self::capability_writes_committed`] for batches the policy
+    /// rejected.
+    #[must_use]
+    pub fn capability_writes_denied(&self) -> BTreeMap<String, u64> {
+        self.inner.cap_write_denied_snapshot()
     }
 
     /// Configured upper bound on the in-memory change-event buffer. Matches
@@ -1680,6 +1799,56 @@ fn make_engine_tx<'tx, 'coll>(
         inner,
         ops_collector,
     }
+}
+
+// ---------------------------------------------------------------------------
+// Per-capability scope derivation (named compromise #5)
+// ---------------------------------------------------------------------------
+
+/// Derive the deduplicated list of `store:<label>:write` scopes a batch of
+/// `PendingOp`s exercises. Mirrors [`benten_caps::GrantBackedPolicy`]'s
+/// internal derivation so a NoAuth engine and a GrantBacked engine tally
+/// commits under the same key space.
+///
+/// System-zone labels (`system:*`) are skipped — user subgraphs cannot
+/// reach them, and crediting privileged grant/revoke writes to the
+/// per-scope tally would make the metric misleading. Empty labels
+/// collapse to `store:write` (matches the caps-side fallback).
+fn derive_committed_scopes(ops: &[benten_caps::PendingOp]) -> Vec<String> {
+    use benten_caps::PendingOp;
+    let mut out: Vec<String> = Vec::new();
+    let mut push = |label: &str| {
+        if label.starts_with("system:") {
+            return;
+        }
+        let scope = if label.is_empty() {
+            "store:write".to_string()
+        } else {
+            format!("store:{label}:write")
+        };
+        if !out.contains(&scope) {
+            out.push(scope);
+        }
+    };
+    for op in ops {
+        match op {
+            PendingOp::PutNode { labels, .. } => {
+                let primary = labels.first().map_or("", String::as_str);
+                push(primary);
+            }
+            PendingOp::PutEdge { label, .. } => push(label),
+            PendingOp::DeleteNode { labels, .. } => {
+                let primary = labels.first().map_or("", String::as_str);
+                push(primary);
+            }
+            PendingOp::DeleteEdge { label, .. } => {
+                if let Some(l) = label.as_deref() {
+                    push(l);
+                }
+            }
+        }
+    }
+    out
 }
 
 // ---------------------------------------------------------------------------

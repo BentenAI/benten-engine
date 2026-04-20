@@ -278,6 +278,24 @@ describe("napi engine — extended surface", () => {
     expect(count).toBe(1);
   });
 
+  it("metricsSnapshot surfaces per-capability write counters (compromise #5)", () => {
+    // Run a handful of CRUD creates under NoAuth and assert the
+    // aggregate + per-scope committed counters are populated.
+    const handlerId = ext.registerCrud("post");
+    for (let i = 0; i < 4; i += 1) {
+      ext.call(handlerId, "create", { title: `metric-${i}` });
+    }
+    const metrics = ext.metricsSnapshot();
+    expect(typeof metrics).toBe("object");
+    expect(metrics["benten.writes.committed"]).toBe(4);
+    expect(metrics["benten.writes.committed.store:post:write"]).toBe(4);
+
+    // Typed accessor round-trips the same data without the flattened keys.
+    const perScope = ext.capabilityWritesCommitted();
+    expect(perScope["store:post:write"]).toBe(4);
+    expect(Object.keys(ext.capabilityWritesDenied())).toHaveLength(0);
+  });
+
   it("openWithPolicy opens with NoAuth and accepts writes", () => {
     const dir2 = mkdtempSync(join(tmpdir(), "benten-napi-policy-"));
     try {
