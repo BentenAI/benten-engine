@@ -67,10 +67,16 @@ impl CapabilityGrantsView {
 
     /// Content-addressed definition for this view. Written to the graph as a
     /// `system:IVMView` Node.
+    ///
+    /// The input pattern label is `"system:CapabilityGrant"` (namespaced),
+    /// matching the `CAPABILITY_GRANT_LABEL` constant in `benten-caps` and
+    /// the label that `Engine::grant_capability` writes via the privileged
+    /// path. A bare `"CapabilityGrant"` label would silently skip every
+    /// real grant event (r6b-ivm-2).
     pub fn definition() -> ViewDefinition {
         ViewDefinition {
             view_id: VIEW_ID.to_string(),
-            input_pattern_label: Some("CapabilityGrant".to_string()),
+            input_pattern_label: Some("system:CapabilityGrant".to_string()),
             output_label: "system:IVMView".to_string(),
         }
     }
@@ -173,7 +179,14 @@ impl CapabilityGrantsView {
         }
 
         // Node path: CapabilityGrant-labeled node events.
-        if !event.has_label("CapabilityGrant") {
+        //
+        // Match on the namespaced `"system:CapabilityGrant"` label — grants
+        // are engine-internal state written via the privileged path and carry
+        // the system-zone prefix. See `benten_caps::grant::CAPABILITY_GRANT_LABEL`.
+        // An older draft matched the unqualified `"CapabilityGrant"` label,
+        // which meant View 1 silently skipped every real grant event
+        // (r6b-ivm-2).
+        if !event.has_label("system:CapabilityGrant") {
             return Ok(());
         }
         match event.kind {
@@ -296,7 +309,10 @@ mod tests {
     fn grant_node(n: i64) -> Node {
         let mut props = BTreeMap::new();
         props.insert("n".into(), Value::Int(n));
-        Node::new(vec!["CapabilityGrant".into()], props)
+        // Namespaced label — matches the `CAPABILITY_GRANT_LABEL` constant
+        // in `benten-caps` so this view's in-crate tests exercise the same
+        // label surface production grants carry (r6b-ivm-2).
+        Node::new(vec!["system:CapabilityGrant".into()], props)
     }
 
     #[test]

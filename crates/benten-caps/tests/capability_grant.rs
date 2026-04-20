@@ -1,7 +1,8 @@
 //! `CapabilityGrant` Node type (P2 — R2 landscape §2.4 row 6).
 //!
-//! Grants are plain Nodes with label `"CapabilityGrant"`. HLC timestamps in
-//! the properties make every grant content-distinct (anti-dedupe semantic).
+//! Grants are plain Nodes with label `"system:CapabilityGrant"`. HLC
+//! timestamps in the properties make every grant content-distinct
+//! (anti-dedupe semantic).
 //!
 //! Test edit (G4 mini-review g4-cr-2): `issuer` is now a required field on
 //! `CapabilityGrant` — the prior two-construction-paths hazard (struct
@@ -12,7 +13,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use benten_caps::CapabilityGrant;
+use benten_caps::{CAPABILITY_GRANT_LABEL, CapabilityGrant};
 use benten_core::testing::canonical_test_node;
 
 #[test]
@@ -26,7 +27,12 @@ fn grant_as_node_label_is_capability_grant() {
         hlc_stamp: 1,
     };
     let node = grant.as_node();
-    assert_eq!(node.labels, vec!["CapabilityGrant".to_string()]);
+    // Match against the shared constant so the label-namespace contract
+    // is pinned at one location (r6b-ivm-2). The namespaced
+    // `"system:CapabilityGrant"` form is load-bearing for View 1's filter
+    // and the `BackendGrantReader` lookup.
+    assert_eq!(node.labels, vec![CAPABILITY_GRANT_LABEL.to_string()]);
+    assert_eq!(CAPABILITY_GRANT_LABEL, "system:CapabilityGrant");
 }
 
 #[test]

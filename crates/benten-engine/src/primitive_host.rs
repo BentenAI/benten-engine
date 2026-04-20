@@ -100,10 +100,25 @@ pub(crate) enum PendingHostOp {
     DeleteNode {
         cid: Cid,
     },
+    // r6b-ce-2: PutEdge / DeleteEdge are retained on the enum so the match
+    // arm in `dispatch_call_inner` stays exhaustive and the Phase-2
+    // EngineTransaction edge API can flip both variants on without a
+    // silent replay regression. Phase 1 `PrimitiveHost::{put,delete}_edge`
+    // fail loud with `EvalError::Unsupported`, so the variants are never
+    // constructed in Phase 1 — the `#[allow(dead_code)]` below is a
+    // deliberate ratification of that state.
+    #[allow(
+        dead_code,
+        reason = "r6b-ce-2: reserved for Phase-2 EngineTransaction edge API"
+    )]
     PutEdge {
         edge: Edge,
         projected_cid: Cid,
     },
+    #[allow(
+        dead_code,
+        reason = "r6b-ce-2: reserved for Phase-2 EngineTransaction edge API"
+    )]
     DeleteEdge {
         cid: Cid,
     },
@@ -176,19 +191,21 @@ impl PrimitiveHost for Engine {
         }
     }
 
-    fn put_edge(&self, edge: &Edge) -> Result<Cid, benten_eval::EvalError> {
-        let projected = edge.cid()?;
-        let mut guard = self.active_call().lock_recover();
-        if let Some(frame) = guard.last_mut() {
-            frame.pending_ops.push(PendingHostOp::PutEdge {
-                edge: edge.clone(),
-                projected_cid: projected.clone(),
-            });
-            Ok(projected)
-        } else {
-            drop(guard);
-            Ok(self.backend().put_edge(edge)?)
-        }
+    fn put_edge(&self, _edge: &Edge) -> Result<Cid, benten_eval::EvalError> {
+        // r6b-ce-2: the prior buffering-then-silent-no-op shape contradicted
+        // the PrimitiveHost buffer+replay ALL-or-NONE atomicity claim — the
+        // replay arm in `dispatch_call_inner` dropped edge ops on the floor.
+        // Phase-1 has no evaluator path that reaches this method, so failing
+        // loud here (rather than silently succeeding then losing the write)
+        // prevents a Phase-2 contributor from wiring a primitive that
+        // depends on an edge write that never lands.
+        //
+        // Maps to `E_NOT_IMPLEMENTED` at the catalog; the full edge-ops
+        // replay wires with the dedicated EngineTransaction edge API in
+        // Phase 2.
+        Err(benten_eval::EvalError::Unsupported {
+            operation: "put_edge".to_string(),
+        })
     }
 
     fn delete_node(&self, cid: &Cid) -> Result<(), benten_eval::EvalError> {
@@ -205,18 +222,12 @@ impl PrimitiveHost for Engine {
         }
     }
 
-    fn delete_edge(&self, cid: &Cid) -> Result<(), benten_eval::EvalError> {
-        let mut guard = self.active_call().lock_recover();
-        if let Some(frame) = guard.last_mut() {
-            frame
-                .pending_ops
-                .push(PendingHostOp::DeleteEdge { cid: cid.clone() });
-            Ok(())
-        } else {
-            drop(guard);
-            self.backend().delete_edge(cid)?;
-            Ok(())
-        }
+    fn delete_edge(&self, _cid: &Cid) -> Result<(), benten_eval::EvalError> {
+        // r6b-ce-2: symmetric fail-loud with `put_edge`. See that method
+        // for the full rationale.
+        Err(benten_eval::EvalError::Unsupported {
+            operation: "delete_edge".to_string(),
+        })
     }
 
     fn call_handler(
@@ -240,8 +251,15 @@ impl PrimitiveHost for Engine {
                     Ok(Value::Null)
                 }
             }
-            Err(EngineError::Cap(c)) => Err(benten_eval::EvalError::Capability(c)),
-            Err(e) => Err(benten_eval::EvalError::Backend(format!("{e:?}"))),
+            // r6b-err-1: typed pass-through preserves the origin catalog
+            // code across the EngineError → EvalError boundary. Prior to
+            // this, every non-Cap error collapsed into
+            // `EvalError::Backend(format!("{e:?}"))` — the stable
+            // catalog code (`E_UNKNOWN_VIEW`, `E_IVM_VIEW_STALE`,
+            // `E_SUBSYSTEM_DISABLED`, `E_GRAPH_INTERNAL`, …) was lost at
+            // the boundary and the TS wrapper saw an opaque
+            // `E_EVAL_BACKEND` with a debug-formatted message.
+            Err(e) => Err(engine_error_to_eval_error(e)),
         }
     }
 
@@ -291,7 +309,8 @@ impl PrimitiveHost for Engine {
                     Ok(Value::Null)
                 }
             }
-            Err(e) => Err(benten_eval::EvalError::Backend(format!("{e:?}"))),
+            // r6b-err-1: typed pass-through — see `call_handler` above.
+            Err(e) => Err(engine_error_to_eval_error(e)),
         }
     }
 }
@@ -300,15 +319,70 @@ impl PrimitiveHost for Engine {
 // EvalError ↔ EngineError conversion + attribution helpers
 // ---------------------------------------------------------------------------
 
+/// Convert an `EngineError` into the equivalent `EvalError` for return
+/// across the `PrimitiveHost` boundary (r6b-err-1). Preserves the origin
+/// catalog code by dispatching to typed `EvalError` variants for every
+/// `EngineError` shape that has a stable downstream identity; the
+/// catch-all `Backend(message)` path now only fires for residual
+/// `EngineError::Other` and `NotImplemented` shapes.
+fn engine_error_to_eval_error(e: EngineError) -> benten_eval::EvalError {
+    match e {
+        EngineError::Cap(c) => benten_eval::EvalError::Capability(c),
+        EngineError::Graph(g) => benten_eval::EvalError::Graph(g),
+        EngineError::Core(c) => benten_eval::EvalError::Core(c),
+        EngineError::UnknownView { view_id } => benten_eval::EvalError::UnknownView(view_id),
+        EngineError::IvmViewStale { view_id } => benten_eval::EvalError::IvmViewStale(view_id),
+        EngineError::SubsystemDisabled { subsystem } => {
+            benten_eval::EvalError::SubsystemDisabled(subsystem.to_string())
+        }
+        // Remaining shapes (Invariant, DuplicateHandler, NestedTransaction,
+        // Other, NotImplemented, the two builder-guard errors) have no
+        // typed EvalError representation; fall back to the debug-formatted
+        // Backend channel. The stable catalog code is still recoverable
+        // via the `{error_code()}` accessor on the resurrected EngineError
+        // above the TS boundary, and the residual shapes are
+        // engine-orchestrator concerns rather than evaluator-visible
+        // states, so the drop is acceptable.
+        other => benten_eval::EvalError::Backend(format!("{other:?}")),
+    }
+}
+
 /// Convert an `EvalError` back into an `EngineError` for the transaction
 /// closure's return type.
+///
+/// r6b-err-3: the `EvalError::Backend` arm now routes to the same stable
+/// string (`E_EVAL_BACKEND`) that `EvalError::code()` emits for the same
+/// variant. Prior to this, the engine-side conversion spelled it
+/// `E_BACKEND` while the eval-side `.code()` spelled it `E_EVAL_BACKEND`;
+/// two catalog strings for one conceptual state meant a TS caller doing a
+/// `switch (err.code)` branch saw the code flip depending on which side
+/// of the boundary the error was observed on.
 pub(crate) fn eval_error_to_engine_error(e: benten_eval::EvalError) -> EngineError {
     match e {
         benten_eval::EvalError::Capability(c) => EngineError::Cap(c),
         benten_eval::EvalError::Graph(g) => EngineError::Graph(g),
         benten_eval::EvalError::Core(c) => EngineError::Core(c),
+        // r6b-err-1: typed round-trip. An `EvalError::UnknownView` that
+        // came from an engine-side rejection (via `engine_error_to_eval_error`)
+        // must land back on the same engine-side variant, preserving the
+        // stable catalog code across the round-trip. Similarly for
+        // `IvmViewStale` and `SubsystemDisabled`.
+        //
+        // `SubsystemDisabled` round-trips through a `String` because
+        // `EngineError::SubsystemDisabled` carries a `&'static str`; the
+        // outer boundary spelling picks "ivm" or "capabilities" per the
+        // set of constants the engine uses. Phase-1 hits exactly those two
+        // strings; Phase-2 can intern to a typed enum if the set grows.
+        benten_eval::EvalError::UnknownView(view_id) => EngineError::UnknownView { view_id },
+        benten_eval::EvalError::IvmViewStale(view_id) => EngineError::IvmViewStale { view_id },
+        benten_eval::EvalError::SubsystemDisabled(subsystem) => EngineError::Other {
+            code: benten_errors::ErrorCode::SubsystemDisabled,
+            message: format!("subsystem disabled: {subsystem}"),
+        },
         benten_eval::EvalError::Backend(m) => EngineError::Other {
-            code: benten_errors::ErrorCode::Unknown("E_BACKEND".into()),
+            // Single source of truth — mirrors
+            // `EvalError::Backend.code()` in benten-eval (r6b-err-3).
+            code: benten_errors::ErrorCode::Unknown("E_EVAL_BACKEND".into()),
             message: m,
         },
         other => EngineError::Other {

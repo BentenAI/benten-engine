@@ -537,6 +537,24 @@ impl RedbBackend {
         // keys either way, and redb multimap `remove` is idempotent. This
         // invariant breaks for Phase-2 mutable identities (Anchor.CURRENT
         // pointer, named roots); re-evaluate when those land.
+        //
+        // r6b-ivm-1 cascade: delete every edge whose source or target is
+        // `cid` first, so the Node delete doesn't leave orphaned edges
+        // pointing at an absent CID. Each cascaded edge delete runs through
+        // `delete_edge` (itself a separate redb write-txn), so the cascade
+        // is NOT atomic with the node delete on this direct-API path —
+        // callers who need atomicity go through `transaction(|tx| ...)`,
+        // which holds all removals inside one commit.
+        //
+        // The `Engine::delete_node` path always routes through the
+        // transactional variant (`Transaction::delete_node`); this direct
+        // path exists for tests and non-engine consumers and matches the
+        // rest of the `RedbBackend::delete_*` API shape.
+        let cascade_edges = self.collect_edges_referencing_node(cid)?;
+        for edge_cid in &cascade_edges {
+            self.delete_edge(edge_cid)?;
+        }
+
         let existing = self.get_node(cid)?;
         let n_key = node_key(cid);
 
@@ -565,6 +583,25 @@ impl RedbBackend {
         }
         write_txn.commit()?;
         Ok(())
+    }
+
+    /// Collect every Edge CID referencing `cid` as source or target,
+    /// deduped across the two prefix scans. Used by the non-transactional
+    /// `delete_node` cascade (r6b-ivm-1). The transactional variant in
+    /// `transaction.rs` has its own in-txn scan helper to keep the cascade
+    /// atomic with the commit.
+    fn collect_edges_referencing_node(
+        &self,
+        cid: &Cid,
+    ) -> Result<std::collections::BTreeSet<Cid>, GraphError> {
+        let mut out: std::collections::BTreeSet<Cid> = std::collections::BTreeSet::new();
+        for edge in self.edges_from(cid)? {
+            out.insert(edge.cid()?);
+        }
+        for edge in self.edges_to(cid)? {
+            out.insert(edge.cid()?);
+        }
+        Ok(out)
     }
 
     // ---- Edge CRUD -------------------------------------------------------

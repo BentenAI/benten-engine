@@ -17,70 +17,81 @@
 
 use benten_errors::ErrorCode;
 
-/// Count the enum variants that the catalog enumerates. Update this alongside
-/// the catalog doc + `.code()` mappers whenever a new catalog code lands.
+/// Every catalog variant must round-trip through `as_str` / `from_str`
+/// without hitting the `Unknown` fallback. The enumerated list below is the
+/// authoritative source for the count — `CATALOG_VARIANT_COUNT` is derived
+/// from `ALL_CATALOG_VARIANTS.len()` rather than hard-coded, so a new
+/// catalog variant added to the list without bumping a separate constant
+/// cannot drift (r6b-err-2).
 ///
-/// Current catalog count: 42 catalog variants + 1 `Unknown(String)` fallback
-/// = 43 total. (`ErrorCode::Unknown` is not a catalog code; it's a
-/// forward-compat fallback.)
-const CATALOG_VARIANT_COUNT: usize = 42;
+/// **Adding a variant:** add it to [`ALL_CATALOG_VARIANTS`], then add the
+/// matching `match` arms in `ErrorCode::as_str`, `as_static_str`, and
+/// `from_str`, then document the code in `docs/ERROR-CATALOG.md`. The
+/// `round_trips_via_as_str_from_str` test below is the tripwire that fails
+/// loudly if any of those steps is skipped.
+///
+/// `ErrorCode::Unknown(String)` is deliberately excluded — it's the
+/// forward-compat fallback, not a catalog code.
+const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
+    ErrorCode::InvCycle,
+    ErrorCode::InvDepthExceeded,
+    ErrorCode::InvFanoutExceeded,
+    ErrorCode::InvTooManyNodes,
+    ErrorCode::InvTooManyEdges,
+    ErrorCode::InvDeterminism,
+    ErrorCode::InvContentHash,
+    ErrorCode::InvRegistration,
+    ErrorCode::InvIterateNestDepth,
+    ErrorCode::InvIterateMaxMissing,
+    ErrorCode::InvIterateBudget,
+    ErrorCode::CapDenied,
+    ErrorCode::CapDeniedRead,
+    ErrorCode::CapRevoked,
+    ErrorCode::CapRevokedMidEval,
+    ErrorCode::CapNotImplemented,
+    ErrorCode::CapAttenuation,
+    ErrorCode::WriteConflict,
+    ErrorCode::IvmViewStale,
+    ErrorCode::TxAborted,
+    ErrorCode::NestedTransactionNotSupported,
+    ErrorCode::PrimitiveNotImplemented,
+    ErrorCode::SystemZoneWrite,
+    ErrorCode::ValueFloatNan,
+    ErrorCode::ValueFloatNonFinite,
+    ErrorCode::CidParse,
+    ErrorCode::CidUnsupportedCodec,
+    ErrorCode::CidUnsupportedHash,
+    ErrorCode::VersionBranched,
+    ErrorCode::BackendNotFound,
+    ErrorCode::TransformSyntax,
+    ErrorCode::InputLimit,
+    ErrorCode::NotFound,
+    ErrorCode::Serialize,
+    ErrorCode::GraphInternal,
+    ErrorCode::DuplicateHandler,
+    ErrorCode::NoCapabilityPolicyConfigured,
+    ErrorCode::ProductionRequiresCaps,
+    ErrorCode::SubsystemDisabled,
+    ErrorCode::UnknownView,
+    ErrorCode::NotImplemented,
+    ErrorCode::IvmPatternMismatch,
+    ErrorCode::VersionUnknownPrior,
+];
+
+/// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
+/// adding to the list and forgetting to bump a number is impossible).
+const CATALOG_VARIANT_COUNT: usize = ALL_CATALOG_VARIANTS.len();
 
 /// Every catalog variant must round-trip through `as_str` / `from_str`
-/// without hitting the `Unknown` fallback. If this count drifts from the
-/// actual enum shape the test fails with a clear error message, which is
-/// the tripwire we want.
+/// without hitting the `Unknown` fallback. Cross-checks the enumerated
+/// `ALL_CATALOG_VARIANTS` list against the enum so a variant added to the
+/// enum without being added to the list is caught by the
+/// `catalog_variant_count_matches_enum` test below, and a variant added to
+/// the list without the matching `from_str` arm is caught here.
 #[test]
 fn variant_count_is_pinned() {
-    // Enumerate every variant explicitly so the count is mechanically
-    // verifiable against the enum declaration. Adding a variant requires
-    // adding it here too — a deliberate friction point.
-    let all: [ErrorCode; CATALOG_VARIANT_COUNT] = [
-        ErrorCode::InvCycle,
-        ErrorCode::InvDepthExceeded,
-        ErrorCode::InvFanoutExceeded,
-        ErrorCode::InvTooManyNodes,
-        ErrorCode::InvTooManyEdges,
-        ErrorCode::InvDeterminism,
-        ErrorCode::InvContentHash,
-        ErrorCode::InvRegistration,
-        ErrorCode::InvIterateNestDepth,
-        ErrorCode::InvIterateMaxMissing,
-        ErrorCode::InvIterateBudget,
-        ErrorCode::CapDenied,
-        ErrorCode::CapDeniedRead,
-        ErrorCode::CapRevoked,
-        ErrorCode::CapRevokedMidEval,
-        ErrorCode::CapNotImplemented,
-        ErrorCode::CapAttenuation,
-        ErrorCode::WriteConflict,
-        ErrorCode::IvmViewStale,
-        ErrorCode::TxAborted,
-        ErrorCode::NestedTransactionNotSupported,
-        ErrorCode::PrimitiveNotImplemented,
-        ErrorCode::SystemZoneWrite,
-        ErrorCode::ValueFloatNan,
-        ErrorCode::ValueFloatNonFinite,
-        ErrorCode::CidParse,
-        ErrorCode::CidUnsupportedCodec,
-        ErrorCode::CidUnsupportedHash,
-        ErrorCode::VersionBranched,
-        ErrorCode::BackendNotFound,
-        ErrorCode::TransformSyntax,
-        ErrorCode::InputLimit,
-        ErrorCode::NotFound,
-        ErrorCode::Serialize,
-        ErrorCode::GraphInternal,
-        ErrorCode::DuplicateHandler,
-        ErrorCode::NoCapabilityPolicyConfigured,
-        ErrorCode::ProductionRequiresCaps,
-        ErrorCode::SubsystemDisabled,
-        ErrorCode::UnknownView,
-        ErrorCode::NotImplemented,
-        ErrorCode::IvmPatternMismatch,
-    ];
-    assert_eq!(all.len(), CATALOG_VARIANT_COUNT);
     // Every listed variant must round-trip through from_str(as_str).
-    for code in &all {
+    for code in ALL_CATALOG_VARIANTS {
         let s = code.as_str();
         let parsed = ErrorCode::from_str(s);
         assert_eq!(
@@ -88,6 +99,26 @@ fn variant_count_is_pinned() {
             "catalog variant {code:?} failed as_str/from_str round-trip via string {s}",
         );
     }
+    // The "as_static_str" path MUST also return the same string for every
+    // catalog variant — it's the path the engine's static-code accessor
+    // delegates through, and it duplicating `as_str` is load-bearing for
+    // the drift detector's expected reverse mapping.
+    for code in ALL_CATALOG_VARIANTS {
+        assert_eq!(
+            code.as_str(),
+            code.as_static_str(),
+            "as_str / as_static_str disagree for {code:?}",
+        );
+    }
+    // Canary: the known count at the time this harness landed (43). If a
+    // future change bumps the enum, it bumps the array, which bumps this
+    // value — the assertion documents the expected movement direction.
+    // Adding a variant is a +1 delta; shrinking is always a breaking
+    // change that must surface in the catalog diff.
+    assert_eq!(
+        CATALOG_VARIANT_COUNT, 43,
+        "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
+    );
 }
 
 /// Representative catalog code renders the frozen string form.

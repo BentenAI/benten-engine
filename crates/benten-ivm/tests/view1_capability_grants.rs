@@ -25,7 +25,10 @@ use benten_ivm::{View, ViewQuery, ViewResult};
 fn grant_event(kind: ChangeKind) -> ChangeEvent {
     ChangeEvent {
         cid: canonical_test_node().cid().unwrap(),
-        labels: vec!["CapabilityGrant".to_string()],
+        // Namespaced label — matches `CAPABILITY_GRANT_LABEL` in
+        // `benten-caps` and the filter in View 1. A bare
+        // `"CapabilityGrant"` would be silently ignored (r6b-ivm-2).
+        labels: vec!["system:CapabilityGrant".to_string()],
         kind,
         tx_id: 1,
         actor_cid: None,
@@ -112,6 +115,84 @@ fn view1_revocation_removes_grant() {
     };
     match v.read(&q).unwrap() {
         ViewResult::Cids(cids) => assert!(cids.is_empty(), "revocation must empty the set"),
+        other => panic!("expected Cids, got {other:?}"),
+    }
+}
+
+/// r6b-ivm-2 regression: View 1 routes events whose labels carry the
+/// **namespaced** `"system:CapabilityGrant"` label (the form produced by
+/// the engine's privileged `grant_capability` path). An unqualified
+/// `"CapabilityGrant"` label used to match; now only the namespaced form
+/// does.
+///
+/// This asserts the filter AND the in-crate constant so a future drift
+/// between `benten-caps::CAPABILITY_GRANT_LABEL` and View 1's filter
+/// surfaces as a compile-time / test-time failure rather than a silent
+/// empty view.
+#[test]
+fn view1_routes_system_labeled_grant_events_correctly() {
+    let expected_cid = canonical_test_node().cid().unwrap();
+    let event = ChangeEvent {
+        cid: expected_cid.clone(),
+        // Namespaced label — matches `benten_caps::CAPABILITY_GRANT_LABEL`.
+        labels: vec!["system:CapabilityGrant".to_string()],
+        kind: ChangeKind::Created,
+        tx_id: 1,
+        actor_cid: None,
+        handler_cid: None,
+        capability_grant_cid: None,
+        node: None,
+        edge_endpoints: None,
+    };
+    let mut v = CapabilityGrantsView::new();
+    v.update(&event).unwrap();
+
+    let q = ViewQuery {
+        entity_cid: Some(expected_cid.clone()),
+        ..ViewQuery::default()
+    };
+    match v.read(&q).unwrap() {
+        ViewResult::Cids(cids) => {
+            assert_eq!(
+                cids,
+                vec![expected_cid],
+                "system-labeled grant event must populate the by_entity map"
+            );
+        }
+        other => panic!("expected Cids, got {other:?}"),
+    }
+}
+
+/// r6b-ivm-2 regression (negative pair): View 1 must IGNORE an event
+/// carrying the old unqualified `"CapabilityGrant"` label. If this test
+/// ever starts populating state, the label namespace has regressed back to
+/// the pre-r6b shape where the `BackendGrantReader` and View 1 disagreed.
+#[test]
+fn view1_ignores_unqualified_capability_grant_label() {
+    let cid = canonical_test_node().cid().unwrap();
+    let event = ChangeEvent {
+        cid: cid.clone(),
+        labels: vec!["CapabilityGrant".to_string()],
+        kind: ChangeKind::Created,
+        tx_id: 1,
+        actor_cid: None,
+        handler_cid: None,
+        capability_grant_cid: None,
+        node: None,
+        edge_endpoints: None,
+    };
+    let mut v = CapabilityGrantsView::new();
+    v.update(&event).unwrap();
+
+    let q = ViewQuery {
+        entity_cid: Some(cid),
+        ..ViewQuery::default()
+    };
+    match v.read(&q).unwrap() {
+        ViewResult::Cids(cids) => assert!(
+            cids.is_empty(),
+            "unqualified label must not route to View 1 (system-zone convention)"
+        ),
         other => panic!("expected Cids, got {other:?}"),
     }
 }

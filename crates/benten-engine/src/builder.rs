@@ -17,7 +17,10 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use benten_caps::{CapError, CapabilityPolicy, GrantBackedPolicy, GrantReader, NoAuthBackend};
+use benten_caps::{
+    CAPABILITY_GRANT_LABEL, CapError, CapabilityPolicy, GrantBackedPolicy, GrantReader,
+    NoAuthBackend,
+};
 use benten_core::Value;
 use benten_errors::ErrorCode;
 use benten_graph::{ChangeSubscriber, RedbBackend};
@@ -361,9 +364,13 @@ impl GrantReader for BackendGrantReader {
         if revoked.contains(scope) {
             return Ok(false);
         }
+        // Single-source-of-truth for the grant label — matches the
+        // `CAPABILITY_GRANT_LABEL` constant in `benten-caps` (and View 1's
+        // filter). A hard-coded string here would re-open the r6b-ivm-2
+        // namespace-drift bug.
         let cids = self
             .backend
-            .get_by_label("system:CapabilityGrant")
+            .get_by_label(CAPABILITY_GRANT_LABEL)
             .map_err(|e| CapError::Denied {
                 required: format!("backend read: {e:?}"),
                 entity: String::new(),
