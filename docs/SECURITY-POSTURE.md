@@ -105,8 +105,9 @@ the worst-case TOCTOU window bounded at 99 iterations.
 
 **Phase-2 revisit:** configurable per-handler batch size (0 =
 per-iteration check, at the cost of the O(N) backend read) and
-wall-clock bound on the TOCTOU window (auditor finding g4-p2-uc-2 —
-TRANSFORM-heavy handlers can push the 100-iteration cap past 10
+wall-clock bound on the TOCTOU window (auditor finding
+[g4-p2-uc-2](../.addl/phase-1/r5-g4-pass2-ucan-capability-auditor.json)
+— TRANSFORM-heavy handlers can push the 100-iteration cap past 10
 minutes of wall-clock time). The deferred integration tests
 `capability_revoked_mid_iteration_denies_subsequent_batches` and
 `writes_in_current_batch_are_not_retroactively_denied` in
@@ -221,6 +222,40 @@ this compromise.
 
 ---
 
+### Compromise #8 — `Engine::call` bypasses the evaluator for CRUD handlers — CLOSED
+
+Originally open: during G7 the `Engine::call` dispatch for
+`register_crud`-registered handlers took a "CRUD fast-path" that
+synthesised a transaction directly against the backend and skipped the
+`benten-eval` evaluator walk entirely. The fast-path mirrored the
+capability hook and change-event emission of the full dispatch, but it
+was a parallel code path — any invariant check or primitive-level hook
+added to the evaluator would not fire for CRUD handlers.
+
+**Closure (R5 pass-5b).** The `PrimitiveHost` trait was extracted and
+`benten-engine` now implements it; `Engine::call` drives
+`Evaluator::run_with_trace` for every registered handler (CRUD and
+SubgraphSpec alike) and replays buffered host-side WRITE / DELETE ops
+atomically inside a single transaction after the walk completes. The
+CRUD fast-path is retired; there is no dispatch path that reaches the
+backend without walking the evaluator first.
+
+**Why it matters (security framing):** the bypass was a latent
+backdoor that would have let a Phase-2 invariant (e.g. invariant 8
+cumulative iteration budget, invariant 11 system-zone reachability)
+ship green against SubgraphSpec handlers while silently not firing for
+the zero-config `crud('<label>')` registration that most applications
+use. Closing the compromise eliminates that backdoor before the
+Phase-2 invariant set lands.
+
+**Regression test:**
+`compromise_8_primitive_host_is_sole_dispatch` in
+`crates/benten-engine/tests/integration/compromises_regression.rs`
+pins the "evaluator is sole dispatch path" contract. Re-opening the
+CRUD fast-path flips the test red.
+
+---
+
 ## `requires` property is Phase-1 advisory (r6-sec-1)
 
 Handler subgraphs can declare a `requires` property on each primitive
@@ -284,6 +319,13 @@ subscriber path. This is a deliberate Phase-1 simplification, not a bug:
   `actor_cid` / `handler_cid` / `capability_grant_cid` triple (r6-sec-3),
   so a Phase-3 policy layer can retroactively filter by observer identity
   without breaking the wire format.
+
+  **Phase-1 field status.** `capability_grant_cid` is present in the
+  wire format but is always `None` in Phase 1 — grant-resolution on the
+  write path is Phase-3 `benten-id` scope. The field is frozen now so
+  audit consumers written today (forward-compatibility). Phase-1 audit
+  code MUST NOT rely on the value being populated; consuming code that
+  needs grant attribution should wait on the Phase-3 identity surface.
 
 **Phase-3 revisit.** Alongside Compromise #2 — once `benten-id` lands a
 typed principal and sync / federation cross the trust boundary, the

@@ -4,8 +4,13 @@
 //! the result on the `"ok"` edge. The expression is stored on the operation
 //! Node as the `"expr"` property (a Text value carrying the source string);
 //! the input is supplied on the `"input"` property (bound to `$input` in
-//! the expression). Registration-time validation parses the expression once
-//! (via [`crate::expr::parser::parse`]); runtime calls walk the AST.
+//! the expression). Phase-1 parses the expression at every `execute()`
+//! call via [`crate::expr::parser::parse`]; there is no registration-time
+//! parse cache.
+//!
+//! TODO(phase-2-transform-parse-cache): move the parse step to registration
+//! time so runtime calls walk a pre-built AST. Tracked for the Phase-2
+//! evaluator-performance pass (5d-J scope).
 //!
 //! Phase-1 contract (R2 §2.5 row 7):
 //!

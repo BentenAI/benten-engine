@@ -1,10 +1,8 @@
 //! ITERATE primitive executor.
 //!
-//! ITERATE walks a bounded input list and invokes a body subgraph for each
-//! element. Phase 1's executor is property-driven (matching the other
-//! primitives): the real body-subgraph dispatch wires up in G7 when the
-//! engine handle is available. The contract this executor locks in is the
-//! edge-routing shape the evaluator uses:
+//! ITERATE walks a bounded iteration counter and drives the capability
+//! re-check cadence (Named Compromise #1). The contract this executor
+//! locks in is the edge-routing shape the evaluator uses:
 //!
 //! - `items: List` — the iteration input. When omitted, the executor
 //!   treats the input as empty.
@@ -14,27 +12,32 @@
 //!   [`ErrorCode::InvIterateMaxMissing`](benten_errors::ErrorCode)). The
 //!   executor additionally routes `ON_LIMIT` if the actual item count
 //!   exceeds `max`.
-//! - `parallel: Bool` — when `true`, the evaluator invokes the body on
-//!   each element concurrently via `std::thread::scope`. Ordering of the
-//!   accumulated result list is preserved.
-//! - `batch_size: Int` — chunk size for capability re-checking
-//!   (cooperating with `benten_caps::DEFAULT_BATCH_BOUNDARY`).
+//! - `requires: Text` — the capability scope checked at every batch
+//!   boundary (falls back to `"iterate"` when absent).
 //!
 //! Named Compromise #1 (ITERATE batch-boundary half): the capability
 //! re-check fires at `host.iterate_batch_boundary()` (default 100) rather
-//! than per-iteration. The executor walks `items` in lockstep and every
-//! N iterations calls `host.check_capability` with the scope declared on
-//! the operation (`requires` property, falling back to `"iterate"`). A
-//! revocation landing mid-batch is visible at the NEXT batch boundary;
-//! the denial routes through the `ON_DENIED` typed edge with the policy's
-//! error code in the edge payload. See
+//! than per-iteration. The executor walks the item count in lockstep and
+//! every N iterations calls `host.check_capability` with the scope
+//! declared on the operation. The entry refresh (iteration 0) always
+//! fires, even when the iteration list is empty. A revocation landing
+//! mid-batch is visible at the NEXT batch boundary; the denial routes
+//! through the `ON_DENIED` typed edge with the policy's error code in the
+//! edge payload. See
 //! [`CapabilityPolicy::iterate_batch_boundary`](benten_caps::CapabilityPolicy::iterate_batch_boundary).
 //!
-//! The Phase-1 executor does not dispatch a body subgraph (no engine
-//! handle is in scope); iteration is accounted for the cap-refresh cadence
-//! only. The returned `output` is an empty accumulator list, same as the
-//! pre-compromise-#1 shape, so existing tests that pin the happy-path
+//! The Phase-1 executor does not dispatch a body subgraph; iteration is
+//! accounted for the cap-refresh cadence only. The returned `output` is
+//! an empty accumulator list, so existing tests that pin the happy-path
 //! output remain green.
+//!
+//! # Phase-2 deferred
+//!
+//! Parallel iteration (`parallel: Bool` via `std::thread::scope`) and
+//! user-supplied per-op batch size (`batch_size: Int`) are NOT part of
+//! the Phase-1 contract. The Phase-1 executor reads only `items`, `max`,
+//! and `requires`; any additional property is ignored. Body-subgraph
+//! dispatch with the accumulated-results shape is Phase-2 scope.
 
 use benten_core::Value;
 

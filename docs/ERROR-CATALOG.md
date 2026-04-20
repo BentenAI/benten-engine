@@ -400,7 +400,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 - **Message:** "Unknown view: {view_id}"
 - **Context:** `{ view_id: string, registered: string[] }`
-- **Fix:** The view id was not registered via `create_view` / `registerView`. Check spelling, confirm the IVM subscriber has the view wired, and that `.without_ivm()` was not used on the builder.
+- **Fix:** The view id was not registered. From TypeScript use `engine.createView(viewDef)`; from Rust use `Engine::create_view` (or the built-in views wired at engine-build time). Check spelling, confirm the IVM subscriber has the view wired, and that `.without_ivm()` was not used on the builder.
 - **Thrown at:** Engine (`read_view`)
 - **Phase:** 1
 

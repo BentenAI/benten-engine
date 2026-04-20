@@ -203,14 +203,29 @@ pub trait CapabilityPolicy: Send + Sync {
     }
 
     /// Maximum number of ITERATE loop bodies that may execute between
-    /// capability-snapshot refreshes.
+    /// capability-snapshot refreshes, as recommended by this policy.
     ///
     /// The default is [`DEFAULT_BATCH_BOUNDARY`] — the Phase 1 named
-    /// compromise #1 boundary. A revocation-sensitive backend (Phase 3 UCAN
-    /// with a short TTL; a testing backend that wants to force a refresh
-    /// every iteration) can override to tighten the bound. The evaluator
-    /// (G6) reads this value via `CapabilityPolicy::iterate_batch_boundary`
-    /// and re-reads caps every N iterations.
+    /// compromise #1 boundary. A revocation-sensitive backend (Phase 3
+    /// UCAN with a short TTL; a testing backend that wants to force a
+    /// refresh every iteration) can override to tighten the bound.
+    ///
+    /// # Phase-1 wiring caveat
+    ///
+    /// The evaluator reads its batch cadence from
+    /// `benten_eval::PrimitiveHost::iterate_batch_boundary`, not from the
+    /// configured `CapabilityPolicy`. In Phase 1 the default engine
+    /// `PrimitiveHost` implementation does NOT delegate to the policy's
+    /// override, so customising this value on a bespoke
+    /// `CapabilityPolicy` will not affect the evaluator's actual refresh
+    /// cadence. This method is therefore a policy-level constant in
+    /// Phase 1, consulted by capability-aware tooling that inspects the
+    /// policy directly.
+    ///
+    /// TODO(phase-2-iterate-boundary-delegation): wire the engine's
+    /// `PrimitiveHost::iterate_batch_boundary` to delegate to the
+    /// configured `CapabilityPolicy::iterate_batch_boundary` so the
+    /// policy override becomes load-bearing end-to-end.
     ///
     /// Lowering this bound increases capability-check load; raising it
     /// widens the TOCTOU window. Keep in lockstep with the named compromise
