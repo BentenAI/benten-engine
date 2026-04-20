@@ -23,7 +23,7 @@
 //! nondeterminism (time, RNG, locale-sensitive case folding) are rejected
 //! by the grammar or omitted.
 //!
-//! TODO(R4b): audit docs/DSL-SPECIFICATION.md against this dispatch table.
+//! TODO(phase-2-dsl-audit): audit docs/DSL-SPECIFICATION.md against this dispatch table.
 //! `formatDate(date_str, format_str)` is currently absent; decide whether
 //! to add it as a deterministic string-in / string-out formatter or
 //! remove the expectation from the grammar doc. `now()` is correctly

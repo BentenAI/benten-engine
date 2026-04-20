@@ -632,9 +632,20 @@ impl Engine {
     /// need to re-invoke `Engine::call` just to recover the result
     /// (avoids the Phase-1 write-amplification footgun). Phase 2
     /// replaces the step synthesis with live evaluator instrumentation.
+    ///
+    /// # Side-effect-free (r6-dx-C4)
+    ///
+    /// Tracing runs the evaluator in "trace mode" — the buffered host
+    /// write ops produced by the walk are *discarded* instead of being
+    /// replayed into the backend. A traced `crud:create` therefore does
+    /// NOT persist a Node, does NOT fire a ChangeEvent, does NOT
+    /// disturb IVM views. The returned `Outcome.created_cid` is the
+    /// *projected* CID the write would have landed under, so the tracer
+    /// can display a realistic terminal result without polluting the
+    /// graph.
     pub fn trace(&self, handler_id: &str, op: &str, input: Node) -> Result<Trace, EngineError> {
         let start = std::time::Instant::now();
-        let outcome = self.dispatch_call(handler_id, op, input, None)?;
+        let outcome = self.dispatch_call_with_mode(handler_id, op, input, None, true)?;
         let elapsed = start.elapsed().as_micros();
         let elapsed = u64::try_from(elapsed).unwrap_or(u64::MAX).max(1);
         // Derive the op-specific primitive list for CRUD handlers. The
@@ -738,6 +749,25 @@ impl Engine {
         input: Node,
         actor: Option<Cid>,
     ) -> Result<Outcome, EngineError> {
+        self.dispatch_call_with_mode(handler_id, op, input, actor, false)
+    }
+
+    /// Internal dispatch that optionally runs in trace-mode.
+    ///
+    /// When `trace_mode` is `true`, the replay phase of the two-phase write
+    /// is skipped entirely — buffered `PendingHostOp`s are dropped rather
+    /// than applied inside a transaction. This gives `Engine::trace` a
+    /// side-effect-free walk while still producing the same `Outcome`
+    /// shape (via the pending ops' projected CIDs) so callers see a
+    /// realistic terminal result. See r6-dx-C4.
+    pub(crate) fn dispatch_call_with_mode(
+        &self,
+        handler_id: &str,
+        op: &str,
+        input: Node,
+        actor: Option<Cid>,
+        trace_mode: bool,
+    ) -> Result<Outcome, EngineError> {
         // Verify the handler is registered.
         let handler_cid_opt = {
             let guard = self.inner.handlers.lock_recover();
@@ -765,7 +795,8 @@ impl Engine {
             });
         }
 
-        let result = self.dispatch_call_inner(handler_id, op, input, actor, &handler_cid);
+        let result =
+            self.dispatch_call_inner(handler_id, op, input, actor, &handler_cid, trace_mode);
 
         // Always pop the stack frame, even on error.
         {
@@ -787,6 +818,7 @@ impl Engine {
         input: Node,
         _actor: Option<Cid>,
         _handler_cid: &Cid,
+        trace_mode: bool,
     ) -> Result<Outcome, EngineError> {
         // Build the execution subgraph. CRUD handlers synthesize an op-
         // specific shape (READ / WRITE / RESPOND); SubgraphSpec-registered
@@ -838,6 +870,25 @@ impl Engine {
                 return Err(eval_error_to_engine_error(e));
             }
         };
+
+        // Trace-mode short-circuit (r6-dx-C4): drop the pending ops rather
+        // than replaying them. We still project the would-be `created_cid`
+        // from the first `PutNode` so `Outcome.created_cid` stays realistic
+        // for the tracer; nothing hits the backend. No transaction, no IVM
+        // disturbance, no change-event emission.
+        if trace_mode {
+            let projected_cid = pending.iter().find_map(|op| match op {
+                PendingHostOp::PutNode { projected_cid, .. } => Some(projected_cid.clone()),
+                _ => None,
+            });
+            return Ok(outcome_from_terminal_with_cid(
+                self,
+                &edge,
+                output,
+                list_hint,
+                projected_cid,
+            ));
+        }
 
         // Replay the buffered host ops atomically. If the capability hook
         // denies, surface ON_DENIED; on SystemZoneWrite surface ON_ERROR

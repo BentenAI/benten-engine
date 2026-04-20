@@ -60,6 +60,7 @@
 //!   a runtime WASM check against the fixture is a Phase 1 CI follow-up)
 
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 #![no_std]
 
 extern crate alloc;

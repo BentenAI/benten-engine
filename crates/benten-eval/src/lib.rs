@@ -8,6 +8,11 @@
 //! R3 stub scaffold — R5 implementation lands in Phase 1 proper.
 
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
+#![allow(
+    missing_docs,
+    reason = "TODO(phase-2-docs): benten-eval has ~120 pub items (Subgraph builder, primitives, RegistrationError diagnostic fields, expr parser surface). Crate-root + module-root docs land Phase-1 R6; per-item sweep deferred to Phase-2 when the public surface is re-audited post-evaluator-completion."
+)]
 #![allow(clippy::todo, reason = "R3 red-phase stubs; R5 removes todos")]
 #![allow(
     clippy::result_large_err,

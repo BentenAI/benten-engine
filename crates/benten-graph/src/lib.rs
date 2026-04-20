@@ -22,6 +22,7 @@
 //!   `WriteContext`, `SnapshotHandle`) owned by G3 / G6.
 
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 #![allow(clippy::todo, reason = "Phase 1 stubs cleared as G2-B/G3/G5/G6 land")]
 
 pub use benten_core::ErrorCode;

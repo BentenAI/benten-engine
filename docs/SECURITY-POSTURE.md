@@ -41,6 +41,91 @@ Phase 1 ships the stricter error route: a denied read returns `CapError::DeniedR
 
 ---
 
+### Compromise #1 — TOCTOU window bound at 100-iter batch
+
+Phase-1 capability checks on ITERATE handlers refresh the grant snapshot at **batch boundaries** (default: every 100 iterations), not per-iteration. A revocation that lands mid-batch is therefore visible to the evaluator only at the NEXT batch boundary.
+
+**Why:** per-iteration policy lookup would impose an O(N) backend read against the grant table on every step of every iterate. The batch-refresh amortizes that cost to O(N/100) while keeping the worst-case TOCTOU window bounded at 99 iterations.
+
+**What this posture does NOT claim:**
+- Per-iteration revocation visibility. A grant revoked at iter 50 will still authorize writes 50..=100; write 101 is the first to see the revocation.
+- Real-time revocation across a federation (that's the Phase-3 `CapRevoked` code, distinct from Phase-1's `CapRevokedMidEval`).
+
+**What IS guaranteed:**
+- Writes 101+ see the revocation.
+- The bound is surfaced as a distinct error code (`E_CAP_REVOKED_MID_EVAL`) so operators can reason about batch boundaries without guessing at generic `E_CAP_DENIED`.
+
+**Phase-2 revisit:** configurable per-handler batch size (0 = per-iteration check, at the cost of the O(N) backend read). The regression test `capability_revoked_mid_iteration_denies_subsequent_batches` in `crates/benten-caps/tests/toctou_iteration.rs` locks in the current shape; it remains `#[ignore]` pending Phase-2 ITERATE-subgraph wiring + `schedule_revocation_at_iteration` on GrantReader.
+
+---
+
+### Compromise #3 — `ErrorCode` enum lives in `benten-core`
+
+The canonical catalog enum [`ErrorCode`](../crates/benten-core/src/error_code.rs) lives in `benten-core` instead of a dedicated `benten-errors` crate.
+
+**Why:** every crate in the workspace maps its own error variants to `ErrorCode::<Variant>` via a `.code()` accessor. Putting the enum in `benten-core` avoids a crate-graph node for what is effectively a namespaced constant table. A dedicated crate was considered at R1 and deferred — the argument for extracting it is crate-graph purity, not a security or correctness property.
+
+**Posture claim:** the `ErrorCode` string forms (`"E_CAP_DENIED"`, `"E_INV_CYCLE"`, …) are **frozen**. Drift between this enum and `docs/ERROR-CATALOG.md` is detected by a G8 lint run in CI. Adding a variant requires (a) the enum entry, (b) a catalog doc entry, (c) the `.code()` mapping.
+
+**Phase-2 revisit:** if an additional Benten crate outside this workspace needs to import the enum without pulling `benten-core`, extract to `benten-errors`. Until then, the compromise is purely structural.
+
+**Regression test:** `compromise_3_error_code_enum_in_benten_core` in `crates/benten-engine/tests/integration/compromises_regression.rs` pins the type path via `std::any::type_name`.
+
+---
+
+### Compromise #4 — WASM runtime is compile-check only
+
+The `bindings/napi` crate compiles with `--target wasm32-unknown-unknown` in CI (`wasm-checks.yml`) but does NOT execute a WASM runtime (browser / `wasmtime`) at test time.
+
+**Why:** the Phase-1 WASM surface exists to guarantee that the napi bindings build for a browser target so Thrum (the Phase-4 consumer) can compile them into its web bundle. Runtime execution of the WASM artifact is a Phase-2 scope item tied to the SANDBOX primitive's `wasmtime` host — both land together so the WASM runtime story is coherent.
+
+**What this posture claims:**
+- The napi bindings compile for `wasm32-unknown-unknown` with zero warnings.
+- The compiled artifact has no forbidden symbol references (no `std::net`, no `std::fs::File::open` in hot paths).
+
+**What this posture does NOT claim:**
+- That the WASM build runs correctly in a browser or `wasmtime` host. Phase-2 adds in-browser integration tests; Phase-1 relies on the compile-check as a coarse smoke test.
+- That napi and WASM have behavioral parity. Some surfaces (redb backend) are stubbed out on WASM per `#[cfg]` gates.
+
+**Phase-2 revisit:** add a `wasmtime` harness in CI that executes a smoke-test from the WASM build. Land this alongside the SANDBOX primitive's runtime.
+
+---
+
+### Compromise #5 — No write rate-limits; metric recorded only
+
+Phase 1 does not enforce a write-rate limit on the engine's ingress. A misbehaving or adversarial caller can submit arbitrary writes as fast as the capability policy permits.
+
+**What IS recorded:** per-engine write counters surface in `engine.metrics_snapshot()` under `benten.writes.committed` and `benten.writes.denied`. Operators can detect abnormal rates out-of-band.
+
+**Why no enforcement:** a proper rate-limit needs a **scoped** budget (per-actor, per-capability, per-handler) — not a global one. Phase-1 lacks the actor-identity machinery (Phase-3 `benten-id`) to make the scoped variant meaningful; a global rate-limit would punish legitimate bulk-import workflows more than it protects against abuse.
+
+**What this posture does NOT claim:**
+- Protection against DoS via write-flood at the engine ingress.
+- A ceiling on backend write throughput.
+
+**Phase-2 / Phase-3 revisit:** Phase-2 introduces a policy-layer budget trait so `CapabilityPolicy` implementations can enforce per-actor rate limits. Phase-3 ties the identity shape (actor Cid) to the budget so the rate is scoped correctly across a federation.
+
+**Regression test:** `writes_committed_metric_is_recorded` in `crates/benten-engine/tests/metrics.rs` asserts the metric is populated.
+
+---
+
+### Compromise #7 — `bindings/napi` binary is gated behind a feature flag
+
+Shipping the napi `.node` binary from this repo would bake every Phase-1 decision into downstream consumers. The crate's `Cargo.toml` gates binary output behind the `publish` feature so `cargo publish` on the workspace does not emit a prebuilt `.node` alongside the Rust crates.
+
+**Why:** the workspace publishes six Rust crates (core/graph/caps/ivm/eval/engine); the napi binding is a convenience artifact, not a supported API surface for Phase-1 (the TS layer in `packages/engine` re-wraps it with DX types anyway). Publishing the `.node` as part of the crate package would lock operators into the Phase-1 ABI.
+
+**What this posture claims:**
+- `cargo publish -p benten-*` does NOT emit a native binary artifact.
+- The `@benten/engine-native` npm package is built separately (by `npm run build` inside `bindings/napi`) and distributed via the TS package graph, not crate.io.
+
+**What this posture does NOT claim:**
+- A stable napi ABI for external consumers. Phase-1 treats the napi surface as an internal implementation detail of the TS wrapper.
+
+**Phase-2 revisit:** when Thrum migration (Phase-4) begins, the napi ABI hardens into a versioned contract + explicit `postinstall` script that rebuilds the binary against the local Node.js version. The current `publish`-gated shape is the bridge until then.
+
+---
+
 ## `requires` property is Phase-1 advisory (r6-sec-1)
 
 Handler subgraphs can declare a `requires` property on each primitive

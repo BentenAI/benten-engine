@@ -205,21 +205,27 @@ pub struct EffectiveRules {
 }
 
 impl EffectiveRules {
+    /// Depth of the ancestor walk that produced this rule set (0 == direct).
     #[must_use]
     pub fn depth(&self) -> usize {
         self.depth
     }
 
+    /// `true` if the walk hit the configured max-depth cap before exhausting
+    /// the ancestor chain.
     #[must_use]
     pub fn was_truncated(&self) -> bool {
         self.was_truncated
     }
 
+    /// `true` if the walk detected a cycle in the GOVERNED_BY chain and
+    /// short-circuited defensively.
     #[must_use]
     pub fn cycle_detected(&self) -> bool {
         self.cycle_detected
     }
 
+    /// Effective rule CIDs in walk order (nearest ancestor first).
     #[must_use]
     pub fn rules(&self) -> &[Cid] {
         &self.rules
