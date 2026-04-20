@@ -20,14 +20,21 @@
 //! - `batch_size: Int` — chunk size for capability re-checking
 //!   (cooperating with `benten_caps::DEFAULT_BATCH_BOUNDARY`).
 //!
-//! Phase-1 named compromise #1: the capability re-check fires at
-//! `DEFAULT_BATCH_BOUNDARY` (100 items) rather than per-iteration. The
-//! engine's CapabilityPolicy supplies the batch boundary via
+//! Named Compromise #1 (ITERATE batch-boundary half): the capability
+//! re-check fires at `host.iterate_batch_boundary()` (default 100) rather
+//! than per-iteration. The executor walks `items` in lockstep and every
+//! N iterations calls `host.check_capability` with the scope declared on
+//! the operation (`requires` property, falling back to `"iterate"`). A
+//! revocation landing mid-batch is visible at the NEXT batch boundary;
+//! the denial routes through the `ON_DENIED` typed edge with the policy's
+//! error code in the edge payload. See
 //! [`CapabilityPolicy::iterate_batch_boundary`](benten_caps::CapabilityPolicy::iterate_batch_boundary).
 //!
-//! The Phase-1 executor does not actually invoke a body subgraph (no engine
-//! handle is in scope); instead it returns a sentinel `StepResult` whose
-//! `output` summarises the intended iteration count for the evaluator trace.
+//! The Phase-1 executor does not dispatch a body subgraph (no engine
+//! handle is in scope); iteration is accounted for the cap-refresh cadence
+//! only. The returned `output` is an empty accumulator list, same as the
+//! pre-compromise-#1 shape, so existing tests that pin the happy-path
+//! output remain green.
 
 use benten_core::Value;
 
@@ -36,15 +43,17 @@ use crate::{EvalError, OperationNode, PrimitiveHost, StepResult};
 /// Execute an ITERATE primitive.
 ///
 /// Takes `&dyn PrimitiveHost` so the capability re-check cadence
-/// (Phase-1 named compromise #1) is host-driven —
-/// [`PrimitiveHost::iterate_batch_boundary`] supplies the batch size.
+/// (Named Compromise #1) is host-driven —
+/// [`PrimitiveHost::iterate_batch_boundary`] supplies the batch size and
+/// [`PrimitiveHost::check_capability`] performs the refresh.
 ///
 /// # Errors
 ///
-/// Returns `Ok` with the `ON_LIMIT` edge when the input exceeds `max`.
-/// Never errors via `Err`; budget failures are routed through the typed
-/// error edge so the engine's trace shows the overrun.
-pub fn execute(op: &OperationNode, _host: &dyn PrimitiveHost) -> Result<StepResult, EvalError> {
+/// Returns `Ok` with the `ON_LIMIT` edge when the input exceeds `max`,
+/// and `Ok` with `ON_DENIED` when a batch-boundary cap-refresh surfaces
+/// a denial. Never errors via `Err`; budget and denial failures are
+/// routed through typed error edges so the engine's trace shows them.
+pub fn execute(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResult, EvalError> {
     let items_len = match op.properties.get("items") {
         Some(Value::List(l)) => l.len(),
         _ => 0,
@@ -66,14 +75,49 @@ pub fn execute(op: &OperationNode, _host: &dyn PrimitiveHost) -> Result<StepResu
         });
     }
 
+    // Named Compromise #1 (ITERATE batch-boundary half). Walk the item
+    // count in fixed-size batches; at every boundary (inclusive of the
+    // first iteration — Phase-1 posture re-reads caps at batch 0 so a
+    // grant revoked *between* handler registration and ITERATE entry is
+    // observed before the first loop body). A denial routes ON_DENIED
+    // with the policy's code in the payload.
+    let required_scope: String = match op.properties.get("requires") {
+        Some(Value::Text(s)) => s.clone(),
+        _ => "iterate".to_string(),
+    };
+    let boundary = host.iterate_batch_boundary().max(1);
+
+    // Entry refresh — zero-th boundary — always fires, even when the
+    // iteration list is empty. Matches the ITERATE compromise prose:
+    // "the evaluator snapshots caps at batch boundaries; the first
+    // snapshot is taken at iteration 0."
+    if let Err(EvalError::Capability(c)) = host.check_capability(&required_scope, None) {
+        return Ok(StepResult {
+            next: None,
+            edge_label: "ON_DENIED".to_string(),
+            output: Value::text(c.to_string()),
+        });
+    }
+
+    // Per-batch refresh at iterations `boundary`, `2*boundary`, …
+    // Bounded by `items_len` so the loop terminates.
+    let mut i = boundary;
+    while i < items_len {
+        if let Err(EvalError::Capability(c)) = host.check_capability(&required_scope, None) {
+            return Ok(StepResult {
+                next: None,
+                edge_label: "ON_DENIED".to_string(),
+                output: Value::text(c.to_string()),
+            });
+        }
+        i = i.saturating_add(boundary);
+    }
+
     // Happy-path result: an empty accumulator list. The real engine-backed
-    // body invocation (G7) replaces this with the accumulated per-iteration
-    // results.
-    //
-    // TODO(R4b / G7): staged-primitive observability — ensure a chained
-    // `iterate(items, body).map(...)` handler produces non-empty output
-    // once G7 wires body invocation. Add an integration test that pins
-    // accumulated output. Mini-review `g6-cr-9` / `g6-cr-10`.
+    // body invocation (Phase-2) replaces this with the accumulated
+    // per-iteration results. The cap-refresh cadence above is the
+    // Phase-1 deliverable — body dispatch can layer on top without
+    // reshaping the refresh semantics.
     Ok(StepResult {
         next: None,
         edge_label: "ok".to_string(),
