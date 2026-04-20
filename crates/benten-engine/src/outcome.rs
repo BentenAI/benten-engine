@@ -9,6 +9,8 @@
 //! [`HandlerPredecessors`], [`NestedTx`], [`ReadViewOptions`], and
 //! [`ViewCreateOptions`] are small supporting types.
 
+use std::collections::BTreeMap;
+
 use benten_core::{Cid, Node};
 use benten_errors::ErrorCode;
 
@@ -216,23 +218,73 @@ pub struct AnchorHandle {
     pub(crate) _phase1_stub: (),
 }
 
-/// Predecessor adjacency for trace assertions. **Phase 1 stub.**
+/// Predecessor adjacency for trace assertions.
 ///
-/// TODO(phase-2-trace): carries a `BTreeMap<Cid, Vec<Cid>>` when the
-/// evaluator surfaces real predecessor metadata (R-nit-07).
+/// Populated at `Engine::handler_predecessors` time by walking the
+/// registered subgraph's edge list and mapping each `(from_op_id, to_op_id)`
+/// pair onto the operation-node CIDs that the trace step stream uses
+/// (handler-scoped `blake3("<handler_id>\0<op_node_id>")`).
+///
+/// 5d-J workstream 5 — prior to this, the Phase-1 shell returned an
+/// always-empty slice, so trace topological-order assertions degraded to
+/// a no-op partial-order check.
 #[derive(Debug, Default)]
 pub struct HandlerPredecessors {
-    #[allow(
-        dead_code,
-        reason = "Phase-1 stub retains the shape; Phase-2 populates predecessor adjacency"
-    )]
-    pub(crate) _phase1_stub: (),
+    /// `target_cid -> sorted list of predecessor Cids`. Sorted so test
+    /// assertions over the edge set are order-stable.
+    pub(crate) adjacency: BTreeMap<Cid, Vec<Cid>>,
 }
 
 impl HandlerPredecessors {
-    pub fn predecessors_of(&self, _node_cid: &Cid) -> &[Cid] {
-        &[]
+    /// Construct from an adjacency map. Used by the engine at
+    /// `handler_predecessors` time.
+    #[must_use]
+    pub fn from_adjacency(adjacency: BTreeMap<Cid, Vec<Cid>>) -> Self {
+        Self { adjacency }
     }
+
+    /// Predecessors of `node_cid` in topological order. Returns an empty
+    /// slice when the node is a root or when the CID was never registered
+    /// as a successor in this handler.
+    pub fn predecessors_of(&self, node_cid: &Cid) -> &[Cid] {
+        self.adjacency
+            .get(node_cid)
+            .map_or::<&[Cid], _>(&[], Vec::as_slice)
+    }
+
+    /// Enumerate the target CIDs that have at least one predecessor.
+    /// Small accessor used by tests that want to iterate the edge set
+    /// without hard-coding CIDs.
+    pub fn targets(&self) -> impl Iterator<Item = &Cid> {
+        self.adjacency.keys()
+    }
+}
+
+/// Diagnostic report returned by [`crate::Engine::diagnose_read`].
+///
+/// Option C (named compromise #2, 5d-J workstream 1). The default public
+/// read API (`Engine::get_node`, `read_view`, `edges_from`, `edges_to`)
+/// returns the symmetric `Ok(None)` / empty-vec on either a
+/// backend-miss OR a policy-denied read — a caller cannot tell them
+/// apart. `diagnose_read` surfaces the distinction, but is itself
+/// gated on a `debug:read` capability grant so ordinary callers never
+/// see the existence signal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiagnosticInfo {
+    /// The CID the caller asked about. Echoed for correlation.
+    pub cid: Cid,
+    /// True when the CID has a byte-payload in the backend. Distinct from
+    /// the policy-denial signal so operators can tell "exists but denied"
+    /// apart from "never written" apart from "written then deleted".
+    pub exists_in_backend: bool,
+    /// When set, names the scope the policy rejected. `None` means the
+    /// policy permitted the read (or no policy is configured).
+    pub denied_by_policy: Option<String>,
+    /// True when the backend has no byte-payload for this CID. Mirrors
+    /// `!exists_in_backend` but exposed as its own field so the TS
+    /// caller reads `{ notFound: true }` as a discriminant without
+    /// boolean-flipping.
+    pub not_found: bool,
 }
 
 /// Nested-transaction handle. **Phase 1 stub.**

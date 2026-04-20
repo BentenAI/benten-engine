@@ -54,6 +54,7 @@ import type {
 interface NativeEngine {
   createNode?: (labels: string[], properties: unknown) => string;
   getNode?: (cid: string) => unknown;
+  diagnoseRead?: (cid: string) => unknown;
   updateNode?: (oldCid: string, labels: string[], properties: unknown) => string;
   deleteNode?: (cid: string) => void;
   createEdge?: (source: string, target: string, label: string) => string;
@@ -592,6 +593,46 @@ export class Engine {
     }
     try {
       return (this.inner.getNode(cid) ?? null) as JsonValue | null;
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /**
+   * Option-C diagnostic surface for a denied / missing read (named
+   * compromise #2, 5d-J workstream 1). Gated on a `debug:read` grant —
+   * ordinary callers see `E_CAP_DENIED` when the configured policy
+   * rejects.
+   *
+   * Returns `{ cid, existsInBackend, deniedByPolicy, notFound }`:
+   * - `existsInBackend: false, notFound: true` — the CID was never
+   *   written (or was deleted).
+   * - `existsInBackend: true, deniedByPolicy: "store:<label>:read"` —
+   *   exists, but the reader lacks the scope.
+   * - `existsInBackend: true, deniedByPolicy: null` — exists and is
+   *   readable by this caller (regular `getNode` would return it).
+   */
+  public async diagnoseRead(cid: string): Promise<{
+    cid: string;
+    existsInBackend: boolean;
+    deniedByPolicy: string | null;
+    notFound: boolean;
+  }> {
+    this.assertOpen();
+    if (!this.inner.diagnoseRead) {
+      throw new EDslInvalidShape(
+        "Engine.diagnoseRead unavailable on this binding — rebuild @benten/engine-native",
+      );
+    }
+    try {
+      const raw = this.inner.diagnoseRead(cid) as Record<string, unknown>;
+      return {
+        cid: String(raw.cid ?? cid),
+        existsInBackend: Boolean(raw.existsInBackend),
+        deniedByPolicy:
+          typeof raw.deniedByPolicy === "string" ? raw.deniedByPolicy : null,
+        notFound: Boolean(raw.notFound),
+      };
     } catch (err) {
       throw mapNativeError(err);
     }

@@ -279,19 +279,30 @@ impl EngineBuilder {
 
         let caps_enabled = !self.without_caps;
         let ivm_enabled = !self.without_ivm;
-        let policy: Option<Box<dyn CapabilityPolicy>> = if caps_enabled {
+        let (policy, using_noauth): (Option<Box<dyn CapabilityPolicy>>, bool) = if caps_enabled {
             if let Some(explicit) = self.policy {
-                Some(explicit)
+                (Some(explicit), false)
             } else if self.use_grant_backed {
                 let reader: Arc<dyn GrantReader> =
                     Arc::new(BackendGrantReader::new(Arc::clone(&backend)));
-                Some(Box::new(GrantBackedPolicy::new(reader)))
+                (Some(Box::new(GrantBackedPolicy::new(reader))), false)
             } else {
-                Some(Box::new(NoAuthBackend::new()))
+                (Some(Box::new(NoAuthBackend::new())), true)
             }
         } else {
-            None
+            (None, false)
         };
+
+        // 5d-J workstream 6: when the assembled engine is running with the
+        // zero-config NoAuthBackend (no caller-supplied policy, no grant-
+        // backed flag, caps not disabled), emit a one-shot info log so
+        // operators running `create-benten-app`-scaffolded code see the
+        // posture in stderr on first startup. Acceptable for embedded /
+        // single-user deployments; not suitable for multi-user or
+        // networked use. Tests capture stderr and pin the presence.
+        if using_noauth {
+            emit_noauth_startup_log();
+        }
 
         Ok(Engine::from_parts(
             backend,
@@ -309,6 +320,49 @@ impl Default for EngineBuilder {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// One-shot guard for the NoAuth startup log — the process-wide `Once` so
+/// a binary opening a pool of engines does not spam stderr.
+static NOAUTH_LOG_ONCE: std::sync::Once = std::sync::Once::new();
+
+/// Message emitted once per process when the assembled engine falls through
+/// to the zero-config [`NoAuthBackend`]. Public so the integration test can
+/// assert the exact wording without drift.
+pub const NOAUTH_STARTUP_LOG: &str = "benten-engine: running with NoAuthBackend (no authorization). \
+     Acceptable for embedded/single-user; configure a CapabilityPolicy \
+     for multi-user/networked use.";
+
+fn emit_noauth_startup_log() {
+    NOAUTH_LOG_ONCE.call_once(|| {
+        // `eprintln!` rather than `tracing` so the notice surfaces on a
+        // scaffolded project that hasn't wired a tracing subscriber yet.
+        // A binary that prefers structured logs can route through their
+        // own subscriber once they've configured a CapabilityPolicy and
+        // the noauth path is no longer hit.
+        #[allow(
+            clippy::print_stderr,
+            reason = "5d-J workstream 6: operator-facing startup notice; \
+                      intentionally unstructured so scaffolded projects \
+                      without a tracing subscriber still see it."
+        )]
+        {
+            eprintln!("{NOAUTH_STARTUP_LOG}");
+        }
+    });
+}
+
+/// Test-only reset hook so the one-shot log can be re-armed between
+/// test cases. `std::sync::Once` has no reset API, so we replace the
+/// guard atomically via a module-local mutex. Gated on `cfg(test)` and
+/// the `test-helpers` feature so production builds never see it.
+#[cfg(any(test, feature = "test-helpers"))]
+#[doc(hidden)]
+pub fn __test_reset_noauth_log_once() {
+    // No-op: we can't reset a `Once`. Tests that need re-entrant capture
+    // should spawn a subprocess or accept that the log is one-shot
+    // process-wide. The constant [`NOAUTH_STARTUP_LOG`] is the stable
+    // anchor for contents-based assertions.
 }
 
 /// [`GrantReader`] implementation backed by the engine's

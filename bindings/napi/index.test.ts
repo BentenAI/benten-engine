@@ -453,3 +453,35 @@ describe("bytes_vs_list_preserve_content_addressing_at_napi_boundary", () => {
     expect(fetched.properties.meta.rank).toBe(42);
   });
 });
+
+// 5d-J workstream 1 — Option C diagnose_read napi surface.
+describe("engine.diagnoseRead (Option C)", () => {
+  it("surfaces exists+readable under NoAuth", () => {
+    const dir = mkdtempSync(join(tmpdir(), "benten-diag-"));
+    const eng = new native.Engine(join(dir, "benten.redb"));
+    const cid = eng.createNode(["post"], { title: "diag-me" });
+    const info = eng.diagnoseRead(cid);
+    expect(info.cid).toBe(cid);
+    expect(info.existsInBackend).toBe(true);
+    expect(info.deniedByPolicy).toBeNull();
+    expect(info.notFound).toBe(false);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("reports notFound=true for a CID that was never written", () => {
+    const dir = mkdtempSync(join(tmpdir(), "benten-diag-"));
+    const eng = new native.Engine(join(dir, "benten.redb"));
+    // Write one Node just so the backend is populated, then diagnose a
+    // different CID we never wrote.
+    eng.createNode(["post"], { title: "seeded" });
+    // A valid-shape CID that does not exist in the backend. Reuse the
+    // canonical fixture CID — it's a legitimate CIDv1 string but the
+    // fresh temp engine never wrote under it.
+    const phantom = CANONICAL_CID;
+    const info = eng.diagnoseRead(phantom);
+    expect(info.existsInBackend).toBe(false);
+    expect(info.notFound).toBe(true);
+    expect(info.deniedByPolicy).toBeNull();
+    rmSync(dir, { recursive: true, force: true });
+  });
+});

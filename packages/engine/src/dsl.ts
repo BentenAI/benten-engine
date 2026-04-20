@@ -537,6 +537,17 @@ export interface CrudOptions {
    * property is informational only.
    */
   capability?: string;
+  /**
+   * When `true`, flags this handler as expecting the `debug:read`
+   * capability — callers who hold the grant can use
+   * [`Engine.diagnoseRead`] to probe denied / missing reads against
+   * Nodes of this handler's label (named compromise #2, Option C;
+   * see `docs/SECURITY-POSTURE.md`). The flag is informational in
+   * Phase 1 (the actual gate is `engine.grantCapability({ actor,
+   * scope: "store:debug:read" })` — the DSL surface is a hint for
+   * tooling). Defaults `false`.
+   */
+  debugRead?: boolean;
 }
 
 /**

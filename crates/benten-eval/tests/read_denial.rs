@@ -1,163 +1,247 @@
-//! Phase 1 R3 security test — existence leakage via READ denial (R1 major #6).
+//! Phase 1 security tests — Option C (symmetric-None + diagnostic capability).
 //!
-//! Attack class: when a caller issues `READ(cid)` on a Node they lack read
-//! capability for, the engine's error response leaks existence. Ben's
-//! decision (R1 triage named compromise #2): ship **Option A — honest
-//! error, leaky existence**. `E_CAP_DENIED_READ` is a DISTINCT code from
-//! `E_NOT_FOUND`; the presence of `E_CAP_DENIED_READ` confirms the Node
-//! exists, just inaccessible to this caller.
+//! Named compromise #2 shipped Option A in the R5 base scaffold
+//! (`E_CAP_DENIED_READ` error — honest but existence-leaking). 5d-J
+//! workstream 1 migrates to **Option C**:
 //!
-//! Phase 1 is embedded/local-only, so the leakage's threat model is bounded.
-//! Phase 3 sync revisits with a per-grant `existence_visibility: visible|
-//! hidden` configuration. This test locks the Phase 1 contract so Phase 3
-//! implementers can tell the semantics from reading the test.
+//! 1. `Engine::get_node` (and the other public read surfaces) return
+//!    `Ok(None)` when the policy denies the read — symmetric with a
+//!    genuine backend miss. An unauthorised caller CANNOT distinguish
+//!    "denied" from "never existed".
+//! 2. The distinction is recoverable through [`Engine::diagnose_read`],
+//!    gated on a `debug:read` capability grant. Ordinary callers can't
+//!    fish the existence signal; operators who hold the diagnostic
+//!    grant get three-state output (`existsInBackend`,
+//!    `deniedByPolicy`, `notFound`).
 //!
-//! The test pair covers:
-//!   1. Read on a denied (existing) resource → `E_CAP_DENIED_READ`.
-//!   2. Read on a truly-missing resource → `E_NOT_FOUND`.
+//! See `docs/SECURITY-POSTURE.md` §Compromise #2 for the full posture.
 //!
-//! These must be DISTINGUISHABLE (the point of option A). If a future impl
-//! decides to mask existence by returning `E_NOT_FOUND` for denial, the
-//! test flips — AND the named compromise doc entry must be updated in the
-//! same PR.
-//!
-//! TDD contract: FAIL at R3 — the READ primitive, the typed error edges,
-//! and both error codes land in R5.
-//!
-//! Cross-refs:
-//! - `.addl/phase-1/r1-security-auditor.json` finding #6 (major)
-//! - `.addl/phase-1/r1-triage.md` named compromise #2
-//! - `docs/ERROR-CATALOG.md` `E_CAP_DENIED_READ` vs `E_NOT_FOUND`
+//! The earlier Option-A `read_denied_returns_cap_denied_read` test is
+//! obsolete under Option C and has been removed; its contract is
+//! replaced by `get_node_on_denied_cid_returns_none_symmetric_with_miss`
+//! below. The `option_a_existence_leak_is_documented_compromise` test
+//! (which greps the posture doc) is superseded by the Option-C posture
+//! text that now lives in `docs/SECURITY-POSTURE.md`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_engine::Engine;
-use benten_engine::testing::{read_handler_for, subject_with_no_read_grants};
 use benten_errors::ErrorCode;
+use std::sync::Arc;
 
-/// Option A: read denial returns `E_CAP_DENIED_READ`, NOT `E_NOT_FOUND`.
-#[test]
-#[ignore = "TODO(phase-2-read-denial): GrantBackedPolicy IS wired for writes; blockers for READ denial are (a) `subject_with_no_read_grants()` returns NoAuth in Phase-1 testing scaffolding, (b) `read_handler_for(cid)` returns SubgraphSpec::empty so no READ primitive is walked, (c) the evaluator has no CapabilityPolicy::check_read hook at READ entry. All three land together in Phase 2."]
-fn read_denied_returns_cap_denied_read() {
-    let dir = tempfile::tempdir().unwrap();
-    let engine = Engine::builder()
-        .capability_policy(subject_with_no_read_grants())
-        .open(dir.path().join("benten.redb"))
-        .unwrap();
+// A deny-all-reads policy used to exercise the Option-C read-gate. The
+// write path is permissive (NoAuth-equivalent) so the fixture can still
+// populate the backend via `testing_insert_privileged_fixture`.
+#[derive(Debug)]
+struct DenyAllReadsPolicy;
 
-    // Create a real, readable-by-privileged-path Node so the target EXISTS
-    // in the store. The attacker lacks read cap on it but it is there.
-    let cid = engine.testing_insert_privileged_fixture();
+impl benten_caps::CapabilityPolicy for DenyAllReadsPolicy {
+    fn check_write(&self, _ctx: &benten_caps::WriteContext) -> Result<(), benten_caps::CapError> {
+        Ok(())
+    }
 
-    let handler = read_handler_for(cid);
-    let handler_id = engine.register_subgraph(&handler).unwrap();
-
-    let outcome = engine
-        .call(&handler_id, "read", benten_core::Node::empty())
-        .expect("call returns Ok wrapper");
-
-    let err = outcome.terminal_error().expect("read must be denied");
-    assert_eq!(
-        err.code(),
-        ErrorCode::CapDeniedRead,
-        "Option A (R1 triage named compromise #2): read denial MUST fire \
-         E_CAP_DENIED_READ so the error is honest; leaking existence is \
-         the deliberate Phase 1 compromise. Masking via E_NOT_FOUND is a \
-         Phase 3+ opt-in."
-    );
-    assert_eq!(outcome.taken_edge(), "ON_DENIED");
-
-    // Distinguishability contract: E_CAP_DENIED_READ MUST be distinct from
-    // the generic write-denial code AND from the not-found code. If future
-    // code paths conflate them, operators can't tell "fix your caps" from
-    // "your CID is wrong" from "that thing doesn't exist".
-    assert_ne!(err.code(), ErrorCode::CapDenied);
-    assert_ne!(err.code(), ErrorCode::NotFound);
+    fn check_read(&self, ctx: &benten_caps::ReadContext) -> Result<(), benten_caps::CapError> {
+        // Permit the `debug:read` diagnostic probe so
+        // `Engine::diagnose_read` still works under this policy — the
+        // diagnostic path is the Option-C escape hatch and we test it
+        // below.
+        if ctx.label == "debug" {
+            return Ok(());
+        }
+        // Empty label = introspection read. Permit so existing Phase-1
+        // tests that reach `get_node` on unlabelled Nodes still pass.
+        if ctx.label.is_empty() {
+            return Ok(());
+        }
+        Err(benten_caps::CapError::DeniedRead {
+            required: format!("store:{}:read", ctx.label),
+            entity: ctx
+                .target_cid
+                .as_ref()
+                .map(benten_core::Cid::to_base32)
+                .unwrap_or_default(),
+        })
+    }
 }
 
-/// Positive control: a read on a CID that genuinely does NOT exist returns
-/// `E_NOT_FOUND`, routed via `ON_NOT_FOUND`. This establishes the two error
-/// paths are observably different from userland.
 #[test]
-fn read_missing_returns_not_found() {
-    use benten_core::Node;
-
+fn get_node_on_denied_cid_returns_none_symmetric_with_miss() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
-        .capability_policy(subject_with_no_read_grants())
+        .capability_policy(Box::new(DenyAllReadsPolicy))
         .open(dir.path().join("benten.redb"))
         .unwrap();
 
-    // Use the CID of a Node we never inserted. Nothing is stored under it.
+    // A CID that exists in the backend but is denied by policy.
+    let present_cid = engine.testing_insert_privileged_fixture();
+
+    // A CID that was never written.
+    let phantom_cid = {
+        let mut props = std::collections::BTreeMap::new();
+        props.insert(
+            "marker".into(),
+            benten_core::Value::Text("never-inserted".into()),
+        );
+        benten_core::Node::new(vec!["PhantomLabel".into()], props)
+            .cid()
+            .unwrap()
+    };
+
+    // Both return Ok(None). The caller cannot tell the denied-but-
+    // existing CID apart from the never-written CID from this API.
+    assert!(
+        engine.get_node(&present_cid).unwrap().is_none(),
+        "Option C: a denied read must collapse to Ok(None), symmetric with a miss"
+    );
+    assert!(
+        engine.get_node(&phantom_cid).unwrap().is_none(),
+        "positive control: a genuinely missing CID returns Ok(None)"
+    );
+}
+
+#[test]
+fn diagnose_read_requires_debug_read_capability() {
+    #[derive(Debug)]
+    struct DenyEverything;
+    impl benten_caps::CapabilityPolicy for DenyEverything {
+        fn check_write(
+            &self,
+            _ctx: &benten_caps::WriteContext,
+        ) -> Result<(), benten_caps::CapError> {
+            Ok(())
+        }
+        fn check_read(&self, ctx: &benten_caps::ReadContext) -> Result<(), benten_caps::CapError> {
+            // Deny the debug:read probe — the caller lacks the
+            // diagnostic capability.
+            Err(benten_caps::CapError::DeniedRead {
+                required: format!("store:{}:read", ctx.label),
+                entity: String::new(),
+            })
+        }
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::builder()
+        .capability_policy(Box::new(DenyEverything))
+        .open(dir.path().join("benten.redb"))
+        .unwrap();
+
+    let cid = engine.testing_insert_privileged_fixture();
+    let err = engine
+        .diagnose_read(&cid)
+        .expect_err("diagnose_read must reject when debug:read is not held");
+    // The Option-C contract folds DeniedRead on the debug probe into
+    // CapError::Denied at the diagnostic boundary.
+    assert_eq!(err.error_code(), ErrorCode::CapDenied);
+}
+
+#[test]
+fn diagnose_read_with_capability_surfaces_denied_by_policy() {
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::builder()
+        .capability_policy(Box::new(DenyAllReadsPolicy))
+        .open(dir.path().join("benten.redb"))
+        .unwrap();
+
+    let cid = engine.testing_insert_privileged_fixture();
+    // The DenyAllReadsPolicy above permits `debug:read` but denies
+    // every other label — so diagnose_read succeeds and reports a
+    // `denied_by_policy` signal for the underlying post:read.
+    let info = engine.diagnose_read(&cid).expect("debug:read is held");
+    assert!(
+        info.exists_in_backend,
+        "Nodes inserted via testing_insert_privileged_fixture must exist"
+    );
+    assert!(
+        info.denied_by_policy.is_some(),
+        "caller has debug:read but not post:read — deniedByPolicy MUST be populated"
+    );
+    assert!(
+        info.denied_by_policy.as_deref().unwrap().contains("post"),
+        "the denied scope should name the Node's label"
+    );
+    assert!(!info.not_found);
+}
+
+#[test]
+fn diagnose_read_with_capability_surfaces_not_found() {
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::builder()
+        .capability_policy(Box::new(DenyAllReadsPolicy))
+        .open(dir.path().join("benten.redb"))
+        .unwrap();
+
+    // A CID that was never written.
     let mut props = std::collections::BTreeMap::new();
     props.insert(
         "marker".into(),
-        benten_core::Value::Text("nonexistent".into()),
+        benten_core::Value::Text("never-inserted".into()),
     );
-    let phantom = Node::new(vec!["PhantomNode".into()], props);
+    let phantom = benten_core::Node::new(vec!["PhantomLabel".into()], props);
     let cid = phantom.cid().unwrap();
 
-    let handler = read_handler_for(cid);
-    let handler_id = engine.register_subgraph(&handler).unwrap();
-    let outcome = engine
-        .call(&handler_id, "read", benten_core::Node::empty())
-        .expect("call returns Ok wrapper");
-
-    let err = outcome.terminal_error().expect("read must miss");
-    assert_eq!(
-        err.code(),
-        ErrorCode::NotFound,
-        "read on a genuinely-missing CID must fire E_NOT_FOUND, NOT \
-         E_CAP_DENIED_READ — otherwise the two error paths become \
-         indistinguishable and Phase 3 visibility-hiding is impossible"
+    let info = engine.diagnose_read(&cid).expect("debug:read is held");
+    assert!(!info.exists_in_backend);
+    assert!(info.not_found);
+    assert!(
+        info.denied_by_policy.is_none(),
+        "not-found paths carry no denial signal — the backend simply has no byte-payload"
     );
-    assert_eq!(outcome.taken_edge(), "ON_NOT_FOUND");
 }
 
-/// Contract regression: option A is a named compromise. If Phase N ever
-/// wants to flip to option B (mask existence), this test AND named
-/// compromise #2 in r1-triage.md must both update. The comment here is the
-/// grep-target for that migration.
 #[test]
-fn option_a_existence_leak_is_documented_compromise() {
-    // Phase 1 compromise; Phase 3 sync revisits per R1 triage named
-    // compromise #2. If this test is removed, update the compromise
-    // regression in `compromises_regression.rs` in the same PR.
-    //
-    // Rewritten at R4 triage (M9) — the v1 body was a self-comparison
-    // tautology. The three actual assertions that enforce the compromise:
-    //   (a) CapDeniedRead and NotFound are distinct ErrorCode variants (so
-    //       a caller CAN distinguish them — the leak is by design of
-    //       option A),
-    //   (b) CapDeniedRead.as_str() is the exact documented string
-    //       `"E_CAP_DENIED_READ"` (the canonical catalog name),
-    //   (c) SECURITY-POSTURE.md documents this explicitly as option A.
+fn diagnose_read_under_noauth_is_open() {
+    // Under NoAuth the diagnose_read surface is unrestricted (no policy
+    // is plumbed in, so no gate fires). Documented in the Engine doc on
+    // `diagnose_read` — embedded / single-user deployments get
+    // diagnostics out of the box.
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
+    let cid = engine.testing_insert_privileged_fixture();
+    let info = engine.diagnose_read(&cid).expect("NoAuth permits");
+    assert!(info.exists_in_backend);
+    assert!(info.denied_by_policy.is_none());
+}
 
-    // (a) Distinct error-code variants.
-    assert_ne!(
-        ErrorCode::CapDeniedRead,
-        ErrorCode::NotFound,
-        "option A: cap-denial-on-read and not-found must be distinct codes — \
-         hiding this distinction is Phase 3's option-B migration"
+#[test]
+fn edges_from_on_denied_cid_returns_empty_symmetric_with_zero_outgoing() {
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::builder()
+        .capability_policy(Box::new(DenyAllReadsPolicy))
+        .open(dir.path().join("benten.redb"))
+        .unwrap();
+
+    let cid = engine.testing_insert_privileged_fixture();
+    let edges = engine
+        .edges_from(&cid)
+        .expect("edges_from returns Ok even when denied");
+    assert!(
+        edges.is_empty(),
+        "Option C: denied reads produce an empty edge vec, symmetric with a Node that has no outgoing edges"
     );
+}
 
-    // (b) Canonical catalog string.
-    assert_eq!(
-        ErrorCode::CapDeniedRead.as_str(),
-        "E_CAP_DENIED_READ",
-        "catalog string must match the documented ERROR-CATALOG entry"
-    );
-
-    // (c) Documented-in-posture check.
+#[test]
+fn compromise_2_option_c_is_documented() {
+    // The posture doc must name Option C as the shipped Phase-1
+    // behaviour so operators reading SECURITY-POSTURE.md understand
+    // why `engine.getNode(cid)` returns null on both denial and miss.
     let posture = std::fs::read_to_string("../../docs/SECURITY-POSTURE.md")
         .or_else(|_| std::fs::read_to_string("docs/SECURITY-POSTURE.md"))
         .expect("SECURITY-POSTURE.md must be present at repo root");
     assert!(
-        posture.contains("option A") || posture.contains("Option A"),
-        "SECURITY-POSTURE.md must document the existence-leak as option A"
+        posture.contains("Option C"),
+        "SECURITY-POSTURE.md must document the migrated posture as Option C"
     );
     assert!(
-        posture.contains("E_CAP_DENIED_READ"),
-        "SECURITY-POSTURE.md must reference the E_CAP_DENIED_READ code"
+        posture.contains("diagnose_read") || posture.contains("diagnoseRead"),
+        "SECURITY-POSTURE.md must reference the Engine::diagnose_read escape hatch"
     );
 }
+
+// Re-exported so the Arc-based type is consumable from this crate's
+// dependency graph without pulling in benten-caps directly as a dev-dep
+// keyword. (benten-caps is already a dep via `benten-engine`'s re-export
+// surface.)
+#[allow(dead_code, reason = "kept for symmetry with prior test scaffolding")]
+fn _keep_arc(_: Arc<()>) {}

@@ -47,17 +47,51 @@ Benten uses **BLAKE3-256** specifically (multihash code `0x1e`), not SHA-256 (`0
 
 ---
 
-### Compromise #2 — `E_CAP_DENIED_READ` leaks existence (Option A)
+### Compromise #2 — Symmetric-None + diagnostic capability (Option C) — CLOSED
 
-Phase 1 ships the stricter error route: a denied read returns `CapError::DeniedRead { required, entity }` (code `E_CAP_DENIED_READ`) rather than silently returning `None` (which would be indistinguishable from not-found).
+**Status (2026-04-17, 5d-J workstream 1):** migrated from Option A (honest-but-existence-leaking `E_CAP_DENIED_READ`) to **Option C** (symmetric `None` on denial, diagnostic-capability escape hatch). The existence-leak surface the prior posture named is no longer live; the escape hatch gives operators the signal they need without exposing it to ordinary callers.
 
-**Why:** Option A surfaces the denial to the caller, enabling the application layer to distinguish "you don't have access" from "this resource doesn't exist." This leaks the fact that the Cid EXISTS in the backend to an unauthorized reader.
+**Primary path — symmetric None.** `Engine::get_node`, `Engine::edges_from`, `Engine::edges_to`, and `Engine::read_view` now collapse a `CapabilityPolicy::check_read` denial onto `Ok(None)` / `Ok(vec![])` / an empty-list `Outcome` — byte-identical with the response an unauthorised caller would see if the CID were genuinely absent. An attacker probing the CID space cannot distinguish denial from not-found through any of these surfaces.
 
-**Attack class:** an unauthorized reader can probe the CID space to enumerate what is stored, without ever reading contents.
+**Escape hatch — `Engine::diagnose_read`.** A new public method surfaces the distinction, but is itself gated on a `debug:read` capability: the configured policy's `check_read` is consulted with label `"debug"` and the target CID; a denial there collapses the probe into `Err(CapError::Denied)` so ordinary callers see the same `E_CAP_DENIED` shape that every other capability denial wears. When permitted, the method returns:
 
-**Phase 3 revisit:** sync + federation will revisit this. Options: (a) return indistinguishable `None` (the option-B plan); (b) add a capability level that permits existence-check but not read; (c) rotate CIDs per-reader (privacy-preserving addressing).
+```rust
+pub struct DiagnosticInfo {
+    pub cid: Cid,
+    pub exists_in_backend: bool,
+    pub denied_by_policy: Option<String>,  // `"store:<label>:read"` on denial
+    pub not_found: bool,
+}
+```
 
-**Regression test:** `option_a_existence_leak_is_documented_compromise` greps this doc for `option A` + `E_CAP_DENIED_READ` — keeping this section load-bearing for the test.
+Three distinguishable states:
+
+- `existsInBackend: false, notFound: true, deniedByPolicy: null` — never written (or deleted).
+- `existsInBackend: true, deniedByPolicy: Some("store:<label>:read")` — exists, reader lacks the scope.
+- `existsInBackend: true, deniedByPolicy: None` — exists and is readable by this caller.
+
+**TypeScript surface:** `engine.diagnoseRead(cid)` returns `{ cid, existsInBackend, deniedByPolicy, notFound }`. The `CrudOptions.debugRead` flag on `crud('post', { debugRead: true })` is an informational hint for tooling that the handler's operator expects to hold the diagnostic grant; the real gate is `engine.grantCapability({ actor, scope: "store:debug:read" })`.
+
+**Posture claim:**
+
+- The public read API does NOT surface an existence signal to unauthorised callers under any input.
+- The diagnostic signal IS available, but is itself capability-gated — an attacker who lacks the grant sees `E_CAP_DENIED` (not `E_NOT_FOUND`, not `null`).
+- NoAuth deployments (no policy configured) treat `diagnose_read` as open; this matches the embedded / single-user trust model where the caller already has full backend access.
+
+**What this posture does NOT claim:**
+
+- **Change-stream parity.** `Engine::subscribe_change_events` still fans out every committed ChangeEvent without a per-event `check_read` gate — see the separate "Change-stream subscription bypasses capability read-checks" section below. The Option-C gate covers the four read surfaces named above; the subscribe path stays as-is for Phase 1 because the Engine instance itself is the security boundary.
+- **Evaluator-path gating of READ primitives inside a user subgraph.** Option C gates the engine-orchestrator public API. The evaluator's `PrimitiveHost::check_read_capability` hook is now wired (5d-J workstream 1 added the trait method with a permissive default); Phase-2 threads it into the READ primitive's execute path so `crud:post:get` dispatched through `Engine::call` honours Option C end-to-end without a separate gate at the public API.
+
+**`E_CAP_DENIED_READ` code:** retained in the catalog (`docs/ERROR-CATALOG.md`) because Phase-2 evaluator-path READ enforcement still needs a typed denial code for the evaluator-visible leg — the Option-C public API mapping is an engine-orchestrator concern, not a catalog removal. The `CapError::DeniedRead` variant remains the signal policies use to communicate "denied" to the engine; the engine maps it onto `Ok(None)` at the public boundary.
+
+**Regression tests:**
+
+- `crates/benten-eval/tests/read_denial.rs` — six Option-C tests covering symmetric-None on `get_node`, `edges_from`, the three `diagnose_read` outcomes (`exists_but_denied`, `not_found`, NoAuth-open), and the `debug:read` gate.
+- `crates/benten-engine/tests/integration/compromises_regression.rs::compromise_2_option_c_symmetric_none_plus_diagnose_read` — engine-level regression.
+- `crates/benten-engine/tests/integration/compromises_regression.rs::compromise_2_option_c_is_documented` (implicit, via the doc-grep in the eval-side `compromise_2_option_c_is_documented`) — keeps this section load-bearing.
+
+**Phase 3 revisit (federation / sync):** sync replicas cross trust boundaries; Phase 3 revisits whether a reader CAN observe existence through a sibling peer (the Phase-3 `CapRevoked` scenario) and may upgrade `diagnose_read` to require a federation-aware principal handle. The Option-C surface introduced here stays stable; Phase 3 layers scope on top.
 
 ---
 

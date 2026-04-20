@@ -4,13 +4,17 @@
 //! the result on the `"ok"` edge. The expression is stored on the operation
 //! Node as the `"expr"` property (a Text value carrying the source string);
 //! the input is supplied on the `"input"` property (bound to `$input` in
-//! the expression). Phase-1 parses the expression at every `execute()`
-//! call via [`crate::expr::parser::parse`]; there is no registration-time
-//! parse cache.
+//! the expression).
 //!
-//! TODO(phase-2-transform-parse-cache): move the parse step to registration
-//! time so runtime calls walk a pre-built AST. Tracked for the Phase-2
-//! evaluator-performance pass (5d-J scope).
+//! # Registration-time parse guarantee (5d-J workstream 3)
+//!
+//! Every TRANSFORM node's `expr` is parsed at `register_subgraph` time via
+//! [`crate::invariants::validate_transform_expressions`]; unparseable
+//! grammar surfaces `E_TRANSFORM_SYNTAX` during registration, not at call
+//! time. The runtime executor re-parses defensively — the AST cache that
+//! would make the re-parse free is Phase-2 scope (Phase-2
+//! evaluator-performance pass). The observable behaviour from a caller's
+//! perspective is identical either way.
 //!
 //! Phase-1 contract (R2 §2.5 row 7):
 //!
