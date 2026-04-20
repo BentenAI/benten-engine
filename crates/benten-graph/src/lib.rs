@@ -29,11 +29,13 @@ use benten_core::{Cid, CoreError, Node};
 
 pub mod backend;
 pub(crate) mod indexes;
+pub mod mutex_ext;
 pub mod redb_backend;
 pub mod store;
 pub mod transaction;
 
 pub use backend::{BatchOp, DurabilityMode, KVBackend, ScanIter, ScanResult};
+pub use mutex_ext::{MutexExt, RwLockExt};
 pub use redb_backend::RedbBackend;
 pub use store::{ChangeEvent, ChangeKind, ChangeSubscriber, EdgeStore, NodeStore};
 pub use transaction::{PendingOp, Transaction};

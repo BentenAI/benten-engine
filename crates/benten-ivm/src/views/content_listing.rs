@@ -38,7 +38,7 @@ use alloc::vec::Vec;
 use benten_core::{Cid, Node, Value};
 use benten_graph::{ChangeEvent, ChangeKind};
 
-use crate::{View, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
+use crate::{BudgetTracker, View, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
 
 /// Composite sort key: `(createdAt, disambiguator)`. The disambiguator is a
 /// per-view monotonic counter so two inserts with equal `createdAt` don't
@@ -63,6 +63,9 @@ fn bias_i64_to_u64(v: i64) -> u64 {
     (v as u64).wrapping_add(SORT_BIAS)
 }
 
+/// Stable view identifier used in `ViewError` payloads and `View::id`.
+const VIEW_ID: &str = "content_listing";
+
 /// View 3 — paginated sorted-by-`createdAt` content listing per label.
 #[derive(Debug)]
 pub struct ContentListingView {
@@ -74,15 +77,10 @@ pub struct ContentListingView {
     entries: BTreeMap<SortKey, Cid>,
     /// Monotonic insertion counter for the composite sort key.
     next_disambiguator: u64,
-    /// Budget: max number of `on_change` / `update` calls before the view
-    /// flips to `Stale`. `u64::MAX` disables the trip in normal construction.
-    remaining_budget: u64,
-    /// Originally-configured budget, stashed at construction so `rebuild`
-    /// restores the same cap (mini-review g5-cr-3).
-    original_budget: u64,
-    /// Runtime state. Reads under `Stale` either error (`read_page`) or
-    /// return the last-known-good snapshot (`read_page_allow_stale`).
-    state: ViewState,
+    /// Shared `remaining/original/stale` tracker — see `crate::budget`
+    /// (r6-ref R-major-02). This view wraps `BudgetTracker` to preserve
+    /// last-known-good snapshotting on the stale transition.
+    budget: BudgetTracker,
     /// Last-known-good snapshot, taken immediately before a `Stale`
     /// transition so relaxed reads have something to return.
     last_known_good: Vec<Cid>,
@@ -97,9 +95,7 @@ impl ContentListingView {
             label: label.into(),
             entries: BTreeMap::new(),
             next_disambiguator: 0,
-            remaining_budget: u64::MAX,
-            original_budget: u64::MAX,
-            state: ViewState::Fresh,
+            budget: BudgetTracker::new(u64::MAX),
             last_known_good: Vec::new(),
         }
     }
@@ -108,7 +104,7 @@ impl ContentListingView {
     /// `system:IVMView`).
     pub fn definition() -> ViewDefinition {
         ViewDefinition {
-            view_id: "content_listing".into(),
+            view_id: VIEW_ID.into(),
             input_pattern_label: Some("post".into()),
             output_label: "system:IVMView".into(),
         }
@@ -120,8 +116,7 @@ impl ContentListingView {
     #[must_use]
     pub fn with_budget_for_testing(budget: u64) -> Self {
         let mut v = Self::new("post");
-        v.remaining_budget = budget;
-        v.original_budget = budget;
+        v.budget = BudgetTracker::new(budget);
         v
     }
 
@@ -134,7 +129,7 @@ impl ContentListingView {
     /// Returns [`ViewError::BudgetExceeded`] when `budget == 0`.
     pub fn try_with_budget(budget: u64) -> Result<Self, ViewError> {
         if budget == 0 {
-            return Err(ViewError::BudgetExceeded("content_listing".into()));
+            return Err(ViewError::BudgetExceeded(VIEW_ID.into()));
         }
         Ok(Self::with_budget_for_testing(budget))
     }
@@ -152,19 +147,20 @@ impl ContentListingView {
         self.entries.clear();
         self.next_disambiguator = 0;
         self.last_known_good.clear();
-        self.state = ViewState::Fresh;
-        // Rebuild restores the originally-configured budget so a view
-        // constructed with a finite budget, tripped stale, and rebuilt,
-        // accepts the same number of updates again. Uniform across all
-        // 5 views per mini-review g5-cr-3.
-        self.remaining_budget = self.original_budget;
+        // Rebuild restores the originally-configured budget and clears
+        // the stale flag. Uniform across all 5 views (g5-cr-3).
+        self.budget.rebuild();
         Ok(())
     }
 
     /// Runtime state (`Fresh` or `Stale`).
     #[must_use]
     pub fn state(&self) -> ViewState {
-        self.state
+        if self.budget.is_stale() {
+            ViewState::Stale
+        } else {
+            ViewState::Fresh
+        }
     }
 
     /// Ingest a Node-level change directly. Used by edge-case tests that
@@ -178,7 +174,7 @@ impl ContentListingView {
     /// - Missing / wrong-typed `createdAt`: no-op.
     /// - Match: insert under composite sort key.
     pub fn on_change(&mut self, node: Node) {
-        if self.state == ViewState::Stale {
+        if self.budget.is_stale() {
             return;
         }
         // Budget models "work per on_change call" — every invocation counts
@@ -186,11 +182,11 @@ impl ContentListingView {
         // view still spent a probe pattern-match against the event. This
         // matches the `stale_on_budget_exceeded` test's expectation that
         // two label-mismatched updates trip a budget-1 view.
-        if self.remaining_budget == 0 {
+        if self.budget.remaining() == 0 {
             self.trip_to_stale();
             return;
         }
-        self.remaining_budget = self.remaining_budget.saturating_sub(1);
+        let _ = self.budget.try_consume(1, VIEW_ID);
         if !node.labels.iter().any(|l| l == &self.label) {
             return;
         }
@@ -213,10 +209,8 @@ impl ContentListingView {
     ///
     /// Returns [`ViewError::Stale`] when the view's state is `Stale`.
     pub fn read_page(&self, offset: usize, limit: usize) -> Result<Vec<Cid>, ViewError> {
-        if self.state == ViewState::Stale {
-            return Err(ViewError::Stale {
-                view_id: "content_listing".into(),
-            });
+        if self.budget.is_stale() {
+            return Err(BudgetTracker::stale_error(VIEW_ID));
         }
         Ok(self.snapshot(offset, limit))
     }
@@ -234,7 +228,7 @@ impl ContentListingView {
         offset: usize,
         limit: usize,
     ) -> Result<Vec<Cid>, ViewError> {
-        if self.state == ViewState::Stale {
+        if self.budget.is_stale() {
             Ok(paginate_slice(&self.last_known_good, offset, limit))
         } else {
             Ok(self.snapshot(offset, limit))
@@ -256,7 +250,7 @@ impl ContentListingView {
     /// Snapshot last-known-good before flipping to `Stale`.
     fn trip_to_stale(&mut self) {
         self.last_known_good = self.entries.values().cloned().collect();
-        self.state = ViewState::Stale;
+        self.budget.mark_stale();
     }
 
     /// Remove all entries pointing at `cid`. Used for `Deleted` events.
@@ -277,19 +271,17 @@ impl View for ContentListingView {
         reason = "Phase 1 fallback warn; Phase 2 routes to tracing"
     )]
     fn update(&mut self, event: &ChangeEvent) -> Result<(), ViewError> {
-        if self.state == ViewState::Stale {
-            return Err(ViewError::Stale {
-                view_id: "content_listing".into(),
-            });
+        if self.budget.is_stale() {
+            return Err(BudgetTracker::stale_error(VIEW_ID));
         }
         if !event.labels.iter().any(|l| l == &self.label) {
             return Ok(());
         }
         match event.kind {
             ChangeKind::Created | ChangeKind::Updated => {
-                if self.remaining_budget == 0 {
+                if self.budget.remaining() == 0 {
                     self.trip_to_stale();
-                    return Err(ViewError::BudgetExceeded("content_listing".into()));
+                    return Err(ViewError::BudgetExceeded(VIEW_ID.into()));
                 }
                 // Prefer event.node.createdAt; fall back to tx_id on
                 // identity-only events (legacy test harness). The fallback
@@ -323,7 +315,7 @@ impl View for ContentListingView {
                 self.next_disambiguator = self.next_disambiguator.wrapping_add(1);
                 self.entries
                     .insert((sort_primary, disambiguator), event.cid.clone());
-                self.remaining_budget = self.remaining_budget.saturating_sub(1);
+                let _ = self.budget.try_consume(1, VIEW_ID);
             }
             ChangeKind::Deleted => {
                 // g5-p2-ivm-2: match budget cost to work done. A flood of
@@ -336,8 +328,8 @@ impl View for ContentListingView {
                 self.remove_all_with_cid(&event.cid);
                 let removed = before - self.entries.len();
                 let cost = (removed.max(1)) as u64;
-                self.remaining_budget = self.remaining_budget.saturating_sub(cost);
-                if self.remaining_budget == 0 && !self.entries.is_empty() {
+                let _ = self.budget.try_consume(cost, VIEW_ID);
+                if self.budget.remaining() == 0 && !self.entries.is_empty() {
                     // Optional Phase-2 perf upgrade: `cid → sort_key`
                     // reverse map makes this O(log n). Deferred.
                 }
@@ -349,10 +341,8 @@ impl View for ContentListingView {
     }
 
     fn read(&self, query: &ViewQuery) -> Result<ViewResult, ViewError> {
-        if self.state == ViewState::Stale {
-            return Err(ViewError::Stale {
-                view_id: "content_listing".into(),
-            });
+        if self.budget.is_stale() {
+            return Err(BudgetTracker::stale_error(VIEW_ID));
         }
         // Phase-1: if the query names a label, it must match this view's
         // watched label. If it doesn't, return empty (the query is for a
@@ -372,11 +362,15 @@ impl View for ContentListingView {
     }
 
     fn id(&self) -> &str {
-        "content_listing"
+        VIEW_ID
     }
 
     fn is_stale(&self) -> bool {
-        self.state == ViewState::Stale
+        self.budget.is_stale()
+    }
+
+    fn mark_stale(&mut self) {
+        self.budget.mark_stale();
     }
 }
 

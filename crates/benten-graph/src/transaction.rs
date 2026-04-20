@@ -48,6 +48,8 @@
 
 use std::sync::{Arc, Mutex};
 
+use crate::mutex_ext::MutexExt;
+
 use benten_core::{Cid, Edge, Node};
 use redb::{Durability, ReadableMultimapTable, ReadableTable};
 
@@ -227,7 +229,7 @@ pub(crate) struct TxGuard {
 
 impl TxGuard {
     pub(crate) fn try_acquire(flag: Arc<Mutex<bool>>) -> Result<Self, GraphError> {
-        let mut guard = flag.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = flag.lock_recover();
         if *guard {
             return Err(GraphError::NestedTransactionNotSupported {});
         }
@@ -239,7 +241,7 @@ impl TxGuard {
 
 impl Drop for TxGuard {
     fn drop(&mut self) {
-        let mut guard = self.flag.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = self.flag.lock_recover();
         *guard = false;
     }
 }

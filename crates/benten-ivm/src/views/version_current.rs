@@ -23,12 +23,11 @@
 //!   originally-configured budget (g5-cr-3).
 
 use alloc::collections::BTreeMap;
-use alloc::string::String;
 
 use benten_core::{Cid, Node};
 use benten_graph::{ChangeEvent, ChangeKind};
 
-use crate::{View, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
+use crate::{BudgetTracker, View, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
 
 /// Phase-1 anchor-handle default. When the event/Node doesn't carry an
 /// `anchor_id` (the current `ChangeEvent` shape never does), updates are
@@ -36,18 +35,17 @@ use crate::{View, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
 /// against this convention.
 const DEFAULT_ANCHOR_ID: u64 = 1;
 
+/// Stable view identifier used in `ViewError` payloads and `View::id`.
+const VIEW_ID: &str = "version_current";
+
 /// View 5 — `anchor_id → current-version Cid` pointer table.
 #[derive(Debug)]
 pub struct VersionCurrentView {
     /// Keyed by u64 anchor id. `BTreeMap` (not `HashMap`) for stable
     /// iteration in case rebuild equivalence tests compare traversals.
     current: BTreeMap<u64, Cid>,
-    /// Budget counter. See [`super::content_listing::ContentListingView`]
-    /// for the same model.
-    remaining_budget: u64,
-    /// Original budget for uniform `rebuild` restore (g5-cr-3).
-    original_budget: u64,
-    state: ViewState,
+    /// Shared budget tracker — see `crate::budget` (r6-ref R-major-02).
+    budget: BudgetTracker,
 }
 
 impl VersionCurrentView {
@@ -56,16 +54,14 @@ impl VersionCurrentView {
     pub fn new() -> Self {
         Self {
             current: BTreeMap::new(),
-            remaining_budget: u64::MAX,
-            original_budget: u64::MAX,
-            state: ViewState::Fresh,
+            budget: BudgetTracker::new(u64::MAX),
         }
     }
 
     /// Content-addressed definition for the view registry.
     pub fn definition() -> ViewDefinition {
         ViewDefinition {
-            view_id: "version_current".into(),
+            view_id: VIEW_ID.into(),
             input_pattern_label: Some("NEXT_VERSION".into()),
             output_label: "system:IVMView".into(),
         }
@@ -76,9 +72,7 @@ impl VersionCurrentView {
     pub fn with_budget_for_testing(budget: u64) -> Self {
         Self {
             current: BTreeMap::new(),
-            remaining_budget: budget,
-            original_budget: budget,
-            state: ViewState::Fresh,
+            budget: BudgetTracker::new(budget),
         }
     }
 
@@ -86,11 +80,7 @@ impl VersionCurrentView {
     /// (version-chain Nodes carry one per ENGINE-SPEC §6); otherwise falls
     /// back to `DEFAULT_ANCHOR_ID`.
     pub fn on_change(&mut self, node: Node) {
-        if self.state == ViewState::Stale {
-            return;
-        }
-        if self.remaining_budget == 0 {
-            self.state = ViewState::Stale;
+        if self.budget.try_consume(1, VIEW_ID).is_err() {
             return;
         }
         let Ok(cid) = node.cid() else {
@@ -98,13 +88,16 @@ impl VersionCurrentView {
         };
         let anchor_id = node.anchor_id.unwrap_or(DEFAULT_ANCHOR_ID);
         self.current.insert(anchor_id, cid);
-        self.remaining_budget = self.remaining_budget.saturating_sub(1);
     }
 
     /// Runtime state.
     #[must_use]
     pub fn state(&self) -> ViewState {
-        self.state
+        if self.budget.is_stale() {
+            ViewState::Stale
+        } else {
+            ViewState::Fresh
+        }
     }
 
     /// Resolve `anchor → current-version Cid`. Accepts either a `u64`
@@ -117,10 +110,8 @@ impl VersionCurrentView {
     ///
     /// Returns [`ViewError::Stale`] when the view is `Stale`.
     pub fn resolve<A: AnchorRef>(&self, anchor: A) -> Result<Option<Cid>, ViewError> {
-        if self.state == ViewState::Stale {
-            return Err(ViewError::Stale {
-                view_id: "version_current".into(),
-            });
+        if self.budget.is_stale() {
+            return Err(BudgetTracker::stale_error(VIEW_ID));
         }
         let anchor_id = anchor.to_anchor_id();
         Ok(self.current.get(&anchor_id).cloned())
@@ -169,27 +160,21 @@ impl View for VersionCurrentView {
     /// anchor); NEXT_VERSION-labeled edge events move the default anchor's
     /// head to the edge's target (the new head per ENGINE-SPEC §6).
     fn update(&mut self, event: &ChangeEvent) -> Result<(), ViewError> {
-        if self.state == ViewState::Stale {
-            return Err(ViewError::Stale {
-                view_id: "version_current".into(),
-            });
+        if self.budget.is_stale() {
+            return Err(BudgetTracker::stale_error(VIEW_ID));
         }
         if !event.labels.iter().any(|l| l == "NEXT_VERSION") {
             return Ok(());
         }
         match event.kind {
             ChangeKind::Created | ChangeKind::Updated => {
-                if self.remaining_budget == 0 {
-                    self.state = ViewState::Stale;
-                    return Err(ViewError::BudgetExceeded("version_current".into()));
-                }
+                self.budget.try_consume(1, VIEW_ID)?;
                 let anchor_id = event
                     .node
                     .as_ref()
                     .and_then(|n| n.anchor_id)
                     .unwrap_or(DEFAULT_ANCHOR_ID);
                 self.current.insert(anchor_id, event.cid.clone());
-                self.remaining_budget = self.remaining_budget.saturating_sub(1);
             }
             ChangeKind::Deleted => {
                 let anchor_id = event
@@ -200,10 +185,7 @@ impl View for VersionCurrentView {
                 self.current.remove(&anchor_id);
             }
             ChangeKind::EdgeCreated => {
-                if self.remaining_budget == 0 {
-                    self.state = ViewState::Stale;
-                    return Err(ViewError::BudgetExceeded("version_current".into()));
-                }
+                self.budget.try_consume(1, VIEW_ID)?;
                 if let Some((_source, target, _label)) = &event.edge_endpoints {
                     // Per ENGINE-SPEC §6 the NEXT_VERSION edge points from
                     // the previous head to the new head. Phase-1 lookup by
@@ -212,7 +194,6 @@ impl View for VersionCurrentView {
                     // source could be used as an anchor-identity hint in
                     // Phase 2 once a source→anchor map lands.
                     self.current.insert(DEFAULT_ANCHOR_ID, target.clone());
-                    self.remaining_budget = self.remaining_budget.saturating_sub(1);
                 }
             }
             ChangeKind::EdgeDeleted => {
@@ -226,10 +207,8 @@ impl View for VersionCurrentView {
     }
 
     fn read(&self, query: &ViewQuery) -> Result<ViewResult, ViewError> {
-        if self.state == ViewState::Stale {
-            return Err(ViewError::Stale {
-                view_id: "version_current".into(),
-            });
+        if self.budget.is_stale() {
+            return Err(BudgetTracker::stale_error(VIEW_ID));
         }
         let anchor_id = query.anchor_id.unwrap_or(DEFAULT_ANCHOR_ID);
         Ok(ViewResult::Current(self.current.get(&anchor_id).cloned()))
@@ -237,19 +216,20 @@ impl View for VersionCurrentView {
 
     fn rebuild(&mut self) -> Result<(), ViewError> {
         self.current.clear();
-        self.state = ViewState::Fresh;
-        // Restore original budget (g5-cr-3 uniform policy across all 5
-        // views); a view constructed with a finite cap that's rebuilt
-        // must accept up to the same number of events again.
-        self.remaining_budget = self.original_budget;
+        // Restore original budget + clear stale (g5-cr-3 uniform policy).
+        self.budget.rebuild();
         Ok(())
     }
 
     fn id(&self) -> &str {
-        "version_current"
+        VIEW_ID
     }
 
     fn is_stale(&self) -> bool {
-        self.state == ViewState::Stale
+        self.budget.is_stale()
+    }
+
+    fn mark_stale(&mut self) {
+        self.budget.mark_stale();
     }
 }
