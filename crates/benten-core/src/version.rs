@@ -111,6 +111,20 @@ pub enum VersionError {
     },
 }
 
+impl VersionError {
+    /// Stable catalog code for this error. Every other error enum in the
+    /// workspace exposes a `.code()`; [`VersionError`] does too so cross-
+    /// boundary callers receive a stable identifier regardless of the
+    /// wrapper type (r6-err-11).
+    #[must_use]
+    pub fn code(&self) -> crate::ErrorCode {
+        match self {
+            VersionError::Branched { .. } => crate::ErrorCode::VersionBranched,
+            VersionError::UnknownPrior { .. } => crate::ErrorCode::VersionUnknownPrior,
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Append / walk
 // ---------------------------------------------------------------------------

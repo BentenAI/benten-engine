@@ -41,4 +41,114 @@ Phase 1 ships the stricter error route: a denied read returns `CapError::DeniedR
 
 ---
 
+## `requires` property is Phase-1 advisory (r6-sec-1)
+
+Handler subgraphs can declare a `requires` property on each primitive
+(e.g. `write.requires("store:post:write")`). In Phase 1 this property is
+**declarative-only**: the engine does NOT use the declared string to gate
+the operation at evaluation time. What IS enforced is the **derived
+per-op scope**: `GrantBackedPolicy` re-derives `store:<label>:write` (or
+`store:<label>:read`) from the actual `PendingOp` the transaction
+commits, and requires an unrevoked capability grant for that scope. The
+attack class where a handler declares `requires: "post:read"` but writes
+to an `admin`-labelled Node is therefore already closed — the policy
+sees `store:admin:write` in the PendingOp batch, finds no grant, and
+denies.
+
+What Phase 1 does NOT close:
+
+- **Declared-vs-actual mismatch surfacing.** A handler that declares
+  `requires: "post:read"` but actually writes admin data registers and
+  runs; the write is denied at commit, but the registration itself gives
+  no warning. Operator tooling + the mermaid diagram DO show the
+  declared string, so a human reviewing the registered handler sees the
+  lie.
+- **CALL-attenuation via `requires`.** The `isolated: false` call path
+  that would attenuate the caller's capability context to the
+  intersection of the outer grant and the callee's declared `requires`
+  is Phase-2 scope (named compromise contract, R1 triage SC4). The
+  Phase-1 posture: every CALL runs under the outer actor's grants; a
+  compromised callee that issues a wider write sees the same per-op
+  derived-scope check as any other handler.
+
+The pair of tests at `crates/benten-eval/tests/requires_enforcement.rs`
+remain `#[ignore]`-gated on the Phase-2 register-time static analysis
+pass that would elevate declared-vs-actual to a registration-time
+error (`E_REQUIRES_SCOPE_MISMATCH`). The test pair proves the Phase-2
+closure once the static analyzer lands; the Phase-1 defensive line is
+the GrantBackedPolicy derived-scope check exercised by
+`crates/benten-caps/tests/grant_backed_policy.rs`.
+
+---
+
+## Change-stream subscription bypasses capability read-checks
+
+**Phase-1 posture.** `Engine::subscribe_change_events` returns a
+`ChangeProbe` that drains every committed `ChangeEvent` the engine has observed — including events for Nodes the subscriber does not hold a
+`store:<label>:read` capability for. No `check_read` is applied on the
+subscriber path. This is a deliberate Phase-1 simplification, not a bug:
+
+- **The Engine instance is itself the security boundary.** Phase 1 ships
+  the embedded / single-process trust model (`docs/VISION.md`, pillar 1).
+  Every caller of `subscribe_change_events` is already trusted with full
+  read access to the backing store — they could open the `redb` file
+  directly and observe the same data. Gating the subscribe surface would
+  give false assurance without closing the real exfiltration path.
+- **Existence-leak parity with Compromise #2.** The same "denied reads
+  reveal the CID exists" surface that Compromise #2 documents for
+  `check_read` already applies to the change stream: a subscriber can
+  enumerate committed CIDs regardless of whether a read capability is
+  granted. The two surfaces are intentionally co-located because the
+  Phase-3 fix is the same: scoped subscriptions over a trust boundary.
+- **Attribution is preserved.** Every `ChangeEvent` carries the
+  `actor_cid` / `handler_cid` / `capability_grant_cid` triple (r6-sec-3),
+  so a Phase-3 policy layer can retroactively filter by observer identity
+  without breaking the wire format.
+
+**Phase-3 revisit.** Alongside Compromise #2 — once `benten-id` lands a
+typed principal and sync / federation cross the trust boundary, the
+engine will:
+
+1. Accept a principal handle at `subscribe_change_events` time.
+2. Apply `CapabilityPolicy::check_read` per event before yielding it.
+3. Decide between Option A (surface `E_CAP_DENIED_READ` — consistent with
+   the read path) or Option B (silent drop — matches the "indistinguishable
+   from not-found" posture).
+
+Operators who need a tighter bound today can:
+- Deploy with `.without_ivm()` + avoid calling
+  `subscribe_change_events` — no probe, no disclosure.
+- Run the engine behind a process boundary and gate the subscribe RPC at
+  the mux layer.
+
+---
+
+## napi input-limit enforcement (r6-sec-7)
+
+The TypeScript→Rust boundary is the engine's hottest surface and the
+primary DoS vector for a hosted deployment. Two classes of input-size
+attack are live in Phase 1:
+
+1. **Oversized JSON strings.** A caller who supplies a single
+   multi-gigabyte `Value::Text` can force the Rust side to allocate the
+   full string before any downstream check fires. The JSON boundary in
+   `bindings/napi/src/node.rs` now rejects any string longer than
+   `JSON_MAX_BYTES` (1 MiB) with `E_INPUT_LIMIT` before the `Value::Text`
+   lands in the tree.
+2. **Aggregate payload size.** A JSON tree whose total text-byte weight
+   exceeds the per-request budget is similarly rejected with
+   `E_INPUT_LIMIT` — the check runs during tree-walk so deeply-nested
+   payloads cannot evade the cap by fragmenting across many small values.
+
+**Phase-2 completeness.** The canonical on-wire decoder
+(`testing::deserialize_value_from_js_like`) is still a shim pending a
+`CoreError::InputLimit` variant in `benten-core`; the B8 input-validation
+test suite is gated behind `--features in-process-test` and stays red
+until the decoder un-stub lands (coordination is deferred to the error-
+ergonomics work track). The boundary-side caps in this section are the
+Phase-1 defensive line against the allocation vector; the B8 suite will
+add CBOR-level depth / bomb coverage on top.
+
+---
+
 *Future compromises with security implications will be appended as sections here, each tagged with the compromise number from the R1 Triage Addendum.*

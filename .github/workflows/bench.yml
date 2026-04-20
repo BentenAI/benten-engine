@@ -1,0 +1,89 @@
+name: Bench
+
+# R6-TA-2: nightly Criterion bench sweep across the workspace.
+#
+# Purpose:
+#   The plan's §14.6 perf targets (Node lookup <50µs, IVM view read <1µs,
+#   content listing <100µs, 10-node handler <300µs, etc.) have been
+#   exercised at R4 gate-close via `cargo bench -- --quick` runs locally,
+#   but nothing in CI turns them into a regression signal. This workflow
+#   closes that gap at the lightest-weight cost: it runs the full bench
+#   suite nightly, uploads the Criterion HTML / CSV output as an artifact,
+#   and surfaces the measured numbers so a drift between commits is
+#   attributable to the offending PR in the git log.
+#
+# Phase-1 policy:
+#   - Phase-1 runs the benches and STORES the result. It does NOT fail
+#     on regression — bench numbers on shared GitHub Actions runners are
+#     noisy (±30% variance is typical under contention), and gating on a
+#     raw threshold would either fire spuriously or have to be set so loose
+#     that real regressions slip through. The artifact is the signal;
+#     humans read it during Phase-2 review.
+#   - Phase-2 ratchets: once dedicated / self-hosted runners or Bencher.dev
+#     integration lands, this workflow grows a comparison step that posts
+#     a comment-diff on PRs vs the main-branch baseline and fails on
+#     >N% regression across the §14.6-direct benches.
+#
+# Triggers:
+#   - nightly cron (02:30 UTC — after fuzz.yml at 02:00 so they don't
+#     contend for shared runner capacity)
+#   - workflow_dispatch (on-demand runs for perf-investigation PRs)
+#
+# Measurement window:
+#   `--measurement-time 2` keeps the total wall-clock bounded around
+#   ~20 minutes for the full workspace sweep. The per-bench plan spec
+#   calls for 5s windows; ratchet back up when this moves to dedicated
+#   runners. The 2s window still produces meaningful numbers — Criterion's
+#   statistics are stable once warmup converges, even in shorter windows.
+
+on:
+  schedule:
+    - cron: '30 2 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  bench:
+    name: workspace benches
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: bench
+
+      - name: cargo bench --no-run
+        # Compile-only gate first — the benches must link cleanly before
+        # we commit to the multi-minute measurement window.
+        run: cargo bench --workspace --no-run --locked
+
+      - name: cargo bench (workspace sweep)
+        # `--measurement-time 2` keeps the nightly wall-clock bounded;
+        # locally or on dedicated runners use `--measurement-time 5` for
+        # the full-spec measurement.
+        run: cargo bench --workspace --locked -- --measurement-time 2
+
+      - name: Upload Criterion output as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-${{ github.run_id }}
+          path: target/criterion/
+          retention-days: 30
+          if-no-files-found: warn

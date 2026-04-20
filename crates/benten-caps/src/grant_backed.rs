@@ -110,12 +110,19 @@ impl CapabilityPolicy for GrantBackedPolicy {
             return Ok(());
         }
 
-        // Derive scopes from the batch: for each PutNode we scope by its
-        // primary (first) label; if no pending ops (pre-G3 synthetic ctx
-        // shape) we fall back to the convenience `label` field.
+        // Derive scopes from the batch: for each op we scope by its primary
+        // label; if no pending ops (pre-G3 synthetic ctx shape) we fall back
+        // to the convenience `label` / `scope` fields. r6-sec-8: when the
+        // caller arrives with neither pending ops nor any scope hint, the
+        // grant-backed policy DENIES rather than permit-by-default — an
+        // unstructured WriteContext reaching the policy is an error mode,
+        // not a legitimate no-op, and denying closes the fail-open surface.
         let scopes: Vec<String> = if ctx.pending_ops.is_empty() {
             if ctx.label.is_empty() && ctx.scope.is_empty() {
-                return Ok(());
+                return Err(CapError::Denied {
+                    required: "store:write".to_string(),
+                    entity: String::new(),
+                });
             }
             let scope = if ctx.scope.is_empty() {
                 Self::derive_write_scope(&ctx.label)
@@ -140,12 +147,26 @@ impl CapabilityPolicy for GrantBackedPolicy {
                     PendingOp::PutEdge { label, .. } => {
                         v.push(Self::derive_write_scope(label));
                     }
-                    PendingOp::DeleteNode { .. } | PendingOp::DeleteEdge { .. } => {
-                        // Deletes in Phase-1 use the same write-scope family
-                        // as creates of the same label. Without the Node body
-                        // we cannot recover the label from a CID alone; skip
-                        // the check for now (Phase-2 widens the PendingOp shape
-                        // to include the target label).
+                    PendingOp::DeleteNode { labels, .. } => {
+                        // r6-sec-8: labels captured via read-before-delete in
+                        // benten-graph are threaded through the caps PendingOp
+                        // so the policy can derive the same store:<label>:write
+                        // scope used for the create side. Empty labels means
+                        // an idempotent-miss delete — no scope needed.
+                        let primary = labels.first().cloned().unwrap_or_default();
+                        if primary.is_empty() || primary.starts_with("system:") {
+                            continue;
+                        }
+                        v.push(Self::derive_write_scope(&primary));
+                    }
+                    PendingOp::DeleteEdge { label, .. } => {
+                        let Some(label) = label else {
+                            continue; // idempotent miss
+                        };
+                        if label.starts_with("system:") {
+                            continue;
+                        }
+                        v.push(Self::derive_write_scope(label));
                     }
                 }
             }
@@ -182,7 +203,10 @@ impl CapabilityPolicy for GrantBackedPolicy {
         if ok {
             Ok(())
         } else {
-            Err(CapError::DeniedRead)
+            Err(CapError::DeniedRead {
+                required: scope,
+                entity: ctx.label.clone(),
+            })
         }
     }
 }

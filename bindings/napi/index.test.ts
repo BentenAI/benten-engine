@@ -357,3 +357,62 @@ describe("napi misc surfaces", () => {
     expect(mermaid).toMatch(/flowchart/);
   });
 });
+
+describe("bytes_vs_list_preserve_content_addressing_at_napi_boundary", () => {
+  // r6-perf-6 regression guard. Two Nodes — one carrying a Uint8Array
+  // property, the other carrying a plain number[] property with the
+  // same elements — MUST hash to distinct CIDs. The prior heuristic
+  // collapsed both to `Value::List` and therefore produced identical
+  // CIDs, silently violating the content-addressing contract for any
+  // caller who round-tripped a Buffer through the napi boundary.
+  it("distinguishes Uint8Array from plain number[] at the CID level", () => {
+    const bytesCid = engine.createNode(["blob"], {
+      payload: new Uint8Array([0, 1, 2, 3, 255]),
+    });
+    const listCid = engine.createNode(["blob"], {
+      payload: [0, 1, 2, 3, 255],
+    });
+    expect(bytesCid).not.toBe(listCid);
+    // Both must also be valid base32-multibase CIDs (`b` prefix).
+    expect(bytesCid.startsWith("b")).toBe(true);
+    expect(listCid.startsWith("b")).toBe(true);
+  });
+
+  it("Uint8Array round-trips as a byte-indexed Object via getNode", () => {
+    // Typed arrays are the canonical Bytes-shaped input on the napi
+    // boundary — napi-rs serializes them to an Object with numeric-
+    // string keys (because `napi_is_array` returns false for
+    // TypedArrays), which our inbound decoder routes to
+    // `Value::Bytes`. `getNode` then emits a structurally-equivalent
+    // shape so the round-trip preserves both the CID and the byte
+    // values.
+    //
+    // Node's `Buffer` type extends `Uint8Array` but carries extra
+    // prototype methods that napi-rs's serde_json decoder treats as
+    // "JS functions" — so `Buffer.from(...)` is NOT the right shape
+    // for the boundary as of Phase 1. Callers who have a Buffer
+    // should pass `new Uint8Array(buf)` for the round-trip; Phase-2's
+    // native TypedArray path lifts this constraint.
+    const cid = engine.createNode(["blob"], {
+      payload: new Uint8Array([7, 8, 9]),
+    });
+    const fetched = engine.getNode(cid);
+    expect(fetched).not.toBeNull();
+    // The emitted shape is an Object with numeric keys; reconstruct
+    // the byte array to confirm the three bytes are intact.
+    const payload = fetched.properties.payload;
+    expect(typeof payload).toBe("object");
+    expect(payload["0"]).toBe(7);
+    expect(payload["1"]).toBe(8);
+    expect(payload["2"]).toBe(9);
+  });
+
+  it("plain JS objects with alphabetic keys are not misclassified as Bytes", () => {
+    const cid = engine.createNode(["post"], {
+      meta: { title: "hello", rank: 42 },
+    });
+    const fetched = engine.getNode(cid);
+    expect(fetched.properties.meta.title).toBe("hello");
+    expect(fetched.properties.meta.rank).toBe(42);
+  });
+});

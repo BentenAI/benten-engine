@@ -75,6 +75,39 @@ Full details: [`docs/DEVELOPMENT-METHODOLOGY.md`](docs/DEVELOPMENT-METHODOLOGY.m
   ```
 - CI runs the same checks plus `cargo doc` with warnings-as-errors. See `.github/workflows/ci.yml`.
 
+## Running tests: nextest is load-bearing
+
+The test suite is designed to run under `cargo nextest run`, and that
+choice is load-bearing for correctness — not just speed. A couple of
+test-infrastructure contracts depend on it:
+
+- **Process isolation for test-globals.** The version-chain substrate
+  in `benten-core/src/lib.rs` keeps two process-global states —
+  `ANCHOR_COUNTER` (an `AtomicU64` issuing unique anchor ids) and
+  `U64_CHAINS` (a `spin::Mutex<BTreeMap<...>>` mapping anchor ids to
+  CID chains). Phase 1 deliberately scopes these to the process — a
+  Phase-2 `AnchorStore` trait will push them behind a handle — and the
+  test suite writes to them from ~51 call sites across 5 integration
+  test files. `cargo nextest run` runs each integration test binary
+  in its **own process**, so cross-binary interactions are isolated
+  naturally. `cargo test` (without `--test-threads=1`) runs all tests
+  in a **single process** and will interleave `U64_CHAINS` writes
+  across tests in the same binary; assertions that depend on a
+  specific anchor id or chain length may see drift under that runner.
+
+- **Flakiness contract.** The `.config/nextest.toml` file pins
+  `retries = 0` in both the default and CI profiles. The invariant
+  is "zero hidden flakiness" — a test that fails once has to be
+  investigated, not retried. `cargo nextest run` honors that pin
+  automatically; ad-hoc retry via shell loops defeats the contract.
+
+Run `cargo nextest run --workspace` locally to match CI. If nextest is
+unavailable, `cargo test --workspace --jobs 1 -- --test-threads=1` is
+the second-best approximation — it serializes tests inside each
+binary, avoiding the interleaving that would otherwise perturb the
+globals above. Do not rely on assertion-level ordering between tests
+in the same file under any runner.
+
 ## Style
 
 - **Rust:** `rustfmt` and `clippy` with the configs at the repo root. Workspace lints are set in `Cargo.toml`; crates inherit.

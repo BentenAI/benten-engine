@@ -82,6 +82,27 @@ pub enum ErrorCode {
     /// invariants; the payload is a human-readable message held on the
     /// corresponding [`CoreError::Serialize`] variant.
     Serialize,
+    /// Handler id already registered with different content (engine-layer).
+    DuplicateHandler,
+    /// `Engine::builder().production()` invoked without an explicit capability
+    /// policy (R1 SC2 fail-early guardrail).
+    NoCapabilityPolicyConfigured,
+    /// `.production()` combined with `.without_caps()` — mutually exclusive.
+    ProductionRequiresCaps,
+    /// Operation requires an IVM or capability subsystem that was disabled
+    /// at builder time (`.without_ivm()` / `.without_caps()` thinness paths).
+    SubsystemDisabled,
+    /// Read against a view id that was never registered.
+    UnknownView,
+    /// Feature deferred to a future group / phase. Used for surfaces that
+    /// depend on evaluator integration not yet wired in Phase 1.
+    NotImplemented,
+    /// IVM view was queried with a filter pattern the view does not maintain.
+    /// Runtime-query-shape error distinct from `E_INV_REGISTRATION`.
+    IvmPatternMismatch,
+    /// Caller-supplied prior head was never observed by the version anchor.
+    /// Surfaces from the prior-head-threaded `benten_core::version::append_version`.
+    VersionUnknownPrior,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -129,7 +150,74 @@ impl ErrorCode {
             ErrorCode::NotFound => "E_NOT_FOUND",
             ErrorCode::Serialize => "E_SERIALIZE",
             ErrorCode::GraphInternal => "E_GRAPH_INTERNAL",
+            ErrorCode::DuplicateHandler => "E_DUPLICATE_HANDLER",
+            ErrorCode::NoCapabilityPolicyConfigured => "E_NO_CAPABILITY_POLICY_CONFIGURED",
+            ErrorCode::ProductionRequiresCaps => "E_PRODUCTION_REQUIRES_CAPS",
+            ErrorCode::SubsystemDisabled => "E_SUBSYSTEM_DISABLED",
+            ErrorCode::UnknownView => "E_UNKNOWN_VIEW",
+            ErrorCode::NotImplemented => "E_NOT_IMPLEMENTED",
+            ErrorCode::IvmPatternMismatch => "E_IVM_PATTERN_MISMATCH",
+            ErrorCode::VersionUnknownPrior => "E_VERSION_UNKNOWN_PRIOR",
             ErrorCode::Unknown(s) => s.as_str(),
+        }
+    }
+
+    /// Return the stable string identifier with a `'static` lifetime when
+    /// the variant is a known catalog code; returns `"E_UNKNOWN"` for the
+    /// forward-compat [`ErrorCode::Unknown`] variant because its payload is
+    /// an owned `String` and cannot be promoted to `'static` without
+    /// leaking.
+    ///
+    /// This is the single source of truth the engine's
+    /// `EngineError::code()` delegates through, replacing the former
+    /// `static_for` match duplicate (r6-err-10).
+    #[must_use]
+    pub fn as_static_str(&self) -> &'static str {
+        match self {
+            ErrorCode::InvCycle => "E_INV_CYCLE",
+            ErrorCode::InvDepthExceeded => "E_INV_DEPTH_EXCEEDED",
+            ErrorCode::InvFanoutExceeded => "E_INV_FANOUT_EXCEEDED",
+            ErrorCode::InvTooManyNodes => "E_INV_TOO_MANY_NODES",
+            ErrorCode::InvTooManyEdges => "E_INV_TOO_MANY_EDGES",
+            ErrorCode::InvDeterminism => "E_INV_DETERMINISM",
+            ErrorCode::InvContentHash => "E_INV_CONTENT_HASH",
+            ErrorCode::InvRegistration => "E_INV_REGISTRATION",
+            ErrorCode::InvIterateNestDepth => "E_INV_ITERATE_NEST_DEPTH",
+            ErrorCode::InvIterateMaxMissing => "E_INV_ITERATE_MAX_MISSING",
+            ErrorCode::InvIterateBudget => "E_INV_ITERATE_BUDGET",
+            ErrorCode::CapDenied => "E_CAP_DENIED",
+            ErrorCode::CapDeniedRead => "E_CAP_DENIED_READ",
+            ErrorCode::CapRevoked => "E_CAP_REVOKED",
+            ErrorCode::CapRevokedMidEval => "E_CAP_REVOKED_MID_EVAL",
+            ErrorCode::CapNotImplemented => "E_CAP_NOT_IMPLEMENTED",
+            ErrorCode::CapAttenuation => "E_CAP_ATTENUATION",
+            ErrorCode::WriteConflict => "E_WRITE_CONFLICT",
+            ErrorCode::IvmViewStale => "E_IVM_VIEW_STALE",
+            ErrorCode::TxAborted => "E_TX_ABORTED",
+            ErrorCode::NestedTransactionNotSupported => "E_NESTED_TRANSACTION_NOT_SUPPORTED",
+            ErrorCode::PrimitiveNotImplemented => "E_PRIMITIVE_NOT_IMPLEMENTED",
+            ErrorCode::SystemZoneWrite => "E_SYSTEM_ZONE_WRITE",
+            ErrorCode::ValueFloatNan => "E_VALUE_FLOAT_NAN",
+            ErrorCode::ValueFloatNonFinite => "E_VALUE_FLOAT_NONFINITE",
+            ErrorCode::CidParse => "E_CID_PARSE",
+            ErrorCode::CidUnsupportedCodec => "E_CID_UNSUPPORTED_CODEC",
+            ErrorCode::CidUnsupportedHash => "E_CID_UNSUPPORTED_HASH",
+            ErrorCode::VersionBranched => "E_VERSION_BRANCHED",
+            ErrorCode::BackendNotFound => "E_BACKEND_NOT_FOUND",
+            ErrorCode::TransformSyntax => "E_TRANSFORM_SYNTAX",
+            ErrorCode::InputLimit => "E_INPUT_LIMIT",
+            ErrorCode::NotFound => "E_NOT_FOUND",
+            ErrorCode::Serialize => "E_SERIALIZE",
+            ErrorCode::GraphInternal => "E_GRAPH_INTERNAL",
+            ErrorCode::DuplicateHandler => "E_DUPLICATE_HANDLER",
+            ErrorCode::NoCapabilityPolicyConfigured => "E_NO_CAPABILITY_POLICY_CONFIGURED",
+            ErrorCode::ProductionRequiresCaps => "E_PRODUCTION_REQUIRES_CAPS",
+            ErrorCode::SubsystemDisabled => "E_SUBSYSTEM_DISABLED",
+            ErrorCode::UnknownView => "E_UNKNOWN_VIEW",
+            ErrorCode::NotImplemented => "E_NOT_IMPLEMENTED",
+            ErrorCode::IvmPatternMismatch => "E_IVM_PATTERN_MISMATCH",
+            ErrorCode::VersionUnknownPrior => "E_VERSION_UNKNOWN_PRIOR",
+            ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
 
@@ -174,6 +262,14 @@ impl ErrorCode {
             "E_NOT_FOUND" => ErrorCode::NotFound,
             "E_SERIALIZE" => ErrorCode::Serialize,
             "E_GRAPH_INTERNAL" => ErrorCode::GraphInternal,
+            "E_DUPLICATE_HANDLER" => ErrorCode::DuplicateHandler,
+            "E_NO_CAPABILITY_POLICY_CONFIGURED" => ErrorCode::NoCapabilityPolicyConfigured,
+            "E_PRODUCTION_REQUIRES_CAPS" => ErrorCode::ProductionRequiresCaps,
+            "E_SUBSYSTEM_DISABLED" => ErrorCode::SubsystemDisabled,
+            "E_UNKNOWN_VIEW" => ErrorCode::UnknownView,
+            "E_NOT_IMPLEMENTED" => ErrorCode::NotImplemented,
+            "E_IVM_PATTERN_MISMATCH" => ErrorCode::IvmPatternMismatch,
+            "E_VERSION_UNKNOWN_PRIOR" => ErrorCode::VersionUnknownPrior,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }

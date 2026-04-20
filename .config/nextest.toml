@@ -1,0 +1,35 @@
+# nextest profiles for Benten — pins the flakiness contract at R6-TA-6.
+#
+# The load-bearing setting is `retries = 0`: the project's "zero hidden
+# flakiness" contract means a test that fails ONCE is a test that has to
+# be investigated. Nextest's default retry behavior (which would re-run
+# a failing test and pass the suite if the retry succeeds) would mask
+# every one of those signals. Pinning 0 retries in BOTH the default and
+# CI profiles is deliberate — not a placeholder to be relaxed later.
+#
+# `slow-timeout` surfaces a test that has hung but is not yet dead.
+# `terminate-after = 3` means "log the slow notice three times, then
+# forcibly kill the test" — catches deadlocks at the three-minute mark
+# rather than letting them eat the 60-minute CI budget.
+#
+# `failure-output = "immediate"` prints test failure output as it occurs
+# (default is "immediate-final", which prints twice). "immediate-final"
+# is still the CI-profile default because log-scrapers benefit from the
+# second printout at the end of the run.
+
+[profile.default]
+retries = 0
+slow-timeout = { period = "60s", terminate-after = 3 }
+failure-output = "immediate"
+# `status-level = "pass"` prints every PASS as well as FAIL — useful for
+# local TDD flow where you want to see the test suite grow green bar by
+# green bar. CI uses the default ("fail") to keep log volume bounded.
+status-level = "pass"
+
+[profile.ci]
+retries = 0
+fail-fast = false
+failure-output = "immediate-final"
+slow-timeout = { period = "60s", terminate-after = 3 }
+# Don't bail on the first failure in CI — let every leg's full result
+# surface so a cross-leg regression is visible in a single PR.

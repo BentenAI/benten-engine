@@ -1,0 +1,90 @@
+name: Coverage
+
+# R6-TA-5: cargo-llvm-cov workflow — backs the hand-counted R4 coverage
+# metrics (108/113 public APIs, 21/21 error codes, etc.) with measured
+# line / region coverage so a PR that drops coverage trips a visible
+# signal rather than relying on reviewer discipline alone.
+#
+# Phase-1 policy:
+#   - Runs on PRs to main AND on main pushes, so every merge updates
+#     the tracked coverage number.
+#   - Emits an HTML report as a CI artifact (downloadable from the
+#     workflow run page) plus a plain-text summary in the job output so
+#     reviewers can see "coverage went from N% to M%" without digging
+#     into the artifact.
+#   - Does NOT fail on coverage drops at Phase 1 — the baseline is
+#     being measured for the first time and gating prematurely would
+#     turn every red-phase TDD PR into a coverage-policy argument.
+#     Phase-2 adds a threshold gate once the baseline is stable.
+#   - codecov / coveralls integration is deliberately NOT wired —
+#     both need a token + account setup that isn't in place for
+#     Phase-1. The artifact + job-output summary are sufficient to
+#     drive human review.
+#
+# Triggers: PR + main push (opt-in via workflow_dispatch for ad-hoc).
+#
+# Runner: ubuntu-latest — llvm-cov is platform-portable and the coverage
+# signal does not depend on arch, so one leg is enough.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  coverage:
+    name: cargo-llvm-cov
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (with llvm-tools)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: coverage
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Generate coverage report (HTML + summary)
+        # `--workspace` walks every member crate; the HTML artifact is
+        # navigable from the workflow run page for deep dives. The
+        # `--summary-only` second invocation pipes a one-liner into the
+        # job output so reviewers don't have to download the artifact
+        # for a top-level number.
+        run: |
+          cargo llvm-cov --workspace --html --output-dir coverage-report
+          echo "### Coverage summary" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cargo llvm-cov report --summary-only >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload HTML coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ github.run_id }}
+          path: coverage-report/
+          retention-days: 14
+          if-no-files-found: warn

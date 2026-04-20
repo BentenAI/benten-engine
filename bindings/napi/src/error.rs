@@ -21,7 +21,14 @@ pub(crate) fn engine_err(err: benten_engine::EngineError) -> napi::Error {
     napi::Error::new(Status::GenericFailure, format!("{code}: {err}"))
 }
 
-/// Map a `CoreError` into a napi error.
+/// Map a `CoreError` into a napi error, preserving the stable catalog code
+/// via `CoreError::code().as_static_str()` as the message prefix so the TS
+/// `mapNativeError` regex reconstructs the typed subclass (r6-err-8 — was
+/// previously fabricating `E_CORE:` which is not a catalog code).
 pub(crate) fn core_err(err: benten_core::CoreError) -> napi::Error {
-    napi::Error::new(Status::InvalidArg, format!("E_CORE: {err}"))
+    let code = err.code();
+    napi::Error::new(
+        Status::InvalidArg,
+        format!("{}: {err}", code.as_static_str()),
+    )
 }

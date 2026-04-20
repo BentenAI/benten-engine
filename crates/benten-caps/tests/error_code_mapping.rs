@@ -24,7 +24,14 @@ fn cap_error_codes_match_catalog() {
         .code(),
         ErrorCode::CapDenied
     );
-    assert_eq!(CapError::DeniedRead.code(), ErrorCode::CapDeniedRead);
+    assert_eq!(
+        CapError::DeniedRead {
+            required: String::new(),
+            entity: String::new()
+        }
+        .code(),
+        ErrorCode::CapDeniedRead
+    );
     assert_eq!(
         CapError::RevokedMidEval.code(),
         ErrorCode::CapRevokedMidEval
@@ -50,7 +57,10 @@ fn cap_error_display_messages_are_nonempty() {
             required: String::new(),
             entity: String::new(),
         },
-        CapError::DeniedRead,
+        CapError::DeniedRead {
+            required: String::new(),
+            entity: String::new(),
+        },
         CapError::RevokedMidEval,
         CapError::NotImplemented {
             backend: "UCANBackend",

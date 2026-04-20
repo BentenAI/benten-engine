@@ -27,7 +27,11 @@ pub enum CapError {
     /// [`crate::GrantScope::parse`] on empty input) and no structured
     /// payload is available. An empty pair is still a denial — the
     /// `ErrorCode` is `E_CAP_DENIED` regardless.
-    #[error("capability denied (required={required:?}, entity={entity:?})")]
+    ///
+    /// The Display format uses `{required}` / `{entity}` (not `{:?}`) —
+    /// `:?` on `String` wraps the payload in escaped quotes that travel
+    /// through to the JS `Error.message` (r6-err-6).
+    #[error("capability denied (required={required}, entity={entity})")]
     Denied {
         /// The capability scope the write required (e.g. `"store:post:write"`).
         required: String,
@@ -38,8 +42,19 @@ pub enum CapError {
     /// A READ primitive was denied. Phase 1 named compromise #2 (Option A):
     /// returning this error leaks "this CID exists" to an unauthorized reader.
     /// Phase 3 revisits once the identity / principal surface lands.
-    #[error("read denied")]
-    DeniedRead,
+    ///
+    /// Carries the same `(required, entity)` shape as [`CapError::Denied`]
+    /// so audit pipelines can log the denied scope + actor on a read the
+    /// same way they do on a write (r6-err-9). Both fields may be empty
+    /// when the policy's denial path does not have structured context
+    /// available — the `E_CAP_DENIED_READ` code is unchanged in that case.
+    #[error("read denied (required={required}, entity={entity})")]
+    DeniedRead {
+        /// The capability scope the read required (e.g. `"store:post:read"`).
+        required: String,
+        /// The entity / actor identifier the read targeted.
+        entity: String,
+    },
 
     /// Capability was revoked. Phase 3 sync-revocation code — distinct from
     /// [`CapError::RevokedMidEval`] so evaluator-visible revocation during a
@@ -85,7 +100,7 @@ impl CapError {
     pub fn code(&self) -> ErrorCode {
         match self {
             CapError::Denied { .. } => ErrorCode::CapDenied,
-            CapError::DeniedRead => ErrorCode::CapDeniedRead,
+            CapError::DeniedRead { .. } => ErrorCode::CapDeniedRead,
             CapError::Revoked => ErrorCode::CapRevoked,
             CapError::RevokedMidEval => ErrorCode::CapRevokedMidEval,
             CapError::NotImplemented { .. } => ErrorCode::CapNotImplemented,
