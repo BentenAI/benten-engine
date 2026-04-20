@@ -69,7 +69,9 @@ mod napi_surface {
 
     use crate::edge::edge_to_json;
     use crate::error::engine_err;
-    use crate::node::{json_to_props, node_json_to_node, node_to_json, parse_cid};
+    use crate::node::{
+        json_to_props, node_json_to_node, node_to_json, parse_actor_cid_or_derive, parse_cid,
+    };
     use crate::policy::{PolicyKind, parse_grant_json};
     use crate::subgraph::{json_to_subgraph_spec, outcome_to_json};
     use crate::trace::trace_to_json;
@@ -256,7 +258,17 @@ mod napi_surface {
             Ok(outcome_to_json(&outcome))
         }
 
-        /// Invoke a handler on behalf of an explicit actor CID.
+        /// Invoke a handler on behalf of an explicit actor principal.
+        ///
+        /// The `actor` argument is a friendly principal identifier. When
+        /// it parses as a valid multibase-base32 CID (the wire form a
+        /// previously-created Node returns), it's used verbatim. When it
+        /// doesn't parse (e.g. `"alice"` — the QUICKSTART example), the
+        /// napi layer synthesizes a deterministic CID by hashing the
+        /// string (`parse_actor_cid_or_derive`). Same input always maps
+        /// to the same synthetic CID process-wide, so NoAuthBackend audit
+        /// attribution for a given friendly name is stable. Phase 3 swaps
+        /// in typed principals from `benten-id`. See r6b-dx-C5.
         #[napi]
         pub fn call_as(
             &self,
@@ -266,7 +278,7 @@ mod napi_surface {
             actor: String,
         ) -> napi::Result<serde_json::Value> {
             let node = node_json_to_node(input)?;
-            let actor_cid = parse_cid(&actor)?;
+            let actor_cid = parse_actor_cid_or_derive(&actor);
             let outcome = self
                 .inner
                 .call_as(&handler_id, &op, node, &actor_cid)

@@ -26,65 +26,93 @@ npm run dev
 The zero-config path:
 
 ```typescript
-import { crud } from '@benten/engine/operations';
+import { crud } from "@benten/engine";
 
 // Register a content type with defaults:
-// - schema inferred from first write
-// - `public` capability (no auth required)
+// - properties inferred from the caller-supplied input
+// - `NoAuth` policy (no grants required)
 // - local storage only
-export const postHandlers = crud('post');
+export const postHandlers = crud("post");
 ```
 
-That's the simplest useful Benten code. `crud('post')` registers `create`, `read`, `update`, `delete`, and `list` handlers with sensible defaults.
+That's the simplest useful Benten code. `crud("post")` exposes `create`, `get`, `list`, `update`, and `delete` actions with sensible defaults.
 
 ### 3. Use it
 
 ```typescript
-// Create
-await engine.call('post:create', { title: 'Hello Benten', body: 'First post.' });
+import { Engine } from "@benten/engine";
+import { postHandlers } from "./handlers.js";
 
-// Read
-const posts = await engine.call('post:list', { limit: 10 });
-console.log(posts);
+const engine = await Engine.open(".benten/my-app.redb");
+const handler = await engine.registerSubgraph(postHandlers);
+// `handler.id` is `"crud:post"` — a stable content-addressed handler id.
+
+// Create
+const created = await engine.call(handler.id, "post:create", {
+  title: "Hello Benten",
+  body: "First post.",
+});
+console.log(created.cid);
+
+// List
+const listed = await engine.call(handler.id, "post:list", {});
+console.log(listed.items);
+
+// Update
+await engine.call(handler.id, "post:update", {
+  cid: created.cid,
+  patch: { body: "Edited body." },
+});
+
+// Delete
+await engine.call(handler.id, "post:delete", { cid: created.cid });
 ```
 
 ## Adding capabilities (when you're ready)
 
-When you need authentication, add a capability:
+When you need authentication, open the engine with the grant-backed policy and stamp a `capability` on the CRUD handler:
 
 ```typescript
-export const postHandlers = crud('post', {
-  capability: 'store:post:*',
-});
+import { Engine, PolicyKind, crud } from "@benten/engine";
+
+const engine = await Engine.openWithPolicy(
+  ".benten/my-app.redb",
+  PolicyKind.GrantBacked,
+);
+const handler = await engine.registerSubgraph(
+  crud("post", { capability: "store:post:*" }),
+);
+
+// Grant the wildcard capability — permits create / update / delete under
+// the `post` label because `store:post:*` attenuates to the concrete
+// `store:post:write` the engine derives at commit time.
+await engine.grantCapability({ actor: "alice", scope: "store:post:*" });
+
+// `callAs` accepts either a real CID or a friendly principal string; the
+// friendly string is hashed into a deterministic synthetic CID.
+await engine.callAs(handler.id, "post:create", { title: "x" }, "alice");
 ```
 
-Now every mutation requires a grant to that capability. The engine ships with a `NoAuthBackend` by default; swap in UCAN or custom policy when you need it.
-
-## Adding schema validation
-
-```typescript
-export const postHandlers = crud('post', {
-  schema: {
-    title: { type: 'string', required: true, maxLength: 200 },
-    body: { type: 'string', required: true },
-    publishedAt: { type: 'date', optional: true },
-  },
-});
-```
+The engine ships with `PolicyKind.NoAuth` by default (every call permitted); swap in `PolicyKind.GrantBacked` when you want the revocation-aware Phase-1 policy. UCAN backends land in Phase 3.
 
 ## Viewing your operation subgraph
 
 Benten's handlers are subgraphs you can inspect:
 
 ```typescript
-console.log(postHandlers.create.toMermaid());
-// Prints a Mermaid diagram you can paste into any Markdown viewer
+console.log(handler.toMermaid());
+// Prints a Mermaid diagram you can paste into any Markdown viewer.
 ```
 
 ```typescript
-const trace = await engine.trace('post:create', { title: 'Test', body: 'Trace me' });
+const trace = await engine.trace(handler.id, "post:create", {
+  title: "Test",
+  body: "Trace me",
+});
 console.log(trace.steps);
-// Array of { node, inputs, outputs, durationUs }
+// Array of { nodeCid, primitive, durationUs, inputs?, outputs? } — one
+// entry per OperationNode executed. `engine.trace` does NOT persist the
+// outcome or fire a ChangeEvent; it's safe to run repeatedly.
 ```
 
 ## Next steps

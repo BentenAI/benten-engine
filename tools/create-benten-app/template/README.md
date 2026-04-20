@@ -26,18 +26,23 @@ npm run build        # tsc -> dist/
 
 ## Next steps
 
-- **Add a capability.** Open the engine with the grant-backed policy and stamp a `capability` on your CRUD handler:
+- **Add a capability.** Open the engine with the grant-backed policy and stamp a `capability` on your CRUD handler. `callAs` accepts a real CID or a friendly principal string — the napi layer hashes the latter into a deterministic synthetic CID so `"alice"` works without minting a Node first:
 
   ```ts
   import { Engine, PolicyKind, crud } from "@benten/engine";
   const engine = await Engine.openWithPolicy("./.benten/{{name}}.redb", PolicyKind.GrantBacked);
-  const handler = await engine.registerSubgraph(crud("post", { capability: "store:post:write" }));
-  await engine.grantCapability({ actor: "alice", scope: "store:post:write" });
-  await engine.call(handler.id, "post:create", { title: "x" });
+  const handler = await engine.registerSubgraph(
+    crud("post", { capability: "store:post:*" }),
+  );
+  // A wildcard grant like `store:post:*` permits the derived concrete
+  // scopes (`store:post:write`, `store:post:read`, …).
+  await engine.grantCapability({ actor: "alice", scope: "store:post:*" });
+  await engine.callAs(handler.id, "post:create", { title: "x" }, "alice");
   ```
 
   Unrevoked `system:CapabilityGrant` Nodes authorize matching writes; `engine.revokeCapability(grantCid, "alice")` turns them off.
+- **Use the full CRUD surface.** `crud("post")` exposes five actions — `create`, `get`, `list`, `update`, `delete` — dispatched via `engine.call(handler.id, "post:<action>", input)`. Note that the handler id is `crud:post` (`handler.id` above), not `post:create`; the action is the second argument.
 - **Inspect the subgraph.** `console.log(handler.toMermaid())` renders the handler as a Mermaid flowchart — paste into any Mermaid renderer.
-- **Trace an evaluation.** `engine.trace(handler.id, 'post:create', { title: 'x' })` returns per-node timings and (when the native tracer surfaces them) per-step inputs / outputs.
+- **Trace an evaluation.** `engine.trace(handler.id, "post:create", { title: "x" })` returns per-node timings; each `step.nodeCid` cross-references a node id rendered by `handler.toMermaid()`. Traced calls do not persist the outcome and do not fire ChangeEvents.
 
 See `docs/QUICKSTART.md` in the Benten repo for the full walkthrough.

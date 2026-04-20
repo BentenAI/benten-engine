@@ -706,40 +706,25 @@ impl Engine {
     /// can display a realistic terminal result without polluting the
     /// graph.
     pub fn trace(&self, handler_id: &str, op: &str, input: Node) -> Result<Trace, EngineError> {
-        let start = std::time::Instant::now();
-        let outcome = self.dispatch_call_with_mode(handler_id, op, input, None, true)?;
-        let elapsed = start.elapsed().as_micros();
-        let elapsed = u64::try_from(elapsed).unwrap_or(u64::MAX).max(1);
-        // Derive the op-specific primitive list for CRUD handlers. The
-        // bare op name (e.g. `"create"`) drives the mapping; the label
-        // prefix is ignored because the synthetic steps below only
-        // describe primitive kinds, not labels.
-        let op_name = op.split_once(':').map_or(op, |(_, o)| o);
-        let primitives: Vec<&'static str> = match op_name {
-            "create" => vec!["write", "respond"],
-            "list" | "get" => vec!["read", "respond"],
-            "update" => vec!["read", "write", "respond"],
-            "delete" => vec!["write", "respond"],
-            // Fall through to the generic "read+respond" shape for
-            // unknown ops; the terminal Outcome still carries truth.
-            _ => vec!["read", "respond"],
-        };
-        let step_cid = outcome
-            .created_cid
-            .clone()
-            .unwrap_or_else(|| Cid::from_blake3_digest([0; 32]));
-        let n = u64::try_from(primitives.len().max(1)).unwrap_or(1);
-        let per_step = elapsed / n;
-        let steps = primitives
-            .into_iter()
-            .map(|p| TraceStep {
-                duration_us: per_step.max(1),
-                node_cid: step_cid.clone(),
-                primitive: p.to_string(),
-            })
-            .collect();
+        // r6b-dx-C4 + r6b-dx-C6: delegate to the evaluator's real
+        // `run_with_trace` so every returned step is a genuine per-primitive
+        // record — distinct `node_cid` per OperationNode, distinct per-step
+        // microsecond duration, primitive kind reflecting what the walk
+        // actually executed. The per-step `node_cid` is derived from the
+        // handler-scoped OperationNode id, so it cross-references the
+        // Mermaid diagram's node identifiers rather than the outcome's
+        // content-addressed CID.
+        let mut trace_steps: Vec<TraceStep> = Vec::new();
+        let outcome = self.dispatch_call_with_mode_and_trace(
+            handler_id,
+            op,
+            input,
+            None,
+            true,
+            Some(&mut trace_steps),
+        )?;
         Ok(Trace {
-            steps,
+            steps: trace_steps,
             outcome: Some(outcome),
         })
     }
@@ -830,6 +815,31 @@ impl Engine {
         actor: Option<Cid>,
         trace_mode: bool,
     ) -> Result<Outcome, EngineError> {
+        self.dispatch_call_with_mode_and_trace(handler_id, op, input, actor, trace_mode, None)
+    }
+
+    /// Variant of [`Self::dispatch_call_with_mode`] that optionally populates
+    /// a per-step trace buffer during the walk (r6b-dx-C4). When
+    /// `trace_steps_out` is `Some`, the engine invokes
+    /// [`benten_eval::Evaluator::run_with_trace`] and converts each recorded
+    /// [`benten_eval::TraceStep`] into the engine-level [`TraceStep`] the
+    /// public `Engine::trace` surface consumes. The per-step `node_cid` is
+    /// derived from the handler-scoped OperationNode id via BLAKE3 so the
+    /// CID uniquely identifies *which primitive* executed (cross-reference
+    /// point for the Mermaid diagram) rather than echoing the outcome's
+    /// created CID (r6b-dx-C6).
+    ///
+    /// The function is kept private to the engine crate; public callers
+    /// reach it via `Engine::trace`.
+    pub(crate) fn dispatch_call_with_mode_and_trace(
+        &self,
+        handler_id: &str,
+        op: &str,
+        input: Node,
+        actor: Option<Cid>,
+        trace_mode: bool,
+        trace_steps_out: Option<&mut Vec<TraceStep>>,
+    ) -> Result<Outcome, EngineError> {
         // Verify the handler is registered.
         let handler_cid_opt = {
             let guard = self.inner.handlers.lock_recover();
@@ -857,8 +867,15 @@ impl Engine {
             });
         }
 
-        let result =
-            self.dispatch_call_inner(handler_id, op, input, actor, &handler_cid, trace_mode);
+        let result = self.dispatch_call_inner(
+            handler_id,
+            op,
+            input,
+            actor,
+            &handler_cid,
+            trace_mode,
+            trace_steps_out,
+        );
 
         // Always pop the stack frame, even on error.
         {
@@ -873,6 +890,10 @@ impl Engine {
         clippy::too_many_lines,
         reason = "r6-sec-4 adds the NotImplemented→ON_ERROR routing arm; further decomposition would obscure the top-to-bottom dispatch flow (subgraph build → evaluator run → replay → outcome mapping)"
     )]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "r6b-dx-C4 threads an optional trace-buffer through the private dispatch helper; wrapping the inputs in a struct worsens call-site readability without changing the surface contract"
+    )]
     fn dispatch_call_inner(
         &self,
         handler_id: &str,
@@ -881,6 +902,7 @@ impl Engine {
         _actor: Option<Cid>,
         _handler_cid: &Cid,
         trace_mode: bool,
+        trace_steps_out: Option<&mut Vec<TraceStep>>,
     ) -> Result<Outcome, EngineError> {
         // Build the execution subgraph. CRUD handlers synthesize an op-
         // specific shape (READ / WRITE / RESPOND); SubgraphSpec-registered
@@ -904,9 +926,41 @@ impl Engine {
         // atomically inside a transaction after the walk completes. See the
         // `primitive_host` module doc "Two-phase write (arch-2)" for the
         // rationale.
+        //
+        // When tracing (trace_steps_out.is_some()) we call
+        // `run_with_trace` so the evaluator records a real per-step entry
+        // for every primitive it executed; the resulting TraceStep list
+        // replaces the synthetic-step fabrication r6b-dx-C4 retired.
         let input_value = Value::Map(input.properties.clone());
         let mut evaluator = benten_eval::Evaluator::new();
-        let eval_result = evaluator.run(&subgraph, input_value, self as &dyn PrimitiveHost);
+        let (eval_result, raw_trace) = if trace_steps_out.is_some() {
+            match evaluator.run_with_trace(&subgraph, input_value, self as &dyn PrimitiveHost) {
+                Ok((run, trace)) => (Ok(run), trace),
+                Err(e) => (Err(e), Vec::new()),
+            }
+        } else {
+            (
+                evaluator.run(&subgraph, input_value, self as &dyn PrimitiveHost),
+                Vec::new(),
+            )
+        };
+
+        // Copy raw evaluator TraceSteps into the caller's buffer, mapping
+        // each node_id → a stable per-OperationNode CID. The CID is
+        // derived from the handler_id + node_id pair so two ops with the
+        // same primitive kind but different positions in the subgraph
+        // surface distinct CIDs (r6b-dx-C6).
+        if let Some(out) = trace_steps_out {
+            for rs in raw_trace {
+                let primitive = primitive_kind_label(&subgraph, &rs.node_id);
+                let node_cid = derive_op_node_cid(subgraph.handler_id(), &rs.node_id);
+                out.push(TraceStep {
+                    duration_us: rs.duration_us.max(1),
+                    node_cid,
+                    primitive,
+                });
+            }
+        }
 
         // Capture pending ops + inject_failure out of the active_call frame.
         let (pending, inject_failure) = {
@@ -1156,6 +1210,98 @@ impl Engine {
                 // into the ON_NOT_FOUND Outcome edge.
                 let hint = resolved_cid.map(|c| format!("get:{}:{}", label, c.to_base32()));
                 Ok((sg, hint))
+            }
+            "update" => {
+                // r6b-dx-C2: add the update arm. Resolves the target CID,
+                // reads the current Node properties, merges the caller's
+                // `patch` Map onto them, and emits a subgraph that
+                // (1) deletes the old Node and (2) writes the merged new
+                // Node under a freshly-hashed CID. Both host ops land in the
+                // same `pending_ops` batch and replay atomically in one tx.
+                //
+                // Input shape: `{ cid: <base32>, patch: <Map> }`. Missing
+                // `cid` routes ON_NOT_FOUND via the delete executor's
+                // delete_missing path; missing `patch` is treated as an
+                // empty map (no-op update re-writes identical properties).
+                let target = match input.properties.get("cid") {
+                    Some(Value::Text(s)) => self.lookup_cid_by_base32(label, s)?,
+                    _ => None,
+                };
+                // Read the existing Node so we can merge its properties with
+                // the caller-supplied patch. A miss routes the delete
+                // subgraph's `delete_missing` branch via ON_NOT_FOUND.
+                let (old_props, resolved_target) = match target {
+                    Some(cid) => match self.backend.get_node(&cid)? {
+                        Some(node) => (node.properties, Some(cid)),
+                        None => (BTreeMap::new(), None),
+                    },
+                    None => (BTreeMap::new(), None),
+                };
+                let patch = match input.properties.get("patch") {
+                    Some(Value::Map(m)) => m.clone(),
+                    _ => BTreeMap::new(),
+                };
+                // Merge: patch wins on key collisions; old properties fill
+                // the rest. Preserve the stamped `createdAt` unless the
+                // patch explicitly overrides it.
+                let mut merged = old_props;
+                for (k, v) in patch {
+                    merged.insert(k, v);
+                }
+
+                // Build the two-step subgraph. We do NOT cache this one
+                // because the delete target CID is per-call input; the
+                // shape is small (2 WRITEs + RESPOND) so rebuilding is
+                // cheap relative to the lookup work above.
+                let mut sb = benten_eval::SubgraphBuilder::new(format!("crud:{label}:update"));
+                let del = sb.write(format!("crud_{label}_update_delete"));
+                let upd = sb.write(format!("crud_{label}_update_write"));
+                sb.add_edge(del, upd);
+                let _ = sb.respond(upd);
+                let mut sg = sb.build_unvalidated_for_test();
+
+                // Populate the delete node.
+                if let Some(del_node) = sg.op_by_id_mut(&format!("crud_{label}_update_delete")) {
+                    match resolved_target {
+                        Some(cid) => {
+                            del_node
+                                .properties
+                                .insert("op".into(), Value::text("delete"));
+                            del_node
+                                .properties
+                                .insert("target_cid".into(), Value::Bytes(cid.as_bytes().to_vec()));
+                        }
+                        None => {
+                            // Route the overall subgraph through
+                            // ON_NOT_FOUND when the target doesn't resolve.
+                            // The delete_missing executor emits the typed
+                            // edge; without a follow-up WRITE the
+                            // Outcome's edge reflects the miss.
+                            del_node
+                                .properties
+                                .insert("op".into(), Value::text("delete_missing"));
+                        }
+                    }
+                }
+
+                // Populate the write (update) node only when the target
+                // resolved. If it didn't, the delete_missing step routes
+                // ON_NOT_FOUND and the walk terminates before reaching
+                // the write — but we still populate defensively so
+                // re-entering via `next` would not crash.
+                if let Some(upd_node) = sg.op_by_id_mut(&format!("crud_{label}_update_write")) {
+                    upd_node
+                        .properties
+                        .insert("op".into(), Value::text("update"));
+                    upd_node
+                        .properties
+                        .insert("label".into(), Value::text(label));
+                    upd_node
+                        .properties
+                        .insert("properties".into(), Value::Map(merged));
+                }
+
+                Ok((sg, None))
             }
             "delete" => {
                 // Resolve the target CID up front (Cid::from_str is Phase-2),
@@ -1873,6 +2019,40 @@ fn derive_committed_scopes(ops: &[benten_caps::PendingOp]) -> Vec<String> {
 /// only matters for tests that probe uncreated-but-canonical view ids.
 /// TODO(phase-2-view-id-registry): replace with a per-view definition
 /// registration pulled from benten-ivm.
+/// Derive a stable content-addressed identifier for a single OperationNode
+/// inside a handler's subgraph. Used by `Engine::trace` so each trace step
+/// carries a CID that cross-references the operation-node identifier
+/// rendered by Mermaid (`subgraph.to_mermaid()`) — the trace's
+/// `node_cid` stream is meaningfully distinct from the Outcome's
+/// `created_cid` (r6b-dx-C6).
+///
+/// The derivation hashes `"<handler_id>\0<node_id>"` via BLAKE3; an empty
+/// handler_id collapses to hashing the node_id alone, matching the
+/// fallback shape the evaluator uses when a handler has no id.
+fn derive_op_node_cid(handler_id: &str, node_id: &str) -> Cid {
+    let mut material = Vec::with_capacity(handler_id.len() + 1 + node_id.len());
+    material.extend_from_slice(handler_id.as_bytes());
+    material.push(0);
+    material.extend_from_slice(node_id.as_bytes());
+    let digest: [u8; 32] = *blake3::hash(&material).as_bytes();
+    Cid::from_blake3_digest(digest)
+}
+
+/// Look up the primitive kind label for a given operation-node id inside a
+/// subgraph and lowercase it for surface parity with the DSL-side
+/// primitive names (`"read"`, `"write"`, `"respond"`, …). Missing nodes
+/// collapse to an empty string — the evaluator should never emit a
+/// TraceStep with an unknown id, but the trace surface must not crash if
+/// that invariant slips.
+fn primitive_kind_label(subgraph: &benten_eval::Subgraph, node_id: &str) -> String {
+    for node in subgraph.nodes() {
+        if node.id == node_id {
+            return format!("{:?}", node.kind).to_lowercase();
+        }
+    }
+    String::new()
+}
+
 pub(crate) fn is_known_view_id(id: &str) -> bool {
     let canonical = [
         "capability_grants",
