@@ -11,6 +11,18 @@ description = "Storage abstraction (KVBackend trait) and redb implementation for
 [lints]
 workspace = true
 
+[features]
+# `test-fixtures` gates the `write-canonical-and-exit` binary target so a
+# downstream `cargo install benten-graph --no-default-features` does not
+# pay the compile-time cost of a test-only fixture. The feature is
+# default-enabled so `cargo test`, `cargo nextest run --workspace`, and
+# every developer workflow continue to build the bin without ceremony;
+# publishers who want the library-only subset opt out explicitly.
+#
+# Closure of Named Compromise #7 (`[[bin]]` required-features gating).
+default = ["test-fixtures"]
+test-fixtures = []
+
 [dependencies]
 benten-core = { path = "../benten-core" }
 redb = { workspace = true }
@@ -33,8 +45,11 @@ benten-engine = { path = "../benten-engine" }
 # test via the `env!()` macro.
 name = "write-canonical-and-exit"
 path = "bin/write_canonical_and_exit.rs"
-# Required-features guard keeps the binary out of `cargo build` when
-# benten-graph is consumed as a library dep.
+# `required-features` guard keeps the binary out of `cargo install
+# benten-graph --no-default-features` (Named Compromise #7 closure).
+# `test = false` / `bench = false` keep the bin out of `cargo test` /
+# `cargo bench` target discovery.
+required-features = ["test-fixtures"]
 test = false
 bench = false
 

@@ -41,21 +41,58 @@ Phase 1 ships the stricter error route: a denied read returns `CapError::DeniedR
 
 ---
 
-### Compromise #1 — TOCTOU window bound at 100-iter batch
+### Compromise #1 — TOCTOU window bound at CALL entry + ITERATE batch boundary
 
-Phase-1 capability checks on ITERATE handlers refresh the grant snapshot at **batch boundaries** (default: every 100 iterations), not per-iteration. A revocation that lands mid-batch is therefore visible to the evaluator only at the NEXT batch boundary.
+Phase-1 capability checks refresh the grant snapshot at THREE distinct
+boundaries: (a) every transaction commit via `CapabilityPolicy::check_write`
+in `benten-engine`, (b) CALL primitive entry via
+`PrimitiveHost::check_capability`, and (c) ITERATE batch boundaries —
+every `host.iterate_batch_boundary()` iterations (default 100), inclusive
+of iter 0. A revocation that lands mid-batch is therefore visible to the
+evaluator at the NEXT batch boundary; a revocation that lands between
+handler registration and CALL entry is visible at the CALL entry.
 
-**Why:** per-iteration policy lookup would impose an O(N) backend read against the grant table on every step of every iterate. The batch-refresh amortizes that cost to O(N/100) while keeping the worst-case TOCTOU window bounded at 99 iterations.
+**Why the batch cadence:** per-iteration policy lookup would impose an
+O(N) backend read against the grant table on every step of every
+iterate. The batch-refresh amortizes that cost to O(N/100) while keeping
+the worst-case TOCTOU window bounded at 99 iterations.
 
 **What this posture does NOT claim:**
-- Per-iteration revocation visibility. A grant revoked at iter 50 will still authorize writes 50..=100; write 101 is the first to see the revocation.
-- Real-time revocation across a federation (that's the Phase-3 `CapRevoked` code, distinct from Phase-1's `CapRevokedMidEval`).
+- Per-iteration revocation visibility inside a batch. A grant revoked at
+  iter 50 will still authorize writes 50..=100; write 101 is the first
+  to see the revocation.
+- Real-time revocation across a federation (that's the Phase-3
+  `CapRevoked` code, distinct from Phase-1's `CapRevokedMidEval`).
 
 **What IS guaranteed:**
-- Writes 101+ see the revocation.
-- The bound is surfaced as a distinct error code (`E_CAP_REVOKED_MID_EVAL`) so operators can reason about batch boundaries without guessing at generic `E_CAP_DENIED`.
+- Transaction commits see the current policy state (per-commit).
+- CALL entry observes a revocation that landed before the outer
+  handler reached the CALL primitive; the denial routes `ON_DENIED`.
+- Writes past an ITERATE batch boundary observe any revocation that
+  landed within the previous batch; the denial routes `ON_DENIED`.
+- The batch-boundary / CALL-entry denials surface the policy's error
+  code string (e.g. `E_CAP_REVOKED_MID_EVAL`) in the edge payload so
+  operators can distinguish batch-boundary revocation from generic
+  `E_CAP_DENIED`.
 
-**Phase-2 revisit:** configurable per-handler batch size (0 = per-iteration check, at the cost of the O(N) backend read). The regression test `capability_revoked_mid_iteration_denies_subsequent_batches` in `crates/benten-caps/tests/toctou_iteration.rs` locks in the current shape; it remains `#[ignore]` pending Phase-2 ITERATE-subgraph wiring + `schedule_revocation_at_iteration` on GrantReader.
+**Regression tests:**
+- `crates/benten-engine/tests/integration/cap_toctou.rs::capability_revocation_at_batch_boundary_surfaces_mid_eval_code`
+  — engine-level per-commit refresh.
+- `crates/benten-eval/tests/cap_refresh_toctou.rs` — seven tests
+  covering CALL-entry refresh (permit + deny), ITERATE entry refresh,
+  batch-boundary refresh, no-spurious-refresh on single-batch, and
+  host-supplied boundary override.
+
+**Phase-2 revisit:** configurable per-handler batch size (0 =
+per-iteration check, at the cost of the O(N) backend read) and
+wall-clock bound on the TOCTOU window (auditor finding g4-p2-uc-2 —
+TRANSFORM-heavy handlers can push the 100-iteration cap past 10
+minutes of wall-clock time). The deferred integration tests
+`capability_revoked_mid_iteration_denies_subsequent_batches` and
+`writes_in_current_batch_are_not_retroactively_denied` in
+`crates/benten-caps/tests/toctou_iteration.rs` remain `#[ignore]`
+pending the Phase-2 `schedule_revocation_at_iteration` API on
+GrantReader + a populated `iterate_write_handler` fixture.
 
 ---
 
@@ -95,34 +132,55 @@ The `bindings/napi` crate compiles with `--target wasm32-unknown-unknown` in CI 
 
 Phase 1 does not enforce a write-rate limit on the engine's ingress. A misbehaving or adversarial caller can submit arbitrary writes as fast as the capability policy permits.
 
-**What IS recorded:** per-engine write counters surface in `engine.metrics_snapshot()` under `benten.writes.committed` and `benten.writes.denied`. Operators can detect abnormal rates out-of-band.
+**What IS recorded:** `engine.metrics_snapshot()` surfaces four write counters (both Rust + napi surfaces):
 
-**Why no enforcement:** a proper rate-limit needs a **scoped** budget (per-actor, per-capability, per-handler) — not a global one. Phase-1 lacks the actor-identity machinery (Phase-3 `benten-id`) to make the scoped variant meaningful; a global rate-limit would punish legitimate bulk-import workflows more than it protects against abuse.
+- `benten.writes.committed` — aggregate count of transactions the capability policy permitted (tick once per committed batch, not per op).
+- `benten.writes.denied` — aggregate count of transactions the capability policy rejected.
+- `benten.writes.committed.<scope>` — per-capability-scope fan-out. The scope key is `store:<label>:write`, derived from the batch's `PendingOp` labels (mirrors `GrantBackedPolicy`'s internal derivation so the counters line up with the enforcement-side key space).
+- `benten.writes.denied.<scope>` — per-capability-scope denial fan-out.
+
+Typed accessors `Engine::capability_writes_committed() -> BTreeMap<String, u64>` and `Engine::capability_writes_denied() -> BTreeMap<String, u64>` expose the per-scope maps directly without the flattened key projection. napi callers get the same shape via `engine.capabilityWritesCommitted()` / `engine.capabilityWritesDenied()`. Operators can detect abnormal rates per scope out-of-band.
+
+The counters increment regardless of whether a capability policy is plumbed in — under the zero-config `NoAuthBackend` default a batch that writes `post`-labelled Nodes still bumps `benten.writes.committed.store:post:write`. System-zone writes (`system:*` labels) are intentionally excluded from the per-scope tally because user subgraphs cannot reach them and crediting privileged grant/revoke paths to the per-scope key would make the metric misleading.
+
+**Why no enforcement:** a proper rate-limit needs a **scoped** budget (per-actor, per-capability, per-handler) — not a global one. Phase-1 lacks the actor-identity machinery (Phase-3 `benten-id`) to make the scoped variant meaningful; a global rate-limit would punish legitimate bulk-import workflows more than it protects against abuse. Recording the per-scope counter now means Phase-3 can layer enforcement on top without re-deriving the scope key space.
 
 **What this posture does NOT claim:**
 - Protection against DoS via write-flood at the engine ingress.
 - A ceiling on backend write throughput.
+- Bounded memory for the per-scope map. Scope keys derive from user-supplied Node labels, so an adversarial writer who creates Nodes with (say) 10k distinct fresh labels will grow the map to 10k entries. Phase-3's rate-limit pass adds eviction; Phase-1 accepts the unbounded-growth surface because (a) realistic label cardinality is bounded, and (b) the attack class is identical to spamming distinct CIDs in the backend, which the operator already has to manage.
 
-**Phase-2 / Phase-3 revisit:** Phase-2 introduces a policy-layer budget trait so `CapabilityPolicy` implementations can enforce per-actor rate limits. Phase-3 ties the identity shape (actor Cid) to the budget so the rate is scoped correctly across a federation.
+**Phase-2 / Phase-3 revisit:** Phase-2 introduces a policy-layer budget trait so `CapabilityPolicy` implementations can enforce per-actor rate limits. Phase-3 ties the identity shape (actor Cid) to the budget so the rate is scoped correctly across a federation, and adds eviction for the per-scope counter map.
 
-**Regression test:** `writes_committed_metric_is_recorded` in `crates/benten-engine/tests/metrics.rs` asserts the metric is populated.
+**Regression tests:**
+- `writes_committed_metric_is_recorded` + `per_capability_write_metrics_increment` + `denied_writes_surface_on_denied_metric` in `crates/benten-engine/tests/metrics.rs` pin the Rust recording shape.
+- `compromise_5_no_write_rate_limits_but_metric_recorded` in `crates/benten-engine/tests/integration/compromises_regression.rs` pins the "no rate-limit enforcement" half.
+- `metricsSnapshot surfaces per-capability write counters` in `bindings/napi/index.test.ts` pins the TS round-trip.
 
 ---
 
-### Compromise #7 — `bindings/napi` binary is gated behind a feature flag
+### Compromise #7 — `[[bin]]` `required-features` gating — CLOSED
 
-Shipping the napi `.node` binary from this repo would bake every Phase-1 decision into downstream consumers. The crate's `Cargo.toml` gates binary output behind the `publish` feature so `cargo publish` on the workspace does not emit a prebuilt `.node` alongside the Rust crates.
+Originally open: `benten-graph`'s `write-canonical-and-exit` test-fixture
+bin was declared with `test = false` / `bench = false` but no
+`required-features` gate, so `cargo install benten-graph` compiled an
+unnecessary test-fixture binary alongside the library crate.
 
-**Why:** the workspace publishes six Rust crates (core/graph/caps/ivm/eval/engine); the napi binding is a convenience artifact, not a supported API surface for Phase-1 (the TS layer in `packages/engine` re-wraps it with DX types anyway). Publishing the `.node` as part of the crate package would lock operators into the Phase-1 ABI.
+**Closure (2026-04-17).** `crates/benten-graph/Cargo.toml` now declares a
+`test-fixtures` feature (default-enabled) and gates the bin with
+`required-features = ["test-fixtures"]`. Downstream consumers doing
+`cargo install benten-graph --no-default-features` skip the bin entirely;
+the workspace-wide `cargo test` / `cargo nextest run --workspace` path
+keeps it via the default feature so `d2_cross_process_graph.rs` still
+resolves `CARGO_BIN_EXE_write-canonical-and-exit`.
 
-**What this posture claims:**
-- `cargo publish -p benten-*` does NOT emit a native binary artifact.
-- The `@benten/engine-native` npm package is built separately (by `npm run build` inside `bindings/napi`) and distributed via the TS package graph, not crate.io.
-
-**What this posture does NOT claim:**
-- A stable napi ABI for external consumers. Phase-1 treats the napi surface as an internal implementation detail of the TS wrapper.
-
-**Phase-2 revisit:** when Thrum migration (Phase-4) begins, the napi ABI hardens into a versioned contract + explicit `postinstall` script that rebuilds the binary against the local Node.js version. The current `publish`-gated shape is the bridge until then.
+**Regression test:**
+`compromise_7_benten_graph_bin_is_required_features_gated` in
+`crates/benten-engine/tests/integration/compromises_regression.rs` reads
+`benten-graph/Cargo.toml` and asserts (a) the `required-features`
+clause, (b) the `test-fixtures` feature declaration, (c) the default
+membership. Removing any of the three flips the test red and re-opens
+this compromise.
 
 ---
 

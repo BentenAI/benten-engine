@@ -23,12 +23,18 @@
 //! CALL-depth tracking (invariant 8) is handled by the iterative
 //! evaluator's stack accounting in G6-C; CALL itself is unaware of depth.
 //!
-//! TODO(R4b / G7): when G7 wires real callee-subgraph invocation, add an
-//! `Evaluator.call_depth: usize` counter that increments on CALL entry
-//! and decrements on callee terminate, and propagate remaining iteration
-//! budget multiplicatively through the CALL boundary. Mini-review
-//! findings `g6-cag-5` and the ITERATE/CALL observability concern in
-//! `g6-cr-10`.
+//! Named Compromise #1 (CALL-entry half): the executor consults
+//! `PrimitiveHost::check_capability` before attenuation / timeout /
+//! dispatch. A grant revoked between the outer handler's registration
+//! and the CALL entry is surfaced through the `ON_DENIED` typed edge
+//! with the policy's error code in the edge payload — same shape as a
+//! mid-iteration revocation observed at an ITERATE batch boundary.
+//!
+//! TODO(phase-2): add an `Evaluator.call_depth: usize` counter that
+//! increments on CALL entry and decrements on callee terminate, and
+//! propagate remaining iteration budget multiplicatively through the
+//! CALL boundary. Mini-review findings `g6-cag-5` and the ITERATE/CALL
+//! observability concern in `g6-cr-10`.
 
 use benten_core::{Node, Value};
 
@@ -45,6 +51,30 @@ use crate::{EvalError, OperationNode, PrimitiveHost, StepResult};
 /// Does not surface errors via `Err`; attenuation / timeout failures route
 /// through the typed error edges `ON_DENIED` / `ON_LIMIT`.
 pub fn execute(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResult, EvalError> {
+    // Compromise #1 closure (CALL-entry cap refresh). Before any
+    // attenuation or dispatch work, consult the configured capability
+    // policy so a grant revoked between the outer handler's registration
+    // and the CALL entry is observed immediately — not deferred to the
+    // callee's first per-commit check. The `required` string prefers the
+    // declared `child_scope` (the scope the callee will run under) and
+    // falls back to `requires` or `"call"` so a host that keys off a
+    // specific scope sees the most precise identifier available.
+    let required_scope: String = match (
+        op.properties.get("child_scope"),
+        op.properties.get("requires"),
+    ) {
+        (Some(Value::Text(s)), _) => s.clone(),
+        (_, Some(Value::Text(s))) => s.clone(),
+        _ => "call".to_string(),
+    };
+    if let Err(EvalError::Capability(c)) = host.check_capability(&required_scope, None) {
+        return Ok(StepResult {
+            next: None,
+            edge_label: "ON_DENIED".to_string(),
+            output: Value::text(c.to_string()),
+        });
+    }
+
     // Attenuation check.
     if let (Some(Value::Text(parent)), Some(Value::Text(child))) = (
         op.properties.get("parent_scope"),
