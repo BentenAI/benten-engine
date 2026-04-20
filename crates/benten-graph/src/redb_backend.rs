@@ -19,6 +19,8 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+use crate::mutex_ext::MutexExt;
+
 use benten_core::{Cid, Edge, Node, Value};
 use redb::{
     Database, Durability, MultimapTableDefinition, ReadableDatabase, ReadableMultimapTable,
@@ -862,7 +864,7 @@ impl RedbBackend {
                     // the commit and the snapshot below observes the just-
                     // committed event; one registered afterwards does not.
                     let subs = {
-                        let guard = self.subscribers.lock().unwrap_or_else(|e| e.into_inner());
+                        let guard = self.subscribers.lock_recover();
                         if guard.is_empty() {
                             Vec::new()
                         } else {
@@ -966,7 +968,7 @@ impl RedbBackend {
         &self,
         subscriber: Arc<dyn ChangeSubscriber>,
     ) -> Result<(), GraphError> {
-        let mut guard = self.subscribers.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = self.subscribers.lock_recover();
         guard.push(subscriber);
         Ok(())
     }

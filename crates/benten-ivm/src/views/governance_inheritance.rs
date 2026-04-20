@@ -30,7 +30,7 @@ use alloc::vec::Vec;
 use benten_core::Cid;
 use benten_graph::{ChangeEvent, ChangeKind};
 
-use crate::{View, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
+use crate::{BudgetTracker, View, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
 
 /// Depth cap for governance inheritance traversal per ENGINE-SPEC §8.
 pub const MAX_GOVERNANCE_DEPTH: usize = 5;
@@ -44,10 +44,8 @@ pub struct GovernanceInheritanceView {
     /// Adjacency map: child → parent (single parent per child, matching the
     /// Phase-1 `GovernedBy` cardinality; Phase 2 extends to multi-parent).
     parent: BTreeMap<Cid, Cid>,
-    remaining_budget: u64,
-    /// Original budget for uniform `rebuild` restore (g5-cr-3).
-    original_budget: u64,
-    stale: bool,
+    /// Shared budget tracker — see `crate::budget` (r6-ref R-major-02).
+    budget: BudgetTracker,
 }
 
 impl GovernanceInheritanceView {
@@ -56,9 +54,7 @@ impl GovernanceInheritanceView {
     pub fn new() -> Self {
         Self {
             parent: BTreeMap::new(),
-            remaining_budget: UNLIMITED_BUDGET,
-            original_budget: UNLIMITED_BUDGET,
-            stale: false,
+            budget: BudgetTracker::new(UNLIMITED_BUDGET),
         }
     }
 
@@ -76,23 +72,14 @@ impl GovernanceInheritanceView {
     pub fn with_budget_for_testing(budget: u64) -> Self {
         Self {
             parent: BTreeMap::new(),
-            remaining_budget: budget,
-            original_budget: budget,
-            stale: false,
+            budget: BudgetTracker::new(budget),
         }
     }
 
     /// Ingest a node-level change. Consumes budget, flips to Stale when
     /// exhausted.
     pub fn on_change(&mut self, _node: benten_core::Node) {
-        if self.stale {
-            return;
-        }
-        if self.remaining_budget == 0 {
-            self.stale = true;
-            return;
-        }
-        self.remaining_budget -= 1;
+        let _ = self.budget.try_consume(1, VIEW_ID);
         // Phase 1: `on_change` does not materialize edges (the `ChangeEvent`
         // / `Node` shape does not carry `GovernedBy` endpoint information).
         // Callers use `add_edge` to seed the adjacency.
@@ -102,7 +89,7 @@ impl GovernanceInheritanceView {
     /// direct adjacency updates; the `ChangeEvent`-driven path defers this
     /// to Phase 2 when edge-endpoint events land on the change stream.
     pub fn add_edge(&mut self, child: &Cid, parent: &Cid) {
-        if self.stale {
+        if self.budget.is_stale() {
             return;
         }
         self.parent.insert(child.clone(), parent.clone());
@@ -111,7 +98,7 @@ impl GovernanceInheritanceView {
     /// Current runtime state.
     #[must_use]
     pub fn state(&self) -> ViewState {
-        if self.stale {
+        if self.budget.is_stale() {
             ViewState::Stale
         } else {
             ViewState::Fresh
@@ -165,25 +152,14 @@ impl GovernanceInheritanceView {
     /// Fallible variant that surfaces `ViewError::Stale` when the view has
     /// tripped its budget. Shape used by the budget-exceeded test harness.
     pub fn read_effective_rules(&self, entity: &Cid) -> Result<EffectiveRules, ViewError> {
-        if self.stale {
-            return Err(ViewError::Stale {
-                view_id: VIEW_ID.to_string(),
-            });
+        if self.budget.is_stale() {
+            return Err(BudgetTracker::stale_error(VIEW_ID));
         }
         Ok(self.effective_rules(entity))
     }
 
     fn apply_event(&mut self, event: &ChangeEvent) -> Result<(), ViewError> {
-        if self.stale {
-            return Err(ViewError::Stale {
-                view_id: VIEW_ID.to_string(),
-            });
-        }
-        if self.remaining_budget == 0 {
-            self.stale = true;
-            return Err(ViewError::BudgetExceeded(VIEW_ID.to_string()));
-        }
-        self.remaining_budget -= 1;
+        self.budget.try_consume(1, VIEW_ID)?;
 
         match event.kind {
             ChangeKind::EdgeCreated if event.has_label("GovernedBy") => {
@@ -262,10 +238,8 @@ impl View for GovernanceInheritanceView {
     }
 
     fn read(&self, query: &ViewQuery) -> Result<ViewResult, ViewError> {
-        if self.stale {
-            return Err(ViewError::Stale {
-                view_id: VIEW_ID.to_string(),
-            });
+        if self.budget.is_stale() {
+            return Err(BudgetTracker::stale_error(VIEW_ID));
         }
         let rules_map: BTreeMap<String, benten_core::Value> = match &query.entity_cid {
             Some(entity) => {
@@ -288,8 +262,7 @@ impl View for GovernanceInheritanceView {
 
     fn rebuild(&mut self) -> Result<(), ViewError> {
         self.parent.clear();
-        self.remaining_budget = self.original_budget;
-        self.stale = false;
+        self.budget.rebuild();
         Ok(())
     }
 
@@ -298,11 +271,11 @@ impl View for GovernanceInheritanceView {
     }
 
     fn is_stale(&self) -> bool {
-        self.stale
+        self.budget.is_stale()
     }
 
     fn mark_stale(&mut self) {
-        self.stale = true;
+        self.budget.mark_stale();
     }
 }
 

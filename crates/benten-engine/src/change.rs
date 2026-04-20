@@ -23,7 +23,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use benten_graph::{ChangeEvent, ChangeSubscriber};
+use benten_graph::{ChangeEvent, ChangeSubscriber, MutexExt};
 
 /// Callback alias used by [`ChangeBroadcast::subscribe_fn`]. The `'static`
 /// bound is load-bearing — callbacks outlive the caller of `subscribe_fn`
@@ -80,7 +80,7 @@ impl ChangeBroadcast {
         let cb: ChangeCallback = Arc::new(move |event: &ChangeEvent| {
             subscriber.on_change(event);
         });
-        let mut guard = self.callbacks.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = self.callbacks.lock_recover();
         guard.push(cb);
     }
 
@@ -91,7 +91,7 @@ impl ChangeBroadcast {
     where
         F: Fn(&ChangeEvent) + Send + Sync + 'static,
     {
-        let mut guard = self.callbacks.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = self.callbacks.lock_recover();
         guard.push(Arc::new(f));
     }
 
@@ -106,7 +106,7 @@ impl ChangeBroadcast {
         // when the list is empty so the thinness path (no IVM) pays a
         // single lock-probe per commit rather than a lock + vec-clone.
         let subs = {
-            let guard = self.callbacks.lock().unwrap_or_else(|e| e.into_inner());
+            let guard = self.callbacks.lock_recover();
             if guard.is_empty() {
                 Vec::new()
             } else {

@@ -26,13 +26,13 @@
 //! `ViewState::Stale` and subsequent reads return `ViewError::Stale`.
 
 use alloc::collections::{BTreeMap, BTreeSet};
-use alloc::string::{String, ToString};
+use alloc::string::ToString;
 use alloc::vec::Vec;
 
 use benten_core::{Cid, Value};
 use benten_graph::{ChangeEvent, ChangeKind};
 
-use crate::{View, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
+use crate::{BudgetTracker, View, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
 
 /// Stable view identifier used in error messages and `View::id`.
 const VIEW_ID: &str = "capability_grants";
@@ -45,15 +45,11 @@ const UNLIMITED_BUDGET: u64 = u64::MAX;
 pub struct CapabilityGrantsView {
     /// entity CID → set of grant CIDs.
     by_entity: BTreeMap<Cid, BTreeSet<Cid>>,
-    /// Remaining update budget. Decremented by each `on_change` / `update`
-    /// call; when it would go negative, the view flips to `Stale`.
-    remaining_budget: u64,
-    /// Originally-configured budget, stashed at construction so `rebuild`
-    /// restores the same cap rather than silently bumping to `u64::MAX`.
-    /// Uniform across all 5 views per mini-review g5-cr-3.
-    original_budget: u64,
-    /// Whether the view is currently stale.
-    stale: bool,
+    /// Shared `remaining/original/stale` state — see `crate::budget`
+    /// (r6-ref R-major-02). Every `on_change` / `apply_event` call
+    /// charges one unit; exhaustion flips the view stale and `rebuild`
+    /// restores the original cap (g5-cr-3).
+    budget: BudgetTracker,
 }
 
 /// Back-compat alias. Some tests / docs write `CapGrants` for brevity.
@@ -65,9 +61,7 @@ impl CapabilityGrantsView {
     pub fn new() -> Self {
         Self {
             by_entity: BTreeMap::new(),
-            remaining_budget: UNLIMITED_BUDGET,
-            original_budget: UNLIMITED_BUDGET,
-            stale: false,
+            budget: BudgetTracker::new(UNLIMITED_BUDGET),
         }
     }
 
@@ -87,9 +81,7 @@ impl CapabilityGrantsView {
     pub fn with_budget_for_testing(budget: u64) -> Self {
         Self {
             by_entity: BTreeMap::new(),
-            remaining_budget: budget,
-            original_budget: budget,
-            stale: false,
+            budget: BudgetTracker::new(budget),
         }
     }
 
@@ -97,14 +89,9 @@ impl CapabilityGrantsView {
     /// budget-exceeded test harness which exercises the `Node` shape rather
     /// than the `ChangeEvent` shape.
     pub fn on_change(&mut self, node: benten_core::Node) {
-        if self.stale {
+        if self.budget.try_consume(1, VIEW_ID).is_err() {
             return;
         }
-        if self.remaining_budget == 0 {
-            self.stale = true;
-            return;
-        }
-        self.remaining_budget -= 1;
 
         // Prefer the node's `grantee` property (Cid-valued) as entity key.
         // Fall back to the node's own CID when absent (identity-only path).
@@ -128,7 +115,7 @@ impl CapabilityGrantsView {
     /// Current runtime state.
     #[must_use]
     pub fn state(&self) -> ViewState {
-        if self.stale {
+        if self.budget.is_stale() {
             ViewState::Stale
         } else {
             ViewState::Fresh
@@ -139,10 +126,8 @@ impl CapabilityGrantsView {
     /// `entity`, in sorted order. Refuses with `ViewError::Stale` when the
     /// view is stale.
     pub fn read_for_entity(&self, entity: &Cid) -> Result<Vec<Cid>, ViewError> {
-        if self.stale {
-            return Err(ViewError::Stale {
-                view_id: VIEW_ID.to_string(),
-            });
+        if self.budget.is_stale() {
+            return Err(BudgetTracker::stale_error(VIEW_ID));
         }
         Ok(self
             .by_entity
@@ -155,16 +140,7 @@ impl CapabilityGrantsView {
     /// when the event is a no-op (wrong label) so the subscriber's per-event
     /// accounting stays simple.
     fn apply_event(&mut self, event: &ChangeEvent) -> Result<(), ViewError> {
-        if self.stale {
-            return Err(ViewError::Stale {
-                view_id: VIEW_ID.to_string(),
-            });
-        }
-        if self.remaining_budget == 0 {
-            self.stale = true;
-            return Err(ViewError::BudgetExceeded(VIEW_ID.to_string()));
-        }
-        self.remaining_budget -= 1;
+        self.budget.try_consume(1, VIEW_ID)?;
 
         // Edge path: GRANTED_TO edge wiring — source is grant, target is entity.
         if matches!(
@@ -266,10 +242,8 @@ impl View for CapabilityGrantsView {
     }
 
     fn read(&self, query: &ViewQuery) -> Result<ViewResult, ViewError> {
-        if self.stale {
-            return Err(ViewError::Stale {
-                view_id: VIEW_ID.to_string(),
-            });
+        if self.budget.is_stale() {
+            return Err(BudgetTracker::stale_error(VIEW_ID));
         }
         let cids = match &query.entity_cid {
             Some(entity) => self
@@ -288,8 +262,7 @@ impl View for CapabilityGrantsView {
         // budget that's tripped then rebuilt must accept up to the same
         // number of events again — see mini-review g5-cr-3.
         self.by_entity.clear();
-        self.remaining_budget = self.original_budget;
-        self.stale = false;
+        self.budget.rebuild();
         Ok(())
     }
 
@@ -298,11 +271,11 @@ impl View for CapabilityGrantsView {
     }
 
     fn is_stale(&self) -> bool {
-        self.stale
+        self.budget.is_stale()
     }
 
     fn mark_stale(&mut self) {
-        self.stale = true;
+        self.budget.mark_stale();
     }
 }
 

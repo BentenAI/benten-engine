@@ -32,7 +32,7 @@ use alloc::vec::Vec;
 use benten_core::{Cid, Value};
 use benten_graph::{ChangeEvent, ChangeKind};
 
-use crate::{View, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
+use crate::{BudgetTracker, View, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
 
 const VIEW_ID: &str = "event_dispatch";
 const UNLIMITED_BUDGET: u64 = u64::MAX;
@@ -51,10 +51,8 @@ pub struct EventDispatchView {
     /// Per-event-name dispatch set. The `""` key is the global bucket for
     /// identity-only legacy events (see module doc).
     by_event: BTreeMap<String, BTreeSet<Cid>>,
-    remaining_budget: u64,
-    /// Original budget for uniform `rebuild` restore (g5-cr-3).
-    original_budget: u64,
-    stale: bool,
+    /// Shared budget tracker — see `crate::budget` (r6-ref R-major-02).
+    budget: BudgetTracker,
 }
 
 impl EventDispatchView {
@@ -63,9 +61,7 @@ impl EventDispatchView {
     pub fn new() -> Self {
         Self {
             by_event: BTreeMap::new(),
-            remaining_budget: UNLIMITED_BUDGET,
-            original_budget: UNLIMITED_BUDGET,
-            stale: false,
+            budget: BudgetTracker::new(UNLIMITED_BUDGET),
         }
     }
 
@@ -83,22 +79,15 @@ impl EventDispatchView {
     pub fn with_budget_for_testing(budget: u64) -> Self {
         Self {
             by_event: BTreeMap::new(),
-            remaining_budget: budget,
-            original_budget: budget,
-            stale: false,
+            budget: BudgetTracker::new(budget),
         }
     }
 
     /// Ingest a node-level change directly. Counts against the budget.
     pub fn on_change(&mut self, node: benten_core::Node) {
-        if self.stale {
+        if self.budget.try_consume(1, VIEW_ID).is_err() {
             return;
         }
-        if self.remaining_budget == 0 {
-            self.stale = true;
-            return;
-        }
-        self.remaining_budget -= 1;
         let Ok(cid) = node.cid() else {
             return;
         };
@@ -110,7 +99,7 @@ impl EventDispatchView {
     /// Current runtime state.
     #[must_use]
     pub fn state(&self) -> ViewState {
-        if self.stale {
+        if self.budget.is_stale() {
             ViewState::Stale
         } else {
             ViewState::Fresh
@@ -121,10 +110,8 @@ impl EventDispatchView {
     /// `event`. When the event isn't partitioned (legacy harness), returns
     /// the global bucket.
     pub fn read_handlers_for_event(&self, event: &str) -> Result<Vec<Cid>, ViewError> {
-        if self.stale {
-            return Err(ViewError::Stale {
-                view_id: VIEW_ID.to_string(),
-            });
+        if self.budget.is_stale() {
+            return Err(BudgetTracker::stale_error(VIEW_ID));
         }
         let mut out: BTreeSet<Cid> = BTreeSet::new();
         if let Some(set) = self.by_event.get(event) {
@@ -137,16 +124,7 @@ impl EventDispatchView {
     }
 
     fn apply_event(&mut self, event: &ChangeEvent) -> Result<(), ViewError> {
-        if self.stale {
-            return Err(ViewError::Stale {
-                view_id: VIEW_ID.to_string(),
-            });
-        }
-        if self.remaining_budget == 0 {
-            self.stale = true;
-            return Err(ViewError::BudgetExceeded(VIEW_ID.to_string()));
-        }
-        self.remaining_budget -= 1;
+        self.budget.try_consume(1, VIEW_ID)?;
 
         // Edge path: SubscribesTo edges route into the global bucket for
         // Phase 1 — edge events don't carry a property payload.
@@ -217,7 +195,12 @@ impl EventDispatchView {
                 }
                 // Drop empty buckets.
                 self.by_event.retain(|_, v| !v.is_empty());
-                self.remaining_budget = self.remaining_budget.saturating_sub(extra_cost);
+                if extra_cost > 0 {
+                    // Best-effort: charge additional cost. If this trips the
+                    // tracker to stale, the caller path has already applied
+                    // the delete — the next update will surface the stale.
+                    let _ = self.budget.try_consume(extra_cost, VIEW_ID);
+                }
             }
             _ => {}
         }
@@ -252,10 +235,8 @@ impl View for EventDispatchView {
     }
 
     fn read(&self, query: &ViewQuery) -> Result<ViewResult, ViewError> {
-        if self.stale {
-            return Err(ViewError::Stale {
-                view_id: VIEW_ID.to_string(),
-            });
+        if self.budget.is_stale() {
+            return Err(BudgetTracker::stale_error(VIEW_ID));
         }
         let cids: Vec<Cid> = match &query.event_name {
             Some(name) => {
@@ -275,8 +256,7 @@ impl View for EventDispatchView {
 
     fn rebuild(&mut self) -> Result<(), ViewError> {
         self.by_event.clear();
-        self.remaining_budget = self.original_budget;
-        self.stale = false;
+        self.budget.rebuild();
         Ok(())
     }
 
@@ -285,11 +265,11 @@ impl View for EventDispatchView {
     }
 
     fn is_stale(&self) -> bool {
-        self.stale
+        self.budget.is_stale()
     }
 
     fn mark_stale(&mut self) {
-        self.stale = true;
+        self.budget.mark_stale();
     }
 }
 

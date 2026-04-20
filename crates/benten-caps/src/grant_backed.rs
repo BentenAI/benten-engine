@@ -38,7 +38,7 @@ use crate::policy::{CapabilityPolicy, PendingOp, ReadContext, WriteContext};
 /// Kept behind a trait so the policy does not take a direct dep on
 /// `benten-graph` (which would be a layering break — `benten-caps` is a
 /// lower-level crate than the orchestrator that composes the two). The
-/// engine implements this trait against its own [`benten_graph::RedbBackend`]
+/// engine implements this trait against its own `benten_graph::RedbBackend`
 /// and injects the handle at assembly time.
 pub trait GrantReader: Send + Sync {
     /// Does the backend contain at least one unrevoked
