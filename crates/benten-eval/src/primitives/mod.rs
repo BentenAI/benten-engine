@@ -10,13 +10,13 @@
 //! executor lands.
 //!
 //! The dispatcher is thin on purpose. Each per-primitive module exposes an
-//! `execute(op) -> Result<StepResult, EvalError>` function the evaluator
-//! calls; the primitives themselves are stateless and the Phase-1 test
-//! suite drives them with property-carried fixtures (see
-//! `tests/primitive_*.rs`). G7's engine layer will extend this with real
-//! backend access once the engine handle is stabilised; the Phase-1
-//! executors are deliberately pure over the `OperationNode` so the
-//! evaluator-scoped tests don't need an engine at all.
+//! `execute(op)` or `execute(op, host)` function the evaluator calls;
+//! primitives themselves are stateless and the Phase-1 test suite drives
+//! them with property-carried fixtures (see `tests/primitive_*.rs`). The
+//! engine layer (`benten-engine`) supplies a real `PrimitiveHost`
+//! implementation at call time; the Phase-1 unit-test suite uses
+//! [`NullHost`](crate::NullHost) so per-primitive tests don't need an
+//! engine at all.
 
 use crate::{EvalError, OperationNode, PrimitiveHost, PrimitiveKind, StepResult};
 
@@ -31,18 +31,21 @@ pub mod write;
 
 /// Dispatch a single primitive execution by kind.
 ///
+/// Dispatches to the per-primitive executor in this module; Phase-2
+/// primitives (`WAIT`, `STREAM`, `SUBSCRIBE`-as-user-op, `SANDBOX`) return
+/// [`EvalError::PrimitiveNotImplemented`] carrying the primitive kind so
+/// the test-time message remains precise.
+///
 /// The dispatcher's contract:
 ///
-/// - Phase-1 executable primitives owned by G6-A (`READ`, `WRITE`,
-///   `RESPOND`, `EMIT`) delegate to their per-primitive module.
-/// - Phase-1 executable primitives owned by G6-B (`TRANSFORM`, `BRANCH`,
-///   `ITERATE`, `CALL`) are dispatched by G6-B; today this module calls the
-///   evaluator back via the unimplemented arms so `cargo check` passes in
-///   parallel commits. G6-B replaces the unimplemented arms with real
-///   executors.
-/// - Phase-2 primitives (`WAIT`, `STREAM`, `SUBSCRIBE`, `SANDBOX`) return
-///   [`EvalError::PrimitiveNotImplemented`] carrying the primitive kind so
-///   the test-time message remains precise.
+/// - Phase-1 executable primitives (`READ`, `WRITE`, `RESPOND`, `EMIT`,
+///   `TRANSFORM`, `BRANCH`, `ITERATE`, `CALL`) each resolve to a real
+///   executor in the matching submodule.
+/// - Phase-2 primitives (`WAIT`, `STREAM`, `SUBSCRIBE`, `SANDBOX`) pass
+///   structural validation (so Phase-1 and Phase-2 subgraphs are binary-
+///   compatible and round-trip through storage) but return
+///   [`EvalError::PrimitiveNotImplemented`] when the evaluator reaches
+///   them at call time.
 ///
 /// # Errors
 ///
@@ -55,7 +58,6 @@ pub fn dispatch(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResu
         PrimitiveKind::Write => write::execute(op, host),
         PrimitiveKind::Respond => respond::execute(op),
         PrimitiveKind::Emit => emit::execute(op, host),
-        // G6-B scope — TRANSFORM, BRANCH, ITERATE, CALL.
         PrimitiveKind::Transform => transform::execute(op),
         PrimitiveKind::Branch => branch::execute(op),
         PrimitiveKind::Iterate => iterate::execute(op, host),

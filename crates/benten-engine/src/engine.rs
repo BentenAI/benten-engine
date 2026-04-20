@@ -570,15 +570,20 @@ impl Engine {
     /// Register the zero-config `crud('<label>')` handler set. Returns a
     /// stable handler id derived from the label.
     ///
-    /// **Phase 1 scope**: the registration registers the handler id and
-    /// stores a minimal subgraph shape. Primitive-dispatch execution via
-    /// `call` is deferred to Phase 2 — `engine.call(&id, ...)` currently
-    /// returns `EngineError::NotImplemented`.
+    /// The stored handler is a minimal `READ → RESPOND` subgraph whose CID
+    /// identifies the *handler family*. At [`Engine::call`] time the
+    /// dispatcher synthesises a per-op Subgraph (five arms:
+    /// `<label>:create`, `<label>:get`, `<label>:list`, `<label>:update`,
+    /// `<label>:delete`) and walks it end-to-end through
+    /// [`benten_eval::Evaluator::run_with_trace`] with `self as &dyn
+    /// PrimitiveHost` as the backend/capability surface. Compromise #8
+    /// (CRUD fast-path bypass) is CLOSED — `Engine::call` is the sole
+    /// dispatch path and no handler arm short-circuits the evaluator.
     ///
     /// See the arch-10 module doc for the "registered CID vs walked CID"
-    /// discussion — the CID stored under `handler_id` encodes only the
-    /// zero-config READ → RESPOND shape, not the per-op `(create, list,
-    /// get, update, delete)` shapes the walker materialises at call-time.
+    /// distinction — the CID stored under `handler_id` encodes only the
+    /// zero-config READ → RESPOND shape, not the per-op CRUD shapes the
+    /// walker materialises at call-time.
     pub fn register_crud(&self, label: &str) -> Result<String, EngineError> {
         // Build a minimal multi-primitive subgraph with the label baked in
         // so the content-addressed handler id varies per label.
@@ -640,18 +645,19 @@ impl Engine {
 
     /// Call a registered handler with an op name and input.
     ///
-    /// Phase-1 dispatch is a focused composition — CRUD ops (`<label>:create`,
-    /// `<label>:list`, `<label>:get`) dispatch directly against the backend
-    /// within a transaction so the capability hook, change-event emission,
-    /// and system-zone guard all fire through the single commit path. Other
-    /// registered SubgraphSpec handlers run their WriteSpec primitive list
-    /// inside one transaction and surface `E_TX_ABORTED` when any WRITE has
-    /// `test_inject_failure(true)`.
+    /// Dispatch walks the handler's Subgraph end-to-end through
+    /// [`benten_eval::Evaluator::run_with_trace`] with the Engine itself
+    /// acting as the [`PrimitiveHost`]. CRUD handlers synthesise a per-op
+    /// shape (`<label>:{create,get,list,update,delete}`); SubgraphSpec
+    /// handlers walk their recorded primitive list. Buffered host-side
+    /// WRITE / DELETE ops from the walk are replayed atomically inside a
+    /// single transaction so the capability hook, change-event emission,
+    /// IVM update, and system-zone guard all fire at one commit boundary;
+    /// any WRITE flagged with `test_inject_failure(true)` surfaces
+    /// `E_TX_ABORTED`.
     ///
-    /// The walker that executes arbitrary primitive subgraphs end-to-end
-    /// (TRANSFORM expression evaluation, BRANCH edge routing, ITERATE budget
-    /// composition) lands in a future group — the Phase-1 call() is limited
-    /// to the shapes Phase-1 registration actually produces.
+    /// Closes Compromise #8: the evaluator is the sole dispatch path. No
+    /// handler arm short-circuits the walker.
     pub fn call<I>(&self, handler_id: &str, op: &str, input: I) -> Result<Outcome, EngineError>
     where
         I: IntoCallInput,
@@ -686,14 +692,14 @@ impl Engine {
 
     /// Return a per-step trace of the evaluation.
     ///
-    /// Phase-1 synthesizes one step per primitive the dispatched op is
-    /// known to route through (e.g. CRUD `create` = WRITE + RESPOND;
-    /// CRUD `list` = READ + RESPOND; CRUD `get` = READ + RESPOND;
-    /// CRUD `delete` = WRITE + RESPOND). The terminal `Outcome` is
-    /// attached to the Trace via [`Trace::outcome`] so callers don't
-    /// need to re-invoke `Engine::call` just to recover the result
-    /// (avoids the Phase-1 write-amplification footgun). Phase 2
-    /// replaces the step synthesis with live evaluator instrumentation.
+    /// Delegates to [`benten_eval::Evaluator::run_with_trace`], so every
+    /// returned step is a real per-primitive record with a distinct
+    /// `node_cid` (derived from the handler-scoped OperationNode id, not
+    /// from the outcome's created CID) and a per-step duration sampled
+    /// around the primitive executor. The terminal `Outcome` is attached
+    /// to the Trace via [`Trace::outcome`] so callers don't need to
+    /// re-invoke `Engine::call` just to recover the result (avoids the
+    /// write-amplification footgun).
     ///
     /// # Side-effect-free (r6-dx-C4)
     ///

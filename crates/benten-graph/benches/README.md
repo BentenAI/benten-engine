@@ -1,8 +1,9 @@
 # `benten-graph` benchmark suite
 
 Four criterion 0.8 benches covering the storage layer's hot paths. Their
-purpose, gate policy, and the Phase-1 compromises shaping each one are
-documented here; read this before tweaking numbers or retargeting CI gates.
+purpose, gate policy, and the Phase-1 storage-layer characteristics
+shaping each one are documented here; read this before tweaking numbers
+or retargeting CI gates.
 
 ## Quick reference
 
@@ -94,12 +95,16 @@ bench surfaces the measured number honestly — it does not adjust the
 window to pass. **Informational-not-gated** until the Group collapse is
 resolved in Phase 2.
 
-### Phase-1 compromises (this bench specifically)
+### Phase-1 storage-layer characteristics (this bench specifically)
 
-1. **Group collapses to Immediate.** Documented in
+1. **Group collapses to Immediate.** `redb` v4 exposes only
+   `Durability::Immediate` / `Durability::None`; there is no grouped-
+   commit path to call. Documented in
    `RedbBackend::open_or_create_with_durability` and re-surfaced as a
    one-shot stderr warning. The enum variant is preserved so consumers
-   don't face a semver break when Phase 2 wires real grouped commit.
+   don't face a semver break when Phase 2 wires real grouped commit
+   (pending upstream `redb` support). This is a platform / storage
+   characteristic, not a named compromise.
 2. **No separate fsync-latency histogram.** We measure
    total-commit-latency, not the fsync component in isolation. Peeling
    those apart requires `fstrace`/`strace`/equivalent and is a Phase 2
@@ -108,6 +113,12 @@ resolved in Phase 2.
    sustained measurement; the bench defaults to 2 s so CI wall-clock
    stays bounded. Pass `cargo bench -p benten-graph --bench
    durability_modes -- --measurement-time 5` for the on-spec window.
+4. **macOS APFS fsync floor.** On the reference dev machine, a single
+   `Immediate` commit fsync lands ~4–13ms regardless of payload size;
+   the 150–300µs headline in ENGINE-SPEC §14.6 is not reachable for
+   write-bearing workloads on Phase-1 macOS hardware. This is a
+   platform characteristic surfaced honestly by the bench, not a
+   regression.
 
 ## `concurrent_writers`
 

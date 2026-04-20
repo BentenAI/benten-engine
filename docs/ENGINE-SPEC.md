@@ -437,6 +437,24 @@ The performance critic identified that several targets were aspirational and the
 | Concurrent writers (per community/instance) | 100-1000 writes/sec | redb single-writer serialization is a hard ceiling. Multi-tenant shared-replica scenarios hit this. Benchmark explicitly during spike. |
 | SANDBOX instantiation | 100us-1ms per call | wasmtime module instantiate + fuel meter setup dominates. Requires instance pool in Phase 2 to avoid 5-50x target miss on SANDBOX-heavy handlers. |
 
+**macOS APFS fsync-floor caveat (Phase-1, reference dev environment):**
+
+The "Node creation + IVM update" and "10-node handler evaluation" targets
+above assume grouped or async commit, or an SSD whose fsync-per-commit
+lands in the tens-of-microseconds range. On macOS APFS — the reference
+dev environment for the Phase-1 build — a single `redb` `Immediate`-
+durability commit fsyncs the journal on every call, and the measured
+floor is ~4–13ms per write-bearing handler invocation, independent of
+evaluator overhead. This is a platform / storage characteristic, not an
+engine regression; `redb` v4 exposes only `Durability::Immediate` /
+`Durability::None`, so Phase 1 has no grouped-commit amortization path.
+The tracking artifact lives in `.addl/phase-1/r4-triage.md` §4.4 and in
+`crates/benten-graph/benches/README.md` / `crates/benten-eval/benches/
+ten_node_handler.rs`. Phase 2 adds grouped / async durability wiring
+when `redb` grows the surface; at that point the headline 150–300µs
+target becomes reachable for write-bearing handlers and these benches
+become the regression signal that amortization is delivering a win.
+
 **What Rust DOES fix vs what it does NOT:**
 
 - **Rust fixes:** V8 sort overhead (Content Listing Algorithm C), GC pauses, Z-set creation costs, TypeScript iteration loops. Real gains of 10-100x on these patterns.

@@ -15,11 +15,13 @@
 //! On macOS APFS (the reference dev environment for the Phase-1 build),
 //! a single `redb` `Immediate`-durability commit fsyncs the journal on
 //! every call — the measured floor is ~4ms per write-bearing handler
-//! invocation, independent of evaluator overhead. Compromise #7
-//! (Group-collapses-to-Immediate, see `.addl/phase-1/r4-triage.md`) is
-//! the canonical tracker for this ceiling; the 10-node handler target
-//! of 150-300µs is NOT reachable in Phase 1 on macOS dev hardware when
-//! the handler includes a WRITE that must fsync. The evaluator layer
+//! invocation, independent of evaluator overhead. `redb` v4 exposes only
+//! `Durability::Immediate` / `Durability::None`, so Phase 1 has no
+//! grouped-commit amortization path (tracker: `.addl/phase-1/
+//! r4-triage.md` §4.4, ENGINE-SPEC §14.6 macOS caveat). The 10-node
+//! handler target of 150-300µs is NOT reachable in Phase 1 on macOS dev
+//! hardware when the handler includes a WRITE that must fsync. The
+//! evaluator layer
 //! itself (subgraph build + walk + primitive dispatch, no redb commit)
 //! is measured by the `build_only` / `list_dispatch_no_write` sub-
 //! benches below and DOES land in the sub-100µs range.

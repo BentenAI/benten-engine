@@ -114,9 +114,21 @@ pub trait PrimitiveHost: Send + Sync {
     /// returns `()` — EMIT never fails the evaluator.
     fn emit_event(&self, name: &str, payload: Value);
 
-    /// READ / WRITE gate: capability check against the configured policy.
-    /// Called on every primitive whose registered `requires:` declaration
-    /// names a scope. Typed errors surface via [`EvalError::Capability`].
+    /// Capability re-check hook used by ITERATE and CALL.
+    ///
+    /// Called by ITERATE at iteration 0 and every
+    /// [`PrimitiveHost::iterate_batch_boundary`] iterations (named
+    /// compromise #1), and by CALL at entry before sibling-handler
+    /// dispatch. These are the TOCTOU-refresh points the evaluator
+    /// owns.
+    ///
+    /// READ / WRITE primitive enforcement does NOT route through this
+    /// method — their capability gate runs at the transaction-commit
+    /// boundary inside `benten-engine`, which calls
+    /// `CapabilityPolicy::check_write` / `check_read` against the full
+    /// pending-ops batch. This method only exists for the evaluator-
+    /// scoped refresh points where there is no transaction to anchor
+    /// the check on.
     ///
     /// # Errors
     /// Returns [`EvalError::Capability`] when the configured policy denies.
