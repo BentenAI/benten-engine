@@ -1,8 +1,15 @@
 # R4 triage (m14) — standalone MSRV workflow.
 #
-# Phase 1 MSRV is 1.85 (pinned in `rust-toolchain.toml`). CI runs the main
-# workflow on stable; this workflow runs separately on MSRV to catch
-# accidental use of newer language features before they reach a user.
+# CI runs the main workflow on stable; this workflow runs separately on MSRV
+# to catch accidental use of newer language features before they reach a user.
+#
+# Effective MSRV is 1.89 as of Phase 2a: redb 4.0.0 (graph backend,
+# non-optional) declares `rust-version = "1.89"`, so 1.85 cannot build the
+# workspace via `--locked` even though `workspace.package.rust-version` in
+# the root Cargo.toml still reads "1.85". Matching the workspace declaration
+# to the actual floor is a source-side change tracked separately (not in
+# this infrastructure-only patch); until then this workflow pins 1.89 so
+# the MSRV gate reflects what actually compiles.
 #
 # Also verifies the canonical fixture CID remains stable at MSRV — the cheap
 # determinism gate from SPIKE-phase-1-stack-RESULTS.md.
@@ -17,23 +24,23 @@ on:
 
 jobs:
   build-and-fixture-check:
-    name: cargo build --workspace --locked @1.85
+    name: cargo build --workspace --locked @1.89
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
 
       - name: Install MSRV toolchain
         run: |
-          rustup toolchain install 1.85 --profile minimal
-          rustup default 1.85
+          rustup toolchain install 1.89 --profile minimal
+          rustup default 1.89
 
       - name: Build workspace
-        run: cargo +1.85 build --workspace --locked
+        run: cargo +1.89 build --workspace --locked
 
       - name: Fixture-match check (canonical CID)
         run: |
           # The canonical fixture CID must remain stable across Rust versions.
           # If MSRV drift changes the encoding path, this catches it before
           # merge.
-          cargo +1.85 test --workspace --locked --no-fail-fast -- \
+          cargo +1.89 test --workspace --locked --no-fail-fast -- \
             exit_6_canonical_cid_matches_spike_fixture
