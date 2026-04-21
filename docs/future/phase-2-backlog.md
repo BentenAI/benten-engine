@@ -141,9 +141,9 @@ Phase 1 closed this in commit `9b67fc5`: `Cid::from_bytes` now distinguishes cod
 
 Phase 1 ships the `npm test` path (mechanically verifiable). Dev-server with hot reload is Phase 2. See `.addl/phase-1/00-implementation-plan.md` §1 and `ENGINE-SPEC.md` Rank 10.
 
-### 8.2 CLAUDE.md → ENGINE-SPEC numeric-claim drift lint
+### 8.2 Cross-doc numeric-claim drift lint
 
-`spec-to-code-compliance-audit.md` §6.3 flagged that CLAUDE.md's performance targets have drifted from ENGINE-SPEC §14.6 three times. A small CI lint that greps CLAUDE.md for numeric performance claims and compares them against ENGINE-SPEC ranges would close the loop. Low priority — the `docs/DEVELOPMENT-METHODOLOGY.md` Pattern 5 (Verify, don't trust docs) review discipline catches most occurrences.
+Phase-1 audit surfaced that performance targets occasionally drift between summary locations and `ENGINE-SPEC.md` §14.6 (the canonical source). A small CI lint that greps `docs/*.md` for numeric performance claims and compares them against ENGINE-SPEC ranges would close the loop. Low priority — the "verify, don't trust docs" review discipline catches most occurrences.
 
 ### 8.3 Per-item `missing_docs` sweep
 

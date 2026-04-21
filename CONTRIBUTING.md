@@ -116,7 +116,7 @@ in the same file under any runner.
 
 ## Naming Conventions
 
-- **`UPPERCASE-KEBAB.md`** — canonical specifications and contracts (VISION, ARCHITECTURE, ENGINE-SPEC, CLAUDE, README, CONTRIBUTING, GLOSSARY, DECISION-LOG).
+- **`UPPERCASE-KEBAB.md`** — canonical specifications and contracts (VISION, ARCHITECTURE, ENGINE-SPEC, README, CONTRIBUTING, GLOSSARY, DECISION-LOG).
 - **`lowercase-kebab.md`** — research, exploration, critique, validation artifacts.
 - **Rust:** `snake_case` for modules/functions, `UpperCamelCase` for types.
 - **TypeScript:** `camelCase` for values/functions, `UpperCamelCase` for types/classes.

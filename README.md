@@ -92,18 +92,18 @@ Everything beyond Phase 8 (full Groves, federation, general compute marketplace,
 ```
 benten-engine/
 ├── crates/          # Rust workspace crates (7 at Phase 1 close: benten-errors, benten-core, benten-graph, benten-ivm, benten-caps, benten-eval, benten-engine)
-├── bindings/        # napi-rs, wasm, python bindings
+├── bindings/        # napi-rs bindings (native + WASM target via napi-rs v3)
+├── packages/        # TypeScript DSL wrapper (@benten/engine)
+├── tools/           # create-benten-app scaffolder + dev tooling
 ├── tests/           # Cross-crate integration tests and benchmarks
 ├── docs/
 │   ├── VISION, ARCHITECTURE, ENGINE-SPEC, PLATFORM-DESIGN, BUSINESS-PLAN,
 │   │   DSL-SPECIFICATION, FULL-ROADMAP, QUICKSTART, ERROR-CATALOG,
-│   │   DEVELOPMENT-METHODOLOGY, PROJECT-HISTORY, GLOSSARY
-│   ├── future/      # Exploratory proposals not in committed scope
-│   ├── research/    # Active explorations
-│   ├── validation/  # Empirical artifacts (paper prototype, IVM benchmark)
-│   └── archive/     # Historical critiques, reviews, superseded specs
+│   │   SECURITY-POSTURE, TRANSFORM-GRAMMAR, GLOSSARY
+│   └── future/      # Exploratory proposals not in committed scope
+├── scripts/         # Codegen + drift-detect tooling
+├── .github/         # 13 CI workflows (determinism, wasm, supply-chain, fuzz, mutants, …)
 ├── Cargo.toml       # Workspace root
-├── CLAUDE.md        # AI dev instructions
 ├── CONTRIBUTING.md
 └── README.md        # This file
 ```

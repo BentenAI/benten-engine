@@ -52,7 +52,7 @@ fn ucan_stub_error_message_names_phase_and_alternative() {
     let err = backend.check_write(&ctx).unwrap_err();
     let msg = err.to_string();
 
-    // Phase 3 is the scheduled landing phase for UCAN per `CLAUDE.md` +
+    // Phase 3 is the scheduled landing phase for UCAN per
     // `docs/FULL-ROADMAP.md`. Operators scanning the message must see it.
     assert!(
         msg.contains("Phase 3"),

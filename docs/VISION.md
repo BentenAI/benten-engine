@@ -154,8 +154,5 @@ A world where every person runs their own AI assistant that organizes their life
 | The 8-phase committed plan | [`FULL-ROADMAP.md`](FULL-ROADMAP.md) |
 | Error codes and fixes | [`ERROR-CATALOG.md`](ERROR-CATALOG.md) |
 | Exploratory / future scope | [`future/`](future/) |
-| Active research feeding future decisions | [`research/`](research/) |
 | Glossary of Benten-specific terms | [`GLOSSARY.md`](GLOSSARY.md) |
-| The process for building this | [`DEVELOPMENT-METHODOLOGY.md`](DEVELOPMENT-METHODOLOGY.md) |
 | How to contribute | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) |
-| AI dev instructions | [`../CLAUDE.md`](../CLAUDE.md) |

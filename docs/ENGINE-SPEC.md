@@ -353,7 +353,7 @@ File storage and DDL are the least natural fits. Modules that depend heavily on 
 
 ### Phase 1: Core Engine ("tight middle" scope, reconciled 2026-04-14)
 
-Scope reconciled with CLAUDE.md "Phase 1 Scope" and `FULL-ROADMAP.md` Phase 1 to a single coherent shape. Phase 1 ships everything Phase 1's exit criteria (`crud('post')` + audit-trail viz) actually exercises, plus the primitives and invariants needed to prove the architectural thesis. WAIT / STREAM / SUBSCRIBE-as-user-op / SANDBOX and the remaining invariants ship in Phase 2 alongside evaluator completion.
+Scope reconciled with `FULL-ROADMAP.md` Phase 1 to a single coherent shape. Phase 1 ships everything Phase 1's exit criteria (`crud('post')` + audit-trail viz) actually exercises, plus the primitives and invariants needed to prove the architectural thesis. WAIT / STREAM / SUBSCRIBE-as-user-op / SANDBOX and the remaining invariants ship in Phase 2 alongside evaluator completion.
 
 - **benten-core**: Node, Edge, Value, content hashing (BLAKE3 + DAG-CBOR + CIDv1), version chain primitives (opt-in)
 - **benten-graph**: storage via `KVBackend` trait (redb v4 impl), indexes, MVCC via redb snapshot isolation, change-notification stream that IVM subscribes to

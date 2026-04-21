@@ -42,3 +42,15 @@ perf.data*
 *.pem
 *.key
 secrets/
+
+# Local-only dev infrastructure + internal methodology artifacts
+# (kept on disk for the maintainer's reference; not shipped in the public repo)
+.claude/
+CLAUDE.md
+.addl/
+docs/archive/
+docs/research/
+docs/validation/
+docs/DEVELOPMENT-METHODOLOGY.md
+docs/PROJECT-HISTORY.md
+SPIKE-phase-1-stack-RESULTS.md

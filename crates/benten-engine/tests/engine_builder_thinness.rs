@@ -2,12 +2,12 @@
 //! `NoAuthBackend` + `without_ivm()` + `without_versioning()` must still
 //! produce a usable graph database.
 //!
-//! Per CLAUDE.md "The thinness test": A developer should be able to use
-//! benten-core + benten-graph + benten-engine with NoAuthBackend, versioning
-//! disabled, and no IVM subscribers — and get a pure content-addressed graph
-//! database with no Benten-specific conventions. If that configuration
-//! requires anything from benten-eval, benten-ivm, or benten-caps, the
-//! engine is too thick.
+//! Per `docs/ARCHITECTURE.md` "The Thinness Test": A developer should be able
+//! to use benten-core + benten-graph + benten-engine with NoAuthBackend,
+//! versioning disabled, and no IVM subscribers — and get a pure content-
+//! addressed graph database with no Benten-specific conventions. If that
+//! configuration requires anything from benten-eval, benten-ivm, or
+//! benten-caps, the engine is too thick.
 //!
 //! This is the edge-case pair: `without_ivm().without_caps().without_versioning()`
 //! is the *thinnest* configuration. It must still create/read Nodes, create/read
@@ -30,7 +30,7 @@ use tempfile::tempdir;
 fn thinness_no_ivm_no_caps_no_versioning_still_works() {
     // The thinnest-viable Engine: NoAuth + no IVM + no versioning.
     // Must still support content-addressed Node create/read — the
-    // "pure CID KV store" use case documented in CLAUDE.md.
+    // "pure CID KV store" use case per `docs/ARCHITECTURE.md`.
     let dir = tempdir().unwrap();
     let engine = benten_engine::Engine::builder()
         .path(dir.path().join("thin.redb"))
