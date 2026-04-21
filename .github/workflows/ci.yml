@@ -56,7 +56,7 @@ jobs:
           - { os: ubuntu-24.04-arm, leg: linux-arm64,   target: aarch64-unknown-linux-gnu,  rust: stable   }
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -133,7 +133,7 @@ jobs:
     name: wasm32 (wasip1 runtime + unknown-unknown compile)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -179,7 +179,7 @@ jobs:
     needs: [build-and-test, wasm-runtime]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Download all CID artifacts
         uses: actions/download-artifact@v4
@@ -250,7 +250,7 @@ jobs:
     name: supply-chain (cargo-audit + cargo-deny)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -275,7 +275,7 @@ jobs:
     name: error-catalog drift detector (T7)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -319,7 +319,7 @@ jobs:
     # dependency can be dropped for a truly cold install path.
     needs: [build-and-test]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Install Node.js
         uses: actions/setup-node@v4

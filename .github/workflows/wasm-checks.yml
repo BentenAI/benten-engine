@@ -28,7 +28,7 @@ jobs:
     name: T8 benten-napi wasm32-unknown-unknown
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain (stable + wasm32-unknown-unknown)
         uses: dtolnay/rust-toolchain@stable
