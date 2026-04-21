@@ -91,287 +91,238 @@ The ordering matches [`ENGINE-SPEC.md`](ENGINE-SPEC.md) §3. Primitives marked *
 
 ---
 
-### 2.1 `read(target, options?)`
+### 2.1 `read(args)`
 
-Retrieve data from the graph. The `target` is either a Node label (for queries) or a Node ID (for single lookups).
+Retrieve data from the graph: a single Node by CID / property lookup, or a query against an IVM-backed view.
 
 ```typescript
-function read(target: string, options?: ReadOptions): ReadStep;
+function read(args: ReadArgs): { primitive: 'read'; args: ReadArgs };
 
-interface ReadOptions {
-  /** Single node by ID. If set, returns one Node or triggers onNotFound. */
-  id?: string | Expression;
-  /** Lookup by a unique field instead of ID. */
-  lookup?: { field: string; value: string | Expression };
-  /** Filter conditions for queries (when no id/lookup). */
-  where?: Record<string, any> | Expression;
-  /** Sort order. */
-  orderBy?: Record<string, 'asc' | 'desc'>;
-  /** Maximum results. */
-  limit?: number | Expression;
-  /** Skip N results. */
-  offset?: number | Expression;
-  /** Project specific fields (default: all). */
-  fields?: string[];
-  /** Alias for the result in the pipeline context. Default: `$result`. */
+interface ReadArgs {
+  /** Label to read from. */
+  label: string;
+  /** Lookup key (`"id"` / `"cid"` / a property name). */
+  by?: string;
+  /** Literal value to filter on (when `by` is set). */
+  value?: JsonValue;
+  /** Bind the READ result under this key on `$result`. */
   as?: string;
 }
 ```
 
-**Implied mode:** When `id` or `lookup` is provided, the engine uses single-node lookup (O(1) via IVM). Otherwise it uses a query.
+**Implied mode.** When `by` + `value` identify a single record (e.g. `by: 'cid'`), the engine uses a single-node lookup (O(1) via IVM). Omitting `by` (or passing a view key such as `'_listView'`) returns a list from the matching IVM view.
 
-**Error edges:**
+**Error edges (typed):**
 
-| Method | Edge Type | When |
-|--------|-----------|------|
-| `.onNotFound(handler)` | `ON_NOT_FOUND` | Single lookup returns null |
-| `.onEmpty(handler)` | `ON_EMPTY` | Query returns zero results |
+| Edge Type | When |
+|-----------|------|
+| `ON_NOT_FOUND` | Single lookup resolved to no Node |
+| `ON_EMPTY` | Query/view returned zero results |
+| `ON_DENIED` | Capability policy rejected the read |
 
 **Examples:**
 
 ```typescript
-// Single node by ID
-read('post', { id: '$input.id' })
+// Single node by CID
+read({ label: 'post', by: 'cid', value: '$input.cid' })
 
-// Lookup by unique field
-read('post', { lookup: { field: 'slug', value: '$input.slug' } })
+// Lookup by unique property
+read({ label: 'post', by: 'slug', value: '$input.slug' })
 
-// Query with filters
-read('post', {
-  where: { published: true, authorId: '$ctx.user.id' },
-  orderBy: { createdAt: 'desc' },
-  limit: 20,
-})
+// IVM list view
+read({ label: 'post', by: '_listView' })
 
-// With error handling
-read('post', { id: '$input.id' })
-  .onNotFound(respond(404, { error: 'Post not found' }))
+// Routing a not-found result to a 404 RESPOND
+subgraph('get-post')
+  .read({ label: 'post', by: 'cid', value: '$input.cid' })
+  .respond({ body: '$result' })
+  .respond({ edge: 'ON_NOT_FOUND', status: 404, body: '{ error: "not found" }' })
+  .build();
 ```
 
 ---
 
-### 2.2 `write(target, options)`
+### 2.2 `write(args)`
 
-Create, update, or delete data in the graph.
+Create or update a Node. Writes are content-addressed: the returned `$result.cid` is the CID of the persisted Node.
 
 ```typescript
-function write(target: string, options: WriteOptions): WriteStep;
+function write(args: WriteArgs): { primitive: 'write'; args: WriteArgs };
 
-interface WriteOptions {
-  /** Mutation type. Default: 'create'. */
-  action?: 'create' | 'update' | 'delete' | 'upsert';
-  /** Node ID for update/delete. */
-  id?: string | Expression;
-  /** Data to write. Expressions allowed in values. */
-  data?: Record<string, any> | Expression;
-  /** Expected version for optimistic locking (update). */
-  version?: number | Expression;
-  /** Alias for the result. Default: `$result`. */
-  as?: string;
+interface WriteArgs {
+  /** Label for the Node being written. */
+  label: string;
+  /** Properties to write. Expressions (e.g. '$input.title') resolve at evaluation time. */
+  properties?: Record<string, JsonValue>;
+  /** Optional `requires` capability (gates the WRITE at commit under a capability policy). */
+  requires?: string;
 }
 ```
 
-**Error edges:**
+Deletes are modeled as a tombstone write (`properties.tombstone = true`); see the `crud()` delete case in §4.3. Optimistic-lock semantics use the CID as the version discriminator: supplying `properties.cid` causes the evaluator to CAS against the existing Node's CID and emit `ON_CONFLICT` if they differ.
 
-| Method | Edge Type | When |
-|--------|-----------|------|
-| `.onConflict(handler)` | `ON_CONFLICT` | Version mismatch on update |
-| `.onNotFound(handler)` | `ON_NOT_FOUND` | Target does not exist for update/delete |
+**Error edges (typed):**
+
+| Edge Type | When |
+|-----------|------|
+| `ON_CONFLICT` | CAS failure (cid / tombstone mismatch) |
+| `ON_DENIED` | `requires` property rejected by the policy |
 
 **Examples:**
 
 ```typescript
 // Create
-write('post', {
-  data: {
-    title: '$input.title',
-    slug: '$input.slug',
-    status: 'draft',
-    createdAt: 'now()',
-    updatedAt: 'now()',
-  },
+write({ label: 'post', properties: { title: '$input.title', status: 'draft' }, requires: 'store:write:post/*' })
+
+// Update with CAS
+write({
+  label: 'post',
+  properties: { cid: '$input.cid', title: '$input.title', updatedAt: 'now()' },
+  requires: 'store:write:post/*',
 })
 
-// Update with optimistic locking
-write('post', {
-  action: 'update',
-  id: '$input.id',
-  data: { title: '$input.title', updatedAt: 'now()' },
-  version: '$input.version',
-}).onConflict(respond(409, { error: 'Version conflict. Reload and retry.' }))
-
-// Delete
-write('post', { action: 'delete', id: '$input.id' })
-  .onNotFound(respond(404, { error: 'Post not found' }))
+// Tombstone (soft delete)
+write({ label: 'post', properties: { cid: '$input.cid', tombstone: true }, requires: 'store:write:post/*' })
 ```
 
 ---
 
-### 2.3 `transform(expression)`
+### 2.3 `transform(args)`
 
 Pure data reshaping. No I/O, no graph access. Uses the TRANSFORM expression language (Section 5).
 
 ```typescript
-function transform(expression: Expression | Record<string, Expression>): TransformStep;
-function transform(expression: Expression | Record<string, Expression>, options?: TransformOptions): TransformStep;
+function transform(args: TransformArgs): { primitive: 'transform'; args: TransformArgs };
 
-interface TransformOptions {
-  /** Merge output into existing context (true) or replace (false). Default: false. */
-  merge?: boolean;
-  /** Alias for the result. Default: `$result`. */
+interface TransformArgs {
+  /**
+   * TRANSFORM expression source (a subset of JS per
+   * `docs/TRANSFORM-GRAMMAR.md`). Parsed at registration.
+   */
+  expr: string;
+  /** Where to bind the result on `$result`. Defaults to replacing `$result`. */
   as?: string;
 }
 ```
 
-**Two forms:**
+**Two common forms** (both use the single `expr` string):
 
 ```typescript
 // Object construction -- the common case
-transform({
-  id: '$result.id',
-  title: '$result.title',
-  summary: 'truncate($result.content, 200)',
-  date: 'formatDate($result.createdAt, "YYYY-MM-DD")',
-})
+transform({ expr: '{ id: $result.id, title: $result.title, summary: truncate($result.content, 200) }' })
 
-// Single expression
-transform('$result.items | filter(i => i.active) | map(i => i.name)')
+// Piped expression
+transform({ expr: 'filter($result.items, i => i.active) | map(i => i.name)' })
 ```
 
 ---
 
-### 2.4 `branch(conditions)`
+### 2.4 `branch(args)`
 
-Route execution to one of several paths based on conditions.
+Open a BRANCH Node switching on `args.on`. Case bodies are added via the `BranchBuilder.case(value, body)` chain from §3.3.
 
 ```typescript
-function branch(conditions: BranchCondition[]): BranchStep;
-function branch(condition: Expression): BranchStep; // shorthand: 2-way boolean
+function branch(args: BranchArgs): { primitive: 'branch'; args: BranchArgs };
 
-interface BranchCondition {
-  /** Boolean expression to evaluate. */
-  when: Expression;
-  /** The step(s) to execute if this condition is true. */
-  then: Step | Step[];
+interface BranchArgs {
+  /** Expression over `$result` / `$input` to switch on. */
+  on: string;
 }
 ```
-
-**Methods:**
-
-| Method | Purpose |
-|--------|---------|
-| `.when(expr, ...steps)` | Add a conditional branch (alternative to constructor array) |
-| `.otherwise(...steps)` | Default path when no condition matches |
 
 **Examples:**
 
 ```typescript
-// Boolean shorthand (2-way)
-branch('$result != null')
+// Boolean predicate (2-way)
+subgraph('publish')
+  .branch({ on: '$result != null' })
+    .case('true',  s => s.respond({ body: '$result' }))
+    .case('false', s => s.respond({ status: 404, body: '{ error: "not found" }' }))
+  .endBranch()
+  .build();
 
-// Multi-way
-branch([
-  { when: '$input.method === "stripe"', then: call('commerce/charge-stripe') },
-  { when: '$input.method === "paypal"', then: call('commerce/charge-paypal') },
-]).otherwise(respond(400, { error: 'Unsupported payment method' }))
-
-// Fluent multi-way (equivalent)
-branch()
-  .when('$input.method === "stripe"', call('commerce/charge-stripe'))
-  .when('$input.method === "paypal"', call('commerce/charge-paypal'))
-  .otherwise(respond(400, { error: 'Unsupported payment method' }))
+// Multi-way dispatch (used by crud() internally)
+subgraph('payments')
+  .branch({ on: '$input.method' })
+    .case('stripe', s => s.call({ handler: 'payment/charge-stripe' }).respond({ body: '$result' }))
+    .case('paypal', s => s.call({ handler: 'payment/charge-paypal' }).respond({ body: '$result' }))
+  .endBranch()
+  .build();
 ```
+
+See §3.3 for the BranchBuilder chain semantics (why the shipped DSL has no explicit `.otherwise()`).
 
 ---
 
-### 2.5 `iterate(source, body, options?)`
+### 2.5 `iterate(args)`
 
-Bounded iteration over a collection. Each item is processed by the body steps.
+Bounded iteration over a collection. The body follows the ITERATE Node's NEXT chain until a RESPOND or a composed `ON_ITEM_ERROR` edge terminates the current iteration.
 
 ```typescript
-function iterate(source: Expression, body: Step | ((item: StepContext) => Step), options?: IterateOptions): IterateStep;
+function iterate(args: IterateArgs): { primitive: 'iterate'; args: IterateArgs };
 
-interface IterateOptions {
-  /** Variable name for the current item. Default: '$item'. */
-  as?: string;
-  /** Variable name for the current index. Default: '$index'. */
-  indexAs?: string;
-  /** Maximum number of iterations. REQUIRED -- no default. */
+interface IterateArgs {
+  /** Source list expression. */
+  over: string;
+  /** Max iteration count (required -- invariant 9 / `E_INV_ITERATE_MAX_MISSING`). */
   max: number;
-  /** Execute iterations in parallel. Default: false. */
-  parallel?: boolean;
-  /** Concurrency limit for parallel mode. Default: 10. */
-  maxConcurrency?: number;
-  /** Alias for collected results. Default: '$results'. */
-  collectAs?: string;
 }
 ```
 
-**Error edges:**
+**Why `max` is required.** Operation subgraphs are not Turing complete. Every iteration must be bounded. The builder's `.iterate(...)` method throws `E_INV_ITERATE_MAX_MISSING` at build time if `max` is missing or non-positive; the engine re-checks structural invariant #9 at registration. This is a security invariant, not a convenience default.
 
-| Method | Edge Type | When |
-|--------|-----------|------|
-| `.onItemError(handler)` | `ON_ERROR` | A single iteration fails |
-| `.onLimitExceeded(handler)` | `ON_LIMIT` | Collection exceeds `max` |
+**Error edges (typed):**
 
-**Why `max` is required:** Operation subgraphs are not Turing complete. Every iteration must be bounded. The engine rejects subgraphs where ITERATE lacks a `max` property. This is a security invariant, not a convenience default.
+| Edge Type | When |
+|-----------|------|
+| `ON_LIMIT` | Source sequence longer than `max` |
+| `ON_ITEM_ERROR` | Body aborted for the current iteration |
 
 **Examples:**
 
 ```typescript
-// Sequential iteration
-iterate('$cart.items', (item) =>
-  call({ handler: 'commerce/check-inventory', input: '{ itemId: $item.id, qty: $item.quantity }' }),
-  { max: 100, as: '$item' }
-)
-
-// Parallel iteration with limit
-iterate('$input.imageUrls', (img) =>
-  sandbox('image/resize', { url: '$item', width: 800 }),
-  { max: 50, parallel: true, maxConcurrency: 5 }
-)
+// Sequential iteration; body is everything up to the next RESPOND
+subgraph('check-cart')
+  .iterate({ over: '$cart.items', max: 100 })
+  .call({ handler: 'commerce/check-inventory', input: '{ itemId: $item.id, qty: $item.quantity }' })
+  .respond({ body: '$results' })
+  .build();
 ```
+
+Parallelism (see §7.4) and concurrency hints attach to the ITERATE args in the Phase 2 executor; the Phase 1 executor runs iterations sequentially.
 
 ---
 
-### 2.6 `wait(options)`
+### 2.6 `wait(args)` *(executor Phase 2)*
 
-Suspend execution until a signal arrives or a timeout expires.
+Suspend execution until a duration elapses. The subgraph Node is valid in Phase 1 (passes structural validation); the executor that serializes execution state and resumes on deadline ships in Phase 2. Phase 1 subgraphs that reach a WAIT return `E_PRIMITIVE_NOT_IMPLEMENTED`.
 
 ```typescript
-function wait(options: WaitOptions): WaitStep;
+function wait(args: WaitArgs): { primitive: 'wait'; args: WaitArgs };
 
-interface WaitOptions {
-  /** Wait for a named signal. */
-  signal?: string;
-  /** Wait for a duration in milliseconds. */
-  delay?: number;
-  /** Wait until an ISO 8601 timestamp. */
-  until?: string | Expression;
-  /** Maximum wait time in milliseconds. */
-  timeout?: number;
+interface WaitArgs {
+  /** Duration string (e.g. `"5m"`, `"30s"`, `"2h"`). */
+  duration: string;
 }
 ```
 
-**Error edges:**
+**Error edges (typed):**
 
-| Method | Edge Type | When |
-|--------|-----------|------|
-| `.onTimeout(handler)` | `ON_TIMEOUT` | Timeout expires before signal/time |
+| Edge Type | When |
+|-----------|------|
+| `ON_TIMEOUT` | Deadline expired before an external signal (Phase 2) |
 
 **Examples:**
 
 ```typescript
-// Wait for external signal (e.g., payment webhook)
-wait({ signal: 'payment:confirmed:$orderId', timeout: 300_000 })
-  .onTimeout(call('commerce/cancelPendingOrder'))
-
 // Scheduled delay (rate limiting, retry backoff)
-wait({ delay: 5000 })
+wait({ duration: '5s' })
 
-// Wait until a specific time
-wait({ until: '$input.scheduledAt', timeout: 86_400_000 })
+// Longer deadline for workflow suspension
+wait({ duration: '1h' })
 ```
+
+Signal-based WAIT (`wait({ signal: '...' })`) and `until: <timestamp>` variants are Phase 2 design additions; the shipped `WaitArgs` only accepts `duration`.
 
 ---
 
