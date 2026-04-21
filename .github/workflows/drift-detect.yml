@@ -48,12 +48,14 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install tsx for the drift-detect script
-        # The script is Node/TS; `tsx` is the runtime that
-        # `.github/workflows/ci.yml`'s drift-detector job uses. Keep both
-        # jobs on the same runtime so divergence can't hide behind a
-        # workflow-specific runner difference.
-        run: npm install --global tsx
+      - name: Install workspace dev dependencies (tsx for TS script runner)
+        # `node --import tsx` resolves `tsx` through normal ESM resolution
+        # starting at CWD, so a workspace-root npm install (which includes
+        # the tsx devDependency) is the only form that works. A global
+        # install does NOT populate the local node_modules and node
+        # refuses to resolve the loader. Mirrors the ci.yml drift-detector
+        # job exactly.
+        run: npm install --ignore-scripts --no-audit --no-fund
 
       - name: Run the drift detector (bidirectional)
         run: node --import tsx scripts/drift-detect.ts
@@ -83,8 +85,8 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install tsx
-        run: npm install --global tsx
+      - name: Install workspace dev dependencies (tsx for TS script runner)
+        run: npm install --ignore-scripts --no-audit --no-fund
 
       - name: Drift-detector self-test must succeed
         # The detector ships its own fixture-injection self-test via the
