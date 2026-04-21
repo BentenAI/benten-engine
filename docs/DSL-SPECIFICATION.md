@@ -1,25 +1,16 @@
 # Benten Operation DSL -- Complete Specification
 
 **Created:** 2026-04-11
-**Status:** Design specification (pre-implementation)
-**Package:** `@benten/engine/operations`
+**Last rewritten:** 2026-04-20 (aligned with the shipped 12-primitive set)
+**Status:** Matches the shipped Phase 1 DSL (`@benten/engine` v0.x)
+**Package:** `@benten/engine`
 **Audience:** Module developers who compose operation subgraphs using TypeScript
 
-> **⚠️ Primitive set revised 2026-04-14.** The DSL was designed around the original 12 primitives. After critic review, two primitives were dropped (**VALIDATE**, **GATE**) and two were added (**SUBSCRIBE**, **STREAM**). The authoritative primitive list is in [`ENGINE-SPEC.md`](ENGINE-SPEC.md) Section 3. Examples in this document that use VALIDATE or GATE are historical — see the migration notes below.
->
-> **Migration:**
-> - **VALIDATE** → compose from BRANCH (on schema predicate) + TRANSFORM (to format error) + RESPOND (with error) + error edges. Or let it register as a validation function hooked to the engine's 14 structural invariants.
-> - **GATE** → capability checks use the `requires` property on any Node (engine-enforced automatic BRANCH). Custom validation logic uses TRANSFORM or SANDBOX.
-> - **SUBSCRIBE** (new) → reactive change notification; IVM views, sync delta propagation, and event-driven handlers all compose on top.
-> - **STREAM** (new) → partial output with back-pressure; replaces patterns that previously attempted to use RESPOND for streaming.
->
-> A DSL rewrite against the revised primitives is a Phase 1 deliverable. Until then, treat occurrences of VALIDATE and GATE in examples as illustrative of the *pattern*, not the final API shape.
+This document describes the shipped 12-primitive DSL: **READ, WRITE, TRANSFORM, BRANCH, ITERATE, WAIT, CALL, RESPOND, EMIT, SANDBOX, SUBSCRIBE, STREAM**. The authoritative primitive list lives in [`ENGINE-SPEC.md`](ENGINE-SPEC.md) §3; this doc is its developer-facing mirror.
 
-**Also pending (DX critic findings, Phase 1 scope):**
-- Zero-config `crud('post')` path (currently requires `{schema, capability}`)
-- Error catalog integration (see [`ERROR-CATALOG.md`](ERROR-CATALOG.md))
-- Debug tooling: `.toMermaid()` method, evaluation trace
-- TypeScript wrapper layer (`@benten/engine` over `@benten/engine-native`)
+Four of the twelve primitives -- **WAIT, STREAM, SUBSCRIBE, SANDBOX** -- have their Node types and DSL helpers in Phase 1 (so structural validation recognises them and toolchains can build subgraphs that use them), but their executors ship in Phase 2. Attempting to evaluate one in Phase 1 returns the typed error `E_PRIMITIVE_NOT_IMPLEMENTED`. Everything else -- READ, WRITE, TRANSFORM, BRANCH, ITERATE, CALL, RESPOND, EMIT -- executes today.
+
+Two primitives from the pre-revision draft -- **VALIDATE** and **GATE** -- are not part of the shipped DSL. See [Appendix D: Migration from the pre-revision draft](#appendix-d-migration-from-the-pre-revision-draft) for the composition patterns that replace them.
 
 ---
 
@@ -37,6 +28,10 @@
 10. [Python Equivalent API](#10-python-equivalent-api)
 11. [DSL-to-Graph Compilation](#11-dsl-to-graph-compilation)
 12. [Complete Handler Examples](#12-complete-handler-examples)
+- [Appendix A: Learning Ladder](#appendix-a-learning-ladder)
+- [Appendix B: Quick Reference Card](#appendix-b-quick-reference-card)
+- [Appendix C: Expression Quick Reference](#appendix-c-expression-quick-reference)
+- [Appendix D: Migration from the pre-revision draft](#appendix-d-migration-from-the-pre-revision-draft)
 
 ---
 
@@ -61,12 +56,13 @@
 ```typescript
 import {
   subgraph, crud,
-  read, write, validate, transform, branch, iterate,
-  wait, gate, call, respond, emit, sandbox,
-} from '@benten/engine/operations';
+  read, write, transform, branch, iterate,
+  wait, call, respond, emit, sandbox,
+  subscribe, stream,
+} from '@benten/engine';
 ```
 
-All 12 primitives plus `subgraph` and `crud` are named exports from a single entry point.
+All 12 primitives plus `subgraph` and `crud` are named exports from the `@benten/engine` entry point. Typed errors (e.g. `EPrimitiveNotImplemented`, `EDslInvalidShape`) live on the sibling subpath `@benten/engine/errors`.
 
 ---
 
@@ -83,13 +79,15 @@ Each primitive maps 1:1 to an operation Node type in the graph. The function sig
 | 3 | `transform()` | TRANSFORM | Reshape data with expressions | No |
 | 4 | `branch()` | BRANCH | Route to one of several paths | No |
 | 5 | `iterate()` | ITERATE | Process a collection (bounded) | No |
-| 6 | `wait()` | WAIT | Suspend until signal or timeout | No |
-| 7 | `gate()` | GATE | Execute a registered TypeScript handler | No |
-| 8 | `call()` | CALL | Execute another subgraph | No |
-| 9 | `respond()` | RESPOND | Terminal: produce output | Yes |
-| 10 | `emit()` | EMIT | Fire-and-forget event | No |
-| 11 | `sandbox()` | SANDBOX | Execute code in WASM sandbox | No |
-| 12 | `validate()` | VALIDATE | Check data against a schema | No |
+| 6 | `wait()` | WAIT | Suspend until signal or timeout (executor Phase 2) | No |
+| 7 | `call()` | CALL | Execute another subgraph | No |
+| 8 | `respond()` | RESPOND | Terminal: produce output | Yes |
+| 9 | `emit()` | EMIT | Fire-and-forget event | No |
+| 10 | `sandbox()` | SANDBOX | Execute code in WASM sandbox (executor Phase 2) | No |
+| 11 | `subscribe()` | SUBSCRIBE | Reactive change notification (executor Phase 2) | No |
+| 12 | `stream()` | STREAM | Partial output with back-pressure (executor Phase 2) | No |
+
+The ordering matches [`ENGINE-SPEC.md`](ENGINE-SPEC.md) §3. Primitives marked *executor Phase 2* are type-valid -- they build well-formed subgraph Nodes and pass structural validation -- but the engine returns `E_PRIMITIVE_NOT_IMPLEMENTED` if evaluation actually reaches them in Phase 1.
 
 ---
 
@@ -323,7 +321,7 @@ interface IterateOptions {
 ```typescript
 // Sequential iteration
 iterate('$cart.items', (item) =>
-  gate('commerce/checkInventory', { itemId: '$item.id', qty: '$item.quantity' }),
+  call({ handler: 'commerce/check-inventory', input: '{ itemId: $item.id, qty: $item.quantity }' }),
   { max: 100, as: '$item' }
 )
 
@@ -377,626 +375,454 @@ wait({ until: '$input.scheduledAt', timeout: 86_400_000 })
 
 ---
 
-### 2.7 `gate(handler, args?)`
+### 2.7 `call(args)`
 
-Execute a registered TypeScript handler function. This is the escape hatch for logic too complex for the expression language. One purpose only: run a function, get its result.
-
-```typescript
-function gate(handler: string, args?: Record<string, Expression>): GateStep;
-
-// handler: a registered handler ID (e.g., 'commerce/calculateTax')
-// args: optional argument mapping (expressions resolved before invocation)
-```
-
-**Error edges:**
-
-| Method | Edge Type | When |
-|--------|-----------|------|
-| `.onError(handler)` | `ON_ERROR` | Handler threw an error |
-
-**Handler registration (in module onRegister):**
+Execute another subgraph. The function-call equivalent for operation graphs: a "charge payment" subgraph is defined once and called from checkout, subscription renewal, and refund retry flows.
 
 ```typescript
-ctx.registerHandler('commerce/calculateTax', async (input, ctx) => {
-  // Complex tax calculation -- multiple jurisdictions, rate lookups, exemptions
-  const tax = calculateTaxForJurisdiction(input.address, input.items);
-  return { ...input, tax, total: input.subtotal + tax };
-});
-```
+function call(args: CallArgs): { primitive: 'call'; args: CallArgs };
 
-**When to use GATE vs TRANSFORM:**
-
-| Use TRANSFORM when... | Use GATE when... |
-|-----------------------|-----------------|
-| Reshaping fields (rename, project) | Business logic (tax, scoring, ranking) |
-| Arithmetic on known fields | Algorithm with conditional logic |
-| Built-in string/date functions suffice | Third-party library needed |
-| The logic fits in one expression | The logic is 5+ lines of TypeScript |
-
-**Examples:**
-
-```typescript
-// Simple handler call
-gate('commerce/calculateTax')
-
-// With argument mapping
-gate('seo/scoreContent', {
-  title: '$result.title',
-  body: '$result.content',
-  url: '$result.slug',
-})
-
-// With error handling
-gate('payment/chargeCard', { token: '$input.paymentToken', amount: '$total' })
-  .onError(respond(402, { error: 'Payment failed: $error.message' }))
-```
-
----
-
-### 2.8 `call(subgraphId, options?)`
-
-Execute another subgraph. This is the function call equivalent for operation graphs. Enables reuse: a "charge payment" subgraph is defined once and called from checkout, subscription renewal, and refund retry flows.
-
-```typescript
-function call(subgraphId: string, options?: CallOptions): CallStep;
-
-interface CallOptions {
-  /** Map fields from current context to the subgraph's expected input. */
-  input?: Record<string, Expression>;
-  /** Map fields from subgraph output to the current context. */
-  output?: Record<string, Expression>;
-  /** Timeout in milliseconds. */
-  timeout?: number;
-  /** Run the subgraph with attenuated capabilities. */
-  capabilities?: string[];
+interface CallArgs {
+  /** Handler id to CALL. */
+  handler: string;
+  /** Optional action on the target handler (e.g. `"post:get"`). */
+  action?: string;
+  /** Input expression bound to the callee's `$input`. */
+  input?: string;
+  /**
+   * If `true`, the CALL enters an isolated capability scope and cannot
+   * delegate parent caps. Default `false`. (ENGINE-SPEC §3 ships with
+   * `true` as the long-term default; the DSL-side default is `false`
+   * for Phase 1 ergonomics and flips in Phase 2 once UCAN attenuation
+   * lands.)
+   */
+  isolated?: boolean;
 }
 ```
 
-**Error edges:**
+**Error edges (typed):**
 
-| Method | Edge Type | When |
-|--------|-----------|------|
-| `.onError(handler)` | `ON_ERROR` | Subgraph execution failed |
-| `.onTimeout(handler)` | `ON_TIMEOUT` | Subgraph exceeded timeout |
+| Edge Type | When |
+|-----------|------|
+| `ON_ERROR` | Callee subgraph aborted |
+| `ON_TIMEOUT` | Callee exceeded the configured timeout |
 
 **Examples:**
 
 ```typescript
 // Simple call
-call('commerce/charge-stripe')
+call({ handler: 'commerce/charge-stripe' })
 
-// With input/output mapping
-call('notifications/send-email', {
-  input: { to: '$result.email', template: 'order-confirmation', data: '$result' },
+// With input mapping and an action
+call({
+  handler: 'notifications/send-email',
+  action: 'email:send',
+  input: '{ to: $result.email, template: "order-confirmation", data: $result }',
 })
 
-// With capability attenuation
-call('thirdparty/analytics', {
-  input: { event: 'pageView', path: '$input.path' },
-  capabilities: ['store:read:analytics/*'],  // narrow: only analytics reads
-})
+// Isolated capability scope (callee cannot inherit parent caps)
+call({ handler: 'thirdparty/analytics', isolated: true })
 ```
 
 ---
 
-### 2.9 `respond(status, body?)`
+### 2.8 `respond(args)`
 
 Terminal node. Produces the subgraph's output. Every execution path must end with a `respond()`.
 
 ```typescript
-function respond(status: number, body?: any | Expression): RespondStep;
-function respond(status: number, body?: any | Expression, options?: RespondOptions): RespondStep;
+function respond(args?: RespondArgs): { primitive: 'respond'; args: RespondArgs };
 
-interface RespondOptions {
-  /** Response headers. */
-  headers?: Record<string, string>;
-  /** Response channel (default: 'http'). Use 'event' for event handler responses. */
-  channel?: string;
+interface RespondArgs {
+  /** Response body expression. */
+  body?: string;
+  /** Optional typed error edge to route through (e.g. `"ON_NOT_FOUND"`). */
+  edge?: string;
+  /** Optional status-code override (HTTP mapping -- not enforced in Phase 1). */
+  status?: number;
 }
 ```
 
 **Examples:**
 
 ```typescript
-// Success with body
-respond(200, '$result')
+// Echo the current result
+respond({ body: '$result' })
 
-// Created with transformed body
-respond(201, { id: '$result.id', slug: '$result.slug' })
+// Created with shaped body
+respond({ status: 201, body: '{ id: $result.cid, slug: $result.slug }' })
 
-// Error with static message
-respond(404, { error: 'Not found' })
+// Route through a typed error edge
+respond({ edge: 'ON_NOT_FOUND', body: '{ error: "not found" }' })
 
-// No content
-respond(204)
-
-// With custom headers
-respond(200, '$result', { headers: { 'X-Total-Count': '$total' } })
+// No body
+respond({ status: 204 })
 ```
 
 ---
 
-### 2.10 `emit(event, payload?)`
+### 2.9 `emit(args)`
 
-Fire-and-forget event. Does not wait for handlers. The event is dispatched after the current operation completes. Execution continues along the NEXT edge immediately.
+Fire-and-forget event. Does not wait for subscribers. Execution continues along the NEXT edge immediately.
 
 ```typescript
-function emit(event: string, payload?: Record<string, Expression> | Expression): EmitStep;
+function emit(args: EmitArgs): { primitive: 'emit'; args: EmitArgs };
+
+interface EmitArgs {
+  /** Event label. */
+  event: string;
+  /** Event payload expression. */
+  payload?: string;
+}
 ```
 
 **Examples:**
 
 ```typescript
 // Simple event
-emit('content:afterCreate', { id: '$result.id', type: '$result.type' })
+emit({ event: 'content:afterCreate', payload: '{ id: $result.cid }' })
 
 // Full payload passthrough
-emit('commerce:orderCreated', '$result')
-
-// Chained after write
-write('post', { data: '$input' })
-  // .emit() is also available as a chain method (syntactic sugar)
+emit({ event: 'commerce:orderCreated', payload: '$result' })
 ```
+
+Subscribers attach via the `subscribe()` primitive (section 2.11) or via the engine's internal IVM wiring.
 
 ---
 
-### 2.11 `sandbox(runtimeId, options)`
+### 2.10 `sandbox(args)` *(executor Phase 2)*
 
-Execute code in a WASM sandbox (QuickJS-in-WASM). For untrusted code, AI-generated code, or computationally intensive operations that need isolation and fuel metering.
+Execute code in a WASM sandbox. For untrusted code, AI-generated code, or computationally intensive operations that need isolation and fuel metering. The **subgraph Node is valid in Phase 1** (structural validation recognises it), but calling a subgraph that reaches a SANDBOX node returns `E_PRIMITIVE_NOT_IMPLEMENTED` until the Phase 2 executor lands (see [`docs/future/phase-2-backlog.md`](future/phase-2-backlog.md)).
 
 ```typescript
-function sandbox(runtimeId: string, options: SandboxOptions): SandboxStep;
+function sandbox(args: SandboxArgs): { primitive: 'sandbox'; args: SandboxArgs };
 
-interface SandboxOptions {
-  /** Entry point function name within the WASM module. */
-  entryPoint?: string;
-  /** Arguments passed to the function (serialized to JSON across the boundary). */
-  input?: Record<string, Expression>;
-  /** Gas/fuel budget. Execution halts when exhausted. */
+interface SandboxArgs {
+  /** WASM module CID to execute. */
+  module: string;
+  /** Fuel budget (per-subgraph, not per-call). */
   fuel?: number;
-  /** Memory limit in bytes. */
-  memoryLimit?: number;
-  /** Timeout in milliseconds. */
-  timeout?: number;
-  /** Capabilities granted to the sandbox (for host function callbacks). */
-  capabilities?: string[];
 }
 ```
 
-**Error edges:**
+**Error edges (typed):**
 
-| Method | Edge Type | When |
-|--------|-----------|------|
-| `.onError(handler)` | `ON_ERROR` | Runtime error or fuel exhaustion |
-| `.onTimeout(handler)` | `ON_TIMEOUT` | Exceeded timeout |
-
-**How the developer writes sandbox functions:**
-
-Sandbox functions are plain TypeScript files compiled to WASM at build time. During development and testing, they run as native TypeScript (no WASM boundary). In production, they run inside QuickJS-in-WASM with fuel metering and capability membranes.
-
-```typescript
-// File: modules/ai/generate-content.ts
-// This file is compiled to a WASM module at build time.
-// During development, it runs natively in Node.js.
-
-export function generateContent(input: { topic: string; style: string }): ContentResult {
-  // Complex content generation logic
-  // Can call host functions via the provided API:
-  //   hostRead(label, id) -- reads from graph (if capabilities allow)
-  //   hostWrite(label, data) -- writes to graph (if capabilities allow)
-  const template = getTemplateForStyle(input.style);
-  return {
-    title: formatTitle(input.topic),
-    body: applyTemplate(template, input.topic),
-    status: 'draft',
-  };
-}
-```
-
-**Registration:**
-
-```typescript
-// In module onRegister():
-ctx.registerSandbox('ai/generateContent', {
-  source: './generate-content.ts',  // compiled to WASM at build
-  entryPoint: 'generateContent',
-  defaultFuel: 100_000,
-  defaultTimeout: 30_000,
-  requiredCapabilities: ['store:read:content/*'],
-});
-```
+| Edge Type | When |
+|-----------|------|
+| `ON_ERROR` | Runtime error or fuel exhaustion (Phase 2) |
+| `ON_TIMEOUT` | Exceeded wall-clock timeout (Phase 2) |
 
 **Examples:**
 
 ```typescript
-// AI content generation
-sandbox('ai/generateContent', {
-  input: { topic: '$input.topic', style: '$input.style' },
-  fuel: 100_000,
-  timeout: 30_000,
-})
+// AI content generation (registers in Phase 1; executes in Phase 2)
+sandbox({ module: 'bafyr4i...ai-module-cid', fuel: 100_000 })
 
-// Image processing (CPU-intensive, needs isolation)
-sandbox('media/resizeImage', {
-  input: { url: '$item.url', width: 800, quality: 80 },
-  fuel: 500_000,
-  memoryLimit: 64 * 1024 * 1024,  // 64MB
-  timeout: 10_000,
-})
-
-// Third-party untrusted plugin code
-sandbox('thirdparty/process', {
-  input: { data: '$result' },
-  fuel: 10_000,
-  capabilities: ['store:read:content/post'],  // minimal capabilities
-}).onError(respond(500, { error: 'Plugin execution failed' }))
+// Image processing
+sandbox({ module: 'bafyr4i...media-module-cid', fuel: 500_000 })
 ```
+
+The Phase-2 executor uses `wasmtime` with fuel metering and capability membranes. See [`ENGINE-SPEC.md`](ENGINE-SPEC.md) §8 for the SANDBOX contract.
 
 ---
 
-### 2.12 `validate(schema, options?)`
+### 2.11 `subscribe(args)` *(executor Phase 2)*
 
-Check data against a declared schema. Produces structured field-level errors on failure. The schema is either a reference to a schema Node in the graph or an inline Valibot-compatible definition.
+Reactive change notification. Subscribes the current subgraph to a named event stream; the engine fires the subgraph each time the stream publishes. This is the base primitive that IVM, sync delta propagation, and event-driven handlers all compose on.
 
 ```typescript
-function validate(schema: string | SchemaDefinition, options?: ValidateOptions): ValidateStep;
+function subscribe(args: SubscribeArgs): { primitive: 'subscribe'; args: SubscribeArgs };
 
-interface ValidateOptions {
-  /** What to validate. Default: '$input' (the current input). */
-  target?: Expression;
-  /** How to handle extra fields. Default: 'strip'. */
-  mode?: 'strict' | 'strip' | 'passthrough';
+interface SubscribeArgs {
+  /** Event label to subscribe to (e.g. `"content:afterCreate"`). */
+  event: string;
+  /** Optional handler id to route deliveries through. */
+  handler?: string;
 }
 ```
 
-**Error edges:**
-
-| Method | Edge Type | When |
-|--------|-----------|------|
-| `.onInvalid(handler)` | `ON_INVALID` | Validation failed (receives field-level errors) |
+**Phase status.** As with SANDBOX, the subgraph Node is well-formed in Phase 1 -- `SubgraphBuilder.subscribe({ ... })` compiles, the builder rejects malformed args with `EDslInvalidShape`, and registration passes structural validation. Phase 1 subgraphs that try to *evaluate* a SUBSCRIBE node return `E_PRIMITIVE_NOT_IMPLEMENTED`. The Phase-1 IVM subscriber wires into the same change-stream infrastructure at the `benten-graph` layer; user-visible SUBSCRIBE as an active operation in a user subgraph is a Phase 2 deliverable.
 
 **Examples:**
 
 ```typescript
-// Validate against a content type schema stored in the graph
-validate('contentType:post')
-  .onInvalid(respond(400, { error: 'Validation failed', details: '$error.fields' }))
+// Subscribe a subgraph to content-creation events
+subgraph('audit-content-seo')
+  .subscribe({ event: 'content:afterCreate' })
+  .read({ label: 'post', by: 'cid', value: '$input.cid' })
+  .transform({ expr: '{ scoredAt: now() }' })
+  .respond({ body: '$result' })
+  .build();
 
-// Validate with strict mode (reject unknown fields)
-validate('contentType:post', { mode: 'strict' })
+// Subscribe via a handler-id router
+subscribe({ event: 'commerce:orderCreated', handler: 'analytics/record-order' })
+```
 
-// Validate a specific part of the context
-validate('CheckoutSchema', { target: '$input.shippingAddress' })
+See [`ENGINE-SPEC.md`](ENGINE-SPEC.md) §3 on what SUBSCRIBE composes (IVM materialized views, event handler registration, sync delta propagation).
+
+---
+
+### 2.12 `stream(args)` *(executor Phase 2)*
+
+Partial/ongoing output with back-pressure. Used for SSE, WebSocket messages, LLM token streams, and progress updates -- patterns that cannot be cleanly composed from RESPOND (terminal) or ITERATE (no back-pressure). WinterTC-targeted runtimes make streaming table stakes for 2026 web APIs.
+
+```typescript
+function stream(args: StreamArgs): { primitive: 'stream'; args: StreamArgs };
+
+interface StreamArgs {
+  /** Expression yielding the source sequence. */
+  source: string;
+  /** Optional chunk-size hint. */
+  chunkSize?: number;
+}
+```
+
+**Phase status.** Same shape as `subscribe()`: the subgraph Node registers and passes structural validation in Phase 1, but evaluation returns `E_PRIMITIVE_NOT_IMPLEMENTED` until the Phase-2 executor ships. The napi binding will bridge STREAM to a WinterTC-compatible `ReadableStream` when the executor lands.
+
+**Error edges (typed):**
+
+| Edge Type | When |
+|-----------|------|
+| `ON_ERROR` | Source sequence errored mid-stream (Phase 2) |
+| `ON_TIMEOUT` | Stream stalled past the configured deadline (Phase 2) |
+
+**Examples:**
+
+```typescript
+// Stream LLM tokens (Phase 2)
+stream({ source: '$tokens', chunkSize: 16 })
+
+// Stream a large query result as NDJSON (Phase 2)
+subgraph('api/posts-ndjson')
+  .read({ label: 'post' })
+  .stream({ source: '$result' })
+  .respond({ status: 200 })
+  .build();
 ```
 
 ---
 
 ## 3. Fluent Builder API
 
-The `subgraph()` function creates a named builder that chains operations into a linear flow. For branching, iteration, and parallel execution, the builder nests.
+The `subgraph()` function returns a `SubgraphBuilder` that chains primitives into a linear flow. Branching is nested via `.branch({ on: ... }).case('value', s => ...).endBranch()`.
 
 ### 3.1 Basic Chain
 
 ```typescript
-const listPosts = subgraph('GET /api/posts')
-  .require('store:read:post/*')
-  .read('post', {
-    where: { published: true },
-    orderBy: { createdAt: 'desc' },
-    limit: 20,
-  })
-  .transform({
-    items: '$result',
-    total: 'len($result)',
-  })
-  .respond(200);
+const listPosts = subgraph('list-posts-handler')
+  .action('post:list')
+  .read({ label: 'post', by: '_listView' })
+  .transform({ expr: '{ items: $result, total: len($result) }' })
+  .respond({ body: '$result' })
+  .build();
 ```
 
 ### 3.2 Chain Methods
 
-The builder supports every primitive as a chain method. Each call appends a Node and a NEXT edge.
+The builder exposes one chain method per primitive. Each call appends a Node and wires a default `NEXT` edge from the previous Node.
 
 ```typescript
-interface SubgraphBuilder {
-  // -- Capability --
-  /** Require a capability. Adds a capability check at the current point. */
-  require(capability: string): this;
-
+class SubgraphBuilder {
   // -- Data --
-  read(target: string, options?: ReadOptions): ReadChain;
-  write(target: string, options: WriteOptions): WriteChain;
+  read(args: ReadArgs): this;
+  write(args: WriteArgs): this;
 
   // -- Logic --
-  validate(schema: string | SchemaDefinition, options?: ValidateOptions): ValidateChain;
-  transform(expression: Expression | Record<string, Expression>, options?: TransformOptions): this;
-  branch(conditions: BranchCondition[]): BranchChain;
-  branch(condition: Expression): BranchChain;
+  transform(args: TransformArgs): this;
+  branch(args: BranchArgs): BranchBuilder;  // see 3.3 below
+  iterate(args: IterateArgs): this;
 
   // -- Flow --
-  iterate(source: Expression, body: Step | ((item: StepContext) => Step), options: IterateOptions): IterateChain;
-  wait(options: WaitOptions): WaitChain;
-
-  // -- Execution --
-  gate(handler: string, args?: Record<string, Expression>): GateChain;
-  call(subgraphId: string, options?: CallOptions): CallChain;
-  sandbox(runtimeId: string, options: SandboxOptions): SandboxChain;
+  call(args: CallArgs): this;
+  wait(args: WaitArgs): this;         // Phase 2 executor
 
   // -- Output --
-  respond(status: number, body?: any | Expression, options?: RespondOptions): SubgraphResult;
-  emit(event: string, payload?: Record<string, Expression> | Expression): this;
+  respond(args?: RespondArgs): this;
+  emit(args: EmitArgs): this;
+
+  // -- Reactive / streaming (Phase 2 executors) --
+  subscribe(args: SubscribeArgs): this;
+  stream(args: StreamArgs): this;
+  sandbox(args: SandboxArgs): this;
 
   // -- Meta --
-  /** Label this subgraph for debugging/tracing. */
-  label(name: string): this;
-  /** Set the overall timeout for the subgraph. */
-  timeout(ms: number): this;
-  /** Compile the builder into a Subgraph (Nodes + Edges). */
-  compile(): Subgraph;
+  action(name: string): this;         // declare an exposed action string
+  build(): Subgraph;                  // materialize the Subgraph
 }
 ```
 
-### 3.3 The `.require()` Method
+Capability checking is not a separate method. Any primitive Node that mutates or reads sensitive state accepts a `requires` property (e.g. `write({ label: 'post', requires: 'store:write:post/*', ... })`). The evaluator honours `requires` automatically: when the grant is absent the Node routes through `ON_DENIED` with no explicit builder method needed. See [Appendix D](#appendix-d-migration-from-the-pre-revision-draft) for the pre-revision `.require()` pattern this replaced.
 
-Capability checking is a cross-cutting concern. Rather than manually inserting GATE nodes for every capability check, `.require()` adds a capability check at the current point in the chain. If the check fails, the engine follows the ON_DENIED edge to a default 403 response (or a custom handler if provided).
+### 3.3 Branching
 
 ```typescript
-subgraph('POST /api/posts')
-  .require('store:write:post/*')             // capability check here
-  .require('content:create')                  // AND another capability
-  .validate('contentType:post')
-  .write('post', { data: '$input' })
-  .respond(201);
+subgraph('publish-post')
+  .read({ label: 'post', by: 'cid', value: '$input.cid' })
+  .branch({ on: '$result.status' })
+    .case('draft', s => s
+      .write({ label: 'post', properties: { status: 'published' } })
+      .respond({ body: '$result' }),
+    )
+    .case('published', s => s
+      .respond({ status: 400, body: '{ error: "already published" }' }),
+    )
+  .endBranch()
+  .build();
 ```
 
-This compiles to two GATE Nodes at the start of the subgraph, each with `ON_DENIED -> RESPOND(403)`.
+`.case(value, body)` opens a sub-scope; whatever primitives `body` adds are attached to the BRANCH via a `CASE:<value>` edge. `.endBranch()` returns to the parent `SubgraphBuilder`.
 
-`.require()` can also be used mid-chain for operations that need additional capabilities:
+### 3.4 Typed Error Edges
+
+The engine emits typed error edges on primitives that can fail. Routing is declarative: the engine follows the edge to the first node the subgraph provides a handler for, otherwise it aborts with the corresponding typed error.
+
+| Primitive | Edge Types | Triggered By |
+|-----------|-----------|-------------|
+| `read()` | `ON_NOT_FOUND`, `ON_EMPTY`, `ON_DENIED` | Missing Node / empty query / capability denial |
+| `write()` | `ON_CONFLICT`, `ON_DENIED` | CAS failure / capability denial |
+| `call()` | `ON_ERROR`, `ON_TIMEOUT` | Callee aborted / exceeded timeout |
+| `iterate()` | `ON_LIMIT`, `ON_ITEM_ERROR` | Source longer than `max` / body aborted |
+| `wait()` | `ON_TIMEOUT` | Deadline expired (Phase 2) |
+| `sandbox()` | `ON_ERROR`, `ON_TIMEOUT` | Runtime error / fuel exhaustion (Phase 2) |
+| `stream()` | `ON_ERROR`, `ON_TIMEOUT` | Source errored / stream stalled (Phase 2) |
+
+To route a specific error to a terminal response, use a `respond()` with an `edge` override that matches the source error:
 
 ```typescript
-subgraph('POST /api/posts/publish')
-  .require('store:write:post/*')
-  .read('post', { id: '$input.id' })
-  .require('content:publish')                 // additional check before publish
-  .write('post', { action: 'update', id: '$input.id', data: { status: 'published' } })
-  .respond(200);
+subgraph('get-post')
+  .read({ label: 'post', by: 'cid', value: '$input.cid' })
+  .respond({ body: '$result' })
+  .respond({ edge: 'ON_NOT_FOUND', status: 404, body: '{ error: "not found" }' })
+  .respond({ edge: 'ON_DENIED', status: 403, body: '{ error: "forbidden" }' })
+  .build();
 ```
 
-### 3.4 Error Edge Methods
-
-Every chainable step that can fail returns an enriched chain with error-handling methods. These methods attach edges to alternate paths:
-
-```typescript
-// ReadChain extends the base chain with onNotFound/onEmpty
-interface ReadChain extends SubgraphBuilder {
-  onNotFound(...steps: Step[]): this;
-  onNotFound(step: Step): this;
-  onEmpty(...steps: Step[]): this;
-  onEmpty(step: Step): this;
-}
-
-// WriteChain extends with onConflict/onNotFound
-interface WriteChain extends SubgraphBuilder {
-  onConflict(...steps: Step[]): this;
-  onNotFound(...steps: Step[]): this;
-}
-
-// ValidateChain extends with onInvalid
-interface ValidateChain extends SubgraphBuilder {
-  onInvalid(...steps: Step[]): this;
-}
-
-// GateChain/SandboxChain extends with onError
-interface GateChain extends SubgraphBuilder {
-  onError(...steps: Step[]): this;
-}
-
-// WaitChain extends with onTimeout
-interface WaitChain extends SubgraphBuilder {
-  onTimeout(...steps: Step[]): this;
-}
-```
-
-Error handlers are optional. If not provided, the engine uses fail-closed defaults:
-- `.onNotFound()` defaults to `respond(404, { error: '{target} not found' })`
-- `.onInvalid()` defaults to `respond(400, { error: 'Validation failed', details: '$error.fields' })`
-- `.onConflict()` defaults to `respond(409, { error: 'Version conflict' })`
-- `.onError()` defaults to `respond(500, { error: 'Internal error' })`
-- `.onTimeout()` defaults to `respond(504, { error: 'Timeout' })`
+When no explicit handler is provided, the engine returns a fail-closed default (404 / 409 / 500 / 504 as appropriate) using codes from [`ERROR-CATALOG.md`](ERROR-CATALOG.md).
 
 ---
 
 ## 4. CRUD Shorthand
 
-The single most important DX feature. One function call generates 5 complete handler subgraphs (list, get, create, update, delete) with proper validation, error handling, capability checks, event emission, and response shaping.
+The most important DX feature. A single `crud('post')` call builds **one handler subgraph** that exposes five canonical actions (`create`, `get`, `list`, `update`, `delete`) via a dispatch BRANCH on `$input.action`. The Phase 1 zero-config path needs no `schema`, no `capability` -- just a label.
 
 ### 4.1 Signature
 
+The shipped type lives in `packages/engine/src/dsl.ts`. Fields that look minimal are minimal on purpose: Phase 1 ships the tight middle; Phase 2 adds soft-delete, optimistic locking, after-hooks, and per-action schemas.
+
 ```typescript
-function crud(label: string, options: CrudOptions): CrudHandlers;
+function crud(label: string, opts?: CrudOptions): CrudHandler;
 
 interface CrudOptions {
-  /** Schema reference for validation. */
-  schema: string;
-  /** Capability base string. Will be expanded to action-specific capabilities. */
-  capability: string;
-  /** Content type fields for response shaping (optional -- uses schema fields if not provided). */
-  fields?: string[];
-
-  /** List endpoint options. */
-  list?: {
-    /** Default sort. */
-    sort?: Record<string, 'asc' | 'desc'>;
-    /** Default page size. */
-    limit?: number;
-    /** Maximum allowed page size. */
-    maxLimit?: number;
-    /** Additional where clause applied to all list queries. */
-    where?: Record<string, any>;
-    /** Custom transform for list items. */
-    transform?: Record<string, Expression>;
-  };
-
-  /** Create endpoint options. */
-  create?: {
-    /** Hooks to run after create (before response). */
-    after?: Step[];
-    /** Default values merged into input. */
-    defaults?: Record<string, any>;
-    /** Event name to emit. Default: '{label}:afterCreate'. */
-    event?: string | false;
-  };
-
-  /** Update endpoint options. */
-  update?: {
-    /** Enable optimistic locking via version field. Default: true. */
-    optimisticLocking?: boolean;
-    /** Hooks to run after update. */
-    after?: Step[];
-    /** Event name to emit. Default: '{label}:afterUpdate'. */
-    event?: string | false;
-  };
-
-  /** Delete endpoint options. */
-  delete?: {
-    /** Use soft delete (set deletedAt) instead of hard delete. Default: false. */
-    soft?: boolean;
-    /** Hooks to run after delete. */
-    after?: Step[];
-    /** Event name to emit. Default: '{label}:afterDelete'. */
-    event?: string | false;
-  };
-
-  /** Add timestamps (createdAt, updatedAt) automatically. Default: true. */
-  timestamps?: boolean;
+  /** Override the rendered label (default: the first `crud()` argument). */
+  label?: string;
+  /** Supply your own HLC source (useful for deterministic tests). */
+  hlc?: () => number;
+  /**
+   * Capability expression required to execute the mutating actions
+   * (`create`, `update`, `delete`). Stamped as a `requires` property on
+   * each WRITE Node in the produced subgraph. Informational under
+   * `PolicyKind.NoAuth` (default); enforced under
+   * `PolicyKind.GrantBacked`.
+   */
+  capability?: string;
+  /**
+   * When `true`, flags the handler as expecting the `debug:read`
+   * capability (named compromise #2, Option C). The flag is
+   * informational in Phase 1 -- the real gate is
+   * `engine.grantCapability({ actor, scope: "store:debug:read" })`;
+   * the flag is a hint for tooling. Defaults `false`.
+   */
+  debugRead?: boolean;
 }
 
-interface CrudHandlers {
-  /** All 5 subgraphs as an array (for bulk registration). */
-  all: Subgraph[];
-  /** Individual subgraphs for selective registration or customization. */
-  list: Subgraph;
-  get: Subgraph;
-  create: Subgraph;
-  update: Subgraph;
-  delete: Subgraph;
+interface CrudHandler {
+  /** The underlying Subgraph. Pass directly to `engine.registerSubgraph()`. */
+  readonly subgraph: Subgraph;
+  /** The action strings exposed (e.g. `["create", "get", "list", "update", "delete"]`). */
+  readonly actions: string[];
+  /** The label used for this CRUD handler. */
+  readonly label: string;
+  /** HLC-stamped createdAt ms-since-epoch. */
+  stampCreatedAt(): number;
 }
 ```
 
 ### 4.2 Usage
 
 ```typescript
-const postHandlers = crud('post', {
-  schema: 'contentType:post',
-  capability: 'store:post',
-  list: {
-    sort: { createdAt: 'desc' },
-    limit: 20,
-  },
-  create: {
-    defaults: { status: 'draft' },
-    after: [emit('content:afterCreate')],
-  },
-  update: {
-    optimisticLocking: true,
-  },
-  delete: {
-    soft: true,
-  },
-});
+import { Engine, crud } from '@benten/engine';
 
-// Register all 5
-ctx.registerSubgraphs(postHandlers.all);
+const engine = await Engine.open('./data');
 
-// Or register selectively
-ctx.registerSubgraph(postHandlers.list);
-ctx.registerSubgraph(postHandlers.get);
+// Zero-config: one line, five actions.
+const postHandler = await engine.registerSubgraph(crud('post'));
+
+// With capability attenuation (checked under GrantBacked policy).
+const gated = await engine.registerSubgraph(
+  crud('post', { capability: 'store:write:post/*' }),
+);
+
+// Invoke an action.
+await engine.call(postHandler.id, 'post:create', { title: 'hello' });
+await engine.call(postHandler.id, 'post:get', { cid: '...' });
 ```
 
 ### 4.3 What It Generates
 
-For `crud('post', { schema: 'contentType:post', capability: 'store:post', timestamps: true })`, the following 5 subgraphs are generated:
-
-**List (GET /api/posts):**
+For `crud('post')` the builder produces **one** handler subgraph of the shape below. Every action is dispatched through a single BRANCH on `$input.action`; each case is a linear chain.
 
 ```
-GATE[require store:read:post/*]
-  -> READ[query post, where=$query.where, orderBy=$query.sort, limit=$query.limit, offset=$query.offset]
-    -> TRANSFORM[{items: $result, total: len($result)}]
-      -> RESPOND[200]
-  ON_DENIED -> RESPOND[403]
+BRANCH[on = $input.action]
+  CASE:create  -> WRITE[label=post, properties={from: $input} (+ requires if opts.capability)]
+                  -> RESPOND[body = $result]
+  CASE:get     -> READ [label=post, by=cid, value=$input.cid]
+                  -> RESPOND[body = $result]
+  CASE:list    -> READ [label=post, by=_listView]
+                  -> RESPOND[body = $result]
+  CASE:update  -> WRITE[label=post, properties={cid: $input.cid, patch: $input.patch}
+                       (+ requires if opts.capability)]
+                  -> RESPOND[body = $result]
+  CASE:delete  -> WRITE[label=post, properties={cid: $input.cid, tombstone: true}
+                       (+ requires if opts.capability)]
+                  -> RESPOND[body = $result]
 ```
 
-**Get (GET /api/posts/:id):**
+The five executable primitives used are **BRANCH, READ, WRITE, RESPOND** (plus the `transform`-free shape). No GATE, no VALIDATE -- capability gating happens via the `requires` property the engine reads directly at commit time, and schema validation is supplied by the 14 structural invariants at registration time (invariants 1-6, 9-10, 12 in Phase 1). See [Appendix D](#appendix-d-migration-from-the-pre-revision-draft) for the old GATE / VALIDATE patterns and the composed replacements when stricter body-shape checks are needed.
 
-```
-GATE[require store:read:post/*]
-  -> READ[node post, id=$params.id]
-    -> RESPOND[200, $result]
-    ON_NOT_FOUND -> RESPOND[404]
-  ON_DENIED -> RESPOND[403]
-```
+**Error edge routing.** The engine still emits the four typed error edges from [ENGINE-SPEC §5](ENGINE-SPEC.md#5-the-evaluator):
 
-**Create (POST /api/posts):**
+- `ON_NOT_FOUND` - READ could not resolve the lookup (fires on `get` / `update` / `delete` when the target cid is missing). Default: 404 response.
+- `ON_CONFLICT` - WRITE aborted because the version / tombstone already present. Default: 409 response.
+- `ON_DENIED` - `requires` property rejected at commit. Default: 403 response.
+- `ON_ERROR` - Anything else the evaluator could not route. Default: 500 response.
 
-```
-GATE[require store:create:post/*]
-  -> VALIDATE[contentType:post]
-    -> TRANSFORM[merge $input + {createdAt: now(), updatedAt: now()}]
-      -> WRITE[create post, data=$result]
-        -> EMIT[post:afterCreate]
-          -> RESPOND[201, $result]
-    ON_INVALID -> RESPOND[400, $error]
-  ON_DENIED -> RESPOND[403]
-```
-
-**Update (PUT /api/posts/:id):**
-
-```
-GATE[require store:update:post/*]
-  -> READ[node post, id=$params.id]
-    -> VALIDATE[contentType:post]
-      -> TRANSFORM[merge $input + {updatedAt: now()}]
-        -> WRITE[update post, id=$params.id, data=$result, version=$input.version]
-          -> EMIT[post:afterUpdate]
-            -> RESPOND[200, $result]
-        ON_CONFLICT -> RESPOND[409]
-      ON_INVALID -> RESPOND[400, $error]
-    ON_NOT_FOUND -> RESPOND[404]
-  ON_DENIED -> RESPOND[403]
-```
-
-**Delete (DELETE /api/posts/:id):**
-
-```
-GATE[require store:delete:post/*]
-  -> READ[node post, id=$params.id]
-    -> WRITE[delete post, id=$params.id]
-      -> EMIT[post:afterDelete]
-        -> RESPOND[200]
-    ON_NOT_FOUND -> RESPOND[404]
-  ON_DENIED -> RESPOND[403]
-```
-
-**Total: 5 subgraphs, ~30 Nodes, ~35 Edges.** All generated from one `crud()` call.
+To customize, append `respond({ edge: 'ON_NOT_FOUND', status: 404, body: ... })` chains to the underlying `handler.subgraph` before `registerSubgraph()`.
 
 ### 4.4 Customization
 
-The generated subgraphs are standard `Subgraph` objects. Developers can modify them before registration:
+`CrudHandler.subgraph` is a plain `Subgraph` value. Extend it with additional Nodes / edges before registration; for more involved shapes, copy the canonical CRUD out and rebuild with `subgraph()` directly.
 
 ```typescript
-const postHandlers = crud('post', { schema: 'contentType:post', capability: 'store:post' });
+const handle = crud('post', { capability: 'store:write:post/*' });
 
-// Insert a slug generation step before write in the create handler
-postHandlers.create.insertBefore('WRITE',
-  gate('content/generateUniqueSlug', { title: '$input.title' })
-);
+// Re-wrap to append a trailing EMIT after the existing RESPOND-create case.
+const custom = subgraph('post-handler')
+  .action('create').action('get').action('list').action('update').action('delete')
+  .branch({ on: '$input.action' })
+    .case('create', s => s
+      .write({ label: 'post', properties: { from: '$input' }, requires: 'store:write:post/*' })
+      .emit({ event: 'post:afterCreate', payload: '{ cid: $result.cid }' })
+      .respond({ body: '$result' }),
+    )
+    .case('get', s => s
+      .read({ label: 'post', by: 'cid', value: '$input.cid' })
+      .respond({ body: '$result' }),
+    )
+    // ... list / update / delete unchanged
+  .endBranch()
+  .build();
 
-// Add a search index update after the create event
-postHandlers.create.insertAfter('EMIT',
-  call('search/indexDocument', { input: { id: '$result.id', type: 'post' } })
-);
-
-ctx.registerSubgraphs(postHandlers.all);
+await engine.registerSubgraph(custom);
 ```
 
 ---
@@ -1247,14 +1073,14 @@ These constraints keep lambdas inspectable and total. An AI agent can read `filt
 |---------|---------|-------------|
 | Variable declaration (`let`, `const`) | Would create state | Use `as` option on steps |
 | Loops (`for`, `while`) | Unbounded computation | Use ITERATE node |
-| Function definition | Would create closures | Use GATE handler |
+| Function definition | Would create closures | Use a SANDBOX node or extract to a separate subgraph and `call()` it |
 | `async`/`await` | Expressions are synchronous | Graph handles async via edges |
-| `try`/`catch` | Expressions cannot fail (fail-closed) | Error edges on nodes |
+| `try`/`catch` | Expressions cannot fail (fail-closed) | Typed error edges on nodes |
 | `new` | Object construction syntax differs | Use `{ }` object literals |
 | `import`/`require` | No module system | Built-in functions only |
 | `this` | No context binding | Use `$ctx` |
 | Regular expressions | Complexity + ReDoS risk | Use `contains()`, `startsWith()`, `replace()` |
-| Bitwise operators | Rarely needed in business logic | Use GATE handler |
+| Bitwise operators | Rarely needed in business logic | Use a SANDBOX node |
 | `typeof`, `instanceof` | Use `typeOf()` function instead | `typeOf($result)` |
 | Template literals | Complexity | String concatenation with `+` |
 
@@ -1288,102 +1114,82 @@ The implementation reuses jsep for parsing and the custom AST walker for evaluat
 Every operation that can fail has typed error edges. Handling errors at the point of failure keeps the error path visible in the graph.
 
 ```typescript
-const handler = subgraph('POST /api/posts')
-  .require('store:write:post/*')
-  .validate('contentType:post')
-    .onInvalid(respond(400, { error: 'Invalid input', details: '$error.fields' }))
-  .read('post', { lookup: { field: 'slug', value: '$input.slug' } })
-    .onNotFound(
-      // Slug is available -- proceed to create
-      write('post', { data: '$input' })
+// Idiomatic pattern: validation as a BRANCH on a schema predicate;
+// slug uniqueness via a READ that routes through ON_EMPTY (slug is free).
+const createPost = subgraph('create-post')
+  .action('post:create')
+  // Schema validation composes from BRANCH + TRANSFORM + RESPOND
+  // (the pre-revision VALIDATE primitive; see Appendix D).
+  .branch({ on: 'isValid($input, "contentType:post")' })
+    .case('false', s => s
+      .respond({ status: 400, body: '{ error: "invalid input", details: $error.fields }' }),
     )
-    // .onNotFound() not triggered means slug exists -- conflict
-  .respond(409, { error: 'A post with this slug already exists' });
+    .case('true', s => s
+      .read({ label: 'post', by: 'slug', value: '$input.slug' })
+      .respond({ edge: 'ON_NOT_FOUND', status: 0 })  // slug free: fall through
+      .respond({ edge: 'ON_EMPTY', status: 0 })      // query variant: continue
+      .write({
+        label: 'post',
+        properties: { ...('$input' as any), createdAt: 'now()', updatedAt: 'now()' },
+        requires: 'store:write:post/*',
+      })
+      .emit({ event: 'content:afterCreate', payload: '{ cid: $result.cid }' })
+      .respond({ status: 201, body: '$result' }),
+    )
+  .endBranch()
+  .build();
 ```
 
-Wait -- that pattern is awkward. Let us show the correct idiomatic pattern:
-
-```typescript
-const createPost = subgraph('POST /api/posts')
-  .require('store:write:post/*')
-  .validate('contentType:post')
-    .onInvalid(respond(400, { error: 'Invalid input', details: '$error.fields' }))
-  .read('post', { lookup: { field: 'slug', value: '$input.slug' } })
-    .onNotEmpty(respond(409, { error: 'Slug already exists' }))
-  .write('post', { data: { ...'$input', createdAt: 'now()', updatedAt: 'now()' } })
-  .emit('content:afterCreate', { id: '$result.id' })
-  .respond(201, '$result');
-```
-
-The `.onNotEmpty()` method on a read-by-lookup checks the INVERSE condition: "if a record WAS found, that is the error." This is the uniqueness-check pattern.
+The slug-uniqueness idiom is the typed-error-edge pattern: READ fires `ON_NOT_FOUND` (single lookup) or `ON_EMPTY` (query) when the slug is free, so the happy path continues to WRITE; if the READ *does* return a Node, the chain naturally terminates with the configured conflict response.
 
 ### 6.2 Error Edge Summary
 
-| Step Type | Error Methods | Default if Unhandled |
-|-----------|-------------|---------------------|
-| `read()` (by id/lookup) | `.onNotFound()` | `respond(404)` |
-| `read()` (query) | `.onEmpty()` | Continue (empty array is valid) |
-| `read()` (by lookup) | `.onNotEmpty()` | Continue (finding a record is valid) |
-| `write()` (update) | `.onConflict()`, `.onNotFound()` | `respond(409)` / `respond(404)` |
-| `write()` (delete) | `.onNotFound()` | `respond(404)` |
-| `validate()` | `.onInvalid()` | `respond(400, $error)` |
-| `gate()` | `.onError()` | `respond(500)` |
-| `sandbox()` | `.onError()`, `.onTimeout()` | `respond(500)` / `respond(504)` |
-| `call()` | `.onError()`, `.onTimeout()` | `respond(500)` / `respond(504)` |
-| `wait()` | `.onTimeout()` | `respond(504)` |
-| `iterate()` | `.onItemError()`, `.onLimitExceeded()` | abort subgraph / `respond(413)` |
-| `.require()` | (implicit) | `respond(403)` |
+| Primitive | Edge Types | Default if Unhandled |
+|-----------|-----------|---------------------|
+| `read()` (by id/lookup) | `ON_NOT_FOUND` | `respond(404)` |
+| `read()` (query) | `ON_EMPTY` | Continue (empty array is valid) |
+| `read()` / `write()` | `ON_DENIED` | `respond(403)` |
+| `write()` (update) | `ON_CONFLICT` | `respond(409)` |
+| `sandbox()` | `ON_ERROR`, `ON_TIMEOUT` | `respond(500)` / `respond(504)` (Phase 2 executor) |
+| `call()` | `ON_ERROR`, `ON_TIMEOUT` | `respond(500)` / `respond(504)` |
+| `wait()` | `ON_TIMEOUT` | `respond(504)` (Phase 2 executor) |
+| `iterate()` | `ON_ITEM_ERROR`, `ON_LIMIT` | abort subgraph / `respond(413)` |
+
+Capability denial (`ON_DENIED`) replaces the old `.require()`-based `GATE` pattern: the `requires` property on any Node triggers an automatic BRANCH to `ON_DENIED` when the policy rejects it. See [Appendix D](#appendix-d-migration-from-the-pre-revision-draft).
 
 ### 6.3 Compensation (Saga Pattern)
 
-For multi-step operations where failure requires undoing previous steps, use the `compensate()` wrapper:
+For multi-step operations where failure requires undoing previous steps, use the `compensate()` wrapper. Compensation is a stdlib pattern that composes BRANCH + CALL (undo subgraph) rather than a first-class primitive.
 
 ```typescript
-import { compensate } from '@benten/engine/operations';
+import { subgraph, call, write, emit, iterate, compensate } from '@benten/engine';  // compensate is a stdlib helper
 
-const checkoutFlow = subgraph('POST /api/checkout')
-  .require('commerce:write')
-  .validate('CheckoutSchema')
+const checkoutFlow = subgraph('checkout')
+  .action('checkout:process')
   .compensate('Checkout Transaction', (saga) => {
     saga
       .step(
-        gate('commerce/calculateTotal'),
+        call({ handler: 'commerce/calculate-total' }),
         // No compensation needed for a pure calculation
       )
       .step(
-        gate('payment/chargeCard', { token: '$input.paymentToken', amount: '$total' }),
+        call({ handler: 'payment/charge-card', input: '{ token: $input.paymentToken, amount: $total }' }),
         // On failure: refund the charge
-        { undo: gate('payment/refundCharge', { chargeId: '$result.chargeId' }) }
+        { undo: call({ handler: 'payment/refund-charge', input: '{ chargeId: $result.chargeId }' }) },
       )
       .step(
-        write('order', { data: '$orderData' }),
-        // On failure: delete the order
-        { undo: write('order', { action: 'delete', id: '$result.id' }) }
+        write({ label: 'order', properties: '$orderData', requires: 'commerce:write' }),
+        // On failure: write a tombstone.
+        { undo: write({ label: 'order', properties: { cid: '$result.cid', tombstone: true } }) },
       )
       .step(
-        iterate('$cart.items', (item) =>
-          write('inventory', {
-            action: 'update',
-            id: '$item.inventoryId',
-            data: { quantity: '$item.currentQty - $item.orderQty' },
-          }),
-          { max: 100 }
-        ),
-        // On failure: restore inventory quantities
-        {
-          undo: iterate('$cart.items', (item) =>
-            write('inventory', {
-              action: 'update',
-              id: '$item.inventoryId',
-              data: { quantity: '$item.currentQty' },
-            }),
-            { max: 100 }
-          )
-        }
+        iterate({ over: '$cart.items', max: 100 }),
+        // Body and undo omitted for brevity; see Example 3 in §12.
       );
   })
-  .emit('commerce:orderCreated', '$result')
-  .respond(201, '$result');
+  .emit({ event: 'commerce:orderCreated', payload: '$result' })
+  .respond({ status: 201, body: '$result' })
+  .build();
 ```
 
 **How compensation works:**
@@ -1399,50 +1205,52 @@ const checkoutFlow = subgraph('POST /api/checkout')
 When error edges are not explicitly handled, the engine generates sensible defaults:
 
 ```json
-// 400 - Validation failed
+// 400 - Validation failed (composed via BRANCH + RESPOND)
 {
-  "error": "VALIDATION_FAILED",
+  "error": "E_DSL_INVALID_SHAPE",
   "message": "Input validation failed",
   "details": [
     { "path": "title", "message": "Required" },
     { "path": "email", "message": "Must be a valid email address" }
   ],
-  "subgraph": "POST /api/posts",
-  "node": "validate-0"
+  "subgraph": "create-post",
+  "node": "branch-1"
 }
 
-// 403 - Capability denied
+// 403 - Capability denied (requires-property rejection)
 {
-  "error": "CAPABILITY_DENIED",
+  "error": "E_CAP_DENIED_WRITE",
   "message": "Missing required capability: store:write:post/*",
-  "subgraph": "POST /api/posts",
-  "node": "require-0"
+  "subgraph": "create-post",
+  "node": "write-3"
 }
 
 // 404 - Not found
 {
-  "error": "NOT_FOUND",
-  "message": "post with id 'abc-123' not found",
-  "subgraph": "GET /api/posts/:id",
-  "node": "read-0"
+  "error": "E_NODE_NOT_FOUND",
+  "message": "post with cid 'bafyr4i...' not found",
+  "subgraph": "post-handler",
+  "node": "read-2"
 }
 
 // 409 - Version conflict
 {
-  "error": "VERSION_CONFLICT",
+  "error": "E_WRITE_CONFLICT",
   "message": "Expected version 3, found version 5",
-  "subgraph": "PUT /api/posts/:id",
-  "node": "write-0"
+  "subgraph": "post-handler",
+  "node": "write-4"
 }
 
-// 500 - Handler error
+// 500 - Sub-call error
 {
-  "error": "HANDLER_ERROR",
-  "message": "Handler 'commerce/calculateTax' failed: Tax service unavailable",
-  "subgraph": "POST /api/checkout",
-  "node": "gate-2"
+  "error": "E_CALL_FAILED",
+  "message": "Callee 'commerce/calculate-tax' aborted: Tax service unavailable",
+  "subgraph": "checkout",
+  "node": "call-5"
 }
 ```
+
+Error codes are stable and catalogued in [`ERROR-CATALOG.md`](ERROR-CATALOG.md).
 
 All error responses include `subgraph` and `node` for debuggability. In production, set `sanitizeErrors: true` to omit internal details from client responses while preserving them in logs.
 
@@ -1450,96 +1258,91 @@ All error responses include `subgraph` and `node` for debuggability. In producti
 
 ## 7. Branching and Iteration
 
-### 7.1 Two-Way Branch (Boolean)
+### 7.1 Two-Way Branch
 
-The simplest branch: true or false.
+BRANCH on a single expression, with `true` / `false` case handlers.
 
 ```typescript
-const handler = subgraph('POST /api/posts/publish')
-  .require('content:publish')
-  .read('post', { id: '$input.id' })
-    .onNotFound(respond(404))
-  .branch('$result.status === "draft"')
-    .then(
-      write('post', { action: 'update', id: '$input.id', data: { status: 'published', publishedAt: 'now()' } }),
-      emit('content:afterPublish', { id: '$input.id' }),
-      respond(200, { published: true }),
+const publishPost = subgraph('publish-post')
+  .action('post:publish')
+  .read({ label: 'post', by: 'cid', value: '$input.cid' })
+  .branch({ on: '$result.status === "draft"' })
+    .case('true', s => s
+      .write({
+        label: 'post',
+        properties: { cid: '$input.cid', status: 'published', publishedAt: 'now()' },
+        requires: 'content:publish',
+      })
+      .emit({ event: 'content:afterPublish', payload: '{ cid: $input.cid }' })
+      .respond({ status: 200, body: '{ published: true }' }),
     )
-    .otherwise(
-      respond(400, { error: 'Post is already published' }),
-    );
+    .case('false', s => s
+      .respond({ status: 400, body: '{ error: "Post is already published" }' }),
+    )
+  .endBranch()
+  .build();
 ```
 
 ### 7.2 Multi-Way Branch
 
+BRANCH accepts an arbitrary number of `.case(value, body)` entries; the evaluator routes on exact-match of `on` against the case value.
+
 ```typescript
-const handler = subgraph('POST /api/payments/process')
-  .require('commerce:payment')
-  .validate('PaymentSchema')
-  .branch()
-    .when('$input.method === "stripe"',
-      gate('payment/chargeStripe', { token: '$input.token', amount: '$input.amount' }),
-      respond(200, '$result'),
+const processPayment = subgraph('process-payment')
+  .action('payment:process')
+  .branch({ on: '$input.method' })
+    .case('stripe', s => s
+      .call({ handler: 'payment/charge-stripe', input: '{ token: $input.token, amount: $input.amount }' })
+      .respond({ status: 200, body: '$result' }),
     )
-    .when('$input.method === "paypal"',
-      gate('payment/chargePaypal', { orderId: '$input.orderId' }),
-      respond(200, '$result'),
+    .case('paypal', s => s
+      .call({ handler: 'payment/charge-paypal', input: '{ orderId: $input.orderId }' })
+      .respond({ status: 200, body: '$result' }),
     )
-    .when('$input.method === "crypto"',
-      sandbox('payment/chargeCrypto', {
-        input: { address: '$input.address', amount: '$input.amount' },
-        fuel: 50_000,
-        timeout: 60_000,
-      }),
-      respond(200, '$result'),
+    .case('crypto', s => s
+      .sandbox({ module: 'bafyr4i...crypto-charge-module-cid', fuel: 50_000 })
+      .respond({ status: 200, body: '$result' }),
     )
-    .otherwise(
-      respond(400, { error: 'Unsupported payment method: $input.method' }),
-    );
+  .endBranch()
+  .build();
 ```
+
+For an "otherwise" default, add a trailing `.case('*', s => ...)` body that explicitly matches any unhandled value -- the shipped DSL uses exact-match semantics plus an explicit catch-all case; there is no separate `.otherwise()` today.
 
 ### 7.3 Iteration with Per-Item Processing
 
 ```typescript
-const importProducts = subgraph('POST /api/products/import')
-  .require('store:write:product/*')
-  .validate('ImportSchema')
-  .iterate('$input.rows', (row) => [
-    validate('ProductRowSchema'),
-    write('product', { action: 'upsert', data: '$item' }),
-  ], {
-    max: 1000,
-    parallel: true,
-    maxConcurrency: 10,
-    as: '$item',
-    collectAs: '$imported',
-  })
-    .onItemError(
-      transform({ failedRow: '$index', error: '$error.message' })
-      // Collected into $errors automatically
-    )
-  .transform({
-    imported: 'len(filter($imported, r => r.success))',
-    failed: 'len(filter($imported, r => !r.success))',
-    errors: '$errors',
-  })
-  .respond(200);
+const importProducts = subgraph('import-products')
+  .action('product:import')
+  .iterate({ over: '$input.rows', max: 1000 })
+  .write({ label: 'product', properties: '$item', requires: 'store:write:product/*' })
+  .transform({ expr: '{ success: true, cid: $result.cid, index: $index }' })
+  .respond({ body: '$results' })
+  .build();
 ```
+
+The ITERATE body follows the immediate NEXT chain until the next RESPOND or the subgraph ends. Per-item shape checks compose from an inner BRANCH that short-circuits into a RESPOND when the predicate fails; the outer ITERATE collects successes and aborted-body items into `$results`. See [Appendix D](#appendix-d-migration-from-the-pre-revision-draft) for the VALIDATE → composed-BRANCH pattern.
 
 ### 7.4 Parallel Execution via Iterate
 
-There is no separate `parallel()` node. Parallelism is expressed through `iterate()` with `parallel: true`. For fork-join patterns where the branches are heterogeneous (not iterating over a collection), use multiple `call()` steps or a `gate()` handler.
+Parallelism is expressed through `iterate()`'s parallel mode (configured on the ITERATE Node args; the Phase 2 executor extends this to a host-provided concurrency limit). For fork-join patterns where branches are heterogeneous (not iterating over a collection), use multiple `call()` primitives -- the evaluator executes independent `call()` paths concurrently when they fan out from the same predecessor.
 
 ```typescript
 // Homogeneous parallel: iterate over items
-iterate('$input.imageUrls', (img) =>
-  sandbox('media/resize', { input: { url: '$item' }, fuel: 100_000 }),
-  { max: 20, parallel: true, maxConcurrency: 5 }
-)
+subgraph('resize-images')
+  .iterate({ over: '$input.imageUrls', max: 20 })
+  .sandbox({ module: 'bafyr4i...resize-module-cid', fuel: 100_000 })
+  .respond({ body: '$results' })
+  .build();
 
-// Heterogeneous parallel: use gate handler
-gate('dashboard/fetchAllData')
-// The gate handler internally uses Promise.all/allSettled
+// Heterogeneous parallel: fan out via multiple call() nodes
+subgraph('dashboard-fetch')
+  .call({ handler: 'analytics/fetch-pageviews' })
+  .call({ handler: 'commerce/fetch-revenue' })
+  .call({ handler: 'content/fetch-recent' })
+  .transform({ expr: '{ pageviews: $r0, revenue: $r1, recent: $r2 }' })
+  .respond({ body: '$result' })
+  .build();
 ```
 
 ---
@@ -1756,12 +1559,11 @@ it('executes nodes in expected order', async () => {
     trace: true,
   });
 
-  expect(result.trace).toHaveLength(6);
+  expect(result.trace).toHaveLength(5);
   expect(result.trace.map(t => t.type)).toEqual([
-    'GATE',       // require capability
-    'VALIDATE',   // schema validation
+    'BRANCH',     // schema predicate (composed VALIDATE)
     'READ',       // slug uniqueness check
-    'WRITE',      // create post
+    'WRITE',      // create post (requires-property gates at commit)
     'EMIT',       // afterCreate event
     'RESPOND',    // 201 response
   ]);
@@ -1779,14 +1581,14 @@ it('handles payment failure with compensation', async () => {
   const engine = createTestEngine();
   engine.registerSubgraph(checkoutFlow);
 
-  // Mock the payment handler to fail
-  engine.mockHandler('payment/chargeCard', async () => {
+  // Mock the payment subgraph to fail
+  engine.mockHandler('payment/charge-card', async () => {
     throw new Error('Card declined');
   });
 
   // Track compensation calls
   const refundCalls: any[] = [];
-  engine.mockHandler('payment/refundCharge', async (input) => {
+  engine.mockHandler('payment/refund-charge', async (input) => {
     refundCalls.push(input);
     return { refunded: true };
   });
@@ -1800,7 +1602,7 @@ it('handles payment failure with compensation', async () => {
 
   expect(result.status).toBe(402);
   // Verify compensation ran (no stale charge)
-  expect(result.trace.some(t => t.type === 'GATE' && t.label === 'undo:payment')).toBe(true);
+  expect(result.trace.some(t => t.type === 'CALL' && t.label === 'undo:payment')).toBe(true);
 });
 ```
 
@@ -1808,22 +1610,22 @@ it('handles payment failure with compensation', async () => {
 
 ```typescript
 it('crud generates expected graph structure', () => {
-  const handlers = crud('post', {
-    schema: 'contentType:post',
-    capability: 'store:post',
-  });
+  const handle = crud('post', { capability: 'store:write:post/*' });
 
-  const createGraph = handlers.create.compile();
+  const sg = handle.subgraph;
 
-  expect(createGraph.nodes).toHaveLength(6);
-  expect(createGraph.nodes.map(n => n.type)).toEqual([
-    'GATE', 'VALIDATE', 'TRANSFORM', 'WRITE', 'EMIT', 'RESPOND',
+  // One dispatch BRANCH + five cases, each a tiny linear chain.
+  expect(sg.nodes.map(n => n.primitive)).toEqual([
+    'branch',
+    'write', 'respond',  // create
+    'read',  'respond',  // get
+    'read',  'respond',  // list
+    'write', 'respond',  // update
+    'write', 'respond',  // delete
   ]);
-  expect(createGraph.edges.filter(e => e.type === 'ON_INVALID')).toHaveLength(1);
-  expect(createGraph.edges.filter(e => e.type === 'ON_DENIED')).toHaveLength(1);
 
   // Snapshot for regression detection
-  expect(createGraph).toMatchSnapshot();
+  expect(sg).toMatchSnapshot();
 });
 ```
 
@@ -1857,23 +1659,19 @@ it('scores content correctly', async () => {
 
 The Python API uses PyO3 bindings to call the same Rust engine. The DSL mirrors the TypeScript API with Python idioms: snake_case, keyword arguments, context managers.
 
+The PyO3-backed Python API is a Phase 2+ deliverable; the shapes below mirror the shipped TypeScript DSL and are included for reference once bindings land. Until then, treat this section as a design sketch -- the TypeScript sections are the load-bearing source of truth.
+
 ### 10.1 Basic Chain
 
 ```python
-from benten import subgraph, read, write, validate, transform, respond, emit
+from benten import subgraph
 
-list_posts = (subgraph('GET /api/posts')
-  .require('store:read:post/*')
-  .read('post',
-    where={'published': True},
-    order_by={'created_at': 'desc'},
-    limit=20,
-  )
-  .transform({
-    'items': '$result',
-    'total': 'len($result)',
-  })
-  .respond(200))
+list_posts = (subgraph('list-posts')
+  .action('post:list')
+  .read(label='post', by='_listView')
+  .transform(expr='{ items: $result, total: len($result) }')
+  .respond(body='$result')
+  .build())
 ```
 
 ### 10.2 CRUD Shorthand
@@ -1881,70 +1679,51 @@ list_posts = (subgraph('GET /api/posts')
 ```python
 from benten import crud
 
-post_handlers = crud('post',
-  schema='contentType:post',
-  capability='store:post',
-  list={'sort': {'created_at': 'desc'}, 'limit': 20},
-  create={'defaults': {'status': 'draft'}},
-  update={'optimistic_locking': True},
-  delete={'soft': True},
-)
-
-ctx.register_subgraphs(post_handlers.all)
+post_handle = crud('post', capability='store:write:post/*')
+engine.register_subgraph(post_handle)
 ```
 
 ### 10.3 Branching
 
 ```python
-from benten import subgraph, branch, gate, call, respond
+from benten import subgraph
 
-payment_handler = (subgraph('POST /api/payments/process')
-  .require('commerce:payment')
-  .validate('PaymentSchema')
-  .branch()
-    .when('$input.method === "stripe"',
-      gate('payment/charge_stripe', token='$input.token', amount='$input.amount'),
-      respond(200, '$result'),
-    )
-    .when('$input.method === "paypal"',
-      gate('payment/charge_paypal', order_id='$input.order_id'),
-      respond(200, '$result'),
-    )
-    .otherwise(
-      respond(400, {'error': 'Unsupported payment method'}),
-    ))
+payment_handler = (subgraph('process-payment')
+  .action('payment:process')
+  .branch(on='$input.method')
+    .case('stripe', lambda s: (s
+      .call(handler='payment/charge-stripe', input='{ token: $input.token, amount: $input.amount }')
+      .respond(status=200, body='$result')))
+    .case('paypal', lambda s: (s
+      .call(handler='payment/charge-paypal', input='{ orderId: $input.orderId }')
+      .respond(status=200, body='$result')))
+  .end_branch()
+  .build())
 ```
 
 ### 10.4 Error Handling
 
 ```python
-create_post = (subgraph('POST /api/posts')
-  .require('store:write:post/*')
-  .validate('contentType:post')
-    .on_invalid(respond(400, {'error': 'Validation failed', 'details': '$error.fields'}))
-  .read('post', lookup={'field': 'slug', 'value': '$input.slug'})
-    .on_not_empty(respond(409, {'error': 'Slug already exists'}))
-  .write('post', data='$input')
-  .emit('content:afterCreate', {'id': '$result.id'})
-  .respond(201, '$result'))
+# Slug uniqueness via a READ that routes ON_NOT_FOUND to the WRITE path.
+create_post = (subgraph('create-post')
+  .action('post:create')
+  .read(label='post', by='slug', value='$input.slug')
+  .respond(edge='ON_NOT_FOUND', status=0)  # slug free: fall through
+  .write(label='post', properties='$input', requires='store:write:post/*')
+  .emit(event='content:afterCreate', payload='{ cid: $result.cid }')
+  .respond(status=201, body='$result')
+  .build())
 ```
 
 ### 10.5 Iteration
 
 ```python
-import_products = (subgraph('POST /api/products/import')
-  .require('store:write:product/*')
-  .validate('ImportSchema')
-  .iterate('$input.rows',
-    body=lambda row: [
-      validate('ProductRowSchema'),
-      write('product', action='upsert', data='$item'),
-    ],
-    max=1000,
-    parallel=True,
-    max_concurrency=10,
-  )
-  .respond(200, {'imported': 'len($results)'}))
+import_products = (subgraph('import-products')
+  .action('product:import')
+  .iterate(over='$input.products', max=5000)
+  .write(label='product', properties='$item', requires='store:write:product/*')
+  .respond(body='$results')
+  .build())
 ```
 
 ### 10.6 Testing
@@ -1979,7 +1758,7 @@ def test_rejects_invalid():
     )
 
     assert result.status == 400
-    assert result.body['error'] == 'VALIDATION_FAILED'
+    assert result.body['error'] == 'E_DSL_INVALID_SHAPE'
 ```
 
 ### 10.7 Naming Conventions
@@ -1987,16 +1766,12 @@ def test_rejects_invalid():
 | TypeScript | Python |
 |-----------|--------|
 | `subgraph()` | `subgraph()` |
-| `.onNotFound()` | `.on_not_found()` |
-| `.onInvalid()` | `.on_invalid()` |
-| `.onConflict()` | `.on_conflict()` |
-| `.onNotEmpty()` | `.on_not_empty()` |
-| `.onError()` | `.on_error()` |
-| `.onTimeout()` | `.on_timeout()` |
-| `.onItemError()` | `.on_item_error()` |
-| `orderBy` | `order_by` |
-| `maxConcurrency` | `max_concurrency` |
-| `optimisticLocking` | `optimistic_locking` |
+| `.endBranch()` | `.end_branch()` |
+| `.case(value, body)` | `.case(value, body)` |
+| `build()` | `build()` |
+| `debugRead` (option) | `debug_read` |
+| `chunkSize` (arg) | `chunk_size` |
+| camelCase arg keys | snake_case arg keys |
 
 The expression language is identical across both languages. Expressions are strings evaluated by the engine, not by the host language.
 
@@ -2010,245 +1785,152 @@ The DSL is a builder that constructs a `Subgraph` object at registration time. A
 
 ```typescript
 interface Subgraph {
-  /** Unique identifier (e.g., 'GET /api/posts', 'commerce/checkout'). */
+  /** Handler id (unique namespace for the subgraph). */
+  handlerId: string;
+  /** Declared action strings (e.g. ['post:create', 'post:get', ...]). */
+  actions: string[];
+  /** All Subgraph Nodes, keyed by local id (`read-1`, `branch-2`, etc.). */
+  nodes: SubgraphNode[];
+  /** The root Node id (entry point of evaluation). */
+  root: string;
+}
+
+interface SubgraphNode {
+  /** Local id, auto-generated as `<primitive>-<counter>`. */
   id: string;
-  /** Human-readable label. */
-  label?: string;
-  /** The entry-point Node ID. */
-  entryNode: string;
-  /** All Nodes in the subgraph. */
-  nodes: OperationNode[];
-  /** All Edges connecting the Nodes. */
-  edges: OperationEdge[];
-  /** Required capabilities for the entire subgraph. */
-  capabilities: string[];
-  /** Maximum execution timeout. */
-  timeout?: number;
+  /** One of the 12 primitive types. */
+  primitive: Primitive;
+  /** Primitive-specific args (shape from §2). */
+  args: Record<string, JsonValue>;
+  /** Outgoing edges, keyed by edge label. */
+  edges: Record<string, string>;
 }
 
-interface OperationNode {
-  /** Unique ID within the subgraph (auto-generated: '{type}-{index}'). */
-  id: string;
-  /** One of the 12 operation types. */
-  type: OperationType;
-  /** Human-readable label (for debugging/tracing). */
-  label?: string;
-  /** Type-specific properties. */
-  properties: Record<string, JsonValue>;
-}
-
-type OperationType =
-  | 'READ' | 'WRITE' | 'TRANSFORM' | 'BRANCH' | 'ITERATE'
-  | 'WAIT' | 'GATE' | 'CALL' | 'RESPOND' | 'EMIT'
-  | 'SANDBOX' | 'VALIDATE';
-
-interface OperationEdge {
-  /** Source Node ID. */
-  from: string;
-  /** Target Node ID. */
-  to: string;
-  /** Edge type (determines semantics). */
-  type: OperationEdgeType;
-  /** Optional data transform applied as data flows through this edge. */
-  transform?: Record<string, string>;
-}
-
-type OperationEdgeType =
-  | 'NEXT'
-  | 'ON_NOT_FOUND' | 'ON_EMPTY' | 'ON_NOT_EMPTY'
-  | 'ON_INVALID' | 'ON_CONFLICT' | 'ON_DENIED'
-  | 'ON_ERROR' | 'ON_TIMEOUT' | 'ON_FAILURE' | 'ON_LIMIT'
-  | 'BRANCH' | 'BRANCH_DEFAULT'
-  | 'BODY' | 'UNDO';
+type Primitive =
+  | 'read' | 'write' | 'transform' | 'branch' | 'iterate'
+  | 'wait' | 'call' | 'respond' | 'emit'
+  | 'sandbox' | 'subscribe' | 'stream';
 ```
+
+Edge labels follow these conventions:
+
+| Label | When |
+|-------|------|
+| `NEXT` | Default forward edge (top-to-bottom chain order). |
+| `CASE:<value>` | BRANCH case body (one per `.case(value, body)` call). |
+| `ON_NOT_FOUND` | READ of a single lookup returned nothing. |
+| `ON_EMPTY` | READ of a query returned zero rows. |
+| `ON_CONFLICT` | WRITE CAS failed. |
+| `ON_DENIED` | `requires`-property rejection at commit. |
+| `ON_ERROR`, `ON_TIMEOUT`, `ON_LIMIT`, `ON_ITEM_ERROR` | Typed error edges per ENGINE-SPEC §5. |
 
 ### 11.2 Compilation Example
 
 Given this DSL code:
 
 ```typescript
-const createPost = subgraph('POST /api/posts')
-  .require('store:write:post/*')
-  .validate('contentType:post')
-    .onInvalid(respond(400, { error: 'Invalid input', details: '$error.fields' }))
-  .read('post', { lookup: { field: 'slug', value: '$input.slug' } })
-    .onNotEmpty(respond(409, { error: 'Slug already exists' }))
-  .write('post', { data: { title: '$input.title', slug: '$input.slug', createdAt: 'now()' } })
-  .emit('content:afterCreate', { id: '$result.id' })
-  .respond(201, '$result');
+const createPost = subgraph('create-post')
+  .action('post:create')
+  .read({ label: 'post', by: 'slug', value: '$input.slug' })
+  .respond({ edge: 'ON_NOT_FOUND', status: 0 })  // slug free: fall through
+  .write({
+    label: 'post',
+    properties: { title: '$input.title', slug: '$input.slug', createdAt: 'now()' },
+    requires: 'store:write:post/*',
+  })
+  .emit({ event: 'content:afterCreate', payload: '{ cid: $result.cid }' })
+  .respond({ status: 201, body: '$result' })
+  .build();
 ```
 
 The builder produces:
 
 ```typescript
-// createPost.compile() returns:
+// createPost (returned by .build())
 {
-  id: 'POST /api/posts',
-  entryNode: 'gate-0',
-  capabilities: ['store:write:post/*'],
+  handlerId: 'create-post',
+  actions: ['post:create'],
+  root: 'read-1',
   nodes: [
     {
-      id: 'gate-0',
-      type: 'GATE',
-      label: 'require store:write:post/*',
-      properties: {
-        mode: 'capability',
-        check: 'store:write:post/*',
-      },
+      id: 'read-1',
+      primitive: 'read',
+      args: { label: 'post', by: 'slug', value: '$input.slug' },
+      edges: { NEXT: 'write-3' },  // slug free -> proceed to write
     },
     {
-      id: 'validate-0',
-      type: 'VALIDATE',
-      label: 'validate contentType:post',
-      properties: {
-        schema: 'contentType:post',
-        mode: 'strip',
-      },
+      id: 'respond-2',
+      primitive: 'respond',
+      args: { edge: 'ON_NOT_FOUND', status: 0 },
+      edges: {},  // terminal
     },
     {
-      id: 'respond-invalid',
-      type: 'RESPOND',
-      label: '400 Invalid input',
-      properties: {
-        status: 400,
-        body: { error: 'Invalid input', details: '$error.fields' },
+      id: 'write-3',
+      primitive: 'write',
+      args: {
+        label: 'post',
+        properties: { title: '$input.title', slug: '$input.slug', createdAt: 'now()' },
+        requires: 'store:write:post/*',
       },
+      edges: { NEXT: 'emit-4' },
     },
     {
-      id: 'read-0',
-      type: 'READ',
-      label: 'lookup post by slug',
-      properties: {
-        target: 'post',
-        mode: 'lookup',
-        lookupField: 'slug',
-        lookupValue: '$input.slug',
-      },
+      id: 'emit-4',
+      primitive: 'emit',
+      args: { event: 'content:afterCreate', payload: '{ cid: $result.cid }' },
+      edges: { NEXT: 'respond-5' },
     },
     {
-      id: 'respond-conflict',
-      type: 'RESPOND',
-      label: '409 Slug already exists',
-      properties: {
-        status: 409,
-        body: { error: 'Slug already exists' },
-      },
+      id: 'respond-5',
+      primitive: 'respond',
+      args: { status: 201, body: '$result' },
+      edges: {},
     },
-    {
-      id: 'write-0',
-      type: 'WRITE',
-      label: 'create post',
-      properties: {
-        target: 'post',
-        action: 'create',
-        data: { title: '$input.title', slug: '$input.slug', createdAt: 'now()' },
-      },
-    },
-    {
-      id: 'emit-0',
-      type: 'EMIT',
-      label: 'content:afterCreate',
-      properties: {
-        event: 'content:afterCreate',
-        payload: { id: '$result.id' },
-      },
-    },
-    {
-      id: 'respond-0',
-      type: 'RESPOND',
-      label: '201 Created',
-      properties: {
-        status: 201,
-        body: '$result',
-      },
-    },
-    {
-      id: 'respond-denied',
-      type: 'RESPOND',
-      label: '403 Forbidden',
-      properties: {
-        status: 403,
-        body: { error: 'CAPABILITY_DENIED', message: 'Missing required capability: store:write:post/*' },
-      },
-    },
-  ],
-  edges: [
-    // Happy path
-    { from: 'gate-0',      to: 'validate-0',       type: 'NEXT' },
-    { from: 'validate-0',  to: 'read-0',           type: 'NEXT' },
-    { from: 'read-0',      to: 'write-0',          type: 'NEXT' },           // lookup found nothing -> proceed
-    { from: 'write-0',     to: 'emit-0',           type: 'NEXT' },
-    { from: 'emit-0',      to: 'respond-0',        type: 'NEXT' },
-
-    // Error paths
-    { from: 'gate-0',      to: 'respond-denied',   type: 'ON_DENIED' },
-    { from: 'validate-0',  to: 'respond-invalid',  type: 'ON_INVALID' },
-    { from: 'read-0',      to: 'respond-conflict', type: 'ON_NOT_EMPTY' },  // slug exists = conflict
   ],
 }
 ```
 
-### 11.3 Structural Validation at Compile Time
+The evaluator routes typed error edges (`ON_DENIED` on `write-3`, `ON_NOT_FOUND` on `read-1`) to the nearest matching `respond({ edge: '<code>', ... })` Node; if none is provided, it falls back to the engine's default error responses using codes from [`ERROR-CATALOG.md`](ERROR-CATALOG.md).
 
-When `.compile()` runs (or when the subgraph is registered), the builder validates:
+### 11.3 Structural Validation at Build Time
 
-| Check | Error if Violated |
-|-------|------------------|
-| Every execution path ends with RESPOND | `SUBGRAPH_NO_TERMINAL: Path from 'write-0' does not reach a RESPOND node` |
-| No unreachable Nodes | `SUBGRAPH_UNREACHABLE: Node 'transform-3' is not reachable from entry node 'gate-0'` |
-| ITERATE has `max` property | `ITERATE_UNBOUNDED: ITERATE node 'iterate-0' must specify 'max' (bounded iteration required)` |
-| No cycles in the execution graph | `SUBGRAPH_CYCLE: Cycle detected: gate-0 -> read-0 -> gate-0` |
-| BRANCH has at least one condition | `BRANCH_EMPTY: BRANCH node 'branch-0' has no conditions` |
-| `.require()` capability strings are valid | `INVALID_CAPABILITY: Capability 'store:write' is missing scope (expected format: 'domain:action:scope')` |
-| Expression strings parse successfully | `EXPRESSION_PARSE_ERROR: Expression '$input.title +' is not valid: unexpected end of input (in node 'transform-0')` |
-| Schema references exist (if graph is available) | `SCHEMA_NOT_FOUND: Schema 'contentType:article' not found in graph (referenced by node 'validate-0')` |
+`SubgraphBuilder.build()` enforces shape-level checks immediately (failures throw `EDslInvalidShape`). The engine re-runs the full 14-invariant structural validation at `registerSubgraph()` time (invariants 1-6, 9-10, 12 in Phase 1; the remainder in Phase 2). Sample failures:
 
-These are **compile-time** checks, not runtime checks. They run when the developer registers the subgraph, providing immediate feedback. A subgraph that fails structural validation is never written to the graph.
+| Invariant | Error code | Message shape |
+|-----------|-----------|---------------|
+| (build-time) root present | `E_DSL_INVALID_SHAPE` | `subgraph 'x' has no nodes - add at least one primitive before calling .build()` |
+| #1 DAG-ness | `E_INV_CYCLE` | `cycle detected: read-1 -> branch-2 -> read-1` |
+| #5 Max nodes | `E_INV_TOO_MANY_NODES` | `subgraph has 4097 nodes; limit is 4096` |
+| #9 ITERATE `max` | `E_INV_ITERATE_MAX_MISSING` | `iterate requires a positive integer 'max'` |
+| #10 Hash stability | `E_INV_HASH_MISMATCH` | `registered subgraph does not hash to its declared cid` |
+| #12 Root reachability | `E_INV_UNREACHABLE_NODE` | `node 'respond-4' is not reachable from root 'read-1'` |
 
 ### 11.4 Node ID Generation
 
-Node IDs within a subgraph are auto-generated as `{type}-{index}`:
-- `gate-0`, `gate-1` (for multiple capability checks)
-- `validate-0`
-- `read-0`, `read-1`
-- `write-0`
-- `emit-0`
-- `respond-0`, `respond-denied`, `respond-invalid`, `respond-conflict`
+The builder assigns node ids as `<primitive>-<counter>`, where the counter is per-builder-instance and monotonic:
 
-Error-path RESPOND nodes get descriptive suffixes (`-denied`, `-invalid`, `-conflict`, `-notfound`, `-error`, `-timeout`) for readability in traces and debugging.
+- `read-1`, `read-2` (for multiple READs)
+- `write-3`
+- `branch-4`, with case bodies becoming `<primitive>-<n+1>`, `<primitive>-<n+2>`, ...
+- `respond-5`, `respond-6`
 
-Custom IDs can be set via the `id` option on any step:
-
-```typescript
-.gate('commerce/calculateTax', { id: 'calc-tax' })
-```
+Per-instance counters make two parallel `crud('post')` calls produce identical subgraph shapes (and therefore identical content-addressed CIDs), which is load-bearing for handler-cid stability across Vitest workers -- see the class-level JSDoc on `SubgraphBuilder` in `packages/engine/src/dsl.ts`.
 
 ### 11.5 How the Engine Stores the Subgraph
 
-When `ctx.registerSubgraph(sg)` is called, the compiled Subgraph is written to the engine's graph as:
+When `engine.registerSubgraph(sg)` is called, the built `Subgraph` is hashed (BLAKE3 over DAG-CBOR of `{ handlerId, actions, root, nodes }`) and written to the engine's graph as:
 
-1. A **SubgraphDef** anchor Node with label `OperationSubgraph`:
+1. A **handler anchor Node** under the system-zone label `system:Handler`:
    ```
-   Node { id: 'subgraph:POST /api/posts', type: 'OperationSubgraph', version: 1,
-          config: { entryNode: 'gate-0', capabilities: ['store:write:post/*'] } }
-   ```
-
-2. One **OperationNode** per step, with label `Operation`:
-   ```
-   Node { id: 'subgraph:POST /api/posts:gate-0', type: 'Operation',
-          config: { opType: 'GATE', mode: 'capability', check: 'store:write:post/*' } }
+   Node { labels: ['system:Handler'],
+          properties: { handlerId: 'create-post', actions: ['post:create'], root: 'read-1' } }
    ```
 
-3. One **Edge** per connection:
-   ```
-   Edge { from: 'subgraph:POST /api/posts:gate-0',
-          to: 'subgraph:POST /api/posts:validate-0',
-          type: 'op:NEXT' }
-   ```
+2. One child Node per subgraph Node, labeled `system:HandlerNode`, linked by a `CONTAINS` Edge from the anchor.
 
-4. A **CONTAINS** edge from the SubgraphDef to each OperationNode (for subgraph-scoped queries).
+3. Intra-subgraph edges are serialized into each HandlerNode's `edges` property (not as separate graph Edges) -- keeps the handler self-contained and content-addressed.
 
-The `op:` prefix on edge types distinguishes operation edges from data edges in the graph.
+System-zone labels are unreachable from user operations (invariant #11); user subgraphs cannot READ or WRITE the handler metadata directly. The `op:` namespace prefix on edge labels (e.g. `op:NEXT` for handler-internal NEXT) is purely a convention; the shipped builder stores them under their bare names.
 
 ---
 
@@ -2257,308 +1939,305 @@ The `op:` prefix on edge types distinguishes operation edges from data edges in 
 ### Example 1: Blog Post CRUD (Minimal)
 
 ```typescript
-import { crud } from '@benten/engine/operations';
+import { Engine, crud } from '@benten/engine';
 
-const postHandlers = crud('post', {
-  schema: 'contentType:post',
-  capability: 'store:post',
-  list: { sort: { createdAt: 'desc' }, limit: 20 },
-  update: { optimisticLocking: true },
-  delete: { soft: true },
-});
+const engine = await Engine.open('./data');
+const postHandler = await engine.registerSubgraph(crud('post'));
 
-// 5 subgraphs, ~30 Nodes, 1 line of code.
-ctx.registerSubgraphs(postHandlers.all);
+// One dispatch BRANCH with five cases (create/get/list/update/delete).
+await engine.call(postHandler.id, 'post:create', { title: 'hello' });
 ```
 
 ### Example 2: Content Creation with Slug Uniqueness
 
 ```typescript
-import { subgraph, respond, emit } from '@benten/engine/operations';
+import { subgraph } from '@benten/engine';
 
-const createPost = subgraph('POST /api/posts')
-  .require('store:write:post/*')
-  .validate('contentType:post')
-    .onInvalid(respond(400, { error: 'Validation failed', details: '$error.fields' }))
-  .read('post', { lookup: { field: 'slug', value: '$input.slug' } })
-    .onNotEmpty(respond(409, { error: 'A post with this slug already exists' }))
-  .transform({
-    ...'$input',
-    createdAt: 'now()',
-    updatedAt: 'now()',
-    status: 'draft',
-  })
-  .write('post', { data: '$result' })
-  .emit('content:afterCreate', { id: '$result.id', type: 'post' })
-  .respond(201, '$result');
+const createPost = subgraph('create-post')
+  .action('post:create')
+  .read({ label: 'post', by: 'slug', value: '$input.slug' })
+  // Slug is free -> fall through; if present the chain terminates through
+  // the engine's default ON_CONFLICT response for the WRITE below.
+  .respond({ edge: 'ON_NOT_FOUND', status: 0 })
+  .transform({ expr: '{ ...$input, createdAt: now(), updatedAt: now(), status: "draft" }' })
+  .write({ label: 'post', properties: '$result', requires: 'store:write:post/*' })
+  .emit({ event: 'content:afterCreate', payload: '{ cid: $result.cid, type: "post" }' })
+  .respond({ status: 201, body: '$result' })
+  .build();
 ```
 
 ### Example 3: E-Commerce Checkout with Compensation
 
-```typescript
-import { subgraph, compensate, gate, write, emit, iterate, respond } from '@benten/engine/operations';
+Compensation is a composed pattern (BRANCH on error + CALL to an undo subgraph), not a primitive. See the composed helper sketch at `compensate(label, fn)` for ergonomic reuse.
 
-const checkout = subgraph('POST /api/checkout')
-  .require('commerce:checkout')
-  .validate('CheckoutSchema')
-    .onInvalid(respond(400, { error: 'Invalid checkout data', details: '$error.fields' }))
-  .read('cart', { id: '$input.cartId' })
-    .onNotFound(respond(404, { error: 'Cart not found' }))
-  .iterate('$result.items', (item) =>
-    gate('commerce/checkInventory', { productId: '$item.productId', qty: '$item.quantity' }),
-    { max: 100, parallel: true, as: '$item' }
-  )
-  .branch('some($results, r => !r.available)')
-    .then(respond(409, {
-      error: 'Items out of stock',
-      unavailable: 'filter($results, r => !r.available)',
-    }))
-  .compensate('Checkout Transaction', (saga) => {
-    saga
-      .step(
-        gate('commerce/calculateTotal', {
+```typescript
+import { subgraph, compensate } from '@benten/engine';
+
+const checkout = subgraph('checkout')
+  .action('checkout:process')
+  .read({ label: 'cart', by: 'cid', value: '$input.cartId' })
+  .iterate({ over: '$result.items', max: 100 })
+  .call({ handler: 'commerce/check-inventory', input: '{ productId: $item.productId, qty: $item.quantity }' })
+  .branch({ on: 'some($results, r => !r.available)' })
+    .case('true', s => s
+      .respond({ status: 409, body: '{ error: "out of stock", unavailable: filter($results, r => !r.available) }' }),
+    )
+    .case('false', s => s
+      // Compensation: each step has an optional undo that the engine
+      // walks in reverse order on failure.
+      .call({ handler: 'commerce/calculate-total', input: '{ items: $cart.items, shipping: $input.shippingMethod }' })
+      .call({ handler: 'payment/charge',
+              input: '{ token: $input.paymentToken, amount: $total, currency: $input.currency }' })
+      .write({
+        label: 'order',
+        properties: {
+          userId: '$ctx.user.id',
           items: '$cart.items',
-          shipping: '$input.shippingMethod',
-        }),
-      )
-      .step(
-        gate('payment/charge', {
-          token: '$input.paymentToken',
-          amount: '$total',
-          currency: '$input.currency',
-        }),
-        { undo: gate('payment/refund', { chargeId: '$result.chargeId' }) }
-      )
-      .step(
-        write('order', {
-          data: {
-            userId: '$ctx.user.id',
-            items: '$cart.items',
-            total: '$total',
-            chargeId: '$chargeId',
-            status: 'confirmed',
-          },
-        }),
-        { undo: write('order', { action: 'delete', id: '$result.id' }) }
-      );
-  })
-  .emit('commerce:orderCreated', { orderId: '$result.id', userId: '$ctx.user.id' })
-  .respond(201, { orderId: '$result.id', total: '$total', status: 'confirmed' });
+          total: '$total',
+          chargeId: '$chargeId',
+          status: 'confirmed',
+        },
+        requires: 'commerce:write',
+      })
+      .emit({ event: 'commerce:orderCreated', payload: '{ orderId: $result.cid, userId: $ctx.user.id }' })
+      .respond({ status: 201, body: '{ orderId: $result.cid, total: $total, status: "confirmed" }' }),
+    )
+  .endBranch()
+  .build();
 ```
 
 ### Example 4: Content Approval Workflow
 
 ```typescript
-import { subgraph, branch, gate, write, emit, call, respond, wait } from '@benten/engine/operations';
+import { subgraph } from '@benten/engine';
 
-const submitForReview = subgraph('POST /api/posts/:id/submit')
-  .require('content:submit')
-  .read('post', { id: '$ctx.params.id' })
-    .onNotFound(respond(404))
-  .branch('$result.status !== "draft"')
-    .then(respond(400, { error: 'Only draft posts can be submitted for review' }))
-  .write('post', {
-    action: 'update',
-    id: '$ctx.params.id',
-    data: { status: 'pending_review', submittedAt: 'now()' },
-  })
-  .emit('content:submittedForReview', { postId: '$ctx.params.id', authorId: '$ctx.user.id' })
-  .respond(200, { status: 'pending_review' });
+const submitForReview = subgraph('submit-for-review')
+  .action('post:submit-review')
+  .read({ label: 'post', by: 'cid', value: '$input.cid' })
+  .branch({ on: '$result.status === "draft"' })
+    .case('false', s => s
+      .respond({ status: 400, body: '{ error: "Only draft posts can be submitted" }' }),
+    )
+    .case('true', s => s
+      .write({
+        label: 'post',
+        properties: { cid: '$input.cid', status: 'pending_review', submittedAt: 'now()' },
+        requires: 'content:submit',
+      })
+      .emit({ event: 'content:submittedForReview', payload: '{ postId: $input.cid, authorId: $ctx.user.id }' })
+      .respond({ status: 200, body: '{ status: "pending_review" }' }),
+    )
+  .endBranch()
+  .build();
 
-const approvePost = subgraph('POST /api/posts/:id/approve')
-  .require('content:approve')
-  .read('post', { id: '$ctx.params.id' })
-    .onNotFound(respond(404))
-  .branch('$result.status !== "pending_review"')
-    .then(respond(400, { error: 'Post is not pending review' }))
-  .write('post', {
-    action: 'update',
-    id: '$ctx.params.id',
-    data: { status: 'published', publishedAt: 'now()', approvedBy: '$ctx.user.id' },
-  })
-  .emit('content:published', { postId: '$ctx.params.id' })
-  .call('notifications/notifyAuthor', {
-    input: { authorId: '$result.authorId', postTitle: '$result.title', action: 'approved' },
-  })
-  .respond(200, { status: 'published' });
+const approvePost = subgraph('approve-post')
+  .action('post:approve')
+  .read({ label: 'post', by: 'cid', value: '$input.cid' })
+  .branch({ on: '$result.status === "pending_review"' })
+    .case('false', s => s
+      .respond({ status: 400, body: '{ error: "Post is not pending review" }' }),
+    )
+    .case('true', s => s
+      .write({
+        label: 'post',
+        properties: { cid: '$input.cid', status: 'published', publishedAt: 'now()', approvedBy: '$ctx.user.id' },
+        requires: 'content:approve',
+      })
+      .emit({ event: 'content:published', payload: '{ postId: $input.cid }' })
+      .call({
+        handler: 'notifications/notify-author',
+        input: '{ authorId: $result.authorId, postTitle: $result.title, action: "approved" }',
+      })
+      .respond({ status: 200, body: '{ status: "published" }' }),
+    )
+  .endBranch()
+  .build();
 ```
 
 ### Example 5: Real-Time Game State Update
 
 ```typescript
-import { subgraph, gate, write, emit, respond } from '@benten/engine/operations';
+import { subgraph } from '@benten/engine';
 
-const makeMove = subgraph('POST /api/games/:id/move')
-  .require('game:play')
-  .read('game', { id: '$ctx.params.id' })
-    .onNotFound(respond(404, { error: 'Game not found' }))
-  .branch('$result.status !== "active"')
-    .then(respond(400, { error: 'Game is not active' }))
-  .branch('$result.currentTurn !== $ctx.user.id')
-    .then(respond(403, { error: 'Not your turn' }))
-  .validate('MoveSchema')
-  .gate('chess/validateAndApplyMove', {
-    board: '$result.board',
-    move: '$input.move',
-    player: '$ctx.user.id',
-  })
-    .onError(respond(400, { error: 'Invalid move: $error.message' }))
-  .write('game', {
-    action: 'update',
-    id: '$ctx.params.id',
-    data: {
-      board: '$result.newBoard',
-      currentTurn: '$result.nextPlayer',
-      moveHistory: '$result.moveHistory',
-      status: '$result.gameStatus',
-    },
-    version: '$result.version',
-  })
-    .onConflict(respond(409, { error: 'Concurrent move detected. Reload game state.' }))
-  .emit('game:moveMade', {
-    gameId: '$ctx.params.id',
-    move: '$input.move',
-    player: '$ctx.user.id',
-    status: '$result.gameStatus',
-  })
-  .respond(200, {
-    board: '$result.newBoard',
-    currentTurn: '$result.nextPlayer',
-    status: '$result.gameStatus',
-  });
+const makeMove = subgraph('game-make-move')
+  .action('game:move')
+  .read({ label: 'game', by: 'cid', value: '$input.cid' })
+  .branch({ on: '$result.status === "active" && $result.currentTurn === $ctx.user.id' })
+    .case('false', s => s
+      .respond({ status: 403, body: '{ error: "not your turn or game inactive" }' }),
+    )
+    .case('true', s => s
+      // Move validation is a TRANSFORM that asserts shape; if the
+      // move is invalid the TRANSFORM returns an error object that
+      // the subsequent BRANCH routes into a 400.
+      .transform({ expr: 'validateMove($result.board, $input.move, $ctx.user.id)', as: '$applied' })
+      .branch({ on: '$applied.valid' })
+        .case('false', s2 => s2
+          .respond({ status: 400, body: '{ error: "Invalid move: " + $applied.reason }' }),
+        )
+        .case('true', s2 => s2
+          .write({
+            label: 'game',
+            properties: {
+              cid: '$input.cid',
+              board: '$applied.newBoard',
+              currentTurn: '$applied.nextPlayer',
+              moveHistory: '$applied.moveHistory',
+              status: '$applied.gameStatus',
+              version: '$result.version',
+            },
+            requires: 'game:play',
+          })
+          .emit({
+            event: 'game:moveMade',
+            payload: '{ gameId: $input.cid, move: $input.move, player: $ctx.user.id, status: $applied.gameStatus }',
+          })
+          .respond({
+            status: 200,
+            body: '{ board: $applied.newBoard, currentTurn: $applied.nextPlayer, status: $applied.gameStatus }',
+          }),
+        )
+      .endBranch(),
+    )
+  .endBranch()
+  .build();
 ```
 
-### Example 6: AI Content Generation with Sandbox
+### Example 6: AI Content Generation with Sandbox *(Phase 2 executor)*
 
 ```typescript
-import { subgraph, sandbox, validate, write, emit, respond } from '@benten/engine/operations';
+import { subgraph } from '@benten/engine';
 
-const generateContent = subgraph('POST /api/content/generate')
-  .require('ai:generate')
-  .require('store:write:content/*')
-  .validate('GenerateContentSchema')
-  .sandbox('ai/generateContent', {
-    input: { topic: '$input.topic', style: '$input.style', length: '$input.length' },
-    fuel: 200_000,
-    timeout: 30_000,
-    capabilities: ['store:read:content/*'],  // AI can read existing content for context
-  })
-    .onError(respond(500, { error: 'Content generation failed. Try again or simplify the topic.' }))
-    .onTimeout(respond(504, { error: 'Content generation timed out. Try a shorter length.' }))
-  .validate('contentType:post', { target: '$result' })
-    .onInvalid(respond(500, { error: 'Generated content failed validation. Please try again.' }))
-  .write('post', {
-    data: {
-      ...'$result',
-      status: 'draft',
-      generatedBy: 'ai',
-      generatedAt: 'now()',
-      authorId: '$ctx.user.id',
-    },
-  })
-  .emit('content:generated', { id: '$result.id', topic: '$input.topic' })
-  .respond(201, '$result');
+// The SANDBOX executor ships in Phase 2; this subgraph registers
+// cleanly in Phase 1 but `engine.call('content:generate')` returns
+// `E_PRIMITIVE_NOT_IMPLEMENTED` until the executor lands.
+const generateContent = subgraph('generate-content')
+  .action('content:generate')
+  .sandbox({ module: 'bafyr4i...ai-generate-module-cid', fuel: 200_000 })
+  // Schema validation composes as BRANCH + RESPOND.
+  .branch({ on: 'isValid($result, "contentType:post")' })
+    .case('false', s => s
+      .respond({ status: 500, body: '{ error: "generated content failed validation" }' }),
+    )
+    .case('true', s => s
+      .write({
+        label: 'post',
+        properties: {
+          title: '$result.title',
+          body: '$result.body',
+          status: 'draft',
+          generatedBy: 'ai',
+          generatedAt: 'now()',
+          authorId: '$ctx.user.id',
+        },
+        requires: 'store:write:content/*',
+      })
+      .emit({ event: 'content:generated', payload: '{ cid: $result.cid, topic: $input.topic }' })
+      .respond({ status: 201, body: '$result' }),
+    )
+  .endBranch()
+  .build();
 ```
 
-### Example 7: Batch Data Import with Progress
+### Example 7: Batch Data Import
 
 ```typescript
-import { subgraph, validate, iterate, write, transform, respond } from '@benten/engine/operations';
+import { subgraph } from '@benten/engine';
 
-const importProducts = subgraph('POST /api/products/import')
-  .require('store:write:product/*')
-  .validate('ImportBatchSchema')
-  .iterate('$input.products', (product) => [
-    validate('ProductSchema')
-      .onInvalid(
-        transform({ success: false, error: '$error', index: '$index' })
-      ),
-    write('product', { action: 'upsert', data: '$item' }),
-    transform({ success: true, id: '$result.id', index: '$index' }),
-  ], {
-    max: 5000,
-    parallel: true,
-    maxConcurrency: 20,
-    as: '$item',
-    collectAs: '$importResults',
-  })
+const importProducts = subgraph('import-products')
+  .action('product:import')
+  .iterate({ over: '$input.products', max: 5000 })
+  // Per-item shape check as an inline BRANCH.
+  .branch({ on: 'isValid($item, "contentType:product")' })
+    .case('false', s => s
+      .transform({ expr: '{ success: false, error: $error, index: $index }' })
+      .respond({ edge: 'ON_ITEM_ERROR' }),
+    )
+    .case('true', s => s
+      .write({ label: 'product', properties: '$item', requires: 'store:write:product/*' })
+      .transform({ expr: '{ success: true, cid: $result.cid, index: $index }' }),
+    )
+  .endBranch()
   .transform({
-    total: 'len($input.products)',
-    succeeded: 'count($importResults, r => r.success)',
-    failed: 'count($importResults, r => !r.success)',
-    errors: 'filter($importResults, r => !r.success) | map(r => { index: r.index, error: r.error })',
+    expr: '{ total: len($input.products), succeeded: count($results, r => r.success), failed: count($results, r => !r.success) }',
   })
-  .respond(200);
+  .respond({ body: '$result' })
+  .build();
 ```
 
-### Example 8: SEO Content Audit (Cross-Module Event Listener)
+### Example 8: SEO Content Audit (Event-Triggered via SUBSCRIBE) *(Phase 2 executor)*
 
-This is not a route handler -- it is an event-triggered subgraph that runs when content is created or updated. It demonstrates the `subscribesTo` pattern from Thrum V3-4.5.
+Event-triggered subgraphs compose via the SUBSCRIBE primitive. The Node registers and passes structural validation in Phase 1; the executor that fires the subgraph on event delivery ships in Phase 2.
 
 ```typescript
-import { subgraph, gate, write, emit } from '@benten/engine/operations';
+import { subgraph } from '@benten/engine';
 
-const auditContentSeo = subgraph('event:content:afterCreate')
-  .label('SEO Content Audit')
-  .read('post', { id: '$input.id' })
-  .sandbox('seo/scoreContent', {
-    input: { title: '$result.title', body: '$result.content', slug: '$result.slug' },
-    fuel: 50_000,
-    timeout: 5_000,
-  })
-  .write('seo_score', {
-    action: 'upsert',
-    data: {
-      contentId: '$input.id',
+const auditContentSeo = subgraph('audit-content-seo')
+  .subscribe({ event: 'content:afterCreate' })
+  .read({ label: 'post', by: 'cid', value: '$input.cid' })
+  .sandbox({ module: 'bafyr4i...seo-score-module-cid', fuel: 50_000 })
+  .write({
+    label: 'seo_score',
+    properties: {
+      contentId: '$input.cid',
       overall: '$result.overall',
       readability: '$result.readability',
       keywords: '$result.keywords',
       suggestions: '$result.suggestions',
       scoredAt: 'now()',
     },
+    requires: 'store:write:seo/*',
   })
-  .emit('seo:scored', { contentId: '$input.id', score: '$result.overall' });
-// No respond() -- event handlers do not produce HTTP responses
+  .emit({ event: 'seo:scored', payload: '{ contentId: $input.cid, score: $result.overall }' })
+  .respond({})  // subscriber subgraphs still terminate with a RESPOND
+  .build();
 ```
 
 ---
 
 ## Appendix A: Learning Ladder
 
-Structure your learning path through the 12 primitives:
+Structure your learning path through the 12 primitives. Four of the twelve (`wait`, `stream`, `subscribe`, `sandbox`) have Phase 2 executors; the remaining eight execute today.
 
 | Stage | Primitives | What You Can Build |
 |-------|-----------|-------------------|
-| **Hour 1** | `crud()` | Full CRUD API for any content type. One function call. |
-| **Hour 2** | `read`, `write`, `respond`, `validate` | Custom endpoints with validation. |
-| **Day 1** | `transform`, `branch`, `emit` | Data shaping, conditional logic, events. |
-| **Day 2** | `gate`, `call` | Business logic handlers, subgraph composition. |
-| **Day 3** | `iterate`, `wait` | Batch processing, async workflows. |
-| **Week 2** | `sandbox`, `compensate` | WASM isolation, saga patterns. |
+| **Hour 1** | `crud()` | Full CRUD handler for any label. One function call. |
+| **Hour 2** | `read`, `write`, `respond` | Custom endpoints, typed error edges. |
+| **Day 1** | `transform`, `branch`, `emit` | Data shaping, conditional logic, events. Composed VALIDATE via BRANCH. |
+| **Day 2** | `call`, `iterate` | Subgraph composition and bounded batch processing. |
+| **Week 2** | `subscribe`, `stream` | Event-triggered subgraphs and back-pressured output (Phase 2 executors). |
+| **Advanced** | `sandbox`, `wait`, compensation pattern | WASM isolation, suspendable workflows, saga patterns (Phase 2 executors). |
 
-Most module developers will spend 90% of their time in the first three stages. `sandbox` and `compensate` are for advanced use cases.
+Most module developers will spend 90% of their time in the first three stages. `sandbox` and `stream` are for advanced use cases.
 
 ## Appendix B: Quick Reference Card
 
 ```
-subgraph(id)                    -- Create a named subgraph builder
-  .require(capability)          -- Check capability (403 on deny)
-  .read(target, opts)           -- Retrieve data (.onNotFound, .onEmpty, .onNotEmpty)
-  .write(target, opts)          -- Mutate data (.onConflict, .onNotFound)
-  .validate(schema, opts)       -- Validate against schema (.onInvalid)
-  .transform(expr, opts)        -- Reshape data (pure, no I/O)
-  .branch(conditions)           -- Conditional routing (.when, .otherwise)
-  .iterate(source, body, opts)  -- Bounded loop (.onItemError, .onLimitExceeded)
-  .wait(opts)                   -- Suspend (.onTimeout)
-  .gate(handler, args)          -- TypeScript escape hatch (.onError)
-  .call(subgraphId, opts)       -- Execute another subgraph (.onError, .onTimeout)
-  .sandbox(runtimeId, opts)     -- WASM sandbox (.onError, .onTimeout)
-  .emit(event, payload)         -- Fire-and-forget event
-  .respond(status, body)        -- Terminal: produce output
-  .compensate(label, fn)        -- Saga with automatic undo
-  .compile()                    -- Compile to Subgraph (Nodes + Edges)
+subgraph(id)                    -- Create a new SubgraphBuilder
+  .action(name)                 -- Declare an action string this handler exposes
+  .read({ label, by, value })   -- Retrieve data (emits ON_NOT_FOUND / ON_EMPTY / ON_DENIED)
+  .write({ label, properties,   -- Mutate data (emits ON_CONFLICT / ON_DENIED; `requires` gates the write)
+           requires })
+  .transform({ expr, as })      -- Reshape data (pure, no I/O)
+  .branch({ on })               -- Open BRANCH; chain `.case(value, body).endBranch()`
+    .case(value, body)          -- Add a case body (sub-scope with the same primitives)
+    .endBranch()                -- Return to the parent builder
+  .iterate({ over, max })       -- Bounded loop; body follows until next RESPOND
+  .call({ handler, action,      -- Invoke another subgraph (emits ON_ERROR / ON_TIMEOUT)
+          input, isolated })
+  .respond({ body, edge,        -- Terminal: produce output. `edge` routes this RESPOND
+             status })              as the handler for a specific typed error edge.
+  .emit({ event, payload })     -- Fire-and-forget event
 
-crud(label, opts)               -- Generate 5 CRUD subgraphs from one call
+  // Phase 2 executors (build fine in Phase 1; evaluator returns E_PRIMITIVE_NOT_IMPLEMENTED):
+  .wait({ duration })           -- Suspend until deadline
+  .subscribe({ event, handler })-- Attach to a change-stream event
+  .stream({ source, chunkSize })-- Partial output with back-pressure
+  .sandbox({ module, fuel })    -- WASM sandbox with fuel metering
+
+  .build()                      -- Materialize the Subgraph
+
+crud(label, opts?)              -- Build a 5-action CRUD handler subgraph in one call
 ```
 
 ## Appendix C: Expression Quick Reference
@@ -2586,3 +2265,71 @@ $input, $result, $ctx, $item, $index, $error, $results
 // Date: now formatDate parseDate addDays addHours diffDays isAfter isBefore
 // Utility: coalesce typeOf keys values entries fromEntries merge pick omit uuid
 ```
+
+## Appendix D: Migration from the pre-revision draft
+
+The DSL was originally designed around a 12-primitive set that included **VALIDATE** and **GATE**. After the 2026-04-14 critic review, those two primitives were dropped and **SUBSCRIBE** and **STREAM** were added, keeping the count at 12. The shipped DSL (described above) matches the revised set; this appendix documents the migration path for readers returning from the old draft.
+
+### VALIDATE -> composed pattern
+
+The old `validate(schema, opts).onInvalid(...)` primitive composes cleanly from primitives that already existed:
+
+```typescript
+// Pre-revision:
+validate('contentType:post')
+  .onInvalid(respond(400, { error: 'invalid', details: '$error.fields' }))
+
+// Post-revision (shipped): BRANCH on schema predicate; TRANSFORM
+// shapes the error detail; RESPOND with the 400; typed error edges do
+// the routing. `isValid(obj, schemaId)` is a TRANSFORM built-in.
+subgraph('x')
+  .branch({ on: 'isValid($input, "contentType:post")' })
+    .case('false', s => s
+      .transform({ expr: '{ error: "invalid", details: validationErrors($input, "contentType:post") }' })
+      .respond({ status: 400, body: '$result' }),
+    )
+    .case('true', s => s
+      /* happy path */
+    )
+  .endBranch();
+```
+
+For schema validation at the handler-registration layer (not as a user-subgraph Node), register a validation function against the engine's 14 structural invariants; it runs at `registerSubgraph()` time and rejects malformed subgraphs before they are written. See [ENGINE-SPEC §4](ENGINE-SPEC.md#4-structural-invariants) for the invariant list.
+
+### GATE -> `requires` property on any Node, plus SANDBOX / CALL / TRANSFORM for logic
+
+The old `gate(handler, args)` had two conflated roles: **capability checking** and **custom-logic escape hatch**. Each role gets a distinct post-revision shape:
+
+| Old shape | New shape |
+|-----------|-----------|
+| `gate('require:store:write:post/*')` | `write({ ..., requires: 'store:write:post/*' })` -- the `requires` property on any Node fires an automatic BRANCH to `ON_DENIED` when the configured policy (e.g. `PolicyKind.GrantBacked`) rejects it. No user-visible node. |
+| `.require(capability)` builder method | Same: pass `requires` on the Node that needs the grant. For multi-step handlers, stamp `requires` on each mutating Node; the DSL does not require a separate "upfront" capability node. |
+| `gate('commerce/calculateTax', { ... })` (business logic) | `call({ handler: 'commerce/calculate-tax', input: '{ ... }' })` -- register the logic as a subgraph and compose via CALL. |
+| `gate('image/resize', { ... })` (untrusted / CPU-intensive) | `sandbox({ module: '...', fuel: 100_000 })` -- WASM with fuel metering (Phase 2 executor). |
+| `gate('trim-title', { title: '$input.title' })` (one-liner reshape) | `transform({ expr: 'trim($input.title)' })` -- the expression language has 50+ built-in functions. |
+
+The net effect: the "escape hatch" semantics that were undefined in the old GATE primitive (Open Question 8 in the pre-revision draft) are now split across three primitives with clear, separate contracts.
+
+### SUBSCRIBE (new in the revised set)
+
+SUBSCRIBE is the primitive that reactive change notification, IVM materialized views, sync delta propagation, and cross-module event handling all compose on. In the pre-revision draft these were implicit features of the engine (IVM was internal; event handlers were magic); the revision makes the underlying primitive explicit so each of those patterns is composable. See §2.11 above.
+
+### STREAM (new in the revised set)
+
+STREAM addresses a gap in the pre-revision set: partial output with back-pressure. RESPOND is terminal (no subsequent Nodes), ITERATE has no back-pressure, and SANDBOX exits all-at-once -- none of which compose cleanly into Server-Sent Events, WebSocket messages, LLM token streams, or large NDJSON responses. WinterTC targets make streaming table stakes for 2026 web APIs. See §2.12 above.
+
+### Quick substitution table
+
+| Pre-revision API | Post-revision (shipped) API |
+|------------------|-----------------------------|
+| `validate(schema).onInvalid(...)` | `branch({ on: 'isValid(obj, schema)' }).case('false', s => s.respond(...))` |
+| `.require(cap)` | `write({ ..., requires: cap })` (or any Node that accepts `requires`) |
+| `gate('handler', args)` | `call({ handler: 'handler', input: 'args' })` |
+| `gate(<cpu-intensive>)` | `sandbox({ module: '...', fuel: N })` |
+| `gate(<one-liner>)` | `transform({ expr: '...' })` |
+| `respond(status, body)` | `respond({ status, body })` |
+| `emit(event, payload)` | `emit({ event, payload })` |
+| `read(label, { id })` | `read({ label, by: 'cid', value: '$input.cid' })` |
+| `write(label, { data })` | `write({ label, properties })` |
+
+All examples in sections 1-12 above use the post-revision (shipped) shapes; this appendix exists solely to help readers coming from the old draft.
