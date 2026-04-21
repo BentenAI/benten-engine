@@ -79,12 +79,12 @@ pub(crate) struct EngineInner {
     /// Registered handler ids → subgraph CIDs. Populated by
     /// `register_subgraph` and consulted for the idempotent re-registration
     /// path.
-    handlers: std::sync::Mutex<BTreeMap<String, Cid>>,
+    pub(crate) handlers: std::sync::Mutex<BTreeMap<String, Cid>>,
     /// Registered SubgraphSpec bodies keyed by handler id — so `call()` can
     /// walk the WriteSpec list when the user registered a SubgraphSpec
     /// (as opposed to `register_crud` which is dispatched directly by op
     /// name).
-    specs: std::sync::Mutex<BTreeMap<String, SubgraphSpec>>,
+    pub(crate) specs: std::sync::Mutex<BTreeMap<String, SubgraphSpec>>,
     /// Observed ChangeEvents (post-commit). Populated by the
     /// `ChangeBroadcast` subscriber; drained by
     /// `engine.subscribe_change_events().drain()`.
@@ -92,42 +92,42 @@ pub(crate) struct EngineInner {
     /// Bounded by [`EngineInner::change_stream_capacity`] — on overflow the
     /// oldest event is evicted and [`EngineInner::dropped_events`] is
     /// incremented. See r6-sec-5.
-    observed_events: std::sync::Mutex<Vec<(u64, ChangeEvent)>>,
+    pub(crate) observed_events: std::sync::Mutex<Vec<(u64, ChangeEvent)>>,
     /// Configured upper bound for `observed_events`. Populated from
     /// [`EngineBuilder::change_stream_capacity`] at engine-build time;
     /// defaults to [`CHANGE_STREAM_MAX_BUFFERED`].
-    change_stream_capacity: usize,
+    pub(crate) change_stream_capacity: usize,
     /// Counter of ChangeEvents dropped because the buffer reached
     /// `change_stream_capacity` before a subscriber drained. Surfaced via
     /// `metrics_snapshot["benten.change_stream.dropped_events"]`.
-    dropped_events: std::sync::atomic::AtomicU64,
+    pub(crate) dropped_events: std::sync::atomic::AtomicU64,
     /// Counter of total change events observed (for `change_event_count()`).
-    event_count: std::sync::atomic::AtomicU64,
+    pub(crate) event_count: std::sync::atomic::AtomicU64,
     /// Monotonic per-engine sequence used to stamp `createdAt` on CRUD
     /// creates when the caller did not supply one — makes listing order
     /// deterministic across rapid-fire creates that might otherwise collide
     /// on a wall-clock timestamp.
-    created_at_seq: std::sync::atomic::AtomicU64,
+    pub(crate) created_at_seq: std::sync::atomic::AtomicU64,
     /// Pre-built subgraph templates keyed on `(handler_id, op)`. See
     /// [`SubgraphCache`] — closes r6-perf-5.
-    subgraph_cache: SubgraphCache,
+    pub(crate) subgraph_cache: SubgraphCache,
     /// Per-capability-scope tally of writes that passed the policy's
     /// `check_write` gate (i.e. committed). Keyed by the derived scope
     /// string (`store:<label>:write`). Closes named compromise #5 — the
     /// Phase-1 posture is "record, don't enforce"; Phase-2 adds the
     /// rate-limit enforcement pass on top of these counters.
-    cap_write_committed: std::sync::Mutex<BTreeMap<String, u64>>,
+    pub(crate) cap_write_committed: std::sync::Mutex<BTreeMap<String, u64>>,
     /// Per-capability-scope tally of writes the policy DENIED. Scope keys
     /// match the committed side; incremented when `check_write` returns
     /// `Err(CapError::Denied)` / `Err(CapError::DeniedRead)` so operators
     /// can spot abnormal denial patterns out-of-band.
-    cap_write_denied: std::sync::Mutex<BTreeMap<String, u64>>,
+    pub(crate) cap_write_denied: std::sync::Mutex<BTreeMap<String, u64>>,
     /// Aggregate count of capability-policy `check_write` calls that
     /// returned `Ok`. Surfaced via `metrics_snapshot["benten.writes.committed"]`.
-    writes_committed_total: std::sync::atomic::AtomicU64,
+    pub(crate) writes_committed_total: std::sync::atomic::AtomicU64,
     /// Aggregate count of capability-policy `check_write` calls that
     /// returned `Err`. Surfaced via `metrics_snapshot["benten.writes.denied"]`.
-    writes_denied_total: std::sync::atomic::AtomicU64,
+    pub(crate) writes_denied_total: std::sync::atomic::AtomicU64,
 }
 
 impl EngineInner {
@@ -262,7 +262,7 @@ impl EngineInner {
 /// should revisit when user-registered subgraphs are long-lived and
 /// handler_id count can grow large.
 #[derive(Default)]
-struct SubgraphCache {
+pub(crate) struct SubgraphCache {
     entries: std::sync::RwLock<std::collections::HashMap<SubgraphCacheKey, benten_eval::Subgraph>>,
 }
 
@@ -313,17 +313,17 @@ impl SubgraphCache {
 
 /// The Benten engine handle.
 pub struct Engine {
-    backend: Arc<RedbBackend>,
+    pub(crate) backend: Arc<RedbBackend>,
     /// Configured capability policy. `None` collapses to
     /// `NoAuthBackend`-equivalent behavior (every commit permitted).
-    policy: Option<Box<dyn CapabilityPolicy>>,
+    pub(crate) policy: Option<Box<dyn CapabilityPolicy>>,
     /// True if `.without_caps()` was passed to the builder. Controls whether
     /// `grant_capability` / `revoke_capability` refuse honestly rather than
     /// silently no-op.
-    caps_enabled: bool,
+    pub(crate) caps_enabled: bool,
     /// True if `.without_ivm()` was NOT passed. Controls whether the
     /// subscriber is wired and whether view reads can succeed.
-    ivm_enabled: bool,
+    pub(crate) ivm_enabled: bool,
     /// Change broadcast channel. Always present so `subscribe_change_events`
     /// works even when IVM is disabled (subscribers can still observe
     /// committed events directly).
@@ -335,18 +335,18 @@ pub struct Engine {
         dead_code,
         reason = "retained for Phase-2 operator observability of subscriber count"
     )]
-    broadcast: Arc<ChangeBroadcast>,
+    pub(crate) broadcast: Arc<ChangeBroadcast>,
     /// Shared engine-wide state.
-    inner: Arc<EngineInner>,
+    pub(crate) inner: Arc<EngineInner>,
     /// IVM subscriber handle. `None` when `.without_ivm()` was passed.
     /// Engine retains the Arc so `create_view` can register views against the
     /// live subscriber and `read_view_with` can consult view state
     /// (code-reviewer g7-cr-8 / philosophy g7-ep-3).
-    ivm: Option<Arc<benten_ivm::Subscriber>>,
+    pub(crate) ivm: Option<Arc<benten_ivm::Subscriber>>,
     /// Active `Engine::call` stack. Used by `impl PrimitiveHost` to pick up
     /// per-call context (actor, nested depth) without threading it through
     /// the trait-method signatures.
-    active_call: std::sync::Mutex<Vec<ActiveCall>>,
+    pub(crate) active_call: std::sync::Mutex<Vec<ActiveCall>>,
 }
 
 impl std::fmt::Debug for Engine {
@@ -412,145 +412,10 @@ impl Engine {
     }
 
     // -------- CRUD surface (Node + Edge) --------
-
-    /// Hash `node` (CIDv1 over labels + properties only), store it, and return
-    /// its CID. Idempotent.
-    ///
-    /// The unprivileged user-API path — system-zone labels (labels starting
-    /// with `"system:"`) are rejected with `E_SYSTEM_ZONE_WRITE`. Engine-
-    /// internal paths (grant/revoke/create_view) bypass the check via a
-    /// privileged `WriteContext`.
-    ///
-    /// Runs inside a transaction so ChangeEvents fan out to registered
-    /// subscribers (IVM, change-stream probes) at commit.
-    pub fn create_node(&self, node: &Node) -> Result<Cid, EngineError> {
-        // Short-circuit the system-zone guard so the typed SystemZoneWrite
-        // error surfaces directly — running inside the transaction closure
-        // would rewrap it as TxAborted.
-        for label in &node.labels {
-            if label.starts_with("system:") {
-                return Err(EngineError::Graph(GraphError::SystemZoneWrite {
-                    label: label.clone(),
-                }));
-            }
-        }
-        Ok(self.backend.transaction(|tx| tx.put_node(node))?)
-    }
-
-    /// Retrieve a Node by CID. Returns `Ok(None)` on a clean miss.
-    ///
-    /// # Named compromise #2 (Option C, 5d-J workstream 1)
-    ///
-    /// When a capability policy is configured and `policy.check_read`
-    /// rejects the read, the return collapses to `Ok(None)` — symmetric
-    /// with a genuine backend miss. An unauthorised caller cannot
-    /// distinguish denial from not-found via this API. To introspect
-    /// the difference (e.g. for operator diagnostics), use
-    /// [`Engine::diagnose_read`], which is gated on a separate
-    /// `debug:read` capability.
-    pub fn get_node(&self, cid: &Cid) -> Result<Option<Node>, EngineError> {
-        let node = self.backend.get_node(cid)?;
-        let Some(node) = node else {
-            return Ok(None);
-        };
-        // Gate on the primary label. A Node with no labels collapses to
-        // an empty-label ReadContext; GrantBackedPolicy permits the
-        // empty-label path (introspection reads) so this stays
-        // backwards-compatible for hand-constructed Nodes.
-        let label = node.labels.first().cloned().unwrap_or_default();
-        if let Some(policy) = self.policy.as_deref() {
-            let ctx = benten_caps::ReadContext {
-                label,
-                target_cid: Some(cid.clone()),
-                ..Default::default()
-            };
-            if let Err(CapError::DeniedRead { .. }) = policy.check_read(&ctx) {
-                return Ok(None);
-            }
-        }
-        Ok(Some(node))
-    }
-
-    /// Update an existing Node. The old CID entry is deleted and the new node
-    /// is stored under its own content-addressed CID. Returns the new CID.
-    pub fn update_node(&self, old_cid: &Cid, new_node: &Node) -> Result<Cid, EngineError> {
-        self.backend.transaction(|tx| {
-            tx.delete_node(old_cid)?;
-            tx.put_node(new_node)
-        })?;
-        Ok(new_node.cid()?)
-    }
-
-    /// Delete a Node by CID.
-    pub fn delete_node(&self, cid: &Cid) -> Result<(), EngineError> {
-        self.backend.transaction(|tx| tx.delete_node(cid))?;
-        Ok(())
-    }
-
-    /// Create an Edge between two Nodes with the given label, returning the
-    /// Edge's content-addressed CID.
-    pub fn create_edge(&self, source: &Cid, target: &Cid, label: &str) -> Result<Cid, EngineError> {
-        let edge = Edge::new(source.clone(), target.clone(), label.to_string(), None);
-        Ok(self.backend.put_edge(&edge)?)
-    }
-
-    /// Retrieve an Edge by CID. Returns `Ok(None)` on a clean miss.
-    pub fn get_edge(&self, cid: &Cid) -> Result<Option<Edge>, EngineError> {
-        Ok(self.backend.get_edge(cid)?)
-    }
-
-    /// Delete an Edge by CID.
-    pub fn delete_edge(&self, cid: &Cid) -> Result<(), EngineError> {
-        self.backend.transaction(|tx| tx.delete_edge(cid))?;
-        Ok(())
-    }
-
-    /// Return every Edge whose `source == cid`.
-    ///
-    /// Option C applies: when the policy's `check_read` denies a read on
-    /// the source Node, the returned Vec is empty (symmetric with a
-    /// source CID that has no outgoing edges). See [`Engine::get_node`]
-    /// for the full semantics.
-    pub fn edges_from(&self, cid: &Cid) -> Result<Vec<Edge>, EngineError> {
-        if self.read_denied_for_cid(cid)? {
-            return Ok(Vec::new());
-        }
-        Ok(self.backend.edges_from(cid)?)
-    }
-
-    /// Return every Edge whose `target == cid`.
-    ///
-    /// Option C applies: see [`Engine::edges_from`].
-    pub fn edges_to(&self, cid: &Cid) -> Result<Vec<Edge>, EngineError> {
-        if self.read_denied_for_cid(cid)? {
-            return Ok(Vec::new());
-        }
-        Ok(self.backend.edges_to(cid)?)
-    }
-
-    /// Internal helper: does `policy.check_read` deny a read against the
-    /// Node stored at `cid`? Looks up the Node's primary label and runs
-    /// it through the policy. Returns `Ok(false)` when the backend has
-    /// no Node at `cid` (no leakage signal — we fall through to the
-    /// normal empty-list / None path).
-    fn read_denied_for_cid(&self, cid: &Cid) -> Result<bool, EngineError> {
-        let Some(policy) = self.policy.as_deref() else {
-            return Ok(false);
-        };
-        let Some(node) = self.backend.get_node(cid)? else {
-            return Ok(false);
-        };
-        let label = node.labels.first().cloned().unwrap_or_default();
-        let ctx = benten_caps::ReadContext {
-            label,
-            target_cid: Some(cid.clone()),
-            ..Default::default()
-        };
-        Ok(matches!(
-            policy.check_read(&ctx),
-            Err(CapError::DeniedRead { .. })
-        ))
-    }
+    //
+    // CRUD methods (`create_node`, `get_node`, `update_node`, `delete_node`,
+    // `create_edge`, `get_edge`, `delete_edge`, `edges_from`, `edges_to`) live
+    // in [`crate::engine_crud`].
 
     // -------- Registration / invariants --------
 
@@ -1572,622 +1437,34 @@ impl Engine {
     }
 
     // -------- System-zone privileged API (N7) --------
-
-    /// Create an actor principal. Phase 1: the principal is stored as a
-    /// `system:Principal`-labeled Node; its CID is used as the actor identity
-    /// by `grant_capability` / `revoke_capability`.
-    pub fn create_principal(&self, name: &str) -> Result<Cid, EngineError> {
-        let mut props: BTreeMap<String, Value> = BTreeMap::new();
-        props.insert("name".into(), Value::Text(name.into()));
-        let node = Node::new(vec!["system:Principal".into()], props);
-        self.privileged_put_node(&node)
-    }
-
-    /// Grant a capability. Writes a `system:CapabilityGrant` Node via the
-    /// engine-privileged path. The first arg may be a `&Cid`, `&str`, or
-    /// owning `Cid`/`String` per the `GrantSubject` impls.
-    pub fn grant_capability<A, S>(&self, actor: A, scope: S) -> Result<Cid, EngineError>
-    where
-        A: GrantSubject,
-        S: AsRef<str>,
-    {
-        if !self.caps_enabled {
-            return Err(EngineError::SubsystemDisabled {
-                subsystem: "capabilities",
-            });
-        }
-        let scope_str = scope.as_ref().to_string();
-        let mut props: BTreeMap<String, Value> = BTreeMap::new();
-        props.insert("actor".into(), actor.as_value());
-        props.insert("scope".into(), Value::Text(scope_str));
-        props.insert("revoked".into(), Value::Bool(false));
-        let node = Node::new(vec!["system:CapabilityGrant".into()], props);
-        self.privileged_put_node(&node)
-    }
-
-    /// Revoke a capability. Phase 1: writes a `system:CapabilityRevocation`
-    /// Node naming the `(actor, scope)` pair. The revocation is distinct from
-    /// the grant's own `revoked` property so a sync replica that has only
-    /// seen the revocation node can still recognize the grant as revoked.
-    pub fn revoke_capability<A, S>(&self, actor: A, scope: S) -> Result<(), EngineError>
-    where
-        A: RevokeSubject,
-        S: RevokeScope,
-    {
-        if !self.caps_enabled {
-            return Err(EngineError::SubsystemDisabled {
-                subsystem: "capabilities",
-            });
-        }
-        let mut props: BTreeMap<String, Value> = BTreeMap::new();
-        props.insert("actor".into(), actor.as_value());
-        props.insert("scope".into(), Value::Text(scope.as_scope_string()));
-        let node = Node::new(vec!["system:CapabilityRevocation".into()], props);
-        self.privileged_put_node(&node)?;
-        Ok(())
-    }
-
-    /// Create an IVM view registration. Writes a `system:IVMView` Node via the
-    /// engine-privileged path AND — when IVM is enabled — registers a live
-    /// view instance with the subscriber so future change events flow into
-    /// it (code-reviewer g7-cr-8).
-    ///
-    /// Idempotent: same `view_id` returns the same content-addressed CID.
-    /// The content-listing view family (view_id `"content_listing"` or
-    /// `"content_listing_<label>"`) is instantiated with the trailing label
-    /// as its input pattern; other canonical ids register their own view.
-    pub fn create_view(&self, view_id: &str, _opts: ViewCreateOptions) -> Result<Cid, EngineError> {
-        // Derive the input pattern label for content-listing views so the
-        // stored definition is stable regardless of subscriber state.
-        let input_pattern_label = if let Some(label) = view_id.strip_prefix("content_listing_") {
-            Some(label.to_string())
-        } else if view_id == "content_listing" {
-            Some("post".to_string())
-        } else {
-            None
-        };
-        let def = benten_ivm::ViewDefinition {
-            view_id: view_id.to_string(),
-            input_pattern_label: input_pattern_label.clone(),
-            output_label: "system:IVMView".to_string(),
-        };
-        let node = def.as_node();
-        let cid = self.privileged_put_node(&node)?;
-
-        // Register the live view with the IVM subscriber so change events
-        // propagate. Skipped when IVM is disabled. We dedupe by view id —
-        // re-registering the same id is a no-op at the subscriber level.
-        if let Some(ivm) = self.ivm.as_ref() {
-            let already_registered = ivm.view_ids().iter().any(|id| id == view_id);
-            if !already_registered {
-                if let Some(label) = input_pattern_label.as_deref() {
-                    let view = benten_ivm::views::ContentListingView::new(label);
-                    ivm.register_view(Box::new(view));
-                }
-                // Non-content-listing canonical view ids (capability_grants,
-                // event_dispatch, governance_inheritance, version_current) are
-                // Phase-2 scope for automatic instantiation — the definition
-                // Node is still written, but the live view isn't constructed
-                // here because those views have additional constructor
-                // parameters the Phase-1 API doesn't yet surface.
-            }
-        }
-        Ok(cid)
-    }
-
-    /// Internal: write a system-zone Node via the privileged context.
-    fn privileged_put_node(&self, node: &Node) -> Result<Cid, EngineError> {
-        Ok(self.backend.put_node_with_context(
-            node,
-            &benten_graph::WriteContext::privileged_for_engine_api(),
-        )?)
-    }
+    //
+    // `create_principal`, `grant_capability`, `revoke_capability`,
+    // `create_view`, and the private `privileged_put_node` helper live in
+    // [`crate::engine_caps`].
 
     // -------- Change stream surface --------
-
-    /// Subscribe to ChangeEvents. Returns a [`ChangeProbe`] that `drain()`s
-    /// every event observed since the probe was created.
-    pub fn subscribe_change_events(&self) -> ChangeProbe {
-        ChangeProbe {
-            inner: Arc::clone(&self.inner),
-            start_offset: self
-                .inner
-                .event_count
-                .load(std::sync::atomic::Ordering::SeqCst),
-            label_filter: None,
-        }
-    }
-
-    /// Test-only probe equivalent to `subscribe_change_events` — kept so
-    /// integration tests written against the v1 name keep compiling.
-    #[cfg(any(test, feature = "test-helpers"))]
-    pub fn test_subscribe_all_change_events(&self) -> ChangeProbe {
-        self.subscribe_change_events()
-    }
-
-    /// Subscribe filtered to a specific label.
-    #[cfg(any(test, feature = "test-helpers"))]
-    pub fn test_subscribe_change_events_matching_label(&self, label: &str) -> ChangeProbe {
-        ChangeProbe {
-            inner: Arc::clone(&self.inner),
-            start_offset: self
-                .inner
-                .event_count
-                .load(std::sync::atomic::Ordering::SeqCst),
-            label_filter: Some(label.to_string()),
-        }
-    }
-
-    /// Count of ChangeEvents emitted since the engine opened.
-    #[must_use]
-    pub fn change_event_count(&self) -> u64 {
-        self.inner
-            .event_count
-            .load(std::sync::atomic::Ordering::SeqCst)
-    }
+    //
+    // `subscribe_change_events`, the test-only probe variants, and
+    // `change_event_count` live in [`crate::engine_views`].
 
     // -------- View reads (IVM) --------
+    //
+    // `read_view`, `read_view_with`, `read_view_strict`, and
+    // `read_view_allow_stale` live in [`crate::engine_views`].
 
-    /// Strict read of an IVM view. Phase 1: returns typed errors for the
-    /// unknown-view, no-IVM, and stale paths; the healthy-view path routes
-    /// through the evaluator-backed primitive dispatch which is Phase 2.
-    pub fn read_view(&self, view_id: &str) -> Result<Outcome, EngineError> {
-        self.read_view_with(view_id, ReadViewOptions::strict())
-    }
-
-    /// Read an IVM view with explicit options.
-    ///
-    /// Consults the live IVM subscriber (philosophy g7-ep-2): the healthy
-    /// path returns an Outcome whose `list` reflects the view's current
-    /// state; strict reads of a stale view error with `E_IVM_VIEW_STALE`;
-    /// relaxed reads of a stale view return the empty last-known-good.
-    /// Unknown view ids error with `E_UNKNOWN_VIEW`.
-    ///
-    /// Option C (5d-J workstream 1): when the view id encodes a label
-    /// (`content_listing_<label>`) and the policy denies a read on
-    /// that label, the return collapses to an empty list — symmetric
-    /// with an empty view.
-    pub fn read_view_with(
-        &self,
-        view_id: &str,
-        opts: ReadViewOptions,
-    ) -> Result<Outcome, EngineError> {
-        if !self.ivm_enabled {
-            return Err(EngineError::SubsystemDisabled { subsystem: "ivm" });
-        }
-        // Derive a label from the view id for the read-gate. Only
-        // content_listing_<label> views carry a Phase-1 label hint;
-        // other view ids pass through unchanged.
-        if let Some(policy) = self.policy.as_deref() {
-            let label = view_id
-                .strip_prefix("content_listing_")
-                .or_else(|| view_id.strip_prefix("system:ivm:content_listing_"))
-                .unwrap_or("");
-            if !label.is_empty() {
-                let ctx = benten_caps::ReadContext {
-                    label: label.to_string(),
-                    target_cid: None,
-                    ..Default::default()
-                };
-                if let Err(CapError::DeniedRead { .. }) = policy.check_read(&ctx) {
-                    return Ok(Outcome {
-                        list: Some(Vec::new()),
-                        ..Outcome::default()
-                    });
-                }
-            }
-        }
-        // Normalize the namespaced alias `system:ivm:<id>` → `<id>`.
-        let normalized = view_id.strip_prefix("system:ivm:").unwrap_or(view_id);
-        // Consult the subscriber first — if a live view exists with this id,
-        // route through it. Falling back to the canonical-id whitelist
-        // preserves the Phase-1 contract for views that haven't been
-        // create_view-registered yet but are named in R3 tests.
-        if let Some(ivm) = self.ivm.as_ref() {
-            if let Some(is_stale) = ivm.view_is_stale(normalized) {
-                if is_stale {
-                    return if opts.allow_stale {
-                        Ok(Outcome {
-                            list: Some(Vec::new()),
-                            ..Outcome::default()
-                        })
-                    } else {
-                        Err(EngineError::IvmViewStale {
-                            view_id: view_id.to_string(),
-                        })
-                    };
-                }
-                // Healthy view — return empty listing (Phase 1: view's full
-                // read API surface is Phase 2).
-                return Ok(Outcome {
-                    list: Some(Vec::new()),
-                    ..Outcome::default()
-                });
-            }
-        }
-        // No live view registered for this id. Phase 1 canonical whitelist
-        // decides: recognized -> stale (in strict) / last-known-good empty
-        // (relaxed). Unknown -> UnknownView error.
-        if !is_known_view_id(view_id) {
-            return Err(EngineError::UnknownView {
-                view_id: view_id.to_string(),
-            });
-        }
-        if opts.allow_stale {
-            Ok(Outcome {
-                list: Some(Vec::new()),
-                ..Outcome::default()
-            })
-        } else {
-            Err(EngineError::IvmViewStale {
-                view_id: view_id.to_string(),
-            })
-        }
-    }
-
-    /// Strict view read — alias for [`Self::read_view`].
-    ///
-    /// Retained for source-compatibility with R3 tests that spell the strict
-    /// intent explicitly. `read_view_strict(id)` is literally
-    /// `read_view_with(id, ReadViewOptions::strict())` and is documented as
-    /// such so operators choosing between the three names know the contract
-    /// is identical (R-minor-05).
-    pub fn read_view_strict(&self, view_id: &str) -> Result<Outcome, EngineError> {
-        self.read_view_with(view_id, ReadViewOptions::strict())
-    }
-
-    /// Relaxed view read — equivalent to
-    /// [`Self::read_view_with`] with `ReadViewOptions::allow_stale()`.
-    /// Retained for R3 test source-compatibility (R-minor-05).
-    pub fn read_view_allow_stale(&self, view_id: &str) -> Result<Outcome, EngineError> {
-        self.read_view_with(view_id, ReadViewOptions::allow_stale())
-    }
-
-    // -------- Snapshot + transaction --------
-
-    /// Open a MVCC snapshot handle observing the engine state at the call
-    /// instant. Forwards to the graph layer's [`RedbBackend::snapshot`].
-    pub fn snapshot(&self) -> Result<benten_graph::SnapshotHandle, EngineError> {
-        Ok(self.backend.snapshot()?)
-    }
-
-    /// Run a closure inside a write transaction.
-    pub fn transaction<F, R>(&self, f: F) -> Result<R, EngineError>
-    where
-        F: FnOnce(&mut EngineTransaction<'_, '_>) -> Result<R, EngineError>,
-    {
-        use std::sync::Mutex;
-        let ops_cell: Mutex<Vec<benten_caps::PendingOp>> = Mutex::new(Vec::new());
-        let user_result: Mutex<Option<Result<R, EngineError>>> = Mutex::new(None);
-
-        let policy = self.policy.as_deref();
-
-        let tx_outcome = self.backend.transaction(|tx| {
-            let mut eng_tx = make_engine_tx(tx, &ops_cell);
-            match f(&mut eng_tx) {
-                Ok(value) => {
-                    let ops = ops_cell.lock_recover().clone();
-                    // Derive the per-capability-scope list from the batch
-                    // (Phase-1 posture: `store:<label>:write` per op; system
-                    // zone skipped since user subgraphs cannot reach it).
-                    // Empty labels collapse to `store:write`. Closes named
-                    // compromise #5 — record, don't enforce.
-                    let scopes = derive_committed_scopes(&ops);
-                    if let Some(p) = policy {
-                        if !ops.is_empty() {
-                            let primary_label = ops
-                                .iter()
-                                .find_map(|op| match op {
-                                    benten_caps::PendingOp::PutNode { labels, .. } => {
-                                        labels.first().cloned()
-                                    }
-                                    benten_caps::PendingOp::PutEdge { label, .. } => {
-                                        Some(label.clone())
-                                    }
-                                    _ => None,
-                                })
-                                .unwrap_or_default();
-                            let ctx = benten_caps::WriteContext {
-                                label: primary_label,
-                                pending_ops: ops,
-                                ..Default::default()
-                            };
-                            if let Err(cap_err) = p.check_write(&ctx) {
-                                self.inner.record_cap_write_denied(&scopes);
-                                *user_result.lock_recover() = Some(Err(EngineError::Cap(cap_err)));
-                                return Err(GraphError::TxAborted {
-                                    reason: "capability denied".into(),
-                                });
-                            }
-                        }
-                    }
-                    // Record committed writes regardless of whether a policy
-                    // was configured — the metric is operational, not a gate.
-                    // Under NoAuthBackend the scope list still derives from
-                    // the batch's labels so dashboards can spot traffic-by-
-                    // label without a policy plumbed in.
-                    if !scopes.is_empty() {
-                        self.inner.record_cap_write_committed(&scopes);
-                    }
-                    *user_result.lock_recover() = Some(Ok(value));
-                    Ok(())
-                }
-                Err(e) => {
-                    *user_result.lock_recover() = Some(Err(e));
-                    Err(GraphError::TxAborted {
-                        reason: "closure error".into(),
-                    })
-                }
-            }
-        });
-
-        let saved = user_result.into_inner().unwrap_or_else(|e| e.into_inner());
-        if let Some(r) = saved {
-            return r;
-        }
-        match tx_outcome {
-            Ok(()) => {
-                debug_assert!(false, "transaction returned Ok without saved result");
-                Err(EngineError::Other {
-                    code: ErrorCode::Unknown(String::from("engine_internal")),
-                    message: "transaction returned Ok without saved result".into(),
-                })
-            }
-            Err(GraphError::NestedTransactionNotSupported {}) => {
-                Err(EngineError::NestedTransactionNotSupported)
-            }
-            Err(e) => Err(EngineError::Graph(e)),
-        }
-    }
-
-    // -------- Metrics + diagnostics --------
-
-    /// Count nodes stored under a label via the label index.
-    pub fn count_nodes_with_label(&self, label: &str) -> Result<usize, EngineError> {
-        Ok(self.backend.get_by_label(label)?.len())
-    }
-
-    /// Metric snapshot for compromise-5 regression tests.
-    ///
-    /// Surfaces:
-    /// - `benten.writes.total` — cumulative ChangeEvents observed.
-    /// - `benten.ivm.view_stale_count` — Phase-1 placeholder; Phase-2 wires
-    ///   the real counter.
-    /// - `benten.change_stream.dropped_events` — ChangeEvents evicted from
-    ///   the bounded observed-events buffer because a subscriber fell behind
-    ///   the write path (r6-sec-5). Non-zero means an operator should
-    ///   increase the capacity via
-    ///   [`EngineBuilder::change_stream_capacity`] or ensure probes drain.
-    #[must_use]
-    pub fn metrics_snapshot(&self) -> BTreeMap<String, f64> {
-        let mut out = BTreeMap::new();
-        let n = self
-            .inner
-            .event_count
-            .load(std::sync::atomic::Ordering::SeqCst);
-        let dropped = self
-            .inner
-            .dropped_events
-            .load(std::sync::atomic::Ordering::SeqCst);
-        let committed_total = self
-            .inner
-            .writes_committed_total
-            .load(std::sync::atomic::Ordering::SeqCst);
-        let denied_total = self
-            .inner
-            .writes_denied_total
-            .load(std::sync::atomic::Ordering::SeqCst);
-        #[allow(
-            clippy::cast_precision_loss,
-            reason = "Phase-1 metric is best-effort; lossy cast from u64 to f64 is acceptable for the compromise-5 regression test."
-        )]
-        {
-            out.insert("benten.writes.total".to_string(), n as f64);
-            out.insert(
-                "benten.change_stream.dropped_events".to_string(),
-                dropped as f64,
-            );
-            // Named compromise #5: per-capability write metrics. The totals
-            // are aggregate (one tick per commit); the per-scope keys
-            // `benten.writes.committed.<scope>` fan-out so operators can
-            // spot abnormal traffic per label before Phase-3 enforcement
-            // lands.
-            out.insert(
-                "benten.writes.committed".to_string(),
-                committed_total as f64,
-            );
-            out.insert("benten.writes.denied".to_string(), denied_total as f64);
-            for (scope, count) in self.inner.cap_write_committed_snapshot() {
-                out.insert(format!("benten.writes.committed.{scope}"), count as f64);
-            }
-            for (scope, count) in self.inner.cap_write_denied_snapshot() {
-                out.insert(format!("benten.writes.denied.{scope}"), count as f64);
-            }
-        }
-        out.insert("benten.ivm.view_stale_count".to_string(), 0.0);
-        out
-    }
-
-    /// Per-capability-scope committed-write counter snapshot. Keys are the
-    /// derived scope strings (`store:<label>:write`); values are the number
-    /// of batches committed under each scope since the engine opened. Used
-    /// by the compromise-#5 regression test and by napi callers that want
-    /// the map shape directly without the flattened `metrics_snapshot`
-    /// string-keyed projection.
-    #[must_use]
-    pub fn capability_writes_committed(&self) -> BTreeMap<String, u64> {
-        self.inner.cap_write_committed_snapshot()
-    }
-
-    /// Per-capability-scope denied-write counter snapshot. Mirrors
-    /// [`Self::capability_writes_committed`] for batches the policy
-    /// rejected.
-    #[must_use]
-    pub fn capability_writes_denied(&self) -> BTreeMap<String, u64> {
-        self.inner.cap_write_denied_snapshot()
-    }
-
-    /// Configured upper bound on the in-memory change-event buffer. Matches
-    /// the value passed to [`EngineBuilder::change_stream_capacity`] (or
-    /// [`CHANGE_STREAM_MAX_BUFFERED`] when the default was taken). See
-    /// r6-sec-5.
-    #[must_use]
-    pub fn change_stream_capacity(&self) -> usize {
-        self.inner.change_stream_capacity
-    }
-
-    /// IVM subscriber count — used by thinness tests. Excludes the
-    /// engine-internal change broadcast tap (which is always present so
-    /// `subscribe_change_events` works).
-    ///
-    /// Returns the number of views registered against the IVM subscriber, or
-    /// 0 when `.without_ivm()` was passed. When IVM is enabled but no views
-    /// have been created yet (fresh engine), this also returns 0 — the
-    /// subscriber itself is wired but there's nothing to fan events out to.
-    /// See philosophy g7-ep-3 / code-reviewer g7-cr-8.
-    #[must_use]
-    pub fn ivm_subscriber_count(&self) -> usize {
-        self.ivm.as_ref().map_or(0, |s| s.view_count())
-    }
-
-    /// Option-C diagnostic for a denied / missing read.
-    ///
-    /// Requires the caller to hold a `debug:read` capability — the
-    /// configured policy's `check_read` is consulted with label
-    /// `"debug"` and `target_cid = Some(cid)`. When the policy denies,
-    /// `diagnose_read` returns `Err(EngineError::Cap(CapError::Denied))`
-    /// so an ordinary caller cannot fish the existence signal.
-    ///
-    /// When permitted, the returned [`DiagnosticInfo`] distinguishes
-    /// three states: "not in backend", "in backend but policy denied",
-    /// "in backend and policy permitted". See named compromise #2 in
-    /// `docs/SECURITY-POSTURE.md` for the full semantics.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`EngineError::Cap`] when the caller lacks `debug:read`.
-    /// Backend read failures bubble through [`EngineError::Graph`].
-    pub fn diagnose_read(&self, cid: &Cid) -> Result<DiagnosticInfo, EngineError> {
-        // Gate on `debug:read`. We thread the probe through the configured
-        // policy's check_read with a canonical `"debug"` label so a
-        // Phase-1 GrantBackedPolicy + grant("...", "store:debug:read")
-        // unlocks the diagnostic surface. Absent a policy, diagnose_read
-        // is open (matches NoAuth posture — embedded single-user
-        // deployments get diagnostics out of the box).
-        if let Some(policy) = self.policy.as_deref() {
-            let ctx = benten_caps::ReadContext {
-                label: "debug".into(),
-                target_cid: Some(cid.clone()),
-                ..Default::default()
-            };
-            if let Err(e) = policy.check_read(&ctx) {
-                // Normalise to CapError::Denied on the diagnostic path —
-                // a DeniedRead on this gate is itself the denial signal.
-                let required = match &e {
-                    CapError::DeniedRead { required, .. } | CapError::Denied { required, .. } => {
-                        required.clone()
-                    }
-                    _ => "store:debug:read".to_string(),
-                };
-                return Err(EngineError::Cap(CapError::Denied {
-                    required,
-                    entity: cid.to_base32(),
-                }));
-            }
-        }
-
-        // Now inspect actual state. Probe the backend unconditionally —
-        // we already gated on the debug:read capability.
-        let existing = self.backend.get_node(cid)?;
-        let (exists_in_backend, label) = match &existing {
-            Some(n) => (true, n.labels.first().cloned().unwrap_or_default()),
-            None => (false, String::new()),
-        };
-
-        // Recompute the policy's verdict on the *real* label so the
-        // DiagnosticInfo carries an accurate `denied_by_policy` signal.
-        let denied_by_policy = if exists_in_backend {
-            if let Some(policy) = self.policy.as_deref() {
-                let ctx = benten_caps::ReadContext {
-                    label: label.clone(),
-                    target_cid: Some(cid.clone()),
-                    ..Default::default()
-                };
-                match policy.check_read(&ctx) {
-                    Err(CapError::DeniedRead { required, .. }) => Some(required),
-                    _ => None,
-                }
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        Ok(DiagnosticInfo {
-            cid: cid.clone(),
-            exists_in_backend,
-            denied_by_policy,
-            not_found: !exists_in_backend,
-        })
-    }
-
-    // -------- Version chains (Phase 1 stubs) --------
-
-    pub fn create_anchor(&self, _name: &str) -> Result<AnchorHandle, EngineError> {
-        Err(EngineError::NotImplemented {
-            feature: "create_anchor — Phase 2",
-        })
-    }
-
-    pub fn append_version(&self, _anchor: &AnchorHandle, _node: &Node) -> Result<Cid, EngineError> {
-        Err(EngineError::NotImplemented {
-            feature: "append_version — Phase 2",
-        })
-    }
-
-    pub fn read_current_version(&self, _anchor: &AnchorHandle) -> Result<Option<Cid>, EngineError> {
-        Err(EngineError::NotImplemented {
-            feature: "read_current_version — Phase 2",
-        })
-    }
-
-    pub fn walk_versions(
-        &self,
-        _anchor: &AnchorHandle,
-    ) -> Result<std::vec::IntoIter<Cid>, EngineError> {
-        Err(EngineError::NotImplemented {
-            feature: "walk_versions — Phase 2",
-        })
-    }
-
-    pub fn schedule_revocation_at_iteration(
-        &self,
-        _grant: Cid,
-        _n: u32,
-    ) -> Result<(), EngineError> {
-        Err(EngineError::NotImplemented {
-            feature: "schedule_revocation_at_iteration — Phase 2",
-        })
-    }
-
-    #[cfg(any(test, feature = "test-helpers"))]
-    #[allow(
-        clippy::expect_used,
-        reason = "test-only helper; NoAuth backend cannot deny a plain post"
-    )]
-    pub fn testing_insert_privileged_fixture(&self) -> Cid {
-        let mut props: BTreeMap<String, Value> = BTreeMap::new();
-        props.insert("title".into(), Value::Text("secret".into()));
-        let node = Node::new(vec!["post".into()], props);
-        self.create_node(&node)
-            .expect("fixture insertion via NoAuth backend")
-    }
+    // -------- Snapshot + transaction / metrics / diagnostics --------
+    //
+    // `snapshot`, `transaction`, `count_nodes_with_label`,
+    // `metrics_snapshot`, `capability_writes_committed` /
+    // `capability_writes_denied`, `change_stream_capacity`,
+    // `ivm_subscriber_count`, `diagnose_read`, the Phase-2 version-chain
+    // stubs, and `testing_insert_privileged_fixture` all live in
+    // [`crate::engine_diagnostics`].
 }
 
 // `make_engine_tx` constructs an EngineTransaction from a graph Transaction.
 // Kept out of the main flow so the closure reads cleanly.
-fn make_engine_tx<'tx, 'coll>(
+pub(crate) fn make_engine_tx<'tx, 'coll>(
     tx: &'tx mut benten_graph::Transaction<'_>,
     ops_collector: &'coll std::sync::Mutex<Vec<benten_caps::PendingOp>>,
 ) -> EngineTransaction<'tx, 'coll> {
@@ -2213,7 +1490,7 @@ fn make_engine_tx<'tx, 'coll>(
 /// reach them, and crediting privileged grant/revoke writes to the
 /// per-scope tally would make the metric misleading. Empty labels
 /// collapse to `store:write` (matches the caps-side fallback).
-fn derive_committed_scopes(ops: &[benten_caps::PendingOp]) -> Vec<String> {
+pub(crate) fn derive_committed_scopes(ops: &[benten_caps::PendingOp]) -> Vec<String> {
     use benten_caps::PendingOp;
     let mut out: Vec<String> = Vec::new();
     let mut push = |label: &str| {
