@@ -170,54 +170,16 @@ pub enum ErrorCode {
 impl ErrorCode {
     /// Return the stable string identifier (e.g. `"E_INV_CYCLE"`).
     ///
-    /// For [`ErrorCode::Unknown`] the stored string is returned verbatim.
+    /// For [`ErrorCode::Unknown`] the stored string is returned verbatim;
+    /// every known variant delegates through [`ErrorCode::as_static_str`]
+    /// so the 44-arm catalog mapping lives in exactly one place
+    /// (5d-K triple-match dedup). `&'static str` coerces to the shorter
+    /// `&self`-bound `&str` without runtime cost.
     #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
-            ErrorCode::InvCycle => "E_INV_CYCLE",
-            ErrorCode::InvDepthExceeded => "E_INV_DEPTH_EXCEEDED",
-            ErrorCode::InvFanoutExceeded => "E_INV_FANOUT_EXCEEDED",
-            ErrorCode::InvTooManyNodes => "E_INV_TOO_MANY_NODES",
-            ErrorCode::InvTooManyEdges => "E_INV_TOO_MANY_EDGES",
-            ErrorCode::InvDeterminism => "E_INV_DETERMINISM",
-            ErrorCode::InvContentHash => "E_INV_CONTENT_HASH",
-            ErrorCode::InvRegistration => "E_INV_REGISTRATION",
-            ErrorCode::InvIterateNestDepth => "E_INV_ITERATE_NEST_DEPTH",
-            ErrorCode::InvIterateMaxMissing => "E_INV_ITERATE_MAX_MISSING",
-            ErrorCode::InvIterateBudget => "E_INV_ITERATE_BUDGET",
-            ErrorCode::CapDenied => "E_CAP_DENIED",
-            ErrorCode::CapDeniedRead => "E_CAP_DENIED_READ",
-            ErrorCode::CapRevoked => "E_CAP_REVOKED",
-            ErrorCode::CapRevokedMidEval => "E_CAP_REVOKED_MID_EVAL",
-            ErrorCode::CapNotImplemented => "E_CAP_NOT_IMPLEMENTED",
-            ErrorCode::CapAttenuation => "E_CAP_ATTENUATION",
-            ErrorCode::WriteConflict => "E_WRITE_CONFLICT",
-            ErrorCode::IvmViewStale => "E_IVM_VIEW_STALE",
-            ErrorCode::TxAborted => "E_TX_ABORTED",
-            ErrorCode::NestedTransactionNotSupported => "E_NESTED_TRANSACTION_NOT_SUPPORTED",
-            ErrorCode::PrimitiveNotImplemented => "E_PRIMITIVE_NOT_IMPLEMENTED",
-            ErrorCode::SystemZoneWrite => "E_SYSTEM_ZONE_WRITE",
-            ErrorCode::ValueFloatNan => "E_VALUE_FLOAT_NAN",
-            ErrorCode::ValueFloatNonFinite => "E_VALUE_FLOAT_NONFINITE",
-            ErrorCode::CidParse => "E_CID_PARSE",
-            ErrorCode::CidUnsupportedCodec => "E_CID_UNSUPPORTED_CODEC",
-            ErrorCode::CidUnsupportedHash => "E_CID_UNSUPPORTED_HASH",
-            ErrorCode::VersionBranched => "E_VERSION_BRANCHED",
-            ErrorCode::BackendNotFound => "E_BACKEND_NOT_FOUND",
-            ErrorCode::TransformSyntax => "E_TRANSFORM_SYNTAX",
-            ErrorCode::InputLimit => "E_INPUT_LIMIT",
-            ErrorCode::NotFound => "E_NOT_FOUND",
-            ErrorCode::Serialize => "E_SERIALIZE",
-            ErrorCode::GraphInternal => "E_GRAPH_INTERNAL",
-            ErrorCode::DuplicateHandler => "E_DUPLICATE_HANDLER",
-            ErrorCode::NoCapabilityPolicyConfigured => "E_NO_CAPABILITY_POLICY_CONFIGURED",
-            ErrorCode::ProductionRequiresCaps => "E_PRODUCTION_REQUIRES_CAPS",
-            ErrorCode::SubsystemDisabled => "E_SUBSYSTEM_DISABLED",
-            ErrorCode::UnknownView => "E_UNKNOWN_VIEW",
-            ErrorCode::NotImplemented => "E_NOT_IMPLEMENTED",
-            ErrorCode::IvmPatternMismatch => "E_IVM_PATTERN_MISMATCH",
-            ErrorCode::VersionUnknownPrior => "E_VERSION_UNKNOWN_PRIOR",
             ErrorCode::Unknown(s) => s.as_str(),
+            known => known.as_static_str(),
         }
     }
 
