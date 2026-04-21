@@ -302,7 +302,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 - **Message:** "CID bytes could not be parsed into a CIDv1: {detail}"
 - **Context:** `{ detail: string, bytes_len: number }`
-- **Fix:** Phase 1 accepts only base32-lower-nopad multibase (`b`-prefixed) CIDv1. Check that the caller is not passing a base58btc / base64 / hex form, and that the bytes are not truncated.
+- **Fix:** Phase 1 accepts base32-lower-nopad multibase (`b`-prefixed) CIDv1 via both the napi boundary and the Rust `Cid::from_str` path. Check that the caller is not passing a base58btc / base64 / hex form, and that the bytes are not truncated.
 - **Thrown at:** CID deserialization / napi boundary
 - **Phase:** 1
 

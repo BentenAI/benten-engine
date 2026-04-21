@@ -97,9 +97,9 @@ Phase 1 views rebuild only by re-applying every committed `ChangeEvent` from eng
 
 ## 6. `benten-core` + content-addressing
 
-### 6.1 `Cid::from_str` implementation (spec-to-code audit §5.9)
+### 6.1 `Cid::from_str` implementation (spec-to-code audit §5.9) — CLOSED (2026-04-20)
 
-`Cid::from_str` unconditionally returns `CoreError::CidParse("Cid::from_str is a Phase 2 deliverable; needs multibase decoder")`. The `ERROR-CATALOG.md` `E_CID_PARSE` fix-hint says "Phase 1 accepts base32-lower-nopad multibase" which reads as "Phase 1 accepts it" — the napi boundary accepts it (via a separate path that fires `E_INPUT_LIMIT`), but Rust's `Cid::from_str` does not. Phase 2 lands the ~30-line base32 decoder (mirrors the existing `to_base32` encoder in `benten-core/src/lib.rs`).
+Landed in Phase 1 as the close-out of R7 audit finding F-R7-004: `Cid::from_str` now decodes the base32-lower-nopad multibase form (the inverse of `Cid::to_base32`) and hands the resulting bytes to `Cid::from_bytes`, so string-path callers get the same three typed failure classes (`CoreError::InvalidCid` / `CidUnsupportedCodec` / `CidUnsupportedHash`) as byte-path callers. The catalog fix-hint for `E_CID_PARSE` was updated to drop the "Phase 2 path still stubbed" caveat. Tests: `crates/benten-core/tests/cid_from_str.rs` (roundtrip + canonical fixture + prefix / alphabet / length rejections) plus a lib-level `cid_string_roundtrip` unit test.
 
 ### 6.2 `get_node_verified` read-path hash check (spec-to-code audit §5.7)
 
