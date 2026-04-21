@@ -4,7 +4,7 @@
 
 Benten is a Rust graph execution engine where every platform capability composes on top rather than being built in. On it, we're building personal AI assistants that replace the paid software stack — organizing your knowledge and generating the tools you need on demand, all running on hardware you trust. The platform is funded by treasury interest on its USD-pegged stable currency.
 
-**Status:** Pre-implementation. Phase 1 spike begins next.
+**Status:** Phase 1 complete (2026-04-21). Content-addressed graph engine with 8-primitive evaluator, 5-view IVM, pluggable capability policy, TypeScript bindings, scaffolder, and the 10-minute DX path shipped. Phase 2 (evaluator completion + WASM SANDBOX + remaining invariants) is the next milestone. See [`docs/FULL-ROADMAP.md`](docs/FULL-ROADMAP.md) for the committed 8-phase plan.
 
 ## Three Pillars
 
@@ -14,30 +14,37 @@ Benten is a Rust graph execution engine where every platform capability composes
 
 See [`docs/VISION.md`](docs/VISION.md) for the full articulation.
 
-## Hello Benten (target DX — ships with Phase 1)
+## Hello Benten
 
 ```sh
 npx create-benten-app my-app
-cd my-app && npm run dev
+cd my-app && npm install && npm test
 ```
 
 ```typescript
 // Your first handler — no schema, no auth, no config required:
-import { crud } from '@benten/engine/operations';
+import { crud } from '@benten/engine';
 export const postHandlers = crud('post');
 ```
 
 ```typescript
 // Use it:
-await engine.call('post:create', { title: 'Hello', body: 'Works.' });
-const posts = await engine.call('post:list');
+import { Engine } from '@benten/engine';
+
+const engine = await Engine.open('.benten/my-app.redb');
+const handler = await engine.registerSubgraph(postHandlers);
+
+await engine.call(handler.id, 'post:create', { title: 'Hello', body: 'Works.' });
+const { items } = await engine.call(handler.id, 'post:list', {});
 ```
 
 Every call produces a deterministic, content-addressed audit trail you can inspect:
 ```typescript
-console.log(postHandlers.create.toMermaid());  // Visual diagram
-console.log(await engine.trace('post:create', {...}));  // Step-by-step trace
+console.log(handler.toMermaid());                             // Visual diagram of the subgraph
+console.log(await engine.trace(handler.id, 'post:create', {...}));  // Per-step evaluation trace
 ```
+
+(Dev server with hot reload is Phase 2; Phase 1 ships the `npm test` path — the scaffolder smoke test exercises six exit-criterion gates, each mechanically verifiable.)
 
 That's the entire onboarding surface. Complexity (capabilities, IVM views, version chains, P2P sync, AI integration) is opt-in as you need it.
 
@@ -55,7 +62,7 @@ See [`docs/QUICKSTART.md`](docs/QUICKSTART.md) for the full 10-minute path.
 
 | Phase | Deliverable |
 |-------|-------------|
-| **1** | Core engine: 6 crates, 12 primitives, capability hooks, napi-rs TypeScript bindings, scaffolder + debug tooling |
+| **1** | ✅ Core engine: 7 crates, 12 primitive types (8 executable), 8 of 14 structural invariants, 5 hand-written IVM views, pluggable capability policy, napi-rs TypeScript bindings, scaffolder + debug tooling |
 | **2** | Evaluator completion, WASM build target, wasmtime SANDBOX with fuel metering |
 | **3** | P2P sync (iroh, CRDT, Merkle Search Trees, DID). **Atriums ship here.** |
 | **4** | Thrum CMS migration to the engine — 3,200+ tests pass |
@@ -84,7 +91,7 @@ Everything beyond Phase 8 (full Groves, federation, general compute marketplace,
 
 ```
 benten-engine/
-├── crates/          # Rust workspace crates (5 in Phase 1)
+├── crates/          # Rust workspace crates (7 at Phase 1 close: benten-errors, benten-core, benten-graph, benten-ivm, benten-caps, benten-eval, benten-engine)
 ├── bindings/        # napi-rs, wasm, python bindings
 ├── tests/           # Cross-crate integration tests and benchmarks
 ├── docs/
@@ -108,7 +115,7 @@ READ     WRITE     TRANSFORM    BRANCH     ITERATE    WAIT
 CALL     RESPOND   EMIT         SANDBOX    SUBSCRIBE  STREAM
 ```
 
-Empirically validated against 5 real handlers with 2.5% SANDBOX rate. See [`docs/validation/paper-prototype-handlers.md`](docs/validation/paper-prototype-handlers.md). (Note: paper prototype used the original set — VALIDATE and GATE were dropped, SUBSCRIBE and STREAM added during the 2026-04-14 critic review. Re-validation is a Phase 1 task.)
+Empirically validated against 5 real handlers with 2.5% SANDBOX rate. See [`docs/validation/paper-prototype-handlers.md`](docs/validation/paper-prototype-handlers.md). (Note: paper prototype used the original set — VALIDATE and GATE were dropped, SUBSCRIBE and STREAM added during the 2026-04-14 critic review. Phase 1 ships all 12 primitive *types* with structural validation; 8 have live executors today — READ, WRITE, TRANSFORM, BRANCH, ITERATE, CALL, RESPOND, EMIT — and the other 4 — WAIT, STREAM, SUBSCRIBE, SANDBOX — return `E_PRIMITIVE_NOT_IMPLEMENTED` until their Phase 2 executors land.)
 
 ## Tech Stack (Validated April 2026)
 
