@@ -31,15 +31,20 @@ jobs:
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check
-          # `--allow wildcard` downgrades the `bans.wildcards = "deny"` lint for
-          # path-only / workspace-internal wildcard deps that cargo-deny flags
-          # because the `path = ".."` form lacks a version field. Every real
-          # wildcard version from crates.io still trips `deny` via the lint's
-          # other code paths; this narrow allow applies only to the workspace-
-          # internal path/git forms. Clean resolution moves to
-          # `bans.allow-wildcard-paths = true` in deny.toml once that file is
-          # next touched.
-          arguments: --all-features --allow wildcard
+          arguments: --all-features
+          # `--allow wildcard` is a `check` subcommand option, so it goes in
+          # `command-arguments` (post-subcommand), not `arguments`
+          # (pre-subcommand). The cargo-deny-action composes the command line
+          # as `cargo-deny {arguments} check {command-arguments}`.
+          #
+          # Downgrades the `bans.wildcards = "deny"` lint for path-only /
+          # workspace-internal wildcard deps that cargo-deny flags because the
+          # `path = ".."` form lacks a version field. Genuine wildcard
+          # versions from crates.io still trip `deny` via other code paths;
+          # this narrow allow applies only to workspace-internal path/git
+          # forms. Clean resolution moves to `bans.allow-wildcard-paths = true`
+          # in deny.toml once that file is next touched.
+          command-arguments: --allow wildcard
           # Fail on any advisory with CVSS HIGH or CRITICAL. Medium/low
           # advisories surface as warnings. The deny.toml `yanked = "deny"`
           # setting catches yanked crates regardless of severity (which would
