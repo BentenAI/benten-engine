@@ -41,7 +41,14 @@ use alloc::string::{String, ToString};
 ///
 /// The set mirrors `docs/ERROR-CATALOG.md`. See the crate-level docs for the
 /// adding-a-variant checklist.
+///
+/// `#[non_exhaustive]` (R6b bp-17) so downstream consumers must include a
+/// fallback `_ =>` arm — adding a new catalog code in a later phase is a
+/// minor version bump rather than a breaking change. The existing
+/// `ErrorCode::Unknown(String)` variant covers forward-compat on the
+/// parse-side; `non_exhaustive` covers forward-compat on the match-side.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ErrorCode {
     /// Registration-time: subgraph contains a cycle (invariant 1 violation).
     InvCycle,

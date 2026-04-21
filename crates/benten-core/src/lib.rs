@@ -380,7 +380,11 @@ fn base32_lower_nopad_encode(input: &[u8], out: &mut String) {
 /// We use `thiserror` for ergonomic `Display`/`Error` impls. The spike surface
 /// is deliberately small; Phase 1 proper will expand this to cover version-
 /// chain and edge errors.
+/// `#[non_exhaustive]` (R6b bp-17) — future phases add variants (version-chain
+/// conflict subtypes, edge-level validation errors); downstream matchers must
+/// include a `_ =>` fallback so additions are a minor version bump.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum CoreError {
     /// DAG-CBOR serialization failed. Carries a human-readable message since
     /// `serde_ipld_dagcbor::EncodeError` is generic over the writer type and

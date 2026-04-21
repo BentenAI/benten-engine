@@ -22,7 +22,29 @@ repository = "https://github.com/BentenAI/benten-engine"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
-unused_must_use = "allow"
+# R6b bp-23: five workspace allows audited.
+#
+# `unused_must_use` (the dangerous one — would silence dropped-Result warnings
+# in transaction commit paths) was removed entirely; CI stays green without
+# it, so the safer posture holds.
+#
+# The remaining four are retained as bare `"allow"` because the `reason =`
+# key is not accepted on `[workspace.lints.rust]` entries in current cargo;
+# the justification lives in these comments instead.
+#
+# - unused_imports: Phase-1 R3 test fixtures keep scoped imports across
+#   cfg-gated variant helpers. Lib-code unused imports are fixed site-local.
+#   Phase-2 sweep after evaluator completion re-audits.
+# - dead_code: R3 test fixtures include helper functions (e.g.
+#   `system_labeled_node`, `concrete_scope`) gated on cfg features. Library
+#   dead_code is fixed site-local; lint stays relaxed workspace-wide until
+#   the test-only helper set stabilises.
+# - unused_variables: R3 tests bind fixture results (`let root = sb.read(...)`)
+#   for diagnostic breakpoint use; renaming to `_root` loses breakpoint-name
+#   symmetry with the rest of the test. Phase-2 migrates to `dbg!`.
+# - non_snake_case: R3 `ucan_stub_messages.rs` uses uppercase routing-token
+#   names (`ON_ERROR`, `ON_DENIED`) inside test-function identifiers to keep
+#   the routing contract visible in the test name.
 unused_imports = "allow"
 dead_code = "allow"
 unused_variables = "allow"

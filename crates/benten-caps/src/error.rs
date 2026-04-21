@@ -18,7 +18,12 @@ use benten_errors::ErrorCode;
 /// evaluator pipes these through `ON_ERROR` typed edges; the `NotImplemented`
 /// branch in particular must NOT route to `ON_DENIED` — see
 /// `tests/ucan_stub_messages.rs` for the routing contract.
+/// `#[non_exhaustive]` (R6b bp-17) — Phase 3 UCAN backend introduces
+/// `CapError::UcanInvalidProof`, `CapError::UcanExpired`, principal-identity
+/// variants; downstream matchers must include `_ =>` so adding variants is
+/// a minor version bump.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum CapError {
     /// The capability was denied.
     ///

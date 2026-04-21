@@ -33,7 +33,12 @@ extern crate alloc;
 /// consumers (TS bindings, CLI) see the same string at every boundary.
 ///
 /// [`ErrorCode`]: benten_errors::ErrorCode
+/// `#[non_exhaustive]` (R6b bp-17) — Phase 2 adds user-registered IVM views
+/// with their own failure modes (e.g. `RegistrationConflict`, `BackfillFailed`);
+/// downstream matchers must include `_ =>` so adding variants is a minor
+/// version bump.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum ViewError {
     /// The view's incremental state is stale — a prior update tripped its
     /// budget and the view has not been rebuilt since. Strict reads refuse;

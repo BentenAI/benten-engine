@@ -12,7 +12,13 @@ use benten_eval::RegistrationError;
 use benten_graph::GraphError;
 
 /// Errors produced by the engine orchestrator.
+///
+/// `#[non_exhaustive]` (R6b bp-17) — engine error variants will grow as
+/// Phase 2 primitives land (STREAM back-pressure, WAIT timeouts, SANDBOX
+/// fuel exhaustion); downstream matchers must include `_ =>` so adding
+/// variants is a minor version bump.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum EngineError {
     #[error("core: {0}")]
     Core(#[from] CoreError),
