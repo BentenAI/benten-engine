@@ -134,6 +134,9 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_CAP_REVOKED_MID_EVAL
 
+<!-- reachability: ignore -->
+<!-- Rationale: Phase-1 named compromise #1 (TOCTOU window). `CapError::RevokedMidEval` is the frozen code surface that the evaluator's batch-boundary recheck will return once wired in R5 (see `crates/benten-caps/src/error.rs` docstring + `crates/benten-engine/tests/integration/cap_toctou.rs`). Construction sites live in TOCTOU integration tests today; drift-detect correctly flags the production gap. Remove this annotation when the evaluator's refresh-point-5 wiring lands in R5/G9-A. -->
+
 - **Message:** "Capability {grant_id} was revoked during ongoing evaluation at {revoked_at}"
 - **Context:** `{ grant_id: NodeId, revoked_at: HlcTimestamp, batch_boundary: number }`
 - **Fix:** Distinct from `E_CAP_REVOKED` (Phase 3 sync-side revocation). Fired when a cap is revoked between the start of evaluation and a capability re-check point (commit boundary, CALL entry, or every N ITERATE iterations, default 100). Phase 2 Invariant 13 tightens the window to per-operation.
@@ -148,6 +151,9 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** Evaluation (at commit when an unimplemented backend is configured)
 
 ### E_CAP_REVOKED
+
+<!-- reachability: ignore -->
+<!-- Rationale: Phase-3 sync-subsystem code. `CapError::Revoked` surfaces from `sync-receive` when a peer propagates a revocation over the Atrium wire; the Atrium stack lands in Phase 3 with `benten-sync`. Kept as the stable wire code the Phase-1 `ErrorCode` enum round-trips so `E_CAP_REVOKED` strings arriving from a newer peer don't collapse to `ErrorCode::Unknown(_)`. Remove this annotation when `benten-sync` wires the first `Err(CapError::Revoked)` construction site. -->
 
 - **Message:** "Capability {grant_id} was revoked at {revoked_at}"
 - **Context:** `{ grant_id: NodeId, revoked_at: HlcTimestamp }`
@@ -241,6 +247,9 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Phase:** 1
 
 ### E_INPUT_LIMIT
+
+<!-- reachability: ignore -->
+<!-- Rationale: R5 G8-B/B8 follow-up. The napi boundary's bounded streaming decoder (size/depth/bytes/CID-shape enforcement) is explicitly deferred — see the in-source acknowledgement at `bindings/napi/src/lib.rs::testing::deserialize_value_from_js_like` ("B8 harness's assertions about `ErrorCode::InputLimit` stay red until R5"). Drift-detect only scans `crates/*/src/`; the real firing site will live in `bindings/napi/src/` anyway, so this entry would need re-annotating rather than unignoring. Remove this annotation if/when a `crates/`-resident construction site is added (e.g., a shared limits module in `benten-core`). -->
 
 - **Message:** "Napi boundary input exceeds {limit_kind} limit: {actual} > {max}"
 - **Context:** `{ limit_kind: "map_size"|"list_size"|"bytes_len"|"text_len"|"nesting_depth"|"subgraph_bytes"|"node_count"|"edge_count", actual: number, max: number }`
