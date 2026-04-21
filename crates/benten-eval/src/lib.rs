@@ -56,7 +56,12 @@ pub mod limits {
 }
 
 /// Evaluator error type (Phase 1 stub).
+///
+/// `#[non_exhaustive]` (R6b bp-17) — Phase 2 adds STREAM / WAIT / SUBSCRIBE /
+/// SANDBOX runtime errors; downstream matchers must include `_ =>` so adding
+/// variants is a minor version bump.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum EvalError {
     #[error("invariant violation: {0:?}")]
     Invariant(InvariantViolation),
@@ -160,7 +165,14 @@ impl EvalError {
 }
 
 /// Structural-invariant violation variants.
+///
+/// `#[non_exhaustive]` (R6b bp-17) — invariants 4 (SANDBOX nest depth), 7
+/// (SANDBOX output limit), 11 (system-zone reachability), 13 (immutability),
+/// 14 (causal attribution) land in Phase 2 and each introduces a variant
+/// here; downstream matchers must include `_ =>` so adding variants is a
+/// minor version bump.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum InvariantViolation {
     Cycle,
     DepthExceeded,
@@ -362,7 +374,14 @@ impl RegistrationError {
 }
 
 /// The 12 operation primitive types.
+///
+/// `#[non_exhaustive]` (R6b bp-17): while the set of 12 primitives is
+/// deliberately closed by ENGINE-SPEC §3, `non_exhaustive` guards against
+/// a future Phase 2+ decision to introduce a 13th primitive without forcing
+/// a major-version bump across downstream matchers. The vocabulary is
+/// architectural; the enum representation is a mechanical surface.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum PrimitiveKind {
     Read,
     Write,

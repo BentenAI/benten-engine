@@ -58,7 +58,11 @@ pub use transaction::{PendingOp, Transaction};
 /// variant is retained for test-fixture injection (see
 /// `tests/failure_injection_rollback.rs`) and for internal
 /// "missing transaction handle" bookkeeping.
+/// `#[non_exhaustive]` (R6b bp-17) — Phase 2 introduces per-backend error
+/// kinds (e.g. WASM `IndexedDBBackend`, peer-fetch errors); downstream
+/// matchers must include `_ =>` so adding variants is a minor version bump.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum GraphError {
     /// Propagated from `benten-core` (CID construction, canonical
     /// serialization, DAG-CBOR decode via `CoreError::Serialize`).
