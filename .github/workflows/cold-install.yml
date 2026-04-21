@@ -42,6 +42,21 @@ jobs:
         with:
           node-version: "22"
 
+      # GitHub Actions hosted runners ship with Rust pre-installed. This
+      # test measures "no-Rust install latency" — so we hide the pre-
+      # installed Rust from PATH for the rest of the job. That satisfies
+      # the test's intent (npm install behaves as if the user has no Rust)
+      # without requiring a custom runner image.
+      - name: Hide pre-installed Rust from PATH
+        shell: bash
+        run: |
+          # Filter PATH: drop any entry containing rustup / cargo / rustc.
+          # Handles Linux (/home/runner/.rustup/...), macOS (~/.rustup/...),
+          # and Windows-in-git-bash (/c/Users/runneradmin/.cargo/...).
+          filtered=$(echo "$PATH" | tr ':' '\n' | grep -v -E '(rustup|cargo|rustc)' | tr '\n' ':' | sed 's/:$//')
+          echo "PATH=$filtered" >> "$GITHUB_ENV"
+          echo "Filtered PATH — dropped rustup/cargo/rustc entries"
+
       # DELIBERATELY no `dtolnay/rust-toolchain@...` step. If the install
       # path needs Rust, it will fail here — which is the exact failure
       # mode we want to catch.
@@ -49,9 +64,11 @@ jobs:
         shell: bash
         run: |
           if command -v cargo >/dev/null 2>&1; then
-            echo "ERROR: cargo is on PATH. This runner is supposed to be Rust-free so the"
-            echo "cold-install test reflects real user experience. If this is a runner-image"
-            echo "change, update this step; otherwise fail."
+            echo "ERROR: cargo is still on PATH after the filter step. If a new install"
+            echo "location isn't covered by the rustup/cargo/rustc regex, extend it in the"
+            echo "'Hide pre-installed Rust from PATH' step above."
+            echo "Current PATH: $PATH"
+            command -v cargo
             exit 1
           fi
           echo "OK: no Rust toolchain on PATH."
