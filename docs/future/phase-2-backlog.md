@@ -6,7 +6,7 @@
 - `future/` = exploratory proposals, may or may not ship (e.g. `benten-runtime.md`, `compute-marketplace.md`).
 - `phase-2-backlog.md` (this file) = committed deferrals with concrete Phase 1 references. Every item here is expected to land in Phase 2 or has a clear trigger for earlier landing.
 
-**Phase 2 scope anchor:** `docs/FULL-ROADMAP.md` §Phase 2 — "Evaluator completion + WASM SANDBOX + remaining invariants." See `ENGINE-SPEC.md` §14 for the evaluator-side primary plan.
+**Phase 2 scope anchor:** `docs/FULL-ROADMAP.md` §Phase 2 — "Evaluator completion + WASM SANDBOX + remaining invariants." **Phase 2 was split into Phase 2a + Phase 2b during Phase 2a pre-R1 (2026-04-21)** on review-lens-coherence grounds. Phase 2a (evaluator completion + debt close + 4 of 6 invariants): `.addl/phase-2a/00-implementation-plan.md`. Phase 2b (SANDBOX + WASM + compute): `.addl/phase-2b/00-scope-outline.md` — opens pre-R1 after 2a ships. The backlog items below split across 2a and 2b per the `.addl/phase-2a/00-implementation-plan.md` §11 traceability map.
 
 ---
 

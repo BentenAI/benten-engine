@@ -34,15 +34,32 @@ The committed scope reflects the three-pillar vision (see [`VISION.md`](VISION.m
 
 ### Phase 2: Evaluator Completion + WASM + SANDBOX
 
-**Completion.** The evaluator handles all 12 primitives production-quality, WASM builds work, SANDBOX is live, and the full invariant set is enforced.
+**Split during Phase 2a pre-R1 (2026-04-21)** into two coherent sub-phases on review-lens-coherence grounds — see `.addl/phase-2a/00-implementation-plan.md` §8. Each sub-phase runs its own full ADDL cycle.
 
-- Remaining 4 primitives executed: **WAIT** (suspend/resume with serializable execution state), **STREAM** (chunked output with back-pressure, SSE/WebSocket integration), **SUBSCRIBE** (reactive change notification as a user-visible operation beyond the IVM internal subscriber), **SANDBOX** (wasmtime-hosted fuel-metered computation)
-- Remaining structural invariants enforced: **4** (SANDBOX nesting), **7** (SANDBOX output ≤1MB), **8** (cumulative iteration budget multiplicative through ITERATE/CALL), **11** (system-zone labels unreachable from user operations), **13** (immutability enforcement — TOCTOU protection), **14** (causal attribution emitted on every evaluation, unsuppressible)
-- wasmtime SANDBOX host with fuel metering + instance pool + host-function manifest
-- WASM build target via napi-rs v3 with network-fetch `KVBackend` stub
-- Generalized IVM Algorithm B + per-view strategy selection (A/B/C per view based on access pattern)
-- Module manifest format (requires-caps, provides-subgraphs, migrations)
-- Transaction-primitive API shape finalized (closure-based vs. `WriteBatch`) based on Phase 1 usage feedback
+#### Phase 2a: Evaluator completion + debt close (~5 days HE)
+
+Structural + debt-close work with a coherent `code-as-graph-reviewer` + invariant-lens review surface.
+
+- **`benten-eval → benten-graph` dependency break** (arch-1) — the evaluator's error surface reshapes so every downstream group builds on a clean base
+- **WAIT** executor with serializable execution state on a DAG-CBOR + CIDv1 envelope (decision baked pre-R1 per §9.1 — preserves content-addressing symmetry for Phase 3 sync, Phase 6 AI workflow forking, Phase 7 Garden approval flows)
+- **Four of six remaining invariants** — 8 (cumulative iteration budget multiplicative through ITERATE/CALL), 11 (system-zone full enforcement replacing Phase-1 write-path stopgap), 13 (immutability/TOCTOU), 14 (structural causal attribution per evaluation step)
+- **Evaluator-path Option C** — threads `PrimitiveHost::check_read_capability` into the READ primitive so `crud:post:get` honours symmetric-None end-to-end
+- **Wall-clock TOCTOU delegation** — closes the Phase-2 portion of Compromise #1
+- **`DurabilityMode::Group` default** + **subgraph AST cache** — together make ENGINE-SPEC §14.6's 150–300µs 10-node-handler target reachable on macOS APFS
+- `view_stale_count` metric wire-up (drops the `0.0` placeholder)
+- Dev server with hot reload; per-item `missing_docs` sweep for 2a-touched items
+
+#### Phase 2b: SANDBOX + WASM + compute (~12 days HE)
+
+Isolation + compute work with a `wasmtime-sandbox-auditor` + `ivm-algorithm-b-reviewer` review surface. Opens pre-R1 after 2a ships. Scope frozen at `.addl/phase-2b/00-scope-outline.md`.
+
+- **Three primitive executors** — STREAM (chunked output + back-pressure + SSE/WebSocket), SUBSCRIBE (user-visible reactive primitive), SANDBOX (wasmtime host + fuel metering + instance pool + capability-derived host-function manifest — decision baked during 2a pre-R1 §9.3)
+- **Two remaining invariants** — 4 (SANDBOX nesting), 7 (SANDBOX output ≤ 1 MB)
+- **Generalized IVM Algorithm B** + per-view strategy selection (A/B/C) + user-registered views beyond the 5 hand-written Phase-1 views
+- **WASM build target** via napi-rs v3 with network-fetch `KVBackend` stub (snapshot-blob flavour; full iroh backend is Phase 3)
+- **Module manifest format** (requires-caps, provides-subgraphs, migrations) + install/uninstall APIs
+- Paper-prototype revalidation against the full 12 primitives (first measurement with all executors live — re-checks the < 30% SANDBOX-rate prediction)
+- Transaction-primitive API shape finalized based on Phase 1 + 2a usage feedback
 
 ### Phase 3: P2P Sync — **Atriums Ship Here**
 
