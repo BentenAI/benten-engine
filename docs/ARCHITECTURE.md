@@ -32,10 +32,11 @@ Additional exploratory layers (Runtime, Economy, Governance, Marketplace) are pr
 
 ## Layer 1: Graph Engine (Phase 1-2 scope)
 
-The foundation. A Rust-native graph execution engine. **Six crates** after critic review (up from four — added `benten-ivm` and `benten-caps` to keep the engine thin):
+The foundation. A Rust-native graph execution engine. **Seven crates** after critic review and the Phase-1 Compromise #3 closure (up from the four in the original draft — added `benten-ivm` and `benten-caps` to keep the engine thin, then extracted `benten-errors` to close the error-catalog-dependency concern):
 
 ```
   crates/
+    benten-errors/     # Stable ErrorCode catalog discriminants; zero Benten-crate deps
     benten-core/       # Node, Edge, Value, content hashing (BLAKE3 + DAG-CBOR + CIDv1)
     benten-graph/      # Storage (KVBackend trait + redb impl), indexes, MVCC
     benten-ivm/        # Incremental View Maintenance, subscribes to graph changes
@@ -47,9 +48,9 @@ The foundation. A Rust-native graph execution engine. **Six crates** after criti
     napi/              # Node.js bindings via napi-rs v3 (also compiles to WASM)
 ```
 
-### Why six crates, not four
+### Why seven crates, not four (nor six)
 
-Critic reviews (architecture-purity, engine-philosophy) identified three concerns with the original four-crate plan that together added two crates:
+Critic reviews (architecture-purity, engine-philosophy) identified three concerns with the original four-crate plan that together added two crates (`benten-ivm` and `benten-caps`). A fourth extraction (`benten-errors`) landed during Phase 1 to close named compromise #3:
 
 1. **IVM was load-bearing for capability resolution, governance resolution, and event dispatch** — all inside one unvalidated algorithm. Extraction to `benten-ivm` lets the engine evaluator stay ignorant of IVM; IVM subscribes to graph change notifications via the SUBSCRIBE primitive.
 
@@ -57,10 +58,13 @@ Critic reviews (architecture-purity, engine-philosophy) identified three concern
 
 3. **Version chains are a pattern, not a primitive.** They're Nodes + Edges + a CURRENT pointer. Consumers who don't want versioning (ephemeral data, presence channels) shouldn't pay for it.
 
+4. **The `ErrorCode` catalog enum forced a `benten-core` dependency on every crate that only wanted stable string identifiers.** Extraction to `benten-errors` (closes named compromise #3) puts the catalog at the root of the workspace dependency graph — every other crate imports from it with zero Benten-crate coupling, and the TS codegen + drift-detector target a single canonical source.
+
 Version chains land in `benten-core` as an opt-in convention rather than a separate crate — they're thin enough that a trait is overkill, but they're not mandatory.
 
 ### Key responsibilities per crate
 
+- **`benten-errors`** — Stable `ErrorCode` enum discriminants mirroring `docs/ERROR-CATALOG.md`. Zero dependencies on other Benten crates; sits at the root of the workspace dependency graph.
 - **`benten-core`** — Node, Edge, Value, content-addressed hashing (BLAKE3 + DAG-CBOR via `serde_ipld_dagcbor`, CIDv1 format), version chain primitives (Anchor + Version Node + CURRENT Edge pattern)
 - **`benten-graph`** — Storage via a `KVBackend` trait (implemented by `benten-storage-redb` for native; future WASM/network-fetch backends plug in), indexes (hash + B-tree), MVCC via redb transactions
 - **`benten-ivm`** — Materialized views maintained via change subscriptions. Per-view strategy selection (Algorithm B default, A for rarely-read, C for complex joins). NOT known to the evaluator.
