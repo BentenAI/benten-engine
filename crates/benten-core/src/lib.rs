@@ -311,20 +311,33 @@ impl Cid {
     }
 
     /// Parse a base32-multibase-prefixed CIDv1 string (e.g.
-    /// `"bafyr4i..."`). See [`Cid::to_base32`] for the inverse.
+    /// `"bafyr4i..."`). This is the inverse of [`Cid::to_base32`].
     ///
-    /// **Phase 2 deliverable.** The parsing path needs a multibase decoder
-    /// which lands with the `cid`-crate migration (C4). In the interim this
-    /// returns a typed, recoverable error rather than panicking so production
-    /// call sites can degrade gracefully.
+    /// Phase 1 accepts exactly the multibase form produced by `to_base32`:
+    /// the single-character `b` prefix followed by an RFC 4648 lowercase
+    /// base32 body with no padding. The decoded bytes are then handed to
+    /// [`Cid::from_bytes`], which enforces the Benten CIDv1 layout
+    /// (`[0x01, 0x71, 0x1e, 0x20, <32-byte BLAKE3 digest>]`).
     ///
     /// # Errors
     ///
-    /// Always returns [`CoreError::CidParse`] in Phase 1.
-    pub fn from_str(_s: &str) -> Result<Self, CoreError> {
-        Err(CoreError::CidParse(
-            "Cid::from_str is a Phase 2 deliverable (needs multibase decoder; see C4)",
-        ))
+    /// - [`CoreError::CidParse`] if the string is empty, lacks the `b`
+    ///   multibase prefix, or contains a character outside the base32
+    ///   lowercase alphabet `a-z2-7`.
+    /// - The three typed failure classes from [`Cid::from_bytes`]
+    ///   ([`CoreError::InvalidCid`], [`CoreError::CidUnsupportedCodec`],
+    ///   [`CoreError::CidUnsupportedHash`]) if the decoded bytes are the
+    ///   wrong length or carry unexpected multicodec / multihash codes.
+    pub fn from_str(s: &str) -> Result<Self, CoreError> {
+        // Multibase prefix: Phase 1 accepts only `b` (base32-lower-nopad).
+        // Any other leading char — including the common mistakes `B`
+        // (base32 upper), `z` (base58btc), `f` (base16), `m` (base64) —
+        // is rejected rather than silently accepted.
+        let body = s.strip_prefix('b').ok_or(CoreError::CidParse(
+            "CID string must use multibase base32-lower-nopad ('b' prefix)",
+        ))?;
+        let decoded = base32_lower_nopad_decode(body)?;
+        Cid::from_bytes(&decoded)
     }
 
     /// Base32 (RFC 4648, lowercase, no padding) string accessor, prefixed with
@@ -369,6 +382,60 @@ fn base32_lower_nopad_encode(input: &[u8], out: &mut String) {
         let idx = ((buffer << (5 - bits)) & 0x1f) as usize;
         out.push(ALPHABET[idx] as char);
     }
+}
+
+/// Decode a base32 lowercase, no-padding body (no multibase prefix) into its
+/// raw bytes.
+///
+/// Inverse of [`base32_lower_nopad_encode`]. Accepts the RFC 4648 lowercase
+/// alphabet `a-z` + `2-7`; any other character (uppercase, digits `0`/`1`,
+/// multibase prefix, padding `=`, whitespace) is a parse error. Trailing
+/// padding bits left at the end of the last 5-bit group must be zero — a
+/// well-formed encoder never emits set padding bits, so set bits indicate
+/// either a hand-edited string or a different alphabet.
+///
+/// Kept `no_std`-compatible: returns `Vec<u8>` from `alloc`, no external deps.
+fn base32_lower_nopad_decode(input: &str) -> Result<Vec<u8>, CoreError> {
+    // Capacity upper bound: each char contributes 5 bits, so byte count is
+    // `(chars * 5) / 8`. `div_ceil` overshoots by at most one; a one-byte
+    // over-allocation is fine.
+    let mut out: Vec<u8> = Vec::with_capacity(input.len() * 5 / 8);
+    let mut buffer: u32 = 0;
+    let mut bits: u32 = 0;
+    for c in input.chars() {
+        let value: u32 = match c {
+            'a'..='z' => (c as u32) - ('a' as u32),
+            '2'..='7' => (c as u32) - ('2' as u32) + 26,
+            _ => {
+                return Err(CoreError::CidParse(
+                    "CID base32 body contains a character outside the lowercase \
+                     alphabet a-z2-7",
+                ));
+            }
+        };
+        buffer = (buffer << 5) | value;
+        bits += 5;
+        if bits >= 8 {
+            bits -= 8;
+            // Truncating cast is intentional: `buffer >> bits` fits in 8 bits
+            // after masking because only the low `bits + 8` bits of `buffer`
+            // are ever populated.
+            let byte = ((buffer >> bits) & 0xff) as u8;
+            out.push(byte);
+        }
+    }
+    // Any leftover bits < 5 must be zero padding. Non-zero padding bits mean
+    // the encoder emitted a set bit past the end of the data, which is
+    // either corruption or a different alphabet entirely.
+    if bits > 0 {
+        let mask = (1u32 << bits) - 1;
+        if (buffer & mask) != 0 {
+            return Err(CoreError::CidParse(
+                "CID base32 body has non-zero trailing padding bits",
+            ));
+        }
+    }
+    Ok(out)
 }
 
 // ---------------------------------------------------------------------------
@@ -664,6 +731,17 @@ mod tests {
     fn cid_bytes_roundtrip() {
         let cid = canonical_test_node().cid().unwrap();
         let parsed = Cid::from_bytes(cid.as_bytes()).unwrap();
+        assert_eq!(cid, parsed);
+    }
+
+    /// Round-trip through the string form: `to_base32` → `from_str` is the
+    /// identity on the canonical fixture. Deeper coverage lives in
+    /// `tests/cid_from_str.rs` (alphabet / prefix / length rejections).
+    #[test]
+    fn cid_string_roundtrip() {
+        let cid = canonical_test_node().cid().unwrap();
+        let encoded = cid.to_base32();
+        let parsed = Cid::from_str(&encoded).unwrap();
         assert_eq!(cid, parsed);
     }
 

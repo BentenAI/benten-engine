@@ -15,19 +15,14 @@
 //! double-count. Keeping this bench informational lets us watch the trend
 //! without gating on a number that isn't in the spec.
 //!
-//! ## Why `from_bytes`, not `from_str`
+//! ## Why `from_bytes` is the primary measurement
 //!
-//! `Cid::from_str` is `todo!`-style stubbed in Phase 1 — it returns
-//! `CoreError::CidParse` unconditionally because the base32 multibase
-//! decoder lands with the `cid`-crate migration (C4, Phase 2). Running a
-//! bench against it would `.expect("parse")`-panic on every iteration.
-//! `from_bytes` exercises the equivalent binary validation path that IS
-//! live in Phase 1 (length check, version byte, multicodec, multihash,
-//! digest length) and produces stable, meaningful numbers.
-//!
-//! When `Cid::from_str` lands in Phase 2, add a sibling
-//! `bench_cid_from_str` measurement in this file so the informational
-//! trend covers both paths.
+//! `Cid::from_str` landed in Phase 1 (F-R7-004 close-out) and now
+//! symmetrically parses the base32-lower-nopad multibase form. The binary
+//! `from_bytes` path remains the canonical napi-boundary hot path (TS
+//! passes 36-byte buffers, not strings) so it stays the primary trend
+//! line here; a sibling `from_str` measurement can be added alongside
+//! this one when the string path becomes a measured hot spot.
 
 #![allow(
     clippy::unwrap_used,
