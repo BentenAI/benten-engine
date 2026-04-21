@@ -47,7 +47,7 @@ jobs:
           - { os: windows-2022, target: x86_64-pc-windows-msvc,     leg: windows-x86_64 }
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust toolchain (stable)
         uses: dtolnay/rust-toolchain@stable
@@ -94,7 +94,7 @@ jobs:
       matrix:
         rust: ["1.85", "stable"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -133,7 +133,7 @@ jobs:
     name: T6 wasm32-wasip1 runtime
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust toolchain (stable + wasm32-wasip1)
         uses: dtolnay/rust-toolchain@stable
@@ -188,7 +188,7 @@ jobs:
     needs: [multi-arch, msrv, wasm-runtime]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Download all CID artifacts
         uses: actions/download-artifact@v4

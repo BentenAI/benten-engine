@@ -284,3 +284,80 @@ fn grant_backed_policy_wildcard_denies_wrong_label() {
         .expect_err("wildcard on a different label must NOT permit");
     assert!(matches!(err, CapError::Denied { .. }));
 }
+
+/// r6b-sec-3 (minor): defensive-line regression test for the Phase-1
+/// `requires`-attack closure documented in `docs/SECURITY-POSTURE.md`.
+///
+/// The Phase-1 posture does not use a user-settable `requires` property on
+/// the operation subgraph; instead, required scopes are derived from the
+/// written labels at policy-check time (`PendingOp::PutNode { labels, .. }`
+/// → `store:<label>:write`). That closure is what makes a
+/// `requires: "store:post:read"` property on a graph that actually writes
+/// `labels: ["admin"]` incapable of down-scoping the capability check — the
+/// policy never reads the property.
+///
+/// The security-auditor (R6) named this attack closed in `SECURITY-POSTURE`
+/// but noted the defensive test didn't exist. This is that test: grant only
+/// `store:post:read` to the actor, submit a `PendingOp::PutNode` with
+/// `labels: ["admin"]`, and assert the policy derives the correct required
+/// scope (`store:admin:write`) and denies — proving the label-derived scope
+/// path, not any user-controlled property, is load-bearing.
+#[test]
+fn grant_backed_policy_denies_put_node_to_label_outside_grant_scope() {
+    let grants = MockGrants::new(&["store:post:read"]);
+    let policy = GrantBackedPolicy::new(grants);
+
+    let ctx = WriteContext {
+        // Primary label of the write batch is `admin` — the field the
+        // policy uses as its fallback derivation source. Even if this were
+        // `post` (to mimic an attacker attempting to spoof the batch as a
+        // "post" write), the per-op labels below would still force
+        // `store:admin:write`. Both paths converge on deny.
+        label: "admin".into(),
+        pending_ops: vec![PendingOp::PutNode {
+            cid: fake_cid(),
+            labels: vec!["admin".into()],
+        }],
+        ..Default::default()
+    };
+
+    let err = policy
+        .check_write(&ctx)
+        .expect_err("put_node with labels=[admin] under store:post:read grant must be denied");
+    let CapError::Denied { required, .. } = err else {
+        panic!("expected Denied, got {err:?}");
+    };
+    assert_eq!(
+        required, "store:admin:write",
+        "the defensive line derives required scope from per-op labels, \
+         not from any user-supplied `requires` property — the labeled \
+         write must resolve to `store:admin:write` even when the grant \
+         only covers `store:post:read`"
+    );
+}
+
+/// r6b-sec-3 (minor): positive inverse of the defensive-line test.
+///
+/// With `store:post:write` granted, a `PendingOp::PutNode { labels: ["post"] }`
+/// must succeed. Pairing this with the denial case proves the derivation path
+/// is not merely "always deny" — it genuinely routes through the grant-scope
+/// match.
+#[test]
+fn grant_backed_policy_permits_put_node_within_grant_scope() {
+    let grants = MockGrants::new(&["store:post:write"]);
+    let policy = GrantBackedPolicy::new(grants);
+
+    let ctx = WriteContext {
+        label: "post".into(),
+        pending_ops: vec![PendingOp::PutNode {
+            cid: fake_cid(),
+            labels: vec!["post".into()],
+        }],
+        ..Default::default()
+    };
+
+    policy.check_write(&ctx).expect(
+        "put_node with labels=[post] under store:post:write grant must be permitted — \
+         the positive half of the label-derived-scope defensive line",
+    );
+}

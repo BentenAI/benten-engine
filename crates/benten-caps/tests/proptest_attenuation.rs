@@ -1,12 +1,18 @@
 //! Property-based coverage for [`benten_caps::check_attenuation`] (G4
 //! mini-review g4-uc-7).
 //!
-//! Three properties each run 1024 cases; at total 3×1024 = 3072 random
-//! scopes the attenuation algorithm gets meaningful adversarial coverage —
-//! two concrete bypasses (parent `"*"` granting any child; parent `"store:*"`
-//! granting `"store:anything:write:delete"` with fabricated tail segments)
-//! were introduced in the earlier G4 draft by a zip-on-shorter loop that
-//! failed to examine the child's tail. These properties catch that class.
+//! Case count is governed by the standard `PROPTEST_CASES` env var (CI sets
+//! this to 1024 on every PR; fuzz.yml bumps it to 10 000 on the nightly run;
+//! local `cargo nextest run` defaults to proptest's built-in 256). The
+//! earlier revision hardcoded `with_cases(1024)` which overrode the env var
+//! and defeated the scale-up path — fixed as R6b-TA-4.
+//!
+//! At the CI budget the attenuation algorithm gets meaningful adversarial
+//! coverage — two concrete bypasses (parent `"*"` granting any child; parent
+//! `"store:*"` granting `"store:anything:write:delete"` with fabricated tail
+//! segments) were introduced in the earlier G4 draft by a zip-on-shorter
+//! loop that failed to examine the child's tail. These properties catch
+//! that class.
 //!
 //! Properties:
 //!
@@ -54,7 +60,11 @@ fn concrete_tail() -> impl Strategy<Value = Vec<String>> {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(1024))]
+    // R6b-TA-4: use the default ProptestConfig so `PROPTEST_CASES` (set by
+    // CI to 1024 on PR, 10 000 on nightly fuzz.yml) actually takes effect.
+    // The earlier hardcoded `with_cases(1024)` overrode the env var and
+    // pinned the case count regardless of how CI dialed it up or down.
+    #![proptest_config(ProptestConfig::default())]
 
     /// Property 1: a parent ending in `:*` permits any child whose first
     /// segments are an exact prefix of the parent's non-wildcard segments,
