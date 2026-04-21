@@ -1,0 +1,316 @@
+{
+  "agent": "code-reviewer",
+  "stage": "pre-r1",
+  "phase": "2a",
+  "plan_head_reviewed": "uncommitted working tree (CLAUDE.md + phase-2a/00-implementation-plan.md + phase-2b/00-scope-outline.md dirty)",
+  "verdict": "PASS_WITH_FINDINGS",
+  "summary": "Plan structure is sound — scope split is clean, exit criteria are mechanically verifiable, and spot-checked code citations all validate against HEAD. But the 2a/2b split was applied over a document that was written to cover full Phase 2, and several sections did not get updated to reflect the narrowed 2a scope. Concrete tactical bugs: three file-ownership overlaps on `invariants.rs` (G4-A, G5-A, G5-B) and `engine.rs` (G2-B, G3-B) that will collide at R5 R5; §4.3 references non-existent exit-criterion gate numbers (pre-split text survives); §6 ADDL-stage persistence paths all say `.addl/phase-2/` but the actual dir is `.addl/phase-2a/`; §6 R6 council lists 14 seats including 2b-only lenses (`wasmtime-sandbox-auditor`, `ivm-algorithm-b-reviewer`); §7 calendar totals ~17 days spanning both 2a and 2b groups; Appendix §10 cites a non-existent deliverable D3 under G10; and G3-B ownership doesn't include any napi/TS file even though §10 routes D1 `wait()` DSL through G3-B. Most findings are editorial cleanup from the split, but the file-ownership overlaps are dispatch-blockers if not renumbered before R5.",
+  "findings": [
+    {
+      "id": "cr-1",
+      "severity": "critical",
+      "title": "File-ownership overlap: `crates/benten-eval/src/invariants.rs` claimed by G4-A, G5-A, AND G5-B",
+      "category": "file_overlap",
+      "location": "plan §3, lines 198 (G4-A), 209 (G5-A), 210 (G5-B)",
+      "claim": "G4-A owns `crates/benten-eval/src/invariants.rs (multiplicative cumulative-budget computation)`; G5-A owns `crates/benten-eval/src/invariants.rs (Inv-11 full + Inv-13 eval-side)`; G5-B owns `crates/benten-eval/src/invariants.rs (Inv-14 structural)`.",
+      "concern": "Three agents in two different groups are declared owners of the same file. Per the plan's own assertion in §3 opener — 'Agents within a group own disjoint files' — this is a direct violation. R5 groups dispatch in parallel per §6 Stage parallelism (G4 + G5 run parallel after G3), so two in-flight branches will edit `invariants.rs` concurrently. Merging is possible because the invariants are separate functions, but the plan does not declare the partitioning discipline (sub-file ownership by function / module / visible marker) and the file-level declaration is wrong as written.",
+      "evidence": "Lines 198, 209, 210 of `.addl/phase-2a/00-implementation-plan.md` all list `crates/benten-eval/src/invariants.rs`. The file at HEAD (benten-eval/src/invariants.rs) is a single ~N-line file; Inv-8 multiplicative, Inv-11 full, Inv-13, Inv-14 all need to land inside it.",
+      "recommendation": "Either (a) declare sub-file partitioning explicitly (G4-A owns Inv-8 multiplicative functions; G5-A owns Inv-11/Inv-13 eval-side; G5-B owns Inv-14 attribution structural — with Ben or the orchestrator merging the three branches serially at R5-green-gate time), (b) split `invariants.rs` into `invariants_budget.rs` + `invariants_zone.rs` + `invariants_attribution.rs` pre-R5 so file-level ownership is disjoint, or (c) serialise G5-A after G4-A and G5-B after G5-A so there's no concurrent touch. Preferred: option (b) — file split matches the conceptual axes and makes the R4b / R6 reviewer's job tractable."
+    },
+    {
+      "id": "cr-2",
+      "severity": "major",
+      "title": "File-ownership overlap: `crates/benten-eval/src/evaluator.rs` claimed by G3-A AND G5-B",
+      "category": "file_overlap",
+      "location": "plan §3, lines 185 (G3-A), 210 (G5-B)",
+      "claim": "G3-A owns `crates/benten-eval/src/evaluator.rs (serialise-on-suspend, restore-on-resume)`; G5-B owns `crates/benten-eval/src/evaluator.rs (attribution threading onto every TraceStep)`.",
+      "concern": "G3 and G5 can run in parallel per §6 Stage parallelism ('G4 + G5 depend on G3'). Wait — actually §6 says G5 depends on G3, so they serialise. BUT the plan as written has both agents editing the same file without declaring who goes first or what shared invariants the second agent must preserve. G5-B's attribution threading lands after G3-A serialises ExecutionState. If G5-B adds an `actor_cid` field to TraceStep, G3-A's serialise logic (already committed) may not have accounted for it and the on-disk ExecutionState bytes become non-replayable across the G5-B commit.",
+      "evidence": "Line 185: G3-A — `crates/benten-eval/src/evaluator.rs (serialise-on-suspend, restore-on-resume)`. Line 210: G5-B — `crates/benten-eval/src/evaluator.rs (attribution threading onto every TraceStep)`. `evaluator.rs` exists at HEAD.",
+      "recommendation": "Make explicit: G5-B depends on G3-A, and G5-B's changes MUST update the ExecutionState serialisation schema + envelope schema_version bump IF the attribution field is part of the persisted frame. Either (a) land G5-B's TraceStep schema change BEFORE G3-A freezes the ExecutionState format (flip the order in §6), or (b) carve `evaluator.rs` into smaller modules so the touch surfaces don't collide. Cross-reference §5 Rank 3 'WAIT on-disk state format stability' — this interaction is exactly the risk described there."
+    },
+    {
+      "id": "cr-3",
+      "severity": "major",
+      "title": "File-ownership overlap: `crates/benten-engine/src/engine.rs` claimed by G2-B, G3-B, and (indirectly) G8-B",
+      "category": "file_overlap",
+      "location": "plan §3, lines 174 (G2-B), 186 (G3-B), 254 (G8-B)",
+      "claim": "G2-B owns `crates/benten-engine/src/engine.rs (subgraph_for_crud + dispatch_call_inner — complete AST cache wire-through)`; G3-B owns `crates/benten-engine/src/engine.rs (call_with_suspension, resume_from_bytes)`; G8-B says it removes `TODO(phase-2-view-id-registry) at engine.rs:1549` but claims only `engine_views.rs` in its files-owned list.",
+      "concern": "engine.rs is already a ~1600-line file per the backlog; three groups expanding it in parallel + one group removing an in-code TODO at line 1549 without listing engine.rs as owned = merge conflicts. G8-B is explicitly deferred to 2b so the immediate overlap is G2-B vs G3-B; but G8-B's file-ownership declaration is inconsistent with its deliverable (the TODO it closes is in engine.rs, not engine_views.rs).",
+      "evidence": "Line 174: G2-B — `crates/benten-engine/src/engine.rs (subgraph_for_crud + dispatch_call_inner — complete AST cache wire-through)`. Line 186: G3-B — `crates/benten-engine/src/engine.rs (call_with_suspension, resume_from_bytes)`. Line 254: G8-B — `crates/benten-engine/src/engine_views.rs (create_view goes live — removes TODO(phase-2-view-id-registry) at engine.rs:1549)`. Grep of HEAD confirms the TODO at engine.rs:1549 and the `is_known_view_id` hardcoded list at engine.rs:1585.",
+      "recommendation": "For G2-B vs G3-B: same fix as cr-1/cr-2 — declare sub-file partitioning by impl block or function name, or serialise. For G8-B: add `crates/benten-engine/src/engine.rs (remove hard-coded view-id whitelist, wire engine_views to benten-ivm registry)` to G8-B's files-owned list. Note G8-B is 2b-deferred so this is a frozen-shape correction, not a 2a dispatch blocker."
+    },
+    {
+      "id": "cr-4",
+      "severity": "major",
+      "title": "§4.3 references non-existent Phase 2a exit-criterion gate numbers (stale pre-split text)",
+      "category": "stale_reference",
+      "location": "plan §4.3, lines 316-322",
+      "claim": "'SANDBOX-heavy smoke (headline exit criterion gate 1)', 'WAIT/resume end-to-end (headline exit criterion gate 2...)', 'STREAM SSE over napi (headline exit criterion gate 5)'.",
+      "concern": "§1 defines Phase 2a gates as: 1=WAIT-resume, 2=Four-of-six invariants, 3=arch-1, 4=Option C, 5=Durability+AST cache. SANDBOX and STREAM are explicitly deferred to 2b (§3 G6 and G7 both tagged [PHASE 2B]). So §4.3 is labelling deferred 2b items with 2a gate numbers. Three separate errors: (a) gate 1 is WAIT, not SANDBOX; (b) gate 5 is Durability+AST, not STREAM SSE; (c) the 'headline exit criterion' labels on SANDBOX / STREAM items are simply wrong for Phase 2a.",
+      "evidence": "§1 lines 22-30 enumerate gates 1-5. §4.3 lines 316-322 list SANDBOX-smoke / WAIT-resume / STREAM-SSE as exit-criterion gates. §3 G6 line 215 and G7 line 229 tag both STREAM and SANDBOX as '[PHASE 2B]'.",
+      "recommendation": "Rewrite §4.3 to match the 2a gate set: remove SANDBOX-smoke + STREAM-SSE from the integration-test list (they're 2b), renumber 'WAIT/resume end-to-end' as gate 1, add 'Arch-1 no-benten-graph-in-eval-manifest' (gate 3), 'Option C read-denial end-to-end via Engine::call' (gate 4), and 'Durability + AST cache CI-gated criterion suite' (gate 5). Gate 2 is invariant firing — add 'Full invariant-11/13/14 coverage over a composed subgraph' as the integration test for that."
+    },
+    {
+      "id": "cr-5",
+      "severity": "major",
+      "title": "§6 ADDL stage dispatch paths all reference `.addl/phase-2/` but the actual directory is `.addl/phase-2a/`",
+      "category": "stale_reference",
+      "location": "plan §6, lines 461-468",
+      "claim": "'2 JSON findings at `.addl/phase-2/pre-r1-<agent>.json`'; '6 JSON findings at `.addl/phase-2/r1-<agent>.json`'; etc. All six ADDL stages use `.addl/phase-2/` prefix.",
+      "concern": "The split introduced `.addl/phase-2a/` and `.addl/phase-2b/` as separate directories. Every `.addl/phase-2/` reference in §6 is stale. This is a pre-R1 pipeline-dispatch issue: if the orchestrator follows the plan literally, artifacts land in the wrong directory.",
+      "evidence": "File exists at `/Users/benwork/Documents/benten-engine/.addl/phase-2a/00-implementation-plan.md` and `/Users/benwork/Documents/benten-engine/.addl/phase-2b/00-scope-outline.md` — no `.addl/phase-2/` directory. Every dispatch-path string in §6 uses `.addl/phase-2/` prefix.",
+      "recommendation": "Global replace `.addl/phase-2/` → `.addl/phase-2a/` throughout §6. Phase 2b will have its own plan that uses `.addl/phase-2b/` paths."
+    },
+    {
+      "id": "cr-6",
+      "severity": "major",
+      "title": "§6 R6 quality council lists 14 seats including 2b-only lenses; mis-scoped for Phase 2a",
+      "category": "stale_reference",
+      "location": "plan §6, line 468",
+      "claim": "'R6 quality council (14 seats) | architect-reviewer, code-reviewer, security-auditor, performance-engineer, qa-expert, test-automator, chaos-engineer, error-detective, refactoring-specialist, operation-primitive-linter, code-as-graph-reviewer, best-practices-2026, wasmtime-sandbox-auditor (NEW seat — replaces Phase-1's dx-optimizer at R6; SANDBOX is the largest new attack surface), ivm-algorithm-b-reviewer (domain-swap slot — generalised Algorithm B correctness)'.",
+      "concern": "`wasmtime-sandbox-auditor` is the SANDBOX R1/R6 lens; Phase 2a does not include SANDBOX. `ivm-algorithm-b-reviewer` is for generalised Algorithm B; Phase 2a does not include generalised Algorithm B (G8 is 2b-deferred). These two seats have nothing to review in 2a. The 14-seat headcount was sized for the combined 2a+2b scope; 2a's scope is narrower and a 12-seat council would fit.",
+      "evidence": "Line 468 lists the 14 seats. §3 G7 line 229 (SANDBOX) is 2b-deferred. §3 G8 line 245 (Algorithm B) is 2b-deferred.",
+      "recommendation": "Drop `wasmtime-sandbox-auditor` and `ivm-algorithm-b-reviewer` from 2a's R6 council (they carry forward to 2b's own R6). Consider whether `determinism-verifier` should be promoted to R6 for 2a given WAIT's ExecutionState CID determinism is the headline 2a gate. 12-seat council is appropriate for 2a scope."
+    },
+    {
+      "id": "cr-7",
+      "severity": "major",
+      "title": "§6 R1 spec review agent list includes 2b-only lens `ivm-algorithm-b-reviewer` + `wasmtime-sandbox-auditor`",
+      "category": "stale_reference",
+      "location": "plan §6, line 462",
+      "claim": "'R1 spec review (agent-team mode, peer-debate) | architect-reviewer, code-reviewer, security-auditor, wasmtime-sandbox-auditor (NEW lens replacing Phase-1's dx-optimizer at R1 — primitive work is not DX-heavy), benten-engine-philosophy, ivm-algorithm-b-reviewer (NEW for Phase 2 R1 — generalised Algorithm B is load-bearing spec surface)'.",
+      "concern": "Same issue as cr-6. Phase 2a's R1 has nothing for `wasmtime-sandbox-auditor` to review (SANDBOX is 2b) and nothing for `ivm-algorithm-b-reviewer` (generalised Algorithm B is 2b). A 6-person peer-debate where 2 agents have no in-scope work is a review-quality hit.",
+      "evidence": "Line 462. §3 G7 and G8 deferred to 2b.",
+      "recommendation": "Replace `wasmtime-sandbox-auditor` and `ivm-algorithm-b-reviewer` with agents that match 2a's lens surface. Candidates: `chaos-engineer` (ExecutionState crash recovery — already in G3 mini-review), `determinism-verifier` (DAG-CBOR + CID stability of ExecutionState — core 2a concern), `ucan-capability-auditor` (G9 TOCTOU work). A 5-6 person 2a council would be: architect-reviewer, code-reviewer, security-auditor, benten-engine-philosophy, chaos-engineer, determinism-verifier."
+    },
+    {
+      "id": "cr-8",
+      "severity": "major",
+      "title": "§7 calendar totals ~17 days spanning both 2a and 2b groups (stale after scope split)",
+      "category": "stale_reference",
+      "location": "plan §7, lines 498-520",
+      "claim": "Calendar lists R5 G1 (1d) + G2+G3+G9 (1.5d) + G4+G5 (1d) + G6 (1d) + G7 (2.5d) + G8 (1.5d) + G10 (1d) + G11 (0.5d), totalling ~17 days HE. §8 separately says 2a = ~5 days HE.",
+      "concern": "§7 calendar was written for the combined Phase 2 scope and not trimmed for the 2a/2b split. §8 line 531 correctly says 'Phase 2a (this plan) — ... ~5 days human-equivalent'. The two numbers are inconsistent and the calendar table names groups G6, G7, G8, G10 that are explicitly 2b-deferred.",
+      "evidence": "§7 lines 498-520 calendar table. §8 line 531 says 2a is ~5 days HE.",
+      "recommendation": "Rewrite §7 calendar for 2a-only: R5 G1 (1d) → R5 G2+G3+G9 (1.5d parallel) → R5 G4+G5 (1d) → R5 G11 (0.5d). Pre-R5 stages unchanged. Total for 2a: ~8-9 days HE including review/fix cycles. Move the full-scope 17-day calendar to `.addl/phase-2b/00-scope-outline.md` as the 2a+2b combined baseline, not here."
+    },
+    {
+      "id": "cr-9",
+      "severity": "major",
+      "title": "Appendix §10 cites deliverable `D3` which does not exist; should be `D2`",
+      "category": "typo",
+      "location": "plan §3 G10 line 282",
+      "claim": "'Deliverables closed: N2, B1, B5, D3.' under G10.",
+      "concern": "§2.8 defines only D1 and D2 (lines 126-127). No D3 is declared anywhere in §2. The correct referent is D2 (Module manifest TS types + manifest-file validator). G10-B owns manifest and packages/engine/src/manifest.ts — that's D2. This is a simple typo but propagates into the Appendix: §10 line 699 correctly maps D2 to G10-B, so the §3 G10 line is the one in error.",
+      "evidence": "§2.8 lines 124-128 define only D1, D2. §3 G10 line 282 says 'D3'. §10 line 699 says 'D2 Module manifest TS types | G10-B'.",
+      "recommendation": "Fix §3 G10 line 282: 'Deliverables closed: N2, B1, B5, D3.' → 'Deliverables closed: N2, B1, B5, D2.'"
+    },
+    {
+      "id": "cr-10",
+      "severity": "major",
+      "title": "G3-B file ownership does not include any TS/napi surface, but §10 routes D1 `wait()` DSL through G3-B",
+      "category": "unassigned_deliverable",
+      "location": "plan §3 line 186; Appendix §10 line 698",
+      "claim": "G3-B files owned: `crates/benten-core/src/time_source.rs (new), crates/benten-engine/src/engine_wait.rs (new), crates/benten-engine/src/engine.rs`. §10 line 698: 'D1 DSL builders for new primitives (+ doc examples refresh) | G3-B, G6-B, G7-C; examples wrap-up in G11-A'.",
+      "concern": "D1 (line 126) says the TS DSL surfaces live at `packages/engine/src/dsl.ts` and tests are in TS Vitest. G3-B has zero TS/napi/packages file in its ownership list. Either (a) an extra file needs to be added to G3-B ownership (`bindings/napi/src/wait.rs` new, `packages/engine/src/wait.ts` new — the DSL builder + napi glue for WAIT), or (b) the wait-related napi+TS work needs to land in G3 somewhere (maybe a new G3-C agent). As written the wait() DSL builder has no R5 owner in 2a, yet §10 claims G3-B owns it.",
+      "evidence": "Line 186 G3-B files. Line 126 D1 deliverable (TS DSL). Line 698 Appendix routing D1 → G3-B.",
+      "recommendation": "Add to G3-B files owned: `bindings/napi/src/wait.rs (new)`, `packages/engine/src/wait.ts (new — DSL wait() builder)`. Alternatively, split into a G3-C agent for the napi+TS side. Also apply same audit to G6-B (STREAM) and G7-C (SANDBOX) — those are 2b-deferred so confirm the 2b-frozen shape includes TS surfaces too."
+    },
+    {
+      "id": "cr-11",
+      "severity": "minor",
+      "title": "§1 opener says 'two mechanically-verifiable CI gates' but lists five",
+      "category": "typo",
+      "location": "plan §1, line 20",
+      "claim": "'Headline exit criterion (Phase 2a): two mechanically-verifiable CI gates green on every PR.' Then lists 1 through 5.",
+      "concern": "The 'two' is leftover from an earlier draft. Line 32 'Phase 2a is mechanically complete when all five are green on main' is correct. Line 26 explicitly distinguishes 'Bundled gates (not standalone exit criteria but required green for Phase 2a close)' which are 3/4/5. So the intent seems to be: '2 headline + 3 bundled = 5 total', but the opener doesn't convey that.",
+      "evidence": "Line 20: 'two mechanically-verifiable CI gates'. Line 32: 'when all five are green'.",
+      "recommendation": "Rewrite line 20: 'Headline exit criteria (Phase 2a): two primary gates (WAIT-resume determinism + four-of-six new invariants firing) plus three bundled gates (arch-1 dep break, Option C evaluator-path, Durability + AST cache perf). All five green on main = Phase 2a complete.'"
+    },
+    {
+      "id": "cr-12",
+      "severity": "minor",
+      "title": "§1 line 24 calls gate 2 'Four-of-six new invariants firing' — only 4 invariants are in 2a, 'four-of-six' phrasing is confusing",
+      "category": "typo",
+      "location": "plan §1, line 24",
+      "claim": "'Four-of-six new invariants firing — paired positive+negative tests for Inv-8 multiplicative-through-CALL, Inv-11 full system-zone enforcement ..., Inv-13 immutability ..., Inv-14 structural causal attribution.'",
+      "concern": "The phrase 'Four-of-six new invariants' is true (2a ships 4 of the 6 remaining invariants; Inv-4 and Inv-7 are 2b), but a reader scanning the gate list sees 'four-of-six' and wonders whether 2a passes when only 4 out of 6 fire. The gate PASSES when the specific 4 invariants (8/11/13/14) fire. Phrasing can be tightened.",
+      "evidence": "Line 24. Phase 2b scope outline line 14 confirms Inv-4 + Inv-7 are 2b.",
+      "recommendation": "Rewrite line 24: 'Phase 2a invariants firing — paired positive+negative tests for Inv-8 (multiplicative-through-CALL), Inv-11 (full system-zone enforcement...), Inv-13 (immutability...), Inv-14 (structural causal attribution...). Inv-4 and Inv-7 ship in 2b alongside SANDBOX.'"
+    },
+    {
+      "id": "cr-13",
+      "severity": "minor",
+      "title": "G1-A file ownership includes `crates/benten-eval/src/error.rs` which does not exist at HEAD",
+      "category": "bad_citation",
+      "location": "plan §3, line 160",
+      "claim": "G1-A files owned: '... crates/benten-eval/src/error.rs (new HostError), ...'.",
+      "concern": "At HEAD, `benten-eval/src/` contains no `error.rs` file; `EvalError` is defined in `benten-eval/src/lib.rs:65`. The plan notation '(new HostError)' can read as 'new file' or 'new HostError inside an existing file'. If G1-A is expected to create a new `error.rs` and move `EvalError` into it, that's a scope-bearing refactor that should be stated explicitly. If G1-A is expected to just add `HostError` alongside `EvalError` in `lib.rs`, the path is wrong.",
+      "evidence": "`ls crates/benten-eval/src/` shows no error.rs. `grep 'pub enum EvalError' crates/benten-eval/src/` → only hit is `lib.rs:65`.",
+      "recommendation": "Clarify: either (a) G1-A files owned includes 'crates/benten-eval/src/lib.rs (add HostError variant adjacent to EvalError)' OR (b) 'crates/benten-eval/src/error.rs (new file — extract EvalError here, add HostError)'. Option (b) is cleaner for the error-surface audit but adds refactor churn; recommend option (a) unless R1 argues for the extraction."
+    },
+    {
+      "id": "cr-14",
+      "severity": "minor",
+      "title": "G8-B test name `tests/view_stale_count_tallies` and G11-A test of same name — ownership collision",
+      "category": "file_overlap",
+      "location": "plan §3, lines 254 (G8-B), 290 (G11-A)",
+      "claim": "G8-B must-pass tests include `tests/view_stale_count_tallies`. G11-A must-pass tests include `tests/view_stale_count_tallies`.",
+      "concern": "Same test name in two groups. §3 G8 header line 247 explicitly says the view_stale_count metric wire-up (<10-line item) is absorbed into G11-A docs sweep rather than waiting for 2b. So the G8-B listing of `view_stale_count_tallies` is a residual — it belongs to G11-A for Phase 2a. But G8-B is 2b-deferred, so G11-A owns it in 2a and G8-B would re-own it in 2b when the generalized Algorithm B + user views land (at which point the test would need to be extended to user-registered views).",
+      "evidence": "Line 247: 'Exception: the view_stale_count metric wire-up ... is a <10-line Phase-2a item absorbed into G11-A docs sweep rather than waiting for 2b.' Line 254: G8-B lists `tests/view_stale_count_tallies`. Line 290: G11-A lists `tests/view_stale_count_tallies`.",
+      "recommendation": "In G8-B's line 254, replace `tests/view_stale_count_tallies` with `tests/user_view_stale_count_tallies` (the 2b-scope extended test covering user-registered views). Leave the base test in G11-A. Document in §11 that the metric-wire-up landed in 2a G11-A and 2b G8-B extends to user views."
+    },
+    {
+      "id": "cr-15",
+      "severity": "minor",
+      "title": "§11 line 721 '1.2 `transaction.rs` 711-line file split' re-defers 'if file < 1200 lines' — threshold vs. current size phrasing confusing",
+      "category": "typo",
+      "location": "plan §11, line 720",
+      "claim": "'| 1.2 | `transaction.rs` 711-line file split | re-defer to Phase 3 if file < 1200 lines at Phase 2 close | Logical seam only emerges at ~1200 lines |'.",
+      "concern": "The rule reads as 'defer if < 1200' meaning the file is NOT split while it's small. That's the intended meaning but the phrasing inverts naturally — a reader might read 're-defer if < 1200' as 're-defer the split-work if the file has grown under 1200 lines' (nonsense). Cleaner: 'Split only if file ≥ 1200 lines at Phase 2 close; otherwise re-defer to Phase 3.'",
+      "evidence": "Line 720.",
+      "recommendation": "Minor phrasing fix: 'Split only if file ≥ 1200 lines at Phase 2 close; otherwise re-defer to Phase 3 — logical seam only emerges at that size.'"
+    },
+    {
+      "id": "cr-16",
+      "severity": "minor",
+      "title": "§2 E13 claims ~120 pub items have `allow(missing_docs, reason=\"Phase-2-sweep\")` escape hatch; actual string is different",
+      "category": "bad_citation",
+      "location": "plan §2.5 E13 line 96",
+      "claim": "'stub (~120 pub items carry `allow(missing_docs, reason=\"Phase-2-sweep\")` escape hatch at crate root)'.",
+      "concern": "At HEAD, `benten-eval/src/lib.rs:12-15` carries the allow with reason text 'TODO(phase-2-docs): benten-eval has ~120 pub items (Subgraph builder, primitives, RegistrationError diagnostic fields, expr parser surface). Crate-root + module-root docs land Phase-1 R6; per-item sweep deferred to Phase-2 when the public surface is re-audited post-evaluator-completion.' — not the shorter `reason=\"Phase-2-sweep\"` string the plan cites. Substantive citation accuracy is fine (the allow exists and covers ~120 items) but the literal reason string does not match.",
+      "evidence": "`grep -rn 'allow(missing_docs' crates/benten-eval/src/` shows only lib.rs:13 with the long reason text.",
+      "recommendation": "Minor: fix the cited reason string, or drop the literal-string citation and say 'the `allow(missing_docs)` escape hatch at crate root with phase-2-deferral reason text'. Low priority since the substance is accurate."
+    },
+    {
+      "id": "cr-17",
+      "severity": "minor",
+      "title": "§2 I6 cites `engine_diagnostics.rs:170-184` but the hardcoded `0.0` is at line 185",
+      "category": "bad_citation",
+      "location": "plan §2.3 I6 line 69 + §3 G11 line 290",
+      "claim": "'`engine_diagnostics.rs:170-184` hard-codes `0.0`' and 'replacing the 0.0 hard-code at engine_diagnostics.rs:170-184'.",
+      "concern": "At HEAD, `engine_diagnostics.rs:185` reads `out.insert(\"benten.ivm.view_stale_count\".to_string(), 0.0);`. Lines 170-184 are the per-capability-scope metrics block (compromise #5 metrics). The hardcode is at 185, just past the cited range. The substance (a hard-coded `0.0` exists) is correct; the line range is off by ~1-15 depending on how it's read.",
+      "evidence": "`grep -n 'view_stale_count' crates/benten-engine/src/engine_diagnostics.rs` → 132 (doc comment), 185 (hard-coded insert).",
+      "recommendation": "Update citation from `engine_diagnostics.rs:170-184` to `engine_diagnostics.rs:185` (or `:185` with the `132` doc-comment reference). Low-priority citation tightening."
+    },
+    {
+      "id": "cr-18",
+      "severity": "minor",
+      "title": "§4.6 lists `.github/workflows/phase-2-exit-criteria.yml` — should be phase-2a-exit-criteria after split",
+      "category": "stale_reference",
+      "location": "plan §4.6 line 348",
+      "claim": "'.github/workflows/phase-2-exit-criteria.yml — composite job gating on gates 1–5 all green'.",
+      "concern": "After the 2a/2b split, the 2a exit-criteria CI should be named `phase-2a-exit-criteria.yml` (parallel to the prose discipline). A combined `phase-2-exit-criteria.yml` would only turn green when 2b ships, which defeats the point of splitting the pipeline.",
+      "evidence": "Line 348.",
+      "recommendation": "Rename in the plan: `phase-2-exit-criteria.yml` → `phase-2a-exit-criteria.yml`. Phase 2b's plan creates its own `phase-2b-exit-criteria.yml`. Similarly audit `sandbox-fuzz.yml` (line 345) and `wasm-runtime.yml` (line 346) — both belong to 2b since SANDBOX and WASM runtime are 2b-scope. 2a's CI additions are just `wait-resume-determinism.yml` (line 347) and possibly `phase-2a-exit-criteria.yml`."
+    },
+    {
+      "id": "cr-19",
+      "severity": "minor",
+      "title": "§6 says 'R5 implementation | 11 groups G1–G11' but 2a only dispatches 7 groups",
+      "category": "stale_reference",
+      "location": "plan §6 line 466",
+      "claim": "'R5 implementation | 11 groups G1–G11 per §3.'",
+      "concern": "§3 tags G6, G7, G8, G10 as [PHASE 2B]. §3 G11 line 284 is tagged '[PHASE 2A scope]' — so 2a dispatches G1, G2, G3, G4, G5, G9, G11 = 7 groups. §6's '11 groups' count includes the 2b-deferred groups.",
+      "evidence": "§3 line 215 (G6 2b), line 229 (G7 2b), line 245 (G8 2b), line 270 (G10 2b). Line 284 (G11 2a).",
+      "recommendation": "Rewrite: 'R5 implementation | 7 groups (G1, G2, G3, G4, G5, G9, G11) per §3; G6, G7, G8, G10 ship in Phase 2b'."
+    },
+    {
+      "id": "cr-20",
+      "severity": "minor",
+      "title": "§6 stage-parallelism block references G7/G6/G10 dependencies that are 2b-scope",
+      "category": "stale_reference",
+      "location": "plan §6, line 489",
+      "claim": "'R5 groups: G1 strictly first. G2 + G3 + G9 can run in parallel (disjoint file sets, all depend only on G1). G4 + G5 depend on G3. G6 depends on G3 + G4. G7 depends on G3 + G5 + G6 (longest pole). G8 can run in parallel with G7 (different crate). G10 depends on G7 (WASM disables SANDBOX). G11 runs last.'",
+      "concern": "The ordering statement spans 2a and 2b groups. For 2a, the ordering reduces to: G1 → (G2 ∥ G3 ∥ G9) → (G4 ∥ G5) → G11. The 2a-only variant should be stated; the combined variant belongs in Phase 2b's plan.",
+      "evidence": "Line 489.",
+      "recommendation": "Split into two paragraphs: one for 2a (G1 → parallel G2+G3+G9 → parallel G4+G5 → G11), one noting that G6, G7, G8, G10 dependency shape is preserved for Phase 2b dispatch."
+    },
+    {
+      "id": "cr-21",
+      "severity": "minor",
+      "title": "Pre-R1 critic section §6 line 461 only names 2 critics (benten-core-guardian, code-reviewer); plan is also being reviewed by architect-reviewer + benten-engine-philosophy per triage doc",
+      "category": "stale_reference",
+      "location": "plan §6, line 461",
+      "claim": "'Pre-R1 critics | benten-core-guardian (scope + crate-structure sanity), code-reviewer (plan coherence + omission check) | 2 JSON findings'.",
+      "concern": "My own dispatch-instructions name 4 critics: this one (code-reviewer, tactical-correctness), architect-reviewer, benten-engine-philosophy, and benten-core-guardian. If the plan's §6 lists only 2 and the actual dispatch is 4, that's a drift between the plan and the orchestrator-intent. Either benten-core-guardian is correct and this critic is a special-case add (fine), or the plan undercounts. Low-severity meta-finding — surface to the orchestrator for confirmation.",
+      "evidence": "Line 461. My dispatch spec names 3 critics (philosophy, architect, code-reviewer).",
+      "recommendation": "Update §6 line 461 to reflect the actual 4-critic pre-R1 set (architect-reviewer, benten-engine-philosophy, code-reviewer-tactical, benten-core-guardian) OR confirm with the orchestrator that only 2 are the planned 'critics' with architect/philosophy being routed differently. Low priority."
+    }
+  ],
+  "file_ownership_overlaps": [
+    "crates/benten-eval/src/invariants.rs — claimed by G4-A, G5-A, and G5-B (three-way overlap)",
+    "crates/benten-eval/src/evaluator.rs — claimed by G3-A and G5-B (two-way overlap)",
+    "crates/benten-engine/src/engine.rs — claimed by G2-B and G3-B explicitly; G8-B removes an in-file TODO without declaring ownership (three-way effective overlap)"
+  ],
+  "unassigned_deliverables": [
+    "D1 TS/DSL `wait()` builder + napi glue — routed to G3-B in §10 but G3-B files owned do not include any packages/engine or bindings/napi file",
+    "C1 AnchorStore — §10 says 'G11 or G3 if WAIT needs bulk anchor access — R1 decision', so formally not yet assigned (acceptable as an R1 open item but should be surfaced as such)"
+  ],
+  "missing_test_owners": [
+    "None — every test named in §4 (where a group is named) has a group owner. `tests/view_stale_count_tallies` appears in both G8-B and G11-A (see cr-14) but is assigned; just over-assigned."
+  ],
+  "spot_checked_citations": [
+    {
+      "citation": "crates/benten-engine/src/engine.rs:1549 (TODO phase-2-view-id-registry)",
+      "claim_in_plan": "I4 user-registered views stub (engine API `create_view` at `engine.rs:1549` has `TODO(phase-2-view-id-registry)`)",
+      "verified": true,
+      "reality": "Line 1549 reads `/// TODO(phase-2-view-id-registry): replace with a per-view definition`, inside the doc-comment block for `is_known_view_id` (defined at line 1585). The hardcoded canonical-view whitelist is at lines 1585-1603. The TODO is accurately cited though the semantic fix is in the whitelist block just below."
+    },
+    {
+      "citation": "crates/benten-caps/src/policy.rs:225 (TODO phase-2-iterate-boundary-delegation)",
+      "claim_in_plan": "P2 `iterate_batch_boundary` delegation stub (`TODO(phase-2-iterate-boundary-delegation)` at `policy.rs:225`)",
+      "verified": true,
+      "reality": "Line 225 reads `/// TODO(phase-2-iterate-boundary-delegation): wire the engine's`, inside the doc-comment for `iterate_batch_boundary()` (fn sig at line 240). Accurate."
+    },
+    {
+      "citation": "crates/benten-caps/src/policy.rs:234 (TODO phase-2-wallclock-toctou)",
+      "claim_in_plan": "P1 Wall-clock TOCTOU delegation stub (`TODO(phase-2-wallclock-toctou)` at `policy.rs:234`)",
+      "verified": true,
+      "reality": "Line 234 reads `// TODO(phase-2-wallclock-toctou): honor wall-clock bound in addition to iteration count per`. Accurate."
+    },
+    {
+      "citation": "crates/benten-eval/src/primitives/mod.rs:67-70 (PrimitiveNotImplemented branches)",
+      "claim_in_plan": "Phase-2 primitives — structural validation accepts them, the executor rejects at call time.",
+      "verified": true,
+      "reality": "Lines 67-70 read `PrimitiveKind::Wait | PrimitiveKind::Stream | PrimitiveKind::Subscribe | PrimitiveKind::Sandbox => Err(EvalError::PrimitiveNotImplemented(op.kind))`. Matches the plan."
+    },
+    {
+      "citation": "crates/benten-engine/src/engine.rs:265 (SubgraphCache)",
+      "claim_in_plan": "G2 Subgraph AST cache completion — `SubgraphCache` wired at `benten-engine/src/engine.rs:265`",
+      "verified": true,
+      "reality": "Line 265 reads `pub(crate) struct SubgraphCache {`. Accurate."
+    },
+    {
+      "citation": "crates/benten-engine/src/engine.rs:449 (Engine::call re-parse)",
+      "claim_in_plan": "`Engine::call` still re-parses per-call at `engine.rs:449`",
+      "verified": true,
+      "reality": "Line 449 is inside a doc-comment describing fail-fast parse-at-registration: `/// perf pass); this is the fail-fast guarantee only.`. The actual re-parse site is very close but the exact line is the doc-comment for TRANSFORM parse-at-registration. Reading the surrounding code (lines 440-460), the comment explicitly says 'The runtime executor still re-parses per-call (Phase-2 completes the AST-cache perf pass)' — confirming the semantic claim. Citation is imprecise by a few lines but the fact is accurate."
+    },
+    {
+      "citation": "crates/benten-engine/src/engine.rs:590 (TODO phase-2-grant-backed-policy)",
+      "claim_in_plan": "P3 `GrantBackedPolicy` wired into READ primitive execute path (`TODO(phase-2-grant-backed-policy)` at `engine.rs:590`)",
+      "verified": true,
+      "reality": "Line 590 reads `// TODO(phase-2-grant-backed-policy): route through GrantBackedPolicy`. Accurate."
+    },
+    {
+      "citation": "crates/benten-engine/src/engine_diagnostics.rs:170-184 (view_stale_count 0.0 hardcode)",
+      "claim_in_plan": "I6 `benten.ivm.view_stale_count` metric wire-up stub (`engine_diagnostics.rs:170-184` hard-codes `0.0`)",
+      "verified": false,
+      "reality": "The hardcoded `out.insert(\"benten.ivm.view_stale_count\".to_string(), 0.0);` is at line 185, not inside 170-184. Lines 170-184 contain the per-capability-scope write-metrics block (compromise #5). Substance correct (a hardcode exists), line range off by one."
+    },
+    {
+      "citation": "crates/benten-eval/src/error.rs (G1-A new HostError)",
+      "claim_in_plan": "G1-A owns `crates/benten-eval/src/error.rs (new HostError)`",
+      "verified": false,
+      "reality": "File does not exist at HEAD. `EvalError` is defined in `benten-eval/src/lib.rs:65`. The plan either intends to create a new `error.rs` file (implicit refactor) or the path is wrong — see cr-13."
+    },
+    {
+      "citation": "Agents listed in §6 (wasmtime-sandbox-auditor, ivm-algorithm-b-reviewer, napi-bindings-reviewer, ucan-capability-auditor, websocket-engineer, chaos-engineer, determinism-verifier)",
+      "claim_in_plan": "'All the specialised agents exist' (§6 line 472)",
+      "verified": true,
+      "reality": "`ls .claude/agents/` confirms all 7 listed agent files exist. The count '54 agents' in my dispatch-instructions is close to the 54 I count. No missing agents."
+    }
+  ],
+  "confidence": 0.82
+}

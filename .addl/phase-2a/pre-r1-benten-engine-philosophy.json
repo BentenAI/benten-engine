@@ -1,0 +1,102 @@
+{
+  "agent": "benten-engine-philosophy",
+  "stage": "pre-r1",
+  "phase": "2a",
+  "plan_head_reviewed": "196239b (Phase 1 close; plan file uncommitted in working tree)",
+  "verdict": "PASS_WITH_FINDINGS",
+  "summary": "Phase 2a's shape preserves the thin-engine thesis more rigorously than Phase 1 did — arch-1 (G1) is a genuine coupling break, not a shuffle, because it eliminates the last Benten-internal type that crossed the evaluator-host boundary. Both baked-in architectural decisions (ExecutionState DAG-CBOR/CIDv1 envelope; SANDBOX manifest as capability-derived) are philosophically sound: each reuses an existing Benten primitive (content-addressing; capability grants) rather than inventing a parallel vocabulary. Two real concerns remain — attribution as a structural invariant (Inv-14) risks drifting into engine-level policy that should live as composed attribution-emitting primitives, and the scope split has one forced boundary (Inv-4/Inv-7 are SANDBOX-coupled but their test-partition lives in 2b while their invariant-enumeration sits in the 2a invariants file).",
+  "findings": [
+    {
+      "id": "phil-1",
+      "severity": "major",
+      "title": "Inv-14 'causal attribution on every TraceStep' risks becoming engine policy, not structural property",
+      "location": "plan §2.5 E12 and §3 G5-B",
+      "claim": "Plan says: 'every `TraceStep` MUST carry `(actor_cid, handler_cid, capability_grant_cid_used)`; absence is a registration-time error for any primitive that does not declare its attribution source.'",
+      "concern": "The other 13 invariants are all structural (DAG-ness, fan-out limits, system-zone unreachability, immutability) — properties of the subgraph-as-data. Attribution is a property of the *evaluator walk*, not of the subgraph. Making every TraceStep carry an attribution triple is a policy choice about audit-trail completeness; calling it a 'structural invariant' imports engine-level auditing semantics into the primitive vocabulary. The philosophical cleaner shape: attribution is captured by EMIT (fire-and-forget audit event) composed alongside user primitives, not threaded through the evaluator as a fourteenth mandatory property. This matters because Phase 6 AI-assistant workflows and Phase 7 Garden approval flows will want configurable attribution shapes (e.g. adding delegation chain CIDs, adding Garden-vote CIDs); if Inv-14 is hardcoded as a 3-tuple, those phases retrofit.",
+      "evidence": "plan §2.5 E12 text + `ENGINE-SPEC.md` §4 invariant 14 'Causal attribution on every evaluation' (engine-level framing)",
+      "recommendation": "R1 debate: is Inv-14 structural or compositional? If structural (plan's claim), define the attribution-triple schema as part of ENGINE-SPEC §4 and lock it. If compositional, demote Inv-14 from the 14-invariant list and reframe as 'engine emits a default AttributionEvent via EMIT at every TraceStep unless the handler opts out'. Second-best is to make the attribution schema extensible (triple today, add slots in 3/6/7 via envelope versioning, same pattern as ExecutionState §9.1)."
+    },
+    {
+      "id": "phil-2",
+      "severity": "major",
+      "title": "Inv-11 dynamic-CID runtime check recouples evaluator to system-zone label registry",
+      "location": "plan §2.5 E10 + §5 Rank 6 + §9.1 debate",
+      "claim": "Plan says: 'Registration-time check: reject subgraphs whose READ / WRITE primitives target any CID with a `system:` prefix label, unless WriteContext::privileged. [...] runtime TRANSFORM-computed CID rejection.' — implying the evaluator maintains a system-zone prefix table.",
+      "concern": "Phase 1's Invariant 11 stopgap lived at the *storage* layer (write-path E_SYSTEM_ZONE_WRITE) — which keeps the evaluator ignorant of what's 'system' vs 'user'. Lifting enforcement to the evaluator means `benten-eval` now needs to know the set of system-zone label prefixes, which is data that fundamentally lives in `benten-engine` (capability grants, IVM view registrations, module manifests are all engine-orchestrator concerns). This is the same coupling the arch-1 break is removing in the other direction. The plan even acknowledges this in §5 Rank 6: 'Full enforcement means runtime-checking every READ/WRITE target CID against a system-zone prefix table. Cost: ≥O(1) HashMap probe per primitive call.' The philosophy preference: this check belongs in the PrimitiveHost impl (engine-side), not in the evaluator.",
+      "evidence": "plan §2.5 E10, §5 Rank 6; `crates/benten-eval/src/host.rs` currently expresses system-zone policy via the host, not the evaluator; `docs/ENGINE-SPEC.md` §9 'System-zone protection' lists system-zone Nodes as engine-level concerns ('Capability Nodes, version chain metadata, IVM view definitions')",
+      "recommendation": "R1 decision point: put Inv-11 runtime enforcement in `PrimitiveHost::check_read_capability` / `check_capability` (it's already there for the Option C threading — extend the ctx with system-zone classification) rather than in `benten-eval/src/invariants.rs`. Registration-time literal-CID rejection stays structural (it's a property of the subgraph); dynamic-CID runtime rejection is a policy question about which CIDs count as system — that's host-owned. Keeps the evaluator ignorant of the system-zone label set."
+    },
+    {
+      "id": "phil-3",
+      "severity": "minor",
+      "title": "`HostError` opaque-box + enum shape risks reintroducing the coupling G1 is breaking",
+      "location": "plan §9.2 — Option A/B/C + 'Planner's preference: B + A as escape hatch'",
+      "claim": "Plan proposes B (enum of known host-error variants: NotFound / WriteConflict / BackendUnavailable / ...) with A (opaque Box) as escape hatch.",
+      "concern": "Option B *recreates* the GraphError-shaped enum inside benten-eval under a new name. If `HostError` enumerates 'NotFound / WriteConflict / BackendUnavailable', you've pulled the modeling of storage failures back into `benten-eval` — just without the explicit Cargo.toml dep. Phase 3 adds network failures; does `HostError` grow a `NetworkUnavailable` variant? Phase 8 adds compute-marketplace failures; does `HostError` grow a `QuotaExceeded` variant? The path points at growth. Option C (just an `ErrorCode` string) is *more* thin-engine — the evaluator routes on `ErrorCode`, the host owns the error modeling. Option A (opaque box) is the only option that keeps the evaluator genuinely ignorant of error taxonomy.",
+      "evidence": "plan §9.2 + `crates/benten-eval/src/lib.rs:73 EvalError::Graph(#[from] GraphError)` (current shape) + `crates/benten-engine/src/primitive_host.rs:349` (the planned mapping location)",
+      "recommendation": "R1 should prefer A + a stable ErrorCode classification (C-lite) over B. Keep the evaluator's error taxonomy minimal: `Invariant | Capability | Host(ErrorCode, Box<dyn Error>) | PrimitiveNotImplemented | Internal`. The ErrorCode is the wire format; the Box is for operators who want full chain preservation. This preserves thinness across phase growth."
+    },
+    {
+      "id": "phil-4",
+      "severity": "minor",
+      "title": "`TimeSource` abstraction placed in `benten-core` rather than a neutral home",
+      "location": "plan §2.10 T1 'benten-core/src/time_source.rs (new)'",
+      "claim": "`TimeSource` trait lands in `benten-core`. Used by wall-clock TOCTOU (caps), HLC stamping, WAIT timeout.",
+      "concern": "`benten-core` is supposed to carry only Node / Edge / Value / CID machinery — the pure-data primitives. A `TimeSource` is execution-context machinery. Phase 3 sync introduces HLC with drift tolerance and a separate time-source; Phase 7 Gardens introduce governance-voting deadlines with their own clock-authority pattern. Putting TimeSource in benten-core risks the 'benten-core grows past fundamental types' anti-pattern. It's also the second time in Phase 2a where functionality gets parked in benten-core for lack of a neutral home (C1 AnchorStore being the other — though that one is at least Node-level).",
+      "evidence": "plan §2.10 T1 + CLAUDE.md 'Anti-patterns you flag: benten-core growing past the fundamental types + hashing'",
+      "recommendation": "R1 decides: either (a) put TimeSource in `benten-eval` where WAIT executor + iteration budget actually call it (acceptable even if caps + HLC also reach in — eval already has the capability policy trait), or (b) create a tiny `benten-clock` crate for Phase 2a that Phase 3 extends. Option (a) is probably right for Phase 2a. Do NOT land it in benten-core — benten-core is the crate whose stability everyone else depends on and its surface should stay data-shape-only."
+    },
+    {
+      "id": "phil-5",
+      "severity": "minor",
+      "title": "Scope split has one forced boundary: Inv-4 / Inv-7 / E6 (SANDBOX) separated from Inv-8 / multiplicative budget",
+      "location": "plan §3 + §8 + §10 traceability",
+      "claim": "Inv-8 multiplicative-through-CALL lands in 2a G4; Inv-4 (SANDBOX nest) + Inv-7 (SANDBOX output) defer to 2b G7. 'G7 (cumulative budget feeds into SANDBOX fuel-budget composition)' per G4 gate.",
+      "concern": "Invariant 8's 'cumulative iteration budget (multiplicative through ITERATE/CALL)' is the mathematical twin of the SANDBOX fuel composition story. They're both bounded-execution invariants — Claim 3 of the architectural trio. Shipping Inv-8 multiplicative in 2a but deferring the fuel-budget composition to 2b means 2a's Inv-8 implementation may bake in assumptions (e.g. budget is an integer iteration count; CALL attenuation is a subtraction) that 2b's SANDBOX fuel layer then has to retrofit. The §3 G4 entry acknowledges the dependency ('cumulative budget feeds into SANDBOX fuel-budget composition') but doesn't guarantee 2a designs the budget abstraction with SANDBOX fuel in mind. This is the one place in the scope split where I'd push back on 'natural joint.'",
+      "evidence": "plan §3 G4 Gates line + §10 traceability E9 / E8 / E7 rows + `docs/ENGINE-SPEC.md` §4 invariants 4, 7, 8 clustered as SANDBOX-adjacent bounded-execution properties",
+      "recommendation": "Phase 2a R1 should lock the *abstract budget shape* (`Budget { iterations: u64, fuel: Option<u64>, sandbox_depth: u8 }` or equivalent) even though 2a only implements the iterations field. 2a's Inv-8 composes against this abstract shape; 2b's Inv-4/7/SANDBOX plug in the fuel + depth fields. This keeps 2a's Inv-8 work forward-compatible without pulling SANDBOX into 2a. Without this, the split *is* forced and 2b will reshape 2a work."
+    },
+    {
+      "id": "phil-6",
+      "severity": "minor",
+      "title": "Module manifest as 'Benten-native content-addressed shape' (§9.6 Option C) is under-specified vs DAG-CBOR/TOML",
+      "location": "plan §9.6 — 'Planner's preference: C. Every other Benten artifact is content-addressed; manifest being a subgraph is maximally consistent with the thesis.'",
+      "claim": "Module manifest format preference is C: a Benten-native content-addressed shape where the manifest IS a subgraph with its own CID.",
+      "concern": "The philosophical intuition is right — 'code IS graph' extends naturally to 'module manifest IS a subgraph of declarations.' But the plan hasn't done the work to show what the manifest-as-subgraph shape *is*. Which primitive Node types declare `requires_caps`? Are migrations ITERATE sequences? If the manifest is a subgraph, it's evaluator-walked; is installing a module a CALL? The current spec says `Engine::install_module(manifest)` which is a plain API call, not a graph operation. Option C is philosophically aligned but needs the primitive-shape work before R1 locks it. Option A/B (TOML/JSON) is the safer pragmatic path, and named-compromise #N-ifying the 'module manifest is not yet a subgraph' decision is more honest than shipping a half-subgraph-half-struct hybrid.",
+      "evidence": "plan §9.6 + §2.6 N2 ('Format TBD at R1') + §3 G10-B file ownership (`crates/benten-engine/src/module_manifest.rs` — which implies a Rust-struct shape, not a subgraph)",
+      "recommendation": "R1 debate: if you commit to Option C, specify the manifest subgraph's primitive composition before R1 closes (which Nodes, which Edges, what CIDs). If the spec work isn't done by R1, default to B (JSON) and add a named compromise 'manifest is not yet a subgraph; Phase-N lifts it.' Do not ship a half-committed C."
+    },
+    {
+      "id": "phil-7",
+      "severity": "minor",
+      "title": "Arch-1 dep break is genuine thinning; confirm it survives Phase 2 primitive growth",
+      "location": "plan §3 G1 + §9.2",
+      "claim": "G1 drops `benten-graph` dep from `benten-eval`; replaces with `HostError` routing through `PrimitiveHost`.",
+      "concern": "This is the right call and it's NOT shuffled coupling — I verified that `EvalError::Graph(#[from] benten_graph::GraphError)` at `crates/benten-eval/src/lib.rs:73` is the only place benten-graph leaks into benten-eval's type surface, and `PrimitiveHost` (at `crates/benten-eval/src/host.rs`) is already the right abstraction. The one residual concern: Phase 2a/2b add WAIT / STREAM / SUBSCRIBE / SANDBOX executors. Each executor touches the host in new ways (suspend state bytes, chunk sinks, change subscriptions, WASM instance handles). Every one of those is a *new* opportunity for storage-type leakage back across the boundary. G1 landing clean isn't enough — the PrimitiveHost surface expansion (plan §2.6 N1) needs its own sub-review gate: does the new `suspend_execution_state` / `open_chunk_sink` / etc. surface take concrete storage-crate types, or does it stay behind the `HostError`-shaped boundary?",
+      "evidence": "plan §3 G1 + §2.6 N1 'Add suspend_execution_state, resume_execution_state, acquire_sandbox_instance, open_chunk_sink, open_change_subscription methods' + verified coupling site at `crates/benten-eval/src/lib.rs:73`",
+      "recommendation": "Add a Phase-2-wide sub-invariant to the R4 test landscape: `tests/arch_1_no_graph_dep.rs` (§3 G1) stays green after *every* primitive-host expansion in G3 / G6 / G7. R5 mini-review catches any storage-type leak-back as an automatic block."
+    }
+  ],
+  "baked_decisions_assessment": {
+    "executionstate_format": {
+      "verdict": "sound",
+      "reasoning": "DAG-CBOR + CIDv1 envelope is the philosophically correct choice. It preserves content-addressing symmetry across every suspended-execution use case in Phase 3/6/7 (sync observes suspended workflows; AI assistants fork conversation state; Garden approval flows anchor signatures on suspended-state CIDs). The counter-argument — 'what if suspended states are ephemeral and content-addressing is just cost?' — doesn't hold up: ephemeral in Phase 1 becomes persistent in Phase 6 (multi-turn agent workflows ARE suspended handlers), and if the format were swapped to borsh/JSON now it would need a format migration then. The versioned envelope `{schema_version: u8, payload}` lets the shape evolve additively without breaking content-addressing. Debuggability is correctly addressed via `benten-dev inspect-state` pretty-print (tool-level, not format-level). One caveat: the Inv-14 attribution triple carried through suspension (flagged R1-open in §9.1) needs to be locked before WAIT ships — attribution crossing a suspend/resume boundary is exactly where finding phil-1 bites."
+    },
+    "sandbox_manifest_architecture": {
+      "verdict": "sound",
+      "reasoning": "Capability-derived with named-manifest DX sugar is the correct call and preserves the single-security-model thesis. A hand-allowlist or tiered system would be a second security vocabulary — exactly what Phase 1's `benten-caps` extraction existed to prevent. The plan's rationale chain (Phase 8 Credits marketplace needs fine-grained host-fn caps; Phase 6 AI assistants inherit caps through CALL attenuation naturally; Phase 7 Gardens grant per-trust-level host-function scopes) is all cross-phase-coherent. Named manifests are genuine DX sugar — they're lookup tables over cap bundles, not a parallel permission system, and the plan correctly frames them that way. The residual concern is finding phil-6's sibling: the named-manifest *registry* (§9.3 bullet 4) needs a locked location before 2b pre-R1. TOML-in-workspace is fine; a `benten-caps`-adjacent module is better; inline constants would be bad (not user-extensible). R1 should lock this now even though SANDBOX itself is 2b, so 2b R1 doesn't re-litigate."
+    }
+  },
+  "scope_split_assessment": {
+    "verdict": "natural_joint",
+    "reasoning": "The 2a/2b split cleaves along a defensible joint. 2a is structural-invariants + debt-close (well-scoped, lens surface = code-as-graph-reviewer + invariant lens); 2b is isolation-and-compute (unknown-unknowns, lens surface = wasmtime-sandbox-auditor + ivm-algorithm-b-reviewer). Review-lens non-overlap is real — wasmtime-sandbox-auditor brings nothing to Inv-13 immutability and code-as-graph-reviewer doesn't sensibly review wasmtime instance-pool design. Blast-radius isolation is correct — 2a ships independent of 2b's wasmtime API-stability risk. Scope cohesion passes — arch-1 + WAIT + invariants are all evaluator-structural, SANDBOX + STREAM + WASM + Algorithm B are all compute-and-isolation. One forced-boundary residue (phil-5: Inv-8 + Inv-4/7 are the same bounded-execution Claim 3 trio, separated by the split); addressable by locking the abstract budget shape at 2a R1. With phil-5's fix, the split is a genuinely natural joint rather than a forced boundary."
+  },
+  "cross_phase_foreclosure_risks": [
+    "Phase 3 sync — ExecutionState envelope versioning (§9.1) is the right shape for sync, but plan is silent on whether HLC fields land IN the payload or in a sibling envelope. If HLC fields are added later as payload-internal, the schema_version bump forces every 2a-era suspended workflow to migrate; if they're sibling-enveloped, the CID-stable property is preserved. R1 should lock HLC placement before 2a ships so 2a's CID-determinism proptest doesn't need a pass-2 rewrite in Phase 3.",
+    "Phase 6 AI assistants — Inv-14 (phil-1) as hardcoded 3-tuple forecloses assistant-workflow attribution that needs delegation-chain CIDs in the triple. If Inv-14 ships rigid in 2a, Phase 6 adds either an extension dictionary (which makes the triple a lie) or migrates every stored attribution record. Decide the attribution schema extensibility story at 2a R1.",
+    "Phase 7 Gardens — Module manifest as subgraph (phil-6) is the right long-run shape because Garden governance operates on subgraph-CID references. If 2b ships manifest as TOML/JSON, Gardens work in Phase 7 recreates the manifest-is-subgraph shape and retrofits. Lock the 'manifest is a subgraph' decision by 2b R1 open, even if the initial storage format is a stopgap JSON.",
+    "Phase 8 Credits compute marketplace — SANDBOX manifest architecture (baked decision #2) is correctly aligned with Phase 8. The residual risk is the named-manifest registry shape (phil's sibling to phil-6): if 2b ships named-manifest constants inline in benten-caps, third-party compute providers in Phase 8 cannot author their own manifests without forking benten-caps. R1 of 2b should require the registry to be data-driven (TOML, or manifest-as-subgraph).",
+    "Phase 3 network-fetch KVBackend (§9.8) defers the real backend to Phase 3 but ships a snapshot-blob stub in 2b G10. If the snapshot-blob interface bakes in assumptions (e.g. single blob per engine construction, no progressive loading) that the eventual iroh-backed Phase 3 implementation can't match, the stub shape itself becomes a backward-compat constraint. This risk is correctly flagged at Rank 9 in §5; 2b R1 lens from `determinism-verifier` + `napi-bindings-reviewer` should pressure-test the snapshot-blob interface for Phase-3 compatibility."
+  ],
+  "confidence": 0.78
+}
