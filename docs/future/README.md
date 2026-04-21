@@ -6,6 +6,7 @@ This directory exists because several critic reviews (architecture-purity, engin
 
 ## What's In Here
 
+- **`phase-2-backlog.md`** — Consolidated list of items deferred from Phase 1 that have a clear Phase 2 landing point (arch-1 dep break, 4 deferred primitives, 6 deferred invariants, IVM generalisation, security follow-ups). Distinct from the exploratory proposals below: backlog = committed deferrals with concrete Phase 1 references; `future/` proper = exploratory, may or may not ship.
 - **`benten-runtime.md`** — Benten Runtime as WinterTC-compliant infrastructure product (competes with Cloudflare Workers)
 - **`bentend-daemon.md`** — General-purpose compute daemon with Nomad-style pluggable drivers (containers, VMs, WASM workloads beyond ours)
 - **`compute-marketplace.md`** — Broad peer-to-peer compute marketplace for arbitrary workloads (hardware-renting for containers/VMs beyond Benten's own compute)
