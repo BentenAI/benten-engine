@@ -52,5 +52,15 @@ jobs:
         # exercises cross-process round-trip. If the test is split across
         # two processes (parent spawns child), the harness handles that.
         # Flag is fatal so a hang here doesn't wedge the whole workflow.
+        #
+        # The cross-process scenario lives at
+        # `crates/benten-engine/tests/integration/cross_process_graph.rs`
+        # and is compiled into the shared `integration` test binary (see
+        # `tests/integration.rs`'s `mod integration` aggregator). Filter
+        # by the module path so only that scenario runs here.
         timeout-minutes: 5
-        run: cargo nextest run -p benten-engine --test cross_process_graph
+        run: |
+          cargo nextest run \
+            -p benten-engine \
+            --test integration \
+            'integration::cross_process_graph::'
