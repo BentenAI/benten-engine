@@ -10,8 +10,6 @@ members = [
     "crates/benten-eval",     # 12 primitives, evaluator, transaction primitive, SANDBOX host (STUB)
     "crates/benten-engine",   # Orchestrator: public API
     "bindings/napi",          # napi-rs v3 bindings (native + WASM)
-    "tests/doc_completeness", # Phase-2a R3 qa-expert — docs-vs-code audit tests
-    "tools/benten-dev",       # Phase-2a G11-A dev-server stub (hot-reload, inspect-state)
 ]
 
 [workspace.package]
