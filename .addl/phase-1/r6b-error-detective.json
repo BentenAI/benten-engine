@@ -1,0 +1,222 @@
+{
+  "agent": "error-detective",
+  "stage": "r6b",
+  "phase": 1,
+  "head": "a6d806e",
+  "date": "2026-04-17",
+  "verdict": "PASS-WITH-FINDINGS",
+  "methodology_note": "Second-pass audit under the updated 'verify, don't trust docs' reviewer contract. For every `ErrorCode` variant in `crates/benten-errors/src/lib.rs`, this pass (a) located a code path that fires or reserves the variant, (b) confirmed a test asserts on the code, and (c) cross-read every `docs/ERROR-CATALOG.md` fix-hint against the real Rust/TS surface to flag stale API references. All findings below were reproduced against HEAD a6d806e by re-reading the cited lines; no claim depends on the pass-1 snapshot.",
+  "summary": "Pass-1's 3 majors (r6-err-3 redb source chain, r6-err-4 catalog completeness, r6-err-5 IVM pattern-mismatch) and most minors/nits are all closed at HEAD: redb errors now flow through `GraphError::RedbSource(#[from] redb::Error)` with `Error::source()` preserved; the 6 engine-synthesized codes (DuplicateHandler/NoCapabilityPolicyConfigured/ProductionRequiresCaps/SubsystemDisabled/UnknownView/NotImplemented) are first-class ErrorCode variants; ViewError::PatternMismatch now maps to the new IvmPatternMismatch code; CapError::Denied uses Display formatting (r6-err-6); DeniedRead is a struct variant with (required, entity) payload (r6-err-9); BackendNotFound Display redacts to the basename only (r6-err-7); napi core_err uses err.code().as_static_str() (r6-err-8); EngineError::code() delegates to ErrorCode::as_static_str, removing the static_for/as_str duplication (r6-err-10); VersionError::code() was added with UnknownPrior routing through the new E_VERSION_UNKNOWN_PRIOR code (r6-err-11). Pass-1 r6-err-1 is PARTIALLY fixed: EvalError::Graph/Core now dispatch to inner .code(), but EvalError::Backend maps to ErrorCode::Unknown(String::from(\"E_EVAL_BACKEND\")) — a fabricated code not in the catalog or in the ErrorCode enum. Pass-1 r6-err-2 is PARTIALLY fixed: the read_node/put_node/put_edge/delete_node/delete_edge PrimitiveHost impls now use `?` to propagate GraphError through EvalError::Graph (typed), but two call sites remain that collapse EngineError into stringified Backend(format!(\"{e:?}\")): `call_handler` (primitive_host.rs:244) for any non-Cap EngineError variant, and `read_view` (primitive_host.rs:294) for any error. In both paths the origin catalog code (IvmViewStale / UnknownView / SubsystemDisabled / Graph::*) is lost and re-emerges on the TS side as `E_BACKEND` via `eval_error_to_engine_error`. Three new findings surfaced in this pass: (a) the EvalError::Backend → ErrorCode collapse emits E_EVAL_BACKEND (in benten-eval/src/lib.rs:115) while eval_error_to_engine_error emits E_BACKEND (in primitive_host.rs:311) — two different non-catalog markers for the same conceptual case; (b) the regression fixture `crates/benten-errors/tests/stable_shape.rs` pins CATALOG_VARIANT_COUNT = 42 but the enum now has 43 catalog variants (VersionUnknownPrior missing from the array) — the drift tripwire is stale; (c) the `E_UNKNOWN_VIEW` fix-hint in docs/ERROR-CATALOG.md says 'The view id was not registered via `create_view` / `registerView`' but `registerView` does not exist on the TS Engine surface (`packages/engine/src/engine.ts` exposes `createView`, line 812) or on the napi bindings. `create_view` is the Rust method; `createView` is the TS binding. No `registerView` anywhere in the codebase.",
+  "counts": {
+    "catalog_variants_in_error_code_enum": 43,
+    "variants_plus_unknown_fallback": 44,
+    "variants_with_verified_producer": 42,
+    "variants_reserved_but_not_yet_fired": 1,
+    "variants_with_direct_assertion_test": 42,
+    "variants_missing_from_stable_shape_tripwire": 1,
+    "pass_1_findings_closed": 8,
+    "pass_1_findings_partial": 2,
+    "pass_1_findings_open": 0,
+    "new_findings_this_pass": 3,
+    "findings_total": 5,
+    "findings_critical": 0,
+    "findings_major": 3,
+    "findings_minor": 2,
+    "findings_nit": 0
+  },
+  "scope_covered": [
+    "crates/benten-errors/src/lib.rs (43-variant ErrorCode enum + as_str / as_static_str / from_str)",
+    "crates/benten-errors/tests/stable_shape.rs (regression tripwire for variant count + round-trip)",
+    "crates/benten-core/src/lib.rs (CoreError + code())",
+    "crates/benten-core/src/version.rs (VersionError + code() — r6-err-11 landed)",
+    "crates/benten-graph/src/lib.rs (GraphError + RedbSource #[from] redb::Error — r6-err-3 landed)",
+    "crates/benten-caps/src/error.rs (CapError + DeniedRead struct variant — r6-err-9 landed; :?→: fix — r6-err-6 landed)",
+    "crates/benten-ivm/src/view.rs (ViewError → IvmPatternMismatch — r6-err-5 landed)",
+    "crates/benten-eval/src/lib.rs (EvalError + code() — r6-err-1 partially landed)",
+    "crates/benten-engine/src/error.rs (EngineError + error_code / code delegate to as_static_str — r6-err-4 + r6-err-10 landed)",
+    "crates/benten-engine/src/primitive_host.rs (PrimitiveHost impl — r6-err-2 partially landed)",
+    "bindings/napi/src/error.rs (core_err uses as_static_str — r6-err-8 landed)",
+    "docs/ERROR-CATALOG.md (44 catalog entries + fix-hint API references)",
+    "packages/engine/src/engine.ts (TS Engine surface — createView / registerSubgraph / registerCrud verified)",
+    "packages/engine/src/errors.generated.ts (55 generated codes)",
+    "scripts/drift-detect.ts (live run: catalog 54 / rust 44 / ts 54 OK)"
+  ],
+  "variants_verified": {
+    "InvCycle": "producer: crates/benten-eval/src/invariants.rs; tests: invariant_1_cycle.rs, register_subgraph_failures.rs",
+    "InvDepthExceeded": "producer: crates/benten-eval/src/invariants.rs (+ EvalError::StackOverflow also maps here); tests: invariant_2_depth.rs",
+    "InvFanoutExceeded": "producer: crates/benten-eval/src/invariants.rs; tests: invariant_3_fanout.rs",
+    "InvTooManyNodes": "producer: crates/benten-eval/src/invariants.rs; tests: invariants_5_6_counts.rs",
+    "InvTooManyEdges": "producer: crates/benten-eval/src/invariants.rs; tests: invariants_5_6_counts.rs",
+    "InvDeterminism": "producer: crates/benten-eval/src/invariants.rs; tests: invariants_9_10_12.rs",
+    "InvContentHash": "producer: crates/benten-eval/src/invariants.rs (registration-time); tests: invariants_9_10_12.rs. CAVEAT: catalog advertises 'Thrown at: Registration / read' but there is no read-path hash verification — see finding r6b-err-4",
+    "InvRegistration": "producer: crates/benten-eval/src/invariants.rs (catch-all via EvalError::RegistrationCatchAll); tests: invariants_9_10_12.rs",
+    "InvIterateNestDepth": "producer: crates/benten-eval/src/primitives/iterate.rs; tests: iterate_max_and_nest_depth.rs",
+    "InvIterateMaxMissing": "producer: crates/benten-eval/src/primitives/iterate.rs; tests: iterate_max_and_nest_depth.rs",
+    "InvIterateBudget": "producer: crates/benten-eval/src/evaluator.rs:174 (runtime step-counter); tests: evaluator iteration-budget test coverage",
+    "CapDenied": "producer: crates/benten-caps/src/grant_backed.rs (check_write denial path); tests: requires_enforcement.rs, call_attenuation.rs, error_code_mapping.rs",
+    "CapDeniedRead": "producer: crates/benten-caps/src/grant_backed.rs:185 check_read; tests: read_denial.rs, cap_error_display_hygiene.rs",
+    "CapRevoked": "RESERVED BUT NEVER CONSTRUCTED — Phase 3 sync-revocation code. Confirmed by grep: no CapError::Revoked construction outside src/error.rs:104 code() mapping. Tested at round-trip level via stable_shape.rs + error_code_mapping.rs; no producer test. Documented as defensible in spec-to-code-compliance-audit.md",
+    "CapRevokedMidEval": "producer: crates/benten-caps/src/toctou.rs (mid-eval revocation boundary); tests: crates/benten-caps/tests/toctou_iteration.rs",
+    "CapNotImplemented": "producer: crates/benten-caps/src/ucan.rs; tests: crates/benten-caps/tests/ucan_stub_messages.rs",
+    "CapAttenuation": "producer: crates/benten-caps/src/grant_backed.rs attenuation check; tests: call_attenuation.rs, error_code_mapping.rs",
+    "WriteConflict": "producer: crates/benten-eval/src/primitives/write.rs + engine transaction; tests: engine transaction CAS tests",
+    "IvmViewStale": "producer: crates/benten-engine/src/engine.rs:1479+1506, crates/benten-ivm/src/views/*::rebuild; tests: crates/benten-ivm/tests/view_read_allow_stale.rs, stale_on_budget_exceeded.rs, crates/benten-engine/tests/engine_read_view_stale.rs",
+    "TxAborted": "producer: crates/benten-graph/src/lib.rs TxAborted variant; tests: transaction_atomicity.rs",
+    "NestedTransactionNotSupported": "producer: crates/benten-graph + crates/benten-engine NestedTransactionNotSupported variants; tests: engine_error_codes.rs",
+    "PrimitiveNotImplemented": "producer: crates/benten-eval/src/primitives/mod.rs; tests: phase_two_primitives_structural.rs, primitive_types.rs",
+    "SystemZoneWrite": "producer: crates/benten-graph/src/lib.rs (graph write-path guard); tests: system_zone.rs, system_zone_inherent_put_blocks_user.rs, system_zone_api_exclusivity.rs",
+    "ValueFloatNan": "producer: crates/benten-core/src/lib.rs Value::Float canonicalization; tests: value_float.rs, error_codes.rs",
+    "ValueFloatNonFinite": "producer: crates/benten-core/src/lib.rs Value::Float canonicalization; tests: value_float.rs, error_codes.rs",
+    "CidParse": "producer: crates/benten-core (Cid deserialization + napi boundary); tests: error_codes.rs, bindings/napi/tests/input_validation.rs",
+    "CidUnsupportedCodec": "producer: crates/benten-core/src/lib.rs Cid::from_bytes; tests: error_codes.rs",
+    "CidUnsupportedHash": "producer: crates/benten-core/src/lib.rs Cid::from_bytes; tests: error_codes.rs",
+    "VersionBranched": "producer: crates/benten-core/src/version.rs:163; tests: version_branched.rs, version_error_codes.rs",
+    "BackendNotFound": "producer: crates/benten-graph/src/lib.rs open_existing; tests: graph_error_hygiene.rs (redaction regression)",
+    "TransformSyntax": "producer: crates/benten-eval/src/primitives/transform.rs + expr parser; tests: transform_grammar_rejections.rs, transform_grammar_fuzz.rs",
+    "InputLimit": "producer: bindings/napi/src/lib.rs:484 (napi-boundary input validation); tests: bindings/napi/tests/input_validation.rs (8 assertions)",
+    "NotFound": "producer: engine lookups (anchor / handler / view); tests: error_codes.rs, engine_error_codes.rs",
+    "Serialize": "producer: crates/benten-core/src/lib.rs:422 (CoreError::Serialize from DAG-CBOR encoder); tests: error_codes.rs",
+    "GraphInternal": "producer: crates/benten-graph/src/lib.rs RedbSource #[from] redb::Error + Redb(String) + Decode(String) all map to GraphInternal; tests: graph_error_hygiene.rs",
+    "DuplicateHandler": "producer: crates/benten-engine/src/engine.rs register_subgraph; tests: engine_error_codes.rs",
+    "NoCapabilityPolicyConfigured": "producer: crates/benten-engine/src/builder.rs production guardrail; tests: engine_error_codes.rs",
+    "ProductionRequiresCaps": "producer: crates/benten-engine/src/builder.rs; tests: engine_error_codes.rs::production_requires_caps_routes_to_catalog_variant",
+    "SubsystemDisabled": "producer: crates/benten-engine/src/engine.rs (thin-engine refusal paths); tests: engine_api_surface.rs, engine_error_codes.rs",
+    "UnknownView": "producer: crates/benten-engine/src/engine.rs read_view unknown-id; tests: engine_api_surface.rs",
+    "NotImplemented": "producer: crates/benten-engine/src/engine.rs primitive-dispatch stubs; tests: engine_error_codes.rs",
+    "IvmPatternMismatch": "producer: crates/benten-ivm/src/view.rs:82 (PatternMismatch -> IvmPatternMismatch); tests: view pattern-mismatch tests (r6-err-5 closed)",
+    "VersionUnknownPrior": "producer: crates/benten-core/src/version.rs:155; tests: crates/benten-core/tests/version_error_codes.rs + anchor_version + version_branched. NOT included in stable_shape.rs tripwire array — see finding r6b-err-2"
+  },
+  "pass_1_dispositions": [
+    {
+      "id": "r6-err-1",
+      "title": "EvalError::{Backend, Graph, Core} collapse to ErrorCode::Unknown(\"\")",
+      "status": "PARTIAL",
+      "evidence_at_head": "benten-eval/src/lib.rs:99-117 — Graph(e)/Core(e) now dispatch to inner e.code() (good). Backend(_) maps to ErrorCode::Unknown(String::from(\"E_EVAL_BACKEND\")) — a fabricated code not in the catalog nor the ErrorCode enum. Meanwhile eval_error_to_engine_error at primitive_host.rs:311 emits ErrorCode::Unknown(\"E_BACKEND\". See finding r6b-err-3."
+    },
+    {
+      "id": "r6-err-2",
+      "title": "Engine PrimitiveHost impl stringifies EngineError into EvalError::Backend, dropping source chain and code",
+      "status": "PARTIAL",
+      "evidence_at_head": "primitive_host.rs:122-220 — read_node/get_by_label/get_by_property/put_node/put_edge/delete_node/delete_edge now use `?` which goes through `From<GraphError> for EvalError`, preserving the typed path. call_handler:243 specifically catches EngineError::Cap(c) and routes to EvalError::Capability(c) (good). HOWEVER call_handler:244 and read_view:294 still have `Err(e) => Err(benten_eval::EvalError::Backend(format!(\"{e:?}\")))` — any non-Cap EngineError variant (IvmViewStale, UnknownView, SubsystemDisabled, Graph, Core, Other) collapses to E_EVAL_BACKEND at these two sites. See finding r6b-err-1."
+    },
+    {
+      "id": "r6-err-3",
+      "title": "All 6 redb From impls on GraphError stringify, dropping source chain",
+      "status": "CLOSED",
+      "evidence_at_head": "benten-graph/src/lib.rs:75 RedbSource(#[from] redb::Error) + :169-193 six From impls funnel through `redb::Error`. benten-graph/src/lib.rs:140 routes RedbSource/Redb/Decode to ErrorCode::GraphInternal (new first-class variant). Pass-1's suggestion to reserve E_GRAPH_INTERNAL instead of the ad-hoc lowercase 'graph_internal' marker is the path taken."
+    },
+    {
+      "id": "r6-err-4",
+      "title": "EngineError variants map to ErrorCode::Unknown with fabricated codes not in catalog",
+      "status": "CLOSED",
+      "evidence_at_head": "benten-engine/src/error.rs:97-104 — six variants (DuplicateHandler, NoCapabilityPolicyConfigured, ProductionRequiresCaps, SubsystemDisabled, UnknownView, NotImplemented) now map to first-class ErrorCode variants. Drift-detect live run confirms parity."
+    },
+    {
+      "id": "r6-err-5",
+      "title": "ViewError::PatternMismatch maps to E_INV_REGISTRATION (layer violation)",
+      "status": "CLOSED",
+      "evidence_at_head": "crates/benten-ivm/src/view.rs:82 and benten-errors/src/lib.rs:154 — new IvmPatternMismatch variant landed; view.rs routes PatternMismatch to it directly. Catalog entry E_IVM_PATTERN_MISMATCH at ERROR-CATALOG.md:413-419."
+    },
+    {
+      "id": "r6-err-6",
+      "title": "CapError::Denied Display uses {required:?} / {entity:?} (escape-quoted)",
+      "status": "CLOSED",
+      "evidence_at_head": "benten-caps/src/error.rs:34 — template now `capability denied (required={required}, entity={entity})` (no `:?`). DeniedRead:51 matches. Regression test: crates/benten-caps/tests/cap_error_display_hygiene.rs."
+    },
+    {
+      "id": "r6-err-7",
+      "title": "GraphError::BackendNotFound leaks filesystem path via path.display()",
+      "status": "CLOSED",
+      "evidence_at_head": "benten-graph/src/lib.rs:102 — Display uses redact_path_for_display(path) which returns '<redacted>/{basename}'. Full PathBuf still on struct for programmatic access. Regression: crates/benten-graph/tests/graph_error_hygiene.rs."
+    },
+    {
+      "id": "r6-err-8",
+      "title": "napi core_err fabricates E_CORE: prefix — not a catalog code",
+      "status": "CLOSED",
+      "evidence_at_head": "bindings/napi/src/error.rs:28-34 — core_err uses `format!(\"{}: {err}\", code.as_static_str())` where code = err.code(). Parity with engine_err."
+    },
+    {
+      "id": "r6-err-9",
+      "title": "CapError::DeniedRead is a unit variant — no structured context",
+      "status": "CLOSED",
+      "evidence_at_head": "benten-caps/src/error.rs:52-57 — DeniedRead { required, entity } now a struct variant. grant_backed.rs check_read populates both fields. Catalog entry (line 129-131) promises {required, entity, target} — the `target` field is NOT populated yet (see pass-1 note), but required+entity are structured. Minor residual: the catalog still lists a target field that the Rust variant doesn't carry."
+    },
+    {
+      "id": "r6-err-10",
+      "title": "static_for in benten-engine duplicates ErrorCode::as_str",
+      "status": "CLOSED",
+      "evidence_at_head": "benten-engine/src/error.rs:113-115 — `EngineError::code()` delegates to `self.error_code().as_static_str()`. Duplication removed; the single source of truth is benten-errors::ErrorCode::as_static_str. Regression: crates/benten-engine/tests/engine_error_codes.rs::code_delegates_to_as_static_str."
+    },
+    {
+      "id": "r6-err-11",
+      "title": "VersionError has no .code() method",
+      "status": "CLOSED",
+      "evidence_at_head": "benten-core/src/version.rs:120-126 — VersionError::code() added; Branched -> VersionBranched, UnknownPrior -> new VersionUnknownPrior variant. Catalog entry E_VERSION_UNKNOWN_PRIOR at ERROR-CATALOG.md:421-427. Regression: crates/benten-core/tests/version_error_codes.rs."
+    }
+  ],
+  "findings": [
+    {
+      "id": "r6b-err-1",
+      "severity": "major",
+      "title": "PrimitiveHost impl stringifies non-Cap EngineError at call_handler and read_view — residual of r6-err-2",
+      "location": "crates/benten-engine/src/primitive_host.rs:244 (call_handler) and :294 (read_view)",
+      "detail": "Pass-1's r6-err-2 was closed for the atomic PrimitiveHost methods (read_node / get_by_label / get_by_property / put_node / put_edge / delete_node / delete_edge) which all now use `?` to propagate typed GraphError through the From<GraphError> for EvalError impl. But the compound methods `call_handler` (dispatching to an inner Engine::dispatch_call) and `read_view` (dispatching to Engine::read_view) both end with `Err(e) => Err(benten_eval::EvalError::Backend(format!(\"{e:?}\")))`. A user subgraph that calls `engine.call(...)` through the evaluator into a handler whose transaction raises `EngineError::Graph(GraphError::TxAborted { reason })` — or a `READ` primitive via `read_view` that hits `EngineError::UnknownView { view_id }` or `EngineError::IvmViewStale { view_id }` or `EngineError::SubsystemDisabled { .. }` — loses the origin catalog code at this boundary. The reciprocal `eval_error_to_engine_error` at primitive_host.rs:310 then wraps the stringified payload in `EngineError::Other { code: ErrorCode::Unknown(\"E_BACKEND\".into()), message: m }`. So a TS caller that expects to catch `EIvmViewStale` or `EUnknownView` sees a generic `BentenError` with code `E_BACKEND` (a code not in the catalog). The typed-error contract quietly degrades.\n\nThe pass-1 fix recommendation was to extend EvalError with typed variants per PrimitiveHost failure. EvalError::Graph and EvalError::Core already exist as From<GraphError> / From<CoreError>. The missing piece is an EvalError::Engine variant (or, simpler, match on EngineError::Graph/Core/Cap/Invariant and dispatch to the corresponding EvalError variants individually; route the terminal EngineError::{IvmViewStale, UnknownView, SubsystemDisabled, NotImplemented, DuplicateHandler, NoCapabilityPolicyConfigured, ProductionRequiresCaps, NestedTransactionNotSupported, Other} through a new EvalError variant that carries the ErrorCode directly).",
+      "fix": "At call_handler:244 and read_view:294, expand the match to preserve the origin code. Minimum viable: introduce `EvalError::Engine(ErrorCode, String)` that carries the catalog code + the Display message; `eval_error_to_engine_error` then maps it back through `EngineError::Other { code, message }`. This preserves the round-trip without adding a full typed-EngineError-in-EvalError redundancy.",
+      "test_coverage": "Add engine-level integration tests: (a) register a handler that reads a view that does not exist; invoke through engine.call(...); assert the returned EngineError::error_code() is ErrorCode::UnknownView, not ErrorCode::Unknown(\"E_BACKEND\"). (b) same for an IvmViewStale flow via a view with a 0-budget. Pass-1's recommended CapDenied integration test is already covered by the explicit EngineError::Cap(c) arm at :243."
+    },
+    {
+      "id": "r6b-err-2",
+      "severity": "major",
+      "title": "stable_shape.rs tripwire pins CATALOG_VARIANT_COUNT = 42 but enum has 43 — VersionUnknownPrior missing from the array",
+      "location": "crates/benten-errors/tests/stable_shape.rs:26 (const) and :37-80 (explicit array)",
+      "detail": "The intent of this test is to be a 'tripwire' — adding a catalog variant should require bumping the count AND adding the variant to the array so as_str/from_str round-trip is verified explicitly. The comment at lines 20-25 says 'Adding a variant requires bumping this number AND adding a catalog entry + .code() mapping'. But when VersionUnknownPrior was added as the 43rd catalog variant (in r6-err-11 via commit 21412c1 or the benten-errors extraction at commit d03f642), the array was not updated. The test still passes because the array has 42 entries and CATALOG_VARIANT_COUNT = 42 — the assertion at line 81 checks `all.len() == CATALOG_VARIANT_COUNT` which is `42 == 42`, not that the array covers every catalog variant. The tripwire is silently stale: a developer who adds a variant #44 without updating this file would pass CI. Meanwhile the drift-detect script (scripts/drift-detect.ts) is reporting 44 Rust codes against the catalog because it counts by scanning the as_str match arms, not the tripwire.\n\nDouble-verified: (a) counted enum variants in crates/benten-errors/src/lib.rs 47-160: 43 catalog variants plus Unknown. (b) array entries in stable_shape.rs lines 38-79: 42 entries, no VersionUnknownPrior. (c) drift-detect live run: 'rust codes: 44' (the 43 + Unknown). Three-source disagreement.",
+      "fix": "Bump CATALOG_VARIANT_COUNT to 43 and add `ErrorCode::VersionUnknownPrior,` to the array. Optional hardening: add a compile-time exhaustiveness check — a `match code { all_variants => {...} }` that the compiler requires to cover every variant — so the next time a variant is added the test fails at compile time rather than at runtime count-mismatch.",
+      "test_coverage": "The test itself IS the regression; the fix is to un-stale it. Separately, consider a proptest-style exhaustive-enumeration test, e.g. strum::EnumIter or a manual `fn all_variants() -> &'static [ErrorCode]` that returns every variant and is exhaustiveness-checked at compile time. This would turn 'forgot to add a variant to the array' from a silent CI pass into a compile error."
+    },
+    {
+      "id": "r6b-err-3",
+      "severity": "major",
+      "title": "EvalError::Backend and eval_error_to_engine_error emit two different non-catalog codes (E_EVAL_BACKEND vs E_BACKEND)",
+      "location": "crates/benten-eval/src/lib.rs:115 (emits E_EVAL_BACKEND) and crates/benten-engine/src/primitive_host.rs:311 (emits E_BACKEND)",
+      "detail": "EvalError::Backend(String) is the stringify-fallback for any untyped host error. Its `.code()` returns `ErrorCode::Unknown(String::from(\"E_EVAL_BACKEND\"))` (benten-eval/src/lib.rs:115). Meanwhile the reciprocal conversion `eval_error_to_engine_error(EvalError::Backend(m))` constructs `EngineError::Other { code: ErrorCode::Unknown(\"E_BACKEND\".into()), message: m }` (primitive_host.rs:310-313). So the same conceptual error state has two different wire codes depending on which side of the boundary you look at it from: internally it's E_EVAL_BACKEND; after crossing back through the engine boundary it's E_BACKEND. Neither code is in docs/ERROR-CATALOG.md, neither is in the ErrorCode first-class variant list, and neither is in packages/engine/src/errors.generated.ts. The TS `mapNativeError` regex `\\bE_[A-Z0-9_]+\\b` picks up both, looks them up in CODE_TO_CTOR, misses, and falls through to the synthetic-BentenError path. A caller catching for `E_CAP_DENIED` / `E_IVM_VIEW_STALE` / `E_UNKNOWN_VIEW` sees nothing. The inconsistent codes also make debugging harder: a tracing span on the Rust side shows E_EVAL_BACKEND, the same error rendered at the TS layer shows E_BACKEND. This is a variant of the pass-1 r6-err-1 / r6-err-2 residual but newly-observed specifically as a two-code inconsistency.\n\nNote: this finding is only fully resolved when r6b-err-1 is fixed — the goal is to route every EngineError back to its stable catalog code, eliminating the Backend(String) stringify path entirely except for primitives that genuinely have no code. If a stringify-fallback remains, there should be exactly one fabricated sentinel (either promote E_EVAL_BACKEND to a first-class ErrorCode variant + catalog entry, or route through ErrorCode::Unknown consistently at both sides).",
+      "fix": "Three options in priority order. (1) Fix r6b-err-1 so no EngineError ever collapses into EvalError::Backend(String) — then EvalError::Backend becomes a genuine 'no origin code available' case. (2) Promote the fallback to a first-class ErrorCode::EvalBackend variant, reserve E_EVAL_BACKEND in the catalog + TS codegen. Both sides now agree. (3) Harmonize: if keeping Unknown(String) as the sentinel, pick one string everywhere. Replace E_BACKEND with E_EVAL_BACKEND at primitive_host.rs:311 (or vice versa). Option (1) is strongly preferred because it closes the underlying typed-error-loss; options (2)/(3) are band-aids.",
+      "test_coverage": "Unit test asserting `EvalError::Backend(\"test\".into()).code().as_str() == eval_error_to_engine_error(EvalError::Backend(\"test\".into())).error_code().as_str()` — the two sides must agree."
+    },
+    {
+      "id": "r6b-err-4",
+      "severity": "minor",
+      "title": "Catalog fix-hint references `registerView` but the TS surface exposes `createView`",
+      "location": "docs/ERROR-CATALOG.md:401 (E_UNKNOWN_VIEW fix-hint) and generated echo at packages/engine/src/errors.generated.ts:822+824",
+      "detail": "The E_UNKNOWN_VIEW fix-hint reads: 'The view id was not registered via `create_view` / `registerView`. Check spelling, confirm the IVM subscriber has the view wired, and that `.without_ivm()` was not used on the builder.'\n\n`create_view` is the Rust method (crates/benten-engine/src/engine.rs:1350 `pub fn create_view(&self, view_id: &str, _opts: ViewCreateOptions) -> Result<Cid, EngineError>`). `registerView` is NOT a real method on any surface:\n- `grep -r 'registerView' /Users/benwork/Documents/benten-engine` returns matches only in docs/ERROR-CATALOG.md and the generated errors.generated.ts (which echoes the doc's text).\n- packages/engine/src/engine.ts exposes the method as `createView` (line 812: `public async createView(viewDef: ViewDef): Promise<string>`).\n- bindings/napi has no `registerView`, no `register_view`.\n\nA developer hitting E_UNKNOWN_VIEW, reading the fix-hint, and searching the engine surface for `registerView` will find nothing. The correct TS method name is `createView` (or `engine.createView(viewDef)`); on the Rust side it's `engine.create_view(view_id, opts)`.\n\nThis finding is exactly the pattern the updated reviewer contract was written to catch: the catalog hint references a method that does not exist in the real code. Every other hint I sampled (`.production()`, `.capability_policy(...)`, `.open(...)`, `.without_caps()`, `.without_ivm()`, `register_subgraph`, `registerCrud`, `Engine::grant_capability`, `Engine::create_view`, `Engine::revoke_capability`, `Node::cid`, `Edge::cid`, `benten_core::version::append_version`, `walk_versions`) traces to a real API.",
+      "fix": "Edit docs/ERROR-CATALOG.md line 401: change `create_view` / `registerView`' to `create_view` / `createView`' (or just `createView` since TS is the audience for a catalog hint). Regenerate errors.generated.ts via `tsx scripts/codegen-errors.ts`. Verify via `git grep registerView` returns zero matches after the edit.",
+      "test_coverage": "The catalog ↔ code contract for fix-hints has no mechanical tripwire today. Consider a light test in drift-detect.ts (or a new lint) that extracts backtick-quoted identifiers from fix-hints and greps for their existence in the real engine surface. Not needed for Phase 1 but worth logging as a post-Phase-1 improvement."
+    },
+    {
+      "id": "r6b-err-5",
+      "severity": "minor",
+      "title": "Catalog claims E_INV_CONTENT_HASH 'Thrown at: Registration / read' but no read-path hash verification exists",
+      "location": "docs/ERROR-CATALOG.md:107 vs crates/benten-graph/src/lib.rs (no hash-verify)",
+      "detail": "The catalog entry says E_INV_CONTENT_HASH is 'Thrown at: Registration / read' (line 107). A grep over the whole workspace for content-hash verification in the read path turns up nothing: `grep -rn 'verify.*hash\\|hash.*verify\\|content.*mismatch\\|ContentHash' crates/benten-graph/` returns zero matches. The only producers of `InvariantViolation::ContentHash` are at registration time in crates/benten-eval/src/invariants.rs. A stored Node whose on-disk bytes somehow decode to a different CID than its storage key (corruption case) will NOT surface E_INV_CONTENT_HASH — it will either decode silently (and return a Node whose `cid()` computes a different value than the key) or fail `Decode(String)` in the redb path, which maps to E_GRAPH_INTERNAL. This is also flagged in .addl/phase-1/spec-to-code-compliance-audit.md (already-known); re-surfacing here because it's a catalog claim that does not match code.\n\nLow-severity because the case is defensive (corruption detection) and Phase-2 lands proper hash verification on read when the evaluator's READ executor is fully wired.",
+      "fix": "Either (a) narrow the catalog claim to 'Thrown at: Registration' (Phase 1 truth), and reserve a Phase-2 re-opening comment; or (b) add a read-path hash-verify in RedbBackend::get_node that compares the computed cid to the key and raises GraphError::Core(CoreError::InvariantContentHash { expected, actual }). Option (a) is cheaper and honest.",
+      "test_coverage": "If option (b) is taken: add a corruption-injection test that mutates a stored Node's bytes and confirms the read path raises E_INV_CONTENT_HASH rather than silently returning the bad Node or raising E_GRAPH_INTERNAL."
+    }
+  ],
+  "recommendations_priority_order": [
+    "r6b-err-1 (MAJOR): extend the EvalError round-trip to preserve origin codes on non-atomic PrimitiveHost paths (call_handler / read_view). Closes the last residual of pass-1 r6-err-2. This is the single most load-bearing fix for the typed-error contract.",
+    "r6b-err-3 (MAJOR): harmonize (preferably: eliminate) the E_EVAL_BACKEND / E_BACKEND pair. Falls out naturally if r6b-err-1 is fixed.",
+    "r6b-err-2 (MAJOR): bring stable_shape.rs tripwire in sync with the 43-variant enum. Two-line fix; important for future-proofing since the tripwire's whole purpose is to catch drift, and it's currently silent-drifting itself.",
+    "r6b-err-4 (MINOR): fix the `registerView` stale API reference in ERROR-CATALOG.md. Regenerate errors.generated.ts.",
+    "r6b-err-5 (MINOR): align the E_INV_CONTENT_HASH catalog claim with the reality that Phase-1 does not verify hashes on read. Prefer narrowing the claim to 'Registration' over adding read-path hash verification in Phase-1."
+  ],
+  "notes": [
+    "Methodology: I re-verified every pass-1 disposition by reading the cited source line at HEAD a6d806e. r6-err-3 / -4 / -5 / -6 / -7 / -8 / -9 / -10 / -11 are confirmed closed. r6-err-1 and r6-err-2 are confirmed PARTIAL — the typed dispatch landed for the common paths but not for the two compound PrimitiveHost methods.",
+    "Every ErrorCode variant except CapRevoked has a verified producer in non-test code AND a test asserting on the code. CapRevoked is a Phase-3 sync-revocation stub that is reserved here and round-trip tested at the catalog level; this is documented as defensible in spec-to-code-compliance-audit.md.",
+    "The enum has 43 catalog variants + 1 Unknown(String) fallback = 44 total. Drift-detect live reports 'rust codes: 44' matching this accounting. TS codegen surfaces 54 classes (includes 2 TS-only DSL classes and 8 Phase-2/3 deferred codes).",
+    "TS-only codes E_DSL_INVALID_SHAPE / E_DSL_UNREGISTERED_HANDLER fire in packages/engine/src/engine.ts and have errors.test.ts assertions. These are never surfaced from Rust.",
+    "Phase-2/3 reserved codes present in the catalog but correctly absent from the Rust enum (the enum is gated to Phase-1-required): E_INV_SANDBOX_NESTED, E_INV_SYSTEM_ZONE, E_SANDBOX_FUEL_EXHAUSTED, E_SANDBOX_TIMEOUT, E_SANDBOX_OUTPUT_LIMIT, E_SYNC_HASH_MISMATCH, E_SYNC_HLC_DRIFT, E_SYNC_CAP_UNVERIFIED, E_UNKNOWN. All accounted for in drift-detect's 'catalog 54 vs rust 44' count. None of these are fired in Phase-1 code, as expected.",
+    "Fix-hint API references verified: `create_view` ✓ (Rust), `createView` ✓ (TS), `registerView` ✗ (flagged as r6b-err-4), `register_subgraph` ✓ (Rust/TS), `registerCrud` ✓ (TS), `capability_policy` ✓ (Rust builder), `production` ✓, `without_caps` ✓, `without_ivm` ✓, `open` ✓ (TS Engine.open), `Engine::grant_capability` ✓, `Engine::create_view` ✓, `Engine::revoke_capability` ✓, `benten_core::version::append_version` ✓, `walk_versions` ✓, `Value::Null` ✓, `Node::cid` ✓, `Edge::cid` ✓. Exactly one stale reference found — `registerView`.",
+    "The r6b-err-2 stable_shape.rs-tripwire gap is a subtle methodology win: pass-1 described stable_shape.rs as a strength (\"contract check passing\") but didn't count the array entries against the enum declaration. Under the updated 'verify, don't trust' contract this pass re-counts and finds the 42-vs-43 mismatch.",
+    "Compilation: `cargo test --workspace --no-run` is clean at HEAD a6d806e. Drift-detect is clean. The three new findings are correctness/completeness issues that do not block the R6b gate but should be tracked.",
+    "Cross-finding dependency: r6b-err-1 and r6b-err-3 should be fixed in the same change — they're two facets of the same boundary. r6b-err-2 is a two-line isolated fix. r6b-err-4 is a docs + codegen-rerun fix. r6b-err-5 is a docs-only or Phase-2 fix."
+  ]
+}

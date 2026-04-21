@@ -1,0 +1,161 @@
+{
+  "agent": "code-as-graph-reviewer",
+  "stage": "R6b-second-pass-verification",
+  "pass": 2,
+  "head": "a6d806e",
+  "methodology": "verify-dont-trust-docs",
+  "verdict": "pass",
+  "severity_counts": {
+    "critical": 0,
+    "major": 0,
+    "minor": 2,
+    "info": 2
+  },
+  "workspace_state_verified": {
+    "nextest": "515/515 passed, 16 skipped",
+    "cid_order_unit_test": "benten-eval::invariants::tests::cid_order_independent_over_edges — PASS",
+    "cid_order_proptest_eval": "benten-eval::prop_subgraph_cid_order_independent — PASS",
+    "cid_order_proptest_core": "benten-core::prop_subgraph_cid_order_independent — implemented (not todo!())"
+  },
+  "pass_1_dispositions": {
+    "r6-cag-1": {
+      "status": "unchanged",
+      "verification": "Confirmed by grep: GrantBackedPolicy::check_read exists at grant_backed.rs:167-187; no invocation site in crates/benten-engine/src. Engine dispatch_call_inner at engine.rs:876-900 routes list/get through backend+View-3 without policy consultation. The doc-vs-behaviour gap is real and Phase-1-scoped. Info-level finding stands.",
+      "severity": "info"
+    },
+    "r6-cag-2": {
+      "status": "partially-stale",
+      "verification": "CLAIM UPDATE — pass-1 said 'proptest prop_subgraph_cid_order_independent is still a todo!() stub'. VERIFIED FALSE at HEAD a6d806e: both benten-core/tests/proptests_subgraph_order.rs:98-109 AND benten-eval/tests/proptests_subgraph_order.rs:72-113 are fully implemented and GREEN in nextest. The determinism-flag skip on validate_subgraph (finalized-Subgraph path) is still real — DSL handlers via IntoSubgraphSpec::into_eval_subgraph (subgraph_spec.rs:279) terminate with build_unvalidated_for_test() and then register_subgraph calls sg.validate(&cfg) which dispatches to validate_subgraph, which explicitly skips invariant 9 per the TODO at invariants.rs:142-149. This remains a Phase-2 gap. Severity now minor (not the proptest stub portion).",
+      "severity": "minor"
+    },
+    "r6-cag-3": {
+      "status": "unchanged",
+      "verification": "Confirmed by inspection: transform.rs:41 calls parse() at execute-time. invariants.rs has no import or invocation of expr::parser::parse (grep: zero matches for 'expr::parser|parse\\(.*expr' in invariants.rs). The module doc at transform.rs:3-8 claims 'Registration-time validation parses the expression once' but no such path exists. Minor DX/correctness gap. The bounded grammar means this is NOT 'source code stored as a property' in the code-as-graph-contract sense — parse() enforces a fixed BNF — so the code-as-graph posture is preserved; the finding is about shift-left of the syntax error surface, not about contract integrity.",
+      "severity": "minor"
+    },
+    "r6-cag-4": {
+      "status": "closed-defensive",
+      "verification": "Re-read: engine.rs:517-534 does error on DuplicateHandler BEFORE the specs insert (line 530-533), and the idempotent path overwrites specs with a functionally-equivalent value. The observable behaviour is correct; pass-1 correctly flagged this as info-level defense-in-depth. No code change needed for Phase 1.",
+      "severity": "info"
+    },
+    "r6-cag-5": {
+      "status": "unchanged",
+      "verification": "Confirmed by inspection: Subgraph.nodes/edges/handler_id are pub(crate) (lib.rs:465-467), read-accessors at lines 482/488/494, but Subgraph::new (472) + with_node (527) + with_edge (533) + first_op_mut (509) + write_op_mut (515) + op_by_id_mut (522) + build_unvalidated_for_test (775) are ALL pub. An external crate with a direct dep on benten-eval can construct an unvalidated Subgraph and pass it to Evaluator::run (evaluator.rs:70 accepts any &Subgraph; no validation gate at entry). For Phase 1 this is mitigated by the documented surface being Engine::register_subgraph → validate → Engine::call; the type system does not enforce it. Pass-1 correctly flagged this as minor Phase-2 refactor. The field visibility reduction partially addressed the issue but the builder-method surface still allows skipping validation.",
+      "severity": "minor"
+    }
+  },
+  "invariant_check_second_pass": {
+    "1_dag": {
+      "enforced_at_registration": true,
+      "evidence": "invariants.rs:94-100 (validate_subgraph) + :208-222 (validate_builder) both run find_cycle/find_cycle_indices before accepting. Exercised via Subgraph::validate and SubgraphBuilder::build_validated. Engine::register_subgraph calls sg.validate(&cfg) at engine.rs:506.",
+      "verdict": "pass"
+    },
+    "2_depth": {
+      "enforced_at_registration": true,
+      "evidence": "invariants.rs:122-135 (finalized) + :281-311 (builder counts CALL-only depth per ENGINE-SPEC §4). InvariantConfig::max_depth default 64.",
+      "verdict": "pass"
+    },
+    "3_fanout": {
+      "enforced_at_registration": true,
+      "evidence": "invariants.rs:102-118 + :225-240. Per-node fanout = max(explicit-outgoing, iterate_parallel). Builder path includes parallel_fanout from snapshot.",
+      "verdict": "pass"
+    },
+    "5_node_cap": {
+      "enforced_at_registration": true,
+      "evidence": "invariants.rs:64-73 + :178-187. Default 4096. Both paths enforce.",
+      "verdict": "pass"
+    },
+    "6_edge_cap": {
+      "enforced_at_registration": true,
+      "evidence": "invariants.rs:75-84 + :189-199. Default 8192. Builder path includes sn.extra_edges.",
+      "verdict": "pass"
+    },
+    "9_determinism": {
+      "enforced_at_registration": "partial",
+      "evidence": "Builder path (validate_builder at invariants.rs:313-327) enforces — any non-deterministic primitive inside a deterministic-flagged handler rejects. Finalized path (validate_subgraph) explicitly skips per TODO at :142-149 because the deterministic flag does not survive Subgraph serialization. Engine::register_subgraph via IntoSubgraphSpec::into_eval_subgraph takes the finalized path for DSL handlers (subgraph_spec.rs:279 → build_unvalidated_for_test → sg.validate → validate_subgraph). DSL-authored handlers therefore do NOT get invariant 9 enforced at registration today. This is r6-cag-2; Phase-2 scope per the TODO.",
+      "verdict": "partial-phase2-scoped"
+    },
+    "10_hash": {
+      "enforced_at_registration": true,
+      "evidence": "canonical_subgraph_bytes at invariants.rs:576-611 sorts nodes by (id, kind) and edges by (from, to, label) before serde_ipld_dagcbor::to_vec; DAG-CBOR canonicalizes map keys. BLAKE3 over canonical bytes. Engine::register_subgraph computes cid at engine.rs:515 before store. VERIFIED: unit test `cid_order_independent_over_edges` at invariants.rs:665-683 PASSES; proptest `prop_subgraph_cid_order_independent` at benten-eval/tests/proptests_subgraph_order.rs:72-113 PASSES (1 of 515 green tests); benten-core also has a node-level proptest. Pass-1 r6-cag-2 claim of 'todo!() stub' is stale.",
+      "verdict": "pass"
+    },
+    "12_registration_validate": {
+      "enforced_at_registration": true,
+      "evidence": "Engine::register_subgraph at engine.rs:504-514 validates before inserting into handlers map. register_subgraph_aggregate at :541-549 does aggregate-mode validation. Idempotent on same (handler_id, CID); errors DuplicateHandler on collision.",
+      "verdict": "pass"
+    }
+  },
+  "dispatch_path_audit_second_pass": {
+    "claim": "Engine::call routes all handlers through Evaluator::run — Compromise #8 closed.",
+    "verification": "CONFIRMED at engine.rs:908-909: dispatch_call_inner builds Subgraph via subgraph_for_spec (stored SubgraphSpec) OR subgraph_for_crud (synthesizer) then calls evaluator.run(&subgraph, input_value, self as &dyn PrimitiveHost). No CRUD fast-path. call_as and call_with_revocation_at funnel to dispatch_call. Only evaluator.run can produce a RunResult; pending WRITE ops are buffered on active_call frame and replayed inside transaction after the walk. NOTE: pass-1 cites lib.rs line numbers (626-631, 781-827, 829-950); code has been moved to engine.rs. Behavior is unchanged.",
+    "verdict": "pass"
+  },
+  "cid_order_independence_audit": {
+    "claim": "Invariant 10 CID is order-independent (not just claimed).",
+    "verification": "Verified by three independent tests, all GREEN at HEAD a6d806e: (a) unit test benten-eval::invariants::tests::cid_order_independent_over_edges reverses nodes vec and asserts equal canonical_bytes; (b) benten-eval proptest reverses nodes + edges with remapped indices, asserts equal CID, across 2..8 nodes and 0..6 edges, 256 cases; (c) benten-core proptest at node level does the same over op multisets. Sort keys are (id, kind) for nodes and (from, to, label) for edges — sufficient to produce a canonical total order for any structurally-equal subgraph.",
+    "verdict": "pass"
+  },
+  "subgraph_field_visibility_audit": {
+    "claim": "Subgraph fields are pub(crate) per pass-1 fix (g6-cag-3 closed).",
+    "verification": "CONFIRMED at lib.rs:464-467: nodes / edges / handler_id are pub(crate). Read-accessors nodes() / edges() / handler_id() at 482-496. BUT the builder-shape API remains pub: Subgraph::new, with_node, with_edge, first_op_mut, write_op_mut, op_by_id_mut, build_unvalidated_for_test are all pub. An external caller can still construct and mutate a Subgraph, then pass it to Evaluator::run (which has no validation gate). The field-visibility fix blocked direct struct-literal mutation by external crates but did not remove the builder-method bypass. Phase-2 refactor would either replace first_op_mut with a SubgraphBuilder::set_property API or make these mutators pub(crate) with a trait-based property-binding hook for benten-engine.",
+    "verdict": "pass-with-residual-risk",
+    "residual_risk": "minor — Evaluator::run has no type-level enforcement that the input Subgraph was validated. For Phase 1 this is mitigated by the documented dispatch surface funneling through Engine::register_subgraph; for Phase 2 the immutability invariant (13) should close this by either wrapping Subgraph in a ValidatedSubgraph newtype or requiring a validation token at Evaluator::run entry."
+  },
+  "transform_registration_parse_audit": {
+    "claim": "TRANSFORM expr is parsed at call time, not registration — pass-1 r6-cag-3.",
+    "verification": "CONFIRMED OPEN. transform.rs:41 parses on every call. invariants.rs makes no call to expr::parser::parse for Transform nodes (grep confirms: zero matches for 'parse' or 'expr::parser' in invariants.rs). The module doc at transform.rs:3-8 documents the intended behaviour ('Registration-time validation parses the expression once') but the validator does not implement it. This is NOT a code-as-graph contract violation — the expression grammar is bounded and enforced by parse() itself, so the 'source code in a property' contract is preserved — but it is a real DX gap: a subgraph can register successfully and then fail on every call with E_TRANSFORM_SYNTAX. Minor finding retained.",
+    "verdict": "open-minor"
+  },
+  "new_findings": [
+    {
+      "id": "r6b-cag-1",
+      "severity": "info",
+      "location": "Pass-1 artifact .addl/phase-1/r6-code-as-graph-reviewer.json (r6-cag-2)",
+      "claim": "Pass-1 r6-cag-2 conflates two distinct gaps and contains one stale sub-claim about a todo!() stub.",
+      "detail": "The proptest `prop_subgraph_cid_order_independent` is actually implemented in BOTH benten-core/tests/proptests_subgraph_order.rs (node-level) AND benten-eval/tests/proptests_subgraph_order.rs (subgraph-level), and BOTH pass in nextest run at HEAD a6d806e. The real gap in r6-cag-2 is the finalized-Subgraph validation path skipping invariant 9 — that is confirmed open. Future reviewers reading pass-1 should treat the todo!() line as obsolete and focus only on the determinism-flag serialization gap.",
+      "suggested_fix": "When authoring R6c / Phase-2 triage, supersede pass-1 r6-cag-2 with this R6b note."
+    },
+    {
+      "id": "r6b-cag-2",
+      "severity": "info",
+      "location": "Pass-1 artifact .addl/phase-1/r6-code-as-graph-reviewer.json line-number citations",
+      "claim": "Pass-1 cites benten-engine lib.rs line numbers (626-631, 781-950, 992-1070, 1448, 2094-2116, 2162, 2237, 2848-2881) that no longer exist — the engine module has since been split out of lib.rs into engine.rs (1891 lines) + primitive_host.rs (523) + engine_transaction.rs (167). Behaviour claims remain correct; only citations are stale.",
+      "detail": "verified current locations: Engine::register_subgraph at engine.rs:496-535; dispatch_call_inner at engine.rs:876-1000+; evaluator.run call site at engine.rs:909. Pass-1 verdicts hold; the audit trail for future readers should note this refactor happened post-pass-1.",
+      "suggested_fix": "No code change. Pass-1 reviewer verdict (pass) remains valid after re-verification against the new file layout."
+    }
+  ],
+  "carryover_findings": [
+    {
+      "id": "r6-cag-1",
+      "severity": "info",
+      "status": "open-phase1-documented",
+      "summary": "GrantBackedPolicy::check_read is dead code at the Engine boundary; Phase-3 scope."
+    },
+    {
+      "id": "r6-cag-2",
+      "severity": "minor",
+      "status": "open-phase2-scoped",
+      "summary": "DSL-authored handlers skip invariant 9 at registration because validate_subgraph (finalized path) has no determinism flag. validate_builder path does enforce but is not reached from the DSL. The proptest sub-claim is stale (both order-independence proptests are implemented and green)."
+    },
+    {
+      "id": "r6-cag-3",
+      "severity": "minor",
+      "status": "open-dx-gap",
+      "summary": "TRANSFORM expr is parsed on every call; invariants.rs does not invoke expr::parser::parse at registration despite the module-doc claim. Not a code-as-graph contract violation (grammar is bounded) but a registration-time-failure shift-left opportunity."
+    },
+    {
+      "id": "r6-cag-4",
+      "severity": "info",
+      "status": "closed-defensive",
+      "summary": "specs map insert is logically correct; pass-1 correctly classified as defensive-cleanup minor."
+    },
+    {
+      "id": "r6-cag-5",
+      "severity": "minor",
+      "status": "open-phase2-refactor",
+      "summary": "Subgraph builder-method surface (new, with_node, with_edge, *_mut, build_unvalidated_for_test) is pub; Evaluator::run has no validation gate. External crates can bypass registration-time invariant checks if they depend on benten-eval directly. Mitigated for Phase 1 by the documented Engine-centric dispatch surface."
+    }
+  ],
+  "notes": "R6b verification confirms the pass-1 verdict (pass). Every claim about invariants 1/2/3/5/6/9/10/12 enforcement was traced to its enforcement site. Invariant 10 CID order-independence is genuinely proven by unit + two proptests (not just asserted in docs). Compromise #8 is closed: evaluator.run is the sole dispatch path. Subgraph field visibility was reduced to pub(crate) but the builder-method surface remains pub, which is the residual risk captured in r6-cag-5. Pass-1 r6-cag-3 (TRANSFORM parse at call, not registration) is confirmed as a real open gap — the module doc promises a registration-time parse that the validator does not implement. The DSL-path determinism gap (r6-cag-2) is the most substantive carryover, but is Phase-2 scoped per an explicit TODO. No critical or major findings surfaced in R6b. Two new info-level notes about pass-1 artifact stale citations."
+}

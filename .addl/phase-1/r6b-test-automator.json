@@ -1,0 +1,252 @@
+{
+  "agent": "test-automator",
+  "stage": "r6b",
+  "phase": "phase-1",
+  "head_claimed_in_prompt": "90eb694",
+  "head_actual": "a6d806e7405cd1a033e3670e516c26c44b79c281",
+  "reviewed_at": "2026-04-17",
+  "methodology": "verify-don't-trust — every workflow YAML read line-by-line, every invoked cargo/shell command traced to the test/bench/script it claims to run, every test file grep-verified for the #[ignore] markers and function names the workflow names, and the bench compile+run path exercised locally to catch the 'unit-test harness accepts no criterion flags' failure mode.",
+  "verdict": "CONCERNS",
+  "summary": "Pass-1 produced seven labeled closure-gaps (R6-TA-1 critical, -TA-2/-3/-4 major, -TA-5/-6/-7 minor). All seven now have a workflow / config / docs artifact claiming to close them. Six of those close cleanly under verification. ONE — R6-TA-2 bench.yml — SHIPS A CI JOB THAT WILL FAIL on every scheduled run: `cargo bench --workspace -- --measurement-time 2` invokes the lib unit-test harness on every crate (the default `[lib]` target is implicitly a bench target even when it has zero `#[bench]` items), and the built-in test harness rejects `--measurement-time` with 'Unrecognized option'. Reproduced locally on `benten-caps` and `benten-errors`. This is the exact pass-1 failure mode (the fuzz workflow that claimed to exist but didn't) displaced to a new target — the bench workflow now exists on paper but does nothing useful because every nightly run dies on step one of the measurement sweep. Six other gaps are genuinely closed: fuzz.yml correctly targets transform_grammar_fuzz.rs + fuzz_transform_parser (#[ignore] verified present, filename matches --test name), coverage.yml's install path is valid (taiki-e/install-action is the canonical cargo-llvm-cov installer, components: llvm-tools-preview is the correct toolchain add-on), mutants.yml is genuinely informational with a Phase-2 ratchet plan stated in the YAML header, ci.yml now sets PROPTEST_CASES=1024 + PROPTEST_MAX_SHRINK_ITERS=4096 under `env:` on the nextest step (nextest inherits parent-process env by default — the wiring works), .config/nextest.toml exists with retries=0 pinned in both profiles (the flakiness-contract load-bearer), and CONTRIBUTING.md now has a 'Running tests: nextest is load-bearing' section that documents the U64_CHAINS global-state contract and the `cargo test --jobs 1 -- --test-threads=1` fallback. Infrastructure quality continues to be strong; the one failure is a mechanical cargo-ism that the pass-1 recommendation underspecified.",
+  "counts": {
+    "workflows_total": 13,
+    "workflows_added_since_pass_1": 4,
+    "workflows_added_list": [
+      "fuzz.yml",
+      "bench.yml",
+      "coverage.yml",
+      "mutants.yml"
+    ],
+    "workflows_existing": [
+      "ci.yml",
+      "determinism.yml",
+      "wasm-checks.yml",
+      "cross-process-graph.yml",
+      "cold-install.yml",
+      "drift-detect.yml",
+      "supply-chain.yml",
+      "supply-chain-seeded-test.yml",
+      "msrv.yml"
+    ],
+    "config_files_added": [
+      ".config/nextest.toml"
+    ],
+    "docs_updated": [
+      "CONTRIBUTING.md (Running tests: nextest is load-bearing section)"
+    ]
+  },
+  "pass_1_dispositions": [
+    {
+      "id": "R6-TA-1",
+      "title": "10k-case TRANSFORM fuzz harness has no CI runner",
+      "pass_1_severity": "critical",
+      "disposition": "CLOSED",
+      "verification": [
+        ".github/workflows/fuzz.yml exists and is scheduled nightly at 02:00 UTC + workflow_dispatch.",
+        "The job invokes `cargo test -p benten-eval --test transform_grammar_fuzz --release -- --ignored --nocapture`.",
+        "`--test transform_grammar_fuzz` resolves to the file `crates/benten-eval/tests/transform_grammar_fuzz.rs` (filename-matches-target-name convention verified).",
+        "That file contains `#[ignore = \"fuzz harness — run via \\`cargo test -- --ignored\\`\"]` on `fn fuzz_transform_parser(src in fuzzy_js_snippet())` at line 144, wrapped in a `proptest!` block with `ProptestConfig { cases: 10_000, max_shrink_iters: 256, .. }`.",
+        "The `--ignored` flag in the invocation will cause that ignored test to run.",
+        "timeout-minutes: 30 is generous but safe — 10k proptest cases with heavy shrinking can swing high on a shared runner.",
+        "No fuzzer-specific concurrency group, but the workflow is on a nightly cron (no PR volume to contend with) so none needed."
+      ],
+      "notes": "The pass-1 recommendation said 10-minute timeout; implementation used 30 minutes. Not a regression — 30 is the safer number on shared runners. Close as-is."
+    },
+    {
+      "id": "R6-TA-2",
+      "title": "No benchmark CI and no perf regression tracking",
+      "pass_1_severity": "major",
+      "disposition": "FAILED_VERIFICATION",
+      "new_finding_id": "R6b-TA-1",
+      "verification": [
+        ".github/workflows/bench.yml exists. Policy in the header (informational-only at Phase 1, artifact upload, Phase-2 ratchet) is correct and well-documented.",
+        "Step 1 `cargo bench --workspace --no-run --locked` PASSES — all 10 criterion benches compile cleanly (verified locally in 4m29s cold).",
+        "Step 2 `cargo bench --workspace --locked -- --measurement-time 2` FAILS on the first crate with a lib target. Reproduced locally on benten-caps: `error: Unrecognized option: 'measurement-time'` followed by `error: bench failed, to rerun pass \\`-p benten-caps --lib\\``. Reproduced again on benten-errors with identical failure.",
+        "Root cause: cargo implicitly treats every crate's `[lib]` target as a bench target (unless `[lib] bench = false` is set in Cargo.toml). The compiled artifact uses the built-in `libtest` bench harness, NOT criterion — so arguments like `--measurement-time` that criterion understands are rejected by libtest with 'Unrecognized option'. `harness = false` on the `[[bench]]` stanza turns off libtest on the CRITERION BENCH FILES but does nothing for the lib itself.",
+        "Confirmed in Cargo.toml survey: only `benten-graph`'s `write-canonical-and-exit` bin has `bench = false`; NO crate has `[lib] bench = false`. Therefore every library target in the workspace will be invoked with the `--measurement-time` flag and will fail."
+      ],
+      "fix_options": [
+        "Option A (recommended, minimal touch): add `[lib] bench = false` to Cargo.toml of every member crate (benten-core, benten-graph, benten-ivm, benten-caps, benten-eval, benten-engine, benten-errors, benten-napi). Eight edits. Keeps the `cargo bench --workspace -- --measurement-time 2` invocation as-is. Semantically correct: the libs have no `#[bench]` items and are not measuring anything. No behavior change for `cargo test` or `cargo build`.",
+        "Option B: change bench.yml to iterate per-crate and per-bench: `for bench in hash_only cid_parse roundtrip end_to_end_create ten_node_handler get_create_node concurrent_writers multi_mb_roundtrip durability_modes view_maintenance; do cargo bench --workspace --bench $bench --locked -- --measurement-time 2; done`. More YAML, zero Cargo.toml churn, but brittle to new benches unless the list is kept in sync.",
+        "Option C: drop `--measurement-time 2` and rely on criterion defaults. Least clean — triples the workflow wall-clock (criterion default is 5s measurement_time × 10-element sample + warmup, per-bench ~60s). Still needs Option A for the lib-harness rejection."
+      ],
+      "severity_after_verification": "major",
+      "recommended_action": "Option A. Eight one-line Cargo.toml edits. Verify locally with `cargo bench --workspace --locked -- --measurement-time 1 --sample-size 10` before re-enabling bench.yml on the nightly schedule. Until then, bench.yml is a silent-pass workflow: it runs on the schedule, always red, and the signal is useless."
+    },
+    {
+      "id": "R6-TA-3",
+      "title": "PROPTEST_CASES env var designed in but never set in CI",
+      "pass_1_severity": "major",
+      "disposition": "CLOSED",
+      "verification": [
+        "ci.yml `cargo nextest run` step now carries `env:` with `PROPTEST_CASES: \"1024\"` and `PROPTEST_MAX_SHRINK_ITERS: \"4096\"`.",
+        "cargo nextest inherits parent-process env into the per-test subprocesses — the env-var handoff works without further wiring.",
+        "proptest reads PROPTEST_CASES at test time for any proptest! block that does NOT have an explicit `ProptestConfig::with_cases(N)` override. 10 of the 12 proptest! blocks in the tree do not override — those get the 1024 bump on every PR.",
+        "The 2 blocks that DO override: `proptest_attenuation.rs` at with_cases(1024) — coincidentally matches the new CI value, so no effect. `transform_grammar_fuzz.rs` at cases: 10_000, gated by #[ignore], runs only in fuzz.yml — irrelevant to PR CI.",
+        "Net effect: every PR now runs proptest blocks at 4x the pre-R6 coverage (256 → 1024) with 8x-better shrinking (default 1024 → 4096)."
+      ],
+      "notes": "Pass-1 recommended 10 000 on PR + 100 000 nightly; implementation used 1024 on PR with no heavy nightly job. The 1024 setting is a reasonable compromise — keeps PR wall-clock bounded — but the 100k nightly sweep is still missing. Not a blocker, and the fuzz.yml 10k TRANSFORM run covers the highest-risk property specifically. Down-shift to CLOSED; a follow-up nightly 'proptest-heavy' workflow is a Phase-1.1 nice-to-have, not a gate."
+    },
+    {
+      "id": "R6-TA-4",
+      "title": "No mutation testing wired despite skill being installed",
+      "pass_1_severity": "major",
+      "disposition": "CLOSED",
+      "verification": [
+        ".github/workflows/mutants.yml exists, runs weekly on Sunday 04:00 UTC + workflow_dispatch, continues-on-error=true, uploads outcomes.json as artifact, posts a GITHUB_STEP_SUMMARY noting 'informational only for Phase 1'.",
+        "Header docstring accurately describes the Phase-1-informational / Phase-2-gate ratchet: 'Phase 2 will gate on a mutation-test-coverage threshold once we have a baseline distribution.' This is consistent with the pass-1 recommendation.",
+        "`cargo install cargo-mutants --locked` in the install step is the canonical install pattern. No --version pin, which means a cargo-mutants major-version bump could change behavior — acceptable for an informational-only Phase-1 workflow.",
+        "The `--jobs 2 --no-shuffle --timeout 180 --output ./mutants-out` flags are all valid cargo-mutants flags. 360-minute outer timeout + 180s per-mutant inner timeout is a sane budget for a weekly run.",
+        "The workflow is genuinely informational (not a stub that does nothing): it WILL install cargo-mutants, RUN it, and UPLOAD an artifact. If the run produces a skewed baseline or some mutants panic out, those will surface in the artifact rather than failing the workflow."
+      ],
+      "notes": "The workflow content is meaningful, not a stub. Phase 1 scope intentionally stops at baseline collection. Close as-is."
+    },
+    {
+      "id": "R6-TA-5",
+      "title": "No coverage tooling (cargo-llvm-cov) wired",
+      "pass_1_severity": "minor",
+      "disposition": "CLOSED",
+      "verification": [
+        ".github/workflows/coverage.yml exists. Triggers: push to main + pull_request to main + workflow_dispatch. Runner: ubuntu-latest.",
+        "Install path: `dtolnay/rust-toolchain@stable` with `components: llvm-tools-preview` — this is MANDATORY for cargo-llvm-cov (it depends on `llvm-profdata` / `llvm-cov` from the llvm-tools-preview component). Correctly specified.",
+        "`taiki-e/install-action@v2` with `tool: cargo-llvm-cov` is the canonical installer for cargo-llvm-cov and works reliably on ubuntu-latest.",
+        "Command sequence: `cargo llvm-cov --workspace --html --output-dir coverage-report` generates HTML + raw coverage data under target/llvm-cov, then `cargo llvm-cov report --summary-only` reads the raw data and appends to GITHUB_STEP_SUMMARY. Valid invocation — `report` is documented to read prior-run data.",
+        "HTML artifact uploaded with 14-day retention. if-no-files-found: warn (not error — correct, because a totally-broken build would leave no files and we'd rather not red-herring the coverage job for a compilation failure the other workflows catch)."
+      ],
+      "notes": "Install path is correct. Command is valid. Close."
+    },
+    {
+      "id": "R6-TA-6",
+      "title": "No .config/nextest.toml — CI inherits defaults that can drift",
+      "pass_1_severity": "minor",
+      "disposition": "CLOSED",
+      "verification": [
+        ".config/nextest.toml exists at the canonical location (nextest's documented search path is `<workspace>/.config/nextest.toml`).",
+        "`[profile.default] retries = 0` AND `[profile.ci] retries = 0` — the flakiness-contract load-bearer is pinned in BOTH profiles, which is the correct belt-and-suspenders choice (default applies to local runs, ci applies when `--profile ci` is passed).",
+        "slow-timeout = { period = \"60s\", terminate-after = 3 } — will log three 60-second slow notices and then forcibly kill a test at the ~3-minute mark. Catches deadlocks without burning the 60-min CI budget.",
+        "fail-fast = false only on the ci profile — correct, so a cross-leg regression shows every failing leg's output in a single PR rather than masking later failures behind an early one.",
+        "Header comment explicitly calls out the 'retries = 0 is deliberate, not a placeholder' framing — future maintainers won't relax it by accident."
+      ],
+      "notes": "Config is correct and well-documented inline. Note: ci.yml does NOT invoke `cargo nextest run --profile ci` — it uses the default profile. That means CI actually uses [profile.default] settings. Since both profiles pin retries=0, the flakiness contract holds regardless, but the `[profile.ci]` stanza is currently unused. Minor observation, not a gap — the profile is there for future explicit use."
+    },
+    {
+      "id": "R6-TA-7",
+      "title": "Document U64_CHAINS global-state contract in CONTRIBUTING.md",
+      "pass_1_severity": "minor",
+      "disposition": "CLOSED",
+      "verification": [
+        "CONTRIBUTING.md now has a 'Running tests: nextest is load-bearing' section (lines 79-109) that explicitly names ANCHOR_COUNTER + U64_CHAINS, explains the 51 call sites across 5 integration test files, and states the process-isolation guarantee `cargo nextest run` provides.",
+        "The fallback is named accurately: `cargo test --workspace --jobs 1 -- --test-threads=1` serializes tests within each binary (second-best approximation).",
+        "The flakiness contract is also documented (retries = 0, 'zero hidden flakiness')."
+      ],
+      "notes": "Documentation landed correctly. Close."
+    }
+  ],
+  "new_findings": [
+    {
+      "id": "R6b-TA-1",
+      "severity": "major",
+      "title": "bench.yml will fail on every scheduled run — libtest harness rejects criterion flags",
+      "discovery": "Verified by running `cargo bench -p benten-caps --locked -- --measurement-time 1` locally. Failed with: `error: Unrecognized option: 'measurement-time'` in benten_caps-<hash>. Reproduced again on benten-errors. Confirmed at the Cargo.toml level: only the `write-canonical-and-exit` bin has `bench = false`, no lib target is opted out.",
+      "mechanism": "cargo implicitly treats `[lib]` as a bench target by default. The lib bench binary uses libtest's built-in bench harness (not criterion's — that's only on the `[[bench]]` stanzas where `harness = false`). libtest does not accept `--measurement-time`, `--sample-size`, or any other criterion-specific flag.",
+      "impact": "Every scheduled nightly run of bench.yml will fail on the very first crate processed. The artifact upload step has `if: always()` so it will still upload an empty/partial target/criterion/ directory, but the actual perf numbers will never land. Pass-1's R6-TA-2 goal — give R4 perf targets a CI heartbeat — is NOT met by the current implementation. This is the same failure mode as the pass-1 fuzz job: a workflow exists, but a mechanical flaw means it does nothing useful.",
+      "fix_recommended": "Add `[lib] bench = false` to each of the 8 workspace member Cargo.toml files (benten-core, benten-graph, benten-ivm, benten-caps, benten-eval, benten-engine, benten-errors, benten-napi). Also add `[[bin]] bench = false` to any bin targets that don't have it. Confirm with `cargo bench --workspace --locked -- --measurement-time 1 --sample-size 10` locally.",
+      "fix_alternative": "Change bench.yml to iterate over criterion bench targets by name, avoiding the workspace-level --measurement-time propagation: `for b in hash_only cid_parse roundtrip end_to_end_create ten_node_handler get_create_node concurrent_writers multi_mb_roundtrip durability_modes view_maintenance; do cargo bench --workspace --bench \"$b\" --locked -- --measurement-time 2; done`. This works without Cargo.toml edits but requires maintaining the bench list in the YAML.",
+      "effort": "20 minutes for Option A (Cargo.toml edits) + 3 minutes local verify",
+      "gate_impact": "Blocks closure of R6-TA-2. Does NOT block R4b gate close or Phase-1 overall — nothing downstream depends on bench.yml being green — but leaves the R6 pass-1 'perf signal' claim unbacked."
+    },
+    {
+      "id": "R6b-TA-2",
+      "severity": "minor",
+      "title": ".config/nextest.toml [profile.ci] is defined but never selected",
+      "discovery": "ci.yml runs `cargo nextest run --workspace --locked` with no `--profile ci`. The [profile.default] settings apply, not [profile.ci]. Both profiles happen to pin retries=0 so the flakiness contract is still honored, but the explicitly-defined `fail-fast = false` and `failure-output = immediate-final` of the ci profile are currently unused.",
+      "mechanism": "nextest defaults to [profile.default] unless --profile is passed or NEXTEST_PROFILE env is set.",
+      "impact": "On a CI run where leg N of the matrix fails early, subsequent tests in that leg's nextest invocation will stop (because fail-fast = true is the default profile behavior, and no [profile.default] override sets it false). Cross-matrix-leg parallelism is still preserved by `strategy.fail-fast: false` at the matrix level, so the practical impact is bounded: a given leg's first failure hides later failures on that same leg. For the Phase-1 matrix size (8 legs, typical test suite ~500 tests) this is a minor diagnostic cost, not a correctness issue.",
+      "fix_recommended": "Either (a) add `fail-fast = false` to [profile.default] so local + CI both see all failures per run, OR (b) invoke nextest with `--profile ci` in ci.yml. Option (a) is simpler and better aligned with a 'zero hidden flakiness' contract — developers should see every failure locally too.",
+      "effort": "2 minutes"
+    },
+    {
+      "id": "R6b-TA-3",
+      "severity": "minor",
+      "title": "mutants.yml uses actions/checkout@v5 but every other workflow uses @v4",
+      "discovery": "Inventory of checkout action versions across all 13 workflows: 12 use `actions/checkout@v4`, mutants.yml uses `actions/checkout@v5`. v5 exists but the ecosystem mix is unintentional drift — a reviewer reading the YAML suite will assume a reason and won't find one.",
+      "mechanism": "Copy-paste drift. v5 is newer but the feature surface used here (just `uses: actions/checkout`) is identical between the two versions.",
+      "impact": "None functionally. A style/consistency gap.",
+      "fix_recommended": "Either bump every workflow to @v5 OR pin mutants.yml back to @v4 to match the rest of the suite. Uniformity is the goal.",
+      "effort": "1 minute"
+    },
+    {
+      "id": "R6b-TA-4",
+      "severity": "minor",
+      "title": "proptest_attenuation.rs hardcodes with_cases(1024), ignoring PROPTEST_CASES env",
+      "discovery": "`ProptestConfig::with_cases(1024)` at crates/benten-caps/tests/proptest_attenuation.rs:57. This overrides the PROPTEST_CASES env var that ci.yml now sets to 1024 — coincidentally the same value, so no current effect, but a future bump to PROPTEST_CASES=10000 for a nightly heavy run will silently skip this test.",
+      "impact": "Low — the coincidence means nothing breaks today. But this is a latent failure of the env-var contract.",
+      "fix_recommended": "Either (a) remove the hardcoded with_cases and let the env var drive (preferred — keeps the test flexible), OR (b) add a comment at that line explicitly naming 'env-var override intentionally ignored because ...'. Silent override is the problem, not the number.",
+      "effort": "5 minutes"
+    }
+  ],
+  "ci_workflow_quality_assessment": {
+    "overall": "STRONG with one concrete bug",
+    "notable_strengths_verified": [
+      "Every workflow has concurrency: group + cancel-in-progress — confirmed on all 13 files.",
+      "Every cargo build/test step uses --locked — verified across ci.yml, bench.yml, coverage.yml, mutants.yml, fuzz.yml.",
+      "Every workflow specifies permissions: contents: read (principle of least privilege) — verified.",
+      "Seeded-vuln canary pattern (supply-chain-seeded-test.yml) preserved.",
+      "Cross-leg determinism gate (every-vs-every + every-vs-fixture) preserved.",
+      "Scaffolder smoke test in ci.yml `cold-install` job preserved.",
+      "CI fuzz wiring (new in R6 pass 2) closes the #[ignore]-but-never-run gap that was pass-1's critical finding.",
+      "Coverage install uses the correct components: llvm-tools-preview + taiki-e/install-action — verified."
+    ],
+    "concrete_bugs_found_in_pass_2": [
+      "bench.yml will fail every run (R6b-TA-1) — libtest lib-target harness rejects --measurement-time.",
+      "mutants.yml uses actions/checkout@v5 while others use @v4 — consistency drift (R6b-TA-3)."
+    ],
+    "hidden_silent_pass_modes_hunted_for_and_cleared": [
+      "fuzz.yml runs the right test file with the right filter and the #[ignore] marker is present — NOT a silent pass.",
+      "coverage.yml's install step is the canonical path — will actually install cargo-llvm-cov.",
+      "mutants.yml actually runs cargo-mutants and uploads a real artifact — NOT a stub, despite being explicitly informational.",
+      "ci.yml's PROPTEST_CASES env var is honored by nextest's child processes — NOT a dead letter.",
+      ".config/nextest.toml is at the correct path nextest searches — NOT in a place the tool ignores."
+    ]
+  },
+  "blocking_issues": [],
+  "closure_gaps_pass_2": [
+    {
+      "id": "R6b-TA-1",
+      "severity": "major",
+      "must_fix_before": "next-scheduled-bench-run",
+      "summary": "bench.yml will fail every run — fix with `[lib] bench = false` across workspace members"
+    },
+    {
+      "id": "R6b-TA-2",
+      "severity": "minor",
+      "must_fix_before": "phase-2-open",
+      "summary": "nextest [profile.ci] is unused — either add fail-fast=false to default or invoke with --profile ci"
+    },
+    {
+      "id": "R6b-TA-3",
+      "severity": "minor",
+      "must_fix_before": "phase-2-open",
+      "summary": "mutants.yml uses actions/checkout@v5 vs the rest of the suite's @v4 — pick one"
+    },
+    {
+      "id": "R6b-TA-4",
+      "severity": "minor",
+      "must_fix_before": "phase-1.1-hardening",
+      "summary": "proptest_attenuation.rs hardcodes with_cases(1024), defeating PROPTEST_CASES env-var for that test"
+    }
+  ],
+  "severity_counts_pass_2": {
+    "critical": 0,
+    "major": 1,
+    "minor": 3,
+    "total_new": 4
+  },
+  "pass_1_dispositions_summary": {
+    "closed": 6,
+    "failed_verification": 1,
+    "total_pass_1": 7
+  },
+  "verdict_rationale": "CONCERNS, down-shifted from the pass-1 CONCERNS-with-critical. Pass-1's critical (R6-TA-1 fuzz job missing) is verifiably closed: fuzz.yml runs the correct file, the correct filter, and the test has the correct #[ignore] marker — the silent-pass-by-omission failure mode that defined pass-1 is resolved. What replaces it is a narrower silent-pass-by-mechanical-flaw: bench.yml SHIPS a workflow that will red-signal every nightly run because `cargo bench --workspace -- --measurement-time 2` is rejected by the libtest lib-target harness. Not a blocker for gate close — bench.yml is a diagnostic signal, not a correctness gate — but it's the exact pattern this pass was supposed to hunt for, and it needs fixing before a 'Phase-1 perf signal lives in CI' claim is honest. Three minor findings (unused nextest ci profile, checkout version drift, a hardcoded proptest cases override) are hygiene items for Phase-1.1 or Phase-2-open.",
+  "gate_recommendation": "Close R6-TA-1/-3/-4/-5/-6/-7 cleanly. R6-TA-2 close is CONTINGENT on fixing R6b-TA-1 (the `[lib] bench = false` edit) — a 20-minute fix. Without that fix, bench.yml is an always-red workflow that provides no signal and costs CI budget weekly. Recommended sequence: apply the 8 Cargo.toml edits, verify with `cargo bench --workspace --locked -- --measurement-time 1 --sample-size 10` green locally, then re-run R6b in 10 minutes to confirm bench.yml is actually green on a fresh run. R6b-TA-2/-3/-4 fold into any available cycle — none gate Phase 1."
+}

@@ -1,0 +1,117 @@
+{
+  "agent": "ivm-algorithm-b-reviewer",
+  "stage": "R6b",
+  "slot": "second-pass-audit",
+  "pass1_reference": ".addl/phase-1/r6-ivm-algorithm-b-reviewer.json",
+  "verdict": "pass-with-findings",
+  "counts": {
+    "findings": 6,
+    "block": 0,
+    "revise": 0,
+    "major": 2,
+    "minor": 3,
+    "informational": 1
+  },
+  "methodology_note": "Verify-don't-trust: every claim below was re-derived from source. Pass-1 JSON was NOT accepted at face value; two of its claims are incorrect (see new-findings r6b-ivm-1 and dispositions for pass1-r6-ivm-4).",
+  "pass1_dispositions": {
+    "r6-ivm-1": {
+      "status": "still-open-and-upgraded",
+      "verification": "Cross-crate mismatch CONFIRMED and is larger than pass-1 characterized. benten-caps/src/grant.rs:33 defines `CAPABILITY_GRANT_LABEL = \"CapabilityGrant\"`. benten-engine/src/engine.rs:1315 writes `Node::new(vec![\"system:CapabilityGrant\".into()], props)`. benten-ivm/src/views/capability_grants.rs:73 declares `input_pattern_label: Some(\"CapabilityGrant\".to_string())` and line 176 filters with `has_label(\"CapabilityGrant\")`. benten-engine/src/builder.rs:366 reads grants via `get_by_label(\"system:CapabilityGrant\")`. Three crates each carry their own idea of the label namespace. Upgraded to MAJOR in the new-findings section (r6b-ivm-2): the engine's own BackendGrantReader already worked around the mismatch by hardcoding `system:CapabilityGrant`; the benten-caps constant is thus DEAD and the `benten-ivm` View 1 filter is UNREACHABLE from the engine's grant path.",
+      "new-test-coverage": "None added — r6-ivm-1 pass-1 recommended a test, pass-1 explicitly deferred it to R4b. Test gap remains."
+    },
+    "r6-ivm-2": {
+      "status": "still-open",
+      "verification": "event_handler_dispatch.rs:123-124 reads the queried bucket AND the GLOBAL_BUCKET (empty string). The edge path at line 141-144 unconditionally writes SubscribesTo edge events to the GLOBAL_BUCKET. Any production handler registered via the edge path over-dispatches. Same severity (minor), same fix. Unchanged."
+    },
+    "r6-ivm-3": {
+      "status": "still-open",
+      "verification": "subscriber_routing.rs has 3 tests; none exercise a multi-labeled node reaching multiple views. All 5 view filter sites use independent `has_label` / `iter().any` checks — multi-routing would happen in theory but has no regression test. Unchanged minor."
+    },
+    "r6-ivm-4": {
+      "status": "pass-1-was-WRONG",
+      "verification": "Pass-1 claimed `benches/view_maintenance.rs` is still a `todo!()` stub at lines 53-58. Read the file: that claim is false. The bench is fully wired — `bench_view_read_content_listing` (line 90), `bench_view_read_governance_inheritance` (line 106), `bench_view_incremental_maintenance` (line 128) all use real `ContentListingView::read_page`, `GovernanceInheritanceView::read_effective_rules`, and `Subscriber::route_change_event` with a 512-entry seeded view and all 5 views attached. The `todo!()` stub was replaced in the fix-pass — pass-1 read stale code. This finding should be CLOSED, not deferred. Flagged as methodology defect r6b-meta-1 below.",
+      "new-status": "closed"
+    },
+    "r6-ivm-5": {
+      "status": "still-open",
+      "verification": "engine.rs:1371-1385 auto-instantiates content_listing only; canonical ids (capability_grants/event_dispatch/governance_inheritance/version_current) write the definition Node but don't register a live view. A read against them will miss. Unchanged informational."
+    }
+  },
+  "new_findings": [
+    {
+      "id": "r6b-ivm-1",
+      "severity": "major",
+      "location": "crates/benten-graph/src/transaction.rs:428-488 (delete_node); crates/benten-graph/src/redb_backend.rs:530-568 (direct delete_node)",
+      "claim": "NO CASCADE EDGE DELETE. Pass-1 stated cascade deletion was 'partially correct end-to-end' and 'ChangeKind::EdgeDeleted events are emitted by the backend for cascaded edges (redb_backend.rs)'. That claim is WRONG: neither Transaction::delete_node nor RedbBackend::delete_node scans for edges whose source or target equals the deleted CID, nor do they emit EdgeDeleted events for them. Edges referencing the deleted node remain in the backend (dangling references) and subscribing IVM views receive exactly ONE ChangeKind::Deleted for the node and ZERO cascaded ChangeKind::EdgeDeleted events. This is the exact 'cascade deletion bug the benchmark prototype discovered' that the R5 MUST clause says not to regress.",
+      "evidence": "transaction.rs:482-486 pushes only `PendingOp::DeleteNode{cid, labels, node}` — no edge scan. transaction.rs at line 656 (redb_backend.rs) has `edge_src_index_prefix` scanning infrastructure (used elsewhere for reads), but delete_node never invokes it. The TODO at benten-ivm/src/lib.rs:57-60 acknowledges this gap: 'integration test that exercises cascade-deletion correctness (RESULTS.md §3) ... assert every view converges to empty. See mini-review g5-ivm-13.' The gap is known, deferred to Phase 2, and the pass-1 reviewer either misread or trusted the TODO.",
+      "impact": "View 1 (CapabilityGrants via GRANTED_TO edges): deleting a Grant node leaves the `entity → {grant_cid}` set populated with a dangling CID — no cascaded EdgeDeleted cleans it up. View 4 (GovernanceInheritance via GovernedBy edges): deleting a parent node leaves `child → parent` adjacency pointing at a non-existent parent (the View 4 Node-delete handler at line 181-183 does `parent.retain(|_, v| v != &event.cid)` as a best-effort scan, but that's only triggered by a Node-delete event, not by the non-existent cascaded edge-deletes). View 5 (VersionCurrent via NEXT_VERSION edges): deleting an anchor node leaves `anchor_id → current_cid` potentially pointing at a deleted version.",
+      "fix": "Phase 2: add edge-index scan in Transaction::delete_node. For each edge in (src_index_prefix ∪ tgt_index_prefix)[cid], emit PendingOp::DeleteEdge with captured endpoints. The index infrastructure already exists (scan(&edge_src_index_prefix(source)) is used by the backend's get_edges_by_source at line 656). Phase 1: promote the TODO(phase-2-ivm-cascade) to an explicit named-compromise in the plan so a Phase-2 implementer can't miss it, OR accept a minor-cost Phase-1 implementation that scans and emits (the scan is O(edges on node), bounded by node-fanout invariant 3).",
+      "action": "PROMOTE to named-compromise #8 in the Phase-1 plan. This is the prototype bug — cannot be silently carried as a TODO comment."
+    },
+    {
+      "id": "r6b-ivm-2",
+      "severity": "major",
+      "location": "crates/benten-caps/src/grant.rs:33; crates/benten-engine/src/engine.rs:1315; crates/benten-engine/src/builder.rs:366; crates/benten-ivm/src/views/capability_grants.rs:73, 176",
+      "claim": "Three crates disagree on the CapabilityGrant label namespace. benten-caps declares CAPABILITY_GRANT_LABEL = 'CapabilityGrant' (unqualified). benten-engine writes new grants with label 'system:CapabilityGrant' (namespaced). The engine's own BackendGrantReader reads 'system:CapabilityGrant' — proving it silently worked around the benten-caps constant. benten-ivm View 1 filters on unqualified 'CapabilityGrant' — so if a caller ever registered View 1 live, it would receive zero events from the engine write path. The benten-caps constant is DEAD in production and ALIGNED with the also-dead benten-ivm View 1 filter, forming a closed loop of unreachable code.",
+      "evidence": "benten-caps/src/grant.rs:33 `pub const CAPABILITY_GRANT_LABEL: &str = \"CapabilityGrant\";`. benten-engine/src/engine.rs:1315 `Node::new(vec![\"system:CapabilityGrant\".into()], props)`. benten-engine/src/builder.rs:366 `.get_by_label(\"system:CapabilityGrant\")`. benten-ivm/src/views/capability_grants.rs:176 `if !event.has_label(\"CapabilityGrant\") { return Ok(()); }`. Pass-1 called this 'dormant' — it is, but dormancy doesn't exonerate the cross-crate contract drift. If/when benten-caps gains a writer that uses its own CAPABILITY_GRANT_LABEL constant, it will silently diverge from the engine write path.",
+      "impact": "Phase 1: dormant because View 1 is never auto-instantiated. Phase 2: live-hostile — a Phase-2 caller who follows the public API (construct a grant Node via benten_caps::CapabilityGrant::as_node, which applies CAPABILITY_GRANT_LABEL = 'CapabilityGrant') will write a grant that the engine's BackendGrantReader will NOT find (it scans 'system:CapabilityGrant'). Two writers disagree on the table.",
+      "fix": "Pick ONE namespace and centralize. Options: (a) expose CAPABILITY_GRANT_LABEL in benten-caps as 'system:CapabilityGrant' and have benten-engine + benten-ivm import it; (b) keep benten-caps unqualified and strip the 'system:' prefix on engine writes (harder to justify given the system-zone invariant). (a) is ~5 lines and aligns with the system-zone label convention. Must land before Phase 2 capability-grant writer paths diverge further.",
+      "action": "Land in R4b/G4-trailing fix. Blocking for Phase 2 kickoff; non-blocking for Phase 1 exit."
+    },
+    {
+      "id": "r6b-ivm-3",
+      "severity": "minor",
+      "location": "crates/benten-ivm/src/views/governance_inheritance.rs:82; crates/benten-ivm/src/views/content_listing.rs:189, 318, 331",
+      "claim": "Several `let _ = self.budget.try_consume(...)` sites silently swallow the BudgetExceeded error. The test-only `on_change` paths are defensible (they're documented no-op-on-stale), but the trait `update` path for content_listing at line 318 ignores the result after a successful insert. Consistency question: should the fan-out subscriber see an Ok from the trait even when the cost-charge tripped stale, OR should the view return Err so the subscriber marks stale? Current behavior: view silently goes stale BUT returns Ok, so subscriber.apply_event's budget-exceeded branch never fires — the view is only discovered stale on the NEXT event's leading `if self.budget.is_stale() { return Err(Stale) }` probe. One event's worth of delay.",
+      "evidence": "content_listing.rs:318 `let _ = self.budget.try_consume(1, VIEW_ID);` sits AFTER the entries.insert at line 316-317. If try_consume returns Err (which happens when budget was already 0 — unreachable here because of the 282 check) the insert has already happened. The dead-code fallback is still confusing. content_listing.rs:331 `let _ = self.budget.try_consume(cost, VIEW_ID);` — same pattern, but here the cost can exceed remaining and the ignored Err does cause one event of delay before the next update trips.",
+      "fix": "Two options: (a) propagate the Err from try_consume on Update/Delete paths so the subscriber marks stale immediately (change `let _ = ...` to `return`-on-err); or (b) document why the delayed trip is intentional. Phase 1 is defensible either way — the tests confirm stale is reached — but the `let _ = ...` sites should carry a comment explaining the delayed-trip semantics. Non-blocking.",
+      "action": "R4b hygiene. Low priority."
+    },
+    {
+      "id": "r6b-ivm-4",
+      "severity": "informational",
+      "location": "crates/benten-engine/src/primitive_host.rs:451",
+      "claim": "When View 3 returns Err (stale) during list resolution, the engine silently falls through to the backend label-index scan. The `Ok(_) | Err(_)` pattern at line 451 swallows every view-side error including Stale. This is safe (backend scan is the source of truth) but masks staleness from observability — there's no log, metric, or tracing when a view is skipped because it tripped stale mid-request.",
+      "evidence": "primitive_host.rs:451 `Some(Ok(_) | Err(_)) | None => {}` — the comment at 448-450 says 'Fall through ... if the view returned empty, errored (stale), or isn't registered'. The three cases are conflated.",
+      "fix": "Phase 2: add a tracing::warn! when the stale branch is taken (already TODO'd in subscriber.rs line 227 for view-level errors). The fallback itself is correct.",
+      "action": "Phase-2 tracing wiring. Non-blocking."
+    },
+    {
+      "id": "r6b-ivm-5",
+      "severity": "minor",
+      "location": "crates/benten-ivm/tests/view1_capability_grants.rs:77-99 (and view2/view3/view5 mirrors)",
+      "claim": "The 4 #[ignore]'d rebuild-equivalence tests are structurally broken, not just phase-2-deferred. view1_rebuild_matches_incremental_state constructs a rebuilt view with zero events, calls rebuild() on it, and asserts its output equals an incrementally-populated view's output. rebuild() per the Phase-1 contract clears state, so the comparison is 'populated set == empty set'. The #[ignore] comment 'Phase 2 adds event-log replay ... when populated, assert incremental == rebuild' papers over that the test body itself must change — not just get re-enabled — when replay lands.",
+      "evidence": "view1_capability_grants.rs:77-99: `let mut rebuilt = CapabilityGrantsView::new(); rebuilt.rebuild().unwrap();` — no events fed in, so the rebuild is a no-op on an already-empty view. If the test were re-enabled as-is, the assertion `assert_eq!(a, b)` would FAIL on any populated incremental (which is the whole point of the test). This is a test-scaffolding bug, not an unreachable assertion.",
+      "fix": "Replace the TODO comment with a concrete test body that feeds the same event sequence into both instances, then rebuild one and assert equivalence. The shape is `let mut incremental = ...; for e in events { incremental.update(e)?; } let mut rebuilt = ...; for e in events { rebuilt.update(e)?; } rebuilt.rebuild()?; for e in events { rebuilt.update(e)?; } assert_eq!(incremental.read(q)?, rebuilt.read(q)?);` — which requires that rebuild NOT clear state (Phase 2 replay path) OR that the test explicitly replay post-rebuild. Either way the current body is a placeholder, not a deferred-but-correct test.",
+      "action": "Rewrite in Phase 2 alongside the event-log replay work. Leave the TODO in place for Phase 1."
+    },
+    {
+      "id": "r6b-meta-1",
+      "severity": "informational",
+      "location": "meta — pass-1 review methodology",
+      "claim": "Pass-1's r6-ivm-4 claimed benches/view_maintenance.rs is 'still a todo!() stub' citing lines 53-58. On verification: the actual file has fully-wired benchmarks at those line numbers, and the todo!() was replaced in an earlier fix-pass. Pass-1 either read an outdated copy or carried the finding from a prior review without re-reading. Similarly pass-1's cascade-deletion narrative ('edge events are emitted by the backend for cascaded edges') is a plausible but code-contrary statement that a code-read disproves in under 60 seconds. Two of five pass-1 findings did not survive verify-don't-trust review. Methodology upgrade (which this pass-2 run encodes) is vindicated.",
+      "evidence": "benches/view_maintenance.rs:90-152 contains three real bench functions calling real view APIs against a 512-entry seeded view. transaction.rs:428-488 delete_node has no edge-cascade scan. Both are 1-minute verifications.",
+      "fix": "Keep the verify-don't-trust protocol in the agent definition. Future IVM reviewers should open the source, not just the docs or the prior JSON.",
+      "action": "Documented. No code change needed."
+    }
+  ],
+  "audit_focus_verifications": {
+    "5_views_update_on_relevant_change_events": {
+      "status": "verified-with-one-gap",
+      "detail": "All 5 views implement `View::update(&ChangeEvent)` and wire filter-based ingestion against the correct labels/kinds. VERIFIED IN CODE: View 1 capability_grants.rs:240-242 → apply_event handles Created/Updated/Deleted on CapabilityGrant-labeled and EdgeCreated/EdgeDeleted on GRANTED_TO-labeled; View 2 event_handler_dispatch.rs:233 → same shape for SubscribesTo; View 3 content_listing.rs:273 → Created/Updated/Deleted filtering by self.label; View 4 governance_inheritance.rs:242-243 → EdgeCreated/EdgeDeleted on GovernedBy + Deleted on nodes; View 5 version_current.rs:162 → Created/Updated/Deleted/EdgeCreated/EdgeDeleted on NEXT_VERSION. GAP: View 1's filter is unqualified 'CapabilityGrant' but engine writes 'system:CapabilityGrant' → the view would receive events but filter them out. See r6b-ivm-2."
+    },
+    "budget_enforcement_not_cosmetic": {
+      "status": "verified",
+      "detail": "BudgetTracker::try_consume (budget.rs:92-102) decrements and flips stale on exhaustion. All 5 views call this on every update — VERIFIED at: capability_grants.rs:143 (apply_event leading charge, propagated via ?); event_handler_dispatch.rs:127 (same pattern); version_current.rs:171, 188 (propagated via ?); content_listing.rs:185, 282 (explicit remaining==0 check then try_consume); governance_inheritance.rs:162 (propagated via ?). Budget trip CAUSES state transition and is observable: stale_on_budget_exceeded.rs tests confirm ViewState::Stale after budget exhaustion and ViewError::Stale on subsequent reads. The budget is real, not cosmetic. MINOR: three `let _ = try_consume` sites swallow Err (see r6b-ivm-3) — still correct but causes one-event trip delay."
+    },
+    "cascade_deletion_works_end_to_end": {
+      "status": "FAILED",
+      "detail": "Cascade deletion does NOT work end-to-end. Transaction::delete_node (transaction.rs:428-488) emits exactly one ChangeKind::Deleted for the node and ZERO ChangeKind::EdgeDeleted events for edges whose source/target reference the deleted CID. Backend RedbBackend::delete_node (redb_backend.rs:530-568) takes the same non-cascading path. This is the prototype cascade-deletion bug the R5 MUST clause explicitly forbids regressing. Pass-1 asserted 'partially correct' — this is incorrect; it's 'not implemented, with a known-deferred TODO at benten-ivm/src/lib.rs:57-60'. See r6b-ivm-1 for full evidence and impact analysis."
+    },
+    "rebuild_semantics_match_tests": {
+      "status": "verified-with-caveat",
+      "detail": "Active (non-ignored) rebuild tests claim rebuild clears state + restores budget. The code matches: every view's rebuild() clears the internal map and calls budget.rebuild() (which restores original + clears stale). capability_grants.rs:259-267, event_handler_dispatch.rs:257-261, content_listing.rs:360-362 (via rebuild_from_scratch), governance_inheritance.rs:269-273, version_current.rs:217-222. CAVEAT: the 4 IGNORED rebuild-equivalence tests are structurally broken (see r6b-ivm-5), not just deferred. Their comments say 'Phase 2 adds event-log replay', but the test bodies don't feed events through the rebuilt view, so they wouldn't pass in Phase 2 either without rewrite."
+    }
+  },
+  "pass1_r6_ivm_1_test_coverage": "NOT ADDED. Pass-1 recommended a regression test for the label-namespace mismatch; no test was added. Test gap confirmed. See r6b-ivm-2 for upgraded severity."
+}

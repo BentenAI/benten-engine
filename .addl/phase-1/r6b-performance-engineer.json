@@ -1,0 +1,270 @@
+{
+  "schema_version": "1.0",
+  "agent": "performance-engineer",
+  "round": "R6b",
+  "phase": "phase-1",
+  "commit": "90eb694",
+  "methodology_note": "Re-audit with 'Verify, don't trust docs.' Every §14.6 claim traced to a bench, every bench invoked (cargo bench with small windows) to confirm it runs rather than panics, and the reported number compared to what the claim promises. Two critical 'bench panics at runtime' issues were caught in pass-1; this pass hunts for the same pattern elsewhere.",
+  "scope": {
+    "plan_section": "§14.6 performance targets + pass-1 re-verification",
+    "files_reviewed": [
+      "docs/ENGINE-SPEC.md (§14.6 table)",
+      ".addl/phase-1/00-implementation-plan.md (§4.4 bench map)",
+      ".github/workflows/bench.yml",
+      "crates/benten-core/benches/hash_only.rs",
+      "crates/benten-core/benches/cid_parse.rs",
+      "crates/benten-core/src/lib.rs (Cid::from_str)",
+      "crates/benten-graph/benches/get_create_node.rs",
+      "crates/benten-graph/benches/durability_modes.rs",
+      "crates/benten-graph/benches/concurrent_writers.rs",
+      "crates/benten-graph/benches/multi_mb_roundtrip.rs",
+      "crates/benten-graph/src/transaction.rs (fan_out, to_change_event)",
+      "crates/benten-engine/benches/end_to_end_create.rs",
+      "crates/benten-engine/benches/roundtrip.rs",
+      "crates/benten-engine/src/engine.rs (SubgraphCache)",
+      "crates/benten-engine/src/engine_transaction.rs (put_node_with_attribution)",
+      "crates/benten-engine/src/primitive_host.rs (PendingHostOp::PutNode.projected_cid)",
+      "crates/benten-eval/benches/ten_node_handler.rs",
+      "crates/benten-ivm/benches/view_maintenance.rs",
+      "crates/benten-ivm/src/views/governance_inheritance.rs (read_effective_rules)",
+      "bindings/napi/src/node.rs (detect_typed_array_bytes, value_to_json)",
+      "docs/SECURITY-POSTURE.md (compromise numbering)"
+    ],
+    "benches_executed_this_pass": [
+      "benten-eval/ten_node_handler (all 3 fns)",
+      "benten-ivm/view_maintenance (all 3 fns)",
+      "benten-graph/get_create_node (get_node hot_cache, batch_100, create_immediate)",
+      "benten-graph/concurrent_writers (1/2/4/8/16 threads)",
+      "benten-engine/end_to_end_create (composed path)",
+      "benten-core/cid_parse (panics — documented below)"
+    ]
+  },
+  "verdict": "FAIL_CONCERNS",
+  "verdict_rationale": "Pass-1's two criticals (r6-perf-1 ten_node_handler stub, r6-perf-2 view_maintenance stub) are VERIFIED CLOSED — both benches now run real code and produce sensible numbers (list_dispatch 12.2µs, view_read 98ns, view_incremental 1.28µs, all inside §14.6 envelopes). Pass-1's other blocking findings (r6-perf-3 double-hash, r6-perf-4 fan_out loop-inversion, r6-perf-5 subgraph cache, r6-perf-6 typed-array Bytes detection) are ALSO VERIFIED CLOSED via source inspection — the fixes are wired with correctly-shaped code. HOWEVER, this second pass found TWO NEW critical bench-validity bugs that pass-1 missed — both are the exact 'bench target claimed but bench doesn't measure what it promises' pattern the updated methodology names:\\n\\n(1) `cid_parse` bench PANICS at runtime because `Cid::from_str` returns `Err(CidParse)` and the bench does `.expect(\"parse\")`. Any nightly `cargo bench --workspace` run (the CI bench.yml workflow, bench.yml:80) dies on this first. The bench's own docstring at line 18-21 still says 'Cid::from_str is currently todo!()' — it's now an Err-return instead, but the functional outcome is identical: panic. This is exactly the 'bench-stub panics at runtime' pattern that caught pass-1 flat-footed on ten_node_handler and view_maintenance.\\n\\n(2) `concurrent_writers` bench reports inflated throughput by a factor of `writer_count`. Under redb's single-writer serialization the actual throughput should be ~flat across thread counts, and the measured per-iter time IS flat (3.9-4.3ms across 1/2/4/8/16 writers), but `Throughput::Elements(writer_count as u64)` at line 63 tells criterion each iter produced `writer_count` elements when each iter actually produces 1 write. Result: reported throughput scales linearly with thread count (250→503→1037→1999→3726 elem/s) which would mean redb IS parallelizing — but it isn't. The §14.6 'Concurrent writers 100-1000 writes/sec' claim is being reported as 3.7k writes/sec at 16 threads. Measurement is wrong.\\n\\nAdditionally, two 'stale doc' observations: (a) ENGINE-SPEC.md §14.6 was NOT updated to acknowledge the macOS APFS fsync-floor that makes the '10-node handler 150-300µs' target unreachable on dev hardware — the honest update only landed in plan §4.4. The spec still reads as an achievable target. (b) The bench docstrings reference 'Compromise #7: Group-collapses-to-Immediate' but SECURITY-POSTURE.md renumbered #7 to the `[[bin]]` gating issue — the durability compromise is not formally tracked in any named compromise list.\\n\\nPass-1 dispositions stand: all 2C blockers closed, 5M blockers closed or acknowledged as Phase-2 deferrals.",
+  "summary": {
+    "pass_1_criticals_verified_closed": "2/2 (ten_node_handler + view_maintenance both run real code)",
+    "pass_1_majors_verified_closed": "4/5 (double-hash + fan_out + subgraph_cache + typed-array detection); r6-perf-6 outbound path still emits bulky object-of-numeric-keys rather than native Buffer (Phase-2 deferral, acknowledged in code)",
+    "pass_1_minors_still_open": "3/4 (distinct-cid bench, adjacency cache, post:list e2e bench — all Phase-2 non-blocking)",
+    "new_critical_issues": 2,
+    "new_major_issues": 0,
+    "new_minor_issues": 2,
+    "new_observations": 1,
+    "critical_issues": 2,
+    "major_issues": 0,
+    "minor_issues": 2,
+    "observations": 1
+  },
+  "pass_1_disposition_audit": [
+    {
+      "id": "r6-perf-1",
+      "pass_1_severity": "critical",
+      "pass_1_title": "ten_node_handler bench is todo!() stub",
+      "verification_method": "ran `cargo bench -p benten-eval --bench ten_node_handler`; all three sub-benches execute and report numbers",
+      "verified_status": "CLOSED",
+      "measurements_this_pass": "crud_post_create_dispatch: 4.36ms median (dominated by redb fsync, acknowledged as unreachable-in-Phase-1 in bench docstring line 41-45 and plan §4.4); crud_post_list_dispatch_no_write: 12.25µs (< 300µs target, PASS); crud_post_build_subgraph_only: 2.33µs (< 10µs target, PASS)",
+      "residual_note": "create_dispatch's 4.36ms is honestly surfaced (not CI-gated per plan §4.4). The evaluator-only slice at 12µs delivers the §14.6-derived claim."
+    },
+    {
+      "id": "r6-perf-2",
+      "pass_1_severity": "critical",
+      "pass_1_title": "view_maintenance bench is todo!() stub",
+      "verification_method": "ran `cargo bench -p benten-ivm --bench view_maintenance`; all three sub-benches execute and report numbers",
+      "verified_status": "CLOSED",
+      "measurements_this_pass": "view_read_content_listing/hot_cache_page_20: 98.0ns (§14.6 direct '<1µs' target, PASS); view_read_governance_inheritance/hot_cache_empty_closure: 39.2ns (§14.6 direct '<1µs' target, PASS); view_incremental_maintenance/all_five_views_per_write: 1.28µs (§14.6-derived '<50µs' target, PASS)",
+      "residual_note": "governance_inheritance bench reads an empty-closure entity — measures HashMap-miss O(1) rather than a fully-seeded closure traversal. Acceptable for the §14.6 claim (which names HashMap/sorted-list strategies) but narrower than ideal. A Phase-2 seeded-closure variant would tighten the regression signal."
+    },
+    {
+      "id": "r6-perf-3",
+      "pass_1_severity": "major",
+      "pass_1_title": "Double BLAKE3 hash on WRITE primitive",
+      "verification_method": "grep for `projected_cid` + `put_node_with_attribution` across engine crate",
+      "verified_status": "CLOSED",
+      "evidence": "crates/benten-engine/src/engine_transaction.rs line 113-117 docstring names r6-perf-3 explicitly; primitive_host.rs stores `projected_cid: Cid` in `PendingHostOp::PutNode` (line 95); engine.rs:977 passes `Some(projected_cid.clone())` into `put_node_with_attribution`. Replay path receives precomputed CID, skips rehash."
+    },
+    {
+      "id": "r6-perf-4",
+      "pass_1_severity": "major",
+      "pass_1_title": "fan_out clones ChangeEvent O(subscribers × ops)",
+      "verification_method": "grep `fan_out` in benten-graph/src/transaction.rs",
+      "verified_status": "CLOSED",
+      "evidence": "transaction.rs:575-584: loop inverted. Line 580 builds `events: Vec<ChangeEvent>` once (O(ops) construction), then outer loop is subscribers, inner iterates the pre-built event vec. Comment at line 576-579 explicitly names r6-perf-4. Each event still clones per subscriber (necessary because callbacks take ownership of the event bytes), but the ChangeEvent construction (including Node clone inside to_change_event) happens once per op, not S×ops."
+    },
+    {
+      "id": "r6-perf-5",
+      "pass_1_severity": "major",
+      "pass_1_title": "Subgraph rebuilt every Engine::call",
+      "verification_method": "grep `SubgraphCache` in engine.rs; confirm cache insert + lookup on all three CRUD op paths",
+      "verified_status": "CLOSED",
+      "evidence": "engine.rs:265 defines `SubgraphCache { entries: RwLock<HashMap<SubgraphCacheKey, Subgraph>> }`; subgraph_for_crud at line 1029-1140 does get-or-insert for create/list/get paths with `cache_handler = format!(\"crud:{label}\")` key. crud_post_build_subgraph_only bench measures the cache-hit path at 2.33µs median — template clone + patch, no rebuild."
+    },
+    {
+      "id": "r6-perf-6",
+      "pass_1_severity": "major",
+      "pass_1_title": "napi Value::Bytes loses type across boundary",
+      "verification_method": "read bindings/napi/src/node.rs json_to_value Object branch + value_to_json Bytes branch",
+      "verified_status": "CLOSED-CORRECTNESS / DEFERRED-PERFORMANCE",
+      "evidence": "Correctness: inbound `detect_typed_array_bytes` at line 221 pattern-matches the canonical napi-rs v3 typed-array shape ({'0':n,'1':n,...} with integer values 0..=255) and routes to `Value::Bytes`. Outbound `value_to_json` at line 304-327 emits the symmetric Object shape. The three input shapes (Array, typed-array-object, plain-keyed-object) now produce three distinct Value variants with three distinct CIDs — the content-addressing bug pass-1 flagged is closed. Performance residual: a 1MB Uint8Array still crosses as a serde_json::Object with 1M numeric-string keys (line 319-325 inserts `i.to_string()` + `Number(byte)` per byte). The docstring at line 312-318 explicitly defers native Buffer return to Phase-2. Acceptable for Phase-1 correctness; still a Phase-2 perf target."
+    },
+    {
+      "id": "r6-perf-7",
+      "pass_1_severity": "major",
+      "pass_1_title": "get_node hot-cache bench reads same CID",
+      "verification_method": "read get_create_node.rs bench_get_node_batch",
+      "verified_status": "OPEN-PHASE-2",
+      "evidence": "bench still reads the same `cid` in a tight loop (line 77-84). Measured 86.6µs for 100 reads of the same CID = 866ns per read. That's identical to the single-read hot_cache bench (957ns), confirming the batch variant measures the same page-hot path N times. Not a §14.6 gate failure — 'get_node hot_cache' at 957ns is inside the 1-50µs claim — but the batch variant doesn't tell us anything the single-read doesn't. Phase-2 should add distinct-cids variant."
+    },
+    {
+      "id": "r6-perf-8",
+      "pass_1_severity": "observation",
+      "pass_1_title": "View 3 is genuinely post:list hot path",
+      "verified_status": "CLOSED-VERIFIED (pass-1 observation was correct)"
+    },
+    {
+      "id": "r6-perf-9",
+      "pass_1_severity": "minor",
+      "pass_1_title": "ChangeBroadcast::publish clones subscriber Vec per commit",
+      "verified_status": "OPEN-PHASE-2 (non-blocking, ~200ns per 100-subscriber commit)"
+    },
+    {
+      "id": "r6-perf-10",
+      "pass_1_severity": "minor",
+      "pass_1_title": "Evaluator run_inner rebuilds adjacency HashMaps per call",
+      "verified_status": "OPEN-PHASE-2 (non-blocking)"
+    },
+    {
+      "id": "r6-perf-11",
+      "pass_1_severity": "minor",
+      "pass_1_title": "No post:list end-to-end bench",
+      "verification_method": "ls crates/benten-engine/benches/",
+      "verified_status": "OPEN-PHASE-2",
+      "evidence": "No end_to_end_list.rs exists. end_to_end_create.rs + roundtrip.rs cover create + hash + get; post:list path is measured only indirectly via ten_node_handler's list_dispatch_no_write sub-bench (12.25µs evaluator-only, no get_node fan-out for the page's Nodes). A dedicated engine-level post:list bench with populated state is still missing."
+    },
+    {
+      "id": "r6-perf-12",
+      "pass_1_severity": "minor",
+      "pass_1_title": "G7 PrimitiveHost buffer+replay tax",
+      "verified_status": "ACCEPTED (architectural choice, ~3-8µs cost documented)"
+    },
+    {
+      "id": "r6-perf-13",
+      "pass_1_severity": "observation",
+      "pass_1_title": "G3-B collapse honestly documented",
+      "verified_status": "CLOSED-VERIFIED"
+    },
+    {
+      "id": "r6-perf-14",
+      "pass_1_severity": "observation",
+      "pass_1_title": "ContentListingView pre-materializes last_known_good",
+      "verified_status": "OPEN-PHASE-2 (observational)"
+    },
+    {
+      "id": "r6-perf-15",
+      "pass_1_severity": "observation",
+      "pass_1_title": "napi crossing cost not benched",
+      "verified_status": "OPEN-PHASE-2"
+    }
+  ],
+  "findings": [
+    {
+      "id": "r6b-perf-1",
+      "severity": "critical",
+      "area": "bench-coverage",
+      "title": "`cid_parse` bench panics at runtime — nightly CI `cargo bench --workspace` will fail on first execution",
+      "file": "crates/benten-core/benches/cid_parse.rs",
+      "lines": "46",
+      "detail": "`cid_parse/base32_roundtrip` calls `Cid::from_str(cid_str).expect(\"parse\")`. But `Cid::from_str` at crates/benten-core/src/lib.rs:311 unconditionally returns `Err(CoreError::CidParse(\"Cid::from_str is a Phase 2 deliverable (needs multibase decoder; see C4)\"))`. The `.expect` panics with that exact message — verified by running `cargo bench -p benten-core --bench cid_parse`. The bench's own docstring at line 18-21 says 'Cid::from_str is currently todo!() ... Running this benchmark before G1 lands will panic at bench time. That is expected and correct per the R3 TDD contract.' But G1 shipped (Phase 1 declared complete), the implementation moved from `todo!()` to `Err`-return, the bench was never updated to either (a) wrap the parse attempt with a tolerant shape that reports 'not yet implemented' without panicking, or (b) gate itself behind a `#[cfg]` flag that excludes it from default-bench-sweep runs.\\n\\n**The CI impact:** `.github/workflows/bench.yml:80` runs `cargo bench --workspace --locked -- --measurement-time 2` on the nightly cron. That command runs every bench in the workspace including cid_parse; cid_parse panics; the job fails. No nightly bench number has ever been successfully collected because the sweep dies on this first panic. This is the exact 'bench panics at runtime while coverage claims success' pattern pass-1 named for ten_node_handler and view_maintenance — pass-1 missed it because no one ran the full workspace sweep as part of the audit.",
+      "recommendation": "Three options: (a) delete the bench until Cid::from_str lands (cleanest — it's informational-only per the bench's own docstring, no §14.6 gate lost); (b) guard with `#[cfg(feature = \"cid-parse-impl\")]` plus a workspace-level feature flag that CI doesn't enable; (c) rewrite the bench body as `let result = Cid::from_str(...); black_box(result)` so the bench measures the Err-return path (trivially fast) until the real implementation lands. Option (a) is recommended — the bench provides zero signal today, and re-adding it when Cid::from_str ships is a 5-line PR.",
+      "blocking": "phase-2-entry",
+      "effort": "XS"
+    },
+    {
+      "id": "r6b-perf-2",
+      "severity": "critical",
+      "area": "bench-methodology",
+      "title": "`concurrent_writers` bench misreports throughput by factor of `writer_count` — claims 3.7k writes/sec at 16 threads when actual is ~250 writes/sec",
+      "file": "crates/benten-graph/benches/concurrent_writers.rs",
+      "lines": "62-107",
+      "detail": "The bench structure is: for each writer_count in {1,2,4,8,16}, `iter_custom(|iters| { ... spawn writer_count threads each doing per_thread = iters/writer_count puts ... })`. Total work per `iter_custom` call is `per_thread * writer_count ≈ iters` writes. But line 63 sets `group.throughput(Throughput::Elements(writer_count as u64))` — this tells criterion each individual iter produced `writer_count` elements. Since each iter actually produces 1 write (iters total writes distributed across threads), the throughput report is inflated by `writer_count`.\\n\\n**Measured this pass** (cargo bench -p benten-graph --bench concurrent_writers):\\n```\\nconcurrent_writers/1   time: 3.97ms, thrpt: 251 elem/s  <-- actual ~252/s\\nconcurrent_writers/2   time: 3.97ms, thrpt: 503 elem/s  <-- actual ~252/s (2x inflated)\\nconcurrent_writers/4   time: 3.85ms, thrpt: 1037 elem/s <-- actual ~260/s (4x inflated)\\nconcurrent_writers/8   time: 4.00ms, thrpt: 1999 elem/s <-- actual ~250/s (8x inflated)\\nconcurrent_writers/16  time: 4.29ms, thrpt: 3726 elem/s <-- actual ~233/s (16x inflated)\\n```\\n\\nThe per-iter time is flat (3.85-4.29ms, exactly the single-write fsync floor), proving redb's single-writer serialization works correctly: more threads don't produce more writes, they queue on the write lock. The throughput column is pure illusion.\\n\\n**Why this is critical:** §14.6 directly tabulates 'Concurrent writers (per community/instance): 100-1000 writes/sec.' The bench at 16 threads reports 3.7k writes/sec — which would (a) suggest Benten has already blown past its documented ceiling, and (b) mask real regressions when actual throughput drops (e.g. from 260 to 100, the thrpt column at 16 threads would still read as 1600 elem/s vs 3726 — a 'mere' 57% drop rather than the actual 62% collapse). The bench docstring at line 5-12 explicitly markets this as the §14.6 'Concurrent writers' gate surface — the number it produces does not measure what the claim promises.\\n\\nThis is the same 'bench claim doesn't match what bench measures' pattern pass-1 named. Pass-1 read the bench docstring ('informational, not a gate') and accepted it; pass-1 did NOT run the bench and notice the throughput arithmetic was wrong.",
+      "recommendation": "Change `group.throughput(Throughput::Elements(writer_count as u64))` at line 63 to `group.throughput(Throughput::Elements(1))`. Each iter_custom iteration is one write per the math at line 73 (`per_thread = iters.div_ceil(writer_count)`, so total writes across threads is ~iters, matching criterion's per-iter model). The per-iter time already reports the correct wall-clock-per-write; the throughput column will then correctly show flat-across-thread-counts, confirming redb's serialization model. Alternatively, drop the `throughput` call entirely and let the bench report per-iter latency only — the shape of the 1/2/4/8/16 latency curve (flat vs. rising vs. pathological) is the real §14.6 signal anyway.",
+      "blocking": "phase-2-entry",
+      "effort": "XS"
+    },
+    {
+      "id": "r6b-perf-3",
+      "severity": "minor",
+      "area": "doc-drift",
+      "title": "ENGINE-SPEC.md §14.6 table NOT updated with honest fsync-floor caveat — only plan §4.4 was updated",
+      "file": "docs/ENGINE-SPEC.md",
+      "lines": "431-438",
+      "detail": "The user's handoff note said '§14.6 plan §14.6 updated honestly — 10-node handler target of 300µs was unreachable on macOS APFS (redb fsync floor ~4ms).' Verified: .addl/phase-1/00-implementation-plan.md §4.4 at lines 288-291 does carry the compromise acknowledgement ('Phase-1 floor on macOS APFS is ~4ms per call ... Not CI-gated'). But docs/ENGINE-SPEC.md §14.6 at lines 431-438 is the canonical spec location and still reads:\\n\\n| 10-node handler evaluation | 150-300us for mixed handlers | <100us achievable for pure TRANSFORM pipelines; handlers with 2+ WRITEs + IVM miss the target by 2-3x |\\n\\nThe '2-3x miss' caveat was written for an SSD fsync floor of ~50-100µs; on the reference dev env (macOS APFS) the floor is ~4ms, which is a 13-27x miss, not 2-3x. A reader consulting only the spec sees a claim that is no longer honest. The plan is updated; the spec is not.\\n\\nAdditionally the 'Node creation + IVM update | 100-500us realistic' row has the same issue — the end_to_end_create bench measured 4.25ms this pass, which is 8.5x the upper range.",
+      "recommendation": "Add an 'honest-caveat' paragraph under the §14.6 table: 'Phase-1 measurements on macOS APFS show the Node-creation-with-fsync floor at ~4ms per call because redb v4 exposes only Durability::Immediate and Durability::None (named compromise: DurabilityMode::Group collapses to Immediate). The 150-300µs and 100-500µs headline targets become achievable once grouped/async durability lands in Phase-2. The evaluator-only slice (no write, no fsync) measures at ~12µs today — 25x better than the headline target — so the engine itself is not the bottleneck; storage durability is.' This brings the spec into alignment with the plan and the bench output.",
+      "blocking": "none",
+      "effort": "XS"
+    },
+    {
+      "id": "r6b-perf-4",
+      "severity": "minor",
+      "area": "doc-drift",
+      "title": "Bench docstrings reference 'Compromise #7: Group-collapses-to-Immediate' but SECURITY-POSTURE #7 is now `[[bin]]` gating",
+      "file": "crates/benten-eval/benches/ten_node_handler.rs, crates/benten-graph/benches/durability_modes.rs",
+      "lines": "ten_node_handler.rs:19-20; durability_modes.rs:60-67",
+      "detail": "Both bench docstrings reference 'Compromise #7' as the durability-collapse tracker. But docs/SECURITY-POSTURE.md renumbered the named compromises — #7 is now 'required-features gating on `[[bin]]` targets' (CLOSED), and the Group-collapses-to-Immediate limitation is NOT formally tracked as a named compromise anywhere in SECURITY-POSTURE.md. It's acknowledged in plan §4.4, in the durability_modes bench docstring (lines 60-67 'Phase-1 compromise note (named compromise #7 adjacent)'), and in the ten_node_handler docstring (lines 17-25). But the numbering pointer is broken — readers clicking through from the bench docstring to find the formal compromise record will find the wrong compromise.\\n\\nCLAUDE.md memory index ('user's auto-memory') says '7 named compromises with regression tests' at R4-gate-close — suggesting the durability compromise WAS the 7th. Sometime between R4 and R6 the numbering shifted and the durability item was absorbed into plan documentation rather than the named-compromise registry.",
+      "recommendation": "Either (a) restore the durability-collapse as Named Compromise #8 (or whatever number is next available) in SECURITY-POSTURE.md, with a clear tracker for Phase-2 re-gating; or (b) update the two bench docstrings to reference the plan §4.4 compromise note directly (without a number). Option (a) is cleaner — the compromise is exactly the shape SECURITY-POSTURE tracks (a capability Benten claims but doesn't fully deliver in Phase-1), and the bench output IS the regression signal for when Phase-2 closes it.",
+      "blocking": "none",
+      "effort": "S"
+    },
+    {
+      "id": "r6b-perf-5",
+      "severity": "observation",
+      "area": "bench-methodology",
+      "title": "`get_node_batch_100` still reads same-CID 100 times — verified matches pass-1 finding r6-perf-7",
+      "file": "crates/benten-graph/benches/get_create_node.rs",
+      "lines": "64-86",
+      "detail": "Confirmed by running: 86.6µs for 100 iterations of `backend.get_node(&cid)` where cid is a single pre-put Node. Per-read cost 866ns — identical to the single-read hot_cache variant (957ns). The bench measures redb's page-cache on a single hot page, not a page-of-100-Nodes scan. Not blocking since get_node hot_cache at 957ns IS inside the §14.6 'Node lookup by ID 1-50µs' claim, but the '_batch_100' naming suggests it measures something it doesn't — a reader expects to see how per-read cost changes under a fan-out pattern.",
+      "recommendation": "Phase-2: add `hot_cache_100_distinct_cids` variant that pre-populates 100 Nodes with distinct property values and reads each once. The delta between distinct-cid and same-cid is the signal for whether redb's cache is doing real work or measurement-amplified work.",
+      "blocking": "none",
+      "effort": "S"
+    }
+  ],
+  "gate_gates": {
+    "14_6_node_lookup_id_benched": true,
+    "14_6_node_lookup_id_honest": true,
+    "14_6_node_lookup_id_measured_this_pass": "957ns median at hot cache — inside 1-50µs envelope",
+    "14_6_ivm_view_read_benched": true,
+    "14_6_ivm_view_read_honest": true,
+    "14_6_ivm_view_read_measured_this_pass": "98ns content_listing + 39ns governance_inheritance — inside 0.04-1µs envelope",
+    "14_6_content_listing_benched": "partial — view-layer read benched; engine-level post:list end-to-end still missing (pass-1 r6-perf-11)",
+    "14_6_node_creation_ivm_benched": true,
+    "14_6_node_creation_ivm_honest": "partial — plan §4.4 acknowledges 4ms fsync floor; ENGINE-SPEC §14.6 still reads as aspirational target (r6b-perf-3)",
+    "14_6_node_creation_measured_this_pass": "4.25ms end_to_end_create (vs 100-500µs spec claim); evaluator-only slice 12.25µs (25x under claim)",
+    "14_6_10_node_handler_benched": true,
+    "14_6_10_node_handler_honest": "partial — plan §4.4 acknowledges fsync unreachability; spec §14.6 does not (r6b-perf-3)",
+    "14_6_concurrent_writers_benched": "YES but REPORTED-WRONG — throughput arithmetic inflated by writer_count (r6b-perf-2)",
+    "cid_parse_bench_runs": false,
+    "ci_bench_workflow_functional": false,
+    "view_3_is_post_list_hot_path": true,
+    "g7_buffer_replay_overhead_bounded": true,
+    "pass_1_criticals_closed": true,
+    "pass_1_blocking_majors_closed": true
+  },
+  "recommended_disposition": [
+    "BLOCKING Phase-2 entry: r6b-perf-1 (cid_parse bench panics at runtime). The nightly CI bench workflow has never completed successfully since this bench landed — fix or remove the bench. 5-10 minute effort.",
+    "BLOCKING Phase-2 entry: r6b-perf-2 (concurrent_writers throughput arithmetic). One-line fix (Throughput::Elements(1) instead of writer_count). Absent this fix the §14.6 concurrent_writers gate reports numbers that don't match reality.",
+    "Non-blocking: r6b-perf-3 (ENGINE-SPEC §14.6 honest caveat). Documentation alignment — the plan is honest, the spec is not. Low effort, high clarity value.",
+    "Non-blocking: r6b-perf-4 (compromise #7 doc drift). Either re-register the durability compromise under a new number in SECURITY-POSTURE or drop the numbered references from bench docstrings.",
+    "Non-blocking: r6b-perf-5 (distinct-cids bench variant). Same disposition as pass-1 r6-perf-7 — Phase-2 work.",
+    "Pass-1 verification summary: 2/2 criticals CLOSED (real benches shipped), 4/5 majors CLOSED (fixes wired), 1 major in DEFERRED-PERFORMANCE state (r6-perf-6 outbound Bytes shape — correctness closed, perf deferred to Phase-2 with native Buffer return)."
+  ],
+  "notes": [
+    "Methodology lesson: pass-1 read bench docstrings but did not execute the full workspace bench sweep. Two of the four new findings (r6b-perf-1 cid_parse panic, r6b-perf-2 throughput arithmetic) required running the benches — the docstrings alone said the right things, the code did not match. The updated agent-definition instruction 'Verify, don't trust docs' paid off on both.",
+    "Pass-2 ran every bench with --measurement-time 1-2 --sample-size 10 to bound wall-clock. All §14.6-direct benches now produce real numbers. Raw measurements this pass (ordered by §14.6 claim):",
+    "  - Node lookup by ID (§14.6 1-50µs): 957ns measured — PASS",
+    "  - IVM view read (§14.6 0.04-1µs): 98ns (content) / 39ns (governance) — PASS",
+    "  - Node creation + IVM update (§14.6 100-500µs): 4.25ms measured — FAIL vs spec, HONEST per plan §4.4",
+    "  - 10-node handler eval (§14.6 150-300µs): 4.36ms with-write / 12.25µs evaluator-only — FAIL vs spec for write path (fsync floor), PASS for evaluator slice",
+    "  - Concurrent writers (§14.6 100-1000/s): reported 251-3726 elem/s across 1-16 threads; CORRECTED value is ~250/s flat — the bench arithmetic inflates throughput (r6b-perf-2)",
+    "  - Hash only (non-§14.6 baseline): not re-run this pass; spike measured 892ns, last bench recorded in range",
+    "Pass-1's big catch was real code existed but wasn't wired. Pass-2's big catch is wired code that reports inflated or broken numbers. Both fit the 'verify don't trust docs' pattern the methodology update names — different failure modes, same root cause (documentation assertion without empirical verification).",
+    "Confidence in Phase-1 perf: the engine layer delivers. The storage layer is honest about its fsync ceiling. The bench methodology has two remaining bugs that both produce misleading signals — fixing them is cheap and should land before the Phase-2 gate is declared open."
+  ]
+}

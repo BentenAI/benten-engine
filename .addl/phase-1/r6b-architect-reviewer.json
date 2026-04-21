@@ -1,0 +1,129 @@
+{
+  "agent": "architect-reviewer",
+  "stage": "R6b-second-pass-verify-dont-trust-docs",
+  "verdict": "PASS",
+  "summary": "Second-pass review applying the verify-don't-trust-docs contract. Walked every pass-1 finding to the code path (or its absence); re-audited the Phase-1 architectural claims surfaced in CLAUDE.md / docs/SECURITY-POSTURE.md / docs/ENGINE-SPEC.md against live enforcement + regression tests. Ten of twelve pass-1 findings are addressed at the Phase-1 expected scope (doc-in-code TODO markers where Phase-2 is the right boundary; full code fixes where the finding was closable now); two carry forward as Phase-2 follow-ups with explicit escalation notes (arch-1, arch-12). Two compromise-prose-vs-code gaps that Step 5c discovered (#1 TOCTOU cap-refresh, #5 per-cap write metrics) were verified FIXED in code: compromise #1's three refresh boundaries (commit / CALL-entry / ITERATE-batch) all have live enforcement sites in `benten-eval/src/primitives/call.rs` + `iterate.rs` with a seven-test regression file (`cap_refresh_toctou.rs`); compromise #5's per-scope write counters live on EngineInner as BTreeMap<String,u64> + AtomicU64 aggregates, fired inside the transaction closure (engine.rs:1580/1594), surfaced via `metrics_snapshot()` + typed accessors + napi surface. No new prose-vs-code gap of the '#1/#5 aspirational claim' shape found in this pass. One doc-overreach noted (NEW-arch-13): CLAUDE.md §'14 Structural Invariants' header states 'All enforced by the engine' but invariants 7/11/13/14 have only partial enforcement at Phase 1 (7/11 have stopgaps, 13 is deferred, 14 is attribution-only — exercised not structurally enforced). CLAUDE.md's Phase-1 Scope section on line 328-335 IS honest about this, but the §'14 Structural Invariants' summary block is not. Verdict: PASS — the R6b lens found no load-bearing compromise where the code silently no-ops behind the prose; the remaining architectural debt is explicitly surfaced in code (TODO(phase-2-*) markers) and in docs (compromise-numbered sections with CLOSED/OPEN status).",
+  "pass1_dispositions": [
+    {
+      "id": "arch-1",
+      "pass1_severity": "major",
+      "verify_verdict": "STILL-OPEN (as Phase-2 deferral)",
+      "evidence": "`crates/benten-eval/Cargo.toml:22` still lists `benten-graph = { path = \"../benten-graph\" }` as a non-dev dep. `crates/benten-eval/src/lib.rs:68` still carries `Graph(#[from] benten_graph::GraphError)` in EvalError. Commit 4dc9efc explicitly deferred this with an escalation clause note: 'the engine's `impl PrimitiveHost` relies on `EvalError::Graph(#[from] GraphError)` for `?`-sugar propagation; removing the `#[from]` is non-additive to EvalError; Phase-2 item.'",
+      "disposition": "HOLD-OPEN for Phase-2. Deferral is explicit in the commit trailer and in the JSON triage log; no doc claim asserts it is closed. Not a prose-vs-code gap — a knowing deferral with a named successor scope."
+    },
+    {
+      "id": "arch-2",
+      "pass1_severity": "major",
+      "verify_verdict": "CLOSED (docs landed)",
+      "evidence": "`crates/benten-engine/src/primitive_host.rs:13-33` now carries a module-doc `# Two-phase write (arch-2)` block that names the three failure surfaces (evaluator fails mid-walk / evaluator Ok + replay caps-denied / evaluator Ok + replay system-zone) and the projected-vs-committed CID invariant. The dispatch seam moved with the R6 Wave 2 split — ActiveCall + PendingHostOp are now crate-private types in the module, so the state shape is locally legible.",
+      "disposition": "CLOSED. Phase-2 write-through refactor still tracked; the docstring is the right Phase-1 deliverable."
+    },
+    {
+      "id": "arch-3",
+      "pass1_severity": "minor",
+      "verify_verdict": "FIXED (code landed)",
+      "evidence": "`crates/benten-graph/src/lib.rs:75` now carries `GraphError::RedbSource(#[from] redb::Error)` — preserves `std::error::Error::source()` via thiserror's `#[from]`. The six sub-type impls (`redb::StorageError`, `redb::DatabaseError`, `redb::TableError`, `redb::CommitError`, `redb::TransactionError`, `redb::SavepointError`) at lib.rs:168-191 funnel through `redb::Error`'s native conversions. Regression test `crates/benten-graph/tests/graph_error_hygiene.rs` (added in commit 21412c1) pins the source() chain.",
+      "disposition": "CLOSED. Wave 1 (err-3) landed the refactor."
+    },
+    {
+      "id": "arch-4",
+      "pass1_severity": "minor",
+      "verify_verdict": "DOC-ACK (Phase-2 boundary marked)",
+      "evidence": "`crates/benten-engine/src/builder.rs:5-15` module-doc carries a `# Thinness-vs-runtime-config (arch-4)` block naming the Phase-1 runtime-flag approach and the Phase-2 cargo-feature option. The `engine_builder_thinness.rs` integration test enforces the runtime contract (without_ivm + without_caps routes to honest-no errors), so the Phase-1 claim is tested end-to-end.",
+      "disposition": "HOLD-OPEN for Phase-2 (cargo-feature gating). Doc treatment is adequate for Phase 1."
+    },
+    {
+      "id": "arch-5",
+      "pass1_severity": "minor",
+      "verify_verdict": "DOC-ACK (TODO landed)",
+      "evidence": "`crates/benten-engine/src/engine.rs:1868` carries an `arch-5` drift-warning docstring above `is_known_view_id`; a `TODO(phase-2-view-id-registry)` marker lives at line 1874. The whitelist remains (content_listing + capability_grants + event_handler_dispatch + governance_inheritance + version_current prefixes), but the drift risk is named in code with a Phase-2 successor.",
+      "disposition": "HOLD-OPEN for Phase-2."
+    },
+    {
+      "id": "arch-6",
+      "pass1_severity": "minor",
+      "verify_verdict": "DOC-ACK (TODO landed)",
+      "evidence": "`crates/benten-engine/src/builder.rs:252` carries `TODO(phase-2-content-listing-autoreg)` naming the two auto-registration paths (assembly-time 'post' + per-label register_crud). `crates/benten-engine/src/engine.rs:611` cross-references arch-6 inside register_crud. The coupling is flagged with a Phase-2 `register_content_listing(label)` successor.",
+      "disposition": "HOLD-OPEN for Phase-2."
+    },
+    {
+      "id": "arch-7",
+      "pass1_severity": "minor",
+      "verify_verdict": "DOC-ACK (TODO landed)",
+      "evidence": "`crates/benten-engine/src/engine_transaction.rs:19` carries `TODO(phase-2-unify-tx-types)` explaining the parallel benten_graph::Transaction + benten_engine::EngineTransaction shape and the edge-op gap in PendingHostOp (the transaction path buffers PutNode / DeleteNode; PutEdge / DeleteEdge are reserved).",
+      "disposition": "HOLD-OPEN for Phase-2."
+    },
+    {
+      "id": "arch-8",
+      "pass1_severity": "minor",
+      "verify_verdict": "ACKNOWLEDGED (no change)",
+      "evidence": "`crates/benten-graph/src/store.rs:257-297` still carries ChangeEvent with `node: Option<Node>` and `edge_endpoints: Option<(Cid,Cid,String)>`. The G5 mini-review commit rationale lives in the docstring (lines 280-289). No TODO was added — the finding was flagged as pre-mature optimization at Phase-1 scale and the doc is the right audit trail for the semantic-shift decision.",
+      "disposition": "HOLD-OPEN for Phase-2."
+    },
+    {
+      "id": "arch-9",
+      "pass1_severity": "minor",
+      "verify_verdict": "FIXED (code landed)",
+      "evidence": "`crates/benten-engine/src/engine.rs:73` now declares `pub const CHANGE_STREAM_MAX_BUFFERED: usize = 16_384;`. EngineInner carries `change_stream_capacity: usize` (line 99) + `dropped_events: AtomicU64` (line 103). The push path at engine.rs:205 enforces `while guard.len() >= self.change_stream_capacity { guard.pop_front(); self.dropped_events.fetch_add(1, Relaxed); }` — drop-oldest bound. `metrics_snapshot()` (line 1671) surfaces `benten.change_stream.dropped_events`. EngineBuilder::change_stream_capacity() (builder.rs:173) exposes the override. Regression test `crates/benten-engine/tests/integration/change_stream.rs:76` exercises the cap + drop metric. The aside about test-helpers feature-gating is partially addressed — `benten-engine/Cargo.toml:22` defaults to `test-helpers` ON with an explicit comment 'publishers of release artifacts disable via `--no-default-features`'; Phase-2 could make this default-off.",
+      "disposition": "CLOSED (primary). Test-helpers default is a softer minor left to Phase-2 packaging discipline."
+    },
+    {
+      "id": "arch-10",
+      "pass1_severity": "minor",
+      "verify_verdict": "DOC-ACK (module-doc landed)",
+      "evidence": "`crates/benten-engine/src/engine.rs:20-29` carries a `# Subgraph cache + register_crud (arch-10)` module-doc block explaining the registered-CID-vs-walked-CID mismatch. `register_crud`'s docstring at line 578 cross-references the arch-10 discussion. Phase-2 unification (multi-entry-point SubgraphSpec) is the named successor.",
+      "disposition": "HOLD-OPEN for Phase-2."
+    },
+    {
+      "id": "arch-11",
+      "pass1_severity": "minor",
+      "verify_verdict": "TIGHTENED (compromises #1 + #5 closed in Step 5c)",
+      "evidence": "Step 5c (commits de3f01b + ffa2c5b) promoted compromises #1 (TOCTOU refresh) and #5 (per-cap metrics) from aspirational-prose to live-code-plus-regression-tests. `docs/SECURITY-POSTURE.md:64-115` now documents THREE refresh boundaries (commit / CALL-entry / ITERATE-batch) with regression-test pointers; compromise #5 (lines 168-196) documents four metric keys + Rust regression tests + TS round-trip pin. Compromises #3 (ErrorCode home) + #7 (bin gating) separately moved to CLOSED status in SECURITY-POSTURE.md. The pass-1 'all 8 compromises are clean' claim holds — and now four of them are CLOSED rather than HOLD-OPEN, tightening the Phase-1 posture.",
+      "disposition": "CLOSED-TIGHTER. Four compromises (#1, #3, #5, #7) now have live enforcement + regression tests; four (#2, #4, #6, #8) remain documented-deferrals with Phase-N revisit triggers. The ticking-time-bomb pattern Step 5c found (prose ahead of code) is absent from the remaining compromises — verified by walking each to its enforcement site."
+    },
+    {
+      "id": "arch-12",
+      "pass1_severity": "minor",
+      "verify_verdict": "STILL-OPEN (Phase-2 successor scope)",
+      "evidence": "`crates/benten-engine/src/primitive_host.rs:282` still carries `_query: &benten_eval::ViewQuery` (underscore prefix), then calls `Engine::read_view(self, view_id)` at line 284 — the ViewQuery is dropped. PrimitiveHost is still 13 methods + `iterate_batch_boundary()` default-returning-100 (which IS compromise #1's enforcement knob, as the pass-1 fix suggested documenting). No split into NodeHost / CapabilityHost / ViewHost / IterationHost landed.",
+      "disposition": "HOLD-OPEN for Phase-2. Phase-1 behavior correct (view reads work end-to-end via the five canonical hand-written IVM views); the trait-shape refactor is a Phase-2 concern when user-defined views ship."
+    }
+  ],
+  "new_findings": [
+    {
+      "id": "arch-13",
+      "severity": "minor",
+      "location": "CLAUDE.md §'## 14 Structural Invariants' (line 369)",
+      "claim": "CLAUDE.md's §'14 Structural Invariants' summary block opens with 'All enforced by the engine, not by application code' — but invariants 7 (SANDBOX output cap), 11 (system-zone labels unreachable), 13 (immutable once registered / per-step cap check), and 14 (causal attribution) have only partial or stopgap enforcement at Phase 1.",
+      "detail": "Verified by walking each invariant to its code site: (a) Invariant 4 (SANDBOX nesting) has structural enforcement via max_iterate_nest_depth for ITERATE but not SANDBOX (SANDBOX primitive returns PrimitiveNotImplemented, so the invariant is vacuous not enforced); (b) Invariant 7 (SANDBOX output cap) has no enforcement — no code site emits `SandboxOutputTooLarge` because no SANDBOX executor exists; (c) Invariant 11 (system-zone labels) has a graph-layer stopgap (`crates/benten-graph/tests/system_zone.rs:5` documents 'Invariant 11 full enforcement is Phase 2; this is the Phase 1 stopgap') — the full evaluator-side reachability check is deferred; (d) Invariant 13 (per-step cap check / immutability) is explicitly named as deferred in two `#[ignore]` tests (`requires_enforcement.rs:48` + `requires_property_call_time_check.rs:47` — 'per-primitive enforcement needs evaluator invoking check_* per op step, not only at replay. Phase 2'); (e) Invariant 14 (causal attribution) has attribution fields populated + tested (change_stream.rs:154-162) but no structural invariant enforcement — it is exercised, not checked. CLAUDE.md's Phase-1 Scope section at lines 328-335 IS honest about this partial coverage: 'Structural validation (registration-time) for invariants 1-6, 9-10, 12 ... Full invariant set (7 SANDBOX output, 8 iteration-budget cumulative, 11 system-zone, 13 immutability, 14 causal-attribution) ships in Phase 2'. The §'## 14 Structural Invariants' summary block on line 367 is the mismatched surface — it reads as a claim of full enforcement. This is the exact prose-vs-code pattern the verify-don't-trust-docs lens is designed to catch, though it's a low-stakes instance because the detailed Phase-1-Scope section is honest.",
+      "suggested_fix": "Edit CLAUDE.md line 369 from 'All enforced by the engine, not by application code:' to 'The complete invariant set (Phase-1 coverage varies — see Phase 1 Scope §\"benten-eval\" for the 1-6/9-10/12 subset + 8 runtime budget; full 7/11/13/14 enforcement in Phase 2):'. Alternatively: add a one-line caveat right after the list — 'Phase-1 scope covers 1-6, 9-10, 12 at registration-time + 8 at runtime; 7/11/13/14 are Phase 2. See docs/SECURITY-POSTURE.md §Compromise 1 + 4 for rationale.' Low-risk edit; no code changes needed."
+    }
+  ],
+  "severity_counts": {
+    "critical": 0,
+    "major": 0,
+    "minor": 1,
+    "pass1_still_open": 2,
+    "pass1_closed": 4,
+    "pass1_doc_ack_phase2": 5,
+    "pass1_tightened_in_step_5c": 1
+  },
+  "verify_dont_trust_audit": {
+    "compromise_claims_walked_to_code": 8,
+    "compromise_claims_with_prose_ahead_of_code": 0,
+    "compromise_claims_closed_since_r6": 4,
+    "step_5c_gap_pattern_recurrence": "NONE-FOUND",
+    "rationale": "Step 5c discovered compromise #1 (TOCTOU) + #5 (metrics) were documented as implemented but the code did nothing. That pattern — aspirational prose with no enforcement — was the hunt lens for this pass. For each of the 8 named compromises in docs/SECURITY-POSTURE.md: (1) located the doc section; (2) followed its 'regression test' pointer to the test file; (3) confirmed the test exists and exercises a real code path; (4) walked the code path to the enforcement site. No compromise currently documents an enforcement that isn't in code. Compromise #8 (dispatch short-circuit) was CLOSED earlier by removing the fast path — verified by grepping for any surviving short-circuit in engine.rs dispatch_call_inner (none found; every call routes through Evaluator::run per the primitive_host.rs seam). Compromise #6 (BLAKE3 128-bit) is a posture-claim, not an enforcement-claim — the bound is an assumption about the hash function, verified by hash-algorithm-choice at `crates/benten-core/src/cid.rs` using `blake3::hash` + multihash code 0x1e."
+  },
+  "positive_observations": [
+    "Step 5c's closure of compromises #1 + #5 is the strongest signal this review could receive: the methodology that failed in the prior pass (reviewer audited the doc, not the code) was applied successfully in R6b against the remaining six compromise claims, and zero new aspirational-prose-vs-code gaps surfaced.",
+    "The R6 Wave 2 engine/lib.rs split (3,476 LOC → 9 modules at ~500 LOC each) makes prose-vs-code verification materially easier. Pass-1 findings arch-2, arch-5, arch-6, arch-7, arch-10 all landed doc-fixes as module-level docstrings at the exact extraction boundary — readers find the arch-N reference at the file that owns the concern, not buried in a monolithic lib.rs.",
+    "GraphError::RedbSource(#[from] redb::Error) (commit 21412c1) closes a long-running architectural debt with a ~20-line refactor and a dedicated regression test (`graph_error_hygiene.rs`). The test-surface friction pass-1 warned about (R3 fixtures used `GraphError::Redb(String)`) was resolved by keeping the old variant alongside the new one with a docstring distinguishing 'test injection' from 'production conversion'.",
+    "Compromise #1's three-boundary refresh architecture (commit / CALL / ITERATE-batch) in commit de3f01b is a model: named, bounded, documented with explicit 'does NOT claim' caveats, backed by seven tests in `cap_refresh_toctou.rs`, and the Phase-2 revisit path (per-iteration cap via `schedule_revocation_at_iteration`) is named in SECURITY-POSTURE.md.",
+    "Compromise #5's per-scope write metrics (commit ffa2c5b) correctly anchors the key space (`store:<label>:write`) against GrantBackedPolicy's internal derivation — the Phase-3 rate-limit enforcement pass can layer on top without re-deriving the scope key shape. System-zone labels are explicitly excluded from per-scope tally to prevent privileged writes from skewing operator dashboards.",
+    "BLAKE3 decision provenance (commit 90eb694) in SECURITY-POSTURE.md §'Hash algorithm choice — BLAKE3 (options considered)' documents all four options (A: BLAKE3 only / B: SHA-256 only / C: dual-hash / D: BLAKE3-internal-SHA-256-boundary) with interop-caveat discussion. Good example of the R6 methodology: document the decision with enough context that a Phase-N reviewer can audit the cost-benefit, not just the conclusion.",
+    "The cargo-nextest retries=0 setting (`.config/nextest.toml`, added in Wave 1) prevents hidden-flakiness from masking determinism bugs — directly aligned with the verify-don't-trust-docs contract: no re-run hides a bug that would otherwise reproduce in CI.",
+    "Seventeen `#[ignore]` tests (up from 16; one added with the new `#[ignore]` in requires_property_call_time_check.rs for Invariant 13 deferral) all carry TODO(phase-2-*) or TODO(phase-3-*) markers naming a specific API surface or populated-fixture gap. The boundary is drawn at scope, not at test ID — a regression that 'silently passes' under ignore is bounded by the named successor scope."
+  ],
+  "notes": "R6b verdict: PASS. The verify-don't-trust-docs lens found exactly one new doc-overreach (arch-13: the '## 14 Structural Invariants' summary block in CLAUDE.md reads as a claim of full enforcement when Phase 1 covers 1-6, 9-10, 12 + 8 runtime). That gap is low-stakes because the detailed Phase-1 Scope section on the same page IS honest. The hunt for recurrences of the Step 5c pattern (aspirational prose / no code) came up empty against the six remaining compromises — each one walks cleanly to its enforcement site plus regression test. R6 pass-1's two major findings are correctly dispositioned: arch-1 (benten-eval→benten-graph dep) is an explicit Phase-2 deferral with commit-trailer escalation; arch-2 (two-phase-write contract) is CLOSED by doc-landing at the extraction boundary. Of the ten pass-1 minor findings, five are DOC-ACK'd with in-code TODO(phase-2-*) markers at the extracted module level (arch-4, arch-5, arch-6, arch-7, arch-10), one is ACKNOWLEDGED with no action (arch-8 — pre-mature optimization at Phase-1 scale), two are FIXED (arch-3, arch-9), and one is HOLD-OPEN + TIGHTENED via the Step 5c compromise-closure work (arch-11). arch-12 (PrimitiveHost shape) remains a Phase-2 refactor target — the trait works correctly for Phase-1 views but will benefit from splitting when user-defined views land. The architecture is in a materially better state than at R6 close: four compromises moved from HOLD-OPEN to CLOSED, engine/lib.rs is no longer a 3,476-LOC monolith, and the verify-don't-trust-docs methodology is now encoded in the architect-reviewer agent definition so future reviews apply it by default. Recommend progression to R7 / Phase-2 scope planning."
+}
