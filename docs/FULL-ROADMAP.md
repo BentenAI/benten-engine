@@ -14,7 +14,7 @@ The committed scope reflects the three-pillar vision (see [`VISION.md`](VISION.m
 
 ### Phase 1: Core Engine
 
-**The foundation.** A working Rust graph engine with TypeScript bindings that proves the code-as-graph thesis for real CRUD handlers. Scope reconciled 2026-04-14 with CLAUDE.md "Phase 1 Scope" — the shape below is what meets Phase 1's exit criteria without deferring the central architectural claims.
+**The foundation.** A working Rust graph engine with TypeScript bindings that proves the code-as-graph thesis for real CRUD handlers. Scope reconciled 2026-04-14 — the shape below is what meets Phase 1's exit criteria without deferring the central architectural claims.
 
 - 6 crates: `benten-core`, `benten-graph`, `benten-ivm`, `benten-caps`, `benten-eval`, `benten-engine`
 - Node, Edge, Value types; content hashing (BLAKE3 + DAG-CBOR + CIDv1); version chains (opt-in)

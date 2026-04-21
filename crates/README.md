@@ -18,7 +18,7 @@ Additional crates added in Phase 3:
 Optional future crate (if demand emerges):
 - `benten-query/` — Cypher parser beyond operation subgraphs
 
-These directories **do not yet exist** — they will be created during the Phase 1 spike (see `CLAUDE.md` Step 4) so the crate structure reflects what actually compiles against the validated dependencies. Creating empty skeletons ahead of the spike would lock in structure before we know what the stack tolerates.
+The Phase 1 + Phase 2 crates above land during their respective phases — the crate structure reflects what actually compiles against the validated dependencies per the roadmap. The Phase-3+ crates are spec'd but not yet created.
 
 ## The Thinness Test
 
