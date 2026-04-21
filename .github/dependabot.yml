@@ -1,4 +1,25 @@
 version: 2
+
+# Dependabot policy for benten-engine.
+#
+# Phase-2a tightening (2026-04-21): major-version bumps are excluded. The
+# first push triggered 12 PRs within two minutes, seven of which were
+# majors (typescript 5→6, vitest 2→4, @types/node 20→25, checkout 5→6,
+# download-artifact 4→8, github-script 7→9, setup-node 4→6, upload-artifact
+# 4→7). Those arrive faster than humans can triage and introduce semantic
+# changes (language versions, test-runner APIs) that belong on planned
+# upgrade paths rather than weekly dep-noise.
+#
+# Policy per ecosystem:
+#   - Minor + patch updates are grouped into a single PR per week per
+#     ecosystem.
+#   - Major updates are ignored globally. They come in via a human-driven
+#     bump on a purpose-built branch, not a Monday-morning PR storm.
+#
+# When we DO want a major-version bump evaluated: drop the corresponding
+# `ignore` entry, let Dependabot raise the PR, review it with the weight
+# it deserves, and restore the ignore after it lands.
+
 updates:
   - package-ecosystem: cargo
     directory: "/"
@@ -7,7 +28,7 @@ updates:
       day: monday
       time: "06:00"
       timezone: "UTC"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
     labels:
       - dependencies
       - rust
@@ -17,6 +38,9 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: "/"
@@ -29,6 +53,15 @@ updates:
     labels:
       - dependencies
       - javascript
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: "/bindings/napi"
@@ -39,6 +72,15 @@ updates:
     labels:
       - dependencies
       - javascript
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: "/packages/engine"
@@ -49,6 +91,15 @@ updates:
     labels:
       - dependencies
       - javascript
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: "/tools/create-benten-app"
@@ -59,6 +110,15 @@ updates:
     labels:
       - dependencies
       - javascript
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: "/"
@@ -69,3 +129,12 @@ updates:
     labels:
       - dependencies
       - ci
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
