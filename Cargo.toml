@@ -10,6 +10,8 @@ members = [
     "crates/benten-eval",     # 12 primitives, evaluator, transaction primitive, SANDBOX host (STUB)
     "crates/benten-engine",   # Orchestrator: public API
     "bindings/napi",          # napi-rs v3 bindings (native + WASM)
+    "tests/doc_completeness", # Phase-2a R3 qa-expert — docs-vs-code audit tests
+    "tools/benten-dev",       # Phase-2a G11-A dev-server stub (hot-reload, inspect-state)
 ]
 
 [workspace.package]
@@ -260,26 +262,18 @@ uhlc = "0.2"
 # loro = "1"
 # ed25519-dalek = "2"
 
-# Dependency workaround: the `core2` 0.4.0 crate was archived upstream on
-# 2026-04-14 ("No longer supported. Use core directly.") and yanked from
-# crates.io. It is pulled in transitively via two chains:
-#   1. cid -> ipld-core -> serde_ipld_dagcbor  (direct in our hash path)
-#   2. multihash + multihash-derive             (via cid's feature wiring)
+# Historical dependency note: in Phase 1 the `core2` 0.4.0 crate was archived
+# upstream on 2026-04-14 ("No longer supported. Use core directly.") and
+# yanked from crates.io. It was pulled in transitively via two chains through
+# `cid` and `multihash`. We maintained a temporary fork (BentenAI/rust-cid
+# at rev e11cf45) and a pinned technocreatives core2 fork to unblock the spike.
 #
-# We resolve chain 1 by patching `cid` to our fork, which replaces the core2
-# dependency with `no_std_io2` (same approach as multiformats/rust-multihash#407,
-# pending upstream review in multiformats/rust-cid).
+# Both upstream PRs have since merged and released:
+#   - multiformats/rust-cid#185       → cid 0.11.2 (no_std_io2 replacement)
+#   - multiformats/rust-multihash#407 → multihash 0.19.4 (no_std_io2 replacement)
 #
-# We resolve chain 2 temporarily by patching `core2` to the technocreatives
-# community fork at a pinned commit. This entry can be removed once
-# multiformats/rust-multihash#407 merges and a release is cut, which will
-# propagate a core2-free multihash through to the ipld-core / serde_ipld_dagcbor
-# chain as well.
-#
-# See SPIKE-phase-1-stack-RESULTS.md "Surprises" #1 and "Next Actions" #1.
-[patch.crates-io]
-cid = { git = "https://github.com/BentenAI/rust-cid", rev = "e11cf45399c951597725a9bc3ed49c805f7aa640" }
-core2 = { git = "https://github.com/technocreatives/core2", rev = "545e84bcb0f235b12e21351e0c69767958efe2a7" }
+# The forks are no longer needed; crates.io versions carry the fix. Closes
+# docs/future/phase-2-backlog.md §6.4.
 
 [profile.release]
 lto = "thin"
