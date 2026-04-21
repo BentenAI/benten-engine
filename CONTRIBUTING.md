@@ -4,7 +4,7 @@ First time reading the repo? Start with [`docs/VISION.md`](docs/VISION.md) and [
 
 ## Prerequisites
 
-- Rust 2024 edition. MSRV (minimum supported) is **1.85** (when edition 2024 stabilized); dev version is **1.94+** (pinned to `stable` channel in `rust-toolchain.toml`, which auto-installs the current stable on first cargo invocation). Install via `rustup`.
+- Rust 2024 edition. MSRV (minimum supported) is **1.89** (raised from 1.85 to match the `redb` 4.0.0 floor, which is a non-optional workspace dep); dev version is **1.94+** (pinned to `stable` channel in `rust-toolchain.toml`, which auto-installs the current stable on first cargo invocation). Install via `rustup`.
 - Node.js 22+ and npm (for TypeScript bindings and IVM benchmark reproducibility).
 - `cargo-nextest` for faster tests: `cargo install cargo-nextest`.
 

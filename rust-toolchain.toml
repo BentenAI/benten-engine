@@ -4,4 +4,7 @@ components = ["rustfmt", "clippy", "rust-src"]
 profile = "default"
 
 # Benten targets Rust 2024 edition (stable since Rust 1.85, February 2025).
-# Current validated version: 1.94.1 (2026-03-25).
+# Workspace MSRV is 1.89 (set in Cargo.toml `workspace.package.rust-version`);
+# the bump from 1.85 tracks `redb` 4.0.0's declared floor and is enforced
+# by `.github/workflows/msrv.yml`. The stable channel currently ships
+# 1.94.1 (2026-03-25), comfortably above MSRV.

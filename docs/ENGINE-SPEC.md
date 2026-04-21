@@ -418,7 +418,7 @@ Confirmed stack with versions (April 2026):
 | wasmtime | 35+ | Production, fuel metering |
 | cargo-nextest | current | Adopted as default test runner |
 
-Rust toolchain: 1.94.1 (2024 edition stable since 1.85.0, February 2025).
+Rust toolchain: dev version 1.94.1; workspace MSRV is **1.89** (raised from 1.85 to match `redb` 4.0.0's declared floor, validated by `.github/workflows/msrv.yml`). The 2024 edition itself has been stable since 1.85.0 (February 2025); the MSRV bump is a dep-floor consequence, not an edition consequence.
 
 ---
 
