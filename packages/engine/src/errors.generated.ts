@@ -6,7 +6,7 @@
 // exposes them as instance properties so `err.code` / `err.fixHint`
 // work on any thrown instance. The drift-detect script asserts this
 // file stays in sync with the catalog and the Rust `ErrorCode` enum
-// at `crates/benten-core/src/error_code.rs`.
+// at `crates/benten-errors/src/lib.rs`.
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
@@ -379,7 +379,7 @@ export class ECapAttenuation extends BentenError {
 /**
  * E_WRITE_CONFLICT
  *
- * Thrown at: Evaluation (CAS WRITE)
+ * Thrown at: Evaluation (CAS WRITE). **Runtime surface is edge-routed, not Rust-enum-valued:** WRITE's `cas` mode routes conflicts via the `ON_CONFLICT` edge; the engine stamps `error_code: "E_WRITE_CONFLICT"` on the routed step (`crates/benten-engine/src/primitive_host.rs:~362`). Callers read the code off the edge-routing metadata, not via a `match` on an `Err(EvalError::WriteConflict)` — the enum variant exists for forward-compat with a Phase-2 native Rust path but has no construction site in Phase-1 production code. The drift-detector's `reachability: ignore` annotation reflects this asymmetry.
  * Message template: "Expected version {expected}, found {actual} on {target}"
  */
 export class EWriteConflict extends BentenError {
@@ -639,9 +639,9 @@ export class EValueFloatNonfinite extends BentenError {
  */
 export class ECidParse extends BentenError {
   static readonly code = "E_CID_PARSE";
-  static readonly fixHint = "Phase 1 accepts only base32-lower-nopad multibase (`b`-prefixed) CIDv1. Check that the caller is not passing a base58btc / base64 / hex form, and that the bytes are not truncated.";
+  static readonly fixHint = "Phase 1 accepts base32-lower-nopad multibase (`b`-prefixed) CIDv1 via both the napi boundary and the Rust `Cid::from_str` path. Check that the caller is not passing a base58btc / base64 / hex form, and that the bytes are not truncated.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_CID_PARSE", "Phase 1 accepts only base32-lower-nopad multibase (`b`-prefixed) CIDv1. Check that the caller is not passing a base58btc / base64 / hex form, and that the bytes are not truncated.", message, context);
+    super("E_CID_PARSE", "Phase 1 accepts base32-lower-nopad multibase (`b`-prefixed) CIDv1 via both the napi boundary and the Rust `Cid::from_str` path. Check that the caller is not passing a base58btc / base64 / hex form, and that the bytes are not truncated.", message, context);
     this.name = "ECidParse";
   }
 }
@@ -649,7 +649,7 @@ export class ECidParse extends BentenError {
 /**
  * E_CID_UNSUPPORTED_CODEC
  *
- * Thrown at: CID deserialization
+ * Thrown at: CID deserialization (`Cid::from_bytes` — distinct from `E_CID_PARSE`, which is reserved for length / version / digest-length structural failures)
  * Message template: "CID codec {codec} is not supported; Phase 1 recognizes DAG-CBOR (0x71)"
  */
 export class ECidUnsupportedCodec extends BentenError {
@@ -664,7 +664,7 @@ export class ECidUnsupportedCodec extends BentenError {
 /**
  * E_CID_UNSUPPORTED_HASH
  *
- * Thrown at: CID deserialization
+ * Thrown at: CID deserialization (`Cid::from_bytes` — distinct from `E_CID_PARSE`, which is reserved for length / version / digest-length structural failures)
  * Message template: "CID hash function {code} is not supported; Phase 1 recognizes BLAKE3 (0x1e)"
  */
 export class ECidUnsupportedHash extends BentenError {
@@ -819,9 +819,9 @@ export class ESubsystemDisabled extends BentenError {
  */
 export class EUnknownView extends BentenError {
   static readonly code = "E_UNKNOWN_VIEW";
-  static readonly fixHint = "The view id was not registered via `create_view` / `registerView`. Check spelling, confirm the IVM subscriber has the view wired, and that `.without_ivm()` was not used on the builder.";
+  static readonly fixHint = "The view id was not registered. From TypeScript use `engine.createView(viewDef)`; from Rust use `Engine::create_view` (or the built-in views wired at engine-build time). Check spelling, confirm the IVM subscriber has the view wired, and that `.without_ivm()` was not used on the builder.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_UNKNOWN_VIEW", "The view id was not registered via `create_view` / `registerView`. Check spelling, confirm the IVM subscriber has the view wired, and that `.without_ivm()` was not used on the builder.", message, context);
+    super("E_UNKNOWN_VIEW", "The view id was not registered. From TypeScript use `engine.createView(viewDef)`; from Rust use `Engine::create_view` (or the built-in views wired at engine-build time). Check spelling, confirm the IVM subscriber has the view wired, and that `.without_ivm()` was not used on the builder.", message, context);
     this.name = "EUnknownView";
   }
 }
@@ -844,14 +844,14 @@ export class ENotImplemented extends BentenError {
 /**
  * E_IVM_PATTERN_MISMATCH
  *
- * Thrown at: IVM view read
+ * Thrown at: IVM view read (`View::read` on any of the five Phase-1 views)
  * Message template: "IVM view query pattern does not match any maintained index: {detail}"
  */
 export class EIvmPatternMismatch extends BentenError {
   static readonly code = "E_IVM_PATTERN_MISMATCH";
-  static readonly fixHint = "The caller asked a view for an index partition it doesn't maintain (e.g. an `entity_cid` query against a view that only keys on `label`). Consult the view's maintained-pattern list and restrict the `ViewQuery` to supported keys. Distinct from `E_INV_REGISTRATION` — the view is healthy; the query shape is wrong.";
+  static readonly fixHint = "The caller asked a view for an index partition it doesn't maintain. Each of the five Phase-1 views keys on a specific field and rejects queries that omit it: - `capability_grants` requires `entity_cid` - `event_dispatch` requires `event_name` - `content_listing` accepts `label` (optional — omitted returns full listing; a non-matching label is rejected) - `governance_inheritance` requires `entity_cid` - `version_current` requires `anchor_id` Consult the view's maintained-pattern list and restrict the `ViewQuery` to supported keys. Distinct from `E_INV_REGISTRATION` — the view is healthy; the query shape is wrong.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_IVM_PATTERN_MISMATCH", "The caller asked a view for an index partition it doesn't maintain (e.g. an `entity_cid` query against a view that only keys on `label`). Consult the view's maintained-pattern list and restrict the `ViewQuery` to supported keys. Distinct from `E_INV_REGISTRATION` — the view is healthy; the query shape is wrong.", message, context);
+    super("E_IVM_PATTERN_MISMATCH", "The caller asked a view for an index partition it doesn't maintain. Each of the five Phase-1 views keys on a specific field and rejects queries that omit it: - `capability_grants` requires `entity_cid` - `event_dispatch` requires `event_name` - `content_listing` accepts `label` (optional — omitted returns full listing; a non-matching label is rejected) - `governance_inheritance` requires `entity_cid` - `version_current` requires `anchor_id` Consult the view's maintained-pattern list and restrict the `ViewQuery` to supported keys. Distinct from `E_INV_REGISTRATION` — the view is healthy; the query shape is wrong.", message, context);
     this.name = "EIvmPatternMismatch";
   }
 }
