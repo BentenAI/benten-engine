@@ -17,6 +17,12 @@ workspace = true
 # surface. The `napi-export` feature gates the napi-rs symbols so the
 # rlib used by the test binary doesn't reference unresolved napi externs.
 crate-type = ["cdylib", "rlib"]
+# Disable the implicit libtest bench harness. `cargo bench --workspace`
+# passes criterion CLI flags (`--measurement-time`, `--sample-size`) that
+# libtest rejects with `Unrecognized option`. benten-napi has no benches of
+# its own — opting out of the implicit bench target fixes the bench.yml run.
+# Mirrors the identical fix in crates/benten-core/Cargo.toml.
+bench = false
 
 [features]
 default = ["napi-export"]
