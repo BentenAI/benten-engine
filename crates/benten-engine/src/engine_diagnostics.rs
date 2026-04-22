@@ -24,7 +24,8 @@ impl Engine {
     // -------- Snapshot + transaction --------
 
     /// Open a MVCC snapshot handle observing the engine state at the call
-    /// instant. Forwards to the graph layer's [`RedbBackend::snapshot`].
+    /// instant. Forwards to the graph layer's
+    /// [`benten_graph::RedbBackend::snapshot`].
     pub fn snapshot(&self) -> Result<benten_graph::SnapshotHandle, EngineError> {
         Ok(self.backend.snapshot()?)
     }
@@ -135,7 +136,8 @@ impl Engine {
     ///   the bounded observed-events buffer because a subscriber fell behind
     ///   the write path (r6-sec-5). Non-zero means an operator should
     ///   increase the capacity via
-    ///   [`EngineBuilder::change_stream_capacity`] or ensure probes drain.
+    ///   [`crate::builder::EngineBuilder::change_stream_capacity`] or ensure
+    ///   probes drain.
     #[must_use]
     pub fn metrics_snapshot(&self) -> BTreeMap<String, f64> {
         let mut out = BTreeMap::new();
@@ -206,9 +208,10 @@ impl Engine {
     }
 
     /// Configured upper bound on the in-memory change-event buffer. Matches
-    /// the value passed to [`EngineBuilder::change_stream_capacity`] (or
-    /// [`CHANGE_STREAM_MAX_BUFFERED`] when the default was taken). See
-    /// r6-sec-5.
+    /// the value passed to
+    /// [`crate::builder::EngineBuilder::change_stream_capacity`] (or
+    /// [`crate::engine::CHANGE_STREAM_MAX_BUFFERED`] when the default was
+    /// taken). See r6-sec-5.
     #[must_use]
     pub fn change_stream_capacity(&self) -> usize {
         self.inner.change_stream_capacity
