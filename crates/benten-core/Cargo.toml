@@ -28,7 +28,14 @@ serde_ipld_dagcbor = { workspace = true }
 spin = { workspace = true }
 thiserror = { workspace = true }
 
-[dev-dependencies]
+# Dev-deps target-gated off wasm32-*: `proptest` pulls `rusty-fork` →
+# `wait-timeout`, which has no wasi backend and fails to compile for
+# `wasm32-wasip1`. The T6 determinism workflow builds the
+# `print_canonical_cid` example for `wasm32-wasip1` and inherits the
+# dev-deps; without this gate the wasm build fails on a transitive dep
+# the example doesn't use. Native tests / benches are unaffected —
+# `cfg(not(target_family = "wasm"))` is true there.
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 # Cross-process determinism test uses std.
 proptest = { workspace = true }
 criterion = { workspace = true }
