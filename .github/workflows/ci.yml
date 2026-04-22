@@ -130,7 +130,7 @@ jobs:
           cat "cid-${{ matrix.leg }}-${{ matrix.rust }}.txt"
 
       - name: Upload CID artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cid-${{ matrix.leg }}-${{ matrix.rust }}
           path: cid-${{ matrix.leg }}-${{ matrix.rust }}.txt
@@ -172,7 +172,7 @@ jobs:
           cat cid-wasm32-wasip1.txt
 
       - name: Upload wasm CID artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cid-wasm32-wasip1
           path: cid-wasm32-wasip1.txt
@@ -192,7 +192,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Download all CID artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: cids/
           pattern: cid-*
