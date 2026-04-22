@@ -110,6 +110,14 @@ pub use subgraph_spec::{
     SubgraphSpec, SubgraphSpecBuilder, WriteSpec,
 };
 
+pub mod engine_wait;
+pub mod subgraph_cache;
+pub mod system_zones;
+
+pub use engine_wait::{SuspendedOrComplete, SuspensionOutcome};
+pub use subgraph_cache::{SubgraphCache, SubgraphCacheKey};
+pub use system_zones::SYSTEM_ZONE_PREFIXES;
+
 // ---------------------------------------------------------------------------
 // Tests — lightweight smoke coverage; the heavy lifting lives in
 // `tests/` + `tests/integration/`.
