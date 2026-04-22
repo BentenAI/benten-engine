@@ -31,17 +31,21 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Install MSRV toolchain
-        run: |
-          rustup toolchain install 1.89 --profile minimal
-          rustup default 1.89
+        # Canonical install idiom — replaces the manual `rustup toolchain
+        # install ... && rustup default ...` that was a form drift with
+        # the rest of the workflow fleet. Sets 1.89 as default so
+        # subsequent `cargo ...` invocations use MSRV without `+1.89`.
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.89"
 
       - name: Build workspace
-        run: cargo +1.89 build --workspace --locked
+        run: cargo build --workspace --locked
 
       - name: Fixture-match check (canonical CID)
         run: |
           # The canonical fixture CID must remain stable across Rust versions.
           # If MSRV drift changes the encoding path, this catches it before
           # merge.
-          cargo +1.89 test --workspace --locked --no-fail-fast -- \
+          cargo test --workspace --locked --no-fail-fast -- \
             exit_6_canonical_cid_matches_spike_fixture

@@ -62,7 +62,12 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-audit
-        run: cargo install --locked cargo-audit
+        # Prebuilt binary via taiki-e install-action — ~3s instead of ~45s
+        # for `cargo install --locked cargo-audit` (which compiles from
+        # source).
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
 
       - name: Audit
         run: cargo audit --deny warnings
@@ -99,7 +104,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-audit
-        run: cargo install --locked cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
 
       - name: Run audit and collect output
         id: audit

@@ -113,7 +113,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-audit
-        run: cargo install --locked cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
 
       - name: Seed + lock a known-vulnerable dep
         shell: bash

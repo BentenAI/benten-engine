@@ -46,7 +46,11 @@ jobs:
           shared-key: "mutants"
 
       - name: Install cargo-mutants
-        run: cargo install cargo-mutants --locked
+        # Prebuilt binary via taiki-e — avoids the ~60s source compile of
+        # `cargo install cargo-mutants --locked`.
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants
 
       # Per-mutant cap of 180s so an accidentally-infinite mutant (e.g.
       # removing a loop bound) doesn't stall the whole job.

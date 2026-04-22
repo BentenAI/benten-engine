@@ -67,14 +67,15 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
-      - name: Generate coverage report (HTML + summary)
+      - name: Generate coverage report (HTML + summary + lcov)
         # `--workspace` walks every member crate; the HTML artifact is
         # navigable from the workflow run page for deep dives. The
         # `--summary-only` second invocation pipes a one-liner into the
         # job output so reviewers don't have to download the artifact
-        # for a top-level number.
+        # for a top-level number. The `--lcov` emission feeds codecov.io.
         run: |
           cargo llvm-cov --workspace --html --output-dir coverage-report
+          cargo llvm-cov report --lcov --output-path coverage.lcov
           echo "### Coverage summary" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           cargo llvm-cov report --summary-only >> "$GITHUB_STEP_SUMMARY"
@@ -88,3 +89,15 @@ jobs:
           path: coverage-report/
           retention-days: 14
           if-no-files-found: warn
+
+      - name: Upload lcov to codecov.io
+        # Token-less upload — the action auto-discovers the public-repo
+        # identity from the github context. Public-repo OSS gets PR diff
+        # comments + historical trend charts from codecov for free. Wire-
+        # up decision recorded in .addl/phase-2a/ci-decisions-2026-04-22.md
+        # §4 open-question #2.
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.lcov
+          fail_ci_if_error: false
+          verbose: true
