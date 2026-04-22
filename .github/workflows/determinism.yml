@@ -46,6 +46,7 @@ jobs:
           - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, leg: linux-arm64 }
           - { os: windows-2022, target: x86_64-pc-windows-msvc,     leg: windows-x86_64 }
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
 
@@ -89,6 +90,7 @@ jobs:
   msrv:
     name: T5 msrv ${{ matrix.rust }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -132,6 +134,7 @@ jobs:
   wasm-runtime:
     name: T6 wasm32-wasip1 runtime
     runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
 
@@ -187,6 +190,7 @@ jobs:
     name: T9 cross-leg byte-equality gate
     needs: [multi-arch, msrv, wasm-runtime]
     runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
 
@@ -209,10 +213,20 @@ jobs:
             legs[$leg]="$value"
           done
 
-          echo "Legs observed:"
+          echo "Legs observed (${#legs[@]}):"
           for leg in "${!legs[@]}"; do
             printf '  %-24s %s\n' "$leg" "${legs[$leg]}"
           done
+
+          # Sanity: we expect at least 5 legs (macos-arm64, macos-x86_64,
+          # linux-x86_64, linux-arm64, windows-x86_64, wasm32-wasip1, plus
+          # the msrv legs). A missing artifact silently drops a leg, which
+          # would weaken the cross-leg gate without failing it — catch that
+          # degenerate case here.
+          if [ "${#legs[@]}" -lt 5 ]; then
+            echo "EXPECTED ≥5 legs, observed ${#legs[@]} — an upload step likely failed silently."
+            exit 1
+          fi
 
           # Pick any leg as the reference; every other leg must match its
           # bytes exactly.

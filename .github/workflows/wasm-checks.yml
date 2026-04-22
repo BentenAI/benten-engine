@@ -27,6 +27,7 @@ jobs:
   napi-wasm32-compile-check:
     name: T8 benten-napi wasm32-unknown-unknown
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 

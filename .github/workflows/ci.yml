@@ -65,6 +65,7 @@ jobs:
           - { os: ubuntu-24.04-arm, leg: linux-arm64,   target: aarch64-unknown-linux-gnu,  rust: "1.85.0" }
           - { os: ubuntu-24.04-arm, leg: linux-arm64,   target: aarch64-unknown-linux-gnu,  rust: stable   }
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
 
@@ -142,6 +143,7 @@ jobs:
   wasm-runtime:
     name: wasm32 (wasip1 runtime + unknown-unknown compile)
     runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
 
@@ -188,6 +190,7 @@ jobs:
     name: cross-leg byte-equality gate (T9)
     needs: [build-and-test, wasm-runtime]
     runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
 
@@ -258,6 +261,7 @@ jobs:
   cold-install:
     name: create-benten-app cold install
     runs-on: ubuntu-24.04
+    timeout-minutes: 25
     # Depends on build-and-test so the bindings/napi artifact is compiled
     # at least once on Linux (the local workspace link path resolves the
     # compiled binary). If we ever publish prebuilt napi binaries, this

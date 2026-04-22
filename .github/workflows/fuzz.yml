@@ -40,3 +40,19 @@ jobs:
           --
           --ignored
           --nocapture
+
+      # On any fuzz-discovered counterexample, proptest writes the failing
+      # seed to `proptest-regressions/` so the next run re-checks it. We
+      # preserve those on failure so the seed survives CI workflow cleanup
+      # and the next push + a `--regenerate` run can reproduce the bug
+      # locally. Without this, a new counterexample would be lost.
+      - name: Upload proptest regressions on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: proptest-regressions-${{ github.run_id }}
+          path: |
+            crates/benten-eval/proptest-regressions/
+            **/proptest-regressions/
+          if-no-files-found: ignore
+          retention-days: 30

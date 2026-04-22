@@ -36,6 +36,7 @@ jobs:
   seeded-vuln-must-fail-cargo-deny:
     name: cargo-deny fires on seeded vulnerable dep
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
 
@@ -104,6 +105,7 @@ jobs:
   seeded-vuln-must-fail-cargo-audit:
     name: cargo-audit fires on seeded vulnerable dep
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
 

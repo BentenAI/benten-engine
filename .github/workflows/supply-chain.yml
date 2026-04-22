@@ -21,6 +21,7 @@ jobs:
   cargo-deny:
     name: cargo-deny (licenses / bans / advisories / sources)
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
@@ -53,6 +54,7 @@ jobs:
   cargo-audit:
     name: cargo-audit (belt-and-suspenders)
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
@@ -68,6 +70,7 @@ jobs:
   lockfile-verify:
     name: Cargo.lock integrity
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
@@ -85,6 +88,7 @@ jobs:
     # push a PR.
     if: github.event_name == 'schedule'
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
       contents: read
       issues: write

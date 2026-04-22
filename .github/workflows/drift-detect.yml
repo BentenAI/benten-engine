@@ -37,6 +37,7 @@ jobs:
   drift-detect:
     name: docs ↔ Rust enum ↔ TS types parity
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
 
@@ -88,6 +89,7 @@ jobs:
   test-drift-detector-fails:
     name: self-test (meta-assertion that the detector actually detects)
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     # This job exercises the drift-detector against a fixture that INJECTS
     # a missing variant. If the detector passes on the fixture, the
     # detector itself is broken (silent-pass) and the primary drift-detect
