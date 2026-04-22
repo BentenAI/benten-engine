@@ -53,9 +53,27 @@ jobs:
         # starting at CWD, so a workspace-root npm install (which includes
         # the tsx devDependency) is the only form that works. A global
         # install does NOT populate the local node_modules and node
-        # refuses to resolve the loader. Mirrors the ci.yml drift-detector
-        # job exactly.
+        # refuses to resolve the loader.
         run: npm install --ignore-scripts --no-audit --no-fund
+
+      # ci-forensics-2026-04-22 Root Cause C: the regen-freshness check was
+      # only wired in ci.yml's (now-deleted) inline drift-detector job.
+      # Because ci.yml was cancel-stormed on every push, the standalone
+      # drift-detect.yml passed (structural parity is narrower) while
+      # `errors.generated.ts` drifted against `benten-errors/src/lib.rs`
+      # fix-hint edits across multiple commits. The standalone now owns the
+      # regen-freshness gate too — this file is the single source of truth
+      # for T7 and runs on every push/PR.
+      - name: Regenerate TS error classes from catalog
+        run: node --import tsx scripts/codegen-errors.ts
+
+      - name: Verify errors.generated.ts is checked in and up to date
+        run: |
+          if ! git diff --quiet -- packages/engine/src/errors.generated.ts; then
+            echo "errors.generated.ts is out of date. Run 'npm run codegen:errors' and commit the result."
+            git --no-pager diff -- packages/engine/src/errors.generated.ts
+            exit 1
+          fi
 
       - name: Run the drift detector (bidirectional)
         run: node --import tsx scripts/drift-detect.ts

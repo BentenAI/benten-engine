@@ -1,6 +1,6 @@
 name: CI
 
-# Main Phase 1 CI workflow (T4/T5/T6/T7/T9/T10 + scaffolder cold-install).
+# Main Phase 1 CI workflow (T4/T5/T6/T9 + scaffolder cold-install).
 #
 # Jobs:
 #   1. build-and-test   — multi-arch matrix (macOS arm64/x86_64, Linux
@@ -11,16 +11,26 @@ name: CI
 #                         reproduction) + wasm32-unknown-unknown compile
 #                         check for bindings/napi.
 #   3. cross-leg-gate   — asserts every leg's CID is byte-identical.
-#   4. supply-chain     — cargo-audit + cargo-deny on every PR.
-#   5. drift-detector   — docs/ERROR-CATALOG.md vs Rust enum vs TS types.
-#   6. cold-install     — `npx create-benten-app test-project &&
+#   4. cold-install     — `npx create-benten-app test-project &&
 #                         cd test-project && npm install && npm run test`.
+#
+# T7 (error-catalog drift) and T10 (supply-chain) are NOT in this workflow:
+# they have dedicated standalone workflows (`drift-detect.yml`,
+# `supply-chain.yml`) that trigger on push + PR with their own concurrency
+# groups, matching coverage, and the correct flag set. The previous inline
+# copies here diverged from the standalones (different `cargo deny` flags;
+# `drift-detect.yml` did not have the regen-freshness check) and were
+# silently-red for multiple commits behind this workflow's concurrency-
+# cancel storm. The ci-forensics-2026-04-22 audit grouped this under
+# "duplicated-checks-with-diverging-semantics produce false greens" —
+# single-owner-per-gate is the remediation.
 #
 # Companion workflows (determinism.yml, wasm-checks.yml, supply-chain.yml,
 # drift-detect.yml, cold-install.yml) run the same checks on wider trigger
 # matrices (weekly cron, release events, seeded-vuln canaries). The set of
-# jobs here is the PR-gate subset — every one of these must be green for
-# a PR to merge.
+# jobs here is the PR-gate subset specific to functional build+test that is
+# not covered by a standalone; every one of these must be green for a PR
+# to merge, but the drift + supply-chain gates live in their own files.
 
 on:
   push:
@@ -239,71 +249,6 @@ jobs:
           fi
 
           echo "T9 OK: all ${#legs[@]} legs produced the same CID: $reference_value"
-
-  # --------------------------------------------------------------------------
-  # T10 — supply chain. cargo-audit + cargo-deny on every PR. Fails on any
-  # HIGH/CRITICAL advisory or banned license. A weekly sibling workflow
-  # (supply-chain-seeded-test.yml) validates the harness itself fires on a
-  # known-vulnerable canary.
-  # --------------------------------------------------------------------------
-  supply-chain:
-    name: supply-chain (cargo-audit + cargo-deny)
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-audit + cargo-deny
-        run: |
-          cargo install --locked cargo-audit
-          cargo install --locked cargo-deny
-
-      - name: cargo audit
-        run: cargo audit --deny warnings
-
-      - name: cargo deny check
-        run: cargo deny check
-
-  # --------------------------------------------------------------------------
-  # T7 — error-catalog drift detector. Bidirectional parity check across
-  # docs/ERROR-CATALOG.md, crates/benten-errors/src/lib.rs, and
-  # packages/engine/src/errors.generated.ts (+ errors.ts fallback).
-  # --------------------------------------------------------------------------
-  drift-detector:
-    name: error-catalog drift detector (T7)
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Install workspace dev dependencies (tsx for TS script runner)
-        # tsx replaces `node --experimental-strip-types` (Node 22 default
-        # was always gated behind the flag; tsx is the unflagged 2026
-        # idiom and is already bundled with the scaffolder template).
-        run: npm install --ignore-scripts --no-audit --no-fund
-
-      - name: Regenerate TS error classes from catalog
-        # Runs the codegen; if the checked-in errors.generated.ts diverges
-        # from what the catalog would produce, the drift-detector will
-        # surface it.
-        run: node --import tsx scripts/codegen-errors.ts
-
-      - name: Verify errors.generated.ts is checked in and up to date
-        run: |
-          if ! git diff --quiet -- packages/engine/src/errors.generated.ts; then
-            echo "errors.generated.ts is out of date. Run 'npm run codegen:errors' and commit the result."
-            git --no-pager diff -- packages/engine/src/errors.generated.ts
-            exit 1
-          fi
-
-      - name: Run drift detector (TS sources of truth)
-        run: node --import tsx scripts/drift-detect.ts
 
   # --------------------------------------------------------------------------
   # Scaffolder cold-install sanity. `npx create-benten-app` produces a
