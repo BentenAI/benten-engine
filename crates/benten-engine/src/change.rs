@@ -58,7 +58,7 @@ pub struct ChangeBroadcast {
 
 impl std::fmt::Debug for ChangeBroadcast {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let n = self.callbacks.lock().map(|g| g.len()).unwrap_or(0);
+        let n = self.callbacks.lock().map_or(0, |g| g.len());
         f.debug_struct("ChangeBroadcast")
             .field("callbacks", &n)
             .finish()
@@ -129,7 +129,7 @@ impl ChangeBroadcast {
     /// stays empty when IVM is disabled.
     #[must_use]
     pub fn subscriber_count(&self) -> usize {
-        self.callbacks.lock().map(|g| g.len()).unwrap_or(0)
+        self.callbacks.lock().map_or(0, |g| g.len())
     }
 }
 
