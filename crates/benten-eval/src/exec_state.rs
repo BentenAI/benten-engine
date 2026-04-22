@@ -6,8 +6,11 @@
 //! re-verifies each boundary. See plan §9.1 + `.addl/phase-2a/r1-triage.md`
 //! "arch-1" resolution.
 //!
-//! TODO(phase-2a-G3-A): real DAG-CBOR encoders + 4-step resume protocol +
-//! `Frame` implementation carry load.
+//! Encoding: `serde_ipld_dagcbor` produces canonical DAG-CBOR bytes that
+//! are bit-stable across re-encodes (BTreeMap-ordered keys, deterministic
+//! float handling). The envelope's `payload_cid` is BLAKE3 of the canonical
+//! payload bytes (32-byte digest wrapped in a CIDv1 `dag-cbor` / `blake3`
+//! envelope — matches `benten_core::Cid` throughout the engine).
 
 use benten_core::{Cid, CoreError, Value};
 use serde::{Deserialize, Serialize};
@@ -123,16 +126,36 @@ pub struct ExecutionStateEnvelope {
     pub payload: ExecutionStatePayload,
 }
 
-impl ExecutionStateEnvelope {
-    /// Canonical constructor: computes `payload_cid` from `payload` and
-    /// stamps `schema_version = 1`.
+impl ExecutionStatePayload {
+    /// Canonical DAG-CBOR encoding of this payload. The bytes are the
+    /// hash-input for the envelope's `payload_cid`.
+    ///
+    /// # Errors
+    /// Returns [`CoreError::Serialize`] on encode failure.
+    pub fn to_canonical_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        serde_ipld_dagcbor::to_vec(self)
+            .map_err(|e| CoreError::Serialize(format!("exec-state payload encode: {e}")))
+    }
+
+    /// BLAKE3 CID of the canonical DAG-CBOR bytes.
     ///
     /// # Errors
     /// Returns [`CoreError`] on encode failure.
+    pub fn cid(&self) -> Result<Cid, CoreError> {
+        let bytes = self.to_canonical_bytes()?;
+        let digest = blake3::hash(&bytes);
+        Ok(Cid::from_blake3_digest(*digest.as_bytes()))
+    }
+}
+
+impl ExecutionStateEnvelope {
+    /// Canonical constructor: computes `payload_cid` from the canonical
+    /// DAG-CBOR bytes of `payload` and stamps `schema_version = 1`.
+    ///
+    /// # Errors
+    /// Returns [`CoreError::Serialize`] on encode failure.
     pub fn new(payload: ExecutionStatePayload) -> Result<Self, CoreError> {
-        // Stub: use the resumption_principal_cid as a placeholder for the
-        // content hash. R5 G3-A lands real DAG-CBOR encode + BLAKE3.
-        let payload_cid = payload.resumption_principal_cid;
+        let payload_cid = payload.cid()?;
         Ok(Self {
             schema_version: 1,
             payload_cid,
@@ -140,31 +163,37 @@ impl ExecutionStateEnvelope {
         })
     }
 
-    /// Encode as DAG-CBOR. Phase-2a stub.
+    /// Encode the envelope as canonical DAG-CBOR.
+    ///
+    /// Two independent calls with the same payload MUST produce byte-
+    /// identical output (proptest `prop_exec_state_dagcbor_roundtrip` and
+    /// the `wait_resume_determinism` integration gate depend on this).
     ///
     /// # Errors
     /// Returns [`CoreError::Serialize`] on encode failure.
     pub fn to_dagcbor(&self) -> Result<Vec<u8>, CoreError> {
-        todo!(
-            "Phase 2a G3-A: implement DAG-CBOR encode per plan §9.1 + \
-             `exec_state_dagcbor_roundtrip` test"
-        )
+        serde_ipld_dagcbor::to_vec(self)
+            .map_err(|e| CoreError::Serialize(format!("exec-state envelope encode: {e}")))
     }
 
-    /// Decode from DAG-CBOR. Phase-2a stub.
+    /// Decode an envelope from canonical DAG-CBOR.
+    ///
+    /// This is the mirror of [`Self::to_dagcbor`]; `to_dagcbor` →
+    /// `from_dagcbor` is a bijection on well-formed bytes. The decoder does
+    /// NOT re-verify `payload_cid` against the payload bytes — that is step 1
+    /// of the resume protocol (see [`Self::recompute_payload_cid`]).
     ///
     /// # Errors
     /// Returns [`CoreError::Serialize`] on decode failure.
-    pub fn from_dagcbor(_bytes: &[u8]) -> Result<Self, CoreError> {
-        todo!(
-            "Phase 2a G3-A: implement DAG-CBOR decode per plan §9.1 + \
-             `exec_state_dagcbor_roundtrip` test"
-        )
+    pub fn from_dagcbor(bytes: &[u8]) -> Result<Self, CoreError> {
+        serde_ipld_dagcbor::from_slice(bytes)
+            .map_err(|e| CoreError::Serialize(format!("exec-state envelope decode: {e}")))
     }
 
-    /// Envelope CID accessor — returns a `Result` so call sites can chain
-    /// `.expect()` uniformly; the `Err` arm fires only if the envelope was
-    /// constructed with a malformed payload (a Phase-2a regression guard).
+    /// Envelope CID accessor. In Phase 2a this is the `payload_cid` — the
+    /// envelope wrapper itself is not separately hashed. `Result` is
+    /// preserved so call sites can chain `.expect()` uniformly; future
+    /// phases may compute an outer envelope CID lazily here.
     ///
     /// # Errors
     /// Returns [`CoreError`] on encode failure.
@@ -172,11 +201,14 @@ impl ExecutionStateEnvelope {
         Ok(self.payload_cid)
     }
 
-    /// Recompute the payload CID from the payload bytes (resume step 1).
+    /// Recompute the payload CID from the current payload bytes (resume
+    /// protocol step 1 per plan §9.1). A mismatch vs. `self.payload_cid`
+    /// means the persisted bytes were tampered with between suspend and
+    /// resume and the resume MUST be rejected.
     ///
     /// # Errors
-    /// Returns [`CoreError`] on encode failure.
+    /// Returns [`CoreError::Serialize`] on encode failure.
     pub fn recompute_payload_cid(&self) -> Result<Cid, CoreError> {
-        todo!("Phase 2a G3-A: implement recompute_payload_cid per plan §9.1 step 1")
+        self.payload.cid()
     }
 }

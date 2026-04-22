@@ -17,7 +17,9 @@ use benten_core::{Cid, Value};
 use benten_eval::TraceStep;
 
 fn zero_cid() -> Cid {
-    Cid::from_bytes(&[0u8; benten_core::CID_LEN]).expect("zero cid")
+    // R5 G3-A note: `from_bytes` on an all-zero buffer fails CID-header
+    // validation; the zero-digest CID is the intended fixture.
+    Cid::from_blake3_digest([0u8; 32])
 }
 
 /// SHAPE-PIN: validates the struct shape for Phase-2b forward-compat.

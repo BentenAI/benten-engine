@@ -21,7 +21,11 @@ use benten_core::Cid;
 use benten_eval::AttributionFrame;
 
 fn zero_cid() -> Cid {
-    Cid::from_bytes(&[0u8; benten_core::CID_LEN]).expect("zero cid")
+    // R5 G3-A note: the test-fixture helper uses `from_blake3_digest` (valid
+    // CIDv1 envelope over a zero digest) rather than `from_bytes` on an
+    // all-zero buffer — the latter fails CID-header validation. This is the
+    // zero-digest CID all G3-A shape-pin tests intended.
+    Cid::from_blake3_digest([0u8; 32])
 }
 
 /// SHAPE-PIN: validates the struct shape for Phase-2b forward-compat.

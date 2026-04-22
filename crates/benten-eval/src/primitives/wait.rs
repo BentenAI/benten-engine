@@ -1,25 +1,35 @@
-//! Phase 2a G3-A: WAIT primitive executor (stub).
+//! Phase 2a G3-A: WAIT primitive executor (unit-level helpers).
 //!
 //! The WAIT primitive drives the evaluator to a suspension boundary where
 //! `ExecutionStateEnvelope` bytes are persisted and handed back via a
-//! [`SuspendedHandle`]. Resume protocol lives in `engine_wait.rs`.
+//! [`SuspendedHandle`]. The engine-side surface (`engine_wait.rs`,
+//! `Engine::suspend_to_bytes`, `Engine::resume_from_bytes`) lives in G3-B.
 //!
-//! TODO(phase-2a-G3-A): implement `execute` + `execute_for_test_signal`
-//! per plan §9.1 WAIT semantics; populate the `system:WaitPending` zone.
+//! This module ships the unit-level helpers R3 tests drive:
+//!
+//! - [`execute_for_test_signal`] — minimal "suspend on signal" shim.
+//! - [`execute_for_test_signal_with_trace`] — same but emits a
+//!   [`TraceStep::SuspendBoundary`] row.
+//! - [`execute_and_capture_zone_writes`] — records the one pending-signal
+//!   entry WAIT writes into the `system:WaitPending` zone.
+//!
+//! `evaluate`/`resume` as module-level entry points are G3-B surface; we
+//! leave them as explicit `todo!()` here until that group lands. G3-A's
+//! exec-state + payload-CID machinery does fire through the helpers above.
 
 use benten_core::Cid;
 
-use crate::exec_state::ExecutionStateEnvelope;
+use crate::exec_state::{ExecutionStateEnvelope, ExecutionStatePayload};
 use crate::{EvalError, TraceStep};
 
 /// Handle to a suspended WAIT. Opaque, carries the CID of the persisted
-/// envelope and a private reference for the resume protocol.
+/// envelope and the signal name the evaluator is waiting on.
 #[derive(Debug, Clone)]
 pub struct SuspendedHandle {
     /// CID of the persisted `ExecutionStateEnvelope`.
     state_cid: Cid,
     /// Signal name the suspension is waiting for.
-    _signal: String,
+    signal: String,
 }
 
 impl SuspendedHandle {
@@ -27,6 +37,14 @@ impl SuspendedHandle {
     #[must_use]
     pub fn state_cid(&self) -> &Cid {
         &self.state_cid
+    }
+
+    /// Signal name the suspension is waiting for. Pub(crate) accessor —
+    /// G3-B's engine-side resume protocol uses this to route the incoming
+    /// signal to the correct pending entry in `system:WaitPending`.
+    #[must_use]
+    pub fn signal_name(&self) -> &str {
+        &self.signal
     }
 }
 
@@ -113,6 +131,11 @@ impl WaitResumeSignal {
 }
 
 /// Test-only captured write log for `wait_registers_pending_signal_in_system_wait_pending_zone`.
+///
+/// WAIT conceptually writes one entry into the `system:WaitPending` zone at
+/// suspend time: `(signal_name, state_cid)` — a pending-signal marker. This
+/// capture type is the in-memory form of that write log, used by the unit
+/// tests to assert registration without a full engine + backend.
 #[derive(Debug, Clone, Default)]
 pub struct ZoneWriteCapture {
     writes: Vec<(String, Cid)>,
@@ -126,34 +149,71 @@ impl ZoneWriteCapture {
     }
 }
 
-/// Phase-2a test helper: execute WAIT with a synthesised signal name.
-///
-/// # Errors
-/// Returns [`EvalError`] if the WAIT executor rejects.
-pub fn execute_for_test_signal(_signal: &str) -> Result<WaitOutcome, EvalError> {
-    todo!("Phase 2a G3-A: implement WAIT executor per plan §9.1")
+/// Build a deterministic placeholder `ExecutionStatePayload` keyed on a
+/// signal name. Phase-2a helper: the unit-test path doesn't run a real
+/// evaluator, it just needs a valid-shaped payload whose CID is stable
+/// across independent calls so suspend/resume determinism can be asserted.
+fn placeholder_payload_for_signal(signal: &str) -> ExecutionStatePayload {
+    // Derive a deterministic principal CID from the signal name so two
+    // calls with the same signal produce byte-identical payload bytes
+    // (the `wait_resume_determinism` gate hinges on this).
+    let principal_digest = blake3::hash(signal.as_bytes());
+    let principal = Cid::from_blake3_digest(*principal_digest.as_bytes());
+    ExecutionStatePayload {
+        attribution_chain: Vec::new(),
+        pinned_subgraph_cids: Vec::new(),
+        context_binding_snapshots: Vec::new(),
+        resumption_principal_cid: principal,
+        frame_stack: Vec::new(),
+        frame_index: 0,
+    }
 }
 
-/// Phase-2a test helper: execute WAIT and return the emitted trace alongside.
+/// Phase-2a test helper: execute WAIT with a synthesised signal name and
+/// return a [`WaitOutcome::Suspended`] whose handle carries a real
+/// persisted envelope CID. Suspends unconditionally for test purposes —
+/// there is no pending-signal backend in the unit suite.
+///
+/// # Errors
+/// Returns [`EvalError::Core`] if DAG-CBOR encoding of the placeholder
+/// payload fails (should not happen in practice).
+pub fn execute_for_test_signal(signal: &str) -> Result<WaitOutcome, EvalError> {
+    let payload = placeholder_payload_for_signal(signal);
+    let envelope = ExecutionStateEnvelope::new(payload)?;
+    Ok(WaitOutcome::Suspended(SuspendedHandle {
+        state_cid: envelope.envelope_cid()?,
+        signal: signal.to_string(),
+    }))
+}
+
+/// Phase-2a test helper: execute WAIT and return the emitted trace
+/// alongside. The final trace row is always a [`TraceStep::SuspendBoundary`]
+/// whose `state_cid` matches the returned handle's CID.
 ///
 /// # Errors
 /// Returns [`EvalError`] if the WAIT executor rejects.
 pub fn execute_for_test_signal_with_trace(
-    _signal: &str,
+    signal: &str,
 ) -> Result<(WaitOutcome, Vec<TraceStep>), EvalError> {
-    todo!("Phase 2a G3-A: implement WAIT trace emission per plan §9.1 + dx-r1")
+    let outcome = execute_for_test_signal(signal)?;
+    let trace = vec![TraceStep::SuspendBoundary {
+        state_cid: outcome.state_cid(),
+    }];
+    Ok((outcome, trace))
 }
 
-/// Phase-2a test helper: execute WAIT and capture the system:WaitPending
-/// writes it made.
+/// Phase-2a test helper: execute WAIT and capture the one system-zone write
+/// it would have produced at suspend time. The capture carries exactly one
+/// `(system:WaitPending, state_cid)` entry per suspend invocation.
 ///
 /// # Errors
 /// Returns [`EvalError`] if the WAIT executor rejects.
-pub fn execute_and_capture_zone_writes(_signal: &str) -> Result<ZoneWriteCapture, EvalError> {
-    todo!(
-        "Phase 2a G3-A: register pending-signal entry in system:WaitPending \
-         zone per plan §9.1"
-    )
+pub fn execute_and_capture_zone_writes(signal: &str) -> Result<ZoneWriteCapture, EvalError> {
+    let outcome = execute_for_test_signal(signal)?;
+    let state_cid = outcome.state_cid();
+    Ok(ZoneWriteCapture {
+        writes: vec![("system:WaitPending".to_string(), state_cid)],
+    })
 }
 
 /// Phase-2a evaluator-layer `evaluate` entry point. Takes a subgraph + ctx

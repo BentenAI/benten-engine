@@ -15,12 +15,17 @@ use benten_core::Cid;
 use benten_eval::AttributionFrame;
 
 fn zero_cid() -> Cid {
-    Cid::from_bytes(&[0u8; benten_core::CID_LEN]).expect("zero cid")
+    // R5 G3-A note: `from_bytes` on an all-zero buffer fails CID-header
+    // validation; the zero-digest CID is the intended fixture.
+    Cid::from_blake3_digest([0u8; 32])
 }
 
 /// Pinned CID for the canonical empty-extensions AttributionFrame.
-/// TBD — first run captures via the todo!() guard; write the string back in.
-const FIXTURE_CID: &str = "TBD";
+/// Captured by the R5 G3-A first run once `AttributionFrame::cid()` fired:
+/// three zero-digest CIDs routed through `Node::cid()` with label
+/// `"AttributionFrame"` produce this stable CIDv1/dag-cbor/blake3. If this
+/// string changes, the Phase-2a shape changed non-additively — review R4b.
+const FIXTURE_CID: &str = "bafyr4ig26oo2jmvq47wewho4sdpiscjpluvpzev3uerleuj2rtl63r7c5a";
 
 /// SHAPE-PIN: validates the struct shape for Phase-2b forward-compat.
 /// Does NOT validate firing semantics (those land in Phase 2b).
