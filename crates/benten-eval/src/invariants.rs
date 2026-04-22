@@ -147,15 +147,15 @@ pub fn validate_subgraph(
     // reported, skip to avoid infinite walks.
     if !violations.contains(&InvariantViolation::Cycle) {
         let max_depth = usize::try_from(config.max_depth).unwrap_or(usize::MAX);
-        if let Some(longest) = longest_path(&sg.nodes, &outgoing) {
-            if longest.len() > max_depth {
-                out.depth_actual = Some(longest.len());
-                out.depth_max = Some(max_depth);
-                out.longest_path = Some(longest);
-                violations.push(InvariantViolation::DepthExceeded);
-                if !aggregate {
-                    return Err(finalize(out, violations));
-                }
+        if let Some(longest) = longest_path(&sg.nodes, &outgoing)
+            && longest.len() > max_depth
+        {
+            out.depth_actual = Some(longest.len());
+            out.depth_max = Some(max_depth);
+            out.longest_path = Some(longest);
+            violations.push(InvariantViolation::DepthExceeded);
+            if !aggregate {
+                return Err(finalize(out, violations));
             }
         }
     }
@@ -557,11 +557,11 @@ fn longest_path_indices(
             if idx < neighbors.len() {
                 stack.last_mut().expect("just pushed").1 = idx + 1;
                 let next = neighbors[idx];
-                if let Some(v) = visited.get(next).copied() {
-                    if !v {
-                        visited[next] = true;
-                        stack.push((next, 0));
-                    }
+                if let Some(v) = visited.get(next).copied()
+                    && !v
+                {
+                    visited[next] = true;
+                    stack.push((next, 0));
                 }
             } else {
                 order.push(cur);

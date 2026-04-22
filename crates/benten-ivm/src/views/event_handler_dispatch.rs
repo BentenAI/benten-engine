@@ -187,10 +187,10 @@ impl EventDispatchView {
                 // rebuild would. `retain` is O(n_buckets) on the map.
                 let mut extra_cost: u64 = 0;
                 for b in &buckets {
-                    if let Some(set) = self.by_event.get_mut(b) {
-                        if set.remove(&event.cid) {
-                            extra_cost = extra_cost.saturating_add(1);
-                        }
+                    if let Some(set) = self.by_event.get_mut(b)
+                        && set.remove(&event.cid)
+                    {
+                        extra_cost = extra_cost.saturating_add(1);
                     }
                 }
                 // Drop empty buckets.

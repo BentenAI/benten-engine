@@ -1015,7 +1015,7 @@ impl RedbBackend {
     /// disabled.
     #[must_use]
     pub fn subscriber_count(&self) -> usize {
-        self.subscribers.lock().map(|g| g.len()).unwrap_or(0)
+        self.subscribers.lock().map_or(0, |g| g.len())
     }
 
     /// Open a MVCC snapshot handle. The handle captures redb's read-txn at

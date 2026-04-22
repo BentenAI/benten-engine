@@ -136,7 +136,7 @@ fn bench_view_incremental_maintenance(c: &mut Criterion) {
             counter = counter.wrapping_add(1);
             // Alternate matching/non-matching labels so the dispatch
             // pattern-match path gets exercised alongside the apply path.
-            let node = if counter % 2 == 0 {
+            let node = if counter.is_multiple_of(2) {
                 post_node(&format!("bp{counter}"), i64::try_from(counter).unwrap_or(0))
             } else {
                 other_node("unrelated")

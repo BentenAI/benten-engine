@@ -51,32 +51,32 @@ impl Engine {
                     // Empty labels collapse to `store:write`. Closes named
                     // compromise #5 — record, don't enforce.
                     let scopes = derive_committed_scopes(&ops);
-                    if let Some(p) = policy {
-                        if !ops.is_empty() {
-                            let primary_label = ops
-                                .iter()
-                                .find_map(|op| match op {
-                                    benten_caps::PendingOp::PutNode { labels, .. } => {
-                                        labels.first().cloned()
-                                    }
-                                    benten_caps::PendingOp::PutEdge { label, .. } => {
-                                        Some(label.clone())
-                                    }
-                                    _ => None,
-                                })
-                                .unwrap_or_default();
-                            let ctx = benten_caps::WriteContext {
-                                label: primary_label,
-                                pending_ops: ops,
-                                ..Default::default()
-                            };
-                            if let Err(cap_err) = p.check_write(&ctx) {
-                                self.inner.record_cap_write_denied(&scopes);
-                                *user_result.lock_recover() = Some(Err(EngineError::Cap(cap_err)));
-                                return Err(GraphError::TxAborted {
-                                    reason: "capability denied".into(),
-                                });
-                            }
+                    if let Some(p) = policy
+                        && !ops.is_empty()
+                    {
+                        let primary_label = ops
+                            .iter()
+                            .find_map(|op| match op {
+                                benten_caps::PendingOp::PutNode { labels, .. } => {
+                                    labels.first().cloned()
+                                }
+                                benten_caps::PendingOp::PutEdge { label, .. } => {
+                                    Some(label.clone())
+                                }
+                                _ => None,
+                            })
+                            .unwrap_or_default();
+                        let ctx = benten_caps::WriteContext {
+                            label: primary_label,
+                            pending_ops: ops,
+                            ..Default::default()
+                        };
+                        if let Err(cap_err) = p.check_write(&ctx) {
+                            self.inner.record_cap_write_denied(&scopes);
+                            *user_result.lock_recover() = Some(Err(EngineError::Cap(cap_err)));
+                            return Err(GraphError::TxAborted {
+                                reason: "capability denied".into(),
+                            });
                         }
                     }
                     // Record committed writes regardless of whether a policy

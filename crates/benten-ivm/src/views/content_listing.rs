@@ -349,13 +349,12 @@ impl View for ContentListingView {
         // than a silently-empty result (r6b §5.5 audit: silent-empty made
         // "no entries" and "queried a different listing" look identical).
         // Queries with no `label` filter still return the full listing.
-        if let Some(ref wanted) = query.label {
-            if wanted != &self.label {
-                return Err(ViewError::PatternMismatch(
-                    "content_listing: query label does not match this view's watched label"
-                        .to_string(),
-                ));
-            }
+        if let Some(ref wanted) = query.label
+            && wanted != &self.label
+        {
+            return Err(ViewError::PatternMismatch(
+                "content_listing: query label does not match this view's watched label".to_string(),
+            ));
         }
         let offset = query.offset.unwrap_or(0);
         let limit = query.limit.unwrap_or(usize::MAX);

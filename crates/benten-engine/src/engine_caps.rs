@@ -104,11 +104,9 @@ impl Engine {
         // re-registering the same id is a no-op at the subscriber level.
         if let Some(ivm) = self.ivm.as_ref() {
             let already_registered = ivm.view_ids().iter().any(|id| id == view_id);
-            if !already_registered {
-                if let Some(label) = input_pattern_label.as_deref() {
-                    let view = benten_ivm::views::ContentListingView::new(label);
-                    ivm.register_view(Box::new(view));
-                }
+            if !already_registered && let Some(label) = input_pattern_label.as_deref() {
+                let view = benten_ivm::views::ContentListingView::new(label);
+                ivm.register_view(Box::new(view));
                 // Non-content-listing canonical view ids (capability_grants,
                 // event_dispatch, governance_inheritance, version_current) are
                 // Phase-2 scope for automatic instantiation — the definition

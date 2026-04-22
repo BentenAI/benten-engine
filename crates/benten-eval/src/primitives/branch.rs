@@ -52,14 +52,14 @@ pub fn execute(op: &OperationNode) -> Result<StepResult, EvalError> {
         // edge-label convention. When present + admissible, route there.
         if let Some(Value::List(cases)) = op.properties.get("cases") {
             for c in cases {
-                if let Value::Text(label) = c {
-                    if label == match_v {
-                        return Ok(StepResult {
-                            next: None,
-                            edge_label: label.clone(),
-                            output: Value::Null,
-                        });
-                    }
+                if let Value::Text(label) = c
+                    && label == match_v
+                {
+                    return Ok(StepResult {
+                        next: None,
+                        edge_label: label.clone(),
+                        output: Value::Null,
+                    });
                 }
             }
             // No case matched — if there is a default, route there.

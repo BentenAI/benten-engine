@@ -728,10 +728,10 @@ fn obj_pick(args: &[Value]) -> Result<Value, EvalError> {
     };
     let mut out = BTreeMap::new();
     for k in keys {
-        if let Value::Text(kn) = k {
-            if let Some(v) = map.get(kn) {
-                out.insert(kn.clone(), v.clone());
-            }
+        if let Value::Text(kn) = k
+            && let Some(v) = map.get(kn)
+        {
+            out.insert(kn.clone(), v.clone());
         }
     }
     Ok(Value::Map(out))
@@ -942,10 +942,10 @@ fn clamp_index(i: i64, len: usize) -> usize {
 }
 
 fn flatten_one(args: &[Value]) -> Vec<Value> {
-    if args.len() == 1 {
-        if let Value::List(l) = &args[0] {
-            return l.clone();
-        }
+    if args.len() == 1
+        && let Value::List(l) = &args[0]
+    {
+        return l.clone();
     }
     args.to_vec()
 }

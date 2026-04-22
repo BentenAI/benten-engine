@@ -97,14 +97,13 @@ pub fn execute(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResul
     if let (Some(Value::Int(timeout)), Some(Value::Int(elapsed))) = (
         op.properties.get("timeout_ms"),
         op.properties.get("elapsed_ms"),
-    ) {
-        if *elapsed > *timeout {
-            return Ok(StepResult {
-                next: None,
-                edge_label: "ON_LIMIT".to_string(),
-                output: Value::Null,
-            });
-        }
+    ) && *elapsed > *timeout
+    {
+        return Ok(StepResult {
+            next: None,
+            edge_label: "ON_LIMIT".to_string(),
+            output: Value::Null,
+        });
     }
 
     // Dispatch through the host when a `target` + `op` are staged. Real

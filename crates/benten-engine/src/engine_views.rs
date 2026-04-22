@@ -116,27 +116,27 @@ impl Engine {
         // route through it. Falling back to the canonical-id whitelist
         // preserves the Phase-1 contract for views that haven't been
         // create_view-registered yet but are named in R3 tests.
-        if let Some(ivm) = self.ivm.as_ref() {
-            if let Some(is_stale) = ivm.view_is_stale(normalized) {
-                if is_stale {
-                    return if opts.allow_stale {
-                        Ok(Outcome {
-                            list: Some(Vec::new()),
-                            ..Outcome::default()
-                        })
-                    } else {
-                        Err(EngineError::IvmViewStale {
-                            view_id: view_id.to_string(),
-                        })
-                    };
-                }
-                // Healthy view — return empty listing (Phase 1: view's full
-                // read API surface is Phase 2).
-                return Ok(Outcome {
-                    list: Some(Vec::new()),
-                    ..Outcome::default()
-                });
+        if let Some(ivm) = self.ivm.as_ref()
+            && let Some(is_stale) = ivm.view_is_stale(normalized)
+        {
+            if is_stale {
+                return if opts.allow_stale {
+                    Ok(Outcome {
+                        list: Some(Vec::new()),
+                        ..Outcome::default()
+                    })
+                } else {
+                    Err(EngineError::IvmViewStale {
+                        view_id: view_id.to_string(),
+                    })
+                };
             }
+            // Healthy view — return empty listing (Phase 1: view's full
+            // read API surface is Phase 2).
+            return Ok(Outcome {
+                list: Some(Vec::new()),
+                ..Outcome::default()
+            });
         }
         // No live view registered for this id. Phase 1 canonical whitelist
         // decides: recognized -> stale (in strict) / last-known-good empty

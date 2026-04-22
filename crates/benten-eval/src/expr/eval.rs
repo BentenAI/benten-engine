@@ -651,17 +651,16 @@ pub fn try_namespaced_call(
     args: &[Expr],
     env: &mut Env,
 ) -> Result<Option<Value>, EvalError> {
-    if let Expr::PropertyAccess { target, name } = callee {
-        if let Expr::Identifier(ns) = target.as_ref() {
-            if matches!(
-                ns.as_str(),
-                "Math" | "String" | "Array" | "Object" | "Number"
-            ) {
-                let arg_vals = eval_args(args, env)?;
-                let full = format!("{ns}.{name}");
-                return Ok(Some(builtins::dispatch_namespaced(&full, &arg_vals)?));
-            }
-        }
+    if let Expr::PropertyAccess { target, name } = callee
+        && let Expr::Identifier(ns) = target.as_ref()
+        && matches!(
+            ns.as_str(),
+            "Math" | "String" | "Array" | "Object" | "Number"
+        )
+    {
+        let arg_vals = eval_args(args, env)?;
+        let full = format!("{ns}.{name}");
+        return Ok(Some(builtins::dispatch_namespaced(&full, &arg_vals)?));
     }
     Ok(None)
 }
@@ -675,10 +674,10 @@ pub fn try_namespaced_call(
 pub fn eval_with_namespaces(expr: &Expr, env: &mut Env) -> Result<Value, EvalError> {
     // Intercept calls before property-access evaluation to handle the
     // `Namespace.method(args)` sugar form.
-    if let Expr::Call { callee, args } = expr {
-        if let Some(v) = try_namespaced_call(callee, args, env)? {
-            return Ok(v);
-        }
+    if let Expr::Call { callee, args } = expr
+        && let Some(v) = try_namespaced_call(callee, args, env)?
+    {
+        return Ok(v);
     }
     eval(expr, env)
 }

@@ -477,14 +477,12 @@ pub(crate) fn outcome_from_terminal_with_cid(
     let list = if let Some(hint) = list_hint.as_deref() {
         if let Some(rest) = hint.strip_prefix("get:") {
             let mut out = Vec::new();
-            if let Some((scan_label, b32)) = rest.split_once(':') {
-                if let Ok(cids) = engine.backend().get_by_label(scan_label) {
-                    if let Some(cid) = cids.into_iter().find(|c| c.to_base32() == b32) {
-                        if let Ok(Some(node)) = engine.backend().get_node(&cid) {
-                            out.push(node);
-                        }
-                    }
-                }
+            if let Some((scan_label, b32)) = rest.split_once(':')
+                && let Ok(cids) = engine.backend().get_by_label(scan_label)
+                && let Some(cid) = cids.into_iter().find(|c| c.to_base32() == b32)
+                && let Ok(Some(node)) = engine.backend().get_node(&cid)
+            {
+                out.push(node);
             }
             Some(out)
         } else {
