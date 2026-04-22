@@ -13,14 +13,20 @@ name: Cold Install Latency
 # R3 ownership: rust-test-writer-performance.
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  # Also run on release so a freshly-published package is validated
-  # against a truly cold machine, not the PR's CI cache.
+  # Only run on actual release events — the gate measures "cold install of
+  # a published package," which only makes sense once @benten/engine is on
+  # the registry (or once a release pipeline emits a local tarball into
+  # packages/engine/dist/benten-engine-local.tgz during the release flow).
+  # Running this on every push/PR pre-publish produced either hard failures
+  # (nothing to install from) or a "skipped" pass that looked green without
+  # actually measuring anything — both misleading signals. Phase 2a G11-A
+  # owns wiring a tarball-artifact pipeline that would make push/PR runs
+  # meaningful; until then the trigger is release-only.
   release:
     types: [published]
+  # Manual trigger preserved for operators testing the gate against a
+  # locally-built tarball via `act` or a hand-seeded artifact.
+  workflow_dispatch:
 
 concurrency:
   group: cold-install-${{ github.ref }}
