@@ -20,7 +20,7 @@ env:
 jobs:
   cargo-deny:
     name: cargo-deny (licenses / bans / advisories / sources)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
 
@@ -52,7 +52,7 @@ jobs:
 
   cargo-audit:
     name: cargo-audit (belt-and-suspenders)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
 
@@ -67,7 +67,7 @@ jobs:
 
   lockfile-verify:
     name: Cargo.lock integrity
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
 
@@ -84,7 +84,7 @@ jobs:
     # advisories land, so the dep watch doesn't rely on someone happening to
     # push a PR.
     if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       issues: write

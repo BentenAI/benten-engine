@@ -25,7 +25,7 @@ concurrency:
 jobs:
   mutants:
     name: cargo-mutants baseline
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Mutation runs are O(hours) on a cold runner; cap at 6h so a stuck
     # run doesn't burn the monthly minutes budget.
     timeout-minutes: 360
