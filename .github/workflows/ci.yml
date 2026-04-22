@@ -300,6 +300,19 @@ jobs:
       - name: Install workspace deps
         run: npm install --no-audit --no-fund
 
+      - name: Build @benten/engine (compile TS → packages/engine/dist)
+        # packages/engine/package.json declares `main: ./dist/index.js` +
+        # `exports: { ".": ./dist/index.js }`. dist/ is .gitignore'd, so
+        # CI must compile the TypeScript before the scaffolded project's
+        # vitest can resolve `@benten/engine`. Without this step, the
+        # cold-install test fails with "Failed to resolve entry for
+        # package '@benten/engine'" as soon as vitest asks vite to load
+        # the package entry. Caught the first time this job reached the
+        # scaffolder-test step on main (2026-04-22).
+        run: |
+          cd packages/engine
+          npm run build
+
       - name: Run scaffolder and test the generated project
         shell: bash
         run: |
