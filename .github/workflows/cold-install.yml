@@ -80,17 +80,36 @@ jobs:
           cd /tmp/cold-install-test
           npm init -y > /dev/null
 
+      - name: Detect installable source (tarball present, or package published)
+        id: detect
+        shell: bash
+        run: |
+          # Pre-publish reality: @benten/engine is not yet on npm, and the
+          # release pipeline that would produce a local tarball at
+          # packages/engine/dist/benten-engine-local.tgz isn't wired in
+          # Phase 2a. Rather than fail the whole cold-install job on every
+          # push, detect the pre-publish state and skip subsequent steps
+          # with a clear signal.
+          if [ -f "${GITHUB_WORKSPACE}/packages/engine/dist/benten-engine-local.tgz" ]; then
+            echo "mode=tarball" >> "$GITHUB_OUTPUT"
+            echo "source=${GITHUB_WORKSPACE}/packages/engine/dist/benten-engine-local.tgz"
+          elif npm view @benten/engine version --registry=https://registry.npmjs.org/ >/dev/null 2>&1; then
+            echo "mode=registry" >> "$GITHUB_OUTPUT"
+            echo "source=@benten/engine (npm)"
+          else
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            echo "::notice::Cold-install gate skipped: no local tarball and @benten/engine is not yet published. The gate becomes active once the release pipeline ships a tarball or the package lands on npm."
+          fi
+
       - name: Time npm install of @benten/engine
+        if: steps.detect.outputs.mode != 'skip'
         shell: bash
         run: |
           cd /tmp/cold-install-test
           # Use GNU `date +%s%3N` on Linux; the Python fallback makes this
           # portable to macOS (no GNU date) and Windows (git-bash).
           start=$(python3 -c "import time; print(int(time.time()*1000))")
-          # Install from the local tarball if this is a PR (before publish),
-          # otherwise from the registry. Local tarball path is set by the
-          # release pipeline; for PRs we pack and install.
-          if [ -f "${GITHUB_WORKSPACE}/packages/engine/dist/benten-engine-local.tgz" ]; then
+          if [ "${{ steps.detect.outputs.mode }}" = "tarball" ]; then
             npm install "${GITHUB_WORKSPACE}/packages/engine/dist/benten-engine-local.tgz" --no-audit --no-fund
           else
             npm install @benten/engine --no-audit --no-fund
@@ -106,6 +125,7 @@ jobs:
           echo "OK: cold install within 60s budget."
 
       - name: Sanity — imported module loads
+        if: steps.detect.outputs.mode != 'skip'
         shell: bash
         run: |
           cd /tmp/cold-install-test
