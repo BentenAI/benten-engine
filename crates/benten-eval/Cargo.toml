@@ -28,7 +28,14 @@ diag = []
 [dependencies]
 benten-core = { path = "../benten-core" }
 benten-errors = { workspace = true }
-benten-graph = { path = "../benten-graph" }
+# benten-graph intentionally absent — arch-1 dep-break (phil-r1-2 / plan §9.10 +
+# §9.14). The evaluator reaches storage only through `PrimitiveHost`; backend-
+# side failures surface through `HostError` (see `src/host_error.rs`), which
+# carries an opaque `Box<dyn StdError>` source so no `benten-graph` type leaks
+# into the `benten-eval` public surface. Enforced by:
+#  - `tests/arch_1_no_graph_dep.rs` (this Cargo.toml)
+#  - `tests/arch_1_no_graph_types_in_primitive_host.rs` (signature-level)
+#  - `.github/workflows/arch-1-dep-break.yml` (CI gate)
 benten-caps = { path = "../benten-caps" }
 blake3 = { workspace = true }
 serde = { workspace = true }

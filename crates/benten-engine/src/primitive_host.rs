@@ -38,7 +38,8 @@ use std::sync::Arc;
 
 use benten_caps::CapError;
 use benten_core::{Cid, Edge, Node, Value};
-use benten_eval::PrimitiveHost;
+use benten_errors::ErrorCode;
+use benten_eval::{HostError, PrimitiveHost};
 use benten_graph::{ChangeEvent, GraphError, MutexExt};
 
 use crate::engine::{Engine, is_known_view_id};
@@ -135,11 +136,13 @@ impl PrimitiveHost for Engine {
     // `EvalError::Backend(String)` and the catalog code collapsed to
     // `E_EVAL_BACKEND` at the boundary.
     fn read_node(&self, cid: &Cid) -> Result<Option<Node>, benten_eval::EvalError> {
-        Ok(self.backend().get_node(cid)?)
+        self.backend().get_node(cid).map_err(graph_err_to_eval)
     }
 
     fn get_by_label(&self, label: &str) -> Result<Vec<Cid>, benten_eval::EvalError> {
-        Ok(self.backend().get_by_label(label)?)
+        self.backend()
+            .get_by_label(label)
+            .map_err(graph_err_to_eval)
     }
 
     fn get_by_property(
@@ -148,7 +151,9 @@ impl PrimitiveHost for Engine {
         prop: &str,
         value: &Value,
     ) -> Result<Vec<Cid>, benten_eval::EvalError> {
-        Ok(self.backend().get_by_property(label, prop, value)?)
+        self.backend()
+            .get_by_property(label, prop, value)
+            .map_err(graph_err_to_eval)
     }
 
     fn put_node(&self, node: &Node) -> Result<Cid, benten_eval::EvalError> {
@@ -184,7 +189,7 @@ impl PrimitiveHost for Engine {
             // that call impl PrimitiveHost::put_node without a containing
             // dispatch.
             drop(guard);
-            Ok(self.backend().put_node(node)?)
+            self.backend().put_node(node).map_err(graph_err_to_eval)
         }
     }
 
@@ -214,7 +219,7 @@ impl PrimitiveHost for Engine {
             Ok(())
         } else {
             drop(guard);
-            self.backend().delete_node(cid)?;
+            self.backend().delete_node(cid).map_err(graph_err_to_eval)?;
             Ok(())
         }
     }
@@ -351,7 +356,15 @@ impl PrimitiveHost for Engine {
 fn engine_error_to_eval_error(e: EngineError) -> benten_eval::EvalError {
     match e {
         EngineError::Cap(c) => benten_eval::EvalError::Capability(c),
-        EngineError::Graph(g) => benten_eval::EvalError::Graph(g),
+        // arch-1 dep-break (G1-B / phil-r1-2 / plan §9.10 + §9.14): the former
+        // `EvalError::Graph(GraphError)` round-trip is replaced with a
+        // HostError envelope. `benten-eval` no longer depends on
+        // `benten-graph`, so the mapping from GraphError → evaluator-visible
+        // error happens HERE, at the `PrimitiveHost` boundary. The catalog
+        // code on the `HostError` mirrors the `GraphError`'s `code()` so
+        // `EvalError::code()` still returns the same stable discriminant
+        // callers saw pre-G1-B (no TS-wire regression).
+        EngineError::Graph(g) => benten_eval::EvalError::Host(graph_error_to_host_error(g)),
         EngineError::Core(c) => benten_eval::EvalError::Core(c),
         EngineError::UnknownView { view_id } => benten_eval::EvalError::UnknownView(view_id),
         EngineError::IvmViewStale { view_id } => benten_eval::EvalError::IvmViewStale(view_id),
@@ -370,6 +383,91 @@ fn engine_error_to_eval_error(e: EngineError) -> benten_eval::EvalError {
     }
 }
 
+/// Convenience: wrap a `GraphError` as an `EvalError::Host(HostError)` so
+/// `impl PrimitiveHost for Engine` methods can funnel backend-side
+/// rejections through `.map_err(graph_err_to_eval)` without restating the
+/// HostError construction (G1-B / arch-1 dep-break).
+fn graph_err_to_eval(g: GraphError) -> benten_eval::EvalError {
+    benten_eval::EvalError::Host(graph_error_to_host_error(g))
+}
+
+/// Map a `GraphError` to a `HostError` for routing across the
+/// `PrimitiveHost` boundary (G1-B / arch-1 dep-break). Preserves the
+/// origin stable catalog code on `HostError.code` so `EvalError::code()`
+/// returns the same discriminant the pre-G1-B `EvalError::Graph(g).code()`
+/// path surfaced. The `GraphError` itself becomes the opaque
+/// `Box<dyn StdError>` source — it never crosses back onto a wire because
+/// `HostError::to_wire_bytes` excludes `source` per sec-r1-6 / atk-6.
+fn graph_error_to_host_error(g: GraphError) -> HostError {
+    let code = g.code();
+    // Render a user-safe context from the Display form. Display on
+    // `GraphError::BackendNotFound` is already redacted to a basename
+    // (see `redact_path_for_display` in benten-graph), so this string is
+    // safe to surface to callers. We do NOT route a context for
+    // RedbSource / Redb / Decode because their Display forms can embed
+    // redb internal identifiers; the opaque source chain is the
+    // programmatic path instead.
+    let context = match &g {
+        GraphError::BackendNotFound { .. }
+        | GraphError::SystemZoneWrite { .. }
+        | GraphError::NestedTransactionNotSupported {}
+        | GraphError::TxAborted { .. } => Some(g.to_string()),
+        GraphError::Core(_)
+        | GraphError::RedbSource(_)
+        | GraphError::Redb(_)
+        | GraphError::Decode(_) => None,
+        // GraphError is #[non_exhaustive]; a future variant falls through
+        // as "no context" so a Phase-2 addition never silently leaks a
+        // raw Debug payload through the envelope.
+        _ => None,
+    };
+    HostError {
+        code,
+        source: Box::new(g),
+        context,
+    }
+}
+
+/// Map a `HostError` surfaced from the evaluator back into an
+/// `EngineError` for the transaction closure's return type (G1-B).
+/// The `HostError.source` is attempted-downcast back to `GraphError` so
+/// the engine side preserves the typed variant for call sites that still
+/// match on `EngineError::Graph`. When the downcast fails (source was a
+/// non-graph error, e.g. after a future Phase-2b sandbox-host wires a
+/// wasmtime-side error into HostError), we fall through to
+/// `EngineError::Other` keyed on the stable catalog code.
+fn host_error_to_engine_error(h: HostError) -> EngineError {
+    let code = h.code.clone();
+    let message = h
+        .context
+        .clone()
+        .unwrap_or_else(|| code.as_str().to_string());
+    // Try to recover the original `GraphError` — the common case in
+    // Phase-1 / 2a where the eval-side saw a HostError we ourselves
+    // minted from a GraphError three lines upstream. `Box<dyn Error + Send
+    // + Sync>` supports `downcast` via `std::error::Error::is` +
+    // `Box::<dyn Any>::downcast`; we use the former for safety.
+    match h.source.downcast::<GraphError>() {
+        Ok(g) => EngineError::Graph(*g),
+        Err(_) => EngineError::Other { code, message },
+    }
+}
+
+/// Signature-level arch-1 gate compile check (plan §9.14). Confirms the
+/// `HostError` envelope is the *only* shape that carries backend-side
+/// failure across the `PrimitiveHost` boundary — if a future edit adds
+/// a `benten_graph::*` path to a `PrimitiveHost` trait-method signature
+/// or to an `EvalError` variant, CI + the signature-level unit tests
+/// (`arch_1_no_graph_types_in_primitive_host.rs`, the YAML gate) fire.
+/// This function is never called — it exists as a structural anchor.
+#[allow(
+    dead_code,
+    reason = "arch-1 anchor: proves HostError is the sole backend-error surface; see plan §9.14"
+)]
+fn _arch_1_host_error_is_the_boundary(h: HostError) -> benten_eval::EvalError {
+    benten_eval::EvalError::Host(h)
+}
+
 /// Convert an `EvalError` back into an `EngineError` for the transaction
 /// closure's return type.
 ///
@@ -383,7 +481,13 @@ fn engine_error_to_eval_error(e: EngineError) -> benten_eval::EvalError {
 pub(crate) fn eval_error_to_engine_error(e: benten_eval::EvalError) -> EngineError {
     match e {
         benten_eval::EvalError::Capability(c) => EngineError::Cap(c),
-        benten_eval::EvalError::Graph(g) => EngineError::Graph(g),
+        // arch-1 dep-break (G1-B): the Phase-1 `EvalError::Graph(GraphError)`
+        // round-trip is replaced by `EvalError::Host(HostError)`. The inverse
+        // mapping downcasts `HostError.source` back to `GraphError` when
+        // possible, preserving the pre-G1-B `EngineError::Graph(g)` shape
+        // for callers that still match on it. See
+        // `host_error_to_engine_error` for the recovery logic.
+        benten_eval::EvalError::Host(h) => host_error_to_engine_error(h),
         benten_eval::EvalError::Core(c) => EngineError::Core(c),
         // r6b-err-1: typed round-trip. An `EvalError::UnknownView` that
         // came from an engine-side rejection (via `engine_error_to_eval_error`)

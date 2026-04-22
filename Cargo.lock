@@ -141,7 +141,6 @@ dependencies = [
  "benten-core",
  "benten-engine",
  "benten-errors",
- "benten-graph",
  "blake3",
  "criterion",
  "proptest",

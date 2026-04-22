@@ -153,8 +153,16 @@ pub enum EvalError {
     #[error("capability: {0}")]
     Capability(#[from] benten_caps::CapError),
 
-    #[error("graph: {0}")]
-    Graph(#[from] benten_graph::GraphError),
+    /// Host-boundary failure surfaced through a [`PrimitiveHost`] call.
+    /// Replaces the Phase-1 `Graph(GraphError)` variant as part of arch-1
+    /// dep-break (phil-r1-2 / plan §9.10 + §9.14) — `benten-eval` no longer
+    /// depends on `benten-graph`, so storage-layer rejections route through
+    /// the opaque [`HostError`] envelope. The wrapped `HostError` carries a
+    /// stable catalog code + optional context on the wire plus an opaque
+    /// `Box<dyn StdError>` source that never reaches the wire (sec-r1-6 /
+    /// atk-6).
+    #[error("host: {0}")]
+    Host(HostError),
 
     #[error("core: {0}")]
     Core(#[from] benten_core::CoreError),
@@ -229,11 +237,14 @@ impl EvalError {
             EvalError::TransformSyntax(_) => ErrorCode::TransformSyntax,
             EvalError::StackOverflow => ErrorCode::InvDepthExceeded,
             // Preserve the stable catalog code across the cross-crate
-            // boundary. Prior to r6-err-1 these three collapsed into
-            // `Unknown("")`, which made `EvalError → EngineError → napi → TS`
-            // lose the origin error code. Dispatch to inner `.code()` so the
-            // catalog identifier survives the round-trip.
-            EvalError::Graph(e) => e.code(),
+            // boundary. Prior to r6-err-1 these collapsed into `Unknown("")`,
+            // which made `EvalError → EngineError → napi → TS` lose the
+            // origin error code. Dispatch to inner `.code()` so the catalog
+            // identifier survives the round-trip. arch-1 dep-break (G1-B):
+            // the former `EvalError::Graph(GraphError)` arm is now
+            // `EvalError::Host(HostError)`; HostError's `code` field is the
+            // catalog discriminant.
+            EvalError::Host(h) => h.code.clone(),
             EvalError::Core(e) => e.code(),
             // r6b-err-3: both `EvalError::Backend` and the engine-side
             // `eval_error_to_engine_error` now spell the stable string the

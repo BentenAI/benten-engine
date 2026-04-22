@@ -192,3 +192,99 @@ jobs:
           fi
 
           echo "OK: no benten_graph::* types leak through PrimitiveHost / EvalError / benten-eval src"
+
+  primitive-host-trait-signature-gate:
+    # Signature-level gate added in G1-B (plan §9.14): beyond the whole-file
+    # `benten_graph::` grep above, this job narrows to the EXACT surfaces that
+    # define the PrimitiveHost trait's public contract (method return types,
+    # method arg types, trait bounds) AND every EvalError variant declaration.
+    # Motivation: a future contributor might refactor a helper out of host.rs
+    # that legitimately references benten_graph types under a dev-test path
+    # while the trait-defining block itself stays clean. This gate scopes to
+    # the block-level surface via awk so we never misfire on incidental hits.
+    name: PrimitiveHost trait surface + EvalError variants (signature block scan)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: "Scan PrimitiveHost trait block for benten_graph types"
+        shell: bash
+        run: |
+          set -euo pipefail
+          host="crates/benten-eval/src/host.rs"
+          if [ ! -f "$host" ]; then
+            echo "NOTE: ${host} not present (OK pre-G1)"
+            exit 0
+          fi
+
+          # Extract lines between `pub trait PrimitiveHost` and the matching
+          # closing `}`. Awk brace-depth tracking guarantees we scope to the
+          # trait body only, skipping unrelated helper impls further down.
+          block=$(awk '
+            /pub trait PrimitiveHost/ { in_block = 1 }
+            in_block {
+              print
+              for (i = 1; i <= length($0); i++) {
+                c = substr($0, i, 1)
+                if (c == "{") depth += 1
+                else if (c == "}") {
+                  depth -= 1
+                  if (depth == 0) { in_block = 0; exit }
+                }
+              }
+            }
+          ' "$host")
+
+          hits=$(echo "$block" | rg -n 'benten_graph::' | rg -v '^\s*(//|///)' || true)
+          if [ -n "$hits" ]; then
+            echo "ARCH-1 VIOLATION: PrimitiveHost trait block references benten_graph::"
+            echo "$hits"
+            echo ""
+            echo "The trait defined in ${host} is the dep-break boundary."
+            echo "No method in that trait may reference benten_graph::* types."
+            exit 1
+          fi
+
+          echo "OK: PrimitiveHost trait block is clean of benten_graph::* types"
+
+      - name: "Scan EvalError variant block for benten_graph types"
+        shell: bash
+        run: |
+          set -euo pipefail
+          lib="crates/benten-eval/src/lib.rs"
+          if [ ! -f "$lib" ]; then
+            echo "NOTE: ${lib} not present (OK pre-G1)"
+            exit 0
+          fi
+
+          # Scope to the `pub enum EvalError { ... }` body only.
+          block=$(awk '
+            /pub enum EvalError/ { in_block = 1 }
+            in_block {
+              print
+              for (i = 1; i <= length($0); i++) {
+                c = substr($0, i, 1)
+                if (c == "{") depth += 1
+                else if (c == "}") {
+                  depth -= 1
+                  if (depth == 0) { in_block = 0; exit }
+                }
+              }
+            }
+          ' "$lib")
+
+          hits=$(echo "$block" | rg -n 'benten_graph::' | rg -v '^\s*(//|///)' || true)
+          if [ -n "$hits" ]; then
+            echo "ARCH-1 VIOLATION: EvalError enum block references benten_graph::"
+            echo "$hits"
+            echo ""
+            echo "EvalError variants must not carry benten_graph::* types."
+            echo "Route storage-layer failures through benten_eval::HostError."
+            exit 1
+          fi
+
+          echo "OK: EvalError enum block is clean of benten_graph::* types"
