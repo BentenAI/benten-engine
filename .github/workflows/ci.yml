@@ -284,10 +284,18 @@ jobs:
         # the repo-root workspace link. That link requires the napi crate
         # to be compiled before `npm install` inside the scaffolded app
         # resolves @benten/engine-native.
+        #
+        # `npm run build` dispatches through bindings/napi/package.json's
+        # "build": "napi build --platform --release" script. Do NOT use
+        # `npx @napi-rs/cli build` — the package's binary is named `napi`,
+        # not `@napi-rs/cli`, so npx reports "could not determine
+        # executable to run". Caught the first time this job completed on
+        # main (2026-04-22) after dead-macos-13 + cancel-storm had
+        # masked it since the workflow was introduced.
         run: |
           cd bindings/napi
           npm install --no-audit --no-fund
-          npx @napi-rs/cli build --platform --release
+          npm run build
 
       - name: Install workspace deps
         run: npm install --no-audit --no-fund
