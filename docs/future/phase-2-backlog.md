@@ -163,7 +163,51 @@ Phase-1 audit surfaced that performance targets occasionally drift between summa
 
 ---
 
-## 10. In-code `TODO(phase-2-*)` markers
+## 10. CI / workflow deferrals (from 2026-04-22 maturity audit)
+
+Source: `.addl/phase-2a/ci-maturity-audit-2026-04-22.md` + the decisions companion `.addl/phase-2a/ci-decisions-2026-04-22.md`. Reordered by Ben, 2026-04-22.
+
+**Phase 2a release-era items** (cargo-semver-checks, napi prebuilt publish, release-plz, SLSA attestation, SBOM, CodeQL, branch-protection, SHA-pinning) are **not in this backlog** — they land as the Phase 2a close-out release pass. See `.addl/phase-2a/00-implementation-plan.md` §3.1.
+
+### 10.1 Phase 2b CI additions (land with 2b pre-R1 or implementation)
+
+| Item | When within 2b |
+|---|---|
+| `cargo-public-api` tracking | Early 2b (pairs with cargo-semver-checks for full API-surface visibility) |
+| `cargo-vet` trust metadata | 2b entry — SANDBOX brings wasmtime's ~60 transitive deps into scope |
+| `wasm-conformance.yml` — malicious/boundary handler fixture suite | 2b entry — SANDBOX is the attack surface, CI must validate containment |
+| E2E tests — headless browser vitest against scaffolded handlers | 2b mid — real DX-level test |
+| Weekly scheduled security sweep expansion (adds `cargo-vet check` to existing supply-chain.yml Monday cron) | Once cargo-vet is active |
+
+### 10.2 Phase 3 CI additions
+
+| Item | When within 3 |
+|---|---|
+| Multi-peer networked CRDT test — 3+ iroh peers, assert Loro merge convergence across write patterns | 3 entry — CRDT correctness is the 3 headline invariant |
+| Phase-3-specific chaos workflow (network partition simulation via `tc netem`) | 3 mid |
+| Self-hosted runner posture document | 3 (don't buy capacity until a 3 test actually needs it) |
+| Additional cross-target coverage (illumos, FreeBSD, linux-musl) | When actual Phase 3 users appear on those targets |
+
+### 10.3 Phase 9+ (OSS contributor-volume era)
+
+| Item | Trigger |
+|---|---|
+| Auto-labeler / PR triage bots | Issue volume arrives |
+| Preview deploys for docs.benten.ai | When docs site is live |
+| Auto-merge for Dependabot patch-level bumps | When contributors arrive (revisit — not now while solo) |
+
+### 10.4 Anytime / backlog
+
+| Item | Notes |
+|---|---|
+| `cargo-outdated` weekly report | Nice-to-have; ratchet if Dependabot PR volume feels noisy |
+| Ratchet `PROPTEST_CASES` 1024 → 4096 nightly | Free on public runners, costs ~0 to flip |
+| Ratchet `bench.yml --measurement-time` 2s → 5s | Better measurement noise floor |
+| Run `mutants.yml` twice weekly instead of weekly | Free on public runners |
+
+---
+
+## 11. In-code `TODO(phase-2-*)` markers
 
 At Phase 1 close, the codebase contains ~180 `Phase 2` / `TODO(phase-2-*)` markers across crate source. This backlog doc consolidates the structural items; finer-grained markers stay in-code for the agent that touches that area. Grep for them as needed:
 
