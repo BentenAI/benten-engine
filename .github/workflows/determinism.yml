@@ -41,7 +41,7 @@ jobs:
       matrix:
         include:
           - { os: macos-14,     target: aarch64-apple-darwin,       leg: macos-arm64 }
-          - { os: macos-13,     target: x86_64-apple-darwin,        leg: macos-x86_64 }
+          - { os: macos-15-intel, target: x86_64-apple-darwin,      leg: macos-x86_64 }
           - { os: ubuntu-24.04, target: x86_64-unknown-linux-gnu,   leg: linux-x86_64 }
           - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, leg: linux-arm64 }
           - { os: windows-2022, target: x86_64-pc-windows-msvc,     leg: windows-x86_64 }

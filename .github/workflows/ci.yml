@@ -58,8 +58,8 @@ jobs:
         include:
           - { os: macos-14,         leg: macos-arm64,   target: aarch64-apple-darwin,       rust: "1.85.0" }
           - { os: macos-14,         leg: macos-arm64,   target: aarch64-apple-darwin,       rust: stable   }
-          - { os: macos-13,         leg: macos-x86_64,  target: x86_64-apple-darwin,        rust: "1.85.0" }
-          - { os: macos-13,         leg: macos-x86_64,  target: x86_64-apple-darwin,        rust: stable   }
+          - { os: macos-15-intel,   leg: macos-x86_64,  target: x86_64-apple-darwin,        rust: "1.85.0" }
+          - { os: macos-15-intel,   leg: macos-x86_64,  target: x86_64-apple-darwin,        rust: stable   }
           - { os: ubuntu-24.04,     leg: linux-x86_64,  target: x86_64-unknown-linux-gnu,   rust: "1.85.0" }
           - { os: ubuntu-24.04,     leg: linux-x86_64,  target: x86_64-unknown-linux-gnu,   rust: stable   }
           - { os: ubuntu-24.04-arm, leg: linux-arm64,   target: aarch64-unknown-linux-gnu,  rust: "1.85.0" }
