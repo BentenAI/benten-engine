@@ -161,7 +161,11 @@ pub enum EvalError {
     /// stable catalog code + optional context on the wire plus an opaque
     /// `Box<dyn StdError>` source that never reaches the wire (sec-r1-6 /
     /// atk-6).
-    #[error("host: {0}")]
+    // HostError's Display already includes the "host error (...)" prefix, so
+    // a redundant "host: " in this attribute would render as "host: host
+    // error (...)". Delegate the whole Display to HostError (G1-B mini-review
+    // nit N1).
+    #[error("{0}")]
     Host(HostError),
 
     #[error("core: {0}")]
