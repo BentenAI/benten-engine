@@ -151,8 +151,16 @@ jobs:
           # path-fragment. Matches on use-statements at file scope are
           # handled separately below (those are also forbidden in eval but
           # may be legitimate in engine).
+          # NOTE: `crates/benten-engine/src/primitive_host.rs` is intentionally
+          # NOT in this target list. That file IS the arch-1 boundary — it
+          # defines the `impl PrimitiveHost for Engine` that MAPS
+          # `benten_graph::GraphError` → `benten_eval::HostError` at the host
+          # boundary. Of course it names `benten_graph::*` in its body; that's
+          # the entire point. The companion job `primitive-host-trait-signature-gate`
+          # below uses awk brace-depth scoping to scan ONLY the `PrimitiveHost`
+          # trait declaration and `EvalError` variant declarations in
+          # benten-eval — which IS what the arch-1 contract forbids.
           targets=(
-            "crates/benten-engine/src/primitive_host.rs"
             "crates/benten-eval/src/host.rs"
             "crates/benten-eval/src/error.rs"
           )
