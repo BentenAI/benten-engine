@@ -79,6 +79,71 @@ pub mod version;
 pub use edge::Edge;
 pub use value::Value;
 
+/// Phase 2a ucca-9 / arch-r1-2 frozen shape — lifted into `benten-core` so
+/// both `benten-graph::WriteAuthority` and `benten-caps::WriteAuthority`
+/// re-export the SAME type (avoiding the cross-crate newtype proliferation
+/// that bit `noauth_still_permits_everything.rs`).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum WriteAuthority {
+    /// Normal user path (default).
+    User,
+    /// Engine-internal privileged write.
+    EnginePrivileged,
+    /// Phase-3 sync-replica write.
+    SyncReplica {
+        /// CID of the peer that originated the replicated write.
+        origin_peer: Cid,
+    },
+}
+
+impl Default for WriteAuthority {
+    fn default() -> Self {
+        WriteAuthority::User
+    }
+}
+
+/// Phase 2a C5 stub: `Subgraph` placeholder re-exposed at the benten-core
+/// root so the DAG-CBOR + content-hash round-trip tests (which live in
+/// `benten-core/tests/subgraph_load_verified_migration.rs` per the R2
+/// partition) compile against the core surface.
+///
+/// The real `Subgraph` type lives in `benten-eval`; this thin shape is a
+/// compile-only surrogate that carries the minimal accessors (`handler_id`,
+/// `cid`, `empty_for_test`) R3 tests reference. Phase 2a G5-A migrates the
+/// real Subgraph into benten-core under an opaque DAG-CBOR schema.
+///
+/// TODO(phase-2a-G5-A): move the real Subgraph here + delete this stub.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Subgraph {
+    handler_id: alloc::string::String,
+}
+
+impl Subgraph {
+    /// Construct an empty Subgraph for test fixtures.
+    #[must_use]
+    pub fn empty_for_test(handler_id: impl Into<alloc::string::String>) -> Self {
+        Self {
+            handler_id: handler_id.into(),
+        }
+    }
+
+    /// The handler id this Subgraph was registered under.
+    #[must_use]
+    pub fn handler_id(&self) -> &str {
+        &self.handler_id
+    }
+
+    /// Content-addressed CID.
+    ///
+    /// # Errors
+    /// Returns [`CoreError`] on encode failure.
+    pub fn cid(&self) -> Result<Cid, CoreError> {
+        // Derive a stable CID from the handler id's bytes.
+        let h = blake3::hash(self.handler_id.as_bytes());
+        Ok(Cid::from_blake3_digest(*h.as_bytes()))
+    }
+}
+
 use benten_errors::ErrorCode;
 
 // ---------------------------------------------------------------------------
@@ -188,6 +253,64 @@ impl Node {
         let digest = blake3::hash(&bytes);
         Ok(Cid::from_blake3_digest(*digest.as_bytes()))
     }
+
+    /// Phase 2a C4 stub: load a Node from DAG-CBOR bytes, verifying that
+    /// the recomputed CID matches the supplied `cid`.
+    ///
+    /// # Errors
+    /// Returns [`CoreError::Serialize`] on decode failure; returns a
+    /// content-hash mismatch on tamper.
+    ///
+    /// TODO(phase-2a-G2-A / C4): implement per plan §9 `Node::load_verified`.
+    pub fn load_verified(_cid: &Cid, _bytes: &[u8]) -> Result<Self, CoreError> {
+        todo!("Phase 2a C4 / G2-A: implement Node::load_verified")
+    }
+}
+
+impl Subgraph {
+    /// Phase 2a C5 / G5-A: mark the Subgraph deterministic.
+    pub fn set_deterministic(&mut self, _value: bool) {
+        // Phase-2a stub — the core Subgraph shim tracks only handler_id; the
+        // real Subgraph (in benten-eval) has the deterministic flag.
+    }
+
+    /// Phase 2a C5 / G5-A: DAG-CBOR encode.
+    ///
+    /// # Errors
+    /// Returns [`CoreError::Serialize`] on encode failure.
+    pub fn to_dag_cbor(&self) -> Result<Vec<u8>, CoreError> {
+        todo!("Phase 2a C5 / G5-A: implement Subgraph DAG-CBOR encode")
+    }
+
+    /// Phase 2a C5 / G5-A: load a Subgraph from DAG-CBOR bytes.
+    ///
+    /// # Errors
+    /// Returns [`CoreError::Serialize`] on decode failure.
+    pub fn load_verified(_bytes: &[u8]) -> Result<Self, CoreError> {
+        todo!("Phase 2a C5 / G5-A: implement Subgraph::load_verified (simple shape)")
+    }
+
+    /// Phase 2a C5 / G5-A: load a Subgraph from bytes + an expected CID.
+    /// Integrity-enforcing: mismatch between the recomputed CID and
+    /// `expected_cid` fires `E_INV_CONTENT_HASH`.
+    ///
+    /// # Errors
+    /// Returns [`CoreError::Serialize`] on decode failure; returns a
+    /// content-hash mismatch on integrity failure.
+    pub fn load_verified_with_cid(_bytes: &[u8], _expected_cid: &Cid) -> Result<Self, CoreError> {
+        todo!(
+            "Phase 2a C5 / G5-A: implement Subgraph::load_verified_with_cid \
+             (CID-supplied integrity-enforcing shape)"
+        )
+    }
+
+    /// Phase 2a C5 / G5-A: whether the Subgraph is classified deterministic.
+    #[must_use]
+    pub fn is_deterministic(&self) -> bool {
+        // Phase-2a stub mirrors the eval-side accessor; always false in the
+        // core shim.
+        false
+    }
 }
 
 /// Private serde view that encodes exactly the hash-input fields.
@@ -220,7 +343,7 @@ struct NodeHashView<'a> {
 /// meaning**: two CIDs where `a < b` says nothing about content relationship,
 /// causality, version precedence, or any other graph-level property — those
 /// must be derived from the graph itself.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Cid(
     // serde does not derive `Serialize`/`Deserialize` for `[u8; N]` where N > 32
     // (the trait is only impl'd for arrays up to length 32). Wrap in `Vec<u8>`
@@ -607,7 +730,7 @@ impl Default for Anchor {
 pub fn append_version(anchor: &Anchor, version: &Node) -> Result<Cid, CoreError> {
     let cid = version.cid()?;
     let mut table = U64_CHAINS.lock();
-    table.entry(anchor.id).or_default().push(cid.clone());
+    table.entry(anchor.id).or_default().push(cid);
     Ok(cid)
 }
 
@@ -620,7 +743,7 @@ pub fn current_version(anchor: &Anchor) -> Result<Cid, CoreError> {
     let table = U64_CHAINS.lock();
     table
         .get(&anchor.id)
-        .and_then(|chain| chain.last().cloned())
+        .and_then(|chain| chain.last().copied())
         .ok_or(CoreError::NotFound)
 }
 

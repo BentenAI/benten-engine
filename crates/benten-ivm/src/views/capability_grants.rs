@@ -138,7 +138,7 @@ impl CapabilityGrantsView {
         Ok(self
             .by_entity
             .get(entity)
-            .map(|s| s.iter().cloned().collect())
+            .map(|s| s.iter().copied().collect())
             .unwrap_or_default())
     }
 
@@ -159,10 +159,7 @@ impl CapabilityGrantsView {
             if let Some((source, target, _)) = &event.edge_endpoints {
                 match event.kind {
                     ChangeKind::EdgeCreated => {
-                        self.by_entity
-                            .entry(target.clone())
-                            .or_default()
-                            .insert(source.clone());
+                        self.by_entity.entry(*target).or_default().insert(*source);
                     }
                     ChangeKind::EdgeDeleted => {
                         if let Some(set) = self.by_entity.get_mut(target) {
@@ -198,11 +195,11 @@ impl CapabilityGrantsView {
                     .node
                     .as_ref()
                     .and_then(extract_grantee)
-                    .unwrap_or_else(|| event.cid.clone());
+                    .unwrap_or(event.cid);
                 self.by_entity
                     .entry(entity_key)
                     .or_default()
-                    .insert(event.cid.clone());
+                    .insert(event.cid);
             }
             ChangeKind::Deleted => {
                 // Prefer the pre-delete node's `grantee` property; fall back
@@ -272,7 +269,7 @@ impl View for CapabilityGrantsView {
         let cids = self
             .by_entity
             .get(entity)
-            .map(|s| s.iter().cloned().collect())
+            .map(|s| s.iter().copied().collect())
             .unwrap_or_default();
         Ok(ViewResult::Cids(cids))
     }

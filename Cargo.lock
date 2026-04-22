@@ -80,6 +80,7 @@ dependencies = [
  "benten-engine",
  "benten-errors",
  "benten-graph",
+ "criterion",
  "proptest",
  "tempfile",
  "thiserror",
@@ -102,6 +103,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "benten-dev"
+version = "0.1.0"
+dependencies = [
+ "benten-core",
+ "benten-errors",
+ "tempfile",
+]
+
+[[package]]
 name = "benten-engine"
 version = "0.1.0"
 dependencies = [
@@ -113,6 +123,8 @@ dependencies = [
  "benten-ivm",
  "blake3",
  "criterion",
+ "proptest",
+ "serde_ipld_dagcbor",
  "tempfile",
  "thiserror",
 ]
@@ -143,6 +155,7 @@ dependencies = [
 name = "benten-graph"
 version = "0.1.0"
 dependencies = [
+ "benten-caps",
  "benten-core",
  "benten-engine",
  "benten-errors",
@@ -457,6 +470,13 @@ checksum = "7ab67060fc6b8ef687992d439ca0fa36e7ed17e9a0b16b25b601e8757df720de"
 dependencies = [
  "data-encoding",
  "syn",
+]
+
+[[package]]
+name = "doc-completeness-tests"
+version = "0.0.0"
+dependencies = [
+ "benten-errors",
 ]
 
 [[package]]

@@ -192,12 +192,13 @@ impl Evaluator {
                 Ok(r) => {
                     steps += 1;
                     if collect_trace {
-                        trace.push(TraceStep {
+                        trace.push(TraceStep::Step {
                             node_id: op.id.clone(),
                             duration_us: elapsed,
                             inputs: Value::Null,
                             outputs: r.output.clone(),
                             error: None,
+                            attribution: None,
                         });
                     }
                     last = r;
@@ -225,12 +226,13 @@ impl Evaluator {
                 }
                 Err(e) => {
                     if collect_trace {
-                        trace.push(TraceStep {
+                        trace.push(TraceStep::Step {
                             node_id: op.id.clone(),
                             duration_us: elapsed,
                             inputs: Value::Null,
                             outputs: Value::Null,
                             error: Some(e.code()),
+                            attribution: None,
                         });
                     }
                     return Err(e);

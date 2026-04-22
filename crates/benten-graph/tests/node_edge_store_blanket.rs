@@ -36,7 +36,7 @@ fn edge_store_put_then_get_returns_same_edge() {
     let cid1 = b.put_node(&n1).unwrap();
     let mut p = BTreeMap::new();
     p.insert("w".to_string(), Value::Int(3));
-    let edge = Edge::new(cid1.clone(), cid1.clone(), "LIKES", Some(p));
+    let edge = Edge::new(cid1, cid1, "LIKES", Some(p));
     let ecid = b.put_edge(&edge).unwrap();
     assert_eq!(b.get_edge(&ecid).unwrap(), Some(edge));
 }
@@ -46,7 +46,7 @@ fn edges_from_returns_outgoing_only() {
     let (b, _d) = temp();
     let n = canonical_test_node();
     let c = b.put_node(&n).unwrap();
-    let e = Edge::new(c.clone(), c.clone(), "L", None);
+    let e = Edge::new(c, c, "L", None);
     b.put_edge(&e).unwrap();
 
     let out = b.edges_from(&c).unwrap();
@@ -59,7 +59,7 @@ fn edges_to_returns_incoming_only() {
     let (b, _d) = temp();
     let n = canonical_test_node();
     let c = b.put_node(&n).unwrap();
-    let e = Edge::new(c.clone(), c.clone(), "L", None);
+    let e = Edge::new(c, c, "L", None);
     b.put_edge(&e).unwrap();
 
     let incoming = b.edges_to(&c).unwrap();

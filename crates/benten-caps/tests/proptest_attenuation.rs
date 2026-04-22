@@ -259,3 +259,123 @@ fn g4_uc_2_deterministic_regression_no_wildcard_parent_denies_extra_tail() {
          accepted this because segments 3 and 4 were never examined."
     );
 }
+
+// R3 security writer — added 2026-04-21 per plan §4.2 + ucca-6 seed.
+// Append-only per R2 watch-1 discipline — no edits to existing blocks above.
+//
+// Phase 2a R3 security — chain-depth-5 transitivity (ucca-6 seed).
+//
+// Extends the Phase-1 3-chain (prop_attenuation_is_transitive) to a 5-chain
+// A → B → C → D → E. The 3-chain catches non-transitivity at one hop; the
+// 5-chain catches "drift over depth" bugs that a 3-chain would miss — e.g.
+// an algorithm that accepts N-1 legs pairwise but silently relaxes a
+// constraint at the fourth hop.
+//
+// Per ucca-6: Phase-6 AI agent chains can be deep (user → agent → tool →
+// sub-tool → ...). 5 is the minimum depth where a class of
+// "accumulation-of-small-errors" bugs can appear.
+//
+// Case count: governed by PROPTEST_CASES (CI 1024; nightly fuzz.yml 10k).
+
+proptest! {
+    #![proptest_config(ProptestConfig::default())]
+
+    /// ucca-6: 5-hop attenuation is transitive.
+    ///
+    /// Builds A → B → C → D → E where each leg is a legitimate attenuation
+    /// of its predecessor via identity OR concretizing a trailing `*`. Uses
+    /// `prop_assume!` to filter non-chains; asserts that when every
+    /// adjacent pair is permitted, end-to-end (A, E) is also permitted.
+    ///
+    /// Catches non-transitivity bugs a depth-3 chain misses — e.g. an
+    /// algorithm that accumulates off-by-one tail handling through
+    /// multiple wildcard-concretization hops.
+    #[test]
+    fn chain_depth_5_transitivity(
+        a_prefix in prop::collection::vec(concrete_segment(), 1..=3),
+        a_has_wildcard in any::<bool>(),
+        b_concretization in prop::collection::vec(concrete_segment(), 0..=2),
+        c_concretization in prop::collection::vec(concrete_segment(), 0..=2),
+        d_concretization in prop::collection::vec(concrete_segment(), 0..=2),
+        e_concretization in prop::collection::vec(concrete_segment(), 0..=2),
+    ) {
+        // A: concrete prefix, optionally trailing `:*`.
+        let a_str = if a_has_wildcard {
+            format!("{}:*", a_prefix.join(":"))
+        } else {
+            a_prefix.join(":")
+        };
+        let a = GrantScope::parse(&a_str).unwrap();
+
+        // Helper: if `scope_str` ends with `:*` and `concretization` is
+        // non-empty, replace the trailing `*` with concrete segments,
+        // optionally leaving a new trailing `:*` so the next hop can
+        // further concretize. Otherwise return identity (new == old).
+        let derive = |scope_str: &str, concretization: &[String]| -> String {
+            if scope_str.ends_with(":*") && !concretization.is_empty() {
+                let prefix = scope_str.strip_suffix(":*").unwrap_or(scope_str);
+                let prefix = prefix.trim_end_matches(':');
+                // Emit a NEW trailing `:*` 50% of the time (determined by
+                // concretization.len() parity) so the chain can continue
+                // further-attenuating; otherwise terminate in a concrete.
+                // This keeps the chain live across 5 hops.
+                if concretization.len() % 2 == 1 {
+                    if prefix.is_empty() {
+                        format!("{}:*", concretization.join(":"))
+                    } else {
+                        format!("{}:{}:*", prefix, concretization.join(":"))
+                    }
+                } else if prefix.is_empty() {
+                    concretization.join(":")
+                } else {
+                    format!("{}:{}", prefix, concretization.join(":"))
+                }
+            } else if scope_str == "*" && !concretization.is_empty() {
+                // Lone `*` is a trailing wildcard at depth 0.
+                concretization.join(":")
+            } else {
+                scope_str.to_string()
+            }
+        };
+
+        let b_str = derive(&a_str, &b_concretization);
+        let b = match GrantScope::parse(&b_str) {
+            Ok(x) => x,
+            Err(_) => return Err(TestCaseError::Reject("degenerate B".into())),
+        };
+
+        let c_str = derive(&b_str, &c_concretization);
+        let c = match GrantScope::parse(&c_str) {
+            Ok(x) => x,
+            Err(_) => return Err(TestCaseError::Reject("degenerate C".into())),
+        };
+
+        let d_str = derive(&c_str, &d_concretization);
+        let d = match GrantScope::parse(&d_str) {
+            Ok(x) => x,
+            Err(_) => return Err(TestCaseError::Reject("degenerate D".into())),
+        };
+
+        let e_str = derive(&d_str, &e_concretization);
+        let e = match GrantScope::parse(&e_str) {
+            Ok(x) => x,
+            Err(_) => return Err(TestCaseError::Reject("degenerate E".into())),
+        };
+
+        // Only assert transitivity when every adjacent leg permits. The
+        // filter makes the property a ONE-DIRECTION implication
+        // (legs-all-ok ⇒ endpoints-ok); the contrapositive falls out of
+        // the generator's wildcard-only-concretization discipline.
+        prop_assume!(check_attenuation(&a, &b).is_ok());
+        prop_assume!(check_attenuation(&b, &c).is_ok());
+        prop_assume!(check_attenuation(&c, &d).is_ok());
+        prop_assume!(check_attenuation(&d, &e).is_ok());
+
+        prop_assert!(
+            check_attenuation(&a, &e).is_ok(),
+            "depth-5 transitivity violation: every adjacent pair permits \
+             but endpoint (A, E) does not. \
+             A={a_str} B={b_str} C={c_str} D={d_str} E={e_str}"
+        );
+    }
+}

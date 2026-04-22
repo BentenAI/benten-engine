@@ -53,7 +53,7 @@ fn neg_zero_and_pos_zero_share_cid_and_share_index_bucket() {
     let by_pos = b
         .get_by_property("Metric", "score", &Value::Float(0.0))
         .unwrap();
-    assert_eq!(by_pos, vec![cid.clone()]);
+    assert_eq!(by_pos, vec![cid]);
 
     let by_neg = b
         .get_by_property("Metric", "score", &Value::Float(-0.0))

@@ -39,7 +39,7 @@ fn version_current_o1_resolution_at_every_step() {
     let mut last_cid = None;
     for n in 1..=5u32 {
         let cid = engine.append_version(&anchor, &version(n)).expect("append");
-        last_cid = Some(cid.clone());
+        last_cid = Some(cid);
 
         // Resolve via View 5 (version_current). Timing bound: < 50us hot cache.
         let t = Instant::now();

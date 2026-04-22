@@ -17,7 +17,7 @@ fn fixture_cid() -> benten_core::Cid {
 fn edge_new_with_empty_properties() {
     let src = fixture_cid();
     let tgt = fixture_cid();
-    let e = Edge::new(src.clone(), tgt.clone(), "LIKES", None);
+    let e = Edge::new(src, tgt, "LIKES", None);
     assert_eq!(e.label, "LIKES");
     assert_eq!(e.source, src);
     assert_eq!(e.target, tgt);
@@ -38,7 +38,7 @@ fn edge_new_with_populated_properties() {
 fn edge_allows_self_loop() {
     // Invariant 1 (DAG-ness) is a subgraph-level check, not edge-level.
     let c = fixture_cid();
-    let e = Edge::new(c.clone(), c.clone(), "SELF", None);
+    let e = Edge::new(c, c, "SELF", None);
     // Constructible + hashable.
     let _cid = e.cid().unwrap();
 }
@@ -46,8 +46,8 @@ fn edge_allows_self_loop() {
 #[test]
 fn edge_cid_stable_across_reconstructions() {
     let c = fixture_cid();
-    let e1 = Edge::new(c.clone(), c.clone(), "L", None);
-    let e2 = Edge::new(c.clone(), c.clone(), "L", None);
+    let e1 = Edge::new(c, c, "L", None);
+    let e2 = Edge::new(c, c, "L", None);
     assert_eq!(e1.cid().unwrap(), e2.cid().unwrap());
 }
 
@@ -55,8 +55,8 @@ fn edge_cid_stable_across_reconstructions() {
 fn edge_none_props_vs_empty_map_produce_different_cids() {
     // Per DAG-CBOR: missing field ≠ empty map. Edges preserve that distinction.
     let c = fixture_cid();
-    let none = Edge::new(c.clone(), c.clone(), "L", None);
-    let empty = Edge::new(c.clone(), c, "L", Some(BTreeMap::new()));
+    let none = Edge::new(c, c, "L", None);
+    let empty = Edge::new(c, c, "L", Some(BTreeMap::new()));
     assert_ne!(
         none.cid().unwrap(),
         empty.cid().unwrap(),
@@ -74,7 +74,7 @@ fn edge_different_source_produces_different_cid() {
     let src_b = other.cid().unwrap();
 
     let tgt = fixture_cid();
-    let e_a = Edge::new(src_a, tgt.clone(), "L", None);
+    let e_a = Edge::new(src_a, tgt, "L", None);
     let e_b = Edge::new(src_b, tgt, "L", None);
     assert_ne!(e_a.cid().unwrap(), e_b.cid().unwrap());
 }

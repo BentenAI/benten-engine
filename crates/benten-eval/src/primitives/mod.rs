@@ -27,6 +27,7 @@ pub mod iterate;
 pub mod read;
 pub mod respond;
 pub mod transform;
+pub mod wait;
 pub mod write;
 
 /// Dispatch a single primitive execution by kind.

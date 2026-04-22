@@ -1,0 +1,41 @@
+[package]
+name = "doc-completeness-tests"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+# Phase 2a R3 — owned by qa-expert.
+# This crate exists solely to host `tests/*.rs` files that audit
+# documentation coverage against code. The tests assert that every
+# Phase-2a ErrorCode variant has a corresponding ERROR-CATALOG.md entry;
+# they fail-loud when docs drift behind code. See the `verify, don't
+# trust docs` guard in the project brief.
+
+[lib]
+path = "src/lib.rs"
+doctest = false
+bench = false
+
+[[test]]
+name = "phase_2a_catalog_coverage"
+path = "phase_2a_catalog_coverage.rs"
+
+[[test]]
+name = "invariant_coverage_doc"
+path = "invariant_coverage_doc.rs"
+
+[[test]]
+name = "host_functions_doc"
+path = "host_functions_doc.rs"
+
+[[test]]
+name = "quickstart_diagnosing_denied_reads"
+path = "quickstart_diagnosing_denied_reads.rs"
+
+[dependencies]
+benten-errors = { workspace = true }
+
+[lints]
+workspace = true

@@ -36,6 +36,7 @@
 extern crate alloc;
 
 use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 
 /// Stable error-catalog discriminants.
 ///
@@ -162,10 +163,85 @@ pub enum ErrorCode {
     /// Caller-supplied prior head was never observed by the version anchor.
     /// Surfaces from the prior-head-threaded `benten_core::version::append_version`.
     VersionUnknownPrior,
+    // ---------------------------------------------------------------
+    // Phase 2a reserved variants.
+    //
+    // Reserved in Phase 2a (catalog slots), fire sites wired by the
+    // groups that own them; see `.addl/phase-2a/00-implementation-plan.md`
+    // §X1 + §9.2 + §9.11 + §9.13.
+    // ---------------------------------------------------------------
+    /// Host-boundary: target Node/Edge not found (G1-B; fires in Phase 3).
+    HostNotFound,
+    /// Host-boundary: optimistic concurrency conflict (G1-B; Phase 3).
+    HostWriteConflict,
+    /// Host-boundary: backend unavailable (I/O, disk, network) (G1-B).
+    HostBackendUnavailable,
+    /// Host-boundary: capability revoked mid-operation (G1-B).
+    HostCapabilityRevoked,
+    /// Host-boundary: capability expired by TTL (G1-B).
+    HostCapabilityExpired,
+    /// Resume: `payload_cid` recomputation doesn't match envelope (G3-A).
+    ExecStateTampered,
+    /// Resume: `resumption_principal_cid` doesn't match caller (G3-A).
+    ResumeActorMismatch,
+    /// Resume: pinned subgraph CID drifted from registered head (G3-A).
+    ResumeSubgraphDrift,
+    /// WAIT deadline elapsed (G3-B).
+    WaitTimeout,
+    /// Invariant 13: immutability violation (G5-A).
+    InvImmutability,
+    /// Invariant 11: system-zone breach from user subgraph (G5-B).
+    InvSystemZone,
+    /// Invariant 14: missing / malformed attribution frame (G5-B).
+    InvAttribution,
+    /// Capability wall-clock refresh bound breached (G9-A, §9.13).
+    CapWallclockExpired,
+    /// Capability attenuation chain exceeds `GrantReader::max_chain_depth`
+    /// (ucca-6, G9-A).
+    CapChainTooDeep,
+    /// `GrantScope::parse("*")` rejected (ucca-7, G4-A). The lone star is
+    /// a root-scope footgun; compound `*:<ns>` is still accepted.
+    CapScopeLoneStarRejected,
+    /// Resume-time WAIT signal payload shape mismatch (G3-B DX signal-payload
+    /// typing addendum). Fires when a resumed WAIT declares a `signal_shape`
+    /// and the incoming signal payload fails the declared schema.
+    WaitSignalShapeMismatch,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
 }
+
+/// Phase-2a firing codes — the canonical, single-source-of-truth list that
+/// both the R3 catalog-coverage test and the R3 presence test consume. Kept
+/// alongside the enum so drift between the two tests becomes a compile-level
+/// impossibility (R4 qa-r4-5 fix).
+///
+/// R5 groups landing new firing sites append to this list; there is exactly
+/// one place to update.
+pub const PHASE_2A_FIRING_CODES: &[ErrorCode] = &[
+    ErrorCode::ExecStateTampered,
+    ErrorCode::ResumeActorMismatch,
+    ErrorCode::ResumeSubgraphDrift,
+    ErrorCode::WaitTimeout,
+    ErrorCode::InvImmutability,
+    ErrorCode::InvSystemZone,
+    ErrorCode::InvAttribution,
+    ErrorCode::CapWallclockExpired,
+    ErrorCode::CapChainTooDeep,
+    ErrorCode::WaitSignalShapeMismatch,
+];
+
+/// Phase-2a reserved HostError discriminants — G1-B reserves slots that
+/// Phase 3 sync wires fire sites for. The catalog documents them as
+/// "reserved — fires in Phase 3" so operators reading the catalog don't
+/// confuse them with active codes.
+pub const PHASE_2A_RESERVED_CODES: &[ErrorCode] = &[
+    ErrorCode::HostNotFound,
+    ErrorCode::HostWriteConflict,
+    ErrorCode::HostBackendUnavailable,
+    ErrorCode::HostCapabilityRevoked,
+    ErrorCode::HostCapabilityExpired,
+];
 
 impl ErrorCode {
     /// Return the stable string identifier (e.g. `"E_INV_CYCLE"`).
@@ -238,8 +314,49 @@ impl ErrorCode {
             ErrorCode::NotImplemented => "E_NOT_IMPLEMENTED",
             ErrorCode::IvmPatternMismatch => "E_IVM_PATTERN_MISMATCH",
             ErrorCode::VersionUnknownPrior => "E_VERSION_UNKNOWN_PRIOR",
+            ErrorCode::HostNotFound => "E_HOST_NOT_FOUND",
+            ErrorCode::HostWriteConflict => "E_HOST_WRITE_CONFLICT",
+            ErrorCode::HostBackendUnavailable => "E_HOST_BACKEND_UNAVAILABLE",
+            ErrorCode::HostCapabilityRevoked => "E_HOST_CAPABILITY_REVOKED",
+            ErrorCode::HostCapabilityExpired => "E_HOST_CAPABILITY_EXPIRED",
+            ErrorCode::ExecStateTampered => "E_EXEC_STATE_TAMPERED",
+            ErrorCode::ResumeActorMismatch => "E_RESUME_ACTOR_MISMATCH",
+            ErrorCode::ResumeSubgraphDrift => "E_RESUME_SUBGRAPH_DRIFT",
+            ErrorCode::WaitTimeout => "E_WAIT_TIMEOUT",
+            ErrorCode::InvImmutability => "E_INV_IMMUTABILITY",
+            ErrorCode::InvSystemZone => "E_INV_SYSTEM_ZONE",
+            ErrorCode::InvAttribution => "E_INV_ATTRIBUTION",
+            ErrorCode::CapWallclockExpired => "E_CAP_WALLCLOCK_EXPIRED",
+            ErrorCode::CapChainTooDeep => "E_CAP_CHAIN_TOO_DEEP",
+            ErrorCode::CapScopeLoneStarRejected => "E_CAP_SCOPE_LONE_STAR_REJECTED",
+            ErrorCode::WaitSignalShapeMismatch => "E_WAIT_SIGNAL_SHAPE_MISMATCH",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
+    }
+
+    /// Identity accessor — convenience for code paths that surface an
+    /// `ErrorCode` directly and still want `.code()` to be callable. Phase 2a
+    /// dx-r1-add: lots of tests bind `let err = ErrorCode::...;` and then
+    /// call `err.code()` as if `err` were a typed error; this makes those
+    /// sites compile without changing test semantics.
+    #[must_use]
+    pub fn code(&self) -> ErrorCode {
+        self.clone()
+    }
+
+    /// Phase 2a dx-r1 (test-spec follow-up): the edge label a typed error
+    /// routes through (`"ON_ERROR"` / `"ON_DENIED"` / `"ON_NOT_FOUND"`).
+    /// Returns `None` for variants that don't have a canonical routing edge.
+    ///
+    /// TODO(phase-2a-G3-B): complete the routing table.
+    #[must_use]
+    pub fn routed_edge_label(&self) -> Option<&'static str> {
+        Some(match self {
+            ErrorCode::CapDenied | ErrorCode::CapDeniedRead => "ON_DENIED",
+            ErrorCode::NotFound | ErrorCode::BackendNotFound => "ON_NOT_FOUND",
+            ErrorCode::WaitTimeout => "ON_ERROR",
+            _ => "ON_ERROR",
+        })
     }
 
     /// Parse a stable catalog code string into an [`ErrorCode`], falling back
@@ -291,7 +408,96 @@ impl ErrorCode {
             "E_NOT_IMPLEMENTED" => ErrorCode::NotImplemented,
             "E_IVM_PATTERN_MISMATCH" => ErrorCode::IvmPatternMismatch,
             "E_VERSION_UNKNOWN_PRIOR" => ErrorCode::VersionUnknownPrior,
+            "E_HOST_NOT_FOUND" => ErrorCode::HostNotFound,
+            "E_HOST_WRITE_CONFLICT" => ErrorCode::HostWriteConflict,
+            "E_HOST_BACKEND_UNAVAILABLE" => ErrorCode::HostBackendUnavailable,
+            "E_HOST_CAPABILITY_REVOKED" => ErrorCode::HostCapabilityRevoked,
+            "E_HOST_CAPABILITY_EXPIRED" => ErrorCode::HostCapabilityExpired,
+            "E_EXEC_STATE_TAMPERED" => ErrorCode::ExecStateTampered,
+            "E_RESUME_ACTOR_MISMATCH" => ErrorCode::ResumeActorMismatch,
+            "E_RESUME_SUBGRAPH_DRIFT" => ErrorCode::ResumeSubgraphDrift,
+            "E_WAIT_TIMEOUT" => ErrorCode::WaitTimeout,
+            "E_INV_IMMUTABILITY" => ErrorCode::InvImmutability,
+            "E_INV_SYSTEM_ZONE" => ErrorCode::InvSystemZone,
+            "E_INV_ATTRIBUTION" => ErrorCode::InvAttribution,
+            "E_CAP_WALLCLOCK_EXPIRED" => ErrorCode::CapWallclockExpired,
+            "E_CAP_CHAIN_TOO_DEEP" => ErrorCode::CapChainTooDeep,
+            "E_CAP_SCOPE_LONE_STAR_REJECTED" => ErrorCode::CapScopeLoneStarRejected,
+            "E_WAIT_SIGNAL_SHAPE_MISMATCH" => ErrorCode::WaitSignalShapeMismatch,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }
+}
+
+impl core::fmt::Display for ErrorCode {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+// Phase 2a consolidation: let tests write `assert_eq!(err.code(),
+// ErrorCode::X)` where `err.code()` returns `&'static str`. The two
+// `PartialEq` directions cover both `&str == ErrorCode` and
+// `ErrorCode == &str`.
+impl PartialEq<ErrorCode> for &str {
+    fn eq(&self, other: &ErrorCode) -> bool {
+        *self == other.as_str()
+    }
+}
+impl PartialEq<&str> for ErrorCode {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+impl PartialEq<ErrorCode> for str {
+    fn eq(&self, other: &ErrorCode) -> bool {
+        self == other.as_str()
+    }
+}
+
+/// Parsed 3-segment cap-string. Phase 2a r1-cr-13 / arch-r1-10 locked shape.
+///
+/// `"prefix:domain:action"` → `CapString { prefix, domain, action,
+/// reserved_extension_namespace }`. The flag is set when `prefix == "custom"`
+/// per arch-r1-10's reserved-extension-namespace escape hatch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CapString {
+    /// First segment.
+    pub prefix: String,
+    /// Second segment.
+    pub domain: String,
+    /// Third segment.
+    pub action: String,
+    /// arch-r1-10 flag: `"custom:*"` strings set this to `true` so downstream
+    /// tooling can gate on the reserved-extension-namespace.
+    pub reserved_extension_namespace: bool,
+}
+
+/// Phase 2a stub for the cap-string-format parser (r1-cr-13, arch-7).
+///
+/// Accepts well-formed `"prefix:domain:action"` strings; returns
+/// `Err(ErrorCode::CapScopeLoneStarRejected)` for lone-star (`"*"`). Real
+/// parser lands in G4-A.
+///
+/// # Errors
+/// Returns a stable [`ErrorCode`] on parse failure.
+pub fn parse_cap_string(s: &str) -> Result<CapString, ErrorCode> {
+    if s == "*" {
+        return Err(ErrorCode::CapScopeLoneStarRejected);
+    }
+    if s.is_empty() {
+        return Err(ErrorCode::CapDenied);
+    }
+    let segs: alloc::vec::Vec<&str> = s.split(':').collect();
+    if segs.len() != 3 || segs.iter().any(|s| s.is_empty()) {
+        return Err(ErrorCode::CapDenied);
+    }
+    let prefix = segs[0].to_string();
+    let reserved = prefix == "custom";
+    Ok(CapString {
+        prefix,
+        domain: segs[1].to_string(),
+        action: segs[2].to_string(),
+        reserved_extension_namespace: reserved,
+    })
 }

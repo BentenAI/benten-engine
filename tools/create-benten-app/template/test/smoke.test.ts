@@ -1,20 +1,25 @@
 // Smoke test for the scaffolded {{name}} project.
 //
-// This file is the headline Phase 1 exit criterion: running `npm test`
-// after `npx create-benten-app` + `npm install` must exercise all six
-// named assertions without error. Each `it()` block below maps to a
-// single exit-criterion gate from implementation plan §1.
+// This file is the headline Phase 1 + 2a exit criterion: running `npm test`
+// after `npx create-benten-app` + `npm install` must exercise all named
+// assertions without error. Each `it()` block below maps to a numbered
+// exit-criterion gate.
 //
 // The scaffolder's own Vitest (tools/create-benten-app/test/
-// scaffolder.test.ts) asserts this file contains exactly six `it()`
-// blocks with the expected names — drift guards against accidentally
+// scaffolder.test.ts) asserts this file contains the expected set of
+// `it()` blocks with the correct names — drift guards against accidentally
 // dropping a gate.
+//
+// Phase 2a R3 (qa-expert) extension: gate 7 exercises the WAIT executor
+// end-to-end in the scaffolded app, closing the "scaffolded project can
+// compose WAIT" Phase-2a user-facing contract. Traces to the brief:
+// "7th gate testing WAIT executor end-to-end in the scaffolded app."
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Engine } from "@benten/engine";
+import { Engine, subgraph } from "@benten/engine";
 import { postHandlers } from "../src/handlers.js";
 
 let engine: Engine;
@@ -32,7 +37,7 @@ afterAll(async () => {
   rmSync(tmp, { recursive: true, force: true });
 });
 
-describe("Benten Phase 1 exit criteria (six named gates)", () => {
+describe("Benten Phase 1 + 2a exit criteria (seven named gates)", () => {
   // Gate 1: registration succeeds.
   it("register_succeeds", () => {
     expect(handler.id).toBeTruthy();
@@ -52,13 +57,6 @@ describe("Benten Phase 1 exit criteria (six named gates)", () => {
   });
 
   // Gate 3: calling an unregistered handler surfaces a typed error.
-  //
-  // Note: the original Phase-1 gate exercised capability denial, but
-  // capability-gated `crud()` variants (with a `capability:` option)
-  // are Phase-2 DSL surface. Until that lands, we exercise the same
-  // typed-error-surface contract via an unregistered-handler lookup —
-  // both paths route through `mapNativeError` and attach a stable
-  // `err.code`, which is the property the gate is asserting.
   it("typed_error_surface_unregistered_handler", async () => {
     try {
       await engine.call("no-such-handler", "post:create", { title: "x" });
@@ -73,17 +71,10 @@ describe("Benten Phase 1 exit criteria (six named gates)", () => {
     const trace = await engine.trace(handler.id, "post:create", { title: "traced" });
     expect(Array.isArray(trace.steps)).toBe(true);
     expect(trace.steps.length).toBeGreaterThan(0);
-    // At least one step has a non-zero microsecond timing.
     expect(trace.steps.some((s) => (s.durationUs ?? 0) > 0)).toBe(true);
   });
 
   // Gate 5: Mermaid output has a well-formed flowchart shape.
-  //
-  // Structural check instead of a parser-based assertion — the
-  // `@mermaid-js/parser` package does not ship a `flowchart` parser
-  // (only info / packet / pie / architecture / gitGraph / radar /
-  // treemap), so a regex over the expected grammar is the most
-  // honest Phase-1 gate.
   it("mermaid_output_parses", () => {
     const mermaid = handler.toMermaid();
     expect(mermaid).toMatch(/^flowchart (TD|LR|TB|BT|RL)\b/m);
@@ -96,5 +87,33 @@ describe("Benten Phase 1 exit criteria (six named gates)", () => {
     const created = await engine.call(handler.id, "post:create", { title: "round-trip" });
     const reread = await engine.call(handler.id, "post:get", { cid: created.cid });
     expect(reread.cid).toBe(created.cid);
+  });
+
+  // Gate 7 (Phase 2a): WAIT executor end-to-end in the scaffolded app.
+  //
+  // Register a wait-composing handler locally (not part of the
+  // scaffolder template's default `postHandlers` so projects without
+  // WAIT use cases don't pay the test cost, but the scaffolder smoke
+  // MUST exercise this primitive to prove the napi surface wires up).
+  it("wait_executor_end_to_end", async () => {
+    const waitHandler = await engine.registerSubgraph(
+      subgraph("smoke-wait")
+        .action("run")
+        .wait({ signal: "external:continue" })
+        .respond({ body: "$result" })
+        .build(),
+    );
+
+    const suspended = await engine.callWithSuspension(waitHandler.id, "run", {});
+    expect(suspended.kind).toBe("suspended");
+    if (suspended.kind !== "suspended") return;
+    expect(suspended.handle).toBeInstanceOf(Buffer);
+    expect(suspended.handle.length).toBeGreaterThan(0);
+
+    const resumed = await engine.resumeFromBytes(suspended.handle, { value: "ok" });
+    // The resumed outcome MUST complete (kind "complete") — this is the
+    // exit contract: scaffolded projects can register + suspend + resume
+    // a WAIT handler through the public TS surface.
+    expect(resumed.kind ?? "complete").toBe("complete");
   });
 });

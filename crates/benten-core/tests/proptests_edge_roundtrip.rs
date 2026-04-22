@@ -39,5 +39,5 @@ fn make_edge(source: &benten_core::Cid, target: &benten_core::Cid, label: &str) 
     // the (source, target, label) determinism claim; property-map drift is
     // covered separately by `edge_cid::edge_cid_stable_across_reconstructions`
     // and `edge_none_props_vs_empty_map_produce_different_cids`.
-    Edge::new(source.clone(), target.clone(), label, None)
+    Edge::new(*source, *target, label, None)
 }

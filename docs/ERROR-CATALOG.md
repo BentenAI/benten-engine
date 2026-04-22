@@ -461,6 +461,130 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** DSL wrapper
 - **Phase:** 1 (TS-only — never surfaces from the Rust engine)
 
+### E_HOST_NOT_FOUND
+
+- **Message:** "Host-boundary lookup miss: {kind} {identifier}"
+- **Context:** `{ kind: string, identifier: string }`
+- **Fix:** Reserved HostError discriminant. Surfaces from `PrimitiveHost` impls when the requested entity is not in the backend. Distinct from `E_NOT_FOUND` because it carries the host-layer boundary (preserves the `benten-eval` → `benten-graph` arch-1 dep break).
+- **Thrown at:** `PrimitiveHost` implementation (G1-B)
+- **Phase:** 2a (shape reserved; first firing site in Phase 3 sync)
+
+### E_HOST_WRITE_CONFLICT
+
+- **Message:** "Host-boundary optimistic-concurrency conflict on {target}"
+- **Context:** `{ target: string }`
+- **Fix:** Reserved HostError discriminant. Fires when a host-level compare-and-swap write detects a concurrent mutation. Surface is frozen at Phase 2a; first firing site in Phase 3 sync.
+- **Thrown at:** `PrimitiveHost` implementation (G1-B)
+- **Phase:** 2a (reserved — fires in Phase 3)
+
+### E_HOST_BACKEND_UNAVAILABLE
+
+- **Message:** "Host-boundary backend unavailable: {detail}"
+- **Context:** `{ detail: string }`
+- **Fix:** Reserved HostError discriminant. Fires when the underlying storage backend is offline (I/O error, disk full, network partition). Retry with exponential backoff; if persistent, inspect the storage layer.
+- **Thrown at:** `PrimitiveHost` implementation (G1-B)
+- **Phase:** 2a (reserved — fires in Phase 3)
+
+### E_HOST_CAPABILITY_REVOKED
+
+- **Message:** "Host-boundary capability was revoked mid-operation"
+- **Context:** `{ grant_cid: Cid }`
+- **Fix:** Reserved HostError discriminant. Fires when a host-level capability check observes a revocation between resolve and use. Retry after re-granting.
+- **Thrown at:** `PrimitiveHost` implementation (G1-B)
+- **Phase:** 2a (reserved — fires in Phase 3)
+
+### E_HOST_CAPABILITY_EXPIRED
+
+- **Message:** "Host-boundary capability expired by TTL"
+- **Context:** `{ grant_cid: Cid, expired_at: string }`
+- **Fix:** Reserved HostError discriminant. Fires when a host-level capability check observes the grant's TTL has elapsed. Re-grant with a longer TTL or refresh the cap.
+- **Thrown at:** `PrimitiveHost` implementation (G1-B)
+- **Phase:** 2a (reserved — fires in Phase 3)
+
+### E_EXEC_STATE_TAMPERED
+
+- **Message:** "ExecutionState payload_cid mismatch — envelope tampered"
+- **Context:** `{ expected_cid: Cid, actual_cid: Cid }`
+- **Fix:** The resume envelope's `payload_cid` recomputation does not match the declared CID. Either the bytes were tampered in transit, or the Phase-2a serialization layer drifted. Verify the source of the bytes; never resume from untrusted storage without an integrity check.
+- **Thrown at:** `Engine::resume_from_bytes` (G3-A resume protocol step 1)
+- **Phase:** 2a
+
+### E_RESUME_ACTOR_MISMATCH
+
+- **Message:** "Resume principal does not match the suspended ExecutionState"
+- **Context:** `{ suspended_actor_cid: Cid, resuming_actor_cid: Cid }`
+- **Fix:** The caller attempting `resume_from_bytes_as` does not match the actor recorded at suspend time. Only the same principal (or an equivalent delegated grant) can resume. Verify the caller identity; use `resume_from_bytes` only on the original actor's behalf.
+- **Thrown at:** `Engine::resume_from_bytes_as` (G3-A resume protocol step 2)
+- **Phase:** 2a
+
+### E_RESUME_SUBGRAPH_DRIFT
+
+- **Message:** "Pinned subgraph CID drifted from the currently registered head"
+- **Context:** `{ pinned_cid: Cid, current_cid: Cid, handler_id: string }`
+- **Fix:** The subgraph the caller suspended against has since been re-registered under a new CID. Resumption deliberately refuses to cross that boundary. If the drift is expected, re-suspend under the new CID. Distinct from `E_INV_IMMUTABILITY` — the drift is detected at resume time, not write time.
+- **Thrown at:** `Engine::resume_from_bytes` (G3-A resume protocol step 3)
+- **Phase:** 2a
+
+### E_WAIT_TIMEOUT
+
+- **Message:** "WAIT deadline elapsed before a resume signal arrived"
+- **Context:** `{ handler_id: string, node_id: NodeId, deadline_ms: number }`
+- **Fix:** A WAIT declared `duration: <ms>` and the deadline elapsed without a matching signal. Either the orchestrator that was meant to resume the suspension never dispatched, or the deadline was too tight. Re-call with a longer duration, or wire a fallback ON_ERROR edge to downstream compensation logic.
+- **Thrown at:** WAIT executor (G3-B duration path)
+- **Phase:** 2a
+
+### E_INV_IMMUTABILITY
+
+- **Message:** "Write would mutate a registered subgraph (Inv-13)"
+- **Context:** `{ handler_cid: Cid, attempted_authority: WriteAuthority }`
+- **Fix:** Phase-2a invariant 13: once a handler subgraph is registered under a CID, its bytes are immutable. User re-writes (both content-matching and content-differing) are rejected. Privileged engine re-puts with matching bytes dedup silently; SyncReplica row is reserved for Phase 3. Register a NEW handler CID if the intent is to change the subgraph.
+- **Thrown at:** graph write-path (G5-A)
+- **Phase:** 2a
+
+#### Note on E_INV_SYSTEM_ZONE (already listed above)
+
+`E_INV_SYSTEM_ZONE` is the firing code for Phase-2a Inv-11 enforcement (both registration-time literal detection and runtime TRANSFORM-constructed CID probing). The Phase-1 stopgap `E_SYSTEM_ZONE_WRITE` continues to fire at the graph write-path as the coarsest guard.
+
+### E_INV_ATTRIBUTION
+
+- **Message:** "Missing or malformed attribution frame (Inv-14)"
+- **Context:** `{ step_index: number, reason: string }`
+- **Fix:** Phase-2a invariant 14: every TraceStep MUST carry an `AttributionFrame` naming the actor, handler, and capability-grant CIDs. A primitive-type that refuses to declare its attribution source fails at registration. File a bug against the primitive's `attribution_for_step` impl.
+- **Thrown at:** registration + runtime trace emission (G5-B)
+- **Phase:** 2a
+
+### E_CAP_WALLCLOCK_EXPIRED
+
+- **Message:** "Capability wall-clock refresh bound breached"
+- **Context:** `{ elapsed_ms: number, bound_ms: number }`
+- **Fix:** A long-running ITERATE crossed the 300s default wall-clock refresh boundary; the grant was revoked between the previous refresh and the boundary. Re-grant the capability and retry. Tighten handler shapes to stay under the refresh bound if latency matters.
+- **Thrown at:** evaluator (G9-A, §9.13 refresh point #5)
+- **Phase:** 2a
+
+### E_CAP_CHAIN_TOO_DEEP
+
+- **Message:** "Capability attenuation chain exceeds max_chain_depth"
+- **Context:** `{ depth: number, limit: number }`
+- **Fix:** A delegation chain was deeper than the configured `GrantReader::max_chain_depth` (default 64). Either shorten the chain or raise the configured cap through the engine builder. Ucca-6 guard against malicious delegator attacks.
+- **Thrown at:** capability policy attenuation walker (G9-A)
+- **Phase:** 2a
+
+### E_CAP_SCOPE_LONE_STAR_REJECTED
+
+- **Message:** "GrantScope::parse('*') rejected — lone star is a footgun"
+- **Context:** `{ input: string }`
+- **Fix:** Lone `*` is refused because it collapses to a root-scope wildcard that cannot be meaningfully attenuated. Use a compound form (`*:<namespace>`) or name an explicit scope. Ucca-7 / G4-A.
+- **Thrown at:** `GrantScope::parse` (G4-A)
+- **Phase:** 2a
+
+### E_WAIT_SIGNAL_SHAPE_MISMATCH
+
+- **Message:** "WAIT signal payload does not match declared signal_shape"
+- **Context:** `{ node_id: NodeId, expected: string, got: unknown }`
+- **Fix:** When a WAIT declares `signal_shape: Some(schema)`, a resume with a payload that fails schema validation is rejected BEFORE any downstream TRANSFORM runs. Either widen the schema, re-send with the correct shape, or drop the `signal_shape` to keep the untyped path.
+- **Thrown at:** WAIT executor resume path (G3-B DX signal-payload typing)
+- **Phase:** 2a
+
 ## Extending the catalog
 
 When adding a new error:

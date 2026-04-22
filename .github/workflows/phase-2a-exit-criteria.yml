@@ -1,0 +1,214 @@
+name: Phase 2a Exit Criteria
+
+# Phase 2a exit-criteria aggregate gate. Blocks PR merge to main if any of
+# the Phase-2a contract gates regress. Owned by the R3 performance + CI-
+# harness writer (Phase 2a).
+#
+# Gates composed here:
+#   1. WAIT suspend/resume determinism   — plan §4.1 exit-gate 1
+#   2. Inv-8 multiplicative firing       — plan §4.2 exit-gate 2
+#   3. Inv-11 / Inv-13 / Inv-14 firing   — plan §4.2 + §4.8
+#   4. arch-1 dependency-break gate      — plan §9.10 (delegated to
+#                                          arch-1-dep-break.yml via `needs`)
+#   5. Option C flanking-methods gate    — plan §4.4 exit-gate 4
+#   6. Criterion perf gates              — CI-gated benches
+#                                          (multiplicative_budget_overhead,
+#                                           get_node_label_only_sub_1us)
+#   7. Inv-11 system-zone drift gate     — delegated to
+#                                          inv-11-system-zone-drift.yml
+#   8. HostError wire-safety gate        — delegated to
+#                                          host-error-wire-safety.yml
+#
+# Phase-2a headline: THIS workflow must be green for a Phase-2a PR to merge.
+# Branch protection should make this a required status check on `main`.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: phase-2a-exit-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # Noisy CI-runner cushion for the CI-gated Criterion thresholds. Baseline
+  # numbers come from §4.4 / §9.10 on dev hardware; CI runners see 2-3x
+  # variance under contention. The multiplier is applied to the THRESHOLD_NS
+  # comment in each bench source file.
+  BENTEN_BENCH_GATE_MULTIPLIER: "3"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Gate 1 — WAIT suspend/resume determinism integration tests (§4.1).
+  # Composite integration tests live at
+  # `crates/benten-engine/tests/integration/wait_resume.rs` +
+  # `wait_inside_wait.rs`. This job runs them under `--profile ci` so
+  # retries + slow-test handling match the rest of the CI fleet.
+  # ---------------------------------------------------------------------------
+  wait-resume-determinism:
+    name: Gate 1 — WAIT suspend/resume determinism
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: phase-2a-wait
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - name: Run WAIT-resume integration tests
+        env:
+          PROPTEST_CASES: "1024"
+        run: |
+          cargo nextest run --profile ci --locked \
+            -p benten-engine \
+            --test wait_resume \
+            --test wait_inside_wait \
+            --test engine_wait_end_to_end
+
+  # ---------------------------------------------------------------------------
+  # Gate 2 — Invariant firing tests: Inv-8 multiplicative, Inv-11 runtime,
+  # Inv-13 immutability matrix, Inv-14 attribution.
+  # ---------------------------------------------------------------------------
+  invariants-firing:
+    name: Gate 2 — Inv-8/11/13/14 firing
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: phase-2a-invariants
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - name: Run invariants test modules
+        env:
+          PROPTEST_CASES: "1024"
+        run: |
+          cargo nextest run --profile ci --locked \
+            -E 'test(/invariant_(8|11|13|14)_/)'
+
+  # ---------------------------------------------------------------------------
+  # Gate 4 — Option C evaluator-path flanking tests (§4.4).
+  # ---------------------------------------------------------------------------
+  option-c-flanking:
+    name: Gate 4 — Option C flanking methods
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: phase-2a-option-c
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - name: Run Option C flanking + end-to-end tests
+        run: |
+          cargo nextest run --profile ci --locked \
+            -E 'test(/option_c_flanking_methods::/) + test(/crud_post_get_symmetric_none/)'
+
+  # ---------------------------------------------------------------------------
+  # Gate 6 — CI-gated Criterion benchmarks. Builds + runs the 2 CI-gated
+  # benches (multiplicative_budget_overhead, get_node_label_only_sub_1us)
+  # and fails if the observed median exceeds the documented THRESHOLD_NS
+  # (multiplied by BENTEN_BENCH_GATE_MULTIPLIER to absorb runner variance).
+  #
+  # Threshold contract is machine-readable: the gate reads THRESHOLD_NS
+  # from the bench source doc-comments (grep-parsed below) and compares
+  # against `target/criterion/<id>/new/estimates.json`'s `median` field.
+  # ---------------------------------------------------------------------------
+  perf-gates:
+    name: Gate 6 — Criterion perf gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: phase-2a-perf
+      - name: Compile benches
+        run: |
+          cargo bench --locked --no-run \
+            -p benten-eval --bench multiplicative_budget_overhead \
+            -p benten-engine --bench get_node_label_only_sub_1us
+      - name: Run multiplicative_budget_overhead
+        run: |
+          cargo bench --locked \
+            -p benten-eval --bench multiplicative_budget_overhead \
+            -- --measurement-time 3
+      - name: Run get_node_label_only_sub_1us
+        run: |
+          cargo bench --locked \
+            -p benten-engine --bench get_node_label_only_sub_1us \
+            -- --measurement-time 3
+      - name: Enforce CI-gated thresholds
+        shell: bash
+        run: |
+          set -euo pipefail
+          multiplier="${BENTEN_BENCH_GATE_MULTIPLIER:-3}"
+
+          check_gate() {
+            local bench_id="$1"
+            local threshold_ns="$2"
+            local estimates="target/criterion/${bench_id}/new/estimates.json"
+            if [ ! -f "$estimates" ]; then
+              echo "GATE ${bench_id}: estimates.json missing at ${estimates}"
+              exit 1
+            fi
+            # Criterion stores median point estimate as
+            # .median.point_estimate (nanoseconds).
+            local median
+            median=$(python3 -c "
+import json,sys
+with open('${estimates}') as f:
+    d = json.load(f)
+print(int(d['median']['point_estimate']))
+")
+            local budget=$((threshold_ns * multiplier))
+            echo "GATE ${bench_id}: median=${median}ns threshold=${threshold_ns}ns (x${multiplier} = ${budget}ns)"
+            if [ "$median" -gt "$budget" ]; then
+              echo "FAIL: ${bench_id} median ${median}ns > ${budget}ns"
+              exit 1
+            fi
+          }
+
+          # IDs match the benchmark_group / bench_function call sites in
+          # the bench source files. THRESHOLD_NS values match the
+          # machine-readable comments in each bench.
+          check_gate "multiplicative_budget_overhead/boundary_check_per_node" 1000
+          check_gate "get_node_label_only/hot_cache" 1000
+
+  # ---------------------------------------------------------------------------
+  # Exit aggregate: every Phase-2a gate must be green.
+  # Downstream gates (arch-1-dep-break, inv-11-system-zone-drift,
+  # host-error-wire-safety) run as their own workflows and can be made
+  # `required` on the branch-protection policy; this aggregate adds the
+  # in-workflow composition so a single status check surfaces the
+  # overall Phase-2a verdict.
+  # ---------------------------------------------------------------------------
+  exit-gate:
+    name: Phase 2a exit-gate aggregate
+    runs-on: ubuntu-24.04
+    needs: [wait-resume-determinism, invariants-firing, option-c-flanking, perf-gates]
+    steps:
+      - name: All Phase-2a gates green
+        run: echo "Phase 2a exit criteria: PASS"

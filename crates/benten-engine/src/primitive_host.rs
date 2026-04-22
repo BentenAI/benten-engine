@@ -168,14 +168,11 @@ impl PrimitiveHost for Engine {
             // consumers can distinguish "no one supplied an actor" from
             // "the write wasn't attributed at all". The seed is fixed so
             // every noauth call produces the same CID process-wide.
-            let actor_cid = frame
-                .actor
-                .clone()
-                .or_else(|| Some(noauth_pseudo_actor_cid()));
-            let handler_cid = frame.handler_cid.clone();
+            let actor_cid = frame.actor.or_else(|| Some(noauth_pseudo_actor_cid()));
+            let handler_cid = frame.handler_cid;
             frame.pending_ops.push(PendingHostOp::PutNode {
                 node: node.clone(),
-                projected_cid: projected.clone(),
+                projected_cid: projected,
                 actor_cid,
                 handler_cid,
                 capability_grant_cid: None,
@@ -213,7 +210,7 @@ impl PrimitiveHost for Engine {
         if let Some(frame) = guard.last_mut() {
             frame
                 .pending_ops
-                .push(PendingHostOp::DeleteNode { cid: cid.clone() });
+                .push(PendingHostOp::DeleteNode { cid: *cid });
             Ok(())
         } else {
             drop(guard);
@@ -286,7 +283,7 @@ impl PrimitiveHost for Engine {
         if let Some(policy) = self.policy() {
             let ctx = benten_caps::ReadContext {
                 label: label.to_string(),
-                target_cid: target_cid.cloned(),
+                target_cid: target_cid.copied(),
                 ..Default::default()
             };
             if let Err(c) = policy.check_read(&ctx) {

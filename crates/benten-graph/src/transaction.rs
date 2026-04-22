@@ -159,13 +159,13 @@ impl PendingOp {
                 handler_cid,
                 capability_grant_cid,
             } => ChangeEvent {
-                cid: cid.clone(),
+                cid: *cid,
                 labels: node.labels.clone(),
                 kind: ChangeKind::Created,
                 tx_id,
-                actor_cid: actor_cid.clone(),
-                handler_cid: handler_cid.clone(),
-                capability_grant_cid: capability_grant_cid.clone(),
+                actor_cid: *actor_cid,
+                handler_cid: *handler_cid,
+                capability_grant_cid: *capability_grant_cid,
                 node: Some(node.clone()),
                 edge_endpoints: None,
             },
@@ -175,7 +175,7 @@ impl PendingOp {
                 target,
                 label,
             } => ChangeEvent {
-                cid: cid.clone(),
+                cid: *cid,
                 labels: vec![label.clone()],
                 kind: ChangeKind::EdgeCreated,
                 tx_id,
@@ -183,10 +183,10 @@ impl PendingOp {
                 handler_cid: None,
                 capability_grant_cid: None,
                 node: None,
-                edge_endpoints: Some((source.clone(), target.clone(), label.clone())),
+                edge_endpoints: Some((*source, *target, label.clone())),
             },
             PendingOp::DeleteNode { cid, labels, node } => ChangeEvent {
-                cid: cid.clone(),
+                cid: *cid,
                 labels: labels.clone(),
                 kind: ChangeKind::Deleted,
                 tx_id,
@@ -202,7 +202,7 @@ impl PendingOp {
                 source,
                 target,
             } => ChangeEvent {
-                cid: cid.clone(),
+                cid: *cid,
                 labels: label.clone().into_iter().collect(),
                 kind: ChangeKind::EdgeDeleted,
                 tx_id,
@@ -211,7 +211,7 @@ impl PendingOp {
                 capability_grant_cid: None,
                 node: None,
                 edge_endpoints: match (source, target, label) {
-                    (Some(s), Some(t), Some(l)) => Some((s.clone(), t.clone(), l.clone())),
+                    (Some(s), Some(t), Some(l)) => Some((*s, *t, l.clone())),
                     _ => None,
                 },
             },
@@ -360,7 +360,7 @@ impl<'a> Transaction<'a> {
             }
         }
         self.pending.push(PendingOp::PutNode {
-            cid: cid.clone(),
+            cid,
             node: node.clone(),
             actor_cid,
             handler_cid,
@@ -402,9 +402,9 @@ impl<'a> Transaction<'a> {
             table.insert(edge_tgt_index_key(&edge.target, &cid).as_slice(), &[][..])?;
         }
         self.pending.push(PendingOp::PutEdge {
-            cid: cid.clone(),
-            source: edge.source.clone(),
-            target: edge.target.clone(),
+            cid,
+            source: edge.source,
+            target: edge.target,
             label: edge.label.clone(),
         });
         Ok(cid)
@@ -512,7 +512,7 @@ impl<'a> Transaction<'a> {
             }
         }
         self.pending.push(PendingOp::DeleteNode {
-            cid: cid.clone(),
+            cid: *cid,
             labels: labels.clone(),
             node: existing,
         });
@@ -591,8 +591,8 @@ impl<'a> Transaction<'a> {
             }
         };
         let label = edge.as_ref().map(|e| e.label.clone());
-        let source = edge.as_ref().map(|e| e.source.clone());
-        let target = edge.as_ref().map(|e| e.target.clone());
+        let source = edge.as_ref().map(|e| e.source);
+        let target = edge.as_ref().map(|e| e.target);
         {
             let mut table = txn.open_table(NODES_TABLE)?;
             if let Some(e) = &edge {
@@ -602,7 +602,7 @@ impl<'a> Transaction<'a> {
             table.remove(edge_key(cid).as_slice())?;
         }
         self.pending.push(PendingOp::DeleteEdge {
-            cid: cid.clone(),
+            cid: *cid,
             label: label.clone(),
             source,
             target,

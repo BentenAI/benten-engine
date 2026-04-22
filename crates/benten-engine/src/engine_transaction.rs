@@ -102,7 +102,7 @@ impl EngineTransaction<'_, '_> {
         self.ops_collector
             .lock_recover()
             .push(benten_caps::PendingOp::PutNode {
-                cid: cid.clone(),
+                cid,
                 labels: node.labels.clone(),
             });
         Ok(cid)
@@ -135,7 +135,7 @@ impl EngineTransaction<'_, '_> {
         self.ops_collector
             .lock_recover()
             .push(benten_caps::PendingOp::PutNode {
-                cid: cid.clone(),
+                cid,
                 labels: node.labels.clone(),
             });
         Ok(cid)
@@ -153,10 +153,7 @@ impl EngineTransaction<'_, '_> {
         let labels = self.inner.delete_node(cid).map_err(EngineError::Graph)?;
         self.ops_collector
             .lock_recover()
-            .push(benten_caps::PendingOp::DeleteNode {
-                cid: cid.clone(),
-                labels,
-            });
+            .push(benten_caps::PendingOp::DeleteNode { cid: *cid, labels });
         Ok(())
     }
 

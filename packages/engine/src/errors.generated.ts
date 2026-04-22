@@ -87,6 +87,21 @@ export const CATALOG_CODES = [
   "E_VERSION_UNKNOWN_PRIOR",
   "E_DSL_INVALID_SHAPE",
   "E_DSL_UNREGISTERED_HANDLER",
+  "E_HOST_NOT_FOUND",
+  "E_HOST_WRITE_CONFLICT",
+  "E_HOST_BACKEND_UNAVAILABLE",
+  "E_HOST_CAPABILITY_REVOKED",
+  "E_HOST_CAPABILITY_EXPIRED",
+  "E_EXEC_STATE_TAMPERED",
+  "E_RESUME_ACTOR_MISMATCH",
+  "E_RESUME_SUBGRAPH_DRIFT",
+  "E_WAIT_TIMEOUT",
+  "E_INV_IMMUTABILITY",
+  "E_INV_ATTRIBUTION",
+  "E_CAP_WALLCLOCK_EXPIRED",
+  "E_CAP_CHAIN_TOO_DEEP",
+  "E_CAP_SCOPE_LONE_STAR_REJECTED",
+  "E_WAIT_SIGNAL_SHAPE_MISMATCH",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -898,5 +913,230 @@ export class EDslUnregisteredHandler extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_DSL_UNREGISTERED_HANDLER", "Check spelling; register via `engine.registerSubgraph(handler)` or `engine.registerSubgraph(crud('<label>'))`.", message, context);
     this.name = "EDslUnregisteredHandler";
+  }
+}
+
+/**
+ * E_HOST_NOT_FOUND
+ *
+ * Thrown at: `PrimitiveHost` implementation (G1-B)
+ * Message template: "Host-boundary lookup miss: {kind} {identifier}"
+ */
+export class EHostNotFound extends BentenError {
+  static readonly code = "E_HOST_NOT_FOUND";
+  static readonly fixHint = "Reserved HostError discriminant. Surfaces from `PrimitiveHost` impls when the requested entity is not in the backend. Distinct from `E_NOT_FOUND` because it carries the host-layer boundary (preserves the `benten-eval` → `benten-graph` arch-1 dep break).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_HOST_NOT_FOUND", "Reserved HostError discriminant. Surfaces from `PrimitiveHost` impls when the requested entity is not in the backend. Distinct from `E_NOT_FOUND` because it carries the host-layer boundary (preserves the `benten-eval` → `benten-graph` arch-1 dep break).", message, context);
+    this.name = "EHostNotFound";
+  }
+}
+
+/**
+ * E_HOST_WRITE_CONFLICT
+ *
+ * Thrown at: `PrimitiveHost` implementation (G1-B)
+ * Message template: "Host-boundary optimistic-concurrency conflict on {target}"
+ */
+export class EHostWriteConflict extends BentenError {
+  static readonly code = "E_HOST_WRITE_CONFLICT";
+  static readonly fixHint = "Reserved HostError discriminant. Fires when a host-level compare-and-swap write detects a concurrent mutation. Surface is frozen at Phase 2a; first firing site in Phase 3 sync.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_HOST_WRITE_CONFLICT", "Reserved HostError discriminant. Fires when a host-level compare-and-swap write detects a concurrent mutation. Surface is frozen at Phase 2a; first firing site in Phase 3 sync.", message, context);
+    this.name = "EHostWriteConflict";
+  }
+}
+
+/**
+ * E_HOST_BACKEND_UNAVAILABLE
+ *
+ * Thrown at: `PrimitiveHost` implementation (G1-B)
+ * Message template: "Host-boundary backend unavailable: {detail}"
+ */
+export class EHostBackendUnavailable extends BentenError {
+  static readonly code = "E_HOST_BACKEND_UNAVAILABLE";
+  static readonly fixHint = "Reserved HostError discriminant. Fires when the underlying storage backend is offline (I/O error, disk full, network partition). Retry with exponential backoff; if persistent, inspect the storage layer.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_HOST_BACKEND_UNAVAILABLE", "Reserved HostError discriminant. Fires when the underlying storage backend is offline (I/O error, disk full, network partition). Retry with exponential backoff; if persistent, inspect the storage layer.", message, context);
+    this.name = "EHostBackendUnavailable";
+  }
+}
+
+/**
+ * E_HOST_CAPABILITY_REVOKED
+ *
+ * Thrown at: `PrimitiveHost` implementation (G1-B)
+ * Message template: "Host-boundary capability was revoked mid-operation"
+ */
+export class EHostCapabilityRevoked extends BentenError {
+  static readonly code = "E_HOST_CAPABILITY_REVOKED";
+  static readonly fixHint = "Reserved HostError discriminant. Fires when a host-level capability check observes a revocation between resolve and use. Retry after re-granting.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_HOST_CAPABILITY_REVOKED", "Reserved HostError discriminant. Fires when a host-level capability check observes a revocation between resolve and use. Retry after re-granting.", message, context);
+    this.name = "EHostCapabilityRevoked";
+  }
+}
+
+/**
+ * E_HOST_CAPABILITY_EXPIRED
+ *
+ * Thrown at: `PrimitiveHost` implementation (G1-B)
+ * Message template: "Host-boundary capability expired by TTL"
+ */
+export class EHostCapabilityExpired extends BentenError {
+  static readonly code = "E_HOST_CAPABILITY_EXPIRED";
+  static readonly fixHint = "Reserved HostError discriminant. Fires when a host-level capability check observes the grant's TTL has elapsed. Re-grant with a longer TTL or refresh the cap.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_HOST_CAPABILITY_EXPIRED", "Reserved HostError discriminant. Fires when a host-level capability check observes the grant's TTL has elapsed. Re-grant with a longer TTL or refresh the cap.", message, context);
+    this.name = "EHostCapabilityExpired";
+  }
+}
+
+/**
+ * E_EXEC_STATE_TAMPERED
+ *
+ * Thrown at: `Engine::resume_from_bytes` (G3-A resume protocol step 1)
+ * Message template: "ExecutionState payload_cid mismatch — envelope tampered"
+ */
+export class EExecStateTampered extends BentenError {
+  static readonly code = "E_EXEC_STATE_TAMPERED";
+  static readonly fixHint = "The resume envelope's `payload_cid` recomputation does not match the declared CID. Either the bytes were tampered in transit, or the Phase-2a serialization layer drifted. Verify the source of the bytes; never resume from untrusted storage without an integrity check.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_EXEC_STATE_TAMPERED", "The resume envelope's `payload_cid` recomputation does not match the declared CID. Either the bytes were tampered in transit, or the Phase-2a serialization layer drifted. Verify the source of the bytes; never resume from untrusted storage without an integrity check.", message, context);
+    this.name = "EExecStateTampered";
+  }
+}
+
+/**
+ * E_RESUME_ACTOR_MISMATCH
+ *
+ * Thrown at: `Engine::resume_from_bytes_as` (G3-A resume protocol step 2)
+ * Message template: "Resume principal does not match the suspended ExecutionState"
+ */
+export class EResumeActorMismatch extends BentenError {
+  static readonly code = "E_RESUME_ACTOR_MISMATCH";
+  static readonly fixHint = "The caller attempting `resume_from_bytes_as` does not match the actor recorded at suspend time. Only the same principal (or an equivalent delegated grant) can resume. Verify the caller identity; use `resume_from_bytes` only on the original actor's behalf.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_RESUME_ACTOR_MISMATCH", "The caller attempting `resume_from_bytes_as` does not match the actor recorded at suspend time. Only the same principal (or an equivalent delegated grant) can resume. Verify the caller identity; use `resume_from_bytes` only on the original actor's behalf.", message, context);
+    this.name = "EResumeActorMismatch";
+  }
+}
+
+/**
+ * E_RESUME_SUBGRAPH_DRIFT
+ *
+ * Thrown at: `Engine::resume_from_bytes` (G3-A resume protocol step 3)
+ * Message template: "Pinned subgraph CID drifted from the currently registered head"
+ */
+export class EResumeSubgraphDrift extends BentenError {
+  static readonly code = "E_RESUME_SUBGRAPH_DRIFT";
+  static readonly fixHint = "The subgraph the caller suspended against has since been re-registered under a new CID. Resumption deliberately refuses to cross that boundary. If the drift is expected, re-suspend under the new CID. Distinct from `E_INV_IMMUTABILITY` — the drift is detected at resume time, not write time.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_RESUME_SUBGRAPH_DRIFT", "The subgraph the caller suspended against has since been re-registered under a new CID. Resumption deliberately refuses to cross that boundary. If the drift is expected, re-suspend under the new CID. Distinct from `E_INV_IMMUTABILITY` — the drift is detected at resume time, not write time.", message, context);
+    this.name = "EResumeSubgraphDrift";
+  }
+}
+
+/**
+ * E_WAIT_TIMEOUT
+ *
+ * Thrown at: WAIT executor (G3-B duration path)
+ * Message template: "WAIT deadline elapsed before a resume signal arrived"
+ */
+export class EWaitTimeout extends BentenError {
+  static readonly code = "E_WAIT_TIMEOUT";
+  static readonly fixHint = "A WAIT declared `duration: <ms>` and the deadline elapsed without a matching signal. Either the orchestrator that was meant to resume the suspension never dispatched, or the deadline was too tight. Re-call with a longer duration, or wire a fallback ON_ERROR edge to downstream compensation logic.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_WAIT_TIMEOUT", "A WAIT declared `duration: <ms>` and the deadline elapsed without a matching signal. Either the orchestrator that was meant to resume the suspension never dispatched, or the deadline was too tight. Re-call with a longer duration, or wire a fallback ON_ERROR edge to downstream compensation logic.", message, context);
+    this.name = "EWaitTimeout";
+  }
+}
+
+/**
+ * E_INV_IMMUTABILITY
+ *
+ * Thrown at: graph write-path (G5-A)
+ * Message template: "Write would mutate a registered subgraph (Inv-13)"
+ */
+export class EInvImmutability extends BentenError {
+  static readonly code = "E_INV_IMMUTABILITY";
+  static readonly fixHint = "Phase-2a invariant 13: once a handler subgraph is registered under a CID, its bytes are immutable. User re-writes (both content-matching and content-differing) are rejected. Privileged engine re-puts with matching bytes dedup silently; SyncReplica row is reserved for Phase 3. Register a NEW handler CID if the intent is to change the subgraph.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_INV_IMMUTABILITY", "Phase-2a invariant 13: once a handler subgraph is registered under a CID, its bytes are immutable. User re-writes (both content-matching and content-differing) are rejected. Privileged engine re-puts with matching bytes dedup silently; SyncReplica row is reserved for Phase 3. Register a NEW handler CID if the intent is to change the subgraph.", message, context);
+    this.name = "EInvImmutability";
+  }
+}
+
+/**
+ * E_INV_ATTRIBUTION
+ *
+ * Thrown at: registration + runtime trace emission (G5-B)
+ * Message template: "Missing or malformed attribution frame (Inv-14)"
+ */
+export class EInvAttribution extends BentenError {
+  static readonly code = "E_INV_ATTRIBUTION";
+  static readonly fixHint = "Phase-2a invariant 14: every TraceStep MUST carry an `AttributionFrame` naming the actor, handler, and capability-grant CIDs. A primitive-type that refuses to declare its attribution source fails at registration. File a bug against the primitive's `attribution_for_step` impl.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_INV_ATTRIBUTION", "Phase-2a invariant 14: every TraceStep MUST carry an `AttributionFrame` naming the actor, handler, and capability-grant CIDs. A primitive-type that refuses to declare its attribution source fails at registration. File a bug against the primitive's `attribution_for_step` impl.", message, context);
+    this.name = "EInvAttribution";
+  }
+}
+
+/**
+ * E_CAP_WALLCLOCK_EXPIRED
+ *
+ * Thrown at: evaluator (G9-A, §9.13 refresh point #5)
+ * Message template: "Capability wall-clock refresh bound breached"
+ */
+export class ECapWallclockExpired extends BentenError {
+  static readonly code = "E_CAP_WALLCLOCK_EXPIRED";
+  static readonly fixHint = "A long-running ITERATE crossed the 300s default wall-clock refresh boundary; the grant was revoked between the previous refresh and the boundary. Re-grant the capability and retry. Tighten handler shapes to stay under the refresh bound if latency matters.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_CAP_WALLCLOCK_EXPIRED", "A long-running ITERATE crossed the 300s default wall-clock refresh boundary; the grant was revoked between the previous refresh and the boundary. Re-grant the capability and retry. Tighten handler shapes to stay under the refresh bound if latency matters.", message, context);
+    this.name = "ECapWallclockExpired";
+  }
+}
+
+/**
+ * E_CAP_CHAIN_TOO_DEEP
+ *
+ * Thrown at: capability policy attenuation walker (G9-A)
+ * Message template: "Capability attenuation chain exceeds max_chain_depth"
+ */
+export class ECapChainTooDeep extends BentenError {
+  static readonly code = "E_CAP_CHAIN_TOO_DEEP";
+  static readonly fixHint = "A delegation chain was deeper than the configured `GrantReader::max_chain_depth` (default 64). Either shorten the chain or raise the configured cap through the engine builder. Ucca-6 guard against malicious delegator attacks.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_CAP_CHAIN_TOO_DEEP", "A delegation chain was deeper than the configured `GrantReader::max_chain_depth` (default 64). Either shorten the chain or raise the configured cap through the engine builder. Ucca-6 guard against malicious delegator attacks.", message, context);
+    this.name = "ECapChainTooDeep";
+  }
+}
+
+/**
+ * E_CAP_SCOPE_LONE_STAR_REJECTED
+ *
+ * Thrown at: `GrantScope::parse` (G4-A)
+ * Message template: "GrantScope::parse('*') rejected — lone star is a footgun"
+ */
+export class ECapScopeLoneStarRejected extends BentenError {
+  static readonly code = "E_CAP_SCOPE_LONE_STAR_REJECTED";
+  static readonly fixHint = "Lone `*` is refused because it collapses to a root-scope wildcard that cannot be meaningfully attenuated. Use a compound form (`*:<namespace>`) or name an explicit scope. Ucca-7 / G4-A.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_CAP_SCOPE_LONE_STAR_REJECTED", "Lone `*` is refused because it collapses to a root-scope wildcard that cannot be meaningfully attenuated. Use a compound form (`*:<namespace>`) or name an explicit scope. Ucca-7 / G4-A.", message, context);
+    this.name = "ECapScopeLoneStarRejected";
+  }
+}
+
+/**
+ * E_WAIT_SIGNAL_SHAPE_MISMATCH
+ *
+ * Thrown at: WAIT executor resume path (G3-B DX signal-payload typing)
+ * Message template: "WAIT signal payload does not match declared signal_shape"
+ */
+export class EWaitSignalShapeMismatch extends BentenError {
+  static readonly code = "E_WAIT_SIGNAL_SHAPE_MISMATCH";
+  static readonly fixHint = "When a WAIT declares `signal_shape: Some(schema)`, a resume with a payload that fails schema validation is rejected BEFORE any downstream TRANSFORM runs. Either widen the schema, re-send with the correct shape, or drop the `signal_shape` to keep the untyped path.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_WAIT_SIGNAL_SHAPE_MISMATCH", "When a WAIT declares `signal_shape: Some(schema)`, a resume with a payload that fails schema validation is rejected BEFORE any downstream TRANSFORM runs. Either widen the schema, re-send with the correct shape, or drop the `signal_shape` to keep the untyped path.", message, context);
+    this.name = "EWaitSignalShapeMismatch";
   }
 }

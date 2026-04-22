@@ -59,13 +59,13 @@ fn cascade_edge_delete_emits_events_for_all_referencing_edges() {
 
     // Three edges: A→B, A→C, B→A.
     let e_ab = backend
-        .put_edge(&Edge::new(a.clone(), b.clone(), "X".to_string(), None))
+        .put_edge(&Edge::new(a, b, "X".to_string(), None))
         .unwrap();
     let e_ac = backend
-        .put_edge(&Edge::new(a.clone(), c.clone(), "Y".to_string(), None))
+        .put_edge(&Edge::new(a, c, "Y".to_string(), None))
         .unwrap();
     let e_ba = backend
-        .put_edge(&Edge::new(b.clone(), a.clone(), "Z".to_string(), None))
+        .put_edge(&Edge::new(b, a, "Z".to_string(), None))
         .unwrap();
 
     // Register the recording subscriber AFTER setup so the fan-out only
@@ -118,7 +118,7 @@ fn cascade_edge_delete_emits_events_for_all_referencing_edges() {
 
     // Every cascaded edge's CID must appear as an EdgeDeleted event.
     let deleted_edge_cids: std::collections::BTreeSet<_> =
-        edge_deletes.iter().map(|e| e.cid.clone()).collect();
+        edge_deletes.iter().map(|e| e.cid).collect();
     assert!(
         deleted_edge_cids.contains(&e_ab),
         "A→B cascade missing from fan-out",
@@ -153,7 +153,7 @@ fn cascade_edge_delete_dedupes_self_loop() {
 
     let a = backend.put_node(&labeled_node("NodeA", 1)).unwrap();
     let loop_edge = backend
-        .put_edge(&Edge::new(a.clone(), a.clone(), "self".to_string(), None))
+        .put_edge(&Edge::new(a, a, "self".to_string(), None))
         .unwrap();
 
     let events = Arc::new(Mutex::new(Vec::<ChangeEvent>::new()));

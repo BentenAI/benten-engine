@@ -41,6 +41,155 @@ pub use redb_backend::RedbBackend;
 pub use store::{ChangeEvent, ChangeKind, ChangeSubscriber, EdgeStore, NodeStore};
 pub use transaction::{PendingOp, Transaction};
 
+/// Phase 2a G2-A / C5 stub: additional test-only and Phase-2a methods on
+/// [`RedbBackend`]. These are split into a trait impl here so the main
+/// `redb_backend.rs` stays focused on Phase-1 semantics while Phase-2a
+/// stubs surface the new API shape in one place.
+///
+/// TODO(phase-2a-G2-A / G5-A): implement real bodies; the stubs below
+/// `todo!()` so tests fail at runtime with a clear pointer to the owning
+/// group.
+impl RedbBackend {
+    /// Phase 2a G2-A: `create`-alias for the `open_or_create` constructor —
+    /// new R3 tests prefer this name.
+    ///
+    /// # Errors
+    /// Returns [`GraphError`] on redb open failure.
+    pub fn create(path: impl AsRef<std::path::Path>) -> Result<Self, GraphError> {
+        Self::open_or_create(path)
+    }
+
+    /// Phase 2a G5-B-i: fast-path label-only read (Code-as-graph Major #1).
+    /// Reads only the Node header bytes sufficient to extract the first
+    /// label; used by the Inv-11 runtime probe.
+    ///
+    /// # Errors
+    /// Returns [`GraphError`] on decode failure.
+    pub fn get_node_label_only(&self, _cid: &Cid) -> Result<Option<String>, GraphError> {
+        todo!(
+            "Phase 2a G5-B-i: implement label-only fast path per plan §9.10 + \
+             Code-as-graph Major #1"
+        )
+    }
+
+    /// Phase 2a test-only hook: inject a Node at a specific CID (mismatched
+    /// content). Exercises the User×differs path in the Inv-13 matrix.
+    ///
+    /// # Errors
+    /// Returns [`GraphError`] on write failure.
+    pub fn put_node_at_cid_for_test(
+        &self,
+        _cid: &Cid,
+        _node: &benten_core::Node,
+        _ctx: &WriteContext,
+    ) -> Result<Cid, GraphError> {
+        todo!("Phase 2a G5-A: test-only mismatched-CID injection hook")
+    }
+
+    /// Phase 2a test-only hook: drain the ChangeEvent buffer for
+    /// `inv_13_dedup_does_not_emit_changeevent` assertions.
+    pub fn drain_change_events_for_test(&self) -> Vec<ChangeEvent> {
+        Vec::new()
+    }
+
+    /// Phase 2a test-only hook: whether the bloom-filter cache has the CID.
+    pub fn cache_contains_cid(&self, _cid: &Cid) -> bool {
+        false
+    }
+
+    /// Phase 2a test-only hook: force the next `put_node` to trip a bloom
+    /// false-positive path (inv_13_bloom_false_positive test).
+    pub fn force_bloom_collision_for_next_put(&self) {}
+
+    /// Phase 2a test-only hook: probe the bloom filter directly.
+    pub fn bloom_may_contain_for_test(&self, _cid: &Cid) -> bool {
+        false
+    }
+
+    /// Phase 2a test-only hook: force the next probe to return a positive.
+    pub fn force_bloom_positive_for_test(&self, _cid: &Cid) {}
+
+    /// Phase 2a arch-r1-1 descope-witness bench helper. The accompanying
+    /// bench (`crud_post_create_dispatch_group_durability.rs`) routes its
+    /// iteration body through this helper so the bench compiles today.
+    ///
+    /// TODO(phase-2a-G2-A): wire durability-mode pass-through through
+    /// `put_node` so the Group vs Immediate delta is observable.
+    pub fn benchmark_helper_crud_post_create_dispatch(&self, _durability: DurabilityMode) {
+        todo!(
+            "Phase 2a G2-A descope-witness: implement durability-mode pass-through \
+             per arch-r1-1 + named Compromise #N+3"
+        )
+    }
+
+    /// Phase 2a test-only hook: return the `DurabilityMode` of the last
+    /// `put_node` that targeted this label.
+    pub fn last_put_node_durability_for_label(&self, _label: &str) -> Option<DurabilityMode> {
+        None
+    }
+
+    /// Phase 2a test-only hook: reset the bytes-read counter for the
+    /// `get_node_label_only_fast_path_reads_prefix_only` assertion.
+    pub fn reset_read_byte_counter(&self) {}
+
+    /// Phase 2a test-only hook: read bytes consumed since the last reset.
+    pub fn read_bytes_since_reset(&self) -> usize {
+        0
+    }
+
+    /// Phase 2a C5 / G5-A: store a `Subgraph` under its DAG-CBOR canonical
+    /// encoding, returning its CID.
+    ///
+    /// # Errors
+    /// Returns [`GraphError`] on encode / write failure.
+    pub fn store_subgraph(&self, _sg: &benten_core::Subgraph) -> Result<Cid, GraphError> {
+        todo!("Phase 2a C5 / G5-A: Subgraph DAG-CBOR persistence")
+    }
+
+    /// Phase 2a C5 / G5-A: load a subgraph by CID, verifying integrity.
+    ///
+    /// # Errors
+    /// Returns [`GraphError`] on decode / integrity failure.
+    pub fn load_subgraph_verified(
+        &self,
+        _cid: &Cid,
+    ) -> Result<Option<benten_core::Subgraph>, GraphError> {
+        todo!(
+            "Phase 2a C5 / G5-A: Subgraph load + verify per \
+             `subgraph_load_verified_migration.rs`"
+        )
+    }
+
+    /// Phase 2a test-only hook: corrupt on-disk subgraph bytes via a
+    /// mutator closure.
+    ///
+    /// # Errors
+    /// Returns [`GraphError`] if the CID is missing.
+    pub fn corrupt_subgraph_bytes_for_test<F>(
+        &self,
+        _cid: &Cid,
+        _mutate: F,
+    ) -> Result<(), GraphError>
+    where
+        F: FnOnce(&mut [u8]),
+    {
+        todo!("Phase 2a G5-A: test-only on-disk corruption hook")
+    }
+
+    /// Phase 2a test-only hook: inject raw bytes under a computed CID.
+    ///
+    /// # Errors
+    /// Returns [`GraphError`] on write failure.
+    pub fn inject_raw_subgraph_bytes_for_test(&self, _bytes: &[u8]) -> Result<Cid, GraphError> {
+        todo!("Phase 2a G5-A: test-only raw-byte injection hook")
+    }
+}
+
+/// Re-export of [`benten_core::WriteAuthority`]. Phase 2a ucca-9 / arch-r1-2
+/// frozen shape lives in benten-core so every mid-stack crate uses the same
+/// type. See `benten-core/src/lib.rs` for docs.
+pub use benten_core::WriteAuthority;
+
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
@@ -317,6 +466,10 @@ pub struct WriteContext {
     /// Marks an engine-API-only path. User code cannot reach this without
     /// going through one of the engine's privileged methods.
     pub is_privileged: bool,
+    /// Phase 2a G2-B / ucca-9 / arch-r1-2: authority under which the write
+    /// runs. Defaults to [`WriteAuthority::User`]. `EnginePrivileged` aligns
+    /// with `is_privileged = true`; `SyncReplica` is Phase-3 reserved.
+    pub authority: WriteAuthority,
 }
 
 impl Default for WriteContext {
@@ -324,6 +477,7 @@ impl Default for WriteContext {
         Self {
             label: String::new(),
             is_privileged: false,
+            authority: WriteAuthority::User,
         }
     }
 }
@@ -336,6 +490,7 @@ impl WriteContext {
         Self {
             label: label.into(),
             is_privileged: false,
+            authority: WriteAuthority::User,
         }
     }
 
@@ -349,7 +504,21 @@ impl WriteContext {
         Self {
             label: String::new(),
             is_privileged: true,
+            authority: WriteAuthority::EnginePrivileged,
         }
+    }
+
+    /// Set the [`WriteAuthority`] for this context (builder-style).
+    ///
+    /// TODO(phase-2a-G2-B): wire `EnginePrivileged` to also flip
+    /// `is_privileged = true` at call sites, so both axes stay coherent.
+    #[must_use]
+    pub fn with_authority(mut self, authority: WriteAuthority) -> Self {
+        if matches!(authority, WriteAuthority::EnginePrivileged) {
+            self.is_privileged = true;
+        }
+        self.authority = authority;
+        self
     }
 
     /// Called by the transaction primitive to enforce the SC1 stopgap.

@@ -1,0 +1,81 @@
+//! Phase 2a R3 security — Inv-13 dedup audit-sequence (atk-3 / sec-r1-4).
+//!
+//! **Attack class (companion to `inv_13_dedup_does_not_emit_changeevent`).**
+//! The audit log maintains a monotonically-advancing sequence counter per
+//! transaction commit. If the dedup path silently bumps the audit sequence
+//! (e.g. via a shared counter in the transaction machinery), an attacker
+//! who re-puts identical bytes observes the sequence increment — linking
+//! "nothing happened" to an observable time-ordered effect.
+//!
+//! **Prerequisite.** Same as sibling: attacker reaches engine-privileged
+//! write path. Observer can read the audit sequence or infer it from
+//! ordering side-channels.
+//!
+//! **Attack sequence.**
+//!  1. Observe current audit sequence S.
+//!  2. Re-issue identical grant bytes via `grant_capability`.
+//!  3. Observe audit sequence post-call.
+//!  4. Mitigation: the sequence MUST be unchanged — the dedup path is
+//!     pure-read (Compromise #N+1).
+//!
+//! **Impact.** Side-channel information leak about transaction counter;
+//! also cleanliness regression — audit log gains phantom "commits" that
+//! never produced a ChangeEvent.
+//!
+//! **Recommended mitigation.** Same as sibling: §9.11 row 3 branches
+//! BEFORE any transaction.pending_ops accounting. No counter bump, no
+//! event, no audit trace.
+//!
+//! **Red-phase contract.** Phase 1 HEAD has no public audit-sequence API;
+//! the test is shape-locked against the G5-A-era mitigation. Until G5-A
+//! lands a `TransactionStats` / `audit_sequence()` accessor, the test is
+//! `#[ignore]`d. A compilation-only fixture asserts current APIs still
+//! resolve.
+//!
+//! R3 writer: `rust-test-writer-security` (Phase 2a).
+
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
+use benten_engine::Engine;
+
+/// atk-3 companion: audit sequence does not advance on dedup.
+#[test]
+#[ignore = "phase-2a-pending: audit_sequence() public accessor lands in G5-A per plan §9.11 row 3. Drop #[ignore] once the accessor + dedup-pure-read branching are live."]
+fn inv_13_dedup_path_does_not_advance_audit_sequence() {
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::builder()
+        .path(dir.path().join("benten.redb"))
+        .build()
+        .unwrap();
+
+    let alice = engine.create_principal("alice").unwrap();
+
+    let _cid_1 = engine
+        .grant_capability(&alice, "store:post:write")
+        .expect("first issuance");
+
+    // Target API path (G5-A):
+    //
+    //     let seq_before = engine.audit_sequence();
+    //     let _cid_2 = engine
+    //         .grant_capability(&alice, "store:post:write")
+    //         .expect("dedup path");
+    //     let seq_after = engine.audit_sequence();
+    //     assert_eq!(
+    //         seq_before, seq_after,
+    //         "dedup path (Compromise #N+1) MUST NOT advance the audit \
+    //          sequence; before={seq_before}, after={seq_after}"
+    //     );
+    //
+    // Until audit_sequence() lands, the test stays red via the panic
+    // below.  Re-issuing the grant confirms the existing API still
+    // resolves — fixture sanity.
+    let _cid_2 = engine
+        .grant_capability(&alice, "store:post:write")
+        .expect("dedup path");
+
+    panic!(
+        "red-phase: audit_sequence() accessor + dedup pure-read branching \
+         not yet present. G5-A to land per plan §9.11 row 3."
+    );
+}

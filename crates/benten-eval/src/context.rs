@@ -51,6 +51,15 @@ impl EvalContext {
         ctx
     }
 
+    /// Phase 2a G3-B: construct a context with a specific clock injected.
+    ///
+    /// TODO(phase-2a-G3-B): actually plumb the clock; Phase-2a stub discards
+    /// it and returns a default context.
+    #[must_use]
+    pub fn with_clock<T: crate::TimeSource + 'static>(_clock: T) -> Self {
+        Self::new()
+    }
+
     /// Push a new scope onto the binding stack.
     ///
     /// The caller-supplied bindings become the innermost frame and shadow

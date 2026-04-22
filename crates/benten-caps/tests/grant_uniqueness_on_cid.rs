@@ -31,8 +31,8 @@ fn identical_grants_hash_to_identical_cid() {
     let issuer = entity_cid("root");
 
     let a = CapabilityGrant::new(
-        entity.clone(),
-        issuer.clone(),
+        entity,
+        issuer,
         GrantScope::parse("store:post:write").unwrap(),
     );
     let b = CapabilityGrant::new(
@@ -52,8 +52,8 @@ fn grant_scope_difference_changes_cid() {
     let issuer = entity_cid("root");
 
     let a = CapabilityGrant::new(
-        entity.clone(),
-        issuer.clone(),
+        entity,
+        issuer,
         GrantScope::parse("store:post:write").unwrap(),
     );
     let b = CapabilityGrant::new(
@@ -74,7 +74,7 @@ fn grant_entity_difference_changes_cid() {
     let issuer = entity_cid("root");
     let scope = GrantScope::parse("store:post:write").unwrap();
 
-    let a = CapabilityGrant::new(entity_cid("alice"), issuer.clone(), scope.clone());
+    let a = CapabilityGrant::new(entity_cid("alice"), issuer, scope.clone());
     let b = CapabilityGrant::new(entity_cid("bob"), issuer, scope);
 
     assert_ne!(
@@ -92,7 +92,7 @@ fn grant_issuer_difference_changes_cid() {
     let entity = entity_cid("alice");
     let scope = GrantScope::parse("store:post:write").unwrap();
 
-    let a = CapabilityGrant::new(entity.clone(), entity_cid("root"), scope.clone());
+    let a = CapabilityGrant::new(entity, entity_cid("root"), scope.clone());
     let b = CapabilityGrant::new(entity, entity_cid("admin"), scope);
 
     assert_ne!(

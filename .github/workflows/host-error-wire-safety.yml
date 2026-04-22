@@ -1,0 +1,97 @@
+name: HostError Wire Safety
+
+# Validates the sec-r1-6 / atk-6 wire-safety contract for `HostError`:
+# the over-the-wire encoding (DAG-CBOR serialised form that HostError
+# surfaces across the Rust <-> napi <-> TS boundary) MUST NOT include
+# any bytes from a CID payload. Per plan §9.2 (Option A HostError):
+#
+#   > `source` stays opaque (never boxed-into-serialised-wire-bytes).
+#   > Integration test `host_error_wire_format_excludes_cids`
+#   > (§4.3) gates regressions.
+#
+# This workflow is the CI harness for that test. It builds + runs the
+# integration test under `cargo nextest run` so a regression (e.g. a
+# future PR adds a CID field to HostError's serialised shape, or the
+# `source` box leaks identifying bytes on its way through the wire) is
+# caught at PR time.
+#
+# Triggers on any change to:
+#   - the errors crate (HostError lives there per G1-B)
+#   - the engine public API (wire-format surface)
+#   - the napi bindings (marshalling boundary)
+#   - the wire-safety integration test itself
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - "crates/benten-errors/**"
+      - "crates/benten-engine/**"
+      - "bindings/napi/**"
+      - "crates/benten-engine/tests/integration/host_error_wire_safety.rs"
+      - ".github/workflows/host-error-wire-safety.yml"
+
+concurrency:
+  group: host-error-wire-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  wire-safety-test:
+    name: HostError wire format excludes CID bytes
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: host-error-wire-safety
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: Build + run wire-safety integration test
+        run: |
+          cargo nextest run --profile ci --locked \
+            -p benten-engine \
+            --test host_error_wire_safety \
+            -E 'test(host_error_wire_format_excludes_cids)'
+
+      - name: Sanity check — HostError does not serialise CID fields
+        # Belt-and-suspenders: scan the HostError Serialize derive site
+        # (if the struct grows a `#[serde]` field whose name contains
+        # `cid`, fail fast before waiting on the integration test).
+        shell: bash
+        run: |
+          set -euo pipefail
+          host_error_src=$(find crates/benten-errors/src -name '*.rs' \
+            | xargs grep -l 'struct HostError' || true)
+          if [ -z "$host_error_src" ]; then
+            echo "NOTE: HostError struct not found yet (OK pre-G1-B)"
+            exit 0
+          fi
+          echo "HostError defined in: ${host_error_src}"
+          # Read the struct block ('struct HostError {' ... '}').
+          awk '/struct HostError[[:space:]]*\{/,/^\}/' "$host_error_src" > host_error_struct.txt
+          echo "--- HostError struct ---"
+          cat host_error_struct.txt
+          echo "--- end ---"
+          # Forbidden field patterns — any of these would leak CID bytes.
+          if grep -iqE '(pub[[:space:]]+)?(cid|content_cid|target_cid)[[:space:]]*:' host_error_struct.txt; then
+            echo "FAIL: HostError has a CID-typed field in its public shape"
+            echo "Per plan §9.2, source stays opaque. Add wire-safe context"
+            echo "via the `context: Option<String>` field instead."
+            exit 1
+          fi
+          echo "OK: HostError struct has no CID-typed fields"

@@ -243,13 +243,13 @@ impl ContentListingView {
             .values()
             .skip(offset)
             .take(limit)
-            .cloned()
+            .copied()
             .collect()
     }
 
     /// Snapshot last-known-good before flipping to `Stale`.
     fn trip_to_stale(&mut self) {
-        self.last_known_good = self.entries.values().cloned().collect();
+        self.last_known_good = self.entries.values().copied().collect();
         self.budget.mark_stale();
     }
 
@@ -314,7 +314,7 @@ impl View for ContentListingView {
                 let disambiguator = self.next_disambiguator;
                 self.next_disambiguator = self.next_disambiguator.wrapping_add(1);
                 self.entries
-                    .insert((sort_primary, disambiguator), event.cid.clone());
+                    .insert((sort_primary, disambiguator), event.cid);
                 let _ = self.budget.try_consume(1, VIEW_ID);
             }
             ChangeKind::Deleted => {
@@ -390,5 +390,5 @@ fn extract_created_at(node: &Node) -> Option<i64> {
 /// Paginate an already-ordered slice (used for last-known-good snapshots
 /// which are pre-materialized as a flat `Vec`).
 fn paginate_slice(src: &[Cid], offset: usize, limit: usize) -> Vec<Cid> {
-    src.iter().skip(offset).take(limit).cloned().collect()
+    src.iter().skip(offset).take(limit).copied().collect()
 }

@@ -27,6 +27,22 @@ bench = false
 # publishers of release artifacts disable via `--no-default-features`.
 default = ["test-helpers"]
 test-helpers = []
+# Phase-2a R3's original `phase_2a_stubs` feature was removed at R4
+# fix-pass (cov-1) — the R3 consolidation stubs made the gate obsolete
+# for the 4 exit-gate composite files (wait_resume_determinism,
+# inv_8_11_13_14_firing, arch_1_dep_break_verified, option_c_end_to_end).
+# Those tests now compile and fail at `todo!()` panics carrying the
+# owning R5 group pointer.
+#
+# A narrower `phase_2a_pending_apis` feature (below) gates FOUR files
+# whose bodies reach into DSL/testing APIs that are wider than the R3
+# consolidation stubs — specifically `SubgraphBuilder` closure-style
+# builder methods, `testing_audit_sequence`, `call_with_ticking_mono_clock`,
+# `testing_reput_subgraph_as_user`, etc. R5 G2-B / G3-B / G5-A / G9-A
+# own landing those APIs; once landed, the respective file drops this
+# feature gate and its tests flip from compile-skip to red-phase
+# `todo!()` panic, preserving the TDD contract.
+phase_2a_pending_apis = []
 
 [dependencies]
 benten-caps = { path = "../benten-caps" }
@@ -41,6 +57,10 @@ thiserror = { workspace = true }
 [dev-dependencies]
 criterion = { workspace = true }
 tempfile = { workspace = true }
+# Phase 2a R3 tests: proptest + serde_ipld_dagcbor reach into the DAG-CBOR
+# schema directly for tamper-injection paths.
+proptest = { workspace = true }
+serde_ipld_dagcbor = { workspace = true }
 
 [[bench]]
 name = "roundtrip"
@@ -48,4 +68,16 @@ harness = false
 
 [[bench]]
 name = "end_to_end_create"
+harness = false
+
+[[bench]]
+name = "get_node_label_only_sub_1us"
+harness = false
+
+[[bench]]
+name = "option_c_evaluator_path_overhead"
+harness = false
+
+[[bench]]
+name = "subgraph_cache_hit"
 harness = false

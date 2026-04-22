@@ -115,7 +115,7 @@ impl VersionCurrentView {
             return Err(BudgetTracker::stale_error(VIEW_ID));
         }
         let anchor_id = anchor.to_anchor_id();
-        Ok(self.current.get(&anchor_id).cloned())
+        Ok(self.current.get(&anchor_id).copied())
     }
 }
 
@@ -175,7 +175,7 @@ impl View for VersionCurrentView {
                     .as_ref()
                     .and_then(|n| n.anchor_id)
                     .unwrap_or(DEFAULT_ANCHOR_ID);
-                self.current.insert(anchor_id, event.cid.clone());
+                self.current.insert(anchor_id, event.cid);
             }
             ChangeKind::Deleted => {
                 let anchor_id = event
@@ -194,7 +194,7 @@ impl View for VersionCurrentView {
                     // reverse-lookup of source → anchor yet); the edge
                     // source could be used as an anchor-identity hint in
                     // Phase 2 once a source→anchor map lands.
-                    self.current.insert(DEFAULT_ANCHOR_ID, target.clone());
+                    self.current.insert(DEFAULT_ANCHOR_ID, *target);
                 }
             }
             ChangeKind::EdgeDeleted => {
@@ -223,7 +223,7 @@ impl View for VersionCurrentView {
                 "version_current: query missing required `anchor_id`".to_string(),
             ));
         };
-        Ok(ViewResult::Current(self.current.get(&anchor_id).cloned()))
+        Ok(ViewResult::Current(self.current.get(&anchor_id).copied()))
     }
 
     fn rebuild(&mut self) -> Result<(), ViewError> {

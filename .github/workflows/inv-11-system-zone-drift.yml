@@ -1,0 +1,156 @@
+name: Inv-11 System-Zone Drift
+
+# Invariant-11 drift detector. Every string literal of the form
+# `"system:<Label>"` that appears anywhere under `crates/**/*.rs` must
+# also appear in the `SYSTEM_ZONE_PREFIXES` const (benten-core or
+# benten-eval, wherever the const lives post-G1-A). A new system-zone
+# label that bypasses the const would silently open a hole in Inv-11
+# enforcement — this workflow is the mechanical tripwire.
+#
+# Maps to test `inv_11_system_zone_drift_test::all_system_zone_writers_
+# registered_in_prefix_table` from R2 landscape §2.5.5.
+#
+# Casing contract (cr-r1-2 + code-as-graph critical): all system-zone
+# labels are PascalCase after the `system:` prefix (e.g.
+# `system:CapabilityGrant`, NOT `system:capability_grant`). The drift
+# check verifies both directions:
+#   (a) every literal found in src matches PascalCase,
+#   (b) every literal found in src appears in SYSTEM_ZONE_PREFIXES.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - "crates/**/*.rs"
+      - ".github/workflows/inv-11-system-zone-drift.yml"
+
+concurrency:
+  group: inv-11-drift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drift-check:
+    name: System-zone literal drift
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: Collect system-zone literals under crates/
+        id: collect-literals
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Match `"system:<Word>"` string literals anywhere under
+          # crates/. We grep for the bytes of the literal including the
+          # surrounding quotes so comments with `system:X` prose don't
+          # trip the gate. `-o` prints just the matching text.
+          #
+          # Exclude:
+          #   - tests/ and benches/ trees (test fixtures can legitimately
+          #     reference labels for assertion, not for writing)
+          #   - src/*_test.rs files (inline unit tests)
+          #   - anything whose line starts with // or is inside a
+          #     `#[doc = ...]` (handled by the post-filter below).
+
+          rg --no-heading --no-line-number -o '"system:[A-Za-z0-9_]+"' \
+             crates/ \
+             --glob '!**/tests/**' \
+             --glob '!**/benches/**' \
+             --glob '!**/*_test.rs' \
+             | sort -u > literals.txt || true
+
+          if [ ! -s literals.txt ]; then
+            echo "NOTE: no system-zone literals found under crates/ (OK pre-G1-A if const not seeded)"
+            exit 0
+          fi
+
+          echo "Literals discovered under crates/:"
+          cat literals.txt
+
+      - name: Validate PascalCase casing
+        if: hashFiles('literals.txt') != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          violations=0
+          while IFS= read -r literal; do
+            # Strip surrounding quotes + the "system:" prefix. What
+            # remains must start with an uppercase ASCII letter.
+            suffix=${literal#\"system:}
+            suffix=${suffix%\"}
+            first=${suffix:0:1}
+            case "$first" in
+              [A-Z]) : ;;
+              *)
+                echo "CASING: ${literal} — suffix must start with uppercase (PascalCase), got '${first}'"
+                violations=$((violations + 1))
+                ;;
+            esac
+          done < literals.txt
+          if [ "$violations" -gt 0 ]; then
+            echo ""
+            echo "Inv-11 casing contract (cr-r1-2): system-zone labels are PascalCase."
+            exit 1
+          fi
+
+      - name: Validate every literal appears in SYSTEM_ZONE_PREFIXES
+        if: hashFiles('literals.txt') != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Locate the SYSTEM_ZONE_PREFIXES const. Per plan, it lives in
+          # benten-core (G1-A creates the skeleton). Search broadly so the
+          # post-G1-A placement survives without edits here.
+          const_src=$(rg -l 'SYSTEM_ZONE_PREFIXES' crates/ || true)
+          if [ -z "$const_src" ]; then
+            echo "FAIL: SYSTEM_ZONE_PREFIXES const not found anywhere under crates/"
+            echo "G1-A must land the const for this gate to pass."
+            exit 1
+          fi
+
+          echo "SYSTEM_ZONE_PREFIXES sources:"
+          echo "$const_src"
+
+          # Extract the const's contents (everything between the const
+          # name and the first `];` after it). Works for both
+          # `const SYSTEM_ZONE_PREFIXES: &[&str; N] = &["...", ...];` and
+          # `static SYSTEM_ZONE_PREFIXES: [&str; N] = [...];` shapes.
+          const_body=$(rg --multiline --multiline-dotall \
+            'SYSTEM_ZONE_PREFIXES[^=]*=[\s\S]*?\];' \
+            $const_src || true)
+
+          if [ -z "$const_body" ]; then
+            echo "FAIL: could not parse SYSTEM_ZONE_PREFIXES const body"
+            exit 1
+          fi
+
+          echo "--- const body ---"
+          echo "$const_body"
+          echo "--- end ---"
+
+          violations=0
+          while IFS= read -r literal; do
+            # grep -F fixed-string match including the surrounding quotes.
+            if ! echo "$const_body" | grep -Fq "$literal"; then
+              echo "DRIFT: ${literal} found in crate src but NOT in SYSTEM_ZONE_PREFIXES"
+              violations=$((violations + 1))
+            fi
+          done < literals.txt
+
+          if [ "$violations" -gt 0 ]; then
+            echo ""
+            echo "Inv-11 drift (§2.5.5 R2 landscape + sec-r1-3 / atk-4):"
+            echo "every system-zone label that appears in code must be"
+            echo "registered in SYSTEM_ZONE_PREFIXES so the phf prefix"
+            echo "probe recognises it at runtime."
+            exit 1
+          fi
+
+          echo "OK: all ${literals_count:-$(wc -l < literals.txt)} literals registered in SYSTEM_ZONE_PREFIXES"

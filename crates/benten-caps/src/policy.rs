@@ -11,6 +11,10 @@ use benten_core::Cid;
 use crate::DEFAULT_BATCH_BOUNDARY;
 use crate::error::CapError;
 
+/// Re-export of [`benten_core::WriteAuthority`]. Single canonical type
+/// across benten-core, benten-graph, and benten-caps.
+pub use benten_core::WriteAuthority;
+
 /// Context handed to the capability policy at commit time.
 ///
 /// The field set is a union of the axes the R1 triage + R2 landscape named
@@ -107,6 +111,9 @@ pub struct WriteContext {
     /// Closes R4 pass-2 residual `g4-uc-5`: policies can now inspect the
     /// full batch rather than just the primary op reflected by `label`.
     pub pending_ops: Vec<PendingOp>,
+    /// Phase 2a G2-B / ucca-9 / arch-r1-2: authority under which the write
+    /// runs. Defaults to [`WriteAuthority::User`].
+    pub authority: WriteAuthority,
 }
 
 impl WriteContext {
@@ -122,7 +129,18 @@ impl WriteContext {
             is_privileged: false,
             actor_hint: Some("synthetic-actor".into()),
             pending_ops: Vec::new(),
+            authority: WriteAuthority::User,
         }
+    }
+
+    /// Builder: set the [`WriteAuthority`] on a context. Phase 2a G2-B.
+    #[must_use]
+    pub fn with_authority(mut self, authority: WriteAuthority) -> Self {
+        if matches!(authority, WriteAuthority::EnginePrivileged) {
+            self.is_privileged = true;
+        }
+        self.authority = authority;
+        self
     }
 }
 
@@ -239,5 +257,17 @@ pub trait CapabilityPolicy: Send + Sync {
     // (min(iteration_count, wall_clock_seconds), default ≤300s).
     fn iterate_batch_boundary(&self) -> usize {
         DEFAULT_BATCH_BOUNDARY
+    }
+
+    /// Phase 2a G9-A / P1 / §9.13 refresh-point-5: maximum wall-clock
+    /// duration between capability-grant revalidations during a long-running
+    /// ITERATE or CALL. Default 300s per the dual-source resolution; the
+    /// evaluator's monotonic source drives the cadence, the HLC rides
+    /// alongside for federation correlation.
+    ///
+    /// TODO(phase-2a-G9-A): wire into the evaluator's refresh path so the
+    /// override becomes load-bearing end-to-end.
+    fn wallclock_refresh_ceiling(&self) -> core::time::Duration {
+        core::time::Duration::from_secs(300)
     }
 }

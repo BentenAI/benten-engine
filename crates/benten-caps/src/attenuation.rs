@@ -54,6 +54,38 @@ use std::cmp::Ordering;
 use crate::error::CapError;
 use crate::grant::GrantScope;
 
+/// Phase 2a consolidation trait: lets `check_attenuation` accept both
+/// `&GrantScope` (Phase-1 callers) and `&str` / `&String` (proptest-style
+/// call sites from the Phase-2a ucca-8 suite).
+pub trait AsAttenuationScope {
+    /// Borrow the colon-segmented scope string.
+    fn as_scope_str(&self) -> &str;
+}
+
+impl AsAttenuationScope for &GrantScope {
+    fn as_scope_str(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl AsAttenuationScope for GrantScope {
+    fn as_scope_str(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl AsAttenuationScope for &str {
+    fn as_scope_str(&self) -> &str {
+        self
+    }
+}
+
+impl AsAttenuationScope for &String {
+    fn as_scope_str(&self) -> &str {
+        self.as_str()
+    }
+}
+
 /// Check that `child_required` is an attenuation (strict subset) of
 /// `parent_scope`.
 ///
@@ -77,11 +109,13 @@ use crate::grant::GrantScope;
 /// assert!(check_attenuation(&parent_strict, &child_wider).is_err());
 /// ```
 pub fn check_attenuation(
-    parent_scope: &GrantScope,
-    child_required: &GrantScope,
+    parent_scope: impl AsAttenuationScope,
+    child_required: impl AsAttenuationScope,
 ) -> Result<(), CapError> {
-    let parent_segments: Vec<&str> = parent_scope.as_str().split(':').collect();
-    let child_segments: Vec<&str> = child_required.as_str().split(':').collect();
+    let parent = parent_scope.as_scope_str();
+    let child = child_required.as_scope_str();
+    let parent_segments: Vec<&str> = parent.split(':').collect();
+    let child_segments: Vec<&str> = child.split(':').collect();
 
     // Walk aligned pairs. A trailing `*` on the parent short-circuits to
     // permit any remaining child tail; a non-trailing `*` matches one

@@ -189,6 +189,28 @@ impl Value {
         Value::Text(s.into())
     }
 
+    /// Phase 2a G3-A convenience constructor for the "no value" / unit shape.
+    /// Semantically equivalent to [`Value::Null`]; provided as a named
+    /// constructor so WAIT / resume test sites read uniformly.
+    #[must_use]
+    pub fn unit() -> Self {
+        Value::Null
+    }
+
+    /// Phase 2a G3-B convenience constructor for a `Map` value from an
+    /// iterable of `(key, value)` pairs.
+    pub fn map_of<I, K>(entries: I) -> Self
+    where
+        I: IntoIterator<Item = (K, Value)>,
+        K: Into<String>,
+    {
+        let mut out = BTreeMap::new();
+        for (k, v) in entries {
+            out.insert(k.into(), v);
+        }
+        Value::Map(out)
+    }
+
     /// Produce a hashing-canonical clone of this value: validates that no
     /// non-finite floats are present, and normalizes `-0.0` to `+0.0` so the
     /// CID is stable across the sign of zero. Used by

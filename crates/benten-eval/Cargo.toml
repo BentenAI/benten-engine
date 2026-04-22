@@ -47,3 +47,11 @@ benten-engine = { path = "../benten-engine" }
 [[bench]]
 name = "ten_node_handler"
 harness = false
+
+[[bench]]
+name = "multiplicative_budget_overhead"
+harness = false
+
+[[bench]]
+name = "wait_suspend_resume_latency"
+harness = false

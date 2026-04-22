@@ -1,0 +1,194 @@
+name: Arch-1 Dependency Break
+
+# Signature-level gate: benten-eval must NOT depend on benten-graph (either
+# as a Cargo dep OR via benten_graph::* types in PrimitiveHost trait method
+# signatures). Closes the phil-r1-2 + arch-r1 finding: re-coupling eval and
+# graph under a new name is the drift we must detect mechanically.
+#
+# Two independent checks:
+#   1. Cargo.toml edge check — `benten-eval` must not list `benten-graph`
+#      as a [dependencies] entry. (dev-dependencies / test-only deps are
+#      fine since integration tests legitimately cross layers.)
+#   2. Type-signature grep — the `PrimitiveHost` trait (and every
+#      `EvalError` variant shape) must not reference any path starting
+#      with `benten_graph::`.
+#
+# Both run on every PR that touches `crates/benten-eval/**` or
+# `crates/benten-engine/**`. A single offending line fails the job with a
+# typed error pointing at the offending file:line.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - "crates/benten-core/**"
+      - "crates/benten-eval/**"
+      - "crates/benten-engine/**"
+      - ".github/workflows/arch-1-dep-break.yml"
+
+concurrency:
+  group: arch-1-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  benten-core-no-eval-dep:
+    name: benten-core Cargo.toml must not depend on benten-eval
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Parse benten-core Cargo.toml for benten-eval edge
+        shell: bash
+        run: |
+          set -euo pipefail
+          toml="crates/benten-core/Cargo.toml"
+          if [ ! -f "$toml" ]; then
+            echo "FAIL: ${toml} not found"
+            exit 1
+          fi
+
+          # Match any of:
+          #   benten-eval = "x.y"
+          #   benten-eval = { path = ... }
+          #   benten-eval={ ... }
+          #   [dependencies.benten-eval]
+          #   [dev-dependencies.benten-eval]
+          #   [build-dependencies.benten-eval]
+          offending=$(grep -nE \
+            '^[[:space:]]*(benten-eval[[:space:]]*=|\[dependencies\.benten-eval\]|\[dev-dependencies\.benten-eval\]|\[build-dependencies\.benten-eval\])' \
+            "$toml" || true)
+
+          if [ -n "$offending" ]; then
+            echo "ARCH-1 VIOLATION in ${toml} (phil-r1-3):"
+            echo "$offending"
+            echo ""
+            echo "benten-core must not depend on benten-eval. The dependency"
+            echo "graph flows eval → core, never the reverse. If a shared type"
+            echo "is needed, promote it into benten-core (data-shape-only)."
+            exit 1
+          fi
+
+          echo "OK: ${toml} has no benten-eval edge"
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify via cargo tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          # `cargo tree -p benten-core --prefix none` prints every resolved
+          # crate in the dependency graph of benten-core. Grep for any
+          # mention of `benten-eval`; absence is success.
+          output=$(cargo tree -p benten-core --prefix none 2>/dev/null || true)
+          if echo "$output" | grep -q '^benten-eval'; then
+            echo "ARCH-1 VIOLATION: cargo tree -p benten-core contains benten-eval"
+            echo "$output" | grep 'benten-eval' || true
+            exit 1
+          fi
+
+          echo "OK: cargo tree -p benten-core has no benten-eval node"
+
+  cargo-toml-edge-check:
+    name: benten-eval Cargo.toml must not depend on benten-graph
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Parse benten-eval Cargo.toml [dependencies]
+        shell: bash
+        run: |
+          set -euo pipefail
+          toml="crates/benten-eval/Cargo.toml"
+          if [ ! -f "$toml" ]; then
+            echo "FAIL: ${toml} not found"
+            exit 1
+          fi
+
+          # Extract the [dependencies] section (up to the next `[...]`
+          # header) and look for a `benten-graph` entry. Uses awk for a
+          # dependency-free parse; the `/^\[/` resets the section flag so
+          # `[dev-dependencies]` or `[[bench]]` matches don't trip it.
+          offending=$(awk '
+            /^\[dependencies\]/ { in_deps = 1; next }
+            /^\[/              { in_deps = 0; next }
+            in_deps && /^benten-graph[[:space:]]*=/ { print NR": "$0 }
+          ' "$toml")
+
+          if [ -n "$offending" ]; then
+            echo "ARCH-1 VIOLATION in ${toml}:"
+            echo "$offending"
+            echo ""
+            echo "benten-eval must not depend on benten-graph at runtime"
+            echo "(plan §9.10 + phil-r1-2 resolution). If a legitimate"
+            echo "shared type needs to move, land it in benten-core."
+            exit 1
+          fi
+
+          echo "OK: ${toml} [dependencies] has no benten-graph edge"
+
+  primitive-host-type-grep:
+    name: PrimitiveHost trait signatures must not name benten_graph::* types
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: Scan PrimitiveHost trait + EvalError variants
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # The trait is defined in benten-engine::primitive_host; the
+          # EvalError is in benten-eval. Scan both for any `benten_graph::`
+          # path-fragment. Matches on use-statements at file scope are
+          # handled separately below (those are also forbidden in eval but
+          # may be legitimate in engine).
+          targets=(
+            "crates/benten-engine/src/primitive_host.rs"
+            "crates/benten-eval/src/host.rs"
+            "crates/benten-eval/src/error.rs"
+          )
+
+          violations=0
+          for f in "${targets[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "NOTE: ${f} not present yet (OK pre-G1)"
+              continue
+            fi
+            # Ignore doc-comments (// or ///) since docs legitimately
+            # reference the old coupled path. The gate is on *code*, not
+            # prose.
+            hits=$(rg -n 'benten_graph::' "$f" | rg -v '^\s*(//|///)' || true)
+            if [ -n "$hits" ]; then
+              echo "ARCH-1 VIOLATION in ${f}:"
+              echo "$hits"
+              violations=$((violations + 1))
+            fi
+          done
+
+          # Also scan benten-eval's whole src tree for any use of
+          # benten_graph:: outside of dev-test paths.
+          eval_hits=$(rg -n 'benten_graph::' crates/benten-eval/src/ \
+            | rg -v '^\s*(//|///)' || true)
+          if [ -n "$eval_hits" ]; then
+            echo "ARCH-1 VIOLATION: benten-eval src references benten_graph::"
+            echo "$eval_hits"
+            violations=$((violations + 1))
+          fi
+
+          if [ "$violations" -gt 0 ]; then
+            echo ""
+            echo "Total arch-1 violations: ${violations}"
+            echo "See plan §9.10 for the dependency-break contract."
+            exit 1
+          fi
+
+          echo "OK: no benten_graph::* types leak through PrimitiveHost / EvalError / benten-eval src"

@@ -126,3 +126,39 @@ impl CallCounter {
 pub fn handler_with_read_write_read_sequence() -> SubgraphSpec {
     SubgraphSpec::empty("rwr")
 }
+
+/// Phase 2a G3-B test helper: a minimal no-op RESPOND handler under the
+/// given handler id. Used by `engine_wait_api_shape` to register a shape
+/// the `call_with_suspension` happy path exercises.
+#[must_use]
+pub fn minimal_respond_handler(handler_id: &str) -> SubgraphSpec {
+    SubgraphSpec::builder()
+        .handler_id(handler_id)
+        .respond()
+        .build()
+}
+
+/// Phase 2a G3-B test helper: a minimal WAIT handler for benchmark
+/// fixtures.
+#[must_use]
+pub fn minimal_wait_handler(handler_id: &str) -> SubgraphSpec {
+    SubgraphSpec::empty(handler_id)
+}
+
+/// Phase 2a G9-A test helper: deterministic actor CID derived from a name.
+/// Two callers passing the same name get bit-identical CIDs.
+#[must_use]
+pub fn principal_cid(name: &str) -> benten_core::Cid {
+    let digest = blake3::hash(name.as_bytes());
+    benten_core::Cid::from_blake3_digest(*digest.as_bytes())
+}
+
+/// Phase 2a G9-A test helper: returns `(boxed policy, counter)` so tests
+/// can destructure the check-count side of the counting policy AND pass the
+/// boxed form to `.capability_policy(...)` directly.
+#[must_use]
+pub fn counting_policy() -> (Box<dyn CapabilityPolicy>, CallCounter) {
+    let p = counting_capability_policy();
+    let c = p.call_counter();
+    (Box::new(p), c)
+}

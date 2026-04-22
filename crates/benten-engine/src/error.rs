@@ -112,11 +112,26 @@ impl EngineError {
         }
     }
 
-    /// Stable catalog code as a `'static str`. Delegates to
-    /// [`ErrorCode::as_static_str`] — the former `static_for` local helper
-    /// duplicated the match arms and risked silent drift (r6-err-10).
+    /// Stable catalog code as [`ErrorCode`]. Phase 2a consolidation: the
+    /// return type changed from `&'static str` to `ErrorCode` so Phase-2a
+    /// tests can pattern-match and/or compare equal against `ErrorCode`
+    /// variants directly. For the string form, call `.code().as_str()` or
+    /// use the legacy [`Self::code_as_str`] helper.
     #[must_use]
-    pub fn code(&self) -> &'static str {
+    pub fn code(&self) -> ErrorCode {
+        self.error_code()
+    }
+
+    /// Legacy `'static str` code accessor retained for call sites that
+    /// serialise the code directly (napi wire, drift detector).
+    #[must_use]
+    pub fn code_as_str(&self) -> &'static str {
         self.error_code().as_static_str()
+    }
+
+    /// Phase 2a dx-r1 (addendum): edge-label the error routes through.
+    #[must_use]
+    pub fn routed_edge_label(&self) -> Option<&'static str> {
+        self.error_code().routed_edge_label()
     }
 }

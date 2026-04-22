@@ -35,7 +35,7 @@ fn concurrent_append_creates_branched_chain() {
     // each append their own v1. The chain now has two heads — E_VERSION_BRANCHED.
     let v0 = versioned_node("initial", 0);
     let v0_cid = v0.cid().unwrap();
-    let anchor = Anchor::new(v0_cid.clone());
+    let anchor = Anchor::new(v0_cid);
 
     // Writer A appends v1_a pointing to v0. Succeeds.
     let v1_a = versioned_node("writer A edit", 1);
@@ -68,7 +68,7 @@ fn append_after_current_head_succeeds() {
     // forking, not about any append failing.
     let v0 = versioned_node("initial", 0);
     let v0_cid = v0.cid().unwrap();
-    let anchor = Anchor::new(v0_cid.clone());
+    let anchor = Anchor::new(v0_cid);
 
     let v1 = versioned_node("linear update", 1);
     let v1_cid = v1.cid().unwrap();

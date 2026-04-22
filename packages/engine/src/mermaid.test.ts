@@ -48,4 +48,27 @@ describe("handler.toMermaid()", () => {
     const b = handler.toMermaid();
     expect(a).toBe(b);
   });
+
+  // Phase 2a R4 qa-r4-8 / dx-r1-9: WAIT renders as a stadium-shape node
+  // (`([text])`) plus a dashed resume edge labelled `on resume`. TDD
+  // red-phase: `packages/engine/src/mermaid.ts` does NOT yet specialise
+  // WAIT (falls through to rectangle); G3-B lands the dashed-edge shape.
+  it("wait_renders_as_stadium_with_dashed_resume_edge", async () => {
+    const { subgraph } = await import("@benten/engine");
+    const waitHandler = await engine.registerSubgraph(
+      subgraph("mermaid-wait")
+        .action("run")
+        .wait({ signal: "external:continue" })
+        .respond({ body: "$result" })
+        .build(),
+    );
+    const mermaid = waitHandler.toMermaid();
+
+    // Stadium shape `([text])` — Mermaid's "stadium" variant. Phase-1
+    // uses it only for RESPOND/EMIT; G3-B adds WAIT.
+    expect(mermaid).toMatch(/\(\[\s*WAIT:/);
+    // Dashed resume edge `-.->` labelled `on resume` — explicit signal
+    // that this edge fires post-suspend.
+    expect(mermaid).toMatch(/-\.->\s*\|?on resume/);
+  });
 });

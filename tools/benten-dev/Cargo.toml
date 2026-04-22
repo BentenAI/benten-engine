@@ -1,0 +1,24 @@
+[package]
+name = "benten-dev"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Benten dev-server for Phase-2a G11-A — hot-reload, inspect-state CLI, grant-preservation across reloads. TDD red-phase stubs only."
+publish = false
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+bench = false
+
+[dependencies]
+benten-core = { path = "../../crates/benten-core" }
+benten-errors = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

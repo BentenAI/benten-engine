@@ -25,6 +25,8 @@ fn grant_as_node_label_is_capability_grant() {
         issuer,
         scope: "post:write".to_string(),
         hlc_stamp: 1,
+        // Phase 2a ucca-8: default None preserves Phase-1 CID.
+        ttl_hlc_duration: None,
     };
     let node = grant.as_node();
     // Match against the shared constant so the label-namespace contract
@@ -40,16 +42,18 @@ fn grant_cid_is_deterministic_for_identical_content() {
     let grantee = canonical_test_node().cid().unwrap();
     let issuer = canonical_test_node().cid().unwrap();
     let g1 = CapabilityGrant {
-        grantee: grantee.clone(),
-        issuer: issuer.clone(),
+        grantee,
+        issuer,
         scope: "post:write".to_string(),
         hlc_stamp: 7,
+        ttl_hlc_duration: None,
     };
     let g2 = CapabilityGrant {
         grantee,
         issuer,
         scope: "post:write".to_string(),
         hlc_stamp: 7,
+        ttl_hlc_duration: None,
     };
     assert_eq!(g1.cid().unwrap(), g2.cid().unwrap());
 }

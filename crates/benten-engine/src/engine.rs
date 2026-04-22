@@ -625,7 +625,7 @@ impl Engine {
         input: Node,
         actor: &Cid,
     ) -> Result<Outcome, EngineError> {
-        self.dispatch_call(handler_id, op, input, Some(actor.clone()))
+        self.dispatch_call(handler_id, op, input, Some(*actor))
     }
 
     /// Call with a scheduled mid-iteration revocation. Phase-1: same shape as
@@ -639,7 +639,7 @@ impl Engine {
         _scope: &str,
         _n: u32,
     ) -> Result<Outcome, EngineError> {
-        self.dispatch_call(handler_id, op, input, Some(actor.clone()))
+        self.dispatch_call(handler_id, op, input, Some(*actor))
     }
 
     /// Return a per-step trace of the evaluation.
@@ -842,7 +842,7 @@ impl Engine {
         // Verify the handler is registered.
         let handler_cid_opt = {
             let guard = self.inner.handlers.lock_recover();
-            guard.get(handler_id).cloned()
+            guard.get(handler_id).copied()
         };
         let Some(handler_cid) = handler_cid_opt else {
             return Err(EngineError::Other {
@@ -859,8 +859,8 @@ impl Engine {
             guard.push(ActiveCall {
                 handler_id: handler_id.to_string(),
                 op: op.to_string(),
-                actor: actor.clone(),
-                handler_cid: Some(handler_cid.clone()),
+                actor,
+                handler_cid: Some(handler_cid),
                 pending_ops: Vec::new(),
                 inject_failure: false,
             });
@@ -951,10 +951,11 @@ impl Engine {
         // surface distinct CIDs (r6b-dx-C6).
         if let Some(out) = trace_steps_out {
             for rs in raw_trace {
-                let primitive = primitive_kind_label(&subgraph, &rs.node_id);
-                let node_cid = derive_op_node_cid(subgraph.handler_id(), &rs.node_id);
+                let node_id_str = rs.node_id().unwrap_or("").to_string();
+                let primitive = primitive_kind_label(&subgraph, &node_id_str);
+                let node_cid = derive_op_node_cid(subgraph.handler_id(), &node_id_str);
                 out.push(TraceStep {
-                    duration_us: rs.duration_us.max(1),
+                    duration_us: rs.duration_us().max(1),
                     node_cid,
                     primitive,
                 });
@@ -993,7 +994,7 @@ impl Engine {
         // disturbance, no change-event emission.
         if trace_mode {
             let projected_cid = pending.iter().find_map(|op| match op {
-                PendingHostOp::PutNode { projected_cid, .. } => Some(projected_cid.clone()),
+                PendingHostOp::PutNode { projected_cid, .. } => Some(*projected_cid),
                 _ => None,
             });
             return Ok(outcome_from_terminal_with_cid(
@@ -1027,10 +1028,10 @@ impl Engine {
                         } => {
                             let cid = tx.put_node_with_attribution(
                                 node,
-                                Some(projected_cid.clone()),
-                                actor_cid.clone(),
-                                handler_cid.clone(),
-                                capability_grant_cid.clone(),
+                                Some(*projected_cid),
+                                *actor_cid,
+                                *handler_cid,
+                                *capability_grant_cid,
                             )?;
                             last_cid = Some(cid);
                         }

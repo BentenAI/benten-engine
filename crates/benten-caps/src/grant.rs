@@ -83,6 +83,12 @@ impl GrantScope {
                 entity: String::new(),
             });
         }
+        // Phase 2a ucca-7: refuse lone `*` — root-scope footgun. Compound
+        // `*:<ns>` remains accepted because the second segment anchors the
+        // namespace.
+        if trimmed == "*" {
+            return Err(CapError::ScopeLoneStarRejected);
+        }
         // Reject empty segments — any empty-string segment is a parse error.
         // Covers `"store::write"` (empty middle), `":store"` (empty leading),
         // `"store:"` (empty trailing), and `":::"` (all empty).
@@ -135,6 +141,15 @@ pub struct CapabilityGrant {
     /// source; Phase 1 accepts any caller-supplied `u64` (test fixtures use
     /// small literals such as `1` or `7`).
     pub hlc_stamp: u64,
+    /// Phase 2a ucca-8: optional TTL expressed as an HLC duration. When
+    /// `None`, the grant's CID is bit-identical to the Phase-1 shape
+    /// (serialization skips the field). When `Some`, the duration contributes
+    /// to the property set and therefore the CID.
+    ///
+    /// TODO(phase-2a-G4-A): wire the field into `as_node` serialization with
+    /// `skip_serializing_if = "Option::is_none"` semantics so the None case
+    /// preserves Phase-1 CIDs.
+    pub ttl_hlc_duration: Option<core::time::Duration>,
 }
 
 impl CapabilityGrant {
@@ -153,6 +168,25 @@ impl CapabilityGrant {
             issuer,
             scope: scope.0,
             hlc_stamp: 0,
+            ttl_hlc_duration: None,
+        }
+    }
+
+    /// Construct a synthetic grant for attenuation-chain tests (ucca-6).
+    ///
+    /// `i` indexes distinct grants along a chain so each has a distinct CID.
+    /// Real grant issuance is Phase-3 scope.
+    ///
+    /// TODO(phase-2a-G9-A): real attenuation flow.
+    #[must_use]
+    pub fn attenuated_for_test(actor: &Cid, scope: &str, i: usize) -> Self {
+        Self {
+            grantee: *actor,
+            issuer: *actor,
+            scope: scope.to_string(),
+            #[allow(clippy::cast_possible_truncation, reason = "test index")]
+            hlc_stamp: i as u64,
+            ttl_hlc_duration: None,
         }
     }
 

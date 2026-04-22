@@ -1,8 +1,11 @@
-//! Structural-invariant enforcement (G6-C) — the eight registration-time
-//! checks the engine runs before a subgraph is accepted.
+//! Phase-1 structural invariants (1, 2, 3, 5, 6, 9, 10, 12).
+//!
+//! Pure code-move from the former single-file `invariants.rs` per plan §3
+//! G1-A. Phase-2a invariants 8 (multiplicative budget), 11 (system zone), 13
+//! (immutability), 14 (attribution) live in sibling files in this directory.
 //!
 //! Per ENGINE-SPEC §4 and the Phase-1 scope reconciliation in
-//! `.addl/phase-1/00-implementation-plan.md` §3 G6-C, Phase 1 enforces:
+//! `.addl/phase-1/00-implementation-plan.md` §3 G6-C, this module enforces:
 //!
 //! - **1 — DAG-ness** (back-edge detection via DFS coloring)
 //! - **2 — max depth** (longest path in the subgraph)
@@ -11,7 +14,9 @@
 //! - **5 — max total nodes** (default 4096)
 //! - **6 — max total edges** (default 8192)
 //! - **8 (Phase-1 stopgap)** — max ITERATE nesting depth (R1 named
-//!   compromise; hardcoded to 3 per `DEFAULT_MAX_ITERATE_NEST_DEPTH`)
+//!   compromise; hardcoded to 3 per `DEFAULT_MAX_ITERATE_NEST_DEPTH`).
+//!   Phase-2a G4-A replaces this stopgap with the multiplicative
+//!   cumulative-budget path in `invariants/budget.rs`.
 //! - **9 — determinism classification** (any non-deterministic primitive
 //!   inside a handler declared `deterministic: true` is rejected)
 //! - **10 — content-addressed CID** (byte encoding is order-independent:
@@ -19,11 +24,6 @@
 //!   same CID, per R1 triage)
 //! - **12 — registration-time catch-all** (aggregate-mode reporting across
 //!   two or more simultaneous violations)
-//!
-//! Phase-2 invariants (4, 7, 8-full, 11, 13, 14) are explicitly NOT
-//! implemented here. The tests in `tests/phase_two_primitives_structural.rs`
-//! pin the contract that Phase-2 primitives pass structural validation but
-//! fail at call time.
 //!
 //! Per Validated Design Decision #5, the CID is BLAKE3 over a canonical
 //! DAG-CBOR encoding; the canonicalizer sorts nodes and edges before
@@ -38,19 +38,6 @@ use crate::{
     RegistrationError, Subgraph, SubgraphSnapshot,
 };
 
-/// Validate a finalized [`Subgraph`] (the post-builder, post-edge-
-/// materialization form) against the structural invariants.
-///
-/// Used by [`Subgraph::validate`](crate::Subgraph::validate) when the caller
-/// already has a `Subgraph` (e.g. after round-tripping through storage).
-/// `SubgraphBuilder::build_validated` takes the richer builder-snapshot path
-/// via `validate_builder` (crate-private).
-///
-/// # Errors
-///
-/// Returns a [`RegistrationError`] carrying the first invariant violation
-/// encountered. `aggregate=true` runs every check and reports all failures
-/// via [`InvariantViolation::Registration`]-style context.
 /// Parse every TRANSFORM operation-node's `expr` property at registration
 /// time. 5d-J workstream 3: gives the fail-fast guarantee that an
 /// unparseable expression surfaces at `register_subgraph` rather than
@@ -76,6 +63,19 @@ pub fn validate_transform_expressions(sg: &Subgraph) -> Result<(), EvalError> {
     Ok(())
 }
 
+/// Validate a finalized [`Subgraph`] (the post-builder, post-edge-
+/// materialization form) against the structural invariants.
+///
+/// Used by [`Subgraph::validate`](crate::Subgraph::validate) when the caller
+/// already has a `Subgraph` (e.g. after round-tripping through storage).
+/// `SubgraphBuilder::build_validated` takes the richer builder-snapshot path
+/// via `validate_builder` (crate-private).
+///
+/// # Errors
+///
+/// Returns a [`RegistrationError`] carrying the first invariant violation
+/// encountered. `aggregate=true` runs every check and reports all failures
+/// via [`InvariantViolation::Registration`]-style context.
 pub fn validate_subgraph(
     sg: &Subgraph,
     config: &InvariantConfig,

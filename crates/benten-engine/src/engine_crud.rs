@@ -66,7 +66,7 @@ impl Engine {
         if let Some(policy) = self.policy.as_deref() {
             let ctx = benten_caps::ReadContext {
                 label,
-                target_cid: Some(cid.clone()),
+                target_cid: Some(*cid),
                 ..Default::default()
             };
             if let Err(CapError::DeniedRead { .. }) = policy.check_read(&ctx) {
@@ -95,7 +95,7 @@ impl Engine {
     /// Create an Edge between two Nodes with the given label, returning the
     /// Edge's content-addressed CID.
     pub fn create_edge(&self, source: &Cid, target: &Cid, label: &str) -> Result<Cid, EngineError> {
-        let edge = Edge::new(source.clone(), target.clone(), label.to_string(), None);
+        let edge = Edge::new(*source, *target, label.to_string(), None);
         Ok(self.backend.put_edge(&edge)?)
     }
 
@@ -148,7 +148,7 @@ impl Engine {
         let label = node.labels.first().cloned().unwrap_or_default();
         let ctx = benten_caps::ReadContext {
             label,
-            target_cid: Some(cid.clone()),
+            target_cid: Some(*cid),
             ..Default::default()
         };
         Ok(matches!(

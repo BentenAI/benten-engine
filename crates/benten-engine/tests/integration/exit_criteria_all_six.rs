@@ -256,7 +256,7 @@ fn exit_4_trace_non_zero_timing_and_topological_order() {
                 pred
             );
         }
-        seen.insert(step.node_cid().clone());
+        seen.insert(*step.node_cid());
     }
 }
 

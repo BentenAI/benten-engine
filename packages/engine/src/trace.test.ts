@@ -94,3 +94,69 @@ describe("engine.trace", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 2a R3 extension (qa-expert) — TraceStep variants visible + typed
+// ---------------------------------------------------------------------------
+//
+// Traces to: `.addl/phase-2a/00-implementation-plan.md` §3 G3-A
+// (TraceStep::SuspendBoundary + ResumeBoundary + BudgetExhausted variants
+// present in outcome.rs) + §9.12 BudgetExhausted shared shape.
+//
+// SHAPE-PIN: validates the struct shape for Phase-2b forward-compat.
+// Does NOT validate firing semantics of SANDBOX fuel (Phase 2b).
+//
+// These tests run against the generated `.d.ts` from napi-rs; they check
+// that the wrapper surface exposes discriminant unions consumers can
+// switch on. Owned by `qa-expert` per R2 landscape §8.5.
+
+describe("trace TraceStep discriminant variants (Phase 2a)", () => {
+  it("trace_step_type_union_visible_in_public_surface", async () => {
+    // Compile-time shape-pin: import the TraceStep discriminant union
+    // from the public types surface. If G3-A + G5-B-ii land the new
+    // variants correctly, the import is typed and `type` switches are
+    // exhaustive-checkable.
+    const { type TraceStep } = await import("./types.js");
+    const inspector = (step: TraceStep): string => {
+      switch (step.type) {
+        case "suspend_boundary":
+          return `suspend:${step.stateCid}`;
+        case "resume_boundary":
+          return `resume:${step.stateCid}:${String(step.signalValue)}`;
+        case "budget_exhausted":
+          // shape-pin: §9.12 shared shape
+          return `budget:${step.budgetType}:${step.consumed}/${step.limit}`;
+        case "primitive":
+          return `prim:${step.primitive}`;
+        default:
+          // exhaustive-check: TypeScript fails build if a new variant
+          // lands without a case here.
+          const _never: never = step;
+          return _never;
+      }
+    };
+    // Smoke: inspector type-checks.
+    expect(typeof inspector).toBe("function");
+  });
+
+  it("trace_step_attribution_field_required_on_every_variant", async () => {
+    // Inv-14 (G5-B-ii) promotes `attribution: AttributionFrame` to a
+    // required field on EVERY TraceStep variant. TS surface pin: the
+    // field is non-optional in types.ts.
+    const { type TraceStep } = await import("./types.js");
+    // Compile-time trick: assigning to an object missing attribution
+    // would fail typecheck. We exercise the inverse by requiring the
+    // field is always present at runtime on any step returned by the
+    // engine.
+    const handler = await engine.registerSubgraph(crud("post"));
+    const trace = await engine.trace(handler.id, "post:create", {
+      title: "attribution-pin",
+    });
+    for (const step of trace.steps as TraceStep[]) {
+      expect(step.attribution).toBeTruthy();
+      expect(step.attribution.actorCid).toBeTypeOf("string");
+      expect(step.attribution.handlerCid).toBeTypeOf("string");
+      expect(step.attribution.capabilityGrantCid).toBeTypeOf("string");
+    }
+  });
+});

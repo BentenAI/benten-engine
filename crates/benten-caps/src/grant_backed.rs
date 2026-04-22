@@ -52,6 +52,96 @@ pub trait GrantReader: Send + Sync {
     /// — a policy that cannot read its grant list cannot safely permit the
     /// write.
     fn has_unrevoked_grant_for_scope(&self, scope: &str) -> Result<bool, CapError>;
+
+    /// Phase 2a ucca-6: batched variant — return `true` iff any scope in
+    /// `scopes` has an unrevoked grant. The default impl fans out to N
+    /// single-scope calls; concrete implementations override to perform a
+    /// single backend read to bound resume-time CPU cost under adversarial
+    /// deep chains.
+    ///
+    /// TODO(phase-2a-G9-A): concrete single-read override.
+    fn has_unrevoked_grant_for_any(&self, scopes: &[&str]) -> Result<bool, CapError> {
+        for s in scopes {
+            if self.has_unrevoked_grant_for_scope(s)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+}
+
+/// Phase 2a ucca-6: `GrantReader` configuration overrides (plan §3 G9-A).
+/// Currently carries the `max_chain_depth` bound; Phase 2b may grow more
+/// knobs (e.g. batch size).
+#[derive(Debug, Clone)]
+pub struct GrantReaderConfig {
+    /// Maximum attenuation-chain depth before firing
+    /// [`CapError::ChainTooDeep`]. Default 64.
+    pub max_chain_depth: usize,
+}
+
+impl Default for GrantReaderConfig {
+    fn default() -> Self {
+        Self {
+            max_chain_depth: 64,
+        }
+    }
+}
+
+/// Phase 2a ucca-6 test harness: a concrete `GrantReader`-alike handle
+/// exposing a synthetic attenuation chain. Lives alongside the trait because
+/// the `grant_reader_max_chain_depth` test references this type (see
+/// consolidation report for the shape compromise).
+///
+/// TODO(phase-2a-G9-A): replace this synthetic harness with the real grant
+/// reader's chain-depth checker backed by `system:CapabilityGrant` /
+/// `system:CapabilityRevocation` lookups.
+pub struct GrantReaderChain {
+    chain: Vec<crate::grant::CapabilityGrant>,
+    config: GrantReaderConfig,
+}
+
+impl GrantReaderChain {
+    /// Construct a chain-backed test harness with the default
+    /// [`GrantReaderConfig`] (max depth 64).
+    #[must_use]
+    pub fn with_chain_for_test(chain: Vec<crate::grant::CapabilityGrant>) -> Self {
+        Self {
+            chain,
+            config: GrantReaderConfig::default(),
+        }
+    }
+
+    /// Override the config (test only).
+    #[must_use]
+    pub fn with_config(mut self, config: GrantReaderConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    /// Combined constructor: chain + config in one call.
+    #[must_use]
+    pub fn with_chain_and_config_for_test(
+        chain: Vec<crate::grant::CapabilityGrant>,
+        config: GrantReaderConfig,
+    ) -> Self {
+        Self { chain, config }
+    }
+
+    /// Walk the chain and return [`CapError::ChainTooDeep`] when the depth
+    /// exceeds the configured bound.
+    ///
+    /// # Errors
+    /// Fires [`CapError::ChainTooDeep`] on depth > `max_chain_depth`.
+    pub fn check_attenuation_for_test(&self, _scope: &str) -> Result<(), CapError> {
+        if self.chain.len() > self.config.max_chain_depth {
+            return Err(CapError::ChainTooDeep {
+                depth: self.chain.len(),
+                limit: self.config.max_chain_depth,
+            });
+        }
+        Ok(())
+    }
 }
 
 /// Capability policy that keys off `system:CapabilityGrant` /

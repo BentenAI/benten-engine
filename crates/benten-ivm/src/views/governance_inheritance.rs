@@ -92,7 +92,7 @@ impl GovernanceInheritanceView {
         if self.budget.is_stale() {
             return;
         }
-        self.parent.insert(child.clone(), parent.clone());
+        self.parent.insert(*child, *parent);
     }
 
     /// Current runtime state.
@@ -118,8 +118,8 @@ impl GovernanceInheritanceView {
     pub fn effective_rules(&self, entity: &Cid) -> EffectiveRules {
         let mut rules: Vec<Cid> = Vec::new();
         let mut visited: BTreeSet<Cid> = BTreeSet::new();
-        let mut cursor = entity.clone();
-        visited.insert(cursor.clone());
+        let mut cursor = *entity;
+        visited.insert(cursor);
 
         let mut depth = 0usize;
         let mut was_truncated = false;
@@ -131,14 +131,14 @@ impl GovernanceInheritanceView {
                 break;
             }
             depth += 1;
-            if !visited.insert(parent.clone()) {
+            if !visited.insert(*parent) {
                 // Revisiting a node we've already seen on this walk → cycle.
                 cycle_detected = true;
                 was_truncated = true;
                 break;
             }
-            rules.push(parent.clone());
-            cursor = parent.clone();
+            rules.push(*parent);
+            cursor = *parent;
         }
 
         EffectiveRules {
@@ -166,7 +166,7 @@ impl GovernanceInheritanceView {
                 if let Some((source, target, _)) = &event.edge_endpoints {
                     // `GovernedBy` edge: source is the child (governed),
                     // target is the parent (governor).
-                    self.parent.insert(source.clone(), target.clone());
+                    self.parent.insert(*source, *target);
                 }
             }
             ChangeKind::EdgeDeleted if event.has_label("GovernedBy") => {

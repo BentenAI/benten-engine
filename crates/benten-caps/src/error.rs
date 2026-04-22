@@ -95,9 +95,41 @@ pub enum CapError {
     /// capability is not a subset of the parent's held capability.
     #[error("capability attenuation violation")]
     Attenuation,
+
+    /// Phase 2a ucca-7: `GrantScope::parse("*")` refused — the lone star is
+    /// a root-scope footgun. Compound `*:<ns>` remains accepted.
+    #[error("grant scope lone '*' rejected — use a compound scope like '*:ns'")]
+    ScopeLoneStarRejected,
+
+    /// Phase 2a ucca-6: attenuation chain exceeds `GrantReader::max_chain_depth`.
+    /// Bounds resume-time CPU cost under adversarial deep chains.
+    #[error("capability chain too deep (depth {depth}, limit {limit})")]
+    ChainTooDeep {
+        /// Actual depth observed on the chain.
+        depth: usize,
+        /// Configured maximum.
+        limit: usize,
+    },
+
+    /// Phase 2a G9-A / §9.13 refresh-point-5: wall-clock refresh bound
+    /// breached during a long-running ITERATE / CALL.
+    #[error("capability wall-clock refresh ceiling exceeded")]
+    WallclockExpired,
 }
 
 impl CapError {
+    /// R4 tq-7 — structured-context accessor for `ChainTooDeep`. Returns
+    /// `Some((depth, limit))` for that variant and `None` for every other,
+    /// so tests can assert on the diagnostic payload without matching a
+    /// human-readable message substring.
+    #[must_use]
+    pub fn chain_depth_context(&self) -> Option<(usize, usize)> {
+        match self {
+            CapError::ChainTooDeep { depth, limit } => Some((*depth, *limit)),
+            _ => None,
+        }
+    }
+
     /// Map to the stable ERROR-CATALOG code. Kept as an associated `fn` (not
     /// a `From` impl) so the mapping is introspectable from diagnostics
     /// without pulling in the `CapError` value.
@@ -110,6 +142,9 @@ impl CapError {
             CapError::RevokedMidEval => ErrorCode::CapRevokedMidEval,
             CapError::NotImplemented { .. } => ErrorCode::CapNotImplemented,
             CapError::Attenuation => ErrorCode::CapAttenuation,
+            CapError::ScopeLoneStarRejected => ErrorCode::CapScopeLoneStarRejected,
+            CapError::ChainTooDeep { .. } => ErrorCode::CapChainTooDeep,
+            CapError::WallclockExpired => ErrorCode::CapWallclockExpired,
         }
     }
 }

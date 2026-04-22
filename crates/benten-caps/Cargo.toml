@@ -25,6 +25,7 @@ thiserror = { workspace = true }
 [dev-dependencies]
 proptest = { workspace = true }
 tempfile = { workspace = true }
+criterion = { workspace = true }
 # benten-core re-exposed for `Node::empty()` etc. in test fixtures.
 # benten-core is already a non-dev dep transitively via re-exports, but
 # integration tests live in the test binary and need the path explicit.
@@ -33,3 +34,7 @@ benten-graph = { path = "../benten-graph" }
 # `toctou_iteration.rs`. dev-deps cycle between benten-caps and benten-engine
 # is safe because test binaries link separately from the lib crate graph.
 benten-engine = { path = "../benten-engine" }
+
+[[bench]]
+name = "wallclock_toctou_refresh"
+harness = false

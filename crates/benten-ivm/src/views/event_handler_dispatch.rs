@@ -92,7 +92,7 @@ impl EventDispatchView {
             return;
         };
         for bucket in extract_event_names(&node) {
-            self.by_event.entry(bucket).or_default().insert(cid.clone());
+            self.by_event.entry(bucket).or_default().insert(cid);
         }
     }
 
@@ -115,10 +115,10 @@ impl EventDispatchView {
         }
         let mut out: BTreeSet<Cid> = BTreeSet::new();
         if let Some(set) = self.by_event.get(event) {
-            out.extend(set.iter().cloned());
+            out.extend(set.iter().copied());
         }
         if let Some(set) = self.by_event.get(GLOBAL_BUCKET) {
-            out.extend(set.iter().cloned());
+            out.extend(set.iter().copied());
         }
         Ok(out.into_iter().collect())
     }
@@ -141,7 +141,7 @@ impl EventDispatchView {
                         self.by_event
                             .entry(GLOBAL_BUCKET.to_string())
                             .or_default()
-                            .insert(source.clone());
+                            .insert(*source);
                     }
                     ChangeKind::EdgeDeleted => {
                         if let Some(set) = self.by_event.get_mut(GLOBAL_BUCKET) {
@@ -172,10 +172,7 @@ impl EventDispatchView {
         match event.kind {
             ChangeKind::Created | ChangeKind::Updated => {
                 for b in buckets {
-                    self.by_event
-                        .entry(b)
-                        .or_default()
-                        .insert(event.cid.clone());
+                    self.by_event.entry(b).or_default().insert(event.cid);
                 }
             }
             ChangeKind::Deleted => {
@@ -249,10 +246,10 @@ impl View for EventDispatchView {
         };
         let mut out: BTreeSet<Cid> = BTreeSet::new();
         if let Some(set) = self.by_event.get(name) {
-            out.extend(set.iter().cloned());
+            out.extend(set.iter().copied());
         }
         if let Some(set) = self.by_event.get(GLOBAL_BUCKET) {
-            out.extend(set.iter().cloned());
+            out.extend(set.iter().copied());
         }
         let cids: Vec<Cid> = out.into_iter().collect();
         Ok(ViewResult::Cids(cids))

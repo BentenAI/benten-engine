@@ -50,9 +50,10 @@ describe("create-benten-app scaffolder (headline exit criterion)", () => {
     }
   }, 180_000); // 3-minute timeout covers npm install + test + build + dev.
 
-  it("scaffolder_smoke_test_asserts_all_six_exit_criteria", () => {
-    // Meta-test: the generated smoke.test.ts must contain exactly six top-level
-    // it() blocks mapping to the six exit-criterion assertions. A regression
+  it("scaffolder_smoke_test_asserts_all_seven_exit_criteria", () => {
+    // Meta-test: the generated smoke.test.ts must contain exactly seven
+    // top-level it() blocks — the six Phase-1 exit-criterion assertions
+    // plus the Phase-2a gate 7 (WAIT executor end-to-end). A regression
     // that drops one of them is caught here.
     //
     // We count only `it(` call-site occurrences (line-start whitespace +
@@ -61,6 +62,6 @@ describe("create-benten-app scaffolder (headline exit criterion)", () => {
     const templatePath = join(__dirname, "..", "template", "test", "smoke.test.ts");
     const template = readFileSync(templatePath, "utf8");
     const itCount = (template.match(/^\s*it\s*\(/gm) ?? []).length;
-    expect(itCount).toBe(6);
+    expect(itCount).toBe(7);
   });
 });

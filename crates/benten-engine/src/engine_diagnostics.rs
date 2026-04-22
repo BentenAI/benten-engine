@@ -258,7 +258,7 @@ impl Engine {
         if let Some(policy) = self.policy.as_deref() {
             let ctx = benten_caps::ReadContext {
                 label: "debug".into(),
-                target_cid: Some(cid.clone()),
+                target_cid: Some(*cid),
                 ..Default::default()
             };
             if let Err(e) = policy.check_read(&ctx) {
@@ -291,7 +291,7 @@ impl Engine {
             if let Some(policy) = self.policy.as_deref() {
                 let ctx = benten_caps::ReadContext {
                     label: label.clone(),
-                    target_cid: Some(cid.clone()),
+                    target_cid: Some(*cid),
                     ..Default::default()
                 };
                 match policy.check_read(&ctx) {
@@ -306,7 +306,7 @@ impl Engine {
         };
 
         Ok(DiagnosticInfo {
-            cid: cid.clone(),
+            cid: *cid,
             exists_in_backend,
             denied_by_policy,
             not_found: !exists_in_backend,

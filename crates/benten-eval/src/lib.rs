@@ -30,13 +30,97 @@ use std::collections::BTreeMap;
 pub mod context;
 pub mod diag;
 pub mod evaluator;
+pub mod exec_state;
 pub mod expr;
 pub mod host;
+pub mod host_error;
 pub mod invariants;
 pub mod primitives;
+pub mod time_source;
 
 pub use context::EvalContext;
+pub use exec_state::{AttributionFrame, ExecutionStateEnvelope, ExecutionStatePayload, Frame};
 pub use host::{NullHost, PrimitiveHost, ViewQuery};
+pub use host_error::HostError;
+pub use primitives::wait::{SignalShape, SuspendedHandle, WaitOutcome, WaitResumeSignal};
+pub use time_source::{
+    HlcTimeSource, InstantMonotonicSource, MockTimeSource, MonotonicSource, TimeSource,
+    default_monotonic_source, default_time_source,
+};
+
+/// Phase 2a G4-A test harness: register a callee handler with a declared
+/// iteration-budget bound. Consumed by `invariant_8_isolated_call`.
+///
+/// TODO(phase-2a-G4-A): swap in a real handler-registration path.
+pub fn register_test_callee(_name: &str, _bound: u64) {
+    // Placeholder — R5 G4-A wires a real handler-registration table.
+}
+
+/// Phase 2a G3-B: crate-root alias for
+/// [`primitives::wait::evaluate`]. Tests call `benten_eval::evaluate(...)`
+/// through this re-export.
+///
+/// # Errors
+/// See [`primitives::wait::evaluate`].
+pub fn evaluate(sg: &Subgraph, ctx: &mut EvalContext, input: benten_core::Value) -> Outcome {
+    match primitives::wait::evaluate(sg, ctx, input) {
+        Ok(WaitOutcome::Complete(v)) => Outcome::Complete(v),
+        Ok(wo @ WaitOutcome::Suspended(_)) => Outcome::Suspended(wo),
+        Err(e) => Outcome::Err(e.code()),
+    }
+}
+
+/// Phase 2a G3-B: crate-root alias for [`primitives::wait::resume`]. The
+/// `handle` arg accepts a [`WaitOutcome`] so test harnesses that pipe
+/// `evaluate(...).expect_suspended()` through `resume` compile without
+/// mapping the `Outcome::Suspended(h)` arm back to a raw `SuspendedHandle`.
+///
+/// # Errors
+/// See [`primitives::wait::resume`].
+pub fn resume(
+    _sg: &Subgraph,
+    _ctx: &mut EvalContext,
+    _handle: WaitOutcome,
+    _signal: WaitResumeSignal,
+) -> Outcome {
+    // Phase-2a stub: run-time tests fail at the nested `todo!()`.
+    todo!("Phase 2a G3-B: crate-root resume alias per wait_timeout / wait_signal_shape tests")
+}
+
+/// Phase 2a G4-A test harness: expose a budget-probe for the multiplicative
+/// benchmark (`benches/multiplicative_budget_overhead.rs`).
+pub mod testing {
+    /// Phase-2a placeholder probe; Phase 2a G4-A benches call this to
+    /// measure cumulative-budget computation overhead.
+    ///
+    /// TODO(phase-2a-G4-A): real probe implementation.
+    #[must_use]
+    pub fn multiplicative_budget_probe() -> u64 {
+        0
+    }
+}
+
+/// Phase 2a G3-A: `Outcome` shape mirrored from `benten-engine` so tests
+/// can name `benten_eval::Outcome::{Complete, Suspended, Err}` alongside
+/// `SuspendedHandle`. Phase-1 owns the real type in `benten-engine`; the
+/// re-export is a narrow proxy whose variants match the expected surface.
+///
+/// `Suspended` carries a [`WaitOutcome`] — not a raw [`SuspendedHandle`] —
+/// so test harnesses that pipe `evaluate(...).expect_suspended()` (declared
+/// `-> WaitOutcome`) compile without mapping.
+///
+/// TODO(phase-2a-G3-B): unify the eval-side and engine-side `Outcome`s after
+/// the WAIT surface is live.
+#[derive(Debug, Clone)]
+pub enum Outcome {
+    /// Handler ran to completion.
+    Complete(benten_core::Value),
+    /// Handler suspended at a WAIT primitive. Carries the full
+    /// [`WaitOutcome`] so multi-variant tests can re-inspect the shape.
+    Suspended(WaitOutcome),
+    /// Terminal error.
+    Err(ErrorCode),
+}
 
 /// Marker for the current stub phase. Removed when the evaluator lands.
 pub const STUB_MARKER: &str = "benten-eval::stub";
@@ -327,13 +411,13 @@ impl RegistrationError {
     /// Declared-by-caller CID for `InvContentHash` failures.
     #[must_use]
     pub fn expected_cid(&self) -> Option<Cid> {
-        self.expected_cid.clone()
+        self.expected_cid
     }
 
     /// Computed-from-bytes CID for `InvContentHash` failures.
     #[must_use]
     pub fn actual_cid(&self) -> Option<Cid> {
-        self.actual_cid.clone()
+        self.actual_cid
     }
 
     /// Configured max nodes (Invariant 5).
@@ -504,6 +588,18 @@ impl OperationNode {
         self.properties.insert(k.into(), v);
         self
     }
+
+    /// Read a property by key.
+    #[must_use]
+    pub fn property(&self, k: &str) -> Option<&Value> {
+        self.properties.get(k)
+    }
+
+    /// Alias for [`Self::kind`] — back-compat name used by Phase 2a tests.
+    #[must_use]
+    pub fn primitive_kind(&self) -> PrimitiveKind {
+        self.kind
+    }
 }
 
 /// Opaque handle returned by `SubgraphBuilder` when adding nodes. Tests
@@ -611,6 +707,68 @@ impl Subgraph {
         self.nodes.iter_mut().find(|n| n.id == id)
     }
 
+    /// Phase 2a G4-A test helper: return the precomputed cumulative
+    /// Inv-8 budget for the root frame. Stub — G4-A lands the real
+    /// computation.
+    ///
+    /// Returns a `u64` directly; Phase-2a default is `0` so tests asserting
+    /// non-zero budgets fail at run-time with a clear delta.
+    #[must_use]
+    pub fn cumulative_budget_for_root_for_test(&self) -> u64 {
+        0
+    }
+
+    /// Phase 2a G4-A test helper: cumulative budget at an arbitrary handle,
+    /// returned as `Option<u64>` so the `invariant_8_isolated_call` tests'
+    /// `.expect()` / `.unwrap()` chains compile. Phase-2a default: `None`.
+    #[must_use]
+    pub fn cumulative_budget_for_handle_for_test(&self, _h: NodeHandle) -> Option<u64> {
+        None
+    }
+
+    /// Phase 2a G4-A test helper: returns `true` once multiplicative Inv-8
+    /// budget tracking is live.
+    #[must_use]
+    pub fn has_multiplicative_budget_tracked_for_test(&self) -> bool {
+        false
+    }
+
+    /// Phase 2a G4-A test helper: return the `NodeHandle` for an operation
+    /// node id.
+    #[must_use]
+    pub fn handle_of(&self, id: &str) -> NodeHandle {
+        let idx = self.nodes.iter().position(|n| n.id == id).unwrap_or(0);
+        NodeHandle(u32::try_from(idx).unwrap_or(u32::MAX))
+    }
+
+    /// Phase 2a G3-B test helper: empty Subgraph with the given handler id.
+    #[must_use]
+    pub fn empty_for_test(handler_id: impl Into<String>) -> Self {
+        Self::new(handler_id)
+    }
+
+    /// Phase 2a G3-B test helper: look up a node by its handle.
+    #[must_use]
+    pub fn node_by_handle(&self, h: NodeHandle) -> Option<&OperationNode> {
+        self.nodes.get(h.0 as usize)
+    }
+
+    /// Phase 2a C5 / G5-A: DAG-CBOR encode (stub — wired in G5-A).
+    ///
+    /// # Errors
+    /// Returns [`benten_core::CoreError::Serialize`] on encode failure.
+    pub fn to_dagcbor(&self) -> Result<Vec<u8>, benten_core::CoreError> {
+        todo!("Phase 2a C5 / G5-A: Subgraph DAG-CBOR encode (eval side)")
+    }
+
+    /// Phase 2a C5 / G5-A: DAG-CBOR decode (stub — wired in G5-A).
+    ///
+    /// # Errors
+    /// Returns [`benten_core::CoreError::Serialize`] on decode failure.
+    pub fn from_dagcbor(_bytes: &[u8]) -> Result<Self, benten_core::CoreError> {
+        todo!("Phase 2a C5 / G5-A: Subgraph DAG-CBOR decode (eval side)")
+    }
+
     #[must_use]
     pub fn with_node(mut self, n: OperationNode) -> Self {
         self.nodes.push(n);
@@ -687,7 +845,7 @@ impl Subgraph {
         let actual = Cid::from_blake3_digest(*digest.as_bytes());
         if actual != *cid {
             let mut err = RegistrationError::new(InvariantViolation::ContentHash);
-            err.expected_cid = Some(cid.clone());
+            err.expected_cid = Some(*cid);
             err.actual_cid = Some(actual);
             return Err(err);
         }
@@ -829,6 +987,81 @@ impl SubgraphBuilder {
         let id = format!("emit_{}", self.nodes.len());
         let nest = self.iterate_depth_of(prev);
         self.push_chained(OperationNode::new(id, PrimitiveKind::Emit), prev, nest)
+    }
+
+    /// Phase 2a G3-B (dx-r1-8): WAIT signal variant. Sets the `signal`
+    /// property on the created node.
+    pub fn wait_signal(&mut self, prev: NodeHandle, signal_name: impl Into<String>) -> NodeHandle {
+        let id = format!("wait_{}", self.nodes.len());
+        let op = OperationNode::new(id, PrimitiveKind::Wait)
+            .with_property("signal", Value::text(signal_name));
+        let nest = self.iterate_depth_of(prev);
+        self.push_chained(op, prev, nest)
+    }
+
+    /// Phase 2a G3-B: WAIT signal variant with optional static typing (DX
+    /// signal-payload typing addendum). Takes a [`SignalShape`].
+    pub fn wait_signal_typed(
+        &mut self,
+        prev: NodeHandle,
+        signal_name: impl Into<String>,
+        _shape: crate::SignalShape,
+    ) -> NodeHandle {
+        // TODO(phase-2a-G3-B): encode shape into a property.
+        self.wait_signal(prev, signal_name)
+    }
+
+    /// Phase 2a G3-B: WAIT signal variant with explicit timeout.
+    pub fn wait_signal_with_timeout(
+        &mut self,
+        prev: NodeHandle,
+        signal_name: impl Into<String>,
+        timeout: std::time::Duration,
+    ) -> NodeHandle {
+        let h = self.wait_signal(prev, signal_name);
+        let idx = h.0 as usize;
+        let ms = i64::try_from(timeout.as_millis()).unwrap_or(i64::MAX);
+        if let Some(n) = self.nodes.get_mut(idx) {
+            n.properties.insert("timeout_ms".into(), Value::Int(ms));
+        }
+        h
+    }
+
+    /// Phase 2a G3-B: WAIT duration variant (already-shipped in Phase 1 stub;
+    /// signature kept stable).
+    pub fn wait_duration(&mut self, prev: NodeHandle, duration: std::time::Duration) -> NodeHandle {
+        let id = format!("wait_{}", self.nodes.len());
+        let ms = i64::try_from(duration.as_millis()).unwrap_or(i64::MAX);
+        let op = OperationNode::new(id, PrimitiveKind::Wait)
+            .with_property("duration_ms", Value::Int(ms));
+        let nest = self.iterate_depth_of(prev);
+        self.push_chained(op, prev, nest)
+    }
+
+    /// Phase 2a G4-A / Code-as-graph Major #2: CALL with an explicit
+    /// `isolated` flag. `isolated: true` resets the multiplicative budget
+    /// to the callee grant's declared bound.
+    pub fn call_with_isolated(
+        &mut self,
+        prev: NodeHandle,
+        handler: &str,
+        isolated: bool,
+    ) -> NodeHandle {
+        let id = format!("call_{}", self.nodes.len());
+        let op = OperationNode::new(id, PrimitiveKind::Call)
+            .with_property("handler", Value::text(handler.to_string()))
+            .with_property("isolated", Value::Bool(isolated));
+        let nest = self.iterate_depth_of(prev);
+        self.push_chained(op, prev, nest)
+    }
+
+    /// Phase 2a test-only property setter — used by
+    /// `wait_signal_shape_optional_typing` to inject malformed payloads.
+    pub fn set_property_for_test(&mut self, h: NodeHandle, key: &str, value: Value) -> &mut Self {
+        if let Some(n) = self.nodes.get_mut(h.0 as usize) {
+            n.properties.insert(key.to_string(), value);
+        }
+        self
     }
 
     pub fn iterate_parallel(&mut self, prev: NodeHandle, _body: &str, max: usize) -> NodeHandle {
@@ -1091,13 +1324,98 @@ pub struct StepResult {
 }
 
 /// A trace step returned by `engine.trace(handler, input)`.
+///
+/// Phase 2a dx-r1 / §9.12: the Phase-1 single-variant shape is promoted to
+/// an enum so the boundary/budget variants coexist with the per-primitive
+/// `Step` rows.
+///
+/// TODO(phase-2a-G3-A / G4-A / G5-B): wire `SuspendBoundary`, `ResumeBoundary`,
+/// `BudgetExhausted` firing + `attribution` threading onto every trace row.
 #[derive(Debug, Clone)]
-pub struct TraceStep {
-    pub node_id: String,
-    pub duration_us: u64,
-    pub inputs: Value,
-    pub outputs: Value,
-    pub error: Option<ErrorCode>,
+pub enum TraceStep {
+    /// A single primitive execution row (Phase 1 baseline shape preserved
+    /// as struct-variant).
+    Step {
+        /// Operation-node id within the handler.
+        node_id: String,
+        /// Duration in microseconds.
+        duration_us: u64,
+        /// Inputs to the primitive.
+        inputs: Value,
+        /// Outputs produced by the primitive.
+        outputs: Value,
+        /// Optional error code if the step failed.
+        error: Option<ErrorCode>,
+        /// Inv-14 attribution (G5-B-ii wires this). Phase-2a default
+        /// constructs to `None` until the runtime attribution threader lands.
+        attribution: Option<AttributionFrame>,
+    },
+    /// WAIT primitive drove the evaluator to suspension. Emitted as the
+    /// terminal step for the suspended invocation (§9.1 G3-A).
+    SuspendBoundary {
+        /// CID of the persisted `ExecutionStateEnvelope`.
+        state_cid: Cid,
+    },
+    /// Resume re-entered a suspended execution. Emitted as the first step
+    /// after `Engine::resume_from_bytes` (§9.1 G3-A).
+    ResumeBoundary {
+        /// CID of the `ExecutionStateEnvelope` that was resumed.
+        state_cid: Cid,
+        /// Value handed to the resumed frame as the signal payload.
+        signal_value: Value,
+    },
+    /// Invariant-8 / Phase-2b SANDBOX-fuel budget exhausted (§9.12).
+    BudgetExhausted {
+        /// `"inv_8_iteration"` | `"sandbox_fuel"`.
+        budget_type: &'static str,
+        /// How much budget was consumed before firing.
+        consumed: u64,
+        /// Configured limit.
+        limit: u64,
+        /// Path of operation-node ids that produced the exhaustion.
+        path: Vec<String>,
+    },
+}
+
+impl TraceStep {
+    /// Convenience: return the primitive's `node_id` for `Step` rows;
+    /// `None` for boundary / budget rows.
+    #[must_use]
+    pub fn node_id(&self) -> Option<&str> {
+        match self {
+            TraceStep::Step { node_id, .. } => Some(node_id.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Inv-14 attribution accessor. `None` for boundary / budget rows in
+    /// Phase 2a; will be `Some` once G5-B-ii wires runtime threading.
+    #[must_use]
+    pub fn attribution(&self) -> Option<&AttributionFrame> {
+        match self {
+            TraceStep::Step { attribution, .. } => attribution.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// Phase-1 compat: the `duration_us` field on `Step` rows; `0` for
+    /// boundary / budget rows.
+    #[must_use]
+    pub fn duration_us(&self) -> u64 {
+        match self {
+            TraceStep::Step { duration_us, .. } => *duration_us,
+            _ => 0,
+        }
+    }
+
+    /// Phase-1 compat: the `error` field on `Step` rows; `None` otherwise.
+    #[must_use]
+    pub fn error(&self) -> Option<&ErrorCode> {
+        match self {
+            TraceStep::Step { error, .. } => error.as_ref(),
+            _ => None,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

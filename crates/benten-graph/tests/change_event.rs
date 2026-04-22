@@ -17,7 +17,7 @@ fn change_event_exposes_cid_label_kind_and_tx_id() {
     // exactly when the public shape matches the spec.
     let cid = canonical_test_node().cid().unwrap();
     let e = ChangeEvent {
-        cid: cid.clone(),
+        cid,
         labels: vec!["Post".to_string()],
         kind: ChangeKind::Created,
         tx_id: 42,
@@ -39,17 +39,17 @@ fn change_event_supports_attribution_fields() {
     // R1 attribution: `actor_cid`, `handler_cid`, `capability_grant_cid` are
     // optional but exposed on the event.
     let cid = canonical_test_node().cid().unwrap();
-    let actor = cid.clone();
-    let handler = cid.clone();
-    let grant = cid.clone();
+    let actor = cid;
+    let handler = cid;
+    let grant = cid;
     let e = ChangeEvent {
-        cid: cid.clone(),
+        cid,
         labels: vec!["Post".to_string()],
         kind: ChangeKind::Updated,
         tx_id: 7,
-        actor_cid: Some(actor.clone()),
-        handler_cid: Some(handler.clone()),
-        capability_grant_cid: Some(grant.clone()),
+        actor_cid: Some(actor),
+        handler_cid: Some(handler),
+        capability_grant_cid: Some(grant),
         node: None,
         edge_endpoints: None,
     };

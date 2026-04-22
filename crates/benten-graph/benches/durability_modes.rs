@@ -255,10 +255,74 @@ fn bench_sustained_throughput(c: &mut Criterion) {
     group.finish();
 }
 
+/// Gate-5 descope proof: `DurabilityMode::Group` collapses to
+/// `DurabilityMode::Immediate` because redb v4 only exposes
+/// `Durability::Immediate` and `Durability::None` — no grouped-commit
+/// primitive. This bench is an **informational** sibling of the gated
+/// `single_write` cases: it measures the two modes back-to-back within
+/// one bench function so the "collapse" is visible as overlapping
+/// confidence intervals in Criterion's HTML output.
+///
+/// **Target source:** no §14.6 number — this is arch-r1-1 compromise
+/// tracking. Gate 5 (P1.graph.durability) descoped from "Group beats
+/// Immediate by an amortisation factor" to "Group variant preserved as
+/// forward-compat shape only."
+///
+/// **Gate policy:** INFORMATIONAL. Recording the collapse is the point;
+/// gating would require the collapse to *persist*, which is the
+/// opposite of what Phase 2 wants.
+///
+/// ```text
+/// BENCH_ID = durability_modes/gate5_descope_proof/*
+/// THRESHOLD_NS = informational
+/// POLICY = informational
+/// SOURCE = arch-r1-1 / plan §2.2 G1
+/// ```
+///
+/// Phase-2 forward signal: when redb grows grouped-commit support (or
+/// the benten-graph layer wires a write batcher), this bench becomes
+/// the regression detector that the amortization is actually
+/// delivering a win. Promotion from informational to CI-gated happens
+/// in the same PR that lands the grouped path.
+fn bench_gate5_descope_proof(c: &mut Criterion) {
+    let mut group = c.benchmark_group("durability_modes/gate5_descope_proof");
+    group.warm_up_time(Duration::from_millis(500));
+    group.measurement_time(Duration::from_secs(3));
+    group.sample_size(50);
+    // INFORMATIONAL — no gate. The presence of this bench is the gate-5
+    // descope surface: we measure the collapse rather than hiding it.
+
+    for mode in [DurabilityMode::Immediate, DurabilityMode::Group] {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(mode_label(mode)),
+            &mode,
+            |b, &mode| {
+                let (backend, _dir) = fresh_backend(mode).expect("backend");
+                let value = canonical_test_node()
+                    .canonical_bytes()
+                    .expect("canonical bytes");
+                let counter = std::sync::atomic::AtomicUsize::new(0);
+
+                b.iter(|| {
+                    let i = counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let mut key = [0u8; 12];
+                    key[..6].copy_from_slice(b"bench:");
+                    key[6..10].copy_from_slice(&(i as u32).to_be_bytes());
+                    backend
+                        .put(black_box(&key), black_box(&value))
+                        .expect("put");
+                });
+            },
+        );
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_single_write,
     bench_batch_100,
-    bench_sustained_throughput
+    bench_sustained_throughput,
+    bench_gate5_descope_proof
 );
 criterion_main!(benches);

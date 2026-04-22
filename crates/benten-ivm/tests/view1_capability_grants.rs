@@ -55,7 +55,7 @@ fn view1_populated_read_returns_specific_cid_set() {
     v.update(&grant_event(ChangeKind::Created)).unwrap();
 
     let q = ViewQuery {
-        entity_cid: Some(expected_cid.clone()),
+        entity_cid: Some(expected_cid),
         ..ViewQuery::default()
     };
     match v.read(&q).unwrap() {
@@ -133,7 +133,7 @@ fn view1_revocation_removes_grant() {
 fn view1_routes_system_labeled_grant_events_correctly() {
     let expected_cid = canonical_test_node().cid().unwrap();
     let event = ChangeEvent {
-        cid: expected_cid.clone(),
+        cid: expected_cid,
         // Namespaced label — matches `benten_caps::CAPABILITY_GRANT_LABEL`.
         labels: vec!["system:CapabilityGrant".to_string()],
         kind: ChangeKind::Created,
@@ -148,7 +148,7 @@ fn view1_routes_system_labeled_grant_events_correctly() {
     v.update(&event).unwrap();
 
     let q = ViewQuery {
-        entity_cid: Some(expected_cid.clone()),
+        entity_cid: Some(expected_cid),
         ..ViewQuery::default()
     };
     match v.read(&q).unwrap() {
@@ -171,7 +171,7 @@ fn view1_routes_system_labeled_grant_events_correctly() {
 fn view1_ignores_unqualified_capability_grant_label() {
     let cid = canonical_test_node().cid().unwrap();
     let event = ChangeEvent {
-        cid: cid.clone(),
+        cid,
         labels: vec!["CapabilityGrant".to_string()],
         kind: ChangeKind::Created,
         tx_id: 1,

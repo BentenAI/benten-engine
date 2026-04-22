@@ -94,7 +94,6 @@ fn concurrent_reader_writer_soak_no_corruption_no_deadlock() {
             let stop = Arc::clone(&stop);
             let reads = Arc::clone(&reads);
             let corruption = Arc::clone(&corruption);
-            let seed_cid = seed_cid.clone();
             thread::spawn(move || {
                 while !stop.load(Ordering::Relaxed) {
                     match backend.get_node(&seed_cid).expect("get") {

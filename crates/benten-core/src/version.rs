@@ -153,7 +153,7 @@ pub fn append_version(
     let is_known_descendant = chain.iter().any(|(_, new)| new == prior_head);
     if !is_root && !is_known_descendant {
         return Err(VersionError::UnknownPrior {
-            supplied: prior_head.clone(),
+            supplied: *prior_head,
         });
     }
 
@@ -161,12 +161,12 @@ pub fn append_version(
     // `prior_head` as its prior? If so, this would fork the chain.
     if chain.iter().any(|(prev_prior, _)| prev_prior == prior_head) {
         return Err(VersionError::Branched {
-            seen: prior_head.clone(),
-            attempted: new_head.clone(),
+            seen: *prior_head,
+            attempted: *new_head,
         });
     }
 
-    chain.push((prior_head.clone(), new_head.clone()));
+    chain.push((*prior_head, *new_head));
     Ok(())
 }
 
@@ -179,9 +179,9 @@ pub fn append_version(
 pub fn walk_versions(anchor: &Anchor) -> alloc::vec::IntoIter<Cid> {
     let chain = anchor.chain.lock();
     let mut out = Vec::with_capacity(1 + chain.len());
-    out.push(anchor.head.clone());
+    out.push(anchor.head);
     for (_, new) in chain.iter() {
-        out.push(new.clone());
+        out.push(*new);
     }
     out.into_iter()
 }

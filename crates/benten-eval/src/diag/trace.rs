@@ -27,15 +27,17 @@ pub fn pretty(steps: &[TraceStep]) -> String {
     let _ = writeln!(out, "step | node_id    | duration_us | error");
     let _ = writeln!(out, "-----+------------+-------------+------");
     for (i, s) in steps.iter().enumerate() {
+        let node_id = s.node_id().unwrap_or("-").to_string();
+        let err_str = s
+            .error()
+            .map_or("-".to_string(), |e| e.as_str().to_string());
         let _ = writeln!(
             out,
             "{:4} | {:10} | {:11} | {}",
             i,
-            truncate(&s.node_id, 10),
-            s.duration_us,
-            s.error
-                .as_ref()
-                .map_or("-".to_string(), |e| e.as_str().to_string())
+            truncate(&node_id, 10),
+            s.duration_us(),
+            err_str,
         );
     }
     out
@@ -60,19 +62,21 @@ mod tests {
     #[test]
     fn pretty_includes_header_and_row_per_step() {
         let steps = vec![
-            TraceStep {
+            TraceStep::Step {
                 node_id: "a".into(),
                 duration_us: 10,
                 inputs: Value::Null,
                 outputs: Value::Null,
                 error: None,
+                attribution: None,
             },
-            TraceStep {
+            TraceStep::Step {
                 node_id: "b".into(),
                 duration_us: 20,
                 inputs: Value::Null,
                 outputs: Value::Null,
                 error: None,
+                attribution: None,
             },
         ];
         let out = pretty(&steps);

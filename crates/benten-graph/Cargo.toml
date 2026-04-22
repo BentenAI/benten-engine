@@ -43,6 +43,9 @@ criterion = { workspace = true }
 # Cross-process graph integration test (`d2_cross_process_graph.rs`) opens
 # the engine to round-trip a persisted node. Dev-dep cycle is safe.
 benten-engine = { path = "../benten-engine" }
+# Phase 2a: `capability_grant_writes_immediate.rs` imports
+# `CapabilityGrant` / `GrantScope` directly from benten-caps.
+benten-caps = { path = "../benten-caps" }
 
 [[bin]]
 # Test-fixture binary used by d2_cross_process_graph.rs to prove PID
@@ -74,4 +77,8 @@ harness = false
 
 [[bench]]
 name = "multi_mb_roundtrip"
+harness = false
+
+[[bench]]
+name = "crud_post_create_dispatch_group_durability"
 harness = false

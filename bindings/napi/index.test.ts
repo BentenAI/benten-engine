@@ -485,3 +485,45 @@ describe("engine.diagnoseRead (Option C)", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 });
+
+// Phase 2a R4 cov-8: the WAIT napi bridge end-to-end test. The TS DSL
+// layer has its own WAIT tests (`packages/engine/src/wait.test.ts`); this
+// one fires the callWithSuspension + resumeFromBytes calls directly through
+// the native binary so a napi-layer regression (e.g. a lost suspension
+// handle across the boundary) is caught before the DSL wraps it.
+//
+// TDD red-phase: `callWithSuspension` / `resumeFromBytes` are not yet
+// exposed on the napi `Engine` class (G3-A/B land them). Until then this
+// test fails at the `typeof eng.callWithSuspension !== "function"` guard.
+describe("napi WAIT bridge round-trip (Phase 2a cov-8)", () => {
+  it("callWithSuspension + resumeFromBytes roundtrip through the native binary", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "benten-wait-napi-"));
+    const eng = new native.Engine(join(dir, "benten.redb"));
+    try {
+      expect(typeof eng.callWithSuspension).toBe(
+        "function",
+      );
+      expect(typeof eng.resumeFromBytes).toBe("function");
+
+      // Register a minimal WAIT-composing handler via the napi surface.
+      // The spec-shape mirrors the Rust side — a tiny subgraph with WAIT
+      // on an `external:ping` signal that completes on RESPOND once the
+      // signal resumes.
+      const handlerId = eng.registerWaitHandlerForTest?.("wait:napi_bridge");
+      expect(typeof handlerId).toBe("string");
+
+      const suspended = eng.callWithSuspension(handlerId, "wait:run", {});
+      expect(suspended).toBeTruthy();
+      expect(suspended.kind).toBe("suspended");
+      const bytes = suspended.handle ?? suspended.bytes;
+      expect(bytes).toBeInstanceOf(Uint8Array);
+
+      const resumed = eng.resumeFromBytes(bytes, { payload: "hello" });
+      expect(resumed).toBeTruthy();
+      // Either `kind: "complete"` or an implicit complete outcome.
+      expect(resumed.kind ?? "complete").toBe("complete");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

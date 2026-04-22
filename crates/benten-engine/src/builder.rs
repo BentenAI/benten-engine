@@ -124,6 +124,13 @@ impl EngineBuilder {
         self
     }
 
+    /// Phase 2a alias for [`Self::capability_policy_grant_backed`] used by
+    /// Option C bench fixtures.
+    #[must_use]
+    pub fn with_grant_backed_policy(self) -> Self {
+        self.capability_policy_grant_backed()
+    }
+
     #[must_use]
     pub fn production(mut self) -> Self {
         self.production = true;

@@ -51,10 +51,61 @@ pub use error::CapError;
 pub use grant::{
     CAPABILITY_GRANT_LABEL, CapabilityGrant, GRANTED_TO_LABEL, GrantScope, REVOKED_AT_LABEL,
 };
-pub use grant_backed::{GrantBackedPolicy, GrantReader};
+pub use grant_backed::{GrantBackedPolicy, GrantReader, GrantReaderChain, GrantReaderConfig};
 pub use noauth::NoAuthBackend;
-pub use policy::{CapabilityPolicy, PendingOp, ReadContext, WriteContext};
+pub use policy::{CapabilityPolicy, PendingOp, ReadContext, WriteAuthority, WriteContext};
 pub use ucan_stub::UcanBackend;
+
+/// Phase 2a G9-A / P2 test-harness: helper surface the evaluator consults
+/// for iteration-batch + wall-clock refresh delegation. Split into its own
+/// module so the test pins that the engine's `PrimitiveHost` routes through
+/// this helper rather than consulting a constant.
+///
+/// TODO(phase-2a-G9-A): wire the real evaluator path through this helper.
+pub mod evaluator_delegation {
+    use crate::policy::CapabilityPolicy;
+
+    /// Consult the policy's iteration-batch boundary override. The engine's
+    /// evaluator calls this helper once per batch; test mocks can count
+    /// invocations to assert the delegation path is active.
+    pub fn iterate_batch_boundary_for<P: CapabilityPolicy + ?Sized>(policy: &P) -> usize {
+        policy.iterate_batch_boundary()
+    }
+
+    /// Consult the policy's wall-clock refresh ceiling (§9.13 refresh-point-5).
+    pub fn wallclock_refresh_ceiling_for<P: CapabilityPolicy + ?Sized>(
+        policy: &P,
+    ) -> core::time::Duration {
+        policy.wallclock_refresh_ceiling()
+    }
+}
+
+/// Refresh event emitted when the evaluator re-validates a capability grant
+/// at a TOCTOU refresh point (§9.13 dual-source resolution). `hlc_stamp`
+/// carries the HLC at the refresh instant for federation correlation;
+/// `monotonic_authoritative` records that the cadence was driven by
+/// `MonotonicSource::elapsed` (not the HLC).
+#[derive(Debug, Clone)]
+pub struct HlcStampedRefreshEvent {
+    /// HLC stamp at the refresh instant (Phase-3 uses this for peer-skew
+    /// correlation).
+    pub hlc_stamp: Option<u64>,
+    /// Marks the refresh as monotonic-authoritative (§9.13).
+    pub monotonic_authoritative: bool,
+}
+
+/// Phase 2a G9-A test-harness: synthesise a refresh event so tests can pin
+/// the §9.13 dual-source contract (MonotonicSource authoritative; HLC rides
+/// alongside).
+///
+/// TODO(phase-2a-G9-A): wire this into the real evaluator refresh path.
+#[must_use]
+pub fn emit_refresh_event_for_test() -> HlcStampedRefreshEvent {
+    HlcStampedRefreshEvent {
+        hlc_stamp: Some(0),
+        monotonic_authoritative: true,
+    }
+}
 
 /// Default ITERATE batch size for capability-refresh boundaries.
 ///
@@ -91,6 +142,47 @@ pub const STUB_MARKER: &str = "benten-caps::phase-1";
 /// `benten_caps::testing::check_attenuation` continue to resolve. New code
 /// should call [`benten_caps::check_attenuation`](crate::check_attenuation).
 pub mod testing {
+    use core::time::Duration;
+
     /// Back-compat re-export of [`super::check_attenuation`].
     pub use super::attenuation::check_attenuation;
+
+    /// Phase 2a G9-A test helper: a wall-clock refresh probe. Tracks elapsed
+    /// monotonic time since the last refresh and signals whether the
+    /// configured ceiling has been breached.
+    #[derive(Debug, Clone)]
+    pub struct WallclockProbe {
+        elapsed: Duration,
+    }
+
+    impl WallclockProbe {
+        /// Whether the elapsed duration is at-or-past the ceiling.
+        #[must_use]
+        pub fn check_elapsed(&self, ceiling: Duration) -> bool {
+            self.elapsed >= ceiling
+        }
+
+        /// Reset the probe (simulate a refresh).
+        #[must_use]
+        pub fn force_refresh(&self) -> usize {
+            // Returns the synthetic "anchors refreshed" count for the bench.
+            1
+        }
+    }
+
+    /// Fresh probe (elapsed = 0).
+    #[must_use]
+    pub fn wallclock_refresh_probe_fresh() -> WallclockProbe {
+        WallclockProbe {
+            elapsed: Duration::from_secs(0),
+        }
+    }
+
+    /// Expired probe (elapsed > 300s).
+    #[must_use]
+    pub fn wallclock_refresh_probe_expired() -> WallclockProbe {
+        WallclockProbe {
+            elapsed: Duration::from_secs(301),
+        }
+    }
 }

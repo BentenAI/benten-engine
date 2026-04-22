@@ -100,7 +100,7 @@ impl Outcome {
 
     #[must_use]
     pub fn created_cid(&self) -> Option<Cid> {
-        self.created_cid.clone()
+        self.created_cid
     }
 
     #[must_use]

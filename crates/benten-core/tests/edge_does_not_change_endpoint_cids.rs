@@ -30,7 +30,7 @@ fn creating_an_edge_does_not_alter_endpoint_node_cids() {
     let cid_b_before = b.cid().unwrap();
 
     // Create an Edge between A and B.
-    let _edge = Edge::new(cid_a_before.clone(), cid_b_before.clone(), "LIKES", None);
+    let _edge = Edge::new(cid_a_before, cid_b_before, "LIKES", None);
 
     // Re-hash both endpoints. Their CIDs must be unchanged.
     let cid_a_after = node_a().cid().unwrap();
@@ -45,8 +45,8 @@ fn edge_with_different_label_still_does_not_alter_endpoint_cids() {
     // Belt-and-suspenders: different edge label → still no effect on endpoints.
     let a = node_a();
     let cid_a = a.cid().unwrap();
-    let _e1 = Edge::new(cid_a.clone(), cid_a.clone(), "L1", None);
-    let _e2 = Edge::new(cid_a.clone(), cid_a.clone(), "L2", None);
+    let _e1 = Edge::new(cid_a, cid_a, "L1", None);
+    let _e2 = Edge::new(cid_a, cid_a, "L2", None);
     let cid_a_reread = node_a().cid().unwrap();
     assert_eq!(cid_a, cid_a_reread);
 }
