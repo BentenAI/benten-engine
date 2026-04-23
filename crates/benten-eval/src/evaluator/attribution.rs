@@ -13,9 +13,7 @@
 
 use benten_core::{Cid, Value};
 
-use crate::{
-    AttributionFrame, EvalError, NullHost, OperationNode, PrimitiveKind, Subgraph, TraceStep,
-};
+use crate::{AttributionFrame, EvalError, NullHost, OperationNode, Subgraph, TraceStep};
 
 /// Runtime attribution threader. Given a [`Subgraph`] plus the current
 /// [`AttributionFrame`] (the top of the evaluator's frame stack), walks the
@@ -91,16 +89,4 @@ fn synthetic_cid(prefix: &[u8], id: &str) -> Cid {
     hasher.update(prefix);
     hasher.update(id.as_bytes());
     Cid::from_blake3_digest(*hasher.finalize().as_bytes())
-}
-
-/// True when a primitive kind is expected to carry attribution. Every
-/// primitive in the 12-op vocabulary consumes attribution in Phase-2a —
-/// there is no exemption — so the default declaration is `true`. Phase-6
-/// may introduce a primitive type that runs outside any attribution chain
-/// (e.g. a pure constant emitter); that extension re-opens this decision.
-#[must_use]
-pub(crate) fn kind_consumes_attribution(_kind: PrimitiveKind) -> bool {
-    // All current primitive kinds carry attribution; helper preserved for
-    // Phase-6 future-proofing when a per-kind override may land.
-    true
 }

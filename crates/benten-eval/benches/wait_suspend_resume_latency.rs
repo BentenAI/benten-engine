@@ -54,7 +54,7 @@ use std::hint::black_box;
 use std::time::Duration;
 
 use benten_core::{Node, Value};
-use benten_engine::{Engine, SuspendedOrComplete};
+use benten_engine::{Engine, SuspensionOutcome};
 use criterion::{Criterion, criterion_group, criterion_main};
 
 /// Build a WAIT-containing handler: READ → WAIT(signal) → TRANSFORM →
@@ -89,8 +89,8 @@ fn bench_wait_round_trip_no_io(c: &mut Criterion) {
         .call_with_suspension(&handler_id, "wait:entry", input_node)
         .expect("call_with_suspension succeeds")
     {
-        SuspendedOrComplete::Suspended(handle) => handle,
-        SuspendedOrComplete::Complete(_) => panic!(
+        SuspensionOutcome::Suspended(handle) => handle,
+        SuspensionOutcome::Complete(_) => panic!(
             "WAIT reference handler must suspend; G3-A is misconfigured if Complete is returned"
         ),
     };

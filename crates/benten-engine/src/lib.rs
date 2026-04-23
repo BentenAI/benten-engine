@@ -114,7 +114,7 @@ pub mod engine_wait;
 pub mod subgraph_cache;
 pub mod system_zones;
 
-pub use engine_wait::{SuspendedOrComplete, SuspensionOutcome};
+pub use engine_wait::SuspensionOutcome;
 pub use subgraph_cache::{SubgraphCache, SubgraphCacheKey};
 pub use system_zones::SYSTEM_ZONE_PREFIXES;
 

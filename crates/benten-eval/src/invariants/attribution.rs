@@ -45,15 +45,6 @@ pub fn validate_registration(subgraph: &Subgraph) -> Result<(), EvalError> {
     Ok(())
 }
 
-/// Back-compat shim for the `invariant_14_attribution` test — forwards to
-/// [`validate_registration`].
-///
-/// # Errors
-/// Forwards to [`validate_registration`].
-pub fn validate(sg: &Subgraph) -> Result<(), EvalError> {
-    validate_registration(sg)
-}
-
 /// True when `node` carries a well-formed attribution declaration.
 fn node_declares_attribution(node: &OperationNode) -> bool {
     matches!(

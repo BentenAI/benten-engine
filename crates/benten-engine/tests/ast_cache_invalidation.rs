@@ -53,12 +53,12 @@ fn ast_cache_invalidates_on_reregister_with_different_cid() {
 
     // First call → parses + caches.
     engine.call_for_test("h1", "run", Value::unit()).unwrap();
-    let parse_count_after_v1_first_call = engine.test_hook_parse_counter();
+    let parse_count_after_v1_first_call = engine.testing_parse_counter();
 
     // Second call at same CID → cache hit, parse count unchanged.
     engine.call_for_test("h1", "run", Value::unit()).unwrap();
     assert_eq!(
-        engine.test_hook_parse_counter(),
+        engine.testing_parse_counter(),
         parse_count_after_v1_first_call,
         "second call at same subgraph_cid must hit cache"
     );
@@ -78,7 +78,7 @@ fn ast_cache_invalidates_on_reregister_with_different_cid() {
     // advances.
     engine.call_for_test("h1", "run", Value::unit()).unwrap();
     assert!(
-        engine.test_hook_parse_counter() > parse_count_after_v1_first_call,
+        engine.testing_parse_counter() > parse_count_after_v1_first_call,
         "re-registration must invalidate cached AST and cause a re-parse"
     );
 }
@@ -92,7 +92,7 @@ fn ast_cache_noop_on_reregister_with_identical_cid() {
     let cid = engine.register_subgraph(sg.clone()).unwrap();
 
     engine.call_for_test("h1", "run", Value::unit()).unwrap();
-    let parse_count = engine.test_hook_parse_counter();
+    let parse_count = engine.testing_parse_counter();
 
     // Re-register same content.
     let cid_again = engine.register_subgraph(sg).unwrap();
@@ -103,7 +103,7 @@ fn ast_cache_noop_on_reregister_with_identical_cid() {
 
     engine.call_for_test("h1", "run", Value::unit()).unwrap();
     assert_eq!(
-        engine.test_hook_parse_counter(),
+        engine.testing_parse_counter(),
         parse_count,
         "identical-CID re-registration must not invalidate the cache"
     );

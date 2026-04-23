@@ -99,10 +99,6 @@ impl SuspensionOutcome {
     }
 }
 
-/// Alias kept for back-compat with earlier test spec drafts
-/// (`SuspendedOrComplete` ↔ `SuspensionOutcome`).
-pub type SuspendedOrComplete = SuspensionOutcome;
-
 /// Phase 2a R3 consolidation: accept both `&str` and `&Cid` as handler
 /// identifiers. Bench fixtures that round-trip a just-registered subgraph
 /// CID through `call_with_suspension` don't have to `.to_string()` it.
@@ -555,12 +551,6 @@ impl Engine {
         self.inner
             .parse_counter
             .load(std::sync::atomic::Ordering::SeqCst)
-    }
-
-    /// Back-compat alias for callers that used `test_hook_parse_counter`.
-    #[must_use]
-    pub fn test_hook_parse_counter(&self) -> u64 {
-        self.testing_parse_counter()
     }
 
     /// Phase 2a G2-B test-only: force-reregister the named handler under a
