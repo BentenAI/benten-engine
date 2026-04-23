@@ -407,4 +407,38 @@ add CBOR-level depth / bomb coverage on top.
 
 ---
 
+## `ExecutionStateEnvelope::envelope_cid` does not cover `schema_version` (Phase 2a G3-A / G3-A-mini-review Minor-2)
+
+In Phase 2a `ExecutionStateEnvelope::envelope_cid` returns `payload_cid`
+— the BLAKE3 over the DAG-CBOR bytes of `ExecutionStatePayload`. The
+envelope's `schema_version: u8` byte is **not** covered by this CID.
+
+**Implication.** An attacker who re-wraps the same payload under a
+future `schema_version = 2` produces an envelope whose `envelope_cid`
+is byte-identical to the `schema_version = 1` form. Today this is
+purely hypothetical — `schema_version = 1` is the only valid value
+and the resume path rejects mismatches — but if Phase 2b/3 grows the
+envelope shape additively, the re-wrap attack becomes reachable
+unless the envelope hash includes the full envelope (not just the
+payload).
+
+**Mitigation path (Phase 2b / Phase 3).** Either (a) redefine
+`envelope_cid` to hash the full envelope bytes (including
+`schema_version`), or (b) ship a separate `envelope_hash` field
+alongside `payload_cid` so callers can ask the right question.
+Option (a) would change the CID contract and requires coordination
+with any already-persisted `ExecutionStateEnvelope` in storage;
+Option (b) is additive and preferred.
+
+**Phase 2a status.** Phase 2a pins `schema_version = 1`; the single
+call-site that checks re-wrap tampering (`resume_from_bytes` re-
+computes `payload_cid` and asserts equality) fires correctly for
+Phase 2a's closed shape. Forward-compat concern only.
+
+**Cross-refs.** §9.1 of `.addl/phase-2a/00-implementation-plan.md`
+(envelope shape frozen); G3-A mini-review Minor-2 (captured 2026-
+04-22).
+
+---
+
 *Future compromises with security implications will be appended as sections here, each tagged with the compromise number from the R1 Triage Addendum.*

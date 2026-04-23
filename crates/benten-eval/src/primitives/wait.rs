@@ -49,6 +49,11 @@ impl SuspendedHandle {
 }
 
 /// Outcome of a WAIT invocation at execute time.
+///
+/// Callers must inspect the variant — discarding a `WaitOutcome::Suspended`
+/// silently loses the handle needed to resume, so `#[must_use]` enforces an
+/// acknowledgment at the call-site.
+#[must_use]
 #[derive(Debug, Clone)]
 pub enum WaitOutcome {
     /// The signal was already available; WAIT completed inline with the

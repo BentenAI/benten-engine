@@ -88,3 +88,52 @@ fn grant_reader_has_unrevoked_grant_for_any_empty_batch_returns_false() {
         "empty batch must return false — no grants to match against"
     );
 }
+
+/// G9-A mini-review Nit 3a: pins the "all-revoked → false" contract so a
+/// future refactor that collapses `.any(|s| ...)` to `.all(|s| ...)` — or
+/// inverts the predicate — cannot silently pass. The RecordingReader has
+/// zero unrevoked grants; every probed scope returns false; the batch
+/// must return false even though it contains multiple entries.
+#[test]
+fn grant_reader_has_unrevoked_grant_for_any_all_revoked_returns_false() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let reader = RecordingReader {
+        unrevoked: Vec::new(),
+        calls: Arc::clone(&calls),
+    };
+
+    let scopes = [
+        "store:comment:write",
+        "store:user:write",
+        "store:post:write",
+    ];
+    let out = reader.has_unrevoked_grant_for_any(&scopes).expect("query");
+    assert!(
+        !out,
+        "all-revoked batch must return false (no unrevoked grants available)"
+    );
+    // Same single-read invariant — batch API does one backend probe, not N.
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        1,
+        "batch query must be a single backend read even when no grants match"
+    );
+}
+
+/// G9-A mini-review Nit 3a companion: pins the "single-scope-revoked →
+/// false" case. Distinct from the all-revoked multi-scope case above because
+/// it exercises a 1-element batch path that some implementations short-
+/// circuit differently from the multi-element path.
+#[test]
+fn grant_reader_has_unrevoked_grant_for_any_single_revoked_returns_false() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let reader = RecordingReader {
+        unrevoked: Vec::new(),
+        calls,
+    };
+
+    let out = reader
+        .has_unrevoked_grant_for_any(&["store:post:write"])
+        .expect("query");
+    assert!(!out, "single revoked scope must return false");
+}

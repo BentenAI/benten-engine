@@ -434,10 +434,19 @@ fn graph_error_to_host_error(g: GraphError) -> HostError {
         | GraphError::SystemZoneWrite { .. }
         | GraphError::NestedTransactionNotSupported {}
         | GraphError::TxAborted { .. } => Some(g.to_string()),
-        GraphError::Core(_)
-        | GraphError::RedbSource(_)
-        | GraphError::Redb(_)
-        | GraphError::Decode(_) => None,
+        // CoreError Display is audit-safe: it renders serialize/decode
+        // error messages that never embed CID bytes (the CID bytes only
+        // appear inside Display of backend-storage-layer errors like
+        // `GraphError::Decode`, which wraps a redb encode step; those
+        // stay opaque below). Surfacing CoreError's Display restores the
+        // pre-G1-B "graph: core: <msg>" readability for downstream
+        // match-on-source callers. Fix: G1-B mini-review M1.
+        GraphError::Core(inner) => Some(format!("core: {inner}")),
+        // RedbSource / Redb / Decode stay opaque: their Display can embed
+        // redb internal identifiers (page numbers, raw byte offsets) that
+        // a wire observer could correlate with disk layout. The
+        // programmatic path is the opaque `source` chain, not `context`.
+        GraphError::RedbSource(_) | GraphError::Redb(_) | GraphError::Decode(_) => None,
         // GraphError is #[non_exhaustive]; a future variant falls through
         // as "no context" so a Phase-2 addition never silently leaks a
         // raw Debug payload through the envelope.
@@ -460,10 +469,11 @@ fn graph_error_to_host_error(g: GraphError) -> HostError {
 /// `EngineError::Other` keyed on the stable catalog code.
 fn host_error_to_engine_error(h: HostError) -> EngineError {
     let code = h.code.clone();
-    let message = h
-        .context
-        .clone()
-        .unwrap_or_else(|| code.as_str().to_string());
+    // Fallback to the full HostError Display form (which includes the
+    // `host error (CODE): context` shape) rather than the bare code
+    // string — preserves Display consistency for callers that render the
+    // EngineError to a log line. Fix: G1-B mini-review M2.
+    let message = h.context.clone().unwrap_or_else(|| h.to_string());
     // Try to recover the original `GraphError` — the common case in
     // Phase-1 / 2a where the eval-side saw a HostError we ourselves
     // minted from a GraphError three lines upstream. `Box<dyn Error + Send
@@ -481,14 +491,19 @@ fn host_error_to_engine_error(h: HostError) -> EngineError {
 /// a `benten_graph::*` path to a `PrimitiveHost` trait-method signature
 /// or to an `EvalError` variant, CI + the signature-level unit tests
 /// (`arch_1_no_graph_types_in_primitive_host.rs`, the YAML gate) fire.
-/// This function is never called — it exists as a structural anchor.
+///
+/// Implemented as a `const fn` pointer alias so deleting it fails the
+/// compile instead of silently losing the guarantee (G1-B mini-review
+/// N2). The alias takes the canonical coercion shape — a
+/// `fn(HostError) -> benten_eval::EvalError` — and constructs it from
+/// `EvalError::Host` at const-eval time. A refactor that renames the
+/// variant or changes the shape breaks the alias.
 #[allow(
     dead_code,
     reason = "arch-1 anchor: proves HostError is the sole backend-error surface; see plan §9.14"
 )]
-fn _arch_1_host_error_is_the_boundary(h: HostError) -> benten_eval::EvalError {
-    benten_eval::EvalError::Host(h)
-}
+const _ARCH_1_HOST_ERROR_IS_THE_BOUNDARY: fn(HostError) -> benten_eval::EvalError =
+    benten_eval::EvalError::Host;
 
 /// Convert an `EvalError` back into an `EngineError` for the transaction
 /// closure's return type.

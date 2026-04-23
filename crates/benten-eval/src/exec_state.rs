@@ -57,12 +57,13 @@ impl AttributionFrame {
     }
 }
 
-/// Evaluator stack-frame snapshot. Phase-2a stub shape sufficient for
-/// `ExecutionStatePayload` round-trip; real suspension/resume semantics
-/// land with G3-A.
-///
-/// TODO(phase-2a-G3-A): carry the actual frame pointer + pending op list
-/// + local variables.
+/// Evaluator stack-frame snapshot. Phase-2a ships the `{ tag: String }`
+/// shape; this is sufficient for `ExecutionStatePayload` DAG-CBOR round-trip
+/// semantics. The "real frame pointer + pending op list + local variables"
+/// elaboration is a Phase 2b concern owned by G3-B / G6-C when the evaluator
+/// is fully reshaped around multi-suspend + SANDBOX integration. Per plan §9.1
+/// the Frame shape is FROZEN at Phase 2a close as `{ tag: String }`; any
+/// field additions are additive (new required field = schema_version bump).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Frame {
     /// Opaque frame tag; populated by the evaluator at suspend time.
