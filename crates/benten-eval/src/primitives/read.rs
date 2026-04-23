@@ -80,6 +80,20 @@ fn read_by_bytes_via_host(host: &dyn PrimitiveHost, bytes: &[u8]) -> Result<Step
             output: Value::Null,
         });
     };
+    // Phase 2a G4-A (Option C evaluator-path, P3 / sec-r1-5): consult the
+    // host's check_read_capability hook before touching the backend. A
+    // denial collapses to the symmetric-None shape (`ON_NOT_FOUND`) so an
+    // unauthorised reader cannot distinguish denial from a genuine miss.
+    // The label argument is the empty string at this call-site because
+    // by-bytes READs don't carry a label-scope; the host's policy keys
+    // off the target CID alone.
+    if let Err(EvalError::Capability(_)) = host.check_read_capability("", Some(&cid)) {
+        return Ok(StepResult {
+            next: None,
+            edge_label: "ON_NOT_FOUND".to_string(),
+            output: Value::Null,
+        });
+    }
     match host.read_node(&cid) {
         Ok(Some(node)) => {
             let mut payload = std::collections::BTreeMap::new();
@@ -150,8 +164,18 @@ fn query_via_host(
             output: Value::List(Vec::new()),
         });
     }
-    // `label`-scoped lookup: use host.get_by_label when available.
+    // `label`-scoped lookup: use host.get_by_label when available. Phase
+    // 2a G4-A (Option C, sec-r1-5): consult check_read_capability before
+    // the list probe. Under a deny-reads policy, collapse to ON_EMPTY so
+    // the symmetric-None contract holds through the by-query branch too.
     if let Some(Value::Text(label)) = op.properties.get("label") {
+        if let Err(EvalError::Capability(_)) = host.check_read_capability(label, None) {
+            return Ok(StepResult {
+                next: None,
+                edge_label: "ON_EMPTY".to_string(),
+                output: Value::List(Vec::new()),
+            });
+        }
         let cids = host.get_by_label(label)?;
         if cids.is_empty() {
             return Ok(StepResult {

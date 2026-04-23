@@ -160,6 +160,17 @@ pub fn validate_subgraph(
         }
     }
 
+    // Invariant 8 — multiplicative cumulative budget (Phase 2a G4-A).
+    // Symmetric with the builder-snapshot path: a finalized Subgraph
+    // reaching this validator re-runs the budget check so a subgraph
+    // round-tripped through storage still surfaces the same rejection.
+    if let Err(budget_err) = crate::invariants::budget::validate(sg) {
+        violations.push(InvariantViolation::IterateBudget);
+        if !aggregate {
+            return Err(budget_err);
+        }
+    }
+
     // Invariant 9 — determinism. 5d-J workstream 4: the finalized
     // Subgraph now carries the `deterministic` flag (still in-memory
     // only; DAG-CBOR serialization is Phase-2 scope per the earlier
@@ -272,37 +283,21 @@ pub(crate) fn validate_builder(
         }
     }
 
-    // Invariant 8 (Phase-1 stopgap) — max ITERATE nesting depth. The builder
-    // tracks the chain depth on each node; exceeding the cap fires here.
-    let max_nest = usize::try_from(config.max_iterate_nest_depth).unwrap_or(usize::MAX);
-    let mut worst: (usize, usize) = (0, 0);
-    for (idx, depth) in sn.iterate_depth.iter().copied().enumerate() {
-        if depth > worst.0 {
-            worst = (depth, idx);
-        }
-    }
-    if worst.0 > max_nest {
-        out.iterate_nest_depth_actual = Some(worst.0);
-        out.iterate_nest_depth_max = Some(max_nest);
-        // Walk back the chain via reverse-adjacency to produce a path string.
-        out.iterate_nest_path = Some(
-            sn.nodes
-                .iter()
-                .enumerate()
-                .filter_map(|(i, n)| {
-                    if sn.iterate_depth.get(i).copied().unwrap_or(0) > 0
-                        && matches!(n.kind, PrimitiveKind::Iterate)
-                    {
-                        Some(n.id.clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect(),
-        );
-        violations.push(InvariantViolation::IterateNestDepth);
+    // Invariant 8 — multiplicative cumulative budget (Phase 2a G4-A /
+    // Code-as-graph Major #2). The Phase-1 nest-depth-3 stopgap
+    // is retired; the multiplicative walker in `invariants/budget.rs`
+    // computes the worst-case path product across the snapshot and fires
+    // `InvariantViolation::IterateBudget` → `E_INV_ITERATE_BUDGET` when
+    // it exceeds `DEFAULT_INV_8_BUDGET`.
+    //
+    // `max_iterate_nest_depth` on `InvariantConfig` is preserved for
+    // backward-compat with downstream callers but no longer gates the
+    // validator — the field is dead under Phase 2a semantics.
+    let _ = config.max_iterate_nest_depth;
+    if let Err(budget_err) = crate::invariants::budget::validate_snapshot(sn) {
+        violations.push(InvariantViolation::IterateBudget);
         if !aggregate {
-            return Err(finalize(out, violations));
+            return Err(budget_err);
         }
     }
 

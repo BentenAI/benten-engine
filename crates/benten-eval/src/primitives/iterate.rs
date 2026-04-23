@@ -78,6 +78,23 @@ pub fn execute(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResul
         });
     }
 
+    // Phase 2a G4-A: consult the shared evaluator/budget helper so the
+    // per-iteration runtime budget check routes through one entry point
+    // (cr-r1-3). `check_per_iteration_budget` is a pure function over
+    // `(consumed, limit)` — the evaluator holds the running counters on
+    // its stack; here we pre-check the static `items_len <= max` bound
+    // via the same helper so a regression in either side is caught by
+    // the helper's unit tests rather than by diverging call-site logic.
+    if let Err(_e) =
+        crate::evaluator::budget::check_per_iteration_budget(items_len as u64, max as u64)
+    {
+        return Ok(StepResult {
+            next: None,
+            edge_label: "ON_LIMIT".to_string(),
+            output: Value::Null,
+        });
+    }
+
     // Named Compromise #1 (ITERATE batch-boundary half). Walk the item
     // count in fixed-size batches; at every boundary (inclusive of the
     // first iteration — Phase-1 posture re-reads caps at batch 0 so a

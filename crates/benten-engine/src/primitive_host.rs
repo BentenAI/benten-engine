@@ -136,10 +136,32 @@ impl PrimitiveHost for Engine {
     // `EvalError::Backend(String)` and the catalog code collapsed to
     // `E_EVAL_BACKEND` at the boundary.
     fn read_node(&self, cid: &Cid) -> Result<Option<Node>, benten_eval::EvalError> {
+        // Option C flanking (sec-r1-5 / atk-5): consult the read-gate on
+        // every content-returning method — the by-CID branch collapses a
+        // denial to `Ok(None)` so the caller cannot distinguish a denied
+        // CID from a genuine miss. Mirrors the shape of `Engine::get_node`
+        // (the public API wrapper); the evaluator-visible path needs the
+        // same collapse so a TRANSFORM-driven handler cannot flank.
+        if let Err(benten_eval::EvalError::Capability(_)) =
+            <Self as PrimitiveHost>::check_read_capability(self, "", Some(cid))
+        {
+            return Ok(None);
+        }
         self.backend().get_node(cid).map_err(graph_err_to_eval)
     }
 
     fn get_by_label(&self, label: &str) -> Result<Vec<Cid>, benten_eval::EvalError> {
+        // Option C flanking (sec-r1-5 / atk-5): consult the read-gate
+        // before the backend probe. A denial collapses to an empty list —
+        // symmetric with "no matching Nodes" — so a TRANSFORM-driven
+        // handler that flanks through this accessor cannot distinguish a
+        // denied label from an empty one. See `docs/SECURITY-POSTURE.md`
+        // Compromise #2 (Option C) for the posture contract.
+        if let Err(benten_eval::EvalError::Capability(_)) =
+            <Self as PrimitiveHost>::check_read_capability(self, label, None)
+        {
+            return Ok(Vec::new());
+        }
         self.backend()
             .get_by_label(label)
             .map_err(graph_err_to_eval)
@@ -151,6 +173,14 @@ impl PrimitiveHost for Engine {
         prop: &str,
         value: &Value,
     ) -> Result<Vec<Cid>, benten_eval::EvalError> {
+        // Option C flanking (sec-r1-5 / atk-5): symmetric with
+        // `get_by_label` — cap-denied reads collapse to an empty result
+        // rather than leak existence via a populated list.
+        if let Err(benten_eval::EvalError::Capability(_)) =
+            <Self as PrimitiveHost>::check_read_capability(self, label, None)
+        {
+            return Ok(Vec::new());
+        }
         self.backend()
             .get_by_property(label, prop, value)
             .map_err(graph_err_to_eval)
@@ -325,8 +355,20 @@ impl PrimitiveHost for Engine {
     fn read_view(
         &self,
         view_id: &str,
-        _query: &benten_eval::ViewQuery,
+        query: &benten_eval::ViewQuery,
     ) -> Result<Value, benten_eval::EvalError> {
+        // Option C flanking (sec-r1-5 / atk-5) — coarse-grained per
+        // named Compromise #N+2 (IVM views are coarse-grained read-gated
+        // in Phase 2a; per-row gating is Phase 3). The cap gate keys off
+        // the query's label filter when one is present, falling back to
+        // the view_id as a scope identifier. A denial collapses the
+        // whole view to an empty list rather than leaking existence.
+        let label = query.label.as_deref().unwrap_or(view_id);
+        if let Err(benten_eval::EvalError::Capability(_)) =
+            <Self as PrimitiveHost>::check_read_capability(self, label, None)
+        {
+            return Ok(Value::List(Vec::new()));
+        }
         match Engine::read_view(self, view_id) {
             Ok(outcome) => {
                 if let Some(list) = outcome.list {

@@ -85,19 +85,19 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_INV_ITERATE_BUDGET
 
-- **Message:** "Cumulative iteration budget {actual} exceeds max {max} through nested ITERATE/CALL"
-- **Context:** `{ actual: number, max: number, path: NodeId[] }`
-- **Fix:** Reduce the multiplicative iteration space. Total iterations across nested ITERATE/CALL is bounded by the capability grant.
-- **Thrown at:** Evaluation (Phase 1 flat budget) / Registration (Phase 2 multiplicative-through-CALL)
-- **Phase:** 1 (runtime flat `DEFAULT_ITERATION_BUDGET` from `crates/benten-eval/src/evaluator.rs`; distinct from `E_INV_ITERATE_NEST_DEPTH`, which is the registration-time nesting-cap stopgap of 3). Phase 2 adds the multiplicative-through-CALL registration-time enforcement under the same code.
+- **Message:** "Cumulative iteration budget {actual} exceeds bound {bound} through nested ITERATE/CALL"
+- **Context:** `{ actual: number, bound: number, path: NodeId[] }`
+- **Fix:** Reduce the multiplicative iteration space. The cumulative budget is the worst-case product of ITERATE `max` values and non-isolated CALL callee bounds along any DAG path through the handler. Flatten the nested iteration, or declare `isolated: true` on a CALL whose callee runs under its own grant's bound (the callee frame resets the cumulative rather than inheriting the caller's remaining budget — Code-as-graph Major #2 / Option B).
+- **Thrown at:** Registration (Phase 2a multiplicative-through-CALL / Code-as-graph Major #2) and Evaluation (Phase 1 runtime flat budget, preserved at `DEFAULT_ITERATION_BUDGET = 100_000` in `crates/benten-eval/src/evaluator.rs`).
+- **Phase:** 1 (runtime flat budget) + 2a (registration-time multiplicative form — G4-A lands the static product-over-paths walker in `crates/benten-eval/src/invariants/budget.rs` + `crates/benten-eval/src/evaluator/budget.rs` per cr-r1-3 shared-helper coordination). The Phase-1 nest-depth-3 stopgap (`E_INV_ITERATE_NEST_DEPTH`) is retired at Phase 2a open; the multiplicative form supersedes it. Default registration-time bound: `DEFAULT_INV_8_BUDGET = 500_000`.
 
 ### E_INV_ITERATE_NEST_DEPTH
 
 - **Message:** "ITERATE nesting depth {depth} exceeds Phase 1 limit {max}"
 - **Context:** `{ depth: number, max: number, path: NodeId[] }`
-- **Fix:** Phase 1 bounds ITERATE nesting structurally at depth 3 as a stopgap for the cumulative-budget enforcement coming in Phase 2. Flatten the nested iteration, or split into multiple CALL-connected subgraphs.
+- **Fix:** Phase 1 bounded ITERATE nesting structurally at depth 3 as a stopgap for the cumulative-budget enforcement shipped in Phase 2a. Retired at Phase 2a open — `E_INV_ITERATE_BUDGET` supersedes it. The variant + string spelling stay reserved in `benten-errors` for backward-compat (catalog IDs are stable across phases); new registrations no longer fire it.
 - **Thrown at:** Registration
-- **Phase:** 1 (named compromise for invariant 8; see implementation plan §5 Rank 10)
+- **Phase:** 1 (retired at Phase 2a open — see `E_INV_ITERATE_BUDGET` for the Phase 2a multiplicative replacement).
 
 ### E_INV_CONTENT_HASH
 

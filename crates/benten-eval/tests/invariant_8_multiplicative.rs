@@ -87,13 +87,9 @@ fn call_respecting_cap_on_budget() {
 // ---- Proptest: multiplicative exact across random DAGs ----
 
 proptest! {
-    // R4 cov-9: proptesting a `todo!()`-bodied budget walker yields a
-    // vacuous test (every generated case panics on the first step). Kept
-    // ignored until G4-A lands the real `validate_multiplicative` body;
-    // the strategy + assertion shape are already correct, so R5 G4-A
-    // flips the `#[ignore]` off and the property fires meaningfully.
-    #[ignore = "phase-2a-pending: requires G4-A multiplicative budget walker to be \
-                non-todo!() for the property to fire meaningfully"]
+    // Phase 2a G4-A: the multiplicative budget walker is now non-`todo!()`
+    // so this property fires meaningfully — the `#[ignore]` was retired
+    // when `invariants/budget.rs::compute_cumulative` landed.
     #[test]
     fn prop_invariant_8_multiplicative_exact(
         // CALL factor plus two ITERATE maxes; shrink toward minimal

@@ -49,12 +49,38 @@ pub use time_source::{
 };
 
 /// Phase 2a G4-A test harness: register a callee handler with a declared
-/// iteration-budget bound. Consumed by `invariant_8_isolated_call`.
+/// iteration-budget bound. Consumed by `invariant_8_isolated_call` tests
+/// so the Inv-8 multiplicative walker can look up the callee's bound at
+/// registration time.
 ///
-/// TODO(phase-2a-G4-A): swap in a real handler-registration path.
-pub fn register_test_callee(_name: &str, _bound: u64) {
-    // Placeholder — R5 G4-A wires a real handler-registration table.
+/// The registry is a process-global `RwLock<HashMap<String, u64>>`; the
+/// table is append-only within a test process (a subsequent register of
+/// the same name overwrites the prior entry). Real handler registration
+/// is an engine-layer concern; this is purely a test-surface convenience
+/// (Phase 2a testing-helpers contract — see plan §3 G4-A).
+pub fn register_test_callee(name: &str, bound: u64) {
+    let mut guard = TEST_CALLEE_REGISTRY
+        .write()
+        .expect("test callee registry poisoned");
+    guard.insert(name.to_string(), bound);
 }
+
+/// Look up a previously-registered callee bound. Returns `None` when the
+/// name has not been registered — the multiplicative walker's
+/// `non_isolated_callee_factor` / `isolated_callee_bound` helpers fall back
+/// to the CALL node's own `max` property in that case.
+#[must_use]
+pub fn lookup_test_callee(name: &str) -> Option<u64> {
+    TEST_CALLEE_REGISTRY
+        .read()
+        .expect("test callee registry poisoned")
+        .get(name)
+        .copied()
+}
+
+static TEST_CALLEE_REGISTRY: std::sync::LazyLock<
+    std::sync::RwLock<std::collections::HashMap<String, u64>>,
+> = std::sync::LazyLock::new(|| std::sync::RwLock::new(std::collections::HashMap::new()));
 
 /// Phase 2a G3-B: crate-root alias for
 /// [`primitives::wait::evaluate`]. Tests call `benten_eval::evaluate(...)`
@@ -739,30 +765,32 @@ impl Subgraph {
         self.nodes.iter_mut().find(|n| n.id == id)
     }
 
-    /// Phase 2a G4-A test helper: return the precomputed cumulative
-    /// Inv-8 budget for the root frame. Stub — G4-A lands the real
-    /// computation.
+    /// Phase 2a G4-A test helper: return the cumulative Inv-8 budget at
+    /// the subgraph's worst-case path.
     ///
-    /// Returns a `u64` directly; Phase-2a default is `0` so tests asserting
-    /// non-zero budgets fail at run-time with a clear delta.
+    /// The cumulative is the MAX over all DAG paths of the product of per-
+    /// node multiplicative factors (ITERATE's `max`, non-isolated CALL's
+    /// callee-bound, 1 for everything else). An isolated CALL resets the
+    /// path product to the callee's declared bound per Code-as-graph
+    /// Major #2.
     #[must_use]
     pub fn cumulative_budget_for_root_for_test(&self) -> u64 {
-        0
+        invariants::budget::compute_cumulative(self)
     }
 
-    /// Phase 2a G4-A test helper: cumulative budget at an arbitrary handle,
-    /// returned as `Option<u64>` so the `invariant_8_isolated_call` tests'
-    /// `.expect()` / `.unwrap()` chains compile. Phase-2a default: `None`.
+    /// Phase 2a G4-A test helper: cumulative budget at an arbitrary handle.
+    /// Returns `None` when the handle does not correspond to a node in
+    /// this subgraph.
     #[must_use]
-    pub fn cumulative_budget_for_handle_for_test(&self, _h: NodeHandle) -> Option<u64> {
-        None
+    pub fn cumulative_budget_for_handle_for_test(&self, h: NodeHandle) -> Option<u64> {
+        invariants::budget::cumulative_at_handle(self, h)
     }
 
-    /// Phase 2a G4-A test helper: returns `true` once multiplicative Inv-8
-    /// budget tracking is live.
+    /// Phase 2a G4-A test helper: multiplicative Inv-8 budget tracking is
+    /// live in Phase 2a.
     #[must_use]
     pub fn has_multiplicative_budget_tracked_for_test(&self) -> bool {
-        false
+        true
     }
 
     /// Phase 2a G4-A test helper: return the `NodeHandle` for an operation

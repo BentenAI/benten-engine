@@ -1,15 +1,16 @@
 //! Edge-case tests for ITERATE primitive's `max` and nesting-depth boundaries.
 //!
-//! Covers error codes:
-//! - `E_INV_ITERATE_NEST_DEPTH` — Phase 1 named compromise: ITERATE nesting
-//!   is hardcoded at depth 3 as a stopgap for Invariant 8's cumulative-budget
-//!   enforcement (full form ships in Phase 2).
-//! - (Phase-2-reserved: `E_INV_ITERATE_MAX_MISSING` and `E_INV_ITERATE_BUDGET`
-//!   — NOT fired in Phase 1 per R1 triage, but tests still pin "no Phase 1
-//!   registration incorrectly fires these codes today.")
+//! Phase 2a (G4-A): the Phase-1 `MAX_ITERATE_NEST_DEPTH = 3` stopgap for
+//! Invariant 8 has been retired in favour of the multiplicative cumulative-
+//! budget check. The tests below exercise the post-retirement contract: a
+//! depth-4 nest whose product stays within `DEFAULT_INV_8_BUDGET` is
+//! accepted. Exhaustive coverage lives in
+//! `invariant_8_nest_depth_stopgap_removed.rs`.
 //!
-//! Regression: MAX_ITERATE_NEST_DEPTH=3 is a Phase 1 stopgap for Invariant 8.
-//! Phase 2 removes this limit (or tightens it via cumulative-budget).
+//! Phase-2-reserved: `E_INV_ITERATE_MAX_MISSING` is still not fired by any
+//! Phase-2a path because the builder's `iterate(..., u64)` takes `max` at
+//! compile time. The code stays reserved for a Phase-2 registration form
+//! that reaches a subgraph via bytes rather than the typed builder.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 #![allow(
@@ -17,7 +18,7 @@
     reason = "RegistrationError carries ~360 bytes of diagnostic context per R1 triage; test helpers mirror the crate-internal API. Public engine surface boxes it."
 )]
 
-use benten_eval::{ErrorCode, SubgraphBuilder};
+use benten_eval::SubgraphBuilder;
 
 /// Build a subgraph with `n` levels of nested ITERATEs.
 fn nested_iterates(n: usize) -> Result<benten_eval::Subgraph, benten_eval::RegistrationError> {
@@ -32,27 +33,25 @@ fn nested_iterates(n: usize) -> Result<benten_eval::Subgraph, benten_eval::Regis
 }
 
 #[test]
-fn accepts_nest_depth_3_rejects_4() {
-    // Regression: MAX_ITERATE_NEST_DEPTH=3 is a Phase 1 stopgap for Invariant 8.
-    // Phase 2 removes this limit (or tightens it via cumulative-budget).
+fn accepts_depth_3_and_all_shorter() {
+    // Phase 2a (G4-A): the nest-depth-3 stopgap is retired in favour of the
+    // multiplicative cumulative-budget check. A 3-deep nest with each
+    // per-level max=10 has cumulative 10^3 = 1000, well within the default
+    // `DEFAULT_INV_8_BUDGET` (500_000) — all three must continue to pass.
     let _ok = nested_iterates(1).expect("depth-1 ITERATE must pass");
     let _ok = nested_iterates(2).expect("depth-2 ITERATE must pass");
-    let _ok = nested_iterates(3).expect("depth-3 ITERATE must pass (at limit)");
+    let _ok = nested_iterates(3).expect("depth-3 ITERATE must pass");
 }
 
 #[test]
-fn rejects_depth_4_accepts_depth_3() {
-    // Regression: MAX_ITERATE_NEST_DEPTH=3 is a Phase 1 stopgap for Invariant 8.
-    // Phase 2 removes this limit.
-    let err = nested_iterates(4).expect_err("depth-4 ITERATE must be rejected in Phase 1");
-    assert_eq!(err.code(), ErrorCode::InvIterateNestDepth);
-
-    // Context names the depth and the limit.
-    assert_eq!(err.iterate_nest_depth_actual().unwrap(), 4);
-    assert_eq!(err.iterate_nest_depth_max().unwrap(), 3);
-    // Context includes the path (so devs can locate the offending
-    // nested ITERATE chain).
-    assert!(err.iterate_nest_path().is_some());
+fn depth_4_within_budget_accepted_under_multiplicative() {
+    // Phase 2a (G4-A): `nested_iterates(4)` uses per-level max=10 →
+    // cumulative 10^4 = 10_000 < DEFAULT_INV_8_BUDGET (500_000). Phase 1
+    // used to reject this with `E_INV_ITERATE_NEST_DEPTH`; Phase 2a
+    // accepts because the product stays inside the budget. The
+    // nest-depth stopgap removal is covered exhaustively in
+    // `invariant_8_nest_depth_stopgap_removed.rs`.
+    let _ok = nested_iterates(4).expect("depth-4 with cumulative 10_000 must be accepted");
 }
 
 #[test]

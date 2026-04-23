@@ -35,6 +35,11 @@ use crate::{EvalError, Evaluator, OperationNode, PrimitiveHost, StepResult, Subg
 /// grant)` triple.
 pub mod attribution;
 
+/// Phase 2a G4-A: shared iteration-budget helper consumed by
+/// `primitives/iterate.rs` and `primitives/call.rs` (plus G9-A's wallclock
+/// TOCTOU batch-boundary check). Single coordination point per cr-r1-3.
+pub mod budget;
+
 /// G5-B-ii / phil-r1-1: pinned empty-extensions `AttributionFrame` fixture
 /// CID. Phase-6 additions to the attribution shape MUST be additive — if the
 /// pinned CID shifts, the shape changed non-additively and the drift gate

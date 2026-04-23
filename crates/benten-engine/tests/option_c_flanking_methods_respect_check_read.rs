@@ -153,7 +153,6 @@ fn transform_via_get_by_property_respects_check_read() {
 /// flank here is: a TRANSFORM calls `read_view("posts")` on a view the
 /// policy does not authorise and receives the populated list.
 #[test]
-#[ignore = "phase-2a-pending: read_view coarse-grained cap gate (Compromise #N+2) lands in G4-A. PrimitiveHost::read_view today is a Phase-1-partial stub; the cap-gated semantics fires after G4-A threads check_read_capability."]
 fn transform_via_read_view_respects_check_read() {
     let (engine, _dir) = engine_with_deny_reads();
 
