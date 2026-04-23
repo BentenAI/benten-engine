@@ -299,13 +299,7 @@ impl SubgraphCache {
             .cloned()
     }
 
-    pub(crate) fn insert(
-        &self,
-        handler_id: &str,
-        op: &str,
-        cid: &Cid,
-        sg: benten_eval::Subgraph,
-    ) {
+    pub(crate) fn insert(&self, handler_id: &str, op: &str, cid: &Cid, sg: benten_eval::Subgraph) {
         let mut guard = benten_graph::RwLockExt::write_recover(&self.entries);
         guard.insert(
             SubgraphCacheKey {
@@ -1155,9 +1149,12 @@ impl Engine {
                             w_node.properties.insert("op".into(), Value::text("create"));
                             w_node.properties.insert("label".into(), Value::text(label));
                         }
-                        self.inner
-                            .subgraph_cache
-                            .insert(&cache_handler, "create", handler_cid, sg.clone());
+                        self.inner.subgraph_cache.insert(
+                            &cache_handler,
+                            "create",
+                            handler_cid,
+                            sg.clone(),
+                        );
                         sg
                     });
                 // Patch the per-call property bag onto the cloned template.
@@ -1193,9 +1190,12 @@ impl Engine {
                                 .insert("query_kind".into(), Value::text("by_label"));
                             r_node.properties.insert("label".into(), Value::text(label));
                         }
-                        self.inner
-                            .subgraph_cache
-                            .insert(&cache_handler, "list", handler_cid, sg.clone());
+                        self.inner.subgraph_cache.insert(
+                            &cache_handler,
+                            "list",
+                            handler_cid,
+                            sg.clone(),
+                        );
                         sg
                     });
                 Ok((sg, Some(label.to_string())))
@@ -1213,9 +1213,12 @@ impl Engine {
                         let r = sb.read(format!("crud_{label}_get"));
                         let _ = sb.respond(r);
                         let sg = sb.build_unvalidated_for_test();
-                        self.inner
-                            .subgraph_cache
-                            .insert(&cache_handler, "get", handler_cid, sg.clone());
+                        self.inner.subgraph_cache.insert(
+                            &cache_handler,
+                            "get",
+                            handler_cid,
+                            sg.clone(),
+                        );
                         sg
                     });
                 // Signal to the outcome mapper that this single-get should
@@ -1359,9 +1362,12 @@ impl Engine {
                         let w = sb.write(format!("crud_{label}_delete"));
                         let _ = sb.respond(w);
                         let sg = sb.build_unvalidated_for_test();
-                        self.inner
-                            .subgraph_cache
-                            .insert(&cache_handler, "delete", handler_cid, sg.clone());
+                        self.inner.subgraph_cache.insert(
+                            &cache_handler,
+                            "delete",
+                            handler_cid,
+                            sg.clone(),
+                        );
                         sg
                     });
                 if let Some(w_node) = sg.first_op_mut() {

@@ -340,11 +340,7 @@ impl Engine {
     }
 
     /// Phase 2a G2-B: invalidation measurement — probe under a DIFFERENT CID.
-    pub fn benchmark_helper_subgraph_cache_reregister_and_miss(
-        &self,
-        handler_id: &str,
-        op: &str,
-    ) {
+    pub fn benchmark_helper_subgraph_cache_reregister_and_miss(&self, handler_id: &str, op: &str) {
         let fresh_cid = benten_core::Cid::from_blake3_digest(
             *blake3::hash(b"benchmark_helper_subgraph_cache_reregister_and_miss_probe").as_bytes(),
         );
