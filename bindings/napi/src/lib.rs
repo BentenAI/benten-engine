@@ -47,6 +47,12 @@ mod subgraph;
 mod trace;
 #[cfg(feature = "napi-export")]
 mod view;
+// Phase 2a G3-B: WAIT / suspend / resume napi-bridge helpers. The
+// `#[napi]` impl methods consuming these helpers live in `napi_surface`
+// below; split into its own file so the suspend/resume codec surface
+// stays diff-reviewable.
+#[cfg(feature = "napi-export")]
+mod wait;
 
 // Re-export the policy enum so the napi-derive macros pick it up at the
 // crate root where napi-rs v3 looks for top-level `#[napi]` items.

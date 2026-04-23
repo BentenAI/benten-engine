@@ -100,10 +100,35 @@ export interface EmitArgs {
   payload?: string;
 }
 
-// Phase 2 primitives — build valid Nodes but executors throw.
-export interface WaitArgs {
-  /** Duration string (e.g. `"5m"`). */
+// Phase 2a G3-B (dx-r1-8): WAIT has two variants — a signal-keyed form
+// (`wait({ signal, signal_shape? })`) and the Phase-1 timed form
+// (`wait({ duration })`). Exactly one of `signal` / `duration` must be
+// present; the builder throws `EDslInvalidShape` at `.wait()` time if
+// neither is supplied. When `signal` is present, an optional
+// `signal_shape` (a TRANSFORM-style schema string) constrains the
+// resume-time payload. See docs/DSL-SPECIFICATION.md §2.6.
+export type WaitArgs = WaitSignalArgs | WaitDurationArgs;
+
+export interface WaitSignalArgs {
+  /** Signal name the WAIT suspends on (e.g. `"external:payment"`). */
+  signal: string;
+  /**
+   * Optional schema string constraining the resume-time payload. If
+   * omitted (default) any Value is accepted; if set, a resume with a
+   * mismatched payload fires `E_WAIT_SIGNAL_SHAPE_MISMATCH` before any
+   * downstream primitive executes.
+   */
+  signal_shape?: string;
+  /** Optional deadline — if the signal does not arrive in time, `E_WAIT_TIMEOUT` fires. */
+  duration?: string;
+}
+
+export interface WaitDurationArgs {
+  /** Duration string (e.g. `"5m"`, `"30s"`, `"2h"`). */
   duration: string;
+  /** Signal-keyed form never co-occurs with the bare-duration form. */
+  signal?: never;
+  signal_shape?: never;
 }
 export interface StreamArgs {
   source: string;
@@ -204,9 +229,19 @@ export class SubgraphBuilder {
     return this.addNode("emit", { ...args } as Record<string, JsonValue>);
   }
 
-  // Phase 2 primitives — type-valid subgraph Nodes; executors throw at call.
+  // Phase 2a G3-B (dx-r1-8): WAIT accepts either a signal-keyed form or the
+  // Phase-1 timed form; exactly one of `signal` / `duration` must be set.
   public wait(args: WaitArgs): this {
-    return this.addNode("wait", { ...args } as Record<string, JsonValue>);
+    const a = args as Partial<WaitSignalArgs & WaitDurationArgs>;
+    if (!a || (a.signal == null && a.duration == null)) {
+      throw new EDslInvalidShape(
+        "wait(args) requires either `signal: string` or `duration: string` (E_DSL_INVALID_SHAPE)",
+      );
+    }
+    return this.addNode("wait", { ...(args as object) } as Record<
+      string,
+      JsonValue
+    >);
   }
   public stream(args: StreamArgs): this {
     return this.addNode("stream", { ...args } as Record<string, JsonValue>);
@@ -413,7 +448,16 @@ export class CaseBuilder {
     return this.addNode("emit", { ...a } as Record<string, JsonValue>);
   }
   public wait(a: WaitArgs): this {
-    return this.addNode("wait", { ...a } as Record<string, JsonValue>);
+    const s = a as Partial<WaitSignalArgs & WaitDurationArgs>;
+    if (!s || (s.signal == null && s.duration == null)) {
+      throw new EDslInvalidShape(
+        "wait(args) requires either `signal: string` or `duration: string` (E_DSL_INVALID_SHAPE)",
+      );
+    }
+    return this.addNode("wait", { ...(a as object) } as Record<
+      string,
+      JsonValue
+    >);
   }
   public stream(a: StreamArgs): this {
     return this.addNode("stream", { ...a } as Record<string, JsonValue>);
@@ -481,6 +525,12 @@ export function emit(args: EmitArgs): { primitive: "emit"; args: EmitArgs } {
   return { primitive: "emit", args };
 }
 export function wait(args: WaitArgs): { primitive: "wait"; args: WaitArgs } {
+  const s = args as Partial<WaitSignalArgs & WaitDurationArgs>;
+  if (!s || (s.signal == null && s.duration == null)) {
+    throw new EDslInvalidShape(
+      "wait(args) requires either `signal: string` or `duration: string` (E_DSL_INVALID_SHAPE)",
+    );
+  }
   return { primitive: "wait", args };
 }
 export function stream(args: StreamArgs): {

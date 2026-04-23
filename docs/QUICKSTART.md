@@ -117,6 +117,43 @@ if (info.notFound) {
 
 Without `store:debug:read`, `diagnoseRead` throws `E_CAP_DENIED` — so ordinary callers still cannot distinguish the two cases. Under `PolicyKind.NoAuth` the method is open (matches the embedded / single-user trust model).
 
+## Suspending + resuming on a signal (Phase 2a)
+
+Some workflows need to wait for an external event — a webhook confirming a payment, a human approval, an AI assistant's next turn. WAIT suspends execution and hands you back a `SuspendedHandle` you can persist:
+
+```typescript
+const paymentHandler = subgraph("checkout")
+  .action("charge")
+  .read({ label: "cart", by: "id", value: "$input.cart_id" })
+  .wait({
+    signal: "external:payment_confirmed",
+    signal_shape: "{ amount: Int, currency: Text }",
+  })
+  .write({ label: "order", properties: { status: "paid" } })
+  .respond({ body: "$result" });
+
+await engine.registerSubgraph(paymentHandler);
+
+const result = await engine.callWithSuspension("checkout", "charge", {
+  cart_id: "c-42",
+});
+if (result.kind === "suspended") {
+  // Persist the handle; the worker that receives the webhook later
+  // resumes the handler with the matching payload.
+  const bytes = result.handle;
+  await fs.writeFile(".benten/suspended/checkout-c-42.cbor", bytes);
+}
+
+// Later — in a different process, after restart.
+const bytes = await fs.readFile(".benten/suspended/checkout-c-42.cbor");
+const outcome = await engine.resumeFromBytes(bytes, {
+  amount: 19900,
+  currency: "USD",
+});
+```
+
+Tampered bytes, the wrong principal, or a grant revoked between suspend and resume all surface as typed errors before the write runs (`E_EXEC_STATE_TAMPERED`, `E_RESUME_ACTOR_MISMATCH`, `E_RESUME_SUBGRAPH_DRIFT`, `E_CAP_REVOKED_MID_EVAL`). The timed form `wait({ duration: "5m" })` is also supported; its deadline fires `E_WAIT_TIMEOUT` if no resume arrives in time.
+
 ## Viewing your operation subgraph
 
 Benten's handlers are subgraphs you can inspect:

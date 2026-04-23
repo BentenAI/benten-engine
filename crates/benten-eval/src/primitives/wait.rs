@@ -33,6 +33,18 @@ pub struct SuspendedHandle {
 }
 
 impl SuspendedHandle {
+    /// Phase 2a G3-B: construct a handle from its component parts. Used by
+    /// the engine-side orchestration (`engine_wait.rs`) once it has
+    /// persisted an [`ExecutionStateEnvelope`] and knows the envelope CID
+    /// plus the signal name the suspension is waiting on.
+    #[must_use]
+    pub fn new_for_test(state_cid: Cid, signal: impl Into<String>) -> Self {
+        Self {
+            state_cid,
+            signal: signal.into(),
+        }
+    }
+
     /// CID of the persisted execution state.
     #[must_use]
     pub fn state_cid(&self) -> &Cid {

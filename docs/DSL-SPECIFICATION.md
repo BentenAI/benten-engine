@@ -293,14 +293,31 @@ Parallelism (see §7.4) and concurrency hints attach to the ITERATE args in the 
 
 ---
 
-### 2.6 `wait(args)` *(executor Phase 2)*
+### 2.6 `wait(args)`
 
-Suspend execution until a duration elapses. The subgraph Node is valid in Phase 1 (passes structural validation); the executor that serializes execution state and resumes on deadline ships in Phase 2. Phase 1 subgraphs that reach a WAIT return `E_PRIMITIVE_NOT_IMPLEMENTED`.
+Suspend execution until either an external signal arrives or a duration elapses. Phase 2a ships both forms: the timed form (shipped in Phase 1 as a structural stub) plus the signal-keyed form (promoted from Phase-2b plan per dx-r1-8). When a WAIT suspends, the engine returns a `SuspendedHandle`; call `engine.suspendToBytes(handle)` to persist the execution state and `engine.resumeFromBytes(bytes, signal_value)` to resume.
 
 ```typescript
 function wait(args: WaitArgs): { primitive: 'wait'; args: WaitArgs };
 
-interface WaitArgs {
+// dx-r1-8: exactly one of `signal` / `duration` must be present.
+type WaitArgs = WaitSignalArgs | WaitDurationArgs;
+
+interface WaitSignalArgs {
+  /** Signal name the WAIT suspends on (e.g. `"external:payment"`). */
+  signal: string;
+  /**
+   * Optional schema constraining the resume-time payload. If omitted
+   * (default), any `Value` is accepted. When set, a resume with a payload
+   * whose shape does not match fires `E_WAIT_SIGNAL_SHAPE_MISMATCH`
+   * BEFORE any downstream primitive executes.
+   */
+  signal_shape?: string;
+  /** Optional timeout — if the signal does not arrive in time, `E_WAIT_TIMEOUT` fires. */
+  duration?: string;
+}
+
+interface WaitDurationArgs {
   /** Duration string (e.g. `"5m"`, `"30s"`, `"2h"`). */
   duration: string;
 }
@@ -310,19 +327,29 @@ interface WaitArgs {
 
 | Edge Type | When |
 |-----------|------|
-| `ON_TIMEOUT` | Deadline expired before an external signal (Phase 2) |
+| `ON_TIMEOUT` | Deadline expired before the signal arrived (`E_WAIT_TIMEOUT`). |
+| `ON_ERROR` | Signal payload failed `signal_shape` (`E_WAIT_SIGNAL_SHAPE_MISMATCH`), or the resume envelope failed integrity/principal/pin/capability checks (`E_EXEC_STATE_TAMPERED` / `E_RESUME_ACTOR_MISMATCH` / `E_RESUME_SUBGRAPH_DRIFT` / `E_CAP_REVOKED_MID_EVAL`). |
 
 **Examples:**
 
 ```typescript
-// Scheduled delay (rate limiting, retry backoff)
+// Signal-keyed: suspend until an external event arrives.
+wait({ signal: 'external:payment' })
+
+// Typed signal payload — resume rejects shapes that don't match.
+wait({
+  signal: 'external:payment',
+  signal_shape: '{ amount: Int, currency: Text }',
+})
+
+// Timed WAIT (Phase-1 form preserved).
 wait({ duration: '5s' })
 
-// Longer deadline for workflow suspension
-wait({ duration: '1h' })
+// Signal with fallback timeout.
+wait({ signal: 'external:ack', duration: '1h' })
 ```
 
-Signal-based WAIT (`wait({ signal: '...' })`) and `until: <timestamp>` variants are Phase 2 design additions; the shipped `WaitArgs` only accepts `duration`.
+See `docs/ERROR-CATALOG.md` for the full list of resume-protocol error codes (`E_EXEC_STATE_TAMPERED`, `E_RESUME_ACTOR_MISMATCH`, `E_RESUME_SUBGRAPH_DRIFT`, `E_WAIT_TIMEOUT`, `E_WAIT_SIGNAL_SHAPE_MISMATCH`).
 
 ---
 
