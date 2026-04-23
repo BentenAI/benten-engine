@@ -29,6 +29,18 @@ use std::time::Instant;
 
 use crate::{EvalError, Evaluator, OperationNode, PrimitiveHost, StepResult, Subgraph, TraceStep};
 
+/// G5-B-ii: runtime attribution threading (Inv-14). Stamps an
+/// [`crate::AttributionFrame`] onto every emitted [`TraceStep::Step`] row so
+/// trace consumers can walk back to the authorising `(actor, handler,
+/// grant)` triple.
+pub mod attribution;
+
+/// G5-B-ii / phil-r1-1: pinned empty-extensions `AttributionFrame` fixture
+/// CID. Phase-6 additions to the attribution shape MUST be additive — if the
+/// pinned CID shifts, the shape changed non-additively and the drift gate
+/// (`tests/invariant_14_fixture_cid.rs`) fires.
+pub mod attribution_schema_fixture;
+
 /// Terminal outcome of [`Evaluator::run`].
 ///
 /// Carries the final step's edge label, the `$result` value bound in the

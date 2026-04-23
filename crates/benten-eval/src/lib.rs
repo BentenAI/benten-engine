@@ -293,6 +293,10 @@ pub enum InvariantViolation {
     /// invariants are violated simultaneously. See
     /// `tests/invariants_9_10_12.rs::registration_catch_all_populates_violated_list`.
     Registration,
+    /// Invariant 14 (G5-B-ii): a primitive-type in the subgraph did not
+    /// declare whether it consumes an `AttributionFrame`. Fires at
+    /// registration-time. Maps to `ErrorCode::InvAttribution`.
+    Attribution,
 }
 
 impl InvariantViolation {
@@ -310,6 +314,7 @@ impl InvariantViolation {
             InvariantViolation::IterateNestDepth => ErrorCode::InvIterateNestDepth,
             InvariantViolation::IterateBudget => ErrorCode::InvIterateBudget,
             InvariantViolation::Registration => ErrorCode::InvRegistration,
+            InvariantViolation::Attribution => ErrorCode::InvAttribution,
         }
     }
 }
