@@ -1,254 +1,164 @@
-# Benten Architecture
+# Architecture
 
-**Created:** 2026-04-14
-**Last Updated:** 2026-04-14 (6-crate Phase 1 plan after critic review; added `benten-ivm` and `benten-caps` as separate crates to keep engine thin; version-chain convention stayed in `benten-core`; moved exploratory layers to `future/`)
-**Status:** Committed architecture for Phase 1-4. Speculative layers documented in [`future/`](future/).
-**Audience:** Developers, architects, and critics who need to understand how the Phase 1-4 scope composes.
+The shape of the engine — crates, boundaries, primitives, invariants, and how a request flows through the layers.
+
+For plain-English orientation, start with [`HOW-IT-WORKS.md`](HOW-IT-WORKS.md). This doc assumes you want depth.
 
 ---
 
-## The Committed Architecture (Phase 1-4)
+## Seven crates
 
-Benten's committed architecture has three layers. Two more layers are proposed but not committed — they live in [`future/`](future/).
+The Rust workspace:
 
 ```
-  +------------------------------------------------------+
-  |  Layer 3: APPLICATIONS (Phase 4)                     |
-  |  Thrum CMS migration; reference implementation       |
-  +------------------------------------------------------+
-  |  Layer 2: SYNC & IDENTITY (Phase 3)                  |
-  |  iroh P2P, CRDT merge, Merkle Search Tree diff,      |
-  |  UCAN capabilities, DID/VC, Ed25519, HLC             |
-  +------------------------------------------------------+
-  |  Layer 1: GRAPH ENGINE (Phase 1-2)                   |
-  |  Nodes, Edges, 12 primitives, version chains,        |
-  |  capability hooks, IVM, storage, WASM target         |
-  +------------------------------------------------------+
+crates/
+  benten-errors/    # Stable ErrorCode discriminants. Zero Benten-crate deps.
+                    # Root of the workspace dependency graph.
+  benten-core/      # Node, Edge, Value. Content-addressed hashing
+                    # (BLAKE3 + DAG-CBOR + CIDv1). Version-chain primitives.
+  benten-graph/     # Storage (KVBackend trait + redb impl), indexes, MVCC
+                    # via redb transactions.
+  benten-ivm/       # Incremental View Maintenance. Subscribes to graph
+                    # changes; updates materialized views. Not known to
+                    # the evaluator.
+  benten-caps/      # Capability grants as Nodes. Pre-write hook trait.
+                    # NoAuthBackend default; GrantBackedPolicy ships alongside.
+  benten-eval/      # 12 operation primitives. Iterative evaluator (explicit
+                    # stack, not recursive). Structural validation (14
+                    # invariants). Transaction primitive.
+  benten-engine/    # Composes the above into a public API. Wires the
+                    # capability hook, storage backend, IVM subscriber.
+
+bindings/
+  napi/             # Node.js bindings via napi-rs v3. Same codebase compiles
+                    # to native and WASM.
+
+packages/
+  engine/           # TypeScript DSL wrapper (@benten/engine).
 ```
 
-Additional exploratory layers (Runtime, Economy, Governance, Marketplace) are proposals, not committed scope. They are documented in [`future/`](future/) and inform Phase 1 abstraction boundaries (so we don't foreclose them) but do not appear here as active engineering.
+The crate graph is DAG-shaped: `benten-errors` has no Benten dependencies; every other crate imports from it for error discriminants; `benten-engine` sits at the top and is the only crate applications link against.
 
----
+### Thinness test
 
-## Layer 1: Graph Engine (Phase 1-2 scope)
+Each crate has one responsibility. A reader can use `benten-engine` with `NoAuthBackend` and no IVM subscribers as a content-addressed embedded graph DB, with none of the capability, sync, or application machinery engaged. Features that can live outside the evaluator's main loop are moved into sibling crates.
 
-The foundation. A Rust-native graph execution engine. **Seven crates** after critic review and the Phase-1 Compromise #3 closure (up from the four in the original draft — added `benten-ivm` and `benten-caps` to keep the engine thin, then extracted `benten-errors` to close the error-catalog-dependency concern):
-
-```
-  crates/
-    benten-errors/     # Stable ErrorCode catalog discriminants; zero Benten-crate deps
-    benten-core/       # Node, Edge, Value, content hashing (BLAKE3 + DAG-CBOR + CIDv1)
-    benten-graph/      # Storage (KVBackend trait + redb impl), indexes, MVCC
-    benten-ivm/        # Incremental View Maintenance, subscribes to graph changes
-    benten-caps/       # Capability types + pre-write hook + NoAuthBackend default
-    benten-eval/       # 12 primitives, evaluator, structural validation
-    benten-engine/     # Orchestrator: public API, ties crates together
-
-  bindings/
-    napi/              # Node.js bindings via napi-rs v3 (also compiles to WASM)
-```
-
-### Why seven crates, not four (nor six)
-
-Critic reviews (architecture-purity, engine-philosophy) identified three concerns with the original four-crate plan that together added two crates (`benten-ivm` and `benten-caps`). A fourth extraction (`benten-errors`) landed during Phase 1 to close named compromise #3:
-
-1. **IVM was load-bearing for capability resolution, governance resolution, and event dispatch** — all inside one unvalidated algorithm. Extraction to `benten-ivm` lets the engine evaluator stay ignorant of IVM; IVM subscribes to graph change notifications via the SUBSCRIBE primitive.
-
-2. **Capability enforcement was inside `benten-eval`.** That couples the engine to UCAN forever. Extraction to `benten-caps` with a pre-write hook trait means the engine ships with a `NoAuthBackend` default, and UCAN (or VC, or TEE attestation, or any future policy) is a pluggable backend.
-
-3. **Version chains are a pattern, not a primitive.** They're Nodes + Edges + a CURRENT pointer. Consumers who don't want versioning (ephemeral data, presence channels) shouldn't pay for it.
-
-4. **The `ErrorCode` catalog enum forced a `benten-core` dependency on every crate that only wanted stable string identifiers.** Extraction to `benten-errors` (closes named compromise #3) puts the catalog at the root of the workspace dependency graph — every other crate imports from it with zero Benten-crate coupling, and the TS codegen + drift-detector target a single canonical source.
-
-Version chains land in `benten-core` as an opt-in convention rather than a separate crate — they're thin enough that a trait is overkill, but they're not mandatory.
-
-### Key responsibilities per crate
-
-- **`benten-errors`** — Stable `ErrorCode` enum discriminants mirroring `docs/ERROR-CATALOG.md`. Zero dependencies on other Benten crates; sits at the root of the workspace dependency graph.
-- **`benten-core`** — Node, Edge, Value, content-addressed hashing (BLAKE3 + DAG-CBOR via `serde_ipld_dagcbor`, CIDv1 format), version chain primitives (Anchor + Version Node + CURRENT Edge pattern)
-- **`benten-graph`** — Storage via a `KVBackend` trait (implemented by `benten-storage-redb` for native; future WASM/network-fetch backends plug in), indexes (hash + B-tree), MVCC via redb transactions
-- **`benten-ivm`** — Materialized views maintained via change subscriptions. Per-view strategy selection (Algorithm B default, A for rarely-read, C for complex joins). NOT known to the evaluator.
-- **`benten-caps`** — UCAN-compatible capability grants as Nodes. Pre-write hook trait for policy enforcement. `NoAuthBackend` for embedded/local-only use.
-- **`benten-eval`** — The 12 operation primitives, iterative evaluator (explicit stack, not recursive), structural validation (14 invariants), transaction primitive (begin/commit/rollback)
-- **`benten-engine`** — Composes the above into a public API. Wires the capability hook, storage backend, and IVM subscriber.
-
-### The 12 Operation Primitives (revised 2026-04-14)
-
-| # | Primitive | Purpose |
-|---|-----------|---------|
-| 1 | READ | Retrieve from graph |
-| 2 | WRITE | Mutate graph (auto version-stamp if versioning enabled) |
-| 3 | TRANSFORM | Pure data reshaping (sandboxed expression) |
-| 4 | BRANCH | Conditional routing (forward-only) |
-| 5 | ITERATE | Bounded collection processing |
-| 6 | WAIT | Suspend until signal or timeout |
-| 7 | CALL | Execute another subgraph |
-| 8 | RESPOND | Terminal: single output |
-| 9 | EMIT | Fire-and-forget notification |
-| 10 | SANDBOX | WASM computation (fuel-metered, no re-entrancy) |
-| 11 | SUBSCRIBE | Reactive change notification |
-| 12 | STREAM | Partial/ongoing output with back-pressure |
-
-Dropped from the original 12: **VALIDATE** (BRANCH + TRANSFORM + RESPOND), **GATE** (capability checking uses the `requires` property on any Node, not a separate step). Added: **SUBSCRIBE** (the primitive IVM, sync, and EMIT delivery all compose on top of), **STREAM** (WinterTC SSE, WebSocket messages, LLM token streams).
-
-### Design Principles
-
-- **Thin engine.** Every feature that can be a module is a module.
-- **Stateless evaluator.** No implicit dependency on local storage during subgraph walks.
-- **`KVBackend` trait at `benten-graph`.** redb is one implementation; WASM/network-fetch is a future implementation.
-- **Capability hook.** Engine provides the hook; UCAN/NoAuth/custom policies are backends.
-- **Not Turing complete.** DAGs only. Bounded iteration. Guaranteed termination.
-
-### Output of Phase 1-2
-
-A working engine. TypeScript developers can create/read/update/delete Nodes, define operation subgraphs, maintain materialized views, enforce capabilities, compile the same engine to WASM for browsers/edge, and benchmark against PostgreSQL + AGE on hot-path queries.
-
----
-
-## Layer 2: Sync & Identity (Phase 3 scope)
-
-Distributes the engine across instances and users.
+## The 12 operation primitives
 
 ```
-  crates/
-    benten-sync/    # CRDT merge, sync protocol, Merkle Search Tree diff
-    benten-id/      # Ed25519, UCAN chains (as `benten-caps` backend), DID/VC
+READ       WRITE       TRANSFORM       BRANCH       ITERATE       WAIT
+CALL       RESPOND     EMIT            SANDBOX      SUBSCRIBE     STREAM
 ```
 
-### Key responsibilities
+Each primitive is an Operation Node kind. The evaluator dispatches on `PrimitiveKind` to a per-primitive executor in `crates/benten-eval/src/primitives/`.
 
-- P2P transport via iroh v0.97+ (QUIC-based, dial-by-public-key, NAT traversal with relay fallback)
-- CRDT merge using per-property LWW + HLC; Loro for rich CRDT types where needed
-- Merkle Search Tree diff for efficient subgraph sync (AT Protocol-validated pattern)
-- Light-client verification: received data verified against sender's content-addressed root (IBC-inspired pattern, cheap because we already use content addressing)
-- UCAN capability grants with delegation chain verification (as a `benten-caps` policy backend)
-- DID-based identity (did:key baseline; did:web, did:plc, did:peer as options)
-- HLC timestamps with drift tolerance (uhlc crate)
-- Device-to-device key transfer (QR + ephemeral DH)
-- Optional Shamir threshold key recovery (Web3Auth tKey or Dark Crystal pattern)
+| # | Primitive | Purpose | Live |
+|---|---|---|---|
+| 1 | READ | Retrieve a Node by CID, label, or property | Phase 1 |
+| 2 | WRITE | Persist a Node; version-stamps if versioning is enabled on its label | Phase 1 |
+| 3 | TRANSFORM | Pure expression evaluation over Values | Phase 1 |
+| 4 | BRANCH | Conditional routing (forward-only) | Phase 1 |
+| 5 | ITERATE | Bounded collection processing | Phase 1 |
+| 6 | WAIT | Suspend until signal or timeout; resume with DAG-CBOR state | Phase 2a |
+| 7 | CALL | Invoke another registered subgraph | Phase 1 |
+| 8 | RESPOND | Terminal: produce the handler's output | Phase 1 |
+| 9 | EMIT | Fire-and-forget change notification | Phase 1 |
+| 10 | SANDBOX | WASM computation, fuel-metered, no re-entrancy | Phase 2b |
+| 11 | SUBSCRIBE | Reactive change notification (composition point for IVM) | Phase 2b |
+| 12 | STREAM | Partial output with back-pressure (SSE, WebSockets, LLM tokens) | Phase 2b |
 
-### Output of Phase 3
+Subgraphs containing Phase-2 primitives pass structural validation at Phase 1 (so Phase-1 and Phase-2 graphs are binary-compatible and round-trip through storage). Phase-2 executors return `E_PRIMITIVE_NOT_IMPLEMENTED` at call time until they land.
 
-Two Benten instances sync subgraphs bidirectionally. A user on Device A can work with their graph offline; changes propagate to Device B when peer connectivity exists. Capability grants verified on receipt. Version chain conflicts resolve into commit DAGs.
+## The 14 structural invariants
 
----
+Validated at registration time or fired at runtime, depending on invariant:
 
-## Layer 3: Applications (Phases 4-8 scope)
+1. **Entry/exit well-formedness.**
+2. **Max operation-subgraph depth.**
+3. **Max fan-out per Node.**
+4. **SANDBOX nest depth limit.** (Phase 2b)
+5. **Max total Nodes per subgraph.**
+6. **Max total Edges per subgraph.**
+7. **SANDBOX fuel budget.** (Phase 2b)
+8. **Iteration budget — multiplicative through CALL and ITERATE nesting.** (Phase 2a)
+9. **Type-safety of Value flows.**
+10. **Reachability from entry.**
+11. **System-zone Nodes are unreachable from user subgraphs.** (Phase 2a runtime enforcement)
+12. **Terminal Node presence.**
+13. **Immutability — registered subgraphs are not rewritable.** (Phase 2a 5-row firing matrix)
+14. **Causal attribution — every evaluation step carries a principal / handler / grant chain.** (Phase 2a threading)
 
-Layer 3 is where committed applications run on the engine. The committed scope expands beyond Thrum to include the platform features that make self-composition real, the AI assistant that drives adoption, Gardens MVP for community spaces, and Credits MVP for the economic engine. All compose on the Phase 1 engine without requiring engine changes.
+Invariants 1–3, 5–6, 9–10, 12 ship in Phase 1. Invariants 8, 11, 13, 14 ship in Phase 2a. Invariants 4, 7 ship in Phase 2b with SANDBOX.
 
-### Phase 4: Thrum CMS migration
+## How a request flows
 
-- CMS domain (content types, blocks, compositions, field types) expressed as operation subgraphs
-- Existing Thrum modules + admin migrate
-- 3,200+ behavioral tests pass against the Benten engine
-- Performance competitive with or better than PostgreSQL + AGE baseline
+### Read
 
-### Phase 5: Platform features
+1. Caller invokes `engine.call(handlerId, action, input)`.
+2. `benten-engine` looks up the handler's subgraph CID, reads the subgraph, locates the action entry Node.
+3. `benten-eval` walks from the entry Node, dispatching each Operation Node to its executor:
+   - READ hits IVM views (O(1)) or falls through to `benten-graph` on a miss.
+   - TRANSFORM evaluates a pure expression.
+   - BRANCH routes on a condition.
+   - CALL invokes another registered subgraph.
+   - RESPOND terminates with the handler's output.
+4. Reads flow without capability checks by default. Phase 2a extends check-read to the content path for evaluator-driven reads under the grant-backed policy.
 
-- Schema-driven rendering (materializer pipeline as operation subgraphs)
-- Self-composing admin (admin UI configurable by editing compositions in the graph)
-- Declarative plugin manifest format (requires-caps, provides-subgraphs, migrations)
+### Write (transactional)
 
-### Phase 6: Personal AI Assistant MVP
+1. Same entry flow.
+2. The transaction primitive wraps all WRITEs: begin → operations → commit (or rollback).
+3. Each WRITE hits the capability hook. Denial aborts the transaction; no ChangeEvents fire.
+4. On commit: content is hashed into CIDs, version chains advance (where enabled), the audit sequence advances, ChangeEvents fire to the IVM subscriber.
+5. IVM updates materialized views whose subscription patterns match the changes.
 
-- MCP integration for LLM providers (local + cloud)
-- PARA knowledge organization (Projects / Areas / Resources / Archives as graph Nodes)
-- On-demand tool generation (assistant composes operation subgraphs from primitives)
-- UCAN capability grants for assistant's authority (spending caps, rate limits, intent declarations)
-- Causal attribution of every agent action to a signed user intent
+### Suspend and resume (Phase 2a)
 
-See [`research/explore-personal-ai-assistant.md`](research/explore-personal-ai-assistant.md) for scoping.
+A WAIT primitive suspends the evaluator, produces an `ExecutionStateEnvelope` (DAG-CBOR, content-addressed), and returns a `SuspendedHandle` carrying the envelope CID. The caller persists the envelope bytes.
 
-### Phase 7: Digital Gardens MVP
+At resume the engine runs a 4-step protocol before continuing evaluation:
 
-- Garden creation flow (promote Atrium to Garden, or create new)
-- Admin-configured governance (invitations, roles, basic moderation)
-- Member-mesh replication with bootstrap from any online member
-- Full fractal Groves remain exploratory
+1. **Payload integrity.** The envelope is DAG-CBOR decoded; a mismatch with its declared `payload_cid` fires `E_EXEC_STATE_TAMPERED`.
+2. **Principal binding.** The resumption principal is verified against the caller's claimed identity; mismatch fires `E_RESUME_ACTOR_MISMATCH`.
+3. **Subgraph pin check.** Each pinned subgraph CID is re-verified against the registered-handler table; drift fires `E_RESUME_SUBGRAPH_DRIFT`.
+4. **Capability re-check.** `CapabilityPolicy::check_write` is re-invoked against the persisted head-of-chain grant CID; mid-eval revocation fires `E_CAP_REVOKED_MID_EVAL`.
 
-See [`research/explore-gardens-mvp.md`](research/explore-gardens-mvp.md) for scoping.
+Only after all four steps pass does evaluation resume.
 
-### Phase 8: Benten Credits MVP
+## Storage
 
-- USD-pegged stable currency with treasury-backed reserves
-- FedNow on/off ramp for mint/burn
-- Multi-sig mint/burn with HSM
-- Tab-based periodic net settlement between peers
-- Real-time reserve monitoring
+`benten-graph` exposes a `KVBackend` trait. `RedbBackend` is the Phase-1 implementation: ACID, MVCC (concurrent readers with single writer), crash-safe via copy-on-write B-trees. A future WASM implementation will fetch content-addressed Nodes from peer storage.
 
-All five phases (4-8) are applications composed from the engine's primitives. None require engine core modifications.
+redb transactions wrap every `put_node_with_context` call. The Phase-2a Inv-13 firing matrix dispatches on the write's `WriteAuthority` (User / EnginePrivileged / SyncReplica): User re-puts of an already-persisted CID fire `E_INV_IMMUTABILITY`; privileged dedup paths return `Ok(cid)` without emitting ChangeEvents or advancing the audit sequence (a named compromise — the privileged dedup is a pure read on the backend even though it passes through the write API).
 
-### Not yet committed (Phase 9+ exploratory)
+Content is serialized via `serde_ipld_dagcbor` — the IPLD subset of CBOR with canonical encoding (map keys sorted, no indefinite-length forms). CIDs are v1 with multicodec `0x71` (dag-cbor) and multihash `0x1e` (BLAKE3).
 
-- Full Groves with fractal/polycentric governance
-- Garden/Grove federation (polycentric, cross-community)
-- Knowledge attestation marketplace
-- Benten Runtime (WinterTC edge host)
-- `bentend` peer daemon (general-purpose compute)
-- Broader compute marketplace (arbitrary workloads)
-- DAO transition / Governance Grove
+## Incremental View Maintenance
 
-See [`FULL-ROADMAP.md`](FULL-ROADMAP.md) for the full partition and [`future/`](future/) for exploratory proposals.
+`benten-ivm` subscribes to ChangeEvents from the storage layer and keeps views current. Phase 1 ships five hand-written views covering the hot paths: capability resolution, content listings, change-event fan-out, principal resolution, and view-staleness tallies. Phase 2b generalizes this into Algorithm B (dependency-tracked incremental maintenance) with per-view strategy selection so applications can register their own views.
 
----
+The evaluator does not know IVM exists. Views are materialized Nodes; reads hit them via the normal read path.
 
-## How Requests Flow (Phase 1-4)
+## Capabilities
 
-### Read request
+`benten-caps` defines a pre-write hook trait:
 
-1. Client calls engine API (via napi-rs bindings or direct Rust)
-2. `benten-engine` dispatches to the operation subgraph registered for this request shape
-3. `benten-eval` walks the subgraph:
-   - READ operations hit IVM materialized views (O(1)) or fall through to graph storage
-   - TRANSFORM runs pure expressions
-   - CALL invokes sub-subgraphs
-   - BRANCH routes based on conditions
-4. Each WRITE would invoke the capability hook (`benten-caps`); reads go through without hook by default
-5. Response returns via RESPOND (single) or STREAM (chunked)
-6. `benten-ivm` gets notified of any changes for view maintenance
+```rust
+fn check_write(&self, ctx: &WriteContext) -> Result<Decision, CapError>;
+```
 
-### Write (transactional subgraph)
+The engine's default is `NoAuthBackend` — allows everything, zero overhead — so embedded single-user deployments don't pay for capability machinery.
 
-1. Same entry flow
-2. Transaction primitive wraps all WRITEs in the subgraph (begin → operations → commit)
-3. Each WRITE hits the capability hook; rejection aborts the transaction
-4. On commit: content hashes computed, version chain advanced (if versioning enabled on the Node), IVM views updated via change notifications, sync protocol propagates deltas to peers holding this subgraph (Phase 3+)
-5. If any WRITE fails, all roll back atomically
+A `GrantBackedPolicy` ships alongside: grants are Nodes with `GRANTED_TO` edges, attenuation is verified along the delegation chain, revocation is a Node write. Phase 2a adds TOCTOU refresh at five points (transaction commit, CALL entry, every N iterations of ITERATE, WAIT resume, wall-clock boundary) with a dual monotonic + HLC clock source. Phase 3 adds UCAN as another policy backend.
 
-### Cross-instance sync (Phase 3+)
+## Determinism
 
-1. Instance A writes a Node. HLC timestamp recorded.
-2. `benten-sync` packages the version Node and pushes to peer agreements
-3. Instance B receives; verifies content hash and capability chain
-4. If HLC is within drift tolerance, merge per-property LWW
-5. If conflict, branch the version chain into a commit DAG (both branches valid, resolve on read)
+The canonical fixture CID `bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda` is stable across x86_64 Linux / macOS / Windows and ARM64 macOS. The `.github/workflows/determinism.yml` workflow computes it on every PR; drift is a merge blocker.
 
----
+## The control plane is the graph
 
-## The Graph Is the Control Plane
-
-Every layer is configured through the graph:
-
-- **Capability grants** → CapabilityGrant Nodes with GRANTED_TO Edges
-- **Sync agreements** → SyncAgreement Nodes with subgraph-scope properties
-- **Operation handlers** → registered subgraphs (content-addressed, immutable once registered)
-- **IVM view definitions** → ViewDefinition Nodes with strategy property
-- **Reputation scores** (when economic layer exists) → materialized IVM views
-- **User preferences** (when AI agents exist) → Preference Nodes the agent consults
-
-Configuration is inspectable, forkable, versionable, and auditable by design. No YAML scattered across machines, no opaque admin UIs. The state of any layer is queryable like any other data.
+Everything the engine uses at runtime is in the graph: capability grants (`CapabilityGrant` Nodes with `GRANTED_TO` edges), registered handlers (content-addressed subgraphs, immutable once registered), IVM view definitions (ViewDefinition Nodes with a strategy property), user preferences, change-event queues. The engine does not read configuration from YAML or a config service; it reads Nodes.
 
 ---
 
-## Why This Works
-
-1. **Six crates, one coherent engine.** Each crate has one responsibility. The thinness test (can someone use `benten-engine` for a problem unrelated to communities, sync, or Thrum?) is achievable with `NoAuthBackend` + versioning-disabled + no IVM subscribers.
-
-2. **Phase 1 produces something useful standalone.** The engine with napi-rs bindings is a new kind of embedded graph database with a code-as-graph paradigm. Developers can use it without Phase 2+ layers.
-
-3. **Phase 2+ layers are reachable from Phase 1.** Storage trait, capability hook, content addressing, operation subgraphs, SUBSCRIBE primitive — all designed to support Phase 2-4 without requiring changes to earlier crates.
-
-4. **Commodity where possible, custom where necessary.** iroh, redb, wasmtime, `serde_ipld_dagcbor`, papaya, Ed25519, uhlc, Loro — we compose existing production-quality crates. Our original work is the graph engine itself and eventual economic/governance primitives on top.
-
-5. **Exploratory scope doesn't pressure the engine.** Runtime, Credits, marketplace, bentend — all in [`future/`](future/). The engine is built to not foreclose them, but they do not appear in committed architecture until they earn their place.
+For the paths this will take next, see [`HOW-IT-WORKS.md`](HOW-IT-WORKS.md) "The path from here." For every error the engine surfaces, see [`ERROR-CATALOG.md`](ERROR-CATALOG.md).

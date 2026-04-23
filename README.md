@@ -1,20 +1,29 @@
 # Benten Engine
 
-**The engine for the decentralized web.**
+> Everything is a graph; materialized as anything.
+> Unified graph store and runtime in Rust.
 
-Benten is a Rust graph execution engine where every platform capability composes on top rather than being built in. On it, we're building personal AI assistants that replace the paid software stack — organizing your knowledge and generating the tools you need on demand, all running on hardware you trust. The platform is funded by treasury interest on its USD-pegged stable currency.
+Your backend is a graph.
+Your frontend is a graph.
+Your data is a graph.
+Your AI is a graph.
+Your community is a graph.
 
-**Status:** Phase 1 complete (2026-04-21). Content-addressed graph engine with 8-primitive evaluator, 5-view IVM, pluggable capability policy, TypeScript bindings, scaffolder, and the 10-minute DX path shipped. Phase 2 (evaluator completion + WASM SANDBOX + remaining invariants) is the next milestone. See [`docs/FULL-ROADMAP.md`](docs/FULL-ROADMAP.md) for the committed 8-phase plan.
+Everything is a graph; materialized as anything.
 
-## Three Pillars
+One engine. Data and logic live in the same content-addressed structure; the engine walks that structure to execute.
 
-1. **The engine** — a Rust graph execution engine where data and code are one content-addressed structure. Every capability (auth, sync, storage, compute, governance, economics) composes from 12 operation primitives.
-2. **The adoption driver** — personal AI assistants that organize your life via PARA methodology, generate tools on demand, and replace the paid software stack with one you own.
-3. **The economic engine** — treasury bond interest on USD-pegged credit reserves (primary revenue), with a peer-to-peer compute network providing secondary revenue and driving credit utilization.
+## What this is
 
-See [`docs/VISION.md`](docs/VISION.md) for the full articulation.
+A Rust graph engine where **the application is just more graph**. Handlers aren't source-code strings — they're subgraphs of operation Nodes that the engine walks. Data, code, queries, capabilities, and audit trails share one representation and one storage layer.
 
-## Hello Benten
+- **Content-addressed.** Every Node has a CID (BLAKE3 + DAG-CBOR). Identical content has identical identity across machines.
+- **Bounded by construction.** Handlers are DAGs of 12 operation primitives. Not Turing complete; guaranteed to terminate.
+- **Incremental by default.** Materialized views stay current through change subscriptions, so common reads are O(1).
+- **Capability-shaped, policy-pluggable.** The engine has a pre-write hook; policy backends plug in. The default is open; a revocation-aware grant backend ships with it.
+- **Content-identity is the sync story.** Because everything is a CID, two machines merge by exchanging content, not by reconciling schemas.
+
+## What it looks like
 
 ```sh
 npx create-benten-app my-app
@@ -22,13 +31,13 @@ cd my-app && npm install && npm test
 ```
 
 ```typescript
-// Your first handler — no schema, no auth, no config required:
 import { crud } from '@benten/engine';
+
+// A five-action handler: create / get / list / update / delete.
 export const postHandlers = crud('post');
 ```
 
 ```typescript
-// Use it:
 import { Engine } from '@benten/engine';
 
 const engine = await Engine.open('.benten/my-app.redb');
@@ -38,90 +47,52 @@ await engine.call(handler.id, 'post:create', { title: 'Hello', body: 'Works.' })
 const { items } = await engine.call(handler.id, 'post:list', {});
 ```
 
-Every call produces a deterministic, content-addressed audit trail you can inspect:
+The handler is data. You can inspect it:
+
 ```typescript
-console.log(handler.toMermaid());                             // Visual diagram of the subgraph
-console.log(await engine.trace(handler.id, 'post:create', {...}));  // Per-step evaluation trace
+console.log(handler.toMermaid());                                     // visual diagram
+console.log(await engine.trace(handler.id, 'post:create', { ... })); // step-by-step trace
 ```
 
-(Dev server with hot reload is Phase 2; Phase 1 ships the `npm test` path — the scaffolder smoke test exercises six exit-criterion gates, each mechanically verifiable.)
+## Current state
 
-That's the entire onboarding surface. Complexity (capabilities, IVM views, version chains, P2P sync, AI integration) is opt-in as you need it.
+Phase 1 shipped (2026-04-21). Phase 2a is in flight — extends the evaluator with the WAIT primitive, the full 14-invariant set, capability TOCTOU hardening, and DAG-CBOR suspended-state persistence. Phase 2b adds WASM SANDBOX, STREAM, and SUBSCRIBE.
 
-See [`docs/QUICKSTART.md`](docs/QUICKSTART.md) for the full 10-minute path.
+**Live today:** the eight Phase-1 primitives (READ, WRITE, TRANSFORM, BRANCH, ITERATE, CALL, RESPOND, EMIT), the `crud()` zero-config path, content-addressed storage with MVCC, hand-written IVM views, pluggable capability policy, scaffolder, debug tooling, `handler.toMermaid()` and `engine.trace()` introspection. TypeScript bindings via napi-rs; Rust API available directly.
 
-## What's Different
+**Not yet live:** SANDBOX, STREAM, and SUBSCRIBE return `E_PRIMITIVE_NOT_IMPLEMENTED` until Phase 2b. P2P sync and UCAN land in Phase 3. See [`docs/HOW-IT-WORKS.md`](docs/HOW-IT-WORKS.md) for how the phases compose.
 
-- **Code IS graph.** Handlers are subgraphs of operation Nodes, not source code strings. Inspectable, auditable, statically analyzable, versionable, forkable — and directly composable by AI agents.
-- **Answers exist before questions.** Incremental View Maintenance pre-computes query results. Reads are O(1).
-- **Not Turing complete by design.** Bounded DAGs. Guaranteed termination. WASM sandbox is the controlled escape hatch.
-- **Capabilities as data, policy as plugin.** UCAN-compatible grants stored as Nodes. Pluggable policy backends.
-- **History IS the graph.** Version chains with content-addressed hashing (CIDv1). Undo, audit, time-travel are graph traversals.
+## Start here
 
-## Committed Scope (Phase 1-8)
-
-| Phase | Deliverable |
-|-------|-------------|
-| **1** | ✅ Core engine: 7 crates, 12 primitive types (8 executable), 8 of 14 structural invariants, 5 hand-written IVM views, pluggable capability policy, napi-rs TypeScript bindings, scaffolder + debug tooling |
-| **2** | Evaluator completion, WASM build target, wasmtime SANDBOX with fuel metering |
-| **3** | P2P sync (iroh, CRDT, Merkle Search Trees, DID). **Atriums ship here.** |
-| **4** | Thrum CMS migration to the engine — 3,200+ tests pass |
-| **5** | Platform features — schema-driven rendering, self-composing admin, declarative plugin manifests |
-| **6** | **Personal AI Assistant MVP** — MCP, PARA knowledge organization, on-demand tool generation |
-| **7** | **Digital Gardens MVP** — community spaces with admin governance, invitation flows, moderation |
-| **8** | **Benten Credits MVP** — USD-pegged currency, treasury-backed, FedNow on/off ramp, tab settlement |
-
-Everything beyond Phase 8 (full Groves, federation, general compute marketplace, DAO transition) is exploratory. See [`docs/future/`](docs/future/).
-
-## Start Here
-
-| If you want... | Read |
-|---------------|------|
+| If you want… | Read |
+|---|---|
 | The 10-minute quickstart | [`docs/QUICKSTART.md`](docs/QUICKSTART.md) |
-| The vision and three pillars | [`docs/VISION.md`](docs/VISION.md) |
-| How the layers compose | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
-| The 8-phase plan (committed + exploratory) | [`docs/FULL-ROADMAP.md`](docs/FULL-ROADMAP.md) |
-| The Rust engine blueprint | [`docs/ENGINE-SPEC.md`](docs/ENGINE-SPEC.md) |
-| The TypeScript developer API | [`docs/DSL-SPECIFICATION.md`](docs/DSL-SPECIFICATION.md) |
-| Error codes and fixes | [`docs/ERROR-CATALOG.md`](docs/ERROR-CATALOG.md) |
-| Terms with specific meaning | [`docs/GLOSSARY.md`](docs/GLOSSARY.md) |
+| The plain-English tour of Benten | [`docs/HOW-IT-WORKS.md`](docs/HOW-IT-WORKS.md) |
+| The architecture at depth — crates, boundaries, invariants | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| Error codes by discriminant, with context | [`docs/ERROR-CATALOG.md`](docs/ERROR-CATALOG.md) |
+| Terms that mean something specific here | [`docs/GLOSSARY.md`](docs/GLOSSARY.md) |
 | How to contribute | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| How to report a security issue | [`SECURITY.md`](SECURITY.md) |
 
-## Repository Structure
+## Repository layout
 
 ```
 benten-engine/
-├── crates/          # Rust workspace crates (7 at Phase 1 close: benten-errors, benten-core, benten-graph, benten-ivm, benten-caps, benten-eval, benten-engine)
-├── bindings/        # napi-rs bindings (native + WASM target via napi-rs v3)
-├── packages/        # TypeScript DSL wrapper (@benten/engine)
+├── crates/          # 7-crate Rust workspace (see ARCHITECTURE)
+├── bindings/napi/   # Node.js bindings (native + WASM) via napi-rs v3
+├── packages/engine/ # TypeScript DSL wrapper (@benten/engine)
 ├── tools/           # create-benten-app scaffolder + dev tooling
-├── tests/           # Cross-crate integration tests and benchmarks
-├── docs/
-│   ├── VISION, ARCHITECTURE, ENGINE-SPEC, PLATFORM-DESIGN, BUSINESS-PLAN,
-│   │   DSL-SPECIFICATION, FULL-ROADMAP, QUICKSTART, ERROR-CATALOG,
-│   │   SECURITY-POSTURE, TRANSFORM-GRAMMAR, GLOSSARY
-│   └── future/      # Exploratory proposals not in committed scope
-├── scripts/         # Codegen + drift-detect tooling
-├── .github/         # 13 CI workflows (determinism, wasm, supply-chain, fuzz, mutants, …)
-├── Cargo.toml       # Workspace root
-├── CONTRIBUTING.md
-└── README.md        # This file
+├── docs/            # Public documentation
+└── .github/         # CI workflows
 ```
 
-## The 12 Operation Primitives
+## Tech stack
 
-```
-READ     WRITE     TRANSFORM    BRANCH     ITERATE    WAIT
-CALL     RESPOND   EMIT         SANDBOX    SUBSCRIBE  STREAM
-```
+Rust 2024 edition, MSRV 1.89, stable 1.94+.
 
-Empirically validated against 5 real handlers with 2.5% SANDBOX rate. See [`docs/validation/paper-prototype-handlers.md`](docs/validation/paper-prototype-handlers.md). (Note: paper prototype used the original set — VALIDATE and GATE were dropped, SUBSCRIBE and STREAM added during the 2026-04-14 critic review. Phase 1 ships all 12 primitive *types* with structural validation; 8 have live executors today — READ, WRITE, TRANSFORM, BRANCH, ITERATE, CALL, RESPOND, EMIT — and the other 4 — WAIT, STREAM, SUBSCRIBE, SANDBOX — return `E_PRIMITIVE_NOT_IMPLEMENTED` until their Phase 2 executors land.)
+Core: `blake3`, `serde_ipld_dagcbor`, `multihash`, `redb` 4, `papaya`, `mimalloc`, `thiserror` 2, `tracing`, `criterion` 0.8, `proptest`, `wasmtime` (Phase 2b), `napi-rs` 3, `cargo-nextest`.
 
-## Tech Stack (Validated April 2026)
-
-Rust 1.94+ (2024 edition) · blake3 · serde_ipld_dagcbor · multihash (CIDv1) · redb 4 · papaya · mimalloc · thiserror 2 · tracing · criterion 0.8 · proptest · wasmtime · napi-rs 3 · cargo-nextest
-
-Phase 3+: iroh · Loro · ed25519-dalek · ssi · uhlc
+Phase 3+: `iroh`, `Loro`, `ed25519-dalek`, `ssi`, `uhlc`.
 
 ## License
 

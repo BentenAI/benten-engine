@@ -222,10 +222,12 @@ fn edges_from_on_denied_cid_returns_empty_symmetric_with_zero_outgoing() {
 }
 
 #[test]
+#[ignore = "SECURITY-POSTURE.md is internal-only as of the 2026-04-23 default-untrack pass; re-enable when a public security posture doc lands."]
 fn compromise_2_option_c_is_documented() {
-    // The posture doc must name Option C as the shipped Phase-1
-    // behaviour so operators reading SECURITY-POSTURE.md understand
-    // why `engine.getNode(cid)` returns null on both denial and miss.
+    // Pinned the Phase-1 Option C posture by reading SECURITY-POSTURE.md
+    // from disk. Now that the posture doc is internal-only, this
+    // content-pin has no public-facing payoff; re-enable against the
+    // public security doc whenever that lands.
     let posture = std::fs::read_to_string("../../docs/SECURITY-POSTURE.md")
         .or_else(|_| std::fs::read_to_string("docs/SECURITY-POSTURE.md"))
         .expect("SECURITY-POSTURE.md must be present at repo root");

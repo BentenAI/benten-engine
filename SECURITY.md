@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Benten Engine is in Phase-1 active development as of 2026-04. Only the latest commit on `main` receives security updates. No versioned releases have shipped yet; see [docs/SECURITY-POSTURE.md](docs/SECURITY-POSTURE.md) for the current Phase-1 security posture and named compromises.
+Benten Engine is in active pre-release development as of 2026-04. Only the latest commit on `main` receives security updates. No versioned releases have shipped yet.
 
 ## Reporting a vulnerability
 
@@ -34,4 +34,4 @@ This policy covers the `benten-engine` repository and its published crates / npm
 - Findings that require an attacker to already have root / filesystem access to the host machine
 - Theoretical issues without a demonstrated exploit path
 - Denial-of-service via pathological inputs to the TypeScript DSL (Phase 1's threat model is embedded/single-process — the process is trusted)
-- Compromises already named in [docs/SECURITY-POSTURE.md](docs/SECURITY-POSTURE.md) (these are documented known limitations; new findings that sharpen the scope of a named compromise ARE in scope)
+- Documented known limitations (see the release notes and changelog entries for the current commit); new findings that sharpen the scope of a known limitation ARE in scope

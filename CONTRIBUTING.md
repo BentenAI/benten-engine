@@ -1,156 +1,93 @@
-# Contributing to Benten Engine
+# Contributing
 
-First time reading the repo? Start with [`docs/VISION.md`](docs/VISION.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+Thanks for your interest. This repo is under active development; contributions are welcome but expect some churn, especially during phase transitions.
+
+## Before you start
+
+- Read [`docs/HOW-IT-WORKS.md`](docs/HOW-IT-WORKS.md) for orientation.
+- Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the crate layout and invariant set.
+- For large changes, open an issue first. The engine's architecture is still settling at its edges; coordination avoids wasted work.
 
 ## Prerequisites
 
-- Rust 2024 edition. MSRV (minimum supported) is **1.89** (raised from 1.85 to match the `redb` 4.0.0 floor, which is a non-optional workspace dep); dev version is **1.94+** (pinned to `stable` channel in `rust-toolchain.toml`, which auto-installs the current stable on first cargo invocation). Install via `rustup`.
-- Node.js 22+ and npm (for TypeScript bindings and IVM benchmark reproducibility).
-- `cargo-nextest` for faster tests: `cargo install cargo-nextest`.
+- Rust 2024 edition. MSRV is **1.89** (bounded by `redb` 4's floor); dev version is **1.94+** (pinned to `stable` in `rust-toolchain.toml`, which auto-installs on first cargo invocation).
+- Node.js 22+ and npm (for the TypeScript bindings and integration tests).
+- `cargo-nextest`: `cargo install cargo-nextest`.
 
 ## Setup
 
 ```sh
-git clone <repo>
+git clone https://github.com/BentenAI/benten-engine.git
 cd benten-engine
-# rust-toolchain.toml auto-installs the correct Rust version on first cargo command
 cargo build --workspace
 cargo nextest run --workspace
 ```
 
-Phase 1 has not yet produced Rust crates — they will be created during the spike. Until then, `cargo` commands operate on an empty workspace.
+The test suite is designed for `cargo nextest`. See "Why nextest is load-bearing" below.
 
-## Development Philosophy
+## Before you push
 
-**"Do it right, not fast."** Quality over speed. Do not cut scope. Do not ship half-built features to hit timelines.
+Run locally:
 
-**Pre-work catches bugs before code.** Planning, dependency validation, critic reviews, and spikes catch architectural issues that would be expensive to fix later. Skipping pre-work has always cost more time than it saved.
-
-**Every question is potentially plan-changing.** The project's direction has shifted several times based on good questions. Ask them. Challenge assumptions. Revisions are cheaper than wrong implementations.
-
-## The ADDL Process
-
-All substantive work follows Agent-Driven Development Lifecycle. Summary:
-
-```
-PRE-WORK
-  Plan → 2+ critic reviews → triage every finding → revised plan
-
-FULL ADDL (for feature phases)
-  R1: 5 spec agents (architecture, correctness, security, DX, philosophy)
-  R2: 1 test plan synthesis agent
-  R3: 5 test writing agents (TDD: tests before code)
-  R4: 2 test review agents
-  R5: Implementation groups (parallel agents + commit + full tests + mini-review)
-  R4b: 2 post-implementation test review agents
-  R6: 14-agent quality council
+```sh
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo nextest run --workspace
 ```
 
-Full details: [`docs/DEVELOPMENT-METHODOLOGY.md`](docs/DEVELOPMENT-METHODOLOGY.md).
+CI runs the same checks plus cross-target determinism, supply-chain hygiene, invariant drift detection, and doc-build with warnings-as-errors. The determinism workflow computes the canonical fixture CID on Linux/macOS/Windows; any drift is a merge blocker.
 
-## Non-Negotiable Process Rules
+## Commits
 
-1. **After every review:** fix all fixable items, write deferrals to specific docs with phase targets, explain all disagreements. Never skip by severity.
-2. **When triage says "fix now" — write the code.** Do not say "noted for implementation."
-3. **Stay in the current phase.** Flag scope detours explicitly and let the user decide.
-4. **Mini-review after every implementation group.** One correctness agent, properly briefed with files changed. Fix all findings before next group.
-5. **No deprecated aliases or backward-compat shims.** Fresh project. Delete don't comment.
-6. **Doc updates in the LAST implementation group,** not afterthought.
-7. **Explain in plain English first,** technical details second.
-8. **Don't combine agents.** Each agent gets its own prompt with its own scope.
-9. **Full quality council for feature phases.** Only pure correctness work gets a reduced council.
-10. **The user is a co-architect.** Present options, not just results.
-11. **Run the full test suite after every commit.** Indirect breakage is real.
-12. **Fix pre-existing issues** under ~15 minutes if found during review.
+- Conventional commits: `<type>(<scope>): <summary>`. Types: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `perf`, `build`.
+- One logical change per commit. Commit messages explain **why**, not just what.
+- Do not amend merged commits or force-push to `main`.
 
-## Commits and PRs
+## Why nextest is load-bearing
 
-- Write descriptive commit messages. Explain **why**, not just what.
-- Keep commits atomic — one logical change per commit.
-- Before committing, run:
-  ```sh
-  cargo fmt --all
-  cargo clippy --workspace --all-targets -- -D warnings
-  cargo nextest run --workspace
-  ```
-- CI runs the same checks plus `cargo doc` with warnings-as-errors. See `.github/workflows/ci.yml`.
+The test suite is designed to run under `cargo nextest run`. That choice is load-bearing for correctness — not just speed.
 
-## Running tests: nextest is load-bearing
+The version-chain substrate in `benten-core/src/lib.rs` keeps two process-global states: `ANCHOR_COUNTER` (an `AtomicU64` issuing unique anchor IDs) and `U64_CHAINS` (a `spin::Mutex<BTreeMap<...>>` mapping anchor IDs to CID chains). Phase 1 deliberately scopes these to the process; a Phase-2 `AnchorStore` trait will push them behind a handle. The test suite writes to them from ~50 call sites across five integration-test files.
 
-The test suite is designed to run under `cargo nextest run`, and that
-choice is load-bearing for correctness — not just speed. A couple of
-test-infrastructure contracts depend on it:
+`cargo nextest run` runs each integration-test binary in its own process, so cross-binary interactions are naturally isolated. Plain `cargo test` (without `--test-threads=1`) runs all tests in a single process and can interleave writes across tests in the same binary; assertions that depend on a specific anchor ID or chain length drift under that runner.
 
-- **Process isolation for test-globals.** The version-chain substrate
-  in `benten-core/src/lib.rs` keeps two process-global states —
-  `ANCHOR_COUNTER` (an `AtomicU64` issuing unique anchor ids) and
-  `U64_CHAINS` (a `spin::Mutex<BTreeMap<...>>` mapping anchor ids to
-  CID chains). Phase 1 deliberately scopes these to the process — a
-  Phase-2 `AnchorStore` trait will push them behind a handle — and the
-  test suite writes to them from ~51 call sites across 5 integration
-  test files. `cargo nextest run` runs each integration test binary
-  in its **own process**, so cross-binary interactions are isolated
-  naturally. `cargo test` (without `--test-threads=1`) runs all tests
-  in a **single process** and will interleave `U64_CHAINS` writes
-  across tests in the same binary; assertions that depend on a
-  specific anchor id or chain length may see drift under that runner.
+`.config/nextest.toml` pins `retries = 0` in both default and CI profiles. The invariant is zero hidden flakiness — a test that fails once is investigated, not retried.
 
-- **Flakiness contract.** The `.config/nextest.toml` file pins
-  `retries = 0` in both the default and CI profiles. The invariant
-  is "zero hidden flakiness" — a test that fails once has to be
-  investigated, not retried. `cargo nextest run` honors that pin
-  automatically; ad-hoc retry via shell loops defeats the contract.
-
-Run `cargo nextest run --workspace` locally to match CI. If nextest is
-unavailable, `cargo test --workspace --jobs 1 -- --test-threads=1` is
-the second-best approximation — it serializes tests inside each
-binary, avoiding the interleaving that would otherwise perturb the
-globals above. Do not rely on assertion-level ordering between tests
-in the same file under any runner.
-
-## Style
-
-- **Rust:** `rustfmt` and `clippy` with the configs at the repo root. Workspace lints are set in `Cargo.toml`; crates inherit.
-- **TypeScript:** 2-space indent, double quotes, trailing commas. `.editorconfig` enforces.
-- **Markdown:** 2-space indent, preserve trailing whitespace in docs (for intentional line breaks).
-
-## Naming Conventions
-
-- **`UPPERCASE-KEBAB.md`** — canonical specifications and contracts (VISION, ARCHITECTURE, ENGINE-SPEC, README, CONTRIBUTING, GLOSSARY, DECISION-LOG).
-- **`lowercase-kebab.md`** — research, exploration, critique, validation artifacts.
-- **Rust:** `snake_case` for modules/functions, `UpperCamelCase` for types.
-- **TypeScript:** `camelCase` for values/functions, `UpperCamelCase` for types/classes.
-
-## Running Critics
-
-Critics are AI agents with specific perspectives (architecture-purity, developer-experience, security-trust, composability-extensibility, etc.). They review specs or implementations and produce findings. Triage every finding:
-- **Fix now:** write the fix, verify it, commit.
-- **Defer:** write the deferral to a specific doc with a phase target.
-- **Disagree:** explain why.
-
-"Noted" is not an acceptable response.
+If nextest is unavailable: `cargo test --workspace --jobs 1 -- --test-threads=1` is the second-best approximation. It serializes tests inside each binary, avoiding the interleaving that perturbs the globals above.
 
 ## Supply chain
 
-The workspace enforces supply-chain hygiene via CI. See `deny.toml` + `.github/workflows/supply-chain.yml`.
+The workspace enforces supply-chain hygiene via `cargo-deny` and `.github/workflows/supply-chain.yml`:
 
-- **License allowlist** — MIT / Apache-2.0 (with LLVM-exception) / BSD-2 / BSD-3 / CC0 / ISC / Unicode-DFS-2016 / Unicode-3.0 / Zlib. Anything else fails the build. If a transitive dep pulls in a non-allowed license, either (a) replace the dep, (b) add a narrowly-scoped exception in `deny.toml` naming the reviewer + rationale, or (c) pin a pre-license-change version.
-- **RUSTSEC advisories** — `cargo-deny check` fails on any advisory against the current dep tree. `yanked = "deny"` catches yanks in real time (this is the setting that would have caught the 2026-04-14 core2 event before the spike hit it). A weekly scheduled job re-runs `cargo audit` against the committed lockfile and opens a GitHub issue when new advisories land, so the dep watch doesn't rely on someone pushing a PR.
-- **`cargo build --locked`** — CI rebuilds from the committed lockfile and fails if resolution would change. This catches forgotten `cargo update` commits.
-- **Git patches** — every `[patch.crates-io]` git source must be listed in `deny.toml`'s `allow-git`. New forks require updating both the `Cargo.toml` patch entry and `deny.toml`.
+- **License allowlist.** MIT, Apache-2.0 (with LLVM-exception), BSD-2, BSD-3, CC0, ISC, Unicode-DFS-2016, Unicode-3.0, Zlib. Anything else fails the build.
+- **RUSTSEC advisories.** `cargo-deny check` fails on any advisory against the current dependency tree. A weekly scheduled job re-runs `cargo audit` and opens an issue on new advisories.
+- **`cargo build --locked`.** CI fails if resolution would change. Forgot to commit a `cargo update`? CI catches it.
+- **Git patches.** Every `[patch.crates-io]` git source must appear in `deny.toml`'s `allow-git` list.
 
-### If a dep is yanked mid-phase (the protocol)
+If a dep is yanked mid-development, the protocol is: open a `supply-chain` + `needs-triage` issue within 24h, pin by commit SHA (fork to `BentenAI/<crate>` if the upstream needs work), file an upstream fix, block the PR until the tree is green, and remove the patch once the upstream ships a fix.
 
-1. **Open a tracking issue** labeled `supply-chain` + `needs-triage` within 24h of the yank notification (the weekly audit issue is the canonical trigger).
-2. **Pin by commit SHA** — if the upstream needs work, fork to `BentenAI/<crate>` and add a pinned-by-hash `[patch.crates-io]` entry. Update `deny.toml`'s `allow-git` in the same PR.
-3. **File the upstream fix** if one is needed. The rust-cid#185 fork + upstream PR pattern is the template — minimal diff, co-ordinate with sibling-crate PRs when possible, add a corresponding issue comment on the tracking thread.
-4. **Block the PR merge** until the dep tree is green again. A yanked transitive is never an acceptable merge state.
-5. **Track the revert** — when the upstream fix merges and a new release is cut, remove the `[patch.crates-io]` entry and close the tracking issue. `deny.toml`'s `allow-git` entry is removed in the same PR.
+## Style
 
-## Reporting Issues
+- **Rust:** `rustfmt` and `clippy` with the configs at the repo root.
+- **TypeScript:** 2-space indent, double quotes, trailing commas. `.editorconfig` enforces.
+- **Markdown:** 2-space indent.
 
-For the current pre-implementation phase: raise questions directly with Ben. Once code lands, use GitHub issues with the relevant phase label.
+## Naming conventions
 
-## Acknowledgments
+- **`UPPERCASE-KEBAB.md`** — canonical specifications and contracts (README, CONTRIBUTING, SECURITY, ARCHITECTURE, HOW-IT-WORKS, ERROR-CATALOG, GLOSSARY, QUICKSTART).
+- **Rust:** `snake_case` for modules and functions, `UpperCamelCase` for types.
+- **TypeScript:** `camelCase` for values and functions, `UpperCamelCase` for types and classes.
 
-Benten is a successor to the Thrum project (V3 TypeScript platform, 15 packages, 3,200+ tests). Many design decisions descend from that work. See [`docs/PROJECT-HISTORY.md`](docs/PROJECT-HISTORY.md).
+## Reporting issues
+
+Use GitHub issues. Include:
+
+- Rust version (`rustc --version`) and platform
+- Minimal reproduction if behavioral
+- Relevant error codes (see [`docs/ERROR-CATALOG.md`](docs/ERROR-CATALOG.md))
+
+For security issues, please follow [`SECURITY.md`](SECURITY.md) instead of filing a public issue.
+
+## License
+
+By contributing, you agree that your contributions will be dual-licensed under MIT and Apache-2.0, matching the repository.

@@ -14,7 +14,7 @@ npm run build        # tsc -> dist/
 
 ## Files
 
-- `src/handlers.ts` — `crud('post')` zero-config handler. Edit this to add capabilities, schemas, or custom TRANSFORM logic. See `docs/DSL-SPECIFICATION.md` in the Benten repo for the full options shape.
+- `src/handlers.ts` — `crud('post')` zero-config handler. Edit this to add capabilities, schemas, or custom TRANSFORM logic.
 - `src/index.ts` — entry point. Opens the engine, registers the handlers, logs the registered handler id.
 - `test/smoke.test.ts` — Phase 1 exit-criterion smoke tests. Six `it()` blocks:
   1. `register_succeeds`

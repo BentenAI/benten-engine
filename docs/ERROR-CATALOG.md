@@ -242,7 +242,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 - **Message:** "TRANSFORM expression failed to parse: {reason} at position {offset}"
 - **Context:** `{ reason: string, offset: number, expression: string, grammar_doc: string }`
-- **Fix:** The TRANSFORM expression language is a positive-allowlist subset of JavaScript. Any token or AST shape not in the published grammar (`docs/TRANSFORM-GRAMMAR.md`) is rejected. Common causes: closures, `this`, imports, template literals with expressions, tagged templates, optional-chained method calls, computed property names referencing `__proto__`/`constructor`/`Symbol.*`, `new`/`with`/`eval`/`yield`/`async`/`await`, destructuring with getters. See the grammar doc's "Rejected constructs" appendix.
+- **Fix:** The TRANSFORM expression language is a positive-allowlist subset of JavaScript. Any token or AST shape not in the allowlist is rejected. Common causes: closures, `this`, imports, template literals with expressions, tagged templates, optional-chained method calls, computed property names referencing `__proto__`/`constructor`/`Symbol.*`, `new`/`with`/`eval`/`yield`/`async`/`await`, destructuring with getters.
 - **Thrown at:** Registration (TRANSFORM parser runs at registration time)
 - **Phase:** 1
 
