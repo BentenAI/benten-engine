@@ -79,12 +79,17 @@ pub fn evaluate(sg: &Subgraph, ctx: &mut EvalContext, input: benten_core::Value)
 /// See [`primitives::wait::resume`].
 pub fn resume(
     _sg: &Subgraph,
-    _ctx: &mut EvalContext,
-    _handle: WaitOutcome,
-    _signal: WaitResumeSignal,
+    ctx: &mut EvalContext,
+    handle: WaitOutcome,
+    signal: WaitResumeSignal,
 ) -> Outcome {
-    // Phase-2a stub: run-time tests fail at the nested `todo!()`.
-    todo!("Phase 2a G3-B: crate-root resume alias per wait_timeout / wait_signal_shape tests")
+    let state_cid = handle.state_cid();
+    let meta = primitives::wait::metadata_for_cid(&state_cid);
+    match primitives::wait::resume_with_meta(meta, signal, ctx.elapsed_ms()) {
+        Ok(WaitOutcome::Complete(v)) => Outcome::Complete(v),
+        Ok(wo @ WaitOutcome::Suspended(_)) => Outcome::Suspended(wo),
+        Err(e) => Outcome::Err(e.code()),
+    }
 }
 
 /// Phase 2a G4-A test harness: expose a budget-probe for the multiplicative
@@ -1028,14 +1033,27 @@ impl SubgraphBuilder {
 
     /// Phase 2a G3-B: WAIT signal variant with optional static typing (DX
     /// signal-payload typing addendum). Takes a [`SignalShape`].
+    ///
+    /// The shape is encoded into the node's `signal_shape` property so the
+    /// evaluator's resume path can re-constitute it without a side table.
+    /// `SignalShape::Any` → no property written (absence == untyped). A
+    /// `SignalShape::Typed(v)` → store the inner `v` under `signal_shape`.
+    /// The `build_validated` path rejects a `Value::Bytes` poisoned
+    /// `signal_shape` property because legitimate shape encodings round-trip
+    /// as `Int` / `Map` / `Null`, never as a bytestring.
     pub fn wait_signal_typed(
         &mut self,
         prev: NodeHandle,
         signal_name: impl Into<String>,
-        _shape: crate::SignalShape,
+        shape: crate::SignalShape,
     ) -> NodeHandle {
-        // TODO(phase-2a-G3-B): encode shape into a property.
-        self.wait_signal(prev, signal_name)
+        let h = self.wait_signal(prev, signal_name);
+        if let crate::SignalShape::Typed(v) = shape
+            && let Some(n) = self.nodes.get_mut(h.0 as usize)
+        {
+            n.properties.insert("signal_shape".into(), v);
+        }
+        h
     }
 
     /// Phase 2a G3-B: WAIT signal variant with explicit timeout.

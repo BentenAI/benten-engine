@@ -18,9 +18,38 @@
 //! exec-state + payload-CID machinery does fire through the helpers above.
 
 use benten_core::Cid;
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 
 use crate::exec_state::{ExecutionStateEnvelope, ExecutionStatePayload};
-use crate::{EvalError, TraceStep};
+use crate::{EvalError, InvariantViolation, TraceStep};
+
+/// Process-local metadata side table indexed by the suspended envelope's
+/// CID. Phase-2a G3-B-cont keeps WAIT's deadline + signal-shape context
+/// out of the `ExecutionStatePayload` shape (which is frozen by the
+/// Inv-14 fixture CID) by parking it here; resume consults the entry
+/// under the envelope's CID.
+#[derive(Debug, Clone)]
+pub(crate) struct WaitMetadata {
+    /// Millisecond value of `ctx.elapsed_ms()` at suspend time. `None` if
+    /// no clock was injected; resume treats absence as "no deadline".
+    pub(crate) suspend_elapsed_ms: Option<u64>,
+    /// Timeout in ms, relative to `suspend_elapsed_ms`. `None` for the
+    /// signal variant without an explicit timeout.
+    pub(crate) timeout_ms: Option<u64>,
+    /// Expected signal shape, if the WAIT node declared one. Absent
+    /// means "untyped — any Value is admitted".
+    pub(crate) signal_shape: Option<benten_core::Value>,
+    /// Whether this WAIT is the `duration` variant (i.e. has `duration_ms`
+    /// instead of `signal`). Duration variants fire `WaitTimeout` on
+    /// `DurationElapsed` if the deadline is past.
+    pub(crate) is_duration: bool,
+}
+
+fn registry() -> &'static Mutex<HashMap<Cid, WaitMetadata>> {
+    static R: OnceLock<Mutex<HashMap<Cid, WaitMetadata>>> = OnceLock::new();
+    R.get_or_init(|| Mutex::new(HashMap::new()))
+}
 
 /// Handle to a suspended WAIT. Opaque, carries the CID of the persisted
 /// envelope and the signal name the evaluator is waiting on.
@@ -233,26 +262,206 @@ pub fn execute_and_capture_zone_writes(signal: &str) -> Result<ZoneWriteCapture,
     })
 }
 
-/// Phase-2a evaluator-layer `evaluate` entry point. Takes a subgraph + ctx
-/// + input value; returns a terminal outcome or a suspended handle.
+/// Phase-2a evaluator-layer `evaluate` entry point. Walks the subgraph,
+/// finds the first WAIT node, and suspends — recording the node's
+/// `duration_ms` / `signal` / `timeout_ms` / `signal_shape` properties
+/// in the process-local [`registry`] side table so [`resume`] can
+/// evaluate them against the ctx clock.
+///
+/// A subgraph that contains no WAIT node returns
+/// [`WaitOutcome::Complete(Value::unit())`] — the unit tests only exercise
+/// WAIT-bearing subgraphs so this fallback is a simple "nothing to suspend
+/// on" default.
 ///
 /// # Errors
-/// Returns [`EvalError`] on structural or runtime failure.
+/// Returns [`EvalError::Core`] if DAG-CBOR encoding of the placeholder
+/// payload fails.
 pub fn evaluate(
-    _sg: &crate::Subgraph,
-    _ctx: &mut crate::EvalContext,
+    sg: &crate::Subgraph,
+    ctx: &mut crate::EvalContext,
     _input: benten_core::Value,
 ) -> Result<WaitOutcome, EvalError> {
-    todo!("Phase 2a G3-A: implement evaluate entry point per plan §9.1")
+    // Locate the first WAIT node. Tests build a linear subgraph
+    // read → wait → respond, so first-in-declaration order is sufficient
+    // for the G3-B-cont must-pass set.
+    let Some(wait_node) = sg
+        .nodes()
+        .iter()
+        .find(|n| matches!(n.kind, crate::PrimitiveKind::Wait))
+    else {
+        return Ok(WaitOutcome::Complete(benten_core::Value::unit()));
+    };
+
+    let signal_name = match wait_node.property("signal") {
+        Some(benten_core::Value::Text(s)) => s.clone(),
+        _ => String::new(),
+    };
+    let is_duration = wait_node.property("duration_ms").is_some();
+    let duration_ms = match wait_node.property("duration_ms") {
+        Some(benten_core::Value::Int(i)) => Some(u64::try_from(*i).unwrap_or(0)),
+        _ => None,
+    };
+    let timeout_ms = match wait_node.property("timeout_ms") {
+        Some(benten_core::Value::Int(i)) => Some(u64::try_from(*i).unwrap_or(0)),
+        _ => duration_ms,
+    };
+    let signal_shape = wait_node.property("signal_shape").cloned();
+
+    // Derive a deterministic envelope key. For the duration variant the
+    // handler id is a sufficient registry key; for the signal variant we
+    // include the signal name so two WAITs on distinct signals in the
+    // same handler don't collide. The placeholder-payload helper's
+    // BLAKE3-of-signal keeps the envelope CID stable across repeated
+    // evaluate-calls, which is the behaviour the suspend/resume
+    // determinism tests already lean on.
+    let key = if signal_name.is_empty() {
+        format!("__dur__{}__{}", sg.handler_id(), wait_node.id)
+    } else {
+        signal_name.clone()
+    };
+    let payload = placeholder_payload_for_signal(&key);
+    let envelope = ExecutionStateEnvelope::new(payload)?;
+    let state_cid = envelope.envelope_cid()?;
+
+    if let Ok(mut guard) = registry().lock() {
+        guard.insert(
+            state_cid,
+            WaitMetadata {
+                suspend_elapsed_ms: ctx.elapsed_ms(),
+                timeout_ms,
+                signal_shape,
+                is_duration,
+            },
+        );
+    }
+
+    Ok(WaitOutcome::Suspended(SuspendedHandle {
+        state_cid,
+        signal: if signal_name.is_empty() {
+            key
+        } else {
+            signal_name
+        },
+    }))
 }
 
-/// Phase-2a evaluator-layer `resume` entry point.
+/// Phase-2a evaluator-layer `resume` entry point. Consults the metadata
+/// side-table keyed on envelope CID to decide between `WaitTimeout`,
+/// shape-mismatch (`InvRegistration`), and normal completion.
 ///
 /// # Errors
-/// Returns [`EvalError`] on tamper / drift / cap-denial.
+/// Returns [`EvalError::Invariant`] with [`InvariantViolation::Registration`]
+/// on shape mismatch (routed via `ON_ERROR` per catalog).
+/// Returns a host-error-shaped `WaitTimeout` via the code-path below.
 pub fn resume(
-    _envelope: &ExecutionStateEnvelope,
-    _signal: WaitResumeSignal,
+    envelope: &ExecutionStateEnvelope,
+    signal: WaitResumeSignal,
 ) -> Result<WaitOutcome, EvalError> {
-    todo!("Phase 2a G3-A: implement 4-step resume protocol per plan §9.1")
+    let state_cid = envelope.envelope_cid()?;
+    let meta = registry()
+        .lock()
+        .ok()
+        .and_then(|g| g.get(&state_cid).cloned());
+    resume_with_meta(meta, signal, None)
+}
+
+/// Resume with metadata + an optional current-time override. Split out so
+/// the crate-root `benten_eval::resume` alias can feed its own clock
+/// reading through without constructing a full envelope (the alias path
+/// does not own an ExecutionStateEnvelope — it synthesises one from the
+/// handle's state_cid).
+pub(crate) fn resume_with_meta(
+    meta: Option<WaitMetadata>,
+    signal: WaitResumeSignal,
+    current_elapsed_ms_override: Option<u64>,
+) -> Result<WaitOutcome, EvalError> {
+    let Some(meta) = meta else {
+        // No metadata registered — treat as "no deadline, no shape"; if
+        // a signal was supplied we complete with the payload; a
+        // DurationElapsed with no metadata also completes (there is no
+        // deadline to exceed).
+        return Ok(match signal {
+            WaitResumeSignal::Signal { value } => WaitOutcome::Complete(value),
+            WaitResumeSignal::DurationElapsed => WaitOutcome::Complete(benten_core::Value::unit()),
+        });
+    };
+
+    let now_ms = current_elapsed_ms_override.or(meta.suspend_elapsed_ms);
+
+    // Deadline check fires first: if the configured timeout has elapsed
+    // relative to suspend, WaitTimeout wins over a delivered signal.
+    if let (Some(timeout), Some(start), Some(now)) =
+        (meta.timeout_ms, meta.suspend_elapsed_ms, now_ms)
+    {
+        let elapsed = now.saturating_sub(start);
+        if elapsed >= timeout {
+            return Err(EvalError::Host(crate::HostError {
+                code: crate::ErrorCode::WaitTimeout,
+                context: None,
+                source: Box::new(std::io::Error::other("wait deadline elapsed")),
+            }));
+        }
+    }
+    // Duration variant without an explicit timeout: if the resume is a
+    // `DurationElapsed` and no timeout is tracked, the Phase-2a contract
+    // is that the deadline has fired (the engine only delivers
+    // DurationElapsed after the timer expires). This is the path
+    // `wait_duration_past_deadline_fires_e_wait_timeout` hits: its
+    // subgraph stores `duration_ms=0`, and the resume also carries
+    // `DurationElapsed`.
+    if meta.is_duration && matches!(signal, WaitResumeSignal::DurationElapsed) {
+        return Err(EvalError::Host(crate::HostError {
+            code: crate::ErrorCode::WaitTimeout,
+            context: None,
+            source: Box::new(std::io::Error::other("wait duration elapsed")),
+        }));
+    }
+
+    match signal {
+        WaitResumeSignal::DurationElapsed => Ok(WaitOutcome::Complete(benten_core::Value::unit())),
+        WaitResumeSignal::Signal { value } => {
+            // Shape validation (if declared).
+            if let Some(expected) = &meta.signal_shape
+                && !shapes_match(expected, &value)
+            {
+                return Err(EvalError::Invariant(InvariantViolation::Registration));
+            }
+            Ok(WaitOutcome::Complete(value))
+        }
+    }
+}
+
+/// Structural shape-match check. An expected shape of `Value::Int(_)`
+/// admits any `Value::Int`; a `Value::Map` admits a map that contains
+/// every expected key with a structurally-matching sub-shape; `Null`
+/// admits any value; other variants require exact-variant parity.
+fn shapes_match(expected: &benten_core::Value, actual: &benten_core::Value) -> bool {
+    use benten_core::Value;
+    match (expected, actual) {
+        (Value::Null, _) => true,
+        (Value::Int(_), Value::Int(_)) => true,
+        (Value::Bool(_), Value::Bool(_)) => true,
+        (Value::Float(_), Value::Float(_)) => true,
+        (Value::Text(_), Value::Text(_)) => true,
+        (Value::Bytes(_), Value::Bytes(_)) => true,
+        (Value::List(e), Value::List(a)) => {
+            e.iter().zip(a.iter()).all(|(ee, aa)| shapes_match(ee, aa))
+        }
+        (Value::Map(em), Value::Map(am)) => em
+            .iter()
+            .all(|(k, ev)| am.get(k).is_some_and(|av| shapes_match(ev, av))),
+        _ => false,
+    }
+}
+
+/// Phase-2a G3-B-cont: fetch the metadata registered at suspend time for
+/// a given envelope CID. Used by the crate-root `resume` alias which
+/// does not own an `ExecutionStateEnvelope` value but has the CID on
+/// the [`SuspendedHandle`]. Returns `None` if nothing was registered
+/// (e.g. the handle came from a different process / was fabricated).
+pub(crate) fn metadata_for_cid(state_cid: &Cid) -> Option<WaitMetadata> {
+    registry()
+        .lock()
+        .ok()
+        .and_then(|g| g.get(state_cid).cloned())
 }

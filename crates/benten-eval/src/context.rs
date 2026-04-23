@@ -21,6 +21,7 @@
 
 use benten_core::Value;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Scoped binding stack used by the iterative evaluator.
 ///
@@ -28,9 +29,23 @@ use std::collections::HashMap;
 /// shadows an outer `$item` (nested `ITERATE`s, for example). The outermost
 /// frame is always the handler's top-level frame carrying `$input` and the
 /// running `$result`.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct EvalContext {
     frames: Vec<HashMap<String, Value>>,
+    /// Optional injected clock (Phase-2a G3-B-cont). WAIT's resume path
+    /// consults this to evaluate deadlines against a test-controlled
+    /// time line. `None` means "use process wall clock" — resume treats
+    /// the deadline as still in the future.
+    clock: Option<Arc<dyn crate::TimeSource>>,
+}
+
+impl std::fmt::Debug for EvalContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EvalContext")
+            .field("frames", &self.frames)
+            .field("has_clock", &self.clock.is_some())
+            .finish()
+    }
 }
 
 impl EvalContext {
@@ -39,6 +54,7 @@ impl EvalContext {
     pub fn new() -> Self {
         Self {
             frames: vec![HashMap::new()],
+            clock: None,
         }
     }
 
@@ -52,12 +68,22 @@ impl EvalContext {
     }
 
     /// Phase 2a G3-B: construct a context with a specific clock injected.
-    ///
-    /// TODO(phase-2a-G3-B): actually plumb the clock; Phase-2a stub discards
-    /// it and returns a default context.
+    /// The clock drives WAIT's deadline checks at resume time.
     #[must_use]
-    pub fn with_clock<T: crate::TimeSource + 'static>(_clock: T) -> Self {
-        Self::new()
+    pub fn with_clock<T: crate::TimeSource + 'static>(clock: T) -> Self {
+        Self {
+            frames: vec![HashMap::new()],
+            clock: Some(Arc::new(clock)),
+        }
+    }
+
+    /// Elapsed time (in milliseconds) reported by the injected clock. Phase-
+    /// 2a `MockTimeSource::hlc_stamp` returns elapsed microseconds, so we
+    /// convert to millis here. Returns `None` when no clock was injected —
+    /// WAIT's resume path treats that as "no deadline evaluation possible".
+    #[must_use]
+    pub fn elapsed_ms(&self) -> Option<u64> {
+        self.clock.as_ref().map(|c| c.hlc_stamp() / 1000)
     }
 
     /// Push a new scope onto the binding stack.

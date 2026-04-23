@@ -359,6 +359,39 @@ pub(crate) fn validate_builder(
         }
     }
 
+    // Phase-2a G3-B-cont: WAIT property well-formedness rejections. Two
+    // cases route through E_INV_REGISTRATION:
+    //   (a) `signal` property is an empty `Value::Text` — an empty signal
+    //       name has no routing meaning (see `wait_dsl_signal_naming.rs`).
+    //   (b) `signal_shape` property is a `Value::Bytes` — a poisoned
+    //       shape encoding (see `wait_signal_shape_optional_typing.rs`).
+    // Legitimate shape encodings are `Int` / `Map` / `Null` — never a
+    // bytestring (bytes round-trip only via `SubgraphBuilder::
+    // set_property_for_test` in negative-contract tests).
+    for n in sn.nodes {
+        if !matches!(n.kind, PrimitiveKind::Wait) {
+            continue;
+        }
+        if let Some(Value::Text(sig)) = n.properties.get("signal")
+            && sig.is_empty()
+        {
+            violations.push(InvariantViolation::Registration);
+            if !aggregate {
+                let mut err = RegistrationError::new(InvariantViolation::Registration);
+                err.fanout_node_id = Some(n.id.clone());
+                return Err(err);
+            }
+        }
+        if let Some(Value::Bytes(_)) = n.properties.get("signal_shape") {
+            violations.push(InvariantViolation::Registration);
+            if !aggregate {
+                let mut err = RegistrationError::new(InvariantViolation::Registration);
+                err.fanout_node_id = Some(n.id.clone());
+                return Err(err);
+            }
+        }
+    }
+
     if violations.is_empty() {
         Ok(())
     } else {
