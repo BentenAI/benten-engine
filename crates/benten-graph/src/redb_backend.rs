@@ -897,18 +897,33 @@ impl RedbBackend {
         // unchecked-put path, and the last-durability bookkeeping below.
         let cid = node.cid()?;
 
-        // Inv-13 fast-path + exact-check — User authority only (plan §9.11
-        // rows 1-2). EnginePrivileged and SyncReplica paths are G5-A's; they
-        // go through the unchecked write below with the
-        // EnginePrivileged-forced durability. Under content-addressing
-        // row 2 (User×differs) is vacuous at this call path — distinct
-        // bytes yield a distinct CID; the test-only
-        // `put_node_at_cid_for_test` backdoor (G5-A ownership, not
-        // implemented in G2-A) synthesises the row-2 shape separately.
-        if matches!(ctx.authority, WriteAuthority::User) {
-            let already_present = self.probe_cid_exists(&cid)?;
-            if already_present {
-                return Err(GraphError::InvImmutability { cid });
+        // Inv-13 fast-path + exact-check — User authority fires
+        // E_INV_IMMUTABILITY per plan §9.11 rows 1-2. EnginePrivileged
+        // (row 3) and SyncReplica (row 4, Phase-3 reserved) return Ok(cid)
+        // without emitting a ChangeEvent and without advancing the audit
+        // sequence when the CID is already present (pure-read dedup —
+        // named Compromise "Dedup writes pure-read", sec-r1-4 / atk-3).
+        //
+        // The SyncReplica row 4 code-path is shaped but not yet reachable
+        // from a public API in Phase 2a — Phase 3 sync-receive wires the
+        // replication entry point. The matrix cell lands here so the
+        // receive path has a single branch to drop into.
+        match ctx.authority {
+            WriteAuthority::User => {
+                let already_present = self.probe_cid_exists(&cid)?;
+                if already_present {
+                    return Err(GraphError::InvImmutability { cid });
+                }
+            }
+            WriteAuthority::EnginePrivileged | WriteAuthority::SyncReplica { .. } => {
+                // Row 3 / row 4: content-addressed dedup. If the CID is
+                // already persisted, branch BEFORE any write + before any
+                // ChangeEvent accumulation + before any audit-sequence
+                // advance. Return the existing CID so the caller sees a
+                // successful idempotent dedup.
+                if self.probe_cid_exists(&cid)? {
+                    return Ok(cid);
+                }
             }
         }
 
@@ -954,7 +969,86 @@ impl RedbBackend {
             cache.insert(&cid);
         }
 
+        // Phase 2a G5-A: record the emitted ChangeEvent in the test-only
+        // drain buffer so the Inv-13 dedup-no-event assertions can observe
+        // that the FIRST put emitted while a subsequent dedup-path put
+        // did NOT. `put_node_with_context` does not open a user-facing
+        // `transaction`, so its fan-out proxy for Row-3 assertions lives
+        // here. The dedup branches above return before reaching this
+        // point, so only genuine first-puts show up in the buffer.
+        {
+            let tx_id = self.next_tx_id.fetch_add(1, Ordering::SeqCst);
+            let event = ChangeEvent {
+                cid,
+                labels: node.labels.clone(),
+                kind: crate::store::ChangeKind::Created,
+                tx_id,
+                actor_cid: None,
+                handler_cid: None,
+                capability_grant_cid: None,
+                node: Some(node.clone()),
+                edge_endpoints: None,
+            };
+            let mut log = self.test_event_log.lock_recover();
+            log.push(event);
+        }
+
         Ok(cid)
+    }
+
+    /// Backing for [`Self::put_node_at_cid_for_test`]. See the public
+    /// method's doc-comment for the row-2 synthesis contract.
+    pub(crate) fn put_node_at_cid_for_test_impl(
+        &self,
+        cid: &Cid,
+        node: &Node,
+        ctx: &WriteContext,
+    ) -> Result<Cid, GraphError> {
+        // Only User authority routes through this hook; privileged paths
+        // have no legitimate reason to inject mismatched bytes.
+        if !matches!(ctx.authority, WriteAuthority::User) {
+            return Err(GraphError::Redb(
+                "put_node_at_cid_for_test only supports WriteAuthority::User".into(),
+            ));
+        }
+        // Row 2 synthesis: if the caller-supplied CID is already persisted,
+        // this is the unprivileged-re-put path. Fire Inv-13 without
+        // touching the store.
+        if self.probe_cid_exists(cid)? {
+            return Err(GraphError::InvImmutability { cid: *cid });
+        }
+        // Otherwise inject the node's canonical bytes under the caller's
+        // chosen key. Index maintenance mirrors `put_node_with_context`
+        // but keyed on `cid` rather than the node's true CID.
+        let bytes = node.canonical_bytes()?;
+        let n_key = node_key(cid);
+        let write_txn = self.begin_write_txn()?;
+        {
+            let mut nodes = write_txn.open_table(NODES_TABLE)?;
+            nodes.insert(n_key.as_slice(), bytes.as_slice())?;
+        }
+        {
+            let mut label_idx = write_txn.open_multimap_table(LABEL_INDEX_TABLE)?;
+            for label in &node.labels {
+                label_idx.insert(label.as_bytes(), cid.as_bytes().as_slice())?;
+            }
+        }
+        {
+            let mut prop_idx = write_txn.open_multimap_table(PROP_INDEX_TABLE)?;
+            for label in &node.labels {
+                for (prop_name, value) in &node.properties {
+                    let vbytes = value_index_bytes(value)?;
+                    let key = property_index_key(label, prop_name, &vbytes);
+                    prop_idx.insert(key.as_slice(), cid.as_bytes().as_slice())?;
+                }
+            }
+        }
+        write_txn.commit()?;
+        {
+            let mut cache = self.immutability_cache.lock_recover();
+            cache.insert(cid);
+        }
+        Ok(*cid)
     }
 
     /// Inv-13 existence probe — returns `true` if `cid` is already persisted

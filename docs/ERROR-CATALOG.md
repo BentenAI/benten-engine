@@ -536,9 +536,19 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 ### E_INV_IMMUTABILITY
 
 - **Message:** "Write would mutate a registered subgraph (Inv-13)"
-- **Context:** `{ handler_cid: Cid, attempted_authority: WriteAuthority }`
-- **Fix:** Phase-2a invariant 13: once a handler subgraph is registered under a CID, its bytes are immutable. User re-writes (both content-matching and content-differing) are rejected. Privileged engine re-puts with matching bytes dedup silently; SyncReplica row is reserved for Phase 3. Register a NEW handler CID if the intent is to change the subgraph.
-- **Thrown at:** graph write-path (G5-A)
+- **Context:** `{ cid: Cid, attempted_authority: WriteAuthority }`
+- **Fix:** Phase-2a invariant 13 — once a Node/subgraph is persisted under a CID, its bytes are immutable from user-path writes. The firing matrix has five rows (plan §9.11):
+
+  | # | WriteAuthority / Path | Content matches registered bytes | Outcome |
+  |---|---|---|---|
+  | 1 | `User` | yes | `E_INV_IMMUTABILITY` — unprivileged re-put of matching bytes is a policy violation (users cannot observe dedup on system-controlled surfaces). |
+  | 2 | `User` | no | `E_INV_IMMUTABILITY` — canonical unprivileged immutability violation. Vacuous under content-addressing (CID-match ⇔ bytes-match); reached from the `put_node_at_cid_for_test` backdoor only. |
+  | 3 | `EnginePrivileged` (version-chain append) | yes | `Ok(cid_dedup)` — content-addressed dedup. Does NOT emit `ChangeEvent`, does NOT advance audit sequence (named Compromise "Dedup writes pure-read", sec-r1-4 / atk-3). |
+  | 4 | `SyncReplica { origin_peer }` (Phase-3 sync-receive) | yes | `Ok(cid_dedup)` — same no-event + no-audit semantics as row 3. Reserved shape in 2a; wired at Phase 3 receive-path. |
+  | 5 | WAIT-resume stale-pin pre-check (any authority) | (`pinned_subgraph_cids` no longer matches the anchor's CURRENT) | `E_RESUME_SUBGRAPH_DRIFT` fires BEFORE any write. Distinct code; mirrors arch-1 resume-step-3 (§9.1) in the Inv-13 matrix. |
+
+  To change a registered subgraph, register a new handler CID; the storage is content-addressed and version-chain appends through `EnginePrivileged` dedup at row 3.
+- **Thrown at:** graph write-path (G5-A, `benten-graph`); declaration-time affordance at `benten-eval::invariants::immutability` rejects WRITE primitives whose literal `target_cid` is already registered.
 - **Phase:** 2a
 
 #### Note on E_INV_SYSTEM_ZONE (already listed above)

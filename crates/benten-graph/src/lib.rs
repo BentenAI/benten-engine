@@ -73,18 +73,35 @@ impl RedbBackend {
         )
     }
 
-    /// Phase 2a test-only hook: inject a Node at a specific CID (mismatched
-    /// content). Exercises the User×differs path in the Inv-13 matrix.
+    /// Phase 2a G5-A test-only hook: inject a [`Node`] under a caller-
+    /// specified `cid`, bypassing the content-addressing invariant so the
+    /// Inv-13 5-row matrix can synthesise the otherwise-vacuous
+    /// `User x content-differs` row (plan §9.11 row 2).
+    ///
+    /// Under real content-addressed storage the CID *is* the content, so a
+    /// mismatched pair is unreachable from user code — this hook exists
+    /// solely to exercise the row-2 error path so Inv-13's matrix stays
+    /// testable end-to-end.
+    ///
+    /// Semantics:
+    ///
+    /// - [`WriteAuthority::User`] + `cid` already persisted -> fires
+    ///   [`GraphError::InvImmutability`] (row 2). The mismatched bytes are
+    ///   not written.
+    /// - [`WriteAuthority::User`] + `cid` absent -> injects the bytes at
+    ///   the requested key and warms the bloom cache for `cid`.
+    /// - Any non-`User` authority -> rejected with [`GraphError::Redb`]
+    ///   guarding the hook against accidental misuse from privileged paths.
     ///
     /// # Errors
-    /// Returns [`GraphError`] on write failure.
+    /// Returns [`GraphError`] on write failure or non-User authority misuse.
     pub fn put_node_at_cid_for_test(
         &self,
-        _cid: &Cid,
-        _node: &benten_core::Node,
-        _ctx: &WriteContext,
+        cid: &Cid,
+        node: &benten_core::Node,
+        ctx: &WriteContext,
     ) -> Result<Cid, GraphError> {
-        todo!("Phase 2a G5-A: test-only mismatched-CID injection hook")
+        self.put_node_at_cid_for_test_impl(cid, node, ctx)
     }
 
     /// Phase 2a test-only hook: drain the ChangeEvent buffer for

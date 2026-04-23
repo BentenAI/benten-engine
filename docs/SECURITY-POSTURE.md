@@ -442,3 +442,65 @@ Phase 2a's closed shape. Forward-compat concern only.
 ---
 
 *Future compromises with security implications will be appended as sections here, each tagged with the compromise number from the R1 Triage Addendum.*
+
+## Phase 2a — Inv-13 immutability firing matrix (5-row)
+
+Phase 2a G5-A adopts the firing matrix decided at R1 close (plan §9.11)
+for Invariant 13 (immutability). Five rows cover the three
+`WriteAuthority` variants plus a resume-time pre-check:
+
+| # | WriteAuthority / Path | Content matches registered bytes | Outcome |
+|---|---|---|---|
+| 1 | `User` | yes | `E_INV_IMMUTABILITY` — canonical unprivileged immutability violation. Users cannot observe dedup on system-controlled surfaces. |
+| 2 | `User` | no | `E_INV_IMMUTABILITY` — vacuous under content-addressing (CID-match ⇔ bytes-match); reached only via the test-only `put_node_at_cid_for_test` backdoor that injects bytes at a caller-supplied CID. Error naming kept for forward-compat with mutable-id extensions. |
+| 3 | `EnginePrivileged` (version-chain append) | yes | `Ok(cid_dedup)` — pure-read dedup. Does NOT emit `ChangeEvent` and does NOT advance the audit sequence (Compromise "Dedup writes pure-read" below). |
+| 4 | `SyncReplica { origin_peer }` (Phase-3 sync-receive) | yes | `Ok(cid_dedup)` — same no-event + no-audit semantics as row 3. Shape reserved in 2a; wired at Phase 3 receive-path. |
+| 5 | WAIT-resume stale-pin pre-check (any authority) | (`pinned_subgraph_cids` no longer matches the anchor's CURRENT) | `E_RESUME_SUBGRAPH_DRIFT` fires BEFORE any write. Distinct code; mirrors arch-1 resume-step-3 (§9.1) in the Inv-13 matrix explicitly. |
+
+`WriteContext` carries a `WriteAuthority` enum
+(`User | EnginePrivileged | SyncReplica { origin_peer }`).
+`EnginePrivileged` replaces the Phase-1 `privileged: bool` and is set
+by the engine orchestrator for capability-grant-authorised
+version-chain `NEXT_VERSION` appends; user subgraphs never reach it.
+`SyncReplica` reserves a Phase-3 shape for replicated writes.
+
+### Compromise #9 — Dedup writes pure-read (sec-r1-4 / atk-3)
+
+**Class.** Audit-log forgery and audit-sequence side-channel leak
+via the dedup path.
+
+**Shape.** Row 3 (`EnginePrivileged` + content matches) returns
+`Ok(cid_dedup)` as a successful idempotent dedup. If the
+transaction machinery still pushed the dedup into `pending_ops` and
+fanned out a `ChangeEvent`, an attacker with privileged-write reach
+(version-chain append, grant re-issuance) could manufacture a
+succession of audit events carrying fresh timestamps but bit-
+identical content — inflating the audit trail and making
+re-issuance look like distinct authorisations.
+
+A companion side-channel: if the dedup path silently advanced the
+audit sequence counter, an observer who can read the sequence
+learns "a privileged actor re-visited this CID" even when the
+visible audit log is empty.
+
+**Mitigation.** Row 3 (and the Phase-3 row 4) **branch before**
+`pending_ops.push`, before any ChangeEvent construction, and before
+any audit-sequence advance. The privileged re-put with matching
+bytes returns the existing CID with no observable effect on the
+ChangeEvent stream or the audit counter. Tests:
+
+- `crates/benten-graph/tests/inv_13_dedup_does_not_emit_changeevent.rs`
+- `crates/benten-graph/tests/inv_13_dedup_path_does_not_advance_audit_sequence.rs`
+  (engine-side accessor `testing_audit_sequence` lands in G11-2a)
+- `crates/benten-graph/tests/inv_13_matrix.rs` (Row 3 no-event)
+
+**Residual risk.** The dedup pure-read contract is enforced at the
+storage-layer entry points (`RedbBackend::put_node_with_context`).
+A future code-path that accumulates its own ChangeEvent before
+calling into the storage layer would need to re-check the row-3
+branch at its own entry point; the `WriteContext::authority` enum
+makes this explicit at the type level so reviewers catch
+regressions.
+
+**Cross-refs.** plan §9.11 5-row matrix; R1 triage `sec-r1-4`,
+atk-3, Code-as-graph Major #4; ERROR-CATALOG E_INV_IMMUTABILITY.

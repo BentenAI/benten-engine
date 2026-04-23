@@ -297,6 +297,12 @@ pub enum InvariantViolation {
     /// declare whether it consumes an `AttributionFrame`. Fires at
     /// registration-time. Maps to `ErrorCode::InvAttribution`.
     Attribution,
+    /// Invariant 13 (G5-A): a WRITE primitive declares a literal CID target
+    /// that is already registered as an immutable subgraph/Node. Fires at
+    /// registration-time (declaration-layer reject). Maps to
+    /// [`ErrorCode::InvImmutability`]. Runtime firing lives in
+    /// `benten-graph` per plan §9.11.
+    Immutability,
 }
 
 impl InvariantViolation {
@@ -315,6 +321,7 @@ impl InvariantViolation {
             InvariantViolation::IterateBudget => ErrorCode::InvIterateBudget,
             InvariantViolation::Registration => ErrorCode::InvRegistration,
             InvariantViolation::Attribution => ErrorCode::InvAttribution,
+            InvariantViolation::Immutability => ErrorCode::InvImmutability,
         }
     }
 }

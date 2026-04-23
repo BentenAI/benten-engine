@@ -394,6 +394,7 @@ fn invariant_number(v: &InvariantViolation) -> u8 {
         | InvariantViolation::IterateNestDepth
         | InvariantViolation::IterateBudget => 8,
         InvariantViolation::Attribution => 14,
+        InvariantViolation::Immutability => 13,
     }
 }
 
