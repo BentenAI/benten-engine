@@ -141,14 +141,15 @@ pub struct CapabilityGrant {
     /// source; Phase 1 accepts any caller-supplied `u64` (test fixtures use
     /// small literals such as `1` or `7`).
     pub hlc_stamp: u64,
-    /// Phase 2a ucca-8: optional TTL expressed as an HLC duration. When
-    /// `None`, the grant's CID is bit-identical to the Phase-1 shape
-    /// (serialization skips the field). When `Some`, the duration contributes
-    /// to the property set and therefore the CID.
-    ///
-    /// TODO(phase-2a-G4-A): wire the field into `as_node` serialization with
-    /// `skip_serializing_if = "Option::is_none"` semantics so the None case
-    /// preserves Phase-1 CIDs.
+    /// Phase 2a ucca-8 (G9-A): optional TTL expressed as an HLC duration.
+    /// When `None`, the grant's CID is bit-identical to the Phase-1 shape
+    /// — [`CapabilityGrant::as_node`] skips the property entirely, matching
+    /// `#[serde(skip_serializing_if = "Option::is_none")]` semantics.
+    /// When `Some`, the duration's nanosecond count is inserted as a
+    /// `"ttl_hlc_duration_nanos"` property and therefore contributes to the
+    /// computed CID. This preserves additive-upgrade compatibility for the
+    /// existing Phase-1 fixture CIDs while letting a Phase-3 UCAN backend
+    /// stamp a real TTL on the grant.
     pub ttl_hlc_duration: Option<core::time::Duration>,
 }
 
@@ -226,6 +227,15 @@ impl CapabilityGrant {
             reason = "Phase 1 HLC stamps are small test literals; Phase 3 replaces with a typed HLC that saturates explicitly"
         )]
         props.insert("hlc_stamp".to_string(), Value::Int(self.hlc_stamp as i64));
+        // Phase 2a ucca-8 (G9-A): `skip_serializing_if = Option::is_none`
+        // semantics — the TTL property is inserted only when Some, so a
+        // Phase-1-shaped grant (`ttl_hlc_duration = None`) hashes to the
+        // identical CID. Duration nanoseconds fit into `i64` for any sane
+        // TTL (≈292 years); values beyond that saturate to i64::MAX.
+        if let Some(d) = self.ttl_hlc_duration {
+            let nanos = i64::try_from(d.as_nanos()).unwrap_or(i64::MAX);
+            props.insert("ttl_hlc_duration_nanos".to_string(), Value::Int(nanos));
+        }
         Node::new(vec![CAPABILITY_GRANT_LABEL.to_string()], props)
     }
 

@@ -341,6 +341,28 @@ impl PrimitiveHost for Engine {
             Err(e) => Err(engine_error_to_eval_error(e)),
         }
     }
+
+    /// Phase 2a G9-A / P2: delegate the ITERATE batch-boundary cadence to
+    /// the configured capability policy (§9.13 refresh-point-3 + plan §3 G9).
+    ///
+    /// The default `PrimitiveHost` impl returns the hard-coded Phase-1
+    /// constant (100); this override makes the policy's
+    /// `iterate_batch_boundary` method load-bearing end-to-end so a
+    /// revocation-sensitive backend (Phase-3 UCAN with a short TTL) can
+    /// tighten the bound. When no policy is configured we keep the Phase-1
+    /// default via `benten_caps::DEFAULT_BATCH_BOUNDARY`.
+    ///
+    /// Routing goes through
+    /// [`benten_caps::evaluator_delegation::iterate_batch_boundary_for`] so
+    /// the shared helper's test harness (see
+    /// `crates/benten-caps/tests/wallclock_delegation.rs`) and the engine's
+    /// production path converge on a single delegation point.
+    fn iterate_batch_boundary(&self) -> usize {
+        match self.policy() {
+            Some(p) => benten_caps::evaluator_delegation::iterate_batch_boundary_for(p),
+            None => benten_caps::DEFAULT_BATCH_BOUNDARY,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -24,13 +24,23 @@ use benten_core::Cid;
 use std::time::Duration;
 
 fn zero_cid() -> Cid {
-    Cid::from_bytes(&[0u8; benten_core::CID_LEN]).expect("zero cid")
+    // G9-A fix: the R3-shipped helper used `Cid::from_bytes(&[0u8; CID_LEN])`,
+    // which fails construction because byte[0] is the `CID_V1` marker (0x01)
+    // not zero. Use the correct `from_blake3_digest([0u8; 32])` path so the
+    // fixture produces a structurally-valid CID whose digest is all-zeros.
+    // Flagged for R4b review — assertions are unchanged; only the broken
+    // precondition is repaired.
+    Cid::from_blake3_digest([0u8; 32])
 }
 
 /// Canonical CID for a ttl-less grant under the exit-criterion fixture.
-/// TBD — first run captures this value via the `todo!()` guard below; the
-/// committed constant follows the Phase-1 fixture pattern.
-const EXPECTED_CID: &str = "TBD";
+/// Captured on G9-A first run per the R2 Watch-3 pin-capture protocol: a
+/// grant with `(grantee, issuer) = (zero_cid, zero_cid)`, `scope =
+/// "store:post:write"`, `hlc_stamp = 0`, and `ttl_hlc_duration = None`.
+/// The `None` TTL path preserves the Phase-1 shape via `as_node`'s
+/// `skip_serializing_if = "Option::is_none"` semantics, so this CID also
+/// pins the additive-compatibility promise.
+const EXPECTED_CID: &str = "bafyr4iexrlgishx4dpzblnfxcclv7ojns7txhp5ilcoxti4p7csqdi6n64";
 
 #[test]
 fn grant_ttl_hlc_duration_optional_preserves_cid() {
