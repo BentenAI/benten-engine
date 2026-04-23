@@ -54,3 +54,22 @@ docs/validation/
 docs/DEVELOPMENT-METHODOLOGY.md
 docs/PROJECT-HISTORY.md
 SPIKE-phase-1-stack-RESULTS.md
+
+# Default-untracked docs pending public rewrite (internal-audience in current form).
+# Public surface is deliberately minimal: README, LICENSE-*, CONTRIBUTING, SECURITY,
+# plus docs/QUICKSTART + docs/ARCHITECTURE + docs/ERROR-CATALOG + docs/GLOSSARY
+# (and a HOW-IT-WORKS doc to be authored). Everything below stays local until
+# rewritten for a public audience.
+docs/VISION.md
+docs/ENGINE-SPEC.md
+docs/DSL-SPECIFICATION.md
+docs/TRANSFORM-GRAMMAR.md
+docs/FULL-ROADMAP.md
+docs/SECURITY-POSTURE.md
+docs/PLATFORM-DESIGN.md
+docs/BUSINESS-PLAN.md
+docs/future/
+crates/benten-graph/benches/README.md
+crates/README.md
+bindings/README.md
+tests/README.md
