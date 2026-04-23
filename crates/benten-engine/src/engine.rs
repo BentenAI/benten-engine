@@ -1412,14 +1412,13 @@ impl Engine {
         // Phase 2a G2-B / arch-r1-5: consult the AST cache (WRITE-free
         // specs only, since WRITE-bearing specs stamp per-call `createdAt`).
         let cache_eligible = spec.write_specs.is_empty();
-        if cache_eligible {
-            if let Some(cached) =
-                self.inner
-                    .subgraph_cache
-                    .get(&spec.handler_id, op, handler_cid)
-            {
-                return Ok(cached);
-            }
+        if cache_eligible
+            && let Some(cached) = self
+                .inner
+                .subgraph_cache
+                .get(&spec.handler_id, op, handler_cid)
+        {
+            return Ok(cached);
         }
         self.inner
             .parse_counter
