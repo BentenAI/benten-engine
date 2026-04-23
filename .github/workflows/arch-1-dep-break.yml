@@ -174,7 +174,11 @@ jobs:
             # Ignore doc-comments (// or ///) since docs legitimately
             # reference the old coupled path. The gate is on *code*, not
             # prose.
-            hits=$(rg -n 'benten_graph::' "$f" | rg -v '^\s*(//|///)' || true)
+            # PCRE2 negative lookahead: lines that do NOT start with `\s*//`
+            # (covers `//`, `///`, `//!` doc comments in a single pass) AND
+            # contain `benten_graph::`. Pattern applies to file content;
+            # `-n` prefixes line numbers in output.
+            hits=$(rg -nP '^(?!\s*//).*benten_graph::' "$f" || true)
             if [ -n "$hits" ]; then
               echo "ARCH-1 VIOLATION in ${f}:"
               echo "$hits"
@@ -184,8 +188,7 @@ jobs:
 
           # Also scan benten-eval's whole src tree for any use of
           # benten_graph:: outside of dev-test paths.
-          eval_hits=$(rg -n 'benten_graph::' crates/benten-eval/src/ \
-            | rg -v '^\s*(//|///)' || true)
+          eval_hits=$(rg -nP '^(?!\s*//).*benten_graph::' crates/benten-eval/src/ || true)
           if [ -n "$eval_hits" ]; then
             echo "ARCH-1 VIOLATION: benten-eval src references benten_graph::"
             echo "$eval_hits"
@@ -247,7 +250,7 @@ jobs:
             }
           ' "$host")
 
-          hits=$(echo "$block" | rg -n 'benten_graph::' | rg -v '^\s*(//|///)' || true)
+          hits=$(echo "$block" | rg -nP '^(?!\s*//).*benten_graph::' || true)
           if [ -n "$hits" ]; then
             echo "ARCH-1 VIOLATION: PrimitiveHost trait block references benten_graph::"
             echo "$hits"
@@ -285,7 +288,7 @@ jobs:
             }
           ' "$lib")
 
-          hits=$(echo "$block" | rg -n 'benten_graph::' | rg -v '^\s*(//|///)' || true)
+          hits=$(echo "$block" | rg -nP '^(?!\s*//).*benten_graph::' || true)
           if [ -n "$hits" ]; then
             echo "ARCH-1 VIOLATION: EvalError enum block references benten_graph::"
             echo "$hits"
