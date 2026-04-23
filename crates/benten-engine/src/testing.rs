@@ -127,13 +127,13 @@ pub fn handler_with_read_write_read_sequence() -> SubgraphSpec {
     SubgraphSpec::empty("rwr")
 }
 
-/// Phase 2a G3-B test helper: a minimal no-op RESPOND handler under the
-/// given handler id. Used by `engine_wait_api_shape` to register a shape
-/// the `call_with_suspension` happy path exercises.
+/// Phase 2a G2-B/G3-B test helper: READ → RESPOND handler. The leading
+/// `primitive("r", Read)` ensures `respond` has a predecessor per g7-cr-13.
 #[must_use]
 pub fn minimal_respond_handler(handler_id: &str) -> SubgraphSpec {
     SubgraphSpec::builder()
         .handler_id(handler_id)
+        .primitive("r", benten_eval::PrimitiveKind::Read)
         .respond()
         .build()
 }

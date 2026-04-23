@@ -55,6 +55,7 @@ use benten_core::{Cid, Edge, Node};
 use redb::{Durability, ReadableMultimapTable, ReadableTable};
 
 use crate::GraphError;
+use crate::WriteAuthority;
 use crate::indexes::{LABEL_INDEX_TABLE, PROP_INDEX_TABLE, property_index_key, value_index_bytes};
 use crate::redb_backend::{NODES_TABLE, next_prefix};
 use crate::store::{
@@ -262,6 +263,14 @@ pub struct Transaction<'a> {
     /// True when the calling backend is flagged as privileged (engine-API
     /// path only). Controls the system-zone label check on Node puts.
     pub(crate) is_privileged: bool,
+    /// Phase 2a G2-A: authority under which the transaction runs. The G2-A
+    /// brief specifies per-write-class durability tiers — G2-A preserves the
+    /// enum plumbing so G5-A's Inv-13 firing matrix can compose on top.
+    /// Today every caller enters via [`crate::RedbBackend::transaction`]
+    /// with the default [`WriteAuthority::User`]; the privileged-entry-point
+    /// that flips this to [`WriteAuthority::EnginePrivileged`] is G7's
+    /// grant-capability / create-view machinery.
+    pub(crate) authority: WriteAuthority,
 }
 
 impl<'a> Transaction<'a> {
@@ -269,6 +278,28 @@ impl<'a> Transaction<'a> {
         inner: redb::WriteTransaction,
         durability: Durability,
         is_privileged: bool,
+    ) -> Result<Self, GraphError> {
+        let authority = if is_privileged {
+            WriteAuthority::EnginePrivileged
+        } else {
+            WriteAuthority::User
+        };
+        Self::new_with_authority(inner, durability, is_privileged, authority)
+    }
+
+    /// Construct a `Transaction` pinned to an explicit [`WriteAuthority`] and
+    /// the redb durability derived from it by the caller.
+    ///
+    /// Phase 2a G2-A: plumbing exists so G5-A's Inv-13 matrix can compose
+    /// on top. `RedbBackend::transaction` today only reaches the
+    /// `User`/`EnginePrivileged` derivation via [`Self::new`]; this
+    /// constructor exists for the future privileged-entry-point G7 will
+    /// land.
+    pub(crate) fn new_with_authority(
+        inner: redb::WriteTransaction,
+        durability: Durability,
+        is_privileged: bool,
+        authority: WriteAuthority,
     ) -> Result<Self, GraphError> {
         let mut inner = inner;
         inner
@@ -279,7 +310,29 @@ impl<'a> Transaction<'a> {
             pending: Vec::new(),
             _phantom: core::marker::PhantomData,
             is_privileged,
+            authority,
         })
+    }
+
+    /// Map a [`WriteAuthority`] onto the redb durability tier G2-A
+    /// specifies: `EnginePrivileged → Immediate`, `User → configured`,
+    /// `SyncReplica → None`. The `configured` argument is the backend's
+    /// configured redb durability.
+    ///
+    /// Consumed by the G7 privileged-entry-point work and by G5-A's
+    /// `transaction_with_authority` variant when those land; kept on this
+    /// module so the per-write-class tier contract lives next to the
+    /// `Transaction` that enforces it.
+    #[must_use]
+    pub(crate) fn durability_for_authority(
+        authority: &WriteAuthority,
+        configured: Durability,
+    ) -> Durability {
+        match authority {
+            WriteAuthority::EnginePrivileged => Durability::Immediate,
+            WriteAuthority::User => configured,
+            WriteAuthority::SyncReplica { .. } => Durability::None,
+        }
     }
 
     /// Put a Node inside the transaction. Maintains the label and

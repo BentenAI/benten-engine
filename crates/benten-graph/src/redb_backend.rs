@@ -15,6 +15,7 @@
 //! they maintain the label and property-value indexes as part of the same
 //! write transaction, so the indexes are always in sync with the node store.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -28,16 +29,18 @@ use redb::{
 };
 
 use crate::backend::{DurabilityMode, KVBackend, ScanResult};
+use crate::immutability::CidExistenceCache;
 use crate::indexes::{
     LABEL_INDEX_TABLE, PROP_INDEX_TABLE, cid_from_index_bytes, property_index_key,
     value_index_bytes,
 };
 use crate::store::{
-    ChangeSubscriber, EDGE_SRC_PREFIX, EDGE_TGT_PREFIX, EdgeStore, NodeStore, decode_err, edge_key,
-    edge_src_index_key, edge_src_index_prefix, edge_tgt_index_key, edge_tgt_index_prefix, node_key,
+    ChangeEvent, ChangeSubscriber, EDGE_SRC_PREFIX, EDGE_TGT_PREFIX, EdgeStore, NodeStore,
+    decode_err, edge_key, edge_src_index_key, edge_src_index_prefix, edge_tgt_index_key,
+    edge_tgt_index_prefix, node_key,
 };
 use crate::transaction::{TxGuard, fan_out};
-use crate::{GraphError, Transaction, WriteContext};
+use crate::{GraphError, Transaction, WriteAuthority, WriteContext};
 
 /// Shared system-zone label-prefix check used by every write entry point on
 /// [`RedbBackend`] — both the `WriteContext`-aware paths and the inherent
@@ -184,6 +187,29 @@ fn warn_if_group_durability_collapsed(mode: DurabilityMode) {
 pub struct RedbBackend {
     db: Database,
     durability: Durability,
+    /// Configured [`DurabilityMode`] the backend was constructed with. Kept
+    /// alongside the redb-flavoured `durability` because Inv-13 / capability-
+    /// grant paths want to report the logical mode back to callers (via
+    /// [`RedbBackend::last_put_node_durability_for_label`]) even when they
+    /// locally override the redb flavour.
+    configured_durability: DurabilityMode,
+    /// Per-call override record: the last `DurabilityMode` used by a
+    /// `put_node_with_context` commit, keyed on every label the persisted
+    /// Node carried. Used by the test hook
+    /// [`RedbBackend::last_put_node_durability_for_label`]; the
+    /// capability-grant path in particular stamps `Immediate` here regardless
+    /// of [`Self::configured_durability`] so revocation-ordering cannot be
+    /// reordered by a looser configured mode.
+    last_durability_by_label: Arc<Mutex<HashMap<String, DurabilityMode>>>,
+    /// Inv-13 fast-path CID-existence cache (G2-A skeleton; G5-A wires the
+    /// 5-row matrix on top). See [`crate::immutability`] for the fast-path
+    /// contract.
+    immutability_cache: Arc<Mutex<CidExistenceCache>>,
+    /// Test-only change-event buffer drained by
+    /// [`RedbBackend::drain_change_events_for_test`]. G5-A populates the
+    /// write side; G2-A leaves it empty so the method surface compiles for
+    /// tests that don't assert on it.
+    test_event_log: Arc<Mutex<Vec<ChangeEvent>>>,
     /// Registered change-event subscribers. Behind a `Mutex<Vec<...>>` so
     /// `register_subscriber` and the post-commit fan-out can share one
     /// list without forcing callers to hold an `Arc<RedbBackend>`.
@@ -295,6 +321,10 @@ impl RedbBackend {
         let backend = Self {
             db,
             durability: to_redb_durability(durability),
+            configured_durability: durability,
+            last_durability_by_label: Arc::new(Mutex::new(HashMap::new())),
+            immutability_cache: Arc::new(Mutex::new(CidExistenceCache::new())),
+            test_event_log: Arc::new(Mutex::new(Vec::new())),
             subscribers: Arc::new(Mutex::new(Vec::new())),
             tx_flag: Arc::new(Mutex::new(false)),
             next_tx_id: Arc::new(AtomicU64::new(1)),
@@ -354,6 +384,10 @@ impl RedbBackend {
         let backend = Self {
             db,
             durability: to_redb_durability(durability),
+            configured_durability: durability,
+            last_durability_by_label: Arc::new(Mutex::new(HashMap::new())),
+            immutability_cache: Arc::new(Mutex::new(CidExistenceCache::new())),
+            test_event_log: Arc::new(Mutex::new(Vec::new())),
             subscribers: Arc::new(Mutex::new(Vec::new())),
             tx_flag: Arc::new(Mutex::new(false)),
             next_tx_id: Arc::new(AtomicU64::new(1)),
@@ -398,8 +432,20 @@ impl RedbBackend {
     /// durability. Centralizing the durability wiring here means every
     /// mutating path picks up a durability change automatically.
     fn begin_write_txn(&self) -> Result<redb::WriteTransaction, GraphError> {
+        self.begin_write_txn_with(self.durability)
+    }
+
+    /// Begin a write transaction pinned to an explicit redb durability
+    /// regardless of [`Self::configured_durability`]. Used by the privileged
+    /// `put_node_with_context` path so capability-grant writes can override
+    /// a configured Async / Group mode back to Immediate without touching
+    /// the backend's shared state.
+    fn begin_write_txn_with(
+        &self,
+        durability: Durability,
+    ) -> Result<redb::WriteTransaction, GraphError> {
         let mut txn = self.db.begin_write()?;
-        txn.set_durability(self.durability)
+        txn.set_durability(durability)
             .map_err(|e| GraphError::Redb(e.to_string()))?;
         Ok(txn)
     }
@@ -846,9 +892,174 @@ impl RedbBackend {
         ctx: &WriteContext,
     ) -> Result<Cid, GraphError> {
         guard_system_zone_node(node, ctx.is_privileged)?;
-        // Route around the inherent put_node's guard (already enforced above)
-        // so a privileged context can land a system-zone write.
-        self.put_node_unchecked(node)
+
+        // Compute the CID once — reused by the immutability probe, the
+        // unchecked-put path, and the last-durability bookkeeping below.
+        let cid = node.cid()?;
+
+        // Inv-13 fast-path + exact-check — User authority only (plan §9.11
+        // rows 1-2). EnginePrivileged and SyncReplica paths are G5-A's; they
+        // go through the unchecked write below with the
+        // EnginePrivileged-forced durability. Under content-addressing
+        // row 2 (User×differs) is vacuous at this call path — distinct
+        // bytes yield a distinct CID; the test-only
+        // `put_node_at_cid_for_test` backdoor (G5-A ownership, not
+        // implemented in G2-A) synthesises the row-2 shape separately.
+        if matches!(ctx.authority, WriteAuthority::User) {
+            let already_present = self.probe_cid_exists(&cid)?;
+            if already_present {
+                return Err(GraphError::InvImmutability { cid });
+            }
+        }
+
+        // Phase 2a G2-A: WriteAuthority-driven per-call durability tier.
+        //
+        // - `EnginePrivileged` (capability grants, system-zone writes) always
+        //   commits with `Durability::Immediate` so revocation ordering is
+        //   not reordered by a configured Group / Async window.
+        // - `User` writes honor the backend-configured durability.
+        // - `SyncReplica` reserves Phase-3 `Durability::None` (commit-returns-
+        //   before-fsync) — the receiver is expected to already hold the
+        //   bytes, so the safety story is "best-effort durability on the
+        //   replica side".
+        let (effective_redb, effective_mode) = match ctx.authority {
+            WriteAuthority::EnginePrivileged => (Durability::Immediate, DurabilityMode::Immediate),
+            WriteAuthority::User => (self.durability, self.configured_durability),
+            // Phase-3 reserved. No `None` equivalent on `DurabilityMode` yet
+            // (the enum exposes Immediate / Group / Async); record the
+            // configured mode so downstream inspection APIs see something
+            // truthful during 2a's shape-only lifetime.
+            WriteAuthority::SyncReplica { .. } => (Durability::None, self.configured_durability),
+        };
+
+        self.put_node_unchecked_with_durability(node, effective_redb)?;
+
+        // Record per-label durability for the
+        // `last_put_node_durability_for_label` test hook. Every label the
+        // Node carried gets stamped so tests can key on any of them (the
+        // capability-grant path Nodes always carry
+        // `"system:CapabilityGrant"`).
+        {
+            let mut map = self.last_durability_by_label.lock_recover();
+            for label in &node.labels {
+                map.insert(label.clone(), effective_mode);
+            }
+        }
+
+        // Warm the Inv-13 fast-path cache. Bloom positive on subsequent
+        // User-path probes; the exact-check in `probe_cid_exists` is still
+        // authoritative for correctness.
+        {
+            let mut cache = self.immutability_cache.lock_recover();
+            cache.insert(&cid);
+        }
+
+        Ok(cid)
+    }
+
+    /// Inv-13 existence probe — returns `true` if `cid` is already persisted
+    /// in the backend. Consults the Bloom filter first (hot-path fast
+    /// negative); falls back to an authoritative redb read when the filter
+    /// reports a positive.
+    fn probe_cid_exists(&self, cid: &Cid) -> Result<bool, GraphError> {
+        // Mutating probe because `may_contain` clears the one-shot
+        // `forced_collision_next` flag. Keep the mutex held only for the
+        // duration of the bloom probe — if we fall through to the exact
+        // check we release it immediately so redb can open a read-txn
+        // without contention.
+        let maybe_present = {
+            let mut cache = self.immutability_cache.lock_recover();
+            cache.may_contain(cid)
+        };
+        if !maybe_present {
+            return Ok(false);
+        }
+        // Exact check: the bloom filter reported positive (real hit or
+        // false positive). Consult redb for the authoritative answer.
+        Ok(self.get(&node_key(cid))?.is_some())
+    }
+
+    /// Inherent put-without-guard with an explicit per-call durability.
+    /// Mirrors [`Self::put_node_unchecked`] but opens its write transaction
+    /// at the supplied durability rather than the backend-configured one.
+    fn put_node_unchecked_with_durability(
+        &self,
+        node: &Node,
+        durability: Durability,
+    ) -> Result<Cid, GraphError> {
+        let cid = node.cid()?;
+        let bytes = node.canonical_bytes()?;
+        let n_key = node_key(&cid);
+
+        let write_txn = self.begin_write_txn_with(durability)?;
+        {
+            let mut nodes = write_txn.open_table(NODES_TABLE)?;
+            nodes.insert(n_key.as_slice(), bytes.as_slice())?;
+        }
+        {
+            let mut label_idx = write_txn.open_multimap_table(LABEL_INDEX_TABLE)?;
+            for label in &node.labels {
+                label_idx.insert(label.as_bytes(), cid.as_bytes().as_slice())?;
+            }
+        }
+        {
+            let mut prop_idx = write_txn.open_multimap_table(PROP_INDEX_TABLE)?;
+            for label in &node.labels {
+                for (prop_name, value) in &node.properties {
+                    let vbytes = value_index_bytes(value)?;
+                    let key = property_index_key(label, prop_name, &vbytes);
+                    prop_idx.insert(key.as_slice(), cid.as_bytes().as_slice())?;
+                }
+            }
+        }
+        write_txn.commit()?;
+        Ok(cid)
+    }
+
+    // ---- G2-A Inv-13 + durability-inspection test hook impls -------------
+
+    /// Backing for [`Self::cache_contains_cid`]. Authoritative warmness
+    /// check — not subject to bloom false positives.
+    pub(crate) fn cache_contains_cid_impl(&self, cid: &Cid) -> bool {
+        let cache = self.immutability_cache.lock_recover();
+        cache.warmed_for(cid)
+    }
+
+    /// Backing for [`Self::force_bloom_collision_for_next_put`].
+    pub(crate) fn force_bloom_collision_for_next_put_impl(&self) {
+        let mut cache = self.immutability_cache.lock_recover();
+        cache.force_collision_next();
+    }
+
+    /// Backing for [`Self::bloom_may_contain_for_test`]. Non-mutating peek
+    /// — does not consume a one-shot collision flag.
+    pub(crate) fn bloom_may_contain_for_test_impl(&self, cid: &Cid) -> bool {
+        let cache = self.immutability_cache.lock_recover();
+        cache.may_contain_peek(cid)
+    }
+
+    /// Backing for [`Self::force_bloom_positive_for_test`].
+    pub(crate) fn force_bloom_positive_for_test_impl(&self, cid: &Cid) {
+        let mut cache = self.immutability_cache.lock_recover();
+        cache.force_positive_for_test(cid);
+    }
+
+    /// Backing for [`Self::last_put_node_durability_for_label`].
+    pub(crate) fn last_put_node_durability_for_label_impl(
+        &self,
+        label: &str,
+    ) -> Option<DurabilityMode> {
+        let map = self.last_durability_by_label.lock_recover();
+        map.get(label).copied()
+    }
+
+    /// Backing for [`Self::drain_change_events_for_test`]. Drains the
+    /// test-only change-event log. G5-A extends the write side to cover
+    /// every commit path; G2-A leaves the buffer empty so the test surface
+    /// compiles without regressing the Phase-1 behaviour consumers expect.
+    pub(crate) fn drain_change_events_for_test_impl(&self) -> Vec<ChangeEvent> {
+        let mut log = self.test_event_log.lock_recover();
+        std::mem::take(&mut *log)
     }
 
     /// Transaction primitive — a closure over a write transaction handle.

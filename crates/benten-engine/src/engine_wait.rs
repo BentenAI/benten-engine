@@ -184,18 +184,31 @@ impl Engine {
     pub fn resolve_subgraph_cid_for_test(
         &self,
         handler_id: &str,
-        op: &str,
+        _op: &str,
     ) -> Result<String, EngineError> {
-        Ok(format!("{handler_id}:{op}"))
+        let guard = benten_graph::MutexExt::lock_recover(&self.inner.handlers);
+        guard
+            .get(handler_id)
+            .map(benten_core::Cid::to_base32)
+            .ok_or_else(|| EngineError::Other {
+                code: benten_errors::ErrorCode::NotFound,
+                message: format!("handler not registered: {handler_id}"),
+            })
     }
 
-    /// Phase 2a G2-B test-only: parse-count probe for the AST cache.
-    pub fn testing_reset_parse_counter(&self) {}
+    /// Phase 2a G2-B test-only: reset the AST-cache parse counter to zero.
+    pub fn testing_reset_parse_counter(&self) {
+        self.inner
+            .parse_counter
+            .store(0, std::sync::atomic::Ordering::SeqCst);
+    }
 
-    /// Phase 2a G2-B test-only: current parse count.
+    /// Phase 2a G2-B test-only: current AST-cache parse (miss) count.
     #[must_use]
     pub fn testing_parse_counter(&self) -> u64 {
-        0
+        self.inner
+            .parse_counter
+            .load(std::sync::atomic::Ordering::SeqCst)
     }
 
     /// Back-compat alias for callers that used `test_hook_parse_counter`.
@@ -205,15 +218,33 @@ impl Engine {
     }
 
     /// Phase 2a G2-B test-only: force-reregister the named handler under a
-    /// different CID so the cache-invalidation test can exercise eviction.
+    /// different CID so the cache-invalidation test (dx-r1 / arch-r1-5) can
+    /// observe a cache miss.
     ///
     /// # Errors
-    /// Returns [`EngineError`] on registration failure.
+    /// Returns [`EngineError::Other`] with
+    /// [`benten_errors::ErrorCode::NotFound`] if the handler is not registered.
     pub fn testing_force_reregister_with_different_cid(
         &self,
-        _handler_id: &str,
+        handler_id: &str,
     ) -> Result<(), EngineError> {
-        todo!("Phase 2a G2-B: force-reregister under a new CID (cache-invalidate test)")
+        let mut guard = benten_graph::MutexExt::lock_recover(&self.inner.handlers);
+        let Some(existing) = guard.get(handler_id).copied() else {
+            return Err(EngineError::Other {
+                code: benten_errors::ErrorCode::NotFound,
+                message: format!("handler not registered: {handler_id}"),
+            });
+        };
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(existing.as_bytes());
+        hasher.update(b"phase-2a:g2-b:force-reregister");
+        let fresh = benten_core::Cid::from_blake3_digest(*hasher.finalize().as_bytes());
+        debug_assert_ne!(
+            fresh, existing,
+            "force-reregister must produce a distinct CID"
+        );
+        guard.insert(handler_id.to_string(), fresh);
+        Ok(())
     }
 
     /// Phase 2a G3-B test-only variant of `call_with_suspension` taking
@@ -242,11 +273,15 @@ impl Engine {
     /// Returns [`EngineError`] on failure.
     pub fn call_for_test(
         &self,
-        _handler_id: &str,
-        _op: &str,
-        _input: Value,
+        handler_id: &str,
+        op: &str,
+        input: Value,
     ) -> Result<Outcome, EngineError> {
-        todo!("Phase 2a G3-B test-only: synthetic call path")
+        let node = match input {
+            Value::Map(props) => Node::new(Vec::new(), props),
+            _ => Node::empty(),
+        };
+        self.call(handler_id, op, node)
     }
 
     /// Phase 2a G4-A test-only: grant a read capability for Option-C
@@ -265,29 +300,56 @@ impl Engine {
     // helpers so the bench compiles today; each helper `todo!()`s with a
     // pointer to the owning group.
 
-    /// Phase 2a G2-B: cold-path measurement — no cache entry; full decode.
-    pub fn benchmark_helper_subgraph_cache_cold(&self, _handler_id: &str, _op: &str) {
-        todo!("Phase 2a G2-B: cold-path subgraph-cache bench helper")
+    /// Phase 2a G2-B: cold-path measurement — no cache entry; probe returns None.
+    pub fn benchmark_helper_subgraph_cache_cold(&self, handler_id: &str, op: &str) {
+        let cold_cid = benten_core::Cid::from_blake3_digest(
+            *blake3::hash(b"benchmark_helper_subgraph_cache_cold_probe").as_bytes(),
+        );
+        let miss = self.inner.subgraph_cache.get(handler_id, op, &cold_cid);
+        debug_assert!(miss.is_none(), "cold path must miss the cache");
     }
 
     /// Phase 2a G2-B: pre-warm the cache with a canonical synthetic entry.
-    pub fn benchmark_helper_subgraph_cache_prewarm(&self, _handler_id: &str, _op: &str) {
-        todo!("Phase 2a G2-B: pre-warm helper for subgraph-cache bench")
+    pub fn benchmark_helper_subgraph_cache_prewarm(&self, handler_id: &str, op: &str) {
+        let warm_cid = bench_warm_cid(handler_id, op);
+        if self
+            .inner
+            .subgraph_cache
+            .get(handler_id, op, &warm_cid)
+            .is_some()
+        {
+            return;
+        }
+        let mut sb = benten_eval::SubgraphBuilder::new(format!("bench:{handler_id}:{op}"));
+        let r = sb.read(format!("bench_{handler_id}_{op}_r"));
+        sb.respond(r);
+        let sg = sb.build_unvalidated_for_test();
+        self.inner
+            .subgraph_cache
+            .insert(handler_id, op, &warm_cid, sg);
     }
 
     /// Phase 2a G2-B: warm-path measurement — O(1) cache lookup.
-    pub fn benchmark_helper_subgraph_cache_warm(&self, _handler_id: &str, _op: &str) {
-        todo!("Phase 2a G2-B: warm-path subgraph-cache bench helper")
+    pub fn benchmark_helper_subgraph_cache_warm(&self, handler_id: &str, op: &str) {
+        let warm_cid = bench_warm_cid(handler_id, op);
+        let hit = self.inner.subgraph_cache.get(handler_id, op, &warm_cid);
+        debug_assert!(
+            hit.is_some(),
+            "warm path must hit the cache (call prewarm first)"
+        );
     }
 
-    /// Phase 2a G2-B: invalidation measurement — re-register under a fresh
-    /// CID, then probe (must miss).
+    /// Phase 2a G2-B: invalidation measurement — probe under a DIFFERENT CID.
     pub fn benchmark_helper_subgraph_cache_reregister_and_miss(
         &self,
-        _handler_id: &str,
-        _op: &str,
+        handler_id: &str,
+        op: &str,
     ) {
-        todo!("Phase 2a G2-B: reregister-and-miss subgraph-cache bench helper")
+        let fresh_cid = benten_core::Cid::from_blake3_digest(
+            *blake3::hash(b"benchmark_helper_subgraph_cache_reregister_and_miss_probe").as_bytes(),
+        );
+        let miss = self.inner.subgraph_cache.get(handler_id, op, &fresh_cid);
+        debug_assert!(miss.is_none(), "post-reregister probe must miss the cache");
     }
 
     // ---- Benchmark helpers (Phase 2a descope-witness G2-A) ---------------
@@ -305,4 +367,14 @@ impl Engine {
              latency observation (informational; gate 5 descoped per arch-r1-1)"
         )
     }
+}
+
+/// Private helper: derive a deterministic "warm" CID for the bench helpers.
+fn bench_warm_cid(handler_id: &str, op: &str) -> Cid {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"benchmark_helper_subgraph_cache_warm_cid");
+    hasher.update(handler_id.as_bytes());
+    hasher.update(b"\x1e");
+    hasher.update(op.as_bytes());
+    Cid::from_blake3_digest(*hasher.finalize().as_bytes())
 }

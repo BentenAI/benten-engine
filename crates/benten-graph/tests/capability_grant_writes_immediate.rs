@@ -18,8 +18,14 @@ use benten_caps::{CapabilityGrant, GrantScope};
 use benten_core::Cid;
 use benten_graph::{DurabilityMode, RedbBackend, WriteContext};
 
+// R3 fixture bug fix (G2-A named deviation D1.1): the original fixture called
+// `Cid::from_bytes(&[0u8; CID_LEN])` which fails at construction because
+// byte[0] must be `CID_V1` (0x01), not zero. Every prior G1-A / G3-A / G9-A
+// group hit the same bug — the workspace-standard workaround is
+// `Cid::from_blake3_digest([0u8; 32])`, which threads the zero BLAKE3 digest
+// through Benten's CID header synthesis and produces a valid zero-ish CID.
 fn zero_cid() -> Cid {
-    Cid::from_bytes(&[0u8; benten_core::CID_LEN]).expect("zero cid")
+    Cid::from_blake3_digest([0u8; 32])
 }
 
 #[test]

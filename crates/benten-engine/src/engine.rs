@@ -108,9 +108,11 @@ pub(crate) struct EngineInner {
     /// deterministic across rapid-fire creates that might otherwise collide
     /// on a wall-clock timestamp.
     pub(crate) created_at_seq: std::sync::atomic::AtomicU64,
-    /// Pre-built subgraph templates keyed on `(handler_id, op)`. See
-    /// [`SubgraphCache`] — closes r6-perf-5.
+    /// Pre-built subgraph templates keyed on `(handler_id, op, subgraph_cid)`.
+    /// Phase 2a G2-B / arch-r1-5.
     pub(crate) subgraph_cache: SubgraphCache,
+    /// Phase 2a G2-B / dx-r1: count of subgraph template builds (cache misses).
+    pub(crate) parse_counter: std::sync::atomic::AtomicU64,
     /// Per-capability-scope tally of writes that passed the policy's
     /// `check_write` gate (i.e. committed). Keyed by the derived scope
     /// string (`store:<label>:write`). Closes named compromise #5 — the
@@ -145,6 +147,7 @@ impl EngineInner {
             event_count: std::sync::atomic::AtomicU64::new(0),
             created_at_seq: std::sync::atomic::AtomicU64::new(0),
             subgraph_cache: SubgraphCache::new(),
+            parse_counter: std::sync::atomic::AtomicU64::new(0),
             cap_write_committed: std::sync::Mutex::new(BTreeMap::new()),
             cap_write_denied: std::sync::Mutex::new(BTreeMap::new()),
             writes_committed_total: std::sync::atomic::AtomicU64::new(0),
@@ -266,12 +269,13 @@ pub(crate) struct SubgraphCache {
     entries: std::sync::RwLock<std::collections::HashMap<SubgraphCacheKey, benten_eval::Subgraph>>,
 }
 
-/// Cache key. Owned-string so the cache can outlive the dispatch stack that
-/// produced the lookup.
+/// Cache key — Phase 2a G2-B / arch-r1-5: three-axis
+/// `(handler_id, op, subgraph_cid)`.
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct SubgraphCacheKey {
     handler_id: String,
     op: String,
+    subgraph_cid: Cid,
 }
 
 impl SubgraphCache {
@@ -279,28 +283,35 @@ impl SubgraphCache {
         Self::default()
     }
 
-    /// Return a clone of the cached template for `(handler_id, op)`, or
-    /// `None` on a miss. Callers then build the subgraph and store it via
-    /// [`Self::insert`].
-    fn get(&self, handler_id: &str, op: &str) -> Option<benten_eval::Subgraph> {
+    pub(crate) fn get(
+        &self,
+        handler_id: &str,
+        op: &str,
+        cid: &Cid,
+    ) -> Option<benten_eval::Subgraph> {
         let guard = benten_graph::RwLockExt::read_recover(&self.entries);
         guard
             .get(&SubgraphCacheKey {
                 handler_id: handler_id.to_string(),
                 op: op.to_string(),
+                subgraph_cid: *cid,
             })
             .cloned()
     }
 
-    /// Insert a fresh template under `(handler_id, op)`. Safe to call
-    /// concurrently — last writer wins, but since handlers are immutable
-    /// the value is identical across concurrent constructors.
-    fn insert(&self, handler_id: &str, op: &str, sg: benten_eval::Subgraph) {
+    pub(crate) fn insert(
+        &self,
+        handler_id: &str,
+        op: &str,
+        cid: &Cid,
+        sg: benten_eval::Subgraph,
+    ) {
         let mut guard = benten_graph::RwLockExt::write_recover(&self.entries);
         guard.insert(
             SubgraphCacheKey {
                 handler_id: handler_id.to_string(),
                 op: op.to_string(),
+                subgraph_cid: *cid,
             },
             sg,
         );
@@ -698,25 +709,27 @@ impl Engine {
     /// primitive per registered node plus one `-->` per edge. See the
     /// renderer module for the exact format.
     pub fn handler_to_mermaid(&self, handler_id: &str) -> Result<String, EngineError> {
-        let guard = self.inner.handlers.lock_recover();
-        if !guard.contains_key(handler_id) {
+        let handler_cid = {
+            let guard = self.inner.handlers.lock_recover();
+            guard.get(handler_id).copied()
+        };
+        let Some(handler_cid) = handler_cid else {
             return Err(EngineError::Other {
                 code: ErrorCode::NotFound,
                 message: format!("handler not registered: {handler_id}"),
             });
-        }
-        drop(guard);
+        };
 
         // Reconstruct the subgraph. DSL (SubgraphSpec) path takes priority;
         // CRUD synthesis falls back to the `:create` shape because mermaid
         // rendering is op-agnostic (all CRUD ops share the same structural
-        // READ/WRITE/RESPOND shape for the diagram). An unknown handler_id
-        // shape propagates via the normal error path.
+        // READ/WRITE/RESPOND shape for the diagram).
         let spec_opt = self.inner.specs.lock_recover().get(handler_id).cloned();
         let subgraph = if let Some(spec) = spec_opt {
-            self.subgraph_for_spec(&spec, "default", &Node::empty())?
+            self.subgraph_for_spec(&spec, "default", &Node::empty(), &handler_cid)?
         } else if let Some(label) = handler_id.strip_prefix("crud:") {
-            self.subgraph_for_crud(label, "create", &Node::empty())?.0
+            self.subgraph_for_crud(label, "create", &Node::empty(), &handler_cid)?
+                .0
         } else {
             return Err(EngineError::Other {
                 code: ErrorCode::NotFound,
@@ -739,22 +752,25 @@ impl Engine {
         &self,
         handler_id: &str,
     ) -> Result<HandlerPredecessors, EngineError> {
-        let guard = self.inner.handlers.lock_recover();
-        if !guard.contains_key(handler_id) {
+        let handler_cid = {
+            let guard = self.inner.handlers.lock_recover();
+            guard.get(handler_id).copied()
+        };
+        let Some(handler_cid) = handler_cid else {
             return Err(EngineError::Other {
                 code: ErrorCode::NotFound,
                 message: format!("handler not registered: {handler_id}"),
             });
-        }
-        drop(guard);
+        };
 
         // Reconstruct the subgraph via the same code path `handler_to_mermaid`
         // uses so the node set + edge set match what the walker saw.
         let spec_opt = self.inner.specs.lock_recover().get(handler_id).cloned();
         let subgraph = if let Some(spec) = spec_opt {
-            self.subgraph_for_spec(&spec, "default", &Node::empty())?
+            self.subgraph_for_spec(&spec, "default", &Node::empty(), &handler_cid)?
         } else if let Some(label) = handler_id.strip_prefix("crud:") {
-            self.subgraph_for_crud(label, "create", &Node::empty())?.0
+            self.subgraph_for_crud(label, "create", &Node::empty(), &handler_cid)?
+                .0
         } else {
             return Err(EngineError::Other {
                 code: ErrorCode::NotFound,
@@ -899,20 +915,21 @@ impl Engine {
         op: &str,
         input: Node,
         _actor: Option<Cid>,
-        _handler_cid: &Cid,
+        handler_cid: &Cid,
         trace_mode: bool,
         trace_steps_out: Option<&mut Vec<TraceStep>>,
     ) -> Result<Outcome, EngineError> {
-        // Build the execution subgraph. CRUD handlers synthesize an op-
-        // specific shape (READ / WRITE / RESPOND); SubgraphSpec-registered
-        // handlers materialize their recorded WriteSpecs into WRITE nodes.
-        // Either way the resulting Subgraph walks through the Evaluator.
+        // Phase 2a G2-B / arch-r1-5: `handler_cid` is the third axis on the
+        // subgraph-cache key — re-registration flips this axis.
         let spec_opt = self.inner.specs.lock_recover().get(handler_id).cloned();
 
         let (subgraph, list_hint) = if let Some(spec) = spec_opt {
-            (self.subgraph_for_spec(&spec, op, &input)?, None)
+            (
+                self.subgraph_for_spec(&spec, op, &input, handler_cid)?,
+                None,
+            )
         } else if let Some(label) = handler_id.strip_prefix("crud:") {
-            self.subgraph_for_crud(label, op, &input)?
+            self.subgraph_for_crud(label, op, &input, handler_cid)?
         } else {
             return Err(EngineError::Other {
                 code: ErrorCode::NotFound,
@@ -1094,6 +1111,7 @@ impl Engine {
         label: &str,
         op: &str,
         input: &Node,
+        handler_cid: &Cid,
     ) -> Result<(benten_eval::Subgraph, Option<String>), EngineError> {
         // Strip an optional leading `<label>:` prefix in the op argument so
         // both `"create"` and `"post:create"` dispatch identically.
@@ -1121,8 +1139,11 @@ impl Engine {
                 let mut sg = self
                     .inner
                     .subgraph_cache
-                    .get(&cache_handler, "create")
+                    .get(&cache_handler, "create", handler_cid)
                     .unwrap_or_else(|| {
+                        self.inner
+                            .parse_counter
+                            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                         let mut sb =
                             benten_eval::SubgraphBuilder::new(format!("crud:{label}:create"));
                         let w = sb.write(format!("crud_{label}_write"));
@@ -1136,7 +1157,7 @@ impl Engine {
                         }
                         self.inner
                             .subgraph_cache
-                            .insert(&cache_handler, "create", sg.clone());
+                            .insert(&cache_handler, "create", handler_cid, sg.clone());
                         sg
                     });
                 // Patch the per-call property bag onto the cloned template.
@@ -1156,8 +1177,11 @@ impl Engine {
                 let sg = self
                     .inner
                     .subgraph_cache
-                    .get(&cache_handler, "list")
+                    .get(&cache_handler, "list", handler_cid)
                     .unwrap_or_else(|| {
+                        self.inner
+                            .parse_counter
+                            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                         let mut sb =
                             benten_eval::SubgraphBuilder::new(format!("crud:{label}:list"));
                         let r = sb.read(format!("crud_{label}_list"));
@@ -1171,7 +1195,7 @@ impl Engine {
                         }
                         self.inner
                             .subgraph_cache
-                            .insert(&cache_handler, "list", sg.clone());
+                            .insert(&cache_handler, "list", handler_cid, sg.clone());
                         sg
                     });
                 Ok((sg, Some(label.to_string())))
@@ -1180,15 +1204,18 @@ impl Engine {
                 let mut sg = self
                     .inner
                     .subgraph_cache
-                    .get(&cache_handler, "get")
+                    .get(&cache_handler, "get", handler_cid)
                     .unwrap_or_else(|| {
+                        self.inner
+                            .parse_counter
+                            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                         let mut sb = benten_eval::SubgraphBuilder::new(format!("crud:{label}:get"));
                         let r = sb.read(format!("crud_{label}_get"));
                         let _ = sb.respond(r);
                         let sg = sb.build_unvalidated_for_test();
                         self.inner
                             .subgraph_cache
-                            .insert(&cache_handler, "get", sg.clone());
+                            .insert(&cache_handler, "get", handler_cid, sg.clone());
                         sg
                     });
                 // Signal to the outcome mapper that this single-get should
@@ -1322,8 +1349,11 @@ impl Engine {
                 let mut sg = self
                     .inner
                     .subgraph_cache
-                    .get(&cache_handler, "delete")
+                    .get(&cache_handler, "delete", handler_cid)
                     .unwrap_or_else(|| {
+                        self.inner
+                            .parse_counter
+                            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                         let mut sb =
                             benten_eval::SubgraphBuilder::new(format!("crud:{label}:delete"));
                         let w = sb.write(format!("crud_{label}_delete"));
@@ -1331,7 +1361,7 @@ impl Engine {
                         let sg = sb.build_unvalidated_for_test();
                         self.inner
                             .subgraph_cache
-                            .insert(&cache_handler, "delete", sg.clone());
+                            .insert(&cache_handler, "delete", handler_cid, sg.clone());
                         sg
                     });
                 if let Some(w_node) = sg.first_op_mut() {
@@ -1375,13 +1405,25 @@ impl Engine {
     fn subgraph_for_spec(
         &self,
         spec: &SubgraphSpec,
-        _op: &str,
+        op: &str,
         _input: &Node,
+        handler_cid: &Cid,
     ) -> Result<benten_eval::Subgraph, EngineError> {
-        // Materialize the recorded WriteSpecs into an ordered WRITE chain
-        // terminated by RESPOND. When no WriteSpec contributes a real write
-        // (phase-1 shape-only fixtures), we still synthesize an empty chain
-        // so the evaluator walks it and terminates cleanly.
+        // Phase 2a G2-B / arch-r1-5: consult the AST cache (WRITE-free
+        // specs only, since WRITE-bearing specs stamp per-call `createdAt`).
+        let cache_eligible = spec.write_specs.is_empty();
+        if cache_eligible {
+            if let Some(cached) =
+                self.inner
+                    .subgraph_cache
+                    .get(&spec.handler_id, op, handler_cid)
+            {
+                return Ok(cached);
+            }
+        }
+        self.inner
+            .parse_counter
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let mut sb = benten_eval::SubgraphBuilder::new(spec.handler_id.clone());
         let mut last: Option<benten_eval::NodeHandle> = None;
         let mut write_ops: Vec<(usize, WriteSpec)> = Vec::new();
@@ -1433,6 +1475,11 @@ impl Engine {
                 node.properties
                     .insert("properties".into(), Value::Map(props));
             }
+        }
+        if cache_eligible {
+            self.inner
+                .subgraph_cache
+                .insert(&spec.handler_id, op, handler_cid, sg.clone());
         }
         Ok(sg)
     }

@@ -29,6 +29,7 @@ use benten_core::{Cid, CoreError, Node};
 pub use benten_errors::ErrorCode;
 
 pub mod backend;
+pub mod immutability;
 pub(crate) mod indexes;
 pub mod mutex_ext;
 pub mod redb_backend;
@@ -87,27 +88,39 @@ impl RedbBackend {
     }
 
     /// Phase 2a test-only hook: drain the ChangeEvent buffer for
-    /// `inv_13_dedup_does_not_emit_changeevent` assertions.
+    /// `inv_13_dedup_does_not_emit_changeevent` assertions. G5-A populates
+    /// the write side; G2-A leaves an empty-drain shim so the method
+    /// surface exists for the Inv-13 matrix tests to compile against.
     pub fn drain_change_events_for_test(&self) -> Vec<ChangeEvent> {
-        Vec::new()
+        self.drain_change_events_for_test_impl()
     }
 
-    /// Phase 2a test-only hook: whether the bloom-filter cache has the CID.
-    pub fn cache_contains_cid(&self, _cid: &Cid) -> bool {
-        false
+    /// Phase 2a test-only hook: whether the bloom-filter cache has warmed
+    /// for this CID. Backed by [`immutability::CidExistenceCache::warmed_for`]
+    /// — authoritative (records real inserts), not subject to bloom false
+    /// positives.
+    pub fn cache_contains_cid(&self, cid: &Cid) -> bool {
+        self.cache_contains_cid_impl(cid)
     }
 
-    /// Phase 2a test-only hook: force the next `put_node` to trip a bloom
-    /// false-positive path (inv_13_bloom_false_positive test).
-    pub fn force_bloom_collision_for_next_put(&self) {}
-
-    /// Phase 2a test-only hook: probe the bloom filter directly.
-    pub fn bloom_may_contain_for_test(&self, _cid: &Cid) -> bool {
-        false
+    /// Phase 2a test-only hook: force the next `put_node`'s bloom probe to
+    /// report `true` unconditionally (one-shot), so tests can exercise the
+    /// false-positive fallback path reliably.
+    pub fn force_bloom_collision_for_next_put(&self) {
+        self.force_bloom_collision_for_next_put_impl();
     }
 
-    /// Phase 2a test-only hook: force the next probe to return a positive.
-    pub fn force_bloom_positive_for_test(&self, _cid: &Cid) {}
+    /// Phase 2a test-only hook: non-mutating probe of the bloom filter.
+    pub fn bloom_may_contain_for_test(&self, cid: &Cid) -> bool {
+        self.bloom_may_contain_for_test_impl(cid)
+    }
+
+    /// Phase 2a test-only hook: force the bloom filter to report positive
+    /// for `cid` until the backend is dropped. Persistent (not one-shot —
+    /// contrast with [`Self::force_bloom_collision_for_next_put`]).
+    pub fn force_bloom_positive_for_test(&self, cid: &Cid) {
+        self.force_bloom_positive_for_test_impl(cid);
+    }
 
     /// Phase 2a arch-r1-1 descope-witness bench helper. The accompanying
     /// bench (`crud_post_create_dispatch_group_durability.rs`) routes its
@@ -123,9 +136,12 @@ impl RedbBackend {
     }
 
     /// Phase 2a test-only hook: return the `DurabilityMode` of the last
-    /// `put_node` that targeted this label.
-    pub fn last_put_node_durability_for_label(&self, _label: &str) -> Option<DurabilityMode> {
-        None
+    /// `put_node` that targeted a Node carrying `label`. Populated by
+    /// [`RedbBackend::put_node_with_context`] after every successful commit
+    /// so the `capability_grant_writes_immediate` test can assert that the
+    /// privileged path overrode the configured durability.
+    pub fn last_put_node_durability_for_label(&self, label: &str) -> Option<DurabilityMode> {
+        self.last_put_node_durability_for_label_impl(label)
     }
 
     /// Phase 2a test-only hook: reset the bytes-read counter for the
@@ -270,6 +286,18 @@ pub enum GraphError {
     #[error("nested transactions are not supported")]
     NestedTransactionNotSupported {},
 
+    /// Invariant 13 (immutability) rejection — an unprivileged
+    /// [`WriteAuthority::User`] re-put of an already-stored CID, per plan
+    /// §9.11 rows 1-2. Fires `E_INV_IMMUTABILITY`. G2-A lands the User-path
+    /// firing at the storage layer; G5-A extends to cover the full 5-row
+    /// matrix (EnginePrivileged dedup + SyncReplica dedup rows do NOT return
+    /// this error — they dedup to `Ok(cid)`).
+    #[error("immutability violation: CID {cid:?} already persisted")]
+    InvImmutability {
+        /// The CID the re-put targeted.
+        cid: Cid,
+    },
+
     /// The transaction's closure returned `Err`, so the write batch was
     /// rolled back.
     #[error("transaction aborted: {reason}")]
@@ -298,6 +326,7 @@ impl GraphError {
             GraphError::NestedTransactionNotSupported {} => {
                 ErrorCode::NestedTransactionNotSupported
             }
+            GraphError::InvImmutability { .. } => ErrorCode::InvImmutability,
             GraphError::TxAborted { .. } => ErrorCode::TxAborted,
         }
     }

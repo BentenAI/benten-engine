@@ -20,7 +20,8 @@ use benten_engine::Engine;
 use benten_graph::WriteAuthority;
 
 fn zero_cid() -> Cid {
-    Cid::from_bytes(&[0u8; benten_core::CID_LEN]).expect("zero cid")
+    // R3 fixture bug fix (rule-12): from_bytes(zero) fails on version byte.
+    Cid::from_blake3_digest([0u8; 32])
 }
 
 fn open_engine() -> (tempfile::TempDir, Engine) {
@@ -135,13 +136,10 @@ fn subgraph_cache_key_includes_subgraph_cid() {
     // (handler_id, op) pair must produce distinct cache entries.
     let cache = benten_engine::subgraph_cache::SubgraphCache::new_for_test();
     let cid_a = zero_cid();
-    let mut b = [0u8; benten_core::CID_LEN];
-    b[0] = 0x01;
-    b[1] = 0x71;
-    b[2] = 0x1e;
-    b[3] = 0x20;
-    b[benten_core::CID_LEN - 1] = 0x99;
-    let cid_b = Cid::from_bytes(&b).expect("cid b");
+    // R3 fixture fix (rule-12): use BLAKE3-digest constructor.
+    let mut digest = [0u8; 32];
+    digest[31] = 0x99;
+    let cid_b = Cid::from_blake3_digest(digest);
 
     cache.insert_for_test("h", "op", &cid_a, "ast-a");
     cache.insert_for_test("h", "op", &cid_b, "ast-b");
