@@ -40,12 +40,12 @@ jobs:
           toolchain: "1.89"
 
       - name: Build workspace
-        run: cargo build --workspace --locked
+        run: cargo build --workspace --locked --features benten-eval/testing
 
       - name: Fixture-match check (canonical CID)
         run: |
           # The canonical fixture CID must remain stable across Rust versions.
           # If MSRV drift changes the encoding path, this catches it before
           # merge.
-          cargo test --workspace --locked --no-fail-fast -- \
+          cargo test --workspace --locked --no-fail-fast --features benten-eval/testing -- \
             exit_6_canonical_cid_matches_spike_fixture

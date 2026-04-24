@@ -68,11 +68,21 @@ jobs:
         env:
           PROPTEST_CASES: "1024"
         run: |
-          cargo nextest run --profile ci --locked \
+          # The plan originally named test binaries `wait_resume` /
+          # `wait_inside_wait` / `engine_wait_end_to_end`; G3-B / G3-B-cont
+          # landed them with more-specific names that pattern-match the
+          # R3 consolidation scheme. Using an expression filter over the
+          # actual binary names keeps the gate aligned with where the tests
+          # currently live.
+          cargo nextest run --profile ci --locked --features benten-eval/testing \
             -p benten-engine \
-            --test wait_resume \
-            --test wait_inside_wait \
-            --test engine_wait_end_to_end
+            --test engine_wait_api_shape \
+            --test resume_decode_failure_not_panic \
+            --test resume_with_missing_attribution_triple_rejects \
+            --test resume_with_revoked_grant_denies \
+            --test resume_with_substituted_principal_rejects \
+            --test resume_with_tampered_attribution_rejected \
+            --test inv_13_wait_resume_stale_pin
 
   # ---------------------------------------------------------------------------
   # Gate 2 — Invariant firing tests: Inv-8 multiplicative, Inv-11 runtime,
@@ -124,7 +134,7 @@ jobs:
           tool: cargo-nextest
       - name: Run Option C flanking + end-to-end tests
         run: |
-          cargo nextest run --profile ci --locked \
+          cargo nextest run --profile ci --locked --features benten-eval/testing \
             -E 'test(/option_c_flanking_methods::/) + test(/crud_post_get_symmetric_none/)'
 
   # ---------------------------------------------------------------------------
