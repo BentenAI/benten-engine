@@ -273,7 +273,7 @@ export class SubgraphBuilder {
   // Phase 2a G3-B (dx-r1-8): WAIT accepts either a signal-keyed form or the
   // Phase-1 timed form; exactly one of `signal` / `duration` must be set.
   public wait(args: WaitArgs): this {
-    const a = args as Partial<WaitSignalArgs & WaitDurationArgs>;
+    const a = args as { signal?: string; duration?: string };
     if (!a || (a.signal == null && a.duration == null)) {
       throw new EDslInvalidShape(
         "wait(args) requires either `signal: string` or `duration: string` (E_DSL_INVALID_SHAPE)",
@@ -491,7 +491,7 @@ export class CaseBuilder {
     return this.addNode("emit", { ...a } as Record<string, JsonValue>);
   }
   public wait(a: WaitArgs): this {
-    const s = a as Partial<WaitSignalArgs & WaitDurationArgs>;
+    const s = a as { signal?: string; duration?: string };
     if (!s || (s.signal == null && s.duration == null)) {
       throw new EDslInvalidShape(
         "wait(args) requires either `signal: string` or `duration: string` (E_DSL_INVALID_SHAPE)",
@@ -568,7 +568,7 @@ export function emit(args: EmitArgs): { primitive: "emit"; args: EmitArgs } {
   return { primitive: "emit", args };
 }
 export function wait(args: WaitArgs): { primitive: "wait"; args: WaitArgs } {
-  const s = args as Partial<WaitSignalArgs & WaitDurationArgs>;
+  const s = args as { signal?: string; duration?: string };
   if (!s || (s.signal == null && s.duration == null)) {
     throw new EDslInvalidShape(
       "wait(args) requires either `signal: string` or `duration: string` (E_DSL_INVALID_SHAPE)",
