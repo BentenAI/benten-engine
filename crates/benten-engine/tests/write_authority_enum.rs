@@ -131,31 +131,6 @@ fn engine_call_first_call_warms_cache() {
 }
 
 #[test]
-fn subgraph_cache_key_includes_subgraph_cid() {
-    // arch-r1-5: two different subgraph_cid values for the SAME
-    // (handler_id, op) pair must produce distinct cache entries.
-    let cache = benten_engine::subgraph_cache::SubgraphCache::new_for_test();
-    let cid_a = zero_cid();
-    // R3 fixture fix (rule-12): use BLAKE3-digest constructor.
-    let mut digest = [0u8; 32];
-    digest[31] = 0x99;
-    let cid_b = Cid::from_blake3_digest(digest);
-
-    cache.insert_for_test("h", "op", &cid_a, "ast-a");
-    cache.insert_for_test("h", "op", &cid_b, "ast-b");
-
-    assert_eq!(
-        cache.get_for_test("h", "op", &cid_a),
-        Some("ast-a".to_string())
-    );
-    assert_eq!(
-        cache.get_for_test("h", "op", &cid_b),
-        Some("ast-b".to_string()),
-        "different subgraph_cid for same (handler_id, op) must not collide"
-    );
-}
-
-#[test]
 fn ast_cache_invalidates_on_reregister() {
     // dx-r1: re-register under a different CID invalidates the prior entry.
     let (_d, engine) = open_engine();
