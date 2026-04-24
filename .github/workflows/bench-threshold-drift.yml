@@ -1,0 +1,114 @@
+name: Bench Threshold Drift
+
+# G11-A Wave-1 carry Item 4: drift-lint between bench-source THRESHOLD_NS
+# comments and the documented matrix.
+#
+# `docs/BENCHMARKING.md` is internal-only / gitignored, so the public CI
+# runner never sees it. The matrix below is the workflow's inlined
+# source-of-truth — it mirrors the BENCHMARKING.md table values but lives
+# here so the gate is self-contained on a clean checkout.
+#
+# Per-bench comments at the top of each `crates/**/benches/*.rs` body
+# carry a machine-readable
+#   `// THRESHOLD_NS=<value> policy=<policy> source=<ref>`
+# line. The job greps every bench source for that line and asserts the
+# `<value>` matches the inlined matrix below. If a contributor changes the
+# bench-source comment without updating the matrix (or vice-versa), this
+# job fails red.
+#
+# The "value" axis is either a numeric nanosecond ceiling
+# (`fail-on-regression` policy benches) or the literal string
+# `informational` (no CI gate, but still a documented target).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'crates/**/benches/*.rs'
+      - '.github/workflows/bench-threshold-drift.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: Bench-source THRESHOLD_NS matrix drift
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Verify bench-source THRESHOLD_NS comments match inlined matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Inlined source-of-truth matrix. Each row is:
+          #   <bench-source-relative-path>|<expected THRESHOLD_NS value>
+          # Values are either a numeric nanosecond ceiling or the literal
+          # string `informational`. Mirrors docs/BENCHMARKING.md (which is
+          # gitignored on public CI runners).
+          declare -A MATRIX=(
+            ["crates/benten-eval/benches/multiplicative_budget_overhead.rs"]="1000"
+            ["crates/benten-engine/benches/get_node_label_only_sub_1us.rs"]="1000"
+            ["crates/benten-eval/benches/transform_expression_latency.rs"]="10000"
+            ["crates/benten-eval/benches/wait_suspend_resume_latency.rs"]="50000"
+            ["crates/benten-caps/benches/wallclock_toctou_refresh.rs"]="informational"
+            ["crates/benten-engine/benches/option_c_evaluator_path_overhead.rs"]="informational"
+          )
+
+          fail=0
+
+          # 1. For every row in the matrix, grep the source for the
+          #    machine-readable `// THRESHOLD_NS=<value>` comment and
+          #    confirm the value matches.
+          for src in "${!MATRIX[@]}"; do
+            expected="${MATRIX[$src]}"
+            if [ ! -f "$src" ]; then
+              echo "DRIFT: matrix row references missing bench source: $src"
+              fail=1
+              continue
+            fi
+            # Match a line of the form `// THRESHOLD_NS=<value> ...`
+            # — the comment may have leading whitespace and trailing
+            # tokens (policy=..., source=...). `\s` is not portable in
+            # BSD/GNU sed -E; use `[[:space:]]` instead.
+            actual=$(grep -E '^[[:space:]]*//[[:space:]]*THRESHOLD_NS=' "$src" | head -n1 | sed -E 's|^[[:space:]]*//[[:space:]]*THRESHOLD_NS=([^ ]+).*|\1|' || true)
+            if [ -z "$actual" ]; then
+              echo "DRIFT: $src has no machine-readable THRESHOLD_NS=<value> comment"
+              fail=1
+              continue
+            fi
+            if [ "$actual" != "$expected" ]; then
+              echo "DRIFT: $src THRESHOLD_NS=$actual but matrix expects $expected"
+              fail=1
+              continue
+            fi
+            echo "OK: $src THRESHOLD_NS=$actual"
+          done
+
+          # 2. Reverse direction: any bench source carrying a
+          #    machine-readable THRESHOLD_NS line that ISN'T in the
+          #    matrix is also drift (a new bench landed without a matrix
+          #    update).
+          while IFS= read -r src; do
+            if [ -z "${MATRIX[$src]+x}" ]; then
+              echo "DRIFT: $src carries a THRESHOLD_NS comment but no matrix row"
+              fail=1
+            fi
+          done < <(grep -lE '^[[:space:]]*//[[:space:]]*THRESHOLD_NS=' crates/*/benches/*.rs || true)
+
+          if [ "$fail" -ne 0 ]; then
+            echo ""
+            echo "Bench-threshold matrix is out of sync with bench-source comments."
+            echo "Update either the bench-source THRESHOLD_NS=<value> line OR"
+            echo "the matrix in .github/workflows/bench-threshold-drift.yml."
+            echo "(docs/BENCHMARKING.md tracks the same matrix for human readers"
+            echo " but is gitignored, so the workflow's inlined matrix is the"
+            echo " authoritative source-of-truth on CI.)"
+            exit 1
+          fi
+
+          echo "All bench THRESHOLD_NS comments match the inlined matrix."
