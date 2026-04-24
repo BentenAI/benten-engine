@@ -1163,7 +1163,7 @@ impl Engine {
         if trace_mode {
             let projected_cid = pending.iter().find_map(|op| match op {
                 PendingHostOp::PutNode { projected_cid, .. } => Some(*projected_cid),
-                _ => None,
+                PendingHostOp::DeleteNode { .. } => None,
             });
             return Ok(outcome_from_terminal_with_cid(
                 self,
