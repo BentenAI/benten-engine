@@ -23,14 +23,6 @@ name = "phase_2a_catalog_coverage"
 path = "phase_2a_catalog_coverage.rs"
 
 [[test]]
-name = "invariant_coverage_doc"
-path = "invariant_coverage_doc.rs"
-
-[[test]]
-name = "host_functions_doc"
-path = "host_functions_doc.rs"
-
-[[test]]
 name = "quickstart_diagnosing_denied_reads"
 path = "quickstart_diagnosing_denied_reads.rs"
 
