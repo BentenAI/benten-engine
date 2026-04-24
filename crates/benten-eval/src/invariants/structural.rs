@@ -484,9 +484,7 @@ fn invariant_number(v: &InvariantViolation) -> u8 {
         InvariantViolation::Determinism => 9,
         InvariantViolation::ContentHash => 10,
         InvariantViolation::Registration => 12,
-        InvariantViolation::IterateMaxMissing
-        | InvariantViolation::IterateNestDepth
-        | InvariantViolation::IterateBudget => 8,
+        InvariantViolation::IterateMaxMissing | InvariantViolation::IterateBudget => 8,
         InvariantViolation::Attribution => 14,
         InvariantViolation::Immutability => 13,
         InvariantViolation::SystemZone => 11,
@@ -787,7 +785,7 @@ mod tests {
         assert_eq!(invariant_number(&InvariantViolation::Cycle), 1);
         assert_eq!(invariant_number(&InvariantViolation::FanoutExceeded), 3);
         assert_eq!(invariant_number(&InvariantViolation::TooManyNodes), 5);
-        assert_eq!(invariant_number(&InvariantViolation::IterateNestDepth), 8);
+        assert_eq!(invariant_number(&InvariantViolation::IterateBudget), 8);
     }
 
     /// Invariant 10 — canonical bytes are order-independent.

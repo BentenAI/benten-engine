@@ -41,7 +41,6 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::InvDeterminism,
     ErrorCode::InvContentHash,
     ErrorCode::InvRegistration,
-    ErrorCode::InvIterateNestDepth,
     ErrorCode::InvIterateMaxMissing,
     ErrorCode::InvIterateBudget,
     ErrorCode::CapDenied,

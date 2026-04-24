@@ -67,19 +67,17 @@ pub enum ErrorCode {
     InvContentHash,
     /// Registration-time catch-all for invariants lacking a distinct code.
     InvRegistration,
-    /// Registration-time: nested `ITERATE` deeper than the policy allows
-    /// (a Phase-1 stopgap for invariant 8's nesting aspect).
-    InvIterateNestDepth,
     /// Registration-time: `ITERATE` node is missing its required `max` bound.
     InvIterateMaxMissing,
     /// Runtime cumulative-iteration-budget exhaustion.
     ///
-    /// Phase 1 surfaces this when the iterative evaluator's per-run step
-    /// counter reaches the default iteration budget. Distinct from
-    /// [`ErrorCode::InvIterateNestDepth`] (registration-time stopgap for
-    /// invariant 8's nesting-depth aspect). Phase 2 replaces the scalar
-    /// budget with multiplicative-through-CALL accounting but keeps this
-    /// same code.
+    /// Phase 1 surfaced this when the iterative evaluator's per-run step
+    /// counter reached the default iteration budget. Phase 2a replaces
+    /// the scalar budget with multiplicative-through-CALL accounting
+    /// (`benten-eval::invariants::budget`) and keeps this same code for
+    /// both registration-time and runtime firing. The Phase-1 nest-depth
+    /// stopgap code (`E_INV_ITERATE_NEST_DEPTH`) was stripped at Phase-2a
+    /// open — pre-1.0 discipline, no external consumers.
     InvIterateBudget,
     /// Capability policy denied a write (generic `E_CAP_DENIED`).
     CapDenied,
@@ -279,7 +277,6 @@ impl ErrorCode {
             ErrorCode::InvDeterminism => "E_INV_DETERMINISM",
             ErrorCode::InvContentHash => "E_INV_CONTENT_HASH",
             ErrorCode::InvRegistration => "E_INV_REGISTRATION",
-            ErrorCode::InvIterateNestDepth => "E_INV_ITERATE_NEST_DEPTH",
             ErrorCode::InvIterateMaxMissing => "E_INV_ITERATE_MAX_MISSING",
             ErrorCode::InvIterateBudget => "E_INV_ITERATE_BUDGET",
             ErrorCode::CapDenied => "E_CAP_DENIED",
@@ -373,7 +370,6 @@ impl ErrorCode {
             "E_INV_DETERMINISM" => ErrorCode::InvDeterminism,
             "E_INV_CONTENT_HASH" => ErrorCode::InvContentHash,
             "E_INV_REGISTRATION" => ErrorCode::InvRegistration,
-            "E_INV_ITERATE_NEST_DEPTH" => ErrorCode::InvIterateNestDepth,
             "E_INV_ITERATE_MAX_MISSING" => ErrorCode::InvIterateMaxMissing,
             "E_INV_ITERATE_BUDGET" => ErrorCode::InvIterateBudget,
             "E_CAP_DENIED" => ErrorCode::CapDenied,

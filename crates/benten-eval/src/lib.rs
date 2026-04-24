@@ -338,13 +338,11 @@ pub enum InvariantViolation {
     Determinism,
     ContentHash,
     IterateMaxMissing,
-    IterateNestDepth,
-    /// Runtime cumulative-iteration-budget exhaustion (invariant 8 runtime
-    /// leg). Distinct from `IterateNestDepth` (registration-time nesting
-    /// stopgap). Fires from the iterative evaluator when the per-run step
-    /// counter reaches `DEFAULT_ITERATION_BUDGET`. Maps to
-    /// [`ErrorCode::InvIterateBudget`] / `E_INV_ITERATE_BUDGET`. See
-    /// mini-review finding `g6-cag-1` / `g6-opl-6` / `g6-cr-2`.
+    /// Runtime + registration-time cumulative iteration-budget violation
+    /// (invariant 8). Phase-2a folds what was Phase-1's nest-depth stopgap
+    /// (`IterateNestDepth`, now stripped) into a single multiplicative-
+    /// through-CALL check via `benten-eval::invariants::budget`. Maps to
+    /// [`ErrorCode::InvIterateBudget`] / `E_INV_ITERATE_BUDGET`.
     IterateBudget,
     /// Aggregate catch-all for Invariant 12 — fires when two or more
     /// invariants are violated simultaneously. See
@@ -382,7 +380,6 @@ impl InvariantViolation {
             InvariantViolation::Determinism => ErrorCode::InvDeterminism,
             InvariantViolation::ContentHash => ErrorCode::InvContentHash,
             InvariantViolation::IterateMaxMissing => ErrorCode::InvIterateMaxMissing,
-            InvariantViolation::IterateNestDepth => ErrorCode::InvIterateNestDepth,
             InvariantViolation::IterateBudget => ErrorCode::InvIterateBudget,
             InvariantViolation::Registration => ErrorCode::InvRegistration,
             InvariantViolation::Attribution => ErrorCode::InvAttribution,

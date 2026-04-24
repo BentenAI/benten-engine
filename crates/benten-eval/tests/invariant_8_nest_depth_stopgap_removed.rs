@@ -69,11 +69,10 @@ fn invariant_8_nest_depth_4_rejects_by_budget_not_by_depth_code() {
         "depth-4 over-budget must fire E_INV_ITERATE_BUDGET, got {:?}",
         err.code()
     );
-    assert_ne!(
-        err.code(),
-        ErrorCode::InvIterateNestDepth,
-        "Phase 2a must NOT fire the dropped nest-depth stopgap code"
-    );
+    // Nest-depth stopgap variant (`ErrorCode::InvIterateNestDepth`) was
+    // stripped at Phase-2a open — pre-1.0 discipline. Previously this test
+    // also `assert_ne!`d against the stripped variant; the removal of the
+    // variant itself is the stronger pin.
 }
 
 #[test]
