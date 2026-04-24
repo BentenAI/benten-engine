@@ -265,7 +265,7 @@ pub fn execute_and_capture_zone_writes(signal: &str) -> Result<ZoneWriteCapture,
 /// Phase-2a evaluator-layer `evaluate` entry point. Walks the subgraph,
 /// finds the first WAIT node, and suspends — recording the node's
 /// `duration_ms` / `signal` / `timeout_ms` / `signal_shape` properties
-/// in the process-local [`registry`] side table so [`resume`] can
+/// in the process-local `registry` side table so [`resume`] can
 /// evaluate them against the ctx clock.
 ///
 /// A subgraph that contains no WAIT node returns

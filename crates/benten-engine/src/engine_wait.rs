@@ -24,7 +24,7 @@
 //! # Envelope-cache eviction (G11-A)
 //!
 //! The module-private `ENVELOPE_CACHE` is bounded by
-//! [`ENVELOPE_CACHE_MAX_ENTRIES`] to prevent unbounded memory growth from
+//! `ENVELOPE_CACHE_MAX_ENTRIES` to prevent unbounded memory growth from
 //! a long-running test process. The map is content-addressed — duplicate
 //! CIDs overwrite rather than accumulate — so the cap is only reached
 //! when a test generates many distinct envelopes. On insertion past the

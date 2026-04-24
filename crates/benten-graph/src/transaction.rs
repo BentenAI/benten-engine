@@ -31,7 +31,7 @@
 //! Phase-1 transactions opened via `RedbBackend::transaction` are always
 //! unprivileged — the [`WriteAuthority`] on [`Transaction`] is
 //! `WriteAuthority::User` at the backend entry points, and the system-zone
-//! label guard consults it via [`Transaction::is_privileged`]. Engine-
+//! label guard consults it via `Transaction::is_privileged`. Engine-
 //! internal multi-write operations that need to write `"system:"`-prefixed
 //! nodes or edges atomically (grant_capability / create_view /
 //! revoke_capability, G7) will land a dedicated privileged entry point
