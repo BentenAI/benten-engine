@@ -492,7 +492,7 @@ impl Engine {
     /// to assert an engine-privileged write actually landed (e.g.
     /// `grant_capability_only_via_engine_api`) reach through this
     /// accessor so the privileged back-channel is explicit.
-    #[cfg(any(test, debug_assertions, feature = "test-helpers"))]
+    #[cfg(any(test, feature = "test-helpers"))]
     #[must_use]
     pub fn backend_for_test(&self) -> &Arc<RedbBackend> {
         &self.backend

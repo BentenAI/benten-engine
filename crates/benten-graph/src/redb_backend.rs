@@ -1162,6 +1162,10 @@ impl RedbBackend {
 
     /// Backing for [`Self::put_node_at_cid_for_test`]. See the public
     /// method's doc-comment for the row-2 synthesis contract.
+    ///
+    /// G11-A Wave 2a: cfg-gated behind `any(test, feature = "testing")` —
+    /// the public wrapper is gated, so the impl tracks the same gate.
+    #[cfg(any(test, feature = "testing"))]
     pub(crate) fn put_node_at_cid_for_test_impl(
         &self,
         cid: &Cid,
@@ -1252,6 +1256,9 @@ impl RedbBackend {
     }
 
     /// Backing for [`Self::force_bloom_collision_for_next_put`].
+    ///
+    /// G11-A Wave 2a: cfg-gated behind `any(test, feature = "testing")`.
+    #[cfg(any(test, feature = "testing"))]
     pub(crate) fn force_bloom_collision_for_next_put_impl(&self) {
         let mut cache = self.immutability_cache.lock_recover();
         cache.force_collision_next();
@@ -1259,12 +1266,18 @@ impl RedbBackend {
 
     /// Backing for [`Self::bloom_may_contain_for_test`]. Non-mutating peek
     /// — does not consume a one-shot collision flag.
+    ///
+    /// G11-A Wave 2a: cfg-gated behind `any(test, feature = "testing")`.
+    #[cfg(any(test, feature = "testing"))]
     pub(crate) fn bloom_may_contain_for_test_impl(&self, cid: &Cid) -> bool {
         let cache = self.immutability_cache.lock_recover();
         cache.may_contain_peek(cid)
     }
 
     /// Backing for [`Self::force_bloom_positive_for_test`].
+    ///
+    /// G11-A Wave 2a: cfg-gated behind `any(test, feature = "testing")`.
+    #[cfg(any(test, feature = "testing"))]
     pub(crate) fn force_bloom_positive_for_test_impl(&self, cid: &Cid) {
         let mut cache = self.immutability_cache.lock_recover();
         cache.force_positive_for_test(cid);

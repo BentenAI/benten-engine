@@ -61,6 +61,7 @@ jobs:
         timeout-minutes: 5
         run: |
           cargo nextest run \
+            --features benten-eval/testing,benten-engine/test-helpers \
             -p benten-engine \
             --test integration \
             'integration::cross_process_graph::'
