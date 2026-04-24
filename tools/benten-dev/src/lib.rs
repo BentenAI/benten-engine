@@ -268,13 +268,14 @@ impl DevServer {
         op: &str,
         source: &str,
     ) -> Result<(), ErrorCode> {
-        // Reload coordinator: block until all in-flight calls drain so the
-        // swap from v_n → v_{n+1} is observably ordered against any call
-        // that had already entered its evaluator loop. Panics in in-flight
-        // calls do NOT deadlock — `ReloadCoordinator` tracks guards with
-        // `Arc::strong_count`, which decrements even on panic.
-        let _reload_lease = self.reload_coordinator.begin_reload();
-
+        // Swap ordering: the `RwLock::write()` below serializes concurrent
+        // reloads against each other, and each in-flight call's
+        // `Arc<HandlerVersion>` snapshot (captured via `snapshot_version`
+        // before entering its evaluator loop) keeps the pre-reload
+        // HandlerVersion alive for the call's lifetime — so a reload
+        // racing an in-flight call is observable via the snapshot but
+        // doesn't mutate the in-flight call's view. See
+        // `reload::ReloadCoordinator` module header.
         let mut t = self
             .handlers
             .write()
@@ -310,14 +311,17 @@ impl DevServer {
     /// grant-preservation tests that want to pin "a reload occurred but
     /// grants survived."
     ///
+    /// The shim is a no-op at this layer: the handler table is already
+    /// current, and the point is to bump the registration sequence so
+    /// the grant-audit-sequence test can pin that reload does NOT touch
+    /// the grant table.
+    ///
     /// # Errors
-    /// Returns `Err(ErrorCode)` on a poisoned reload coordinator.
+    /// Currently infallible — returns `Ok(())` unconditionally. The
+    /// `Result` return shape is preserved for future back-compat when a
+    /// drain-on-reload semantic lands in Phase-2b.
     pub fn reload_for_test(&self) -> Result<(), ErrorCode> {
-        let _lease = self.reload_coordinator.begin_reload();
-        // Reload is a no-op at this layer — the handler table is already
-        // current. The point of the shim is to exercise the coordinator
-        // so the grant-audit-sequence test can pin that reload does NOT
-        // touch the grant table.
+        self.registration_seq.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
 

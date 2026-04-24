@@ -1,35 +1,41 @@
-//! Reload coordinator — orders hot-reloads against in-flight evaluations.
+//! Reload coordinator — tracks in-flight evaluations so tests can observe
+//! the reload-vs-call ordering contract.
 //!
 //! ## Contract
 //!
-//! - A new evaluation acquires a `CallGuard` for its lifetime via
-//!   [`ReloadCoordinator::begin_call`]. The guard increments an
-//!   in-flight counter; dropping it (RAII, including on panic)
-//!   decrements it.
-//! - A reload acquires a `ReloadLease` via
-//!   [`ReloadCoordinator::begin_reload`]. The lease takes the reload
-//!   mutex and is held for the duration of the registration swap.
+//! A new evaluation acquires a `CallGuard` for its lifetime via
+//! [`ReloadCoordinator::begin_call`]. The guard increments an in-flight
+//! counter; dropping it (RAII, including on panic) decrements it.
 //!
 //! ## Phase-2a semantics
 //!
 //! Phase-2a's reload coordinator is intentionally *non-blocking* on
 //! in-flight calls: a reload races a call rather than queueing behind
-//! it. The handler-table snapshot taken by the call (an `Arc<HandlerVersion>`
-//! captured before the work begins) is what makes the in-flight
-//! evaluation observe the *pre-reload* version even when the new
-//! registration lands while the call is still executing. The reload
-//! mutex serializes concurrent reloads against each other so two writers
-//! cannot interleave their version-counter bumps.
+//! it. The actual ordering guarantee that makes in-flight calls observe
+//! the *pre-reload* `HandlerVersion` comes from TWO mechanisms in
+//! `DevServer::register_handler_from_str`:
 //!
-//! Phase-2b can tighten this to a "drain on reload" semantics if the
-//! WAIT-suspension story needs it; today the `Arc` snapshot is enough
-//! because evaluator state is per-call.
+//! 1. `RwLock::write()` on `DevServer.handlers` serializes concurrent
+//!    reloads against each other (the version-counter bump + new entry
+//!    insert both happen under the write lock, so two reloads cannot
+//!    interleave their bumps).
+//! 2. Each call captures an `Arc<HandlerVersion>` snapshot via
+//!    `snapshot_version()` before doing work; dropping the read-lock
+//!    after the snapshot means a concurrent reload's write-lock can
+//!    proceed, but the in-flight call continues executing against its
+//!    snapshot (the `Arc` keeps the old `HandlerVersion` live).
+//!
+//! This coordinator doesn't contribute to ordering — the `RwLock` and
+//! the `Arc` snapshot do. What this coordinator DOES contribute: the
+//! in-flight counter so tests can pin "reload occurred while N calls
+//! were in flight" + the slow-transform gate used by the in-flight
+//! harness. Phase-2b can introduce a drain-on-reload lease here if the
+//! WAIT-suspension story needs tighter ordering.
 //!
 //! ## Panic safety
 //!
-//! `CallGuard` and `ReloadLease` use Drop, so a panicking in-flight call
-//! still releases its in-flight counter and a panicking reload still
-//! releases the reload mutex. The `slow_transform_wait` path uses a
+//! `CallGuard` uses Drop, so a panicking in-flight call still releases
+//! its in-flight counter. The `slow_transform_wait` path uses a
 //! `Condvar` rather than a `std::sync::Barrier` because a panicking
 //! waiter on a Barrier would poison the harness.
 
@@ -42,8 +48,6 @@ pub struct ReloadCoordinator {
     /// Count of currently-executing calls. Used by [`ReloadCoordinator::in_flight_count`]
     /// for testing visibility.
     in_flight: AtomicUsize,
-    /// Serializes reloads against each other.
-    reload_lock: Mutex<()>,
     /// Slow-transform fixture — the call thread waits on this condvar; the
     /// test releases it via [`ReloadCoordinator::slow_transform_release`].
     slow_transform: SlowTransformGate,
@@ -71,7 +75,6 @@ impl ReloadCoordinator {
     pub const fn new() -> Self {
         Self {
             in_flight: AtomicUsize::new(0),
-            reload_lock: Mutex::new(()),
             slow_transform: SlowTransformGate::new(),
         }
     }
@@ -83,33 +86,6 @@ impl ReloadCoordinator {
         self.in_flight.fetch_add(1, Ordering::AcqRel);
         CallGuard {
             coord: Arc::clone(self),
-        }
-    }
-
-    /// Begin a reload. Returns a lease that releases the reload mutex on
-    /// drop. The lease is poison-tolerant — a panicking reload still
-    /// releases the lock for the next reload attempt.
-    #[must_use]
-    pub fn begin_reload(self: &Arc<Self>) -> ReloadLease {
-        // `lock_recover`-style poison handling: if a previous reload
-        // panicked while holding the lock the mutex is poisoned; we
-        // recover the inner guard rather than propagating the panic so a
-        // legitimate reload after a panicking call still succeeds.
-        // This is the panic-safety invariant the in-flight harness pins.
-        let guard = match self.reload_lock.lock() {
-            Ok(g) => g,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        // Convert the lifetime by leaking the guard's inner state — the
-        // ReloadLease holds an Arc to the coordinator and re-acquires
-        // implicitly on drop via the unlock. To avoid `unsafe`, simply
-        // drop the guard once we have proven we hold the mutex; reloads
-        // are short and don't need to keep the std MutexGuard alive.
-        // (Phase-2b: switch to parking_lot or a re-entrant primitive if
-        // we ever need long-held reload sessions.)
-        drop(guard);
-        ReloadLease {
-            _coord: Arc::clone(self),
         }
     }
 
@@ -165,12 +141,6 @@ impl Drop for CallGuard {
     }
 }
 
-/// RAII lease for an in-flight reload.
-#[derive(Debug)]
-pub struct ReloadLease {
-    _coord: Arc<ReloadCoordinator>,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -189,19 +159,6 @@ mod tests {
         let _ = h.join();
         // Guard dropped on panic-unwind; counter decremented.
         assert_eq!(coord.in_flight_count(), 0);
-    }
-
-    #[test]
-    fn reload_after_panicking_reload_still_succeeds() {
-        let coord = Arc::new(ReloadCoordinator::new());
-        let c2 = Arc::clone(&coord);
-        let h = thread::spawn(move || {
-            let _l = c2.begin_reload();
-            panic!("intentional");
-        });
-        let _ = h.join();
-        // The mutex is poisoned, but begin_reload recovers.
-        let _l = coord.begin_reload();
     }
 
     #[test]
