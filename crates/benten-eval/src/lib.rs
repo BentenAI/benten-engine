@@ -359,6 +359,14 @@ pub enum InvariantViolation {
     /// [`ErrorCode::InvImmutability`]. Runtime firing lives in
     /// `benten-graph` per plan §9.11.
     Immutability,
+    /// Invariant 11 (G5-B-i): a user subgraph declares a READ or WRITE
+    /// whose target label falls within a `system:*` system-zone prefix.
+    /// Fires at registration-time via the literal-CID walker in
+    /// [`crate::invariants::system_zone::validate_registration`]; the
+    /// runtime counterpart lives in `benten-engine/src/primitive_host.rs`
+    /// and reuses the `ErrorCode::InvSystemZone` code. Maps to
+    /// [`ErrorCode::InvSystemZone`].
+    SystemZone,
 }
 
 impl InvariantViolation {
@@ -378,6 +386,7 @@ impl InvariantViolation {
             InvariantViolation::Registration => ErrorCode::InvRegistration,
             InvariantViolation::Attribution => ErrorCode::InvAttribution,
             InvariantViolation::Immutability => ErrorCode::InvImmutability,
+            InvariantViolation::SystemZone => ErrorCode::InvSystemZone,
         }
     }
 }

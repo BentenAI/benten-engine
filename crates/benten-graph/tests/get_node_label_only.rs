@@ -53,7 +53,13 @@ fn get_node_label_only_missing_cid_returns_none() {
     let dir = tempfile::tempdir().expect("tempdir");
     let backend = RedbBackend::open_or_create(dir.path().join("miss.redb")).expect("open");
 
-    let phantom = benten_core::Cid::from_bytes(&[0u8; benten_core::CID_LEN]).expect("phantom cid");
+    // `Cid::from_bytes(&[0u8; CID_LEN])` rejects with `InvalidCid("wrong CID
+    // version")` because the canonical encoding carries a multicodec /
+    // multihash prefix an all-zero buffer can't satisfy. Derive a phantom
+    // CID by threading the zero BLAKE3 digest through the content-
+    // addressing helper instead (mirrors the pattern used by
+    // `subgraph_load_verified_migration.rs::missing`).
+    let phantom = benten_core::Cid::from_blake3_digest([0u8; 32]);
     let out = backend.get_node_label_only(&phantom).expect("ok");
     assert!(out.is_none(), "missing CID must return None, not an error");
 }

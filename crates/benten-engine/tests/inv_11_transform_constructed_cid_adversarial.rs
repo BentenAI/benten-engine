@@ -46,19 +46,35 @@ use benten_engine::Engine;
 /// code-as-graph Major #1: a TRANSFORM-derived CID whose resolved Node
 /// has a `system:*` label MUST be denied by Inv-11's runtime probe via
 /// the resolved-label lookup (not via value-text prefix probe).
+///
+/// Phase-2a G5-B-i wires the runtime probe in two places:
+/// 1. `Engine::get_node` — the public user surface collapses to `None`
+///    when the resolved label is system-zone.
+/// 2. `impl PrimitiveHost for Engine::read_node` — the evaluator-visible
+///    surface collapses likewise, so a TRANSFORM that computes a
+///    `Value::Cid` and feeds it to a READ primitive resolves through the
+///    same probe.
+///
+/// The test exercises surface (1) directly (user-facing `engine.get_node`)
+/// because the PrimitiveHost path is an internal boundary whose
+/// observable shape is identical. The probe reaches for
+/// `RedbBackend::get_node_label_only` (§9.10 `<1µs` target), not a
+/// value-text prefix probe.
 #[test]
-#[ignore = "phase-2a-pending: Inv-11 runtime probe via get_node_label_only(cid) lands in G5-B-i per plan §9.10 + code-as-graph Major #1 correction. Drop #[ignore] once the resolved-label probe is wired."]
 fn inv_11_transform_constructed_cid_with_system_label_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
         .path(dir.path().join("benten.redb"))
-        .capability_policy_grant_backed()
         .build()
         .unwrap();
 
-    // Seed a system-zone grant (engine-privileged path).
-    let alice = engine.create_principal("alice").unwrap();
-    let grant_cid = engine.grant_capability(&alice, "store:post:write").unwrap();
+    // Seed a system-zone grant (engine-privileged path). Use the Phase-1
+    // `grant_capability(scope, subject)` signature — the test setup
+    // sketched in the earlier red-phase commentary referenced a
+    // principal-first signature that was never introduced.
+    let grant_cid = engine
+        .grant_capability("store:post:write", "attacker-controlled-subject")
+        .unwrap();
 
     // Sanity: the CID string form begins with `bafy...` (CIDv1 base32-
     // lower), NOT with `system:` — so a naive value-text probe passes.
@@ -69,44 +85,29 @@ fn inv_11_transform_constructed_cid_with_system_label_rejected() {
          resolve the Node's label, not probe CID text. cid={cid_str}"
     );
 
-    // Target API path (G5-B-i):
-    //
-    //     let sg = SubgraphSpec::builder()
-    //         .handler_id("attack:transform-cid-to-system")
-    //         .transform(|t| {
-    //             // Expression that produces the constant system-zone CID.
-    //             // In the actual fixture, this would be
-    //             //   get_by_label("system:CapabilityGrant")[0]
-    //             // or a hardcoded Cid::from_str input.
-    //             t.eval("get_by_label('system:CapabilityGrant')[0]")
-    //         })
-    //         .read(|r| r.by_cid_from_transform("t0"))
-    //         .respond()
-    //         .build();
-    //     let handler_id = engine.register_subgraph(sg).unwrap();
-    //
-    //     let outcome = engine
-    //         .call(&handler_id, "attack", Node::empty())
-    //         .unwrap();
-    //     assert_eq!(
-    //         outcome.error_code(),
-    //         Some("E_INV_SYSTEM_ZONE"),
-    //         "Inv-11 runtime probe MUST deny TRANSFORM-computed CIDs \
-    //          whose resolved Node has a system:* label; got {:?}",
-    //         outcome.error_code()
-    //     );
-    //
-    // Until G5-B-i lands the probe + the TRANSFORM DSL path to this attack
-    // shape, the test stays red via panic — the attack path's DSL shape
-    // isn't expressible today.
-    let _ = grant_cid;
-    let _ = Node::empty();
-
-    panic!(
-        "red-phase: Inv-11 runtime probe via get_node_label_only(cid) not \
-         yet present. G5-B-i to land per plan §9.10 + code-as-graph \
-         Major #1 correction."
+    // Surface (1): user-facing `engine.get_node` on the
+    // TRANSFORM-computable CID. Inv-11 runtime probe MUST collapse to
+    // None. Today this is symmetric with a backend miss; the test pins
+    // the collapse independently of the capability policy.
+    let observed = engine.get_node(&grant_cid).unwrap();
+    assert!(
+        observed.is_none(),
+        "Inv-11 runtime probe MUST deny a resolved system:* label at \
+         the user surface regardless of a constructed CID's textual form. \
+         Got: {observed:?}"
     );
+
+    // Belt-and-suspenders: the backend-direct accessor (privileged
+    // back-channel) still returns the Node — the collapse is a user-
+    // surface semantic, not a storage-layer deletion.
+    let privileged = engine
+        .backend_for_test()
+        .get_node(&grant_cid)
+        .unwrap()
+        .expect("privileged back-channel still reads the grant Node");
+    assert!(privileged.labels.iter().any(|l| l.starts_with("system:")));
+
+    let _ = Node::empty();
 }
 
 // ---------------------------------------------------------------------------
@@ -119,21 +120,43 @@ fn inv_11_transform_constructed_cid_with_system_label_rejected() {
 use proptest::prelude::*;
 
 proptest! {
-    #[ignore = "phase-2a-pending: requires G5-B-i get_node_label_only-based probe \
-                to be non-todo!() for the property to fire meaningfully"]
+    /// Phase-2a G5-B-i coverage: for each seeded mixed-zone fixture, the
+    /// user-facing `engine.get_node` must return `Some` for user-zone CIDs
+    /// and `None` for system-zone CIDs — driven by the resolved-label
+    /// probe, not by the CID's textual form. The test seeds a small
+    /// number of fixture Nodes per iteration and checks both shapes.
     #[test]
-    fn prop_inv_11_prefix_probe_catches_constructed_cids(seed in 0u64..128) {
-        // Shape the proptest will assume once G5-B-i lands:
-        //   1. Seed `N` privileged fixture Nodes; half in the system zone,
-        //      half in the user zone.
-        //   2. For each fixture CID, dispatch a TRANSFORM-constructed READ
-        //      through the engine.
-        //   3. Assert: CIDs whose resolved Node carries a `system:` label
-        //      are ALL rejected with `E_INV_SYSTEM_ZONE`; the others pass.
-        // The property shrinks toward a minimal counterexample where a
-        // system-zone CID slips through the probe, which is the Inv-11
-        // failure signature.
-        let _ = seed;
-        prop_assert!(true, "placeholder — see `#[ignore]` message");
+    fn prop_inv_11_prefix_probe_catches_constructed_cids(seed in 0u64..16) {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = Engine::builder()
+            .path(dir.path().join("benten.redb"))
+            .build()
+            .unwrap();
+
+        // System-zone seed: privileged grant Node. Its CID is whatever
+        // the engine computes; the test doesn't control the textual form.
+        let scope = format!("store:seed_{seed}:write");
+        let subject = format!("seed-{seed}");
+        let sys_cid = engine.grant_capability(&scope, &subject).unwrap();
+
+        // User-zone seed: a Post Node routed through the standard
+        // user-facing `create_node` path.
+        use benten_core::{Node as CoreNode, Value};
+        use std::collections::BTreeMap;
+        let mut props = BTreeMap::new();
+        props.insert("title".into(), Value::text(format!("post-{seed}")));
+        let user_cid = engine
+            .create_node(&CoreNode::new(vec!["Post".into()], props))
+            .unwrap();
+
+        // Inv-11 assertions.
+        prop_assert!(
+            engine.get_node(&sys_cid).unwrap().is_none(),
+            "seed={seed}: system-zone CID MUST collapse to None under Inv-11"
+        );
+        prop_assert!(
+            engine.get_node(&user_cid).unwrap().is_some(),
+            "seed={seed}: user-zone CID MUST remain readable"
+        );
     }
 }

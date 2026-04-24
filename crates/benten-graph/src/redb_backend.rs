@@ -1437,6 +1437,16 @@ impl NodeStore for RedbBackend {
     fn delete_node(&self, cid: &Cid) -> Result<(), Self::Error> {
         RedbBackend::delete_node(self, cid)
     }
+
+    // Phase 2a G5-B-i (Code-as-graph Major #1): override the default-impl
+    // `get_node(cid)?.labels.first()` path with the redb-specific fast
+    // path so trait-dispatched callers (Phase-2b generic NodeStore
+    // consumers) get the same byte-bounded probe as the inherent call
+    // site. The implementation lives in `lib.rs`'s impl-block alongside
+    // the other Phase-2a hooks on `RedbBackend`.
+    fn get_node_label_only(&self, cid: &Cid) -> Result<Option<String>, Self::Error> {
+        RedbBackend::get_node_label_only(self, cid)
+    }
 }
 
 impl EdgeStore for RedbBackend {

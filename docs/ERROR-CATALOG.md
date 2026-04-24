@@ -66,8 +66,8 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Message:** "Node {node_id} references system-zone label '{label}', unreachable from user operations"
 - **Context:** `{ node_id: NodeId, label: string }`
 - **Fix:** System-zone labels are reserved for engine internals. Use a non-reserved label.
-- **Thrown at:** Registration
-- **Phase:** 2 (invariant 11 full registration-time enforcement; Phase 1 stopgap is `E_SYSTEM_ZONE_WRITE` at the graph write-path layer)
+- **Thrown at:** Registration (literal-CID walker in `benten-eval::invariants::system_zone::validate_registration`) + Runtime (resolved-label probe in `benten-engine::primitive_host` — TRANSFORM-computed CIDs whose resolved Node carries a `system:*` label). Also fires from `Engine::get_node` when an unprivileged caller reads a system-zone CID (the probe returns `Ok(None)` at the user surface rather than routing an error — symmetric with a backend miss — but the storage-layer read itself records the `E_INV_SYSTEM_ZONE` code in the runtime telemetry path).
+- **Phase:** 2a G5-B-i — **active**. Registration-time (literal-CID) + runtime (resolved-label via `RedbBackend::get_node_label_only` per Code-as-graph Major #1) enforcement live. The Phase-1 `E_SYSTEM_ZONE_WRITE` host-layer stopgap is retired on the user-facing surface (`Engine::create_node` now fires `E_INV_SYSTEM_ZONE`); the graph-layer storage stopgap is retained as defence-in-depth.
 
 ### E_INV_DETERMINISM
 

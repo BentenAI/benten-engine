@@ -171,6 +171,19 @@ pub fn validate_subgraph(
         }
     }
 
+    // Invariant 11 — system-zone literal-CID reject (Phase 2a G5-B-i).
+    // Walks every READ / WRITE node whose literal target label (from
+    // `"label"` property OR node id) begins with a `system:*` prefix.
+    // Runtime counterpart lives in `benten-engine/src/primitive_host.rs`.
+    if let Err(sz_err) =
+        crate::invariants::system_zone::validate_registration_with_diagnostics(sg.nodes.as_slice())
+    {
+        violations.push(InvariantViolation::SystemZone);
+        if !aggregate {
+            return Err(sz_err);
+        }
+    }
+
     // Invariant 9 — determinism. 5d-J workstream 4: the finalized
     // Subgraph now carries the `deterministic` flag (still in-memory
     // only; DAG-CBOR serialization is Phase-2 scope per the earlier
@@ -301,6 +314,18 @@ pub(crate) fn validate_builder(
         }
     }
 
+    // Invariant 11 — system-zone literal-CID reject (Phase 2a G5-B-i).
+    // Mirror the `validate_subgraph` wiring so `SubgraphBuilder::build_validated`
+    // trips the same gate a round-tripped Subgraph would hit.
+    if let Err(sz_err) =
+        crate::invariants::system_zone::validate_registration_with_diagnostics(sn.nodes)
+    {
+        violations.push(InvariantViolation::SystemZone);
+        if !aggregate {
+            return Err(sz_err);
+        }
+    }
+
     // Invariant 2 — max depth. Depth = count of CALL primitives on the
     // longest path (per `docs/ENGINE-SPEC.md` §4 and R1 triage:
     // handler-call depth is what the capability grant configures, not raw
@@ -423,6 +448,7 @@ fn invariant_number(v: &InvariantViolation) -> u8 {
         | InvariantViolation::IterateBudget => 8,
         InvariantViolation::Attribution => 14,
         InvariantViolation::Immutability => 13,
+        InvariantViolation::SystemZone => 11,
     }
 }
 

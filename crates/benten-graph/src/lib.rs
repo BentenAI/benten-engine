@@ -61,16 +61,34 @@ impl RedbBackend {
     }
 
     /// Phase 2a G5-B-i: fast-path label-only read (Code-as-graph Major #1).
-    /// Reads only the Node header bytes sufficient to extract the first
-    /// label; used by the Inv-11 runtime probe.
+    /// Reads the Node body bytes via the `n:CID` redb key and DAG-CBOR-decodes
+    /// just enough to surface the first label, without materializing the
+    /// full `Node` struct (properties are left unparsed).
+    ///
+    /// Used by the Inv-11 runtime probe in
+    /// `benten-engine/src/primitive_host.rs` so a TRANSFORM-computed CID
+    /// whose resolved Node carries a `system:*` label cannot flank the
+    /// registration-time walker (plan §9.10 + Code-as-graph Major #1).
+    ///
+    /// The implementation presently decodes the full Node under the hood
+    /// via `serde_ipld_dagcbor::from_slice` and drops everything but the
+    /// first label; the `<1µs` gate
+    /// (`get_node_label_only_sub_1us` criterion bench) documents the
+    /// Phase-2a target. A truly partial decoder is a Phase-2b perf
+    /// refinement — the public signature is stable either way.
     ///
     /// # Errors
-    /// Returns [`GraphError`] on decode failure.
-    pub fn get_node_label_only(&self, _cid: &Cid) -> Result<Option<String>, GraphError> {
-        todo!(
-            "Phase 2a G5-B-i: implement label-only fast path per plan §9.10 + \
-             Code-as-graph Major #1"
-        )
+    /// Returns [`GraphError::Core`] (carrying a `CoreError::Serialize`)
+    /// on decode failure, or [`GraphError::Redb`] on redb I/O failure.
+    pub fn get_node_label_only(&self, cid: &Cid) -> Result<Option<String>, GraphError> {
+        use crate::store::{decode_err, node_key};
+        let Some(bytes) = self.get(&node_key(cid))? else {
+            return Ok(None);
+        };
+        let node: benten_core::Node = serde_ipld_dagcbor::from_slice(&bytes)
+            .map_err(decode_err)
+            .map_err(GraphError::from)?;
+        Ok(node.labels.into_iter().next())
     }
 
     /// Phase 2a G5-A test-only hook: inject a [`Node`] under a caller-

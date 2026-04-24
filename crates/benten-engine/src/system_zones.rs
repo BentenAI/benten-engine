@@ -20,6 +20,7 @@ pub const SYSTEM_ZONE_PREFIXES: &[&str] = &[
     "system:Principal",
     "system:Grant",
     "system:WaitPending",
+    "system:WaitResume",
     "system:ModuleManifest",
     // IVM view-id namespace prefix. Entries like `system:ivm:content_listing`
     // resolve into built-in views; the prefix is engine-privileged. Added at

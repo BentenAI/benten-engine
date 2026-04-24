@@ -490,10 +490,16 @@ impl Engine {
     /// Phase 2a G5-B-i: engine-level alias for
     /// [`benten_graph::RedbBackend::get_node_label_only`] per plan §9.10.
     ///
+    /// Used by the Inv-11 runtime probe on the `PrimitiveHost` boundary
+    /// so a TRANSFORM-computed CID whose resolved Node carries a
+    /// `system:*` label is denied before the Node body is returned to
+    /// user code (Code-as-graph Major #1). Also reused by the
+    /// `get_node_label_only_sub_1us` criterion bench.
+    ///
     /// # Errors
     /// Returns [`EngineError`] on backend failure.
-    pub fn get_node_label_only(&self, _cid: &Cid) -> Result<Option<String>, EngineError> {
-        todo!("Phase 2a G5-B-i: engine alias for get_node_label_only fast path")
+    pub fn get_node_label_only(&self, cid: &Cid) -> Result<Option<String>, EngineError> {
+        Ok(self.backend().get_node_label_only(cid)?)
     }
 
     /// Phase 2a G2-A: engine-level `put_node` that respects the configured

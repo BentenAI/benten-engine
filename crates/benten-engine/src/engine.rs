@@ -404,6 +404,19 @@ impl Engine {
         &self.backend
     }
 
+    /// Phase 2a G5-B-i test-only backend accessor.
+    ///
+    /// The user-facing [`Engine::get_node`] now collapses system-zone
+    /// reads to `None` under the Inv-11 runtime probe. Tests that need
+    /// to assert an engine-privileged write actually landed (e.g.
+    /// `grant_capability_only_via_engine_api`) reach through this
+    /// accessor so the privileged back-channel is explicit.
+    #[cfg(any(test, debug_assertions, feature = "test-helpers"))]
+    #[must_use]
+    pub fn backend_for_test(&self) -> &Arc<RedbBackend> {
+        &self.backend
+    }
+
     pub(crate) fn policy(&self) -> Option<&dyn CapabilityPolicy> {
         self.policy.as_deref()
     }

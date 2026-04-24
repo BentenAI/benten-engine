@@ -66,9 +66,22 @@ fn engine_privileged_api_can_write_system_zone() {
     let grant_cid = engine
         .grant_capability(&actor, "store:post:write")
         .expect("privileged path permitted");
+    // Phase 2a G5-B-i: the user-facing `Engine::get_node` now collapses
+    // system-zone reads to `None` under the Inv-11 runtime probe.
+    // Verify via the privileged backend accessor that the grant did
+    // land; assert the user surface collapses as the new contract
+    // requires.
     assert!(
-        engine.get_node(&grant_cid).unwrap().is_some(),
-        "grant Node persisted"
+        engine
+            .backend_for_test()
+            .get_node(&grant_cid)
+            .unwrap()
+            .is_some(),
+        "grant Node persisted (privileged backend accessor)"
+    );
+    assert!(
+        engine.get_node(&grant_cid).unwrap().is_none(),
+        "Phase 2a Inv-11: user-facing get_node collapses system-zone reads"
     );
 }
 

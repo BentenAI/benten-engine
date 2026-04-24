@@ -45,6 +45,45 @@ use benten_graph::{ChangeEvent, GraphError, MutexExt};
 use crate::engine::{Engine, is_known_view_id};
 use crate::error::EngineError;
 use crate::outcome::Outcome;
+use crate::system_zones::SYSTEM_ZONE_PREFIXES;
+
+// ---------------------------------------------------------------------------
+// Phase 2a G5-B-i: Inv-11 runtime probe
+// ---------------------------------------------------------------------------
+
+/// Phase-2a Inv-11 runtime probe: `true` when `label` is inside the
+/// `system:*` reserved zone.
+///
+/// Every `system:*`-prefixed label is privileged — the broad check
+/// matches the Phase-1 storage-layer stopgap
+/// (`benten_graph::guard_system_zone_node`) so the registration-time
+/// walker, the runtime probe, and the graph storage guard share one
+/// deniable-set classification
+/// (`both_paths_agree_on_deniable_set`).
+///
+/// [`SYSTEM_ZONE_PREFIXES`] remains documented as the list of concrete
+/// system zones the engine itself writes, consumed by the
+/// `inv_11_system_zone_drift_test` CI guard; the classification used
+/// here is intentionally broader so an unknown-but-still-`system:`-
+/// prefixed label still routes through Inv-11.
+#[must_use]
+pub(crate) fn is_system_zone_label(label: &str) -> bool {
+    // A read of `SYSTEM_ZONE_PREFIXES` keeps the const live so the
+    // drift-detector test stays wired; any member is covered by the
+    // broad `starts_with("system:")` classification below.
+    let _ = SYSTEM_ZONE_PREFIXES;
+    label.starts_with("system:")
+}
+
+/// Inv-11 runtime probe: resolve `cid` through the backend's label-only
+/// fast path and return `true` when the stored Node carries a system-zone
+/// label. A missing CID returns `false` (no node → no disclosure).
+fn resolved_cid_in_system_zone(engine: &Engine, cid: &Cid) -> bool {
+    match engine.backend().get_node_label_only(cid) {
+        Ok(Some(label)) => is_system_zone_label(&label),
+        Ok(None) | Err(_) => false,
+    }
+}
 
 // ---------------------------------------------------------------------------
 // ActiveCall + PendingHostOp
@@ -136,6 +175,20 @@ impl PrimitiveHost for Engine {
     // `EvalError::Backend(String)` and the catalog code collapsed to
     // `E_EVAL_BACKEND` at the boundary.
     fn read_node(&self, cid: &Cid) -> Result<Option<Node>, benten_eval::EvalError> {
+        // Phase-2a Inv-11 runtime probe (G5-B-i / Code-as-graph Major #1):
+        // a TRANSFORM-computed CID whose resolved Node carries a
+        // `system:*` label MUST NOT leak to user code, regardless of what
+        // the configured capability policy permits. Inv-11 is an engine-
+        // side invariant stricter than the pluggable cap policy. We
+        // collapse to `Ok(None)` (symmetric with a clean miss) rather
+        // than surface a typed error so the adversary cannot distinguish
+        // "system-zone CID" from "no such CID" via the evaluator-visible
+        // return shape. Probe the RESOLVED Node's label via the backend's
+        // `get_node_label_only` fast path — per Major #1 the check is on
+        // the resolved label, not any passing `Value` payload.
+        if resolved_cid_in_system_zone(self, cid) {
+            return Ok(None);
+        }
         // Option C flanking (sec-r1-5 / atk-5): consult the read-gate on
         // every content-returning method — the by-CID branch collapses a
         // denial to `Ok(None)` so the caller cannot distinguish a denied
@@ -151,6 +204,14 @@ impl PrimitiveHost for Engine {
     }
 
     fn get_by_label(&self, label: &str) -> Result<Vec<Cid>, benten_eval::EvalError> {
+        // Phase-2a Inv-11 runtime probe: a user subgraph asking for every
+        // CID carrying a `system:*` label is a direct enumeration attack
+        // on the capability grant zone. Collapse to an empty list —
+        // symmetric with "no matching Nodes" — before the backend is
+        // consulted so the index probe itself is not a side-channel.
+        if is_system_zone_label(label) {
+            return Ok(Vec::new());
+        }
         // Option C flanking (sec-r1-5 / atk-5): consult the read-gate
         // before the backend probe. A denial collapses to an empty list —
         // symmetric with "no matching Nodes" — so a TRANSFORM-driven
@@ -173,6 +234,12 @@ impl PrimitiveHost for Engine {
         prop: &str,
         value: &Value,
     ) -> Result<Vec<Cid>, benten_eval::EvalError> {
+        // Phase-2a Inv-11 runtime probe: symmetric with `get_by_label`
+        // above — a `system:*`-filtered property query enumerates the
+        // system zone. Collapse before the backend probe.
+        if is_system_zone_label(label) {
+            return Ok(Vec::new());
+        }
         // Option C flanking (sec-r1-5 / atk-5): symmetric with
         // `get_by_label` — cap-denied reads collapse to an empty result
         // rather than leak existence via a populated list.
@@ -357,6 +424,15 @@ impl PrimitiveHost for Engine {
         view_id: &str,
         query: &benten_eval::ViewQuery,
     ) -> Result<Value, benten_eval::EvalError> {
+        // Phase-2a Inv-11 runtime probe: a user subgraph reading a
+        // `system:ivm:*` view id or a `system:*` query label enumerates
+        // engine-privileged projections. Collapse to an empty list
+        // before the IVM subscriber is consulted so the view-id
+        // registry is not itself a side-channel.
+        if is_system_zone_label(view_id) || query.label.as_deref().is_some_and(is_system_zone_label)
+        {
+            return Ok(Value::List(Vec::new()));
+        }
         // Option C flanking (sec-r1-5 / atk-5) — coarse-grained per
         // named Compromise #N+2 (IVM views are coarse-grained read-gated
         // in Phase 2a; per-row gating is Phase 3). The cap gate keys off

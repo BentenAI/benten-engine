@@ -35,6 +35,12 @@ fn system_labeled_node() -> Node {
 /// `Engine::create_node` is the user-facing CRUD entry point. Using it to
 /// write a `system:`-labelled Node must fail — this is the primary
 /// privilege-escalation vector in NoAuthBackend deployments.
+///
+/// Phase 2a G5-B-i retired the host-layer `E_SYSTEM_ZONE_WRITE` stopgap in
+/// favour of the Inv-11 runtime reject (`E_INV_SYSTEM_ZONE`). The
+/// storage-layer stopgap in `benten-graph/src/redb_backend.rs` stays as
+/// defence-in-depth. Per plan §9.10, this test pins the user-facing
+/// firing code to Inv-11.
 #[test]
 fn create_node_rejects_system_labeled_write() {
     let dir = tempfile::tempdir().unwrap();
@@ -47,17 +53,23 @@ fn create_node_rejects_system_labeled_write() {
         .create_node(&node)
         .expect_err("create_node must reject system:* labels");
 
-    match err {
-        EngineError::Graph(ge) => {
-            assert_eq!(ge.code(), ErrorCode::SystemZoneWrite);
-        }
-        other => panic!("unexpected error variant: {other:?}"),
-    }
+    assert_eq!(
+        err.error_code(),
+        ErrorCode::InvSystemZone,
+        "Phase 2a: user-facing create_node of a system:* Node fires \
+         E_INV_SYSTEM_ZONE via Inv-11; got {err:?}"
+    );
 }
 
 /// Privileged engine APIs are the ONLY way to mutate the system zone.
 /// `Engine::grant_capability` writes a `system:CapabilityGrant` Node and
 /// MUST succeed.
+///
+/// Phase 2a G5-B-i note: `Engine::get_node` now collapses reads on
+/// system-zone Nodes to `None` independently of the capability policy
+/// (Inv-11 runtime probe). Tests verifying that the privileged mint
+/// actually landed now reach through the backend's direct accessor,
+/// which bypasses the user-facing Inv-11 collapse.
 #[test]
 fn grant_capability_only_via_engine_api() {
     let dir = tempfile::tempdir().unwrap();
@@ -70,9 +82,20 @@ fn grant_capability_only_via_engine_api() {
         .grant_capability("post:write", "test-subject")
         .expect("engine.grant_capability must succeed as privileged path");
 
-    // Readable back — the grant exists in the store.
-    let fetched = engine.get_node(&cid).unwrap().expect("grant persisted");
+    // Readable back via the privileged back-channel (backend-direct).
+    // The user-facing `engine.get_node(cid)` now collapses to `None` on
+    // system-zone Nodes under Phase-2a Inv-11.
+    let fetched = engine
+        .backend_for_test()
+        .get_node(&cid)
+        .unwrap()
+        .expect("grant persisted");
     assert!(fetched.labels.iter().any(|l| l == "system:CapabilityGrant"));
+    // User-facing read MUST collapse to None under Inv-11.
+    assert!(
+        engine.get_node(&cid).unwrap().is_none(),
+        "Phase 2a: user-facing get_node MUST collapse system-zone reads"
+    );
 }
 
 /// `Engine::create_view` writes a `system:IVMView` Node — privileged path.
@@ -86,7 +109,13 @@ fn create_view_only_via_engine_api() {
     let view_cid = engine
         .create_view("content_listing", Default::default())
         .expect("engine.create_view is the privileged view-creation path");
-    let fetched = engine.get_node(&view_cid).unwrap().unwrap();
+    // Phase 2a: user-facing `engine.get_node` collapses system-zone reads;
+    // verify the view Node via the privileged backend accessor.
+    let fetched = engine
+        .backend_for_test()
+        .get_node(&view_cid)
+        .unwrap()
+        .unwrap();
     assert!(fetched.labels.iter().any(|l| l == "system:IVMView"));
 }
 

@@ -10,7 +10,7 @@
 
 use benten_caps::CapError;
 use benten_core::{Cid, Edge, Node};
-use benten_graph::GraphError;
+use benten_errors::ErrorCode;
 
 use crate::engine::Engine;
 use crate::error::EngineError;
@@ -21,22 +21,33 @@ impl Engine {
     /// Hash `node` (CIDv1 over labels + properties only), store it, and return
     /// its CID. Idempotent.
     ///
-    /// The unprivileged user-API path — system-zone labels (labels starting
-    /// with `"system:"`) are rejected with `E_SYSTEM_ZONE_WRITE`. Engine-
-    /// internal paths (grant/revoke/create_view) bypass the check via a
-    /// privileged `WriteContext`.
+    /// The unprivileged user-API path — system-zone labels (labels whose
+    /// prefix appears in
+    /// [`crate::system_zones::SYSTEM_ZONE_PREFIXES`]) are rejected with
+    /// `E_INV_SYSTEM_ZONE` (Phase 2a G5-B-i Inv-11). The Phase-1
+    /// `E_SYSTEM_ZONE_WRITE` host-layer stopgap is retired at the
+    /// user-facing surface; the identical check in the storage layer
+    /// (`benten-graph/src/redb_backend.rs::guard_system_zone_node`) is
+    /// retained as defence-in-depth per plan §9.10.
+    ///
+    /// Engine-internal paths (grant/revoke/create_view) bypass Inv-11 via
+    /// a privileged `WriteContext`.
     ///
     /// Runs inside a transaction so ChangeEvents fan out to registered
     /// subscribers (IVM, change-stream probes) at commit.
     pub fn create_node(&self, node: &Node) -> Result<Cid, EngineError> {
-        // Short-circuit the system-zone guard so the typed SystemZoneWrite
-        // error surfaces directly — running inside the transaction closure
-        // would rewrap it as TxAborted.
+        // Phase-2a Inv-11 user-facing check. Short-circuits the guard so
+        // the typed `E_INV_SYSTEM_ZONE` code surfaces directly — running
+        // inside the transaction closure would rewrap the storage-layer
+        // `E_SYSTEM_ZONE_WRITE` (defence-in-depth) as `TxAborted`.
         for label in &node.labels {
-            if label.starts_with("system:") {
-                return Err(EngineError::Graph(GraphError::SystemZoneWrite {
-                    label: label.clone(),
-                }));
+            if crate::primitive_host::is_system_zone_label(label) {
+                return Err(EngineError::Other {
+                    code: ErrorCode::InvSystemZone,
+                    message: format!(
+                        "Inv-11: system-zone label `{label}` not writable via user API"
+                    ),
+                });
             }
         }
         Ok(self.backend.transaction(|tx| tx.put_node(node))?)
@@ -53,16 +64,37 @@ impl Engine {
     /// the difference (e.g. for operator diagnostics), use
     /// [`Engine::diagnose_read`], which is gated on a separate
     /// `debug:read` capability.
+    ///
+    /// # Phase-2a Inv-11 runtime probe (G5-B-i)
+    ///
+    /// When the resolved Node's primary label falls inside a
+    /// Phase-2a system-zone prefix
+    /// ([`crate::system_zones::SYSTEM_ZONE_PREFIXES`]), the read
+    /// collapses to `Ok(None)` independently of the configured
+    /// capability policy. Inv-11 is an engine-side invariant stricter
+    /// than the pluggable cap policy — a user-facing `get_node(grant_cid)`
+    /// MUST NOT return the privileged content even under the
+    /// `NoAuthBackend` default. Engine-privileged code paths that need
+    /// to inspect system-zone Nodes reach through
+    /// `self.backend.get_node(cid)` directly.
     pub fn get_node(&self, cid: &Cid) -> Result<Option<Node>, EngineError> {
         let node = self.backend.get_node(cid)?;
         let Some(node) = node else {
             return Ok(None);
         };
+        // Phase-2a Inv-11 runtime probe (code-as-graph Major #1): probe
+        // the RESOLVED Node's first label — NOT a passing `Value` payload
+        // — against the engine-side system-zone prefix list. Applied
+        // before the cap-policy gate so the policy's verdict cannot
+        // override Inv-11.
+        let label = node.labels.first().cloned().unwrap_or_default();
+        if crate::primitive_host::is_system_zone_label(&label) {
+            return Ok(None);
+        }
         // Gate on the primary label. A Node with no labels collapses to
         // an empty-label ReadContext; GrantBackedPolicy permits the
         // empty-label path (introspection reads) so this stays
         // backwards-compatible for hand-constructed Nodes.
-        let label = node.labels.first().cloned().unwrap_or_default();
         if let Some(policy) = self.policy.as_deref() {
             let ctx = benten_caps::ReadContext {
                 label,
