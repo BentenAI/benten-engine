@@ -46,10 +46,6 @@ pub use view::{
     IvmError, View, ViewBudget, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState,
 };
 
-/// Marker for the current implementation phase. Removed when the generalized
-/// Algorithm B lands in Phase 2.
-pub const STUB_MARKER: &str = "benten-ivm::phase-1";
-
 // TODO(phase-2-ivm-bench): criterion benchmarks against RESULTS.md §1 targets
 // — one target per view (capability lookup, event dispatch, content listing,
 // governance traversal, version-current resolve). See mini-review g5-ivm-14.

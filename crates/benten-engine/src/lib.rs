@@ -63,32 +63,6 @@ pub mod subgraph_spec;
 pub mod testing;
 
 // ---------------------------------------------------------------------------
-// Stub-crate markers
-// ---------------------------------------------------------------------------
-//
-// Touch the stub crates so the dependency graph is real, not just declared.
-// TODO(phase-1-cleanup, G8): retire these three `const _:` assertions together
-// with the `STUB_MARKER` constants in benten-caps / benten-eval / benten-ivm
-// once those crates are no longer stub-phase (R-minor-08). Kept for now so
-// any stealth dependency removal surfaces as a compile error rather than a
-// silent regression.
-#[allow(
-    dead_code,
-    reason = "stub-marker assertions — see R-minor-08 for Phase-1 retirement"
-)]
-const _BENTEN_CAPS_MARKER: &str = benten_caps::STUB_MARKER;
-#[allow(
-    dead_code,
-    reason = "stub-marker assertions — see R-minor-08 for Phase-1 retirement"
-)]
-const _BENTEN_EVAL_MARKER: &str = benten_eval::STUB_MARKER;
-#[allow(
-    dead_code,
-    reason = "stub-marker assertions — see R-minor-08 for Phase-1 retirement"
-)]
-const _BENTEN_IVM_MARKER: &str = benten_ivm::STUB_MARKER;
-
-// ---------------------------------------------------------------------------
 // Public re-exports — preserve every call-site path that existed before the
 // R6 Wave 2 split.
 // ---------------------------------------------------------------------------

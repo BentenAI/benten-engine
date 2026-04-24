@@ -121,19 +121,6 @@ pub fn emit_refresh_event_for_test() -> HlcStampedRefreshEvent {
 /// - `docs/SECURITY-POSTURE.md` once that doc lands.
 pub const DEFAULT_BATCH_BOUNDARY: usize = 100;
 
-/// Legacy stub marker. Kept as a compile-time cross-crate link anchor because
-/// `benten-engine` references it in a `const _:` assertion pinned at R3 — the
-/// assertion exists so a fresh-eyes reviewer can tell, at a glance, which
-/// crate modules are still pre-implementation. The constant's value is
-/// cosmetic; only its presence (and `&str` type) are load-bearing for the
-/// cross-crate assertion.
-///
-/// `TODO(phase-1-cleanup, G8)`: remove both this constant and the mirrored
-/// reference at `benten-engine/src/lib.rs` (near the `const _: &str =
-/// benten_caps::STUB_MARKER;` line) together — both sides of the cross-crate
-/// assertion retire at the same commit.
-pub const STUB_MARKER: &str = "benten-caps::phase-1";
-
 /// Test-only back-compat surface.
 ///
 /// The real [`check_attenuation`] lives at the crate root (see the

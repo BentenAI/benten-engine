@@ -42,8 +42,7 @@ use crate::{
 /// emitters for Inv-11 should consume this constant so the wording
 /// stays canonical across the eval-side structural reject, the
 /// runtime system-zone probe, and the storage-layer guard.
-pub const SYSTEM_ZONE_REJECTION_MESSAGE: &str =
-    "Node IDs and labels cannot begin with the reserved 'system:' prefix — it's reserved for engine internals";
+pub const SYSTEM_ZONE_REJECTION_MESSAGE: &str = "Node IDs and labels cannot begin with the reserved 'system:' prefix — it's reserved for engine internals";
 
 /// Return `true` when `label` falls inside a Phase-2a system-zone prefix.
 ///

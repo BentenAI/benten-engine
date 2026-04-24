@@ -181,9 +181,6 @@ pub enum Outcome {
     Err(ErrorCode),
 }
 
-/// Marker for the current stub phase. Removed when the evaluator lands.
-pub const STUB_MARKER: &str = "benten-eval::stub";
-
 /// Configurable invariant limits. Defaults match ENGINE-SPEC §4.
 pub mod limits {
     /// Invariant 2: default max operation-subgraph depth.
