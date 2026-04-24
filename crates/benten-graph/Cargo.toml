@@ -28,6 +28,12 @@ bench = false
 # Closure of Named Compromise #7 (`[[bin]]` required-features gating).
 default = ["test-fixtures"]
 test-fixtures = []
+# `testing` gates the test-only instrumentation that would otherwise grow
+# unboundedly at runtime: the `test_event_log`, the `warmed` HashSet inside
+# `CidExistenceCache`, and the `last_durability_by_label` map. Matches the
+# `benten-eval/testing` feature pattern (G11-A alignment). Default off —
+# production builds carry none of this bookkeeping.
+testing = []
 
 [dependencies]
 benten-core = { path = "../benten-core" }
@@ -81,4 +87,10 @@ harness = false
 
 [[bench]]
 name = "crud_post_create_dispatch_group_durability"
+harness = false
+
+[[bench]]
+# G11-A: MVCC read latency during 0 / 1 / 4 / 16 concurrent writers.
+# Informational, not a gate — see the bench module docs.
+name = "mvcc_read_latency"
 harness = false

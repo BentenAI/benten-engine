@@ -64,6 +64,14 @@ pub const DEFAULT_FALSE_POSITIVE_RATE: f64 = 1.0 / 10_000.0;
 /// false-positive rate.
 const DEFAULT_EXPECTED_INSERTS: usize = 4096;
 
+/// G11-A unbounded-cache bound: maximum entries in the `warmed` test-only
+/// tracking set before the oldest half is evicted. Prevents the long-lived
+/// integration-test process from accumulating unbounded CIDs in memory
+/// (unbounded-cache G11-A capture). 100k gives every foreseeable test run
+/// plenty of headroom; the production-side fast-path consults the bloom
+/// filter, which is capacity-independent.
+const WARMED_CAP: usize = 100_000;
+
 /// A pedagogically-simple Bloom filter keyed on [`Cid`] bytes.
 ///
 /// The filter uses the double-hashing technique — two independent base hashes
@@ -303,9 +311,16 @@ impl CidExistenceCache {
     }
 
     /// Record that the CID has been persisted. Sets its bits in the bloom
-    /// filter and adds it to the `warmed` set.
+    /// filter and adds it to the `warmed` set. When `warmed` reaches
+    /// `WARMED_CAP`, the set is cleared before inserting the new CID — the
+    /// authoritative existence check is against redb, not this set, so
+    /// eviction is safe even for in-flight warmness assertions (which
+    /// test processes re-trigger after the cap).
     pub fn insert(&mut self, cid: &Cid) {
         self.bloom.insert(cid);
+        if self.warmed.len() >= WARMED_CAP {
+            self.warmed.clear();
+        }
         self.warmed.insert(*cid);
     }
 

@@ -32,3 +32,8 @@ blake3 = { workspace = true }
 [[bench]]
 name = "view_maintenance"
 harness = false
+
+[[bench]]
+# G11-A: view staleness transition cost. Informational, not gated.
+name = "view_staleness_transition"
+harness = false

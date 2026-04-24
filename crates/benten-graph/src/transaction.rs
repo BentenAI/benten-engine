@@ -29,12 +29,14 @@
 //! # Privileged vs unprivileged transactions (G7 reservation)
 //!
 //! Phase-1 transactions opened via `RedbBackend::transaction` are always
-//! unprivileged — the `is_privileged` flag on [`Transaction`] is hard-coded
-//! to `false` at the backend entry points. Engine-internal multi-write
-//! operations that need to write `"system:"`-prefixed nodes or edges
-//! atomically (grant_capability / create_view / revoke_capability, G7) will
-//! land a dedicated privileged entry point later; user-authored closures
-//! never gain a path to set `is_privileged = true`.
+//! unprivileged — the [`WriteAuthority`] on [`Transaction`] is
+//! `WriteAuthority::User` at the backend entry points, and the system-zone
+//! label guard consults it via [`Transaction::is_privileged`]. Engine-
+//! internal multi-write operations that need to write `"system:"`-prefixed
+//! nodes or edges atomically (grant_capability / create_view /
+//! revoke_capability, G7) will land a dedicated privileged entry point
+//! that sets `WriteAuthority::EnginePrivileged`; user-authored closures
+//! never gain a path to flip the authority.
 //!
 //! # Subscriber ordering and dead-letter observability (R4b follow-ups)
 //!
@@ -260,12 +262,13 @@ pub struct Transaction<'a> {
     pub(crate) pending: Vec<PendingOp>,
     /// Phantom tying the transaction to the backend's lifetime.
     _phantom: core::marker::PhantomData<&'a ()>,
-    /// True when the calling backend is flagged as privileged (engine-API
-    /// path only). Controls the system-zone label check on Node puts.
-    pub(crate) is_privileged: bool,
-    /// Phase 2a G2-A: authority under which the transaction runs. The G2-A
-    /// brief specifies per-write-class durability tiers — G2-A preserves the
-    /// enum plumbing so G5-A's Inv-13 firing matrix can compose on top.
+    /// Phase 2a G2-A / G11-A: authority under which the transaction runs.
+    /// Drives two decisions: (a) the redb durability tier selected at txn
+    /// construction via [`Self::durability_for_authority`]; (b) the
+    /// system-zone label guard in [`Self::put_node`] / [`Self::put_edge`]
+    /// (engine-privileged / sync-replica contexts bypass the `"system:"`
+    /// prefix guard; user contexts enforce it).
+    ///
     /// Today every caller enters via [`crate::RedbBackend::transaction`]
     /// with the default [`WriteAuthority::User`]; the privileged-entry-point
     /// that flips this to [`WriteAuthority::EnginePrivileged`] is G7's
@@ -274,31 +277,14 @@ pub struct Transaction<'a> {
 }
 
 impl<'a> Transaction<'a> {
-    pub(crate) fn new(
-        inner: redb::WriteTransaction,
-        durability: Durability,
-        is_privileged: bool,
-    ) -> Result<Self, GraphError> {
-        let authority = if is_privileged {
-            WriteAuthority::EnginePrivileged
-        } else {
-            WriteAuthority::User
-        };
-        Self::new_with_authority(inner, durability, is_privileged, authority)
-    }
-
     /// Construct a `Transaction` pinned to an explicit [`WriteAuthority`] and
-    /// the redb durability derived from it by the caller.
-    ///
-    /// Phase 2a G2-A: plumbing exists so G5-A's Inv-13 matrix can compose
-    /// on top. `RedbBackend::transaction` today only reaches the
-    /// `User`/`EnginePrivileged` derivation via [`Self::new`]; this
-    /// constructor exists for the future privileged-entry-point G7 will
-    /// land.
+    /// the redb durability derived from it by the caller. Callers at
+    /// `RedbBackend::transaction` use [`Self::durability_for_authority`] to
+    /// select the durability tier, then pass it here so the inner redb txn
+    /// and the authority field stay in sync.
     pub(crate) fn new_with_authority(
         inner: redb::WriteTransaction,
         durability: Durability,
-        is_privileged: bool,
         authority: WriteAuthority,
     ) -> Result<Self, GraphError> {
         let mut inner = inner;
@@ -309,9 +295,17 @@ impl<'a> Transaction<'a> {
             inner: Some(inner),
             pending: Vec::new(),
             _phantom: core::marker::PhantomData,
-            is_privileged,
             authority,
         })
+    }
+
+    /// True when the transaction runs under a privileged [`WriteAuthority`]
+    /// (EnginePrivileged or SyncReplica). Used by the system-zone label
+    /// guard on Node / Edge puts. Derived from [`Self::authority`] rather
+    /// than stored separately so the two can never drift.
+    #[must_use]
+    pub(crate) fn is_privileged(&self) -> bool {
+        !matches!(self.authority, WriteAuthority::User)
     }
 
     /// Map a [`WriteAuthority`] onto the redb durability tier G2-A
@@ -370,7 +364,7 @@ impl<'a> Transaction<'a> {
         handler_cid: Option<Cid>,
         capability_grant_cid: Option<Cid>,
     ) -> Result<Cid, GraphError> {
-        if !self.is_privileged {
+        if !self.is_privileged() {
             for label in &node.labels {
                 if label.starts_with("system:") {
                     return Err(GraphError::SystemZoneWrite {
@@ -437,7 +431,7 @@ impl<'a> Transaction<'a> {
     /// - [`GraphError::SystemZoneWrite`] on an unprivileged system-zone edge.
     /// - Encoding or redb failures.
     pub fn put_edge(&mut self, edge: &Edge) -> Result<Cid, GraphError> {
-        if !self.is_privileged && edge.label.starts_with("system:") {
+        if !self.is_privileged() && edge.label.starts_with("system:") {
             return Err(GraphError::SystemZoneWrite {
                 label: edge.label.clone(),
             });

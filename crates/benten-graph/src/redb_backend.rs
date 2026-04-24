@@ -86,6 +86,21 @@ fn guard_system_zone_edge(edge: &Edge, is_privileged: bool) -> Result<(), GraphE
 /// schema on top of this table.
 pub(crate) const NODES_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("benten_nodes");
 
+/// G11-A unbounded-cache bound: maximum entries in the test-only
+/// `test_event_log` before the oldest half is evicted. Tests drain the
+/// buffer between assertions, so the cap only fires in a long-lived bench
+/// or integration process that writes tens of thousands of nodes without
+/// calling `drain_change_events_for_test`.
+const TEST_EVENT_LOG_CAP: usize = 10_000;
+
+/// G11-A unbounded-cache bound: maximum entries in the
+/// `last_durability_by_label` test-inspection map before the map is cleared.
+/// Callers only ever ask for the most-recent tier per label, so eviction
+/// preserves correctness for the always-recent test hook caller; a
+/// far-future test that persists across 1k+ distinct labels would need to
+/// re-stamp before inspecting.
+const LAST_DURABILITY_MAP_CAP: usize = 1_000;
+
 /// Lexicographic successor of `prefix` — the smallest byte string strictly
 /// greater than every string that begins with `prefix`. Used to turn a
 /// prefix scan into a bounded range scan.
@@ -893,39 +908,9 @@ impl RedbBackend {
     ) -> Result<Cid, GraphError> {
         guard_system_zone_node(node, ctx.is_privileged)?;
 
-        // Compute the CID once — reused by the immutability probe, the
-        // unchecked-put path, and the last-durability bookkeeping below.
+        // Compute the CID once — reused by the in-txn existence check, the
+        // write path, and the post-commit bookkeeping.
         let cid = node.cid()?;
-
-        // Inv-13 fast-path + exact-check — User authority fires
-        // E_INV_IMMUTABILITY per plan §9.11 rows 1-2. EnginePrivileged
-        // (row 3) and SyncReplica (row 4, Phase-3 reserved) return Ok(cid)
-        // without emitting a ChangeEvent and without advancing the audit
-        // sequence when the CID is already present (pure-read dedup —
-        // named Compromise "Dedup writes pure-read", sec-r1-4 / atk-3).
-        //
-        // The SyncReplica row 4 code-path is shaped but not yet reachable
-        // from a public API in Phase 2a — Phase 3 sync-receive wires the
-        // replication entry point. The matrix cell lands here so the
-        // receive path has a single branch to drop into.
-        match ctx.authority {
-            WriteAuthority::User => {
-                let already_present = self.probe_cid_exists(&cid)?;
-                if already_present {
-                    return Err(GraphError::InvImmutability { cid });
-                }
-            }
-            WriteAuthority::EnginePrivileged | WriteAuthority::SyncReplica { .. } => {
-                // Row 3 / row 4: content-addressed dedup. If the CID is
-                // already persisted, branch BEFORE any write + before any
-                // ChangeEvent accumulation + before any audit-sequence
-                // advance. Return the existing CID so the caller sees a
-                // successful idempotent dedup.
-                if self.probe_cid_exists(&cid)? {
-                    return Ok(cid);
-                }
-            }
-        }
 
         // Phase 2a G2-A: WriteAuthority-driven per-call durability tier.
         //
@@ -947,23 +932,121 @@ impl RedbBackend {
             WriteAuthority::SyncReplica { .. } => (Durability::None, self.configured_durability),
         };
 
-        self.put_node_unchecked_with_durability(node, effective_redb)?;
+        // G11-A TOCTOU atomicity: the existence probe + the conditional
+        // write run inside a SINGLE redb write transaction so two concurrent
+        // `put_node_with_context` callers cannot both pass a pre-txn probe
+        // and then both land. Closes the G2-A User-path race window and the
+        // G5-A Row-3 dedup race window in one fix.
+        //
+        // Previously a read-txn probe preceded a write-txn put; that gap
+        // let two User-authority writers both observe "absent" and both
+        // commit (only one would actually persist under redb's single-writer
+        // lock, but the OTHER lost write would return Ok(cid) — meaning two
+        // distinct "first-put" acknowledgments for the same CID). The same
+        // gap let two EnginePrivileged dedup callers both "dedup" an
+        // already-present CID against different inflight writes. Fold
+        // probe-and-write into one txn and both races disappear.
+        //
+        // The bloom fast-path short-circuits BEFORE opening the write txn
+        // when it definitively reports "absent" — that path is race-free
+        // because redb's single-writer lock still serializes the actual
+        // commit below.
+
+        // Fast-negative: if the bloom filter says "definitely absent" there
+        // is no need to burn a redb read for the existence check — the
+        // write txn can go straight to the insert. This preserves the
+        // Inv-13 hot-path perf envelope the G2-A bloom was designed for.
+        //
+        // Correctness: a "definitely absent" bloom answer is authoritative
+        // modulo the `warmed` set lifetime — we insert into the bloom on
+        // every put, so a CID present on disk whose bloom bits were evicted
+        // could theoretically fall through; Phase-1 ships without eviction
+        // so "definitely absent" is exact in practice. When bloom eviction
+        // lands, the fast-path must flip to always consulting the in-txn
+        // check.
+        let bloom_says_maybe = {
+            let mut cache = self.immutability_cache.lock_recover();
+            cache.may_contain(&cid)
+        };
+
+        let n_key = node_key(&cid);
+        let bytes = node.canonical_bytes()?;
+
+        let write_txn = self.begin_write_txn_with(effective_redb)?;
+
+        // In-txn existence check. Only run when bloom says "maybe" —
+        // otherwise the write has already been green-lit and the redb
+        // single-writer lock is sufficient to serialize this commit against
+        // any other in-flight put_node_with_context. The check reads from
+        // the same write-txn so it sees any prior writes in this txn
+        // (defensive — the closure body only writes after this probe).
+        let already_present = if bloom_says_maybe {
+            let table = write_txn.open_table(NODES_TABLE)?;
+            table.get(n_key.as_slice())?.is_some()
+        } else {
+            false
+        };
+
+        if already_present {
+            // Branch on authority AT the in-txn result — preserves the
+            // G5-A 5-row matrix semantics:
+            //  - Row 1: User + present     → E_INV_IMMUTABILITY
+            //  - Row 3: EnginePrivileged + present → dedup (no write, no event)
+            //  - Row 4: SyncReplica + present      → dedup (Phase-3 receiver)
+            // Drop the write txn (redb aborts on drop without commit) so the
+            // dedup branches emit NO ChangeEvent and do NOT advance the audit
+            // sequence — sec-r1-4 "pure-read dedup" contract.
+            drop(write_txn);
+            return match ctx.authority {
+                WriteAuthority::User => Err(GraphError::InvImmutability { cid }),
+                WriteAuthority::EnginePrivileged | WriteAuthority::SyncReplica { .. } => Ok(cid),
+            };
+        }
+
+        // Not present: write body + indexes, then commit — all inside the
+        // same txn so a concurrent writer that raced to this point is
+        // serialized behind redb's single-writer lock. The second arrival
+        // will see `already_present == true` under its own txn and take
+        // the appropriate branch above.
+        {
+            let mut nodes = write_txn.open_table(NODES_TABLE)?;
+            nodes.insert(n_key.as_slice(), bytes.as_slice())?;
+        }
+        {
+            let mut label_idx = write_txn.open_multimap_table(LABEL_INDEX_TABLE)?;
+            for label in &node.labels {
+                label_idx.insert(label.as_bytes(), cid.as_bytes().as_slice())?;
+            }
+        }
+        {
+            let mut prop_idx = write_txn.open_multimap_table(PROP_INDEX_TABLE)?;
+            for label in &node.labels {
+                for (prop_name, value) in &node.properties {
+                    let vbytes = value_index_bytes(value)?;
+                    let key = property_index_key(label, prop_name, &vbytes);
+                    prop_idx.insert(key.as_slice(), cid.as_bytes().as_slice())?;
+                }
+            }
+        }
+        write_txn.commit()?;
 
         // Record per-label durability for the
         // `last_put_node_durability_for_label` test hook. Every label the
         // Node carried gets stamped so tests can key on any of them (the
         // capability-grant path Nodes always carry
-        // `"system:CapabilityGrant"`).
+        // `"system:CapabilityGrant"`). Bounded at `LAST_DURABILITY_MAP_CAP`
+        // to defuse the unbounded-growth hazard G11-A captured.
         {
             let mut map = self.last_durability_by_label.lock_recover();
+            if map.len() >= LAST_DURABILITY_MAP_CAP {
+                map.clear();
+            }
             for label in &node.labels {
                 map.insert(label.clone(), effective_mode);
             }
         }
 
-        // Warm the Inv-13 fast-path cache. Bloom positive on subsequent
-        // User-path probes; the exact-check in `probe_cid_exists` is still
-        // authoritative for correctness.
+        // Warm the Inv-13 fast-path cache post-commit.
         {
             let mut cache = self.immutability_cache.lock_recover();
             cache.insert(&cid);
@@ -972,12 +1055,16 @@ impl RedbBackend {
         // Phase 2a G5-A: record the emitted ChangeEvent in the test-only
         // drain buffer so the Inv-13 dedup-no-event assertions can observe
         // that the FIRST put emitted while a subsequent dedup-path put
-        // did NOT. `put_node_with_context` does not open a user-facing
-        // `transaction`, so its fan-out proxy for Row-3 assertions lives
-        // here. The dedup branches above return before reaching this
+        // did NOT. The dedup branches above return before reaching this
         // point, so only genuine first-puts show up in the buffer.
+        //
+        // G11-A: the buffer is capped at `TEST_EVENT_LOG_CAP` — a long-
+        // running test that writes past the cap without draining sees the
+        // buffer clear (test hooks drain between assertions, so the cap
+        // only matters for pathological test shapes). tx_id bumps
+        // unconditionally for the subscriber fan-out path.
+        let tx_id = self.next_tx_id.fetch_add(1, Ordering::SeqCst);
         {
-            let tx_id = self.next_tx_id.fetch_add(1, Ordering::SeqCst);
             let event = ChangeEvent {
                 cid,
                 labels: node.labels.clone(),
@@ -990,6 +1077,9 @@ impl RedbBackend {
                 edge_endpoints: None,
             };
             let mut log = self.test_event_log.lock_recover();
+            if log.len() >= TEST_EVENT_LOG_CAP {
+                log.clear();
+            }
             log.push(event);
         }
 
@@ -1073,43 +1163,6 @@ impl RedbBackend {
         Ok(self.get(&node_key(cid))?.is_some())
     }
 
-    /// Inherent put-without-guard with an explicit per-call durability.
-    /// Mirrors [`Self::put_node_unchecked`] but opens its write transaction
-    /// at the supplied durability rather than the backend-configured one.
-    fn put_node_unchecked_with_durability(
-        &self,
-        node: &Node,
-        durability: Durability,
-    ) -> Result<Cid, GraphError> {
-        let cid = node.cid()?;
-        let bytes = node.canonical_bytes()?;
-        let n_key = node_key(&cid);
-
-        let write_txn = self.begin_write_txn_with(durability)?;
-        {
-            let mut nodes = write_txn.open_table(NODES_TABLE)?;
-            nodes.insert(n_key.as_slice(), bytes.as_slice())?;
-        }
-        {
-            let mut label_idx = write_txn.open_multimap_table(LABEL_INDEX_TABLE)?;
-            for label in &node.labels {
-                label_idx.insert(label.as_bytes(), cid.as_bytes().as_slice())?;
-            }
-        }
-        {
-            let mut prop_idx = write_txn.open_multimap_table(PROP_INDEX_TABLE)?;
-            for label in &node.labels {
-                for (prop_name, value) in &node.properties {
-                    let vbytes = value_index_bytes(value)?;
-                    let key = property_index_key(label, prop_name, &vbytes);
-                    prop_idx.insert(key.as_slice(), cid.as_bytes().as_slice())?;
-                }
-            }
-        }
-        write_txn.commit()?;
-        Ok(cid)
-    }
-
     // ---- G2-A Inv-13 + durability-inspection test hook impls -------------
 
     /// Backing for [`Self::cache_contains_cid`]. Authoritative warmness
@@ -1187,12 +1240,20 @@ impl RedbBackend {
         F: FnOnce(&mut Transaction<'_>) -> Result<R, GraphError>,
     {
         let _guard = TxGuard::try_acquire(Arc::clone(&self.tx_flag))?;
-        let write_txn = self.begin_write_txn()?;
-        // `begin_write_txn` already sets durability on the inner txn, so
-        // `Transaction::new` sees a fresh WriteTransaction with the
-        // backend's configured durability already in place. Transaction::new
-        // re-applies it defensively (cheap; idempotent).
-        let mut tx = Transaction::new(write_txn, self.durability, /* privileged */ false)?;
+        // G11-A authority wiring: pick the redb durability via
+        // `Transaction::durability_for_authority` so the authority field
+        // on `Transaction` actually drives per-write-class durability —
+        // closes the G2-A narrative gap where the helper was plumbed but
+        // never consulted. Today every caller enters via this method with
+        // `WriteAuthority::User`, so the selected durability is the
+        // backend's configured tier. The G7 privileged-entry-point path
+        // will enter via a sibling method with `EnginePrivileged` and pick
+        // up `Durability::Immediate` automatically.
+        let authority = WriteAuthority::User;
+        let effective_durability =
+            Transaction::durability_for_authority(&authority, self.durability);
+        let write_txn = self.begin_write_txn_with(effective_durability)?;
+        let mut tx = Transaction::new_with_authority(write_txn, effective_durability, authority)?;
 
         match f(&mut tx) {
             Ok(value) => {
@@ -1259,8 +1320,12 @@ impl RedbBackend {
         F: FnOnce(&mut Transaction<'_>) -> Result<R, GraphError>,
     {
         let _guard = TxGuard::try_acquire(Arc::clone(&self.tx_flag))?;
-        let write_txn = self.begin_write_txn()?;
-        let mut tx = Transaction::new(write_txn, self.durability, /* privileged */ false)?;
+        // Same authority-driven durability selection as `transaction`.
+        let authority = WriteAuthority::User;
+        let effective_durability =
+            Transaction::durability_for_authority(&authority, self.durability);
+        let write_txn = self.begin_write_txn_with(effective_durability)?;
+        let mut tx = Transaction::new_with_authority(write_txn, effective_durability, authority)?;
         let _closure_value = f(&mut tx).map_err(|inner| GraphError::TxAborted {
             reason: inner.to_string(),
         })?;

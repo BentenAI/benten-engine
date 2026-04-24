@@ -39,8 +39,14 @@
 use benten_engine::Engine;
 
 /// atk-3 companion: audit sequence does not advance on dedup.
+///
+/// G11-A Wave 1: `Engine::audit_sequence()` landed as a public accessor
+/// reading the per-engine committed-writes counter. The dedup branch in
+/// `RedbBackend::put_node_with_context` is a pure-read short-circuit
+/// (§9.11 row 3) — it returns the existing CID without advancing the
+/// committed-writes total, so a re-issued grant observes the same
+/// counter value.
 #[test]
-#[ignore = "phase-2a-pending: audit_sequence() public accessor lands in G5-A per plan §9.11 row 3. Drop #[ignore] once the accessor + dedup-pure-read branching are live."]
 fn inv_13_dedup_path_does_not_advance_audit_sequence() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
@@ -54,28 +60,14 @@ fn inv_13_dedup_path_does_not_advance_audit_sequence() {
         .grant_capability(&alice, "store:post:write")
         .expect("first issuance");
 
-    // Target API path (G5-A):
-    //
-    //     let seq_before = engine.audit_sequence();
-    //     let _cid_2 = engine
-    //         .grant_capability(&alice, "store:post:write")
-    //         .expect("dedup path");
-    //     let seq_after = engine.audit_sequence();
-    //     assert_eq!(
-    //         seq_before, seq_after,
-    //         "dedup path (Compromise #N+1) MUST NOT advance the audit \
-    //          sequence; before={seq_before}, after={seq_after}"
-    //     );
-    //
-    // Until audit_sequence() lands, the test stays red via the panic
-    // below.  Re-issuing the grant confirms the existing API still
-    // resolves — fixture sanity.
+    let seq_before = engine.audit_sequence();
     let _cid_2 = engine
         .grant_capability(&alice, "store:post:write")
         .expect("dedup path");
-
-    panic!(
-        "red-phase: audit_sequence() accessor + dedup pure-read branching \
-         not yet present. G5-A to land per plan §9.11 row 3."
+    let seq_after = engine.audit_sequence();
+    assert_eq!(
+        seq_before, seq_after,
+        "dedup path (Compromise #N+1) MUST NOT advance the audit \
+         sequence; before={seq_before}, after={seq_after}"
     );
 }

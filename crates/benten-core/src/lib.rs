@@ -254,16 +254,41 @@ impl Node {
         Ok(Cid::from_blake3_digest(*digest.as_bytes()))
     }
 
-    /// Phase 2a C4 stub: load a Node from DAG-CBOR bytes, verifying that
+    /// Phase 2a C4 / G2-A: load a Node from DAG-CBOR bytes, verifying that
     /// the recomputed CID matches the supplied `cid`.
     ///
-    /// # Errors
-    /// Returns [`CoreError::Serialize`] on decode failure; returns a
-    /// content-hash mismatch on tamper.
+    /// Contract: decode the bytes as DAG-CBOR, then re-canonicalize and
+    /// re-hash the result. If the recomputed CID does not byte-match the
+    /// supplied `cid`, fire [`CoreError::ContentHashMismatch`] (mapped to
+    /// [`ErrorCode::InvContentHash`]) so storage-layer tamper or corruption
+    /// surfaces as a distinct, typed error on the node-read path.
     ///
-    /// TODO(phase-2a-G2-A / C4): implement per plan §9 `Node::load_verified`.
-    pub fn load_verified(_cid: &Cid, _bytes: &[u8]) -> Result<Self, CoreError> {
-        todo!("Phase 2a C4 / G2-A: implement Node::load_verified")
+    /// # Errors
+    /// - [`CoreError::Serialize`] if the bytes fail to decode as a Node.
+    /// - [`CoreError::ContentHashMismatch`] if the recomputed CID doesn't
+    ///   match the supplied one (tamper / corruption / codec drift on read).
+    pub fn load_verified(cid: &Cid, bytes: &[u8]) -> Result<Self, CoreError> {
+        // Hash the incoming bytes FIRST — don't attempt decode against
+        // possibly-tampered bytes. A tamper that happens to corrupt the
+        // CBOR structure would otherwise surface as a `Serialize` error,
+        // masking the real failure (integrity). Bytes-level hash is the
+        // authoritative check because, by the canonical-DAG-CBOR contract,
+        // a Node's CID is a pure function of its encoded bytes.
+        let digest = blake3::hash(bytes);
+        let recomputed = Cid::from_blake3_digest(*digest.as_bytes());
+        if &recomputed != cid {
+            return Err(CoreError::ContentHashMismatch {
+                path: "node",
+                expected: *cid,
+                actual: recomputed,
+            });
+        }
+        // Hash matched — now decode. A decode failure here indicates
+        // a genuine DAG-CBOR encoding issue (not tamper), since the bytes
+        // hash to the expected CID.
+        let node: Self = serde_ipld_dagcbor::from_slice(bytes)
+            .map_err(|e| CoreError::Serialize(format_err(&e)))?;
+        Ok(node)
     }
 }
 
@@ -613,6 +638,23 @@ pub enum CoreError {
     /// Generic not-found error (version-chain anchor, etc.). **Phase 1 stub.**
     #[error("not found")]
     NotFound,
+
+    /// Content-hash mismatch surfaced at a `*_verified` read entry point.
+    /// Fires when the bytes stored under a CID hash to a different CID on
+    /// re-read (storage tamper, on-disk corruption, or codec drift). The
+    /// `path` discriminant identifies which read surface the mismatch
+    /// surfaced on (`"node"` / `"subgraph"`), so diagnostics can distinguish
+    /// the node-body mismatch from the subgraph-load mismatch without the
+    /// caller having to inspect error-location metadata.
+    #[error("content hash mismatch on {path} read: expected {expected}, got {actual}")]
+    ContentHashMismatch {
+        /// The read surface the mismatch surfaced on (`"node"` / `"subgraph"`).
+        path: &'static str,
+        /// CID the caller asked for.
+        expected: Cid,
+        /// CID the recomputed bytes actually hash to.
+        actual: Cid,
+    },
 }
 
 impl CoreError {
@@ -628,6 +670,7 @@ impl CoreError {
             CoreError::VersionBranched => ErrorCode::VersionBranched,
             CoreError::Serialize(_) => ErrorCode::Serialize,
             CoreError::NotFound => ErrorCode::NotFound,
+            CoreError::ContentHashMismatch { .. } => ErrorCode::InvContentHash,
         }
     }
 }

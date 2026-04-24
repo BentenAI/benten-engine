@@ -102,6 +102,22 @@ impl Subscriber {
         guard.iter().map(|v| String::from(v.id())).collect()
     }
 
+    /// Number of currently-stale registered views. Used by the engine-level
+    /// `benten.ivm.view_stale_count` metric snapshot — a monotonically non-
+    /// decreasing counter across a subscriber's lifetime (once a view
+    /// trips its budget and flips stale it stays stale until rebuilt, so
+    /// this tally only grows as the subscriber processes more events).
+    /// G11-A: closes the R3 `todo!()` hardcode that pinned the metric to
+    /// `0.0`.
+    #[must_use]
+    pub fn stale_count_tally(&self) -> usize {
+        let guard = self
+            .views
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard.iter().filter(|v| v.is_stale()).count()
+    }
+
     /// Is the named view currently stale? Returns `None` if the view is not
     /// registered. Used by the engine-level `read_view_with` to decide
     /// strict vs. relaxed semantics without exposing the view's internal
