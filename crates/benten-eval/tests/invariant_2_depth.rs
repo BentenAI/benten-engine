@@ -15,12 +15,20 @@
 use benten_eval::{ErrorCode, RegistrationError, Subgraph, SubgraphBuilder};
 
 fn linear_chain_of_calls(n: usize) -> Result<Subgraph, RegistrationError> {
+    // G11-A EVAL wave-1: `SubgraphBuilder::call_handler` stamps the
+    // `handler` property on the CALL node (the old `call(_, _name)`
+    // signature ignored its name arg). Inv-8's multiplicative walker
+    // now resolves the named callee at registration-time against the
+    // test-callee registry; seed a factor-1 bound so depth tests
+    // exercise Inv-2 without being rejected by the Inv-8 unknown-
+    // callee leg.
+    benten_eval::register_test_callee("inner_handler", 1);
     // Chain of `n` nested CALL primitives. Each CALL counts as +1 depth.
     let mut sb = SubgraphBuilder::new(&format!("chain_{n}"));
     let root = sb.read("root");
     let mut prev = root;
     for _ in 0..n {
-        prev = sb.call(prev, "inner_handler");
+        prev = sb.call_handler(prev, "inner_handler");
     }
     sb.respond(prev);
     sb.build_validated()
@@ -75,12 +83,15 @@ fn depth_one_always_accepted() {
 fn depth_cap_configurable_via_capability_grant() {
     // The depth cap is configurable per capability grant. A lower cap
     // must reject subgraphs that the default would accept.
+    // G11-A EVAL wave-1: `call_handler` requires a registered callee
+    // bound (see `linear_chain_of_calls` comment above).
+    benten_eval::register_test_callee("inner", 1);
     let lower_cap = 3;
     let mut sb = SubgraphBuilder::new("would_pass_default");
     let root = sb.read("root");
     let mut prev = root;
     for _ in 0..5 {
-        prev = sb.call(prev, "inner");
+        prev = sb.call_handler(prev, "inner");
     }
     sb.respond(prev);
 

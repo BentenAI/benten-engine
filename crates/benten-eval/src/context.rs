@@ -81,6 +81,23 @@ impl EvalContext {
     /// 2a `MockTimeSource::hlc_stamp` returns elapsed microseconds, so we
     /// convert to millis here. Returns `None` when no clock was injected —
     /// WAIT's resume path treats that as "no deadline evaluation possible".
+    ///
+    /// # Sub-millisecond truncation (G11-A EVAL wave-1)
+    ///
+    /// The `hlc_stamp() / 1000` conversion is integer division: any
+    /// elapsed time below 1 ms reads as 0. A WAIT with `timeout_ms = 1`
+    /// resumed 500 µs later therefore reports elapsed=0 and would not
+    /// trip the deadline even though half the timeout has passed in
+    /// wall-clock terms. The truncation is acceptable under the
+    /// Phase-2a WAIT contract — WAIT timeouts are specified in
+    /// whole-millisecond units and no Phase-2a handler declares a
+    /// sub-millisecond deadline. Phase 2b re-examines this when the
+    /// cross-process WAIT durability work (see
+    /// `.addl/phase-2b/00-scope-outline.md` §7a) lands a typed
+    /// `Duration`-shaped timeout surface; at that point the elapsed-
+    /// reporting precision is revisited alongside the envelope format.
+    /// Upstream tests that care about sub-ms resolution should read
+    /// [`TimeSource::hlc_stamp`] directly.
     #[must_use]
     pub fn elapsed_ms(&self) -> Option<u64> {
         self.clock.as_ref().map(|c| c.hlc_stamp() / 1000)

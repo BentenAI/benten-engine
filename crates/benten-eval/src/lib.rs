@@ -128,33 +128,34 @@ pub fn evaluate(sg: &Subgraph, ctx: &mut EvalContext, input: benten_core::Value)
 /// `evaluate(...).expect_suspended()` through `resume` compile without
 /// mapping the `Outcome::Suspended(h)` arm back to a raw `SuspendedHandle`.
 ///
+/// # G3-B-cont guard (Complete-variant rejection)
+///
+/// The alias accepts only a `WaitOutcome::Suspended(_)` payload — passing
+/// a `WaitOutcome::Complete(_)` is API misuse (there is no suspended
+/// frame to resume, and the `Complete` arm's `state_cid()` returns a
+/// zero-derived CID that would consult an unrelated metadata slot). We
+/// surface `Outcome::Err(ErrorCode::InvRegistration)` for that case
+/// rather than silently succeeding or panicking.
+///
 /// # Errors
-/// See [`primitives::wait::resume`].
+/// See [`primitives::wait::resume`]. Additionally returns
+/// `Outcome::Err(ErrorCode::InvRegistration)` when `handle` is a
+/// `WaitOutcome::Complete(_)`.
 pub fn resume(
     _sg: &Subgraph,
     ctx: &mut EvalContext,
     handle: WaitOutcome,
     signal: WaitResumeSignal,
 ) -> Outcome {
+    if matches!(handle, WaitOutcome::Complete(_)) {
+        return Outcome::Err(ErrorCode::InvRegistration);
+    }
     let state_cid = handle.state_cid();
     let meta = primitives::wait::metadata_for_cid(&state_cid);
     match primitives::wait::resume_with_meta(meta, signal, ctx.elapsed_ms()) {
         Ok(WaitOutcome::Complete(v)) => Outcome::Complete(v),
         Ok(wo @ WaitOutcome::Suspended(_)) => Outcome::Suspended(wo),
         Err(e) => Outcome::Err(e.code()),
-    }
-}
-
-/// Phase 2a G4-A test harness: expose a budget-probe for the multiplicative
-/// benchmark (`benches/multiplicative_budget_overhead.rs`).
-pub mod testing {
-    /// Phase-2a placeholder probe; Phase 2a G4-A benches call this to
-    /// measure cumulative-budget computation overhead.
-    ///
-    /// TODO(phase-2a-G4-A): real probe implementation.
-    #[must_use]
-    pub fn multiplicative_budget_probe() -> u64 {
-        0
     }
 }
 
@@ -193,8 +194,6 @@ pub mod limits {
     pub const DEFAULT_MAX_NODES: usize = 4096;
     /// Invariant 6: default max total edges per subgraph.
     pub const DEFAULT_MAX_EDGES: usize = 8192;
-    /// Invariant 8 stopgap: max ITERATE nesting depth (Phase 1 named compromise).
-    pub const DEFAULT_MAX_ITERATE_NEST_DEPTH: usize = 3;
 }
 
 /// Evaluator error type (Phase 1 stub).
@@ -409,9 +408,6 @@ pub struct RegistrationError {
     pub(crate) nodes_max: Option<usize>,
     pub(crate) edges_actual: Option<usize>,
     pub(crate) edges_max: Option<usize>,
-    pub(crate) iterate_nest_depth_actual: Option<usize>,
-    pub(crate) iterate_nest_depth_max: Option<usize>,
-    pub(crate) iterate_nest_path: Option<Vec<String>>,
     pub(crate) violated_invariants: Option<Vec<u8>>,
     pub(crate) expected_cid: Option<Cid>,
     pub(crate) actual_cid: Option<Cid>,
@@ -433,9 +429,6 @@ impl RegistrationError {
             nodes_max: None,
             edges_actual: None,
             edges_max: None,
-            iterate_nest_depth_actual: None,
-            iterate_nest_depth_max: None,
-            iterate_nest_path: None,
             violated_invariants: None,
             expected_cid: None,
             actual_cid: None,
@@ -463,11 +456,6 @@ impl RegistrationError {
     }
 
     #[must_use]
-    pub fn iterate_nest_depth_actual(&self) -> Option<usize> {
-        self.iterate_nest_depth_actual
-    }
-
-    #[must_use]
     pub fn violated_invariants(&self) -> Option<&Vec<u8>> {
         self.violated_invariants.as_ref()
     }
@@ -488,18 +476,6 @@ impl RegistrationError {
     #[must_use]
     pub fn longest_path(&self) -> Option<Vec<String>> {
         self.longest_path.clone()
-    }
-
-    /// Configured max iterate nest depth (Invariant 8 stopgap).
-    #[must_use]
-    pub fn iterate_nest_depth_max(&self) -> Option<usize> {
-        self.iterate_nest_depth_max
-    }
-
-    /// Reconstructed iterate-nest path.
-    #[must_use]
-    pub fn iterate_nest_path(&self) -> Option<Vec<String>> {
-        self.iterate_nest_path.clone()
     }
 
     /// Declared-by-caller CID for `InvContentHash` failures.
@@ -1018,7 +994,16 @@ impl SubgraphBuilder {
         self
     }
 
-    fn push(&mut self, op: OperationNode) -> NodeHandle {
+    fn push(&mut self, mut op: OperationNode) -> NodeHandle {
+        // G11-A EVAL wave-1 (D12.7 Decision 1): the Rust `SubgraphBuilder`
+        // is the eval-side DSL surface and therefore carries the
+        // canonical Inv-14 attribution stamp. Every OperationNode it
+        // emits declares `attribution: true` by default; tests that
+        // want to probe the Inv-14 reject path construct
+        // `OperationNode`s directly (bypassing the builder).
+        op.properties
+            .entry(crate::invariants::attribution::ATTRIBUTION_PROPERTY_KEY.to_string())
+            .or_insert(benten_core::Value::Bool(true));
         let h = NodeHandle(u32::try_from(self.nodes.len()).unwrap_or(u32::MAX));
         self.nodes.push(op);
         self.parallel_fanout.push(1);
@@ -1053,10 +1038,23 @@ impl SubgraphBuilder {
         self.push_chained(OperationNode::new(id, PrimitiveKind::Branch), prev, nest)
     }
 
-    pub fn call(&mut self, prev: NodeHandle, _handler: &str) -> NodeHandle {
+    /// Add a CALL operation that dispatches to the named handler.
+    ///
+    /// The `handler_id` is stamped onto the new CALL node's `handler`
+    /// property so the Inv-8 multiplicative walker can look it up
+    /// against the test-callee registry at registration time. Prior to
+    /// G11-A EVAL wave-1 (D12.7 Decision 7) this method was spelled
+    /// `call(prev, name)` and ignored the name argument entirely, which
+    /// yielded CALL nodes that behaved as handler-less factor-1
+    /// pass-throughs regardless of what the caller passed. Pre-1.0
+    /// discipline (CLAUDE.md §5): no deprecated alias — callers are
+    /// migrated at the dispatch-cycle boundary.
+    pub fn call_handler(&mut self, prev: NodeHandle, handler_id: &str) -> NodeHandle {
         let id = format!("call_{}", self.nodes.len());
+        let op = OperationNode::new(id, PrimitiveKind::Call)
+            .with_property("handler", Value::text(handler_id.to_string()));
         let nest = self.iterate_depth_of(prev);
-        self.push_chained(OperationNode::new(id, PrimitiveKind::Call), prev, nest)
+        self.push_chained(op, prev, nest)
     }
 
     pub fn iterate(&mut self, prev: NodeHandle, _body: &str, max: u64) -> NodeHandle {
@@ -1338,7 +1336,6 @@ pub struct InvariantConfig {
     pub max_fanout: u32,
     pub max_nodes: u32,
     pub max_edges: u32,
-    pub max_iterate_nest_depth: u32,
 }
 
 impl Default for InvariantConfig {
@@ -1348,8 +1345,6 @@ impl Default for InvariantConfig {
             max_fanout: u32::try_from(limits::DEFAULT_MAX_FANOUT).unwrap_or(16),
             max_nodes: u32::try_from(limits::DEFAULT_MAX_NODES).unwrap_or(4096),
             max_edges: u32::try_from(limits::DEFAULT_MAX_EDGES).unwrap_or(8192),
-            max_iterate_nest_depth: u32::try_from(limits::DEFAULT_MAX_ITERATE_NEST_DEPTH)
-                .unwrap_or(3),
         }
     }
 }

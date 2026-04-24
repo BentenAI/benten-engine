@@ -43,12 +43,16 @@ fn register_cycle_fails_with_inv_cycle() {
 fn register_depth_exceeded_fails_with_inv_depth() {
     let (engine, _dir) = fresh_engine();
 
+    // G11-A EVAL wave-1: `call_handler` stamps the `handler` property;
+    // Inv-8 resolves named callees against the registry so seed a
+    // factor-1 bound to isolate the Inv-2 depth check.
+    benten_eval::register_test_callee("inner", 1);
     let cap = benten_eval::limits::DEFAULT_MAX_DEPTH;
     let mut sb = SubgraphBuilder::new("too_deep");
     let r = sb.read("r");
     let mut prev = r;
     for _ in 0..(cap + 2) {
-        prev = sb.call(prev, "inner");
+        prev = sb.call_handler(prev, "inner");
     }
     sb.respond(prev);
 

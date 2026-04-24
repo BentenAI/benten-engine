@@ -349,6 +349,14 @@ pub fn evaluate(
 /// side-table keyed on envelope CID to decide between `WaitTimeout`,
 /// shape-mismatch (`InvRegistration`), and normal completion.
 ///
+/// The `ctx` parameter supplies the current clock reading so the
+/// deadline check compares the resume-time `now` against the stored
+/// suspend-time start (not the start against itself, which was the
+/// G3-B-cont elapsed-ms bug: prior code defaulted the `now` override
+/// to `None`, and `resume_with_meta` then fell back to
+/// `meta.suspend_elapsed_ms` for both sides of the subtraction,
+/// producing elapsed=0 on every resume).
+///
 /// # Errors
 /// Returns [`EvalError::Invariant`] with [`InvariantViolation::Registration`]
 /// on shape mismatch (routed via `ON_ERROR` per catalog).
@@ -356,13 +364,14 @@ pub fn evaluate(
 pub fn resume(
     envelope: &ExecutionStateEnvelope,
     signal: WaitResumeSignal,
+    ctx: &crate::EvalContext,
 ) -> Result<WaitOutcome, EvalError> {
     let state_cid = envelope.envelope_cid()?;
     let meta = registry()
         .lock()
         .ok()
         .and_then(|g| g.get(&state_cid).cloned());
-    resume_with_meta(meta, signal, None)
+    resume_with_meta(meta, signal, ctx.elapsed_ms())
 }
 
 /// Resume with metadata + an optional current-time override. Split out so
@@ -370,6 +379,38 @@ pub fn resume(
 /// reading through without constructing a full envelope (the alias path
 /// does not own an ExecutionStateEnvelope — it synthesises one from the
 /// handle's state_cid).
+///
+/// # Phase-2a missing-metadata fallback (Decision 4, deferred to Phase 2b)
+///
+/// **Known gap — out of scope for Phase 2a.** When `meta` is `None` —
+/// which happens whenever a `SuspendedHandle` lands on the resume path
+/// without a corresponding entry in the process-local [`registry`] — the
+/// fallback arm completes silently with the supplied value (or `unit`
+/// for a `DurationElapsed`). No deadline check fires, no shape check
+/// fires, and no typed error is raised. Missing-metadata occurs today
+/// in exactly two scenarios:
+///
+///   1. The `SuspendedHandle` was fabricated in a test (including any
+///      test that goes through [`SuspendedHandle::new_for_test`] without
+///      first calling [`evaluate`] on a WAIT-bearing subgraph).
+///   2. **Cross-process resume** — the suspend ran in process A, the
+///      envelope persisted to disk, process B loaded it and called
+///      `resume`. Process B's registry is empty.
+///
+/// Scenario 2 is the real-world gap. Preserving metadata across
+/// persisted envelopes requires serialising `WaitMetadata` into the
+/// `ExecutionStateEnvelope` DAG-CBOR shape itself; this is scoped in
+/// `.addl/phase-2b/00-scope-outline.md` §7a (WAIT durability) and
+/// tracked in `docs/future/phase-2-backlog.md`. Until Phase 2b lands
+/// that work, cross-process resume silently drops the deadline +
+/// shape validation. In-process suspend/resume (the only Phase-2a
+/// supported shape) preserves metadata via the process-local
+/// [`registry`] and fires both checks correctly.
+///
+/// The G11-A EVAL wave-1 triage (D12.7 Decision 4) chose **(c) document
+/// the gap, defer the fix to Phase 2b** over (a) fail loud on missing
+/// metadata — the latter would regress in-process test harnesses that
+/// fabricate handles.
 pub(crate) fn resume_with_meta(
     meta: Option<WaitMetadata>,
     signal: WaitResumeSignal,

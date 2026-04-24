@@ -163,11 +163,15 @@ fn factor_for_node(op: &OperationNode) -> Result<u64, UnknownCallee> {
 ///    use the directly-encoded bound (test-harness shorthand used by
 ///    `build_call_with_callee_budget_for_test`).
 /// 3. If the CALL declares neither, fall back to factor 1. This covers
-///    the legacy `SubgraphBuilder::call` surface (which ignores its
-///    `_handler` arg) used by depth + structural tests that build CALL
-///    nodes purely to exercise non-Inv-8 checks. The handler-less CALL
-///    carries no iteration cost of its own — the iteration-cost attack
-///    surface is gated on declaring a named callee.
+///    the handler-less CALL shape — a CALL node with no `handler`
+///    property at all. (Prior to G11-A EVAL wave-1 the legacy
+///    `SubgraphBuilder::call(prev, name)` signature ignored its `name`
+///    arg and therefore produced handler-less CALL nodes; the new
+///    `SubgraphBuilder::call_handler(prev, handler_id)` stamps the
+///    `handler` property so callers land in branch 1 instead.) The
+///    handler-less CALL carries no iteration cost of its own — the
+///    iteration-cost attack surface is gated on declaring a named
+///    callee.
 fn non_isolated_callee_factor(op: &OperationNode) -> Result<u64, UnknownCallee> {
     if matches!(op.properties.get("isolated"), Some(Value::Bool(true))) {
         // Caller of `factor_for_node` for an isolated CALL shouldn't
@@ -350,7 +354,15 @@ pub(crate) fn cumulative_by_snapshot(sn: &SubgraphSnapshot<'_>) -> Result<Vec<u6
         }
     }
 
-    let mut cumulative = vec![0_u64; sn.nodes.len()];
+    // G11-A EVAL wave-1: seed the per-node cumulative slots with the
+    // multiplicative identity `1_u64`, matching `compute_cumulative`'s
+    // `table.values().copied().max().unwrap_or(1)` empty-subgraph
+    // behaviour. Prior `0_u64` seeding meant a node that no walker
+    // reached (an unreachable subgraph fragment, or an empty graph)
+    // reported cumulative=0 via `cumulative_by_snapshot` while the
+    // finalized-subgraph path reported 1. The walker's `if at_here >
+    // slot` update still monotonically refines upwards from the seed.
+    let mut cumulative = vec![1_u64; sn.nodes.len()];
     for (idx, _) in sn.nodes.iter().enumerate() {
         if !has_incoming.get(idx).copied().unwrap_or(false) {
             walk_snapshot(

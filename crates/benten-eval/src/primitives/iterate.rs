@@ -77,23 +77,13 @@ pub fn execute(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResul
             output: Value::Null,
         });
     }
-
-    // Phase 2a G4-A: consult the shared evaluator/budget helper so the
-    // per-iteration runtime budget check routes through one entry point
-    // (cr-r1-3). `check_per_iteration_budget` is a pure function over
-    // `(consumed, limit)` — the evaluator holds the running counters on
-    // its stack; here we pre-check the static `items_len <= max` bound
-    // via the same helper so a regression in either side is caught by
-    // the helper's unit tests rather than by diverging call-site logic.
-    if let Err(_e) =
-        crate::evaluator::budget::check_per_iteration_budget(items_len as u64, max as u64)
-    {
-        return Ok(StepResult {
-            next: None,
-            edge_label: "ON_LIMIT".to_string(),
-            output: Value::Null,
-        });
-    }
+    // G11-A EVAL wave-1: the prior second `check_per_iteration_budget`
+    // call on `(items_len, max)` was unreachable under the `items_len >
+    // max` branch above — `items_len <= max` is already the permit-case,
+    // so the helper always returned Ok and the ON_LIMIT arm never
+    // fired a second time. Removed per the dead-code sweep; the
+    // evaluator's frame-stack walker still calls the helper at the
+    // correct stride.
 
     // Named Compromise #1 (ITERATE batch-boundary half). Walk the item
     // count in fixed-size batches; at every boundary (inclusive of the

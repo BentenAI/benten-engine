@@ -25,6 +25,34 @@ import type {
 } from "./types.js";
 
 // ---------------------------------------------------------------------------
+// Inv-14 attribution stamp (Phase 2a G11-A EVAL wave-1, D12.7 Decision 1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Property key on every DSL-emitted OperationNode that declares the node
+ * consumes causal attribution (Inv-14). The Rust-side registration-time
+ * validator expects `Value::Bool(true)` exactly (opt-out is Phase-6
+ * scope); the DSL stamps this default so hand-built subgraphs that go
+ * through the builder never hit `E_INV_ATTRIBUTION` at registration.
+ * Mirrors
+ * `benten_eval::invariants::attribution::ATTRIBUTION_PROPERTY_KEY`.
+ */
+export const ATTRIBUTION_PROPERTY_KEY = "attribution";
+
+/** Return a copy of `args` with the Inv-14 attribution stamp applied. */
+function stampAttribution(
+  args: Record<string, JsonValue>,
+): Record<string, JsonValue> {
+  // Only stamp when absent — callers that explicitly set the property
+  // (future Phase-6 opt-out callers, or tests that probe the reject
+  // path) retain their declared value.
+  if (args[ATTRIBUTION_PROPERTY_KEY] !== undefined) {
+    return args;
+  }
+  return { ...args, [ATTRIBUTION_PROPERTY_KEY]: true };
+}
+
+// ---------------------------------------------------------------------------
 // Primitive-specific argument shapes (public; consumed by the DSL methods)
 // ---------------------------------------------------------------------------
 
@@ -187,7 +215,20 @@ export class SubgraphBuilder {
     args: Record<string, JsonValue>,
   ): this {
     const id = this.nextNodeId(primitive);
-    const node: SubgraphNode = { id, primitive, args, edges: {} };
+    // Phase 2a G11-A EVAL wave-1 (D12.7 Decision 1): every OperationNode
+    // the DSL emits declares `attribution: true` by default so the
+    // Rust-side Inv-14 registration-time validator does not reject a
+    // DSL-built subgraph. Callers that want to opt out (Phase-6 extension
+    // point) must bypass the DSL entirely. The stamp lives under `args`
+    // so it rides through the napi wire shape into the engine's
+    // OperationNode property bag without a dedicated parallel channel.
+    const stampedArgs = stampAttribution(args);
+    const node: SubgraphNode = {
+      id,
+      primitive,
+      args: stampedArgs,
+      edges: {},
+    };
     // Link previous node via a default `NEXT` edge (unless the previous
     // was a BRANCH — its edges are managed by `.case()`).
     if (this.lastId) {
@@ -414,7 +455,9 @@ export class CaseBuilder {
     args: Record<string, JsonValue>,
   ): this {
     const id = this.mintId(primitive);
-    const node: SubgraphNode = { id, primitive, args, edges: {} };
+    // See SubgraphBuilder.addNode for Inv-14 attribution stamp rationale.
+    const stampedArgs = stampAttribution(args);
+    const node: SubgraphNode = { id, primitive, args: stampedArgs, edges: {} };
     if (this.lastId) {
       const prev = this.scopeNodes.find((n) => n.id === this.lastId);
       if (prev && prev.primitive !== "branch") {

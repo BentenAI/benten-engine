@@ -70,3 +70,7 @@ harness = false
 [[bench]]
 name = "wait_suspend_resume_latency"
 harness = false
+
+[[bench]]
+name = "transform_expression_latency"
+harness = false

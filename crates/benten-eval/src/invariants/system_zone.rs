@@ -31,6 +31,20 @@ use crate::{
     EvalError, InvariantViolation, OperationNode, PrimitiveKind, RegistrationError, Subgraph,
 };
 
+/// Canonical DX-facing message for `E_INV_SYSTEM_ZONE` surfaces.
+///
+/// Phase-2a G11-A EVAL wave-1 (D12.7 Decision 6): the runtime rejection
+/// message is tightened from the prior "system-zone label not writable
+/// via user subgraph" wording — the new text spells out BOTH surfaces
+/// (node ids AND labels) and explains the *why* so developers hitting
+/// `E_INV_SYSTEM_ZONE` understand they've stumbled onto a reserved
+/// namespace instead of a typo. Engine-side `Outcome::error_message`
+/// emitters for Inv-11 should consume this constant so the wording
+/// stays canonical across the eval-side structural reject, the
+/// runtime system-zone probe, and the storage-layer guard.
+pub const SYSTEM_ZONE_REJECTION_MESSAGE: &str = "Node IDs and labels cannot begin with the reserved 'system:' prefix \
+     — it's reserved for engine internals.";
+
 /// Return `true` when `label` falls inside a Phase-2a system-zone prefix.
 ///
 /// The Phase-2a classification matches the Phase-1 storage-layer stopgap
@@ -133,8 +147,12 @@ pub(crate) fn validate_registration_with_diagnostics(
 ///
 /// The helper threads the literal via the operation-node's `"label"`
 /// property — the idiomatic DSL path — so the walker probes both channels
-/// end-to-end. The handler id is a fixed string; tests that care about
-/// naming can build their own subgraph.
+/// end-to-end. The fixture's `handler_id` is pinned to
+/// `"inv11_literal_read_fixture"` because the Inv-14 schema-fixture CID
+/// pin (see `evaluator/attribution_schema_fixture.rs`) hashes the
+/// handler id alongside the node shape; renaming this constant would
+/// drift the fixture CID and require a cross-file pin update. Tests
+/// that care about different handler naming build their own subgraph.
 #[must_use]
 pub fn build_subgraph_reading_literal_system_cid_for_test(label: &str) -> Subgraph {
     let mut props: BTreeMap<String, Value> = BTreeMap::new();

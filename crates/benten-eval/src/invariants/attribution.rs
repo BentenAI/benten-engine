@@ -16,10 +16,14 @@ use crate::{
 };
 
 /// Property key that each [`OperationNode`] in a registered subgraph must
-/// carry. The value MUST be [`Value::Bool`] — `true` declares the primitive
-/// consumes attribution (the Phase-2a default for every kind); `false`
-/// opts it out. Absence of the key fails registration with
-/// [`crate::ErrorCode::InvAttribution`].
+/// carry.
+///
+/// Phase-2a (G11-A EVAL wave-1, D12.7 Decision 2): the value MUST be
+/// exactly [`Value::Bool(true)`]. `Bool(false)` is rejected — Phase 2a
+/// does not admit an opt-out (the opt-out extension point moved to
+/// Phase-6 seeds at `.addl/phase-6/00-scope-seeds.md`). Absence of the
+/// key, a non-`Bool` typed value, or `Bool(false)` all fail registration
+/// with [`crate::ErrorCode::InvAttribution`].
 pub const ATTRIBUTION_PROPERTY_KEY: &str = "attribution";
 
 /// Registration-time declaration validator. Rejects a subgraph whose
@@ -46,10 +50,15 @@ pub fn validate_registration(subgraph: &Subgraph) -> Result<(), EvalError> {
 }
 
 /// True when `node` carries a well-formed attribution declaration.
+///
+/// Phase-2a (Decision 2): tightened from `Bool(_)` to `Bool(true)` — the
+/// opt-out path is Phase-6 scope, not Phase-2a. Any of `Bool(false)`,
+/// absence, or a non-`Bool` typed value returns `false` and trips
+/// `E_INV_ATTRIBUTION` at registration.
 fn node_declares_attribution(node: &OperationNode) -> bool {
     matches!(
         node.property(ATTRIBUTION_PROPERTY_KEY),
-        Some(Value::Bool(_))
+        Some(Value::Bool(true))
     )
 }
 

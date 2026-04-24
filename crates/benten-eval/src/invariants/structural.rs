@@ -13,10 +13,11 @@
 //!   logical fan-out of `iterate_parallel(max)` siblings)
 //! - **5 — max total nodes** (default 4096)
 //! - **6 — max total edges** (default 8192)
-//! - **8 (Phase-1 stopgap)** — max ITERATE nesting depth (R1 named
-//!   compromise; hardcoded to 3 per `DEFAULT_MAX_ITERATE_NEST_DEPTH`).
-//!   Phase-2a G4-A replaces this stopgap with the multiplicative
-//!   cumulative-budget path in `invariants/budget.rs`.
+//! - **8 (Phase-2a)** — multiplicative cumulative-budget path lives in
+//!   `invariants/budget.rs` (G4-A). The Phase-1 nest-depth-3 stopgap is
+//!   retired; the former `DEFAULT_MAX_ITERATE_NEST_DEPTH` constant and
+//!   `InvariantConfig::max_iterate_nest_depth` field are gone (G11-A
+//!   EVAL wave-1 dead-code sweep).
 //! - **9 — determinism classification** (any non-deterministic primitive
 //!   inside a handler declared `deterministic: true` is rejected)
 //! - **10 — content-addressed CID** (byte encoding is order-independent:
@@ -164,10 +165,16 @@ pub fn validate_subgraph(
     // Symmetric with the builder-snapshot path: a finalized Subgraph
     // reaching this validator re-runs the budget check so a subgraph
     // round-tripped through storage still surfaces the same rejection.
-    if let Err(budget_err) = crate::invariants::budget::validate(sg) {
+    //
+    // G11-A EVAL wave-1 minor: non-aggregate arm returns via
+    // `finalize(out, violations)` like the other siblings — the
+    // inherited `out` diagnostic carries any context populated by
+    // earlier checks, and `finalize` picks the canonical
+    // `violated_invariants` encoding for 1-vs-N violations.
+    if crate::invariants::budget::validate(sg).is_err() {
         violations.push(InvariantViolation::IterateBudget);
         if !aggregate {
-            return Err(budget_err);
+            return Err(finalize(out, violations));
         }
     }
 
@@ -175,12 +182,12 @@ pub fn validate_subgraph(
     // Walks every READ / WRITE node whose literal target label (from
     // `"label"` property OR node id) begins with a `system:*` prefix.
     // Runtime counterpart lives in `benten-engine/src/primitive_host.rs`.
-    if let Err(sz_err) =
-        crate::invariants::system_zone::validate_registration_with_diagnostics(sg.nodes.as_slice())
+    if crate::invariants::system_zone::validate_registration_with_diagnostics(sg.nodes.as_slice())
+        .is_err()
     {
         violations.push(InvariantViolation::SystemZone);
         if !aggregate {
-            return Err(sz_err);
+            return Err(finalize(out, violations));
         }
     }
 
@@ -302,11 +309,6 @@ pub(crate) fn validate_builder(
     // computes the worst-case path product across the snapshot and fires
     // `InvariantViolation::IterateBudget` → `E_INV_ITERATE_BUDGET` when
     // it exceeds `DEFAULT_INV_8_BUDGET`.
-    //
-    // `max_iterate_nest_depth` on `InvariantConfig` is preserved for
-    // backward-compat with downstream callers but no longer gates the
-    // validator — the field is dead under Phase 2a semantics.
-    let _ = config.max_iterate_nest_depth;
     if let Err(budget_err) = crate::invariants::budget::validate_snapshot(sn) {
         violations.push(InvariantViolation::IterateBudget);
         if !aggregate {
@@ -379,12 +381,15 @@ pub(crate) fn validate_builder(
         }
     }
 
-    // Phase-2a G3-B-cont: WAIT property well-formedness rejections. Two
+    // Phase-2a G3-B-cont: WAIT property well-formedness rejections. Three
     // cases route through E_INV_REGISTRATION:
     //   (a) `signal` property is an empty `Value::Text` — an empty signal
     //       name has no routing meaning (see `wait_dsl_signal_naming.rs`).
     //   (b) `signal_shape` property is a `Value::Bytes` — a poisoned
     //       shape encoding (see `wait_signal_shape_optional_typing.rs`).
+    //   (c) `duration_ms` / `timeout_ms` is `Value::Int` and negative —
+    //       a negative millisecond value has no physical meaning
+    //       (G11-A EVAL wave-1 minor from G3-B-cont).
     // Legitimate shape encodings are `Int` / `Map` / `Null` — never a
     // bytestring (bytes round-trip only via `SubgraphBuilder::
     // set_property_for_test` in negative-contract tests).
@@ -409,6 +414,42 @@ pub(crate) fn validate_builder(
                 err.fanout_node_id = Some(n.id.clone());
                 return Err(err);
             }
+        }
+        for key in ["duration_ms", "timeout_ms"] {
+            if let Some(Value::Int(ms)) = n.properties.get(key)
+                && *ms < 0
+            {
+                violations.push(InvariantViolation::Registration);
+                if !aggregate {
+                    let mut err = RegistrationError::new(InvariantViolation::Registration);
+                    err.fanout_node_id = Some(n.id.clone());
+                    return Err(err);
+                }
+            }
+        }
+    }
+
+    // Invariant 14 — causal-attribution declaration (Phase 2a G5-B-ii /
+    // Decision 1). Every OperationNode in a registered subgraph MUST
+    // declare `attribution: Value::Bool(true)`. The Rust `SubgraphBuilder`
+    // and the TS DSL stamp this by default on every node they emit;
+    // tests that bypass the builders (by constructing `OperationNode`
+    // directly) must stamp the property themselves or expect
+    // `E_INV_ATTRIBUTION`.
+    //
+    // We project the snapshot onto a transient Subgraph view because
+    // `validate_registration` takes a `&Subgraph`; the node contents
+    // (id + kind + properties) are what Inv-14 inspects.
+    let transient = Subgraph {
+        handler_id: sn.handler_id.to_string(),
+        nodes: sn.nodes.to_vec(),
+        edges: Vec::new(),
+        deterministic: sn.deterministic,
+    };
+    if crate::invariants::attribution::validate_registration(&transient).is_err() {
+        violations.push(InvariantViolation::Attribution);
+        if !aggregate {
+            return Err(RegistrationError::new(InvariantViolation::Attribution));
         }
     }
 
