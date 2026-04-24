@@ -114,7 +114,12 @@ jobs:
         # the profile was defined but never activated, so CI silently ran
         # under `[profile.default]` (status-level=pass was noisy, and
         # fail-fast defaulted to true — masking cross-leg regressions).
-        run: cargo nextest run --profile ci --workspace --locked
+        # `--features benten-eval/testing` activates the `register_test_callee`
+        # MUTATION surface for benten-eval's own integration tests (G4-A
+        # mini-review C1). The feature is off by default so release /
+        # non-test builds cannot seed the TEST_CALLEE_REGISTRY that
+        # production Inv-8 budget decisions consult.
+        run: cargo nextest run --profile ci --workspace --locked --features benten-eval/testing
 
       - name: cargo doc
         if: matrix.rust == 'stable'

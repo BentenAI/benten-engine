@@ -59,19 +59,29 @@ pub use time_source::{
 /// is an engine-layer concern; this is purely a test-surface convenience
 /// (Phase 2a testing-helpers contract — see plan §3 G4-A).
 ///
-/// # Soundness gate (G4-A mini-review C1)
-/// This MUTATION surface is gated behind `cfg(any(test,
-/// debug_assertions, feature = "testing"))` so release builds
-/// (`debug_assertions = false`, no feature set) cannot pre-seed the
-/// registry that `invariants::budget` consults at registration-time
-/// validation. The READ path (`lookup_test_callee`) stays unconditional —
-/// in a release build the registry is always empty, and the Inv-8
-/// validator rejects unknown callees with `E_INV_REGISTRATION` (see G4-A
-/// mini-review M1 fix). The `debug_assertions` leg keeps integration
-/// tests (which link `benten-eval` as a regular dep, so `cfg(test)` is
-/// not active) working without requiring every test binary to opt into
-/// the `testing` feature.
-#[cfg(any(test, debug_assertions, feature = "testing"))]
+/// # Soundness gate (G4-A mini-review C1 + follow-up tightening)
+/// This MUTATION surface is gated behind `cfg(any(test, feature =
+/// "testing"))` so ANY non-test build (including dev-profile
+/// `cargo build` / `cargo check`, release, bench, and custom deploy
+/// profiles) cannot pre-seed the registry that `invariants::budget`
+/// consults at registration-time validation. The READ path
+/// (`lookup_test_callee`) stays unconditional — in a non-test build
+/// the registry is always empty, and the Inv-8 validator rejects
+/// unknown callees with `E_INV_REGISTRATION` (see G4-A mini-review M1
+/// fix).
+///
+/// Integration tests that live in `crates/benten-eval/tests/*.rs` are
+/// covered by the `cfg(test)` leg because cargo compiles the crate
+/// with `--cfg test` when building them. Cross-crate test binaries
+/// (e.g. a `benten-engine` integration test that wants to seed the
+/// benten-eval registry) must explicitly opt into the `testing`
+/// feature via `benten-eval = { path = "...", features = ["testing"]
+/// }` under their `[dev-dependencies]`. Earlier iterations included a
+/// `debug_assertions` leg for DX convenience; that leg was dropped
+/// because `cargo build` (dev-profile) sets `debug_assertions = true`
+/// and a compromised dep or accidentally-introduced production-path
+/// call to `register_test_callee` would compile in that profile.
+#[cfg(any(test, feature = "testing"))]
 pub fn register_test_callee(name: &str, bound: u64) {
     let mut guard = TEST_CALLEE_REGISTRY
         .write()

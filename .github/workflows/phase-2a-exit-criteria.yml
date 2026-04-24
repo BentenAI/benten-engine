@@ -97,7 +97,11 @@ jobs:
         env:
           PROPTEST_CASES: "1024"
         run: |
-          cargo nextest run --profile ci --locked \
+          # `--features benten-eval/testing` unlocks `register_test_callee`
+          # for the Inv-8 integration tests (G4-A mini-review C1 soundness
+          # gate — MUTATION surface is `cfg(any(test, feature = "testing"))`
+          # so non-test builds cannot seed the registry).
+          cargo nextest run --profile ci --locked --features benten-eval/testing \
             -E 'test(/invariant_(8|11|13|14)_/)'
 
   # ---------------------------------------------------------------------------
