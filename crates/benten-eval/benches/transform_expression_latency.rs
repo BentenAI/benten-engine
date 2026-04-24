@@ -1,4 +1,10 @@
-//! Criterion benchmark: per-expression TRANSFORM parse+evaluate latency.
+//! Criterion benchmark: per-expression TRANSFORM parse latency.
+//!
+//! (The bench body exercises only the parser hot path; actual expression
+//! evaluation is measured separately in other benches. The name
+//! `parse_eval_mixed` is retained because changing it would break the
+//! gate's `BENCH_ID` comment reference and the workflow CI grep — the
+//! "mixed" aspect is the three-shape workload rather than parse+eval.)
 //!
 //! **Target source:** ENGINE-SPEC §5 TRANSFORM — "< 10 µs per expression
 //! on dev hardware." TRANSFORM sits on the hot path of every handler

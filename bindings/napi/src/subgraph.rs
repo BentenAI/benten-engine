@@ -344,7 +344,5 @@ pub(crate) fn outcome_to_json(outcome: &benten_engine::Outcome) -> serde_json::V
         "successfulWriteCount".to_string(),
         serde_json::Value::Number(u64::from(outcome.successful_write_count()).into()),
     );
-    // Silence unused-import for release builds.
-    let _ = Value::Null;
     serde_json::Value::Object(out)
 }

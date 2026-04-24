@@ -34,13 +34,12 @@
 //! fine with that because content-addressed hashing is deterministic: the
 //! projected CID matches the eventual committed CID byte-for-byte.
 
-use std::sync::Arc;
 
 use benten_caps::CapError;
 use benten_core::{Cid, Edge, Node, Value};
 use benten_errors::ErrorCode;
 use benten_eval::{HostError, PrimitiveHost};
-use benten_graph::{ChangeEvent, GraphError, MutexExt};
+use benten_graph::MutexExt;
 
 use crate::engine::{Engine, is_known_view_id};
 use crate::error::EngineError;
@@ -77,10 +76,6 @@ pub const WALLCLOCK_REFRESH_CEILING: std::time::Duration = std::time::Duration::
 /// prefixed label still routes through Inv-11.
 #[must_use]
 pub(crate) fn is_system_zone_label(label: &str) -> bool {
-    // A read of `SYSTEM_ZONE_PREFIXES` keeps the const live so the
-    // drift-detector test stays wired; any member is covered by the
-    // broad `starts_with("system:")` classification below.
-    let _ = SYSTEM_ZONE_PREFIXES;
     label.starts_with("system:")
 }
 
@@ -975,8 +970,3 @@ pub(crate) fn tx_aborted_outcome() -> Outcome {
     }
 }
 
-// Touch unused imports to keep them available when downstream expansion needs
-// them (GraphError + ChangeEvent + Arc are all used by the engine.rs consumer
-// of this module; keeping them imported here mirrors the original layout).
-#[allow(dead_code)]
-fn _keep_imports(_g: Option<GraphError>, _c: Option<ChangeEvent>, _a: Option<Arc<()>>) {}

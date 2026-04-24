@@ -77,7 +77,7 @@ fn wait_inside_wait_serializes_correctly() {
     let mut start_payload = BTreeMap::new();
     start_payload.insert("payload".into(), Value::Text("go".into()));
     let outcome2 = engine
-        .resume_from_bytes_for_suspension(&bytes1, Node::new(vec!["signal".into()], start_payload))
+        .resume_from_bytes_unauthenticated(&bytes1, Node::new(vec!["signal".into()], start_payload))
         .expect("resume-1 returns another suspension (inner WAIT)");
     let handle2 = outcome2
         .unwrap_suspended()
@@ -133,7 +133,7 @@ fn wait_inside_wait_wrong_signal_at_inner_rejects() {
     let mut start_payload = BTreeMap::new();
     start_payload.insert("payload".into(), Value::Text("go".into()));
     let outcome2 = engine
-        .resume_from_bytes_for_suspension(&bytes1, Node::new(vec!["signal".into()], start_payload))
+        .resume_from_bytes_unauthenticated(&bytes1, Node::new(vec!["signal".into()], start_payload))
         .unwrap();
     let handle2 = outcome2.unwrap_suspended().unwrap();
     let bytes2 = engine.suspend_to_bytes(&handle2).unwrap();

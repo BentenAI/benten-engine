@@ -180,10 +180,6 @@ impl MockTimeSource {
 #[derive(Clone)]
 pub struct MockMonotonicSource {
     inner: std::sync::Arc<std::sync::Mutex<Duration>>,
-    /// Per-iter advance applied automatically whenever `elapsed_since_start`
-    /// is read. Set via [`advance_per_iter`]; lets the wallclock test drive
-    /// an iteration body without per-iteration bookkeeping at the call site.
-    per_iter: std::sync::Arc<std::sync::Mutex<Duration>>,
 }
 
 #[cfg(any(test, feature = "testing"))]
@@ -193,7 +189,6 @@ impl MockMonotonicSource {
     pub fn at_zero() -> Self {
         Self {
             inner: std::sync::Arc::new(std::sync::Mutex::new(Duration::ZERO)),
-            per_iter: std::sync::Arc::new(std::sync::Mutex::new(Duration::ZERO)),
         }
     }
 
@@ -205,19 +200,7 @@ impl MockMonotonicSource {
         }
     }
 
-    /// Configure a per-read auto-advance. Subsequent calls to
-    /// `elapsed_since_start` tick the clock forward by `by` before
-    /// returning — simulates the "natural elapsed advance of a long-
-    /// running iterate loop" without requiring the test to thread an
-    /// advance call around every iteration body.
-    pub fn advance_per_iter(&self, by: Duration) {
-        if let Ok(mut g) = self.per_iter.lock() {
-            *g = by;
-        }
-    }
-
-    /// Read the current elapsed without triggering the per-iter bump.
-    /// Useful for assertions in the test body.
+    /// Read the current elapsed.
     #[must_use]
     pub fn elapsed(&self) -> Duration {
         self.inner.lock().map_or(Duration::ZERO, |g| *g)
@@ -227,16 +210,6 @@ impl MockMonotonicSource {
 #[cfg(any(test, feature = "testing"))]
 impl MonotonicSource for MockMonotonicSource {
     fn elapsed_since_start(&self) -> Duration {
-        // Apply the configured per-iter auto-advance FIRST so two
-        // consecutive reads differ by at least `per_iter`; this mirrors
-        // the way `std::time::Instant::elapsed()` advances on its own
-        // between evaluator iterations.
-        let bump = self.per_iter.lock().map_or(Duration::ZERO, |g| *g);
-        if bump > Duration::ZERO
-            && let Ok(mut g) = self.inner.lock()
-        {
-            *g += bump;
-        }
         self.inner.lock().map_or(Duration::ZERO, |g| *g)
     }
 }

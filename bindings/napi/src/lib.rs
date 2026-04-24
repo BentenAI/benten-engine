@@ -497,13 +497,6 @@ mod napi_surface {
         }
     }
 
-    // Keep a lint-silencer so the imports stay live even when every helper
-    // they wrap is called conditionally.
-    #[allow(dead_code)]
-    fn _keep_imports_live() -> Option<Value> {
-        let _: Option<BTreeMap<String, Value>> = None;
-        None
-    }
 }
 
 // ---------------------------------------------------------------------------
