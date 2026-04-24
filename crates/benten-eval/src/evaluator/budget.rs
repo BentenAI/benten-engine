@@ -73,10 +73,17 @@ pub fn check_per_iteration_budget(consumed: u64, limit: u64) -> Result<(), Budge
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::invariants::budget::build_chained_call_iterate_iterate_for_test;
+    use crate::invariants::budget::{
+        build_chained_call_iterate_iterate_for_test, callee_name_for_factor,
+    };
 
     #[test]
     fn cumulative_shared_helper_matches_invariant_module() {
+        // Pre-register the callee the harness now uses for its middle
+        // CALL node (G4-A mini-review C2 — harness swapped a middle
+        // ITERATE for a real CALL so the shared helper exercises the
+        // CALL-factor code path).
+        crate::register_test_callee(&callee_name_for_factor(3), 3);
         let sg = build_chained_call_iterate_iterate_for_test(2, 3, 5);
         assert_eq!(cumulative_budget_for_subgraph(&sg), 30);
     }

@@ -24,6 +24,14 @@ bench = false
 # diagnostics; minimal embedders can opt out.
 default = []
 diag = []
+# `testing` is one leg of the `cfg(any(test, debug_assertions, feature =
+# "testing"))` gate on `register_test_callee` (G4-A mini-review C1). The
+# MUTATION surface that seeds the Inv-8 TEST_CALLEE_REGISTRY must be
+# unreachable in release builds (`debug_assertions = false`, feature not
+# enabled). Downstream consumers that want the helper in a release-ish
+# profile (e.g. an integration-test binary built under `--release`) must
+# opt in by enabling this feature explicitly.
+testing = []
 
 [dependencies]
 benten-core = { path = "../benten-core" }

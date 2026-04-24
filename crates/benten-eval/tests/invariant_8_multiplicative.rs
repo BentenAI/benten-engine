@@ -25,10 +25,20 @@ use benten_errors::ErrorCode;
 use benten_eval::invariants::budget::{self, MultiplicativeBudget};
 use proptest::prelude::*;
 
+/// Pre-register the callee that
+/// [`budget::build_chained_call_iterate_iterate_for_test`] now embeds as a
+/// real CALL node (G4-A mini-review C2). Callers must invoke this before
+/// validating the resulting subgraph — the M1 fallback now rejects an
+/// unregistered callee at registration time.
+fn register_chained_callee(call_factor: u64) {
+    benten_eval::register_test_callee(&budget::callee_name_for_factor(call_factor), call_factor);
+}
+
 #[test]
 fn invariant_8_multiplicative_through_call() {
-    // 3-node handler CALLs 3-iter ITERATE which CALLs another 3-iter ITERATE
-    // = 3 * 3 * 3 = 27 cumulative iterations along the worst path.
+    // ITERATE(3) → CALL(non-isolated, callee-bound=3) → ITERATE(3) =
+    // 3 * 3 * 3 = 27 cumulative iterations along the worst path.
+    register_chained_callee(3);
     let subgraph = budget::build_chained_call_iterate_iterate_for_test(3, 3, 3);
 
     // With a bound of 26, registration must reject.
@@ -86,25 +96,45 @@ fn call_respecting_cap_on_budget() {
 
 // ---- Proptest: multiplicative exact across random DAGs ----
 
+// Pre-seed the chained-callee registry across the proptest's `call_factor`
+// range so every shrink target is resolvable. Bounds 1..=5 match the
+// proptest strategy below. G4-A mini-review M1 added registration-time
+// rejection for unknown callees; without these entries the walker would
+// reject every proptest input rather than exercising the CALL factor
+// computation.
+fn preseed_proptest_callees() {
+    for factor in 1u64..=5 {
+        register_chained_callee(factor);
+    }
+}
+
 proptest! {
-    // Phase 2a G4-A: the multiplicative budget walker is now non-`todo!()`
-    // so this property fires meaningfully — the `#[ignore]` was retired
-    // when `invariants/budget.rs::compute_cumulative` landed.
+    // G4-A mini-review C2: the harness the proptest drives now builds
+    // ITERATE(m1) → CALL(non-isolated, callee-bound=call_factor) →
+    // ITERATE(m3). This genuinely exercises `non_isolated_callee_factor`
+    // + the `walk` CALL branch — the prior harness collapsed call_factor
+    // into a third ITERATE and so had zero CALL-path coverage.
     #[test]
     fn prop_invariant_8_multiplicative_exact(
         // CALL factor plus two ITERATE maxes; shrink toward minimal
-        // counterexample DAGs.
-        call_factor in 1u64..6,
-        iter_a in 1u64..6,
-        iter_b in 1u64..6,
+        // counterexample DAGs. Registry pre-seeded for 1..=5 via
+        // `preseed_proptest_callees`.
+        call_factor in 1u64..=5,
+        iter_a in 1u64..=5,
+        iter_b in 1u64..=5,
     ) {
+        preseed_proptest_callees();
         let subgraph =
-            budget::build_chained_call_iterate_iterate_for_test(call_factor, iter_a, iter_b);
-        let expected = call_factor * iter_a * iter_b;
+            budget::build_chained_call_iterate_iterate_for_test(iter_a, call_factor, iter_b);
+        // Reference implementation: the path is a straight chain
+        // ITERATE → CALL → ITERATE, so the worst-case MAX-over-paths
+        // product equals iter_a * call_factor * iter_b.
+        let expected = iter_a.saturating_mul(call_factor).saturating_mul(iter_b);
         let observed = budget::compute_cumulative(&subgraph);
         prop_assert_eq!(
             observed, expected,
-            "static cumulative must equal product of nesting factors"
+            "static cumulative must equal product of nesting factors \
+             (ITERATE × non-isolated-CALL × ITERATE)"
         );
     }
 }

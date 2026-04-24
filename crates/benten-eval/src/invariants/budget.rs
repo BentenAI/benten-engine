@@ -103,21 +103,38 @@ impl std::error::Error for BudgetError {}
 // Per-node factor resolution
 // ---------------------------------------------------------------------------
 
+/// G4-A mini-review M1: an unknown-callee rejection surfaced by the
+/// multiplicative walker. A CALL node that names a `handler` which is not
+/// resolvable to a cumulative bound at registration time is treated as an
+/// adversarial / misconfigured subgraph; the walker fails the subgraph
+/// rather than silently defaulting to factor 1.
+#[derive(Debug, Clone)]
+pub(crate) struct UnknownCallee {
+    /// The CALL node id that references the unregistered callee.
+    pub(crate) op_id: String,
+    /// The `handler` property value that could not be resolved.
+    pub(crate) handler: String,
+}
+
 /// Resolve the multiplicative factor a given operation node contributes to
 /// any DAG path passing through it.
 ///
 /// See crate docs for the factor table. `CALL { isolated: true }` is NOT
 /// resolved here — it's a reset, not a factor, and the path-walker handles
 /// it separately.
-#[must_use]
-fn factor_for_node(op: &OperationNode) -> u64 {
+///
+/// Returns `Err(UnknownCallee)` for a non-isolated CALL whose `handler`
+/// property names a callee not registered via `register_test_callee` and
+/// which does not carry a directly-encoded `max` on the CALL node itself
+/// (G4-A mini-review M1).
+fn factor_for_node(op: &OperationNode) -> Result<u64, UnknownCallee> {
     match op.kind {
         PrimitiveKind::Iterate => match op.properties.get("max") {
-            Some(Value::Int(m)) if *m > 0 => u64::try_from(*m).unwrap_or(u64::MAX),
+            Some(Value::Int(m)) if *m > 0 => Ok(u64::try_from(*m).unwrap_or(u64::MAX)),
             // No `max` declared — the registration-time Inv-8 max-missing
             // check (invariants/structural.rs) already rejects this; treat
             // as factor 1 here so the walker doesn't explode.
-            _ => 1,
+            _ => Ok(1),
         },
         // Non-isolated CALL contributes the callee grant's declared
         // iteration bound as a factor — the caller's remaining budget
@@ -128,28 +145,45 @@ fn factor_for_node(op: &OperationNode) -> u64 {
         // All other primitives (READ, WRITE, TRANSFORM, BRANCH, RESPOND,
         // EMIT, WAIT, SANDBOX, SUBSCRIBE, STREAM) are pass-through:
         // factor 1.
-        _ => 1,
+        _ => Ok(1),
     }
 }
 
-/// Factor contributed by a non-isolated CALL: the callee's declared
-/// iteration bound (via the process-global test-callee registry), falling
-/// back to any `max` property on the CALL node, else 1.
-fn non_isolated_callee_factor(op: &OperationNode) -> u64 {
+/// Factor contributed by a non-isolated CALL.
+///
+/// Resolution order (G4-A mini-review M1):
+/// 1. If the CALL declares a `handler` property, it MUST resolve to a
+///    registered callee bound — otherwise return `Err(UnknownCallee)`.
+///    This is the adversarial case the M1 fix addresses: a handler
+///    declaring a named callee that was never registered cannot silently
+///    default to factor 1 (or to the CALL's own `max`), because that
+///    would let a malicious subgraph bypass Inv-8 by claiming a cheap
+///    callee and then pointing at an expensive one at runtime.
+/// 2. If the CALL declares no `handler` property but carries a `max`,
+///    use the directly-encoded bound (test-harness shorthand used by
+///    `build_call_with_callee_budget_for_test`).
+/// 3. If the CALL declares neither, fall back to factor 1. This covers
+///    the legacy `SubgraphBuilder::call` surface (which ignores its
+///    `_handler` arg) used by depth + structural tests that build CALL
+///    nodes purely to exercise non-Inv-8 checks. The handler-less CALL
+///    carries no iteration cost of its own — the iteration-cost attack
+///    surface is gated on declaring a named callee.
+fn non_isolated_callee_factor(op: &OperationNode) -> Result<u64, UnknownCallee> {
     if matches!(op.properties.get("isolated"), Some(Value::Bool(true))) {
         // Caller of `factor_for_node` for an isolated CALL shouldn't
         // happen (the walker detects isolation first and resets). Guard
         // defensively.
-        return 1;
+        return Ok(1);
     }
-    if let Some(Value::Text(name)) = op.properties.get("handler")
-        && let Some(bound) = crate::lookup_test_callee(name)
-    {
-        return bound;
+    if let Some(Value::Text(name)) = op.properties.get("handler") {
+        return crate::lookup_test_callee(name).ok_or_else(|| UnknownCallee {
+            op_id: op.id.clone(),
+            handler: name.clone(),
+        });
     }
     match op.properties.get("max") {
-        Some(Value::Int(m)) if *m > 0 => u64::try_from(*m).unwrap_or(u64::MAX),
-        _ => 1,
+        Some(Value::Int(m)) if *m > 0 => Ok(u64::try_from(*m).unwrap_or(u64::MAX)),
+        _ => Ok(1),
     }
 }
 
@@ -159,28 +193,29 @@ fn is_isolated_call(op: &OperationNode) -> bool {
         && matches!(op.properties.get("isolated"), Some(Value::Bool(true)))
 }
 
-/// Whether `op` is a CALL primitive (isolated or not).
-fn is_call(op: &OperationNode) -> bool {
-    matches!(op.kind, PrimitiveKind::Call)
-}
-
-/// Look up the callee-grant bound for an isolated CALL node by consulting the
-/// handler name property + the process-global test-callee registry.
+/// Look up the callee-grant bound for an isolated CALL node.
 ///
-/// When the CALL's `handler` property doesn't match any registered callee,
-/// returns the declared `max` on the CALL node if present, otherwise `1` —
-/// an unknown callee contributes no iteration cost of its own.
-fn isolated_callee_bound(op: &OperationNode) -> u64 {
-    if let Some(Value::Text(name)) = op.properties.get("handler")
-        && let Some(bound) = crate::lookup_test_callee(name)
-    {
-        return bound;
+/// Same resolution rules as [`non_isolated_callee_factor`] (registry
+/// lookup when `handler` is named → rejection on miss; `max` on the CALL
+/// node when no handler is named; fallback 1 when neither is declared).
+///
+/// G4-A mini-review M1: an unknown NAMED callee at an isolated-CALL
+/// boundary is a registration-time rejection, not a silent-default-to-1
+/// — an adversarial handler declaring `isolated: true` with
+/// `handler: "<unregistered>"` must not bypass Inv-8 by pointing at an
+/// undisclosed callee. Handler-LESS isolated CALLs with no `max`
+/// contribute factor 1 (no iteration cost is the honest fallback when
+/// the CALL site declares no cost at all).
+fn isolated_callee_bound(op: &OperationNode) -> Result<u64, UnknownCallee> {
+    if let Some(Value::Text(name)) = op.properties.get("handler") {
+        return crate::lookup_test_callee(name).ok_or_else(|| UnknownCallee {
+            op_id: op.id.clone(),
+            handler: name.clone(),
+        });
     }
-    // Fallback: the CALL node may declare its own `max` for tests that
-    // don't register a named callee.
     match op.properties.get("max") {
-        Some(Value::Int(m)) if *m > 0 => u64::try_from(*m).unwrap_or(u64::MAX),
-        _ => 1,
+        Some(Value::Int(m)) if *m > 0 => Ok(u64::try_from(*m).unwrap_or(u64::MAX)),
+        _ => Ok(1),
     }
 }
 
@@ -190,7 +225,10 @@ fn isolated_callee_bound(op: &OperationNode) -> u64 {
 
 /// Compute the MAX-over-paths cumulative budget for each node in a finalized
 /// Subgraph, keyed by node id. Saturating multiplication throughout.
-fn cumulative_by_id(sg: &Subgraph) -> HashMap<String, u64> {
+///
+/// Returns `Err(UnknownCallee)` when any CALL node on the walked path
+/// names an unresolvable callee (G4-A mini-review M1).
+fn cumulative_by_id(sg: &Subgraph) -> Result<HashMap<String, u64>, UnknownCallee> {
     // Build adjacency by id.
     let mut outgoing: HashMap<&str, Vec<&str>> = HashMap::new();
     for (f, t, _l) in &sg.edges {
@@ -217,9 +255,9 @@ fn cumulative_by_id(sg: &Subgraph) -> HashMap<String, u64> {
     // product with what came before).
     let mut cumulative: HashMap<String, u64> = HashMap::new();
     for root in roots {
-        walk(root, 1, &by_id, &outgoing, &mut cumulative, &mut Vec::new());
+        walk(root, 1, &by_id, &outgoing, &mut cumulative, &mut Vec::new())?;
     }
-    cumulative
+    Ok(cumulative)
 }
 
 /// DFS walker. `running` = product of factors along the path up to but not
@@ -232,21 +270,21 @@ fn walk(
     outgoing: &HashMap<&str, Vec<&str>>,
     cumulative: &mut HashMap<String, u64>,
     visiting: &mut Vec<String>,
-) {
+) -> Result<(), UnknownCallee> {
     if visiting.iter().any(|v| v == cur) {
-        return;
+        return Ok(());
     }
     let Some(op) = by_id.get(cur).copied() else {
-        return;
+        return Ok(());
     };
 
     // Compute the cumulative AT this node.
     let at_here = if is_isolated_call(op) {
         // Isolated CALL resets cumulative to the callee grant's bound.
-        isolated_callee_bound(op)
+        isolated_callee_bound(op)?
     } else {
         // Factor-multiply onto the running product (saturating).
-        running.saturating_mul(factor_for_node(op))
+        running.saturating_mul(factor_for_node(op)?)
     };
 
     // Record the MAX over all paths reaching `cur`.
@@ -255,18 +293,25 @@ fn walk(
         *slot = at_here;
     }
 
-    // For non-isolated CALL, the downstream propagation carries the full
-    // running × callee-frame product. For isolated CALL, the downstream
-    // continues from the reset bound (the callee's frame). For other
-    // primitives, downstream carries `at_here`.
+    // Determine the product propagated to downstream nodes.
+    //
+    // G4-A mini-review M2: an isolated-CALL does NOT taint the caller's
+    // post-CALL path with the callee's bound. The callee runs under its
+    // own grant, so the caller's nodes reached AFTER the CALL must
+    // continue from the caller's PRE-CALL running product. A shape like
+    // `ITERATE(10) → isolated-CALL(callee-bound=5) → ITERATE(3)` therefore
+    // propagates carry_forward=10 (not 5) past the CALL, yielding
+    // cumulative=30 at the trailing ITERATE — NOT 15.
+    //
+    // For a non-isolated CALL, `at_here = running × callee_factor`; the
+    // caller's post-CALL path legitimately inherits that product
+    // (non-isolated semantics = budget composes multiplicatively through
+    // the CALL boundary).
+    //
+    // For every other primitive, `at_here == running × factor_for_node`,
+    // which is also what downstream should see.
     let carry_forward = if is_isolated_call(op) {
-        at_here
-    } else if is_call(op) {
-        // Non-isolated CALL: factor itself is 1 at the CALL node, but the
-        // downstream of the CALL subgraph isn't represented in the same
-        // Subgraph — the caller's subsequent nodes see `at_here` (which
-        // equals `running` since factor_for_node(CALL)=1).
-        at_here
+        running
     } else {
         at_here
     };
@@ -274,9 +319,10 @@ fn walk(
     visiting.push(cur.to_string());
     let empty: Vec<&str> = Vec::new();
     for &next in outgoing.get(cur).unwrap_or(&empty) {
-        walk(next, carry_forward, by_id, outgoing, cumulative, visiting);
+        walk(next, carry_forward, by_id, outgoing, cumulative, visiting)?;
     }
     visiting.pop();
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -286,7 +332,10 @@ fn walk(
 /// Compute per-node cumulative budgets for a builder snapshot (the pre-
 /// finalize form used by `SubgraphBuilder::build_validated`). Returns a
 /// Vec indexed by node position.
-pub(crate) fn cumulative_by_snapshot(sn: &SubgraphSnapshot<'_>) -> Vec<u64> {
+///
+/// Returns `Err(UnknownCallee)` when any CALL node names an unresolvable
+/// callee (G4-A mini-review M1, mirroring `cumulative_by_id`).
+pub(crate) fn cumulative_by_snapshot(sn: &SubgraphSnapshot<'_>) -> Result<Vec<u64>, UnknownCallee> {
     // Build adjacency by index.
     let mut outgoing: HashMap<usize, Vec<usize>> = HashMap::new();
     for (f, t, _l) in sn.edges {
@@ -311,10 +360,10 @@ pub(crate) fn cumulative_by_snapshot(sn: &SubgraphSnapshot<'_>) -> Vec<u64> {
                 &outgoing,
                 &mut cumulative,
                 &mut Vec::new(),
-            );
+            )?;
         }
     }
-    cumulative
+    Ok(cumulative)
 }
 
 fn walk_snapshot(
@@ -324,29 +373,38 @@ fn walk_snapshot(
     outgoing: &HashMap<usize, Vec<usize>>,
     cumulative: &mut [u64],
     visiting: &mut Vec<usize>,
-) {
+) -> Result<(), UnknownCallee> {
     if visiting.contains(&cur) {
-        return;
+        return Ok(());
     }
     let Some(op) = nodes.get(cur) else {
-        return;
+        return Ok(());
     };
     let at_here = if is_isolated_call(op) {
-        isolated_callee_bound(op)
+        isolated_callee_bound(op)?
     } else {
-        running.saturating_mul(factor_for_node(op))
+        running.saturating_mul(factor_for_node(op)?)
     };
     if at_here > cumulative.get(cur).copied().unwrap_or(0)
         && let Some(slot) = cumulative.get_mut(cur)
     {
         *slot = at_here;
     }
+    // G4-A mini-review M2: isolated-CALL must NOT leak the callee bound
+    // into the caller's post-CALL path — mirror the finalized-subgraph
+    // walker (see `walk` above).
+    let carry_forward = if is_isolated_call(op) {
+        running
+    } else {
+        at_here
+    };
     visiting.push(cur);
     let empty: Vec<usize> = Vec::new();
     for &next in outgoing.get(&cur).unwrap_or(&empty) {
-        walk_snapshot(next, at_here, nodes, outgoing, cumulative, visiting);
+        walk_snapshot(next, carry_forward, nodes, outgoing, cumulative, visiting)?;
     }
     visiting.pop();
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -355,22 +413,30 @@ fn walk_snapshot(
 
 /// Compute the cumulative Inv-8 budget for a subgraph; returns the
 /// MAX-over-paths product.
+///
+/// A CALL node with an unresolvable callee (no registered bound and no
+/// directly-encoded `max`) saturates this computation to `u64::MAX`, which
+/// reliably exceeds any configured Inv-8 bound and surfaces at the
+/// validator layer as a registration rejection (G4-A mini-review M1). The
+/// typed rejection with handler-id context flows through the validator
+/// entry points below.
 #[must_use]
 pub fn compute_cumulative(subgraph: &Subgraph) -> u64 {
-    cumulative_by_id(subgraph)
-        .values()
-        .copied()
-        .max()
-        .unwrap_or(1)
+    match cumulative_by_id(subgraph) {
+        Ok(table) => table.values().copied().max().unwrap_or(1),
+        Err(_) => u64::MAX,
+    }
 }
 
 /// Compute the cumulative Inv-8 budget at a specific node handle. `None` is
-/// returned when the handle doesn't correspond to any node in the subgraph.
+/// returned when the handle doesn't correspond to any node in the subgraph
+/// or when the subgraph contains an unresolvable callee (in which case the
+/// validator path is the canonical surface for the rejection).
 #[must_use]
 pub fn cumulative_at_handle(subgraph: &Subgraph, handle: NodeHandle) -> Option<u64> {
     let idx = handle.0 as usize;
     let node = subgraph.nodes.get(idx)?;
-    let table = cumulative_by_id(subgraph);
+    let table = cumulative_by_id(subgraph).ok()?;
     table.get(&node.id).copied()
 }
 
@@ -383,12 +449,30 @@ pub fn cumulative_at_handle(subgraph: &Subgraph, handle: NodeHandle) -> Option<u
 ///
 /// # Errors
 /// Fires [`ErrorCode::InvIterateBudget`] via [`BudgetError`] when the
-/// worst-path product exceeds `bound.limit()`.
+/// worst-path product exceeds `bound.limit()`, or
+/// [`ErrorCode::InvRegistration`] when a CALL node references an
+/// unresolvable callee bound (G4-A mini-review M1 — an unknown callee is a
+/// registration mistake or adversarial bypass attempt, not a factor-1
+/// default).
 pub fn validate_multiplicative(
     subgraph: &Subgraph,
     bound: MultiplicativeBudget,
 ) -> Result<(), BudgetError> {
-    let cumulative = compute_cumulative(subgraph);
+    let table = match cumulative_by_id(subgraph) {
+        Ok(t) => t,
+        Err(unk) => {
+            return Err(BudgetError {
+                code: ErrorCode::InvRegistration,
+                message: format!(
+                    "CALL node {:?} references unresolvable callee {:?} \
+                     — isolated/non-isolated CALL requires the callee's \
+                     cumulative bound be declared at registration time",
+                    unk.op_id, unk.handler
+                ),
+            });
+        }
+    };
+    let cumulative = table.values().copied().max().unwrap_or(1);
     if cumulative > bound.limit() {
         return Err(BudgetError {
             code: ErrorCode::InvIterateBudget,
@@ -406,10 +490,16 @@ pub fn validate_multiplicative(
 ///
 /// # Errors
 /// Converts [`BudgetError`] to [`RegistrationError`] carrying the Inv-8
-/// context.
+/// context. Unknown-callee is mapped to
+/// [`InvariantViolation::Registration`] (→ `E_INV_REGISTRATION`) rather
+/// than `InvariantViolation::IterateBudget`; a missing callee declaration
+/// is a structural flaw, not a budget-overflow.
 pub fn validate(subgraph: &Subgraph) -> Result<(), RegistrationError> {
     match validate_multiplicative(subgraph, MultiplicativeBudget::new(DEFAULT_INV_8_BUDGET)) {
         Ok(()) => Ok(()),
+        Err(be) if be.code() == ErrorCode::InvRegistration => {
+            Err(RegistrationError::new(InvariantViolation::Registration))
+        }
         Err(_) => Err(RegistrationError::new(InvariantViolation::IterateBudget)),
     }
 }
@@ -422,7 +512,15 @@ pub fn validate(subgraph: &Subgraph) -> Result<(), RegistrationError> {
 /// Returns a populated [`RegistrationError`] when any node's cumulative
 /// budget exceeds `DEFAULT_INV_8_BUDGET`.
 pub(crate) fn validate_snapshot(sn: &SubgraphSnapshot<'_>) -> Result<(), RegistrationError> {
-    let cumulative = cumulative_by_snapshot(sn);
+    let cumulative = match cumulative_by_snapshot(sn) {
+        Ok(v) => v,
+        Err(_) => {
+            // G4-A mini-review M1: unknown callee at the builder-snapshot
+            // path is a registration-layer rejection, not a budget
+            // overflow.
+            return Err(RegistrationError::new(InvariantViolation::Registration));
+        }
+    };
     let worst = cumulative.iter().copied().max().unwrap_or(1);
     if worst > DEFAULT_INV_8_BUDGET {
         return Err(RegistrationError::new(InvariantViolation::IterateBudget));
@@ -434,37 +532,60 @@ pub(crate) fn validate_snapshot(sn: &SubgraphSnapshot<'_>) -> Result<(), Registr
 // Test harnesses (consumed by tests/invariant_8_multiplicative.rs).
 // ---------------------------------------------------------------------------
 
-/// Test harness: build a subgraph `ITERATE(m1) → CALL → ITERATE(m2)` with the
-/// call_factor embedded as a leading ITERATE so the "chained CALL/ITERATE"
-/// product is `m1 × m2 × m3`.
+/// Test harness: build a subgraph `ITERATE(m1) → CALL(non-isolated) →
+/// ITERATE(m3)` where the CALL's callee has declared bound `call_factor`.
 ///
-/// The test name `build_chained_call_iterate_iterate_for_test(a, b, c)` is
-/// documented in `invariant_8_multiplicative.rs` as producing cumulative
-/// `a × b × c`. We realize that as a straight ITERATE chain of three ITERATE
-/// primitives with maxes `a`, `b`, `c` (the CALL boundary contributes
-/// factor 1 to the product under non-isolated semantics).
+/// G4-A mini-review C2: the prior harness collapsed the call-factor into
+/// a third ITERATE, which meant
+/// `prop_invariant_8_multiplicative_exact` exercised zero CALL code paths
+/// (`non_isolated_callee_factor`, `isolated_callee_bound`, or the `walk`
+/// isolation branch). This version threads the call-factor through a real
+/// CALL node: the middle node is `PrimitiveKind::Call` with
+/// `isolated: false` and a registered callee whose bound is `call_factor`.
+/// The proptest (and unit tests calling this helper) must
+/// [`crate::register_test_callee`] that callee first — the M1 fallback now
+/// rejects unknown callees at registration time.
+///
+/// Caller contract: the callee name returned by this function (encoded on
+/// the CALL node's `handler` property) is derived from `call_factor` so
+/// each invocation with a distinct factor pre-registers a distinct entry.
+/// Caller must call `register_test_callee(name, call_factor)` before
+/// validating the subgraph.
 #[must_use]
-pub fn build_chained_call_iterate_iterate_for_test(m1: u64, m2: u64, m3: u64) -> Subgraph {
+pub fn build_chained_call_iterate_iterate_for_test(m1: u64, call_factor: u64, m3: u64) -> Subgraph {
     use crate::{OperationNode, PrimitiveKind, Subgraph};
     let mut sg = Subgraph::new("chained_call_iterate");
     let i64_or_max = |v: u64| i64::try_from(v).unwrap_or(i64::MAX);
+    let callee_name = callee_name_for_factor(call_factor);
     sg.nodes.push(
         OperationNode::new("iter_a", PrimitiveKind::Iterate)
             .with_property("max", Value::Int(i64_or_max(m1))),
     );
     sg.nodes.push(
-        OperationNode::new("iter_b", PrimitiveKind::Iterate)
-            .with_property("max", Value::Int(i64_or_max(m2))),
+        OperationNode::new("call_mid", PrimitiveKind::Call)
+            .with_property("handler", Value::text(callee_name))
+            .with_property("isolated", Value::Bool(false)),
     );
     sg.nodes.push(
         OperationNode::new("iter_c", PrimitiveKind::Iterate)
             .with_property("max", Value::Int(i64_or_max(m3))),
     );
     sg.edges
-        .push(("iter_a".into(), "iter_b".into(), "next".into()));
+        .push(("iter_a".into(), "call_mid".into(), "next".into()));
     sg.edges
-        .push(("iter_b".into(), "iter_c".into(), "next".into()));
+        .push(("call_mid".into(), "iter_c".into(), "next".into()));
     sg
+}
+
+/// Test harness: deterministic callee name derived from the declared
+/// bound. Using the bound as a suffix lets the proptest pre-register
+/// every distinct call_factor exactly once and share registrations
+/// across test runs in the same process. Consumers must
+/// `register_test_callee(&callee_name_for_factor(factor), factor)` before
+/// validating the subgraph.
+#[must_use]
+pub fn callee_name_for_factor(factor: u64) -> String {
+    format!("chained_callee_factor_{factor}")
 }
 
 /// Test harness: ITERATE(inner_max) nested inside ITERATE(outer_max).

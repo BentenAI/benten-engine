@@ -58,6 +58,20 @@ pub use time_source::{
 /// the same name overwrites the prior entry). Real handler registration
 /// is an engine-layer concern; this is purely a test-surface convenience
 /// (Phase 2a testing-helpers contract — see plan §3 G4-A).
+///
+/// # Soundness gate (G4-A mini-review C1)
+/// This MUTATION surface is gated behind `cfg(any(test,
+/// debug_assertions, feature = "testing"))` so release builds
+/// (`debug_assertions = false`, no feature set) cannot pre-seed the
+/// registry that `invariants::budget` consults at registration-time
+/// validation. The READ path (`lookup_test_callee`) stays unconditional —
+/// in a release build the registry is always empty, and the Inv-8
+/// validator rejects unknown callees with `E_INV_REGISTRATION` (see G4-A
+/// mini-review M1 fix). The `debug_assertions` leg keeps integration
+/// tests (which link `benten-eval` as a regular dep, so `cfg(test)` is
+/// not active) working without requiring every test binary to opt into
+/// the `testing` feature.
+#[cfg(any(test, debug_assertions, feature = "testing"))]
 pub fn register_test_callee(name: &str, bound: u64) {
     let mut guard = TEST_CALLEE_REGISTRY
         .write()
@@ -66,9 +80,10 @@ pub fn register_test_callee(name: &str, bound: u64) {
 }
 
 /// Look up a previously-registered callee bound. Returns `None` when the
-/// name has not been registered — the multiplicative walker's
-/// `non_isolated_callee_factor` / `isolated_callee_bound` helpers fall back
-/// to the CALL node's own `max` property in that case.
+/// name has not been registered — the multiplicative walker treats a
+/// CALL with a `handler` property naming an unregistered callee as an
+/// Inv-8-rejectable registration error (Phase 2a G4-A M1 fix), so the
+/// fallback is no longer "contribute factor 1."
 #[must_use]
 pub fn lookup_test_callee(name: &str) -> Option<u64> {
     TEST_CALLEE_REGISTRY
