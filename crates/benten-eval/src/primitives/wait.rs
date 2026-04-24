@@ -269,7 +269,7 @@ pub fn execute_and_capture_zone_writes(signal: &str) -> Result<ZoneWriteCapture,
 /// evaluate them against the ctx clock.
 ///
 /// A subgraph that contains no WAIT node returns
-/// [`WaitOutcome::Complete(Value::unit())`] — the unit tests only exercise
+/// `WaitOutcome::Complete(Value::unit())` — the unit tests only exercise
 /// WAIT-bearing subgraphs so this fallback is a simple "nothing to suspend
 /// on" default.
 ///

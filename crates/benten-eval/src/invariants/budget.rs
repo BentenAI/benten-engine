@@ -555,7 +555,7 @@ pub(crate) fn validate_snapshot(sn: &SubgraphSnapshot<'_>) -> Result<(), Registr
 /// CALL node: the middle node is `PrimitiveKind::Call` with
 /// `isolated: false` and a registered callee whose bound is `call_factor`.
 /// The proptest (and unit tests calling this helper) must
-/// [`crate::register_test_callee`] that callee first — the M1 fallback now
+/// `crate::register_test_callee` that callee first — the M1 fallback now
 /// rejects unknown callees at registration time.
 ///
 /// Caller contract: the callee name returned by this function (encoded on

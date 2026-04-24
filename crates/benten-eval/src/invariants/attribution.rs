@@ -19,7 +19,7 @@ use crate::{
 /// carry.
 ///
 /// Phase-2a (G11-A EVAL wave-1, D12.7 Decision 2): the value MUST be
-/// exactly [`Value::Bool(true)`]. `Bool(false)` is rejected — Phase 2a
+/// exactly `Value::Bool(true)`. `Bool(false)` is rejected — Phase 2a
 /// does not admit an opt-out (the opt-out extension point moved to
 /// Phase-6 seeds at `.addl/phase-6/00-scope-seeds.md`). Absence of the
 /// key, a non-`Bool` typed value, or `Bool(false)` all fail registration

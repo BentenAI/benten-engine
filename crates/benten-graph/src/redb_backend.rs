@@ -471,7 +471,7 @@ impl RedbBackend {
     /// Wave-1 mini-review SEVERE-2: current value of the storage-layer
     /// commit counter. Bumped once per successful
     /// `put_node_with_context` commit (dedup early returns do NOT
-    /// advance it). The engine's [`benten-engine`] `Engine::audit_sequence`
+    /// advance it). The engine's `benten-engine` `Engine::audit_sequence`
     /// accessor reads this counter directly so the §9.11 row-3
     /// "dedup is a pure read" contract is observable at the storage
     /// layer rather than at an engine-transaction layer the privileged

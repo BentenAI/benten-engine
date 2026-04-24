@@ -3,7 +3,7 @@
 //! Structural/registration-time declaration lives in
 //! [`crate::invariants::attribution`]. This module owns the **runtime** side
 //! of phil-1's dual-surface resolution: every [`TraceStep::Step`] emitted by
-//! the evaluator carries the [`AttributionFrame`] on top of the current
+//! the evaluator carries the `AttributionFrame` on top of the current
 //! attribution-frame stack.
 //!
 //! Policy-driven: the stamping is primitive-type agnostic. READ, WRITE,
@@ -16,7 +16,7 @@ use benten_core::{Cid, Value};
 use crate::{AttributionFrame, EvalError, NullHost, OperationNode, Subgraph, TraceStep};
 
 /// Runtime attribution threader. Given a [`Subgraph`] plus the current
-/// [`AttributionFrame`] (the top of the evaluator's frame stack), walks the
+/// `AttributionFrame` (the top of the evaluator's frame stack), walks the
 /// subgraph and emits one [`TraceStep::Step`] per primitive node with the
 /// frame stamped in.
 ///

@@ -97,7 +97,7 @@ impl EvalContext {
     /// `Duration`-shaped timeout surface; at that point the elapsed-
     /// reporting precision is revisited alongside the envelope format.
     /// Upstream tests that care about sub-ms resolution should read
-    /// [`TimeSource::hlc_stamp`] directly.
+    /// `TimeSource::hlc_stamp` directly.
     #[must_use]
     pub fn elapsed_ms(&self) -> Option<u64> {
         self.clock.as_ref().map(|c| c.hlc_stamp() / 1000)

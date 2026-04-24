@@ -4,12 +4,12 @@
 //! ITERATE + CALL primitives consult iteration-budget bookkeeping at
 //! registration + run time. It is deliberately thin:
 //!
-//! - [`cumulative_budget_for_subgraph`] exposes the registration-time
+//! - `cumulative_budget_for_subgraph` exposes the registration-time
 //!   multiplicative product (delegating to
 //!   [`crate::invariants::budget::compute_cumulative`]) so that
 //!   `primitives/iterate.rs` and `primitives/call.rs` do not each re-walk
 //!   the subgraph.
-//! - [`check_per_iteration_budget`] is the shared run-time check both
+//! - `check_per_iteration_budget` is the shared run-time check both
 //!   primitives call on each batch boundary; it composes the caller's
 //!   remaining budget with the per-iteration cost and fires a
 //!   `BudgetError` (stable code `E_INV_ITERATE_BUDGET`) when the limit is
