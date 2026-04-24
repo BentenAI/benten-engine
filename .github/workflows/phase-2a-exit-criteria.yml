@@ -180,13 +180,10 @@ jobs:
             fi
             # Criterion stores median point estimate as
             # .median.point_estimate (nanoseconds).
+            # Single-line Python avoids YAML block-scalar indent issues
+            # that broke this workflow's parse since 0278ba3.
             local median
-            median=$(python3 -c "
-import json,sys
-with open('${estimates}') as f:
-    d = json.load(f)
-print(int(d['median']['point_estimate']))
-")
+            median=$(python3 -c "import json,sys; d=json.load(open('${estimates}')); print(int(d['median']['point_estimate']))")
             local budget=$((threshold_ns * multiplier))
             echo "GATE ${bench_id}: median=${median}ns threshold=${threshold_ns}ns (x${multiplier} = ${budget}ns)"
             if [ "$median" -gt "$budget" ]; then
@@ -215,4 +212,4 @@ print(int(d['median']['point_estimate']))
     needs: [wait-resume-determinism, invariants-firing, option-c-flanking, perf-gates]
     steps:
       - name: All Phase-2a gates green
-        run: echo "Phase 2a exit criteria: PASS"
+        run: 'echo "Phase 2a exit criteria: PASS"'
