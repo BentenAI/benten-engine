@@ -947,44 +947,30 @@ impl RedbBackend {
         // already-present CID against different inflight writes. Fold
         // probe-and-write into one txn and both races disappear.
         //
-        // The bloom fast-path short-circuits BEFORE opening the write txn
-        // when it definitively reports "absent" — that path is race-free
-        // because redb's single-writer lock still serializes the actual
-        // commit below.
-
-        // Fast-negative: if the bloom filter says "definitely absent" there
-        // is no need to burn a redb read for the existence check — the
-        // write txn can go straight to the insert. This preserves the
-        // Inv-13 hot-path perf envelope the G2-A bloom was designed for.
-        //
-        // Correctness: a "definitely absent" bloom answer is authoritative
-        // modulo the `warmed` set lifetime — we insert into the bloom on
-        // every put, so a CID present on disk whose bloom bits were evicted
-        // could theoretically fall through; Phase-1 ships without eviction
-        // so "definitely absent" is exact in practice. When bloom eviction
-        // lands, the fast-path must flip to always consulting the in-txn
-        // check.
-        let bloom_says_maybe = {
-            let mut cache = self.immutability_cache.lock_recover();
-            cache.may_contain(&cid)
-        };
+        // Wave-1 mini-review SEVERE-1 correction: the bloom fast-path CANNOT
+        // be allowed to skip the in-txn existence check. Concurrent writers
+        // racing on a yet-to-be-committed CID all observe `may_contain =
+        // false` (the bloom is warmed post-commit), all skip the probe, and
+        // all `nodes.insert(...)` — which in redb REPLACES without erroring,
+        // producing N distinct `Ok(cid)` acknowledgments + N ChangeEvents
+        // for the same CID. Correctness demands the probe run UNCONDITIONALLY
+        // inside the write txn; the bloom remains a hint for the non-
+        // transactional `probe_cid_exists` path only.
 
         let n_key = node_key(&cid);
         let bytes = node.canonical_bytes()?;
 
         let write_txn = self.begin_write_txn_with(effective_redb)?;
 
-        // In-txn existence check. Only run when bloom says "maybe" —
-        // otherwise the write has already been green-lit and the redb
-        // single-writer lock is sufficient to serialize this commit against
-        // any other in-flight put_node_with_context. The check reads from
-        // the same write-txn so it sees any prior writes in this txn
-        // (defensive — the closure body only writes after this probe).
-        let already_present = if bloom_says_maybe {
+        // In-txn existence check. Runs unconditionally — redb's single-
+        // writer lock serializes this txn against every other in-flight
+        // `put_node_with_context`, so the probe observes a consistent
+        // snapshot that includes every prior committed put. The bloom
+        // fast-path is bypassed here precisely because its "definitely
+        // absent" answer races with uncommitted concurrent writers.
+        let already_present = {
             let table = write_txn.open_table(NODES_TABLE)?;
             table.get(n_key.as_slice())?.is_some()
-        } else {
-            false
         };
 
         if already_present {
