@@ -68,6 +68,9 @@ docs/FULL-ROADMAP.md
 docs/SECURITY-POSTURE.md
 docs/PLATFORM-DESIGN.md
 docs/BUSINESS-PLAN.md
+docs/INVARIANT-COVERAGE.md
+docs/HOST-FUNCTIONS.md
+docs/BENCHMARKING.md
 docs/future/
 crates/benten-graph/benches/README.md
 crates/README.md

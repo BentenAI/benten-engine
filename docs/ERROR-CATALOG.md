@@ -63,9 +63,9 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_INV_SYSTEM_ZONE
 
-- **Message:** "Node {node_id} references system-zone label '{label}', unreachable from user operations"
+- **Message:** "Node IDs and labels cannot begin with the reserved 'system:' prefix — it's reserved for engine internals"
 - **Context:** `{ node_id: NodeId, label: string }`
-- **Fix:** System-zone labels are reserved for engine internals. Use a non-reserved label.
+- **Fix:** The `system:` prefix is reserved for engine internals; both labels AND node IDs that start with `system:` are rejected at registration as defence-in-depth (G5-B-i Decision 6 reserved-prefix DX improvement). Pick a non-reserved label/ID and re-register. Runtime probing of resolved (TRANSFORM-computed) CIDs collapses system-zone targets to `Ok(None)` on the user-visible surface; only the user-facing `create_node` path fires this error directly for an input label.
 - **Thrown at:**
     - Registration — literal-CID walker in `benten-eval::invariants::system_zone::validate_registration` (rejects a READ or WRITE operation node whose `"label"` property or node-id is a `system:*` literal).
     - Runtime — resolved-label probe in `benten-engine::primitive_host`:
@@ -91,9 +91,11 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 ### E_INV_ITERATE_BUDGET
 
 - **Message:** "Cumulative iteration budget {actual} exceeds bound {bound} through nested ITERATE/CALL"
-- **Context:** `{ actual: number, bound: number, path: NodeId[] }`
+- **Context:** `{ actual: number, bound: number }`
 - **Fix:** Reduce the multiplicative iteration space. The cumulative budget is the worst-case product of ITERATE `max` values and non-isolated CALL callee bounds along any DAG path through the handler. Flatten the nested iteration, or declare `isolated: true` on a CALL whose callee runs under its own grant's bound (the callee frame resets the cumulative rather than inheriting the caller's remaining budget — Code-as-graph Major #2 / Option B).
 - **Thrown at:** Registration (Phase 2a multiplicative-through-CALL / Code-as-graph Major #2) and Evaluation (Phase 1 runtime flat budget, preserved at `DEFAULT_ITERATION_BUDGET = 100_000` in `crates/benten-eval/src/evaluator.rs`).
+
+  Context shape note (G11-A doc review): the registration-time variant does NOT populate a `path: NodeId[]` field. The multiplicative walker in `benten-eval::invariants::budget` reports the product-over-paths `actual` and the configured `bound`; the specific DAG path that produced the worst-case product is not surfaced in the error payload. G4-A Code-as-graph Major #2 cleanup / Phase-2a M4 residual.
 - **Phase:** 1 (runtime flat budget) + 2a (registration-time multiplicative form — G4-A lands the static product-over-paths walker in `crates/benten-eval/src/invariants/budget.rs` + `crates/benten-eval/src/evaluator/budget.rs` per cr-r1-3 shared-helper coordination). The Phase-1 nest-depth-3 stopgap (`E_INV_ITERATE_NEST_DEPTH`) is retired at Phase 2a open; the multiplicative form supersedes it. Default registration-time bound: `DEFAULT_INV_8_BUDGET = 500_000`.
 
 ### E_INV_ITERATE_NEST_DEPTH

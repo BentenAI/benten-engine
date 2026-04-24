@@ -91,6 +91,8 @@ The default `PolicyKind.NoAuth` permits everything (the embedded / single-user m
 
 Under a grant-backed policy, a denied read returns `null` — byte-identical with a genuine miss. That's deliberate: an unauthorized caller cannot distinguish existence from permission by probing CIDs.
 
+This symmetric-None surface now covers more than just `Engine::get_node`: Phase 2a G4-A threaded Option C into the evaluator dispatch itself, so a READ primitive inside a user subgraph observes the same collapse (denied → `null`, backend miss → `null`) through `PrimitiveHost::check_read_capability`. Handlers running through `engine.call(...)` honour the same honest-no boundary end-to-end — there is no evaluator-side backdoor around the public-API contract.
+
 If you're the operator and need to tell "denied" apart from "not found" (debugging a missing grant, for example), grant yourself the `store:debug:read` capability and call `engine.diagnoseRead`:
 
 ```typescript
