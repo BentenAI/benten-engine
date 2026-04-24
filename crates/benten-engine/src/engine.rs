@@ -1007,6 +1007,24 @@ impl Engine {
                 {
                     return Ok(tx_aborted_outcome());
                 }
+                // Phase 2a G5-B-i mini-review C1: an evaluator-raised Inv-11
+                // (from `impl PrimitiveHost::put_node`'s system-zone
+                // short-circuit) routes through the same Outcome::ON_ERROR
+                // shape as the Phase-1 storage-layer stopgap, but fires
+                // the Phase-2a user-surface code `E_INV_SYSTEM_ZONE`
+                // instead of `E_SYSTEM_ZONE_WRITE`. See
+                // `primitive_host::inv_system_zone_to_outcome` for the
+                // symmetry rationale. Pending ops are intentionally
+                // dropped — the violating WRITE is the first thing the
+                // evaluator attempts, so the buffer is empty at this
+                // point (but defence-in-depth: even if a legal WRITE had
+                // buffered first, dropping preserves all-or-nothing).
+                if matches!(
+                    &e,
+                    benten_eval::EvalError::Invariant(benten_eval::InvariantViolation::SystemZone)
+                ) {
+                    return Ok(crate::primitive_host::inv_system_zone_to_outcome());
+                }
                 return Err(eval_error_to_engine_error(e));
             }
         };

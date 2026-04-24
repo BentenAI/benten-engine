@@ -60,22 +60,25 @@ impl RedbBackend {
         Self::open_or_create(path)
     }
 
-    /// Phase 2a G5-B-i: fast-path label-only read (Code-as-graph Major #1).
-    /// Reads the Node body bytes via the `n:CID` redb key and DAG-CBOR-decodes
-    /// just enough to surface the first label, without materializing the
-    /// full `Node` struct (properties are left unparsed).
+    /// Phase 2a G5-B-i: label-only read for the Inv-11 runtime probe
+    /// (Code-as-graph Major #1).
     ///
-    /// Used by the Inv-11 runtime probe in
+    /// Used by the Inv-11 runtime hook in
     /// `benten-engine/src/primitive_host.rs` so a TRANSFORM-computed CID
     /// whose resolved Node carries a `system:*` label cannot flank the
     /// registration-time walker (plan §9.10 + Code-as-graph Major #1).
     ///
-    /// The implementation presently decodes the full Node under the hood
-    /// via `serde_ipld_dagcbor::from_slice` and drops everything but the
-    /// first label; the `<1µs` gate
-    /// (`get_node_label_only_sub_1us` criterion bench) documents the
-    /// Phase-2a target. A truly partial decoder is a Phase-2b perf
-    /// refinement — the public signature is stable either way.
+    /// # Phase-2a implementation shape
+    ///
+    /// The impl is **full-decode-then-drop**: read the `n:CID` redb key,
+    /// DAG-CBOR-decode the bytes into a `benten_core::Node`, then keep
+    /// only the first label. The name "label-only" describes the return
+    /// shape, not a byte-bounded header read. The `<1µs` gate
+    /// (`get_node_label_only_sub_1us` criterion bench) enforces the
+    /// Phase-2a target against this full-decode impl; a truly partial
+    /// decoder (stop at the `labels` field in the CBOR stream) is a
+    /// Phase-2b perf refinement — the public signature is stable either
+    /// way.
     ///
     /// # Errors
     /// Returns [`GraphError::Core`] (carrying a `CoreError::Serialize`)

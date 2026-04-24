@@ -13,11 +13,15 @@
 //!    stopgap co-existence test (`system_zone_stopgap_and_full_coexist.rs`).
 //!
 //! Either surface carrying a `system:*` literal triggers
-//! `InvariantViolation::SystemZone` → `E_INV_SYSTEM_ZONE`. The prefix list
-//! is the Phase-2a frozen const `SYSTEM_ZONE_PREFIXES` living in
-//! `benten-engine::system_zones` (imported here via a hardcoded mirror to
-//! keep `benten-eval` free of an upstream engine dependency — a dedicated
-//! drift test in the engine crate asserts the two lists stay in sync).
+//! `InvariantViolation::SystemZone` → `E_INV_SYSTEM_ZONE`. The
+//! classification is a broad `starts_with("system:")` check —
+//! intentionally matching the Phase-1 storage-layer stopgap
+//! (`benten_graph::guard_system_zone_node`) so the registration-time
+//! walker, the runtime probe, and the graph storage guard agree on a
+//! single deniable set. The engine crate separately maintains a
+//! `SYSTEM_ZONE_PREFIXES` list of concrete zones it itself writes, kept
+//! consistent with this classification by the
+//! `inv_11_system_zone_drift_test` CI guard.
 
 use std::collections::BTreeMap;
 
@@ -27,25 +31,6 @@ use crate::{
     EvalError, InvariantViolation, OperationNode, PrimitiveKind, RegistrationError, Subgraph,
 };
 
-/// Phase-2a frozen mirror of `benten_engine::system_zones::SYSTEM_ZONE_PREFIXES`.
-///
-/// Held here (rather than imported) so `benten-eval` stays free of a
-/// `benten-engine` dep — the arch-1 thinning goal. A drift test in the
-/// engine crate
-/// (`tests/inv_11_system_zone_drift_test::all_system_zone_writers_registered_in_prefix_table`)
-/// + the CI workflow keep the two lists consistent.
-pub const SYSTEM_ZONE_PREFIXES_EVAL_MIRROR: &[&str] = &[
-    "system:CapabilityGrant",
-    "system:IVMView",
-    "system:CapabilityRevocation",
-    "system:Principal",
-    "system:Grant",
-    "system:WaitPending",
-    "system:WaitResume",
-    "system:ModuleManifest",
-    "system:ivm:",
-];
-
 /// Return `true` when `label` falls inside a Phase-2a system-zone prefix.
 ///
 /// The Phase-2a classification matches the Phase-1 storage-layer stopgap
@@ -54,35 +39,37 @@ pub const SYSTEM_ZONE_PREFIXES_EVAL_MIRROR: &[&str] = &[
 /// time walker, the runtime probe, and the graph storage guard aligned on
 /// a single deniable set (`both_paths_agree_on_deniable_set`); a user-
 /// declared `system:internal:forbidden` must route through Inv-11 even
-/// though the specific prefix isn't listed in
-/// [`SYSTEM_ZONE_PREFIXES_EVAL_MIRROR`].
-///
-/// [`SYSTEM_ZONE_PREFIXES_EVAL_MIRROR`] remains documented as the list
-/// of concrete system zones the engine itself writes; the
-/// `inv_11_system_zone_drift_test` CI guard uses it to ensure every
-/// engine-side `system:*` literal is enumerated there. Classification —
-/// the shape of what counts as a system-zone label — is intentionally
-/// broader so unknown-but-still-`system:`-prefixed labels are rejected,
-/// not accidentally allowed.
+/// though the specific prefix isn't listed in the engine's concrete
+/// `SYSTEM_ZONE_PREFIXES` table. The classification — the shape of what
+/// counts as a system-zone label — is intentionally broader so
+/// unknown-but-still-`system:`-prefixed labels are rejected, not
+/// accidentally allowed.
 #[must_use]
 pub fn is_system_zone_label(label: &str) -> bool {
     label.starts_with("system:")
 }
 
-/// Extract the literal target label the walker should probe for a given
+/// Extract the literal target label the walker probes for a given
 /// operation node. READ / WRITE nodes carry the label via a `"label"`
-/// property (idiomatic DSL path) or via the node id (legacy builder). We
-/// probe both so either shape routes through Inv-11.
-fn literal_target_label(op: &OperationNode) -> Option<&str> {
+/// property (idiomatic DSL path); the legacy builder path
+/// (`SubgraphBuilder::{read,write}(literal)`) instead stores the literal
+/// directly in `id`. Both shapes are probed, so either surface routes
+/// through Inv-11.
+///
+/// G5-B-i mini-review Minor: the earlier `-> Option<&str>` signature
+/// was dead — both branches returned `Some(...)`, and the `None`
+/// fallback arm at call sites (`else { continue; }`) could never fire.
+/// The return type is now the bare `&str` the call sites actually use.
+fn literal_target_label(op: &OperationNode) -> &str {
     if let Some(Value::Text(s)) = op.properties.get("label")
         && !s.is_empty()
     {
-        return Some(s.as_str());
+        return s.as_str();
     }
     // Fallback: the node id. `SubgraphBuilder::{read,write}(literal)`
     // stores the literal directly in `id`, and the coexist-tests
     // exercise that shape against the registration-time gate.
-    Some(op.id.as_str())
+    op.id.as_str()
 }
 
 /// Registration-time literal-CID reject. Fires `E_INV_SYSTEM_ZONE` on
@@ -103,9 +90,7 @@ pub fn validate_registration(sg: &Subgraph) -> Result<(), EvalError> {
         if !matches!(node.kind, PrimitiveKind::Read | PrimitiveKind::Write) {
             continue;
         }
-        let Some(label) = literal_target_label(node) else {
-            continue;
-        };
+        let label = literal_target_label(node);
         if is_system_zone_label(label) {
             return Err(EvalError::Invariant(InvariantViolation::SystemZone));
         }
@@ -132,9 +117,7 @@ pub(crate) fn validate_registration_with_diagnostics(
         if !matches!(node.kind, PrimitiveKind::Read | PrimitiveKind::Write) {
             continue;
         }
-        let Some(label) = literal_target_label(node) else {
-            continue;
-        };
+        let label = literal_target_label(node);
         if is_system_zone_label(label) {
             let mut err = RegistrationError::new(InvariantViolation::SystemZone);
             err.fanout_node_id = Some(node.id.clone());

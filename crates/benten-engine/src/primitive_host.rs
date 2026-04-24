@@ -254,6 +254,22 @@ impl PrimitiveHost for Engine {
     }
 
     fn put_node(&self, node: &Node) -> Result<Cid, benten_eval::EvalError> {
+        // Phase-2a Inv-11 runtime probe (G5-B-i mini-review C1): a handler
+        // WRITE whose Node carries a `system:*` label MUST fire
+        // `E_INV_SYSTEM_ZONE` at the evaluator-visible boundary, NOT the
+        // Phase-1 storage-layer stopgap `E_SYSTEM_ZONE_WRITE`. Mirrors the
+        // user-facing check in `engine_crud::create_node`: the same broad
+        // `is_system_zone_label` probe fires before any PendingHostOp is
+        // buffered so the replay path never sees the violating op. The
+        // storage-layer `guard_system_zone_node` stays wired as
+        // defence-in-depth per plan §9.10.
+        for label in &node.labels {
+            if is_system_zone_label(label) {
+                return Err(benten_eval::EvalError::Invariant(
+                    benten_eval::InvariantViolation::SystemZone,
+                ));
+            }
+        }
         // Project the Node's CID up front so the evaluator's StepResult can
         // echo it back immediately; the real backend write happens after
         // the evaluator walk completes, inside a single transaction.
@@ -856,6 +872,27 @@ pub(crate) fn system_zone_to_outcome() -> Outcome {
         edge: Some("ON_ERROR".into()),
         error_code: Some("E_SYSTEM_ZONE_WRITE".into()),
         error_message: Some("system zone write rejected".into()),
+        ..Outcome::default()
+    }
+}
+
+/// Phase 2a G5-B-i mini-review C1: map an evaluator-raised Inv-11
+/// (`EvalError::Invariant(SystemZone)`) to its user-facing `Outcome`.
+///
+/// Symmetric with [`system_zone_to_outcome`] (the Phase-1 storage-layer
+/// stopgap shape) but fires the Phase-2a user-surface code
+/// `E_INV_SYSTEM_ZONE` — matching `Engine::create_node`'s routing. This
+/// is the shape `dispatch_call_inner` surfaces when
+/// `impl PrimitiveHost::put_node` short-circuits a system-zone handler
+/// WRITE before the `PendingHostOp` is buffered. The storage-layer stopgap
+/// `system_zone_to_outcome` is unreachable through the evaluator path
+/// under Phase 2a; it stays wired as defence-in-depth for direct
+/// backend-level writes (exercised in `crates/benten-graph/tests/`).
+pub(crate) fn inv_system_zone_to_outcome() -> Outcome {
+    Outcome {
+        edge: Some("ON_ERROR".into()),
+        error_code: Some("E_INV_SYSTEM_ZONE".into()),
+        error_message: Some("system-zone label not writable via user subgraph".into()),
         ..Outcome::default()
     }
 }

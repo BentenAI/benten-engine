@@ -57,10 +57,17 @@ fn write_authority_user_preserves_phase1_semantics() {
         .build();
     let forbidden_id = engine.register_subgraph(forbidden).unwrap();
     let denied = engine.call(&forbidden_id, "wa:run", Node::empty()).unwrap();
+    // Phase 2a G5-B-i mini-review C1: under the evaluator-visible
+    // `impl PrimitiveHost::put_node` Inv-11 short-circuit, a User-authority
+    // system-zone WRITE fires `E_INV_SYSTEM_ZONE` (routed through
+    // `inv_system_zone_to_outcome`) BEFORE reaching the storage-layer
+    // stopgap that surfaced `E_SYSTEM_ZONE_WRITE` in Phase 1. The stopgap
+    // remains wired for direct backend-level writes.
     assert_eq!(
         denied.error_code(),
-        Some("E_SYSTEM_ZONE_WRITE"),
-        "User-authority system-zone write must be rejected (old is_privileged = false semantics)"
+        Some("E_INV_SYSTEM_ZONE"),
+        "Phase 2a: User-authority system-zone write surfaces the user-facing \
+         Inv-11 code, not the Phase-1 storage-layer stopgap"
     );
 }
 

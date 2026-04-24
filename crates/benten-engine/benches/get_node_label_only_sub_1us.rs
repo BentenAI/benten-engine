@@ -33,11 +33,14 @@
 //! the regression is in the phf table or in the code surrounding the
 //! probe — not in the storage fast-path.
 //!
-//! ## Red-phase TDD
+//! ## Red-phase → green-phase
 //!
-//! `get_node_label_only` is a G5-B-i deliverable; at R3 the function
-//! returns `todo!()`. The bench panics on first iteration until G5-B-i
-//! lands the implementation. Once landed, the measurement becomes real.
+//! `get_node_label_only` was a G5-B-i deliverable; at R3 the function was
+//! `todo!()`. G5-B-i landed the Phase-2a full-decode-then-drop impl
+//! (`serde_ipld_dagcbor::from_slice::<Node>(bytes)` then keep only the first
+//! label). The mini-review C2 fix additionally `create_node`s the fixture
+//! before the probe so this bench measures the hot-cache HIT path (the real
+//! evaluator scenario), not the miss-before-decode fast-out.
 
 #![allow(
     clippy::unwrap_used,
@@ -66,14 +69,22 @@ fn bench_get_node_label_only_hot_cache(c: &mut Criterion) {
 
     // Seed a non-system-zone Node and capture its CID for the probe.
     // The canonical test node has label "post" — not in SYSTEM_ZONE_PREFIXES,
-    // so the probe returns `Ok(false)` ("not system-zone") which is the
-    // hot path the evaluator exercises on every legitimate user READ.
+    // so the probe returns `Ok(Some("post"))` ("not system-zone") which is
+    // the hot path the evaluator exercises on every legitimate user READ.
+    //
+    // G5-B-i mini-review C2 fix: the earlier bench body computed `node.cid()`
+    // but never persisted the Node, so `get_node_label_only(cid)` returned
+    // `Ok(None)` at the first key-lookup step — measuring the MISS path, not
+    // the hot-cache HIT. `engine.create_node` now writes the fixture into
+    // redb so the probe reaches the `serde_ipld_dagcbor::from_slice::<Node>`
+    // decode step (the full-decode-then-drop Phase-2a impl per
+    // `NodeStore::get_node_label_only`).
     let node = canonical_test_node();
-    let cid = node.cid().expect("canonical CID");
+    let cid = engine
+        .create_node(&node)
+        .expect("seed fixture via the user-facing CRUD path");
 
-    // Pre-warm: one call to populate any internal cache line.
-    // G5-B-i NOT LANDED: this call hits `todo!()` in the implementation;
-    // the bench panics on first iteration until the function is real.
+    // Pre-warm: one call to populate the redb page cache line for this CID.
     let _ = engine.get_node_label_only(&cid);
 
     let mut group = c.benchmark_group("get_node_label_only");

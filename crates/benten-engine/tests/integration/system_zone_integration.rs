@@ -1,16 +1,20 @@
 //! Phase 1 R3 integration — System-zone protection (full-stack).
 //!
 //! A user-authored subgraph attempts to WRITE a Node with a `system:`-prefixed
-//! label through the normal call path. The write must be rejected with
-//! E_SYSTEM_ZONE_WRITE and routed via ON_ERROR. A grant_capability call
-//! through the engine-privileged API must succeed.
+//! label through the normal call path. Under Phase 2a G5-B-i the write is
+//! rejected at the evaluator-visible `PrimitiveHost::put_node` boundary
+//! with `EvalError::Invariant(SystemZone)` → `E_INV_SYSTEM_ZONE` — the
+//! Phase-2a user-surface Inv-11 code. `dispatch_call_inner` routes that
+//! through `inv_system_zone_to_outcome()` so the outcome shape
+//! (ON_ERROR edge + typed `error_code`) matches the Phase-1 storage-layer
+//! stopgap behaviour, but fires the new code. The storage-layer stopgap
+//! (`E_SYSTEM_ZONE_WRITE`) stays wired as defence-in-depth for direct
+//! backend-level writes — see `crates/benten-graph/tests/system_zone.rs`.
 //!
 //! Complements the single-crate security tests at
 //! `crates/benten-graph/tests/system_zone.rs` (write-path only) and
 //! `crates/benten-engine/tests/system_zone_api_exclusivity.rs` (engine API only).
 //! This file tests the full stack: eval -> graph -> caps policy -> error routing.
-//!
-//! **Status:** FAILING until N7 + N8 + E3 land.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -50,7 +54,15 @@ fn handler_cannot_write_system_zone_via_normal_api() {
         outcome.routed_through_edge("ON_ERROR"),
         "system-zone write must route via ON_ERROR"
     );
-    assert_eq!(outcome.error_code(), Some("E_SYSTEM_ZONE_WRITE"));
+    // Phase 2a G5-B-i mini-review C1: the evaluator-visible
+    // `impl PrimitiveHost::put_node` short-circuits the WRITE with
+    // `EvalError::Invariant(SystemZone)` BEFORE buffering, and
+    // `dispatch_call_inner` routes that to an Outcome carrying the
+    // Phase-2a user-surface code `E_INV_SYSTEM_ZONE`. The Phase-1
+    // storage-layer stopgap (`E_SYSTEM_ZONE_WRITE`) is unreachable
+    // through the evaluator path but remains wired as defence-in-depth
+    // for direct backend-level writes.
+    assert_eq!(outcome.error_code(), Some("E_INV_SYSTEM_ZONE"));
 }
 
 #[test]

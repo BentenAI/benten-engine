@@ -150,22 +150,30 @@ pub trait NodeStore {
     /// Returns the backend's error on I/O failure.
     fn delete_node(&self, cid: &Cid) -> Result<(), Self::Error>;
 
-    /// Phase 2a G5-B-i / Code-as-graph Major #1: fast-path probe that
-    /// returns the stored Node's first label without a full Node decode.
+    /// Phase 2a G5-B-i / Code-as-graph Major #1: probe that returns the
+    /// stored Node's first label so the Inv-11 runtime hook can classify
+    /// resolved CIDs against the system-zone prefix set.
     ///
     /// The Inv-11 runtime hook in `benten-engine/src/primitive_host.rs`
     /// calls this on every TRANSFORM-computed READ / WRITE target so a
     /// user subgraph that routes through a computed `Value::Cid` cannot
-    /// flank the registration-time literal-CID walker. A naive default
-    /// implementation delegates to [`Self::get_node`] and discards the
-    /// properties; concrete backends (notably
-    /// [`crate::RedbBackend::get_node_label_only`]) override with a
-    /// byte-bounded header read so the probe stays under the <1 µs target
-    /// gate (`get_node_label_only_sub_1us` criterion bench).
+    /// flank the registration-time literal-CID walker.
+    ///
+    /// # Phase-2a implementation shape
+    ///
+    /// Both the default [`NodeStore`] impl and the concrete
+    /// [`crate::RedbBackend::get_node_label_only`] override currently
+    /// perform a **full-Node DAG-CBOR decode and drop everything but the
+    /// first label**. The name "label-only" refers to the *return shape*,
+    /// not to a byte-bounded header read. A truly partial decoder that
+    /// stops at the `labels` field is a Phase-2b perf refinement; the
+    /// public signature is stable either way and the
+    /// `get_node_label_only_sub_1us` criterion bench enforces the <1 µs
+    /// gate against the full-decode impl today.
     ///
     /// # Errors
     /// Returns the backend's error on I/O failure or a decode error if
-    /// the stored bytes cannot be parsed far enough to surface the label.
+    /// the stored bytes cannot be parsed as a Node.
     fn get_node_label_only(&self, cid: &Cid) -> Result<Option<String>, Self::Error> {
         match self.get_node(cid)? {
             Some(node) => Ok(node.labels.into_iter().next()),
