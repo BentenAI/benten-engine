@@ -134,8 +134,8 @@ jobs:
           tool: cargo-nextest
       - name: Run Option C flanking + end-to-end tests
         run: |
-          cargo nextest run --profile ci --locked --features benten-eval/testing \
-            -E 'test(/option_c_flanking_methods::/) + test(/crud_post_get_symmetric_none/)'
+          cargo nextest run --profile ci --locked --features benten-eval/testing,benten-engine/phase_2a_pending_apis \
+            -E 'test(/transform_via_get_by_label_respects_check_read/) + test(/transform_via_get_by_property_respects_check_read/) + test(/transform_via_read_view_respects_check_read/) + test(/crud_post_get_symmetric_none/)'
 
   # ---------------------------------------------------------------------------
   # Gate 6 — CI-gated Criterion benchmarks. Builds + runs the 2 CI-gated

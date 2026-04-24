@@ -58,7 +58,7 @@ jobs:
           #   - anything whose line starts with // or is inside a
           #     `#[doc = ...]` (handled by the post-filter below).
 
-          rg --no-heading --no-line-number -o '"system:[A-Za-z0-9_]+"' \
+          rg --no-heading --no-line-number --no-filename -o '"system:[A-Za-z0-9_]+"' \
              crates/ \
              --glob '!**/tests/**' \
              --glob '!**/benches/**' \
