@@ -196,6 +196,26 @@ impl ReadContext {
             actor_cid: None,
         }
     }
+
+    /// Construct a `ReadContext` for a label-scoped read with no target
+    /// CID in hand (e.g. `get_by_label`, `get_by_property`,
+    /// `read_view` — the caller is probing a label-filtered index, not
+    /// a specific known CID).
+    ///
+    /// G11-A Wave-2a carry (EVAL Wave-1 M2 follow-up): the paired
+    /// constructor to [`ReadContext::by_cid_only`]. Together the two
+    /// typed constructors let every engine-side `check_read_capability`
+    /// call site describe its read-shape without relying on the
+    /// unwritten "empty label means CID-only" convention.
+    #[must_use]
+    pub fn by_label_only(label: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            target_cid: None,
+            actor_hint: None,
+            actor_cid: None,
+        }
+    }
 }
 
 /// The capability pre-write hook trait.

@@ -179,6 +179,38 @@ pub(crate) enum PendingHostOp {
 }
 
 // ---------------------------------------------------------------------------
+// Typed read-context plumbing (G11-A Wave-2a carry — EVAL Wave-1 M2)
+// ---------------------------------------------------------------------------
+
+impl Engine {
+    /// Route a typed [`benten_caps::ReadContext`] through the configured
+    /// capability policy's `check_read` hook.
+    ///
+    /// Engine-side Option C flanking sites (`read_node`, `get_by_label`,
+    /// `get_by_property`, `read_view`) construct the context directly via
+    /// [`benten_caps::ReadContext::by_cid_only`] or
+    /// [`benten_caps::ReadContext::by_label_only`] so the read-shape
+    /// intent is typed rather than encoded as an unwritten "empty label"
+    /// convention on the trait method's `(label, Option<&Cid>)` pair.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`benten_eval::EvalError::Capability`] when the configured
+    /// policy denies. No policy → `Ok(())`.
+    pub(crate) fn check_read_ctx(
+        &self,
+        ctx: &benten_caps::ReadContext,
+    ) -> Result<(), benten_eval::EvalError> {
+        if let Some(policy) = self.policy()
+            && let Err(c) = policy.check_read(ctx)
+        {
+            return Err(benten_eval::EvalError::Capability(c));
+        }
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
 // impl PrimitiveHost for Engine
 // ---------------------------------------------------------------------------
 
@@ -210,7 +242,7 @@ impl PrimitiveHost for Engine {
         // (the public API wrapper); the evaluator-visible path needs the
         // same collapse so a TRANSFORM-driven handler cannot flank.
         if let Err(benten_eval::EvalError::Capability(_)) =
-            <Self as PrimitiveHost>::check_read_capability(self, "", Some(cid))
+            self.check_read_ctx(&benten_caps::ReadContext::by_cid_only(*cid))
         {
             return Ok(None);
         }
@@ -233,7 +265,7 @@ impl PrimitiveHost for Engine {
         // denied label from an empty one. See `docs/SECURITY-POSTURE.md`
         // Compromise #2 (Option C) for the posture contract.
         if let Err(benten_eval::EvalError::Capability(_)) =
-            <Self as PrimitiveHost>::check_read_capability(self, label, None)
+            self.check_read_ctx(&benten_caps::ReadContext::by_label_only(label))
         {
             return Ok(Vec::new());
         }
@@ -258,7 +290,7 @@ impl PrimitiveHost for Engine {
         // `get_by_label` — cap-denied reads collapse to an empty result
         // rather than leak existence via a populated list.
         if let Err(benten_eval::EvalError::Capability(_)) =
-            <Self as PrimitiveHost>::check_read_capability(self, label, None)
+            self.check_read_ctx(&benten_caps::ReadContext::by_label_only(label))
         {
             return Ok(Vec::new());
         }
@@ -404,25 +436,25 @@ impl PrimitiveHost for Engine {
         label: &str,
         target_cid: Option<&Cid>,
     ) -> Result<(), benten_eval::EvalError> {
-        // Option C (5d-J workstream 1): evaluate the configured policy's
-        // `check_read` hook and route a `DeniedRead` back across the
-        // boundary via `EvalError::Capability`. The engine's own public
-        // read API (`Engine::get_node`, `read_view`, `edges_from`,
-        // `edges_to`) maps that to `Ok(None)` / empty-vec so an
-        // unauthorized reader cannot distinguish denial from not-found;
-        // the evaluator-visible path surfaces the typed error for
-        // routing through typed error edges.
-        if let Some(policy) = self.policy() {
-            let ctx = benten_caps::ReadContext {
+        // G11-A Wave-2a carry (EVAL Wave-1 M2): the trait method retains
+        // its `(label, Option<&Cid>)` signature for boundary stability,
+        // but routes through the typed `check_read_ctx` helper so the
+        // "empty label means CID-only" convention becomes explicit via
+        // `ReadContext::by_cid_only` / `ReadContext::by_label_only`.
+        // Engine-side sites call `check_read_ctx` directly with a typed
+        // context; external PrimitiveHost callers hitting this method
+        // land on the branch that matches the `(label, target_cid)`
+        // pair.
+        let ctx = match (label.is_empty(), target_cid) {
+            (true, Some(cid)) => benten_caps::ReadContext::by_cid_only(*cid),
+            (_, None) => benten_caps::ReadContext::by_label_only(label),
+            (false, Some(cid)) => benten_caps::ReadContext {
                 label: label.to_string(),
-                target_cid: target_cid.copied(),
+                target_cid: Some(*cid),
                 ..Default::default()
-            };
-            if let Err(c) = policy.check_read(&ctx) {
-                return Err(benten_eval::EvalError::Capability(c));
-            }
-        }
-        Ok(())
+            },
+        };
+        self.check_read_ctx(&ctx)
     }
 
     fn check_capability(
@@ -519,7 +551,7 @@ impl PrimitiveHost for Engine {
         // whole view to an empty list rather than leaking existence.
         let label = query.label.as_deref().unwrap_or(view_id);
         if let Err(benten_eval::EvalError::Capability(_)) =
-            <Self as PrimitiveHost>::check_read_capability(self, label, None)
+            self.check_read_ctx(&benten_caps::ReadContext::by_label_only(label))
         {
             return Ok(Value::List(Vec::new()));
         }
