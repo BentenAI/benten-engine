@@ -512,12 +512,23 @@ impl Engine {
 
     /// Phase 2a G5-A / G11-A: monotonic per-engine audit sequence.
     ///
-    /// Returns the current value of the audit-write counter — the number
-    /// of times the capability-policy's `check_write` hook committed a
-    /// batch to the backend (matches the aggregate
-    /// `benten.writes.committed` metric). §9.11 row 3 names this as the
-    /// observable sequence the dedup path MUST NOT advance: re-putting
-    /// identical bytes is a pure-read and must leave this counter alone.
+    /// Returns the current value of the storage-layer commit counter —
+    /// the number of times `RedbBackend::put_node_with_context` produced
+    /// a real commit. §9.11 row 3 names this as the observable sequence
+    /// the dedup path MUST NOT advance: re-putting identical bytes is a
+    /// pure-read and must leave this counter alone.
+    ///
+    /// Wave-1 mini-review SEVERE-2 fix: previously this accessor read
+    /// the engine-level `writes_committed_total` counter, which was
+    /// only bumped by `Engine::transaction`'s capability-policy commit
+    /// path. The privileged `grant_capability → privileged_put_node`
+    /// route goes direct to the backend and bypasses that counter,
+    /// making the `inv_13_dedup_path_does_not_advance_audit_sequence`
+    /// assertion vacuous (0 == 0 before and after the grant). Pulling
+    /// the counter from the storage layer closes the gap — the counter
+    /// advances on every genuine first-put, whether that put originates
+    /// from a user-authority transaction or an engine-privileged grant,
+    /// and stays put on the dedup early-return branch.
     ///
     /// Surfaced publicly (not cfg-gated behind `test-helpers`) so the
     /// graph crate's `inv_13_dedup_path_does_not_advance_audit_sequence`
@@ -526,9 +537,7 @@ impl Engine {
     /// any thread, cost is a single atomic load per invocation.
     #[must_use]
     pub fn audit_sequence(&self) -> u64 {
-        self.inner
-            .writes_committed_total
-            .load(std::sync::atomic::Ordering::SeqCst)
+        self.backend.writes_committed()
     }
 
     /// Phase 2a G11-A Wave 1 test-only alias spelled the way the R3 test

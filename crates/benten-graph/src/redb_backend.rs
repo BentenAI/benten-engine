@@ -256,6 +256,16 @@ pub struct RedbBackend {
     /// the counter into a dedicated redb table; Phase 1 documents the
     /// limitation (IVM views rebuild from scratch on restart in Phase 1).
     next_tx_id: Arc<AtomicU64>,
+    /// Wave-1 mini-review SEVERE-2: storage-layer commit counter. Bumped
+    /// once per real `put_node_with_context` commit (excluding the dedup
+    /// early-return path, which is a pure read per Compromise #N+1 / §9.11
+    /// row 3). Surfaced via [`Self::writes_committed`] so the engine's
+    /// `audit_sequence()` accessor can observe the dedup-no-advance
+    /// contract without routing privileged capability writes through
+    /// [`crate::Transaction`] accounting (which would drag the grant path
+    /// through `Engine::transaction` and change the shape of the privileged
+    /// write API).
+    writes_committed: Arc<AtomicU64>,
 }
 
 impl core::fmt::Debug for RedbBackend {
@@ -343,6 +353,7 @@ impl RedbBackend {
             subscribers: Arc::new(Mutex::new(Vec::new())),
             tx_flag: Arc::new(Mutex::new(false)),
             next_tx_id: Arc::new(AtomicU64::new(1)),
+            writes_committed: Arc::new(AtomicU64::new(0)),
         };
         backend.ensure_tables()?;
         Ok(backend)
@@ -406,6 +417,7 @@ impl RedbBackend {
             subscribers: Arc::new(Mutex::new(Vec::new())),
             tx_flag: Arc::new(Mutex::new(false)),
             next_tx_id: Arc::new(AtomicU64::new(1)),
+            writes_committed: Arc::new(AtomicU64::new(0)),
         };
         backend.ensure_tables()?;
         Ok(backend)
@@ -428,6 +440,19 @@ impl RedbBackend {
     /// ```
     pub fn open(path: impl AsRef<Path>) -> Result<Self, GraphError> {
         Self::open_or_create(path)
+    }
+
+    /// Wave-1 mini-review SEVERE-2: current value of the storage-layer
+    /// commit counter. Bumped once per successful
+    /// `put_node_with_context` commit (dedup early returns do NOT
+    /// advance it). The engine's [`benten-engine`] `Engine::audit_sequence`
+    /// accessor reads this counter directly so the §9.11 row-3
+    /// "dedup is a pure read" contract is observable at the storage
+    /// layer rather than at an engine-transaction layer the privileged
+    /// grant path bypasses.
+    #[must_use]
+    pub fn writes_committed(&self) -> u64 {
+        self.writes_committed.load(Ordering::SeqCst)
     }
 
     /// Materialize every table we need so cold-database reads don't fail.
@@ -1015,6 +1040,15 @@ impl RedbBackend {
             }
         }
         write_txn.commit()?;
+
+        // Wave-1 mini-review SEVERE-2: bump the storage-layer commit
+        // counter ONLY on a real commit. The dedup early-return branch
+        // above never reaches here, so Compromise #N+1's "dedup is a
+        // pure read; audit sequence MUST NOT advance" contract is
+        // preserved at the source of truth (the storage layer) rather
+        // than at an engine-transaction layer that the privileged
+        // grant path bypasses.
+        self.writes_committed.fetch_add(1, Ordering::SeqCst);
 
         // Record per-label durability for the
         // `last_put_node_durability_for_label` test hook. Every label the

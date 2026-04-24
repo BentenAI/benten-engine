@@ -71,3 +71,43 @@ fn inv_13_dedup_path_does_not_advance_audit_sequence() {
          sequence; before={seq_before}, after={seq_after}"
     );
 }
+
+/// Wave-1 mini-review SEVERE-2 companion: the sibling assertion —
+/// `audit_sequence` MUST advance on a genuine first-put. Without this
+/// test the dedup-no-advance assertion is trivially satisfied by a
+/// counter that never moves at all (the bug the mini-review surfaced:
+/// the engine-level counter was bumped only by `Engine::transaction`,
+/// which the privileged grant path bypasses, so `0 == 0` both before
+/// and after a grant). Varying the counter here proves the path is
+/// live — a broken dedup implementation that mistakenly advances the
+/// counter will fail the sibling test; a broken first-put that fails
+/// to advance the counter will fail this one.
+#[test]
+fn inv_13_first_put_advances_audit_sequence() {
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::builder()
+        .path(dir.path().join("benten.redb"))
+        .build()
+        .unwrap();
+
+    let seq_initial = engine.audit_sequence();
+    let alice = engine.create_principal("alice").unwrap();
+    let seq_after_principal = engine.audit_sequence();
+    assert!(
+        seq_after_principal > seq_initial,
+        "creating a principal must commit at least one Node to the \
+         backend; initial={seq_initial}, after={seq_after_principal}"
+    );
+
+    let seq_before_grant = engine.audit_sequence();
+    let _cid = engine
+        .grant_capability(&alice, "store:post:write")
+        .expect("first issuance must succeed");
+    let seq_after_grant = engine.audit_sequence();
+    assert!(
+        seq_after_grant > seq_before_grant,
+        "first-put via the privileged grant path MUST advance the \
+         audit sequence; before={seq_before_grant}, \
+         after={seq_after_grant}"
+    );
+}
