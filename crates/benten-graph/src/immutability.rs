@@ -65,11 +65,16 @@ pub const DEFAULT_FALSE_POSITIVE_RATE: f64 = 1.0 / 10_000.0;
 const DEFAULT_EXPECTED_INSERTS: usize = 4096;
 
 /// G11-A unbounded-cache bound: maximum entries in the `warmed` test-only
-/// tracking set before the oldest half is evicted. Prevents the long-lived
+/// tracking set before the set is cleared. Prevents the long-lived
 /// integration-test process from accumulating unbounded CIDs in memory
 /// (unbounded-cache G11-A capture). 100k gives every foreseeable test run
 /// plenty of headroom; the production-side fast-path consults the bloom
 /// filter, which is capacity-independent.
+///
+/// Wave-1 mini-review MODERATE-3: gated behind `cfg(any(test, feature =
+/// "testing"))` — production builds compile the `warmed` field away
+/// entirely, so the cap has nowhere to bind.
+#[cfg(any(test, feature = "testing"))]
 const WARMED_CAP: usize = 100_000;
 
 /// A pedagogically-simple Bloom filter keyed on [`Cid`] bytes.
@@ -249,6 +254,13 @@ pub struct CidExistenceCache {
     /// [`BloomFilter::may_contain`] — the authoritative check is against
     /// redb, not this set). It exists only to give test code a
     /// "definitely warmed" view.
+    ///
+    /// Wave-1 mini-review MODERATE-3: `cfg`-gated behind
+    /// `any(test, feature = "testing")` so production builds strip the
+    /// field (and every insert into it) entirely. Closes the commit-
+    /// message claim in `be8f6ea` that the accumulation surface no
+    /// longer exists in production.
+    #[cfg(any(test, feature = "testing"))]
     warmed: HashSet<Cid>,
 }
 
@@ -268,6 +280,7 @@ impl CidExistenceCache {
             bloom: BloomFilter::for_expected_inserts(expected_inserts, fp_rate),
             forced_collision_next: false,
             forced_positives: HashSet::new(),
+            #[cfg(any(test, feature = "testing"))]
             warmed: HashSet::new(),
         }
     }
@@ -305,23 +318,32 @@ impl CidExistenceCache {
     /// Warmness check used by `cache_contains_cid` — reports `true` iff the
     /// CID has actually been [`Self::insert`]ed during this process (or is in
     /// the forced-positive set).
+    ///
+    /// Wave-1 mini-review MODERATE-3: cfg-gated behind
+    /// `any(test, feature = "testing")` so the accessor (and the
+    /// backing `warmed` set) disappear from production builds.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn warmed_for(&self, cid: &Cid) -> bool {
         self.warmed.contains(cid) || self.forced_positives.contains(cid)
     }
 
     /// Record that the CID has been persisted. Sets its bits in the bloom
-    /// filter and adds it to the `warmed` set. When `warmed` reaches
-    /// `WARMED_CAP`, the set is cleared before inserting the new CID — the
-    /// authoritative existence check is against redb, not this set, so
-    /// eviction is safe even for in-flight warmness assertions (which
-    /// test processes re-trigger after the cap).
+    /// filter; under `cfg(any(test, feature = "testing"))` also appends
+    /// to the test-only `warmed` set (bounded at `WARMED_CAP` — clears
+    /// on overflow). Production builds compile the `warmed` branch
+    /// away entirely; the authoritative existence check is against
+    /// redb, not this set, so eviction is safe even for in-flight
+    /// warmness assertions.
     pub fn insert(&mut self, cid: &Cid) {
         self.bloom.insert(cid);
-        if self.warmed.len() >= WARMED_CAP {
-            self.warmed.clear();
+        #[cfg(any(test, feature = "testing"))]
+        {
+            if self.warmed.len() >= WARMED_CAP {
+                self.warmed.clear();
+            }
+            self.warmed.insert(*cid);
         }
-        self.warmed.insert(*cid);
     }
 
     /// Arm the one-shot forced-collision flag. The next `may_contain` call

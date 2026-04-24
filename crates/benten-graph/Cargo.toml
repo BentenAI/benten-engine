@@ -26,13 +26,20 @@ bench = false
 # publishers who want the library-only subset opt out explicitly.
 #
 # Closure of Named Compromise #7 (`[[bin]]` required-features gating).
-default = ["test-fixtures"]
+default = ["test-fixtures", "testing"]
 test-fixtures = []
 # `testing` gates the test-only instrumentation that would otherwise grow
 # unboundedly at runtime: the `test_event_log`, the `warmed` HashSet inside
 # `CidExistenceCache`, and the `last_durability_by_label` map. Matches the
-# `benten-eval/testing` feature pattern (G11-A alignment). Default off —
-# production builds carry none of this bookkeeping.
+# `benten-eval/testing` feature pattern (G11-A alignment). Wave-1 mini-review
+# MODERATE-3 fix: default-enabled so `cargo test` / `cargo nextest run` /
+# CI (`--features benten-eval/testing`) automatically light up the test-only
+# instrumentation surfaces without a per-invocation opt-in. Production
+# `cargo install benten-graph --no-default-features` strips the bookkeeping
+# away entirely (no `warmed` HashSet, no `test_event_log`, no
+# `last_durability_by_label`) — fulfilling the commit-message claim in
+# `be8f6ea` that these accumulation surfaces "no longer accumulate [in
+# production builds]".
 testing = []
 
 [dependencies]

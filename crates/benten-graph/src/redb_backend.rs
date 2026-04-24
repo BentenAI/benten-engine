@@ -15,6 +15,7 @@
 //! they maintain the label and property-value indexes as part of the same
 //! write transaction, so the indexes are always in sync with the node store.
 
+#[cfg(any(test, feature = "testing"))]
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -87,10 +88,15 @@ fn guard_system_zone_edge(edge: &Edge, is_privileged: bool) -> Result<(), GraphE
 pub(crate) const NODES_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("benten_nodes");
 
 /// G11-A unbounded-cache bound: maximum entries in the test-only
-/// `test_event_log` before the oldest half is evicted. Tests drain the
+/// `test_event_log` before the buffer is cleared. Tests drain the
 /// buffer between assertions, so the cap only fires in a long-lived bench
 /// or integration process that writes tens of thousands of nodes without
 /// calling `drain_change_events_for_test`.
+///
+/// Wave-1 mini-review MODERATE-3: gated behind `cfg(any(test, feature =
+/// "testing"))` — production builds compile the `test_event_log` away
+/// entirely, so the cap has nothing to bind.
+#[cfg(any(test, feature = "testing"))]
 const TEST_EVENT_LOG_CAP: usize = 10_000;
 
 /// G11-A unbounded-cache bound: maximum entries in the
@@ -99,6 +105,10 @@ const TEST_EVENT_LOG_CAP: usize = 10_000;
 /// preserves correctness for the always-recent test hook caller; a
 /// far-future test that persists across 1k+ distinct labels would need to
 /// re-stamp before inspecting.
+///
+/// Wave-1 mini-review MODERATE-3: gated behind `cfg(any(test, feature =
+/// "testing"))` — production builds compile the map away entirely.
+#[cfg(any(test, feature = "testing"))]
 const LAST_DURABILITY_MAP_CAP: usize = 1_000;
 
 /// Lexicographic successor of `prefix` — the smallest byte string strictly
@@ -215,6 +225,13 @@ pub struct RedbBackend {
     /// capability-grant path in particular stamps `Immediate` here regardless
     /// of [`Self::configured_durability`] so revocation-ordering cannot be
     /// reordered by a looser configured mode.
+    ///
+    /// Wave-1 mini-review MODERATE-3: cfg-gated behind `any(test,
+    /// feature = "testing")` — production builds compile the map (and
+    /// the per-commit stamping block inside `put_node_with_context`)
+    /// away entirely. Closes the commit-message claim in `be8f6ea` that
+    /// the accumulation surface no longer exists in production.
+    #[cfg(any(test, feature = "testing"))]
     last_durability_by_label: Arc<Mutex<HashMap<String, DurabilityMode>>>,
     /// Inv-13 fast-path CID-existence cache (G2-A skeleton; G5-A wires the
     /// 5-row matrix on top). See [`crate::immutability`] for the fast-path
@@ -224,6 +241,11 @@ pub struct RedbBackend {
     /// [`RedbBackend::drain_change_events_for_test`]. G5-A populates the
     /// write side; G2-A leaves it empty so the method surface compiles for
     /// tests that don't assert on it.
+    ///
+    /// Wave-1 mini-review MODERATE-3: cfg-gated behind `any(test,
+    /// feature = "testing")` — production builds compile the buffer and
+    /// the per-commit push block away entirely.
+    #[cfg(any(test, feature = "testing"))]
     test_event_log: Arc<Mutex<Vec<ChangeEvent>>>,
     /// Registered change-event subscribers. Behind a `Mutex<Vec<...>>` so
     /// `register_subscriber` and the post-commit fan-out can share one
@@ -347,8 +369,10 @@ impl RedbBackend {
             db,
             durability: to_redb_durability(durability),
             configured_durability: durability,
+            #[cfg(any(test, feature = "testing"))]
             last_durability_by_label: Arc::new(Mutex::new(HashMap::new())),
             immutability_cache: Arc::new(Mutex::new(CidExistenceCache::new())),
+            #[cfg(any(test, feature = "testing"))]
             test_event_log: Arc::new(Mutex::new(Vec::new())),
             subscribers: Arc::new(Mutex::new(Vec::new())),
             tx_flag: Arc::new(Mutex::new(false)),
@@ -411,8 +435,10 @@ impl RedbBackend {
             db,
             durability: to_redb_durability(durability),
             configured_durability: durability,
+            #[cfg(any(test, feature = "testing"))]
             last_durability_by_label: Arc::new(Mutex::new(HashMap::new())),
             immutability_cache: Arc::new(Mutex::new(CidExistenceCache::new())),
+            #[cfg(any(test, feature = "testing"))]
             test_event_log: Arc::new(Mutex::new(Vec::new())),
             subscribers: Arc::new(Mutex::new(Vec::new())),
             tx_flag: Arc::new(Mutex::new(false)),
@@ -1056,6 +1082,12 @@ impl RedbBackend {
         // capability-grant path Nodes always carry
         // `"system:CapabilityGrant"`). Bounded at `LAST_DURABILITY_MAP_CAP`
         // to defuse the unbounded-growth hazard G11-A captured.
+        //
+        // Wave-1 mini-review MODERATE-3: cfg-gated behind `any(test,
+        // feature = "testing")`. Production builds compile this block
+        // (and the backing map) away entirely — no per-commit work, no
+        // accumulation.
+        #[cfg(any(test, feature = "testing"))]
         {
             let mut map = self.last_durability_by_label.lock_recover();
             if map.len() >= LAST_DURABILITY_MAP_CAP {
@@ -1065,6 +1097,8 @@ impl RedbBackend {
                 map.insert(label.clone(), effective_mode);
             }
         }
+        #[cfg(not(any(test, feature = "testing")))]
+        let _ = effective_mode;
 
         // Warm the Inv-13 fast-path cache post-commit.
         {
@@ -1083,7 +1117,27 @@ impl RedbBackend {
         // buffer clear (test hooks drain between assertions, so the cap
         // only matters for pathological test shapes). tx_id bumps
         // unconditionally for the subscriber fan-out path.
+        //
+        // Wave-1 mini-review MODERATE-3: cfg-gated behind `any(test,
+        // feature = "testing")`. Production builds compile the whole
+        // block (and the `test_event_log` field) away entirely; the
+        // `next_tx_id` bump stays unconditional so subscriber fan-out
+        // still carries a monotonic id.
+        // The `next_tx_id` bump is unconditional so every commit path
+        // advances the monotonic id the subscriber fan-out relies on.
+        // Under the `any(test, feature = "testing")` cfg we also copy
+        // the freshly-incremented value into the ChangeEvent pushed to
+        // the test-only log; under the production cfg the value is
+        // observable only as the counter advance itself (the binding
+        // below is dropped to silence the unused-variable lint).
+        #[cfg_attr(
+            not(any(test, feature = "testing")),
+            allow(clippy::let_underscore_untyped)
+        )]
         let tx_id = self.next_tx_id.fetch_add(1, Ordering::SeqCst);
+        #[cfg(not(any(test, feature = "testing")))]
+        let _ = tx_id;
+        #[cfg(any(test, feature = "testing"))]
         {
             let event = ChangeEvent {
                 cid,
@@ -1187,6 +1241,11 @@ impl RedbBackend {
 
     /// Backing for [`Self::cache_contains_cid`]. Authoritative warmness
     /// check — not subject to bloom false positives.
+    ///
+    /// Wave-1 mini-review MODERATE-3: cfg-gated behind `any(test,
+    /// feature = "testing")` — the backing `warmed` set on
+    /// `CidExistenceCache` is only present under the same gate.
+    #[cfg(any(test, feature = "testing"))]
     pub(crate) fn cache_contains_cid_impl(&self, cid: &Cid) -> bool {
         let cache = self.immutability_cache.lock_recover();
         cache.warmed_for(cid)
@@ -1212,6 +1271,12 @@ impl RedbBackend {
     }
 
     /// Backing for [`Self::last_put_node_durability_for_label`].
+    ///
+    /// Wave-1 mini-review MODERATE-3: cfg-gated behind `any(test,
+    /// feature = "testing")` — the backing map is only present under
+    /// the same gate, and production code has no legitimate consumer
+    /// for the accessor.
+    #[cfg(any(test, feature = "testing"))]
     pub(crate) fn last_put_node_durability_for_label_impl(
         &self,
         label: &str,
@@ -1224,6 +1289,11 @@ impl RedbBackend {
     /// test-only change-event log. G5-A extends the write side to cover
     /// every commit path; G2-A leaves the buffer empty so the test surface
     /// compiles without regressing the Phase-1 behaviour consumers expect.
+    ///
+    /// Wave-1 mini-review MODERATE-3: cfg-gated behind `any(test,
+    /// feature = "testing")` — the backing buffer is only present
+    /// under the same gate.
+    #[cfg(any(test, feature = "testing"))]
     pub(crate) fn drain_change_events_for_test_impl(&self) -> Vec<ChangeEvent> {
         let mut log = self.test_event_log.lock_recover();
         std::mem::take(&mut *log)

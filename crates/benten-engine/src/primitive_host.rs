@@ -34,12 +34,11 @@
 //! fine with that because content-addressed hashing is deterministic: the
 //! projected CID matches the eventual committed CID byte-for-byte.
 
-
 use benten_caps::CapError;
 use benten_core::{Cid, Edge, Node, Value};
 use benten_errors::ErrorCode;
 use benten_eval::{HostError, PrimitiveHost};
-use benten_graph::MutexExt;
+use benten_graph::{GraphError, MutexExt};
 
 use crate::engine::{Engine, is_known_view_id};
 use crate::error::EngineError;
@@ -969,4 +968,3 @@ pub(crate) fn tx_aborted_outcome() -> Outcome {
         ..Outcome::default()
     }
 }
-

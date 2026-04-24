@@ -129,6 +129,11 @@ impl RedbBackend {
     /// `inv_13_dedup_does_not_emit_changeevent` assertions. G5-A populates
     /// the write side; G2-A leaves an empty-drain shim so the method
     /// surface exists for the Inv-13 matrix tests to compile against.
+    ///
+    /// Wave-1 mini-review MODERATE-3: cfg-gated behind `any(test,
+    /// feature = "testing")`. Production builds strip the buffer and
+    /// the public accessor together.
+    #[cfg(any(test, feature = "testing"))]
     pub fn drain_change_events_for_test(&self) -> Vec<ChangeEvent> {
         self.drain_change_events_for_test_impl()
     }
@@ -137,6 +142,10 @@ impl RedbBackend {
     /// for this CID. Backed by [`immutability::CidExistenceCache::warmed_for`]
     /// — authoritative (records real inserts), not subject to bloom false
     /// positives.
+    ///
+    /// Wave-1 mini-review MODERATE-3: cfg-gated behind `any(test,
+    /// feature = "testing")`.
+    #[cfg(any(test, feature = "testing"))]
     pub fn cache_contains_cid(&self, cid: &Cid) -> bool {
         self.cache_contains_cid_impl(cid)
     }
@@ -178,6 +187,10 @@ impl RedbBackend {
     /// [`RedbBackend::put_node_with_context`] after every successful commit
     /// so the `capability_grant_writes_immediate` test can assert that the
     /// privileged path overrode the configured durability.
+    ///
+    /// Wave-1 mini-review MODERATE-3: cfg-gated behind `any(test,
+    /// feature = "testing")`.
+    #[cfg(any(test, feature = "testing"))]
     pub fn last_put_node_durability_for_label(&self, label: &str) -> Option<DurabilityMode> {
         self.last_put_node_durability_for_label_impl(label)
     }
