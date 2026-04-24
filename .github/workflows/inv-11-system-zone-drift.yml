@@ -105,10 +105,15 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Locate the SYSTEM_ZONE_PREFIXES const. Per plan, it lives in
-          # benten-core (G1-A creates the skeleton). Search broadly so the
-          # post-G1-A placement survives without edits here.
-          const_src=$(rg -l 'SYSTEM_ZONE_PREFIXES' crates/ || true)
+          # Locate the SYSTEM_ZONE_PREFIXES const DEFINITION (not just
+          # references — those appear in primitive_host.rs and other
+          # consumer files, and if we grab their fragments instead of
+          # the real const body the drift check reports false positives).
+          # The canonical shape is `pub const SYSTEM_ZONE_PREFIXES: &[&str]`
+          # / `pub static SYSTEM_ZONE_PREFIXES:` — match on the colon
+          # that follows the name, which only appears at the definition
+          # site.
+          const_src=$(rg -l '(pub )?(const|static)\s+SYSTEM_ZONE_PREFIXES\s*:' crates/ || true)
           if [ -z "$const_src" ]; then
             echo "FAIL: SYSTEM_ZONE_PREFIXES const not found anywhere under crates/"
             echo "G1-A must land the const for this gate to pass."
