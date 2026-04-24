@@ -154,28 +154,6 @@ pub(crate) enum PendingHostOp {
     DeleteNode {
         cid: Cid,
     },
-    // r6b-ce-2: PutEdge / DeleteEdge are retained on the enum so the match
-    // arm in `dispatch_call_inner` stays exhaustive and the Phase-2
-    // EngineTransaction edge API can flip both variants on without a
-    // silent replay regression. Phase 1 `PrimitiveHost::{put,delete}_edge`
-    // fail loud with `EvalError::Unsupported`, so the variants are never
-    // constructed in Phase 1 — the `#[allow(dead_code)]` below is a
-    // deliberate ratification of that state.
-    #[allow(
-        dead_code,
-        reason = "r6b-ce-2: reserved for Phase-2 EngineTransaction edge API"
-    )]
-    PutEdge {
-        edge: Edge,
-        projected_cid: Cid,
-    },
-    #[allow(
-        dead_code,
-        reason = "r6b-ce-2: reserved for Phase-2 EngineTransaction edge API"
-    )]
-    DeleteEdge {
-        cid: Cid,
-    },
 }
 
 // ---------------------------------------------------------------------------

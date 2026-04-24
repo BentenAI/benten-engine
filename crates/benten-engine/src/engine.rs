@@ -1206,21 +1206,6 @@ impl Engine {
                         PendingHostOp::DeleteNode { cid } => {
                             tx.delete_node(cid)?;
                         }
-                        PendingHostOp::PutEdge { .. } | PendingHostOp::DeleteEdge { .. } => {
-                            // r6b-ce-2: `PrimitiveHost::{put_edge,delete_edge}`
-                            // now fail fast with `EvalError::Unsupported`, so
-                            // these variants are unreachable in Phase 1 — no
-                            // evaluator path can buffer them. The match arm
-                            // stays so the enum remains exhaustive and the
-                            // Phase-2 EngineTransaction edge API can flip
-                            // both variants on without a silent replay
-                            // regression.
-                            debug_assert!(
-                                false,
-                                "PendingHostOp::{{Put,Delete}}Edge is unreachable in Phase 1 \
-                                 after r6b-ce-2; see primitive_host.rs"
-                            );
-                        }
                     }
                 }
                 Ok(last_cid)
