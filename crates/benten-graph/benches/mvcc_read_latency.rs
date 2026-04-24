@@ -45,7 +45,10 @@ use tempfile::tempdir;
 /// same CID (content-addressed storage dedupes identical content).
 fn unique_node(seed: u64) -> Node {
     let mut props = BTreeMap::new();
-    props.insert("seed".to_string(), Value::Int(i64::try_from(seed).unwrap_or(0)));
+    props.insert(
+        "seed".to_string(),
+        Value::Int(i64::try_from(seed).unwrap_or(0)),
+    );
     Node::new(vec!["bench-writer".to_string()], props)
 }
 

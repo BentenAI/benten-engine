@@ -38,7 +38,10 @@ use criterion::{Criterion, criterion_group, criterion_main};
 fn post_event(i: u64) -> ChangeEvent {
     let mut props = BTreeMap::new();
     props.insert("title".into(), Value::Text(format!("p{i}")));
-    props.insert("createdAt".into(), Value::Int(i64::try_from(i).unwrap_or(0)));
+    props.insert(
+        "createdAt".into(),
+        Value::Int(i64::try_from(i).unwrap_or(0)),
+    );
     let node = Node::new(vec!["post".into()], props);
     let cid = node
         .cid()
