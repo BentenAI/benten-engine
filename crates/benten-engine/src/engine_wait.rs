@@ -1,7 +1,37 @@
 //! Phase 2a G3-B / N3: WAIT public API — `call_with_suspension`,
-//! `suspend_to_bytes`, `resume_from_bytes`, `resume_from_bytes_as`.
+//! `suspend_to_bytes`, `resume_from_bytes_unauthenticated`, `resume_from_bytes_as`.
 //!
 //! Sibling module to `engine.rs` following the Phase-1 5d-K pattern.
+//!
+//! # Two resume entry points
+//!
+//! The resume surface exposes two shapes:
+//!
+//! - [`Engine::resume_from_bytes_as`] — the full 4-step protocol; requires
+//!   a caller-supplied principal CID. This is the API shipped to third
+//!   parties and the one the napi / TS wrapper exposes.
+//! - [`Engine::resume_from_bytes_unauthenticated`] — identical to the
+//!   4-step protocol except **step 2 (principal binding) is skipped**
+//!   because no principal is supplied. The name spells the specific
+//!   missing step rather than a vague "bare" / "trusted" adjective
+//!   (G11-A Decision 3, 2026-04-24): "unauthenticated" makes clear that
+//!   the caller has accepted responsibility for proving principal
+//!   identity some other way (in-process test harnesses, single-user
+//!   dev deployments). A bytes observer who can replay an envelope at
+//!   this surface is NOT rejected on principal mismatch — that's the
+//!   whole point of the skip.
+//!
+//! # Envelope-cache eviction (G11-A)
+//!
+//! The module-private `ENVELOPE_CACHE` is bounded by
+//! [`ENVELOPE_CACHE_MAX_ENTRIES`] to prevent unbounded memory growth from
+//! a long-running test process. The map is content-addressed — duplicate
+//! CIDs overwrite rather than accumulate — so the cap is only reached
+//! when a test generates many distinct envelopes. On insertion past the
+//! cap we evict one entry (first-in BTreeMap order) and continue. No
+//! LRU metadata: the cache is test-grade in Phase-2a; Phase-2b moves
+//! envelope bytes to a system-zone storage primitive with real lifecycle
+//! policy.
 //!
 //! # Resume protocol (§9.1 4-step)
 //!
@@ -57,12 +87,32 @@ use crate::outcome::Outcome;
 // `resume_after_engine_restart_preserves_attribution_chain` integration
 // gate, which drops engine A and opens engine B against the same db path).
 
+/// Upper bound on the in-memory envelope cache (G11-A). Sized to absorb
+/// the Phase-2a test suite's WAIT-bearing fixtures (current peak: low
+/// hundreds of distinct CIDs across the full `cargo test -p benten-engine`
+/// workspace run) with comfortable headroom. On overflow we evict one
+/// oldest-by-BTreeMap-ordering entry and continue — symmetric with the
+/// `ChangeBroadcast`'s oldest-first drop policy, so the observable
+/// shape of "a suspended handle can no longer resume" is at least
+/// consistent across cache surfaces.
+pub(crate) const ENVELOPE_CACHE_MAX_ENTRIES: usize = 1_024;
+
 static ENVELOPE_CACHE: LazyLock<Mutex<BTreeMap<Cid, ExecutionStateEnvelope>>> =
     LazyLock::new(|| Mutex::new(BTreeMap::new()));
 
 fn cache_put(envelope: ExecutionStateEnvelope) -> Cid {
     let cid = envelope.payload_cid;
     if let Ok(mut g) = ENVELOPE_CACHE.lock() {
+        // Content-addressed overwrite keeps distinct CIDs bounded.
+        // When genuinely distinct CIDs pile up past the cap (only
+        // reached if a test generates >1k distinct envelopes), evict
+        // the first-key entry so the map stops growing.
+        if !g.contains_key(&cid)
+            && g.len() >= ENVELOPE_CACHE_MAX_ENTRIES
+            && let Some((&first, _)) = g.iter().next()
+        {
+            g.remove(&first);
+        }
         g.insert(cid, envelope);
     }
     cid
@@ -278,21 +328,44 @@ impl Engine {
         envelope.to_dagcbor().map_err(EngineError::Core)
     }
 
-    /// Phase 2a G3-B: resume from DAG-CBOR bytes. Runs the 4-step resume
-    /// protocol (§9.1). Supply the signal value that fulfils the WAIT.
+    /// Phase 2a G3-B: resume from DAG-CBOR bytes WITHOUT a principal check.
+    ///
+    /// **This variant skips step 2 (principal binding) of the 4-step resume
+    /// protocol** because it has no principal to compare against. Step 1
+    /// (payload-CID tamper check), step 3 (pinned subgraph drift), and
+    /// step 4 (capability re-check) still fire. Use
+    /// [`Engine::resume_from_bytes_as`] for the full 4-step protocol —
+    /// this variant is for in-process test harnesses and single-user dev
+    /// deployments where the caller proves principal identity some other
+    /// way (process boundary, UNIX uid, etc.).
+    ///
+    /// The name explicitly spells the missing step rather than using a
+    /// vague adjective like "trusted" or "bare" — G11-A Decision 3
+    /// (2026-04-24): if a caller sees "unauthenticated" in the method
+    /// name they know exactly which contract they're opting into.
     ///
     /// # Errors
-    /// Fires `E_EXEC_STATE_TAMPERED`, `E_RESUME_ACTOR_MISMATCH`,
-    /// `E_RESUME_SUBGRAPH_DRIFT`, or `E_CAP_REVOKED_MID_EVAL` per §9.1.
-    pub fn resume_from_bytes(&self, bytes: &[u8], _signal: Value) -> Result<Outcome, EngineError> {
+    /// Fires `E_EXEC_STATE_TAMPERED`, `E_RESUME_SUBGRAPH_DRIFT`, or
+    /// `E_CAP_REVOKED_MID_EVAL` per §9.1. Never fires
+    /// `E_RESUME_ACTOR_MISMATCH` — that's step 2, which this variant
+    /// skips by design.
+    pub fn resume_from_bytes_unauthenticated(
+        &self,
+        bytes: &[u8],
+        _signal: Value,
+    ) -> Result<Outcome, EngineError> {
         self.resume_from_bytes_inner(bytes, None)
     }
 
     /// Phase 2a G3-B: resume-from-bytes with an explicit resumption
-    /// principal CID (used by `resume_decode_failure_not_panic.rs`).
+    /// principal CID — the FULL 4-step resume protocol. Step 2 (principal
+    /// binding) compares `principal` against the envelope's
+    /// `resumption_principal_cid` and fires
+    /// [`ErrorCode::ResumeActorMismatch`] on drift.
     ///
     /// # Errors
-    /// See [`Engine::resume_from_bytes`].
+    /// See [`Engine::resume_from_bytes_unauthenticated`] plus
+    /// `E_RESUME_ACTOR_MISMATCH` on step-2 principal drift.
     pub fn resume_from_bytes_as(
         &self,
         bytes: &[u8],
@@ -342,8 +415,9 @@ impl Engine {
         }
 
         // Step 2: principal binding. Only enforced when the caller named a
-        // principal (resume_from_bytes_as). The bare `resume_from_bytes`
-        // surface is used by harnesses that trust the bytes source.
+        // principal (resume_from_bytes_as). The `resume_from_bytes_
+        // unauthenticated` surface passes `None` by design — that's the
+        // "skips step 2" contract its name advertises.
         if let Some(caller) = caller_principal
             && caller != envelope.payload.resumption_principal_cid
         {

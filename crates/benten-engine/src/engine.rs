@@ -352,6 +352,28 @@ pub struct Engine {
     /// per-call context (actor, nested depth) without threading it through
     /// the trait-method signatures.
     pub(crate) active_call: std::sync::Mutex<Vec<ActiveCall>>,
+    /// Phase 2a G9-A-cont: configured monotonic clock source. Drives
+    /// TOCTOU wall-clock-refresh cadence inside `impl PrimitiveHost`
+    /// (§9.13 refresh point #3). Always `Some` post-build —
+    /// [`crate::builder::EngineBuilder::build`] installs
+    /// [`benten_eval::InstantMonotonicSource`] when the caller didn't
+    /// inject a mock. `Arc<dyn _>` rather than `Box<dyn _>` so tests can
+    /// retain a clone of the handle to drive advances.
+    pub(crate) monotonic_source: Arc<dyn benten_eval::MonotonicSource>,
+    /// Phase 2a G9-A-cont: configured HLC / wall-clock source. NEVER used
+    /// to drive TOCTOU cadence — rides alongside for federation-
+    /// correlation stamping only.
+    pub(crate) time_source: Arc<dyn benten_eval::TimeSource>,
+    /// Phase 2a G9-A-cont: target-iteration revocation schedule. Populated
+    /// by [`Engine::schedule_revocation_at_iteration`]; consulted by
+    /// `impl PrimitiveHost` at iterate-batch boundaries so a test can
+    /// assert that a cap revoked mid-walk fires
+    /// `E_CAP_REVOKED_MID_EVAL`. Keyed by `grant_cid`; value is the
+    /// target iteration number. Empty in production — the real
+    /// revocation path runs through
+    /// `benten-caps::GrantBackedPolicy::check_write` via a
+    /// `system:CapabilityRevocation` Node write.
+    pub(crate) revoke_at_iteration: std::sync::Mutex<BTreeMap<Cid, u64>>,
 }
 
 impl std::fmt::Debug for Engine {
@@ -377,6 +399,16 @@ impl Engine {
 
     /// Builder-only constructor used by `EngineBuilder::assemble`. Not part
     /// of the public API.
+    ///
+    /// Delegates to [`Self::from_parts_with_clocks`] with the Phase-1
+    /// default clocks (`InstantMonotonicSource` + `HlcTimeSource`). Kept
+    /// as a convenience for older call sites that predate the G9-A-cont
+    /// clock injection; new call sites should use
+    /// [`Self::from_parts_with_clocks`].
+    #[allow(
+        dead_code,
+        reason = "retained for symmetry; all live call sites now use from_parts_with_clocks"
+    )]
     pub(crate) fn from_parts(
         backend: Arc<RedbBackend>,
         policy: Option<Box<dyn CapabilityPolicy>>,
@@ -385,6 +417,35 @@ impl Engine {
         broadcast: Arc<ChangeBroadcast>,
         inner: Arc<EngineInner>,
         ivm: Option<Arc<benten_ivm::Subscriber>>,
+    ) -> Self {
+        Self::from_parts_with_clocks(
+            backend,
+            policy,
+            caps_enabled,
+            ivm_enabled,
+            broadcast,
+            inner,
+            ivm,
+            Arc::new(benten_eval::InstantMonotonicSource::new()),
+            Arc::new(benten_eval::HlcTimeSource::new()),
+        )
+    }
+
+    /// Builder-only constructor used by `EngineBuilder::assemble` (Phase
+    /// 2a G9-A-cont variant). Threads the clock sources onto the Engine
+    /// struct so `impl PrimitiveHost` can consult them at refresh-point
+    /// #3 without additional argument threading.
+    #[allow(clippy::too_many_arguments, reason = "builder plumbing")]
+    pub(crate) fn from_parts_with_clocks(
+        backend: Arc<RedbBackend>,
+        policy: Option<Box<dyn CapabilityPolicy>>,
+        caps_enabled: bool,
+        ivm_enabled: bool,
+        broadcast: Arc<ChangeBroadcast>,
+        inner: Arc<EngineInner>,
+        ivm: Option<Arc<benten_ivm::Subscriber>>,
+        monotonic_source: Arc<dyn benten_eval::MonotonicSource>,
+        time_source: Arc<dyn benten_eval::TimeSource>,
     ) -> Self {
         Self {
             backend,
@@ -395,7 +456,27 @@ impl Engine {
             inner,
             ivm,
             active_call: std::sync::Mutex::new(Vec::new()),
+            monotonic_source,
+            time_source,
+            revoke_at_iteration: std::sync::Mutex::new(BTreeMap::new()),
         }
+    }
+
+    /// Phase 2a G9-A-cont: accessor for the configured monotonic clock
+    /// source. `impl PrimitiveHost::check_capability` consults this at
+    /// refresh-point-#3 so a drift-resilient TOCTOU refresh cadence runs
+    /// regardless of wall-clock jumps.
+    #[must_use]
+    pub fn monotonic_source(&self) -> &Arc<dyn benten_eval::MonotonicSource> {
+        &self.monotonic_source
+    }
+
+    /// Phase 2a G9-A-cont: accessor for the configured HLC / wall-clock
+    /// source. Rides alongside `monotonic_source` for federation-
+    /// correlation stamping; never primary for cadence.
+    #[must_use]
+    pub fn time_source(&self) -> &Arc<dyn benten_eval::TimeSource> {
+        &self.time_source
     }
 
     // -------- Cross-module accessors (used by primitive_host.rs) --------
@@ -427,6 +508,40 @@ impl Engine {
 
     pub(crate) fn active_call(&self) -> &std::sync::Mutex<Vec<ActiveCall>> {
         &self.active_call
+    }
+
+    /// Phase 2a G5-A / G11-A: monotonic per-engine audit sequence.
+    ///
+    /// Returns the current value of the audit-write counter — the number
+    /// of times the capability-policy's `check_write` hook committed a
+    /// batch to the backend (matches the aggregate
+    /// `benten.writes.committed` metric). §9.11 row 3 names this as the
+    /// observable sequence the dedup path MUST NOT advance: re-putting
+    /// identical bytes is a pure-read and must leave this counter alone.
+    ///
+    /// Surfaced publicly (not cfg-gated behind `test-helpers`) so the
+    /// graph crate's `inv_13_dedup_path_does_not_advance_audit_sequence`
+    /// test can observe the counter across the engine boundary. The
+    /// accessor reads an `AtomicU64::SeqCst` load — safe to call from
+    /// any thread, cost is a single atomic load per invocation.
+    #[must_use]
+    pub fn audit_sequence(&self) -> u64 {
+        self.inner
+            .writes_committed_total
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Phase 2a G11-A Wave 1 test-only alias spelled the way the R3 test
+    /// suite (`inv_8_11_13_14_firing.rs`) names the counter — the
+    /// integration tests imported the `testing_` prefix by convention
+    /// before the public `audit_sequence` name was finalised. Kept as a
+    /// thin alias rather than duplicated logic; if the test suite
+    /// migrates to the public accessor, this alias can be deleted
+    /// without touching any behaviour.
+    #[cfg(any(test, feature = "test-helpers"))]
+    #[must_use]
+    pub fn testing_audit_sequence(&self) -> u64 {
+        self.audit_sequence()
     }
 
     // -------- CRUD surface (Node + Edge) --------
@@ -886,6 +1001,8 @@ impl Engine {
                 handler_cid: Some(handler_cid),
                 pending_ops: Vec::new(),
                 inject_failure: false,
+                last_refresh: None,
+                iteration: 0,
             });
         }
 

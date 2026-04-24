@@ -96,7 +96,7 @@ fn wait_inside_wait_serializes_correctly() {
     let mut ack_payload = BTreeMap::new();
     ack_payload.insert("payload".into(), Value::Text("done".into()));
     let final_outcome = engine
-        .resume_from_bytes(&bytes2, Node::new(vec!["signal".into()], ack_payload))
+        .resume_from_bytes_unauthenticated(&bytes2, Node::new(vec!["signal".into()], ack_payload))
         .expect("resume-2 completes the handler");
     assert!(
         final_outcome.is_ok_edge(),
@@ -140,7 +140,7 @@ fn wait_inside_wait_wrong_signal_at_inner_rejects() {
 
     let mut wrong_payload = BTreeMap::new();
     wrong_payload.insert("payload".into(), Value::Text("not-ack".into()));
-    let result = engine.resume_from_bytes(
+    let result = engine.resume_from_bytes_unauthenticated(
         &bytes2,
         Node::new(vec!["signal:external:start".into()], wrong_payload),
     );

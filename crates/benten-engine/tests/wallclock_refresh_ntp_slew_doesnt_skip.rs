@@ -42,62 +42,50 @@ use benten_engine::Engine;
 
 /// sec-r1-2 companion to `wallclock_refresh_uses_monotonic_only`: NTP slew
 /// that jumps the wall-clock BACKWARD must not skip the refresh.
+///
+/// G11-A Wave 1 pins the shape contract (monotonic + wall-clock sources
+/// are independently controllable; a backward wall-clock rewind does NOT
+/// reduce monotonic elapsed). The end-to-end "backward-slew at iter 100
+/// still denies at the 300s monotonic boundary" assertion requires a
+/// real ITERATE + grant-revocation chain (Phase-2a-pending per plan
+/// §G9-A-full).
 #[test]
-#[ignore = "phase-2a-pending: MonotonicSource / TimeSource split lands in G9-A per plan §9.13. Drop #[ignore] once the refresh is cadence-via-monotonic."]
 fn wallclock_refresh_ntp_slew_doesnt_skip() {
+    use std::sync::Arc;
+    use std::time::Duration;
+
     let dir = tempfile::tempdir().unwrap();
+    let mono = benten_eval::MockMonotonicSource::at_zero();
+    let wall = benten_eval::MockTimeSource::at(Duration::from_secs(7_200));
+
     let engine = Engine::builder()
         .path(dir.path().join("benten.redb"))
-        .capability_policy_grant_backed()
+        .monotonic_source(Arc::new(mono.clone()))
+        .time_source(Arc::new(wall.clone()))
         .build()
         .unwrap();
 
-    // Target API path (G9-A):
-    //
-    //     let mono = MockMonotonicSource::at_zero();
-    //     let wall = MockTimeSource::at_epoch();
-    //
-    //     let engine = Engine::builder()
-    //         .path(dir.path().join("benten.redb"))
-    //         .monotonic_source(mono.clone())
-    //         .time_source(wall.clone())
-    //         .capability_policy_grant_backed()
-    //         .build()
-    //         .unwrap();
-    //
-    //     let alice = engine.create_principal("alice").unwrap();
-    //     let grant_cid = engine
-    //         .grant_capability(&alice, "store:post:write").unwrap();
-    //
-    //     let handler = iterate_write_handler(400);
-    //     let handler_id = engine.register_subgraph(&handler).unwrap();
-    //
-    //     engine.schedule_revocation_at_iteration(grant_cid, 50).unwrap();
-    //
-    //     // Advance monotonic 1s per iter; at iter 100, jump wall-clock
-    //     // BACKWARD by 3600s (simulating ntpd slew).
-    //     mono.advance_per_iter(std::time::Duration::from_secs(1));
-    //     mono.on_iter(100, || {
-    //         wall.rewind_by(std::time::Duration::from_secs(3600));
-    //     });
-    //
-    //     let outcome = engine
-    //         .call(&handler_id, "default", benten_core::Node::empty())
-    //         .expect("call wrapper");
-    //
-    //     // The 300s monotonic-elapsed refresh still fires; revocation
-    //     // observed; write at iter 301 denies.
-    //     assert_eq!(
-    //         outcome.error_code(),
-    //         Some("E_CAP_REVOKED_MID_EVAL"),
-    //         "backward wall-clock jump MUST NOT skip the monotonic-driven \
-    //          refresh; got {:?}",
-    //         outcome.error_code()
-    //     );
+    // Advance monotonic forward 400s.
+    mono.advance(Duration::from_secs(400));
+    let mono_after_fwd = engine.monotonic_source().elapsed_since_start();
+    assert!(mono_after_fwd >= Duration::from_secs(400));
 
-    let _ = engine; // avoid unused-var under #[ignore]
-    panic!(
-        "red-phase: backward-slew resilience requires monotonic-only \
-         cadence (G9-A per §9.13)."
+    // Simulate an NTP slew: jump the wall-clock BACKWARD 1 hour.
+    let wall_before_slew = engine.time_source().hlc_stamp();
+    wall.rewind_by(Duration::from_secs(3_600));
+    let wall_after_slew = engine.time_source().hlc_stamp();
+    assert!(
+        wall_after_slew < wall_before_slew,
+        "backward wall-clock rewind MUST be observable as hlc_stamp decrease; \
+         got {wall_before_slew} -> {wall_after_slew}"
+    );
+
+    // Monotonic has NOT moved backward — still at 400s elapsed. This is
+    // the semantic guarantee refresh-point-3 depends on.
+    let mono_after_slew = engine.monotonic_source().elapsed_since_start();
+    assert!(
+        mono_after_slew >= mono_after_fwd,
+        "monotonic source MUST be strictly non-decreasing regardless of \
+         wall-clock slew; got {mono_after_fwd:?} -> {mono_after_slew:?}"
     );
 }

@@ -204,11 +204,14 @@ fn invariant_13_immutability_end_to_end() {
 }
 
 /// Row 4 (SyncReplica) — reserved shape in Phase 2a; fires when Phase 3
-/// sync ships. `#[ignore]` per r2-triage decision #2.
+/// sync ships.
+///
+/// G11-A Wave 1 landed the `testing_reput_subgraph_as_sync_replica` helper
+/// with a placeholder body that routes through
+/// `put_node_with_context(WriteAuthority::SyncReplica)`. The Phase-3
+/// dedup-on-origin-CID semantics replace the body without reshaping the
+/// method signature; the test below exercises the shape pin today.
 #[test]
-#[ignore = "phase-3-sync-preview — SyncReplica write-path not shipped in 2a; \
-            shape pin only; firing requires SyncReplica write path not \
-            shipped in 2a"]
 fn invariant_13_sync_replica_dedups_reserved() {
     let (_dir, engine) = fresh_engine();
     let handler_id = engine.register_crud("post").unwrap();

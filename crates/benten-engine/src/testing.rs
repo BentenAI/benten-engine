@@ -162,3 +162,161 @@ pub fn counting_policy() -> (Box<dyn CapabilityPolicy>, CallCounter) {
     let c = p.call_counter();
     (Box::new(p), c)
 }
+
+// ---------------------------------------------------------------------------
+// G11-A Wave 1 / G5-A test helpers — subgraph-bytes round-trip + reput
+// ---------------------------------------------------------------------------
+//
+// The Phase-2a R3 integration test `inv_8_11_13_14_firing.rs` exercises the
+// 5-row Inv-13 matrix (§9.11). It needs three primitives that aren't public
+// on the Phase-1 surface:
+//
+//   1. Grab the canonical bytes of a registered handler's Subgraph so the
+//      test can "re-present" them to the backend under different authorities.
+//   2. Re-put those bytes as a User-authority write — row 1 (identical bytes)
+//      and row 2 (mutated bytes) both must fire E_INV_IMMUTABILITY.
+//   3. Re-put those bytes as an EnginePrivileged write — row 3 is dedup:
+//      matching-bytes returns Ok(cid); NO ChangeEvent, NO audit-sequence
+//      advance.
+//
+// Phase-2a owns rows 1-3. Row 4 (SyncReplica) is Phase-3 reserved but a
+// shape-pinning helper is included so the test suite can assert the method
+// exists + its signature is stable.
+//
+// Because benten-engine has no "subgraph store" yet (handlers live in an
+// in-memory map), the helpers work against a synthesised Node whose
+// `properties["subgraph_cbor"]` carries the canonical bytes. The
+// backend-visible CID is therefore distinct from the handler's registered
+// CID — what we're exercising here is strictly the `put_node_with_context`
+// immutability / dedup branching, not the handler registry.
+// ---------------------------------------------------------------------------
+
+/// Phase 2a G11-A Wave 1 test helper: extract the canonical DAG-CBOR bytes
+/// of the Subgraph registered under `handler_id`.
+///
+/// Returns the bytes the evaluator would hash to compute the handler's
+/// content-addressed CID; two calls at the same handler produce byte-
+/// identical output (Inv-10 content-address property).
+///
+/// # Errors
+/// Returns an error string if the handler is not registered or if the
+/// Subgraph reconstruction fails (e.g. unknown handler_id prefix).
+pub fn subgraph_bytes_for_handler(
+    engine: &crate::engine::Engine,
+    handler_id: &str,
+) -> Result<Vec<u8>, String> {
+    // Confirm the handler exists. Reaches through the engine's internal
+    // handlers map via the existing `resolve_subgraph_cid_for_test` public
+    // surface so the test helper doesn't duplicate the lookup.
+    engine
+        .resolve_subgraph_cid_for_test(handler_id, "default")
+        .map_err(|e| format!("subgraph_bytes_for_handler: {e}"))?;
+
+    // Reconstruct the subgraph via the mermaid / predecessor helper's
+    // code path; this matches what `handler_to_mermaid` renders and keeps
+    // the canonical-bytes output in sync with every other observable
+    // representation of the handler.
+    let mermaid = engine
+        .handler_to_mermaid(handler_id)
+        .map_err(|e| format!("subgraph_bytes_for_handler: mermaid: {e}"))?;
+    // The mermaid render is deterministic per handler — a stand-in for
+    // canonical bytes until Phase-2a C5 completes the
+    // Subgraph::to_dagcbor path. Hashes to a stable Vec<u8>.
+    Ok(mermaid.into_bytes())
+}
+
+/// Phase 2a G11-A Wave 1 test helper: re-put subgraph bytes as a User-
+/// authority write.
+///
+/// Wraps the bytes in a minimal Node (single property `subgraph_cbor`
+/// carrying the bytes) and attempts a write against the engine's backend
+/// with [`benten_graph::WriteAuthority::User`]. Row 1 / Row 2 of the
+/// Inv-13 matrix both fire `E_INV_IMMUTABILITY` — row 1 because the bytes
+/// round-trip to the same CID the first call stored, row 2 because any
+/// mutation still hits the immutability check under User authority.
+impl crate::engine::Engine {
+    /// Phase 2a G11-A / G5-A: User-authority reput — see module docs.
+    ///
+    /// # Errors
+    /// Returns [`crate::error::EngineError::Graph`] wrapping
+    /// `GraphError::Core(InvImmutability)` on a duplicate CID (row 1),
+    /// or the first-write CID on the initial put. The integration test
+    /// performs a first put + second put to observe the immutability
+    /// edge.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn testing_reput_subgraph_as_user(
+        &self,
+        bytes: &[u8],
+    ) -> Result<benten_core::Cid, crate::error::EngineError> {
+        use std::collections::BTreeMap;
+        let mut props: BTreeMap<String, benten_core::Value> = BTreeMap::new();
+        props.insert(
+            "subgraph_cbor".into(),
+            benten_core::Value::Bytes(bytes.to_vec()),
+        );
+        let node = benten_core::Node::new(vec!["phase_2a_reput_subgraph".into()], props);
+        let ctx = benten_graph::WriteContext::new("phase_2a_reput_subgraph")
+            .with_authority(benten_graph::WriteAuthority::User);
+        Ok(self.backend().put_node_with_context(&node, &ctx)?)
+    }
+
+    /// Phase 2a G11-A / G5-A: EnginePrivileged reput — §9.11 row 3 dedup
+    /// path. Matching bytes return `Ok(cid)` WITHOUT emitting a
+    /// ChangeEvent or advancing the audit sequence.
+    ///
+    /// # Errors
+    /// Returns [`crate::error::EngineError::Graph`] on backend failure.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn testing_reput_subgraph_privileged(
+        &self,
+        bytes: &[u8],
+    ) -> Result<benten_core::Cid, crate::error::EngineError> {
+        use std::collections::BTreeMap;
+        let mut props: BTreeMap<String, benten_core::Value> = BTreeMap::new();
+        props.insert(
+            "subgraph_cbor".into(),
+            benten_core::Value::Bytes(bytes.to_vec()),
+        );
+        let node = benten_core::Node::new(vec!["phase_2a_reput_subgraph".into()], props);
+        let ctx = benten_graph::WriteContext::new("phase_2a_reput_subgraph")
+            .with_authority(benten_graph::WriteAuthority::EnginePrivileged);
+        Ok(self.backend().put_node_with_context(&node, &ctx)?)
+    }
+
+    /// Phase 2a G11-A Wave 1 shape-pin: SyncReplica reput. Row 4 of the
+    /// Inv-13 matrix is Phase-3 reserved — the method shape is stabilised
+    /// here so the `invariant_13_sync_replica_dedups_reserved` test's
+    /// `#[ignore]` marker can drop without a subsequent compile churn.
+    ///
+    /// # Errors
+    /// Phase-2a: returns the same immutability behaviour as
+    /// [`Self::testing_reput_subgraph_as_user`]. Phase-3 sync lands the
+    /// real dedup-on-origin-CID semantics.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn testing_reput_subgraph_as_sync_replica(
+        &self,
+        bytes: &[u8],
+        origin: &benten_core::Cid,
+    ) -> Result<benten_core::Cid, crate::error::EngineError> {
+        use std::collections::BTreeMap;
+        let mut props: BTreeMap<String, benten_core::Value> = BTreeMap::new();
+        props.insert(
+            "subgraph_cbor".into(),
+            benten_core::Value::Bytes(bytes.to_vec()),
+        );
+        // Stamp origin onto the synthesised Node so the Phase-3 wiring has
+        // a content-addressed anchor ready when the real SyncReplica
+        // semantics land.
+        props.insert(
+            "sync_replica_origin".into(),
+            benten_core::Value::Text(origin.to_base32()),
+        );
+        let node = benten_core::Node::new(vec!["phase_2a_reput_subgraph".into()], props);
+        let ctx = benten_graph::WriteContext::new("phase_2a_reput_subgraph").with_authority(
+            benten_graph::WriteAuthority::SyncReplica {
+                origin_peer: *origin,
+            },
+        );
+        Ok(self.backend().put_node_with_context(&node, &ctx)?)
+    }
+}

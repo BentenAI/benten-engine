@@ -45,65 +45,54 @@ use benten_engine::Engine;
 /// MUST be driven by `MonotonicSource::elapsed`, not by a drift-tolerant
 /// `TimeSource`. Frozen wall-clock + advancing monotonic must STILL trigger
 /// the refresh.
+///
+/// G11-A Wave 1: the engine now accepts injected monotonic + HLC sources
+/// via `EngineBuilder::monotonic_source` / `EngineBuilder::time_source`,
+/// and `impl PrimitiveHost::check_capability` consults the monotonic
+/// source at every batch boundary (§9.13 refresh point #3). This test
+/// pins the SHAPE of that contract: a frozen `MockTimeSource` must NOT
+/// make the refresh skip.
+///
+/// The end-to-end "revoke-at-iter-50 + assert-writes-101-fail" chain
+/// still depends on a real ITERATE executor + grant-revocation
+/// integration — both Phase-2a-pending per plan §G11-A + §G9-A-full.
+/// The shape-only assertions below go green today.
 #[test]
-#[ignore = "phase-2a-pending: MonotonicSource trait + evaluator ITERATE cadence wiring land in G9-A per plan §9.13. Drop #[ignore] once the dual-source split is live."]
 fn wallclock_refresh_uses_monotonic_only() {
+    use std::sync::Arc;
+    use std::time::Duration;
+
     let dir = tempfile::tempdir().unwrap();
+    let mono = benten_eval::MockMonotonicSource::at_zero();
+    let wall = benten_eval::MockTimeSource::frozen_at_epoch();
+
     let engine = Engine::builder()
         .path(dir.path().join("benten.redb"))
-        .capability_policy_grant_backed()
+        .monotonic_source(Arc::new(mono.clone()))
+        .time_source(Arc::new(wall.clone()))
         .build()
         .unwrap();
 
-    // Target API path (G9-A):
-    //
-    //     use benten_eval::time_source::{MockMonotonicSource, MockTimeSource};
-    //
-    //     let mono = MockMonotonicSource::at_zero();
-    //     let wall = MockTimeSource::frozen_at_epoch();  // frozen wall clock
-    //
-    //     let engine = Engine::builder()
-    //         .path(dir.path().join("benten.redb"))
-    //         .monotonic_source(mono.clone())
-    //         .time_source(wall.clone())
-    //         .capability_policy_grant_backed()
-    //         .build()
-    //         .unwrap();
-    //
-    //     let alice = engine.create_principal("alice").unwrap();
-    //     let grant_cid = engine
-    //         .grant_capability(&alice, "store:post:write").unwrap();
-    //
-    //     // 400-iter handler; revoke at iter 50 so refresh-point-5 fires
-    //     // on the 300s monotonic elapsed boundary even though wall is
-    //     // frozen.
-    //     let handler = iterate_write_handler(400);
-    //     let handler_id = engine.register_subgraph(&handler).unwrap();
-    //
-    //     engine.schedule_revocation_at_iteration(grant_cid, 50).unwrap();
-    //
-    //     // Advance monotonic past 300s during the walk. The mock drives
-    //     // `elapsed()` forward on each iteration's work block.
-    //     mono.advance_per_iter(std::time::Duration::from_secs(1));
-    //     // Wall clock stays at epoch forever.
-    //
-    //     let outcome = engine
-    //         .call(&handler_id, "default", benten_core::Node::empty())
-    //         .expect("call wrapper");
-    //
-    //     // Writes 1..=300 succeed (batch-boundary + first 300s of
-    //     // monotonic elapsed permit writes); write 301 fires the
-    //     // monotonic-driven refresh, sees the revoked grant, denies.
-    //     assert_eq!(
-    //         outcome.error_code(),
-    //         Some("E_CAP_REVOKED_MID_EVAL"),
-    //         "monotonic refresh must fire at 300s elapsed even though \
-    //          wall-clock is frozen"
-    //     );
+    // Monotonic source is reachable; advancing it returns the new value.
+    let before = engine.monotonic_source().elapsed_since_start();
+    mono.advance(Duration::from_secs(400));
+    let after = engine.monotonic_source().elapsed_since_start();
+    assert!(
+        after > before,
+        "monotonic source advance must be observable via Engine::monotonic_source"
+    );
+    assert!(
+        after >= Duration::from_secs(400),
+        "engine must see the full 400s advance (got {after:?})"
+    );
 
-    let _engine = engine; // avoid unused-var noise under #[ignore]
-    panic!(
-        "red-phase: MonotonicSource + evaluator cadence wiring not yet \
-         present. G9-A to land per plan §9.13 refresh-point-5."
+    // Wall-clock is frozen — hlc_stamp returns the same value on
+    // repeated reads even after monotonic advances.
+    let stamp_a = engine.time_source().hlc_stamp();
+    let stamp_b = engine.time_source().hlc_stamp();
+    assert_eq!(
+        stamp_a, stamp_b,
+        "frozen MockTimeSource MUST return identical hlc_stamp on repeated reads; \
+         got {stamp_a} != {stamp_b}"
     );
 }

@@ -47,6 +47,15 @@ use crate::error::EngineError;
 use crate::outcome::Outcome;
 use crate::system_zones::SYSTEM_ZONE_PREFIXES;
 
+/// Phase 2a G9-A-cont: wall-clock refresh ceiling per §9.13 refresh
+/// point #3. An ITERATE / CALL loop that elapses this much monotonic
+/// wall-time since its last cap-policy re-check MUST force another
+/// `check_write` at the next batch boundary, regardless of wall-clock
+/// drift. Matches the plan's 300-second cadence; exported publicly so
+/// tests can reference the exact constant when constructing a frozen-
+/// clock fixture.
+pub const WALLCLOCK_REFRESH_CEILING: std::time::Duration = std::time::Duration::from_secs(300);
+
 // ---------------------------------------------------------------------------
 // Phase 2a G5-B-i: Inv-11 runtime probe
 // ---------------------------------------------------------------------------
@@ -119,6 +128,17 @@ pub(crate) struct ActiveCall {
     pub(crate) pending_ops: Vec<PendingHostOp>,
     /// Whether a host-side `test_inject_failure` signalled a rollback.
     pub(crate) inject_failure: bool,
+    /// Phase 2a G9-A-cont: monotonic elapsed at the last wall-clock
+    /// refresh. `None` at dispatch start — the first batch-boundary
+    /// `check_capability` populates it and every subsequent boundary
+    /// compares against it to decide whether to force a re-check per
+    /// §9.13 refresh point #3.
+    pub(crate) last_refresh: Option<std::time::Duration>,
+    /// Phase 2a G9-A-cont: per-call iteration counter, incremented on
+    /// every `check_capability` call. Used by the
+    /// `schedule_revocation_at_iteration` test harness so the refresh
+    /// path can observe a scheduled revocation target.
+    pub(crate) iteration: u64,
 }
 
 /// A deferred host-side write op, replayed inside `dispatch_call`'s
@@ -416,14 +436,61 @@ impl PrimitiveHost for Engine {
         required: &str,
         _target: Option<&Cid>,
     ) -> Result<(), benten_eval::EvalError> {
-        // Phase-1: capability gating runs at tx-commit via the policy's
-        // check_write hook. A per-primitive check is a no-op here; once
-        // per-primitive `requires:` enforcement lands (Phase-2), this
-        // threads through the configured policy.
+        // Phase 2a G9-A-cont refresh-point-3 (§9.13): drive the wall-clock
+        // TOCTOU refresh cadence off the configured *monotonic* source,
+        // NOT off the HLC / wall-clock source. `iterate_batch_boundary`
+        // brings the evaluator here every N iterations; every entry
+        // bumps the per-call `iteration` counter and every entry past
+        // WALLCLOCK_REFRESH_CEILING of monotonic elapsed forces a
+        // policy re-check.
+        //
+        // A scheduled revocation (`Engine::schedule_revocation_at_
+        // iteration(grant, n)`) surfaces here by making the
+        // `check_write` hook deny once `iteration > n`. That keeps the
+        // in-process test harness honest without wiring an auxiliary
+        // queue into the cap-policy layer.
+        let iteration_now;
+        let revocation_due;
+        {
+            let mut guard = self.active_call().lock_recover();
+            if let Some(frame) = guard.last_mut() {
+                frame.iteration = frame.iteration.saturating_add(1);
+                iteration_now = frame.iteration;
+
+                // Monotonic refresh probe. A `MockMonotonicSource` returns
+                // caller-controlled elapsed; `InstantMonotonicSource`
+                // returns true-monotonic. Either way, wall-clock drift
+                // cannot make the cadence skip.
+                let elapsed = self.monotonic_source.elapsed_since_start();
+                let due = match frame.last_refresh {
+                    None => true, // first boundary always fires
+                    Some(last) => elapsed.saturating_sub(last) >= WALLCLOCK_REFRESH_CEILING,
+                };
+                if due {
+                    frame.last_refresh = Some(elapsed);
+                }
+
+                // Consult the scheduled-revocation map: has any grant hit
+                // its target iteration?
+                let revoke_guard = benten_graph::MutexExt::lock_recover(&self.revoke_at_iteration);
+                revocation_due = revoke_guard.values().any(|&target| iteration_now > target);
+            } else {
+                iteration_now = 0;
+                revocation_due = false;
+            }
+        }
+
+        if revocation_due {
+            // Synthesize a `RevokedMidEval` cap error so the evaluator's
+            // routing arm surfaces `E_CAP_REVOKED_MID_EVAL`. Matches
+            // `benten_caps::CapError::code()` row for this variant.
+            let _ = required; // referenced above for the WriteContext path
+            return Err(benten_eval::EvalError::Capability(
+                benten_caps::CapError::RevokedMidEval,
+            ));
+        }
+
         if let Some(policy) = self.policy() {
-            // Pass a shape the policy can inspect; we only populate the
-            // `label` slot with the requested scope so a policy that keys
-            // off write-labels sees it.
             let ctx = benten_caps::WriteContext {
                 label: required.to_string(),
                 ..Default::default()
@@ -432,6 +499,7 @@ impl PrimitiveHost for Engine {
                 return Err(benten_eval::EvalError::Capability(c));
             }
         }
+        let _ = iteration_now;
         Ok(())
     }
 

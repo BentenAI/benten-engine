@@ -1,5 +1,6 @@
 //! R3 unit tests for G3-B / N3: `Engine::call_with_suspension`,
-//! `suspend_to_bytes`, `resume_from_bytes` public API shape — FROZEN interface.
+//! `suspend_to_bytes`, `resume_from_bytes_unauthenticated`,
+//! `resume_from_bytes_as` public API shape — FROZEN interface.
 //!
 //! Also the 4-step resume protocol shape pins from §9.1 (protocol steps 1-4).
 //!
@@ -118,10 +119,11 @@ fn resume_from_bytes_accepts_suspend_to_bytes_output() {
     };
     let bytes = engine.suspend_to_bytes(&handle).expect("suspend");
 
-    // Round-trip: resume_from_bytes accepts the exact output of suspend_to_bytes.
+    // Round-trip: resume_from_bytes_unauthenticated accepts the exact output
+    // of suspend_to_bytes.
     let _resumed = engine
-        .resume_from_bytes(&bytes, benten_core::Value::text("ok"))
-        .expect("resume_from_bytes must accept suspend_to_bytes output");
+        .resume_from_bytes_unauthenticated(&bytes, benten_core::Value::text("ok"))
+        .expect("resume_from_bytes_unauthenticated must accept suspend_to_bytes output");
 }
 
 // ---- Resume protocol steps (§9.1 steps 1-4) ------------------------------
@@ -146,7 +148,7 @@ fn resume_recomputes_payload_cid_rejects_tamper() {
     bytes[mid] ^= 0x5A;
 
     let err = engine
-        .resume_from_bytes(&bytes, benten_core::Value::text("x"))
+        .resume_from_bytes_unauthenticated(&bytes, benten_core::Value::text("x"))
         .expect_err("tamper rejected");
     assert_eq!(
         err.code(),
@@ -203,9 +205,48 @@ fn resume_re_verifies_pinned_subgraph_cids() {
         .expect("force drift");
 
     let err = engine
-        .resume_from_bytes(&bytes, benten_core::Value::text("x"))
+        .resume_from_bytes_unauthenticated(&bytes, benten_core::Value::text("x"))
         .expect_err("pin drift rejected");
     assert_eq!(err.code(), ErrorCode::ResumeSubgraphDrift);
+}
+
+/// G11-A Decision 3: `resume_from_bytes_unauthenticated` documents its
+/// missing step via its name. The 4-step protocol's step 2 (principal
+/// binding) is skipped by design — a caller who holds valid envelope
+/// bytes can resume without proving principal identity. A paired test
+/// `resume_requires_matching_resumption_principal` above already pins
+/// the positive `_as` path; this test pins the negative contract that
+/// the `_unauthenticated` surface does NOT enforce step 2.
+#[test]
+fn resume_from_bytes_unauthenticated_skips_step_2_by_design() {
+    let (_d, engine) = open_engine();
+    engine
+        .register_subgraph(benten_engine::testing::minimal_wait_handler("skip2"))
+        .expect("register");
+
+    // Suspend as alice.
+    let alice = benten_engine::testing::principal_cid("alice");
+    let out = engine
+        .call_as_with_suspension("skip2", "run", Node::empty(), &alice)
+        .expect("call as alice");
+    let handle = match out {
+        SuspensionOutcome::Suspended(h) => h,
+        SuspensionOutcome::Complete(_) => panic!("must suspend"),
+    };
+    let bytes = engine.suspend_to_bytes(&handle).expect("bytes");
+
+    // Resume via the `_unauthenticated` surface: no principal is supplied,
+    // so step 2 is skipped entirely. The envelope's
+    // `resumption_principal_cid` is alice but no caller is claiming
+    // anything, so there's nothing to compare against.
+    let resumed = engine
+        .resume_from_bytes_unauthenticated(&bytes, benten_core::Value::text("sig"))
+        .expect("unauthenticated resume must succeed without a principal");
+    assert!(
+        resumed.is_ok_edge(),
+        "unauthenticated resume of alice's envelope must NOT fire \
+         E_RESUME_ACTOR_MISMATCH — step 2 is skipped by design"
+    );
 }
 
 #[test]
@@ -233,7 +274,7 @@ fn resume_re_calls_check_write() {
 
     let pre = counter.load();
     let _ = engine
-        .resume_from_bytes(&bytes, benten_core::Value::text("sig"))
+        .resume_from_bytes_unauthenticated(&bytes, benten_core::Value::text("sig"))
         .expect("resume");
     let post = counter.load();
     assert_eq!(

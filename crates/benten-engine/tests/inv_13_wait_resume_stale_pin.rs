@@ -51,8 +51,14 @@ use benten_engine::Engine;
 
 /// code-as-graph Major #4 / §9.11 row 5: WAIT-resume with a stale pin
 /// fires `E_RESUME_SUBGRAPH_DRIFT` BEFORE any write attempt.
+///
+/// G11-A Wave 1: the 4-step resume protocol's step 3 (pinned-subgraph
+/// CID drift check) landed in G3-A and is now exercised end-to-end via
+/// the `testing_force_reregister_with_different_cid` helper — which
+/// simulates a version bump between suspend and resume. The resume
+/// path must observe the drift and surface
+/// `E_RESUME_SUBGRAPH_DRIFT` BEFORE any cap re-check or write.
 #[test]
-#[ignore = "phase-2a-pending: pinned_subgraph_cids + resume step 3 land in G3-A per plan §9.1. Drop #[ignore] once resume_from_bytes re-verifies pinned CIDs."]
 fn inv_13_wait_resume_stale_pin_fires_resume_subgraph_drift() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
@@ -61,54 +67,32 @@ fn inv_13_wait_resume_stale_pin_fires_resume_subgraph_drift() {
         .build()
         .unwrap();
 
-    let _alice = engine.create_principal("alice").unwrap();
+    // Register a WAIT-bearing handler whose CID will be pinned inside the
+    // persisted envelope.
+    engine
+        .register_subgraph(benten_engine::testing::minimal_wait_handler("pinned"))
+        .expect("register");
 
-    // Target API path (G3-A):
-    //
-    //     // Register B v1.
-    //     let b_v1 = SubgraphSpec::builder()
-    //         .handler_id("b")
-    //         .write(|w| w.label("post").requires("store:post:write"))
-    //         .respond()
-    //         .build();
-    //     let b_id = engine.register_subgraph(b_v1).unwrap();
-    //     let b_v1_cid = engine.subgraph_cid_for(&b_id).unwrap();
-    //
-    //     // Register A, which CALLs B.
-    //     let a = SubgraphSpec::builder()
-    //         .handler_id("a")
-    //         .wait(|w| w.signal("external:signal"))
-    //         .call(|c| c.handler_id(&b_id))
-    //         .respond()
-    //         .build();
-    //     let a_id = engine.register_subgraph(a).unwrap();
-    //
-    //     // Invoke A, suspend.
-    //     let suspended = engine
-    //         .call_with_suspension(&a_id, "run", Node::empty())
-    //         .unwrap()
-    //         .unwrap_suspended();
-    //     let bytes = engine.suspend_to_bytes(suspended).unwrap();
-    //
-    //     // Between suspend and resume, register B v2 (new version).
-    //     let b_v2 = SubgraphSpec::builder()
-    //         .handler_id("b")
-    //         .write(|w| w.label("post").requires("store:post:write"))
-    //         .write(|w| w.label("audit").property("version", Value::Int(2)))
-    //         .respond()
-    //         .build();
-    //     let _ = engine.register_subgraph(b_v2).unwrap();
-    //     let b_v2_cid = engine.subgraph_cid_for(&b_id).unwrap();
-    //     assert_ne!(b_v1_cid, b_v2_cid, "version bump changes CID");
-    //
-    //     // Attempt resume; pinned_subgraph_cids still references v1.
-    //     let outcome = engine.resume_from_bytes(bytes, signal_value());
-    //     let err = outcome.expect_err("stale pin must fail before write");
-    //     assert_eq!(err.code().as_str(), "E_RESUME_SUBGRAPH_DRIFT");
+    let outcome = engine
+        .call_with_suspension("pinned", "run", benten_core::Node::empty())
+        .expect("call_with_suspension");
+    let handle = outcome
+        .unwrap_suspended()
+        .expect("WAIT-bearing handler must suspend");
+    let bytes = engine.suspend_to_bytes(&handle).expect("suspend_to_bytes");
 
-    let _ = engine;
-    panic!(
-        "red-phase: pinned_subgraph_cids + resume step 3 not yet present. \
-         G3-A to land per plan §9.1 resume protocol."
+    // Between suspend and resume, "version-bump" the handler so its
+    // registered CID no longer matches the pin inside the envelope.
+    engine
+        .testing_force_reregister_with_different_cid("pinned")
+        .expect("force pin drift");
+
+    let err = engine
+        .resume_from_bytes_unauthenticated(&bytes, benten_core::Value::text("signal"))
+        .expect_err("stale pin must fail before write");
+    assert_eq!(
+        err.code(),
+        benten_errors::ErrorCode::ResumeSubgraphDrift,
+        "§9.11 row 5: pinned subgraph drift fires E_RESUME_SUBGRAPH_DRIFT"
     );
 }

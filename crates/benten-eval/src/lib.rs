@@ -43,6 +43,8 @@ pub use exec_state::{AttributionFrame, ExecutionStateEnvelope, ExecutionStatePay
 pub use host::{NullHost, PrimitiveHost, ViewQuery};
 pub use host_error::HostError;
 pub use primitives::wait::{SignalShape, SuspendedHandle, WaitOutcome, WaitResumeSignal};
+#[cfg(any(test, feature = "testing"))]
+pub use time_source::MockMonotonicSource;
 pub use time_source::{
     HlcTimeSource, InstantMonotonicSource, MockTimeSource, MonotonicSource, TimeSource,
     default_monotonic_source, default_time_source,

@@ -8,9 +8,15 @@
 //! ```text
 //! engine.callWithSuspension(handler_id, op, input)
 //!   -> { kind: "complete", outcome } | { kind: "suspended", handle: Buffer }
-//! engine.resumeFromBytes(bytes, signalValue)   -> Outcome
+//! engine.resumeFromBytesUnauthenticated(bytes, signalValue)   -> Outcome
 //! engine.resumeFromBytesAs(bytes, signalValue, principalCid) -> Outcome
 //! ```
+//!
+//! The `Unauthenticated` variant skips step 2 (principal binding) of the
+//! 4-step resume protocol by design — G11-A Decision 3 (2026-04-24). TS
+//! callers should prefer `resumeFromBytesAs` unless they're in a
+//! single-user / in-process context where no principal identity is
+//! meaningful.
 //!
 //! Envelope bytes cross the boundary as `Buffer` (napi's `Vec<u8>` bridge).
 //! Signal payloads cross as `serde_json::Value`, re-used from the existing
@@ -92,18 +98,25 @@ pub(crate) fn call_with_suspension_adapter(
     }
 }
 
-/// Internal: drive `Engine::resume_from_bytes`. The signal payload is
-/// handed through as a structured `Value` (routed via the existing
-/// `json_to_props` path so maps surface as `Value::Map` and primitives
-/// as their matching `Value::*` variant).
-pub(crate) fn resume_from_bytes_adapter(
+/// Internal: drive `Engine::resume_from_bytes_unauthenticated`. The signal
+/// payload is handed through as a structured `Value` (routed via the
+/// existing `json_to_props` path so maps surface as `Value::Map` and
+/// primitives as their matching `Value::*` variant).
+///
+/// This adapter is routed to TS as `resumeFromBytesUnauthenticated` —
+/// callers who need step-2 principal binding must go through
+/// [`resume_from_bytes_as_adapter`] instead. G11-A Decision 3 renamed the
+/// Rust-side method from `resume_from_bytes` to
+/// `resume_from_bytes_unauthenticated` so the name itself warns that
+/// principal binding is skipped.
+pub(crate) fn resume_from_bytes_unauthenticated_adapter(
     engine: &InnerEngine,
     bytes: &[u8],
     signal_value: serde_json::Value,
 ) -> napi::Result<serde_json::Value> {
     let signal = json_to_value(signal_value)?;
     let outcome = engine
-        .resume_from_bytes(bytes, signal)
+        .resume_from_bytes_unauthenticated(bytes, signal)
         .map_err(engine_err)?;
     Ok(outcome_to_json(&outcome))
 }

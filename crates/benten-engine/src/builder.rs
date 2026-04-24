@@ -23,6 +23,7 @@ use benten_caps::{
 };
 use benten_core::Value;
 use benten_errors::ErrorCode;
+use benten_eval::{HlcTimeSource, InstantMonotonicSource, MonotonicSource, TimeSource};
 use benten_graph::{ChangeSubscriber, RedbBackend};
 
 use crate::change::ChangeBroadcast;
@@ -52,6 +53,15 @@ pub struct EngineBuilder {
     /// Upper bound on the in-memory change-event buffer. `None` defaults to
     /// [`CHANGE_STREAM_MAX_BUFFERED`]. See r6-sec-5.
     change_stream_capacity: Option<usize>,
+    /// Phase 2a G9-A-cont: explicit monotonic clock source used by the
+    /// evaluator's wall-clock-refresh cadence (§9.13 refresh point #3).
+    /// `None` defaults to [`InstantMonotonicSource`] at build time.
+    monotonic_source: Option<Arc<dyn MonotonicSource>>,
+    /// Phase 2a G9-A-cont: explicit HLC wall-clock source. `None` defaults
+    /// to [`HlcTimeSource`] at build time. Rides alongside
+    /// `monotonic_source` for federation-correlation context; never
+    /// primary for cadence (§9.13 dual-source resolution).
+    time_source: Option<Arc<dyn TimeSource>>,
 }
 
 impl EngineBuilder {
@@ -69,6 +79,8 @@ impl EngineBuilder {
             use_grant_backed: false,
             allow_revocation: false,
             change_stream_capacity: None,
+            monotonic_source: None,
+            time_source: None,
         }
     }
 
@@ -192,6 +204,39 @@ impl EngineBuilder {
         self
     }
 
+    /// Phase 2a G9-A-cont: inject an explicit monotonic clock source.
+    ///
+    /// The configured source drives the evaluator's wall-clock-refresh
+    /// cadence (§9.13 refresh point #3). Tests that need a controllable
+    /// monotonic clock (see
+    /// `tests/wallclock_refresh_uses_monotonic_only.rs`) inject a
+    /// `MockMonotonicSource`; production builds take the
+    /// [`InstantMonotonicSource`] default.
+    ///
+    /// Monotonic is PRIMARY for cadence — if you want to also control the
+    /// wall-clock HLC stamp, use [`Self::time_source`] alongside this
+    /// method. The two traits are deliberately orthogonal so a
+    /// drift-injecting test can freeze the wall-clock independently of
+    /// the monotonic tick.
+    #[must_use]
+    pub fn monotonic_source(mut self, source: Arc<dyn MonotonicSource>) -> Self {
+        self.monotonic_source = Some(source);
+        self
+    }
+
+    /// Phase 2a G9-A-cont: inject an explicit HLC / wall-clock source.
+    ///
+    /// Rides alongside [`Self::monotonic_source`] for federation-
+    /// correlation context. This source is NEVER used to drive TOCTOU
+    /// refresh cadence — wall-clock is drift-exploitable (§9.13
+    /// refresh-point-5 threat model). Production defaults to
+    /// [`HlcTimeSource`].
+    #[must_use]
+    pub fn time_source(mut self, source: Arc<dyn TimeSource>) -> Self {
+        self.time_source = Some(source);
+        self
+    }
+
     /// Build the engine — either from a configured backend or by opening
     /// `path` as a redb file.
     pub fn build(mut self) -> Result<Engine, EngineError> {
@@ -311,7 +356,19 @@ impl EngineBuilder {
             emit_noauth_startup_log();
         }
 
-        Ok(Engine::from_parts(
+        // Phase 2a G9-A-cont: resolve the configured clock sources, falling
+        // back to the production defaults when the builder caller did not
+        // inject explicit mocks. Both sources are held behind `Arc<dyn …>`
+        // on the Engine so `impl PrimitiveHost for Engine` can read them
+        // without threading them through the trait method signatures.
+        let monotonic: Arc<dyn MonotonicSource> = self
+            .monotonic_source
+            .unwrap_or_else(|| Arc::new(InstantMonotonicSource::new()));
+        let time: Arc<dyn TimeSource> = self
+            .time_source
+            .unwrap_or_else(|| Arc::new(HlcTimeSource::new()));
+
+        Ok(Engine::from_parts_with_clocks(
             backend,
             policy,
             caps_enabled,
@@ -319,6 +376,8 @@ impl EngineBuilder {
             broadcast,
             inner,
             ivm,
+            monotonic,
+            time,
         ))
     }
 }

@@ -119,8 +119,11 @@ fn bench_wait_round_trip_no_io(c: &mut Criterion) {
             // Sanity that round-trip shape is preserved across the loop.
             debug_assert_eq!(bytes.len(), envelope_bytes.len());
             let outcome = engine
-                .resume_from_bytes(black_box(&bytes), black_box(signal_value.clone()))
-                .expect("resume_from_bytes");
+                .resume_from_bytes_unauthenticated(
+                    black_box(&bytes),
+                    black_box(signal_value.clone()),
+                )
+                .expect("resume_from_bytes_unauthenticated");
             black_box(outcome);
         });
     });

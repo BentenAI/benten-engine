@@ -184,7 +184,17 @@ impl Engine {
                 out.insert(format!("benten.writes.denied.{scope}"), count as f64);
             }
         }
-        out.insert("benten.ivm.view_stale_count".to_string(), 0.0);
+        // G11-A Wave 1: replace the R3-consolidation hard-code with the
+        // real tally from the IVM subscriber. When `.without_ivm()` was
+        // configured the subscriber is absent — surface 0 in that case so
+        // operators comparing metrics across configurations don't see a
+        // phantom view go stale when no views exist at all.
+        let stale = self.ivm.as_ref().map_or(0, |s| s.stale_count_tally());
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "stale view counts are bounded by registered-view count; f64 is lossless well past any realistic view-registry size"
+        )]
+        out.insert("benten.ivm.view_stale_count".to_string(), stale as f64);
         out
     }
 
@@ -342,14 +352,29 @@ impl Engine {
         })
     }
 
-    pub fn schedule_revocation_at_iteration(
-        &self,
-        _grant: Cid,
-        _n: u32,
-    ) -> Result<(), EngineError> {
-        Err(EngineError::NotImplemented {
-            feature: "schedule_revocation_at_iteration — Phase 2",
-        })
+    /// Phase 2a G9-A-cont: record a target iteration at which `grant`
+    /// should be treated as revoked by the in-process TOCTOU harness.
+    ///
+    /// The scheduled target is consulted by the evaluator's wall-clock-
+    /// refresh callback (`impl PrimitiveHost::check_capability`) when
+    /// `iterate_batch_boundary` triggers a cap re-check. A test that
+    /// calls [`Self::schedule_revocation_at_iteration`] with `(grant, 50)`
+    /// and then drives a 300-iter handler will observe the denial at
+    /// the first boundary past iteration 50 — matching the §9.13
+    /// refresh-point-3 semantics.
+    ///
+    /// This is an IN-PROCESS test harness surface. It is NOT wired to
+    /// the production revocation path (`system:CapabilityRevocation`
+    /// Node writes + `GrantBackedPolicy::check_write`); those remain
+    /// authoritative for end-to-end tests.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Other`] on lock recovery failure (never
+    /// fires under sound state — kept as a safe-by-default shape).
+    pub fn schedule_revocation_at_iteration(&self, grant: Cid, n: u32) -> Result<(), EngineError> {
+        let mut guard = benten_graph::MutexExt::lock_recover(&self.revoke_at_iteration);
+        guard.insert(grant, u64::from(n));
+        Ok(())
     }
 
     #[cfg(any(test, feature = "test-helpers"))]

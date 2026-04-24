@@ -67,7 +67,7 @@ fn wait_signal_shape_defaults_untyped() {
         },
     ] {
         let outcome = engine
-            .resume_from_bytes(&bytes, Node::new(vec!["signal".into()], payload))
+            .resume_from_bytes_unauthenticated(&bytes, Node::new(vec!["signal".into()], payload))
             .expect("untyped WAIT accepts any signal shape");
         assert!(
             outcome.is_ok_edge(),
@@ -107,7 +107,7 @@ fn wait_signal_shape_validates_against_schema_when_set() {
     ok_payload.insert("amount".into(), Value::Int(100));
     ok_payload.insert("currency".into(), Value::Text("USD".into()));
     let ok_outcome = engine
-        .resume_from_bytes(&bytes, Node::new(vec!["signal".into()], ok_payload))
+        .resume_from_bytes_unauthenticated(&bytes, Node::new(vec!["signal".into()], ok_payload))
         .expect("shape-matching signal resumes OK");
     assert!(ok_outcome.is_ok_edge());
 
@@ -115,8 +115,8 @@ fn wait_signal_shape_validates_against_schema_when_set() {
     let mut bad_payload = BTreeMap::new();
     bad_payload.insert("amount".into(), Value::Text("one-hundred".into()));
     bad_payload.insert("currency".into(), Value::Text("USD".into()));
-    let bad_result =
-        engine.resume_from_bytes(&bytes, Node::new(vec!["signal".into()], bad_payload));
+    let bad_result = engine
+        .resume_from_bytes_unauthenticated(&bytes, Node::new(vec!["signal".into()], bad_payload));
     assert!(
         bad_result.is_err(),
         "shape-mismatched signal must be rejected at resume before TRANSFORM"

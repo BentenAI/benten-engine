@@ -88,7 +88,7 @@ fn wait_serializes_and_resumes() {
     let signal_value = Node::new(vec!["signal".into()], signal_payload);
 
     let resumed = engine2
-        .resume_from_bytes(&bytes1, signal_value)
+        .resume_from_bytes_unauthenticated(&bytes1, signal_value)
         .expect("resume from fresh engine succeeds");
 
     assert!(
@@ -175,7 +175,7 @@ fn wait_crash_midway_recovers() {
     let mut payload = BTreeMap::new();
     payload.insert("payload".into(), Value::Text("survived".into()));
     let outcome = engine_b
-        .resume_from_bytes(&bytes, Node::new(vec!["signal".into()], payload))
+        .resume_from_bytes_unauthenticated(&bytes, Node::new(vec!["signal".into()], payload))
         .expect("resume survives engine restart");
     assert!(
         outcome.is_ok_edge(),
