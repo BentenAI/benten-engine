@@ -4,7 +4,7 @@
 //! The public assertion lives in the integration test
 //! `crates/benten-eval/tests/invariant_14_fixture_cid.rs` — it constructs an
 //! [`AttributionFrame`](crate::AttributionFrame) with three zero-digest CIDs
-//! and asserts that `frame.cid().to_string()` equals [`FIXTURE_CID`]. A shift
+//! and asserts that `frame.cid().to_string()` equals `FIXTURE_CID`. A shift
 //! in the computed CID means the `AttributionFrame` schema changed
 //! non-additively; Phase-6 additions MUST re-render the pinned constant.
 //!
