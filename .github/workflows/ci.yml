@@ -133,8 +133,6 @@ jobs:
         #   - load_verified/load_subgraph_verified — benten-core +
         #     benten-graph storage-layer hash-check read paths (plan
         #     §G11-A "G2-A scope ambiguity"; Wave-2 carry).
-        #   - devserver_* / hotreload_* — tools/benten-dev integration
-        #     tests; the devserver crate itself is Wave-2 DEVSERVER scope.
         #   - ast_cache_* / old_subgraph_cid_not_reachable — plan
         #     §G11-A "G2-B contradictory R3 contract" (rewrite via
         #     testing_force_reregister_with_different_cid hook).
@@ -155,7 +153,7 @@ jobs:
         #     DOCS-CARRY.
         run: |
           cargo nextest run --profile ci --workspace --locked --features benten-eval/testing \
-            -E 'not test(/load_verified/) and not test(/devserver_/) and not test(/ast_cache_/) and not test(/old_subgraph_cid_not_reachable/) and not test(/prop_parent_single_wildcard/) and not test(/variant_count_is_pinned/) and not test(/view_stale_count_tallies/) and not test(/compromise_6_/) and not test(/compromise_7_/)'
+            -E 'not test(/load_verified/) and not test(/ast_cache_/) and not test(/old_subgraph_cid_not_reachable/) and not test(/prop_parent_single_wildcard/) and not test(/variant_count_is_pinned/) and not test(/view_stale_count_tallies/) and not test(/compromise_6_/) and not test(/compromise_7_/)'
 
       - name: cargo doc
         if: matrix.rust == 'stable'

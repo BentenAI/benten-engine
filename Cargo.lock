@@ -108,6 +108,8 @@ version = "0.1.0"
 dependencies = [
  "benten-core",
  "benten-errors",
+ "benten-eval",
+ "blake3",
  "tempfile",
 ]
 
