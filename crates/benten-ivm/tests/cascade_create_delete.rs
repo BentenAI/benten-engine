@@ -86,6 +86,10 @@ fn post_event(idx: u64, kind: ChangeKind, tx_id: u64) -> (Cid, ChangeEvent) {
 }
 
 #[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "fixture-heavy multi-view integration test; splitting artificially would hurt readability"
+)]
 fn cascade_create_then_delete_converges_every_view_to_empty() {
     // Step 1: build a multi-view subscriber. Two distinct view types so
     // the per-view dispatch loop is exercised on every event, not just
