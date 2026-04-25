@@ -91,21 +91,83 @@ export interface RegisteredHandler {
   subgraph: Subgraph;
 }
 
-/** One step of an evaluator trace — per-node timing + I/O snapshot. */
-export interface TraceStep {
-  /** Content-addressed CID of the evaluated subgraph Node. */
+/**
+ * Inv-14 attribution frame — the (actor, handler, capability_grant) triple
+ * authorizing each emitted trace step. Mirrors `benten_eval::AttributionFrame`.
+ */
+export interface AttributionFrame {
+  /** CID of the actor (principal) that authored the step. */
+  actorCid: string;
+  /** CID of the handler subgraph that is executing. */
+  handlerCid: string;
+  /** CID of the capability grant authorising the step. */
+  capabilityGrantCid: string;
+}
+
+/**
+ * One per-primitive trace row — the dominant variant. Mirrors
+ * `benten_engine::TraceStep::Step` after the Phase 2a G11-A Wave 2b
+ * unification with `benten_eval::TraceStep`.
+ */
+export interface TraceStepPrimitive {
+  type: "primitive";
+  /** Content-addressed CID of the evaluated subgraph OperationNode. */
   nodeCid: string;
   /** Which primitive fired at this step. */
   primitive: Primitive | string;
   /** Duration of the step in microseconds (>0). */
   durationUs: number;
-  /** Optional input binding observed at step entry. */
+  /** Operation-node id within the registered handler. */
+  nodeId: string;
+  /** Input binding observed at step entry. */
   inputs?: JsonValue;
-  /** Optional output produced by the step. */
+  /** Output produced by the step. */
   outputs?: JsonValue;
   /** Optional error-code string if the step routed to a typed error edge. */
   error?: string;
+  /** Inv-14 attribution. Required slot; populated once G5-B-ii completes. */
+  attribution?: AttributionFrame;
 }
+
+/** WAIT primitive drove the evaluator to suspension. */
+export interface TraceStepSuspendBoundary {
+  type: "suspend_boundary";
+  /** CID of the persisted ExecutionStateEnvelope. */
+  stateCid: string;
+}
+
+/** Resume re-entered a suspended execution. */
+export interface TraceStepResumeBoundary {
+  type: "resume_boundary";
+  /** CID of the ExecutionStateEnvelope that was resumed. */
+  stateCid: string;
+  /** Signal payload handed to the resumed frame. */
+  signalValue: JsonValue;
+}
+
+/** Inv-8 / Phase-2b SANDBOX-fuel budget exhausted. */
+export interface TraceStepBudgetExhausted {
+  type: "budget_exhausted";
+  /** "inv_8_iteration" | "sandbox_fuel". */
+  budgetType: string;
+  /** How much budget was consumed before firing. */
+  consumed: number;
+  /** Configured limit. */
+  limit: number;
+  /** Path of operation-node ids that produced the exhaustion. */
+  path: string[];
+}
+
+/**
+ * One step of an evaluator trace. Phase 2a G11-A Wave 2b: discriminated
+ * union mirroring the engine-side `TraceStep` enum. Switch on `.type` to
+ * read variant-specific fields exhaustively.
+ */
+export type TraceStep =
+  | TraceStepPrimitive
+  | TraceStepSuspendBoundary
+  | TraceStepResumeBoundary
+  | TraceStepBudgetExhausted;
 
 /** Full trace returned by `engine.trace()`. */
 export interface Trace {

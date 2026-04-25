@@ -31,6 +31,7 @@ import {
 } from "./errors.js";
 import { toMermaid } from "./mermaid.js";
 import type {
+  AttributionFrame,
   CapabilityGrant,
   Edge,
   HandlerAdjacencies,
@@ -38,6 +39,7 @@ import type {
   RegisteredHandler,
   Subgraph,
   Trace,
+  TraceStep,
   ViewDef,
 } from "./types.js";
 
@@ -172,6 +174,63 @@ function toNativePayload(
       edges: n.edges,
     })),
   };
+}
+
+// ---------------------------------------------------------------------------
+// TraceStep projection — Phase 2a G11-A Wave 2b unification
+// ---------------------------------------------------------------------------
+
+function readAttribution(raw: unknown): AttributionFrame | undefined {
+  if (raw === null || typeof raw !== "object") return undefined;
+  const r = raw as Record<string, unknown>;
+  const actorCid = typeof r.actorCid === "string" ? r.actorCid : undefined;
+  const handlerCid = typeof r.handlerCid === "string" ? r.handlerCid : undefined;
+  const capabilityGrantCid =
+    typeof r.capabilityGrantCid === "string" ? r.capabilityGrantCid : undefined;
+  if (!actorCid || !handlerCid || !capabilityGrantCid) return undefined;
+  return { actorCid, handlerCid, capabilityGrantCid };
+}
+
+function mapTraceStep(s: Record<string, unknown>): TraceStep {
+  const t = typeof s.type === "string" ? s.type : "primitive";
+  switch (t) {
+    case "suspend_boundary":
+      return {
+        type: "suspend_boundary",
+        stateCid: String(s.stateCid ?? ""),
+      };
+    case "resume_boundary":
+      return {
+        type: "resume_boundary",
+        stateCid: String(s.stateCid ?? ""),
+        signalValue: (s.signalValue ?? null) as JsonValue,
+      };
+    case "budget_exhausted":
+      return {
+        type: "budget_exhausted",
+        budgetType: String(s.budgetType ?? ""),
+        consumed: Number(s.consumed ?? 0),
+        limit: Number(s.limit ?? 0),
+        path: Array.isArray(s.path) ? (s.path as unknown[]).map(String) : [],
+      };
+    case "primitive":
+    default:
+      return {
+        type: "primitive",
+        nodeCid: String(s.nodeCid ?? ""),
+        primitive: String(s.primitive ?? ""),
+        // Native durationUs is an integer microsecond reading; a genuine
+        // zero is possible for ultra-fast steps. The trace contract
+        // asserts `> 0`; fall back to 1 to keep the contract honest
+        // without lying about timing (the step DID execute).
+        durationUs: Math.max(1, Number(s.durationUs ?? 0)),
+        nodeId: String(s.nodeId ?? ""),
+        inputs: s.inputs as JsonValue | undefined,
+        outputs: s.outputs as JsonValue | undefined,
+        error: typeof s.error === "string" ? s.error : undefined,
+        attribution: readAttribution(s.attribution),
+      };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -527,24 +586,14 @@ export class Engine {
     const result: JsonValue =
       rawTrace.result !== undefined ? (rawTrace.result as JsonValue) : null;
 
-    return {
-      steps: (rawTrace.steps as Array<Record<string, unknown>>).map((s) => ({
-        nodeCid: String(s.nodeCid ?? s.node_cid ?? ""),
-        primitive: String(s.primitive ?? ""),
-        // Native durationUs is an integer microsecond reading; a
-        // genuine zero is possible for ultra-fast steps. The test
-        // asserts `> 0`; fall back to 1 to keep the contract honest
-        // without lying about timing (the step DID execute).
-        durationUs: Math.max(
-          1,
-          Number(s.durationUs ?? s.duration_us ?? 0),
-        ),
-        inputs: s.inputs as JsonValue | undefined,
-        outputs: s.outputs as JsonValue | undefined,
-        error: typeof s.error === "string" ? s.error : undefined,
-      })),
-      result,
-    };
+    // Phase 2a G11-A Wave 2b: each native step is a discriminated union;
+    // dispatch on the `type` field and project per-variant. Unknown
+    // discriminants fall through to a `primitive` row stub so a forward-
+    // compat native binding doesn't crash an older wrapper.
+    const steps: TraceStep[] = (rawTrace.steps as Array<Record<string, unknown>>).map(
+      (s) => mapTraceStep(s),
+    );
+    return { steps, result };
   }
 
   /**
