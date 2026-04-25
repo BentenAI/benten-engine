@@ -329,11 +329,26 @@ impl View for ContentListingView {
                 // delete storm bypasses the stale-on-budget backpressure.
                 // Option A per the brief: decrement by the entries removed
                 // (or by 1 if none, so every probe still costs something).
-                let before = self.entries.len();
-                self.remove_all_with_cid(&event.cid);
-                let removed = before - self.entries.len();
+                //
+                // ivm-r6-5 (R6FP catch-up): mirror the Created branch's
+                // consume-before-mutate ordering and propagate `try_consume`
+                // failures up to the subscriber. The prior version deleted
+                // first, then ignored a tripped `try_consume` Result and
+                // returned `Ok(())` — the subscriber's `applied += 1`
+                // counter was off by one in the trip case (the subscriber
+                // counted the event as applied even though the view had
+                // just flipped Stale). Pre-compute the cost via a
+                // dry-run scan, charge the budget BEFORE mutating, and
+                // surface `BudgetExceeded` so the subscriber's `match`
+                // arm marks the view stale instead of bumping `applied`.
+                if self.budget.remaining() == 0 {
+                    self.trip_to_stale();
+                    return Err(ViewError::BudgetExceeded(VIEW_ID.into()));
+                }
+                let removed: usize = self.entries.values().filter(|v| *v == &event.cid).count();
                 let cost = (removed.max(1)) as u64;
-                let _ = self.budget.try_consume(cost, VIEW_ID);
+                self.budget.try_consume(cost, VIEW_ID)?;
+                self.remove_all_with_cid(&event.cid);
                 if self.budget.remaining() == 0 && !self.entries.is_empty() {
                     // Optional Phase-2 perf upgrade: `cid → sort_key`
                     // reverse map makes this O(log n). Deferred.
