@@ -75,6 +75,23 @@ pub struct HandlerVersion {
 }
 
 impl HandlerVersion {
+    /// Dev-only **surrogate** hash for an in-memory devserver handler version.
+    ///
+    /// **NOT a canonical Benten CID.** The canonical handler CID is
+    /// `BLAKE3(DAG-CBOR(Subgraph))` wrapped as CIDv1 with multicodec
+    /// `0x71` (dag-cbor) and multihash `0x1e` (BLAKE3) — see
+    /// `crates/benten-core/src/lib.rs::Node::cid` and
+    /// `crates/benten-eval/src/lib.rs::Subgraph::cid`. This function instead
+    /// hashes the source TEXT (`handler_id ‖ op ‖ source ‖ version_tag`)
+    /// directly because the Phase-2a devserver does not have a
+    /// DSL-text → `SubgraphSpec` compiler available (that compiler lands
+    /// in Phase 2b — see `.addl/phase-2b/00-scope-outline.md` §7a
+    /// "Devserver → Engine routing"). The resulting CID is content-addressed
+    /// across the source text alone, NOT across the structural Subgraph
+    /// shape, and MUST NOT be persisted, exposed on the engine wire,
+    /// or mixed with canonical CIDs from `Engine::register_subgraph`.
+    /// At Phase-2b cutover this function is deleted and replaced by the
+    /// canonical compile-then-`register_subgraph` path.
     fn compute_cid(handler_id: &str, op: &str, source: &str, version_tag: &str) -> Cid {
         let mut h = blake3_hasher();
         h.update(handler_id.as_bytes());

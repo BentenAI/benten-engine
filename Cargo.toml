@@ -237,9 +237,6 @@ tracing = "0.1"
 # because `spin` needs no feature flags for no_std+alloc.
 spin = { version = "0.10", default-features = false, features = ["mutex", "spin_mutex", "lazy"] }
 
-# WASM sandbox (SANDBOX primitive)
-wasmtime = "35"
-
 # Dev
 criterion = { version = "0.8", features = ["html_reports"] }
 proptest = "1.11"
@@ -256,6 +253,13 @@ napi-derive = "3"
 # per-Anchor counter hack for Phase 1 that gets thrown away at Phase 3. One
 # HLC implementation for all phases is cleaner.
 uhlc = "0.2"
+
+# Phase 2b (SANDBOX / WASM compute) — reserved versions for future use.
+# No production crate consumes wasmtime today; it activates with the G7
+# SANDBOX host + Inv-4 / Inv-7 wiring. Keeping the version pin commented
+# here parallels the Phase-3 reservation discipline below so the workspace
+# manifest documents intended versions without dragging the build graph.
+# wasmtime = "35"
 
 # Phase 3 (sync/identity) — reserved versions for future use:
 # iroh = "0.97"
