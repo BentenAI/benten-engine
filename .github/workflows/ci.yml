@@ -155,8 +155,14 @@ jobs:
         #     ScopeLoneStarRejected. Rewritten to pin the post-ucca-7
         #     contract (lone `*` rejected at parse time; compound
         #     `<ns>:*` still permits any tail). Filter clause dropped.
-        #   - variant_count_is_pinned — G3-B WaitOutcome variant-count
-        #     shape-pin; belongs with the Wave-2b TraceStep unification.
+        #   - variant_count_is_pinned — RESOLVED in G11-A Wave 3a.
+        #     Comment here mis-classified this as the G3-B WaitOutcome
+        #     TraceStep shape-pin; it was actually a benten-errors
+        #     catalog drift (`ALL_CATALOG_VARIANTS` had 42 entries, enum
+        #     had 58). Expanded the list to cover the 5 reserved
+        #     HostError discriminants, the 10 Phase-2a firing codes, and
+        #     the ucca-7 `CapScopeLoneStarRejected` parse refusal; bumped
+        #     the canary to 58. Filter clause dropped.
         #   - view_stale_count_tallies — RESOLVED in G11-A Wave 3a
         #     (the IVM-side tally was already live via
         #     Subscriber::stale_count_tally; the test needed
@@ -173,7 +179,7 @@ jobs:
         #     DOCS-CARRY.
         run: |
           cargo nextest run --profile ci --workspace --locked --features benten-eval/testing,benten-engine/test-helpers \
-            -E 'not test(/load_verified/) and not test(/variant_count_is_pinned/) and not test(/compromise_6_/) and not test(/compromise_7_/)'
+            -E 'not test(/load_verified/) and not test(/compromise_6_/) and not test(/compromise_7_/)'
 
       - name: cargo doc
         if: matrix.rust == 'stable'

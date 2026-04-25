@@ -1,5 +1,5 @@
 //! Phase 2a G2-B / arch-r1-5 informational bench: AST cache hit/miss latency
-//! for `SubgraphCacheKey = (handler_id, op, subgraph_cid)`.
+//! for the `(handler_id, op, subgraph_cid)` key tuple.
 //!
 //! Three measurement cases:
 //! 1. Cold path — no cache entry; full subgraph decode.

@@ -75,6 +75,29 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::NotImplemented,
     ErrorCode::IvmPatternMismatch,
     ErrorCode::VersionUnknownPrior,
+    // Phase-2a G1-B HostError discriminants (PHASE_2A_RESERVED_CODES). All
+    // five reserved for Phase-3 sync fires but already carry catalog
+    // entries + as_str / as_static_str / from_str arms, so they belong on
+    // the round-trip list.
+    ErrorCode::HostNotFound,
+    ErrorCode::HostWriteConflict,
+    ErrorCode::HostBackendUnavailable,
+    ErrorCode::HostCapabilityRevoked,
+    ErrorCode::HostCapabilityExpired,
+    // Phase-2a firing codes (PHASE_2A_FIRING_CODES). Added during the
+    // Phase-2a R5 wave and carry full catalog + round-trip wiring.
+    ErrorCode::ExecStateTampered,
+    ErrorCode::ResumeActorMismatch,
+    ErrorCode::ResumeSubgraphDrift,
+    ErrorCode::WaitTimeout,
+    ErrorCode::InvImmutability,
+    ErrorCode::InvSystemZone,
+    ErrorCode::InvAttribution,
+    ErrorCode::CapWallclockExpired,
+    ErrorCode::CapChainTooDeep,
+    ErrorCode::WaitSignalShapeMismatch,
+    // Phase-2a ucca-7 parse-time refusal code (lone-`*` GrantScope).
+    ErrorCode::CapScopeLoneStarRejected,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -109,13 +132,21 @@ fn variant_count_is_pinned() {
             "as_str / as_static_str disagree for {code:?}",
         );
     }
-    // Canary: the known count at the time this harness landed (43). If a
-    // future change bumps the enum, it bumps the array, which bumps this
-    // value — the assertion documents the expected movement direction.
-    // Adding a variant is a +1 delta; shrinking is always a breaking
-    // change that must surface in the catalog diff.
+    // Canary: the known count at the time this harness last synced
+    // (58). If a future change bumps the enum, it bumps the array, which
+    // bumps this value — the assertion documents the expected movement
+    // direction. Adding a variant is a +1 delta; shrinking is always a
+    // breaking change that must surface in the catalog diff.
+    //
+    // G11-A Wave 3a sync: the earlier canary (43) predated the Phase-2a
+    // R5 waves which introduced the 5 reserved HostError discriminants
+    // (PHASE_2A_RESERVED_CODES), the 10 firing codes (PHASE_2A_FIRING_CODES),
+    // and the ucca-7 `CapScopeLoneStarRejected` parse-time refusal. All
+    // 16 additions already had `as_str` / `as_static_str` / `from_str`
+    // coverage in `benten-errors/src/lib.rs` — the test list just hadn't
+    // been updated. Post-sync: 42 + 16 = 58.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 43,
+        CATALOG_VARIANT_COUNT, 58,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
