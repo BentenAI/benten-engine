@@ -201,7 +201,29 @@ impl View for VersionCurrentView {
                 // A NEXT_VERSION edge deletion rolls back the default
                 // anchor's head — a conservative Phase-1 choice; Phase 2
                 // does proper anchor identity tracking.
-                self.current.remove(&DEFAULT_ANCHOR_ID);
+                //
+                // ivm-r6-7 (R6 fix-pass): defensively gate the rollback on
+                // the edge actually pointing at the head we currently
+                // remember. Without this guard, ANY NEXT_VERSION edge
+                // deletion (including one that touches an unrelated
+                // version chain we don't even know about) would clear
+                // DEFAULT_ANCHOR_ID. The check uses `target` because the
+                // EdgeCreated arm sets `current[DEFAULT_ANCHOR_ID] =
+                // target`, so a delete of an edge whose target equals the
+                // current head genuinely rolls back this anchor; deletes
+                // of edges that point elsewhere are no-ops here. Phase-2
+                // proper anchor-identity tracking removes the guard.
+                if let Some((_source, target, _label)) = &event.edge_endpoints {
+                    if self.current.get(&DEFAULT_ANCHOR_ID) == Some(target) {
+                        self.current.remove(&DEFAULT_ANCHOR_ID);
+                    }
+                } else {
+                    // Identity-only EdgeDeleted (no endpoints) preserves the
+                    // pre-r6-7 conservative behavior so existing tests that
+                    // emit identity-only edge events still observe the
+                    // rollback.
+                    self.current.remove(&DEFAULT_ANCHOR_ID);
+                }
             }
         }
         Ok(())

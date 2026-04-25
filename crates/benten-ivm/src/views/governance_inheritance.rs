@@ -159,10 +159,16 @@ impl GovernanceInheritanceView {
     }
 
     fn apply_event(&mut self, event: &ChangeEvent) -> Result<(), ViewError> {
-        self.budget.try_consume(1, VIEW_ID)?;
-
+        // ivm-r6-6 (R6 fix-pass): only charge the budget for events the view
+        // actually processes. The earlier code charged `try_consume(1)`
+        // unconditionally, so a flood of unrelated change events (every
+        // non-governance node create/update/edge in the system) would push
+        // the view to Stale despite doing zero work. The match arms below
+        // mirror the per-arm work — the no-op `_ =>` arm explicitly skips
+        // the consume.
         match event.kind {
             ChangeKind::EdgeCreated if event.has_label("GovernedBy") => {
+                self.budget.try_consume(1, VIEW_ID)?;
                 if let Some((source, target, _)) = &event.edge_endpoints {
                     // `GovernedBy` edge: source is the child (governed),
                     // target is the parent (governor).
@@ -170,11 +176,13 @@ impl GovernanceInheritanceView {
                 }
             }
             ChangeKind::EdgeDeleted if event.has_label("GovernedBy") => {
+                self.budget.try_consume(1, VIEW_ID)?;
                 if let Some((source, _target, _)) = &event.edge_endpoints {
                     self.parent.remove(source);
                 }
             }
             ChangeKind::Deleted => {
+                self.budget.try_consume(1, VIEW_ID)?;
                 // A node-delete of a governance participant invalidates any
                 // adjacency that pointed AT it; best-effort cleanup per
                 // mini-review g5-cr-7.
@@ -182,7 +190,8 @@ impl GovernanceInheritanceView {
                 self.parent.remove(&event.cid);
             }
             _ => {
-                // Non-governance events are acknowledged but not acted on.
+                // Non-governance events are acknowledged but not acted on —
+                // and crucially, do not charge the budget (ivm-r6-6).
             }
         }
         Ok(())

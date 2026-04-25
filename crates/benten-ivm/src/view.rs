@@ -132,11 +132,6 @@ pub struct ViewBudget {
 }
 
 impl ViewBudget {
-    /// Default per-update budget (1000 units). See ENGINE-SPEC §8.
-    pub const DEFAULT: Self = Self {
-        max_work_per_update: 1000,
-    };
-
     /// Construct a budget. Rejects `0` because a zero-budget view is stale
     /// before any data arrives — that is a misconfiguration, not a valid
     /// runtime state.
@@ -155,11 +150,15 @@ impl ViewBudget {
     }
 }
 
-impl Default for ViewBudget {
-    fn default() -> Self {
-        Self::DEFAULT
-    }
-}
+// Phase-2a R6 ivm-r6-2: removed the prior `ViewBudget::DEFAULT = 1000`
+// constant + its `Default` impl. Every Phase-1 view constructs its
+// `BudgetTracker` with `u64::MAX` (the unlimited sentinel) directly; the
+// `DEFAULT = 1000` constant exported from this module was dead code that
+// claimed an "ENGINE-SPEC §8 default" it never actually wired into a view
+// constructor. ENGINE-SPEC §8 is updated in the DOCS lane to remove the
+// stale reference. Per-view budgeting remains a Phase-2b concern (the
+// `BudgetTracker` infrastructure is already in place; only a configurable
+// per-view budget plumbing wave is missing).
 
 // ---------------------------------------------------------------------------
 // ViewQuery / ViewResult

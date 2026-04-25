@@ -279,10 +279,16 @@ impl View for ContentListingView {
         }
         match event.kind {
             ChangeKind::Created | ChangeKind::Updated => {
+                // ivm-r6-4 (R6 fix-pass): consume budget BEFORE inserting so
+                // a tracker that trips on this event leaves `entries`
+                // unchanged. The prior order inserted first and consumed
+                // last, which let the final write past the budget land in
+                // the index even though the view immediately flipped Stale.
                 if self.budget.remaining() == 0 {
                     self.trip_to_stale();
                     return Err(ViewError::BudgetExceeded(VIEW_ID.into()));
                 }
+                self.budget.try_consume(1, VIEW_ID)?;
                 // Prefer event.node.createdAt; fall back to tx_id on
                 // identity-only events (legacy test harness). The fallback
                 // is announced on stderr so operators can notice when the
@@ -315,7 +321,6 @@ impl View for ContentListingView {
                 self.next_disambiguator = self.next_disambiguator.wrapping_add(1);
                 self.entries
                     .insert((sort_primary, disambiguator), event.cid);
-                let _ = self.budget.try_consume(1, VIEW_ID);
             }
             ChangeKind::Deleted => {
                 // g5-p2-ivm-2: match budget cost to work done. A flood of
