@@ -19,41 +19,47 @@
 //! `capability_grant_cid` still references the now-revoked grant.
 //!
 //! **Attack sequence.**
-//!  1. Alice holds `store:post:write`. Registers a handler containing a
-//!     WAIT, invokes it, drives to suspension.
+//!  1. Alice holds a grant for the `wait:resume` scope (the synthetic scope
+//!     the resume-step-4 protocol consults — see
+//!     `engine_wait::resume_from_bytes_inner` step 4). Alice registers a
+//!     handler containing a WAIT, invokes it, drives to suspension.
 //!  2. Alice persists the state via `engine.suspend_to_bytes(handle)`.
 //!  3. A separate actor (admin) revokes Alice's grant.
-//!  4. Alice calls `engine.resume_from_bytes(bytes, signal)`.
+//!  4. Alice calls `engine.resume_from_bytes_unauthenticated(bytes, signal)`.
 //!  5. Mitigation: resume step 4 (§9.1) re-calls
-//!     `CapabilityPolicy::check_write` with the persisted
-//!     head-of-chain `capability_grant_cid`; the revocation is observed;
-//!     `E_CAP_REVOKED_MID_EVAL` fires BEFORE any write.
+//!     `CapabilityPolicy::check_write` with a synthesized `WriteContext`
+//!     scoped to `wait:resume`; the revocation is observed; the engine
+//!     surfaces `E_CAP_REVOKED_MID_EVAL` BEFORE the terminal-OK envelope
+//!     would be produced.
 //!
-//! **Impact.** Write executes under revoked authority — capability-bound
-//! audit-trail attributes the write to Alice's revoked grant, which the
-//! audit log treats as authorised.
+//! **Impact.** Without step-4, the resume would surface a terminal-OK
+//! Outcome attributed to Alice's revoked grant — an audit-trail bypass.
 //!
 //! **Recommended mitigation.** Per §9.13 refresh point #4 +
-//! `Engine::resume_from_bytes`, the 4-step resume protocol's step 4 calls
-//! `CapabilityPolicy::check_write` with a freshly-derived `WriteContext`
-//! using the persisted head-of-chain `capability_grant_cid`. Any denial =
-//! `E_CAP_REVOKED_MID_EVAL`.
+//! `Engine::resume_from_bytes_*`, the 4-step resume protocol's step 4 calls
+//! `CapabilityPolicy::check_write` with a synthesized `WriteContext` whose
+//! `scope = "wait:resume"`. Any denial = `E_CAP_REVOKED_MID_EVAL`.
 //!
-//! **Red-phase contract.** G3-B lands the resume API + the refresh-point-4
-//! wiring. Until then, this test stays `#[ignore]`d; the body documents
-//! the target assertion and the pre-existing revoke API still compiles.
+//! Wave-3c R4b fix-pass: this test was previously a `#[ignore]`d red-phase
+//! placeholder. G3-B landed `Engine::resume_from_bytes_unauthenticated`
+//! with the step-4 cap re-check (see `engine_wait::resume_from_bytes_inner`
+//! lines 492-511); G9-A landed the GrantBackedPolicy + revoke-aware
+//! GrantReader. The end-to-end suspend → revoke → resume → deny path is
+//! now exercised through the engine surface (the sibling
+//! `benten-caps/tests/resume_revocation_denies.rs` only exercised the
+//! synthetic-WriteContext policy layer).
 //!
 //! R3 writer: `rust-test-writer-security` (Phase 2a).
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_engine::Engine;
+use benten_engine::{Engine, SuspensionOutcome};
+use benten_errors::ErrorCode;
 
-/// ucca-3 / atk-1 refresh-point-4: resume from bytes whose persisted
-/// capability_grant_cid has been revoked must fire `E_CAP_REVOKED_MID_EVAL`
-/// BEFORE any side-effect.
+/// ucca-3 / atk-1 refresh-point-4: resume from bytes whose persisted grant
+/// has been revoked mid-window must fire `E_CAP_REVOKED_MID_EVAL` BEFORE
+/// any side-effect.
 #[test]
-#[ignore = "phase-2a-pending: suspend/resume API + refresh-point-4 wiring land in G3-B per plan §9.13. Drop #[ignore] once resume_from_bytes consults CapabilityPolicy::check_write."]
 fn resume_with_revoked_grant_denies() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
@@ -62,40 +68,62 @@ fn resume_with_revoked_grant_denies() {
         .build()
         .unwrap();
 
+    // Mint a grant for the resume-protocol step-4 synthetic scope. The
+    // engine's `resume_from_bytes_inner` synthesises a WriteContext with
+    // `scope = "wait:resume"` (see `engine_wait.rs` ~line 500); the
+    // grant-backed policy permits when an unrevoked grant exists for that
+    // scope, denies otherwise.
     let alice = engine.create_principal("alice").unwrap();
-    let grant_cid = engine.grant_capability(&alice, "store:post:write").unwrap();
+    let _grant_cid = engine
+        .grant_capability(&alice, "wait:resume")
+        .expect("grant succeeds");
 
-    // Target API path (G3-B):
-    //
-    //     let sg = SubgraphSpec::builder()
-    //         .handler_id("wait-before-write")
-    //         .wait(|w| w.signal("external:signal"))
-    //         .write(|w| w.label("post").requires("store:post:write"))
-    //         .respond()
-    //         .build();
-    //     let handler_id = engine.register_subgraph(sg).unwrap();
-    //     let suspended = engine
-    //         .call_with_suspension(&handler_id, "run", Node::empty())
-    //         .unwrap()
-    //         .unwrap_suspended();
-    //     let bytes = engine.suspend_to_bytes(suspended).unwrap();
-    //
-    //     // Revoke the grant between suspend and resume.
-    //     engine.revoke_capability(&grant_cid).unwrap();
-    //
-    //     let outcome = engine.resume_from_bytes(bytes, signal_value());
-    //     let err = outcome.expect_err("revoked grant must deny resume");
-    //     assert_eq!(err.code().as_str(), "E_CAP_REVOKED_MID_EVAL");
-    //
-    // Sanity on currently-available APIs: the grant CID is well-formed and
-    // the revoke path compiles (revocation API exists in Phase 1).
+    // Suspend a WAIT handler. The persisted envelope's attribution chain
+    // names alice; resume step 4 will re-derive a WriteContext for
+    // `wait:resume` and consult the grant-backed policy.
+    engine
+        .register_subgraph(benten_engine::testing::minimal_wait_handler("revoke-flow"))
+        .expect("register WAIT handler");
+
+    let suspended = match engine
+        .call_as_with_suspension("revoke-flow", "run", benten_core::Node::empty(), &alice)
+        .expect("call_as_with_suspension")
+    {
+        SuspensionOutcome::Suspended(h) => h,
+        SuspensionOutcome::Complete(_) => panic!("WAIT handler must suspend"),
+    };
+    let bytes = engine
+        .suspend_to_bytes(&suspended)
+        .expect("suspend_to_bytes");
+
+    // Sanity-baseline: BEFORE revocation, the same envelope's resume must
+    // succeed — otherwise the post-revoke denial below could be a false
+    // positive (always-deny independent of revocation state).
+    let baseline = engine
+        .resume_from_bytes_unauthenticated(&bytes, benten_core::Value::text("sig"))
+        .expect("baseline: pre-revocation resume must succeed");
     assert!(
-        grant_cid.to_string().starts_with("bafy"),
-        "grant CID shape: {grant_cid}"
+        baseline.is_ok_edge(),
+        "baseline: unrevoked-grant resume must produce an OK edge; got {:?}",
+        baseline.edge_taken()
     );
 
-    panic!(
-        "red-phase: Engine::resume_from_bytes + refresh-point-4 cap \
-         re-verification not yet present. G3-B to land; see §9.13."
+    // Revoke alice's grant — simulates the window between suspend and
+    // resume during which an admin (or a Garden approval flow) flips
+    // authority.
+    engine
+        .revoke_capability(&alice, "wait:resume")
+        .expect("revoke succeeds");
+
+    // Resume now: step 4 must observe the revocation and deny BEFORE the
+    // terminal-OK envelope would be produced.
+    let err = engine
+        .resume_from_bytes_unauthenticated(&bytes, benten_core::Value::text("sig"))
+        .expect_err("revoked grant must deny resume at step 4");
+    assert_eq!(
+        err.code(),
+        ErrorCode::CapRevokedMidEval,
+        "post-revoke resume must fire E_CAP_REVOKED_MID_EVAL via the §9.13 \
+         refresh-point-4 path. Got: {err:?}"
     );
 }
