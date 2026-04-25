@@ -3,27 +3,35 @@
 //! R2 landscape §2.6.2 row "AST cache invalidates on re-registration".
 //!
 //! The AST cache (G2-B, N6) memoises parsed-handler subgraphs keyed by
-//! `SubgraphCacheKey { handler_id, op, subgraph_cid }`. Re-registering a
-//! handler under the same `(handler_id, op)` with a different `subgraph_cid`
-//! must invalidate the prior cache entry so stale ASTs are not served.
+//! `(handler_id, op, subgraph_cid)`. When the handler entry's CID flips
+//! (e.g. via the `testing_force_reregister_with_different_cid` hook used
+//! here), the cache key axis on `subgraph_cid` changes, so subsequent
+//! lookups miss and the handler is re-parsed.
 //!
 //! Concerns pinned:
-//! - Second `register_subgraph` with the same `handler_id+op` but a new
-//!   `subgraph_cid` invalidates the prior cache entry.
-//! - A subsequent `Engine::call` for that handler re-parses (the cache miss
-//!   on the new key is observable via the test harness's parse-counter).
-//! - The old subgraph CID is no longer reachable via the cached path.
-//! - Re-registration with the SAME subgraph_cid is a no-op — cache stays.
+//! - A re-registration that flips the stored `subgraph_cid` for an existing
+//!   `(handler_id, op)` pair causes the next call to miss the cache and
+//!   re-parse (observable via `testing_parse_counter`).
+//! - Re-registration with the SAME content (no CID flip) is a true no-op:
+//!   the parse counter does not advance on the next call.
+//! - The handler's resolved CID after the flip is the new CID, never the
+//!   old one — the call path cannot reach a stale subgraph through the
+//!   cached lookup.
 //!
-//! R3 red-phase contract: R5 (G2-B) lands `SubgraphCacheKey` keyed by
-//! `subgraph_cid`. Tests compile; they fail because the `subgraph_cid` axis
-//! on the cache key does not exist yet.
+//! G11-A Wave 3a rewrite (D12.x): the previous shape called
+//! `register_subgraph` twice with different content for the same
+//! `handler_id`, contradicting the Phase-1 `DuplicateHandler` contract
+//! (`register_subgraph_failures::register_duplicate_handler_id_errors`).
+//! The decision is to preserve `DuplicateHandler` and exercise the
+//! cache-invalidation contract through the dedicated
+//! `testing_force_reregister_with_different_cid` hook on `Engine`.
+//! That hook is gated behind `cfg(any(test, feature = "test-helpers"))`
+//! so the surface is not reachable from release builds.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_core::Value;
 use benten_engine::Engine;
-use benten_eval::SubgraphBuilder;
 use tempfile::tempdir;
 
 fn engine() -> (tempfile::TempDir, Engine) {
@@ -36,72 +44,81 @@ fn engine() -> (tempfile::TempDir, Engine) {
     (dir, engine)
 }
 
-fn simple_subgraph(handler_id: &str, tag: &str) -> benten_eval::Subgraph {
-    let mut sb = SubgraphBuilder::new(handler_id);
-    let r = sb.read(tag);
-    sb.respond(r);
-    sb.build_validated().expect("validation")
-}
-
 #[test]
 fn ast_cache_invalidates_on_reregister_with_different_cid() {
     let (_dir, engine) = engine();
 
-    // Register handler v1.
-    let sg_v1 = simple_subgraph("h1", "v1");
-    let cid_v1 = engine.register_subgraph(sg_v1).unwrap();
+    // Register a CRUD handler so the dispatch path materialises a real
+    // cache entry. `crud("post")` produces handler_id `"crud:post"` and
+    // routes through `subgraph_for_crud`, which consults the AST cache
+    // keyed on `(handler_id, op, subgraph_cid)`.
+    let handler = engine.register_crud("post").unwrap();
+    assert_eq!(handler, "crud:post");
 
-    // First call → parses + caches.
-    engine.call_for_test("h1", "run", Value::unit()).unwrap();
-    let parse_count_after_v1_first_call = engine.testing_parse_counter();
-
-    // Second call at same CID → cache hit, parse count unchanged.
-    engine.call_for_test("h1", "run", Value::unit()).unwrap();
-    assert_eq!(
-        engine.testing_parse_counter(),
-        parse_count_after_v1_first_call,
-        "second call at same subgraph_cid must hit cache"
+    // First call → cache miss, parse counter advances.
+    engine.testing_reset_parse_counter();
+    engine
+        .call_for_test(&handler, "get", Value::unit())
+        .unwrap();
+    let parse_count_after_first = engine.testing_parse_counter();
+    assert!(
+        parse_count_after_first > 0,
+        "first call must miss the cache and bump the parse counter"
     );
 
-    // Re-register h1 with a semantically-different subgraph → new CID.
-    let sg_v2 = {
-        let mut sb = SubgraphBuilder::new("h1");
-        let r = sb.read("v2");
-        let t = sb.transform(r, "identity");
-        sb.respond(t);
-        sb.build_validated().unwrap()
-    };
-    let cid_v2 = engine.register_subgraph(sg_v2).unwrap();
-    assert_ne!(cid_v1, cid_v2, "new CID expected for changed subgraph");
+    // Second call at the SAME registered CID → cache hit, parse count
+    // unchanged.
+    engine
+        .call_for_test(&handler, "get", Value::unit())
+        .unwrap();
+    assert_eq!(
+        engine.testing_parse_counter(),
+        parse_count_after_first,
+        "second call at same subgraph_cid must hit the cache"
+    );
 
-    // Call after re-registration → cache miss on the new key, parse count
-    // advances.
-    engine.call_for_test("h1", "run", Value::unit()).unwrap();
+    // Force-flip the stored handler CID. This simulates the cache-relevant
+    // bit of a re-registration without violating the Phase-1
+    // `DuplicateHandler` contract that `register_subgraph` enforces.
+    engine
+        .testing_force_reregister_with_different_cid(&handler)
+        .expect("hook must succeed for a registered handler");
+
+    // Call after the flip → cache miss on the new key, parse counter
+    // advances again.
+    engine
+        .call_for_test(&handler, "get", Value::unit())
+        .unwrap();
     assert!(
-        engine.testing_parse_counter() > parse_count_after_v1_first_call,
-        "re-registration must invalidate cached AST and cause a re-parse"
+        engine.testing_parse_counter() > parse_count_after_first,
+        "re-registration (flipped subgraph_cid) must invalidate the cached \
+         AST and cause a re-parse"
     );
 }
 
 #[test]
 fn ast_cache_noop_on_reregister_with_identical_cid() {
-    // Re-registering the exact same bytes yields the same CID; the cache
-    // must NOT be invalidated, parse counter stays.
+    // Re-registering the exact same content (no CID change) must be a true
+    // no-op for the cache: the parse counter does not advance on the next
+    // call. The dispatch path consults `(handler_id, op, subgraph_cid)`,
+    // and identical content keeps `subgraph_cid` stable.
     let (_dir, engine) = engine();
-    let sg = simple_subgraph("h1", "same");
-    let cid = engine.register_subgraph(sg.clone()).unwrap();
+    let handler = engine.register_crud("post").unwrap();
 
-    engine.call_for_test("h1", "run", Value::unit()).unwrap();
+    engine.testing_reset_parse_counter();
+    engine
+        .call_for_test(&handler, "get", Value::unit())
+        .unwrap();
     let parse_count = engine.testing_parse_counter();
 
-    // Re-register same content.
-    let cid_again = engine.register_subgraph(sg).unwrap();
-    assert_eq!(
-        cid, cid_again,
-        "identical content must produce identical CID"
-    );
+    // Re-register the same crud label. `register_crud` is idempotent for
+    // identical content — the handler entry's CID does not change.
+    let handler_again = engine.register_crud("post").unwrap();
+    assert_eq!(handler, handler_again);
 
-    engine.call_for_test("h1", "run", Value::unit()).unwrap();
+    engine
+        .call_for_test(&handler, "get", Value::unit())
+        .unwrap();
     assert_eq!(
         engine.testing_parse_counter(),
         parse_count,
@@ -111,28 +128,27 @@ fn ast_cache_noop_on_reregister_with_identical_cid() {
 
 #[test]
 fn old_subgraph_cid_not_reachable_through_cached_call_after_reregister() {
-    // After re-registration, the old subgraph is gone from the cache path.
-    // The engine may still keep the old bytes around for audit, but a call
-    // via `(handler_id, op)` must resolve to the NEW CID.
+    // After a CID flip, the resolver path returns the NEW CID. The engine
+    // may still hold the old bytes for audit (Phase-3 concern), but a call
+    // via `(handler_id, op)` must resolve to the post-flip CID.
     let (_dir, engine) = engine();
+    let handler = engine.register_crud("post").unwrap();
 
-    let v1 = simple_subgraph("h1", "v1");
-    let old_cid = engine.register_subgraph(v1).unwrap();
-
-    let v2 = {
-        let mut sb = SubgraphBuilder::new("h1");
-        let r = sb.read("v2");
-        sb.respond(r);
-        sb.build_validated().unwrap()
-    };
-    let new_cid = engine.register_subgraph(v2).unwrap();
-
-    let resolved = engine
-        .resolve_subgraph_cid_for_test("h1", "run")
+    let old_cid = engine
+        .resolve_subgraph_cid_for_test(&handler, "get")
         .expect("handler must resolve");
-    assert_eq!(
-        resolved, new_cid,
-        "post-reregister call path must resolve to new CID, not old"
+
+    // Force-flip the stored handler CID via the test hook.
+    engine
+        .testing_force_reregister_with_different_cid(&handler)
+        .expect("hook must succeed for a registered handler");
+
+    let new_cid = engine
+        .resolve_subgraph_cid_for_test(&handler, "get")
+        .expect("handler must still resolve after flip");
+
+    assert_ne!(
+        new_cid, old_cid,
+        "force-reregister must produce a distinct CID"
     );
-    assert_ne!(resolved, old_cid);
 }

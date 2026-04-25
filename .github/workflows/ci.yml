@@ -143,9 +143,11 @@ jobs:
         #   - load_verified/load_subgraph_verified — benten-core +
         #     benten-graph storage-layer hash-check read paths (plan
         #     §G11-A "G2-A scope ambiguity"; Wave-2 carry).
-        #   - ast_cache_* / old_subgraph_cid_not_reachable — plan
-        #     §G11-A "G2-B contradictory R3 contract" (rewrite via
-        #     testing_force_reregister_with_different_cid hook).
+        #   - ast_cache_* / old_subgraph_cid_not_reachable — RESOLVED
+        #     in G11-A Wave 3a (tests rewritten via
+        #     testing_force_reregister_with_different_cid hook so the
+        #     Phase-1 DuplicateHandler contract is preserved); filter
+        #     clauses dropped.
         #   - prop_parent_single_wildcard_is_still_narrowing — D12.6
         #     flaky-proptest item.
         #   - variant_count_is_pinned — G3-B WaitOutcome variant-count
@@ -163,7 +165,7 @@ jobs:
         #     DOCS-CARRY.
         run: |
           cargo nextest run --profile ci --workspace --locked --features benten-eval/testing,benten-engine/test-helpers \
-            -E 'not test(/load_verified/) and not test(/ast_cache_/) and not test(/old_subgraph_cid_not_reachable/) and not test(/prop_parent_single_wildcard/) and not test(/variant_count_is_pinned/) and not test(/view_stale_count_tallies/) and not test(/compromise_6_/) and not test(/compromise_7_/)'
+            -E 'not test(/load_verified/) and not test(/prop_parent_single_wildcard/) and not test(/variant_count_is_pinned/) and not test(/view_stale_count_tallies/) and not test(/compromise_6_/) and not test(/compromise_7_/)'
 
       - name: cargo doc
         if: matrix.rust == 'stable'
