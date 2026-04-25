@@ -10,6 +10,8 @@ Terms that have specific meaning in Benten. Alphabetical.
 
 **Anchor (Anchor Node)** — A Node with stable identity that never changes. External edges point to anchors, not to versions. The anchor has a `CURRENT` edge to its latest Version Node. See "Version chain."
 
+**Attribution** — The Phase-2a Inv-14 contract that every executed `TraceStep` carries an `AttributionFrame` naming the actor (principal CID), handler (registered subgraph CID), and the head-of-chain capability grant CID that authorized the step. Stamped automatically by the DSL on every emitted Operation Node and threaded through the evaluator runtime; opt-out is a Phase-6 affordance, not a Phase-2a one. Missing or malformed frames fire `E_INV_ATTRIBUTION` at registration or runtime.
+
 **BLAKE3** — The cryptographic hash function used for CID derivation. Fast, tree-hash-friendly, multi-threaded.
 
 **CID / CIDv1** — Content Identifier version 1. IPLD standard: version byte + multicodec + multihash. Benten uses CIDv1 with multicodec `0x71` (dag-cbor) and multihash `0x1e` (BLAKE3).
@@ -17,6 +19,8 @@ Terms that have specific meaning in Benten. Alphabetical.
 **Code-as-graph** — The paradigm where application logic is represented AS graph structure, not stored IN graph properties. A handler is a subgraph of Operation Nodes connected by control-flow Edges. The engine walks the subgraph to execute it.
 
 **Content-addressed** — A storage model where an item's identity is derived from its bytes. Identical content has identical identity; different content has different identity. Enables cryptographic verification, dedup, and peer sync without schema reconciliation.
+
+**Capability grant chain** — The ordered delegation chain from a root grant to the leaf grant that actually authorizes a write. Phase-2a `GrantBackedPolicy` walks the chain at every refresh point; each link must attenuate (narrow scope, never widen). The head-of-chain grant CID is persisted in the WAIT `ExecutionStateEnvelope` so resume re-checks the chain at the same head it was authorized against. Chain depth is capped (default 64) — exceeding fires `E_CAP_CHAIN_TOO_DEEP`.
 
 **CURRENT pointer** — An Edge from an Anchor Node to its latest Version Node. Atomic update moves the pointer within a storage transaction, giving versioned entities "single latest" semantics while preserving history.
 
@@ -33,6 +37,8 @@ Terms that have specific meaning in Benten. Alphabetical.
 **Invariant** — A structural or runtime check the engine enforces. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full 14-invariant list and their phase landing.
 
 **iroh** — The P2P networking library (QUIC, dial-by-public-key, NAT traversal with relay fallback) used in Phase 3.
+
+**Multiplicative budget** — The Phase-2a Inv-8 cumulative iteration budget. Computed at registration time as the worst-case product of `ITERATE.max` values and non-isolated `CALL` callee bounds along any DAG path through the handler. Caps the worst-case iteration space so nested `ITERATE` + `CALL` combinations cannot trigger combinatorial explosion. `CALL { isolated: true }` resets the cumulative for the callee frame (the callee runs under its own grant's bound). Default registration-time bound: `DEFAULT_INV_8_BUDGET = 500_000`. Exceeding fires `E_INV_ITERATE_BUDGET` at registration; the runtime flat budget (`DEFAULT_ITERATION_BUDGET = 100_000`) remains as a Phase-1 backstop.
 
 **IVM** — Incremental View Maintenance. Benten keeps materialized views up to date via change subscriptions; common reads hit them in O(1).
 
@@ -59,6 +65,8 @@ Terms that have specific meaning in Benten. Alphabetical.
 **Subgraph** — See "Operation subgraph."
 
 **SUBSCRIBE** — A Phase-2b primitive providing reactive change notification. The base primitive on which IVM views, sync delta propagation, and event-driven handlers all compose.
+
+**System zone** — The reserved namespace for engine-internal Nodes (capability grants, version-chain metadata, IVM view definitions, subscriber bookkeeping). Labels and node IDs prefixed with `system:` are off-limits to user subgraphs. Phase-2a Inv-11 enforces this at three layers: registration-time literal-CID rejection in `benten-eval::invariants::system_zone`, runtime resolved-label probing in `benten-engine::primitive_host`, and storage-layer defence-in-depth in `benten-graph::redb_backend::guard_system_zone_node`. Reads collapse to `Ok(None)` on the user-visible surface (symmetric with a backend miss); writes fire `E_INV_SYSTEM_ZONE`. System-zone Nodes are only writable through dedicated engine APIs (`engine.grantCapability`, `engine.createView`, …).
 
 **TOCTOU** — Time-of-check-to-time-of-use. The security class where a permission check succeeds but the underlying permission changes before the protected action runs. Phase-2a hardens five TOCTOU points across capability enforcement (commit, CALL entry, ITERATE boundary, WAIT resume, wall-clock revocation ceiling).
 

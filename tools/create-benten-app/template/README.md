@@ -41,7 +41,7 @@ npm run build        # tsc -> dist/
   ```
 
   Unrevoked `system:CapabilityGrant` Nodes authorize matching writes; `engine.revokeCapability(grantCid, "alice")` turns them off.
-- **Use the full CRUD surface.** `crud("post")` exposes five actions — `create`, `get`, `list`, `update`, `delete` — dispatched via `engine.call(handler.id, "post:<action>", input)`. Note that the handler id is `crud:post` (`handler.id` above), not `post:create`; the action is the second argument.
+- **Use the full CRUD surface.** `crud("post")` exposes five actions — `create`, `get`, `list`, `update`, `delete` — dispatched via `engine.call(handler.id, "post:<action>", input)`. Note that the handler id is `post-handler` (derived as `${label}-handler` and accessible as `handler.id` above), not `post:create`; the action is the second argument.
 - **Inspect the subgraph.** `console.log(handler.toMermaid())` renders the handler as a Mermaid flowchart — paste into any Mermaid renderer.
 - **Trace an evaluation.** `engine.trace(handler.id, "post:create", { title: "x" })` returns per-node timings; each `step.nodeCid` cross-references a node id rendered by `handler.toMermaid()`. Traced calls do not persist the outcome and do not fire ChangeEvents.
 
