@@ -293,6 +293,30 @@ jobs:
         # touch the test-callee registry.
         run: cargo check -p benten-eval --no-default-features --locked
 
+      - name: Assert benten-napi feature closure does not pull `test-helpers`
+        # Phase-2a R6 round-2 A8 (envelope-cache-test-grade split). The A2
+        # split landed `envelope-cache-test-grade = []` as a narrow gate the
+        # napi WAIT bridge can opt into without dragging the broader
+        # `test-helpers` surface (which lights `backend_for_test`,
+        # `testing_force_reregister_with_different_cid`, the bloom hooks,
+        # etc.) into the cdylib. This step pins that split structurally:
+        # if `bindings/napi`'s default feature closure ever re-broadens to
+        # include `test-helpers` (regression — e.g. someone adds
+        # `test-helpers` to the engine dep's `features = [...]` list), CI
+        # fails here. The check resolves the napi crate's transitive
+        # feature closure with `--no-default-features` so it reflects the
+        # release-mode shape that ships in the published cdylib.
+        run: |
+          set -euo pipefail
+          tree=$(cargo tree -p benten-napi --no-default-features -e features --format "{p} {f}")
+          echo "$tree"
+          if echo "$tree" | grep -E '^[^ ]*benten-engine[^ ]*\s.*(^| |,)test-helpers( |,|$)'; then
+            echo "FAIL: benten-napi --no-default-features closure pulls benten-engine/test-helpers."
+            echo "Phase-2a R6r2 A2 split: napi must use envelope-cache-test-grade, not the broader test-helpers gate."
+            exit 1
+          fi
+          echo "OK: benten-napi --no-default-features closure does not include benten-engine/test-helpers."
+
   # --------------------------------------------------------------------------
   # T9 — cross-leg byte-equality gate. Asserts every native leg and the
   # wasm leg produced identical CID bytes. Not just "each matches the
