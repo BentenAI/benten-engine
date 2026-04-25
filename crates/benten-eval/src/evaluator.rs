@@ -147,7 +147,7 @@ impl Evaluator {
 
     /// G5-B-ii / Inv-14: trace variant that stamps the supplied
     /// [`AttributionFrame`] onto every emitted [`TraceStep::Step`] row.
-    /// Callers (notably [`crate::Engine::dispatch_call`] in `benten-engine`)
+    /// Callers (notably `Engine::dispatch_call` in `benten-engine`)
     /// construct the frame from the in-flight `(actor, handler, grant)`
     /// triple and pass it here so trace consumers can walk back to the
     /// authorising context.
