@@ -42,6 +42,7 @@ use benten_core::{Cid, CoreError, Edge, Node};
 // |----------|----------------------------------------------------|
 // | `n:CID`  | serialized Node keyed by its CID                   |
 // | `e:CID`  | serialized Edge keyed by its CID                   |
+// | `s:CID`  | DAG-CBOR Subgraph body keyed by its CID            |
 // | `es:SRC|EDGE` | edge index: source → edge (edge CID suffix)   |
 // | `et:TGT|EDGE` | edge index: target → edge (edge CID suffix)   |
 //
@@ -52,6 +53,7 @@ pub(crate) const NODE_PREFIX: &[u8] = b"n:";
 pub(crate) const EDGE_PREFIX: &[u8] = b"e:";
 pub(crate) const EDGE_SRC_PREFIX: &[u8] = b"es:";
 pub(crate) const EDGE_TGT_PREFIX: &[u8] = b"et:";
+pub(crate) const SUBGRAPH_PREFIX: &[u8] = b"s:";
 
 /// `"n:" ++ cid_bytes`. Single source of truth for the Node key schema —
 /// crate-private so `RedbBackend`'s inherent put/delete and the trait impl
@@ -66,6 +68,17 @@ pub(crate) fn node_key(cid: &Cid) -> Vec<u8> {
 pub(crate) fn edge_key(cid: &Cid) -> Vec<u8> {
     let mut k = Vec::with_capacity(EDGE_PREFIX.len() + cid.as_bytes().len());
     k.extend_from_slice(EDGE_PREFIX);
+    k.extend_from_slice(cid.as_bytes());
+    k
+}
+
+/// `"s:" ++ cid_bytes`. Subgraph key schema — parallels the `n:` / `e:`
+/// Node / Edge layout. Crate-private so the inherent `RedbBackend`
+/// subgraph put/get and any future per-backend impl share one definition
+/// and cannot drift.
+pub(crate) fn subgraph_key(cid: &Cid) -> Vec<u8> {
+    let mut k = Vec::with_capacity(SUBGRAPH_PREFIX.len() + cid.as_bytes().len());
+    k.extend_from_slice(SUBGRAPH_PREFIX);
     k.extend_from_slice(cid.as_bytes());
     k
 }

@@ -28,6 +28,8 @@
 use benten_core::{Cid, CoreError, Node};
 pub use benten_errors::ErrorCode;
 
+use crate::store::subgraph_key;
+
 pub mod backend;
 pub mod immutability;
 pub(crate) mod indexes;
@@ -271,7 +273,7 @@ impl RedbBackend {
             return Ok(None);
         };
         let sg =
-            benten_core::Subgraph::load_verified_with_cid(&bytes, cid).map_err(GraphError::from)?;
+            benten_core::Subgraph::load_verified_with_cid(cid, &bytes).map_err(GraphError::from)?;
         Ok(Some(sg))
     }
 
@@ -327,16 +329,6 @@ impl RedbBackend {
         self.put(&subgraph_key(&cid), bytes)?;
         Ok(cid)
     }
-}
-
-/// `"s:" ++ cid_bytes`. Subgraph key schema — parallels the `n:` / `e:`
-/// Node / Edge layout.
-fn subgraph_key(cid: &Cid) -> Vec<u8> {
-    const SUBGRAPH_PREFIX: &[u8] = b"s:";
-    let mut k = Vec::with_capacity(SUBGRAPH_PREFIX.len() + cid.as_bytes().len());
-    k.extend_from_slice(SUBGRAPH_PREFIX);
-    k.extend_from_slice(cid.as_bytes());
-    k
 }
 
 /// Re-export of [`benten_core::WriteAuthority`]. Phase 2a ucca-9 / arch-r1-2
