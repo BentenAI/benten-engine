@@ -73,8 +73,17 @@ jobs:
         # `--summary-only` second invocation pipes a one-liner into the
         # job output so reviewers don't have to download the artifact
         # for a top-level number. The `--lcov` emission feeds codecov.io.
+        #
+        # `--features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing`
+        # mirrors ci.yml's build+test invocation. Without these the
+        # workspace test compile fails on `benten_eval::register_test_callee`
+        # (gated under `cfg(any(test, feature = "testing"))`) +
+        # `Engine::backend_for_test` etc., because llvm-cov drives a
+        # standalone `cargo test --tests` build that does not see the
+        # testing-feature flags ci.yml passes through.
         run: |
-          cargo llvm-cov --workspace --html --output-dir coverage-report
+          cargo llvm-cov --workspace --html --output-dir coverage-report \
+            --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing
           cargo llvm-cov report --lcov --output-path coverage.lcov
           echo "### Coverage summary" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
