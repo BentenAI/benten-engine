@@ -34,8 +34,16 @@ pub enum EngineError {
     /// `RegistrationError` itself carries ~360 bytes of diagnostic context
     /// (paths, expected/actual CIDs, per-invariant counts). Mini-review
     /// findings `g6-cr-1` / `g6-cag-7`.
-    #[error("invariant: {0:?}")]
-    Invariant(Box<RegistrationError>),
+    ///
+    /// R6FP catch-up EH4: `#[from]` enables `?` auto-conversion from
+    /// `Box<RegistrationError>` and (per thiserror semantics) automatically
+    /// participates in the standard `std::error::Error::source()` chain so
+    /// `anyhow` / `eyre` / log renderers see the underlying invariant
+    /// context. Format flipped from `{0:?}` Debug to `{0}` Display now that
+    /// `RegistrationError` impls Display (one-line catalog code +
+    /// first-available diagnostic field).
+    #[error("invariant: {0}")]
+    Invariant(#[from] Box<RegistrationError>),
 
     /// Handler ID already registered with different content.
     #[error("duplicate handler: {handler_id}")]

@@ -127,6 +127,103 @@ fn inspect_state_with_unreadable_path_exits_1_not_2() {
 }
 
 #[test]
+fn help_long_flag_exits_0_with_usage_to_stdout() {
+    // `benten-dev --help` must print usage to STDOUT (so it's pipeable to
+    // pagers and grep) and exit 0 — the operator asked for help, that's
+    // not a usage error. R6FP catch-up DX3.
+    let output = benten_dev()
+        .arg("--help")
+        .output()
+        .expect("spawn benten-dev");
+    let code = output.status.code().expect("exit code");
+    assert_eq!(
+        code,
+        0,
+        "--help must exit 0. Got {code}.\nstderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Usage") || stdout.contains("usage"),
+        "--help stdout must include a Usage banner; got: {stdout:?}"
+    );
+}
+
+#[test]
+fn help_short_flag_exits_0_with_usage_to_stdout() {
+    let output = benten_dev().arg("-h").output().expect("spawn benten-dev");
+    let code = output.status.code().expect("exit code");
+    assert_eq!(
+        code,
+        0,
+        "-h must exit 0. Got {code}.\nstderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Usage") || stdout.contains("usage"),
+        "-h stdout must include a Usage banner; got: {stdout:?}"
+    );
+}
+
+#[test]
+fn version_long_flag_exits_0_with_version_to_stdout() {
+    // `benten-dev --version` must print "benten-dev <semver>" to STDOUT
+    // and exit 0. The semver shape is x.y.z[-prerelease][+build] —
+    // matching Cargo's `CARGO_PKG_VERSION` contract. R6FP catch-up DX3.
+    let output = benten_dev()
+        .arg("--version")
+        .output()
+        .expect("spawn benten-dev");
+    let code = output.status.code().expect("exit code");
+    assert_eq!(
+        code,
+        0,
+        "--version must exit 0. Got {code}.\nstderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let trimmed = stdout.trim();
+    assert!(
+        trimmed.starts_with("benten-dev "),
+        "--version stdout must start with 'benten-dev '; got: {stdout:?}"
+    );
+    // Loose semver-shape check — major.minor.patch with optional suffix.
+    // Avoids pulling a regex crate for this single assertion.
+    let version_str = trimmed.trim_start_matches("benten-dev ");
+    let parts: Vec<&str> = version_str.split('.').collect();
+    assert!(
+        parts.len() >= 3,
+        "version must look like x.y.z; got: {version_str:?}"
+    );
+    assert!(
+        parts[0].chars().all(|c| c.is_ascii_digit()),
+        "major must be all digits; got: {version_str:?}"
+    );
+    assert!(
+        parts[1].chars().all(|c| c.is_ascii_digit()),
+        "minor must be all digits; got: {version_str:?}"
+    );
+}
+
+#[test]
+fn version_short_flag_exits_0_with_version_to_stdout() {
+    let output = benten_dev().arg("-V").output().expect("spawn benten-dev");
+    let code = output.status.code().expect("exit code");
+    assert_eq!(
+        code,
+        0,
+        "-V must exit 0. Got {code}.\nstderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.trim().starts_with("benten-dev "),
+        "-V stdout must start with 'benten-dev '; got: {stdout:?}"
+    );
+}
+
+#[test]
 fn inspect_state_with_valid_envelope_bytes_exits_0() {
     // Happy path: produce a valid `ExecutionStateEnvelope` via the same
     // pretty-printer surface the binary consumes, write it to a temp

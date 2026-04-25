@@ -521,6 +521,43 @@ impl RegistrationError {
     }
 }
 
+/// `Display` impl for `RegistrationError` — required so consumers (notably
+/// `EngineError::Invariant(#[from] Box<RegistrationError>)`) participate in
+/// the standard `std::error::Error::source()` chain via thiserror's
+/// `{0}`-format expansion. Phase-2a R6FP catch-up EH4. The rendering is
+/// deliberately compact: catalog code as the leading discriminant followed
+/// by the first available diagnostic context field. Operators wanting the
+/// full diagnostic structure use the typed accessors (`depth_actual()`,
+/// `cycle_path()`, etc.) — `Display` is the one-line summary.
+impl core::fmt::Display for RegistrationError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.kind.code().as_static_str())?;
+        if let (Some(actual), Some(max)) = (self.nodes_actual, self.nodes_max) {
+            write!(f, " (nodes: {actual}/{max})")?;
+        } else if let (Some(actual), Some(max)) = (self.edges_actual, self.edges_max) {
+            write!(f, " (edges: {actual}/{max})")?;
+        } else if let (Some(actual), Some(max)) = (self.depth_actual, self.depth_max) {
+            write!(f, " (depth: {actual}/{max})")?;
+        } else if let (Some(actual), Some(max)) = (self.fanout_actual, self.fanout_max) {
+            write!(f, " (fanout: {actual}/{max}")?;
+            if let Some(ref id) = self.fanout_node_id {
+                write!(f, " at node {id}")?;
+            }
+            write!(f, ")")?;
+        } else if let (Some(expected), Some(actual)) = (self.expected_cid, self.actual_cid) {
+            write!(f, " (expected CID {expected}, actual {actual})")?;
+        } else if let Some(ref violated) = self.violated_invariants {
+            write!(f, " (violated invariants: {violated:?})")?;
+        }
+        Ok(())
+    }
+}
+
+/// `Error` impl for `RegistrationError` — paired with `Display` above so the
+/// type satisfies `std::error::Error` and can be threaded through `#[from]`
+/// / `#[source]` in downstream `thiserror` enums. R6FP catch-up EH4.
+impl std::error::Error for RegistrationError {}
+
 /// The 12 operation primitive types.
 ///
 /// `#[non_exhaustive]` (R6b bp-17): while the set of 12 primitives is
