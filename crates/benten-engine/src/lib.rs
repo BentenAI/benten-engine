@@ -30,7 +30,9 @@
 //!   `.transaction(|tx| …)` closure.
 //! - [`change`] — [`change::ChangeBroadcast`] subscriber fan-out.
 //! - [`change_probe`] — [`ChangeProbe`] observation handle.
-//! - [`testing`] — integration-test helpers consumed by sibling crates.
+//! - `testing` — integration-test helpers consumed by sibling crates
+//!   (cfg-gated behind `any(test, feature = "test-helpers")`; not part
+//!   of the production cdylib surface).
 //!
 //! `lib.rs` is deliberately thin after the R6 Wave 2 split (R-major-01): it
 //! declares the modules and re-exports the full public surface so call-site
