@@ -71,9 +71,13 @@ pub struct Frame {
 }
 
 impl Frame {
-    /// Root-frame stub for unit tests.
+    /// Construct the canonical root frame. Engine entry-points (notably
+    /// `Engine::call_with_suspension` via `payload_for_handler`) use this
+    /// as the bottom of a fresh frame stack at suspend-time. The previous
+    /// `root_for_test` name was misleading — this constructor is
+    /// production-reachable, not test-only.
     #[must_use]
-    pub fn root_for_test() -> Self {
+    pub fn root() -> Self {
         Self { tag: "root".into() }
     }
 }

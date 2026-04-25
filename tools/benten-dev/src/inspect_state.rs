@@ -111,7 +111,7 @@ mod tests {
             Cid::from_blake3_digest([0xaa; 32]),
             Cid::from_blake3_digest([0xbb; 32]),
         ]);
-        payload.frame_stack = vec![Frame::root_for_test(), Frame::root_for_test()];
+        payload.frame_stack = vec![Frame::root(), Frame::root()];
         payload.frame_index = 1;
         payload.resumption_principal_cid = Cid::from_blake3_digest([0xcc; 32]);
         ExecutionStateEnvelope::new(payload).expect("envelope")

@@ -280,7 +280,7 @@ fn payload_for_handler(
         pinned_subgraph_cids: vec![handler_cid],
         context_binding_snapshots: Vec::new(),
         resumption_principal_cid: *principal,
-        frame_stack: vec![Frame::root_for_test()],
+        frame_stack: vec![Frame::root()],
         frame_index: 0,
     }
 }
@@ -540,7 +540,7 @@ impl Engine {
             pinned_subgraph_cids: Vec::new(),
             context_binding_snapshots: Vec::new(),
             resumption_principal_cid: *principal,
-            frame_stack: vec![Frame::root_for_test()],
+            frame_stack: vec![Frame::root()],
             frame_index: 0,
         };
         let envelope = ExecutionStateEnvelope::new(payload).map_err(EngineError::Core)?;
@@ -726,7 +726,7 @@ impl Engine {
         let payload = payload_for_handler(self, handler_id, principal);
         let envelope = ExecutionStateEnvelope::new(payload).map_err(EngineError::Core)?;
         let state_cid = cache_put(envelope);
-        let handle = SuspendedHandle::new_for_test(state_cid, DEFAULT_SYNTHETIC_SIGNAL);
+        let handle = SuspendedHandle::new(state_cid, DEFAULT_SYNTHETIC_SIGNAL);
         Ok(SuspensionOutcome::Suspended(handle))
     }
 

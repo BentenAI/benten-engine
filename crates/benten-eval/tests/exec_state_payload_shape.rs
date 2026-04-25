@@ -130,7 +130,7 @@ fn exec_state_payload_has_resumption_principal_cid() {
 #[test]
 fn exec_state_payload_has_frame_stack_and_frame_index() {
     // Frame stack is a Vec<Frame> and frame_index is usize.
-    let frame: Frame = Frame::root_for_test();
+    let frame: Frame = Frame::root();
     let payload = ExecutionStatePayload {
         attribution_chain: Vec::new(),
         pinned_subgraph_cids: Vec::new(),

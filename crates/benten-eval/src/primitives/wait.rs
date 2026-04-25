@@ -66,8 +66,13 @@ impl SuspendedHandle {
     /// the engine-side orchestration (`engine_wait.rs`) once it has
     /// persisted an [`ExecutionStateEnvelope`] and knows the envelope CID
     /// plus the signal name the suspension is waiting on.
+    ///
+    /// G11-A Wave 3a CFG-GATING M1: renamed from `new_for_test` — the
+    /// constructor is production-reachable from
+    /// `Engine::call_with_suspension` via `call_as_with_suspension`, so
+    /// the `_for_test` suffix was misleading.
     #[must_use]
-    pub fn new_for_test(state_cid: Cid, signal: impl Into<String>) -> Self {
+    pub fn new(state_cid: Cid, signal: impl Into<String>) -> Self {
         Self {
             state_cid,
             signal: signal.into(),
@@ -391,7 +396,7 @@ pub fn resume(
 /// in exactly two scenarios:
 ///
 ///   1. The `SuspendedHandle` was fabricated in a test (including any
-///      test that goes through [`SuspendedHandle::new_for_test`] without
+///      test that goes through [`SuspendedHandle::new`] without
 ///      first calling [`evaluate`] on a WAIT-bearing subgraph).
 ///   2. **Cross-process resume** — the suspend ran in process A, the
 ///      envelope persisted to disk, process B loaded it and called
