@@ -72,9 +72,11 @@ fn load_verified_rejects_cid_mismatch_with_claimed_cid() {
     // Integrity: load_verified takes the bytes AND the expected CID; if the
     // bytes hash to a different CID the function rejects.
     //
-    // R3 shape: `Subgraph::load_verified_with_cid(&bytes, expected_cid)` is
+    // R3 shape: `Subgraph::load_verified_with_cid(expected_cid, &bytes)` is
     // the integrity-enforcing variant. A bare `load_verified(&bytes)` that
     // returns Ok does not pin integrity; the migration adds a CID-check path.
+    // Argument order mirrors `Node::load_verified(cid, bytes)` so the two
+    // verified-load paths read identically at call sites.
     let real_bytes = {
         // Build a minimal-valid Subgraph, encode it.
         let sg = Subgraph::empty_for_test("verify_migration");
@@ -83,7 +85,7 @@ fn load_verified_rejects_cid_mismatch_with_claimed_cid() {
     // Claim a different CID than what the bytes hash to.
     let wrong_cid = Cid::from_blake3_digest([0u8; 32]);
 
-    let result = Subgraph::load_verified_with_cid(&real_bytes, &wrong_cid);
+    let result = Subgraph::load_verified_with_cid(&wrong_cid, &real_bytes);
     let err = result.expect_err("CID mismatch must fail load_verified");
     assert_eq!(
         err.code(),

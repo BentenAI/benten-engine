@@ -346,7 +346,7 @@ impl Subgraph {
     ///   match `expected_cid`.
     /// - [`CoreError::Serialize`] if the (hash-matching) bytes fail to
     ///   decode as a Subgraph.
-    pub fn load_verified_with_cid(bytes: &[u8], expected_cid: &Cid) -> Result<Self, CoreError> {
+    pub fn load_verified_with_cid(expected_cid: &Cid, bytes: &[u8]) -> Result<Self, CoreError> {
         let digest = blake3::hash(bytes);
         let recomputed = Cid::from_blake3_digest(*digest.as_bytes());
         if &recomputed != expected_cid {
