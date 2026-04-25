@@ -211,8 +211,13 @@ invariance on reload) which is what the devserver test suite asserts.
 refactored to compile source → `SubgraphSpec` → `engine.register_subgraph(spec)`
 and to drop both the in-memory registry and the `BDEV\x01` envelope shim.
 Tracked in `.addl/phase-2b/00-scope-outline.md` §7a "Devserver → Engine routing".
-The Phase-2a `ReloadCoordinator` / `CallGuard` / `ReloadLease` machinery
-(cache-preservation + concurrency-ordering, not storage) survives the cutover.
+The Phase-2a `ReloadCoordinator` / `CallGuard` machinery — together with
+`DevServer`'s `RwLock<HandlerTable>::write()` + `Arc<HandlerVersion>`
+snapshot ordering (the `RwLock` serialises concurrent reload-bumps; each
+in-flight call's `Arc<HandlerVersion>` snapshot keeps the pre-reload
+version live for the duration of the call) — survives the cutover. That
+ordering shape is concurrency-coordination, not storage, and applies
+unchanged when the real engine is wired.
 
 ## The control plane is the graph
 
