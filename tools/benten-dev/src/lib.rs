@@ -52,9 +52,21 @@ pub struct HandlerVersion {
     /// Version label — `"v1"` on first registration of a `handler_id`,
     /// `"v2"` on next, and so on.
     pub version_tag: String,
-    /// Per-version content-addressed id. Deterministic BLAKE3 of
+    /// Per-version content-addressed id derived from
     /// `handler_id || op || source || version_tag`.
-    pub subgraph_cid: Cid,
+    ///
+    /// **Phase-2a R6 cag-r6-1: renamed from `subgraph_cid`.** This
+    /// identifier is a surrogate hash over the source TEXT, NOT a
+    /// canonical structural `SubgraphSpec` CID. Calling it `subgraph_cid`
+    /// invited callers to mix it with engine-side CIDs from
+    /// `Engine::register_subgraph`, which it is not interchangeable with.
+    /// The new name `version_cid` makes the per-version provenance
+    /// explicit and matches how the field is actually used (pin a
+    /// suspended call to its compiled-version snapshot). At Phase-2b
+    /// cutover this field is replaced by the real structural CID
+    /// returned by the canonical compile-then-`register_subgraph` path
+    /// and the rename is unwound to `subgraph_cid` simultaneously.
+    pub version_cid: Cid,
     /// Raw DSL source. Retained so the CLI can round-trip a handler's
     /// shape; the real engine-side compile is Phase-2b.
     pub source: String,
@@ -75,6 +87,23 @@ pub struct HandlerVersion {
 }
 
 impl HandlerVersion {
+    /// Dev-only **surrogate** hash for an in-memory devserver handler version.
+    ///
+    /// **NOT a canonical Benten CID.** The canonical handler CID is
+    /// `BLAKE3(DAG-CBOR(Subgraph))` wrapped as CIDv1 with multicodec
+    /// `0x71` (dag-cbor) and multihash `0x1e` (BLAKE3) — see
+    /// `crates/benten-core/src/lib.rs::Node::cid` and
+    /// `crates/benten-eval/src/lib.rs::Subgraph::cid`. This function instead
+    /// hashes the source TEXT (`handler_id ‖ op ‖ source ‖ version_tag`)
+    /// directly because the Phase-2a devserver does not have a
+    /// DSL-text → `SubgraphSpec` compiler available (that compiler lands
+    /// in Phase 2b — see `.addl/phase-2b/00-scope-outline.md` §7a
+    /// "Devserver → Engine routing"). The resulting CID is content-addressed
+    /// across the source text alone, NOT across the structural Subgraph
+    /// shape, and MUST NOT be persisted, exposed on the engine wire,
+    /// or mixed with canonical CIDs from `Engine::register_subgraph`.
+    /// At Phase-2b cutover this function is deleted and replaced by the
+    /// canonical compile-then-`register_subgraph` path.
     fn compute_cid(handler_id: &str, op: &str, source: &str, version_tag: &str) -> Cid {
         let mut h = blake3_hasher();
         h.update(handler_id.as_bytes());
@@ -88,13 +117,13 @@ impl HandlerVersion {
     }
 
     fn new(handler_id: &str, op: &str, source: &str, version_tag: String) -> Self {
-        let subgraph_cid = Self::compute_cid(handler_id, op, source, &version_tag);
+        let version_cid = Self::compute_cid(handler_id, op, source, &version_tag);
         Self {
             has_wait: source.contains("wait_signal"),
             has_slow_transform: source.contains("slow_transform"),
             has_explode_transform: source.contains("explode_transform"),
             version_tag,
-            subgraph_cid,
+            version_cid,
             source: source.to_string(),
             op: op.to_string(),
         }
@@ -235,9 +264,25 @@ impl DevServer {
 
     /// Testing shim — returns the grant table's audit sequence.
     /// Advances on `grant` / `reset_dev_state`, never on hot-reload.
+    ///
+    /// Phase-2a R6 C1 fix: the prior implementation silently returned `0`
+    /// when the grant lock was poisoned (`map_or(0, ...)`). That masked
+    /// the very contract this accessor pins — a poisoned lock would
+    /// indistinguishably look like a fresh table, so a test asserting
+    /// "audit sequence MUST advance after grant" could pass on a
+    /// poisoned mutex while the underlying invariant was already broken.
+    /// This crate has no `MutexExt::lock_recover` (no `benten-graph`
+    /// dep — benten-graph would pull redb transitively into the
+    /// dev-server build), so we inline the same recovery idiom directly:
+    /// poisoning yields the inner guard so the audit-sequence read
+    /// reflects reality. Rationale matches `MutexExt::lock_recover` in
+    /// `benten-graph::mutex_ext`: poisoning here means a previous
+    /// holder panicked mid-critical-section, and the dev-server's
+    /// invariants are defensive enough that "keep going" is correct.
     #[must_use]
     pub fn grant_table_audit_sequence_for_test(&self) -> u64 {
-        self.grants.lock().map_or(0, |g| g.audit_sequence)
+        let g = self.grants.lock().unwrap_or_else(|e| e.into_inner());
+        g.audit_sequence
     }
 
     /// Testing shim — release the slow-transform gate so any thread
@@ -410,7 +455,7 @@ impl DevServer {
 
         Ok(DevCallOutcome {
             version_tag: hv.version_tag.clone(),
-            subgraph_cid: hv.subgraph_cid,
+            version_cid: hv.version_cid,
         })
     }
 
@@ -440,15 +485,16 @@ impl DevServer {
             ));
         }
 
-        // Minimal envelope: handler_id | op | version_tag | subgraph_cid_bytes.
+        // Minimal envelope: handler_id | op | version_tag | version_cid_bytes.
         // Version + CID pinning mirrors the real `ExecutionStateEnvelope`
         // contract — suspension handles are stable across reloads because
-        // they name the pre-reload CID, not the handler-id slot.
+        // they name the pre-reload version-CID surrogate, not the
+        // handler-id slot.
         let envelope = SuspensionEnvelope {
             handler_id: handler_id.to_string(),
             op: op.to_string(),
             version_tag: hv.version_tag.clone(),
-            subgraph_cid: hv.subgraph_cid,
+            version_cid: hv.version_cid,
         };
         Ok(envelope.to_bytes())
     }
@@ -470,7 +516,7 @@ impl DevServer {
         ))?;
         Ok(DevCallOutcome {
             version_tag: env.version_tag,
-            subgraph_cid: env.subgraph_cid,
+            version_cid: env.version_cid,
         })
     }
 }
@@ -533,7 +579,7 @@ impl DevServerBuilder {
 #[derive(Debug, Clone)]
 pub struct DevCallOutcome {
     version_tag: String,
-    subgraph_cid: Cid,
+    version_cid: Cid,
 }
 
 impl DevCallOutcome {
@@ -544,11 +590,15 @@ impl DevCallOutcome {
         &self.version_tag
     }
 
-    /// Content-addressed id of the subgraph version this outcome was
-    /// produced from.
+    /// Per-version surrogate CID of the handler this outcome was produced
+    /// from. Phase-2a R6 cag-r6-1: renamed from `subgraph_cid` to make the
+    /// per-version provenance explicit and keep callers from mixing this
+    /// with canonical structural `SubgraphSpec` CIDs from the engine. See
+    /// [`HandlerVersion::version_cid`] for the surrogate-vs-canonical
+    /// rationale.
     #[must_use]
-    pub fn subgraph_cid(&self) -> &Cid {
-        &self.subgraph_cid
+    pub fn version_cid(&self) -> &Cid {
+        &self.version_cid
     }
 }
 
@@ -561,7 +611,7 @@ struct SuspensionEnvelope {
     handler_id: String,
     op: String,
     version_tag: String,
-    subgraph_cid: Cid,
+    version_cid: Cid,
 }
 
 impl SuspensionEnvelope {
@@ -580,7 +630,7 @@ impl SuspensionEnvelope {
         push_len_prefixed(&mut buf, self.handler_id.as_bytes());
         push_len_prefixed(&mut buf, self.op.as_bytes());
         push_len_prefixed(&mut buf, self.version_tag.as_bytes());
-        push_len_prefixed(&mut buf, self.subgraph_cid.as_bytes());
+        push_len_prefixed(&mut buf, self.version_cid.as_bytes());
         buf
     }
 
@@ -593,12 +643,12 @@ impl SuspensionEnvelope {
         let handler_id = std::str::from_utf8(handler_id).ok()?.to_string();
         let op = std::str::from_utf8(op).ok()?.to_string();
         let version_tag = std::str::from_utf8(version_tag).ok()?.to_string();
-        let subgraph_cid = Cid::from_bytes(cid_bytes).ok()?;
+        let version_cid = Cid::from_bytes(cid_bytes).ok()?;
         Some(Self {
             handler_id,
             op,
             version_tag,
-            subgraph_cid,
+            version_cid,
         })
     }
 }
@@ -631,7 +681,7 @@ mod tests {
             handler_id: "h1".into(),
             op: "run".into(),
             version_tag: "v2".into(),
-            subgraph_cid: Cid::from_blake3_digest([0x99; 32]),
+            version_cid: Cid::from_blake3_digest([0x99; 32]),
         };
         let bytes = env.to_bytes();
         let back = SuspensionEnvelope::from_bytes(&bytes).expect("parse");

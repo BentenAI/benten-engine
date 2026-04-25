@@ -99,14 +99,48 @@ impl Watcher {
     }
 }
 
+#[allow(
+    clippy::print_stderr,
+    reason = "Phase-2a R6 C2 surface watcher errors loudly; benten-dev has no tracing dep \
+              and a Result-bearing Watcher::poll is a Phase-2b API change."
+)]
 fn collect_files(dir: &Path, extension: &str, out: &mut BTreeMap<PathBuf, Fingerprint>) {
+    // Phase-2a R6 C2: surface read_dir / metadata / mtime failures via
+    // stderr so a coarse-mtime FS, a permission-denied subdir, or a
+    // platform that lacks `modified()` doesn't silently disable
+    // hot-reload. The pre-fix code dropped these errors on the floor:
+    // `read_dir` failure returned silently; `metadata().modified()`
+    // failure fell back to UNIX_EPOCH, freezing the fingerprint and
+    // preventing the change from being observed on subsequent polls.
+    // We can't surface a `Result` from `Watcher::poll` without a public-
+    // API break (a Phase-2b cutover concern), so the loudest tool we
+    // have today is a stderr warn — the dev-server is a developer-only
+    // binary so stderr is observed.
     let entries = match fs::read_dir(dir) {
         Ok(it) => it,
-        Err(_) => return,
+        Err(e) => {
+            eprintln!(
+                "benten-dev::watcher: read_dir({}) failed: {} — skipping subtree (hot-reload \
+                 will not see changes under this path until the underlying error clears)",
+                dir.display(),
+                e
+            );
+            return;
+        }
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        let Ok(meta) = entry.metadata() else { continue };
+        let meta = match entry.metadata() {
+            Ok(m) => m,
+            Err(e) => {
+                eprintln!(
+                    "benten-dev::watcher: metadata({}) failed: {} — skipping entry",
+                    path.display(),
+                    e
+                );
+                continue;
+            }
+        };
         if meta.is_dir() {
             collect_files(&path, extension, out);
         } else if meta.is_file()
@@ -115,7 +149,19 @@ fn collect_files(dir: &Path, extension: &str, out: &mut BTreeMap<PathBuf, Finger
                 .and_then(|e| e.to_str())
                 .is_some_and(|e| e.eq_ignore_ascii_case(extension))
         {
-            let mtime = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+            let mtime = match meta.modified() {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!(
+                        "benten-dev::watcher: modified() unavailable for {}: {} — \
+                         falling back to UNIX_EPOCH; hot-reload will key off the file's \
+                         length only on this entry",
+                        path.display(),
+                        e
+                    );
+                    SystemTime::UNIX_EPOCH
+                }
+            };
             let fp = Fingerprint {
                 mtime,
                 len: meta.len(),
