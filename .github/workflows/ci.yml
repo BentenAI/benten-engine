@@ -240,6 +240,60 @@ jobs:
           if-no-files-found: error
 
   # --------------------------------------------------------------------------
+  # Phase 2a R4b COVERAGE M3 — release-build no-default-features gate.
+  #
+  # G11-A Wave 2a (CFG-GATING) flipped `benten-engine/test-helpers` off the
+  # default feature set so production / release artefacts do NOT compile
+  # the test-only `backend_for_test` / `engine_wait::cache_put` /
+  # `testing_force_reregister_with_different_cid` surfaces. The intent
+  # was that `cargo check -p benten-engine --no-default-features` would
+  # catch any test-only surface accidentally leaking into a default-build
+  # path (regressions where a non-test-helper module imports a
+  # test-helper item, etc.). Until R4b nothing in CI ran that check —
+  # the comment at line 111 documented the intent but no workflow
+  # asserted it. This job closes that gap.
+  #
+  # Single linux-x86_64 stable leg is sufficient: release-feature
+  # semantics don't drift across legs (a feature-gated symbol is gated
+  # everywhere or nowhere). Fast (~2-3 min) so the PR-gate cost is
+  # negligible.
+  # --------------------------------------------------------------------------
+  release-build-gate:
+    name: release-build (--no-default-features) gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: release-build-gate
+
+      - name: cargo check -p benten-engine --no-default-features
+        # Catches: a non-test-helper module accidentally importing a
+        # `test-helpers`-gated item; an unused-import that the default
+        # feature set masked. The release artefact MUST compile under
+        # this exact flag set.
+        run: cargo check -p benten-engine --no-default-features --locked
+
+      - name: cargo check -p benten-graph --no-default-features
+        # benten-graph carries an analogous `testing` feature for the
+        # bloom helpers + `subgraph_bytes_for_handler` test surface. The
+        # release crate must build clean without it.
+        run: cargo check -p benten-graph --no-default-features --locked
+
+      - name: cargo check -p benten-eval --no-default-features
+        # benten-eval carries `testing` (re-exports `MockMonotonicSource`,
+        # `register_test_callee`). Release artefacts must compile clean
+        # without those — the production Inv-8 budget path should never
+        # touch the test-callee registry.
+        run: cargo check -p benten-eval --no-default-features --locked
+
+  # --------------------------------------------------------------------------
   # T9 — cross-leg byte-equality gate. Asserts every native leg and the
   # wasm leg produced identical CID bytes. Not just "each matches the
   # committed fixture" — that would mask a drift that sneaks into the
