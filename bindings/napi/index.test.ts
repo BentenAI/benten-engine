@@ -149,6 +149,16 @@ describe("napi engine — extended surface", () => {
   });
 
   it("grantCapability writes a system:CapabilityGrant Node", () => {
+    // The grant Node lands in a system-zone label
+    // (`system:CapabilityGrant`); Phase-2a Inv-11 makes user-path
+    // `getNode(cid)` collapse to null for system-zone reads, so we
+    // verify the write landed via:
+    //   1. the returned CID has CIDv1 base32 shape,
+    //   2. `countNodesWithLabel("system:CapabilityGrant")` incremented,
+    //   3. `diagnoseRead(cid).existsInBackend === true` (the privileged
+    //      Option-C diagnostic bypasses the cap-policy gate under
+    //      NoAuth, surfacing the backend's authoritative answer).
+    const beforeGrants = ext.countNodesWithLabel("system:CapabilityGrant");
     const cid = ext.grantCapability({
       actor: "alice",
       scope: "store:post:write",
@@ -156,11 +166,12 @@ describe("napi engine — extended surface", () => {
     expect(typeof cid).toBe("string");
     expect(cid.startsWith("b")).toBe(true);
     expect(cid.length).toBeGreaterThanOrEqual(50);
-    const node = ext.getNode(cid);
-    expect(node).not.toBeNull();
-    expect(node.labels).toContain("system:CapabilityGrant");
-    expect(node.properties.scope).toBe("store:post:write");
-    expect(node.properties.revoked).toBe(false);
+    expect(ext.countNodesWithLabel("system:CapabilityGrant")).toBe(
+      beforeGrants + 1,
+    );
+    const diag = ext.diagnoseRead(cid);
+    expect(diag.existsInBackend).toBe(true);
+    expect(diag.notFound).toBe(false);
   });
 
   it("revokeCapability writes a CapabilityRevocation record", () => {
@@ -174,10 +185,12 @@ describe("napi engine — extended surface", () => {
     expect(afterCount).toBe(beforeCount + 1);
     // The original grant Node is untouched by the Phase-1 revocation path
     // (the revocation is a separate record, per engine docs at
-    // crates/benten-engine/src/lib.rs#1175). Assert it still resolves.
-    const grant = ext.getNode(grantCid);
-    expect(grant).not.toBeNull();
-    expect(grant.labels).toContain("system:CapabilityGrant");
+    // crates/benten-engine/src/lib.rs#1175). User-path `getNode` cannot
+    // see system-zone Nodes under Inv-11, so verify via diagnoseRead
+    // (Option-C diagnostic bypasses the cap-policy gate under NoAuth).
+    const diag = ext.diagnoseRead(grantCid);
+    expect(diag.existsInBackend).toBe(true);
+    expect(diag.notFound).toBe(false);
   });
 
   it("readView returns a structured ok outcome for a live view id", () => {
@@ -255,6 +268,7 @@ describe("napi engine — extended surface", () => {
 
   it("createView registers a view that bumps ivmSubscriberCount", () => {
     const before = ext.ivmSubscriberCount();
+    const beforeDefs = ext.countNodesWithLabel("system:IVMView");
     // `content_listing_<label>` is a Phase-1 canonical id family that the
     // engine auto-instantiates as a live ContentListingView.
     const viewCid = ext.createView({ viewId: "content_listing_article" });
@@ -262,11 +276,14 @@ describe("napi engine — extended surface", () => {
     expect(viewCid.startsWith("b")).toBe(true);
     const after = ext.ivmSubscriberCount();
     expect(after).toBe(before + 1);
-    // The definition Node is persisted with label `system:IVMView` and
-    // should round-trip via getNode.
-    const defNode = ext.getNode(viewCid);
-    expect(defNode).not.toBeNull();
-    expect(defNode.labels).toContain("system:IVMView");
+    // The definition Node is persisted under `system:IVMView`; Inv-11
+    // makes the user-path `getNode` collapse to null for system-zone
+    // reads, so verify the write via the system-zone label counter +
+    // the Option-C diagnostic.
+    expect(ext.countNodesWithLabel("system:IVMView")).toBe(beforeDefs + 1);
+    const diag = ext.diagnoseRead(viewCid);
+    expect(diag.existsInBackend).toBe(true);
+    expect(diag.notFound).toBe(false);
   });
 
   it("emitEvent surfaces E_PRIMITIVE_NOT_IMPLEMENTED per G8 fix-pass", () => {
