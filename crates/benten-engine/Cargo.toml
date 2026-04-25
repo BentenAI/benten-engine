@@ -59,10 +59,14 @@ test-helpers = ["envelope-cache-test-grade"]
 # whose bodies reach into DSL/testing APIs that are wider than the R3
 # consolidation stubs — specifically `SubgraphBuilder` closure-style
 # builder methods, `testing_audit_sequence`, `call_with_ticking_mono_clock`,
-# `testing_reput_subgraph_as_user`, etc. R5 G2-B / G3-B / G5-A / G9-A
-# own landing those APIs; once landed, the respective file drops this
-# feature gate and its tests flip from compile-skip to red-phase
-# `todo!()` panic, preserving the TDD contract.
+# `testing_reput_subgraph_as_user`, etc. R5 G2-B / G3-B / G9-A landed
+# their respective APIs and dropped the gate; the `SubgraphBuilder` arm
+# remains pending the Phase-2b benten-core-migration (see
+# `.addl/phase-2b/00-scope-outline.md` §7a "benten-core Subgraph
+# migration"; originally tagged `G5-A` but G5-A actually shipped the
+# storage-layer Inv-13 matrix instead). Once landed, the gated test files
+# flip from compile-skip to red-phase `todo!()` panic, preserving the TDD
+# contract.
 phase_2a_pending_apis = []
 
 [dependencies]

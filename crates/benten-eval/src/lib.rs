@@ -856,20 +856,26 @@ impl Subgraph {
         self.nodes.get(h.0 as usize)
     }
 
-    /// Phase 2a C5 / G5-A: DAG-CBOR encode (stub — wired in G5-A).
+    /// Phase-2b benten-core-migration: DAG-CBOR encode (stub).
+    ///
+    /// Wired when the real `Subgraph` moves into `benten-core`; see
+    /// `.addl/phase-2b/00-scope-outline.md` §7a "benten-core Subgraph migration".
     ///
     /// # Errors
     /// Returns [`benten_core::CoreError::Serialize`] on encode failure.
     pub fn to_dagcbor(&self) -> Result<Vec<u8>, benten_core::CoreError> {
-        todo!("Phase 2a C5 / G5-A: Subgraph DAG-CBOR encode (eval side)")
+        todo!("phase-2b benten-core-migration: Subgraph DAG-CBOR encode (eval side)")
     }
 
-    /// Phase 2a C5 / G5-A: DAG-CBOR decode (stub — wired in G5-A).
+    /// Phase-2b benten-core-migration: DAG-CBOR decode (stub).
+    ///
+    /// Wired when the real `Subgraph` moves into `benten-core`; see
+    /// `.addl/phase-2b/00-scope-outline.md` §7a "benten-core Subgraph migration".
     ///
     /// # Errors
     /// Returns [`benten_core::CoreError::Serialize`] on decode failure.
     pub fn from_dagcbor(_bytes: &[u8]) -> Result<Self, benten_core::CoreError> {
-        todo!("Phase 2a C5 / G5-A: Subgraph DAG-CBOR decode (eval side)")
+        todo!("phase-2b benten-core-migration: Subgraph DAG-CBOR decode (eval side)")
     }
 
     #[must_use]

@@ -102,15 +102,14 @@ impl Default for WriteAuthority {
     }
 }
 
-/// Phase 2a C5 stub: `Subgraph` placeholder re-exposed at the benten-core
+/// Phase-2a stub: `Subgraph` placeholder re-exposed at the benten-core
 /// root so the DAG-CBOR + content-hash round-trip tests (which live in
 /// `benten-core/tests/subgraph_load_verified_migration.rs` per the R2
 /// partition) compile against the core surface.
 ///
 /// The real `Subgraph` type lives in `benten-eval`; this thin shape is a
 /// compile-only surrogate that carries the minimal accessors (`handler_id`,
-/// `cid`, `empty_for_test`) R3 tests reference. Phase 2a G5-A migrates the
-/// real Subgraph into benten-core under an opaque DAG-CBOR schema.
+/// `cid`, `empty_for_test`) R3 tests reference.
 ///
 /// G11-A Wave 3a: the shim now carries a `deterministic` field and encodes
 /// via canonical DAG-CBOR so the graph-layer `load_subgraph_verified`
@@ -118,7 +117,11 @@ impl Default for WriteAuthority {
 /// CID-from-DAG-CBOR-bytes invariant is load-bearing for the
 /// `load_subgraph_verified_from_store_*` suite.
 ///
-/// TODO(phase-2a-G5-A): move the real Subgraph here + delete this stub.
+/// TODO(phase-2b-benten-core-migration): move the real `Subgraph` here +
+/// delete this stub. Originally tagged `phase-2a-G5-A`; G5-A actually
+/// shipped the storage-layer Inv-13 matrix, so the type-move was deferred.
+/// Tracked at `.addl/phase-2b/00-scope-outline.md` §7a "benten-core
+/// Subgraph migration".
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Subgraph {
     handler_id: alloc::string::String,
@@ -306,12 +309,12 @@ impl Node {
 }
 
 impl Subgraph {
-    /// Phase 2a C5 / G5-A: mark the Subgraph deterministic.
+    /// Phase-2b benten-core-migration: mark the Subgraph deterministic.
     pub fn set_deterministic(&mut self, value: bool) {
         self.deterministic = value;
     }
 
-    /// Phase 2a C5 / G5-A: DAG-CBOR encode. The bytes produced here are the
+    /// Phase-2b benten-core-migration: DAG-CBOR encode. The bytes produced here are the
     /// hash-input for [`Subgraph::cid`].
     ///
     /// # Errors
@@ -320,7 +323,7 @@ impl Subgraph {
         serde_ipld_dagcbor::to_vec(self).map_err(|e| CoreError::Serialize(format_err(&e)))
     }
 
-    /// Phase 2a C5 / G5-A: load a Subgraph from DAG-CBOR bytes.
+    /// Phase-2b benten-core-migration: load a Subgraph from DAG-CBOR bytes.
     ///
     /// This is the no-CID variant — it only validates that the bytes decode
     /// cleanly as a Subgraph. Integrity enforcement (CID vs. computed-hash)
@@ -332,7 +335,7 @@ impl Subgraph {
         serde_ipld_dagcbor::from_slice(bytes).map_err(|e| CoreError::Serialize(format_err(&e)))
     }
 
-    /// Phase 2a C5 / G5-A: load a Subgraph from bytes + an expected CID.
+    /// Phase-2b benten-core-migration: load a Subgraph from bytes + an expected CID.
     /// Integrity-enforcing: mismatch between the recomputed CID and
     /// `expected_cid` fires `E_INV_CONTENT_HASH`.
     ///
@@ -359,7 +362,7 @@ impl Subgraph {
         serde_ipld_dagcbor::from_slice(bytes).map_err(|e| CoreError::Serialize(format_err(&e)))
     }
 
-    /// Phase 2a C5 / G5-A: whether the Subgraph is classified deterministic.
+    /// Phase-2b benten-core-migration: whether the Subgraph is classified deterministic.
     #[must_use]
     pub fn is_deterministic(&self) -> bool {
         self.deterministic

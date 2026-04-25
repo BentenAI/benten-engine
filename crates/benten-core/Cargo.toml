@@ -45,9 +45,12 @@ serde_json = { workspace = true }
 # even dev-dependencies to enforce the arch-1 dep-break. The R3-consolidation
 # scaffolding previously added `benten-eval = { path = "../benten-eval" }`
 # here so `tests/subgraph_deterministic_dagcbor.rs` could import Subgraph /
-# SubgraphBuilder before G5-A moves those types from `benten-eval` to
-# `benten-core`. That dev-dep has been removed; the dependent test file stays
-# uncommitted at R3 state and is gated behind G5-A landing the type move.
+# SubgraphBuilder before the type-move from `benten-eval` to `benten-core`.
+# That dev-dep has been removed; the dependent test file stays uncommitted
+# at R3 state and is gated behind the Phase-2b benten-core-migration landing
+# the type move (see `.addl/phase-2b/00-scope-outline.md` §7a "benten-core
+# Subgraph migration"; originally tagged `G5-A` but G5-A actually shipped
+# the storage-layer Inv-13 matrix instead).
 
 [[bench]]
 name = "hash_only"
