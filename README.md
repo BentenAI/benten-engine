@@ -56,7 +56,7 @@ console.log(await engine.trace(handler.id, 'post:create', { ... })); // step-by-
 
 ## Current state
 
-Phase 1 shipped (2026-04-21). Phase 2a is in flight — extends the evaluator with the WAIT primitive, the full 14-invariant set, capability TOCTOU hardening, and DAG-CBOR suspended-state persistence. Phase 2b adds WASM SANDBOX, STREAM, and SUBSCRIBE.
+Phase 1 shipped (2026-04-21). Phase 2a is closing — implementation complete; quality-council review in progress ahead of the release-era CI pass and tag. Phase 2a extended the evaluator with the WAIT primitive, the multiplicative iteration budget, system-zone runtime enforcement, structural causal attribution, immutability enforcement, capability TOCTOU hardening, and DAG-CBOR suspended-state persistence. Phase 2b adds WASM SANDBOX, STREAM, and SUBSCRIBE.
 
 **Live today:** the eight Phase-1 primitives (READ, WRITE, TRANSFORM, BRANCH, ITERATE, CALL, RESPOND, EMIT), the `crud()` zero-config path, content-addressed storage with MVCC, hand-written IVM views, pluggable capability policy, scaffolder, debug tooling, `handler.toMermaid()` and `engine.trace()` introspection. TypeScript bindings via napi-rs; Rust API available directly.
 

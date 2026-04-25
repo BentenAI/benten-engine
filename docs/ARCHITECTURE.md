@@ -43,6 +43,38 @@ The crate graph is DAG-shaped: `benten-errors` has no Benten dependencies; every
 
 Each crate has one responsibility. A reader can use `benten-engine` with `NoAuthBackend` and no IVM subscribers as a content-addressed embedded graph DB, with none of the capability, sync, or application machinery engaged. Features that can live outside the evaluator's main loop are moved into sibling crates.
 
+## Bindings and tooling
+
+Beyond the seven Rust crates, the workspace ships two ancillary trees that exist
+to make the engine reachable from JavaScript and to keep developer onboarding
+ten minutes from `npx` to a green test:
+
+### `bindings/`
+
+- `bindings/napi/` — Node.js bindings via `napi-rs` v3. The same Rust codebase
+  compiles to a native dynamic library (`.node`) for desktop / server and to a
+  WASM module for browser / edge runtimes. Auto-generates TypeScript `.d.ts`
+  files from `#[napi]` annotations so the TS DSL never hand-writes a binding
+  signature. Phase-2a surfaces here include `call_with_suspension`,
+  `resume_from_bytes`, `resume_from_bytes_as`, `grant_capability`,
+  `revoke_capability`, and the trace + diagnostics APIs.
+
+### `tools/`
+
+- `tools/create-benten-app/` — the `npx create-benten-app <name>` scaffolder.
+  Drops a minimal TypeScript project (handler file + smoke test +
+  `tsconfig.json`) wired to `@benten/engine` via a `file:` link to the
+  workspace `packages/engine`. Closes the Phase-1 zero-config DX promise.
+  Templates live under `tools/create-benten-app/template/`.
+- `tools/benten-dev/` — the Phase-2a developer-server tool. Watches handler
+  source files, hot-reloads registered subgraphs, and preserves capability
+  grants + in-flight evaluations across reload. Carries an `inspect-state`
+  subcommand that pretty-prints a serialized `ExecutionStateEnvelope`.
+  Currently runs its own minimal in-memory handler registry + grant table
+  rather than threading through `Engine::register_subgraph` — see
+  ["Devserver divergence (Phase-2a posture)"](#devserver-divergence-phase-2a-posture)
+  below for the rationale and the Phase-2b cutover plan.
+
 ## The 12 operation primitives
 
 ```
@@ -154,6 +186,33 @@ A `GrantBackedPolicy` ships alongside: grants are Nodes with `GRANTED_TO` edges,
 ## Determinism
 
 The canonical fixture CID `bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda` is stable across x86_64 Linux / macOS / Windows and ARM64 macOS. The `.github/workflows/determinism.yml` workflow computes it on every PR; drift is a merge blocker.
+
+## Devserver divergence (Phase-2a posture)
+
+The Phase-2a `tools/benten-dev` developer server runs **parallel infrastructure**
+to the canonical engine path rather than threading through it:
+
+| Concern | Canonical engine path | `tools/benten-dev` Phase-2a path |
+|---|---|---|
+| Handler registry | `Engine::register_subgraph` against the redb-backed graph | In-memory `OnceLock<Mutex<HashMap<HandlerId, Vec<HandlerVersion>>>>` |
+| Handler CID | Canonical `Subgraph` DAG-CBOR + multicodec `0x71` + multihash `0x1e` | Dev-only surrogate: `BLAKE3(handler_id ‖ op ‖ source ‖ version_tag)` |
+| Capability grants | `benten-caps` policy backend, persisted as `system:CapabilityGrant` Nodes | In-memory grant table, source-text-keyed |
+| WAIT suspension | Canonical DAG-CBOR `ExecutionStateEnvelope` with `payload_cid` round-trip | Custom `BDEV\x01` magic-prefixed envelope wire format |
+
+This is **intentional Phase-2a posture, not a regression.** The real DSL-text →
+`SubgraphSpec` compiler is itself Phase-2b scope (see `docs/DSL-SPECIFICATION.md`),
+so the devserver could not thread reloads through `Engine::register_subgraph`
+without a compiler boundary that does not yet exist. The Phase-2a in-memory
+shape pins the developer-facing contracts (grant preservation across reload,
+in-flight call ordering, suspension-handle survival across reload, audit-sequence
+invariance on reload) which is what the devserver test suite asserts.
+
+**Phase-2b cutover:** when the DSL compiler lands, `tools/benten-dev` is
+refactored to compile source → `SubgraphSpec` → `engine.register_subgraph(spec)`
+and to drop both the in-memory registry and the `BDEV\x01` envelope shim.
+Tracked in `.addl/phase-2b/00-scope-outline.md` §7a "Devserver → Engine routing".
+The Phase-2a `ReloadCoordinator` / `CallGuard` / `ReloadLease` machinery
+(cache-preservation + concurrency-ordering, not storage) survives the cutover.
 
 ## The control plane is the graph
 

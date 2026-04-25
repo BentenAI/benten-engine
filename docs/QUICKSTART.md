@@ -39,7 +39,8 @@ import { postHandlers } from "./handlers.js";
 
 const engine = await Engine.open(".benten/my-app.redb");
 const handler = await engine.registerSubgraph(postHandlers);
-// `handler.id` is "crud:post" — a stable content-addressed id.
+// `handler.id` is "post-handler" — derived as `${label}-handler` from the
+// `crud("post")` label. The action is the second argument to `engine.call`.
 
 // Create
 const created = await engine.call(handler.id, "post:create", {
@@ -115,6 +116,8 @@ Without `store:debug:read`, `diagnoseRead` throws `E_CAP_DENIED` — ordinary ca
 Some workflows wait for an external event — a webhook confirming payment, a human approval, an AI assistant's next turn. WAIT suspends execution and hands back a `SuspendedHandle` you persist:
 
 ```typescript
+import { promises as fs } from "node:fs";
+
 const paymentHandler = subgraph("checkout")
   .action("charge")
   .read({ label: "cart", by: "id", value: "$input.cart_id" })
@@ -125,7 +128,7 @@ const paymentHandler = subgraph("checkout")
   .write({ label: "order", properties: { status: "paid" } })
   .respond({ body: "$result" });
 
-await engine.registerSubgraph(paymentHandler);
+await engine.registerSubgraph(paymentHandler.build());
 
 const result = await engine.callWithSuspension("checkout", "charge", {
   cart_id: "c-42",
