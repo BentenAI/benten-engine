@@ -27,7 +27,10 @@ use benten_core::Value;
 use std::collections::HashMap;
 use std::time::Instant;
 
-use crate::{EvalError, Evaluator, OperationNode, PrimitiveHost, StepResult, Subgraph, TraceStep};
+use crate::{
+    AttributionFrame, EvalError, Evaluator, OperationNode, PrimitiveHost, StepResult, Subgraph,
+    TraceStep,
+};
 
 /// G5-B-ii: runtime attribution threading (Inv-14). Stamps an
 /// [`crate::AttributionFrame`] onto every emitted [`TraceStep::Step`] row so
@@ -110,7 +113,7 @@ impl Evaluator {
         host: &dyn PrimitiveHost,
         budget: u64,
     ) -> Result<RunResult, EvalError> {
-        let (result, _trace) = self.run_inner(subgraph, input, host, budget, false)?;
+        let (result, _trace) = self.run_inner(subgraph, input, host, budget, false, None)?;
         Ok(result)
     }
 
@@ -121,6 +124,15 @@ impl Evaluator {
     /// step routed through. G8's `engine.trace` wraps this into the
     /// developer-facing trace object.
     ///
+    /// Phase 2a G5-B-ii: Inv-14 runtime threading. Callers that have an
+    /// `(actor, handler, grant)` triple in scope should prefer
+    /// [`Evaluator::run_with_trace_attributed`] so every emitted
+    /// [`TraceStep::Step`] carries the originating
+    /// [`AttributionFrame`]. This unattributed entry point exists for
+    /// in-crate unit tests + the structural-only invariant suites that
+    /// drive the evaluator without an engine-side capability surface;
+    /// production traces must go through the attributed entry point.
+    ///
     /// # Errors
     ///
     /// See [`Evaluator::run`].
@@ -130,7 +142,42 @@ impl Evaluator {
         input: Value,
         host: &dyn PrimitiveHost,
     ) -> Result<(RunResult, Vec<TraceStep>), EvalError> {
-        self.run_inner(subgraph, input, host, DEFAULT_ITERATION_BUDGET, true)
+        self.run_inner(subgraph, input, host, DEFAULT_ITERATION_BUDGET, true, None)
+    }
+
+    /// G5-B-ii / Inv-14: trace variant that stamps the supplied
+    /// [`AttributionFrame`] onto every emitted [`TraceStep::Step`] row.
+    /// Callers (notably [`crate::Engine::dispatch_call`] in `benten-engine`)
+    /// construct the frame from the in-flight `(actor, handler, grant)`
+    /// triple and pass it here so trace consumers can walk back to the
+    /// authorising context.
+    ///
+    /// Phase-2a contract: boundary variants
+    /// ([`TraceStep::SuspendBoundary`] / [`TraceStep::ResumeBoundary`] /
+    /// [`TraceStep::BudgetExhausted`]) do not yet carry attribution — the
+    /// shape-pin in `crates/benten-eval/tests/inv_8_11_13_14_firing.rs` is
+    /// the source of truth. Phase-2b broadens the contract per plan §5
+    /// "required on every variant" once the boundary-variant shapes are
+    /// reopened.
+    ///
+    /// # Errors
+    ///
+    /// See [`Evaluator::run`].
+    pub fn run_with_trace_attributed(
+        &mut self,
+        subgraph: &Subgraph,
+        input: Value,
+        host: &dyn PrimitiveHost,
+        frame: AttributionFrame,
+    ) -> Result<(RunResult, Vec<TraceStep>), EvalError> {
+        self.run_inner(
+            subgraph,
+            input,
+            host,
+            DEFAULT_ITERATION_BUDGET,
+            true,
+            Some(frame),
+        )
     }
 
     fn run_inner(
@@ -140,6 +187,7 @@ impl Evaluator {
         host: &dyn PrimitiveHost,
         budget: u64,
         collect_trace: bool,
+        attribution: Option<AttributionFrame>,
     ) -> Result<(RunResult, Vec<TraceStep>), EvalError> {
         // Build an adjacency map keyed by (from-node-id, edge-label).
         let mut next_by_edge: HashMap<(&str, &str), &str> = HashMap::new();
@@ -215,7 +263,7 @@ impl Evaluator {
                             inputs: Value::Null,
                             outputs: r.output.clone(),
                             error: None,
-                            attribution: None,
+                            attribution: attribution.clone(),
                         });
                     }
                     last = r;
@@ -249,7 +297,7 @@ impl Evaluator {
                             inputs: Value::Null,
                             outputs: Value::Null,
                             error: Some(e.code()),
-                            attribution: None,
+                            attribution: attribution.clone(),
                         });
                     }
                     return Err(e);

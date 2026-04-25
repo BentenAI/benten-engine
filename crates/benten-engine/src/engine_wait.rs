@@ -60,9 +60,9 @@
 //! Only once all four steps pass does the evaluator take the resume path
 //! and produce a terminal `Outcome`.
 
-#[cfg(any(test, feature = "test-helpers"))]
+#[cfg(any(test, feature = "envelope-cache-test-grade"))]
 use std::collections::BTreeMap;
-#[cfg(any(test, feature = "test-helpers"))]
+#[cfg(any(test, feature = "envelope-cache-test-grade"))]
 use std::sync::{LazyLock, Mutex};
 
 use benten_caps::WriteContext as CapWriteContext;
@@ -99,29 +99,36 @@ use crate::outcome::Outcome;
 /// consistent across cache surfaces.
 ///
 /// Wave-1 mini-review MODERATE-4: cfg-gated behind `any(test, feature =
-/// "test-helpers")` alongside the cache itself — production builds
-/// without the feature strip the cache (and this cap) entirely, since
-/// Phase-2a ships test-grade suspend/resume and Phase-2b persists
-/// envelopes via redb. The feature is default-enabled on `benten-engine`
-/// so every `cargo test` / `cargo nextest run` / developer workflow
-/// continues to see the cache without ceremony.
-#[cfg(any(test, feature = "test-helpers"))]
+/// "envelope-cache-test-grade")` alongside the cache itself — production
+/// builds without the feature strip the cache (and this cap) entirely,
+/// since Phase-2a ships test-grade suspend/resume and Phase-2b persists
+/// envelopes via redb.
+///
+/// R6 fix-pass A2: this gate was tightened from `test-helpers` to the
+/// narrower `envelope-cache-test-grade` so the napi cdylib (which needs
+/// the WAIT bridge) doesn't drag the broader test-only surface
+/// (`testing_force_reregister_with_different_cid`,
+/// `testing_audit_sequence`, etc.) into production builds. The
+/// `test-helpers` feature implies `envelope-cache-test-grade` so
+/// existing CI invocations are unaffected.
+#[cfg(any(test, feature = "envelope-cache-test-grade"))]
 pub(crate) const ENVELOPE_CACHE_MAX_ENTRIES: usize = 1_024;
 
 /// Wave-1 mini-review MODERATE-4: the in-memory envelope cache is
 /// test-grade — it exists only so the R3 WAIT resume tests can round-
 /// trip a suspended handle without a persistent backing store. Gated
-/// behind `any(test, feature = "test-helpers")` so a release artifact
-/// built with `--no-default-features` does not carry a static
-/// `LazyLock<Mutex<BTreeMap<...>>>` that has no legitimate production
-/// consumer. Production Phase-2b will persist envelopes through a
-/// system-zone storage primitive (see module docs); until then
-/// `cache_put` / `cache_get` become no-ops under the non-gated branch.
-#[cfg(any(test, feature = "test-helpers"))]
+/// behind `any(test, feature = "envelope-cache-test-grade")` so a
+/// release artifact built with `--no-default-features` does not carry a
+/// static `LazyLock<Mutex<BTreeMap<...>>>` that has no legitimate
+/// production consumer. Production Phase-2b will persist envelopes
+/// through a system-zone storage primitive (see module docs); until
+/// then `cache_put` / `cache_get` become no-ops under the non-gated
+/// branch.
+#[cfg(any(test, feature = "envelope-cache-test-grade"))]
 static ENVELOPE_CACHE: LazyLock<Mutex<BTreeMap<Cid, ExecutionStateEnvelope>>> =
     LazyLock::new(|| Mutex::new(BTreeMap::new()));
 
-#[cfg(any(test, feature = "test-helpers"))]
+#[cfg(any(test, feature = "envelope-cache-test-grade"))]
 fn cache_put(envelope: ExecutionStateEnvelope) -> Cid {
     let cid = envelope.payload_cid;
     if let Ok(mut g) = ENVELOPE_CACHE.lock() {
@@ -140,7 +147,7 @@ fn cache_put(envelope: ExecutionStateEnvelope) -> Cid {
     cid
 }
 
-#[cfg(not(any(test, feature = "test-helpers")))]
+#[cfg(not(any(test, feature = "envelope-cache-test-grade")))]
 fn cache_put(envelope: ExecutionStateEnvelope) -> Cid {
     // Production no-op: return the content-addressed CID so callers
     // that persist the handle elsewhere (Phase-2b redb-backed envelope
@@ -150,12 +157,12 @@ fn cache_put(envelope: ExecutionStateEnvelope) -> Cid {
     envelope.payload_cid
 }
 
-#[cfg(any(test, feature = "test-helpers"))]
+#[cfg(any(test, feature = "envelope-cache-test-grade"))]
 fn cache_get(cid: &Cid) -> Option<ExecutionStateEnvelope> {
     ENVELOPE_CACHE.lock().ok()?.get(cid).cloned()
 }
 
-#[cfg(not(any(test, feature = "test-helpers")))]
+#[cfg(not(any(test, feature = "envelope-cache-test-grade")))]
 fn cache_get(_cid: &Cid) -> Option<ExecutionStateEnvelope> {
     // Production no-op (see `cache_put`).
     None
