@@ -100,7 +100,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_INV_ITERATE_NEST_DEPTH
 
-> **Retired at Phase-2a open — not firing.** Superseded by `E_INV_ITERATE_BUDGET` (multiplicative form). Catalog entry retained for forward-/backward-compat string round-trip; the Rust enum variant has been removed.
+> **⚠️ Not firing in production.** Retired at Phase-2a open: superseded by `E_INV_ITERATE_BUDGET` (multiplicative form). Catalog entry retained for forward-/backward-compat string round-trip; the Rust enum variant has been removed.
 
 <!-- reachability: ignore -->
 
@@ -145,7 +145,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_CAP_REVOKED_MID_EVAL
 
-> **⚠️ Phase-2a/2b reserved — not yet firing in production.** The frozen code surface that the evaluator's batch-boundary recheck will return once refresh-point-5 wiring lands. TOCTOU integration tests construct it today; the production firing site is deferred (see `.addl/phase-2a/00-implementation-plan.md` G9-A residuals).
+> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 2b. The frozen code surface that the evaluator's batch-boundary recheck will return once refresh-point-5 wiring lands. TOCTOU integration tests construct it today; the production firing site is deferred (see `.addl/phase-2a/00-implementation-plan.md` G9-A residuals).
 
 <!-- reachability: ignore -->
 <!-- Rationale: Phase-1 named compromise #1 (TOCTOU window). `CapError::RevokedMidEval` is the frozen code surface that the evaluator's batch-boundary recheck will return once wired in R5 (see `crates/benten-caps/src/error.rs` docstring + `crates/benten-engine/tests/integration/cap_toctou.rs`). Construction sites live in TOCTOU integration tests today; drift-detect correctly flags the production gap. Remove this annotation when the evaluator's refresh-point-5 wiring lands in R5/G9-A. -->
@@ -165,7 +165,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_CAP_REVOKED
 
-> **⚠️ Phase-3 reserved — not yet firing.** Surfaces from `sync-receive` when a peer propagates a revocation; the Atrium sync stack lands with `benten-sync` in Phase 3. The catalog entry pins the wire code so peer-emitted `E_CAP_REVOKED` round-trips through the Phase-1 enum without collapsing to `ErrorCode::Unknown(_)`.
+> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 3. Surfaces from `sync-receive` when a peer propagates a revocation; the Atrium sync stack lands with `benten-sync` in Phase 3. The catalog entry pins the wire code so peer-emitted `E_CAP_REVOKED` round-trips through the Phase-1 enum without collapsing to `ErrorCode::Unknown(_)`.
 
 <!-- reachability: ignore -->
 <!-- Rationale: Phase-3 sync-subsystem code. `CapError::Revoked` surfaces from `sync-receive` when a peer propagates a revocation over the Atrium wire; the Atrium stack lands in Phase 3 with `benten-sync`. Kept as the stable wire code the Phase-1 `ErrorCode` enum round-trips so `E_CAP_REVOKED` strings arriving from a newer peer don't collapse to `ErrorCode::Unknown(_)`. Remove this annotation when `benten-sync` wires the first `Err(CapError::Revoked)` construction site. -->
@@ -184,7 +184,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_WRITE_CONFLICT
 
-> **⚠️ Phase-2 native-Rust path reserved — not yet firing as an `Err(...)` enum variant.** Phase-1/2a runtime surface is edge-routed via `ON_CONFLICT`; the engine stamps the code on the routed step. The Rust `EvalError::WriteConflict` variant is reserved for the Phase-2 native call path.
+> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 2b (native call path). Phase-1/2a runtime surface is edge-routed via `ON_CONFLICT`; the engine stamps the code on the routed step. The Rust `EvalError::WriteConflict` variant is reserved for the Phase-2b native call path.
 
 <!-- reachability: ignore -->
 
@@ -265,7 +265,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_INPUT_LIMIT
 
-> **⚠️ Phase-2b reserved — not yet firing.** The napi boundary's bounded streaming decoder is explicitly deferred (see the in-source acknowledgement at `bindings/napi/src/lib.rs::testing::deserialize_value_from_js_like`). The catalog entry pins the shape; the production firing site lands with the Phase-2b napi/B8 wave.
+> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 2b (napi/B8 wave). The napi boundary's bounded streaming decoder is explicitly deferred (see the in-source acknowledgement at `bindings/napi/src/lib.rs::testing::deserialize_value_from_js_like`). The catalog entry pins the shape; the production firing site lands with the Phase-2b napi/B8 wave.
 
 <!-- reachability: ignore -->
 <!-- Rationale: R5 G8-B/B8 follow-up. The napi boundary's bounded streaming decoder (size/depth/bytes/CID-shape enforcement) is explicitly deferred — see the in-source acknowledgement at `bindings/napi/src/lib.rs::testing::deserialize_value_from_js_like` ("B8 harness's assertions about `ErrorCode::InputLimit` stay red until R5"). Drift-detect only scans `crates/*/src/`; the real firing site will live in `bindings/napi/src/` anyway, so this entry would need re-annotating rather than unignoring. Remove this annotation if/when a `crates/`-resident construction site is added (e.g., a shared limits module in `benten-core`). -->
@@ -482,7 +482,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_HOST_NOT_FOUND
 
-> **⚠️ Phase-2a shape reserved; first firing site lands in Phase 3 sync — not yet firing in production.**
+> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 3 sync.
 
 <!-- reachability: ignore -->
 
@@ -494,7 +494,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_HOST_WRITE_CONFLICT
 
-> **⚠️ Phase-2a shape reserved; first firing site lands in Phase 3 sync — not yet firing in production.**
+> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 3 sync.
 
 <!-- reachability: ignore -->
 
@@ -506,7 +506,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_HOST_BACKEND_UNAVAILABLE
 
-> **⚠️ Phase-2a shape reserved; first firing site lands in Phase 3 sync — not yet firing in production.**
+> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 3 sync.
 
 <!-- reachability: ignore -->
 
@@ -518,7 +518,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_HOST_CAPABILITY_REVOKED
 
-> **⚠️ Phase-2a shape reserved; first firing site lands in Phase 3 sync — not yet firing in production.**
+> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 3 sync.
 
 <!-- reachability: ignore -->
 
@@ -530,7 +530,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_HOST_CAPABILITY_EXPIRED
 
-> **⚠️ Phase-2a shape reserved; first firing site lands in Phase 3 sync — not yet firing in production.**
+> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 3 sync.
 
 <!-- reachability: ignore -->
 
@@ -612,7 +612,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_CAP_WALLCLOCK_EXPIRED
 
-> **⚠️ Phase-2a/2b reserved — not yet firing in production.** `CapError::WallclockExpired` is the upstream alias; the firing site is reserved at G9-A refresh-point-5 and is not yet wired (see `.addl/phase-2a/00-implementation-plan.md` G9-A residuals).
+> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 2b. `CapError::WallclockExpired` is the upstream alias; the firing site is reserved at G9-A refresh-point-5 and is not yet wired (see `.addl/phase-2a/00-implementation-plan.md` G9-A residuals).
 
 <!-- reachability: ignore -->
 
@@ -640,7 +640,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_WAIT_SIGNAL_SHAPE_MISMATCH
 
-> **⚠️ Phase-2b reserved — not yet firing in production.** Integration test at `crates/benten-engine/tests/integration/wait_signal_shape_optional_typing.rs` exercises the surface; the production firing site is reserved alongside the broader G3-B DX signal-payload typing landing.
+> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 2b (alongside the broader G3-B DX signal-payload typing landing). Integration test at `crates/benten-engine/tests/integration/wait_signal_shape_optional_typing.rs` exercises the surface; the production firing site is reserved.
 
 <!-- reachability: ignore -->
 
