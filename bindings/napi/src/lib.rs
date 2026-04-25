@@ -82,6 +82,10 @@ mod napi_surface {
     use crate::subgraph::{json_to_subgraph_spec, outcome_to_json};
     use crate::trace::trace_to_json;
     use crate::view::extract_view_id;
+    use crate::wait::{
+        call_with_suspension_adapter, resume_from_bytes_as_adapter,
+        resume_from_bytes_unauthenticated_adapter,
+    };
 
     /// Benten graph engine handle. One instance per redb database file;
     /// thread-safe (the engine's internal locks coordinate concurrent
@@ -494,6 +498,63 @@ mod napi_surface {
                 out.insert(scope, serde_json::Value::from(count));
             }
             serde_json::Value::Object(out)
+        }
+
+        // -------- WAIT / suspend / resume (Phase 2a G3-B napi F5) --------
+
+        /// Invoke a handler with suspension awareness. Returns a
+        /// discriminated-union JSON shape:
+        ///
+        /// - `{ kind: "complete", outcome: <Outcome-JSON> }` when the
+        ///   handler ran to completion without hitting a WAIT.
+        /// - `{ kind: "suspended", handle: <base64-string> }` when the
+        ///   handler suspended on a WAIT primitive. The TS wrapper
+        ///   (`packages/engine/src/engine.ts::callWithSuspension`) decodes
+        ///   the base64 string into a `Buffer` before exposing it to user
+        ///   code; passing it through JSON keeps the napi return type a
+        ///   single `serde_json::Value` so we don't need a hand-rolled
+        ///   discriminated union at the napi layer.
+        #[napi]
+        pub fn call_with_suspension(
+            &self,
+            handler_id: String,
+            op: String,
+            input: serde_json::Value,
+        ) -> napi::Result<serde_json::Value> {
+            let bridge = call_with_suspension_adapter(&self.inner, &handler_id, &op, input)?;
+            Ok(bridge.into_json())
+        }
+
+        /// Resume from envelope bytes WITHOUT a principal-binding check
+        /// (skips step 2 of the 4-step resume protocol). Returns the
+        /// terminal Outcome JSON. See `wait.rs` module docs for the
+        /// `Unauthenticated` semantics — TS callers should prefer
+        /// [`Engine::resume_from_bytes_as`] unless they're in a single-
+        /// user / in-process context.
+        ///
+        /// `bytes` arrives as a Node `Buffer` (which napi-rs maps to the
+        /// `Buffer` type); the underlying byte slice is passed through to
+        /// the Rust adapter unchanged.
+        #[napi]
+        pub fn resume_from_bytes_unauthenticated(
+            &self,
+            bytes: Buffer,
+            signal_value: serde_json::Value,
+        ) -> napi::Result<serde_json::Value> {
+            resume_from_bytes_unauthenticated_adapter(&self.inner, bytes.as_ref(), signal_value)
+        }
+
+        /// Resume from envelope bytes WITH an explicit principal CID —
+        /// the full 4-step resume protocol. `principal_cid` is a base32-
+        /// multibase CID string (the wire form `create_node` returns).
+        #[napi]
+        pub fn resume_from_bytes_as(
+            &self,
+            bytes: Buffer,
+            signal_value: serde_json::Value,
+            principal_cid: String,
+        ) -> napi::Result<serde_json::Value> {
+            resume_from_bytes_as_adapter(&self.inner, bytes.as_ref(), signal_value, &principal_cid)
         }
     }
 }

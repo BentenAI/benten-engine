@@ -492,42 +492,63 @@ describe("engine.diagnoseRead (Option C)", () => {
   });
 });
 
-// Phase 2a R4 cov-8: the WAIT napi bridge end-to-end test. The TS DSL
-// layer has its own WAIT tests (`packages/engine/src/wait.test.ts`); this
-// one fires the callWithSuspension + resumeFromBytes calls directly through
-// the native binary so a napi-layer regression (e.g. a lost suspension
-// handle across the boundary) is caught before the DSL wraps it.
+// Phase 2a R4 cov-8 / Wave-3 napi F5: the WAIT napi bridge end-to-end
+// test. The TS DSL layer has its own WAIT tests
+// (`packages/engine/src/wait.test.ts`); this one fires the
+// callWithSuspension + resumeFromBytesUnauthenticated calls directly
+// through the native binary so a napi-layer regression (e.g. a lost
+// suspension handle across the boundary) is caught before the DSL
+// wraps it.
 //
-// TDD red-phase: `callWithSuspension` / `resumeFromBytes` are not yet
-// exposed on the napi `Engine` class (G3-A/B land them). Until then this
-// test fails at the `typeof eng.callWithSuspension !== "function"` guard.
+// The napi surface returns the suspended handle as a base64 string
+// inside the `{ kind, handle }` JSON shape so the napi return type
+// stays a single `serde_json::Value`. The TS DSL wrapper decodes this
+// to a `Buffer` before exposing it to user code; here we exercise the
+// raw native surface and decode inline.
 describe("napi WAIT bridge round-trip (Phase 2a cov-8)", () => {
-  it("callWithSuspension + resumeFromBytes roundtrip through the native binary", async () => {
+  it("callWithSuspension + resumeFromBytesUnauthenticated roundtrip through the native binary", () => {
     const dir = mkdtempSync(join(tmpdir(), "benten-wait-napi-"));
     const eng = new native.Engine(join(dir, "benten.redb"));
     try {
-      expect(typeof eng.callWithSuspension).toBe(
-        "function",
-      );
-      expect(typeof eng.resumeFromBytes).toBe("function");
+      expect(typeof eng.callWithSuspension).toBe("function");
+      expect(typeof eng.resumeFromBytesUnauthenticated).toBe("function");
+      expect(typeof eng.resumeFromBytesAs).toBe("function");
 
-      // Register a minimal WAIT-composing handler via the napi surface.
-      // The spec-shape mirrors the Rust side — a tiny subgraph with WAIT
-      // on an `external:ping` signal that completes on RESPOND once the
-      // signal resumes.
-      const handlerId = eng.registerWaitHandlerForTest?.("wait:napi_bridge");
+      // Register a minimal WAIT-composing handler via the napi
+      // `registerSubgraph` JSON surface. Any spec carrying a `wait`
+      // primitive trips `should_suspend` inside the engine's WAIT
+      // executor (`crates/benten-engine/src/engine_wait.rs`) so
+      // callWithSuspension returns the Suspended arm.
+      const handlerId = eng.registerSubgraph({
+        handlerId: "wait:napi_bridge",
+        actions: ["wait:run"],
+        root: "n0",
+        nodes: [
+          { id: "n0", primitive: "wait", args: { signal: "external:ping" }, edges: {} },
+          { id: "n1", primitive: "respond", args: { body: "$result" }, edges: {} },
+        ],
+      });
       expect(typeof handlerId).toBe("string");
 
       const suspended = eng.callWithSuspension(handlerId, "wait:run", {});
       expect(suspended).toBeTruthy();
       expect(suspended.kind).toBe("suspended");
-      const bytes = suspended.handle ?? suspended.bytes;
-      expect(bytes).toBeInstanceOf(Uint8Array);
+      // Handle is base64-encoded over the napi JSON surface; decode to
+      // the Uint8Array shape the resume_from_bytes_unauthenticated
+      // adapter expects.
+      expect(typeof suspended.handle).toBe("string");
+      const bytes = Buffer.from(suspended.handle as string, "base64");
+      expect(bytes.length).toBeGreaterThan(0);
 
-      const resumed = eng.resumeFromBytes(bytes, { payload: "hello" });
+      const resumed = eng.resumeFromBytesUnauthenticated(bytes, {
+        payload: "hello",
+      });
       expect(resumed).toBeTruthy();
-      // Either `kind: "complete"` or an implicit complete outcome.
-      expect(resumed.kind ?? "complete").toBe("complete");
+      // Phase-2a synthesizes a terminal OK outcome on resume; assert
+      // the Outcome shape (ok=true, edge="OK") rather than a
+      // `kind: complete` discriminant — that wrapping happens in the
+      // TS DSL, not at the raw napi surface.
+      expect(resumed.ok).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

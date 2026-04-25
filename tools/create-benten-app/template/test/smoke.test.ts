@@ -96,13 +96,10 @@ describe("Benten Phase 1 + 2a exit criteria (seven named gates)", () => {
   // WAIT use cases don't pay the test cost, but the scaffolder smoke
   // MUST exercise this primitive to prove the napi surface wires up).
   //
-  // .skip pending Phase-2a Wave-3 napi F5: `callWithSuspension` +
-  // `resumeFromBytes` adapters exist in `bindings/napi/src/wait.rs`
-  // but aren't exposed as `#[napi]` methods on the Engine class yet.
-  // Un-skip when Wave 3 lands the 3 `#[napi] fn` bridges consuming
-  // the existing adapters (plan §G11-A "napi F5 resume/suspend
-  // wiring").
-  it.skip("wait_executor_end_to_end", async () => {
+  // Phase-2a Wave-3 napi F5 (G11-A): `callWithSuspension` +
+  // `resumeFromBytes[As]` are now exposed as `#[napi]` methods on the
+  // Engine class via `bindings/napi/src/lib.rs::napi_surface`.
+  it("wait_executor_end_to_end", async () => {
     const waitHandler = await engine.registerSubgraph(
       subgraph("smoke-wait")
         .action("run")

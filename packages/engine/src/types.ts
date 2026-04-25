@@ -213,6 +213,48 @@ export interface CapabilityGrant {
 }
 
 /**
+ * Terminal outcome of a handler invocation. Mirrors the napi-side
+ * `outcome_to_json` shape from `bindings/napi/src/subgraph.rs`.
+ *
+ * `ok: true` indicates the call routed via an `OK` edge (or its
+ * synonyms). `ok: false` indicates the handler routed via an error
+ * edge — `errorCode` / `errorMessage` carry the Rust-side typed error.
+ *
+ * The `cid` / `createdCid` aliases both refer to the CID of the
+ * primary Node a CRUD `create` produced; `list` carries the materialized
+ * list for `read_view` / `list` actions.
+ */
+export interface Outcome {
+  ok: boolean;
+  edge?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  cid?: string;
+  createdCid?: string;
+  list?: JsonValue[];
+  completedIterations?: number;
+  successfulWriteCount: number;
+}
+
+/**
+ * Discriminated-union return shape from `Engine.callWithSuspension`.
+ *
+ * - `kind: "complete"` — the handler ran to completion without hitting
+ *   a WAIT primitive; `outcome` is the terminal Outcome.
+ * - `kind: "suspended"` — the handler hit a WAIT and persisted an
+ *   `ExecutionStateEnvelope`; `handle` is the DAG-CBOR bytes you pass
+ *   to `Engine.resumeFromBytes` / `Engine.resumeFromBytesAs` once the
+ *   awaited signal is ready.
+ *
+ * Phase 2a G3-B napi F5 wiring: the napi layer transports the handle
+ * as a base64 string under the hood; the TS wrapper decodes to `Buffer`
+ * before exposing it to user code.
+ */
+export type SuspensionResult =
+  | { kind: "complete"; outcome: Outcome }
+  | { kind: "suspended"; handle: Buffer };
+
+/**
  * Input shape for `Engine.createView`. Phase-1 recognizes the well-known
  * id family `content_listing_<label>`; extra fields are reserved for
  * Phase-2 user-defined views.

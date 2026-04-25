@@ -36,8 +36,10 @@ import type {
   Edge,
   HandlerAdjacencies,
   JsonValue,
+  Outcome,
   RegisteredHandler,
   Subgraph,
+  SuspensionResult,
   Trace,
   TraceStep,
   ViewDef,
@@ -84,6 +86,21 @@ interface NativeEngine {
   metricsSnapshot?: () => Record<string, number>;
   capabilityWritesCommitted?: () => Record<string, number>;
   capabilityWritesDenied?: () => Record<string, number>;
+  // Phase 2a G3-B napi F5 — WAIT suspend/resume bridge.
+  callWithSuspension?: (
+    handlerId: string,
+    op: string,
+    input: unknown,
+  ) => unknown;
+  resumeFromBytesUnauthenticated?: (
+    bytes: Buffer,
+    signalValue: unknown,
+  ) => unknown;
+  resumeFromBytesAs?: (
+    bytes: Buffer,
+    signalValue: unknown,
+    principalCid: string,
+  ) => unknown;
 }
 
 interface NativeEngineCtor {
@@ -1033,6 +1050,111 @@ export class Engine {
     }
     try {
       return this.inner.capabilityWritesDenied();
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  // -------- WAIT / suspend / resume (Phase 2a G3-B napi F5) --------
+
+  /**
+   * Invoke a handler with suspension awareness.
+   *
+   * Returns a discriminated-union result:
+   * - `{ kind: "complete", outcome }` — the handler ran to completion
+   *   without hitting a WAIT primitive; `outcome` is the terminal Outcome.
+   * - `{ kind: "suspended", handle }` — the handler hit a WAIT and
+   *   produced an envelope. `handle` is a Node `Buffer` carrying the
+   *   DAG-CBOR ExecutionStateEnvelope; pass it to `resumeFromBytes` /
+   *   `resumeFromBytesAs` once the awaited signal is ready.
+   *
+   * The napi layer transports the handle as base64 to keep the FFI
+   * return type a single `serde_json::Value`; this wrapper decodes it
+   * to a `Buffer` so user code never sees the wire encoding.
+   */
+  public async callWithSuspension(
+    handlerId: string,
+    op: string,
+    input: JsonValue,
+  ): Promise<SuspensionResult> {
+    this.assertOpen();
+    if (!this.inner.callWithSuspension) {
+      throw new EDslInvalidShape(
+        "Engine.callWithSuspension unavailable on this binding — rebuild @benten/engine-native",
+      );
+    }
+    let raw: unknown;
+    try {
+      raw = this.inner.callWithSuspension(handlerId, op, input);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+    if (!raw || typeof raw !== "object") {
+      throw new EDslInvalidShape(
+        "Engine.callWithSuspension: native binding returned an unexpected shape",
+      );
+    }
+    const r = raw as Record<string, unknown>;
+    const kind = typeof r.kind === "string" ? r.kind : "";
+    if (kind === "complete") {
+      return { kind: "complete", outcome: r.outcome as Outcome };
+    }
+    if (kind === "suspended") {
+      const handleStr = typeof r.handle === "string" ? r.handle : "";
+      if (handleStr.length === 0) {
+        throw new EDslInvalidShape(
+          "Engine.callWithSuspension: suspended result missing base64 handle",
+        );
+      }
+      return { kind: "suspended", handle: Buffer.from(handleStr, "base64") };
+    }
+    throw new EDslInvalidShape(
+      `Engine.callWithSuspension: unknown result kind "${kind}"`,
+    );
+  }
+
+  /**
+   * Resume a suspended handler from envelope bytes. Equivalent to the
+   * Rust-side `resume_from_bytes_unauthenticated` — skips step 2
+   * (principal binding) of the 4-step resume protocol. Use
+   * {@link Engine.resumeFromBytesAs} when you have a principal CID
+   * that should be bound into the resume.
+   */
+  public async resumeFromBytes(
+    bytes: Buffer,
+    signal: JsonValue,
+  ): Promise<Outcome> {
+    this.assertOpen();
+    if (!this.inner.resumeFromBytesUnauthenticated) {
+      throw new EDslInvalidShape(
+        "Engine.resumeFromBytes unavailable on this binding — rebuild @benten/engine-native",
+      );
+    }
+    try {
+      return this.inner.resumeFromBytesUnauthenticated(bytes, signal) as Outcome;
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /**
+   * Resume a suspended handler from envelope bytes WITH an explicit
+   * resumption principal CID. Drives the full 4-step resume protocol;
+   * a principal mismatch fires `E_RESUME_ACTOR_MISMATCH`.
+   */
+  public async resumeFromBytesAs(
+    bytes: Buffer,
+    signal: JsonValue,
+    principalCid: string,
+  ): Promise<Outcome> {
+    this.assertOpen();
+    if (!this.inner.resumeFromBytesAs) {
+      throw new EDslInvalidShape(
+        "Engine.resumeFromBytesAs unavailable on this binding — rebuild @benten/engine-native",
+      );
+    }
+    try {
+      return this.inner.resumeFromBytesAs(bytes, signal, principalCid) as Outcome;
     } catch (err) {
       throw mapNativeError(err);
     }
