@@ -152,9 +152,12 @@ jobs:
         #     flaky-proptest item.
         #   - variant_count_is_pinned — G3-B WaitOutcome variant-count
         #     shape-pin; belongs with the Wave-2b TraceStep unification.
-        #   - view_stale_count_tallies — ENGINE Wave-1 wired
-        #     engine_diagnostics.rs:185 away from the 0.0 hardcode but
-        #     the IVM-side tally isn't tallying; Wave-2 ENGINE-CARRY.
+        #   - view_stale_count_tallies — RESOLVED in G11-A Wave 3a
+        #     (the IVM-side tally was already live via
+        #     Subscriber::stale_count_tally; the test needed
+        #     `.with_test_ivm_budget(small)` so a modest write burst
+        #     actually trips the view past its freshness bound). Filter
+        #     clause dropped.
         #   - compromise_6_* / compromise_7_* — compromise-regression
         #     tests asserting SECURITY-POSTURE.md content + benten-graph
         #     bin feature-gating that G11-A Wave 1 DOCS didn't land; the
@@ -165,7 +168,7 @@ jobs:
         #     DOCS-CARRY.
         run: |
           cargo nextest run --profile ci --workspace --locked --features benten-eval/testing,benten-engine/test-helpers \
-            -E 'not test(/load_verified/) and not test(/prop_parent_single_wildcard/) and not test(/variant_count_is_pinned/) and not test(/view_stale_count_tallies/) and not test(/compromise_6_/) and not test(/compromise_7_/)'
+            -E 'not test(/load_verified/) and not test(/prop_parent_single_wildcard/) and not test(/variant_count_is_pinned/) and not test(/compromise_6_/) and not test(/compromise_7_/)'
 
       - name: cargo doc
         if: matrix.rust == 'stable'
