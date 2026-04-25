@@ -17,6 +17,17 @@
 //!   end-to-end latency including the fan-out loop.
 //!
 //! Informational (not CI-gated for Phase-2a).
+//!
+//! Threshold (machine-readable, mirrors `bench-threshold-drift.yml`):
+//!
+//! ```text
+//! BENCH_ID = change_event_fanout/*
+//! THRESHOLD_NS = informational
+//! POLICY = informational
+//! SOURCE = plan-§G11-A-bench-backfill
+//! ```
+
+// THRESHOLD_NS=informational policy=informational source=plan-§G11-A-bench-backfill
 
 use std::collections::BTreeMap;
 

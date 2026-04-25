@@ -23,6 +23,15 @@
 //! Under redb's MVCC, the reader should see a flat latency line regardless
 //! of N — readers go through `begin_read` which opens a snapshot, not the
 //! single-writer lock.
+//!
+//! ```text
+//! BENCH_ID = mvcc_read_latency/*
+//! THRESHOLD_NS = informational
+//! POLICY = informational
+//! SOURCE = §14.6-mvcc-reads-stay-fast-trend
+//! ```
+
+// THRESHOLD_NS=informational policy=informational source=§14.6-mvcc-reads-stay-fast-trend
 
 #![allow(
     clippy::unwrap_used,

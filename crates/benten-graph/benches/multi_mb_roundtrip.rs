@@ -32,6 +32,15 @@
 //! ~100MB of transient heap during the put, plus another ~100MB for the
 //! decoded Node on `get_node`. Systems with <2GB free RAM may see
 //! allocator pressure — reduce `size_mb` or skip the 100MB variant.
+//!
+//! ```text
+//! BENCH_ID = multi_mb_roundtrip/*
+//! THRESHOLD_NS = informational
+//! POLICY = informational
+//! SOURCE = non-§14.6-payload-trend
+//! ```
+
+// THRESHOLD_NS=informational policy=informational source=non-§14.6-payload-trend
 
 #![allow(
     clippy::unwrap_used,

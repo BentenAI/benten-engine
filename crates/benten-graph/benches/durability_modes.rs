@@ -72,6 +72,14 @@
     reason = "benches may use unwrap/expect per workspace policy"
 )]
 
+// Matrix-readable threshold (mirrors `bench-threshold-drift.yml`). The
+// existing per-case `/// THRESHOLD_NS = informational` doc-comments
+// inside the `bench_gate5_descope_proof` body capture the rationale per
+// case; this top-level non-doc comment exists so the matrix-side grep
+// (which only matches `^[[:space:]]*//[[:space:]]*THRESHOLD_NS=`) picks
+// the file up.
+// THRESHOLD_NS=informational policy=informational source=arch-r1-1-gate-5-descope-witness
+
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 

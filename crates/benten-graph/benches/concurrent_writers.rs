@@ -35,6 +35,15 @@
 //! Characterization of write-lock queuing tail is owned by the
 //! integration-test landscape (see `tests/integration/contention_*`);
 //! this bench's job is to surface the throughput envelope.
+//!
+//! ```text
+//! BENCH_ID = concurrent_writers/*
+//! THRESHOLD_NS = informational
+//! POLICY = informational
+//! SOURCE = §14.6-direct-concurrent-writers
+//! ```
+
+// THRESHOLD_NS=informational policy=informational source=§14.6-direct-concurrent-writers
 
 #![allow(
     clippy::unwrap_used,

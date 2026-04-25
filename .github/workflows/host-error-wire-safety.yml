@@ -36,7 +36,10 @@ on:
 
 concurrency:
   group: host-error-wire-${{ github.ref }}
-  cancel-in-progress: true
+  # CI-2 hygiene: cancel-in-progress only on PR. Force-cancel on push
+  # could lose the only run that reflects a freshly-merged main commit
+  # (mirrors ci.yml's pattern).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always

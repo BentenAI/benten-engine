@@ -16,6 +16,19 @@
 //!   to the Subscriber's registered views (all 5 Phase-1 hand-written views
 //!   attached). Events alternate matching / non-matching labels so the
 //!   dispatch pattern-match gets exercised as well as the apply path.
+//!
+//! ```text
+//! BENCH_ID = view_maintenance/*
+//! THRESHOLD_NS = informational  (per-case gates: 1µs read, 50µs maintain — Criterion-side)
+//! POLICY = informational
+//! SOURCE = §14.6-direct-ivm-view-read + §14.6-derived-ivm-incremental
+//! ```
+//!
+//! Matrix-level entry is `informational` because the file mixes a 1µs
+//! read gate and a 50µs maintenance gate; the matrix slot holds one
+//! value per file. Per-case gates remain in the docstring above.
+
+// THRESHOLD_NS=informational policy=informational source=§14.6-ivm-direct-mixed
 
 #![allow(
     clippy::unwrap_used,

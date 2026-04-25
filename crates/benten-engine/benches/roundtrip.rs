@@ -13,6 +13,21 @@
 //! - Node creation + IVM update: 100-500us realistic
 //!
 //! The `full_roundtrip` benchmark is the headline number.
+//!
+//! ```text
+//! BENCH_ID = roundtrip/*
+//! THRESHOLD_NS = informational
+//! POLICY = informational
+//! SOURCE = §14.6-direct-trend (numeric gates live in get_create_node.rs)
+//! ```
+//!
+//! The numeric §14.6 gates (`get_node` 50µs / `create_node_immediate`
+//! 500µs) live in `crates/benten-graph/benches/get_create_node.rs` —
+//! that storage-layer bench owns the fail-on-regression contract. This
+//! engine-level wrapper is informational + trend-only so the matrix
+//! doesn't double-gate the same surface.
+
+// THRESHOLD_NS=informational policy=informational source=§14.6-trend-only
 
 #![allow(
     clippy::unwrap_used,

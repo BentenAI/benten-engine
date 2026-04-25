@@ -30,6 +30,15 @@
 //! A delta > 150µs means composition overhead has overgrown the §14.6
 //! envelope and needs profiling.
 
+// Threshold (machine-readable, mirrors `bench-threshold-drift.yml`).
+// The §14.6 row names a 100–500µs realistic envelope; on the public CI
+// runner under contention + the BENTEN_BENCH_GATE_MULTIPLIER=3 cushion
+// applied at gate time, a fail-on-regression numeric ceiling produces
+// noise without catching real regressions. The §14.6 envelope itself is
+// asserted by the `roundtrip.rs` storage-layer benches; this end-to-end
+// composition variant tracks the trend across releases as informational.
+// THRESHOLD_NS=informational policy=informational source=§14.6-direct
+
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,

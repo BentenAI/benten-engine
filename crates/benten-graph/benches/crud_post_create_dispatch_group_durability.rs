@@ -16,6 +16,15 @@
 //! Phase 2a R3 red-phase: the bench routes through a Phase-2a helper that
 //! `todo!()`s until G2-A wires the durability-mode-aware put path. Today's
 //! iteration panics; the bench compiles.
+//!
+//! ```text
+//! BENCH_ID = crud_post_create_dispatch_group_durability
+//! THRESHOLD_NS = informational
+//! POLICY = informational
+//! SOURCE = arch-r1-1 / plan-§2.2-G1 (gate-5 descope witness)
+//! ```
+
+// THRESHOLD_NS=informational policy=informational source=arch-r1-1-gate-5-descope-witness
 
 use benten_graph::{DurabilityMode, RedbBackend};
 use criterion::{Criterion, criterion_group, criterion_main};

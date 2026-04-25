@@ -52,6 +52,22 @@
 //!   subgraph-build cost (cache-warmed) so a regression in the subgraph
 //!   cache (r6-perf-5) is caught here rather than swallowed by fsync.
 //!   Target: median < 10µs.
+//!
+//! ```text
+//! BENCH_ID = ten_node_handler/*
+//! THRESHOLD_NS = informational
+//! POLICY = informational
+//! SOURCE = §14.6-mixed-handler-trend
+//! ```
+//!
+//! The matrix-level THRESHOLD is `informational` because the bench mixes
+//! a gated path (`build_only`) with an explicitly-ungated path
+//! (`crud_post_create_dispatch`) and a third gated path
+//! (`list_dispatch_no_write`). Per-bench-case gates live inside the
+//! Criterion harness; the matrix entry exists so the drift gate covers
+//! every benched surface (perf-r6-1).
+
+// THRESHOLD_NS=informational policy=informational source=§14.6-mixed-handler-trend
 
 #![allow(
     clippy::unwrap_used,

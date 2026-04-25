@@ -28,7 +28,10 @@ on:
 
 concurrency:
   group: inv-11-drift-${{ github.ref }}
-  cancel-in-progress: true
+  # CI-2 hygiene: cancel-in-progress only on PR to keep main-branch pushes
+  # serial (mirrors ci.yml's pattern). A force-cancel on push could lose
+  # the only run that reflects a freshly-merged main commit.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   drift-check:

@@ -29,6 +29,22 @@
 //! All methods invoked here (`RedbBackend::open`, `put_node`, `get_node`)
 //! exist in the spike. This bench will run against real code from day one of
 //! R5.
+//!
+//! ```text
+//! BENCH_ID = get_node + create_node_immediate
+//! THRESHOLD_NS = informational  (per-case gates live in the docstring above)
+//! POLICY = informational
+//! SOURCE = §14.6-direct-get-create
+//! ```
+//!
+//! Matrix-level entry is `informational` because this file mixes two
+//! distinct §14.6 ceilings (50µs read / 500µs write) and the matrix slot
+//! holds one value per file. Per-case fail-on-regression gating
+//! continues via the per-case Criterion thresholds called out in the
+//! docstring above; the matrix entry exists only so the bench-drift
+//! gate covers this file (perf-r6-1 COVERAGE finding).
+
+// THRESHOLD_NS=informational policy=informational source=§14.6-direct-get-create-mixed
 
 #![allow(
     clippy::unwrap_used,

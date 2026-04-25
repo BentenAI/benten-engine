@@ -23,6 +23,15 @@
 //! passes 36-byte buffers, not strings) so it stays the primary trend
 //! line here; a sibling `from_str` measurement can be added alongside
 //! this one when the string path becomes a measured hot spot.
+//!
+//! ```text
+//! BENCH_ID = cid_parse/*
+//! THRESHOLD_NS = informational
+//! POLICY = informational
+//! SOURCE = non-§14.6-cid-parse-trend
+//! ```
+
+// THRESHOLD_NS=informational policy=informational source=non-§14.6-cid-parse-trend
 
 #![allow(
     clippy::unwrap_used,

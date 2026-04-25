@@ -23,6 +23,15 @@
 //!    against this.
 //!
 //! Informational (not CI-gated for Phase-2a).
+//!
+//! ```text
+//! BENCH_ID = subgraph_cache_hit_80_20_mixed/*
+//! THRESHOLD_NS = informational
+//! POLICY = informational
+//! SOURCE = plan-§G11-A-bench-backfill
+//! ```
+
+// THRESHOLD_NS=informational policy=informational source=plan-§G11-A-bench-backfill
 
 use std::collections::BTreeMap;
 

@@ -14,6 +14,15 @@
 //!
 //! Informational (not CI-gated); R5 G2-B flips it live once the cache
 //! round-trip is wired.
+//!
+//! ```text
+//! BENCH_ID = subgraph_cache_hit/*
+//! THRESHOLD_NS = informational
+//! POLICY = informational
+//! SOURCE = plan-§4.4-G2-B-cache-warm-path
+//! ```
+
+// THRESHOLD_NS=informational policy=informational source=plan-§4.4-G2-B-cache-warm-path
 
 use benten_engine::Engine;
 use criterion::{Criterion, criterion_group, criterion_main};

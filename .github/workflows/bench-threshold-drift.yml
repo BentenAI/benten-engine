@@ -51,12 +51,37 @@ jobs:
           # string `informational`. Mirrors docs/BENCHMARKING.md (which is
           # gitignored on public CI runners).
           declare -A MATRIX=(
+            # Numerically-gated entries (fail-on-regression).
             ["crates/benten-eval/benches/multiplicative_budget_overhead.rs"]="1000"
             ["crates/benten-engine/benches/get_node_label_only_sub_1us.rs"]="1000"
             ["crates/benten-eval/benches/transform_expression_latency.rs"]="10000"
             ["crates/benten-eval/benches/wait_suspend_resume_latency.rs"]="50000"
+            # Informational entries (no CI gate, but still tracked for
+            # drift between bench-source and matrix). perf-r6-1 +
+            # COVERAGE M4: every bench under crates/**/benches/*.rs
+            # appears in this matrix so the gate covers all benched
+            # surfaces. Files with multiple per-case gates carry their
+            # numeric ceilings inside the Criterion harness; the matrix
+            # entry is `informational` because the matrix slot holds
+            # one value per file.
             ["crates/benten-caps/benches/wallclock_toctou_refresh.rs"]="informational"
             ["crates/benten-engine/benches/option_c_evaluator_path_overhead.rs"]="informational"
+            ["crates/benten-engine/benches/change_event_fanout.rs"]="informational"
+            ["crates/benten-engine/benches/end_to_end_create.rs"]="informational"
+            ["crates/benten-engine/benches/roundtrip.rs"]="informational"
+            ["crates/benten-engine/benches/subgraph_cache_hit.rs"]="informational"
+            ["crates/benten-engine/benches/subgraph_cache_hit_80_20_mixed.rs"]="informational"
+            ["crates/benten-eval/benches/ten_node_handler.rs"]="informational"
+            ["crates/benten-graph/benches/concurrent_writers.rs"]="informational"
+            ["crates/benten-graph/benches/crud_post_create_dispatch_group_durability.rs"]="informational"
+            ["crates/benten-graph/benches/durability_modes.rs"]="informational"
+            ["crates/benten-graph/benches/get_create_node.rs"]="informational"
+            ["crates/benten-graph/benches/multi_mb_roundtrip.rs"]="informational"
+            ["crates/benten-graph/benches/mvcc_read_latency.rs"]="informational"
+            ["crates/benten-ivm/benches/view_maintenance.rs"]="informational"
+            ["crates/benten-ivm/benches/view_staleness_transition.rs"]="informational"
+            ["crates/benten-core/benches/cid_parse.rs"]="informational"
+            ["crates/benten-core/benches/hash_only.rs"]="informational"
           )
 
           fail=0

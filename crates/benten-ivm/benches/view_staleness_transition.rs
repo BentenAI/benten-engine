@@ -19,6 +19,15 @@
 //!
 //! Separately the bench also measures a single clean update on a healthy
 //! view (the baseline) so regressions in the common path show up.
+//!
+//! ```text
+//! BENCH_ID = view_staleness_transition/*
+//! THRESHOLD_NS = informational
+//! POLICY = informational
+//! SOURCE = plan-§G11-A-bench-backfill
+//! ```
+
+// THRESHOLD_NS=informational policy=informational source=plan-§G11-A-bench-backfill
 
 #![allow(
     clippy::unwrap_used,

@@ -22,6 +22,15 @@
 //! ```ignore
 //! cargo bench -p benten-core --bench hash_only
 //! ```
+//!
+//! ```text
+//! BENCH_ID = hash_only/*
+//! THRESHOLD_NS = informational
+//! POLICY = informational
+//! SOURCE = non-§14.6-baseline-protection
+//! ```
+
+// THRESHOLD_NS=informational policy=informational source=non-§14.6-baseline-protection
 
 #![allow(
     clippy::unwrap_used,
