@@ -76,8 +76,8 @@ pub use engine::{CHANGE_STREAM_MAX_BUFFERED, Engine};
 pub use engine_transaction::EngineTransaction;
 pub use error::EngineError;
 pub use outcome::{
-    AnchorHandle, DiagnosticInfo, HandlerPredecessors, NestedTx, Outcome, OutcomeExt,
-    ReadViewOptions, TerminalError, Trace, TraceStep, ViewCreateOptions,
+    AnchorHandle, BudgetExhaustedView, DiagnosticInfo, HandlerPredecessors, NestedTx, Outcome,
+    OutcomeExt, ReadViewOptions, TerminalError, Trace, TraceStep, ViewCreateOptions,
 };
 pub use subgraph_spec::{
     GrantSubject, IntoCallInput, IntoSubgraphSpec, IterateBody, RevokeScope, RevokeSubject,

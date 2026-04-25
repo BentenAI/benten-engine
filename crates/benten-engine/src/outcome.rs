@@ -11,8 +11,9 @@
 
 use std::collections::BTreeMap;
 
-use benten_core::{Cid, Node};
+use benten_core::{Cid, Node, Value};
 use benten_errors::ErrorCode;
+use benten_eval::AttributionFrame;
 
 /// Options passed to `Engine::create_view`. Currently a placeholder shape so
 /// `Default::default()` resolves unambiguously at the call site.
@@ -177,30 +178,224 @@ impl Trace {
     }
 }
 
+/// A single trace row produced by [`crate::Engine::trace`].
+///
+/// **Phase 2a G11-A Wave 2b — TraceStep unification (G5-B-ii deferral).** The
+/// engine-level `TraceStep` is now a discriminant union mirroring
+/// [`benten_eval::TraceStep`] so projections from the evaluator's trace
+/// stream into the engine surface are structurally 1:1. Three variants
+/// beyond the per-primitive `Step` row carry the suspend / resume / budget-
+/// exhaustion boundaries the Phase-2a evaluator emits.
+///
+/// The mirror shape preserves the engine-side per-primitive metadata that
+/// the eval-side row does not carry directly: `node_cid` (BLAKE3-derived
+/// per-OperationNode identity for predecessor lookups against
+/// [`HandlerPredecessors`]) and `primitive` (kind label, e.g. `"read"` /
+/// `"write"` / `"respond"`).
 #[derive(Debug, Clone)]
-pub struct TraceStep {
-    pub(crate) duration_us: u64,
-    pub(crate) node_cid: Cid,
-    pub(crate) primitive: String,
+#[allow(
+    clippy::large_enum_variant,
+    reason = "Step is the dominant variant (>99% of trace rows in normal CRUD walks); boxing it would force an allocation per step on the hot path while saving bytes only on the rare boundary / budget rows."
+)]
+pub enum TraceStep {
+    /// One per-primitive execution row.
+    Step {
+        /// Duration of the step in microseconds. Saturated at `1` so trace
+        /// callers that assert `> 0` see honest non-zero timing even for
+        /// ultra-fast primitives.
+        duration_us: u64,
+        /// Stable per-OperationNode CID, derived as
+        /// `BLAKE3(handler_id || \0 || op_node_id)`. Cross-references the
+        /// predecessor adjacency map returned by
+        /// [`crate::Engine::handler_predecessors`].
+        node_cid: Cid,
+        /// Primitive-kind label (e.g. `"read"`, `"write"`, `"respond"`).
+        /// Empty when the evaluator cannot attribute a primitive (legacy
+        /// Phase-1 synthetic-step fallback).
+        primitive: String,
+        /// Operation-node id within the registered handler (carried over
+        /// from the eval-side row for diagnostic surfacing).
+        node_id: String,
+        /// Inputs to the primitive. Phase-2a evaluator emits `Value::Null`
+        /// until per-step input snapshotting lands (Phase-2b).
+        inputs: Value,
+        /// Outputs produced by the primitive (`r.output` from the
+        /// evaluator's `step` result).
+        outputs: Value,
+        /// Optional error code if the step routed to a typed error edge.
+        error: Option<ErrorCode>,
+        /// Inv-14 attribution. `None` until G5-B-ii completes runtime
+        /// threading; the field is required on the public shape so
+        /// downstream callers can rely on the slot existing.
+        attribution: Option<AttributionFrame>,
+    },
+    /// WAIT primitive drove the evaluator to suspension. Mirrors
+    /// [`benten_eval::TraceStep::SuspendBoundary`].
+    SuspendBoundary {
+        /// CID of the persisted `ExecutionStateEnvelope`.
+        state_cid: Cid,
+    },
+    /// Resume re-entered a suspended execution. Mirrors
+    /// [`benten_eval::TraceStep::ResumeBoundary`].
+    ResumeBoundary {
+        /// CID of the `ExecutionStateEnvelope` that was resumed.
+        state_cid: Cid,
+        /// Value handed to the resumed frame as the signal payload.
+        signal_value: Value,
+    },
+    /// Inv-8 / Phase-2b SANDBOX-fuel budget exhausted. Mirrors
+    /// [`benten_eval::TraceStep::BudgetExhausted`].
+    BudgetExhausted {
+        /// `"inv_8_iteration"` | `"sandbox_fuel"`.
+        budget_type: &'static str,
+        /// How much budget was consumed before firing.
+        consumed: u64,
+        /// Configured limit.
+        limit: u64,
+        /// Path of operation-node ids that produced the exhaustion.
+        path: Vec<String>,
+    },
+}
+
+/// Inspector surface for the [`TraceStep::BudgetExhausted`] variant. Returned
+/// by [`TraceStep::as_budget_exhausted`] so shape-pin tests can read the
+/// fields without pattern-matching at every call site.
+#[derive(Debug, Clone, Copy)]
+pub struct BudgetExhaustedView<'a> {
+    budget_type: &'static str,
+    consumed: u64,
+    limit: u64,
+    path: &'a [String],
+}
+
+impl<'a> BudgetExhaustedView<'a> {
+    /// `"inv_8_iteration"` | `"sandbox_fuel"`.
+    #[must_use]
+    pub fn budget_type(&self) -> &'static str {
+        self.budget_type
+    }
+
+    /// How much budget was consumed before firing.
+    #[must_use]
+    pub fn consumed(&self) -> u64 {
+        self.consumed
+    }
+
+    /// Configured limit.
+    #[must_use]
+    pub fn limit(&self) -> u64 {
+        self.limit
+    }
+
+    /// Path of operation-node ids that produced the exhaustion.
+    #[must_use]
+    pub fn path(&self) -> &[String] {
+        self.path
+    }
 }
 
 impl TraceStep {
+    /// Step-row duration accessor. Returns the per-primitive microsecond
+    /// reading for [`TraceStep::Step`]; `0` for boundary / budget rows
+    /// (those are emitted at decision points, not metered intervals).
     #[must_use]
     pub fn duration_us(&self) -> u64 {
-        self.duration_us
+        match self {
+            TraceStep::Step { duration_us, .. } => *duration_us,
+            _ => 0,
+        }
     }
 
+    /// Step-row CID accessor. `Some(&Cid)` for [`TraceStep::Step`]; `None`
+    /// for boundary / budget rows (which are bounded by the suspended
+    /// envelope CID, not an OperationNode CID).
     #[must_use]
-    pub fn node_cid(&self) -> &Cid {
-        &self.node_cid
+    pub fn node_cid(&self) -> Option<&Cid> {
+        match self {
+            TraceStep::Step { node_cid, .. } => Some(node_cid),
+            _ => None,
+        }
     }
 
-    /// Primitive-kind label for the step (e.g. `"read"`, `"write"`,
-    /// `"respond"`). Empty when the Phase-1 synthetic step cannot
-    /// attribute a primitive.
+    /// Primitive-kind label for [`TraceStep::Step`]; `None` otherwise.
     #[must_use]
-    pub fn primitive(&self) -> &str {
-        &self.primitive
+    pub fn primitive(&self) -> Option<&str> {
+        match self {
+            TraceStep::Step { primitive, .. } => Some(primitive.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Operation-node id within the registered handler. `None` for
+    /// boundary / budget rows.
+    #[must_use]
+    pub fn node_id(&self) -> Option<&str> {
+        match self {
+            TraceStep::Step { node_id, .. } => Some(node_id.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Inv-14 attribution accessor. `None` in Phase 2a until G5-B-ii
+    /// runtime threading completes; once it does, every Step row carries
+    /// `Some(_)`. Boundary / budget rows always return `None`.
+    #[must_use]
+    pub fn attribution(&self) -> Option<&AttributionFrame> {
+        match self {
+            TraceStep::Step { attribution, .. } => attribution.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// Step-row error accessor. `Some(&ErrorCode)` if the primitive routed
+    /// to a typed error edge; `None` for success rows or non-Step variants.
+    #[must_use]
+    pub fn error(&self) -> Option<&ErrorCode> {
+        match self {
+            TraceStep::Step { error, .. } => error.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// Discriminant accessor for [`TraceStep::SuspendBoundary`].
+    #[must_use]
+    pub fn as_suspend_boundary(&self) -> Option<&Cid> {
+        match self {
+            TraceStep::SuspendBoundary { state_cid } => Some(state_cid),
+            _ => None,
+        }
+    }
+
+    /// Discriminant accessor for [`TraceStep::ResumeBoundary`].
+    #[must_use]
+    pub fn as_resume_boundary(&self) -> Option<(&Cid, &Value)> {
+        match self {
+            TraceStep::ResumeBoundary {
+                state_cid,
+                signal_value,
+            } => Some((state_cid, signal_value)),
+            _ => None,
+        }
+    }
+
+    /// Discriminant accessor for [`TraceStep::BudgetExhausted`]. Returns a
+    /// view exposing `budget_type`, `consumed`, `limit`, `path`.
+    #[must_use]
+    pub fn as_budget_exhausted(&self) -> Option<BudgetExhaustedView<'_>> {
+        match self {
+            TraceStep::BudgetExhausted {
+                budget_type,
+                consumed,
+                limit,
+                path,
+            } => Some(BudgetExhaustedView {
+                budget_type,
+                consumed: *consumed,
+                limit: *limit,
+                path,
+            }),
+            _ => None,
+        }
     }
 }
 

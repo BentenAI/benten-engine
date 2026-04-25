@@ -1095,20 +1095,62 @@ impl Engine {
         };
 
         // Copy raw evaluator TraceSteps into the caller's buffer, mapping
-        // each node_id → a stable per-OperationNode CID. The CID is
-        // derived from the handler_id + node_id pair so two ops with the
-        // same primitive kind but different positions in the subgraph
-        // surface distinct CIDs (r6b-dx-C6).
+        // each Step row to its stable per-OperationNode CID and preserving
+        // boundary / budget rows verbatim. The CID is derived from the
+        // handler_id + node_id pair so two ops with the same primitive
+        // kind but different positions in the subgraph surface distinct
+        // CIDs (r6b-dx-C6). G11-A Wave 2b: TraceStep is now an enum
+        // mirroring the eval-side variant union.
         if let Some(out) = trace_steps_out {
             for rs in raw_trace {
-                let node_id_str = rs.node_id().unwrap_or("").to_string();
-                let primitive = primitive_kind_label(&subgraph, &node_id_str);
-                let node_cid = derive_op_node_cid(subgraph.handler_id(), &node_id_str);
-                out.push(TraceStep {
-                    duration_us: rs.duration_us().max(1),
-                    node_cid,
-                    primitive,
-                });
+                match rs {
+                    benten_eval::TraceStep::Step {
+                        node_id,
+                        duration_us,
+                        inputs,
+                        outputs,
+                        error,
+                        attribution,
+                    } => {
+                        let primitive = primitive_kind_label(&subgraph, &node_id);
+                        let node_cid = derive_op_node_cid(subgraph.handler_id(), &node_id);
+                        out.push(TraceStep::Step {
+                            duration_us: duration_us.max(1),
+                            node_cid,
+                            primitive,
+                            node_id,
+                            inputs,
+                            outputs,
+                            error,
+                            attribution,
+                        });
+                    }
+                    benten_eval::TraceStep::SuspendBoundary { state_cid } => {
+                        out.push(TraceStep::SuspendBoundary { state_cid });
+                    }
+                    benten_eval::TraceStep::ResumeBoundary {
+                        state_cid,
+                        signal_value,
+                    } => {
+                        out.push(TraceStep::ResumeBoundary {
+                            state_cid,
+                            signal_value,
+                        });
+                    }
+                    benten_eval::TraceStep::BudgetExhausted {
+                        budget_type,
+                        consumed,
+                        limit,
+                        path,
+                    } => {
+                        out.push(TraceStep::BudgetExhausted {
+                            budget_type,
+                            consumed,
+                            limit,
+                            path,
+                        });
+                    }
+                }
             }
         }
 

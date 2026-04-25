@@ -229,8 +229,15 @@ fn exit_4_trace_non_zero_timing_and_topological_order() {
         steps.len()
     );
     for step in &steps {
+        // Phase 2a G11-A Wave 2b: TraceStep is now a discriminant union;
+        // a `crud(post):create` walk only emits Step rows (no WAIT, no
+        // budget exhaustion), so destructure to assert per-primitive
+        // timing without weakening the >0 contract.
+        let benten_engine::TraceStep::Step { duration_us, .. } = step else {
+            panic!("crud(post):create trace must only emit Step rows; got {step:?}");
+        };
         assert!(
-            step.duration_us() > 0,
+            *duration_us > 0,
             "every trace step must have non-zero timing; got {:?}",
             step
         );
@@ -248,15 +255,21 @@ fn exit_4_trace_non_zero_timing_and_topological_order() {
         .expect("handler structure available for test");
     let mut seen = std::collections::HashSet::new();
     for step in &steps {
-        for pred in adj.predecessors_of(step.node_cid()) {
+        // Wave 2b: only Step rows have node_cid; crud(post):create never
+        // emits boundary / budget variants, so the `expect` here pins the
+        // shape rather than weakening the topo assertion.
+        let cid = step
+            .node_cid()
+            .expect("crud(post):create trace must only emit Step rows with node_cid");
+        for pred in adj.predecessors_of(cid) {
             assert!(
                 seen.contains(pred),
                 "topo-order violated: {} observed before predecessor {}",
-                step.node_cid(),
+                cid,
                 pred
             );
         }
-        seen.insert(*step.node_cid());
+        seen.insert(*cid);
     }
 }
 

@@ -58,7 +58,12 @@ fn trace_returns_per_step_timings() {
         .unwrap();
     assert!(!trace.steps().is_empty());
     for step in trace.steps() {
-        assert!(step.duration_us() > 0, "every step has non-zero timing");
+        // Wave 2b TraceStep unification: crud(post):create only emits
+        // Step rows; assert the discriminant + timing without weakening.
+        let benten_engine::TraceStep::Step { duration_us, .. } = step else {
+            panic!("crud(post):create trace must only emit Step rows; got {step:?}");
+        };
+        assert!(duration_us > 0, "every step has non-zero timing");
     }
 }
 
