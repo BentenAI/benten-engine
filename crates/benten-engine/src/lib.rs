@@ -60,6 +60,16 @@ pub mod error;
 pub mod outcome;
 pub mod primitive_host;
 pub mod subgraph_spec;
+// R6 round-2 sec-r6r2-02: gate the test-helper surface (`principal_cid`,
+// `minimal_wait_handler`, `policy_with_grants`, `counting_capability_policy`,
+// `subgraph_bytes_for_handler`, etc.) behind `cfg(any(test, feature =
+// "test-helpers"))` so the napi cdylib (which opts into the narrower
+// `envelope-cache-test-grade` feature only) does NOT compile this surface
+// into production. Sibling crates' integration tests reach in via dev-deps
+// that already declare `benten-engine = { features = ["test-helpers"] }`
+// (see `benten-eval/Cargo.toml:66`, `benten-graph/Cargo.toml:86`,
+// `benten-caps/Cargo.toml:40`), so the test path is unaffected.
+#[cfg(any(test, feature = "test-helpers"))]
 pub mod testing;
 
 // ---------------------------------------------------------------------------
