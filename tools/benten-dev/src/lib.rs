@@ -237,7 +237,7 @@ impl DevServer {
     /// Advances on `grant` / `reset_dev_state`, never on hot-reload.
     #[must_use]
     pub fn grant_table_audit_sequence_for_test(&self) -> u64 {
-        self.grants.lock().map(|g| g.audit_sequence).unwrap_or(0)
+        self.grants.lock().map_or(0, |g| g.audit_sequence)
     }
 
     /// Testing shim — release the slow-transform gate so any thread
