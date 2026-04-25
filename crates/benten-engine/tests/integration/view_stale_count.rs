@@ -53,9 +53,28 @@ fn view_stale_count_tallies() {
         .copied()
         .unwrap_or(0.0);
 
+    // Tighten the delta assertion (R4b COVERAGE M3 — the prior `after >=
+    // before` is vacuous because `Subscriber::stale_count_tally` is
+    // monotonic by construction). The realistic delta is exactly 1: the
+    // builder auto-registers a single ContentListingView for "post"
+    // (`builder.rs` ~line 321), and `stale_count_tally` returns the count
+    // of currently-stale views — bounded above by the number of registered
+    // views. After 128 inserts with `with_test_ivm_budget(4)` overshoots
+    // the freshness bound, the single view MUST be stale, so
+    // `after - before == 1` (or `after == 1` when the run starts fresh).
+    // We assert `after - before >= 1` so the test is robust to a future
+    // multi-view subscriber registration without weakening the firing
+    // contract: the burst MUST flip at least one view stale.
+    let delta = after - before;
     assert!(
-        after >= before,
-        "view_stale_count must be monotonically non-decreasing; before={before} after={after}"
+        delta >= 1.0,
+        "view_stale_count must advance by at least 1 after a mutation burst \
+         big enough to push the auto-registered ContentListingView past its \
+         freshness bound (with_test_ivm_budget(4), 128 inserts). Got \
+         before={before}, after={after}, delta={delta}. \
+         Either the subscriber is not registered (builder.rs ~line 316), \
+         the view is not auto-registered (builder.rs ~line 323), or the \
+         per-view budget tracker is not flipping is_stale on overshoot."
     );
     assert!(
         after > 0.0,

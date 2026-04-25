@@ -40,4 +40,6 @@ mod integration {
     pub mod write_authority_lift;
     // ---- Phase 2a R4 fix-pass additions ----
     pub mod view_stale_count; // cov-6 G11-A witness
+    // ---- Phase 2a R4b Wave-3c fix-pass additions ----
+    pub mod budget_exhausted_trace_emission; // cov M2 — runtime BudgetExhausted firing
 }
