@@ -571,3 +571,113 @@ describe("napi WAIT bridge round-trip (Phase 2a cov-8)", () => {
     }
   });
 });
+
+// Phase 2a R4b Wave-3c COVERAGE M1 — resumeFromBytesAs end-to-end. The
+// existing suite at line 532 only smoke-checks `typeof eng.resumeFromBytesAs
+// === "function"`. This test fires the principal-attributed resume through
+// the full 4-step protocol, asserting both (a) a wrong-principal CID
+// surfaces `E_RESUME_ACTOR_MISMATCH` (step 2 enforcement) and (b) the
+// shape of the rejected error reaches the napi caller as a typed throw
+// rather than a silent no-op.
+//
+// Rationale for the negative assertion (step-2 mismatch) over a positive
+// match: the napi raw surface does NOT expose `callAsWithSuspension`, so
+// suspension uses `default_principal_for(handler_id)` (engine_wait.rs ~line
+// 294) — a CID that's NOT round-trippable through the napi boundary
+// without re-implementing the BLAKE3 derivation in TS. The negative
+// assertion proves step 2 is wired and reachable from napi (which the
+// shape-pin smoke test does NOT) without depending on a private
+// derivation. The matching positive flow is covered at the Rust layer
+// by `engine_wait_api_shape::resume_requires_matching_resumption_principal`.
+describe("napi resumeFromBytesAs end-to-end (Phase 2a R4b cov-M1)", () => {
+  it("rejects a principal CID that does not match the suspended envelope's resumption_principal_cid", () => {
+    const dir = mkdtempSync(join(tmpdir(), "benten-resume-as-"));
+    const eng = new native.Engine(join(dir, "benten.redb"));
+    try {
+      const handlerId = eng.registerSubgraph({
+        handlerId: "wait:napi_resume_as",
+        actions: ["wait:run"],
+        root: "n0",
+        nodes: [
+          { id: "n0", primitive: "wait", args: { signal: "external:resume-as" }, edges: {} },
+          { id: "n1", primitive: "respond", args: { body: "$result" }, edges: {} },
+        ],
+      });
+      const suspended = eng.callWithSuspension(handlerId, "wait:run", {});
+      expect(suspended.kind).toBe("suspended");
+      const bytes = Buffer.from(suspended.handle as string, "base64");
+      expect(bytes.length).toBeGreaterThan(0);
+
+      // A valid-shape CID that is provably NOT the synthesised default
+      // principal for the handler. Use the canonical fixture CID — it's
+      // a legitimate CIDv1 string that the suspend path never names.
+      const wrongPrincipal = CANONICAL_CID;
+
+      // Step 2 of the resume protocol must reject the mismatched
+      // principal with E_RESUME_ACTOR_MISMATCH (engine_wait.rs ~line 460).
+      // napi-rs surfaces engine errors as thrown JS Errors carrying the
+      // typed code in the message.
+      expect(() => {
+        eng.resumeFromBytesAs(bytes, { payload: "x" }, wrongPrincipal);
+      }).toThrow(/E_RESUME_ACTOR_MISMATCH/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// Phase 2a R4b Wave-3c COVERAGE M2-followup — duration-form WAIT
+// suspension at the napi boundary. The existing tests at line 525 cover
+// the signal-form (`wait({ signal: "external:ping" })`); this sibling
+// pins the duration-form (`wait({ duration: "1ms" })`) so a regression
+// in the napi-side primitive arg encoding for `duration` is caught at
+// the boundary, not just at the DSL layer
+// (`packages/engine/src/wait.test.ts`).
+//
+// Phase-2a contract per `engine_wait::should_suspend`: ANY `wait`
+// primitive triggers the Suspended arm regardless of the `args`
+// shape (signal vs. duration). This test pins that the duration form
+// reaches the napi-layer suspension path.
+describe("napi callWithSuspension duration-form (Phase 2a R4b cov-M2-followup)", () => {
+  it("duration-form wait suspends through the napi bridge identical to the signal-form path", () => {
+    const dir = mkdtempSync(join(tmpdir(), "benten-wait-duration-napi-"));
+    const eng = new native.Engine(join(dir, "benten.redb"));
+    try {
+      const handlerId = eng.registerSubgraph({
+        handlerId: "wait:napi_duration_form",
+        actions: ["wait:run"],
+        root: "n0",
+        nodes: [
+          {
+            id: "n0",
+            primitive: "wait",
+            // 1ms — the napi layer doesn't yet plumb a sub-millisecond
+            // deadline-elapsed completion, so duration-form WAITs go
+            // through the same suspend → resume_from_bytes path as
+            // signal-form (per `should_suspend` in engine_wait.rs).
+            args: { duration: "1ms" },
+            edges: {},
+          },
+          { id: "n1", primitive: "respond", args: { body: "$result" }, edges: {} },
+        ],
+      });
+
+      const suspended = eng.callWithSuspension(handlerId, "wait:run", {});
+      expect(suspended).toBeTruthy();
+      expect(suspended.kind).toBe("suspended");
+      expect(typeof suspended.handle).toBe("string");
+      const bytes = Buffer.from(suspended.handle as string, "base64");
+      expect(bytes.length).toBeGreaterThan(0);
+
+      // Round-trip through resumeFromBytesUnauthenticated to confirm the
+      // duration-form envelope decodes + clears the 4-step protocol the
+      // same way the signal-form envelope does. Phase-2a synthesises a
+      // terminal-OK outcome on resume.
+      const resumed = eng.resumeFromBytesUnauthenticated(bytes, {});
+      expect(resumed).toBeTruthy();
+      expect(resumed.ok).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
