@@ -33,7 +33,11 @@ benten-graph = { path = "../benten-graph" }
 # Integration tests cross layers; see `check_write_called_at_commit.rs` and
 # `toctou_iteration.rs`. dev-deps cycle between benten-caps and benten-engine
 # is safe because test binaries link separately from the lib crate graph.
-benten-engine = { path = "../benten-engine" }
+#
+# G11-A Wave 2a: `features = ["test-helpers"]` because the
+# `test-helpers` default was flipped off on benten-engine; the helpers
+# stay available for these integration tests under the explicit opt-in.
+benten-engine = { path = "../benten-engine", features = ["test-helpers"] }
 
 [[bench]]
 name = "wallclock_toctou_refresh"

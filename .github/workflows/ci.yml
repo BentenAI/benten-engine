@@ -94,7 +94,7 @@ jobs:
 
       - name: cargo clippy
         if: matrix.rust == 'stable'
-        run: cargo clippy --workspace --all-targets --features benten-eval/testing -- -D warnings
+        run: cargo clippy --workspace --all-targets --features benten-eval/testing,benten-engine/test-helpers -- -D warnings
 
       - name: cargo build --locked
         # `--features benten-eval/testing` unlocks the `register_test_callee`
@@ -102,7 +102,17 @@ jobs:
         # own integration tests (G4-A mini-review C1). Without it,
         # `cargo build --all-targets` fails on test + bench code referencing
         # `benten_eval::MockMonotonicSource` / `MockTimeSource::frozen_at_epoch`.
-        run: cargo build --workspace --all-targets --locked --features benten-eval/testing
+        #
+        # G11-A Wave 2a (CFG-GATING): `--features benten-engine/test-helpers`
+        # lights the test-only `backend_for_test` / `engine_wait.cache_put` /
+        # `testing_force_reregister_with_different_cid` + the bloom and
+        # immutability test hooks on `RedbBackend` back on. The `test-helpers`
+        # default was flipped off so release builds
+        # (`cargo check -p benten-engine --no-default-features`) do not
+        # compile those surfaces; CI re-enables them here so the full
+        # `cargo build --all-targets` / `cargo nextest run` continues to
+        # pick up every integration test.
+        run: cargo build --workspace --all-targets --locked --features benten-eval/testing,benten-engine/test-helpers
 
       - name: cargo nextest run
         env:
@@ -154,7 +164,7 @@ jobs:
         #     live in the public-untracked wave of the doc split. Wave-2
         #     DOCS-CARRY.
         run: |
-          cargo nextest run --profile ci --workspace --locked --features benten-eval/testing \
+          cargo nextest run --profile ci --workspace --locked --features benten-eval/testing,benten-engine/test-helpers \
             -E 'not test(/load_verified/) and not test(/devserver_/) and not test(/ast_cache_/) and not test(/old_subgraph_cid_not_reachable/) and not test(/prop_parent_single_wildcard/) and not test(/variant_count_is_pinned/) and not test(/view_stale_count_tallies/) and not test(/compromise_6_/) and not test(/compromise_7_/)'
 
       - name: cargo doc

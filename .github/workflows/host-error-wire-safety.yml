@@ -64,6 +64,7 @@ jobs:
       - name: Build + run wire-safety integration test
         run: |
           cargo nextest run --profile ci --locked \
+            --features benten-eval/testing,benten-engine/test-helpers \
             -p benten-engine \
             --test host_error_wire_safety \
             -E 'test(host_error_wire_format_excludes_cids)'

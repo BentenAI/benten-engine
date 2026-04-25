@@ -23,9 +23,19 @@ bench = false
 # The helpers are also available unconditionally under `cfg(test)`; this
 # feature lights them up for integration tests under tests/ (which are
 # compiled against the non-test library). See code-reviewer finding
-# g7-cr-4. Enabled by default so `cargo test` works without --features;
-# publishers of release artifacts disable via `--no-default-features`.
-default = ["test-helpers"]
+# g7-cr-4.
+#
+# G11-A Wave 2a (CFG-GATING): `default = []` so release builds
+# (`cargo check -p benten-engine --no-default-features`) do NOT
+# compile the test-only surfaces listed under `test-helpers` — most
+# importantly `engine_wait::testing_force_reregister_with_different_cid`
+# and the `engine_wait::ENVELOPE_CACHE` + `cache_put` / `cache_get`
+# helpers. CI workflows (`ci.yml`, `msrv.yml`, `phase-2a-exit-criteria.yml`,
+# `cross-process-graph.yml`, `host-error-wire-safety.yml`) pass
+# `--features benten-engine/test-helpers` alongside
+# `--features benten-eval/testing` so the `cargo test` / `cargo nextest
+# run` invocations continue to light the helpers up.
+default = []
 test-helpers = []
 # Phase-2a R3's original `phase_2a_stubs` feature was removed at R4
 # fix-pass (cov-1) — the R3 consolidation stubs made the gate obsolete

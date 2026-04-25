@@ -55,7 +55,11 @@ proptest = { workspace = true }
 criterion = { workspace = true }
 # Cross-process graph integration test (`d2_cross_process_graph.rs`) opens
 # the engine to round-trip a persisted node. Dev-dep cycle is safe.
-benten-engine = { path = "../benten-engine" }
+#
+# G11-A Wave 2a: `features = ["test-helpers"]` because the
+# `test-helpers` default was flipped off on benten-engine; the helpers
+# stay available for these integration tests under the explicit opt-in.
+benten-engine = { path = "../benten-engine", features = ["test-helpers"] }
 # Phase 2a: `capability_grant_writes_immediate.rs` imports
 # `CapabilityGrant` / `GrantScope` directly from benten-caps.
 benten-caps = { path = "../benten-caps" }

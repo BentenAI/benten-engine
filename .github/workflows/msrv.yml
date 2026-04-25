@@ -40,12 +40,18 @@ jobs:
           toolchain: "1.89"
 
       - name: Build workspace
-        run: cargo build --workspace --locked --features benten-eval/testing
+        # G11-A Wave 2a: `benten-engine/test-helpers` pairs with
+        # `benten-eval/testing` so the test-only surfaces (envelope cache,
+        # `backend_for_test`, `testing_force_reregister_with_different_cid`,
+        # bloom / Inv-13 matrix hooks) stay available for the MSRV build —
+        # the `test-helpers` default was flipped off to keep release
+        # builds clean.
+        run: cargo build --workspace --locked --features benten-eval/testing,benten-engine/test-helpers
 
       - name: Fixture-match check (canonical CID)
         run: |
           # The canonical fixture CID must remain stable across Rust versions.
           # If MSRV drift changes the encoding path, this catches it before
           # merge.
-          cargo test --workspace --locked --no-fail-fast --features benten-eval/testing -- \
+          cargo test --workspace --locked --no-fail-fast --features benten-eval/testing,benten-engine/test-helpers -- \
             exit_6_canonical_cid_matches_spike_fixture

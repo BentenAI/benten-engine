@@ -114,8 +114,15 @@ impl RedbBackend {
     /// - Any non-`User` authority -> rejected with [`GraphError::Redb`]
     ///   guarding the hook against accidental misuse from privileged paths.
     ///
+    /// G11-A Wave 2a: cfg-gated behind `any(test, feature = "testing")`.
+    /// This hook bypasses the content-addressing invariant by design (to
+    /// synthesise the otherwise-vacuous Inv-13 row-2 `User x content-
+    /// differs` path); leaving it exposed in release builds would let any
+    /// caller flank the Inv-13 5-row dispatch matrix.
+    ///
     /// # Errors
     /// Returns [`GraphError`] on write failure or non-User authority misuse.
+    #[cfg(any(test, feature = "testing"))]
     pub fn put_node_at_cid_for_test(
         &self,
         cid: &Cid,
@@ -153,11 +160,17 @@ impl RedbBackend {
     /// Phase 2a test-only hook: force the next `put_node`'s bloom probe to
     /// report `true` unconditionally (one-shot), so tests can exercise the
     /// false-positive fallback path reliably.
+    ///
+    /// G11-A Wave 2a: cfg-gated behind `any(test, feature = "testing")`.
+    #[cfg(any(test, feature = "testing"))]
     pub fn force_bloom_collision_for_next_put(&self) {
         self.force_bloom_collision_for_next_put_impl();
     }
 
     /// Phase 2a test-only hook: non-mutating probe of the bloom filter.
+    ///
+    /// G11-A Wave 2a: cfg-gated behind `any(test, feature = "testing")`.
+    #[cfg(any(test, feature = "testing"))]
     pub fn bloom_may_contain_for_test(&self, cid: &Cid) -> bool {
         self.bloom_may_contain_for_test_impl(cid)
     }
@@ -165,6 +178,9 @@ impl RedbBackend {
     /// Phase 2a test-only hook: force the bloom filter to report positive
     /// for `cid` until the backend is dropped. Persistent (not one-shot —
     /// contrast with [`Self::force_bloom_collision_for_next_put`]).
+    ///
+    /// G11-A Wave 2a: cfg-gated behind `any(test, feature = "testing")`.
+    #[cfg(any(test, feature = "testing"))]
     pub fn force_bloom_positive_for_test(&self, cid: &Cid) {
         self.force_bloom_positive_for_test_impl(cid);
     }
@@ -230,8 +246,14 @@ impl RedbBackend {
     /// Phase 2a test-only hook: corrupt on-disk subgraph bytes via a
     /// mutator closure.
     ///
+    /// G11-A Wave 2a: cfg-gated behind `any(test, feature = "testing")`
+    /// so a release build cannot reach the corruption primitive. Body is
+    /// still a `todo!()` stub pending the
+    /// `subgraph_load_verified_migration` deferral.
+    ///
     /// # Errors
     /// Returns [`GraphError`] if the CID is missing.
+    #[cfg(any(test, feature = "testing"))]
     pub fn corrupt_subgraph_bytes_for_test<F>(
         &self,
         _cid: &Cid,
@@ -245,8 +267,13 @@ impl RedbBackend {
 
     /// Phase 2a test-only hook: inject raw bytes under a computed CID.
     ///
+    /// G11-A Wave 2a: cfg-gated behind `any(test, feature = "testing")`.
+    /// Body is still a `todo!()` stub pending the
+    /// `subgraph_load_verified_migration` deferral.
+    ///
     /// # Errors
     /// Returns [`GraphError`] on write failure.
+    #[cfg(any(test, feature = "testing"))]
     pub fn inject_raw_subgraph_bytes_for_test(&self, _bytes: &[u8]) -> Result<Cid, GraphError> {
         todo!("Phase 2a G5-A: test-only raw-byte injection hook")
     }

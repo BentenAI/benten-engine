@@ -57,7 +57,13 @@ criterion = { workspace = true }
 # Integration tests reach into `benten_engine::testing` helpers; see
 # `read_denial.rs`, `requires_enforcement.rs`, etc. dev-deps can cycle
 # safely because test binaries link as a separate compile unit.
-benten-engine = { path = "../benten-engine" }
+#
+# G11-A Wave 2a: `features = ["test-helpers"]` because the
+# `test-helpers` default was flipped off on benten-engine; without this
+# explicit opt-in the integration tests under tests/ cannot reach
+# `Engine::testing_insert_privileged_fixture`,
+# `Engine::backend_for_test`, or the WAIT envelope-cache plumbing.
+benten-engine = { path = "../benten-engine", features = ["test-helpers"] }
 
 [[bench]]
 name = "ten_node_handler"

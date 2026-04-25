@@ -1,15 +1,21 @@
 # Local dev convenience: `cargo t` runs the full workspace test suite with
-# the `benten-eval/testing` feature enabled, which unlocks the
-# `register_test_callee` helper for benten-eval's own integration tests
-# (G4-A mini-review C1 — the MUTATION surface is gated behind
-# `cfg(any(test, feature = "testing"))` so no non-test build can seed the
-# registry that production Inv-8 budget decisions consult).
+# the `benten-eval/testing` + `benten-engine/test-helpers` features
+# enabled. `benten-eval/testing` unlocks the `register_test_callee` helper
+# for benten-eval's own integration tests (G4-A mini-review C1 — the
+# MUTATION surface is gated behind `cfg(any(test, feature = "testing"))`
+# so no non-test build can seed the registry that production Inv-8 budget
+# decisions consult). `benten-engine/test-helpers` (G11-A Wave 2a)
+# unlocks the test-only Engine surfaces — `backend_for_test`,
+# `engine_wait::ENVELOPE_CACHE` + `cache_put` / `cache_get`,
+# `testing_force_reregister_with_different_cid` — that the `test-helpers`
+# default flip removed from release builds.
 #
-# CI workflows pass `--features benten-eval/testing` explicitly in their
-# nextest invocations; this alias mirrors that for local `cargo test`
-# runs. Devs who want the canonical invocation can use `cargo t` or
-# `cargo test-all`; running `cargo test` directly still works but skips
-# the Inv-8 integration tests with a "function not found" compile error.
+# CI workflows pass `--features benten-eval/testing,benten-engine/test-helpers`
+# explicitly in their nextest invocations; this alias mirrors that for
+# local `cargo test` runs. Devs who want the canonical invocation can
+# use `cargo t` or `cargo test-all`; running `cargo test` directly still
+# works but skips the Inv-8 integration tests with a "function not
+# found" compile error.
 [alias]
-t = "nextest run --workspace --features benten-eval/testing"
-test-all = "nextest run --workspace --features benten-eval/testing"
+t = "nextest run --workspace --features benten-eval/testing,benten-engine/test-helpers"
+test-all = "nextest run --workspace --features benten-eval/testing,benten-engine/test-helpers"

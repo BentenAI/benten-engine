@@ -676,9 +676,14 @@ impl Engine {
     /// different CID so the cache-invalidation test (dx-r1 / arch-r1-5) can
     /// observe a cache miss.
     ///
+    /// G11-A Wave 2a: cfg-gated behind `any(test, feature = "test-helpers")`
+    /// so release builds cannot force a hashing inconsistency through the
+    /// registered-handler map from the public API.
+    ///
     /// # Errors
     /// Returns [`EngineError::Other`] with
     /// [`benten_errors::ErrorCode::NotFound`] if the handler is not registered.
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn testing_force_reregister_with_different_cid(
         &self,
         handler_id: &str,
