@@ -10,7 +10,7 @@
     "index.d.ts"
   ],
   "napi": {
-    "name": "benten-napi"
+    "binaryName": "benten-napi"
   },
   "scripts": {
     "build": "napi build --platform --release",
