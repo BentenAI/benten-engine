@@ -597,7 +597,15 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 ### E_INV_ATTRIBUTION
 
 - **Message:** "Missing or malformed attribution frame (Inv-14)"
-- **Context:** `{ step_index: number, reason: string }`
+- **Context:** none — Phase-2a R6FP catch-up EH5 trimmed the previously
+  documented `{ step_index, reason }` payload to match the actual Rust
+  surface, which returns the discriminant only via
+  `InvariantViolation::Attribution`. Threading per-step diagnostic context
+  through `EvalError` / `RegistrationError` / `ErrorCode` is a Phase-2b
+  refinement (post-evaluator-completion) tracked in
+  `docs/future/phase-2-backlog.md` if/when operator demand surfaces. The
+  catalog is the source of truth: until the structured payload exists, the
+  catalog spec must not promise it.
 - **Fix:** Phase-2a invariant 14: every TraceStep MUST carry an `AttributionFrame` naming the actor, handler, and capability-grant CIDs. A primitive-type that refuses to declare its attribution source fails at registration. File a bug against the primitive's `attribution_for_step` impl.
 - **Thrown at:** registration + runtime trace emission (G5-B)
 - **Phase:** 2a
