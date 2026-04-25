@@ -37,17 +37,24 @@ napi-export = ["dep:napi", "dep:napi-derive"]
 [dependencies]
 benten-core = { path = "../../crates/benten-core" }
 benten-caps = { path = "../../crates/benten-caps" }
-# Phase 2a G11-A Wave 3a napi F5: `benten-engine/test-helpers` is pulled
-# in unconditionally so the WAIT suspend/resume bridge (the in-memory
-# `ENVELOPE_CACHE` that `suspend_to_bytes` / `resume_from_bytes*` round-
-# trip through) is live in the cdylib the scaffolder + index.test.ts
-# consume. Phase 2b lands a redb-backed envelope store; until then the
-# in-memory cache is the only thing that makes `callWithSuspension` ->
-# `resumeFromBytes*` work across the napi boundary. Every other
-# `test-helpers`-gated surface (testing_force_reregister_with_different_cid,
-# the test-only engine introspection helpers) is a no-op for napi
-# consumers so the extra coverage carries no runtime cost.
-benten-engine = { path = "../../crates/benten-engine", features = ["test-helpers"] }
+# Phase 2a G11-A Wave 3a napi F5: the WAIT suspend/resume bridge (the
+# in-memory `ENVELOPE_CACHE` that `suspend_to_bytes` /
+# `resume_from_bytes*` round-trip through) must be live in the cdylib
+# the scaffolder + index.test.ts consume. Phase 2b lands a redb-backed
+# envelope store; until then the in-memory cache is the only thing that
+# makes `callWithSuspension` -> `resumeFromBytes*` work across the napi
+# boundary.
+#
+# R6 fix-pass A2: opt into the narrow `envelope-cache-test-grade`
+# feature instead of the broader `test-helpers`. Prior to the split the
+# cdylib pulled the full `test-helpers` surface
+# (`testing_force_reregister_with_different_cid`,
+# `testing_audit_sequence`, `testing_insert_privileged_fixture`, …)
+# which is reachable in production napi consumers' processes. The
+# narrow feature gates ONLY the ENVELOPE_CACHE static + cache_put /
+# cache_get; nothing else from the test-only API surface lands in the
+# cdylib.
+benten-engine = { path = "../../crates/benten-engine", features = ["envelope-cache-test-grade"] }
 benten-errors = { workspace = true }
 # r6b-dx-C5: used by `parse_actor_cid_or_derive` to hash friendly
 # principal strings into deterministic synthetic CIDs. Same version the
