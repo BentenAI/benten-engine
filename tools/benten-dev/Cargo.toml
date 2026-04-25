@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Benten dev-server for Phase-2a G11-A — hot-reload, inspect-state CLI, grant-preservation across reloads. TDD red-phase stubs only."
+description = "Benten dev-server (Phase-2a G11-A): hot-reload of handler subgraphs, cap-grant preservation across reload, inspect-state pretty-printer for suspended ExecutionStateEnvelopes."
 publish = false
 
 [lints]
@@ -16,9 +16,15 @@ workspace = true
 path = "src/lib.rs"
 bench = false
 
+[[bin]]
+name = "benten-dev"
+path = "src/main.rs"
+
 [dependencies]
 benten-core = { path = "../../crates/benten-core" }
 benten-errors = { workspace = true }
+benten-eval = { path = "../../crates/benten-eval" }
+blake3 = { workspace = true, features = ["pure"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }
