@@ -20,10 +20,14 @@ fn caches_stay_bounded_under_many_distinct_inserts() {
     let dir = tempdir().unwrap();
     let backend = RedbBackend::open_or_create(dir.path().join("db.redb")).unwrap();
 
-    // Drive well past the `TEST_EVENT_LOG_CAP` (10_000) and
-    // `LAST_DURABILITY_MAP_CAP` (1_000) bounds. 20k distinct nodes on
-    // distinct labels forces both caps to cycle at least once.
-    const INSERT_COUNT: u64 = 20_000;
+    // Drive past the `TEST_EVENT_LOG_CAP` (10_000) and
+    // `LAST_DURABILITY_MAP_CAP` (1_000) bounds. 11k distinct nodes on
+    // distinct labels exceeds both caps so they cycle at least once;
+    // earlier 20k sized for headroom but timed out on macos-x86_64-1.85
+    // (slowest runner combo at >180s for 20k redb write-txns). 11k keeps
+    // the cap-cycling contract while staying inside the 180s nextest
+    // slow-timeout × 3 terminate window.
+    const INSERT_COUNT: u64 = 11_000;
     for i in 0..INSERT_COUNT {
         let mut props = BTreeMap::new();
         props.insert("i".to_string(), Value::Int(i64::try_from(i).unwrap_or(0)));
