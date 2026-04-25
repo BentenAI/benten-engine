@@ -232,101 +232,133 @@ fn isolated_callee_bound(op: &OperationNode) -> Result<u64, UnknownCallee> {
 ///
 /// Returns `Err(UnknownCallee)` when any CALL node on the walked path
 /// names an unresolvable callee (G4-A mini-review M1).
+///
+/// # Complexity
+///
+/// `O(V + E)` via Kahn's topological sort + dynamic programming over the
+/// resulting order. Prior implementation was a recursive DFS without
+/// memoization that re-walked shared subtrees on diamond DAGs; cumulative
+/// cost was `O(2^V)` on a balanced fork-join shape with N forks. The
+/// memoized topological pass yields the same MAX-over-paths result (this
+/// is a perf rewrite, NOT a semantic change — see
+/// `perf_inv_8_diamond_*` regression tests).
 fn cumulative_by_id(sg: &Subgraph) -> Result<HashMap<String, u64>, UnknownCallee> {
-    // Build adjacency by id.
-    let mut outgoing: HashMap<&str, Vec<&str>> = HashMap::new();
-    for (f, t, _l) in &sg.edges {
-        outgoing.entry(f.as_str()).or_default().push(t.as_str());
-    }
+    let order = topo_order_by_id(sg);
     let by_id: HashMap<&str, &OperationNode> =
         sg.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
 
-    // Find roots (nodes with no incoming edge).
-    let mut has_incoming: std::collections::HashSet<&str> = std::collections::HashSet::new();
-    for (_f, t, _l) in &sg.edges {
-        has_incoming.insert(t.as_str());
+    // Predecessor adjacency keyed by `to`.
+    let mut incoming: HashMap<&str, Vec<&str>> = HashMap::new();
+    for (f, t, _l) in &sg.edges {
+        incoming.entry(t.as_str()).or_default().push(f.as_str());
     }
-    let roots: Vec<&str> = sg
-        .nodes
-        .iter()
-        .map(|n| n.id.as_str())
-        .filter(|id| !has_incoming.contains(id))
-        .collect();
 
-    // BFS/DFS carrying the cumulative product so far; at each node record
-    // the MAX product seen from any path reaching it. On an isolated CALL
-    // the cumulative at that node resets to the callee bound (not the
-    // product with what came before).
+    // Per-node MAX `carry_forward` propagated from predecessors. Roots
+    // start with the multiplicative identity 1.
+    let mut running_max: HashMap<&str, u64> = HashMap::new();
     let mut cumulative: HashMap<String, u64> = HashMap::new();
-    for root in roots {
-        walk(root, 1, &by_id, &outgoing, &mut cumulative, &mut Vec::new())?;
+    let mut carry: HashMap<&str, u64> = HashMap::new();
+
+    for cur in order {
+        let Some(op) = by_id.get(cur).copied() else {
+            continue;
+        };
+
+        // running coming into `cur` = MAX over predecessors' carry_forward.
+        // (1 if no predecessors — the root case.)
+        let running = if let Some(preds) = incoming.get(cur) {
+            let mut max = 0_u64;
+            let mut saw_any = false;
+            for p in preds {
+                if let Some(&c) = carry.get(p) {
+                    saw_any = true;
+                    if c > max {
+                        max = c;
+                    }
+                }
+            }
+            if saw_any { max } else { 1 }
+        } else {
+            1
+        };
+        running_max.insert(cur, running);
+
+        // at_here: isolated-CALL resets to the callee bound; everything
+        // else multiplies the per-node factor onto running (saturating).
+        let at_here = if is_isolated_call(op) {
+            isolated_callee_bound(op)?
+        } else {
+            running.saturating_mul(factor_for_node(op)?)
+        };
+        cumulative.insert(cur.to_string(), at_here);
+
+        // carry_forward to descendants.
+        //
+        // G4-A mini-review M2: an isolated-CALL does NOT taint the caller's
+        // post-CALL path with the callee's bound. The callee runs under
+        // its own grant, so the caller's nodes reached AFTER the CALL
+        // must continue from the caller's PRE-CALL running product. A
+        // shape like `ITERATE(10) → isolated-CALL(callee-bound=5) →
+        // ITERATE(3)` therefore propagates carry_forward=10 (not 5) past
+        // the CALL, yielding cumulative=30 at the trailing ITERATE — NOT
+        // 15.
+        //
+        // For a non-isolated CALL, `at_here = running × callee_factor`;
+        // the caller's post-CALL path legitimately inherits that product
+        // (non-isolated semantics = budget composes multiplicatively
+        // through the CALL boundary).
+        //
+        // For every other primitive, `at_here == running × factor_for_node`,
+        // which is also what downstream should see.
+        let carry_forward = if is_isolated_call(op) {
+            running
+        } else {
+            at_here
+        };
+        carry.insert(cur, carry_forward);
     }
+
     Ok(cumulative)
 }
 
-/// DFS walker. `running` = product of factors along the path up to but not
-/// including `cur`. `visiting` prevents infinite loops under residual cycles
-/// (belt-and-suspenders; Invariant 1 should have already rejected cycles).
-fn walk(
-    cur: &str,
-    running: u64,
-    by_id: &HashMap<&str, &OperationNode>,
-    outgoing: &HashMap<&str, Vec<&str>>,
-    cumulative: &mut HashMap<String, u64>,
-    visiting: &mut Vec<String>,
-) -> Result<(), UnknownCallee> {
-    if visiting.iter().any(|v| v == cur) {
-        return Ok(());
+/// Kahn's topological order over node ids. Nodes that participate in a
+/// residual cycle (Invariant 1 should reject these at registration) are
+/// dropped from the order — the walker treats unreached nodes as
+/// uninitialized, which matches the prior DFS walker's `visiting` cycle
+/// guard (it returned without recording anything for the cycle members).
+fn topo_order_by_id(sg: &Subgraph) -> Vec<&str> {
+    let mut indeg: HashMap<&str, usize> = HashMap::new();
+    let mut outgoing: HashMap<&str, Vec<&str>> = HashMap::new();
+    for n in &sg.nodes {
+        indeg.insert(n.id.as_str(), 0);
     }
-    let Some(op) = by_id.get(cur).copied() else {
-        return Ok(());
-    };
-
-    // Compute the cumulative AT this node.
-    let at_here = if is_isolated_call(op) {
-        // Isolated CALL resets cumulative to the callee grant's bound.
-        isolated_callee_bound(op)?
-    } else {
-        // Factor-multiply onto the running product (saturating).
-        running.saturating_mul(factor_for_node(op)?)
-    };
-
-    // Record the MAX over all paths reaching `cur`.
-    let slot = cumulative.entry(cur.to_string()).or_insert(0);
-    if at_here > *slot {
-        *slot = at_here;
+    for (f, t, _l) in &sg.edges {
+        *indeg.entry(t.as_str()).or_insert(0) += 1;
+        outgoing.entry(f.as_str()).or_default().push(t.as_str());
+        // Ensure both endpoints are in indeg even if `from` has no
+        // incoming edges of its own.
+        indeg.entry(f.as_str()).or_insert(0);
     }
-
-    // Determine the product propagated to downstream nodes.
-    //
-    // G4-A mini-review M2: an isolated-CALL does NOT taint the caller's
-    // post-CALL path with the callee's bound. The callee runs under its
-    // own grant, so the caller's nodes reached AFTER the CALL must
-    // continue from the caller's PRE-CALL running product. A shape like
-    // `ITERATE(10) → isolated-CALL(callee-bound=5) → ITERATE(3)` therefore
-    // propagates carry_forward=10 (not 5) past the CALL, yielding
-    // cumulative=30 at the trailing ITERATE — NOT 15.
-    //
-    // For a non-isolated CALL, `at_here = running × callee_factor`; the
-    // caller's post-CALL path legitimately inherits that product
-    // (non-isolated semantics = budget composes multiplicatively through
-    // the CALL boundary).
-    //
-    // For every other primitive, `at_here == running × factor_for_node`,
-    // which is also what downstream should see.
-    let carry_forward = if is_isolated_call(op) {
-        running
-    } else {
-        at_here
-    };
-
-    visiting.push(cur.to_string());
+    let mut queue: std::collections::VecDeque<&str> = sg
+        .nodes
+        .iter()
+        .map(|n| n.id.as_str())
+        .filter(|id| indeg.get(id).copied().unwrap_or(0) == 0)
+        .collect();
+    let mut order: Vec<&str> = Vec::with_capacity(sg.nodes.len());
     let empty: Vec<&str> = Vec::new();
-    for &next in outgoing.get(cur).unwrap_or(&empty) {
-        walk(next, carry_forward, by_id, outgoing, cumulative, visiting)?;
+    while let Some(cur) = queue.pop_front() {
+        order.push(cur);
+        for &nxt in outgoing.get(cur).unwrap_or(&empty) {
+            if let Some(slot) = indeg.get_mut(nxt) {
+                *slot -= 1;
+                if *slot == 0 {
+                    queue.push_back(nxt);
+                }
+            }
+        }
     }
-    visiting.pop();
-    Ok(())
+    order
 }
 
 // ---------------------------------------------------------------------------
@@ -340,18 +372,12 @@ fn walk(
 /// Returns `Err(UnknownCallee)` when any CALL node names an unresolvable
 /// callee (G4-A mini-review M1, mirroring `cumulative_by_id`).
 pub(crate) fn cumulative_by_snapshot(sn: &SubgraphSnapshot<'_>) -> Result<Vec<u64>, UnknownCallee> {
-    // Build adjacency by index.
+    // Build incoming + outgoing adjacency by index.
     let mut outgoing: HashMap<usize, Vec<usize>> = HashMap::new();
+    let mut incoming: HashMap<usize, Vec<usize>> = HashMap::new();
     for (f, t, _l) in sn.edges {
         outgoing.entry(f.0 as usize).or_default().push(t.0 as usize);
-    }
-
-    // Roots = nodes with no incoming edge.
-    let mut has_incoming = vec![false; sn.nodes.len()];
-    for (_f, t, _l) in sn.edges {
-        if let Some(slot) = has_incoming.get_mut(t.0 as usize) {
-            *slot = true;
-        }
+        incoming.entry(t.0 as usize).or_default().push(f.0 as usize);
     }
 
     // G11-A EVAL wave-1: seed the per-node cumulative slots with the
@@ -360,63 +386,87 @@ pub(crate) fn cumulative_by_snapshot(sn: &SubgraphSnapshot<'_>) -> Result<Vec<u6
     // behaviour. Prior `0_u64` seeding meant a node that no walker
     // reached (an unreachable subgraph fragment, or an empty graph)
     // reported cumulative=0 via `cumulative_by_snapshot` while the
-    // finalized-subgraph path reported 1. The walker's `if at_here >
-    // slot` update still monotonically refines upwards from the seed.
+    // finalized-subgraph path reported 1.
     let mut cumulative = vec![1_u64; sn.nodes.len()];
-    for (idx, _) in sn.nodes.iter().enumerate() {
-        if !has_incoming.get(idx).copied().unwrap_or(false) {
-            walk_snapshot(
-                idx,
-                1,
-                sn.nodes,
-                &outgoing,
-                &mut cumulative,
-                &mut Vec::new(),
-            )?;
+    let mut carry = vec![1_u64; sn.nodes.len()];
+
+    // perf-r6-2: linear topological-order DP, mirroring
+    // `cumulative_by_id`. Replaces the prior recursive DFS walker that
+    // re-walked shared subtrees on diamond DAGs (O(2^V) on a balanced
+    // fork-join shape). Same MAX-over-paths semantics; O(V+E) cost.
+    let order = topo_order_by_idx(sn);
+    for cur in order {
+        let Some(op) = sn.nodes.get(cur) else {
+            continue;
+        };
+        let running = if let Some(preds) = incoming.get(&cur) {
+            let mut max = 0_u64;
+            let mut saw_any = false;
+            for &p in preds {
+                if let Some(&c) = carry.get(p) {
+                    saw_any = true;
+                    if c > max {
+                        max = c;
+                    }
+                }
+            }
+            if saw_any { max } else { 1 }
+        } else {
+            1
+        };
+        let at_here = if is_isolated_call(op) {
+            isolated_callee_bound(op)?
+        } else {
+            running.saturating_mul(factor_for_node(op)?)
+        };
+        if let Some(slot) = cumulative.get_mut(cur) {
+            *slot = at_here;
+        }
+        // G4-A mini-review M2: isolated-CALL must NOT leak the callee
+        // bound into the caller's post-CALL path — mirror
+        // `cumulative_by_id`.
+        let carry_forward = if is_isolated_call(op) {
+            running
+        } else {
+            at_here
+        };
+        if let Some(slot) = carry.get_mut(cur) {
+            *slot = carry_forward;
         }
     }
     Ok(cumulative)
 }
 
-fn walk_snapshot(
-    cur: usize,
-    running: u64,
-    nodes: &[OperationNode],
-    outgoing: &HashMap<usize, Vec<usize>>,
-    cumulative: &mut [u64],
-    visiting: &mut Vec<usize>,
-) -> Result<(), UnknownCallee> {
-    if visiting.contains(&cur) {
-        return Ok(());
+/// Snapshot-side Kahn topological order. Cycle members (which Invariant 1
+/// should reject at registration) are dropped from the result, matching
+/// the prior DFS walker's `visiting` cycle-guard behaviour.
+fn topo_order_by_idx(sn: &SubgraphSnapshot<'_>) -> Vec<usize> {
+    let n = sn.nodes.len();
+    let mut indeg = vec![0_usize; n];
+    let mut outgoing: HashMap<usize, Vec<usize>> = HashMap::new();
+    for (f, t, _l) in sn.edges {
+        let from = f.0 as usize;
+        let to = t.0 as usize;
+        if let Some(slot) = indeg.get_mut(to) {
+            *slot += 1;
+        }
+        outgoing.entry(from).or_default().push(to);
     }
-    let Some(op) = nodes.get(cur) else {
-        return Ok(());
-    };
-    let at_here = if is_isolated_call(op) {
-        isolated_callee_bound(op)?
-    } else {
-        running.saturating_mul(factor_for_node(op)?)
-    };
-    if at_here > cumulative.get(cur).copied().unwrap_or(0)
-        && let Some(slot) = cumulative.get_mut(cur)
-    {
-        *slot = at_here;
-    }
-    // G4-A mini-review M2: isolated-CALL must NOT leak the callee bound
-    // into the caller's post-CALL path — mirror the finalized-subgraph
-    // walker (see `walk` above).
-    let carry_forward = if is_isolated_call(op) {
-        running
-    } else {
-        at_here
-    };
-    visiting.push(cur);
+    let mut queue: std::collections::VecDeque<usize> = (0..n).filter(|i| indeg[*i] == 0).collect();
+    let mut order: Vec<usize> = Vec::with_capacity(n);
     let empty: Vec<usize> = Vec::new();
-    for &next in outgoing.get(&cur).unwrap_or(&empty) {
-        walk_snapshot(next, carry_forward, nodes, outgoing, cumulative, visiting)?;
+    while let Some(cur) = queue.pop_front() {
+        order.push(cur);
+        for &nxt in outgoing.get(&cur).unwrap_or(&empty) {
+            if let Some(slot) = indeg.get_mut(nxt) {
+                *slot -= 1;
+                if *slot == 0 {
+                    queue.push_back(nxt);
+                }
+            }
+        }
     }
-    visiting.pop();
-    Ok(())
+    order
 }
 
 // ---------------------------------------------------------------------------
