@@ -151,14 +151,14 @@ describe("trace TraceStep discriminant variants (Phase 2a)", () => {
     expect(typeof inspector).toBe("function");
   });
 
-  it.skip("trace_step_attribution_field_required_on_every_variant", async () => {
+  it("trace_step_attribution_field_required_on_every_variant", async () => {
     // Inv-14 (G5-B-ii) places `attribution: AttributionFrame` on every
-    // emitted Step row. Wave 2b TraceStep unification confirms the slot
-    // exists on the `primitive` variant; populating it end-to-end is the
-    // remaining tail of G5-B-ii's runtime threading (the eval-side
-    // `run_with_trace` still emits `attribution: None` until that
-    // landing). Skipped at the wrapper level until then; un-skip when
-    // `Engine::trace` carries a populated frame through the napi wire.
+    // emitted Step row. Wave 2b TraceStep unification confirmed the slot
+    // exists on the `primitive` variant; sec-r6r1-01 (commit 3822570)
+    // landed the eval-side `run_with_trace` wiring so `Engine::trace`
+    // now carries a populated `AttributionFrame` through the napi wire.
+    // perf-r6 / NAPI-R2-6 un-skip: previously skipped while the runtime
+    // tail of G5-B-ii was outstanding.
     const _typeAlive: TraceStep | null = null;
     expect(_typeAlive).toBeNull();
     const handler = await engine.registerSubgraph(crud("post"));
