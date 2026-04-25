@@ -429,8 +429,16 @@ pub enum GraphError {
     /// fired. The catalog (`docs/ERROR-CATALOG.md`) promises this
     /// field; the firing sites at `redb_backend.rs:1038, 1186` already
     /// know the authority and now thread it through.
+    // R6 round-2 EH1-R2-OBS: render the CID via its `Display` impl
+    // (`{cid}`) rather than `{cid:?}`. `Cid::Display` produces the
+    // base32 multibase form catalogued in `docs/ERROR-CATALOG.md`,
+    // whereas `{cid:?}` printed the wrapped `[u8; 32]` tuple — useful
+    // for engine internals but not for operator-facing diagnostics.
+    // `attempted_authority` retains `{:?}` because `WriteAuthority`
+    // has no `Display` impl (it's an internal enum, not an
+    // operator-renderable identifier).
     #[error(
-        "immutability violation: CID {cid:?} already persisted (attempted_authority: {attempted_authority:?})"
+        "immutability violation: CID {cid} already persisted (attempted_authority: {attempted_authority:?})"
     )]
     InvImmutability {
         /// The CID the re-put targeted.

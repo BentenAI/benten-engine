@@ -83,7 +83,14 @@ pub use value::Value;
 /// both `benten-graph::WriteAuthority` and `benten-caps::WriteAuthority`
 /// re-export the SAME type (avoiding the cross-crate newtype proliferation
 /// that bit `noauth_still_permits_everything.rs`).
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+///
+/// R6 round-2 C2-R2-6: derives `Copy` because every variant either has no
+/// payload (`User`, `EnginePrivileged`) or carries a `Cid` (`SyncReplica`),
+/// which is itself `Copy`. The marker lets call sites that previously had
+/// to `clone()` the authority before threading it into a typed-error
+/// payload (e.g. `redb_backend.rs::put_node_with_context`) rely on
+/// implicit copy semantics instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum WriteAuthority {
     /// Normal user path (default).
     User,
