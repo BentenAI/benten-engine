@@ -1083,7 +1083,34 @@ impl Engine {
         let input_value = Value::Map(input.properties.clone());
         let mut evaluator = benten_eval::Evaluator::new();
         let (eval_result, raw_trace) = if trace_steps_out.is_some() {
-            match evaluator.run_with_trace(&subgraph, input_value, self as &dyn PrimitiveHost) {
+            // G5-B-ii / Inv-14: construct the runtime AttributionFrame from
+            // the active call's `(actor, handler, grant)` triple and thread
+            // it through `run_with_trace_attributed` so every emitted
+            // `TraceStep::Step` carries the originating audit context.
+            // Symmetric with the WRITE-path stamping in
+            // `impl PrimitiveHost::put_node` — same `noauth_pseudo_actor_cid`
+            // fallback when the caller did not supply an explicit actor and
+            // the same zero-CID placeholder for the grant under
+            // NoAuthBackend (no grant entity yet — populated Phase 3 when
+            // UCAN lands).
+            let actor_cid = {
+                let guard = self.active_call.lock_recover();
+                guard
+                    .last()
+                    .and_then(|f| f.actor)
+                    .unwrap_or_else(crate::primitive_host::noauth_pseudo_actor_cid)
+            };
+            let frame = benten_eval::AttributionFrame {
+                actor_cid,
+                handler_cid: *handler_cid,
+                capability_grant_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+            };
+            match evaluator.run_with_trace_attributed(
+                &subgraph,
+                input_value,
+                self as &dyn PrimitiveHost,
+                frame,
+            ) {
                 Ok((run, trace)) => (Ok(run), trace),
                 Err(e) => (Err(e), Vec::new()),
             }
