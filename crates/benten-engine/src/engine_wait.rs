@@ -591,8 +591,15 @@ impl Engine {
     /// used by the suspend/resume bench. Returns the registered subgraph
     /// CID (the bench uses it as the `handler_id` arg).
     ///
+    /// R6 round-2 sec-r6r2-02: gated behind `cfg(any(test, feature =
+    /// "test-helpers"))` because it calls into `crate::testing` which is
+    /// itself gated. The bench (`benten-eval/benches/
+    /// wait_suspend_resume_latency.rs`) opts into `test-helpers` via the
+    /// dev-dep on `benten-engine`.
+    ///
     /// # Errors
     /// Returns [`EngineError`] on register failure.
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn register_wait_reference_handler(&self) -> Result<Cid, EngineError> {
         let spec = crate::testing::minimal_wait_handler("phase-2a:bench:wait");
         let _ = self.register_subgraph(spec)?;

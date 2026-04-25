@@ -1037,7 +1037,7 @@ impl RedbBackend {
             return match ctx.authority {
                 WriteAuthority::User => Err(GraphError::InvImmutability {
                     cid,
-                    attempted_authority: ctx.authority.clone(),
+                    attempted_authority: ctx.authority,
                 }),
                 WriteAuthority::EnginePrivileged | WriteAuthority::SyncReplica { .. } => Ok(cid),
             };
@@ -1188,7 +1188,7 @@ impl RedbBackend {
         if self.probe_cid_exists(cid)? {
             return Err(GraphError::InvImmutability {
                 cid: *cid,
-                attempted_authority: ctx.authority.clone(),
+                attempted_authority: ctx.authority,
             });
         }
         // Otherwise inject the node's canonical bytes under the caller's

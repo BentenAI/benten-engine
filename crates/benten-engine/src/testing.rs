@@ -222,7 +222,10 @@ pub fn subgraph_bytes_for_handler(
     // The mermaid render is deterministic per handler — a stand-in for
     // canonical bytes until the Phase-2b benten-core-migration completes
     // the Subgraph::to_dagcbor path (see
-    // `.addl/phase-2b/00-scope-outline.md` §7a). Hashes to a stable Vec<u8>.
+    // `.addl/phase-2b/00-scope-outline.md` §7a). The panic stubs that
+    // previously pinned this path were removed in R6 round-2 / A7
+    // because no caller existed. Hashes to a stable Vec<u8>.
+
     Ok(mermaid.into_bytes())
 }
 

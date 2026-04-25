@@ -255,7 +255,12 @@ fn cumulative_by_id(sg: &Subgraph) -> Result<HashMap<String, u64>, UnknownCallee
 
     // Per-node MAX `carry_forward` propagated from predecessors. Roots
     // start with the multiplicative identity 1.
-    let mut running_max: HashMap<&str, u64> = HashMap::new();
+    //
+    // R6 round-2 C2-R2-2: a `running_max` HashMap was previously written
+    // here but never read; stripped because it inflated the per-pass
+    // allocator footprint without contributing to the algorithm's output.
+    // The `carry` map is the only propagation state the topological pass
+    // requires.
     let mut cumulative: HashMap<String, u64> = HashMap::new();
     let mut carry: HashMap<&str, u64> = HashMap::new();
 
@@ -281,7 +286,6 @@ fn cumulative_by_id(sg: &Subgraph) -> Result<HashMap<String, u64>, UnknownCallee
         } else {
             1
         };
-        running_max.insert(cur, running);
 
         // at_here: isolated-CALL resets to the callee bound; everything
         // else multiplies the per-node factor onto running (saturating).

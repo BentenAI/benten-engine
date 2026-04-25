@@ -1019,7 +1019,6 @@ impl Engine {
             handler_id,
             op,
             input,
-            actor,
             &handler_cid,
             trace_mode,
             trace_steps_out,
@@ -1038,16 +1037,16 @@ impl Engine {
         clippy::too_many_lines,
         reason = "r6-sec-4 adds the NotImplemented→ON_ERROR routing arm; further decomposition would obscure the top-to-bottom dispatch flow (subgraph build → evaluator run → replay → outcome mapping)"
     )]
-    #[allow(
-        clippy::too_many_arguments,
-        reason = "r6b-dx-C4 threads an optional trace-buffer through the private dispatch helper; wrapping the inputs in a struct worsens call-site readability without changing the surface contract"
-    )]
+    // R6 round-2 C2-R2-3: the `_actor: Option<Cid>` parameter became dead
+    // after sec-r6r1-01 landed the actor-from-active-call lookup
+    // (`engine.rs:1096-1102`). Removed; the callable dispatch helper now
+    // takes 6 args, dropping under the default `clippy::too_many_arguments`
+    // threshold so its allow attribute is no longer required either.
     fn dispatch_call_inner(
         &self,
         handler_id: &str,
         op: &str,
         input: Node,
-        _actor: Option<Cid>,
         handler_cid: &Cid,
         trace_mode: bool,
         trace_steps_out: Option<&mut Vec<TraceStep>>,
@@ -1103,7 +1102,7 @@ impl Engine {
             let frame = benten_eval::AttributionFrame {
                 actor_cid,
                 handler_cid: *handler_cid,
-                capability_grant_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+                capability_grant_cid: crate::primitive_host::noauth_zero_grant_cid(),
             };
             match evaluator.run_with_trace_attributed(
                 &subgraph,

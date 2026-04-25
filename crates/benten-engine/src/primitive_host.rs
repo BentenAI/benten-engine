@@ -774,6 +774,21 @@ pub(crate) fn noauth_pseudo_actor_cid() -> Cid {
     Cid::from_blake3_digest(digest)
 }
 
+/// Return the placeholder grant CID used while the capability backend is
+/// `NoAuthBackend` (Phase 1/2a). Every NoAuth write/dispatch attributes to
+/// the same all-zero `Cid` because the backend issues no real grant entities;
+/// once Phase-3 wires UCAN, the call sites that currently invoke
+/// `noauth_zero_grant_cid()` flip to the real grant CID their backend stamps.
+///
+/// R6 round-2 C2-R2-4: prior to centralisation the zero-grant placeholder
+/// was open-coded as `Cid::from_blake3_digest([0u8; 32])` at multiple
+/// dispatch + WRITE sites. Folding it into a named helper next to
+/// `noauth_pseudo_actor_cid` gives Phase-3 wiring a single grep target
+/// when the time comes to swap the placeholder out for a real grant CID.
+pub(crate) fn noauth_zero_grant_cid() -> Cid {
+    Cid::from_blake3_digest([0u8; 32])
+}
+
 // ---------------------------------------------------------------------------
 // Outcome-mapping helpers
 // ---------------------------------------------------------------------------

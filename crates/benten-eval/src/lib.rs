@@ -547,7 +547,18 @@ impl core::fmt::Display for RegistrationError {
         } else if let (Some(expected), Some(actual)) = (self.expected_cid, self.actual_cid) {
             write!(f, " (expected CID {expected}, actual {actual})")?;
         } else if let Some(ref violated) = self.violated_invariants {
-            write!(f, " (violated invariants: {violated:?})")?;
+            // R6 round-2 C2-R2-5: render the invariant numbers as a
+            // Display-style comma-separated list rather than the
+            // `{:?}` Debug-formatted `Vec<u8>`. Keeps the rest of the
+            // impl's compact one-line summary style consistent.
+            write!(f, " (violated invariants: ")?;
+            for (i, n) in violated.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{n}")?;
+            }
+            write!(f, ")")?;
         }
         Ok(())
     }
@@ -856,27 +867,18 @@ impl Subgraph {
         self.nodes.get(h.0 as usize)
     }
 
-    /// Phase-2b benten-core-migration: DAG-CBOR encode (stub).
-    ///
-    /// Wired when the real `Subgraph` moves into `benten-core`; see
-    /// `.addl/phase-2b/00-scope-outline.md` §7a "benten-core Subgraph migration".
-    ///
-    /// # Errors
-    /// Returns [`benten_core::CoreError::Serialize`] on encode failure.
-    pub fn to_dagcbor(&self) -> Result<Vec<u8>, benten_core::CoreError> {
-        todo!("phase-2b benten-core-migration: Subgraph DAG-CBOR encode (eval side)")
-    }
-
-    /// Phase-2b benten-core-migration: DAG-CBOR decode (stub).
-    ///
-    /// Wired when the real `Subgraph` moves into `benten-core`; see
-    /// `.addl/phase-2b/00-scope-outline.md` §7a "benten-core Subgraph migration".
-    ///
-    /// # Errors
-    /// Returns [`benten_core::CoreError::Serialize`] on decode failure.
-    pub fn from_dagcbor(_bytes: &[u8]) -> Result<Self, benten_core::CoreError> {
-        todo!("phase-2b benten-core-migration: Subgraph DAG-CBOR decode (eval side)")
-    }
+    // R6 round-2 A7: the `Subgraph::to_dagcbor` / `from_dagcbor` panic
+    // stubs that previously sat here were removed because no caller ever
+    // existed (verified across crates/, tools/, bindings/, and benches/).
+    // The real DAG-CBOR symmetry lives on `ExecutionStateEnvelope`
+    // (see `crates/benten-eval/src/exec_state.rs`); the
+    // `tests/subgraph_deterministic_dagcbor.rs.pending-g5a` fixture
+    // remains suffixed `.pending-g5a` and will be re-introduced together
+    // with a real implementation when the Phase-2b benten-core-migration
+    // (.addl/phase-2b/00-scope-outline.md §7a) wires the subgraph
+    // round-trip path. Keeping panic stubs in the public API surfaced
+    // a footgun (a downstream consumer that compiled successfully but
+    // crashed in production); deleting them makes the absence explicit.
 
     #[must_use]
     pub fn with_node(mut self, n: OperationNode) -> Self {
