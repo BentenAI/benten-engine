@@ -113,11 +113,17 @@ describe("ts_subgraph_register_and_call", () => {
 
 describe("ts_trace_contains_per_node_timings", () => {
   it("returns a trace with per-step durationUs", () => {
+    // Phase 2a G11-A Wave 2b: TraceStep is a discriminated union; the
+    // `crud(post):create` walk emits only `type === "primitive"` rows
+    // (no WAIT, no budget exhaustion). Assert the discriminant + the
+    // per-row fields explicitly so the shape pin survives variant
+    // additions.
     const handlerId = engine.registerCrud("post");
     const trace = engine.trace(handlerId, "create", { title: "traced" });
     expect(Array.isArray(trace.steps)).toBe(true);
     expect(trace.steps.length).toBeGreaterThan(0);
     for (const step of trace.steps) {
+      expect(step.type).toBe("primitive");
       expect(typeof step.nodeCid).toBe("string");
       expect(typeof step.durationUs).toBe("number");
       expect(step.durationUs).toBeGreaterThan(0);
