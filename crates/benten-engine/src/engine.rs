@@ -1759,6 +1759,11 @@ pub(crate) fn derive_committed_scopes(ops: &[benten_caps::PendingOp]) -> Vec<Str
                     push(l);
                 }
             }
+            // R6 fix-pass: `PendingOp` is `#[non_exhaustive]` (added in
+            // commit 98d14fe). Phase-3 will add UCAN-attributed variants
+            // (PutCapabilityGrant etc.); future variants surface here as
+            // a no-op until the scope-mapping path is taught about them.
+            _ => {}
         }
     }
     out
