@@ -393,9 +393,9 @@ impl ErrorCode {
             // Optimistic-concurrency conflict — explicit ON_CONFLICT.
             // EH2 fix: previously fell into the wildcard ON_ERROR which
             // misrouted WriteConflict, the conflict family's prototype.
-            ErrorCode::WriteConflict | ErrorCode::HostWriteConflict | ErrorCode::VersionBranched => {
-                Some("ON_CONFLICT")
-            }
+            ErrorCode::WriteConflict
+            | ErrorCode::HostWriteConflict
+            | ErrorCode::VersionBranched => Some("ON_CONFLICT"),
 
             // ON_ERROR catch-all for runtime failures with no more-specific
             // edge.
