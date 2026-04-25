@@ -1035,7 +1035,10 @@ impl RedbBackend {
             // sequence — sec-r1-4 "pure-read dedup" contract.
             drop(write_txn);
             return match ctx.authority {
-                WriteAuthority::User => Err(GraphError::InvImmutability { cid }),
+                WriteAuthority::User => Err(GraphError::InvImmutability {
+                    cid,
+                    attempted_authority: ctx.authority.clone(),
+                }),
                 WriteAuthority::EnginePrivileged | WriteAuthority::SyncReplica { .. } => Ok(cid),
             };
         }
@@ -1183,7 +1186,10 @@ impl RedbBackend {
         // this is the unprivileged-re-put path. Fire Inv-13 without
         // touching the store.
         if self.probe_cid_exists(cid)? {
-            return Err(GraphError::InvImmutability { cid: *cid });
+            return Err(GraphError::InvImmutability {
+                cid: *cid,
+                attempted_authority: ctx.authority.clone(),
+            });
         }
         // Otherwise inject the node's canonical bytes under the caller's
         // chosen key. Index maintenance mirrors `put_node_with_context`

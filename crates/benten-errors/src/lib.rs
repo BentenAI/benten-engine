@@ -342,18 +342,116 @@ impl ErrorCode {
     }
 
     /// Phase 2a dx-r1 (test-spec follow-up): the edge label a typed error
-    /// routes through (`"ON_ERROR"` / `"ON_DENIED"` / `"ON_NOT_FOUND"`).
-    /// Returns `None` for variants that don't have a canonical routing edge.
+    /// routes through (`"ON_ERROR"` / `"ON_DENIED"` / `"ON_NOT_FOUND"` /
+    /// `"ON_CONFLICT"`).
     ///
-    /// TODO(phase-2a-G3-B): complete the routing table.
+    /// Returns `None` for variants that have no canonical primitive-edge
+    /// routing semantics (resume-protocol failures, build-time
+    /// configuration errors, drift-detector fallbacks, etc.). Phase-2a R6
+    /// EH2 replaced the prior `_ => "ON_ERROR"` wildcard with an explicit
+    /// per-variant match: a wildcard pre-1.0 was a hazard because adding
+    /// a new ErrorCode variant in a later phase would silently inherit
+    /// `ON_ERROR` routing whether or not that's correct, and existing
+    /// codes (notably `WriteConflict` → `ON_CONFLICT`, not `ON_ERROR`)
+    /// were already misrouted by the wildcard. The match is exhaustive
+    /// against every named variant; the `Unknown(_)` forward-compat
+    /// variant returns `Some("ON_ERROR")` because any unknown firing
+    /// surface is best-effort routed to the catch-all.
+    ///
+    /// Mapping summary:
+    ///
+    /// | Family | Edge label |
+    /// |---|---|
+    /// | Capability denials | `ON_DENIED` |
+    /// | Not-found family | `ON_NOT_FOUND` |
+    /// | Optimistic-concurrency conflict | `ON_CONFLICT` |
+    /// | Wait timeout, attribution, system-zone, write failures, …| `ON_ERROR` |
+    /// | Resume protocol / configuration / drift-only codes | `None` |
     #[must_use]
     pub fn routed_edge_label(&self) -> Option<&'static str> {
-        Some(match self {
-            ErrorCode::CapDenied | ErrorCode::CapDeniedRead => "ON_DENIED",
-            ErrorCode::NotFound | ErrorCode::BackendNotFound => "ON_NOT_FOUND",
-            ErrorCode::WaitTimeout => "ON_ERROR",
-            _ => "ON_ERROR",
-        })
+        match self {
+            // Cap denials — explicit ON_DENIED.
+            ErrorCode::CapDenied
+            | ErrorCode::CapDeniedRead
+            | ErrorCode::CapRevoked
+            | ErrorCode::CapRevokedMidEval
+            | ErrorCode::CapAttenuation
+            | ErrorCode::CapWallclockExpired
+            | ErrorCode::CapChainTooDeep
+            | ErrorCode::CapScopeLoneStarRejected
+            | ErrorCode::CapNotImplemented
+            | ErrorCode::HostCapabilityRevoked
+            | ErrorCode::HostCapabilityExpired => Some("ON_DENIED"),
+
+            // Not-found family — explicit ON_NOT_FOUND.
+            ErrorCode::NotFound
+            | ErrorCode::BackendNotFound
+            | ErrorCode::HostNotFound
+            | ErrorCode::VersionUnknownPrior
+            | ErrorCode::UnknownView => Some("ON_NOT_FOUND"),
+
+            // Optimistic-concurrency conflict — explicit ON_CONFLICT.
+            // EH2 fix: previously fell into the wildcard ON_ERROR which
+            // misrouted WriteConflict, the conflict family's prototype.
+            ErrorCode::WriteConflict | ErrorCode::HostWriteConflict | ErrorCode::VersionBranched => {
+                Some("ON_CONFLICT")
+            }
+
+            // ON_ERROR catch-all for runtime failures with no more-specific
+            // edge.
+            ErrorCode::WaitTimeout
+            | ErrorCode::WaitSignalShapeMismatch
+            | ErrorCode::TxAborted
+            | ErrorCode::PrimitiveNotImplemented
+            | ErrorCode::SystemZoneWrite
+            | ErrorCode::ValueFloatNan
+            | ErrorCode::ValueFloatNonFinite
+            | ErrorCode::CidParse
+            | ErrorCode::CidUnsupportedCodec
+            | ErrorCode::CidUnsupportedHash
+            | ErrorCode::TransformSyntax
+            | ErrorCode::InputLimit
+            | ErrorCode::Serialize
+            | ErrorCode::GraphInternal
+            | ErrorCode::HostBackendUnavailable
+            | ErrorCode::IvmViewStale
+            | ErrorCode::IvmPatternMismatch
+            | ErrorCode::InvImmutability
+            | ErrorCode::InvSystemZone
+            | ErrorCode::InvAttribution
+            | ErrorCode::InvIterateBudget
+            | ErrorCode::NotImplemented
+            | ErrorCode::SubsystemDisabled => Some("ON_ERROR"),
+
+            // Registration-time invariants — surface at REGISTER time, not
+            // along a primitive edge. No routing.
+            ErrorCode::InvCycle
+            | ErrorCode::InvDepthExceeded
+            | ErrorCode::InvFanoutExceeded
+            | ErrorCode::InvTooManyNodes
+            | ErrorCode::InvTooManyEdges
+            | ErrorCode::InvDeterminism
+            | ErrorCode::InvContentHash
+            | ErrorCode::InvRegistration
+            | ErrorCode::InvIterateMaxMissing
+            | ErrorCode::DuplicateHandler => None,
+
+            // Resume-protocol failures — surface at the resume call site,
+            // not along a primitive edge. No routing.
+            ErrorCode::ExecStateTampered
+            | ErrorCode::ResumeActorMismatch
+            | ErrorCode::ResumeSubgraphDrift
+            | ErrorCode::NestedTransactionNotSupported => None,
+
+            // Builder-time configuration errors — surface at builder, not
+            // along a primitive edge.
+            ErrorCode::NoCapabilityPolicyConfigured | ErrorCode::ProductionRequiresCaps => None,
+
+            // Forward-compat unknown — best-effort ON_ERROR. A future
+            // server that emits a newer code we don't recognize routes
+            // through the catch-all rather than dropping on the floor.
+            ErrorCode::Unknown(_) => Some("ON_ERROR"),
+        }
     }
 
     /// Parse a stable catalog code string into an [`ErrorCode`], falling back

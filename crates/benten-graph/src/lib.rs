@@ -422,10 +422,26 @@ pub enum GraphError {
     /// firing at the storage layer; G5-A extends to cover the full 5-row
     /// matrix (EnginePrivileged dedup + SyncReplica dedup rows do NOT return
     /// this error — they dedup to `Ok(cid)`).
-    #[error("immutability violation: CID {cid:?} already persisted")]
+    ///
+    /// Phase-2a R6 EH1: carries the [`WriteAuthority`] under which the
+    /// re-put attempt was made so the rendered Display + downstream
+    /// diagnostics can name which row of the 5-row matrix actually
+    /// fired. The catalog (`docs/ERROR-CATALOG.md`) promises this
+    /// field; the firing sites at `redb_backend.rs:1038, 1186` already
+    /// know the authority and now thread it through.
+    #[error(
+        "immutability violation: CID {cid:?} already persisted (attempted_authority: {attempted_authority:?})"
+    )]
     InvImmutability {
         /// The CID the re-put targeted.
         cid: Cid,
+        /// Authority under which the re-put was attempted. Always the
+        /// load-bearing diagnostic — only [`WriteAuthority::User`] reaches
+        /// this variant in production today; G5-A test hooks
+        /// (`put_node_at_cid_for_test`) constrain to `User` as well, so
+        /// observing any other variant in the field signals a regression
+        /// in the dispatch matrix.
+        attempted_authority: WriteAuthority,
     },
 
     /// The transaction's closure returned `Err`, so the write batch was
