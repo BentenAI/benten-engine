@@ -547,7 +547,18 @@ impl core::fmt::Display for RegistrationError {
         } else if let (Some(expected), Some(actual)) = (self.expected_cid, self.actual_cid) {
             write!(f, " (expected CID {expected}, actual {actual})")?;
         } else if let Some(ref violated) = self.violated_invariants {
-            write!(f, " (violated invariants: {violated:?})")?;
+            // R6 round-2 C2-R2-5: render the invariant numbers as a
+            // Display-style comma-separated list rather than the
+            // `{:?}` Debug-formatted `Vec<u8>`. Keeps the rest of the
+            // impl's compact one-line summary style consistent.
+            write!(f, " (violated invariants: ")?;
+            for (i, n) in violated.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{n}")?;
+            }
+            write!(f, ")")?;
         }
         Ok(())
     }
