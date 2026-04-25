@@ -94,7 +94,7 @@ jobs:
 
       - name: cargo clippy
         if: matrix.rust == 'stable'
-        run: cargo clippy --workspace --all-targets --features benten-eval/testing,benten-engine/test-helpers -- -D warnings
+        run: cargo clippy --workspace --all-targets --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing -- -D warnings
 
       - name: cargo build --locked
         # `--features benten-eval/testing` unlocks the `register_test_callee`
@@ -112,7 +112,7 @@ jobs:
         # compile those surfaces; CI re-enables them here so the full
         # `cargo build --all-targets` / `cargo nextest run` continues to
         # pick up every integration test.
-        run: cargo build --workspace --all-targets --locked --features benten-eval/testing,benten-engine/test-helpers
+        run: cargo build --workspace --all-targets --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing
 
       - name: cargo nextest run
         env:
@@ -140,12 +140,15 @@ jobs:
         # exclusion points at a specific waiting-on-impl or waiting-on-
         # wave-2 item in plan §G11-A; the exclusions drop as those items
         # land. Categories:
-        #   - load_verified/load_subgraph_verified — benten-core +
-        #     benten-graph storage-layer hash-check read paths (plan
-        #     §G11-A "G2-A scope ambiguity"; Wave-2 carry).
-        #   - ast_cache_* / old_subgraph_cid_not_reachable — plan
-        #     §G11-A "G2-B contradictory R3 contract" (rewrite via
-        #     testing_force_reregister_with_different_cid hook).
+        #   - load_verified/load_subgraph_verified — RESOLVED in
+        #     G11-A Wave 3a (storage-layer hash-check read paths landed
+        #     in benten-core::Subgraph::load_verified_with_cid +
+        #     RedbBackend::load_subgraph_verified); filter clause dropped.
+        #   - ast_cache_* / old_subgraph_cid_not_reachable — RESOLVED
+        #     in G11-A Wave 3a (tests rewritten via
+        #     testing_force_reregister_with_different_cid hook so the
+        #     Phase-1 DuplicateHandler contract is preserved); filter
+        #     clauses dropped.
         #   - prop_parent_single_wildcard_is_still_narrowing — D12.6
         #     flaky-proptest item.
         #   - variant_count_is_pinned — G3-B WaitOutcome variant-count
@@ -153,17 +156,26 @@ jobs:
         #   - view_stale_count_tallies — ENGINE Wave-1 wired
         #     engine_diagnostics.rs:185 away from the 0.0 hardcode but
         #     the IVM-side tally isn't tallying; Wave-2 ENGINE-CARRY.
-        #   - compromise_6_* / compromise_7_* — compromise-regression
-        #     tests asserting SECURITY-POSTURE.md content + benten-graph
-        #     bin feature-gating that G11-A Wave 1 DOCS didn't land; the
-        #     docs reference the 4 new named compromises (dual-layer
-        #     read-cap, resume-time re-verification, dedup pure-read, IVM
-        #     coarse read-gate) but compromises #6/#7 are earlier and
-        #     live in the public-untracked wave of the doc split. Wave-2
-        #     DOCS-CARRY.
+        #   - compromise_6_* / compromise_7_* — RESOLVED in G11-A Wave
+        #     3a DOC-REGRESSION. Compromise #7: `crates/benten-graph/
+        #     Cargo.toml` now carries the literal
+        #     `required-features = ["test-fixtures"]` gate on the
+        #     `write-canonical-and-exit` bin, matching the
+        #     `default = ["test-fixtures"]` single-element default array
+        #     and the `test-fixtures = []` feature declaration; the
+        #     previous Wave-1 MODERATE-3 `testing` piggy-back in
+        #     `default` has been relocated to the CI
+        #     `--features benten-graph/testing` flag added to this job's
+        #     cargo invocations so production
+        #     `cargo install benten-graph --no-default-features` keeps
+        #     stripping both the bin and the instrumentation.
+        #     Compromise #6: `docs/SECURITY-POSTURE.md` re-tracked
+        #     (`.gitignore` updated) so CI fresh clones see the
+        #     BLAKE3 / 128-bit collision-resistance section the
+        #     regression test asserts. Filter clauses dropped.
         run: |
-          cargo nextest run --profile ci --workspace --locked --features benten-eval/testing,benten-engine/test-helpers \
-            -E 'not test(/load_verified/) and not test(/ast_cache_/) and not test(/old_subgraph_cid_not_reachable/) and not test(/prop_parent_single_wildcard/) and not test(/variant_count_is_pinned/) and not test(/view_stale_count_tallies/) and not test(/compromise_6_/) and not test(/compromise_7_/)'
+          cargo nextest run --profile ci --workspace --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing \
+            -E 'not test(/prop_parent_single_wildcard/) and not test(/variant_count_is_pinned/) and not test(/view_stale_count_tallies/)'
 
       - name: cargo doc
         if: matrix.rust == 'stable'

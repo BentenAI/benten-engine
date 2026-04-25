@@ -65,7 +65,13 @@ docs/ENGINE-SPEC.md
 docs/DSL-SPECIFICATION.md
 docs/TRANSFORM-GRAMMAR.md
 docs/FULL-ROADMAP.md
-docs/SECURITY-POSTURE.md
+# `docs/SECURITY-POSTURE.md` re-tracked in G11-A Wave 3a DOC-REGRESSION:
+# the `compromise_6_blake3_collision_resistance_note_in_security_posture`
+# regression test (in `crates/benten-engine/tests/integration/
+# compromises_regression.rs`) reads this file from the working tree, so
+# fresh CI clones must contain it. The file's content stayed on disk
+# locally between db5831f (default-untrack pass) and Wave 3a; re-tracking
+# restores the public-clone visibility the regression test requires.
 docs/PLATFORM-DESIGN.md
 docs/BUSINESS-PLAN.md
 docs/INVARIANT-COVERAGE.md

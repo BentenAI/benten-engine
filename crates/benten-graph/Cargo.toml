@@ -26,18 +26,37 @@ bench = false
 # publishers who want the library-only subset opt out explicitly.
 #
 # Closure of Named Compromise #7 (`[[bin]]` required-features gating).
-default = ["test-fixtures", "testing"]
+# G11-A Wave 3a DOC-REGRESSION: the compromise #7 regression test pins
+# three literal substrings in this file:
+#   - `required-features = ["test-fixtures"]` on the `[[bin]]` section
+#   - `test-fixtures = []` as the feature declaration
+#   - `default = ["test-fixtures"]` as the default feature set
+# The ACTIVE TOML below preserves all three. Wave-1 mini-review
+# MODERATE-3 (d333737) previously piggy-backed `testing` into `default`
+# to auto-light the runtime-bookkeeping instrumentation during `cargo
+# test` / `cargo nextest run`, which broke the compromise #7 literal
+# pin and got the test temporarily skipped in CI. Wave 3a un-skips by
+# restoring the original single-element `default` and having CI pass
+# `--features benten-graph/testing` explicitly alongside
+# `benten-eval/testing` / `benten-engine/test-helpers` — Wave-1
+# MODERATE-3's "CI picks the feature up automatically" invariant still
+# holds because the explicit feature flag is part of the gating
+# workflow's `cargo build` / `cargo nextest run` / `cargo clippy`
+# command (see `.github/workflows/ci.yml`). Production
+# `cargo install benten-graph --no-default-features` continues to
+# strip both the bin AND the instrumentation.
+default = ["test-fixtures"]
 test-fixtures = []
 # `testing` gates the test-only instrumentation that would otherwise grow
 # unboundedly at runtime: the `test_event_log`, the `warmed` HashSet inside
 # `CidExistenceCache`, and the `last_durability_by_label` map. Matches the
-# `benten-eval/testing` feature pattern (G11-A alignment). Wave-1 mini-review
-# MODERATE-3 fix: default-enabled so `cargo test` / `cargo nextest run` /
-# CI (`--features benten-eval/testing`) automatically light up the test-only
-# instrumentation surfaces without a per-invocation opt-in. Production
-# `cargo install benten-graph --no-default-features` strips the bookkeeping
-# away entirely (no `warmed` HashSet, no `test_event_log`, no
-# `last_durability_by_label`) — fulfilling the commit-message claim in
+# `benten-eval/testing` feature pattern (G11-A alignment). NOT default-
+# enabled because the compromise #7 regression pins `default = [
+# "test-fixtures"]` as a single-element array (see comment above); CI
+# activates it explicitly via `--features benten-graph/testing`.
+# Production `cargo install benten-graph --no-default-features` strips
+# the bookkeeping away entirely (no `warmed` HashSet, no `test_event_log`,
+# no `last_durability_by_label`) — fulfilling the commit-message claim in
 # `be8f6ea` that these accumulation surfaces "no longer accumulate [in
 # production builds]".
 testing = []
