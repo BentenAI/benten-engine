@@ -100,11 +100,13 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_INV_ITERATE_NEST_DEPTH
 
+<!-- reachability: ignore -->
+
 - **Message:** "ITERATE nesting depth {depth} exceeds Phase 1 limit {max}"
 - **Context:** `{ depth: number, max: number, path: NodeId[] }`
-- **Fix:** Phase 1 bounded ITERATE nesting structurally at depth 3 as a stopgap for the cumulative-budget enforcement shipped in Phase 2a. Retired at Phase 2a open — `E_INV_ITERATE_BUDGET` supersedes it. The variant + string spelling stay reserved in `benten-errors` for backward-compat (catalog IDs are stable across phases); new registrations no longer fire it.
-- **Thrown at:** Registration
-- **Phase:** 1 (retired at Phase 2a open — see `E_INV_ITERATE_BUDGET` for the Phase 2a multiplicative replacement).
+- **Fix:** Phase 1 bounded ITERATE nesting structurally at depth 3 as a stopgap for the cumulative-budget enforcement shipped in Phase 2a. Retired at Phase 2a open — `E_INV_ITERATE_BUDGET` supersedes it. The catalog entry + TS class spelling stay reserved (catalog IDs are stable across phases); the Rust `ErrorCode` variant has been removed because no production path constructs it. The reachability annotation above is the drift-detector's signal that this is a deliberate forward-/backward-compat retention rather than aspirational prose.
+- **Thrown at:** Never (retired)
+- **Phase:** 2 (retired-at-Phase-2a-open marker — Phase >1 keeps it out of `phase1Required` so the drift detector does not demand a Rust enum variant. See `E_INV_ITERATE_BUDGET` for the live Phase 2a multiplicative replacement).
 
 ### E_INV_CONTENT_HASH
 
@@ -470,43 +472,53 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_HOST_NOT_FOUND
 
+<!-- reachability: ignore -->
+
 - **Message:** "Host-boundary lookup miss: {kind} {identifier}"
 - **Context:** `{ kind: string, identifier: string }`
 - **Fix:** Reserved HostError discriminant. Surfaces from `PrimitiveHost` impls when the requested entity is not in the backend. Distinct from `E_NOT_FOUND` because it carries the host-layer boundary (preserves the `benten-eval` → `benten-graph` arch-1 dep break).
 - **Thrown at:** `PrimitiveHost` implementation (G1-B)
-- **Phase:** 2a (shape reserved; first firing site in Phase 3 sync)
+- **Phase:** 2a (shape reserved; first firing site in Phase 3 sync — drift-detector reachability is `ignore` until then)
 
 ### E_HOST_WRITE_CONFLICT
+
+<!-- reachability: ignore -->
 
 - **Message:** "Host-boundary optimistic-concurrency conflict on {target}"
 - **Context:** `{ target: string }`
 - **Fix:** Reserved HostError discriminant. Fires when a host-level compare-and-swap write detects a concurrent mutation. Surface is frozen at Phase 2a; first firing site in Phase 3 sync.
 - **Thrown at:** `PrimitiveHost` implementation (G1-B)
-- **Phase:** 2a (reserved — fires in Phase 3)
+- **Phase:** 2a (reserved — fires in Phase 3; drift-detector reachability is `ignore` until then)
 
 ### E_HOST_BACKEND_UNAVAILABLE
+
+<!-- reachability: ignore -->
 
 - **Message:** "Host-boundary backend unavailable: {detail}"
 - **Context:** `{ detail: string }`
 - **Fix:** Reserved HostError discriminant. Fires when the underlying storage backend is offline (I/O error, disk full, network partition). Retry with exponential backoff; if persistent, inspect the storage layer.
 - **Thrown at:** `PrimitiveHost` implementation (G1-B)
-- **Phase:** 2a (reserved — fires in Phase 3)
+- **Phase:** 2a (reserved — fires in Phase 3; drift-detector reachability is `ignore` until then)
 
 ### E_HOST_CAPABILITY_REVOKED
+
+<!-- reachability: ignore -->
 
 - **Message:** "Host-boundary capability was revoked mid-operation"
 - **Context:** `{ grant_cid: Cid }`
 - **Fix:** Reserved HostError discriminant. Fires when a host-level capability check observes a revocation between resolve and use. Retry after re-granting.
 - **Thrown at:** `PrimitiveHost` implementation (G1-B)
-- **Phase:** 2a (reserved — fires in Phase 3)
+- **Phase:** 2a (reserved — fires in Phase 3; drift-detector reachability is `ignore` until then)
 
 ### E_HOST_CAPABILITY_EXPIRED
+
+<!-- reachability: ignore -->
 
 - **Message:** "Host-boundary capability expired by TTL"
 - **Context:** `{ grant_cid: Cid, expired_at: string }`
 - **Fix:** Reserved HostError discriminant. Fires when a host-level capability check observes the grant's TTL has elapsed. Re-grant with a longer TTL or refresh the cap.
 - **Thrown at:** `PrimitiveHost` implementation (G1-B)
-- **Phase:** 2a (reserved — fires in Phase 3)
+- **Phase:** 2a (reserved — fires in Phase 3; drift-detector reachability is `ignore` until then)
 
 ### E_EXEC_STATE_TAMPERED
 
@@ -572,10 +584,12 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_CAP_WALLCLOCK_EXPIRED
 
+<!-- reachability: ignore -->
+
 - **Message:** "Capability wall-clock refresh bound breached"
 - **Context:** `{ elapsed_ms: number, bound_ms: number }`
 - **Fix:** A long-running ITERATE crossed the 300s default wall-clock refresh boundary; the grant was revoked between the previous refresh and the boundary. Re-grant the capability and retry. Tighten handler shapes to stay under the refresh bound if latency matters.
-- **Thrown at:** evaluator (G9-A, §9.13 refresh point #5)
+- **Thrown at:** evaluator (G9-A, §9.13 refresh point #5). `CapError::WallclockExpired` is the upstream alias; the firing site is reserved at G9-A refresh-point-5 and is not yet wired in production code (drift-detector reachability is `ignore` until then).
 - **Phase:** 2a
 
 ### E_CAP_CHAIN_TOO_DEEP
@@ -596,10 +610,12 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_WAIT_SIGNAL_SHAPE_MISMATCH
 
+<!-- reachability: ignore -->
+
 - **Message:** "WAIT signal payload does not match declared signal_shape"
 - **Context:** `{ node_id: NodeId, expected: string, got: unknown }`
 - **Fix:** When a WAIT declares `signal_shape: Some(schema)`, a resume with a payload that fails schema validation is rejected BEFORE any downstream TRANSFORM runs. Either widen the schema, re-send with the correct shape, or drop the `signal_shape` to keep the untyped path.
-- **Thrown at:** WAIT executor resume path (G3-B DX signal-payload typing)
+- **Thrown at:** WAIT executor resume path (G3-B DX signal-payload typing). The integration test at `crates/benten-engine/tests/integration/wait_signal_shape_optional_typing.rs` exercises the surface; the production firing site is reserved alongside the broader G3-B DX typing landing (drift-detector reachability is `ignore` until then).
 - **Phase:** 2a
 
 ## Extending the catalog

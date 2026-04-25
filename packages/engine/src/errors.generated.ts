@@ -199,14 +199,14 @@ export class EInvTooManyEdges extends BentenError {
 /**
  * E_INV_SYSTEM_ZONE
  *
- * Thrown at: Registration
- * Message template: "Node {node_id} references system-zone label '{label}', unreachable from user operations"
+ * Thrown at: - Registration — literal-CID walker in `benten-eval::invariants::system_zone::validate_registration` (rejects a READ or WRITE operation node whose `"label"` property or node-id is a `system:*` literal). - Runtime — resolved-label probe in `benten-engine::primitive_host`: - `read_node` / `get_by_label` / `get_by_property` / `read_view` — TRANSFORM-computed CIDs whose resolved Node carries a `system:*` label collapse to `Ok(None)` / empty list at the user surface (symmetric with a backend miss). - `put_node` — fires `EvalError::Invariant(SystemZone)` before the `PendingHostOp` is buffered, so a handler WRITE of a `system:*`-labelled Node never reaches the storage-layer defence-in-depth guard (which would otherwise surface the Phase-1 `E_SYSTEM_ZONE_WRITE` code). - User-facing CRUD — `Engine::create_node` fires this code directly for any `system:*` label in the input Node's `labels` vector. `Engine::get_node` collapses system-zone reads to `Ok(None)` (the probe returns the typed code through the runtime telemetry path but not through the user-visible `Result`).
+ * Message template: "Node IDs and labels cannot begin with the reserved 'system:' prefix — it's reserved for engine internals"
  */
 export class EInvSystemZone extends BentenError {
   static readonly code = "E_INV_SYSTEM_ZONE";
-  static readonly fixHint = "System-zone labels are reserved for engine internals. Use a non-reserved label.";
+  static readonly fixHint = "The `system:` prefix is reserved for engine internals; both labels AND node IDs that start with `system:` are rejected at registration as defence-in-depth (G5-B-i Decision 6 reserved-prefix DX improvement). Pick a non-reserved label/ID and re-register. Runtime probing of resolved (TRANSFORM-computed) CIDs collapses system-zone targets to `Ok(None)` on the user-visible surface; only the user-facing `create_node` path fires this error directly for an input label.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_INV_SYSTEM_ZONE", "System-zone labels are reserved for engine internals. Use a non-reserved label.", message, context);
+    super("E_INV_SYSTEM_ZONE", "The `system:` prefix is reserved for engine internals; both labels AND node IDs that start with `system:` are rejected at registration as defence-in-depth (G5-B-i Decision 6 reserved-prefix DX improvement). Pick a non-reserved label/ID and re-register. Runtime probing of resolved (TRANSFORM-computed) CIDs collapses system-zone targets to `Ok(None)` on the user-visible surface; only the user-facing `create_node` path fires this error directly for an input label.", message, context);
     this.name = "EInvSystemZone";
   }
 }
@@ -244,14 +244,14 @@ export class EInvIterateMaxMissing extends BentenError {
 /**
  * E_INV_ITERATE_BUDGET
  *
- * Thrown at: Evaluation (Phase 1 flat budget) / Registration (Phase 2 multiplicative-through-CALL)
- * Message template: "Cumulative iteration budget {actual} exceeds max {max} through nested ITERATE/CALL"
+ * Thrown at: Registration (Phase 2a multiplicative-through-CALL / Code-as-graph Major #2) and Evaluation (Phase 1 runtime flat budget, preserved at `DEFAULT_ITERATION_BUDGET = 100_000` in `crates/benten-eval/src/evaluator.rs`).
+ * Message template: "Cumulative iteration budget {actual} exceeds bound {bound} through nested ITERATE/CALL"
  */
 export class EInvIterateBudget extends BentenError {
   static readonly code = "E_INV_ITERATE_BUDGET";
-  static readonly fixHint = "Reduce the multiplicative iteration space. Total iterations across nested ITERATE/CALL is bounded by the capability grant.";
+  static readonly fixHint = "Reduce the multiplicative iteration space. The cumulative budget is the worst-case product of ITERATE `max` values and non-isolated CALL callee bounds along any DAG path through the handler. Flatten the nested iteration, or declare `isolated: true` on a CALL whose callee runs under its own grant's bound (the callee frame resets the cumulative rather than inheriting the caller's remaining budget — Code-as-graph Major #2 / Option B).";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_INV_ITERATE_BUDGET", "Reduce the multiplicative iteration space. Total iterations across nested ITERATE/CALL is bounded by the capability grant.", message, context);
+    super("E_INV_ITERATE_BUDGET", "Reduce the multiplicative iteration space. The cumulative budget is the worst-case product of ITERATE `max` values and non-isolated CALL callee bounds along any DAG path through the handler. Flatten the nested iteration, or declare `isolated: true` on a CALL whose callee runs under its own grant's bound (the callee frame resets the cumulative rather than inheriting the caller's remaining budget — Code-as-graph Major #2 / Option B).", message, context);
     this.name = "EInvIterateBudget";
   }
 }
@@ -259,14 +259,14 @@ export class EInvIterateBudget extends BentenError {
 /**
  * E_INV_ITERATE_NEST_DEPTH
  *
- * Thrown at: Registration
+ * Thrown at: Never (retired)
  * Message template: "ITERATE nesting depth {depth} exceeds Phase 1 limit {max}"
  */
 export class EInvIterateNestDepth extends BentenError {
   static readonly code = "E_INV_ITERATE_NEST_DEPTH";
-  static readonly fixHint = "Phase 1 bounds ITERATE nesting structurally at depth 3 as a stopgap for the cumulative-budget enforcement coming in Phase 2. Flatten the nested iteration, or split into multiple CALL-connected subgraphs.";
+  static readonly fixHint = "Phase 1 bounded ITERATE nesting structurally at depth 3 as a stopgap for the cumulative-budget enforcement shipped in Phase 2a. Retired at Phase 2a open — `E_INV_ITERATE_BUDGET` supersedes it. The catalog entry + TS class spelling stay reserved (catalog IDs are stable across phases); the Rust `ErrorCode` variant has been removed because no production path constructs it. The reachability annotation above is the drift-detector's signal that this is a deliberate forward-/backward-compat retention rather than aspirational prose.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_INV_ITERATE_NEST_DEPTH", "Phase 1 bounds ITERATE nesting structurally at depth 3 as a stopgap for the cumulative-budget enforcement coming in Phase 2. Flatten the nested iteration, or split into multiple CALL-connected subgraphs.", message, context);
+    super("E_INV_ITERATE_NEST_DEPTH", "Phase 1 bounded ITERATE nesting structurally at depth 3 as a stopgap for the cumulative-budget enforcement shipped in Phase 2a. Retired at Phase 2a open — `E_INV_ITERATE_BUDGET` supersedes it. The catalog entry + TS class spelling stay reserved (catalog IDs are stable across phases); the Rust `ErrorCode` variant has been removed because no production path constructs it. The reachability annotation above is the drift-detector's signal that this is a deliberate forward-/backward-compat retention rather than aspirational prose.", message, context);
     this.name = "EInvIterateNestDepth";
   }
 }
@@ -534,9 +534,9 @@ export class ESystemZoneWrite extends BentenError {
  */
 export class ETransformSyntax extends BentenError {
   static readonly code = "E_TRANSFORM_SYNTAX";
-  static readonly fixHint = "The TRANSFORM expression language is a positive-allowlist subset of JavaScript. Any token or AST shape not in the published grammar (`docs/TRANSFORM-GRAMMAR.md`) is rejected. Common causes: closures, `this`, imports, template literals with expressions, tagged templates, optional-chained method calls, computed property names referencing `__proto__`/`constructor`/`Symbol.*`, `new`/`with`/`eval`/`yield`/`async`/`await`, destructuring with getters. See the grammar doc's \"Rejected constructs\" appendix.";
+  static readonly fixHint = "The TRANSFORM expression language is a positive-allowlist subset of JavaScript. Any token or AST shape not in the allowlist is rejected. Common causes: closures, `this`, imports, template literals with expressions, tagged templates, optional-chained method calls, computed property names referencing `__proto__`/`constructor`/`Symbol.*`, `new`/`with`/`eval`/`yield`/`async`/`await`, destructuring with getters.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_TRANSFORM_SYNTAX", "The TRANSFORM expression language is a positive-allowlist subset of JavaScript. Any token or AST shape not in the published grammar (`docs/TRANSFORM-GRAMMAR.md`) is rejected. Common causes: closures, `this`, imports, template literals with expressions, tagged templates, optional-chained method calls, computed property names referencing `__proto__`/`constructor`/`Symbol.*`, `new`/`with`/`eval`/`yield`/`async`/`await`, destructuring with getters. See the grammar doc's \"Rejected constructs\" appendix.", message, context);
+    super("E_TRANSFORM_SYNTAX", "The TRANSFORM expression language is a positive-allowlist subset of JavaScript. Any token or AST shape not in the allowlist is rejected. Common causes: closures, `this`, imports, template literals with expressions, tagged templates, optional-chained method calls, computed property names referencing `__proto__`/`constructor`/`Symbol.*`, `new`/`with`/`eval`/`yield`/`async`/`await`, destructuring with getters.", message, context);
     this.name = "ETransformSyntax";
   }
 }
@@ -1054,14 +1054,14 @@ export class EWaitTimeout extends BentenError {
 /**
  * E_INV_IMMUTABILITY
  *
- * Thrown at: graph write-path (G5-A)
+ * Thrown at: graph write-path (G5-A, `benten-graph`); declaration-time affordance at `benten-eval::invariants::immutability` rejects WRITE primitives whose literal `target_cid` is already registered.
  * Message template: "Write would mutate a registered subgraph (Inv-13)"
  */
 export class EInvImmutability extends BentenError {
   static readonly code = "E_INV_IMMUTABILITY";
-  static readonly fixHint = "Phase-2a invariant 13: once a handler subgraph is registered under a CID, its bytes are immutable. User re-writes (both content-matching and content-differing) are rejected. Privileged engine re-puts with matching bytes dedup silently; SyncReplica row is reserved for Phase 3. Register a NEW handler CID if the intent is to change the subgraph.";
+  static readonly fixHint = "Phase-2a invariant 13 — once a Node/subgraph is persisted under a CID, its bytes are immutable from user-path writes. The firing matrix has five rows (plan §9.11):";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_INV_IMMUTABILITY", "Phase-2a invariant 13: once a handler subgraph is registered under a CID, its bytes are immutable. User re-writes (both content-matching and content-differing) are rejected. Privileged engine re-puts with matching bytes dedup silently; SyncReplica row is reserved for Phase 3. Register a NEW handler CID if the intent is to change the subgraph.", message, context);
+    super("E_INV_IMMUTABILITY", "Phase-2a invariant 13 — once a Node/subgraph is persisted under a CID, its bytes are immutable from user-path writes. The firing matrix has five rows (plan §9.11):", message, context);
     this.name = "EInvImmutability";
   }
 }
@@ -1084,7 +1084,7 @@ export class EInvAttribution extends BentenError {
 /**
  * E_CAP_WALLCLOCK_EXPIRED
  *
- * Thrown at: evaluator (G9-A, §9.13 refresh point #5)
+ * Thrown at: evaluator (G9-A, §9.13 refresh point #5). `CapError::WallclockExpired` is the upstream alias; the firing site is reserved at G9-A refresh-point-5 and is not yet wired in production code (drift-detector reachability is `ignore` until then).
  * Message template: "Capability wall-clock refresh bound breached"
  */
 export class ECapWallclockExpired extends BentenError {
@@ -1129,7 +1129,7 @@ export class ECapScopeLoneStarRejected extends BentenError {
 /**
  * E_WAIT_SIGNAL_SHAPE_MISMATCH
  *
- * Thrown at: WAIT executor resume path (G3-B DX signal-payload typing)
+ * Thrown at: WAIT executor resume path (G3-B DX signal-payload typing). The integration test at `crates/benten-engine/tests/integration/wait_signal_shape_optional_typing.rs` exercises the surface; the production firing site is reserved alongside the broader G3-B DX typing landing (drift-detector reachability is `ignore` until then).
  * Message template: "WAIT signal payload does not match declared signal_shape"
  */
 export class EWaitSignalShapeMismatch extends BentenError {
