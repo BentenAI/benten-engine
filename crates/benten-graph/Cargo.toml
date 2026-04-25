@@ -64,6 +64,11 @@ testing = []
 [dependencies]
 benten-core = { path = "../benten-core" }
 benten-errors = { workspace = true }
+# G11-A Wave 3a: hash-check on the subgraph storage path
+# (`store_subgraph` / `load_subgraph_verified`) recomputes BLAKE3 over the
+# canonical DAG-CBOR bytes. Using the workspace dep keeps the algorithm
+# lockstep with `benten-core`'s CID hashing.
+blake3 = { workspace = true }
 redb = { workspace = true }
 serde_ipld_dagcbor = { workspace = true }
 thiserror = { workspace = true }

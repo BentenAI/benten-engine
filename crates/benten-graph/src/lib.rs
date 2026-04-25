@@ -213,9 +213,19 @@ impl RedbBackend {
 
     /// Phase 2a test-only hook: reset the bytes-read counter for the
     /// `get_node_label_only_fast_path_reads_prefix_only` assertion.
+    ///
+    /// G11-A Wave 3a CFG-GATING M2: stub is gated behind `any(test,
+    /// feature = "testing")` so the no-op cannot leak into release
+    /// builds. Body remains a no-op — the byte-counter instrumentation
+    /// is a Phase-2b perf-instrumentation refinement.
+    #[cfg(any(test, feature = "testing"))]
     pub fn reset_read_byte_counter(&self) {}
 
     /// Phase 2a test-only hook: read bytes consumed since the last reset.
+    ///
+    /// G11-A Wave 3a CFG-GATING M2: stub is gated behind `any(test,
+    /// feature = "testing")`.
+    #[cfg(any(test, feature = "testing"))]
     pub fn read_bytes_since_reset(&self) -> usize {
         0
     }
@@ -223,60 +233,110 @@ impl RedbBackend {
     /// Phase 2a C5 / G5-A: store a `Subgraph` under its DAG-CBOR canonical
     /// encoding, returning its CID.
     ///
+    /// The subgraph is keyed by the `s:` prefix plus the CID bytes, parallel
+    /// to the `n:CID` / `e:CID` schema for Nodes / Edges. The CID itself is
+    /// BLAKE3 over the canonical DAG-CBOR bytes so a round-trip through
+    /// [`RedbBackend::load_subgraph_verified`] recomputes the identical CID.
+    ///
     /// # Errors
     /// Returns [`GraphError`] on encode / write failure.
-    pub fn store_subgraph(&self, _sg: &benten_core::Subgraph) -> Result<Cid, GraphError> {
-        todo!("Phase 2a C5 / G5-A: Subgraph DAG-CBOR persistence")
+    pub fn store_subgraph(&self, sg: &benten_core::Subgraph) -> Result<Cid, GraphError> {
+        let bytes = sg.to_dag_cbor().map_err(GraphError::from)?;
+        let digest = blake3::hash(&bytes);
+        let cid = Cid::from_blake3_digest(*digest.as_bytes());
+        self.put(&subgraph_key(&cid), &bytes)?;
+        Ok(cid)
     }
 
     /// Phase 2a C5 / G5-A: load a subgraph by CID, verifying integrity.
     ///
+    /// Hash-first: the stored bytes are BLAKE3-hashed and compared against
+    /// the caller-supplied `cid` before any decode is attempted. Mismatch
+    /// fires [`CoreError::ContentHashMismatch`] (mapped to
+    /// `E_INV_CONTENT_HASH` via [`GraphError::code`]); a matching hash that
+    /// still fails to decode surfaces as [`CoreError::Serialize`] (mapped
+    /// to `E_SERIALIZE`). A missing CID returns `Ok(None)`.
+    ///
     /// # Errors
-    /// Returns [`GraphError`] on decode / integrity failure.
+    /// - [`GraphError::Core`] carrying `CoreError::ContentHashMismatch` on
+    ///   tamper / corruption.
+    /// - [`GraphError::Core`] carrying `CoreError::Serialize` on decode
+    ///   failure of (hash-matching) bytes.
+    /// - [`GraphError::Redb`] on redb I/O failure.
     pub fn load_subgraph_verified(
         &self,
-        _cid: &Cid,
+        cid: &Cid,
     ) -> Result<Option<benten_core::Subgraph>, GraphError> {
-        todo!(
-            "Phase 2a C5 / G5-A: Subgraph load + verify per \
-             `subgraph_load_verified_migration.rs`"
-        )
+        let Some(bytes) = self.get(&subgraph_key(cid))? else {
+            return Ok(None);
+        };
+        let sg =
+            benten_core::Subgraph::load_verified_with_cid(&bytes, cid).map_err(GraphError::from)?;
+        Ok(Some(sg))
     }
 
     /// Phase 2a test-only hook: corrupt on-disk subgraph bytes via a
     /// mutator closure.
     ///
+    /// Reads the bytes at `s:CID`, hands them to `mutate` for in-place
+    /// modification, writes them back under the ORIGINAL key. The key is
+    /// preserved (not re-computed from the mutated bytes) so the next
+    /// `load_subgraph_verified(cid)` observes the CID-vs-content drift as
+    /// `E_INV_CONTENT_HASH` rather than a clean miss.
+    ///
     /// G11-A Wave 2a: cfg-gated behind `any(test, feature = "testing")`
-    /// so a release build cannot reach the corruption primitive. Body is
-    /// still a `todo!()` stub pending the
-    /// `subgraph_load_verified_migration` deferral.
+    /// so a release build cannot reach the corruption primitive.
     ///
     /// # Errors
-    /// Returns [`GraphError`] if the CID is missing.
+    /// Returns [`GraphError::Redb`] with a string payload if the CID is
+    /// missing (the hook has no bytes to corrupt), or propagates I/O
+    /// failures from the underlying put/get.
     #[cfg(any(test, feature = "testing"))]
-    pub fn corrupt_subgraph_bytes_for_test<F>(
-        &self,
-        _cid: &Cid,
-        _mutate: F,
-    ) -> Result<(), GraphError>
+    pub fn corrupt_subgraph_bytes_for_test<F>(&self, cid: &Cid, mutate: F) -> Result<(), GraphError>
     where
         F: FnOnce(&mut [u8]),
     {
-        todo!("Phase 2a G5-A: test-only on-disk corruption hook")
+        let key = subgraph_key(cid);
+        let Some(mut bytes) = self.get(&key)? else {
+            return Err(GraphError::Redb(format!(
+                "corrupt_subgraph_bytes_for_test: CID {cid:?} not present"
+            )));
+        };
+        mutate(&mut bytes);
+        self.put(&key, &bytes)?;
+        Ok(())
     }
 
-    /// Phase 2a test-only hook: inject raw bytes under a computed CID.
+    /// Phase 2a test-only hook: inject raw bytes under their computed CID.
+    ///
+    /// Hashes `bytes` to produce the CID, writes under `s:CID`, returns
+    /// the CID. Unlike [`Self::corrupt_subgraph_bytes_for_test`] this path
+    /// preserves the content-addressing invariant (key = hash(value)) —
+    /// its purpose is to inject bytes that hash-match but fail to DECODE
+    /// as a `Subgraph`, exercising the `E_SERIALIZE` arm of
+    /// `load_subgraph_verified`.
     ///
     /// G11-A Wave 2a: cfg-gated behind `any(test, feature = "testing")`.
-    /// Body is still a `todo!()` stub pending the
-    /// `subgraph_load_verified_migration` deferral.
     ///
     /// # Errors
     /// Returns [`GraphError`] on write failure.
     #[cfg(any(test, feature = "testing"))]
-    pub fn inject_raw_subgraph_bytes_for_test(&self, _bytes: &[u8]) -> Result<Cid, GraphError> {
-        todo!("Phase 2a G5-A: test-only raw-byte injection hook")
+    pub fn inject_raw_subgraph_bytes_for_test(&self, bytes: &[u8]) -> Result<Cid, GraphError> {
+        let digest = blake3::hash(bytes);
+        let cid = Cid::from_blake3_digest(*digest.as_bytes());
+        self.put(&subgraph_key(&cid), bytes)?;
+        Ok(cid)
     }
+}
+
+/// `"s:" ++ cid_bytes`. Subgraph key schema — parallels the `n:` / `e:`
+/// Node / Edge layout.
+fn subgraph_key(cid: &Cid) -> Vec<u8> {
+    const SUBGRAPH_PREFIX: &[u8] = b"s:";
+    let mut k = Vec::with_capacity(SUBGRAPH_PREFIX.len() + cid.as_bytes().len());
+    k.extend_from_slice(SUBGRAPH_PREFIX);
+    k.extend_from_slice(cid.as_bytes());
+    k
 }
 
 /// Re-export of [`benten_core::WriteAuthority`]. Phase 2a ucca-9 / arch-r1-2

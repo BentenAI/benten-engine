@@ -160,6 +160,7 @@ dependencies = [
  "benten-core",
  "benten-engine",
  "benten-errors",
+ "blake3",
  "criterion",
  "proptest",
  "redb",

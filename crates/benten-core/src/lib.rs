@@ -112,10 +112,17 @@ impl Default for WriteAuthority {
 /// `cid`, `empty_for_test`) R3 tests reference. Phase 2a G5-A migrates the
 /// real Subgraph into benten-core under an opaque DAG-CBOR schema.
 ///
+/// G11-A Wave 3a: the shim now carries a `deterministic` field and encodes
+/// via canonical DAG-CBOR so the graph-layer `load_subgraph_verified`
+/// round-trip can recompute a stable CID from the stored bytes. The
+/// CID-from-DAG-CBOR-bytes invariant is load-bearing for the
+/// `load_subgraph_verified_from_store_*` suite.
+///
 /// TODO(phase-2a-G5-A): move the real Subgraph here + delete this stub.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Subgraph {
     handler_id: alloc::string::String,
+    deterministic: bool,
 }
 
 impl Subgraph {
@@ -124,6 +131,7 @@ impl Subgraph {
     pub fn empty_for_test(handler_id: impl Into<alloc::string::String>) -> Self {
         Self {
             handler_id: handler_id.into(),
+            deterministic: false,
         }
     }
 
@@ -135,12 +143,17 @@ impl Subgraph {
 
     /// Content-addressed CID.
     ///
+    /// The CID is BLAKE3 over the canonical DAG-CBOR bytes, so a round-trip
+    /// through [`Subgraph::to_dag_cbor`] + [`Subgraph::load_verified`]
+    /// recomputes the identical CID — the integrity invariant the graph-
+    /// layer `load_subgraph_verified` path depends on.
+    ///
     /// # Errors
-    /// Returns [`CoreError`] on encode failure.
+    /// Returns [`CoreError::Serialize`] on encode failure.
     pub fn cid(&self) -> Result<Cid, CoreError> {
-        // Derive a stable CID from the handler id's bytes.
-        let h = blake3::hash(self.handler_id.as_bytes());
-        Ok(Cid::from_blake3_digest(*h.as_bytes()))
+        let bytes = self.to_dag_cbor()?;
+        let digest = blake3::hash(&bytes);
+        Ok(Cid::from_blake3_digest(*digest.as_bytes()))
     }
 }
 
@@ -294,47 +307,62 @@ impl Node {
 
 impl Subgraph {
     /// Phase 2a C5 / G5-A: mark the Subgraph deterministic.
-    pub fn set_deterministic(&mut self, _value: bool) {
-        // Phase-2a stub — the core Subgraph shim tracks only handler_id; the
-        // real Subgraph (in benten-eval) has the deterministic flag.
+    pub fn set_deterministic(&mut self, value: bool) {
+        self.deterministic = value;
     }
 
-    /// Phase 2a C5 / G5-A: DAG-CBOR encode.
+    /// Phase 2a C5 / G5-A: DAG-CBOR encode. The bytes produced here are the
+    /// hash-input for [`Subgraph::cid`].
     ///
     /// # Errors
     /// Returns [`CoreError::Serialize`] on encode failure.
     pub fn to_dag_cbor(&self) -> Result<Vec<u8>, CoreError> {
-        todo!("Phase 2a C5 / G5-A: implement Subgraph DAG-CBOR encode")
+        serde_ipld_dagcbor::to_vec(self).map_err(|e| CoreError::Serialize(format_err(&e)))
     }
 
     /// Phase 2a C5 / G5-A: load a Subgraph from DAG-CBOR bytes.
     ///
+    /// This is the no-CID variant — it only validates that the bytes decode
+    /// cleanly as a Subgraph. Integrity enforcement (CID vs. computed-hash)
+    /// is the job of [`Subgraph::load_verified_with_cid`].
+    ///
     /// # Errors
     /// Returns [`CoreError::Serialize`] on decode failure.
-    pub fn load_verified(_bytes: &[u8]) -> Result<Self, CoreError> {
-        todo!("Phase 2a C5 / G5-A: implement Subgraph::load_verified (simple shape)")
+    pub fn load_verified(bytes: &[u8]) -> Result<Self, CoreError> {
+        serde_ipld_dagcbor::from_slice(bytes).map_err(|e| CoreError::Serialize(format_err(&e)))
     }
 
     /// Phase 2a C5 / G5-A: load a Subgraph from bytes + an expected CID.
     /// Integrity-enforcing: mismatch between the recomputed CID and
     /// `expected_cid` fires `E_INV_CONTENT_HASH`.
     ///
+    /// Mirrors [`Node::load_verified`]: the bytes-level hash is the
+    /// authoritative check (hash first, then decode) so a tamper that
+    /// happens to corrupt the CBOR structure does not masquerade as a
+    /// generic `Serialize` error.
+    ///
     /// # Errors
-    /// Returns [`CoreError::Serialize`] on decode failure; returns a
-    /// content-hash mismatch on integrity failure.
-    pub fn load_verified_with_cid(_bytes: &[u8], _expected_cid: &Cid) -> Result<Self, CoreError> {
-        todo!(
-            "Phase 2a C5 / G5-A: implement Subgraph::load_verified_with_cid \
-             (CID-supplied integrity-enforcing shape)"
-        )
+    /// - [`CoreError::ContentHashMismatch`] if the recomputed CID does not
+    ///   match `expected_cid`.
+    /// - [`CoreError::Serialize`] if the (hash-matching) bytes fail to
+    ///   decode as a Subgraph.
+    pub fn load_verified_with_cid(bytes: &[u8], expected_cid: &Cid) -> Result<Self, CoreError> {
+        let digest = blake3::hash(bytes);
+        let recomputed = Cid::from_blake3_digest(*digest.as_bytes());
+        if &recomputed != expected_cid {
+            return Err(CoreError::ContentHashMismatch {
+                path: "subgraph",
+                expected: *expected_cid,
+                actual: recomputed,
+            });
+        }
+        serde_ipld_dagcbor::from_slice(bytes).map_err(|e| CoreError::Serialize(format_err(&e)))
     }
 
     /// Phase 2a C5 / G5-A: whether the Subgraph is classified deterministic.
     #[must_use]
     pub fn is_deterministic(&self) -> bool {
-        // Phase-2a stub mirrors the eval-side accessor; always false in the
-        // core shim.
-        false
+        self.deterministic
     }
 }
 
