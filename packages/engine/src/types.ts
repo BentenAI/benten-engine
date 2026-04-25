@@ -119,10 +119,11 @@ export interface TraceStepPrimitive {
   durationUs: number;
   /** Operation-node id within the registered handler. */
   nodeId: string;
-  /** Input binding observed at step entry. */
-  inputs?: JsonValue;
-  /** Output produced by the step. */
-  outputs?: JsonValue;
+  /** Input binding observed at step entry. Always emitted by the napi
+   *  bridge (Value::Null serialises to JSON null, never absent). */
+  inputs: JsonValue;
+  /** Output produced by the step. Same always-present semantics as `inputs`. */
+  outputs: JsonValue;
   /** Optional error-code string if the step routed to a typed error edge. */
   error?: string;
   /** Inv-14 attribution. Required slot; populated once G5-B-ii completes. */

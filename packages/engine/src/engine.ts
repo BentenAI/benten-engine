@@ -214,7 +214,6 @@ function mapTraceStep(s: Record<string, unknown>): TraceStep {
         path: Array.isArray(s.path) ? (s.path as unknown[]).map(String) : [],
       };
     case "primitive":
-    default:
       return {
         type: "primitive",
         nodeCid: String(s.nodeCid ?? ""),
@@ -225,11 +224,21 @@ function mapTraceStep(s: Record<string, unknown>): TraceStep {
         // without lying about timing (the step DID execute).
         durationUs: Math.max(1, Number(s.durationUs ?? 0)),
         nodeId: String(s.nodeId ?? ""),
-        inputs: s.inputs as JsonValue | undefined,
-        outputs: s.outputs as JsonValue | undefined,
+        inputs: s.inputs as JsonValue,
+        outputs: s.outputs as JsonValue,
         error: typeof s.error === "string" ? s.error : undefined,
         attribution: readAttribution(s.attribution),
       };
+    default:
+      // Wave-2b mini-review M1: an unknown discriminant from a newer native
+      // binding indicates a wrapper-version mismatch. Failing loudly here
+      // is preferable to silently downgrading the row to a default-shaped
+      // "primitive" (which masquerades unknown variants as primitive steps
+      // with empty fields). When a Phase-2b variant lands, callers update
+      // both the native binding and this wrapper together.
+      throw new Error(
+        `Unknown TraceStep discriminant "${t}" — @benten/engine is older than the native binding it's reading. Update @benten/engine to a version that knows this variant.`,
+      );
   }
 }
 
