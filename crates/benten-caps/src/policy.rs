@@ -35,7 +35,16 @@ pub use benten_core::WriteAuthority;
 /// each op to route denials. Richer shapes (full Node body, property diffs)
 /// are a Phase-2 concern and would require `benten-caps` to take a direct
 /// dep on `benten-graph` (a layering break).
+///
+/// `#[non_exhaustive]` (Phase-2a R6 wsa-3): Phase-2b adds a
+/// `HostFunctionCall` variant (SANDBOX host-function manifest, plan §9.3),
+/// which would otherwise be a breaking change for downstream policy
+/// implementors. Sealing the variant set behind `non_exhaustive` makes
+/// future additions a minor version bump and forces external `match`
+/// expressions to include a `_ =>` arm — the same forward-compat
+/// discipline `ErrorCode` and `GraphError` already enforce.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum PendingOp {
     /// A Node write. `labels` is the full label set of the Node being put.
     PutNode {
