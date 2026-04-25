@@ -148,8 +148,13 @@ jobs:
         #     testing_force_reregister_with_different_cid hook so the
         #     Phase-1 DuplicateHandler contract is preserved); filter
         #     clauses dropped.
-        #   - prop_parent_single_wildcard_is_still_narrowing — D12.6
-        #     flaky-proptest item.
+        #   - prop_parent_single_wildcard_is_still_narrowing — RESOLVED
+        #     in G11-A Wave 3a. Mis-filed as "flaky" in D12.6: the test
+        #     panicked deterministically on every draw because
+        #     `GrantScope::parse("*").unwrap()` trips ucca-7's
+        #     ScopeLoneStarRejected. Rewritten to pin the post-ucca-7
+        #     contract (lone `*` rejected at parse time; compound
+        #     `<ns>:*` still permits any tail). Filter clause dropped.
         #   - variant_count_is_pinned — G3-B WaitOutcome variant-count
         #     shape-pin; belongs with the Wave-2b TraceStep unification.
         #   - view_stale_count_tallies — RESOLVED in G11-A Wave 3a
@@ -168,7 +173,7 @@ jobs:
         #     DOCS-CARRY.
         run: |
           cargo nextest run --profile ci --workspace --locked --features benten-eval/testing,benten-engine/test-helpers \
-            -E 'not test(/load_verified/) and not test(/prop_parent_single_wildcard/) and not test(/variant_count_is_pinned/) and not test(/compromise_6_/) and not test(/compromise_7_/)'
+            -E 'not test(/load_verified/) and not test(/variant_count_is_pinned/) and not test(/compromise_6_/) and not test(/compromise_7_/)'
 
       - name: cargo doc
         if: matrix.rust == 'stable'
