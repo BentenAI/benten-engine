@@ -29,8 +29,9 @@ on:
     paths:
       - "crates/benten-errors/**"
       - "crates/benten-engine/**"
+      - "crates/benten-eval/**"
       - "bindings/napi/**"
-      - "crates/benten-engine/tests/integration/host_error_wire_safety.rs"
+      - "crates/benten-engine/tests/host_error_wire_format_excludes_cids.rs"
       - ".github/workflows/host-error-wire-safety.yml"
 
 concurrency:
@@ -62,22 +63,35 @@ jobs:
           tool: cargo-nextest
 
       - name: Build + run wire-safety integration test
+        # The integration-test binary lives at
+        # `crates/benten-engine/tests/host_error_wire_format_excludes_cids.rs`;
+        # `--test` selects by file stem, not by inner test name. A previous
+        # spelling pointed `--test` at `host_error_wire_safety` (which is the
+        # workflow name + R2 anchor) and cargo failed with "no test target
+        # named `host_error_wire_safety`". The actual file stem is the test
+        # name itself.
         run: |
           cargo nextest run --profile ci --locked \
-            --features benten-eval/testing,benten-engine/test-helpers \
+            --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing \
             -p benten-engine \
-            --test host_error_wire_safety \
-            -E 'test(host_error_wire_format_excludes_cids)'
+            --test host_error_wire_format_excludes_cids
 
       - name: Sanity check — HostError does not serialise CID fields
         # Belt-and-suspenders: scan the HostError Serialize derive site
         # (if the struct grows a `#[serde]` field whose name contains
         # `cid`, fail fast before waiting on the integration test).
+        #
+        # G1-B landed `HostError` in `benten-eval` (NOT `benten-errors` — the
+        # latter holds the stable `ErrorCode` catalog only; `HostError` wraps
+        # `ErrorCode` + opaque source + optional context). Scan `benten-eval`
+        # primarily and `benten-errors` as a defensive fallback in case the
+        # type later moves.
         shell: bash
         run: |
           set -euo pipefail
-          host_error_src=$(find crates/benten-errors/src -name '*.rs' \
-            | xargs grep -l 'struct HostError' || true)
+          host_error_src=$(find crates/benten-eval/src crates/benten-errors/src \
+            -name '*.rs' 2>/dev/null \
+            | xargs grep -l 'struct HostError' 2>/dev/null || true)
           if [ -z "$host_error_src" ]; then
             echo "NOTE: HostError struct not found yet (OK pre-G1-B)"
             exit 0
