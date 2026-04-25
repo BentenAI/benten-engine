@@ -46,12 +46,12 @@ jobs:
         # bloom / Inv-13 matrix hooks) stay available for the MSRV build —
         # the `test-helpers` default was flipped off to keep release
         # builds clean.
-        run: cargo build --workspace --locked --features benten-eval/testing,benten-engine/test-helpers
+        run: cargo build --workspace --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing
 
       - name: Fixture-match check (canonical CID)
         run: |
           # The canonical fixture CID must remain stable across Rust versions.
           # If MSRV drift changes the encoding path, this catches it before
           # merge.
-          cargo test --workspace --locked --no-fail-fast --features benten-eval/testing,benten-engine/test-helpers -- \
+          cargo test --workspace --locked --no-fail-fast --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing -- \
             exit_6_canonical_cid_matches_spike_fixture

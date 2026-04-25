@@ -140,42 +140,40 @@ jobs:
         # exclusion points at a specific waiting-on-impl or waiting-on-
         # wave-2 item in plan §G11-A; the exclusions drop as those items
         # land. Categories:
-        #   - load_verified/load_subgraph_verified — RESOLVED in
-        #     G11-A Wave 3a (storage-layer hash-check read paths landed
-        #     in benten-core::Subgraph::load_verified_with_cid +
-        #     RedbBackend::load_subgraph_verified); filter clause dropped.
-        #   - ast_cache_* / old_subgraph_cid_not_reachable — RESOLVED
-        #     in G11-A Wave 3a (tests rewritten via
+        #   - load_verified/load_subgraph_verified — RESOLVED in G11-A
+        #     Wave 3a STORAGE-VERIFIED (benten-core::Subgraph::
+        #     load_verified_with_cid + RedbBackend::load_subgraph_verified).
+        #   - ast_cache_* / old_subgraph_cid_not_reachable — RESOLVED in
+        #     G11-A Wave 3a RESIDUALS (tests rewritten via
         #     testing_force_reregister_with_different_cid hook so the
-        #     Phase-1 DuplicateHandler contract is preserved); filter
-        #     clauses dropped.
-        #   - prop_parent_single_wildcard_is_still_narrowing — D12.6
-        #     flaky-proptest item.
-        #   - variant_count_is_pinned — G3-B WaitOutcome variant-count
-        #     shape-pin; belongs with the Wave-2b TraceStep unification.
-        #   - view_stale_count_tallies — ENGINE Wave-1 wired
-        #     engine_diagnostics.rs:185 away from the 0.0 hardcode but
-        #     the IVM-side tally isn't tallying; Wave-2 ENGINE-CARRY.
+        #     Phase-1 DuplicateHandler contract is preserved).
+        #   - prop_parent_single_wildcard_is_still_narrowing — RESOLVED
+        #     in G11-A Wave 3a RESIDUALS. Mis-filed as "flaky" in D12.6:
+        #     panicked deterministically on `GrantScope::parse("*")`
+        #     under ucca-7's ScopeLoneStarRejected. Rewritten to pin the
+        #     post-ucca-7 contract.
+        #   - variant_count_is_pinned — RESOLVED in G11-A Wave 3a
+        #     RESIDUALS. Mis-classified here as TraceStep shape-pin; was
+        #     actually a benten-errors catalog drift (42 vs 58).
+        #     ALL_CATALOG_VARIANTS expanded to include 5 reserved
+        #     HostError + 10 Phase-2a firing + CapScopeLoneStarRejected.
+        #   - view_stale_count_tallies — RESOLVED in G11-A Wave 3a
+        #     RESIDUALS. IVM-side tally was already correct; test needed
+        #     `.with_test_ivm_budget(4)` so a modest write burst actually
+        #     trips the view past its freshness bound.
         #   - compromise_6_* / compromise_7_* — RESOLVED in G11-A Wave
         #     3a DOC-REGRESSION. Compromise #7: `crates/benten-graph/
-        #     Cargo.toml` now carries the literal
-        #     `required-features = ["test-fixtures"]` gate on the
-        #     `write-canonical-and-exit` bin, matching the
-        #     `default = ["test-fixtures"]` single-element default array
-        #     and the `test-fixtures = []` feature declaration; the
-        #     previous Wave-1 MODERATE-3 `testing` piggy-back in
-        #     `default` has been relocated to the CI
-        #     `--features benten-graph/testing` flag added to this job's
-        #     cargo invocations so production
-        #     `cargo install benten-graph --no-default-features` keeps
-        #     stripping both the bin and the instrumentation.
-        #     Compromise #6: `docs/SECURITY-POSTURE.md` re-tracked
-        #     (`.gitignore` updated) so CI fresh clones see the
-        #     BLAKE3 / 128-bit collision-resistance section the
-        #     regression test asserts. Filter clauses dropped.
+        #     Cargo.toml` carries `required-features = ["test-fixtures"]`
+        #     on the bin + `default = ["test-fixtures"]`; the prior
+        #     Wave-1 MODERATE-3 `testing` piggy-back in `default` was
+        #     relocated to the explicit `--features benten-graph/testing`
+        #     CI flag below. Compromise #6: `docs/SECURITY-POSTURE.md`
+        #     re-tracked so CI fresh clones see the BLAKE3 /
+        #     128-bit collision-resistance section.
+        # All filter clauses dropped — Wave 3a closed every remaining
+        # red-phase carry.
         run: |
-          cargo nextest run --profile ci --workspace --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing \
-            -E 'not test(/prop_parent_single_wildcard/) and not test(/variant_count_is_pinned/) and not test(/view_stale_count_tallies/)'
+          cargo nextest run --profile ci --workspace --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing
 
       - name: cargo doc
         if: matrix.rust == 'stable'

@@ -243,6 +243,13 @@ impl DevServer {
     /// Testing shim — release the slow-transform gate so any thread
     /// parked inside [`DevServer::call_for_test`] on a `slow_transform`
     /// handler resumes.
+    ///
+    /// Scope: the gate is per-[`DevServer`] instance — each `DevServer`
+    /// owns its own `Arc<ReloadCoordinator>`, so releasing here affects
+    /// only calls in flight against THIS server, not any other server
+    /// in the same process. Wave-2a mini-review M2 asked whether this
+    /// was global state; the `ReloadCoordinator` field on `DevServer`
+    /// makes the scope per-instance and that's the intended contract.
     pub fn slow_transform_release_for_test(&self) {
         self.reload_coordinator.slow_transform_release();
     }

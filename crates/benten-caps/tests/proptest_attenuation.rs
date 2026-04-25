@@ -205,30 +205,58 @@ proptest! {
         );
     }
 
-    /// Property 4: the earlier-draft concrete bypasses.
+    /// Property 4: lone `*` is rejected at parse time (ucca-7 semantic).
     ///
-    /// Parent `"*"` (a single wildcard) permits nothing deeper than one
-    /// segment. The auditor's g4-uc-1 example: a child
-    /// `"store:post:write:admin:override"` must be DENIED by the new
-    /// algorithm (the old one accepted it after one segment pair).
+    /// Pre-ucca-7 this test pinned the earlier semantic that a single `*`
+    /// segment was a trailing wildcard granting unrestricted authority.
+    /// ucca-7 flipped that: `GrantScope::parse("*")` now returns
+    /// `Err(CapError::ScopeLoneStarRejected)` to close the root-scope
+    /// footgun. A grantor who intends "any sub-scope under `ns`" must
+    /// name the namespace (`ns:*`) — the compound-wildcard form exercised
+    /// below.
     ///
-    /// This is a deterministic boundary asserting the g4-uc-1 fix, not a
-    /// random fuzz — keeps the regression pinned for future refactors.
+    /// The original test unconditionally called `GrantScope::parse("*")
+    /// .unwrap()` and panicked deterministically on every draw after
+    /// ucca-7 landed (mis-filed as "flaky" in D12.6; the failure was
+    /// universal, not intermittent). Rewritten to pin the real
+    /// post-ucca-7 contract in two halves:
+    ///
+    /// 1. Lone `*` MUST be rejected at parse time (`ScopeLoneStarRejected`).
+    /// 2. A namespace-anchored compound wildcard (`<anchor>:*`) MUST still
+    ///    permit any child starting with `<anchor>` and one-or-more tail
+    ///    segments — the trailing-wildcard semantic is scoped to the
+    ///    compound case only, not the lone-`*` case.
+    ///
+    /// Test-name preserved because the CI exclusion in
+    /// `.github/workflows/ci.yml` refers to it by name.
     #[test]
     fn prop_parent_single_wildcard_is_still_narrowing(
         tail in prop::collection::vec(concrete_segment(), 2..=5)
     ) {
-        let parent = GrantScope::parse("*").unwrap();
-        // Parent "*" is a single-segment trailing wildcard, so the new
-        // algorithm SHOULD permit any child. That is the correct semantic:
-        // a single `*` IS an unrestricted grant. The real bypass in the
-        // earlier draft was the untested `store:*` case below.
-        let child = GrantScope::parse(&tail.join(":")).unwrap();
+        // ucca-7 contract: lone `*` refused at construction.
+        match GrantScope::parse("*") {
+            Err(benten_caps::CapError::ScopeLoneStarRejected) => {}
+            other => {
+                prop_assert!(
+                    false,
+                    "ucca-7 contract violated: GrantScope::parse(\"*\") \
+                     must return Err(ScopeLoneStarRejected), got {other:?}"
+                );
+            }
+        }
+
+        // Compound `<anchor>:*` still permits an arbitrary tail.
+        let (anchor, rest) = tail.split_first().expect("tail is 2..=5");
+        let parent_str = format!("{anchor}:*");
+        let parent = GrantScope::parse(&parent_str).unwrap();
+        let mut child_segs = vec![anchor.clone()];
+        child_segs.extend(rest.iter().cloned());
+        let child = GrantScope::parse(&child_segs.join(":")).unwrap();
         prop_assert!(
             check_attenuation(&parent, &child).is_ok(),
-            "a single `*` is a trailing wildcard and permits any child; \
-             this test pins the semantic so a future change that rejects \
-             single-`*` scopes is caught. Parent=* child={child:?}"
+            "compound trailing-wildcard `{parent_str}` must still permit \
+             child {child:?}; lone-`*` rejection is scoped to the \
+             single-segment case only"
         );
     }
 }

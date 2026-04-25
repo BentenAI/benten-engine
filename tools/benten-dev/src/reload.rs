@@ -106,6 +106,12 @@ impl ReloadCoordinator {
             Ok(g) => g,
             Err(poisoned) => poisoned.into_inner(),
         };
+        // N1 mini-review from Wave-2b suggested `let _ = …` style, but
+        // the wait_while() return is a MutexGuard and `let _ =` trips
+        // the `let_underscore_lock` lint (the guard would drop
+        // immediately instead of being bound to the enclosing scope's
+        // cleanup). The named binding keeps the guard alive through
+        // scope exit and is the idiomatic form for condvar waits.
         let _unused = self
             .slow_transform
             .cv
