@@ -251,6 +251,16 @@ impl IntoSubgraphSpec for SubgraphSpec {
     fn into_eval_subgraph(self) -> Result<benten_eval::Subgraph, EngineError> {
         // Construct a minimal Subgraph from the collected primitives so the
         // invariant validator can run.
+        //
+        // R6 cag-r6-2: dispatch on every PrimitiveKind so each kind
+        // produces a structurally-distinct OperationNode shape — the prior
+        // wildcard `_ => sb.read(id)` silently degraded 9 of 12 primitives
+        // to READ, collapsing distinct registered subgraphs onto identical
+        // CIDs (Inv-13 immutability collision surface). Read/Write/Respond
+        // retain their kind-specific helpers so existing tests keep their
+        // node-shape expectations; every other kind routes through the
+        // raw `push_primitive` builder method which materializes the
+        // declared kind verbatim.
         let mut sb = benten_eval::SubgraphBuilder::new(self.handler_id);
         let mut last: Option<benten_eval::NodeHandle> = None;
         for (id, kind) in self.primitives {
@@ -269,7 +279,7 @@ impl IntoSubgraphSpec for SubgraphSpec {
                     };
                     sb.respond(prev)
                 }
-                _ => sb.read(id),
+                other => sb.push_primitive(id, other),
             };
             if let Some(p) = last {
                 sb.add_edge(p, h);

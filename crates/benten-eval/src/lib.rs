@@ -1020,6 +1020,29 @@ impl SubgraphBuilder {
         self.push(OperationNode::new(id, PrimitiveKind::Write))
     }
 
+    /// Push an operation node of an arbitrary [`PrimitiveKind`] onto the
+    /// builder, returning its handle.
+    ///
+    /// Phase-2a R6 cag-r6-2 follow-on: the engine's `IntoSubgraphSpec ->
+    /// Subgraph` conversion needs to materialize **structurally distinct**
+    /// `OperationNode`s for every PrimitiveKind a registered subgraph
+    /// declares so two registered handlers that differ only in primitive
+    /// kind hash distinctly under `Subgraph::cid()`. Prior to this fix the
+    /// engine-side conversion mapped every non-Read / non-Write / non-Respond
+    /// kind onto `sb.read(id)`, silently degrading 9 of 12 primitives at
+    /// invariant-validation time and creating a CID collision surface that
+    /// would have undermined Inv-13 immutability.
+    ///
+    /// This method is the single push-only entry point for all 12 kinds.
+    /// Existing kind-specific helpers (`read`, `write`, `respond`,
+    /// `transform`, `branch`, `iterate`, `wait_signal`, `call_handler`,
+    /// `sandbox`, `emit`) remain for the chained DSL-builder paths that
+    /// need predecessor-aware behavior; this raw-push variant is
+    /// deliberately the lowest-level constructor.
+    pub fn push_primitive(&mut self, id: impl Into<String>, kind: PrimitiveKind) -> NodeHandle {
+        self.push(OperationNode::new(id, kind))
+    }
+
     pub fn transform(&mut self, prev: NodeHandle, _expr: &str) -> NodeHandle {
         let id = format!("transform_{}", self.nodes.len());
         let nest = self.iterate_depth_of(prev);
@@ -1059,10 +1082,20 @@ impl SubgraphBuilder {
         self.push_chained(op, prev, nest)
     }
 
-    pub fn sandbox(&mut self, prev: NodeHandle, _module: &str) -> NodeHandle {
+    /// Append a SANDBOX operation that targets `module`. The module
+    /// identifier is persisted as a `module` text property on the new
+    /// OperationNode (wsa-2): Phase-2b wires SANDBOX hosting against
+    /// wasmtime and needs to recover the module name from the registered
+    /// subgraph WITHOUT a constructor-signature break, so the property must
+    /// already be present on subgraphs registered today. The empty-string
+    /// case is preserved as `Value::Text("")` so absence-vs-empty round-
+    /// trips losslessly through DAG-CBOR.
+    pub fn sandbox(&mut self, prev: NodeHandle, module: &str) -> NodeHandle {
         let id = format!("sandbox_{}", self.nodes.len());
+        let op = OperationNode::new(id, PrimitiveKind::Sandbox)
+            .with_property("module", Value::text(module.to_string()));
         let nest = self.iterate_depth_of(prev);
-        self.push_chained(OperationNode::new(id, PrimitiveKind::Sandbox), prev, nest)
+        self.push_chained(op, prev, nest)
     }
 
     pub fn respond(&mut self, prev: NodeHandle) -> NodeHandle {
