@@ -115,9 +115,10 @@ describe("Benten Phase 1 + 2a exit criteria (seven named gates)", () => {
     expect(suspended.handle.length).toBeGreaterThan(0);
 
     const resumed = await engine.resumeFromBytes(suspended.handle, { value: "ok" });
-    // The resumed outcome MUST complete (kind "complete") — this is the
-    // exit contract: scaffolded projects can register + suspend + resume
-    // a WAIT handler through the public TS surface.
-    expect(resumed.kind ?? "complete").toBe("complete");
+    // The resumed Outcome must report ok=true — this is the exit
+    // contract: scaffolded projects can register + suspend + resume
+    // a WAIT handler through the public TS surface. (Outcome has no
+    // `kind` field; mirrors the napi index.test roundtrip assertion.)
+    expect(resumed.ok).toBe(true);
   });
 });
