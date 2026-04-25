@@ -25,57 +25,85 @@
 //! Alice's conversation under Alice's delegated grants. Phase-7 Garden
 //! approval: Eve "resumes" Alice's vote.
 //!
-//! **Recommended mitigation.** `resume_from_bytes_as(bytes, signal,
+//! **Mitigation in code.** `resume_from_bytes_as(bytes, signal,
 //! claimed_principal)` checks `persisted.resumption_principal_cid ==
 //! claimed_principal` by CID-equality (content-addressed) before step 3
-//! (pinned subgraph CIDs) or step 4 (cap re-check).
+//! (pinned subgraph CIDs) or step 4 (cap re-check). See
+//! `crates/benten-engine/src/engine_wait.rs::resume_from_bytes_inner`
+//! step 2.
 //!
-//! **Red-phase contract.** G3-A lands `resumption_principal_cid` on the
-//! payload + `resume_from_bytes_as` API. Until then, `#[ignore]`d with a
-//! pending pointer. Fixture setup (create_principal for both Alice and
-//! Eve) compiles today.
-//!
-//! R3 writer: `rust-test-writer-security` (Phase 2a).
+//! R3 writer: `rust-test-writer-security` (Phase 2a). R6 fix-pass:
+//! un-ignored once `resume_from_bytes_as` + `resumption_principal_cid`
+//! landed (G3-A + G3-B). The §9.1 4-step protocol is now live and the
+//! step-2 firing edge is asserted end-to-end.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_engine::Engine;
+use benten_core::{Node, Value};
+use benten_engine::{Engine, SuspensionOutcome};
+use benten_errors::ErrorCode;
 
 /// ucca-4 / atk-1: Eve calls resume on Alice's state. Resume step 2 must
 /// fire `E_RESUME_ACTOR_MISMATCH` before any side-effect.
 #[test]
-#[ignore = "phase-2a-pending: resume_from_bytes_as + resumption_principal_cid field land in G3-A + G3-B per plan §9.1 step 2. Drop #[ignore] once the principal-bearing resume API is live."]
 fn resume_with_substituted_principal_rejects() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
         .path(dir.path().join("benten.redb"))
-        .capability_policy_grant_backed()
         .build()
         .unwrap();
 
-    let alice_cid = engine.create_principal("alice").unwrap();
-    let eve_cid = engine.create_principal("eve").unwrap();
+    // Two distinct principals — alice owns the suspension; eve attempts
+    // the unauthorized resume. `principal_cid` derives a deterministic
+    // CID from the name so this test does not depend on any backing
+    // identity store, only on CID-equality semantics in step 2.
+    let alice_cid = benten_engine::testing::principal_cid("alice");
+    let eve_cid = benten_engine::testing::principal_cid("eve");
     assert_ne!(
         alice_cid, eve_cid,
         "principals must hash to distinct CIDs — fixture sanity"
     );
 
-    // Target API path (G3-A + G3-B):
-    //
-    //     let handler_id = register_wait_handler(&engine, "wait-handler");
-    //     let suspended = engine
-    //         .call_with_suspension_as(&handler_id, "run", Node::empty(), &alice_cid)
-    //         .unwrap()
-    //         .unwrap_suspended();
-    //     let bytes = engine.suspend_to_bytes(suspended).unwrap();
-    //
-    //     // Eve tries to resume Alice's suspension.
-    //     let outcome = engine.resume_from_bytes_as(bytes, signal_value(), &eve_cid);
-    //     let err = outcome.expect_err("eve must not resume alice's suspension");
-    //     assert_eq!(err.code().as_str(), "E_RESUME_ACTOR_MISMATCH");
+    // Register a wait handler so `call_as_with_suspension` produces a
+    // genuine suspended envelope rather than a Complete short-circuit.
+    engine
+        .register_subgraph(benten_engine::testing::minimal_wait_handler("atk1"))
+        .expect("register wait handler");
 
-    panic!(
-        "red-phase: resume_from_bytes_as + resumption_principal_cid field \
-         not yet present. G3-A + G3-B to land per plan §9.1 step 2."
+    // Alice suspends a workflow. Step 0 of the protocol stamps
+    // `resumption_principal_cid = alice_cid` into the envelope.
+    let outcome = engine
+        .call_as_with_suspension("atk1", "run", Node::empty(), &alice_cid)
+        .expect("alice's call_with_suspension_as succeeds");
+    let handle = match outcome {
+        SuspensionOutcome::Suspended(h) => h,
+        SuspensionOutcome::Complete(_) => {
+            panic!("minimal_wait_handler must Suspend, not Complete")
+        }
+    };
+    let bytes = engine
+        .suspend_to_bytes(&handle)
+        .expect("serialise alice's suspension");
+
+    // Eve attempts to resume Alice's suspension under her own principal.
+    // Step 2 of the resume protocol must fire E_RESUME_ACTOR_MISMATCH
+    // before any side-effect.
+    let err = engine
+        .resume_from_bytes_as(&bytes, Value::text("attack-signal"), &eve_cid)
+        .expect_err("eve must not resume alice's suspension");
+    assert_eq!(
+        err.code(),
+        ErrorCode::ResumeActorMismatch,
+        "resume-principal mismatch must fire E_RESUME_ACTOR_MISMATCH; got {err:?}"
+    );
+
+    // Sanity: alice CAN resume her own suspension (proves the mismatch
+    // wasn't a categorical refuse-all and the bytes are well-formed).
+    let alice_resume = engine
+        .resume_from_bytes_as(&bytes, Value::text("legit-signal"), &alice_cid)
+        .expect("alice's own resume must succeed");
+    assert!(
+        alice_resume.is_ok_edge(),
+        "alice's own resume must route OK; got {alice_resume:?}"
     );
 }

@@ -67,9 +67,12 @@ thiserror = { workspace = true }
 [dev-dependencies]
 criterion = { workspace = true }
 tempfile = { workspace = true }
-# Phase 2a R3 tests: proptest + serde_ipld_dagcbor reach into the DAG-CBOR
-# schema directly for tamper-injection paths.
+# Phase 2a R3 tests: proptest + serde + serde_ipld_dagcbor reach into the
+# DAG-CBOR schema directly for tamper-injection paths (notably
+# `resume_with_missing_attribution_triple_rejects` derives `Serialize`
+# on a parallel "tampered" envelope shape).
 proptest = { workspace = true }
+serde = { workspace = true }
 serde_ipld_dagcbor = { workspace = true }
 
 [[bench]]

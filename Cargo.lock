@@ -126,6 +126,7 @@ dependencies = [
  "blake3",
  "criterion",
  "proptest",
+ "serde",
  "serde_ipld_dagcbor",
  "tempfile",
  "thiserror",
