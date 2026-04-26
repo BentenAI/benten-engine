@@ -28,14 +28,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Install MSRV toolchain
         # Canonical install idiom — replaces the manual `rustup toolchain
         # install ... && rustup default ...` that was a form drift with
         # the rest of the workflow fleet. Sets 1.89 as default so
         # subsequent `cargo ...` invocations use MSRV without `+1.89`.
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master (no semver tags; Dependabot rotates frequently)
         with:
           toolchain: "1.89"
 
