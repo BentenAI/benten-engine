@@ -21,12 +21,14 @@ bench = false
 
 [features]
 # `phase_2b_landed` gates compilation of Phase 2b R3-followup red-phase test
-# files whose `use` statements reference R5-pending APIs (notably the migrated
-# `benten_core::Subgraph` + `SubgraphBuilder` post-G12-C, plus the post-G12-D
-# widened `SubgraphSpec.primitives` shape). Default OFF so the CI required-check
-# fleet (which does NOT enable this feature) compiles + runs cleanly during
-# R3-consolidation. R5 G12-C / G12-D briefs flip this on as the referenced
-# surfaces land. See `.addl/phase-2b/r3-consolidation.md` §4 + qa-r4-02 / qa-r4-03.
+# files that import R5-pending APIs. G12-C lands the `Subgraph` + `SubgraphBuilder`
+# core-side surface partially (see `crates/benten-core/src/lib.rs` Subgraph
+# docstring re. deferred full-type relocation); the gate stays in place for
+# the canonical-bytes-shape-match + no-residual-eval-Subgraph + sec-r6 carry
+# tests that wait on the deferred follow-on. G12-D will use the same gate
+# for the `SubgraphSpec.primitives` widened-shape tests. Default OFF so the
+# CI required-check fleet (which does NOT enable this feature) compiles +
+# runs cleanly. See `.addl/phase-2b/r3-consolidation.md` §4 + qa-r4-02 / qa-r4-03.
 phase_2b_landed = []
 
 [dependencies]
@@ -50,17 +52,12 @@ thiserror = { workspace = true }
 proptest = { workspace = true }
 criterion = { workspace = true }
 serde_json = { workspace = true }
-# Phase 2a G1-A (arch-r1-7): `benten-core` MUST NOT depend on `benten-eval`
-# in any dep section — the `tests/benten_core_no_eval_dep.rs` gate rejects
-# even dev-dependencies to enforce the arch-1 dep-break. The R3-consolidation
-# scaffolding previously added `benten-eval = { path = "../benten-eval" }`
-# here so `tests/subgraph_deterministic_dagcbor.rs` could import Subgraph /
-# SubgraphBuilder before the type-move from `benten-eval` to `benten-core`.
-# That dev-dep has been removed; the dependent test file stays uncommitted
-# at R3 state and is gated behind the Phase-2b benten-core-migration landing
-# the type move (see `.addl/phase-2b/00-scope-outline.md` §7a "benten-core
-# Subgraph migration"; originally tagged `G5-A` but G5-A actually shipped
-# the storage-layer Inv-13 matrix instead).
+# arch-1 invariant: `benten-core` MUST NOT depend on `benten-eval` in any
+# dep section. The `tests/benten_core_no_eval_dep.rs` gate enforces this
+# (rejects even dev-dependencies). G12-C's core-side `Subgraph` +
+# `SubgraphBuilder` are self-contained so the round-trip / deterministic-
+# field tests compile against the core surface alone — no `benten-eval`
+# dev-dep is needed.
 
 [[bench]]
 name = "hash_only"

@@ -867,18 +867,15 @@ impl Subgraph {
         self.nodes.get(h.0 as usize)
     }
 
-    // R6 round-2 A7: the `Subgraph::to_dagcbor` / `from_dagcbor` panic
-    // stubs that previously sat here were removed because no caller ever
-    // existed (verified across crates/, tools/, bindings/, and benches/).
-    // The real DAG-CBOR symmetry lives on `ExecutionStateEnvelope`
-    // (see `crates/benten-eval/src/exec_state.rs`); the
-    // `tests/subgraph_deterministic_dagcbor.rs.pending-g5a` fixture
-    // remains suffixed `.pending-g5a` and will be re-introduced together
-    // with a real implementation when the Phase-2b benten-core-migration
-    // (.addl/phase-2b/00-scope-outline.md §7a) wires the subgraph
-    // round-trip path. Keeping panic stubs in the public API surfaced
-    // a footgun (a downstream consumer that compiled successfully but
-    // crashed in production); deleting them makes the absence explicit.
+    // The `Subgraph::to_dagcbor` / `from_dagcbor` round-trip surface lives
+    // on the core-side `benten_core::Subgraph` (G12-C — see
+    // `crates/benten-core/src/lib.rs` and the round-trip tests in
+    // `crates/benten-core/tests/subgraph_deterministic_dagcbor.rs`). The
+    // eval-side `Subgraph` deliberately does NOT expose these methods;
+    // its CID is computed via `canonical_subgraph_bytes` (the eval-rich
+    // shape including nodes + edges) for the registration / immutability
+    // path. Keeping the round-trip surface on one side prevents the
+    // footgun of two divergent canonical encodings on the same type.
 
     #[must_use]
     pub fn with_node(mut self, n: OperationNode) -> Self {

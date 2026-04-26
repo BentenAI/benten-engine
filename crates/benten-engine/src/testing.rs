@@ -220,11 +220,12 @@ pub fn subgraph_bytes_for_handler(
         .handler_to_mermaid(handler_id)
         .map_err(|e| format!("subgraph_bytes_for_handler: mermaid: {e}"))?;
     // The mermaid render is deterministic per handler — a stand-in for
-    // canonical bytes until the Phase-2b benten-core-migration completes
-    // the Subgraph::to_dagcbor path (see
-    // `.addl/phase-2b/00-scope-outline.md` §7a). The panic stubs that
-    // previously pinned this path were removed in R6 round-2 / A7
-    // because no caller existed. Hashes to a stable Vec<u8>.
+    // the eval-side canonical bytes path. G12-C added the core-side
+    // `Subgraph::to_dagcbor` round-trip on `benten_core::Subgraph` (see
+    // `crates/benten-core/src/lib.rs`); the eval-side rich Subgraph (used
+    // here for handler dispatch) keeps `canonical_subgraph_bytes` for the
+    // registration / immutability path. The mermaid stand-in is retained
+    // for backward compatibility with existing testing surfaces.
 
     Ok(mermaid.into_bytes())
 }
