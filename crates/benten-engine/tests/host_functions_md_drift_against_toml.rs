@@ -2,7 +2,7 @@
 //! reverse-direction drift detector.
 //!
 //! TDD red-phase. Pin source: R2 §6 (`host_functions_doc_drift_against_toml`)
-//! + qa-r4-08 dispatch note (R3-E's `host_functions_doc_drift_against_toml.rs`
+//! and qa-r4-08 dispatch note (R3-E's `host_functions_doc_drift_against_toml.rs`
 //! covers TOML→MD; this file covers the OPPOSITE direction MD→TOML
 //! to close the bidirectional drift gap that asymmetric drift detectors
 //! historically miss).
