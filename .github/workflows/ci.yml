@@ -310,12 +310,32 @@ jobs:
           set -euo pipefail
           tree=$(cargo tree -p benten-napi --no-default-features -e features --format "{p} {f}")
           echo "$tree"
-          if echo "$tree" | grep -E '^[^ ]*benten-engine[^ ]*\s.*(^| |,)test-helpers( |,|$)'; then
+          # R6FP-R3 (sec-r6r3-01 / NAPI-R3-1 / A8-R3-01): the prior
+          # `^[^ ]*benten-engine[^ ]*\s...` regex could not match cargo-tree's
+          # box-drawing-prefixed lines (e.g. `├── benten-engine ...`), so the
+          # gate was vacuous — verified empirically by piping a synthesized
+          # regression line through it. Fixed-string chain catches both the
+          # `default,...` enumeration form and the `feature "..."`
+          # activation-edge form a regression would produce.
+          if echo "$tree" | grep -F 'benten-engine' | grep -qF 'test-helpers'; then
             echo "FAIL: benten-napi --no-default-features closure pulls benten-engine/test-helpers."
             echo "Phase-2a R6r2 A2 split: napi must use envelope-cache-test-grade, not the broader test-helpers gate."
             exit 1
           fi
           echo "OK: benten-napi --no-default-features closure does not include benten-engine/test-helpers."
+          # R6FP-R3 self-test: pipe a synthesized regression line through the
+          # same filter chain and assert it MATCHES. If a future edit weakens
+          # the filter, this assertion fires before the negative-result echo
+          # above silently passes again. Both the `default,...` enumeration
+          # form and the `feature "test-helpers"` activation-edge form are
+          # covered by the fixed-string chain.
+          if ! printf '│   └── benten-engine v0.1.0 (/path) default,envelope-cache-test-grade,test-helpers\n├── benten-engine feature "test-helpers"\n' \
+            | grep -F 'benten-engine' | grep -qF 'test-helpers'; then
+            echo "FAIL (self-test): the filter chain above no longer detects a synthesized regression line."
+            echo "The negative-result echo above is therefore meaningless — fix the grep before merging."
+            exit 1
+          fi
+          echo "OK (self-test): filter chain correctly detects the synthesized regression line."
 
   # --------------------------------------------------------------------------
   # T9 — cross-leg byte-equality gate. Asserts every native leg and the
