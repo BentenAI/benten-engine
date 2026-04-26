@@ -48,6 +48,11 @@ default = []
 # unchanged.
 envelope-cache-test-grade = []
 test-helpers = ["envelope-cache-test-grade"]
+# `phase_2b_landed` — see benten-eval/Cargo.toml for the rationale. Gates
+# Phase-2b R3 red-phase test files that import R5-pending surfaces from
+# benten-engine (e.g. `engine.callStream`, `engine.installModule`,
+# `benten_engine::testing::testing_*`).
+phase_2b_landed = []
 # Phase-2a R3's original `phase_2a_stubs` feature was removed at R4
 # fix-pass (cov-1) — the R3 consolidation stubs made the gate obsolete
 # for the 4 exit-gate composite files (wait_resume_determinism,

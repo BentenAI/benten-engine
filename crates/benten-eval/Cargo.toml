@@ -32,6 +32,14 @@ diag = []
 # profile (e.g. an integration-test binary built under `--release`) must
 # opt in by enabling this feature explicitly.
 testing = []
+# `phase_2b_landed` gates compilation of Phase 2b R3 red-phase test files
+# whose `use` statements reference R5-pending APIs (`benten_eval::chunk_sink`,
+# `benten_eval::sandbox`, `benten_eval::testing::testing_*`, etc.). Default
+# OFF so the CI required-check fleet (which does NOT enable this feature)
+# can compile + run the workspace cleanly during R3-consolidation. R5
+# implementer briefs flip this on per-group as the referenced surfaces
+# land. See `.addl/phase-2b/r3-consolidation.md` §4.
+phase_2b_landed = []
 
 [dependencies]
 benten-core = { path = "../benten-core" }

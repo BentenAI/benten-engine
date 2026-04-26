@@ -17,6 +17,13 @@ workspace = true
 # benten-core/Cargo.toml for the longer rationale.
 bench = false
 
+[features]
+default = []
+# `phase_2b_landed` — see benten-eval/Cargo.toml for the rationale. Gates
+# Phase-2b R3 red-phase test files that import error-catalog variants not
+# yet landed (e.g. `ErrorCode::SandboxFuelExhausted`, `ErrorCode::StreamBackpressureDropped`).
+phase_2b_landed = []
+
 [dependencies]
 # Intentionally no workspace dependencies — benten-errors sits at the
 # root of the crate graph so any crate can depend on it without pulling

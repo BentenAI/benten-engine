@@ -1,0 +1,66 @@
+name: WASM Conformance (wasm32-wasip1)
+
+# Phase 2b R3-E (red-phase) STUB. Pin source: plan §3.1 Phase-2b CI
+# additions (`wasm-conformance.yml` REVISED 12-16h, NEW workflow per
+# wsa-13 — essential for G7 R6 sign-off; tests fuel-trap, memory-kill,
+# no-reentrancy, Inv-7 output-limit, Inv-4 nest-depth, plus
+# module-validation rejection + import-set adversarial cases + NaN
+# canonicalization). Component-Model type-mismatch rejection only if
+# wsa-3 reverses (currently component-model removed).
+#
+# Trigger discipline per METH-13: pull_request branches: [main] +
+# push branches: [main]. workflow_dispatch added for ad-hoc reruns.
+# No `push: branches: ['**']`.
+#
+# This is a SCAFFOLD. R5 implementation (G7-B + G10-A-wasip1) fills in
+# the actual job steps:
+#   - install Rust + wasm32-wasip1 target
+#   - install wasmtime
+#   - cargo build --target wasm32-wasip1 -p benten-eval
+#   - run the ESC-1..16 fixture suite under wasmtime
+#   - assert each ESC vector surfaces its expected error code
+#
+# Owned by R3-E (CI workflow stubs); R5 owners G7-B + G10-A-wasip1.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: wasm-conformance-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  wasm-conformance-stub:
+    name: WASM conformance (wasm32-wasip1) — RED-PHASE STUB
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      # R5 implementer (G7-B + G10-A-wasip1) replaces this placeholder
+      # with the real conformance harness. Until then the job exits 0
+      # so the CI surface compiles; the test landscape captures the
+      # missing assertions in the integration tests above
+      # (snapshot_blob_round_trip, wasip1_target_canonical_cid, etc.)
+      # which carry `#[ignore]` markers pointing at the same group.
+      - name: Placeholder — R5 (G7-B + G10-A-wasip1) implementation pending
+        shell: bash
+        run: |
+          echo "RED-PHASE STUB: wasm-conformance.yml awaits G7-B (SANDBOX"
+          echo "ESC-1..16 fixture suite) + G10-A-wasip1 (wasm32-wasip1"
+          echo "build harness) implementation per plan §3.1."
+          echo ""
+          echo "When implemented this job MUST:"
+          echo "  - install wasm32-wasip1 target + wasmtime"
+          echo "  - cargo build --target wasm32-wasip1 -p benten-eval"
+          echo "  - run ESC-1..16 fixture suite + assert typed errors"
+          echo "  - run module-validation rejection + import-set adversarial"
+          echo "  - run NaN canonicalization checks"
+          exit 0
