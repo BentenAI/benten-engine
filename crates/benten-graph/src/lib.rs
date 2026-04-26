@@ -235,7 +235,7 @@ impl RedbBackend {
         0
     }
 
-    /// Phase-2b benten-core-migration: store a `Subgraph` under its DAG-CBOR canonical
+    /// G12-C: store a `Subgraph` under its DAG-CBOR canonical
     /// encoding, returning its CID.
     ///
     /// The subgraph is keyed by the `s:` prefix plus the CID bytes, parallel
@@ -253,7 +253,7 @@ impl RedbBackend {
         Ok(cid)
     }
 
-    /// Phase-2b benten-core-migration: load a subgraph by CID, verifying integrity.
+    /// G12-C: load a subgraph by CID, verifying integrity.
     ///
     /// Hash-first: the stored bytes are BLAKE3-hashed and compared against
     /// the caller-supplied `cid` before any decode is attempted. Mismatch
