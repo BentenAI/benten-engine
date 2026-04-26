@@ -42,6 +42,17 @@ concurrency:
 
 permissions:
   contents: read
+  # NOTE: GitHub's GITHUB_TOKEN cannot read branch-protection settings —
+  # the `administration` permission key does not exist for GITHUB_TOKEN
+  # (only `actions`, `checks`, `contents`, `deployments`, `discussions`,
+  # `id-token`, `issues`, `packages`, `pages`, `pull-requests`,
+  # `repository-projects`, `security-events`, `statuses`,
+  # `attestations`, `models` are valid). Live drift-check therefore
+  # requires a PAT stored at `secrets.BRANCH_PROTECTION_READ_TOKEN`
+  # with `repo` scope (or fine-grained "Administration: read"). When
+  # the secret is absent the workflow degrades to spec-YAML-validation
+  # only and emits a warning that drift-check is unavailable. When
+  # present it diffs live state against spec.
 
 env:
   # Default = warn-only. Override at the repo Variables level
@@ -82,25 +93,46 @@ jobs:
           fi
           yq --version
 
+      - name: Validate spec YAML well-formedness
+        # Always runs. Sets the floor: even without a PAT, this workflow
+        # ensures the spec file parses as YAML and has the expected
+        # top-level shape. A typo in the spec would have no other guard.
+        run: |
+          python3 -c "import yaml,sys; d=yaml.safe_load(open('.github/branch-protection.yml')); assert 'protection' in d, 'spec missing top-level protection key'; print('spec YAML OK; top-level keys:', list(d.keys()))"
+
       - name: Fetch live protection state
         id: live
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PAT precedence: dedicated read-only PAT secret if configured,
+          # else fall back to GITHUB_TOKEN (which will 403 — handled below).
+          GH_TOKEN: ${{ secrets.BRANCH_PROTECTION_READ_TOKEN || secrets.GITHUB_TOKEN }}
+          PAT_CONFIGURED: ${{ secrets.BRANCH_PROTECTION_READ_TOKEN != '' }}
         run: |
           set +e
           # GET /repos/.../branches/main/protection — returns the
-          # current protection JSON or 404 if unprotected.
+          # current protection JSON, 404 if unprotected, or 403 if the
+          # token lacks admin scope (which GITHUB_TOKEN always does for
+          # this endpoint, by GitHub's design).
           live_json="$(gh api /repos/${{ github.repository }}/branches/main/protection 2>&1)"
           rc=$?
           set -e
 
           if [ $rc -ne 0 ]; then
             if echo "$live_json" | grep -q "Branch not protected"; then
+              # Genuine 404 — spec exists, no live protection applied yet.
               echo "live_state=unprotected" >> "$GITHUB_OUTPUT"
-              echo "$live_json" > live.json
-              # Sentinel: empty object so downstream diff has something
-              # to compare without erroring.
               echo '{}' > live.json
+            elif echo "$live_json" | grep -q "Resource not accessible"; then
+              # 403 — expected when no PAT is configured. Degrade to
+              # spec-only mode; emit a one-time warning that surfaces
+              # the runbook for Ben.
+              echo "live_state=skipped_no_pat" >> "$GITHUB_OUTPUT"
+              echo '{}' > live.json
+              if [ "$PAT_CONFIGURED" = "true" ]; then
+                echo "::error::PAT configured at BRANCH_PROTECTION_READ_TOKEN but still got 403 — token may lack 'repo' scope or 'Administration: read' fine-grained permission. Re-issue PAT with the right scope."
+                exit 1
+              fi
+              echo "::warning::Live drift-check skipped — no PAT configured at secrets.BRANCH_PROTECTION_READ_TOKEN. Spec YAML validity verified above; that is the floor. To enable live drift-check, create a fine-grained PAT with 'Administration: read' scope on this repo and store as a repo secret named BRANCH_PROTECTION_READ_TOKEN. See header of .github/branch-protection.yml for details."
             else
               echo "::error::Failed to fetch live protection: $live_json"
               exit 1
@@ -109,7 +141,7 @@ jobs:
             echo "live_state=protected" >> "$GITHUB_OUTPUT"
             echo "$live_json" > live.json
           fi
-          echo "Live state: $(cat "$GITHUB_OUTPUT" | grep ^live_state)"
+          echo "Live state: $(grep ^live_state "$GITHUB_OUTPUT")"
 
       - name: Extract spec
         run: |

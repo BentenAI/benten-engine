@@ -12,7 +12,7 @@
 #
 # === Apply runbook ===
 #
-# Ben (one-shot, requires PAT with `repo` admin scope or fine-grained
+# Step 1 (one-shot, requires PAT with `repo` admin scope or fine-grained
 # token with "Administration: Read and write" on this repo):
 #
 #   gh api -X PUT /repos/BentenAI/benten-engine/branches/main/protection \
@@ -25,10 +25,31 @@
 #
 #   gh api /repos/BentenAI/benten-engine/branches/main/protection | jq .
 #
-# Then either delete the `STRICT_PROTECTION_CHECK` env-var gate in
-# `branch-protection-spec-check.yml` or set the workflow's repo-level
-# variable `STRICT_PROTECTION_CHECK=true` to flip the spec-check
-# workflow from warn-only to fail-on-drift.
+# === Enable live drift-check (the spec-check workflow) ===
+#
+# GitHub's GITHUB_TOKEN cannot read branch-protection state — only PATs
+# and GitHub Apps can call that endpoint. Without a PAT the workflow
+# degrades to spec-YAML-validation only (warning-level, doesn't fail).
+# To enable real drift-check:
+#
+# Step 2: Create a fine-grained PAT scoped to this repo with
+#   `Administration: Read` permission (Settings → Developer settings →
+#   Personal access tokens → Fine-grained tokens → Generate new token).
+#   Or a classic PAT with `repo` scope works too.
+#
+# Step 3: Store the PAT as a repo secret named
+#   `BRANCH_PROTECTION_READ_TOKEN` (Settings → Secrets and variables →
+#   Actions → New repository secret).
+#
+# After Step 3 the spec-check workflow will pull live state and diff it.
+#
+# === Make drift fail (instead of warn) ===
+#
+# Step 4 (after Steps 1+2+3 land + a green workflow run confirms drift=0):
+#   either flip `STRICT_PROTECTION_CHECK_DEFAULT: 'false'` -> `'true'`
+#   in `.github/workflows/branch-protection-spec-check.yml`, or set repo
+#   Variable `STRICT_PROTECTION_CHECK=true` (Settings -> Secrets and
+#   variables -> Actions -> Variables) to flip without code change.
 #
 # === Spec ===
 
