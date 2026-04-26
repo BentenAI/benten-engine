@@ -1,3 +1,4 @@
+#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! Algorithm B within 20% of hand-written gate test (G8-A).
 //!
 //! Pin source: `.addl/phase-2b/00-implementation-plan.md` §3 G8-A bench gate.
