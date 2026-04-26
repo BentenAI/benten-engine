@@ -80,6 +80,13 @@ jobs:
             ["crates/benten-graph/benches/mvcc_read_latency.rs"]="informational"
             ["crates/benten-ivm/benches/view_maintenance.rs"]="informational"
             ["crates/benten-ivm/benches/view_staleness_transition.rs"]="informational"
+            # Phase 2b R3-D Algorithm B vs hand-written per-view bench (G8-A).
+            # Gated by RATIO (B/A ≤ 1.20) via companion test rather than ns
+            # ceiling, so matrix entry is `informational`. Body is cfg-gated
+            # behind `phase_2b_landed`; matrix row + THRESHOLD_NS comment
+            # land NOW so the drift detector covers the bench from
+            # consolidation onward.
+            ["crates/benten-ivm/benches/algorithm_b_vs_handwritten.rs"]="informational"
             ["crates/benten-core/benches/cid_parse.rs"]="informational"
             ["crates/benten-core/benches/hash_only.rs"]="informational"
           )
