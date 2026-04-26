@@ -1,4 +1,5 @@
-#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
+#![cfg(feature = "phase_2b_landed")]
+// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: SUBSCRIBE pattern + dedup proptests (G6-A).
 //!
 //! Pin source: streaming-systems must_pass —
@@ -8,9 +9,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_eval::testing::{
-    testing_run_pattern_proptest, testing_run_replay_dedup_proptest,
-};
+use benten_eval::testing::{testing_run_pattern_proptest, testing_run_replay_dedup_proptest};
 use proptest::prelude::*;
 
 proptest! {

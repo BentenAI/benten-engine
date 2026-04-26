@@ -1,4 +1,5 @@
-#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
+#![cfg(feature = "phase_2b_landed")]
+// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: SUBSCRIBE basic delivery + handler-boundary dedup
 //! (G6-A).
 //!
@@ -12,7 +13,7 @@ use benten_eval::primitives::subscribe::{
     ChangeKind, ChangePattern, SubscribeCursor, SubscriptionSpec,
 };
 use benten_eval::testing::{
-    testing_make_change_event, testing_subscribe_register, testing_subscribe_inject_event,
+    testing_make_change_event, testing_subscribe_inject_event, testing_subscribe_register,
 };
 use std::num::NonZeroUsize;
 
@@ -57,11 +58,8 @@ fn subscribe_seq_dedup_at_handler_boundary() {
     let sub = testing_subscribe_register(spec).expect("register");
 
     let anchor = benten_core::Cid::sample_for_test();
-    let mut event = testing_make_change_event(
-        anchor,
-        ChangeKind::Created,
-        serde_json::json!({"v": 1}),
-    );
+    let mut event =
+        testing_make_change_event(anchor, ChangeKind::Created, serde_json::json!({"v": 1}));
     event.seq = 42;
 
     // Inject the SAME event twice — engine MUST dedup at handler boundary

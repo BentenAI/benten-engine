@@ -1,4 +1,5 @@
-#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
+#![cfg(feature = "phase_2b_landed")]
+// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! Algorithm B within 20% of hand-written gate test (G8-A).
 //!
 //! Pin source: `.addl/phase-2b/00-implementation-plan.md` §3 G8-A bench gate.
@@ -94,7 +95,11 @@ fn algorithm_b_vs_handwritten_per_view_within_threshold() {
     for c in &ceilings {
         let a_ns = criterion_mean_ns(c.view, "A");
         let b_ns = criterion_mean_ns(c.view, "B");
-        assert!(a_ns > 0.0, "view {} strategy A mean is non-positive", c.view);
+        assert!(
+            a_ns > 0.0,
+            "view {} strategy A mean is non-positive",
+            c.view
+        );
         let ratio = b_ns / a_ns;
         if ratio > c.max_ratio {
             violations.push(format!(

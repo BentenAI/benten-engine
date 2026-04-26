@@ -53,11 +53,14 @@ fn wait_ttl_expires_via_suspension_store() {
 
     // Register a handler whose body waits with ttl_hours: 1.
     let spec = benten_engine::testing::testing_make_wait_spec_with_ttl_hours(1);
-    engine.register_subgraph("test.wait_with_ttl", spec).unwrap();
+    engine
+        .register_subgraph("test.wait_with_ttl", spec)
+        .unwrap();
 
     // Drive the engine to the suspension point + capture the envelope.
-    let envelope = benten_engine::testing::testing_call_to_suspend(&mut engine, "test.wait_with_ttl")
-        .expect("handler must reach the WAIT suspension point cleanly");
+    let envelope =
+        benten_engine::testing::testing_call_to_suspend(&mut engine, "test.wait_with_ttl")
+            .expect("handler must reach the WAIT suspension point cleanly");
 
     // Confirm the SuspensionStore now holds the wait metadata.
     assert!(

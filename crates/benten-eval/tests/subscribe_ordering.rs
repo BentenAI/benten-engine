@@ -1,4 +1,5 @@
-#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
+#![cfg(feature = "phase_2b_landed")]
+// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: SUBSCRIBE ordering — within-key strict, cross-key
 //! unordered (G6-A).
 //!
@@ -12,7 +13,7 @@ use benten_eval::primitives::subscribe::{
     ChangeKind, ChangePattern, SubscribeCursor, SubscriptionSpec,
 };
 use benten_eval::testing::{
-    testing_make_change_event, testing_subscribe_register, testing_subscribe_inject_event,
+    testing_make_change_event, testing_subscribe_inject_event, testing_subscribe_register,
 };
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
@@ -41,9 +42,7 @@ fn subscribe_within_key_ordering_strict() {
     }
 
     let received: Vec<u64> = sub.drain_blocking(std::time::Duration::from_millis(100));
-    let same_anchor_seqs: Vec<u64> = received
-        .into_iter()
-        .collect();
+    let same_anchor_seqs: Vec<u64> = received.into_iter().collect();
     assert_eq!(
         same_anchor_seqs,
         (0..32u64).collect::<Vec<_>>(),
@@ -84,7 +83,10 @@ fn subscribe_cross_key_ordering_unordered_documented() {
     }
 
     let events = sub.drain_events_blocking(std::time::Duration::from_millis(200));
-    assert_eq!(events.len(), expected.values().map(|v| v.len()).sum::<usize>());
+    assert_eq!(
+        events.len(),
+        expected.values().map(|v| v.len()).sum::<usize>()
+    );
 
     // Per-anchor ordering preserved (within-key); we DO NOT assert any
     // particular cross-anchor ordering. The point is that the documented
@@ -92,7 +94,10 @@ fn subscribe_cross_key_ordering_unordered_documented() {
     // assertion creeps in.
     let mut per_anchor: HashMap<benten_core::Cid, Vec<u64>> = HashMap::new();
     for ev in &events {
-        per_anchor.entry(ev.anchor_cid.clone()).or_default().push(ev.seq);
+        per_anchor
+            .entry(ev.anchor_cid.clone())
+            .or_default()
+            .push(ev.seq);
     }
     for (anchor, seqs) in &per_anchor {
         let exp = expected.get(anchor).unwrap();

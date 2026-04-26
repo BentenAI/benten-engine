@@ -6,8 +6,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_engine::testing::{
-    testing_engine_with_call_handler_streaming,
-    testing_engine_with_iterate_handler_chunked,
+    testing_engine_with_call_handler_streaming, testing_engine_with_iterate_handler_chunked,
 };
 
 /// `subgraph(...).stream(args)` composes inside a CALL handler. Outer
@@ -35,8 +34,9 @@ fn stream_composes_inside_call_handler_of_handler_streaming() {
 #[test]
 #[ignore = "Phase 2b G6-B pending — STREAM inside ITERATE"]
 fn stream_inside_iterate_bounded_chunked_output_per_iteration() {
-    let (mut engine, handler_id) =
-        testing_engine_with_iterate_handler_chunked(/* iterations */ 3, /* chunks_per_iter */ 4);
+    let (mut engine, handler_id) = testing_engine_with_iterate_handler_chunked(
+        /* iterations */ 3, /* chunks_per_iter */ 4,
+    );
     let stream = engine
         .call_stream(&handler_id, "iterate_chunked", serde_json::json!({}))
         .expect("call_stream returns AsyncIterable");

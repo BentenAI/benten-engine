@@ -1,4 +1,5 @@
-#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
+#![cfg(feature = "phase_2b_landed")]
+// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: SUBSCRIBE ordering + no-event-loss proptests (G6-A).
 //!
 //! Pin source: streaming-systems stream-d5-1 must_pass —
@@ -9,8 +10,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_eval::testing::{
-    testing_run_concurrent_subscribe_event_ordering,
-    testing_run_concurrent_subscribe_no_event_loss,
+    testing_run_concurrent_subscribe_event_ordering, testing_run_concurrent_subscribe_no_event_loss,
 };
 use proptest::prelude::*;
 use std::collections::BTreeSet;

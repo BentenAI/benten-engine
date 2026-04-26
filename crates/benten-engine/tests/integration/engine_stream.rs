@@ -5,7 +5,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_engine::testing::{testing_engine_with_streaming_handler, testing_register_streaming_handler};
+use benten_engine::testing::{
+    testing_engine_with_streaming_handler, testing_register_streaming_handler,
+};
 
 /// `Engine::stream_handler` end-to-end: register a streaming handler →
 /// invoke → drain chunks.
@@ -15,7 +17,11 @@ fn engine_stream_end_to_end() {
     let (mut engine, handler_id) = testing_engine_with_streaming_handler();
     let chunks_to_emit = 8;
     let mut iter = engine
-        .stream_handler(&handler_id, "echo_stream", serde_json::json!({"n": chunks_to_emit}))
+        .stream_handler(
+            &handler_id,
+            "echo_stream",
+            serde_json::json!({"n": chunks_to_emit}),
+        )
         .expect("stream_handler returns AsyncIterable-shaped iterator");
 
     let mut received: Vec<u64> = Vec::new();
@@ -54,6 +60,8 @@ fn engine_openstream_explicit_close() {
         .open_stream(&handler_id, "echo_stream", serde_json::json!({"n": 4}))
         .expect("openStream surface present");
 
-    handle.close().expect("close is infallible (or returns idempotent Ok)");
+    handle
+        .close()
+        .expect("close is infallible (or returns idempotent Ok)");
     handle.close().expect("close is idempotent on repeat");
 }

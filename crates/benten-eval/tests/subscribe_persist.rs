@@ -1,4 +1,5 @@
-#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
+#![cfg(feature = "phase_2b_landed")]
+// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: SUBSCRIBE persistent-cursor + retention-window (G6-A).
 //!
 //! Pin source: D5-RESOLVED + G12-E SuspensionStore generalization.
@@ -9,6 +10,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use benten_errors::ErrorCode;
 use benten_eval::primitives::subscribe::{
     ChangeKind, ChangePattern, SubscribeCursor, SubscriberId, SubscriptionSpec,
 };
@@ -17,7 +19,6 @@ use benten_eval::testing::{
     testing_make_suspension_store_in_memory, testing_subscribe_inject_event,
     testing_subscribe_register_with_store,
 };
-use benten_errors::ErrorCode;
 use std::num::NonZeroUsize;
 
 fn anchor_prefix_spec(id: SubscriberId) -> SubscriptionSpec {
@@ -51,8 +52,14 @@ fn subscribe_persistent_cursor_max_delivered_seq_persists_to_suspension_store() 
     }
     sub.ack_through(4).expect("ack through seq 4");
 
-    let stored = store.get_cursor(&id).expect("store read").expect("cursor present");
-    assert_eq!(stored, 4, "max_delivered_seq round-trips through SuspensionStore");
+    let stored = store
+        .get_cursor(&id)
+        .expect("store read")
+        .expect("cursor present");
+    assert_eq!(
+        stored, 4,
+        "max_delivered_seq round-trips through SuspensionStore"
+    );
 }
 
 /// At-least-once internally; on restart the engine MAY redeliver events
@@ -64,7 +71,8 @@ fn subscribe_at_least_once_internal_under_restart_dedups_at_handler() {
     let id = testing_make_persistent_subscription_id();
 
     // Session 1: deliver + ack 3 events.
-    let sub1 = testing_subscribe_register_with_store(anchor_prefix_spec(id.clone()), store.clone()).unwrap();
+    let sub1 = testing_subscribe_register_with_store(anchor_prefix_spec(id.clone()), store.clone())
+        .unwrap();
     let anchor = benten_core::Cid::sample_for_test();
     for seq in 0..3u64 {
         let mut e = testing_make_change_event(
@@ -105,7 +113,7 @@ fn subscribe_at_least_once_internal_under_restart_dedups_at_handler() {
 #[ignore = "Phase 2b G6-A pending — D5 retention window literal"]
 fn subscribe_retention_window_1000_events_or_24h_documented() {
     use benten_eval::primitives::subscribe::config::{
-        DEFAULT_RETENTION_EVENTS, DEFAULT_RETENTION_DURATION,
+        DEFAULT_RETENTION_DURATION, DEFAULT_RETENTION_EVENTS,
     };
     assert_eq!(
         DEFAULT_RETENTION_EVENTS, 1000,

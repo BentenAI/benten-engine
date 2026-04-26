@@ -1,4 +1,5 @@
-#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
+#![cfg(feature = "phase_2b_landed")]
+// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: SUBSCRIBE pattern matching + invalid-pattern typed
 //! error (G6-A).
 //!
@@ -7,13 +8,13 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use benten_errors::ErrorCode;
 use benten_eval::primitives::subscribe::{
     ChangeKind, ChangePattern, SubscribeCursor, SubscriptionSpec,
 };
 use benten_eval::testing::{
     testing_make_change_event, testing_subscribe_inject_event, testing_subscribe_register,
 };
-use benten_errors::ErrorCode;
 use std::num::NonZeroUsize;
 
 /// Pattern label-matches anchor glob: `/posts/*` matches `/posts/123` but
@@ -33,7 +34,11 @@ fn subscribe_pattern_label_matches_anchor_glob() {
 
     testing_subscribe_inject_event(
         &sub,
-        testing_make_change_event(posts_anchor.clone(), ChangeKind::Created, serde_json::json!({})),
+        testing_make_change_event(
+            posts_anchor.clone(),
+            ChangeKind::Created,
+            serde_json::json!({}),
+        ),
     )
     .unwrap();
     testing_subscribe_inject_event(

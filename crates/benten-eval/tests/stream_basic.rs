@@ -1,4 +1,5 @@
-#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
+#![cfg(feature = "phase_2b_landed")]
+// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: STREAM basic chunk-sequence + close-propagation tests
 //! (G6-A).
 //!
@@ -7,9 +8,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use benten_errors::ErrorCode;
 use benten_eval::chunk_sink::{Chunk, ChunkSinkError, SendOutcome};
 use benten_eval::testing::testing_make_chunk_sink;
-use benten_errors::ErrorCode;
 use std::num::NonZeroUsize;
 
 /// Producer emits N chunks in order; consumer drains in identical seq order.

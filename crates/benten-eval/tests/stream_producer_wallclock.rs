@@ -1,4 +1,5 @@
-#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
+#![cfg(feature = "phase_2b_landed")]
+// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: STREAM producer wallclock budget kills permanently
 //! stalled sends (G6-A).
 //!
@@ -9,9 +10,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use benten_errors::ErrorCode;
 use benten_eval::chunk_sink::{Chunk, ChunkSinkError};
 use benten_eval::testing::testing_make_chunk_sink_with_wallclock;
-use benten_errors::ErrorCode;
 use std::num::NonZeroUsize;
 use std::time::Duration;
 
@@ -41,7 +42,10 @@ fn stream_producer_wallclock_kills_blocked_send() {
     let elapsed = start.elapsed();
 
     let err = result.expect_err("blocked send must surface wallclock-exceeded error");
-    assert!(matches!(err, ChunkSinkError::ProducerWallclockExceeded { .. }));
+    assert!(matches!(
+        err,
+        ChunkSinkError::ProducerWallclockExceeded { .. }
+    ));
     assert_eq!(err.error_code(), ErrorCode::StreamProducerWallclockExceeded);
 
     assert!(

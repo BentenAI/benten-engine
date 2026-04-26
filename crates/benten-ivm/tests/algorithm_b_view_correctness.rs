@@ -1,4 +1,5 @@
-#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
+#![cfg(feature = "phase_2b_landed")]
+// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! Algorithm B vs hand-written equivalence tests — 5 views (G8-A).
 //!
 //! For each of the 5 Phase-1 hand-written views, run the same `ChangeEvent`
@@ -91,7 +92,8 @@ fn replay_and_compare<F, R>(
     let result_a = query_fn(a.as_ref());
     let result_b = query_fn(b.as_ref());
     assert_eq!(
-        result_a, result_b,
+        result_a,
+        result_b,
         "Algorithm B (Strategy::B) diverged from hand-written (Strategy::A) for view `{}`",
         a.id()
     );
@@ -105,8 +107,10 @@ fn replay_and_compare<F, R>(
 #[ignore = "Phase 2b G8-A pending"]
 fn algorithm_b_correctness_against_capability_grants_view() {
     let a: Box<dyn View> = Box::new(CapabilityGrantsView::new());
-    let b: Box<dyn View> =
-        Box::new(AlgorithmBView::for_id("capability_grants", CapabilityGrantsView::definition()));
+    let b: Box<dyn View> = Box::new(AlgorithmBView::for_id(
+        "capability_grants",
+        CapabilityGrantsView::definition(),
+    ));
 
     let actor = Cid::from_blake3_digest([0u8; 32]);
     let events = vec![
@@ -147,8 +151,10 @@ fn algorithm_b_correctness_against_capability_grants_view() {
 #[ignore = "Phase 2b G8-A pending"]
 fn algorithm_b_correctness_against_event_handler_dispatch_view() {
     let a: Box<dyn View> = Box::new(EventDispatchView::new());
-    let b: Box<dyn View> =
-        Box::new(AlgorithmBView::for_id("event_dispatch", EventDispatchView::definition()));
+    let b: Box<dyn View> = Box::new(AlgorithmBView::for_id(
+        "event_dispatch",
+        EventDispatchView::definition(),
+    ));
 
     let events = vec![
         ChangeEvent::new_node(
@@ -189,8 +195,10 @@ fn algorithm_b_correctness_against_content_listing_view() {
     // here first because this view is the highest gate-risk for the 20% bench
     // gate.
     let a: Box<dyn View> = Box::new(ContentListingView::new("post"));
-    let b: Box<dyn View> =
-        Box::new(AlgorithmBView::for_id("content_listing", ContentListingView::definition()));
+    let b: Box<dyn View> = Box::new(AlgorithmBView::for_id(
+        "content_listing",
+        ContentListingView::definition(),
+    ));
 
     let mut events = Vec::new();
     for i in 0u64..32 {
@@ -273,8 +281,10 @@ fn algorithm_b_correctness_against_governance_inheritance_view() {
 #[ignore = "Phase 2b G8-A pending"]
 fn algorithm_b_correctness_against_version_current_view() {
     let a: Box<dyn View> = Box::new(VersionCurrentView::new());
-    let b: Box<dyn View> =
-        Box::new(AlgorithmBView::for_id("version_current", VersionCurrentView::definition()));
+    let b: Box<dyn View> = Box::new(AlgorithmBView::for_id(
+        "version_current",
+        VersionCurrentView::definition(),
+    ));
 
     let anchor = Cid::from_blake3_digest([0u8; 32]);
     let events = vec![

@@ -1,4 +1,5 @@
-#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
+#![cfg(feature = "phase_2b_landed")]
+// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! `prop_algorithm_b_incremental_equals_rebuild` (G8-A — 100k cases).
 //!
 //! For any sequence of `ChangeEvent`s, Algorithm B's incremental snapshot
@@ -59,7 +60,13 @@ fn arb_node() -> impl Strategy<Value = Node> {
 fn arb_change_event() -> impl Strategy<Value = ChangeEvent> {
     (arb_node(), arb_change_kind(), 1u64..1_000_000).prop_map(|(node, kind, tx)| {
         let labels = node.labels.clone();
-        ChangeEvent::new_node(Cid::from_blake3_digest([0u8; 32]), labels, kind, tx, Some(node))
+        ChangeEvent::new_node(
+            Cid::from_blake3_digest([0u8; 32]),
+            labels,
+            kind,
+            tx,
+            Some(node),
+        )
     })
 }
 

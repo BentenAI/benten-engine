@@ -1,4 +1,5 @@
-#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
+#![cfg(feature = "phase_2b_landed")]
+// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: STREAM lossless proptests (G6-A).
 //!
 //! Pin source: streaming-systems stream-d4-1 must_pass —
@@ -10,9 +11,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_eval::chunk_sink::{Chunk, SendOutcome};
-use benten_eval::testing::{
-    testing_make_chunk_sink, testing_run_lossless_stream_with_schedule,
-};
+use benten_eval::testing::{testing_make_chunk_sink, testing_run_lossless_stream_with_schedule};
 use proptest::prelude::*;
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
