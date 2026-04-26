@@ -12,6 +12,7 @@
 
 #![cfg(feature = "phase_2b_landed")]
 #![allow(clippy::unwrap_used)]
+#![allow(clippy::doc_lazy_continuation)] // R3-FP test scaffolding doc-comment formatting; R5 G12-B may rewrite
 
 #[test]
 #[ignore = "R5 G12-B red-phase: DSL parser + emitter not yet implemented"]
