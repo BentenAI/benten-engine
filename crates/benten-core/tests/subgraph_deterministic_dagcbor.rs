@@ -1,19 +1,23 @@
 //! R3 unit tests for C5: `Subgraph` DAG-CBOR schema carries the `deterministic`
 //! field, and the field participates in the content hash (CID).
 //!
-//! TDD red-phase: these tests will fail to compile until G5-A threads
-//! `deterministic` into the DAG-CBOR-serialised shape of `Subgraph` and exposes
-//! a `to_dagcbor` / `from_dagcbor` pair (or equivalent) on the Phase-1 surface.
+//! TDD red-phase (un-skipped from `.pending-g5a` per qa-r4-02 R3-followup):
+//! these tests reference the migrated `benten_core::Subgraph` /
+//! `SubgraphBuilder` post-G12-C. Until G12-C lands, the file is gated behind
+//! `phase_2b_landed`; once landed, the gate flips on and the tests transition
+//! from compile-skip to runtime red-phase.
 //!
-//! Owner: rust-test-writer-unit (R2 landscape §2.1 C5).
+//! Owner: R5 G12-C (R2 landscape §2.1 C5; qa-r4-02 R3-followup).
 
+#![cfg(feature = "phase_2b_landed")]
 #![allow(clippy::unwrap_used)]
 
-use benten_eval::{Subgraph, SubgraphBuilder};
+use benten_core::{Subgraph, SubgraphBuilder};
 
 /// SHAPE-PIN: validates the struct shape for Phase-2b forward-compat.
 /// Does NOT validate firing semantics (those land in Phase 2b).
 #[test]
+#[ignore = "R5 G12-C red-phase: Subgraph migration to benten-core not yet landed"]
 fn subgraph_dagcbor_roundtrip_preserves_deterministic_field() {
     let mut b = SubgraphBuilder::new("det-roundtrip");
     let r = b.read("r");
@@ -40,6 +44,7 @@ fn subgraph_dagcbor_roundtrip_preserves_deterministic_field() {
 }
 
 #[test]
+#[ignore = "R5 G12-C red-phase: Subgraph migration to benten-core not yet landed"]
 fn subgraph_cid_differs_when_deterministic_flag_differs() {
     let mut b_true = SubgraphBuilder::new("det-cid-diff");
     let r1 = b_true.read("r");

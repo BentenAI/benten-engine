@@ -19,6 +19,16 @@ workspace = true
 # library out of the implicit bench target fixes `cargo bench --workspace`.
 bench = false
 
+[features]
+# `phase_2b_landed` gates compilation of Phase 2b R3-followup red-phase test
+# files whose `use` statements reference R5-pending APIs (notably the migrated
+# `benten_core::Subgraph` + `SubgraphBuilder` post-G12-C, plus the post-G12-D
+# widened `SubgraphSpec.primitives` shape). Default OFF so the CI required-check
+# fleet (which does NOT enable this feature) compiles + runs cleanly during
+# R3-consolidation. R5 G12-C / G12-D briefs flip this on as the referenced
+# surfaces land. See `.addl/phase-2b/r3-consolidation.md` §4 + qa-r4-02 / qa-r4-03.
+phase_2b_landed = []
+
 [dependencies]
 benten-errors = { workspace = true }
 blake3 = { workspace = true, features = ["pure"] }

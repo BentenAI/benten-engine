@@ -114,6 +114,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "benten-dsl-compiler"
+version = "0.1.0"
+dependencies = [
+ "benten-core",
+ "benten-errors",
+ "thiserror",
+]
+
+[[package]]
 name = "benten-engine"
 version = "0.1.0"
 dependencies = [
