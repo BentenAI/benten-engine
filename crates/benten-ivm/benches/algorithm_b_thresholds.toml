@@ -1,0 +1,24 @@
+# Algorithm B vs hand-written ratio thresholds (G8-A bench gate).
+#
+# Per `.addl/phase-2b/00-implementation-plan.md` §3 G8-A: Algorithm B must
+# run within 20% of the corresponding hand-written baseline for each of the
+# 5 Phase-1 views. Ratio = (B mean wall time) / (A mean wall time).
+#
+# These ceilings are READ by `tests/algorithm_b_within_20pct_gate.rs` after
+# a Criterion run produces `target/criterion/.../estimates.json`.
+#
+# The 20% (1.20) ceiling is the universal G8-A gate; per-view headroom may
+# be tightened (NOT loosened) below 1.20 if R5 measurement reveals a view
+# can hold a stricter target.
+
+[gate]
+universal_max_ratio = 1.20
+
+[per_view]
+# Order mirrors `r1-ivm-algorithm.json` perf-risk descending — first row
+# is the hardest gate to pass.
+content_listing       = 1.20  # HIGH risk per ivm-r1 (~25-35% B overhead expected pre-tuning)
+governance_inheritance = 1.20  # MEDIUM-HIGH (transitive closure)
+version_current        = 1.20  # MEDIUM
+capability_grants      = 1.20  # LOW
+event_dispatch         = 1.20  # LOW

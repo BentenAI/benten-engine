@@ -17,6 +17,13 @@ workspace = true
 # benten-core/Cargo.toml for the longer rationale.
 bench = false
 
+[features]
+default = []
+# `phase_2b_landed` — see benten-eval/Cargo.toml for the rationale. Gates
+# Phase-2b R3 red-phase test + bench files that import R5-pending IVM
+# surfaces (`benten_ivm::Strategy`, `benten_ivm::algorithm_b::AlgorithmBView`).
+phase_2b_landed = []
+
 [dependencies]
 benten-core = { path = "../benten-core" }
 benten-errors = { workspace = true }
@@ -36,4 +43,12 @@ harness = false
 [[bench]]
 # G11-A: view staleness transition cost. Informational, not gated.
 name = "view_staleness_transition"
+harness = false
+
+[[bench]]
+# G8-A (Phase 2b): Algorithm B (Strategy::B) vs hand-written (Strategy::A)
+# per-view comparison. Gated by ratio (B/A ≤ 1.20) via the companion
+# `tests/algorithm_b_within_20pct_gate.rs`. Per-view ceilings live in
+# `benches/algorithm_b_thresholds.toml`.
+name = "algorithm_b_vs_handwritten"
 harness = false

@@ -42,4 +42,50 @@ mod integration {
     pub mod view_stale_count; // cov-6 G11-A witness
     // ---- Phase 2a R4b Wave-3c fix-pass additions ----
     pub mod budget_exhausted_trace_emission; // cov M2 — runtime BudgetExhausted firing
+    // ---- Phase 2b R3 (red-phase) — gated on `phase_2b_landed` feature.
+    // CI's required-check fleet does NOT enable this feature, so the
+    // submodules whose bodies reach into R5-pending APIs are excluded
+    // from the integration-test binary build during R3-consolidation.
+    // R5 implementer briefs flip the feature on per-group as their
+    // surfaces land. See `.addl/phase-2b/r3-consolidation.md` §4.
+    //
+    // R3-A (G6-B integration) — STREAM + SUBSCRIBE engine-shape integration:
+    #[cfg(feature = "phase_2b_landed")]
+    pub mod engine_stream; // G6-B exit-1 + dx-r1-2b STREAM
+    #[cfg(feature = "phase_2b_landed")]
+    pub mod engine_subscribe; // G6-B exit-1 + dx-r1-2b SUBSCRIBE
+    #[cfg(feature = "phase_2b_landed")]
+    pub mod stream_composition; // G6-B plan §4 STREAM integration
+    #[cfg(feature = "phase_2b_landed")]
+    pub mod stream_napi; // G6-B streaming-systems must_pass napi async iter
+    #[cfg(feature = "phase_2b_landed")]
+    pub mod subscribe_emit; // G6-B plan §4 SUBSCRIBE integration
+
+    // R3-B (G7-A integration) — SANDBOX composition:
+    #[cfg(feature = "phase_2b_landed")]
+    pub mod engine_sandbox; // G7-C plan §3 G7-C
+    #[cfg(feature = "phase_2b_landed")]
+    pub mod sandbox_in_crud; // G7-A plan §4 SANDBOX integration
+    #[cfg(feature = "phase_2b_landed")]
+    pub mod stream_into_sandbox; // G7-A wsa-18 + arch-pre-r1-9
+
+    // R3-E (red-phase) — WASM target + SuspensionStore + WAIT TTL:
+    #[cfg(feature = "phase_2b_landed")]
+    pub mod browser_target_bundle_size; // wasm-r1-7 (≤500KB gz cap)
+    #[cfg(feature = "phase_2b_landed")]
+    pub mod cross_process_wait_resume; // G12-E + Compromise #9 closure
+    #[cfg(feature = "phase_2b_landed")]
+    pub mod install_module_rejects_cid_mismatch; // G10-B + D16 dual-CID error
+    #[cfg(feature = "phase_2b_landed")]
+    pub mod sandbox_compile_time_disabled_on_wasm32; // sec-pre-r1-05 + wasm-r1-3
+    #[cfg(feature = "phase_2b_landed")]
+    pub mod snapshot_blob_round_trip; // D10 export/import round-trip
+    #[cfg(feature = "phase_2b_landed")]
+    pub mod suspension_store_round_trip_subscription_cursor; // G12-E + D5 cursor
+    #[cfg(feature = "phase_2b_landed")]
+    pub mod suspension_store_round_trip_wait_metadata; // G12-E generalization
+    #[cfg(feature = "phase_2b_landed")]
+    pub mod wait_ttl_expires_via_suspension_store; // D12 + Q4 (G12-E owns TTL)
+    #[cfg(feature = "phase_2b_landed")]
+    pub mod wasip1_target_canonical_cid; // wasm-r1-1 dual-target gate
 }
