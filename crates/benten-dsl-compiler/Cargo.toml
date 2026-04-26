@@ -1,0 +1,35 @@
+[package]
+name = "benten-dsl-compiler"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Phase-2b DSL-text → SubgraphSpec compiler. MINIMAL-FOR-DEVSERVER scope per arch-pre-r1-1: ~200-300 LOC, 4 public items (compile_str, compile_file, CompileError, Diagnostic). Sibling-of-engine; depends on benten-core only — MUST NOT depend on benten-eval or benten-graph (preserves arch-1)."
+publish = false
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+bench = false
+
+[features]
+# `phase_2b_landed` gates compilation of red-phase test files whose `use`
+# statements reference R5-pending APIs (`compile_str`, `CompileError`, etc.).
+# Default OFF so the CI required-check fleet (which does NOT enable this
+# feature) can compile + run the workspace cleanly during R3-consolidation.
+# R5 G12-B brief flips this on when the surface lands.
+phase_2b_landed = []
+
+[dependencies]
+# Per arch-pre-r1-3 + plan §3.2 G12-B + r1-architect-reviewer.json:
+# benten-dsl-compiler depends on benten-core (Subgraph + SubgraphSpec types)
+# and MUST NOT depend on benten-eval or benten-graph (preserves arch-1).
+benten-core = { path = "../benten-core" }
+benten-errors = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]

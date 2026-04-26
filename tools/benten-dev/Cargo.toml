@@ -20,6 +20,15 @@ bench = false
 name = "benten-dev"
 path = "src/main.rs"
 
+[features]
+# `phase_2b_landed` gates compilation of Phase 2b R3-followup red-phase
+# integration test files in `tests/devserver_*` that reference the post-G12-B
+# routing surface (devserver -> Engine::register_subgraph via benten-dsl-compiler).
+# Default OFF so CI (which does NOT enable this feature) compiles + runs cleanly
+# during R3-consolidation. R5 G12-B brief flips this on as the surface lands.
+# See `.addl/phase-2b/r3-consolidation.md` §4 + qa-r4-01.
+phase_2b_landed = []
+
 [dependencies]
 benten-core = { path = "../../crates/benten-core" }
 benten-errors = { workspace = true }
