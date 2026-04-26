@@ -993,3 +993,19 @@ pub(crate) fn tx_aborted_outcome() -> Outcome {
         ..Outcome::default()
     }
 }
+
+/// G12-A: trace-mode error outcome for an Inv-8 cumulative-step budget
+/// exhaustion. Lets `engine.trace(...)` return the captured trace (which
+/// carries the terminal `TraceStep::BudgetExhausted` row) instead of
+/// dropping it on an `Err` propagation. The non-trace `engine.call` path
+/// still surfaces the typed `EngineError::Invariant(IterateBudget)`.
+pub(crate) fn inv_iterate_budget_to_outcome() -> Outcome {
+    Outcome {
+        edge: Some("ON_ERROR".into()),
+        error_code: Some("E_INV_ITERATE_BUDGET".into()),
+        error_message: Some(
+            "iteration step budget exhausted; trace carries terminal BudgetExhausted row".into(),
+        ),
+        ..Outcome::default()
+    }
+}

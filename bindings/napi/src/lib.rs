@@ -338,6 +338,25 @@ mod napi_surface {
             Ok(trace_to_json(&trace))
         }
 
+        /// G12-A test-only: cap the evaluator's cumulative iteration budget
+        /// at `budget` steps for every subsequent `engine.call` /
+        /// `engine.trace` invocation on this engine. Pass `null` (or omit)
+        /// to clear the override. Used by
+        /// `bindings/napi/test/budget_exhausted_napi_round_trip.test.ts`
+        /// to drive the runtime BudgetExhausted emission path through the
+        /// JS surface within a CI-friendly subgraph size. Reaches the
+        /// engine's `testing_set_iteration_budget` setter, which is gated
+        /// behind the narrow `iteration-budget-test-grade` feature so the
+        /// production cdylib does NOT pull the broader `test-helpers` API.
+        #[napi(js_name = "testingSetIterationBudget")]
+        pub fn testing_set_iteration_budget(&self, budget: Option<u32>) {
+            // napi-rs maps Rust `u64` to JS `bigint`; `u32` is friendlier
+            // for test fixtures (we never need >4B as a budget cap) and
+            // round-trips losslessly to `u64` for the engine API.
+            let budget = budget.map(u64::from);
+            self.inner.testing_set_iteration_budget(budget);
+        }
+
         /// Mermaid flowchart source for a registered handler.
         #[napi]
         pub fn handler_to_mermaid(&self, handler_id: String) -> napi::Result<String> {

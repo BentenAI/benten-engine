@@ -3,26 +3,30 @@
 //! R4b CORRECTNESS finding: the `TraceStep::BudgetExhausted` enum variant
 //! is constructed only by shape-pin tests
 //! (`inv_8_11_13_14_firing.rs::trace_step_budget_exhausted_variant_shape_pin`).
-//! No test exercises the variant via REAL Inv-8 firing — i.e. the
+//! No test exercised the variant via REAL Inv-8 firing — i.e. the
 //! evaluator running until the cumulative step budget is exhausted, then
-//! emitting a `BudgetExhausted` row at the suspension point.
+//! emitting a `BudgetExhausted` row at the suspension point. **Phase-2b
+//! G12-A** wires that emission path.
 //!
-//! **Target API.** The evaluator's runtime budget exhaustion path
-//! (`benten-eval/src/evaluator.rs::run_inner` ~line 185) currently
-//! short-circuits with `EvalError::Invariant(IterateBudget)` and DROPS the
-//! collected trace. The §9.12 contract documented at
-//! `benten-eval/src/lib.rs:1430-1431` (TODO(phase-2a-G3-A / G4-A / G5-B))
-//! calls for emitting a terminal `TraceStep::BudgetExhausted { budget_type,
-//! consumed, limit, path }` row before returning so consumers of `trace`
-//! see the exhaustion in-band rather than as an out-of-band error.
+//! **Closed API.** The evaluator's runtime budget exhaustion path
+//! (`benten-eval/src/evaluator.rs::run_inner`) now pushes a terminal
+//! [`TraceStep::BudgetExhausted { budget_type, consumed, limit, path }`] row
+//! BEFORE returning `EvalError::Invariant(IterateBudget)`, and the
+//! engine-side trace path preserves the captured trace through the error
+//! branch (mapping the typed error onto an `Outcome::ON_ERROR` shape
+//! carrying `E_INV_ITERATE_BUDGET`) so consumers of `engine.trace(...)`
+//! observe the exhaustion in-band rather than as an out-of-band `Err`.
+//! Closes the §9.12 / `benten-eval/src/lib.rs:1430-1431` TODO.
 //!
-//! **This test is RED-PHASE today.** The runtime emission path is not yet
-//! wired (the lib.rs:1430 TODO comment is the single source of truth for
-//! that gap). The body documents the target shape so the implementation
-//! agent landing the emission path has a concrete pin. Until then the test
-//! is `#[ignore]`d with a clear pointer.
+//! G12-A scope: `budget_type = "inv_8_iteration"`. The analogous
+//! `"sandbox_fuel"` budget_type lands when G7-A wires the SANDBOX fuel
+//! metering path; that addition is purely additive and won't reshape this
+//! test.
 //!
-//! Wave-3c R4b fix-pass writer.
+//! Wave-3c R4b fix-pass writer (red-phase); Phase-2b G12-A green-phase
+//! rewriter — drove the assertion via a 4-EMIT chain under a test-only
+//! iteration budget so the trip fires deterministically without inflating
+//! the spec into a 100k-node fixture.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -39,32 +43,58 @@ fn fresh_engine() -> (tempfile::TempDir, Engine) {
     (dir, engine)
 }
 
-/// Register a subgraph that exhausts the Inv-8 cumulative step budget at
-/// runtime, drive `engine.trace`, and assert at least one
-/// `TraceStep::BudgetExhausted` row is emitted with realistic field values.
+/// Register a 4-EMIT-node chain, cap the cumulative iteration budget at 2
+/// via the `Engine::testing_set_iteration_budget` G12-A test hook, drive
+/// `engine.trace`, and assert at least one `TraceStep::BudgetExhausted`
+/// row is emitted with realistic field values before the `IterateBudget`
+/// invariant violation is folded into an `Outcome::ON_ERROR`.
 ///
-/// **Phase-2a status: red-phase.** Runtime emission of `BudgetExhausted`
-/// is the §9.12 / lib.rs:1430 TODO; until the evaluator pushes a terminal
-/// row before returning `EvalError::Invariant(IterateBudget)`, this test
-/// will fail. Tracked under plan §G11-A residuals.
+/// Each EMIT primitive returns the `"ok"` evaluator edge unconditionally
+/// (`crates/benten-eval/src/primitives/emit.rs`); the
+/// `SubgraphBuilder::add_edge` between successive EMITs uses the `"next"`
+/// edge label, which `run_inner` consults as the `"ok"` fallback. The
+/// walker therefore steps through the chain one EMIT at a time, bumping
+/// the cumulative `steps` counter once per primitive, and the Inv-8 guard
+/// (`steps >= budget`) trips when the cursor advances onto the third EMIT
+/// (`steps == 2`, `budget == 2`).
 #[test]
-#[ignore = "phase-2a-pending: runtime BudgetExhausted trace-row emission per benten-eval/src/lib.rs:1430-1431 TODO. Drop #[ignore] once the evaluator pushes the terminal row before short-circuiting on cumulative-budget exhaustion."]
 fn budget_exhausted_runtime_trace_emission() {
     let (_dir, engine) = fresh_engine();
 
-    // ITERATE bound is wired through the builder's `iterate(max, body)`
-    // signature (Phase-1 thin shape — body closure is not executed yet).
-    // The runtime walker still trips the cumulative `steps >= budget`
-    // check inside `run_inner` once the per-step accumulator reaches the
-    // configured budget — that's what the BudgetExhausted row pins.
+    // Build a 4-WRITE chain via the SubgraphSpec builder so the engine
+    // stores the spec for downstream dispatch (`subgraph_for_spec`
+    // walks `spec.write_specs` to materialize the runnable Subgraph,
+    // chaining successive WRITE OperationNodes via `"next"` edges and
+    // capping with a terminal RESPOND). Each WRITE primitive returns
+    // the `"ok"` evaluator edge on success; the walker steps through
+    // the chain one WRITE at a time, bumping the cumulative `steps`
+    // counter once per primitive, and the Inv-8 guard
+    // (`steps >= budget`) trips when the cursor advances onto the
+    // third WRITE (`steps == 2`, `budget == 2`).
+    //
+    // (`SubgraphSpec::iterate` is a Phase-1 no-op and a single
+    // `respond` is terminal-on-first-step, so neither is sufficient
+    // to trip the cumulative-step guard. Chained EMIT primitives
+    // would also step correctly, but `subgraph_for_spec` currently
+    // ignores `spec.primitives` and walks only `write_specs` — that
+    // type-widening is owned by G12-D, not this group.)
     let sg = SubgraphSpec::builder()
         .handler_id("budget:exhauster")
-        .iterate(50_000_u32, |body| body)
-        .respond()
+        .write(|w| w.label("budget_step_0"))
+        .write(|w| w.label("budget_step_1"))
+        .write(|w| w.label("budget_step_2"))
+        .write(|w| w.label("budget_step_3"))
         .build();
+
     let handler_id = engine
         .register_subgraph(sg)
-        .expect("registration must succeed; multiplicative budget within default 100k cap");
+        .expect("registration must succeed; 4 WRITE primitives + RESPOND form a valid linear DAG");
+
+    // G12-A test hook: cap cumulative iteration budget at 2 so the
+    // walker trips at the third EMIT (steps == 2 == budget). Without
+    // this override the engine uses `DEFAULT_ITERATION_BUDGET = 100_000`
+    // and the chain would terminate cleanly after 4 steps.
+    engine.testing_set_iteration_budget(Some(2));
 
     let trace = engine
         .trace(&handler_id, "budget:run", Node::empty())
@@ -110,6 +140,11 @@ fn budget_exhausted_runtime_trace_emission() {
         "BudgetExhausted row's consumed ({consumed}) must be >= limit \
          ({limit}) — that's the entire firing condition \
          (`steps >= budget` in run_inner)"
+    );
+    assert_eq!(
+        limit, 2,
+        "the test override pinned limit at 2; if this drifts the override \
+         plumbing through `Engine::testing_set_iteration_budget` regressed"
     );
     assert!(
         path_len > 0,

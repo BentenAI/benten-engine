@@ -130,6 +130,17 @@ pub(crate) struct EngineInner {
     /// Aggregate count of capability-policy `check_write` calls that
     /// returned `Err`. Surfaced via `metrics_snapshot["benten.writes.denied"]`.
     pub(crate) writes_denied_total: std::sync::atomic::AtomicU64,
+    /// G12-A test-only: override for the evaluator's cumulative iteration
+    /// budget. `None` = use [`benten_eval::DEFAULT_ITERATION_BUDGET`]; `Some(n)`
+    /// caps every subsequent `engine.trace(...)` / `engine.call(...)` walk at
+    /// `n` steps so a small chained-primitive subgraph can deterministically
+    /// trip the Inv-8 cumulative-step guard inside `Evaluator::run_inner`.
+    /// Set via `Engine::testing_set_iteration_budget`; read in
+    /// `dispatch_call_with_mode_and_trace`. Only meaningful under `cfg(any(
+    /// test, feature = "test-helpers"))`; field stays present unconditionally
+    /// to keep `EngineInner`'s layout cfg-invariant per arch-pre-r1-2 sibling
+    /// "no cfg-conditional struct shapes" rule.
+    pub(crate) test_iteration_budget: std::sync::Mutex<Option<u64>>,
 }
 
 impl EngineInner {
@@ -152,6 +163,7 @@ impl EngineInner {
             cap_write_denied: std::sync::Mutex::new(BTreeMap::new()),
             writes_committed_total: std::sync::atomic::AtomicU64::new(0),
             writes_denied_total: std::sync::atomic::AtomicU64::new(0),
+            test_iteration_budget: std::sync::Mutex::new(None),
         }
     }
 
@@ -551,6 +563,25 @@ impl Engine {
     #[must_use]
     pub fn testing_audit_sequence(&self) -> u64 {
         self.audit_sequence()
+    }
+
+    /// G12-A test-only: cap the evaluator's cumulative iteration budget at
+    /// `budget` steps for every subsequent `engine.call` / `engine.trace`
+    /// invocation on this engine. `None` clears the override, restoring
+    /// [`benten_eval::evaluator::DEFAULT_ITERATION_BUDGET`]. Used by the
+    /// `budget_exhausted_runtime_trace_emission` integration test (and its
+    /// napi companion) to drive the Inv-8 cumulative-step guard within a
+    /// CI-friendly subgraph size without mutating the production default.
+    ///
+    /// Gated behind the narrow `iteration-budget-test-grade` feature so the
+    /// napi cdylib can opt in without dragging the rest of the
+    /// `test-helpers` surface across the JS boundary. The broader
+    /// `test-helpers` feature implies it so existing in-tree test
+    /// invocations work unchanged.
+    #[cfg(any(test, feature = "iteration-budget-test-grade"))]
+    pub fn testing_set_iteration_budget(&self, budget: Option<u64>) {
+        let mut guard = self.inner.test_iteration_budget.lock_recover();
+        *guard = budget;
     }
 
     // -------- CRUD surface (Node + Edge) --------
@@ -1081,6 +1112,15 @@ impl Engine {
         // replaces the synthetic-step fabrication r6b-dx-C4 retired.
         let input_value = Value::Map(input.properties.clone());
         let mut evaluator = benten_eval::Evaluator::new();
+        // G12-A: read the test-only iteration-budget override (set by
+        // `Engine::testing_set_iteration_budget`); fall back to
+        // `benten_eval::DEFAULT_ITERATION_BUDGET` when unset. Lets the
+        // `budget_exhausted_runtime_trace_emission` integration test trip
+        // the Inv-8 cumulative-step guard within a small chained subgraph.
+        let iteration_budget = {
+            let guard = self.inner.test_iteration_budget.lock_recover();
+            (*guard).unwrap_or(benten_eval::evaluator::DEFAULT_ITERATION_BUDGET)
+        };
         let (eval_result, raw_trace) = if trace_steps_out.is_some() {
             // G5-B-ii / Inv-14: construct the runtime AttributionFrame from
             // the active call's `(actor, handler, grant)` triple and thread
@@ -1104,18 +1144,29 @@ impl Engine {
                 handler_cid: *handler_cid,
                 capability_grant_cid: crate::primitive_host::noauth_zero_grant_cid(),
             };
-            match evaluator.run_with_trace_attributed(
+            // G12-A: route through the budget-aware capturing variant so
+            // the terminal `TraceStep::BudgetExhausted` row pushed by the
+            // evaluator before short-circuiting on Inv-8 cumulative-step
+            // exhaustion (and any future runtime emissions on error paths)
+            // reaches the user-visible `engine.trace(...)` consumer instead
+            // of being dropped here. The `iteration_budget` resolves to the
+            // production default unless `Engine::testing_set_iteration_budget`
+            // applied a test override.
+            evaluator.run_with_trace_attributed_capturing_with_budget(
                 &subgraph,
                 input_value,
                 self as &dyn PrimitiveHost,
                 frame,
-            ) {
-                Ok((run, trace)) => (Ok(run), trace),
-                Err(e) => (Err(e), Vec::new()),
-            }
+                iteration_budget,
+            )
         } else {
             (
-                evaluator.run(&subgraph, input_value, self as &dyn PrimitiveHost),
+                evaluator.run_with_budget(
+                    &subgraph,
+                    input_value,
+                    self as &dyn PrimitiveHost,
+                    iteration_budget,
+                ),
                 Vec::new(),
             )
         };
@@ -1218,6 +1269,23 @@ impl Engine {
                     benten_eval::EvalError::Invariant(benten_eval::InvariantViolation::SystemZone)
                 ) {
                     return Ok(crate::primitive_host::inv_system_zone_to_outcome());
+                }
+                // G12-A: in trace mode, surface the Inv-8 cumulative-step
+                // exhaustion as an Ok(error_outcome) so `engine.trace(...)`
+                // returns the captured trace (which already carries the
+                // terminal `TraceStep::BudgetExhausted` row pushed by the
+                // evaluator) instead of dropping it on an `Err` return.
+                // Non-trace `engine.call` paths still surface the typed
+                // `EngineError` for back-compat.
+                if trace_mode
+                    && matches!(
+                        &e,
+                        benten_eval::EvalError::Invariant(
+                            benten_eval::InvariantViolation::IterateBudget,
+                        )
+                    )
+                {
+                    return Ok(crate::primitive_host::inv_iterate_budget_to_outcome());
                 }
                 return Err(eval_error_to_engine_error(e));
             }

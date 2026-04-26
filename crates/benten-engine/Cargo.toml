@@ -47,7 +47,18 @@ default = []
 # feature so existing CI invocations + workspace test runs keep working
 # unchanged.
 envelope-cache-test-grade = []
-test-helpers = ["envelope-cache-test-grade"]
+# G12-A: narrow feature that gates ONLY the
+# `Engine::testing_set_iteration_budget` setter (consumed by the napi
+# `bindings/napi/test/budget_exhausted_napi_round_trip.test.ts`
+# integration test that exercises the runtime BudgetExhausted emission
+# path through the JS surface). Splitting it off the broader
+# `test-helpers` lets `bindings/napi/Cargo.toml` opt into the budget
+# override without dragging the rest of the test-only API into the
+# cdylib. `test-helpers` implies this feature so existing CI invocations
+# keep working unchanged. Production cdylib consumers do NOT see this
+# method unless they explicitly opt in.
+iteration-budget-test-grade = []
+test-helpers = ["envelope-cache-test-grade", "iteration-budget-test-grade"]
 # `phase_2b_landed` — see benten-eval/Cargo.toml for the rationale. Gates
 # Phase-2b R3 red-phase test files that import R5-pending surfaces from
 # benten-engine (e.g. `engine.callStream`, `engine.installModule`,

@@ -113,8 +113,8 @@ impl Evaluator {
         host: &dyn PrimitiveHost,
         budget: u64,
     ) -> Result<RunResult, EvalError> {
-        let (result, _trace) = self.run_inner(subgraph, input, host, budget, false, None)?;
-        Ok(result)
+        let (result, _trace) = self.run_inner(subgraph, input, host, budget, false, None);
+        result
     }
 
     /// Walk a subgraph and record per-step trace metadata.
@@ -142,7 +142,30 @@ impl Evaluator {
         input: Value,
         host: &dyn PrimitiveHost,
     ) -> Result<(RunResult, Vec<TraceStep>), EvalError> {
-        self.run_inner(subgraph, input, host, DEFAULT_ITERATION_BUDGET, true, None)
+        let (result, trace) =
+            self.run_inner(subgraph, input, host, DEFAULT_ITERATION_BUDGET, true, None);
+        result.map(|r| (r, trace))
+    }
+
+    /// G12-A: trace-preserving + budget-parameterized variant of
+    /// [`Evaluator::run_with_trace_attributed`] that returns the recorded
+    /// trace ALONGSIDE any [`EvalError`] rather than dropping it on the
+    /// error path. Engine-side callers in trace mode use this so the
+    /// terminal [`TraceStep::BudgetExhausted`] / typed-error rows pushed
+    /// by [`Evaluator::run_inner`] reach the user-facing
+    /// `engine.trace(...)` consumer (§9.12 / `lib.rs:1430-1431` TODO
+    /// closure). The explicit `budget` lets the engine thread its
+    /// `Engine::testing_set_iteration_budget` override through without
+    /// adding a second method.
+    pub fn run_with_trace_attributed_capturing_with_budget(
+        &mut self,
+        subgraph: &Subgraph,
+        input: Value,
+        host: &dyn PrimitiveHost,
+        frame: AttributionFrame,
+        budget: u64,
+    ) -> (Result<RunResult, EvalError>, Vec<TraceStep>) {
+        self.run_inner(subgraph, input, host, budget, true, Some(frame))
     }
 
     /// G5-B-ii / Inv-14: trace variant that stamps the supplied
@@ -170,14 +193,15 @@ impl Evaluator {
         host: &dyn PrimitiveHost,
         frame: AttributionFrame,
     ) -> Result<(RunResult, Vec<TraceStep>), EvalError> {
-        self.run_inner(
+        let (result, trace) = self.run_inner(
             subgraph,
             input,
             host,
             DEFAULT_ITERATION_BUDGET,
             true,
             Some(frame),
-        )
+        );
+        result.map(|r| (r, trace))
     }
 
     fn run_inner(
@@ -188,7 +212,7 @@ impl Evaluator {
         budget: u64,
         collect_trace: bool,
         attribution: Option<AttributionFrame>,
-    ) -> Result<(RunResult, Vec<TraceStep>), EvalError> {
+    ) -> (Result<RunResult, EvalError>, Vec<TraceStep>) {
         // Build an adjacency map keyed by (from-node-id, edge-label).
         let mut next_by_edge: HashMap<(&str, &str), &str> = HashMap::new();
         let mut has_incoming: HashMap<&str, bool> = HashMap::new();
@@ -210,14 +234,14 @@ impl Evaluator {
             .iter()
             .find(|n| !has_incoming.contains_key(n.id.as_str()))
         else {
-            return Ok((
-                RunResult {
+            return (
+                Ok(RunResult {
                     terminal_edge: "ok".to_string(),
                     output: Value::Null,
                     steps_executed: 0,
-                },
+                }),
                 Vec::new(),
-            ));
+            );
         };
 
         let mut trace = Vec::new();
@@ -228,6 +252,13 @@ impl Evaluator {
             edge_label: "ok".to_string(),
             output: Value::Null,
         };
+        // G12-A: track the operation-node id walk-path so a runtime
+        // `TraceStep::BudgetExhausted` emission can name the chain that
+        // produced the exhaustion. Visited ids are pushed at execution time
+        // (post-success); the about-to-execute cursor id is appended at
+        // emission time so the path's terminal element is the node the
+        // budget guard short-circuited before stepping.
+        let mut walk_path: Vec<String> = Vec::new();
 
         while let Some(op) = cursor {
             if steps >= budget {
@@ -235,9 +266,30 @@ impl Evaluator {
                 // the registration-time nesting-depth stopgap
                 // (`IterateNestDepth`). Mini-review findings g6-cag-1 /
                 // g6-opl-6 / g6-cr-2. Maps to `E_INV_ITERATE_BUDGET`.
-                return Err(EvalError::Invariant(
-                    crate::InvariantViolation::IterateBudget,
-                ));
+                //
+                // G12-A: §9.12 / `lib.rs:1430-1431` TODO closure — push a
+                // terminal `TraceStep::BudgetExhausted` row before the
+                // typed error propagates so `engine.trace(...)` consumers
+                // observe the exhaustion in-band rather than as an
+                // out-of-band error. Phase-2b G7-A wires the analogous
+                // `"sandbox_fuel"` budget_type when SANDBOX fuel metering
+                // lands; this group covers `"inv_8_iteration"` only.
+                if collect_trace {
+                    let mut path = walk_path.clone();
+                    path.push(op.id.clone());
+                    trace.push(TraceStep::BudgetExhausted {
+                        budget_type: "inv_8_iteration",
+                        consumed: steps,
+                        limit: budget,
+                        path,
+                    });
+                }
+                return (
+                    Err(EvalError::Invariant(
+                        crate::InvariantViolation::IterateBudget,
+                    )),
+                    trace,
+                );
             }
             let start = Instant::now();
             let step_res = self.step(op, host);
@@ -256,6 +308,7 @@ impl Evaluator {
             match step_res {
                 Ok(r) => {
                     steps += 1;
+                    walk_path.push(op.id.clone());
                     if collect_trace {
                         trace.push(TraceStep::Step {
                             node_id: op.id.clone(),
@@ -300,19 +353,19 @@ impl Evaluator {
                             attribution: attribution.clone(),
                         });
                     }
-                    return Err(e);
+                    return (Err(e), trace);
                 }
             }
         }
 
-        Ok((
-            RunResult {
+        (
+            Ok(RunResult {
                 terminal_edge: last.edge_label,
                 output: last.output,
                 steps_executed: steps,
-            },
+            }),
             trace,
-        ))
+        )
     }
 }
 
