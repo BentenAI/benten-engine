@@ -567,12 +567,19 @@ mod napi_surface {
 // links cleanly.
 // ---------------------------------------------------------------------------
 
+#[cfg(any(test, feature = "in-process-test"))]
 pub mod testing {
     //! Test-only surface for the napi input-validation harness.
     //!
     //! The real napi class surface lives in `napi_surface` and is gated on
     //! the `napi-export` feature because the cdylib build pulls in napi-rs
     //! extern symbols the rlib used by this test cannot resolve.
+    //!
+    //! R6FP-R3 NAPI-R3-3: cfg-gated to keep this rlib-only test surface
+    //! out of the production cdylib symbol table — defense-in-depth
+    //! alignment with the engine-side `testing` module gate (sec-r6r2-02).
+    //! Only `bindings/napi/tests/input_validation.rs` consumes this module
+    //! and it already requires the `in-process-test` feature.
 
     use benten_core::{Cid, CoreError, Value};
 

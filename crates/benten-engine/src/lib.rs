@@ -42,7 +42,7 @@
 #![warn(missing_docs)]
 #![allow(
     missing_docs,
-    reason = "TODO(phase-2-docs): benten-engine orchestrator exposes ~60 pub items across EngineBuilder, Engine, SubgraphSpec builder, Outcome/Trace response shapes, and EngineError variants. Crate-root + module-root docs land in R6 (see lib.rs / engine.rs / outcome.rs module headers); per-item sweep deferred to Phase-2 when the public surface is re-audited post-evaluator-completion and the SubgraphSpec DSL stabilises."
+    reason = "TODO(phase-2b-docs): benten-engine orchestrator exposes ~60 pub items across EngineBuilder, Engine, SubgraphSpec builder, Outcome/Trace response shapes, and EngineError variants. Crate-root + module-root docs land in R6 (see lib.rs / engine.rs / outcome.rs module headers); per-item sweep deferred to Phase-2b when the public surface is re-audited post-evaluator-completion and the SubgraphSpec DSL stabilises."
 )]
 #![allow(
     clippy::todo,

@@ -263,6 +263,11 @@ fn payload_for_handler(
     let handler_cid = handlers
         .get(handler_id)
         .copied()
+        // R6FP-R3 architect A12: distinct from `primitive_host::noauth_zero_grant_cid()` — that
+        // helper centralises the noauth-grant placeholder for Phase-3 UCAN substitution. This
+        // fallback fires when the requested handler isn't registered (a suspend-protocol
+        // invariant break, not a missing grant), so we keep it open-coded so a Phase-3 grep
+        // for grant-CID seams doesn't false-positive on this site.
         .unwrap_or_else(|| Cid::from_blake3_digest([0u8; 32]));
     drop(handlers);
 
@@ -672,6 +677,10 @@ impl Engine {
     }
 
     /// Phase 2a G2-B test-only: reset the AST-cache parse counter to zero.
+    ///
+    /// R6FP-R3 sec-r6r3-02: cfg-gated to keep test-only API out of the napi cdylib.
+    /// Mirrors the `testing_force_reregister_with_different_cid` gate below.
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn testing_reset_parse_counter(&self) {
         self.inner
             .parse_counter
@@ -679,6 +688,9 @@ impl Engine {
     }
 
     /// Phase 2a G2-B test-only: current AST-cache parse (miss) count.
+    ///
+    /// R6FP-R3 sec-r6r3-02: cfg-gated to keep test-only API out of the napi cdylib.
+    #[cfg(any(test, feature = "test-helpers"))]
     #[must_use]
     pub fn testing_parse_counter(&self) -> u64 {
         self.inner
