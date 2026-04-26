@@ -1,0 +1,158 @@
+# Branch-protection spec for `BentenAI/benten-engine` `main`.
+#
+# Closes Phase-2a CI-1 deferral (`.addl/phase-2a/00-implementation-plan.md`
+# §9.16) — required-status-check set decided in
+# `.addl/phase-2a/ci-decisions-2026-04-22.md` §4 was documentation-only
+# until this spec landed. Encoded as the JSON shape that the GitHub
+# branch-protection PUT endpoint accepts so `gh api` can apply it
+# verbatim. The companion workflow
+# `.github/workflows/branch-protection-spec-check.yml` diffs live state
+# against this spec and warns (or, with STRICT_PROTECTION_CHECK=true,
+# fails) on drift, making the spec load-bearing rather than aspirational.
+#
+# === Apply runbook ===
+#
+# Ben (one-shot, requires PAT with `repo` admin scope or fine-grained
+# token with "Administration: Read and write" on this repo):
+#
+#   gh api -X PUT /repos/BentenAI/benten-engine/branches/main/protection \
+#     --input <(yq -o=json '.protection' .github/branch-protection.yml)
+#
+# (`yq` v4+ via `brew install yq`. Alternative: hand-translate the spec
+# below to JSON; the structure mirrors the API verbatim.)
+#
+# Verify:
+#
+#   gh api /repos/BentenAI/benten-engine/branches/main/protection | jq .
+#
+# Then either delete the `STRICT_PROTECTION_CHECK` env-var gate in
+# `branch-protection-spec-check.yml` or set the workflow's repo-level
+# variable `STRICT_PROTECTION_CHECK=true` to flip the spec-check
+# workflow from warn-only to fail-on-drift.
+#
+# === Spec ===
+
+protection:
+  # ---- Required status checks ----
+  #
+  # Frozen 5-check set (ci-decisions-2026-04-22.md §4). Each entry below
+  # is a JOB context string as it renders in the Checks tab — branch-
+  # protection matches against context strings, not workflow names.
+  #
+  # Aggregator-job pattern: where a workflow has a `needs:`-chained
+  # umbrella job, only the umbrella is required (it will only succeed
+  # if its dependencies succeeded). For matrix jobs without an
+  # umbrella, every leg's rendered context must be listed.
+  #
+  # Workflow → required context mapping:
+  #
+  #   ci.yml:
+  #     - "cross-leg byte-equality gate (T9)"  (needs: build-and-test, wasm-runtime)
+  #     - "create-benten-app cold install"     (needs: build-and-test; cold-install job)
+  #     - "release-build (--no-default-features) gate"
+  #
+  #   determinism.yml:
+  #     - "T9 cross-leg byte-equality gate"    (needs: multi-arch, msrv, wasm-runtime)
+  #
+  #   phase-2a-exit-criteria.yml:
+  #     - "Phase 2a exit-gate aggregate"       (needs: all 4 gate jobs)
+  #
+  #   drift-detect.yml:
+  #     - "docs ↔ Rust enum ↔ TS types parity"
+  #     - "self-test (meta-assertion that the detector actually detects)"
+  #
+  #   supply-chain.yml:
+  #     - "cargo-deny (licenses / bans / advisories / sources)"
+  #     - "cargo-audit (belt-and-suspenders)"
+  #     - "Cargo.lock integrity"
+  #     (NOT requiring `weekly-audit-issue` — schedule-only, never runs on PR.)
+  #
+  # CodeQL (`codeql.yml`) is NOT required per ci-decisions-2026-04-22.md §4
+  # — informational only via Code-scanning alerts.
+  #
+  # Phase-conditional checks (`arch-1-dep-break.yml`,
+  # `inv-11-system-zone-drift.yml`, `host-error-wire-safety.yml`,
+  # `cross-process-graph.yml`) are NOT required — they're path-conditional-
+  # required once GitHub Rulesets API supports path-gating on required
+  # checks. Until then they remain informational.
+  required_status_checks:
+    strict: true   # branches must be up-to-date before merging
+    contexts:
+      # ci.yml
+      - "cross-leg byte-equality gate (T9)"
+      - "create-benten-app cold install"
+      - "release-build (--no-default-features) gate"
+      # determinism.yml
+      - "T9 cross-leg byte-equality gate"
+      # phase-2a-exit-criteria.yml
+      - "Phase 2a exit-gate aggregate"
+      # drift-detect.yml
+      - "docs ↔ Rust enum ↔ TS types parity"
+      - "self-test (meta-assertion that the detector actually detects)"
+      # supply-chain.yml
+      - "cargo-deny (licenses / bans / advisories / sources)"
+      - "cargo-audit (belt-and-suspenders)"
+      - "Cargo.lock integrity"
+
+  # ---- Pull-request review requirements ----
+  #
+  # 0 reviewers — solo project. Review discipline lives in the Pattern-6
+  # ADDL agent dispatches, not in PR review counts. Ben can flip this to
+  # ≥1 once a second human committer is added.
+  required_pull_request_reviews:
+    required_approving_review_count: 0
+    dismiss_stale_reviews: true
+    require_code_owner_reviews: false
+    require_last_push_approval: false
+
+  # ---- Conversation resolution ----
+  required_conversation_resolution: true
+
+  # ---- Linear history ----
+  #
+  # No merge commits — Ben's commit conventions (CLAUDE.md "Commit
+  # Conventions") prefer fast-forward / rebase only.
+  required_linear_history: true
+
+  # ---- Force-push / deletion bans ----
+  #
+  # CLAUDE.md "no force-push to main" is non-negotiable. Encoded here so
+  # the rule applies even if a future PAT bypasses local discipline.
+  allow_force_pushes: false
+  allow_deletions: false
+
+  # ---- Admin enforcement ----
+  #
+  # The rule applies to Ben (admin) too. Without `enforce_admins: true`
+  # an admin push could bypass all the above; with it on, even Ben must
+  # open a PR + wait for the 10 required checks.
+  enforce_admins: true
+
+  # ---- Signed commits ----
+  #
+  # Phase-2a does not require GPG signing (no signing infra in place
+  # yet). Phase 3+ peer-mesh sync may revisit this when ed25519-dalek
+  # peer identity lands. Explicit `false` documents the current choice.
+  required_signatures: false
+
+  # ---- Lock branch / fork-syncing ----
+  #
+  # Branch is not locked (active development); fork-syncing not
+  # applicable (no public forks).
+  lock_branch: false
+  allow_fork_syncing: false
+
+  # ---- Block creations ----
+  #
+  # `restrictions: null` means anyone with push access can push to
+  # branches matching the protection rule. For `main` push access is
+  # gated by the above (force-push / deletion / linear-history rules);
+  # no push-actor restriction beyond repo permissions.
+  restrictions: null
+
+  # ---- Bypass actors ----
+  #
+  # No bypass list — combined with `enforce_admins: true`, no one can
+  # skip required checks. Phase-3+ may add a release-bot bypass if
+  # release-plz lands.
+  block_creations: false

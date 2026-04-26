@@ -1,0 +1,205 @@
+# Branch-protection spec drift detector.
+#
+# Reads `.github/branch-protection.yml`, fetches the live protection
+# state via the GitHub branch-protection GET endpoint, diffs the two,
+# and either WARNS (default) or FAILS (when STRICT_PROTECTION_CHECK
+# is true) on drift.
+#
+# Why warn-by-default: this workflow lands BEFORE Ben applies the spec
+# to the live repo (applying needs a PAT with admin scope; that's the
+# Phase-2a §3.1 item-2 follow-up). Failing on drift the moment this
+# lands would block every PR until Ben runs the apply runbook in
+# `.github/branch-protection.yml`. After Ben applies + flips the
+# strict-mode flag, drift becomes a hard fail.
+#
+# Toggling strict mode (after the live state is applied):
+#   Option A — flip the env-var below to `true`.
+#   Option B — set repo Variable `STRICT_PROTECTION_CHECK=true` in
+#              Settings → Secrets and variables → Actions → Variables;
+#              the workflow reads `${{ vars.STRICT_PROTECTION_CHECK }}`
+#              if defined, else falls back to the env default.
+#
+# Closes Phase-2a CI-1 deferral together with the spec file. Without
+# this workflow the spec is just documentation; with it, the spec is
+# load-bearing.
+
+name: Branch Protection Spec Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Daily catch — picks up out-of-band changes Ben might make in the
+    # web UI. Off-peak.
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  # Default = warn-only. Override at the repo Variables level
+  # (`vars.STRICT_PROTECTION_CHECK`) to flip without code change, or
+  # edit this line for a permanent flip after Ben applies the spec.
+  STRICT_PROTECTION_CHECK_DEFAULT: 'false'
+
+jobs:
+  drift-check:
+    name: Compare live branch-protection vs. spec
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        # actions/checkout@v4 → resolved 2026-04-25
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Resolve strict-mode flag
+        id: strict
+        run: |
+          flag="${{ vars.STRICT_PROTECTION_CHECK }}"
+          if [ -z "$flag" ]; then
+            flag="${STRICT_PROTECTION_CHECK_DEFAULT}"
+          fi
+          echo "strict=$flag" >> "$GITHUB_OUTPUT"
+          echo "strict-mode = $flag"
+
+      - name: Install yq
+        run: |
+          # yq v4 is preinstalled on ubuntu-latest as `yq`; verify and
+          # version-pin via apt only as a fallback. Avoid extra action
+          # dependency surface.
+          if ! command -v yq >/dev/null 2>&1; then
+            sudo wget -qO /usr/local/bin/yq \
+              https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            sudo chmod +x /usr/local/bin/yq
+          fi
+          yq --version
+
+      - name: Fetch live protection state
+        id: live
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          # GET /repos/.../branches/main/protection — returns the
+          # current protection JSON or 404 if unprotected.
+          live_json="$(gh api /repos/${{ github.repository }}/branches/main/protection 2>&1)"
+          rc=$?
+          set -e
+
+          if [ $rc -ne 0 ]; then
+            if echo "$live_json" | grep -q "Branch not protected"; then
+              echo "live_state=unprotected" >> "$GITHUB_OUTPUT"
+              echo "$live_json" > live.json
+              # Sentinel: empty object so downstream diff has something
+              # to compare without erroring.
+              echo '{}' > live.json
+            else
+              echo "::error::Failed to fetch live protection: $live_json"
+              exit 1
+            fi
+          else
+            echo "live_state=protected" >> "$GITHUB_OUTPUT"
+            echo "$live_json" > live.json
+          fi
+          echo "Live state: $(cat "$GITHUB_OUTPUT" | grep ^live_state)"
+
+      - name: Extract spec
+        run: |
+          # Pull the `protection:` subtree from the spec and emit JSON.
+          yq -o=json '.protection' .github/branch-protection.yml > spec.json
+          echo "--- spec.json (first 40 lines) ---"
+          head -40 spec.json
+
+      - name: Diff live vs spec (key fields)
+        id: diff
+        run: |
+          set +e
+
+          drift=0
+          report=""
+
+          # Helper: compare a jq-extractable field between live + spec.
+          # Drift if the values differ (including missing on either side).
+          compare() {
+            local label="$1"
+            local jq_expr="$2"
+            local live_v spec_v
+            live_v="$(jq -c "$jq_expr // null" live.json 2>/dev/null)"
+            spec_v="$(jq -c "$jq_expr // null" spec.json 2>/dev/null)"
+            if [ "$live_v" != "$spec_v" ]; then
+              report="${report}"$'\n'"- ${label}: live=${live_v} spec=${spec_v}"
+              drift=1
+            fi
+          }
+
+          if [ "${{ steps.live.outputs.live_state }}" = "unprotected" ]; then
+            report="- Branch is UNPROTECTED on the live repo. Spec exists but has not been applied. Run the apply runbook documented at the top of .github/branch-protection.yml."
+            drift=1
+          else
+            # Required-status-check contexts (sorted compare; order
+            # doesn't matter for the gate's effect).
+            live_ctx="$(jq -c '.required_status_checks.contexts // [] | sort' live.json)"
+            spec_ctx="$(jq -c '.required_status_checks.contexts // [] | sort' spec.json)"
+            if [ "$live_ctx" != "$spec_ctx" ]; then
+              report="${report}"$'\n'"- required_status_checks.contexts: live=${live_ctx} spec=${spec_ctx}"
+              drift=1
+            fi
+
+            compare "required_status_checks.strict" '.required_status_checks.strict'
+            compare "required_pull_request_reviews.required_approving_review_count" \
+                    '.required_pull_request_reviews.required_approving_review_count'
+            compare "required_conversation_resolution" '.required_conversation_resolution.enabled // .required_conversation_resolution'
+            compare "required_linear_history" '.required_linear_history.enabled // .required_linear_history'
+            compare "allow_force_pushes" '.allow_force_pushes.enabled // .allow_force_pushes'
+            compare "allow_deletions" '.allow_deletions.enabled // .allow_deletions'
+            compare "enforce_admins" '.enforce_admins.enabled // .enforce_admins'
+            compare "required_signatures" '.required_signatures.enabled // .required_signatures'
+          fi
+
+          echo "drift=$drift" >> "$GITHUB_OUTPUT"
+
+          if [ $drift -eq 0 ]; then
+            echo ":white_check_mark: Live branch-protection matches spec." \
+              >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## Branch-protection drift detected"
+              echo ""
+              echo "Live state at \`main\` does not match \`.github/branch-protection.yml\`."
+              echo ""
+              echo "### Diff"
+              echo "\`\`\`"
+              echo "$report"
+              echo "\`\`\`"
+              echo ""
+              echo "Strict mode: \`${{ steps.strict.outputs.strict }}\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "$report"
+          fi
+
+      - name: Decide outcome
+        run: |
+          drift="${{ steps.diff.outputs.drift }}"
+          strict="${{ steps.strict.outputs.strict }}"
+
+          if [ "$drift" = "0" ]; then
+            echo "No drift. PASS."
+            exit 0
+          fi
+
+          if [ "$strict" = "true" ]; then
+            echo "::error::Branch-protection drift detected and STRICT_PROTECTION_CHECK is true. FAILING."
+            exit 1
+          fi
+
+          # Default warn-only path.
+          echo "::warning::Branch-protection drift detected. STRICT_PROTECTION_CHECK is false (warn-only). Apply the spec via the runbook in .github/branch-protection.yml, then flip the strict flag."
+          exit 0
