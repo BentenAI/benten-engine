@@ -89,7 +89,8 @@ fn subscribe_max_delivered_seq_round_trips_via_suspension_store() {
     .unwrap();
 
     // Push 5 events through.
-    benten_engine::testing::testing_emit_n_synthetic_events(&mut engine, "acme.posts/*", 5).unwrap();
+    benten_engine::testing::testing_emit_n_synthetic_events(&mut engine, "acme.posts/*", 5)
+        .unwrap();
 
     // The store should now hold max_delivered_seq = 5 for this subscriber.
     let store = benten_engine::testing::testing_get_suspension_store(&engine);

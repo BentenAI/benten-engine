@@ -1,4 +1,5 @@
-#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
+#![cfg(feature = "phase_2b_landed")]
+// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: SUBSCRIBE handler idempotency replay-safe via Inv-13
 //! (G6-A).
 //!
@@ -35,11 +36,8 @@ fn subscribe_handler_idempotency_replay_safe_via_inv_13() {
     sub.bind_handler(&handler).expect("bind");
 
     let anchor = benten_core::Cid::sample_for_test();
-    let mut event = testing_make_change_event(
-        anchor,
-        ChangeKind::Created,
-        serde_json::json!({"k": "v"}),
-    );
+    let mut event =
+        testing_make_change_event(anchor, ChangeKind::Created, serde_json::json!({"k": "v"}));
     event.seq = 7;
 
     // Replay 5×.

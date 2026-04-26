@@ -1,4 +1,5 @@
-#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
+#![cfg(feature = "phase_2b_landed")]
+// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: STREAM persist option (phil-r1-1) (G6-A).
 //!
 //! Pin source: phil-r1-1 — opt-in `stream({ persist: true })` materializes
@@ -8,7 +9,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_eval::primitives::stream::{StreamPrimitiveSpec, StreamPersistMode};
+use benten_eval::primitives::stream::{StreamPersistMode, StreamPrimitiveSpec};
 use benten_eval::testing::{testing_collect_stream_aggregate_node, testing_run_stream_persist};
 
 /// `stream({ persist: true })` materializes an aggregate Node at completion
@@ -16,8 +17,7 @@ use benten_eval::testing::{testing_collect_stream_aggregate_node, testing_run_st
 #[test]
 #[ignore = "Phase 2b G6-A pending — phil-r1-1 STREAM persist materialization"]
 fn stream_persist_true_materializes_aggregate_node() {
-    let chunks: Vec<Vec<u8>> =
-        vec![b"hello ".to_vec(), b"world".to_vec(), b"!".to_vec()];
+    let chunks: Vec<Vec<u8>> = vec![b"hello ".to_vec(), b"world".to_vec(), b"!".to_vec()];
 
     let spec = StreamPrimitiveSpec {
         persist: StreamPersistMode::Persist,

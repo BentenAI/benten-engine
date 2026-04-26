@@ -1,4 +1,5 @@
-#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
+#![cfg(feature = "phase_2b_landed")]
+// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: SUBSCRIBE cursor modes — Latest / Sequence / Persistent
 //! (G6-A).
 //!
@@ -13,7 +14,7 @@ use benten_eval::primitives::subscribe::{
 };
 use benten_eval::testing::{
     testing_make_change_event, testing_make_persistent_subscription_id,
-    testing_subscribe_register, testing_subscribe_inject_event,
+    testing_subscribe_inject_event, testing_subscribe_register,
 };
 use std::num::NonZeroUsize;
 
@@ -33,22 +34,38 @@ fn subscribe_cursor_latest_starts_at_next_event() {
     let anchor = benten_core::Cid::sample_for_test();
 
     // Inject a pre-registration event (this should NOT be observed).
-    let mut pre = testing_make_change_event(anchor.clone(), ChangeKind::Created, serde_json::json!({"v": 0}));
+    let mut pre = testing_make_change_event(
+        anchor.clone(),
+        ChangeKind::Created,
+        serde_json::json!({"v": 0}),
+    );
     pre.seq = 100;
     benten_eval::testing::testing_publish_change_event(pre);
 
     let sub = testing_subscribe_register(base_spec(SubscribeCursor::Latest)).expect("register");
 
     // Inject a post-registration event (this MUST be observed).
-    let mut post = testing_make_change_event(anchor.clone(), ChangeKind::Created, serde_json::json!({"v": 1}));
+    let mut post = testing_make_change_event(
+        anchor.clone(),
+        ChangeKind::Created,
+        serde_json::json!({"v": 1}),
+    );
     post.seq = 101;
     testing_subscribe_inject_event(&sub, post.clone()).unwrap();
 
-    let received = sub.next_blocking(std::time::Duration::from_millis(100)).expect("post event");
-    assert_eq!(received.seq, 101, "Latest cursor delivers next-event-after-registration");
+    let received = sub
+        .next_blocking(std::time::Duration::from_millis(100))
+        .expect("post event");
+    assert_eq!(
+        received.seq, 101,
+        "Latest cursor delivers next-event-after-registration"
+    );
 
     let none = sub.try_next();
-    assert!(none.is_none(), "Latest cursor MUST NOT replay pre-registration events");
+    assert!(
+        none.is_none(),
+        "Latest cursor MUST NOT replay pre-registration events"
+    );
 }
 
 /// `Sequence(N)` cursor: subscriber resumes at explicit seq N; events with
@@ -58,11 +75,16 @@ fn subscribe_cursor_latest_starts_at_next_event() {
 fn subscribe_cursor_sequence_resumes_at_explicit_seq() {
     let anchor = benten_core::Cid::sample_for_test();
 
-    let sub = testing_subscribe_register(base_spec(SubscribeCursor::Sequence(50))).expect("register");
+    let sub =
+        testing_subscribe_register(base_spec(SubscribeCursor::Sequence(50))).expect("register");
 
     // Events 49 and 50: only 50 should be delivered.
     for seq in [49u64, 50, 51] {
-        let mut e = testing_make_change_event(anchor.clone(), ChangeKind::Updated, serde_json::json!({"v": seq}));
+        let mut e = testing_make_change_event(
+            anchor.clone(),
+            ChangeKind::Updated,
+            serde_json::json!({"v": seq}),
+        );
         e.seq = seq;
         testing_subscribe_inject_event(&sub, e).unwrap();
     }
@@ -77,7 +99,8 @@ fn subscribe_cursor_sequence_resumes_at_explicit_seq() {
 #[ignore = "Phase 2b G6-A pending — D5 cursor Persistent"]
 fn subscribe_cursor_persistent_assigns_subscriber_id() {
     let id: SubscriberId = testing_make_persistent_subscription_id();
-    let sub = testing_subscribe_register(base_spec(SubscribeCursor::Persistent(id.clone()))).expect("register");
+    let sub = testing_subscribe_register(base_spec(SubscribeCursor::Persistent(id.clone())))
+        .expect("register");
 
     assert_eq!(
         sub.subscriber_id().as_ref(),

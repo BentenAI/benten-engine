@@ -30,8 +30,7 @@
 use benten_core::testing::canonical_test_node;
 
 /// The Phase-1 frozen canonical fixture CID — every target MUST hit this.
-const CANONICAL_FIXTURE_CID: &str =
-    "bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda";
+const CANONICAL_FIXTURE_CID: &str = "bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda";
 
 /// `wasm32_wasip1_canonical_cid_matches_native` — plan §3 G10-A-wasip1
 /// must-pass + R2 §2.3.

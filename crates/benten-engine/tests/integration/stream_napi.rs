@@ -6,8 +6,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_engine::testing::{
-    testing_engine_with_streaming_handler, testing_napi_consumer_pause,
-    testing_napi_consumer_break,
+    testing_engine_with_streaming_handler, testing_napi_consumer_break, testing_napi_consumer_pause,
 };
 use std::time::Duration;
 

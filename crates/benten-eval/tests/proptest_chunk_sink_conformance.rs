@@ -1,4 +1,5 @@
-#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
+#![cfg(feature = "phase_2b_landed")]
+// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: ChunkSink conformance proptest (G6-A).
 //!
 //! Pin source: benten-philosophy phil-r1-4 — all conformant sinks produce

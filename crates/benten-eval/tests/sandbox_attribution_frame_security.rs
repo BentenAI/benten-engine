@@ -71,7 +71,5 @@ fn attribution_frame_extension_does_not_leak_to_unauthorized_consumers() {
     //
     // Defense-in-depth: closes the case where a future host-fn might
     // accidentally surface attribution data into the SANDBOX guest.
-    todo!(
-        "R5 G7-A — sweep host-functions.toml + assert no entry exposes AttributionFrame"
-    );
+    todo!("R5 G7-A — sweep host-functions.toml + assert no entry exposes AttributionFrame");
 }

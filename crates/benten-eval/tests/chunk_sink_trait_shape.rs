@@ -1,4 +1,5 @@
-#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
+#![cfg(feature = "phase_2b_landed")]
+// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: ChunkSink trait shape (G6-A).
 //!
 //! Pin source: arch-pre-r1-9 + benten-philosophy r1 + streaming-systems
@@ -34,9 +35,8 @@ fn chunk_sink_send_static_no_lifetime_thread() {
 
     // Confirm the trait can in fact be moved to a fresh thread (the napi
     // worker-thread idiom). If this compiles AND runs, the bound holds.
-    let (sink, _src) = benten_eval::testing::testing_make_chunk_sink(
-        NonZeroUsize::new(16).unwrap(),
-    );
+    let (sink, _src) =
+        benten_eval::testing::testing_make_chunk_sink(NonZeroUsize::new(16).unwrap());
     let handle = std::thread::spawn(move || {
         let _moved: Box<dyn ChunkSink> = Box::new(sink);
     });
@@ -75,9 +75,8 @@ fn chunk_sink_default_capacity_is_16() {
     );
 
     // Sink built with the default reports 16 remaining when freshly created.
-    let (sink, _src) = benten_eval::testing::testing_make_chunk_sink(
-        benten_eval::chunk_sink::DEFAULT_CAPACITY,
-    );
+    let (sink, _src) =
+        benten_eval::testing::testing_make_chunk_sink(benten_eval::chunk_sink::DEFAULT_CAPACITY);
     assert_eq!(sink.capacity_remaining(), 16);
 }
 

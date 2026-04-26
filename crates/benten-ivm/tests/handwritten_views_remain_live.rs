@@ -1,4 +1,5 @@
-#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
+#![cfg(feature = "phase_2b_landed")]
+// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! All-5-handwritten-views-remain-live enforcement (g8-clarity-1).
 //!
 //! HYBRID 5-view fate per `r1-ivm-algorithm.json`: retire NONE in Phase 2b;

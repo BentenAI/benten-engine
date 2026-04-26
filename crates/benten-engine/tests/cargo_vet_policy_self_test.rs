@@ -87,8 +87,14 @@ fn cargo_vet_workflow_non_vacuity_self_test_passes() {
             e
         );
     });
-    let known_upstreams =
-        ["mozilla", "google", "bytecode-alliance", "rust-lang", "fermyon", "zcash"];
+    let known_upstreams = [
+        "mozilla",
+        "google",
+        "bytecode-alliance",
+        "rust-lang",
+        "fermyon",
+        "zcash",
+    ];
     let has_upstream = known_upstreams.iter().any(|name| config_str.contains(name));
     assert!(
         has_upstream,

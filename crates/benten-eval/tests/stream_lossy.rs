@@ -1,4 +1,5 @@
-#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
+#![cfg(feature = "phase_2b_landed")]
+// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: STREAM lossy opt-in mode (G6-A).
 //!
 //! Pin source: D4-RESOLVED — `try_send` + `lossy_mode = true` emits
@@ -7,9 +8,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use benten_errors::ErrorCode;
 use benten_eval::chunk_sink::{Chunk, ChunkSinkError, SendOutcome};
 use benten_eval::testing::testing_make_chunk_sink_lossy;
-use benten_errors::ErrorCode;
 use std::num::NonZeroUsize;
 
 /// Lossy mode + saturated sink → `try_send` returns `BackpressureDropped`
@@ -44,7 +45,10 @@ fn stream_lossy_mode_try_send_emits_e_stream_backpressure_dropped_in_trace() {
             final_chunk: false,
         })
         .expect_err("lossy mode: try_send on full buffer returns typed-dropped error");
-    assert!(matches!(dropped, ChunkSinkError::BackpressureDropped { .. }));
+    assert!(matches!(
+        dropped,
+        ChunkSinkError::BackpressureDropped { .. }
+    ));
     assert_eq!(dropped.error_code(), ErrorCode::StreamBackpressureDropped);
 
     // Trace must surface the drop loudly — observable to the consumer's
