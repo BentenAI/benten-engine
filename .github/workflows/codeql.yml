@@ -1,0 +1,80 @@
+# CodeQL static analysis (security + quality) for Rust.
+#
+# Closes Phase-2a §3.1 hardening item 1 (CodeQL for Rust). Catches
+# CWE-class issues beyond clippy. Findings surface as GitHub Security
+# Code-scanning alerts; this workflow is INFORMATIONAL ONLY and is NOT
+# a required status check (the frozen 5-check required-status-check set
+# decided in `.addl/phase-2a/ci-decisions-2026-04-22.md` §4 stays at:
+# ci.yml, determinism.yml, phase-2a-exit-criteria.yml, drift-detect.yml,
+# supply-chain.yml).
+#
+# Rust is supported by CodeQL (general availability since 2024-09); no
+# build configuration is needed for the default `build-mode: none` path
+# used here — CodeQL extracts Rust sources directly without needing a
+# successful `cargo build`.
+#
+# Ben follow-up after this workflow lands: enable code-scanning in repo
+# Settings → Security → Code scanning → Set up → Default (or "Advanced"
+# pointing at this workflow). Until that toggle is flipped the workflow
+# will run but findings will not surface in the Security tab UI.
+#
+# Third-party actions are SHA-pinned per the parallel SUPPLY-CHAIN-PIN
+# agent's hardening pass (closes CI-3 deferral, §9.16). Dependabot will
+# rotate these refs.
+
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly cadence per GitHub Security docs recommendation. Mondays
+    # 06:17 UTC — off-peak, off-hour to dodge runner contention.
+    - cron: '17 6 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  security-events: write   # required for CodeQL to upload SARIF
+  actions: read            # required for private-repo workflow visibility
+
+jobs:
+  analyze:
+    name: CodeQL / ${{ matrix.language }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [rust]
+
+    steps:
+      - name: Checkout
+        # actions/checkout@v4 → resolved 2026-04-25
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Initialize CodeQL
+        # github/codeql-action/init@v3 → resolved 2026-04-25
+        # (v3 tag → commit ce64ddcb0d8d890d2df4a9d1c04ff297367dea2a)
+        uses: github/codeql-action/init@ce64ddcb0d8d890d2df4a9d1c04ff297367dea2a
+        with:
+          languages: ${{ matrix.language }}
+          # `none` skips a build; CodeQL extracts Rust directly. Avoids
+          # paying for a workspace build twice (CI already builds in
+          # ci.yml). If we ever need autobuild semantics (e.g. for a
+          # build.rs that codegen's source), flip this to `manual` and
+          # add the explicit `cargo build` step.
+          build-mode: none
+
+      - name: Perform CodeQL Analysis
+        # github/codeql-action/analyze@v3 → resolved 2026-04-25
+        # (v3 tag → commit ce64ddcb0d8d890d2df4a9d1c04ff297367dea2a)
+        uses: github/codeql-action/analyze@ce64ddcb0d8d890d2df4a9d1c04ff297367dea2a
+        with:
+          category: /language:${{ matrix.language }}
