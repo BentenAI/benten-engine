@@ -1,0 +1,84 @@
+name: Bundle Size (browser, ≤500KB gzipped)
+
+# Phase 2b R4-FP B-3 (red-phase) STUB. Pin source: plan §3.1 + r1-wasm-target.json
+# wasm-r1-7 (browser bundle MUST be ≤ 500KB gzipped). qa-r4-09 names this
+# as 1 of 3 missing workflow YAMLs.
+#
+# Trigger discipline per METH-13: pull_request branches: [main] +
+# push branches: [main]. workflow_dispatch added for ad-hoc reruns.
+# No `push: branches: ['**']`.
+#
+# Status (per ci-decisions-2026-04-22.md §4): INFORMATIONAL ONLY -- not
+# a member of the 5-required-check set. Reports current size + delta from
+# baseline; bundle-size REGRESSIONS appear as a PR comment / step summary
+# so reviewers can decide on the trade-off. The hard 500KB cap is the
+# release-cadence wasm-browser.yml gate, not this per-PR informational
+# workflow.
+#
+# This is a SCAFFOLD. R5 implementation (G10-A-browser) fills in the
+# actual job steps:
+#   - install Rust + wasm32-unknown-unknown target
+#   - install wasm-bindgen-cli + wasm-pack (pinned)
+#   - cargo build --target wasm32-unknown-unknown --release -p benten-napi
+#   - emit gzipped bundle; measure size
+#   - compare against baseline checked into bindings/napi/dist/baseline.json
+#   - emit current + delta to $GITHUB_STEP_SUMMARY + post PR comment
+#
+# Owned by R4-FP B-3 (R3-followup); R5 owner G10-A-browser.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: bundle-size-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  bundle-size-stub:
+    name: browser bundle size — RED-PHASE STUB
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      # TODO(Phase 2b G10-A-browser): implement actual job steps.
+      # R5 implementer replaces this placeholder with:
+      #   - actions-rust-lang/setup-rust-toolchain@... with target
+      #     wasm32-unknown-unknown + components clippy, rustfmt
+      #   - cargo install wasm-bindgen-cli --locked --version <pinned>
+      #     cargo install wasm-pack --locked --version <pinned>
+      #   - cargo build --release --target wasm32-unknown-unknown
+      #     -p benten-napi
+      #   - wasm-bindgen target/wasm32-unknown-unknown/release/benten_napi.wasm
+      #     --out-dir bindings/napi/dist/browser/ --target web
+      #   - gzip -n -9 the .wasm + .js bundle artifacts; sum bytes
+      #   - read baseline from bindings/napi/dist/baseline.json
+      #   - emit current_bytes + delta_bytes + delta_pct to step summary
+      #   - if delta is regression, also post a PR comment
+      #   - exit 0 ALWAYS (informational; the 500KB hard cap lives in
+      #     wasm-browser.yml's release-cadence gate)
+      - name: Placeholder — R5 (G10-A-browser) implementation pending
+        shell: bash
+        run: |
+          echo "RED-PHASE STUB: bundle-size.yml awaits G10-A-browser"
+          echo "implementation per plan §3.1 + wasm-r1-7."
+          echo ""
+          echo "When implemented this job MUST:"
+          echo "  - install Rust + wasm32-unknown-unknown target"
+          echo "  - install wasm-bindgen-cli + wasm-pack (pinned)"
+          echo "  - cargo build --release --target wasm32-unknown-unknown"
+          echo "    -p benten-napi"
+          echo "  - emit gzipped bundle to bindings/napi/dist/browser/"
+          echo "  - measure current size; compare against baseline.json"
+          echo "  - emit delta to step summary + PR comment if regression"
+          echo "  - exit 0 (informational; hard 500KB cap is in wasm-browser.yml)"
+          echo ""
+          echo "Status: INFORMATIONAL (not in the 5-required-check set)."
+          exit 0

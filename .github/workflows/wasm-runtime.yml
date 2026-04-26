@@ -1,0 +1,82 @@
+name: WASM Runtime (wasm32-wasip1 + wasmtime)
+
+# Phase 2b R4-FP B-3 (red-phase) STUB. Pin source: plan §3.1 Phase-2b CI
+# additions + r4-qa-expert.json qa-r4-09 (3 of 5 expected workflow YAMLs
+# missing). This is the wasm32-wasip1 RUNTIME workflow (separate from
+# `wasm-conformance.yml` which exercises the ESC-1..16 fixture suite, and
+# separate from `wasm-browser.yml` which targets wasm32-unknown-unknown).
+# This workflow exercises the wasmtime runtime against the canonical
+# benten-eval surface (build + smoke-run, NOT exhaustive escape-attempt
+# coverage -- that's wasm-conformance.yml's job).
+#
+# Trigger discipline per METH-13: pull_request branches: [main] +
+# push branches: [main]. workflow_dispatch added for ad-hoc reruns.
+# No `push: branches: ['**']`.
+#
+# Status (per ci-decisions-2026-04-22.md §4): INFORMATIONAL ONLY -- not
+# a member of the 5-required-check set (`ci.yml`, `determinism.yml`,
+# `phase-2a-exit-criteria.yml`, `drift-detect.yml`, `supply-chain.yml`).
+# The required-check fleet stays narrow per METH-8 concurrency budget.
+#
+# This is a SCAFFOLD. R5 implementation (G7-B + G10-A-wasip1) fills in
+# the actual job steps:
+#   - install Rust + wasm32-wasip1 target
+#   - install wasmtime
+#   - cargo build --target wasm32-wasip1 -p benten-eval --features phase_2b_landed
+#   - run benten-eval test binaries under wasmtime
+#   - assert canonical fixture CID matches native build (wasm-r1-1 dual-target)
+#
+# Owned by R4-FP B-3 (R3-followup); R5 owners G7-B + G10-A-wasip1.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: wasm-runtime-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  wasm-runtime-stub:
+    name: wasm32-wasip1 + wasmtime smoke — RED-PHASE STUB
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      # TODO(Phase 2b G7-B + G10-A-wasip1): implement actual job steps.
+      # R5 implementer replaces this placeholder with:
+      #   - actions-rust-lang/setup-rust-toolchain@... with target
+      #     wasm32-wasip1 + components clippy, rustfmt
+      #   - bytecodealliance/actions/wasmtime@... or curl-install of
+      #     wasmtime release tarball (pinned SHA per supply-chain policy)
+      #   - cargo build --target wasm32-wasip1 -p benten-eval
+      #     --features phase_2b_landed
+      #   - run benten-eval lib tests under wasmtime, asserting:
+      #       * canonical fixture CID == native build CID (wasm-r1-1)
+      #       * a representative SANDBOX smoke test executes successfully
+      #         in the wasi runtime
+      #   - emit a short summary into $GITHUB_STEP_SUMMARY for operator
+      #     consumption.
+      - name: Placeholder — R5 (G7-B + G10-A-wasip1) implementation pending
+        shell: bash
+        run: |
+          echo "RED-PHASE STUB: wasm-runtime.yml awaits G7-B (SANDBOX core)"
+          echo "+ G10-A-wasip1 (wasm32-wasip1 build harness) implementation"
+          echo "per plan §3.1."
+          echo ""
+          echo "When implemented this job MUST:"
+          echo "  - install Rust + wasm32-wasip1 target"
+          echo "  - install wasmtime (pinned version)"
+          echo "  - cargo build --target wasm32-wasip1 -p benten-eval"
+          echo "  - run a representative benten-eval smoke under wasmtime"
+          echo "  - assert canonical fixture CID matches the native build CID"
+          echo ""
+          echo "Status: INFORMATIONAL (not in the 5-required-check set)."
+          exit 0
