@@ -47,10 +47,10 @@ fn parse_toml_host_fn_names(toml_src: &str) -> BTreeSet<String> {
     let mut names = BTreeSet::new();
     for line in toml_src.lines() {
         let trimmed = line.trim();
-        if let Some(rest) = trimmed.strip_prefix("[host_fn.") {
-            if let Some(name) = rest.strip_suffix(']') {
-                names.insert(name.to_string());
-            }
+        if let Some(rest) = trimmed.strip_prefix("[host_fn.")
+            && let Some(name) = rest.strip_suffix(']')
+        {
+            names.insert(name.to_string());
         }
     }
     names
