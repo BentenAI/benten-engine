@@ -48,6 +48,15 @@ proptest! {
         //       prop_assert_eq!(decode_i32(read), init_value);
         //   }
         let _ = (init_value, set_values);
-        prop_assume!(false);
+        // R4-FP-A — `prop_assume!(false)` DISCARDS the case (silent
+        // vacuous-pass after un-ignore); `prop_assert!(false, ...)`
+        // actually fails the case, preserving fail-fast intent
+        // (rust-test-reviewer.json tq-2b-3).
+        prop_assert!(
+            false,
+            "Phase 2b G7-A pending: write no-state-persists-across-calls \
+             property body (replace this prop_assert!(false) with the \
+             read-after-set assertion described in the file pseudo)."
+        );
     }
 }

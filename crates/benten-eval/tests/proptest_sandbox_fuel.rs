@@ -40,8 +40,17 @@ proptest! {
         //       prop_assert!(window[1].consumed >= window[0].consumed);
         //   }
         let _ = seed;
-        // Force an `assume(false)` so the test fails-fast in red phase.
-        // R5 replaces with the actual property body.
-        prop_assume!(false);
+        // R4-FP-A — `prop_assume!(false)` DISCARDS the case (it does not
+        // fail the test); a body of all-discards silently passes 0 cases,
+        // so the previous shape was a vacuous-pass hazard the moment R5
+        // drops `#[ignore]` (rust-test-reviewer.json tq-2b-3).
+        // `prop_assert!(false, ...)` actually fails the case → fails the
+        // proptest, preserving fail-fast intent.
+        prop_assert!(
+            false,
+            "Phase 2b G7-A pending: write fuel-monotonicity property body \
+             (replace this prop_assert!(false) with the actual fuel-trace \
+             monotonicity assertion described in the file pseudo)."
+        );
     }
 }

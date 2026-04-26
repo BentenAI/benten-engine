@@ -23,9 +23,9 @@ use benten_graph::{ChangeEvent, ChangeKind};
 // Renamed to avoid clash with `proptest::strategy::Strategy` trait imported
 // via `proptest::prelude::*`.
 use benten_ivm::Strategy as IvmStrategy;
-use benten_ivm::View;
 use benten_ivm::algorithm_b::AlgorithmBView;
 use benten_ivm::views::ContentListingView;
+use benten_ivm::{View, ViewQuery, ViewResult};
 use proptest::prelude::*;
 use std::collections::BTreeMap;
 
@@ -104,14 +104,26 @@ proptest! {
         }
         rebuilt.rebuild().expect("rebuild on Algorithm B view must succeed");
 
-        // Snapshots must match. The exact projection shape is up to the
-        // view's `read` implementation; here we use the id-stamped Debug
-        // form as a stable proxy that R5 will refine to a real `read()`
-        // pattern when the surface lands.
-        prop_assert_eq!(
-            format!("{}::{:?}", incremental.id(), incremental.is_stale()),
-            format!("{}::{:?}", rebuilt.id(), rebuilt.is_stale())
-        );
+        // R4-FP-A — Snapshots must match on ACTUAL CONTENT, not just id +
+        // is_stale (the prior projection was tautological because both views
+        // share the same id by construction; per rust-test-reviewer.json
+        // tq-2b-1). Project via `read(&ViewQuery { label: "post", limit: 100 })`
+        // — both views must report the same paginated CID set after the
+        // event sequence, including identical Err(PatternMismatch) shapes
+        // for queries the view can't serve.
+        let q = ViewQuery {
+            label: Some("post".into()),
+            limit: Some(100),
+            offset: Some(0),
+            ..ViewQuery::default()
+        };
+        let inc_result: Result<ViewResult, _> = incremental.read(&q);
+        let reb_result: Result<ViewResult, _> = rebuilt.read(&q);
+        prop_assert_eq!(format!("{inc_result:?}"), format!("{reb_result:?}"));
+        // Liveness pin: both views must report stale-state identically (an
+        // Algorithm B that silently flips to stale on rebuild would diverge
+        // here while the read snapshots could still match by coincidence).
+        prop_assert_eq!(incremental.is_stale(), rebuilt.is_stale());
         prop_assert_eq!(incremental.strategy(), IvmStrategy::B);
         prop_assert_eq!(rebuilt.strategy(), IvmStrategy::B);
     }

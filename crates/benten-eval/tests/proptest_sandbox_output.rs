@@ -61,6 +61,15 @@ proptest! {
         //       prop_assert_eq!(consumed, batches.iter().sum::<usize>() as u64);
         //   }
         let _ = (limit, batches);
-        prop_assume!(false);
+        // R4-FP-A — `prop_assume!(false)` DISCARDS the case (silent
+        // vacuous-pass after un-ignore); `prop_assert!(false, ...)`
+        // actually fails the case, preserving fail-fast intent
+        // (rust-test-reviewer.json tq-2b-3).
+        prop_assert!(
+            false,
+            "Phase 2b G7-A pending: write output-strictly-bounded property \
+             body (replace this prop_assert!(false) with the consumed-vs-limit \
+             assertion described in the file pseudo)."
+        );
     }
 }

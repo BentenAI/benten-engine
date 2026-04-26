@@ -1,4 +1,5 @@
-#![cfg(feature = "phase_2b_landed")] // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
+#![cfg(feature = "phase_2b_landed")]
+// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: SUBSCRIBE security-class — capability gating + Inv-11 +
 //! Option-C compliance (G6-A).
 //!
@@ -8,6 +9,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use benten_errors::ErrorCode;
 use benten_eval::primitives::subscribe::{
     ChangeKind, ChangePattern, SubscribeCursor, SubscriptionSpec,
 };
@@ -16,7 +18,6 @@ use benten_eval::testing::{
     testing_revoke_cap_mid_subscribe, testing_subscribe_inject_event,
     testing_subscribe_register_as,
 };
-use benten_errors::ErrorCode;
 use std::num::NonZeroUsize;
 
 fn spec(prefix: &str) -> SubscriptionSpec {
@@ -108,8 +109,7 @@ fn subscribe_capability_revoked_mid_stream_cancels() {
 fn subscribe_pattern_cannot_exfiltrate_cross_zone_data_inv_11() {
     let principal = testing_principal_with_caps(&["subscribe:*"]);
     // System-zone label prefix from user code must be denied.
-    let result =
-        testing_subscribe_register_as(&principal, spec("system:/secrets/"));
+    let result = testing_subscribe_register_as(&principal, spec("system:/secrets/"));
     let err = result.expect_err("system: prefix from user code must fail Inv-11");
     assert_eq!(err.error_code(), ErrorCode::Inv11SystemZoneRead);
 }
