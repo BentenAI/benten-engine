@@ -748,3 +748,31 @@ DX polish; no security gap.
 **Cross-refs.** plan §G5-B-i Decision 6 / Minor 3; ERROR-CATALOG
 `E_INV_SYSTEM_ZONE`; `SYSTEM_ZONE_PREFIXES` at
 `crates/benten-engine/src/system_zones.rs`.
+
+---
+
+## Repository security configuration (Phase 2a §3.1 hardening pass)
+
+**CodeQL code scanning.** Workflow at `.github/workflows/codeql.yml` runs
+on every push to `main`, every PR, and weekly cron. Findings appear in
+the GitHub Security tab; not a required CI check (informational-only per
+ci-decisions-2026-04-22.md §4). The workflow file *is* the configuration —
+GitHub auto-enabled code scanning on first SARIF upload from the
+`analyze` action; no Settings toggle was needed.
+
+**Private Vulnerability Reporting (PVR).** Enabled at the repo level on
+2026-04-25 (Settings → Code security and analysis → Private vulnerability
+reporting). Gives external researchers an in-platform path to report
+security issues privately rather than opening a public issue. No
+maintainer action needed beyond the toggle; reports route to the
+Security tab. See <https://docs.github.com/en/code-security/security-advisories/working-with-repository-security-advisories/configuring-private-vulnerability-reporting-for-a-repository>.
+
+**Branch protection on `main`.** Spec at `.github/branch-protection.yml`;
+drift-check workflow at `.github/workflows/branch-protection-spec-check.yml`.
+Apply runbook + PAT setup live in the spec file's header comment. Closes
+the CI-1 deferral.
+
+**Third-party action SHA-pinning.** All workflows pin third-party actions
+at commit SHAs (rather than mutable tag/branch refs). Dependabot rotates
+weekly via `.github/dependabot.yml`'s github-actions ecosystem entry.
+Closes the CI-3 deferral.
