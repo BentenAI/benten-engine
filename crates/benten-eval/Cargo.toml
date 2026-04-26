@@ -94,3 +94,20 @@ harness = false
 [[bench]]
 name = "transform_expression_latency"
 harness = false
+
+# Phase 2b R3-B SANDBOX bench skeletons (G7-A / G7-C). `required-features`
+# tells cargo to skip compilation when `phase_2b_landed` is OFF (the default
+# CI feature posture during R3 consolidation), so the bench files can ship
+# `criterion_main!()` unconditionally without breaking the default build.
+# R5 G7-A / G7-C wires the bench bodies + flips the feature on at run time.
+# r4-rust-test-coverage.json A1 + r3-consolidation.md §5 item 17 — fix-pass
+# landing the missing registration the consolidation flagged but didn't land.
+[[bench]]
+name = "sandbox_cold_start"
+harness = false
+required-features = ["phase_2b_landed"]
+
+[[bench]]
+name = "sandbox_fuel"
+harness = false
+required-features = ["phase_2b_landed"]

@@ -27,12 +27,39 @@ use std::collections::BTreeMap;
 
 use benten_core::{Cid, Node, Value};
 use benten_graph::{ChangeEvent, ChangeKind};
-use benten_ivm::View;
 use benten_ivm::algorithm_b::AlgorithmBView;
 use benten_ivm::views::{
     CapabilityGrantsView, ContentListingView, EventDispatchView, GovernanceInheritanceView,
     VersionCurrentView,
 };
+use benten_ivm::{View, ViewQuery, ViewResult};
+
+// ---------------------------------------------------------------------------
+// Content projection (R4-FP-A — replaces id-only tautology)
+// ---------------------------------------------------------------------------
+//
+// `format!("{:?}", v.id())` was a tautological projection — both views ship
+// with the SAME id by construction (the id is supplied as the first arg to
+// `AlgorithmBView::for_id`). The reviewer (rust-test-reviewer.json tq-2b-1)
+// flagged this as a vacuous-pass: any AlgorithmB divergence that doesn't
+// rename the view passes, which is the entire class of bugs G8-A is supposed
+// to catch.
+//
+// `project_view_content` reads the view's actual observable output via
+// `view.read(&ViewQuery { ... })` and returns its Debug-rendered form. The
+// `ViewResult` enum (Cids/Current/Rules) does not derive `Eq`, so we use
+// the stable Debug-string projection — `Vec<Cid>` Debug ordering is
+// deterministic; `BTreeMap<String, Value>` Debug iterates in key order.
+// Two views diverging on actual content WILL produce different strings.
+//
+// `read()` may return `ViewError::PatternMismatch` for queries against
+// indexes the view doesn't maintain — that's still useful as a
+// content-equivalence projection (both views must pattern-mismatch
+// identically). We capture both Ok/Err in the projection.
+fn project_view_content(v: &dyn View, query: &ViewQuery) -> String {
+    let result: Result<ViewResult, _> = v.read(query);
+    format!("{result:?}")
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -138,8 +165,14 @@ fn algorithm_b_correctness_against_capability_grants_view() {
     ];
 
     replay_and_compare(a, b, &events, |v| {
-        // Probe: ask the view for the actor's grants and snapshot the result.
-        format!("{:?}", v.id())
+        // Project the actor's actual grant set from each view (CapabilityGrants
+        // keys on `entity_cid`; both views must report the same Cids slice for
+        // the actor or Algorithm B has diverged).
+        let q = ViewQuery {
+            entity_cid: Some(actor),
+            ..ViewQuery::default()
+        };
+        project_view_content(v, &q)
     });
 }
 
@@ -180,7 +213,16 @@ fn algorithm_b_correctness_against_event_handler_dispatch_view() {
         ),
     ];
 
-    replay_and_compare(a, b, &events, |v| format!("{:?}", v.id()));
+    replay_and_compare(a, b, &events, |v| {
+        // Project the handler set for the `post.created` event name (the
+        // EventDispatch view keys on `event_name`; both views must report the
+        // same handler-CID set or Algorithm B has diverged).
+        let q = ViewQuery {
+            event_name: Some("post.created".into()),
+            ..ViewQuery::default()
+        };
+        project_view_content(v, &q)
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -229,7 +271,19 @@ fn algorithm_b_correctness_against_content_listing_view() {
         Some(post_node("not-a-post", 9999)),
     ));
 
-    replay_and_compare(a, b, &events, |v| format!("{:?}", v.id()));
+    replay_and_compare(a, b, &events, |v| {
+        // Project the full first page of the `post` listing (the
+        // ContentListing view keys on `label`; both views must report the
+        // same paginated CID set or Algorithm B has diverged on the
+        // cancellation path).
+        let q = ViewQuery {
+            label: Some("post".into()),
+            limit: Some(100),
+            offset: Some(0),
+            ..ViewQuery::default()
+        };
+        project_view_content(v, &q)
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -270,7 +324,17 @@ fn algorithm_b_correctness_against_governance_inheritance_view() {
         ),
     ];
 
-    replay_and_compare(a, b, &events, |v| format!("{:?}", v.id()));
+    replay_and_compare(a, b, &events, |v| {
+        // Project the effective rules for the root governance entity (the
+        // GovernanceInheritance view keys on `entity_cid`; both views must
+        // report the same effective-rules map or Algorithm B has diverged on
+        // the transitive-closure path).
+        let q = ViewQuery {
+            entity_cid: Some(root),
+            ..ViewQuery::default()
+        };
+        project_view_content(v, &q)
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -311,5 +375,17 @@ fn algorithm_b_correctness_against_version_current_view() {
         ),
     ];
 
-    replay_and_compare(a, b, &events, |v| format!("{:?}", v.id()));
+    replay_and_compare(a, b, &events, |v| {
+        // Project the CURRENT version pointer for the anchor (the
+        // VersionCurrent view keys on `anchor_id`; both views must report the
+        // same Current(Cid) or Algorithm B has diverged on the
+        // last-revision-wins path). Note: `anchor_id: u64` per ViewQuery
+        // shape; the 0 sentinel is fine for this fixture because the test
+        // uses a single anchor.
+        let q = ViewQuery {
+            anchor_id: Some(0),
+            ..ViewQuery::default()
+        };
+        project_view_content(v, &q)
+    });
 }
