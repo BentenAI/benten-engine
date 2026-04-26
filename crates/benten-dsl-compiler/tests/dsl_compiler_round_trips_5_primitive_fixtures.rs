@@ -5,7 +5,7 @@
 //! composition to keep round-trip surface honest).
 //!
 //! TDD red-phase: tests fail with `todo!()` until G12-B R5 lands the parser
-//! + emitter. Each fixture is a compact DSL string the devserver hot-reload
+//! and emitter. Each fixture is a compact DSL string the devserver hot-reload
 //! path needs to round-trip.
 //!
 //! Owner: R5 G12-B (qa-r4-01 R3-followup).
