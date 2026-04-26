@@ -2,7 +2,7 @@
 // trace emission wired in `crates/benten-eval/src/evaluator.rs::run_inner`.
 //
 // Verifies the firing-path (not just the shape) round-trips through the
-// napi boundary: register a 4-EMIT chain, cap the cumulative iteration
+// napi boundary: register a 4-WRITE chain, cap the cumulative iteration
 // budget at 2 via the `iteration-budget-test-grade`-gated
 // `engine.testingSetIterationBudget(2)` helper, drive `engine.trace`, and
 // assert the returned trace array carries a row with `type ===
@@ -12,6 +12,13 @@
 // Mirrors `crates/benten-engine/tests/integration/budget_exhausted_trace_emission.rs`
 // at the JS surface so the Rust-side fix is exercised end-to-end through
 // the napi-rs v3 trace serializer (`bindings/napi/src/trace.rs`).
+//
+// WRITE not EMIT: per mini-review g12a-cr-1 + the matching Rust deviation,
+// the napi `into_eval_subgraph` builder routes `primitive: "emit"` through
+// `spec.primitives` which `Engine::subgraph_for_spec` does NOT walk today
+// (G12-D widening lands the consumer-update). WRITE primitives populate
+// `spec.write_specs` which IS walked — so the runnable subgraph is the
+// 4-WRITE chain that the walker steps through one node at a time.
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -54,22 +61,22 @@ describe("napi G12-A budget_exhausted runtime trace round-trip", () => {
   });
 
   it("engine.trace surfaces a TraceStep with type=budget_exhausted when Inv-8 fires through the napi boundary", () => {
-    // Register a 4-EMIT-node chain via the DSL `nodes` shape. Each EMIT
-    // returns the `"ok"` evaluator edge unconditionally; the napi
-    // `into_eval_subgraph` builder threads `"next"` edges between
-    // successive nodes, which `run_inner` consults as the `"ok"`
-    // fallback. The walker therefore steps through the chain one EMIT
-    // at a time, bumping the cumulative `steps` counter once per
-    // primitive.
+    // Register a 4-WRITE-node chain via the DSL `nodes` shape. Each WRITE
+    // populates `spec.write_specs` which `Engine::subgraph_for_spec` walks
+    // (unlike `spec.primitives` which is G12-D scope to wire). Successive
+    // `"next"` edges between writes thread the chain so the walker steps
+    // through one WRITE at a time, bumping the cumulative `steps` counter
+    // once per primitive — same firing-path semantics as the Rust
+    // integration test.
     const handlerId = engine.registerSubgraph({
       handlerId: "budget:napi_exhauster",
       actions: ["budget:run"],
       root: "n0",
       nodes: [
-        { id: "n0", primitive: "emit", args: {}, edges: {} },
-        { id: "n1", primitive: "emit", args: {}, edges: {} },
-        { id: "n2", primitive: "emit", args: {}, edges: {} },
-        { id: "n3", primitive: "emit", args: {}, edges: {} },
+        { id: "n0", primitive: "write", args: { labels: ["BudgetTest"], properties: {} }, edges: { ok: "n1" } },
+        { id: "n1", primitive: "write", args: { labels: ["BudgetTest"], properties: {} }, edges: { ok: "n2" } },
+        { id: "n2", primitive: "write", args: { labels: ["BudgetTest"], properties: {} }, edges: { ok: "n3" } },
+        { id: "n3", primitive: "write", args: { labels: ["BudgetTest"], properties: {} }, edges: {} },
       ],
     });
     expect(typeof handlerId).toBe("string");
