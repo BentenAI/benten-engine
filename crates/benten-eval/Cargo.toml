@@ -40,6 +40,12 @@ testing = []
 # implementer briefs flip this on per-group as the referenced surfaces
 # land. See `.addl/phase-2b/r3-consolidation.md` §4.
 phase_2b_landed = []
+# `component-model` is reserved per wsa-3 (Phase 2b removed wasmtime's
+# component-model feature). The feature flag is declared here so R3 tests
+# (`sandbox_escape_attempts_denied.rs` ESC-11 + ESC-12) can `#[cfg]`-gate
+# Component-Model-specific escape vectors. Default OFF; never enabled in
+# Phase 2b. R5 brief author flips on if/when wsa-3 reverses.
+component-model = []
 
 [dependencies]
 benten-core = { path = "../benten-core" }
