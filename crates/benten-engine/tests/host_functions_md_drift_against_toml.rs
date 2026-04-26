@@ -22,6 +22,7 @@
 //! Owned by R3-E (CI workflow tests row); test landed by R4-FP B-4.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::doc_lazy_continuation)] // R3-FP test scaffolding doc-comment formatting; R5 G11-2b may rewrite
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
