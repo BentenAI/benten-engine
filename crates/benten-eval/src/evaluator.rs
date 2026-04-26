@@ -152,7 +152,8 @@ impl Evaluator {
     /// trace ALONGSIDE any [`EvalError`] rather than dropping it on the
     /// error path. Engine-side callers in trace mode use this so the
     /// terminal [`TraceStep::BudgetExhausted`] / typed-error rows pushed
-    /// by [`Evaluator::run_inner`] reach the user-facing
+    /// by `run_inner` (private; cannot intra-doc-link without
+    /// `--document-private-items`) reach the user-facing
     /// `engine.trace(...)` consumer (§9.12 / `lib.rs:1430-1431` TODO
     /// closure). The explicit `budget` lets the engine thread its
     /// `Engine::testing_set_iteration_budget` override through without
