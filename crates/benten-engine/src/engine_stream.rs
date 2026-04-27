@@ -28,11 +28,14 @@
 //!
 //! Vitest harnesses need a stream-handle factory that does NOT drag the
 //! production async-iterator setup. Per ts-r4-2 R4 finding,
-//! [`Engine::testing_open_stream_for_test`] returns a typed
+//! `Engine::testing_open_stream_for_test` returns a typed
 //! [`StreamHandle`] with a pre-populated chunk vec the harness drives
 //! synchronously. cfg-gated under `cfg(any(test, feature =
 //! "test-helpers"))` per Phase-2a sec-r6r2-02 discipline so the
-//! production cdylib does not compile this surface in.
+//! production cdylib does not compile this surface in. (No intra-doc
+//! link: the cfg-gated method isn't compiled in default `cargo doc`,
+//! so a `[link]` wrap fails `RUSTDOCFLAGS=-D warnings` — keep the
+//! reference as plain prose.)
 //!
 //! # G6-A coordination
 //!
