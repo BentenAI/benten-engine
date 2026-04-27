@@ -250,7 +250,7 @@ fn should_suspend(engine: &Engine, handler_id: &str) -> bool {
     }
     spec.primitives
         .iter()
-        .any(|(_, k)| matches!(k, benten_eval::PrimitiveKind::Wait))
+        .any(|p| matches!(p.kind, benten_eval::PrimitiveKind::Wait))
 }
 
 /// Build an `ExecutionStatePayload` for a just-registered handler.

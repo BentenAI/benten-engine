@@ -1695,9 +1695,21 @@ impl Engine {
         _input: &Node,
         handler_cid: &Cid,
     ) -> Result<benten_eval::Subgraph, EngineError> {
-        // Phase 2a G2-B / arch-r1-5: consult the AST cache (WRITE-free
-        // specs only, since WRITE-bearing specs stamp per-call `createdAt`).
-        let cache_eligible = spec.write_specs.is_empty();
+        // Phase 2b G12-D: walk `spec.primitives` (the widened storage) to
+        // materialise the runnable Subgraph. Each PrimitiveSpec contributes
+        // one OperationNode of its declared kind; consecutive primitives
+        // chain via `add_edge` so the walker steps through them in
+        // registration order.
+        //
+        // Cache eligibility (Phase 2a G2-B / arch-r1-5): WRITE-free specs
+        // only — WRITE-bearing specs stamp per-call `createdAt`, which would
+        // poison a content-addressed cache. Determined by scanning the
+        // widened `primitives` storage for any kind=Write entry.
+        let has_write = spec
+            .primitives
+            .iter()
+            .any(|p| matches!(p.kind, benten_eval::PrimitiveKind::Write));
+        let cache_eligible = !has_write;
         if cache_eligible
             && let Some(cached) = self
                 .inner
@@ -1711,28 +1723,73 @@ impl Engine {
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let mut sb = benten_eval::SubgraphBuilder::new(spec.handler_id.clone());
         let mut last: Option<benten_eval::NodeHandle> = None;
-        let mut write_ops: Vec<(usize, WriteSpec)> = Vec::new();
-        for (idx, w) in spec.write_specs.iter().enumerate() {
-            let h = sb.write(format!("w{idx}"));
+        // Track WRITE configs for post-build property-bag population. We
+        // must walk write-spec rehydration via `WriteSpec::from_primitive_spec`
+        // because the per-node `op`/`label`/`properties`/`createdAt` keys
+        // the evaluator dispatch path expects live in the OperationNode's
+        // properties map, NOT in the PrimitiveSpec bag (which uses the
+        // `WRITE_PROP_*` keys for inter-spec config carry).
+        let mut write_ops: Vec<(String, WriteSpec)> = Vec::new();
+        // Track the original primitive id so we can populate properties on
+        // non-WRITE primitives that carried a `WRITE_PROP_*` bag (no-op for
+        // pure structural primitives, but routed through here uniformly).
+        let mut had_terminal_respond = false;
+        for ps in &spec.primitives {
+            let h = match ps.kind {
+                benten_eval::PrimitiveKind::Write => {
+                    let h = sb.write(ps.id.clone());
+                    write_ops.push((ps.id.clone(), WriteSpec::from_primitive_spec(ps)));
+                    h
+                }
+                benten_eval::PrimitiveKind::Read => sb.read(ps.id.clone()),
+                benten_eval::PrimitiveKind::Respond => {
+                    // RESPOND must follow a predecessor; if it's first, fall
+                    // through to the empty-spec branch below by leaving
+                    // `last` unchanged. (Registered SubgraphSpec callers
+                    // should never produce this; the .respond() builder is
+                    // typically chained AFTER .write() entries.)
+                    let Some(prev) = last else {
+                        // Skip a leading-RESPOND defensively — it would
+                        // produce a degenerate single-node subgraph; the
+                        // empty-spec fallback below handles cleanly.
+                        continue;
+                    };
+                    had_terminal_respond = true;
+                    sb.respond(prev)
+                }
+                other => sb.push_primitive(ps.id.clone(), other),
+            };
             if let Some(prev) = last {
-                sb.add_edge(prev, h);
+                // RESPOND already chained via sb.respond(prev); skip the
+                // extra add_edge to avoid a duplicate edge.
+                if !matches!(ps.kind, benten_eval::PrimitiveKind::Respond) {
+                    sb.add_edge(prev, h);
+                }
             }
             last = Some(h);
-            write_ops.push((idx, w.clone()));
         }
-        let terminal = match last {
-            Some(prev) => sb.respond(prev),
-            None => {
-                let r = sb.read("noop_read".to_string());
-                sb.respond(r)
-            }
-        };
-        let _ = terminal;
+        // If the builder didn't already produce a terminal RESPOND, supply
+        // one so the dispatch path always has a terminator. Empty `primitives`
+        // → noop_read+respond (preserves the prior empty-write_specs
+        // semantics). Non-empty without a trailing RESPOND → append.
+        if !had_terminal_respond {
+            let terminal = match last {
+                Some(prev) => sb.respond(prev),
+                None => {
+                    let r = sb.read("noop_read".to_string());
+                    sb.respond(r)
+                }
+            };
+            let _ = terminal;
+        }
         let mut sg = sb.build_unvalidated_for_test();
         // Populate WRITE property bags post-build — SubgraphBuilder doesn't
         // surface per-node property setters for callers outside the crate.
-        for (idx, w) in &write_ops {
-            if let Some(node) = sg.op_by_id_mut(&format!("w{idx}")) {
+        // Reads `(id, WriteSpec)` pairs collected during the walk so each
+        // OperationNode's `op` / `label` / `properties` keys reflect the
+        // caller's WriteSpec configuration.
+        for (id, w) in &write_ops {
+            if let Some(node) = sg.op_by_id_mut(id) {
                 if w.inject_failure {
                     node.properties
                         .insert("op".into(), Value::text("test_inject_failure"));

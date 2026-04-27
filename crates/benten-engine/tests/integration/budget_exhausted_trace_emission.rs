@@ -62,22 +62,19 @@ fn budget_exhausted_runtime_trace_emission() {
     let (_dir, engine) = fresh_engine();
 
     // Build a 4-WRITE chain via the SubgraphSpec builder so the engine
-    // stores the spec for downstream dispatch (`subgraph_for_spec`
-    // walks `spec.write_specs` to materialize the runnable Subgraph,
-    // chaining successive WRITE OperationNodes via `"next"` edges and
-    // capping with a terminal RESPOND). Each WRITE primitive returns
-    // the `"ok"` evaluator edge on success; the walker steps through
-    // the chain one WRITE at a time, bumping the cumulative `steps`
-    // counter once per primitive, and the Inv-8 guard
-    // (`steps >= budget`) trips when the cursor advances onto the
-    // third WRITE (`steps == 2`, `budget == 2`).
+    // stores the spec for downstream dispatch. Phase-2b G12-D widening:
+    // `subgraph_for_spec` now walks `spec.primitives` (the unified
+    // per-primitive storage), constructing each declared primitive in
+    // order, chaining successive nodes via `"next"` edges, and capping
+    // with a terminal RESPOND. Each WRITE primitive returns the `"ok"`
+    // evaluator edge on success; the walker steps through the chain one
+    // WRITE at a time, bumping the cumulative `steps` counter once per
+    // primitive, and the Inv-8 guard (`steps >= budget`) trips when the
+    // cursor advances onto the third WRITE (`steps == 2`, `budget == 2`).
     //
     // (`SubgraphSpec::iterate` is a Phase-1 no-op and a single
     // `respond` is terminal-on-first-step, so neither is sufficient
-    // to trip the cumulative-step guard. Chained EMIT primitives
-    // would also step correctly, but `subgraph_for_spec` currently
-    // ignores `spec.primitives` and walks only `write_specs` — that
-    // type-widening is owned by G12-D, not this group.)
+    // to trip the cumulative-step guard.)
     let sg = SubgraphSpec::builder()
         .handler_id("budget:exhauster")
         .write(|w| w.label("budget_step_0"))
