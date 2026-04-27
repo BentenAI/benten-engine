@@ -1,0 +1,114 @@
+name: napi vitest
+
+# Phase-2b orchestrator carry — closes the systemic finding surfaced by the
+# G12-A mini-review (g12a-cr-1 / 2026-04-26): `bindings/napi/test/*.test.ts`
+# was not executed by any CI workflow. The scaffolder cold-install
+# (`ci.yml::cold-install`) runs `npm test` against the GENERATED test-project
+# only — the napi crate's own vitest companion suite (the test files that
+# pin runtime behaviour at the napi boundary, e.g.
+# `budget_exhausted_napi_round_trip.test.ts`) was uncovered. Future companion
+# tests would silently rot if they broke post-merge.
+#
+# This workflow builds the napi cdylib + runs `npx vitest run` against
+# `bindings/napi/test/`. INFORMATIONAL ONLY — NOT in the required-check set
+# per `.addl/phase-2a/ci-decisions-2026-04-22.md` §4 (the required set is
+# frozen for Phase-2a close + Phase-2b only adds gates that ci-decisions
+# explicitly elevates). Single Linux x86_64 leg is sufficient for a smoke;
+# matrix expansion is a one-line addition if Ben wants per-platform coverage
+# later.
+#
+# Trigger discipline (METH-13): `pull_request` + `push` on main + manual.
+# No `paths:` filter — the gate is cheap (~3-4 min) and every PR touching
+# the engine surface can affect the napi boundary indirectly.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  napi-vitest:
+    name: napi vitest (linux-x86_64, informational)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          key: napi-vitest
+
+      - name: Install Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+
+      - name: Build napi cdylib (napi build --platform --release)
+        # Dispatches `napi build --platform --release` via
+        # `bindings/napi/package.json::scripts.build`. The `--platform` flag
+        # makes napi-rs emit the platform-suffixed `benten-napi.linux-x64.node`
+        # in `bindings/napi/`, which is exactly where the test files'
+        # `loadNative()` helper resolves via
+        # `require('../benten-napi.${platform}-${arch}.node')`.
+        #
+        # No extra `--features` flag is needed: `bindings/napi/Cargo.toml`
+        # already pulls `envelope-cache-test-grade` + `iteration-budget-
+        # test-grade` from `benten-engine` in its default dep features list
+        # (lines 57). The cdylib that ships in the published binary
+        # therefore includes the same test-grade hooks the vitest suite
+        # exercises (`testingSetIterationBudget`, `cache_put`/`cache_get`).
+        # If a future PR drops those gates from the napi default closure,
+        # the symbol-presence assertion in
+        # `budget_exhausted_napi_round_trip.test.ts` (`expect(typeof
+        # engine.testingSetIterationBudget).toBe("function")`) catches it.
+        #
+        # Matches the pattern in `ci.yml::cold-install` — `npm run build`
+        # is the only sanctioned dispatch (`npx @napi-rs/cli build` does
+        # not work because the binary is named `napi`, not `@napi-rs/cli`).
+        run: |
+          cd bindings/napi
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Run vitest suite (green-phase subset)
+        # SCOPED to the test files whose R5 implementation has landed:
+        #   - `index.test.ts`                              (G8-A smoke; green)
+        #   - `test/budget_exhausted_napi_round_trip.test.ts` (G12-A; green)
+        #
+        # Excluded (Phase-2b R3 red-phase carries — implementation has NOT
+        # landed; the symbols they reference do not exist in
+        # `bindings/napi/src/` yet):
+        #   - `test/sandbox_napi_bridge.test.ts`               (G7 R5 carry)
+        #   - `test/stream_napi_async_iterator_back_pressure.test.ts` (G6 R5)
+        #
+        # When G6 + G7 R5 land, drop the explicit file list and revert to
+        # `npm test` to pick the whole suite up automatically. The carry
+        # tests are intentionally tracked at `.addl/phase-2b/r3-*` and will
+        # flip green as part of those groups' R5 fix-passes — wiring this
+        # workflow now closes the systemic finding (any FUTURE companion
+        # napi vitest test in `bindings/napi/test/` will be discovered the
+        # moment its R5 implementation lands and the explicit allowlist
+        # below is updated to include it).
+        #
+        # The platform-suffixed `.node` artifact built in the previous step
+        # is resolved via the test files' `loadNative()` helper
+        # (`require('../benten-napi.${platform}-${arch}.node')`).
+        run: |
+          cd bindings/napi
+          npx vitest run index.test.ts test/budget_exhausted_napi_round_trip.test.ts
