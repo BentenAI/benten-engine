@@ -97,6 +97,16 @@ benten-ivm = { path = "../benten-ivm" }
 blake3 = { workspace = true }
 thiserror = { workspace = true }
 
+# Phase 2b G7-A — `engine.toml` workspace-config parser. Reads at
+# `Engine::open` time; failed parsing surfaces as `E_ENGINE_CONFIG_INVALID`.
+# Per Ben's G7-A brief addition: deployment-level override of D24
+# wallclock defaults (and future engine knobs). serde + serde derive
+# wired through here for the EngineConfig schema; toml drives the
+# workspace-root parse.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+toml = { workspace = true }
+serde = { workspace = true }
+
 [dev-dependencies]
 criterion = { workspace = true }
 tempfile = { workspace = true }

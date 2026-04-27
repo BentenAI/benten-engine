@@ -26,6 +26,11 @@ pub mod emit;
 pub mod iterate;
 pub mod read;
 pub mod respond;
+// Phase 2b G7-A SANDBOX executor. Compile-time wasm32-disabled per
+// sec-pre-r1-05 (the executor depends on `wasmtime` which doesn't
+// build for wasm32).
+#[cfg(not(target_arch = "wasm32"))]
+pub mod sandbox;
 pub mod stream;
 pub mod subscribe;
 pub mod transform;
