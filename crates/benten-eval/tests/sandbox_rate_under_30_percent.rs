@@ -32,6 +32,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 #![allow(unused_imports, dead_code, unused_variables)]
+#![allow(clippy::cast_precision_loss)]
 #![cfg(feature = "phase_2b_landed")]
 
 /// Single classifier result for one paper-prototype handler.

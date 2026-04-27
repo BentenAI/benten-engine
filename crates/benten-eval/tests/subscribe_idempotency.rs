@@ -9,6 +9,7 @@
 //! Phase 2b TDD red-phase. Owner: R3-A.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::clone_on_copy)]
 
 use benten_eval::primitives::subscribe::{
     ChangeKind, ChangePattern, SubscribeCursor, SubscriptionSpec,
@@ -23,7 +24,6 @@ use std::num::NonZeroUsize;
 /// event N times produces ONE write (Inv-13 immutability + handler-boundary
 /// dedup combined). Replay-safe by construction.
 #[test]
-#[ignore = "Phase 2b G6-A pending — handler idempotency under replay"]
 fn subscribe_handler_idempotency_replay_safe_via_inv_13() {
     let handler = testing_register_idempotent_write_handler();
 

@@ -72,11 +72,13 @@ use core::fmt;
 
 use serde::{Deserialize, Serialize};
 
+pub mod change_stream;
 pub mod edge;
 pub mod subgraph;
 pub mod value;
 pub mod version;
 
+pub use change_stream::{ChangeEvent, ChangeKind, ChangeStream, SubscriberId};
 pub use edge::Edge;
 pub use subgraph::{
     ATTRIBUTION_PROPERTY_KEY, NodeHandle, OperationNode, PrimitiveKind, Subgraph, SubgraphBuilder,
@@ -414,6 +416,35 @@ impl Cid {
         ))?;
         let decoded = base32_lower_nopad_decode(body)?;
         Cid::from_bytes(&decoded)
+    }
+
+    /// Phase-2b G6-A test helper: mint a fresh distinct CID for SUBSCRIBE
+    /// red-phase fixtures. Always returns a distinct value within a process
+    /// (uses a monotonic counter hashed into the digest); cross-process
+    /// distinctness is NOT guaranteed and is irrelevant to the tests.
+    /// Gated on `cfg(any(test, feature = "testing"))` so production builds
+    /// cannot accidentally mint synthetic CIDs.
+    #[cfg(any(test, feature = "testing"))]
+    #[must_use]
+    pub fn sample_for_test() -> Self {
+        use core::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(1);
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let mut digest = [0u8; 32];
+        digest[..8].copy_from_slice(&n.to_le_bytes());
+        Self::from_blake3_digest(digest)
+    }
+
+    /// Phase-2b G6-A test helper: mint a deterministic Cid keyed by `label`.
+    /// Two calls with the same label produce the same CID (BLAKE3 of the
+    /// label bytes); two calls with different labels produce different CIDs
+    /// with overwhelming probability. Gated on test/feature like
+    /// [`Cid::sample_for_test`].
+    #[cfg(any(test, feature = "testing"))]
+    #[must_use]
+    pub fn sample_for_label(label: &str) -> Self {
+        let digest = blake3::hash(label.as_bytes());
+        Self::from_blake3_digest(*digest.as_bytes())
     }
 
     /// Base32 (RFC 4648, lowercase, no padding) string accessor, prefixed with

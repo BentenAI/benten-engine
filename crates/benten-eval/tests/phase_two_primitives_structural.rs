@@ -51,15 +51,15 @@ fn sandbox_primitive_subgraph_passes_structural_validation() {
 
 /// Covered by `covers_error_code[E_PRIMITIVE_NOT_IMPLEMENTED]` entry
 /// "wait_stream_subscribe_sandbox_call_time_error".
+///
+/// Phase-2b G6-A scope update: STREAM + SUBSCRIBE now have real
+/// executors (wave-4 G6-A landing). The remaining Phase-2 primitives
+/// (`Wait`, `Sandbox`) keep their `PrimitiveNotImplemented` reject
+/// posture until G3 / G7 land their executors.
 #[test]
-fn wait_stream_subscribe_sandbox_call_time_error() {
+fn wait_sandbox_call_time_error() {
     let mut ev = Evaluator::new();
-    for kind in [
-        PrimitiveKind::Wait,
-        PrimitiveKind::Stream,
-        PrimitiveKind::Subscribe,
-        PrimitiveKind::Sandbox,
-    ] {
+    for kind in [PrimitiveKind::Wait, PrimitiveKind::Sandbox] {
         let op = OperationNode::new(format!("{kind:?}"), kind);
         let err = ev
             .step(&op, &NullHost)

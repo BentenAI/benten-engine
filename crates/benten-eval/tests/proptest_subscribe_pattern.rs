@@ -8,6 +8,14 @@
 //! Phase 2b TDD red-phase. Owner: R3-A.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::useless_conversion,
+    clippy::no_effect_underscore_binding,
+    clippy::clone_on_copy,
+    clippy::stable_sort_primitive,
+    clippy::match_like_matches_macro,
+    clippy::unnested_or_patterns
+)]
 
 use benten_eval::testing::{testing_run_pattern_proptest, testing_run_replay_dedup_proptest};
 use proptest::prelude::*;
@@ -18,7 +26,6 @@ proptest! {
     /// Random pattern × random WRITE; assert NO event delivered for
     /// non-matching anchor.
     #[test]
-    #[ignore = "Phase 2b G6-A pending — pattern false-positive guard"]
     fn prop_subscribe_pattern_no_false_positives(
         pattern_glob in "[a-z/]{1,12}",
         anchor_label in "[a-z/]{1,16}",
@@ -35,7 +42,6 @@ proptest! {
     /// Replay event N times; handler observes deliver-once-then-drop
     /// semantics at the handler boundary. D5 + stream-d5-1.
     #[test]
-    #[ignore = "Phase 2b G6-A pending — D5 dedup proptest"]
     fn prop_subscribe_seq_dedup_at_handler_idempotent_under_replay(
         seq in 0u64..1024,
         replay_count in 1usize..16,

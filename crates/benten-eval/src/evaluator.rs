@@ -28,8 +28,8 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use crate::{
-    AttributionFrame, EvalError, Evaluator, OperationNode, PrimitiveHost, StepResult, Subgraph,
-    TraceStep,
+    AttributionFrame, ErrorCode, EvalError, Evaluator, OperationNode, PrimitiveHost, StepResult,
+    Subgraph, TraceStep,
 };
 
 /// G5-B-ii: runtime attribution threading (Inv-14). Stamps an
@@ -345,12 +345,37 @@ impl Evaluator {
                 }
                 Err(e) => {
                     if collect_trace {
+                        // G6-A trace-preservation pattern (D1 carry from
+                        // G12-A): when STREAM backpressure / closed-by-peer
+                        // errors fire, emit a `TraceStep::BudgetExhausted
+                        // { budget_type: "stream_backpressure", ... }` row
+                        // BEFORE the typed-error Step row so consumers
+                        // observe the exhaustion in-band, mirroring the
+                        // `inv_8_iteration` flow above. The path's terminal
+                        // element is the node whose primitive surfaced the
+                        // typed error.
+                        let code = e.code();
+                        if matches!(
+                            code,
+                            ErrorCode::StreamBackpressureDropped
+                                | ErrorCode::StreamClosedByPeer
+                                | ErrorCode::StreamProducerWallclockExceeded
+                        ) {
+                            let mut path = walk_path.clone();
+                            path.push(op.id.clone());
+                            trace.push(TraceStep::BudgetExhausted {
+                                budget_type: "stream_backpressure",
+                                consumed: 0,
+                                limit: 0,
+                                path,
+                            });
+                        }
                         trace.push(TraceStep::Step {
                             node_id: op.id.clone(),
                             duration_us: elapsed,
                             inputs: Value::Null,
                             outputs: Value::Null,
-                            error: Some(e.code()),
+                            error: Some(code),
                             attribution: attribution.clone(),
                         });
                     }

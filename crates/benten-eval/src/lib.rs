@@ -41,6 +41,8 @@ pub mod host_error;
 pub mod invariants;
 pub mod primitives;
 pub mod subgraph_ext;
+#[cfg(any(test, feature = "testing"))]
+pub mod testing;
 pub mod time_source;
 
 pub use subgraph_ext::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};

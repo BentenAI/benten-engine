@@ -8,6 +8,14 @@
 //! Phase 2b TDD red-phase. Owner: R3-A.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::useless_conversion,
+    clippy::no_effect_underscore_binding,
+    clippy::clone_on_copy,
+    clippy::stable_sort_primitive,
+    clippy::match_like_matches_macro,
+    clippy::unnested_or_patterns
+)]
 
 use benten_eval::testing::{
     testing_run_concurrent_subscribe_event_ordering, testing_run_concurrent_subscribe_no_event_loss,
@@ -21,7 +29,6 @@ proptest! {
     /// Random concurrent writes across N anchors × M subscribers → per-anchor
     /// ordering at every subscriber. D5 within-key strict.
     #[test]
-    #[ignore = "Phase 2b G6-A pending — D5 per-anchor ordering"]
     fn prop_subscribe_event_ordering(
         anchor_count in 1usize..6,
         subscriber_count in 1usize..4,
@@ -55,7 +62,6 @@ proptest! {
     /// allowed, since handler-boundary dedup is internal). At-least-once
     /// internal (D5).
     #[test]
-    #[ignore = "Phase 2b G6-A pending — D5 at-least-once internal"]
     fn prop_subscribe_no_event_loss_under_concurrent_writes(
         writer_count in 2usize..6,
         writes_per_writer in 1usize..32,

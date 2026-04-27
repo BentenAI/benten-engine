@@ -26,6 +26,8 @@ pub mod emit;
 pub mod iterate;
 pub mod read;
 pub mod respond;
+pub mod stream;
+pub mod subscribe;
 pub mod transform;
 pub mod wait;
 pub mod write;
@@ -63,12 +65,18 @@ pub fn dispatch(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResu
         PrimitiveKind::Branch => branch::execute(op),
         PrimitiveKind::Iterate => iterate::execute(op, host),
         PrimitiveKind::Call => call::execute(op, host),
-        // Phase-2 primitives — structural validation accepts them, the
-        // executor rejects at call time.
-        PrimitiveKind::Wait
-        | PrimitiveKind::Stream
-        | PrimitiveKind::Subscribe
-        | PrimitiveKind::Sandbox => Err(EvalError::PrimitiveNotImplemented(op.kind)),
+        // Phase-2b G6-A: STREAM + SUBSCRIBE land their executors here.
+        // STREAM allocates a sink + source pair; SUBSCRIBE registers a
+        // change-event subscription against the engine's ChangeStream
+        // port. Both return `Ok` immediately; runtime delivery is driven
+        // by the engine's IVM subscriber.
+        PrimitiveKind::Stream => stream::execute(op, host),
+        PrimitiveKind::Subscribe => subscribe::execute(op, host),
+        // Remaining Phase-2 primitives — structural validation accepts
+        // them; the executor rejects at call time until their wave lands.
+        PrimitiveKind::Wait | PrimitiveKind::Sandbox => {
+            Err(EvalError::PrimitiveNotImplemented(op.kind))
+        }
         // PrimitiveKind is `#[non_exhaustive]` (G12-C-cont relocation kept the
         // attribute for downstream-crate version-evolution discipline). Any
         // future variant added at the source-of-truth `benten-core` site

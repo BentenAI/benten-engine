@@ -8,6 +8,7 @@
 //! Phase 2b TDD red-phase. Owner: R3-A.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::clone_on_copy)]
 
 use benten_eval::primitives::subscribe::{
     ChangeKind, ChangePattern, SubscribeCursor, SubscriptionSpec,
@@ -21,7 +22,6 @@ use std::num::NonZeroUsize;
 /// Within-key (per anchor CID) ordering is STRICT. Concurrent writes to the
 /// same anchor MUST be delivered in commit order at every subscriber.
 #[test]
-#[ignore = "Phase 2b G6-A pending — D5 within-key strict"]
 fn subscribe_within_key_ordering_strict() {
     let spec = SubscriptionSpec {
         pattern: ChangePattern::AnchorPrefix("/ordering/".into()),
@@ -54,7 +54,6 @@ fn subscribe_within_key_ordering_strict() {
 /// interleave arbitrarily. Test only asserts that ALL events arrive,
 /// NOT that they arrive in any particular cross-anchor order.
 #[test]
-#[ignore = "Phase 2b G6-A pending — D5 cross-key unordered"]
 fn subscribe_cross_key_ordering_unordered_documented() {
     let spec = SubscriptionSpec {
         pattern: ChangePattern::AnchorPrefix("/cross/".into()),

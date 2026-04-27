@@ -8,6 +8,7 @@
 //! Phase 2b TDD red-phase. Owner: R3-A.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::clone_on_copy)]
 
 use benten_eval::primitives::subscribe::{
     ChangeKind, ChangePattern, SubscribeCursor, SubscriberId, SubscriptionSpec,
@@ -29,7 +30,6 @@ fn base_spec(cursor: SubscribeCursor) -> SubscriptionSpec {
 /// `Latest` cursor: subscriber starts at the NEXT event after registration;
 /// pre-registration events are LOST.
 #[test]
-#[ignore = "Phase 2b G6-A pending — D5 cursor Latest"]
 fn subscribe_cursor_latest_starts_at_next_event() {
     let anchor = benten_core::Cid::sample_for_test();
 
@@ -71,7 +71,6 @@ fn subscribe_cursor_latest_starts_at_next_event() {
 /// `Sequence(N)` cursor: subscriber resumes at explicit seq N; events with
 /// `seq < N` are skipped, events with `seq >= N` are delivered.
 #[test]
-#[ignore = "Phase 2b G6-A pending — D5 cursor Sequence"]
 fn subscribe_cursor_sequence_resumes_at_explicit_seq() {
     let anchor = benten_core::Cid::sample_for_test();
 
@@ -96,7 +95,6 @@ fn subscribe_cursor_sequence_resumes_at_explicit_seq() {
 /// `Persistent(SubscriberId)` cursor: engine assigns / persists `max_delivered_seq`
 /// keyed by subscriber-id; resumes from last-acked across restarts.
 #[test]
-#[ignore = "Phase 2b G6-A pending — D5 cursor Persistent"]
 fn subscribe_cursor_persistent_assigns_subscriber_id() {
     let id: SubscriberId = testing_make_persistent_subscription_id();
     let sub = testing_subscribe_register(base_spec(SubscribeCursor::Persistent(id.clone())))

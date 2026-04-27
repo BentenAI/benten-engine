@@ -7,6 +7,7 @@
 //! Phase 2b TDD red-phase. Owner: R3-A.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::clone_on_copy)]
 
 use benten_eval::primitives::subscribe::{ChangePattern, SubscribeCursor, SubscriptionSpec};
 use benten_eval::testing::{testing_active_subscription_count, testing_subscribe_register};
@@ -14,7 +15,6 @@ use std::num::NonZeroUsize;
 
 /// Cancelling a subscription releases its event-buffer + retention slot.
 #[test]
-#[ignore = "Phase 2b G6-A pending — unsubscribe cleanup"]
 fn subscribe_unsubscribe_releases_resources() {
     let baseline = testing_active_subscription_count();
 

@@ -14,6 +14,11 @@
 //! Phase 2b R3 TDD red-phase. Owner: R3-A (rust-test-writer-streaming).
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::useless_conversion,
+    clippy::no_effect_underscore_binding,
+    clippy::clone_on_copy
+)]
 
 // NOTE: imports reference the future surface; will fail to resolve until
 // G6-A scaffolds beyond the trait-signature stub already on main per
@@ -27,7 +32,6 @@ use std::num::NonZeroUsize;
 /// the napi async-iterator bridge in G6-B cannot move the sink across thread
 /// boundaries. This test is a static-shape assertion.
 #[test]
-#[ignore = "Phase 2b G6-A pending — depends on benten_eval::chunk_sink::ChunkSink"]
 fn chunk_sink_send_static_no_lifetime_thread() {
     fn assert_send_static<T: Send + 'static>() {}
     // The trait must be object-safe AND `Send + 'static` when boxed.
@@ -46,7 +50,6 @@ fn chunk_sink_send_static_no_lifetime_thread() {
 /// Capacity-zero sinks are rejected at construction time. streaming-systems
 /// stream-d4-1: `NonZeroUsize` enforcement at the constructor surface.
 #[test]
-#[ignore = "Phase 2b G6-A pending — depends on testing_make_chunk_sink with NonZeroUsize"]
 fn chunk_sink_capacity_zero_rejected_at_construction() {
     // The `NonZeroUsize::new(0)` call returns `None`; any caller attempting
     // to thread a zero-capacity literal cannot reach the constructor at all.
@@ -66,7 +69,6 @@ fn chunk_sink_capacity_zero_rejected_at_construction() {
 /// Default capacity is 16 chunks (D4-RESOLVED). Pinning the literal here so
 /// docs + DSL DX guides cannot drift.
 #[test]
-#[ignore = "Phase 2b G6-A pending — depends on benten_eval::chunk_sink::DEFAULT_CAPACITY"]
 fn chunk_sink_default_capacity_is_16() {
     assert_eq!(
         benten_eval::chunk_sink::DEFAULT_CAPACITY,
@@ -84,7 +86,6 @@ fn chunk_sink_default_capacity_is_16() {
 /// `bytes: Bytes` (or `Vec<u8>`), and `final_chunk: bool`. streaming-systems
 /// implementation_hint pin.
 #[test]
-#[ignore = "Phase 2b G6-A pending — depends on Chunk struct shape"]
 fn chunk_struct_carries_seq_bytes_final_marker() {
     let c = Chunk {
         seq: 0,

@@ -7,6 +7,7 @@
 //! Phase 2b TDD red-phase. Owner: R3-A.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::clone_on_copy)]
 
 use benten_errors::ErrorCode;
 use benten_eval::primitives::subscribe::{
@@ -20,7 +21,6 @@ use std::num::NonZeroUsize;
 /// Pattern label-matches anchor glob: `/posts/*` matches `/posts/123` but
 /// not `/comments/123`.
 #[test]
-#[ignore = "Phase 2b G6-A pending — pattern label glob"]
 fn subscribe_pattern_label_matches_anchor_glob() {
     let spec = SubscriptionSpec {
         pattern: ChangePattern::LabelGlob("/posts/*".into()),
@@ -55,7 +55,6 @@ fn subscribe_pattern_label_matches_anchor_glob() {
 /// Invalid pattern (e.g. malformed glob, empty pattern) → typed error at
 /// registration time.
 #[test]
-#[ignore = "Phase 2b G6-A pending — pattern invalid"]
 fn subscribe_pattern_invalid_fires_e_subscribe_pattern_invalid() {
     let spec = SubscriptionSpec {
         pattern: ChangePattern::LabelGlob("[unclosed-bracket".into()),
