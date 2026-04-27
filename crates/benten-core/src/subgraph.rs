@@ -566,7 +566,7 @@ impl PrimitiveKind {
             "SUBSCRIBE" => Ok(Self::Subscribe),
             "STREAM" => Ok(Self::Stream),
             other => Err(CoreError::Serialize(format!(
-                "unknown PrimitiveKind canonical tag: {other:?}"
+                "unknown PrimitiveKind canonical tag: {other}"
             ))),
         }
     }
