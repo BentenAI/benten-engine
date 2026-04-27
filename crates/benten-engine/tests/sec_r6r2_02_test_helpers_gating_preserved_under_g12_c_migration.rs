@@ -27,12 +27,11 @@ const ENGINE_RECOGNISED_GATES: &[&str] = &[
     "#[cfg(test)]",
 ];
 
-const EVAL_RECOGNISED_GATES: &[&str] = &[
-    r#"#[cfg(any(test, feature = "testing"))]"#,
-    r#"#[cfg(any(test, debug_assertions, feature = "testing"))]"#,
-    r"#[cfg(any(test, debug_assertions))]",
-    "#[cfg(test)]",
-];
+// G12-C-cont fix-pass A.7: `EVAL_RECOGNISED_GATES` removed alongside the
+// vacuous benten-eval/src scan — there are no `pub fn testing_*` declarations
+// in benten-eval/src for the gate set to apply to. Re-add this constant if a
+// future change introduces `pub fn testing_*` to benten-eval/src and the
+// scan needs to be reinstated.
 
 fn walk_src(dir: &Path, files: &mut Vec<PathBuf>) {
     let entries = match fs::read_dir(dir) {
@@ -128,11 +127,16 @@ fn every_pub_testing_helper_in_benten_engine_carries_cfg_test_or_test_helpers_ga
     assert_each_helper_is_cfg_gated(&engine_src, "benten-engine", ENGINE_RECOGNISED_GATES);
 }
 
-#[test]
-fn every_pub_testing_helper_in_benten_eval_carries_cfg_test_or_testing_feature_gate() {
-    let eval_src = workspace_root().join("crates/benten-eval/src");
-    assert_each_helper_is_cfg_gated(&eval_src, "benten-eval", EVAL_RECOGNISED_GATES);
-}
+// G12-C-cont fix-pass A.7 (cr-mr-g12c-cont-3): the prior
+// `every_pub_testing_helper_in_benten_eval_carries_cfg_test_or_testing_feature_gate`
+// test was vacuously true — zero `pub fn testing_*` declarations live in
+// `benten-eval/src` (verified by `grep -rn 'pub fn testing_\|pub(crate) fn
+// testing_' crates/benten-eval/src/` returning empty). The sec-r6r2-02
+// closures all live in `benten-engine/src` (covered by
+// `every_pub_testing_helper_in_benten_engine_*` above) and `benten-core/src`
+// (none currently). Deleting rather than chasing a meaningless surface; the
+// engine-side scan + the explicit-by-name parse-counter pin below are the
+// load-bearing checks.
 
 #[test]
 fn count_of_testing_helpers_post_migration_does_not_drop_to_zero() {
@@ -159,9 +163,21 @@ fn g12c_parse_counter_cfg_gate_preserved_post_subgraph_migration() {
     // sec-pre-r1-13 explicit named carry from R2 §1.9: pin that the Phase-2a
     // sec-r6r3-02 parse-counter cfg-gate (`testing_parse_counter` /
     // `testing_reset_parse_counter`) survives the Subgraph relocation.
-    let eval_src = workspace_root().join("crates/benten-eval/src");
+    //
+    // G12-C-cont fix-pass A.2 (sec-mr-g12c-cont-1): the actual parse-counter
+    // implementations live in `crates/benten-engine/src/engine_wait.rs` (the
+    // R6FP-R3 sec-r6r3-02 closure landed there, not in benten-eval). The
+    // pre-fix-pass version of this sub-test scanned `benten-eval/src` and
+    // therefore observed zero matches — vacuously passing while pretending to
+    // be load-bearing. Fix: scan the engine-side surface where the helpers
+    // actually live, using `ENGINE_RECOGNISED_GATES`. The broader engine-wide
+    // gate scan in `every_pub_testing_helper_in_benten_engine_carries_*` (line
+    // 125) ALSO covers these helpers; this sub-test pins them by name so a
+    // rename or accidental gate-strip surfaces with a precise diagnostic.
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR");
+    let engine_src = Path::new(&manifest_dir).join("src");
     let mut files = Vec::new();
-    walk_src(&eval_src, &mut files);
+    walk_src(&engine_src, &mut files);
     let mut found_parse_counter = false;
     for path in files {
         let content = fs::read_to_string(&path).expect("read");
@@ -176,12 +192,12 @@ fn g12c_parse_counter_cfg_gate_preserved_post_subgraph_migration() {
                 let preceding = &lines[start..i];
                 let has_gate = preceding.iter().any(|l| {
                     let t = l.trim();
-                    EVAL_RECOGNISED_GATES.contains(&t)
+                    ENGINE_RECOGNISED_GATES.contains(&t)
                 });
                 let file_module_gate = lines
                     .iter()
                     .take(20)
-                    .any(|l| EVAL_RECOGNISED_GATES.contains(&l.trim()));
+                    .any(|l| ENGINE_RECOGNISED_GATES.contains(&l.trim()));
                 assert!(
                     has_gate || file_module_gate,
                     "{}:{}: `{}` lost its cfg-gate post-G12-C-cont",
@@ -192,7 +208,12 @@ fn g12c_parse_counter_cfg_gate_preserved_post_subgraph_migration() {
             }
         }
     }
-    // It's fine if the parse-counter helpers don't exist (Phase-2b may not
-    // have shipped them yet) — but if they DO exist, they MUST be gated.
-    let _ = found_parse_counter; // intentionally tolerated
+    assert!(
+        found_parse_counter,
+        "expected to find at least one of `testing_parse_counter` / \
+         `testing_reset_parse_counter` in benten-engine/src — the post-fix-pass \
+         scan moved from benten-eval/src to benten-engine/src; if these helpers \
+         are intentionally retired, delete this sub-test rather than letting it \
+         silently pass"
+    );
 }

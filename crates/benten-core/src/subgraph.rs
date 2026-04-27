@@ -422,7 +422,7 @@ impl Subgraph {
     pub fn load_verified(bytes: &[u8]) -> Result<Self, CoreError> {
         let owned: CanonViewOwned = serde_ipld_dagcbor::from_slice(bytes)
             .map_err(|e| CoreError::Serialize(format!("{e}")))?;
-        Ok(Self::from_canonical_owned(owned))
+        Self::from_canonical_owned(owned)
     }
 
     /// G12-C: alias for [`Subgraph::load_verified`].
@@ -517,49 +517,57 @@ impl Subgraph {
         }
     }
 
-    fn from_canonical_owned(owned: CanonViewOwned) -> Self {
-        let nodes: Vec<OperationNode> = owned
+    fn from_canonical_owned(owned: CanonViewOwned) -> Result<Self, CoreError> {
+        let nodes: Result<Vec<OperationNode>, CoreError> = owned
             .nodes
             .into_iter()
-            .map(|n| OperationNode {
-                id: n.id,
-                kind: PrimitiveKind::from_canonical_tag(&n.kind),
-                properties: n.properties,
+            .map(|n| {
+                Ok(OperationNode {
+                    id: n.id,
+                    kind: PrimitiveKind::from_canonical_tag(&n.kind)?,
+                    properties: n.properties,
+                })
             })
             .collect();
+        let nodes = nodes?;
         let edges: Vec<(String, String, String)> = owned
             .edges
             .into_iter()
             .map(|e| (e.from, e.to, e.label))
             .collect();
-        Self {
+        Ok(Self {
             handler_id: owned.handler_id,
             nodes,
             edges,
             deterministic: owned.deterministic,
-        }
+        })
     }
 }
 
 impl PrimitiveKind {
-    /// Inverse of [`PrimitiveKind::canonical_tag`]. Unknown tag => `Read`
-    /// (defensive default; the caller's CID round-trip will fail anyway if
-    /// the encoder ever emits an unknown tag).
-    fn from_canonical_tag(tag: &str) -> Self {
+    /// Inverse of [`PrimitiveKind::canonical_tag`]. Unknown tag fails with
+    /// [`CoreError::Serialize`] — pre-fix-pass behaviour silently mapped
+    /// unknown tags to `Read`, masking encoder drift in the rare case that
+    /// the caller used `Subgraph::load_verified` (no-CID variant) where the
+    /// hash check could not reject corrupted-tag bytes first. Brought to
+    /// attention as G12-C-cont fix-pass A.8 (cag-mr-g12c-cont-2).
+    fn from_canonical_tag(tag: &str) -> Result<Self, CoreError> {
         match tag {
-            "READ" => Self::Read,
-            "WRITE" => Self::Write,
-            "TRANSFORM" => Self::Transform,
-            "BRANCH" => Self::Branch,
-            "ITERATE" => Self::Iterate,
-            "WAIT" => Self::Wait,
-            "CALL" => Self::Call,
-            "RESPOND" => Self::Respond,
-            "EMIT" => Self::Emit,
-            "SANDBOX" => Self::Sandbox,
-            "SUBSCRIBE" => Self::Subscribe,
-            "STREAM" => Self::Stream,
-            _ => Self::Read,
+            "READ" => Ok(Self::Read),
+            "WRITE" => Ok(Self::Write),
+            "TRANSFORM" => Ok(Self::Transform),
+            "BRANCH" => Ok(Self::Branch),
+            "ITERATE" => Ok(Self::Iterate),
+            "WAIT" => Ok(Self::Wait),
+            "CALL" => Ok(Self::Call),
+            "RESPOND" => Ok(Self::Respond),
+            "EMIT" => Ok(Self::Emit),
+            "SANDBOX" => Ok(Self::Sandbox),
+            "SUBSCRIBE" => Ok(Self::Subscribe),
+            "STREAM" => Ok(Self::Stream),
+            other => Err(CoreError::Serialize(format!(
+                "unknown PrimitiveKind canonical tag: {other:?}"
+            ))),
         }
     }
 }
@@ -957,18 +965,13 @@ impl SubgraphBuilder {
     }
 }
 
-impl NodeHandle {
-    /// Test-only constructor for the corruption-test path. The test produces
-    /// a Subgraph with a fixed minimal shape — the CID and canonical bytes
-    /// round-trip is verified by the test, which then tampers with the bytes
-    /// and expects `load_verified` to reject on the altered hash.
-    #[must_use]
-    pub fn build_validated_for_corruption_test(self) -> Subgraph {
-        Subgraph {
-            handler_id: "corruption_test".to_string(),
-            nodes: alloc::vec![OperationNode::new("r", PrimitiveKind::Read)],
-            edges: Vec::new(),
-            deterministic: false,
-        }
-    }
-}
+// G12-C-cont fix-pass A.5 (arch-mr-g12c-cont-3): the inherent
+// `build_validated_for_corruption_test` body that previously lived here on
+// `benten-core::NodeHandle` was deleted in favour of the eval-side
+// `NodeHandleExt::build_validated_for_corruption_test` extension trait
+// (`benten-eval/src/subgraph_ext.rs`). Per the G4-A C1 / sec-r6r2-02 precedent,
+// test-only construction surfaces should not be `pub` on benten-core without
+// a cfg-gate; consolidating into the eval-side extension trait keeps the
+// surface in one place + lets callsites import via `use benten_eval::NodeHandleExt;`
+// (which the only callsite — `crates/benten-eval/tests/invariants_9_10_12.rs`
+// — already does).
