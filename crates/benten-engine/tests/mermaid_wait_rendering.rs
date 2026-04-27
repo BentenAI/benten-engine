@@ -16,6 +16,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_engine::{Engine, SubgraphSpec};
+use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
 
 fn fresh_engine() -> (tempfile::TempDir, Engine) {
     let dir = tempfile::tempdir().unwrap();

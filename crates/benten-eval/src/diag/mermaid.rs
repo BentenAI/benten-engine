@@ -49,22 +49,12 @@ pub fn render(sg: &Subgraph) -> String {
     out
 }
 
-/// Primitive-kind label used in the rendered node.
+/// Primitive-kind label used in the rendered node. Delegates to
+/// `PrimitiveKind::canonical_tag` (relocated to benten-core under
+/// G12-C-cont) so the label set matches the canonical-bytes encoding tag
+/// set exactly.
 fn kind_label(k: PrimitiveKind) -> &'static str {
-    match k {
-        PrimitiveKind::Read => "READ",
-        PrimitiveKind::Write => "WRITE",
-        PrimitiveKind::Transform => "TRANSFORM",
-        PrimitiveKind::Branch => "BRANCH",
-        PrimitiveKind::Iterate => "ITERATE",
-        PrimitiveKind::Wait => "WAIT",
-        PrimitiveKind::Call => "CALL",
-        PrimitiveKind::Respond => "RESPOND",
-        PrimitiveKind::Emit => "EMIT",
-        PrimitiveKind::Sandbox => "SANDBOX",
-        PrimitiveKind::Subscribe => "SUBSCRIBE",
-        PrimitiveKind::Stream => "STREAM",
-    }
+    k.canonical_tag()
 }
 
 /// Produce a Mermaid-safe identifier (ASCII letters + digits + underscores).

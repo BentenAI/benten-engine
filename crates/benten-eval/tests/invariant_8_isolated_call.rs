@@ -30,6 +30,7 @@
 )]
 
 use benten_eval::{ErrorCode, Subgraph, SubgraphBuilder};
+use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
 
 /// Register a callee handler with a declared iteration-budget bound `callee_bound`.
 /// The caller subgraph under test invokes this handler.

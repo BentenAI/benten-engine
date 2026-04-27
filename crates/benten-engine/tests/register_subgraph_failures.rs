@@ -10,6 +10,7 @@
 
 use benten_engine::{Engine, EngineError, ErrorCode};
 use benten_eval::SubgraphBuilder;
+use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
 use tempfile::tempdir;
 
 fn fresh_engine() -> (Engine, tempfile::TempDir) {

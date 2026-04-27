@@ -15,6 +15,8 @@
 
 #![allow(clippy::unwrap_used)]
 
+use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
+
 use benten_eval::{
     EvalError, Evaluator, InvariantConfig, NullHost, OperationNode, PrimitiveKind, Subgraph,
 };

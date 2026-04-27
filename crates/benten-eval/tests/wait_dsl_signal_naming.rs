@@ -30,6 +30,7 @@
 use benten_core::Value;
 use benten_errors::ErrorCode;
 use benten_eval::SubgraphBuilder;
+use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
 use std::time::Duration;
 
 #[test]

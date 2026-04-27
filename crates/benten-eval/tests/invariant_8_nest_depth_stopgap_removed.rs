@@ -29,6 +29,7 @@
 )]
 
 use benten_eval::{ErrorCode, Subgraph, SubgraphBuilder};
+use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
 
 fn nested_iterates_with_max(
     n: usize,

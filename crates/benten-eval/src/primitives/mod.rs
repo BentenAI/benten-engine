@@ -69,5 +69,11 @@ pub fn dispatch(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResu
         | PrimitiveKind::Stream
         | PrimitiveKind::Subscribe
         | PrimitiveKind::Sandbox => Err(EvalError::PrimitiveNotImplemented(op.kind)),
+        // PrimitiveKind is `#[non_exhaustive]` (G12-C-cont relocation kept the
+        // attribute for downstream-crate version-evolution discipline). Any
+        // future variant added at the source-of-truth `benten-core` site
+        // surfaces here as `PrimitiveNotImplemented` until a dedicated
+        // executor lands.
+        _ => Err(EvalError::PrimitiveNotImplemented(op.kind)),
     }
 }

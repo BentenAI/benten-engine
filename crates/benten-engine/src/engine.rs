@@ -36,7 +36,9 @@ use std::sync::Arc;
 use benten_caps::{CapError, CapabilityPolicy};
 use benten_core::{Cid, Edge, Node, Value};
 use benten_errors::ErrorCode;
-use benten_eval::{InvariantConfig, PrimitiveHost, RegistrationError};
+use benten_eval::{
+    InvariantConfig, PrimitiveHost, RegistrationError, SubgraphBuilderExt, SubgraphExt,
+};
 use benten_graph::{ChangeEvent, GraphError, MutexExt, RedbBackend};
 
 use crate::builder::EngineBuilder;

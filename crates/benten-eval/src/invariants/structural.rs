@@ -67,7 +67,8 @@ pub fn validate_transform_expressions(sg: &Subgraph) -> Result<(), EvalError> {
 /// Validate a finalized [`Subgraph`] (the post-builder, post-edge-
 /// materialization form) against the structural invariants.
 ///
-/// Used by [`Subgraph::validate`](crate::Subgraph::validate) when the caller
+/// Used by `SubgraphExt::validate` (relocated to extension trait under
+/// G12-C-cont; see `crate::subgraph_ext`) when the caller
 /// already has a `Subgraph` (e.g. after round-tripping through storage).
 /// `SubgraphBuilder::build_validated` takes the richer builder-snapshot path
 /// via `validate_builder` (crate-private).
@@ -693,87 +694,19 @@ fn node_parallel_fanout(_n: &OperationNode) -> usize {
 
 /// Produce the canonical DAG-CBOR byte encoding of a subgraph.
 ///
-/// Nodes and edges are sorted before encoding so the resulting bytes depend
-/// only on the final set of nodes and edges, not on construction order. This
-/// is the key property Invariant 10 guarantees — two builders that produce
-/// the same final structure via different paths hash to the same CID.
+/// **Phase-2b G12-C-cont:** delegates to
+/// [`benten_core::canonical_subgraph_bytes`]. The encoding logic + CanonView
+/// schema live in `benten-core` alongside the relocated `Subgraph` type;
+/// this re-export preserves the legacy
+/// `benten_eval::invariants::canonical_subgraph_bytes` import path that
+/// `immutability.rs` and the registration-time `validate_subgraph` walk
+/// reach into.
 ///
 /// # Errors
 ///
 /// Returns [`CoreError::Serialize`] on DAG-CBOR failure.
 pub(crate) fn canonical_subgraph_bytes(sg: &Subgraph) -> Result<Vec<u8>, CoreError> {
-    // Project to serializable form. Nodes sorted by id + kind; edges by
-    // (from, to, label).
-    let mut nodes: Vec<CanonNode<'_>> = sg
-        .nodes
-        .iter()
-        .map(|n| CanonNode {
-            id: &n.id,
-            kind: kind_tag(n.kind),
-            properties: &n.properties,
-        })
-        .collect();
-    nodes.sort_by(|a, b| (a.id, a.kind).cmp(&(b.id, b.kind)));
-
-    let mut edges: Vec<CanonEdge<'_>> = sg
-        .edges
-        .iter()
-        .map(|(f, t, l)| CanonEdge {
-            from: f,
-            to: t,
-            label: l,
-        })
-        .collect();
-    edges.sort_by(|a, b| (a.from, a.to, a.label).cmp(&(b.from, b.to, b.label)));
-
-    let view = CanonView {
-        handler_id: &sg.handler_id,
-        nodes: &nodes,
-        edges: &edges,
-    };
-
-    // `serde_ipld_dagcbor` canonicalizes CBOR map keys (length-first sort)
-    // at encode time, so the on-wire bytes depend only on the post-sort
-    // node/edge order we enforced above.
-    serde_ipld_dagcbor::to_vec(&view).map_err(|e| CoreError::Serialize(format!("{e}")))
-}
-
-fn kind_tag(k: PrimitiveKind) -> &'static str {
-    match k {
-        PrimitiveKind::Read => "READ",
-        PrimitiveKind::Write => "WRITE",
-        PrimitiveKind::Transform => "TRANSFORM",
-        PrimitiveKind::Branch => "BRANCH",
-        PrimitiveKind::Iterate => "ITERATE",
-        PrimitiveKind::Wait => "WAIT",
-        PrimitiveKind::Call => "CALL",
-        PrimitiveKind::Respond => "RESPOND",
-        PrimitiveKind::Emit => "EMIT",
-        PrimitiveKind::Sandbox => "SANDBOX",
-        PrimitiveKind::Subscribe => "SUBSCRIBE",
-        PrimitiveKind::Stream => "STREAM",
-    }
-}
-
-#[derive(serde::Serialize)]
-struct CanonNode<'a> {
-    id: &'a str,
-    kind: &'static str,
-    properties: &'a BTreeMap<String, Value>,
-}
-
-#[derive(serde::Serialize)]
-struct CanonEdge<'a> {
-    from: &'a str,
-    to: &'a str,
-    label: &'a str,
-}
-
-#[derive(serde::Serialize)]
-struct CanonView<'a> {
-    handler_id: &'a str,
-    nodes: &'a [CanonNode<'a>],
-    edges: &'a [CanonEdge<'a>],
+    benten_core::canonical_subgraph_bytes(sg)
 }
 
 #[cfg(test)]

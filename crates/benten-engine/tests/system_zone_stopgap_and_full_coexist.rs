@@ -30,6 +30,7 @@
 )]
 
 use benten_eval::{ErrorCode, SubgraphBuilder};
+use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
 
 fn subgraph_writes_system_labelled_node()
 -> Result<benten_eval::Subgraph, benten_eval::RegistrationError> {

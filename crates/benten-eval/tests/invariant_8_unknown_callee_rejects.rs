@@ -16,6 +16,7 @@
 )]
 
 use benten_eval::{ErrorCode, SubgraphBuilder};
+use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
 
 #[test]
 fn invariant_8_unknown_callee_rejects_at_registration_non_isolated() {

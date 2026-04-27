@@ -31,6 +31,7 @@
 use benten_core::Value;
 use benten_errors::ErrorCode;
 use benten_eval::{MockTimeSource, Outcome, SubgraphBuilder, WaitOutcome, WaitResumeSignal};
+use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
 use std::time::Duration;
 
 fn wait_duration_subgraph(ms: u64) -> benten_eval::Subgraph {
