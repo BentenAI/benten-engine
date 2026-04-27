@@ -33,6 +33,11 @@ bench = false
 # compiles + runs cleanly. See `.addl/phase-2b/r3-consolidation.md` §4 +
 # qa-r4-02 / qa-r4-03.
 phase_2b_landed = []
+# `testing` exposes synthetic-fixture constructors (currently `Cid::sample_for_test`
+# + `Cid::sample_for_label`) used by Phase-2b G6-A SUBSCRIBE tests. Gated so
+# production builds cannot accidentally mint synthetic CIDs. Mirrors the
+# `benten-eval` `testing` feature shape.
+testing = []
 
 [dependencies]
 benten-errors = { workspace = true }

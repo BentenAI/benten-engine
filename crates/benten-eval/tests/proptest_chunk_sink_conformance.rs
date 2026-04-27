@@ -21,7 +21,6 @@ proptest! {
     /// in-memory-vec-based reference) MUST produce identical TraceStep
     /// sequences for the same handler input. phil-r1-4 conformance.
     #[test]
-    #[ignore = "Phase 2b G6-A pending — phil-r1-4 conformance"]
     fn prop_chunk_sink_traces_identical_across_conformant_sinks(
         chunk_count in 1usize..64,
         chunk_size in 1usize..256,

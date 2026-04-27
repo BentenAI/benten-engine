@@ -8,6 +8,7 @@
 //! Phase 2b TDD red-phase. Owner: R3-A.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::clone_on_copy)]
 
 use benten_eval::primitives::subscribe::{
     ChangeKind, ChangePattern, SubscribeCursor, SubscriptionSpec,
@@ -20,14 +21,13 @@ use std::num::NonZeroUsize;
 /// Subscribing user-visible: register a SUBSCRIBE; emit a matching WRITE
 /// (modeled as a ChangeEvent injection); assert handler observed delivery.
 #[test]
-#[ignore = "Phase 2b G6-A pending"]
 fn subscribe_user_visible_routes_change_events() {
     let spec = SubscriptionSpec {
         pattern: ChangePattern::AnchorPrefix("/posts/".into()),
         start_from: SubscribeCursor::Latest,
         delivery_buffer: NonZeroUsize::new(64).unwrap(),
     };
-    let mut sub = testing_subscribe_register(spec).expect("register");
+    let sub = testing_subscribe_register(spec).expect("register");
 
     let anchor = benten_core::Cid::sample_for_test();
     let event = testing_make_change_event(
@@ -48,7 +48,6 @@ fn subscribe_user_visible_routes_change_events() {
 /// delivering the SAME `seq` twice → handler invoked exactly once.
 /// D5-RESOLVED exactly-once-at-handler.
 #[test]
-#[ignore = "Phase 2b G6-A pending — D5 dedup"]
 fn subscribe_seq_dedup_at_handler_boundary() {
     let spec = SubscriptionSpec {
         pattern: ChangePattern::AnchorPrefix("/dedup/".into()),

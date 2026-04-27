@@ -31,7 +31,7 @@ diag = []
 # enabled). Downstream consumers that want the helper in a release-ish
 # profile (e.g. an integration-test binary built under `--release`) must
 # opt in by enabling this feature explicitly.
-testing = []
+testing = ["benten-core/testing"]
 # `phase_2b_landed` gates compilation of Phase 2b R3 red-phase test files
 # whose `use` statements reference R5-pending APIs (`benten_eval::chunk_sink`,
 # `benten_eval::sandbox`, `benten_eval::testing::testing_*`, etc.). Default
@@ -61,6 +61,11 @@ benten-errors = { workspace = true }
 benten-caps = { path = "../benten-caps" }
 blake3 = { workspace = true }
 serde = { workspace = true }
+# G6-A SUBSCRIBE testing helpers: `make_change_event` accepts a
+# `serde_json::Value` payload so red-phase tests can spell `json!({...})`
+# inline. Used by the `testing` feature surface; the runtime hot path
+# carries opaque `Vec<u8>` payloads.
+serde_json = { workspace = true }
 serde_ipld_dagcbor = { workspace = true }
 thiserror = { workspace = true }
 

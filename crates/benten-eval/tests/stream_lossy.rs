@@ -7,6 +7,11 @@
 //! Phase 2b TDD red-phase. Owner: R3-A.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+// G6-A `Chunk.bytes: Vec<u8>` deliberately accepts `vec![..].into()` so a
+// future migration to the `bytes` crate stays a one-liner; the explicit
+// `.into()` doubles as a marker and is intentional even when current type
+// is identity.
+#![allow(clippy::useless_conversion)]
 
 use benten_errors::ErrorCode;
 use benten_eval::chunk_sink::{Chunk, ChunkSinkError, SendOutcome};
@@ -17,7 +22,6 @@ use std::num::NonZeroUsize;
 /// AND the trace records `E_STREAM_BACKPRESSURE_DROPPED` per dropped chunk
 /// (loud-by-default per benten-philosophy concern).
 #[test]
-#[ignore = "Phase 2b G6-A pending"]
 fn stream_lossy_mode_try_send_emits_e_stream_backpressure_dropped_in_trace() {
     let cap = NonZeroUsize::new(2).unwrap();
     let (mut sink, _src) = testing_make_chunk_sink_lossy(cap);

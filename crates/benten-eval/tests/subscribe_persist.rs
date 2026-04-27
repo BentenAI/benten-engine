@@ -9,6 +9,7 @@
 //! Phase 2b TDD red-phase. Owner: R3-A.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::clone_on_copy)]
 
 use benten_errors::ErrorCode;
 use benten_eval::primitives::subscribe::{
@@ -33,7 +34,6 @@ fn anchor_prefix_spec(id: SubscriberId) -> SubscriptionSpec {
 /// SuspensionStore (G12-E generalization per streaming-systems
 /// cross-cutting-2).
 #[test]
-#[ignore = "Phase 2b G6-A pending — D5 + G12-E SuspensionStore"]
 fn subscribe_persistent_cursor_max_delivered_seq_persists_to_suspension_store() {
     let store = testing_make_suspension_store_in_memory();
     let id = testing_make_persistent_subscription_id();
@@ -65,7 +65,6 @@ fn subscribe_persistent_cursor_max_delivered_seq_persists_to_suspension_store() 
 /// At-least-once internally; on restart the engine MAY redeliver events
 /// already acked. Handler-boundary dedup (D5) drops duplicates.
 #[test]
-#[ignore = "Phase 2b G6-A pending — D5 at-least-once + handler-boundary dedup"]
 fn subscribe_at_least_once_internal_under_restart_dedups_at_handler() {
     let store = testing_make_suspension_store_in_memory();
     let id = testing_make_persistent_subscription_id();
@@ -110,7 +109,6 @@ fn subscribe_at_least_once_internal_under_restart_dedups_at_handler() {
 /// Retention window 1000 events OR 24h (whichever first) is documented +
 /// honored by the engine. Doc-drift pin.
 #[test]
-#[ignore = "Phase 2b G6-A pending — D5 retention window literal"]
 fn subscribe_retention_window_1000_events_or_24h_documented() {
     use benten_eval::primitives::subscribe::config::{
         DEFAULT_RETENTION_DURATION, DEFAULT_RETENTION_EVENTS,
@@ -129,7 +127,6 @@ fn subscribe_retention_window_1000_events_or_24h_documented() {
 /// Subscriber returns after retention exhausted → typed error
 /// `E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED`. streaming-systems stream-d5-1.
 #[test]
-#[ignore = "Phase 2b G6-A pending — D5 retention exceed"]
 fn subscribe_retention_window_exceeded_fires_e_subscribe_replay_window_exceeded() {
     let store = testing_make_suspension_store_in_memory();
     let id = testing_make_persistent_subscription_id();

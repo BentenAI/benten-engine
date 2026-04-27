@@ -9,6 +9,14 @@
 //! Phase 2b TDD red-phase. Owner: R3-A.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::useless_conversion,
+    clippy::no_effect_underscore_binding,
+    clippy::clone_on_copy,
+    clippy::stable_sort_primitive,
+    clippy::match_like_matches_macro,
+    clippy::unnested_or_patterns
+)]
 
 use benten_eval::chunk_sink::{Chunk, SendOutcome};
 use benten_eval::testing::{testing_make_chunk_sink, testing_run_lossless_stream_with_schedule};
@@ -26,7 +34,6 @@ proptest! {
     /// Random producer rates × random consumer pause schedules → received
     /// `seq` set MUST equal sent `seq` set in lossless mode.
     #[test]
-    #[ignore = "Phase 2b G6-A pending — D4 lossless invariant"]
     fn prop_stream_no_chunk_loss_under_backpressure(
         chunk_count in 1usize..256,
         cap in 1usize..32,
@@ -49,7 +56,6 @@ proptest! {
     /// (Per-producer monotonicity is the contract; cross-producer interleave
     /// is permitted.)
     #[test]
-    #[ignore = "Phase 2b G6-A pending — D4 chunk order under concurrent producers"]
     fn prop_stream_chunk_order_preserved_under_concurrent_consumers(
         producer_count in 2usize..6,
         chunks_per_producer in 1usize..64,
@@ -61,7 +67,7 @@ proptest! {
 
         // Group received chunks by producer-id; per-group seq must be monotonic.
         for producer_id in 0..producer_count {
-            let mut group_seqs: Vec<u64> = outcome
+            let group_seqs: Vec<u64> = outcome
                 .received
                 .iter()
                 .filter(|c| c.producer_id == producer_id)
@@ -72,10 +78,12 @@ proptest! {
                 s.sort();
                 s
             };
-            prop_assert_eq!(
-                group_seqs, sorted,
+            // G6-A: macro expansion can't capture surrounding-scope vars,
+            // so format outside the macro literal.
+            let msg = format!(
                 "producer {producer_id} per-stream seq must be monotonic at consumer"
             );
+            prop_assert_eq!(group_seqs, sorted, "{}", msg);
         }
     }
 }
@@ -90,7 +98,6 @@ proptest! {
     /// caps at MAX rather than silently rolling to 0.
     /// streaming-systems concerns_for_r3 — wraparound regression guard.
     #[test]
-    #[ignore = "Phase 2b G6-A pending — seq wraparound guard"]
     fn prop_stream_seq_u64_no_wraparound_at_boundary(
         start in (u64::MAX - 16)..u64::MAX,
         n in 1usize..8,
@@ -126,7 +133,12 @@ proptest! {
             }
         }
         if !overflow_observed {
-            prop_assert_eq!(received, sent);
+            // G6-A test-author follow-up: `prop_assert_eq!` moves both
+            // arguments into the macro, so we clone before the second
+            // `received.iter()` borrow. Cheap because received is a
+            // bounded-length `Vec<u64>` (n < 16 per the proptest range).
+            let received_for_assert = received.clone();
+            prop_assert_eq!(received_for_assert, sent);
             prop_assert!(received.iter().all(|s| *s >= start), "no wraparound to 0");
         }
     }

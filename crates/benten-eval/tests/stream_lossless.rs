@@ -7,6 +7,11 @@
 //! Phase 2b TDD red-phase. Owner: R3-A.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::useless_conversion,
+    clippy::no_effect_underscore_binding,
+    clippy::clone_on_copy
+)]
 
 use benten_eval::chunk_sink::{Chunk, SendOutcome};
 use benten_eval::testing::testing_make_chunk_sink;
@@ -16,7 +21,6 @@ use std::time::Duration;
 /// Default mode (lossless) NEVER drops chunks, even under back-pressure
 /// (slow / paused consumer). Producer awaits available capacity.
 #[test]
-#[ignore = "Phase 2b G6-A pending"]
 fn stream_default_mode_never_drops() {
     let cap = NonZeroUsize::new(4).unwrap();
     let (mut sink, mut src) = testing_make_chunk_sink(cap);
@@ -26,21 +30,22 @@ fn stream_default_mode_never_drops() {
     // full; total received == total sent.
     let producer = std::thread::spawn(move || {
         for i in 0..100u64 {
-            loop {
-                let outcome = sink.send(Chunk {
-                    seq: i,
-                    bytes: vec![(i & 0xff) as u8].into(),
-                    final_chunk: false,
-                });
-                match outcome {
-                    Ok(SendOutcome::Accepted) => break,
-                    Ok(SendOutcome::BackpressureCredit(_)) => {
-                        // Lossless mode: retry until accepted; never drop.
-                        std::thread::sleep(Duration::from_micros(100));
-                    }
-                    Ok(SendOutcome::Closed) => panic!("unexpected closed"),
-                    Err(e) => panic!("unexpected send error: {e:?}"),
-                }
+            // G6-A landed: lossless `send` returns `Accepted` or
+            // `BackpressureCredit(remaining)` on success (the chunk is
+            // already in the buffer); only `Closed` / `Err(_)` indicate
+            // the chunk was NOT delivered. The R3-A producer-loop's
+            // "retry on BackpressureCredit" pattern double-pushed and
+            // deadlocked at the cap=4 boundary — fix is to treat both
+            // success arms identically and move to the next chunk.
+            let outcome = sink.send(Chunk {
+                seq: i,
+                bytes: vec![(i & 0xff) as u8].into(),
+                final_chunk: false,
+            });
+            match outcome {
+                Ok(SendOutcome::Accepted | SendOutcome::BackpressureCredit(_)) => {}
+                Ok(SendOutcome::Closed) => panic!("unexpected closed"),
+                Err(e) => panic!("unexpected send error: {e:?}"),
             }
         }
         sink.close().unwrap();

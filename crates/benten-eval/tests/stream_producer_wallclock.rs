@@ -9,6 +9,11 @@
 //! Phase 2b TDD red-phase. Owner: R3-A.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::useless_conversion,
+    clippy::no_effect_underscore_binding,
+    clippy::clone_on_copy
+)]
 
 use benten_errors::ErrorCode;
 use benten_eval::chunk_sink::{Chunk, ChunkSinkError};
@@ -19,7 +24,6 @@ use std::time::Duration;
 /// Consumer never drains; producer's wallclock budget eventually fires
 /// `E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED`.
 #[test]
-#[ignore = "Phase 2b G6-A pending — producer wallclock budget"]
 fn stream_producer_wallclock_kills_blocked_send() {
     let cap = NonZeroUsize::new(1).unwrap();
     let budget = Duration::from_millis(50);

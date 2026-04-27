@@ -204,6 +204,40 @@ pub enum ErrorCode {
     /// typing addendum). Fires when a resumed WAIT declares a `signal_shape`
     /// and the incoming signal payload fails the declared schema.
     WaitSignalShapeMismatch,
+    // ---------------------------------------------------------------
+    // Phase 2b G6-A — STREAM + SUBSCRIBE error codes (D4 + D5).
+    // ---------------------------------------------------------------
+    /// STREAM lossy mode: `try_send` on a saturated buffer dropped a chunk.
+    /// Fires loudly via the trace surface — never silent. D4-RESOLVED.
+    StreamBackpressureDropped,
+    /// STREAM consumer disconnected mid-stream; producer's next send fails
+    /// closed. D4-RESOLVED.
+    StreamClosedByPeer,
+    /// STREAM lossless producer's wallclock budget elapsed while awaiting
+    /// available capacity. Kills permanently-stalled sends. streaming-systems
+    /// implementation hint per D4-RESOLVED.
+    StreamProducerWallclockExceeded,
+    /// SUBSCRIBE delivery-time failure (capability re-check denied at
+    /// delivery, downstream consumer dropped, etc.). D5-RESOLVED cap-check
+    /// at delivery.
+    SubscribeDeliveryFailed,
+    /// SUBSCRIBE registration rejected: pattern is malformed (unclosed glob
+    /// bracket, empty pattern, etc.). Fires at registration time.
+    SubscribePatternInvalid,
+    /// SUBSCRIBE persistent cursor drifted past the bounded retention window
+    /// (1000 events OR 24h, whichever first). Subscriber must restart from
+    /// `Latest`. D5 strengthening item 4.
+    SubscribeCursorLost,
+    /// SUBSCRIBE persistent cursor restart attempted past the retention
+    /// window. Equivalent surface to `SubscribeCursorLost` but raised at
+    /// re-registration time rather than mid-stream. streaming-systems
+    /// stream-d5-1.
+    SubscribeReplayWindowExceeded,
+    /// SUBSCRIBE Inv-11 violation: user code attempted to subscribe to a
+    /// `system:*` zone label. Distinct catalog code so SUBSCRIBE-side
+    /// system-zone breaches are diagnostically separable from WRITE-side
+    /// breaches (`InvSystemZone` covers writes).
+    Inv11SystemZoneRead,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -327,6 +361,14 @@ impl ErrorCode {
             ErrorCode::CapChainTooDeep => "E_CAP_CHAIN_TOO_DEEP",
             ErrorCode::CapScopeLoneStarRejected => "E_CAP_SCOPE_LONE_STAR_REJECTED",
             ErrorCode::WaitSignalShapeMismatch => "E_WAIT_SIGNAL_SHAPE_MISMATCH",
+            ErrorCode::StreamBackpressureDropped => "E_STREAM_BACKPRESSURE_DROPPED",
+            ErrorCode::StreamClosedByPeer => "E_STREAM_CLOSED_BY_PEER",
+            ErrorCode::StreamProducerWallclockExceeded => "E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED",
+            ErrorCode::SubscribeDeliveryFailed => "E_SUBSCRIBE_DELIVERY_FAILED",
+            ErrorCode::SubscribePatternInvalid => "E_SUBSCRIBE_PATTERN_INVALID",
+            ErrorCode::SubscribeCursorLost => "E_SUBSCRIBE_CURSOR_LOST",
+            ErrorCode::SubscribeReplayWindowExceeded => "E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED",
+            ErrorCode::Inv11SystemZoneRead => "E_INV_11_SYSTEM_ZONE_READ",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -421,7 +463,20 @@ impl ErrorCode {
             | ErrorCode::InvAttribution
             | ErrorCode::InvIterateBudget
             | ErrorCode::NotImplemented
-            | ErrorCode::SubsystemDisabled => Some("ON_ERROR"),
+            | ErrorCode::SubsystemDisabled
+            // G6-A STREAM + SUBSCRIBE runtime failures route through the
+            // ON_ERROR catch-all. STREAM consumer-disconnects, dropped
+            // chunks, wallclock-exceeded, and SUBSCRIBE delivery-time
+            // failures all terminate along the conventional error edge;
+            // pattern-invalid + cursor-lost surface at registration /
+            // restart and have no in-graph routing analog (see `None` arm
+            // below).
+            | ErrorCode::StreamBackpressureDropped
+            | ErrorCode::StreamClosedByPeer
+            | ErrorCode::StreamProducerWallclockExceeded
+            | ErrorCode::SubscribeDeliveryFailed
+            | ErrorCode::SubscribeCursorLost
+            | ErrorCode::Inv11SystemZoneRead => Some("ON_ERROR"),
 
             // Registration-time invariants — surface at REGISTER time, not
             // along a primitive edge. No routing.
@@ -446,6 +501,11 @@ impl ErrorCode {
             // Builder-time configuration errors — surface at builder, not
             // along a primitive edge.
             ErrorCode::NoCapabilityPolicyConfigured | ErrorCode::ProductionRequiresCaps => None,
+
+            // SUBSCRIBE registration / restart failures — surface at the
+            // registration call site, not along a primitive edge. Mirrors
+            // the resume-protocol family above.
+            ErrorCode::SubscribePatternInvalid | ErrorCode::SubscribeReplayWindowExceeded => None,
 
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
@@ -518,6 +578,14 @@ impl ErrorCode {
             "E_CAP_CHAIN_TOO_DEEP" => ErrorCode::CapChainTooDeep,
             "E_CAP_SCOPE_LONE_STAR_REJECTED" => ErrorCode::CapScopeLoneStarRejected,
             "E_WAIT_SIGNAL_SHAPE_MISMATCH" => ErrorCode::WaitSignalShapeMismatch,
+            "E_STREAM_BACKPRESSURE_DROPPED" => ErrorCode::StreamBackpressureDropped,
+            "E_STREAM_CLOSED_BY_PEER" => ErrorCode::StreamClosedByPeer,
+            "E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED" => ErrorCode::StreamProducerWallclockExceeded,
+            "E_SUBSCRIBE_DELIVERY_FAILED" => ErrorCode::SubscribeDeliveryFailed,
+            "E_SUBSCRIBE_PATTERN_INVALID" => ErrorCode::SubscribePatternInvalid,
+            "E_SUBSCRIBE_CURSOR_LOST" => ErrorCode::SubscribeCursorLost,
+            "E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED" => ErrorCode::SubscribeReplayWindowExceeded,
+            "E_INV_11_SYSTEM_ZONE_READ" => ErrorCode::Inv11SystemZoneRead,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }

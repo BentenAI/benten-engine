@@ -140,17 +140,18 @@ fn call_primitive_error_edges_include_on_limit_denied_error() {
 
 /// Covered by `covers_error_code[E_PRIMITIVE_NOT_IMPLEMENTED]` entry
 /// "phase_two_primitives_return_not_implemented_at_call_time".
+///
+/// Phase-2b G6-A scope update: STREAM + SUBSCRIBE now have real executors
+/// (wave-4 G6-A landing), so they no longer return
+/// `PrimitiveNotImplemented`. The remaining Phase-2 primitives (`Wait`,
+/// `Sandbox`) keep their `PrimitiveNotImplemented` reject posture until G3
+/// / G7 land their executors.
 #[test]
 fn phase_two_primitives_return_not_implemented_at_call_time() {
     use benten_eval::{EvalError, Evaluator, NullHost, OperationNode};
 
     let mut ev = Evaluator::new();
-    for kind in [
-        PrimitiveKind::Wait,
-        PrimitiveKind::Stream,
-        PrimitiveKind::Subscribe,
-        PrimitiveKind::Sandbox,
-    ] {
+    for kind in [PrimitiveKind::Wait, PrimitiveKind::Sandbox] {
         let op = OperationNode::new(format!("op_{kind:?}"), kind);
         let err = ev
             .step(&op, &NullHost)

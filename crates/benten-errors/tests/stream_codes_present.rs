@@ -13,7 +13,6 @@ use benten_errors::ErrorCode;
 
 /// `E_STREAM_BACKPRESSURE_DROPPED` round-trips through `as_str` / `from_str`.
 #[test]
-#[ignore = "Phase 2b G6-A pending — depends on ErrorCode::StreamBackpressureDropped variant"]
 fn e_stream_backpressure_dropped_routed_through_typed_error_catalog() {
     let code = ErrorCode::StreamBackpressureDropped;
     assert_eq!(code.as_str(), "E_STREAM_BACKPRESSURE_DROPPED");
@@ -25,7 +24,6 @@ fn e_stream_backpressure_dropped_routed_through_typed_error_catalog() {
 
 /// `E_STREAM_CLOSED_BY_PEER` round-trips.
 #[test]
-#[ignore = "Phase 2b G6-A pending — depends on ErrorCode::StreamClosedByPeer variant"]
 fn e_stream_closed_by_peer_routed_through_typed_error_catalog() {
     let code = ErrorCode::StreamClosedByPeer;
     assert_eq!(code.as_str(), "E_STREAM_CLOSED_BY_PEER");
@@ -38,7 +36,6 @@ fn e_stream_closed_by_peer_routed_through_typed_error_catalog() {
 /// `E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED` round-trips. Companion to the
 /// `stream_producer_wallclock_kills_blocked_send` runtime test.
 #[test]
-#[ignore = "Phase 2b G6-A pending — depends on ErrorCode::StreamProducerWallclockExceeded variant"]
 fn e_stream_producer_wallclock_exceeded_routed_through_typed_error_catalog() {
     let code = ErrorCode::StreamProducerWallclockExceeded;
     assert_eq!(code.as_str(), "E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED");

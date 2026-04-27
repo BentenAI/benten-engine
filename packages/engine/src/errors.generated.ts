@@ -102,6 +102,14 @@ export const CATALOG_CODES = [
   "E_CAP_CHAIN_TOO_DEEP",
   "E_CAP_SCOPE_LONE_STAR_REJECTED",
   "E_WAIT_SIGNAL_SHAPE_MISMATCH",
+  "E_STREAM_BACKPRESSURE_DROPPED",
+  "E_STREAM_CLOSED_BY_PEER",
+  "E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED",
+  "E_SUBSCRIBE_DELIVERY_FAILED",
+  "E_SUBSCRIBE_PATTERN_INVALID",
+  "E_SUBSCRIBE_CURSOR_LOST",
+  "E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED",
+  "E_INV_11_SYSTEM_ZONE_READ",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -1138,5 +1146,125 @@ export class EWaitSignalShapeMismatch extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_WAIT_SIGNAL_SHAPE_MISMATCH", "When a WAIT declares `signal_shape: Some(schema)`, a resume with a payload that fails schema validation is rejected BEFORE any downstream TRANSFORM runs. Either widen the schema, re-send with the correct shape, or drop the `signal_shape` to keep the untyped path.", message, context);
     this.name = "EWaitSignalShapeMismatch";
+  }
+}
+
+/**
+ * E_STREAM_BACKPRESSURE_DROPPED
+ *
+ * Thrown at: `benten_eval::chunk_sink::BoundedSink::try_send` (lossy variant); evaluator emits a `TraceStep::BudgetExhausted { budget_type: "stream_backpressure" }` row BEFORE propagating the typed error per the D1 trace-preservation pattern.
+ * Message template: "STREAM lossy mode dropped a chunk on a saturated buffer"
+ */
+export class EStreamBackpressureDropped extends BentenError {
+  static readonly code = "E_STREAM_BACKPRESSURE_DROPPED";
+  static readonly fixHint = "STREAM was created with lossy semantics (`try_send` on a full buffer drops rather than awaits). The drop fires loudly via the trace surface — never silent. Either switch to lossless `send`, increase the sink capacity, or pace the producer. D4-RESOLVED. Phase-2b G6-A.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_STREAM_BACKPRESSURE_DROPPED", "STREAM was created with lossy semantics (`try_send` on a full buffer drops rather than awaits). The drop fires loudly via the trace surface — never silent. Either switch to lossless `send`, increase the sink capacity, or pace the producer. D4-RESOLVED. Phase-2b G6-A.", message, context);
+    this.name = "EStreamBackpressureDropped";
+  }
+}
+
+/**
+ * E_STREAM_CLOSED_BY_PEER
+ *
+ * Thrown at: `benten_eval::chunk_sink::BoundedSink::send` / `try_send`.
+ * Message template: "STREAM consumer disconnected; producer cannot deliver chunk"
+ */
+export class EStreamClosedByPeer extends BentenError {
+  static readonly code = "E_STREAM_CLOSED_BY_PEER";
+  static readonly fixHint = "The downstream `ChunkSource` was dropped (consumer detached, transport closed) before the producer's next send arrived. Resume the consumer, or terminate the producer. D4-RESOLVED. Phase-2b G6-A.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_STREAM_CLOSED_BY_PEER", "The downstream `ChunkSource` was dropped (consumer detached, transport closed) before the producer's next send arrived. Resume the consumer, or terminate the producer. D4-RESOLVED. Phase-2b G6-A.", message, context);
+    this.name = "EStreamClosedByPeer";
+  }
+}
+
+/**
+ * E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED
+ *
+ * Thrown at: `benten_eval::chunk_sink::BoundedSink::send` (wallclock-budgeted variant).
+ * Message template: "STREAM producer wallclock budget elapsed while awaiting available capacity"
+ */
+export class EStreamProducerWallclockExceeded extends BentenError {
+  static readonly code = "E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED";
+  static readonly fixHint = "A lossless STREAM producer was created with a wallclock budget (`make_chunk_sink_with_wallclock`) and the budget elapsed while a slow consumer kept the buffer full. Either widen the budget, increase capacity, accelerate the consumer, or accept lossy mode. Kills permanently-stalled sends per streaming-systems implementation hint. D4-RESOLVED. Phase-2b G6-A.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED", "A lossless STREAM producer was created with a wallclock budget (`make_chunk_sink_with_wallclock`) and the budget elapsed while a slow consumer kept the buffer full. Either widen the budget, increase capacity, accelerate the consumer, or accept lossy mode. Kills permanently-stalled sends per streaming-systems implementation hint. D4-RESOLVED. Phase-2b G6-A.", message, context);
+    this.name = "EStreamProducerWallclockExceeded";
+  }
+}
+
+/**
+ * E_SUBSCRIBE_DELIVERY_FAILED
+ *
+ * Thrown at: `benten_eval::primitives::subscribe::ActiveSubscription::inject` (delivery-time cap re-check).
+ * Message template: "SUBSCRIBE delivery failed (capability re-check denied at delivery)"
+ */
+export class ESubscribeDeliveryFailed extends BentenError {
+  static readonly code = "E_SUBSCRIBE_DELIVERY_FAILED";
+  static readonly fixHint = "D5-RESOLVED requires capability re-intersection at every delivery boundary. A previously-granted READ cap was revoked mid-stream; the subscription auto-cancels. Re-grant the cap and re-register the subscription. Phase-2b G6-A.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SUBSCRIBE_DELIVERY_FAILED", "D5-RESOLVED requires capability re-intersection at every delivery boundary. A previously-granted READ cap was revoked mid-stream; the subscription auto-cancels. Re-grant the cap and re-register the subscription. Phase-2b G6-A.", message, context);
+    this.name = "ESubscribeDeliveryFailed";
+  }
+}
+
+/**
+ * E_SUBSCRIBE_PATTERN_INVALID
+ *
+ * Thrown at: `benten_eval::primitives::subscribe::ChangePattern::validate` (registration entry).
+ * Message template: "SUBSCRIBE pattern is malformed (empty pattern, unclosed glob bracket, etc.)"
+ */
+export class ESubscribePatternInvalid extends BentenError {
+  static readonly code = "E_SUBSCRIBE_PATTERN_INVALID";
+  static readonly fixHint = "Pattern shape failed validation at registration. Fix the glob (balance `[` / `]`), provide a non-empty pattern, or switch from `LabelGlob` to `AnchorPrefix`. Phase-2b G6-A.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SUBSCRIBE_PATTERN_INVALID", "Pattern shape failed validation at registration. Fix the glob (balance `[` / `]`), provide a non-empty pattern, or switch from `LabelGlob` to `AnchorPrefix`. Phase-2b G6-A.", message, context);
+    this.name = "ESubscribePatternInvalid";
+  }
+}
+
+/**
+ * E_SUBSCRIBE_CURSOR_LOST
+ *
+ * Thrown at: `benten_eval::primitives::subscribe::ActiveSubscription::inject` (mid-stream retention check).
+ * Message template: "SUBSCRIBE cursor lost (retention window exhausted mid-stream)"
+ */
+export class ESubscribeCursorLost extends BentenError {
+  static readonly code = "E_SUBSCRIBE_CURSOR_LOST";
+  static readonly fixHint = "D5 strengthening item 4 caps persistent-cursor retention at 1000 events OR 24h, whichever first. Beyond the bound, the subscription auto-cancels and the subscriber must restart from `Latest`. Adjust event-emission rate, drain promptly, or accept the bounded-replay contract. Phase-2b G6-A.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SUBSCRIBE_CURSOR_LOST", "D5 strengthening item 4 caps persistent-cursor retention at 1000 events OR 24h, whichever first. Beyond the bound, the subscription auto-cancels and the subscriber must restart from `Latest`. Adjust event-emission rate, drain promptly, or accept the bounded-replay contract. Phase-2b G6-A.", message, context);
+    this.name = "ESubscribeCursorLost";
+  }
+}
+
+/**
+ * E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED
+ *
+ * Thrown at: `benten_eval::primitives::subscribe::register_inner` (`Persistent` cursor re-registration).
+ * Message template: "SUBSCRIBE persistent cursor restart attempted past the retention window"
+ */
+export class ESubscribeReplayWindowExceeded extends BentenError {
+  static readonly code = "E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED";
+  static readonly fixHint = "Equivalent surface to `E_SUBSCRIBE_CURSOR_LOST` raised at re-registration time rather than mid-stream. The persisted `max_delivered_seq` falls outside the retained event window; re-register with `start_from: Latest` to resume from the next published event. streaming-systems stream-d5-1. Phase-2b G6-A.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED", "Equivalent surface to `E_SUBSCRIBE_CURSOR_LOST` raised at re-registration time rather than mid-stream. The persisted `max_delivered_seq` falls outside the retained event window; re-register with `start_from: Latest` to resume from the next published event. streaming-systems stream-d5-1. Phase-2b G6-A.", message, context);
+    this.name = "ESubscribeReplayWindowExceeded";
+  }
+}
+
+/**
+ * E_INV_11_SYSTEM_ZONE_READ
+ *
+ * Thrown at: `benten_eval::primitives::subscribe::ChangePattern::validate` (registration entry).
+ * Message template: "SUBSCRIBE pattern names a `system:*` zone (Inv-11)"
+ */
+export class EInv11SystemZoneRead extends BentenError {
+  static readonly code = "E_INV_11_SYSTEM_ZONE_READ";
+  static readonly fixHint = "User code attempted to subscribe to a `system:*` system-zone label. Distinct catalog code so SUBSCRIBE-side breaches are diagnostically separable from WRITE-side breaches (`E_INV_SYSTEM_ZONE` covers writes). Subscribe to a non-system pattern, or, for engine-internal observation, use a privileged path. Phase-2b G6-A.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_INV_11_SYSTEM_ZONE_READ", "User code attempted to subscribe to a `system:*` system-zone label. Distinct catalog code so SUBSCRIBE-side breaches are diagnostically separable from WRITE-side breaches (`E_INV_SYSTEM_ZONE` covers writes). Subscribe to a non-system pattern, or, for engine-internal observation, use a privileged path. Phase-2b G6-A.", message, context);
+    this.name = "EInv11SystemZoneRead";
   }
 }

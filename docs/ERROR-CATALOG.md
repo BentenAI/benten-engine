@@ -650,6 +650,70 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** WAIT executor resume path (G3-B DX signal-payload typing). The integration test at `crates/benten-engine/tests/integration/wait_signal_shape_optional_typing.rs` exercises the surface; the production firing site is reserved alongside the broader G3-B DX typing landing (drift-detector reachability is `ignore` until then).
 - **Phase:** 2a
 
+### E_STREAM_BACKPRESSURE_DROPPED
+
+- **Message:** "STREAM lossy mode dropped a chunk on a saturated buffer"
+- **Context:** `{ seq: u64, capacity: usize }`
+- **Fix:** STREAM was created with lossy semantics (`try_send` on a full buffer drops rather than awaits). The drop fires loudly via the trace surface — never silent. Either switch to lossless `send`, increase the sink capacity, or pace the producer. D4-RESOLVED. Phase-2b G6-A.
+- **Thrown at:** `benten_eval::chunk_sink::BoundedSink::try_send` (lossy variant); evaluator emits a `TraceStep::BudgetExhausted { budget_type: "stream_backpressure" }` row BEFORE propagating the typed error per the D1 trace-preservation pattern.
+- **Phase:** 2b
+
+### E_STREAM_CLOSED_BY_PEER
+
+- **Message:** "STREAM consumer disconnected; producer cannot deliver chunk"
+- **Context:** `{ seq: u64 }`
+- **Fix:** The downstream `ChunkSource` was dropped (consumer detached, transport closed) before the producer's next send arrived. Resume the consumer, or terminate the producer. D4-RESOLVED. Phase-2b G6-A.
+- **Thrown at:** `benten_eval::chunk_sink::BoundedSink::send` / `try_send`.
+- **Phase:** 2b
+
+### E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED
+
+- **Message:** "STREAM producer wallclock budget elapsed while awaiting available capacity"
+- **Context:** `{ elapsed_ms: u64, budget_ms: u64 }`
+- **Fix:** A lossless STREAM producer was created with a wallclock budget (`make_chunk_sink_with_wallclock`) and the budget elapsed while a slow consumer kept the buffer full. Either widen the budget, increase capacity, accelerate the consumer, or accept lossy mode. Kills permanently-stalled sends per streaming-systems implementation hint. D4-RESOLVED. Phase-2b G6-A.
+- **Thrown at:** `benten_eval::chunk_sink::BoundedSink::send` (wallclock-budgeted variant).
+- **Phase:** 2b
+
+### E_SUBSCRIBE_DELIVERY_FAILED
+
+- **Message:** "SUBSCRIBE delivery failed (capability re-check denied at delivery)"
+- **Context:** `{ subscriber_id: SubscriberId, anchor_cid: Cid }`
+- **Fix:** D5-RESOLVED requires capability re-intersection at every delivery boundary. A previously-granted READ cap was revoked mid-stream; the subscription auto-cancels. Re-grant the cap and re-register the subscription. Phase-2b G6-A.
+- **Thrown at:** `benten_eval::primitives::subscribe::ActiveSubscription::inject` (delivery-time cap re-check).
+- **Phase:** 2b
+
+### E_SUBSCRIBE_PATTERN_INVALID
+
+- **Message:** "SUBSCRIBE pattern is malformed (empty pattern, unclosed glob bracket, etc.)"
+- **Context:** `{ pattern: string }`
+- **Fix:** Pattern shape failed validation at registration. Fix the glob (balance `[` / `]`), provide a non-empty pattern, or switch from `LabelGlob` to `AnchorPrefix`. Phase-2b G6-A.
+- **Thrown at:** `benten_eval::primitives::subscribe::ChangePattern::validate` (registration entry).
+- **Phase:** 2b
+
+### E_SUBSCRIBE_CURSOR_LOST
+
+- **Message:** "SUBSCRIBE cursor lost (retention window exhausted mid-stream)"
+- **Context:** `{ subscriber_id: SubscriberId, delivered_count: usize }`
+- **Fix:** D5 strengthening item 4 caps persistent-cursor retention at 1000 events OR 24h, whichever first. Beyond the bound, the subscription auto-cancels and the subscriber must restart from `Latest`. Adjust event-emission rate, drain promptly, or accept the bounded-replay contract. Phase-2b G6-A.
+- **Thrown at:** `benten_eval::primitives::subscribe::ActiveSubscription::inject` (mid-stream retention check).
+- **Phase:** 2b
+
+### E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED
+
+- **Message:** "SUBSCRIBE persistent cursor restart attempted past the retention window"
+- **Context:** `{ subscriber_id: SubscriberId }`
+- **Fix:** Equivalent surface to `E_SUBSCRIBE_CURSOR_LOST` raised at re-registration time rather than mid-stream. The persisted `max_delivered_seq` falls outside the retained event window; re-register with `start_from: Latest` to resume from the next published event. streaming-systems stream-d5-1. Phase-2b G6-A.
+- **Thrown at:** `benten_eval::primitives::subscribe::register_inner` (`Persistent` cursor re-registration).
+- **Phase:** 2b
+
+### E_INV_11_SYSTEM_ZONE_READ
+
+- **Message:** "SUBSCRIBE pattern names a `system:*` zone (Inv-11)"
+- **Context:** `{ pattern: string }`
+- **Fix:** User code attempted to subscribe to a `system:*` system-zone label. Distinct catalog code so SUBSCRIBE-side breaches are diagnostically separable from WRITE-side breaches (`E_INV_SYSTEM_ZONE` covers writes). Subscribe to a non-system pattern, or, for engine-internal observation, use a privileged path. Phase-2b G6-A.
+- **Thrown at:** `benten_eval::primitives::subscribe::ChangePattern::validate` (registration entry).
+- **Phase:** 2b
+
 ## Extending the catalog
 
 When adding a new error:
