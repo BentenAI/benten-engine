@@ -16,6 +16,7 @@
 )]
 
 use benten_eval::{ErrorCode, RegistrationError, Subgraph, SubgraphBuilder};
+use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
 
 /// Build a 3-node chain A -> B -> C. Valid DAG.
 fn chain_dag() -> Subgraph {

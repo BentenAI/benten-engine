@@ -21,14 +21,17 @@ bench = false
 
 [features]
 # `phase_2b_landed` gates compilation of Phase 2b R3-followup red-phase test
-# files that import R5-pending APIs. G12-C lands the `Subgraph` + `SubgraphBuilder`
-# core-side surface partially (see `crates/benten-core/src/lib.rs` Subgraph
-# docstring re. deferred full-type relocation); the gate stays in place for
-# the canonical-bytes-shape-match + no-residual-eval-Subgraph + sec-r6 carry
-# tests that wait on the deferred follow-on. G12-D will use the same gate
-# for the `SubgraphSpec.primitives` widened-shape tests. Default OFF so the
-# CI required-check fleet (which does NOT enable this feature) compiles +
-# runs cleanly. See `.addl/phase-2b/r3-consolidation.md` §4 + qa-r4-02 / qa-r4-03.
+# files that import R5-pending APIs. G12-C-cont (Phase 2b R6 A1 closure)
+# completed the `Subgraph` + `SubgraphBuilder` + `OperationNode` +
+# `PrimitiveKind` + `NodeHandle` type relocation from `benten-eval` to
+# `benten-core` (see `crates/benten-core/src/subgraph.rs`); the
+# canonical-bytes-shape-match + no-residual-eval-Subgraph + sec-r6 carry
+# tests that the brief un-ignored now compile and run unconditionally.
+# The gate stays in place for the remaining Phase-2b R3-followup tests
+# (e.g. `SubgraphSpec.primitives` widened-shape under G12-D). Default OFF
+# so the CI required-check fleet (which does NOT enable this feature)
+# compiles + runs cleanly. See `.addl/phase-2b/r3-consolidation.md` §4 +
+# qa-r4-02 / qa-r4-03.
 phase_2b_landed = []
 
 [dependencies]

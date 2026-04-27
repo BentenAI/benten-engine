@@ -73,15 +73,18 @@ phase_2b_landed = []
 #
 # `phase_2a_pending_apis` gates the WAIT-stack-inspection / closure-style
 # DSL / `call_with_ticking_mono_clock` / `testing_reput_subgraph_as_user`
-# test files (currently 9 across `tests/` + `tests/integration/`) whose
+# test files (currently 8 across `tests/` + `tests/integration/`) whose
 # bodies reach into APIs wider than the R3 consolidation stubs. R5 G2-B /
 # G3-B / G9-A landed their respective APIs but the gate stayed because
 # downstream R6 work that completes the WAIT-related test bodies is still
-# pending. G12-C addresses the `SubgraphBuilder` arm of the original
-# rationale (see `crates/benten-core/src/lib.rs` Subgraph docstring) but
-# the WAIT / closure-DSL arms remain — so the feature stays. The next
-# Phase-2b R6 wave can audit per-file and lapse the gate as the WAIT
-# bodies fill in.
+# pending.
+#
+# G12-C-cont (Phase 2b R6 A1 closure) addressed the original
+# `SubgraphBuilder` arm of this gate by completing the type relocation
+# from `benten-eval` to `benten-core` (see `crates/benten-core/src/
+# subgraph.rs`). The WAIT / closure-DSL arms remain — so the feature
+# stays. The next Phase-2b R6 wave can audit per-file and lapse the
+# gate as the WAIT bodies fill in.
 phase_2a_pending_apis = []
 
 [dependencies]

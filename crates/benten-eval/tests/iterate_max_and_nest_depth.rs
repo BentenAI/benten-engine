@@ -19,6 +19,7 @@
 )]
 
 use benten_eval::SubgraphBuilder;
+use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
 
 /// Build a subgraph with `n` levels of nested ITERATEs.
 fn nested_iterates(n: usize) -> Result<benten_eval::Subgraph, benten_eval::RegistrationError> {

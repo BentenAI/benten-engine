@@ -73,10 +73,15 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 
 pub mod edge;
+pub mod subgraph;
 pub mod value;
 pub mod version;
 
 pub use edge::Edge;
+pub use subgraph::{
+    ATTRIBUTION_PROPERTY_KEY, NodeHandle, OperationNode, PrimitiveKind, Subgraph, SubgraphBuilder,
+    canonical_subgraph_bytes,
+};
 pub use value::Value;
 
 /// Phase 2a ucca-9 / arch-r1-2 frozen shape — lifted into `benten-core` so
@@ -106,75 +111,6 @@ pub enum WriteAuthority {
 impl Default for WriteAuthority {
     fn default() -> Self {
         WriteAuthority::User
-    }
-}
-
-/// Content-addressed Subgraph type (G12-C partial migration).
-///
-/// This is the **core-side opaque shape** consumed by the DAG-CBOR round-trip
-/// path (`Subgraph::to_dagcbor` / `Subgraph::from_dagcbor` /
-/// `Subgraph::load_verified_with_cid`). The shape carries the
-/// `handler_id` (handler-registration identity) plus the `deterministic`
-/// flag (Invariant-9 declaration) under a length-first canonical DAG-CBOR
-/// schema; both fields participate in the CID computation.
-///
-/// # Migration status (G12-C, 2026-04-25)
-///
-/// G12-C is shipped here as a **partial migration**: the core-side type
-/// retains the Phase-2a stub shape (the `{handler_id, deterministic}` pair
-/// pinned by `tests/benten_core_subgraph_canonical_bytes_match_phase_2a_stub_shape.rs`)
-/// and gains the `to_dagcbor` / `from_dagcbor` API aliases that the
-/// un-skipped `tests/subgraph_deterministic_dagcbor.rs` round-trip pins.
-/// The **full type relocation** — moving the eval-side `Subgraph` body
-/// (with its `Vec<OperationNode>` + `Vec<edges>` + cross-cutting eval-side
-/// inherent methods such as `validate` / `cid` / `to_mermaid` /
-/// `cumulative_budget_for_*_for_test`) into this crate — is **deferred**
-/// because Rust's "no inherent impls on foreign types" rule turns a
-/// surface-level type relocation into a many-thousand-LOC cascade across
-/// 88+ `build_validated*` callsites and the eval `invariants` module
-/// (~2,000 LOC) that the eval-side Subgraph methods reach into. That
-/// follow-on is tracked under §7a "benten-core Subgraph migration" and
-/// should be re-scoped at the next Phase-2b R6 wave with explicit
-/// allowance for the cross-crate refactor surface.
-///
-/// Today the eval-side `Subgraph` (in `benten-eval/src/lib.rs`) is the
-/// **production** type used by registration, dispatch, validation, and
-/// IVM; this core-side type is the storage-layer round-trip carrier.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Subgraph {
-    handler_id: alloc::string::String,
-    deterministic: bool,
-}
-
-impl Subgraph {
-    /// Construct an empty Subgraph for test fixtures.
-    #[must_use]
-    pub fn empty_for_test(handler_id: impl Into<alloc::string::String>) -> Self {
-        Self {
-            handler_id: handler_id.into(),
-            deterministic: false,
-        }
-    }
-
-    /// The handler id this Subgraph was registered under.
-    #[must_use]
-    pub fn handler_id(&self) -> &str {
-        &self.handler_id
-    }
-
-    /// Content-addressed CID.
-    ///
-    /// The CID is BLAKE3 over the canonical DAG-CBOR bytes, so a round-trip
-    /// through [`Subgraph::to_dag_cbor`] + [`Subgraph::load_verified`]
-    /// recomputes the identical CID — the integrity invariant the graph-
-    /// layer `load_subgraph_verified` path depends on.
-    ///
-    /// # Errors
-    /// Returns [`CoreError::Serialize`] on encode failure.
-    pub fn cid(&self) -> Result<Cid, CoreError> {
-        let bytes = self.to_dag_cbor()?;
-        let digest = blake3::hash(&bytes);
-        Ok(Cid::from_blake3_digest(*digest.as_bytes()))
     }
 }
 
@@ -326,205 +262,9 @@ impl Node {
     }
 }
 
-impl Subgraph {
-    /// G12-C: mark the Subgraph deterministic.
-    pub fn set_deterministic(&mut self, value: bool) {
-        self.deterministic = value;
-    }
-
-    /// G12-C: DAG-CBOR encode. The bytes produced here are the
-    /// hash-input for [`Subgraph::cid`].
-    ///
-    /// # Errors
-    /// Returns [`CoreError::Serialize`] on encode failure.
-    pub fn to_dag_cbor(&self) -> Result<Vec<u8>, CoreError> {
-        serde_ipld_dagcbor::to_vec(self).map_err(|e| CoreError::Serialize(format_err(&e)))
-    }
-
-    /// G12-C alias for [`Subgraph::to_dag_cbor`]. The shorter name (no
-    /// underscore between `dag` and `cbor`) is the spelling consumed by the
-    /// `tests/subgraph_deterministic_dagcbor.rs` round-trip suite that
-    /// G12-C un-skips. Both spellings are stable; consumers may pick
-    /// either.
-    ///
-    /// # Errors
-    /// Returns [`CoreError::Serialize`] on encode failure.
-    pub fn to_dagcbor(&self) -> Result<Vec<u8>, CoreError> {
-        self.to_dag_cbor()
-    }
-
-    /// G12-C: load a Subgraph from DAG-CBOR bytes.
-    ///
-    /// This is the no-CID variant — it only validates that the bytes decode
-    /// cleanly as a Subgraph. Integrity enforcement (CID vs. computed-hash)
-    /// is the job of [`Subgraph::load_verified_with_cid`].
-    ///
-    /// # Errors
-    /// Returns [`CoreError::Serialize`] on decode failure.
-    pub fn load_verified(bytes: &[u8]) -> Result<Self, CoreError> {
-        serde_ipld_dagcbor::from_slice(bytes).map_err(|e| CoreError::Serialize(format_err(&e)))
-    }
-
-    /// G12-C alias for [`Subgraph::load_verified`] (no-CID variant). The
-    /// shorter name matches the round-trip-test convention that pairs
-    /// `to_dagcbor` ↔ `from_dagcbor`.
-    ///
-    /// # Errors
-    /// Returns [`CoreError::Serialize`] on decode failure.
-    pub fn from_dagcbor(bytes: &[u8]) -> Result<Self, CoreError> {
-        Self::load_verified(bytes)
-    }
-
-    /// G12-C: empty `nodes()` view. The core-side stub does not carry
-    /// per-node operation detail (those live on the eval-side Subgraph
-    /// pending the deferred full-type relocation); this accessor is
-    /// provided so the un-skipped `subgraph_deterministic_dagcbor`
-    /// round-trip can compare `decoded.nodes().len() == sg.nodes().len()`
-    /// without panicking. Both sides return zero — the round-trip
-    /// preserves the shape this stub carries.
-    #[must_use]
-    pub fn nodes(&self) -> &[()] {
-        &[]
-    }
-
-    /// G12-C: declared determinism accessor (Invariant 9). Mirrors the
-    /// eval-side `Subgraph::is_declared_deterministic()` so the un-skipped
-    /// `subgraph_deterministic_dagcbor` round-trip's accessor pin matches.
-    #[must_use]
-    pub fn is_declared_deterministic(&self) -> bool {
-        self.deterministic
-    }
-
-    /// Phase-2b benten-core-migration: load a Subgraph from bytes + an expected CID.
-    /// Integrity-enforcing: mismatch between the recomputed CID and
-    /// `expected_cid` fires `E_INV_CONTENT_HASH`.
-    ///
-    /// Mirrors [`Node::load_verified`]: the bytes-level hash is the
-    /// authoritative check (hash first, then decode) so a tamper that
-    /// happens to corrupt the CBOR structure does not masquerade as a
-    /// generic `Serialize` error.
-    ///
-    /// # Errors
-    /// - [`CoreError::ContentHashMismatch`] if the recomputed CID does not
-    ///   match `expected_cid`.
-    /// - [`CoreError::Serialize`] if the (hash-matching) bytes fail to
-    ///   decode as a Subgraph.
-    pub fn load_verified_with_cid(expected_cid: &Cid, bytes: &[u8]) -> Result<Self, CoreError> {
-        let digest = blake3::hash(bytes);
-        let recomputed = Cid::from_blake3_digest(*digest.as_bytes());
-        if &recomputed != expected_cid {
-            return Err(CoreError::ContentHashMismatch {
-                path: "subgraph",
-                expected: *expected_cid,
-                actual: recomputed,
-            });
-        }
-        serde_ipld_dagcbor::from_slice(bytes).map_err(|e| CoreError::Serialize(format_err(&e)))
-    }
-
-    /// G12-C: whether the Subgraph is classified deterministic.
-    #[must_use]
-    pub fn is_deterministic(&self) -> bool {
-        self.deterministic
-    }
-}
-
-/// G12-C: opaque handle returned by [`SubgraphBuilder`] when adding nodes.
-/// Mirrors the eval-side `NodeHandle` shape so the migrated builder API
-/// surface is interchangeable with the eval-side rich builder for the
-/// methods both expose.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct NodeHandle(pub u32);
-
-/// G12-C: minimal `SubgraphBuilder` co-located with the migrated
-/// [`Subgraph`] type, supporting the `subgraph_deterministic_dagcbor`
-/// round-trip suite that the un-skip step turns from compile-skip to
-/// runtime green.
-///
-/// **Scope:** declares the `read` / `respond` / `declare_deterministic` /
-/// `build_validated` / `build_unvalidated_for_test` methods that the
-/// un-skipped test references. The builder tracks node-count-only (the
-/// core-side `Subgraph` does not carry per-node operation detail in this
-/// migration; that follows in the deferred full-type-relocation under
-/// scope-outline §7a). The eval-side `SubgraphBuilder` (in
-/// `benten_eval`) remains the **production** rich builder consumed by
-/// the engine's registration path; it produces the eval-side `Subgraph`
-/// type and runs the full invariants suite.
-///
-/// **Why two builders coexist:** the eval-side rich builder reaches into
-/// the eval `invariants` module (~2,000 LOC) for `validate_builder`,
-/// `validate_subgraph`, the multiplicative-budget walker, etc. Pulling
-/// any of that into `benten-core` would invert the dep direction
-/// (`benten-core` MUST NOT depend on `benten-eval` per the arch-1
-/// invariant pinned by `tests/benten_core_no_eval_dep.rs`). The
-/// minimal core-side builder here covers the round-trip schema-pin path
-/// without dragging the validation surface across the dep boundary.
-#[derive(Debug, Clone)]
-pub struct SubgraphBuilder {
-    handler_id: alloc::string::String,
-    next_handle: u32,
-    deterministic: bool,
-}
-
-impl SubgraphBuilder {
-    /// G12-C: construct an empty builder for the named handler.
-    #[must_use]
-    pub fn new(handler_id: impl Into<alloc::string::String>) -> Self {
-        Self {
-            handler_id: handler_id.into(),
-            next_handle: 0,
-            deterministic: false,
-        }
-    }
-
-    /// G12-C: append a READ primitive (mirrors eval-side `SubgraphBuilder::read`).
-    pub fn read(&mut self, _id: impl Into<alloc::string::String>) -> NodeHandle {
-        let h = NodeHandle(self.next_handle);
-        self.next_handle = self.next_handle.saturating_add(1);
-        h
-    }
-
-    /// G12-C: chain a RESPOND after `_prev` (mirrors eval-side
-    /// `SubgraphBuilder::respond`).
-    pub fn respond(&mut self, _prev: NodeHandle) -> NodeHandle {
-        let h = NodeHandle(self.next_handle);
-        self.next_handle = self.next_handle.saturating_add(1);
-        h
-    }
-
-    /// G12-C: declare the subgraph's determinism-context flag (Invariant 9).
-    pub fn declare_deterministic(&mut self, value: bool) -> &mut Self {
-        self.deterministic = value;
-        self
-    }
-
-    /// G12-C: build with structural validation. The core-side minimal
-    /// builder accepts every well-formed input (no invariants module on
-    /// the core-side dep boundary; the eval-side rich builder retains the
-    /// full validation surface). Returns the produced [`Subgraph`].
-    ///
-    /// # Errors
-    /// Returns [`CoreError::Serialize`] only if the round-trip schema-pin
-    /// itself surfaces a serialization issue at construction time
-    /// (currently unreachable — the construction is pure).
-    pub fn build_validated(self) -> Result<Subgraph, CoreError> {
-        Ok(Subgraph {
-            handler_id: self.handler_id,
-            deterministic: self.deterministic,
-        })
-    }
-
-    /// G12-C: build without validation, used by the migrated round-trip
-    /// pin suite where the test wants to exercise the encode/decode
-    /// schema without walking the invariant validators.
-    #[must_use]
-    pub fn build_unvalidated_for_test(self) -> Subgraph {
-        Subgraph {
-            handler_id: self.handler_id,
-            deterministic: self.deterministic,
-        }
-    }
-}
+// Subgraph + SubgraphBuilder + NodeHandle moved to `subgraph` module
+// (Phase 2b R6 A1 closure G12-C-cont). See `crate::subgraph` and the
+// re-exports at the top of this file.
 
 /// Private serde view that encodes exactly the hash-input fields.
 /// Using a struct (not the map literal) keeps the field order and names

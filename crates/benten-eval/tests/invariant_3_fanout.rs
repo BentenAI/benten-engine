@@ -14,6 +14,7 @@
 )]
 
 use benten_eval::{ErrorCode, Subgraph, SubgraphBuilder};
+use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
 
 /// Build a BRANCH with `n` outgoing cases.
 fn branch_with_cases(n: usize) -> Result<Subgraph, benten_eval::RegistrationError> {

@@ -17,6 +17,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_eval::{ErrorCode, SubgraphBuilder};
+use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
 
 #[test]
 fn rejects_nondet_in_det_context() {
@@ -69,7 +70,7 @@ fn rejects_content_hash_mismatch() {
     *last ^= 0x01;
 
     // The load path verifies the hash; mismatch fires E_INV_CONTENT_HASH.
-    let err = benten_eval::Subgraph::load_verified(&cid, &bytes)
+    let err = <benten_eval::Subgraph as benten_eval::SubgraphExt>::load_verified_eval(&cid, &bytes)
         .expect_err("hash mismatch must be detected on load");
     assert_eq!(err.code(), ErrorCode::InvContentHash);
 
@@ -137,7 +138,8 @@ fn invariant_10_rejection_exposes_cid_expected_and_actual_accessors() {
     let cid = sg.cid().unwrap();
     let mut bytes = sg.canonical_bytes().unwrap();
     *bytes.last_mut().unwrap() ^= 0x01;
-    let err = benten_eval::Subgraph::load_verified(&cid, &bytes).expect_err("hash mismatch");
+    let err = <benten_eval::Subgraph as benten_eval::SubgraphExt>::load_verified_eval(&cid, &bytes)
+        .expect_err("hash mismatch");
     assert_eq!(err.code(), ErrorCode::InvContentHash);
     // `expected_cid()` / `actual_cid()` are the established accessor names
     // (per the existing `rejects_content_hash_mismatch` test). `cid_expected`

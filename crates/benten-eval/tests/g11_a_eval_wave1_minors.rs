@@ -32,6 +32,7 @@ use benten_eval::{
     EvalContext, Outcome, SubgraphBuilder, WaitOutcome, WaitResumeSignal,
     invariants::attribution::ATTRIBUTION_PROPERTY_KEY,
 };
+use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
 
 #[test]
 fn benten_eval_resume_alias_rejects_complete_variant() {

@@ -14,7 +14,7 @@ fn subgraph_dagcbor_roundtrip_preserves_deterministic_field() {
     let r = b.read("r");
     b.respond(r);
     b.declare_deterministic(true);
-    let sg = b.build_validated().expect("valid subgraph");
+    let sg = b.build_unvalidated_for_test();
 
     assert!(
         sg.is_declared_deterministic(),
@@ -40,13 +40,13 @@ fn subgraph_cid_differs_when_deterministic_flag_differs() {
     let r1 = b_true.read("r");
     b_true.respond(r1);
     b_true.declare_deterministic(true);
-    let sg_true = b_true.build_validated().expect("valid true");
+    let sg_true = b_true.build_unvalidated_for_test();
 
     let mut b_false = SubgraphBuilder::new("det-cid-diff");
     let r2 = b_false.read("r");
     b_false.respond(r2);
     b_false.declare_deterministic(false);
-    let sg_false = b_false.build_validated().expect("valid false");
+    let sg_false = b_false.build_unvalidated_for_test();
 
     let cid_true = sg_true.cid().expect("cid true");
     let cid_false = sg_false.cid().expect("cid false");

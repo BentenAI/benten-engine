@@ -16,6 +16,7 @@
 )]
 
 use benten_eval::{ErrorCode, Subgraph, SubgraphBuilder};
+use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
 
 /// Build a fan-out subgraph of exactly `n` nodes (1 root + n-1 leaves).
 /// Edge count = n - 1. Fan-out = n - 1 (one branch point).

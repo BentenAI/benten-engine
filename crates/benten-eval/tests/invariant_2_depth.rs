@@ -13,6 +13,7 @@
 )]
 
 use benten_eval::{ErrorCode, RegistrationError, Subgraph, SubgraphBuilder};
+use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
 
 fn linear_chain_of_calls(n: usize) -> Result<Subgraph, RegistrationError> {
     // G11-A EVAL wave-1: `SubgraphBuilder::call_handler` stamps the

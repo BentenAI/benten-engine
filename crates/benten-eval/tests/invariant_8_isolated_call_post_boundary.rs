@@ -15,6 +15,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
 use benten_eval::{Subgraph, SubgraphBuilder};
 
 fn caller_iterate_isolated_call_iterate(

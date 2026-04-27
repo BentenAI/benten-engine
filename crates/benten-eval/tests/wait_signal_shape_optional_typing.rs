@@ -30,6 +30,7 @@ use benten_errors::ErrorCode;
 use benten_eval::{
     EvalContext, MockTimeSource, Outcome, SignalShape, SubgraphBuilder, WaitResumeSignal,
 };
+use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
 use std::time::Duration;
 
 fn subgraph_with_optional_shape(shape: Option<SignalShape>) -> benten_eval::Subgraph {
