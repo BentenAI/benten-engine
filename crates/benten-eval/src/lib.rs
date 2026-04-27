@@ -30,6 +30,7 @@ use benten_core::{Cid, Value};
 pub use benten_errors::ErrorCode;
 use std::collections::BTreeMap;
 
+pub mod chunk_sink;
 pub mod context;
 pub mod diag;
 pub mod evaluator;
