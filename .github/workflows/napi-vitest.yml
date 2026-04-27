@@ -85,6 +85,20 @@ jobs:
           cd bindings/napi
           npm install --no-audit --no-fund
           npm run build
+          # @napi-rs/cli v3 emits the binary with the full Rust target triple's
+          # ABI suffix on Linux (`benten-napi.linux-x64-gnu.node`), but the
+          # test files' `loadNative()` helper computes
+          # `benten-napi.${process.platform}-${process.arch}.node` (no ABI), so
+          # on Linux it resolves `benten-napi.linux-x64.node`. macOS/Windows
+          # triples don't have an ABI suffix, so the macOS preflight that the
+          # micro-task agent ran locally produced `benten-napi.darwin-arm64.node`
+          # which matched the helper's expectation directly. Rename here for
+          # the no-ABI variant the helper expects on Linux.
+          ls -la benten-napi.*.node
+          for f in benten-napi.linux-x64-*.node; do
+            [ -f "$f" ] && [ "$f" != "benten-napi.linux-x64.node" ] && cp "$f" benten-napi.linux-x64.node
+          done
+          ls -la benten-napi.*.node
 
       - name: Run vitest suite (green-phase subset)
         # SCOPED to the test files whose R5 implementation has landed:
