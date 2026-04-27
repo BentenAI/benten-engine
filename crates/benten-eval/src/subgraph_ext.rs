@@ -239,10 +239,18 @@ impl SubgraphExt for Subgraph {
         // code returned `Ok(Subgraph::new("loaded"))` on decode error (verbatim
         // from the deleted eval-side body); both code-reviewer + architect
         // lenses flagged this as a swallow.
+        //
+        // FP-mini-review fix (cr-fp-mr-1): leave `actual_cid = None` here so
+        // a consumer reading the error can disambiguate decode-after-hash-pass
+        // (`expected_cid = Some, actual_cid = None`) from a genuine
+        // tamper/hash mismatch (`expected_cid = Some, actual_cid = Some(diff)`
+        // — set above before the early return). Reuses ContentHash variant
+        // rather than widening InvariantViolation with a new Decode arm so
+        // ErrorCode/error-catalog stay stable; the field-shape distinction
+        // is sufficient diagnostic signal.
         Subgraph::load_verified_with_cid(cid, bytes).map_err(|_| {
             let mut err = RegistrationError::new(InvariantViolation::ContentHash);
             err.expected_cid = Some(*cid);
-            err.actual_cid = Some(actual);
             err
         })
     }
@@ -251,14 +259,23 @@ impl SubgraphExt for Subgraph {
 /// Extension trait for [`benten_core::NodeHandle`] exposing the eval-side
 /// `build_validated_for_corruption_test` constructor that the
 /// `subgraph_corruption.rs` test reaches in via.
+///
+/// The single trait method is gated behind `#[cfg(any(test, feature =
+/// "testing"))]` per FP-mini-review fix sec-fp-mr-1 — discipline-consistency
+/// with the rest of the eval-side test-only surface (sec-r6r2-02 baseline).
+/// The body constructs a public-API-equivalent Subgraph with no privileged-
+/// write/auth-bypass path, so the gate is defense-in-depth rather than
+/// closing a live escalation surface.
 pub trait NodeHandleExt: private::Sealed {
     /// Test-only constructor for the corruption-test path. Produces a
     /// deterministic single-node subgraph (no edges) so two invocations
     /// produce identical canonical bytes.
+    #[cfg(any(test, feature = "testing"))]
     fn build_validated_for_corruption_test(self) -> Subgraph;
 }
 
 impl NodeHandleExt for NodeHandle {
+    #[cfg(any(test, feature = "testing"))]
     fn build_validated_for_corruption_test(self) -> Subgraph {
         Subgraph::new("corruption_test").with_node(OperationNode::new("r", PrimitiveKind::Read))
     }
