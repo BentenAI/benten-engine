@@ -12,24 +12,97 @@ use benten_eval::RegistrationError;
 use crate::error::EngineError;
 
 // ---------------------------------------------------------------------------
-// SubgraphSpec + SubgraphSpecBuilder + WriteSpec
+// SubgraphSpec + SubgraphSpecBuilder + PrimitiveSpec + WriteSpec
 // ---------------------------------------------------------------------------
+
+/// Per-primitive declaration carried by [`SubgraphSpec::primitives`]. Each
+/// entry pairs the canonical [`benten_eval::PrimitiveKind`] tag with a
+/// per-primitive **properties bag** (`BTreeMap<String, Value>` —
+/// sorted-by-key for canonical-bytes deterministic ordering per
+/// sec-pre-r1-09; typed `Value` rather than generic CBOR passthrough for
+/// the same reason).
+///
+/// The bag carries the configuration each primitive declares at registration
+/// time — e.g. WRITE's `label` / `requires` / `inject_failure` / user
+/// properties; WAIT's `ttl_hours` / `wallclock_ms`; SANDBOX's `module` /
+/// `wallclock_ms` / `output_limit`; SUBSCRIBE's `pattern`. New primitives
+/// (G6 STREAM/SUBSCRIBE, G7 SANDBOX, G10 module manifest) plug in by
+/// declaring their config here, alongside the canonical `kind` tag.
+///
+/// Phase-2b D6-RESOLVED: BTreeMap+Value, NOT generic CBOR passthrough. See
+/// plan §5 D6 + sec-pre-r1-09.
+#[derive(Debug, Clone)]
+pub struct PrimitiveSpec {
+    /// Stable per-primitive id within the subgraph (e.g. `"w0"`, `"r1"`).
+    /// Not the CID; the CID derives from the constructed [`Subgraph`]'s
+    /// canonical bytes.
+    ///
+    /// [`Subgraph`]: benten_core::Subgraph
+    pub id: String,
+    /// Which of the 12 operation primitives this entry represents.
+    pub kind: benten_eval::PrimitiveKind,
+    /// Per-primitive configuration bag. Empty for primitives without
+    /// declared config (e.g. plain READ, plain RESPOND). Sorted by key
+    /// at canonical-bytes encode time via `BTreeMap`'s ordered iteration.
+    pub properties: BTreeMap<String, Value>,
+}
+
+impl PrimitiveSpec {
+    /// Build a `PrimitiveSpec` with an empty properties bag — the most
+    /// common shape for primitives without declared config.
+    #[must_use]
+    pub fn new(id: impl Into<String>, kind: benten_eval::PrimitiveKind) -> Self {
+        Self {
+            id: id.into(),
+            kind,
+            properties: BTreeMap::new(),
+        }
+    }
+
+    /// Set a property in the bag (replacing any existing value at that key).
+    /// Builder-style for ergonomic chaining.
+    #[must_use]
+    pub fn with_property(mut self, key: impl Into<String>, value: Value) -> Self {
+        self.properties.insert(key.into(), value);
+        self
+    }
+}
+
+// Property-bag keys used by the D6-RESOLVED widening to fold WriteSpec config
+// into a `PrimitiveSpec` of kind=Write. Centralised so both the producer
+// (`SubgraphSpecBuilder::write`) and the consumers (`Engine::subgraph_for_spec`,
+// `SubgraphSpec::write_specs()`) use the same string keys.
+//
+// These keys are CANONICAL — they are folded into `PrimitiveSpec.properties`
+// at registration and read back by the engine consumer. Renaming any of them
+// silently breaks the WRITE dispatch path. Phase-3 sync will need to preserve
+// these key names across protocol versions.
+pub(crate) const WRITE_PROP_LABEL: &str = "_label";
+pub(crate) const WRITE_PROP_REQUIRES: &str = "_requires";
+pub(crate) const WRITE_PROP_INJECT_FAILURE: &str = "_inject_failure";
+pub(crate) const WRITE_PROP_USER_PROPERTIES: &str = "_user_properties";
 
 /// DSL-friendly specification passed to `Engine::register_subgraph`.
 ///
-/// Records the handler id, the ordered list of primitive kinds (so the
-/// invariant validator can see the subgraph's shape) and the per-WRITE
-/// payload (label, properties, requires scope, failure-injection flag) so
-/// `Engine::call` can actually dispatch. Fix for philosophy finding
-/// `g7-ep-1` — the v1 builder dropped every WriteSpec field on the floor.
+/// Records the handler id and the ordered list of [`PrimitiveSpec`]s — each
+/// primitive carries both the canonical `kind` tag (so the invariant
+/// validator can see the subgraph's shape) and a per-primitive **properties
+/// bag** (so `Engine::call` can dispatch with the caller's intent). Fix for
+/// philosophy finding `g7-ep-1` — the v1 builder dropped every WriteSpec
+/// field on the floor.
+///
+/// Phase-2b G12-D widening: `primitives` carries `Vec<PrimitiveSpec>`
+/// (D6-RESOLVED). The legacy parallel `write_specs: Vec<WriteSpec>` field is
+/// retired — WRITE config now lives inside the `primitives` entries
+/// themselves under the `WRITE_PROP_*` keys. The
+/// [`SubgraphSpec::write_specs`] accessor synthesises a `Vec<WriteSpec>`
+/// from those entries for back-compat reads.
 #[derive(Debug, Clone)]
 pub struct SubgraphSpec {
     pub(crate) handler_id: String,
-    pub(crate) primitives: Vec<(String, benten_eval::PrimitiveKind)>,
-    /// Per-WRITE payload, indexed in registration order. `primitives` refers
-    /// to this list via its `Write` entries; non-Write primitives don't
-    /// appear here.
-    pub(crate) write_specs: Vec<WriteSpec>,
+    /// Ordered per-primitive declarations. Walked by
+    /// `Engine::subgraph_for_spec` to materialise the runnable Subgraph.
+    pub(crate) primitives: Vec<PrimitiveSpec>,
 }
 
 impl SubgraphSpec {
@@ -44,10 +117,29 @@ impl SubgraphSpec {
         &self.handler_id
     }
 
-    /// Read-only access to the recorded WriteSpecs (for tests + diagnostics).
+    /// Read-only access to the recorded primitives (for tests + diagnostics).
     #[must_use]
-    pub fn write_specs(&self) -> &[WriteSpec] {
-        &self.write_specs
+    pub fn primitives(&self) -> &[PrimitiveSpec] {
+        &self.primitives
+    }
+
+    /// Synthesise the legacy `Vec<WriteSpec>` view from the widened
+    /// `primitives` storage. Each `PrimitiveSpec { kind: Write, properties }`
+    /// entry produces one `WriteSpec` with `label` / `requires` /
+    /// `inject_failure` / user `properties` lifted out of the bag under the
+    /// `WRITE_PROP_*` keys.
+    ///
+    /// Provided as a back-compat read-only accessor — pre-G12-D code paths
+    /// that inspected `spec.write_specs()` keep working unchanged. Mutation
+    /// has moved into the `primitives` bag (the source of truth), so this
+    /// returns an owned `Vec` rather than a borrowed slice.
+    #[must_use]
+    pub fn write_specs(&self) -> Vec<WriteSpec> {
+        self.primitives
+            .iter()
+            .filter(|p| matches!(p.kind, benten_eval::PrimitiveKind::Write))
+            .map(WriteSpec::from_primitive_spec)
+            .collect()
     }
 
     /// Convenience: build an empty SubgraphSpec (no primitives) with just a
@@ -57,18 +149,17 @@ impl SubgraphSpec {
         Self {
             handler_id: handler_id.into(),
             primitives: Vec::new(),
-            write_specs: Vec::new(),
         }
     }
 }
 
 /// DSL builder that produces a [`SubgraphSpec`]. Calling `write(|w| w.label
-/// (...).property(...))` stores the configured `WriteSpec` so downstream
-/// dispatch can see exactly what the caller requested.
+/// (...).property(...))` records a [`PrimitiveSpec`] of kind=Write whose
+/// properties bag carries the configured WriteSpec fields under the
+/// `WRITE_PROP_*` canonical keys.
 pub struct SubgraphSpecBuilder {
     handler_id: String,
-    primitives: Vec<(String, benten_eval::PrimitiveKind)>,
-    write_specs: Vec<WriteSpec>,
+    primitives: Vec<PrimitiveSpec>,
 }
 
 impl SubgraphSpecBuilder {
@@ -77,7 +168,6 @@ impl SubgraphSpecBuilder {
         Self {
             handler_id: String::new(),
             primitives: Vec::new(),
-            write_specs: Vec::new(),
         }
     }
 
@@ -104,20 +194,16 @@ impl SubgraphSpecBuilder {
         F: FnOnce(WriteSpec) -> WriteSpec,
     {
         let spec = f(WriteSpec::new());
-        self.primitives.push((
-            format!("w{}", self.primitives.len()),
-            benten_eval::PrimitiveKind::Write,
-        ));
-        self.write_specs.push(spec);
+        let id = format!("w{}", self.primitives.len());
+        self.primitives.push(spec.into_primitive_spec(id));
         self
     }
 
     #[must_use]
     pub fn respond(mut self) -> Self {
-        self.primitives.push((
-            format!("r{}", self.primitives.len()),
-            benten_eval::PrimitiveKind::Respond,
-        ));
+        let id = format!("r{}", self.primitives.len());
+        self.primitives
+            .push(PrimitiveSpec::new(id, benten_eval::PrimitiveKind::Respond));
         self
     }
 
@@ -129,7 +215,18 @@ impl SubgraphSpecBuilder {
     /// time; registration merely preserves the shape.
     #[must_use]
     pub fn primitive(mut self, id: &str, kind: benten_eval::PrimitiveKind) -> Self {
-        self.primitives.push((id.to_string(), kind));
+        self.primitives.push(PrimitiveSpec::new(id, kind));
+        self
+    }
+
+    /// Register a primitive declaration with a pre-built per-primitive
+    /// properties bag — the widened-shape entry point for callers that need
+    /// to declare per-primitive config (G6/G7/G10 future primitives). The
+    /// bag keys are primitive-specific and the canonical-bytes encoding
+    /// preserves their `BTreeMap` ordering.
+    #[must_use]
+    pub fn primitive_with_props(mut self, spec: PrimitiveSpec) -> Self {
+        self.primitives.push(spec);
         self
     }
 
@@ -138,7 +235,6 @@ impl SubgraphSpecBuilder {
         SubgraphSpec {
             handler_id: self.handler_id,
             primitives: self.primitives,
-            write_specs: self.write_specs,
         }
     }
 }
@@ -224,6 +320,72 @@ impl WriteSpec {
     pub fn properties_ref(&self) -> &BTreeMap<String, Value> {
         &self.properties
     }
+
+    /// Fold this `WriteSpec` into a `PrimitiveSpec` of kind=Write whose
+    /// properties bag carries the WriteSpec fields under the `WRITE_PROP_*`
+    /// canonical keys. Used by `SubgraphSpecBuilder::write` to fold legacy
+    /// WriteSpec construction into the widened `primitives` storage.
+    pub(crate) fn into_primitive_spec(self, id: String) -> PrimitiveSpec {
+        let mut props: BTreeMap<String, Value> = BTreeMap::new();
+        if !self.label.is_empty() {
+            props.insert(WRITE_PROP_LABEL.into(), Value::Text(self.label));
+        }
+        if !self.requires.is_empty() {
+            props.insert(
+                WRITE_PROP_REQUIRES.into(),
+                Value::List(self.requires.into_iter().map(Value::Text).collect()),
+            );
+        }
+        if self.inject_failure {
+            props.insert(WRITE_PROP_INJECT_FAILURE.into(), Value::Bool(true));
+        }
+        if !self.properties.is_empty() {
+            props.insert(
+                WRITE_PROP_USER_PROPERTIES.into(),
+                Value::Map(self.properties),
+            );
+        }
+        PrimitiveSpec {
+            id,
+            kind: benten_eval::PrimitiveKind::Write,
+            properties: props,
+        }
+    }
+
+    /// Reconstruct a `WriteSpec` from a `PrimitiveSpec` of kind=Write —
+    /// the inverse of `into_primitive_spec`. Used by
+    /// `SubgraphSpec::write_specs()` to synthesise the back-compat
+    /// `Vec<WriteSpec>` view from the widened `primitives` storage.
+    ///
+    /// Tolerant of partial / missing keys (an empty bag yields a default
+    /// WriteSpec); unknown bag keys are silently ignored so a Phase-2c
+    /// addition of a new WriteSpec field can safely extend the bag without
+    /// breaking older readers.
+    pub(crate) fn from_primitive_spec(spec: &PrimitiveSpec) -> Self {
+        let mut out = WriteSpec::default();
+        if let Some(Value::Text(label)) = spec.properties.get(WRITE_PROP_LABEL) {
+            out.label.clone_from(label);
+        }
+        if let Some(Value::List(reqs)) = spec.properties.get(WRITE_PROP_REQUIRES) {
+            out.requires = reqs
+                .iter()
+                .filter_map(|v| match v {
+                    Value::Text(s) => Some(s.clone()),
+                    _ => None,
+                })
+                .collect();
+        }
+        if matches!(
+            spec.properties.get(WRITE_PROP_INJECT_FAILURE),
+            Some(Value::Bool(true))
+        ) {
+            out.inject_failure = true;
+        }
+        if let Some(Value::Map(user)) = spec.properties.get(WRITE_PROP_USER_PROPERTIES) {
+            out.properties = user.clone();
+        }
+        out
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -263,7 +425,8 @@ impl IntoSubgraphSpec for SubgraphSpec {
         // declared kind verbatim.
         let mut sb = benten_eval::SubgraphBuilder::new(self.handler_id);
         let mut last: Option<benten_eval::NodeHandle> = None;
-        for (id, kind) in self.primitives {
+        for ps in self.primitives {
+            let PrimitiveSpec { id, kind, .. } = ps;
             let h = match kind {
                 benten_eval::PrimitiveKind::Write => sb.write(id),
                 benten_eval::PrimitiveKind::Read => sb.read(id),

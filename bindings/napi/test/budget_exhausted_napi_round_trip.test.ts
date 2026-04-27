@@ -13,12 +13,12 @@
 // at the JS surface so the Rust-side fix is exercised end-to-end through
 // the napi-rs v3 trace serializer (`bindings/napi/src/trace.rs`).
 //
-// WRITE not EMIT: per mini-review g12a-cr-1 + the matching Rust deviation,
-// the napi `into_eval_subgraph` builder routes `primitive: "emit"` through
-// `spec.primitives` which `Engine::subgraph_for_spec` does NOT walk today
-// (G12-D widening lands the consumer-update). WRITE primitives populate
-// `spec.write_specs` which IS walked — so the runnable subgraph is the
-// 4-WRITE chain that the walker steps through one node at a time.
+// WRITE not EMIT: the napi `into_eval_subgraph` builder routes
+// `primitive: "write"` through the WriteSpec convenience builder so each
+// WRITE entry carries a populated label + properties bag through the
+// G12-D widened `spec.primitives` storage that
+// `Engine::subgraph_for_spec` walks. Each WRITE step bumps the cumulative
+// `steps` counter so the Inv-8 guard trips deterministically.
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -62,12 +62,12 @@ describe("napi G12-A budget_exhausted runtime trace round-trip", () => {
 
   it("engine.trace surfaces a TraceStep with type=budget_exhausted when Inv-8 fires through the napi boundary", () => {
     // Register a 4-WRITE-node chain via the DSL `nodes` shape. Each WRITE
-    // populates `spec.write_specs` which `Engine::subgraph_for_spec` walks
-    // (unlike `spec.primitives` which is G12-D scope to wire). Successive
-    // `"next"` edges between writes thread the chain so the walker steps
-    // through one WRITE at a time, bumping the cumulative `steps` counter
-    // once per primitive — same firing-path semantics as the Rust
-    // integration test.
+    // contributes a `PrimitiveSpec` of kind=Write to the widened
+    // `spec.primitives` storage that `Engine::subgraph_for_spec` walks
+    // (G12-D); successive `"next"` edges between writes thread the chain
+    // so the walker steps through one WRITE at a time, bumping the
+    // cumulative `steps` counter once per primitive — same firing-path
+    // semantics as the Rust integration test.
     const handlerId = engine.registerSubgraph({
       handlerId: "budget:napi_exhauster",
       actions: ["budget:run"],

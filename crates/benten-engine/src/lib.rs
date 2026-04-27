@@ -24,7 +24,8 @@
 //!   view-read / transaction / snapshot / diagnostics.
 //! - [`primitive_host`] — `impl PrimitiveHost for Engine` + the buffered
 //!   replay state (`ActiveCall` / `PendingHostOp`).
-//! - [`subgraph_spec`] — DSL builders (`SubgraphSpec`, `WriteSpec`, …).
+//! - [`subgraph_spec`] — DSL builders (`SubgraphSpec`, `PrimitiveSpec`,
+//!   `WriteSpec`, …).
 //! - [`outcome`] — response shapes (`Outcome`, `Trace`, …).
 //! - [`engine_transaction`] — `EngineTransaction` passed into the
 //!   `.transaction(|tx| …)` closure.
@@ -92,8 +93,8 @@ pub use outcome::{
     OutcomeExt, ReadViewOptions, TerminalError, Trace, TraceStep, ViewCreateOptions,
 };
 pub use subgraph_spec::{
-    GrantSubject, IntoCallInput, IntoSubgraphSpec, IterateBody, RevokeScope, RevokeSubject,
-    SubgraphSpec, SubgraphSpecBuilder, WriteSpec,
+    GrantSubject, IntoCallInput, IntoSubgraphSpec, IterateBody, PrimitiveSpec, RevokeScope,
+    RevokeSubject, SubgraphSpec, SubgraphSpecBuilder, WriteSpec,
 };
 
 pub mod engine_wait;
