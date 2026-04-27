@@ -1688,6 +1688,13 @@ impl Engine {
         Ok(None)
     }
 
+    // The body is a 4-pass pipeline (cache lookup → walk primitives →
+    // post-build WRITE bag → post-build non-WRITE bag → cache insert) over
+    // shared state (`sb`, `last`, `had_terminal_respond`, `write_ops`,
+    // `other_ops`, `sg`). Extracting any single pass into a helper would
+    // require threading 5+ parameters through and would not improve
+    // readability. The 104-line length is intrinsic to the pipeline shape.
+    #[allow(clippy::too_many_lines)]
     fn subgraph_for_spec(
         &self,
         spec: &SubgraphSpec,
@@ -1730,9 +1737,16 @@ impl Engine {
         // properties map, NOT in the PrimitiveSpec bag (which uses the
         // `WRITE_PROP_*` keys for inter-spec config carry).
         let mut write_ops: Vec<(String, WriteSpec)> = Vec::new();
-        // Track the original primitive id so we can populate properties on
-        // non-WRITE primitives that carried a `WRITE_PROP_*` bag (no-op for
-        // pure structural primitives, but routed through here uniformly).
+        // Two post-build property-population passes are needed because
+        // SubgraphBuilder doesn't surface per-node property setters to
+        // outside-the-crate callers. WRITE entries take the WriteSpec
+        // rehydration shape (op/label/properties/createdAt — see the loop
+        // below this walker). Non-WRITE entries with a `PrimitiveSpec.properties`
+        // bag get a flat per-key copy onto the OperationNode (no inter-spec
+        // shape transform); collect them here so future G6/G7/G10 SUBSCRIBE
+        // /WAIT/SANDBOX entries can declare config alongside their `kind` and
+        // have it visible at dispatch time.
+        let mut other_ops: Vec<(String, BTreeMap<String, Value>)> = Vec::new();
         let mut had_terminal_respond = false;
         for ps in &spec.primitives {
             let h = match ps.kind {
@@ -1757,7 +1771,12 @@ impl Engine {
                     had_terminal_respond = true;
                     sb.respond(prev)
                 }
-                other => sb.push_primitive(ps.id.clone(), other),
+                other => {
+                    if !ps.properties.is_empty() {
+                        other_ops.push((ps.id.clone(), ps.properties.clone()));
+                    }
+                    sb.push_primitive(ps.id.clone(), other)
+                }
             };
             if let Some(prev) = last {
                 // RESPOND already chained via sb.respond(prev); skip the
@@ -1816,6 +1835,19 @@ impl Engine {
                 }
                 node.properties
                     .insert("properties".into(), Value::Map(props));
+            }
+        }
+        // Non-WRITE primitive property propagation (FP fix cr-g12d-mr-1):
+        // SUBSCRIBE/WAIT/SANDBOX entries declared via `primitive_with_props`
+        // carry their config in `PrimitiveSpec.properties`; propagate the
+        // bag flat onto the OperationNode so dispatch sees what registration
+        // declared. WRITE keeps its own loop above (different shape: op +
+        // label + nested properties + createdAt stamping).
+        for (id, props) in &other_ops {
+            if let Some(node) = sg.op_by_id_mut(id) {
+                for (key, val) in props {
+                    node.properties.insert(key.clone(), val.clone());
+                }
             }
         }
         if cache_eligible {

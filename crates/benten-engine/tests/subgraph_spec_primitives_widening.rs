@@ -6,11 +6,12 @@
 //! 1. `subgraph_spec_primitives_carries_per_primitive_props` — a
 //!    `SubgraphSpec` with mixed primitive kinds (WRITE + READ +
 //!    SUBSCRIBE) round-trips through registration preserving each
-//!    primitive's properties bag.
-//! 2. `wider_subgraph_spec_cid_stable_when_primitives_unset` — empty
-//!    `primitives` Vec produces the same handler CID as a fresh empty
-//!    spec on the legacy WRITE-only construction path (forward-compat
-//!    pin: widening doesn't drift the CID for the empty case).
+//!    primitive's properties bag (verified at the `spec.primitives()`
+//!    surface).
+//! 2. `empty_subgraph_spec_produces_deterministic_handler_cid_across_registrations`
+//!    — an empty `SubgraphSpec` registers cleanly AND produces an
+//!    identical handler CID across two fresh engine instances
+//!    (registration-determinism pin; renamed FP-fix cr-g12d-mr-2).
 //! 3. `wider_subgraph_spec_old_handlers_still_load` — handlers built via
 //!    the legacy `.write(|w| ...)` builder method still register and
 //!    dispatch correctly post-widening (back-compat pin).
@@ -18,6 +19,21 @@
 //!    `SubgraphSpec` that declares a non-WRITE primitive (READ) via the
 //!    widened `.primitive_with_props` entry point + a WRITE constructs
 //!    a runnable Subgraph that includes both nodes, NOT just WRITE.
+//!
+//! Intentional gap (FP-mini-review fix cr-g12d-mr-1): direct unit-test
+//! verification of OperationNode-level property propagation for
+//! non-WRITE primitives (the second post-build loop in
+//! `Engine::subgraph_for_spec`) is NOT in this file. Verifying it would
+//! require a new test-helper Engine accessor exposing the materialized
+//! `Subgraph` post-registration, which would be premature engine-
+//! surface growth pending the actual consumers (G6 SUBSCRIBE/STREAM,
+//! G7 SANDBOX, G10 module manifest) that will dispatch primitives
+//! carrying configured `properties` bags. The G6/G7/G10 wave
+//! integration tests will catch any regression in property propagation
+//! end-to-end at dispatch time, which is the load-bearing verification
+//! surface. The fix itself is in place at `crates/benten-engine/src/
+//! engine.rs::subgraph_for_spec` (second post-build loop iterating
+//! `other_ops`).
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -115,15 +131,18 @@ fn subgraph_spec_primitives_carries_per_primitive_props() {
     );
 }
 
-/// Pin 2 — empty `primitives` Vec is forward-compat-stable.
+/// Pin 2 — empty `SubgraphSpec` produces deterministic handler CID across registrations.
 ///
-/// A `SubgraphSpec` with NO primitives declared registers cleanly under
-/// the widened shape AND dispatches via the empty-spec `noop_read+respond`
-/// fallback in `Engine::subgraph_for_spec`. Asserts the empty case round-
-/// trips through registration without surfacing an error or constructing
-/// an unexpectedly-shaped subgraph.
+/// A `SubgraphSpec` with NO primitives declared registers cleanly AND
+/// produces an identical handler CID when re-registered into a fresh engine.
+/// Verifies registration determinism for the empty-primitives shape (a
+/// content-addressing pin: same canonical bytes → same CID across engine
+/// instances). Renamed FP-mini-review fix cr-g12d-mr-2 — prior name +
+/// docstring oversold this as a forward-compat-vs-legacy pin, but post-
+/// widening there is no "old WRITE-only path" to compare against, so the
+/// real assertion is registration determinism.
 #[test]
-fn wider_subgraph_spec_cid_stable_when_primitives_unset() {
+fn empty_subgraph_spec_produces_deterministic_handler_cid_across_registrations() {
     let (_dir, engine) = fresh_engine();
 
     let spec = SubgraphSpec::builder()
