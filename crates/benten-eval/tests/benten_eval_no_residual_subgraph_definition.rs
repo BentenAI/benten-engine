@@ -102,6 +102,19 @@ fn benten_eval_re_exports_subgraph_companions_from_benten_core() {
     // Assert the relocated types are re-exported by name. The exact `pub use`
     // syntax can vary (single line vs. multi-line braces); we look for each
     // type's appearance in a `pub use benten_core::{...}` block.
+    //
+    // G12-C-cont fix-pass A.4 (cr-mr-g12c-cont-2) intent note: the per-name
+    // `lib.contains(name)` scan deliberately runs over the WHOLE lib.rs
+    // rather than parsing the `pub use benten_core::{...}` block. This is
+    // sound because (1) the `pub_use_block_present` guard above ensures the
+    // crate-root `pub use benten_core::` block exists, and (2) the
+    // type-name strings ("Subgraph", "SubgraphBuilder", "PrimitiveKind",
+    // "OperationNode", "NodeHandle") are unique enough that any appearance
+    // anywhere in lib.rs implies they are referenced — the test catches
+    // drift via PRESENCE-not-absence (a wholesale removal of the type from
+    // lib.rs would fail), not via syntactic block parsing. Tightening to a
+    // block-parse would not catch additional regressions worth the
+    // maintenance cost.
     let needed_re_exports = [
         "Subgraph",
         "SubgraphBuilder",

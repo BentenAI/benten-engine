@@ -21,9 +21,13 @@
 //! Existing callsites import the eval-side surface (`use benten_eval::{Subgraph,
 //! SubgraphBuilder};`); to keep `b.build_validated()?` / `sg.validate(&cfg)?`
 //! working, callers add `use benten_eval::{SubgraphBuilderExt, SubgraphExt};`
-//! (or import from the eval prelude). The trait methods shadow nothing on
-//! the relocated types — `benten-core` deliberately exposes only the data
-//! surface, leaving validation as the eval-side concern.
+//! (or import from the eval prelude). The trait methods are **distinct names**
+//! from any inherent methods on the relocated types — there is no shadowing
+//! and no method-resolution ambiguity. `benten-core` deliberately exposes
+//! only the data surface (`build_unvalidated_for_test`, `load_verified`,
+//! `load_verified_with_cid`), leaving validation + Mermaid + budget walks as
+//! the eval-side concern (which depends on the `invariants/` module that
+//! cannot follow into benten-core under arch-1).
 
 use benten_core::{Cid, NodeHandle, OperationNode, PrimitiveKind, Subgraph, SubgraphBuilder};
 
@@ -31,10 +35,24 @@ use crate::{
     EvalError, InvariantConfig, InvariantViolation, RegistrationError, SubgraphSnapshot, invariants,
 };
 
+// G12-C-cont fix-pass A.6 (arch-mr-g12c-cont-1): seal the extension traits so
+// downstream crates cannot impl them on their own types. The relocated types
+// (`Subgraph`, `SubgraphBuilder`, `NodeHandle`) live in benten-core; these
+// traits exist only to project eval-side methods onto them. Allowing arbitrary
+// downstream impls would invite ambiguity at the method-resolution callsites
+// (`b.build_validated()?` etc.) and break the Phase-3 OSS surface contract.
+mod private {
+    use benten_core::{NodeHandle, Subgraph, SubgraphBuilder};
+    pub trait Sealed {}
+    impl Sealed for SubgraphBuilder {}
+    impl Sealed for Subgraph {}
+    impl Sealed for NodeHandle {}
+}
+
 /// Extension trait for [`benten_core::SubgraphBuilder`] that re-runs the
 /// `benten-eval::invariants` validator before producing a finalized
 /// [`Subgraph`]. Mirrors the pre-G12-C-cont inherent-method contract.
-pub trait SubgraphBuilderExt {
+pub trait SubgraphBuilderExt: private::Sealed {
     /// Build with structural validation (invariants 1/2/3/5/6/9/10/12).
     /// Fails fast on the first invariant violation encountered.
     ///
@@ -126,7 +144,7 @@ impl SubgraphBuilderExt for SubgraphBuilder {
 /// Extension trait for [`benten_core::Subgraph`] exposing the eval-side
 /// validation, multiplicative-budget, and Mermaid rendering methods that
 /// stayed in `benten-eval` after the G12-C-cont type relocation.
-pub trait SubgraphExt {
+pub trait SubgraphExt: private::Sealed {
     /// Registration-time structural validation (invariants 1/2/3/5/6/9/10/12).
     /// Delegates to the `invariants::validate_subgraph` finalized-subgraph
     /// path. Returns the first violation as an `EvalError::Invariant`.
@@ -212,28 +230,28 @@ impl SubgraphExt for Subgraph {
             err.actual_cid = Some(actual);
             return Err(err);
         }
-        // Phase 1 / G12-C-cont: the byte-encoding decode round-trips through
-        // the canonical-bytes shape; if the decode fails (genuine DAG-CBOR
-        // issue rather than tamper, which the hash check above already
-        // rejected) surface as a Serialize-flavoured RegistrationError.
-        match Subgraph::load_verified_with_cid(cid, bytes) {
-            Ok(sg) => Ok(sg),
-            Err(_) => {
-                // Pre-G12-C-cont behaviour: return an empty Subgraph "loaded"
-                // placeholder so callers that only check the CID succeed
-                // path don't see a hash-rejection-flavoured error here. The
-                // `load_verified_with_cid` decode failure is rare in
-                // practice (would require encoder drift, not data tamper).
-                Ok(Subgraph::new("loaded"))
-            }
-        }
+        // G12-C-cont fix-pass A.9 (cr-mr-g12c-cont-4 + arch-mr-g12c-cont-2):
+        // propagate decode failures rather than swallowing them with an
+        // empty-Subgraph placeholder. The hash check above rejects tampered
+        // bytes; a decode failure here indicates encoder drift, not tamper —
+        // surfacing it as a `ContentHash` violation lets callers diagnose
+        // the drift instead of silently operating on a placeholder. Pre-fix-pass
+        // code returned `Ok(Subgraph::new("loaded"))` on decode error (verbatim
+        // from the deleted eval-side body); both code-reviewer + architect
+        // lenses flagged this as a swallow.
+        Subgraph::load_verified_with_cid(cid, bytes).map_err(|_| {
+            let mut err = RegistrationError::new(InvariantViolation::ContentHash);
+            err.expected_cid = Some(*cid);
+            err.actual_cid = Some(actual);
+            err
+        })
     }
 }
 
 /// Extension trait for [`benten_core::NodeHandle`] exposing the eval-side
 /// `build_validated_for_corruption_test` constructor that the
 /// `subgraph_corruption.rs` test reaches in via.
-pub trait NodeHandleExt {
+pub trait NodeHandleExt: private::Sealed {
     /// Test-only constructor for the corruption-test path. Produces a
     /// deterministic single-node subgraph (no edges) so two invocations
     /// produce identical canonical bytes.
