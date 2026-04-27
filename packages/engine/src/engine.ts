@@ -30,9 +30,22 @@ import {
   mapNativeError,
 } from "./errors.js";
 import { toMermaid } from "./mermaid.js";
+import {
+  validateStreamCallArgs,
+  wrapStreamHandle,
+  type NativeStreamHandle,
+} from "./stream.js";
+import {
+  makeSubscription,
+  serializeCursor,
+  validateOnChangeArgs,
+  type NativeSubscriptionJson,
+  type OnChangeCallback,
+} from "./subscribe.js";
 import type {
   AttributionFrame,
   CapabilityGrant,
+  Chunk,
   Edge,
   HandlerAdjacencies,
   JsonValue,
@@ -40,7 +53,10 @@ import type {
   Outcome,
   RegisteredHandler,
   SandboxNodeDescription,
+  StreamHandle,
   Subgraph,
+  SubscribeCursor,
+  Subscription,
   SuspensionResult,
   Trace,
   TraceStep,
@@ -112,6 +128,19 @@ interface NativeEngine {
     signalValue: unknown,
     principalCid: string,
   ) => unknown;
+  // Phase 2b G6-B — STREAM + SUBSCRIBE bridge.
+  callStream?: (
+    handlerId: string,
+    op: string,
+    input: unknown,
+  ) => NativeStreamHandle;
+  openStream?: (
+    handlerId: string,
+    op: string,
+    input: unknown,
+  ) => NativeStreamHandle;
+  testingOpenStreamForTest?: (chunks: Buffer[]) => NativeStreamHandle;
+  onChange?: (pattern: string, cursor: unknown) => NativeSubscriptionJson;
 }
 
 interface NativeEngineCtor {
@@ -1395,6 +1424,160 @@ export class Engine {
     throw new EDslInvalidShape(
       "Engine.computeManifestCid: not yet wired into this @benten/engine-native build (G10-B implements; G7-C pins the TS surface contract)",
     );
+  }
+
+  // -------- STREAM (Phase 2b G6-B) --------
+
+  /**
+   * Invoke a registered handler whose subgraph produces STREAM chunks.
+   * Returns a [`StreamHandle`] that implements `AsyncIterable<Chunk>`,
+   * so consumers can write:
+   *
+   * ```ts
+   * for await (const chunk of engine.callStream(handlerId, "act", input)) {
+   *   process.stdout.write(chunk);
+   * }
+   * ```
+   *
+   * The handle auto-closes when the `for await` loop exits (via the
+   * iterator's `return()` hook). For an explicit-close lifecycle use
+   * {@link Engine.openStream}.
+   *
+   * Mirrors {@link Engine.call} naming. Pre-G6-A the underlying executor
+   * isn't wired; the first iterator step throws
+   * `E_PRIMITIVE_NOT_IMPLEMENTED` until G6-A merges. Use
+   * {@link Engine.testingOpenStreamForTest} for harness fixtures.
+   */
+  public callStream(
+    handlerId: string,
+    op: string,
+    input: JsonValue,
+  ): StreamHandle {
+    this.assertOpen();
+    validateStreamCallArgs(handlerId, op, input);
+    if (!this.inner.callStream) {
+      throw new EDslInvalidShape(
+        "Engine.callStream unavailable on this binding — rebuild @benten/engine-native",
+      );
+    }
+    let native: NativeStreamHandle;
+    try {
+      native = this.inner.callStream(handlerId, op, input);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+    return wrapStreamHandle(native);
+  }
+
+  /**
+   * Open a STREAM dispatch returning a [`StreamHandle`] whose lifecycle
+   * the caller manages via {@link StreamHandle.close}. Same dispatch
+   * path as {@link Engine.callStream} — the only difference is the
+   * lifecycle contract (the `for await` form auto-closes; this form
+   * doesn't).
+   *
+   * Use this when you need to start a stream, hand the handle to a
+   * different scope (e.g. an Express route), and `close()` it
+   * explicitly when the consumer disconnects.
+   */
+  public openStream(
+    handlerId: string,
+    op: string,
+    input: JsonValue,
+  ): StreamHandle {
+    this.assertOpen();
+    validateStreamCallArgs(handlerId, op, input);
+    if (!this.inner.openStream) {
+      throw new EDslInvalidShape(
+        "Engine.openStream unavailable on this binding — rebuild @benten/engine-native",
+      );
+    }
+    let native: NativeStreamHandle;
+    try {
+      native = this.inner.openStream(handlerId, op, input);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+    return wrapStreamHandle(native);
+  }
+
+  /**
+   * ts-r4-2 R4: vitest-harness factory. Returns a [`StreamHandle`]
+   * pre-populated with `chunks` for harnesses that need to drive the
+   * async-iterator without G6-A's production STREAM executor wired in.
+   *
+   * The native cdylib's `testingOpenStreamForTest` symbol is only
+   * resolvable when the napi build was built with
+   * `--features test-helpers`. Production cdylibs surface
+   * `E_PRIMITIVE_NOT_IMPLEMENTED` if reached.
+   *
+   * Symbol presence is pinned by
+   * `bindings/napi/test/stream_napi_async_iterator_back_pressure.test.ts`.
+   */
+  public testingOpenStreamForTest(chunks: Chunk[]): StreamHandle {
+    this.assertOpen();
+    if (!this.inner.testingOpenStreamForTest) {
+      throw new EDslInvalidShape(
+        "Engine.testingOpenStreamForTest unavailable on this binding — \
+build @benten/engine-native with `--features test-helpers`",
+      );
+    }
+    let native: NativeStreamHandle;
+    try {
+      native = this.inner.testingOpenStreamForTest(chunks);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+    return wrapStreamHandle(native);
+  }
+
+  // -------- SUBSCRIBE (Phase 2b G6-B) --------
+
+  /**
+   * Register an ad-hoc change-stream consumer. `pattern` is an
+   * event-name glob (e.g. `"post:*"`, `"system:CapabilityGrant"`);
+   * `callback` fires once per matched event with
+   * `(engineAssignedSeq, payloadChunk)`.
+   *
+   * Returns a [`Subscription`] handle; call `unsubscribe()` (or let it
+   * fall out of scope and rely on the GC-driven Rust-side `Drop` impl)
+   * to release the registration.
+   *
+   * Renamed from `engine.subscribe` per dx-optimizer R1 finding to
+   * avoid name-collision with the DSL `subgraph(...).subscribe`
+   * builder method.
+   *
+   * D5-RESOLVED delivery semantics: engine-assigned `u64 seq` +
+   * engine-side dedup at the handler boundary = exactly-once at this
+   * API surface. Within-key strict ordering, cross-key unordered.
+   * Bounded retention window (1000 events OR 24h) for persistent
+   * cursors. Cap-check at delivery.
+   */
+  public onChange(
+    pattern: string,
+    callback: OnChangeCallback,
+    cursor?: SubscribeCursor,
+  ): Subscription {
+    this.assertOpen();
+    validateOnChangeArgs(pattern, callback);
+    if (!this.inner.onChange) {
+      throw new EDslInvalidShape(
+        "Engine.onChange unavailable on this binding — rebuild @benten/engine-native",
+      );
+    }
+    let raw: NativeSubscriptionJson;
+    try {
+      raw = this.inner.onChange(pattern, serializeCursor(cursor));
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+    // Pre-G6-A: callback is dropped because the change-stream port
+    // isn't wired across napi yet; the wrapper exposes the
+    // Subscription shape so consumer code compiles end-to-end.
+    // Post-G6-A: this wrapper threads the callback through a
+    // `napi::ThreadsafeFunction` registered by the napi adapter.
+    void callback;
+    return makeSubscription(raw);
   }
 }
 

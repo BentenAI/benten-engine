@@ -60,6 +60,13 @@ mod view;
 // stays diff-reviewable.
 #[cfg(feature = "napi-export")]
 mod wait;
+// Phase 2b G6-B: STREAM + SUBSCRIBE napi-bridge helpers. Same split
+// pattern as `wait` — adapters are plain Rust functions here, the
+// `#[napi]` impl methods consuming them live in `napi_surface` below.
+#[cfg(feature = "napi-export")]
+mod stream;
+#[cfg(feature = "napi-export")]
+mod subscribe;
 
 // Re-export the policy enum so the napi-derive macros pick it up at the
 // crate root where napi-rs v3 looks for top-level `#[napi]` items.
@@ -86,7 +93,11 @@ mod napi_surface {
         json_to_props, node_json_to_node, node_to_json, parse_actor_cid_or_derive, parse_cid,
     };
     use crate::policy::{PolicyKind, parse_grant_json};
+    use crate::stream::{
+        call_stream_adapter, close_handle_adapter, next_chunk_adapter, open_stream_adapter,
+    };
     use crate::subgraph::{json_to_subgraph_spec, outcome_to_json};
+    use crate::subscribe::{on_change_adapter, subscription_to_json};
     use crate::trace::trace_to_json;
     use crate::view::{extract_view_id, parse_user_view_spec};
     use crate::wait::{
@@ -596,6 +607,225 @@ mod napi_surface {
             principal_cid: String,
         ) -> napi::Result<serde_json::Value> {
             resume_from_bytes_as_adapter(&self.inner, bytes.as_ref(), signal_value, &principal_cid)
+        }
+
+        // -------- STREAM (Phase 2b G6-B) --------
+
+        /// Phase 2b G6-B: invoke a registered handler whose subgraph
+        /// produces STREAM chunks. Returns a [`StreamHandleJs`] the
+        /// TS wrapper renders as `AsyncIterable<Chunk>`.
+        ///
+        /// Mirrors `Engine::call` naming. The TS wrapper's
+        /// `engine.callStream(handlerId, action, input)` is the
+        /// auto-close form; for explicit-close use `openStream`.
+        #[napi]
+        pub fn call_stream(
+            &self,
+            handler_id: String,
+            op: String,
+            input: serde_json::Value,
+        ) -> napi::Result<StreamHandleJs> {
+            let handle = call_stream_adapter(&self.inner, &handler_id, &op, input)?;
+            Ok(StreamHandleJs::from_inner(handle))
+        }
+
+        /// Phase 2b G6-B: open a STREAM dispatch returning a
+        /// [`StreamHandleJs`] whose lifecycle the caller manages
+        /// explicitly via `close()`.
+        #[napi]
+        pub fn open_stream(
+            &self,
+            handler_id: String,
+            op: String,
+            input: serde_json::Value,
+        ) -> napi::Result<StreamHandleJs> {
+            let handle = open_stream_adapter(&self.inner, &handler_id, &op, input)?;
+            Ok(StreamHandleJs::from_inner(handle))
+        }
+
+        /// ts-r4-2 R4: vitest-harness factory. Construct a
+        /// [`StreamHandleJs`] pre-populated with `chunks` for harnesses
+        /// that need to drive the JS-side async-iterator without G6-A's
+        /// production STREAM executor wired in.
+        ///
+        /// Symbol presence is pinned by
+        /// `bindings/napi/test/stream_napi_async_iterator_back_pressure.test.ts:
+        /// expect(typeof engine.testingOpenStreamForTest).toBe("function")`.
+        ///
+        /// The underlying `benten_engine::Engine::testing_open_stream_for_test`
+        /// is cfg-gated under `cfg(any(test, feature = "test-helpers"))`
+        /// per Phase-2a sec-r6r2-02 discipline. This napi method is
+        /// emitted unconditionally (napi-derive can't cfg-gate at method
+        /// level cleanly) but compiles only when the napi crate's
+        /// `test-helpers` feature is enabled, which transitively enables
+        /// `benten-engine/test-helpers`. Production cdylib builds (the
+        /// scaffolder + index.test.ts default path) do NOT enable
+        /// `test-helpers`, so this method's body fails to resolve and
+        /// the build fails before the test surface lands in production.
+        ///
+        /// To keep the cdylib build green when `test-helpers` is OFF,
+        /// the body routes through a stub that always panics — the
+        /// caller-side `cfg(any(test, feature = "test-helpers"))` gate
+        /// on the engine method means the real symbol only resolves
+        /// in the test build. See `crate::stream::testing_open_stream_for_test_adapter`
+        /// for the gated entry point.
+        #[napi(js_name = "testingOpenStreamForTest")]
+        pub fn testing_open_stream_for_test(
+            &self,
+            chunks: Vec<Buffer>,
+        ) -> napi::Result<StreamHandleJs> {
+            #[cfg(any(test, feature = "test-helpers"))]
+            {
+                let raw: Vec<Vec<u8>> = chunks.into_iter().map(|b| b.as_ref().to_vec()).collect();
+                let handle = crate::stream::testing_open_stream_for_test_adapter(&self.inner, raw);
+                Ok(StreamHandleJs::from_inner(handle))
+            }
+            #[cfg(not(any(test, feature = "test-helpers")))]
+            {
+                let _ = chunks;
+                Err(napi::Error::new(
+                    Status::GenericFailure,
+                    "E_PRIMITIVE_NOT_IMPLEMENTED: testingOpenStreamForTest \
+                     requires the cdylib to be built with `--features test-helpers` \
+                     (vitest harness build only). Production cdylib consumers \
+                     should never reach this surface.",
+                ))
+            }
+        }
+
+        // -------- SUBSCRIBE (Phase 2b G6-B) --------
+
+        /// Phase 2b G6-B: register an ad-hoc change-stream consumer.
+        ///
+        /// `pattern` is an event-name glob; `cursor` is one of:
+        /// - `null` / `{ "kind": "latest" }` — start from next event
+        /// - `{ "kind": "sequence", "seq": <number> }` — replay from seq
+        /// - `{ "kind": "persistent", "subscriberId": <string> }` —
+        ///   engine-managed cursor stored across restart
+        ///
+        /// Returns the JSON shape of the constructed
+        /// [`benten_engine::Subscription`]:
+        /// `{ active, pattern, cursor, maxDeliveredSeq }`.
+        ///
+        /// Renamed from `engine.subscribe` per dx-optimizer R1 finding
+        /// to avoid name-collision with the DSL
+        /// `subgraph(...).subscribe` builder method. Callbacks are
+        /// wired through G6-A's change-stream port; pre-G6-A the
+        /// returned subscription's `active` is `false`.
+        #[napi]
+        pub fn on_change(
+            &self,
+            pattern: String,
+            cursor: serde_json::Value,
+        ) -> napi::Result<serde_json::Value> {
+            let sub = on_change_adapter(&self.inner, &pattern, &cursor)?;
+            Ok(subscription_to_json(&sub))
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // StreamHandleJs — napi class wrapping `benten_engine::StreamHandle`
+    // ---------------------------------------------------------------------
+
+    /// JS-side stream handle. Mirrors [`benten_engine::StreamHandle`]
+    /// across the napi boundary. The TS wrapper renders this class as
+    /// `AsyncIterable<Buffer>` with an explicit `close()` method.
+    ///
+    /// Each `next()` call drains one chunk, returning either
+    /// `Buffer | null` (`null` ⇒ end-of-stream). Errors surface as
+    /// thrown napi errors.
+    ///
+    /// Pre-G6-A: `next()` from a handle constructed via
+    /// `engine.callStream` / `engine.openStream` surfaces
+    /// `E_PRIMITIVE_NOT_IMPLEMENTED` on the first call. Handles
+    /// constructed via the cfg-gated `testingOpenStreamForTest`
+    /// drain their pre-populated chunk vector normally.
+    #[napi]
+    pub struct StreamHandleJs {
+        inner: std::sync::Mutex<Option<benten_engine::StreamHandle>>,
+    }
+
+    impl StreamHandleJs {
+        pub(crate) fn from_inner(handle: benten_engine::StreamHandle) -> Self {
+            Self {
+                inner: std::sync::Mutex::new(Some(handle)),
+            }
+        }
+    }
+
+    #[napi]
+    impl StreamHandleJs {
+        /// Pull the next chunk. Returns `null` at end-of-stream.
+        ///
+        /// Throws if the stream has been closed and drained, or if the
+        /// underlying executor surfaces a typed error.
+        #[napi]
+        pub fn next(&self) -> napi::Result<Option<Buffer>> {
+            let mut g = self.inner.lock().map_err(|_| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    "StreamHandle: internal lock poisoned",
+                )
+            })?;
+            let Some(handle) = g.as_mut() else {
+                return Ok(None);
+            };
+            match next_chunk_adapter(handle)? {
+                Some(bytes) => Ok(Some(Buffer::from(bytes))),
+                None => Ok(None),
+            }
+        }
+
+        /// Explicitly close the handle. Idempotent. Once closed, all
+        /// subsequent `next()` calls return `null`.
+        #[napi]
+        pub fn close(&self) -> napi::Result<()> {
+            let mut g = self.inner.lock().map_err(|_| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    "StreamHandle: internal lock poisoned",
+                )
+            })?;
+            if let Some(handle) = g.as_mut() {
+                close_handle_adapter(handle);
+            }
+            Ok(())
+        }
+
+        /// `true` once the handle is drained (closed AND no buffered
+        /// chunks remain).
+        #[napi(js_name = "isDrained")]
+        pub fn is_drained(&self) -> napi::Result<bool> {
+            let g = self.inner.lock().map_err(|_| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    "StreamHandle: internal lock poisoned",
+                )
+            })?;
+            Ok(match g.as_ref() {
+                Some(h) => h.is_drained(),
+                None => true,
+            })
+        }
+
+        /// Engine-assigned sequence count of chunks delivered so far.
+        /// Bumped per `next()` returning a chunk; `0` before the first
+        /// chunk drains.
+        #[napi(js_name = "seqSoFar")]
+        pub fn seq_so_far(&self) -> napi::Result<u32> {
+            let g = self.inner.lock().map_err(|_| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    "StreamHandle: internal lock poisoned",
+                )
+            })?;
+            // u32 keeps the JS surface friendly; saturating cast covers
+            // the (unreachable in 2b scope) >4B-chunk case without
+            // surfacing a bigint to JS.
+            Ok(match g.as_ref() {
+                Some(h) => u32::try_from(h.seq_so_far()).unwrap_or(u32::MAX),
+                None => 0,
+            })
         }
     }
 }

@@ -33,6 +33,14 @@ in-process-test = []
 # yields a pure-Rust rlib that the in-process integration test can link
 # against without resolving napi extern symbols.
 napi-export = ["dep:napi", "dep:napi-derive"]
+# Phase 2b G6-B (ts-r4-2): light up the cfg-gated
+# `engine.testingOpenStreamForTest` factory + the underlying
+# `benten_engine::testing_open_stream_for_test` helper. The napi
+# `Engine` impl method is wrapped in `cfg(any(test, feature =
+# "test-helpers"))` so the production cdylib does NOT compile this
+# surface in. Vitest fixtures opt into this feature explicitly when
+# building the test artifact (`napi build --features test-helpers`).
+test-helpers = ["benten-engine/test-helpers"]
 
 [dependencies]
 benten-core = { path = "../../crates/benten-core" }
