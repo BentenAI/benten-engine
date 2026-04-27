@@ -54,7 +54,17 @@ pub const ATTRIBUTION_PROPERTY_KEY: &str = "attribution";
 /// `non_exhaustive` guards against a future Phase-2+ decision to add a 13th
 /// primitive without forcing a major-version bump across downstream
 /// matchers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+///
+/// **Intentionally NOT `Serialize` / `Deserialize`** (cag-mr-g12c-cont-1, D5).
+/// `PrimitiveKind` is encoded into the canonical-bytes shape via its
+/// [`PrimitiveKind::canonical_tag`] string ("READ" / "WRITE" / ...) — see
+/// [`canonical_subgraph_bytes`]. A generic serde derive would produce a
+/// SECOND, NON-CANONICAL encoding (the auto-derived enum-discriminant tag),
+/// inviting silent CID drift if a caller serialised a `PrimitiveKind` (or
+/// any containing struct) through `serde_json` / `serde_ipld_dagcbor::to_vec`
+/// directly. Routing all encode/decode through `canonical_tag` /
+/// `from_canonical_tag` keeps the on-disk shape single-sourced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PrimitiveKind {
     /// READ a Node from the graph.
@@ -173,7 +183,15 @@ impl PrimitiveKind {
 }
 
 /// Operation Node — the subgraph-level unit of execution.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+///
+/// **Intentionally NOT `Serialize` / `Deserialize`** (cag-mr-g12c-cont-1, D5).
+/// The on-disk shape is defined by [`canonical_subgraph_bytes`] via the
+/// internal `CanonNodeRef` / `CanonNodeOwned` projection (which encodes
+/// `kind` as a stable string tag rather than the enum's auto-derived
+/// discriminant). Exposing a generic serde derive here would invite a
+/// silent second encoding that does not round-trip through
+/// [`Subgraph::load_verified`].
+#[derive(Debug, Clone, PartialEq)]
 pub struct OperationNode {
     /// Node id, unique within the enclosing subgraph.
     pub id: String,
@@ -217,7 +235,15 @@ impl OperationNode {
 
 /// Opaque handle returned by `SubgraphBuilder` when adding nodes. Tests
 /// use these as arguments to `add_edge`, `transform`, etc.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+///
+/// **Intentionally NOT `Serialize` / `Deserialize`** (cag-mr-g12c-cont-1, D5).
+/// `NodeHandle` is a transient builder-time index into
+/// [`SubgraphBuilder::nodes`]; it is NEVER part of the canonical-bytes shape
+/// (the canonical encoding identifies nodes by their string `id`, not their
+/// builder index). Serialising a handle through generic serde would
+/// guarantee a footgun: the handle decoded on the other side would index
+/// into a freshly-built subgraph whose node order may differ.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct NodeHandle(pub u32);
 
 /// A subgraph (set of OperationNodes + directed edges between them).
@@ -234,13 +260,22 @@ pub struct NodeHandle(pub u32);
 ///
 /// `Subgraph::to_dagcbor` / [`canonical_subgraph_bytes`] use the
 /// `CanonView` schema (sorted nodes + sorted edges + handler_id +
-/// deterministic). The auto-derived `Serialize` / `Deserialize`
-/// implementations are a SECONDARY (non-canonical) serialization for
-/// debugging / non-CID-bearing transport — DO NOT route content-addressed
-/// bytes through `serde_ipld_dagcbor::to_vec(&subgraph)` directly; always
-/// go through `to_dagcbor`/`canonical_subgraph_bytes` so the CID matches
-/// the `from_dagcbor` decode.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// deterministic).
+///
+/// **`Subgraph` is intentionally NOT `Serialize` / `Deserialize`**
+/// (cag-mr-g12c-cont-1, D5). The pre-fix-pass auto-derived impls were a
+/// SECONDARY (non-canonical) serialisation that did NOT match
+/// `canonical_bytes()` — calling `serde_ipld_dagcbor::to_vec(&sg)` produced
+/// bytes whose BLAKE3 differed from `sg.cid()`, and round-tripping through a
+/// generic serde sink yielded a `Subgraph` that would not re-hash to the
+/// original CID. Removing the derives forces every encode path to go through
+/// [`Subgraph::canonical_bytes`] / [`Subgraph::to_dag_cbor`] /
+/// [`Subgraph::to_dagcbor`] and every decode path through
+/// [`Subgraph::load_verified`] / [`Subgraph::from_dagcbor`] /
+/// [`Subgraph::load_verified_with_cid`], so the `cid()` ↔ stored-bytes
+/// contract is single-sourced. A caller that previously relied on `serde`
+/// will see a typed compile error pointing at the canonical entry points.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Subgraph {
     /// Stable handler-registration identity.
     pub handler_id: String,
