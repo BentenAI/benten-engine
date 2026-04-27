@@ -646,6 +646,22 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** `GrantScope::parse` (G4-A)
 - **Phase:** 2a
 
+### E_VIEW_STRATEGY_A_REFUSED
+
+- **Message:** "user view '{view_id}' declared Strategy::A — Strategy A is reserved for the 5 hand-written Phase-1 IVM views (Rust-only); user views must use Strategy::B"
+- **Context:** `{ view_id: string }`
+- **Fix:** D8-RESOLVED (Phase 2b). Strategy A is the hand-written-IVM lane reserved for the five Phase-1 baseline views (capability-grants, event-dispatch, content-listing, governance-inheritance, version-current). User-registered views go through generalized Algorithm B; either omit the `strategy` field (defaults to `B`) or pass `Strategy::B` explicitly.
+- **Thrown at:** `Engine::create_view` registration (G8-B)
+- **Phase:** 2b
+
+### E_VIEW_STRATEGY_C_RESERVED
+
+- **Message:** "user view '{view_id}' declared Strategy::C — Strategy C (Z-set / DBSP cancellation) is reserved for Phase 3+"
+- **Context:** `{ view_id: string }`
+- **Fix:** D8-RESOLVED (Phase 2b). Strategy C is the Z-set / DBSP cancellation algorithm slot reserved for Phase 3+; refused at registration time in Phase 2b. Use `Strategy::B` (or omit the field; user views default to B).
+- **Thrown at:** `Engine::create_view` registration (G8-B)
+- **Phase:** 2b
+
 ### E_WAIT_SIGNAL_SHAPE_MISMATCH
 
 > **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 2b (alongside the broader G3-B DX signal-payload typing landing). Integration test at `crates/benten-engine/tests/integration/wait_signal_shape_optional_typing.rs` exercises the surface; the production firing site is reserved.

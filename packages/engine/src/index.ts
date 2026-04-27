@@ -68,11 +68,23 @@ export type {
   SandboxNodeDescription,
   SandboxOptions,
   SandboxResult,
+  Strategy,
   Subgraph,
   SubgraphNode,
   SuspensionResult,
   Trace,
   TraceStep,
+  UserView,
+  UserViewInputPattern,
+  UserViewSpec,
+  UserViewSubscription,
   Value,
   ViewDef,
 } from "./types.js";
+
+export {
+  buildUserViewHandle,
+  resolveUserViewStrategy,
+  userViewSpecToNativeJson,
+  validateUserViewSpec,
+} from "./views.js";

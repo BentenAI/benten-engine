@@ -79,6 +79,23 @@ pub enum EngineError {
     #[error("unknown view: {view_id}")]
     UnknownView { view_id: String },
 
+    /// Phase-2b G8-B (D8-RESOLVED): user view registered with `Strategy::A`.
+    /// Strategy A is reserved for the 5 hand-written Phase-1 IVM views
+    /// (Rust-only); user-registered views must use the generalized Algorithm
+    /// B path. The user-view default is `Strategy::B`.
+    #[error(
+        "user view '{view_id}' declared Strategy::A — Strategy A is reserved for the 5 hand-written Phase-1 IVM views (Rust-only); user views must use Strategy::B"
+    )]
+    ViewStrategyARefused { view_id: String },
+
+    /// Phase-2b G8-B (D8-RESOLVED): user view registered with `Strategy::C`.
+    /// Strategy C (Z-set / DBSP cancellation) is reserved for Phase 3+ and
+    /// refused at registration time in Phase 2b.
+    #[error(
+        "user view '{view_id}' declared Strategy::C — Strategy C (Z-set / DBSP cancellation) is reserved for Phase 3+"
+    )]
+    ViewStrategyCReserved { view_id: String },
+
     /// Nested transaction attempted.
     #[error("nested transaction not supported")]
     NestedTransactionNotSupported,
@@ -114,6 +131,8 @@ impl EngineError {
             EngineError::SubsystemDisabled { .. } => ErrorCode::SubsystemDisabled,
             EngineError::IvmViewStale { .. } => ErrorCode::IvmViewStale,
             EngineError::UnknownView { .. } => ErrorCode::UnknownView,
+            EngineError::ViewStrategyARefused { .. } => ErrorCode::ViewStrategyARefused,
+            EngineError::ViewStrategyCReserved { .. } => ErrorCode::ViewStrategyCReserved,
             EngineError::NestedTransactionNotSupported => ErrorCode::NestedTransactionNotSupported,
             EngineError::NotImplemented { .. } => ErrorCode::NotImplemented,
             EngineError::Other { code, .. } => code.clone(),

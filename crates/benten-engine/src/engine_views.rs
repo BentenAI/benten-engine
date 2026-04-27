@@ -5,15 +5,24 @@
 //! `change_event_count`, and the three view-read entry points
 //! (`read_view`, `read_view_with`, `read_view_strict`,
 //! `read_view_allow_stale`). Every method is a plain `impl Engine` item.
+//!
+//! **Phase 2b G8-B addition.** [`Engine::create_user_view`] registers
+//! user-defined views via [`UserViewSpec`]. The user-view path is the
+//! generalized Algorithm B lane (`Strategy::B` per D8-RESOLVED). The 5
+//! Phase-1 hand-written views remain on `Strategy::A` (Rust-only) and are
+//! still registered through the legacy `Engine::create_view(view_id, opts)`
+//! surface in [`crate::engine_caps`].
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use benten_caps::CapError;
+use benten_core::{Cid, Node, Value};
 
 use crate::change_probe::ChangeProbe;
 use crate::engine::{Engine, is_known_view_id};
 use crate::error::EngineError;
-use crate::outcome::{Outcome, ReadViewOptions};
+use crate::outcome::{Outcome, ReadViewOptions, UserViewInputPattern, UserViewSpec};
 
 impl Engine {
     // -------- Change stream surface --------
@@ -175,4 +184,132 @@ impl Engine {
     pub fn read_view_allow_stale(&self, view_id: &str) -> Result<Outcome, EngineError> {
         self.read_view_with(view_id, ReadViewOptions::allow_stale())
     }
+
+    // -------- User-view registration (Phase 2b G8-B) --------
+
+    /// Register a user-defined IVM view via the [`UserViewSpec`] builder.
+    ///
+    /// This is the Phase-2b user-view registration surface. Defaults to
+    /// `Strategy::B` per D8-RESOLVED — the 5 hand-written Phase-1 views
+    /// stay on `Strategy::A` (Rust-only) and continue to be registered via
+    /// the legacy [`Engine::create_view`] `(view_id, ViewCreateOptions)`
+    /// overload in [`crate::engine_caps`].
+    ///
+    /// # Errors
+    ///
+    /// - [`EngineError::SubsystemDisabled`] when IVM is disabled
+    ///   (`.without_ivm()` engine builder).
+    /// - [`EngineError::ViewStrategyARefused`] when the spec declared
+    ///   `Strategy::A` (Strategy A is hand-written-IVM-only; user views
+    ///   cannot claim that lane).
+    /// - [`EngineError::ViewStrategyCReserved`] when the spec declared
+    ///   `Strategy::C` (Z-set / DBSP cancellation reserved for Phase 3+).
+    /// - Backend errors from the underlying privileged Node write.
+    pub fn create_user_view(&self, spec: UserViewSpec) -> Result<Cid, EngineError> {
+        // D8-RESOLVED: refuse Strategy::A + Strategy::C BEFORE writing the
+        // definition Node so a refused registration leaves no on-disk
+        // residue (the `system:IVMView` Node only exists for accepted
+        // strategies).
+        match spec.strategy() {
+            benten_ivm::Strategy::A => {
+                return Err(EngineError::ViewStrategyARefused {
+                    view_id: spec.id().to_string(),
+                });
+            }
+            benten_ivm::Strategy::C => {
+                return Err(EngineError::ViewStrategyCReserved {
+                    view_id: spec.id().to_string(),
+                });
+            }
+            benten_ivm::Strategy::B => { /* accepted */ }
+        }
+
+        if !self.ivm_enabled {
+            return Err(EngineError::SubsystemDisabled { subsystem: "ivm" });
+        }
+
+        // Derive the input-pattern label (used by the ContentListingView
+        // shim until G8-A's generalized Algorithm B port lands; per the
+        // §3 G8-B coordination note the user-view ingestion path stubs
+        // through ContentListingView in the Label case so the registration
+        // round-trip is observable end-to-end on this branch).
+        let input_pattern_label = match spec.input_pattern() {
+            UserViewInputPattern::Label(l) => Some(l.clone()),
+            UserViewInputPattern::AnchorPrefix(prefix) => Some(prefix.clone()),
+        };
+
+        // Persist the view definition Node so the registration is content-
+        // addressed + visible to Phase-3 sync. The Node carries the user
+        // view's id + input-pattern label + an explicit `strategy: "B"`
+        // property so the catalog encoding round-trips a future-loader's
+        // Strategy enum lookup unambiguously.
+        let mut def_props: BTreeMap<String, Value> = BTreeMap::new();
+        def_props.insert("view_id".into(), Value::text(spec.id()));
+        if let Some(label) = input_pattern_label.as_deref() {
+            def_props.insert("input_pattern_label".into(), Value::text(label));
+        }
+        match spec.input_pattern() {
+            UserViewInputPattern::Label(_) => {
+                def_props.insert("input_pattern_kind".into(), Value::text("label"));
+            }
+            UserViewInputPattern::AnchorPrefix(_) => {
+                def_props.insert("input_pattern_kind".into(), Value::text("anchor_prefix"));
+            }
+        }
+        def_props.insert("strategy".into(), Value::text("B"));
+        let def_node = Node::new(vec!["system:IVMView".into()], def_props);
+        let cid = self.privileged_put_node_for_user_view(&def_node)?;
+
+        // Register a live view instance with the IVM subscriber so future
+        // change events propagate. We dedupe by view id so re-registering
+        // the same id is a no-op at the subscriber level.
+        if let Some(ivm) = self.ivm.as_ref() {
+            let already_registered = ivm.view_ids().iter().any(|id| id == spec.id());
+            if !already_registered && let Some(label) = input_pattern_label.as_deref() {
+                // Phase 2b G8-B: until G8-A's generalized Algorithm B port
+                // lands, the user-view runtime ingestion path stubs through
+                // ContentListingView keyed on the input pattern label so
+                // change events still flow to a live View. Once G8-A ships
+                // the dispatch swaps to the per-strategy view constructor;
+                // the registration surface (this method) does not change.
+                let view = benten_ivm::views::ContentListingView::new(label);
+                ivm.register_view(Box::new(view));
+            }
+        }
+
+        Ok(cid)
+    }
 }
+
+impl Engine {
+    /// Internal helper mirroring `engine_caps::Engine::privileged_put_node`
+    /// so the user-view registration path can write its system-zone Node
+    /// without re-exporting the helper. The two implementations are
+    /// intentionally identical in body — keeping this one private to
+    /// `engine_views` avoids bumping `engine_caps`'s public surface.
+    fn privileged_put_node_for_user_view(&self, node: &Node) -> Result<Cid, EngineError> {
+        Ok(self.backend.put_node_with_context(
+            node,
+            &benten_graph::WriteContext::privileged_for_engine_api(),
+        )?)
+    }
+
+}
+
+// `is_known_view_id` consultation note (Phase 2b G8-B addresses
+// engine.rs:1976 TODO partially): user-view registration via
+// [`Engine::create_user_view`] adds the user's view id into the IVM
+// subscriber's `view_ids()` set. The `read_view_with` path above already
+// consults the live subscriber FIRST (see the `if let Some(ivm) = ...`
+// block) and only falls back to the canonical-id whitelist when the
+// subscriber has no live view for the id — so user-registered views are
+// observable through `read_view*` immediately after `create_user_view`
+// returns.
+//
+// The TODO at engine.rs:1976 ("replace with a per-view definition
+// registration pulled from benten-ivm") is now subscriber-driven for
+// the dynamic-registration path; the static whitelist of canonical ids
+// remains for the 5 hand-written views which do not auto-register a
+// live subscriber on engine open. Full removal of the whitelist waits
+// on G8-A's Algorithm B port to expose a definition-registry method on
+// the subscriber.

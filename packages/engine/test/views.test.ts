@@ -16,7 +16,11 @@
 // r4-qa-expert.json qa-r4-04.
 
 import { describe, it, expect } from "vitest";
-import { Engine } from "@benten/engine";
+import {
+  Engine,
+  resolveUserViewStrategy,
+  validateUserViewSpec,
+} from "@benten/engine";
 import type { UserViewSpec, UserView } from "@benten/engine";
 
 describe("engine.createView", () => {
@@ -50,22 +54,32 @@ describe("engine.createView", () => {
     await engine.close();
   });
 
-  it.skip("Phase 2b G8-B pending — strategy defaults to 'B' for user views (D8)", async () => {
-    const engine = await Engine.open(":memory:");
-
+  it("strategy defaults to 'B' for user views (D8) — pure resolver", () => {
+    // G8-B pure-resolver test: pin the default-strategy contract at the
+    // TS DSL layer without spinning a Rust engine. The engine integration
+    // test lives Rust-side in
+    // crates/benten-engine/tests/user_view_strategy_b_default.rs. This
+    // pure-resolver assertion catches drift in the TS default ahead of
+    // an in-memory engine backend (today `Engine.open(":memory:")` is
+    // not yet wired in 2b — the resolver is the load-bearing surface
+    // the napi bridge round-trips).
     const spec: UserViewSpec = {
       id: "user_default_strategy",
       inputPattern: { label: "post" },
       // No strategy field — DEFAULTS to 'B' per D8-RESOLVED.
     };
-
-    const view = await engine.createView(spec);
-    expect(view.strategy).toBe("B");
-
-    await engine.close();
+    const resolved = resolveUserViewStrategy(spec);
+    expect(resolved).toBe("B");
   });
 
-  it.skip("Phase 2b G8-B pending — refuses strategy 'A' with typed error (D8)", async () => {
+  it.skip("Phase 2b post-G8-A — refuses strategy 'A' with typed error via engine boundary (D8)", async () => {
+    // Engine-boundary refusal test. The actual typed-error firing is
+    // covered Rust-side at
+    // crates/benten-engine/tests/user_view_strategy_refusals.rs (the
+    // `E_VIEW_STRATEGY_A_REFUSED` error fires from `Engine::create_user_view`
+    // BEFORE any subscriber side-effect). This TS test is held until the
+    // in-memory backend lands so `Engine.open(":memory:")` doesn't itself
+    // fail before reaching the strategy-refusal path.
     const engine = await Engine.open(":memory:");
 
     const badSpec = {
@@ -75,7 +89,6 @@ describe("engine.createView", () => {
     } as unknown as UserViewSpec;
 
     await expect(engine.createView(badSpec)).rejects.toMatchObject({
-      // Exact error code TBD by R5 G8-B; assert recognizable typed shape.
       message: expect.stringMatching(
         /E_VIEW_STRATEGY_A_REFUSED|hand-written|Strategy::A/i,
       ),
@@ -84,26 +97,26 @@ describe("engine.createView", () => {
     await engine.close();
   });
 
-  it.skip("Phase 2b G8-B pending — explicit 'B' opt-in matches default behavior", async () => {
-    const engine = await Engine.open(":memory:");
-
-    const explicit = await engine.createView({
+  it("explicit 'B' opt-in matches default behavior — pure resolver", () => {
+    // Pure-resolver assertion: resolveUserViewStrategy returns 'B' both
+    // for an explicit `strategy: 'B'` and for the default omission.
+    // Engine-boundary parity test held until the in-memory backend lands.
+    const explicit = resolveUserViewStrategy({
       id: "user_explicit_b",
       inputPattern: { label: "post" },
       strategy: "B",
     });
-    const fallback = await engine.createView({
+    const fallback = resolveUserViewStrategy({
       id: "user_fallback_b",
       inputPattern: { label: "post" },
     });
-
-    expect(explicit.strategy).toBe(fallback.strategy);
-    expect(explicit.strategy).toBe("B");
-
-    await engine.close();
+    expect(explicit).toBe(fallback);
+    expect(explicit).toBe("B");
   });
 
-  it.skip("Phase 2b G8-B pending — refuses strategy 'C' as Phase-3 reserved", async () => {
+  it.skip("Phase 2b post-G8-A — refuses strategy 'C' as Phase-3 reserved via engine boundary", async () => {
+    // Held until in-memory backend lands; Rust-side coverage at
+    // crates/benten-engine/tests/user_view_strategy_refusals.rs.
     const engine = await Engine.open(":memory:");
 
     const reservedSpec = {
@@ -117,6 +130,37 @@ describe("engine.createView", () => {
     });
 
     await engine.close();
+  });
+
+  it("validateUserViewSpec rejects malformed spec with typed message", () => {
+    // Pure-validator coverage so the napi-bridge pre-validation contract
+    // is pinned regardless of backend availability.
+    const missingId = validateUserViewSpec({
+      // @ts-expect-error — missing required field for negative test
+      inputPattern: { label: "post" },
+    });
+    expect(missingId).toMatch(/id/);
+
+    const missingPattern = validateUserViewSpec({
+      // @ts-expect-error — missing required field for negative test
+      id: "x",
+    });
+    expect(missingPattern).toMatch(/inputPattern/);
+
+    const badStrategy = validateUserViewSpec({
+      id: "x",
+      inputPattern: { label: "post" },
+      // @ts-expect-error — bad value for negative test
+      strategy: "Z",
+    });
+    expect(badStrategy).toMatch(/strategy/);
+
+    // Well-formed spec returns null.
+    const ok = validateUserViewSpec({
+      id: "ok",
+      inputPattern: { label: "post" },
+    });
+    expect(ok).toBeNull();
   });
 });
 

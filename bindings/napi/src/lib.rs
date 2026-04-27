@@ -88,7 +88,7 @@ mod napi_surface {
     use crate::policy::{PolicyKind, parse_grant_json};
     use crate::subgraph::{json_to_subgraph_spec, outcome_to_json};
     use crate::trace::trace_to_json;
-    use crate::view::extract_view_id;
+    use crate::view::{extract_view_id, parse_user_view_spec};
     use crate::wait::{
         call_with_suspension_adapter, resume_from_bytes_as_adapter,
         resume_from_bytes_unauthenticated_adapter,
@@ -419,6 +419,21 @@ mod napi_surface {
                 .inner
                 .create_view(&view_id, ViewCreateOptions)
                 .map_err(engine_err)?;
+            Ok(cid.to_base32())
+        }
+
+        /// Phase-2b G8-B: register a user-defined IVM view.
+        ///
+        /// Accepts the JS-side `UserViewSpec` shape:
+        /// `{ id: string, inputPattern: { label?: string, anchorPrefix?: string },
+        ///    strategy?: 'A' | 'B' | 'C' }`.
+        /// `strategy` defaults to `'B'` per D8-RESOLVED. `'A'` and `'C'`
+        /// produce typed errors (`E_VIEW_STRATEGY_A_REFUSED` /
+        /// `E_VIEW_STRATEGY_C_RESERVED`).
+        #[napi]
+        pub fn create_user_view(&self, spec_json: serde_json::Value) -> napi::Result<String> {
+            let spec = parse_user_view_spec(&spec_json)?;
+            let cid = self.inner.create_user_view(spec).map_err(engine_err)?;
             Ok(cid.to_base32())
         }
 

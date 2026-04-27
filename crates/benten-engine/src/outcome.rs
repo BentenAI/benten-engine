@@ -15,10 +15,136 @@ use benten_core::{Cid, Node, Value};
 use benten_errors::ErrorCode;
 use benten_eval::AttributionFrame;
 
-/// Options passed to `Engine::create_view`. Currently a placeholder shape so
+/// Options passed to `Engine::create_view` for the legacy id-string form
+/// (`engine.create_view(view_id, opts)`). Currently a placeholder shape so
 /// `Default::default()` resolves unambiguously at the call site.
+///
+/// **Phase 2b G8-B note.** New code registering user-defined views should
+/// use the [`UserViewSpec`] builder — `engine.create_view(spec)` — which
+/// carries the strategy field and the input-pattern shape. The legacy
+/// `(view_id, ViewCreateOptions)` overload is preserved for the canonical
+/// view-id family the engine builds in (e.g. `content_listing_<label>`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ViewCreateOptions;
+
+/// Input-pattern selector for [`UserViewSpec`] (Phase-2b G8-B).
+///
+/// User views observe the change stream via a small selector vocabulary
+/// kept deliberately narrow in 2b — the surface widens in Phase 3 alongside
+/// the generalized Algorithm B port. The shape mirrors the TS DSL
+/// `inputPattern` field exactly so the napi bridge round-trips without
+/// renaming.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UserViewInputPattern {
+    /// Match every change event whose Node carries the given label. Mirrors
+    /// the Phase-1 `ContentListingView` shape (`label` selector).
+    Label(String),
+    /// Match every change event whose anchor id starts with the given
+    /// prefix. Companion to [`Self::Label`] for anchor-rooted feeds.
+    AnchorPrefix(String),
+}
+
+/// User-registered view spec. Companion to the canonical `(view_id,
+/// ViewCreateOptions)` overload of `Engine::create_view`. The default
+/// strategy is `Strategy::B` per D8-RESOLVED — `Strategy::A` is reserved
+/// for the 5 hand-written Phase-1 views (Rust-only) and is refused at
+/// registration time; `Strategy::C` is reserved for Phase 3+.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserViewSpec {
+    pub(crate) id: String,
+    pub(crate) input_pattern: UserViewInputPattern,
+    pub(crate) strategy: benten_ivm::Strategy,
+}
+
+impl UserViewSpec {
+    /// Construct a builder. The `id` and `input_pattern` are required;
+    /// `strategy` defaults to `Strategy::B` (D8) and may be overridden via
+    /// [`UserViewSpecBuilder::strategy`].
+    #[must_use]
+    pub fn builder() -> UserViewSpecBuilder {
+        UserViewSpecBuilder::default()
+    }
+
+    /// View id (e.g. `"user_posts_by_author"`).
+    #[must_use]
+    pub fn id(&self) -> &str {
+        self.id.as_str()
+    }
+
+    /// Input-pattern selector.
+    #[must_use]
+    pub fn input_pattern(&self) -> &UserViewInputPattern {
+        &self.input_pattern
+    }
+
+    /// Resolved strategy. Defaults to `Strategy::B` per D8 unless the
+    /// builder explicitly opted-in via `.strategy(...)`.
+    #[must_use]
+    pub fn strategy(&self) -> benten_ivm::Strategy {
+        self.strategy
+    }
+}
+
+/// Builder for [`UserViewSpec`]. `id` + `input_pattern` are required;
+/// `strategy` defaults to `Strategy::B` (D8-RESOLVED).
+#[derive(Debug, Default)]
+pub struct UserViewSpecBuilder {
+    id: Option<String>,
+    input_pattern: Option<UserViewInputPattern>,
+    strategy: Option<benten_ivm::Strategy>,
+}
+
+impl UserViewSpecBuilder {
+    /// Set the view id. Required.
+    #[must_use]
+    pub fn id(mut self, id: impl Into<String>) -> Self {
+        self.id = Some(id.into());
+        self
+    }
+
+    /// Set the input pattern. Required.
+    #[must_use]
+    pub fn input_pattern(mut self, pattern: UserViewInputPattern) -> Self {
+        self.input_pattern = Some(pattern);
+        self
+    }
+
+    /// Explicitly opt into a strategy. Default is `Strategy::B` for user
+    /// views (D8-RESOLVED). `Strategy::A` is rejected by `Engine::create_view`
+    /// at registration time (hand-written = Rust-only) and `Strategy::C`
+    /// is rejected as Phase-3-reserved — both via typed errors that the
+    /// builder itself does NOT preempt (so the typed error surfaces at the
+    /// engine boundary where the catalog code is wired).
+    #[must_use]
+    pub fn strategy(mut self, strategy: benten_ivm::Strategy) -> Self {
+        self.strategy = Some(strategy);
+        self
+    }
+
+    /// Finalize the spec. Returns the missing-field error message string
+    /// when a required field was not set; the engine surface maps that to
+    /// `EngineError::Other { code: ErrorCode::InputLimit, message }` at
+    /// `create_view` time so the caller sees a typed error.
+    ///
+    /// # Errors
+    ///
+    /// Returns the missing-field message string when `id` or
+    /// `input_pattern` was not set.
+    pub fn build(self) -> Result<UserViewSpec, String> {
+        let id = self
+            .id
+            .ok_or_else(|| String::from("UserViewSpec.id is required"))?;
+        let input_pattern = self
+            .input_pattern
+            .ok_or_else(|| String::from("UserViewSpec.input_pattern is required"))?;
+        let strategy = self.strategy.unwrap_or(benten_ivm::Strategy::B);
+        Ok(UserViewSpec {
+            id,
+            input_pattern,
+            strategy,
+        })
+    }
+}
 
 /// Options passed to `Engine::read_view_with`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
