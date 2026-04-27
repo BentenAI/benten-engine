@@ -90,7 +90,9 @@ pub(crate) fn parse_user_view_spec(v: &serde_json::Value) -> napi::Result<UserVi
         .get("id")
         .and_then(|x| x.as_str())
         .map(str::to_string)
-        .ok_or_else(|| napi::Error::new(Status::InvalidArg, "createView spec.id: required string"))?;
+        .ok_or_else(|| {
+            napi::Error::new(Status::InvalidArg, "createView spec.id: required string")
+        })?;
 
     let input_pattern_obj = obj.get("inputPattern").ok_or_else(|| {
         napi::Error::new(

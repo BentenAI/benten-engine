@@ -233,6 +233,19 @@ impl Engine {
         // §3 G8-B coordination note the user-view ingestion path stubs
         // through ContentListingView in the Label case so the registration
         // round-trip is observable end-to-end on this branch).
+        //
+        // ⚠️ PRE-G8-A SEMANTIC STUB: AnchorPrefix is silently coerced to
+        // a Label-equality match against the prefix string (because
+        // ContentListingView only knows label equality). An app that
+        // declares `inputPattern: { anchorPrefix: "post" }` and then
+        // reads the user view will see results filtered by `label ==
+        // "post"`, NOT by anchor prefix. This is a stub bridge until
+        // G8-A's per-strategy view dispatch lands (then this branch
+        // swaps to the proper anchor-prefix selector). DO NOT rely on
+        // AnchorPrefix semantics in tests or app code that targets the
+        // pre-G8-A engine. The DSL surface (`packages/engine/src/views.ts`
+        // `UserViewInputPattern` doc + `outcome.rs::UserViewInputPattern`)
+        // mirrors this warning.
         let input_pattern_label = match spec.input_pattern() {
             UserViewInputPattern::Label(l) => Some(l.clone()),
             UserViewInputPattern::AnchorPrefix(prefix) => Some(prefix.clone()),
@@ -279,9 +292,7 @@ impl Engine {
 
         Ok(cid)
     }
-}
 
-impl Engine {
     /// Internal helper mirroring `engine_caps::Engine::privileged_put_node`
     /// so the user-view registration path can write its system-zone Node
     /// without re-exporting the helper. The two implementations are
@@ -293,7 +304,6 @@ impl Engine {
             &benten_graph::WriteContext::privileged_for_engine_api(),
         )?)
     }
-
 }
 
 // `is_known_view_id` consultation note (Phase 2b G8-B addresses

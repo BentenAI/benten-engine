@@ -486,6 +486,16 @@ export type Strategy = "A" | "B" | "C";
  *
  * Phase-2b ships two narrow selectors. The shape mirrors the Rust
  * `UserViewInputPattern` enum and round-trips across the napi boundary.
+ *
+ * ⚠️ PRE-G8-A SEMANTIC STUB: in the pre-G8-A engine, `anchorPrefix` is
+ * silently coerced to a `label`-equality match against the prefix string
+ * (because the underlying `ContentListingView` only knows label equality).
+ * An app that declares `inputPattern: { anchorPrefix: "post" }` and then
+ * reads the user view will see results filtered by `label === "post"`,
+ * NOT by anchor prefix. This is a stub bridge until G8-A's per-strategy
+ * view dispatch lands (then `anchorPrefix` will swap to the proper
+ * anchor-prefix selector). DO NOT rely on `anchorPrefix` semantics in
+ * tests or app code that targets the pre-G8-A engine.
  */
 export type UserViewInputPattern =
   | { label: string }

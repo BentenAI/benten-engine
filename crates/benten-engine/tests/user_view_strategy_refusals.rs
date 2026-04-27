@@ -15,9 +15,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_engine::{
-    Engine, EngineError, ErrorCode, UserViewInputPattern, UserViewSpec,
-};
+use benten_engine::{Engine, EngineError, ErrorCode, UserViewInputPattern, UserViewSpec};
 
 #[test]
 fn user_view_strategy_a_refused_at_registration() {

@@ -122,9 +122,11 @@ impl UserViewSpecBuilder {
     }
 
     /// Finalize the spec. Returns the missing-field error message string
-    /// when a required field was not set; the engine surface maps that to
-    /// `EngineError::Other { code: ErrorCode::InputLimit, message }` at
-    /// `create_view` time so the caller sees a typed error.
+    /// when a required field was not set. The napi binding maps this to a
+    /// typed `napi::Error::InvalidArg` at the FFI boundary
+    /// (`bindings/napi/src/view.rs::parse_user_view_spec`); Rust callers see
+    /// the raw `String`. `Engine::create_user_view` does NOT wrap the builder
+    /// result — it consumes a constructed `UserViewSpec` directly.
     ///
     /// # Errors
     ///

@@ -89,11 +89,8 @@ fn user_view_pattern_mismatch_fires_typed_error() {
 /// 5-name whitelist. Drift detector via source grep against `engine.rs`.
 #[test]
 fn engine_create_view_removes_phase_1_todo() {
-    let src = std::fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/src/engine.rs",
-    ))
-    .expect("engine.rs readable");
+    let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/engine.rs",))
+        .expect("engine.rs readable");
     assert!(
         !src.contains("TODO(phase-2-view-id-registry)"),
         "the Phase-1 view-id-registry TODO MUST be removed by G8-B \
