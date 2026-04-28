@@ -242,6 +242,9 @@ fn inspect_state_with_valid_envelope_bytes_exits_0() {
             actor_cid: zero,
             handler_cid: zero,
             capability_grant_cid: zero,
+            // Phase 2b G7-B / D20: AttributionFrame.sandbox_depth: u8
+            // INHERITED across CALL boundaries (default 0 outside SANDBOX).
+            sandbox_depth: 0,
         }],
         pinned_subgraph_cids: Vec::new(),
         context_binding_snapshots: Vec::new(),
