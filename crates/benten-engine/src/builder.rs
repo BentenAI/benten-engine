@@ -65,6 +65,9 @@ pub struct EngineBuilder {
 }
 
 impl EngineBuilder {
+    /// Construct an empty `EngineBuilder` with all subsystems enabled
+    /// and default configuration. Caller must call [`Self::path`] (or
+    /// the in-memory variant) before [`Self::build`].
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -84,6 +87,9 @@ impl EngineBuilder {
         }
     }
 
+    /// Set the on-disk redb path the engine opens. Required for
+    /// persistent engines; in-memory deployments use the `:memory:`
+    /// pseudo-path.
     #[must_use]
     pub fn path(mut self, p: impl AsRef<Path>) -> Self {
         self.path = Some(p.as_ref().to_path_buf());
@@ -143,36 +149,55 @@ impl EngineBuilder {
         self.capability_policy_grant_backed()
     }
 
+    /// Mark the engine as production-grade — disables permissive
+    /// defaults and surfaces additional sanity checks at boot. Off by
+    /// default for embedded / single-user paths.
     #[must_use]
     pub fn production(mut self) -> Self {
         self.production = true;
         self
     }
 
+    /// Build the engine without the IVM subsystem. Embedded clients
+    /// that do not use views opt in here to avoid the IVM crate's
+    /// memory + scheduling overhead. View-API calls then surface
+    /// `E_SUBSYSTEM_DISABLED`.
     #[must_use]
     pub fn without_ivm(mut self) -> Self {
         self.without_ivm = true;
         self
     }
 
+    /// Build the engine without the capability subsystem. Single-user
+    /// embedded clients with full backend trust opt in here. Cap-API
+    /// calls then surface `E_SUBSYSTEM_DISABLED`.
     #[must_use]
     pub fn without_caps(mut self) -> Self {
         self.without_caps = true;
         self
     }
 
+    /// Build the engine without the version-chain subsystem. Suitable
+    /// for ephemeral data paths that don't need version-history
+    /// retention. `E_SUBSYSTEM_DISABLED` on version-API calls.
     #[must_use]
     pub fn without_versioning(mut self) -> Self {
         self.without_versioning = true;
         self
     }
 
+    /// Set the IVM per-update work budget for testing. Ordinary
+    /// production deployments should use the default (effectively
+    /// unbounded); this knob exists so tests can pin the budget at a
+    /// small value to exercise the budget-exhausted code path.
     #[must_use]
     pub fn with_test_ivm_budget(mut self, b: u64) -> Self {
         self.test_ivm_budget = Some(b);
         self
     }
 
+    /// Alias of [`Self::with_test_ivm_budget`] retained for the IVM
+    /// per-update-work API spelling preferred by some test fixtures.
     #[must_use]
     pub fn ivm_max_work_per_update(mut self, n: u64) -> Self {
         self.test_ivm_budget = Some(n);

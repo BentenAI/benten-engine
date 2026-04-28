@@ -152,6 +152,9 @@ pub fn dispatch_namespaced(full: &str, args: &[Value]) -> Result<Value, EvalErro
 
 // Public re-exports used by the method dispatcher in `eval.rs`.
 
+/// Built-in `array.slice(start, end)` — returns the half-open subrange.
+/// `start` and `end` are clamped into `[0, len]`; an empty slice
+/// returns an empty list. `receiver` must be a [`Value::List`].
 pub fn array_slice(receiver: &Value, args: &[Value]) -> Result<Value, EvalError> {
     let items = list_ref(receiver, "slice")?;
     let start = args.first().and_then(as_i64).unwrap_or(0);
@@ -168,6 +171,9 @@ pub fn array_slice(receiver: &Value, args: &[Value]) -> Result<Value, EvalError>
     }
 }
 
+/// Built-in `array.concat(values...)` — flattens lists in `args` into
+/// a copy of `receiver`. Non-list args are pushed as-is. `receiver`
+/// must be a [`Value::List`].
 pub fn array_concat(receiver: &Value, args: &[Value]) -> Result<Value, EvalError> {
     let mut out = match receiver {
         Value::List(l) => l.clone(),

@@ -62,10 +62,9 @@ fn parse_doc_host_fn_names(md_src: &str) -> BTreeSet<String> {
 /// bidirectional drift gap. The companion R3-E file asserts MD ⊇ TOML;
 /// this file asserts MD ⊆ TOML.
 #[test]
-#[ignore = "Phase 2b G7-A + G11-2b-A pending — host-functions.toml + docs/HOST-FUNCTIONS.md unimplemented"]
 fn host_functions_md_to_toml_no_extra_in_doc() {
     let root = workspace_root();
-    let toml_path = root.join("crates/benten-eval/host-functions.toml");
+    let toml_path = root.join("host-functions.toml");
     let doc_path = root.join("docs/HOST-FUNCTIONS.md");
 
     let toml_src = std::fs::read_to_string(&toml_path).unwrap_or_else(|e| {

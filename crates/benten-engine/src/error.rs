@@ -20,12 +20,18 @@ use benten_graph::GraphError;
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum EngineError {
+    /// Pass-through of `benten_core::CoreError` (CID parse / dag-cbor
+    /// (de)serialise / canonical-bytes mismatch).
     #[error("core: {0}")]
     Core(#[from] CoreError),
 
+    /// Pass-through of `benten_graph::GraphError` (backend KV / redb /
+    /// in-memory store rejection).
     #[error("graph: {0}")]
     Graph(#[from] GraphError),
 
+    /// Pass-through of `benten_caps::CapError` (capability denial /
+    /// revocation / attenuation rejection).
     #[error("capability: {0}")]
     Cap(#[from] CapError),
 
@@ -47,7 +53,10 @@ pub enum EngineError {
 
     /// Handler ID already registered with different content.
     #[error("duplicate handler: {handler_id}")]
-    DuplicateHandler { handler_id: String },
+    DuplicateHandler {
+        /// Identifier of the handler that collided.
+        handler_id: String,
+    },
 
     /// `Engine::builder().production()` called without an explicit
     /// capability policy. R1 SC2: fail-early guardrail.
@@ -69,15 +78,25 @@ pub enum EngineError {
     /// that requires the disabled subsystem. The honest-no boundary — thinness
     /// tests assert we error here rather than silently no-op.
     #[error("subsystem disabled: {subsystem}")]
-    SubsystemDisabled { subsystem: &'static str },
+    SubsystemDisabled {
+        /// Name of the disabled subsystem (`"ivm"` / `"caps"` /
+        /// `"versioning"`).
+        subsystem: &'static str,
+    },
 
     /// Read against a view whose incremental state is stale.
     #[error("IVM view stale: {view_id}")]
-    IvmViewStale { view_id: String },
+    IvmViewStale {
+        /// Identifier of the stale view.
+        view_id: String,
+    },
 
     /// Read against a view id that was never registered.
     #[error("unknown view: {view_id}")]
-    UnknownView { view_id: String },
+    UnknownView {
+        /// Identifier of the unknown view.
+        view_id: String,
+    },
 
     /// Phase-2b G8-B (D8-RESOLVED): user view registered with `Strategy::A`.
     /// Strategy A is reserved for the 5 hand-written Phase-1 IVM views
@@ -86,7 +105,10 @@ pub enum EngineError {
     #[error(
         "user view '{view_id}' declared Strategy::A — Strategy A is reserved for the 5 hand-written Phase-1 IVM views (Rust-only); user views must use Strategy::B"
     )]
-    ViewStrategyARefused { view_id: String },
+    ViewStrategyARefused {
+        /// Identifier of the rejected user view.
+        view_id: String,
+    },
 
     /// Phase-2b G8-B (D8-RESOLVED): user view registered with `Strategy::C`.
     /// Strategy C (Z-set / DBSP cancellation) is reserved for Phase 3+ and
@@ -94,7 +116,10 @@ pub enum EngineError {
     #[error(
         "user view '{view_id}' declared Strategy::C — Strategy C (Z-set / DBSP cancellation) is reserved for Phase 3+"
     )]
-    ViewStrategyCReserved { view_id: String },
+    ViewStrategyCReserved {
+        /// Identifier of the rejected user view.
+        view_id: String,
+    },
 
     /// Nested transaction attempted.
     #[error("nested transaction not supported")]
@@ -105,7 +130,10 @@ pub enum EngineError {
     /// chain, `*` principals) that need the evaluator integration the
     /// present G7 does not land.
     #[error("not implemented in Phase 1: {feature}")]
-    NotImplemented { feature: &'static str },
+    NotImplemented {
+        /// Name of the deferred feature (e.g. `"create_anchor — Phase 2"`).
+        feature: &'static str,
+    },
 
     /// Phase 2b G10-B (D16-RESOLVED-FURTHER): the `expected_cid` arg
     /// passed to [`crate::engine::Engine::install_module`] does not
@@ -142,7 +170,13 @@ pub enum EngineError {
 
     /// Generic wrapped error carrying a stable catalog code.
     #[error("{message}")]
-    Other { code: ErrorCode, message: String },
+    Other {
+        /// Stable [`ErrorCode`] catalog discriminant for this generic
+        /// wrapped error.
+        code: ErrorCode,
+        /// Human-readable message body.
+        message: String,
+    },
 }
 
 impl EngineError {

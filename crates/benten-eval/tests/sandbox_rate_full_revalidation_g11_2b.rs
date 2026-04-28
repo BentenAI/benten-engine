@@ -54,7 +54,6 @@ fn parse_sandbox_rate(md_src: &str) -> Option<f64> {
 /// `sandbox_rate_full_revalidation_g11_2b` — plan §1 exit-criterion #1
 /// FULL revalidation at G11-2b close.
 #[test]
-#[ignore = "Phase 2b G11-2b-A pending — docs/PAPER-PROTOTYPE-REVALIDATION.md unimplemented"]
 fn sandbox_rate_full_revalidation_g11_2b() {
     let root = workspace_root();
     let doc_path = root.join("docs/PAPER-PROTOTYPE-REVALIDATION.md");

@@ -8,11 +8,7 @@
 //! R3 stub scaffold — R5 implementation lands in Phase 1 proper.
 
 #![forbid(unsafe_code)]
-#![warn(missing_docs)]
-#![allow(
-    missing_docs,
-    reason = "TODO(phase-2b-docs): benten-eval has ~120 pub items (Subgraph builder, primitives, RegistrationError diagnostic fields, expr parser surface). Crate-root + module-root docs land Phase-1 R6; per-item sweep deferred to Phase-2b when the public surface is re-audited post-evaluator-completion."
-)]
+#![deny(missing_docs)]
 #![allow(clippy::todo, reason = "R3 red-phase stubs; R5 removes todos")]
 #![allow(
     clippy::result_large_err,
@@ -223,9 +219,14 @@ pub mod limits {
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum EvalError {
+    /// Registration- or runtime-time invariant violation. Carries the
+    /// per-invariant [`InvariantViolation`] discriminant so callers can
+    /// route on the specific invariant that fired.
     #[error("invariant violation: {0:?}")]
     Invariant(InvariantViolation),
 
+    /// Capability-system rejection (denial / revocation / attenuation
+    /// failure). Wrapped from `benten_caps::CapError` via `#[from]`.
     #[error("capability: {0}")]
     Capability(#[from] benten_caps::CapError),
 
@@ -244,21 +245,40 @@ pub enum EvalError {
     #[error("{0}")]
     Host(HostError),
 
+    /// Pass-through of `benten_core::CoreError` (CID parse / dag-cbor
+    /// (de)serialise / canonical-bytes mismatch). Wrapped via `#[from]`.
     #[error("core: {0}")]
     Core(#[from] benten_core::CoreError),
 
+    /// The evaluator was asked to dispatch a primitive whose Phase-1
+    /// executor stub raises `todo!()` (e.g. STREAM in Phase 1; SANDBOX
+    /// pre-Phase-2b). Carries the offending [`PrimitiveKind`].
     #[error("primitive not implemented for Phase 1: {0:?}")]
     PrimitiveNotImplemented(PrimitiveKind),
 
+    /// Registration rejected because two or more invariants failed
+    /// simultaneously (Inv-12 aggregate roll-up). Carries the list of
+    /// violated invariant numbers (e.g. `vec![1, 5]`).
     #[error("registration rejected — multiple invariants failed")]
-    RegistrationCatchAll { violated_invariants: Vec<u8> },
+    RegistrationCatchAll {
+        /// Sorted list of violated invariant numbers (1-based, matches
+        /// `docs/INVARIANT-COVERAGE.md` row numbering).
+        violated_invariants: Vec<u8>,
+    },
 
+    /// Two writers raced on the same backend slot; the loser sees this
+    /// error and may retry. Maps to `E_WRITE_CONFLICT`.
     #[error("write conflict")]
     WriteConflict,
 
+    /// TRANSFORM expression parser rejected the source. Message carries
+    /// the parser diagnostic (offset + reason).
     #[error("transform grammar rejected: {0}")]
     TransformSyntax(String),
 
+    /// Iterative evaluator's explicit operand stack exceeded its bound
+    /// (Phase-1 stopgap for Inv-2 — depth ceiling). Iterative execution
+    /// makes this a typed error rather than a process-level overflow.
     #[error("stack overflow in iterative evaluator")]
     StackOverflow,
 
@@ -306,6 +326,10 @@ pub enum EvalError {
 }
 
 impl EvalError {
+    /// Map this `EvalError` onto the stable [`ErrorCode`] catalog
+    /// identifier — preserves the catalog code across the
+    /// `eval -> engine -> napi -> TS` boundary so TS callers receive the
+    /// same `E_*` discriminant the evaluator raised.
     #[must_use]
     pub fn code(&self) -> ErrorCode {
         match self {
@@ -349,13 +373,25 @@ impl EvalError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum InvariantViolation {
+    /// Invariant 1: graph contains a cycle.
     Cycle,
+    /// Invariant 2: longest-path depth exceeds the configured maximum.
     DepthExceeded,
+    /// Invariant 3: per-node fan-out exceeds the configured maximum.
     FanoutExceeded,
+    /// Invariant 5: total node count exceeds the configured maximum.
     TooManyNodes,
+    /// Invariant 6: total edge count exceeds the configured maximum.
     TooManyEdges,
+    /// Invariant 9: handler declared deterministic contains a
+    /// non-deterministic primitive (e.g. RANDOM, time read at the
+    /// declaration tier).
     Determinism,
+    /// Invariant 10: canonical-bytes encoding is not order-independent
+    /// (DAG-CBOR canonicalisation drift).
     ContentHash,
+    /// Invariant 9 (DSL surface): an ITERATE primitive omitted the
+    /// required `max` declaration.
     IterateMaxMissing,
     /// Runtime + registration-time cumulative iteration-budget violation
     /// (invariant 8). Phase-2a folds what was Phase-1's nest-depth stopgap
@@ -403,6 +439,8 @@ pub enum InvariantViolation {
 }
 
 impl InvariantViolation {
+    /// Map this invariant violation onto its stable [`ErrorCode`]
+    /// catalog identifier.
     #[must_use]
     pub fn code(&self) -> ErrorCode {
         match self {
@@ -447,6 +485,9 @@ pub struct RegistrationError {
 }
 
 impl RegistrationError {
+    /// Construct a new `RegistrationError` from an invariant violation
+    /// kind. All per-invariant context fields default to `None`;
+    /// builders attach context as needed.
     #[must_use]
     pub fn new(kind: InvariantViolation) -> Self {
         Self {
@@ -468,26 +509,35 @@ impl RegistrationError {
         }
     }
 
+    /// Stable [`ErrorCode`] catalog identifier for this error
+    /// (delegates to the wrapped [`InvariantViolation::code`]).
     #[must_use]
     pub fn code(&self) -> ErrorCode {
         self.kind.code()
     }
 
+    /// Borrowed view of the underlying invariant kind.
     #[must_use]
     pub fn kind(&self) -> &InvariantViolation {
         &self.kind
     }
 
+    /// Observed depth that triggered the violation (`Some` when
+    /// `kind == DepthExceeded`).
     #[must_use]
     pub fn depth_actual(&self) -> Option<usize> {
         self.depth_actual
     }
 
+    /// Observed fan-out that triggered the violation (`Some` when
+    /// `kind == FanoutExceeded`).
     #[must_use]
     pub fn fanout_actual(&self) -> Option<usize> {
         self.fanout_actual
     }
 
+    /// Sorted list of violated invariant numbers when `kind ==
+    /// Registration` (Inv-12 aggregate roll-up).
     #[must_use]
     pub fn violated_invariants(&self) -> Option<&Vec<u8>> {
         self.violated_invariants.as_ref()
@@ -627,9 +677,13 @@ pub(crate) struct SubgraphSnapshot<'a> {
 /// Configurable invariant thresholds.
 #[derive(Debug, Clone)]
 pub struct InvariantConfig {
+    /// Invariant 2: maximum operation-subgraph depth.
     pub max_depth: u32,
+    /// Invariant 3: maximum per-node fan-out.
     pub max_fanout: u32,
+    /// Invariant 5: maximum total node count per subgraph.
     pub max_nodes: u32,
+    /// Invariant 6: maximum total edge count per subgraph.
     pub max_edges: u32,
     /// Phase-2b G7-B / Inv-4: maximum SANDBOX nesting depth. The
     /// `AttributionFrame.sandbox_depth: u8` counter is checked against
@@ -666,7 +720,9 @@ impl Default for InvariantConfig {
 /// A single execution frame on the iterative evaluator's stack.
 #[derive(Debug, Clone)]
 pub struct ExecutionFrame {
+    /// Identifier of the operation Node this frame is executing.
     pub node_id: String,
+    /// Position of this frame in the stack (0 = bottom).
     pub frame_index: usize,
 }
 
@@ -674,11 +730,16 @@ pub struct ExecutionFrame {
 ///
 /// **Phase 1 G6 stub.**
 pub struct Evaluator {
+    /// Live execution-frame stack. Bounded by [`Self::max_stack_depth`].
     pub stack: Vec<ExecutionFrame>,
+    /// Stopgap for Inv-2 — process-level overflow becomes a typed
+    /// [`EvalError::StackOverflow`] when the stack would exceed this
+    /// depth.
     pub max_stack_depth: u32,
 }
 
 impl Evaluator {
+    /// Construct a fresh evaluator with default `max_stack_depth = 64`.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -736,8 +797,13 @@ impl Default for Evaluator {
 /// Result of a single primitive execution.
 #[derive(Debug, Clone)]
 pub struct StepResult {
+    /// Identifier of the next operation Node to execute (or `None` if
+    /// the step terminated the handler).
     pub next: Option<String>,
+    /// Edge label this step traversed (e.g. `"NEXT"`, `"CASE:foo"`,
+    /// `"ON_ERROR"`).
     pub edge_label: String,
+    /// Output value the executor returned for this step.
     pub output: Value,
 }
 
@@ -841,7 +907,7 @@ impl TraceStep {
 // ---------------------------------------------------------------------------
 
 pub mod transform {
-    //! TRANSFORM expression grammar + parser (G6-B).
+    //! TRANSFORM expression grammar + parser surface (G6-B).
     //!
     //! Public entry point for the TRANSFORM expression language. The
     //! grammar is a positive allowlist — any construct outside the BNF in
@@ -866,6 +932,7 @@ pub mod transform {
     }
 
     impl TransformParseError {
+        /// Stable [`ErrorCode`] for TRANSFORM parse failures.
         #[must_use]
         pub fn code(&self) -> ErrorCode {
             ErrorCode::TransformSyntax

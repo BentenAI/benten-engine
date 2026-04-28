@@ -94,6 +94,8 @@ pub struct CountingPolicy {
 }
 
 impl CountingPolicy {
+    /// Borrow a fresh handle on the shared call-count atomic so tests
+    /// can observe how many `check_write` calls the policy received.
     #[must_use]
     pub fn call_counter(&self) -> CallCounter {
         CallCounter {
@@ -115,6 +117,7 @@ pub struct CallCounter {
 }
 
 impl CallCounter {
+    /// Snapshot the current call count.
     #[must_use]
     pub fn load(&self) -> u32 {
         self.count.load(std::sync::atomic::Ordering::SeqCst)

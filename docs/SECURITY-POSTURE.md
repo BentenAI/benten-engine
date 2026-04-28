@@ -1,6 +1,40 @@
-# Security Posture — Benten Engine Phase 1
+# Security Posture — Benten Engine (Phase 2b close)
 
-This document records the security claims Benten makes in Phase 1 and the known compromises those claims rest on. Each compromise is tied back to `.addl/phase-1/00-implementation-plan.md` (R1 Triage Addendum); this document is the written, referenceable form.
+This document records the security claims Benten makes through Phase 2b
+close and the known compromises those claims rest on. Each Phase-1
+compromise is tied back to `.addl/phase-1/00-implementation-plan.md`
+(R1 Triage Addendum); Phase-2b additions are tied back to
+`.addl/phase-2b/00-implementation-plan.md`. This document is the
+written, referenceable form.
+
+## Phase 2b close — final compromise table
+
+| # | Title | Phase | Status |
+|---|-------|-------|--------|
+| 1 | TOCTOU window bound at CALL entry + ITERATE batch boundary | 1 | Open (bounded; documented threat model) |
+| 2 | Symmetric-None + diagnostic capability (Option C) | 1 | **CLOSED** at Phase 2a 5d-J |
+| 3 | `ErrorCode` enum lives in `benten-core` | 1 | **CLOSED** at Phase 1 R6 |
+| 4 | WASM runtime is compile-check only | 1 | **CLOSED** at Phase 2b G7 (this phase) |
+| 5 | No write rate-limits; metric recorded only | 1 | Open (Phase 3+) |
+| 6 | BLAKE3 128-bit effective collision resistance | 1 | Open (architectural bound) |
+| 7 | `[[bin]]` `required-features` gating | 1 | **CLOSED** at Phase 1 R6 |
+| 8 | `Engine::call` bypasses the evaluator for CRUD handlers | 1 | **CLOSED** at Phase 2a G4-A |
+| 9 | Dedup writes pure-read (sec-r1-4 / atk-3) | 1 | **CLOSED** at Phase 2b G12-E (this phase) |
+| 10 | Resume-time capability re-verification | 2a | **CLOSED** at Phase 2b G12-E (this phase) |
+| 11 | IVM views coarse-grained read-gate | 2a | Open (Phase 3+) |
+| 12 | `DurabilityMode::Group` gate 5 deferred | 1 | Open (deferred to Phase 2c / 3) |
+| 13 | System-zone reserved-prefix rejection surface | 2a | Open (documented; minor-3) |
+| 14 | SANDBOX cold-start cost (no opt-in pool) | 2b | Open (D3 RESOLVED — additive Phase-3 change if real-workload bottleneck) |
+| 15 | `register_runtime` reserved with deferred error | 2b | Deferred to Phase 8 (marketplace) |
+| 16 | `random` host-fn deferred (no CSPRNG framework chosen) | 2b | Deferred to Phase 2c |
+
+**Phase-2b net delta:** Compromises #4 + #9 + #10 closed (3 net
+closures); 3 new Phase-2b deferrals enumerated (#14, #15, #16) — all
+named, all destination-tagged.
+
+The detailed text for each numbered Compromise follows below. Phase-2b
+additions (#14-#16) appear at the end of the Named Compromises
+section.
 
 ## Named Compromises
 
@@ -815,6 +849,108 @@ DX polish; no security gap.
 **Cross-refs.** plan §G5-B-i Decision 6 / Minor 3; ERROR-CATALOG
 `E_INV_SYSTEM_ZONE`; `SYSTEM_ZONE_PREFIXES` at
 `crates/benten-engine/src/system_zones.rs`.
+
+---
+
+### Compromise #14 — SANDBOX cold-start cost (no opt-in pool) — Phase-2b additive
+
+**Class.** Performance / DX. Per-call SANDBOX dispatch always pays
+the wasmtime `Store` + `Instance` construction cost.
+
+**Shape.** D3-RESOLVED — Phase 2b ships SANDBOX with **per-call**
+hosting only. Each SANDBOX primitive call constructs a fresh
+`wasmtime::Store` + `wasmtime::Instance` (the `wasmtime::Engine` and
+`wasmtime::Module` are singletons cached by content CID for the
+process lifetime — Engine is expensive to construct, Module is
+hash-cached, so cold-start cost is the per-Store + per-Instance work
+only).
+
+**Why per-call only:**
+
+1. **Easier to add than to remove.** A pool-now / remove-later
+   transition would be a breaking change; pool-later / no-pool-now
+   is additive.
+2. **Closes the "trusted boundary" sub-question entirely** — no need
+   to define subgraph-annotation vs cap-grant vs engine-builder vs
+   manifest-bound semantics for opt-in.
+3. **CLAUDE.md §5: don't add features for hypothetical future
+   requirements** — no data shows cold-start is a real workload
+   problem at Phase 2b close.
+4. **Misuse vector is real** — a developer slapping `pool: true`
+   without understanding isolation implications is a silent security
+   regression; pre-1.0 should not ship that footgun.
+
+**Mitigation / posture claim.** If Phase-3+ workload telemetry
+surfaces cold-start as a real bottleneck, an **opt-in pool** lands
+as an additive Phase-3+ change without breaking existing handlers.
+The G11-2b paper-prototype revalidation
+(`docs/PAPER-PROTOTYPE-REVALIDATION.md`) at 16.7% SANDBOX rate gives
+no signal that cold-start is a hot path for typical workloads.
+
+**Cross-refs.** D3-RESOLVED in `.addl/phase-2b/00-implementation-plan.md`;
+`docs/SANDBOX-LIMITS.md` per-call defaults; per-call scope
+clarification per wsa-20 (Engine + Module shared, Store + Instance
+per-call).
+
+---
+
+### Compromise #15 — `register_runtime` reserved with deferred error — Phase-2b additive
+
+**Class.** Surface area gap (intentional); deferred to Phase 8
+marketplace.
+
+**Shape.** D2-RESOLVED — Phase 2b's named-manifest registry is
+**codegen-emitted** (a static `HashMap<String, CapBundle>` built at
+`ManifestRegistry` construction from `host-functions.toml`). The
+`register_runtime(name, bundle)` API is RESERVED in 2b — calls return
+`E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED` typed-error.
+
+**Why deferred:** dynamic manifest registration is the
+marketplace-layer concern (Phase 8). Before the marketplace ships,
+nobody is providing 3rd-party WASM modules with associated manifests;
+shipping the dynamic registration API now would invite the
+runtime-registered cap-bundle to drift from the codegen baseline
+without tooling discipline (cap-bundle fingerprinting, lifecycle, GC).
+
+**Mitigation / posture claim.** Phase-2b's manifest set
+(`compute-basic`, `compute-with-kv`) covers the in-tree
+host-fn surface; the typed deferral surface gives early-adopter
+marketplace builders a concrete error to grep on. Phase 8 lifts the
+deferral as part of the marketplace launch.
+
+**Cross-refs.** D2-RESOLVED; `docs/HOST-FUNCTIONS.md` "Named
+manifests" section; `host-functions.toml` `[manifest.*]` entries;
+`E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED` in `docs/ERROR-CATALOG.md`.
+
+---
+
+### Compromise #16 — `random` host-fn deferred to Phase 2c — Phase-2b additive
+
+**Class.** Capability gap (intentional); deferred pending workspace
+CSPRNG framework decision.
+
+**Shape.** D1-RESOLVED — Phase 2b's host-fn set ships `time`, `log`,
+and `kv:read`. `random` is **deferred to Phase 2c**. A SANDBOX module
+that attempts to call a `random` import gets
+`E_SANDBOX_HOST_FN_NOT_FOUND` with a hint mentioning "deferred to
+Phase 2c".
+
+**Why deferred:** the workspace CSPRNG framework choice has not been
+made (rand_chacha vs OS-CSPRNG vs hardware-RDRAND fallback). Shipping
+`random` before that decision would bake in a footgun — a module that
+depends on weak randomness today would be a silent security regression
+on a future swap. Picking the wrong CSPRNG is a hard-to-reverse
+decision.
+
+**Mitigation / posture claim.** Modules that need randomness today
+must surface it via input from a CALL-er handler that derives
+randomness from a known-source (engine config, principal-bound seed,
+etc.). When the workspace settles on a CSPRNG, `random` lands as an
+additive Phase-2c entry without breaking any Phase-2b modules.
+
+**Cross-refs.** D1-RESOLVED; `host-functions.toml` deferral comment;
+`crates/benten-eval/tests/sandbox_host_fn_random_deferred.rs`
+regression guard; sec-pre-r1-06 §2.3 reasoning.
 
 ---
 

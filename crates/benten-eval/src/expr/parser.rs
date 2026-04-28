@@ -80,7 +80,9 @@ const REJECTED_WORDS: &[&str] = &[
 /// A parse error; the `offset` field points at the first rejected byte.
 #[derive(Debug, Clone)]
 pub struct ParseError {
+    /// Byte offset of the first rejected token in the source string.
     pub offset: usize,
+    /// Human-readable diagnostic message.
     pub message: String,
 }
 
