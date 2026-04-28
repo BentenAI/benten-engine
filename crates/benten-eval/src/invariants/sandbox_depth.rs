@@ -7,8 +7,8 @@
 //! [`ErrorCode::SandboxNestedDispatchDepthExceeded`] code from the
 //! `benten-errors` catalog (D20 saturation).
 //!
-//! 1. **Registration-time static analysis** — [`validate_registration`]
-//!    walks a [`Subgraph`] and counts the longest SANDBOX-only chain
+//! 1. **Registration-time static analysis** — `validate_registration` (private)
+//!    walks a [`benten_core::Subgraph`] and counts the longest SANDBOX-only chain
 //!    along the call-graph. If the count exceeds the configured ceiling
 //!    the subgraph is rejected with [`RegistrationError`]. This catches
 //!    statically-determinable violations BEFORE wasmtime ever sees a
