@@ -56,6 +56,12 @@ benten-caps = { path = "../../crates/benten-caps" }
 # cdylib.
 benten-engine = { path = "../../crates/benten-engine", features = ["envelope-cache-test-grade", "iteration-budget-test-grade"] }
 benten-errors = { workspace = true }
+# Phase 2b G8-B: needed for `Strategy` enum parsing in `parse_user_view_spec`
+# (the `engine.createUserView({ strategy })` napi entry point). The Strategy
+# enum is a public re-export of `benten_ivm::Strategy` via benten-engine; we
+# depend directly so the napi binding's parser can name the enum without
+# pulling a benten-engine re-export shim.
+benten-ivm = { path = "../../crates/benten-ivm" }
 # r6b-dx-C5: used by `parse_actor_cid_or_derive` to hash friendly
 # principal strings into deterministic synthetic CIDs. Same version the
 # engine crates use for content hashing.

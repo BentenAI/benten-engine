@@ -255,9 +255,15 @@ export type SuspensionResult =
   | { kind: "suspended"; handle: Buffer };
 
 /**
- * Input shape for `Engine.createView`. Phase-1 recognizes the well-known
- * id family `content_listing_<label>`; extra fields are reserved for
- * Phase-2 user-defined views.
+ * Input shape for `Engine.createView` (legacy id-string form). Phase-1
+ * recognizes the well-known id family `content_listing_<label>`; extra
+ * fields are reserved for Phase-2 user-defined views.
+ *
+ * **Phase 2b G8-B note.** New code registering user-defined IVM views
+ * should use the [`UserViewSpec`] shape with [`Engine.createView`]'s
+ * builder overload — `engine.createView({ id, inputPattern, strategy?,
+ * project? })`. The legacy `ViewDef` shape stays for the canonical
+ * `content_listing_<label>` family the engine builds in.
  */
 export interface ViewDef {
   /** View id string (e.g. `"content_listing_post"`). */
@@ -461,4 +467,103 @@ export interface SandboxNodeDescription {
    * `null` until the first call returns.
    */
   lastInvocationMs: number | null;
+}
+
+/**
+ * IVM strategy enum (Phase 2b G8 D8-RESOLVED).
+ *
+ * - `'A'` — Phase-1 hand-written IVM views (Rust-only). User-registered
+ *   views CANNOT claim this lane; passing `'A'` to `engine.createView`
+ *   throws `E_VIEW_STRATEGY_A_REFUSED`.
+ * - `'B'` — generalized Algorithm B (default for user views).
+ * - `'C'` — Z-set / DBSP cancellation (reserved for Phase 3+; passing
+ *   `'C'` throws `E_VIEW_STRATEGY_C_RESERVED`).
+ */
+export type Strategy = "A" | "B" | "C";
+
+/**
+ * Input-pattern selector for [`UserViewSpec`].
+ *
+ * Phase-2b ships two narrow selectors. The shape mirrors the Rust
+ * `UserViewInputPattern` enum and round-trips across the napi boundary.
+ *
+ * ⚠️ PRE-G8-A SEMANTIC STUB: in the pre-G8-A engine, `anchorPrefix` is
+ * silently coerced to a `label`-equality match against the prefix string
+ * (because the underlying `ContentListingView` only knows label equality).
+ * An app that declares `inputPattern: { anchorPrefix: "post" }` and then
+ * reads the user view will see results filtered by `label === "post"`,
+ * NOT by anchor prefix. This is a stub bridge until G8-A's per-strategy
+ * view dispatch lands (then `anchorPrefix` will swap to the proper
+ * anchor-prefix selector). DO NOT rely on `anchorPrefix` semantics in
+ * tests or app code that targets the pre-G8-A engine.
+ */
+export type UserViewInputPattern =
+  | { label: string }
+  | { anchorPrefix: string };
+
+/**
+ * User-registered view spec (Phase 2b G8-B).
+ *
+ * `id` and `inputPattern` are required; `strategy` defaults to `'B'`
+ * (D8-RESOLVED). `project` is reserved for the post-G8-A landing — once
+ * the generalized Algorithm B port is in place the engine will invoke
+ * the projection per change event to materialize rows; until then the
+ * field is accepted but not invoked.
+ */
+export interface UserViewSpec {
+  /** Stable view id (e.g. `"user_posts_by_author"`). */
+  id: string;
+  /** Selector that picks the change events the view observes. */
+  inputPattern: UserViewInputPattern;
+  /**
+   * Strategy opt-in. Defaults to `'B'` per D8-RESOLVED. Pass `'A'` only
+   * to verify the typed-error refusal path (the engine refuses A for
+   * user views since A is reserved for the 5 Phase-1 hand-written
+   * views). `'C'` is rejected as Phase-3-reserved.
+   */
+  strategy?: Strategy;
+  /**
+   * Optional projection invoked per change event to materialize a row.
+   * Reserved for the G8-A generalized Algorithm B landing — the field
+   * is accepted by the builder + round-tripped to the Rust side, but
+   * not yet invoked by the runtime.
+   */
+  project?: (event: unknown) => unknown;
+}
+
+/**
+ * Handle returned by `engine.createView(spec)` when `spec` is a
+ * [`UserViewSpec`]. Exposes the resolved id + strategy and the per-view
+ * `snapshot()` / `onUpdate()` surfaces (the snapshot iterator yields
+ * the current materialized rows; `onUpdate` registers a per-diff
+ * callback). Phase-2b G8-B ships the registration round-trip — runtime
+ * materialization (snapshot rows + diff streaming) lights up once
+ * G8-A's Algorithm B port lands.
+ */
+export interface UserView {
+  /** Resolved view id. */
+  readonly id: string;
+  /** Resolved strategy (always `'B'` for accepted user views). */
+  readonly strategy: Strategy;
+  /** Resolved input pattern. */
+  readonly inputPattern: UserViewInputPattern;
+  /**
+   * Async iterator over the currently-materialized rows. Phase-2b G8-B
+   * returns an empty iterator until G8-A's Algorithm B port materializes
+   * the row buffer — the surface exists so app code can be written
+   * against the final shape today.
+   */
+  snapshot: () => AsyncIterable<unknown>;
+  /**
+   * Subscribe to per-diff change notifications. Returns a `Subscription`
+   * with an `unsubscribe()` method. As with `snapshot()`, the runtime
+   * dispatch lights up alongside G8-A; the subscription handle exists
+   * pre-G8-A so app code is forward-compatible.
+   */
+  onUpdate: (cb: (diff: unknown) => void) => UserViewSubscription;
+}
+
+/** Handle returned by `UserView.onUpdate` for cleanup. */
+export interface UserViewSubscription {
+  unsubscribe: () => Promise<void>;
 }

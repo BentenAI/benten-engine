@@ -99,6 +99,11 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::WaitSignalShapeMismatch,
     // Phase-2a ucca-7 parse-time refusal code (lone-`*` GrantScope).
     ErrorCode::CapScopeLoneStarRejected,
+    // Phase-2b G8-B (D8-RESOLVED): user-view strategy refusals — `Strategy::A`
+    // is reserved for the 5 Phase-1 hand-written IVM views; `Strategy::C` is
+    // Phase-3+ Z-set / DBSP cancellation reserved.
+    ErrorCode::ViewStrategyARefused,
+    ErrorCode::ViewStrategyCReserved,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -150,8 +155,12 @@ fn variant_count_is_pinned() {
     // Phase 2b G8-A adds `IvmStrategyNotImplemented` for the reserved
     // `Strategy::C` variant — Algorithm B ships A+B, C is Phase-3+ deferred.
     // Post-G8-A: 58 + 1 = 59.
+    //
+    // Phase 2b G8-B (D8-RESOLVED) adds `ViewStrategyARefused` +
+    // `ViewStrategyCReserved` for user-view registration-time refusals.
+    // Post-G8-B: 59 + 2 = 61.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 59,
+        CATALOG_VARIANT_COUNT, 61,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

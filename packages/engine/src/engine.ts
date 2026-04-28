@@ -44,8 +44,16 @@ import type {
   SuspensionResult,
   Trace,
   TraceStep,
+  UserView,
+  UserViewSpec,
   ViewDef,
 } from "./types.js";
+import {
+  buildUserViewHandle,
+  resolveUserViewStrategy,
+  userViewSpecToNativeJson,
+  validateUserViewSpec,
+} from "./views.js";
 
 // ---------------------------------------------------------------------------
 // Native-module shape (mirrors `bindings/napi/index.d.ts`)
@@ -80,6 +88,7 @@ interface NativeEngine {
   grantCapability?: (grant: unknown) => string;
   revokeCapability?: (grantCid: string, actor: string) => void;
   createView?: (viewDef: unknown) => string;
+  createUserView?: (spec: unknown) => string;
   readView?: (viewId: string, query: unknown) => unknown;
   emitEvent?: (name: string, payload: unknown) => void;
   countNodesWithLabel?: (label: string) => number;
@@ -149,6 +158,22 @@ export const PolicyKind = {
   GrantBacked: "GrantBacked",
 } as const;
 export type PolicyKind = (typeof PolicyKind)[keyof typeof PolicyKind];
+
+/**
+ * Discriminator: returns true when the value matches the
+ * [`UserViewSpec`] shape (has `id` + `inputPattern` keys) versus the
+ * legacy `ViewDef` shape (has `viewId` key). Tolerant — does not
+ * validate field types; that happens inside `validateUserViewSpec`.
+ */
+function isUserViewSpec(arg: unknown): arg is UserViewSpec {
+  if (typeof arg !== "object" || arg === null) return false;
+  const o = arg as Record<string, unknown>;
+  // ViewDef carries `viewId`; UserViewSpec carries `id` + `inputPattern`.
+  // Tested in this order so a ViewDef that happens to also include an
+  // `id` field still routes through the legacy path.
+  if (typeof o.viewId === "string") return false;
+  return typeof o.id === "string" && typeof o.inputPattern === "object";
+}
 
 let __native: NativeModule | undefined;
 
@@ -904,17 +929,55 @@ export class Engine {
   }
 
   /**
-   * Register / materialize an IVM view definition. The `viewDef`
-   * object must carry a `viewId` string (e.g. `"content_listing_post"`).
-   * Returns the view definition Node's CID.
+   * Register / materialize an IVM view definition.
+   *
+   * Two call shapes:
+   *
+   * 1. **Legacy id-string form** (`viewDef: ViewDef`): the `viewDef`
+   *    object carries a `viewId` string from the canonical id family
+   *    (e.g. `"content_listing_post"`). Returns the view definition
+   *    Node's CID as a string. This form is preserved for the 5
+   *    Phase-1 hand-written views.
+   *
+   * 2. **User-view builder form** (Phase 2b G8-B; `spec: UserViewSpec`):
+   *    pass `{ id, inputPattern, strategy?, project? }`. Returns a
+   *    [`UserView`] handle exposing `id`, `strategy`, `inputPattern`,
+   *    `snapshot()`, and `onUpdate()`. Strategy defaults to `'B'` per
+   *    D8-RESOLVED; `'A'` and `'C'` produce typed errors
+   *    (`E_VIEW_STRATEGY_A_REFUSED` / `E_VIEW_STRATEGY_C_RESERVED`).
    */
-  public async createView(viewDef: ViewDef): Promise<string> {
+  public async createView(viewDef: ViewDef): Promise<string>;
+  public async createView(spec: UserViewSpec): Promise<UserView>;
+  public async createView(
+    arg: ViewDef | UserViewSpec,
+  ): Promise<string | UserView> {
     this.assertOpen();
+    if (isUserViewSpec(arg)) {
+      const validationError = validateUserViewSpec(arg);
+      if (validationError !== null) {
+        throw new EDslInvalidShape(validationError);
+      }
+      if (!this.inner.createUserView) {
+        throw new EDslInvalidShape(
+          "Engine.createView (UserViewSpec form) unavailable on this binding — rebuild the napi cdylib against benten-engine ≥ Phase-2b G8-B",
+        );
+      }
+      const resolvedStrategy = resolveUserViewStrategy(arg);
+      try {
+        // The Rust side enforces the typed E_VIEW_STRATEGY_A_REFUSED /
+        // E_VIEW_STRATEGY_C_RESERVED errors; we forward the strategy
+        // string verbatim so the engine boundary owns the policy.
+        this.inner.createUserView(userViewSpecToNativeJson(arg));
+      } catch (err) {
+        throw mapNativeError(err);
+      }
+      return buildUserViewHandle(arg, resolvedStrategy);
+    }
     if (!this.inner.createView) {
       throw new EDslInvalidShape("Engine.createView unavailable on this binding");
     }
     try {
-      return this.inner.createView(viewDef);
+      return this.inner.createView(arg);
     } catch (err) {
       throw mapNativeError(err);
     }

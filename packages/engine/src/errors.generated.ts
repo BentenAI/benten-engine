@@ -102,6 +102,8 @@ export const CATALOG_CODES = [
   "E_CAP_WALLCLOCK_EXPIRED",
   "E_CAP_CHAIN_TOO_DEEP",
   "E_CAP_SCOPE_LONE_STAR_REJECTED",
+  "E_VIEW_STRATEGY_A_REFUSED",
+  "E_VIEW_STRATEGY_C_RESERVED",
   "E_WAIT_SIGNAL_SHAPE_MISMATCH",
   "E_STREAM_BACKPRESSURE_DROPPED",
   "E_STREAM_CLOSED_BY_PEER",
@@ -1147,6 +1149,36 @@ export class ECapScopeLoneStarRejected extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_CAP_SCOPE_LONE_STAR_REJECTED", "Lone `*` is refused because it collapses to a root-scope wildcard that cannot be meaningfully attenuated. Use a compound form (`*:<namespace>`) or name an explicit scope. Ucca-7 / G4-A.", message, context);
     this.name = "ECapScopeLoneStarRejected";
+  }
+}
+
+/**
+ * E_VIEW_STRATEGY_A_REFUSED
+ *
+ * Thrown at: `Engine::create_view` registration (G8-B)
+ * Message template: "user view '{view_id}' declared Strategy::A — Strategy A is reserved for the 5 hand-written Phase-1 IVM views (Rust-only); user views must use Strategy::B"
+ */
+export class EViewStrategyARefused extends BentenError {
+  static readonly code = "E_VIEW_STRATEGY_A_REFUSED";
+  static readonly fixHint = "D8-RESOLVED (Phase 2b). Strategy A is the hand-written-IVM lane reserved for the five Phase-1 baseline views (capability-grants, event-dispatch, content-listing, governance-inheritance, version-current). User-registered views go through generalized Algorithm B; either omit the `strategy` field (defaults to `B`) or pass `Strategy::B` explicitly.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_VIEW_STRATEGY_A_REFUSED", "D8-RESOLVED (Phase 2b). Strategy A is the hand-written-IVM lane reserved for the five Phase-1 baseline views (capability-grants, event-dispatch, content-listing, governance-inheritance, version-current). User-registered views go through generalized Algorithm B; either omit the `strategy` field (defaults to `B`) or pass `Strategy::B` explicitly.", message, context);
+    this.name = "EViewStrategyARefused";
+  }
+}
+
+/**
+ * E_VIEW_STRATEGY_C_RESERVED
+ *
+ * Thrown at: `Engine::create_view` registration (G8-B)
+ * Message template: "user view '{view_id}' declared Strategy::C — Strategy C (Z-set / DBSP cancellation) is reserved for Phase 3+"
+ */
+export class EViewStrategyCReserved extends BentenError {
+  static readonly code = "E_VIEW_STRATEGY_C_RESERVED";
+  static readonly fixHint = "D8-RESOLVED (Phase 2b). Strategy C is the Z-set / DBSP cancellation algorithm slot reserved for Phase 3+; refused at registration time in Phase 2b. Use `Strategy::B` (or omit the field; user views default to B).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_VIEW_STRATEGY_C_RESERVED", "D8-RESOLVED (Phase 2b). Strategy C is the Z-set / DBSP cancellation algorithm slot reserved for Phase 3+; refused at registration time in Phase 2b. Use `Strategy::B` (or omit the field; user views default to B).", message, context);
+    this.name = "EViewStrategyCReserved";
   }
 }
 

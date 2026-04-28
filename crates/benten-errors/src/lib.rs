@@ -244,6 +244,15 @@ pub enum ErrorCode {
     /// system-zone breaches are diagnostically separable from WRITE-side
     /// breaches (`InvSystemZone` covers writes).
     Inv11SystemZoneRead,
+    /// Phase-2b G8-B (D8-RESOLVED): a user view registration declared
+    /// `Strategy::A`. Strategy A is reserved for the 5 hand-written Phase-1
+    /// IVM views (Rust-only); user views must use the generalized Algorithm
+    /// B path (`Strategy::B`, the user-view default).
+    ViewStrategyARefused,
+    /// Phase-2b G8-B (D8-RESOLVED): a user view registration declared
+    /// `Strategy::C`. Strategy C is the Z-set / DBSP cancellation algorithm
+    /// reserved for Phase 3+; refused at registration time in Phase 2b.
+    ViewStrategyCReserved,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -376,6 +385,8 @@ impl ErrorCode {
             ErrorCode::SubscribeCursorLost => "E_SUBSCRIBE_CURSOR_LOST",
             ErrorCode::SubscribeReplayWindowExceeded => "E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED",
             ErrorCode::Inv11SystemZoneRead => "E_INV_11_SYSTEM_ZONE_READ",
+            ErrorCode::ViewStrategyARefused => "E_VIEW_STRATEGY_A_REFUSED",
+            ErrorCode::ViewStrategyCReserved => "E_VIEW_STRATEGY_C_RESERVED",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -515,6 +526,11 @@ impl ErrorCode {
             // the resume-protocol family above.
             ErrorCode::SubscribePatternInvalid | ErrorCode::SubscribeReplayWindowExceeded => None,
 
+            // Phase-2b G8-B: view-strategy refusals fire at registration time
+            // (Engine::create_view), not along a primitive edge — same routing
+            // disposition as DuplicateHandler / InvRegistration.
+            ErrorCode::ViewStrategyARefused | ErrorCode::ViewStrategyCReserved => None,
+
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
             // through the catch-all rather than dropping on the floor.
@@ -595,6 +611,8 @@ impl ErrorCode {
             "E_SUBSCRIBE_CURSOR_LOST" => ErrorCode::SubscribeCursorLost,
             "E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED" => ErrorCode::SubscribeReplayWindowExceeded,
             "E_INV_11_SYSTEM_ZONE_READ" => ErrorCode::Inv11SystemZoneRead,
+            "E_VIEW_STRATEGY_A_REFUSED" => ErrorCode::ViewStrategyARefused,
+            "E_VIEW_STRATEGY_C_RESERVED" => ErrorCode::ViewStrategyCReserved,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }

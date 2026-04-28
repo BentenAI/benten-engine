@@ -1973,8 +1973,14 @@ pub(crate) fn derive_committed_scopes(ops: &[benten_caps::PendingOp]) -> Vec<Str
 /// `UnknownView` for a view the subscriber *does* serve. The subscriber
 /// probe in `read_view_with` consults the live subscriber first, so this
 /// only matters for tests that probe uncreated-but-canonical view ids.
-/// TODO(phase-2-view-id-registry): replace with a per-view definition
-/// registration pulled from benten-ivm.
+///
+/// **Phase 2b G8-B:** user-registered IVM views (registered via
+/// [`Engine::create_user_view`]) are recognized by the live-subscriber
+/// branch in `read_view_with` (the subscriber's `view_ids()` set tracks
+/// every registered view). This whitelist remains for the 5 hand-written
+/// canonical ids that don't auto-register a live subscriber on engine
+/// open; full removal waits on the G8-A Algorithm B port exposing a
+/// definition-registry API on the IVM subscriber.
 /// Derive a stable content-addressed identifier for a single OperationNode
 /// inside a handler's subgraph. Used by `Engine::trace` so each trace step
 /// carries a CID that cross-references the operation-node identifier

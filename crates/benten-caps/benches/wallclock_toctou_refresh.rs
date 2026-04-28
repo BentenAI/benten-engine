@@ -1,3 +1,4 @@
+#![allow(unknown_lints, clippy::duration_suboptimal_units)] // MSRV 1.91 — Rust 1.95 lint suggests from_mins/from_hours, both stabilized in 1.95
 //! Criterion benchmark: wall-clock TOCTOU dual-source refresh overhead.
 //!
 //! **Target source:** plan §9.13 + §9.10 — "300s default refresh cadence
