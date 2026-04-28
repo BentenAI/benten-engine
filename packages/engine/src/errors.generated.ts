@@ -112,7 +112,6 @@ export const CATALOG_CODES = [
   "E_SUBSCRIBE_CURSOR_LOST",
   "E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED",
   "E_INV_11_SYSTEM_ZONE_READ",
-  "E_INV_SANDBOX_DEPTH",
   "E_SANDBOX_FUEL_EXHAUSTED",
   "E_SANDBOX_MEMORY_EXHAUSTED",
   "E_SANDBOX_WALLCLOCK_EXCEEDED",
@@ -123,7 +122,6 @@ export const CATALOG_CODES = [
   "E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED",
   "E_SANDBOX_MODULE_INVALID",
   "E_SANDBOX_NESTED_DISPATCH_DENIED",
-  "E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED",
   "E_MODULE_MANIFEST_CID_MISMATCH",
   "E_ENGINE_CONFIG_INVALID",
 ] as const;
@@ -1316,21 +1314,6 @@ export class EInv11SystemZoneRead extends BentenError {
 }
 
 /**
- * E_INV_SANDBOX_DEPTH
- *
- * Thrown at: Registration (Inv-4 structural check on subgraph nesting).
- * Message template: "SANDBOX nest-depth {actual} exceeds max {max} (Inv-4)"
- */
-export class EInvSandboxDepth extends BentenError {
-  static readonly code = "E_INV_SANDBOX_DEPTH";
-  static readonly fixHint = "Inv-4 — `AttributionFrame.sandbox_depth: u8` saturating-counter; default max nest 4 (D20-RESOLVED). Flatten the SANDBOX → SANDBOX chain or move logic into a single SANDBOX call. Per D20, the depth INHERITS across CALL boundaries (not reset) so a SANDBOX → CALL → SANDBOX chain still counts cumulatively.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_INV_SANDBOX_DEPTH", "Inv-4 — `AttributionFrame.sandbox_depth: u8` saturating-counter; default max nest 4 (D20-RESOLVED). Flatten the SANDBOX → SANDBOX chain or move logic into a single SANDBOX call. Per D20, the depth INHERITS across CALL boundaries (not reset) so a SANDBOX → CALL → SANDBOX chain still counts cumulatively.", message, context);
-    this.name = "EInvSandboxDepth";
-  }
-}
-
-/**
  * E_SANDBOX_FUEL_EXHAUSTED
  *
  * Thrown at: SANDBOX executor (D3-RESOLVED per-call wasmtime `Store` lifecycle).
@@ -1477,21 +1460,6 @@ export class ESandboxNestedDispatchDenied extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_SANDBOX_NESTED_DISPATCH_DENIED", "D19-RESOLVED: deny nested `Engine::call` from host-fn (the actual security claim). Closes the SANDBOX → CALL → SANDBOX cap-context-confusion attack class (sec-pre-r1-08). Renamed from the older `E_SANDBOX_REENTRANCY_DENIED` per wsa-7 + r1-security convergence — the name aligns with what's actually being denied. Refactor the host-fn to NOT re-enter the engine; if Phase-3 async host-fns are needed, acquire the reserved `host:async` cap.", message, context);
     this.name = "ESandboxNestedDispatchDenied";
-  }
-}
-
-/**
- * E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED
- *
- * Thrown at: SANDBOX executor (depth saturation at the inheritance point — distinct from [E_SANDBOX_NESTED_DISPATCH_DENIED] which fires at the dispatch attempt).
- * Message template: "SANDBOX nested dispatch depth exceeded: max={max}"
- */
-export class ESandboxNestedDispatchDepthExceeded extends BentenError {
-  static readonly code = "E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED";
-  static readonly fixHint = "D20-RESOLVED: `AttributionFrame.sandbox_depth: u8` saturating-counter, INHERITED across CALL boundaries (not reset). Default max nest 4. The counter sits on the AttributionFrame so SANDBOX → CALL → SANDBOX → CALL → SANDBOX chains accumulate cumulatively. Flatten the chain or audit for accidental recursion.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED", "D20-RESOLVED: `AttributionFrame.sandbox_depth: u8` saturating-counter, INHERITED across CALL boundaries (not reset). Default max nest 4. The counter sits on the AttributionFrame so SANDBOX → CALL → SANDBOX → CALL → SANDBOX chains accumulate cumulatively. Flatten the chain or audit for accidental recursion.", message, context);
-    this.name = "ESandboxNestedDispatchDepthExceeded";
   }
 }
 
