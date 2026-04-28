@@ -196,10 +196,7 @@ pub trait PrimitiveHost: Send + Sync {
     /// Returns [`EvalError::PrimitiveNotImplemented`] in the default
     /// (NullHost / Phase-1) impl; engine impl returns the executor's
     /// typed errors.
-    fn execute_sandbox(
-        &self,
-        _op: &crate::OperationNode,
-    ) -> Result<crate::StepResult, EvalError> {
+    fn execute_sandbox(&self, _op: &crate::OperationNode) -> Result<crate::StepResult, EvalError> {
         Err(EvalError::PrimitiveNotImplemented(
             crate::PrimitiveKind::Sandbox,
         ))
