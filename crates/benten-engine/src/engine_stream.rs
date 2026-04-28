@@ -323,7 +323,16 @@ impl Engine {
     #[cfg(any(test, feature = "test-helpers"))]
     #[must_use]
     pub fn testing_open_stream_for_test(&self, chunks: Vec<Vec<u8>>) -> StreamHandle {
-        let chunks: Vec<Chunk> = chunks.into_iter().map(Chunk).collect();
+        let total = u64::try_from(chunks.len()).unwrap_or(u64::MAX);
+        let chunks: Vec<Chunk> = chunks
+            .into_iter()
+            .enumerate()
+            .map(|(i, bytes)| Chunk {
+                seq: u64::try_from(i).unwrap_or(u64::MAX),
+                final_chunk: u64::try_from(i + 1).unwrap_or(u64::MAX) == total,
+                bytes: bytes.into(),
+            })
+            .collect();
         StreamHandle::from_test_chunks(chunks)
     }
 }
