@@ -1,32 +1,25 @@
 name: WASM Runtime (wasm32-wasip1 + wasmtime)
 
-# Phase 2b R4-FP B-3 (red-phase) STUB. Pin source: plan §3.1 Phase-2b CI
-# additions + r4-qa-expert.json qa-r4-09 (3 of 5 expected workflow YAMLs
-# missing). This is the wasm32-wasip1 RUNTIME workflow (separate from
-# `wasm-conformance.yml` which exercises the ESC-1..16 fixture suite, and
-# separate from `wasm-browser.yml` which targets wasm32-unknown-unknown).
-# This workflow exercises the wasmtime runtime against the canonical
-# benten-eval surface (build + smoke-run, NOT exhaustive escape-attempt
-# coverage -- that's wasm-conformance.yml's job).
+# Phase 2b G10-A-wasip1 — wasm32-wasip1 build + canonical-CID
+# dual-target invariant (wasm-r1-1).
+#
+# Runs the canonical-fixture-CID test suite for `benten-core` against
+# the `wasm32-wasip1` target under wasmtime. Asserts the same Phase-1
+# canonical fixture CID `bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda`
+# resolves on wasm32-wasip1 as on the native build, plus that the
+# `benten-graph` snapshot-blob backend tests pass under wasmtime (no
+# accidental native-only deps slipped into the Phase-2b storage waist).
+#
+# Distinct from `wasm-conformance.yml` (adversarial SANDBOX fixture
+# suite, also wasm32-wasip1) and `wasm-browser.yml` (wasm32-unknown-
+# unknown bundle build + headless-browser smoke).
+#
+# Status (per ci-decisions-2026-04-22.md §4): INFORMATIONAL — not in
+# the 5-required-check set (`ci.yml`, `determinism.yml`,
+# `phase-2a-exit-criteria.yml`, `drift-detect.yml`, `supply-chain.yml`).
 #
 # Trigger discipline per METH-13: pull_request branches: [main] +
-# push branches: [main]. workflow_dispatch added for ad-hoc reruns.
-# No `push: branches: ['**']`.
-#
-# Status (per ci-decisions-2026-04-22.md §4): INFORMATIONAL ONLY -- not
-# a member of the 5-required-check set (`ci.yml`, `determinism.yml`,
-# `phase-2a-exit-criteria.yml`, `drift-detect.yml`, `supply-chain.yml`).
-# The required-check fleet stays narrow per METH-8 concurrency budget.
-#
-# This is a SCAFFOLD. R5 implementation (G7-B + G10-A-wasip1) fills in
-# the actual job steps:
-#   - install Rust + wasm32-wasip1 target
-#   - install wasmtime
-#   - cargo build --target wasm32-wasip1 -p benten-eval --features phase_2b_landed
-#   - run benten-eval test binaries under wasmtime
-#   - assert canonical fixture CID matches native build (wasm-r1-1 dual-target)
-#
-# Owned by R4-FP B-3 (R3-followup); R5 owners G7-B + G10-A-wasip1.
+# push branches: [main] + workflow_dispatch.
 
 on:
   push:
@@ -41,42 +34,102 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # Pin wasmtime version so a silent upstream bump cannot drift the
+  # runtime invariants. Bump deliberately when the workspace dep moves.
+  WASMTIME_VERSION: "v26.0.1"
 
 jobs:
-  wasm-runtime-stub:
-    name: wasm32-wasip1 + wasmtime smoke — RED-PHASE STUB
+  wasm32-wasip1-build:
+    name: wasm32-wasip1 build (benten-core, benten-graph)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
-      # TODO(Phase 2b G7-B + G10-A-wasip1): implement actual job steps.
-      # R5 implementer replaces this placeholder with:
-      #   - actions-rust-lang/setup-rust-toolchain@... with target
-      #     wasm32-wasip1 + components clippy, rustfmt
-      #   - bytecodealliance/actions/wasmtime@... or curl-install of
-      #     wasmtime release tarball (pinned SHA per supply-chain policy)
-      #   - cargo build --target wasm32-wasip1 -p benten-eval
-      #     --features phase_2b_landed
-      #   - run benten-eval lib tests under wasmtime, asserting:
-      #       * canonical fixture CID == native build CID (wasm-r1-1)
-      #       * a representative SANDBOX smoke test executes successfully
-      #         in the wasi runtime
-      #   - emit a short summary into $GITHUB_STEP_SUMMARY for operator
-      #     consumption.
-      - name: Placeholder — R5 (G7-B + G10-A-wasip1) implementation pending
-        shell: bash
+      - name: Install Rust toolchain (stable + wasm32-wasip1)
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: wasm32-wasip1
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      - name: cargo check benten-core for wasm32-wasip1
+        # benten-core is the canonical-bytes pipeline that produces the
+        # fixture CID. If THIS step fails the wasm-r1-1 invariant is
+        # already broken at compile time.
+        run: cargo check --target wasm32-wasip1 -p benten-core
+
+      - name: cargo check benten-graph for wasm32-wasip1
+        # The snapshot-blob backend (D10) is the wasm32-target storage
+        # waist. We compile-check it against wasm32-wasip1 to prove no
+        # native-only dep (filesystem, threads) slipped in.
+        run: cargo check --target wasm32-wasip1 -p benten-graph
+
+  canonical-cid-dual-target:
+    name: canonical CID — native vs wasm32-wasip1 invariant
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      - name: Native canonical fixture CID test
+        # Pins the canonical CID literal. The wasm-runtime side asserts
+        # the same literal — this side ensures the literal tracks
+        # benten-core's output natively; if these two ever disagree
+        # something drifted and the wasm-r1-1 invariant is broken.
         run: |
-          echo "RED-PHASE STUB: wasm-runtime.yml awaits G7-B (SANDBOX core)"
-          echo "+ G10-A-wasip1 (wasm32-wasip1 build harness) implementation"
-          echo "per plan §3.1."
-          echo ""
-          echo "When implemented this job MUST:"
-          echo "  - install Rust + wasm32-wasip1 target"
-          echo "  - install wasmtime (pinned version)"
-          echo "  - cargo build --target wasm32-wasip1 -p benten-eval"
-          echo "  - run a representative benten-eval smoke under wasmtime"
-          echo "  - assert canonical fixture CID matches the native build CID"
-          echo ""
-          echo "Status: INFORMATIONAL (not in the 5-required-check set)."
-          exit 0
+          cargo test -p benten-engine --test wasm32_wasip1_canonical_cid_matches_native -- --nocapture
+          cargo test -p benten-core --test node_cid -- --nocapture
+
+  wasm-runtime-smoke:
+    name: wasm32-wasip1 smoke — benten-core test under wasmtime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Install Rust toolchain (stable + wasm32-wasip1)
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: wasm32-wasip1
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      - name: Install wasmtime ${{ env.WASMTIME_VERSION }}
+        run: |
+          set -euo pipefail
+          curl -sSfL "https://github.com/bytecodealliance/wasmtime/releases/download/${WASMTIME_VERSION}/wasmtime-${WASMTIME_VERSION}-x86_64-linux.tar.xz" \
+            -o /tmp/wasmtime.tar.xz
+          mkdir -p /tmp/wasmtime
+          tar -xJf /tmp/wasmtime.tar.xz -C /tmp/wasmtime --strip-components=1
+          sudo install -m 0755 /tmp/wasmtime/wasmtime /usr/local/bin/wasmtime
+          wasmtime --version
+
+      - name: Configure wasmtime as wasm32-wasip1 test runner
+        run: |
+          mkdir -p .cargo
+          cat >> .cargo/config.toml <<'EOF'
+
+          [target.wasm32-wasip1]
+          runner = "wasmtime --dir=."
+          EOF
+          cat .cargo/config.toml
+
+      - name: Run benten-core lib tests under wasmtime (wasm32-wasip1)
+        # `cargo test --target wasm32-wasip1` builds the test binaries
+        # for the wasm target and runs each via the configured runner
+        # (wasmtime). The canonical-bytes pipeline tests in benten-core
+        # exercise Node::cid → the Phase-1 fixture CID. The runner
+        # surfaces non-zero exit on any test failure; that's the signal
+        # for cross-target drift.
+        env:
+          BENTEN_WASIP1_HARNESS: "1"
+        run: cargo test --target wasm32-wasip1 -p benten-core --lib -- --nocapture

@@ -109,12 +109,23 @@ serde_ipld_dagcbor = { workspace = true }
 # wallclock defaults (and future engine knobs). serde + serde derive
 # wired through here for the EngineConfig schema; toml drives the
 # workspace-root parse.
+#
+# Phase-2b G10-A-wasip1 (D10-RESOLVED): the snapshot-blob handoff API
+# (`engine_snapshot.rs`) materializes the contents of a `SnapshotBlob`
+# into a fresh tempdir-resident redb backend, then constructs an Engine
+# over it (read-only via `read_only_snapshot` flag). The module is
+# cfg-not-wasm32 (matches `engine_config.rs`); both `tempfile` and
+# `serde_ipld_dagcbor` are needed at runtime, not just at test time, so
+# they ride alongside `toml` here.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 toml = { workspace = true }
 serde = { workspace = true }
 # wsa-g7a-mr-4 fix-pass: emit a startup-warning when engine.toml relaxes
 # the D24 built-in wallclock ceiling.
 tracing = { workspace = true }
+# G10-A-wasip1 snapshot-blob handoff (`engine_snapshot.rs`).
+tempfile = { workspace = true }
+serde_ipld_dagcbor = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

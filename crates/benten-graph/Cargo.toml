@@ -70,6 +70,12 @@ benten-errors = { workspace = true }
 # lockstep with `benten-core`'s CID hashing.
 blake3 = { workspace = true }
 redb = { workspace = true }
+# Phase-2b G10-A-wasip1 (D10-RESOLVED): the snapshot-blob payload struct
+# (`backends/snapshot_blob.rs::SnapshotBlob`) derives Serialize +
+# Deserialize so DAG-CBOR canonical-bytes encoding round-trips through
+# `serde_ipld_dagcbor`. Workspace dep — same `default-features = false`
+# / `derive` / `alloc` posture as benten-core consumes.
+serde = { workspace = true }
 serde_ipld_dagcbor = { workspace = true }
 thiserror = { workspace = true }
 

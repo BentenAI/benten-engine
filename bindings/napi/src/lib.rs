@@ -67,6 +67,14 @@ mod wait;
 mod stream;
 #[cfg(feature = "napi-export")]
 mod subscribe;
+// Phase 2b G10-A-wasip1: napi-side wasm32-wasip1 runtime probes
+// (`wasiTargetKind`, `wasiRuntimeSupportsRedbNative`,
+// `wasiCanonicalFixtureCid`). Cfg-split per the same defence-in-depth
+// pattern as `sandbox.rs`: both halves of the cfg ship so TS callers
+// always see the symbol. The G10-A-browser `wasm_browser.rs` sibling
+// covers wasm32-unknown-unknown.
+#[cfg(feature = "napi-export")]
+mod wasm_target;
 
 // Phase 2b G10-A-browser: wasm32-unknown-unknown runtime path —
 // in-memory module manifest store (Compromise #N+8) + target-availability

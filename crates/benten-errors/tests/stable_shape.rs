@@ -128,6 +128,10 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::SandboxNestedDispatchDenied,
     ErrorCode::ModuleManifestCidMismatch,
     ErrorCode::EngineConfigInvalid,
+    // Phase-2b G10-A-wasip1 (D10-RESOLVED): snapshot-blob backend
+    // surfaces `BackendReadOnly` on every mutation; same code is reused
+    // by the network_fetch_stub backend for write-attempt rejections.
+    ErrorCode::BackendReadOnly,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -195,8 +199,12 @@ fn variant_count_is_pinned() {
     // ManifestUnknown, ManifestRegistrationDeferred, ModuleInvalid,
     // NestedDispatchDenied}, ModuleManifestCidMismatch, EngineConfigInvalid).
     // Post-G7-A: 64 + 12 = 76.
+    //
+    // Phase-2b G10-A-wasip1 (D10-RESOLVED) adds `BackendReadOnly` for
+    // the snapshot-blob + network_fetch_stub backends' write-attempt
+    // typed error. Post-G10-A-wasip1: 76 + 1 = 77.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 76,
+        CATALOG_VARIANT_COUNT, 77,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

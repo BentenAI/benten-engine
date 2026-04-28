@@ -47,7 +47,6 @@ fn engine_with_canonical_state() -> (tempfile::TempDir, Engine) {
 /// Any drift means BTreeMap canonical-bytes discipline broke OR a hidden
 /// non-deterministic field crept into the snapshot envelope.
 #[test]
-#[ignore = "Phase 2b G10-A-wasip1 pending — Engine::{export,from}_snapshot_blob unimplemented"]
 fn snapshot_blob_round_trips_export_import() {
     let (_dir, engine) = engine_with_canonical_state();
 
@@ -74,7 +73,6 @@ fn snapshot_blob_round_trips_export_import() {
 /// snapshot blobs. Any drift indicates a hidden non-deterministic field
 /// (HashMap insertion order, timestamp leak, etc.).
 #[test]
-#[ignore = "Phase 2b G10-A-wasip1 pending"]
 fn snapshot_blob_btreemap_canonical_bytes_stable() {
     let (_dir1, engine1) = engine_with_canonical_state();
     let (_dir2, engine2) = engine_with_canonical_state();
@@ -94,7 +92,6 @@ fn snapshot_blob_btreemap_canonical_bytes_stable() {
 /// The exported snapshot blob has its OWN CID (rolled through `Node::cid`
 /// per D10). That CID MUST be stable across export → import → re-export.
 #[test]
-#[ignore = "Phase 2b G10-A-wasip1 pending"]
 fn snapshot_blob_round_trips_under_canonical_cid() {
     let (_dir, engine) = engine_with_canonical_state();
 

@@ -125,6 +125,7 @@ export const CATALOG_CODES = [
   "E_MODULE_MANIFEST_CID_MISMATCH",
   "E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE",
   "E_ENGINE_CONFIG_INVALID",
+  "E_BACKEND_READ_ONLY",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -1506,5 +1507,20 @@ export class EEngineConfigInvalid extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_ENGINE_CONFIG_INVALID", "Workspace-level `engine.toml` (Ben's G7-A brief addition) failed to parse against the [`EngineConfig`] schema. Either fix the TOML (see `docs/SANDBOX-LIMITS.md` for the schema) or remove the file (built-in defaults apply when absent). The `[sandbox]` section accepts `wallclock_default_ms` (override D24 30s default) and `wallclock_max_ms` (override D24 5min ceiling).", message, context);
     this.name = "EEngineConfigInvalid";
+  }
+}
+
+/**
+ * E_BACKEND_READ_ONLY
+ *
+ * Thrown at: `SnapshotBlobBackend::{put,delete,put_batch}` (`crates/benten-graph/src/backends/snapshot_blob.rs`); `NetworkFetchStubBackend::{put,delete,put_batch}` (`crates/benten-graph/src/backends/network_fetch_stub.rs`); surfaces from `Engine::from_snapshot_blob`-constructed engines on any write call.
+ * Message template: "backend is read-only: {operation} rejected ({backend_kind})"
+ */
+export class EBackendReadOnly extends BentenError {
+  static readonly code = "E_BACKEND_READ_ONLY";
+  static readonly fixHint = "D10-RESOLVED snapshot-blob `KVBackend` (constructed via `Engine::from_snapshot_blob(bytes)`) is a read-mostly view on a content-addressed handoff blob — Phase-3 sync can transmit the blob between peers, but the dst engine cannot write into it without breaking the canonical-bytes invariant the blob's CID is computed over. The same posture applies to the Phase-2a §9.8 `network_fetch_stub` `KVBackend`: writes will land in Phase 3 once the iroh-fetch path replaces the stub. To mutate state, open a redb-backed engine via `Engine::open(path)` instead, or import the snapshot blob into a fresh redb engine and reissue writes there.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_BACKEND_READ_ONLY", "D10-RESOLVED snapshot-blob `KVBackend` (constructed via `Engine::from_snapshot_blob(bytes)`) is a read-mostly view on a content-addressed handoff blob — Phase-3 sync can transmit the blob between peers, but the dst engine cannot write into it without breaking the canonical-bytes invariant the blob's CID is computed over. The same posture applies to the Phase-2a §9.8 `network_fetch_stub` `KVBackend`: writes will land in Phase 3 once the iroh-fetch path replaces the stub. To mutate state, open a redb-backed engine via `Engine::open(path)` instead, or import the snapshot blob into a fresh redb engine and reissue writes there.", message, context);
+    this.name = "EBackendReadOnly";
   }
 }
