@@ -6,6 +6,7 @@
   "workspaces": [
     "bindings/napi",
     "packages/engine",
+    "packages/engine-devserver",
     "tools/create-benten-app"
   ],
   "scripts": {

@@ -41,7 +41,7 @@ pub mod reload;
 pub mod watcher;
 
 pub use inspect_state::pretty_print_envelope_bytes;
-pub use reload::ReloadCoordinator;
+pub use reload::{ReloadCoordinator, ReloadEvent, ReloadSubscriber};
 pub use watcher::{WatchEvent, Watcher};
 
 // G12-B: re-export the DSL compile entry points so devserver consumers
@@ -372,6 +372,43 @@ impl DevServer {
         Ok(compiled.subgraph.handler_id().to_string())
     }
 
+    /// Wave-8f: explicit replace alias. Same semantics as
+    /// [`DevServer::register_handler_from_dsl`] (which already routes
+    /// through `Engine::register_subgraph_replace`); the alias surface
+    /// makes intent explicit at the JS / napi boundary so tooling can
+    /// distinguish "first registration" from "hot-reload" without
+    /// inspecting the version-chain accessor.
+    ///
+    /// # Errors
+    /// Returns the same [`CompileError`] cases as
+    /// [`DevServer::register_handler_from_dsl`].
+    pub fn replace_handler_from_dsl(
+        &self,
+        handler_id: &str,
+        op: &str,
+        source: &str,
+    ) -> Result<String, CompileError> {
+        self.register_handler_from_dsl(handler_id, op, source)
+    }
+
+    /// Wave-8f: subscribe to hot-reload events. The returned handle is
+    /// drained per-poll by JS-side consumers. See
+    /// [`reload::ReloadSubscriber`] for the per-event shape.
+    #[must_use]
+    pub fn subscribe_reload_events(&self) -> ReloadSubscriber {
+        self.reload_coordinator.subscribe_reload_events()
+    }
+
+    /// Wave-8f: borrow the dev-server's reload coordinator. Exposed so
+    /// crate-external test fixtures can `subscribe_reload_events` without
+    /// going through the [`DevServer::subscribe_reload_events`] entry
+    /// point (which is the normal entry point — this accessor exists for
+    /// symmetry with `engine()`).
+    #[must_use]
+    pub fn reload_coordinator(&self) -> &Arc<ReloadCoordinator> {
+        &self.reload_coordinator
+    }
+
     pub fn register_handler_from_str(
         &self,
         handler_id: &str,
@@ -405,7 +442,12 @@ impl DevServer {
         let counter = t.version_counter.entry(handler_id.to_string()).or_insert(0);
         *counter = counter.saturating_add(1);
         let version_tag = format!("v{}", *counter);
-        let hv = Arc::new(HandlerVersion::new(handler_id, op, source, version_tag));
+        let hv = Arc::new(HandlerVersion::new(
+            handler_id,
+            op,
+            source,
+            version_tag.clone(),
+        ));
 
         t.entries
             .entry(handler_id.to_string())
@@ -414,14 +456,22 @@ impl DevServer {
         drop(t);
 
         // G12-B: when engine routing is enabled, compile the DSL source via
-        // benten-dsl-compiler and feed the canonical Subgraph through
-        // Engine::register_subgraph. The legacy version-tag accounting above
-        // continues so the in-flight harness's slow_transform / explode /
-        // wait markers + version_cid surrogate still surface. The engine
-        // re-registration is idempotent for unchanged content (handler_id
-        // → CID match) so a no-op reload doesn't trip DuplicateHandler.
+        // benten-dsl-compiler and feed the canonical Subgraph through the
+        // engine. Wave-8f: the swap on a duplicate handler_id is now
+        // serviced by `Engine::register_subgraph_replace` rather than the
+        // soft-no-op catch the G12-B routing pass shipped. Identical
+        // content under the same handler_id remains idempotent; different
+        // content bumps the engine's in-memory version chain + reports the
+        // predecessor CID.
+        //
         // Caps live on the dev-server's own grant table — engine caps are
-        // out of scope for this routing pass.
+        // out of scope for this routing pass; the dev-server's
+        // `GrantTable` is preserved across reload by virtue of being a
+        // sibling field never touched by the registration path (cf. the
+        // `devserver_hot_reload_preserves_cap_grants_through_engine_path`
+        // integration test).
+        let mut new_engine_cid: Option<benten_core::Cid> = None;
+        let mut prev_engine_cid: Option<benten_core::Cid> = None;
         if let Some(engine) = &self.engine {
             // Only compile + register sources that look like valid DSL.
             // Test fixtures pass arbitrary source strings (e.g.
@@ -430,24 +480,11 @@ impl DevServer {
             // path so the Phase-2a tests stay green. Real DSL sources
             // (using the `->` token + a `respond` keyword) route through
             // the engine.
-            //
-            // G12-B caveat: `Engine::register_subgraph` returns
-            // `DuplicateHandler` when the same handler_id is re-registered
-            // with a different body. Real hot-reload semantics ("replace
-            // the registered handler with the new shape") is a deeper
-            // engine-side design question (audit trail, in-flight
-            // suspended-call resume, etc.) that lands in a separate
-            // workstream. For this routing pass we treat
-            // `DuplicateHandler` as a soft no-op: the canonical engine-side
-            // handler stays at v1's CID, the legacy version_tag table
-            // continues bumping, and the in-flight harness's
-            // `version_tag` accounting still observes "reload happened".
             if let Ok(compiled) = compile_str(source) {
-                match engine.register_subgraph(compiled.subgraph) {
-                    Ok(_) => {}
-                    Err(benten_engine::EngineError::DuplicateHandler { .. }) => {
-                        // Hot-replace not yet supported engine-side.
-                        // See module-level G12-B caveat.
+                match engine.register_subgraph_replace(compiled.subgraph) {
+                    Ok(outcome) => {
+                        new_engine_cid = Some(outcome.cid);
+                        prev_engine_cid = outcome.previous_cid;
                     }
                     Err(e) => {
                         return Err(ErrorCode::Unknown(format!(
@@ -458,6 +495,18 @@ impl DevServer {
             }
         }
 
+        // Publish a reload event so JS-side subscribers (vitest harness,
+        // IDE plugins) can observe what just changed. Always published —
+        // both legacy in-memory mode (where new_cid is None) and engine-
+        // routed mode (where new_cid + previous_cid carry the engine's
+        // canonical structural CID + predecessor).
+        self.reload_coordinator.publish_reload_event(ReloadEvent {
+            handler_id: handler_id.to_string(),
+            op: op.to_string(),
+            version_tag,
+            new_cid: new_engine_cid,
+            previous_cid: prev_engine_cid,
+        });
         self.registration_seq.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }

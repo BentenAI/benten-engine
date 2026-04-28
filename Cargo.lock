@@ -242,6 +242,8 @@ version = "0.1.0"
 dependencies = [
  "benten-caps",
  "benten-core",
+ "benten-dev",
+ "benten-dsl-compiler",
  "benten-engine",
  "benten-errors",
  "benten-ivm",

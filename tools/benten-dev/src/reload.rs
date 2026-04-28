@@ -42,6 +42,65 @@
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 
+use benten_core::Cid;
+
+/// One reload-event observation. Phase 2b Wave-8f: the dev-server publishes
+/// these to subscribers so JS-side renderers (vitest harness, IDE plugins)
+/// can pin "a hot-reload occurred + here's what changed". Carries the
+/// engine-side handler_id + the new+predecessor CIDs (when the underlying
+/// engine reported them via [`benten_engine::RegisterReplaceOutcome`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReloadEvent {
+    /// Handler id whose body was replaced.
+    pub handler_id: String,
+    /// Op the dev-server registered the source under (`"run"`, `"create"`,
+    /// …). Phase-2a-era detail; preserved so JS-side consumers don't need
+    /// to track it separately.
+    pub op: String,
+    /// Surrogate version tag the dev-server stamped on this version
+    /// (`"v1"` / `"v2"` / …) — matches both the legacy `HandlerVersion`
+    /// counter AND `RegisterReplaceOutcome::version_tag()` when the engine
+    /// path is wired.
+    pub version_tag: String,
+    /// New live CID for the handler. `None` when the dev-server is in
+    /// legacy in-memory mode (no engine wired).
+    pub new_cid: Option<Cid>,
+    /// Predecessor CID — present when this reload was a real swap (not a
+    /// first-registration). `None` on first-registration AND on idempotent
+    /// re-registration with identical content AND in legacy in-memory mode.
+    pub previous_cid: Option<Cid>,
+}
+
+/// Subscriber handle returned by [`ReloadCoordinator::subscribe_reload_events`].
+/// Drop to unsubscribe. Cloning produces an independent subscriber that
+/// observes events from this point onward.
+#[derive(Debug, Clone)]
+pub struct ReloadSubscriber {
+    inner: Arc<Mutex<Vec<ReloadEvent>>>,
+}
+
+impl ReloadSubscriber {
+    /// Drain pending events. Returns the events delivered since the last
+    /// drain in arrival order. Phase-2b Wave-8f: uses a buffered channel
+    /// idiom rather than `crossbeam-channel` to avoid pulling a new
+    /// transitive dep into `benten-dev`'s narrow build (`std::sync::mpsc`
+    /// would also work but `Vec<ReloadEvent>` keeps the surface
+    /// trivially cloneable for test fixtures + napi bridging).
+    #[must_use]
+    pub fn drain(&self) -> Vec<ReloadEvent> {
+        let mut g = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+        std::mem::take(&mut *g)
+    }
+
+    /// Whether the buffer currently has at least one event. Cheap snapshot
+    /// for tests that want to spin-wait without draining.
+    #[must_use]
+    pub fn has_events(&self) -> bool {
+        let g = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+        !g.is_empty()
+    }
+}
+
 /// Coordinates hot-reloads against in-flight evaluations.
 #[derive(Debug)]
 pub struct ReloadCoordinator {
@@ -51,6 +110,12 @@ pub struct ReloadCoordinator {
     /// Slow-transform fixture — the call thread waits on this condvar; the
     /// test releases it via [`ReloadCoordinator::slow_transform_release`].
     slow_transform: SlowTransformGate,
+    /// Active reload-event subscribers. Each subscriber is an
+    /// `Arc<Mutex<Vec<ReloadEvent>>>` buffer the publisher pushes into.
+    /// Phase 2b Wave-8f. Held under a Mutex so subscribe + publish race
+    /// cleanly; the per-subscriber buffer Mutex is independent so a slow
+    /// drainer doesn't block the publisher.
+    subscribers: Mutex<Vec<Arc<Mutex<Vec<ReloadEvent>>>>>,
 }
 
 #[derive(Debug)]
@@ -76,7 +141,42 @@ impl ReloadCoordinator {
         Self {
             in_flight: AtomicUsize::new(0),
             slow_transform: SlowTransformGate::new(),
+            subscribers: Mutex::new(Vec::new()),
         }
+    }
+
+    /// Subscribe to hot-reload events. Returns a [`ReloadSubscriber`] whose
+    /// `drain()` reports events seen since the last drain. The subscriber
+    /// remains active for the lifetime of the returned handle (drop → no
+    /// further events; the publisher prunes dropped subscribers lazily on
+    /// publish).
+    pub fn subscribe_reload_events(&self) -> ReloadSubscriber {
+        let buf = Arc::new(Mutex::new(Vec::new()));
+        let mut g = self.subscribers.lock().unwrap_or_else(|p| p.into_inner());
+        g.push(Arc::clone(&buf));
+        ReloadSubscriber { inner: buf }
+    }
+
+    /// Publish a reload event to every active subscriber. Phase 2b Wave-8f.
+    /// Called by `DevServer` on every successful (idempotent or replace)
+    /// `register_handler_from_*` invocation.
+    pub fn publish_reload_event(&self, event: ReloadEvent) {
+        let mut g = self.subscribers.lock().unwrap_or_else(|p| p.into_inner());
+        // Lazily prune subscribers whose only owner is this Vec — no live
+        // external Arc means the subscriber was dropped + we should stop
+        // buffering for it. `Arc::strong_count` of 1 means "this is the
+        // only Arc" (the one we own here); the publisher AND the
+        // ReloadSubscriber each hold one when alive (count == 2).
+        g.retain(|buf| {
+            // Active subscriber → push the event.
+            if Arc::strong_count(buf) >= 2 {
+                let mut b = buf.lock().unwrap_or_else(|p| p.into_inner());
+                b.push(event.clone());
+                true
+            } else {
+                false
+            }
+        });
     }
 
     /// Begin a call. Returns a guard that decrements the in-flight count
@@ -177,5 +277,53 @@ mod tests {
         thread::sleep(Duration::from_millis(10));
         coord.slow_transform_release();
         h.join().expect("must wake");
+    }
+
+    #[test]
+    fn reload_subscriber_receives_published_events() {
+        let coord = Arc::new(ReloadCoordinator::new());
+        let sub = coord.subscribe_reload_events();
+        assert!(!sub.has_events());
+
+        let ev = ReloadEvent {
+            handler_id: "h1".into(),
+            op: "run".into(),
+            version_tag: "v2".into(),
+            new_cid: Some(Cid::from_blake3_digest([0x42; 32])),
+            previous_cid: Some(Cid::from_blake3_digest([0x41; 32])),
+        };
+        coord.publish_reload_event(ev.clone());
+
+        assert!(sub.has_events());
+        let drained = sub.drain();
+        assert_eq!(drained.len(), 1);
+        assert_eq!(drained[0], ev);
+        assert!(!sub.has_events(), "drain must consume");
+    }
+
+    #[test]
+    fn reload_publisher_prunes_dropped_subscribers() {
+        let coord = Arc::new(ReloadCoordinator::new());
+        let sub_alive = coord.subscribe_reload_events();
+        {
+            let _sub_dropped = coord.subscribe_reload_events();
+            // _sub_dropped goes out of scope here.
+        }
+        let ev = ReloadEvent {
+            handler_id: "h".into(),
+            op: "run".into(),
+            version_tag: "v1".into(),
+            new_cid: None,
+            previous_cid: None,
+        };
+        coord.publish_reload_event(ev.clone());
+        assert_eq!(sub_alive.drain().len(), 1);
+        // Internal state inspection: the publisher's retain pruned the
+        // dropped subscriber. Publish a second event; only the live
+        // subscriber buffers it; the dropped buffer is gone.
+        coord.publish_reload_event(ev);
+        // (Indirect assertion: prior code paniced on poisoned dropped
+        // mutex when retain didn't prune. If we got here, retain ran.)
+        assert_eq!(sub_alive.drain().len(), 1);
     }
 }

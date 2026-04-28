@@ -47,8 +47,8 @@ use crate::change_probe::ChangeProbe;
 use crate::engine_transaction::{EngineTransaction, GraphTxLike};
 use crate::error::EngineError;
 use crate::outcome::{
-    AnchorHandle, DiagnosticInfo, HandlerPredecessors, Outcome, ReadViewOptions, Trace, TraceStep,
-    ViewCreateOptions,
+    AnchorHandle, DiagnosticInfo, HandlerPredecessors, Outcome, ReadViewOptions,
+    RegisterReplaceOutcome, Trace, TraceStep, ViewCreateOptions,
 };
 use crate::primitive_host::{
     ActiveCall, PendingHostOp, cap_error_to_outcome, eval_error_to_engine_error,
@@ -167,6 +167,18 @@ pub(crate) struct EngineInner {
     /// cloning a Vec<u8> on lookup is cheap relative to wasmtime
     /// compilation cost.
     pub(crate) module_bytes: std::sync::Mutex<std::collections::BTreeMap<Cid, Vec<u8>>>,
+    /// Phase 2b Wave-8f: per-handler version chain — newest-first list of
+    /// CIDs registered under each handler_id. Populated lazily; the FIRST
+    /// `register_subgraph` for a handler seeds the chain with the
+    /// registered CID, every subsequent `register_subgraph_replace`
+    /// prepends the new CID. The chain itself is bounded only by the
+    /// process lifetime; Phase-3 promotes this to a durable Anchor +
+    /// Version-Node chain (the `core::version` API). The in-memory chain
+    /// keeps the hot-replace surface honest under Phase-2b's "no separate
+    /// version store yet" constraint and gives `RegisterReplaceOutcome`
+    /// the predecessor CID without a backend round-trip.
+    pub(crate) handler_version_chain:
+        std::sync::Mutex<std::collections::BTreeMap<String, Vec<Cid>>>,
 }
 
 impl EngineInner {
@@ -192,6 +204,7 @@ impl EngineInner {
             test_iteration_budget: std::sync::Mutex::new(None),
             installed_modules: std::sync::Mutex::new(std::collections::BTreeMap::new()),
             module_bytes: std::sync::Mutex::new(std::collections::BTreeMap::new()),
+            handler_version_chain: std::sync::Mutex::new(std::collections::BTreeMap::new()),
         }
     }
 
@@ -799,7 +812,153 @@ impl Engine {
             let mut spec_guard = self.inner.specs.lock_recover();
             spec_guard.insert(handler_id.clone(), spec);
         }
+        // Seed / extend the version chain. For the legacy `register_subgraph`
+        // path the chain only gains an entry on the FIRST registration of a
+        // handler_id (the duplicate-with-different-content branch above
+        // already returned with `DuplicateHandler`); duplicate-identical
+        // returns idempotently above without growing the chain.
+        let mut vc = self.inner.handler_version_chain.lock_recover();
+        let chain = vc.entry(handler_id.clone()).or_default();
+        if chain.first() != Some(&cid) {
+            chain.insert(0, cid);
+        }
+        drop(vc);
         Ok(handler_id)
+    }
+
+    /// Replace the subgraph registered under the same `handler_id` with a
+    /// new content-addressed body. Phase 2b Wave-8f.
+    ///
+    /// Unlike [`Engine::register_subgraph`], this method DOES accept a
+    /// different CID under the same `handler_id` and bumps the handler's
+    /// version chain accordingly — the caller's intent is "hot-reload this
+    /// handler". The previous CID becomes the new CID's predecessor on the
+    /// in-memory `handler_version_chain` so callers (devserver hot-reload,
+    /// audit consumers) can name what was replaced.
+    ///
+    /// Idempotency: re-registering identical content (same CID under the
+    /// same `handler_id`) returns the same CID and does NOT bump the
+    /// version chain — the call is a no-op except for re-running the
+    /// invariant battery. This matches `register_subgraph`'s idempotence
+    /// shape so dev-server fingerprint races (file mtime tick without
+    /// content change) don't grow the chain.
+    ///
+    /// The same G6 invariant battery + TRANSFORM-syntax fail-fast that
+    /// `register_subgraph` runs is run here. The newly-registered CID
+    /// becomes the live dispatch target on `Engine::call(handler_id, ...)`.
+    ///
+    /// **In-flight evaluation contract:** in-flight `Engine::call`
+    /// invocations DO NOT see the swap. The dispatch path resolves the CID
+    /// from `handlers` once at call time + holds an
+    /// `Arc<benten_eval::Subgraph>` clone for the call's lifetime, so the
+    /// swap is observed by NEXT calls only. (Full subscription-store-style
+    /// pre-swap-suspension drain is out of scope for Phase 2b — the
+    /// registered CID swap is atomic from the table's perspective; mid-call
+    /// behaviour is bounded by the call's own snapshot.)
+    ///
+    /// **Version chain in Phase 2b:** in-memory only. Phase 3 promotes this
+    /// to a durable `core::version::Anchor` + Version-Node chain so reload
+    /// audit survives engine restart.
+    ///
+    /// # Errors
+    /// - [`EngineError::Invariant`] / [`EngineError::Other`] on the same
+    ///   conditions `register_subgraph` raises.
+    /// - This method does NOT raise [`EngineError::DuplicateHandler`] —
+    ///   that's the whole point.
+    pub fn register_subgraph_replace<S>(
+        &self,
+        spec: S,
+    ) -> Result<RegisterReplaceOutcome, EngineError>
+    where
+        S: IntoSubgraphSpec,
+    {
+        let stored_spec = spec.as_subgraph_spec();
+        let sg = spec.into_eval_subgraph()?;
+        let cfg = InvariantConfig::default();
+        sg.validate(&cfg).map_err(|e| match e {
+            benten_eval::EvalError::Invariant(kind) => {
+                EngineError::Invariant(Box::new(RegistrationError::new(kind)))
+            }
+            other => EngineError::Other {
+                code: other.code(),
+                message: format!("{other:?}"),
+            },
+        })?;
+        benten_eval::invariants::validate_transform_expressions(&sg).map_err(|e| {
+            EngineError::Other {
+                code: e.code(),
+                message: format!("{e}"),
+            }
+        })?;
+        let cid = sg.cid().map_err(EngineError::Core)?;
+        let handler_id = sg.handler_id().to_string();
+
+        // Atomically: read the previous CID (if any), swap the handlers
+        // entry, then prepend onto the version chain. The two locks are
+        // taken in chain order (handlers, then version_chain) consistently
+        // with all other version-chain mutators.
+        let previous_cid: Option<Cid>;
+        let replaced;
+        {
+            let mut guard = self.inner.handlers.lock_recover();
+            let prev = guard.get(&handler_id).copied();
+            match prev {
+                Some(existing) if existing == cid => {
+                    // Identical content — idempotent no-op. The chain is
+                    // already led by `cid`; don't grow it.
+                    previous_cid = Some(existing);
+                    replaced = false;
+                }
+                _ => {
+                    guard.insert(handler_id.clone(), cid);
+                    previous_cid = prev;
+                    replaced = true;
+                }
+            }
+        }
+        if let Some(spec) = stored_spec {
+            let mut spec_guard = self.inner.specs.lock_recover();
+            spec_guard.insert(handler_id.clone(), spec);
+        }
+        if replaced {
+            let mut vc = self.inner.handler_version_chain.lock_recover();
+            let chain = vc.entry(handler_id.clone()).or_default();
+            // Idempotency guard: don't re-prepend if the chain already
+            // leads with this CID (defence against racing replace-with-
+            // same-content writers — the handlers swap above is the
+            // arbiter).
+            if chain.first() != Some(&cid) {
+                chain.insert(0, cid);
+            }
+        }
+        // Chain depth — used by audit consumers to name "v1 / v2 / v3 / …"
+        // at a glance; matches `tools/benten-dev`'s legacy version-tag
+        // convention.
+        let chain_depth = self
+            .inner
+            .handler_version_chain
+            .lock_recover()
+            .get(&handler_id)
+            .map_or(1, std::vec::Vec::len);
+        Ok(RegisterReplaceOutcome {
+            handler_id,
+            cid,
+            previous_cid: if replaced { previous_cid } else { None },
+            chain_depth,
+        })
+    }
+
+    /// Return the in-memory version chain for `handler_id` (newest first),
+    /// or an empty slice when the handler isn't registered. Phase 2b
+    /// Wave-8f introspection helper for devserver + audit consumers.
+    #[must_use]
+    pub fn handler_version_chain(&self, handler_id: &str) -> Vec<Cid> {
+        self.inner
+            .handler_version_chain
+            .lock_recover()
+            .get(handler_id)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Register a subgraph in aggregate mode. Multi-violation inputs surface

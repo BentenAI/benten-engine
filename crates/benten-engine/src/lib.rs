@@ -95,8 +95,8 @@ pub use engine_transaction::EngineTransaction;
 pub use error::EngineError;
 pub use outcome::{
     AnchorHandle, BudgetExhaustedView, DiagnosticInfo, HandlerPredecessors, NestedTx, Outcome,
-    OutcomeExt, ReadViewOptions, TerminalError, Trace, TraceStep, UserViewInputPattern,
-    UserViewSpec, UserViewSpecBuilder, ViewCreateOptions,
+    OutcomeExt, ReadViewOptions, RegisterReplaceOutcome, TerminalError, Trace, TraceStep,
+    UserViewInputPattern, UserViewSpec, UserViewSpecBuilder, ViewCreateOptions,
 };
 pub use subgraph_spec::{
     GrantSubject, IntoCallInput, IntoSubgraphSpec, IterateBody, PrimitiveSpec, RevokeScope,

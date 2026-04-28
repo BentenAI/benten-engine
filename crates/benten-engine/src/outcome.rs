@@ -571,6 +571,52 @@ pub struct AnchorHandle {
     pub(crate) _phase1_stub: (),
 }
 
+/// Outcome of a [`crate::Engine::register_subgraph_replace`] call. Phase 2b
+/// Wave-8f.
+///
+/// Reports the new live CID + the predecessor it replaced (if any) + the
+/// in-memory version-chain depth so devserver / audit consumers can name
+/// what changed. The chain depth matches the `tools/benten-dev` legacy
+/// `version_tag` convention (`v1` on first registration, `v2` on first
+/// replace, …) without forcing the caller to compute it from the
+/// engine's chain accessor.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegisterReplaceOutcome {
+    /// The handler id whose subgraph was registered or replaced.
+    pub handler_id: String,
+    /// The CID now live for this handler — the dispatch target on the
+    /// next [`crate::Engine::call`].
+    pub cid: Cid,
+    /// The CID that was live BEFORE this replace, when present. `None` on
+    /// first registration of the handler_id and on idempotent re-registration
+    /// (identical CID under same handler_id).
+    pub previous_cid: Option<Cid>,
+    /// Depth of the in-memory version chain after this replace — `1` on
+    /// first registration, `n+1` after each non-idempotent replace.
+    pub chain_depth: usize,
+}
+
+impl RegisterReplaceOutcome {
+    /// Convenience: `true` when this outcome reports an actual swap (i.e.
+    /// the handler was already registered with different content). `false`
+    /// on first registration AND on idempotent re-registration with
+    /// identical content.
+    #[must_use]
+    pub fn replaced(&self) -> bool {
+        self.previous_cid
+            .as_ref()
+            .is_some_and(|prev| *prev != self.cid)
+    }
+
+    /// Convenience: surrogate `vN` tag matching `tools/benten-dev`'s
+    /// legacy version-tag convention. `v1` at chain depth 1, `v2` at 2,
+    /// etc.
+    #[must_use]
+    pub fn version_tag(&self) -> String {
+        format!("v{}", self.chain_depth)
+    }
+}
+
 /// Predecessor adjacency for trace assertions.
 ///
 /// Populated at `Engine::handler_predecessors` time by walking the
