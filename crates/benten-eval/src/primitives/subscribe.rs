@@ -278,13 +278,7 @@ pub mod config {
     /// `E_SUBSCRIBE_CURSOR_LOST` fires.
     pub const DEFAULT_RETENTION_EVENTS: usize = 1000;
     /// Maximum retention duration per persistent cursor.
-    #[allow(unknown_lints, clippy::duration_suboptimal_units)]
-    // Rust 1.95 lint suggests `Duration::from_hours(24)` but `from_hours`
-    // was only stabilized in 1.95; workspace MSRV is 1.91. Keeping
-    // `from_secs(24 * 60 * 60)` preserves MSRV compatibility.
-    // `unknown_lints` covers older toolchains. Drop both allows when
-    // MSRV bumps to 1.95.
-    pub const DEFAULT_RETENTION_DURATION: Duration = Duration::from_secs(24 * 60 * 60);
+    pub const DEFAULT_RETENTION_DURATION: Duration = Duration::from_hours(24);
 }
 
 // ---------------------------------------------------------------------------

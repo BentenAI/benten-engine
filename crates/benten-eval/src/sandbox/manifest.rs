@@ -36,14 +36,27 @@ use std::collections::BTreeMap;
 /// - Default-bundled entries are loaded by [`ManifestRegistry::new`] from
 ///   the codegen-emitted [`default_manifests`] table.
 /// - Runtime-registered bundles are reserved for Phase 8 (see D2).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// **Intentionally NOT `Serialize` / `Deserialize`** (det-r4b-4 closure,
+/// wave-8e). Mirrors the cag-mr-g12c-cont-1 fix-pass applied to
+/// `Subgraph` / `NodeHandle`: the canonical encoding for a CapBundle
+/// flows through [`Self::canonical_bytes`] (a typed inner shape that
+/// honours the sorted-keys + skip-when-None discipline that defines
+/// CID-stability across the Phase-3 signed-bundle lift). A
+/// `serde_json::to_string(&bundle)` callsite would silently produce a
+/// SECOND encoding shape — fields in declaration order, no skip-on-
+/// `None` discipline, no DAG-CBOR canonicalisation — and any
+/// downstream consumer treating that JSON as authoritative would be
+/// out-of-sync with the canonical-bytes-derived CID. Dropping the
+/// auto-derive forces every caller through `canonical_bytes()` and
+/// makes the secondary-serde footgun impossible to hit by accident.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CapBundle {
     /// Sorted list of cap-strings the bundle requires. Sorted-canonical for
     /// DAG-CBOR bit-stability per D9.
     pub caps: Vec<String>,
     /// Optional one-line description; not part of canonical bytes (kept
     /// in dev-time TOML only, populated at codegen time).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     /// **sec-g7a-mr-3 fix-pass: D9 signed-manifest reservation.** Phase 3
     /// will lift the deferral by populating this field with an Ed25519
@@ -56,7 +69,6 @@ pub struct CapBundle {
     /// (in this module's `tests` mod) asserts hand-built unsigned-bundle
     /// bytes equal the canonical-bytes output for an `Option::None`
     /// `signature`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature: Option<ManifestSignature>,
 }
 

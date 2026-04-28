@@ -1,5 +1,3 @@
-#![allow(unknown_lints, clippy::duration_suboptimal_units)]
-// MSRV 1.91 — Rust 1.95 lint
 //! Phase 2a R3 security — wall-clock NTP slew cannot skip cap refresh
 //! (atk-2 / sec-r1-2).
 //!
@@ -58,7 +56,7 @@ fn wallclock_refresh_ntp_slew_doesnt_skip() {
 
     let dir = tempfile::tempdir().unwrap();
     let mono = benten_eval::MockMonotonicSource::at_zero();
-    let wall = benten_eval::MockTimeSource::at(Duration::from_secs(7_200));
+    let wall = benten_eval::MockTimeSource::at(Duration::from_hours(2));
 
     let engine = Engine::builder()
         .path(dir.path().join("benten.redb"))
@@ -74,7 +72,7 @@ fn wallclock_refresh_ntp_slew_doesnt_skip() {
 
     // Simulate an NTP slew: jump the wall-clock BACKWARD 1 hour.
     let wall_before_slew = engine.time_source().hlc_stamp();
-    wall.rewind_by(Duration::from_secs(3_600));
+    wall.rewind_by(Duration::from_hours(1));
     let wall_after_slew = engine.time_source().hlc_stamp();
     assert!(
         wall_after_slew < wall_before_slew,

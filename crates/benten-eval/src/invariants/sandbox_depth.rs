@@ -52,8 +52,8 @@
 //! `primitives::sandbox` executor calls FIRST, before any wasmtime work.
 
 use crate::{
-    AttributionFrame, InvariantConfig, InvariantViolation, OperationNode, PrimitiveKind,
-    RegistrationError, SubgraphSnapshot,
+    AttributionFrame, InvariantConfig, InvariantViolation, NodeHandle, OperationNode,
+    PrimitiveKind, RegistrationError, SubgraphSnapshot,
 };
 use benten_errors::ErrorCode;
 
@@ -112,8 +112,21 @@ pub(crate) fn validate_registration(
     // subgraphs — observed on the existing Phase-2a 4096-node
     // structural-catch-all tests). The iterative two-stage stack
     // (`Visit` / `Compute`) is the standard hand-rolled post-order.
+    //
+    // Wave-8e durable cycle defense (per night-shift judgment-call #4):
+    // a `currently_visiting` grey-set rides alongside `visited` (white
+    // / grey / black tri-coloring). On `Visit(i)` we mark grey before
+    // pushing children; on `Compute(i)` we clear grey + mark visited
+    // (black). If we encounter a child that is already grey it's a
+    // back-edge → SKIP recursing into the cycle (the iterative DFS
+    // self-defends instead of relying on the call-site Cycle-skip
+    // gates). The `validate_subgraph` / `validate_builder` upstream
+    // call-sites can stop short-circuiting on `InvariantViolation::Cycle`
+    // because this walker now terminates cleanly on cyclic input —
+    // returning a depth count derived only from the acyclic spine.
     let mut longest: Vec<u32> = vec![0; n];
     let mut visited: Vec<bool> = vec![false; n];
+    let mut currently_visiting: Vec<bool> = vec![false; n];
     enum Action {
         Visit(usize),
         Compute(usize),
@@ -127,16 +140,29 @@ pub(crate) fn validate_registration(
         while let Some(action) = stack.pop() {
             match action {
                 Action::Visit(i) => {
-                    if visited[i] {
+                    if visited[i] || currently_visiting[i] {
+                        // Already finalized (black) or already on the
+                        // current DFS frontier (grey). Either way, no
+                        // re-entry — re-entry on grey is a back-edge.
                         continue;
                     }
-                    // Mark grey; defer the compute until children
-                    // resolve.
+                    currently_visiting[i] = true;
+                    // Defer the compute until children resolve.
                     stack.push(Action::Compute(i));
                     for &child in &adjacency[i] {
-                        if !visited[child] {
-                            stack.push(Action::Visit(child));
+                        if visited[child] || currently_visiting[child] {
+                            // Black children already have their
+                            // `longest[child]` value populated;
+                            // grey children indicate a back-edge that
+                            // we must NOT recurse into (the
+                            // Compute(i) step will still consume any
+                            // values populated on prior visits, but
+                            // we cannot push the grey child without
+                            // forming an infinite Visit→Compute
+                            // oscillation).
+                            continue;
                         }
+                        stack.push(Action::Visit(child));
                     }
                 }
                 Action::Compute(i) => {
@@ -147,12 +173,24 @@ pub(crate) fn validate_registration(
                         u32::from(matches!(snapshot.nodes[i].kind, PrimitiveKind::Sandbox));
                     let mut max_child = 0u32;
                     for &child in &adjacency[i] {
+                        // Skip back-edges (grey children) when
+                        // computing longest-chain — they would form a
+                        // cycle and the DAG longest-path calculation
+                        // is undefined on cyclic graphs. Inv-1 / Inv-12
+                        // are responsible for surfacing the cycle as
+                        // its own invariant violation; Inv-4's
+                        // contribution here is to terminate cleanly
+                        // and report the longest acyclic spine.
+                        if currently_visiting[child] && !visited[child] {
+                            continue;
+                        }
                         if longest[child] > max_child {
                             max_child = longest[child];
                         }
                     }
                     longest[i] = self_contrib.saturating_add(max_child);
                     visited[i] = true;
+                    currently_visiting[i] = false;
                 }
             }
         }
@@ -278,5 +316,85 @@ mod tests {
         let p = parent(2);
         let child = propagate_through_call(&p);
         assert_eq!(child.sandbox_depth, 2);
+    }
+
+    /// Wave-8e durable cycle defense — the iterative DFS walker MUST
+    /// terminate on cyclic input (a node whose adjacency includes
+    /// itself, or any back-edge), regardless of the validator caller's
+    /// `aggregate` mode. Before the wave-8e fix the walker oscillated
+    /// in `Visit→Compute` because the grey-set was missing; the
+    /// `register_returns_inv_registration_on_multiple_violations` test
+    /// in `benten-engine/tests/register_subgraph_failures.rs` wedged at
+    /// >180s on every CI runner because of this. The call-site Cycle
+    /// gates added during night-shift D-NS-17/21 hid the bug; this
+    /// test asserts the walker self-defends and returns within a tight
+    /// 1-second budget on a self-loop fixture.
+    #[test]
+    fn inv_4_walker_terminates_on_cycle_in_aggregate_mode() {
+        use std::time::{Duration, Instant};
+
+        // Self-loop fixture: one SANDBOX node, edge back to itself.
+        // The walker must not infinitely Visit→Compute oscillate.
+        let nodes = vec![OperationNode::new("only", PrimitiveKind::Sandbox)];
+        let edges = vec![(NodeHandle(0), NodeHandle(0), String::from("self"))];
+        let snapshot = SubgraphSnapshot {
+            nodes: nodes.as_slice(),
+            parallel_fanout: &[],
+            iterate_depth: &[],
+            edges: edges.as_slice(),
+            extra_edges: 0,
+            deterministic: true,
+            handler_id: "regression",
+        };
+        let cfg = InvariantConfig::default();
+
+        let start = Instant::now();
+        // The result is incidental — Inv-1/Inv-12 are the cycle
+        // reporters. What this test cares about is termination. The
+        // walker either accepts (back-edge skipped, depth=1 ≤ 4) or
+        // rejects (depth above ceiling) — either is fine; what is NOT
+        // fine is hanging.
+        let _ = validate_registration(&snapshot, &cfg);
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed < Duration::from_secs(1),
+            "Inv-4 walker must terminate on cyclic input within 1s; took {elapsed:?}"
+        );
+    }
+
+    /// Companion to the self-loop test: a 3-cycle (a → b → c → a)
+    /// where every node is SANDBOX. Same termination contract.
+    #[test]
+    fn inv_4_walker_terminates_on_three_cycle() {
+        use std::time::{Duration, Instant};
+
+        let nodes = vec![
+            OperationNode::new("a", PrimitiveKind::Sandbox),
+            OperationNode::new("b", PrimitiveKind::Sandbox),
+            OperationNode::new("c", PrimitiveKind::Sandbox),
+        ];
+        let edges = vec![
+            (NodeHandle(0), NodeHandle(1), String::from("ab")),
+            (NodeHandle(1), NodeHandle(2), String::from("bc")),
+            (NodeHandle(2), NodeHandle(0), String::from("ca")),
+        ];
+        let snapshot = SubgraphSnapshot {
+            nodes: nodes.as_slice(),
+            parallel_fanout: &[],
+            iterate_depth: &[],
+            edges: edges.as_slice(),
+            extra_edges: 0,
+            deterministic: true,
+            handler_id: "regression",
+        };
+        let cfg = InvariantConfig::default();
+
+        let start = Instant::now();
+        let _ = validate_registration(&snapshot, &cfg);
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed < Duration::from_secs(1),
+            "Inv-4 walker must terminate on 3-cycle input within 1s; took {elapsed:?}"
+        );
     }
 }
