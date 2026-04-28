@@ -173,8 +173,13 @@ impl Engine {
         &self,
         _module_cid: &Cid,
     ) -> Result<(), EngineError> {
+        // Uses the wave-8c `SandboxUnavailableOnWasm` variant (target-
+        // specific signal: SANDBOX cannot run here regardless of build
+        // flags) rather than the prior placeholder `SubsystemDisabled`
+        // (which would be operator-actionable as "enable the subsystem"
+        // — wrong in this case since wasmtime can't compile to wasm32).
         Err(EngineError::Other {
-            code: ErrorCode::SubsystemDisabled,
+            code: ErrorCode::SandboxUnavailableOnWasm,
             message: SANDBOX_UNAVAILABLE_ON_WASM_TEXT.to_string(),
         })
     }
