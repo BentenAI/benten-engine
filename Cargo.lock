@@ -175,6 +175,7 @@ dependencies = [
  "thiserror",
  "toml",
  "tracing",
+ "wat",
 ]
 
 [[package]]

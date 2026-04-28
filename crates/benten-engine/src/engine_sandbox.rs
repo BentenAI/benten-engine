@@ -135,11 +135,31 @@ impl Engine {
     /// guest seeing a missing-symbol link error at module load.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn execute_sandbox_native(&self, _module_cid: &Cid) -> Result<(), EngineError> {
-        // G7-A owns the executor. This plumbing exists so the engine's
-        // PrimitiveHost dispatch has a stable call site to wire into when
-        // the executor lands. The body remains a placeholder until G7-A's
-        // surface lands (per the brief: surface to orchestrator if G7-A's
-        // shape differs from plan §3 assumptions).
+        // **wsa-w8b-1 fix-pass:** the production SANDBOX dispatch path is
+        // wired through `impl PrimitiveHost for Engine::execute_sandbox`
+        // (see `crates/benten-engine/src/primitive_host.rs`); the
+        // evaluator dispatcher at
+        // `crates/benten-eval/src/primitives/mod.rs:96` routes
+        // `PrimitiveKind::Sandbox => host.execute_sandbox(op)` straight
+        // through to that override, which assembles SandboxConfig +
+        // grant caps + manifest + AttributionFrame and invokes
+        // `benten_eval::sandbox::execute`.
+        //
+        // This `execute_sandbox_native` accessor is retained as
+        // crate-private reserved scaffolding (the prior placeholder was
+        // designed to be the entry point before the trait-method route
+        // was finalised). It is unreachable from production code paths.
+        // Wave-8e cleanup may delete it entirely; for Wave-8b we leave
+        // it returning `Ok(())` AND surface a `debug_assert!(false)`
+        // tripwire so any future caller that re-introduces it surfaces
+        // loud rather than silently masking a regression of the
+        // production-runtime path closure.
+        debug_assert!(
+            false,
+            "execute_sandbox_native is reserved scaffolding — \
+             production SANDBOX dispatch routes through \
+             impl PrimitiveHost for Engine::execute_sandbox (Wave-8b)."
+        );
         Ok(())
     }
 

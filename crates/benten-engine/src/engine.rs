@@ -151,6 +151,22 @@ pub(crate) struct EngineInner {
     /// backend round-trip.
     pub(crate) installed_modules:
         std::sync::Mutex<std::collections::BTreeMap<Cid, crate::engine_modules::InstalledModule>>,
+    /// Phase 2b Wave-8b: in-memory registry of WebAssembly module bytes
+    /// keyed by the module's canonical CID. Wired through
+    /// `Engine::register_module_bytes(cid, bytes)`; consumed by the
+    /// `impl PrimitiveHost::execute_sandbox` override at SANDBOX dispatch
+    /// time when the SANDBOX OperationNode's `module` property names a
+    /// CID.
+    ///
+    /// Phase-3 generalises this to durable backend-resident WASM blob
+    /// storage; the in-memory map keeps the wiring shape simple under
+    /// Phase-2b's "no separate blob store yet" constraint and matches the
+    /// in-memory `installed_modules` discipline (Compromise #N+8 wasm32
+    /// in-memory-only narrative). The map is plain `BTreeMap` (not a
+    /// Mutex of Arc<Vec<u8>>) because module bytes are read-mostly +
+    /// cloning a Vec<u8> on lookup is cheap relative to wasmtime
+    /// compilation cost.
+    pub(crate) module_bytes: std::sync::Mutex<std::collections::BTreeMap<Cid, Vec<u8>>>,
 }
 
 impl EngineInner {
@@ -175,6 +191,7 @@ impl EngineInner {
             writes_denied_total: std::sync::atomic::AtomicU64::new(0),
             test_iteration_budget: std::sync::Mutex::new(None),
             installed_modules: std::sync::Mutex::new(std::collections::BTreeMap::new()),
+            module_bytes: std::sync::Mutex::new(std::collections::BTreeMap::new()),
         }
     }
 
@@ -603,6 +620,59 @@ impl Engine {
     ) -> &std::sync::Mutex<std::collections::BTreeMap<Cid, crate::engine_modules::InstalledModule>>
     {
         &self.inner.installed_modules
+    }
+
+    /// Phase 2b Wave-8b — register WebAssembly module bytes under their
+    /// canonical CID for SANDBOX dispatch.
+    ///
+    /// The `impl PrimitiveHost for Engine::execute_sandbox` override
+    /// reads bytes from this registry when the dispatched SANDBOX
+    /// OperationNode's `module` property names a CID. Phase-3 replaces
+    /// this in-memory shape with durable blob storage backed by the
+    /// engine's Redb backend; the in-memory shape is the minimum surface
+    /// needed to close the production-runtime path in Phase 2b
+    /// (Compromise #4 closure narrative).
+    ///
+    /// The CID supplied here is the BLAKE3-of-canonical-WASM-bytes per
+    /// the project's content-addressing discipline. Callers that want
+    /// to verify the CID before registering can compute it via
+    /// [`Cid::from_blake3_digest`] applied to `blake3::hash(bytes)`.
+    ///
+    /// Re-registering the same CID with identical bytes is idempotent;
+    /// re-registering with DIFFERENT bytes is a content-addressing bug
+    /// at the call site (the CID would no longer match the bytes), but
+    /// the engine accepts the overwrite without complaint — content
+    /// integrity is the caller's responsibility, mirroring the pattern
+    /// `Engine::install_module` uses for manifest CIDs (the engine
+    /// recomputes/verifies, but blob bytes are not re-hashed on every
+    /// dispatch).
+    ///
+    /// Cap-policy is NOT consulted at this entrypoint: registering wasm
+    /// bytes does not authorise any caller to invoke them. Authority
+    /// flows through the SANDBOX node's manifest cap-set + dispatching
+    /// grant, both of which are checked at execute time inside
+    /// `benten_eval::sandbox::execute`.
+    pub fn register_module_bytes(&self, cid: Cid, bytes: Vec<u8>) {
+        let mut guard = self.inner.module_bytes.lock_recover();
+        guard.insert(cid, bytes);
+    }
+
+    /// Phase 2b Wave-8b — look up registered WebAssembly module bytes by
+    /// CID. `None` when the CID is not in the registry (the SANDBOX
+    /// dispatch path surfaces this as
+    /// [`benten_eval::EvalError::PrimitiveNotImplemented`] with the
+    /// SANDBOX kind plus a descriptive message — see the
+    /// `impl PrimitiveHost for Engine::execute_sandbox` override).
+    ///
+    /// Returns a clone of the bytes — the caller (the executor) takes
+    /// ownership for the duration of the per-call wasmtime instance.
+    /// Compilation is cached at the wasmtime layer
+    /// (`benten_eval::sandbox::instance::module_for_bytes`), so the
+    /// per-dispatch clone cost amortises to zero across hot-loop
+    /// invocations of the same CID.
+    pub(crate) fn module_bytes_for(&self, cid: &Cid) -> Option<Vec<u8>> {
+        let guard = self.inner.module_bytes.lock_recover();
+        guard.get(cid).cloned()
     }
 
     /// Phase 2a G5-A / G11-A: monotonic per-engine audit sequence.
