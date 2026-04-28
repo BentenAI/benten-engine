@@ -205,7 +205,14 @@ pub fn validate_subgraph(
         deterministic: sg.deterministic,
         handler_id: sg.handler_id.as_str(),
     };
-    if crate::invariants::sandbox_depth::validate_registration(&snapshot, config).is_err() {
+    // Skipped if Cycle was detected (matching the Inv-2 pattern above) —
+    // the iterative DFS walker assumes the snapshot is a DAG (Inv-1
+    // enforces in fail-fast mode); on a cyclic snapshot in aggregate
+    // mode the walker oscillates without termination. Same fix as
+    // applied at the `validate_builder` call site upstream.
+    if !violations.contains(&InvariantViolation::Cycle)
+        && crate::invariants::sandbox_depth::validate_registration(&snapshot, config).is_err()
+    {
         violations.push(InvariantViolation::SandboxDepth);
         if !aggregate {
             return Err(finalize(out, violations));
