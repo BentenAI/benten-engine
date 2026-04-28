@@ -31,6 +31,7 @@ pub use benten_errors::ErrorCode;
 use crate::store::subgraph_key;
 
 pub mod backend;
+pub mod backends;
 pub mod immutability;
 pub mod in_memory_backend;
 pub(crate) mod indexes;
@@ -40,6 +41,10 @@ pub mod store;
 pub mod transaction;
 
 pub use backend::{BatchOp, DurabilityMode, KVBackend, ScanIter, ScanResult};
+pub use backends::{
+    NetworkFetchStubBackend, NetworkFetchStubError, SnapshotBlob, SnapshotBlobBackend,
+    SnapshotBlobError,
+};
 pub use in_memory_backend::InMemoryBackend;
 pub use mutex_ext::{MutexExt, RwLockExt};
 pub use redb_backend::RedbBackend;

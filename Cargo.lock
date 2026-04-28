@@ -212,6 +212,7 @@ dependencies = [
  "criterion",
  "proptest",
  "redb",
+ "serde",
  "serde_ipld_dagcbor",
  "tempfile",
  "thiserror",

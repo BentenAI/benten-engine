@@ -397,6 +397,22 @@ pub struct Engine {
     /// `benten-caps::GrantBackedPolicy::check_write` via a
     /// `system:CapabilityRevocation` Node write.
     pub(crate) revoke_at_iteration: std::sync::Mutex<BTreeMap<Cid, u64>>,
+    /// Phase-2b G10-A-wasip1 (D10-RESOLVED): when `true`, the engine was
+    /// constructed via [`Engine::from_snapshot_blob`] and is read-mostly
+    /// — the underlying redb backend is a tempdir-resident materialization
+    /// of the snapshot, and any user-facing mutation method
+    /// (`create_node`, `update_node`, `delete_node`, `create_edge`,
+    /// `delete_edge`) surfaces [`ErrorCode::BackendReadOnly`]
+    /// (`E_BACKEND_READ_ONLY`) instead of corrupting the snapshot's
+    /// canonical-bytes invariant the blob's CID is computed over.
+    ///
+    /// Defaults to `false`. Set only by `from_snapshot_blob`. The check
+    /// lives at the user-facing surface (engine_crud.rs) rather than at
+    /// the storage layer because the snapshot-blob engine still needs
+    /// internal puts at construction time to hydrate the tempdir
+    /// backend; gating at the user surface keeps the construction path
+    /// straightforward.
+    pub(crate) read_only_snapshot: bool,
 }
 
 impl std::fmt::Debug for Engine {
@@ -482,7 +498,27 @@ impl Engine {
             monotonic_source,
             time_source,
             revoke_at_iteration: std::sync::Mutex::new(BTreeMap::new()),
+            read_only_snapshot: false,
         }
+    }
+
+    /// Phase-2b G10-A-wasip1: mark the engine as a read-only snapshot
+    /// view. Set by [`Engine::from_snapshot_blob`] after the tempdir
+    /// backend is hydrated; ungated otherwise. Crate-private so user
+    /// code cannot retroactively flip a normal redb engine read-only
+    /// (which would mask a write that committed).
+    pub(crate) fn set_read_only_snapshot(&mut self) {
+        self.read_only_snapshot = true;
+    }
+
+    /// Phase-2b G10-A-wasip1: returns `true` when this engine is a
+    /// read-only view over a snapshot blob (constructed via
+    /// [`Engine::from_snapshot_blob`]). User code can consult this to
+    /// decide whether to attempt mutations or to thread reads through
+    /// the engine.
+    #[must_use]
+    pub fn is_read_only_snapshot(&self) -> bool {
+        self.read_only_snapshot
     }
 
     /// Phase 2a G9-A-cont: accessor for the configured monotonic clock

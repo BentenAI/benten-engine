@@ -109,6 +109,14 @@ pub use subgraph_spec::{
 
 pub mod engine_modules;
 pub mod engine_sandbox;
+// Phase-2b G10-A-wasip1 (D10-RESOLVED): snapshot-blob handoff API on
+// `Engine` (`export_snapshot_blob` / `from_snapshot_blob` /
+// `compute_snapshot_blob_cid`). Native-target only — wasm32 builds
+// don't yet ship the redb tempdir backend the snapshot-blob construct
+// path materializes into; revisited when G10-A-browser lands a
+// snapshot-blob-backed engine for wasm32-unknown-unknown.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod engine_snapshot;
 pub mod engine_stream;
 pub mod engine_subscribe;
 pub mod engine_wait;

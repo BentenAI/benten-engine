@@ -15,6 +15,15 @@ use benten_errors::ErrorCode;
 use crate::engine::Engine;
 use crate::error::EngineError;
 
+/// Helper: surface `E_BACKEND_READ_ONLY` for a given operation when the
+/// engine was constructed via [`Engine::from_snapshot_blob`].
+fn backend_read_only(operation: &'static str) -> EngineError {
+    EngineError::Other {
+        code: ErrorCode::BackendReadOnly,
+        message: format!("backend is read-only: {operation} rejected (snapshot-blob engine)"),
+    }
+}
+
 impl Engine {
     // -------- CRUD surface (Node + Edge) --------
 
@@ -36,6 +45,12 @@ impl Engine {
     /// Runs inside a transaction so ChangeEvents fan out to registered
     /// subscribers (IVM, change-stream probes) at commit.
     pub fn create_node(&self, node: &Node) -> Result<Cid, EngineError> {
+        // G10-A-wasip1 (D10-RESOLVED): snapshot-blob engines are
+        // read-only — surface E_BACKEND_READ_ONLY rather than corrupting
+        // the snapshot's canonical-bytes invariant.
+        if self.is_read_only_snapshot() {
+            return Err(backend_read_only("create_node"));
+        }
         // Phase-2a Inv-11 user-facing check. Short-circuits the guard so
         // the typed `E_INV_SYSTEM_ZONE` code surfaces directly — running
         // inside the transaction closure would rewrap the storage-layer
@@ -111,6 +126,9 @@ impl Engine {
     /// Update an existing Node. The old CID entry is deleted and the new node
     /// is stored under its own content-addressed CID. Returns the new CID.
     pub fn update_node(&self, old_cid: &Cid, new_node: &Node) -> Result<Cid, EngineError> {
+        if self.is_read_only_snapshot() {
+            return Err(backend_read_only("update_node"));
+        }
         self.backend.transaction(|tx| {
             tx.delete_node(old_cid)?;
             tx.put_node(new_node)
@@ -120,6 +138,9 @@ impl Engine {
 
     /// Delete a Node by CID.
     pub fn delete_node(&self, cid: &Cid) -> Result<(), EngineError> {
+        if self.is_read_only_snapshot() {
+            return Err(backend_read_only("delete_node"));
+        }
         self.backend.transaction(|tx| tx.delete_node(cid))?;
         Ok(())
     }
@@ -127,6 +148,9 @@ impl Engine {
     /// Create an Edge between two Nodes with the given label, returning the
     /// Edge's content-addressed CID.
     pub fn create_edge(&self, source: &Cid, target: &Cid, label: &str) -> Result<Cid, EngineError> {
+        if self.is_read_only_snapshot() {
+            return Err(backend_read_only("create_edge"));
+        }
         let edge = Edge::new(*source, *target, label.to_string(), None);
         Ok(self.backend.put_edge(&edge)?)
     }
@@ -138,6 +162,9 @@ impl Engine {
 
     /// Delete an Edge by CID.
     pub fn delete_edge(&self, cid: &Cid) -> Result<(), EngineError> {
+        if self.is_read_only_snapshot() {
+            return Err(backend_read_only("delete_edge"));
+        }
         self.backend.transaction(|tx| tx.delete_edge(cid))?;
         Ok(())
     }

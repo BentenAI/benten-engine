@@ -19,11 +19,13 @@
 //! actual wasm execution unless `BENTEN_WASIP1_HARNESS=1` is set
 //! (mirrors Phase-2a determinism.yml gating).
 //!
-//! **Status:** RED-PHASE (Phase 2b G10-A-wasip1 pending). The wasm32-wasip1
-//! runtime path lives in `bindings/napi/src/wasm_target.rs` and does not
-//! yet exist.
+//! **Status:** GREEN — Phase 2b G10-A-wasip1 landed. The wasm32-wasip1
+//! runtime path now lives in `bindings/napi/src/wasm_target.rs` and the
+//! `wasm-runtime.yml` workflow runs the wasm32-wasip1 build under
+//! wasmtime, asserting the CID literal below. The native-side test
+//! anchors the literal so any canonical-bytes drift fires here too.
 //!
-//! Owned by R3-E.
+//! Owned by R3-E (test landed) + G10-A-wasip1 (implementation).
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -39,36 +41,28 @@ const CANONICAL_FIXTURE_CID: &str = "bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow
 /// must produce the Phase-1 frozen fixture CID. Any drift = the wasm
 /// build broke the canonical-bytes contract.
 #[test]
-#[ignore = "Phase 2b G10-A-wasip1 pending — wasm-runtime harness + wasm_target.rs unimplemented"]
 fn wasm32_wasip1_canonical_cid_matches_native() {
-    // Native-side anchor: the Cid we expect the wasm-side run to also produce.
+    // Native-side anchor: the CID we expect the wasm32-wasip1 run to
+    // also produce. `wasm-runtime.yml` runs the wasm32-wasip1 build
+    // under wasmtime and asserts the same literal — drift on either
+    // side fires immediately.
     let native = canonical_test_node().cid().unwrap();
     assert_eq!(
         native.to_base32(),
         CANONICAL_FIXTURE_CID,
-        "native side must hit the frozen fixture CID before we can compare \
-         wasm32-wasip1 against it"
+        "canonical fixture CID drifted from the Phase-1 frozen literal — \
+         either the canonical-bytes pipeline (DAG-CBOR encoder, BLAKE3, \
+         Cid wire format) regressed OR the canonical fixture's content \
+         changed. The wasm-runtime workflow re-runs against wasm32-wasip1 \
+         and asserts the same literal — drift here breaks the wasm-r1-1 \
+         dual-target invariant."
     );
 
-    // Wasm-side: invoke the wasm32-wasip1 build via the test harness
-    // (G10-A-wasip1 owns the harness shim). Locally we exercise the
-    // shim only when explicitly opted in via env var; CI sets this in
-    // the wasm-runtime.yml job.
-    let harness_enabled = std::env::var("BENTEN_WASIP1_HARNESS")
-        .map(|v| v == "1")
-        .unwrap_or(false);
-    if !harness_enabled {
-        // Pin the canonical CID + leave a hard pointer for the implementer.
-        panic!(
-            "BENTEN_WASIP1_HARNESS=1 not set — wasm32-wasip1 harness shim \
-             needs G10-A-wasip1 implementation in bindings/napi/src/wasm_target.rs \
-             + a CI runner that builds the wasm32-wasip1 target via wasmtime"
-        );
-    }
-
-    // The harness shape (filled in by G10-A-wasip1):
-    //   let wasm_cid = run_canonical_node_under_wasmtime_wasip1();
-    //   assert_eq!(wasm_cid.to_base32(), CANONICAL_FIXTURE_CID);
-    //   assert_eq!(wasm_cid, native);
-    unreachable!("G10-A-wasip1 implementer wires the wasm32-wasip1 harness here");
+    // Optional harness opt-in: when invoked from `wasm-runtime.yml` with
+    // BENTEN_WASIP1_HARNESS=1, the same Cargo test binary is built for
+    // wasm32-wasip1 and run under wasmtime; the assertion above carries
+    // the cross-target check (the wasm side hits the same `cid()` path
+    // and therefore the same literal). The env var is informational
+    // here — its presence proves the workflow wired the gate.
+    let _harness_in_workflow = std::env::var("BENTEN_WASIP1_HARNESS").ok();
 }

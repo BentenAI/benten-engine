@@ -878,6 +878,14 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** `EngineConfig::load_or_default` (called at `Engine::open` time).
 - **Phase:** 2b G7-A
 
+### E_BACKEND_READ_ONLY
+
+- **Message:** "backend is read-only: {operation} rejected ({backend_kind})"
+- **Context:** `{ operation: string, backend_kind: string }`
+- **Fix:** D10-RESOLVED snapshot-blob `KVBackend` (constructed via `Engine::from_snapshot_blob(bytes)`) is a read-mostly view on a content-addressed handoff blob — Phase-3 sync can transmit the blob between peers, but the dst engine cannot write into it without breaking the canonical-bytes invariant the blob's CID is computed over. The same posture applies to the Phase-2a §9.8 `network_fetch_stub` `KVBackend`: writes will land in Phase 3 once the iroh-fetch path replaces the stub. To mutate state, open a redb-backed engine via `Engine::open(path)` instead, or import the snapshot blob into a fresh redb engine and reissue writes there.
+- **Thrown at:** `SnapshotBlobBackend::{put,delete,put_batch}` (`crates/benten-graph/src/backends/snapshot_blob.rs`); `NetworkFetchStubBackend::{put,delete,put_batch}` (`crates/benten-graph/src/backends/network_fetch_stub.rs`); surfaces from `Engine::from_snapshot_blob`-constructed engines on any write call.
+- **Phase:** 2b G10-A-wasip1
+
 ## Extending the catalog
 
 When adding a new error:

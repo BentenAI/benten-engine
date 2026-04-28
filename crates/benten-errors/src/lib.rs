@@ -353,6 +353,14 @@ pub enum ErrorCode {
     /// future engine-wide knobs. Fires from `EngineConfig::load_or_default`
     /// when the file exists but is malformed.
     EngineConfigInvalid,
+    /// Phase-2b G10-A-wasip1 (D10-RESOLVED): a write was attempted against
+    /// a read-only backend (snapshot-blob `KVBackend`, future
+    /// `network_fetch_stub`). The snapshot-blob `Engine` constructed via
+    /// `Engine::from_snapshot_blob(bytes)` is a read-mostly view on a
+    /// content-addressed handoff blob; any mutation surfaces this typed
+    /// error rather than silently corrupting the dst engine. Maps to
+    /// `E_BACKEND_READ_ONLY`.
+    BackendReadOnly,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -513,6 +521,7 @@ impl ErrorCode {
                 "E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE"
             }
             ErrorCode::EngineConfigInvalid => "E_ENGINE_CONFIG_INVALID",
+            ErrorCode::BackendReadOnly => "E_BACKEND_READ_ONLY",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -682,7 +691,11 @@ impl ErrorCode {
             | ErrorCode::EngineConfigInvalid
             | ErrorCode::ModuleManifestCidMismatch
             | ErrorCode::ModuleMigrationsRequirePersistence
-            | ErrorCode::SandboxWallclockInvalid => None,
+            | ErrorCode::SandboxWallclockInvalid
+            // G10-A-wasip1: snapshot-blob / network-fetch-stub backend
+            // surfaces — write attempts surface at the construction-API
+            // level, not along an in-graph primitive edge.
+            | ErrorCode::BackendReadOnly => None,
 
             // SUBSCRIBE registration / restart failures — surface at the
             // registration call site, not along a primitive edge. Mirrors
@@ -799,6 +812,7 @@ impl ErrorCode {
                 ErrorCode::ModuleMigrationsRequirePersistence
             }
             "E_ENGINE_CONFIG_INVALID" => ErrorCode::EngineConfigInvalid,
+            "E_BACKEND_READ_ONLY" => ErrorCode::BackendReadOnly,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }
