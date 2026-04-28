@@ -566,6 +566,8 @@ export interface UserView {
 /** Handle returned by `UserView.onUpdate` for cleanup. */
 export interface UserViewSubscription {
   unsubscribe: () => Promise<void>;
+}
+
 // ---------------------------------------------------------------------------
 // STREAM (Phase 2b G6-B)
 // ---------------------------------------------------------------------------
