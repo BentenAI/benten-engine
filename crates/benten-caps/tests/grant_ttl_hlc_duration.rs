@@ -1,3 +1,4 @@
+#![allow(unknown_lints, clippy::duration_suboptimal_units)] // MSRV 1.91 — Rust 1.95 lint suggests from_mins/from_hours, both stabilized in 1.95
 //! R3 tests for ucca-8 + proptest chain-depth-5 attenuation transitivity.
 //!
 //! ucca-8: `CapabilityGrant` gains an optional `ttl_hlc_duration` field via

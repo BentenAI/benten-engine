@@ -1,3 +1,4 @@
+#![allow(unknown_lints, clippy::duration_suboptimal_units)] // MSRV 1.91 — Rust 1.95 lint suggests from_mins/from_hours, both stabilized in 1.95
 //! R3 unit tests for G9-A (P1, P2): wall-clock refresh ceiling + iterate-batch
 //! boundary delegation.
 //!

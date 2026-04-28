@@ -1,3 +1,4 @@
+#![allow(unknown_lints, clippy::duration_suboptimal_units)] // MSRV 1.91 — Rust 1.95 lint suggests from_mins/from_hours, both stabilized in 1.95
 //! Phase 2a R3 integration — Wall-clock TOCTOU revokes mid-ITERATE.
 //!
 //! Traces to: `.addl/phase-2a/00-implementation-plan.md` §3 G9-A

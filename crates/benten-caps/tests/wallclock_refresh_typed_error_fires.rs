@@ -1,3 +1,4 @@
+#![allow(unknown_lints, clippy::duration_suboptimal_units)] // MSRV 1.91 — Rust 1.95 lint suggests from_mins/from_hours, both stabilized in 1.95
 //! Phase 2a R6 fix-pass — qa-r6r1-1 closure: end-to-end firing test for
 //! `CapError::WallclockExpired` → `ErrorCode::CapWallclockExpired`.
 //!
