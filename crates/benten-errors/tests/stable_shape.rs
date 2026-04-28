@@ -132,6 +132,13 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // surfaces `BackendReadOnly` on every mutation; same code is reused
     // by the network_fetch_stub backend for write-attempt rejections.
     ErrorCode::BackendReadOnly,
+    // Phase-2b Wave-8d-types: SANDBOX dispatch references a module CID
+    // whose bytes were never registered through
+    // `Engine::register_module_bytes`. Distinct from
+    // `SandboxModuleInvalid` (bytes present but failed wasmtime
+    // structural validation) — fires BEFORE the executor sees any
+    // bytes.
+    ErrorCode::SandboxModuleNotInstalled,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -203,8 +210,12 @@ fn variant_count_is_pinned() {
     // Phase-2b G10-A-wasip1 (D10-RESOLVED) adds `BackendReadOnly` for
     // the snapshot-blob + network_fetch_stub backends' write-attempt
     // typed error. Post-G10-A-wasip1: 76 + 1 = 77.
+    //
+    // Phase-2b Wave-8d-types adds `SandboxModuleNotInstalled` for the
+    // missing-module-bytes path on `impl PrimitiveHost for
+    // Engine::execute_sandbox`. Post-Wave-8d-types: 77 + 1 = 78.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 77,
+        CATALOG_VARIANT_COUNT, 78,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

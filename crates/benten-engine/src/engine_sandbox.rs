@@ -115,57 +115,18 @@ pub struct SandboxNodeDescription {
 // ---------------------------------------------------------------------------
 
 impl Engine {
-    /// Internal entry point invoked by the evaluator's `PrimitiveHost`
-    /// dispatch when it encounters a SANDBOX node during a handler walk.
-    ///
-    /// **Not** part of the public engine surface. Callers reach SANDBOX
-    /// via DSL composition + `engine.call(handler, op, input)`; the
-    /// evaluator routes through here.
-    ///
-    /// ## Cfg behaviour
-    ///
-    /// - `cfg(not(target_arch = "wasm32"))`: threads through to the
-    ///   `benten_eval::primitives::sandbox` executor (G7-A owned).
-    /// - `cfg(target_arch = "wasm32")`: returns `EngineError::Other`
-    ///   carrying [`ErrorCode::SubsystemDisabled`] with the wsa-14
-    ///   actionable text from `docs/SANDBOX-LIMITS.md` §5.
-    ///
-    /// The wasm32 path keeps the symbol so the DSL composition flow
-    /// reports the actionable error at execution time rather than the
-    /// guest seeing a missing-symbol link error at module load.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) fn execute_sandbox_native(&self, _module_cid: &Cid) -> Result<(), EngineError> {
-        // **wsa-w8b-1 fix-pass:** the production SANDBOX dispatch path is
-        // wired through `impl PrimitiveHost for Engine::execute_sandbox`
-        // (see `crates/benten-engine/src/primitive_host.rs`); the
-        // evaluator dispatcher at
-        // `crates/benten-eval/src/primitives/mod.rs:96` routes
-        // `PrimitiveKind::Sandbox => host.execute_sandbox(op)` straight
-        // through to that override, which assembles SandboxConfig +
-        // grant caps + manifest + AttributionFrame and invokes
-        // `benten_eval::sandbox::execute`.
-        //
-        // This `execute_sandbox_native` accessor is retained as
-        // crate-private reserved scaffolding (the prior placeholder was
-        // designed to be the entry point before the trait-method route
-        // was finalised). It is unreachable from production code paths.
-        // Wave-8e cleanup may delete it entirely; for Wave-8b we leave
-        // it returning `Ok(())` AND surface a `debug_assert!(false)`
-        // tripwire so any future caller that re-introduces it surfaces
-        // loud rather than silently masking a regression of the
-        // production-runtime path closure.
-        debug_assert!(
-            false,
-            "execute_sandbox_native is reserved scaffolding — \
-             production SANDBOX dispatch routes through \
-             impl PrimitiveHost for Engine::execute_sandbox (Wave-8b)."
-        );
-        Ok(())
-    }
-
     /// wasm32-target stub: SANDBOX is compile-time absent, so any
     /// execution attempt surfaces the typed `E_SANDBOX_UNAVAILABLE_ON_WASM`
     /// error with the wsa-14 actionable text.
+    ///
+    /// **Wave-8d-types deletion:** the native-target counterpart
+    /// `execute_sandbox_native` was reserved scaffolding with zero
+    /// production callers (the production path is
+    /// `impl PrimitiveHost for Engine::execute_sandbox` in
+    /// `primitive_host.rs`). Removed in Wave-8d-types since the
+    /// debug-assert tripwire scaffolding is no longer load-bearing
+    /// after the wave-8b wire-through landed. The wasm32 stub stays
+    /// because it's pinned by a real test.
     ///
     /// Pinned by `tests/sandbox_unavailable_on_wasm_error_message_exact_text_pin`.
     #[cfg(target_arch = "wasm32")]

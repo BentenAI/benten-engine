@@ -203,6 +203,14 @@ pub enum SandboxError {
         /// Human-readable reason from the encoder.
         reason: String,
     },
+    /// Wave-8d-types: a SANDBOX dispatch named a module CID that has
+    /// no bytes registered through `Engine::register_module_bytes`.
+    /// Distinct from [`SandboxError::ModuleInvalid`] (bytes present
+    /// but failed wasmtime structural validation): this fires BEFORE
+    /// the executor sees any bytes, at the engine's lookup step.
+    /// Routes to [`ErrorCode::SandboxModuleNotInstalled`].
+    #[error("SANDBOX module bytes not registered for CID {0}")]
+    ModuleNotInstalled(benten_core::Cid),
 }
 
 impl SandboxError {
@@ -223,6 +231,7 @@ impl SandboxError {
                 ErrorCode::SandboxNestedDispatchDepthExceeded
             }
             SandboxError::ManifestEncodeFailed { .. } => ErrorCode::Serialize,
+            SandboxError::ModuleNotInstalled(_) => ErrorCode::SandboxModuleNotInstalled,
         }
     }
 
@@ -572,7 +581,8 @@ pub fn execute(
 ///
 /// In wave-8b the live-cap-set is just the init-snapshot caps — the
 /// engine-side wire-through that flips `kv:read` to live-policy lookup
-/// lands when the engine layer wires `execute_sandbox_native` to call
+/// lands when the engine layer's `impl PrimitiveHost::execute_sandbox`
+/// override threads a live cap callback into
 /// this executor (8c-paired work).
 pub(crate) struct SandboxStoreData {
     /// D17 PRIMARY CountedSink the trampoline writes through.
