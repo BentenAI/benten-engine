@@ -214,7 +214,8 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Context:** `{ node_id: NodeId, consumed: number, attempted: number, would_be: number, limit: number, path: "primary_streaming" | "backstop" }`
 - **Fix:** Reduce output emitted by the SANDBOX module's host-fn calls (or the primitive return value). D15 trap-loudly default — there is no opt-in silent-truncation flag. Use STREAM for progressive output if the workload genuinely needs unbounded byte volume.
 - **Thrown at:** Evaluation. The `path` field distinguishes the D17 PRIMARY streaming `CountedSink` enforcement (fires before host-fn bytes are accepted) from the D17 BACKSTOP return-value enforcement (defense-in-depth at the primitive boundary).
-- **Phase:** 2b (G7-B Inv-7 enforcement; D15 + D17 PRIMARY+BACKSTOP)
+- **Phase:** 2b (G7-A + G7-B Inv-7 enforcement; D15 + D17 PRIMARY+BACKSTOP)
+- **D21 priority:** Lowest — fires before [E_SANDBOX_FUEL_EXHAUSTED] / [E_SANDBOX_WALLCLOCK_EXCEEDED] / [E_SANDBOX_MEMORY_EXHAUSTED] when ONLY the output axis trips; otherwise higher-priority axes fire first (D21 priority MEMORY > WALLCLOCK > FUEL > OUTPUT). See `docs/SANDBOX-LIMITS.md` for the rationale.
 
 ### E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED
 
@@ -758,15 +759,6 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** Registration (Inv-4 structural check on subgraph nesting).
 - **Phase:** 2b G7-B
 - **D21 priority:** Registration-time only (this code does not participate in the runtime severity-priority ordering — runtime depth saturation surfaces as `E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED`).
-
-### E_INV_SANDBOX_OUTPUT
-
-- **Message:** "SANDBOX output budget exceeded: consumed={consumed} limit={limit} emitter={emitter_kind} path={path}"
-- **Context:** `{ consumed: u64, limit: u64, emitter_kind: string, path: "primary_streaming" \| "return_backstop" }`
-- **Fix:** Inv-7 — D17-RESOLVED defense-in-depth output enforcement. `path == primary_streaming` indicates the streaming `CountedSink` caught the overflow before accepting bytes; `path == return_backstop` indicates the primitive-boundary backstop caught a host-fn that bypassed the sink. Reduce per-call output via aggregation, raise the per-call cap if the operator trusts the workload, or split into multiple SANDBOX calls.
-- **Thrown at:** SANDBOX executor (host-fn trampoline PRIMARY path; primitive-boundary BACKSTOP path).
-- **Phase:** 2b G7-A / G7-B
-- **D21 priority:** Lowest — fires before [E_SANDBOX_FUEL_EXHAUSTED] / [E_SANDBOX_WALLCLOCK_EXCEEDED] / [E_SANDBOX_MEMORY_EXHAUSTED] when ONLY the output axis trips; otherwise higher-priority axes fire first (D21 priority MEMORY > WALLCLOCK > FUEL > OUTPUT). See `docs/SANDBOX-LIMITS.md` for the rationale.
 
 ### E_SANDBOX_FUEL_EXHAUSTED
 
