@@ -366,8 +366,16 @@ mod tests {
         // to the canonical struct shape; `seq_so_far()` continues to track
         // engine-side sequence stamping independent of the chunk's own seq.
         let mut h = StreamHandle::from_test_chunks(vec![
-            Chunk { seq: 0, final_chunk: false, bytes: vec![1, 2, 3].into() },
-            Chunk { seq: 1, final_chunk: true, bytes: vec![4, 5].into() },
+            Chunk {
+                seq: 0,
+                final_chunk: false,
+                bytes: vec![1, 2, 3].into(),
+            },
+            Chunk {
+                seq: 1,
+                final_chunk: true,
+                bytes: vec![4, 5].into(),
+            },
         ]);
         assert_eq!(h.seq_so_far(), 0);
         let c1 = h.next_chunk().unwrap().unwrap();
@@ -383,8 +391,16 @@ mod tests {
     #[test]
     fn close_releases_buffered_chunks() {
         let mut h = StreamHandle::from_test_chunks(vec![
-            Chunk { seq: 0, final_chunk: false, bytes: vec![1].into() },
-            Chunk { seq: 1, final_chunk: true, bytes: vec![2].into() },
+            Chunk {
+                seq: 0,
+                final_chunk: false,
+                bytes: vec![1].into(),
+            },
+            Chunk {
+                seq: 1,
+                final_chunk: true,
+                bytes: vec![2].into(),
+            },
         ]);
         h.close();
         assert!(h.next_chunk().unwrap().is_none());

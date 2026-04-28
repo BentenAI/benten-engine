@@ -96,9 +96,15 @@ pub(crate) fn testing_open_stream_for_test_adapter(
 /// - `Err(napi::Error)` — typed terminal error (drives the JS
 ///   async-iterable to throw).
 pub(crate) fn next_chunk_adapter(handle: &mut StreamHandle) -> napi::Result<Option<Vec<u8>>> {
+    // Post-G6-A merge: Chunk struct shape is `{ seq, final_chunk, bytes }`
+    // (was `Chunk(Vec<u8>)` newtype against the empty scaffold). The napi
+    // boundary returns the bytes payload only; the seq + final_chunk
+    // metadata is plumbed through the StreamHandle's separate
+    // `seq_so_far()` accessor (already wired) per the G6-A canonical Chunk
+    // shape's metadata-vs-bytes split.
     handle
         .next_chunk()
-        .map(|opt| opt.map(|c| c.0))
+        .map(|opt| opt.map(|c| c.bytes.into()))
         .map_err(engine_err)
 }
 
