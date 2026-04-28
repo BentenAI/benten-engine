@@ -71,6 +71,7 @@ fn dummy_attribution() -> AttributionFrame {
         actor_cid: zero,
         handler_cid: zero,
         capability_grant_cid: zero,
+        sandbox_depth: 0,
     }
 }
 
