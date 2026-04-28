@@ -61,6 +61,7 @@ mod integration {
     // markers per the file headers.
     pub mod engine_stream; // G6-B exit-1 + dx-r1-2b STREAM
     pub mod engine_subscribe; // G6-B exit-1 + dx-r1-2b SUBSCRIBE
+    pub mod esc_subscribe_integration; // wave-8c-subscribe-infra ESC-7/-9/-10/-13/-14
     pub mod stream_composition; // G6-B plan §4 STREAM integration (all `#[ignore]`d pending G6-A)
     pub mod stream_napi; // G6-B streaming-systems must_pass napi async iter
     pub mod subscribe_emit; // G6-B plan §4 SUBSCRIBE integration (all `#[ignore]`d pending G6-A)

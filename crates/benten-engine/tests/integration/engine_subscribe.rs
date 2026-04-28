@@ -39,16 +39,18 @@ fn open_engine() -> (Engine, tempfile::TempDir) {
 }
 
 #[test]
-fn engine_on_change_surface_present_returns_inactive_subscription() {
-    // Pin: G6-B's `on_change` returns a `Subscription` whose
-    // `is_active()` is `false` pre-G6-A (the change-stream port that
-    // would flip it to `true` lands with G6-A). The surface compiles
-    // end-to-end and the subscription handle's pattern + dedup state
-    // are observable.
+fn engine_on_change_surface_present_returns_active_subscription() {
+    // Pin (wave-8c-subscribe-infra): `on_change` now wires the
+    // production change-stream port — the returned [`Subscription`]
+    // reports `is_active() == true` immediately and the handle's
+    // pattern + dedup state are observable.
     let (engine, _d) = open_engine();
     let cb: OnChangeCallback = Arc::new(|_, _| {});
     let sub = engine.on_change("post:*", cb).expect("on_change registers");
-    assert!(!sub.is_active(), "pre-G6-A handle starts inactive");
+    assert!(
+        sub.is_active(),
+        "wave-8c-subscribe-infra: on_change returns an active handle"
+    );
     assert_eq!(sub.pattern(), "post:*");
     assert_eq!(sub.max_delivered_seq(), 0);
 }

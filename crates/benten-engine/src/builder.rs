@@ -327,6 +327,58 @@ impl EngineBuilder {
             inner_for_tap.record_event(event);
         });
 
+        // Wave-8c-subscribe-infra: bridge the engine-side `ChangeBroadcast`
+        // to the eval-side SUBSCRIBE delivery path. Every committed change
+        // event is translated into the eval-side `ChangeEvent` shape
+        // (anchor_cid + monotonic engine-assigned seq + opaque payload
+        // bytes) and dispatched to ALL active subgraph-SUBSCRIBE primitives
+        // + ad-hoc `engine.on_change` consumers via
+        // `subscribe::publish_change_event_with_label`. Closes the
+        // SUBSCRIBE production-runtime DRIFT gap surfaced in the
+        // r4b-followup-primitive-executor-docs-vs-code-audit.
+        broadcast.subscribe_fn(move |event| {
+            // Translate graph::ChangeEvent → eval-side ChangeEvent.
+            let kind = match event.kind {
+                benten_graph::ChangeKind::Created => {
+                    benten_eval::primitives::subscribe::ChangeKind::Created
+                }
+                benten_graph::ChangeKind::Updated => {
+                    benten_eval::primitives::subscribe::ChangeKind::Updated
+                }
+                benten_graph::ChangeKind::Deleted => {
+                    benten_eval::primitives::subscribe::ChangeKind::Deleted
+                }
+                // Edge events route as Updated (no analogous variant
+                // on the eval side — Phase-3 may extend if needed).
+                benten_graph::ChangeKind::EdgeCreated | benten_graph::ChangeKind::EdgeDeleted => {
+                    benten_eval::primitives::subscribe::ChangeKind::Updated
+                }
+            };
+            // Best-effort encoding of the Node body as the payload. For
+            // deletes / edge events without a Node we ship empty bytes;
+            // consumers care about anchor_cid + kind in those cases. We
+            // route through the engine-internal canonical Node bytes so
+            // the eval-side delivery can carry the Node identity without
+            // pulling a new serde dep into benten-engine. (The
+            // ChangeBroadcast already operates inside benten-engine, so
+            // we have the Node's `cid()` accessor + canonical_bytes
+            // available; we use the latter so the consumer-side code can
+            // re-hash without ambiguity if it wishes.)
+            let payload_bytes: Vec<u8> = event
+                .node
+                .as_ref()
+                .and_then(|n| n.canonical_bytes().ok())
+                .unwrap_or_default();
+            let label = event.primary_label().to_string();
+            let translated = benten_eval::primitives::subscribe::ChangeEvent {
+                anchor_cid: event.cid,
+                kind,
+                seq: benten_eval::primitives::subscribe::next_engine_seq(),
+                payload_bytes,
+            };
+            benten_eval::primitives::subscribe::publish_change_event_with_label(&label, translated);
+        });
+
         // Wire the IVM subscriber when enabled. G5's `Subscriber::new()`
         // starts with no views; `create_view` registers views on demand
         // against the Arc the Engine retains. Phase 1 auto-registers the

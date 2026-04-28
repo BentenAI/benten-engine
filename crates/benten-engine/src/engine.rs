@@ -197,6 +197,18 @@ pub(crate) struct EngineInner {
     /// `crate::emit_broadcast` module docs for the rationale on a
     /// separate channel rather than extending [`benten_graph::ChangeEvent`].
     pub(crate) emit_broadcast: Arc<crate::emit_broadcast::EmitBroadcast>,
+    /// Phase 2b Wave-8c-subscribe-infra: in-memory set of revoked actor
+    /// CIDs. The SUBSCRIBE delivery-time cap-recheck consults this set;
+    /// an actor present here has its in-flight ad-hoc onChange
+    /// subscriptions auto-cancelled at the next delivery (D5
+    /// cap-recheck-at-delivery contract). The set is populated by the
+    /// testing helper `testing_revoke_actor_for_subscribe` (ESC-7) and
+    /// by future grant-revocation flows once the GrantBackedPolicy
+    /// rear-loads SUBSCRIBE-shape grant queries.
+    ///
+    /// Phase-3 promotion: the source-of-truth becomes the engine's
+    /// grant store; this in-memory set degenerates to a cache hint.
+    pub(crate) revoked_actors_for_subscribe: std::sync::Mutex<std::collections::HashSet<Cid>>,
 }
 
 impl EngineInner {
@@ -225,7 +237,34 @@ impl EngineInner {
             module_bytes: std::sync::Mutex::new(std::collections::BTreeMap::new()),
             handler_version_chain: std::sync::Mutex::new(std::collections::BTreeMap::new()),
             emit_broadcast: Arc::new(crate::emit_broadcast::EmitBroadcast::new()),
+            revoked_actors_for_subscribe: std::sync::Mutex::new(std::collections::HashSet::new()),
         }
+    }
+
+    /// Phase 2b Wave-8c-subscribe-infra: return `true` iff the actor
+    /// has NOT been added to the revoked-actors set. The SUBSCRIBE
+    /// delivery-time cap-recheck closure built in
+    /// [`Engine::on_change_as_with_cursor`] calls this.
+    pub(crate) fn is_actor_active(&self, actor: &Cid) -> bool {
+        let g = self
+            .revoked_actors_for_subscribe
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        !g.contains(actor)
+    }
+
+    /// Phase 2b Wave-8c-subscribe-infra: mark `actor` as revoked. The
+    /// next ad-hoc onChange delivery for any subscription registered
+    /// under this actor will fail the cap-recheck and auto-cancel the
+    /// subscription per D5 contract. Public via the `testing_*`
+    /// helper on `Engine`; production grant revocation will hook this
+    /// when the GrantBackedPolicy rear-loads SUBSCRIBE-shape grants.
+    pub(crate) fn mark_actor_revoked_for_subscribe(&self, actor: &Cid) {
+        let mut g = self
+            .revoked_actors_for_subscribe
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        g.insert(*actor);
     }
 
     /// Increment the per-scope + aggregate committed-write counters once per
