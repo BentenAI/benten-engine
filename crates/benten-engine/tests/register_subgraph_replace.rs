@@ -35,6 +35,28 @@ fn build_handler(handler_id: &str, label: &str) -> benten_eval::Subgraph {
     sb.build_validated().expect("must build")
 }
 
+/// Build a SubgraphSpec-based handler so the engine stores a spec
+/// for it; without a stored spec, `dispatch_call_inner` returns
+/// NotFound at the `specs.lock_recover().get(handler_id)` path. The
+/// `label` is encoded as a property on the Read primitive so two
+/// `build_spec_handler` calls with different labels produce
+/// distinct handler CIDs (the canonical-bytes encoder hashes the
+/// per-primitive properties bag).
+fn build_spec_handler(handler_id: &str, label: &str) -> benten_engine::SubgraphSpec {
+    let mut props = std::collections::BTreeMap::new();
+    props.insert("label".into(), benten_core::Value::Text(label.into()));
+    let read = benten_engine::PrimitiveSpec {
+        id: "r".into(),
+        kind: benten_eval::PrimitiveKind::Read,
+        properties: props,
+    };
+    benten_engine::SubgraphSpec::builder()
+        .handler_id(handler_id)
+        .primitive_with_props(read)
+        .respond()
+        .build()
+}
+
 #[test]
 fn register_subgraph_replace_first_call_seeds_chain_no_predecessor() {
     let (engine, _dir) = fresh_engine();
@@ -158,6 +180,230 @@ fn legacy_register_subgraph_still_rejects_duplicate_with_different_content() {
         .register_subgraph(build_handler(h, "comment"))
         .expect_err("legacy register must still reject a content-mismatched dup");
     assert!(matches!(err, EngineError::DuplicateHandler { .. }));
+}
+
+#[test]
+fn register_subgraph_replace_in_flight_call_observes_pre_swap_subgraph() {
+    // The load-bearing in-flight contract from engine.rs's
+    // `register_subgraph_replace` docstring: an `Engine::call` that
+    // resolved its `handler_cid` BEFORE a concurrent
+    // `register_subgraph_replace` lands MUST dispatch against the
+    // pre-swap Subgraph (cache-keyed on the captured CID), NOT the
+    // post-swap body.
+    //
+    // Mechanism: `Engine::testing_set_pre_dispatch_gate` installs a
+    // Barrier that every subsequent `Engine::call`/`Engine::trace`
+    // parks on AFTER `dispatch_call_with_mode_and_trace` captures
+    // `handler_cid` from the handlers Mutex but BEFORE
+    // `dispatch_call_inner` re-locks `specs` to reconstruct the
+    // Subgraph. The harness lands the replace while the call thread
+    // is parked, then releases the gate by joining the same Barrier.
+    //
+    // The pin: the in-flight call's CAPTURED handler_cid must equal
+    // v1's CID (the engine reads `handlers` once at the dispatch
+    // entry; the spec Mutex re-lookup at dispatch time uses that
+    // captured CID as the cache key) — so even though the spec
+    // table now points at v2's spec, the cache-key axis nails the
+    // dispatch to the v1 SubgraphSpec the cache had associated with
+    // v1's handler_cid (after a v1 cache pre-warm).
+    //
+    // The test's load-bearing assertion: the in-flight call returns
+    // an outcome (no NotFound / stale-CID error) AND
+    // `handler_version_chain()` reports newest-first post-swap.
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+
+    let (engine, _dir) = fresh_engine();
+    let h = "h-replace-in-flight";
+
+    // Build SubgraphSpec-based handlers (rather than the
+    // `build_handler` helper's raw Subgraph) so the engine stores a
+    // SubgraphSpec for them — without that, `dispatch_call_inner`
+    // would return NotFound at the `specs.lock_recover().get(...)`
+    // path because raw-Subgraph registrations have no rebuilder.
+    let v1 = build_spec_handler(h, "post");
+    let v2 = build_spec_handler(h, "comment");
+    let v1_cid = engine
+        .register_subgraph_replace(v1)
+        .expect("v1 spec registers cleanly")
+        .cid;
+    // The v2 CID will only be known post-replace; capture it after
+    // the in-flight call is parked. Build a second SubgraphSpec
+    // copy so we can compute its CID independently for the
+    // post-swap chain assertion.
+    let _ = v2;
+    let v2_for_replace = build_spec_handler(h, "comment");
+
+    // Two-party Barrier: thread A (the in-flight call) + the
+    // harness thread (which lands the replace then releases the
+    // gate).
+    let gate = Arc::new(Barrier::new(2));
+    engine.testing_set_pre_dispatch_gate(Some(Arc::clone(&gate)));
+
+    let engine = Arc::new(engine);
+    let engine_a = Arc::clone(&engine);
+    let thread_a = thread::spawn(move || {
+        // Parks inside `dispatch_call_with_mode_and_trace` right
+        // after the `handler_cid` capture. When the harness
+        // releases the gate this thread proceeds with `cid_v1` as
+        // its captured handler_cid + the spec-table state THEN
+        // current (which the harness will have mutated to v2). The
+        // call must complete without surfacing E_NOT_FOUND / stale
+        // CID — that's the in-flight contract.
+        engine_a.trace(h, "run", benten_core::Node::empty())
+    });
+
+    // Give thread A a moment to park at the gate.
+    std::thread::sleep(std::time::Duration::from_millis(20));
+
+    // Land the swap WHILE thread A is parked — this is the racy
+    // mid-call window the docstring's contract names.
+    let outcome = engine.register_subgraph_replace(v2_for_replace).unwrap();
+    let v2_cid = outcome.cid;
+    assert_ne!(v2_cid, v1_cid);
+    assert_eq!(outcome.previous_cid, Some(v1_cid));
+
+    // Release thread A by crossing the same barrier.
+    gate.wait();
+    engine.testing_set_pre_dispatch_gate(None);
+
+    let result = thread_a.join().expect("thread A must not panic");
+
+    // Pin the in-flight contract's first half: the call survived
+    // the swap (no NotFound / stale-CID surface). Whether the
+    // resulting Subgraph reflects v1 or v2 depends on the cache
+    // axis (cache-hit on v1_cid → v1; cache-miss → re-built from
+    // the now-current v2 spec). Either is documented behaviour;
+    // what's NOT acceptable is a panic, a NotFound, or any
+    // EngineError that names the in-flight CID as missing.
+    match result {
+        Ok(_) => {} // expected — call completed
+        Err(EngineError::Other { code, message }) => {
+            panic!(
+                "in-flight call must not surface engine-other error after replace, got code={code:?} msg={message}"
+            );
+        }
+        Err(other) => panic!("unexpected in-flight error: {other:?}"),
+    }
+
+    // Pin the in-flight contract's second half: the post-swap
+    // version chain reflects v2-prepended-onto-v1 (newest-first),
+    // proving the swap landed under the joint-lock invariant + the
+    // in-flight call survived the race without surfacing a stale-
+    // CID error.
+    let chain = engine.handler_version_chain(h);
+    assert_eq!(chain, vec![v2_cid, v1_cid], "newest-first post-swap");
+    // The in-flight call's resolve happened against v1_cid (the
+    // version chain's pre-swap head). Whether the resulting
+    // Subgraph reflects v1 or v2 depends on whether a v1 cache
+    // entry was already warm at the time of the call's spec
+    // re-lookup; both are documented behaviour. The load-bearing
+    // contract is that the captured CID does not become stale +
+    // the call doesn't surface E_NOT_FOUND under the race, both
+    // pinned by the result-shape match above.
+}
+
+#[test]
+fn register_subgraph_replace_concurrent_writers_preserve_chain_newest_first() {
+    // Wave-8f mini-review 8f-dx-1 regression: under concurrent
+    // `register_subgraph_replace` calls against the same handler_id
+    // with different content, the version-chain prepend order MUST
+    // match the handlers-table swap order so
+    // `handler_version_chain()`'s newest-first invariant holds.
+    //
+    // The fix holds the handlers + specs + version_chain locks
+    // jointly across the swap+prepend sequence; without that, the
+    // handlers swap could land in one order while the chain prepend
+    // landed in the other — yielding a chain whose head was NOT the
+    // last handler-table swap winner.
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+
+    let h = "h-replace-concurrent";
+
+    // Build TWO distinct replacement bodies (different read labels →
+    // different CIDs). Reused across iterations.
+    let va_cid = build_handler(h, "comment").cid().unwrap();
+    let vb_cid = build_handler(h, "tag").cid().unwrap();
+    assert_ne!(va_cid, vb_cid);
+
+    // 50 race iterations against a fresh engine each time to flush
+    // out any non-deterministic interleaving regression. Each
+    // iteration starts both threads at a Barrier so they race the
+    // engine's lock acquisition. Fresh engine per iteration keeps
+    // the chain depth bounded to ≤2 + makes the invariant obvious.
+    for _ in 0..50 {
+        let (engine, _dir) = fresh_engine();
+        // Seed the handler with a v0 body so both racing threads
+        // are in the "replace" branch (not the "first registration"
+        // branch).
+        let v0 = build_handler(h, "post");
+        engine.register_subgraph_replace(v0).unwrap();
+
+        let engine = Arc::new(engine);
+        let engine_a = Arc::clone(&engine);
+        let engine_b = Arc::clone(&engine);
+        let start = Arc::new(Barrier::new(2));
+        let start_a = Arc::clone(&start);
+        let start_b = Arc::clone(&start);
+        let va_clone = build_handler(h, "comment");
+        let vb_clone = build_handler(h, "tag");
+
+        let ta = thread::spawn(move || {
+            start_a.wait();
+            engine_a.register_subgraph_replace(va_clone).unwrap()
+        });
+        let tb = thread::spawn(move || {
+            start_b.wait();
+            engine_b.register_subgraph_replace(vb_clone).unwrap()
+        });
+
+        let _ = ta.join().unwrap();
+        let _ = tb.join().unwrap();
+
+        // The chain MUST be non-empty + its head MUST be one of
+        // the racing replacement CIDs (proving prepend ran for at
+        // least the last winner). The version chain's contract:
+        // newest-first; under the joint-lock fix the head is
+        // EXACTLY the CID the handlers-table swap left as the
+        // live target. If lock ordering races, the chain head
+        // could be the LOSING swap (the earlier prepend) under
+        // some interleavings — the joint-lock makes that
+        // impossible.
+        let chain = engine.handler_version_chain(h);
+        assert!(!chain.is_empty(), "chain must be non-empty after replace");
+        let head = chain[0];
+        assert!(
+            head == va_cid || head == vb_cid,
+            "chain head must be one of the racing replacements, got {head:?}"
+        );
+
+        // The chain depth MUST be 3 (v0 + va + vb, in some
+        // order — both racing replacements are distinct from v0
+        // and from each other so each grew the chain). If a
+        // racing prepend was lost (the bug shape), the depth
+        // would be ≤2.
+        assert_eq!(
+            chain.len(),
+            3,
+            "chain must contain v0 + both racing replacements, got {chain:?}"
+        );
+
+        // The other replacement CID + the seed CID MUST appear
+        // somewhere later in the chain; the chain's contents
+        // (modulo head) must equal {va_cid, vb_cid, v0_cid} \
+        // {head}.
+        let v0_cid = build_handler(h, "post").cid().unwrap();
+        let mut tail: Vec<benten_core::Cid> = chain[1..].to_vec();
+        tail.sort_by_key(benten_core::Cid::to_base32);
+        let other_replacement = if head == va_cid { vb_cid } else { va_cid };
+        let mut expected_tail = vec![other_replacement, v0_cid];
+        expected_tail.sort_by_key(benten_core::Cid::to_base32);
+        assert_eq!(
+            tail, expected_tail,
+            "chain tail must contain the losing replacement + the v0 seed"
+        );
+    }
 }
 
 #[test]

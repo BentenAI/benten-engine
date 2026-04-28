@@ -109,6 +109,19 @@ export interface ReloadEvent {
 }
 
 /**
+ * Typed error surfaced by {@link BentenDevServer} on harness mis-wires
+ * (e.g. {@link BentenDevServer.waitForReload} timing out without a
+ * reload event). Carries a stable `name` so test fixtures can assert
+ * `err instanceof BentenDevServerError` without string-matching.
+ */
+export class BentenDevServerError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BentenDevServerError";
+  }
+}
+
+/**
  * Drainable reload-event subscriber. Returned by
  * {@link BentenDevServer.subscribeToReloadEvents}. Call `.unsubscribe()`
  * to stop receiving events; not calling it is fine — when the JS
@@ -301,11 +314,21 @@ export class BentenDevServer {
 
   /**
    * Vitest-fixture helper: wait for at least one reload event to be
-   * observed via the internal subscriber, with a soft timeout.
+   * observed via the internal subscriber.
    *
-   * Defaults: 1500ms timeout, 25ms poll interval. The test harness's
-   * `editHandler` immediately publishes a reload event under the
-   * register-path, so the wait typically returns on the first poll.
+   * Defaults: 1500ms timeout, 25ms poll interval. A successful
+   * `registerHandler` / `replaceHandler` immediately publishes a reload
+   * event so the wait typically returns on the first poll.
+   *
+   * @throws {@link BentenDevServerError} if no reload event is observed
+   * within `timeoutMs`. Fail-loud is the correct DX default — a silent
+   * timeout would cause a fixture that expects editHandler-then-
+   * waitForReload to silently move past the wait + then surface a
+   * misleading assertion failure on whatever line of test code uses the
+   * (never-published) reload outcome. The explicit throw names the
+   * mis-wire (no `registerHandler` / `replaceHandler` call matched the
+   * expected handler_id, OR the `editHandler` helper was called without
+   * a follow-up `replaceHandler`).
    */
   async waitForReload(opts?: {
     timeoutMs?: number;
@@ -315,7 +338,7 @@ export class BentenDevServer {
     const pollMs = opts?.pollMs ?? 25;
     const sub = this.internalSubscriber;
     if (!sub) {
-      throw new Error(
+      throw new BentenDevServerError(
         "BentenDevServer.waitForReload(): server has not been started — call .start() first",
       );
     }
@@ -332,11 +355,9 @@ export class BentenDevServer {
         return;
       }
     }
-    // Soft-fail rather than throwing: the existing harness's
-    // `editHandler` triggers an immediate publish so timeout here means
-    // the harness is mis-wired. We still return without throwing so the
-    // test surfaces its specific assertion failure (more diagnostic
-    // value than a generic "waitForReload timeout").
+    throw new BentenDevServerError(
+      `BentenDevServer.waitForReload(): no reload event observed within ${timeoutMs}ms — did the editHandler/registerHandler/replaceHandler call match the expected handler_id? The editHandler helper writes the source file but does NOT register through the engine; pair it with replaceHandler to publish a reload event.`,
+    );
   }
 
   /** Workspace directory (the `<projectRoot>/.benten/` dir). */
@@ -347,3 +368,12 @@ export class BentenDevServer {
 
 // Re-export types so consumers don't need to dig for them.
 export type { BentenDevServerOptions as DevServerOptions };
+
+// Re-export Engine from @benten/engine so a single
+// `import { BentenDevServer, Engine } from "@benten/engine-devserver"`
+// covers both surfaces. Phase-2b devserver users will commonly want
+// to hand-construct an Engine alongside a BentenDevServer (e.g. a
+// CLI that drives engine.call against the devserver's redb file
+// after a `dev.stop()`); the re-export saves a separate import
+// path. See finding 8f-dx-8 in r5-mr-w8f-dx-optimizer.json.
+export { Engine } from "@benten/engine";

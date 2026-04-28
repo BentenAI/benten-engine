@@ -15,17 +15,27 @@
 //! - `subscribeToReloadEvents()` — returns a `ReloadSubscriberJs` whose
 //!   `drain()` reports per-event JSON of `{ handlerId, op, versionTag,
 //!   newCid, previousCid }`.
-//! - `engine()` — borrow the embedded `Engine` via the existing napi
-//!   `Engine` class. Lets JS code drive `engine.call(...)` against the
-//!   dev-server's engine without re-opening the redb file.
+//!
+//! ## No `engine()` accessor on this surface
+//!
+//! The DevServer does NOT expose its embedded `Engine` to JS. JS callers
+//! that want to drive `engine.call(...)` against the same workspace must
+//! open a separate `Engine.open(<workspace>/.benten-dev.redb)` against
+//! the same redb file path the dev-server uses. Be aware that redb takes
+//! an exclusive process-wide file lock — opening a second handle while
+//! the dev-server is started will fail with a backend lock-conflict
+//! error. The recommended pattern is to `dev.stop()` before opening the
+//! standalone `Engine`, or to drive call dispatch via DevServer's own
+//! `registerHandler` / `replaceHandler` surface (which internally uses
+//! the dev-server's `Engine`). A future Phase-3 ergonomic enhancement
+//! will adapt the napi `Engine` class to be constructible from an
+//! existing `Arc<Engine>` so the DevServer can hand out a non-owning
+//! handle without lock-conflict surface — out of scope for Wave-8f.
 //!
 //! ## Why this lives in its own file
 //!
 //! Diff-reviewable: the dev-server bridge is a self-contained surface
-//! with no overlap to the existing `napi_surface::Engine` impl block. It
-//! depends on the JS-side `Engine` class only via type-name reference for
-//! the `engine()` accessor (the DevServer does not extend the `Engine`
-//! class — it embeds one).
+//! with no overlap to the existing `napi_surface::Engine` impl block.
 
 #![cfg(feature = "napi-export")]
 
