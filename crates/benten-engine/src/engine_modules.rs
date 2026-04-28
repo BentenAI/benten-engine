@@ -302,6 +302,63 @@ impl Engine {
             .compute_cid()
             .map_err(manifest_error_to_engine_error)
     }
+
+    /// Wave-8h audit-gap fix — build a [`ManifestRegistry`] hydrated from
+    /// the codegen-default manifests PLUS the engine's currently-installed
+    /// modules.
+    ///
+    /// **Why this exists:** the audit at
+    /// `.addl/phase-2b/r4b-followup-primitive-executor-docs-vs-code-audit.json`
+    /// surfaced that `execute_sandbox` was constructing
+    /// `ManifestRegistry::new()` (codegen-defaults only) at every call,
+    /// so a SANDBOX node carrying `manifest: '<installed-name>'` could
+    /// never resolve through the production path even after the caller
+    /// invoked [`Self::install_module`]. The Named-manifest API was
+    /// effectively a placeholder.
+    ///
+    /// **Mapping rule:** each installed [`ModuleManifest`]'s
+    /// `modules: Vec<ModuleManifestEntry>` projects to one registry
+    /// entry per `ModuleManifestEntry`, keyed by `entry.name` with
+    /// `entry.requires` lifted into the [`CapBundle`]'s caps. Entry
+    /// names that collide with codegen-default registry keys (or with
+    /// each other across multiple installed manifests) are overridden
+    /// last-write-wins per `BTreeMap::insert` semantics.
+    ///
+    /// The registry is reconstructed per-call (fresh `BTreeMap` clone
+    /// from `installed_modules` + codegen defaults) so manifest install
+    /// / uninstall is observable on the next SANDBOX dispatch without
+    /// any cache-invalidation work.
+    ///
+    /// **wasm32 cut:** the SANDBOX subsystem (`benten_eval::sandbox`)
+    /// is `#[cfg(not(target_arch = "wasm32"))]` because wasmtime does
+    /// not compile to wasm32. The production `execute_sandbox` override
+    /// in `primitive_host.rs` is gated the same way; this accessor's
+    /// only consumer is that override, so the cfg-gate matches.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn manifest_registry(&self) -> benten_eval::sandbox::ManifestRegistry {
+        let active = self
+            .installed_modules()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let mut overlay: BTreeMap<String, benten_eval::sandbox::CapBundle> = BTreeMap::new();
+        for installed in active.values() {
+            for entry in &installed.manifest.modules {
+                // Sort + dedupe the entry's requires list so the
+                // resulting CapBundle satisfies the D9 sorted-canonical
+                // invariant `default_manifests()` enforces. The
+                // codegen-default bundles are already sorted; the
+                // install-time path needs to apply the same discipline.
+                let mut caps: Vec<String> = entry.requires.clone();
+                caps.sort();
+                caps.dedup();
+                overlay.insert(
+                    entry.name.clone(),
+                    benten_eval::sandbox::CapBundle::new(caps, None),
+                );
+            }
+        }
+        benten_eval::sandbox::ManifestRegistry::from_overlay(overlay)
+    }
 }
 
 /// Map a [`ManifestError`] (encode / decode failure from the

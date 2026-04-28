@@ -402,11 +402,25 @@ impl PrimitiveHost for Engine {
         }
     }
 
-    fn emit_event(&self, _name: &str, _payload: Value) {
-        // Phase-1 EMIT is a no-op at the host level — the change-broadcast
-        // fan-out is already wired to storage WRITEs; standalone EMIT
-        // primitives without a backing store mutation don't carry a
-        // ChangeEvent payload shape yet. Reserved for Phase-2.
+    fn emit_event(&self, name: &str, payload: Value) {
+        // Wave-8h audit-gap fix — publish the EMIT through the engine's
+        // dedicated EMIT broadcast channel so a handler with a
+        // standalone EMIT primitive (no backing WRITE) produces an
+        // observable event. The audit at
+        // `.addl/phase-2b/r4b-followup-primitive-executor-docs-vs-code-audit.json`
+        // surfaced that the prior no-op silently dropped the payload.
+        //
+        // The EMIT channel is structurally separate from
+        // `ChangeBroadcast` — see `crate::emit_broadcast` module docs
+        // for why we don't extend `benten_graph::ChangeEvent` with an
+        // emit variant. Subscribers attach via
+        // [`Engine::subscribe_emit_events`].
+        self.inner
+            .emit_broadcast
+            .publish(&crate::emit_broadcast::EmitEvent {
+                channel: name.to_string(),
+                payload,
+            });
     }
 
     fn check_read_capability(
@@ -751,12 +765,18 @@ impl PrimitiveHost for Engine {
         //    `crates/benten-eval/tests/sandbox_escape_attempts_denied.rs`
         //    today and exercises the executor directly without the
         //    engine wrapper.
+        // Wave-8h audit-gap fix: hydrate the registry from the engine's
+        // installed-modules active set so `manifest: '<installed-name>'`
+        // resolves through the production SANDBOX path. Prior to wave-8h
+        // every callsite constructed `ManifestRegistry::new()` (codegen
+        // defaults only), so install_module persisted state that
+        // execute_sandbox never consulted.
         let grant_caps = match self.policy() {
             // NoAuth path — synthesise grant ⊇ manifest. See comment
             // above. This collapses to a trivially-permissive grant
             // surface, matching the rest of the Phase-2b NoAuth posture.
             None => {
-                let registry = benten_eval::sandbox::ManifestRegistry::new();
+                let registry = self.manifest_registry();
                 match manifest_ref.resolve(&registry) {
                     Ok(bundle) => bundle.caps.clone(),
                     Err(_) => Vec::new(),
@@ -767,7 +787,7 @@ impl PrimitiveHost for Engine {
             // we use the same NoAuth-equivalent path until Phase-3
             // UCAN wires the real grant store.
             Some(_) => {
-                let registry = benten_eval::sandbox::ManifestRegistry::new();
+                let registry = self.manifest_registry();
                 match manifest_ref.resolve(&registry) {
                     Ok(bundle) => bundle.caps.clone(),
                     Err(_) => Vec::new(),
@@ -806,8 +826,11 @@ impl PrimitiveHost for Engine {
             }
         };
 
-        // 7. Invoke the executor.
-        let registry = benten_eval::sandbox::ManifestRegistry::new();
+        // 7. Invoke the executor. Wave-8h audit-gap fix: hydrate the
+        //    registry from installed_modules so Named-manifest dispatch
+        //    consults install_module persisted state (the prior
+        //    `ManifestRegistry::new()` carried only codegen defaults).
+        let registry = self.manifest_registry();
         let result = benten_eval::sandbox::execute(
             &module_bytes,
             manifest_ref,

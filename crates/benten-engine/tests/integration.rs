@@ -102,4 +102,10 @@ mod integration {
     pub mod wait_ttl_expires_via_suspension_store; // D12 + Q4 (G12-E owns TTL)
     #[cfg(feature = "phase_2b_landed")]
     pub mod wasip1_target_canonical_cid; // wasm-r1-1 dual-target gate
+
+    // ---- Phase 2b Wave-8h audit-gap fixes ----
+    // .addl/phase-2b/r4b-followup-primitive-executor-docs-vs-code-audit.json
+    pub mod emit_event_observable_via_emit_broadcast; // Wave-8h fix #2 — EMIT
+    pub mod ivm_strategy_b_uses_algorithm_b_view; // Wave-8h fix #3 — IVM-B
+    pub mod sandbox_named_manifest_resolves_via_install_module; // Wave-8h fix #1 — SANDBOX
 }

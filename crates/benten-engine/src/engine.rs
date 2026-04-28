@@ -191,6 +191,12 @@ pub(crate) struct EngineInner {
     /// the predecessor CID without a backend round-trip.
     pub(crate) handler_version_chain:
         std::sync::Mutex<std::collections::BTreeMap<String, Vec<Cid>>>,
+    /// Wave-8h audit-gap fix — EMIT broadcast channel. `impl
+    /// PrimitiveHost::emit_event` publishes here; consumers subscribe
+    /// via [`Engine::subscribe_emit_events`]. See
+    /// `crate::emit_broadcast` module docs for the rationale on a
+    /// separate channel rather than extending [`benten_graph::ChangeEvent`].
+    pub(crate) emit_broadcast: Arc<crate::emit_broadcast::EmitBroadcast>,
 }
 
 impl EngineInner {
@@ -218,6 +224,7 @@ impl EngineInner {
             installed_modules: std::sync::Mutex::new(std::collections::BTreeMap::new()),
             module_bytes: std::sync::Mutex::new(std::collections::BTreeMap::new()),
             handler_version_chain: std::sync::Mutex::new(std::collections::BTreeMap::new()),
+            emit_broadcast: Arc::new(crate::emit_broadcast::EmitBroadcast::new()),
         }
     }
 

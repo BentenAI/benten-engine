@@ -308,6 +308,32 @@ impl ManifestRegistry {
     ) -> Result<(), ManifestError> {
         Err(ManifestError::RuntimeRegistrationDeferred)
     }
+
+    /// Wave-8h audit-gap fix — construct a registry pre-loaded with the
+    /// codegen-default bundles **plus** an engine-supplied overlay of
+    /// install-time bundles.
+    ///
+    /// This is a distinct surface from [`Self::register_runtime`]: the
+    /// runtime-registration path is reserved for Phase-8 marketplace
+    /// work, while this overlay path is the engine's `install_module`
+    /// → SANDBOX-dispatch hydration channel. The engine's
+    /// `manifest_registry()` accessor projects its `installed_modules`
+    /// active-set into a `BTreeMap<String, CapBundle>` (one entry per
+    /// installed `ModuleManifestEntry`, keyed by entry name with
+    /// `requires` lifted into the bundle's caps) and passes it here.
+    ///
+    /// Overlay entries override codegen defaults on key collision. The
+    /// codegen drift detector still asserts the codegen path matches
+    /// `host-functions.toml`; this surface only adds entries the
+    /// engine has installed at runtime.
+    #[must_use]
+    pub fn from_overlay(overlay: BTreeMap<String, CapBundle>) -> Self {
+        let mut table = default_manifests();
+        for (k, v) in overlay {
+            table.insert(k, v);
+        }
+        Self { table }
+    }
 }
 
 impl Default for ManifestRegistry {
