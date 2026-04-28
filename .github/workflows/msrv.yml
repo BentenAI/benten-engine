@@ -63,5 +63,15 @@ jobs:
           # The canonical fixture CID must remain stable across Rust versions.
           # If MSRV drift changes the encoding path, this catches it before
           # merge.
-          cargo test --workspace --locked --no-fail-fast --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing -- \
+          #
+          # Scoped to `-p benten-engine --test integration` (the test target
+          # containing `exit_6_canonical_cid_matches_spike_fixture`) instead
+          # of `--workspace`. Wave-8e disk-pressure investigation: under
+          # MSRV 1.95 the workspace-wide test build links 100+ binaries each
+          # statically pulling wasmtime + cranelift, blowing the GH Actions
+          # runner's 14GB disk and producing `ld: SIGBUS` / `No space left
+          # on device` failures during the link step. Building only the one
+          # test binary that contains the fixture check eliminates 95% of
+          # the linker work without losing coverage.
+          cargo test -p benten-engine --test integration --locked --no-fail-fast --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing -- \
             exit_6_canonical_cid_matches_spike_fixture
