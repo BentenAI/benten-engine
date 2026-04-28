@@ -38,24 +38,51 @@ pub enum Expr {
     ContextBinding(String),
     /// Binary operator (`+`, `-`, `*`, `/`, `%`, `<`, `<=`, `>`, `>=`, `==`, `!=`, `===`, `!==`, `&&`, `||`).
     Binary {
+        /// Operator discriminant.
         op: BinaryOp,
+        /// Left-hand-side operand.
         lhs: Box<Expr>,
+        /// Right-hand-side operand.
         rhs: Box<Expr>,
     },
     /// Unary operator (`!`, `-`, `+`).
-    Unary { op: UnaryOp, expr: Box<Expr> },
+    Unary {
+        /// Operator discriminant.
+        op: UnaryOp,
+        /// Operand expression.
+        expr: Box<Expr>,
+    },
     /// Conditional expression (ternary).
     Conditional {
+        /// Condition expression — coerced to boolean.
         cond: Box<Expr>,
+        /// Branch evaluated when `cond` is truthy.
         then_branch: Box<Expr>,
+        /// Branch evaluated when `cond` is falsy.
         else_branch: Box<Expr>,
     },
     /// Property access: `obj.name`.
-    PropertyAccess { target: Box<Expr>, name: String },
+    PropertyAccess {
+        /// Object expression to access.
+        target: Box<Expr>,
+        /// Static property name.
+        name: String,
+    },
     /// Index access: `obj["k"]` / `arr[0]`.
-    IndexAccess { target: Box<Expr>, index: Box<Expr> },
+    IndexAccess {
+        /// Container expression.
+        target: Box<Expr>,
+        /// Computed index expression.
+        index: Box<Expr>,
+    },
     /// Invocation (built-in call or method call).
-    Call { callee: Box<Expr>, args: Vec<Expr> },
+    Call {
+        /// Callee expression — either a bare built-in identifier or a
+        /// method-access expression.
+        callee: Box<Expr>,
+        /// Argument expressions.
+        args: Vec<Expr>,
+    },
     /// Array literal.
     Array(Vec<Expr>),
     /// Object literal.
@@ -65,7 +92,9 @@ pub enum Expr {
     /// `some`). The parser admits lambdas only in those positions; bare
     /// lambdas in expression position are rejected with `E_TRANSFORM_SYNTAX`.
     Lambda {
+        /// Lambda parameter names.
         params: Vec<String>,
+        /// Lambda body expression.
         body: Box<Expr>,
     },
 }
@@ -73,28 +102,47 @@ pub enum Expr {
 /// Binary operators admitted by the grammar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOp {
+    /// `a + b` — numeric addition / string concatenation.
     Add,
+    /// `a - b` — numeric subtraction.
     Sub,
+    /// `a * b` — numeric multiplication.
     Mul,
+    /// `a / b` — numeric division (errors on divide-by-zero).
     Div,
+    /// `a % b` — numeric modulo.
     Mod,
+    /// `a < b` — strict-less-than comparison.
     Lt,
+    /// `a <= b` — less-than-or-equal comparison.
     Le,
+    /// `a > b` — strict-greater-than comparison.
     Gt,
+    /// `a >= b` — greater-than-or-equal comparison.
     Ge,
+    /// `a == b` — value equality (no implicit coercion in Phase 2b).
     Eq,
+    /// `a != b` — value inequality.
     Ne,
+    /// `a === b` — strict-typed equality.
     EqStrict,
+    /// `a !== b` — strict-typed inequality.
     NeStrict,
+    /// `a && b` — short-circuit logical AND.
     And,
+    /// `a || b` — short-circuit logical OR.
     Or,
 }
 
 /// Unary operators admitted by the grammar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnaryOp {
+    /// `!a` — logical negation.
     Not,
+    /// `-a` — numeric negation.
     Neg,
+    /// `+a` — numeric identity (coerces to number when applied to a
+    /// string literal).
     Pos,
 }
 

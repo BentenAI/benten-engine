@@ -74,8 +74,17 @@ docs/FULL-ROADMAP.md
 # restores the public-clone visibility the regression test requires.
 docs/PLATFORM-DESIGN.md
 docs/BUSINESS-PLAN.md
-docs/INVARIANT-COVERAGE.md
-docs/HOST-FUNCTIONS.md
+# `docs/INVARIANT-COVERAGE.md` re-tracked in Phase 2b G11-2b: ships
+# alongside the SANDBOX runtime so Inv-4 + Inv-7 active rows are
+# discoverable in fresh CI clones. The
+# `invariant_coverage_doc_lists_inv_4_and_inv_7_active` regression test
+# reads it from the working tree.
+# `docs/HOST-FUNCTIONS.md` re-tracked in Phase 2b G11-2b: operator-facing
+# host-fn surface doc paired with the codegen TOML drift detectors
+# (`host_functions_doc_drift_against_toml`,
+# `host_functions_md_drift_against_toml`,
+# `host_functions_doc_lists_every_codegen_entry`); fresh CI clones
+# must carry it.
 docs/BENCHMARKING.md
 docs/future/
 crates/benten-graph/benches/README.md

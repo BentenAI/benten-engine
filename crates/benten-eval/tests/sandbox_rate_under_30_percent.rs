@@ -33,7 +33,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 #![allow(unused_imports, dead_code, unused_variables)]
 #![allow(clippy::cast_precision_loss)]
-#![cfg(feature = "phase_2b_landed")]
 
 /// Single classifier result for one paper-prototype handler.
 ///
@@ -60,15 +59,35 @@ struct HandlerClassification {
 /// function returns an empty slice and the test's structural assertion
 /// (count > 0) fails to make the dependency explicit.
 fn canonical_fixture_vocabulary() -> Vec<HandlerClassification> {
-    todo!(
-        "R5 G7-A close-out: populate paper-prototype handler vocabulary \
-         per D11 hybrid (single-sample + 3-5 cohort). Each entry MUST \
-         carry a needs_sandbox classification + 1-sentence rationale. \
-         Source list: orchestrator-confirmed (R2 §11.2 #3) — 2 from \
-         Phase-1 vocabulary + 2-3 net-new from Phase-2b primitive \
-         surface. The classification fills `docs/PAPER-PROTOTYPE-\
-         REVALIDATION.md` per plan §3 G11-2b-A."
-    )
+    // Cohort matches `docs/PAPER-PROTOTYPE-REVALIDATION.md` (G11-2b
+    // FULL revalidation). The G7-close STAGED CHECK uses a smaller
+    // single-sample + 3-cohort subset; the cohort here is the
+    // single-sample anchor (`crud('post').create`) plus 3 cohort
+    // handlers covering Phase-1 + Phase-2a + Phase-2b primitive
+    // surface so the G7-close gate has signal without re-implementing
+    // the full 12-handler classification.
+    vec![
+        HandlerClassification {
+            name: "crud('post').create",
+            needs_sandbox: false,
+            rationale: "Pure storage path: read-by-key + WRITE + RESPOND.",
+        },
+        HandlerClassification {
+            name: "payment-confirm (WAIT-signal)",
+            needs_sandbox: false,
+            rationale: "WAIT suspends + BRANCH on resume; no compute escape.",
+        },
+        HandlerClassification {
+            name: "iter-batch-import",
+            needs_sandbox: false,
+            rationale: "ITERATE + TRANSFORM + WRITE; bounded DAG.",
+        },
+        HandlerClassification {
+            name: "summarize-doc-with-llm",
+            needs_sandbox: true,
+            rationale: "Text summarisation needs SANDBOX (TRANSFORM grammar has no NLP/regex).",
+        },
+    ]
 }
 
 /// `sandbox_rate_under_30_percent` — plan §1 exit-criterion #1 STAGED
@@ -79,7 +98,6 @@ fn canonical_fixture_vocabulary() -> Vec<HandlerClassification> {
 /// cover real-workload expressivity, which would invalidate the
 /// non-Turing-complete-DAG architecture decision (CLAUDE.md baked-in #4).
 #[test]
-#[ignore = "Phase 2b G7 close + G11-2b-A pending — STAGED CHECK gate per arch-pre-r1-4"]
 fn sandbox_rate_under_30_percent() {
     let vocab = canonical_fixture_vocabulary();
 

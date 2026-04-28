@@ -28,7 +28,7 @@
 //! Phase 1 is hand-written maintainers for five concrete views.
 
 #![forbid(unsafe_code)]
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 #![allow(
     clippy::todo,
     reason = "Phase 1 leaves some per-view methods as todo!() for later groups"

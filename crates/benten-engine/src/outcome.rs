@@ -151,15 +151,23 @@ impl UserViewSpecBuilder {
 /// Options passed to `Engine::read_view_with`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReadViewOptions {
+    /// When `true`, the read returns the most-recent materialised view
+    /// even if the IVM background updater has not yet caught up to the
+    /// latest write. When `false`, a stale view fires
+    /// `E_IVM_VIEW_STALE`.
     pub allow_stale: bool,
 }
 
 impl ReadViewOptions {
+    /// Strict mode — fail loudly with `E_IVM_VIEW_STALE` if the view
+    /// is behind the latest write.
     #[must_use]
     pub fn strict() -> Self {
         Self { allow_stale: false }
     }
 
+    /// Permissive mode — return whatever the IVM has materialised even
+    /// if it is stale.
     #[must_use]
     pub fn allow_stale() -> Self {
         Self { allow_stale: true }
@@ -168,6 +176,7 @@ impl ReadViewOptions {
 
 /// Extension trait used by `tx_atomicity` integration tests.
 pub trait OutcomeExt {
+    /// Borrow the wrapped [`Outcome`] for use by test fixtures.
     fn as_outcome(&self) -> &Outcome;
 }
 
@@ -200,48 +209,67 @@ impl PartialEq for Outcome {
 }
 
 impl Outcome {
+    /// Returns `true` iff the outcome routed through the named edge.
     pub fn routed_through_edge(&self, edge: &str) -> bool {
         self.edge.as_deref() == Some(edge)
     }
 
+    /// The edge label this outcome routed through (e.g. `"OK"`,
+    /// `"ON_NOT_FOUND"`); `None` if no edge was recorded.
     #[must_use]
     pub fn edge_taken(&self) -> Option<String> {
         self.edge.clone()
     }
 
+    /// Stable error-code string (e.g. `"E_NOT_FOUND"`) when the
+    /// outcome carries a typed error; `None` for success outcomes.
     pub fn error_code(&self) -> Option<&str> {
         self.error_code.as_deref()
     }
 
+    /// Human-readable error message body for the outcome's typed
+    /// error; `None` for success outcomes.
     pub fn error_message(&self) -> Option<String> {
         self.error_message.clone()
     }
 
+    /// Returns `true` iff this is a successful outcome (no error code
+    /// recorded and the edge taken is one of the OK aliases).
     #[must_use]
     pub fn is_ok_edge(&self) -> bool {
         matches!(self.edge.as_deref(), Some("OK" | "ok") | None) && self.error_code.is_none()
     }
 
+    /// `Some(rows)` when the outcome carried a list response (e.g.
+    /// from a `crud(...).list` action); `None` otherwise.
     #[must_use]
     pub fn as_list(&self) -> Option<Vec<Node>> {
         self.list.clone()
     }
 
+    /// CID of the Node a successful WRITE created (if any).
     #[must_use]
     pub fn created_cid(&self) -> Option<Cid> {
         self.created_cid
     }
 
+    /// Number of completed iterations for outcomes from an ITERATE
+    /// primitive; `None` if the outcome did not include an ITERATE.
     #[must_use]
     pub fn completed_iterations(&self) -> Option<u32> {
         self.completed_iterations
     }
 
+    /// Number of WRITE primitives that committed successfully during
+    /// this outcome's execution.
     #[must_use]
     pub fn successful_write_count(&self) -> u32 {
         self.successful_write_count
     }
 
+    /// Lift the outcome's error code (if any) into a typed
+    /// [`TerminalError`] for downstream callers that need the
+    /// catalog-discriminant form.
     #[must_use]
     pub fn terminal_error(&self) -> Option<TerminalError> {
         self.error_code.as_ref().map(|_c| TerminalError {
@@ -276,6 +304,7 @@ pub struct TerminalError {
 }
 
 impl TerminalError {
+    /// Stable [`ErrorCode`] catalog discriminant for this error.
     #[must_use]
     pub fn code(&self) -> ErrorCode {
         self.code.clone()
@@ -292,6 +321,7 @@ pub struct Trace {
 }
 
 impl Trace {
+    /// Borrowed (cloned) view of every recorded `TraceStep`.
     #[must_use]
     pub fn steps(&self) -> Vec<TraceStep> {
         self.steps.clone()

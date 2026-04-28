@@ -28,6 +28,7 @@ use std::collections::BTreeMap;
 /// `E_TRANSFORM_RUNTIME` via the caller's conversion.
 #[derive(Debug, Clone)]
 pub struct EvalError {
+    /// Human-readable diagnostic message for the runtime failure.
     pub message: String,
 }
 
@@ -58,6 +59,7 @@ pub struct Env {
 }
 
 impl Env {
+    /// Construct an empty environment with one bottom frame.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -65,6 +67,8 @@ impl Env {
         }
     }
 
+    /// Construct an environment seeded with `$input = input` on the
+    /// bottom frame.
     #[must_use]
     pub fn with_input(input: Value) -> Self {
         let mut e = Self::new();
@@ -72,12 +76,15 @@ impl Env {
         e
     }
 
+    /// Bind `k = v` on the topmost frame.
     pub fn set(&mut self, k: impl Into<String>, v: Value) {
         if let Some(f) = self.frames.last_mut() {
             f.insert(k.into(), v);
         }
     }
 
+    /// Look up `k` walking from the topmost frame down to the bottom;
+    /// returns the first match (inner shadows outer).
     #[must_use]
     pub fn get(&self, k: &str) -> Option<&Value> {
         for f in self.frames.iter().rev() {
@@ -88,10 +95,15 @@ impl Env {
         None
     }
 
+    /// Push a fresh frame populated with `bindings`. Used when entering
+    /// a lambda body so the lambda's parameter set shadows the outer
+    /// scope.
     pub fn push(&mut self, bindings: BTreeMap<String, Value>) {
         self.frames.push(bindings);
     }
 
+    /// Pop the topmost frame; the bottom frame is preserved (no-op
+    /// when only the bottom frame remains).
     pub fn pop(&mut self) {
         if self.frames.len() > 1 {
             self.frames.pop();

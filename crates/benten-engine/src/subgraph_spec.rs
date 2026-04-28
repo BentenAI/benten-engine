@@ -106,6 +106,8 @@ pub struct SubgraphSpec {
 }
 
 impl SubgraphSpec {
+    /// Construct a fresh [`SubgraphSpecBuilder`] for fluent DSL
+    /// composition.
     #[must_use]
     pub fn builder() -> SubgraphSpecBuilder {
         SubgraphSpecBuilder::new()
@@ -163,6 +165,8 @@ pub struct SubgraphSpecBuilder {
 }
 
 impl SubgraphSpecBuilder {
+    /// Construct an empty builder with no handler id and no
+    /// primitives.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -171,12 +175,16 @@ impl SubgraphSpecBuilder {
         }
     }
 
+    /// Set the handler id this spec will be registered under.
     #[must_use]
     pub fn handler_id(mut self, id: &str) -> Self {
         self.handler_id = id.to_string();
         self
     }
 
+    /// Declare an ITERATE block (`max` bound + body sub-builder).
+    /// Phase-1 stub — the body is not threaded into `Engine::call` yet;
+    /// registration preserves shape only.
     #[must_use]
     pub fn iterate<F>(self, _max: u32, _body: F) -> Self
     where
@@ -188,6 +196,8 @@ impl SubgraphSpecBuilder {
         self
     }
 
+    /// Append a WRITE primitive declaration. The closure receives a
+    /// fresh [`WriteSpec`] to populate (label, properties, requires).
     #[must_use]
     pub fn write<F>(mut self, f: F) -> Self
     where
@@ -199,6 +209,8 @@ impl SubgraphSpecBuilder {
         self
     }
 
+    /// Append a RESPOND primitive declaration with no body / edge
+    /// configuration (the catch-all default response).
     #[must_use]
     pub fn respond(mut self) -> Self {
         let id = format!("r{}", self.primitives.len());
@@ -230,6 +242,8 @@ impl SubgraphSpecBuilder {
         self
     }
 
+    /// Materialise the accumulated builder state into a runnable
+    /// [`SubgraphSpec`].
     #[must_use]
     pub fn build(self) -> SubgraphSpec {
         SubgraphSpec {
@@ -249,6 +263,9 @@ impl Default for SubgraphSpecBuilder {
 pub struct IterateBody;
 
 impl IterateBody {
+    /// Append a WRITE inside the ITERATE body. Phase-1 stub — body
+    /// content is recorded but not yet threaded into evaluator
+    /// dispatch.
     #[must_use]
     pub fn write<F>(self, _f: F) -> Self
     where
@@ -272,23 +289,30 @@ pub struct WriteSpec {
 }
 
 impl WriteSpec {
+    /// Construct an empty `WriteSpec` — caller must set label +
+    /// properties before passing to `SubgraphSpecBuilder::write`.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the WRITE target label.
     #[must_use]
     pub fn label(mut self, label: &str) -> Self {
         self.label = label.to_string();
         self
     }
 
+    /// Append a property key/value pair to the WRITE. Successive calls
+    /// with the same key overwrite.
     #[must_use]
     pub fn property(mut self, k: &str, v: Value) -> Self {
         self.properties.insert(k.to_string(), v);
         self
     }
 
+    /// Declare a capability scope this WRITE requires (e.g.
+    /// `"store:post:write"`). Multiple `requires` calls accumulate.
     #[must_use]
     pub fn requires(mut self, scope: &str) -> Self {
         self.requires.push(scope.to_string());
@@ -396,6 +420,8 @@ impl WriteSpec {
 /// The `into_eval_subgraph` method converts any of them into the lower-level
 /// `Subgraph` shape the G6 invariant validator consumes.
 pub trait IntoSubgraphSpec {
+    /// Convert into the lower-level `benten_eval::Subgraph` shape the
+    /// G6 invariant validator + evaluator dispatch consume.
     fn into_eval_subgraph(self) -> Result<benten_eval::Subgraph, EngineError>;
 
     /// Return a clone of the underlying `SubgraphSpec` when the input is one;
@@ -476,6 +502,9 @@ impl IntoSubgraphSpec for &benten_eval::Subgraph {
 
 /// Subject arg for `grant_capability`.
 pub trait GrantSubject {
+    /// Render this subject into the canonical [`Value`] shape the
+    /// engine's grant store consumes (CID-bytes for principals,
+    /// UTF-8-text for friendly principal strings).
     fn as_value(&self) -> Value;
 }
 
@@ -503,7 +532,12 @@ impl GrantSubject for &String {
     }
 }
 
+/// Subject arg for `revoke_capability`. Mirrors [`GrantSubject`] —
+/// the two are split so callers cannot accidentally pass a revoke
+/// subject to a grant API and vice-versa.
 pub trait RevokeSubject {
+    /// Render this subject into the canonical [`Value`] shape the
+    /// engine's grant store consumes.
     fn as_value(&self) -> Value;
 }
 
@@ -525,7 +559,11 @@ impl RevokeSubject for &str {
     }
 }
 
+/// Scope arg for `revoke_capability`. Accepts the various string-like
+/// shapes a caller might pass without forcing them to allocate.
 pub trait RevokeScope {
+    /// Render this scope into the canonical owned `String` form the
+    /// engine's grant store keys on.
     fn as_scope_string(&self) -> String;
 }
 

@@ -325,24 +325,34 @@ impl Engine {
 
     // -------- Version chains (Phase 1 stubs) --------
 
+    /// Create a new version-chain anchor under `name`. Phase 1 stub —
+    /// returns `E_NOT_IMPLEMENTED` until Phase 2 wires the anchor
+    /// store.
     pub fn create_anchor(&self, _name: &str) -> Result<AnchorHandle, EngineError> {
         Err(EngineError::NotImplemented {
             feature: "create_anchor — Phase 2",
         })
     }
 
+    /// Append a new version Node to the chain rooted at `anchor`.
+    /// Phase 1 stub — returns `E_NOT_IMPLEMENTED`.
     pub fn append_version(&self, _anchor: &AnchorHandle, _node: &Node) -> Result<Cid, EngineError> {
         Err(EngineError::NotImplemented {
             feature: "append_version — Phase 2",
         })
     }
 
+    /// Read the CID of the version currently pointed at by `anchor`.
+    /// Phase 1 stub — returns `E_NOT_IMPLEMENTED`.
     pub fn read_current_version(&self, _anchor: &AnchorHandle) -> Result<Option<Cid>, EngineError> {
         Err(EngineError::NotImplemented {
             feature: "read_current_version — Phase 2",
         })
     }
 
+    /// Walk the full version-chain history under `anchor`, yielding
+    /// each ancestor CID in order. Phase 1 stub — returns
+    /// `E_NOT_IMPLEMENTED`.
     pub fn walk_versions(
         &self,
         _anchor: &AnchorHandle,
@@ -377,6 +387,10 @@ impl Engine {
         Ok(())
     }
 
+    /// Test-only helper — insert a fixture `post` Node via the
+    /// privileged NoAuth backend path so cap-policy regression suites
+    /// can populate state without round-tripping through the public
+    /// `Engine::call` surface. Returns the inserted Node's CID.
     #[cfg(any(test, feature = "test-helpers"))]
     #[allow(
         clippy::expect_used,

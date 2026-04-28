@@ -83,7 +83,6 @@ fn parse_doc_host_fn_names(md_src: &str) -> BTreeSet<String> {
 /// to the workspace-root location pinned by wsa-16 +
 /// `tests/host_functions_toml_location.rs`.
 #[test]
-#[ignore = "Phase 2b G11-2b-A pending — docs/HOST-FUNCTIONS.md doc fill (host-functions.toml IS landed at workspace root by G7-A PR #30)"]
 fn host_functions_doc_drift_against_toml() {
     let root = workspace_root();
     let toml_path = root.join("host-functions.toml");
