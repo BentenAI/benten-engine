@@ -72,6 +72,13 @@ benten-caps = { path = "../../crates/benten-caps" }
 # feature is unrelated (G12-A budget override).
 benten-engine = { path = "../../crates/benten-engine", features = ["iteration-budget-test-grade"] }
 benten-errors = { workspace = true }
+# Phase 2b Wave-8f: napi `DevServer` binding wraps the `benten-dev` crate's
+# DevServer + ReloadCoordinator. Pulled in alongside `benten-dsl-compiler`
+# so the JS surface can render typed Diagnostic data on bad-DSL input
+# without prose-string parsing (matches the surface
+# `register_handler_from_dsl` already exposes Rust-side).
+benten-dev = { path = "../../tools/benten-dev" }
+benten-dsl-compiler = { path = "../../crates/benten-dsl-compiler" }
 # Phase 2b G8-B: needed for `Strategy` enum parsing in `parse_user_view_spec`
 # (the `engine.createUserView({ strategy })` napi entry point). The Strategy
 # enum is a public re-export of `benten_ivm::Strategy` via benten-engine; we

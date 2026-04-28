@@ -1,0 +1,112 @@
+name: devserver vitest
+
+# Phase 2b Wave-8f: covers the JS-side BentenDevServer hot-reload harness
+# that lands with the napi DevServer bridge. The vitest harness in
+# `tools/benten-dev/test/*.test.ts` exercises the
+# `Engine::register_subgraph_replace` path through the napi DevServer
+# class + the `@benten/engine-devserver` JS wrapper.
+#
+# Coordination note: Wave-8c (parallel sub-track) introduces a workflow
+# covering `packages/engine/test/*.test.ts`. The two suites are
+# orthogonal (8c covers Engine-class STREAM/SUBSCRIBE TS surface; 8f
+# covers the BentenDevServer surface) — when 8c merges first the
+# orchestrator may consolidate the two workflows into a single
+# "engine + devserver vitest" file. Until then this file owns the
+# devserver-specific suite so 8f does not depend on 8c's merge order.
+#
+# Trigger discipline (METH-13): pull_request + push on main + manual.
+# INFORMATIONAL ONLY — NOT in the required-check set per
+# `.addl/phase-2a/ci-decisions-2026-04-22.md` §4. The Rust-side
+# integration tests under `tools/benten-dev/tests/` are the
+# authoritative gate; this workflow validates the JS-surface mirror.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  devserver-vitest:
+    name: devserver vitest (linux-x86_64, informational)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      # Disk-pressure awareness — wave-8b composite action: free pre-installed
+      # tools (Android SDK / .NET / Haskell / etc.) on the runner before
+      # building wasmtime + napi. The vitest harness pulls the full napi
+      # cdylib build closure (wasmtime + cranelift + napi-rs derive crates),
+      # which approaches the free-tier runner's 14GB threshold under default
+      # caching; the composite action recovers ~30GB pre-build.
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
+        if: hashFiles('.github/actions/free-disk-space/action.yml') != ''
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          key: devserver-vitest
+
+      - name: Install Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+
+      - name: Build napi cdylib (napi build --platform --release)
+        run: |
+          cd bindings/napi
+          npm install --no-audit --no-fund
+          npm run build
+          ls -la benten-napi.*.node
+          # @napi-rs/cli v3 emits the binary with the Rust target triple's
+          # ABI suffix on Linux (`benten-napi.linux-x64-gnu.node`); the
+          # @benten/engine-native package's index.js dispatcher prefers the
+          # no-ABI form when present, so duplicate it under the no-ABI name
+          # for compatibility with both forms.
+          for f in benten-napi.linux-x64-*.node; do
+            [ -f "$f" ] && [ "$f" != "benten-napi.linux-x64.node" ] && cp "$f" benten-napi.linux-x64.node
+          done
+          ls -la benten-napi.*.node
+
+      - name: Build @benten/engine TS package
+        run: |
+          cd packages/engine
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Build @benten/engine-devserver TS package
+        run: |
+          cd packages/engine-devserver
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Run devserver vitest suite
+        # SCOPED to `tools/benten-dev/test/*.test.ts`. The harness assumes
+        # the napi cdylib has been built (above) + that the workspace
+        # symlinks resolve `@benten/engine-devserver` to the local
+        # `packages/engine-devserver` package (which the npm-workspace
+        # config in the repo root handles automatically).
+        run: |
+          # Install workspace deps so the workspaces: [...] in repo-root
+          # package.json resolve symlinks across packages/engine,
+          # packages/engine-devserver, bindings/napi.
+          npm install --no-audit --no-fund --workspaces=false
+          npm install --no-audit --no-fund
+          npx vitest run tools/benten-dev/test/devserver.test.ts \
+            tools/benten-dev/test/hotreload_preserves_cap_grants.test.ts

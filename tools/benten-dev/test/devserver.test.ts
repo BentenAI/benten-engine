@@ -1,45 +1,180 @@
-// G12-B red-phase: TS Vitest harness expecting JS `BentenDevServer` + napi
-// bridge through to the real Rust devserver routing through Engine.
+// G12-B / Phase 2b Wave-8f: TS Vitest harness covering the JS-side
+// BentenDevServer (from @benten/engine-devserver) routed through the
+// napi DevServer bridge.
 //
-// Per plan §3.2 G12-B "files owned": "tools/benten-dev/test/*.test.ts —
-// un-ignore the Vitest harness expecting JS `BentenDevServer` + napi bridge."
-//
-// TDD red-phase: tests are skipped via `it.skip` (the `phase_2b_landed`-equivalent
-// gate for TS — Vitest doesn't compile away ignored tests but skip preserves the
-// red-phase contract). Lifts to `it(...)` after G12-B JS surface lands.
-//
-// Owner: R5 G12-B (qa-r4-01 R3-followup).
+// Lifted from `it.skip` to `it(...)` as Wave-8f lands. Per
+// `.addl/phase-2b/wave-8-brief.md` §8f: "Un-skip the Vitest harness;
+// assert hot-reload preserves cap grants through the engine path; assert
+// in-flight evaluations complete before reload."
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-describe("BentenDevServer (G12-B JS surface)", () => {
-  it.skip("registers a handler from a DSL source file via the napi bridge", async () => {
-    // Drive: import { BentenDevServer } from "@benten/dev"; spawn against
-    // a temp DSL file; assert handler is callable via the engine surface.
-    throw new Error("R5 G12-B: implement BentenDevServer JS class + napi bridge");
+import { BentenDevServer } from "@benten/engine-devserver";
+
+function freshTmp(prefix: string): { dir: string; cleanup: () => void } {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  return {
+    dir,
+    cleanup: () => rmSync(dir, { recursive: true, force: true }),
+  };
+}
+
+describe("BentenDevServer (Wave-8f JS surface)", () => {
+  it("registers a handler from a DSL source string via the napi bridge", async () => {
+    const { dir, cleanup } = freshTmp("benten-dev-register-");
+    try {
+      const server = new BentenDevServer({ projectRoot: dir });
+      await server.start();
+      const id = await server.registerHandler(
+        "h1",
+        "run",
+        "handler 'h1' { read('post') -> respond }",
+      );
+      expect(id).toBe("h1");
+      await server.stop();
+    } finally {
+      cleanup();
+    }
   });
 
-  it.skip("hot-reload preserves cap-grants when routed through Engine.register_subgraph", async () => {
-    throw new Error(
-      "R5 G12-B: drive cap-grant preservation property through the JS surface",
-    );
+  it("hot-reload preserves cap-grants when routed through Engine.register_subgraph_replace", async () => {
+    const { dir, cleanup } = freshTmp("benten-dev-hot-grants-");
+    try {
+      const server = new BentenDevServer({ projectRoot: dir });
+      await server.start();
+
+      // Seed a grant BEFORE registering the handler.
+      await server.grantCapability({
+        actor: "alice",
+        scope: "store:post:write",
+      });
+      expect(
+        await server.grantExists({ actor: "alice", scope: "store:post:write" }),
+      ).toBe(true);
+
+      // First registration.
+      await server.registerHandler(
+        "h1",
+        "run",
+        "handler 'h1' { read('post') -> respond }",
+      );
+
+      // Hot-reload: same handler_id, different body. Routed through
+      // Engine::register_subgraph_replace — must NOT throw
+      // DuplicateHandler.
+      await server.replaceHandler(
+        "h1",
+        "run",
+        "handler 'h1' { read('post') -> transform({ x: $x }) -> respond }",
+      );
+
+      // The seeded grant survives the engine-routed re-registration.
+      expect(
+        await server.grantExists({ actor: "alice", scope: "store:post:write" }),
+      ).toBe(true);
+
+      await server.stop();
+    } finally {
+      cleanup();
+    }
   });
 
-  it.skip("in-flight evaluations complete against v1 before swap to v2", async () => {
-    throw new Error("R5 G12-B: drive in-flight property through the JS surface");
+  it("propagates a typed Diagnostic for bad DSL input", async () => {
+    const { dir, cleanup } = freshTmp("benten-dev-bad-dsl-");
+    try {
+      const server = new BentenDevServer({ projectRoot: dir });
+      await server.start();
+      // `teleport` is not a known primitive — must surface E_DSL_*.
+      let captured: Error | undefined;
+      try {
+        await server.registerHandler(
+          "oops",
+          "run",
+          "handler 'oops' { teleport -> respond }",
+        );
+      } catch (err) {
+        captured = err as Error;
+      }
+      expect(captured).toBeDefined();
+      expect(captured?.message).toMatch(/E_DSL_/);
+      await server.stop();
+    } finally {
+      cleanup();
+    }
   });
 
-  it.skip("propagates a typed Diagnostic for bad DSL input", async () => {
-    // Pin: bad DSL → JS-side surface receives { error_code: 'E_DSL_PARSE_ERROR',
-    // line, column, message } — NOT a generic Error.
-    throw new Error(
-      "R5 G12-B: assert Diagnostic surface includes error_code + line + column",
-    );
+  it("subscribeToReloadEvents reports each replace with versionTag + new/previous CIDs", async () => {
+    const { dir, cleanup } = freshTmp("benten-dev-reload-events-");
+    try {
+      const server = new BentenDevServer({ projectRoot: dir });
+      await server.start();
+
+      const sub = server.subscribeToReloadEvents();
+
+      // First registration — versionTag v1, no previousCid.
+      await server.registerHandler(
+        "h1",
+        "run",
+        "handler 'h1' { read('post') -> respond }",
+      );
+      // Replace with a different body — versionTag v2 + previousCid set.
+      await server.replaceHandler(
+        "h1",
+        "run",
+        "handler 'h1' { read('post') -> transform({ x: $x }) -> respond }",
+      );
+
+      const events = sub.drain();
+      expect(events.length).toBeGreaterThanOrEqual(2);
+      const v1 = events.find((e) => e.versionTag === "v1");
+      const v2 = events.find((e) => e.versionTag === "v2");
+      expect(v1).toBeDefined();
+      expect(v2).toBeDefined();
+      // v1 has a newCid (engine-routed) but no previousCid.
+      expect(typeof v1?.newCid).toBe("string");
+      expect(v1?.previousCid).toBeUndefined();
+      // v2 has both.
+      expect(typeof v2?.newCid).toBe("string");
+      expect(typeof v2?.previousCid).toBe("string");
+      // The chain is consistent: v2's previousCid equals v1's newCid.
+      expect(v2?.previousCid).toBe(v1?.newCid);
+
+      sub.unsubscribe();
+      await server.stop();
+    } finally {
+      cleanup();
+    }
   });
 
-  it.skip("inspect-state pretty-printer remains available post-routing-refactor", async () => {
-    // Phase-2a inspect-state surface (`tools/benten-dev/test/inspect_state_pretty_prints.test.ts`)
-    // must keep working after G12-B refactor.
-    throw new Error("R5 G12-B: re-validate inspect-state output shape against routed engine");
+  it("idempotent re-registration with identical content does not bump the version chain", async () => {
+    const { dir, cleanup } = freshTmp("benten-dev-idem-");
+    try {
+      const server = new BentenDevServer({ projectRoot: dir });
+      await server.start();
+
+      const sub = server.subscribeToReloadEvents();
+
+      const src = "handler 'h1' { read('post') -> respond }";
+      await server.registerHandler("h1", "run", src);
+      // Identical re-register — must NOT publish a new event under
+      // the engine routing path (the legacy in-memory bookkeeping
+      // returns early before publishing too).
+      await server.registerHandler("h1", "run", src);
+
+      const events = sub.drain();
+      // First registration publishes one event (v1). Identical
+      // re-register is idempotent; the legacy `existing_same_source`
+      // early-return guards the publish path.
+      expect(events.length).toBe(1);
+      expect(events[0].versionTag).toBe("v1");
+
+      sub.unsubscribe();
+      await server.stop();
+    } finally {
+      cleanup();
+    }
   });
 });

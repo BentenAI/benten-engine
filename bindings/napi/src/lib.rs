@@ -67,6 +67,12 @@ mod wait;
 mod stream;
 #[cfg(feature = "napi-export")]
 mod subscribe;
+// Phase 2b Wave-8f: napi `DevServer` class wrapping `benten_dev::DevServer`.
+// Self-contained surface (its own `#[napi]` impl block) — kept in its own
+// file because the dev-server bridge has zero overlap with the existing
+// `napi_surface::Engine` impl block.
+#[cfg(feature = "napi-export")]
+mod devserver;
 // Phase 2b G10-A-wasip1: napi-side wasm32-wasip1 runtime probes
 // (`wasiTargetKind`, `wasiRuntimeSupportsRedbNative`,
 // `wasiCanonicalFixtureCid`). Cfg-split per the same defence-in-depth
