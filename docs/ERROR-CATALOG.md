@@ -840,6 +840,14 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** SANDBOX executor (`Module::new` / link / instantiation).
 - **Phase:** 2b G7-A
 
+### E_SANDBOX_MODULE_NOT_INSTALLED
+
+- **Message:** "SANDBOX module bytes not registered for CID {module_cid}"
+- **Context:** `{ module_cid: Cid }`
+- **Fix:** A SANDBOX dispatch named a module CID for which no bytes have been registered through `Engine::register_module_bytes(cid, bytes)`. Distinct from [E_SANDBOX_MODULE_INVALID] (bytes are present but failed wasmtime structural validation): this fires BEFORE the executor sees any bytes, at the engine's lookup step. Either call `engine.register_module_bytes(module_cid, wasm_bytes)` before dispatch, or correct the SANDBOX node's `module` property to reference an already-registered CID. The Phase-2b in-memory module-bytes registry is process-local + transient (lost across `Engine` re-open); Phase 3 promotes the registry to a durable `BlobBackend` per Compromise #17. The `install_module(manifest, expected_cid)` path persists the manifest into a system-zone Node but does NOT persist the underlying wasm bytes — that asymmetry IS the Compromise #17 narrative.
+- **Thrown at:** `impl PrimitiveHost for Engine::execute_sandbox` (`crates/benten-engine/src/primitive_host.rs`) when `Engine::module_bytes_for(cid)` returns `None`.
+- **Phase:** 2b Wave-8d-types
+
 ### E_SANDBOX_NESTED_DISPATCH_DENIED
 
 <!-- reachability: ignore -->

@@ -624,16 +624,23 @@ impl PrimitiveHost for Engine {
     ///
     /// ## Error mapping
     ///
-    /// `SandboxError → EvalError::Backend(format!("...({code})"))` is
-    /// a deliberate temporary shape: `EvalError` does not yet have a
-    /// typed `Sandbox(SandboxError)` variant. The catalog code IS
-    /// preserved on the message string + the `code()` of the routed
-    /// `EvalError::Backend` is `E_EVAL_BACKEND` per
-    /// `EvalError::Backend.code()` — Wave-8d (docs/error-catalog
-    /// reconciliation) is the right surface for adding the typed
-    /// `EvalError::Sandbox(SandboxError)` variant + ERROR-CATALOG.md
-    /// row updates. Surfaced as a deviation rather than a wave-8b
-    /// scope-expansion.
+    /// **Wave-8d-types refactor:** `SandboxError` propagates through
+    /// the typed `EvalError::Sandbox` variant (added in
+    /// `crates/benten-eval/src/lib.rs`); the wave-8b temporary
+    /// `EvalError::Backend(format!("...({code})"))` shape is gone.
+    /// The stable `E_SANDBOX_*` catalog code now survives the
+    /// `EvalError → EngineError → napi → TS` pipeline cleanly because
+    /// `EvalError::Sandbox(s).code()` dispatches to `s.code()` and the
+    /// engine-side `eval_error_to_engine_error` catch-all preserves
+    /// `other.code()` on `EngineError::Other`.
+    ///
+    /// Module-lookup failures (no bytes registered for the declared
+    /// CID) surface specifically through
+    /// `SandboxError::ModuleNotInstalled` — distinct from
+    /// `SandboxError::ModuleInvalid` (bytes present but failed
+    /// wasmtime structural validation) — and route to
+    /// [`ErrorCode::SandboxModuleNotInstalled`] (the operator-actionable
+    /// `E_SANDBOX_MODULE_NOT_INSTALLED` discriminant).
     #[cfg(not(target_arch = "wasm32"))]
     #[allow(
         clippy::too_many_lines,
@@ -669,13 +676,13 @@ impl PrimitiveHost for Engine {
         })?;
 
         // 2. Look up wasm bytes from the engine's in-memory module-bytes
-        //    registry.
+        //    registry. Wave-8d-types: surface the typed
+        //    `SandboxError::ModuleNotInstalled` variant rather than the
+        //    prior placeholder `EvalError::Backend(format!(...))` shape so
+        //    `E_SANDBOX_MODULE_NOT_INSTALLED` survives the boundary.
         let module_bytes = self.module_bytes_for(&module_cid).ok_or_else(|| {
-            benten_eval::EvalError::Backend(format!(
-                "SANDBOX: module bytes not registered for CID {} — \
-                 call Engine::register_module_bytes(cid, bytes) before dispatch \
-                 (E_SANDBOX_MODULE_NOT_INSTALLED — durable storage in Phase 3)",
-                module_cid.to_base32()
+            benten_eval::EvalError::Sandbox(benten_eval::sandbox::SandboxError::ModuleNotInstalled(
+                module_cid,
             ))
         })?;
 
@@ -810,35 +817,44 @@ impl PrimitiveHost for Engine {
             &attribution,
         );
 
-        // 8. Map the result.
+        // 8. Map the result. Wave-8d-types: SandboxError propagates
+        //    through the typed `EvalError::Sandbox` variant (via the
+        //    `#[from]` impl), preserving the stable `E_SANDBOX_*`
+        //    catalog code for the downstream TS layer.
         match result {
             Ok(sandbox_result) => Ok(benten_eval::StepResult {
                 next: None,
                 edge_label: "ok".to_string(),
                 output: Value::Bytes(sandbox_result.output),
             }),
-            Err(sandbox_err) => {
-                let code = sandbox_err.code();
-                Err(benten_eval::EvalError::Backend(format!(
-                    "SANDBOX execution failed ({code:?}): {sandbox_err}"
-                )))
-            }
+            Err(sandbox_err) => Err(benten_eval::EvalError::Sandbox(sandbox_err)),
         }
     }
 
     /// wasm32-target stub: `benten_eval::sandbox` is cfg-gated off on
     /// `target_arch = "wasm32"` (wasmtime doesn't compile to wasm32),
     /// so the production override is unreachable. Surface the typed
-    /// E_SANDBOX_UNAVAILABLE_ON_WASM error per wsa-14 / Compromise #N+9
-    /// (browser-target SANDBOX disabled) so the DSL composition flow
-    /// reports the actionable error at execution time rather than
+    /// E_SANDBOX_UNAVAILABLE_ON_WASM-class error per wsa-14 / Compromise
+    /// #N+9 (browser-target SANDBOX disabled) so the DSL composition
+    /// flow reports the actionable error at execution time rather than
     /// fielding a missing-symbol link error at module load.
+    ///
+    /// **Wave-8d-types refactor:** the typed
+    /// `EvalError::SubsystemDisabled` variant carries the
+    /// [`ErrorCode::SubsystemDisabled`] catalog code through the
+    /// `EvalError → EngineError → napi → TS` pipeline (replaces the
+    /// prior `EvalError::Backend(format!(...))` placeholder shape).
+    /// The dedicated `ErrorCode::SandboxUnavailableOnWasm` variant
+    /// remains 8c-cont scope (it would let the wasm32 stub fire its
+    /// own discriminant); for now the actionable wsa-14 text rides on
+    /// the `SubsystemDisabled` envelope and remains pinned by
+    /// `tests/sandbox_unavailable_on_wasm_error_message_exact_text_pin.rs`.
     #[cfg(target_arch = "wasm32")]
     fn execute_sandbox(
         &self,
         _op: &benten_eval::OperationNode,
     ) -> Result<benten_eval::StepResult, benten_eval::EvalError> {
-        Err(benten_eval::EvalError::Backend(
+        Err(benten_eval::EvalError::SubsystemDisabled(
             "SANDBOX is unavailable on wasm32-unknown-unknown — \
              the browser engine ships without wasmtime. \
              E_SANDBOX_UNAVAILABLE_ON_WASM (wsa-14)."
@@ -1030,6 +1046,17 @@ pub(crate) fn eval_error_to_engine_error(e: benten_eval::EvalError) -> EngineErr
             // `EvalError::Backend.code()` in benten-eval (r6b-err-3).
             code: benten_errors::ErrorCode::Unknown("E_EVAL_BACKEND".into()),
             message: m,
+        },
+        // Wave-8d-types: typed `EvalError::Sandbox` round-trips with the
+        // stable `E_SANDBOX_*` catalog code on `EngineError::Other.code`
+        // PLUS the actionable Display rendering on `.message` (so
+        // operator-facing log lines + the Wave-8b acceptance test's
+        // substring assertion both see the user-friendly text rather
+        // than the bare Debug payload).
+        #[cfg(not(target_arch = "wasm32"))]
+        benten_eval::EvalError::Sandbox(s) => EngineError::Other {
+            code: s.code(),
+            message: format!("{s}"),
         },
         other => EngineError::Other {
             code: other.code(),

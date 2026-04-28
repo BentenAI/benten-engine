@@ -42,6 +42,10 @@ mod integration {
     pub mod view_stale_count; // cov-6 G11-A witness
     // ---- Phase 2a R4b Wave-3c fix-pass additions ----
     pub mod budget_exhausted_trace_emission; // cov M2 — runtime BudgetExhausted firing
+    // ---- Phase 2b Wave-8d-types ----
+    // Typed-error refactor acceptance: `EvalError::Sandbox` variant
+    // surfaces `E_SANDBOX_MODULE_NOT_INSTALLED` end-to-end.
+    pub mod sandbox_module_not_installed_emits_typed_error;
     // ---- Phase 2b R3 (red-phase) — gated on `phase_2b_landed` feature.
     // CI's required-check fleet does NOT enable this feature, so the
     // submodules whose bodies reach into R5-pending APIs are excluded

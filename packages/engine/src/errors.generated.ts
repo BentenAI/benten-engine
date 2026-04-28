@@ -121,6 +121,7 @@ export const CATALOG_CODES = [
   "E_SANDBOX_MANIFEST_UNKNOWN",
   "E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED",
   "E_SANDBOX_MODULE_INVALID",
+  "E_SANDBOX_MODULE_NOT_INSTALLED",
   "E_SANDBOX_NESTED_DISPATCH_DENIED",
   "E_MODULE_MANIFEST_CID_MISMATCH",
   "E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE",
@@ -1448,6 +1449,21 @@ export class ESandboxModuleInvalid extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_SANDBOX_MODULE_INVALID", "Module bytes failed wasmtime structural validation (malformed module, type mismatch, OOB section, OOB linear-memory read, recursion-depth overflow, etc.). Audit the module compiler output. ESC-1 / ESC-3 / ESC-5 / ESC-11 / ESC-12 escape vectors all route here.", message, context);
     this.name = "ESandboxModuleInvalid";
+  }
+}
+
+/**
+ * E_SANDBOX_MODULE_NOT_INSTALLED
+ *
+ * Thrown at: `impl PrimitiveHost for Engine::execute_sandbox` (`crates/benten-engine/src/primitive_host.rs`) when `Engine::module_bytes_for(cid)` returns `None`.
+ * Message template: "SANDBOX module bytes not registered for CID {module_cid}"
+ */
+export class ESandboxModuleNotInstalled extends BentenError {
+  static readonly code = "E_SANDBOX_MODULE_NOT_INSTALLED";
+  static readonly fixHint = "A SANDBOX dispatch named a module CID for which no bytes have been registered through `Engine::register_module_bytes(cid, bytes)`. Distinct from [E_SANDBOX_MODULE_INVALID] (bytes are present but failed wasmtime structural validation): this fires BEFORE the executor sees any bytes, at the engine's lookup step. Either call `engine.register_module_bytes(module_cid, wasm_bytes)` before dispatch, or correct the SANDBOX node's `module` property to reference an already-registered CID. The Phase-2b in-memory module-bytes registry is process-local + transient (lost across `Engine` re-open); Phase 3 promotes the registry to a durable `BlobBackend` per Compromise #17. The `install_module(manifest, expected_cid)` path persists the manifest into a system-zone Node but does NOT persist the underlying wasm bytes — that asymmetry IS the Compromise #17 narrative.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SANDBOX_MODULE_NOT_INSTALLED", "A SANDBOX dispatch named a module CID for which no bytes have been registered through `Engine::register_module_bytes(cid, bytes)`. Distinct from [E_SANDBOX_MODULE_INVALID] (bytes are present but failed wasmtime structural validation): this fires BEFORE the executor sees any bytes, at the engine's lookup step. Either call `engine.register_module_bytes(module_cid, wasm_bytes)` before dispatch, or correct the SANDBOX node's `module` property to reference an already-registered CID. The Phase-2b in-memory module-bytes registry is process-local + transient (lost across `Engine` re-open); Phase 3 promotes the registry to a durable `BlobBackend` per Compromise #17. The `install_module(manifest, expected_cid)` path persists the manifest into a system-zone Node but does NOT persist the underlying wasm bytes — that asymmetry IS the Compromise #17 narrative.", message, context);
+    this.name = "ESandboxModuleNotInstalled";
   }
 }
 

@@ -347,6 +347,23 @@ pub enum ErrorCode {
     /// `Engine::install_module(...)` on a wasm32 target when
     /// `ModuleManifest::migrations` is non-empty.
     ModuleMigrationsRequirePersistence,
+    /// Phase 2b Wave-8d-types: a SANDBOX dispatch named a module CID
+    /// that has no bytes registered through
+    /// `Engine::register_module_bytes(cid, bytes)`. Distinct from
+    /// [`ErrorCode::SandboxModuleInvalid`] (module bytes are present
+    /// but failed wasmtime structural validation): this fires BEFORE
+    /// the executor sees any bytes, at the engine's lookup step.
+    ///
+    /// Phase-2b in-memory module-bytes registry narrative: bytes
+    /// registered via `register_module_bytes` are process-local +
+    /// transient (lost across `Engine` re-open). Phase 3 promotes the
+    /// registry to a durable `BlobBackend`. See Compromise #17 in
+    /// `docs/SECURITY-POSTURE.md` for the full asymmetry between
+    /// `install_module` (manifest persistence in system-zone Node) and
+    /// `register_module_bytes` (transient).
+    ///
+    /// Maps to `E_SANDBOX_MODULE_NOT_INSTALLED`.
+    SandboxModuleNotInstalled,
     /// `Engine::open()` failed to parse `engine.toml` from workspace root.
     /// Reserved here for the workspace-config wiring (Ben's G7-A brief
     /// addition): per-deployment override of D24 wallclock defaults +
@@ -532,6 +549,7 @@ impl ErrorCode {
             ErrorCode::ModuleMigrationsRequirePersistence => {
                 "E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE"
             }
+            ErrorCode::SandboxModuleNotInstalled => "E_SANDBOX_MODULE_NOT_INSTALLED",
             ErrorCode::EngineConfigInvalid => "E_ENGINE_CONFIG_INVALID",
             ErrorCode::BackendReadOnly => "E_BACKEND_READ_ONLY",
             ErrorCode::SandboxUnavailableOnWasm => "E_SANDBOX_UNAVAILABLE_ON_WASM",
@@ -604,7 +622,8 @@ impl ErrorCode {
             | ErrorCode::VersionUnknownPrior
             | ErrorCode::UnknownView
             | ErrorCode::SandboxHostFnNotFound
-            | ErrorCode::SandboxManifestUnknown => Some("ON_NOT_FOUND"),
+            | ErrorCode::SandboxManifestUnknown
+            | ErrorCode::SandboxModuleNotInstalled => Some("ON_NOT_FOUND"),
 
             // Optimistic-concurrency conflict — explicit ON_CONFLICT.
             // EH2 fix: previously fell into the wildcard ON_ERROR which
@@ -829,6 +848,7 @@ impl ErrorCode {
             "E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE" => {
                 ErrorCode::ModuleMigrationsRequirePersistence
             }
+            "E_SANDBOX_MODULE_NOT_INSTALLED" => ErrorCode::SandboxModuleNotInstalled,
             "E_ENGINE_CONFIG_INVALID" => ErrorCode::EngineConfigInvalid,
             "E_BACKEND_READ_ONLY" => ErrorCode::BackendReadOnly,
             "E_SANDBOX_UNAVAILABLE_ON_WASM" => ErrorCode::SandboxUnavailableOnWasm,

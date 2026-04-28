@@ -323,6 +323,22 @@ pub enum EvalError {
     /// the host-boundary (r6b-err-1).
     #[error("subsystem disabled: {0}")]
     SubsystemDisabled(String),
+
+    /// SANDBOX runtime/registration failure — preserves the typed
+    /// [`sandbox::SandboxError`] across the `EvalError` boundary so
+    /// the stable `E_SANDBOX_*` catalog code survives the
+    /// eval → engine → napi → TS pipeline. Wave-8d-types replaces the
+    /// prior wave-8b temporary `EvalError::Backend(format!("..."))`
+    /// shape used by `impl PrimitiveHost for Engine::execute_sandbox`.
+    ///
+    /// `cfg(not(target_arch = "wasm32"))`-gated because
+    /// [`sandbox::SandboxError`] is itself wasm32-cut per
+    /// sec-pre-r1-05 (wasmtime doesn't compile to wasm32). The wasm32
+    /// path uses [`EvalError::SubsystemDisabled`] instead via the
+    /// `execute_sandbox_wasm32_unavailable` stub on the engine side.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[error("sandbox: {0}")]
+    Sandbox(#[from] sandbox::SandboxError),
 }
 
 impl EvalError {
@@ -359,6 +375,8 @@ impl EvalError {
             EvalError::UnknownView(_) => ErrorCode::UnknownView,
             EvalError::IvmViewStale(_) => ErrorCode::IvmViewStale,
             EvalError::SubsystemDisabled(_) => ErrorCode::SubsystemDisabled,
+            #[cfg(not(target_arch = "wasm32"))]
+            EvalError::Sandbox(s) => s.code(),
         }
     }
 }
