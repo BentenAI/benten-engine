@@ -149,9 +149,21 @@ impl OutputOverflow {
     /// through `E_INV_SANDBOX_OUTPUT` regardless of which check fired
     /// (the `path` field carries the source distinction; the catalog
     /// code is shared so DSL `ON_OUTPUT_LIMIT` edges route both).
+    ///
+    /// Exposed as an associated `const` because the mapping is currently
+    /// path-independent — `path` is kept on the struct for diagnostic
+    /// surfacing, not for code distinction. If a future revision wants
+    /// per-path codes (e.g. BACKSTOP gets its own catalog entry), this
+    /// can re-grow into a `&self` method without breaking the
+    /// instance-method callsite below.
+    pub const CODE: ErrorCode = ErrorCode::InvSandboxOutput;
+
+    /// Instance-method shim over [`OutputOverflow::CODE`] kept for
+    /// callsite ergonomics (`overflow.code()` reads more naturally
+    /// than `OutputOverflow::CODE` at the trap point).
     #[must_use]
-    pub fn code(&self) -> ErrorCode {
-        ErrorCode::InvSandboxOutput
+    pub const fn code(&self) -> ErrorCode {
+        Self::CODE
     }
 }
 

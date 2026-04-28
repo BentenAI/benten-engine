@@ -217,6 +217,22 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** Evaluation
 - **Phase:** 2 (SANDBOX executor, see `E_SANDBOX_FUEL_EXHAUSTED`)
 
+### E_INV_SANDBOX_DEPTH
+
+- **Message:** "SANDBOX nest depth {depth} exceeds configured max {max}"
+- **Context:** `{ node_id: NodeId, depth: number, max: number }`
+- **Fix:** Reduce SANDBOX nesting (a SANDBOX whose subgraph CALLs another handler that itself SANDBOXes counts toward the same depth — D20 inheritance across CALL boundaries). Either flatten the call chain or increase `max_sandbox_nest_depth` via capability grant.
+- **Thrown at:** Registration (static SubgraphSpec analysis) and Evaluation (TRANSFORM-computed SANDBOX targets that exceed the ceiling at runtime)
+- **Phase:** 2b (G7-B Inv-4 enforcement; counter lives on `AttributionFrame.sandbox_depth: u8` and is INHERITED across CALL boundaries per D20-RESOLVED)
+
+### E_INV_SANDBOX_OUTPUT
+
+- **Message:** "SANDBOX output {would_be} bytes exceeds max {limit} (consumed {consumed} + attempted {attempted})"
+- **Context:** `{ node_id: NodeId, consumed: number, attempted: number, would_be: number, limit: number, path: "primary_streaming" | "backstop" }`
+- **Fix:** Reduce output emitted by the SANDBOX module's host-fn calls (or the primitive return value). D15 trap-loudly default — there is no opt-in silent-truncation flag. Use STREAM for progressive output if the workload genuinely needs unbounded byte volume.
+- **Thrown at:** Evaluation. The `path` field distinguishes the D17 PRIMARY streaming `CountedSink` enforcement (fires before host-fn bytes are accepted) from the D17 BACKSTOP return-value enforcement (defense-in-depth at the primitive boundary).
+- **Phase:** 2b (G7-B Inv-7 enforcement; D15 + D17 PRIMARY+BACKSTOP)
+
 ### E_IVM_VIEW_STALE
 
 - **Message:** "IVM view {view_id} marked stale; async recomputation in progress"

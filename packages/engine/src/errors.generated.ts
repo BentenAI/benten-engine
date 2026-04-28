@@ -56,6 +56,8 @@ export const CATALOG_CODES = [
   "E_SANDBOX_FUEL_EXHAUSTED",
   "E_SANDBOX_TIMEOUT",
   "E_SANDBOX_OUTPUT_LIMIT",
+  "E_INV_SANDBOX_DEPTH",
+  "E_INV_SANDBOX_OUTPUT",
   "E_IVM_VIEW_STALE",
   "E_TX_ABORTED",
   "E_NESTED_TRANSACTION_NOT_SUPPORTED",
@@ -459,6 +461,36 @@ export class ESandboxOutputLimit extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_SANDBOX_OUTPUT_LIMIT", "Return smaller output. Use STREAM for progressive output.", message, context);
     this.name = "ESandboxOutputLimit";
+  }
+}
+
+/**
+ * E_INV_SANDBOX_DEPTH
+ *
+ * Thrown at: Registration (static SubgraphSpec analysis) and Evaluation (TRANSFORM-computed SANDBOX targets that exceed the ceiling at runtime)
+ * Message template: "SANDBOX nest depth {depth} exceeds configured max {max}"
+ */
+export class EInvSandboxDepth extends BentenError {
+  static readonly code = "E_INV_SANDBOX_DEPTH";
+  static readonly fixHint = "Reduce SANDBOX nesting (a SANDBOX whose subgraph CALLs another handler that itself SANDBOXes counts toward the same depth — D20 inheritance across CALL boundaries). Either flatten the call chain or increase `max_sandbox_nest_depth` via capability grant.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_INV_SANDBOX_DEPTH", "Reduce SANDBOX nesting (a SANDBOX whose subgraph CALLs another handler that itself SANDBOXes counts toward the same depth — D20 inheritance across CALL boundaries). Either flatten the call chain or increase `max_sandbox_nest_depth` via capability grant.", message, context);
+    this.name = "EInvSandboxDepth";
+  }
+}
+
+/**
+ * E_INV_SANDBOX_OUTPUT
+ *
+ * Thrown at: Evaluation. The `path` field distinguishes the D17 PRIMARY streaming `CountedSink` enforcement (fires before host-fn bytes are accepted) from the D17 BACKSTOP return-value enforcement (defense-in-depth at the primitive boundary).
+ * Message template: "SANDBOX output {would_be} bytes exceeds max {limit} (consumed {consumed} + attempted {attempted})"
+ */
+export class EInvSandboxOutput extends BentenError {
+  static readonly code = "E_INV_SANDBOX_OUTPUT";
+  static readonly fixHint = "Reduce output emitted by the SANDBOX module's host-fn calls (or the primitive return value). D15 trap-loudly default — there is no opt-in silent-truncation flag. Use STREAM for progressive output if the workload genuinely needs unbounded byte volume.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_INV_SANDBOX_OUTPUT", "Reduce output emitted by the SANDBOX module's host-fn calls (or the primitive return value). D15 trap-loudly default — there is no opt-in silent-truncation flag. Use STREAM for progressive output if the workload genuinely needs unbounded byte volume.", message, context);
+    this.name = "EInvSandboxOutput";
   }
 }
 

@@ -17,7 +17,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 2b G7-B pending — Inv-4 runtime depth"]
+#[ignore = "pending G7-A executor wiring; tracks G7-A's phase-2b/g7/a-sandbox-core PR (PR #30)"]
 fn invariant_4_sandbox_runtime_depth_traps() {
     // Plan §3 G7-B — runtime depth check fires for TRANSFORM-computed
     // SANDBOX targets that exceed max_nest_depth at evaluation time.
@@ -36,7 +36,7 @@ fn invariant_4_sandbox_runtime_depth_traps() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-B pending — D20 inheritance across CALL"]
+#[ignore = "pending G7-A executor wiring; tracks G7-A's phase-2b/g7/a-sandbox-core PR (PR #30)"]
 fn invariant_4_depth_inherited_across_call_boundary() {
     // D20 inherit-not-reset — the actual security claim. Handler A
     // SANDBOXes → CALLs handler B → SANDBOXes is depth-2, NOT two
@@ -60,7 +60,7 @@ fn invariant_4_depth_inherited_across_call_boundary() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-B pending — D20 frame-level inheritance"]
+#[ignore = "pending G7-A executor wiring; tracks G7-A's phase-2b/g7/a-sandbox-core PR (PR #30)"]
 fn invariant_4_depth_inherited_through_attribution_frame() {
     // D20 white-box — assert the inheritance mechanism. The
     // AttributionFrame propagation pattern from Phase-2a sec-r6r1-01
