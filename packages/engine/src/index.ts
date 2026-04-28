@@ -52,8 +52,23 @@ export {
   isSandboxBearing,
 } from "./sandbox.js";
 
+// Phase 2b G6-B: STREAM + SUBSCRIBE consumer-side wrappers.
+export {
+  wrapStreamHandle,
+  validateStreamCallArgs,
+  type NativeStreamHandle,
+} from "./stream.js";
+export {
+  makeSubscription,
+  serializeCursor,
+  validateOnChangeArgs,
+  type NativeSubscriptionJson,
+  type OnChangeCallback,
+} from "./subscribe.js";
+
 export type {
   CapabilityGrant,
+  Chunk,
   Edge,
   HandlerAdjacencies,
   JsonValue,
@@ -69,8 +84,12 @@ export type {
   SandboxOptions,
   SandboxResult,
   Strategy,
+  StreamCursor,
+  StreamHandle,
   Subgraph,
   SubgraphNode,
+  SubscribeCursor,
+  Subscription,
   SuspensionResult,
   Trace,
   TraceStep,

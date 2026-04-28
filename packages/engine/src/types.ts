@@ -567,3 +567,124 @@ export interface UserView {
 export interface UserViewSubscription {
   unsubscribe: () => Promise<void>;
 }
+
+// ---------------------------------------------------------------------------
+// STREAM (Phase 2b G6-B)
+// ---------------------------------------------------------------------------
+
+/**
+ * One chunk of streamed output. Mirrors the napi-side
+ * `benten_engine::Chunk` newtype around `Vec<u8>` — the wire form on
+ * the JS side is a Node `Buffer` so consumers can decode straight to
+ * UTF-8 / structured bytes without an intermediate copy.
+ */
+export type Chunk = Buffer;
+
+/**
+ * Cursor mode for STREAM consumers (G6-A D5 cursor surface symmetry).
+ *
+ * - `latest` — start from the next chunk produced after the call.
+ * - `sequence` — start from the chunk at engine-assigned sequence
+ *   number `seq` (replay within the bounded retention window).
+ */
+export type StreamCursor =
+  | { kind: "latest" }
+  | { kind: "sequence"; seq: number };
+
+/**
+ * Handle to an open STREAM dispatch returned by
+ * {@link Engine.callStream} / {@link Engine.openStream} /
+ * {@link Engine.testingOpenStreamForTest}.
+ *
+ * The handle implements `AsyncIterable<Chunk>` so consumers can
+ * iterate naturally:
+ *
+ * ```ts
+ * for await (const chunk of engine.callStream(handlerId, "act", input)) {
+ *   process.stdout.write(chunk);
+ * }
+ * ```
+ *
+ * `openStream` returns a handle whose lifecycle the caller manages
+ * explicitly via `close()`; `callStream` returns a handle that
+ * auto-closes when the `for await` loop exits. Both share the same
+ * underlying class.
+ */
+export interface StreamHandle extends AsyncIterable<Chunk> {
+  /**
+   * Pull the next chunk synchronously. Returns `null` at end-of-stream.
+   * Throws if the underlying executor surfaces a typed error
+   * (back-pressure drop, peer close, capability denial mid-stream).
+   *
+   * Most consumers should prefer the `for await ... of` form which
+   * routes through `[Symbol.asyncIterator]()`.
+   */
+  next(): Chunk | null;
+
+  /**
+   * Explicitly close the handle. Idempotent. Once closed, all
+   * subsequent `next()` calls return `null`.
+   */
+  close(): void;
+
+  /**
+   * `true` once the handle is drained (closed AND no buffered chunks
+   * remain). Useful for harness assertions.
+   */
+  isDrained(): boolean;
+
+  /**
+   * Engine-assigned sequence count of chunks delivered so far. Bumped
+   * per `next()` returning a chunk; `0` before the first chunk drains.
+   */
+  seqSoFar(): number;
+}
+
+// ---------------------------------------------------------------------------
+// SUBSCRIBE (Phase 2b G6-B)
+// ---------------------------------------------------------------------------
+
+/**
+ * Cursor mode for SUBSCRIBE consumers (G6-A D5-RESOLVED).
+ *
+ * - `latest` — start from the next event published after the
+ *   `onChange` call returns.
+ * - `sequence` — start from engine-assigned sequence number `seq`
+ *   (replay within the bounded retention window: 1000 events OR 24h,
+ *   whichever first).
+ * - `persistent` — engine-managed cursor stored in the G12-E
+ *   SuspensionStore so a re-subscribe across process restart resumes
+ *   from `maxDeliveredSeq + 1`. The `subscriberId` is the persistent
+ *   key.
+ */
+export type SubscribeCursor =
+  | { kind: "latest" }
+  | { kind: "sequence"; seq: number }
+  | { kind: "persistent"; subscriberId: string };
+
+/**
+ * Subscription handle returned by {@link Engine.onChange}.
+ *
+ * Carries the live `active` flag, the matched `pattern`, the
+ * registered `cursor`, and the dedup state machine's current
+ * `maxDeliveredSeq` (D5-RESOLVED — exactly-once at the handler API).
+ *
+ * Drop the handle (or call {@link unsubscribe}) to release the
+ * subscription. The Rust-side `Drop` impl flips the active flag and
+ * de-registers the callback from the engine's change-stream port.
+ */
+export interface Subscription {
+  /** `true` while the subscription is registered with the engine. */
+  readonly active: boolean;
+  /** Pattern the subscription was registered with (event-name glob). */
+  readonly pattern: string;
+  /** Cursor mode at registration time. */
+  readonly cursor: SubscribeCursor;
+  /**
+   * Highest engine-assigned sequence number observed by this
+   * subscription's delivery path. `0` before the first event lands.
+   */
+  readonly maxDeliveredSeq: number;
+  /** Explicitly release the subscription. Idempotent. */
+  unsubscribe(): void;
+}

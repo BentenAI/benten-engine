@@ -99,10 +99,15 @@ pub use subgraph_spec::{
 };
 
 pub mod engine_sandbox;
+pub mod engine_stream;
+pub mod engine_subscribe;
 pub mod engine_wait;
 pub mod system_zones;
 
+pub use benten_eval::chunk_sink::{Chunk, ChunkSink};
 pub use engine_sandbox::{SANDBOX_UNAVAILABLE_ON_WASM_TEXT, SandboxNodeDescription};
+pub use engine_stream::{StreamCursor, StreamHandle};
+pub use engine_subscribe::{OnChangeCallback, SubscribeCursor, Subscription};
 pub use engine_wait::SuspensionOutcome;
 pub use system_zones::SYSTEM_ZONE_PREFIXES;
 
