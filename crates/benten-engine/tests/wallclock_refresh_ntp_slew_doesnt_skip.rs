@@ -1,3 +1,5 @@
+#![allow(unknown_lints, clippy::duration_suboptimal_units)]
+// MSRV 1.91 — Rust 1.95 lint
 //! Phase 2a R3 security — wall-clock NTP slew cannot skip cap refresh
 //! (atk-2 / sec-r1-2).
 //!
