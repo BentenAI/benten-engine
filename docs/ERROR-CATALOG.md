@@ -747,18 +747,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Phase:** 2b
 ## Phase 2b G7-A SANDBOX surface
 
-### E_INV_SANDBOX_DEPTH
-
-<!-- reachability: ignore -->
-
-> **⚠️ Not firing in production yet.** Reserved at Phase 2b G7-A; first firing site lands with G7-B (Inv-4 registration-time check on subgraph nesting).
-
-- **Message:** "SANDBOX nest-depth {actual} exceeds max {max} (Inv-4)"
-- **Context:** `{ node_id: NodeId, actual: number, max: number }`
-- **Fix:** Inv-4 — `AttributionFrame.sandbox_depth: u8` saturating-counter; default max nest 4 (D20-RESOLVED). Flatten the SANDBOX → SANDBOX chain or move logic into a single SANDBOX call. Per D20, the depth INHERITS across CALL boundaries (not reset) so a SANDBOX → CALL → SANDBOX chain still counts cumulatively.
-- **Thrown at:** Registration (Inv-4 structural check on subgraph nesting).
-- **Phase:** 2b G7-B
-- **D21 priority:** Registration-time only (this code does not participate in the runtime severity-priority ordering — runtime depth saturation surfaces as `E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED`).
+<!-- E_INV_SANDBOX_DEPTH: see canonical entry at the Inv-4/Inv-7 G7-B section above -->
 
 ### E_SANDBOX_FUEL_EXHAUSTED
 
@@ -863,17 +852,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** SANDBOX executor (host-fn callback path).
 - **Phase:** 2b G7-A
 
-### E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED
-
-<!-- reachability: ignore -->
-
-> **⚠️ Not firing in production yet.** Reserved at Phase 2b G7-A; first firing site lands with G7-B (Inv-4 runtime depth-counter saturation on `AttributionFrame.sandbox_depth`).
-
-- **Message:** "SANDBOX nested dispatch depth exceeded: max={max}"
-- **Context:** `{ max: u8, actual: u8 }`
-- **Fix:** D20-RESOLVED: `AttributionFrame.sandbox_depth: u8` saturating-counter, INHERITED across CALL boundaries (not reset). Default max nest 4. The counter sits on the AttributionFrame so SANDBOX → CALL → SANDBOX → CALL → SANDBOX chains accumulate cumulatively. Flatten the chain or audit for accidental recursion.
-- **Thrown at:** SANDBOX executor (depth saturation at the inheritance point — distinct from [E_SANDBOX_NESTED_DISPATCH_DENIED] which fires at the dispatch attempt).
-- **Phase:** 2b G7-A / G7-B
+<!-- E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED: see canonical entry at the Inv-4/Inv-7 G7-B section above -->
 
 ### E_MODULE_MANIFEST_CID_MISMATCH
 
