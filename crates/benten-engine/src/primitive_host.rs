@@ -52,6 +52,10 @@ use crate::system_zones::SYSTEM_ZONE_PREFIXES;
 /// drift. Matches the plan's 300-second cadence; exported publicly so
 /// tests can reference the exact constant when constructing a frozen-
 /// clock fixture.
+#[allow(unknown_lints, clippy::duration_suboptimal_units)]
+// Rust 1.95 lint suggests `Duration::from_mins(5)` but `from_mins` was
+// stabilized only in 1.95; workspace MSRV is 1.91. Keeping `from_secs(300)`
+// preserves MSRV compatibility. Drop both allows when MSRV bumps to 1.95.
 pub const WALLCLOCK_REFRESH_CEILING: std::time::Duration = std::time::Duration::from_secs(300);
 
 // ---------------------------------------------------------------------------
