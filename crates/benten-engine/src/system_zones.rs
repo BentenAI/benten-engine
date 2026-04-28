@@ -22,6 +22,12 @@ pub const SYSTEM_ZONE_PREFIXES: &[&str] = &[
     "system:WaitPending",
     "system:WaitResume",
     "system:ModuleManifest",
+    // Phase 2b G10-B: complementary uninstall-side label. Mirrors the
+    // `CapabilityRevocation` ↔ `CapabilityGrant` pairing — uninstall
+    // writes a revocation Node so a Phase-3 sync replica that has only
+    // seen the revocation can still recognize the manifest as
+    // uninstalled.
+    "system:ModuleManifestRevocation",
     // IVM view-id namespace prefix. Entries like `system:ivm:content_listing`
     // resolve into built-in views; the prefix is engine-privileged. Added at
     // G1-A per the workspace drift-scan surfacing it; see §9.10 addendum

@@ -164,6 +164,95 @@ pub fn counting_policy() -> (Box<dyn CapabilityPolicy>, CallCounter) {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 2b G10-B — module-manifest test helpers (D9 + D16)
+// ---------------------------------------------------------------------------
+
+/// Phase 2b G10-B test helper: build a minimal valid [`ModuleManifest`]
+/// keyed by `name`.
+///
+/// The manifest carries one module entry, no migrations, no signature.
+/// Used by `tests/module_install.rs`,
+/// `tests/module_manifest_canonical.rs`, and the cross-crate
+/// integration suite.
+#[cfg(any(test, feature = "test-helpers"))]
+#[must_use]
+pub fn testing_make_minimal_manifest(name: &str) -> crate::module_manifest::ModuleManifest {
+    crate::module_manifest::ModuleManifest {
+        name: name.to_string(),
+        version: "0.0.1".into(),
+        modules: vec![crate::module_manifest::ModuleManifestEntry {
+            name: format!("{name}.handler"),
+            cid: format!("bafy_dummy_module_for_{name}"),
+            requires: vec![],
+        }],
+        migrations: vec![],
+        signature: None,
+    }
+}
+
+/// Phase 2b G10-B test helper: build a [`ModuleManifest`] that requires
+/// the listed `caps` strings on its single module entry.
+///
+/// Used by tests asserting capability propagation + retraction across
+/// install/uninstall cycles.
+#[cfg(any(test, feature = "test-helpers"))]
+#[must_use]
+pub fn testing_make_manifest_with_caps(
+    name: &str,
+    caps: &[&str],
+) -> crate::module_manifest::ModuleManifest {
+    crate::module_manifest::ModuleManifest {
+        name: name.to_string(),
+        version: "0.0.1".into(),
+        modules: vec![crate::module_manifest::ModuleManifestEntry {
+            name: format!("{name}.handler"),
+            cid: format!("bafy_dummy_module_for_{name}"),
+            requires: caps.iter().map(|s| (*s).to_string()).collect(),
+        }],
+        migrations: vec![],
+        signature: None,
+    }
+}
+
+/// Phase 2b G10-B test helper: compute the canonical CID of a manifest.
+///
+/// MUST agree with the CID `Engine::install_module` computes
+/// internally — without that property, the helper would be a lying
+/// oracle and the install-time pin would be untestable. Pinned by
+/// `tests/module_install.rs::install_module_compute_cid_helper_round_trips`.
+///
+/// # Panics
+///
+/// Panics if the manifest fails to encode. Encoding the
+/// [`ModuleManifest`] schema is infallible in practice.
+#[cfg(any(test, feature = "test-helpers"))]
+#[must_use]
+pub fn testing_compute_manifest_cid(
+    manifest: &crate::module_manifest::ModuleManifest,
+) -> benten_core::Cid {
+    manifest
+        .compute_cid()
+        .expect("ModuleManifest canonical-bytes encoding is infallible")
+}
+
+/// Phase 2b G10-B test helper: mint a `Cid` known to differ from any
+/// CID a real manifest would produce.
+///
+/// Used as the "wrong" CID in CID-mismatch tests — pairing this with
+/// `testing_compute_manifest_cid(&m)` guarantees the two values
+/// differ, satisfying the test invariant
+/// `assert_ne!(true_cid, wrong_cid)`.
+#[cfg(any(test, feature = "test-helpers"))]
+#[must_use]
+pub fn testing_make_distinct_dummy_cid() -> benten_core::Cid {
+    // BLAKE3 of a literal that is exceedingly unlikely to collide
+    // with the canonical-bytes encoding of any real ModuleManifest
+    // (the literal is not valid DAG-CBOR for a ModuleManifest).
+    let digest = blake3::hash(b"benten:test:fixture:distinct-dummy-cid:G10-B");
+    benten_core::Cid::from_blake3_digest(*digest.as_bytes())
+}
+
+// ---------------------------------------------------------------------------
 // G11-A Wave 1 / G5-A test helpers — subgraph-bytes round-trip + reput
 // ---------------------------------------------------------------------------
 //

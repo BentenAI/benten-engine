@@ -340,6 +340,13 @@ pub enum ErrorCode {
     /// `Engine::install_module(...)`; reserved here so the catalog string
     /// surface is stable when G10-B lands.
     ModuleManifestCidMismatch,
+    /// Phase 2b G10-B (Compromise #N+8): manifest declares migration
+    /// steps but the install target has no persistent backing store
+    /// (in-memory-only on `wasm32-unknown-unknown`; IndexedDB
+    /// persistence defers to Phase 3). Fires from
+    /// `Engine::install_module(...)` on a wasm32 target when
+    /// `ModuleManifest::migrations` is non-empty.
+    ModuleMigrationsRequirePersistence,
     /// `Engine::open()` failed to parse `engine.toml` from workspace root.
     /// Reserved here for the workspace-config wiring (Ben's G7-A brief
     /// addition): per-deployment override of D24 wallclock defaults +
@@ -502,6 +509,9 @@ impl ErrorCode {
                 "E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED"
             }
             ErrorCode::ModuleManifestCidMismatch => "E_MODULE_MANIFEST_CID_MISMATCH",
+            ErrorCode::ModuleMigrationsRequirePersistence => {
+                "E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE"
+            }
             ErrorCode::EngineConfigInvalid => "E_ENGINE_CONFIG_INVALID",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
@@ -671,6 +681,7 @@ impl ErrorCode {
             | ErrorCode::ProductionRequiresCaps
             | ErrorCode::EngineConfigInvalid
             | ErrorCode::ModuleManifestCidMismatch
+            | ErrorCode::ModuleMigrationsRequirePersistence
             | ErrorCode::SandboxWallclockInvalid => None,
 
             // SUBSCRIBE registration / restart failures — surface at the
@@ -784,6 +795,9 @@ impl ErrorCode {
                 ErrorCode::SandboxNestedDispatchDepthExceeded
             }
             "E_MODULE_MANIFEST_CID_MISMATCH" => ErrorCode::ModuleManifestCidMismatch,
+            "E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE" => {
+                ErrorCode::ModuleMigrationsRequirePersistence
+            }
             "E_ENGINE_CONFIG_INVALID" => ErrorCode::EngineConfigInvalid,
             other => ErrorCode::Unknown(other.to_string()),
         }

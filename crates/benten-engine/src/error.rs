@@ -6,7 +6,7 @@
 //! file it lives in moved.
 
 use benten_caps::CapError;
-use benten_core::CoreError;
+use benten_core::{Cid, CoreError};
 pub use benten_errors::ErrorCode;
 use benten_eval::RegistrationError;
 use benten_graph::GraphError;
@@ -107,6 +107,39 @@ pub enum EngineError {
     #[error("not implemented in Phase 1: {feature}")]
     NotImplemented { feature: &'static str },
 
+    /// Phase 2b G10-B (D16-RESOLVED-FURTHER): the `expected_cid` arg
+    /// passed to [`crate::engine::Engine::install_module`] does not
+    /// match the canonical-DAG-CBOR CID of the manifest. The error
+    /// body carries BOTH CIDs + a 1-line manifest summary so the
+    /// failure is operator-actionable from logs alone (no
+    /// source-code dive required).
+    ///
+    /// Catalog code: `E_MODULE_MANIFEST_CID_MISMATCH`. Closes
+    /// sec-pre-r1-01 (manifest-forge / supply-chain attack class).
+    #[error("module manifest CID mismatch: expected={expected} computed={computed} ({summary})")]
+    ModuleManifestCidMismatch {
+        /// CID the caller passed.
+        expected: Cid,
+        /// CID derived from the manifest's canonical bytes.
+        computed: Cid,
+        /// 1-line manifest summary
+        /// (`<name> v<version> modules=<n> caps=<n>`).
+        summary: String,
+    },
+
+    /// Phase 2b G10-B (Compromise #N+8): the manifest declares
+    /// migration steps but the target has no persistent backing store
+    /// (in-memory-only on `wasm32-unknown-unknown`; IndexedDB
+    /// persistence defers to Phase 3).
+    #[error(
+        "module manifest declares {migration_count} migration(s) but the target has no persistent backing store \
+         (in-memory-only on wasm32-unknown-unknown; IndexedDB defers to Phase 3 — Compromise #N+8)"
+    )]
+    ModuleMigrationsRequirePersistence {
+        /// Number of declared migration steps.
+        migration_count: usize,
+    },
+
     /// Generic wrapped error carrying a stable catalog code.
     #[error("{message}")]
     Other { code: ErrorCode, message: String },
@@ -135,6 +168,10 @@ impl EngineError {
             EngineError::ViewStrategyCReserved { .. } => ErrorCode::ViewStrategyCReserved,
             EngineError::NestedTransactionNotSupported => ErrorCode::NestedTransactionNotSupported,
             EngineError::NotImplemented { .. } => ErrorCode::NotImplemented,
+            EngineError::ModuleManifestCidMismatch { .. } => ErrorCode::ModuleManifestCidMismatch,
+            EngineError::ModuleMigrationsRequirePersistence { .. } => {
+                ErrorCode::ModuleMigrationsRequirePersistence
+            }
             EngineError::Other { code, .. } => code.clone(),
         }
     }

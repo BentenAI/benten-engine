@@ -107,10 +107,16 @@ pub use subgraph_spec::{
     RevokeSubject, SubgraphSpec, SubgraphSpecBuilder, WriteSpec,
 };
 
+pub mod engine_modules;
 pub mod engine_sandbox;
 pub mod engine_stream;
 pub mod engine_subscribe;
 pub mod engine_wait;
+// Phase 2b G10-B — module manifest format (D9-RESOLVED canonical
+// DAG-CBOR; D16-RESOLVED-FURTHER REQUIRED expected_cid arg on
+// `Engine::install_module`). See `module_manifest.rs` for the format
+// spec and `engine_modules.rs` for the install/uninstall lifecycle.
+pub mod module_manifest;
 pub mod system_zones;
 
 pub use benten_eval::chunk_sink::{Chunk, ChunkSink};
@@ -118,6 +124,10 @@ pub use engine_sandbox::{SANDBOX_UNAVAILABLE_ON_WASM_TEXT, SandboxNodeDescriptio
 pub use engine_stream::{StreamCursor, StreamHandle};
 pub use engine_subscribe::{OnChangeCallback, SubscribeCursor, Subscription};
 pub use engine_wait::SuspensionOutcome;
+pub use module_manifest::{
+    ManifestError, ManifestSignature, ManifestSummary, MigrationStep, ModuleManifest,
+    ModuleManifestEntry,
+};
 pub use system_zones::SYSTEM_ZONE_PREFIXES;
 
 // ---------------------------------------------------------------------------

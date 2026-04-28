@@ -856,14 +856,18 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_MODULE_MANIFEST_CID_MISMATCH
 
-<!-- reachability: ignore -->
-
-> **⚠️ Not firing in production yet.** Reserved at Phase 2b G7-A for the G10-B `Engine::install_module(manifest, expected_cid)` surface (per wsa-r1-5 plan-internal conflict resolution G7-C does NOT own this surface; G10-B is the EXCLUSIVE owner).
-
 - **Message:** "Module manifest CID mismatch: expected={expected_cid} computed={computed_cid} summary={manifest_summary}"
 - **Context:** `{ expected_cid: Cid, computed_cid: Cid, manifest_summary: string }`
 - **Fix:** D16-RESOLVED-FURTHER minimal CID-pin integrity gate. `Engine::install_module(manifest, expected_cid: Cid)` REQUIRES the CID arg (not Optional — prevents the lazy `install_module(m, None)` footgun). The error includes both expected + computed CIDs + a 1-line manifest summary so an operator can diff without source-code dive. Either re-compute the expected CID against the actual manifest bytes or audit for tampering. Reserved here for the G10-B `install_module` surface; G7-C does NOT own this fire site (per wsa-r1-5 plan-internal conflict resolution).
 - **Thrown at:** `Engine::install_module` (G10-B).
+- **Phase:** 2b G10-B
+
+### E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE
+
+- **Message:** "module manifest declares N migration(s) but the target has no persistent backing store"
+- **Context:** `{ migration_count: usize }`
+- **Fix:** Compromise #N+8 — browser (`wasm32-unknown-unknown`) engines ship in-memory-only manifest persistence in Phase 2b; the IndexedDB / OPFS persistence story lands in Phase 3. Manifests that declare `migrations` need a durable backing store; the rejection prevents the migration runner from silently dropping work. On native (redb-backed) targets the same manifest installs without error. Either (a) defer the migration to a Phase-3 build with persistent storage, or (b) split the manifest into a migrations-free in-memory variant for Phase-2b browser deployments.
+- **Thrown at:** `Engine::install_module` (G10-B) on `wasm32-unknown-unknown` only.
 - **Phase:** 2b G10-B
 
 ### E_ENGINE_CONFIG_INVALID

@@ -143,6 +143,14 @@ pub(crate) struct EngineInner {
     /// to keep `EngineInner`'s layout cfg-invariant per arch-pre-r1-2 sibling
     /// "no cfg-conditional struct shapes" rule.
     pub(crate) test_iteration_budget: std::sync::Mutex<Option<u64>>,
+    /// Phase 2b G10-B: in-memory active set of installed module manifests
+    /// keyed by their canonical-bytes CID. Mirrored to durable storage
+    /// via the `system:ModuleManifest` zone (see
+    /// [`crate::engine_modules`]). The active set lets the engine answer
+    /// `is_module_installed` and capability-retraction queries without a
+    /// backend round-trip.
+    pub(crate) installed_modules:
+        std::sync::Mutex<std::collections::BTreeMap<Cid, crate::engine_modules::InstalledModule>>,
 }
 
 impl EngineInner {
@@ -166,6 +174,7 @@ impl EngineInner {
             writes_committed_total: std::sync::atomic::AtomicU64::new(0),
             writes_denied_total: std::sync::atomic::AtomicU64::new(0),
             test_iteration_budget: std::sync::Mutex::new(None),
+            installed_modules: std::sync::Mutex::new(std::collections::BTreeMap::new()),
         }
     }
 
@@ -522,6 +531,17 @@ impl Engine {
 
     pub(crate) fn active_call(&self) -> &std::sync::Mutex<Vec<ActiveCall>> {
         &self.active_call
+    }
+
+    /// Phase 2b G10-B accessor — the in-memory active set of installed
+    /// module manifests keyed by canonical-bytes CID. Used by
+    /// [`crate::engine_modules`] for install / uninstall lifecycle
+    /// queries and by tests asserting cap-retraction behavior.
+    pub(crate) fn installed_modules(
+        &self,
+    ) -> &std::sync::Mutex<std::collections::BTreeMap<Cid, crate::engine_modules::InstalledModule>>
+    {
+        &self.inner.installed_modules
     }
 
     /// Phase 2a G5-A / G11-A: monotonic per-engine audit sequence.

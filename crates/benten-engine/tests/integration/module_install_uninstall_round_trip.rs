@@ -1,30 +1,21 @@
-//! Phase 2b R4-FP B-3 — G10-B install/uninstall round-trip 5-row fixture
-//! matrix. Closes plan §1 exit criterion #4.
+//! Phase 2b G10-B — install/uninstall round-trip 5-row fixture matrix.
+//! Closes plan §1 exit criterion #4.
 //!
-//! TDD red-phase. Pin sources:
+//! Pin sources:
 //!   - `.addl/phase-2b/00-implementation-plan.md` §1 exit criterion #4
 //!     (install + uninstall round-trip with `requires`-cap propagation).
-//!   - `r2-test-landscape.md` §2.4
-//!     `module_install_round_trip_5_row_fixture_matrix`.
+//!   - `r2-test-landscape.md` §2.4 `module_install_round_trip_5_row_fixture_matrix`.
 //!
 //! The 5-row matrix exercises the {install, uninstall} cross-product
 //! against a representative spread of manifest shapes (no caps, single
-//! cap, multi-cap, multi-module, cap-overlap with sibling manifest)
-//! so that no single shape monopolizes the pin coverage.
-//!
-//! Owned by R4-FP B-3 (R3-followup); R5 owner G10-B.
+//! cap, multi-cap, multi-module, cap-overlap with sibling manifest).
 
-#![cfg(feature = "phase_2b_landed")]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
-#![allow(unused_imports, dead_code, unused_variables)]
 
-use benten_engine::Engine;
-
-// R5 surfaces consumed (same as module_install.rs unit tests):
-//   benten_engine::Engine::install_module
-//   benten_engine::Engine::uninstall_module
-//   benten_engine::module_manifest::ModuleManifest
-//   benten_engine::testing::testing_compute_manifest_cid
+use benten_engine::testing::{
+    testing_compute_manifest_cid, testing_make_manifest_with_caps, testing_make_minimal_manifest,
+};
+use benten_engine::{Engine, ModuleManifest, ModuleManifestEntry};
 
 fn fresh_engine() -> (tempfile::TempDir, Engine) {
     let dir = tempfile::tempdir().unwrap();
@@ -35,45 +26,142 @@ fn fresh_engine() -> (tempfile::TempDir, Engine) {
     (dir, engine)
 }
 
+fn manifest_multi_module(name: &str, count: usize) -> ModuleManifest {
+    ModuleManifest {
+        name: name.to_string(),
+        version: "0.0.1".into(),
+        modules: (0..count)
+            .map(|i| ModuleManifestEntry {
+                name: format!("{name}.handler{i}"),
+                cid: format!("bafy_dummy_module_for_{name}_{i}"),
+                requires: vec![],
+            })
+            .collect(),
+        migrations: vec![],
+        signature: None,
+    }
+}
+
 #[test]
-#[ignore = "Phase 2b G10-B pending — exit criterion #4 5-row install/uninstall matrix"]
 fn module_install_uninstall_round_trip_5_row_fixture_matrix() {
     // Plan §1 exit criterion #4 — full install/uninstall round-trip
-    // across 5 representative manifest shapes. EACH row MUST:
-    //   (a) install successfully with the matching CID,
-    //   (b) report `is_module_installed(cid) == true` post-install,
-    //   (c) propagate `requires`-cap declarations into the engine's
-    //       active capability set,
-    //   (d) uninstall successfully,
-    //   (e) report `is_module_installed(cid) == false` post-uninstall,
-    //   (f) retract the `requires`-cap declarations from the active set
-    //       (subject to the multi-manifest cap-overlap rule -- see row 5).
-    //
-    // The 5 rows:
-    //   Row 1: empty-caps, single-module
-    //   Row 2: single-cap, single-module ("host:compute:time")
-    //   Row 3: multi-cap, single-module ("host:compute:time" + "host:fs:read")
-    //   Row 4: empty-caps, multi-module (3 modules, no caps)
-    //   Row 5: multi-cap + cap-OVERLAP with a sibling manifest already
-    //          installed -- uninstalling row 5 must NOT retract caps that
-    //          a sibling manifest still requires.
-    //
-    // R5 G10-B wires the row table + driver loop. Suggested table:
-    //   let rows: [(&str, Vec<&str>, usize); 5] = [
-    //     ("empty.caps.single", vec![], 1),
-    //     ("single.cap.single", vec!["host:compute:time"], 1),
-    //     ("multi.cap.single", vec!["host:compute:time", "host:fs:read"], 1),
-    //     ("empty.caps.multi", vec![], 3),
-    //     ("multi.cap.overlap.sibling", vec!["host:compute:time"], 1),
-    //   ];
-    //
-    // For row 5, install a separately-named sibling manifest that ALSO
-    // requires "host:compute:time" BEFORE the row-5 install/uninstall;
-    // assert the sibling's cap declaration survives the row-5 uninstall.
-    let (_dir, mut engine) = fresh_engine();
-    let _ = &mut engine; // suppress unused warning until R5 wires the driver
-    todo!(
-        "R5 G10-B — drive 5-row install/uninstall fixture matrix per exit \
-         criterion #4 (install + cap-propagation + uninstall + cap-retraction)"
+    // across 5 representative manifest shapes.
+    let (_dir, engine) = fresh_engine();
+
+    // Pre-install a sibling manifest used by Row 5's cap-overlap case.
+    // The sibling requires "host:compute:time" — when Row 5 also
+    // requires it, uninstalling Row 5 MUST NOT retract the cap (the
+    // sibling still declares it).
+    let sibling = testing_make_manifest_with_caps("acme.sibling", &["host:compute:time"]);
+    let sibling_cid = testing_compute_manifest_cid(&sibling);
+    engine.install_module(sibling.clone(), sibling_cid).unwrap();
+
+    // Each row: (label, manifest, expected-cap-set-on-the-manifest).
+    let rows: Vec<(&'static str, ModuleManifest, Vec<&'static str>)> = vec![
+        // Row 1: empty-caps, single-module
+        (
+            "empty.caps.single",
+            testing_make_minimal_manifest("row1.empty"),
+            vec![],
+        ),
+        // Row 2: single-cap, single-module
+        (
+            "single.cap.single",
+            testing_make_manifest_with_caps("row2.single", &["host:compute:time"]),
+            vec!["host:compute:time"],
+        ),
+        // Row 3: multi-cap, single-module
+        (
+            "multi.cap.single",
+            testing_make_manifest_with_caps("row3.multi", &["host:compute:time", "host:fs:read"]),
+            vec!["host:compute:time", "host:fs:read"],
+        ),
+        // Row 4: empty-caps, multi-module (3 modules, no caps)
+        (
+            "empty.caps.multi",
+            manifest_multi_module("row4.multimod", 3),
+            vec![],
+        ),
+        // Row 5: multi-cap + cap-OVERLAP with the sibling already installed
+        (
+            "multi.cap.overlap.sibling",
+            testing_make_manifest_with_caps("row5.overlap", &["host:compute:time"]),
+            vec!["host:compute:time"],
+        ),
+    ];
+
+    for (label, manifest, expected_caps) in rows {
+        let cid = testing_compute_manifest_cid(&manifest);
+
+        // (a) install with matching CID
+        let installed = engine
+            .install_module(manifest.clone(), cid)
+            .unwrap_or_else(|e| panic!("[{label}] install must succeed: {e}"));
+        assert_eq!(installed, cid, "[{label}] returned CID matches");
+
+        // (b) is_module_installed reports true
+        assert!(
+            engine.is_module_installed(&cid),
+            "[{label}] post-install, is_module_installed must report true"
+        );
+
+        // (c) caps propagated into the active set
+        let active = engine.active_module_capabilities();
+        for cap in &expected_caps {
+            assert!(
+                active.contains(*cap),
+                "[{label}] post-install, active caps must contain {cap}; got {active:?}"
+            );
+        }
+
+        // (d) uninstall succeeds
+        engine
+            .uninstall_module(cid)
+            .unwrap_or_else(|e| panic!("[{label}] uninstall must succeed: {e}"));
+
+        // (e) is_module_installed reports false
+        assert!(
+            !engine.is_module_installed(&cid),
+            "[{label}] post-uninstall, is_module_installed must report false"
+        );
+
+        // (f) caps retracted UNLESS the sibling manifest still requires them.
+        let active_after = engine.active_module_capabilities();
+        for cap in &expected_caps {
+            // Row 5 overlaps with sibling on host:compute:time — cap survives.
+            let sibling_still_requires = sibling
+                .modules
+                .iter()
+                .any(|m| m.requires.iter().any(|r| r == cap));
+            if sibling_still_requires {
+                assert!(
+                    active_after.contains(*cap),
+                    "[{label}] cap-overlap rule: sibling still requires {cap}; \
+                     it MUST survive uninstall; got {active_after:?}"
+                );
+            } else {
+                assert!(
+                    !active_after.contains(*cap),
+                    "[{label}] post-uninstall, cap {cap} must be retracted; got {active_after:?}"
+                );
+            }
+        }
+    }
+
+    // Sanity: sibling manifest is still installed and its cap is still active.
+    assert!(engine.is_module_installed(&sibling_cid));
+    assert!(
+        engine
+            .active_module_capabilities()
+            .contains("host:compute:time")
+    );
+
+    // Cleanup: uninstall sibling, cap retracts entirely.
+    engine.uninstall_module(sibling_cid).unwrap();
+    assert!(!engine.is_module_installed(&sibling_cid));
+    assert!(
+        !engine
+            .active_module_capabilities()
+            .contains("host:compute:time")
     );
 }

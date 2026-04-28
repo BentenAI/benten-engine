@@ -74,14 +74,11 @@ mod integration {
     pub mod browser_target_bundle_size; // wasm-r1-7 (≤500KB gz cap)
     #[cfg(feature = "phase_2b_landed")]
     pub mod cross_process_wait_resume; // G12-E + Compromise #9 closure
-    #[cfg(feature = "phase_2b_landed")]
+    // G10-B landed (R5 wave-5 — Phase 2b): un-gated below.
     pub mod install_module_rejects_cid_mismatch; // G10-B + D16 dual-CID error
     // R4-FP B-3 (R3-followup) — G10-B install/uninstall integration suite:
-    #[cfg(feature = "phase_2b_landed")]
     pub mod module_install_in_memory_only_in_browser; // r1-wasm-target G10-B
-    #[cfg(feature = "phase_2b_landed")]
     pub mod module_install_uninstall_round_trip; // exit criterion #4 5-row matrix
-    #[cfg(feature = "phase_2b_landed")]
     pub mod module_uninstall_releases_capabilities; // cap-retraction integration
     #[cfg(feature = "phase_2b_landed")]
     pub mod sandbox_compile_time_disabled_on_wasm32; // sec-pre-r1-05 + wasm-r1-3
