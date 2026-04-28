@@ -93,6 +93,7 @@ export type {
   SuspensionResult,
   Trace,
   TraceStep,
+  TraceStepUnknown,
   UserView,
   UserViewInputPattern,
   UserViewSpec,

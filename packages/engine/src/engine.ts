@@ -29,6 +29,7 @@ import {
   EDslUnregisteredHandler,
   mapNativeError,
 } from "./errors.js";
+import { mapTraceStep } from "./internal/trace.js";
 import { toMermaid } from "./mermaid.js";
 import {
   validateStreamCallArgs,
@@ -43,7 +44,6 @@ import {
   type OnChangeCallback,
 } from "./subscribe.js";
 import type {
-  AttributionFrame,
   CapabilityGrant,
   Chunk,
   Edge,
@@ -257,70 +257,17 @@ function toNativePayload(
 }
 
 // ---------------------------------------------------------------------------
-// TraceStep projection — Phase 2a G11-A Wave 2b unification
+// TraceStep projection — Phase 2a G11-A Wave 2b unification, Phase-2b
+// G12-F D14-RESOLVED warning-passthrough.
+//
+// The actual `mapTraceStep` implementation lives in
+// `./internal/trace.ts` so the unit-test surface (mapTraceStepForTest +
+// resetUnknownDiscriminantWarningsForTest) and the production
+// engine-wrapper consumer share exactly one code path. A prior
+// loud-fail default branch lived here; per D14 it is replaced by the
+// typed `TraceStepUnknown` warning-passthrough projection in the
+// internal module.
 // ---------------------------------------------------------------------------
-
-function readAttribution(raw: unknown): AttributionFrame | undefined {
-  if (raw === null || typeof raw !== "object") return undefined;
-  const r = raw as Record<string, unknown>;
-  const actorCid = typeof r.actorCid === "string" ? r.actorCid : undefined;
-  const handlerCid = typeof r.handlerCid === "string" ? r.handlerCid : undefined;
-  const capabilityGrantCid =
-    typeof r.capabilityGrantCid === "string" ? r.capabilityGrantCid : undefined;
-  if (!actorCid || !handlerCid || !capabilityGrantCid) return undefined;
-  return { actorCid, handlerCid, capabilityGrantCid };
-}
-
-function mapTraceStep(s: Record<string, unknown>): TraceStep {
-  const t = typeof s.type === "string" ? s.type : "primitive";
-  switch (t) {
-    case "suspend_boundary":
-      return {
-        type: "suspend_boundary",
-        stateCid: String(s.stateCid ?? ""),
-      };
-    case "resume_boundary":
-      return {
-        type: "resume_boundary",
-        stateCid: String(s.stateCid ?? ""),
-        signalValue: (s.signalValue ?? null) as JsonValue,
-      };
-    case "budget_exhausted":
-      return {
-        type: "budget_exhausted",
-        budgetType: String(s.budgetType ?? ""),
-        consumed: Number(s.consumed ?? 0),
-        limit: Number(s.limit ?? 0),
-        path: Array.isArray(s.path) ? (s.path as unknown[]).map(String) : [],
-      };
-    case "primitive":
-      return {
-        type: "primitive",
-        nodeCid: String(s.nodeCid ?? ""),
-        primitive: String(s.primitive ?? ""),
-        // Native durationUs is an integer microsecond reading; a genuine
-        // zero is possible for ultra-fast steps. The trace contract
-        // asserts `> 0`; fall back to 1 to keep the contract honest
-        // without lying about timing (the step DID execute).
-        durationUs: Math.max(1, Number(s.durationUs ?? 0)),
-        nodeId: String(s.nodeId ?? ""),
-        inputs: s.inputs as JsonValue,
-        outputs: s.outputs as JsonValue,
-        error: typeof s.error === "string" ? s.error : undefined,
-        attribution: readAttribution(s.attribution),
-      };
-    default:
-      // Wave-2b mini-review M1: an unknown discriminant from a newer native
-      // binding indicates a wrapper-version mismatch. Failing loudly here
-      // is preferable to silently downgrading the row to a default-shaped
-      // "primitive" (which masquerades unknown variants as primitive steps
-      // with empty fields). When a Phase-2b variant lands, callers update
-      // both the native binding and this wrapper together.
-      throw new Error(
-        `Unknown TraceStep discriminant "${t}" — @benten/engine is older than the native binding it's reading. Update @benten/engine to a version that knows this variant.`,
-      );
-  }
-}
 
 // ---------------------------------------------------------------------------
 // RegisteredHandler factory

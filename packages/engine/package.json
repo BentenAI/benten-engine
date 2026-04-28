@@ -13,6 +13,10 @@
     "./errors": {
       "types": "./dist/errors.d.ts",
       "import": "./dist/errors.js"
+    },
+    "./internal/trace": {
+      "types": "./dist/internal/trace.d.ts",
+      "default": "./dist/internal/trace.js"
     }
   },
   "files": [
