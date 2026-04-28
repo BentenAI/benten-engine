@@ -58,6 +58,7 @@ export const CATALOG_CODES = [
   "E_SANDBOX_OUTPUT_LIMIT",
   "E_INV_SANDBOX_DEPTH",
   "E_INV_SANDBOX_OUTPUT",
+  "E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED",
   "E_IVM_VIEW_STALE",
   "E_TX_ABORTED",
   "E_NESTED_TRANSACTION_NOT_SUPPORTED",
@@ -491,6 +492,21 @@ export class EInvSandboxOutput extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_INV_SANDBOX_OUTPUT", "Reduce output emitted by the SANDBOX module's host-fn calls (or the primitive return value). D15 trap-loudly default — there is no opt-in silent-truncation flag. Use STREAM for progressive output if the workload genuinely needs unbounded byte volume.", message, context);
     this.name = "EInvSandboxOutput";
+  }
+}
+
+/**
+ * E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED
+ *
+ * Thrown at: Evaluation (saturation point at the SANDBOX entry — the counter-saturation check fires before the inner subgraph starts executing).
+ * Message template: "SANDBOX nested-dispatch depth saturated at {depth} (configured max {max})"
+ */
+export class ESandboxNestedDispatchDepthExceeded extends BentenError {
+  static readonly code = "E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED";
+  static readonly fixHint = "SANDBOX nest-depth saturation overflow distinct from `E_INV_SANDBOX_DEPTH`. Two saturation paths fire this code: the `sandbox_depth: u8` counter saturates at `u8::MAX` (type-level ceiling — extremely deep CALL chains) and the configured `max_sandbox_nest_depth` boundary (capability-grant ceiling). Either case fires this typed error rather than wrapping silently. Reduce nesting per the same guidance as `E_INV_SANDBOX_DEPTH`; if hitting the u8 ceiling, the call topology is almost certainly accidentally recursive and needs structural redesign rather than a higher cap.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED", "SANDBOX nest-depth saturation overflow distinct from `E_INV_SANDBOX_DEPTH`. Two saturation paths fire this code: the `sandbox_depth: u8` counter saturates at `u8::MAX` (type-level ceiling — extremely deep CALL chains) and the configured `max_sandbox_nest_depth` boundary (capability-grant ceiling). Either case fires this typed error rather than wrapping silently. Reduce nesting per the same guidance as `E_INV_SANDBOX_DEPTH`; if hitting the u8 ceiling, the call topology is almost certainly accidentally recursive and needs structural redesign rather than a higher cap.", message, context);
+    this.name = "ESandboxNestedDispatchDepthExceeded";
   }
 }
 
