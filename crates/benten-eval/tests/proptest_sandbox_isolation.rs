@@ -33,7 +33,7 @@ proptest! {
     /// per-call Store + Instance lifecycle being the explicit default,
     /// this test fires.
     #[test]
-    #[ignore = "Phase 2b G7-A pending — no-state-persists property"]
+    #[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — no-state-persists property"]
     fn prop_sandbox_no_module_state_persists_across_calls(
         init_value in any::<i32>(),
         set_values in proptest::collection::vec(any::<i32>(), 1..20),
@@ -54,7 +54,7 @@ proptest! {
         // (rust-test-reviewer.json tq-2b-3).
         prop_assert!(
             false,
-            "Phase 2b G7-A pending: write no-state-persists-across-calls \
+            "Phase 2b G7-C pending (PR #33 engine integration): write no-state-persists-across-calls \
              property body (replace this prop_assert!(false) with the \
              read-after-set assertion described in the file pseudo)."
         );

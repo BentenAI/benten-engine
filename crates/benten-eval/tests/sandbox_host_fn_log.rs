@@ -7,7 +7,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D1 log host-fn byte-volume cap"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D1 log host-fn byte-volume cap"]
 fn sandbox_host_fn_log_respects_byte_volume_cap_64kb() {
     // D1 + sec-pre-r1-06 §2.2 — `log` host-fn declared with
     //   behavior = { kind = "log_sink", per_call_byte_cap = 65536 }

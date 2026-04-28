@@ -9,7 +9,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D7 init-time intersection"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D7 init-time intersection"]
 fn sandbox_host_fn_capability_intersection_at_init() {
     // Plan §3 G7-A — at SANDBOX entry, the engine snapshots the
     // dispatching grant's cap-set AND intersects with the manifest's
@@ -24,7 +24,7 @@ fn sandbox_host_fn_capability_intersection_at_init() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D18 per_call recheck for kv:read"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D18 per_call recheck for kv:read"]
 fn sandbox_host_fn_per_call_recheck_after_revoke_for_kv_read() {
     // D18-RESOLVED — `kv:read` declared `cap_recheck = "per_call"` in
     // host-functions.toml (sensitive — mutation/network/cross-tenant
@@ -41,7 +41,7 @@ fn sandbox_host_fn_per_call_recheck_after_revoke_for_kv_read() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D18 per_boundary recheck for time/log"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D18 per_boundary recheck for time/log"]
 fn sandbox_host_fn_per_boundary_recheck_for_time_log() {
     // D18-RESOLVED — `time` and `log` declared `cap_recheck = "per_boundary"`
     // in host-functions.toml (cheap, output-bounded, idempotent reads
@@ -62,7 +62,7 @@ fn sandbox_host_fn_per_boundary_recheck_for_time_log() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — wsa D18 fail-secure default"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — wsa D18 fail-secure default"]
 fn sandbox_host_fn_undeclared_cap_recheck_defaults_to_per_call() {
     // wsa D18 — UNDECLARED `cap_recheck` field defaults to `per_call`
     // (fail-secure). Regression guard: a host-fn TOML entry without
@@ -76,7 +76,7 @@ fn sandbox_host_fn_undeclared_cap_recheck_defaults_to_per_call() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — sec-r1 D7 typed-error not trap"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — sec-r1 D7 typed-error not trap"]
 fn sandbox_host_fn_denied_routes_typed_error_not_trap() {
     // sec-r1 D7 — when a host-fn cap check fails, the engine surfaces
     // E_SANDBOX_HOST_FN_DENIED as a typed error THROUGH the host-fn

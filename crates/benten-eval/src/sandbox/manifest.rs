@@ -25,7 +25,7 @@
 //! returns `Err(ManifestError::Unknown { .. })`. There is NO permissive
 //! fall-through to a default manifest.
 
-use benten_core::{Cid, CoreError};
+use benten_core::Cid;
 use benten_errors::ErrorCode;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -45,31 +45,70 @@ pub struct CapBundle {
     /// in dev-time TOML only, populated at codegen time).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// **sec-g7a-mr-3 fix-pass: D9 signed-manifest reservation.** Phase 3
+    /// will lift the deferral by populating this field with an Ed25519
+    /// signature over the unsigned canonical bytes. In Phase 2b this is
+    /// ALWAYS `None`; the canonical-bytes encoder ([`Self::canonical_bytes`])
+    /// explicitly omits the field when `None` so the unsigned-bundle CID
+    /// is structurally guaranteed to remain CID-stable across the
+    /// Phase-3 lift (the field added to the encoded map only when
+    /// `Some(_)`). Test pin: `signed_manifest_reservation_cid_stable_when_unsigned`
+    /// (in this module's `tests` mod) asserts hand-built unsigned-bundle
+    /// bytes equal the canonical-bytes output for an `Option::None`
+    /// `signature`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<ManifestSignature>,
 }
 
 impl CapBundle {
     /// Construct a bundle from a sorted, deduplicated list of cap-strings.
     /// Caller is responsible for the sort + dedup invariant; the codegen
-    /// path enforces it at build time.
+    /// path enforces it at build time. The reserved `signature` field is
+    /// always initialised to `None` (Phase-2b semantics — see
+    /// [`Self::signature`] doc).
     #[must_use]
     pub fn new(caps: Vec<String>, description: Option<String>) -> Self {
-        Self { caps, description }
+        Self {
+            caps,
+            description,
+            signature: None,
+        }
     }
 
     /// Return the canonical DAG-CBOR bytes for this bundle (per D9).
     ///
-    /// Encoding shape: `BTreeMap<String, Vec<String>>` with single key
-    /// `"caps"` bound to the sorted cap-strings list. The
-    /// `description` and reserved `signature` fields are NOT part of
-    /// canonical bytes.
+    /// Encoding shape (sec-g7a-mr-3 fix-pass): `BTreeMap<&str, ...>` with
+    /// key `"caps"` bound to the sorted cap-strings list ALWAYS, plus
+    /// key `"signature"` bound to the signature bytes ONLY when
+    /// `self.signature.is_some()`. The `description` field is NEVER part
+    /// of canonical bytes (dev-only). The skip-when-None discipline for
+    /// `signature` is what guarantees CID-stability of unsigned bundles
+    /// across the Phase-3 lift: an unsigned bundle's bytes after the
+    /// lift will be byte-identical to its bytes today (test pin
+    /// `signed_manifest_reservation_cid_stable_when_unsigned` in this
+    /// module's `tests` mod).
     ///
     /// # Errors
     /// Returns `Err(ManifestError::Encode { .. })` on DAG-CBOR encode
     /// failure.
     pub fn canonical_bytes(&self) -> Result<Vec<u8>, ManifestError> {
-        let mut map: BTreeMap<&str, &Vec<String>> = BTreeMap::new();
-        map.insert("caps", &self.caps);
-        serde_ipld_dagcbor::to_vec(&map).map_err(|e| ManifestError::Encode {
+        // Use a typed wrapper so the encoder honours the same canonical
+        // discipline (sorted keys + skip-when-None) as the rest of the
+        // workspace's DAG-CBOR encoders. `BTreeMap<&str, ...>` here cannot
+        // hold heterogeneous value types so we hand-build via two
+        // serialize paths and union the bytes — the simpler approach is
+        // a dedicated typed shape.
+        #[derive(Serialize)]
+        struct Canonical<'a> {
+            caps: &'a Vec<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            signature: Option<&'a ManifestSignature>,
+        }
+        let canon = Canonical {
+            caps: &self.caps,
+            signature: self.signature.as_ref(),
+        };
+        serde_ipld_dagcbor::to_vec(&canon).map_err(|e| ManifestError::Encode {
             reason: e.to_string(),
         })
     }
@@ -130,13 +169,13 @@ impl ManifestError {
     }
 }
 
-impl From<CoreError> for ManifestError {
-    fn from(e: CoreError) -> Self {
-        ManifestError::Encode {
-            reason: e.to_string(),
-        }
-    }
-}
+// sec-g7a-mr-9 fix-pass: dropped `impl From<CoreError> for ManifestError`.
+// The conversion was unused (no `?`-propagation site exists today) and
+// collapsed all `CoreError` variants into `ManifestError::Encode` —
+// losing fidelity for invariant-class vs I/O-class CoreErrors. Fresh
+// project — no deprecated aliases per CLAUDE.md non-negotiable rule 5.
+// When a real caller arises, that caller will own the variant-aware
+// mapping.
 
 /// Codegen-emitted default manifest table.
 ///
@@ -349,5 +388,65 @@ mod tests {
                 "manifest {name} caps must be sorted-canonical for DAG-CBOR stability"
             );
         }
+    }
+
+    /// **sec-g7a-mr-3 fix-pass:** unsigned-bundle CID stability across
+    /// the Phase-3 signed-manifest lift.
+    ///
+    /// The encoder's `skip_serializing_if = "Option::is_none"` discipline
+    /// for `signature` is what guarantees that an unsigned bundle's
+    /// canonical bytes today equal its canonical bytes after Phase-3
+    /// adds signed bundles. This test pins the property by hand-encoding
+    /// the same shape WITHOUT the signature field and asserting the
+    /// bytes are identical to what `canonical_bytes()` produces for an
+    /// unsigned bundle. If a future refactor accidentally serialises
+    /// `Some(empty)` or `null` for the unsigned case the test fires.
+    #[test]
+    fn signed_manifest_reservation_cid_stable_when_unsigned() {
+        let bundle = CapBundle::new(
+            vec![
+                "host:compute:log".to_string(),
+                "host:compute:time".to_string(),
+            ],
+            None,
+        );
+        assert!(bundle.signature.is_none(), "Phase-2b CapBundle is unsigned");
+
+        // Hand-encode the EQUIVALENT shape with NO signature field at
+        // all, mimicking what the canonical encoder must produce when
+        // signature is None.
+        #[derive(Serialize)]
+        struct Unsigned<'a> {
+            caps: &'a Vec<String>,
+        }
+        let hand = Unsigned { caps: &bundle.caps };
+        let hand_bytes = serde_ipld_dagcbor::to_vec(&hand).unwrap();
+
+        let real_bytes = bundle.canonical_bytes().unwrap();
+        assert_eq!(
+            real_bytes, hand_bytes,
+            "unsigned CapBundle canonical-bytes MUST omit the signature \
+             field entirely so the CID stays stable across Phase-3 \
+             signed-manifest lift (sec-g7a-mr-3)"
+        );
+    }
+
+    /// **sec-g7a-mr-3 reinforcement:** signed bundle bytes are
+    /// distinguishable from unsigned bundle bytes (CID changes with
+    /// signature).
+    #[test]
+    fn signed_manifest_bytes_differ_from_unsigned() {
+        let unsigned = CapBundle::new(vec!["host:compute:time".to_string()], None);
+        let mut signed = unsigned.clone();
+        signed.signature = Some(ManifestSignature {
+            bytes: vec![0x42; 64],
+        });
+        let unsigned_bytes = unsigned.canonical_bytes().unwrap();
+        let signed_bytes = signed.canonical_bytes().unwrap();
+        assert_ne!(
+            unsigned_bytes, signed_bytes,
+            "signed CapBundle MUST produce distinct canonical bytes \
+             (different CID) from the same caps unsigned"
+        );
     }
 }

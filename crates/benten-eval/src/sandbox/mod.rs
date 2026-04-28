@@ -42,6 +42,7 @@ pub use host_fns::{
     CapAllowlist, CapRecheckPolicy, HostFnBehavior, HostFnContext, HostFnReturn, HostFnSpec,
     RESERVED_HOST_ASYNC_CAP, default_host_fns, host_fn_names,
 };
+pub use instance::{module_cache_size, module_for_bytes, shared_engine};
 pub use manifest::{
     CapBundle, ManifestError, ManifestRef, ManifestRegistry, ManifestSignature,
     default_manifest_names, default_manifests,
@@ -53,6 +54,6 @@ pub use manifest::{
 // tests) will mostly want `crate::sandbox::Sandbox` shorthand.
 pub use crate::primitives::sandbox as primitives_sandbox;
 pub use crate::primitives::sandbox::{
-    SandboxConfig, SandboxError, SandboxResult, WALLCLOCK_DEFAULT_MS, WALLCLOCK_MAX_MS, execute,
-    resolve_priority,
+    DEFERRED_HOST_FN_RANDOM_CAP_PREFIX, SandboxConfig, SandboxError, SandboxResult,
+    WALLCLOCK_DEFAULT_MS, WALLCLOCK_MAX_MS, execute, resolve_priority,
 };

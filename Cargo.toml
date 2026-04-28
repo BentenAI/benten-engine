@@ -276,7 +276,14 @@ uhlc = "0.2"
 # though no async host-fn ships in 2b). `wat` parsing for tests lives in
 # the sibling `wat` crate (separate dev-dep) — D26 commits pre-built
 # `.wasm` for prod fixtures; `wat::parse_str` is dev-time-only.
-wasmtime = { version = "40", default-features = false, features = ["runtime", "cranelift", "std", "cache", "parallel-compilation", "async"] }
+# wsa-g7a-mr-1 fix-pass: dropped `cache` feature (persistent on-disk module
+# cache duplicative with in-memory MODULE_CACHE in `instance.rs`; conflicts
+# with D3-RESOLVED 'no cross-call state retention by construction').
+# perf-g7a-mr-4 fix-pass: dropped `parallel-compilation` (rayon overhead
+# on the cold-start path is unmeasured + no Phase-2b consumer needs
+# cross-thread compile parallelism — single-flight Mutex on MODULE_CACHE
+# already serializes per-CID compile).
+wasmtime = { version = "40", default-features = false, features = ["runtime", "cranelift", "std", "async"] }
 # `wat` — sibling crate to wasmtime; pin to its current minor. Used by
 # the SANDBOX unit tests + integration tests to author wasm fixtures
 # from `.wat` source (dev-time-only; prod ships pre-built `.wasm`).

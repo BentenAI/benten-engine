@@ -12,7 +12,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — sec-pre-r1-03 attribution threading"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — sec-pre-r1-03 attribution threading"]
 fn sandbox_attribution_frame_threads_through_host_fn() {
     // sec-pre-r1-03 — register a SANDBOX module that calls `log` once;
     // the engine's host-fn audit trail records the

@@ -24,7 +24,7 @@
 //   benten_errors::ErrorCode::SandboxHostFnDenied
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D7 hybrid per-call live check + D18 per_call"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D7 hybrid per-call live check + D18 per_call"]
 fn sandbox_host_fn_capability_revoked_mid_execution_denies_subsequent() {
     // wsa-2 + sec-pre-r1-02 — the load-bearing TOCTOU test.
     //

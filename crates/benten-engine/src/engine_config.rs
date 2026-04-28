@@ -16,11 +16,24 @@
 //! built-in default (D24-RESOLVED: 30s default / 5min ceiling)
 //! ```
 //!
-//! Per-handler clamps to engine.toml ceiling (the per-handler value
-//! cannot exceed `wallclock_max_ms`). Engine.toml ceiling clamps to no
-//! upper bound — operators who want to relax beyond the built-in 5min
-//! can do so by setting a higher `wallclock_max_ms` value, accepting
-//! the security tradeoff.
+//! Per-handler **rejects** (NOT clamps) when above the engine.toml
+//! ceiling — fail-loud (wsa-g7a-mr-3 + sec-g7a-mr-6 fix-pass: a
+//! mis-configured handler should learn at validate-time rather than
+//! run silently with a tighter-than-intended budget). The
+//! `validate_per_handler_wallclock` method returns
+//! `E_SANDBOX_WALLCLOCK_INVALID` for over-ceiling values.
+//!
+//! **wsa-g7a-mr-4 fix-pass:** the engine.toml `wallclock_max_ms`
+//! override is itself bounded by [`ENGINE_TOML_WALLCLOCK_MAX_HARD_CAP`]
+//! (1 hour). Operators may still relax beyond the built-in 5min D24
+//! ceiling by setting a higher `wallclock_max_ms`, but values above
+//! the hard cap fire `E_ENGINE_CONFIG_INVALID` at load time. This
+//! prevents an operator from accidentally setting `wallclock_max_ms
+//! = 86_400_000` (24h) and discovering at incident-response time that
+//! a single SANDBOX call held a worker for 24h. A startup-warning is
+//! ALSO logged via `tracing::warn!` when the relaxed ceiling exceeds
+//! the D24 built-in (5min) so operators see they have widened the
+//! security boundary.
 //!
 //! ## File format
 //!
@@ -53,6 +66,15 @@ use std::path::{Path, PathBuf};
 // Re-export the D24 constants so `engine.toml` precedence chain has a
 // single naming source.
 pub use benten_eval::sandbox::{WALLCLOCK_DEFAULT_MS, WALLCLOCK_MAX_MS};
+
+/// **wsa-g7a-mr-4 fix-pass:** hard upper bound on the
+/// `wallclock_max_ms` engine.toml override (1 hour = 3_600_000 ms).
+/// Operators may relax the ceiling beyond the D24 built-in (5min) up
+/// to this cap; values above this fire `E_ENGINE_CONFIG_INVALID` at
+/// `EngineConfig::load_or_default` time. The hard cap exists so a
+/// typoed `wallclock_max_ms = 86_400_000` (24h) cannot silently
+/// authorise a 24-hour-long SANDBOX call.
+pub const ENGINE_TOML_WALLCLOCK_MAX_HARD_CAP: u64 = 60 * 60 * 1000;
 
 /// Workspace-level engine configuration. Loaded from `engine.toml` at
 /// workspace root via [`Self::load_or_default`].
@@ -90,17 +112,45 @@ impl EngineConfig {
     /// reason.
     pub fn load_or_default(workspace_root: &Path) -> Result<Self, EngineConfigError> {
         let path = workspace_root.join("engine.toml");
-        match std::fs::read_to_string(&path) {
+        let parsed: Self = match std::fs::read_to_string(&path) {
             Ok(text) => toml::from_str::<Self>(&text).map_err(|e| EngineConfigError::Parse {
                 path: path.clone(),
                 reason: e.to_string(),
-            }),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
-            Err(e) => Err(EngineConfigError::Io {
-                path,
-                reason: e.to_string(),
-            }),
+            })?,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Self::default()),
+            Err(e) => {
+                return Err(EngineConfigError::Io {
+                    path,
+                    reason: e.to_string(),
+                });
+            }
+        };
+        // wsa-g7a-mr-4 fix-pass — enforce the hard cap on the relaxed
+        // wallclock ceiling AND warn-on-startup when above the D24
+        // built-in.
+        if let Some(v) = parsed.sandbox.wallclock_max_ms {
+            if v > ENGINE_TOML_WALLCLOCK_MAX_HARD_CAP {
+                return Err(EngineConfigError::Parse {
+                    path: path.clone(),
+                    reason: format!(
+                        "engine.toml [sandbox] wallclock_max_ms = {v} exceeds the hard cap \
+                         {ENGINE_TOML_WALLCLOCK_MAX_HARD_CAP} ms (1 hour). Set a value at or below \
+                         the hard cap; values above this risk holding a SANDBOX worker for an \
+                         excessive period."
+                    ),
+                });
+            }
+            if v > WALLCLOCK_MAX_MS {
+                tracing::warn!(
+                    target: "benten_engine::engine_config",
+                    relaxed_ceiling_ms = v,
+                    builtin_ceiling_ms = WALLCLOCK_MAX_MS,
+                    "engine.toml [sandbox] wallclock_max_ms relaxes the D24 built-in ceiling \
+                     ({WALLCLOCK_MAX_MS} ms = 5min) — operator security boundary widened.",
+                );
+            }
         }
+        Ok(parsed)
     }
 
     /// Effective default wallclock — `engine.toml` override OR D24 built-in.
@@ -249,6 +299,34 @@ mod tests {
         let cfg = EngineConfig::default();
         let v = cfg.validate_per_handler_wallclock(None).unwrap();
         assert_eq!(v, WALLCLOCK_DEFAULT_MS);
+    }
+
+    #[test]
+    fn wsa_g7a_mr_4_engine_toml_above_hard_cap_rejected() {
+        // wsa-g7a-mr-4 fix-pass — wallclock_max_ms above the 1h hard
+        // cap fires E_ENGINE_CONFIG_INVALID at load time.
+        let dir = TempDir::new().expect("temp dir");
+        std::fs::write(
+            dir.path().join("engine.toml"),
+            "[sandbox]\nwallclock_max_ms = 86400000\n", // 24h
+        )
+        .expect("write");
+        let err = EngineConfig::load_or_default(dir.path()).unwrap_err();
+        assert_eq!(err.code(), ErrorCode::EngineConfigInvalid);
+    }
+
+    #[test]
+    fn wsa_g7a_mr_4_engine_toml_at_hard_cap_accepted() {
+        // wsa-g7a-mr-4 fix-pass — exactly 1h is the documented hard cap;
+        // accepted (boundary inclusive).
+        let dir = TempDir::new().expect("temp dir");
+        std::fs::write(
+            dir.path().join("engine.toml"),
+            "[sandbox]\nwallclock_max_ms = 3600000\n", // 1h
+        )
+        .expect("write");
+        let cfg = EngineConfig::load_or_default(dir.path()).expect("at-cap loads");
+        assert_eq!(cfg.effective_wallclock_max_ms(), 3_600_000);
     }
 
     #[test]

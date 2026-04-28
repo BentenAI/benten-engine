@@ -14,7 +14,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D17 PRIMARY path"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D17 PRIMARY path"]
 fn sandbox_output_limit_routes_inv_7_via_counted_sink_primary() {
     // D17 PRIMARY — single host-fn emits > limit. Streaming CountedSink
     // checks `consumed + bytes.len() > limit` BEFORE accepting bytes;
@@ -28,7 +28,7 @@ fn sandbox_output_limit_routes_inv_7_via_counted_sink_primary() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D17 BACKSTOP path"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D17 BACKSTOP path"]
 fn sandbox_output_limit_return_value_backstop_catches_misbehaving_host_fn() {
     // D17 BACKSTOP — host-fn that intentionally bypasses the streaming
     // sink (test-only fixture using `testing_register_uncounted_host_fn`
@@ -48,7 +48,7 @@ fn sandbox_output_limit_return_value_backstop_catches_misbehaving_host_fn() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — wsa D17 boundary condition"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — wsa D17 boundary condition"]
 fn sandbox_output_at_exact_limit_succeeds() {
     // wsa D17 boundary — `consumed == limit` succeeds; `consumed == limit + 1`
     // traps. Off-by-one regression guard.
@@ -60,7 +60,7 @@ fn sandbox_output_at_exact_limit_succeeds() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — wsa-1 aggregate enforcement"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — wsa-1 aggregate enforcement"]
 fn sandbox_output_aggregate_across_host_fns_enforces_inv_7() {
     // wsa-1 suggested fix — 11 successive `log` calls @ 100 KiB each
     // under a 1 MiB ceiling. Tenth call succeeds (consumed=1.0 MiB);

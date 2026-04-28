@@ -7,7 +7,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D1 time host-fn"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D1 time host-fn"]
 fn sandbox_host_fn_time_returns_monotonic_coarsened_100ms() {
     // D1 + sec-pre-r1-06 §2.1 + ESC-16 — module calls `time` 10000 times
     // in a tight loop (within ~50ms wall-time on Linux x86_64). Asserts:

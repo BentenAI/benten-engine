@@ -20,10 +20,14 @@
 //! detector tests parse the TOML at runtime and assert byte-for-byte
 //! match against the static.
 
+use crate::AttributionFrame;
 use crate::sandbox::counted_sink::CountedSink;
 use benten_errors::ErrorCode;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::sync::{Arc, OnceLock};
+
+// HostFnReturn::Error references ErrorCode below; keep the import.
 
 /// D18 cap-recheck cadence per host-fn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -105,21 +109,17 @@ pub struct HostFnSpec {
     pub description: Option<String>,
 }
 
-impl HostFnSpec {
-    /// Validate the `requires` cap-string is well-formed (3-segment
-    /// `prefix:domain:action`). The cap-string itself is the authoritative
-    /// key passed to `PrimitiveHost::check_capability` at runtime — there
-    /// is no intermediate typed projection in 2b. Phase-3 cap-namespace
-    /// work may introduce one; this method is the validation entry-point
-    /// today.
-    ///
-    /// # Errors
-    /// Returns [`ErrorCode::CapDenied`] / [`ErrorCode::CapScopeLoneStarRejected`]
-    /// when the `requires` cap-string is malformed.
-    pub fn validate_requires(&self) -> Result<(), ErrorCode> {
-        benten_errors::parse_cap_string(&self.requires).map(|_| ())
-    }
-}
+// cr-g7a-mr-5 fix-pass: the prior `HostFnSpec::validate_requires`
+// delegated to `benten_errors::parse_cap_string` which accepts only
+// 3-segment cap-strings. The codegen-default `kv:read` entry uses
+// `host:compute:kv:read` (4 segments) so the 3-segment validator was
+// incompatible with the documented surface. Validation now lives in
+// `build_default_host_fns` as a 3-or-4-segment shape-check
+// (host:<domain>:<action>[:<sub>]) AND `cr_g7a_mr_5_default_entries_have_well_formed_requires_strings`
+// pins the same shape at test time.
+//
+// The dead `HostFnSpec::validate_requires` method has been removed per
+// CLAUDE.md non-negotiable rule 5 ("no deprecated aliases").
 
 /// Codegen-emitted host-fn table. Mirrors the dev-time
 /// `host-functions.toml` `[host_fn.*]` tables.
@@ -142,12 +142,30 @@ pub fn host_fn_names() -> &'static [&'static str] {
 ///
 /// `random` is intentionally absent — D1 + sec-pre-r1-06 §2.3 defers it
 /// to Phase 2c until the workspace-wide CSPRNG decision lands.
+///
+/// **perf-g7a-mr-2 fix-pass:** the table is built ONCE per process via
+/// [`std::sync::OnceLock`] and returned as a shared `Arc`. Per-call
+/// SANDBOX dispatch hands out the same `Arc` instead of re-constructing
+/// the BTreeMap + N String allocations. The cold-start budget D22
+/// ≤2ms p95 cannot afford ~12 String allocations per call on the dispatch
+/// hot path. Each entry's `requires` cap-string is also validated at
+/// build time via the private `build_default_host_fns` shape-check
+/// (`host:<domain>:<action>[:<sub>]`; cr-g7a-mr-5 fix-pass) so a typo
+/// trips immediately at first call rather than at runtime cap denial.
 #[must_use]
-pub fn default_host_fns() -> BTreeMap<String, HostFnSpec> {
+pub fn default_host_fns() -> Arc<BTreeMap<String, HostFnSpec>> {
+    static TABLE: OnceLock<Arc<BTreeMap<String, HostFnSpec>>> = OnceLock::new();
+    Arc::clone(TABLE.get_or_init(build_default_host_fns))
+}
+
+/// One-shot constructor invoked exactly once by [`default_host_fns`]
+/// through its [`OnceLock`]. Validates each entry's `requires` cap-string
+/// via [`HostFnSpec::validate_requires`] (cr-g7a-mr-5 fix-pass: every
+/// codegen entry SHOULD validate; a build-time typo is caught here).
+fn build_default_host_fns() -> Arc<BTreeMap<String, HostFnSpec>> {
     let mut table: BTreeMap<String, HostFnSpec> = BTreeMap::new();
 
-    table.insert(
-        "time".to_string(),
+    let entries = [
         HostFnSpec {
             name: "time".to_string(),
             requires: "host:compute:time".to_string(),
@@ -159,10 +177,6 @@ pub fn default_host_fns() -> BTreeMap<String, HostFnSpec> {
                 "Returns monotonic time, coarsened to 100ms granularity.".to_string(),
             ),
         },
-    );
-
-    table.insert(
-        "log".to_string(),
         HostFnSpec {
             name: "log".to_string(),
             requires: "host:compute:log".to_string(),
@@ -176,10 +190,6 @@ pub fn default_host_fns() -> BTreeMap<String, HostFnSpec> {
                 "Writes a string from the SANDBOX module to the engine log sink.".to_string(),
             ),
         },
-    );
-
-    table.insert(
-        "kv:read".to_string(),
         HostFnSpec {
             name: "kv:read".to_string(),
             requires: "host:compute:kv:read".to_string(),
@@ -191,9 +201,30 @@ pub fn default_host_fns() -> BTreeMap<String, HostFnSpec> {
             requires_async: false,
             description: Some("Reads a value by CID from the engine KV backend.".to_string()),
         },
-    );
+    ];
 
-    table
+    for spec in entries {
+        // cr-g7a-mr-5 — validate-time pin: each cap-string at minimum
+        // matches the documented `host:<domain>:<action>` shape with
+        // optional 4-segment kv-style sub-action. The 3-segment
+        // `parse_cap_string` validator from benten-errors is too strict
+        // for `host:compute:kv:read` (4 segments); we instead enforce
+        // the looser shape locally + flag the typo class
+        // (empty-segments, missing prefix) at build time.
+        let segs: Vec<&str> = spec.requires.split(':').collect();
+        debug_assert!(
+            segs.len() >= 3
+                && segs.len() <= 4
+                && segs.iter().all(|s| !s.is_empty())
+                && segs[0] == "host",
+            "host-fn {} requires cap-string {:?} must be host:<domain>:<action>[:<sub>]",
+            spec.name,
+            spec.requires,
+        );
+        table.insert(spec.name.clone(), spec);
+    }
+
+    Arc::new(table)
 }
 
 /// Reserved cap-string for D19 calibrated allow-async path.
@@ -252,7 +283,21 @@ impl CapAllowlist {
 /// Per-invocation context the trampoline threads through every host-fn
 /// call. Exposes the [`CountedSink`] (D17 PRIMARY + D25 trampoline-count)
 /// + the allowlist (init snapshot for `per_boundary` host-fns) + the
-/// callback for live cap re-check (consulted by `per_call` host-fns).
+/// dispatching [`AttributionFrame`] (sec-pre-r1-03 audit-trail-laundering
+/// closure surface) + the live cap-recheck callback (consulted by
+/// `per_call` host-fns).
+///
+/// **sec-g7a-mr-7 / wsa-g7a-mr-2 honest-up:** the `live_cap_check`
+/// callback field IS present on the struct. In the G7-A scaffold the
+/// trampoline that would invoke it (G7-C-owned at module-link time) is
+/// not yet wired; D18 PerCall semantics for `kv:read` therefore degrade
+/// to PerBoundary in the G7-A milestone surface. The plan §3 G7-C row
+/// owns wiring the trampoline to consume this callback. The regression
+/// test pinning the wiring lives at
+/// `crates/benten-eval/tests/sandbox_capability_check_per_call_after_revoke.rs`
+/// and is currently `#[ignore]`-marked with a NAMED-SPECIFIC G7-C
+/// destination (it flips green when G7-C lands the trampoline that
+/// consults this callback).
 ///
 /// This is intentionally a thin typed wrapper — `Sandbox` owns the
 /// concrete state; the trampoline borrows this view per-invocation.
@@ -267,6 +312,20 @@ pub struct HostFnContext<'a> {
     pub kv_reads_remaining: &'a mut u64,
     /// Per-call log byte-volume remaining (consumed by `log`).
     pub log_bytes_remaining: &'a mut u64,
+    /// **sec-pre-r1-03 closure surface:** dispatching attribution frame
+    /// (actor/handler/grant tuple). Every host-fn invocation MUST be
+    /// audit-recorded against THIS frame, NOT against a null/default
+    /// frame (the laundering attack class collapses if the host-fn ABI
+    /// witnesses the dispatching frame at the call boundary). The G7-C
+    /// trampoline reads this field when emitting the host-fn audit row.
+    pub attribution: &'a AttributionFrame,
+    /// **D18 PerCall live cap-recheck callback (sec-pre-r1-02 TOCTOU
+    /// closure surface).** Returns `true` iff the dispatching grant
+    /// CURRENTLY holds the cap-string (not a snapshot — a live read).
+    /// PerCall host-fns (e.g. `kv:read`) consult this BEFORE every
+    /// invocation; PerBoundary host-fns consult [`Self::allowlist`].
+    /// See struct-level doc for the G7-A milestone surface caveat.
+    pub live_cap_check: &'a dyn Fn(&str) -> bool,
 }
 
 /// Trampoline outcome — the host-fn body returns one of these three
@@ -331,7 +390,7 @@ mod tests {
 
     #[test]
     fn d25_no_d1_host_fn_bypasses_output_budget() {
-        for (name, spec) in default_host_fns() {
+        for (name, spec) in default_host_fns().iter() {
             assert!(
                 !spec.bypass_output_budget,
                 "D25 — D1 surface entry {name} must NOT bypass output budget"
@@ -341,10 +400,42 @@ mod tests {
 
     #[test]
     fn d19_no_d1_host_fn_requires_async() {
-        for (name, spec) in default_host_fns() {
+        for (name, spec) in default_host_fns().iter() {
             assert!(
                 !spec.requires_async,
                 "D19 — D1 surface entry {name} must NOT require host:async"
+            );
+        }
+    }
+
+    #[test]
+    fn perf_default_host_fns_returns_same_arc_across_calls() {
+        // perf-g7a-mr-2 fix-pass — the OnceLock-cached Arc must be
+        // pointer-equal across calls. Per-call SANDBOX dispatch hands out
+        // the cached Arc instead of rebuilding the BTreeMap.
+        let a = default_host_fns();
+        let b = default_host_fns();
+        assert!(
+            Arc::ptr_eq(&a, &b),
+            "default_host_fns must reuse the OnceLock-cached Arc"
+        );
+    }
+
+    #[test]
+    fn cr_g7a_mr_5_default_entries_have_well_formed_requires_strings() {
+        // cr-g7a-mr-5 fix-pass — every codegen entry's `requires`
+        // cap-string is a host:<domain>:<action>[:<sub>] cap-string.
+        // Build-time typo regression guard mirroring the debug_assert!
+        // in `build_default_host_fns`.
+        for (name, spec) in default_host_fns().iter() {
+            let segs: Vec<&str> = spec.requires.split(':').collect();
+            assert!(
+                segs.len() >= 3
+                    && segs.len() <= 4
+                    && segs.iter().all(|s| !s.is_empty())
+                    && segs[0] == "host",
+                "host-fn {name} requires={:?} must be host:<domain>:<action>[:<sub>]",
+                spec.requires,
             );
         }
     }

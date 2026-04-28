@@ -12,7 +12,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D25 trampoline accounting"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D25 trampoline accounting"]
 fn sandbox_host_fn_output_bytes_counted_at_trampoline_not_body() {
     // D25-RESOLVED — emitter is the trampoline. White-box test:
     //
@@ -32,7 +32,7 @@ fn sandbox_host_fn_output_bytes_counted_at_trampoline_not_body() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D25 bypass field default false"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D25 bypass field default false"]
 fn sandbox_host_fn_bypass_output_budget_field_default_false() {
     // D25 — host-functions.toml field `bypass_output_budget: bool`
     // defaults to `false`. NONE of the D1 initial surface

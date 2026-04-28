@@ -29,6 +29,15 @@ pub mod respond;
 // Phase 2b G7-A SANDBOX executor. Compile-time wasm32-disabled per
 // sec-pre-r1-05 (the executor depends on `wasmtime` which doesn't
 // build for wasm32).
+//
+// **cr-g7a-mr-7 fix-pass:** the `pub mod sandbox` declaration is
+// `cfg(not(target_arch = "wasm32"))`-gated HERE in addition to the
+// inner-attribute `#![cfg(not(target_arch = "wasm32"))]` on the file
+// body. The two-layer gating is intentional defence-in-depth: any
+// future `pub use` at lib.rs that re-exports symbols from this module
+// MUST also carry the cfg-gate or the wasm32 build will fail to find
+// the symbol. The mod-level cfg here makes the requirement obvious to
+// future maintainers.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod sandbox;
 pub mod stream;

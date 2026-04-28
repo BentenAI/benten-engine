@@ -12,7 +12,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D1 kv:read per-grant 1000 budget"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D1 kv:read per-grant 1000 budget"]
 fn sandbox_host_fn_kv_read_respects_per_grant_budget_1000() {
     // D1 + sec-pre-r1-06 §2.4 — kv:read declared with
     //   behavior = { kind = "kv_read", per_call_read_cap = 1000 }
@@ -30,7 +30,7 @@ fn sandbox_host_fn_kv_read_respects_per_grant_budget_1000() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D18 + ESC-9 cap revoke during kv:read"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D18 + ESC-9 cap revoke during kv:read"]
 fn sandbox_host_fn_kv_read_per_call_cap_check_after_revoke() {
     // D18 + ESC-9 — `kv:read` is `cap_recheck = "per_call"` (sensitive).
     //

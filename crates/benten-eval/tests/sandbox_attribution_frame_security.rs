@@ -25,7 +25,7 @@
 //   benten_engine::Engine
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D20 + sec-pre-r1-03 sandbox_depth inheritance"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D20 + sec-pre-r1-03 sandbox_depth inheritance"]
 fn sandbox_attribution_frame_sandbox_depth_inherited_not_reset_across_call() {
     // Per D20-RESOLVED: AttributionFrame.sandbox_depth: u8 increments on
     // SANDBOX entry; INHERITED across CALL boundaries (NOT reset). Closes
@@ -48,7 +48,7 @@ fn sandbox_attribution_frame_sandbox_depth_inherited_not_reset_across_call() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — sec-pre-r1-13 forward-compat regression"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — sec-pre-r1-13 forward-compat regression"]
 fn attribution_frame_extension_does_not_leak_to_unauthorized_consumers() {
     // sec-pre-r1-13 non-regression — Phase-2a closures must hold:
     //   * sec-r6r1-01 (Inv-14 dead-coded wiring closed)

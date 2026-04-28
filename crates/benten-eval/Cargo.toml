@@ -126,7 +126,11 @@ harness = false
 [[bench]]
 name = "sandbox_cold_start"
 harness = false
-required-features = ["phase_2b_landed"]
+# perf-g7a-mr-1 fix-pass: dropped `required-features = ["phase_2b_landed"]`
+# — the bench body now exercises the G7-A scaffold path (Engine
+# singleton + Module cache + cap-intersection scaffold) so it compiles
+# under default features. Full Store+Instance+invocation measurement
+# lands when G7-C wires the executor.
 
 [[bench]]
 name = "sandbox_fuel"

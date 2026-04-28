@@ -6,7 +6,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — memory exhaustion routing"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — memory exhaustion routing"]
 fn sandbox_memory_limit_kills_routes_e_sandbox_memory_exhausted() {
     // Plan §3 G7-A — module repeatedly invokes `memory.grow` until
     // exceeding per-call memory cap (default 64 MiB candidate).

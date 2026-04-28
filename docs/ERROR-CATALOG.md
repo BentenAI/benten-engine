@@ -39,13 +39,10 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Fix:** Reduce BRANCH cases or split the Node. BRANCH should be binary or multi-way; consider whether a match-table is cleaner.
 - **Thrown at:** Registration
 
-### E_INV_SANDBOX_NESTED
-
-- **Message:** "SANDBOX Node {node_id} calls another SANDBOX, nesting depth {depth} exceeds max {max}"
-- **Context:** `{ node_id: NodeId, depth: number, max: number }`
-- **Fix:** SANDBOX should not call SANDBOX. Flatten or use CALL with a SANDBOX-terminated subgraph.
-- **Thrown at:** Registration
-- **Phase:** 2 (invariant 4 enforcement; Phase 1 type-defines SANDBOX but the executor returns `E_PRIMITIVE_NOT_IMPLEMENTED`)
+<!-- cr-g7a-mr-2 fix-pass: dropped orphan E_INV_SANDBOX_NESTED stub from
+     Phase-1 placeholder. The Phase 2b SANDBOX nest-depth enforcement
+     surface lives at E_INV_SANDBOX_DEPTH (G7-B) + E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED
+     (runtime saturation; G7-A) — both documented later in the file. -->
 
 ### E_INV_TOO_MANY_NODES
 
@@ -193,29 +190,15 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Fix:** Re-read, rebase changes, retry. Typical optimistic concurrency pattern.
 - **Thrown at:** Evaluation (CAS WRITE). **Runtime surface is edge-routed, not Rust-enum-valued:** WRITE's `cas` mode routes conflicts via the `ON_CONFLICT` edge; the engine stamps `error_code: "E_WRITE_CONFLICT"` on the routed step (`crates/benten-engine/src/primitive_host.rs:~362`). Callers read the code off the edge-routing metadata, not via a `match` on an `Err(EvalError::WriteConflict)` — the enum variant exists for forward-compat with a Phase-2 native Rust path but has no construction site in Phase-1 production code. The drift-detector's `reachability: ignore` annotation reflects this asymmetry.
 
-### E_SANDBOX_FUEL_EXHAUSTED
-
-- **Message:** "SANDBOX exhausted fuel budget {budget} before completion"
-- **Context:** `{ node_id: NodeId, budget: number }`
-- **Fix:** Increase fuel budget (via capability), or reduce computational complexity. Fuel is per-subgraph, not per-call.
-- **Thrown at:** Evaluation
-- **Phase:** 2 (SANDBOX executor + wasmtime host land in Phase 2; Phase 1 defines SANDBOX structurally but returns `E_PRIMITIVE_NOT_IMPLEMENTED`)
-
-### E_SANDBOX_TIMEOUT
-
-- **Message:** "SANDBOX exceeded wall-clock timeout {timeout}ms"
-- **Context:** `{ node_id: NodeId, timeout: number }`
-- **Fix:** Increase timeout or split into smaller SANDBOX calls.
-- **Thrown at:** Evaluation
-- **Phase:** 2 (SANDBOX executor, see `E_SANDBOX_FUEL_EXHAUSTED`)
-
-### E_SANDBOX_OUTPUT_LIMIT
-
-- **Message:** "SANDBOX output {actual} bytes exceeds max {max}"
-- **Context:** `{ node_id: NodeId, actual: number, max: number }`
-- **Fix:** Return smaller output. Use STREAM for progressive output.
-- **Thrown at:** Evaluation
-- **Phase:** 2 (SANDBOX executor, see `E_SANDBOX_FUEL_EXHAUSTED`)
+<!-- cr-g7a-mr-2 fix-pass: dropped Phase-1 placeholder duplicates of
+     E_SANDBOX_FUEL_EXHAUSTED + E_SANDBOX_TIMEOUT + E_SANDBOX_OUTPUT_LIMIT.
+     The canonical Phase-2b SANDBOX surface (with `Reserved at G7-A
+     scaffold; G7-C wires the firing site` reachability discipline)
+     lives in the "Phase 2b G7-A SANDBOX surface" section later in
+     this file. The Phase-1 placeholders contradicted the Phase-2b
+     entries (different message/context shapes; renamed E_SANDBOX_TIMEOUT
+     -> E_SANDBOX_WALLCLOCK_EXCEEDED + E_SANDBOX_OUTPUT_LIMIT -> E_INV_SANDBOX_OUTPUT)
+     and were producing TS-narrowing orphans. -->
 
 ### E_INV_SANDBOX_DEPTH
 

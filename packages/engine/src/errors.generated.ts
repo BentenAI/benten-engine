@@ -36,7 +36,6 @@ export const CATALOG_CODES = [
   "E_INV_CYCLE",
   "E_INV_DEPTH_EXCEEDED",
   "E_INV_FANOUT_EXCEEDED",
-  "E_INV_SANDBOX_NESTED",
   "E_INV_TOO_MANY_NODES",
   "E_INV_TOO_MANY_EDGES",
   "E_INV_SYSTEM_ZONE",
@@ -177,21 +176,6 @@ export class EInvFanoutExceeded extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_INV_FANOUT_EXCEEDED", "Reduce BRANCH cases or split the Node. BRANCH should be binary or multi-way; consider whether a match-table is cleaner.", message, context);
     this.name = "EInvFanoutExceeded";
-  }
-}
-
-/**
- * E_INV_SANDBOX_NESTED
- *
- * Thrown at: Registration
- * Message template: "SANDBOX Node {node_id} calls another SANDBOX, nesting depth {depth} exceeds max {max}"
- */
-export class EInvSandboxNested extends BentenError {
-  static readonly code = "E_INV_SANDBOX_NESTED";
-  static readonly fixHint = "SANDBOX should not call SANDBOX. Flatten or use CALL with a SANDBOX-terminated subgraph.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_INV_SANDBOX_NESTED", "SANDBOX should not call SANDBOX. Flatten or use CALL with a SANDBOX-terminated subgraph.", message, context);
-    this.name = "EInvSandboxNested";
   }
 }
 
