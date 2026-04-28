@@ -89,7 +89,7 @@ jobs:
         # initial gate.
         run: |
           set -euo pipefail
-          cargo test -p benten-eval --tests --no-fail-fast 2>&1 | tee sandbox-conformance.log
+          cargo test -p benten-eval --tests --no-fail-fast --features benten-eval/testing 2>&1 | tee sandbox-conformance.log
           echo "::group::Conformance log tail"
           tail -n 100 sandbox-conformance.log || true
           echo "::endgroup::"
