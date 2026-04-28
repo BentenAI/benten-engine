@@ -89,6 +89,13 @@ jobs:
             ["crates/benten-ivm/benches/algorithm_b_vs_handwritten.rs"]="informational"
             ["crates/benten-core/benches/cid_parse.rs"]="informational"
             ["crates/benten-core/benches/hash_only.rs"]="informational"
+            # Phase 2b G7-A SANDBOX cold-start (D22-RESOLVED). Bench
+            # body wires per-platform thresholds from workspace-root
+            # `bench_thresholds.toml`; the matrix slot is `informational`
+            # until G7-C ships the full Store+Instance+invocation
+            # lifecycle (perf-g7a-mr-1 fix-pass: infrastructure lands
+            # now so the gate flips green when the executor lands).
+            ["crates/benten-eval/benches/sandbox_cold_start.rs"]="informational"
           )
 
           fail=0

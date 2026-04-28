@@ -13,7 +13,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D19 catalog rename"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D19 catalog rename"]
 fn sandbox_nested_dispatch_denied_renamed_from_reentrancy() {
     // D19 catalog rename verification — `ErrorCode::SandboxNestedDispatchDenied`
     // exists; `as_str()` returns "E_SANDBOX_NESTED_DISPATCH_DENIED".
@@ -27,7 +27,7 @@ fn sandbox_nested_dispatch_denied_renamed_from_reentrancy() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D19 + sec-pre-r1-08 nested SANDBOX denial"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D19 + sec-pre-r1-08 nested SANDBOX denial"]
 fn sandbox_nested_sandbox_via_call_denied() {
     // D19 + sec-pre-r1-08 — host-fn callback attempts `engine.call(...)`
     // which would dispatch into another handler (potentially containing
@@ -50,7 +50,7 @@ fn sandbox_nested_sandbox_via_call_denied() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D19 calibrated async forward-compat"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D19 calibrated async forward-compat"]
 fn sandbox_async_host_fn_gated_by_host_async_cap_reserved_phase_3() {
     // D19 calibrated — `host:async` capability is reserved in 2b.
     //

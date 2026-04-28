@@ -74,11 +74,19 @@ fn parse_doc_host_fn_names(md_src: &str) -> BTreeSet<String> {
 }
 
 /// `host_functions_doc_drift_against_toml` — R2 §6 + plan §3.1.
+///
+/// **cr-g7a-mr-4 fix-pass:** `host-functions.toml` now exists at the
+/// workspace root (G7-A landed it via PR #30); the marker dropped the
+/// stale "host-functions.toml unimplemented" phrase and now names ONLY
+/// the remaining blocker (G11-2b-A `docs/HOST-FUNCTIONS.md` doc fill).
+/// Path corrected from the prior `crates/benten-eval/host-functions.toml`
+/// to the workspace-root location pinned by wsa-16 +
+/// `tests/host_functions_toml_location.rs`.
 #[test]
-#[ignore = "Phase 2b G7-A + G11-2b-A pending — host-functions.toml + docs/HOST-FUNCTIONS.md unimplemented"]
+#[ignore = "Phase 2b G11-2b-A pending — docs/HOST-FUNCTIONS.md doc fill (host-functions.toml IS landed at workspace root by G7-A PR #30)"]
 fn host_functions_doc_drift_against_toml() {
     let root = workspace_root();
-    let toml_path = root.join("crates/benten-eval/host-functions.toml");
+    let toml_path = root.join("host-functions.toml");
     let doc_path = root.join("docs/HOST-FUNCTIONS.md");
 
     let toml_src = std::fs::read_to_string(&toml_path).unwrap_or_else(|e| {

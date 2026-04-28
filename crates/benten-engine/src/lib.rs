@@ -55,6 +55,12 @@ pub mod change;
 pub mod change_probe;
 pub mod engine;
 pub(crate) mod engine_caps;
+// Phase 2b G7-A — workspace-level `engine.toml` loader (Ben's brief
+// addition). Compile-time wasm32-disabled per the same sec-pre-r1-05
+// cut as SANDBOX itself; on wasm32 the engine config is always
+// built-in defaults.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod engine_config;
 pub(crate) mod engine_crud;
 pub(crate) mod engine_diagnostics;
 pub mod engine_transaction;
@@ -82,6 +88,9 @@ pub mod testing;
 
 pub use benten_errors::ErrorCode;
 pub use benten_eval::PrimitiveKind;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use engine_config::{EngineConfig, EngineConfigError, SandboxSection};
 
 pub use builder::{EngineBuilder, NOAUTH_STARTUP_LOG};
 pub use change_probe::ChangeProbe;

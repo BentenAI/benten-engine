@@ -1,0 +1,94 @@
+# Phase 2b G7-A — SANDBOX host-function declarations.
+#
+# Source-of-truth dev-time TOML for the codegen pipeline that emits
+# `crates/benten-eval/src/sandbox/host_fns/generated.rs` (build.rs).
+# Per D9-RESOLVED, the canonical-bytes encoding for cross-CID stability
+# is DAG-CBOR; this file is the dev-ergonomic source that compiles to
+# canonical bytes.
+#
+# Pin sources:
+#   D1-RESOLVED — initial host-fn surface (time / log / kv:read; random
+#                 deferred to Phase 2c).
+#   D2-RESOLVED — named-manifest registry hybrid (codegen default + reserved
+#                 register_runtime API returning E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED).
+#   D9-RESOLVED — manifest canonical bytes = DAG-CBOR.
+#   D18-RESOLVED — per-host-fn `cap_recheck = "per_call" | "per_boundary"`,
+#                  default "per_call" (fail-secure).
+#   D19-RESOLVED — `requires_async` field reserved for Phase-3 iroh.
+#   D25-RESOLVED — `bypass_output_budget` field default false (centralized
+#                  trampoline counting per D17 PRIMARY).
+#   sec-pre-r1-06 §2.1/§2.2/§2.4 — per-host-fn threat models.
+#
+# Schema invariants (codegen drift-detector consumes):
+#   - Each [host_fn.<name>] entry MUST set `requires` (cap-string).
+#   - `cap_recheck` defaults to "per_call" if absent (D18 fail-secure).
+#   - `bypass_output_budget` defaults to false if absent (D25 fail-safe).
+#   - `requires_async` defaults to false if absent (D19 — only Phase-3
+#     iroh host-fns flip this; in 2b NONE do).
+#   - Each [manifest.<name>] entry's `caps` MUST be a sorted list of
+#     cap-strings; the codegen pipeline asserts sorted-canonical for
+#     DAG-CBOR bit-stability.
+
+[host_fn.time]
+# D1 + sec-pre-r1-06 §2.1 + ESC-16 — monotonic-coarsened to 100ms granularity.
+# Closes timezone leak + clock-fingerprinting side channel.
+requires = "host:compute:time"
+cap_recheck = "per_boundary"
+description = "Returns monotonic time, coarsened to 100ms granularity."
+behavior_kind = "time_monotonic_coarsened"
+coarsening_ms = 100
+bypass_output_budget = false
+requires_async = false
+
+[host_fn.log]
+# D1 + sec-pre-r1-06 §2.2 — 64 KiB per-call byte-volume cap.
+requires = "host:compute:log"
+cap_recheck = "per_boundary"
+description = "Writes a string from the SANDBOX module to the engine log sink."
+behavior_kind = "log_sink"
+per_call_byte_cap = 65536
+bypass_output_budget = false
+requires_async = false
+
+[host_fn."kv:read"]
+# D1 + sec-pre-r1-06 §2.4 — per-call cap-recheck (TOCTOU defense) +
+# 1000-read budget per primitive call (read-amplification DOS bound).
+requires = "host:compute:kv:read"
+cap_recheck = "per_call"
+description = "Reads a value by CID from the engine KV backend, subject to caps."
+behavior_kind = "kv_read"
+per_call_read_cap = 1000
+bypass_output_budget = false
+requires_async = false
+
+# `random` DEFERRED to Phase 2c per D1 + sec-pre-r1-06 §2.3 reasoning
+# (workspace CSPRNG framework choice not yet made; shipping random
+# before that decision bakes in a footgun). The sandbox executor MUST
+# return E_SANDBOX_HOST_FN_NOT_FOUND with a message hint mentioning
+# "deferred to Phase 2c" if a module attempts to call it. Regression
+# guard: tests/sandbox_host_fn_random_deferred.rs.
+
+# ---------------------------------------------------------------------------
+# Named-manifest bundles (D2 hybrid).
+#
+# These are codegen-emitted into a static HashMap<String, CapBundle> at
+# ManifestRegistry construction. `register_runtime(name, bundle)` is
+# RESERVED as a no-op-with-typed-error in 2b returning
+# E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED; Phase 8 lifts the deferral
+# when the marketplace ships dynamic manifest registration.
+#
+# Each manifest's `caps` list MUST be sorted (DAG-CBOR canonical-bytes
+# stability per D9). The codegen pipeline asserts sorted-canonical at
+# build time; a manifest entry with unsorted caps is a build-fail.
+# ---------------------------------------------------------------------------
+
+[manifest.compute-basic]
+# Minimum-viable manifest covering the cheap, output-bounded host-fns.
+caps = ["host:compute:log", "host:compute:time"]
+description = "Time + log (no KV, no network)."
+
+[manifest.compute-with-kv]
+# Adds kv:read on top of compute-basic. The sensitive add — picks up
+# D18 per_call cap-recheck cadence on the kv:read host-fn.
+caps = ["host:compute:kv:read", "host:compute:log", "host:compute:time"]
+description = "compute-basic + kv:read (per_call cap-recheck)."

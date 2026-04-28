@@ -105,13 +105,29 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::ViewStrategyARefused,
     ErrorCode::ViewStrategyCReserved,
     // Phase-2b G7-B SANDBOX invariants (Inv-4 nest depth + Inv-7 output
-    // limit) plus the D20 saturation overflow code. G7-A adds the
-    // additional sandbox runtime codes (fuel/memory/wallclock/host-fn
-    // denial / manifest / module-invalid / nested-dispatch-denied) on its
-    // own branch; the merge surface here is additive.
+    // limit) plus the D20 saturation overflow code.
     ErrorCode::InvSandboxDepth,
     ErrorCode::InvSandboxOutput,
     ErrorCode::SandboxNestedDispatchDepthExceeded,
+    // Phase-2b G7-A SANDBOX runtime + manifest + wasmtime-trap surface
+    // (D1/D2/D3/D9/D17/D18/D19/D20/D21/D24/D25/D27 RESOLVED). The 12
+    // additions cover the wasmtime budget axes (fuel / memory / wallclock),
+    // host-fn cap-check + lookup denials, manifest-unknown + deferred
+    // registration, module-shape failures, the nested-dispatch denied
+    // dispatch surface (rename per D19), the module-manifest CID-pin
+    // mismatch (D16), and the engine-config parse failure surface.
+    ErrorCode::SandboxFuelExhausted,
+    ErrorCode::SandboxMemoryExhausted,
+    ErrorCode::SandboxWallclockExceeded,
+    ErrorCode::SandboxWallclockInvalid,
+    ErrorCode::SandboxHostFnDenied,
+    ErrorCode::SandboxHostFnNotFound,
+    ErrorCode::SandboxManifestUnknown,
+    ErrorCode::SandboxManifestRegistrationDeferred,
+    ErrorCode::SandboxModuleInvalid,
+    ErrorCode::SandboxNestedDispatchDenied,
+    ErrorCode::ModuleManifestCidMismatch,
+    ErrorCode::EngineConfigInvalid,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -168,13 +184,19 @@ fn variant_count_is_pinned() {
     // `ViewStrategyCReserved` for user-view registration-time refusals.
     // Post-G8-B: 59 + 2 = 61.
     //
-    // Phase-2b G7-B sync (this branch, rebased on top of G8-A + G8-B merged
-    // main): +3 codes (InvSandboxDepth, InvSandboxOutput,
-    // SandboxNestedDispatchDepthExceeded). Post-G7-B: 61 + 3 = 64. G7-A's
-    // parallel SANDBOX brief adds the remaining ~9 sandbox codes; that
-    // merge will bump this canary further.
+    // Phase-2b G7-B sync (rebased on top of G8-A + G8-B merged main): +3
+    // codes (InvSandboxDepth, InvSandboxOutput,
+    // SandboxNestedDispatchDepthExceeded). Post-G7-B: 61 + 3 = 64.
+    //
+    // Phase-2b G7-A sync (this branch, rebased on top of G7-B + G6-A/B + G8-A/B
+    // merged main): +12 codes covering the SANDBOX runtime + manifest +
+    // wasmtime-trap surface (Sandbox{FuelExhausted, MemoryExhausted,
+    // WallclockExceeded, WallclockInvalid, HostFnDenied, HostFnNotFound,
+    // ManifestUnknown, ManifestRegistrationDeferred, ModuleInvalid,
+    // NestedDispatchDenied}, ModuleManifestCidMismatch, EngineConfigInvalid).
+    // Post-G7-A: 64 + 12 = 76.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 64,
+        CATALOG_VARIANT_COUNT, 76,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

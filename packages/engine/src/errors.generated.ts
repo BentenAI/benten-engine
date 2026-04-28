@@ -36,7 +36,6 @@ export const CATALOG_CODES = [
   "E_INV_CYCLE",
   "E_INV_DEPTH_EXCEEDED",
   "E_INV_FANOUT_EXCEEDED",
-  "E_INV_SANDBOX_NESTED",
   "E_INV_TOO_MANY_NODES",
   "E_INV_TOO_MANY_EDGES",
   "E_INV_SYSTEM_ZONE",
@@ -53,9 +52,6 @@ export const CATALOG_CODES = [
   "E_CAP_REVOKED",
   "E_CAP_ATTENUATION",
   "E_WRITE_CONFLICT",
-  "E_SANDBOX_FUEL_EXHAUSTED",
-  "E_SANDBOX_TIMEOUT",
-  "E_SANDBOX_OUTPUT_LIMIT",
   "E_INV_SANDBOX_DEPTH",
   "E_INV_SANDBOX_OUTPUT",
   "E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED",
@@ -116,6 +112,20 @@ export const CATALOG_CODES = [
   "E_SUBSCRIBE_CURSOR_LOST",
   "E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED",
   "E_INV_11_SYSTEM_ZONE_READ",
+  "E_INV_SANDBOX_DEPTH",
+  "E_SANDBOX_FUEL_EXHAUSTED",
+  "E_SANDBOX_MEMORY_EXHAUSTED",
+  "E_SANDBOX_WALLCLOCK_EXCEEDED",
+  "E_SANDBOX_WALLCLOCK_INVALID",
+  "E_SANDBOX_HOST_FN_DENIED",
+  "E_SANDBOX_HOST_FN_NOT_FOUND",
+  "E_SANDBOX_MANIFEST_UNKNOWN",
+  "E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED",
+  "E_SANDBOX_MODULE_INVALID",
+  "E_SANDBOX_NESTED_DISPATCH_DENIED",
+  "E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED",
+  "E_MODULE_MANIFEST_CID_MISMATCH",
+  "E_ENGINE_CONFIG_INVALID",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -162,21 +172,6 @@ export class EInvFanoutExceeded extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_INV_FANOUT_EXCEEDED", "Reduce BRANCH cases or split the Node. BRANCH should be binary or multi-way; consider whether a match-table is cleaner.", message, context);
     this.name = "EInvFanoutExceeded";
-  }
-}
-
-/**
- * E_INV_SANDBOX_NESTED
- *
- * Thrown at: Registration
- * Message template: "SANDBOX Node {node_id} calls another SANDBOX, nesting depth {depth} exceeds max {max}"
- */
-export class EInvSandboxNested extends BentenError {
-  static readonly code = "E_INV_SANDBOX_NESTED";
-  static readonly fixHint = "SANDBOX should not call SANDBOX. Flatten or use CALL with a SANDBOX-terminated subgraph.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_INV_SANDBOX_NESTED", "SANDBOX should not call SANDBOX. Flatten or use CALL with a SANDBOX-terminated subgraph.", message, context);
-    this.name = "EInvSandboxNested";
   }
 }
 
@@ -417,51 +412,6 @@ export class EWriteConflict extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_WRITE_CONFLICT", "Re-read, rebase changes, retry. Typical optimistic concurrency pattern.", message, context);
     this.name = "EWriteConflict";
-  }
-}
-
-/**
- * E_SANDBOX_FUEL_EXHAUSTED
- *
- * Thrown at: Evaluation
- * Message template: "SANDBOX exhausted fuel budget {budget} before completion"
- */
-export class ESandboxFuelExhausted extends BentenError {
-  static readonly code = "E_SANDBOX_FUEL_EXHAUSTED";
-  static readonly fixHint = "Increase fuel budget (via capability), or reduce computational complexity. Fuel is per-subgraph, not per-call.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SANDBOX_FUEL_EXHAUSTED", "Increase fuel budget (via capability), or reduce computational complexity. Fuel is per-subgraph, not per-call.", message, context);
-    this.name = "ESandboxFuelExhausted";
-  }
-}
-
-/**
- * E_SANDBOX_TIMEOUT
- *
- * Thrown at: Evaluation
- * Message template: "SANDBOX exceeded wall-clock timeout {timeout}ms"
- */
-export class ESandboxTimeout extends BentenError {
-  static readonly code = "E_SANDBOX_TIMEOUT";
-  static readonly fixHint = "Increase timeout or split into smaller SANDBOX calls.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SANDBOX_TIMEOUT", "Increase timeout or split into smaller SANDBOX calls.", message, context);
-    this.name = "ESandboxTimeout";
-  }
-}
-
-/**
- * E_SANDBOX_OUTPUT_LIMIT
- *
- * Thrown at: Evaluation
- * Message template: "SANDBOX output {actual} bytes exceeds max {max}"
- */
-export class ESandboxOutputLimit extends BentenError {
-  static readonly code = "E_SANDBOX_OUTPUT_LIMIT";
-  static readonly fixHint = "Return smaller output. Use STREAM for progressive output.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SANDBOX_OUTPUT_LIMIT", "Return smaller output. Use STREAM for progressive output.", message, context);
-    this.name = "ESandboxOutputLimit";
   }
 }
 
@@ -1362,5 +1312,215 @@ export class EInv11SystemZoneRead extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_INV_11_SYSTEM_ZONE_READ", "User code attempted to subscribe to a `system:*` system-zone label. Distinct catalog code so SUBSCRIBE-side breaches are diagnostically separable from WRITE-side breaches (`E_INV_SYSTEM_ZONE` covers writes). Subscribe to a non-system pattern, or, for engine-internal observation, use a privileged path. Phase-2b G6-A.", message, context);
     this.name = "EInv11SystemZoneRead";
+  }
+}
+
+/**
+ * E_INV_SANDBOX_DEPTH
+ *
+ * Thrown at: Registration (Inv-4 structural check on subgraph nesting).
+ * Message template: "SANDBOX nest-depth {actual} exceeds max {max} (Inv-4)"
+ */
+export class EInvSandboxDepth extends BentenError {
+  static readonly code = "E_INV_SANDBOX_DEPTH";
+  static readonly fixHint = "Inv-4 — `AttributionFrame.sandbox_depth: u8` saturating-counter; default max nest 4 (D20-RESOLVED). Flatten the SANDBOX → SANDBOX chain or move logic into a single SANDBOX call. Per D20, the depth INHERITS across CALL boundaries (not reset) so a SANDBOX → CALL → SANDBOX chain still counts cumulatively.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_INV_SANDBOX_DEPTH", "Inv-4 — `AttributionFrame.sandbox_depth: u8` saturating-counter; default max nest 4 (D20-RESOLVED). Flatten the SANDBOX → SANDBOX chain or move logic into a single SANDBOX call. Per D20, the depth INHERITS across CALL boundaries (not reset) so a SANDBOX → CALL → SANDBOX chain still counts cumulatively.", message, context);
+    this.name = "EInvSandboxDepth";
+  }
+}
+
+/**
+ * E_SANDBOX_FUEL_EXHAUSTED
+ *
+ * Thrown at: SANDBOX executor (D3-RESOLVED per-call wasmtime `Store` lifecycle).
+ * Message template: "SANDBOX fuel exhausted: limit={limit} consumed={consumed}"
+ */
+export class ESandboxFuelExhausted extends BentenError {
+  static readonly code = "E_SANDBOX_FUEL_EXHAUSTED";
+  static readonly fixHint = "wasmtime fuel-meter intercept. Either reduce the per-call computation, raise `SandboxConfig::fuel` (default 1_000_000), or split the workload across multiple SANDBOX calls. Concurrent with the typed-error propagation, the engine emits `TraceStep::BudgetExhausted { budget_type: \"sandbox_fuel\", consumed, limit, path }` so `engine.trace(...)` consumers observe the exhaustion in-band (mirrors G12-A's `inv_8_iteration` pattern).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SANDBOX_FUEL_EXHAUSTED", "wasmtime fuel-meter intercept. Either reduce the per-call computation, raise `SandboxConfig::fuel` (default 1_000_000), or split the workload across multiple SANDBOX calls. Concurrent with the typed-error propagation, the engine emits `TraceStep::BudgetExhausted { budget_type: \"sandbox_fuel\", consumed, limit, path }` so `engine.trace(...)` consumers observe the exhaustion in-band (mirrors G12-A's `inv_8_iteration` pattern).", message, context);
+    this.name = "ESandboxFuelExhausted";
+  }
+}
+
+/**
+ * E_SANDBOX_MEMORY_EXHAUSTED
+ *
+ * Thrown at: SANDBOX executor.
+ * Message template: "SANDBOX memory limit exhausted: {limit} bytes"
+ */
+export class ESandboxMemoryExhausted extends BentenError {
+  static readonly code = "E_SANDBOX_MEMORY_EXHAUSTED";
+  static readonly fixHint = "wasmtime `StoreLimits` intercept fires deterministically BEFORE host OOM. Either reduce module memory pressure, raise `SandboxConfig::memory_bytes` (default 64 MiB), or audit for runaway `memory.grow` (ESC-2 escape vector).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SANDBOX_MEMORY_EXHAUSTED", "wasmtime `StoreLimits` intercept fires deterministically BEFORE host OOM. Either reduce module memory pressure, raise `SandboxConfig::memory_bytes` (default 64 MiB), or audit for runaway `memory.grow` (ESC-2 escape vector).", message, context);
+    this.name = "ESandboxMemoryExhausted";
+  }
+}
+
+/**
+ * E_SANDBOX_WALLCLOCK_EXCEEDED
+ *
+ * Thrown at: SANDBOX executor (wasmtime `epoch_interruption` driven by a thread-side ticker; D27 `async-support` ENABLED preserves the yield path for Phase-3 iroh forward-compat).
+ * Message template: "SANDBOX wallclock deadline exceeded: {limit_ms} ms"
+ */
+export class ESandboxWallclockExceeded extends BentenError {
+  static readonly code = "E_SANDBOX_WALLCLOCK_EXCEEDED";
+  static readonly fixHint = "D24-RESOLVED defaults: 30s default / 5min ceiling. Per-handler `wallclock_ms` opt-in via `SubgraphSpec.primitives` (G12-D widening). Workspace-level overrides via `engine.toml` `[sandbox]` section (Ben's brief addition). Either shrink the workload, raise the per-handler value (within the engine.toml ceiling), or relax the engine.toml ceiling.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SANDBOX_WALLCLOCK_EXCEEDED", "D24-RESOLVED defaults: 30s default / 5min ceiling. Per-handler `wallclock_ms` opt-in via `SubgraphSpec.primitives` (G12-D widening). Workspace-level overrides via `engine.toml` `[sandbox]` section (Ben's brief addition). Either shrink the workload, raise the per-handler value (within the engine.toml ceiling), or relax the engine.toml ceiling.", message, context);
+    this.name = "ESandboxWallclockExceeded";
+  }
+}
+
+/**
+ * E_SANDBOX_WALLCLOCK_INVALID
+ *
+ * Thrown at: SubgraphSpec validation / `SandboxConfig::with_wallclock_ms`.
+ * Message template: "SANDBOX wallclock setting outside allowed range"
+ */
+export class ESandboxWallclockInvalid extends BentenError {
+  static readonly code = "E_SANDBOX_WALLCLOCK_INVALID";
+  static readonly fixHint = "Per-handler `wallclock_ms` must be > 0 and ≤ engine.toml `wallclock_max_ms` (defaults to D24-RESOLVED 5min ceiling). Reduce the per-handler value or relax `wallclock_max_ms` in `engine.toml`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SANDBOX_WALLCLOCK_INVALID", "Per-handler `wallclock_ms` must be > 0 and ≤ engine.toml `wallclock_max_ms` (defaults to D24-RESOLVED 5min ceiling). Reduce the per-handler value or relax `wallclock_max_ms` in `engine.toml`.", message, context);
+    this.name = "ESandboxWallclockInvalid";
+  }
+}
+
+/**
+ * E_SANDBOX_HOST_FN_DENIED
+ *
+ * Thrown at: SANDBOX executor (init-time intersection; per-invocation re-check per D18 cadence).
+ * Message template: "SANDBOX host-fn capability denied: {cap}"
+ */
+export class ESandboxHostFnDenied extends BentenError {
+  static readonly code = "E_SANDBOX_HOST_FN_DENIED";
+  static readonly fixHint = "Two firing paths: (1) D7 init-snapshot intersection — manifest claims a cap the dispatching grant lacks; fail before module link. (2) D18 per_call live recheck — cap revoked mid-call; subsequent host-fn invocation denied. Surfaces as a typed error THROUGH the host-fn ABI (NOT a wasmtime trap per sec-r1 D7) so the engine accounting stays clean. Either grant the missing cap, change the manifest, or relax the host-fn's `cap_recheck` declaration.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SANDBOX_HOST_FN_DENIED", "Two firing paths: (1) D7 init-snapshot intersection — manifest claims a cap the dispatching grant lacks; fail before module link. (2) D18 per_call live recheck — cap revoked mid-call; subsequent host-fn invocation denied. Surfaces as a typed error THROUGH the host-fn ABI (NOT a wasmtime trap per sec-r1 D7) so the engine accounting stays clean. Either grant the missing cap, change the manifest, or relax the host-fn's `cap_recheck` declaration.", message, context);
+    this.name = "ESandboxHostFnDenied";
+  }
+}
+
+/**
+ * E_SANDBOX_HOST_FN_NOT_FOUND
+ *
+ * Thrown at: SANDBOX executor (link-time preferred; call-time fallback).
+ * Message template: "SANDBOX host-fn not found: {name}"
+ */
+export class ESandboxHostFnNotFound extends BentenError {
+  static readonly code = "E_SANDBOX_HOST_FN_NOT_FOUND";
+  static readonly fixHint = "Module attempted to call a host-fn name not in the active manifest. In Phase 2b: this fires for `random` (deferred to Phase 2c per D1 + sec-pre-r1-06 §2.3 — workspace CSPRNG framework decision pending). The error message hint MUST mention \"deferred to Phase 2c\" for `random` so developers don't think it's a typo. For other names: check the manifest declaration matches the import.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SANDBOX_HOST_FN_NOT_FOUND", "Module attempted to call a host-fn name not in the active manifest. In Phase 2b: this fires for `random` (deferred to Phase 2c per D1 + sec-pre-r1-06 §2.3 — workspace CSPRNG framework decision pending). The error message hint MUST mention \"deferred to Phase 2c\" for `random` so developers don't think it's a typo. For other names: check the manifest declaration matches the import.", message, context);
+    this.name = "ESandboxHostFnNotFound";
+  }
+}
+
+/**
+ * E_SANDBOX_MANIFEST_UNKNOWN
+ *
+ * Thrown at: `ManifestRegistry::lookup` / `ManifestRef::resolve`.
+ * Message template: "SANDBOX manifest unknown: {name}"
+ */
+export class ESandboxManifestUnknown extends BentenError {
+  static readonly code = "E_SANDBOX_MANIFEST_UNKNOWN";
+  static readonly fixHint = "ESC-15 escape vector closure: NO permissive fall-through to a default manifest. Either register the manifest (Phase 8 marketplace work — see [E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED]) or use one of the codegen-default names (`compute-basic`, `compute-with-kv`).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SANDBOX_MANIFEST_UNKNOWN", "ESC-15 escape vector closure: NO permissive fall-through to a default manifest. Either register the manifest (Phase 8 marketplace work — see [E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED]) or use one of the codegen-default names (`compute-basic`, `compute-with-kv`).", message, context);
+    this.name = "ESandboxManifestUnknown";
+  }
+}
+
+/**
+ * E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED
+ *
+ * Thrown at: `ManifestRegistry::register_runtime`.
+ * Message template: "Runtime manifest registration deferred to Phase 8"
+ */
+export class ESandboxManifestRegistrationDeferred extends BentenError {
+  static readonly code = "E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED";
+  static readonly fixHint = "D2-RESOLVED hybrid: `ManifestRegistry::register_runtime(name, bundle)` exists in Phase 2b but returns this typed error (the API surface is reserved so Phase-8 marketplace work doesn't introduce a new public API — it just changes the body). Use a codegen-default manifest in 2b; revisit when Phase 8 ships.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED", "D2-RESOLVED hybrid: `ManifestRegistry::register_runtime(name, bundle)` exists in Phase 2b but returns this typed error (the API surface is reserved so Phase-8 marketplace work doesn't introduce a new public API — it just changes the body). Use a codegen-default manifest in 2b; revisit when Phase 8 ships.", message, context);
+    this.name = "ESandboxManifestRegistrationDeferred";
+  }
+}
+
+/**
+ * E_SANDBOX_MODULE_INVALID
+ *
+ * Thrown at: SANDBOX executor (`Module::new` / link / instantiation).
+ * Message template: "SANDBOX module invalid: {reason}"
+ */
+export class ESandboxModuleInvalid extends BentenError {
+  static readonly code = "E_SANDBOX_MODULE_INVALID";
+  static readonly fixHint = "Module bytes failed wasmtime structural validation (malformed module, type mismatch, OOB section, OOB linear-memory read, recursion-depth overflow, etc.). Audit the module compiler output. ESC-1 / ESC-3 / ESC-5 / ESC-11 / ESC-12 escape vectors all route here.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SANDBOX_MODULE_INVALID", "Module bytes failed wasmtime structural validation (malformed module, type mismatch, OOB section, OOB linear-memory read, recursion-depth overflow, etc.). Audit the module compiler output. ESC-1 / ESC-3 / ESC-5 / ESC-11 / ESC-12 escape vectors all route here.", message, context);
+    this.name = "ESandboxModuleInvalid";
+  }
+}
+
+/**
+ * E_SANDBOX_NESTED_DISPATCH_DENIED
+ *
+ * Thrown at: SANDBOX executor (host-fn callback path).
+ * Message template: "SANDBOX nested dispatch denied"
+ */
+export class ESandboxNestedDispatchDenied extends BentenError {
+  static readonly code = "E_SANDBOX_NESTED_DISPATCH_DENIED";
+  static readonly fixHint = "D19-RESOLVED: deny nested `Engine::call` from host-fn (the actual security claim). Closes the SANDBOX → CALL → SANDBOX cap-context-confusion attack class (sec-pre-r1-08). Renamed from the older `E_SANDBOX_REENTRANCY_DENIED` per wsa-7 + r1-security convergence — the name aligns with what's actually being denied. Refactor the host-fn to NOT re-enter the engine; if Phase-3 async host-fns are needed, acquire the reserved `host:async` cap.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SANDBOX_NESTED_DISPATCH_DENIED", "D19-RESOLVED: deny nested `Engine::call` from host-fn (the actual security claim). Closes the SANDBOX → CALL → SANDBOX cap-context-confusion attack class (sec-pre-r1-08). Renamed from the older `E_SANDBOX_REENTRANCY_DENIED` per wsa-7 + r1-security convergence — the name aligns with what's actually being denied. Refactor the host-fn to NOT re-enter the engine; if Phase-3 async host-fns are needed, acquire the reserved `host:async` cap.", message, context);
+    this.name = "ESandboxNestedDispatchDenied";
+  }
+}
+
+/**
+ * E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED
+ *
+ * Thrown at: SANDBOX executor (depth saturation at the inheritance point — distinct from [E_SANDBOX_NESTED_DISPATCH_DENIED] which fires at the dispatch attempt).
+ * Message template: "SANDBOX nested dispatch depth exceeded: max={max}"
+ */
+export class ESandboxNestedDispatchDepthExceeded extends BentenError {
+  static readonly code = "E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED";
+  static readonly fixHint = "D20-RESOLVED: `AttributionFrame.sandbox_depth: u8` saturating-counter, INHERITED across CALL boundaries (not reset). Default max nest 4. The counter sits on the AttributionFrame so SANDBOX → CALL → SANDBOX → CALL → SANDBOX chains accumulate cumulatively. Flatten the chain or audit for accidental recursion.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED", "D20-RESOLVED: `AttributionFrame.sandbox_depth: u8` saturating-counter, INHERITED across CALL boundaries (not reset). Default max nest 4. The counter sits on the AttributionFrame so SANDBOX → CALL → SANDBOX → CALL → SANDBOX chains accumulate cumulatively. Flatten the chain or audit for accidental recursion.", message, context);
+    this.name = "ESandboxNestedDispatchDepthExceeded";
+  }
+}
+
+/**
+ * E_MODULE_MANIFEST_CID_MISMATCH
+ *
+ * Thrown at: `Engine::install_module` (G10-B).
+ * Message template: "Module manifest CID mismatch: expected={expected_cid} computed={computed_cid} summary={manifest_summary}"
+ */
+export class EModuleManifestCidMismatch extends BentenError {
+  static readonly code = "E_MODULE_MANIFEST_CID_MISMATCH";
+  static readonly fixHint = "D16-RESOLVED-FURTHER minimal CID-pin integrity gate. `Engine::install_module(manifest, expected_cid: Cid)` REQUIRES the CID arg (not Optional — prevents the lazy `install_module(m, None)` footgun). The error includes both expected + computed CIDs + a 1-line manifest summary so an operator can diff without source-code dive. Either re-compute the expected CID against the actual manifest bytes or audit for tampering. Reserved here for the G10-B `install_module` surface; G7-C does NOT own this fire site (per wsa-r1-5 plan-internal conflict resolution).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_MODULE_MANIFEST_CID_MISMATCH", "D16-RESOLVED-FURTHER minimal CID-pin integrity gate. `Engine::install_module(manifest, expected_cid: Cid)` REQUIRES the CID arg (not Optional — prevents the lazy `install_module(m, None)` footgun). The error includes both expected + computed CIDs + a 1-line manifest summary so an operator can diff without source-code dive. Either re-compute the expected CID against the actual manifest bytes or audit for tampering. Reserved here for the G10-B `install_module` surface; G7-C does NOT own this fire site (per wsa-r1-5 plan-internal conflict resolution).", message, context);
+    this.name = "EModuleManifestCidMismatch";
+  }
+}
+
+/**
+ * E_ENGINE_CONFIG_INVALID
+ *
+ * Thrown at: `EngineConfig::load_or_default` (called at `Engine::open` time).
+ * Message template: "engine.toml at {path} parse failure: {reason}"
+ */
+export class EEngineConfigInvalid extends BentenError {
+  static readonly code = "E_ENGINE_CONFIG_INVALID";
+  static readonly fixHint = "Workspace-level `engine.toml` (Ben's G7-A brief addition) failed to parse against the [`EngineConfig`] schema. Either fix the TOML (see `docs/SANDBOX-LIMITS.md` for the schema) or remove the file (built-in defaults apply when absent). The `[sandbox]` section accepts `wallclock_default_ms` (override D24 30s default) and `wallclock_max_ms` (override D24 5min ceiling).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_ENGINE_CONFIG_INVALID", "Workspace-level `engine.toml` (Ben's G7-A brief addition) failed to parse against the [`EngineConfig`] schema. Either fix the TOML (see `docs/SANDBOX-LIMITS.md` for the schema) or remove the file (built-in defaults apply when absent). The `[sandbox]` section accepts `wallclock_default_ms` (override D24 30s default) and `wallclock_max_ms` (override D24 5min ceiling).", message, context);
+    this.name = "EEngineConfigInvalid";
   }
 }

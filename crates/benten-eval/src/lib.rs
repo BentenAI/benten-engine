@@ -40,6 +40,10 @@ pub mod host;
 pub mod host_error;
 pub mod invariants;
 pub mod primitives;
+// Phase 2b G7-A SANDBOX subsystem. Compile-time wasm32-disabled per
+// sec-pre-r1-05 — the wasm32 build cuts SANDBOX entirely.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod sandbox;
 pub mod subgraph_ext;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;

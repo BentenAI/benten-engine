@@ -314,7 +314,7 @@ fn sandbox_escape_forged_cap_claim_section_ignored() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D2 named-manifest registry"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D2 named-manifest registry"]
 fn sandbox_escape_named_manifest_spoofing_rejected() {
     // ESC-15 — Named-manifest spoofing.
     //

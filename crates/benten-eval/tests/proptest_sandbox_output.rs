@@ -37,7 +37,7 @@ proptest! {
     /// counter (e.g., a write of usize::MAX bytes that would
     /// silently wrap consumed to 0).
     #[test]
-    #[ignore = "Phase 2b G7-A pending — output bounded property"]
+    #[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — output bounded property"]
     fn prop_sandbox_output_size_strictly_bounded(
         limit in 1u64..1_000_000u64,
         batches in proptest::collection::vec(0usize..200_000, 1..50),
@@ -67,7 +67,7 @@ proptest! {
         // (rust-test-reviewer.json tq-2b-3).
         prop_assert!(
             false,
-            "Phase 2b G7-A pending: write output-strictly-bounded property \
+            "Phase 2b G7-C pending (PR #33 engine integration): write output-strictly-bounded property \
              body (replace this prop_assert!(false) with the consumed-vs-limit \
              assertion described in the file pseudo)."
         );

@@ -3,13 +3,14 @@
 # CI runs the main workflow on stable; this workflow runs separately on MSRV
 # to catch accidental use of newer language features before they reach a user.
 #
-# Effective MSRV is 1.89 as of Phase 2a: redb 4.0.0 (graph backend,
-# non-optional) declares `rust-version = "1.89"`, so 1.85 cannot build the
-# workspace via `--locked` even though `workspace.package.rust-version` in
-# the root Cargo.toml still reads "1.85". Matching the workspace declaration
-# to the actual floor is a source-side change tracked separately (not in
-# this infrastructure-only patch); until then this workflow pins 1.89 so
-# the MSRV gate reflects what actually compiles.
+# Effective MSRV is 1.91 as of Phase 2b G7-A supply-chain triage:
+# wasmtime 43.0.1 (the wasm runtime, pulled in for the SANDBOX primitive
+# host) declares `rust-version = "1.91"`. The 40 → 43 bump cleared the
+# 11 wasmtime RUSTSEC-2026-008{5..9}/009{1..6} advisories from the
+# 2026-04-09 coordinated security drop; the MSRV cascade is the price.
+# The workspace root `rust-version` in `Cargo.toml` was bumped to "1.91"
+# to match. (Prior baseline was "1.89" set during Phase 2a when redb
+# 4.0.0 forced the floor up from "1.85".)
 #
 # Also verifies the canonical fixture CID remains stable at MSRV — the cheap
 # determinism gate from SPIKE-phase-1-stack-RESULTS.md.
@@ -24,7 +25,7 @@ on:
 
 jobs:
   build-and-fixture-check:
-    name: cargo build --workspace --locked @1.89
+    name: cargo build --workspace --locked @1.91
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:

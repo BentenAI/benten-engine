@@ -69,6 +69,16 @@ serde_json = { workspace = true }
 serde_ipld_dagcbor = { workspace = true }
 thiserror = { workspace = true }
 
+# G7-A SANDBOX dependency. Compile-gated to native targets only per
+# sec-pre-r1-05; the wasm32 build cuts SANDBOX entirely. The napi
+# `bindings/napi/src/sandbox.rs` is wrapped in
+# `#[cfg(not(target_arch = "wasm32"))]` per G7-C; on wasm32 the symbol
+# is literally absent. Workspace pins minor version (40); features per
+# D3-RESOLVED + wsa-3 + D27-RESOLVED.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wasmtime = { workspace = true }
+toml = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }
 proptest = { workspace = true }
@@ -83,6 +93,12 @@ criterion = { workspace = true }
 # `Engine::testing_insert_privileged_fixture`,
 # `Engine::backend_for_test`, or the WAIT envelope-cache plumbing.
 benten-engine = { path = "../benten-engine", features = ["test-helpers"] }
+
+# `wat` for SANDBOX test fixtures (compile `.wat` source to wasm bytes
+# at test time). Workspace-pinned alongside wasmtime; native-only since
+# the SANDBOX subsystem is wasm32-cut per sec-pre-r1-05.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+wat = { workspace = true }
 
 [[bench]]
 name = "ten_node_handler"
@@ -110,7 +126,11 @@ harness = false
 [[bench]]
 name = "sandbox_cold_start"
 harness = false
-required-features = ["phase_2b_landed"]
+# perf-g7a-mr-1 fix-pass: dropped `required-features = ["phase_2b_landed"]`
+# — the bench body now exercises the G7-A scaffold path (Engine
+# singleton + Module cache + cap-intersection scaffold) so it compiles
+# under default features. Full Store+Instance+invocation measurement
+# lands when G7-C wires the executor.
 
 [[bench]]
 name = "sandbox_fuel"

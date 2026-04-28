@@ -18,7 +18,7 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.89"
+rust-version = "1.91"
 license = "MIT OR Apache-2.0"
 authors = ["BentenAI"]
 repository = "https://github.com/BentenAI/benten-engine"
@@ -262,12 +262,42 @@ napi-derive = "3"
 # HLC implementation for all phases is cleaner.
 uhlc = "0.2"
 
-# Phase 2b (SANDBOX / WASM compute) — reserved versions for future use.
-# No production crate consumes wasmtime today; it activates with the G7
-# SANDBOX host + Inv-4 / Inv-7 wiring. Keeping the version pin commented
-# here parallels the Phase-3 reservation discipline below so the workspace
-# manifest documents intended versions without dragging the build graph.
-# wasmtime = "35"
+# Phase 2b (SANDBOX / WASM compute) — wasmtime activated with G7 SANDBOX
+# host + Inv-4 / Inv-7 wiring. Per pre-R1 trigger #2: minor-version
+# pinned. Features per D3-RESOLVED (no pooling-allocator), wsa-3
+# (no component-model — plan uses core-wasm `wasmtime::Instance`), and
+# D27-RESOLVED (`async-support` ENABLED for Phase-3 iroh forward-compat
+# even though no async host-fn ships in 2b). The benten-eval Cargo.toml
+# selects the feature set; this workspace entry pins the version.
+# wasmtime: pinned to crates.io 43 (the 43.x line carries the 2026-04-09
+# coordinated security drop fix in 43.0.1). Per pre-R1 trigger #2:
+# minor-version pinned. Features per D3-RESOLVED (no `pooling-allocator`),
+# wsa-3 (no `component-model` — plan uses core-wasm `wasmtime::Instance`),
+# and D27-RESOLVED (`async` ENABLED for Phase-3 iroh forward-compat even
+# though no async host-fn ships in 2b). `wat` parsing for tests lives in
+# the sibling `wat` crate (separate dev-dep) — D26 commits pre-built
+# `.wasm` for prod fixtures; `wat::parse_str` is dev-time-only.
+# wsa-g7a-mr-1 fix-pass: dropped `cache` feature (persistent on-disk module
+# cache duplicative with in-memory MODULE_CACHE in `instance.rs`; conflicts
+# with D3-RESOLVED 'no cross-call state retention by construction').
+# perf-g7a-mr-4 fix-pass: dropped `parallel-compilation` (rayon overhead
+# on the cold-start path is unmeasured + no Phase-2b consumer needs
+# cross-thread compile parallelism — single-flight Mutex on MODULE_CACHE
+# already serializes per-CID compile).
+# g7a-supplychain-bump: 40.x → 43 to clear the 11 RUSTSEC-2026-008{5..9}
+# + 009{1..6} advisories (all fixed in 43.0.1; same in 42.0.2 / 36.0.7 /
+# 24.0.7 backports). 43 chosen over 44 because 44 bumps wasmtime MSRV
+# from 1.91 → 1.92 with no additional advisory delta vs 43.0.1; staying
+# on the smallest MSRV bump keeps the Phase-2b workspace floor lower
+# (workspace `rust-version` is bumped 1.89 → 1.91 by this same commit
+# because wasmtime 43.0.1 declares `rust-version = "1.91"` — see
+# `.github/workflows/msrv.yml` for the matching CI gate).
+wasmtime = { version = "43", default-features = false, features = ["runtime", "cranelift", "std", "async"] }
+# `wat` — sibling crate to wasmtime; pin to its current minor. Used by
+# the SANDBOX unit tests + integration tests to author wasm fixtures
+# from `.wat` source (dev-time-only; prod ships pre-built `.wasm`).
+wat = "1"
+toml = { version = "0.8", default-features = false, features = ["parse"] }
 
 # Phase 3 (sync/identity) — reserved versions for future use:
 # iroh = "0.97"

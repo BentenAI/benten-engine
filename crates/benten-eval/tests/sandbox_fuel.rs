@@ -6,7 +6,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — fuel exhaustion routing"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — fuel exhaustion routing"]
 fn sandbox_fuel_exhausts_routes_e_sandbox_fuel_exhausted() {
     // Plan §3 G7-A — module enters tight `loop ... br 0 ... end` with
     // budget = N; assert E_SANDBOX_FUEL_EXHAUSTED fires within N
@@ -18,7 +18,7 @@ fn sandbox_fuel_exhausts_routes_e_sandbox_fuel_exhausted() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — dx-r1-2b-5 default budget"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — dx-r1-2b-5 default budget"]
 fn sandbox_fuel_default_1_000_000_runs_canonical_fixture() {
     // dx-r1-2b-5 — default fuel budget = 1_000_000 wasmtime units;
     // canonical echo fixture completes well within this default

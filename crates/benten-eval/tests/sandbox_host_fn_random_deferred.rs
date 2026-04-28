@@ -9,7 +9,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D1 random deferred"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D1 random deferred"]
 fn sandbox_random_host_fn_unavailable_in_phase_2b() {
     // D1 — `random` is NOT in the initial host-fn surface for Phase 2b.
     // A module that requires `host:compute:random` cap and attempts to

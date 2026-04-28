@@ -25,7 +25,7 @@
 //   [manifest."compute-with-kv"] caps = [..., "host:compute:kv:read"]
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D2 hybrid + wsa D18 cap_recheck drift"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D2 hybrid + wsa D18 cap_recheck drift"]
 fn sandbox_host_fn_cap_recheck_codegen_drift_total() {
     // Companion drift detector — every [host_fn.<name>] entry's
     // `cap_recheck` field MUST round-trip through codegen.

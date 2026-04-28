@@ -31,7 +31,7 @@ proptest! {
     /// security test (R3-C territory); this is the random-input
     /// regression guard.
     #[test]
-    #[ignore = "Phase 2b G7-A pending — fuel monotonicity property"]
+    #[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — fuel monotonicity property"]
     fn prop_sandbox_fuel_monotonic(seed in any::<u64>()) {
         // R5 G7-A pseudo:
         //   let module_cid = synth_random_wasm_program(seed);
@@ -48,7 +48,7 @@ proptest! {
         // proptest, preserving fail-fast intent.
         prop_assert!(
             false,
-            "Phase 2b G7-A pending: write fuel-monotonicity property body \
+            "Phase 2b G7-C pending (PR #33 engine integration): write fuel-monotonicity property body \
              (replace this prop_assert!(false) with the actual fuel-trace \
              monotonicity assertion described in the file pseudo)."
         );

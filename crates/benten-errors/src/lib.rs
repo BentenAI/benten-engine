@@ -253,6 +253,15 @@ pub enum ErrorCode {
     /// `Strategy::C`. Strategy C is the Z-set / DBSP cancellation algorithm
     /// reserved for Phase 3+; refused at registration time in Phase 2b.
     ViewStrategyCReserved,
+    // -----------------------------------------------------------------
+    // Phase 2b G7-A SANDBOX surface (plan §3 G7-A; D1/D2/D3/D9/D17/D18/D19/D20/
+    // D21/D24/D25/D27 RESOLVED).
+    //
+    // Inv-4 (`InvSandboxDepth`) + Inv-7 (`InvSandboxOutput`) +
+    // `SandboxNestedDispatchDepthExceeded` are reserved by both G7-A and
+    // G7-B; declared here once. G7-B owns the registration-time wiring;
+    // G7-A owns the runtime + manifest + wasmtime-trap surface.
+    // -----------------------------------------------------------------
     /// Invariant 4 (G7-B): SANDBOX nest-depth violation. Fires either at
     /// registration-time (static SubgraphSpec analysis: a SANDBOX call-graph
     /// declares more than `max_sandbox_nest_depth` levels of nesting) or at
@@ -270,14 +279,73 @@ pub enum ErrorCode {
     /// D15 trap-loudly default — no silent truncation. Maps to
     /// `E_INV_SANDBOX_OUTPUT`.
     InvSandboxOutput,
-    /// SANDBOX nest-depth saturation overflow (D20). The `sandbox_depth: u8`
-    /// counter saturates cleanly at `u8::MAX` and at the configured
-    /// `max_sandbox_nest_depth` boundary; either case fires this typed
-    /// error rather than wrapping. Distinct from `InvSandboxDepth` so
-    /// callers can distinguish a configured-ceiling exceed from a
-    /// type-level u8 ceiling exceed. Maps to
+    /// SANDBOX wasmtime fuel exhaustion. Fires when the per-call fuel budget
+    /// reaches zero before the module returns. Mirrors `InvIterateBudget`
+    /// shape (D21 priority FUEL > OUTPUT; WALLCLOCK > FUEL > OUTPUT).
+    SandboxFuelExhausted,
+    /// SANDBOX per-call memory limit reached. Fires before host OOM via
+    /// wasmtime's memory-limiter (`StoreLimits`). D21 priority: highest
+    /// (matches OS-level OOM trump).
+    SandboxMemoryExhausted,
+    /// SANDBOX wallclock deadline exceeded. Fires via wasmtime's epoch-
+    /// interruption (D27 `async-support` ENABLED preserves the yield path
+    /// for Phase-3 iroh forward-compat; in 2b a thread-side ticker drives
+    /// the epoch). D24-RESOLVED defaults: 30s default / 5min ceiling;
+    /// per-handler `wallclock_ms` override via SubgraphSpec.primitives.
+    SandboxWallclockExceeded,
+    /// SANDBOX wallclock setting outside the allowed range
+    /// (per-handler override > 5min ceiling per D24, or 0).
+    SandboxWallclockInvalid,
+    /// SANDBOX host-fn cap-check denied a call. Two firing paths:
+    ///   - init-time intersection: manifest claims a cap the dispatching
+    ///     grant lacks → fail before module link.
+    ///   - per-call live recheck (D18 `per_call`): cap revoked mid-call;
+    ///     subsequent host-fn invocation denied.
+    /// Surfaces as a typed error THROUGH the host-fn ABI (NOT a wasmtime
+    /// trap) so the engine's accounting stays clean.
+    SandboxHostFnDenied,
+    /// SANDBOX module attempted to call a host-fn name not present in the
+    /// active manifest. Fires at link time (preferred) or call time
+    /// (fallback). Used for `random` since it's deferred to Phase 2c.
+    SandboxHostFnNotFound,
+    /// SANDBOX dispatcher named a manifest not present in the codegen
+    /// registry AND not registered via the deferred runtime API. ESC-15
+    /// escape vector closure: NO permissive fall-through to a default.
+    SandboxManifestUnknown,
+    /// SANDBOX `register_runtime(name, bundle)` invoked in Phase 2b. D2
+    /// hybrid reserves the API as a typed-error no-op until Phase 8
+    /// marketplace work lifts the deferral.
+    SandboxManifestRegistrationDeferred,
+    /// SANDBOX module bytes failed wasmtime's structural validation
+    /// (malformed module, type mismatch, OOB section, etc.). Maps the
+    /// wasmtime trap classes that are NOT a budget exhaustion.
+    SandboxModuleInvalid,
+    /// SANDBOX nested-dispatch denied. D19-RESOLVED rename from
+    /// `E_SANDBOX_REENTRANCY_DENIED` per wsa-7 + r1-security convergence:
+    /// the actual security claim is that a host-fn cannot dispatch back
+    /// into `Engine::call` (which would let SANDBOX → CALL → SANDBOX
+    /// chains launder caps via host-fn boundaries — sec-pre-r1-08).
+    SandboxNestedDispatchDenied,
+    /// SANDBOX nested-dispatch depth-counter saturation (D20). The
+    /// `sandbox_depth: u8` counter saturates cleanly at `u8::MAX` and at
+    /// the configured `max_sandbox_nest_depth` boundary; either case fires
+    /// this typed error rather than wrapping. Distinct from
+    /// [`ErrorCode::SandboxNestedDispatchDenied`]: this fires at the
+    /// inheritance point, not at the dispatch attempt. Maps to
     /// `E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED`.
     SandboxNestedDispatchDepthExceeded,
+    /// Module-manifest CID mismatch at install time (D16 minimal CID-pin
+    /// integrity gate per sec-pre-r1-01). Computed CID does not match the
+    /// REQUIRED `expected_cid` arg. Fires from G10-B's
+    /// `Engine::install_module(...)`; reserved here so the catalog string
+    /// surface is stable when G10-B lands.
+    ModuleManifestCidMismatch,
+    /// `Engine::open()` failed to parse `engine.toml` from workspace root.
+    /// Reserved here for the workspace-config wiring (Ben's G7-A brief
+    /// addition): per-deployment override of D24 wallclock defaults +
+    /// future engine-wide knobs. Fires from `EngineConfig::load_or_default`
+    /// when the file exists but is malformed.
+    EngineConfigInvalid,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -415,11 +483,26 @@ impl ErrorCode {
             ErrorCode::Inv11SystemZoneRead => "E_INV_11_SYSTEM_ZONE_READ",
             ErrorCode::ViewStrategyARefused => "E_VIEW_STRATEGY_A_REFUSED",
             ErrorCode::ViewStrategyCReserved => "E_VIEW_STRATEGY_C_RESERVED",
+            // Phase 2b G7-A SANDBOX surface
             ErrorCode::InvSandboxDepth => "E_INV_SANDBOX_DEPTH",
             ErrorCode::InvSandboxOutput => "E_INV_SANDBOX_OUTPUT",
+            ErrorCode::SandboxFuelExhausted => "E_SANDBOX_FUEL_EXHAUSTED",
+            ErrorCode::SandboxMemoryExhausted => "E_SANDBOX_MEMORY_EXHAUSTED",
+            ErrorCode::SandboxWallclockExceeded => "E_SANDBOX_WALLCLOCK_EXCEEDED",
+            ErrorCode::SandboxWallclockInvalid => "E_SANDBOX_WALLCLOCK_INVALID",
+            ErrorCode::SandboxHostFnDenied => "E_SANDBOX_HOST_FN_DENIED",
+            ErrorCode::SandboxHostFnNotFound => "E_SANDBOX_HOST_FN_NOT_FOUND",
+            ErrorCode::SandboxManifestUnknown => "E_SANDBOX_MANIFEST_UNKNOWN",
+            ErrorCode::SandboxManifestRegistrationDeferred => {
+                "E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED"
+            }
+            ErrorCode::SandboxModuleInvalid => "E_SANDBOX_MODULE_INVALID",
+            ErrorCode::SandboxNestedDispatchDenied => "E_SANDBOX_NESTED_DISPATCH_DENIED",
             ErrorCode::SandboxNestedDispatchDepthExceeded => {
                 "E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED"
             }
+            ErrorCode::ModuleManifestCidMismatch => "E_MODULE_MANIFEST_CID_MISMATCH",
+            ErrorCode::EngineConfigInvalid => "E_ENGINE_CONFIG_INVALID",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -463,7 +546,9 @@ impl ErrorCode {
     #[must_use]
     pub fn routed_edge_label(&self) -> Option<&'static str> {
         match self {
-            // Cap denials — explicit ON_DENIED.
+            // Cap denials — explicit ON_DENIED. SANDBOX host-fn denial
+            // (D7 + D18 hybrid) joins the cap-denial family per
+            // sec-r1 D7 (typed-error not trap).
             ErrorCode::CapDenied
             | ErrorCode::CapDeniedRead
             | ErrorCode::CapRevoked
@@ -474,14 +559,20 @@ impl ErrorCode {
             | ErrorCode::CapScopeLoneStarRejected
             | ErrorCode::CapNotImplemented
             | ErrorCode::HostCapabilityRevoked
-            | ErrorCode::HostCapabilityExpired => Some("ON_DENIED"),
+            | ErrorCode::HostCapabilityExpired
+            | ErrorCode::SandboxHostFnDenied
+            | ErrorCode::SandboxNestedDispatchDenied => Some("ON_DENIED"),
 
-            // Not-found family — explicit ON_NOT_FOUND.
+            // Not-found family — explicit ON_NOT_FOUND. SANDBOX manifest +
+            // host-fn lookup miss join here per ESC-15 + D1 random-deferred
+            // shaping.
             ErrorCode::NotFound
             | ErrorCode::BackendNotFound
             | ErrorCode::HostNotFound
             | ErrorCode::VersionUnknownPrior
-            | ErrorCode::UnknownView => Some("ON_NOT_FOUND"),
+            | ErrorCode::UnknownView
+            | ErrorCode::SandboxHostFnNotFound
+            | ErrorCode::SandboxManifestUnknown => Some("ON_NOT_FOUND"),
 
             // Optimistic-concurrency conflict — explicit ON_CONFLICT.
             // EH2 fix: previously fell into the wildcard ON_ERROR which
@@ -491,7 +582,11 @@ impl ErrorCode {
             | ErrorCode::VersionBranched => Some("ON_CONFLICT"),
 
             // ON_ERROR catch-all for runtime failures with no more-specific
-            // edge.
+            // edge. SANDBOX runtime-budget exhaustions + module-shape
+            // failures + nested-dispatch depth-saturation route here
+            // (D21 priority is documented in SANDBOX-LIMITS.md but the
+            // ROUTED edge is uniformly ON_ERROR — D21 disambiguates which
+            // axis fires; the routing is the same).
             ErrorCode::WaitTimeout
             | ErrorCode::WaitSignalShapeMismatch
             | ErrorCode::TxAborted
@@ -514,7 +609,6 @@ impl ErrorCode {
             | ErrorCode::InvSystemZone
             | ErrorCode::InvAttribution
             | ErrorCode::InvIterateBudget
-            | ErrorCode::InvSandboxDepth
             | ErrorCode::SandboxNestedDispatchDepthExceeded
             | ErrorCode::NotImplemented
             | ErrorCode::SubsystemDisabled
@@ -530,7 +624,16 @@ impl ErrorCode {
             | ErrorCode::StreamProducerWallclockExceeded
             | ErrorCode::SubscribeDeliveryFailed
             | ErrorCode::SubscribeCursorLost
-            | ErrorCode::Inv11SystemZoneRead => Some("ON_ERROR"),
+            | ErrorCode::Inv11SystemZoneRead
+            // G7-A SANDBOX runtime-budget exhaustions + module-shape failures
+            // (D21 priority is documented in SANDBOX-LIMITS.md but the
+            // ROUTED edge is uniformly ON_ERROR — D21 disambiguates which
+            // axis fires; the routing is the same).
+            | ErrorCode::SandboxFuelExhausted
+            | ErrorCode::SandboxMemoryExhausted
+            | ErrorCode::SandboxWallclockExceeded
+            | ErrorCode::SandboxModuleInvalid
+            | ErrorCode::SandboxManifestRegistrationDeferred => Some("ON_ERROR"),
 
             // Inv-7 SANDBOX output limit — dedicated edge label (matches the
             // SANDBOX primitive's edge surface in `benten-core` subgraph.rs:
@@ -538,7 +641,9 @@ impl ErrorCode {
             ErrorCode::InvSandboxOutput => Some("ON_OUTPUT_LIMIT"),
 
             // Registration-time invariants — surface at REGISTER time, not
-            // along a primitive edge. No routing.
+            // along a primitive edge. No routing. Inv-4 (sandbox depth)
+            // joins this family per D20 — registration-time check on the
+            // structural nesting count.
             ErrorCode::InvCycle
             | ErrorCode::InvDepthExceeded
             | ErrorCode::InvFanoutExceeded
@@ -548,7 +653,8 @@ impl ErrorCode {
             | ErrorCode::InvContentHash
             | ErrorCode::InvRegistration
             | ErrorCode::InvIterateMaxMissing
-            | ErrorCode::DuplicateHandler => None,
+            | ErrorCode::DuplicateHandler
+            | ErrorCode::InvSandboxDepth => None,
 
             // Resume-protocol failures — surface at the resume call site,
             // not along a primitive edge. No routing.
@@ -558,8 +664,14 @@ impl ErrorCode {
             | ErrorCode::NestedTransactionNotSupported => None,
 
             // Builder-time configuration errors — surface at builder, not
-            // along a primitive edge.
-            ErrorCode::NoCapabilityPolicyConfigured | ErrorCode::ProductionRequiresCaps => None,
+            // along a primitive edge. Engine-config invalid + module-manifest
+            // CID mismatch + SANDBOX wallclock-invalid join here: each
+            // surfaces at engine init / install / spec validation.
+            ErrorCode::NoCapabilityPolicyConfigured
+            | ErrorCode::ProductionRequiresCaps
+            | ErrorCode::EngineConfigInvalid
+            | ErrorCode::ModuleManifestCidMismatch
+            | ErrorCode::SandboxWallclockInvalid => None,
 
             // SUBSCRIBE registration / restart failures — surface at the
             // registration call site, not along a primitive edge. Mirrors
@@ -653,11 +765,26 @@ impl ErrorCode {
             "E_INV_11_SYSTEM_ZONE_READ" => ErrorCode::Inv11SystemZoneRead,
             "E_VIEW_STRATEGY_A_REFUSED" => ErrorCode::ViewStrategyARefused,
             "E_VIEW_STRATEGY_C_RESERVED" => ErrorCode::ViewStrategyCReserved,
+            // Phase 2b G7-A SANDBOX surface
             "E_INV_SANDBOX_DEPTH" => ErrorCode::InvSandboxDepth,
             "E_INV_SANDBOX_OUTPUT" => ErrorCode::InvSandboxOutput,
+            "E_SANDBOX_FUEL_EXHAUSTED" => ErrorCode::SandboxFuelExhausted,
+            "E_SANDBOX_MEMORY_EXHAUSTED" => ErrorCode::SandboxMemoryExhausted,
+            "E_SANDBOX_WALLCLOCK_EXCEEDED" => ErrorCode::SandboxWallclockExceeded,
+            "E_SANDBOX_WALLCLOCK_INVALID" => ErrorCode::SandboxWallclockInvalid,
+            "E_SANDBOX_HOST_FN_DENIED" => ErrorCode::SandboxHostFnDenied,
+            "E_SANDBOX_HOST_FN_NOT_FOUND" => ErrorCode::SandboxHostFnNotFound,
+            "E_SANDBOX_MANIFEST_UNKNOWN" => ErrorCode::SandboxManifestUnknown,
+            "E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED" => {
+                ErrorCode::SandboxManifestRegistrationDeferred
+            }
+            "E_SANDBOX_MODULE_INVALID" => ErrorCode::SandboxModuleInvalid,
+            "E_SANDBOX_NESTED_DISPATCH_DENIED" => ErrorCode::SandboxNestedDispatchDenied,
             "E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED" => {
                 ErrorCode::SandboxNestedDispatchDepthExceeded
             }
+            "E_MODULE_MANIFEST_CID_MISMATCH" => ErrorCode::ModuleManifestCidMismatch,
+            "E_ENGINE_CONFIG_INVALID" => ErrorCode::EngineConfigInvalid,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }

@@ -7,7 +7,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — wallclock exhaustion routing"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — wallclock exhaustion routing"]
 fn sandbox_wallclock_kills_routes_e_sandbox_wallclock_exceeded() {
     // Plan §3 G7-A — module enters tight loop with sufficient fuel that
     // wallclock fires before fuel does. Assertion:
@@ -22,7 +22,7 @@ fn sandbox_wallclock_kills_routes_e_sandbox_wallclock_exceeded() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D24-RESOLVED defaults"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D24-RESOLVED defaults"]
 fn sandbox_wallclock_default_30s_max_5min() {
     // D24-RESOLVED — `SandboxConfig.wallclock_ms` defaults to 30000 (30s);
     // values above 300_000 (5min) rejected at SubgraphSpec validation OR
@@ -36,7 +36,7 @@ fn sandbox_wallclock_default_30s_max_5min() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-A pending — D24 + D6 per-handler override"]
+#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D24 + D6 per-handler override"]
 fn sandbox_wallclock_per_handler_override_via_subgraphspec_primitives() {
     // D24 + D6 — `SubgraphSpec.primitives` widening (G12-D) carries
     // per-primitive `wallclock_ms` config. SANDBOX primitive config:

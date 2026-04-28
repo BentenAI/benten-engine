@@ -15,11 +15,18 @@
 //!     `E_STREAM_PRODUCER_TIMEOUT`, `E_STREAM_OUTPUT_LIMIT`.
 //!   * G6-A SUBSCRIBE: `E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED`,
 //!     `E_SUBSCRIBE_PATTERN_INVALID`.
-//!   * G7-A SANDBOX: `E_SANDBOX_FUEL_EXHAUSTED`, `E_SANDBOX_MEMORY`,
-//!     `E_SANDBOX_OUTPUT`, `E_SANDBOX_WALLCLOCK`,
-//!     `E_SANDBOX_HOST_FN_DENIED`, `E_SANDBOX_DEPTH_EXCEEDED`,
-//!     `E_SANDBOX_TRAP`, `E_SANDBOX_MANIFEST_UNKNOWN`,
-//!     `E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED`.
+//!   * G7-A SANDBOX (cr-g7a-mr-3 fix-pass: names match landed
+//!     `ErrorCode::*` enum):
+//!     `E_SANDBOX_FUEL_EXHAUSTED`, `E_SANDBOX_MEMORY_EXHAUSTED`,
+//!     `E_INV_SANDBOX_OUTPUT`, `E_SANDBOX_WALLCLOCK_EXCEEDED`,
+//!     `E_SANDBOX_HOST_FN_DENIED`, `E_SANDBOX_HOST_FN_NOT_FOUND`,
+//!     `E_INV_SANDBOX_DEPTH`, `E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED`,
+//!     `E_SANDBOX_NESTED_DISPATCH_DENIED`, `E_SANDBOX_MODULE_INVALID`,
+//!     `E_SANDBOX_MANIFEST_UNKNOWN`,
+//!     `E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED`,
+//!     `E_SANDBOX_WALLCLOCK_INVALID`, `E_ENGINE_CONFIG_INVALID`.
+//!     E_SANDBOX_TRAP from the prior list was NOT landed (collapsed
+//!     into E_SANDBOX_MODULE_INVALID + the per-axis budget codes).
 //!   * G10-B install: `E_MODULE_MANIFEST_CID_MISMATCH`.
 //!   * G6-A WAIT TTL (D12): `E_WAIT_TTL_EXPIRED`,
 //!     `E_WAIT_TTL_INVALID`.
@@ -48,16 +55,22 @@ const PHASE_2B_NEW_CODES: &[&str] = &[
     // SUBSCRIBE (G6-A)
     "E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED",
     "E_SUBSCRIBE_PATTERN_INVALID",
-    // SANDBOX (G7-A)
+    // SANDBOX (G7-A) — cr-g7a-mr-3 fix-pass: names mirror landed
+    // ErrorCode::* enum at crates/benten-errors/src/lib.rs.
     "E_SANDBOX_FUEL_EXHAUSTED",
-    "E_SANDBOX_MEMORY",
-    "E_SANDBOX_OUTPUT",
-    "E_SANDBOX_WALLCLOCK",
+    "E_SANDBOX_MEMORY_EXHAUSTED",
+    "E_INV_SANDBOX_OUTPUT",
+    "E_SANDBOX_WALLCLOCK_EXCEEDED",
+    "E_SANDBOX_WALLCLOCK_INVALID",
     "E_SANDBOX_HOST_FN_DENIED",
-    "E_SANDBOX_DEPTH_EXCEEDED",
-    "E_SANDBOX_TRAP",
+    "E_SANDBOX_HOST_FN_NOT_FOUND",
+    "E_INV_SANDBOX_DEPTH",
+    "E_SANDBOX_NESTED_DISPATCH_DENIED",
+    "E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED",
+    "E_SANDBOX_MODULE_INVALID",
     "E_SANDBOX_MANIFEST_UNKNOWN",
     "E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED",
+    "E_ENGINE_CONFIG_INVALID",
     // Module manifest (G10-B)
     "E_MODULE_MANIFEST_CID_MISMATCH",
     // WAIT TTL (G6-A / G12-E; D12)
@@ -80,7 +93,7 @@ fn read_error_catalog() -> String {
 
 /// `error_catalog_drift_phase_2b_codes_present` — R2 §6 + dx-r1-2b-2.
 #[test]
-#[ignore = "Phase 2b G6/G7/G10-B/G12-E + G11-2b-A pending — new codes + ERROR-CATALOG.md additions unimplemented"]
+#[ignore = "Phase 2b G6 (G6-A STREAM/SUBSCRIBE codes) + G10-B (E_MODULE_MANIFEST_CID_MISMATCH catalog narrative) + G12-E (WAIT TTL codes) + G11-2b-A (catalog doc-pass) pending — G7-A SANDBOX codes ARE landed via this PR (#30) + G7-B PR #32; the ignore flips when the remaining wave-4 + G11-2b-A entries land"]
 fn error_catalog_drift_phase_2b_codes_present() {
     let doc = read_error_catalog();
 
