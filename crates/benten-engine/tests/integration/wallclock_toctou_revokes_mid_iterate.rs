@@ -1,4 +1,3 @@
-#![allow(unknown_lints, clippy::duration_suboptimal_units)] // MSRV 1.91 — Rust 1.95 lint suggests from_mins/from_hours, both stabilized in 1.95
 //! Phase 2a R3 integration — Wall-clock TOCTOU revokes mid-ITERATE.
 //!
 //! Traces to: `.addl/phase-2a/00-implementation-plan.md` §3 G9-A
@@ -135,7 +134,7 @@ fn wallclock_refresh_ntp_slew_doesnt_skip() {
     );
 
     mono.tick(Duration::from_secs(100));
-    engine.testing_simulate_wallclock_jump(Duration::from_secs(300), -1);
+    engine.testing_simulate_wallclock_jump(Duration::from_mins(5), -1);
 
     let refresh_count_before = engine.testing_wallclock_refresh_count();
     let _ = engine.call_as(

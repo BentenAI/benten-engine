@@ -75,11 +75,20 @@ pub(crate) fn open_stream_adapter(
 /// drains them in insertion order without going through the production
 /// async-iterator setup.
 ///
-/// cfg-gated under `cfg(any(test, feature = "test-helpers"))` per
-/// Phase-2a sec-r6r2-02 discipline so the production cdylib does NOT
-/// compile this surface in. The napi `Engine` impl method that calls
-/// this adapter is cfg-gated identically.
-#[cfg(any(test, feature = "test-helpers"))]
+/// cfg-gated under `cfg(feature = "test-helpers")` (D-NS-OBS-3
+/// closure, wave-8e): the previous `cfg(any(test, feature = "test-helpers"))`
+/// gate let `cargo clippy -p benten-napi --all-targets` (default
+/// features, lib-test target) try to compile this body, but the
+/// underlying `InnerEngine::testing_open_stream_for_test` method is
+/// cfg-gated on `benten-engine/test-helpers`, which is OFF in the
+/// default napi feature set. The result was a compile-time
+/// `method not found` against a non-existent symbol that only the
+/// vitest-harness build path (which DOES enable
+/// `benten-napi/test-helpers` → `benten-engine/test-helpers`) ever
+/// compiled successfully. Dropping the bare `test` arm aligns the gate
+/// with the crate-feature dependency chain and makes default-build
+/// clippy pass with `-D warnings`.
+#[cfg(feature = "test-helpers")]
 pub(crate) fn testing_open_stream_for_test_adapter(
     engine: &InnerEngine,
     chunks: Vec<Vec<u8>>,

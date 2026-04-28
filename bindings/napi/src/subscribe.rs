@@ -113,10 +113,10 @@ pub(crate) fn on_change_adapter(
 /// + dedup state machinery without depending on G6-A's change-stream
 /// port. Mirrors `testing_open_stream_for_test_adapter` for STREAM.
 ///
-/// cfg-gated under `cfg(any(test, feature = "test-helpers"))` per
-/// Phase-2a sec-r6r2-02 discipline so the production cdylib does NOT
-/// compile this surface in.
-#[cfg(any(test, feature = "test-helpers"))]
+/// cfg-gated under `cfg(feature = "test-helpers")` (D-NS-OBS-3
+/// closure, wave-8e). See identical rationale in
+/// [`crate::stream::testing_open_stream_for_test_adapter`].
+#[cfg(feature = "test-helpers")]
 pub(crate) fn testing_open_subscription_for_test_adapter(
     engine: &InnerEngine,
     pattern: &str,
@@ -130,7 +130,7 @@ pub(crate) fn testing_open_subscription_for_test_adapter(
 /// path used by harness tests to exercise the dedup state machine
 /// without a real change-stream port. Returns `true` if the synthetic
 /// delivery was applied, `false` if it was deduped.
-#[cfg(any(test, feature = "test-helpers"))]
+#[cfg(feature = "test-helpers")]
 pub(crate) fn testing_deliver_synthetic_event_for_test_adapter(
     engine: &InnerEngine,
     sub: &Subscription,

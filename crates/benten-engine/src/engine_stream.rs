@@ -101,6 +101,18 @@ pub struct StreamHandle {
     /// the TS wrapper can expose `chunk.seq` for replay/dedup symmetry
     /// with SUBSCRIBE.
     next_seq: u64,
+    /// cr-r4b-10 closure (wave-8e): differentiates handles produced by
+    /// [`Engine::open_stream`] (explicit-close lifecycle, `true`) from
+    /// handles produced by [`Engine::call_stream`] (AsyncIterable
+    /// auto-close on for-await scope-exit, `false`). The TS wrapper
+    /// reads this flag through [`Self::requires_explicit_close`] and
+    /// throws `E_STREAM_HANDLE_LEAKED` if an explicit-close handle is
+    /// dropped without `close()` having been called. `call_stream`
+    /// handles are NOT subject to the leak check — `for await`
+    /// auto-closes at scope exit. The same Engine `call_stream_inner`
+    /// dispatch backs both surfaces; the lifecycle contract is the
+    /// only public-API difference.
+    requires_explicit_close: bool,
 }
 
 impl std::fmt::Debug for StreamHandle {
@@ -110,6 +122,7 @@ impl std::fmt::Debug for StreamHandle {
             .field("closed", &self.closed)
             .field("has_pending_error", &self.pending_error.is_some())
             .field("next_seq", &self.next_seq)
+            .field("requires_explicit_close", &self.requires_explicit_close)
             .finish()
     }
 }
@@ -124,11 +137,14 @@ impl StreamHandle {
             closed: true,
             pending_error: None,
             next_seq: 0,
+            requires_explicit_close: false,
         }
     }
 
     /// Construct a handle whose first `next()` call surfaces a typed
-    /// engine error. Used by the G6-A-pending stub path.
+    /// engine error. Used by the G6-A-pending stub path for the
+    /// `call_stream` surface (AsyncIterable auto-close, no
+    /// explicit-close requirement).
     #[must_use]
     pub fn with_pending_error(err: EngineError) -> Self {
         Self {
@@ -136,6 +152,24 @@ impl StreamHandle {
             closed: true,
             pending_error: Some(err),
             next_seq: 0,
+            requires_explicit_close: false,
+        }
+    }
+
+    /// Like [`Self::with_pending_error`] but flagged as the
+    /// explicit-close lifecycle (G6-B `open_stream` form). The TS
+    /// wrapper enforces `close()` was called before the handle is
+    /// dropped; the Rust API does not enforce this directly because
+    /// `Drop` cannot return an error and silently swallowing the leak
+    /// would defeat the contract.
+    #[must_use]
+    pub fn open_with_pending_error(err: EngineError) -> Self {
+        Self {
+            chunks: std::collections::VecDeque::new(),
+            closed: true,
+            pending_error: Some(err),
+            next_seq: 0,
+            requires_explicit_close: true,
         }
     }
 
@@ -150,7 +184,19 @@ impl StreamHandle {
             closed: true,
             pending_error: None,
             next_seq: 0,
+            requires_explicit_close: false,
         }
+    }
+
+    /// `true` if this handle was produced by [`Engine::open_stream`]
+    /// (explicit-close lifecycle) rather than [`Engine::call_stream`]
+    /// (AsyncIterable auto-close). The TS wrapper at
+    /// `packages/engine/src/stream.ts` consults this to decide whether
+    /// to throw `E_STREAM_HANDLE_LEAKED` if the handle is dropped
+    /// without `close()` having been called.
+    #[must_use]
+    pub fn requires_explicit_close(&self) -> bool {
+        self.requires_explicit_close
     }
 
     /// Pull the next chunk from the handle. Returns `Ok(Some(chunk))`
@@ -229,7 +275,13 @@ impl Engine {
         op: &str,
         input: Node,
     ) -> Result<StreamHandle, EngineError> {
-        self.call_stream_inner(handler_id.as_handler_key().as_str(), op, input, None)
+        self.call_stream_inner(
+            handler_id.as_handler_key().as_str(),
+            op,
+            input,
+            None,
+            /* requires_explicit_close */ false,
+        )
     }
 
     /// Phase 2b G6-B: `call_stream` with an explicit actor principal.
@@ -249,6 +301,7 @@ impl Engine {
             op,
             input,
             Some(*actor),
+            /* requires_explicit_close */ false,
         )
     }
 
@@ -259,6 +312,13 @@ impl Engine {
     /// `dispose`/`close` method that the `for await` form does not
     /// require — `for await` auto-closes at scope exit).
     ///
+    /// cr-r4b-10 closure (wave-8e): the returned [`StreamHandle`] is
+    /// flagged via [`StreamHandle::requires_explicit_close`] so the TS
+    /// wrapper can throw `E_STREAM_HANDLE_LEAKED` if the handle is
+    /// dropped without `close()` having been called. The two surfaces
+    /// previously had byte-identical bodies; they now differ in the
+    /// handle's lifecycle flag.
+    ///
     /// # Errors
     /// See [`Engine::call_stream`].
     pub fn open_stream<H: HandlerRef>(
@@ -267,7 +327,13 @@ impl Engine {
         op: &str,
         input: Node,
     ) -> Result<StreamHandle, EngineError> {
-        self.call_stream_inner(handler_id.as_handler_key().as_str(), op, input, None)
+        self.call_stream_inner(
+            handler_id.as_handler_key().as_str(),
+            op,
+            input,
+            None,
+            /* requires_explicit_close */ true,
+        )
     }
 
     fn call_stream_inner(
@@ -276,6 +342,7 @@ impl Engine {
         _op: &str,
         _input: Node,
         _actor: Option<benten_core::Cid>,
+        requires_explicit_close: bool,
     ) -> Result<StreamHandle, EngineError> {
         // Pre-G6-A: verify the handler is registered (so callers get a
         // useful E_NOT_FOUND error early instead of an opaque
@@ -295,13 +362,18 @@ impl Engine {
                 });
             }
         }
-        Ok(StreamHandle::with_pending_error(EngineError::Other {
+        let pending = EngineError::Other {
             code: ErrorCode::PrimitiveNotImplemented,
             message: "call_stream: STREAM executor lands with G6-A; \
                       use testing_open_stream_for_test for harness fixtures \
                       until G6-A merges."
                 .into(),
-        }))
+        };
+        Ok(if requires_explicit_close {
+            StreamHandle::open_with_pending_error(pending)
+        } else {
+            StreamHandle::with_pending_error(pending)
+        })
     }
 
     /// ts-r4-2 R4: napi-side helper exposing a synchronous stream-

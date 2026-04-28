@@ -1,9 +1,8 @@
-#![allow(unknown_lints, clippy::duration_suboptimal_units)] // MSRV 1.91 — Rust 1.95 lint suggests from_mins/from_hours, both stabilized in 1.95
 //! R3 unit tests for G9-A (P1, P2): wall-clock refresh ceiling + iterate-batch
 //! boundary delegation.
 //!
 //! P1 (FROZEN): `CapabilityPolicy::wallclock_refresh_ceiling()` returns
-//!   `Duration::from_secs(300)` by default; a cap-grant can override.
+//!   `Duration::from_mins(5)` by default; a cap-grant can override.
 //! P2: `CapabilityPolicy::iterate_batch_boundary` delegation is end-to-end
 //!   (the evaluator consults the policy's override, not the Phase-1 constant).
 //! ucca-5: HLC consulted alongside `MonotonicSource`.
@@ -29,8 +28,8 @@ fn caps_wallclock_bound_refreshes_at_300s_default() {
     let policy = NoAuthBackend;
     assert_eq!(
         policy.wallclock_refresh_ceiling(),
-        Duration::from_secs(300),
-        "NoAuthBackend default wallclock_refresh_ceiling must be 300s"
+        Duration::from_mins(5),
+        "NoAuthBackend default wallclock_refresh_ceiling must be 5 minutes"
     );
 }
 

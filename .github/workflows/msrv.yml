@@ -3,14 +3,22 @@
 # CI runs the main workflow on stable; this workflow runs separately on MSRV
 # to catch accidental use of newer language features before they reach a user.
 #
-# Effective MSRV is 1.91 as of Phase 2b G7-A supply-chain triage:
-# wasmtime 43.0.1 (the wasm runtime, pulled in for the SANDBOX primitive
-# host) declares `rust-version = "1.91"`. The 40 → 43 bump cleared the
-# 11 wasmtime RUSTSEC-2026-008{5..9}/009{1..6} advisories from the
-# 2026-04-09 coordinated security drop; the MSRV cascade is the price.
-# The workspace root `rust-version` in `Cargo.toml` was bumped to "1.91"
-# to match. (Prior baseline was "1.89" set during Phase 2a when redb
-# 4.0.0 forced the floor up from "1.85".)
+# Effective MSRV is 1.95 as of Phase 2b wave-8e:
+# Bump rationale (1.91 → 1.95): the `Duration::from_mins` and
+# `Duration::from_hours` constructors stabilised in Rust 1.95, which
+# allows dropping the `#[allow(unknown_lints, clippy::duration_suboptimal_units)]`
+# directives planted across the capability-policy / wallclock-refresh /
+# subscribe-persist test + bench fleet during Phase 2b waves 5-7. The
+# bump also drops the broken 1.85 leg of the determinism T5 matrix per
+# det-r4b-7 (the leg has been failing on `wasmtime` and `redb 4` since
+# 2026 anyway; 1.91 was always the real floor).
+#
+# Bump-path history:
+#   1.85 → 1.89 (Phase 2a, redb 4.0.0 declared `rust-version = "1.89"`)
+#   1.89 → 1.91 (Phase 2b G7-A, wasmtime 43.0.1 declared `rust-version = "1.91"`
+#                — the 40 → 43 bump cleared 11 RUSTSEC-2026-008{5..9}/009{1..6}
+#                wasmtime advisories from the 2026-04-09 drop)
+#   1.91 → 1.95 (Phase 2b wave-8e — `Duration::from_mins`/`from_hours` stab)
 #
 # Also verifies the canonical fixture CID remains stable at MSRV — the cheap
 # determinism gate from SPIKE-phase-1-stack-RESULTS.md.
@@ -25,7 +33,7 @@ on:
 
 jobs:
   build-and-fixture-check:
-    name: cargo build --workspace --locked @1.91
+    name: cargo build --workspace --locked @1.95
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -34,11 +42,12 @@ jobs:
       - name: Install MSRV toolchain
         # Canonical install idiom — replaces the manual `rustup toolchain
         # install ... && rustup default ...` that was a form drift with
-        # the rest of the workflow fleet. Sets 1.89 as default so
-        # subsequent `cargo ...` invocations use MSRV without `+1.89`.
+        # the rest of the workflow fleet. Sets the workspace MSRV as
+        # default so subsequent `cargo ...` invocations use it without
+        # an explicit `+1.95`.
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master (no semver tags; Dependabot rotates frequently)
         with:
-          toolchain: "1.89"
+          toolchain: "1.95"
 
       - name: Build workspace
         # G11-A Wave 2a: `benten-engine/test-helpers` pairs with

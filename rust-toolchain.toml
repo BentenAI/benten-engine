@@ -4,7 +4,8 @@ components = ["rustfmt", "clippy", "rust-src"]
 profile = "default"
 
 # Benten targets Rust 2024 edition (stable since Rust 1.85, February 2025).
-# Workspace MSRV is 1.89 (set in Cargo.toml `workspace.package.rust-version`);
-# the bump from 1.85 tracks `redb` 4.0.0's declared floor and is enforced
-# by `.github/workflows/msrv.yml`. The stable channel currently ships
-# 1.94.1 (2026-03-25), comfortably above MSRV.
+# Workspace MSRV is 1.95 (set in Cargo.toml `workspace.package.rust-version`);
+# the bump path was 1.85 → 1.89 (redb 4.0.0) → 1.91 (wasmtime 43.0.1) →
+# 1.95 (Phase-2b wave-8e: `Duration::from_mins` / `from_hours` stabilization
+# clears the `clippy::duration_suboptimal_units` allow-directive backlog).
+# Enforced by `.github/workflows/msrv.yml`.

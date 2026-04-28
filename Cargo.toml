@@ -18,7 +18,7 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.91"
+rust-version = "1.95"
 license = "MIT OR Apache-2.0"
 authors = ["BentenAI"]
 repository = "https://github.com/BentenAI/benten-engine"
@@ -289,9 +289,13 @@ uhlc = "0.2"
 # 24.0.7 backports). 43 chosen over 44 because 44 bumps wasmtime MSRV
 # from 1.91 → 1.92 with no additional advisory delta vs 43.0.1; staying
 # on the smallest MSRV bump keeps the Phase-2b workspace floor lower
-# (workspace `rust-version` is bumped 1.89 → 1.91 by this same commit
-# because wasmtime 43.0.1 declares `rust-version = "1.91"` — see
-# `.github/workflows/msrv.yml` for the matching CI gate).
+# (workspace `rust-version` was bumped 1.89 → 1.91 when wasmtime 43.0.1
+# was adopted because it declares `rust-version = "1.91"`). Wave-8e
+# bumps the workspace floor again, 1.91 → 1.95, to land
+# `Duration::from_mins`/`from_hours` (stable in 1.95) and drop the
+# `clippy::duration_suboptimal_units` allow-directives planted across
+# the cap-policy / wallclock-refresh / subscribe-persist test fleet.
+# See `.github/workflows/msrv.yml` for the matching CI gate.
 wasmtime = { version = "43", default-features = false, features = ["runtime", "cranelift", "std", "async"] }
 # `wat` — sibling crate to wasmtime; pin to its current minor. Used by
 # the SANDBOX unit tests + integration tests to author wasm fixtures

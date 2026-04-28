@@ -1,6 +1,4 @@
 #![cfg(feature = "phase_2b_landed")]
-#![allow(unknown_lints, clippy::duration_suboptimal_units)]
-// MSRV 1.91 — Rust 1.95 lint suggests from_hours, stabilized in 1.95
 // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: SUBSCRIBE persistent-cursor + retention-window (G6-A).
 //!
@@ -121,7 +119,7 @@ fn subscribe_retention_window_1000_events_or_24h_documented() {
     );
     assert_eq!(
         DEFAULT_RETENTION_DURATION,
-        std::time::Duration::from_secs(24 * 60 * 60),
+        std::time::Duration::from_hours(24),
         "D5 RESOLVED: retention window 24h"
     );
 }

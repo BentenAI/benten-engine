@@ -85,7 +85,10 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # T5 — MSRV (1.85) and latest stable, both reproducing the fixture.
+  # T5 — MSRV (1.95) and latest stable, both reproducing the fixture.
+  # The 1.85 leg was dropped per det-r4b-7 + wave-8e: the workspace floor
+  # is 1.95 (wasmtime 43 + redb 4 + Duration::from_mins/from_hours stab),
+  # so the prior 1.85 cell could never have been green.
   # ---------------------------------------------------------------------------
   msrv:
     name: T5 msrv ${{ matrix.rust }}
@@ -94,7 +97,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rust: ["1.85", "stable"]
+        rust: ["1.95", "stable"]
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 

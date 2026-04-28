@@ -222,16 +222,15 @@ impl Engine {
         _callback: OnChangeCallback,
     ) -> Result<Subscription, EngineError> {
         if pattern.is_empty() {
-            // G6-A adds `E_SUBSCRIBE_PATTERN_INVALID` to ERROR-CATALOG; until
-            // that lands in `benten_errors`, surface as `InputLimit` (the
-            // closest existing "shape rejection" code). The wrapper will
-            // be re-targeted to the real code once G6-A merges its catalog
-            // additions.
+            // cr-r4b-9 closure (wave-8e): `E_SUBSCRIBE_PATTERN_INVALID` IS
+            // now in `benten_errors` (G6-A merged it; cap-recheck pattern
+            // validation in `crates/benten-eval/src/primitives/subscribe.rs`
+            // already returns this code at registration time). Surface
+            // the typed code here too — `InputLimit` was the pre-G6-A
+            // placeholder.
             return Err(EngineError::Other {
-                code: ErrorCode::InputLimit,
-                message: "on_change: pattern must be a non-empty event-name glob \
-                          (E_SUBSCRIBE_PATTERN_INVALID lands with G6-A)"
-                    .into(),
+                code: ErrorCode::SubscribePatternInvalid,
+                message: "on_change: pattern must be a non-empty event-name glob".into(),
             });
         }
 
@@ -316,7 +315,7 @@ mod tests {
         let err = e.on_change("", cb).unwrap_err();
         match err {
             EngineError::Other { code, .. } => {
-                assert_eq!(code, ErrorCode::InputLimit);
+                assert_eq!(code, ErrorCode::SubscribePatternInvalid);
             }
             _ => panic!("unexpected error variant"),
         }

@@ -187,97 +187,76 @@ fn compromise_3_error_code_enum_in_benten_errors() {
     );
 }
 
-// Phase 1 compromise; remove when Phase 2 ships network-fetch KVBackend + WASM runtime tests.
+// Compromise #4 CLOSED (Phase 2b): the WASM runtime landed via wasmtime in
+// Phase 2b G7-A and is exercised by per-target test workflows
+// `wasm-runtime.yml` (T6 — wasi runtime CID assertion) and `wasm-conformance.yml`
+// (G10-A-wasip1 conformance suite). Wave-8e flips this regression test from
+// the Phase-1 prohibition ("no workflow may invoke `cargo test --target
+// wasm32-wasip1`") to a positive must-invoke assertion: BOTH named workflows
+// MUST contain a `cargo test`-or-equivalent line targeting `wasm32-wasip1`.
+// This is the drift detector that proves the runtime gate is in force — if
+// the workflows silently lose their wasi-test invocations, this test fails
+// before the gate weakens unnoticed.
 //
-// Rewritten at R4 triage (M15) — the v1 version grepped filenames, which was
-// brittle to workflow-name drift. The semantic checks are:
-//   (a) `benten-napi`'s Cargo.toml does NOT declare `wasmtime` as a runtime
-//       dep (would be a Phase 2 surface),
-//   (b) `.github/workflows/wasm-checks.yml` exists and contains a
-//       `cargo check --target wasm32-unknown-unknown` invocation (the
-//       compile-check gate is the Phase 1 contract),
-//   (c) no workflow invokes `cargo test --target wasm32-wasip1` (runtime
-//       testing is Phase 2).
+// Rationale (R4b durable judgment-call #3): Compromise #4's Phase-1 gate
+// claimed CLOSED status while the production runtime dispatch path returned
+// `PrimitiveNotImplemented`; the prohibition test passed because it asserted
+// the wrong thing. The positive assertion makes "the runtime IS wired" the
+// load-bearing invariant.
 #[test]
 fn compromise_4_wasm_runtime_is_phase_2() {
-    // (a) bindings/napi Cargo.toml does NOT declare `wasmtime`. We check the
-    // `[dependencies]` section specifically — `wasmtime` appears in workspace
-    // deps but must NOT reach the napi crate in Phase 1.
-    let napi_manifest = std::fs::read_to_string("../../bindings/napi/Cargo.toml")
-        .or_else(|_| std::fs::read_to_string("bindings/napi/Cargo.toml"))
-        .expect("bindings/napi/Cargo.toml present");
-    // A naive string-grep is brittle, but `wasmtime =` at line start or after
-    // whitespace is the canonical TOML form for a dependency declaration.
-    let has_wasmtime_dep = napi_manifest.lines().any(|l| {
-        let t = l.trim();
-        t.starts_with("wasmtime =") || t.starts_with("wasmtime=")
-    });
-    assert!(
-        !has_wasmtime_dep,
-        "bindings/napi/Cargo.toml must NOT declare `wasmtime` as a direct \
-         dep in Phase 1 — the WASM runtime landing is Phase 2"
-    );
-
-    // (b) wasm-checks workflow exists and invokes the compile-check target.
-    let wasm_workflow = std::fs::read_to_string("../../.github/workflows/wasm-checks.yml")
-        .or_else(|_| std::fs::read_to_string(".github/workflows/wasm-checks.yml"))
-        .expect(".github/workflows/wasm-checks.yml must exist in Phase 1");
-    assert!(
-        wasm_workflow.contains("wasm32-unknown-unknown"),
-        "wasm-checks.yml must contain the `wasm32-unknown-unknown` compile-check target"
-    );
-    assert!(
-        wasm_workflow.contains("cargo check"),
-        "wasm-checks.yml must invoke `cargo check` (not `cargo test`) per the Phase 1 gate"
-    );
-
-    // (c) No workflow runs `cargo test --target wasm32-wasip1` — runtime
-    // testing of WASM is Phase 2 scope.
+    // Locate the workflow directory regardless of cwd (cargo runs tests with
+    // the crate root as cwd; `cargo nextest` runs from the workspace root).
     let workflow_dir = if std::path::Path::new("../../.github/workflows").exists() {
         std::path::PathBuf::from("../../.github/workflows")
     } else {
         std::path::PathBuf::from(".github/workflows")
     };
-    // Phase 2b G10-A-wasip1 explicitly CLOSES the Phase-1 prohibition:
-    // wasm-runtime.yml + wasm-conformance.yml are the new Phase-2b workflows
-    // that exercise the wasi runtime (D-NS-49 night-shift catch). Other
-    // workflows are still subject to the Phase-1 invariant — drifting a
-    // wasi-test invocation into a non-G10 workflow is still a regression.
-    let phase_2b_wasi_workflows: &[&str] = &["wasm-runtime.yml", "wasm-conformance.yml"];
-    for entry in std::fs::read_dir(&workflow_dir).expect("read workflow dir") {
-        let entry = entry.expect("readdir entry");
-        let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("yml") {
-            continue;
-        }
-        let file_name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or_default();
-        if phase_2b_wasi_workflows.contains(&file_name) {
-            continue;
-        }
-        let content = std::fs::read_to_string(&path).expect("read yml");
-        // G7 test-authoring fix: the v1 check `content.contains("wasm32-wasip1")`
-        // was too broad — determinism.yml legitimately references the
-        // `wasm32-wasip1` target in its `cargo build --release` step that
-        // feeds a cross-runtime CID-determinism canary (T6). The compromise
-        // prohibits `cargo test --target wasm32-wasip1`, not `cargo build`.
-        // Check for the narrower form per the comment above.
-        let has_cargo_test_wasip1 = content
-            .lines()
-            .any(|l| l.contains("cargo test") && l.contains("wasm32-wasip1"));
+
+    // Both Phase-2b wasi-runtime workflows MUST exist + MUST invoke a
+    // `cargo test`-or-equivalent line targeting `wasm32-wasip1`. The
+    // "or-equivalent" allowance covers `cargo nextest run --target
+    // wasm32-wasip1` (the canonical Phase-2b runner) in addition to
+    // `cargo test --target wasm32-wasip1`.
+    let must_invoke_wasi_test: &[&str] = &["wasm-runtime.yml", "wasm-conformance.yml"];
+    for workflow_name in must_invoke_wasi_test {
+        let path = workflow_dir.join(workflow_name);
+        let content = std::fs::read_to_string(&path).unwrap_or_else(|_| {
+            panic!(
+                "Compromise #4 regression: required Phase-2b workflow {} not found at {} \
+                 — the runtime gate is documented CLOSED but the workflow is missing",
+                workflow_name,
+                path.display()
+            )
+        });
+        // Accept any non-comment line that contains BOTH a `cargo test`
+        // (or `cargo nextest run`) invocation AND the `wasm32-wasip1`
+        // target string. We do NOT require the line to START with the
+        // cargo invocation — YAML `run:` steps embed it after a `run:`
+        // prefix, and shell scripts under `run: |` blocks may indent
+        // further. Comment lines (leading `#` after whitespace trim) are
+        // skipped so a doc-only mention can't satisfy the gate.
+        let has_invocation = content.lines().any(|l| {
+            let trimmed = l.trim_start();
+            if trimmed.starts_with('#') {
+                return false;
+            }
+            (l.contains("cargo test") || l.contains("cargo nextest")) && l.contains("wasm32-wasip1")
+        });
         assert!(
-            !has_cargo_test_wasip1,
-            "Compromise #4 regression: only the Phase-2b G10 wasi workflows \
-             ({phase_2b_wasi_workflows:?}) may invoke `cargo test --target \
-             wasm32-wasip1`; got reference in {}",
-            path.display()
+            has_invocation,
+            "Compromise #4 regression: {} MUST invoke a `cargo test` / \
+             `cargo nextest run` line targeting `wasm32-wasip1` (positive \
+             must-invoke assertion). The runtime gate is documented CLOSED — \
+             this assertion proves the workflow still actually runs the wasi \
+             runtime tests. If the workflow shape has legitimately changed, \
+             update this test alongside the workflow.",
+            workflow_name
         );
     }
 
-    // R4 triage (m16 minor): fixture-CID canary — protects against encoding
-    // drift slipping through alongside a WASM-scope change.
+    // R4 triage (m16 minor) carry-forward: fixture-CID canary protects
+    // against encoding drift slipping through alongside a WASM-scope change.
     let expected_fixture = "bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda";
     let canonical = benten_core::testing::canonical_test_node().cid().unwrap();
     assert_eq!(
