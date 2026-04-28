@@ -688,11 +688,9 @@ fn register_default_host_fns(
                         // monotonic offset coarsened to the configured ms
                         // granularity.
                         let elapsed = sandbox_module_relative_time_ms();
-                        let coarsened = if coarsening_ms == 0 {
-                            elapsed
-                        } else {
-                            (elapsed / coarsening_ms) * coarsening_ms
-                        };
+                        let coarsened = elapsed
+                            .checked_div(coarsening_ms)
+                            .map_or(elapsed, |q| q * coarsening_ms);
                         Ok(i64::try_from(coarsened).unwrap_or(i64::MAX))
                     },
                 )?;
