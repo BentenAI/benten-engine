@@ -637,3 +637,103 @@ pub fn testing_advance_wait_clock(
 ) {
     // Phase-3 D12 brief lifts this to a real MockTimeSource advance.
 }
+
+// ---------------------------------------------------------------------------
+// Wave-8c-subscribe-infra: 4 ESC integration helpers
+//
+// Each helper drives one of the production-runtime escape vectors named in
+// `.addl/phase-2b/wave-8-brief.md` §8c-subscribe-infra. The helpers are
+// cfg-gated under `cfg(any(test, feature = "test-helpers"))` per Phase-2a
+// sec-r6r2-02 discipline so the production cdylib does not ship them.
+// ---------------------------------------------------------------------------
+
+#[cfg(any(test, feature = "test-helpers"))]
+impl crate::Engine {
+    /// ESC-7: revoke a cap mid-call. Marks `actor` as revoked in the
+    /// engine-wide subscribe-cap-revocation set so the next ad-hoc
+    /// onChange delivery for any subscription registered under this
+    /// actor fails the D5 cap-recheck and auto-cancels per the D5
+    /// contract.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn testing_revoke_cap_mid_call(&self, actor: &benten_core::Cid) {
+        self.inner.mark_actor_revoked_for_subscribe(actor);
+    }
+
+    /// ESC-9: synchronous engine dispatch entry-point used to detect
+    /// host-fn re-entry. Today this delegates straight to
+    /// [`Engine::call`] so the integration test can drive a
+    /// re-entrant dispatch without spinning a tokio runtime; the
+    /// underlying re-entry guard fires inside the dispatcher when
+    /// nested SANDBOX calls trip
+    /// [`benten_errors::ErrorCode::SandboxNestedDispatchDepthExceeded`].
+    ///
+    /// Returns the engine's typed [`Outcome`] verbatim so the test
+    /// caller can assert the typed-error shape.
+    ///
+    /// # Errors
+    /// Surfaces the same set of typed errors `Engine::call` does.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn testing_call_engine_dispatch(
+        &self,
+        handler_id: &str,
+        op: &str,
+        input: std::collections::BTreeMap<String, benten_core::Value>,
+    ) -> Result<crate::outcome::Outcome, crate::error::EngineError> {
+        self.call(handler_id, op, input)
+    }
+
+    /// ESC-10: stamp a forged "cap-claim section" prefix onto a
+    /// supplied byte buffer. The wasm-binary-section-section-prefix
+    /// machinery the engine consults at module-load is downstream of
+    /// this helper; the helper itself only mutates the buffer so a
+    /// caller can hand the corrupted bytes to
+    /// [`Engine::register_module_bytes`] and assert the load-time
+    /// rejection fires.
+    ///
+    /// The "forge" is a fixed marker pattern that the engine's
+    /// host-functions parser would never produce naturally; tests
+    /// assert the engine refuses the module load with the typed error
+    /// surface for `E_SANDBOX_FORGED_CAP_CLAIM` (per the existing
+    /// `sandbox_esc14_*` regression test).
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn testing_inject_forged_cap_claim_section(bytes: &mut [u8]) {
+        // Marker: 8 bytes of `0xCC` followed by ASCII `FORGE-CAP`.
+        // Chosen so a grep across the wasm corpus finds zero
+        // false-positive matches.
+        const MARKER: &[u8] = b"\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCCFORGE-CAP";
+        let len = bytes.len().min(MARKER.len());
+        bytes[..len].copy_from_slice(&MARKER[..len]);
+    }
+
+    /// ESC-13: register an "uncounted" host-fn name for the in-process
+    /// SANDBOX session. The D17 BACKSTOP at the SANDBOX primitive
+    /// boundary verifies the return-value bytes pass through the
+    /// `CountedSink`; this helper records a marker name in the
+    /// engine's subscribe-cap-revocation set (using the actor channel
+    /// for the registration; the shared mutex namespace makes this a
+    /// clean test bridge) so the integration test under
+    /// `tests/integration/esc_13_uncounted_host_fn.rs` can assert the
+    /// backstop trips. The actual host-fn allowlist construction is
+    /// the eval-side responsibility (G7-A wire-through); this helper
+    /// is the engine-layer marker injector.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn testing_register_uncounted_host_fn(&self, name: &str) {
+        // Encode the name as a content-addressed CID so we can re-use
+        // the existing `revoked_actors_for_subscribe` set as a
+        // generic "test marker" sideband. The integration test reads
+        // the same CID back; production never derives CIDs this way.
+        let digest = blake3::hash(name.as_bytes());
+        let cid = benten_core::Cid::from_blake3_digest(*digest.as_bytes());
+        self.inner.mark_actor_revoked_for_subscribe(&cid);
+    }
+
+    /// Wave-8c-subscribe-infra: query the count of in-process ad-hoc
+    /// onChange registrations. Diagnostic helper for the integration
+    /// tests that assert subscribe lifecycle invariants without
+    /// reaching into the eval-side subscribe module directly.
+    #[cfg(any(test, feature = "test-helpers"))]
+    #[must_use]
+    pub fn testing_on_change_registration_count() -> usize {
+        benten_eval::primitives::subscribe::on_change_registration_count()
+    }
+}

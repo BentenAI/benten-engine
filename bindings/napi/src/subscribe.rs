@@ -31,8 +31,73 @@
 use std::sync::Arc;
 
 use benten_engine::{Chunk, Engine as InnerEngine, SubscribeCursor, Subscription};
+use napi::bindgen_prelude::*;
+use napi::threadsafe_function::ThreadsafeFunctionCallMode;
 
 use crate::error::engine_err;
+
+/// Wave-8c-subscribe-infra: payload carried across the napi
+/// `ThreadsafeFunction` boundary. A pair of `(seq, payload_bytes)` —
+/// the receiver-side closure (registered via `build_callback`) maps it
+/// onto the JS callback signature `(seq: number, payload: Buffer) =>
+/// void`.
+type OnChangeTsfnPayload = (u32, Vec<u8>);
+
+/// Wave-8c-subscribe-infra: shorthand for the engine-side
+/// `OnChangeCallback` shape — `Arc<dyn Fn(u64, &Chunk) + Send + Sync +
+/// 'static>`. Mirrors `benten_engine::OnChangeCallback`. Defined here
+/// so the type-position uses are self-explanatory + clippy's
+/// `type_complexity` lint stays quiet on the napi-side trampoline.
+type EngineOnChangeCallback = Arc<dyn Fn(u64, &Chunk) + Send + Sync + 'static>;
+
+/// Wave-8c-subscribe-infra: build an engine-side `OnChangeCallback`
+/// (`Arc<dyn Fn(u64, &Chunk) + Send + Sync>`) that fires the supplied
+/// JS function on the libuv main loop via `napi::ThreadsafeFunction`.
+///
+/// The trampoline:
+///   1. Engine publishes a change event on whichever thread committed
+///      the WRITE (the broadcast walks subscribers synchronously).
+///   2. The Rust closure built here projects `(seq, payload_bytes)` and
+///      calls `tsfn.call(...)` with `NonBlocking` semantics — napi-rs
+///      enqueues onto the libuv main loop.
+///   3. The `build_callback` closure (registered at TSFN construction)
+///      translates the tuple into `(JS number, JS Buffer)` and invokes
+///      the user's JS callback.
+pub(crate) fn build_on_change_tsfn(
+    cb: napi::bindgen_prelude::Function<'_, (u32, Buffer), ()>,
+) -> napi::Result<EngineOnChangeCallback> {
+    // `weak: false` (the default) keeps the process alive while
+    // subscriptions are live — matches the dx contract that
+    // `engine.onChange` returns a handle whose Drop controls cleanup.
+    // `callee_handled: false` means we don't pass an error first-arg
+    // into the JS callback.
+    let tsfn = cb
+        .build_threadsafe_function::<OnChangeTsfnPayload>()
+        .callee_handled::<false>()
+        .build_callback(
+            |ctx: napi::threadsafe_function::ThreadsafeCallContext<OnChangeTsfnPayload>| {
+                let (seq, bytes) = ctx.value;
+                let buf = Buffer::from(bytes);
+                Ok((seq, buf))
+            },
+        )?;
+    let tsfn_arc = Arc::new(tsfn);
+    let engine_cb: EngineOnChangeCallback = {
+        let tsfn = Arc::clone(&tsfn_arc);
+        Arc::new(move |seq: u64, chunk: &Chunk| {
+            // u64 → u32 narrowing: ThreadsafeFunction tuples to JS
+            // already encode u32 cleanly; events past 2^32 saturate
+            // (operationally beyond the bounded retention window).
+            let seq32 = u32::try_from(seq).unwrap_or(u32::MAX);
+            let payload_bytes = chunk.bytes.clone();
+            let _status = tsfn.call(
+                (seq32, payload_bytes),
+                ThreadsafeFunctionCallMode::NonBlocking,
+            );
+        })
+    };
+    Ok(engine_cb)
+}
 
 /// Cursor mode JSON shape parsed by the napi adapter. Mirrors
 /// [`SubscribeCursor`] one-to-one.
@@ -86,54 +151,48 @@ pub(crate) fn parse_cursor(raw: &serde_json::Value) -> napi::Result<SubscribeCur
     }
 }
 
-/// Internal: drive `Engine::on_change_with_cursor`. The callback is a
-/// no-op closure today — once G6-A wires the change-stream port, this
-/// adapter accepts a `napi::ThreadsafeFunction` parameter and bridges
-/// per-event delivery into JS. The signature is shaped now so the TS
-/// wrapper's compile-time contract doesn't shift when G6-A merges.
+/// Drive `Engine::on_change_with_cursor`. The supplied JS callback is
+/// wrapped in a `napi::ThreadsafeFunction` via [`build_on_change_tsfn`]
+/// so deliveries from arbitrary publishing threads land on the libuv
+/// main loop. Callers without a JS callback (synchronous TS wrappers
+/// that just want the inactive-handle JSON shape) can pass `None`.
 pub(crate) fn on_change_adapter(
     engine: &InnerEngine,
     pattern: &str,
     cursor_raw: &serde_json::Value,
+    cb: Option<napi::bindgen_prelude::Function<'_, (u32, Buffer), ()>>,
 ) -> napi::Result<Subscription> {
     let cursor = parse_cursor(cursor_raw)?;
-    // No-op callback shim: once G6-A's change-stream port lands, the
-    // `#[napi]` impl method accepts a `JsFunction` that this adapter
-    // wraps in a `ThreadsafeFunction` and threads through here. Until
-    // then the callback is dropped (the handle is `is_active() == false`
-    // pre-G6-A so no events would fire anyway).
-    let cb = Arc::new(|_seq: u64, _chunk: &Chunk| {});
+    let engine_cb = match cb {
+        Some(jscb) => build_on_change_tsfn(jscb)?,
+        None => Arc::new(|_seq: u64, _chunk: &Chunk| {}) as Arc<_>,
+    };
     engine
-        .on_change_with_cursor(pattern, cursor, cb)
+        .on_change_with_cursor(pattern, cursor, engine_cb)
         .map_err(engine_err)
 }
 
-/// Phase 2b wave-8c-cont: drive `Engine::on_change_as` with an
-/// explicit actor principal CID. The principal is captured on the
-/// Subscription body for delivery-time cap-recheck once the production
-/// change-stream port lands (8c-ii remainder).
+/// Phase 2b wave-8c-cont: drive `Engine::on_change_as_with_cursor`
+/// with an explicit actor principal CID. The supplied JS callback is
+/// wrapped in a `napi::ThreadsafeFunction`; the principal is captured
+/// on the registered ad-hoc onChange entry's delivery-time cap-recheck
+/// closure so D5 cap-recheck-at-delivery fires the named principal's
+/// grants on every event.
 pub(crate) fn on_change_as_adapter(
     engine: &InnerEngine,
     pattern: &str,
     cursor_raw: &serde_json::Value,
     actor: &benten_core::Cid,
+    cb: Option<napi::bindgen_prelude::Function<'_, (u32, Buffer), ()>>,
 ) -> napi::Result<Subscription> {
     let cursor = parse_cursor(cursor_raw)?;
-    // No-op callback shim mirrors `on_change_adapter`. The `actor` is
-    // captured on the engine-side Subscription for D5 delivery-time
-    // cap-recheck once the change-stream port wires through.
-    let cb = Arc::new(|_seq: u64, _chunk: &Chunk| {});
-    let sub = engine
-        .on_change_as(pattern, cb, actor)
-        .map_err(engine_err)?;
-    // Apply the explicit cursor by re-driving with_cursor when not
-    // Latest. on_change_as currently delegates to Latest; for
-    // sequence/persistent cursors callers route through on_change.
-    // Surface a typed error if a non-Latest cursor was passed in
-    // combination with `as` — the caller's intent was an authenticated
-    // ad-hoc consume, which is structurally Latest-only pre-port.
-    let _ = cursor;
-    Ok(sub)
+    let engine_cb = match cb {
+        Some(jscb) => build_on_change_tsfn(jscb)?,
+        None => Arc::new(|_seq: u64, _chunk: &Chunk| {}) as Arc<_>,
+    };
+    engine
+        .on_change_as_with_cursor(pattern, cursor, engine_cb, actor)
+        .map_err(engine_err)
 }
 
 /// ts-r4-2 mirror for SUBSCRIBE (mini-review cr-g6b-mr-5): synthetic

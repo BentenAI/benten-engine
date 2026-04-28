@@ -786,29 +786,30 @@ mod napi_surface {
             &self,
             pattern: String,
             cursor: serde_json::Value,
+            callback: Option<napi::bindgen_prelude::Function<'_, (u32, Buffer), ()>>,
         ) -> napi::Result<serde_json::Value> {
-            let sub = on_change_adapter(&self.inner, &pattern, &cursor)?;
+            let sub = on_change_adapter(&self.inner, &pattern, &cursor, callback)?;
             Ok(subscription_to_json(&sub))
         }
 
-        /// Phase 2b wave-8c-cont: `onChange` with an explicit actor
-        /// principal. Mirrors [`Engine::call_as`] naming.
+        /// Phase 2b wave-8c-subscribe-infra: `onChange` with an explicit
+        /// actor principal. Mirrors [`Engine::call_as`] naming.
         ///
         /// `actor` is a friendly principal identifier resolved through
         /// `parse_actor_cid_or_derive`. The principal is captured on
-        /// the engine-side Subscription for D5 delivery-time
-        /// cap-recheck once the production change-stream port lands
-        /// (8c-ii remainder); pre-port the returned subscription's
-        /// `active` is `false` honestly.
+        /// the registered ad-hoc onChange entry's delivery-time
+        /// cap-recheck closure so D5 cap-recheck-at-delivery fires the
+        /// named principal's grants on every event.
         #[napi]
         pub fn on_change_as(
             &self,
             pattern: String,
             cursor: serde_json::Value,
             actor: String,
+            callback: Option<napi::bindgen_prelude::Function<'_, (u32, Buffer), ()>>,
         ) -> napi::Result<serde_json::Value> {
             let actor_cid = parse_actor_cid_or_derive(&actor);
-            let sub = on_change_as_adapter(&self.inner, &pattern, &cursor, &actor_cid)?;
+            let sub = on_change_as_adapter(&self.inner, &pattern, &cursor, &actor_cid, callback)?;
             Ok(subscription_to_json(&sub))
         }
 

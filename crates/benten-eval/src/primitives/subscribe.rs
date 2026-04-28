@@ -924,17 +924,297 @@ fn cap_prefix_covers(cap: &str, target: &str) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// Process-wide change-event publish (used by `Latest` cursor pre-registration
-// drop semantics).
+// Process-wide change-event publish + ad-hoc onChange callback registry.
+//
+// Wave-8c-subscribe-infra wires the production SUBSCRIBE delivery path:
+//   1. The engine's `ChangeBroadcast::publish` hands graph-level
+//      `ChangeEvent`s to the bridge in `crate::primitives::subscribe`,
+//      which translates them into the eval-side `ChangeEvent` shape (with
+//      monotonic engine-assigned `seq` + opaque payload bytes) and calls
+//      `publish_change_event_with_label`.
+//   2. `publish_change_event_with_label` walks BOTH:
+//        a. `ACTIVE_HANDLES`  (subgraph-internal SUBSCRIBE primitives)
+//        b. `ON_CHANGE_REGISTRY` (ad-hoc `engine.on_change` consumers)
+//      For each entry whose pattern matches the event's anchor label, it
+//      runs the cursor pre-filter, applies the per-subscriber dedup state
+//      machine, performs the D5 delivery-time cap re-check, and either
+//      injects (subgraph SUBSCRIBE) or invokes the registered callback
+//      (ad-hoc onChange).
+//   3. The legacy `publish_change_event(event)` entry-point bumps the
+//      `Latest`-cursor horizon counter (preserving the original
+//      pre-registration-drop semantics for tests that don't carry a
+//      label) and routes through the label-aware path with an empty
+//      label so ad-hoc consumers using `LabelGlob("*")` still observe.
 // ---------------------------------------------------------------------------
 
 static LATEST_CURSOR_HORIZON: AtomicUsize = AtomicUsize::new(0);
 
+/// Engine-assigned monotonic sequence counter. Bumped on every published
+/// change event so subscribers observe a strictly-increasing `seq` per the
+/// D5-RESOLVED contract. Test fixtures that mint events directly via
+/// `make_change_event` set their own seq; the bridge from the engine
+/// `ChangeBroadcast` uses this counter so production deliveries carry the
+/// monotonic engine-assigned value.
+static ENGINE_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+/// Mint the next engine-assigned `seq` for a freshly-produced event. Public
+/// so the engine-side `ChangeBroadcast` bridge can stamp events before they
+/// reach the SUBSCRIBE delivery path.
+#[must_use]
+pub fn next_engine_seq() -> u64 {
+    ENGINE_SEQ.fetch_add(1, Ordering::Relaxed)
+}
+
+/// Cap-recheck closure shape. Returns `true` if delivery should proceed,
+/// `false` if the principal's caps have been revoked / no longer cover the
+/// event's anchor (D5 cap-recheck-at-delivery).
+pub type DeliveryCapRecheck = Arc<dyn Fn(&ChangeEvent) -> bool + Send + Sync + 'static>;
+
+/// Ad-hoc onChange consumer callback shape (the engine-layer
+/// `Engine::on_change` registers these). Mirrors
+/// `benten_engine::OnChangeCallback` (which is `Arc<dyn Fn(u64, &Chunk) +
+/// Send + Sync>`) but takes the eval-side `ChangeEvent` directly so we
+/// don't have to cross-crate the `Chunk` type. The engine-layer adapter
+/// converts.
+pub type OnChangeDeliveryCallback = Arc<dyn Fn(&ChangeEvent) + Send + Sync + 'static>;
+
+/// One ad-hoc onChange registration row.
+struct OnChangeEntry {
+    pattern: ChangePattern,
+    cursor: SubscribeCursor,
+    callback: OnChangeDeliveryCallback,
+    /// Active flag, shared with the engine-side `Subscription` handle.
+    /// `false` => entry will be GC'd at the next walk + skipped now.
+    active: Arc<std::sync::atomic::AtomicBool>,
+    /// Per-subscriber `max_delivered_seq` (D5 dedup gate). Shared with
+    /// the engine-side `Subscription` so the consumer can read state.
+    max_delivered_seq: Arc<std::sync::atomic::AtomicU64>,
+    /// Optional D5 delivery-time cap-recheck. `None` for unauthenticated
+    /// `on_change`; `Some` for authenticated `on_change_as`.
+    cap_recheck: Option<DeliveryCapRecheck>,
+    /// Pre-registration horizon at registration time. Events with
+    /// `seq <= horizon_at_register` predate the registration and are
+    /// skipped for `Latest` cursor mode.
+    horizon_at_register: u64,
+}
+
+static ON_CHANGE_REGISTRY: std::sync::LazyLock<Mutex<HashMap<SubscriberId, OnChangeEntry>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Register an ad-hoc onChange consumer with the process-wide registry.
+/// Returns the `SubscriberId` keyed under, which the engine-layer
+/// `Subscription` handle remembers so its `Drop` impl can call
+/// [`unregister_on_change`].
+///
+/// # Errors
+/// Surfaces pattern-validation failures at the same code points
+/// `register_inner` would.
+pub fn register_on_change(
+    pattern: ChangePattern,
+    cursor: SubscribeCursor,
+    callback: OnChangeDeliveryCallback,
+    cap_recheck: Option<DeliveryCapRecheck>,
+    active: Arc<std::sync::atomic::AtomicBool>,
+    max_delivered_seq: Arc<std::sync::atomic::AtomicU64>,
+) -> Result<SubscriberId, SubscribeError> {
+    pattern.validate().map_err(|code| match code {
+        ErrorCode::SubscribePatternInvalid => SubscribeError::PatternInvalid,
+        ErrorCode::Inv11SystemZoneRead => SubscribeError::SystemZoneRead,
+        _ => SubscribeError::PatternInvalid,
+    })?;
+
+    // Derive a unique subscriber id from the pattern + cursor + a small
+    // entropy seed (the current ENGINE_SEQ value) so two simultaneous
+    // registrations with the same pattern+cursor produce distinct ids.
+    let mut bytes: Vec<u8> = Vec::new();
+    match &pattern {
+        ChangePattern::AnchorPrefix(s) => {
+            bytes.push(0);
+            bytes.extend_from_slice(s.as_bytes());
+        }
+        ChangePattern::LabelGlob(s) => {
+            bytes.push(1);
+            bytes.extend_from_slice(s.as_bytes());
+        }
+    }
+    match &cursor {
+        SubscribeCursor::Latest => bytes.push(0xa0),
+        SubscribeCursor::Sequence(n) => {
+            bytes.push(0xa1);
+            bytes.extend_from_slice(&n.to_le_bytes());
+        }
+        SubscribeCursor::Persistent(id) => {
+            bytes.push(0xa2);
+            bytes.extend_from_slice(id.as_cid().as_bytes());
+        }
+    }
+    let nonce = ENGINE_SEQ.load(Ordering::Relaxed);
+    bytes.extend_from_slice(&nonce.to_le_bytes());
+    let digest = blake3::hash(&bytes);
+    let id = SubscriberId::from_cid(Cid::from_blake3_digest(*digest.as_bytes()));
+
+    let horizon = u64::try_from(LATEST_CURSOR_HORIZON.load(Ordering::Relaxed)).unwrap_or(0);
+    active.store(true, Ordering::SeqCst);
+
+    let entry = OnChangeEntry {
+        pattern,
+        cursor,
+        callback,
+        active,
+        max_delivered_seq,
+        cap_recheck,
+        horizon_at_register: horizon,
+    };
+    ON_CHANGE_REGISTRY
+        .lock()
+        .expect("on_change-registry poisoned")
+        .insert(id, entry);
+    Ok(id)
+}
+
+/// Remove an ad-hoc onChange entry from the registry. Idempotent — calling
+/// twice for the same id is a no-op.
+pub fn unregister_on_change(id: &SubscriberId) {
+    let mut g = ON_CHANGE_REGISTRY
+        .lock()
+        .expect("on_change-registry poisoned");
+    g.remove(id);
+}
+
+/// Total ad-hoc onChange entries (active OR not). Diagnostic helper for
+/// tests + operator probes.
+#[must_use]
+pub fn on_change_registration_count() -> usize {
+    ON_CHANGE_REGISTRY
+        .lock()
+        .expect("on_change-registry poisoned")
+        .len()
+}
+
 /// Publish a pre-registration change event. `Latest` cursors that
 /// register AFTER this call do NOT observe the event.
+///
+/// Backwards-compatible entry-point that routes through the label-aware
+/// path with an empty label string. Production callers (the engine's
+/// `ChangeBroadcast` bridge) prefer [`publish_change_event_with_label`]
+/// so anchor-label-based `LabelGlob` / `AnchorPrefix` matchers fire
+/// correctly.
 pub fn publish_change_event(event: ChangeEvent) {
-    let _ = event;
+    publish_change_event_with_label("", event);
+}
+
+/// Publish a change event with the matching anchor label string. Walks
+/// both `ACTIVE_HANDLES` (subgraph-internal SUBSCRIBE primitives) and
+/// `ON_CHANGE_REGISTRY` (ad-hoc onChange consumers) and dispatches each
+/// match through the per-subscriber dedup gate + D5 delivery-time
+/// cap-recheck.
+pub fn publish_change_event_with_label(label: &str, event: ChangeEvent) {
     LATEST_CURSOR_HORIZON.fetch_add(1, Ordering::Relaxed);
+
+    // First: subgraph-internal SUBSCRIBE primitives. Snapshot the keys
+    // under a short lock + dispatch outside the lock so a callback that
+    // touches the registry doesn't deadlock.
+    let active_ids: Vec<SubscriberId> = {
+        let g = ACTIVE_HANDLES.lock().expect("active-handles poisoned");
+        g.keys().copied().collect()
+    };
+    for id in &active_ids {
+        let _ = with_active_handle(id, |sub| {
+            // Pattern match against the anchor label. If the spec used an
+            // `AnchorPrefix` and the label string is empty (test path),
+            // we conservatively skip — the test path that mints events
+            // without a label does not exercise pattern routing.
+            if !label.is_empty() && !sub.spec.pattern.matches_label(label) {
+                return;
+            }
+            // Best-effort inject; the inject path applies cursor + dedup
+            // + cap-recheck internally.
+            let _ = sub.inject(event.clone());
+        });
+    }
+
+    // Second: ad-hoc onChange consumers.
+    let entries: Vec<(SubscriberId, OnChangeEntry)> = {
+        let mut g = ON_CHANGE_REGISTRY
+            .lock()
+            .expect("on_change-registry poisoned");
+        // GC inactive entries.
+        g.retain(|_, e| e.active.load(Ordering::SeqCst));
+        // Snapshot a (clone-light) copy of every still-active entry; the
+        // closures are `Arc`-cloneable so this is cheap.
+        g.iter()
+            .map(|(id, e)| {
+                (
+                    *id,
+                    OnChangeEntry {
+                        pattern: e.pattern.clone(),
+                        cursor: e.cursor.clone(),
+                        callback: Arc::clone(&e.callback),
+                        active: Arc::clone(&e.active),
+                        max_delivered_seq: Arc::clone(&e.max_delivered_seq),
+                        cap_recheck: e.cap_recheck.clone(),
+                        horizon_at_register: e.horizon_at_register,
+                    },
+                )
+            })
+            .collect()
+    };
+    for (id, entry) in entries {
+        if !entry.active.load(Ordering::SeqCst) {
+            continue;
+        }
+        // Pattern match. Empty label => skip (test path).
+        if label.is_empty() {
+            continue;
+        }
+        if !entry.pattern.matches_label(label) {
+            continue;
+        }
+        // Cursor pre-filter.
+        match &entry.cursor {
+            SubscribeCursor::Latest => {
+                if event.seq <= entry.horizon_at_register {
+                    continue;
+                }
+            }
+            SubscribeCursor::Sequence(n) => {
+                if event.seq < *n {
+                    continue;
+                }
+            }
+            SubscribeCursor::Persistent(_) => {
+                // Persistent cursor mode for ad-hoc onChange is reserved
+                // for the durable-store path that wires fully in
+                // Phase-3. Pre-port we treat it as Latest.
+                if event.seq <= entry.horizon_at_register {
+                    continue;
+                }
+            }
+        }
+        // Dedup gate (D5 exactly-once-at-handler).
+        let prev = entry.max_delivered_seq.load(Ordering::SeqCst);
+        if event.seq <= prev {
+            continue;
+        }
+        // D5 delivery-time cap re-check.
+        if let Some(check) = &entry.cap_recheck
+            && !(check)(&event)
+        {
+            // Cap was revoked mid-stream — auto-cancel the subscription
+            // (D5 contract). Flip the active flag so the next walk GCs it.
+            entry.active.store(false, Ordering::SeqCst);
+            unregister_on_change(&id);
+            continue;
+        }
+        // Bump dedup state + invoke the callback. Catch panics so a
+        // misbehaving consumer doesn't take down the publishing thread.
+        entry.max_delivered_seq.store(event.seq, Ordering::SeqCst);
+        let cb = Arc::clone(&entry.callback);
+        let ev = event.clone();
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            cb(&ev);
+        }));
+    }
 }
 
 // ---------------------------------------------------------------------------

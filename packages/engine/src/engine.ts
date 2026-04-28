@@ -149,12 +149,17 @@ interface NativeEngine {
     input: unknown,
     actor: string,
   ) => NativeStreamHandle;
-  onChange?: (pattern: string, cursor: unknown) => NativeSubscriptionJson;
+  onChange?: (
+    pattern: string,
+    cursor: unknown,
+    callback?: (seq: number, payload: Buffer) => void,
+  ) => NativeSubscriptionJson;
   // Phase 2b wave-8c-cont — SUBSCRIBE authenticated variant.
   onChangeAs?: (
     pattern: string,
     cursor: unknown,
     actor: string,
+    callback?: (seq: number, payload: Buffer) => void,
   ) => NativeSubscriptionJson;
   // Phase 2b wave-8c — module-manifest lifecycle bridges.
   installModule?: (manifestJson: unknown, expectedCid: string) => string;
@@ -1695,22 +1700,29 @@ build @benten/engine-native with `--features test-helpers`",
         "Engine.onChange unavailable on this binding — rebuild @benten/engine-native",
       );
     }
+    // Wave-8c-subscribe-infra: the napi `onChange` adapter accepts
+    // an optional JS callback (third argument) which it wraps in a
+    // `napi::ThreadsafeFunction` so deliveries from the engine's
+    // ChangeBroadcast publish path land on the libuv main loop. The
+    // adapter's `(seq, payload: Buffer)` shape is mapped to the
+    // user-facing `OnChangeCallback`'s `(seq, chunk)` here so
+    // downstream code can keep treating the payload as a `Chunk`.
+    const napiCb = (seq: number, payload: Buffer): void => {
+      try {
+        callback(seq, payload);
+      } catch (err) {
+        // dx-r1-2b-4: subscriber-side throws are routine; sub stays
+        // alive, log fires.
+        // eslint-disable-next-line no-console
+        console.error("onChange callback threw:", err);
+      }
+    };
     let raw: NativeSubscriptionJson;
     try {
-      raw = this.inner.onChange(pattern, serializeCursor(cursor));
+      raw = this.inner.onChange(pattern, serializeCursor(cursor), napiCb);
     } catch (err) {
       throw mapNativeError(err);
     }
-    // Wave-8c removes the queueMicrotask sentinel masking. The
-    // `callback` argument is intentionally captured but not yet
-    // invoked here — the production napi::ThreadsafeFunction wiring
-    // lands in wave-8c-cont 8c-ii remainder. Until then, the
-    // returned Subscription's `active: false` signals the unwired
-    // condition honestly. We retain the reference under a void
-    // expression so TypeScript's noUnusedParameters lint stays
-    // satisfied without a `_` rename that would be observable to
-    // consumers.
-    void callback;
     return makeSubscription(raw);
   }
 
@@ -1745,13 +1757,25 @@ build @benten/engine-native with `--features test-helpers`",
         "Engine.onChangeAs unavailable on this binding — rebuild @benten/engine-native (wave-8c-cont bridge required)",
       );
     }
+    // Wave-8c-subscribe-infra: same callback adapter shape as
+    // `onChange` above. The principal is captured Rust-side so D5
+    // delivery-time cap-recheck fires this actor's grants on every
+    // event; if the actor's caps are revoked mid-stream the
+    // subscription auto-cancels per D5 contract.
+    const napiCb = (seq: number, payload: Buffer): void => {
+      try {
+        callback(seq, payload);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("onChangeAs callback threw:", err);
+      }
+    };
     let raw: NativeSubscriptionJson;
     try {
-      raw = this.inner.onChangeAs(pattern, serializeCursor(cursor), actor);
+      raw = this.inner.onChangeAs(pattern, serializeCursor(cursor), actor, napiCb);
     } catch (err) {
       throw mapNativeError(err);
     }
-    void callback;
     return makeSubscription(raw);
   }
 
