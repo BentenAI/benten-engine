@@ -19,6 +19,17 @@ use serde::{Deserialize, Serialize};
 /// Plan §9.1 + ucca-1 / ucca-4: chain (not 3-tuple) carries this frame as
 /// its element type. Phase-2a ships the 3-field shape; Phase-6 additions
 /// are provably additive (pinned by `invariant_14_fixture_cid` test).
+///
+/// Phase-2b G7-B (D20-RESOLVED): adds `sandbox_depth: u8` for Inv-4
+/// nest-depth tracking. The counter is INHERITED across CALL boundaries
+/// (not reset) so that handler A SANDBOXes → CALLs handler B → SANDBOXes
+/// is depth-2, not two separate depth-1s. To preserve the Phase-2a
+/// schema-fixture CID (`bafyr4ig26oo2jmvq47wewho4sdpiscjpluvpzev3uerleuj2rtl63r7c5a`),
+/// the field defaults to `0` AND `AttributionFrame::cid()` only includes the
+/// `sandbox_depth` slot in the canonical Node when the value is non-zero.
+/// A frame with `sandbox_depth = 0` therefore round-trips to the exact
+/// Phase-2a CID; a frame with non-zero depth produces a distinct CID
+/// (asserted by `invariant_4_overflow.rs::attribution_frame_sandbox_depth_field_present_default_zero`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AttributionFrame {
     /// CID of the actor (principal) that authored the step.
@@ -27,6 +38,13 @@ pub struct AttributionFrame {
     pub handler_cid: Cid,
     /// CID of the capability grant authorising the step.
     pub capability_grant_cid: Cid,
+    /// Inv-4 SANDBOX nest-depth counter (D20-RESOLVED). Incremented at
+    /// every SANDBOX entry; INHERITED across CALL boundaries (CALL itself
+    /// does NOT increment). Default `0` keeps the Phase-2a schema-fixture
+    /// CID stable for non-SANDBOX flows. `serde(default)` lets older
+    /// DAG-CBOR payloads decode cleanly into the extended struct.
+    #[serde(default)]
+    pub sandbox_depth: u8,
 }
 
 impl AttributionFrame {
@@ -52,6 +70,22 @@ impl AttributionFrame {
             "grant".into(),
             Value::Bytes(self.capability_grant_cid.as_bytes().to_vec()),
         );
+        // D20-RESOLVED Phase-2a-CID-stability discipline: the
+        // `sandbox_depth` slot is included in the canonical Node ONLY
+        // when the value is non-zero. A default-zero AttributionFrame
+        // therefore canonicalises to the exact Phase-2a 3-key Node and
+        // produces the pinned schema-fixture CID
+        // (`bafyr4ig26oo2jmvq47wewho4sdpiscjpluvpzev3uerleuj2rtl63r7c5a`).
+        // Any non-zero value adds the slot and produces a distinct CID,
+        // which is the security claim of Inv-4: a SANDBOX-bearing
+        // attribution chain is content-distinguishable from a non-SANDBOX
+        // chain.
+        if self.sandbox_depth != 0 {
+            props.insert(
+                "sandbox_depth".into(),
+                Value::Int(i64::from(self.sandbox_depth)),
+            );
+        }
         let node = Node::new(vec!["AttributionFrame".into()], props);
         node.cid()
     }

@@ -285,6 +285,7 @@ fn payload_for_handler(
         actor_cid: *principal,
         handler_cid,
         capability_grant_cid: grant_cid,
+        sandbox_depth: 0,
     };
 
     ExecutionStatePayload {
@@ -548,6 +549,7 @@ impl Engine {
                 actor_cid: *principal,
                 handler_cid,
                 capability_grant_cid: grant_cid,
+                sandbox_depth: 0,
             }],
             pinned_subgraph_cids: Vec::new(),
             context_binding_snapshots: Vec::new(),

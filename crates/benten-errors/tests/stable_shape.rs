@@ -104,6 +104,14 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // Phase-3+ Z-set / DBSP cancellation reserved.
     ErrorCode::ViewStrategyARefused,
     ErrorCode::ViewStrategyCReserved,
+    // Phase-2b G7-B SANDBOX invariants (Inv-4 nest depth + Inv-7 output
+    // limit) plus the D20 saturation overflow code. G7-A adds the
+    // additional sandbox runtime codes (fuel/memory/wallclock/host-fn
+    // denial / manifest / module-invalid / nested-dispatch-denied) on its
+    // own branch; the merge surface here is additive.
+    ErrorCode::InvSandboxDepth,
+    ErrorCode::InvSandboxOutput,
+    ErrorCode::SandboxNestedDispatchDepthExceeded,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -159,8 +167,14 @@ fn variant_count_is_pinned() {
     // Phase 2b G8-B (D8-RESOLVED) adds `ViewStrategyARefused` +
     // `ViewStrategyCReserved` for user-view registration-time refusals.
     // Post-G8-B: 59 + 2 = 61.
+    //
+    // Phase-2b G7-B sync (this branch, rebased on top of G8-A + G8-B merged
+    // main): +3 codes (InvSandboxDepth, InvSandboxOutput,
+    // SandboxNestedDispatchDepthExceeded). Post-G7-B: 61 + 3 = 64. G7-A's
+    // parallel SANDBOX brief adds the remaining ~9 sandbox codes; that
+    // merge will bump this canary further.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 61,
+        CATALOG_VARIANT_COUNT, 64,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

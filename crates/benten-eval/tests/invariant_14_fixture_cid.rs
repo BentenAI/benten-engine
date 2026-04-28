@@ -35,6 +35,11 @@ fn attribution_schema_fixture_cid_matches_checked_in_const() {
         actor_cid: zero_cid(),
         handler_cid: zero_cid(),
         capability_grant_cid: zero_cid(),
+        // Phase-2b G7-B (D20 additive): default sandbox_depth = 0 keeps the
+        // Phase-2a fixture CID stable. `AttributionFrame::cid()` only
+        // includes the `sandbox_depth` slot in the canonical Node when
+        // the value is non-zero — see exec_state.rs `cid()` discipline.
+        sandbox_depth: 0,
     };
     let cid = frame.cid().expect("attribution frame cid");
     let actual = cid.to_string();
@@ -44,6 +49,7 @@ fn attribution_schema_fixture_cid_matches_checked_in_const() {
     }
     assert_eq!(
         actual, FIXTURE_CID,
-        "AttributionFrame schema fixture CID must stay pinned"
+        "AttributionFrame schema fixture CID must stay pinned (D20 additive: \
+         sandbox_depth=0 must NOT alter the canonical bytes)"
     );
 }

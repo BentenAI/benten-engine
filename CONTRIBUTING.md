@@ -13,6 +13,7 @@ Thanks for your interest. This repo is under active development; contributions a
 - Rust 2024 edition. MSRV is **1.89** (bounded by `redb` 4's floor); dev version is **1.94+** (pinned to `stable` in `rust-toolchain.toml`, which auto-installs on first cargo invocation).
 - Node.js 22+ and npm (for the TypeScript bindings and integration tests).
 - `cargo-nextest`: `cargo install cargo-nextest`.
+- **Optional — only when regenerating SANDBOX `.wasm` test fixtures:** `wabt` (`brew install wabt`, or your distro's package). The committed `.wasm` bytes under `crates/benten-eval/tests/fixtures/sandbox/` are the canonical CI input — `scripts/build_wasm.sh` (dev-only) re-derives them from sibling `.wat` sources and a CI drift detector enforces equality. You only need `wabt` installed if you're editing a `.wat` source.
 
 ## Setup
 

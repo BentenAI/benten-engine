@@ -179,6 +179,58 @@ pub fn validate_subgraph(
         }
     }
 
+    // Invariant 4 — SANDBOX nest-depth ceiling (Phase 2b G7-B / D20).
+    // Symmetric with the builder-snapshot path; a finalized Subgraph
+    // re-runs the static analysis so a round-tripped subgraph still
+    // surfaces the same rejection.
+    let synth_handles: Vec<(NodeHandle, NodeHandle, String)> = sg
+        .edges
+        .iter()
+        .filter_map(|(f, t, l)| {
+            let fi = sg.nodes.iter().position(|n| n.id == *f)?;
+            let ti = sg.nodes.iter().position(|n| n.id == *t)?;
+            Some((
+                NodeHandle(u32::try_from(fi).ok()?),
+                NodeHandle(u32::try_from(ti).ok()?),
+                l.clone(),
+            ))
+        })
+        .collect();
+    let snapshot = SubgraphSnapshot {
+        nodes: sg.nodes.as_slice(),
+        parallel_fanout: &[],
+        iterate_depth: &[],
+        edges: synth_handles.as_slice(),
+        extra_edges: 0,
+        deterministic: sg.deterministic,
+        handler_id: sg.handler_id.as_str(),
+    };
+    // Skipped if Cycle was detected (matching the Inv-2 pattern above) —
+    // the iterative DFS walker assumes the snapshot is a DAG (Inv-1
+    // enforces in fail-fast mode); on a cyclic snapshot in aggregate
+    // mode the walker oscillates without termination. Same fix as
+    // applied at the `validate_builder` call site upstream.
+    if !violations.contains(&InvariantViolation::Cycle)
+        && crate::invariants::sandbox_depth::validate_registration(&snapshot, config).is_err()
+    {
+        violations.push(InvariantViolation::SandboxDepth);
+        if !aggregate {
+            return Err(finalize(out, violations));
+        }
+    }
+
+    // Invariant 7 — SANDBOX output_max_bytes range (Phase 2b G7-B / D15 +
+    // D17). Registration rejects a SANDBOX node whose declared
+    // `output_max_bytes` is poisoned (non-Int) or out of `(0, ceiling]`.
+    if crate::invariants::sandbox_output::validate_registration(sg.nodes.as_slice(), config)
+        .is_err()
+    {
+        violations.push(InvariantViolation::SandboxOutput);
+        if !aggregate {
+            return Err(finalize(out, violations));
+        }
+    }
+
     // Invariant 11 — system-zone literal-CID reject (Phase 2a G5-B-i).
     // Walks every READ / WRITE node whose literal target label (from
     // `"label"` property OR node id) begins with a `system:*` prefix.
@@ -314,6 +366,41 @@ pub(crate) fn validate_builder(
         violations.push(InvariantViolation::IterateBudget);
         if !aggregate {
             return Err(budget_err);
+        }
+    }
+
+    // Invariant 4 — SANDBOX nest-depth ceiling (Phase 2b G7-B / D20).
+    // Static call-graph analysis: rejects subgraphs whose longest
+    // SANDBOX-only chain exceeds `config.max_sandbox_nest_depth`
+    // (default 4). Runtime check (TRANSFORM-computed SANDBOX targets)
+    // lives in `invariants::sandbox_depth::check_runtime_entry` and
+    // fires from G7-A's SANDBOX primitive executor at every entry.
+    //
+    // Skipped if Cycle was already detected (matching the Inv-2 pattern
+    // below): the iterative DFS walker assumes the snapshot is a DAG
+    // (Inv-1 enforced first). On a cyclic snapshot in aggregate mode
+    // (where Inv-1 detection does NOT short-circuit) the walker
+    // Visit→Compute oscillates without termination — the
+    // `register_returns_inv_registration_on_multiple_violations` test
+    // wedged at >180s on every CI runner before this gate.
+    if !violations.contains(&InvariantViolation::Cycle)
+        && let Err(depth_err) = crate::invariants::sandbox_depth::validate_registration(sn, config)
+    {
+        violations.push(InvariantViolation::SandboxDepth);
+        if !aggregate {
+            return Err(depth_err);
+        }
+    }
+
+    // Invariant 7 — SANDBOX output_max_bytes range (Phase 2b G7-B). Mirror
+    // the validate_subgraph wiring so SubgraphBuilder::build_validated
+    // trips the same gate a round-tripped Subgraph would hit.
+    if let Err(output_err) =
+        crate::invariants::sandbox_output::validate_registration(sn.nodes, config)
+    {
+        violations.push(InvariantViolation::SandboxOutput);
+        if !aggregate {
+            return Err(output_err);
         }
     }
 
@@ -489,6 +576,8 @@ fn invariant_number(v: &InvariantViolation) -> u8 {
         InvariantViolation::Attribution => 14,
         InvariantViolation::Immutability => 13,
         InvariantViolation::SystemZone => 11,
+        InvariantViolation::SandboxDepth => 4,
+        InvariantViolation::SandboxOutput => 7,
     }
 }
 

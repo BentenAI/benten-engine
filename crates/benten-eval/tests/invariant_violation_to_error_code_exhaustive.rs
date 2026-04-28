@@ -66,6 +66,12 @@ fn every_invariant_violation_variant_maps_to_a_non_unknown_error_code() {
         (InvariantViolation::Attribution, ErrorCode::InvAttribution),
         (InvariantViolation::Immutability, ErrorCode::InvImmutability),
         (InvariantViolation::SystemZone, ErrorCode::InvSystemZone),
+        // Phase-2b G7-B — Inv-4 + Inv-7.
+        (InvariantViolation::SandboxDepth, ErrorCode::InvSandboxDepth),
+        (
+            InvariantViolation::SandboxOutput,
+            ErrorCode::InvSandboxOutput,
+        ),
     ];
 
     for (variant, expected) in cases {
@@ -112,7 +118,9 @@ fn assert_variant_known(v: InvariantViolation) {
         | InvariantViolation::Registration
         | InvariantViolation::Attribution
         | InvariantViolation::Immutability
-        | InvariantViolation::SystemZone => {}
+        | InvariantViolation::SystemZone
+        | InvariantViolation::SandboxDepth
+        | InvariantViolation::SandboxOutput => {}
         // The wildcard is REQUIRED here because `InvariantViolation` is
         // `#[non_exhaustive]` from the perspective of an integration test
         // (which compiles as an external crate against `benten-eval`).

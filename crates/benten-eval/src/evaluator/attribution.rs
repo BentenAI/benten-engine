@@ -77,6 +77,7 @@ pub(crate) fn default_frame_for_subgraph(subgraph: &Subgraph) -> AttributionFram
         actor_cid: synthetic_cid(b"actor:", subgraph.handler_id()),
         handler_cid,
         capability_grant_cid: synthetic_cid(b"grant:", subgraph.handler_id()),
+        sandbox_depth: 0,
     }
 }
 

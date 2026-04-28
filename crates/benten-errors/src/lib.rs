@@ -253,6 +253,31 @@ pub enum ErrorCode {
     /// `Strategy::C`. Strategy C is the Z-set / DBSP cancellation algorithm
     /// reserved for Phase 3+; refused at registration time in Phase 2b.
     ViewStrategyCReserved,
+    /// Invariant 4 (G7-B): SANDBOX nest-depth violation. Fires either at
+    /// registration-time (static SubgraphSpec analysis: a SANDBOX call-graph
+    /// declares more than `max_sandbox_nest_depth` levels of nesting) or at
+    /// runtime (a TRANSFORM-computed SANDBOX target pushes the depth past the
+    /// configured ceiling). Maps to `E_INV_SANDBOX_DEPTH`.
+    ///
+    /// D20-RESOLVED: counter lives on `AttributionFrame.sandbox_depth: u8`
+    /// and is INHERITED across CALL boundaries (handler A SANDBOXes → CALLs
+    /// handler B → SANDBOXes is depth-2, not two depth-1s).
+    InvSandboxDepth,
+    /// Invariant 7 (G7-B): SANDBOX cumulative output exceeded the
+    /// per-primitive `output_max_bytes` ceiling. Fires at the streaming
+    /// `CountedSink` (D17 PRIMARY path) before host-fn bytes are accepted,
+    /// or at the primitive boundary as the return-value backstop.
+    /// D15 trap-loudly default — no silent truncation. Maps to
+    /// `E_INV_SANDBOX_OUTPUT`.
+    InvSandboxOutput,
+    /// SANDBOX nest-depth saturation overflow (D20). The `sandbox_depth: u8`
+    /// counter saturates cleanly at `u8::MAX` and at the configured
+    /// `max_sandbox_nest_depth` boundary; either case fires this typed
+    /// error rather than wrapping. Distinct from `InvSandboxDepth` so
+    /// callers can distinguish a configured-ceiling exceed from a
+    /// type-level u8 ceiling exceed. Maps to
+    /// `E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED`.
+    SandboxNestedDispatchDepthExceeded,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -276,6 +301,9 @@ pub const PHASE_2A_FIRING_CODES: &[ErrorCode] = &[
     ErrorCode::CapWallclockExpired,
     ErrorCode::CapChainTooDeep,
     ErrorCode::WaitSignalShapeMismatch,
+    ErrorCode::InvSandboxDepth,
+    ErrorCode::InvSandboxOutput,
+    ErrorCode::SandboxNestedDispatchDepthExceeded,
 ];
 
 /// Phase-2a reserved HostError discriminants — G1-B reserves slots that
@@ -387,6 +415,11 @@ impl ErrorCode {
             ErrorCode::Inv11SystemZoneRead => "E_INV_11_SYSTEM_ZONE_READ",
             ErrorCode::ViewStrategyARefused => "E_VIEW_STRATEGY_A_REFUSED",
             ErrorCode::ViewStrategyCReserved => "E_VIEW_STRATEGY_C_RESERVED",
+            ErrorCode::InvSandboxDepth => "E_INV_SANDBOX_DEPTH",
+            ErrorCode::InvSandboxOutput => "E_INV_SANDBOX_OUTPUT",
+            ErrorCode::SandboxNestedDispatchDepthExceeded => {
+                "E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED"
+            }
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -481,6 +514,8 @@ impl ErrorCode {
             | ErrorCode::InvSystemZone
             | ErrorCode::InvAttribution
             | ErrorCode::InvIterateBudget
+            | ErrorCode::InvSandboxDepth
+            | ErrorCode::SandboxNestedDispatchDepthExceeded
             | ErrorCode::NotImplemented
             | ErrorCode::SubsystemDisabled
             // G6-A STREAM + SUBSCRIBE runtime failures route through the
@@ -496,6 +531,11 @@ impl ErrorCode {
             | ErrorCode::SubscribeDeliveryFailed
             | ErrorCode::SubscribeCursorLost
             | ErrorCode::Inv11SystemZoneRead => Some("ON_ERROR"),
+
+            // Inv-7 SANDBOX output limit — dedicated edge label (matches the
+            // SANDBOX primitive's edge surface in `benten-core` subgraph.rs:
+            // `&["ON_ERROR", "ON_FUEL", "ON_TIMEOUT", "ON_OUTPUT_LIMIT"]`).
+            ErrorCode::InvSandboxOutput => Some("ON_OUTPUT_LIMIT"),
 
             // Registration-time invariants — surface at REGISTER time, not
             // along a primitive edge. No routing.
@@ -613,6 +653,11 @@ impl ErrorCode {
             "E_INV_11_SYSTEM_ZONE_READ" => ErrorCode::Inv11SystemZoneRead,
             "E_VIEW_STRATEGY_A_REFUSED" => ErrorCode::ViewStrategyARefused,
             "E_VIEW_STRATEGY_C_RESERVED" => ErrorCode::ViewStrategyCReserved,
+            "E_INV_SANDBOX_DEPTH" => ErrorCode::InvSandboxDepth,
+            "E_INV_SANDBOX_OUTPUT" => ErrorCode::InvSandboxOutput,
+            "E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED" => {
+                ErrorCode::SandboxNestedDispatchDepthExceeded
+            }
             other => ErrorCode::Unknown(other.to_string()),
         }
     }
