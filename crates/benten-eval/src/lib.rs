@@ -45,6 +45,7 @@ pub mod primitives;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod sandbox;
 pub mod subgraph_ext;
+pub mod suspension_store;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 pub mod time_source;
@@ -56,6 +57,10 @@ pub use exec_state::{AttributionFrame, ExecutionStateEnvelope, ExecutionStatePay
 pub use host::{NullHost, PrimitiveHost, ViewQuery};
 pub use host_error::HostError;
 pub use primitives::wait::{SignalShape, SuspendedHandle, WaitOutcome, WaitResumeSignal};
+pub use suspension_store::{
+    InMemorySuspensionStore, SuspensionKey, SuspensionStore, SuspensionStoreError, WaitMetadata,
+    default_process_store,
+};
 #[cfg(any(test, feature = "testing"))]
 pub use time_source::MockMonotonicSource;
 pub use time_source::{
@@ -164,7 +169,11 @@ pub fn resume(
         return Outcome::Err(ErrorCode::InvRegistration);
     }
     let state_cid = handle.state_cid();
-    let meta = primitives::wait::metadata_for_cid(&state_cid);
+    // Phase-2b G12-E: prefer the EvalContext's configured store
+    // (engine-wired durable backend) over the process-default
+    // singleton. The fallback path retains the prior behaviour for
+    // unit harnesses that build an EvalContext without a store.
+    let meta = ctx.suspension_store().get_wait(&state_cid).ok().flatten();
     match primitives::wait::resume_with_meta(meta, signal, ctx.elapsed_ms()) {
         Ok(WaitOutcome::Complete(v)) => Outcome::Complete(v),
         Ok(wo @ WaitOutcome::Suspended(_)) => Outcome::Suspended(wo),

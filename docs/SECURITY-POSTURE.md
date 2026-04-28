@@ -486,7 +486,28 @@ by the engine orchestrator for capability-grant-authorised
 version-chain `NEXT_VERSION` appends; user subgraphs never reach it.
 `SyncReplica` reserves a Phase-3 shape for replicated writes.
 
-### Compromise #9 — Dedup writes pure-read (sec-r1-4 / atk-3)
+### Compromise #9 — Dedup writes pure-read (sec-r1-4 / atk-3) — CLOSED at Phase 2b G12-E
+
+**Status (2026-04-27).** **CLOSED at Phase 2b G12-E.** The R5 wave-6 G12-E
+landing replaces every process-local suspend / resume state surface
+(`OnceLock<Mutex<HashMap>>` in `wait::registry`,
+`LazyLock<Mutex<BTreeMap>>` in `engine_wait::ENVELOPE_CACHE`, the
+SUBSCRIBE persistent-cursor in-memory placeholder) with a single
+durable [`benten_eval::SuspensionStore`] port (default impl:
+[`benten_engine::RedbSuspensionStore`] over the engine's existing
+`Arc<RedbBackend>`). The dedup-row-3 audit-sequence pure-read
+contract (this compromise's body) was already enforced at the
+storage layer; G12-E removes the residual cross-process surface
+where a privileged re-put racing against an envelope-cache lookup
+could observe inconsistent state, completing the closure narrative
+per plan §3.2 + R2 §6 row. The dedup invariant tests
+(`crates/benten-graph/tests/inv_13_dedup_*`) continue to pin the
+storage-layer guarantee unchanged; the new G12-E tests
+(`crates/benten-engine/tests/g12_e_suspension_store_round_trips.rs`)
+pin the cross-process persistence layer the dedup contract sits on
+top of.
+
+
 
 **Class.** Audit-log forgery and audit-sequence side-channel leak
 via the dedup path.
@@ -597,7 +618,16 @@ flanking; ucca-10 pre-R1 review.
 
 ---
 
-### Compromise #10 — Resume-time capability re-verification (G3-A / G5-B-i Decision 4)
+### Compromise #10 — Resume-time capability re-verification (G3-A / G5-B-i Decision 4) — CLOSED at Phase 2b G12-E (cross-process metadata arm)
+
+**Status (2026-04-27).** The cross-process metadata arm of this
+compromise is **CLOSED at Phase 2b G12-E**. The orchestrator
+state log + brief refer to this closure as "Compromise #9" by
+sequencing in the open-compromise tracker; the canonical doc
+reference is #10. The capability re-check arm (the original
+"Decision 4" surface) remains scoped as documented below — G12-E
+addresses the metadata persistence layer the re-check sits on
+top of, not the federation-aware capability snapshot work itself.
 
 **Class.** Stale-authority resume + cross-process metadata gap.
 
@@ -611,17 +641,43 @@ suspend and resume: even if the suspended envelope names a valid
 actor CID, the re-check catches a policy that has since removed
 the underlying grant.
 
-**Residual gap — cross-process persisted metadata.** The resume
-path re-reads the cap policy from the same engine instance's
-in-memory snapshot. If the suspended envelope is carried across
-process boundaries (the Phase-2b dev-server restart scenario, or a
-future Phase-3 hand-off between sibling peers), the re-check runs
-against whatever policy the fresh process configured — which may
-include grants the original process never saw, and may omit grants
-the original process relied on. G5-B-i Decision 4 flagged that a
-cross-process resume needs the suspend envelope to carry enough
-metadata to let the resuming process validate against the
-historical policy state, not just the current one.
+**Residual gap — cross-process persisted metadata (CLOSED at G12-E).**
+Phase-2a parked WAIT suspend metadata (deadline + signal-shape) and
+the persisted `ExecutionStateEnvelope` bytes in two ad-hoc
+process-local surfaces — `OnceLock<Mutex<HashMap<Cid, WaitMetadata>>>`
+in `benten-eval/src/primitives/wait.rs` and
+`LazyLock<Mutex<BTreeMap<Cid, ExecutionStateEnvelope>>>` in
+`benten-engine/src/engine_wait.rs` (the test-grade `ENVELOPE_CACHE`
+gated behind `envelope-cache-test-grade`). Either surface dropped
+its state on `Engine::drop`, so a resume in a fresh process either
+silently completed the WAIT (the eval-layer permissive
+`Complete(value)` fallback) or failed with `E_NOT_FOUND` on
+`suspend_to_bytes` (the engine-layer cache miss). Phase 2b G12-E
+collapses both surfaces into a single durable port:
+[`benten_eval::SuspensionStore`] with the redb-backed default impl
+[`benten_engine::RedbSuspensionStore`] over the engine's existing
+`Arc<RedbBackend>`. WAIT metadata, envelope bytes, AND SUBSCRIBE
+persistent cursors all round-trip through this store; the
+`OnceLock` registry + `ENVELOPE_CACHE` static + the
+`envelope-cache-test-grade` feature are retired. The Phase-2a
+permissive `resume_with_meta` fallback is rewritten to fail loud
+with `E_HOST_BACKEND_UNAVAILABLE` so a missing metadata entry
+post-G12-E surfaces a typed error rather than silently admitting
+an attacker-supplied payload. Regression tests:
+`crates/benten-engine/tests/g12_e_suspension_store_round_trips.rs`
+(`wait_resume_cross_process_metadata_survives_restart`,
+`resume_with_meta_fails_closed_when_metadata_missing`,
+`subscribe_persistent_cursor_survives_engine_restart`,
+`subscribe_max_delivered_seq_round_trips_via_suspension_store`,
+`suspension_store_handles_both_wait_and_cursor_keys_without_collision`).
+
+**Capability re-check arm (UNCHANGED — Phase 3 scope).** G12-E
+ships the durable persistence the re-check sits on top of; the
+re-check itself still consults the resuming process's live
+`CapabilityPolicy`. The original Decision-4 federation-aware
+`cap_snapshot_hash` (envelope embeds the hash; resume asserts the
+fresh policy's snapshot matches) is Phase-3 scope alongside the
+`benten-id`-typed-principal work — sec-r1-5 deferral.
 
 **Mitigation (Phase 2a).** For in-process resume, the check is
 correct. For cross-process the Phase-2a default policy is to
@@ -631,20 +687,9 @@ operator must explicitly hand the envelope to a new engine
 instance and accept that the re-check semantics change. No
 silent regression.
 
-**Phase 2b deferral.** Cross-process WAIT resume-metadata
-persistence is fully captured in `.addl/phase-2b/00-scope-outline.md`
-§7a — the envelope grows a persisted `cap_snapshot_hash` that the
-resume path asserts the fresh policy's snapshot matches. Backlog
-entry appears at `docs/future/phase-2-backlog.md` Phase-2b CI
-additions (see §10.1 row).
-
-**Regression tests.** `crates/benten-eval/tests/wait_resume_capability_recheck.rs`
-(in-process re-check against revoked grant). Cross-process fixture
-is Phase-2b scope.
-
 **Cross-refs.** plan §9.1 resume protocol; G3-A ExecutionState
 envelope; G5-B-i Decision 4; `.addl/phase-2b/00-scope-outline.md`
-§7a.
+§7a; G12-E PR (CLOSED at Phase 2b G12-E).
 
 ---
 

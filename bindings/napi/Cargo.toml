@@ -62,24 +62,15 @@ browser-target = []
 [dependencies]
 benten-core = { path = "../../crates/benten-core" }
 benten-caps = { path = "../../crates/benten-caps" }
-# Phase 2a G11-A Wave 3a napi F5: the WAIT suspend/resume bridge (the
-# in-memory `ENVELOPE_CACHE` that `suspend_to_bytes` /
-# `resume_from_bytes*` round-trip through) must be live in the cdylib
-# the scaffolder + index.test.ts consume. Phase 2b lands a redb-backed
-# envelope store; until then the in-memory cache is the only thing that
-# makes `callWithSuspension` -> `resumeFromBytes*` work across the napi
-# boundary.
-#
-# R6 fix-pass A2: opt into the narrow `envelope-cache-test-grade`
-# feature instead of the broader `test-helpers`. Prior to the split the
-# cdylib pulled the full `test-helpers` surface
-# (`testing_force_reregister_with_different_cid`,
-# `testing_audit_sequence`, `testing_insert_privileged_fixture`, …)
-# which is reachable in production napi consumers' processes. The
-# narrow feature gates ONLY the ENVELOPE_CACHE static + cache_put /
-# cache_get; nothing else from the test-only API surface lands in the
-# cdylib.
-benten-engine = { path = "../../crates/benten-engine", features = ["envelope-cache-test-grade", "iteration-budget-test-grade"] }
+# Phase-2b G12-E (2026-04-27): the test-grade `envelope-cache-test-grade`
+# feature is RETIRED. WAIT envelope persistence now flows through the
+# durable `benten_eval::SuspensionStore` (default impl
+# `RedbSuspensionStore`) that every Engine instance constructs at build
+# time. The cdylib no longer has to opt in to a test-only static to
+# light up `suspend_to_bytes` / `resume_from_bytes*` — the production
+# path IS the durable path. `iteration-budget-test-grade` stays — that
+# feature is unrelated (G12-A budget override).
+benten-engine = { path = "../../crates/benten-engine", features = ["iteration-budget-test-grade"] }
 benten-errors = { workspace = true }
 # Phase 2b G8-B: needed for `Strategy` enum parsing in `parse_user_view_spec`
 # (the `engine.createUserView({ strategy })` napi entry point). The Strategy

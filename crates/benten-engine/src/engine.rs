@@ -413,6 +413,14 @@ pub struct Engine {
     /// backend; gating at the user surface keeps the construction path
     /// straightforward.
     pub(crate) read_only_snapshot: bool,
+    /// Phase-2b G12-E: durable store for WAIT suspend metadata,
+    /// suspended `ExecutionStateEnvelope` bytes, and SUBSCRIBE
+    /// persistent-cursor `max_delivered_seq` values. Populated at
+    /// engine construction with a [`crate::RedbSuspensionStore`] over
+    /// the engine's existing `Arc<RedbBackend>` so cross-process resume
+    /// hydrates suspended state from disk (closes Phase-2a Compromise
+    /// #10).
+    pub(crate) suspension_store: Arc<dyn benten_eval::SuspensionStore>,
 }
 
 impl std::fmt::Debug for Engine {
@@ -486,6 +494,9 @@ impl Engine {
         monotonic_source: Arc<dyn benten_eval::MonotonicSource>,
         time_source: Arc<dyn benten_eval::TimeSource>,
     ) -> Self {
+        let suspension_store: Arc<dyn benten_eval::SuspensionStore> = Arc::new(
+            crate::suspension_store::RedbSuspensionStore::new(Arc::clone(&backend)),
+        );
         Self {
             backend,
             policy,
@@ -499,6 +510,7 @@ impl Engine {
             time_source,
             revoke_at_iteration: std::sync::Mutex::new(BTreeMap::new()),
             read_only_snapshot: false,
+            suspension_store,
         }
     }
 
@@ -559,6 +571,19 @@ impl Engine {
 
     pub(crate) fn policy(&self) -> Option<&dyn CapabilityPolicy> {
         self.policy.as_deref()
+    }
+
+    /// Phase-2b G12-E: handle to the engine's [`benten_eval::SuspensionStore`].
+    ///
+    /// The store backs WAIT suspend metadata, suspended
+    /// `ExecutionStateEnvelope` bytes, and SUBSCRIBE persistent-cursor
+    /// `max_delivered_seq` values. Returned as a cheap `Arc::clone` so
+    /// the caller can hand it to `EvalContext::with_suspension_store`
+    /// when driving primitives outside the engine's own dispatch path
+    /// (test fixtures, advanced consumers).
+    #[must_use]
+    pub fn suspension_store(&self) -> Arc<dyn benten_eval::SuspensionStore> {
+        Arc::clone(&self.suspension_store)
     }
 
     pub(crate) fn ivm(&self) -> Option<&Arc<benten_ivm::Subscriber>> {

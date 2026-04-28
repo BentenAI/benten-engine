@@ -114,8 +114,10 @@ fn security_posture_compromise_4_marked_closed() {
 }
 
 /// `security_posture_compromise_9_marked_closed` — R2 §6 row.
+///
+/// G12-E (2026-04-27) un-ignored: the closure marker landed alongside
+/// the durable SuspensionStore lift.
 #[test]
-#[ignore = "Phase 2b G12-E + G11-2b-A pending — Compromise #9 closure in SECURITY-POSTURE.md unimplemented"]
 fn security_posture_compromise_9_marked_closed() {
     let doc = read_security_posture();
     let lower = doc.to_ascii_lowercase();

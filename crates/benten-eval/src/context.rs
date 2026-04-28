@@ -23,6 +23,8 @@ use benten_core::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::suspension_store::SuspensionStore;
+
 /// Scoped binding stack used by the iterative evaluator.
 ///
 /// Lookup walks the frames from innermost to outermost so an inner `$item`
@@ -37,6 +39,13 @@ pub struct EvalContext {
     /// time line. `None` means "use process wall clock" — resume treats
     /// the deadline as still in the future.
     clock: Option<Arc<dyn crate::TimeSource>>,
+    /// Phase-2b G12-E: optional injected [`SuspensionStore`]. WAIT
+    /// suspend / resume + SUBSCRIBE persistent-cursor ack consult this
+    /// store. `None` falls back to
+    /// [`crate::suspension_store::default_process_store`] so unit tests
+    /// that construct an `EvalContext` directly continue to work
+    /// without engine wiring.
+    suspension_store: Option<Arc<dyn SuspensionStore>>,
 }
 
 impl std::fmt::Debug for EvalContext {
@@ -44,6 +53,7 @@ impl std::fmt::Debug for EvalContext {
         f.debug_struct("EvalContext")
             .field("frames", &self.frames)
             .field("has_clock", &self.clock.is_some())
+            .field("has_suspension_store", &self.suspension_store.is_some())
             .finish()
     }
 }
@@ -55,6 +65,7 @@ impl EvalContext {
         Self {
             frames: vec![HashMap::new()],
             clock: None,
+            suspension_store: None,
         }
     }
 
@@ -74,7 +85,28 @@ impl EvalContext {
         Self {
             frames: vec![HashMap::new()],
             clock: Some(Arc::new(clock)),
+            suspension_store: None,
         }
+    }
+
+    /// Phase-2b G12-E: install a [`SuspensionStore`] so WAIT suspend /
+    /// resume and SUBSCRIBE persistent-cursor acks survive a process
+    /// restart (when the store itself is durable). Builder-style; chain
+    /// against [`Self::new`] / [`Self::with_input`] / [`Self::with_clock`].
+    #[must_use]
+    pub fn with_suspension_store(mut self, store: Arc<dyn SuspensionStore>) -> Self {
+        self.suspension_store = Some(store);
+        self
+    }
+
+    /// Resolve the active [`SuspensionStore`]. Returns the injected store
+    /// when one was wired via [`Self::with_suspension_store`]; otherwise
+    /// falls back to the process-default singleton.
+    #[must_use]
+    pub fn suspension_store(&self) -> Arc<dyn SuspensionStore> {
+        self.suspension_store
+            .clone()
+            .unwrap_or_else(crate::suspension_store::default_process_store)
     }
 
     /// Elapsed time (in milliseconds) reported by the injected clock. Phase-
