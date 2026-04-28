@@ -125,7 +125,7 @@ fn stream_close_propagates() {
     let mut handle = engine.testing_open_stream_for_test(vec![vec![10], vec![20], vec![30]]);
     // Pull one chunk then close.
     let first = handle.next_chunk().unwrap().expect("first chunk available");
-    assert_eq!(first.0, vec![10]);
+    assert_eq!(first.bytes, vec![10]);
     handle.close();
     assert!(
         handle.next_chunk().unwrap().is_none(),
@@ -144,7 +144,7 @@ fn stream_chunk_sequence_preserves_order() {
     assert_eq!(handle.seq_so_far(), 0);
     let mut received = Vec::<u8>::new();
     while let Some(chunk) = handle.next_chunk().unwrap() {
-        received.push(chunk.0[0]);
+        received.push(chunk.bytes[0]);
     }
     assert_eq!(received, (0..8u8).collect::<Vec<_>>());
     assert_eq!(handle.seq_so_far(), 8);
@@ -169,7 +169,7 @@ fn engine_stream_end_to_end() {
         .expect("call_stream returns handle");
     let mut received = Vec::<Vec<u8>>::new();
     while let Some(chunk) = handle.next_chunk().expect("recv chunk (post-G6-A)") {
-        received.push(chunk.0);
+        received.push(chunk.bytes);
     }
     assert!(
         !received.is_empty(),

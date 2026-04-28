@@ -38,11 +38,11 @@ fn stream_handle_drains_pre_buffered_chunks_in_order_for_napi_bridge() {
     let mut handle: StreamHandle =
         engine.testing_open_stream_for_test(vec![vec![1], vec![2], vec![3]]);
     let c1: Chunk = handle.next_chunk().unwrap().unwrap();
-    assert_eq!(c1.0, vec![1]);
+    assert_eq!(c1.bytes, vec![1]);
     let c2: Chunk = handle.next_chunk().unwrap().unwrap();
-    assert_eq!(c2.0, vec![2]);
+    assert_eq!(c2.bytes, vec![2]);
     let c3: Chunk = handle.next_chunk().unwrap().unwrap();
-    assert_eq!(c3.0, vec![3]);
+    assert_eq!(c3.bytes, vec![3]);
     assert!(handle.next_chunk().unwrap().is_none());
 }
 
