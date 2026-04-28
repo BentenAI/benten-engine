@@ -52,9 +52,6 @@ export const CATALOG_CODES = [
   "E_CAP_REVOKED",
   "E_CAP_ATTENUATION",
   "E_WRITE_CONFLICT",
-  "E_SANDBOX_FUEL_EXHAUSTED",
-  "E_SANDBOX_TIMEOUT",
-  "E_SANDBOX_OUTPUT_LIMIT",
   "E_INV_SANDBOX_DEPTH",
   "E_INV_SANDBOX_OUTPUT",
   "E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED",
@@ -416,51 +413,6 @@ export class EWriteConflict extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_WRITE_CONFLICT", "Re-read, rebase changes, retry. Typical optimistic concurrency pattern.", message, context);
     this.name = "EWriteConflict";
-  }
-}
-
-/**
- * E_SANDBOX_FUEL_EXHAUSTED
- *
- * Thrown at: Evaluation
- * Message template: "SANDBOX exhausted fuel budget {budget} before completion"
- */
-export class ESandboxFuelExhausted extends BentenError {
-  static readonly code = "E_SANDBOX_FUEL_EXHAUSTED";
-  static readonly fixHint = "Increase fuel budget (via capability), or reduce computational complexity. Fuel is per-subgraph, not per-call.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SANDBOX_FUEL_EXHAUSTED", "Increase fuel budget (via capability), or reduce computational complexity. Fuel is per-subgraph, not per-call.", message, context);
-    this.name = "ESandboxFuelExhausted";
-  }
-}
-
-/**
- * E_SANDBOX_TIMEOUT
- *
- * Thrown at: Evaluation
- * Message template: "SANDBOX exceeded wall-clock timeout {timeout}ms"
- */
-export class ESandboxTimeout extends BentenError {
-  static readonly code = "E_SANDBOX_TIMEOUT";
-  static readonly fixHint = "Increase timeout or split into smaller SANDBOX calls.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SANDBOX_TIMEOUT", "Increase timeout or split into smaller SANDBOX calls.", message, context);
-    this.name = "ESandboxTimeout";
-  }
-}
-
-/**
- * E_SANDBOX_OUTPUT_LIMIT
- *
- * Thrown at: Evaluation
- * Message template: "SANDBOX output {actual} bytes exceeds max {max}"
- */
-export class ESandboxOutputLimit extends BentenError {
-  static readonly code = "E_SANDBOX_OUTPUT_LIMIT";
-  static readonly fixHint = "Return smaller output. Use STREAM for progressive output.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SANDBOX_OUTPUT_LIMIT", "Return smaller output. Use STREAM for progressive output.", message, context);
-    this.name = "ESandboxOutputLimit";
   }
 }
 
