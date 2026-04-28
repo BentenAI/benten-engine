@@ -72,7 +72,10 @@ use crate::error::EngineError;
 // ---------------------------------------------------------------------------
 
 /// Diagnostic snapshot of a registered SANDBOX node's resolved limits +
-/// per-call telemetry. Returned by [`Engine::describe_sandbox_node`].
+/// per-call telemetry. Returned by `Engine::describe_sandbox_node` (no
+/// intra-doc link: the method is cfg-gated under
+/// `cfg(any(test, feature = "test-helpers"))` so it isn't compiled in
+/// default `cargo doc`; a `[link]` wrap fails `RUSTDOCFLAGS=-D warnings`).
 ///
 /// The shape mirrors the TypeScript `SandboxNodeDescription` type
 /// (`packages/engine/src/types.ts`). Keep them in lock-step — a field
