@@ -1,4 +1,4 @@
-//! G12-B red-phase: bad DSL input fires a typed `CompileError::Parse(...)`
+//! G12-B green-phase: bad DSL input fires a typed `CompileError::Parse(...)`
 //! (or `Semantic` / `Emit`) variant whose `Diagnostic::error_code` matches
 //! the stable `E_DSL_*` discriminant the devserver renders.
 //!
@@ -6,48 +6,60 @@
 //! `CompileError` enum + `Diagnostic` shape — so devserver can switch on
 //! discriminant without prose-string parsing.
 //!
-//! TDD red-phase. Owner: R5 G12-B (qa-r4-01 R3-followup).
+//! Lifted from red-phase 2026-04-28 (R5 G12-B implementer).
 
 #![cfg(feature = "phase_2b_landed")]
 #![allow(clippy::unwrap_used)]
 
+use benten_dsl_compiler::{CompileError, compile_str};
+
 #[test]
-#[ignore = "R5 G12-B red-phase: typed parse error not yet implemented"]
 fn dsl_compiler_rejects_unbalanced_braces_with_e_dsl_parse_error() {
-    let _src = r"handler 'oops' { read('post') -> respond"; // no closing brace
-    todo!(
-        "R5 G12-B: assert compile_str returns CompileError::Parse(d) with d.error_code == E_DSL_PARSE_ERROR"
-    )
+    let src = "handler 'oops' { read('post') -> respond"; // no closing brace
+    let err = compile_str(src).unwrap_err();
+    assert!(matches!(err, CompileError::Parse(_)));
+    assert_eq!(err.diagnostic().unwrap().error_code, "E_DSL_PARSE_ERROR");
 }
 
 #[test]
-#[ignore = "R5 G12-B red-phase: unknown primitive error not yet implemented"]
 fn dsl_compiler_rejects_unknown_primitive_with_typed_semantic_error() {
-    let _src = r"handler 'oops' { read('post') -> teleport -> respond }"; // teleport not a primitive
-    todo!("R5 G12-B: assert CompileError::Semantic(d) with d.error_code == E_DSL_UNKNOWN_PRIMITIVE")
+    let src = "handler 'oops' { read('post') -> teleport -> respond }";
+    let err = compile_str(src).unwrap_err();
+    assert!(matches!(err, CompileError::Semantic(_)));
+    assert_eq!(
+        err.diagnostic().unwrap().error_code,
+        "E_DSL_UNKNOWN_PRIMITIVE"
+    );
 }
 
 #[test]
-#[ignore = "R5 G12-B red-phase: missing-respond emit error not yet implemented"]
 fn dsl_compiler_rejects_handler_without_respond_with_typed_emit_error() {
-    // Plan §3.2 G12-B inherits the "every handler ends in RESPOND" property
-    // from existing SubgraphSpec validation — surfaced via Emit variant.
-    let _src = r"handler 'no-respond' { read('post') }";
-    todo!("R5 G12-B: assert CompileError::Emit(d) with d.error_code == E_DSL_MISSING_RESPOND")
+    let src = "handler 'no-respond' { read('post') }";
+    let err = compile_str(src).unwrap_err();
+    assert!(matches!(err, CompileError::Emit(_)));
+    assert_eq!(
+        err.diagnostic().unwrap().error_code,
+        "E_DSL_MISSING_RESPOND"
+    );
 }
 
 #[test]
-#[ignore = "R5 G12-B red-phase: empty-source error not yet implemented"]
 fn dsl_compiler_rejects_empty_source_with_typed_parse_error() {
-    let _src = "";
-    todo!(
-        "R5 G12-B: assert CompileError::Parse(d) with non-empty diagnostic message + line/column reported as None"
-    )
+    let err = compile_str("").unwrap_err();
+    assert!(matches!(err, CompileError::Parse(_)));
+    let d = err.diagnostic().unwrap();
+    assert_eq!(d.error_code, "E_DSL_PARSE_ERROR");
+    // Empty source has no source span — line/column reported as None.
+    assert!(d.line.is_none());
+    assert!(d.column.is_none());
 }
 
 #[test]
-#[ignore = "R5 G12-B red-phase: diagnostic span not yet implemented"]
 fn dsl_compiler_diagnostic_carries_line_and_column_for_parse_failure() {
-    let _src = "handler 'has-newline' {\nread('post') ->\nteleport\n-> respond\n}";
-    todo!("R5 G12-B: assert Diagnostic.line == Some(3) + Diagnostic.column == Some(1) (1-indexed)")
+    let src = "handler 'has-newline' {\nread('post') ->\nteleport\n-> respond\n}";
+    let err = compile_str(src).unwrap_err();
+    let d = err.diagnostic().unwrap();
+    // The unknown `teleport` is on line 3 (1-indexed).
+    assert_eq!(d.line, Some(3));
+    assert_eq!(d.column, Some(1));
 }

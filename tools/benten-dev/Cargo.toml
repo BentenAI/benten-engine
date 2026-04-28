@@ -33,6 +33,13 @@ phase_2b_landed = []
 benten-core = { path = "../../crates/benten-core" }
 benten-errors = { workspace = true }
 benten-eval = { path = "../../crates/benten-eval" }
+# G12-B (Phase 2b): devserver routes registrations through Engine::register_subgraph
+# rather than the in-memory HandlerTable. The benten-dsl-compiler dep brings
+# the DSL-text → Subgraph compiler that the watcher pipeline feeds into the
+# engine. ReloadCoordinator + CallGuard remain owned here for concurrency
+# coordination (storage moves to Engine; coordination stays).
+benten-engine = { path = "../../crates/benten-engine" }
+benten-dsl-compiler = { path = "../../crates/benten-dsl-compiler" }
 blake3 = { workspace = true, features = ["pure"] }
 
 [dev-dependencies]

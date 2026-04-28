@@ -139,6 +139,8 @@ name = "benten-dev"
 version = "0.1.0"
 dependencies = [
  "benten-core",
+ "benten-dsl-compiler",
+ "benten-engine",
  "benten-errors",
  "benten-eval",
  "blake3",
