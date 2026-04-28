@@ -609,7 +609,6 @@ impl ErrorCode {
             | ErrorCode::InvSystemZone
             | ErrorCode::InvAttribution
             | ErrorCode::InvIterateBudget
-            | ErrorCode::InvSandboxDepth
             | ErrorCode::SandboxNestedDispatchDepthExceeded
             | ErrorCode::NotImplemented
             | ErrorCode::SubsystemDisabled

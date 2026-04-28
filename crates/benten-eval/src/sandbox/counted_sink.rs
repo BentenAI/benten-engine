@@ -23,7 +23,6 @@
 //! implementation — that wiring lands when STREAM-into-SANDBOX
 //! composition is exercised in G11-2b.
 
-use crate::chunk_sink::ChunkSink;
 use benten_errors::ErrorCode;
 
 /// Defense-in-depth detection path. Recorded on every [`SinkOverflow`]
@@ -159,14 +158,17 @@ impl CountedSink {
     }
 }
 
-/// CountedSink also implements the G6-A scaffold trait so STREAM-into-
-/// SANDBOX composition can route chunks through the per-call output
-/// budget. The marker impl currently has no methods (G6-A scaffold trait
-/// body is empty); G6-A's `tokio::sync::mpsc` impl will name a `send`
-/// method that this `impl` extends. Until then this `impl` is the shape
-/// pin — moving the trait surface in G6-A surfaces here as a
-/// compile-error.
-impl ChunkSink for CountedSink {}
+// STREAM-into-SANDBOX composition (routing chunks through this per-call
+// output budget) lands in G11-2b. Once G6-A's `ChunkSink` trait
+// (`crate::chunk_sink::ChunkSink`) ships its full `send` / `try_send` /
+// `close` / `capacity_remaining` / `drain_trace` surface, the G11-2b
+// implementation will adapt CountedSink onto it (or wrap it in an
+// adapter). Phase 2b G7-A intentionally does NOT impl `ChunkSink` for
+// CountedSink — the empty marker impl that landed in the G7-A scaffold
+// pre-dated the G6-A trait being filled in, and a stub impl with
+// `unimplemented!()` bodies would hide composition gaps at runtime
+// rather than at compile time. The integration point becomes a typed
+// surface when G11-2b lights it up.
 
 #[cfg(test)]
 mod tests {
