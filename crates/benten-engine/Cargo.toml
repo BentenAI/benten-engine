@@ -136,6 +136,13 @@ tempfile = { workspace = true }
 proptest = { workspace = true }
 serde = { workspace = true }
 serde_ipld_dagcbor = { workspace = true }
+# Phase 2b Wave-8b: SANDBOX integration test
+# (`tests/sandbox_execute_via_engine_dispatch_invokes_executor.rs`)
+# compiles a `(module (func (export "run") (result i32) ...))` WAT
+# fixture inline + computes the BLAKE3 module-CID for
+# `Engine::register_module_bytes`.
+wat = { workspace = true }
+blake3 = { workspace = true }
 
 [[bench]]
 name = "roundtrip"

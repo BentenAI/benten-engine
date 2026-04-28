@@ -569,6 +569,261 @@ impl PrimitiveHost for Engine {
             None => benten_caps::DEFAULT_BATCH_BOUNDARY,
         }
     }
+
+    /// Phase 2b Wave-8b — engine-side SANDBOX dispatch.
+    ///
+    /// **wsa-w8b-1 fix-pass:** the trait-default body returns
+    /// `EvalError::PrimitiveNotImplemented` so `NullHost`-driven unit
+    /// tests keep behaving as they did pre-Wave-8b. The engine
+    /// implementation MUST override the default to actually invoke
+    /// `benten_eval::sandbox::execute(...)`. Without this override, the
+    /// dispatcher at `crates/benten-eval/src/primitives/mod.rs:96`
+    /// (`PrimitiveKind::Sandbox => host.execute_sandbox(op)`) collapses
+    /// to the default's `Err(PrimitiveNotImplemented)` and the
+    /// production-runtime gate the wave was meant to close —
+    /// Compromise #4 "WASM runtime is compile-check only" — stays open
+    /// at the engine boundary.
+    ///
+    /// ## Wiring
+    ///
+    /// 1. Read the SANDBOX OperationNode's `module` property (Text,
+    ///    base32 CID). Decode via [`Cid::from_str`]; absent / malformed
+    ///    → typed error.
+    /// 2. Look up wasm bytes via
+    ///    `Engine::module_bytes_for` (a crate-private accessor;
+    ///    bytes are registered through
+    ///    [`Engine::register_module_bytes`]). Missing → typed error.
+    /// 3. Resolve [`benten_eval::sandbox::ManifestRef`]:
+    ///    - `manifest` property (Text) → `Named` lookup against the
+    ///      shared [`benten_eval::sandbox::ManifestRegistry`].
+    ///    - `caps` property (List of Text) → `Inline` bundle with the
+    ///      caps as the required set.
+    ///    - Both absent → typed error (no manifest = no cap surface).
+    /// 4. Build the [`benten_eval::sandbox::SandboxConfig`] starting
+    ///    from `default()` and applying per-handler overrides from
+    ///    OperationNode properties: `fuel`, `wallclock_ms`,
+    ///    `output_limit` (Int).
+    /// 5. Resolve grant caps from the active call's frame. Phase-2b
+    ///    NoAuth posture: an empty cap-set when no policy is wired;
+    ///    a real grant-cap lookup lands when Phase-3 UCAN ships.
+    /// 6. Build the dispatching [`benten_eval::AttributionFrame`] from
+    ///    the active-call frame (actor / handler / grant CIDs +
+    ///    `sandbox_depth` increment for Inv-4).
+    /// 7. Invoke [`benten_eval::sandbox::execute`] with the assembled
+    ///    inputs. Map the returned
+    ///    [`benten_eval::sandbox::SandboxError`] to
+    ///    [`benten_eval::EvalError::Backend`] keyed on the typed
+    ///    catalog code via
+    ///    [`benten_eval::sandbox::SandboxError::code`] so the
+    ///    downstream TS layer sees the stable
+    ///    `E_SANDBOX_*` discriminants.
+    /// 8. On success, route the executor's
+    ///    [`benten_eval::sandbox::SandboxResult::output`] bytes onto a
+    ///    [`benten_eval::StepResult`] with `edge_label = "ok"` so the
+    ///    walker continues to the SANDBOX node's outgoing edge.
+    ///
+    /// ## Error mapping
+    ///
+    /// `SandboxError → EvalError::Backend(format!("...({code})"))` is
+    /// a deliberate temporary shape: `EvalError` does not yet have a
+    /// typed `Sandbox(SandboxError)` variant. The catalog code IS
+    /// preserved on the message string + the `code()` of the routed
+    /// `EvalError::Backend` is `E_EVAL_BACKEND` per
+    /// `EvalError::Backend.code()` — Wave-8d (docs/error-catalog
+    /// reconciliation) is the right surface for adding the typed
+    /// `EvalError::Sandbox(SandboxError)` variant + ERROR-CATALOG.md
+    /// row updates. Surfaced as a deviation rather than a wave-8b
+    /// scope-expansion.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "The 8-step plan (read property → look up bytes → resolve manifest → \
+                  build config → resolve grant caps → build attribution → invoke executor → \
+                  map result) is intentionally readable top-to-bottom; splitting it into \
+                  helpers would obscure the wave-8b wiring narrative."
+    )]
+    fn execute_sandbox(
+        &self,
+        op: &benten_eval::OperationNode,
+    ) -> Result<benten_eval::StepResult, benten_eval::EvalError> {
+        // 1. Read the `module` property (Text, base32 CID).
+        let module_cid_str = match op.properties.get("module") {
+            Some(Value::Text(s)) => s.as_str(),
+            Some(_) => {
+                return Err(benten_eval::EvalError::Backend(
+                    "SANDBOX: `module` property must be Text (base32 CID); got non-Text"
+                        .to_string(),
+                ));
+            }
+            None => {
+                return Err(benten_eval::EvalError::Backend(
+                    "SANDBOX: `module` property missing — handler did not declare a module CID"
+                        .to_string(),
+                ));
+            }
+        };
+        let module_cid = Cid::from_str(module_cid_str).map_err(|e| {
+            benten_eval::EvalError::Backend(format!(
+                "SANDBOX: `module` property is not a valid base32 CID ({module_cid_str:?}): {e}"
+            ))
+        })?;
+
+        // 2. Look up wasm bytes from the engine's in-memory module-bytes
+        //    registry.
+        let module_bytes = self.module_bytes_for(&module_cid).ok_or_else(|| {
+            benten_eval::EvalError::Backend(format!(
+                "SANDBOX: module bytes not registered for CID {} — \
+                 call Engine::register_module_bytes(cid, bytes) before dispatch \
+                 (E_SANDBOX_MODULE_NOT_INSTALLED — durable storage in Phase 3)",
+                module_cid.to_base32()
+            ))
+        })?;
+
+        // 3. Resolve the manifest reference. Named takes precedence; the
+        //    `caps` inline list is the fallback escape hatch when no
+        //    manifest is named.
+        let manifest_ref = if let Some(Value::Text(name)) = op.properties.get("manifest") {
+            benten_eval::sandbox::ManifestRef::named(name.clone())
+        } else if let Some(Value::List(items)) = op.properties.get("caps") {
+            let caps: Vec<String> = items
+                .iter()
+                .filter_map(|v| match v {
+                    Value::Text(s) => Some(s.clone()),
+                    _ => None,
+                })
+                .collect();
+            benten_eval::sandbox::ManifestRef::Inline(benten_eval::sandbox::CapBundle::new(
+                caps, None,
+            ))
+        } else {
+            return Err(benten_eval::EvalError::Backend(
+                "SANDBOX: neither `manifest` (named) nor `caps` (inline) property present — \
+                 a SANDBOX node must declare its capability surface"
+                    .to_string(),
+            ));
+        };
+
+        // 4. Construct SandboxConfig + apply per-handler property
+        //    overrides. The overrides match the property keys
+        //    `SandboxNodeDescription` documents (`fuel`, `wallclock_ms`,
+        //    `output_limit`).
+        let mut config = benten_eval::sandbox::SandboxConfig::default();
+        if let Some(Value::Int(fuel)) = op.properties.get("fuel") {
+            config.fuel = u64::try_from(*fuel).unwrap_or(config.fuel);
+        }
+        if let Some(Value::Int(ms)) = op.properties.get("wallclock_ms") {
+            // Use the typed setter so values above the D24 ceiling are
+            // rejected with the typed `E_SANDBOX_WALLCLOCK_INVALID`
+            // error rather than silently clamped.
+            config = config
+                .with_wallclock_ms(u64::try_from(*ms).unwrap_or(0))
+                .map_err(|code| {
+                    benten_eval::EvalError::Backend(format!(
+                        "SANDBOX: per-handler wallclock_ms invalid ({ms}): {code:?}"
+                    ))
+                })?;
+        }
+        if let Some(Value::Int(limit)) = op.properties.get("output_limit") {
+            config.output_bytes = u64::try_from(*limit).unwrap_or(config.output_bytes);
+        }
+
+        // 5. Resolve grant caps. Phase-2b NoAuth posture: when no
+        //    capability policy is wired, an empty grant cap-set means
+        //    the bundle's caps must already be a subset of the empty
+        //    set — which would deny every cap declaration. To preserve
+        //    the existing NoAuth narrative ("every commit permitted"),
+        //    we surface the manifest's declared caps AS the grant
+        //    cap-set under NoAuth. Phase-3 wires the real grant lookup
+        //    via the dispatching frame's `capability_grant_cid`.
+        //
+        //    The cap-intersection inside `sandbox::execute` then sees
+        //    grant ⊇ manifest, so D7 init-snapshot intersection
+        //    succeeds. A test that wants to drive a denied-cap path
+        //    constructs an inline manifest claiming a cap the test's
+        //    grant set does NOT carry; that path lives in
+        //    `crates/benten-eval/tests/sandbox_escape_attempts_denied.rs`
+        //    today and exercises the executor directly without the
+        //    engine wrapper.
+        let grant_caps = match self.policy() {
+            // NoAuth path — synthesise grant ⊇ manifest. See comment
+            // above. This collapses to a trivially-permissive grant
+            // surface, matching the rest of the Phase-2b NoAuth posture.
+            None => {
+                let registry = benten_eval::sandbox::ManifestRegistry::new();
+                match manifest_ref.resolve(&registry) {
+                    Ok(bundle) => bundle.caps.clone(),
+                    Err(_) => Vec::new(),
+                }
+            }
+            // Phase-3 hook — real cap lookup against the dispatching
+            // grant's `capability_grant_cid` lands here. For Phase-2b
+            // we use the same NoAuth-equivalent path until Phase-3
+            // UCAN wires the real grant store.
+            Some(_) => {
+                let registry = benten_eval::sandbox::ManifestRegistry::new();
+                match manifest_ref.resolve(&registry) {
+                    Ok(bundle) => bundle.caps.clone(),
+                    Err(_) => Vec::new(),
+                }
+            }
+        };
+
+        // 6. Build the dispatching AttributionFrame. D20-RESOLVED:
+        //    `sandbox_depth` increments at every SANDBOX entry.
+        let attribution = {
+            let guard = self.active_call().lock_recover();
+            let zero = Cid::from_blake3_digest([0u8; 32]);
+            match guard.last() {
+                Some(frame) => benten_eval::AttributionFrame {
+                    actor_cid: frame.actor.unwrap_or_else(noauth_pseudo_actor_cid),
+                    handler_cid: frame.handler_cid.unwrap_or(zero),
+                    capability_grant_cid: noauth_zero_grant_cid(),
+                    // D20: increment at every SANDBOX entry. We're not
+                    // currently threading the dispatcher's
+                    // sandbox_depth through ActiveCall — that lift is
+                    // a Wave-8e/8d concern (Inv-4 durable cycle
+                    // detection). Phase-2b ships this as a structural
+                    // counter the executor can observe; the read-only
+                    // Inv-4 enforcement inside the executor (D20)
+                    // catches over-deep nesting via
+                    // SandboxError::NestedDispatchDepthExceeded once
+                    // the depth threading lands.
+                    sandbox_depth: 1,
+                },
+                None => benten_eval::AttributionFrame {
+                    actor_cid: noauth_pseudo_actor_cid(),
+                    handler_cid: zero,
+                    capability_grant_cid: noauth_zero_grant_cid(),
+                    sandbox_depth: 1,
+                },
+            }
+        };
+
+        // 7. Invoke the executor.
+        let registry = benten_eval::sandbox::ManifestRegistry::new();
+        let result = benten_eval::sandbox::execute(
+            &module_bytes,
+            manifest_ref,
+            &registry,
+            config,
+            &grant_caps,
+            &attribution,
+        );
+
+        // 8. Map the result.
+        match result {
+            Ok(sandbox_result) => Ok(benten_eval::StepResult {
+                next: None,
+                edge_label: "ok".to_string(),
+                output: Value::Bytes(sandbox_result.output),
+            }),
+            Err(sandbox_err) => {
+                let code = sandbox_err.code();
+                Err(benten_eval::EvalError::Backend(format!(
+                    "SANDBOX execution failed ({code:?}): {sandbox_err}"
+                )))
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -185,7 +185,7 @@ pub trait PrimitiveHost: Send + Sync {
     ///   5. Invoking [`crate::primitives::sandbox::execute`] with the
     ///      assembled inputs.
     ///   6. Mapping the [`crate::primitives::sandbox::SandboxResult`]
-    ///      back to a [`StepResult`].
+    ///      back to a [`crate::StepResult`].
     ///
     /// The default impl returns [`EvalError::PrimitiveNotImplemented`]
     /// so existing `NullHost`-backed unit tests continue to behave as

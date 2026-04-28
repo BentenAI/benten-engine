@@ -30,12 +30,20 @@ use std::sync::OnceLock;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-/// D24 epoch tick cadence — 1ms means a 30s wallclock budget needs
-/// `30_000` epoch ticks. Tighter than the wall-time precision of typical
-/// schedulers; in practice the ticker thread fires somewhere between 1ms
-/// and a few ms apart, which is well below the 30s default budget
-/// granularity. Tightening below 1ms would burn cycles for no gain.
-pub const EPOCH_TICK_INTERVAL: Duration = Duration::from_millis(1);
+/// D24 epoch tick cadence — 10ms means a 30s wallclock budget needs
+/// `3_000` epoch ticks. The default 30s wallclock budget cares about
+/// ms-level precision only weakly; 10ms is plenty of resolution while
+/// dramatically reducing the daemon ticker thread's idle-CPU footprint.
+///
+/// **wsa-w8b-3 fix-pass:** widened from 1ms (the original cadence) to
+/// 10ms after a parallel-test-run flake on
+/// `wait_signal_arrives_after_timeout_fires_e_wait_timeout`. Once any
+/// test in the process triggers SANDBOX, the ticker thread runs forever
+/// (process-wide singleton via [`OnceLock`]); a 1ms cadence burned
+/// continuous CPU and competed with wall-clock-sensitive WAIT-timing
+/// assertions. 10ms preserves correctness on every existing budget
+/// fixture while eliminating the timing collision.
+pub const EPOCH_TICK_INTERVAL: Duration = Duration::from_millis(10);
 
 /// Convert a millisecond budget to epoch tick count using
 /// [`EPOCH_TICK_INTERVAL`].
@@ -91,9 +99,9 @@ mod tests {
 
     #[test]
     fn epoch_ticks_for_ms_basic_conversion() {
-        // 1ms cadence — 30s budget = 30_000 ticks.
-        assert_eq!(epoch_ticks_for_ms(30_000), 30_000);
-        // 1ms budget = 1 tick.
+        // 10ms cadence (wsa-w8b-3) — 30s budget = 3_000 ticks.
+        assert_eq!(epoch_ticks_for_ms(30_000), 3_000);
+        // 1ms budget rounds up to 1 tick (partial-tick ceiling).
         assert_eq!(epoch_ticks_for_ms(1), 1);
         // 0ms budget = 0 ticks.
         assert_eq!(epoch_ticks_for_ms(0), 0);
@@ -108,9 +116,14 @@ mod tests {
 
     #[test]
     fn epoch_ticks_for_ms_rounds_up_for_partial_ticks() {
-        // With a 1ms interval, 1ms == 1 tick exactly. Verify partial-tick
-        // rounding only meaningfully kicks in if cadence is widened.
+        // With a 10ms interval (wsa-w8b-3), a 1ms budget is a partial
+        // tick that rounds up to 1; a 5ms budget likewise rounds up to 1.
         assert_eq!(epoch_ticks_for_ms(1), 1);
+        assert_eq!(epoch_ticks_for_ms(5), 1);
+        // A 10ms budget is a clean 1 tick.
+        assert_eq!(epoch_ticks_for_ms(10), 1);
+        // 11ms straddles boundaries: 1 full tick + 1 partial = 2.
+        assert_eq!(epoch_ticks_for_ms(11), 2);
     }
 
     #[test]
