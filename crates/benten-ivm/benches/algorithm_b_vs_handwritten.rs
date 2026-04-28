@@ -155,10 +155,10 @@ mod inner {
             &events,
             || Box::new(ContentListingView::new("post")),
             || {
-                Box::new(AlgorithmBView::for_id(
-                    "content_listing",
-                    ContentListingView::definition(),
-                ))
+                Box::new(
+                    AlgorithmBView::for_id("content_listing", ContentListingView::definition())
+                        .expect("content_listing is a known view id"),
+                )
             },
         );
     }
@@ -184,10 +184,13 @@ mod inner {
             &events,
             || Box::new(GovernanceInheritanceView::new()),
             || {
-                Box::new(AlgorithmBView::for_id(
-                    "governance_inheritance",
-                    GovernanceInheritanceView::definition(),
-                ))
+                Box::new(
+                    AlgorithmBView::for_id(
+                        "governance_inheritance",
+                        GovernanceInheritanceView::definition(),
+                    )
+                    .expect("governance_inheritance is a known view id"),
+                )
             },
         );
     }
@@ -212,10 +215,10 @@ mod inner {
             &events,
             || Box::new(VersionCurrentView::new()),
             || {
-                Box::new(AlgorithmBView::for_id(
-                    "version_current",
-                    VersionCurrentView::definition(),
-                ))
+                Box::new(
+                    AlgorithmBView::for_id("version_current", VersionCurrentView::definition())
+                        .expect("version_current is a known view id"),
+                )
             },
         );
     }
@@ -243,10 +246,10 @@ mod inner {
             &events,
             || Box::new(CapabilityGrantsView::new()),
             || {
-                Box::new(AlgorithmBView::for_id(
-                    "capability_grants",
-                    CapabilityGrantsView::definition(),
-                ))
+                Box::new(
+                    AlgorithmBView::for_id("capability_grants", CapabilityGrantsView::definition())
+                        .expect("capability_grants is a known view id"),
+                )
             },
         );
     }
@@ -274,10 +277,10 @@ mod inner {
             &events,
             || Box::new(EventDispatchView::new()),
             || {
-                Box::new(AlgorithmBView::for_id(
-                    "event_dispatch",
-                    EventDispatchView::definition(),
-                ))
+                Box::new(
+                    AlgorithmBView::for_id("event_dispatch", EventDispatchView::definition())
+                        .expect("event_dispatch is a known view id"),
+                )
             },
         );
     }

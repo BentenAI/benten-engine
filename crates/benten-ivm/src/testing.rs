@@ -45,10 +45,10 @@ pub fn testing_construct_view_with_strategy(strategy: Strategy) -> Box<dyn View>
 pub fn try_construct_view_with_strategy(strategy: Strategy) -> Result<Box<dyn View>, ViewError> {
     match strategy {
         Strategy::A => Ok(Box::new(CapabilityGrantsView::new())),
-        Strategy::B => Ok(Box::new(AlgorithmBView::for_id(
-            "content_listing",
-            ContentListingView::definition(),
-        ))),
+        Strategy::B => {
+            let view = AlgorithmBView::for_id("content_listing", ContentListingView::definition())?;
+            Ok(Box::new(view))
+        }
         Strategy::C => Err(ViewError::StrategyNotImplemented {
             strategy: Strategy::C,
             deferred_to_phase: "Phase 3+".to_string(),

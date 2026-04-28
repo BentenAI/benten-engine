@@ -133,10 +133,10 @@ fn replay_and_compare<F, R>(
 #[test]
 fn algorithm_b_correctness_against_capability_grants_view() {
     let a: Box<dyn View> = Box::new(CapabilityGrantsView::new());
-    let b: Box<dyn View> = Box::new(AlgorithmBView::for_id(
-        "capability_grants",
-        CapabilityGrantsView::definition(),
-    ));
+    let b: Box<dyn View> = Box::new(
+        AlgorithmBView::for_id("capability_grants", CapabilityGrantsView::definition())
+            .expect("capability_grants is a known view id"),
+    );
 
     let actor = Cid::from_blake3_digest([0u8; 32]);
     let events = vec![
@@ -182,10 +182,10 @@ fn algorithm_b_correctness_against_capability_grants_view() {
 #[test]
 fn algorithm_b_correctness_against_event_handler_dispatch_view() {
     let a: Box<dyn View> = Box::new(EventDispatchView::new());
-    let b: Box<dyn View> = Box::new(AlgorithmBView::for_id(
-        "event_dispatch",
-        EventDispatchView::definition(),
-    ));
+    let b: Box<dyn View> = Box::new(
+        AlgorithmBView::for_id("event_dispatch", EventDispatchView::definition())
+            .expect("event_dispatch is a known view id"),
+    );
 
     let events = vec![
         ChangeEvent::new_node(
@@ -234,10 +234,10 @@ fn algorithm_b_correctness_against_content_listing_view() {
     // here first because this view is the highest gate-risk for the 20% bench
     // gate.
     let a: Box<dyn View> = Box::new(ContentListingView::new("post"));
-    let b: Box<dyn View> = Box::new(AlgorithmBView::for_id(
-        "content_listing",
-        ContentListingView::definition(),
-    ));
+    let b: Box<dyn View> = Box::new(
+        AlgorithmBView::for_id("content_listing", ContentListingView::definition())
+            .expect("content_listing is a known view id"),
+    );
 
     let mut events = Vec::new();
     for i in 0u64..32 {
@@ -290,10 +290,13 @@ fn algorithm_b_correctness_against_content_listing_view() {
 #[test]
 fn algorithm_b_correctness_against_governance_inheritance_view() {
     let a: Box<dyn View> = Box::new(GovernanceInheritanceView::new());
-    let b: Box<dyn View> = Box::new(AlgorithmBView::for_id(
-        "governance_inheritance",
-        GovernanceInheritanceView::definition(),
-    ));
+    let b: Box<dyn View> = Box::new(
+        AlgorithmBView::for_id(
+            "governance_inheritance",
+            GovernanceInheritanceView::definition(),
+        )
+        .expect("governance_inheritance is a known view id"),
+    );
 
     let root = Cid::from_blake3_digest([0u8; 32]);
     let events = vec![
@@ -340,10 +343,10 @@ fn algorithm_b_correctness_against_governance_inheritance_view() {
 #[test]
 fn algorithm_b_correctness_against_version_current_view() {
     let a: Box<dyn View> = Box::new(VersionCurrentView::new());
-    let b: Box<dyn View> = Box::new(AlgorithmBView::for_id(
-        "version_current",
-        VersionCurrentView::definition(),
-    ));
+    let b: Box<dyn View> = Box::new(
+        AlgorithmBView::for_id("version_current", VersionCurrentView::definition())
+            .expect("version_current is a known view id"),
+    );
 
     let anchor = Cid::from_blake3_digest([0u8; 32]);
     let events = vec![

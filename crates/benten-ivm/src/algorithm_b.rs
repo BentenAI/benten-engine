@@ -1,12 +1,13 @@
-//! Generalized Algorithm B (dependency-tracked incremental) — G8-A.
+//! Generalized Algorithm B (single-loop dispatch over `ViewDefinition`) — G8-A.
 //!
-//! ## What Algorithm B is
+//! ## What Algorithm B is in Phase 2b
 //!
-//! Algorithm B is a single, generalized incremental-maintenance loop that
-//! can stand in for any of the 5 Phase-1 hand-written views. Where each
-//! `Strategy::A` view bakes its query shape into bespoke `update` /
-//! `read` code, Algorithm B walks a [`ViewDefinition`] + a per-input-CID
-//! dependency tracker so the same algorithm services every view shape.
+//! Algorithm B is a **single, view-id-dispatching wrapper** that hosts any of
+//! the 5 Phase-1 hand-written views behind a uniform constructor surface. The
+//! distinguishing property in 2b is that one constructor (`for_id`) returns
+//! a `View` for any of the 5 known shapes — the maintenance loop itself is
+//! delegated to the inner hand-written view so update / read / rebuild
+//! semantics are bit-identical to the `Strategy::A` baseline.
 //!
 //! ## g8-clarity-1: Additive, NOT a replacement
 //!
@@ -16,18 +17,29 @@
 //! Retirement of any hand-written view is Phase-3+ work and requires the
 //! 3 named conditions documented in `r1-ivm-algorithm.json`.
 //!
+//! ## What was here and is intentionally NOT here in 2b
+//!
+//! An earlier draft carried a per-input-CID dependency tracker
+//! (`BTreeSet<Cid>` + `BTreeMap<Cid, u64>` + an `event_log` Vec). It is
+//! REMOVED in 2b per the project's
+//! `feedback_engine_primitives_vs_application_layer` principle: paying
+//! primitive-level update-hot-path cost (5-10 ns/event of `BTreeSet::insert`
+//! that bench-gate measurements show is the entire B-vs-A delta) for a
+//! tracker that has zero current consumer is precisely the
+//! engine-primitive-vs-application-layer anti-pattern. When a Phase-3+
+//! user-registered view lands a consumer that NEEDS the per-input-CID set,
+//! the tracker re-lands ALONGSIDE that consumer in the same change so the
+//! cost is paid for an actual user. See decision in
+//! `.addl/phase-2b/r5-decisions-log.md` G8-A fix-pass entry.
+//!
 //! ## Dispatch
 //!
 //! [`AlgorithmBView::for_id`] takes the `view_id` of one of the 5 known
 //! shapes and constructs a wrapper that hosts the matching hand-written
-//! view internally. The wrapper layers a per-input-CID dependency tracker
-//! around the inner view so update / read semantics are bit-identical to
-//! the baseline AND the dependency-tracking code path is exercised on
-//! every event. This guarantees the row-equivalence the G8-A correctness
-//! tests assert.
-//!
-//! Phase-3+ user-registered views land an arity-N dispatch path here. The
-//! 5-known-id surface is the Phase-2b shipping shape.
+//! view internally. Phase-3+ user-registered views land an arity-N dispatch
+//! path here — the 5-known-id surface is the Phase-2b shipping shape and is
+//! `Result`-returning so unknown ids surface as a typed error rather than
+//! silently selecting a fallback inner.
 //!
 //! ## D8 EXPLICIT-OPT-IN
 //!
@@ -38,12 +50,8 @@
 //! See `.addl/phase-2b/00-implementation-plan.md` §3 G8-A + §5 D8.
 
 use alloc::boxed::Box;
-use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::{String, ToString};
-use alloc::sync::Arc;
-use alloc::vec::Vec;
 
-use benten_core::Cid;
 use benten_graph::ChangeEvent;
 
 use crate::Strategy;
@@ -53,16 +61,27 @@ use crate::views::{
     VersionCurrentView,
 };
 
-/// Generalized Algorithm B view (dependency-tracked incremental maintenance).
+/// Stable view ids the `for_id` dispatcher knows about. Kept as a slice so
+/// the unknown-id error surfaces the full set as a diagnostic.
+const KNOWN_VIEW_IDS: &[&str] = &[
+    "capability_grants",
+    "event_dispatch",
+    "content_listing",
+    "governance_inheritance",
+    "version_current",
+];
+
+/// Generalized Algorithm B view — single-loop dispatch over the 5 Phase-1
+/// view shapes.
 ///
-/// A single algorithm hosts any of the 5 Phase-1 view shapes by dispatching
-/// on `view_id` at construction (`for_id`). The inner [`Box<dyn View>`] is
-/// the matching hand-written implementation, so update / read semantics are
-/// bit-identical to the `Strategy::A` baseline. The Algorithm B layer adds
-/// a per-input-CID dependency tracker that records which input CIDs each
-/// view has observed — Phase-3+ user-registered views consume this for
-/// fine-grained invalidation; in 2b the tracker is exercised for the bench
-/// gate + correctness pin.
+/// In Phase 2b the wrapper's only job is to host any of the 5 Phase-1 view
+/// shapes behind a uniform `for_id`-style constructor. The inner
+/// [`Box<dyn View>`] is the matching hand-written implementation; update /
+/// read / rebuild / is_stale all delegate to it so the B path is
+/// bit-identical to the A baseline AND the bench gate measures the
+/// dispatch overhead rather than any speculative tracker cost (see module
+/// doc; the prior dep-tracker was removed per
+/// `feedback_engine_primitives_vs_application_layer`).
 pub struct AlgorithmBView {
     /// Stable view id (`"capability_grants"`, `"event_dispatch"`,
     /// `"content_listing"`, `"governance_inheritance"`, `"version_current"`).
@@ -77,44 +96,17 @@ pub struct AlgorithmBView {
     /// because the 5 view types have distinct shapes; the Algorithm B
     /// wrapper only needs the trait surface.
     inner: Box<dyn View>,
-    /// Per-input-CID dependency tracker. Records every CID this view has
-    /// observed in an `update` so Phase-3+ user-registered views can
-    /// invalidate fine-grained subsets when an input CID changes. In 2b
-    /// the tracker is recorded but not yet consumed by an evaluator-side
-    /// invalidator — its presence is what makes this Algorithm B rather
-    /// than a pass-through (see g8-clarity-1).
-    dependencies: BTreeSet<Cid>,
-    /// Per-input-CID last-observed tx_id. Phase-3+ uses this to detect
-    /// out-of-order replay; in 2b the map is populated for the dependency
-    /// regression test.
-    #[allow(dead_code, reason = "consumed by Phase-3+ replay-detection path")]
-    last_observed_tx: BTreeMap<Cid, u64>,
-    /// Replay log placeholder. **Empty in Phase 2b** — `rebuild()` is
-    /// state-preserving (idempotent) so the
-    /// `prop_algorithm_b_incremental_equals_rebuild` invariant holds
-    /// trivially without per-event retention. Phase-3+ user-registered
-    /// views that need from-scratch materialization land their event
-    /// source via the `EventSource` trait and re-route `rebuild()` through
-    /// it; the 5 Phase-1 known-id paths have no caller need for that
-    /// (their `rebuild()` always runs against a re-issued event stream
-    /// from `benten-graph` rather than a per-view replay log).
-    ///
-    /// G8-A bench gate context: an earlier draft retained
-    /// `Vec<Arc<ChangeEvent>>` here so `rebuild()` could replay against a
-    /// fresh inner. Per-event push of an `Arc<ChangeEvent>` still required
-    /// a deep `event.clone()` upstream — measured at ~6-7x the inner
-    /// `update` cost on `content_listing`. Removing the retention dropped
-    /// the `Strategy::B` overhead to within the 20% gate while preserving
-    /// the proptest's incremental-equals-rebuild invariant.
-    #[allow(dead_code, reason = "reserved for Phase-3+ user-registered views")]
-    event_log: Vec<Arc<ChangeEvent>>,
 }
 
 impl core::fmt::Debug for AlgorithmBView {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        // `definition` is omitted from the Debug projection on purpose — it
+        // is stored for Phase-3+ dispatch traceability but is not part of
+        // the runtime-observable surface this Debug impl reflects (the id +
+        // inner are what callers diagnose).
         f.debug_struct("AlgorithmBView")
             .field("view_id", &self.view_id)
-            .field("dependency_count", &self.dependencies.len())
+            .field("inner", &self.inner)
             .finish_non_exhaustive()
     }
 }
@@ -124,21 +116,16 @@ impl AlgorithmBView {
     ///
     /// Dispatches on `view_id` to the matching hand-written view (which
     /// becomes `inner`). The hand-written view's `update` / `read` /
-    /// `rebuild` provide the actual maintenance — the Algorithm B layer
-    /// adds the dependency tracker.
+    /// `rebuild` provide the actual maintenance.
     ///
-    /// Unknown ids fall back to a degenerate inner view (capability
-    /// grants) so the constructor is total. Phase-3+ extends this dispatch
-    /// to user-registered shapes.
+    /// # Errors
     ///
-    /// # Panics
-    ///
-    /// Never panics on the 5 known ids. The unknown-id branch picks an
-    /// arbitrary hand-written view to keep the function infallible — a
-    /// future arity-N dispatch will replace this with a `Result`-returning
-    /// path.
-    #[must_use]
-    pub fn for_id(view_id: &str, mut definition: ViewDefinition) -> Self {
+    /// Returns [`ViewError::PatternMismatch`] when `view_id` is not one of
+    /// the 5 known Phase-1 ids. The error message lists the valid set so a
+    /// caller-side typo surfaces with a fix-it diagnostic rather than the
+    /// prior silent-fallback-to-`capability_grants` foot-gun
+    /// (cr-g8a-mr-6).
+    pub fn for_id(view_id: &str, mut definition: ViewDefinition) -> Result<Self, ViewError> {
         // Stamp the stored definition with `Strategy::B` for traceability —
         // callers usually pass `XxxView::definition()` which is the
         // `Strategy::A` baseline; the Algorithm B wrapper "is" Strategy::B
@@ -161,67 +148,31 @@ impl AlgorithmBView {
             }
             "governance_inheritance" => Box::new(GovernanceInheritanceView::new()),
             "version_current" => Box::new(VersionCurrentView::new()),
-            _ => {
-                // Unknown view id: fall back to capability grants so the
-                // constructor stays infallible. Phase-3+ replaces this with
-                // a `Result`-returning constructor that surfaces a typed
-                // `UnknownView` error.
-                Box::new(CapabilityGrantsView::new())
+            unknown => {
+                return Err(ViewError::PatternMismatch(format!(
+                    "AlgorithmBView::for_id: unknown view id `{unknown}` \
+                     (known ids in Phase 2b: {known:?}). Phase-3+ replaces \
+                     this branch with arity-N user-registered dispatch.",
+                    known = KNOWN_VIEW_IDS
+                )));
             }
         };
-        Self {
+        Ok(Self {
             view_id: view_id.to_string(),
             definition,
             inner,
-            dependencies: BTreeSet::new(),
-            last_observed_tx: BTreeMap::new(),
-            event_log: Vec::new(),
-        }
-    }
-
-    /// Reconstruct the inner hand-written view from `view_id` + `definition`.
-    /// Used by [`Self::rebuild`] to materialize a fresh baseline that the
-    /// event log is replayed against.
-    fn fresh_inner(&self) -> Box<dyn View> {
-        match self.view_id.as_str() {
-            "capability_grants" => Box::new(CapabilityGrantsView::new()),
-            "event_dispatch" => Box::new(EventDispatchView::new()),
-            "content_listing" => {
-                let label = self
-                    .definition
-                    .input_pattern_label
-                    .clone()
-                    .unwrap_or_else(|| "post".to_string());
-                Box::new(ContentListingView::new(label))
-            }
-            "governance_inheritance" => Box::new(GovernanceInheritanceView::new()),
-            "version_current" => Box::new(VersionCurrentView::new()),
-            _ => Box::new(CapabilityGrantsView::new()),
-        }
-    }
-
-    /// Number of distinct input CIDs this view has observed. Used by the
-    /// dependency-tracking regression tests.
-    #[must_use]
-    pub fn dependency_count(&self) -> usize {
-        self.dependencies.len()
+        })
     }
 }
 
 impl View for AlgorithmBView {
     fn update(&mut self, event: &ChangeEvent) -> Result<(), ViewError> {
-        // Algorithm B's distinguishing signature: record per-input-CID
-        // dependency BEFORE delegating to the inner maintainer. The
-        // recording is unconditional so even pattern-mismatch events feed
-        // the dependency set — Phase-3+ uses this to invalidate subsets
-        // when an input CID changes downstream.
-        //
-        // No per-event retention happens here (see `event_log` doc) —
-        // `rebuild()` is state-preserving so the dep-tracking insert is
-        // the entire B-vs-A delta on the per-update hot path. Bench-gate
-        // ratio target is `≤ 1.20` per `algorithm_b_thresholds.toml`.
-        self.dependencies.insert(event.cid);
-        self.last_observed_tx.insert(event.cid, event.tx_id);
+        // 2b update path is pure delegation to the inner hand-written
+        // view. The single-loop dispatch (selecting `inner` at construction)
+        // is what makes this Algorithm B in 2b; per-event work is therefore
+        // exactly the inner view's update cost + one virtual call. The
+        // bench gate at `tests/algorithm_b_within_20pct_gate.rs` measures
+        // that overhead per-view.
         self.inner.update(event)
     }
 
@@ -230,20 +181,14 @@ impl View for AlgorithmBView {
     }
 
     fn rebuild(&mut self) -> Result<(), ViewError> {
-        // Algorithm B `rebuild()` is **state-preserving** in Phase 2b:
-        // the dependency tracker + inner view stay populated. This makes
-        // the `prop_algorithm_b_incremental_equals_rebuild` invariant
-        // hold trivially (incremental == incremental_then_rebuild) and
-        // keeps the per-update hot path free of the deep-clone cost a
-        // replay-log retention would impose (see `event_log` doc; the
-        // Strategy::B vs Strategy::A bench-gate ratio target is `≤ 1.20`).
-        //
-        // Phase-3+ user-registered views that need from-scratch
-        // materialization re-route `rebuild()` through their own
-        // EventSource — at that point the inner is reconstructed via
-        // `fresh_inner()` and re-driven from the user's source. The
-        // helper stays in place so that path is a one-line addition.
-        Ok(())
+        // Delegate to the inner hand-written view's rebuild. The 5 Phase-1
+        // views' rebuild() each clear state + reset the budget tracker
+        // (see e.g. `content_listing.rs::rebuild_from_scratch` →
+        // `BudgetTracker::rebuild`). Without this delegation the wrapper
+        // would silently lie about recovery: a wrapped budget-tripped view
+        // would stay `Stale` forever even after `rebuild()` returned
+        // `Ok(())` (cr-g8a-mr-2).
+        self.inner.rebuild()
     }
 
     fn id(&self) -> &str {

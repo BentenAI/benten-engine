@@ -15,6 +15,22 @@
 //! This test asserts the 5 hand-written types are still constructable, still
 //! report their stable view-ids, and still default to `Strategy::A`. If any
 //! of the 5 is removed/renamed, this test fails to compile or assert.
+//!
+//! ## Compile-failure is part of the assertion surface (cr-g8a-mr-8)
+//!
+//! Two kinds of regression are caught here, both intentional:
+//!
+//! 1. **Runtime assertion failure** — a hand-written view that flipped its
+//!    `view.strategy()` to `Strategy::B` or renamed its `view.id()` would
+//!    fail one of the `assert_eq!` lines below.
+//! 2. **Compile failure** — removing/renaming any of the 5 view types
+//!    (`CapabilityGrantsView`, `EventDispatchView`, `ContentListingView`,
+//!    `GovernanceInheritanceView`, `VersionCurrentView`) or changing the
+//!    `::new()` constructor signature would break this file's `use`
+//!    imports or the `XxxView::new(...)` lines. A compile error IS the
+//!    assertion in that case.
+//!
+//! Both modes pin the g8-clarity-1 keep-all-parallel contract.
 
 #![allow(clippy::unwrap_used)]
 
