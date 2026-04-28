@@ -18,7 +18,7 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.89"
+rust-version = "1.91"
 license = "MIT OR Apache-2.0"
 authors = ["BentenAI"]
 repository = "https://github.com/BentenAI/benten-engine"
@@ -269,7 +269,8 @@ uhlc = "0.2"
 # D27-RESOLVED (`async-support` ENABLED for Phase-3 iroh forward-compat
 # even though no async host-fn ships in 2b). The benten-eval Cargo.toml
 # selects the feature set; this workspace entry pins the version.
-# wasmtime: pinned to current crates.io minor (40.x). Per pre-R1 trigger #2:
+# wasmtime: pinned to crates.io 43 (the 43.x line carries the 2026-04-09
+# coordinated security drop fix in 43.0.1). Per pre-R1 trigger #2:
 # minor-version pinned. Features per D3-RESOLVED (no `pooling-allocator`),
 # wsa-3 (no `component-model` — plan uses core-wasm `wasmtime::Instance`),
 # and D27-RESOLVED (`async` ENABLED for Phase-3 iroh forward-compat even
@@ -283,7 +284,15 @@ uhlc = "0.2"
 # on the cold-start path is unmeasured + no Phase-2b consumer needs
 # cross-thread compile parallelism — single-flight Mutex on MODULE_CACHE
 # already serializes per-CID compile).
-wasmtime = { version = "40", default-features = false, features = ["runtime", "cranelift", "std", "async"] }
+# g7a-supplychain-bump: 40.x → 43 to clear the 11 RUSTSEC-2026-008{5..9}
+# + 009{1..6} advisories (all fixed in 43.0.1; same in 42.0.2 / 36.0.7 /
+# 24.0.7 backports). 43 chosen over 44 because 44 bumps wasmtime MSRV
+# from 1.91 → 1.92 with no additional advisory delta vs 43.0.1; staying
+# on the smallest MSRV bump keeps the Phase-2b workspace floor lower
+# (workspace `rust-version` is bumped 1.89 → 1.91 by this same commit
+# because wasmtime 43.0.1 declares `rust-version = "1.91"` — see
+# `.github/workflows/msrv.yml` for the matching CI gate).
+wasmtime = { version = "43", default-features = false, features = ["runtime", "cranelift", "std", "async"] }
 # `wat` — sibling crate to wasmtime; pin to its current minor. Used by
 # the SANDBOX unit tests + integration tests to author wasm fixtures
 # from `.wat` source (dev-time-only; prod ships pre-built `.wasm`).

@@ -46,10 +46,13 @@ pub const MODULE_CACHE_MAX_ENTRIES: usize = 256;
 ///   - `consume_fuel(true)` — D21 fuel-axis enforcement.
 ///   - `epoch_interruption(true)` — D24 wallclock-axis enforcement (the
 ///     epoch ticker is driven by a separate thread; see [`crate::sandbox::primitives_sandbox`].
-///   - `async_support(true)` — D27-RESOLVED forward-compat for Phase-3
-///     iroh async host-fns (no async host-fn ships in 2b; the feature
-///     is gated at the wasmtime API surface so enabling it doesn't
-///     change runtime behavior).
+///   - `async` Cargo feature ENABLED — D27-RESOLVED forward-compat for
+///     Phase-3 iroh async host-fns (no async host-fn ships in 2b). The
+///     wasmtime 43.x API no longer requires (and has deprecated) the
+///     runtime `Config::async_support(true)` call; the feature flag
+///     alone gates async surface compilation. g7a-supplychain-bump:
+///     dropped the deprecated runtime call when bumping 40 → 43 to
+///     clear the 11 RUSTSEC-2026-008{5..9}/009{1..6} advisories.
 ///   - NO `pooling-allocator` per D3-RESOLVED.
 ///   - NO `component-model` per wsa-3 (plan uses core-wasm
 ///     `wasmtime::Instance`).
@@ -67,7 +70,9 @@ pub fn shared_engine() -> &'static Engine {
         let mut cfg = Config::new();
         cfg.consume_fuel(true);
         cfg.epoch_interruption(true);
-        cfg.async_support(true);
+        // `Config::async_support(true)` is deprecated as a no-op in
+        // wasmtime 43.x — the `async` Cargo feature alone gates the
+        // async API surface (see workspace Cargo.toml `wasmtime` entry).
         // Defense-in-depth: cap stack size so ESC-5 (recursion-overflow)
         // surfaces as a wasmtime trap, not a host-process abort.
         cfg.max_wasm_stack(512 * 1024);
