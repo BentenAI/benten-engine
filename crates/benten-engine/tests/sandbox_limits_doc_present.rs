@@ -29,7 +29,8 @@ fn read_sandbox_limits_md() -> String {
     std::fs::read_to_string(&path).unwrap_or_else(|e| {
         panic!(
             "docs/SANDBOX-LIMITS.md must exist at workspace root (G7-C owned). \
-             Read failed: {e}. Path: {path:?}"
+             Read failed: {e}. Path: {}",
+            path.display()
         )
     })
 }
