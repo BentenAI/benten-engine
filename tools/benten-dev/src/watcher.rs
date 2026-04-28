@@ -22,6 +22,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use benten_dsl_compiler::{CompileError, CompiledSubgraph, compile_file};
+
 /// File event surfaced to the reload loop.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WatchEvent {
@@ -31,6 +33,22 @@ pub enum WatchEvent {
     Modified(PathBuf),
     /// A handler source file was deleted.
     Removed(PathBuf),
+}
+
+impl WatchEvent {
+    /// G12-B: pipe a Created/Modified event through the DSL compiler boundary.
+    /// Returns the compiled subgraph the reload loop should hand to
+    /// `Engine::register_subgraph`. Returns `Ok(None)` for `Removed` events
+    /// (deletion is a registration-table concern, not a compile concern).
+    ///
+    /// # Errors
+    /// Returns [`CompileError`] for IO + parse + semantic + emit failures.
+    pub fn compile(&self) -> Result<Option<CompiledSubgraph>, CompileError> {
+        match self {
+            Self::Created(p) | Self::Modified(p) => compile_file(p).map(Some),
+            Self::Removed(_) => Ok(None),
+        }
+    }
 }
 
 /// Per-file fingerprint used to detect changes between polls.
