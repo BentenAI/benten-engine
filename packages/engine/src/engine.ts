@@ -141,6 +141,10 @@ interface NativeEngine {
   ) => NativeStreamHandle;
   testingOpenStreamForTest?: (chunks: Buffer[]) => NativeStreamHandle;
   onChange?: (pattern: string, cursor: unknown) => NativeSubscriptionJson;
+  // Phase 2b wave-8c — module-manifest lifecycle bridges.
+  installModule?: (manifestJson: unknown, expectedCid: string) => string;
+  uninstallModule?: (cid: string) => void;
+  computeManifestCid?: (manifestJson: unknown) => string;
 }
 
 interface NativeEngineCtor {
@@ -1333,16 +1337,28 @@ export class Engine {
    * manifest summary.
    *
    * Owned by G10-B (Phase 2b plan §3 G10-B exclusive ownership per
-   * wsa-r1-5). Stubbed here until G10-B wave lands.
+   * wsa-r1-5). Wave-8c wires the napi bridge through the rebuilt
+   * cdylib; the underlying Rust API has been on `Engine` since
+   * G10-B + G10-A merged.
    */
   public async installModule(
-    _manifest: ModuleManifest,
-    _manifestCid: string,
+    manifest: ModuleManifest,
+    manifestCid: string,
   ): Promise<string> {
     this.assertOpen();
-    throw new EDslInvalidShape(
-      "Engine.installModule: not yet wired into this @benten/engine-native build (G10-B implements; G7-C pins the TS surface contract)",
-    );
+    if (typeof this.inner.installModule !== "function") {
+      throw new EDslInvalidShape(
+        "Engine.installModule unavailable on this binding — rebuild @benten/engine-native (wave-8c bridge required)",
+      );
+    }
+    try {
+      return this.inner.installModule(
+        manifest as unknown as JsonValue,
+        manifestCid,
+      );
+    } catch (err) {
+      throw mapNativeError(err);
+    }
   }
 
   /**
@@ -1350,13 +1366,20 @@ export class Engine {
    * the same CID is a no-op. Releases capabilities + cleans up
    * subscriptions / IVM views referencing modules from the manifest.
    *
-   * Owned by G10-B. Stubbed here until G10-B wave lands.
+   * Owned by G10-B. Wave-8c wires the napi bridge.
    */
-  public async uninstallModule(_cid: string): Promise<void> {
+  public async uninstallModule(cid: string): Promise<void> {
     this.assertOpen();
-    throw new EDslInvalidShape(
-      "Engine.uninstallModule: not yet wired into this @benten/engine-native build (G10-B implements; G7-C pins the TS surface contract)",
-    );
+    if (typeof this.inner.uninstallModule !== "function") {
+      throw new EDslInvalidShape(
+        "Engine.uninstallModule unavailable on this binding — rebuild @benten/engine-native (wave-8c bridge required)",
+      );
+    }
+    try {
+      this.inner.uninstallModule(cid);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
   }
 
   /**
@@ -1364,13 +1387,20 @@ export class Engine {
    * installing it. Used by callers that want to verify the CID before
    * passing it as the required arg to [`installModule`].
    *
-   * Owned by G10-B. Stubbed here until G10-B wave lands.
+   * Owned by G10-B. Wave-8c wires the napi bridge.
    */
-  public async computeManifestCid(_manifest: ModuleManifest): Promise<string> {
+  public async computeManifestCid(manifest: ModuleManifest): Promise<string> {
     this.assertOpen();
-    throw new EDslInvalidShape(
-      "Engine.computeManifestCid: not yet wired into this @benten/engine-native build (G10-B implements; G7-C pins the TS surface contract)",
-    );
+    if (typeof this.inner.computeManifestCid !== "function") {
+      throw new EDslInvalidShape(
+        "Engine.computeManifestCid unavailable on this binding — rebuild @benten/engine-native (wave-8c bridge required)",
+      );
+    }
+    try {
+      return this.inner.computeManifestCid(manifest as unknown as JsonValue);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
   }
 
   // -------- STREAM (Phase 2b G6-B) --------
@@ -1500,21 +1530,21 @@ build @benten/engine-native with `--features test-helpers`",
    * Bounded retention window (1000 events OR 24h) for persistent
    * cursors. Cap-check at delivery.
    *
-   * # Pre-G6-A behavior (mini-review cr-g6b-mr-4)
+   * # Wiring status (wave-8c)
    *
-   * Until G6-A's change-stream port + executor body land, no real
-   * change events are delivered. To match the rest of G6-B's stub-call
-   * pattern (`engine.callStream` returns a `StreamHandle` whose first
-   * `next()` surfaces `E_PRIMITIVE_NOT_IMPLEMENTED` rather than
-   * silently doing nothing), this wrapper fires the supplied
-   * `callback` exactly once asynchronously with a sentinel
-   * `(seq: 0, chunk: Buffer.alloc(0))` AND surfaces a
-   * `console.warn` the first time `onChange` is invoked per process.
-   * Consumers can detect the pre-G6-A no-op condition by inspecting
-   * the returned `Subscription.active` flag (`false` pre-G6-A) or
-   * observing the sentinel `(seq: 0, payload.length === 0)` delivery.
-   * Once G6-A merges, the sentinel + warn are dropped and real
-   * `(seq, chunk)` events flow.
+   * The previous wave-7 stub fired the supplied `callback` once
+   * asynchronously with a sentinel `(seq: 0, payload.length === 0)`
+   * AND surfaced a `console.warn` the first time `onChange` was
+   * invoked per process. This was actively deceptive — consumers
+   * received a callback that was structurally indistinguishable from
+   * a real event. Wave-8c removes the sentinel + warn entirely.
+   *
+   * Until the production callback bridge through
+   * `napi::ThreadsafeFunction` lands (wave-8c-cont 8c-ii remainder),
+   * the returned [`Subscription`] reports `active: false` honestly
+   * and the `callback` argument is registered against the engine's
+   * subscription registry but never invoked. Consumers can detect
+   * the pre-wire condition by inspecting `subscription.active`.
    */
   public onChange(
     pattern: string,
@@ -1534,22 +1564,16 @@ build @benten/engine-native with `--features test-helpers`",
     } catch (err) {
       throw mapNativeError(err);
     }
-    // Pre-G6-A stub-call pattern: fire the callback once asynchronously
-    // with a sentinel zero-length chunk so the dropped-callback
-    // condition is observable rather than silent. Once G6-A's
-    // change-stream port + executor body land, the napi adapter takes
-    // a `napi::ThreadsafeFunction` wrapping `callback` and the sentinel
-    // is replaced by real per-event delivery.
-    onChangePreG6AWarnOnce();
-    queueMicrotask(() => {
-      try {
-        callback(0, Buffer.alloc(0));
-      } catch {
-        // Swallow consumer-side errors — the sentinel delivery is a
-        // surface-presence pin, not a real event the consumer is
-        // expected to act on.
-      }
-    });
+    // Wave-8c removes the queueMicrotask sentinel masking. The
+    // `callback` argument is intentionally captured but not yet
+    // invoked here — the production napi::ThreadsafeFunction wiring
+    // lands in wave-8c-cont 8c-ii remainder. Until then, the
+    // returned Subscription's `active: false` signals the unwired
+    // condition honestly. We retain the reference under a void
+    // expression so TypeScript's noUnusedParameters lint stays
+    // satisfied without a `_` rename that would be observable to
+    // consumers.
+    void callback;
     return makeSubscription(raw);
   }
 }
@@ -1702,24 +1726,6 @@ function ensureParentDir(path: string): void {
     // Fall through — let the native open surface the real error via
     // mapNativeError rather than obscure it with an mkdir failure.
   }
-}
-
-/**
- * Pre-G6-A one-shot console.warn for `engine.onChange`. The sentinel
- * delivery the wrapper schedules pairs with this warning so harness
- * tests + casual callers learn that no real change events are flowing
- * yet (avoids the "aspirational prose, dead code" antipattern flagged
- * in mini-review cr-g6b-mr-4). Removed when G6-A's change-stream port
- * lands.
- */
-let _onChangePreG6AWarned = false;
-function onChangePreG6AWarnOnce(): void {
-  if (_onChangePreG6AWarned) return;
-  _onChangePreG6AWarned = true;
-  // eslint-disable-next-line no-console
-  console.warn(
-    "engine.onChange: pre-G6-A stub — no real change events are delivered yet (G6-A's change-stream port + executor lands separately on `phase-2b/g6/a-stream-subscribe-core`). The supplied callback will fire ONCE with a sentinel `(seq: 0, payload.length === 0)` so the no-op condition is observable rather than silent.",
-  );
 }
 
 /**

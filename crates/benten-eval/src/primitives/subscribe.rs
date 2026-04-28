@@ -728,6 +728,21 @@ static ACTIVE_COUNT: AtomicUsize = AtomicUsize::new(0);
 static REGISTRY: std::sync::LazyLock<Mutex<HashSet<SubscriberId>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
 
+/// cr-r4b-8 closure (wave-8c): process-wide map of `SubscriberId` to
+/// owned [`ActiveSubscription`] instances. Replaces the `std::mem::forget`
+/// pattern at the SUBSCRIBE primitive boundary: instead of leaking the
+/// handle so its `Drop` doesn't decrement the active counter, the
+/// primitive transfers ownership into this map. The engine layer can
+/// look the handle up via [`take_active_handle`] / [`with_active_handle`]
+/// to drive deliveries or perform an explicit unsubscribe — the whole
+/// lifecycle is owned by the engine-layer registry rather than relying
+/// on memory-safety bypasses.
+///
+/// Phase-3 will replace this with the persistent `SuspensionStore` for
+/// cross-process resumability; the in-memory map is the wave-8c bridge.
+static ACTIVE_HANDLES: std::sync::LazyLock<Mutex<HashMap<SubscriberId, ActiveSubscription>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+
 /// Total active subscriptions in this process.
 #[must_use]
 pub fn active_subscription_count() -> usize {
@@ -738,6 +753,31 @@ pub fn active_subscription_count() -> usize {
 #[must_use]
 pub fn subscription_exists(id: &SubscriberId) -> bool {
     REGISTRY.lock().expect("registry poisoned").contains(id)
+}
+
+/// cr-r4b-8 closure (wave-8c): take ownership of the `ActiveSubscription`
+/// for `id`, removing it from the engine-layer registry. Returns `None`
+/// if the id was never registered or if a prior `take` already removed
+/// it. The caller becomes responsible for the handle's lifecycle —
+/// dropping it triggers the regular auto-unsubscribe path.
+#[must_use]
+pub fn take_active_handle(id: &SubscriberId) -> Option<ActiveSubscription> {
+    ACTIVE_HANDLES
+        .lock()
+        .expect("active-handles poisoned")
+        .remove(id)
+}
+
+/// cr-r4b-8 closure (wave-8c): borrow the `ActiveSubscription` for `id`
+/// under a closure to drive an event injection or read state without
+/// taking ownership. Returns `None` if the id is not in the registry.
+#[must_use]
+pub fn with_active_handle<R>(
+    id: &SubscriberId,
+    f: impl FnOnce(&ActiveSubscription) -> R,
+) -> Option<R> {
+    let g = ACTIVE_HANDLES.lock().expect("active-handles poisoned");
+    g.get(id).map(f)
 }
 
 // ---------------------------------------------------------------------------
@@ -1012,13 +1052,19 @@ pub fn execute(op: &OperationNode, _host: &dyn PrimitiveHost) -> Result<StepResu
     };
     match register(spec) {
         Ok(sub) => {
-            let id_bytes = sub.id().as_cid().as_bytes().to_vec();
-            // Leak-protect: the SUBSCRIBE primitive returns the id; the
-            // active-subscription handle remains in the engine table for
-            // the IVM driver to pump events through. For Phase-2b G6-A
-            // we drop it here (the registry holds the slot count); G6-B
-            // wires the handle through the engine layer.
-            std::mem::forget(sub);
+            let id = *sub.id();
+            let id_bytes = id.as_cid().as_bytes().to_vec();
+            // cr-r4b-8 closure (wave-8c): transfer ownership of the
+            // ActiveSubscription into the engine-layer ACTIVE_HANDLES
+            // registry rather than `std::mem::forget`-ing it. The IVM
+            // driver / engine_subscribe path looks the handle up by
+            // SubscriberId via `take_active_handle` / `with_active_handle`
+            // so delivery + unsubscribe + cap-recheck stay routed through
+            // a real owner.
+            ACTIVE_HANDLES
+                .lock()
+                .expect("active-handles poisoned")
+                .insert(id, sub);
             Ok(StepResult {
                 next: None,
                 edge_label: "ok".to_string(),
