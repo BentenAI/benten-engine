@@ -175,24 +175,6 @@ pub fn map_call_error(
     }
 
     // 4. Default: ModuleInvalid with the Display string preserved.
-    // Debug-only: print the unmatched error chain so we can extend the
-    // mapping if we hit a wasmtime-error shape we didn't anticipate.
-    #[cfg(debug_assertions)]
-    {
-        use std::io::Write;
-        if let Ok(mut f) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("/tmp/trap_to_typed_diag.log")
-        {
-            let _ = writeln!(
-                f,
-                "[map_call_error UNMATCHED] display={:?} chain={:?}",
-                msg,
-                err.chain().map(|e| e.to_string()).collect::<Vec<_>>()
-            );
-        }
-    }
     SandboxError::ModuleInvalid {
         reason: format!("wasmtime error: {msg}"),
     }
