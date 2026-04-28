@@ -47,14 +47,27 @@ export {
 
 export { toMermaid } from "./mermaid.js";
 
+export {
+  assertSandboxComposed,
+  isSandboxBearing,
+} from "./sandbox.js";
+
 export type {
   CapabilityGrant,
   Edge,
   HandlerAdjacencies,
   JsonValue,
+  ManifestSignature,
+  ModuleManifest,
+  ModuleManifestEntry,
   Outcome,
   Primitive,
   RegisteredHandler,
+  SandboxArgsByCaps,
+  SandboxArgsByName,
+  SandboxNodeDescription,
+  SandboxOptions,
+  SandboxResult,
   Subgraph,
   SubgraphNode,
   SuspensionResult,

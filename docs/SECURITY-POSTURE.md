@@ -182,21 +182,43 @@ round-trips the catalog-code strings through `as_str` / `from_str`.
 
 ---
 
-### Compromise #4 — WASM runtime is compile-check only
+### Compromise #4 — WASM runtime is compile-check only — CLOSED
 
-The `bindings/napi` crate compiles with `--target wasm32-unknown-unknown` in CI (`wasm-checks.yml`) but does NOT execute a WASM runtime (browser / `wasmtime`) at test time.
+**Closure provenance:** Phase 2b G7 (SANDBOX primitive land) — the `wasmtime` host is now present and exercised end-to-end. G7-A wires the executor + named-manifest registry; G7-B adds Inv-4 + Inv-7 enforcement; G7-C lands the engine + napi + DSL + WASM-host gate.
 
-**Why:** the Phase-1 WASM surface exists to guarantee that the napi bindings build for a browser target so Thrum (the Phase-4 consumer) can compile them into its web bundle. Runtime execution of the WASM artifact is a Phase-2 scope item tied to the SANDBOX primitive's `wasmtime` host — both land together so the WASM runtime story is coherent.
+**Original scope (Phase 1):** the `bindings/napi` crate compiled with `--target wasm32-unknown-unknown` in CI (`wasm-checks.yml`) but did NOT execute a WASM runtime (browser / `wasmtime`) at test time. The Phase-1 WASM surface existed only to guarantee that the napi bindings built for a browser target so Thrum (the Phase-4 consumer) could compile them into its web bundle.
 
-**What this posture claims:**
-- The napi bindings compile for `wasm32-unknown-unknown` with zero warnings.
-- The compiled artifact has no forbidden symbol references (no `std::net`, no `std::fs::File::open` in hot paths).
+**What now ships at Phase 2b:**
+- A live `wasmtime` host inside `crates/benten-eval/src/primitives/sandbox.rs` runs guest WebAssembly modules per-call (D17 instance lifecycle), with the four enforcement axes (memory / wallclock / fuel / output) bounded by the defaults documented in `docs/SANDBOX-LIMITS.md`.
+- A capability-derived host-function manifest (`crates/benten-eval/host-functions.toml`, G7-A owned) controls which host-fns each guest may import. Capability resolution happens at instance-init time per call; revocation between calls is honoured.
+- Cross-platform behaviour:
+  - **Native targets (Linux x86_64, macOS arm64, Windows x86_64):** SANDBOX executes guest modules. Per-call cold-start budget gated by `bench_thresholds.toml` per the D22 RESOLVED tiered numerics (see `docs/SANDBOX-LIMITS.md` §6).
+  - **wasm32-unknown-unknown:** the SANDBOX executor is compile-time absent (`#[cfg(not(target_arch = "wasm32"))]`). The DSL surface (`subgraph(...).sandbox(...)`) stays present so authoring works in browsers; invocation surfaces the typed error `E_SANDBOX_UNAVAILABLE_ON_WASM` at execution time, with the wsa-14 actionable text directing operators to either Phase-3 P2P sync against a Node-resident peer or local-development via @benten/engine in a Node.js process.
 
-**What this posture does NOT claim:**
-- That the WASM build runs correctly in a browser or `wasmtime` host. Phase-2 adds in-browser integration tests; Phase-1 relies on the compile-check as a coarse smoke test.
-- That napi and WASM have behavioral parity. Some surfaces (redb backend) are stubbed out on WASM per `#[cfg]` gates.
+**Regression tests pinning the closure:**
+- `crates/benten-engine/tests/integration/sandbox_compile_time_disabled_on_wasm32.rs` — pins both halves of the compile-time gate (executor present on native, surfaces typed error on wasm32).
+- `bindings/napi/test/sandbox_napi_bridge.test.ts` — pins the napi bridge's cfg-gated symbol set + the `sandboxTargetSupported()` introspection probe.
+- `packages/engine/test/wasm_browser_target.test.ts` — pins the browser-target UX (DSL stays present, registration succeeds, invocation fails with the typed error).
+- `packages/engine/test/sandbox.test.ts` — pins the DSL composition surface (no top-level `engine.sandbox(...)`; `SandboxArgsByName` vs `SandboxArgsByCaps` discriminated union) and the D24 default-knobs surfacing through `engine.describeSandboxNode(...)`.
+- `crates/benten-engine/tests/security_posture_md_phase_2b_compromises_documented.rs::security_posture_compromise_4_marked_closed` — asserts THIS section header carries `— CLOSED`.
 
-**Phase-2 revisit:** add a `wasmtime` harness in CI that executes a smoke-test from the WASM build. Land this alongside the SANDBOX primitive's runtime.
+**Posture claim now in force:** the SANDBOX runtime is a load-bearing primitive. It is expected to run in Phase 2b deployments. The four enforcement axes and the capability-derived host-fn manifest constitute the supply-chain and runtime-isolation perimeter for untrusted-code execution; operators who require additional defence-in-depth (process-level isolation, separate `wasmtime::Engine` per tenant) layer those on top of — not in place of — the in-engine bounds.
+
+**Posture claim — per-call-only instance lifecycle is a security win by construction (D3-RESOLVED, sec-pre-r1-12).** Phase 2b ships the SANDBOX executor with a per-call `wasmtime::Instance` lifecycle (D17-RESOLVED) and explicitly NO opt-in instance pool (D3-RESOLVED). This is not solely a DX or perf decision — it is a security posture claim. With per-call instantiation:
+
+- **No cross-call wasm-linear-memory leakage by construction.** A pooled instance shared across two SANDBOX calls would surface a hazard whenever a guest module wrote to a wasm-global without realising the global persisted; the per-call lifecycle removes that hazard by forcing every call to start from a freshly-instantiated module.
+- **No cross-call capability-resolution leakage.** Host-fn closures resolve capability grants at instance-init time; per-call init means a capability revoked between two calls is honoured on the second call without per-checkout revalidation logic that a pool would require.
+- **Cross-tenant isolation reduces to call ordering.** Two tenants sharing the same engine still get distinct instances per call — the absence of pooling means there is no shared instance whose internal state could be probed across a tenant boundary.
+
+The cold-start cost is bounded by the D22 tiered numerics (≤2 ms p95 / ≤5 ms p99 Linux x86_64; ≤5 ms p95 / ≤10 ms p99 macOS arm64 + Windows x86_64 — see `docs/SANDBOX-LIMITS.md` §6); a measured breach is the trigger that would re-open D3 with real-workload data, NOT an arbitrary regression. If pooling ever lands in a future phase the security claim above must be re-stated at that point — Phase 2b's posture rests on the per-call lifecycle.
+
+**Non-regression notes — Phase-2a security closures stay closed (sec-pre-r1-13).** Phase 2b MUST NOT re-open the Phase-2a security closures listed below; the closures continue to hold under the SANDBOX-bearing surface. Each closure has its own regression test that fires red on regression.
+
+- **sec-r6r1-01 — Inv-14 attribution wired through every primitive frame.** The AttributionFrame routing path is the carrier for the D20 Inv-4 nested-dispatch depth counter (`AttributionFrame.sandbox_depth: u8` field, G7-B owned). Engine-side SANDBOX plumbing (`engine_sandbox.rs`, this G7-C file) routes through the evaluator's `PrimitiveHost` dispatch — there is no SANDBOX execution path that bypasses AttributionFrame propagation. Pinned by the existing Phase-2a Inv-14 regression suite plus the Phase-2b `tests/engine_sandbox_end_to_end_via_dsl_composition_only` integration test (the SANDBOX call inherits its parent attribution frame).
+- **sec-r6r2-02 — `test-helpers` cfg-gating on the engine surface.** The `Engine::describe_sandbox_node(...)` accessor (G7-C; ts-r4-3 finding) is `#[cfg(any(test, feature = "test-helpers"))]`-gated so the napi cdylib (which opts into the narrower `envelope-cache-test-grade` feature only) does NOT compile this surface into production. The G12-C subgraph type relocation MUST preserve every existing `testing_*` surface gate; G7-C's new accessor adds to the gated set rather than relaxing any prior gate.
+- **sec-r6r3-02 — parse-counter cfg-gate.** The G12-A BudgetExhausted runtime emission wiring (Phase-2b R5 wave-1) routes through the AttributionFrame path and does NOT bypass the parse-counter cfg-gate. The G7-C SANDBOX gate is independent of the parse-counter gate; both must remain.
+
+**Cross-refs.** `docs/SANDBOX-LIMITS.md` (axes + per-platform cold-start); `docs/HOST-FUNCTIONS.md` (host-fn surface); `.addl/phase-2b/00-implementation-plan.md` §3 G7-A/B/C + §5 D3 / D17 / D20 / D21 / D22 / D24 + §sec-pre-r1-12 / sec-pre-r1-13.
 
 ---
 

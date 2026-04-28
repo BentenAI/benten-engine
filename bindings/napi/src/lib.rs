@@ -41,6 +41,13 @@ mod error;
 mod node;
 #[cfg(feature = "napi-export")]
 mod policy;
+// Phase 2b G7-C — SANDBOX-related introspection + diagnostic napi
+// surfaces (`sandboxTargetSupported`, cfg-gated `describeSandboxNode`).
+// Compile-time gating per sec-pre-r1-05; both arms ship so the symbol
+// is callable on every target with the documented platform-aware
+// answer.
+#[cfg(feature = "napi-export")]
+mod sandbox;
 #[cfg(feature = "napi-export")]
 mod subgraph;
 #[cfg(feature = "napi-export")]
