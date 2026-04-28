@@ -1,5 +1,6 @@
 #![cfg(feature = "phase_2b_landed")]
-#![allow(unknown_lints, clippy::duration_suboptimal_units)] // MSRV 1.91 — Rust 1.95 lint
+#![allow(unknown_lints, clippy::duration_suboptimal_units)]
+// MSRV 1.91 — Rust 1.95 lint
 // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: SUBSCRIBE persistent-cursor + retention-window (G6-A).
 //!
