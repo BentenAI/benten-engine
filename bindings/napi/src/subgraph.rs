@@ -13,7 +13,7 @@
 //!    (wired by the evaluator, not here).
 
 use benten_core::Value;
-use benten_engine::{PrimitiveKind, SubgraphSpec, WriteSpec};
+use benten_engine::{PrimitiveKind, PrimitiveSpec, SubgraphSpec, WriteSpec};
 use napi::bindgen_prelude::*;
 
 use crate::node::{json_to_props, value_to_json};
@@ -140,15 +140,29 @@ fn decode_dsl_shape(
             });
             continue;
         }
-        // Non-WRITE kinds: register structurally so the subgraph's
-        // primitive list reflects the shape. Dispatch-time execution
-        // of Phase-2-only primitives returns `E_PRIMITIVE_NOT_IMPLEMENTED`.
+        // Non-WRITE kinds: preserve `args` as the PrimitiveSpec
+        // properties bag so STREAM/SUBSCRIBE/SANDBOX/etc. carry their
+        // declared properties (`source`, `chunkSize`, `pattern`,
+        // `manifest`, `module`, etc.) through to the registered handler.
+        // Wave-8c-stream-infra: the engine's STREAM dispatch reads
+        // `properties.source` + `properties.chunkSize` from the registered
+        // PrimitiveSpec; without this, every DSL-built STREAM handler
+        // would surface `missing required source property`.
         let effective_id = if id.is_empty() {
             format!("n{idx}")
         } else {
             id.as_str().to_string()
         };
-        builder = builder.primitive(&effective_id, kind);
+        let args = nm
+            .get("args")
+            .cloned()
+            .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+        let props = json_to_props(args)?;
+        let mut spec = PrimitiveSpec::new(&effective_id, kind);
+        for (k, v) in props {
+            spec = spec.with_property(&k, v);
+        }
+        builder = builder.primitive_with_props(spec);
     }
     Ok(builder.build())
 }
@@ -267,7 +281,20 @@ fn decode_legacy_shape(
                     .get("id")
                     .and_then(|v| v.as_str())
                     .map_or_else(|| format!("p{idx}"), str::to_string);
-                builder = builder.primitive(&id, kind);
+                // Wave-8c-stream-infra: preserve `properties` so STREAM /
+                // SUBSCRIBE / SANDBOX dispatch can read their declared
+                // configuration (`source`, `chunkSize`, `pattern`,
+                // `manifest`, `module`, etc.).
+                let properties = pm
+                    .get("properties")
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+                let prop_map = json_to_props(properties)?;
+                let mut spec = PrimitiveSpec::new(&id, kind);
+                for (k, v) in prop_map {
+                    spec = spec.with_property(&k, v);
+                }
+                builder = builder.primitive_with_props(spec);
             }
         }
     }

@@ -140,6 +140,8 @@ interface NativeEngine {
     input: unknown,
   ) => NativeStreamHandle;
   testingOpenStreamForTest?: (chunks: Buffer[]) => NativeStreamHandle;
+  // Phase 2b wave-8c-stream-infra — process-wide active-stream count.
+  activeStreamCount?: () => number;
   // Phase 2b wave-8c-cont — STREAM authenticated variant.
   callStreamAs?: (
     handlerId: string,
@@ -1618,6 +1620,29 @@ build @benten/engine-native with `--features test-helpers`",
       throw mapNativeError(err);
     }
     return wrapStreamHandle(native);
+  }
+
+  /**
+   * Phase 2b wave-8c-stream-infra: process-wide active-stream count.
+   *
+   * Returns the number of `StreamHandle` instances constructed via the
+   * production runtime path (engine.callStream / engine.openStream)
+   * that have NOT yet been dropped or explicitly closed.
+   *
+   * Pre-buffered handles (`testingOpenStreamForTest`) do NOT contribute
+   * to this count — only real producer-bridge handles do.
+   *
+   * Used by `packages/engine/test/stream.test.ts` to verify that
+   * `for-await break` propagates producer-side cleanup.
+   *
+   * Returns 0 if the bridge isn't built into this cdylib.
+   */
+  public async activeStreamCount(): Promise<number> {
+    this.assertOpen();
+    if (!this.inner.activeStreamCount) {
+      return 0;
+    }
+    return this.inner.activeStreamCount();
   }
 
   // -------- SUBSCRIBE (Phase 2b G6-B) --------

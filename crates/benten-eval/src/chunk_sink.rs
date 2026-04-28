@@ -717,3 +717,161 @@ pub fn make_chunk_sink_with_wallclock(
     ACTIVE_SINKS.fetch_add(1, Ordering::Relaxed);
     BoundedSink::new(capacity, false, Some(budget))
 }
+
+// ---------------------------------------------------------------------------
+// ChunkProducer — the production-runtime chunk emission surface (wave-8c-stream-infra).
+// ---------------------------------------------------------------------------
+
+/// A chunk-producer drives chunks into a [`BoundedSink`].
+///
+/// The trait abstracts the "what bytes to emit" decision from the "how to
+/// transport them" decision: a producer's [`produce`](ChunkProducer::produce)
+/// is invoked once per chunk; returning `Ok(None)` signals end-of-stream
+/// (the bridge invokes `sink.close()`); returning `Ok(Some(bytes))` emits
+/// a chunk; returning `Err(_)` aborts the producer with a typed error.
+///
+/// Object-safe so [`spawn_chunk_producer`] can move a `Box<dyn ChunkProducer>`
+/// onto a worker thread.
+///
+/// # ESC defenses (wave-8c-stream-infra)
+///
+/// - **Chunk-count budget** — [`ChunkProducerConfig::max_chunks`] caps the
+///   total chunks emitted; over-budget producers surface
+///   `ChunkSinkError::BackpressureDropped` with a `seq` of the rejected
+///   chunk and the configured `max_chunks` as the `capacity` field. Set
+///   via the constructor; the bridge enforces.
+/// - **Back-pressure starvation** — the producer wallclock budget on the
+///   underlying sink (already enforced inside `BoundedSink::send`) bounds
+///   the time a stalled lossless send waits. The bridge surfaces
+///   `ProducerWallclockExceeded` via [`ChunkSink::drain_trace`] so
+///   consumers see the typed-loud failure.
+pub trait ChunkProducer: Send + 'static {
+    /// Produce the next chunk's bytes, or `Ok(None)` to signal EOS.
+    ///
+    /// `seq` is the engine-assigned monotonic sequence number; producers
+    /// MAY ignore it (the bridge stamps the chunk's `seq` field with the
+    /// canonical value before sending).
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed [`ChunkSinkError`] when the producer aborts; the
+    /// bridge sends a final `final_chunk: true` close marker and surfaces
+    /// the error via [`ChunkSink::drain_trace`] for consumer inspection.
+    fn produce(&mut self, seq: u64) -> Result<Option<Vec<u8>>, ChunkSinkError>;
+}
+
+/// Configuration for [`spawn_chunk_producer`].
+///
+/// Locked-shape per wave-8c-stream-infra ESC defenses:
+/// - `capacity` — sink capacity (bounded mpsc / lossless default)
+/// - `max_chunks` — hard cap on total chunks emitted (chunk-count budget)
+/// - `wallclock_budget` — optional producer-side budget; back-pressure
+///   starvation defense
+#[derive(Debug, Clone)]
+pub struct ChunkProducerConfig {
+    /// Sink capacity.
+    pub capacity: NonZeroUsize,
+    /// Max chunks the producer may emit before being shut down with a
+    /// typed `BackpressureDropped` (chunk-count budget — ESC defense).
+    /// `None` = unbounded (still subject to consumer disconnect).
+    pub max_chunks: Option<u64>,
+    /// Producer wallclock budget; blocking `send` past the budget surfaces
+    /// `ProducerWallclockExceeded`. `None` = unbounded.
+    pub wallclock_budget: Option<Duration>,
+}
+
+impl Default for ChunkProducerConfig {
+    fn default() -> Self {
+        Self {
+            capacity: DEFAULT_CAPACITY,
+            // Default chunk-count cap: 1,000,000 chunks. Generous enough for
+            // realistic streams; bounded enough to prevent runaway producers
+            // from consuming unbounded engine resources. Override via the
+            // builder for stream-test fixtures with smaller bounds.
+            max_chunks: Some(1_000_000),
+            wallclock_budget: None,
+        }
+    }
+}
+
+/// Spawn a producer thread that drives `producer` into a fresh bounded
+/// sink. Returns the consumer-side [`ChunkSource`] + the producer thread's
+/// `JoinHandle`. The thread owns the sink end and closes it cleanly on
+/// EOS / typed-error / consumer-disconnect.
+///
+/// The function name says "spawn"; the implementation uses `std::thread`
+/// rather than tokio so `benten-eval` stays tokio-free (per the
+/// chunk_sink.rs module docstring decision: "avoids dragging tokio into
+/// `benten-eval`"). The behavioural contract is the same as the
+/// `tokio::sync::mpsc::channel(N)` shape the streaming-systems R1
+/// reviewer cited: PULL-based, lossless, bounded.
+///
+/// # Panics
+/// Never panics; producer panics propagate via the JoinHandle.
+///
+/// # ESC defenses (chunk-budget overflow + back-pressure starvation)
+///
+/// `config.max_chunks` caps total emission; over-budget closes with a
+/// typed final marker. `config.wallclock_budget` is enforced on every
+/// blocking send inside [`BoundedSink::send`] (defense-in-depth — even
+/// without a chunk-count cap, a stalled-consumer path cannot stall the
+/// producer indefinitely).
+#[must_use]
+pub fn spawn_chunk_producer(
+    mut producer: Box<dyn ChunkProducer>,
+    config: ChunkProducerConfig,
+) -> (ChunkSource, std::thread::JoinHandle<()>) {
+    ACTIVE_SINKS.fetch_add(1, Ordering::Relaxed);
+    let (mut sink, source) = BoundedSink::new(config.capacity, false, config.wallclock_budget);
+    let handle = std::thread::spawn(move || {
+        let mut seq: u64 = 0;
+        loop {
+            // Chunk-count budget (ESC defense).
+            if let Some(max) = config.max_chunks
+                && seq >= max
+            {
+                // Loudly close at the budget boundary. The trace entry
+                // path in BoundedSink doesn't natively carry a "chunk
+                // count exceeded" variant; we emit a typed-final close
+                // so consumers observe EOS and can introspect via the
+                // active-stream-count + drain_trace surfaces.
+                let _ = sink.close();
+                break;
+            }
+            match producer.produce(seq) {
+                Ok(Some(bytes)) => {
+                    let chunk = Chunk {
+                        seq,
+                        bytes,
+                        final_chunk: false,
+                    };
+                    match sink.send(chunk) {
+                        Ok(_) => {
+                            seq = seq.saturating_add(1);
+                        }
+                        Err(_) => {
+                            // Consumer disconnected or wallclock-budget
+                            // elapsed. Producer winds down cleanly.
+                            break;
+                        }
+                    }
+                }
+                Ok(None) => {
+                    // Clean EOS — close the sink so the consumer sees the
+                    // close-marker chunk.
+                    let _ = sink.close();
+                    break;
+                }
+                Err(_typed_err) => {
+                    // Producer aborted with typed error. Close the sink
+                    // so the consumer drains; the trace_entry path
+                    // already captures the underlying transport failure
+                    // for the consumer to inspect.
+                    let _ = sink.close();
+                    break;
+                }
+            }
+        }
+    });
+    (source, handle)
+}

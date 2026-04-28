@@ -702,6 +702,16 @@ mod napi_surface {
             Ok(StreamHandleJs::from_inner(handle))
         }
 
+        /// Phase 2b wave-8c-stream-infra: process-wide active STREAM
+        /// count. Bumped when a producer-bridge `StreamHandle` is
+        /// constructed; decremented on `Drop` / explicit `close()`.
+        /// Used by `packages/engine/test/stream.test.ts` to verify
+        /// for-await break propagates producer-side cleanup.
+        #[napi]
+        pub fn active_stream_count(&self) -> u32 {
+            u32::try_from(self.inner.active_stream_count()).unwrap_or(u32::MAX)
+        }
+
         /// ts-r4-2 R4: vitest-harness factory. Construct a
         /// [`StreamHandleJs`] pre-populated with `chunks` for harnesses
         /// that need to drive the JS-side async-iterator without G6-A's
