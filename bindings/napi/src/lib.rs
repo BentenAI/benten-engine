@@ -118,10 +118,11 @@ mod napi_surface {
     };
     use crate::policy::{PolicyKind, parse_grant_json};
     use crate::stream::{
-        call_stream_adapter, close_handle_adapter, next_chunk_adapter, open_stream_adapter,
+        call_stream_adapter, call_stream_as_adapter, close_handle_adapter, next_chunk_adapter,
+        open_stream_adapter,
     };
     use crate::subgraph::{json_to_subgraph_spec, outcome_to_json};
-    use crate::subscribe::{on_change_adapter, subscription_to_json};
+    use crate::subscribe::{on_change_adapter, on_change_as_adapter, subscription_to_json};
     #[cfg(feature = "test-helpers")]
     use crate::subscribe::{
         testing_deliver_synthetic_event_for_test_adapter,
@@ -658,6 +659,29 @@ mod napi_surface {
             Ok(StreamHandleJs::from_inner(handle))
         }
 
+        /// Phase 2b wave-8c-cont: `callStream` with an explicit actor
+        /// principal. Mirrors [`Engine::call_as`] naming.
+        ///
+        /// `actor` is a friendly principal identifier resolved through
+        /// `parse_actor_cid_or_derive` (same as
+        /// [`Engine::call_as`]). The principal is threaded through to
+        /// the STREAM executor for cap-recheck on chunk emission once
+        /// the production runtime wires through (8c-i remainder); the
+        /// surface itself is callable now so consumers see typed
+        /// errors instead of "method not found".
+        #[napi]
+        pub fn call_stream_as(
+            &self,
+            handler_id: String,
+            op: String,
+            input: serde_json::Value,
+            actor: String,
+        ) -> napi::Result<StreamHandleJs> {
+            let actor_cid = parse_actor_cid_or_derive(&actor);
+            let handle = call_stream_as_adapter(&self.inner, &handler_id, &op, input, &actor_cid)?;
+            Ok(StreamHandleJs::from_inner(handle))
+        }
+
         /// Phase 2b G6-B: open a STREAM dispatch returning a
         /// [`StreamHandleJs`] whose lifecycle the caller manages
         /// explicitly via `close()`.
@@ -751,6 +775,27 @@ mod napi_surface {
             Ok(subscription_to_json(&sub))
         }
 
+        /// Phase 2b wave-8c-cont: `onChange` with an explicit actor
+        /// principal. Mirrors [`Engine::call_as`] naming.
+        ///
+        /// `actor` is a friendly principal identifier resolved through
+        /// `parse_actor_cid_or_derive`. The principal is captured on
+        /// the engine-side Subscription for D5 delivery-time
+        /// cap-recheck once the production change-stream port lands
+        /// (8c-ii remainder); pre-port the returned subscription's
+        /// `active` is `false` honestly.
+        #[napi]
+        pub fn on_change_as(
+            &self,
+            pattern: String,
+            cursor: serde_json::Value,
+            actor: String,
+        ) -> napi::Result<serde_json::Value> {
+            let actor_cid = parse_actor_cid_or_derive(&actor);
+            let sub = on_change_as_adapter(&self.inner, &pattern, &cursor, &actor_cid)?;
+            Ok(subscription_to_json(&sub))
+        }
+
         /// ts-r4-2 mirror for SUBSCRIBE (mini-review cr-g6b-mr-5):
         /// vitest-harness factory mirroring `testingOpenStreamForTest`.
         /// Construct a [`SubscriptionJs`] handle wired against the
@@ -834,6 +879,112 @@ mod napi_surface {
                      (vitest harness build only).",
                 ))
             }
+        }
+
+        // -------- Snapshot blob handoff (D10-RESOLVED; wave-8c-cont 8c-iv) --------
+
+        /// Phase 2b wave-8c-cont: napi bridge for `Engine::export_snapshot_blob`.
+        ///
+        /// Walks this engine's storage and encodes a canonical DAG-CBOR
+        /// snapshot-blob for handoff. Returns the bytes as a `Buffer` —
+        /// the TS wrapper exposes this as `Uint8Array` to consumers.
+        ///
+        /// The snapshot-blob is canonical (BTreeMap-sorted) — two
+        /// exports of the same engine state produce byte-identical
+        /// output (D10 + sec-pre-r1-09 Inv-13 collision-safety).
+        ///
+        /// Native-target only — surfaces `E_SUBSYSTEM_DISABLED` on wasm32
+        /// since `Engine::export_snapshot_blob` is gated to native targets.
+        #[cfg(not(target_arch = "wasm32"))]
+        #[napi(js_name = "exportSnapshotBlob")]
+        pub fn export_snapshot_blob(&self) -> napi::Result<Buffer> {
+            let bytes = self.inner.export_snapshot_blob().map_err(engine_err)?;
+            Ok(Buffer::from(bytes))
+        }
+
+        /// Phase 2b wave-8c-cont: wasm32-target stub for
+        /// `exportSnapshotBlob`. Surfaces `E_SUBSYSTEM_DISABLED` because
+        /// the engine_snapshot module is `#[cfg(not(target_arch =
+        /// "wasm32"))]`-gated. Kept in the public napi surface so JS
+        /// callers see a typed error instead of `TypeError: undefined
+        /// is not a function` on a wasm32-only build.
+        #[cfg(target_arch = "wasm32")]
+        #[napi(js_name = "exportSnapshotBlob")]
+        pub fn export_snapshot_blob(&self) -> napi::Result<Buffer> {
+            Err(napi::Error::new(
+                Status::GenericFailure,
+                "E_SUBSYSTEM_DISABLED: snapshot-blob handoff is not available on wasm32 \
+                 builds (engine_snapshot is native-target only). Use a native engine \
+                 instance to export.",
+            ))
+        }
+
+        /// Phase 2b wave-8c-cont: napi factory bridge for
+        /// `Engine::from_snapshot_blob`. Constructs a NEW read-only
+        /// engine view over the supplied snapshot-blob bytes.
+        ///
+        /// The bytes are decoded as a canonical DAG-CBOR `SnapshotBlob`;
+        /// the contents are hydrated into a fresh tempdir-resident redb
+        /// backend; the returned engine has its `read_only_snapshot`
+        /// flag set so subsequent mutation methods surface
+        /// `E_BACKEND_READ_ONLY` (D10).
+        ///
+        /// Native-target only — surfaces `E_SUBSYSTEM_DISABLED` on wasm32.
+        #[cfg(not(target_arch = "wasm32"))]
+        #[napi(factory, js_name = "fromSnapshotBlob")]
+        pub fn from_snapshot_blob(bytes: Buffer) -> napi::Result<Self> {
+            let inner = InnerEngine::from_snapshot_blob(bytes.as_ref()).map_err(engine_err)?;
+            Ok(Self {
+                inner: Arc::new(inner),
+            })
+        }
+
+        /// Phase 2b wave-8c-cont: wasm32-target stub for
+        /// `fromSnapshotBlob`. See native arm doc for the production
+        /// contract.
+        #[cfg(target_arch = "wasm32")]
+        #[napi(factory, js_name = "fromSnapshotBlob")]
+        pub fn from_snapshot_blob(bytes: Buffer) -> napi::Result<Self> {
+            let _ = bytes;
+            Err(napi::Error::new(
+                Status::GenericFailure,
+                "E_SUBSYSTEM_DISABLED: snapshot-blob handoff is not available on wasm32 \
+                 builds (engine_snapshot is native-target only).",
+            ))
+        }
+
+        /// Phase 2b wave-8c-cont: napi bridge for
+        /// `Engine::compute_snapshot_blob_cid`. Pure helper — computes
+        /// the BLAKE3-multibase CID of a snapshot-blob bytes payload
+        /// without constructing an engine.
+        #[cfg(not(target_arch = "wasm32"))]
+        #[napi(js_name = "computeSnapshotBlobCid")]
+        pub fn compute_snapshot_blob_cid(bytes: Buffer) -> napi::Result<String> {
+            let cid = InnerEngine::compute_snapshot_blob_cid(bytes.as_ref()).map_err(engine_err)?;
+            Ok(cid.to_base32())
+        }
+
+        /// Phase 2b wave-8c-cont: wasm32-target stub for
+        /// `computeSnapshotBlobCid`.
+        #[cfg(target_arch = "wasm32")]
+        #[napi(js_name = "computeSnapshotBlobCid")]
+        pub fn compute_snapshot_blob_cid(bytes: Buffer) -> napi::Result<String> {
+            let _ = bytes;
+            Err(napi::Error::new(
+                Status::GenericFailure,
+                "E_SUBSYSTEM_DISABLED: snapshot-blob CID computation is not available on \
+                 wasm32 builds.",
+            ))
+        }
+
+        /// `true` iff this engine was constructed via
+        /// [`Engine::from_snapshot_blob`] and is therefore a read-only
+        /// view. Mirrors the Rust-side accessor; consumers can branch
+        /// on this flag rather than catching `E_BACKEND_READ_ONLY` on
+        /// every mutation attempt.
+        #[napi(js_name = "isReadOnlySnapshot")]
+        pub fn is_read_only_snapshot(&self) -> bool {
+            self.inner.is_read_only_snapshot()
         }
 
         // -------- Module manifest lifecycle (Phase 2b G10-B; wave-8c bridge) --------

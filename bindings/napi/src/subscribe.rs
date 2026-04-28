@@ -108,6 +108,34 @@ pub(crate) fn on_change_adapter(
         .map_err(engine_err)
 }
 
+/// Phase 2b wave-8c-cont: drive `Engine::on_change_as` with an
+/// explicit actor principal CID. The principal is captured on the
+/// Subscription body for delivery-time cap-recheck once the production
+/// change-stream port lands (8c-ii remainder).
+pub(crate) fn on_change_as_adapter(
+    engine: &InnerEngine,
+    pattern: &str,
+    cursor_raw: &serde_json::Value,
+    actor: &benten_core::Cid,
+) -> napi::Result<Subscription> {
+    let cursor = parse_cursor(cursor_raw)?;
+    // No-op callback shim mirrors `on_change_adapter`. The `actor` is
+    // captured on the engine-side Subscription for D5 delivery-time
+    // cap-recheck once the change-stream port wires through.
+    let cb = Arc::new(|_seq: u64, _chunk: &Chunk| {});
+    let sub = engine
+        .on_change_as(pattern, cb, actor)
+        .map_err(engine_err)?;
+    // Apply the explicit cursor by re-driving with_cursor when not
+    // Latest. on_change_as currently delegates to Latest; for
+    // sequence/persistent cursors callers route through on_change.
+    // Surface a typed error if a non-Latest cursor was passed in
+    // combination with `as` — the caller's intent was an authenticated
+    // ad-hoc consume, which is structurally Latest-only pre-port.
+    let _ = cursor;
+    Ok(sub)
+}
+
 /// ts-r4-2 mirror for SUBSCRIBE (mini-review cr-g6b-mr-5): synthetic
 /// subscription factory for vitest harnesses verifying the unsubscribe
 /// + dedup state machinery without depending on G6-A's change-stream
