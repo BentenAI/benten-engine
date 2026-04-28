@@ -96,6 +96,12 @@ benten-graph = { path = "../benten-graph" }
 benten-ivm = { path = "../benten-ivm" }
 blake3 = { workspace = true }
 thiserror = { workspace = true }
+# Phase 2b G10-B — `ModuleManifest` canonical DAG-CBOR encoding (D9-RESOLVED).
+# Production code paths (`Engine::install_module`, `Engine::compute_manifest_cid`)
+# serialize manifests via serde_ipld_dagcbor, so these graduate from
+# dev-deps to regular deps.
+serde = { workspace = true, features = ["std"] }
+serde_ipld_dagcbor = { workspace = true }
 
 # Phase 2b G7-A — `engine.toml` workspace-config parser. Reads at
 # `Engine::open` time; failed parsing surfaces as `E_ENGINE_CONFIG_INVALID`.

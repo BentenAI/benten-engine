@@ -123,6 +123,7 @@ export const CATALOG_CODES = [
   "E_SANDBOX_MODULE_INVALID",
   "E_SANDBOX_NESTED_DISPATCH_DENIED",
   "E_MODULE_MANIFEST_CID_MISMATCH",
+  "E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE",
   "E_ENGINE_CONFIG_INVALID",
 ] as const;
 
@@ -1475,6 +1476,21 @@ export class EModuleManifestCidMismatch extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_MODULE_MANIFEST_CID_MISMATCH", "D16-RESOLVED-FURTHER minimal CID-pin integrity gate. `Engine::install_module(manifest, expected_cid: Cid)` REQUIRES the CID arg (not Optional — prevents the lazy `install_module(m, None)` footgun). The error includes both expected + computed CIDs + a 1-line manifest summary so an operator can diff without source-code dive. Either re-compute the expected CID against the actual manifest bytes or audit for tampering. Reserved here for the G10-B `install_module` surface; G7-C does NOT own this fire site (per wsa-r1-5 plan-internal conflict resolution).", message, context);
     this.name = "EModuleManifestCidMismatch";
+  }
+}
+
+/**
+ * E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE
+ *
+ * Thrown at: `Engine::install_module` (G10-B) on `wasm32-unknown-unknown` only.
+ * Message template: "module manifest declares N migration(s) but the target has no persistent backing store"
+ */
+export class EModuleMigrationsRequirePersistence extends BentenError {
+  static readonly code = "E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE";
+  static readonly fixHint = "Compromise #N+8 — browser (`wasm32-unknown-unknown`) engines ship in-memory-only manifest persistence in Phase 2b; the IndexedDB / OPFS persistence story lands in Phase 3. Manifests that declare `migrations` need a durable backing store; the rejection prevents the migration runner from silently dropping work. On native (redb-backed) targets the same manifest installs without error. Either (a) defer the migration to a Phase-3 build with persistent storage, or (b) split the manifest into a migrations-free in-memory variant for Phase-2b browser deployments.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE", "Compromise #N+8 — browser (`wasm32-unknown-unknown`) engines ship in-memory-only manifest persistence in Phase 2b; the IndexedDB / OPFS persistence story lands in Phase 3. Manifests that declare `migrations` need a durable backing store; the rejection prevents the migration runner from silently dropping work. On native (redb-backed) targets the same manifest installs without error. Either (a) defer the migration to a Phase-3 build with persistent storage, or (b) split the manifest into a migrations-free in-memory variant for Phase-2b browser deployments.", message, context);
+    this.name = "EModuleMigrationsRequirePersistence";
   }
 }
 

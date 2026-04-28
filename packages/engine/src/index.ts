@@ -52,6 +52,15 @@ export {
   isSandboxBearing,
 } from "./sandbox.js";
 
+// Phase 2b G10-B — module manifest helpers (TS-side mirror of Rust
+// `module_manifest::ManifestSummary` rendering). The top-level engine
+// install/uninstall surface lives on `Engine` itself in `./engine.ts`.
+export {
+  manifestSummary,
+  renderManifestSummary,
+  type ManifestSummary,
+} from "./manifest.js";
+
 // Phase 2b G6-B: STREAM + SUBSCRIBE consumer-side wrappers.
 export {
   wrapStreamHandle,
