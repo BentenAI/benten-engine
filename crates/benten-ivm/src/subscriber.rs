@@ -118,6 +118,27 @@ impl Subscriber {
         guard.iter().filter(|v| v.is_stale()).count()
     }
 
+    /// Wave-8h audit-gap fix #3 — query the [`crate::Strategy`] of a
+    /// registered view. Returns `None` when no view with `view_id` is
+    /// registered.
+    ///
+    /// Used by the wave-8h IVM-B integration test to assert that a
+    /// user view registered via `Engine::create_user_view` (which the
+    /// audit surfaced was unconditionally registering
+    /// `ContentListingView`, returning `Strategy::A`) actually flows
+    /// through `AlgorithmBView` post-fix and reports `Strategy::B`.
+    #[must_use]
+    pub fn view_strategy(&self, view_id: &str) -> Option<crate::Strategy> {
+        let guard = self
+            .views
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard
+            .iter()
+            .find(|v| v.id() == view_id)
+            .map(|v| v.strategy())
+    }
+
     /// Is the named view currently stale? Returns `None` if the view is not
     /// registered. Used by the engine-level `read_view_with` to decide
     /// strict vs. relaxed semantics without exposing the view's internal

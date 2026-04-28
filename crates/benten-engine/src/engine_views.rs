@@ -68,6 +68,49 @@ impl Engine {
             .load(std::sync::atomic::Ordering::SeqCst)
     }
 
+    /// Wave-8h audit-gap fix — subscribe to EMIT events.
+    ///
+    /// Standalone EMIT primitives (handlers using EMIT without a
+    /// backing WRITE) publish their `(channel, payload)` pair through
+    /// the engine's dedicated EMIT broadcast. Storage events continue
+    /// to flow through [`Self::subscribe_change_events`]; the two
+    /// channels are independent because [`benten_graph::ChangeEvent`]
+    /// is keyed on a Node CID + commit-time fields that EMIT events
+    /// don't carry. See `crate::emit_broadcast` module docs.
+    ///
+    /// The closure runs synchronously on whatever thread the EMIT
+    /// primitive was dispatched from. Callbacks that need async
+    /// dispatch should enqueue onto their own channel.
+    pub fn subscribe_emit_events<F>(&self, f: F)
+    where
+        F: Fn(&crate::emit_broadcast::EmitEvent) + Send + Sync + 'static,
+    {
+        self.inner.emit_broadcast.subscribe_fn(f);
+    }
+
+    /// Wave-8h audit-gap fix — subscriber count for the EMIT broadcast.
+    /// Used by tests asserting registration + by operator tooling
+    /// surfacing emit-channel observability.
+    #[must_use]
+    pub fn emit_subscriber_count(&self) -> usize {
+        self.inner.emit_broadcast.subscriber_count()
+    }
+
+    /// Wave-8h audit-gap fix #3 — query the [`benten_ivm::Strategy`]
+    /// of a registered IVM view. Returns `None` when no view with
+    /// `view_id` is registered (or when IVM is disabled via
+    /// `.without_ivm()`).
+    ///
+    /// Used by the IVM-B integration test to assert that a user view
+    /// registered via [`Self::create_user_view`] with the default
+    /// `Strategy::B` actually runs through [`benten_ivm::algorithm_b::AlgorithmBView`]
+    /// at runtime — the audit surfaced that the prior code unconditionally
+    /// fell back to `ContentListingView` (which reports `Strategy::A`).
+    #[must_use]
+    pub fn view_strategy(&self, view_id: &str) -> Option<benten_ivm::Strategy> {
+        self.ivm.as_ref().and_then(|ivm| ivm.view_strategy(view_id))
+    }
+
     // -------- View reads (IVM) --------
 
     /// Strict read of an IVM view. Phase 1: returns typed errors for the
@@ -276,17 +319,41 @@ impl Engine {
         // Register a live view instance with the IVM subscriber so future
         // change events propagate. We dedupe by view id so re-registering
         // the same id is a no-op at the subscriber level.
+        //
+        // Wave-8h audit-gap fix: route Strategy::B user views through
+        // [`benten_ivm::AlgorithmBView`] when the spec id matches one of
+        // the 5 canonical Phase-1 view ids. The audit at
+        // `.addl/phase-2b/r4b-followup-primitive-executor-docs-vs-code-audit.json`
+        // surfaced that the prior code unconditionally registered
+        // [`ContentListingView`] regardless of the persisted strategy,
+        // so the AlgorithmBView wave-G8-A deliverable was never used in
+        // production. For user-defined ids that don't match the
+        // canonical set, fall back to the ContentListingView shim
+        // keyed on the input pattern label — Phase-3 user-supplied
+        // dispatch lifts this fallback to per-spec view registration.
         if let Some(ivm) = self.ivm.as_ref() {
             let already_registered = ivm.view_ids().iter().any(|id| id == spec.id());
             if !already_registered && let Some(label) = input_pattern_label.as_deref() {
-                // Phase 2b G8-B: until G8-A's generalized Algorithm B port
-                // lands, the user-view runtime ingestion path stubs through
-                // ContentListingView keyed on the input pattern label so
-                // change events still flow to a live View. Once G8-A ships
-                // the dispatch swaps to the per-strategy view constructor;
-                // the registration surface (this method) does not change.
-                let view = benten_ivm::views::ContentListingView::new(label);
-                ivm.register_view(Box::new(view));
+                let definition = benten_ivm::ViewDefinition {
+                    view_id: spec.id().to_string(),
+                    input_pattern_label: Some(label.to_string()),
+                    output_label: "system:IVMView".to_string(),
+                    strategy: benten_ivm::Strategy::B,
+                };
+                match benten_ivm::algorithm_b::AlgorithmBView::for_id(spec.id(), definition) {
+                    Ok(view) => {
+                        ivm.register_view(Box::new(view));
+                    }
+                    Err(_) => {
+                        // User-defined id outside the 5 canonical Phase-1
+                        // ids: AlgorithmBView::for_id rejects with
+                        // PatternMismatch. Fall back to the ContentListingView
+                        // shim so change events still flow to a live View;
+                        // Phase-3 user-supplied dispatch removes this branch.
+                        let view = benten_ivm::views::ContentListingView::new(label);
+                        ivm.register_view(Box::new(view));
+                    }
+                }
             }
         }
 

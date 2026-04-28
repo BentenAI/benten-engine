@@ -49,6 +49,10 @@
 pub mod builder;
 pub mod change;
 pub mod change_probe;
+// Wave-8h audit-gap fix — EMIT-only broadcast channel so a handler with
+// a standalone EMIT primitive (no backing WRITE) produces an observable
+// event. Mirrors `change::ChangeBroadcast` but for emit-only events.
+pub mod emit_broadcast;
 pub mod engine;
 pub(crate) mod engine_caps;
 // Phase 2b G7-A — workspace-level `engine.toml` loader (Ben's brief
@@ -90,6 +94,7 @@ pub use engine_config::{EngineConfig, EngineConfigError, SandboxSection};
 
 pub use builder::{EngineBuilder, NOAUTH_STARTUP_LOG};
 pub use change_probe::ChangeProbe;
+pub use emit_broadcast::{EmitBroadcast, EmitEvent};
 pub use engine::{CHANGE_STREAM_MAX_BUFFERED, Engine};
 pub use engine_transaction::EngineTransaction;
 pub use error::EngineError;
