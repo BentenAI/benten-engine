@@ -316,6 +316,13 @@ pub trait CapabilityPolicy: Send + Sync {
     ///
     /// TODO(phase-2a-G9-A): wire into the evaluator's refresh path so the
     /// override becomes load-bearing end-to-end.
+    #[allow(unknown_lints, clippy::duration_suboptimal_units)]
+    // Rust 1.95 lint `clippy::duration_suboptimal_units` suggests
+    // `Duration::from_mins(5)`, but `from_mins` was only stabilized in
+    // 1.95 itself; workspace MSRV is 1.91 (wasmtime 43.0.1 floor). The
+    // outer `unknown_lints` covers older toolchains (1.94 + below) that
+    // don't recognize the inner lint name. Drop both allows when MSRV
+    // bumps to 1.95.
     fn wallclock_refresh_ceiling(&self) -> core::time::Duration {
         core::time::Duration::from_secs(300)
     }
