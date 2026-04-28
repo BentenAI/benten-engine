@@ -72,9 +72,15 @@ pub struct ReloadEvent {
 }
 
 /// Subscriber handle returned by [`ReloadCoordinator::subscribe_reload_events`].
-/// Drop to unsubscribe. Cloning produces an independent subscriber that
-/// observes events from this point onward.
-#[derive(Debug, Clone)]
+/// Drop to unsubscribe. The subscriber is intentionally NOT `Clone` —
+/// the inner buffer is shared via `Arc<Mutex<Vec<ReloadEvent>>>`, so a
+/// clone would share the SAME buffer (drain on one drains for both),
+/// which is the opposite of what "independent observation" means at
+/// this surface. Callers that want independent observation should call
+/// [`ReloadCoordinator::subscribe_reload_events`] again to mint a fresh
+/// subscriber backed by its own buffer. Removing `Clone` forces the
+/// correct API usage at compile time.
+#[derive(Debug)]
 pub struct ReloadSubscriber {
     inner: Arc<Mutex<Vec<ReloadEvent>>>,
 }

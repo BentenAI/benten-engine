@@ -143,6 +143,18 @@ pub(crate) struct EngineInner {
     /// to keep `EngineInner`'s layout cfg-invariant per arch-pre-r1-2 sibling
     /// "no cfg-conditional struct shapes" rule.
     pub(crate) test_iteration_budget: std::sync::Mutex<Option<u64>>,
+    /// Phase 2b Wave-8f test-only call gate. When `Some(barrier)`, every
+    /// `dispatch_call_with_mode_and_trace` invocation parks on the barrier
+    /// AFTER resolving `handler_cid` from the handlers map but BEFORE
+    /// constructing/walking the Subgraph. The harness uses this to land an
+    /// `Engine::register_subgraph_replace` between the two points so the
+    /// in-flight call's pre-swap `handler_cid` is the cache key feeding
+    /// `dispatch_call_inner`'s `subgraph_for_spec` lookup. Cleared (set to
+    /// `None`) on completion so production calls never block. Only meaningful
+    /// under `cfg(any(test, feature = "test-helpers"))`; field stays present
+    /// unconditionally per the same arch-pre-r1-2 "no cfg-conditional struct
+    /// shapes" rule that applies to `test_iteration_budget`.
+    pub(crate) test_pre_dispatch_gate: std::sync::Mutex<Option<std::sync::Arc<std::sync::Barrier>>>,
     /// Phase 2b G10-B: in-memory active set of installed module manifests
     /// keyed by their canonical-bytes CID. Mirrored to durable storage
     /// via the `system:ModuleManifest` zone (see
@@ -202,6 +214,7 @@ impl EngineInner {
             writes_committed_total: std::sync::atomic::AtomicU64::new(0),
             writes_denied_total: std::sync::atomic::AtomicU64::new(0),
             test_iteration_budget: std::sync::Mutex::new(None),
+            test_pre_dispatch_gate: std::sync::Mutex::new(None),
             installed_modules: std::sync::Mutex::new(std::collections::BTreeMap::new()),
             module_bytes: std::sync::Mutex::new(std::collections::BTreeMap::new()),
             handler_version_chain: std::sync::Mutex::new(std::collections::BTreeMap::new()),
@@ -750,6 +763,23 @@ impl Engine {
         *guard = budget;
     }
 
+    /// Wave-8f test-only: install a `Barrier` that every subsequent
+    /// `Engine::call`/`Engine::trace` invocation parks on AFTER resolving
+    /// `handler_cid` from the handlers map but BEFORE walking the
+    /// reconstructed Subgraph. Pair with another thread that calls
+    /// `testing_clear_pre_dispatch_gate` (or releases the same barrier
+    /// directly) once the harness has landed an intervening
+    /// `register_subgraph_replace`. Used exclusively by the in-flight
+    /// hot-replace contract test in `tests/register_subgraph_replace.rs`.
+    ///
+    /// Pass `None` to clear the gate so subsequent calls dispatch
+    /// without parking.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn testing_set_pre_dispatch_gate(&self, gate: Option<std::sync::Arc<std::sync::Barrier>>) {
+        let mut guard = self.inner.test_pre_dispatch_gate.lock_recover();
+        *guard = gate;
+    }
+
     // -------- CRUD surface (Node + Edge) --------
     //
     // CRUD methods (`create_node`, `get_node`, `update_node`, `delete_node`,
@@ -848,13 +878,26 @@ impl Engine {
     /// becomes the live dispatch target on `Engine::call(handler_id, ...)`.
     ///
     /// **In-flight evaluation contract:** in-flight `Engine::call`
-    /// invocations DO NOT see the swap. The dispatch path resolves the CID
-    /// from `handlers` once at call time + holds an
-    /// `Arc<benten_eval::Subgraph>` clone for the call's lifetime, so the
-    /// swap is observed by NEXT calls only. (Full subscription-store-style
+    /// invocations DO NOT see the swap. The dispatch path resolves
+    /// `handler_cid` once at call entry; the spec Mutex re-lookup at
+    /// `dispatch_call_inner` uses that CID as the third axis of the
+    /// subgraph-cache key, so the reconstructed `Subgraph` reflects the
+    /// CID resolved at call entry rather than the post-swap CID. The swap
+    /// is observed by NEXT calls only. (Full subscription-store-style
     /// pre-swap-suspension drain is out of scope for Phase 2b — the
     /// registered CID swap is atomic from the table's perspective; mid-call
     /// behaviour is bounded by the call's own snapshot.)
+    ///
+    /// **Concurrency / lock-ordering invariant:** the `handlers` Mutex,
+    /// the `specs` Mutex, and the `handler_version_chain` Mutex are
+    /// acquired in that fixed order and held jointly across the
+    /// swap+spec-update+chain-prepend sequence. This keeps the
+    /// `handlers`-table swap order in lockstep with the version-chain
+    /// prepend order under concurrent writers (without it, two racing
+    /// `register_subgraph_replace` calls against the same `handler_id`
+    /// could land their handler-table swap in one order while their
+    /// version-chain prepend lands in the other, violating the chain's
+    /// newest-first invariant that `handler_version_chain()` reports).
     ///
     /// **Version chain in Phase 2b:** in-memory only. Phase 3 promotes this
     /// to a durable `core::version::Anchor` + Version-Node chain so reload
@@ -894,14 +937,25 @@ impl Engine {
         let handler_id = sg.handler_id().to_string();
 
         // Atomically: read the previous CID (if any), swap the handlers
-        // entry, then prepend onto the version chain. The two locks are
-        // taken in chain order (handlers, then version_chain) consistently
-        // with all other version-chain mutators.
+        // entry, update the spec table, then prepend onto the version
+        // chain. The three locks are acquired in fixed order — handlers,
+        // specs, version_chain — and HELD JOINTLY across the entire
+        // mutation so the handlers-table swap order matches the version-
+        // chain prepend order under concurrent writers. Without this,
+        // racing `register_subgraph_replace` calls against the same
+        // handler_id could land their handler-table swap in one order
+        // and their chain prepend in the other, violating the
+        // newest-first invariant `handler_version_chain()` reports +
+        // the 7 dedicated tests assume.
         let previous_cid: Option<Cid>;
         let replaced;
+        let chain_depth;
         {
-            let mut guard = self.inner.handlers.lock_recover();
-            let prev = guard.get(&handler_id).copied();
+            let mut handlers_guard = self.inner.handlers.lock_recover();
+            let mut specs_guard = self.inner.specs.lock_recover();
+            let mut chain_guard = self.inner.handler_version_chain.lock_recover();
+
+            let prev = handlers_guard.get(&handler_id).copied();
             match prev {
                 Some(existing) if existing == cid => {
                     // Identical content — idempotent no-op. The chain is
@@ -910,36 +964,34 @@ impl Engine {
                     replaced = false;
                 }
                 _ => {
-                    guard.insert(handler_id.clone(), cid);
+                    handlers_guard.insert(handler_id.clone(), cid);
                     previous_cid = prev;
                     replaced = true;
                 }
             }
-        }
-        if let Some(spec) = stored_spec {
-            let mut spec_guard = self.inner.specs.lock_recover();
-            spec_guard.insert(handler_id.clone(), spec);
-        }
-        if replaced {
-            let mut vc = self.inner.handler_version_chain.lock_recover();
-            let chain = vc.entry(handler_id.clone()).or_default();
-            // Idempotency guard: don't re-prepend if the chain already
-            // leads with this CID (defence against racing replace-with-
-            // same-content writers — the handlers swap above is the
-            // arbiter).
-            if chain.first() != Some(&cid) {
-                chain.insert(0, cid);
+
+            if let Some(spec) = stored_spec {
+                specs_guard.insert(handler_id.clone(), spec);
             }
+
+            if replaced {
+                let chain = chain_guard.entry(handler_id.clone()).or_default();
+                // Idempotency guard: don't re-prepend if the chain already
+                // leads with this CID (defence against racing replace-
+                // with-same-content writers — the handlers swap above is
+                // the arbiter).
+                if chain.first() != Some(&cid) {
+                    chain.insert(0, cid);
+                }
+            }
+
+            // Chain depth — used by audit consumers to name "v1 / v2 /
+            // v3 / …" at a glance; matches `tools/benten-dev`'s legacy
+            // version-tag convention. Read while still under the joint
+            // lock to keep the reported depth consistent with the swap
+            // we just performed.
+            chain_depth = chain_guard.get(&handler_id).map_or(1, std::vec::Vec::len);
         }
-        // Chain depth — used by audit consumers to name "v1 / v2 / v3 / …"
-        // at a glance; matches `tools/benten-dev`'s legacy version-tag
-        // convention.
-        let chain_depth = self
-            .inner
-            .handler_version_chain
-            .lock_recover()
-            .get(&handler_id)
-            .map_or(1, std::vec::Vec::len);
         Ok(RegisterReplaceOutcome {
             handler_id,
             cid,
@@ -1356,6 +1408,18 @@ impl Engine {
                 last_refresh: None,
                 iteration: 0,
             });
+        }
+
+        // Wave-8f test-only call gate: park here so the harness can land
+        // a `register_subgraph_replace` between the handler_cid capture
+        // (above) and the Subgraph reconstruction (below). Production
+        // callers never set the gate so the lookup is a single Mutex
+        // peek that returns `None`. The clone keeps the gate Mutex
+        // unlocked while waiting so the harness thread can re-acquire
+        // it without deadlocking.
+        let pre_dispatch_gate = self.inner.test_pre_dispatch_gate.lock_recover().clone();
+        if let Some(barrier) = pre_dispatch_gate {
+            barrier.wait();
         }
 
         let result = self.dispatch_call_inner(

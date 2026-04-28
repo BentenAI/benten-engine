@@ -103,9 +103,20 @@ jobs:
         # `packages/engine-devserver` package (which the npm-workspace
         # config in the repo root handles automatically).
         run: |
-          # Install workspace deps so the workspaces: [...] in repo-root
-          # package.json resolve symlinks across packages/engine,
-          # packages/engine-devserver, bindings/napi.
+          # Two-step install rationale (mini-review 8f-dx-9):
+          #   Step 1 (--workspaces=false): install ROOT-LEVEL devDeps
+          #   only (e.g. vitest, typescript at the repo-root
+          #   package.json). Without this, npm's workspace traversal
+          #   in step 2 may resolve workspace package symlinks
+          #   BEFORE the root-level binaries are present, which can
+          #   leave the `npx vitest` invocation below unable to find
+          #   its binary on first-run cache-miss machines.
+          #   Step 2 (default workspace traversal): install workspace
+          #   deps so the `workspaces: [...]` in repo-root
+          #   package.json resolves symlinks across packages/engine,
+          #   packages/engine-devserver, bindings/napi.
+          # Both calls are idempotent + the second is a fast-path
+          # when the root-level devDeps are already installed.
           npm install --no-audit --no-fund --workspaces=false
           npm install --no-audit --no-fund
           npx vitest run tools/benten-dev/test/devserver.test.ts \

@@ -6,27 +6,30 @@
 // Rust-side (see `tools/benten-dev/tests/devserver_*.rs`); this file is
 // the JS-surface mirror that drives the property through the napi bridge.
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { BentenDevServer } from "@benten/engine-devserver";
 
-let tmp: string;
-let projectRoot: string;
-
-beforeAll(() => {
-  tmp = mkdtempSync(join(tmpdir(), "benten-dev-reload-"));
-  projectRoot = join(tmp, "project");
-});
-
-afterAll(() => {
-  rmSync(tmp, { recursive: true, force: true });
-});
+// Per-test fresh tmp helper (mirrors devserver.test.ts:17-23). The
+// previous beforeAll-scoped projectRoot leaked redb-file state across
+// tests in this file; clean-start setup is the right default since
+// the second test's BentenDevServer would otherwise re-open the
+// engine against the first test's residual `.benten-dev.redb`.
+function freshTmp(prefix: string): { dir: string; cleanup: () => void } {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  return {
+    dir,
+    cleanup: () => rmSync(dir, { recursive: true, force: true }),
+  };
+}
 
 describe("benten-dev hot reload (engine-routed)", () => {
   it("devserver_preserves_cap_grants_across_reload", async () => {
+    const { dir: projectRoot, cleanup } = freshTmp("benten-dev-reload-");
+    try {
     const server = new BentenDevServer({ projectRoot });
     await server.start();
     try {
@@ -62,6 +65,9 @@ describe("benten-dev hot reload (engine-routed)", () => {
     } finally {
       await server.stop();
     }
+    } finally {
+      cleanup();
+    }
   });
 
   it("devserver_in_flight_subscribers_observe_reload_event_for_each_replace", async () => {
@@ -74,6 +80,8 @@ describe("benten-dev hot reload (engine-routed)", () => {
     // gate the Rust harness uses, so the JS test asserts the
     // observability pre-condition rather than the racing in-flight
     // dispatch — that's a Rust-side property).
+    const { dir: projectRoot, cleanup } = freshTmp("benten-dev-reload-flow-");
+    try {
     const server = new BentenDevServer({ projectRoot });
     await server.start();
     try {
@@ -106,6 +114,9 @@ describe("benten-dev hot reload (engine-routed)", () => {
       sub.unsubscribe();
     } finally {
       await server.stop();
+    }
+    } finally {
+      cleanup();
     }
   });
 });
