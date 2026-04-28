@@ -41,6 +41,23 @@ napi-export = ["dep:napi", "dep:napi-derive"]
 # surface in. Vitest fixtures opt into this feature explicitly when
 # building the test artifact (`napi build --features test-helpers`).
 test-helpers = ["benten-engine/test-helpers"]
+# Phase 2b G10-A-browser: browser-target marker feature.
+#
+# napi-rs v3 supports `wasm32-unknown-unknown` automatically via the
+# `napi3` ABI feature already pulled by `napi = { features = ["napi4"] }`
+# above — no extra dep / feature flip is required at the crate boundary.
+# This feature exists as a documentation marker so a downstream consumer
+# building the browser bundle (`wasm-browser.yml`) can opt into any
+# future browser-only behaviour (e.g. wasm-bindgen integration if we
+# ever adopt one) without disturbing the default cdylib build.
+#
+# Compromise #N+8 enforcement (in-memory manifest store only — no
+# IndexedDB) is the responsibility of `src/wasm_browser.rs`'s storage
+# contract, not this feature flag; the flag does NOT toggle persistence
+# behaviour. Per the load-bearing rule documented in `wasm_browser.rs`,
+# every `BrowserManifestStore::new()` returns a non-persistent store
+# regardless of compile-time configuration in Phase 2b.
+browser-target = []
 
 [dependencies]
 benten-core = { path = "../../crates/benten-core" }
@@ -89,4 +106,28 @@ name = "input_validation"
 # (which fails to link the test binary). Use:
 #     cargo test -p benten-napi --no-default-features --features in-process-test
 # to run this test. Until then it is excluded from the default test run.
+required-features = ["in-process-test"]
+
+# Phase 2b G10-A-browser must-pass tests. Each requires the same
+# `in-process-test` rlib build mode `input_validation` uses — the napi
+# cdylib externs don't resolve when libtest links the test binary, so
+# every integration test under bindings/napi/tests/ ships with the
+# same required-features gate.
+#
+# Run with:
+#   cargo test -p benten-napi --no-default-features \
+#     --features in-process-test \
+#     --test wasm32_unknown_unknown_browser_engine_loads \
+#     --test wasm32_unknown_unknown_module_manifest_in_memory_only_no_indexeddb_persistence \
+#     --test wasm32_unknown_unknown_bundle_size_under_threshold
+[[test]]
+name = "wasm32_unknown_unknown_browser_engine_loads"
+required-features = ["in-process-test"]
+
+[[test]]
+name = "wasm32_unknown_unknown_module_manifest_in_memory_only_no_indexeddb_persistence"
+required-features = ["in-process-test"]
+
+[[test]]
+name = "wasm32_unknown_unknown_bundle_size_under_threshold"
 required-features = ["in-process-test"]
