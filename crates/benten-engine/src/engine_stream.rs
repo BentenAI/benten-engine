@@ -388,10 +388,10 @@ mod tests {
         ]);
         assert_eq!(h.seq_so_far(), 0);
         let c1 = h.next_chunk().unwrap().unwrap();
-        assert_eq!(c1.bytes.as_ref(), &[1, 2, 3][..]);
+        assert_eq!(c1.bytes, vec![1, 2, 3]);
         assert_eq!(h.seq_so_far(), 1);
         let c2 = h.next_chunk().unwrap().unwrap();
-        assert_eq!(c2.bytes.as_ref(), &[4, 5][..]);
+        assert_eq!(c2.bytes, vec![4, 5]);
         assert_eq!(h.seq_so_far(), 2);
         assert!(h.next_chunk().unwrap().is_none());
         assert!(h.is_drained());
