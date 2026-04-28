@@ -419,3 +419,221 @@ impl crate::engine::Engine {
         Ok(self.backend().put_node_with_context(&node, &ctx)?)
     }
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2b wave-8g — G12-E follow-up testing helpers (cfg-gated per
+// Phase-2a sec-r6r2-02 discipline so release builds + the napi cdylib do
+// not pick up the test-only surface).
+//
+// The helpers below back the R3 red-phase fixtures under
+// `crates/benten-engine/tests/integration/suspension_store_round_trip_*.rs`
+// + `crates/benten-eval/tests/subscribe_persist.rs` (the latter already
+// passes via `benten-eval::testing` re-exports; the engine-side mirrors
+// keep the public spelling consistent across the two test surfaces).
+//
+// Anything TTL-shaped here is intentionally minimal — D12 WAIT-TTL is a
+// separate Phase-3 brief (see wave-8 brief §"Carry-forwards explicitly
+// NOT in wave-8") and the helpers below set up the surface for that
+// future work without committing to its semantics. In particular,
+// `testing_make_wait_metadata_with_ttl_hours` ignores its TTL argument
+// and stamps the existing `WaitMetadata` shape; D12 will widen the
+// shape with a real `ttl_hours` field.
+// ---------------------------------------------------------------------------
+
+/// Phase 2b wave-8g: borrow the engine's configured
+/// [`benten_eval::SuspensionStore`] handle.
+///
+/// Direct alias for [`crate::engine::Engine::suspension_store`]; the
+/// duplication on the `testing::` path keeps the test-fixture spelling
+/// consistent with the rest of the wave-8g helpers (`testing_make_*`,
+/// `testing_call_to_suspend`, etc.) so a fixture can land all of its
+/// imports under one `benten_engine::testing::*` umbrella.
+#[cfg(any(test, feature = "test-helpers"))]
+#[must_use]
+pub fn testing_get_suspension_store(
+    engine: &crate::engine::Engine,
+) -> std::sync::Arc<dyn benten_eval::SuspensionStore> {
+    engine.suspension_store()
+}
+
+/// Phase 2b wave-8g: deterministic [`benten_core::Cid`] derived from a
+/// caller-chosen string label. Two calls with the same label produce
+/// bit-identical CIDs; the BLAKE3 seed is namespaced under
+/// `phase-2b:wave-8g:wait-id:` so the helper cannot collide with a
+/// real-handler CID.
+///
+/// Used by the `suspension_store_round_trip_wait_metadata` fixtures to
+/// pin a synthetic envelope CID without constructing a full
+/// `ExecutionStateEnvelope`.
+#[cfg(any(test, feature = "test-helpers"))]
+#[must_use]
+pub fn testing_make_wait_id(label: &str) -> benten_core::Cid {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"phase-2b:wave-8g:wait-id:");
+    hasher.update(label.as_bytes());
+    benten_core::Cid::from_blake3_digest(*hasher.finalize().as_bytes())
+}
+
+/// Phase 2b wave-8g: deterministic [`benten_core::SubscriberId`] derived
+/// from a caller-chosen string label. Same construction as
+/// [`testing_make_wait_id`] but namespaced under
+/// `phase-2b:wave-8g:subscriber-id:` so wait-id and subscriber-id
+/// derived from the *same* label still produce different bytes — the
+/// "no-aliasing" property the
+/// `suspension_store_handles_both_wait_and_cursor_keys_without_collision`
+/// fixture asserts.
+///
+/// Note that `SuspensionKey::WaitMetadata(cid)` and
+/// `SuspensionKey::Cursor(SubscriberId::from_cid(cid))` for the SAME
+/// `cid` value still namespace-separate at the
+/// [`crate::suspension_store::RedbSuspensionStore`] table level (one
+/// table per variant); these helpers cover the more-typical case of a
+/// caller wanting two distinct ids with the same conceptual name.
+#[cfg(any(test, feature = "test-helpers"))]
+#[must_use]
+pub fn testing_make_subscriber_id(label: &str) -> benten_core::SubscriberId {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"phase-2b:wave-8g:subscriber-id:");
+    hasher.update(label.as_bytes());
+    let cid = benten_core::Cid::from_blake3_digest(*hasher.finalize().as_bytes());
+    benten_core::SubscriberId::from_cid(cid)
+}
+
+/// Phase 2b wave-8g: build a [`benten_eval::WaitMetadata`] entry suitable
+/// for a `put_wait` round-trip.
+///
+/// **TTL is intentionally a no-op in 8g.** D12 WAIT-TTL + GC + the
+/// `E_WAIT_TTL_EXPIRED` typed error live in a separate Phase-3 brief
+/// (see wave-8 brief §"Carry-forwards explicitly NOT in wave-8"). The
+/// `_ttl_hours` argument is preserved on the helper signature so the
+/// future D12 lift can widen [`WaitMetadata`] without churning every
+/// fixture call site.
+///
+/// The returned metadata is structurally complete (round-trips byte-for-
+/// byte through the SuspensionStore), satisfying the
+/// `suspension_store_round_trip_wait_metadata` pin without committing
+/// to a TTL semantic this brief is out-of-scope for.
+#[cfg(any(test, feature = "test-helpers"))]
+#[must_use]
+pub fn testing_make_wait_metadata_with_ttl_hours(_ttl_hours: u32) -> benten_eval::WaitMetadata {
+    benten_eval::WaitMetadata {
+        suspend_elapsed_ms: Some(0),
+        timeout_ms: Some(60_000),
+        signal_shape: None,
+        is_duration: false,
+    }
+}
+
+/// Phase 2b wave-8g: construct a [`benten_eval::primitives::subscribe::ChangePattern`]
+/// from a glob string.
+///
+/// Convenience wrapper that picks the right pattern variant for the
+/// red-phase fixtures; gives the test a single spelling that survives
+/// future pattern-language additions.
+#[cfg(any(test, feature = "test-helpers"))]
+#[must_use]
+pub fn testing_make_change_pattern(
+    glob: &str,
+) -> benten_eval::primitives::subscribe::ChangePattern {
+    benten_eval::primitives::subscribe::ChangePattern::LabelGlob(glob.to_string())
+}
+
+/// Phase 2b wave-8g: drive a registered handler to its WAIT suspension
+/// boundary and return the encoded envelope bytes.
+///
+/// **Status: minimal stub for the wave-8g surface.** Full integration
+/// (registering an actual WAIT handler under a string id, running it
+/// to suspension, returning real envelope bytes) is coupled to D12's
+/// TTL work + the `cross_process_wait_resume` fixture's broader
+/// helpers. Wave-8g lands the function shape so the sister fixtures
+/// that don't depend on TTL can wire up cleanly; the body fabricates a
+/// deterministic envelope via the existing
+/// [`crate::engine::Engine::fabricate_test_suspend_envelope`] hook.
+///
+/// Tests that need real cross-process resume against a real handler
+/// path remain `#[ignore]`-d until D12 + the
+/// `testing_make_wait_spec_with_ttl_hours` helper land.
+///
+/// # Errors
+/// Returns [`crate::error::EngineError`] on envelope-encode failure.
+#[cfg(any(test, feature = "test-helpers"))]
+pub fn testing_call_to_suspend(
+    engine: &mut crate::engine::Engine,
+    handler_id: &str,
+) -> Result<Vec<u8>, crate::error::EngineError> {
+    // Derive a deterministic principal so a second call against the
+    // same handler_id produces bit-identical envelope bytes (the
+    // existing fabricate_test_suspend_envelope contract).
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"phase-2b:wave-8g:testing_call_to_suspend:principal:");
+    hasher.update(handler_id.as_bytes());
+    let principal = benten_core::Cid::from_blake3_digest(*hasher.finalize().as_bytes());
+    engine.fabricate_test_suspend_envelope(&principal)
+}
+
+/// Phase 2b wave-8g: stub for `testing_register_persistent_subscriber`.
+///
+/// **Status: not implemented in 8g.** The body of
+/// `subscribe_max_delivered_seq_round_trips_via_suspension_store` drives
+/// SUBSCRIBE through the engine boundary (registration + event
+/// emission), which depends on the subscribe production-runtime
+/// wire-through that wave-8c-cont owns. The function shape lands here
+/// for compile-time forward compatibility; the consuming test stays
+/// `#[ignore]`-d under that brief.
+///
+/// # Panics
+/// Always panics with a pointer to wave-8c-cont. `#[ignore]`-d call
+/// sites never reach the body.
+#[cfg(any(test, feature = "test-helpers"))]
+pub fn testing_register_persistent_subscriber(
+    _engine: &mut crate::engine::Engine,
+    _sub_id: benten_core::SubscriberId,
+    _pattern: benten_eval::primitives::subscribe::ChangePattern,
+) -> Result<(), crate::error::EngineError> {
+    panic!(
+        "wave-8g shape-only stub: testing_register_persistent_subscriber depends on the \
+         SUBSCRIBE production-runtime wire-through owned by wave-8c-cont. The consuming \
+         fixture stays `#[ignore]`-d until that brief lands.",
+    )
+}
+
+/// Phase 2b wave-8g: stub for `testing_emit_n_synthetic_events`.
+///
+/// Companion stub to [`testing_register_persistent_subscriber`]. See
+/// that helper's doc comment for status.
+///
+/// # Panics
+/// Always panics with a pointer to wave-8c-cont. `#[ignore]`-d call
+/// sites never reach the body.
+#[cfg(any(test, feature = "test-helpers"))]
+pub fn testing_emit_n_synthetic_events(
+    _engine: &mut crate::engine::Engine,
+    _pattern: &str,
+    _n: usize,
+) -> Result<(), crate::error::EngineError> {
+    panic!(
+        "wave-8g shape-only stub: testing_emit_n_synthetic_events depends on the SUBSCRIBE \
+         production-runtime wire-through owned by wave-8c-cont. The consuming fixture \
+         stays `#[ignore]`-d until that brief lands.",
+    )
+}
+
+/// Phase 2b wave-8g: advance the engine's wait-clock by `delta`.
+///
+/// **Status: no-op stub for the wave-8g surface.** D12 WAIT-TTL work
+/// owns the actual MockTimeSource injection that tests would use to
+/// synthesise a TTL expiry without real wall-clock latency. Wave-8g
+/// lands the function shape for forward compatibility — fixtures that
+/// invoke the helper today receive a deterministic no-op; D12 will
+/// wire it through to the real `EvalContext` time source.
+///
+/// Tests depending on the helper's behaviour (specifically
+/// `wait_ttl_expires_via_suspension_store`) remain `#[ignore]`-d under
+/// the D12 brief.
+#[cfg(any(test, feature = "test-helpers"))]
+pub fn testing_advance_wait_clock(
+    _engine: &mut crate::engine::Engine,
+    _delta: std::time::Duration,
+) {
+    // Phase-3 D12 brief lifts this to a real MockTimeSource advance.
+}

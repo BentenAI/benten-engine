@@ -27,13 +27,19 @@ use crate::primitives::stream::{
 };
 use crate::primitives::subscribe::{
     ActiveSubscription, ConcurrentSubscribeNoLossOutcome, ConcurrentSubscribeOrderingOutcome,
-    InMemorySuspensionStore, PatternProptestOutcome, ReplayDedupOutcome, SubscribeError,
-    SubscriptionSpec, SuspensionStore, TestHandler, TestPrincipal, active_subscription_count,
-    inject_event, make_change_event, make_persistent_subscription_id, publish_change_event,
-    register, register_as, register_with_store, run_concurrent_subscribe_event_ordering,
+    PatternProptestOutcome, ReplayDedupOutcome, SubscribeError, SubscriptionSpec, TestHandler,
+    TestPrincipal, active_subscription_count, inject_event, make_change_event,
+    make_persistent_subscription_id, publish_change_event, register, register_as,
+    register_with_store, run_concurrent_subscribe_event_ordering,
     run_concurrent_subscribe_no_event_loss, run_pattern_proptest, run_replay_dedup_proptest,
     subscription_exists,
 };
+// Phase-2b wave-8g un-aliasing: SUBSCRIBE consumes the unified
+// `SuspensionStore` trait + `InMemorySuspensionStore` impl that lives in
+// `crate::suspension_store`. The interim per-module trait+impl that
+// shipped in `primitives::subscribe` from G6-A through wave-7 has been
+// deleted (D-NS-54 architect-reviewer audit).
+use crate::suspension_store::{InMemorySuspensionStore, SuspensionStore};
 
 // ---------------------------------------------------------------------------
 // Chunk-sink helpers.

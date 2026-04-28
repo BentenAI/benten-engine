@@ -24,7 +24,7 @@
 //!
 //! Owned by R3-E.
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::clone_on_copy)]
 
 use benten_engine::Engine;
 
@@ -39,7 +39,6 @@ fn fresh_engine() -> (tempfile::TempDir, Engine) {
 
 /// `suspension_store_round_trip_wait_metadata` — R2 §2.5 (G12-E generalization).
 #[test]
-#[ignore = "Phase 2b G12-E pending — SuspensionStore + WaitMetadata unimplemented"]
 fn suspension_store_round_trip_wait_metadata() {
     let (_dir, engine) = fresh_engine();
 
@@ -73,7 +72,6 @@ fn suspension_store_round_trip_wait_metadata() {
 /// structural pin that prevents the generalization from regressing
 /// per-feature isolation.
 #[test]
-#[ignore = "Phase 2b G12-E pending"]
 fn suspension_store_handles_both_wait_and_cursor_keys_without_collision() {
     let (_dir, engine) = fresh_engine();
     let store = benten_engine::testing::testing_get_suspension_store(&engine);

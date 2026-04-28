@@ -88,9 +88,15 @@ mod integration {
     pub mod sandbox_compile_time_disabled_on_wasm32; // sec-pre-r1-05 + wasm-r1-3
     #[cfg(feature = "phase_2b_landed")]
     pub mod snapshot_blob_round_trip; // D10 export/import round-trip
-    #[cfg(feature = "phase_2b_landed")]
+    // wave-8g un-gated: G12-E follow-up landed `resume_with_meta` engine
+    // API + the four `testing_*` helpers these fixtures consume. The
+    // `phase_2b_landed` gate stays on for the broader sibling fixtures
+    // whose helpers (TTL spec, persistent subscriber registration, etc.)
+    // remain on Phase-3 / 8c-cont briefs. The wave-8c-cont-pending second
+    // half of `suspension_store_round_trip_subscription_cursor` keeps its
+    // `#[ignore]` marker so the file as a whole can compile + the first
+    // test can run.
     pub mod suspension_store_round_trip_subscription_cursor; // G12-E + D5 cursor
-    #[cfg(feature = "phase_2b_landed")]
     pub mod suspension_store_round_trip_wait_metadata; // G12-E generalization
     #[cfg(feature = "phase_2b_landed")]
     pub mod wait_ttl_expires_via_suspension_store; // D12 + Q4 (G12-E owns TTL)
