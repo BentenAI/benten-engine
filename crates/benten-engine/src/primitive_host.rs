@@ -634,6 +634,7 @@ impl PrimitiveHost for Engine {
     /// `EvalError::Sandbox(SandboxError)` variant + ERROR-CATALOG.md
     /// row updates. Surfaced as a deviation rather than a wave-8b
     /// scope-expansion.
+    #[cfg(not(target_arch = "wasm32"))]
     #[allow(
         clippy::too_many_lines,
         reason = "The 8-step plan (read property → look up bytes → resolve manifest → \
@@ -823,6 +824,26 @@ impl PrimitiveHost for Engine {
                 )))
             }
         }
+    }
+
+    /// wasm32-target stub: `benten_eval::sandbox` is cfg-gated off on
+    /// `target_arch = "wasm32"` (wasmtime doesn't compile to wasm32),
+    /// so the production override is unreachable. Surface the typed
+    /// E_SANDBOX_UNAVAILABLE_ON_WASM error per wsa-14 / Compromise #N+9
+    /// (browser-target SANDBOX disabled) so the DSL composition flow
+    /// reports the actionable error at execution time rather than
+    /// fielding a missing-symbol link error at module load.
+    #[cfg(target_arch = "wasm32")]
+    fn execute_sandbox(
+        &self,
+        _op: &benten_eval::OperationNode,
+    ) -> Result<benten_eval::StepResult, benten_eval::EvalError> {
+        Err(benten_eval::EvalError::Backend(
+            "SANDBOX is unavailable on wasm32-unknown-unknown — \
+             the browser engine ships without wasmtime. \
+             E_SANDBOX_UNAVAILABLE_ON_WASM (wsa-14)."
+                .to_string(),
+        ))
     }
 }
 
