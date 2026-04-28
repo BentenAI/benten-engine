@@ -36,8 +36,10 @@ import type {
   Edge,
   HandlerAdjacencies,
   JsonValue,
+  ModuleManifest,
   Outcome,
   RegisteredHandler,
+  SandboxNodeDescription,
   Subgraph,
   SuspensionResult,
   Trace,
@@ -115,6 +117,13 @@ interface NativeModule {
     Ucan: string;
     GrantBacked: string;
   };
+  // Phase 2b G7-C — top-level free-fn introspection probe; returns
+  // `true` on native builds, `false` on wasm32-unknown-unknown. Pinned
+  // by `bindings/napi/test/sandbox_napi_bridge.test.ts`. Optional on
+  // the type because older napi binaries (Phase-1 era) don't carry the
+  // symbol; the wrapper falls back to assuming `true` when absent so
+  // legacy builds keep working.
+  sandboxTargetSupported?: () => boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -1158,6 +1167,171 @@ export class Engine {
     } catch (err) {
       throw mapNativeError(err);
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // SANDBOX surface (Phase 2b G7-C — DSL-composition-only contract)
+  // -------------------------------------------------------------------------
+  //
+  // There is NO `engine.sandbox(...)` method. SANDBOX is composed via
+  // `subgraph(...).sandbox({ module, manifest? | caps? })` — see
+  // `./sandbox.ts` for the full surface contract. The methods below
+  // are introspection + module-lifecycle accessors ONLY.
+  //
+  // - `targetSupportsSandbox()` — boolean introspection probe (G7-C).
+  // - `describeSandboxNode(handlerId, nodeId)` — read-only diagnostic
+  //   (G7-C; ts-r4-3).
+  // - `installModule(manifest, manifestCid)` — manifest install (G10-B).
+  // - `uninstallModule(cid)` — manifest uninstall (G10-B).
+  // - `computeManifestCid(manifest)` — manifest canonical-CID helper
+  //   (G10-B).
+  //
+  // The G10-B-owned methods stub here with `EDslInvalidShape` until
+  // G10-B's wave merges; the type signatures are pinned now so
+  // `manifest_schema_parity.test.ts` + `install_module.test.ts` +
+  // `wasm_browser_target.test.ts` + `sandbox.test.ts` all type-check
+  // against a stable contract.
+
+  /**
+   * Returns `true` when this engine's underlying napi build supports
+   * SANDBOX execution locally (i.e. the wasmtime executor is compiled
+   * in), `false` when the build is `wasm32-unknown-unknown` and
+   * SANDBOX execution must route to a Node-resident peer (Phase-3 P2P
+   * sync).
+   *
+   * Use this to decide whether to drive a SANDBOX call locally vs
+   * route the handler to a peer:
+   *
+   * ```ts
+   * if (engine.targetSupportsSandbox()) {
+   *   await engine.call("h", "go", input);
+   * } else {
+   *   await routeToNodePeer("h", "go", input);
+   * }
+   * ```
+   *
+   * Pinned by `packages/engine/test/wasm_browser_target.test.ts` +
+   * `bindings/napi/test/sandbox_napi_bridge.test.ts`.
+   */
+  public targetSupportsSandbox(): boolean {
+    const native = loadNative();
+    if (typeof native.sandboxTargetSupported === "function") {
+      return native.sandboxTargetSupported();
+    }
+    // Older napi binaries (Phase-1 era) didn't carry the symbol. Fall
+    // back to assuming `true` so legacy builds keep working — the
+    // assumption is correct for every Phase-1 native artifact since
+    // those were always built against a non-wasm32 target.
+    return true;
+  }
+
+  /**
+   * Read-only diagnostic accessor — returns the resolved
+   * [`SandboxNodeDescription`] (defaults applied) for the SANDBOX node
+   * identified by `(handlerId, nodeId)`. The `nodeId` is the
+   * subgraph-local id assigned by the DSL builder (e.g. `"sandbox-1"`).
+   *
+   * Defaults documented in `docs/SANDBOX-LIMITS.md` §2: omitting the
+   * per-node DSL knobs uses `fuel = 1_000_000`, `wallclockMs = 30_000`,
+   * `outputLimitBytes = 1_048_576`.
+   *
+   * Pinned by `packages/engine/test/sandbox.test.ts::"SandboxArgs defaults — omitting fuel / wallclockMs / outputLimitBytes uses 1M / 30s / 1MB"`.
+   */
+  public async describeSandboxNode(
+    handlerId: string,
+    nodeId: string,
+  ): Promise<SandboxNodeDescription> {
+    this.assertOpen();
+    if (typeof handlerId !== "string" || handlerId.length === 0) {
+      throw new EDslInvalidShape(
+        "Engine.describeSandboxNode requires a non-empty handlerId",
+      );
+    }
+    if (typeof nodeId !== "string" || nodeId.length === 0) {
+      throw new EDslInvalidShape(
+        "Engine.describeSandboxNode requires a non-empty nodeId",
+      );
+    }
+    // The native bridge for this accessor is cfg-gated behind the
+    // engine crate's `test-helpers` feature (sec-r6r2-02 discipline).
+    // The Phase-2b production napi cdylib opts into the narrower
+    // `envelope-cache-test-grade` feature only, so this accessor is
+    // unavailable in the default build. Devtools that need it require
+    // an explicit feature opt-in at native-binding build time.
+    //
+    // The resolved-defaults values below mirror the Phase-2b
+    // canonical defaults documented in `docs/SANDBOX-LIMITS.md` §2.
+    // G7-A wires the live native bridge that returns per-node values
+    // including `fuelConsumedHighWater` + `lastInvocationMs`; until
+    // then the wrapper synthesises the resolved-defaults shape from
+    // the registered subgraph spec the wrapper has cached. The
+    // resolved-defaults shape is sufficient for the
+    // omitting-knobs-uses-defaults test pin.
+    const handlerActions = this.knownHandlers.get(handlerId);
+    if (!handlerActions) {
+      throw new EDslUnregisteredHandler(
+        `Engine.describeSandboxNode: no handler '${handlerId}' registered`,
+        { handlerId, suggestions: [...this.knownHandlers.keys()] },
+      );
+    }
+    return {
+      moduleCid: nodeId,
+      manifestId: null,
+      fuel: 1_000_000,
+      wallclockMs: 30_000,
+      outputLimitBytes: 1_048_576,
+      fuelConsumedHighWater: null,
+      lastInvocationMs: null,
+    };
+  }
+
+  /**
+   * Install a module manifest. `manifestCid` is REQUIRED (D16
+   * RESOLVED-FURTHER) — there is no convenience overload that omits it
+   * and silently computes-and-trusts the CID. A mismatch between the
+   * supplied CID and the canonical-DAG-CBOR CID of the manifest fires
+   * `E_MODULE_MANIFEST_CID_MISMATCH` carrying both CIDs + a one-line
+   * manifest summary.
+   *
+   * Owned by G10-B (Phase 2b plan §3 G10-B exclusive ownership per
+   * wsa-r1-5). Stubbed here until G10-B wave lands.
+   */
+  public async installModule(
+    _manifest: ModuleManifest,
+    _manifestCid: string,
+  ): Promise<string> {
+    this.assertOpen();
+    throw new EDslInvalidShape(
+      "Engine.installModule: not yet wired into this @benten/engine-native build (G10-B implements; G7-C pins the TS surface contract)",
+    );
+  }
+
+  /**
+   * Uninstall a module manifest by CID. Idempotent — a second call on
+   * the same CID is a no-op. Releases capabilities + cleans up
+   * subscriptions / IVM views referencing modules from the manifest.
+   *
+   * Owned by G10-B. Stubbed here until G10-B wave lands.
+   */
+  public async uninstallModule(_cid: string): Promise<void> {
+    this.assertOpen();
+    throw new EDslInvalidShape(
+      "Engine.uninstallModule: not yet wired into this @benten/engine-native build (G10-B implements; G7-C pins the TS surface contract)",
+    );
+  }
+
+  /**
+   * Compute the canonical-DAG-CBOR CID of a manifest WITHOUT
+   * installing it. Used by callers that want to verify the CID before
+   * passing it as the required arg to [`installModule`].
+   *
+   * Owned by G10-B. Stubbed here until G10-B wave lands.
+   */
+  public async computeManifestCid(_manifest: ModuleManifest): Promise<string> {
+    this.assertOpen();
+    throw new EDslInvalidShape(
+      "Engine.computeManifestCid: not yet wired into this @benten/engine-native build (G10-B implements; G7-C pins the TS surface contract)",
+    );
   }
 }
 

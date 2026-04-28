@@ -265,3 +265,200 @@ export interface ViewDef {
   /** Reserved for Phase-2 user-defined views. Ignored in Phase 1. */
   [key: string]: JsonValue;
 }
+
+// ---------------------------------------------------------------------------
+// SANDBOX surface types (Phase 2b G7-C)
+// ---------------------------------------------------------------------------
+
+/**
+ * Reserved-for-Phase-3 manifest signature shape. Phase 2b leaves this
+ * structurally typed but always-undefined — D9 requires the canonical
+ * DAG-CBOR encoding to OMIT the `signature` key entirely when undefined,
+ * not to emit `null`. The `?` here is the load-bearing parity check.
+ *
+ * Pin source: `packages/engine/test/manifest_schema_parity.test.ts`.
+ */
+export interface ManifestSignature {
+  /** Phase-3 Ed25519 signature bytes (base64). Reserved. */
+  ed25519?: string;
+}
+
+/**
+ * One module entry inside a [`ModuleManifest`].
+ */
+export interface ModuleManifestEntry {
+  /** Module name — referenced from the DSL via `<manifestName>:<moduleName>`. */
+  name: string;
+  /** CIDv1 base32 string of the WebAssembly module bytes. */
+  cid: string;
+  /** Capabilities the module's host-fn imports require. */
+  requires: string[];
+}
+
+/**
+ * The shape `engine.installModule(manifest, manifestCid)` accepts.
+ *
+ * Phase 2b G10-B owns the install/uninstall surface; Phase 3 adds
+ * Ed25519 signing on top of the same shape (the `signature?` field is
+ * the forward-compat reservation per D9 + D16). The TS shape MUST stay
+ * in lock-step with the Rust `ModuleManifest` struct — the parity check
+ * lives in `packages/engine/test/manifest_schema_parity.test.ts`.
+ */
+export interface ModuleManifest {
+  /** Manifest name (e.g. `"acme.posts"`). */
+  name: string;
+  /** Manifest version string (semver-shaped; not parsed in Phase 2b). */
+  version: string;
+  /** Modules this manifest declares. */
+  modules: ModuleManifestEntry[];
+  /**
+   * Phase-3 reserved. Omit (i.e. `undefined`, NOT `null`) in Phase 2b —
+   * the canonical-bytes serializer omits the key entirely when
+   * undefined per D9 forward-compat.
+   */
+  signature?: ManifestSignature;
+}
+
+/**
+ * SANDBOX argument shape — by-name variant.
+ *
+ * The `module` field is `<manifestName>:<moduleName>` (resolved against
+ * the named-manifest registry G7-A owns). The `caps` escape hatch is
+ * REJECTED at the type level on this variant — `SandboxArgsByName` and
+ * `SandboxArgsByCaps` are mutually exclusive (per dx-r1-2b SANDBOX) so
+ * a developer cannot half-and-half mix manifest lookup with explicit
+ * caps in the same call.
+ *
+ * Per-call tuning knobs default to (omit them and the engine fills in):
+ *   - `fuel`             = `1_000_000` (D24 + dx-r1-2b-5)
+ *   - `wallclockMs`      = `30_000` (D24)
+ *   - `outputLimitBytes` = `1_048_576` (D15 trap-loudly default)
+ *
+ * Pin source: `packages/engine/test/sandbox.test.ts`.
+ */
+export interface SandboxArgsByName {
+  /** `<manifestName>:<moduleName>` — resolved at registration time. */
+  module: string;
+  /** Input expression (e.g. `"$input"`). */
+  input?: string;
+  /** Per-call fuel budget (default `1_000_000`). */
+  fuel?: number;
+  /** Per-call wallclock budget in milliseconds (default `30_000`). */
+  wallclockMs?: number;
+  /** Per-call output bound in bytes (default `1_048_576`). */
+  outputLimitBytes?: number;
+  /**
+   * MUST NOT co-occur with `module`-by-name. The discriminated-union
+   * type system rejects setting `caps` on this variant; flagged by the
+   * `@ts-expect-error` pin in `sandbox.test.ts`.
+   */
+  caps?: never;
+}
+
+/**
+ * SANDBOX argument shape — by-caps escape-hatch variant.
+ *
+ * The `module` field carries a raw module CID (NOT a `<manifest>:<module>`
+ * lookup name). The `caps` field is REQUIRED and lists exactly the
+ * `host:<domain>:<action>` capability strings the call asks the host to
+ * satisfy. The escape hatch is intentional: it lets a power-user
+ * compose SANDBOX calls without round-tripping through the
+ * named-manifest registry, at the cost of dropping the registry's
+ * named-bundle DX.
+ *
+ * Pin source: `packages/engine/test/sandbox.test.ts`.
+ */
+export interface SandboxArgsByCaps {
+  /** Raw module CID (CIDv1 base32 string). */
+  module: string;
+  /** Required: explicit capability list (`host:<domain>:<action>` strings). */
+  caps: string[];
+  /** Optional: input expression. */
+  input?: string;
+  /** Per-call fuel budget (default `1_000_000`). */
+  fuel?: number;
+  /** Per-call wallclock budget in milliseconds (default `30_000`). */
+  wallclockMs?: number;
+  /** Per-call output bound in bytes (default `1_048_576`). */
+  outputLimitBytes?: number;
+}
+
+/**
+ * Discriminated union of the two SANDBOX argument shapes. The DSL
+ * builder `subgraph(...).sandbox(args)` accepts either variant.
+ *
+ * Pin source: `packages/engine/test/sandbox.test.ts` —
+ * "SandboxArgs by name vs by caps mutually exclusive (TS union)".
+ */
+export type SandboxArgs = SandboxArgsByName | SandboxArgsByCaps;
+
+/**
+ * Alias of [`SandboxArgs`] retained for the Phase 2a-era
+ * `subgraph(...).sandbox(...)` callers — the discriminated-union shape
+ * is the contract going forward but the alias keeps existing
+ * Phase-2a-era TS code compiling.
+ */
+export type SandboxOptions = SandboxArgs;
+
+/**
+ * Terminal value SANDBOX returns to the evaluator's per-call frame.
+ *
+ * `output` carries the guest's emitted output (raw bytes for binary
+ * payloads or a JSON value when the guest returns structured output).
+ * `fuelConsumed` + `durationMs` are populated by the engine post-call
+ * for diagnostic surfacing (`engine.describeSandboxNode(...)` returns
+ * the running maxima across all invocations).
+ *
+ * Pin source: Phase-2b plan §3 G7-C row + `docs/SANDBOX-LIMITS.md` §2.
+ */
+export interface SandboxResult {
+  /** Guest output payload (binary or JSON). */
+  output: Uint8Array | JsonValue;
+  /** Wasmtime fuel consumed by the call. */
+  fuelConsumed: number;
+  /** Wallclock duration of the call in milliseconds. */
+  durationMs: number;
+}
+
+/**
+ * Read-only diagnostic snapshot of a registered SANDBOX node returned
+ * by `engine.describeSandboxNode(handlerId, nodeId)`.
+ *
+ * Mirrors the Rust `SandboxNodeDescription`
+ * (`crates/benten-engine/src/engine_sandbox.rs`). Keep them in
+ * lock-step.
+ *
+ * Defaults documented in `docs/SANDBOX-LIMITS.md` §2: omitting the
+ * per-node DSL knobs uses `fuel = 1_000_000`, `wallclockMs = 30_000`,
+ * `outputLimitBytes = 1_048_576` (D24 + dx-r1-2b-5).
+ *
+ * Pin source: ts-r4-3 R4 finding;
+ * `packages/engine/test/sandbox.test.ts::"SandboxArgs defaults — omitting fuel / wallclockMs / outputLimitBytes uses 1M / 30s / 1MB"`.
+ */
+export interface SandboxNodeDescription {
+  /** CID of the WebAssembly module the SANDBOX node references. */
+  moduleCid: string;
+  /**
+   * Resolved manifest identifier (named-manifest registry lookup) when
+   * the DSL form is by-name; `null` when the node uses the `caps`
+   * escape hatch.
+   */
+  manifestId: string | null;
+  /** Resolved per-call fuel budget. */
+  fuel: number;
+  /** Resolved per-call wallclock budget in milliseconds. */
+  wallclockMs: number;
+  /** Resolved per-call output bound in bytes. */
+  outputLimitBytes: number;
+  /**
+   * Cumulative high-water mark of fuel consumed by this node across
+   * every invocation since registration. `null` until the node is
+   * invoked at least once.
+   */
+  fuelConsumedHighWater: number | null;
+  /**
+   * Wallclock duration of the most recent invocation in milliseconds.
+   * `null` until the first call returns.
+   */
+  lastInvocationMs: number | null;
+}

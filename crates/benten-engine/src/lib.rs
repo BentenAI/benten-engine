@@ -97,9 +97,11 @@ pub use subgraph_spec::{
     RevokeSubject, SubgraphSpec, SubgraphSpecBuilder, WriteSpec,
 };
 
+pub mod engine_sandbox;
 pub mod engine_wait;
 pub mod system_zones;
 
+pub use engine_sandbox::{SANDBOX_UNAVAILABLE_ON_WASM_TEXT, SandboxNodeDescription};
 pub use engine_wait::SuspensionOutcome;
 pub use system_zones::SYSTEM_ZONE_PREFIXES;
 

@@ -20,9 +20,19 @@ import { EDslInvalidShape } from "./errors.js";
 import type {
   JsonValue,
   Primitive,
+  SandboxArgs,
+  SandboxArgsByCaps,
+  SandboxArgsByName,
   Subgraph,
   SubgraphNode,
 } from "./types.js";
+
+// Re-export the SANDBOX argument shapes through the DSL surface so DSL
+// callers can `import type { SandboxArgs } from "@benten/engine"` without
+// reaching into the types module directly. The discriminated-union
+// shape is the contract for `subgraph(...).sandbox(args)` per Phase 2b
+// G7-C.
+export type { SandboxArgs, SandboxArgsByCaps, SandboxArgsByName };
 
 // ---------------------------------------------------------------------------
 // Inv-14 attribution stamp (Phase 2a G11-A EVAL wave-1, D12.7 Decision 1)
@@ -167,12 +177,15 @@ export interface SubscribeArgs {
   event: string;
   handler?: string;
 }
-export interface SandboxArgs {
-  /** WASM module CID to execute. */
-  module: string;
-  /** Fuel budget (per-subgraph, not per-call). */
-  fuel?: number;
-}
+// SandboxArgs is defined in `./types.ts` as the discriminated union
+// `SandboxArgsByName | SandboxArgsByCaps` (Phase 2b G7-C). Imported and
+// re-exported above so DSL callers see one canonical shape.
+//
+// Per dx-r1-2b SANDBOX surface: a SANDBOX node is composed via
+// `subgraph(...).sandbox(args)`. There is no top-level
+// `engine.sandbox(...)` — that would bypass the evaluator + Inv-4 nest
+// depth + Inv-14 attribution chaining + capability resolution. The
+// composition-only contract is pinned by `packages/engine/test/sandbox.test.ts`.
 
 // ---------------------------------------------------------------------------
 // Builder
