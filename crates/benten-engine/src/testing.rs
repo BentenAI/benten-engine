@@ -170,8 +170,8 @@ pub fn counting_policy() -> (Box<dyn CapabilityPolicy>, CallCounter) {
 // Phase 2b G10-B — module-manifest test helpers (D9 + D16)
 // ---------------------------------------------------------------------------
 
-/// Phase 2b G10-B test helper: build a minimal valid [`ModuleManifest`]
-/// keyed by `name`.
+/// Phase 2b G10-B test helper: build a minimal valid
+/// [`crate::module_manifest::ModuleManifest`] keyed by `name`.
 ///
 /// The manifest carries one module entry, no migrations, no signature.
 /// Used by `tests/module_install.rs`,
@@ -193,8 +193,9 @@ pub fn testing_make_minimal_manifest(name: &str) -> crate::module_manifest::Modu
     }
 }
 
-/// Phase 2b G10-B test helper: build a [`ModuleManifest`] that requires
-/// the listed `caps` strings on its single module entry.
+/// Phase 2b G10-B test helper: build a
+/// [`crate::module_manifest::ModuleManifest`] that requires the listed
+/// `caps` strings on its single module entry.
 ///
 /// Used by tests asserting capability propagation + retraction across
 /// install/uninstall cycles.
@@ -227,7 +228,8 @@ pub fn testing_make_manifest_with_caps(
 /// # Panics
 ///
 /// Panics if the manifest fails to encode. Encoding the
-/// [`ModuleManifest`] schema is infallible in practice.
+/// [`crate::module_manifest::ModuleManifest`] schema is infallible in
+/// practice.
 #[cfg(any(test, feature = "test-helpers"))]
 #[must_use]
 pub fn testing_compute_manifest_cid(
