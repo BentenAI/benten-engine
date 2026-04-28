@@ -68,6 +68,22 @@ mod stream;
 #[cfg(feature = "napi-export")]
 mod subscribe;
 
+// Phase 2b G10-A-browser: wasm32-unknown-unknown runtime path —
+// in-memory module manifest store (Compromise #N+8) + target-availability
+// probe (`browser_runtime_available`). Compiled on every target so the
+// store type is reachable from native unit tests + integration tests
+// even when not running under wasm32; the cfg-split inside the file
+// handles target-honest probe answers.
+//
+// Module is NOT gated on `napi-export` so the integration tests under
+// `bindings/napi/tests/` can reach the storage-contract surface without
+// linking the napi cdylib externs (the napi extern symbols don't
+// resolve in a libtest binary). The `#[napi]` attribute on
+// `browser_runtime_available` is gated via `#[cfg_attr(feature =
+// "napi-export", ...)]` inside the module itself, so the symbol is
+// emitted to the cdylib but is invisible to the rlib-only test path.
+pub mod wasm_browser;
+
 // Re-export the policy enum so the napi-derive macros pick it up at the
 // crate root where napi-rs v3 looks for top-level `#[napi]` items.
 #[cfg(feature = "napi-export")]
