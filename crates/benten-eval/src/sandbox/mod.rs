@@ -33,9 +33,12 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 pub mod counted_sink;
+pub mod epoch_ticker;
 pub mod host_fns;
 pub mod instance;
 pub mod manifest;
+pub mod resource_limiter;
+pub mod trap_to_typed;
 
 pub use counted_sink::{CountedSink, OverflowPath, SinkOverflow};
 pub use host_fns::{

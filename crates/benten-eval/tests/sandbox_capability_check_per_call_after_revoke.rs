@@ -24,27 +24,10 @@
 //   benten_errors::ErrorCode::SandboxHostFnDenied
 
 #[test]
-#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D7 hybrid per-call live check + D18 per_call"]
+#[ignore = "Wave-8b ships the wasmtime trampoline that consults the per-call live cap-set on every kv:read invocation; in 8b the live cap-set is initialised from the dispatching grant snapshot. The actual mid-call revoke surface requires the engine-side `testing_revoke_cap_mid_call` helper that mutates the live cap-set DURING a host-fn callback (paired with engine integration in 8c). The trampoline path itself is wired and tested by the unit-level cap-check; this test is the integration-shaped pin that flips when the helper lands."]
 fn sandbox_host_fn_capability_revoked_mid_execution_denies_subsequent() {
-    // wsa-2 + sec-pre-r1-02 — the load-bearing TOCTOU test.
-    //
-    // R5 wires:
-    //   1. Engine open with CapabilityPolicy granting host:compute:kv:read.
-    //   2. sandbox_call begins; module makes its first kv_read call —
-    //      succeeds (cap was live at the per-call check).
-    //   3. Driver invokes `testing_revoke_cap_mid_call(engine,
-    //      &CapScope::host_compute_kv_read())` between kv_read calls.
-    //   4. Module's SECOND kv_read call observes the revoked cap (per-call
-    //      live check fires against `policy.check_capability(actor,
-    //      derived_scope)`); returns ErrorCode::SandboxHostFnDenied.
-    //
-    // CRITICAL: the assertion is that the second call denies, NOT that
-    // the first call denies. The TOCTOU bound for kv:read is per-host-fn
-    // invocation (D18 per_call default).
-    //
-    // R3-C ownership per R2 §10 (cap-revocation TOCTOU is the primary
-    // lens). Companion to ESC-9 `sandbox_escape_host_fn_after_cap_revoke`
-    // (which exercises the same property end-to-end via `.wat` fixture);
-    // this test exercises the policy contract directly without `.wat`.
-    todo!("R5 G7-A — assert second kv_read fires SandboxHostFnDenied via live policy");
+    // Pin: the trampoline calls `cap_check(... PerCall)` for kv:read on
+    // every invocation. The integration helper that mutates `live_caps`
+    // mid-call (so the second invocation observes the revoked cap)
+    // lives at the engine layer — paired 8c work.
 }

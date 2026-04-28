@@ -168,6 +168,42 @@ pub trait PrimitiveHost: Send + Sync {
     ) -> Result<(), EvalError> {
         Ok(())
     }
+
+    /// SANDBOX primitive dispatch (Phase 2b Wave-8b).
+    ///
+    /// The evaluator routes SANDBOX OperationNode dispatch through this
+    /// method. The host implementation is responsible for:
+    ///   1. Reading the SANDBOX node's `module` property (CID of the
+    ///      WebAssembly module bytes) and fetching the bytes from the
+    ///      engine's KV backend.
+    ///   2. Resolving the manifest ref (named or inline) from the node's
+    ///      properties.
+    ///   3. Constructing the [`crate::primitives::sandbox::SandboxConfig`]
+    ///      from the engine policy + the node's per-handler overrides
+    ///      (D6 + D24 widening).
+    ///   4. Looking up the dispatching grant's capability set.
+    ///   5. Invoking [`crate::primitives::sandbox::execute`] with the
+    ///      assembled inputs.
+    ///   6. Mapping the [`crate::primitives::sandbox::SandboxResult`]
+    ///      back to a [`StepResult`].
+    ///
+    /// The default impl returns [`EvalError::PrimitiveNotImplemented`]
+    /// so existing `NullHost`-backed unit tests continue to behave as
+    /// before. The engine implementation in `benten-engine` overrides
+    /// this method to route to the executor (paired wave 8c work).
+    ///
+    /// # Errors
+    /// Returns [`EvalError::PrimitiveNotImplemented`] in the default
+    /// (NullHost / Phase-1) impl; engine impl returns the executor's
+    /// typed errors.
+    fn execute_sandbox(
+        &self,
+        _op: &crate::OperationNode,
+    ) -> Result<crate::StepResult, EvalError> {
+        Err(EvalError::PrimitiveNotImplemented(
+            crate::PrimitiveKind::Sandbox,
+        ))
+    }
 }
 
 /// A no-op [`PrimitiveHost`] for unit tests and benchmarks that exercise

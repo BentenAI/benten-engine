@@ -86,11 +86,18 @@ pub fn dispatch(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResu
         // by the engine's IVM subscriber.
         PrimitiveKind::Stream => stream::execute(op, host),
         PrimitiveKind::Subscribe => subscribe::execute(op, host),
-        // Remaining Phase-2 primitives — structural validation accepts
-        // them; the executor rejects at call time until their wave lands.
-        PrimitiveKind::Wait | PrimitiveKind::Sandbox => {
-            Err(EvalError::PrimitiveNotImplemented(op.kind))
-        }
+        // Phase-2b Wave-8b: SANDBOX dispatch routes through the host's
+        // `execute_sandbox` method. The default `PrimitiveHost` impl
+        // returns `PrimitiveNotImplemented` (preserving Phase-1 NullHost
+        // behaviour); the `benten-engine` impl in
+        // `crates/benten-engine/src/primitive_host.rs` overrides to
+        // assemble the SandboxConfig + grant caps + manifest from
+        // engine state and invoke `crate::sandbox::execute(...)`.
+        PrimitiveKind::Sandbox => host.execute_sandbox(op),
+        // WAIT — engine-side suspension surface owns the dispatch
+        // (`Engine::call_with_suspension`); the dispatcher rejects in
+        // case a WAIT node is reached during a non-suspending walk.
+        PrimitiveKind::Wait => Err(EvalError::PrimitiveNotImplemented(op.kind)),
         // PrimitiveKind is `#[non_exhaustive]` (G12-C-cont relocation kept the
         // attribute for downstream-crate version-evolution discipline). Any
         // future variant added at the source-of-truth `benten-core` site

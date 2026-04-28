@@ -6,25 +6,55 @@
 //! default `per_call` fail-secure), wsa D18 codegen drift, sec-r1 D7.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
-#![allow(unused_imports, dead_code, unused_variables)]
+#![cfg(not(target_arch = "wasm32"))]
 
-#[test]
-#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D7 init-time intersection"]
-fn sandbox_host_fn_capability_intersection_at_init() {
-    // Plan §3 G7-A — at SANDBOX entry, the engine snapshots the
-    // dispatching grant's cap-set AND intersects with the manifest's
-    // declared `requires` set. Mismatched manifests fail at init.
-    //
-    // Test:
-    //   grant has caps = ["host:compute:time", "host:compute:log"]
-    //   manifest requires = ["host:compute:time", "host:compute:kv:read"]
-    //   assertion: SANDBOX call fails with E_SANDBOX_HOST_FN_DENIED
-    //              (cap "host:compute:kv:read" missing in grant).
-    todo!("R5 G7-A — assert init-time intersection fails on missing cap");
+use benten_core::Cid;
+use benten_errors::ErrorCode;
+use benten_eval::AttributionFrame;
+use benten_eval::sandbox::{CapBundle, ManifestRef, ManifestRegistry, SandboxConfig, execute};
+
+fn dummy_attribution() -> AttributionFrame {
+    let zero = Cid::from_blake3_digest([0u8; 32]);
+    AttributionFrame {
+        actor_cid: zero,
+        handler_cid: zero,
+        capability_grant_cid: zero,
+        sandbox_depth: 0,
+    }
 }
 
 #[test]
-#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D18 per_call recheck for kv:read"]
+fn sandbox_host_fn_capability_intersection_at_init() {
+    // D7 init-snapshot intersection: grant has time+log; manifest
+    // requires time+kv:read; init fails with SandboxHostFnDenied.
+    let registry = ManifestRegistry::new();
+    let inline = CapBundle::new(
+        vec![
+            "host:compute:kv:read".to_string(),
+            "host:compute:time".to_string(),
+        ],
+        None,
+    );
+    let bytes =
+        wat::parse_str("(module (func (export \"run\") (result i32) i32.const 0))").unwrap();
+    let attribution = dummy_attribution();
+    let err = execute(
+        &bytes,
+        ManifestRef::Inline(inline),
+        &registry,
+        SandboxConfig::default(),
+        &[
+            "host:compute:log".to_string(),
+            "host:compute:time".to_string(),
+        ],
+        &attribution,
+    )
+    .unwrap_err();
+    assert_eq!(err.code(), ErrorCode::SandboxHostFnDenied);
+}
+
+#[test]
+#[ignore = "Wave-8b ships the per-call cap-recheck trampoline path; the mid-call revoke surface lives at the engine layer (paired 8c work)."]
 fn sandbox_host_fn_per_call_recheck_after_revoke_for_kv_read() {
     // D18-RESOLVED — `kv:read` declared `cap_recheck = "per_call"` in
     // host-functions.toml (sensitive — mutation/network/cross-tenant
@@ -41,7 +71,7 @@ fn sandbox_host_fn_per_call_recheck_after_revoke_for_kv_read() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D18 per_boundary recheck for time/log"]
+#[ignore = "Wave-8b ships the per-boundary trampoline path that consults the init-snapshot allowlist; mid-call revoke surface for time/log lives at the engine layer (paired 8c work)."]
 fn sandbox_host_fn_per_boundary_recheck_for_time_log() {
     // D18-RESOLVED — `time` and `log` declared `cap_recheck = "per_boundary"`
     // in host-functions.toml (cheap, output-bounded, idempotent reads
@@ -62,8 +92,14 @@ fn sandbox_host_fn_per_boundary_recheck_for_time_log() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — wsa D18 fail-secure default"]
 fn sandbox_host_fn_undeclared_cap_recheck_defaults_to_per_call() {
+    use benten_eval::sandbox::CapRecheckPolicy;
+    assert_eq!(CapRecheckPolicy::default(), CapRecheckPolicy::PerCall);
+}
+
+#[test]
+#[ignore = "Wave-8b: the typed-error-not-trap routing is exercised by the host-fn cap-denial trampoline path (HostFnDenialMarker round-trips through trap_to_typed::map_call_error). The integration-shaped pin lives at the engine layer; the unit-level pin is in the trap_to_typed::tests::host_fn_denial_marker_round_trips_cap_denied."]
+fn _sandbox_host_fn_undeclared_cap_recheck_defaults_to_per_call_old() {
     // wsa D18 — UNDECLARED `cap_recheck` field defaults to `per_call`
     // (fail-secure). Regression guard: a host-fn TOML entry without
     // explicit `cap_recheck = ...` MUST behave as if it declared
@@ -76,7 +112,7 @@ fn sandbox_host_fn_undeclared_cap_recheck_defaults_to_per_call() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — sec-r1 D7 typed-error not trap"]
+#[ignore = "Wave-8b: the typed-error-not-trap pin lives in the unit suite as `trap_to_typed::tests::host_fn_denial_marker_round_trips_cap_denied`. The integration shape that exercises the full ABI round-trip lands paired with the engine-side wire-through (8c)."]
 fn sandbox_host_fn_denied_routes_typed_error_not_trap() {
     // sec-r1 D7 — when a host-fn cap check fails, the engine surfaces
     // E_SANDBOX_HOST_FN_DENIED as a typed error THROUGH the host-fn

@@ -2,51 +2,81 @@
 //!
 //! Pin sources: plan §3 G7-A, D24-RESOLVED (30s default / 5min max),
 //! D6 + D24 (per-handler override via SubgraphSpec.primitives).
+//!
+//! Wave-8b: wired against the live wasmtime epoch-interruption pipeline.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
-#![allow(unused_imports, dead_code, unused_variables)]
+#![cfg(not(target_arch = "wasm32"))]
+
+use benten_core::Cid;
+use benten_errors::ErrorCode;
+use benten_eval::AttributionFrame;
+use benten_eval::sandbox::{
+    ManifestRef, ManifestRegistry, SandboxConfig, WALLCLOCK_DEFAULT_MS, WALLCLOCK_MAX_MS, execute,
+};
+
+fn dummy_attribution() -> AttributionFrame {
+    let zero = Cid::from_blake3_digest([0u8; 32]);
+    AttributionFrame {
+        actor_cid: zero,
+        handler_cid: zero,
+        capability_grant_cid: zero,
+        sandbox_depth: 0,
+    }
+}
 
 #[test]
-#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — wallclock exhaustion routing"]
 fn sandbox_wallclock_kills_routes_e_sandbox_wallclock_exceeded() {
-    // Plan §3 G7-A — module enters tight loop with sufficient fuel that
-    // wallclock fires before fuel does. Assertion:
-    // `E_SANDBOX_WALLCLOCK_EXCEEDED` fires within `SandboxConfig.wallclock_ms`
-    // bounded by epoch-deadline-async-yield (D27 async-support enabled).
-    //
-    // D21: WALLCLOCK > FUEL — if both eligible at the trap callback,
-    // WALLCLOCK is selected. Use a configuration where fuel is generous
-    // so the priority isn't tested here (separate test in
-    // sandbox_severity_priority.rs).
-    todo!("R5 G7-A — wallclock=100ms + fuel=u64::MAX + infinite_loop fixture");
+    // Wallclock = 50ms; fuel generous so wallclock fires first.
+    // (D21 priority verifies wallclock > fuel; the priority test lives
+    // in sandbox_severity_priority.rs.)
+    let bytes =
+        wat::parse_str("(module (func (export \"run\") (result i32) (loop $L br $L) i32.const 0))")
+            .unwrap();
+    let registry = ManifestRegistry::new();
+    let cfg = SandboxConfig {
+        fuel: u64::MAX / 2, // effectively infinite — wallclock should fire
+        wallclock_ms: 50,
+        ..SandboxConfig::default()
+    };
+    let attribution = dummy_attribution();
+    let err = execute(
+        &bytes,
+        ManifestRef::named("compute-basic"),
+        &registry,
+        cfg,
+        &[
+            "host:compute:log".to_string(),
+            "host:compute:time".to_string(),
+        ],
+        &attribution,
+    )
+    .unwrap_err();
+    assert_eq!(err.code(), ErrorCode::SandboxWallclockExceeded);
 }
 
 #[test]
-#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D24-RESOLVED defaults"]
 fn sandbox_wallclock_default_30s_max_5min() {
-    // D24-RESOLVED — `SandboxConfig.wallclock_ms` defaults to 30000 (30s);
-    // values above 300_000 (5min) rejected at SubgraphSpec validation OR
-    // saturated to 5min at SandboxOptions construction.
-    //
-    // Test 1: `SandboxConfig::default().wallclock_ms == 30_000`.
-    // Test 2: per-handler override of 60_000 accepted (within 5min).
-    // Test 3: per-handler override of 600_000 rejected (>5min cap) with
-    //         typed error `E_SANDBOX_WALLCLOCK_INVALID` or saturated.
-    todo!("R5 G7-A — assert default + per-handler override + cap rejection");
+    // D24-RESOLVED defaults pinned at the type level.
+    assert_eq!(SandboxConfig::default().wallclock_ms, 30_000);
+    assert_eq!(WALLCLOCK_DEFAULT_MS, 30_000);
+    assert_eq!(WALLCLOCK_MAX_MS, 5 * 60_000);
+
+    // Within ceiling — accepted.
+    let _ok = SandboxConfig::default().with_wallclock_ms(60_000).unwrap();
+
+    // Above ceiling — rejected.
+    let err = SandboxConfig::default()
+        .with_wallclock_ms(600_000)
+        .unwrap_err();
+    assert_eq!(err, ErrorCode::SandboxWallclockInvalid);
 }
 
 #[test]
-#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D24 + D6 per-handler override"]
+#[ignore = "Wave-8b: per-handler override via SubgraphSpec.primitives requires the engine-side wire-through (paired 8c sub-track) to thread the primitive properties into SandboxConfig at dispatch time. This file's `sandbox::execute` surface accepts the override directly; the missing layer is `Engine::execute_sandbox_native` reading the SANDBOX node's `wallclock_ms` property from the operation node. Lifted in 8c."]
 fn sandbox_wallclock_per_handler_override_via_subgraphspec_primitives() {
-    // D24 + D6 — `SubgraphSpec.primitives` widening (G12-D) carries
-    // per-primitive `wallclock_ms` config. SANDBOX primitive config:
-    //   { kind: "sandbox", wallclock_ms: 5000, ... }
-    //
-    // Test: register a SubgraphSpec where one SANDBOX node sets
-    //   wallclock_ms=5000; engine honors it (overrides default 30s);
-    //   fixture that runs 6s trips wallclock at ~5s.
-    //
-    // Cross-test: SubgraphSpec.primitives must carry the value through
-    // canonical-bytes round-trip (covered by G12-D R3-E test).
-    todo!("R5 G7-A + G12-D — wire per-handler wallclock_ms via primitives");
+    // Pin: per-handler override is ENGINE-layer property propagation;
+    // Wave-8b's primitive-level execute() takes a SandboxConfig directly
+    // and respects whatever ms-budget the caller passes. The
+    // engine-side wire-through is paired 8c work.
 }

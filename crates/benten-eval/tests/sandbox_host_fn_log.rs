@@ -6,24 +6,92 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 #![allow(unused_imports, dead_code, unused_variables)]
 
+//! Wave-8b: wired against the live `log` trampoline.
+
+#![cfg(not(target_arch = "wasm32"))]
+
+use benten_core::Cid;
+use benten_errors::ErrorCode;
+use benten_eval::AttributionFrame;
+use benten_eval::sandbox::{ManifestRef, ManifestRegistry, SandboxConfig, execute};
+
+fn dummy_attribution() -> AttributionFrame {
+    let zero = Cid::from_blake3_digest([0u8; 32]);
+    AttributionFrame {
+        actor_cid: zero,
+        handler_cid: zero,
+        capability_grant_cid: zero,
+        sandbox_depth: 0,
+    }
+}
+
 #[test]
-#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D1 log host-fn byte-volume cap"]
 fn sandbox_host_fn_log_respects_byte_volume_cap_64kb() {
-    // D1 + sec-pre-r1-06 §2.2 — `log` host-fn declared with
-    //   behavior = { kind = "log_sink", per_call_byte_cap = 65536 }
-    //
-    // Test 1: a single log of 64 KiB succeeds.
-    // Test 2: a single log of 64 KiB + 1 byte returns the typed error
-    //         E_SANDBOX_HOST_FN_DENIED (or E_INV_SANDBOX_OUTPUT depending
-    //         on routing — pin to whichever R5 picks; the per-call cap is
-    //         distinct from D17's per-primitive output budget).
-    // Test 3: 1000 successive log calls of 100 bytes each succeed
-    //         (aggregate 100 KiB > 64 KiB but PER-CALL cap is what's
-    //         being enforced; aggregate is enforced by D17 CountedSink
-    //         + Inv-7 separately).
-    //
-    // R5 may decide that the per-call cap is enforced via the
-    // CountedSink trampoline (D25 trampoline-counts default) — in which
-    // case the assertion routes through CountedSink's per-host-fn limit.
-    todo!("R5 G7-A — assert per-call 64 KiB cap with three sub-tests");
+    // D1 + sec-pre-r1-06 §2.2: per-call log byte-volume cap = 65 536.
+    // Sub-test 1: 65 536-byte log succeeds (==cap).
+    let bytes = wat::parse_str(
+        "(module
+           (import \"host\" \"log\" (func $log (param i32 i32)))
+           (memory (export \"memory\") 2)
+           (func (export \"run\") (result i32)
+             i32.const 0
+             i32.const 65536
+             call $log
+             i32.const 0
+           )
+         )",
+    )
+    .unwrap();
+    let registry = ManifestRegistry::new();
+    let cfg = SandboxConfig {
+        output_bytes: 1024 * 1024,
+        ..SandboxConfig::default()
+    };
+    let attribution = dummy_attribution();
+    let res = execute(
+        &bytes,
+        ManifestRef::named("compute-basic"),
+        &registry,
+        cfg,
+        &[
+            "host:compute:log".to_string(),
+            "host:compute:time".to_string(),
+        ],
+        &attribution,
+    );
+    assert!(res.is_ok(), "65536-byte log MUST succeed; got {res:?}");
+
+    // Sub-test 2: 65 537-byte log fires SandboxHostFnDenied.
+    let bytes = wat::parse_str(
+        "(module
+           (import \"host\" \"log\" (func $log (param i32 i32)))
+           (memory (export \"memory\") 2)
+           (func (export \"run\") (result i32)
+             i32.const 0
+             i32.const 65537
+             call $log
+             i32.const 0
+           )
+         )",
+    )
+    .unwrap();
+    let registry = ManifestRegistry::new();
+    let cfg = SandboxConfig {
+        output_bytes: 1024 * 1024,
+        ..SandboxConfig::default()
+    };
+    let attribution = dummy_attribution();
+    let err = execute(
+        &bytes,
+        ManifestRef::named("compute-basic"),
+        &registry,
+        cfg,
+        &[
+            "host:compute:log".to_string(),
+            "host:compute:time".to_string(),
+        ],
+        &attribution,
+    )
+    .unwrap_err();
+    assert_eq!(err.code(), ErrorCode::SandboxHostFnDenied);
 }

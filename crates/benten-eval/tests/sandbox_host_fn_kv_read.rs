@@ -11,26 +11,73 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 #![allow(unused_imports, dead_code, unused_variables)]
 
-#[test]
-#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D1 kv:read per-grant 1000 budget"]
-fn sandbox_host_fn_kv_read_respects_per_grant_budget_1000() {
-    // D1 + sec-pre-r1-06 §2.4 — kv:read declared with
-    //   behavior = { kind = "kv_read", per_call_read_cap = 1000 }
-    //
-    // Test:
-    //   1. Module invokes kv:read 999 times → all succeed.
-    //   2. 1000th invocation succeeds (== cap is allowed).
-    //   3. 1001st invocation returns E_SANDBOX_HOST_FN_DENIED (or
-    //      E_SANDBOX_KV_READ_BUDGET_EXCEEDED if R5 picks a dedicated
-    //      code; pin to whichever R5 lands).
-    //
-    // Read-amplification DOS defense — bounds host backend load per
-    // primitive call.
-    todo!("R5 G7-A — fixture kv_read_loop.wat + 1001 invocations + budget assertion");
+//! Wave-8b: budget enforcement wired in the live trampoline; the cap-
+//! revoke path remains 8c (paired engine integration).
+
+#![cfg(not(target_arch = "wasm32"))]
+
+use benten_core::Cid;
+use benten_errors::ErrorCode;
+use benten_eval::AttributionFrame;
+use benten_eval::sandbox::{ManifestRef, ManifestRegistry, SandboxConfig, execute};
+
+fn dummy_attribution() -> AttributionFrame {
+    let zero = Cid::from_blake3_digest([0u8; 32]);
+    AttributionFrame {
+        actor_cid: zero,
+        handler_cid: zero,
+        capability_grant_cid: zero,
+        sandbox_depth: 0,
+    }
 }
 
 #[test]
-#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D18 + ESC-9 cap revoke during kv:read"]
+fn sandbox_host_fn_kv_read_respects_per_grant_budget_1000() {
+    // 1001 invocations under default per_call_read_cap=1000.
+    let bytes = wat::parse_str(
+        "(module
+           (import \"host\" \"kv_read\"
+             (func $kv (param i32 i32 i32 i32) (result i32)))
+           (memory (export \"memory\") 1)
+           (func (export \"run\") (result i32)
+             (local $i i32)
+             (loop $L
+               i32.const 0 i32.const 4 i32.const 0 i32.const 0
+               call $kv
+               drop
+               local.get $i
+               i32.const 1
+               i32.add
+               local.tee $i
+               i32.const 1001
+               i32.lt_s
+               br_if $L
+             )
+             local.get $i
+           )
+         )",
+    )
+    .unwrap();
+    let registry = ManifestRegistry::new();
+    let attribution = dummy_attribution();
+    let err = execute(
+        &bytes,
+        ManifestRef::named("compute-with-kv"),
+        &registry,
+        SandboxConfig::default(),
+        &[
+            "host:compute:kv:read".to_string(),
+            "host:compute:log".to_string(),
+            "host:compute:time".to_string(),
+        ],
+        &attribution,
+    )
+    .unwrap_err();
+    assert_eq!(err.code(), ErrorCode::SandboxHostFnDenied);
+}
+
+#[test]
+#[ignore = "Wave-8b ships the trampoline that consults the live cap-set on every kv:read invocation; the mid-call revoke testing helper that mutates `live_caps` lives at the engine layer (paired 8c work)."]
 fn sandbox_host_fn_kv_read_per_call_cap_check_after_revoke() {
     // D18 + ESC-9 — `kv:read` is `cap_recheck = "per_call"` (sensitive).
     //

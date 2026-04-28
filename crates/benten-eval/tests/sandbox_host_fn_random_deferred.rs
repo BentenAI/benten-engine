@@ -4,23 +4,53 @@
 //! Pin source: D1 (defer-to-2c per sec-pre-r1-06 §2.3 reasoning —
 //! shipping random before workspace-wide CSPRNG framework decision is a
 //! footgun).
+//!
+//! Wave-8b: wired against the live `execute()` surface that fires the
+//! deferral guard for any manifest claiming `host:compute:random*`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
-#![allow(unused_imports, dead_code, unused_variables)]
+#![cfg(not(target_arch = "wasm32"))]
+
+use benten_core::Cid;
+use benten_errors::ErrorCode;
+use benten_eval::AttributionFrame;
+use benten_eval::sandbox::{
+    CapBundle, ManifestRef, ManifestRegistry, SandboxConfig, SandboxError, execute,
+};
+
+fn dummy_attribution() -> AttributionFrame {
+    let zero = Cid::from_blake3_digest([0u8; 32]);
+    AttributionFrame {
+        actor_cid: zero,
+        handler_cid: zero,
+        capability_grant_cid: zero,
+        sandbox_depth: 0,
+    }
+}
 
 #[test]
-#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — D1 random deferred"]
 fn sandbox_random_host_fn_unavailable_in_phase_2b() {
-    // D1 — `random` is NOT in the initial host-fn surface for Phase 2b.
-    // A module that requires `host:compute:random` cap and attempts to
-    // invoke a `random`-named host-fn fails with
-    // E_SANDBOX_HOST_FN_NOT_FOUND.
-    //
-    // The error message hint MUST mention "deferred to Phase 2c" so
-    // downstream developers don't think it's a typo or missing
-    // implementation bug.
-    //
-    // Regression guard: if a future PR ships random in Phase 2b without
-    // workspace-wide CSPRNG framework decision, this test fires.
-    todo!("R5 G7-A — assert random host-fn fires NOT_FOUND with Phase-2c hint");
+    // D1 — `random` cap claim fires E_SANDBOX_HOST_FN_NOT_FOUND with a
+    // "Phase 2c" hint at the message level.
+    let registry = ManifestRegistry::new();
+    let inline = CapBundle::new(vec!["host:compute:random".to_string()], None);
+    let bytes =
+        wat::parse_str("(module (func (export \"run\") (result i32) i32.const 0))").unwrap();
+    let attribution = dummy_attribution();
+    let err = execute(
+        &bytes,
+        ManifestRef::Inline(inline),
+        &registry,
+        SandboxConfig::default(),
+        &["host:compute:random".to_string()],
+        &attribution,
+    )
+    .unwrap_err();
+    assert_eq!(err.code(), ErrorCode::SandboxHostFnNotFound);
+    if let SandboxError::HostFnNotFound { name } = err {
+        assert!(
+            name.contains("Phase 2c") || name.contains("deferred"),
+            "operator hint MUST mention Phase 2c deferral; got: {name}"
+        );
+    }
 }

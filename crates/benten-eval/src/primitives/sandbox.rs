@@ -29,10 +29,16 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use crate::sandbox::counted_sink::{CountedSink, OverflowPath, SinkOverflow};
-use crate::sandbox::host_fns::{CapAllowlist, default_host_fns};
+use crate::sandbox::epoch_ticker::{epoch_ticks_for_ms, spawn_epoch_ticker};
+use crate::sandbox::host_fns::{CapAllowlist, HostFnBehavior, HostFnSpec, default_host_fns};
 use crate::sandbox::manifest::{ManifestRef, ManifestRegistry};
+use crate::sandbox::resource_limiter::SandboxResourceLimiter;
+use crate::sandbox::trap_to_typed::{HostFnDenialKind, HostFnDenialMarker, map_call_error};
 use crate::{AttributionFrame, TraceStep};
 use benten_errors::ErrorCode;
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use wasmtime::{Caller, Engine, Linker, Store};
 
 /// Per-call SANDBOX configuration. Caller-overrides go on top of
 /// [`SandboxConfig::default`]; per-handler overrides come through
@@ -316,6 +322,7 @@ pub const DEFERRED_HOST_FN_RANDOM_CAP_PREFIX: &str = "host:compute:random";
 /// Returns [`SandboxError`] on any axis trip / cap-denial / manifest
 /// lookup failure / module-invalidity.
 #[allow(clippy::needless_pass_by_value)] // Manifest+config are conceptually owned by the call.
+#[allow(clippy::too_many_lines)] // Step-by-step plan is intentionally readable top-to-bottom.
 pub fn execute(
     module_bytes: &[u8],
     manifest_ref: ManifestRef,
@@ -324,15 +331,9 @@ pub fn execute(
     grant_caps: &[String],
     attribution: &AttributionFrame,
 ) -> Result<SandboxResult, SandboxError> {
-    // sec-g7a-mr-1 — pin: the attribution frame parameter exists on
-    // execute() so G7-C can thread it into HostFnContext. G7-A scaffold
-    // does not yet emit the audit-row; the load-bearing surface is the
-    // signature.
-    let _ = attribution;
-
     // 1. Resolve the manifest. ESC-15 closure: `Named` lookup either
     //    returns a bundle or fires `SandboxError::ManifestUnknown`.
-    //    cr-g7a-mr-6 fix-pass: ManifestError::Encode now routes through
+    //    cr-g7a-mr-6 fix-pass: ManifestError::Encode routes through
     //    SandboxError::ManifestEncodeFailed (Serialize code) rather than
     //    being collapsed into ModuleInvalid (which is wasmtime-side
     //    structural validation only).
@@ -344,10 +345,6 @@ pub fn execute(
             SandboxError::ManifestEncodeFailed { reason }
         }
         crate::sandbox::manifest::ManifestError::RuntimeRegistrationDeferred => {
-            // resolve() never produces this variant against an
-            // existing registry (register_runtime is the only
-            // producer); map defensively to ManifestEncodeFailed
-            // so the type stays honest.
             SandboxError::ManifestEncodeFailed {
                 reason: "RuntimeRegistrationDeferred surfaced from resolve() — \
                                  should not happen against existing registry"
@@ -355,35 +352,32 @@ pub fn execute(
             }
         }
     })?;
+    // Take an owned clone so we don't hold a borrow on the registry across
+    // the wasmtime invocation; the bundle is small (Vec<String> caps).
+    let bundle = bundle.clone();
 
     // sec-g7a-mr-5 — defensive D1 random-host-fn deferral guard. Until
-    // the full module-link-time host-fn enumeration lands in G7-C, fire
-    // SandboxHostFnNotFound at validate-time if the manifest claims a
-    // `random` cap. Operator-actionable hint encoded in the message
-    // (mirrors the host-functions.toml comment).
+    // the full module-link-time host-fn enumeration lands in a future
+    // wave, fire SandboxHostFnNotFound at validate-time if the manifest
+    // claims a `random` cap. Operator-actionable hint encoded in the
+    // message (mirrors the host-functions.toml comment).
     for required in &bundle.caps {
         if required.starts_with(DEFERRED_HOST_FN_RANDOM_CAP_PREFIX) {
             return Err(SandboxError::HostFnNotFound {
                 name: format!(
-                    "random (cap='{}'): deferred to Phase 2c per D1 + sec-pre-r1-06 §2.3 \
-                     (workspace CSPRNG framework choice not yet made)",
-                    required
+                    "random (cap='{required}'): deferred to Phase 2c per D1 + \
+                     sec-pre-r1-06 §2.3 (workspace CSPRNG framework choice not yet made)"
                 ),
             });
         }
     }
 
     // 2. D7 init-snapshot intersection — fail loud if the manifest
-    //    claims caps the dispatching grant lacks. **sec-g7a-mr-4 +
-    //    perf-g7a-mr-8 fix-pass:** delegate to CapAllowlist::intersect
-    //    + satisfies_all so the executor's intersection behavior is
-    //    pinned by the same contract HostFnContext.allowlist consumes.
-    //    Locks O(M+G) sorted-set intersection vs the previous O(M*G)
-    //    inline loop.
+    //    claims caps the dispatching grant lacks. sec-g7a-mr-4 +
+    //    perf-g7a-mr-8 fix-pass: delegate to CapAllowlist::intersect.
     let allowlist = CapAllowlist::intersect(&bundle.caps, grant_caps);
     let required_refs: Vec<&str> = bundle.caps.iter().map(String::as_str).collect();
     if !allowlist.satisfies_all(&required_refs) {
-        // Pick the first missing required cap for the error payload.
         for required in &bundle.caps {
             if !allowlist.contains(required) {
                 return Err(SandboxError::HostFnDenied {
@@ -393,58 +387,518 @@ pub fn execute(
         }
     }
 
-    // 3. Resolve the host-fn table. The default codegen surface
-    //    contributes `time`/`log`/`kv:read` (D1). `random` is
-    //    intentionally absent — defensive prefix-check above fires
-    //    SandboxHostFnNotFound before reaching here for `random`.
-    //    perf-g7a-mr-2 fix-pass: returns OnceLock-cached Arc; no
-    //    per-call BTreeMap rebuild.
-    let _host_fns = default_host_fns();
+    // 3. Resolve the host-fn table. perf-g7a-mr-2 fix-pass: returns
+    //    OnceLock-cached Arc; no per-call BTreeMap rebuild.
+    let host_fns = default_host_fns();
 
     // 4. Compile (or fetch from cache) the module.
-    let _module = crate::sandbox::instance::module_for_bytes(module_bytes).map_err(|e| {
+    let module = crate::sandbox::instance::module_for_bytes(module_bytes).map_err(|e| {
         SandboxError::ModuleInvalid {
             reason: e.to_string(),
         }
     })?;
 
-    // 5. Per-call state: CountedSink (D17 PRIMARY) + read budget +
-    //    log byte-volume budget. The trampoline (engine integration)
-    //    consumes these.
-    let _sink = CountedSink::new(config.output_bytes);
+    // 5. Wave-8b: ensure the epoch ticker is running (D24 wallclock
+    //    enforcement). Idempotent — first call spawns; subsequent are
+    //    no-ops.
+    spawn_epoch_ticker();
 
-    // 6. Per-call wasmtime Store + Instance lifecycle. The engine
-    //    integration (G7-C) constructs Store + Instance fresh, runs
-    //    the module, drops both at completion. This stub returns
-    //    success with empty output bytes; the integration replaces
-    //    the body with the real wasmtime invocation.
-    //
-    //    **wsa-g7a-mr-8 fix-pass tripwire:** in debug builds we
-    //    `debug_assert!(cfg!(test), ...)` to abort if production code
-    //    reaches the stub at runtime — a stalled G7-C that left the
-    //    scaffold in place would silently report empty SANDBOX
-    //    successes. The test gate carves out a path so the existing
-    //    scaffold-flow tests still pass.
-    //
-    //    NOTE: This scaffold does NOT yet execute the wasm module.
-    //    G7-C wires the full Store+Instance+invoke path. The
-    //    return-value backstop (D17 BACKSTOP) runs at the engine
-    //    integration boundary against the actual return-value bytes.
-    #[allow(clippy::assertions_on_constants)]
-    {
-        debug_assert!(
-            cfg!(test),
-            "G7-A scaffold reached at runtime — production code path must replace this stub \
-             with the wasmtime Store+Instance dispatch (G7-C). If this fires you have a \
-             stalled G7-C wire-through; flip the implementation in this function before ship."
+    // 6. Per-call wasmtime lifecycle. D3-RESOLVED no-pool: fresh
+    //    Store + Instance per call.
+    let engine: &Engine = crate::sandbox::instance::shared_engine();
+
+    // Build the per-call store data the host-fn trampolines borrow
+    // through.
+    let store_data = SandboxStoreData::new(
+        config.clone(),
+        allowlist.clone(),
+        attribution.clone(),
+        Arc::clone(&host_fns),
+        bundle.caps.clone(),
+    );
+
+    let mut store: Store<SandboxStoreData> = Store::new(engine, store_data);
+
+    // D21 fuel — set at store construction.
+    store
+        .set_fuel(config.fuel)
+        .map_err(|e| SandboxError::ModuleInvalid {
+            reason: format!("set_fuel failed: {e}"),
+        })?;
+
+    // D24 epoch deadline (wallclock).
+    let ticks = epoch_ticks_for_ms(config.wallclock_ms);
+    store.set_epoch_deadline(ticks);
+
+    // D21 priority-1 memory cap via ResourceLimiter.
+    store.limiter(|sd: &mut SandboxStoreData| &mut sd.limiter);
+
+    // 7. Build the Linker. Walk default_host_fns() + register each
+    //    THAT IS IN THE MANIFEST ALLOWLIST. ESC-8 closure: a manifest
+    //    that doesn't authorise kv:read causes the linker to NOT
+    //    register kv_read; wasmtime raises "unknown import" at
+    //    instantiate-time which the executor maps to
+    //    SandboxHostFnNotFound. Host-fns within the manifest's
+    //    allowlist are registered; their trampolines further enforce
+    //    D7/D18 cap-recheck on every invocation.
+    let mut linker: Linker<SandboxStoreData> = Linker::new(engine);
+    register_default_host_fns(&mut linker, &host_fns, &allowlist).map_err(|e| {
+        SandboxError::ModuleInvalid {
+            reason: format!("linker host-fn registration failed: {e}"),
+        }
+    })?;
+
+    // 8. Instantiate. ESC-8 (host-fn not on manifest) defense fires here
+    //    if the module imports a host-fn name the linker doesn't have —
+    //    wasmtime returns an `unknown import` error which we map to
+    //    HostFnNotFound.
+    let instance = match linker.instantiate(&mut store, &module) {
+        Ok(inst) => inst,
+        Err(e) => {
+            // First check if the marker is in the error chain (limiter
+            // raised it during instantiate-time memory init).
+            for cause in e.chain() {
+                if let Some(m) = cause
+                    .downcast_ref::<crate::sandbox::resource_limiter::MemoryCapExceededMarker>()
+                {
+                    return Err(SandboxError::MemoryExhausted {
+                        limit: m.limit_bytes,
+                    });
+                }
+            }
+            // Try to recognise "unknown import" / "incompatible import"
+            // shapes from wasmtime's error display.
+            let msg = e.to_string();
+            let lower = msg.to_lowercase();
+            if lower.contains("unknown import") || lower.contains("incompatible import") {
+                let name = extract_unknown_import_name(&msg).unwrap_or_else(|| msg.clone());
+                return Err(SandboxError::HostFnNotFound { name });
+            }
+            // Map memory-related instantiation failures to MemoryExhausted.
+            if lower.contains("memory") && (lower.contains("limit") || lower.contains("exceeds")) {
+                return Err(SandboxError::MemoryExhausted {
+                    limit: config.memory_bytes,
+                });
+            }
+            return Err(SandboxError::ModuleInvalid {
+                reason: format!("instantiation failed: {msg}"),
+            });
+        }
+    };
+
+    // 9. Resolve the entry function. Phase-2b convention: the exported
+    //    "run" function is the entry point (the WAT corpus exports
+    //    "run" universally). If "run" is missing AND a `_start` exists
+    //    (wasi-style), call _start instead — but for the current corpus
+    //    "run" is always present.
+    let entry_name = "run";
+    let entry: Option<wasmtime::Func> = instance.get_func(&mut store, entry_name);
+    let Some(func) = entry else {
+        // No "run" export — module shape isn't compatible.
+        return Err(SandboxError::ModuleInvalid {
+            reason: format!("module has no exported `{entry_name}` function"),
+        });
+    };
+
+    // 10. Invoke. Use a dynamically-typed call so the corpus's varied
+    //     return signatures (i32, i64, no-result) all work without a
+    //     per-fixture trampoline. The return value bytes are derived
+    //     from the typed return value (encoded as little-endian) for
+    //     the D17 BACKSTOP check.
+    let func_ty = func.ty(&store);
+    let n_results = func_ty.results().len();
+    let mut results: Vec<wasmtime::Val> = (0..n_results).map(|_| wasmtime::Val::I32(0)).collect();
+    let call_result = func.call(&mut store, &[], &mut results);
+
+    // 11. Read fuel-consumed (regardless of success/failure).
+    let fuel_remaining = store.get_fuel().unwrap_or(config.fuel);
+    let fuel_consumed = config.fuel.saturating_sub(fuel_remaining);
+
+    // Snapshot output_consumed BEFORE potentially appending the return-
+    // value bytes; the BACKSTOP needs the consumed-so-far state.
+    let output_consumed_before = store.data().sink.consumed();
+
+    // 12. Map call result.
+    if let Err(e) = call_result {
+        let mapped = map_call_error(
+            e,
+            fuel_consumed,
+            config.wallclock_ms,
+            config.memory_bytes,
+            config.fuel,
         );
+        return Err(mapped);
     }
 
+    // 13. Encode return values into a Vec<u8> for D17 BACKSTOP +
+    //     SandboxResult.output. Phase-2b convention: serialise the
+    //     wasmtime::Val results little-endian. A future revision may
+    //     adopt a richer ABI; for now the bytes are the raw scalar
+    //     return values which is what the existing test corpus (echo
+    //     handlers, ESC-fixtures) expect.
+    let return_bytes = encode_return_values(&results);
+
+    // 14. D17 BACKSTOP — check the return-value bytes against the
+    //     CountedSink budget. Catches a host-fn that bypassed the
+    //     PRIMARY streaming path (test-only `testing_register_uncounted_host_fn`
+    //     fixture).
+    let n_return = u64::try_from(return_bytes.len()).unwrap_or(u64::MAX);
+    store
+        .data()
+        .sink
+        .backstop_check(n_return, "return_value")
+        .map_err(SandboxError::OutputOverflow)?;
+
+    let _ = output_consumed_before; // currently unused; kept for symmetry
+
+    let output_consumed = store.data().sink.consumed().saturating_add(n_return);
+
     Ok(SandboxResult {
-        output: Vec::new(),
-        fuel_consumed: 0,
-        output_consumed: 0,
+        output: return_bytes,
+        fuel_consumed,
+        output_consumed,
     })
+}
+
+// ---------------------------------------------------------------------
+// Per-call wasmtime Store data + host-fn registration (Wave-8b)
+// ---------------------------------------------------------------------
+
+/// Per-call state held in `Store::data()`. Holds the CountedSink (D17
+/// PRIMARY accumulator), the init-snapshot CapAllowlist, the ResourceLimiter
+/// (memory cap), per-call read/log budgets, the dispatching attribution
+/// frame, the host-fn table reference, and the live cap-set (D18 PerCall
+/// recheck consults this).
+///
+/// In wave-8b the live-cap-set is just the init-snapshot caps — the
+/// engine-side wire-through that flips `kv:read` to live-policy lookup
+/// lands when the engine layer wires `execute_sandbox_native` to call
+/// this executor (8c-paired work).
+pub(crate) struct SandboxStoreData {
+    /// D17 PRIMARY CountedSink the trampoline writes through.
+    pub(crate) sink: CountedSink,
+    /// D7 init-snapshot allowlist (consumed by PerBoundary host-fns).
+    allowlist: CapAllowlist,
+    /// D21 ResourceLimiter for memory cap.
+    limiter: SandboxResourceLimiter,
+    /// Per-call kv:read budget remaining (D1: 1000 default).
+    kv_reads_remaining: u64,
+    /// Per-call log byte-volume budget remaining (D1: 64 KiB default).
+    log_bytes_remaining: u64,
+    /// sec-pre-r1-03 — dispatching attribution frame; every host-fn
+    /// invocation must carry this as the audit-frame.
+    #[allow(dead_code)]
+    attribution: AttributionFrame,
+    /// Codegen host-fn table reference.
+    #[allow(dead_code)]
+    host_fns: Arc<BTreeMap<String, HostFnSpec>>,
+    /// Live cap-set for D18 PerCall recheck. In wave-8b this matches
+    /// the init-snapshot; the engine wire-through replaces this with
+    /// a live policy lookup callback.
+    live_caps: Vec<String>,
+}
+
+impl SandboxStoreData {
+    fn new(
+        config: SandboxConfig,
+        allowlist: CapAllowlist,
+        attribution: AttributionFrame,
+        host_fns: Arc<BTreeMap<String, HostFnSpec>>,
+        live_caps: Vec<String>,
+    ) -> Self {
+        let kv_reads_remaining = host_fns
+            .get("kv:read")
+            .and_then(|s| match &s.behavior {
+                HostFnBehavior::KvRead { per_call_read_cap } => Some(*per_call_read_cap),
+                _ => None,
+            })
+            .unwrap_or(1000);
+        let log_bytes_remaining = host_fns
+            .get("log")
+            .and_then(|s| match &s.behavior {
+                HostFnBehavior::LogSink { per_call_byte_cap } => Some(*per_call_byte_cap),
+                _ => None,
+            })
+            .unwrap_or(65_536);
+        Self {
+            sink: CountedSink::new(config.output_bytes),
+            allowlist,
+            limiter: SandboxResourceLimiter::new(config.memory_bytes),
+            kv_reads_remaining,
+            log_bytes_remaining,
+            attribution,
+            host_fns,
+            live_caps,
+        }
+    }
+}
+
+/// Walk `host_fns` and register a wasmtime `Linker` import for each.
+/// The closures are the trampolines: they consult the cap allowlist
+/// (PerBoundary) or the live cap-set (PerCall), apply per-fn budgets
+/// (kv:read read-count, log byte-volume), count output bytes via
+/// CountedSink (D17 PRIMARY + D25 trampoline-counts), and return a
+/// typed [`HostFnDenialMarker`] for cap-denial (sec-r1 D7) instead of a
+/// wasmtime trap.
+fn register_default_host_fns(
+    linker: &mut Linker<SandboxStoreData>,
+    host_fns: &Arc<BTreeMap<String, HostFnSpec>>,
+    allowlist: &CapAllowlist,
+) -> wasmtime::Result<()> {
+    use crate::sandbox::host_fns::CapRecheckPolicy;
+
+    for (name, spec) in host_fns.as_ref() {
+        // ESC-8 closure: only register host-fns whose required cap is
+        // in the init-snapshot allowlist. Host-fns outside the
+        // allowlist are LINK-TIME absent — wasmtime raises
+        // "unknown import" if the module tries to call them.
+        if !allowlist.contains(&spec.requires) {
+            continue;
+        }
+        let cap_required = spec.requires.clone();
+        let recheck = spec.cap_recheck;
+        let behavior = spec.behavior.clone();
+        let host_name = name.clone();
+
+        // Match the WASM import signatures used by the test corpus.
+        // The corpus shape:
+        //   (import "host" "time"     (func               (result i64)))
+        //   (import "host" "log"      (func (param i32 i32)))
+        //   (import "host" "kv_read"  (func (param i32 i32 i32 i32) (result i32)))
+        match host_name.as_str() {
+            "time" => {
+                let cap = cap_required.clone();
+                let beh = behavior.clone();
+                let policy = recheck;
+                linker.func_wrap(
+                    "host",
+                    "time",
+                    move |mut caller: Caller<'_, SandboxStoreData>| -> Result<i64, wasmtime::Error> {
+                        cap_check(&mut caller, policy, &cap)?;
+                        // D1 monotonic-coarsened-100ms. Phase-2b: derive a
+                        // module-start-relative monotonic value coarsened
+                        // to the configured granularity (default 100ms);
+                        // returning the same value across a sub-window
+                        // closes ESC-16 fingerprinting.
+                        let coarsening_ms = match &beh {
+                            HostFnBehavior::TimeMonotonicCoarsened { coarsening_ms } => *coarsening_ms,
+                            _ => 100,
+                        };
+                        // Use a process-static start instant; modules see a
+                        // monotonic offset coarsened to the configured ms
+                        // granularity.
+                        let elapsed = sandbox_module_relative_time_ms();
+                        let coarsened = if coarsening_ms == 0 {
+                            elapsed
+                        } else {
+                            (elapsed / coarsening_ms) * coarsening_ms
+                        };
+                        Ok(i64::try_from(coarsened).unwrap_or(i64::MAX))
+                    },
+                )?;
+            }
+            "log" => {
+                let cap = cap_required.clone();
+                let beh = behavior.clone();
+                let policy = recheck;
+                linker.func_wrap(
+                    "host",
+                    "log",
+                    move |mut caller: Caller<'_, SandboxStoreData>,
+                          ptr: i32,
+                          len: i32|
+                          -> Result<(), wasmtime::Error> {
+                        cap_check(&mut caller, policy, &cap)?;
+                        let per_call_byte_cap = match &beh {
+                            HostFnBehavior::LogSink { per_call_byte_cap } => *per_call_byte_cap,
+                            _ => 65_536,
+                        };
+                        let len_u64 = u64::try_from(len.max(0)).unwrap_or(0);
+                        // D1 + sec-pre-r1-06 §2.2: `per_call_byte_cap`
+                        // semantics — the cap is PER `log` HOST-FN
+                        // INVOCATION (not aggregated across calls). The
+                        // aggregate budget IS CountedSink (the
+                        // primitive-call output_bytes budget), which
+                        // every host-fn shares.
+                        if len_u64 > per_call_byte_cap {
+                            return Err(wasmtime::Error::from(HostFnDenialMarker {
+                                kind: HostFnDenialKind::CapDenied {
+                                    cap: format!("log:per_call_byte_cap={per_call_byte_cap}"),
+                                },
+                            }));
+                        }
+                        let data = caller.data_mut();
+                        // D17 PRIMARY: count log bytes against the
+                        // per-call output budget through CountedSink.
+                        // CountedSink is the cumulative cross-host-fn
+                        // budget — when it overflows the typed error
+                        // routes to E_INV_SANDBOX_OUTPUT (NOT
+                        // SandboxHostFnDenied).
+                        if let Err(o) = data.sink.write_n_bytes(len_u64, "host_fn:compute:log") {
+                            return Err(wasmtime::Error::from(HostFnDenialMarker {
+                                kind: HostFnDenialKind::OutputOverflow(o),
+                            }));
+                        }
+                        // Diagnostic: track total log bytes per primitive
+                        // call (kept for SandboxResult.fuel_consumed
+                        // future telemetry).
+                        data.log_bytes_remaining = data.log_bytes_remaining.saturating_sub(len_u64);
+                        // We don't actually read the bytes from guest
+                        // memory in 2b — `log` is fire-and-forget; the
+                        // budget enforcement is what's load-bearing.
+                        let _ = ptr;
+                        Ok(())
+                    },
+                )?;
+            }
+            "kv:read" => {
+                // The wasm-import name is `kv_read` (underscore) by
+                // convention; the host-fn registry uses `kv:read`
+                // (colon) for the cap-string namespacing. The Linker
+                // registration uses the wasm-side name.
+                let cap = cap_required.clone();
+                let beh = behavior.clone();
+                let policy = recheck;
+                linker.func_wrap(
+                    "host",
+                    "kv_read",
+                    move |mut caller: Caller<'_, SandboxStoreData>,
+                          key_ptr: i32,
+                          key_len: i32,
+                          out_ptr: i32,
+                          out_len: i32|
+                          -> Result<i32, wasmtime::Error> {
+                        cap_check(&mut caller, policy, &cap)?;
+                        let per_call_read_cap = match &beh {
+                            HostFnBehavior::KvRead { per_call_read_cap } => *per_call_read_cap,
+                            _ => 1000,
+                        };
+                        let _ = per_call_read_cap;
+                        let data = caller.data_mut();
+                        if data.kv_reads_remaining == 0 {
+                            return Err(wasmtime::Error::from(HostFnDenialMarker {
+                                kind: HostFnDenialKind::CapDenied {
+                                    cap: "kv:read:per_call_read_cap_exhausted".to_string(),
+                                },
+                            }));
+                        }
+                        // ESC-3 host-buffer overrun defense: validate
+                        // (key_ptr, key_len, out_ptr, out_len) shape
+                        // against the module's declared memory size.
+                        // Negative values (interpreted as i32 ints
+                        // representing huge u32s in unsigned semantics)
+                        // also fire — the WASM ABI passes these as i32
+                        // but a negative value here is always pathological.
+                        if out_len < 0 || out_ptr < 0 || key_len < 0 || key_ptr < 0 {
+                            return Err(wasmtime::Error::from(wasmtime::Trap::MemoryOutOfBounds));
+                        }
+                        let out_len_u64 = u64::try_from(out_len).unwrap_or(0);
+                        let out_ptr_u64 = u64::try_from(out_ptr).unwrap_or(0);
+                        let key_ptr_u64 = u64::try_from(key_ptr).unwrap_or(0);
+                        let key_len_u64 = u64::try_from(key_len).unwrap_or(0);
+                        let mem = caller.get_export("memory").and_then(|e| e.into_memory());
+                        if let Some(mem) = mem {
+                            let mem_size =
+                                u64::try_from(mem.data_size(&caller)).unwrap_or(u64::MAX);
+                            if out_len_u64 > mem_size
+                                || out_ptr_u64.saturating_add(out_len_u64) > mem_size
+                                || key_ptr_u64.saturating_add(key_len_u64) > mem_size
+                            {
+                                return Err(wasmtime::Error::from(
+                                    wasmtime::Trap::MemoryOutOfBounds,
+                                ));
+                            }
+                        }
+                        let data = caller.data_mut();
+                        data.kv_reads_remaining = data.kv_reads_remaining.saturating_sub(1);
+                        // D17 PRIMARY: count "would-be-written" bytes
+                        // against the output budget. Wave-8b stub
+                        // doesn't actually write to guest memory; the
+                        // engine wire-through (8c) will.
+                        if let Err(o) = data.sink.write_n_bytes(0, "host_fn:compute:kv:read") {
+                            return Err(wasmtime::Error::from(HostFnDenialMarker {
+                                kind: HostFnDenialKind::OutputOverflow(o),
+                            }));
+                        }
+                        Ok(0)
+                    },
+                )?;
+            }
+            _ => {
+                // Unknown host-fn name in the table — declined at
+                // registration time. Wave-8b only ships the D1 surface.
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Cap-check helper called at the top of every host-fn trampoline.
+/// PerBoundary consults the init-snapshot allowlist; PerCall consults
+/// the live cap-set (currently the same as the snapshot in 2b — the
+/// engine-side wire-through replaces this with a live policy lookup).
+fn cap_check(
+    caller: &mut Caller<'_, SandboxStoreData>,
+    policy: crate::sandbox::host_fns::CapRecheckPolicy,
+    cap: &str,
+) -> Result<(), wasmtime::Error> {
+    use crate::sandbox::host_fns::CapRecheckPolicy;
+    let data = caller.data();
+    let ok = match policy {
+        CapRecheckPolicy::PerBoundary => data.allowlist.contains(cap),
+        CapRecheckPolicy::PerCall => data.live_caps.iter().any(|c| c == cap),
+    };
+    if !ok {
+        return Err(wasmtime::Error::from(HostFnDenialMarker {
+            kind: HostFnDenialKind::CapDenied {
+                cap: cap.to_string(),
+            },
+        }));
+    }
+    Ok(())
+}
+
+/// Module-relative monotonic time helper for the `time` host-fn.
+/// Returns elapsed milliseconds since process start, NOT since epoch
+/// (closes ESC-16 timezone leak + the no-correlation-with-system-clock
+/// pin in `sandbox_host_fn_time_returns_monotonic_coarsened_100ms`).
+fn sandbox_module_relative_time_ms() -> u64 {
+    use std::sync::OnceLock;
+    use std::time::Instant;
+    static PROCESS_START: OnceLock<Instant> = OnceLock::new();
+    let start = *PROCESS_START.get_or_init(Instant::now);
+    u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+/// Encode a wasmtime `Val` results vector to little-endian bytes for
+/// D17 BACKSTOP + SandboxResult.output.
+fn encode_return_values(results: &[wasmtime::Val]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(results.len() * 8);
+    for v in results {
+        match v {
+            wasmtime::Val::I32(n) => out.extend_from_slice(&n.to_le_bytes()),
+            wasmtime::Val::I64(n) => out.extend_from_slice(&n.to_le_bytes()),
+            wasmtime::Val::F32(bits) => out.extend_from_slice(&bits.to_le_bytes()),
+            wasmtime::Val::F64(bits) => out.extend_from_slice(&bits.to_le_bytes()),
+            // V128, FuncRef, ExternRef — current corpus doesn't use them; encode as zero placeholder.
+            _ => out.extend_from_slice(&[0u8; 16]),
+        }
+    }
+    out
+}
+
+/// Best-effort extraction of an "unknown import" name from wasmtime's
+/// error-display string.
+fn extract_unknown_import_name(msg: &str) -> Option<String> {
+    // wasmtime 43 displays: `unknown import: \`module::name\` has not been defined`
+    // or similar. Look for backticks first; fall back to colon-split.
+    if let (Some(start), Some(end)) = (msg.find('`'), msg.rfind('`'))
+        && start < end
+    {
+        return Some(msg[start + 1..end].to_string());
+    }
+    None
 }
 
 #[cfg(test)]
@@ -599,7 +1053,12 @@ mod tests {
     fn inline_manifest_resolves_without_registry_entry() {
         let registry = ManifestRegistry::new();
         let inline = CapBundle::new(vec!["host:compute:time".to_string()], None);
-        let module_bytes = wat::parse_str("(module)").expect("empty module compiles");
+        // Wave-8b: the executor now actually invokes wasmtime — module
+        // MUST export a `run` function. Use a trivial echo-shape that
+        // returns 0.
+        let module_bytes =
+            wat::parse_str("(module (func (export \"run\") (result i32) i32.const 0))")
+                .expect("trivial run module compiles");
         let attribution = test_attribution();
         let res = execute(
             &module_bytes,
@@ -611,7 +1070,8 @@ mod tests {
         );
         assert!(
             res.is_ok(),
-            "inline manifest with matching grant must succeed"
+            "inline manifest with matching grant must succeed; got {:?}",
+            res
         );
     }
 
