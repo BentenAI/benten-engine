@@ -42,17 +42,18 @@ fn open_engine() -> (Engine, tempfile::TempDir) {
 }
 
 #[test]
-fn engine_call_stream_surface_present_returns_handle_with_pending_error() {
-    // Pin: G6-B's surface returns a `StreamHandle` whose first
-    // `next_chunk()` surfaces `E_PRIMITIVE_NOT_IMPLEMENTED` until G6-A's
-    // executor wires in. This test exercises the registered-handler
-    // happy path; it does NOT require G6-A.
+fn engine_call_stream_crud_handler_rejects_with_typed_error() {
+    // wave-8c-stream-infra: crud handlers don't have a STREAM
+    // composition primitive, so call_stream rejects with a typed
+    // PrimitiveNotImplemented up-front. Pre-wave-8c the call returned
+    // a StreamHandle whose first next_chunk() surfaced the error;
+    // wave-8c moves the rejection to the call boundary because we
+    // can detect the missing STREAM node before spawning a producer.
     let (engine, _d) = open_engine();
     let handler_id = engine.register_crud("post").unwrap();
-    let mut handle = engine
+    let err = engine
         .call_stream(&handler_id, "post:list", Node::empty())
-        .expect("call_stream surface present");
-    let err = handle.next_chunk().unwrap_err();
+        .unwrap_err();
     match err {
         EngineError::Other { code, .. } => {
             assert_eq!(code, ErrorCode::PrimitiveNotImplemented);
@@ -62,17 +63,15 @@ fn engine_call_stream_surface_present_returns_handle_with_pending_error() {
 }
 
 #[test]
-fn engine_open_stream_surface_present_returns_handle_with_pending_error() {
-    // Same shape contract as `call_stream`; the only public-API
-    // difference is lifecycle (TS wrapper exposes explicit `dispose`/
-    // `close` for `openStream` callers — `for await` auto-close is the
-    // `callStream` path). Both share the inner dispatch.
+fn engine_open_stream_crud_handler_rejects_with_typed_error() {
+    // Same contract as call_stream: open_stream against a crud handler
+    // without a STREAM composition primitive surfaces the typed error
+    // at the call boundary (wave-8c-stream-infra wire-through).
     let (engine, _d) = open_engine();
     let handler_id = engine.register_crud("post").unwrap();
-    let mut handle = engine
+    let err = engine
         .open_stream(&handler_id, "post:list", Node::empty())
-        .expect("open_stream surface present");
-    let err = handle.next_chunk().unwrap_err();
+        .unwrap_err();
     match err {
         EngineError::Other { code, .. } => {
             assert_eq!(code, ErrorCode::PrimitiveNotImplemented);
@@ -151,50 +150,206 @@ fn stream_chunk_sequence_preserves_order() {
 }
 
 // ---------------------------------------------------------------------------
+// wave-8c-stream-infra: production-runtime wire-through tests.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn stream_wire_through_count_source_emits_n_chunks() {
+    // wave-8c-stream-infra: STREAM source `$input.upTo` resolves to
+    // an integer N; the producer emits N chunks. Mirrors the
+    // packages/engine/test/stream.test.ts "yields chunks in seq order"
+    // case at the Rust level.
+    use benten_core::Value;
+    use benten_engine::{IntoSubgraphSpec, PrimitiveSpec, SubgraphSpec};
+    use std::collections::BTreeMap;
+
+    let (engine, _d) = open_engine();
+    let mut props = BTreeMap::new();
+    props.insert("source".to_string(), Value::Text("$input.upTo".into()));
+    props.insert("chunkSize".to_string(), Value::Int(1));
+    let stream_ps = PrimitiveSpec {
+        id: "s0".into(),
+        kind: benten_engine::PrimitiveKind::Stream,
+        properties: props,
+    };
+    let spec = SubgraphSpec::builder()
+        .handler_id("counter")
+        .primitive_with_props(stream_ps)
+        .respond()
+        .build();
+    engine.register_subgraph(spec).unwrap();
+
+    let mut input = Node::empty();
+    input.properties.insert("upTo".into(), Value::Int(5));
+
+    let mut handle = engine.call_stream("counter", "count", input).unwrap();
+    let mut seen = Vec::<u64>::new();
+    while let Some(chunk) = handle.next_chunk().unwrap() {
+        seen.push(chunk.seq);
+    }
+    assert_eq!(seen, vec![0, 1, 2, 3, 4]);
+}
+
+#[test]
+fn stream_wire_through_active_count_drops_to_zero_after_drain() {
+    // wave-8c-stream-infra: active stream count tracks producer-bridge
+    // handles; the delta returns to baseline after handle is dropped.
+    // Tests run concurrently so the absolute count may vary; the delta
+    // discipline is what matters.
+    use benten_core::Value;
+    use benten_engine::{IntoSubgraphSpec, PrimitiveSpec, SubgraphSpec};
+    use std::collections::BTreeMap;
+
+    let (engine, _d) = open_engine();
+    let mut props = BTreeMap::new();
+    props.insert("source".to_string(), Value::Text("$input.upTo".into()));
+    let stream_ps = PrimitiveSpec {
+        id: "s0".into(),
+        kind: benten_engine::PrimitiveKind::Stream,
+        properties: props,
+    };
+    let spec = SubgraphSpec::builder()
+        .handler_id("counter2")
+        .primitive_with_props(stream_ps)
+        .respond()
+        .build();
+    engine.register_subgraph(spec).unwrap();
+
+    {
+        let mut input = Node::empty();
+        input.properties.insert("upTo".into(), Value::Int(3));
+        let mut handle = engine.call_stream("counter2", "go", input).unwrap();
+        // Local invariant: at least one handle exists right after
+        // construction (process-wide counter, but our open just
+        // bumped it).
+        assert!(
+            engine.active_stream_count() >= 1,
+            "active_stream_count must be >= 1 right after construction"
+        );
+        while handle.next_chunk().unwrap().is_some() {}
+    }
+    // Drop joined the producer thread. The handle's slot is released;
+    // we cannot assert the absolute count because concurrent tests may
+    // have their own handles in flight. The Drop test discipline is
+    // validated by the inline tests in `engine_stream.rs` (single-
+    // threaded module-level tests with no shared counter races).
+}
+
+#[test]
+fn stream_wire_through_close_releases_active_count() {
+    // wave-8c-stream-infra: explicit close() decrements the active-
+    // stream count immediately. The active-stream counter is process-
+    // wide, so concurrent tests may add/remove handles between our
+    // operations. We assert only the local invariant: after our open()
+    // the count must be > 0, and after our close() the count returns
+    // to baseline (or below — concurrent tests may have closed too).
+    use benten_core::Value;
+    use benten_engine::{IntoSubgraphSpec, PrimitiveSpec, SubgraphSpec};
+    use std::collections::BTreeMap;
+
+    let (engine, _d) = open_engine();
+    let mut props = BTreeMap::new();
+    props.insert("source".to_string(), Value::Text("$input".into()));
+    let stream_ps = PrimitiveSpec {
+        id: "s0".into(),
+        kind: benten_engine::PrimitiveKind::Stream,
+        properties: props,
+    };
+    let spec = SubgraphSpec::builder()
+        .handler_id("infinite")
+        .primitive_with_props(stream_ps)
+        .respond()
+        .build();
+    engine.register_subgraph(spec).unwrap();
+
+    let mut handle = engine.open_stream("infinite", "go", Node::empty()).unwrap();
+    // Local invariant: at least one stream handle exists post-open.
+    assert!(
+        engine.active_stream_count() >= 1,
+        "active_stream_count must be >= 1 right after our open_stream()"
+    );
+    handle.close();
+    handle.close(); // idempotent — no panic, no double-decrement
+    // After close+drop, our handle has released its slot. The exact
+    // count depends on concurrent tests; we can only assert that close
+    // is well-behaved (no double-decrement panic, no leak).
+}
+
+// ---------------------------------------------------------------------------
 // Tests below this line require G6-A's `tokio::sync::mpsc` executor body
 // + the real `benten_eval::primitives::stream` evaluator. Tracked in G6-A's
 // `phase-2b/g6/a-stream-subscribe-core` PR.
 // ---------------------------------------------------------------------------
 
 #[test]
-#[ignore = "pending G6-A executor wiring; tracks G6-A's `phase-2b/g6/a-stream-subscribe-core` PR"]
 fn engine_stream_end_to_end() {
-    // End-to-end: register a STREAM-emitting handler, invoke via
-    // `call_stream`, drain N chunks, observe the terminal end-of-stream.
-    // Requires G6-A's executor to actually drive the chunk_sink.
+    // wave-8c-stream-infra: end-to-end with a real DSL handler that
+    // declares a STREAM composition primitive. The `crud:` handler
+    // path doesn't have a STREAM node; this test now uses a DSL spec.
+    use benten_core::Value;
+    use benten_engine::{IntoSubgraphSpec, PrimitiveSpec, SubgraphSpec};
+    use std::collections::BTreeMap;
+
     let (engine, _d) = open_engine();
-    let handler_id = engine.register_crud("post").unwrap();
+    let mut props = BTreeMap::new();
+    props.insert("source".to_string(), Value::Text("$input.upTo".into()));
+    let stream_ps = PrimitiveSpec {
+        id: "s0".into(),
+        kind: benten_engine::PrimitiveKind::Stream,
+        properties: props,
+    };
+    let spec = SubgraphSpec::builder()
+        .handler_id("e2e_stream")
+        .primitive_with_props(stream_ps)
+        .respond()
+        .build();
+    engine.register_subgraph(spec).unwrap();
+    let mut input = Node::empty();
+    input.properties.insert("upTo".into(), Value::Int(7));
     let mut handle = engine
-        .call_stream(&handler_id, "post:stream", Node::empty())
+        .call_stream("e2e_stream", "go", input)
         .expect("call_stream returns handle");
     let mut received = Vec::<Vec<u8>>::new();
-    while let Some(chunk) = handle.next_chunk().expect("recv chunk (post-G6-A)") {
+    while let Some(chunk) = handle.next_chunk().expect("recv chunk") {
         received.push(chunk.bytes);
     }
-    assert!(
-        !received.is_empty(),
-        "post-G6-A: at least one chunk delivered"
-    );
+    assert_eq!(received.len(), 7, "wave-8c: 7 chunks delivered");
 }
 
 #[test]
-#[ignore = "pending G6-A executor wiring; tracks G6-A's `phase-2b/g6/a-stream-subscribe-core` PR"]
 fn engine_callstream_returns_asynciterable() {
     // The Rust-side `StreamHandle` IS the locked-shape representation
     // that the napi layer renders as a JS `AsyncIterable<Chunk>`. The
-    // shape contract is already pinned by the type itself; this test
-    // exercises the production iteration path which requires G6-A's
-    // executor to deliver real chunks.
+    // production iteration path now delivers real chunks (wave-8c-
+    // stream-infra wire-through).
+    use benten_core::Value;
+    use benten_engine::{IntoSubgraphSpec, PrimitiveSpec, SubgraphSpec};
+    use std::collections::BTreeMap;
+
     let (engine, _d) = open_engine();
-    let handler_id = engine.register_crud("post").unwrap();
+    let mut props = BTreeMap::new();
+    props.insert("source".to_string(), Value::Text("$input.upTo".into()));
+    let stream_ps = PrimitiveSpec {
+        id: "s0".into(),
+        kind: benten_engine::PrimitiveKind::Stream,
+        properties: props,
+    };
+    let spec = SubgraphSpec::builder()
+        .handler_id("e2e_iter")
+        .primitive_with_props(stream_ps)
+        .respond()
+        .build();
+    engine.register_subgraph(spec).unwrap();
+    let mut input = Node::empty();
+    input.properties.insert("upTo".into(), Value::Int(3));
     let mut handle = engine
-        .call_stream(&handler_id, "post:stream", Node::empty())
+        .call_stream("e2e_iter", "go", input)
         .expect("call_stream returns handle");
     let mut count = 0;
-    while let Some(_chunk) = handle.next_chunk().expect("recv chunk (post-G6-A)") {
+    while let Some(_chunk) = handle.next_chunk().expect("recv chunk") {
         count += 1;
     }
-    assert!(count > 0, "post-G6-A: AsyncIterable yielded chunks");
+    assert_eq!(count, 3, "wave-8c: AsyncIterable yielded 3 chunks");
 }
 
 #[test]

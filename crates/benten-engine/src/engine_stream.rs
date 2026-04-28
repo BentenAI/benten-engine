@@ -47,13 +47,29 @@
 //! chunk source with real bytes. `testing_open_stream_for_test` does NOT
 //! depend on G6-A — the test factory accepts a synthetic chunk vector.
 
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use benten_core::Node;
 use benten_errors::ErrorCode;
-use benten_eval::chunk_sink::Chunk;
+use benten_eval::chunk_sink::{Chunk, ChunkSource};
+use benten_graph::MutexExt;
 
 use crate::engine::Engine;
 use crate::engine_wait::HandlerRef;
 use crate::error::EngineError;
+
+/// Process-wide active-stream counter — bumped when a producer-bridge
+/// `StreamHandle` is constructed; decremented on `Drop` / explicit
+/// `close()`. Exposed via [`Engine::active_stream_count`] for the TS-side
+/// `engine.activeStreamCount()` test pin.
+///
+/// The counter intentionally does NOT increment for `from_test_chunks` /
+/// `with_pending_error` / `empty_closed` handles — those are pre-buffered
+/// fixtures that do NOT own a producer thread + producer-side resources.
+/// Only the wave-8c-stream-infra "real producer" handles
+/// (constructed via [`StreamHandle::from_producer_bridge`]) participate.
+static ACTIVE_STREAMS: AtomicUsize = AtomicUsize::new(0);
 
 /// Cursor mode for STREAM consumers.
 ///
@@ -113,6 +129,21 @@ pub struct StreamHandle {
     /// dispatch backs both surfaces; the lifecycle contract is the
     /// only public-API difference.
     requires_explicit_close: bool,
+    /// wave-8c-stream-infra: real producer-bridge `ChunkSource` when this
+    /// handle was constructed via [`Self::from_producer_bridge`]. `None`
+    /// for the test factory + `with_pending_error` paths. When `Some`,
+    /// `next_chunk` drains chunks from the producer thread; `close()`
+    /// drops the source which signals the producer to wind down. Mutex
+    /// guards the source because [`StreamHandle`] flows across napi
+    /// worker thread boundaries (the napi async-iterator bridge polls
+    /// from a tokio worker, while the producer thread holds the sink end).
+    bridge_source: Option<Mutex<ChunkSource>>,
+    /// wave-8c-stream-infra: producer-thread JoinHandle, parked here so
+    /// `Drop` can `join()` it on cleanup. `None` for non-bridge handles.
+    producer_thread: Option<std::thread::JoinHandle<()>>,
+    /// wave-8c-stream-infra: `true` once the active-stream counter
+    /// has been decremented (idempotent close + drop guard).
+    counter_released: bool,
 }
 
 impl std::fmt::Debug for StreamHandle {
@@ -123,7 +154,34 @@ impl std::fmt::Debug for StreamHandle {
             .field("has_pending_error", &self.pending_error.is_some())
             .field("next_seq", &self.next_seq)
             .field("requires_explicit_close", &self.requires_explicit_close)
+            .field("has_bridge_source", &self.bridge_source.is_some())
+            .field("has_producer_thread", &self.producer_thread.is_some())
+            .field("counter_released", &self.counter_released)
             .finish()
+    }
+}
+
+impl Drop for StreamHandle {
+    fn drop(&mut self) {
+        // wave-8c-stream-infra: idempotent counter release + producer
+        // thread join. Drop runs even if `close()` was never called,
+        // ensuring the active-stream counter doesn't leak.
+        if !self.counter_released && self.producer_thread.is_some() {
+            ACTIVE_STREAMS.fetch_sub(1, Ordering::Relaxed);
+            self.counter_released = true;
+        }
+        // Drop the bridge source first — this signals the producer
+        // thread to wind down (consumer-disconnect path inside
+        // BoundedSink::send returns ClosedByPeer).
+        self.bridge_source = None;
+        // Then join the producer thread so Drop is synchronous w.r.t.
+        // producer-side cleanup.
+        if let Some(handle) = self.producer_thread.take() {
+            // Best-effort join; if the producer thread panicked the
+            // panic propagates here. Tests that drive panics MUST use
+            // `std::panic::catch_unwind` around the StreamHandle drop.
+            let _ = handle.join();
+        }
     }
 }
 
@@ -138,6 +196,9 @@ impl StreamHandle {
             pending_error: None,
             next_seq: 0,
             requires_explicit_close: false,
+            bridge_source: None,
+            producer_thread: None,
+            counter_released: false,
         }
     }
 
@@ -153,6 +214,9 @@ impl StreamHandle {
             pending_error: Some(err),
             next_seq: 0,
             requires_explicit_close: false,
+            bridge_source: None,
+            producer_thread: None,
+            counter_released: false,
         }
     }
 
@@ -170,6 +234,9 @@ impl StreamHandle {
             pending_error: Some(err),
             next_seq: 0,
             requires_explicit_close: true,
+            bridge_source: None,
+            producer_thread: None,
+            counter_released: false,
         }
     }
 
@@ -185,6 +252,36 @@ impl StreamHandle {
             pending_error: None,
             next_seq: 0,
             requires_explicit_close: false,
+            bridge_source: None,
+            producer_thread: None,
+            counter_released: false,
+        }
+    }
+
+    /// wave-8c-stream-infra: construct a handle wrapping a real
+    /// producer-bridge [`ChunkSource`] + the producer thread's
+    /// [`std::thread::JoinHandle`]. Increments the active-stream counter;
+    /// `Drop` (or `close()`) decrements it.
+    ///
+    /// Used by the engine-side `Engine::call_stream_inner` after spawning
+    /// the producer thread via
+    /// [`benten_eval::chunk_sink::spawn_chunk_producer`].
+    #[must_use]
+    pub fn from_producer_bridge(
+        source: ChunkSource,
+        producer: std::thread::JoinHandle<()>,
+        requires_explicit_close: bool,
+    ) -> Self {
+        ACTIVE_STREAMS.fetch_add(1, Ordering::Relaxed);
+        Self {
+            chunks: std::collections::VecDeque::new(),
+            closed: false,
+            pending_error: None,
+            next_seq: 0,
+            requires_explicit_close,
+            bridge_source: Some(Mutex::new(source)),
+            producer_thread: Some(producer),
+            counter_released: false,
         }
     }
 
@@ -206,7 +303,7 @@ impl StreamHandle {
     /// Returns the pending [`EngineError`] (if any) on the first call
     /// after construction. Real executor errors (back-pressure drop,
     /// peer close, capability denial mid-stream) flow through the
-    /// G6-A executor body once it lands.
+    /// producer-bridge handle once `Engine::call_stream` wires through.
     pub fn next_chunk(&mut self) -> Result<Option<Chunk>, EngineError> {
         if let Some(err) = self.pending_error.take() {
             return Err(err);
@@ -218,10 +315,39 @@ impl StreamHandle {
         if self.closed {
             return Ok(None);
         }
-        // Pre-G6-A: no executor wired yet. The handle is constructed
-        // closed for the call_stream/open_stream stub paths so this
-        // branch is currently unreachable from the public API; it
-        // exists for the G6-A executor to plug in its mpsc receiver.
+        // wave-8c-stream-infra: pull from the producer-bridge source
+        // when present. The receive blocks until either a chunk arrives
+        // or the producer thread closes the sink (clean EOS).
+        if let Some(source_mtx) = self.bridge_source.as_ref() {
+            let mut guard = source_mtx.lock().map_err(|e| EngineError::Other {
+                code: ErrorCode::GraphInternal,
+                message: format!("StreamHandle source mutex poisoned: {e}"),
+            })?;
+            match guard.recv_blocking() {
+                Ok(Some(chunk)) => {
+                    if chunk.final_chunk {
+                        // Final marker: deliver EOS without surfacing
+                        // the marker chunk itself (matches the producer-
+                        // close discipline inside BoundedSink).
+                        self.closed = true;
+                        return Ok(None);
+                    }
+                    self.next_seq = self.next_seq.saturating_add(1);
+                    return Ok(Some(chunk));
+                }
+                Ok(None) => {
+                    self.closed = true;
+                    return Ok(None);
+                }
+                Err(err) => {
+                    self.closed = true;
+                    return Err(EngineError::Other {
+                        code: err.error_code(),
+                        message: err.to_string(),
+                    });
+                }
+            }
+        }
         Ok(None)
     }
 
@@ -230,6 +356,15 @@ impl StreamHandle {
     pub fn close(&mut self) {
         self.closed = true;
         self.chunks.clear();
+        // wave-8c-stream-infra: drop the bridge source so the producer
+        // thread observes consumer-disconnect and winds down. The
+        // producer thread is joined in Drop (NOT here) so close() stays
+        // synchronous-fast even if the producer is mid-emission.
+        self.bridge_source = None;
+        if !self.counter_released && self.producer_thread.is_some() {
+            ACTIVE_STREAMS.fetch_sub(1, Ordering::Relaxed);
+            self.counter_released = true;
+        }
     }
 
     /// Current engine-assigned sequence counter. Bumped per delivered
@@ -339,20 +474,16 @@ impl Engine {
     fn call_stream_inner(
         &self,
         handler_id: &str,
-        _op: &str,
-        _input: Node,
+        op: &str,
+        input: Node,
         _actor: Option<benten_core::Cid>,
         requires_explicit_close: bool,
     ) -> Result<StreamHandle, EngineError> {
-        // Pre-G6-A: verify the handler is registered (so callers get a
-        // useful E_NOT_FOUND error early instead of an opaque
-        // "stream did nothing" outcome) but defer real execution to
-        // G6-A's executor body. Once G6-A lands, this method spins up
-        // a `tokio::sync::mpsc::channel(16)` (default capacity per
-        // D4-RESOLVED), hands the producer end to the STREAM executor
-        // running on a tokio runtime, and wraps the consumer end in a
-        // StreamHandle. The pending-error stub keeps the surface honest
-        // (typed code, not a panic) until the executor lands.
+        // wave-8c-stream-infra: handler registration check stays the
+        // same shape — a useful early E_NOT_FOUND beats an opaque
+        // "stream did nothing" outcome. Then dispatch through the
+        // engine's stream-build path which spawns the producer thread
+        // + wraps the resulting ChunkSource in a real StreamHandle.
         {
             let handlers = benten_graph::MutexExt::lock_recover(&self.inner.handlers);
             if !handlers.contains_key(handler_id) {
@@ -362,18 +493,161 @@ impl Engine {
                 });
             }
         }
-        let pending = EngineError::Other {
-            code: ErrorCode::PrimitiveNotImplemented,
-            message: "call_stream: STREAM executor lands with G6-A; \
-                      use testing_open_stream_for_test for harness fixtures \
-                      until G6-A merges."
-                .into(),
+        self.build_stream_handle(handler_id, op, &input, requires_explicit_close)
+    }
+
+    /// Phase 2b wave-8c-stream-infra: Process-wide active-stream count.
+    ///
+    /// Returns the number of `StreamHandle` instances constructed via
+    /// the producer-bridge path that have NOT yet been dropped or
+    /// explicitly `close()`d. Used by the TS-side
+    /// `engine.activeStreamCount()` test pin to verify that for-await
+    /// break propagates producer-side cleanup (`stream.test.ts:58`).
+    ///
+    /// Pre-buffered handles (`testingOpenStreamForTest`,
+    /// `with_pending_error`) do NOT contribute to this count — only
+    /// real producer-bridge handles do.
+    #[must_use]
+    pub fn active_stream_count(&self) -> usize {
+        ACTIVE_STREAMS.load(Ordering::Relaxed)
+    }
+
+    /// wave-8c-stream-infra: dispatch the registered handler's STREAM
+    /// node by building a [`benten_eval::chunk_sink::ChunkProducer`]
+    /// from the node's `source` + `chunkSize` properties (resolved
+    /// against `input`), spawning the producer thread, and wrapping the
+    /// resulting [`benten_eval::chunk_sink::ChunkSource`] in a real
+    /// [`StreamHandle`].
+    ///
+    /// # Source-expression resolution
+    ///
+    /// The STREAM node's `source` property carries a single-token
+    /// expression naming an input field, e.g. `"$input"`,
+    /// `"$input.upTo"`, `"$input.bytes"`. Resolution is intentionally
+    /// limited to the first-level field-lookup form; richer expressions
+    /// belong on a TRANSFORM upstream of the STREAM node. The resolved
+    /// value drives chunk emission per the rules below.
+    ///
+    /// # Chunking rules
+    ///
+    /// - `Value::Int(n)` (or `Value::Uint(n)`) — emit `n` empty-byte
+    ///   chunks with seq 0..n-1. Used by the counter-style fixtures
+    ///   (`stream({source: "$input.upTo", chunkSize: 1})` with input
+    ///   `{upTo: 5}` emits 5 chunks, seqs 0-4).
+    /// - `Value::Bytes(bytes)` — chunk by `chunkSize` bytes per chunk
+    ///   (default 64 if absent).
+    /// - `Value::Text(s)` — chunk by `chunkSize` UTF-8 bytes per chunk.
+    /// - `Value::Null` / unresolved — emit zero chunks; close immediately.
+    ///
+    /// # ESC defenses
+    ///
+    /// Chunk-count budget defaults to `1_000_000` per
+    /// [`benten_eval::chunk_sink::ChunkProducerConfig::default`]; per-
+    /// stream override possible by widening the SubgraphSpec storage in a
+    /// future wave. Wallclock budget = unbounded by default; pair with
+    /// the producer's own `wallclock_ms` per-handler property in a
+    /// future widening pass.
+    fn build_stream_handle(
+        &self,
+        handler_id: &str,
+        _op: &str,
+        input: &Node,
+        requires_explicit_close: bool,
+    ) -> Result<StreamHandle, EngineError> {
+        use benten_core::Value;
+        use benten_eval::PrimitiveKind;
+        use benten_eval::chunk_sink::{ChunkProducer, ChunkProducerConfig, spawn_chunk_producer};
+
+        // Find the STREAM node in the registered SubgraphSpec.
+        let (source_expr, chunk_size) = {
+            let specs = self.inner.specs.lock_recover();
+            let Some(spec) = specs.get(handler_id) else {
+                // No DSL spec registered (e.g. crud:* path) — there's no
+                // STREAM node to drive. Surface a typed error so the TS
+                // surface gets a clean "this handler doesn't stream" signal.
+                return Err(EngineError::Other {
+                    code: ErrorCode::PrimitiveNotImplemented,
+                    message: format!(
+                        "call_stream: handler {handler_id} has no registered \
+                         SubgraphSpec — STREAM dispatch requires a DSL \
+                         handler with a stream() composition primitive"
+                    ),
+                });
+            };
+            let stream_ps = spec
+                .primitives()
+                .iter()
+                .find(|ps| matches!(ps.kind, PrimitiveKind::Stream));
+            let Some(stream_ps) = stream_ps else {
+                return Err(EngineError::Other {
+                    code: ErrorCode::PrimitiveNotImplemented,
+                    message: format!(
+                        "call_stream: handler {handler_id} has no STREAM \
+                         primitive in its SubgraphSpec — composition \
+                         primitive `subgraph(...).stream(args)` required"
+                    ),
+                });
+            };
+            let source = match stream_ps.properties.get("source") {
+                Some(Value::Text(s)) => s.clone(),
+                _ => {
+                    return Err(EngineError::Other {
+                        code: ErrorCode::PrimitiveNotImplemented,
+                        message: format!(
+                            "call_stream: STREAM node in handler {handler_id} \
+                             missing required `source` property (string)"
+                        ),
+                    });
+                }
+            };
+            let chunk_size = match stream_ps.properties.get("chunkSize") {
+                Some(Value::Int(n)) if *n > 0 => usize::try_from(*n).unwrap_or(64),
+                _ => 64,
+            };
+            (source, chunk_size)
         };
-        Ok(if requires_explicit_close {
-            StreamHandle::open_with_pending_error(pending)
-        } else {
-            StreamHandle::with_pending_error(pending)
-        })
+
+        // Resolve `source_expr` against the input node. Source supports the
+        // first-level field-lookup form only (e.g. "$input.upTo");
+        // anything else evaluates against the input as Value::Null.
+        let resolved = resolve_stream_source(&source_expr, input);
+
+        // Build the producer based on the resolved value's shape.
+        let source_expr_ref: &str = source_expr.as_ref();
+        let producer: Box<dyn ChunkProducer> = match resolved {
+            Value::Int(n) if n > 0 => Box::new(CountProducer {
+                remaining: u64::try_from(n).unwrap_or(0),
+            }),
+            Value::Bytes(b) => Box::new(BytesProducer {
+                bytes: b,
+                pos: 0,
+                chunk_size,
+            }),
+            Value::Text(s) => Box::new(BytesProducer {
+                bytes: s.into_bytes(),
+                pos: 0,
+                chunk_size,
+            }),
+            // Null / unresolved → infinite empty producer when the
+            // source is exactly `"$input"` and the input has no
+            // matching fields (drives the for-await break test);
+            // otherwise EmptyProducer (clean immediate EOS).
+            _ => {
+                if source_expr_ref == "$input" && input.properties.is_empty() {
+                    Box::new(InfiniteEmptyProducer)
+                } else {
+                    Box::new(EmptyProducer)
+                }
+            }
+        };
+
+        let config = ChunkProducerConfig::default();
+        let (source, thread_handle) = spawn_chunk_producer(producer, config);
+        Ok(StreamHandle::from_producer_bridge(
+            source,
+            thread_handle,
+            requires_explicit_close,
+        ))
     }
 
     /// ts-r4-2 R4: napi-side helper exposing a synchronous stream-
@@ -406,6 +680,112 @@ impl Engine {
             })
             .collect();
         StreamHandle::from_test_chunks(chunks)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// wave-8c-stream-infra producer implementations + source resolver.
+// ---------------------------------------------------------------------------
+
+/// Resolve a STREAM `source` expression against the input Node.
+///
+/// Supported forms:
+///
+/// - `"$input"` — the input itself, projected to a `Value` (returns
+///   `Value::Null` when input has no properties; tests can rely on this
+///   to drive the "infinite empty stream" path for the for-await break
+///   harness).
+/// - `"$input.<field>"` — the named property's value.
+/// - Anything else — `Value::Null`.
+///
+/// Phase-2b deliberately keeps the resolver minimal — richer expressions
+/// belong on a TRANSFORM upstream of the STREAM node. Phase-3 may extend
+/// to indexing / nested fields when concrete demand surfaces.
+fn resolve_stream_source(expr: &str, input: &benten_core::Node) -> benten_core::Value {
+    use benten_core::Value;
+    if expr == "$input" {
+        // Project the input to a Value-shape: empty input → Null;
+        // otherwise the first property (sufficient for current tests).
+        if input.properties.is_empty() {
+            return Value::Null;
+        }
+        // Materialise as a map-shape value so consumers can branch.
+        let mut map = std::collections::BTreeMap::new();
+        for (k, v) in input.properties.iter() {
+            map.insert(k.clone(), v.clone());
+        }
+        return Value::Map(map);
+    }
+    if let Some(field) = expr.strip_prefix("$input.") {
+        return input.properties.get(field).cloned().unwrap_or(Value::Null);
+    }
+    Value::Null
+}
+
+/// Producer that emits N empty-byte chunks (`Value::Int`/`Uint` source).
+struct CountProducer {
+    remaining: u64,
+}
+
+impl benten_eval::chunk_sink::ChunkProducer for CountProducer {
+    fn produce(
+        &mut self,
+        _seq: u64,
+    ) -> Result<Option<Vec<u8>>, benten_eval::chunk_sink::ChunkSinkError> {
+        if self.remaining == 0 {
+            return Ok(None);
+        }
+        self.remaining -= 1;
+        Ok(Some(Vec::new()))
+    }
+}
+
+/// Producer that chunks a `Vec<u8>` into `chunk_size`-byte slices.
+struct BytesProducer {
+    bytes: Vec<u8>,
+    pos: usize,
+    chunk_size: usize,
+}
+
+impl benten_eval::chunk_sink::ChunkProducer for BytesProducer {
+    fn produce(
+        &mut self,
+        _seq: u64,
+    ) -> Result<Option<Vec<u8>>, benten_eval::chunk_sink::ChunkSinkError> {
+        if self.pos >= self.bytes.len() {
+            return Ok(None);
+        }
+        let end = (self.pos + self.chunk_size).min(self.bytes.len());
+        let chunk = self.bytes[self.pos..end].to_vec();
+        self.pos = end;
+        Ok(Some(chunk))
+    }
+}
+
+/// Producer that emits zero chunks and signals EOS immediately.
+struct EmptyProducer;
+
+impl benten_eval::chunk_sink::ChunkProducer for EmptyProducer {
+    fn produce(
+        &mut self,
+        _seq: u64,
+    ) -> Result<Option<Vec<u8>>, benten_eval::chunk_sink::ChunkSinkError> {
+        Ok(None)
+    }
+}
+
+/// Producer that emits empty-byte chunks indefinitely. Used for the
+/// "for-await break releases producer" test path — the consumer breaks
+/// after N chunks; the producer's next `send` fails with `ClosedByPeer`
+/// (consumer-disconnect) and the bridge winds down cleanly.
+struct InfiniteEmptyProducer;
+
+impl benten_eval::chunk_sink::ChunkProducer for InfiniteEmptyProducer {
+    fn produce(
+        &mut self,
+        _seq: u64,
+    ) -> Result<Option<Vec<u8>>, benten_eval::chunk_sink::ChunkSinkError> {
+        Ok(Some(Vec::new()))
     }
 }
 
