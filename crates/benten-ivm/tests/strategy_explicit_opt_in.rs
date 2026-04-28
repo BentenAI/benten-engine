@@ -26,7 +26,6 @@ use benten_ivm::testing::testing_construct_view_with_strategy;
 use benten_ivm::views::ContentListingView;
 
 #[test]
-#[ignore = "Phase 2b G8-A pending"]
 fn strategy_selection_respects_explicit_opt_in_only() {
     // Default constructor — never auto-selects B.
     let v = ContentListingView::new("post");
@@ -42,7 +41,6 @@ fn strategy_selection_respects_explicit_opt_in_only() {
 }
 
 #[test]
-#[ignore = "Phase 2b G8-A pending"]
 fn strategy_runtime_adaptation_rejected() {
     // D8-RESOLVED: no runtime mutation. The only way to change strategy is
     // to construct a fresh view. This is a behavioral check: take a view,

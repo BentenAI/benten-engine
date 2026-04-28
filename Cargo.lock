@@ -190,6 +190,7 @@ dependencies = [
  "blake3",
  "criterion",
  "proptest",
+ "serde_json",
  "tempfile",
  "thiserror",
 ]

@@ -25,7 +25,6 @@ use benten_ivm::testing::try_construct_view_with_strategy;
 use benten_ivm::view::ViewError;
 
 #[test]
-#[ignore = "Phase 2b G8-A pending"]
 fn algorithm_b_strategy_c_reserved_no_implementation_in_2b() {
     // Strategy::A + Strategy::B are constructable; Strategy::C is not.
     let a = try_construct_view_with_strategy(Strategy::A);

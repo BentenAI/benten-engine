@@ -24,6 +24,7 @@ use benten_ivm::{Subscriber, View, ViewError, ViewQuery, ViewResult};
 /// the subscriber marks the view stale on panic, and stale views
 /// short-circuit further `update` dispatches, so subsequent events do not
 /// re-panic.
+#[derive(Debug)]
 struct PanickingView {
     stale: bool,
 }
@@ -64,6 +65,7 @@ impl View for PanickingView {
 /// A healthy view that counts `update` calls it has observed. Uses an
 /// `Arc<AtomicUsize>` so the test body can read the counter after giving
 /// the view away as `Box<dyn View>`.
+#[derive(Debug)]
 struct CountingView {
     updates_seen: Arc<AtomicUsize>,
 }

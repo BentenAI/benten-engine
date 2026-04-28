@@ -34,20 +34,23 @@
 
 // THRESHOLD_NS=informational policy=ratio_gate source=§G8-A-b-within-20pct-of-a
 
+// G8-A: `phase_2b_landed` is now enabled by default (see Cargo.toml). The
+// non-landed cfg branch below remains as a guard so building this bench
+// with `--no-default-features` still produces a runnable (no-op) main rather
+// than a hard compile error.
+
 #[cfg(not(feature = "phase_2b_landed"))]
 fn main() {
-    // R3-consolidation no-op: bench body lives in `landed` module below,
-    // gated on `phase_2b_landed` feature. R5 G8-A enables.
+    // No-op: `phase_2b_landed` feature disabled.
 }
 
 #[cfg(feature = "phase_2b_landed")]
-mod landed {
-    #![allow(
-        clippy::unwrap_used,
-        clippy::expect_used,
-        reason = "benches may use unwrap/expect per workspace policy"
-    )]
-
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "benches may use unwrap/expect per workspace policy"
+)]
+mod inner {
     use std::collections::BTreeMap;
     use std::hint::black_box;
 
@@ -59,7 +62,7 @@ mod landed {
         CapabilityGrantsView, ContentListingView, EventDispatchView, GovernanceInheritanceView,
         VersionCurrentView,
     };
-    use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+    use criterion::{BenchmarkId, Criterion, criterion_group};
 
     const SEED_COUNT: u64 = 256;
 
@@ -152,10 +155,10 @@ mod landed {
             &events,
             || Box::new(ContentListingView::new("post")),
             || {
-                Box::new(AlgorithmBView::for_id(
-                    "content_listing",
-                    ContentListingView::definition(),
-                ))
+                Box::new(
+                    AlgorithmBView::for_id("content_listing", ContentListingView::definition())
+                        .expect("content_listing is a known view id"),
+                )
             },
         );
     }
@@ -181,10 +184,13 @@ mod landed {
             &events,
             || Box::new(GovernanceInheritanceView::new()),
             || {
-                Box::new(AlgorithmBView::for_id(
-                    "governance_inheritance",
-                    GovernanceInheritanceView::definition(),
-                ))
+                Box::new(
+                    AlgorithmBView::for_id(
+                        "governance_inheritance",
+                        GovernanceInheritanceView::definition(),
+                    )
+                    .expect("governance_inheritance is a known view id"),
+                )
             },
         );
     }
@@ -209,10 +215,10 @@ mod landed {
             &events,
             || Box::new(VersionCurrentView::new()),
             || {
-                Box::new(AlgorithmBView::for_id(
-                    "version_current",
-                    VersionCurrentView::definition(),
-                ))
+                Box::new(
+                    AlgorithmBView::for_id("version_current", VersionCurrentView::definition())
+                        .expect("version_current is a known view id"),
+                )
             },
         );
     }
@@ -240,10 +246,10 @@ mod landed {
             &events,
             || Box::new(CapabilityGrantsView::new()),
             || {
-                Box::new(AlgorithmBView::for_id(
-                    "capability_grants",
-                    CapabilityGrantsView::definition(),
-                ))
+                Box::new(
+                    AlgorithmBView::for_id("capability_grants", CapabilityGrantsView::definition())
+                        .expect("capability_grants is a known view id"),
+                )
             },
         );
     }
@@ -271,10 +277,10 @@ mod landed {
             &events,
             || Box::new(EventDispatchView::new()),
             || {
-                Box::new(AlgorithmBView::for_id(
-                    "event_dispatch",
-                    EventDispatchView::definition(),
-                ))
+                Box::new(
+                    AlgorithmBView::for_id("event_dispatch", EventDispatchView::definition())
+                        .expect("event_dispatch is a known view id"),
+                )
             },
         );
     }
@@ -287,11 +293,7 @@ mod landed {
         bench_capability_grants,
         bench_event_handler_dispatch,
     );
-    // criterion_main expands to a `pub fn main()` inside this mod.
-    criterion_main!(benches);
 }
 
 #[cfg(feature = "phase_2b_landed")]
-fn main() {
-    landed::main();
-}
+criterion::criterion_main!(inner::benches);

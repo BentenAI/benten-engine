@@ -454,6 +454,14 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** IVM view read (`View::read` on any of the five Phase-1 views)
 - **Phase:** 1
 
+### E_IVM_STRATEGY_NOT_IMPLEMENTED
+
+- **Message:** "IVM strategy `{strategy:?}` is reserved but not implemented in this phase (deferred to {deferred_to_phase})"
+- **Context:** `{ strategy: "A" | "B" | "C", deferred_to_phase: string }`
+- **Fix:** Phase 2b ships `Strategy::A` (the 5 Phase-1 hand-written views) + `Strategy::B` (the generalized Algorithm B). `Strategy::C` (Z-set / DBSP cancellation) is reserved for Phase 3+ — the variant exists so the catalog of options is complete and stable, but constructing a `Strategy::C` view via `benten_ivm::testing::try_construct_view_with_strategy` returns this typed error rather than silently falling back. Pick `Strategy::B` for new user-registered views; pick `Strategy::A` for the 5 hand-written baselines (Rust-only, defaults applied automatically).
+- **Thrown at:** IVM view registration (`benten_ivm::testing::try_construct_view_with_strategy`)
+- **Phase:** 2b (introduced)
+
 ### E_VERSION_UNKNOWN_PRIOR
 
 - **Message:** "Prior head was never observed by this anchor: {supplied}"

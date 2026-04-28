@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 4fcccaadd3b8ab25ad723dd5323bbef730de4644a68fd90223128c2ef6981ec4 # shrinks to events = [ChangeEvent { cid: Cid([1, 113, 30, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), labels: ["post"], kind: Created, tx_id: 1, actor_cid: None, handler_cid: None, capability_grant_cid: None, node: Some(Node { labels: ["post"], properties: {"createdAt": Int(0), "title": Text("a")}, anchor_id: None }), edge_endpoints: None }]

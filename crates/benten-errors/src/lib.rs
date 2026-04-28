@@ -158,6 +158,12 @@ pub enum ErrorCode {
     /// IVM view was queried with a filter pattern the view does not maintain.
     /// Runtime-query-shape error distinct from `E_INV_REGISTRATION`.
     IvmPatternMismatch,
+    /// Reserved IVM strategy variant requested but not implemented in this
+    /// phase. Phase 2b ships `Strategy::A` (hand-written) + `Strategy::B`
+    /// (Algorithm B); `Strategy::C` (Z-set / DBSP cancellation) is reserved
+    /// for Phase 3+. Surfaces from
+    /// `benten_ivm::testing::try_construct_view_with_strategy(Strategy::C)`.
+    IvmStrategyNotImplemented,
     /// Caller-supplied prior head was never observed by the version anchor.
     /// Surfaces from the prior-head-threaded `benten_core::version::append_version`.
     VersionUnknownPrior,
@@ -344,6 +350,7 @@ impl ErrorCode {
             ErrorCode::UnknownView => "E_UNKNOWN_VIEW",
             ErrorCode::NotImplemented => "E_NOT_IMPLEMENTED",
             ErrorCode::IvmPatternMismatch => "E_IVM_PATTERN_MISMATCH",
+            ErrorCode::IvmStrategyNotImplemented => "E_IVM_STRATEGY_NOT_IMPLEMENTED",
             ErrorCode::VersionUnknownPrior => "E_VERSION_UNKNOWN_PRIOR",
             ErrorCode::HostNotFound => "E_HOST_NOT_FOUND",
             ErrorCode::HostWriteConflict => "E_HOST_WRITE_CONFLICT",
@@ -458,6 +465,7 @@ impl ErrorCode {
             | ErrorCode::HostBackendUnavailable
             | ErrorCode::IvmViewStale
             | ErrorCode::IvmPatternMismatch
+            | ErrorCode::IvmStrategyNotImplemented
             | ErrorCode::InvImmutability
             | ErrorCode::InvSystemZone
             | ErrorCode::InvAttribution
@@ -561,6 +569,7 @@ impl ErrorCode {
             "E_UNKNOWN_VIEW" => ErrorCode::UnknownView,
             "E_NOT_IMPLEMENTED" => ErrorCode::NotImplemented,
             "E_IVM_PATTERN_MISMATCH" => ErrorCode::IvmPatternMismatch,
+            "E_IVM_STRATEGY_NOT_IMPLEMENTED" => ErrorCode::IvmStrategyNotImplemented,
             "E_VERSION_UNKNOWN_PRIOR" => ErrorCode::VersionUnknownPrior,
             "E_HOST_NOT_FOUND" => ErrorCode::HostNotFound,
             "E_HOST_WRITE_CONFLICT" => ErrorCode::HostWriteConflict,

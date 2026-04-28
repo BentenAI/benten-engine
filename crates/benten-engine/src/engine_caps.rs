@@ -95,6 +95,11 @@ impl Engine {
             view_id: view_id.to_string(),
             input_pattern_label: input_pattern_label.clone(),
             output_label: "system:IVMView".to_string(),
+            // Phase 2b G8-A / D8-RESOLVED: hand-written canonical-id views
+            // ALWAYS take Strategy::A (the 5-view fate hybrid keep-all-
+            // parallel; Algorithm B is opt-in + ADDITIVE). User-registered
+            // views default to Strategy::B per `Engine::create_user_view`.
+            strategy: benten_ivm::Strategy::A,
         };
         let node = def.as_node();
         let cid = self.privileged_put_node(&node)?;
