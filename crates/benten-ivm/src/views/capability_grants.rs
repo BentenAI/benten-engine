@@ -78,6 +78,7 @@ impl CapabilityGrantsView {
             view_id: VIEW_ID.to_string(),
             input_pattern_label: Some("system:CapabilityGrant".to_string()),
             output_label: "system:IVMView".to_string(),
+            strategy: crate::Strategy::A,
         }
     }
 

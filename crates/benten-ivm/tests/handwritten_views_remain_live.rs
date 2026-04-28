@@ -26,7 +26,6 @@ use benten_ivm::views::{
 };
 
 #[test]
-#[ignore = "Phase 2b G8-A pending"]
 fn all_5_handwritten_views_remain_live_as_strategy_a() {
     // Constructability — each of the 5 is still a real type at the
     // documented re-export path.

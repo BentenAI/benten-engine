@@ -131,7 +131,6 @@ fn replay_and_compare<F, R>(
 // ---------------------------------------------------------------------------
 
 #[test]
-#[ignore = "Phase 2b G8-A pending"]
 fn algorithm_b_correctness_against_capability_grants_view() {
     let a: Box<dyn View> = Box::new(CapabilityGrantsView::new());
     let b: Box<dyn View> = Box::new(AlgorithmBView::for_id(
@@ -181,7 +180,6 @@ fn algorithm_b_correctness_against_capability_grants_view() {
 // ---------------------------------------------------------------------------
 
 #[test]
-#[ignore = "Phase 2b G8-A pending"]
 fn algorithm_b_correctness_against_event_handler_dispatch_view() {
     let a: Box<dyn View> = Box::new(EventDispatchView::new());
     let b: Box<dyn View> = Box::new(AlgorithmBView::for_id(
@@ -230,7 +228,6 @@ fn algorithm_b_correctness_against_event_handler_dispatch_view() {
 // ---------------------------------------------------------------------------
 
 #[test]
-#[ignore = "Phase 2b G8-A pending"]
 fn algorithm_b_correctness_against_content_listing_view() {
     // R3-D ownership disambiguation per landscape §10 row
     // `algorithm_b_correctness_against_content_listing_view` — R3-D iterates
@@ -291,7 +288,6 @@ fn algorithm_b_correctness_against_content_listing_view() {
 // ---------------------------------------------------------------------------
 
 #[test]
-#[ignore = "Phase 2b G8-A pending"]
 fn algorithm_b_correctness_against_governance_inheritance_view() {
     let a: Box<dyn View> = Box::new(GovernanceInheritanceView::new());
     let b: Box<dyn View> = Box::new(AlgorithmBView::for_id(
@@ -342,7 +338,6 @@ fn algorithm_b_correctness_against_governance_inheritance_view() {
 // ---------------------------------------------------------------------------
 
 #[test]
-#[ignore = "Phase 2b G8-A pending"]
 fn algorithm_b_correctness_against_version_current_view() {
     let a: Box<dyn View> = Box::new(VersionCurrentView::new());
     let b: Box<dyn View> = Box::new(AlgorithmBView::for_id(

@@ -22,7 +22,6 @@ use benten_ivm::views::{
 };
 
 #[test]
-#[ignore = "Phase 2b G8-A pending"]
 fn strategy_enum_a_b_c_present() {
     // D8-RESOLVED: enum has exactly three variants — A (hand-written),
     // B (generalized Algorithm B), C (Z-set / DBSP cancellation, reserved
@@ -44,7 +43,6 @@ fn strategy_enum_a_b_c_present() {
 }
 
 #[test]
-#[ignore = "Phase 2b G8-A pending"]
 fn strategy_default_is_a_for_handwritten_views() {
     // D8-RESOLVED: every Phase-1 hand-written view returns `Strategy::A`
     // from the new `View::strategy()` default-method. This is the contract

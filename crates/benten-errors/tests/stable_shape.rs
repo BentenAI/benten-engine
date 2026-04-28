@@ -74,6 +74,7 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::UnknownView,
     ErrorCode::NotImplemented,
     ErrorCode::IvmPatternMismatch,
+    ErrorCode::IvmStrategyNotImplemented,
     ErrorCode::VersionUnknownPrior,
     // Phase-2a G1-B HostError discriminants (PHASE_2A_RESERVED_CODES). All
     // five reserved for Phase-3 sync fires but already carry catalog
@@ -145,8 +146,12 @@ fn variant_count_is_pinned() {
     // 16 additions already had `as_str` / `as_static_str` / `from_str`
     // coverage in `benten-errors/src/lib.rs` — the test list just hadn't
     // been updated. Post-sync: 42 + 16 = 58.
+    //
+    // Phase 2b G8-A adds `IvmStrategyNotImplemented` for the reserved
+    // `Strategy::C` variant — Algorithm B ships A+B, C is Phase-3+ deferred.
+    // Post-G8-A: 58 + 1 = 59.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 58,
+        CATALOG_VARIANT_COUNT, 59,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

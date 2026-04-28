@@ -18,10 +18,12 @@ workspace = true
 bench = false
 
 [features]
-default = []
-# `phase_2b_landed` — see benten-eval/Cargo.toml for the rationale. Gates
-# Phase-2b R3 red-phase test + bench files that import R5-pending IVM
-# surfaces (`benten_ivm::Strategy`, `benten_ivm::algorithm_b::AlgorithmBView`).
+# G8-A (Phase 2b R5): flipped `phase_2b_landed` ON by default now that the
+# `Strategy`, `algorithm_b::AlgorithmBView`, and `testing::*` surfaces have
+# landed. Pre-G8-A this feature gated R3 red-phase tests against
+# pre-implementation APIs.
+default = ["phase_2b_landed"]
+# `phase_2b_landed` — see benten-eval/Cargo.toml for the rationale.
 phase_2b_landed = []
 
 [dependencies]
@@ -29,6 +31,10 @@ benten-core = { path = "../benten-core" }
 benten-errors = { workspace = true }
 benten-graph = { path = "../benten-graph" }
 thiserror = { workspace = true }
+# G8-A: testing module's `criterion_estimates_mean_ns` parses Criterion
+# output for the bench gate. Behind `phase_2b_landed`, but listed
+# unconditionally to keep the dependency graph stable across feature flips.
+serde_json = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

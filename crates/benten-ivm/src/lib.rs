@@ -36,11 +36,15 @@
 
 extern crate alloc;
 
+pub mod algorithm_b;
 pub mod budget;
+pub mod strategy;
 pub mod subscriber;
+pub mod testing;
 pub mod view;
 
 pub use budget::BudgetTracker;
+pub use strategy::Strategy;
 pub use subscriber::{ChangeStreamSubscriber, Subscriber};
 pub use view::{
     IvmError, View, ViewBudget, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState,

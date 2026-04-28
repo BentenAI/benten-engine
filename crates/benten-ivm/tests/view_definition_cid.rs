@@ -16,7 +16,6 @@
 use benten_ivm::{Strategy, ViewDefinition};
 
 #[test]
-#[ignore = "Phase 2b G8-A pending"]
 fn view_definition_carries_strategy_field_in_cid() {
     let def_a = ViewDefinition {
         view_id: "content_listing".into(),

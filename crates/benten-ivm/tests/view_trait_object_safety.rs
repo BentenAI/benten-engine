@@ -19,7 +19,6 @@ use benten_ivm::views::{
 };
 
 #[test]
-#[ignore = "Phase 2b G8-A pending"]
 fn view_trait_strategy_default_method_preserves_object_safety() {
     // The cast itself is the assertion: if `View` were not object-safe,
     // `Box<dyn View>` would not type-check.

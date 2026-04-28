@@ -65,6 +65,7 @@ impl VersionCurrentView {
             view_id: VIEW_ID.into(),
             input_pattern_label: Some("NEXT_VERSION".into()),
             output_label: "system:IVMView".into(),
+            strategy: crate::Strategy::A,
         }
     }
 

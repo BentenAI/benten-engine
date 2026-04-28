@@ -71,6 +71,7 @@ impl EventDispatchView {
             view_id: VIEW_ID.to_string(),
             input_pattern_label: Some("SubscribesTo".to_string()),
             output_label: "system:IVMView".to_string(),
+            strategy: crate::Strategy::A,
         }
     }
 
