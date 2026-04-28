@@ -7,13 +7,13 @@
 //! `KVBackend` impl on the same op sequences (see
 //! `tests/in_memory_backend_equiv_to_redb.rs`).
 //!
-//! ## Scope vs. [`RedbBackend`]
+//! ## Scope vs. [`crate::RedbBackend`]
 //!
 //! `InMemoryBackend` implements ONLY the [`KVBackend`] trait. It is **not**
 //! a [`crate::store::NodeStore`] or [`crate::store::EdgeStore`] — those
 //! traits carry per-CID change-event subscription, index maintenance, and
 //! the `WriteContext` capability-policy hook, which are
-//! [`RedbBackend`]-specific concerns wired into the engine's
+//! [`crate::RedbBackend`]-specific concerns wired into the engine's
 //! `Arc<RedbBackend>` field. Wiring `Engine::open(":memory:")` to a
 //! transient store therefore goes through redb's own `InMemoryBackend`
 //! (a memory-backed redb page store) so the engine retains full
