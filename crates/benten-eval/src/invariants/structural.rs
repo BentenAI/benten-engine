@@ -368,7 +368,17 @@ pub(crate) fn validate_builder(
     // (default 4). Runtime check (TRANSFORM-computed SANDBOX targets)
     // lives in `invariants::sandbox_depth::check_runtime_entry` and
     // fires from G7-A's SANDBOX primitive executor at every entry.
-    if let Err(depth_err) = crate::invariants::sandbox_depth::validate_registration(sn, config) {
+    //
+    // Skipped if Cycle was already detected (matching the Inv-2 pattern
+    // below): the iterative DFS walker assumes the snapshot is a DAG
+    // (Inv-1 enforced first). On a cyclic snapshot in aggregate mode
+    // (where Inv-1 detection does NOT short-circuit) the walker
+    // Visit→Compute oscillates without termination — the
+    // `register_returns_inv_registration_on_multiple_violations` test
+    // wedged at >180s on every CI runner before this gate.
+    if !violations.contains(&InvariantViolation::Cycle)
+        && let Err(depth_err) = crate::invariants::sandbox_depth::validate_registration(sn, config)
+    {
         violations.push(InvariantViolation::SandboxDepth);
         if !aggregate {
             return Err(depth_err);
