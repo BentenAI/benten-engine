@@ -69,6 +69,15 @@ jobs:
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
+      - name: Free disk space (Linux runners only)
+        # Wave-8b: workspace grew enough that linux x86_64 + arm64 stable
+        # legs hit `ld: SIGBUS` / `No space left on device` during link
+        # of the 100+ test binaries. Composite action removes ~25-30GB
+        # of unused tooling. macOS legs are unaffected (they have more
+        # free disk by default).
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/free-disk-space
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master (no semver tags; Dependabot rotates frequently)
         with:
