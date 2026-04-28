@@ -468,6 +468,47 @@ impl RedbBackend {
         Self::open_or_create(path)
     }
 
+    /// Construct a `RedbBackend` over redb's native in-memory page store.
+    ///
+    /// Used by `Engine::open(":memory:")` (HANDOFF §3.F wave-5) to satisfy
+    /// the 9-of-10 `packages/engine/test/*.test.ts` files that drive the
+    /// engine without a filesystem path. The returned backend has full
+    /// `RedbBackend` semantics (Inv-11 system-zone gating, Inv-13
+    /// immutability cache, change-event publishing, the transaction
+    /// primitive, MVCC reads) — it just persists nothing across process
+    /// restarts.
+    ///
+    /// Durability is forced to [`DurabilityMode::Async`] (redb
+    /// `Durability::None`) because there is no disk to fsync to; passing
+    /// any other mode would just collapse to Async anyway.
+    ///
+    /// # Errors
+    /// Returns [`GraphError::RedbSource`] if redb cannot construct the
+    /// in-memory database (extremely unlikely — only happens on allocator
+    /// failure inside the redb cache).
+    pub fn open_in_memory() -> Result<Self, GraphError> {
+        let db = Database::builder()
+            .create_with_backend(redb::backends::InMemoryBackend::new())
+            .map_err(redb::Error::from)?;
+        let durability = DurabilityMode::Async;
+        let backend = Self {
+            db,
+            durability: to_redb_durability(durability),
+            configured_durability: durability,
+            #[cfg(any(test, feature = "testing"))]
+            last_durability_by_label: Arc::new(Mutex::new(HashMap::new())),
+            immutability_cache: Arc::new(Mutex::new(CidExistenceCache::new())),
+            #[cfg(any(test, feature = "testing"))]
+            test_event_log: Arc::new(Mutex::new(Vec::new())),
+            subscribers: Arc::new(Mutex::new(Vec::new())),
+            tx_flag: Arc::new(Mutex::new(false)),
+            next_tx_id: Arc::new(AtomicU64::new(1)),
+            writes_committed: Arc::new(AtomicU64::new(0)),
+        };
+        backend.ensure_tables()?;
+        Ok(backend)
+    }
+
     /// Wave-1 mini-review SEVERE-2: current value of the storage-layer
     /// commit counter. Bumped once per successful
     /// `put_node_with_context` commit (dedup early returns do NOT

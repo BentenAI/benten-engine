@@ -32,6 +32,7 @@ use crate::store::subgraph_key;
 
 pub mod backend;
 pub mod immutability;
+pub mod in_memory_backend;
 pub(crate) mod indexes;
 pub mod mutex_ext;
 pub mod redb_backend;
@@ -39,6 +40,7 @@ pub mod store;
 pub mod transaction;
 
 pub use backend::{BatchOp, DurabilityMode, KVBackend, ScanIter, ScanResult};
+pub use in_memory_backend::InMemoryBackend;
 pub use mutex_ext::{MutexExt, RwLockExt};
 pub use redb_backend::RedbBackend;
 pub use store::{ChangeEvent, ChangeKind, ChangeSubscriber, EdgeStore, NodeStore};
