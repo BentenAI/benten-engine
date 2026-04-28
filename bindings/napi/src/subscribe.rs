@@ -108,6 +108,37 @@ pub(crate) fn on_change_adapter(
         .map_err(engine_err)
 }
 
+/// ts-r4-2 mirror for SUBSCRIBE (mini-review cr-g6b-mr-5): synthetic
+/// subscription factory for vitest harnesses verifying the unsubscribe
+/// + dedup state machinery without depending on G6-A's change-stream
+/// port. Mirrors `testing_open_stream_for_test_adapter` for STREAM.
+///
+/// cfg-gated under `cfg(any(test, feature = "test-helpers"))` per
+/// Phase-2a sec-r6r2-02 discipline so the production cdylib does NOT
+/// compile this surface in.
+#[cfg(any(test, feature = "test-helpers"))]
+pub(crate) fn testing_open_subscription_for_test_adapter(
+    engine: &InnerEngine,
+    pattern: &str,
+    cursor_raw: &serde_json::Value,
+) -> napi::Result<Subscription> {
+    let cursor = parse_cursor(cursor_raw)?;
+    Ok(engine.testing_open_subscription_for_test(pattern, cursor))
+}
+
+/// ts-r4-2 mirror (mini-review cr-g6b-mr-5): synthetic event delivery
+/// path used by harness tests to exercise the dedup state machine
+/// without a real change-stream port. Returns `true` if the synthetic
+/// delivery was applied, `false` if it was deduped.
+#[cfg(any(test, feature = "test-helpers"))]
+pub(crate) fn testing_deliver_synthetic_event_for_test_adapter(
+    engine: &InnerEngine,
+    sub: &Subscription,
+    seq: u64,
+) -> bool {
+    engine.testing_deliver_synthetic_event_for_test(sub, seq)
+}
+
 /// Render a [`Subscription`] handle as the JSON shape the TS wrapper
 /// expects. Carries the active flag, pattern, and current
 /// `max_delivered_seq` so JS-side code can verify the dedup state

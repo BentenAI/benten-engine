@@ -49,17 +49,17 @@ mod integration {
     // R5 implementer briefs flip the feature on per-group as their
     // surfaces land. See `.addl/phase-2b/r3-consolidation.md` §4.
     //
-    // R3-A (G6-B integration) — STREAM + SUBSCRIBE engine-shape integration:
-    #[cfg(feature = "phase_2b_landed")]
+    // R3-A (G6-B integration) — STREAM + SUBSCRIBE engine-shape integration.
+    // G6-B (mini-review cr-g6b-mr-2 fix-pass): ungated. The module bodies
+    // are rewritten to align with G6-B's actual implemented surface; tests
+    // that can pass against the G6-B stub are live, tests that require
+    // G6-A's executor body are `#[ignore]`d with explicit pending-on
+    // markers per the file headers.
     pub mod engine_stream; // G6-B exit-1 + dx-r1-2b STREAM
-    #[cfg(feature = "phase_2b_landed")]
     pub mod engine_subscribe; // G6-B exit-1 + dx-r1-2b SUBSCRIBE
-    #[cfg(feature = "phase_2b_landed")]
-    pub mod stream_composition; // G6-B plan §4 STREAM integration
-    #[cfg(feature = "phase_2b_landed")]
+    pub mod stream_composition; // G6-B plan §4 STREAM integration (all `#[ignore]`d pending G6-A)
     pub mod stream_napi; // G6-B streaming-systems must_pass napi async iter
-    #[cfg(feature = "phase_2b_landed")]
-    pub mod subscribe_emit; // G6-B plan §4 SUBSCRIBE integration
+    pub mod subscribe_emit; // G6-B plan §4 SUBSCRIBE integration (all `#[ignore]`d pending G6-A)
 
     // R3-B (G7-A integration) — SANDBOX composition:
     #[cfg(feature = "phase_2b_landed")]

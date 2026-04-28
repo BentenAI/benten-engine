@@ -98,6 +98,11 @@ mod napi_surface {
     };
     use crate::subgraph::{json_to_subgraph_spec, outcome_to_json};
     use crate::subscribe::{on_change_adapter, subscription_to_json};
+    #[cfg(any(test, feature = "test-helpers"))]
+    use crate::subscribe::{
+        testing_deliver_synthetic_event_for_test_adapter,
+        testing_open_subscription_for_test_adapter,
+    };
     use crate::trace::trace_to_json;
     use crate::view::{extract_view_id, parse_user_view_spec};
     use crate::wait::{
@@ -720,6 +725,174 @@ mod napi_surface {
         ) -> napi::Result<serde_json::Value> {
             let sub = on_change_adapter(&self.inner, &pattern, &cursor)?;
             Ok(subscription_to_json(&sub))
+        }
+
+        /// ts-r4-2 mirror for SUBSCRIBE (mini-review cr-g6b-mr-5):
+        /// vitest-harness factory mirroring `testingOpenStreamForTest`.
+        /// Construct a [`SubscriptionJs`] handle wired against the
+        /// engine's synthetic delivery path so harness tests can
+        /// exercise the unsubscribe + dedup state machinery without
+        /// G6-A's change-stream port.
+        ///
+        /// `cursor` shape mirrors `on_change`'s third argument
+        /// (`null` / `{ kind: "latest" }` / `{ kind: "sequence", seq }`
+        /// / `{ kind: "persistent", subscriberId }`).
+        ///
+        /// Symbol presence is pinned by the symmetric assertion in
+        /// `bindings/napi/test/stream_napi_async_iterator_back_pressure.test.ts`.
+        ///
+        /// The underlying `benten_engine::Engine::testing_open_subscription_for_test`
+        /// is cfg-gated under `cfg(any(test, feature = "test-helpers"))`
+        /// per Phase-2a sec-r6r2-02 discipline. This napi method is
+        /// emitted unconditionally; the body fails to resolve unless
+        /// the cdylib is built with `--features test-helpers`.
+        #[napi(js_name = "testingOpenSubscriptionForTest")]
+        pub fn testing_open_subscription_for_test(
+            &self,
+            pattern: String,
+            cursor: serde_json::Value,
+        ) -> napi::Result<SubscriptionJs> {
+            #[cfg(any(test, feature = "test-helpers"))]
+            {
+                let sub =
+                    testing_open_subscription_for_test_adapter(&self.inner, &pattern, &cursor)?;
+                Ok(SubscriptionJs::from_inner(sub))
+            }
+            #[cfg(not(any(test, feature = "test-helpers")))]
+            {
+                let _ = (pattern, cursor);
+                Err(napi::Error::new(
+                    Status::GenericFailure,
+                    "E_PRIMITIVE_NOT_IMPLEMENTED: testingOpenSubscriptionForTest \
+                     requires the cdylib to be built with `--features test-helpers` \
+                     (vitest harness build only). Production cdylib consumers \
+                     should never reach this surface.",
+                ))
+            }
+        }
+
+        /// ts-r4-2 mirror for SUBSCRIBE (mini-review cr-g6b-mr-5):
+        /// synthetic delivery path used by harness tests to exercise
+        /// the dedup machinery without a real change-stream port.
+        /// Bumps the subscription's `max_delivered_seq` if `seq >
+        /// max_delivered_seq` (the same condition the production
+        /// delivery path uses); returns `true` if the synthetic
+        /// delivery was applied, `false` if it was deduped.
+        ///
+        /// cfg-gated identically to `testingOpenSubscriptionForTest`.
+        #[napi(js_name = "testingDeliverSyntheticEventForTest")]
+        pub fn testing_deliver_synthetic_event_for_test(
+            &self,
+            sub: &SubscriptionJs,
+            seq: u32,
+        ) -> napi::Result<bool> {
+            #[cfg(any(test, feature = "test-helpers"))]
+            {
+                let g = sub.inner.lock().map_err(|_| {
+                    napi::Error::new(
+                        Status::GenericFailure,
+                        "SubscriptionJs: internal lock poisoned",
+                    )
+                })?;
+                Ok(testing_deliver_synthetic_event_for_test_adapter(
+                    &self.inner,
+                    &g,
+                    u64::from(seq),
+                ))
+            }
+            #[cfg(not(any(test, feature = "test-helpers")))]
+            {
+                let _ = (sub, seq);
+                Err(napi::Error::new(
+                    Status::GenericFailure,
+                    "E_PRIMITIVE_NOT_IMPLEMENTED: testingDeliverSyntheticEventForTest \
+                     requires the cdylib to be built with `--features test-helpers` \
+                     (vitest harness build only).",
+                ))
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // SubscriptionJs — napi class wrapping `benten_engine::Subscription`
+    // ---------------------------------------------------------------------
+
+    /// JS-side subscription handle. Mirrors
+    /// [`benten_engine::Subscription`] across the napi boundary for
+    /// the cfg-gated test-helper factory + delivery path. Production
+    /// SUBSCRIBE consumers go through `engine.onChange` which returns
+    /// the JSON shape via `subscription_to_json` (the JSON shape is
+    /// the locked surface; this class exists for symmetry with
+    /// `StreamHandleJs` per mini-review cr-g6b-mr-5 only).
+    ///
+    /// The handle is held behind a `Mutex` so the `&self`-taking napi
+    /// methods can share it across JS worker threads.
+    #[napi]
+    pub struct SubscriptionJs {
+        inner: std::sync::Mutex<benten_engine::Subscription>,
+    }
+
+    impl SubscriptionJs {
+        pub(crate) fn from_inner(sub: benten_engine::Subscription) -> Self {
+            Self {
+                inner: std::sync::Mutex::new(sub),
+            }
+        }
+    }
+
+    #[napi]
+    impl SubscriptionJs {
+        /// `true` while the subscription is registered with the engine.
+        /// Flips to `false` after `unsubscribe()` or when the handle
+        /// drops.
+        #[napi(js_name = "isActive")]
+        pub fn is_active(&self) -> napi::Result<bool> {
+            let g = self.inner.lock().map_err(|_| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    "SubscriptionJs: internal lock poisoned",
+                )
+            })?;
+            Ok(g.is_active())
+        }
+
+        /// Pattern the subscription was registered with.
+        #[napi]
+        pub fn pattern(&self) -> napi::Result<String> {
+            let g = self.inner.lock().map_err(|_| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    "SubscriptionJs: internal lock poisoned",
+                )
+            })?;
+            Ok(g.pattern().to_string())
+        }
+
+        /// Highest engine-assigned sequence number observed by this
+        /// subscription's delivery path. `0` before the first event
+        /// lands.
+        #[napi(js_name = "maxDeliveredSeq")]
+        pub fn max_delivered_seq(&self) -> napi::Result<u32> {
+            let g = self.inner.lock().map_err(|_| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    "SubscriptionJs: internal lock poisoned",
+                )
+            })?;
+            Ok(u32::try_from(g.max_delivered_seq()).unwrap_or(u32::MAX))
+        }
+
+        /// Explicitly release the subscription. Idempotent.
+        #[napi]
+        pub fn unsubscribe(&self) -> napi::Result<()> {
+            let g = self.inner.lock().map_err(|_| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    "SubscriptionJs: internal lock poisoned",
+                )
+            })?;
+            g.unsubscribe();
+            Ok(())
         }
     }
 

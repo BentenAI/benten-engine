@@ -1552,6 +1552,22 @@ build @benten/engine-native with `--features test-helpers`",
    * API surface. Within-key strict ordering, cross-key unordered.
    * Bounded retention window (1000 events OR 24h) for persistent
    * cursors. Cap-check at delivery.
+   *
+   * # Pre-G6-A behavior (mini-review cr-g6b-mr-4)
+   *
+   * Until G6-A's change-stream port + executor body land, no real
+   * change events are delivered. To match the rest of G6-B's stub-call
+   * pattern (`engine.callStream` returns a `StreamHandle` whose first
+   * `next()` surfaces `E_PRIMITIVE_NOT_IMPLEMENTED` rather than
+   * silently doing nothing), this wrapper fires the supplied
+   * `callback` exactly once asynchronously with a sentinel
+   * `(seq: 0, chunk: Buffer.alloc(0))` AND surfaces a
+   * `console.warn` the first time `onChange` is invoked per process.
+   * Consumers can detect the pre-G6-A no-op condition by inspecting
+   * the returned `Subscription.active` flag (`false` pre-G6-A) or
+   * observing the sentinel `(seq: 0, payload.length === 0)` delivery.
+   * Once G6-A merges, the sentinel + warn are dropped and real
+   * `(seq, chunk)` events flow.
    */
   public onChange(
     pattern: string,
@@ -1571,12 +1587,22 @@ build @benten/engine-native with `--features test-helpers`",
     } catch (err) {
       throw mapNativeError(err);
     }
-    // Pre-G6-A: callback is dropped because the change-stream port
-    // isn't wired across napi yet; the wrapper exposes the
-    // Subscription shape so consumer code compiles end-to-end.
-    // Post-G6-A: this wrapper threads the callback through a
-    // `napi::ThreadsafeFunction` registered by the napi adapter.
-    void callback;
+    // Pre-G6-A stub-call pattern: fire the callback once asynchronously
+    // with a sentinel zero-length chunk so the dropped-callback
+    // condition is observable rather than silent. Once G6-A's
+    // change-stream port + executor body land, the napi adapter takes
+    // a `napi::ThreadsafeFunction` wrapping `callback` and the sentinel
+    // is replaced by real per-event delivery.
+    onChangePreG6AWarnOnce();
+    queueMicrotask(() => {
+      try {
+        callback(0, Buffer.alloc(0));
+      } catch {
+        // Swallow consumer-side errors — the sentinel delivery is a
+        // surface-presence pin, not a real event the consumer is
+        // expected to act on.
+      }
+    });
     return makeSubscription(raw);
   }
 }
@@ -1729,6 +1755,24 @@ function ensureParentDir(path: string): void {
     // Fall through — let the native open surface the real error via
     // mapNativeError rather than obscure it with an mkdir failure.
   }
+}
+
+/**
+ * Pre-G6-A one-shot console.warn for `engine.onChange`. The sentinel
+ * delivery the wrapper schedules pairs with this warning so harness
+ * tests + casual callers learn that no real change events are flowing
+ * yet (avoids the "aspirational prose, dead code" antipattern flagged
+ * in mini-review cr-g6b-mr-4). Removed when G6-A's change-stream port
+ * lands.
+ */
+let _onChangePreG6AWarned = false;
+function onChangePreG6AWarnOnce(): void {
+  if (_onChangePreG6AWarned) return;
+  _onChangePreG6AWarned = true;
+  // eslint-disable-next-line no-console
+  console.warn(
+    "engine.onChange: pre-G6-A stub — no real change events are delivered yet (G6-A's change-stream port + executor lands separately on `phase-2b/g6/a-stream-subscribe-core`). The supplied callback will fire ONCE with a sentinel `(seq: 0, payload.length === 0)` so the no-op condition is observable rather than silent.",
+  );
 }
 
 /**

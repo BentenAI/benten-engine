@@ -1,30 +1,36 @@
-//! R3-A red-phase: SUBSCRIBE composes with EMIT (G6-B).
+//! G6-B: SUBSCRIBE composes with EMIT (plan §4 SUBSCRIBE integration).
 //!
-//! Pin source: plan §4 SUBSCRIBE — subscriber-side strategy where a
-//! subscribed handler issues EMIT in response to change events.
-//! Phase 2b TDD red-phase. Owner: R3-A.
+//! # Status
+//!
+//! `#[ignore]`d pending G6-A executor wiring; tracks G6-A's
+//! `phase-2b/g6/a-stream-subscribe-core` PR. The composition requires
+//! G6-A's change-stream port + the SUBSCRIBE executor body to actually
+//! deliver change events to the subscribed handler so it can EMIT in
+//! response. Pre-G6-A `is_active() == false` so no events would fire.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_engine::testing::{
-    testing_engine_with_subscribe_emit_chain, testing_subscribe_simulate_write,
-};
+use std::sync::Arc;
 
-/// SUBSCRIBE → handler → EMIT: a subscribed handler that responds to a
-/// change event by EMITting (subscriber-side strategy). End-to-end the EMIT
-/// must be observable through the engine's emit-bus.
+use benten_engine::{Engine, OnChangeCallback};
+
+fn open_engine() -> (Engine, tempfile::TempDir) {
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::open(dir.path().join("engine.redb")).unwrap();
+    (engine, dir)
+}
+
 #[test]
-#[ignore = "Phase 2b G6-B pending — SUBSCRIBE + EMIT composition"]
+#[ignore = "pending G6-A executor wiring; tracks G6-A's `phase-2b/g6/a-stream-subscribe-core` PR"]
 fn subscribe_composes_with_emit_subscriber_side_strategy() {
-    let (mut engine, handler_id, emit_bus) =
-        testing_engine_with_subscribe_emit_chain("/orders/*", "order_event");
-
-    testing_subscribe_simulate_write(&mut engine, "/orders/789", serde_json::json!({"total": 42}));
-
-    let emitted = emit_bus
-        .next_blocking(std::time::Duration::from_millis(200))
-        .expect("subscribed handler must emit in response to matching write");
-    assert_eq!(emitted.event_name, "order_event");
-    assert_eq!(emitted.payload["total"], 42);
-    let _ = handler_id;
+    // SUBSCRIBE → handler → EMIT: a subscribed handler that responds
+    // to a change event by EMITting (subscriber-side strategy). Requires
+    // the change-stream port + executor body to drive the chain.
+    let (engine, _d) = open_engine();
+    let cb: OnChangeCallback = Arc::new(|_seq, _chunk| {});
+    let _sub = engine
+        .on_change("/orders/*", cb)
+        .expect("on_change registers");
+    // Post-G6-A: write to /orders/789; assert the EMIT bus observes the
+    // subscribed handler's emitted event with the matching payload.
 }
