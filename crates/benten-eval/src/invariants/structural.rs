@@ -205,14 +205,14 @@ pub fn validate_subgraph(
         deterministic: sg.deterministic,
         handler_id: sg.handler_id.as_str(),
     };
-    // Skipped if Cycle was detected (matching the Inv-2 pattern above) —
-    // the iterative DFS walker assumes the snapshot is a DAG (Inv-1
-    // enforces in fail-fast mode); on a cyclic snapshot in aggregate
-    // mode the walker oscillates without termination. Same fix as
-    // applied at the `validate_builder` call site upstream.
-    if !violations.contains(&InvariantViolation::Cycle)
-        && crate::invariants::sandbox_depth::validate_registration(&snapshot, config).is_err()
-    {
+    // Wave-8e durable cycle defense: the Inv-4 walker now self-defends
+    // via a grey-set tri-coloring (white/grey/black) inside
+    // `validate_registration`, so the call-site Cycle-skip gate is no
+    // longer needed. The walker terminates cleanly on cyclic input by
+    // skipping back-edges, leaving Inv-1 / Inv-12 as the
+    // cycle-violation reporters. See
+    // `inv_4_walker_terminates_on_cycle_in_aggregate_mode` regression.
+    if crate::invariants::sandbox_depth::validate_registration(&snapshot, config).is_err() {
         violations.push(InvariantViolation::SandboxDepth);
         if !aggregate {
             return Err(finalize(out, violations));
@@ -376,16 +376,15 @@ pub(crate) fn validate_builder(
     // lives in `invariants::sandbox_depth::check_runtime_entry` and
     // fires from G7-A's SANDBOX primitive executor at every entry.
     //
-    // Skipped if Cycle was already detected (matching the Inv-2 pattern
-    // below): the iterative DFS walker assumes the snapshot is a DAG
-    // (Inv-1 enforced first). On a cyclic snapshot in aggregate mode
-    // (where Inv-1 detection does NOT short-circuit) the walker
-    // Visit→Compute oscillates without termination — the
-    // `register_returns_inv_registration_on_multiple_violations` test
-    // wedged at >180s on every CI runner before this gate.
-    if !violations.contains(&InvariantViolation::Cycle)
-        && let Err(depth_err) = crate::invariants::sandbox_depth::validate_registration(sn, config)
-    {
+    // Wave-8e durable cycle defense: the walker now uses a grey-set
+    // tri-coloring internally and terminates cleanly on cyclic input,
+    // so the prior `!violations.contains(&InvariantViolation::Cycle)`
+    // call-site short-circuit (added during night-shift D-NS-17/21 to
+    // prevent the Visit→Compute oscillation on cyclic snapshots in
+    // aggregate mode) is removed. Inv-1 / Inv-12 remain the
+    // cycle-violation reporters; Inv-4 simply ignores back-edges and
+    // returns the longest acyclic-spine SANDBOX chain.
+    if let Err(depth_err) = crate::invariants::sandbox_depth::validate_registration(sn, config) {
         violations.push(InvariantViolation::SandboxDepth);
         if !aggregate {
             return Err(depth_err);

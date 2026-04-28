@@ -1,4 +1,3 @@
-#![allow(unknown_lints, clippy::duration_suboptimal_units)] // MSRV 1.91 — Rust 1.95 lint suggests from_mins/from_hours, both stabilized in 1.95
 //! Criterion benchmark: wall-clock TOCTOU dual-source refresh overhead.
 //!
 //! **Target source:** plan §9.13 + §9.10 — "300s default refresh cadence
@@ -79,7 +78,7 @@ fn bench_elapsed_check_no_refresh(c: &mut Criterion) {
     group.bench_function("elapsed_check_no_refresh", |b| {
         b.iter(|| {
             // G9-A NOT LANDED — returns todo!() at R3.
-            let needs_refresh = probe.check_elapsed(black_box(Duration::from_secs(300)));
+            let needs_refresh = probe.check_elapsed(black_box(Duration::from_mins(5)));
             black_box(needs_refresh);
         });
     });

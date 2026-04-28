@@ -1,4 +1,3 @@
-#![allow(unknown_lints, clippy::duration_suboptimal_units)] // MSRV 1.91 — Rust 1.95 lint suggests from_mins/from_hours, both stabilized in 1.95
 //! R3 tests for ucca-8 + proptest chain-depth-5 attenuation transitivity.
 //!
 //! ucca-8: `CapabilityGrant` gains an optional `ttl_hlc_duration` field via
@@ -71,7 +70,7 @@ fn grant_ttl_hlc_duration_optional_preserves_cid() {
 fn grant_ttl_hlc_duration_present_changes_cid() {
     let scope = GrantScope::parse("store:post:write").expect("scope");
     let mut with_ttl = CapabilityGrant::new(zero_cid(), zero_cid(), scope.clone());
-    with_ttl.ttl_hlc_duration = Some(Duration::from_secs(300));
+    with_ttl.ttl_hlc_duration = Some(Duration::from_mins(5));
 
     let without_ttl = CapabilityGrant::new(zero_cid(), zero_cid(), scope);
 

@@ -122,7 +122,7 @@ mod napi_surface {
     };
     use crate::subgraph::{json_to_subgraph_spec, outcome_to_json};
     use crate::subscribe::{on_change_adapter, subscription_to_json};
-    #[cfg(any(test, feature = "test-helpers"))]
+    #[cfg(feature = "test-helpers")]
     use crate::subscribe::{
         testing_deliver_synthetic_event_for_test_adapter,
         testing_open_subscription_for_test_adapter,
@@ -703,13 +703,13 @@ mod napi_surface {
             &self,
             chunks: Vec<Buffer>,
         ) -> napi::Result<StreamHandleJs> {
-            #[cfg(any(test, feature = "test-helpers"))]
+            #[cfg(feature = "test-helpers")]
             {
                 let raw: Vec<Vec<u8>> = chunks.into_iter().map(|b| b.as_ref().to_vec()).collect();
                 let handle = crate::stream::testing_open_stream_for_test_adapter(&self.inner, raw);
                 Ok(StreamHandleJs::from_inner(handle))
             }
-            #[cfg(not(any(test, feature = "test-helpers")))]
+            #[cfg(not(feature = "test-helpers"))]
             {
                 let _ = chunks;
                 Err(napi::Error::new(
@@ -776,13 +776,13 @@ mod napi_surface {
             pattern: String,
             cursor: serde_json::Value,
         ) -> napi::Result<SubscriptionJs> {
-            #[cfg(any(test, feature = "test-helpers"))]
+            #[cfg(feature = "test-helpers")]
             {
                 let sub =
                     testing_open_subscription_for_test_adapter(&self.inner, &pattern, &cursor)?;
                 Ok(SubscriptionJs::from_inner(sub))
             }
-            #[cfg(not(any(test, feature = "test-helpers")))]
+            #[cfg(not(feature = "test-helpers"))]
             {
                 let _ = (pattern, cursor);
                 Err(napi::Error::new(
@@ -810,7 +810,7 @@ mod napi_surface {
             sub: &SubscriptionJs,
             seq: u32,
         ) -> napi::Result<bool> {
-            #[cfg(any(test, feature = "test-helpers"))]
+            #[cfg(feature = "test-helpers")]
             {
                 let g = sub.inner.lock().map_err(|_| {
                     napi::Error::new(
@@ -824,7 +824,7 @@ mod napi_surface {
                     u64::from(seq),
                 ))
             }
-            #[cfg(not(any(test, feature = "test-helpers")))]
+            #[cfg(not(feature = "test-helpers"))]
             {
                 let _ = (sub, seq);
                 Err(napi::Error::new(

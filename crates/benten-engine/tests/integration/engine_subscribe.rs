@@ -103,15 +103,15 @@ fn subscribe_seq_dedup_at_handler_boundary() {
 #[test]
 fn empty_pattern_rejects_with_typed_error() {
     // Pin: empty pattern is rejected at register time with a typed
-    // error. Today this surfaces as `InputLimit` (the closest existing
-    // shape-rejection code); G6-A re-targets to
-    // `E_SUBSCRIBE_PATTERN_INVALID` when its catalog additions land.
+    // error. cr-r4b-9 closure (wave-8e): `E_SUBSCRIBE_PATTERN_INVALID`
+    // IS now in `benten_errors`, so the engine wrapper surfaces the
+    // typed code (was `InputLimit` as a pre-G6-A placeholder).
     let (engine, _d) = open_engine();
     let cb: OnChangeCallback = Arc::new(|_, _| {});
     let err = engine.on_change("", cb).unwrap_err();
     match err {
         EngineError::Other { code, .. } => {
-            assert_eq!(code, ErrorCode::InputLimit);
+            assert_eq!(code, ErrorCode::SubscribePatternInvalid);
         }
         other => panic!("expected typed shape rejection, got {other:?}"),
     }

@@ -97,3 +97,27 @@ jobs:
           echo "::group::Conformance log tail"
           tail -n 100 sandbox-conformance.log || true
           echo "::endgroup::"
+
+      - name: Configure wasmtime as wasm32-wasip1 test runner
+        # Mirrors the configuration used by `wasm-runtime.yml` so the
+        # subsequent `cargo test --target wasm32-wasip1` step routes its
+        # built test binaries through the locally-installed wasmtime
+        # rather than failing for lack of a runner.
+        run: |
+          mkdir -p .cargo
+          cat >> .cargo/config.toml <<'CARGO_CFG'
+          [target.wasm32-wasip1]
+          runner = "wasmtime --dir=."
+          CARGO_CFG
+
+      - name: SANDBOX wasm32-wasip1 lib-test smoke (Compromise #4 must-invoke)
+        # Wave-8e durable fix: the `compromise_4_wasm_runtime_is_phase_2`
+        # regression test now positively asserts that this workflow
+        # contains a `cargo test ... wasm32-wasip1` invocation. The
+        # adversarial-run step above runs natively; this step pins the
+        # wasi-target gate by running the benten-core lib tests under
+        # wasmtime — small, fast, and proves the workflow is exercising
+        # the actual wasi runtime path (not just compile-checking it).
+        # When the full per-target adversarial fixture binaries land,
+        # this step is the natural carrier to extend.
+        run: cargo test --target wasm32-wasip1 -p benten-core --lib -- --nocapture
