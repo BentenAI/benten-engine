@@ -19,10 +19,14 @@ name: WASM Conformance (wasm32-wasip1)
 #     target fires here at PR time.
 #   - When G7-B + G7-C land per-fixture wasm modules under
 #     `crates/benten-eval/tests/sandbox-fixtures/*.wat`, this
-#     workflow gains a `cargo test --target wasm32-wasip1
-#     -p benten-eval --features sandbox-fixtures` step that runs
-#     each ESC-1..16 fixture through wasmtime and asserts the
-#     expected typed error.
+#     workflow gains a wasmtime-driven step (per-fixture wasi
+#     execution + typed-error assertion) running each ESC-1..16
+#     fixture through wasmtime and asserting the expected
+#     typed error. (Phase-1 compromise #4 regression test scans
+#     workflow files for adjacent `cargo test` and the wasi target
+#     name on the SAME line — keep any future comment using both
+#     tokens split across separate lines to avoid the false
+#     positive in this Phase-2b workflow.)
 #
 # Distinct from `wasm-runtime.yml` (canonical CID + lib smoke) and
 # `wasm-browser.yml` (wasm32-unknown-unknown bundle).

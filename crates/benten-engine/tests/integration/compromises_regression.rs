@@ -238,10 +238,23 @@ fn compromise_4_wasm_runtime_is_phase_2() {
     } else {
         std::path::PathBuf::from(".github/workflows")
     };
+    // Phase 2b G10-A-wasip1 explicitly CLOSES the Phase-1 prohibition:
+    // wasm-runtime.yml + wasm-conformance.yml are the new Phase-2b workflows
+    // that exercise the wasi runtime (D-NS-49 night-shift catch). Other
+    // workflows are still subject to the Phase-1 invariant — drifting a
+    // wasi-test invocation into a non-G10 workflow is still a regression.
+    let phase_2b_wasi_workflows: &[&str] = &["wasm-runtime.yml", "wasm-conformance.yml"];
     for entry in std::fs::read_dir(&workflow_dir).expect("read workflow dir") {
         let entry = entry.expect("readdir entry");
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) != Some("yml") {
+            continue;
+        }
+        let file_name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
+        if phase_2b_wasi_workflows.contains(&file_name) {
             continue;
         }
         let content = std::fs::read_to_string(&path).expect("read yml");
@@ -256,8 +269,9 @@ fn compromise_4_wasm_runtime_is_phase_2() {
             .any(|l| l.contains("cargo test") && l.contains("wasm32-wasip1"));
         assert!(
             !has_cargo_test_wasip1,
-            "no workflow may invoke `cargo test --target wasm32-wasip1` in \
-             Phase 1; got reference in {}",
+            "Compromise #4 regression: only the Phase-2b G10 wasi workflows \
+             ({phase_2b_wasi_workflows:?}) may invoke `cargo test --target \
+             wasm32-wasip1`; got reference in {}",
             path.display()
         );
     }
