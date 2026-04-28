@@ -160,15 +160,39 @@ export interface TraceStepBudgetExhausted {
 }
 
 /**
+ * Forward-compat catch-all variant — emitted by the wrapper-side
+ * `mapTraceStep` projection when a row from the native binding carries
+ * a `type` discriminant this version of `@benten/engine` does not yet
+ * recognize (per Phase-2b D14-RESOLVED, "warning-passthrough").
+ *
+ * Routing semantics:
+ *   - The original row is preserved verbatim under `raw` so callers
+ *     willing to opt into pre-release variants can pattern-match on it.
+ *   - `console.warn` is emitted ONCE per discriminant per process so
+ *     a wrapper-version-skew shows up early in dev/CI but doesn't spam.
+ *   - The trace.steps array PRESERVES unknown rows in topological
+ *     position — they are NOT silently dropped.
+ */
+export interface TraceStepUnknown {
+  type: "unknown";
+  /** The unrecognized `type` discriminator string from the native row. */
+  discriminant: string;
+  /** The original row, preserved verbatim. */
+  raw: Record<string, unknown>;
+}
+
+/**
  * One step of an evaluator trace. Phase 2a G11-A Wave 2b: discriminated
  * union mirroring the engine-side `TraceStep` enum. Switch on `.type` to
- * read variant-specific fields exhaustively.
+ * read variant-specific fields exhaustively. Phase-2b G12-F adds the
+ * `TraceStepUnknown` forward-compat variant per D14-RESOLVED.
  */
 export type TraceStep =
   | TraceStepPrimitive
   | TraceStepSuspendBoundary
   | TraceStepResumeBoundary
-  | TraceStepBudgetExhausted;
+  | TraceStepBudgetExhausted
+  | TraceStepUnknown;
 
 /** Full trace returned by `engine.trace()`. */
 export interface Trace {
