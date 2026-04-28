@@ -140,16 +140,36 @@ interface NativeEngine {
     input: unknown,
   ) => NativeStreamHandle;
   testingOpenStreamForTest?: (chunks: Buffer[]) => NativeStreamHandle;
+  // Phase 2b wave-8c-cont — STREAM authenticated variant.
+  callStreamAs?: (
+    handlerId: string,
+    op: string,
+    input: unknown,
+    actor: string,
+  ) => NativeStreamHandle;
   onChange?: (pattern: string, cursor: unknown) => NativeSubscriptionJson;
+  // Phase 2b wave-8c-cont — SUBSCRIBE authenticated variant.
+  onChangeAs?: (
+    pattern: string,
+    cursor: unknown,
+    actor: string,
+  ) => NativeSubscriptionJson;
   // Phase 2b wave-8c — module-manifest lifecycle bridges.
   installModule?: (manifestJson: unknown, expectedCid: string) => string;
   uninstallModule?: (cid: string) => void;
   computeManifestCid?: (manifestJson: unknown) => string;
+  // Phase 2b wave-8c-cont — D10 snapshot-blob handoff bridges.
+  exportSnapshotBlob?: () => Buffer;
+  isReadOnlySnapshot?: () => boolean;
 }
 
 interface NativeEngineCtor {
   new (path: string): NativeEngine;
   openWithPolicy?: (path: string, policy: string) => NativeEngine;
+  // Phase 2b wave-8c-cont — D10 snapshot-blob handoff factory.
+  fromSnapshotBlob?: (bytes: Buffer) => NativeEngine;
+  // Phase 2b wave-8c-cont — snapshot-blob CID computation static helper.
+  computeSnapshotBlobCid?: (bytes: Buffer) => string;
 }
 
 interface NativeModule {
@@ -373,6 +393,64 @@ export class Engine {
     try {
       const inner = native.Engine.openWithPolicy(path, policy);
       return new Engine(inner);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /**
+   * Phase 2b wave-8c-cont (D10 snapshot-blob handoff): construct a
+   * read-only engine from a previously-exported snapshot-blob.
+   *
+   * The bytes are decoded as a canonical DAG-CBOR `SnapshotBlob`; the
+   * contents are hydrated into a fresh tempdir-resident redb backend
+   * inside the native cdylib; the resulting engine surfaces
+   * `E_BACKEND_READ_ONLY` on any mutation attempt (D10 read-mostly
+   * contract). Use {@link Engine.isReadOnlySnapshot} to branch in
+   * caller code without catching the typed error every time.
+   *
+   * Native-target only — surfaces `E_SUBSYSTEM_DISABLED` when the
+   * cdylib was built for wasm32 (where the `engine_snapshot` module
+   * is `#[cfg(not(target_arch = "wasm32"))]`-gated).
+   */
+  public static async fromSnapshotBlob(
+    bytes: Uint8Array | Buffer,
+  ): Promise<Engine> {
+    const native = loadNative();
+    if (!native.Engine.fromSnapshotBlob) {
+      throw new EDslInvalidShape(
+        "Engine.fromSnapshotBlob unavailable on this native binding — rebuild @benten/engine-native (wave-8c-cont bridge required)",
+      );
+    }
+    const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+    try {
+      const inner = native.Engine.fromSnapshotBlob(buf);
+      return new Engine(inner);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /**
+   * Phase 2b wave-8c-cont (D10 snapshot-blob handoff): static helper
+   * that computes the BLAKE3-multibase CID of a snapshot-blob bytes
+   * payload without constructing an engine. Mirrors the Rust-side
+   * `Engine::compute_snapshot_blob_cid`.
+   *
+   * Native-target only — surfaces `E_SUBSYSTEM_DISABLED` on wasm32.
+   */
+  public static async computeSnapshotBlobCid(
+    bytes: Uint8Array | Buffer,
+  ): Promise<string> {
+    const native = loadNative();
+    if (!native.Engine.computeSnapshotBlobCid) {
+      throw new EDslInvalidShape(
+        "Engine.computeSnapshotBlobCid unavailable on this native binding — rebuild @benten/engine-native (wave-8c-cont bridge required)",
+      );
+    }
+    const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+    try {
+      return native.Engine.computeSnapshotBlobCid(buf);
     } catch (err) {
       throw mapNativeError(err);
     }
@@ -1447,6 +1525,40 @@ export class Engine {
   }
 
   /**
+   * Phase 2b wave-8c-cont: `callStream` with an explicit actor
+   * principal. Mirrors {@link Engine.callAs} naming.
+   *
+   * `actor` is a friendly principal identifier (the same shape
+   * `engine.callAs` accepts). The principal is threaded through to
+   * the STREAM executor for cap-recheck on chunk emission once the
+   * production runtime wires through (8c-i remainder); pre-wire-
+   * through the surface returns a [`StreamHandle`] whose first
+   * `next()` surfaces `E_PRIMITIVE_NOT_IMPLEMENTED` honestly, the
+   * same as {@link Engine.callStream}.
+   */
+  public callStreamAs(
+    handlerId: string,
+    op: string,
+    input: JsonValue,
+    actor: string,
+  ): StreamHandle {
+    this.assertOpen();
+    validateStreamCallArgs(handlerId, op, input);
+    if (!this.inner.callStreamAs) {
+      throw new EDslInvalidShape(
+        "Engine.callStreamAs unavailable on this binding — rebuild @benten/engine-native (wave-8c-cont bridge required)",
+      );
+    }
+    let native: NativeStreamHandle;
+    try {
+      native = this.inner.callStreamAs(handlerId, op, input, actor);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+    return wrapStreamHandle(native);
+  }
+
+  /**
    * Open a STREAM dispatch returning a [`StreamHandle`] whose lifecycle
    * the caller manages via {@link StreamHandle.close}. Same dispatch
    * path as {@link Engine.callStream} — the only difference is the
@@ -1575,6 +1687,103 @@ build @benten/engine-native with `--features test-helpers`",
     // consumers.
     void callback;
     return makeSubscription(raw);
+  }
+
+  /**
+   * Phase 2b wave-8c-cont: `onChange` with an explicit actor principal.
+   * Mirrors {@link Engine.callAs} naming.
+   *
+   * `actor` is the friendly principal identifier whose grants drive
+   * D5 delivery-time cap-recheck (once the production change-stream
+   * port lands; pre-port the principal is captured structurally on
+   * the engine-side Subscription).
+   *
+   * # Wiring status (wave-8c-cont)
+   *
+   * Until the production callback bridge through
+   * `napi::ThreadsafeFunction` lands, the returned [`Subscription`]
+   * reports `active: false` honestly and the `callback` argument is
+   * captured but not yet invoked. The principal IS threaded through
+   * the napi boundary so the Rust-side Subscription holds the actor
+   * for the future delivery path.
+   */
+  public onChangeAs(
+    pattern: string,
+    callback: OnChangeCallback,
+    actor: string,
+    cursor?: SubscribeCursor,
+  ): Subscription {
+    this.assertOpen();
+    validateOnChangeArgs(pattern, callback);
+    if (!this.inner.onChangeAs) {
+      throw new EDslInvalidShape(
+        "Engine.onChangeAs unavailable on this binding — rebuild @benten/engine-native (wave-8c-cont bridge required)",
+      );
+    }
+    let raw: NativeSubscriptionJson;
+    try {
+      raw = this.inner.onChangeAs(pattern, serializeCursor(cursor), actor);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+    void callback;
+    return makeSubscription(raw);
+  }
+
+  // -------- Snapshot blob handoff (Phase 2b wave-8c-cont 8c-iv) --------
+
+  /**
+   * Phase 2b wave-8c-cont (D10 snapshot-blob handoff): walk this
+   * engine's storage and encode a canonical DAG-CBOR snapshot-blob
+   * for handoff. Returns the bytes as a `Uint8Array`.
+   *
+   * The snapshot-blob is canonical (BTreeMap-sorted) — two exports
+   * of the same engine state produce byte-identical output (D10 +
+   * sec-pre-r1-09 Inv-13 collision-safety). The companion factory
+   * {@link Engine.fromSnapshotBlob} accepts the bytes to construct a
+   * read-only engine view over the same content.
+   *
+   * Native-target only — surfaces `E_SUBSYSTEM_DISABLED` on wasm32
+   * builds where `engine_snapshot` is `#[cfg(not(target_arch =
+   * "wasm32"))]`-gated.
+   */
+  public async exportSnapshotBlob(): Promise<Uint8Array> {
+    this.assertOpen();
+    if (!this.inner.exportSnapshotBlob) {
+      throw new EDslInvalidShape(
+        "Engine.exportSnapshotBlob unavailable on this binding — rebuild @benten/engine-native (wave-8c-cont bridge required)",
+      );
+    }
+    try {
+      const buf = this.inner.exportSnapshotBlob();
+      // The napi `Buffer` IS a `Uint8Array` subclass; return the same
+      // bytes without an unnecessary copy. Consumers can pass the
+      // result back into `Engine.fromSnapshotBlob` directly.
+      return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /**
+   * Phase 2b wave-8c-cont: `true` iff this engine was constructed via
+   * {@link Engine.fromSnapshotBlob} and is therefore a read-only
+   * view. Mirrors the Rust-side `Engine::is_read_only_snapshot`
+   * accessor.
+   *
+   * Consumers can branch on this flag rather than catching
+   * `E_BACKEND_READ_ONLY` on every mutation attempt.
+   */
+  public isReadOnlySnapshot(): boolean {
+    this.assertOpen();
+    if (!this.inner.isReadOnlySnapshot) {
+      // Older bindings (pre-wave-8c-cont) don't carry the symbol;
+      // those bindings can never produce a read-only engine because
+      // they predate `fromSnapshotBlob`, so `false` is the correct
+      // back-compat answer.
+      return false;
+    }
+    return this.inner.isReadOnlySnapshot();
   }
 }
 

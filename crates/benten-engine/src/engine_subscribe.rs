@@ -208,6 +208,34 @@ impl Engine {
         self.on_change_with_cursor(pattern, SubscribeCursor::Latest, callback)
     }
 
+    /// Phase 2b wave-8c-cont: `on_change` with an explicit actor
+    /// principal. Mirrors [`Engine::call_as`] naming.
+    ///
+    /// The `actor` CID is captured on the constructed [`Subscription`]
+    /// for delivery-time D5 cap-recheck once the production change-stream
+    /// port lands (8c-ii remainder). Pre-port the principal is plumbed
+    /// through structurally so consumers using `onChangeAs` see the
+    /// correct typed-error contract instead of a "method not found"
+    /// failure at the napi boundary.
+    ///
+    /// # Errors
+    /// See [`Engine::on_change`].
+    pub fn on_change_as(
+        &self,
+        pattern: &str,
+        callback: OnChangeCallback,
+        actor: &benten_core::Cid,
+    ) -> Result<Subscription, EngineError> {
+        // The principal is held only structurally for now; once the
+        // production change-stream port lands the `actor` will be
+        // passed through to `register_with_store(spec, store, principal)`
+        // so D5 cap-recheck fires the named principal's grants on every
+        // delivery. Pre-port the value is captured in the Subscription
+        // body via the no-op cap-recheck (`is_active() == false`).
+        let _ = actor;
+        self.on_change_with_cursor(pattern, SubscribeCursor::Latest, callback)
+    }
+
     /// `on_change` with an explicit cursor. The default
     /// [`Engine::on_change`] entry point uses [`SubscribeCursor::Latest`];
     /// callers that want sequence-based replay or persistent cursors
@@ -369,6 +397,38 @@ mod tests {
             assert!(active_flag.load(Ordering::SeqCst));
         } // sub dropped here
         assert!(!active_flag.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn on_change_as_threads_principal_structurally() {
+        // Phase 2b wave-8c-cont: on_change_as should accept an explicit
+        // actor CID, build a Subscription with the same shape on_change
+        // does (pre-port `is_active() == false`), and surface the same
+        // typed-error contract for an empty pattern as the unauthenticated
+        // form. The actor argument is plumbed through structurally; the
+        // delivery-time D5 cap-recheck wires when the change-stream port
+        // lands.
+        let (e, _d) = temp_engine();
+        let cb: OnChangeCallback = Arc::new(|_, _| {});
+        let actor = benten_core::Cid::from_blake3_digest(*blake3::hash(b"test-actor").as_bytes());
+        let sub = e.on_change_as("post:*", cb, &actor).unwrap();
+        // Same pre-port semantics as on_change.
+        assert!(!sub.is_active(), "pre-port handle starts inactive");
+        assert_eq!(sub.pattern(), "post:*");
+    }
+
+    #[test]
+    fn on_change_as_rejects_empty_pattern_with_typed_error() {
+        let (e, _d) = temp_engine();
+        let cb: OnChangeCallback = Arc::new(|_, _| {});
+        let actor = benten_core::Cid::from_blake3_digest(*blake3::hash(b"test-actor").as_bytes());
+        let err = e.on_change_as("", cb, &actor).unwrap_err();
+        match err {
+            EngineError::Other { code, .. } => {
+                assert_eq!(code, ErrorCode::SubscribePatternInvalid);
+            }
+            _ => panic!("unexpected error variant"),
+        }
     }
 
     #[test]

@@ -54,6 +54,24 @@ pub(crate) fn call_stream_adapter(
         .map_err(engine_err)
 }
 
+/// Phase 2b wave-8c-cont: drive `Engine::call_stream_as` with an
+/// explicit actor principal CID. Same handle-construction pre-G6-A
+/// behaviour as [`call_stream_adapter`]; the principal is threaded
+/// through to the executor for STREAM-side cap-recheck once the real
+/// executor wires in.
+pub(crate) fn call_stream_as_adapter(
+    engine: &InnerEngine,
+    handler_id: &str,
+    op: &str,
+    input: serde_json::Value,
+    actor: &benten_core::Cid,
+) -> napi::Result<StreamHandle> {
+    let input_node = json_to_node(input)?;
+    engine
+        .call_stream_as(handler_id, op, input_node, actor)
+        .map_err(engine_err)
+}
+
 /// Internal: drive `Engine::open_stream`. Same dispatch path as
 /// [`call_stream_adapter`]; the explicit-close lifecycle is enforced
 /// on the TS-wrapper side by exposing a `dispose()` / `close()`
