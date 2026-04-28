@@ -4,7 +4,7 @@ name: CI
 #
 # Jobs:
 #   1. build-and-test   — multi-arch matrix (macOS arm64/x86_64, Linux
-#                         x86_64/arm64) x (MSRV 1.85, stable).
+#                         x86_64/arm64) x (MSRV 1.95, stable).
 #                         Runs fmt, clippy, nextest, doc. Emits canonical
 #                         CID for the cross-leg gate.
 #   2. wasm-runtime     — wasm32-wasip1 under wasmtime (canonical CID
@@ -56,13 +56,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-14,         leg: macos-arm64,   target: aarch64-apple-darwin,       rust: "1.85.0" }
+          - { os: macos-14,         leg: macos-arm64,   target: aarch64-apple-darwin,       rust: "1.95.0" }
           - { os: macos-14,         leg: macos-arm64,   target: aarch64-apple-darwin,       rust: stable   }
-          - { os: macos-15-intel,   leg: macos-x86_64,  target: x86_64-apple-darwin,        rust: "1.85.0" }
+          - { os: macos-15-intel,   leg: macos-x86_64,  target: x86_64-apple-darwin,        rust: "1.95.0" }
           - { os: macos-15-intel,   leg: macos-x86_64,  target: x86_64-apple-darwin,        rust: stable   }
-          - { os: ubuntu-24.04,     leg: linux-x86_64,  target: x86_64-unknown-linux-gnu,   rust: "1.85.0" }
+          - { os: ubuntu-24.04,     leg: linux-x86_64,  target: x86_64-unknown-linux-gnu,   rust: "1.95.0" }
           - { os: ubuntu-24.04,     leg: linux-x86_64,  target: x86_64-unknown-linux-gnu,   rust: stable   }
-          - { os: ubuntu-24.04-arm, leg: linux-arm64,   target: aarch64-unknown-linux-gnu,  rust: "1.85.0" }
+          - { os: ubuntu-24.04-arm, leg: linux-arm64,   target: aarch64-unknown-linux-gnu,  rust: "1.95.0" }
           - { os: ubuntu-24.04-arm, leg: linux-arm64,   target: aarch64-unknown-linux-gnu,  rust: stable   }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
@@ -88,7 +88,7 @@ jobs:
 
       - name: cargo fmt --check
         # fmt + clippy only on stable to avoid MSRV-chasing lint churn; the
-        # MSRV legs still build+test to catch accidental post-1.85 features.
+        # MSRV legs still build+test to catch accidental post-1.95 features.
         if: matrix.rust == 'stable'
         run: cargo fmt --all -- --check
 
