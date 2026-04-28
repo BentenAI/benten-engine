@@ -233,6 +233,14 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** Evaluation. The `path` field distinguishes the D17 PRIMARY streaming `CountedSink` enforcement (fires before host-fn bytes are accepted) from the D17 BACKSTOP return-value enforcement (defense-in-depth at the primitive boundary).
 - **Phase:** 2b (G7-B Inv-7 enforcement; D15 + D17 PRIMARY+BACKSTOP)
 
+### E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED
+
+- **Message:** "SANDBOX nested-dispatch depth saturated at {depth} (configured max {max})"
+- **Context:** `{ node_id: NodeId, depth: number, max: number, saturation: "u8_ceiling" | "configured_max" }`
+- **Fix:** SANDBOX nest-depth saturation overflow distinct from `E_INV_SANDBOX_DEPTH`. Two saturation paths fire this code: the `sandbox_depth: u8` counter saturates at `u8::MAX` (type-level ceiling — extremely deep CALL chains) and the configured `max_sandbox_nest_depth` boundary (capability-grant ceiling). Either case fires this typed error rather than wrapping silently. Reduce nesting per the same guidance as `E_INV_SANDBOX_DEPTH`; if hitting the u8 ceiling, the call topology is almost certainly accidentally recursive and needs structural redesign rather than a higher cap.
+- **Thrown at:** Evaluation (saturation point at the SANDBOX entry — the counter-saturation check fires before the inner subgraph starts executing).
+- **Phase:** 2b (G7-B Inv-4 enforcement; D20 inheritance — the counter is INHERITED across CALL boundaries per `AttributionFrame.sandbox_depth: u8`)
+
 ### E_IVM_VIEW_STALE
 
 - **Message:** "IVM view {view_id} marked stale; async recomputation in progress"
