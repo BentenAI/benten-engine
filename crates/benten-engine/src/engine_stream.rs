@@ -330,7 +330,7 @@ impl Engine {
             .map(|(i, bytes)| Chunk {
                 seq: u64::try_from(i).unwrap_or(u64::MAX),
                 final_chunk: u64::try_from(i + 1).unwrap_or(u64::MAX) == total,
-                bytes: bytes.into(),
+                bytes,
             })
             .collect();
         StreamHandle::from_test_chunks(chunks)
@@ -378,12 +378,12 @@ mod tests {
             Chunk {
                 seq: 0,
                 final_chunk: false,
-                bytes: vec![1, 2, 3].into(),
+                bytes: vec![1, 2, 3],
             },
             Chunk {
                 seq: 1,
                 final_chunk: true,
-                bytes: vec![4, 5].into(),
+                bytes: vec![4, 5],
             },
         ]);
         assert_eq!(h.seq_so_far(), 0);
@@ -403,12 +403,12 @@ mod tests {
             Chunk {
                 seq: 0,
                 final_chunk: false,
-                bytes: vec![1].into(),
+                bytes: vec![1],
             },
             Chunk {
                 seq: 1,
                 final_chunk: true,
-                bytes: vec![2].into(),
+                bytes: vec![2],
             },
         ]);
         h.close();
