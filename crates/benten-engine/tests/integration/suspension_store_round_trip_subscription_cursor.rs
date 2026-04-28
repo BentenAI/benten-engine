@@ -24,7 +24,12 @@
 //!
 //! Owned by R3-E.
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::clone_on_copy,
+    clippy::let_unit_value
+)]
 
 use benten_engine::Engine;
 
@@ -43,7 +48,6 @@ fn fresh_engine() -> (tempfile::TempDir, Engine) {
 /// Asserts cursor put/get round-trip preserves the `u64`
 /// `max_delivered_seq` exactly.
 #[test]
-#[ignore = "Phase 2b G12-E pending — SuspensionStore::{put_cursor,get_cursor} unimplemented"]
 fn suspension_store_round_trip_subscription_cursor() {
     let (_dir, engine) = fresh_engine();
     let store = benten_engine::testing::testing_get_suspension_store(&engine);
@@ -74,7 +78,12 @@ fn suspension_store_round_trip_subscription_cursor() {
 /// to the store on event delivery) AND the cursor read side (engine
 /// resumes a Persistent-cursor subscription from the stored seq).
 #[test]
-#[ignore = "Phase 2b G12-E + G6-A SUBSCRIBE persistent-cursor pending"]
+#[ignore = "Phase 2b wave-8c-cont pending — `testing_register_persistent_subscriber` + \
+            `testing_emit_n_synthetic_events` depend on the SUBSCRIBE production \
+            runtime wire-through that 8c-cont owns. Wave-8g un-aliased the \
+            SuspensionStore trait + landed `resume_with_meta`; this fixture's \
+            second-half drives subscribe.rs through the engine boundary which \
+            is still unwired."]
 fn subscribe_max_delivered_seq_round_trips_via_suspension_store() {
     let (_dir, mut engine) = fresh_engine();
 

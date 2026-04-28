@@ -105,6 +105,29 @@ fn cache_get(engine: &Engine, cid: &Cid) -> Option<ExecutionStateEnvelope> {
 // Public API shapes
 // ---------------------------------------------------------------------------
 
+/// Phase 2b wave-8g (G12-E follow-up) — payload variant supplied to
+/// [`Engine::resume_with_meta`].
+///
+/// `None` resumes a duration-style WAIT or a signal-style WAIT whose
+/// caller has no value to deliver (the resume is a wake-up only).
+/// `Signal(Value)` carries an explicit signal value to thread through
+/// the resume protocol's deadline + shape checks.
+///
+/// Per the wave-8g brief this is the engine-level wrapper around the
+/// existing `Engine::resume_from_bytes_*` surface; the variant naming
+/// mirrors the [`benten_eval::WaitResumeSignal`] shape that the
+/// evaluator's `resume` entry point already consumes.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum ResumePayload {
+    /// Resume without delivering a signal value (duration-style WAIT or
+    /// fire-and-forget wake-up).
+    None,
+    /// Resume with an explicit signal value (signal-style WAIT). The
+    /// value is threaded into the resume protocol's shape check.
+    Signal(Value),
+}
+
 /// Phase-2a G3-B return shape for `call_with_suspension`. A handler may
 /// complete inline or suspend awaiting an external signal.
 #[derive(Debug, Clone)]
@@ -358,6 +381,47 @@ impl Engine {
         principal: &Cid,
     ) -> Result<Outcome, EngineError> {
         self.resume_from_bytes_inner(bytes, Some(*principal))
+    }
+
+    /// Phase 2b wave-8g (G12-E follow-up): engine-level resume entry
+    /// point that the R3 red-phase test fixtures + future call sites
+    /// drive.
+    ///
+    /// `envelope` MUST be the DAG-CBOR bytes of a previously-suspended
+    /// `ExecutionStateEnvelope` (the same shape `suspend_to_bytes`
+    /// produces). The resume routes through
+    /// [`Engine::resume_from_bytes_unauthenticated`] which runs steps
+    /// 1, 3, and 4 of the §9.1 4-step protocol (payload-CID tamper
+    /// check, pinned-subgraph drift check, capability re-check). Step 2
+    /// (principal binding) is skipped per the unauthenticated contract;
+    /// callers needing principal binding should use
+    /// [`Engine::resume_from_bytes_as`] directly.
+    ///
+    /// G12-E lifted the missing-metadata path inside the eval-layer
+    /// `resume_with_meta` from a permissive `Complete(value)` fallback
+    /// to a typed `E_HOST_BACKEND_UNAVAILABLE`; this engine-level
+    /// surface is the public entry point that the cross-process resume
+    /// integration tests drive (see
+    /// `tests/integration/cross_process_wait_resume.rs` +
+    /// `tests/g12_e_suspension_store_round_trips.rs`).
+    ///
+    /// # Errors
+    /// Returns [`EngineError`] per
+    /// [`Engine::resume_from_bytes_unauthenticated`] (steps 1, 3, 4 of
+    /// §9.1) — `E_EXEC_STATE_TAMPERED`, `E_RESUME_SUBGRAPH_DRIFT`,
+    /// `E_CAP_REVOKED_MID_EVAL`, `E_SERIALIZE`, plus the eval-layer
+    /// `E_HOST_BACKEND_UNAVAILABLE` lift on missing metadata
+    /// (Compromise #9 / #10 closure).
+    pub fn resume_with_meta(
+        &self,
+        envelope: &[u8],
+        payload: ResumePayload,
+    ) -> Result<Outcome, EngineError> {
+        let signal = match payload {
+            ResumePayload::None => Value::Null,
+            ResumePayload::Signal(v) => v,
+        };
+        self.resume_from_bytes_unauthenticated(envelope, signal)
     }
 
     fn resume_from_bytes_inner(

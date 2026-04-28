@@ -10,8 +10,12 @@
 //!
 //! - **Cursor modes:** `Latest` / `Sequence(u64)` / `Persistent(SubscriberId)`
 //!   (D5). `Persistent` round-trips `max_delivered_seq` through the G12-E
-//!   `SuspensionStore` (G6-A reserves a process-local in-memory placeholder
-//!   per D5-G6-A interim — see `InMemorySuspensionStore`).
+//!   unified [`crate::suspension_store::SuspensionStore`] port. The wave-8g
+//!   un-alias deleted the interim per-module trait+impl that lived here
+//!   from G6-A through wave-7; SUBSCRIBE now consumes the same trait that
+//!   covers WAIT metadata and envelope bytes (zero callsites of the
+//!   interim trait existed outside this module — see D-NS-54
+//!   architect-reviewer audit).
 //!
 //! - **Within-key strict ordering, cross-key UNORDERED** (D5
 //!   strengthening item 3). Phase-3 P2P sync would have to enforce a
@@ -45,6 +49,7 @@
 //!   `benten-graph` edge — change events flow through the port, not
 //!   through a backend type).
 
+use crate::suspension_store::{InMemorySuspensionStore, SuspensionStore, SuspensionStoreError};
 use benten_core::{Cid, Value};
 // Re-export the change-stream types from benten-core so test files can
 // spell `benten_eval::primitives::subscribe::{ChangeKind, SubscriberId, ...}`
@@ -174,8 +179,9 @@ pub enum SubscribeCursor {
     /// skipped.
     Sequence(u64),
     /// Resume at the persisted `max_delivered_seq` keyed by subscriber id.
-    /// Round-trips through the G12-E SuspensionStore (G6-A interim
-    /// in-memory placeholder per D5-G6-A).
+    /// Round-trips through the unified G12-E
+    /// [`crate::suspension_store::SuspensionStore`] (un-aliased in
+    /// wave-8g; was a per-module interim trait through wave-7).
     Persistent(SubscriberId),
 }
 
@@ -282,100 +288,25 @@ pub mod config {
 }
 
 // ---------------------------------------------------------------------------
-// G12-E SuspensionStore interim placeholder (D5-G6-A decision).
+// SUBSCRIBE persistent-cursor storage (G12-E un-aliased — wave-8g).
 //
-// G12-E ships a real persistent SuspensionStore in wave-6. Until then,
-// SUBSCRIBE persistent cursors round-trip through this in-memory
-// placeholder. Wired through the SuspensionStore-shape trait so the
-// G12-E migration is a one-line constructor swap.
+// Phase-2b wave-8g (D-NS-54 architect-reviewer audit): the interim
+// `pub trait SuspensionStore` + `pub struct InMemorySuspensionStore`
+// that lived in this module from G6-A onward have been deleted. The
+// SUBSCRIBE primitive now consumes the unified
+// [`crate::suspension_store::SuspensionStore`] (G12-E generalised port
+// covering WAIT metadata, envelope bytes, AND SUBSCRIBE cursors). The
+// interim trait had zero callsites outside this module, so the un-alias
+// is structural only — production behaviour is unchanged.
+//
+// `SuspensionStoreError` is the unified error envelope; SUBSCRIBE-side
+// callers map it into the existing `SubscribeError` shape via
+// `From<SuspensionStoreError> for SubscribeError`.
 // ---------------------------------------------------------------------------
 
-/// Trait for SUBSCRIBE persistent-cursor storage. Mirrors the eventual
-/// G12-E SuspensionStore shape — `put_cursor` / `get_cursor` keyed by
-/// `SubscriberId`. Separate key namespace from suspension envelopes
-/// (D5 strengthening item 2).
-///
-/// # G12-E migration TODO
-///
-/// `TODO(phase-2b-G12-E)`: replace [`InMemorySuspensionStore`] with the
-/// real G12-E backend. The trait shape stays; only the concrete type
-/// changes. Tests use [`InMemorySuspensionStore`] directly via the
-/// `testing` helpers.
-pub trait SuspensionStore: Send + Sync {
-    /// Persist `max_delivered_seq` for `id`.
-    fn put_cursor(&self, id: &SubscriberId, max_delivered_seq: u64) -> Result<(), SubscribeError>;
-
-    /// Read the persisted `max_delivered_seq` for `id`. `Ok(None)` on a
-    /// clean miss (cursor never registered).
-    fn get_cursor(&self, id: &SubscriberId) -> Result<Option<u64>, SubscribeError>;
-
-    /// True iff the cursor has drifted past the retention window.
-    fn is_retention_exhausted(&self, id: &SubscriberId) -> bool {
-        let _ = id;
-        false
-    }
-
-    /// Test-only: force the retention window for `id` to "exhausted".
-    /// Default impl is a no-op so production backends never expose the
-    /// hook. The G6-A `InMemorySuspensionStore` placeholder overrides
-    /// to drive the `subscribe_persist` red-phase tests.
-    #[cfg(any(test, feature = "testing"))]
-    fn testing_force_retention_exhausted(&self, id: &SubscriberId) {
-        let _ = id;
-    }
-}
-
-/// Process-local in-memory `SuspensionStore` placeholder (D5-G6-A interim).
-///
-/// `Send + Sync` via interior mutability. NOT cross-process; G12-E lifts
-/// this to the real persistent backend.
-#[derive(Default)]
-pub struct InMemorySuspensionStore {
-    inner: Mutex<InMemoryStoreInner>,
-}
-
-#[derive(Default)]
-struct InMemoryStoreInner {
-    cursors: HashMap<SubscriberId, u64>,
-    retention_exhausted: HashMap<SubscriberId, bool>,
-}
-
-impl InMemorySuspensionStore {
-    /// Construct an empty in-memory store.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Test helper: force the retention window for `id` to "exhausted".
-    /// Used by the `subscribe_persist` red-phase to exercise the
-    /// re-registration error path.
-    pub fn force_retention_exhausted(&self, id: &SubscriberId) {
-        let mut g = self.inner.lock().expect("store mutex poisoned");
-        g.retention_exhausted.insert(*id, true);
-    }
-}
-
-impl SuspensionStore for InMemorySuspensionStore {
-    fn put_cursor(&self, id: &SubscriberId, max_delivered_seq: u64) -> Result<(), SubscribeError> {
-        let mut g = self.inner.lock().expect("store mutex poisoned");
-        g.cursors.insert(*id, max_delivered_seq);
-        Ok(())
-    }
-
-    fn get_cursor(&self, id: &SubscriberId) -> Result<Option<u64>, SubscribeError> {
-        let g = self.inner.lock().expect("store mutex poisoned");
-        Ok(g.cursors.get(id).copied())
-    }
-
-    fn is_retention_exhausted(&self, id: &SubscriberId) -> bool {
-        let g = self.inner.lock().expect("store mutex poisoned");
-        *g.retention_exhausted.get(id).unwrap_or(&false)
-    }
-
-    #[cfg(any(test, feature = "testing"))]
-    fn testing_force_retention_exhausted(&self, id: &SubscriberId) {
-        self.force_retention_exhausted(id);
+impl From<SuspensionStoreError> for SubscribeError {
+    fn from(value: SuspensionStoreError) -> Self {
+        SubscribeError::BackendUnavailable(value.to_string())
     }
 }
 

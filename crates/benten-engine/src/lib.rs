@@ -132,7 +132,7 @@ pub use benten_eval::chunk_sink::{Chunk, ChunkSink};
 pub use engine_sandbox::{SANDBOX_UNAVAILABLE_ON_WASM_TEXT, SandboxNodeDescription};
 pub use engine_stream::{StreamCursor, StreamHandle};
 pub use engine_subscribe::{OnChangeCallback, SubscribeCursor, Subscription};
-pub use engine_wait::SuspensionOutcome;
+pub use engine_wait::{ResumePayload, SuspensionOutcome};
 pub use suspension_store::RedbSuspensionStore;
 // Phase-2b G12-E re-exports of the eval-layer trait + value types so
 // downstream consumers (napi bindings, integration tests) can name the
