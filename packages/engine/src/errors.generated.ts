@@ -84,6 +84,7 @@ export const CATALOG_CODES = [
   "E_UNKNOWN_VIEW",
   "E_NOT_IMPLEMENTED",
   "E_IVM_PATTERN_MISMATCH",
+  "E_IVM_STRATEGY_NOT_IMPLEMENTED",
   "E_VERSION_UNKNOWN_PRIOR",
   "E_DSL_INVALID_SHAPE",
   "E_DSL_UNREGISTERED_HANDLER",
@@ -868,6 +869,21 @@ export class EIvmPatternMismatch extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_IVM_PATTERN_MISMATCH", "The caller asked a view for an index partition it doesn't maintain. Each of the five Phase-1 views keys on a specific field and rejects queries that omit it: - `capability_grants` requires `entity_cid` - `event_dispatch` requires `event_name` - `content_listing` accepts `label` (optional — omitted returns full listing; a non-matching label is rejected) - `governance_inheritance` requires `entity_cid` - `version_current` requires `anchor_id` Consult the view's maintained-pattern list and restrict the `ViewQuery` to supported keys. Distinct from `E_INV_REGISTRATION` — the view is healthy; the query shape is wrong.", message, context);
     this.name = "EIvmPatternMismatch";
+  }
+}
+
+/**
+ * E_IVM_STRATEGY_NOT_IMPLEMENTED
+ *
+ * Thrown at: IVM view registration (`benten_ivm::testing::try_construct_view_with_strategy`)
+ * Message template: "IVM strategy `{strategy:?}` is reserved but not implemented in this phase (deferred to {deferred_to_phase})"
+ */
+export class EIvmStrategyNotImplemented extends BentenError {
+  static readonly code = "E_IVM_STRATEGY_NOT_IMPLEMENTED";
+  static readonly fixHint = "Phase 2b ships `Strategy::A` (the 5 Phase-1 hand-written views) + `Strategy::B` (the generalized Algorithm B). `Strategy::C` (Z-set / DBSP cancellation) is reserved for Phase 3+ — the variant exists so the catalog of options is complete and stable, but constructing a `Strategy::C` view via `benten_ivm::testing::try_construct_view_with_strategy` returns this typed error rather than silently falling back. Pick `Strategy::B` for new user-registered views; pick `Strategy::A` for the 5 hand-written baselines (Rust-only, defaults applied automatically).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_IVM_STRATEGY_NOT_IMPLEMENTED", "Phase 2b ships `Strategy::A` (the 5 Phase-1 hand-written views) + `Strategy::B` (the generalized Algorithm B). `Strategy::C` (Z-set / DBSP cancellation) is reserved for Phase 3+ — the variant exists so the catalog of options is complete and stable, but constructing a `Strategy::C` view via `benten_ivm::testing::try_construct_view_with_strategy` returns this typed error rather than silently falling back. Pick `Strategy::B` for new user-registered views; pick `Strategy::A` for the 5 hand-written baselines (Rust-only, defaults applied automatically).", message, context);
+    this.name = "EIvmStrategyNotImplemented";
   }
 }
 
