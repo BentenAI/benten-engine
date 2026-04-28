@@ -255,7 +255,7 @@ impl EngineBuilder {
         let path_opt = self.path.clone();
         let backend = match (backend_opt, path_opt) {
             (Some(b), _) => b,
-            (None, Some(p)) => RedbBackend::open(p)?,
+            (None, Some(p)) => open_backend_for_path(&p)?,
             (None, None) => {
                 return Err(EngineError::Other {
                     code: ErrorCode::Unknown("builder_missing_path".into()),
@@ -268,6 +268,12 @@ impl EngineBuilder {
     }
 
     /// Builder-style open: `Engine::builder().open(path)`.
+    ///
+    /// The sentinel `":memory:"` is recognised here (HANDOFF §3.F wave-5):
+    /// it routes to [`RedbBackend::open_in_memory`] so 9-of-10
+    /// `packages/engine/test/*.test.ts` can drive the engine without a
+    /// filesystem path. Any other value is treated as a real path and
+    /// opens through [`RedbBackend::open`].
     pub fn open(mut self, path: impl AsRef<Path>) -> Result<Engine, EngineError> {
         if self.production && self.without_caps {
             return Err(EngineError::ProductionRequiresCaps);
@@ -275,7 +281,7 @@ impl EngineBuilder {
         if self.production && self.policy.is_none() {
             return Err(EngineError::NoCapabilityPolicyConfigured);
         }
-        let backend = RedbBackend::open(path)?;
+        let backend = open_backend_for_path(path.as_ref())?;
         self.backend = Some(backend);
         self.build()
     }
@@ -391,6 +397,33 @@ impl Default for EngineBuilder {
 /// One-shot guard for the NoAuth startup log — the process-wide `Once` so
 /// a binary opening a pool of engines does not spam stderr.
 static NOAUTH_LOG_ONCE: std::sync::Once = std::sync::Once::new();
+
+/// Sentinel path that routes [`Engine::open`] / [`EngineBuilder::open`] /
+/// [`EngineBuilder::build`] to a transient in-memory backend instead of
+/// touching the filesystem. HANDOFF §3.F wave-5: pinned as the literal
+/// string `":memory:"` because 9-of-10 `packages/engine/test/*.test.ts`
+/// already drive the engine through `Engine.open(":memory:")` at the
+/// napi boundary; renaming would break the JS test suite.
+pub const IN_MEMORY_SENTINEL: &str = ":memory:";
+
+/// Open the configured backend for `path` — sentinel-aware.
+///
+/// `path == ":memory:"` routes to [`RedbBackend::open_in_memory`] (a
+/// transient redb store with `Durability::None`). Any other value is
+/// treated as a real filesystem path and opened through
+/// [`RedbBackend::open`].
+///
+/// The match is intentionally on the literal sentinel string (not a
+/// `to_str()`-then-equality on the borrowed path) so a path that *happens*
+/// to encode `":memory:"` in some non-UTF8 form (impossible on POSIX, but
+/// the type permits it) does not silently get redirected.
+fn open_backend_for_path(path: &Path) -> Result<RedbBackend, EngineError> {
+    if path.as_os_str() == IN_MEMORY_SENTINEL {
+        Ok(RedbBackend::open_in_memory()?)
+    } else {
+        Ok(RedbBackend::open(path)?)
+    }
+}
 
 /// Message emitted once per process when the assembled engine falls through
 /// to the zero-config [`NoAuthBackend`]. Public so the integration test can
