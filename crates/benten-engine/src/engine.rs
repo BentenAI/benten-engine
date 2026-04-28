@@ -1145,6 +1145,7 @@ impl Engine {
                 actor_cid,
                 handler_cid: *handler_cid,
                 capability_grant_cid: crate::primitive_host::noauth_zero_grant_cid(),
+                sandbox_depth: 0,
             };
             // G12-A: route through the budget-aware capturing variant so
             // the terminal `TraceStep::BudgetExhausted` row pushed by the

@@ -16,6 +16,15 @@
 //!   firing lives in `benten-graph`.
 //! - `attribution` — invariant 14 structural declaration-time check
 //!   (G5-B-ii). Runtime threading lives in `evaluator/attribution.rs`.
+//! - `sandbox_depth` — invariant 4 SANDBOX nest-depth ceiling (G7-B).
+//!   Both registration-time static analysis (`validate_registration`) and
+//!   the runtime depth-check helper invoked by the SANDBOX primitive
+//!   executor live here; the counter rides on
+//!   `AttributionFrame.sandbox_depth: u8` per D20-RESOLVED.
+//! - `sandbox_output` — invariant 7 SANDBOX cumulative output ceiling
+//!   (G7-B). Provides the runtime check helper that the streaming
+//!   `CountedSink` PRIMARY path (D17-RESOLVED) calls before accepting
+//!   host-fn bytes; D15 trap-loudly default — no silent truncation.
 //!
 //! `mod.rs` is deliberately thin: downstream call-sites
 //! (`benten_eval::invariants::validate_subgraph`,
@@ -26,6 +35,8 @@
 pub mod attribution;
 pub mod budget;
 pub mod immutability;
+pub mod sandbox_depth;
+pub mod sandbox_output;
 pub mod structural;
 pub mod system_zone;
 

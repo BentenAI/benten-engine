@@ -35,6 +35,9 @@ mod tests {
             actor_cid: zero_cid(),
             handler_cid: zero_cid(),
             capability_grant_cid: zero_cid(),
+            // Phase-2b G7-B (D20 additive) — default sandbox_depth = 0
+            // keeps the Phase-2a fixture CID stable.
+            sandbox_depth: 0,
         };
         let cid = frame.cid().expect("attribution frame cid");
         assert_eq!(cid.to_string(), FIXTURE_CID);

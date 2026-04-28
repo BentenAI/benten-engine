@@ -372,6 +372,21 @@ pub enum InvariantViolation {
     /// and reuses the `ErrorCode::InvSystemZone` code. Maps to
     /// [`ErrorCode::InvSystemZone`].
     SystemZone,
+    /// Invariant 4 (G7-B): SANDBOX nest-depth ceiling exceeded. Fires at
+    /// registration-time via static SubgraphSpec analysis (counts SANDBOX
+    /// nodes along the call-graph) AND at runtime via the
+    /// `AttributionFrame.sandbox_depth: u8` counter when a TRANSFORM-
+    /// computed SANDBOX target pushes past the configured ceiling
+    /// (default 4). D20-RESOLVED — counter INHERITED across CALL boundaries.
+    /// Maps to [`ErrorCode::InvSandboxDepth`].
+    SandboxDepth,
+    /// Invariant 7 (G7-B): SANDBOX cumulative output exceeded
+    /// `output_max_bytes`. Fires at the streaming `CountedSink` PRIMARY
+    /// path BEFORE bytes are accepted (D17-RESOLVED defense-in-depth) and
+    /// also at the primitive return-value backstop. D15 trap-loudly default —
+    /// no silent truncation in Phase 2b. Maps to
+    /// [`ErrorCode::InvSandboxOutput`].
+    SandboxOutput,
 }
 
 impl InvariantViolation {
@@ -391,6 +406,8 @@ impl InvariantViolation {
             InvariantViolation::Attribution => ErrorCode::InvAttribution,
             InvariantViolation::Immutability => ErrorCode::InvImmutability,
             InvariantViolation::SystemZone => ErrorCode::InvSystemZone,
+            InvariantViolation::SandboxDepth => ErrorCode::InvSandboxDepth,
+            InvariantViolation::SandboxOutput => ErrorCode::InvSandboxOutput,
         }
     }
 }
@@ -601,6 +618,23 @@ pub struct InvariantConfig {
     pub max_fanout: u32,
     pub max_nodes: u32,
     pub max_edges: u32,
+    /// Phase-2b G7-B / Inv-4: maximum SANDBOX nesting depth. The
+    /// `AttributionFrame.sandbox_depth: u8` counter is checked against
+    /// this ceiling at every SANDBOX entry. Default `4` per D20-RESOLVED
+    /// (enough for legitimate composition; 5+ smells like accidental
+    /// recursion). The hard type-level ceiling is `u8::MAX` — even with
+    /// `max_sandbox_nest_depth = u8::MAX`, the
+    /// `checked_add(1).ok_or(SandboxNestedDispatchDepthExceeded)` pattern
+    /// in `invariants::sandbox_depth` saturates without wraparound.
+    pub max_sandbox_nest_depth: u8,
+    /// Phase-2b G7-B / Inv-7: maximum per-call SANDBOX cumulative-output
+    /// ceiling in bytes. Registration rejects any SANDBOX node that
+    /// declares `output_max_bytes` greater than this value; runtime
+    /// `CountedSink` enforces the per-node value (or the engine default
+    /// when omitted) against this same hard ceiling. Default is
+    /// [`invariants::sandbox_output::DEFAULT_MAX_SANDBOX_OUTPUT_BYTES`]
+    /// (16 MiB) per D15 trap-loudly framing.
+    pub max_sandbox_output_bytes: u64,
 }
 
 impl Default for InvariantConfig {
@@ -610,6 +644,8 @@ impl Default for InvariantConfig {
             max_fanout: u32::try_from(limits::DEFAULT_MAX_FANOUT).unwrap_or(16),
             max_nodes: u32::try_from(limits::DEFAULT_MAX_NODES).unwrap_or(4096),
             max_edges: u32::try_from(limits::DEFAULT_MAX_EDGES).unwrap_or(8192),
+            max_sandbox_nest_depth: invariants::sandbox_depth::DEFAULT_MAX_SANDBOX_NEST_DEPTH,
+            max_sandbox_output_bytes: invariants::sandbox_output::DEFAULT_MAX_SANDBOX_OUTPUT_BYTES,
         }
     }
 }

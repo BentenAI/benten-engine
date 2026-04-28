@@ -25,6 +25,7 @@ fn sample_payload() -> ExecutionStatePayload {
             actor_cid: zero_cid(),
             handler_cid: zero_cid(),
             capability_grant_cid: zero_cid(),
+            sandbox_depth: 0,
         }],
         pinned_subgraph_cids: vec![zero_cid()],
         context_binding_snapshots: Vec::new(),
@@ -117,6 +118,7 @@ proptest! {
             actor_cid: zero_cid(),
             handler_cid: zero_cid(),
             capability_grant_cid: zero_cid(),
+            sandbox_depth: 0,
         };
         let attribution_chain = vec![frame; chain_depth];
         let pinned_subgraph_cids = vec![zero_cid(); pin_count];
