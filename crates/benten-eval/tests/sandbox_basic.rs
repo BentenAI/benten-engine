@@ -15,21 +15,100 @@ use benten_eval::sandbox::instance::{module_cache_size, module_for_bytes, shared
 use std::sync::Arc;
 
 #[test]
-#[ignore = "Phase 2b G7-C pending — full engine.sandbox_call surface lands at G7-C engine integration (PR #33). G7-A ships the per-call wasmtime lifecycle building blocks but not the public Engine method."]
 fn sandbox_end_to_end() {
-    // Plan §3 G7-A must-pass test #1 — minimal echo module, default caps,
-    // returns the input verbatim through the SANDBOX primitive executor.
-    todo!("G7-C PR #33 — wire echo fixture + sandbox_call public surface");
+    // Wave-8b: minimal echo-shaped module returning a constant via the
+    // primitive-level `sandbox::execute` surface.
+    use benten_core::Cid;
+    use benten_eval::AttributionFrame;
+    use benten_eval::sandbox::{ManifestRef, ManifestRegistry, SandboxConfig, execute};
+
+    let bytes =
+        wat::parse_str("(module (func (export \"run\") (result i32) i32.const 42))").unwrap();
+    let registry = ManifestRegistry::new();
+    let zero = Cid::from_blake3_digest([0u8; 32]);
+    let attribution = AttributionFrame {
+        actor_cid: zero,
+        handler_cid: zero,
+        capability_grant_cid: zero,
+        sandbox_depth: 0,
+    };
+    let res = execute(
+        &bytes,
+        ManifestRef::named("compute-basic"),
+        &registry,
+        SandboxConfig::default(),
+        &[
+            "host:compute:log".to_string(),
+            "host:compute:time".to_string(),
+        ],
+        &attribution,
+    )
+    .unwrap();
+    // i32::42 little-endian.
+    assert_eq!(res.output, vec![42, 0, 0, 0]);
+    assert!(res.fuel_consumed > 0);
 }
 
 #[test]
-#[ignore = "Phase 2b G7-C pending — wasm fixture exercising module-global memory mutation requires the Store + Instance per-call lifecycle that G7-C wires (G7-A scaffold's execute() returns Ok with empty output without invoking the module). Tracked at G7-C PR #33."]
 fn sandbox_no_state_persists_across_calls() {
-    // wsa-15 — pin the PROPERTY (no cross-call retention) not the
-    // implementation. Test fixture writes to module-global memory in
-    // call 1; call 2 of the same module observes the global at its
-    // initial value. Needs G7-C Store+Instance dispatch.
-    todo!("G7-C PR #33 — assert module global memory is reset between calls");
+    // wsa-15 — module-global memory MUST reset across primitive calls
+    // (per-call Store+Instance lifecycle, D3-RESOLVED).
+    use benten_core::Cid;
+    use benten_eval::AttributionFrame;
+    use benten_eval::sandbox::{ManifestRef, ManifestRegistry, SandboxConfig, execute};
+
+    // Module: increments a global on each `run` call, returns its value.
+    let bytes = wat::parse_str(
+        "(module
+           (global $g (mut i32) (i32.const 0))
+           (func (export \"run\") (result i32)
+             global.get $g
+             i32.const 1
+             i32.add
+             global.set $g
+             global.get $g
+           )
+         )",
+    )
+    .unwrap();
+    let registry = ManifestRegistry::new();
+    let zero = Cid::from_blake3_digest([0u8; 32]);
+    let attribution = AttributionFrame {
+        actor_cid: zero,
+        handler_cid: zero,
+        capability_grant_cid: zero,
+        sandbox_depth: 0,
+    };
+    let grant = vec![
+        "host:compute:log".to_string(),
+        "host:compute:time".to_string(),
+    ];
+    // Call 1 — global ends at 1.
+    let r1 = execute(
+        &bytes,
+        ManifestRef::named("compute-basic"),
+        &registry,
+        SandboxConfig::default(),
+        &grant,
+        &attribution,
+    )
+    .unwrap();
+    assert_eq!(r1.output, vec![1, 0, 0, 0]);
+    // Call 2 — fresh Store+Instance, global resets to 0, ends at 1
+    // again.
+    let r2 = execute(
+        &bytes,
+        ManifestRef::named("compute-basic"),
+        &registry,
+        SandboxConfig::default(),
+        &grant,
+        &attribution,
+    )
+    .unwrap();
+    assert_eq!(
+        r2.output, r1.output,
+        "wsa-15 — global memory MUST reset across calls"
+    );
 }
 
 #[test]

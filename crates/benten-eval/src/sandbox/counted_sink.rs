@@ -118,8 +118,20 @@ impl CountedSink {
     /// Returns `Err(SinkOverflow)` when the cumulative byte count
     /// would exceed the limit.
     pub fn write(&mut self, bytes: &[u8], emitter_kind: &str) -> Result<(), SinkOverflow> {
-        let n = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
-        let next = self.consumed.saturating_add(n);
+        self.write_n_bytes(u64::try_from(bytes.len()).unwrap_or(u64::MAX), emitter_kind)
+    }
+
+    /// PRIMARY-path byte-count variant — same semantics as [`Self::write`]
+    /// but takes an explicit byte count. Used by the SANDBOX host-fn
+    /// trampoline (Wave-8b) where the host-fn knows the byte volume
+    /// without having to materialise the bytes themselves (e.g. `log`
+    /// counts a `(ptr, len)` write without reading guest memory).
+    ///
+    /// # Errors
+    /// Returns `Err(SinkOverflow)` when the cumulative byte count
+    /// would exceed the limit.
+    pub fn write_n_bytes(&mut self, n_bytes: u64, emitter_kind: &str) -> Result<(), SinkOverflow> {
+        let next = self.consumed.saturating_add(n_bytes);
         if next > self.limit {
             return Err(SinkOverflow {
                 consumed: self.consumed,

@@ -18,22 +18,47 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 #![cfg(not(target_arch = "wasm32"))]
 
+use benten_eval::sandbox::counted_sink::{OverflowPath, SinkOverflow};
+use benten_eval::sandbox::{SandboxError, resolve_priority};
+
 #[test]
-#[ignore = "Phase 2b G7-C pending — testing_force_simultaneous_traps test helper requires the wasmtime Store+Instance dispatch G7-C wires (PR #33)."]
 fn sandbox_severity_priority_memory_wins_over_wallclock() {
-    todo!("G7-C PR #33 — testing helper + dual-trip assertion");
+    // D21 priority resolver — memory > wallclock at the same trap frame.
+    let pick = resolve_priority(vec![
+        SandboxError::WallclockExceeded { limit_ms: 1000 },
+        SandboxError::MemoryExhausted { limit: 100 },
+    ]);
+    assert!(matches!(pick, Some(SandboxError::MemoryExhausted { .. })));
 }
 
 #[test]
-#[ignore = "Phase 2b G7-C pending — testing_force_simultaneous_traps test helper requires the wasmtime Store+Instance dispatch G7-C wires (PR #33)."]
 fn sandbox_simultaneous_wallclock_and_fuel_picks_wallclock() {
-    todo!("G7-C PR #33 — testing_force_simultaneous_traps(&[Wallclock, Fuel])");
+    let pick = resolve_priority(vec![
+        SandboxError::FuelExhausted {
+            consumed: 0,
+            limit: 100,
+        },
+        SandboxError::WallclockExceeded { limit_ms: 1000 },
+    ]);
+    assert!(matches!(pick, Some(SandboxError::WallclockExceeded { .. })));
 }
 
 #[test]
-#[ignore = "Phase 2b G7-C pending — testing_force_simultaneous_traps test helper requires the wasmtime Store+Instance dispatch G7-C wires (PR #33)."]
 fn sandbox_simultaneous_fuel_and_output_picks_fuel() {
-    todo!("G7-C PR #33 — testing_force_simultaneous_traps(&[Fuel, Output])");
+    let overflow = SinkOverflow {
+        consumed: 5,
+        limit: 5,
+        emitter_kind: "host_fn:compute:log".to_string(),
+        path: OverflowPath::PrimaryStreaming,
+    };
+    let pick = resolve_priority(vec![
+        SandboxError::OutputOverflow(overflow),
+        SandboxError::FuelExhausted {
+            consumed: 0,
+            limit: 100,
+        },
+    ]);
+    assert!(matches!(pick, Some(SandboxError::FuelExhausted { .. })));
 }
 
 #[test]
@@ -75,7 +100,30 @@ fn sandbox_priority_order_documented_in_catalog() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-C pending — testing_force_simultaneous_traps test helper requires the wasmtime Store+Instance dispatch G7-C wires (PR #33)."]
 fn sandbox_axis_in_isolation_still_fires_correctly() {
-    todo!("G7-C PR #33 — 4 sub-cases via testing_force_simultaneous_traps singleton");
+    // Each axis in isolation MUST be picked when alone.
+    assert!(matches!(
+        resolve_priority(vec![SandboxError::MemoryExhausted { limit: 0 }]),
+        Some(SandboxError::MemoryExhausted { .. })
+    ));
+    assert!(matches!(
+        resolve_priority(vec![SandboxError::WallclockExceeded { limit_ms: 0 }]),
+        Some(SandboxError::WallclockExceeded { .. })
+    ));
+    assert!(matches!(
+        resolve_priority(vec![SandboxError::FuelExhausted {
+            consumed: 0,
+            limit: 0
+        }]),
+        Some(SandboxError::FuelExhausted { .. })
+    ));
+    assert!(matches!(
+        resolve_priority(vec![SandboxError::OutputOverflow(SinkOverflow {
+            consumed: 0,
+            limit: 0,
+            emitter_kind: "x".to_string(),
+            path: OverflowPath::PrimaryStreaming,
+        })]),
+        Some(SandboxError::OutputOverflow(_))
+    ));
 }
