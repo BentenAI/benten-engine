@@ -115,7 +115,7 @@ pub fn sandbox_target_supported() -> bool {
 //
 // When the native bridge lands: it will be cfg-gated behind the engine
 // crate's `test-helpers` feature per sec-r6r2-02 discipline (the napi
-// cdylib opts into the narrower `envelope-cache-test-grade` feature, so
+// cdylib post-G12-E opts only into `iteration-budget-test-grade`, so
 // the accessor is NOT exposed to TS by default — devtools that need real
 // runtime state require an explicit feature opt-in). The visible TS
 // contract (the `sandbox_napi_bridge.test.ts` symbol-presence pin) is the

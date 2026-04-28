@@ -18,38 +18,17 @@
 //! exec-state + payload-CID machinery does fire through the helpers above.
 
 use benten_core::Cid;
-use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
 
 use crate::exec_state::{ExecutionStateEnvelope, ExecutionStatePayload};
+use crate::suspension_store::{SuspensionStore, WaitMetadata as StoreWaitMetadata};
 use crate::{EvalError, InvariantViolation, TraceStep};
 
-/// Process-local metadata side table indexed by the suspended envelope's
-/// CID. Phase-2a G3-B-cont keeps WAIT's deadline + signal-shape context
-/// out of the `ExecutionStatePayload` shape (which is frozen by the
-/// Inv-14 fixture CID) by parking it here; resume consults the entry
-/// under the envelope's CID.
-#[derive(Debug, Clone)]
-pub(crate) struct WaitMetadata {
-    /// Millisecond value of `ctx.elapsed_ms()` at suspend time. `None` if
-    /// no clock was injected; resume treats absence as "no deadline".
-    pub(crate) suspend_elapsed_ms: Option<u64>,
-    /// Timeout in ms, relative to `suspend_elapsed_ms`. `None` for the
-    /// signal variant without an explicit timeout.
-    pub(crate) timeout_ms: Option<u64>,
-    /// Expected signal shape, if the WAIT node declared one. Absent
-    /// means "untyped — any Value is admitted".
-    pub(crate) signal_shape: Option<benten_core::Value>,
-    /// Whether this WAIT is the `duration` variant (i.e. has `duration_ms`
-    /// instead of `signal`). Duration variants fire `WaitTimeout` on
-    /// `DurationElapsed` if the deadline is past.
-    pub(crate) is_duration: bool,
-}
-
-fn registry() -> &'static Mutex<HashMap<Cid, WaitMetadata>> {
-    static R: OnceLock<Mutex<HashMap<Cid, WaitMetadata>>> = OnceLock::new();
-    R.get_or_init(|| Mutex::new(HashMap::new()))
-}
+/// Phase-2b G12-E: WAIT-side metadata side-table value shape — keeps
+/// the local crate-private alias for back-compat with the existing
+/// `resume_with_meta` signature while the trait-level [`StoreWaitMetadata`]
+/// owns the cross-impl shape. The two structs are field-identical and
+/// trivially convertible (`From` impls below).
+pub(crate) type WaitMetadata = StoreWaitMetadata;
 
 /// Handle to a suspended WAIT. Opaque, carries the CID of the persisted
 /// envelope and the signal name the evaluator is waiting on.
@@ -328,17 +307,24 @@ pub fn evaluate(
     let envelope = ExecutionStateEnvelope::new(payload)?;
     let state_cid = envelope.envelope_cid()?;
 
-    if let Ok(mut guard) = registry().lock() {
-        guard.insert(
-            state_cid,
-            WaitMetadata {
-                suspend_elapsed_ms: ctx.elapsed_ms(),
-                timeout_ms,
-                signal_shape,
-                is_duration,
-            },
-        );
-    }
+    // Phase-2b G12-E: route through the configured `SuspensionStore` so
+    // cross-process resume can hydrate the deadline + shape from durable
+    // storage. Falls back to the process-default singleton when the
+    // EvalContext was not handed an explicit store (in-process unit
+    // tests, primitive-layer entry points outside the engine).
+    let store = ctx.suspension_store();
+    let _ = store.put_wait(
+        state_cid,
+        WaitMetadata {
+            suspend_elapsed_ms: ctx.elapsed_ms(),
+            timeout_ms,
+            signal_shape,
+            is_duration,
+        },
+    );
+    // Persist the envelope itself so cross-process `suspend_to_bytes`
+    // can fetch the same `ExecutionStateEnvelope` after a restart.
+    let _ = store.put_envelope(envelope.clone());
 
     Ok(WaitOutcome::Suspended(SuspendedHandle {
         state_cid,
@@ -372,10 +358,14 @@ pub fn resume(
     ctx: &crate::EvalContext,
 ) -> Result<WaitOutcome, EvalError> {
     let state_cid = envelope.envelope_cid()?;
-    let meta = registry()
-        .lock()
-        .ok()
-        .and_then(|g| g.get(&state_cid).cloned());
+    // Phase-2b G12-E: WAIT metadata lookup now routes through the
+    // configured `SuspensionStore`, which closes the Phase-2a cross-
+    // process gap (Compromise #10). When the resuming process opened a
+    // store backed by the same redb database the suspending process
+    // wrote, `get_wait` returns the original deadline + signal-shape
+    // and `resume_with_meta` enforces them rather than silently
+    // completing.
+    let meta = ctx.suspension_store().get_wait(&state_cid).ok().flatten();
     resume_with_meta(meta, signal, ctx.elapsed_ms())
 }
 
@@ -385,51 +375,42 @@ pub fn resume(
 /// does not own an ExecutionStateEnvelope — it synthesises one from the
 /// handle's state_cid).
 ///
-/// # Phase-2a missing-metadata fallback (Decision 4, deferred to Phase 2b)
+/// # Phase-2b G12-E: missing-metadata = fail-loud (Compromise #10 closure)
 ///
-/// **Known gap — out of scope for Phase 2a.** When `meta` is `None` —
-/// which happens whenever a `SuspendedHandle` lands on the resume path
-/// without a corresponding entry in the process-local [`registry`] — the
-/// fallback arm completes silently with the supplied value (or `unit`
-/// for a `DurationElapsed`). No deadline check fires, no shape check
-/// fires, and no typed error is raised. Missing-metadata occurs today
-/// in exactly two scenarios:
-///
-///   1. The `SuspendedHandle` was fabricated in a test (including any
-///      test that goes through [`SuspendedHandle::new`] without
-///      first calling [`evaluate`] on a WAIT-bearing subgraph).
-///   2. **Cross-process resume** — the suspend ran in process A, the
-///      envelope persisted to disk, process B loaded it and called
-///      `resume`. Process B's registry is empty.
-///
-/// Scenario 2 is the real-world gap. Preserving metadata across
-/// persisted envelopes requires serialising `WaitMetadata` into the
-/// `ExecutionStateEnvelope` DAG-CBOR shape itself; this is scoped in
-/// `.addl/phase-2b/00-scope-outline.md` §7a (WAIT durability) and
-/// tracked in `docs/future/phase-2-backlog.md`. Until Phase 2b lands
-/// that work, cross-process resume silently drops the deadline +
-/// shape validation. In-process suspend/resume (the only Phase-2a
-/// supported shape) preserves metadata via the process-local
-/// [`registry`] and fires both checks correctly.
-///
-/// The G11-A EVAL wave-1 triage (D12.7 Decision 4) chose **(c) document
-/// the gap, defer the fix to Phase 2b** over (a) fail loud on missing
-/// metadata — the latter would regress in-process test harnesses that
-/// fabricate handles.
+/// G12-E generalised the WAIT metadata side-table behind the
+/// [`crate::suspension_store::SuspensionStore`] port and rewrote the
+/// missing-metadata path from "permissive `Complete(value)` fallback"
+/// to a typed [`EvalError::Host`] with
+/// [`crate::ErrorCode::HostBackendUnavailable`]. The Phase-2a fallback
+/// was a documented gap (see Compromise #10): it silently dropped the
+/// deadline + shape check on cross-process resume, which is the only
+/// scenario where the metadata could legitimately be absent. With the
+/// G12-E redb-backed store, a cross-process resume against the same
+/// underlying database hydrates the entry; missing-metadata after
+/// G12-E means a real integrity break (caller fabricated a handle,
+/// store lost its entry, or the process-local store has not been
+/// shared with the resuming process). Fail loud rather than admit
+/// every signal silently.
 pub(crate) fn resume_with_meta(
     meta: Option<WaitMetadata>,
     signal: WaitResumeSignal,
     current_elapsed_ms_override: Option<u64>,
 ) -> Result<WaitOutcome, EvalError> {
     let Some(meta) = meta else {
-        // No metadata registered — treat as "no deadline, no shape"; if
-        // a signal was supplied we complete with the payload; a
-        // DurationElapsed with no metadata also completes (there is no
-        // deadline to exceed).
-        return Ok(match signal {
-            WaitResumeSignal::Signal { value } => WaitOutcome::Complete(value),
-            WaitResumeSignal::DurationElapsed => WaitOutcome::Complete(benten_core::Value::unit()),
-        });
+        // Phase-2b G12-E (Compromise #10 closure): fail loud rather than
+        // silently complete. A missing-metadata resume can no longer
+        // hide a deadline / shape check that Phase-2a would have
+        // enforced in-process.
+        let _ = signal;
+        return Err(EvalError::Host(crate::HostError {
+            code: crate::ErrorCode::HostBackendUnavailable,
+            context: None,
+            source: Box::new(std::io::Error::other(
+                "wait resume: suspension store has no metadata for envelope CID \
+                 (cross-process resume without a shared SuspensionStore, \
+                 fabricated handle, or evicted entry)",
+            )),
+        }));
     };
 
     let now_ms = current_elapsed_ms_override.or(meta.suspend_elapsed_ms);
@@ -500,14 +481,19 @@ fn shapes_match(expected: &benten_core::Value, actual: &benten_core::Value) -> b
     }
 }
 
-/// Phase-2a G3-B-cont: fetch the metadata registered at suspend time for
-/// a given envelope CID. Used by the crate-root `resume` alias which
-/// does not own an `ExecutionStateEnvelope` value but has the CID on
-/// the [`SuspendedHandle`]. Returns `None` if nothing was registered
-/// (e.g. the handle came from a different process / was fabricated).
+/// Phase-2b G12-E: fetch the metadata registered at suspend time for a
+/// given envelope CID, routed through the process-default
+/// [`crate::suspension_store::SuspensionStore`]. Used by the crate-root
+/// `resume` alias which does not own an `ExecutionStateEnvelope` value
+/// but has the CID on the [`SuspendedHandle`].
+///
+/// Returns `None` only if the store itself surfaces an error AND
+/// the entry is genuinely absent — call sites that resume against a
+/// `None` value MUST surface the typed missing-metadata error
+/// (`resume_with_meta` does this).
 pub(crate) fn metadata_for_cid(state_cid: &Cid) -> Option<WaitMetadata> {
-    registry()
-        .lock()
+    crate::suspension_store::default_process_store()
+        .get_wait(state_cid)
         .ok()
-        .and_then(|g| g.get(state_cid).cloned())
+        .flatten()
 }

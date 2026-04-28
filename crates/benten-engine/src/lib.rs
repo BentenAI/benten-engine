@@ -72,8 +72,8 @@ pub mod subgraph_spec;
 // R6 round-2 sec-r6r2-02: gate the test-helper surface (`principal_cid`,
 // `minimal_wait_handler`, `policy_with_grants`, `counting_capability_policy`,
 // `subgraph_bytes_for_handler`, etc.) behind `cfg(any(test, feature =
-// "test-helpers"))` so the napi cdylib (which opts into the narrower
-// `envelope-cache-test-grade` feature only) does NOT compile this surface
+// "test-helpers"))` so the napi cdylib (which post-G12-E opts only
+// into `iteration-budget-test-grade`) does NOT compile this surface
 // into production. Sibling crates' integration tests reach in via dev-deps
 // that already declare `benten-engine = { features = ["test-helpers"] }`
 // (see `benten-eval/Cargo.toml:66`, `benten-graph/Cargo.toml:86`,
@@ -120,6 +120,11 @@ pub mod engine_snapshot;
 pub mod engine_stream;
 pub mod engine_subscribe;
 pub mod engine_wait;
+// Phase-2b G12-E — engine-side `RedbSuspensionStore` adapter wiring the
+// engine's existing `Arc<RedbBackend>` into `benten_eval::SuspensionStore`.
+// Closes the Phase-2a Compromise #10 cross-process WAIT-resume gap +
+// retires the test-grade `engine_wait::ENVELOPE_CACHE` surface.
+pub mod suspension_store;
 // Phase 2b G10-B — module manifest format (D9-RESOLVED canonical
 // DAG-CBOR; D16-RESOLVED-FURTHER REQUIRED expected_cid arg on
 // `Engine::install_module`). See `module_manifest.rs` for the format
@@ -132,6 +137,13 @@ pub use engine_sandbox::{SANDBOX_UNAVAILABLE_ON_WASM_TEXT, SandboxNodeDescriptio
 pub use engine_stream::{StreamCursor, StreamHandle};
 pub use engine_subscribe::{OnChangeCallback, SubscribeCursor, Subscription};
 pub use engine_wait::SuspensionOutcome;
+pub use suspension_store::RedbSuspensionStore;
+// Phase-2b G12-E re-exports of the eval-layer trait + value types so
+// downstream consumers (napi bindings, integration tests) can name the
+// types without depending on benten-eval directly.
+pub use benten_eval::suspension_store::{
+    InMemorySuspensionStore, SuspensionKey, SuspensionStore, SuspensionStoreError, WaitMetadata,
+};
 pub use module_manifest::{
     ManifestError, ManifestSignature, ManifestSummary, MigrationStep, ModuleManifest,
     ModuleManifestEntry,

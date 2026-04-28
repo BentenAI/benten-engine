@@ -172,8 +172,8 @@ impl Engine {
     /// ## Surface scope (sec-r6r2-02 cfg-gate)
     ///
     /// This accessor is cfg-gated behind `any(test, feature =
-    /// "test-helpers")` so the napi cdylib (which opts into the narrower
-    /// `envelope-cache-test-grade` feature only) does NOT compile this
+    /// "test-helpers")` so the napi cdylib (which post-G12-E opts only
+    /// into `iteration-budget-test-grade`) does NOT compile this
     /// surface into production. Sibling crates' integration tests +
     /// devtools that explicitly opt into `test-helpers` reach in via
     /// dev-deps.

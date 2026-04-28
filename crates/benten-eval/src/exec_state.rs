@@ -155,6 +155,19 @@ impl ExecutionStatePayload {
 
 /// Envelope wrapping an [`ExecutionStatePayload`] with a `schema_version`
 /// and a pre-computed `payload_cid`. Content-addressed by composition.
+///
+/// # Cross-process safety (Phase 2b G12-E)
+///
+/// `ExecutionStateEnvelope` bytes are now safe to round-trip across a
+/// process boundary against a shared on-disk redb file. The engine
+/// persists the envelope into its
+/// [`crate::suspension_store::SuspensionStore`] at suspend time
+/// (default impl: `benten_engine::RedbSuspensionStore` over the engine's
+/// `Arc<RedbBackend>`). A fresh engine opened against the same path
+/// hydrates the envelope on `suspend_to_bytes` lookup AND restores the
+/// associated [`crate::suspension_store::WaitMetadata`] so deadline +
+/// signal-shape checks fire correctly post-restart. This closes the
+/// Phase-2a Compromise #10 cross-process metadata gap.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionStateEnvelope {
     /// Envelope schema version; `= 1` in Phase 2a.

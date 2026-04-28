@@ -21,17 +21,19 @@
 //!   this surface is NOT rejected on principal mismatch — that's the
 //!   whole point of the skip.
 //!
-//! # Envelope-cache eviction (G11-A)
+//! # Envelope persistence (G12-E)
 //!
-//! The module-private `ENVELOPE_CACHE` is bounded by
-//! `ENVELOPE_CACHE_MAX_ENTRIES` to prevent unbounded memory growth from
-//! a long-running test process. The map is content-addressed — duplicate
-//! CIDs overwrite rather than accumulate — so the cap is only reached
-//! when a test generates many distinct envelopes. On insertion past the
-//! cap we evict one entry (first-in BTreeMap order) and continue. No
-//! LRU metadata: the cache is test-grade in Phase-2a; Phase-2b moves
-//! envelope bytes to a system-zone storage primitive with real lifecycle
-//! policy.
+//! Phase-2a shipped a test-grade `ENVELOPE_CACHE` (process-local
+//! `LazyLock<Mutex<BTreeMap<Cid, ExecutionStateEnvelope>>>` gated behind
+//! the `envelope-cache-test-grade` feature) that round-tripped suspend
+//! envelope bytes for `suspend_to_bytes` / `resume_from_bytes_*`.
+//! G12-E retires that cache entirely: persistence now goes through
+//! [`Engine::suspension_store`] (a [`benten_eval::SuspensionStore`]),
+//! whose default impl is the redb-backed
+//! [`crate::suspension_store::RedbSuspensionStore`] over the engine's
+//! own redb file. Cross-process resume (engine A drops, engine B opens
+//! same path) hydrates the envelope bytes from disk — closing the
+//! Phase-2a Compromise #10 cross-process gap.
 //!
 //! # Resume protocol (§9.1 4-step)
 //!
@@ -60,11 +62,6 @@
 //! Only once all four steps pass does the evaluator take the resume path
 //! and produce a terminal `Outcome`.
 
-#[cfg(any(test, feature = "envelope-cache-test-grade"))]
-use std::collections::BTreeMap;
-#[cfg(any(test, feature = "envelope-cache-test-grade"))]
-use std::sync::{LazyLock, Mutex};
-
 use benten_caps::WriteContext as CapWriteContext;
 use benten_core::{Cid, Node, Value};
 use benten_errors::ErrorCode;
@@ -77,95 +74,31 @@ use crate::error::EngineError;
 use crate::outcome::Outcome;
 
 // ---------------------------------------------------------------------------
-// Module-private envelope cache
+// Envelope persistence — G12-E retired the test-grade ENVELOPE_CACHE
 // ---------------------------------------------------------------------------
 //
-// `SuspendedHandle` carries only a `(state_cid, signal_name)` pair; the
-// persisted envelope bytes live here, keyed by envelope CID. Phase-2a
-// test-grade persistence; Phase-2b moves these bytes to a system-zone
-// storage primitive. Sharing across Engine instances is safe because the
-// envelope CID is content-addressed — distinct handlers produce distinct
-// CIDs even when the same process hosts multiple engines (required by the
-// `resume_after_engine_restart_preserves_attribution_chain` integration
-// gate, which drops engine A and opens engine B against the same db path).
-
-/// Upper bound on the in-memory envelope cache (G11-A). Sized to absorb
-/// the Phase-2a test suite's WAIT-bearing fixtures (current peak: low
-/// hundreds of distinct CIDs across the full `cargo test -p benten-engine`
-/// workspace run) with comfortable headroom. On overflow we evict one
-/// oldest-by-BTreeMap-ordering entry and continue — symmetric with the
-/// `ChangeBroadcast`'s oldest-first drop policy, so the observable
-/// shape of "a suspended handle can no longer resume" is at least
-/// consistent across cache surfaces.
-///
-/// Wave-1 mini-review MODERATE-4: cfg-gated behind `any(test, feature =
-/// "envelope-cache-test-grade")` alongside the cache itself — production
-/// builds without the feature strip the cache (and this cap) entirely,
-/// since Phase-2a ships test-grade suspend/resume and Phase-2b persists
-/// envelopes via redb.
-///
-/// R6 fix-pass A2: this gate was tightened from `test-helpers` to the
-/// narrower `envelope-cache-test-grade` so the napi cdylib (which needs
-/// the WAIT bridge) doesn't drag the broader test-only surface
-/// (`testing_force_reregister_with_different_cid`,
-/// `testing_audit_sequence`, etc.) into production builds. The
-/// `test-helpers` feature implies `envelope-cache-test-grade` so
-/// existing CI invocations are unaffected.
-#[cfg(any(test, feature = "envelope-cache-test-grade"))]
-pub(crate) const ENVELOPE_CACHE_MAX_ENTRIES: usize = 1_024;
-
-/// Wave-1 mini-review MODERATE-4: the in-memory envelope cache is
-/// test-grade — it exists only so the R3 WAIT resume tests can round-
-/// trip a suspended handle without a persistent backing store. Gated
-/// behind `any(test, feature = "envelope-cache-test-grade")` so a
-/// release artifact built with `--no-default-features` does not carry a
-/// static `LazyLock<Mutex<BTreeMap<...>>>` that has no legitimate
-/// production consumer. Production Phase-2b will persist envelopes
-/// through a system-zone storage primitive (see module docs); until
-/// then `cache_put` / `cache_get` become no-ops under the non-gated
-/// branch.
-#[cfg(any(test, feature = "envelope-cache-test-grade"))]
-static ENVELOPE_CACHE: LazyLock<Mutex<BTreeMap<Cid, ExecutionStateEnvelope>>> =
-    LazyLock::new(|| Mutex::new(BTreeMap::new()));
-
-#[cfg(any(test, feature = "envelope-cache-test-grade"))]
-fn cache_put(envelope: ExecutionStateEnvelope) -> Cid {
+// Phase-2a shipped `ENVELOPE_CACHE` (a process-local `LazyLock<Mutex<
+// BTreeMap<Cid, ExecutionStateEnvelope>>>` gated behind the
+// `envelope-cache-test-grade` feature) as a test-grade stand-in until a
+// real persistence layer landed. G12-E lands that layer:
+// [`benten_eval::SuspensionStore`] with a redb-backed default impl
+// (`RedbSuspensionStore`). The two helpers below now route
+// suspend / fetch through `Engine::suspension_store()` so the bytes
+// survive an `Engine::drop` AND cross a process boundary cleanly.
+fn cache_put(engine: &Engine, envelope: ExecutionStateEnvelope) -> Result<Cid, EngineError> {
     let cid = envelope.payload_cid;
-    if let Ok(mut g) = ENVELOPE_CACHE.lock() {
-        // Content-addressed overwrite keeps distinct CIDs bounded.
-        // When genuinely distinct CIDs pile up past the cap (only
-        // reached if a test generates >1k distinct envelopes), evict
-        // the first-key entry so the map stops growing.
-        if !g.contains_key(&cid)
-            && g.len() >= ENVELOPE_CACHE_MAX_ENTRIES
-            && let Some((&first, _)) = g.iter().next()
-        {
-            g.remove(&first);
-        }
-        g.insert(cid, envelope);
-    }
-    cid
+    engine
+        .suspension_store
+        .put_envelope(envelope)
+        .map_err(|e| EngineError::Other {
+            code: ErrorCode::HostBackendUnavailable,
+            message: format!("suspension store put_envelope: {e}"),
+        })?;
+    Ok(cid)
 }
 
-#[cfg(not(any(test, feature = "envelope-cache-test-grade")))]
-fn cache_put(envelope: ExecutionStateEnvelope) -> Cid {
-    // Production no-op: return the content-addressed CID so callers
-    // that persist the handle elsewhere (Phase-2b redb-backed envelope
-    // store) still receive a stable identifier. `suspend_to_bytes`
-    // will fail with `E_NOT_FOUND` until the real persistence layer
-    // lands — exactly the Phase-2a → Phase-2b contract the brief names.
-    envelope.payload_cid
-}
-
-#[cfg(any(test, feature = "envelope-cache-test-grade"))]
-fn cache_get(cid: &Cid) -> Option<ExecutionStateEnvelope> {
-    ENVELOPE_CACHE.lock().ok()?.get(cid).cloned()
-}
-
-#[cfg(not(any(test, feature = "envelope-cache-test-grade")))]
-fn cache_get(_cid: &Cid) -> Option<ExecutionStateEnvelope> {
-    // Production no-op (see `cache_put`).
-    None
+fn cache_get(engine: &Engine, cid: &Cid) -> Option<ExecutionStateEnvelope> {
+    engine.suspension_store.get_envelope(cid).ok().flatten()
 }
 
 // ---------------------------------------------------------------------------
@@ -370,7 +303,7 @@ impl Engine {
     /// Returns [`EngineError`] on encode failure.
     pub fn suspend_to_bytes(&self, handle: &SuspendedHandle) -> Result<Vec<u8>, EngineError> {
         let cid = *handle.state_cid();
-        let envelope = cache_get(&cid).ok_or_else(|| EngineError::Other {
+        let envelope = cache_get(self, &cid).ok_or_else(|| EngineError::Other {
             code: ErrorCode::NotFound,
             message: format!(
                 "phase-2a suspend_to_bytes: no envelope cached for CID {}",
@@ -753,7 +686,7 @@ impl Engine {
         }
         let payload = payload_for_handler(self, handler_id, principal);
         let envelope = ExecutionStateEnvelope::new(payload).map_err(EngineError::Core)?;
-        let state_cid = cache_put(envelope);
+        let state_cid = cache_put(self, envelope)?;
         let handle = SuspendedHandle::new(state_cid, DEFAULT_SYNTHETIC_SIGNAL);
         Ok(SuspensionOutcome::Suspended(handle))
     }
