@@ -193,7 +193,7 @@ impl Engine {
     /// `Strategy::B` per D8-RESOLVED — the 5 hand-written Phase-1 views
     /// stay on `Strategy::A` (Rust-only) and continue to be registered via
     /// the legacy [`Engine::create_view`] `(view_id, ViewCreateOptions)`
-    /// overload in [`crate::engine_caps`].
+    /// overload in the private `engine_caps` module.
     ///
     /// # Errors
     ///
