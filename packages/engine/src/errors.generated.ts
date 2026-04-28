@@ -126,6 +126,7 @@ export const CATALOG_CODES = [
   "E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE",
   "E_ENGINE_CONFIG_INVALID",
   "E_BACKEND_READ_ONLY",
+  "E_SANDBOX_UNAVAILABLE_ON_WASM",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -1522,5 +1523,20 @@ export class EBackendReadOnly extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_BACKEND_READ_ONLY", "D10-RESOLVED snapshot-blob `KVBackend` (constructed via `Engine::from_snapshot_blob(bytes)`) is a read-mostly view on a content-addressed handoff blob — Phase-3 sync can transmit the blob between peers, but the dst engine cannot write into it without breaking the canonical-bytes invariant the blob's CID is computed over. The same posture applies to the Phase-2a §9.8 `network_fetch_stub` `KVBackend`: writes will land in Phase 3 once the iroh-fetch path replaces the stub. To mutate state, open a redb-backed engine via `Engine::open(path)` instead, or import the snapshot blob into a fresh redb engine and reissue writes there.", message, context);
     this.name = "EBackendReadOnly";
+  }
+}
+
+/**
+ * E_SANDBOX_UNAVAILABLE_ON_WASM
+ *
+ * Thrown at: `crates/benten-engine/src/engine_sandbox.rs::execute_sandbox_native` (wasm32 cfg-gated stub) and the SANDBOX dispatcher path in `crates/benten-eval/src/primitives/mod.rs` when reached on a wasm32 target.
+ * Message template: "SANDBOX is unavailable on the wasm32 build of the engine ({target})"
+ */
+export class ESandboxUnavailableOnWasm extends BentenError {
+  static readonly code = "E_SANDBOX_UNAVAILABLE_ON_WASM";
+  static readonly fixHint = "SANDBOX requires wasmtime, which does not compile to `wasm32-unknown-unknown` (browser target) and is not currently shipped on `wasm32-wasip1` engine builds either. The engine surfaces this typed error rather than `E_SUBSYSTEM_DISABLED` because the operator-actionable signal is target-specific: SANDBOX cannot run here, regardless of build flags. Phase-3 P2P sync re-routes SANDBOX invocations to a non-browser peer; until then, host SANDBOX-bearing handlers on a native `Engine::open(path)` engine and surface their results through SUBSCRIBE / STREAM to the wasm32-hosted client.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SANDBOX_UNAVAILABLE_ON_WASM", "SANDBOX requires wasmtime, which does not compile to `wasm32-unknown-unknown` (browser target) and is not currently shipped on `wasm32-wasip1` engine builds either. The engine surfaces this typed error rather than `E_SUBSYSTEM_DISABLED` because the operator-actionable signal is target-specific: SANDBOX cannot run here, regardless of build flags. Phase-3 P2P sync re-routes SANDBOX invocations to a non-browser peer; until then, host SANDBOX-bearing handlers on a native `Engine::open(path)` engine and surface their results through SUBSCRIBE / STREAM to the wasm32-hosted client.", message, context);
+    this.name = "ESandboxUnavailableOnWasm";
   }
 }

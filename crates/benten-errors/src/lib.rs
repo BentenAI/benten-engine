@@ -361,6 +361,18 @@ pub enum ErrorCode {
     /// error rather than silently corrupting the dst engine. Maps to
     /// `E_BACKEND_READ_ONLY`.
     BackendReadOnly,
+    /// Phase-2b wave-8c (8c-vii): SANDBOX is unavailable on the wasm32
+    /// build of the engine. Wave-8b wires SANDBOX through wasmtime, but
+    /// wasmtime itself does not compile to `wasm32-unknown-unknown`
+    /// (nested wasm execution is not supported on the browser target).
+    /// The engine surfaces this typed error rather than `E_SUBSYSTEM_DISABLED`
+    /// because the operator-actionable signal is "you're on a target
+    /// that cannot host SANDBOX", not "an arbitrary subsystem was
+    /// disabled at build time". Phase-3 P2P sync re-routes SANDBOX
+    /// invocations to a non-browser peer; this catalog code is the
+    /// drift point at which that re-routing decision becomes visible.
+    /// Maps to `E_SANDBOX_UNAVAILABLE_ON_WASM`.
+    SandboxUnavailableOnWasm,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -522,6 +534,7 @@ impl ErrorCode {
             }
             ErrorCode::EngineConfigInvalid => "E_ENGINE_CONFIG_INVALID",
             ErrorCode::BackendReadOnly => "E_BACKEND_READ_ONLY",
+            ErrorCode::SandboxUnavailableOnWasm => "E_SANDBOX_UNAVAILABLE_ON_WASM",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -695,7 +708,12 @@ impl ErrorCode {
             // G10-A-wasip1: snapshot-blob / network-fetch-stub backend
             // surfaces — write attempts surface at the construction-API
             // level, not along an in-graph primitive edge.
-            | ErrorCode::BackendReadOnly => None,
+            | ErrorCode::BackendReadOnly
+            // 8c-vii: SANDBOX-on-wasm-target unavailability surfaces at
+            // the SANDBOX dispatch site on a wasm32 build, not along a
+            // primitive edge of a runnable handler subgraph (the SANDBOX
+            // primitive cannot run at all on this target).
+            | ErrorCode::SandboxUnavailableOnWasm => None,
 
             // SUBSCRIBE registration / restart failures — surface at the
             // registration call site, not along a primitive edge. Mirrors
@@ -813,6 +831,7 @@ impl ErrorCode {
             }
             "E_ENGINE_CONFIG_INVALID" => ErrorCode::EngineConfigInvalid,
             "E_BACKEND_READ_ONLY" => ErrorCode::BackendReadOnly,
+            "E_SANDBOX_UNAVAILABLE_ON_WASM" => ErrorCode::SandboxUnavailableOnWasm,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }

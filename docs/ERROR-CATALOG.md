@@ -886,6 +886,14 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** `SnapshotBlobBackend::{put,delete,put_batch}` (`crates/benten-graph/src/backends/snapshot_blob.rs`); `NetworkFetchStubBackend::{put,delete,put_batch}` (`crates/benten-graph/src/backends/network_fetch_stub.rs`); surfaces from `Engine::from_snapshot_blob`-constructed engines on any write call.
 - **Phase:** 2b G10-A-wasip1
 
+### E_SANDBOX_UNAVAILABLE_ON_WASM
+
+- **Message:** "SANDBOX is unavailable on the wasm32 build of the engine ({target})"
+- **Context:** `{ target: "wasm32-unknown-unknown" | "wasm32-wasip1", reason: "wasmtime cannot host nested wasm execution on this target" }`
+- **Fix:** SANDBOX requires wasmtime, which does not compile to `wasm32-unknown-unknown` (browser target) and is not currently shipped on `wasm32-wasip1` engine builds either. The engine surfaces this typed error rather than `E_SUBSYSTEM_DISABLED` because the operator-actionable signal is target-specific: SANDBOX cannot run here, regardless of build flags. Phase-3 P2P sync re-routes SANDBOX invocations to a non-browser peer; until then, host SANDBOX-bearing handlers on a native `Engine::open(path)` engine and surface their results through SUBSCRIBE / STREAM to the wasm32-hosted client.
+- **Thrown at:** `crates/benten-engine/src/engine_sandbox.rs::execute_sandbox_native` (wasm32 cfg-gated stub) and the SANDBOX dispatcher path in `crates/benten-eval/src/primitives/mod.rs` when reached on a wasm32 target.
+- **Phase:** 2b wave-8c
+
 ## Extending the catalog
 
 When adding a new error:

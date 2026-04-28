@@ -1,0 +1,107 @@
+name: packages/engine vitest
+
+# Phase-2b wave-8c (8c-vi) — closes the load-bearing CI gap surfaced by R4b
+# napi-bindings-reviewer-v2: `packages/engine/test/*.test.ts` was not run by
+# any CI workflow. The entire TS surface drift between aspirational
+# `EDslInvalidShape "not yet wired"` throws and the production code path
+# was hidden because vitest never ran end-to-end against the rebuilt napi
+# cdylib. This workflow is the drift detector.
+#
+# This workflow builds the napi cdylib + symlinks it into
+# `packages/engine-native/` so the `@benten/engine` package's import path
+# (`require('@benten/engine-native')`) resolves, then runs `npx vitest run`
+# against `packages/engine/test/*.test.ts`. INFORMATIONAL ONLY at landing —
+# elevation to the required-check set happens in wave-8d's exit-criteria
+# refresh once the wave-8c-cont wiring lands and the .skip catalog is
+# fully un-skipped.
+#
+# Trigger discipline (METH-13): `pull_request` + `push` on main + manual.
+# Single Linux x86_64 leg per the existing `napi-vitest` precedent.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  packages-engine-vitest:
+    name: packages/engine vitest (linux-x86_64, informational)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Free disk space (composite)
+        # Heavy cargo + napi-rs build; pre-emptively free disk space per
+        # the wave-8b disk-pressure carry-forward.
+        uses: ./.github/actions/free-disk-space
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          key: packages-engine-vitest
+
+      - name: Install Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+
+      - name: Build napi cdylib (napi build --platform --release)
+        # Mirrors `napi-vitest.yml` build step. The cdylib emitted at
+        # `bindings/napi/benten-napi.linux-x64.node` is consumed by
+        # `packages/engine-native/` via the npm-workspace package layout.
+        run: |
+          cd bindings/napi
+          npm install --no-audit --no-fund
+          npm run build
+          ls -la benten-napi.*.node
+          for f in benten-napi.linux-x64-*.node; do
+            [ -f "$f" ] && [ "$f" != "benten-napi.linux-x64.node" ] && cp "$f" benten-napi.linux-x64.node
+          done
+          ls -la benten-napi.*.node
+
+      - name: Install npm workspace + build TS
+        # The packages/engine workspace consumes the napi cdylib through
+        # the `@benten/engine-native` workspace package. Top-level
+        # `npm install` resolves the workspaces; `npm run build` (or
+        # equivalent tsc invocation) produces the `dist/` consumed by
+        # vitest's import resolution.
+        run: |
+          npm install --no-audit --no-fund
+          cd packages/engine
+          npx tsc --noEmit
+
+      - name: Run vitest suite against built napi cdylib
+        # Runs every test under `packages/engine/test/*.test.ts`.
+        # Wave-8c-cont un-skips the catalogued `.skip`'d cases as their
+        # wire-through dispatch lands; for now the suite reflects the
+        # surface available immediately post-wave-8c-initial:
+        #   - install_module.test.ts          (wired)
+        #   - manifest_schema_parity.test.ts  (wired pre-8c)
+        #   - quickstart_examples_*           (wired pre-8c)
+        #   - sandbox.test.ts                 (DSL composition; wired pre-8c)
+        #   - snapshot_blob_round_trip.test.ts (export/from bridges deferred to wave-8c-cont)
+        #   - stream.test.ts                  (call/openStream stub; full wire in wave-8c-cont)
+        #   - subscribe.test.ts               (onChange honest-no-op; full wire in wave-8c-cont)
+        #   - trace_step_unknown.test.ts      (wired pre-8c)
+        #   - views.test.ts                   (.skip-bearing, expected)
+        #   - wait_ttl.test.ts                (.skip-bearing, expected)
+        #   - wasm_browser_target.test.ts     (wired pre-8c via the wasm32 stub)
+        run: |
+          cd packages/engine
+          npx vitest run

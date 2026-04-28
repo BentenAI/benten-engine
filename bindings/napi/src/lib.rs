@@ -835,6 +835,71 @@ mod napi_surface {
                 ))
             }
         }
+
+        // -------- Module manifest lifecycle (Phase 2b G10-B; wave-8c bridge) --------
+
+        /// Phase 2b wave-8c: napi bridge for `Engine::install_module`.
+        ///
+        /// `manifest_json` is the JSON form of [`benten_engine::ModuleManifest`]
+        /// (serde-derived round-trip). `expected_cid` is the base32-multibase
+        /// encoded canonical-DAG-CBOR CID of the manifest — REQUIRED per
+        /// D16-RESOLVED, no convenience overload that omits it.
+        ///
+        /// Returns the installed manifest's CID (round-trip identity with
+        /// `expected_cid` on the success path; surfaces
+        /// `E_MODULE_MANIFEST_CID_MISMATCH` on D16 mismatch).
+        #[napi(js_name = "installModule")]
+        pub fn install_module(
+            &self,
+            manifest_json: serde_json::Value,
+            expected_cid: String,
+        ) -> napi::Result<String> {
+            let manifest: benten_engine::ModuleManifest = serde_json::from_value(manifest_json)
+                .map_err(|e| {
+                    napi::Error::new(
+                        Status::InvalidArg,
+                        format!("installModule: malformed manifest JSON: {e}"),
+                    )
+                })?;
+            let parsed_cid = parse_cid(&expected_cid)?;
+            let installed = self
+                .inner
+                .install_module(manifest, parsed_cid)
+                .map_err(engine_err)?;
+            Ok(installed.to_base32())
+        }
+
+        /// Phase 2b wave-8c: napi bridge for `Engine::uninstall_module`.
+        /// Idempotent — a call against a never-installed CID is a no-op.
+        #[napi(js_name = "uninstallModule")]
+        pub fn uninstall_module(&self, cid: String) -> napi::Result<()> {
+            let parsed = parse_cid(&cid)?;
+            self.inner.uninstall_module(parsed).map_err(engine_err)
+        }
+
+        /// Phase 2b wave-8c: napi bridge for `Engine::compute_manifest_cid`.
+        /// Pure function — computes the canonical-DAG-CBOR CID of the
+        /// manifest WITHOUT installing it. Intended for callers that
+        /// want to verify the CID before passing it as the required
+        /// `expectedCid` arg to [`Self::install_module`].
+        #[napi(js_name = "computeManifestCid")]
+        pub fn compute_manifest_cid(
+            &self,
+            manifest_json: serde_json::Value,
+        ) -> napi::Result<String> {
+            let manifest: benten_engine::ModuleManifest = serde_json::from_value(manifest_json)
+                .map_err(|e| {
+                    napi::Error::new(
+                        Status::InvalidArg,
+                        format!("computeManifestCid: malformed manifest JSON: {e}"),
+                    )
+                })?;
+            let cid = self
+                .inner
+                .compute_manifest_cid(&manifest)
+                .map_err(engine_err)?;
+            Ok(cid.to_base32())
+        }
     }
 
     // ---------------------------------------------------------------------
