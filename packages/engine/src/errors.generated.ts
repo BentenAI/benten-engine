@@ -113,7 +113,6 @@ export const CATALOG_CODES = [
   "E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED",
   "E_INV_11_SYSTEM_ZONE_READ",
   "E_INV_SANDBOX_DEPTH",
-  "E_INV_SANDBOX_OUTPUT",
   "E_SANDBOX_FUEL_EXHAUSTED",
   "E_SANDBOX_MEMORY_EXHAUSTED",
   "E_SANDBOX_WALLCLOCK_EXCEEDED",
@@ -1328,21 +1327,6 @@ export class EInvSandboxDepth extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_INV_SANDBOX_DEPTH", "Inv-4 — `AttributionFrame.sandbox_depth: u8` saturating-counter; default max nest 4 (D20-RESOLVED). Flatten the SANDBOX → SANDBOX chain or move logic into a single SANDBOX call. Per D20, the depth INHERITS across CALL boundaries (not reset) so a SANDBOX → CALL → SANDBOX chain still counts cumulatively.", message, context);
     this.name = "EInvSandboxDepth";
-  }
-}
-
-/**
- * E_INV_SANDBOX_OUTPUT
- *
- * Thrown at: SANDBOX executor (host-fn trampoline PRIMARY path; primitive-boundary BACKSTOP path).
- * Message template: "SANDBOX output budget exceeded: consumed={consumed} limit={limit} emitter={emitter_kind} path={path}"
- */
-export class EInvSandboxOutput extends BentenError {
-  static readonly code = "E_INV_SANDBOX_OUTPUT";
-  static readonly fixHint = "Inv-7 — D17-RESOLVED defense-in-depth output enforcement. `path == primary_streaming` indicates the streaming `CountedSink` caught the overflow before accepting bytes; `path == return_backstop` indicates the primitive-boundary backstop caught a host-fn that bypassed the sink. Reduce per-call output via aggregation, raise the per-call cap if the operator trusts the workload, or split into multiple SANDBOX calls.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_INV_SANDBOX_OUTPUT", "Inv-7 — D17-RESOLVED defense-in-depth output enforcement. `path == primary_streaming` indicates the streaming `CountedSink` caught the overflow before accepting bytes; `path == return_backstop` indicates the primitive-boundary backstop caught a host-fn that bypassed the sink. Reduce per-call output via aggregation, raise the per-call cap if the operator trusts the workload, or split into multiple SANDBOX calls.", message, context);
-    this.name = "EInvSandboxOutput";
   }
 }
 
