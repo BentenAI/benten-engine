@@ -449,13 +449,36 @@ impl IntoSubgraphSpec for SubgraphSpec {
         // node-shape expectations; every other kind routes through the
         // raw `push_primitive` builder method which materializes the
         // declared kind verbatim.
+        //
+        // Wave-8a (Inv-13 collision fix): preserve `PrimitiveSpec.properties`
+        // through registration so the registered handler CID reflects
+        // declared per-primitive config (SUBSCRIBE.pattern, SANDBOX.module,
+        // STREAM.cursor, plus the WRITE_PROP_* folded WriteSpec fields). The
+        // prior `let PrimitiveSpec { id, kind, .. } = ps;` literally dropped
+        // the `properties` bag, so two specs differing only in non-WRITE
+        // primitive properties registered to the same handler CID — an Inv-13
+        // immutability collision footgun. The post-build property-population
+        // pass below mirrors the non-WRITE leg of `Engine::subgraph_for_spec`
+        // (a flat per-key copy of the `PrimitiveSpec.properties` bag onto the
+        // OperationNode). WRITE-bearing specs see their `WRITE_PROP_*` folded
+        // bag propagated verbatim — the dispatch-time `subgraph_for_spec`
+        // rewrites those keys into the runtime `op`/`label`/`properties`/
+        // `createdAt` shape per-call, so the registered subgraph and the
+        // dispatched subgraph diverge intentionally (registered = static
+        // declared shape; dispatched = per-call materialized shape with the
+        // mutable `createdAt` stamp).
         let mut sb = benten_eval::SubgraphBuilder::new(self.handler_id);
         let mut last: Option<benten_eval::NodeHandle> = None;
+        let mut prop_carry: Vec<(String, BTreeMap<String, Value>)> = Vec::new();
         for ps in self.primitives {
-            let PrimitiveSpec { id, kind, .. } = ps;
+            let PrimitiveSpec {
+                id,
+                kind,
+                properties,
+            } = ps;
             let h = match kind {
-                benten_eval::PrimitiveKind::Write => sb.write(id),
-                benten_eval::PrimitiveKind::Read => sb.read(id),
+                benten_eval::PrimitiveKind::Write => sb.write(id.clone()),
+                benten_eval::PrimitiveKind::Read => sb.read(id.clone()),
                 benten_eval::PrimitiveKind::Respond => {
                     // `respond` is terminal and MUST have a predecessor so the
                     // registered subgraph's CID matches user intent (no
@@ -468,14 +491,33 @@ impl IntoSubgraphSpec for SubgraphSpec {
                     };
                     sb.respond(prev)
                 }
-                other => sb.push_primitive(id, other),
+                other => sb.push_primitive(id.clone(), other),
             };
             if let Some(p) = last {
                 sb.add_edge(p, h);
             }
             last = Some(h);
+            if !properties.is_empty() {
+                prop_carry.push((id, properties));
+            }
         }
-        Ok(sb.build_unvalidated_for_test())
+        let mut sg = sb.build_unvalidated_for_test();
+        // Post-build property propagation — flat per-key copy from each
+        // PrimitiveSpec's `properties` bag onto the matching OperationNode.
+        // Mirrors the non-WRITE leg of `Engine::subgraph_for_spec`. Keys
+        // collide deterministically (BTreeMap iteration order); the canonical-
+        // bytes encoder hashes the resulting OperationNode.properties under
+        // the standard sort-by-key contract, so two specs differing only in a
+        // single property key produce different handler CIDs (the wave-8a
+        // pin).
+        for (id, props) in prop_carry {
+            if let Some(node) = sg.op_by_id_mut(&id) {
+                for (key, val) in props {
+                    node.properties.insert(key, val);
+                }
+            }
+        }
+        Ok(sg)
     }
 }
 

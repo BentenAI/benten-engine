@@ -19,6 +19,13 @@
 //!    `SubgraphSpec` that declares a non-WRITE primitive (READ) via the
 //!    widened `.primitive_with_props` entry point + a WRITE constructs
 //!    a runnable Subgraph that includes both nodes, NOT just WRITE.
+//! 5. `subgraph_spec_primitives_widening_registered_handler_cid_reflects_properties`
+//!    — wave-8a Inv-13 collision pin: two SubgraphSpecs that differ ONLY in
+//!    a non-WRITE primitive's properties bag (e.g. SUBSCRIBE.pattern) MUST
+//!    register to DIFFERENT handler CIDs. Pre-wave-8a, the
+//!    `IntoSubgraphSpec::into_eval_subgraph` destructure literally dropped
+//!    `properties` into `..`, so the registered handler CID reflected only
+//!    the (id, kind) shape — collapsing distinct specs onto identical CIDs.
 //!
 //! Intentional gap (FP-mini-review fix cr-g12d-mr-1): direct unit-test
 //! verification of OperationNode-level property propagation for
@@ -300,5 +307,105 @@ fn subgraph_for_spec_walks_primitives_not_just_write_specs() {
         saw_read,
         "trace must show the READ from `spec.primitives` fired (root edge wires \
          to the first declared primitive). observed steps: {step_summary:?}"
+    );
+}
+
+/// Pin 5 — wave-8a Inv-13 collision fix: registered handler CID reflects
+/// non-WRITE primitive properties.
+///
+/// Two `SubgraphSpec`s with the SAME (id, kind) shape for every primitive
+/// but DIFFERENT non-WRITE primitive properties (here: SUBSCRIBE.pattern)
+/// MUST register to DIFFERENT handler CIDs.
+///
+/// Pre-wave-8a, `IntoSubgraphSpec::into_eval_subgraph` destructured
+/// `let PrimitiveSpec { id, kind, .. } = ps;` — literally dropping the
+/// `properties` bag on the floor. Two specs differing only in declared
+/// SUBSCRIBE.pattern / SANDBOX.module / STREAM.cursor properties registered
+/// to the SAME handler CID. That's an Inv-13 (immutability) collision
+/// footgun: distinct user-declared handlers content-address to identical
+/// CIDs.
+///
+/// The wave-8a fix propagates `PrimitiveSpec.properties` onto the
+/// constructed OperationNode in `into_eval_subgraph`, mirroring the non-
+/// WRITE leg of `Engine::subgraph_for_spec`. Canonical-bytes encoding
+/// hashes those propagated properties, so the registered handler CID now
+/// reflects declared per-primitive config.
+#[test]
+fn subgraph_spec_primitives_widening_registered_handler_cid_reflects_properties() {
+    let (_dir_a, engine_a) = fresh_engine();
+    let (_dir_b, engine_b) = fresh_engine();
+
+    // Spec A — SUBSCRIBE pattern "post:*"
+    let mut props_a = BTreeMap::new();
+    props_a.insert("pattern".into(), Value::text("post:*"));
+    let spec_a = SubgraphSpec::builder()
+        .handler_id("widening:cid-reflects-props")
+        .primitive_with_props(PrimitiveSpec {
+            id: "sub0".into(),
+            kind: PrimitiveKind::Subscribe,
+            properties: props_a,
+        })
+        .build();
+
+    // Spec B — same handler_id + same (id, kind) shape; different
+    // SUBSCRIBE.pattern. The two specs MUST register to different handler
+    // CIDs because their declared per-primitive config differs.
+    let mut props_b = BTreeMap::new();
+    props_b.insert("pattern".into(), Value::text("comment:*"));
+    let spec_b = SubgraphSpec::builder()
+        .handler_id("widening:cid-reflects-props")
+        .primitive_with_props(PrimitiveSpec {
+            id: "sub0".into(),
+            kind: PrimitiveKind::Subscribe,
+            properties: props_b,
+        })
+        .build();
+
+    let id_a = engine_a
+        .register_subgraph(spec_a)
+        .expect("spec A registers cleanly");
+    let id_b = engine_b
+        .register_subgraph(spec_b)
+        .expect("spec B registers cleanly");
+    assert_eq!(id_a, id_b, "handler_ids match (same .handler_id())");
+
+    let cid_a = engine_a
+        .resolve_subgraph_cid_for_test(&id_a, "default")
+        .expect("engine_a knows the handler CID");
+    let cid_b = engine_b
+        .resolve_subgraph_cid_for_test(&id_b, "default")
+        .expect("engine_b knows the handler CID");
+
+    assert_ne!(
+        cid_a, cid_b,
+        "registered handler CIDs MUST differ when specs differ only in non-WRITE \
+         primitive properties (SUBSCRIBE.pattern). Pre-wave-8a both registered to \
+         the same CID — an Inv-13 collision. cid_a={cid_a} cid_b={cid_b}"
+    );
+
+    // Belt-and-suspenders: a spec IDENTICAL to spec_a (same property bag)
+    // MUST register to the SAME CID as spec_a — registration determinism is
+    // preserved, only declared-config differences shift the CID.
+    let mut props_a2 = BTreeMap::new();
+    props_a2.insert("pattern".into(), Value::text("post:*"));
+    let spec_a2 = SubgraphSpec::builder()
+        .handler_id("widening:cid-reflects-props")
+        .primitive_with_props(PrimitiveSpec {
+            id: "sub0".into(),
+            kind: PrimitiveKind::Subscribe,
+            properties: props_a2,
+        })
+        .build();
+    let (_dir_c, engine_c) = fresh_engine();
+    let id_c = engine_c
+        .register_subgraph(spec_a2)
+        .expect("spec A2 (identical to A) registers cleanly");
+    let cid_c = engine_c
+        .resolve_subgraph_cid_for_test(&id_c, "default")
+        .expect("engine_c knows the handler CID");
+    assert_eq!(
+        cid_a, cid_c,
+        "registered handler CID is deterministic when the declared properties \
+         bag matches. cid_a={cid_a} cid_c={cid_c}"
     );
 }
