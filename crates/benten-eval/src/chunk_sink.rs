@@ -14,18 +14,22 @@
 //!   Phase-3 iroh transport boundary, where credit-based push protocols
 //!   warrant the additional surface area.
 //!
-//! - **Default capacity 16** (`DEFAULT_CAPACITY`). Picked because (a) it's
-//!   the same as `tokio::sync::mpsc::channel(16)` defaults the streaming-
-//!   systems R1 reviewer cited and (b) it's small enough that adversarial
-//!   slow consumers engage backpressure quickly during tests, large enough
-//!   to absorb realistic burst patterns at the napi boundary. Doc-drift is
-//!   pinned by `chunk_sink_default_capacity_is_16`.
+//! - **Default capacity 16** (`DEFAULT_CAPACITY`). Picked because (a) it
+//!   matches the `tokio::sync::mpsc::channel(16)` shape the streaming-
+//!   systems R1 reviewer cited (the actual default impl uses
+//!   `std::sync::{Arc, Condvar, Mutex}` + `VecDeque` to avoid pulling
+//!   tokio into the dep graph; behaviorally equivalent for our PULL-mpsc
+//!   semantics) and (b) it's small enough that adversarial slow consumers
+//!   engage backpressure quickly during tests, large enough to absorb
+//!   realistic burst patterns at the napi boundary. Doc-drift is pinned
+//!   by `chunk_sink_default_capacity_is_16`.
 //!
 //! - **Capacity zero rejected at the type level** via `NonZeroUsize`. A
 //!   zero-capacity sink would deadlock the very first send.
 //!
 //! - **Lossless mode is default; lossy is opt-in** via
-//!   [`testing_make_chunk_sink_lossy`](crate::testing::testing_make_chunk_sink_lossy)
+//!   `testing_make_chunk_sink_lossy` (cfg-gated, not linked here because
+//!   the gated module is invisible to default-feature `cargo doc`)
 //!   in tests + the `lossy_mode` builder field at production call sites.
 //!   Lossy mode emits `E_STREAM_BACKPRESSURE_DROPPED` to the trace per
 //!   dropped chunk — never silent.

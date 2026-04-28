@@ -1065,6 +1065,13 @@ pub fn inject_event(sub: &ActiveSubscription, event: ChangeEvent) -> Result<(), 
 }
 
 /// Mint a fresh persistent subscription id (test helper).
+///
+/// cfg-gated under `cfg(any(test, feature = "testing"))` because the
+/// underlying `Cid::sample_for_test` is itself gated; without the gate,
+/// default-feature builds fail to resolve the symbol (cr-g6a-mr-1 +
+/// cr-g6a-mr-2 — single root cause for the 11 wave-4 CI failures on
+/// PR #31).
+#[cfg(any(test, feature = "testing"))]
 #[must_use]
 pub fn make_persistent_subscription_id() -> SubscriberId {
     SubscriberId::from_cid(Cid::sample_for_test())
@@ -1092,6 +1099,7 @@ pub struct ReplayDedupOutcome {
 /// Run one pattern proptest case: register a subscription with the given
 /// pattern; inject one event with the given anchor label; report
 /// match-expectation + delivered count.
+#[cfg(any(test, feature = "testing"))]
 #[must_use]
 pub fn run_pattern_proptest(pattern_glob: &str, anchor_label: &str) -> PatternProptestOutcome {
     let pattern = ChangePattern::LabelGlob(pattern_glob.to_string());
@@ -1132,6 +1140,7 @@ pub fn run_pattern_proptest(pattern_glob: &str, anchor_label: &str) -> PatternPr
 }
 
 /// Run one replay-dedup proptest case.
+#[cfg(any(test, feature = "testing"))]
 #[must_use]
 pub fn run_replay_dedup_proptest(seq: u64, replay_count: usize) -> ReplayDedupOutcome {
     let spec = SubscriptionSpec {
@@ -1184,6 +1193,7 @@ pub struct ReceivedEvent {
 }
 
 /// Run one concurrent-subscribe ordering proptest case.
+#[cfg(any(test, feature = "testing"))]
 #[must_use]
 pub fn run_concurrent_subscribe_event_ordering(
     anchor_count: usize,
@@ -1252,6 +1262,7 @@ pub struct ConcurrentSubscribeNoLossOutcome {
 }
 
 /// Run one concurrent-subscribe no-event-loss proptest case.
+#[cfg(any(test, feature = "testing"))]
 #[must_use]
 pub fn run_concurrent_subscribe_no_event_loss(
     writer_count: usize,
