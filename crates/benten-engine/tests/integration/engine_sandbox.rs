@@ -15,7 +15,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 2b G7-C pending — DSL composition E2E"]
+#[ignore = "pending G7-A executor wiring; tracks G7-A's phase-2b/g7/a-sandbox-core PR (PR #30) — G7-C delivers the surface; G7-A delivers the executor body that makes E2E run"]
 fn engine_sandbox_end_to_end_via_dsl_composition_only() {
     // Plan §3 G7-C — register a SubgraphSpec built via the DSL
     // `subgraph('handler').sandbox({ module: cid, manifest: 'compute-basic' })`.
@@ -28,7 +28,6 @@ fn engine_sandbox_end_to_end_via_dsl_composition_only() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-C pending — absence pin"]
 fn sandbox_no_top_level_engine_sandbox_call_site_exists() {
     // dx-r1-2b SANDBOX surface — anti-regression: the public Rust
     // engine surface (`benten_engine::Engine`) MUST NOT carry a
@@ -36,15 +35,45 @@ fn sandbox_no_top_level_engine_sandbox_call_site_exists() {
     // (G10-B owned) and the internal `execute_sandbox_*` plumbing
     // (private).
     //
-    // Test:
-    //   - Compile a small fixture that attempts `engine.sandbox(...)`;
-    //     assert it FAILS to compile (use `compile_fail` doctest or a
-    //     `trybuild` harness).
-    //   - Alternative: white-box reflective check on the `Engine`
-    //     impl — assert no public method named `sandbox` exists.
-    //
-    // The absence pin is load-bearing for the dx-r1-2b corrected
-    // surface — without it, a future PR could re-introduce the
-    // top-level method without explicit review.
-    todo!("R5 G7-C — trybuild compile_fail or reflective absence assertion");
+    // Source-grep absence pin via manual recursive walk over
+    // `crates/benten-engine/src/` (avoids pulling `walkdir` as a
+    // dev-dep just for this single test). Asserts no `pub fn sandbox(`
+    // declaration exists. Sufficient for the dx-r1-2b corrected-
+    // surface contract per HARD RULE (compile_fail / trybuild
+    // harness reserved for Phase 3 if a deeper type-system
+    // regression vector surfaces).
+    fn walk(dir: &std::path::Path, hits: &mut Vec<String>) {
+        let entries =
+            std::fs::read_dir(dir).unwrap_or_else(|e| panic!("read_dir {}: {e}", dir.display()));
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, hits);
+                continue;
+            }
+            if path.extension().is_some_and(|ext| ext == "rs") {
+                let body = std::fs::read_to_string(&path)
+                    .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+                for (lineno, line) in body.lines().enumerate() {
+                    let trimmed = line.trim_start();
+                    if trimmed.starts_with("pub fn sandbox(")
+                        || trimmed.starts_with("pub fn sandbox<")
+                        || trimmed.starts_with("pub async fn sandbox(")
+                    {
+                        hits.push(format!("{}:{}: {}", path.display(), lineno + 1, line));
+                    }
+                }
+            }
+        }
+    }
+    let src_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut offending = Vec::new();
+    walk(&src_root, &mut offending);
+    assert!(
+        offending.is_empty(),
+        "dx-r1-2b absence pin tripped: top-level `engine.sandbox(...)` surface MUST NOT exist on \
+         `Engine`; found {} declaration(s):\n{}",
+        offending.len(),
+        offending.join("\n")
+    );
 }

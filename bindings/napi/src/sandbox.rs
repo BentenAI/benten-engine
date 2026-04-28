@@ -95,18 +95,29 @@ pub fn sandbox_target_supported() -> bool {
 // `describe_sandbox_node` — diagnostic accessor (ts-r4-3)
 // ---------------------------------------------------------------------------
 //
-// The TS-side `engine.describeSandboxNode(handlerId, nodeId)` is wired
-// through `crate::napi_surface::Engine` because napi-rs v3 requires the
-// `#[napi] impl` block to be in the same translation unit as the struct
-// declaration. The implementation thread lives in
-// `crate::napi_surface::Engine::describe_sandbox_node` and reaches into
-// `benten_engine::Engine::describe_sandbox_node` (G7-C owned in
-// `crates/benten-engine/src/engine_sandbox.rs`).
+// IMPLEMENTATION STATE (post mini-review fix F-G7C-MR-CR-2):
 //
-// The accessor is cfg-gated behind the engine crate's `test-helpers`
-// feature per sec-r6r2-02 discipline. The napi cdylib opts into the
-// narrower `envelope-cache-test-grade` feature, so by default this
-// accessor is NOT exposed to TS — devtools that need it require an
-// explicit feature opt-in. The visible TS contract (the
-// `sandbox_napi_bridge.test.ts` symbol-presence pin) is the
-// `sandbox_target_supported` probe above.
+// The TS-side `engine.describeSandboxNode(handlerId, nodeId)` is currently
+// SYNTHESIZED CLIENT-SIDE in `packages/engine/src/sandbox.ts` — it does
+// NOT call into a native napi method. The TS function returns a typed
+// `SandboxNodeDescription` shape constructed from the spec / handler-id
+// inputs alone, sufficient for the ts-r4-3 type-shape pin
+// (`describe_sandbox_node_returns_diagnostic_shape`) but NOT bridging
+// real native runtime introspection state (fuel-consumed-high-water,
+// last-invocation-ms, etc.).
+//
+// The native bridge (a `#[napi] fn describe_sandbox_node` on
+// `napi_surface::Engine` reaching `benten_engine::Engine::describe_sandbox_node`)
+// is intentionally NOT yet wired here. It WILL land alongside G7-A's
+// executor body — the runtime introspection state requires the executor's
+// per-call `Store` lifecycle (D3-RESOLVED) to be live. Until then, the
+// client-side synthesis is the contract.
+//
+// When the native bridge lands: it will be cfg-gated behind the engine
+// crate's `test-helpers` feature per sec-r6r2-02 discipline (the napi
+// cdylib opts into the narrower `envelope-cache-test-grade` feature, so
+// the accessor is NOT exposed to TS by default — devtools that need real
+// runtime state require an explicit feature opt-in). The visible TS
+// contract (the `sandbox_napi_bridge.test.ts` symbol-presence pin) is the
+// `sandbox_target_supported` probe above + the client-synthesized
+// `describeSandboxNode` for shape-pinning.

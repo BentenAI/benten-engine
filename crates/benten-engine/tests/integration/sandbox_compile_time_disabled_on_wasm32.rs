@@ -50,7 +50,7 @@ fn fresh_engine() -> (tempfile::TempDir, Engine) {
 /// (e.g. dropping the `#[cfg(not(target_arch = "wasm32"))]` decoration
 /// on the executor module) is caught immediately.
 #[test]
-#[ignore = "Phase 2b G7-C + G10-A pending — SANDBOX cfg-gate + typed error unimplemented"]
+#[ignore = "pending G10-A wasm32 build target; tracks G10-A's phase-2b/g10/a-wasip1 (wave-5). G7-C delivers the napi cfg-gate; G10-A delivers the wasm32 build that exercises the negative half of sec-pre-r1-05."]
 fn sandbox_compile_time_disabled_on_wasm32_executor() {
     let (_dir, mut engine) = fresh_engine();
 
@@ -89,7 +89,7 @@ fn sandbox_compile_time_disabled_on_wasm32_executor() {
 /// caught at the source level too (defense in depth against the R2-noted
 /// "test-passes-by-accident" anti-pattern).
 #[test]
-#[ignore = "Phase 2b G7-C pending"]
+#[ignore = "pending G7-A executor; tracks G7-A's phase-2b/g7/a-sandbox-core PR (PR #30). G7-A owns `crates/benten-eval/src/primitives/sandbox.rs`; the source-grep drift detector runs once that module lands."]
 fn sandbox_executor_module_carries_wasm32_cfg_gate_in_source() {
     let exec_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../crates/benten-eval/src/primitives/sandbox.rs");
