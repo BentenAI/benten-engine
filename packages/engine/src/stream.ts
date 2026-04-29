@@ -34,6 +34,11 @@ export interface NativeStreamHandle {
   next(): Buffer | null;
   close(): void;
   isDrained(): boolean;
+  /**
+   * Returns engine-assigned u64 narrowed to JS `number` via napi-rs's
+   * i64 mapping (R6 Round-2 Instance 11 — widened from u32 to i64;
+   * exact for values < Number.MAX_SAFE_INTEGER).
+   */
   seqSoFar(): number;
 }
 
