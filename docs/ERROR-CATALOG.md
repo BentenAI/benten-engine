@@ -188,7 +188,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Message:** "Expected version {expected}, found {actual} on {target}"
 - **Context:** `{ target: NodeId, expected: VersionHash, actual: VersionHash }`
 - **Fix:** Re-read, rebase changes, retry. Typical optimistic concurrency pattern.
-- **Thrown at:** Evaluation (CAS WRITE). **Runtime surface is edge-routed, not Rust-enum-valued:** WRITE's `cas` mode routes conflicts via the `ON_CONFLICT` edge; the engine stamps `error_code: "E_WRITE_CONFLICT"` on the routed step (`crates/benten-engine/src/primitive_host.rs:~362`). Callers read the code off the edge-routing metadata, not via a `match` on an `Err(EvalError::WriteConflict)` — the enum variant exists for forward-compat with a Phase-2 native Rust path but has no construction site in Phase-1 production code. The drift-detector's `reachability: ignore` annotation reflects this asymmetry.
+- **Thrown at:** Evaluation (CAS WRITE). **Runtime surface is edge-routed, not Rust-enum-valued:** WRITE's `cas` mode routes conflicts via the `ON_CONFLICT` edge; the engine stamps `error_code: "E_WRITE_CONFLICT"` on the routed step (`crates/benten-engine/src/primitive_host.rs:1204`). Callers read the code off the edge-routing metadata, not via a `match` on an `Err(EvalError::WriteConflict)` — the enum variant exists for forward-compat with a Phase-2 native Rust path but has no construction site in Phase-1 production code. The drift-detector's `reachability: ignore` annotation reflects this asymmetry.
 
 <!-- cr-g7a-mr-2 fix-pass: dropped Phase-1 placeholder duplicates of
      E_SANDBOX_FUEL_EXHAUSTED + E_SANDBOX_TIMEOUT + E_SANDBOX_OUTPUT_LIMIT.
@@ -215,7 +215,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Fix:** Reduce output emitted by the SANDBOX module's host-fn calls (or the primitive return value). D15 trap-loudly default — there is no opt-in silent-truncation flag. Use STREAM for progressive output if the workload genuinely needs unbounded byte volume.
 - **Thrown at:** **Evaluation — fully active post-wave-8b.** The `path` field distinguishes the D17 PRIMARY streaming `CountedSink::write` enforcement (fires before host-fn bytes are accepted, in `crates/benten-eval/src/sandbox/counted_sink.rs`) from the D17 BACKSTOP return-value enforcement at the primitive boundary (`CountedSink::backstop_check` after the wasm guest returns). Both arms wired through wave-8b's host-fn trampoline + primitive boundary.
 - **Phase:** 2b (G7-A + G7-B Inv-7 enforcement; wave-8b runtime wire-through; D15 + D17 PRIMARY+BACKSTOP)
-- **D21 priority:** Lowest — fires before [E_SANDBOX_FUEL_EXHAUSTED] / [E_SANDBOX_WALLCLOCK_EXCEEDED] / [E_SANDBOX_MEMORY_EXHAUSTED] when ONLY the output axis trips; otherwise higher-priority axes fire first (D21 priority MEMORY > WALLCLOCK > FUEL > OUTPUT). See `docs/SANDBOX-LIMITS.md` for the rationale.
+- **D21 priority:** Lowest — fires before `E_SANDBOX_FUEL_EXHAUSTED` / `E_SANDBOX_WALLCLOCK_EXCEEDED` / `E_SANDBOX_MEMORY_EXHAUSTED` when ONLY the output axis trips; otherwise higher-priority axes fire first (D21 priority MEMORY > WALLCLOCK > FUEL > OUTPUT). See `docs/SANDBOX-LIMITS.md` for the rationale.
 
 ### E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED
 
@@ -768,7 +768,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Fix:** wasmtime fuel-meter intercept. Either reduce the per-call computation, raise `SandboxConfig::fuel` (default 1_000_000), or split the workload across multiple SANDBOX calls. Concurrent with the typed-error propagation, the engine emits `TraceStep::BudgetExhausted { budget_type: "sandbox_fuel", consumed, limit, path }` so `engine.trace(...)` consumers observe the exhaustion in-band (mirrors G12-A's `inv_8_iteration` pattern).
 - **Thrown at:** SANDBOX executor — fully active post-wave-8b. The wasmtime `Store::set_fuel` cap + trap-callback maps fuel-exhaustion traps via `crates/benten-eval/src/sandbox/trap_to_typed.rs` to this typed variant. D3-RESOLVED per-call wasmtime `Store` lifecycle.
 - **Phase:** 2b G7-A (variant) / wave-8b (production trap-mapping)
-- **D21 priority:** fires before [E_INV_SANDBOX_OUTPUT] when both trip; loses to [E_SANDBOX_WALLCLOCK_EXCEEDED] / [E_SANDBOX_MEMORY_EXHAUSTED] (D21 priority MEMORY > WALLCLOCK > FUEL > OUTPUT).
+- **D21 priority:** fires before `E_INV_SANDBOX_OUTPUT` when both trip; loses to `E_SANDBOX_WALLCLOCK_EXCEEDED` / `E_SANDBOX_MEMORY_EXHAUSTED` (D21 priority MEMORY > WALLCLOCK > FUEL > OUTPUT).
 
 ### E_SANDBOX_MEMORY_EXHAUSTED
 
@@ -777,7 +777,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Fix:** wasmtime `ResourceLimiter` intercept fires deterministically BEFORE host OOM (`crates/benten-eval/src/sandbox/resource_limiter.rs`). Either reduce module memory pressure, raise `SandboxConfig::memory_bytes` (default 64 MiB), or audit for runaway `memory.grow` (ESC-2 escape vector).
 - **Thrown at:** SANDBOX executor — fully active post-wave-8b via `ResourceLimiter` impl + memory-trap → typed-error mapping.
 - **Phase:** 2b G7-A (variant) / wave-8b (production ResourceLimiter wiring)
-- **D21 priority:** HIGHEST — fires before [E_SANDBOX_WALLCLOCK_EXCEEDED] / [E_SANDBOX_FUEL_EXHAUSTED] / [E_INV_SANDBOX_OUTPUT] when multiple are simultaneously eligible (D21 priority MEMORY > WALLCLOCK > FUEL > OUTPUT — matches OS-level OOM trump).
+- **D21 priority:** HIGHEST — fires before `E_SANDBOX_WALLCLOCK_EXCEEDED` / `E_SANDBOX_FUEL_EXHAUSTED` / `E_INV_SANDBOX_OUTPUT` when multiple are simultaneously eligible (D21 priority MEMORY > WALLCLOCK > FUEL > OUTPUT — matches OS-level OOM trump).
 
 ### E_SANDBOX_WALLCLOCK_EXCEEDED
 
@@ -786,7 +786,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Fix:** D24-RESOLVED defaults: 30s default / 5min ceiling. Per-handler `wallclock_ms` opt-in via `SubgraphSpec.primitives` (G12-D widening). Workspace-level overrides via `engine.toml` `[sandbox]` section (Ben's brief addition). Either shrink the workload, raise the per-handler value (within the engine.toml ceiling), or relax the engine.toml ceiling.
 - **Thrown at:** SANDBOX executor — fully active post-wave-8b via `wasmtime::Store::set_epoch_deadline` + the wave-8b epoch-interruption ticker thread (`crates/benten-eval/src/sandbox/epoch_ticker.rs`) that ticks the shared engine's epoch on a configured cadence; D27 `async-support` ENABLED preserves the yield path for Phase-3 iroh forward-compat.
 - **Phase:** 2b G7-A (variant) / wave-8b (production epoch-ticker wiring)
-- **D21 priority:** fires before [E_SANDBOX_FUEL_EXHAUSTED] / [E_INV_SANDBOX_OUTPUT] when multiple trip; loses to [E_SANDBOX_MEMORY_EXHAUSTED] (D21 priority MEMORY > WALLCLOCK > FUEL > OUTPUT).
+- **D21 priority:** fires before `E_SANDBOX_FUEL_EXHAUSTED` / `E_INV_SANDBOX_OUTPUT` when multiple trip; loses to `E_SANDBOX_MEMORY_EXHAUSTED` (D21 priority MEMORY > WALLCLOCK > FUEL > OUTPUT).
 
 ### E_SANDBOX_WALLCLOCK_INVALID
 
@@ -816,7 +816,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 - **Message:** "SANDBOX manifest unknown: {name}"
 - **Context:** `{ name: string }`
-- **Fix:** ESC-15 escape vector closure: NO permissive fall-through to a default manifest. Either register the manifest (Phase 8 marketplace work — see [E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED]) or use one of the codegen-default names (`compute-basic`, `compute-with-kv`).
+- **Fix:** ESC-15 escape vector closure: NO permissive fall-through to a default manifest. Either register the manifest (Phase 8 marketplace work — see `E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED`) or use one of the codegen-default names (`compute-basic`, `compute-with-kv`).
 - **Thrown at:** `ManifestRegistry::lookup` / `ManifestRef::resolve`.
 - **Phase:** 2b G7-A
 
@@ -840,7 +840,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 - **Message:** "SANDBOX module bytes not registered for CID {module_cid}"
 - **Context:** `{ module_cid: Cid }`
-- **Fix:** A SANDBOX dispatch named a module CID for which no bytes have been registered through `Engine::register_module_bytes(cid, bytes)`. Distinct from [E_SANDBOX_MODULE_INVALID] (bytes are present but failed wasmtime structural validation): this fires BEFORE the executor sees any bytes, at the engine's lookup step. Either call `engine.register_module_bytes(module_cid, wasm_bytes)` before dispatch, or correct the SANDBOX node's `module` property to reference an already-registered CID. The Phase-2b in-memory module-bytes registry is process-local + transient (lost across `Engine` re-open); Phase 3 promotes the registry to a durable `BlobBackend` per Compromise #17. The `install_module(manifest, expected_cid)` path persists the manifest into a system-zone Node but does NOT persist the underlying wasm bytes — that asymmetry IS the Compromise #17 narrative.
+- **Fix:** A SANDBOX dispatch named a module CID for which no bytes have been registered through `Engine::register_module_bytes(cid, bytes)`. Distinct from `E_SANDBOX_MODULE_INVALID` (bytes are present but failed wasmtime structural validation): this fires BEFORE the executor sees any bytes, at the engine's lookup step. Either call `engine.register_module_bytes(module_cid, wasm_bytes)` before dispatch, or correct the SANDBOX node's `module` property to reference an already-registered CID. The Phase-2b in-memory module-bytes registry is process-local + transient (lost across `Engine` re-open); Phase 3 promotes the registry to a durable `BlobBackend` per Compromise #17. The `install_module(manifest, expected_cid)` path persists the manifest into a system-zone Node but does NOT persist the underlying wasm bytes — that asymmetry IS the Compromise #17 narrative.
 - **Thrown at:** `impl PrimitiveHost for Engine::execute_sandbox` (`crates/benten-engine/src/primitive_host.rs`) when `Engine::module_bytes_for(cid)` returns `None`.
 - **Phase:** 2b Wave-8d-types
 
@@ -891,7 +891,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Message:** "SANDBOX is unavailable on the wasm32 build of the engine ({target})"
 - **Context:** `{ target: "wasm32-unknown-unknown" | "wasm32-wasip1", reason: "wasmtime cannot host nested wasm execution on this target" }`
 - **Fix:** SANDBOX requires wasmtime, which does not compile to `wasm32-unknown-unknown` (browser target) and is not currently shipped on `wasm32-wasip1` engine builds either. The engine surfaces this typed error rather than `E_SUBSYSTEM_DISABLED` because the operator-actionable signal is target-specific: SANDBOX cannot run here, regardless of build flags. Phase-3 P2P sync re-routes SANDBOX invocations to a non-browser peer; until then, host SANDBOX-bearing handlers on a native `Engine::open(path)` engine and surface their results through SUBSCRIBE / STREAM to the wasm32-hosted client.
-- **Thrown at:** `crates/benten-engine/src/engine_sandbox.rs::execute_sandbox_native` (wasm32 cfg-gated stub) and the SANDBOX dispatcher path in `crates/benten-eval/src/primitives/mod.rs` when reached on a wasm32 target.
+- **Thrown at:** `crates/benten-engine/src/engine_sandbox.rs::execute_sandbox_wasm32_unavailable` (wasm32 cfg-gated stub) and the SANDBOX dispatcher path in `crates/benten-eval/src/primitives/mod.rs` when reached on a wasm32 target.
 - **Phase:** 2b wave-8c
 
 ## Extending the catalog

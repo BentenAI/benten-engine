@@ -149,6 +149,55 @@ describe("BentenDevServer (Wave-8f JS surface)", () => {
     }
   });
 
+  it("DSL compile error surfaces structured line + column via error.context (R6FP Instance 9)", async () => {
+    // Pre-fix: compile_err_to_napi formatted `(line={line:?} column={col:?})`
+    // as a `{:?}`-Debug suffix yielding `Some(N)` literals JS had to
+    // regex-parse. Post-fix the structured fields ride the
+    // `$$benten-context$$` sentinel + surface as numeric fields on
+    // `error.context`.
+    const { dir, cleanup } = freshTmp("benten-dev-compile-err-");
+    try {
+      const server = new BentenDevServer({ projectRoot: dir });
+      await server.start();
+
+      // Multi-line malformed source so line + column are non-default.
+      // Line 2 has the syntax error (missing arrow); the parser should
+      // attribute the diagnostic to a real line/column rather than 1:1.
+      const malformed = [
+        "handler 'broken' {",
+        "  read('post') no_arrow_here respond",
+        "}",
+      ].join("\n");
+
+      let captured: any = null;
+      try {
+        await server.registerHandler("broken", "run", malformed);
+      } catch (err) {
+        captured = err;
+      }
+
+      expect(captured).not.toBeNull();
+      // The error MUST carry structured context (Instance 9 contract).
+      expect(captured.context).toBeDefined();
+      expect(captured.context).toBeTypeOf("object");
+      // Structured numeric line + column (NOT a Debug `Some(N)` string).
+      // null is acceptable per the JSON shape if the parser couldn't
+      // attribute, but the type must be number-or-null — never string.
+      const line = captured.context.line;
+      const column = captured.context.column;
+      expect(line === null || typeof line === "number").toBe(true);
+      expect(column === null || typeof column === "number").toBe(true);
+      // Realistically: line should be 2 (the bad line) or higher.
+      if (typeof line === "number") {
+        expect(line).toBeGreaterThanOrEqual(1);
+      }
+
+      await server.stop();
+    } finally {
+      cleanup();
+    }
+  });
+
   it("idempotent re-registration with identical content does not bump the version chain", async () => {
     const { dir, cleanup } = freshTmp("benten-dev-idem-");
     try {

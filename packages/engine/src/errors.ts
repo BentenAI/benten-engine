@@ -260,13 +260,65 @@ export function extractCode(input: unknown): string | undefined {
 }
 
 /**
+ * R6FP-tail (Round-2 Instance 8) — sentinel marker the napi adapter
+ * (`bindings/napi/src/error.rs::engine_err`) appends to the napi error
+ * message when an `EngineError` carries structured per-variant fields
+ * (e.g. `ModuleManifestCidMismatch { expected, computed, summary }` or
+ * `Invariant(RegistrationError { ...14 fields })`). The suffix shape
+ * is `<message> :: $$benten-context$$<json>`.
+ *
+ * `mapNativeError` splits on this sentinel + parses the JSON tail and
+ * passes the resulting bag as the fourth `context` argument to the
+ * typed-error subclass constructor so JS callers can read structured
+ * fields off `error.context` (e.g. `error.context.expected_cid`).
+ *
+ * The double-`$` is chosen because it is unlikely to appear in any
+ * `EngineError` Display rendering — keeps the suffix unambiguous.
+ * Cross-layer contract with the Rust adapter; changing the sentinel
+ * requires a coordinated update on both sides.
+ */
+const CONTEXT_SENTINEL = " :: $$benten-context$$";
+
+/**
+ * R6FP-tail (Round-2 Instance 8) — split a napi error message on the
+ * `$$benten-context$$` sentinel. Returns `[messageWithoutSuffix, context]`
+ * where `context` is the parsed JSON bag (or `undefined` when the
+ * sentinel is absent / the JSON tail fails to parse).
+ *
+ * Best-effort: if the JSON tail is malformed, returns the original
+ * message untouched + `context = undefined` so the typed-error path
+ * still fires on the catalog code.
+ */
+function splitContextSentinel(
+  raw: string,
+): [string, Record<string, unknown> | undefined] {
+  const idx = raw.indexOf(CONTEXT_SENTINEL);
+  if (idx === -1) return [raw, undefined];
+  const head = raw.slice(0, idx);
+  const tail = raw.slice(idx + CONTEXT_SENTINEL.length);
+  try {
+    const parsed = JSON.parse(tail) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return [head, parsed as Record<string, unknown>];
+    }
+    return [head, undefined];
+  } catch {
+    return [head, undefined];
+  }
+}
+
+/**
  * Wrap an unknown value (typically a napi Error) in the most specific
  * typed Benten error we can reconstruct.
  *
  * Rules:
  *   1. If the value is already a `BentenError`, return it untouched.
  *   2. If the value carries a catalog code in its string form, build
- *      the matching subclass and preserve the original message.
+ *      the matching subclass and preserve the original message. When
+ *      the message also carries a `$$benten-context$$` JSON suffix
+ *      (R6FP-tail Round-2 Instance 8), the parsed bag is passed as the
+ *      4th `context` constructor arg so JS consumers can read
+ *      structured fields via `error.context`.
  *   3. Otherwise, fall back to a `BentenError` with a synthetic
  *      unknown-code marker so the caller still sees a typed wrapper.
  *
@@ -282,10 +334,11 @@ export function mapNativeError(err: unknown): BentenError {
       : typeof err === "string"
         ? err
         : String(err);
-  const code = extractCode(raw);
+  const [message, context] = splitContextSentinel(raw);
+  const code = extractCode(message);
   if (code && CODE_TO_CTOR[code]) {
     const Ctor = CODE_TO_CTOR[code];
-    const instance = new Ctor(raw);
+    const instance = new Ctor(message, context);
     if (err instanceof Error && err.stack) {
       instance.stack = err.stack;
     }
@@ -295,5 +348,5 @@ export function mapNativeError(err: unknown): BentenError {
   // Assembled at runtime to avoid baking a fake code into the source
   // text (the drift detector's naive scan would otherwise flag it).
   const syntheticCode = ["E", "UNKNOWN"].join("_");
-  return new BentenError(syntheticCode, "(no catalog match)", raw);
+  return new BentenError(syntheticCode, "(no catalog match)", message, context);
 }

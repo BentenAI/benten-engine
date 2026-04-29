@@ -373,3 +373,44 @@ pub(crate) fn outcome_to_json(outcome: &benten_engine::Outcome) -> serde_json::V
     );
     serde_json::Value::Object(out)
 }
+
+/// R6FP-tail (Round-2 Instance 10) — project a
+/// [`benten_engine::RegisterReplaceOutcome`] into JSON for the JS side.
+///
+/// Shape: `{ handlerId, cid, previousCid, chainDepth, versionTag, replaced }`.
+/// Pre-Instance-10 the napi/devserver path returned only the new CID
+/// String; this helper widens the surface so JS callers can correlate
+/// hot-replace observability without subscribing to reload events.
+pub(crate) fn register_replace_outcome_to_json(
+    outcome: &benten_engine::RegisterReplaceOutcome,
+) -> serde_json::Value {
+    let mut out = serde_json::Map::new();
+    out.insert(
+        "handlerId".to_string(),
+        serde_json::Value::String(outcome.handler_id.clone()),
+    );
+    out.insert(
+        "cid".to_string(),
+        serde_json::Value::String(outcome.cid.to_base32()),
+    );
+    out.insert(
+        "previousCid".to_string(),
+        match &outcome.previous_cid {
+            Some(c) => serde_json::Value::String(c.to_base32()),
+            None => serde_json::Value::Null,
+        },
+    );
+    out.insert(
+        "chainDepth".to_string(),
+        serde_json::Value::Number(serde_json::Number::from(outcome.chain_depth as u64)),
+    );
+    out.insert(
+        "versionTag".to_string(),
+        serde_json::Value::String(outcome.version_tag()),
+    );
+    out.insert(
+        "replaced".to_string(),
+        serde_json::Value::Bool(outcome.replaced()),
+    );
+    serde_json::Value::Object(out)
+}

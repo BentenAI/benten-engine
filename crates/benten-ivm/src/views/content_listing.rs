@@ -382,6 +382,31 @@ impl View for ContentListingView {
         Ok(ViewResult::Cids(self.snapshot(offset, limit)))
     }
 
+    /// Relaxed-read override (R6FP-tail NEW-1). On a stale view, returns
+    /// the last-known-good snapshot via `read_page_allow_stale`'s
+    /// projection rather than [`ViewError::Stale`]. On a fresh view,
+    /// returns the live snapshot identically to [`Self::read`].
+    fn read_allow_stale(&self, query: &ViewQuery) -> Result<ViewResult, ViewError> {
+        if let Some(ref wanted) = query.label
+            && wanted != &self.label
+        {
+            return Err(ViewError::PatternMismatch(
+                "content_listing: query label does not match this view's watched label".to_string(),
+            ));
+        }
+        let offset = query.offset.unwrap_or(0);
+        let limit = query.limit.unwrap_or(usize::MAX);
+        if self.budget.is_stale() {
+            Ok(ViewResult::Cids(paginate_slice(
+                &self.last_known_good,
+                offset,
+                limit,
+            )))
+        } else {
+            Ok(ViewResult::Cids(self.snapshot(offset, limit)))
+        }
+    }
+
     fn rebuild(&mut self) -> Result<(), ViewError> {
         self.rebuild_from_scratch()
     }

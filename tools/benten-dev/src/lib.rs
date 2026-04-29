@@ -391,6 +391,60 @@ impl DevServer {
         self.register_handler_from_dsl(handler_id, op, source)
     }
 
+    /// R6FP-tail (Round-2 Instance 10) — replace a handler from DSL +
+    /// return the full structured [`RegisterReplaceOutcome`] when
+    /// engine routing is enabled.
+    ///
+    /// Pre-Instance-10 the dev-server's replace path returned only the
+    /// new CID String, dropping `previous_cid` / `chain_depth` /
+    /// `version_tag` from the [`benten_engine::RegisterReplaceOutcome`].
+    /// JS callers had to subscribe to reload events + correlate by
+    /// handler_id to recover those fields.
+    ///
+    /// Returns `Ok(Some(outcome))` when engine routing is enabled +
+    /// the source compiles + the engine accepts the registration.
+    /// Returns `Ok(None)` when engine routing is disabled (legacy
+    /// in-memory mode); the caller can fall back to the bare-CID
+    /// [`DevServer::replace_handler_from_dsl`] surface.
+    ///
+    /// # Errors
+    /// Returns the same [`CompileError`] cases as
+    /// [`DevServer::register_handler_from_dsl`].
+    pub fn replace_handler_from_dsl_with_outcome(
+        &self,
+        handler_id: &str,
+        op: &str,
+        source: &str,
+    ) -> Result<Option<benten_engine::RegisterReplaceOutcome>, CompileError> {
+        // Compile first so a malformed source produces the same
+        // CompileError shape as register_handler_from_dsl rather than a
+        // generic Unknown engine-side error wrapped in CompileError.
+        let compiled = compile_str(source)?;
+        // Bookkeep the legacy in-memory table for parity with
+        // register_handler_from_dsl (the version-tag bumps the
+        // dev-server's own counter independently of the engine's chain
+        // depth).
+        let _ = self.register_handler_from_str(handler_id, op, source);
+        if let Some(engine) = &self.engine {
+            match engine.register_subgraph_replace(compiled.subgraph) {
+                Ok(outcome) => Ok(Some(outcome)),
+                // Engine registration failed post-compile — surface
+                // through the existing Io variant since CompileError's
+                // current variant set covers DSL-grammar-vs-typecheck
+                // failure modes; engine-side rejection is a downstream
+                // bucket that fits Io's "everything else" semantic.
+                // R6FP-tail (Round-2 Instance 10) matches the analog
+                // path in `register_handler_from_str` which wraps as
+                // `ErrorCode::Unknown(format!("devserver_engine_register: {e:?}"))`.
+                Err(e) => Err(CompileError::Io(format!(
+                    "devserver_engine_register: {e:?}"
+                ))),
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Wave-8f: subscribe to hot-reload events. The returned handle is
     /// drained per-poll by JS-side consumers. See
     /// [`reload::ReloadSubscriber`] for the per-event shape.

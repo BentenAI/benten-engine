@@ -124,6 +124,9 @@ pub fn sandbox_target_supported() -> bool {
 // `#[napi] fn describe_sandbox_node` cfg-gated under the engine
 // crate's `test-helpers` feature (sec-r6r2-02 discipline).
 //
+// Cross-ref: `docs/SECURITY-POSTURE.md` Compromise #17
+// (sandbox-execution-metric-propagation).
+//
 // Visible TS contract today (the `sandbox_napi_bridge.test.ts`
 // symbol-presence pin): `sandbox_target_supported` probe above +
 // client-synthesized `describeSandboxNode` for shape-pinning. The

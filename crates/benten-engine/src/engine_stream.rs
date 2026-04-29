@@ -37,15 +37,32 @@
 //! so a `[link]` wrap fails `RUSTDOCFLAGS=-D warnings` — keep the
 //! reference as plain prose.)
 //!
-//! # G6-A coordination
+//! # Production wire-through (wave-8c-stream-infra)
 //!
-//! Until G6-A lands its real [`benten_eval::chunk_sink::ChunkSink`]
-//! trait body + tokio-mpsc backed STREAM executor, [`Engine::call_stream`]
-//! returns a [`StreamHandle`] that yields the typed
-//! `E_PRIMITIVE_NOT_IMPLEMENTED` error on first poll. The handle's shape
-//! is locked here; once G6-A merges, its executor populates the handle's
-//! chunk source with real bytes. `testing_open_stream_for_test` does NOT
-//! depend on G6-A — the test factory accepts a synthetic chunk vector.
+//! [`Engine::call_stream`] routes through `call_stream_inner` →
+//! `build_stream_handle` which spawns a real [`benten_eval::chunk_sink::ChunkProducer`]
+//! thread + returns a handle backed by a producer-bridge
+//! [`benten_eval::chunk_sink::ChunkSource`]. `next_chunk()` drains real
+//! bytes from the producer; errors flow as typed [`EngineError`]
+//! through the chunk channel. Cursor modes ([`StreamCursor::Latest`] /
+//! [`StreamCursor::Sequence`]) are honored by the producer side.
+//!
+//! The `E_PRIMITIVE_NOT_IMPLEMENTED` first-poll fallback fires only on
+//! narrow paths — handler not registered, no `SubgraphSpec` found for
+//! the handler id, or the spec carries no STREAM primitive. The
+//! default path is real-chunk delivery.
+//!
+//! Note that `benten_eval::primitives::stream::execute` (the eval-side
+//! executor body) is dead code on the engine path because
+//! `build_stream_handle` invokes
+//! [`benten_eval::chunk_sink::spawn_chunk_producer`] directly to spin
+//! up the producer thread. Group 1's R6FP fix-pass (r6-stream-3)
+//! reconciles the eval-side dead-code situation; this engine-side
+//! module remains the load-bearing dispatch path.
+//!
+//! `testing_open_stream_for_test` continues to accept a synthetic
+//! chunk vector (no producer thread) for tests that drive the handle
+//! shape without exercising the producer-bridge.
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -392,13 +409,22 @@ impl Engine {
     /// handle as an `AsyncIterable<Chunk>` so consumers can write
     /// `for await (const chunk of engine.callStream(...))`.
     ///
-    /// # Pre-G6-A behavior
+    /// # Wave-8c-stream-infra wire-through
     ///
-    /// Until G6-A's real executor body lands, this method returns a
-    /// handle whose first `next_chunk()` surfaces
-    /// `E_PRIMITIVE_NOT_IMPLEMENTED`. Once G6-A merges, the handle is
-    /// populated by the executor's `tokio::sync::mpsc::Receiver<Chunk>`
-    /// per D4-RESOLVED.
+    /// Routes through `call_stream_inner` → `build_stream_handle` which
+    /// spawns a real [`benten_eval::chunk_sink::ChunkProducer`] thread +
+    /// returns a handle backed by a producer-bridge `ChunkSource`.
+    /// `next_chunk()` drains real bytes from the producer; errors flow
+    /// as typed [`EngineError`] through the chunk channel. The
+    /// `E_PRIMITIVE_NOT_IMPLEMENTED` first-poll fallback fires only on
+    /// narrow paths — handler not registered (raises here as Err), no
+    /// `SubgraphSpec` found, or the spec carries no STREAM primitive.
+    /// The default behavior is real-chunk delivery.
+    ///
+    /// (R6FP-tail NEW-3 docstring rewrite — pre-fix this section
+    /// claimed "Pre-G6-A behavior: handle whose first next_chunk()
+    /// surfaces E_PRIMITIVE_NOT_IMPLEMENTED" which was true in early
+    /// Phase-2a but no longer reflects landed reality post wave-8c.)
     ///
     /// # Errors
     /// Returns [`EngineError`] if the handler isn't registered. Streaming

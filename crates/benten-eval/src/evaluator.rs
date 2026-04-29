@@ -154,7 +154,7 @@ impl Evaluator {
     /// terminal [`TraceStep::BudgetExhausted`] / typed-error rows pushed
     /// by `run_inner` (private; cannot intra-doc-link without
     /// `--document-private-items`) reach the user-facing
-    /// `engine.trace(...)` consumer (§9.12 / `lib.rs:1430-1431` TODO
+    /// `engine.trace(...)` consumer (§9.12 / `lib.rs:854-855` TODO
     /// closure). The explicit `budget` lets the engine thread its
     /// `Engine::testing_set_iteration_budget` override through without
     /// adding a second method.
@@ -268,7 +268,7 @@ impl Evaluator {
                 // (`IterateNestDepth`). Mini-review findings g6-cag-1 /
                 // g6-opl-6 / g6-cr-2. Maps to `E_INV_ITERATE_BUDGET`.
                 //
-                // G12-A: §9.12 / `lib.rs:1430-1431` TODO closure — push a
+                // G12-A: §9.12 / `lib.rs:854-855` TODO closure — push a
                 // terminal `TraceStep::BudgetExhausted` row before the
                 // typed error propagates so `engine.trace(...)` consumers
                 // observe the exhaustion in-band rather than as an

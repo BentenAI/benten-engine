@@ -127,7 +127,9 @@ mod napi_surface {
         call_stream_adapter, call_stream_as_adapter, close_handle_adapter, next_chunk_adapter,
         open_stream_adapter,
     };
-    use crate::subgraph::{json_to_subgraph_spec, outcome_to_json};
+    use crate::subgraph::{
+        json_to_subgraph_spec, outcome_to_json, register_replace_outcome_to_json,
+    };
     use crate::subscribe::{on_change_adapter, on_change_as_adapter};
     #[cfg(feature = "test-helpers")]
     use crate::subscribe::{
@@ -321,6 +323,33 @@ mod napi_surface {
         pub fn register_subgraph(&self, spec: serde_json::Value) -> napi::Result<String> {
             let s = json_to_subgraph_spec(spec)?;
             self.inner.register_subgraph(s).map_err(engine_err)
+        }
+
+        /// R6FP-tail (Round-2 Instance 10) — replace a registered
+        /// subgraph's body. Idempotent on identical CID under the same
+        /// `handler_id`; bumps the in-memory version chain on different
+        /// content.
+        ///
+        /// Returns JSON `{ handlerId, cid, previousCid, chainDepth,
+        /// versionTag, replaced }` so JS callers can distinguish first
+        /// registration / idempotent re-registration / true replace
+        /// without a side-channel subscribe-to-reload-events
+        /// correlation. Pre-Instance-10 the napi surface dropped 3 of 4
+        /// `RegisterReplaceOutcome` fields + the `Engine::register_subgraph_replace`
+        /// method was NOT exposed via napi at all (only the
+        /// devserver-bound `replaceHandlerFromDsl` path existed, with
+        /// only the new-CID String return).
+        #[napi(js_name = "registerSubgraphReplace")]
+        pub fn register_subgraph_replace(
+            &self,
+            spec: serde_json::Value,
+        ) -> napi::Result<serde_json::Value> {
+            let s = json_to_subgraph_spec(spec)?;
+            let outcome = self
+                .inner
+                .register_subgraph_replace(s)
+                .map_err(engine_err)?;
+            Ok(register_replace_outcome_to_json(&outcome))
         }
 
         /// Register the zero-config CRUD handler set for `label`. Returns

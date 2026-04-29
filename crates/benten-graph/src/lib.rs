@@ -437,7 +437,7 @@ pub enum GraphError {
     /// re-put attempt was made so the rendered Display + downstream
     /// diagnostics can name which row of the 5-row matrix actually
     /// fired. The catalog (`docs/ERROR-CATALOG.md`) promises this
-    /// field; the firing sites at `redb_backend.rs:1038, 1186` already
+    /// field; the firing sites at `redb_backend.rs:1081, 1232` already
     /// know the authority and now thread it through.
     // R6 round-2 EH1-R2-OBS: render the CID via its `Display` impl
     // (`{cid}`) rather than `{cid:?}`. `Cid::Display` produces the

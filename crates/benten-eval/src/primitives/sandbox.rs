@@ -20,7 +20,7 @@
 //! (wsa-17 R3 carry): when fuel exhaustion fires, the executor emits
 //! `TraceStep::BudgetExhausted { budget_type: "sandbox_fuel", consumed,
 //! limit, path }` BEFORE propagating the typed error, mirroring G12-A's
-//! `inv_8_iteration` pattern at `evaluator.rs:185-192`. Same for
+//! `inv_8_iteration` pattern at `evaluator.rs:271-287`. Same for
 //! `sandbox_memory`, `sandbox_wallclock`, `sandbox_output` budget types.
 //!
 //! This module is `#[cfg(not(target_arch = "wasm32"))]`-gated per
@@ -251,7 +251,7 @@ impl SandboxError {
 
     /// Construct the matching [`TraceStep::BudgetExhausted`] row to
     /// emit BEFORE propagating the typed error (wsa-17, mirrors G12-A's
-    /// `inv_8_iteration` pattern at `evaluator.rs:185-192`). Returns
+    /// `inv_8_iteration` pattern at `evaluator.rs:271-287`). Returns
     /// `None` for non-budget axes.
     #[must_use]
     pub fn to_budget_exhausted_trace(&self, path: Vec<String>) -> Option<TraceStep> {

@@ -73,14 +73,41 @@ impl Engine {
     }
 
     /// Create an IVM view registration. Writes a `system:IVMView` Node via the
-    /// engine-privileged path AND — when IVM is enabled — registers a live
-    /// view instance with the subscriber so future change events flow into
-    /// it (code-reviewer g7-cr-8).
+    /// engine-privileged path AND — when IVM is enabled AND the view id
+    /// names the content-listing view family — registers a live
+    /// [`benten_ivm::views::ContentListingView`] instance with the subscriber
+    /// so future change events flow into it (code-reviewer g7-cr-8).
     ///
     /// Idempotent: same `view_id` returns the same content-addressed CID.
-    /// The content-listing view family (view_id `"content_listing"` or
-    /// `"content_listing_<label>"`) is instantiated with the trailing label
-    /// as its input pattern; other canonical ids register their own view.
+    ///
+    /// # Live-view registration scope
+    ///
+    /// - **Content-listing view family** (`view_id == "content_listing"` or
+    ///   `view_id` matches `content_listing_<label>`): the view is
+    ///   instantiated with the trailing label (or `"post"` for the bare
+    ///   `"content_listing"` id) as its input pattern, AND a live view
+    ///   instance is registered with the IVM subscriber. The definition
+    ///   Node is also persisted.
+    /// - **The 4 other canonical Phase-1 view ids** (`capability_grants`,
+    ///   `event_dispatch`, `governance_inheritance`, `version_current`):
+    ///   the definition Node is persisted via the privileged write path,
+    ///   but **no live view instance is registered with the subscriber**.
+    ///   A subsequent `read_view(<id>)` falls through to the canonical-id
+    ///   whitelist and returns `IvmViewStale` (in strict) or empty
+    ///   last-known-good (in allow-stale). This is because those views
+    ///   require additional constructor parameters the Phase-1
+    ///   `ViewCreateOptions` API doesn't yet surface.
+    ///
+    /// Lift to live-view registration for the 4 other canonical ids is
+    /// `phase-3-backlog.md` §5.1 (R6FP-tail NEW-2 named destination —
+    /// non-content-listing canonical view auto-registration). User-
+    /// defined views go through [`Engine::register_user_view`] which
+    /// IS wired through `AlgorithmBView::for_id` for the canonical ids
+    /// (Strategy::B path) — the legacy `create_view` surface is the
+    /// Strategy::A entry point for the 5 hand-written views. R6FP-tail
+    /// NEW-2 corrects the prior docstring claim that "other canonical
+    /// ids register their own view" (which read as "all 5 canonical
+    /// ids get a live view instance" — only `content_listing` does).
     pub fn create_view(&self, view_id: &str, _opts: ViewCreateOptions) -> Result<Cid, EngineError> {
         // Derive the input pattern label for content-listing views so the
         // stored definition is stable regardless of subscriber state.

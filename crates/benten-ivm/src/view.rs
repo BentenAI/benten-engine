@@ -265,6 +265,30 @@ pub trait View: Send + Sync + core::fmt::Debug {
     /// index this view maintains.
     fn read(&self, query: &ViewQuery) -> Result<ViewResult, ViewError>;
 
+    /// Relaxed read. On a stale view, returns the last-known-good
+    /// snapshot (the state observed just before the budget trip) rather
+    /// than [`ViewError::Stale`]. On a fresh view, behaves identically
+    /// to [`Self::read`].
+    ///
+    /// The default implementation delegates to [`Self::read`], which
+    /// surfaces stale as [`ViewError::Stale`]. Views that maintain a
+    /// last-known-good snapshot (notably [`crate::views::ContentListingView`])
+    /// should override this to project the snapshot through the same
+    /// `ViewResult` shape `read` returns. Used by the engine's
+    /// `read_view_with(..., ReadViewOptions::allow_stale())` path
+    /// (R6FP-tail NEW-1 wire-through).
+    ///
+    /// # Errors
+    ///
+    /// May return [`ViewError::PatternMismatch`] for queries that don't
+    /// name any index this view maintains. The default implementation
+    /// also propagates [`ViewError::Stale`] from `read`; overrides
+    /// MUST NOT return `Stale` (that's the whole point — relaxed
+    /// callers absorbed the staleness already).
+    fn read_allow_stale(&self, query: &ViewQuery) -> Result<ViewResult, ViewError> {
+        self.read(query)
+    }
+
     /// Rebuild the view from scratch. Used for bootstrap and for recovery
     /// after a stale trip. On success, the view is [`ViewState::Fresh`].
     ///
