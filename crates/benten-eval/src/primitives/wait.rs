@@ -21,7 +21,7 @@ use benten_core::Cid;
 
 use crate::exec_state::{ExecutionStateEnvelope, ExecutionStatePayload};
 use crate::suspension_store::{SuspensionStore, WaitMetadata as StoreWaitMetadata};
-use crate::{EvalError, InvariantViolation, TraceStep};
+use crate::{EvalError, InvariantViolation, OperationNode, TraceStep};
 
 /// Phase-2b G12-E: WAIT-side metadata side-table value shape — keeps
 /// the local crate-private alias for back-compat with the existing
@@ -275,7 +275,43 @@ pub fn evaluate(
     else {
         return Ok(WaitOutcome::Complete(benten_core::Value::unit()));
     };
+    evaluate_op_with_handler_id(
+        wait_node,
+        sg.handler_id(),
+        ctx.suspension_store(),
+        ctx.elapsed_ms(),
+    )
+}
 
+/// Phase-2b Wave-8i: dispatcher entry point for a WAIT
+/// [`OperationNode`] reached during a regular `engine.call()` walk.
+///
+/// Identical property-extraction + suspension-store-persistence logic to
+/// [`evaluate`], except the handler-id key falls back to a fixed sentinel
+/// since the dispatcher does not own the surrounding subgraph reference.
+/// In practice the (signal-name OR (handler-id, node-id)) compound key
+/// produced by [`evaluate`] collapses to (signal-name OR ("__op", node-id))
+/// here, which is sufficient for envelope-CID stability across repeated
+/// dispatch calls within a single handler walk (the only contract
+/// callers depend on).
+///
+/// # Errors
+/// Returns [`EvalError::Core`] if DAG-CBOR encoding of the placeholder
+/// payload fails.
+pub fn evaluate_op(
+    op: &OperationNode,
+    store: std::sync::Arc<dyn crate::suspension_store::SuspensionStore>,
+    elapsed_ms: Option<u64>,
+) -> Result<WaitOutcome, EvalError> {
+    evaluate_op_with_handler_id(op, "__op", store, elapsed_ms)
+}
+
+fn evaluate_op_with_handler_id(
+    wait_node: &OperationNode,
+    handler_id: &str,
+    store: std::sync::Arc<dyn crate::suspension_store::SuspensionStore>,
+    elapsed_ms: Option<u64>,
+) -> Result<WaitOutcome, EvalError> {
     let signal_name = match wait_node.property("signal") {
         Some(benten_core::Value::Text(s)) => s.clone(),
         _ => String::new(),
@@ -299,7 +335,7 @@ pub fn evaluate(
     // evaluate-calls, which is the behaviour the suspend/resume
     // determinism tests already lean on.
     let key = if signal_name.is_empty() {
-        format!("__dur__{}__{}", sg.handler_id(), wait_node.id)
+        format!("__dur__{handler_id}__{}", wait_node.id)
     } else {
         signal_name.clone()
     };
@@ -309,14 +345,11 @@ pub fn evaluate(
 
     // Phase-2b G12-E: route through the configured `SuspensionStore` so
     // cross-process resume can hydrate the deadline + shape from durable
-    // storage. Falls back to the process-default singleton when the
-    // EvalContext was not handed an explicit store (in-process unit
-    // tests, primitive-layer entry points outside the engine).
-    let store = ctx.suspension_store();
+    // storage.
     let _ = store.put_wait(
         state_cid,
         WaitMetadata {
-            suspend_elapsed_ms: ctx.elapsed_ms(),
+            suspend_elapsed_ms: elapsed_ms,
             timeout_ms,
             signal_shape,
             is_duration,

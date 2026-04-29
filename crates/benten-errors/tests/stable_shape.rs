@@ -139,6 +139,8 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // structural validation) — fires BEFORE the executor sees any
     // bytes.
     ErrorCode::SandboxModuleNotInstalled,
+    // Phase-2b Wave-8i: WAIT-suspended control-flow signal.
+    ErrorCode::WaitSuspended,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -214,8 +216,13 @@ fn variant_count_is_pinned() {
     // Phase-2b Wave-8d-types adds `SandboxModuleNotInstalled` for the
     // missing-module-bytes path on `impl PrimitiveHost for
     // Engine::execute_sandbox`. Post-Wave-8d-types: 77 + 1 = 78.
+    //
+    // Phase-2b Wave-8i adds `WaitSuspended` — the control-flow signal
+    // surfaced by the dispatcher when a regular `engine.call()` walk hits
+    // a WAIT primitive and the engine routes through eval-side
+    // `wait::evaluate`. Post-Wave-8i: 78 + 1 = 79.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 78,
+        CATALOG_VARIANT_COUNT, 79,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

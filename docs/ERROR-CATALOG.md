@@ -682,6 +682,14 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** WAIT executor resume path (G3-B DX signal-payload typing). The integration test at `crates/benten-engine/tests/integration/wait_signal_shape_optional_typing.rs` exercises the surface; the production firing site is reserved alongside the broader G3-B DX typing landing (drift-detector reachability is `ignore` until then).
 - **Phase:** 2a
 
+### E_WAIT_SUSPENDED
+
+- **Message:** "WAIT primitive suspended awaiting external signal/duration"
+- **Context:** `{ state_cid: Cid, signal: string }`
+- **Fix:** A regular `engine.call(handler, ...)` walk hit a WAIT primitive and the dispatcher routed through the eval-side `wait::evaluate`, producing a `SuspendedHandle`. This is a control-flow signal, NOT a runtime failure — the caller catches the typed error, inspects the carried `SuspendedHandle`, and either calls `Engine::call_with_suspension` (which surfaces the same boundary as `SuspensionOutcome::Suspended`) or persists the handle bytes via `Engine::suspend_to_bytes` for later resume. Phase-2b Wave-8i (option B closure of the WAIT regular-walk dispatcher gap surfaced by the docs-vs-code audit).
+- **Thrown at:** `benten_eval::primitives::dispatch` (WAIT arm), surfaced as `EvalError::WaitSuspended`; round-trips through `eval_error_to_engine_error` to `EngineError::WaitSuspended { handle }` at the engine boundary.
+- **Phase:** 2b
+
 ### E_STREAM_BACKPRESSURE_DROPPED
 
 - **Message:** "STREAM lossy mode dropped a chunk on a saturated buffer"

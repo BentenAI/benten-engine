@@ -169,6 +169,29 @@ pub trait PrimitiveHost: Send + Sync {
         Ok(())
     }
 
+    /// Phase-2b Wave-8i: hand the dispatcher the suspension store the
+    /// host wants WAIT to persist envelopes + metadata into.
+    ///
+    /// The engine impl returns the engine's durable redb-backed store
+    /// (`Engine::suspension_store()`). The default — used by `NullHost`
+    /// + every unit-test PrimitiveHost — falls back to the process-
+    /// default singleton, matching the Phase-2a `EvalContext` fallback
+    /// for the same reason: WAIT unit tests don't wire an engine.
+    fn suspension_store(&self) -> std::sync::Arc<dyn crate::suspension_store::SuspensionStore> {
+        crate::suspension_store::default_process_store()
+    }
+
+    /// Phase-2b Wave-8i: hand the dispatcher the host's current
+    /// monotonic-clock reading in milliseconds (or `None` if no clock
+    /// is wired). WAIT records this as `suspend_elapsed_ms` so the
+    /// resume-time deadline check has a stable start reference.
+    ///
+    /// Default: `None` (no clock — matches `EvalContext::elapsed_ms`
+    /// returning `None` when no `TimeSource` is injected).
+    fn elapsed_ms(&self) -> Option<u64> {
+        None
+    }
+
     /// SANDBOX primitive dispatch (Phase 2b Wave-8b).
     ///
     /// The evaluator routes SANDBOX OperationNode dispatch through this

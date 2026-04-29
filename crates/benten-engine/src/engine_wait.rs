@@ -191,22 +191,27 @@ impl HandlerRef for Cid {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Decide whether a registered handler should take the suspend path. A
-/// handler suspends when its SubgraphSpec either contains a `Wait` primitive
-/// or is structurally empty (Phase-2a `SubgraphSpec::empty(id)` fixtures).
-/// Missing spec ⇒ handler was registered via the crud / raw-subgraph path,
-/// which never suspends.
-fn should_suspend(engine: &Engine, handler_id: &str) -> bool {
+/// Phase-2b Wave-8i: helper for `call_as_with_suspension`'s legacy fallback
+/// path. The Wave-8i refactor routes regular dispatch through
+/// `Engine::dispatch_call`; the only callers of this helper now are
+/// thin-engine fixtures that need a structural detector for the
+/// `SubgraphSpec::empty(id)` shape (Phase-2a test surface) plus the
+/// production hot-path that detects WAIT-bearing handlers without
+/// running them. Production WAIT routing is now done by
+/// `dispatch_call_inner` -> `EngineError::WaitSuspended` -> the
+/// catch-arm in `call_as_with_suspension`.
+///
+/// Retained for the empty-subgraph case (a `SubgraphSpec::empty(id)` test
+/// fixture has no primitives, so the regular walker would terminate
+/// immediately rather than hit the WAIT dispatcher). The empty-subgraph
+/// fixture predates Wave-8i and continues to take the synthesized-handle
+/// shortcut path documented as Phase-2a behaviour.
+fn empty_spec_should_suspend(engine: &Engine, handler_id: &str) -> bool {
     let specs = benten_graph::MutexExt::lock_recover(&engine.inner.specs);
     let Some(spec) = specs.get(handler_id) else {
         return false;
     };
-    if spec.primitives.is_empty() {
-        return true;
-    }
-    spec.primitives
-        .iter()
-        .any(|p| matches!(p.kind, benten_eval::PrimitiveKind::Wait))
+    spec.primitives.is_empty()
 }
 
 /// Build an `ExecutionStatePayload` for a just-registered handler.
@@ -744,15 +749,42 @@ impl Engine {
         input: Node,
         principal: &Cid,
     ) -> Result<SuspensionOutcome, EngineError> {
-        if !should_suspend(self, handler_id) {
-            let outcome = self.call(handler_id, op, input)?;
-            return Ok(SuspensionOutcome::Complete(outcome));
+        // Phase-2a empty-subgraph fixture path: `SubgraphSpec::empty(id)`
+        // has no primitives, so the regular walker would terminate
+        // immediately rather than hit the WAIT dispatcher. Preserve the
+        // pre-Wave-8i synthesized-handle shortcut for that fixture only.
+        if empty_spec_should_suspend(self, handler_id) {
+            let payload = payload_for_handler(self, handler_id, principal);
+            let envelope = ExecutionStateEnvelope::new(payload).map_err(EngineError::Core)?;
+            let state_cid = cache_put(self, envelope)?;
+            let handle = SuspendedHandle::new(state_cid, DEFAULT_SYNTHETIC_SIGNAL);
+            return Ok(SuspensionOutcome::Suspended(handle));
         }
-        let payload = payload_for_handler(self, handler_id, principal);
-        let envelope = ExecutionStateEnvelope::new(payload).map_err(EngineError::Core)?;
-        let state_cid = cache_put(self, envelope)?;
-        let handle = SuspendedHandle::new(state_cid, DEFAULT_SYNTHETIC_SIGNAL);
-        Ok(SuspensionOutcome::Suspended(handle))
+
+        // Phase-2b Wave-8i: route regular dispatch through `dispatch_call`.
+        // The eval-side WAIT dispatcher (mod.rs `PrimitiveKind::Wait` arm)
+        // calls `wait::evaluate_op`, which consults the WAIT node's
+        // properties (`signal`, `duration_ms`, `timeout_ms`,
+        // `signal_shape`) rather than the prior `should_suspend` heuristic
+        // that ignored them. A suspension surfaces as
+        // `EngineError::WaitSuspended { handle }` (round-tripped from
+        // `EvalError::WaitSuspended` via `eval_error_to_engine_error`);
+        // we catch it here and return the typed `Suspended` arm.
+        //
+        // The `principal` is unused on the Wave-8i path because the
+        // suspension envelope is now built by the eval-side
+        // `wait::evaluate_op` from the WAIT node's own properties rather
+        // than the engine's `payload_for_handler` synthesizer. Cross-
+        // process resume protocol (`resume_from_bytes_as`) still
+        // enforces principal binding when the caller supplies a
+        // principal; the suspend-time envelope just no longer carries a
+        // synthesized principal that would be checked at resume.
+        let _ = principal;
+        match self.dispatch_call(handler_id, op, input, None) {
+            Ok(outcome) => Ok(SuspensionOutcome::Complete(outcome)),
+            Err(EngineError::WaitSuspended { handle }) => Ok(SuspensionOutcome::Suspended(handle)),
+            Err(e) => Err(e),
+        }
     }
 
     /// Phase 2a G3-B test-only: drive `Engine::call` that returns the raw

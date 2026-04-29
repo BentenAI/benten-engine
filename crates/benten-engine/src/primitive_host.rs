@@ -584,6 +584,19 @@ impl PrimitiveHost for Engine {
         }
     }
 
+    /// Phase-2b Wave-8i: hand the dispatcher the engine's durable
+    /// redb-backed [`SuspensionStore`](benten_eval::SuspensionStore) so
+    /// WAIT primitives reached during a regular `Engine::call` walk
+    /// persist envelopes + metadata into the same store
+    /// `Engine::call_with_suspension` + `Engine::resume_with_meta`
+    /// consult. Without this override, the dispatcher would fall back
+    /// to the trait default (process-default singleton), which would
+    /// silently lose envelopes across an engine drop and break
+    /// cross-process resume.
+    fn suspension_store(&self) -> std::sync::Arc<dyn benten_eval::SuspensionStore> {
+        Engine::suspension_store(self)
+    }
+
     /// Phase 2b Wave-8b — engine-side SANDBOX dispatch.
     ///
     /// **wsa-w8b-1 fix-pass:** the trait-default body returns
@@ -1081,6 +1094,11 @@ pub(crate) fn eval_error_to_engine_error(e: benten_eval::EvalError) -> EngineErr
             code: s.code(),
             message: format!("{s}"),
         },
+        // Phase-2b Wave-8i: WAIT-suspended is a control-flow signal —
+        // route to the typed `EngineError::WaitSuspended` variant so
+        // callers can pattern-match the carried `SuspendedHandle`
+        // without parsing message strings.
+        benten_eval::EvalError::WaitSuspended { handle } => EngineError::WaitSuspended { handle },
         other => EngineError::Other {
             code: other.code(),
             message: format!("{other:?}"),

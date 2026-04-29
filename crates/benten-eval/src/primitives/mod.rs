@@ -18,7 +18,7 @@
 //! [`NullHost`](crate::NullHost) so per-primitive tests don't need an
 //! engine at all.
 
-use crate::{EvalError, OperationNode, PrimitiveHost, PrimitiveKind, StepResult};
+use crate::{EvalError, OperationNode, PrimitiveHost, PrimitiveKind, StepResult, WaitOutcome};
 
 pub mod branch;
 pub mod call;
@@ -94,10 +94,32 @@ pub fn dispatch(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResu
         // assemble the SandboxConfig + grant caps + manifest from
         // engine state and invoke `crate::sandbox::execute(...)`.
         PrimitiveKind::Sandbox => host.execute_sandbox(op),
-        // WAIT — engine-side suspension surface owns the dispatch
-        // (`Engine::call_with_suspension`); the dispatcher rejects in
-        // case a WAIT node is reached during a non-suspending walk.
-        PrimitiveKind::Wait => Err(EvalError::PrimitiveNotImplemented(op.kind)),
+        // Phase-2b Wave-8i: WAIT now routes through the eval-side
+        // `wait::evaluate_op` from the regular dispatcher path. The
+        // `host` exposes its suspension store + clock-elapsed-ms reading
+        // (engine impl returns the durable redb-backed store; NullHost
+        // returns the process-default singleton). When the WAIT
+        // primitive's properties drive the evaluator to a suspension
+        // boundary (the only outcome for a well-formed WAIT node — the
+        // signal/duration_ms property determines which variant), we
+        // surface `EvalError::WaitSuspended { handle }` so the run loop
+        // short-circuits and the engine catches it in
+        // `dispatch_call_inner`. The pre-Wave-8i shape returned
+        // `PrimitiveNotImplemented`, which forced callers to know about
+        // `call_with_suspension`; the Wave-8i shape lets `engine.call()`
+        // surface the typed control-flow signal directly.
+        PrimitiveKind::Wait => {
+            let store = host.suspension_store();
+            let elapsed_ms = host.elapsed_ms();
+            match wait::evaluate_op(op, store, elapsed_ms)? {
+                WaitOutcome::Suspended(handle) => Err(EvalError::WaitSuspended { handle }),
+                WaitOutcome::Complete(value) => Ok(StepResult {
+                    next: None,
+                    edge_label: "terminal".to_string(),
+                    output: value,
+                }),
+            }
+        }
         // PrimitiveKind is `#[non_exhaustive]` (G12-C-cont relocation kept the
         // attribute for downstream-crate version-evolution discipline). Any
         // future variant added at the source-of-truth `benten-core` site
