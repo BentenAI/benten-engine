@@ -99,3 +99,8 @@ crates/benten-graph/benches/README.md
 crates/README.md
 bindings/README.md
 tests/README.md
+
+# Test artifact: redb file accidentally created when ":memory:" routes
+# through a non-sentinel path. Tracked separately as part of the
+# packages/engine vitest cluster investigation.
+packages/engine/:memory:
