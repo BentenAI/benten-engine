@@ -400,6 +400,20 @@ pub enum ErrorCode {
     /// drift point at which that re-routing decision becomes visible.
     /// Maps to `E_SANDBOX_UNAVAILABLE_ON_WASM`.
     SandboxUnavailableOnWasm,
+    /// R6 Round-2 r6-r2-napi-1: a `ReloadSubscriberJs` napi method
+    /// (`drain` / `hasEvents`) was called after `unsubscribe()`. The
+    /// devserver tooling surface uses this typed code so JS callers
+    /// catching `EReloadSubscriberUnsubscribed` get typed dispatch
+    /// rather than the synthetic `E_UNKNOWN` fallback the prior
+    /// hand-typed string variant produced. Maps to
+    /// `E_RELOAD_SUBSCRIBER_UNSUBSCRIBED`.
+    ReloadSubscriberUnsubscribed,
+    /// R6 Round-2 r6-r2-napi-1: a devserver napi method was called
+    /// after `DevServer.stop()` flipped the in-memory state to stopped.
+    /// Same typed-dispatch motivation as
+    /// [`ErrorCode::ReloadSubscriberUnsubscribed`]. Maps to
+    /// `E_DEVSERVER_STOPPED`.
+    DevServerStopped,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -564,6 +578,8 @@ impl ErrorCode {
             ErrorCode::EngineConfigInvalid => "E_ENGINE_CONFIG_INVALID",
             ErrorCode::BackendReadOnly => "E_BACKEND_READ_ONLY",
             ErrorCode::SandboxUnavailableOnWasm => "E_SANDBOX_UNAVAILABLE_ON_WASM",
+            ErrorCode::ReloadSubscriberUnsubscribed => "E_RELOAD_SUBSCRIBER_UNSUBSCRIBED",
+            ErrorCode::DevServerStopped => "E_DEVSERVER_STOPPED",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -748,7 +764,12 @@ impl ErrorCode {
             // the SANDBOX dispatch site on a wasm32 build, not along a
             // primitive edge of a runnable handler subgraph (the SANDBOX
             // primitive cannot run at all on this target).
-            | ErrorCode::SandboxUnavailableOnWasm => None,
+            | ErrorCode::SandboxUnavailableOnWasm
+            // R6 Round-2 r6-r2-napi-1: devserver tooling surface
+            // typed errors. Surface at the napi method call site, not
+            // along a primitive edge of a runnable handler subgraph.
+            | ErrorCode::ReloadSubscriberUnsubscribed
+            | ErrorCode::DevServerStopped => None,
 
             // SUBSCRIBE registration / restart failures — surface at the
             // registration call site, not along a primitive edge. Mirrors
@@ -869,6 +890,8 @@ impl ErrorCode {
             "E_ENGINE_CONFIG_INVALID" => ErrorCode::EngineConfigInvalid,
             "E_BACKEND_READ_ONLY" => ErrorCode::BackendReadOnly,
             "E_SANDBOX_UNAVAILABLE_ON_WASM" => ErrorCode::SandboxUnavailableOnWasm,
+            "E_RELOAD_SUBSCRIBER_UNSUBSCRIBED" => ErrorCode::ReloadSubscriberUnsubscribed,
+            "E_DEVSERVER_STOPPED" => ErrorCode::DevServerStopped,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }

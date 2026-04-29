@@ -141,6 +141,12 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::SandboxModuleNotInstalled,
     // Phase-2b Wave-8i: WAIT-suspended control-flow signal.
     ErrorCode::WaitSuspended,
+    // R6 Round-2 r6-r2-napi-1: devserver tooling typed errors —
+    // promote the prior hand-typed string literals at devserver.rs to
+    // first-class catalog variants so JS callers get typed BentenError
+    // dispatch rather than the synthetic `E_UNKNOWN` fallback.
+    ErrorCode::ReloadSubscriberUnsubscribed,
+    ErrorCode::DevServerStopped,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -221,8 +227,13 @@ fn variant_count_is_pinned() {
     // surfaced by the dispatcher when a regular `engine.call()` walk hits
     // a WAIT primitive and the engine routes through eval-side
     // `wait::evaluate`. Post-Wave-8i: 78 + 1 = 79.
+    //
+    // R6 Round-2 r6-r2-napi-1 adds `ReloadSubscriberUnsubscribed` +
+    // `DevServerStopped` — promotes the two devserver hand-typed
+    // string literals to first-class catalog variants. Post-R6-R2:
+    // 79 + 2 = 81.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 79,
+        CATALOG_VARIANT_COUNT, 81,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
