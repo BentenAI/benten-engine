@@ -95,12 +95,70 @@ describe("engine.installModule", () => {
       modules: [{ name: "identity", cid: "bafy...echo-wasm", requires: [] }],
     };
 
-    const wrongCid = "bafy...definitely-not-the-right-cid";
+    // Use a structurally valid but content-wrong CID so the parse
+    // succeeds + the mismatch arm fires (rather than the parse-time
+    // E_INPUT_LIMIT pre-check rejecting the placeholder).
+    const otherManifest: ModuleManifest = {
+      name: "different",
+      version: "0.0.1",
+      modules: [],
+    };
+    const wrongCid = await engine.computeManifestCid(otherManifest);
 
     await expect(engine.installModule(manifest, wrongCid)).rejects.toMatchObject({
       code: "E_MODULE_MANIFEST_CID_MISMATCH",
     });
 
     await engine.close();
+  });
+
+  // R6 Round-2 r6-r2-napi-3 closure: Instance 8 round-trip pin.
+  // Asserts `BentenError.context` populates from the
+  // `$$benten-context$$` sentinel suffix that `engine_err` emits for
+  // structured EngineError variants. Pre-Instance-8 the context was
+  // structurally typed at the TS surface but `mapNativeError` never
+  // populated it; this regression pin guards against the sentinel
+  // emit being collapsed back to a Display-only formatting in a
+  // future regression.
+  it("CID mismatch error round-trips structured context fields (Instance 8)", async () => {
+    const engine = await Engine.open(":memory:");
+    try {
+      const manifest: ModuleManifest = {
+        name: "echo",
+        version: "0.0.1",
+        modules: [{ name: "identity", cid: "bafy...echo-wasm", requires: [] }],
+      };
+
+      // Use a structurally valid but content-wrong CID so the parse
+      // succeeds + the mismatch arm fires. Compute the real CID for a
+      // different manifest and supply that as the "expected" CID for
+      // this manifest.
+      const otherManifest: ModuleManifest = {
+        name: "different",
+        version: "0.0.1",
+        modules: [],
+      };
+      const wrongCid = await engine.computeManifestCid(otherManifest);
+
+      let caught: unknown = null;
+      try {
+        await engine.installModule(manifest, wrongCid);
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).not.toBeNull();
+      const e = caught as { code: string; context?: Record<string, unknown> };
+      expect(e.code).toBe("E_MODULE_MANIFEST_CID_MISMATCH");
+      // Instance 8 contract: structured context populates from the
+      // sentinel suffix. The `expected` / `computed` keys are wired
+      // by `EngineError::context_json` for the
+      // `ModuleManifestCidMismatch` variant.
+      expect(e.context).toBeDefined();
+      expect(typeof e.context!.expected).toBe("string");
+      expect(typeof e.context!.computed).toBe("string");
+      expect(e.context!.expected).not.toBe(e.context!.computed);
+    } finally {
+      await engine.close();
+    }
   });
 });
