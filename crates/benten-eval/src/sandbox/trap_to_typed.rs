@@ -14,8 +14,15 @@
 //! | Other trap codes | `SandboxError::ModuleInvalid` | 5 |
 //!
 //! D21 priority resolver (`MEMORY > WALLCLOCK > FUEL > OUTPUT`) lives in
-//! [`super::primitives_sandbox::resolve_priority`]; this module just
-//! does the per-trap classification.
+//! [`crate::primitives::sandbox::resolve_priority`] (the
+//! `primitives/sandbox.rs::resolve_priority` function); this module just
+//! does the per-trap classification. wasmtime delivers a single trap per
+//! call so the priority resolver is a no-op for the single-trap case;
+//! the multi-axis vector input shape is reserved for future
+//! multi-axis-trip composition (verified by the three unit tests at
+//! `crates/benten-eval/src/primitives/sandbox.rs::tests` —
+//! `d21_priority_memory_over_wallclock`,
+//! `d21_priority_wallclock_over_fuel`, `d21_priority_fuel_over_output`).
 //!
 //! Side-channel signal: the host trampoline can raise a
 //! [`HostFnDenialMarker`] anyhow-error which this module unwraps as a
