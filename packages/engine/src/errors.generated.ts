@@ -421,14 +421,14 @@ export class EWriteConflict extends BentenError {
 /**
  * E_INV_SANDBOX_DEPTH
  *
- * Thrown at: Registration (static SubgraphSpec analysis) and Evaluation (TRANSFORM-computed SANDBOX targets that exceed the ceiling at runtime)
+ * Thrown at: **Registration** (static SubgraphSpec analysis at `invariants::sandbox_depth::validate_registration`) — fully active. **Runtime** (TRANSFORM-computed SANDBOX targets at the `check_runtime_entry` site) — structurally plumbed but not transitively threaded through `ActiveCall` in production today (the `AttributionFrame.sandbox_depth: u8` field is constructed with literal `1` at every production site rather than `parent.sandbox_depth + 1`); the wave-8e item #11 carry-forward closes this with depth threading. See `docs/INVARIANT-COVERAGE.md` "Inv-4 + Inv-7 runtime arm status" honest disclosure.
  * Message template: "SANDBOX nest depth {depth} exceeds configured max {max}"
  */
 export class EInvSandboxDepth extends BentenError {
   static readonly code = "E_INV_SANDBOX_DEPTH";
-  static readonly fixHint = "Reduce SANDBOX nesting (a SANDBOX whose subgraph CALLs another handler that itself SANDBOXes counts toward the same depth — D20 inheritance across CALL boundaries). Either flatten the call chain or increase `max_sandbox_nest_depth` via capability grant.";
+  static readonly fixHint = "Reduce SANDBOX nesting (a SANDBOX whose subgraph CALLs another handler that itself SANDBOXes counts toward the same depth at registration time per D20). Either flatten the call chain or increase `max_sandbox_nest_depth` via capability grant.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_INV_SANDBOX_DEPTH", "Reduce SANDBOX nesting (a SANDBOX whose subgraph CALLs another handler that itself SANDBOXes counts toward the same depth — D20 inheritance across CALL boundaries). Either flatten the call chain or increase `max_sandbox_nest_depth` via capability grant.", message, context);
+    super("E_INV_SANDBOX_DEPTH", "Reduce SANDBOX nesting (a SANDBOX whose subgraph CALLs another handler that itself SANDBOXes counts toward the same depth at registration time per D20). Either flatten the call chain or increase `max_sandbox_nest_depth` via capability grant.", message, context);
     this.name = "EInvSandboxDepth";
   }
 }
@@ -436,7 +436,7 @@ export class EInvSandboxDepth extends BentenError {
 /**
  * E_INV_SANDBOX_OUTPUT
  *
- * Thrown at: Evaluation. The `path` field distinguishes the D17 PRIMARY streaming `CountedSink` enforcement (fires before host-fn bytes are accepted) from the D17 BACKSTOP return-value enforcement (defense-in-depth at the primitive boundary).
+ * Thrown at: **Evaluation — fully active post-wave-8b.** The `path` field distinguishes the D17 PRIMARY streaming `CountedSink::write` enforcement (fires before host-fn bytes are accepted, in `crates/benten-eval/src/sandbox/counted_sink.rs`) from the D17 BACKSTOP return-value enforcement at the primitive boundary (`CountedSink::backstop_check` after the wasm guest returns). Both arms wired through wave-8b's host-fn trampoline + primitive boundary.
  * Message template: "SANDBOX output {would_be} bytes exceeds max {limit} (consumed {consumed} + attempted {attempted})"
  */
 export class EInvSandboxOutput extends BentenError {
@@ -451,14 +451,14 @@ export class EInvSandboxOutput extends BentenError {
 /**
  * E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED
  *
- * Thrown at: Evaluation (saturation point at the SANDBOX entry — the counter-saturation check fires before the inner subgraph starts executing).
+ * Thrown at: Evaluation (saturation point at the SANDBOX entry — the counter-saturation check fires before the inner subgraph starts executing). Runtime arm reaches its production firing site once wave-8e item #11 threads `sandbox_depth` through `ActiveCall`.
  * Message template: "SANDBOX nested-dispatch depth saturated at {depth} (configured max {max})"
  */
 export class ESandboxNestedDispatchDepthExceeded extends BentenError {
   static readonly code = "E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED";
-  static readonly fixHint = "SANDBOX nest-depth saturation overflow distinct from `E_INV_SANDBOX_DEPTH`. Two saturation paths fire this code: the `sandbox_depth: u8` counter saturates at `u8::MAX` (type-level ceiling — extremely deep CALL chains) and the configured `max_sandbox_nest_depth` boundary (capability-grant ceiling). Either case fires this typed error rather than wrapping silently. Reduce nesting per the same guidance as `E_INV_SANDBOX_DEPTH`; if hitting the u8 ceiling, the call topology is almost certainly accidentally recursive and needs structural redesign rather than a higher cap.";
+  static readonly fixHint = "SANDBOX nest-depth saturation overflow distinct from `E_INV_SANDBOX_DEPTH`. Two saturation paths fire this code (once depth-threading lands): the `sandbox_depth: u8` counter saturates at `u8::MAX` (type-level ceiling — extremely deep CALL chains) and the configured `max_sandbox_nest_depth` boundary (capability-grant ceiling). Either case fires this typed error rather than wrapping silently. Reduce nesting per the same guidance as `E_INV_SANDBOX_DEPTH`; if hitting the u8 ceiling, the call topology is almost certainly accidentally recursive and needs structural redesign rather than a higher cap.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED", "SANDBOX nest-depth saturation overflow distinct from `E_INV_SANDBOX_DEPTH`. Two saturation paths fire this code: the `sandbox_depth: u8` counter saturates at `u8::MAX` (type-level ceiling — extremely deep CALL chains) and the configured `max_sandbox_nest_depth` boundary (capability-grant ceiling). Either case fires this typed error rather than wrapping silently. Reduce nesting per the same guidance as `E_INV_SANDBOX_DEPTH`; if hitting the u8 ceiling, the call topology is almost certainly accidentally recursive and needs structural redesign rather than a higher cap.", message, context);
+    super("E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED", "SANDBOX nest-depth saturation overflow distinct from `E_INV_SANDBOX_DEPTH`. Two saturation paths fire this code (once depth-threading lands): the `sandbox_depth: u8` counter saturates at `u8::MAX` (type-level ceiling — extremely deep CALL chains) and the configured `max_sandbox_nest_depth` boundary (capability-grant ceiling). Either case fires this typed error rather than wrapping silently. Reduce nesting per the same guidance as `E_INV_SANDBOX_DEPTH`; if hitting the u8 ceiling, the call topology is almost certainly accidentally recursive and needs structural redesign rather than a higher cap.", message, context);
     this.name = "ESandboxNestedDispatchDepthExceeded";
   }
 }
@@ -1336,7 +1336,7 @@ export class EInv11SystemZoneRead extends BentenError {
 /**
  * E_SANDBOX_FUEL_EXHAUSTED
  *
- * Thrown at: SANDBOX executor (D3-RESOLVED per-call wasmtime `Store` lifecycle).
+ * Thrown at: SANDBOX executor — fully active post-wave-8b. The wasmtime `Store::set_fuel` cap + trap-callback maps fuel-exhaustion traps via `crates/benten-eval/src/sandbox/trap_to_typed.rs` to this typed variant. D3-RESOLVED per-call wasmtime `Store` lifecycle.
  * Message template: "SANDBOX fuel exhausted: limit={limit} consumed={consumed}"
  */
 export class ESandboxFuelExhausted extends BentenError {
@@ -1351,14 +1351,14 @@ export class ESandboxFuelExhausted extends BentenError {
 /**
  * E_SANDBOX_MEMORY_EXHAUSTED
  *
- * Thrown at: SANDBOX executor.
+ * Thrown at: SANDBOX executor — fully active post-wave-8b via `ResourceLimiter` impl + memory-trap → typed-error mapping.
  * Message template: "SANDBOX memory limit exhausted: {limit} bytes"
  */
 export class ESandboxMemoryExhausted extends BentenError {
   static readonly code = "E_SANDBOX_MEMORY_EXHAUSTED";
-  static readonly fixHint = "wasmtime `StoreLimits` intercept fires deterministically BEFORE host OOM. Either reduce module memory pressure, raise `SandboxConfig::memory_bytes` (default 64 MiB), or audit for runaway `memory.grow` (ESC-2 escape vector).";
+  static readonly fixHint = "wasmtime `ResourceLimiter` intercept fires deterministically BEFORE host OOM (`crates/benten-eval/src/sandbox/resource_limiter.rs`). Either reduce module memory pressure, raise `SandboxConfig::memory_bytes` (default 64 MiB), or audit for runaway `memory.grow` (ESC-2 escape vector).";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SANDBOX_MEMORY_EXHAUSTED", "wasmtime `StoreLimits` intercept fires deterministically BEFORE host OOM. Either reduce module memory pressure, raise `SandboxConfig::memory_bytes` (default 64 MiB), or audit for runaway `memory.grow` (ESC-2 escape vector).", message, context);
+    super("E_SANDBOX_MEMORY_EXHAUSTED", "wasmtime `ResourceLimiter` intercept fires deterministically BEFORE host OOM (`crates/benten-eval/src/sandbox/resource_limiter.rs`). Either reduce module memory pressure, raise `SandboxConfig::memory_bytes` (default 64 MiB), or audit for runaway `memory.grow` (ESC-2 escape vector).", message, context);
     this.name = "ESandboxMemoryExhausted";
   }
 }
@@ -1366,7 +1366,7 @@ export class ESandboxMemoryExhausted extends BentenError {
 /**
  * E_SANDBOX_WALLCLOCK_EXCEEDED
  *
- * Thrown at: SANDBOX executor (wasmtime `epoch_interruption` driven by a thread-side ticker; D27 `async-support` ENABLED preserves the yield path for Phase-3 iroh forward-compat).
+ * Thrown at: SANDBOX executor — fully active post-wave-8b via `wasmtime::Store::set_epoch_deadline` + the wave-8b epoch-interruption ticker thread (`crates/benten-eval/src/sandbox/epoch_ticker.rs`) that ticks the shared engine's epoch on a configured cadence; D27 `async-support` ENABLED preserves the yield path for Phase-3 iroh forward-compat.
  * Message template: "SANDBOX wallclock deadline exceeded: {limit_ms} ms"
  */
 export class ESandboxWallclockExceeded extends BentenError {
@@ -1411,7 +1411,7 @@ export class ESandboxHostFnDenied extends BentenError {
 /**
  * E_SANDBOX_HOST_FN_NOT_FOUND
  *
- * Thrown at: SANDBOX executor (link-time preferred; call-time fallback).
+ * Thrown at: SANDBOX executor — fully active post-wave-8b. The defensive `random`-cap pre-check at `primitives/sandbox.rs:373-382` fires before module link; the wasmtime link-time resolver path (other names) fires when wasmtime fails to resolve an import against the linker.
  * Message template: "SANDBOX host-fn not found: {name}"
  */
 export class ESandboxHostFnNotFound extends BentenError {
@@ -1486,7 +1486,7 @@ export class ESandboxModuleNotInstalled extends BentenError {
 /**
  * E_SANDBOX_NESTED_DISPATCH_DENIED
  *
- * Thrown at: SANDBOX executor (host-fn callback path).
+ * Thrown at: SANDBOX executor — fully active post-wave-8b. The host-fn callback path enforces the no-nested-`Engine::call` invariant via the trampoline's typed-error short-circuit before the host-side body runs.
  * Message template: "SANDBOX nested dispatch denied"
  */
 export class ESandboxNestedDispatchDenied extends BentenError {
