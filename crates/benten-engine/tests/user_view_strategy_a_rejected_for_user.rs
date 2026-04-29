@@ -31,7 +31,7 @@ use benten_engine::Engine;
 /// (`E_VIEW_STRATEGY_A_REFUSED_FOR_USER_VIEW` — exact code TBD by R5
 /// G8-B, but the test asserts a recognizably typed error renders).
 #[test]
-#[ignore = "Phase 2b G8-B pending — Strategy::A rejection for user views unimplemented"]
+#[ignore = "Phase 3 — Strategy::A rejection-for-user-views body deferred per docs/future/phase-3-backlog.md §7.3.A.3 (G8-B + wave-8h IVM Algorithm B production registration landed)"]
 fn user_view_strategy_a_refused_with_typed_error() {
     let dir = tempfile::tempdir().unwrap();
     let mut engine = Engine::builder()
@@ -75,7 +75,7 @@ fn user_view_strategy_a_refused_with_typed_error() {
 /// Different error code path than Strategy::A — A is "Rust-only",
 /// C is "not yet implemented".
 #[test]
-#[ignore = "Phase 2b G8-B pending — Strategy::C reserved-for-phase-3 path"]
+#[ignore = "Phase 3 — Strategy::C reserved-for-phase-3 rejection body deferred per docs/future/phase-3-backlog.md §7.3.A.3"]
 fn user_view_strategy_c_refused_as_reserved() {
     let dir = tempfile::tempdir().unwrap();
     let mut engine = Engine::builder()

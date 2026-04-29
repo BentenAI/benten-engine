@@ -223,7 +223,7 @@ fn sandbox_escape_fuel_overflow_regression_held() {
 }
 
 #[test]
-#[ignore = "Wave-8b ships the trampoline + per-call Store discipline that prevents fuel-refill (every primitive call gets a fresh Store with set_fuel(N), dropped at completion). The driver-side test that wires a host-fn body invoking engine.call() requires the engine-side dispatcher reachable from a host-fn callback (paired 8c work)."]
+#[ignore = "Phase 3 — ESC-7 fuel-refill via host-fn re-entry body deferred per docs/future/phase-3-backlog.md §7.3.A.7 (security-critical; cross-ref SECURITY-POSTURE.md ESC matrix + Compromise #4 honest disclosure)"]
 fn sandbox_escape_fuel_refill_via_host_fn_denied() {
     // ESC-7 — Fuel-refill bypass via host-fn re-entry.
     //
@@ -263,7 +263,7 @@ fn sandbox_escape_host_fn_not_on_manifest() {
 }
 
 #[test]
-#[ignore = "Wave-8b ships the per-call cap-recheck trampoline path; the mid-call revoke surface (testing_revoke_cap_mid_call helper) lives at the engine layer (paired 8c work)."]
+#[ignore = "Phase 3 — ESC-9 host-fn-after-cap-revoke body deferred per docs/future/phase-3-backlog.md §7.3.A.7 (testing_revoke_cap_mid_call helper; cross-ref SECURITY-POSTURE.md ESC matrix entry for ESC-9 + Compromise #4 honest disclosure)"]
 fn sandbox_escape_host_fn_after_cap_revoke() {
     // ESC-9 — Call host-fn after cap revoked mid-primitive.
     //
@@ -287,7 +287,7 @@ fn sandbox_escape_host_fn_after_cap_revoke() {
 }
 
 #[test]
-#[ignore = "Wave-8b ships the trampoline that fires SandboxNestedDispatchDenied via HostFnDenialMarker; the testing_call_engine_dispatch host-fn body that exercises the path requires the engine-side dispatcher to actually be reachable from a host-fn callback (paired 8c work). The unit-level pin lives in trap_to_typed::tests."]
+#[ignore = "Phase 3 — ESC-10 host-fn-reentrancy-denied body deferred per docs/future/phase-3-backlog.md §7.3.A.7 (testing_call_engine_dispatch helper; cross-ref SECURITY-POSTURE.md ESC matrix entry for ESC-10 + Compromise #4 honest disclosure)"]
 fn sandbox_escape_reentrancy_via_host_fn_denied() {
     // ESC-10 — Host-fn re-entrancy denial.
     //
@@ -308,7 +308,7 @@ fn sandbox_escape_reentrancy_via_host_fn_denied() {
 // =====================================================================
 
 #[test]
-#[ignore = "Phase 2b G7-B pending — Component-Model gated (wsa-3 removed feature)"]
+#[ignore = "Phase 3+ — Component-Model feature wsa-3-removed from 2b scope; ESC-11 component-type-mismatch body deferred per docs/future/phase-3-backlog.md §7.3.A.8 (Phase-3 plan-doc opening checklist re-evaluates wsa-3 Component-Model removal decision)"]
 #[cfg(feature = "component-model")]
 fn sandbox_escape_component_type_mismatch_rejected() {
     // ESC-11 — Component-Model type mismatch with declared interface.
@@ -325,7 +325,7 @@ fn sandbox_escape_component_type_mismatch_rejected() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-B pending — Component-Model gated (wsa-3 removed feature)"]
+#[ignore = "Phase 3+ — Component-Model feature wsa-3-removed from 2b scope; ESC-12 resource-handle-forgery body deferred per docs/future/phase-3-backlog.md §7.3.A.8"]
 #[cfg(feature = "component-model")]
 fn sandbox_escape_resource_handle_forgery_rejected() {
     // ESC-12 — Resource handle forgery.
@@ -346,7 +346,7 @@ fn sandbox_escape_resource_handle_forgery_rejected() {
 // =====================================================================
 
 #[test]
-#[ignore = "Wave-8b ships the per-call Store discipline (D3 RESOLVED no-pool: fresh Store per call, dropped at completion). Defense-in-depth properties (Store-poison + nested-dispatch deny while trap unwinding) require a custom test driver that manipulates the store mid-trap; this driver lives at the engine layer (paired 8c work)."]
+#[ignore = "Phase 3 — ESC-13 trap-in-fuel-callback Store-poison body deferred per docs/future/phase-3-backlog.md §7.3.A.7 (custom test driver lives at engine layer; cross-ref SECURITY-POSTURE.md ESC matrix entry for ESC-13 + Compromise #4)"]
 fn sandbox_escape_trap_in_fuel_callback_denied() {
     // ESC-13 — Trap during fuel-meter callback / Store-state corruption
     // attempt.
@@ -374,7 +374,7 @@ fn sandbox_escape_trap_in_fuel_callback_denied() {
 // =====================================================================
 
 #[test]
-#[ignore = "Wave-8b ships the manifest-authoritative cap derivation (no path consults module-embedded sections for cap claims). The forged-section fixture builder helper (testing_inject_forged_cap_claim_section) is a separate testing-helper that lives at the eval crate's testing module; the integration shape here exercises end-to-end via the .wat fixture + helper composition, paired with a future wave that lands the helper."]
+#[ignore = "Phase 3 — ESC-14/-15 forged-cap-claim-section ignored body deferred per docs/future/phase-3-backlog.md §7.3.A.7 (testing_inject_forged_cap_claim_section helper; cross-ref SECURITY-POSTURE.md ESC matrix + Compromise #4 honest disclosure)"]
 fn sandbox_escape_forged_cap_claim_section_ignored() {
     // ESC-14 — Cap-claim forge in module bytes.
     //

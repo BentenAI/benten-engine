@@ -222,7 +222,7 @@ fn edges_from_on_denied_cid_returns_empty_symmetric_with_zero_outgoing() {
 }
 
 #[test]
-#[ignore = "SECURITY-POSTURE.md is internal-only as of the 2026-04-23 default-untrack pass; re-enable when a public security posture doc lands."]
+#[ignore = "Phase 3+ — SECURITY-POSTURE.md is internal-only post-default-untrack-pass (2026-04-23). Re-enable deferred per docs/future/phase-3-backlog.md §7.3.C; Phase-3 evaluates whether SECURITY-POSTURE.md re-tracks-public alongside other launch-readiness docs (FULL-ROADMAP §Phase 9+ OSS launch era)"]
 fn compromise_2_option_c_is_documented() {
     // Pinned the Phase-1 Option C posture by reading SECURITY-POSTURE.md
     // from disk. Now that the posture doc is internal-only, this

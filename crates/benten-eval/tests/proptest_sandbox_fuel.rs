@@ -31,7 +31,7 @@ proptest! {
     /// security test (R3-C territory); this is the random-input
     /// regression guard.
     #[test]
-    #[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — fuel monotonicity property"]
+    #[ignore = "Phase 3 — fuel monotonicity proptest body deferred per docs/future/phase-3-backlog.md §7.3.A.1 (10k-case property pin)"]
     fn prop_sandbox_fuel_monotonic(seed in any::<u64>()) {
         // R5 G7-A pseudo:
         //   let module_cid = synth_random_wasm_program(seed);

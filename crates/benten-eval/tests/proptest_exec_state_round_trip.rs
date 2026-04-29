@@ -46,7 +46,7 @@ proptest! {
     ///
     /// Marked `#[ignore]` until the struct shapes land in G3-A.
     #[test]
-    #[ignore = "phase-2a-pending: ExecutionStateEnvelope / ExecutionStatePayload / AttributionFrame land in G3-A per plan §9.1. Drop #[ignore] once the types are serde-derived."]
+    #[ignore = "Phase 3 — ExecutionState round-trip CID stability proptest body deferred per docs/future/phase-3-backlog.md §7.3.C (Phase 2a closed at phase-2a-close tag; G3-A surfaces landed structurally; proptest body lands Phase 3)"]
     fn exec_state_round_trip_preserves_cid(
         // Chain depth 1..=8 covers Phase-1 single-frame through Phase-6
         // AI-delegation chains. Deeper chains are bounded by ucca-6's

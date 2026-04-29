@@ -32,7 +32,7 @@ fn workspace_root() -> PathBuf {
 /// crates"; if the doc still says "Seven" after G12-B, operators
 /// reading the doc will miss the dsl-compiler boundary.
 #[test]
-#[ignore = "Phase 2b G12-B pending — benten-dsl-compiler crate + ARCHITECTURE.md update unimplemented"]
+#[ignore = "Phase 3 — ARCHITECTURE.md 8-crate doc-drift body deferred per docs/future/phase-3-backlog.md §7.3.A.5 (G12-B + G11-2b-A both landed; doc-drift detector body lands Phase 3)"]
 fn architecture_md_says_eight_crates_after_g12b() {
     let root = workspace_root();
     let doc_path = root.join("docs/ARCHITECTURE.md");
@@ -83,7 +83,7 @@ fn architecture_md_says_eight_crates_after_g12b() {
 /// the dsl-compiler dir does not exist and this fails to enforce the
 /// dependency.
 #[test]
-#[ignore = "Phase 2b G12-B pending — benten-dsl-compiler crate not yet created"]
+#[ignore = "Phase 3 — workspace-has-dsl-compiler-crate-dir body deferred per docs/future/phase-3-backlog.md §7.3.A.5 (G12-B benten-dsl-compiler crate landed)"]
 fn workspace_has_benten_dsl_compiler_crate_dir() {
     let root = workspace_root();
     let crate_dir = root.join("crates/benten-dsl-compiler");

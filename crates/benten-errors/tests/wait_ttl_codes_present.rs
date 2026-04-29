@@ -25,7 +25,7 @@ use benten_errors::ErrorCode;
 /// `E_WAIT_TTL_EXPIRED` MUST exist as a stable variant in `ErrorCode`
 /// and round-trip through `from_str` / `as_str`.
 #[test]
-#[ignore = "Phase 2b G12-E pending — depends on ErrorCode::WaitTtlExpired variant"]
+#[ignore = "Phase 3 — WaitTtlExpired catalog-presence body deferred per docs/future/phase-3-backlog.md §7.3.A.6 (variant landed via G12-E; runtime expiry path Phase-3)"]
 fn e_wait_ttl_expired_present_in_catalog() {
     let code = ErrorCode::WaitTtlExpired;
     assert_eq!(code.as_str(), "E_WAIT_TTL_EXPIRED");
@@ -41,7 +41,7 @@ fn e_wait_ttl_expired_present_in_catalog() {
 /// and round-trip. Fired by the registration-time validation when
 /// `ttl_hours: 0` or `ttl_hours > 720`.
 #[test]
-#[ignore = "Phase 2b G12-E pending — depends on ErrorCode::WaitTtlInvalid variant"]
+#[ignore = "Phase 3 — WaitTtlInvalid catalog-presence body deferred per docs/future/phase-3-backlog.md §7.3.A.6"]
 fn e_wait_ttl_invalid_present_in_catalog() {
     let code = ErrorCode::WaitTtlInvalid;
     assert_eq!(code.as_str(), "E_WAIT_TTL_INVALID");
@@ -55,7 +55,7 @@ fn e_wait_ttl_invalid_present_in_catalog() {
 /// variants leaks back into the catalog. CLAUDE.md non-negotiable
 /// rule #5: no deprecated aliases or backward-compat shims.
 #[test]
-#[ignore = "Phase 2b G12-E pending — anti-rename guard"]
+#[ignore = "Phase 3 — WAIT-TTL anti-rename guard body deferred per docs/future/phase-3-backlog.md §7.3.A.6"]
 fn wait_ttl_no_deprecated_aliases() {
     // None of these should round-trip to the new variants — they MUST
     // collapse to ErrorCode::Unknown(_).

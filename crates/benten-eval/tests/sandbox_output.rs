@@ -191,7 +191,7 @@ fn sandbox_output_at_exact_limit_succeeds() {
 }
 
 #[test]
-#[ignore = "Wave-8b: D17 BACKSTOP path requires a `testing_register_uncounted_host_fn` helper that ships a deliberately-uncounted host-fn for defense-in-depth verification. The wave-8b trampoline correctly threads CountedSink through every D1-surface host-fn; the backstop covers the case of a future host-fn that bypasses the sink. Helper lands in a follow-up wave (paired with TS-side counter assertions)."]
+#[ignore = "Phase 3 — testing_register_uncounted_host_fn helper deferred per docs/future/phase-3-backlog.md §7.3.A.7 (D17 BACKSTOP defense-in-depth pin; cross-ref SECURITY-POSTURE.md ESC matrix + Compromise #4)"]
 fn sandbox_output_limit_return_value_backstop_catches_misbehaving_host_fn() {
     // The BACKSTOP path is implemented (CountedSink::backstop_check is
     // called against the return-value bytes at the primitive boundary

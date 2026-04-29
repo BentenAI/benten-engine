@@ -87,7 +87,7 @@ fn sandbox_host_fn_capability_intersection_at_init() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-C pending — testing_revoke_cap_mid_call helper requires the live wasmtime trampoline G7-C wires (PR #33)."]
+#[ignore = "Phase 3 — testing_revoke_cap_mid_call helper deferred per docs/future/phase-3-backlog.md §7.3.A.7 (security-critical helper; cross-ref SECURITY-POSTURE.md ESC matrix)"]
 fn sandbox_host_fn_per_boundary_cap_uses_init_snapshot() {
     todo!("G7-C PR #33 — assert per_boundary log() still serves after mid-call revoke");
 }
@@ -111,7 +111,7 @@ fn sandbox_host_fn_undeclared_cap_recheck_defaults_to_per_call() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-C pending — TOML codegen drift detector exercises the build.rs pipeline G7-C wires (PR #33). G7-A ships the static table inline (no build.rs); the drift surface lands in G7-C."]
+#[ignore = "Phase 3 — TOML codegen drift detector body deferred per docs/future/phase-3-backlog.md §7.3.A.1 (build.rs codegen pipeline lands Phase 3)"]
 fn sandbox_host_fn_cap_recheck_policy_codegen_drift() {
     // Closes the manifest-vs-codegen drift class (a D2 sibling concern).
     // Body lands when build.rs codegen pipeline lands in G7-C.

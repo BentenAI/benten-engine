@@ -353,7 +353,7 @@ fn engine_callstream_returns_asynciterable() {
 }
 
 #[test]
-#[ignore = "pending G6-A executor wiring; tracks G6-A's `phase-2b/g6/a-stream-subscribe-core` PR"]
+#[ignore = "Phase 3 — STREAM/SUBSCRIBE end-to-end body deferred per docs/future/phase-3-backlog.md §7.3.A.2 (G6-A + wave-8c production runtime landed; integration body lands Phase 3)"]
 fn stream_persist_true_materializes_aggregate_node() {
     // phil-r1-1 aggregate-Node materialization + canonical-CID
     // stability: `stream({ persist: true })` materializes the cumulative
@@ -372,7 +372,7 @@ fn stream_persist_true_materializes_aggregate_node() {
 }
 
 #[test]
-#[ignore = "pending G6-A executor wiring; tracks G6-A's `phase-2b/g6/a-stream-subscribe-core` PR"]
+#[ignore = "Phase 3 — STREAM/SUBSCRIBE end-to-end body deferred per docs/future/phase-3-backlog.md §7.3.A.2 (G6-A + wave-8c production runtime landed; integration body lands Phase 3)"]
 fn stream_backpressure_engages() {
     // D4-RESOLVED: PULL-based bounded `tokio::sync::mpsc` (default
     // capacity 16). When the consumer is slower than the producer, the

@@ -38,7 +38,7 @@ fn fresh_engine() -> (tempfile::TempDir, Engine) {
 /// receive the 24h default at registration time. The deadline at
 /// suspend-time is `now + 24h`.
 #[test]
-#[ignore = "Phase 2b G12-E pending — ttl_hours default unimplemented"]
+#[ignore = "Phase 3 — ttl_hours 24h default body deferred per docs/future/phase-3-backlog.md §7.3.A.6 (G12-E SuspensionStore + ttl_hours metadata landed; runtime expiry path Phase-3)"]
 fn wait_ttl_default_24h_applies_when_omitted() {
     let (_dir, mut engine) = fresh_engine();
 
@@ -63,7 +63,7 @@ fn wait_ttl_default_24h_applies_when_omitted() {
 ///
 /// Explicit `ttl_hours: 48` MUST override the 24h default end-to-end.
 #[test]
-#[ignore = "Phase 2b G12-E pending — explicit ttl_hours override unimplemented"]
+#[ignore = "Phase 3 — explicit ttl_hours override body deferred per docs/future/phase-3-backlog.md §7.3.A.6"]
 fn wait_ttl_explicit_overrides_default() {
     let (_dir, mut engine) = fresh_engine();
 
@@ -90,7 +90,7 @@ fn wait_ttl_explicit_overrides_default() {
 /// `NonZeroU32`-style validation independently of the type system
 /// (TS-side spec carries `number`, not `NonZeroU32`).
 #[test]
-#[ignore = "Phase 2b G12-E pending — ttl_hours: 0 validation unimplemented"]
+#[ignore = "Phase 3 — ttl_hours: 0 validation body deferred per docs/future/phase-3-backlog.md §7.3.A.6"]
 fn wait_ttl_zero_rejected_at_registration() {
     let (_dir, mut engine) = fresh_engine();
 
@@ -113,7 +113,7 @@ fn wait_ttl_zero_rejected_at_registration() {
 /// rejected with `E_WAIT_TTL_INVALID`. 720 itself MUST be accepted
 /// (boundary inclusive).
 #[test]
-#[ignore = "Phase 2b G12-E pending — 720h max validation unimplemented"]
+#[ignore = "Phase 3 — 720h max validation body deferred per docs/future/phase-3-backlog.md §7.3.A.6"]
 fn wait_ttl_exceeds_max_rejected() {
     let (_dir, mut engine) = fresh_engine();
 
@@ -143,7 +143,7 @@ fn wait_ttl_exceeds_max_rejected() {
 /// unit-level pin asserts the error variant exists at the registration/
 /// resume API boundary in eval-side, not just at the end-to-end level.
 #[test]
-#[ignore = "Phase 2b G12-E pending — E_WAIT_TTL_EXPIRED resume path unimplemented"]
+#[ignore = "Phase 3 — E_WAIT_TTL_EXPIRED resume path body deferred per docs/future/phase-3-backlog.md §7.3.A.6"]
 fn wait_resume_after_expiry_fires_typed_error() {
     let (_dir, mut engine) = fresh_engine();
 

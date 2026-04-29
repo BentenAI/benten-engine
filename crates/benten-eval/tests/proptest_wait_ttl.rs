@@ -41,7 +41,7 @@ proptest! {
     /// false-positive expiry (resume fails despite within-deadline) is
     /// permissible.
     #[test]
-    #[ignore = "Phase 2b G12-E pending — TTL property; depends on ttl_hours + E_WAIT_TTL_EXPIRED + testing_advance_wait_clock"]
+    #[ignore = "Phase 3 — WAIT-TTL no-silent-expiry property body deferred per docs/future/phase-3-backlog.md §7.3.A.6 (testing_advance_wait_clock helper lands Phase 3)"]
     fn prop_wait_ttl_no_silent_expiry_in_resume(
         ttl in 1u32..=720,
         offset_hours in 0u32..=2000,

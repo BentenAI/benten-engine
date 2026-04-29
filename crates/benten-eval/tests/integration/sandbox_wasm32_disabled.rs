@@ -17,7 +17,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 2b G7-C pending — eval-side wasm32 absence pin"]
+#[ignore = "Phase 3 — eval-side wasm32 absence pin body deferred per docs/future/phase-3-backlog.md §7.3.A.1"]
 fn sandbox_compile_time_disabled_on_wasm32_executor() {
     // sec-pre-r1-05 + wasm-r1-3 — assert that the wasmtime-touching
     // SANDBOX executor in `benten-eval` is compile-time excluded from

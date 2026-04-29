@@ -11,7 +11,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 2b G7-B pending — Inv-4 cross-CALL boundary integration"]
+#[ignore = "Phase 3 — Inv-4 cross-CALL boundary integration body deferred per docs/future/phase-3-backlog.md §7.3.A.1"]
 fn invariant_4_sandbox_depth_crosses_call_boundary() {
     // wsa-D20 — engine-level integration. Handler A (registered with
     // engine) SANDBOXes → CALLs handler B (registered) → SANDBOXes.
@@ -26,7 +26,7 @@ fn invariant_4_sandbox_depth_crosses_call_boundary() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-B pending — D20 + Inv-14 carry integration"]
+#[ignore = "Phase 3 — D20 + Inv-14 carry integration body deferred per docs/future/phase-3-backlog.md §7.3.A.1"]
 fn invariant_4_end_to_end_with_attribution_frame() {
     // D20 + Phase-2a Inv-14 carry — the depth counter rides on
     // AttributionFrame (Phase-2a sec-r6r1-01 closure shape).

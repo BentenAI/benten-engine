@@ -24,7 +24,7 @@
 //   benten_errors::ErrorCode::SandboxHostFnDenied
 
 #[test]
-#[ignore = "Wave-8b ships the wasmtime trampoline that consults the per-call live cap-set on every kv:read invocation; in 8b the live cap-set is initialised from the dispatching grant snapshot. The actual mid-call revoke surface requires the engine-side `testing_revoke_cap_mid_call` helper that mutates the live cap-set DURING a host-fn callback (paired with engine integration in 8c). The trampoline path itself is wired and tested by the unit-level cap-check; this test is the integration-shaped pin that flips when the helper lands."]
+#[ignore = "Phase 3 — D7 hybrid + D18 per_call mid-call revoke integration-shape pin deferred per docs/future/phase-3-backlog.md §7.3.A.7 (testing_revoke_cap_mid_call helper; cross-ref SECURITY-POSTURE.md ESC matrix entry for ESC-9 + Compromise #4 honest disclosure)"]
 fn sandbox_host_fn_capability_revoked_mid_execution_denies_subsequent() {
     // Pin: the trampoline calls `cap_check(... PerCall)` for kv:read on
     // every invocation. The integration helper that mutates `live_caps`

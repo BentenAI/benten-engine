@@ -20,7 +20,7 @@ fn open_engine() -> (Engine, tempfile::TempDir) {
 }
 
 #[test]
-#[ignore = "pending G6-A executor wiring; tracks G6-A's `phase-2b/g6/a-stream-subscribe-core` PR"]
+#[ignore = "Phase 3 — STREAM/SUBSCRIBE end-to-end body deferred per docs/future/phase-3-backlog.md §7.3.A.2 (G6-A + wave-8c production runtime landed; integration body lands Phase 3)"]
 fn stream_composes_inside_call_handler_of_handler_streaming() {
     // `subgraph(...).stream(args)` composes inside a CALL handler. The
     // outer handler's call to a STREAM-emitting inner handler returns a
@@ -34,7 +34,7 @@ fn stream_composes_inside_call_handler_of_handler_streaming() {
 }
 
 #[test]
-#[ignore = "pending G6-A executor wiring; tracks G6-A's `phase-2b/g6/a-stream-subscribe-core` PR"]
+#[ignore = "Phase 3 — STREAM/SUBSCRIBE end-to-end body deferred per docs/future/phase-3-backlog.md §7.3.A.2 (G6-A + wave-8c production runtime landed; integration body lands Phase 3)"]
 fn stream_inside_iterate_bounded_chunked_output_per_iteration() {
     // STREAM inside ITERATE: bounded chunked output per iteration.
     // Requires G6-A's executor + ITERATE composition wired through.

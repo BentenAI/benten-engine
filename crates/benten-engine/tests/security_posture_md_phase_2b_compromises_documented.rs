@@ -46,7 +46,7 @@ fn read_security_posture() -> String {
 /// `security_posture_documents_phase_2b_new_compromises` — plan §7d
 /// + sec-pre-r1 carry items.
 #[test]
-#[ignore = "Phase 2b G11-2b-A pending — Phase-2b compromise additions to SECURITY-POSTURE.md unimplemented"]
+#[ignore = "Phase 3 — SECURITY-POSTURE.md Phase-2b compromise documentation drift body deferred per docs/future/phase-3-backlog.md §7.3.A.5 (G11-2b-A docs sweep landed)"]
 fn security_posture_documents_phase_2b_new_compromises() {
     let doc = read_security_posture();
     let lower = doc.to_ascii_lowercase();

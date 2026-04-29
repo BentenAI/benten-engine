@@ -7,7 +7,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — STREAM-into-SANDBOX back-pressure"]
+#[ignore = "Phase 3 — STREAM-into-SANDBOX back-pressure body deferred per docs/future/phase-3-backlog.md §7.3.A.1"]
 fn stream_into_sandbox_via_chunk_sink_back_pressure() {
     // wsa-18 + arch-pre-r1-9 — SANDBOX consumes a STREAM via the
     // ChunkSink trait shape (G6-A's `benten_eval::chunk_sink::ChunkSink`).

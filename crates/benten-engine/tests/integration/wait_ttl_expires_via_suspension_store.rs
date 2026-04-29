@@ -47,7 +47,7 @@ fn fresh_engine() -> (tempfile::TempDir, Engine) {
 /// `E_WAIT_TTL_EXPIRED` error fires AND the SuspensionStore entry has
 /// been GC'd.
 #[test]
-#[ignore = "Phase 2b G12-E pending — WAIT ttl_hours + GC + E_WAIT_TTL_EXPIRED unimplemented"]
+#[ignore = "Phase 3 — WAIT ttl_hours + GC + E_WAIT_TTL_EXPIRED end-to-end body deferred per docs/future/phase-3-backlog.md §7.3.A.6"]
 fn wait_ttl_expires_via_suspension_store() {
     let (_dir, mut engine) = fresh_engine();
 

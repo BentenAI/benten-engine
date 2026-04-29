@@ -95,7 +95,7 @@ fn wait_signal_shape_validates_against_schema_when_set() {
 }
 
 #[test]
-#[ignore = "Phase-2b: runtime signal-shape check not yet implemented. WaitSignalShapeMismatch is shape-reserved per docs/ERROR-CATALOG.md (reachability: ignore annotation in Wave-3b EXPECTED-RED-CLOSEOUT). Un-ignore when the runtime path lands."]
+#[ignore = "Phase 3 — runtime signal-shape check body deferred per docs/future/phase-3-backlog.md §7.3.C (WaitSignalShapeMismatch shape-reserved per docs/ERROR-CATALOG.md; runtime check addition in wait::evaluate_op lands Phase 3)"]
 fn wait_signal_shape_mismatch_fires_typed_error_routed_on_error() {
     // Shape declares `Int`; resume with `Text` shape mismatches → typed
     // error, routed through ON_ERROR.

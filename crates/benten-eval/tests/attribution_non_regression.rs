@@ -10,7 +10,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 2b G7-B pending — sec-pre-r1-13 non-regression carry"]
+#[ignore = "Phase 3 — sec-pre-r1-13 non-regression carry body deferred per docs/future/phase-3-backlog.md §7.3.A.1"]
 fn attribution_frame_extension_preserves_phase_2a_sec_r6r1_01_inv_14_wiring() {
     // sec-pre-r1-13 — D20's `sandbox_depth: u8` field added to
     // AttributionFrame MUST NOT break Phase-2a's invariant_14 wiring

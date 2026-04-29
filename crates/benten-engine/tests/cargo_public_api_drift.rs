@@ -34,7 +34,7 @@ fn workspace_root() -> PathBuf {
 /// `cargo_public_api_workflow_present_and_non_vacuous` — plan §3.1 +
 /// R2 §6.
 #[test]
-#[ignore = "Phase 2b G6 entry pending — cargo-public-api.yml workflow + baseline unimplemented (B-3 owns YAML)"]
+#[ignore = "Phase 3 — cargo-public-api workflow non-vacuity body deferred per docs/future/phase-3-backlog.md §7.3.A.9 (sub-cluster 9a; workflow file exists; non-vacuity assertion lands Phase 3 alongside baseline)"]
 fn cargo_public_api_workflow_present_and_non_vacuous() {
     let root = workspace_root();
     let workflow = root.join(".github/workflows/cargo-public-api.yml");
@@ -75,7 +75,7 @@ fn cargo_public_api_workflow_present_and_non_vacuous() {
 /// baseline; until then this assert fails to make the dependency
 /// explicit.
 #[test]
-#[ignore = "Phase 2b G6 close pending — public-api baseline file unimplemented"]
+#[ignore = "Phase 3 — public-api baseline file lands with phase-3-backlog.md §7.3.A.9 (cargo-public-api drift detector productionization)"]
 fn cargo_public_api_baseline_committed() {
     let root = workspace_root();
     // Allow either docs/public-api/ subdir OR per-crate

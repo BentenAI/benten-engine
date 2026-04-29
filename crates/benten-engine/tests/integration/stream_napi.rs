@@ -58,7 +58,7 @@ fn stream_handle_close_idempotent_for_napi_bridge() {
 }
 
 #[test]
-#[ignore = "pending G6-A executor wiring; tracks G6-A's `phase-2b/g6/a-stream-subscribe-core` PR"]
+#[ignore = "Phase 3 — STREAM/SUBSCRIBE end-to-end body deferred per docs/future/phase-3-backlog.md §7.3.A.2 (G6-A + wave-8c production runtime landed; integration body lands Phase 3)"]
 fn stream_napi_async_iterator_back_pressure_propagates_native() {
     // D4-RESOLVED: PULL-based bounded `tokio::sync::mpsc` (default
     // capacity 16). When the napi-side consumer pauses, the Rust-side

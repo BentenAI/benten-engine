@@ -78,12 +78,7 @@ fn suspension_store_round_trip_subscription_cursor() {
 /// to the store on event delivery) AND the cursor read side (engine
 /// resumes a Persistent-cursor subscription from the stored seq).
 #[test]
-#[ignore = "Phase 2b wave-8c-cont pending — `testing_register_persistent_subscriber` + \
-            `testing_emit_n_synthetic_events` depend on the SUBSCRIBE production \
-            runtime wire-through that 8c-cont owns. Wave-8g un-aliased the \
-            SuspensionStore trait + landed `resume_with_meta`; this fixture's \
-            second-half drives subscribe.rs through the engine boundary which \
-            is still unwired."]
+#[ignore = "Phase 3 — testing_register_persistent_subscriber + testing_emit_n_synthetic_events helpers + SUBSCRIBE engine-boundary cursor round-trip body deferred per docs/future/phase-3-backlog.md §7.3.A.9 (sub-cluster 9c; wave-8c-cont landed structurally but the helpers never shipped)"]
 fn subscribe_max_delivered_seq_round_trips_via_suspension_store() {
     let (_dir, mut engine) = fresh_engine();
 

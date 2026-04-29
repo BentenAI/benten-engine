@@ -6,7 +6,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — SANDBOX inside CRUD handler"]
+#[ignore = "Phase 3 — SANDBOX-inside-CRUD-handler body deferred per docs/future/phase-3-backlog.md §7.3.A.1"]
 fn sandbox_inside_crud_handler_e2e() {
     // Plan §4 SANDBOX integration — a `crud('post')` generated handler
     // composes a SANDBOX primitive (e.g., for content-validation
@@ -22,7 +22,7 @@ fn sandbox_inside_crud_handler_e2e() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — host-boundary cap-check on WRITE"]
+#[ignore = "Phase 3 — host-boundary cap-check on WRITE body deferred per docs/future/phase-3-backlog.md §7.3.A.1"]
 fn sandbox_result_fed_to_write_cap_checked_at_host_boundary() {
     // Plan §4 — when SANDBOX output feeds a WRITE primitive (e.g.,
     // SANDBOX returns the value to write), the WRITE's cap-check fires
