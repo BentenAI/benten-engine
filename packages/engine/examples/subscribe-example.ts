@@ -20,8 +20,10 @@ async function main(): Promise<void> {
   const engine = await Engine.open(".benten/example-subscribe.redb");
   try {
     // Register the post CRUD handler so we can WRITE Nodes that drive
-    // the subscription.
-    await engine.registerSubgraph(crud("post"));
+    // the subscription. The engine assigns the handler id as
+    // `crud:<label>` for crud()-registered handlers — capture the
+    // returned handle so the dispatch below uses the engine's exact id.
+    const postCrud = await engine.registerSubgraph(crud("post"));
 
     // Register the SUBSCRIBE handler — Engine wires it into the
     // change-event bus on registration.
@@ -47,11 +49,11 @@ async function main(): Promise<void> {
     // Drive the SUBSCRIBE handler by writing posts. Each WRITE fires
     // a `post:changed` ChangeEvent; the SUBSCRIBE handler runs once
     // per event and itself emits `post-summary:built`.
-    await engine.call("post-handler", "post:create", {
+    await engine.call(postCrud.id, "post:create", {
       title: "Hello Benten",
       body: "First post.",
     });
-    await engine.call("post-handler", "post:create", {
+    await engine.call(postCrud.id, "post:create", {
       title: "Reactive views work",
       body: "Second.",
     });

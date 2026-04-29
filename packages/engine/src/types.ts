@@ -62,7 +62,9 @@ export interface SubgraphNode {
 
 /** A subgraph ready to register with the engine. */
 export interface Subgraph {
-  /** Human-readable handler id (e.g. `"post-handler"`). */
+  /** Human-readable handler id (e.g. `"export-feed"` for hand-built
+   * subgraphs; the engine assigns `"crud:<label>"` for crud()-registered
+   * handlers — see `Engine.registerSubgraph` for the canonical id). */
   handlerId: string;
   /** Actions this subgraph exposes (e.g. `"post:create"`, `"post:list"`). */
   actions: string[];
