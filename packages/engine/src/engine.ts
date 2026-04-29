@@ -1382,6 +1382,25 @@ export class Engine {
    * per-node DSL knobs uses `fuel = 1_000_000`, `wallclockMs = 30_000`,
    * `outputLimitBytes = 1_048_576`.
    *
+   * # Honest Phase-2b state (r6-mpc-3 + r6-napi-3 + r6-dx-10)
+   *
+   * `fuelConsumedHighWater` + `lastInvocationMs` are returned as the
+   * literal `"unknown"` sentinel — **metrics are NOT tracked in Phase
+   * 2b**. `SandboxResult.fuelConsumed` + `output_consumed` are dropped
+   * at the eval-engine boundary (`primitive_host.rs::execute_sandbox`
+   * only propagates `output`); the per-handler metric record needed
+   * to surface real values is a Phase-3 wiring (named destination:
+   * `docs/future/phase-3-backlog.md` SnapshotBlobBackend
+   * metric-propagation entry, R6-FP Group 4 enrichment). Returning the
+   * `"unknown"` sentinel rather than a synthesized `null` (the prior
+   * shape) lets callers distinguish "metric is structurally not
+   * tracked in 2b" from "node hasn't been invoked yet".
+   *
+   * The remaining fields (`moduleCid` / `manifestId` / `fuel` /
+   * `wallclockMs` / `outputLimitBytes`) are synthesized client-side
+   * from the registered subgraph spec; sufficient for the
+   * omitting-knobs-uses-defaults test pin.
+   *
    * Pinned by `packages/engine/test/sandbox.test.ts::"SandboxArgs defaults — omitting fuel / wallclockMs / outputLimitBytes uses 1M / 30s / 1MB"`.
    */
   public async describeSandboxNode(
@@ -1399,21 +1418,6 @@ export class Engine {
         "Engine.describeSandboxNode requires a non-empty nodeId",
       );
     }
-    // The native bridge for this accessor is cfg-gated behind the
-    // engine crate's `test-helpers` feature (sec-r6r2-02 discipline).
-    // The Phase-2b production napi cdylib opts into the narrower
-    // `envelope-cache-test-grade` feature only, so this accessor is
-    // unavailable in the default build. Devtools that need it require
-    // an explicit feature opt-in at native-binding build time.
-    //
-    // The resolved-defaults values below mirror the Phase-2b
-    // canonical defaults documented in `docs/SANDBOX-LIMITS.md` §2.
-    // G7-A wires the live native bridge that returns per-node values
-    // including `fuelConsumedHighWater` + `lastInvocationMs`; until
-    // then the wrapper synthesises the resolved-defaults shape from
-    // the registered subgraph spec the wrapper has cached. The
-    // resolved-defaults shape is sufficient for the
-    // omitting-knobs-uses-defaults test pin.
     const handlerActions = this.knownHandlers.get(handlerId);
     if (!handlerActions) {
       throw new EDslUnregisteredHandler(
@@ -1427,8 +1431,12 @@ export class Engine {
       fuel: 1_000_000,
       wallclockMs: 30_000,
       outputLimitBytes: 1_048_576,
-      fuelConsumedHighWater: null,
-      lastInvocationMs: null,
+      // Honest "unknown" sentinel per r6-mpc-3 — metrics are not
+      // tracked at the eval-engine boundary in 2b. Phase-3 will
+      // return a real `number` once SandboxResult.fuelConsumed +
+      // durationMs propagate through StepResult.
+      fuelConsumedHighWater: "unknown",
+      lastInvocationMs: "unknown",
     };
   }
 

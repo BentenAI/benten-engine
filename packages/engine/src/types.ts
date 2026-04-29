@@ -464,6 +464,23 @@ export interface SandboxResult {
  * per-node DSL knobs uses `fuel = 1_000_000`, `wallclockMs = 30_000`,
  * `outputLimitBytes = 1_048_576` (D24 + dx-r1-2b-5).
  *
+ * # Phase-2b metrics tracking
+ *
+ * `fuelConsumedHighWater` + `lastInvocationMs` are the per-node
+ * runtime-introspection metrics. **In Phase 2b they are NOT tracked**
+ * — `SandboxResult.fuelConsumed` + `output_consumed` are dropped at
+ * the eval-engine boundary (`primitive_host.rs::execute_sandbox` only
+ * propagates `output`), and `Engine::describe_sandbox_node` does not
+ * maintain a per-handler metric record. The literal `"unknown"`
+ * sentinel is returned for both fields so callers can distinguish
+ * "metric is structurally not available" from "node hasn't been
+ * invoked yet" (the prior `null` shape conflated both states).
+ *
+ * Reinforces Compromise #17 cross-layer narrative: per-node
+ * sandbox-introspection telemetry is Phase-3 surface (named
+ * destination: `docs/future/phase-3-backlog.md` SnapshotBlobBackend
+ * metric-propagation entry — to be added by R6-FP Group 4).
+ *
  * Pin source: ts-r4-3 R4 finding;
  * `packages/engine/test/sandbox.test.ts::"SandboxArgs defaults — omitting fuel / wallclockMs / outputLimitBytes uses 1M / 30s / 1MB"`.
  */
@@ -484,15 +501,23 @@ export interface SandboxNodeDescription {
   outputLimitBytes: number;
   /**
    * Cumulative high-water mark of fuel consumed by this node across
-   * every invocation since registration. `null` until the node is
-   * invoked at least once.
+   * every invocation since registration.
+   *
+   * Phase 2b: ALWAYS `"unknown"` — metrics are not tracked at the
+   * eval-engine boundary in 2b (r6-mpc-3). Phase-3 wiring will return
+   * a `number` once `SandboxResult.fuelConsumed` is propagated through
+   * `StepResult` + a per-handler metric record.
    */
-  fuelConsumedHighWater: number | null;
+  fuelConsumedHighWater: number | "unknown";
   /**
    * Wallclock duration of the most recent invocation in milliseconds.
-   * `null` until the first call returns.
+   *
+   * Phase 2b: ALWAYS `"unknown"` — metrics are not tracked at the
+   * eval-engine boundary in 2b (r6-mpc-3). Phase-3 wiring will return
+   * a `number` once per-call `durationMs` is propagated through
+   * `StepResult` + a per-handler metric record.
    */
-  lastInvocationMs: number | null;
+  lastInvocationMs: number | "unknown";
 }
 
 /**
