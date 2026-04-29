@@ -93,7 +93,7 @@ fn read_error_catalog() -> String {
 
 /// `error_catalog_drift_phase_2b_codes_present` — R2 §6 + dx-r1-2b-2.
 #[test]
-#[ignore = "Phase 2b G6 (G6-A STREAM/SUBSCRIBE codes) + G10-B (E_MODULE_MANIFEST_CID_MISMATCH catalog narrative) + G12-E (WAIT TTL codes) + G11-2b-A (catalog doc-pass) pending — G7-A SANDBOX codes ARE landed via this PR (#30) + G7-B PR #32; the ignore flips when the remaining wave-4 + G11-2b-A entries land"]
+#[ignore = "Phase 3 — Phase-2b error-catalog drift body deferred per docs/future/phase-3-backlog.md §7.3.A.5 (G6 + G10-B + G12-E + G11-2b-A all landed)"]
 fn error_catalog_drift_phase_2b_codes_present() {
     let doc = read_error_catalog();
 
@@ -120,7 +120,7 @@ fn error_catalog_drift_phase_2b_codes_present() {
 /// new code's section must contain a `fix-hint` line within ~30 lines
 /// of the code header.
 #[test]
-#[ignore = "Phase 2b G11-2b-A pending — fix-hint format not yet enforced for Phase-2b codes"]
+#[ignore = "Phase 3 — Phase-2b error-catalog fix-hint format-enforcement body deferred per docs/future/phase-3-backlog.md §7.3.A.5"]
 fn error_catalog_phase_2b_codes_carry_fix_hints() {
     let doc = read_error_catalog();
     let lines: Vec<&str> = doc.lines().collect();

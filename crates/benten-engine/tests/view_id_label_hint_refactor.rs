@@ -49,7 +49,7 @@ use benten_engine::Engine;
 /// DeniedRead branch, and returns `Outcome { list: Some(vec![]) }`
 /// (the Option-C empty-list silent-deny shape, NOT a leak).
 #[test]
-#[ignore = "Phase 2b G8-B pending — view registry-driven label hint replaces string-prefix strip"]
+#[ignore = "Phase 3 — view-registry label-hint body deferred per docs/future/phase-3-backlog.md §7.3.A.3"]
 fn view_id_to_label_hint_consults_input_pattern_label_not_string_prefix() {
     let dir = tempfile::tempdir().unwrap();
     let mut engine = Engine::builder()
@@ -88,7 +88,7 @@ fn view_id_to_label_hint_consults_input_pattern_label_not_string_prefix() {
 /// resolve correctly through the new registry path. We are replacing
 /// the prefix-strip, not the cap behavior on the canonical 5 views.
 #[test]
-#[ignore = "Phase 2b G8-B pending — registry-path coverage of canonical Phase-1 views"]
+#[ignore = "Phase 3 — canonical-Phase-1 view registry-path coverage body deferred per docs/future/phase-3-backlog.md §7.3.A.3"]
 fn content_listing_views_still_route_through_registry_post_g8b() {
     let dir = tempfile::tempdir().unwrap();
     let mut engine = Engine::builder()

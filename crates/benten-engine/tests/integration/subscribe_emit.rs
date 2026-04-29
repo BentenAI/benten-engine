@@ -21,7 +21,7 @@ fn open_engine() -> (Engine, tempfile::TempDir) {
 }
 
 #[test]
-#[ignore = "pending G6-A executor wiring; tracks G6-A's `phase-2b/g6/a-stream-subscribe-core` PR"]
+#[ignore = "Phase 3 — STREAM/SUBSCRIBE end-to-end body deferred per docs/future/phase-3-backlog.md §7.3.A.2 (G6-A + wave-8c production runtime landed; integration body lands Phase 3)"]
 fn subscribe_composes_with_emit_subscriber_side_strategy() {
     // SUBSCRIBE → handler → EMIT: a subscribed handler that responds
     // to a change event by EMITting (subscriber-side strategy). Requires

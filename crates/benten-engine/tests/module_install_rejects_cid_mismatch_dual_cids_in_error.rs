@@ -32,7 +32,7 @@
 //   benten_errors::ErrorCode::ModuleManifestCidMismatch (E_MODULE_MANIFEST_CID_MISMATCH)
 
 #[test]
-#[ignore = "Phase 2b G10-B pending — D16 dual-CID + summary in mismatch error body"]
+#[ignore = "Phase 3 — D16 dual-CID + summary mismatch error body deferred per docs/future/phase-3-backlog.md §7.3.A.4 (G10-B Engine::install_module landed; error-shape pin lands Phase 3)"]
 fn install_module_error_body_carries_both_cids_and_summary_line() {
     // D16 RESOLVED-FURTHER — minimal pin: the rendered error string
     // (the form operators see in logs / stderr) MUST contain:
