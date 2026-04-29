@@ -86,7 +86,15 @@ docs/BUSINESS-PLAN.md
 # `host_functions_doc_lists_every_codegen_entry`); fresh CI clones
 # must carry it.
 docs/BENCHMARKING.md
-docs/future/
+# `docs/future/*` (not `docs/future/`) so git descends into the dir +
+# applies the per-file negations below. Track the phase-N backlog docs —
+# they're cited from in-tree code as named-destinations for
+# Phase-3-deferred items (per HARD RULE rule-1 clause-b:
+# BELONGS-ELSEWHERE-NAMED + destination must EXIST). Other docs/future/
+# exploratory drafts stay local-only.
+docs/future/*
+!docs/future/phase-2-backlog.md
+!docs/future/phase-3-backlog.md
 crates/benten-graph/benches/README.md
 crates/README.md
 bindings/README.md
