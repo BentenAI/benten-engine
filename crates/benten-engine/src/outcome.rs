@@ -382,9 +382,18 @@ pub enum TraceStep {
         outputs: Value,
         /// Optional error code if the step routed to a typed error edge.
         error: Option<ErrorCode>,
-        /// Inv-14 attribution. `None` until G5-B-ii completes runtime
-        /// threading; the field is required on the public shape so
-        /// downstream callers can rely on the slot existing.
+        /// Inv-14 attribution. The slot remains `Option` on the public
+        /// shape so downstream callers can rely on the field being
+        /// present, but at Phase 2b close the runtime threading IS wired
+        /// (sec-r6r1-01 landed the eval-side `run_with_trace` carry that
+        /// populates `AttributionFrame` through the engine + napi wire);
+        /// `Engine::trace` emits `Some(...)` for every `Step` variant on
+        /// every primitive row. The TS regression
+        /// `packages/engine/src/trace.test.ts::trace_step_attribution_field_required_on_every_variant`
+        /// asserts truthy attribution on every primitive step. The
+        /// `Option` wrapper is retained for forward-compatibility with
+        /// non-primitive synthetic-step rows (see `outcome.rs` boundary /
+        /// budget variants which do not carry attribution).
         attribution: Option<AttributionFrame>,
     },
     /// WAIT primitive drove the evaluator to suspension. Mirrors
