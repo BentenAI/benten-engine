@@ -65,6 +65,16 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
+      - name: Install cargo-nextest
+        # Required so the SANDBOX adversarial native-run step picks up the
+        # `serial-globals` test-group config in `.config/nextest.toml`.
+        # The 2 globals-touching tests (`sandbox_module_cache_avoids_recompilation_on_repeated_call`
+        # + `wait_signal_shape_defaults_untyped_accepts_any_value`) flake
+        # under cargo test's default in-binary parallelism.
+        uses: taiki-e/install-action@e6d04dc11e84c2f9c0e5dc70eaa040c45ad15521 # v2
+        with:
+          tool: cargo-nextest
+
       - name: Install wasmtime ${{ env.WASMTIME_VERSION }}
         run: |
           set -euo pipefail
@@ -91,9 +101,17 @@ jobs:
         # G7-B's SANDBOX implementation; until they ship per-target,
         # we run the SANDBOX-flavored test surface natively as the
         # initial gate.
+        #
+        # Uses `cargo nextest run --profile ci` (rather than `cargo test`)
+        # so the `serial-globals` test-group config in
+        # `.config/nextest.toml` is honored — without it,
+        # `sandbox_module_cache_avoids_recompilation_on_repeated_call`
+        # races on the global wasmtime Module cache under in-binary
+        # parallelism. The ci.yml matrix already uses nextest; this
+        # workflow was the outlier.
         run: |
           set -euo pipefail
-          cargo test -p benten-eval --tests --no-fail-fast --features benten-eval/testing 2>&1 | tee sandbox-conformance.log
+          cargo nextest run --profile ci -p benten-eval --tests --no-fail-fast --features benten-eval/testing 2>&1 | tee sandbox-conformance.log
           echo "::group::Conformance log tail"
           tail -n 100 sandbox-conformance.log || true
           echo "::endgroup::"
