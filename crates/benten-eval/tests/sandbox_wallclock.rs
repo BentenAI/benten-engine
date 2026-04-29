@@ -73,7 +73,7 @@ fn sandbox_wallclock_default_30s_max_5min() {
 }
 
 #[test]
-#[ignore = "Wave-8b: per-handler override via SubgraphSpec.primitives requires the engine-side wire-through (paired 8c sub-track) to thread the primitive properties into SandboxConfig at dispatch time. This file's `sandbox::execute` surface accepts the override directly; the missing layer is `impl PrimitiveHost for Engine::execute_sandbox` reading the SANDBOX node's `wallclock_ms` property from the operation node. Lifted in 8c."]
+#[ignore = "Phase 3 — engine-side wire-through reading SANDBOX node's `wallclock_ms` property from operation node into SandboxConfig at dispatch time; lands with phase-3-backlog.md §7.3 (test-body residuals — wave-8c primitive_host wire-through landed but the per-handler property-propagation layer remains; r6-wsa-6)"]
 fn sandbox_wallclock_per_handler_override_via_subgraphspec_primitives() {
     // Pin: per-handler override is ENGINE-layer property propagation;
     // Wave-8b's primitive-level execute() takes a SandboxConfig directly

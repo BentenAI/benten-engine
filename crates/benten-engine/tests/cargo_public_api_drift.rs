@@ -75,7 +75,7 @@ fn cargo_public_api_workflow_present_and_non_vacuous() {
 /// baseline; until then this assert fails to make the dependency
 /// explicit.
 #[test]
-#[ignore = "Phase 2b G6 close pending — public-api baseline file unimplemented"]
+#[ignore = "Phase 3 — public-api baseline file lands with phase-3-backlog.md §7.3.A.9 (cargo-public-api drift detector productionization)"]
 fn cargo_public_api_baseline_committed() {
     let root = workspace_root();
     // Allow either docs/public-api/ subdir OR per-crate
