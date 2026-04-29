@@ -161,6 +161,56 @@ describe("engine.registerUserView", () => {
     await engine.close();
   });
 
+  it("validateUserViewSpec fail-loud rejects canonical-id with mismatched label (r6-ivm-3)", () => {
+    // r6-ivm-3 closure: the AlgorithmBView::for_id dispatcher honors
+    // `input_pattern_label` only for `content_listing`; the other 4
+    // canonical view ids (capability_grants / version_current /
+    // event_dispatch / governance_inheritance) have HARDCODED label
+    // semantics. Pre-fix-pass, registering with one of those ids + a
+    // user-supplied label silently filtered on the hardcoded label.
+    // Post-fix-pass: validateUserViewSpec returns a typed error
+    // message before the napi boundary so the silent-mismatch
+    // foot-gun is closed.
+
+    const versionCurrentBadLabel = validateUserViewSpec({
+      id: "version_current",
+      inputPattern: { label: "post" },
+    });
+    expect(versionCurrentBadLabel).toMatch(/version_current/);
+    expect(versionCurrentBadLabel).toMatch(/NEXT_VERSION/);
+    expect(versionCurrentBadLabel).toMatch(/post/);
+
+    const capGrantsBadLabel = validateUserViewSpec({
+      id: "capability_grants",
+      inputPattern: { label: "user-grant" },
+    });
+    expect(capGrantsBadLabel).toMatch(/capability_grants/);
+    expect(capGrantsBadLabel).toMatch(/system:CapabilityGrant/);
+
+    // Matching label is accepted.
+    const versionCurrentOk = validateUserViewSpec({
+      id: "version_current",
+      inputPattern: { label: "NEXT_VERSION" },
+    });
+    expect(versionCurrentOk).toBeNull();
+
+    // content_listing is not in the canonical-hardcoded-label set;
+    // any user-supplied label is fine.
+    const contentListingAnyLabel = validateUserViewSpec({
+      id: "content_listing",
+      inputPattern: { label: "post" },
+    });
+    expect(contentListingAnyLabel).toBeNull();
+
+    // User-defined ids (anything outside the 5 canonical) are not
+    // restricted.
+    const userDefined = validateUserViewSpec({
+      id: "user_custom_view",
+      inputPattern: { label: "any-label" },
+    });
+    expect(userDefined).toBeNull();
+  });
+
   it("validateUserViewSpec rejects malformed spec with typed message", () => {
     // Pure-validator coverage so the napi-bridge pre-validation contract
     // is pinned regardless of backend availability.
