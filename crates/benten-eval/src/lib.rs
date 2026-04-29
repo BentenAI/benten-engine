@@ -339,6 +339,25 @@ pub enum EvalError {
     #[cfg(not(target_arch = "wasm32"))]
     #[error("sandbox: {0}")]
     Sandbox(#[from] sandbox::SandboxError),
+
+    /// Phase-2b Wave-8i: WAIT primitive in a regular `engine.call()` walk
+    /// drove the evaluator to a suspension boundary. Carries the
+    /// [`SuspendedHandle`] the dispatcher produced via
+    /// [`primitives::wait::evaluate_op`]. This is a control-flow signal,
+    /// NOT a runtime failure: the engine catches it in
+    /// `dispatch_call_inner` and converts to `EngineError::WaitSuspended`
+    /// so callers can either route through `Engine::call_with_suspension`
+    /// (which surfaces the same boundary as `SuspensionOutcome::Suspended`)
+    /// or persist the handle bytes via `Engine::suspend_to_bytes`.
+    ///
+    /// Replaces the Phase-2a `Err(PrimitiveNotImplemented(Wait))` shape
+    /// at the dispatcher (mod.rs:100), which forced callers to know about
+    /// `call_with_suspension` to use WAIT at all.
+    #[error("wait suspended (envelope cid={state_cid}, signal={signal:?})", state_cid = handle.state_cid().to_base32(), signal = handle.signal_name())]
+    WaitSuspended {
+        /// Handle to the persisted suspension envelope; CID + signal name.
+        handle: SuspendedHandle,
+    },
 }
 
 impl EvalError {
@@ -377,6 +396,7 @@ impl EvalError {
             EvalError::SubsystemDisabled(_) => ErrorCode::SubsystemDisabled,
             #[cfg(not(target_arch = "wasm32"))]
             EvalError::Sandbox(s) => s.code(),
+            EvalError::WaitSuspended { .. } => ErrorCode::WaitSuspended,
         }
     }
 }

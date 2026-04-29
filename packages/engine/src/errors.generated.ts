@@ -104,6 +104,7 @@ export const CATALOG_CODES = [
   "E_VIEW_STRATEGY_A_REFUSED",
   "E_VIEW_STRATEGY_C_RESERVED",
   "E_WAIT_SIGNAL_SHAPE_MISMATCH",
+  "E_WAIT_SUSPENDED",
   "E_STREAM_BACKPRESSURE_DROPPED",
   "E_STREAM_CLOSED_BY_PEER",
   "E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED",
@@ -1194,6 +1195,21 @@ export class EWaitSignalShapeMismatch extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_WAIT_SIGNAL_SHAPE_MISMATCH", "When a WAIT declares `signal_shape: Some(schema)`, a resume with a payload that fails schema validation is rejected BEFORE any downstream TRANSFORM runs. Either widen the schema, re-send with the correct shape, or drop the `signal_shape` to keep the untyped path.", message, context);
     this.name = "EWaitSignalShapeMismatch";
+  }
+}
+
+/**
+ * E_WAIT_SUSPENDED
+ *
+ * Thrown at: `benten_eval::primitives::dispatch` (WAIT arm), surfaced as `EvalError::WaitSuspended`; round-trips through `eval_error_to_engine_error` to `EngineError::WaitSuspended { handle }` at the engine boundary.
+ * Message template: "WAIT primitive suspended awaiting external signal/duration"
+ */
+export class EWaitSuspended extends BentenError {
+  static readonly code = "E_WAIT_SUSPENDED";
+  static readonly fixHint = "A regular `engine.call(handler, ...)` walk hit a WAIT primitive and the dispatcher routed through the eval-side `wait::evaluate`, producing a `SuspendedHandle`. This is a control-flow signal, NOT a runtime failure — the caller catches the typed error, inspects the carried `SuspendedHandle`, and either calls `Engine::call_with_suspension` (which surfaces the same boundary as `SuspensionOutcome::Suspended`) or persists the handle bytes via `Engine::suspend_to_bytes` for later resume. Phase-2b Wave-8i (option B closure of the WAIT regular-walk dispatcher gap surfaced by the docs-vs-code audit).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_WAIT_SUSPENDED", "A regular `engine.call(handler, ...)` walk hit a WAIT primitive and the dispatcher routed through the eval-side `wait::evaluate`, producing a `SuspendedHandle`. This is a control-flow signal, NOT a runtime failure — the caller catches the typed error, inspects the carried `SuspendedHandle`, and either calls `Engine::call_with_suspension` (which surfaces the same boundary as `SuspensionOutcome::Suspended`) or persists the handle bytes via `Engine::suspend_to_bytes` for later resume. Phase-2b Wave-8i (option B closure of the WAIT regular-walk dispatcher gap surfaced by the docs-vs-code audit).", message, context);
+    this.name = "EWaitSuspended";
   }
 }
 

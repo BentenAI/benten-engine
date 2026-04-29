@@ -168,6 +168,25 @@ pub enum EngineError {
         migration_count: usize,
     },
 
+    /// Phase-2b Wave-8i: WAIT primitive in a regular `Engine::call` walk
+    /// drove the evaluator to a suspension boundary. Carries the
+    /// [`SuspendedHandle`](benten_eval::SuspendedHandle) the eval-side
+    /// dispatcher produced via `wait::evaluate_op`. This is a
+    /// control-flow signal, NOT a runtime failure: callers either route
+    /// through `Engine::call_with_suspension` (which surfaces the same
+    /// boundary as `SuspensionOutcome::Suspended`) or persist the
+    /// handle bytes via `Engine::suspend_to_bytes` (both impls live in
+    /// [`crate::engine_wait`]).
+    ///
+    /// Replaces the Phase-2a "WAIT in regular walk = E_PRIMITIVE_NOT_IMPLEMENTED"
+    /// shape that forced callers to know about `call_with_suspension`
+    /// to use WAIT at all.
+    #[error("wait suspended (envelope cid={state_cid}, signal={signal})", state_cid = handle.state_cid().to_base32(), signal = handle.signal_name())]
+    WaitSuspended {
+        /// Handle to the persisted suspension envelope; CID + signal name.
+        handle: benten_eval::SuspendedHandle,
+    },
+
     /// Generic wrapped error carrying a stable catalog code.
     #[error("{message}")]
     Other {
@@ -206,6 +225,7 @@ impl EngineError {
             EngineError::ModuleMigrationsRequirePersistence { .. } => {
                 ErrorCode::ModuleMigrationsRequirePersistence
             }
+            EngineError::WaitSuspended { .. } => ErrorCode::WaitSuspended,
             EngineError::Other { code, .. } => code.clone(),
         }
     }

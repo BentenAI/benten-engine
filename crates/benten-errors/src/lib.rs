@@ -210,6 +210,16 @@ pub enum ErrorCode {
     /// typing addendum). Fires when a resumed WAIT declares a `signal_shape`
     /// and the incoming signal payload fails the declared schema.
     WaitSignalShapeMismatch,
+    /// Phase-2b Wave-8i: WAIT primitive in a regular `engine.call()` walk
+    /// suspended awaiting an external signal/duration. The handler did not
+    /// run to completion; the caller holds a `SuspendedHandle` and must
+    /// route through `Engine::call_with_suspension` (or accept the typed
+    /// error and inspect the carried handle) to resume. This is a
+    /// control-flow signal, not a runtime failure: it surfaces from the
+    /// dispatcher when the WAIT primitive's properties (signal /
+    /// duration_ms / timeout_ms / signal_shape) drive the evaluator to a
+    /// suspension boundary.
+    WaitSuspended,
     // ---------------------------------------------------------------
     // Phase 2b G6-A — STREAM + SUBSCRIBE error codes (D4 + D5).
     // ---------------------------------------------------------------
@@ -517,6 +527,7 @@ impl ErrorCode {
             ErrorCode::CapChainTooDeep => "E_CAP_CHAIN_TOO_DEEP",
             ErrorCode::CapScopeLoneStarRejected => "E_CAP_SCOPE_LONE_STAR_REJECTED",
             ErrorCode::WaitSignalShapeMismatch => "E_WAIT_SIGNAL_SHAPE_MISMATCH",
+            ErrorCode::WaitSuspended => "E_WAIT_SUSPENDED",
             ErrorCode::StreamBackpressureDropped => "E_STREAM_BACKPRESSURE_DROPPED",
             ErrorCode::StreamClosedByPeer => "E_STREAM_CLOSED_BY_PEER",
             ErrorCode::StreamProducerWallclockExceeded => "E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED",
@@ -708,11 +719,16 @@ impl ErrorCode {
             | ErrorCode::InvSandboxDepth => None,
 
             // Resume-protocol failures — surface at the resume call site,
-            // not along a primitive edge. No routing.
+            // not along a primitive edge. No routing. WAIT-suspended is a
+            // control-flow signal carried as a typed error (Wave-8i): the
+            // caller catches it and inspects the carried `SuspendedHandle`
+            // rather than routing through a primitive edge — same routing
+            // disposition as the rest of this family.
             ErrorCode::ExecStateTampered
             | ErrorCode::ResumeActorMismatch
             | ErrorCode::ResumeSubgraphDrift
-            | ErrorCode::NestedTransactionNotSupported => None,
+            | ErrorCode::NestedTransactionNotSupported
+            | ErrorCode::WaitSuspended => None,
 
             // Builder-time configuration errors — surface at builder, not
             // along a primitive edge. Engine-config invalid + module-manifest
@@ -816,6 +832,7 @@ impl ErrorCode {
             "E_CAP_CHAIN_TOO_DEEP" => ErrorCode::CapChainTooDeep,
             "E_CAP_SCOPE_LONE_STAR_REJECTED" => ErrorCode::CapScopeLoneStarRejected,
             "E_WAIT_SIGNAL_SHAPE_MISMATCH" => ErrorCode::WaitSignalShapeMismatch,
+            "E_WAIT_SUSPENDED" => ErrorCode::WaitSuspended,
             "E_STREAM_BACKPRESSURE_DROPPED" => ErrorCode::StreamBackpressureDropped,
             "E_STREAM_CLOSED_BY_PEER" => ErrorCode::StreamClosedByPeer,
             "E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED" => ErrorCode::StreamProducerWallclockExceeded,
