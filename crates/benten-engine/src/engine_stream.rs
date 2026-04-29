@@ -571,6 +571,13 @@ impl Engine {
     /// future wave. Wallclock budget = unbounded by default; pair with
     /// the producer's own `wallclock_ms` per-handler property in a
     /// future widening pass.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "R6FP-G1 (r6-stream-2/3): the body is a top-to-bottom \
+                  pipeline (spec lookup → source resolution → producer \
+                  build → cap-recheck wrap → spawn) — extracting helpers \
+                  would obscure the dispatch flow."
+    )]
     fn build_stream_handle(
         &self,
         handler_id: &str,

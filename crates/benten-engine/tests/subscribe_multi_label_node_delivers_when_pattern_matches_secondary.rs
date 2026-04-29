@@ -20,7 +20,7 @@
 //! assert the callback fires.
 
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::type_complexity)]
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};

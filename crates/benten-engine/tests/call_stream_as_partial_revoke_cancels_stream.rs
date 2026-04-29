@@ -132,14 +132,13 @@ fn call_stream_as_partial_revoke_cancels_stream() {
     let mut total = 1; // chunk_a already counted
     while let Ok(Some(_)) = handle.next_chunk() {
         total += 1;
-        if total >= 1_000 {
-            panic!(
-                "stream produced all 1000 chunks despite mid-stream revoke — \
-                 R6FP-G1 (r6-stream-2) per-chunk cap-recheck NOT firing; \
-                 verify CapRecheckProducer wraps the inner producer + \
-                 inner_engine.is_actor_active() consults the revoked-actors set"
-            );
-        }
+        assert!(
+            total < 1_000,
+            "stream produced all 1000 chunks despite mid-stream revoke — \
+             R6FP-G1 (r6-stream-2) per-chunk cap-recheck NOT firing; \
+             verify CapRecheckProducer wraps the inner producer + \
+             inner_engine.is_actor_active() consults the revoked-actors set"
+        );
     }
 
     assert!(

@@ -92,10 +92,7 @@ fn register_default_host_fns_unknown_wasm_import_surfaces_typed_error() {
 /// denial.
 #[test]
 fn register_default_host_fns_walker_covers_every_codegen_entry_name() {
-    let codegen_names: Vec<&str> = benten_eval::sandbox::host_fns::host_fn_names()
-        .iter()
-        .copied()
-        .collect();
+    let codegen_names: Vec<&str> = benten_eval::sandbox::host_fns::host_fn_names().to_vec();
     // The match arms in `register_default_host_fns` at sandbox.rs:703
     // cover exactly these names — keep this set in sync when the
     // canonical D1 surface widens.
