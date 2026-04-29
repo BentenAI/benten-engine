@@ -121,6 +121,11 @@ describe("engine.callWithSuspension + resumeFromBytes", () => {
     if (result.kind !== "suspended") return; // narrow for TS
     expect(result.handle).toBeInstanceOf(Buffer);
     expect(result.handle.length).toBeGreaterThan(0);
+    // R6 Round-2 Instance 12: stateCid + signalName surface alongside
+    // the opaque bytes so JS callers can correlate the suspension.
+    expect(typeof result.stateCid).toBe("string");
+    expect(result.stateCid.length).toBeGreaterThan(0);
+    expect(result.signalName).toBe("external:go");
   });
 
   it("resume_from_bytes_completes_suspension", async () => {

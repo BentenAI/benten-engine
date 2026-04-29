@@ -595,13 +595,15 @@ mod napi_surface {
         ///
         /// - `{ kind: "complete", outcome: <Outcome-JSON> }` when the
         ///   handler ran to completion without hitting a WAIT.
-        /// - `{ kind: "suspended", handle: <base64-string> }` when the
-        ///   handler suspended on a WAIT primitive. The TS wrapper
-        ///   (`packages/engine/src/engine.ts::callWithSuspension`) decodes
-        ///   the base64 string into a `Buffer` before exposing it to user
-        ///   code; passing it through JSON keeps the napi return type a
-        ///   single `serde_json::Value` so we don't need a hand-rolled
-        ///   discriminated union at the napi layer.
+        /// - `{ kind: "suspended", handle: <base64-string>, stateCid: <base32 CID>, signalName: <string> }`
+        ///   when the handler suspended on a WAIT primitive. The TS
+        ///   wrapper (`packages/engine/src/engine.ts::callWithSuspension`)
+        ///   decodes the base64 string into a `Buffer` before exposing
+        ///   it to user code; passing through JSON keeps the napi
+        ///   return type a single `serde_json::Value`. R6 Round-2
+        ///   Instance 12 added `stateCid` + `signalName` fields so JS
+        ///   callers can correlate the suspension across logs /
+        ///   external orchestration without parsing the opaque bytes.
         #[napi]
         pub fn call_with_suspension(
             &self,

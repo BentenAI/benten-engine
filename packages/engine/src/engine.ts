@@ -1308,7 +1308,20 @@ export class Engine {
           "Engine.callWithSuspension: suspended result missing base64 handle",
         );
       }
-      return { kind: "suspended", handle: Buffer.from(handleStr, "base64") };
+      // R6 Round-2 Instance 12: surface stateCid + signalName so JS
+      // callers can correlate the suspension. Older napi cdylib
+      // builds (pre-R6-FP) won't carry these fields; default to
+      // empty strings so the type contract holds + the caller sees
+      // structurally valid (if uninformative) values rather than
+      // undefined.
+      const stateCid = typeof r.stateCid === "string" ? r.stateCid : "";
+      const signalName = typeof r.signalName === "string" ? r.signalName : "";
+      return {
+        kind: "suspended",
+        handle: Buffer.from(handleStr, "base64"),
+        stateCid,
+        signalName,
+      };
     }
     throw new EDslInvalidShape(
       `Engine.callWithSuspension: unknown result kind "${kind}"`,

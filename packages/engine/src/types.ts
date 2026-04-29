@@ -270,7 +270,13 @@ export interface Outcome {
  * - `kind: "suspended"` — the handler hit a WAIT and persisted an
  *   `ExecutionStateEnvelope`; `handle` is the DAG-CBOR bytes you pass
  *   to `Engine.resumeFromBytes` / `Engine.resumeFromBytesAs` once the
- *   awaited signal is ready.
+ *   awaited signal is ready. `stateCid` is the engine-assigned base32
+ *   CID of the persisted envelope (R6 Round-2 Instance 12 — added so
+ *   JS callers can correlate the suspension across logs / external
+ *   orchestration without parsing the opaque bytes); `signalName` is
+ *   the WAIT primitive's signal name (e.g. `"external:payment"`),
+ *   useful for routing the resume payload to the correct pending
+ *   handler in multi-WAIT systems.
  *
  * Phase 2a G3-B napi F5 wiring: the napi layer transports the handle
  * as a base64 string under the hood; the TS wrapper decodes to `Buffer`
@@ -278,7 +284,14 @@ export interface Outcome {
  */
 export type SuspensionResult =
   | { kind: "complete"; outcome: Outcome }
-  | { kind: "suspended"; handle: Buffer };
+  | {
+      kind: "suspended";
+      handle: Buffer;
+      /** Engine-assigned base32 CID of the persisted envelope. */
+      stateCid: string;
+      /** Signal name the suspension is waiting for. */
+      signalName: string;
+    };
 
 /**
  * Input shape for `Engine.createView` (legacy id-string form). Phase-1

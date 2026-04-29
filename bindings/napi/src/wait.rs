@@ -43,7 +43,20 @@ use crate::subgraph::outcome_to_json;
 /// JSON before handing it back across the napi boundary.
 pub(crate) enum SuspensionBridge {
     Complete(serde_json::Value),
-    Suspended { handle_bytes: Vec<u8> },
+    Suspended {
+        handle_bytes: Vec<u8>,
+        /// R6 Round-2 Instance 12: surface the engine-assigned envelope
+        /// CID alongside the bytes. Prior shape carried only
+        /// `handle_bytes`, dropping `state_cid` from the underlying
+        /// `SuspendedHandle`. JS callers wanting to correlate the
+        /// suspension across logs / external orchestration had no
+        /// stable identifier.
+        state_cid: String,
+        /// R6 Round-2 Instance 12: surface the signal name the
+        /// suspension is waiting for. Prior shape dropped this from
+        /// the underlying `SuspendedHandle::signal_name()`.
+        signal_name: String,
+    },
 }
 
 impl SuspensionBridge {
@@ -51,9 +64,12 @@ impl SuspensionBridge {
     /// shape:
     ///
     /// - Complete: `{ kind: "complete", outcome: <Outcome-JSON> }`
-    /// - Suspended: `{ kind: "suspended", handle: <base64 string> }` —
+    /// - Suspended: `{ kind: "suspended", handle: <base64 string>,
+    ///                 stateCid: <base32 CID>, signalName: <string> }` —
     ///   the napi layer wraps `handle` in `Buffer.from(handle, "base64")`
-    ///   before exposing it to TS callers.
+    ///   before exposing it to TS callers. R6 Round-2 Instance 12 added
+    ///   `stateCid` + `signalName` so JS callers can correlate the
+    ///   suspension without parsing the opaque bytes.
     pub(crate) fn into_json(self) -> serde_json::Value {
         let mut map = serde_json::Map::new();
         match self {
@@ -61,13 +77,22 @@ impl SuspensionBridge {
                 map.insert("kind".into(), serde_json::Value::String("complete".into()));
                 map.insert("outcome".into(), outcome);
             }
-            SuspensionBridge::Suspended { handle_bytes } => {
+            SuspensionBridge::Suspended {
+                handle_bytes,
+                state_cid,
+                signal_name,
+            } => {
                 map.insert("kind".into(), serde_json::Value::String("suspended".into()));
                 // Base64-encode the bytes so the JSON surface is self-
                 // contained. The TS wrapper decodes with `Buffer.from(s, 'base64')`
                 // to produce the `Buffer` the public API promises.
                 let b64 = base64_encode(&handle_bytes);
                 map.insert("handle".into(), serde_json::Value::String(b64));
+                map.insert("stateCid".into(), serde_json::Value::String(state_cid));
+                map.insert(
+                    "signalName".into(),
+                    serde_json::Value::String(signal_name),
+                );
             }
         }
         serde_json::Value::Object(map)
@@ -90,9 +115,16 @@ pub(crate) fn call_with_suspension_adapter(
     match outcome {
         SuspensionOutcome::Complete(o) => Ok(SuspensionBridge::Complete(outcome_to_json(&o))),
         SuspensionOutcome::Suspended(handle) => {
+            // R6 Round-2 Instance 12: capture state_cid + signal_name
+            // BEFORE consuming the handle. `suspend_to_bytes` borrows
+            // the handle, so the accessor reads must happen prior.
+            let state_cid_str = handle.state_cid().to_base32();
+            let signal_name_str = handle.signal_name().to_string();
             let bytes = engine.suspend_to_bytes(&handle).map_err(engine_err)?;
             Ok(SuspensionBridge::Suspended {
                 handle_bytes: bytes,
+                state_cid: state_cid_str,
+                signal_name: signal_name_str,
             })
         }
     }
