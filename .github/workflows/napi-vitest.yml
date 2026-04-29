@@ -100,29 +100,17 @@ jobs:
           done
           ls -la benten-napi.*.node
 
-      - name: Run vitest suite (green-phase subset)
-        # SCOPED to the test files whose R5 implementation has landed:
-        #   - `index.test.ts`                              (G8-A smoke; green)
-        #   - `test/budget_exhausted_napi_round_trip.test.ts` (G12-A; green)
-        #
-        # Excluded (Phase-2b R3 red-phase carries — implementation has NOT
-        # landed; the symbols they reference do not exist in
-        # `bindings/napi/src/` yet):
-        #   - `test/sandbox_napi_bridge.test.ts`               (G7 R5 carry)
-        #   - `test/stream_napi_async_iterator_back_pressure.test.ts` (G6 R5)
-        #
-        # When G6 + G7 R5 land, drop the explicit file list and revert to
-        # `npm test` to pick the whole suite up automatically. The carry
-        # tests are intentionally tracked at `.addl/phase-2b/r3-*` and will
-        # flip green as part of those groups' R5 fix-passes — wiring this
-        # workflow now closes the systemic finding (any FUTURE companion
-        # napi vitest test in `bindings/napi/test/` will be discovered the
-        # moment its R5 implementation lands and the explicit allowlist
-        # below is updated to include it).
+      - name: Run vitest suite (full)
+        # R6-FP r6-napi-1 closure: the prior allowlist excluded
+        # `test/sandbox_napi_bridge.test.ts` (rewritten to assert
+        # canonical class-method shape) +
+        # `test/stream_napi_async_iterator_back_pressure.test.ts` (G6-B
+        # surface long since landed). Both are now exercised; the
+        # allowlist is dropped + the suite runs whole-file.
         #
         # The platform-suffixed `.node` artifact built in the previous step
         # is resolved via the test files' `loadNative()` helper
         # (`require('../benten-napi.${platform}-${arch}.node')`).
         run: |
           cd bindings/napi
-          npx vitest run index.test.ts test/budget_exhausted_napi_round_trip.test.ts
+          npx vitest run

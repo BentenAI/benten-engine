@@ -595,13 +595,15 @@ mod napi_surface {
         ///
         /// - `{ kind: "complete", outcome: <Outcome-JSON> }` when the
         ///   handler ran to completion without hitting a WAIT.
-        /// - `{ kind: "suspended", handle: <base64-string> }` when the
-        ///   handler suspended on a WAIT primitive. The TS wrapper
-        ///   (`packages/engine/src/engine.ts::callWithSuspension`) decodes
-        ///   the base64 string into a `Buffer` before exposing it to user
-        ///   code; passing it through JSON keeps the napi return type a
-        ///   single `serde_json::Value` so we don't need a hand-rolled
-        ///   discriminated union at the napi layer.
+        /// - `{ kind: "suspended", handle: <base64-string>, stateCid: <base32 CID>, signalName: <string> }`
+        ///   when the handler suspended on a WAIT primitive. The TS
+        ///   wrapper (`packages/engine/src/engine.ts::callWithSuspension`)
+        ///   decodes the base64 string into a `Buffer` before exposing
+        ///   it to user code; passing through JSON keeps the napi
+        ///   return type a single `serde_json::Value`. R6 Round-2
+        ///   Instance 12 added `stateCid` + `signalName` fields so JS
+        ///   callers can correlate the suspension across logs /
+        ///   external orchestration without parsing the opaque bytes.
         #[napi]
         pub fn call_with_suspension(
             &self,
@@ -1143,15 +1145,26 @@ mod napi_surface {
         /// Highest engine-assigned sequence number observed by this
         /// subscription's delivery path. `0` before the first event
         /// lands.
+        ///
+        /// Returns `i64` — napi-rs maps this to JS `number` directly
+        /// (no BigInt boxing); for values < `Number.MAX_SAFE_INTEGER`
+        /// (2^53) the conversion is exact. R6 Round-2 Instance 11
+        /// closure: prior return type `u32` saturated at 2^32 via
+        /// `u32::try_from(u64).unwrap_or(u32::MAX)`. Now widened to
+        /// `i64` so a heavily-loaded subscriber accumulating >4B
+        /// deliveries surfaces the real seq rather than a saturated
+        /// `u32::MAX`. Saturation at `i64::MAX` is structurally
+        /// unreachable (the engine-side `u64` would have to overflow,
+        /// which never happens in any realistic deployment timeline).
         #[napi(js_name = "maxDeliveredSeq")]
-        pub fn max_delivered_seq(&self) -> napi::Result<u32> {
+        pub fn max_delivered_seq(&self) -> napi::Result<i64> {
             let g = self.inner.lock().map_err(|_| {
                 napi::Error::new(
                     Status::GenericFailure,
                     "SubscriptionJs: internal lock poisoned",
                 )
             })?;
-            Ok(u32::try_from(g.max_delivered_seq()).unwrap_or(u32::MAX))
+            Ok(i64::try_from(g.max_delivered_seq()).unwrap_or(i64::MAX))
         }
 
         /// Explicitly release the subscription. Idempotent.
@@ -1256,19 +1269,22 @@ mod napi_surface {
         /// Engine-assigned sequence count of chunks delivered so far.
         /// Bumped per `next()` returning a chunk; `0` before the first
         /// chunk drains.
+        ///
+        /// Returns `i64` — napi-rs maps to JS `number` (exact for
+        /// values < 2^53). R6 Round-2 Instance 11 closure: prior
+        /// return type `u32` saturated at 2^32 via `u32::try_from`,
+        /// silently truncating past 4B chunks. Widened to `i64` so
+        /// long-lived streams report the real count.
         #[napi(js_name = "seqSoFar")]
-        pub fn seq_so_far(&self) -> napi::Result<u32> {
+        pub fn seq_so_far(&self) -> napi::Result<i64> {
             let g = self.inner.lock().map_err(|_| {
                 napi::Error::new(
                     Status::GenericFailure,
                     "StreamHandle: internal lock poisoned",
                 )
             })?;
-            // u32 keeps the JS surface friendly; saturating cast covers
-            // the (unreachable in 2b scope) >4B-chunk case without
-            // surfacing a bigint to JS.
             Ok(match g.as_ref() {
-                Some(h) => u32::try_from(h.seq_so_far()).unwrap_or(u32::MAX),
+                Some(h) => i64::try_from(h.seq_so_far()).unwrap_or(i64::MAX),
                 None => 0,
             })
         }

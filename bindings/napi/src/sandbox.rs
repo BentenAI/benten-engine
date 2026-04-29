@@ -95,29 +95,39 @@ pub fn sandbox_target_supported() -> bool {
 // `describe_sandbox_node` — diagnostic accessor (ts-r4-3)
 // ---------------------------------------------------------------------------
 //
-// IMPLEMENTATION STATE (post mini-review fix F-G7C-MR-CR-2):
+// HONEST IMPLEMENTATION STATE (R6 Round 1 reconciliation, post-G7-A merged):
 //
-// The TS-side `engine.describeSandboxNode(handlerId, nodeId)` is currently
-// SYNTHESIZED CLIENT-SIDE in `packages/engine/src/sandbox.ts` — it does
-// NOT call into a native napi method. The TS function returns a typed
-// `SandboxNodeDescription` shape constructed from the spec / handler-id
-// inputs alone, sufficient for the ts-r4-3 type-shape pin
-// (`describe_sandbox_node_returns_diagnostic_shape`) but NOT bridging
-// real native runtime introspection state (fuel-consumed-high-water,
-// last-invocation-ms, etc.).
+// The TS-side `engine.describeSandboxNode(handlerId, nodeId)` is
+// SYNTHESIZED CLIENT-SIDE in `packages/engine/src/engine.ts` — it does
+// NOT call into a native napi method. It returns a typed
+// `SandboxNodeDescription` shape constructed from the registered
+// subgraph spec the wrapper has cached, with the literal `"unknown"`
+// sentinel for `fuelConsumedHighWater` + `lastInvocationMs` to make
+// the not-tracked-in-2b state explicit at the type level.
 //
-// The native bridge (a `#[napi] fn describe_sandbox_node` on
-// `napi_surface::Engine` reaching `benten_engine::Engine::describe_sandbox_node`)
-// is intentionally NOT yet wired here. It WILL land alongside G7-A's
-// executor body — the runtime introspection state requires the executor's
-// per-call `Store` lifecycle (D3-RESOLVED) to be live. Until then, the
-// client-side synthesis is the contract.
+// **R6-Round-1 corrective:** this comment block previously claimed the
+// native bridge would land "alongside G7-A's executor body". G7-A
+// shipped (PR #30, `a9758f8`) WITHOUT adding the bridge — the wave-8
+// SANDBOX wire-through closure landed the eval-side execute body but
+// did NOT extend `Engine::describe_sandbox_node` to surface per-call
+// metrics. The metric drop happens upstream of any potential napi
+// bridge: `primitive_host.rs::execute_sandbox` propagates only
+// `SandboxResult.output` into `StepResult`, dropping `fuel_consumed` +
+// `output_consumed` at the eval-engine boundary (r6-mpc-3 finding).
 //
-// When the native bridge lands: it will be cfg-gated behind the engine
-// crate's `test-helpers` feature per sec-r6r2-02 discipline (the napi
-// cdylib post-G12-E opts only into `iteration-budget-test-grade`, so
-// the accessor is NOT exposed to TS by default — devtools that need real
-// runtime state require an explicit feature opt-in). The visible TS
-// contract (the `sandbox_napi_bridge.test.ts` symbol-presence pin) is the
-// `sandbox_target_supported` probe above + the client-synthesized
-// `describeSandboxNode` for shape-pinning.
+// The metric-propagation work (extend `StepResult` + add a
+// per-handler metric record on `Engine` + back-fill `describe_sandbox_node`
+// against it) is named-destination-NOW Phase 3 — see
+// `docs/future/phase-3-backlog.md` SnapshotBlobBackend
+// metric-propagation entry (R6-FP Group 4 enrichment). When that
+// lands, this comment block will be replaced by the real
+// `#[napi] fn describe_sandbox_node` cfg-gated under the engine
+// crate's `test-helpers` feature (sec-r6r2-02 discipline).
+//
+// Visible TS contract today (the `sandbox_napi_bridge.test.ts`
+// symbol-presence pin): `sandbox_target_supported` probe above +
+// client-synthesized `describeSandboxNode` for shape-pinning. The
+// `"unknown"` sentinel return for `fuelConsumedHighWater` /
+// `lastInvocationMs` is the type-level signal that the value is
+// structurally not tracked in 2b (distinct from "node not yet
+// invoked" which would have been the prior `null` reading).

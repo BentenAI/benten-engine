@@ -62,7 +62,9 @@ export interface SubgraphNode {
 
 /** A subgraph ready to register with the engine. */
 export interface Subgraph {
-  /** Human-readable handler id (e.g. `"post-handler"`). */
+  /** Human-readable handler id (e.g. `"export-feed"` for hand-built
+   * subgraphs; the engine assigns `"crud:<label>"` for crud()-registered
+   * handlers — see `Engine.registerSubgraph` for the canonical id). */
   handlerId: string;
   /** Actions this subgraph exposes (e.g. `"post:create"`, `"post:list"`). */
   actions: string[];
@@ -268,7 +270,13 @@ export interface Outcome {
  * - `kind: "suspended"` — the handler hit a WAIT and persisted an
  *   `ExecutionStateEnvelope`; `handle` is the DAG-CBOR bytes you pass
  *   to `Engine.resumeFromBytes` / `Engine.resumeFromBytesAs` once the
- *   awaited signal is ready.
+ *   awaited signal is ready. `stateCid` is the engine-assigned base32
+ *   CID of the persisted envelope (R6 Round-2 Instance 12 — added so
+ *   JS callers can correlate the suspension across logs / external
+ *   orchestration without parsing the opaque bytes); `signalName` is
+ *   the WAIT primitive's signal name (e.g. `"external:payment"`),
+ *   useful for routing the resume payload to the correct pending
+ *   handler in multi-WAIT systems.
  *
  * Phase 2a G3-B napi F5 wiring: the napi layer transports the handle
  * as a base64 string under the hood; the TS wrapper decodes to `Buffer`
@@ -276,7 +284,14 @@ export interface Outcome {
  */
 export type SuspensionResult =
   | { kind: "complete"; outcome: Outcome }
-  | { kind: "suspended"; handle: Buffer };
+  | {
+      kind: "suspended";
+      handle: Buffer;
+      /** Engine-assigned base32 CID of the persisted envelope. */
+      stateCid: string;
+      /** Signal name the suspension is waiting for. */
+      signalName: string;
+    };
 
 /**
  * Input shape for `Engine.createView` (legacy id-string form). Phase-1
@@ -462,6 +477,23 @@ export interface SandboxResult {
  * per-node DSL knobs uses `fuel = 1_000_000`, `wallclockMs = 30_000`,
  * `outputLimitBytes = 1_048_576` (D24 + dx-r1-2b-5).
  *
+ * # Phase-2b metrics tracking
+ *
+ * `fuelConsumedHighWater` + `lastInvocationMs` are the per-node
+ * runtime-introspection metrics. **In Phase 2b they are NOT tracked**
+ * — `SandboxResult.fuelConsumed` + `output_consumed` are dropped at
+ * the eval-engine boundary (`primitive_host.rs::execute_sandbox` only
+ * propagates `output`), and `Engine::describe_sandbox_node` does not
+ * maintain a per-handler metric record. The literal `"unknown"`
+ * sentinel is returned for both fields so callers can distinguish
+ * "metric is structurally not available" from "node hasn't been
+ * invoked yet" (the prior `null` shape conflated both states).
+ *
+ * Reinforces Compromise #17 cross-layer narrative: per-node
+ * sandbox-introspection telemetry is Phase-3 surface (named
+ * destination: `docs/future/phase-3-backlog.md` SnapshotBlobBackend
+ * metric-propagation entry — to be added by R6-FP Group 4).
+ *
  * Pin source: ts-r4-3 R4 finding;
  * `packages/engine/test/sandbox.test.ts::"SandboxArgs defaults — omitting fuel / wallclockMs / outputLimitBytes uses 1M / 30s / 1MB"`.
  */
@@ -482,15 +514,23 @@ export interface SandboxNodeDescription {
   outputLimitBytes: number;
   /**
    * Cumulative high-water mark of fuel consumed by this node across
-   * every invocation since registration. `null` until the node is
-   * invoked at least once.
+   * every invocation since registration.
+   *
+   * Phase 2b: ALWAYS `"unknown"` — metrics are not tracked at the
+   * eval-engine boundary in 2b (r6-mpc-3). Phase-3 wiring will return
+   * a `number` once `SandboxResult.fuelConsumed` is propagated through
+   * `StepResult` + a per-handler metric record.
    */
-  fuelConsumedHighWater: number | null;
+  fuelConsumedHighWater: number | "unknown";
   /**
    * Wallclock duration of the most recent invocation in milliseconds.
-   * `null` until the first call returns.
+   *
+   * Phase 2b: ALWAYS `"unknown"` — metrics are not tracked at the
+   * eval-engine boundary in 2b (r6-mpc-3). Phase-3 wiring will return
+   * a `number` once per-call `durationMs` is propagated through
+   * `StepResult` + a per-handler metric record.
    */
-  lastInvocationMs: number | null;
+  lastInvocationMs: number | "unknown";
 }
 
 /**
@@ -709,6 +749,32 @@ export interface Subscription {
    * subscription's delivery path. `0` before the first event lands.
    */
   readonly maxDeliveredSeq: number;
+  /** Explicitly release the subscription. Idempotent. */
+  unsubscribe(): void;
+}
+
+/**
+ * Handle returned by `engine.onEmit(channel, callback)`.
+ *
+ * Mirrors {@link Subscription} for the EMIT broadcast — the dedicated
+ * channel that carries standalone EMIT events (handlers using EMIT
+ * without a backing WRITE). See `crates/benten-engine/src/emit_broadcast.rs`
+ * for the rationale on a separate channel from ChangeBroadcast.
+ *
+ * Lifecycle: hold the handle alive for the lifetime of the
+ * subscription. Dropping the handle releases the engine-side registry
+ * slot AND the `napi::ThreadsafeFunction` Arc backing the JS callback.
+ *
+ * Wired by R6-FP Group 2 (TS surface) + Group 1 (Rust napi bridge);
+ * closes the wave-8h cross-layer audit gap (r6-mpc-2) where the engine
+ * had a working `Engine::subscribe_emit_events` Rust API but no JS
+ * surface.
+ */
+export interface EmitSubscription {
+  /** `true` while the subscription is registered with the engine. */
+  readonly active: boolean;
+  /** Channel the subscription was registered with. */
+  readonly channel: string;
   /** Explicitly release the subscription. Idempotent. */
   unsubscribe(): void;
 }

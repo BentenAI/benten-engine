@@ -5,7 +5,7 @@
 //   cd packages/engine && npm run build
 //   node --experimental-strip-types examples/stream-example.ts
 
-import { Engine } from "@benten/engine";
+import { Engine, crud } from "@benten/engine";
 import {
   streamHandler,
   streamHandlerAction,
@@ -17,14 +17,20 @@ async function main(): Promise<void> {
   try {
     await engine.registerSubgraph(streamHandler);
 
+    // Register the post CRUD handler so we can WRITE Nodes that the
+    // STREAM handler will read. The engine assigns the handler id as
+    // `crud:<label>` for crud()-registered handlers — capture the
+    // returned handle so the dispatch below uses the engine's exact id.
+    const postCrud = await engine.registerSubgraph(crud("post"));
+
     // Seed the post label with a few rows so the STREAM has something
     // to yield. In real workloads the rows arrive via `crud('post')`
     // / sync / SUBSCRIBE projections / etc.
-    await engine.call("post-handler", "post:create", {
+    await engine.call(postCrud.id, "post:create", {
       title: "First",
       body: "Row 1",
     });
-    await engine.call("post-handler", "post:create", {
+    await engine.call(postCrud.id, "post:create", {
       title: "Second",
       body: "Row 2",
     });

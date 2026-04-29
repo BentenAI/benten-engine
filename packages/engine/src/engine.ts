@@ -39,9 +39,13 @@ import {
 import {
   serializeCursor,
   validateOnChangeArgs,
+  validateOnEmitArgs,
+  wrapEmitSubscriptionHandle,
   wrapSubscriptionHandle,
+  type NativeEmitSubscriptionJs,
   type NativeSubscriptionJs,
   type OnChangeCallback,
+  type OnEmitCallback,
 } from "./subscribe.js";
 import type {
   CapabilityGrant,
@@ -54,6 +58,7 @@ import type {
   RegisteredHandler,
   SandboxNodeDescription,
   StreamHandle,
+  EmitSubscription,
   Subgraph,
   SubscribeCursor,
   Subscription,
@@ -104,6 +109,13 @@ interface NativeEngine {
   grantCapability?: (grant: unknown) => string;
   revokeCapability?: (grantCid: string, actor: string) => void;
   createView?: (viewDef: unknown) => string;
+  // R6-FP r6-arch-2: rename create_user_view → register_user_view to
+  // align with the Engine's `register_*` lifecycle pattern (R4b major
+  // #4 carry-forward). Group 1 lands the Rust + napi rename; the TS
+  // shim probes both names so it works with either side of the merge.
+  // The deprecated alias is kept on the napi shim for one cycle to
+  // match Group 1's Rust deprecation pattern.
+  registerUserView?: (spec: unknown) => string;
   createUserView?: (spec: unknown) => string;
   readView?: (viewId: string, query: unknown) => unknown;
   emitEvent?: (name: string, payload: unknown) => void;
@@ -161,6 +173,20 @@ interface NativeEngine {
     actor: string,
     callback?: (seq: number, payload: Buffer) => void,
   ) => NativeSubscriptionJs;
+  // R6-FP — EMIT broadcast subscription. Mirrors `onChange` but routes
+  // through the engine's dedicated EmitBroadcast (see
+  // crates/benten-engine/src/emit_broadcast.rs). Wired by R6-FP Group 1
+  // (napi class) + Group 2 (TS surface) to close r6-mpc-2 (the wave-8h
+  // audit-gap fix's missing JS-layer consumer).
+  //
+  // Optional on the type so older napi cdylib builds (pre-R6-FP) still
+  // type-check; the wrapper falls back to a typed E_PRIMITIVE_NOT_IMPLEMENTED
+  // if the symbol is absent so consumers get an actionable error rather
+  // than `TypeError: undefined is not a function`.
+  onEmit?: (
+    channel: string,
+    callback?: (channel: string, payloadJson: string) => void,
+  ) => NativeEmitSubscriptionJs;
   // Phase 2b wave-8c — module-manifest lifecycle bridges.
   installModule?: (manifestJson: unknown, expectedCid: string) => string;
   uninstallModule?: (cid: string) => void;
@@ -994,6 +1020,57 @@ export class Engine {
   }
 
   /**
+   * Register a user-defined IVM view (Phase 2b G8-B).
+   *
+   * Pass `{ id, inputPattern, strategy?, project? }`. Returns a
+   * [`UserView`] handle exposing `id`, `strategy`, `inputPattern`,
+   * `snapshot()`, and `onUpdate()`. Strategy defaults to `'B'` per
+   * D8-RESOLVED; `'A'` and `'C'` produce typed errors
+   * (`E_VIEW_STRATEGY_A_REFUSED` / `E_VIEW_STRATEGY_C_RESERVED`).
+   *
+   * # Naming (r6-arch-2 closure)
+   *
+   * Renamed from `createUserView` to `registerUserView` to align with
+   * the Engine's existing `register_*` lifecycle verbs
+   * (`registerSubgraph`, `registerCrud`, `registerModule`). The
+   * `register_*` verb introduces a runtime artifact; `create_*` (e.g.
+   * `createPrincipal`, `createView`) instantiates from a registry /
+   * factory; `install_*` (e.g. `installModule`) loads + verifies
+   * external content. R6-FP Group 1 lands the matching Rust + napi
+   * rename; this TS surface routes through the new `registerUserView`
+   * napi symbol when present and falls back to the legacy
+   * `createUserView` napi symbol on older bindings.
+   *
+   * The canonical-view-from-registry path stays on `createView(viewDef)`
+   * (semantically distinct — instantiates a hand-written view from a
+   * registry-of-strategy; doesn't introduce a new artifact).
+   */
+  public async registerUserView(spec: UserViewSpec): Promise<UserView> {
+    this.assertOpen();
+    const validationError = validateUserViewSpec(spec);
+    if (validationError !== null) {
+      throw new EDslInvalidShape(validationError);
+    }
+    const native =
+      this.inner.registerUserView ?? this.inner.createUserView;
+    if (!native) {
+      throw new EDslInvalidShape(
+        "Engine.registerUserView unavailable on this binding — rebuild the napi cdylib against benten-engine ≥ Phase-2b G8-B",
+      );
+    }
+    const resolvedStrategy = resolveUserViewStrategy(spec);
+    try {
+      // The Rust side enforces the typed E_VIEW_STRATEGY_A_REFUSED /
+      // E_VIEW_STRATEGY_C_RESERVED errors; we forward the strategy
+      // string verbatim so the engine boundary owns the policy.
+      native(userViewSpecToNativeJson(spec));
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+    return buildUserViewHandle(spec, resolvedStrategy);
+  }
+
+  /**
    * Register / materialize an IVM view definition.
    *
    * Two call shapes:
@@ -1006,10 +1083,13 @@ export class Engine {
    *
    * 2. **User-view builder form** (Phase 2b G8-B; `spec: UserViewSpec`):
    *    pass `{ id, inputPattern, strategy?, project? }`. Returns a
-   *    [`UserView`] handle exposing `id`, `strategy`, `inputPattern`,
-   *    `snapshot()`, and `onUpdate()`. Strategy defaults to `'B'` per
-   *    D8-RESOLVED; `'A'` and `'C'` produce typed errors
-   *    (`E_VIEW_STRATEGY_A_REFUSED` / `E_VIEW_STRATEGY_C_RESERVED`).
+   *    [`UserView`] handle.
+   *
+   *    @deprecated since R6-FP — use {@link Engine.registerUserView}
+   *    for the user-view spec form. The `createView(spec)` overload
+   *    forwards to `registerUserView` for one cycle. The legacy
+   *    `createView(viewDef)` form for the 5 Phase-1 hand-written
+   *    views is unchanged.
    */
   public async createView(viewDef: ViewDef): Promise<string>;
   public async createView(spec: UserViewSpec): Promise<UserView>;
@@ -1018,25 +1098,10 @@ export class Engine {
   ): Promise<string | UserView> {
     this.assertOpen();
     if (isUserViewSpec(arg)) {
-      const validationError = validateUserViewSpec(arg);
-      if (validationError !== null) {
-        throw new EDslInvalidShape(validationError);
-      }
-      if (!this.inner.createUserView) {
-        throw new EDslInvalidShape(
-          "Engine.createView (UserViewSpec form) unavailable on this binding — rebuild the napi cdylib against benten-engine ≥ Phase-2b G8-B",
-        );
-      }
-      const resolvedStrategy = resolveUserViewStrategy(arg);
-      try {
-        // The Rust side enforces the typed E_VIEW_STRATEGY_A_REFUSED /
-        // E_VIEW_STRATEGY_C_RESERVED errors; we forward the strategy
-        // string verbatim so the engine boundary owns the policy.
-        this.inner.createUserView(userViewSpecToNativeJson(arg));
-      } catch (err) {
-        throw mapNativeError(err);
-      }
-      return buildUserViewHandle(arg, resolvedStrategy);
+      // r6-arch-2 deprecation alias — forward to the canonical
+      // registerUserView surface. One-cycle alias matching Group 1's
+      // Rust deprecation pattern.
+      return this.registerUserView(arg);
     }
     if (!this.inner.createView) {
       throw new EDslInvalidShape("Engine.createView unavailable on this binding");
@@ -1243,7 +1308,20 @@ export class Engine {
           "Engine.callWithSuspension: suspended result missing base64 handle",
         );
       }
-      return { kind: "suspended", handle: Buffer.from(handleStr, "base64") };
+      // R6 Round-2 Instance 12: surface stateCid + signalName so JS
+      // callers can correlate the suspension. Older napi cdylib
+      // builds (pre-R6-FP) won't carry these fields; default to
+      // empty strings so the type contract holds + the caller sees
+      // structurally valid (if uninformative) values rather than
+      // undefined.
+      const stateCid = typeof r.stateCid === "string" ? r.stateCid : "";
+      const signalName = typeof r.signalName === "string" ? r.signalName : "";
+      return {
+        kind: "suspended",
+        handle: Buffer.from(handleStr, "base64"),
+        stateCid,
+        signalName,
+      };
     }
     throw new EDslInvalidShape(
       `Engine.callWithSuspension: unknown result kind "${kind}"`,
@@ -1363,6 +1441,25 @@ export class Engine {
    * per-node DSL knobs uses `fuel = 1_000_000`, `wallclockMs = 30_000`,
    * `outputLimitBytes = 1_048_576`.
    *
+   * # Honest Phase-2b state (r6-mpc-3 + r6-napi-3 + r6-dx-10)
+   *
+   * `fuelConsumedHighWater` + `lastInvocationMs` are returned as the
+   * literal `"unknown"` sentinel — **metrics are NOT tracked in Phase
+   * 2b**. `SandboxResult.fuelConsumed` + `output_consumed` are dropped
+   * at the eval-engine boundary (`primitive_host.rs::execute_sandbox`
+   * only propagates `output`); the per-handler metric record needed
+   * to surface real values is a Phase-3 wiring (named destination:
+   * `docs/future/phase-3-backlog.md` SnapshotBlobBackend
+   * metric-propagation entry, R6-FP Group 4 enrichment). Returning the
+   * `"unknown"` sentinel rather than a synthesized `null` (the prior
+   * shape) lets callers distinguish "metric is structurally not
+   * tracked in 2b" from "node hasn't been invoked yet".
+   *
+   * The remaining fields (`moduleCid` / `manifestId` / `fuel` /
+   * `wallclockMs` / `outputLimitBytes`) are synthesized client-side
+   * from the registered subgraph spec; sufficient for the
+   * omitting-knobs-uses-defaults test pin.
+   *
    * Pinned by `packages/engine/test/sandbox.test.ts::"SandboxArgs defaults — omitting fuel / wallclockMs / outputLimitBytes uses 1M / 30s / 1MB"`.
    */
   public async describeSandboxNode(
@@ -1380,21 +1477,6 @@ export class Engine {
         "Engine.describeSandboxNode requires a non-empty nodeId",
       );
     }
-    // The native bridge for this accessor is cfg-gated behind the
-    // engine crate's `test-helpers` feature (sec-r6r2-02 discipline).
-    // The Phase-2b production napi cdylib opts into the narrower
-    // `envelope-cache-test-grade` feature only, so this accessor is
-    // unavailable in the default build. Devtools that need it require
-    // an explicit feature opt-in at native-binding build time.
-    //
-    // The resolved-defaults values below mirror the Phase-2b
-    // canonical defaults documented in `docs/SANDBOX-LIMITS.md` §2.
-    // G7-A wires the live native bridge that returns per-node values
-    // including `fuelConsumedHighWater` + `lastInvocationMs`; until
-    // then the wrapper synthesises the resolved-defaults shape from
-    // the registered subgraph spec the wrapper has cached. The
-    // resolved-defaults shape is sufficient for the
-    // omitting-knobs-uses-defaults test pin.
     const handlerActions = this.knownHandlers.get(handlerId);
     if (!handlerActions) {
       throw new EDslUnregisteredHandler(
@@ -1408,8 +1490,12 @@ export class Engine {
       fuel: 1_000_000,
       wallclockMs: 30_000,
       outputLimitBytes: 1_048_576,
-      fuelConsumedHighWater: null,
-      lastInvocationMs: null,
+      // Honest "unknown" sentinel per r6-mpc-3 — metrics are not
+      // tracked at the eval-engine boundary in 2b. Phase-3 will
+      // return a real `number` once SandboxResult.fuelConsumed +
+      // durationMs propagate through StepResult.
+      fuelConsumedHighWater: "unknown",
+      lastInvocationMs: "unknown",
     };
   }
 
@@ -1505,10 +1591,18 @@ export class Engine {
    * iterator's `return()` hook). For an explicit-close lifecycle use
    * {@link Engine.openStream}.
    *
-   * Mirrors {@link Engine.call} naming. Pre-G6-A the underlying executor
-   * isn't wired; the first iterator step throws
-   * `E_PRIMITIVE_NOT_IMPLEMENTED` until G6-A merges. Use
-   * {@link Engine.testingOpenStreamForTest} for harness fixtures.
+   * Mirrors {@link Engine.call} naming.
+   *
+   * # Production runtime (r6-dx-6 closure)
+   *
+   * G6-A + wave-8c-stream-infra wire the underlying STREAM executor
+   * end-to-end: the iterator yields chunks as the chunk-producer
+   * thread pushes them onto the bounded sink + the napi
+   * `next_chunk_adapter` drains them onto the JS async-iterator.
+   * {@link Engine.testingOpenStreamForTest} exists for cfg-gated
+   * harness fixtures that pre-populate chunks without touching the
+   * production executor; it is NOT the supported production
+   * substitute.
    */
   public callStream(
     handlerId: string,
@@ -1537,11 +1631,18 @@ export class Engine {
    *
    * `actor` is a friendly principal identifier (the same shape
    * `engine.callAs` accepts). The principal is threaded through to
-   * the STREAM executor for cap-recheck on chunk emission once the
-   * production runtime wires through (8c-i remainder); pre-wire-
-   * through the surface returns a [`StreamHandle`] whose first
-   * `next()` surfaces `E_PRIMITIVE_NOT_IMPLEMENTED` honestly, the
-   * same as {@link Engine.callStream}.
+   * the napi boundary; per-chunk cap-recheck on emission is a
+   * named-destination Phase-3 surface (r6-stream-2: the production
+   * runtime currently captures the principal but does not consult it
+   * on each chunk emission — STREAM mirroring SUBSCRIBE's
+   * DeliveryCapRecheck is the closure work). Today this method is
+   * functionally equivalent to {@link Engine.callStream} except for
+   * the principal capture.
+   *
+   * Production runtime: G6-A + wave-8c-stream-infra wire the
+   * underlying executor — the iterator yields chunks as the
+   * chunk-producer thread pushes them. (r6-dx-6 closure: dropped the
+   * stale "first next() surfaces E_PRIMITIVE_NOT_IMPLEMENTED" claim.)
    */
   public callStreamAs(
     handlerId: string,
@@ -1568,13 +1669,27 @@ export class Engine {
   /**
    * Open a STREAM dispatch returning a [`StreamHandle`] whose lifecycle
    * the caller manages via {@link StreamHandle.close}. Same dispatch
-   * path as {@link Engine.callStream} — the only difference is the
-   * lifecycle contract (the `for await` form auto-closes; this form
-   * doesn't).
+   * path as {@link Engine.callStream} — the lifecycle CONVENTION is
+   * different (the `for await` form auto-closes; this form requires an
+   * explicit close()).
    *
    * Use this when you need to start a stream, hand the handle to a
    * different scope (e.g. an Express route), and `close()` it
    * explicitly when the consumer disconnects.
+   *
+   * # Lifecycle enforcement (r6-stream-1 honest scope)
+   *
+   * The engine threads `requires_explicit_close: true` through the
+   * underlying StreamHandle so a future leak detector can fire
+   * `E_STREAM_HANDLE_LEAKED` when an unclosed handle is GC'd. **Phase
+   * 2b does NOT enforce this at the JS surface** — at the API level
+   * `callStream` and `openStream` are functionally indistinguishable
+   * once the handle is in JS-side scope. Production handlers using
+   * openStream must close() the handle explicitly; failing to do so is
+   * a resource leak (the producer thread + chunk sink survive until
+   * Drop). Wiring a `FinalizationRegistry` leak detector + exposing a
+   * `requiresExplicitClose()` napi accessor is named-destination Phase
+   * 3 (R6-FP Group 4 enrichment to docs/future/phase-3-backlog.md).
    */
   public openStream(
     handlerId: string,
@@ -1672,21 +1787,20 @@ build @benten/engine-native with `--features test-helpers`",
    * Bounded retention window (1000 events OR 24h) for persistent
    * cursors. Cap-check at delivery.
    *
-   * # Wiring status (wave-8c)
+   * # Delivery semantics (r6-dx-2 closure — wave-8c live)
    *
-   * The previous wave-7 stub fired the supplied `callback` once
-   * asynchronously with a sentinel `(seq: 0, payload.length === 0)`
-   * AND surfaced a `console.warn` the first time `onChange` was
-   * invoked per process. This was actively deceptive — consumers
-   * received a callback that was structurally indistinguishable from
-   * a real event. Wave-8c removes the sentinel + warn entirely.
+   * The napi adapter wraps the supplied callback in a
+   * `napi::ThreadsafeFunction` so deliveries from the engine's
+   * ChangeBroadcast publish thread land on the libuv main loop. The
+   * returned `Subscription`'s `active` getter is `true` until
+   * `unsubscribe()` (or the engine-side `Drop` after the JS handle is
+   * GC'd). **Holding a JS-side reference to the Subscription handle
+   * is required** — letting it be GC'd fires `Drop` on the underlying
+   * `benten_engine::Subscription` which de-registers the callback +
+   * releases the `napi::ThreadsafeFunction` Arc that holds the JS
+   * callback alive.
    *
-   * Until the production callback bridge through
-   * `napi::ThreadsafeFunction` lands (wave-8c-cont 8c-ii remainder),
-   * the returned [`Subscription`] reports `active: false` honestly
-   * and the `callback` argument is registered against the engine's
-   * subscription registry but never invoked. Consumers can detect
-   * the pre-wire condition by inspecting `subscription.active`.
+   * Pin: `packages/engine/test/subscribe.test.ts::"LOAD-BEARING — onChange callback fires when a matching write commits"`.
    */
   public onChange(
     pattern: string,
@@ -1731,18 +1845,20 @@ build @benten/engine-native with `--features test-helpers`",
    * Mirrors {@link Engine.callAs} naming.
    *
    * `actor` is the friendly principal identifier whose grants drive
-   * D5 delivery-time cap-recheck (once the production change-stream
-   * port lands; pre-port the principal is captured structurally on
-   * the engine-side Subscription).
+   * D5 delivery-time cap-recheck (D5-RESOLVED — wave-8c-subscribe-infra
+   * wired this in production). The principal is captured on the
+   * registered ad-hoc onChange entry's delivery-time cap-recheck
+   * closure so the named principal's grants gate every event
+   * delivery; if the actor's caps are revoked mid-stream the
+   * subscription auto-cancels per D5 contract.
    *
-   * # Wiring status (wave-8c-cont)
+   * # Delivery semantics (r6-dx-2 closure — same shape as `onChange`)
    *
-   * Until the production callback bridge through
-   * `napi::ThreadsafeFunction` lands, the returned [`Subscription`]
-   * reports `active: false` honestly and the `callback` argument is
-   * captured but not yet invoked. The principal IS threaded through
-   * the napi boundary so the Rust-side Subscription holds the actor
-   * for the future delivery path.
+   * The napi adapter wraps the supplied callback in a
+   * `napi::ThreadsafeFunction`; deliveries land on the libuv main
+   * loop. The returned `Subscription`'s `active` getter is `true`
+   * until `unsubscribe()` (or engine-side Drop). Holding a JS-side
+   * reference to the handle is required.
    */
   public onChangeAs(
     pattern: string,
@@ -1777,6 +1893,80 @@ build @benten/engine-native with `--features test-helpers`",
       throw mapNativeError(err);
     }
     return wrapSubscriptionHandle(native, cursor ?? { kind: "latest" });
+  }
+
+  /**
+   * Subscribe to standalone EMIT events on a named channel.
+   *
+   * EMIT events flow through the engine's dedicated `EmitBroadcast`
+   * (separate from the storage-event ChangeBroadcast that drives
+   * `onChange` + IVM views). The dedicated channel exists because
+   * EMIT events have no Node CID, no commit, no tx-id — they are
+   * publish-only signals from a handler's standalone EMIT primitive.
+   * See `crates/benten-engine/src/emit_broadcast.rs` for the rationale.
+   *
+   * The callback fires synchronously on every EMIT publish whose
+   * `channel` matches `channel` exactly (string equality; no
+   * glob-matching at the engine surface in Phase 2b).
+   *
+   * Returns an [`EmitSubscription`] handle; call `unsubscribe()` (or
+   * let it fall out of scope and rely on the GC-driven Rust-side `Drop`
+   * impl) to release the registration.
+   *
+   * # Wiring status
+   *
+   * Wired by R6-FP Group 1 (napi `EmitSubscriptionJs` class +
+   * `subscribe_emit_events` adapter) + R6-FP Group 2 (this TS surface).
+   * Closes the wave-8h cross-layer audit gap (`r6-mpc-2`): the engine
+   * had a working `Engine::subscribe_emit_events` Rust API but no JS
+   * surface, so JS consumers could not observe events from a
+   * handler-internal EMIT primitive.
+   *
+   * If the loaded napi cdylib pre-dates the bridge, the call surfaces
+   * `E_PRIMITIVE_NOT_IMPLEMENTED` with a "rebuild @benten/engine-native"
+   * fix-hint rather than crashing on a missing native symbol.
+   */
+  public onEmit(
+    channel: string,
+    callback: OnEmitCallback,
+  ): EmitSubscription {
+    this.assertOpen();
+    validateOnEmitArgs(channel, callback);
+    if (!this.inner.onEmit) {
+      throw new EDslInvalidShape(
+        "Engine.onEmit unavailable on this binding — rebuild @benten/engine-native (R6-FP EMIT broadcast bridge required to close r6-mpc-2)",
+      );
+    }
+    // The native EMIT-side callback shape is `(channel, payloadJson)` —
+    // payloadJson is the engine's `Value` payload serialized to JSON
+    // (the same shape engine.call inputs/outputs use). We parse it once
+    // here so the JS-facing callback receives an idiomatic JsonValue
+    // rather than a raw JSON string.
+    const napiCb = (chanArg: string, payloadJson: string): void => {
+      let payload: JsonValue;
+      try {
+        payload = JSON.parse(payloadJson) as JsonValue;
+      } catch {
+        // Defensive: if the napi side delivered a non-JSON payload
+        // (shouldn't happen — payload comes from Value::to_json), pass
+        // the raw string through rather than crashing the listener.
+        payload = payloadJson;
+      }
+      try {
+        callback(chanArg, payload);
+      } catch (err) {
+        // Subscriber-side throws are routine; sub stays alive, log fires.
+        // eslint-disable-next-line no-console
+        console.error("onEmit callback threw:", err);
+      }
+    };
+    let native: NativeEmitSubscriptionJs;
+    try {
+      native = this.inner.onEmit(channel, napiCb);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+    return wrapEmitSubscriptionHandle(native);
   }
 
   // -------- Snapshot blob handoff (Phase 2b wave-8c-cont 8c-iv) --------

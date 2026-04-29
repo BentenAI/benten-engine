@@ -1,9 +1,9 @@
-// R3-followup (R4-FP B-1) red-phase — engine.createView (G8-B exclusive).
+// R3-followup (R4-FP B-1) red-phase — engine.registerUserView (G8-B exclusive).
 //
 // Tests are RED at landing time; G8-B (TS-side) makes them green.
 //
 // Surface contract (per dx-r1-2b + plan §3 G8-B + D8-RESOLVED):
-//   - engine.createView(spec) -> Promise<UserView>
+//   - engine.registerUserView(spec) -> Promise<UserView>
 //     * spec carries id, inputPattern, strategy?, project?
 //     * strategy DEFAULTS to 'B' (D8: hand-written = Rust-only;
 //       user views always go through Algorithm B).
@@ -11,6 +11,11 @@
 //   - The returned UserView exposes:
 //     * snapshot() -> AsyncIterable<Row>  (current rows)
 //     * onUpdate(cb) -> Subscription      (event-emitter for diffs)
+//
+// R6-FP r6-arch-2: renamed from engine.createView → engine.registerUserView
+// to align with the Engine's register_* lifecycle pattern. The legacy
+// engine.createView(spec) overload remains as a one-cycle deprecation
+// alias forwarding to registerUserView.
 //
 // Pin sources: r2-test-landscape.md §7 rows 462-463; r2 §1.7 + §8 D8;
 // r4-qa-expert.json qa-r4-04.
@@ -23,8 +28,22 @@ import {
 } from "@benten/engine";
 import type { UserViewSpec, UserView } from "@benten/engine";
 
-describe("engine.createView", () => {
-  it.skip("Phase 2b G8-B pending — round-trip create + snapshot materialization", async () => {
+describe("engine.registerUserView", () => {
+  it.skip("Phase 3 (post-G8-B view.snapshot() AsyncIterable wire-through) — round-trip create + snapshot materialization", async () => {
+    // BLOCKER (r6-napi-2 closure): G8-B shipped + Engine.registerUserView
+    // is wired through the napi boundary; the underlying engine-side
+    // view materialization works (Rust integration test
+    // `crates/benten-engine/tests/user_view_strategy_b_default.rs`
+    // pins it). The TS-side gap is `UserView.snapshot()` returning an
+    // empty AsyncIterable stub (`packages/engine/src/views.ts:123`)
+    // and `UserView.onUpdate(cb)` returning a no-op subscription
+    // (line 126). Both are forward-compatibility stubs awaiting the
+    // Phase-3 IVM materialization wire-through that surfaces real
+    // rows + real diffs via napi.
+    //
+    // Named destination: `docs/future/phase-3-backlog.md` (R6-FP
+    // Group 4 enrichment) — entry titled "UserView.snapshot() +
+    // onUpdate() runtime materialization (post-G8-B)" tracks the lift.
     const engine = await Engine.open(":memory:");
 
     const spec: UserViewSpec = {
@@ -37,7 +56,7 @@ describe("engine.createView", () => {
       }),
     };
 
-    const view: UserView = await engine.createView(spec);
+    const view: UserView = await engine.registerUserView(spec);
     expect(view.id).toBe("user_posts_by_author");
 
     // Emit synthetic events through the engine's normal write path.
@@ -58,11 +77,11 @@ describe("engine.createView", () => {
     // G8-B pure-resolver test: pin the default-strategy contract at the
     // TS DSL layer without spinning a Rust engine. The engine integration
     // test lives Rust-side in
-    // crates/benten-engine/tests/user_view_strategy_b_default.rs. This
-    // pure-resolver assertion catches drift in the TS default ahead of
-    // an in-memory engine backend (today `Engine.open(":memory:")` is
-    // not yet wired in 2b — the resolver is the load-bearing surface
-    // the napi bridge round-trips).
+    // crates/benten-engine/tests/user_view_strategy_b_default.rs. The
+    // resolver is the load-bearing surface the napi bridge round-trips.
+    // (r6-dx-4 closure: stale `Engine.open(":memory:")` comment removed —
+    // the in-memory backend IS wired at builder.rs:481-498 and active in
+    // sandbox.test.ts / snapshot_blob_round_trip.test.ts.)
     const spec: UserViewSpec = {
       id: "user_default_strategy",
       inputPattern: { label: "post" },
@@ -72,14 +91,21 @@ describe("engine.createView", () => {
     expect(resolved).toBe("B");
   });
 
-  it.skip("Phase 2b post-G8-A — refuses strategy 'A' with typed error via engine boundary (D8)", async () => {
-    // Engine-boundary refusal test. The actual typed-error firing is
+  it.skip("Phase 3 (post-G8-A TS engine-boundary error round-trip) — refuses strategy 'A' with typed error via engine boundary (D8)", async () => {
+    // BLOCKER (r6-napi-2 closure): The actual typed-error firing is
     // covered Rust-side at
     // crates/benten-engine/tests/user_view_strategy_refusals.rs (the
-    // `E_VIEW_STRATEGY_A_REFUSED` error fires from `Engine::create_user_view`
-    // BEFORE any subscriber side-effect). This TS test is held until the
-    // in-memory backend lands so `Engine.open(":memory:")` doesn't itself
-    // fail before reaching the strategy-refusal path.
+    // `E_VIEW_STRATEGY_A_REFUSED` error fires from
+    // `Engine::register_user_view` BEFORE any subscriber side-effect).
+    // The original "in-memory backend pending" rationale is stale —
+    // `:memory:` IS routed at builder.rs:481-498 + works in
+    // sandbox.test.ts / stream.test.ts / snapshot_blob_round_trip.test.ts.
+    // The remaining TS-side gap: the napi error-mapping for the
+    // E_VIEW_STRATEGY_A_REFUSED variant doesn't yet round-trip the
+    // typed message (instance 8 NEW: mapNativeError doesn't read
+    // structured-context metadata). Named destination:
+    // `docs/future/phase-3-backlog.md` UserView.snapshot/onUpdate
+    // entry covers this surface together.
     const engine = await Engine.open(":memory:");
 
     const badSpec = {
@@ -88,7 +114,7 @@ describe("engine.createView", () => {
       strategy: "A" as const,
     } as unknown as UserViewSpec;
 
-    await expect(engine.createView(badSpec)).rejects.toMatchObject({
+    await expect(engine.registerUserView(badSpec)).rejects.toMatchObject({
       message: expect.stringMatching(
         /E_VIEW_STRATEGY_A_REFUSED|hand-written|Strategy::A/i,
       ),
@@ -100,7 +126,7 @@ describe("engine.createView", () => {
   it("explicit 'B' opt-in matches default behavior — pure resolver", () => {
     // Pure-resolver assertion: resolveUserViewStrategy returns 'B' both
     // for an explicit `strategy: 'B'` and for the default omission.
-    // Engine-boundary parity test held until the in-memory backend lands.
+    // (r6-dx-4 closure: prior "in-memory backend pending" carry was stale.)
     const explicit = resolveUserViewStrategy({
       id: "user_explicit_b",
       inputPattern: { label: "post" },
@@ -114,9 +140,12 @@ describe("engine.createView", () => {
     expect(explicit).toBe("B");
   });
 
-  it.skip("Phase 2b post-G8-A — refuses strategy 'C' as Phase-3 reserved via engine boundary", async () => {
-    // Held until in-memory backend lands; Rust-side coverage at
+  it.skip("Phase 3 (post-G8-A TS engine-boundary error round-trip) — refuses strategy 'C' as Phase-3 reserved via engine boundary", async () => {
+    // BLOCKER (r6-napi-2 closure): Same shape as the Strategy-'A'
+    // refusal test above — Rust-side coverage at
     // crates/benten-engine/tests/user_view_strategy_refusals.rs.
+    // The TS-side gap is napi error-mapping round-trip (instance 8).
+    // Named destination: phase-3-backlog.md (Group 4 enrichment).
     const engine = await Engine.open(":memory:");
 
     const reservedSpec = {
@@ -125,11 +154,61 @@ describe("engine.createView", () => {
       strategy: "C" as const,
     } as unknown as UserViewSpec;
 
-    await expect(engine.createView(reservedSpec)).rejects.toMatchObject({
+    await expect(engine.registerUserView(reservedSpec)).rejects.toMatchObject({
       message: expect.stringMatching(/E_VIEW_STRATEGY_C_RESERVED|Phase 3|Z-set/i),
     });
 
     await engine.close();
+  });
+
+  it("validateUserViewSpec fail-loud rejects canonical-id with mismatched label (r6-ivm-3)", () => {
+    // r6-ivm-3 closure: the AlgorithmBView::for_id dispatcher honors
+    // `input_pattern_label` only for `content_listing`; the other 4
+    // canonical view ids (capability_grants / version_current /
+    // event_dispatch / governance_inheritance) have HARDCODED label
+    // semantics. Pre-fix-pass, registering with one of those ids + a
+    // user-supplied label silently filtered on the hardcoded label.
+    // Post-fix-pass: validateUserViewSpec returns a typed error
+    // message before the napi boundary so the silent-mismatch
+    // foot-gun is closed.
+
+    const versionCurrentBadLabel = validateUserViewSpec({
+      id: "version_current",
+      inputPattern: { label: "post" },
+    });
+    expect(versionCurrentBadLabel).toMatch(/version_current/);
+    expect(versionCurrentBadLabel).toMatch(/NEXT_VERSION/);
+    expect(versionCurrentBadLabel).toMatch(/post/);
+
+    const capGrantsBadLabel = validateUserViewSpec({
+      id: "capability_grants",
+      inputPattern: { label: "user-grant" },
+    });
+    expect(capGrantsBadLabel).toMatch(/capability_grants/);
+    expect(capGrantsBadLabel).toMatch(/system:CapabilityGrant/);
+
+    // Matching label is accepted.
+    const versionCurrentOk = validateUserViewSpec({
+      id: "version_current",
+      inputPattern: { label: "NEXT_VERSION" },
+    });
+    expect(versionCurrentOk).toBeNull();
+
+    // content_listing is not in the canonical-hardcoded-label set;
+    // any user-supplied label is fine.
+    const contentListingAnyLabel = validateUserViewSpec({
+      id: "content_listing",
+      inputPattern: { label: "post" },
+    });
+    expect(contentListingAnyLabel).toBeNull();
+
+    // User-defined ids (anything outside the 5 canonical) are not
+    // restricted.
+    const userDefined = validateUserViewSpec({
+      id: "user_custom_view",
+      inputPattern: { label: "any-label" },
+    });
+    expect(userDefined).toBeNull();
   });
 
   it("validateUserViewSpec rejects malformed spec with typed message", () => {
@@ -165,10 +244,13 @@ describe("engine.createView", () => {
 });
 
 describe("UserView.onUpdate", () => {
-  it.skip("Phase 2b G8-B pending — onUpdate fires with diff for matching writes", async () => {
+  it.skip("Phase 3 (post-G8-B view.onUpdate() wire-through) — onUpdate fires with diff for matching writes", async () => {
+    // BLOCKER (r6-napi-2 closure): `UserView.onUpdate(cb)` is a
+    // no-op stub at packages/engine/src/views.ts:126. Same Phase-3
+    // named-destination as the snapshot test above.
     const engine = await Engine.open(":memory:");
 
-    const view = await engine.createView({
+    const view = await engine.registerUserView({
       id: "user_onupdate_test",
       inputPattern: { label: "post" },
     });

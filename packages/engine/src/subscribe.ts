@@ -25,7 +25,13 @@
 // release the registry slot.
 
 import { EDslInvalidShape } from "./errors.js";
-import type { Chunk, SubscribeCursor, Subscription } from "./types.js";
+import type {
+  Chunk,
+  EmitSubscription,
+  JsonValue,
+  SubscribeCursor,
+  Subscription,
+} from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Native shape — `SubscriptionJs` napi class returned by the adapter
@@ -45,6 +51,11 @@ import type { Chunk, SubscribeCursor, Subscription } from "./types.js";
 export interface NativeSubscriptionJs {
   isActive(): boolean;
   pattern(): string;
+  /**
+   * Returns engine-assigned u64 narrowed to JS `number` via napi-rs's
+   * i64 mapping (R6 Round-2 Instance 11 — widened from u32 to i64;
+   * exact for values < Number.MAX_SAFE_INTEGER).
+   */
   maxDeliveredSeq(): number;
   unsubscribe(): void;
 }
@@ -87,12 +98,15 @@ export function wrapSubscriptionHandle(
   native: NativeSubscriptionJs,
   cursor: SubscribeCursor,
 ): Subscription {
-  // Snapshot the pattern + initial maxDeliveredSeq so the
-  // `Subscription` shape exposes immutable identity-fields (the
-  // `active` getter remains live so JS code can observe drop /
-  // unsubscribe transitions).
+  // Snapshot the pattern (immutable post-registration) so it can be
+  // exposed as a plain readonly field. `active` + `maxDeliveredSeq`
+  // both go through live getters that round-trip to the native handle
+  // — the underlying engine-side atomic bumps on every delivery, so a
+  // snapshotted value goes stale immediately (Round-2 Instance 7
+  // closure: prior shape captured `maxDeliveredSeq` once at
+  // construction time when the value was 0; consumers reading the
+  // field post-delivery saw a permanent zero).
   const pattern = native.pattern();
-  const initialMaxDeliveredSeq = native.maxDeliveredSeq();
   let unsubscribed = false;
   return {
     get active(): boolean {
@@ -101,7 +115,13 @@ export function wrapSubscriptionHandle(
     },
     pattern,
     cursor,
-    maxDeliveredSeq: initialMaxDeliveredSeq,
+    get maxDeliveredSeq(): number {
+      // Always read through to the native atomic. After unsubscribe
+      // the underlying handle still reports the final value (it is
+      // bumped at delivery time, not unsubscribe time), so we don't
+      // gate this on the unsubscribed flag.
+      return native.maxDeliveredSeq();
+    },
     unsubscribe(): void {
       if (unsubscribed) return;
       unsubscribed = true;
@@ -130,6 +150,81 @@ export function validateOnChangeArgs(
   }
   if (typeof callback !== "function") {
     throw new EDslInvalidShape("onChange: callback must be a function");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// EMIT subscription surface (r6-mpc-2 closure — wave-8h audit-gap fix)
+// ---------------------------------------------------------------------------
+
+/**
+ * Native `EmitSubscriptionJs` napi class.
+ *
+ * Mirrors `bindings/napi/src/lib.rs::EmitSubscriptionJs` (added by R6-FP
+ * Group 1). Holds the underlying engine-side EMIT-broadcast subscriber
+ * slot alive on the Rust side; dropping the handle (or calling
+ * `unsubscribe()`) releases the slot AND the
+ * `napi::ThreadsafeFunction` Arc backing the JS callback.
+ */
+export interface NativeEmitSubscriptionJs {
+  isActive(): boolean;
+  channel(): string;
+  unsubscribe(): void;
+}
+
+/**
+ * Callback signature for an `engine.onEmit` registration. Receives a
+ * `(channel, payload)` pair — the channel name the EMIT primitive was
+ * invoked with, and the payload value (deserialized from the engine's
+ * Rust-side `Value` to a JS-side JSON-shape).
+ */
+export type OnEmitCallback = (channel: string, payload: JsonValue) => void;
+
+/**
+ * Wrap a native `EmitSubscriptionJs` handle as an [`EmitSubscription`]
+ * DSL handle. The wrapper retains the native handle internally so the
+ * underlying Rust EMIT-broadcast slot (and its `ThreadsafeFunction`
+ * Arc) is held alive for the lifetime of the JS-side reference.
+ *
+ * `unsubscribe()` is idempotent: subsequent calls are a no-op + the
+ * native handle is told `unsubscribe()` exactly once. The native side
+ * is itself idempotent.
+ */
+export function wrapEmitSubscriptionHandle(
+  native: NativeEmitSubscriptionJs,
+): EmitSubscription {
+  const channel = native.channel();
+  let unsubscribed = false;
+  return {
+    get active(): boolean {
+      if (unsubscribed) return false;
+      return native.isActive();
+    },
+    channel,
+    unsubscribe(): void {
+      if (unsubscribed) return;
+      unsubscribed = true;
+      native.unsubscribe();
+    },
+  };
+}
+
+/**
+ * Validate the (channel, callback) pair an `onEmit` call must supply.
+ * Throws `EDslInvalidShape` early so caller-side bugs surface a typed
+ * error before crossing the napi boundary.
+ */
+export function validateOnEmitArgs(
+  channel: string,
+  callback: OnEmitCallback,
+): void {
+  if (typeof channel !== "string" || channel.length === 0) {
+    throw new EDslInvalidShape(
+      "onEmit: channel must be a non-empty string",
+    );
+  }
+  if (typeof callback !== "function") {
+    throw new EDslInvalidShape("onEmit: callback must be a function");
   }
 }
 
