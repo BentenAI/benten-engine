@@ -183,6 +183,37 @@ impl Subscriber {
             .map(|v| v.read(query))
     }
 
+    /// Relaxed read of a named view. On a stale view, projects the
+    /// view's last-known-good snapshot via [`View::read_allow_stale`]
+    /// (default implementation delegates to [`View::read`]; views with
+    /// a separate stale snapshot — notably
+    /// [`crate::views::ContentListingView`] — override). Returns
+    /// `Ok(None)` when no view with that id is registered.
+    ///
+    /// Used by the engine's `read_view_with(..., ReadViewOptions::allow_stale())`
+    /// path (R6FP-tail NEW-1 wire-through) so relaxed reads see
+    /// last-known-good data rather than the pre-NEW-1 empty stub.
+    ///
+    /// # Errors
+    ///
+    /// Per-view errors propagate identically to [`Self::read_view`].
+    /// Overrides MUST NOT return [`ViewError::Stale`] from
+    /// `read_allow_stale`; the relaxed-read path absorbed staleness.
+    pub fn read_view_allow_stale(
+        &self,
+        view_id: &str,
+        query: &ViewQuery,
+    ) -> Option<Result<ViewResult, ViewError>> {
+        let guard = self
+            .views
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard
+            .iter()
+            .find(|v| v.id() == view_id)
+            .map(|v| v.read_allow_stale(query))
+    }
+
     /// Route a single change event to every registered view.
     ///
     /// Returns the number of views that accepted the event successfully

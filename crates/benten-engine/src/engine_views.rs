@@ -131,9 +131,15 @@ impl Engine {
 
     // -------- View reads (IVM) --------
 
-    /// Strict read of an IVM view. Phase 1: returns typed errors for the
-    /// unknown-view, no-IVM, and stale paths; the healthy-view path routes
-    /// through the evaluator-backed primitive dispatch which is Phase 2.
+    /// Strict read of an IVM view.
+    ///
+    /// Returns typed errors for the unknown-view, no-IVM, and stale paths.
+    /// The healthy-view path delegates to
+    /// [`benten_ivm::Subscriber::read_view`] and projects the registered
+    /// view's current state into [`Outcome::list`] (R6FP-tail NEW-1
+    /// wire-through; pre-NEW-1 this branch returned `Vec::new()`). See
+    /// [`Self::read_view_with`] for the projection details + the
+    /// `ReadViewOptions` knob set.
     pub fn read_view(&self, view_id: &str) -> Result<Outcome, EngineError> {
         self.read_view_with(view_id, ReadViewOptions::strict())
     }
@@ -150,6 +156,31 @@ impl Engine {
     /// (`content_listing_<label>`) and the policy denies a read on
     /// that label, the return collapses to an empty list — symmetric
     /// with an empty view.
+    ///
+    /// # R6FP-tail (NEW-1) wire-through
+    ///
+    /// The healthy-view path delegates to
+    /// [`benten_ivm::Subscriber::read_view`] and projects the returned
+    /// [`benten_ivm::ViewResult`] into the Outcome:
+    ///
+    /// - [`benten_ivm::ViewResult::Cids`] — each CID is hydrated through
+    ///   the backend (`get_node`) and the resulting Nodes populate
+    ///   `Outcome.list`. Order is preserved as the view returns it.
+    /// - [`benten_ivm::ViewResult::Current`] — version-chain pointer; if
+    ///   `Some(cid)` the corresponding Node is hydrated and emitted as a
+    ///   single-element list. `None` produces an empty list.
+    /// - [`benten_ivm::ViewResult::Rules`] — governance rules map; encoded
+    ///   into a synthetic Node carrying the rule keys/values as
+    ///   properties so consumers reading `Outcome.list` see one Node
+    ///   per view. (Test-only views consuming this shape can downcast
+    ///   via the property bag.)
+    ///
+    /// Pre-NEW-1 the healthy-view branch returned `Vec::new()`; subgraphs
+    /// composing READ_VIEW against a registered view saw empty results
+    /// regardless of contents. The wire-through follows the projection
+    /// pattern used by [`primitive_host::resolve_list_via_view_or_backend`]
+    /// for Phase-1 content-listing reads, lifted here so user views are
+    /// observable through the public engine API.
     pub fn read_view_with(
         &self,
         view_id: &str,
@@ -161,23 +192,24 @@ impl Engine {
         // Derive a label from the view id for the read-gate. Only
         // content_listing_<label> views carry a Phase-1 label hint;
         // other view ids pass through unchanged.
-        if let Some(policy) = self.policy.as_deref() {
-            let label = view_id
-                .strip_prefix("content_listing_")
-                .or_else(|| view_id.strip_prefix("system:ivm:content_listing_"))
-                .unwrap_or("");
-            if !label.is_empty() {
-                let ctx = benten_caps::ReadContext {
-                    label: label.to_string(),
-                    target_cid: None,
-                    ..Default::default()
-                };
-                if let Err(CapError::DeniedRead { .. }) = policy.check_read(&ctx) {
-                    return Ok(Outcome {
-                        list: Some(Vec::new()),
-                        ..Outcome::default()
-                    });
-                }
+        let label_hint = view_id
+            .strip_prefix("content_listing_")
+            .or_else(|| view_id.strip_prefix("system:ivm:content_listing_"))
+            .unwrap_or("")
+            .to_string();
+        if let Some(policy) = self.policy.as_deref()
+            && !label_hint.is_empty()
+        {
+            let ctx = benten_caps::ReadContext {
+                label: label_hint.clone(),
+                target_cid: None,
+                ..Default::default()
+            };
+            if let Err(CapError::DeniedRead { .. }) = policy.check_read(&ctx) {
+                return Ok(Outcome {
+                    list: Some(Vec::new()),
+                    ..Outcome::default()
+                });
             }
         }
         // Normalize the namespaced alias `system:ivm:<id>` → `<id>`.
@@ -191,22 +223,60 @@ impl Engine {
         {
             if is_stale {
                 return if opts.allow_stale {
-                    Ok(Outcome {
-                        list: Some(Vec::new()),
-                        ..Outcome::default()
-                    })
+                    // R6FP-tail (NEW-1) wire-through — project the
+                    // view's last-known-good snapshot via
+                    // `Subscriber::read_view_allow_stale` instead of
+                    // returning the pre-NEW-1 empty-list stub.
+                    let label_for_query = if label_hint.is_empty() {
+                        None
+                    } else {
+                        Some(label_hint.clone())
+                    };
+                    let query = benten_ivm::ViewQuery {
+                        label: label_for_query,
+                        limit: None,
+                        offset: None,
+                        ..Default::default()
+                    };
+                    project_view_read_to_outcome(
+                        self,
+                        ivm.read_view_allow_stale(normalized, &query),
+                        view_id,
+                        true,
+                    )
                 } else {
                     Err(EngineError::IvmViewStale {
                         view_id: view_id.to_string(),
                     })
                 };
             }
-            // Healthy view — return empty listing (Phase 1: view's full
-            // read API surface is Phase 2).
-            return Ok(Outcome {
-                list: Some(Vec::new()),
-                ..Outcome::default()
-            });
+            // R6FP-tail (NEW-1) wire-through — delegate to the live
+            // subscriber + project the ViewResult into Outcome.list.
+            //
+            // The pre-NEW-1 stub returned `Vec::new()` here regardless of
+            // view contents; subgraphs composing READ_VIEW against a
+            // registered view silently saw empty results. The fix routes
+            // through `Subscriber::read_view` (the canonical read entry
+            // point already used by `resolve_list_via_view_or_backend`)
+            // and lifts the three `ViewResult` shapes (`Cids` / `Current`
+            // / `Rules`) into hydrated `Vec<Node>`.
+            let label_for_query = if label_hint.is_empty() {
+                None
+            } else {
+                Some(label_hint.clone())
+            };
+            let query = benten_ivm::ViewQuery {
+                label: label_for_query,
+                limit: None,
+                offset: None,
+                ..Default::default()
+            };
+            return Ok(project_view_read_to_outcome(
+                self,
+                ivm.read_view(normalized, &query),
+                view_id,
+                opts.allow_stale,
+            )?);
         }
         // No live view registered for this id. Phase 1 canonical whitelist
         // decides: recognized -> stale (in strict) / last-known-good empty
@@ -408,6 +478,99 @@ impl Engine {
             node,
             &benten_graph::WriteContext::privileged_for_engine_api(),
         )?)
+    }
+}
+
+/// R6FP-tail (NEW-1) wire-through helper — project the live subscriber's
+/// `read_view` outcome into a [`Outcome`] populated with hydrated Nodes.
+///
+/// Mirrors the projection pattern used by
+/// [`crate::primitive_host::resolve_list_via_view_or_backend`] but lifts
+/// it to all three [`benten_ivm::ViewResult`] variants so user-views with
+/// `Current` / `Rules` shapes also produce observable Outcome lists.
+///
+/// - `None` (view not registered under this id at the subscriber): falls
+///   back to the empty-list shape so the caller's downstream
+///   canonical-id-whitelist branch can still fire (preserves the
+///   pre-NEW-1 contract that handler tests pre-dated explicit user-view
+///   registration).
+/// - `Some(Err(ViewError::Stale))` (view became stale between
+///   `view_is_stale` and `read_view`): converts to the same `IvmViewStale`
+///   path the early stale check produces; relaxed reads collapse to empty
+///   last-known-good.
+/// - `Some(Err(other))` (pattern-mismatch / budget): treated as empty
+///   list — the view honestly did not have a useful answer for this
+///   query shape; the caller can re-issue with a different query.
+fn project_view_read_to_outcome(
+    engine: &Engine,
+    result: Option<Result<benten_ivm::ViewResult, benten_ivm::ViewError>>,
+    view_id: &str,
+    allow_stale: bool,
+) -> Result<Outcome, EngineError> {
+    use benten_ivm::{ViewError, ViewResult};
+    let backend = engine.backend();
+    match result {
+        None => Ok(Outcome {
+            list: Some(Vec::new()),
+            ..Outcome::default()
+        }),
+        Some(Ok(ViewResult::Cids(cids))) => {
+            let mut out = Vec::with_capacity(cids.len());
+            for cid in cids {
+                if let Ok(Some(node)) = backend.get_node(&cid) {
+                    out.push(node);
+                }
+            }
+            Ok(Outcome {
+                list: Some(out),
+                ..Outcome::default()
+            })
+        }
+        Some(Ok(ViewResult::Current(maybe_cid))) => {
+            let mut out = Vec::new();
+            if let Some(cid) = maybe_cid
+                && let Ok(Some(node)) = backend.get_node(&cid)
+            {
+                out.push(node);
+            }
+            Ok(Outcome {
+                list: Some(out),
+                ..Outcome::default()
+            })
+        }
+        Some(Ok(ViewResult::Rules(rules))) => {
+            // Encode the rules map as a synthetic Node so consumers
+            // walking `Outcome.list` see one Node carrying the rule
+            // keys/values as properties. Phase-3 generalization may
+            // introduce a typed Outcome.rules slot; until then the
+            // synthetic-Node projection is the lowest-friction path
+            // that matches the rest of the API surface (which is
+            // Vec<Node>).
+            let synthetic = Node::new(
+                vec!["system:ivm:Rules".into()],
+                rules.into_iter().collect(),
+            );
+            Ok(Outcome {
+                list: Some(vec![synthetic]),
+                ..Outcome::default()
+            })
+        }
+        Some(Err(ViewError::Stale { .. })) => {
+            if allow_stale {
+                Ok(Outcome {
+                    list: Some(Vec::new()),
+                    ..Outcome::default()
+                })
+            } else {
+                Err(EngineError::IvmViewStale {
+                    view_id: view_id.to_string(),
+                })
+            }
+        }
+        Some(Err(_)) => Ok(Outcome {
+            list: Some(Vec::new()),
+            ..Outcome::default()
+        }),
     }
 }
 
