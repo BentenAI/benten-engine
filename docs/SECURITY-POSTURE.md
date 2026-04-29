@@ -29,10 +29,16 @@ written, referenceable form.
 | 16 | `random` host-fn deferred (no CSPRNG framework chosen) | 2b | Deferred to Phase 2c |
 | 17 | In-memory module-bytes registry (`Engine::register_module_bytes`) | 2b | Open (Phase 3 — durable BlobBackend) |
 | 18 | In-memory handler-version chain (`Engine::register_subgraph_replace`) | 2b | Open (Phase 3 — durable Anchor + Version-Node chain) |
+| 19 | Browser-target persistent storage absent — manifests in-memory only on `wasm32-unknown-unknown` | 2b | Open (Phase 3 — IndexedDB / OPFS persistence) |
+| 20 | Cross-browser determinism CI cadence not yet established | 2b | Open (Phase 3 — wasm32 cross-browser CI matrix) |
+| 21 | Module manifest minimal CID-pin in Phase 2b; full Ed25519 deferred | 2b | Open (Phase 3 — D16 manifest signing) |
 
 **Phase-2b net delta:** Compromises #4 + #9 + #10 closed (3 net
-closures); 5 new Phase-2b deferrals enumerated (#14, #15, #16, #17,
-#18) — all named, all destination-tagged.
+closures); 8 new Phase-2b deferrals enumerated (#14, #15, #16, #17,
+#18, #19, #20, #21) — all named, all destination-tagged. Compromises
+#19, #20, #21 were lifted from MODULE-MANIFEST.md's local "#N+X" table
+into the global numbering at R6 phase-close so cross-doc references
+resolve to a single authoritative compromise table.
 
 The detailed text for each numbered Compromise follows below. Phase-2b
 additions (#14-#16) appear at the end of the Named Compromises
@@ -118,6 +124,7 @@ Three distinguishable states:
 
 - **Change-stream parity.** `Engine::subscribe_change_events` still fans out every committed ChangeEvent without a per-event `check_read` gate — see the separate "Change-stream subscription bypasses capability read-checks" section below. The Option-C gate covers the four read surfaces named above; the subscribe path stays as-is for Phase 1 because the Engine instance itself is the security boundary.
 - **Evaluator-path gating of READ primitives inside a user subgraph.** Option C gates the engine-orchestrator public API. The evaluator's `PrimitiveHost::check_read_capability` hook is now wired (5d-J workstream 1 added the trait method with a permissive default); Phase-2 threads it into the READ primitive's execute path so `crud:post:get` dispatched through `Engine::call` honours Option C end-to-end without a separate gate at the public API.
+- **SUBSCRIBE D5 per-event read-cap-coverage.** `Engine::on_change_as_with_cursor` (Phase 2b G6-A / wave-8c) builds the delivery-time cap-recheck closure as `move |_event| -> bool { inner.is_actor_active(&actor_cid) }` (engine_subscribe.rs:280-298). The closure consults a flat `revoked_actors` set — a coarse boolean per-actor-revoked check — and **does NOT re-evaluate per-event read-cap-coverage** against the event's anchor CID. The eval-side `TestPrincipal::has_read_cap_for` (`crates/benten-eval/src/primitives/subscribe.rs:485`) has the right anchor-CID-keyed shape, but production napi/TS paths inherit the engine wrapper's boolean shape. Consequence: a *partial* revoke (operator removes the specific grant `store:post:read` from an active actor while leaving the actor active) does NOT auto-cancel an in-flight `onChange` subscription. *Full* actor revocation IS honoured. The per-event read-cap-coverage closure lands in Phase 3 alongside the durable grant-store / `benten-id` work; carry-forward destination is `docs/future/phase-2-backlog.md` §7.4 (Durable grant-store + SUBSCRIBE delivery-time cap-recheck).
 
 **`E_CAP_DENIED_READ` code:** retained in the catalog (`docs/ERROR-CATALOG.md`) because Phase-2 evaluator-path READ enforcement still needs a typed denial code for the evaluator-visible leg — the Option-C public API mapping is an engine-orchestrator concern, not a catalog removal. The `CapError::DeniedRead` variant remains the signal policies use to communicate "denied" to the engine; the engine maps it onto `Ok(None)` at the public boundary.
 
@@ -227,10 +234,28 @@ round-trips the catalog-code strings through `as_str` / `from_str`.
 **What now ships at Phase 2b (post-wave-8b/8h):**
 - A live `wasmtime` host inside `crates/benten-eval/src/primitives/sandbox.rs` runs guest WebAssembly modules per-call (D17 instance lifecycle), with the four enforcement axes (memory / wallclock / fuel / output) bounded by the defaults documented in `docs/SANDBOX-LIMITS.md`. The production engine path routes through the `impl PrimitiveHost for Engine::execute_sandbox` override at `crates/benten-engine/src/primitive_host.rs` which reads module bytes via `Engine::module_bytes_for(cid)`, hydrates the `ManifestRegistry` from `installed_modules`, builds the `SandboxConfig` from the engine's policy + the operation node's properties, and invokes `benten_eval::sandbox::execute`.
 - A capability-derived host-function manifest (`crates/benten-eval/host-functions.toml`, G7-A owned) controls which host-fns each guest may import. Capability resolution happens at instance-init time per call; revocation between calls is honoured. Wave-8h hydrates the registry from the engine's `installed_modules` set so Named-manifest dispatch (e.g. `manifest: "compute-power"`) resolves through the same path that `Engine::install_module` persists state into.
-- ESC defense matrix (16 named escape vectors per `pre-r1-security-deliverables.md` §1):
-  - **Fully wired (9):** ESC-1 OOB linear-memory load (wasmtime trap → `SandboxModuleInvalid`); ESC-3 host-buf overrun (trampoline bounds-check → `SandboxModuleInvalid`); ESC-4 infinite loop (fuel-bound → `SandboxFuelExhausted`); ESC-6 wallclock fingerprint (epoch-interruption ticker → `SandboxWallclockExceeded`); ESC-8 fuel overflow regression (saturated bookkeeping); ESC-11 host-fn after cap-revoke (D18 per-call recheck → `SandboxHostFnDenied`); ESC-12 component type mismatch (link-time → `SandboxModuleInvalid`); ESC-15 manifest unknown (no permissive fallback → `SandboxManifestUnknown`); ESC-16 forged cap-claim section (`forged_cap_claim_section.wat` rejection at `Module::new`).
-  - **Partial / eval-side smoke (5):** ESC-2 linear-memory grow-to-limit (ResourceLimiter cap → `SandboxMemoryExhausted`; the committed `linmem_grow_to_limit.wat` fixture was re-authored in wave-8d-narrative to compile under wasmtime 43); ESC-5 stack-overflow (`max_wasm_stack(512KiB)` partial defense — wasmtime traps but typed-error mapping is partial); ESC-7 host-fn-not-on-manifest (intersection check fires `SandboxHostFnDenied`; wave-8c-cont integration test landed); ESC-9 / ESC-10 helper-fn smoke (renamed from ESC-9 reentrancy / ESC-10 fuel-refill — the original concerns were folded into ESC-11 + nested-dispatch-denied; the helper smoke tests verify trampoline accounting); ESC-13 resource-handle forgery (`test_markers` field separate from production import-list; eval-side test asserts the forgery is structurally rejected).
-  - **Component-model gated (2):** ESC-14 component-type-mismatch + ESC-16 forged-cap-claim — full coverage requires wasm-component-model surface; current defense rejects via `Module::new` structural validation. Phase-3 lifts these to component-model-aware checks if wasmtime's component-model story matures.
+- ESC defense matrix (16 named escape vectors per `pre-r1-security-deliverables.md` §1). The canonical numbering in the inventory + the test corpus at `crates/benten-eval/tests/sandbox_escape_attempts_denied.rs` is authoritative; this matrix uses the same numbering. The 16 vectors split into four buckets post-wave-8b/8h:
+
+  | # | Vector | Defense mechanism | Runtime status | Test pin |
+  |---|--------|-------------------|----------------|----------|
+  | ESC-1 | OOB linear-memory read | wasmtime bounds-check trap → `trap_to_typed::map_call_error` → `SandboxModuleInvalid` | Fully wired | `sandbox_escape_attempts_denied.rs:76` (`sandbox_escape_oob_linmem_read_traps`) |
+  | ESC-2 | Linear-memory grow beyond per-call cap | `SandboxResourceLimiter::memory_growing` returns `Err(MemoryCapExceededMarker)` → marker downcast at `trap_to_typed.rs:113-119` → `SandboxMemoryExhausted` | Fully wired (fixture re-authored wave-8d-narrative; see wave-8 §r6-wsa-4 dead-branch nit) | `sandbox_escape_attempts_denied.rs:85` (`sandbox_escape_linmem_grow_to_limit_kills`) |
+  | ESC-3 | Host-buffer overrun via host-fn output write | `kv:read` trampoline bounds-check at `primitives/sandbox.rs:778-833` → `Trap::MemoryOutOfBounds` → `SandboxModuleInvalid` | Fully wired | `sandbox_escape_attempts_denied.rs:120` (`sandbox_escape_host_buf_overrun_rejected`) |
+  | ESC-4 | Infinite loop without fuel | `Store::set_fuel(config.fuel)` → `Trap::OutOfFuel` → `SandboxFuelExhausted` | Fully wired | `sandbox_escape_attempts_denied.rs:147` (`sandbox_escape_infinite_loop_fuel_bound`) |
+  | ESC-5 | Recursive-call stack overflow | wasmtime `Config::max_wasm_stack(512 KiB)` → `Trap::StackOverflow` → `SandboxModuleInvalid` (catalog-fold; see r6-wsa-8 in wave-8 R6 review for the operator-UX nit on minting `SandboxStackExhausted`) | Fully wired (typed error correct; catalog choice noted) | `sandbox_escape_attempts_denied.rs:170` (`sandbox_escape_recursive_call_overflow_traps`) |
+  | ESC-6 | Fuel-counter overflow regression | wasmtime saturated fuel bookkeeping; per-call `set_fuel` budget independent of guest run-time → `SandboxFuelExhausted` | Fully wired | `sandbox_escape_attempts_denied.rs:199` (`sandbox_escape_fuel_overflow_regression_held`) |
+  | ESC-7 | Fuel-refill via host-fn re-entry | Per-call `Store` lifecycle (D3-RESOLVED no-pool); host-fn dispatch path is forbidden from touching `Store::fuel`. Production nested-dispatch arm not wired (depends on r6-wsa-1 sandbox_depth threading) | Paper-only `#[ignore]` (paired-engine wiring carry-forward) | `sandbox_escape_attempts_denied.rs:227` (`sandbox_escape_fuel_refill_via_host_fn_denied`) — `#[ignore]` |
+  | ESC-8 | Call host-fn not in manifest | `Linker::func_wrap` only registers manifest-allowlisted host-fns; missing import → wasmtime "unknown import" → `SandboxHostFnNotFound` | Fully wired | `sandbox_escape_attempts_denied.rs:247` (`sandbox_escape_host_fn_not_on_manifest`) |
+  | ESC-9 | Cap-revoke mid-call (TOCTOU between cap-grant and cap-use) | D18 PerCall live-recheck via `HostFnContext::live_cap_check` callback. Production `live_caps` is init-snapshot of `bundle.caps`; no production writer mutates the set, so PerCall functionally degrades to PerBoundary today (named gap, see r6-wsa-2). Phase-3 grant-store integration closes the loop | Paper-only `#[ignore]` (named: Phase-3 grant-store + benten-id) | `sandbox_escape_attempts_denied.rs:267` (`sandbox_escape_host_fn_after_cap_revoke`) — `#[ignore]` |
+  | ESC-10 | Re-entrancy via host-fn (cap-context confusion via SANDBOX → CALL → SANDBOX) | `AttributionFrame.sandbox_depth` runtime threading bumps depth at SANDBOX entry; `E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED` fires above ceiling. Production literal `1` at `primitive_host.rs:870, 876` (Inv-4 honest-disclosure block above; runtime arm dormant) | Paper-only `#[ignore]` (depth threading carry-forward) | `sandbox_escape_attempts_denied.rs:291` (`sandbox_escape_reentrancy_via_host_fn_denied`) — `#[ignore]` |
+  | ESC-11 | Component-Model type mismatch | wasmtime component-model linker type-check → `SandboxModuleInvalid`. wasmtime workspace dep at `Cargo.toml:299` ships `["runtime", "cranelift", "std", "async"]` — explicitly NO `component-model` feature; defense IS the cut | Component-model gated (`#[cfg(feature = "component-model")]` + `#[ignore]`) | `sandbox_escape_attempts_denied.rs:313` (`sandbox_escape_component_type_mismatch_rejected`) — feature-gated |
+  | ESC-12 | Resource handle forgery | wasmtime component-model resource-handle table validates handles → `SandboxModuleInvalid` or `SandboxHostFnDenied` | Component-model gated (same cut as ESC-11) | `sandbox_escape_attempts_denied.rs:330` (`sandbox_escape_resource_handle_forgery_rejected`) — feature-gated |
+  | ESC-13 | Trap during fuel-meter callback / Store-state corruption | Host-fn dispatch path refuses re-entry while a trap is unwinding; wasmtime `Store`-poison check fires deterministically on next access | Paper-only `#[ignore]` (Rust-driver vector; fuel-callback re-entry test infra carry-forward) | `sandbox_escape_attempts_denied.rs:350` (`sandbox_escape_trap_in_fuel_callback_denied`) — `#[ignore]` |
+  | ESC-14 | Cap-claim forge in module bytes | Engine ignores embedded WASM custom sections for cap purposes; cap derivation is exclusively from the manifest passed at call time. `forged_cap_claim_section.wat` (committed) verifies that a forged section is silently ignored AND that subsequent `kv:read` calls fire `SandboxHostFnDenied` if the manifest didn't include them. D26 `.wasm`-bytes shipping for the escape corpus is a wave-8 noted gap (r6-wsa-5) | Partial / eval-side smoke (forged-section helper carry-forward; manifest-authoritative defense IS structurally correct in production code) | `sandbox_escape_attempts_denied.rs:378` (`sandbox_escape_forged_cap_claim_section_ignored`) |
+  | ESC-15 | Named-manifest spoofing (typo / non-existent name) | `manifest_ref.resolve(&registry)` returns `Unknown`; no permissive fallback → `SandboxManifestUnknown` | Fully wired | `sandbox_escape_attempts_denied.rs:403` (`sandbox_escape_named_manifest_spoofing_rejected`) |
+  | ESC-16 | Wall-clock leak via `time` host-fn fingerprinting | `time` host-fn returns monotonic-coarsened values (100 ms granularity); 10 000 calls within 50 ms collapse to ≤1 distinct value | Partial (host-fn coarsening unit-pinned; integration-level fingerprint-collapse property test bypasses the committed `wallclock_fingerprint.wat` fixture — see r6-wsa-3 for the engine-side memory-snapshot helper carry-forward) | `sandbox_escape_attempts_denied.rs:447` (`sandbox_escape_wallclock_fingerprint_via_time_coarsened`) + `sandbox_host_fn_time.rs::sandbox_host_fn_time_returns_monotonic_coarsened_100ms` |
+
+  **Bucket totals (16 vectors, each in exactly one bucket):** **Fully wired (8):** ESC-1, -2, -3, -4, -5, -6, -8, -15 — production runtime defense + integration test passing. *(Note: ESC-5's typed-error fold into `SandboxModuleInvalid` is operator-UX-degraded vs. minting a `SandboxStackExhausted` variant; documented in the wave-8 R6 review as a Phase-3 catalog-decision item.)* **Partial / eval-side smoke (2):** ESC-14 (manifest-authoritative defense structurally correct; forged-section helper carry-forward), ESC-16 (host-fn coarsening unit-pinned; integration-level cross-call dedup property test carry-forward). **Paper-only `#[ignore]` (4):** ESC-7, -9, -10, -13 — each named to a specific carry-forward (host-fn re-entry path / grant-store live-cap-recheck / sandbox_depth runtime threading / fuel-callback test infra). **Component-model gated (2):** ESC-11, -12 — `#[cfg(feature = "component-model")]` + `#[ignore]`; the wasmtime workspace dep at `Cargo.toml:299` explicitly omits the feature. **Total:** 8 + 2 + 4 + 2 = 16 (no double-counting). The honest headline: **8 of 16 vectors fire typed-error defense end-to-end against the production executor at Phase 2b close**; the remaining 8 are honestly bucketed by the reason they don't (carry-forward dependency, partial integration coverage, or feature-cut). The narrative claim in some prior wave summaries that 9 vectors were fully wired included ESC-16 in the fully-wired count by counting the unit-level coarsening pin — corrected here so the bucket totals are arithmetically clean.
 - Cross-platform behaviour:
   - **Native targets (Linux x86_64, macOS arm64, Windows x86_64):** SANDBOX executes guest modules. Per-call cold-start budget gated by `bench_thresholds.toml` per the D22 RESOLVED tiered numerics (see `docs/SANDBOX-LIMITS.md` §6).
   - **wasm32-unknown-unknown / wasm32-wasip1:** the SANDBOX executor is compile-time absent (`#[cfg(not(target_arch = "wasm32"))]`). The DSL surface (`subgraph(...).sandbox(...)`) stays present so authoring works in browsers; invocation surfaces the typed error `E_SANDBOX_UNAVAILABLE_ON_WASM` at execution time, with the wsa-14 actionable text directing operators to either Phase-3 P2P sync against a Node-resident peer or local-development via @benten/engine in a Node.js process.
@@ -263,7 +288,7 @@ The cold-start cost is bounded by the D22 tiered numerics (≤2 ms p95 / ≤5 ms
 **Wave-8h adjacencies — EMIT broadcast + IVM Algorithm B production registration.** The wave-8h audit-gap fixes addressed two surfaces orthogonal to the SANDBOX wasmtime-invocation axis but adjacent to Compromise #4's overall "Phase-2 primitives are wired end-to-end" posture:
 
 - **EMIT engine wrapper** at `crates/benten-engine/src/primitive_host.rs:405-424` was previously a documented no-op (`Phase-1 EMIT is a no-op at the host level`); a handler with a standalone EMIT primitive (no backing WRITE) silently dropped the payload. Wave-8h wired EMIT to publish through a dedicated `EmitBroadcast` channel (separate from the `ChangeBroadcast` channel which carries storage WRITE events). Public API: `Engine::subscribe_emit_events`. The two channels are intentionally separate — extending `benten_graph::ChangeEvent` with an emit variant would conflate two distinct event shapes (storage commits vs handler-emitted events) that currently serve different downstream consumers (IVM views + cap-recheck pipelines vs ad-hoc observers + log shippers). Phase-3 may converge them when iroh sync introduces a unified P2P event stream; until then the two channels stay distinct and `EmitBroadcast` lives in `crates/benten-engine/src/emit_broadcast.rs`.
-- **IVM Algorithm B production registration** at `crates/benten-engine/src/engine_views.rs` was previously a `ContentListingView` fallback for every `Strategy::B`-declared user view (the view ran on the Phase-1 ContentListingView shape regardless of the spec's declared Strategy::B). Wave-8h wired the dispatch to construct `AlgorithmBView::for_id(spec.id())` for the 5 canonical view IDs that `AlgorithmBView` supports natively. Coverage compromise: non-canonical user-defined view IDs retain the `ContentListingView` fallback (the AlgorithmBView codebase is hand-written for the 5 known view shapes; generalised user-defined Algorithm B handlers are a Phase-3 lift). Documented in `docs/INVARIANT-COVERAGE.md` Algorithm B note. The user-facing impact today: declaring `Strategy::B` on a non-canonical view ID does NOT fail loud; it transparently uses ContentListingView. A drift-detector for "declared B but registered ContentListingView" is on the Phase-3 backlog.
+- **IVM Algorithm B production registration** at `crates/benten-engine/src/engine_views.rs` was previously a `ContentListingView` fallback for every `Strategy::B`-declared user view (the view ran on the Phase-1 ContentListingView shape regardless of the spec's declared Strategy::B). Wave-8h wired the dispatch to construct `AlgorithmBView::for_id(spec.id())` for the 5 canonical view IDs that `AlgorithmBView` supports natively. Coverage compromise: non-canonical user-defined view IDs retain the `ContentListingView` fallback (the AlgorithmBView codebase is hand-written for the 5 known view shapes; generalised user-defined Algorithm B handlers are a Phase-3 lift). Documented in `docs/INVARIANT-COVERAGE.md` Algorithm B note. The user-facing impact today: declaring `Strategy::B` on a non-canonical view ID does NOT fail loud; it transparently uses ContentListingView. A drift-detector for "declared B but registered ContentListingView" is on the Phase-3 backlog (see `docs/future/phase-3-backlog.md` §1.4 once the Group-4 enrichment pass lands the IVM Algorithm B drift-detector entry — the destination doc exists today but the §1.4 anchor is added by R6 Round-1 Group 4).<!-- TODO(r6-doc-9): once Group 4's phase-3-backlog enrichment lands, change the parenthetical to point at the concrete §1.X anchor for the IVM Algorithm B drift-detector entry. -->
 
 **Cross-refs.** `docs/SANDBOX-LIMITS.md` (axes + per-platform cold-start); `docs/HOST-FUNCTIONS.md` (host-fn surface); `.addl/phase-2b/00-implementation-plan.md` §3 G7-A/B/C + §5 D3 / D17 / D20 / D21 / D22 / D24 + §sec-pre-r1-12 / sec-pre-r1-13; `.addl/phase-2b/wave-8-brief.md` §8b + §8h + §8d-narrative; `.addl/phase-2b/r4b-followup-primitive-executor-docs-vs-code-audit.json` (the post-impl audit that surfaced the wire-through gaps).
 
@@ -710,7 +735,11 @@ persistent cursors all round-trip through this store; the
 permissive `resume_with_meta` fallback is rewritten to fail loud
 with `E_HOST_BACKEND_UNAVAILABLE` so a missing metadata entry
 post-G12-E surfaces a typed error rather than silently admitting
-an attacker-supplied payload. Regression tests:
+an attacker-supplied payload.
+
+**Honest disclosure — fail-closed asymmetry between eval-side and engine-side resume surfaces.** The fail-closed semantics applies to the eval-side `benten_eval::resume_with_meta` API (callers with stricter integrity expectations — the public API used by tests and any future direct-eval consumers). The engine-side bytes-only resume surfaces (`Engine::resume_from_bytes`, `resume_from_bytes_as`, `resume_from_bytes_unauthenticated`) treat a missing `WaitMetadata` entry as best-effort *skip the inline-deadline check and proceed* rather than fail-closed — see the deliberate inline comment at `crates/benten-engine/src/engine_wait.rs:535-540` for the rationale. The shape tolerates legitimate cross-process eviction without breaking resume (a fabricated test envelope, a non-WAIT resume reaching this surface, or a store miss after legitimate eviction in cross-process scenarios all skip the deadline-check rather than failing). The downstream Step 2 principal-binding + Step 3 capability re-check still run, so an attacker cannot use the asymmetry to bypass the cap re-check — only the inline deadline check is skipped on missing metadata. The narrow attack class (attacker who forges an envelope + shared SuspensionStore eviction window must coincide) is bounded by the cap re-check arm; the divergence is documented here so operators reading Compromise #10 don't assume both surfaces are uniformly fail-closed.
+
+Regression tests:
 `crates/benten-engine/tests/g12_e_suspension_store_round_trips.rs`
 (`wait_resume_cross_process_metadata_survives_restart`,
 `resume_with_meta_fails_closed_when_metadata_missing`,
@@ -1101,7 +1130,67 @@ relies on.
 docstring (in-memory note);
 `crates/benten-engine/src/engine.rs::handler_version_chain` docstring;
 Compromise #17 (sibling persistence gap); Phase-2b R5 wave-8f mini-review
-finding 8f-dx-10.
+finding 8f-dx-10; `docs/future/phase-3-backlog.md` (durable Anchor +
+Version-Node chain — concrete §1.X anchor lands with Group 4's R6
+Round-1 enrichment pass).<!-- TODO(r6-cag-7): once Group 4's
+phase-3-backlog enrichment lands the Compromise #17/#18 durable backing
+entry, replace the trailing parenthetical with the concrete §1.X anchor. -->
+
+---
+
+### Compromise #19 — Browser-target persistent storage absent — Phase-2b additive
+
+**Status:** Open in Phase 2b. **Closure target:** Phase 3 (IndexedDB / OPFS persistence layer).
+
+**What ships at Phase 2b.** On `wasm32-unknown-unknown` (browser) targets, the engine compiles with an in-memory-only manifest store. Module manifests installed via `Engine::install_module(...)` persist for the lifetime of the engine instance and are lost on page reload. Native (`x86_64`, `aarch64`, `wasm32-wasip1`) targets are unaffected — the redb-backed `Engine::open(path)` constructor persists manifests durably to disk.
+
+**Where this surfaces.**
+- Manifests with non-empty `migrations` on `wasm32-unknown-unknown` fire `E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE` at `install_module` time (because migrations need a durable backing store to land in). Manifests without `migrations` install but vanish on reload.
+- See `docs/MODULE-MANIFEST.md` §3.2 + `docs/ERROR-CATALOG.md` `E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE` row for the operator-actionable text.
+
+**Phase 3 promotion path.** Wire IndexedDB (or the newer OPFS / File System Access API where browser support is sufficient) as the durable backing store for browser-target manifest persistence. Same shape the native redb backend exposes (`KVBackend` trait), behind a target-conditional impl. Cross-browser determinism (Compromise #20) needs to be settled in parallel since the canonical-bytes round-trip + CID-pin must be byte-identical across Chromium / Gecko / WebKit.
+
+**Posture claim.** This is a *durability* deferral, not a *security* deferral — a browser engine that loses its manifests on reload is still capability-bounded for the lifetime of the page session. The honest disclosure protects operators from assuming durability where none exists.
+
+**Renumbering note.** This was `Compromise #N+8` in `docs/MODULE-MANIFEST.md`'s local table prior to R6 phase-close; lifted to global #19 here so cross-doc references resolve to a single authoritative entry.
+
+**Cross-refs.** `docs/MODULE-MANIFEST.md` §3.2; `docs/ERROR-CATALOG.md::E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE`.
+
+---
+
+### Compromise #20 — Cross-browser determinism CI cadence not yet established — Phase-2b additive
+
+**Status:** Open in Phase 2b. **Closure target:** Phase 3 (cross-browser CI matrix once browser persistence lands).
+
+**What ships at Phase 2b.** The wasm32 build verifies compilation on every PR (existing `wasm-checks.yml` + `wasm-runtime.yml`). What is NOT yet established is a cross-browser determinism CI cadence — a matrix that runs the canonical-bytes round-trip + CID-pin tests under Chromium, Gecko, and WebKit (Playwright or similar) on a recurring schedule and asserts byte-identical CIDs across the three.
+
+**Why this matters.** Once Compromise #19 lands (browser-target persistence), a manifest installed in Chromium and re-loaded in Gecko MUST produce the same CID — otherwise the engine's content-addressed integrity guarantee silently breaks at the browser boundary. Phase 2b's wasm-checks already verify the canonical-bytes encoding is deterministic across native + wasm32-wasip1; the remaining gap is Browser × Engine matrix coverage on a CI cadence.
+
+**Phase 3 promotion path.** Add a `cross-browser-determinism.yml` workflow with a Playwright matrix (Chromium / Gecko / WebKit) running the canonical-bytes + CID-pin assertion suite weekly (or on push to a release branch). Until Compromise #19's persistence story lands, this CI surface is moot — there's no per-browser persistence layer to test against. The two compromises close together.
+
+**Posture claim.** No security regression *today* (no browser persistence at Phase 2b means no per-browser determinism question). The compromise records the gap for the moment Compromise #19 closes.
+
+**Cross-refs.** Compromise #19 (the dependency); existing wasm-checks.yml / wasm-runtime.yml.
+
+---
+
+### Compromise #21 — Module manifest minimal CID-pin in Phase 2b; full Ed25519 deferred — Phase-2b additive
+
+**Status:** Open in Phase 2b. **Closure target:** Phase 3 (D16 manifest signing — Ed25519 + UCAN integration).
+
+**What ships at Phase 2b.** `Engine::install_module(manifest, expected_cid: Cid)` REQUIRES the `expected_cid` argument (D16-RESOLVED-FURTHER — not Optional, prevents the lazy `install_module(m, None)` footgun). The engine recomputes the canonical-bytes CID over the manifest, compares against `expected_cid`, and fires `E_MODULE_MANIFEST_CID_MISMATCH` (with a 1-line manifest summary so an operator can diff without source-code dive) on disagreement. This is the minimal CID-pin integrity gate.
+
+**What's NOT shipped.** Ed25519 manifest signing — i.e. the manifest carrying a signature field that the engine verifies against a publisher public key before installing. The `signature` field IS reserved in the canonical encoding (omitted-when-`None` so future signed manifests don't break the wire format) but is not consumed by the install path.
+
+**Threat model deltas.**
+- *Ships at 2b:* tampering with manifest bytes between source and `install_module` call is detected (CID mismatch → typed rejection). This protects against in-transit corruption + simple substitution attacks where the operator has the expected CID out-of-band (e.g. from a published release manifest).
+- *Deferred to Phase 3:* publisher authentication. A manifest with a forged-but-byte-consistent payload installs without complaint; the engine has no per-publisher trust anchor. Trust is established via the `expected_cid` arg the operator supplies; the manifest itself doesn't carry an unforgeable origin claim.
+
+**Phase 3 promotion path.** Wire Ed25519 signing per D16: `manifest.signature: Option<Ed25519Signature>` populated; `install_module` verifies the signature against a configured publisher key registry (or, when UCAN delegation is in scope, against the UCAN proof chain). The canonical-bytes encoding already reserves the field (D9-RESOLVED) so adding the verification arm is additive — no wire-format break.
+
+**Renumbering note.** This was `Compromise #N+5` in `docs/MODULE-MANIFEST.md`'s local table prior to R6 phase-close; lifted to global #21 here.
+
+**Cross-refs.** `docs/MODULE-MANIFEST.md` §6 + §7; `docs/ERROR-CATALOG.md::E_MODULE_MANIFEST_CID_MISMATCH`; D16 + D9 in `.addl/phase-2b/00-implementation-plan.md`.
 
 ---
 
