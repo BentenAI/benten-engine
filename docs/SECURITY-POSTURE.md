@@ -27,10 +27,12 @@ written, referenceable form.
 | 14 | SANDBOX cold-start cost (no opt-in pool) | 2b | Open (D3 RESOLVED — additive Phase-3 change if real-workload bottleneck) |
 | 15 | `register_runtime` reserved with deferred error | 2b | Deferred to Phase 8 (marketplace) |
 | 16 | `random` host-fn deferred (no CSPRNG framework chosen) | 2b | Deferred to Phase 2c |
+| 17 | In-memory module-bytes registry (`Engine::register_module_bytes`) | 2b | Open (Phase 3 — durable BlobBackend) |
+| 18 | In-memory handler-version chain (`Engine::register_subgraph_replace`) | 2b | Open (Phase 3 — durable Anchor + Version-Node chain) |
 
 **Phase-2b net delta:** Compromises #4 + #9 + #10 closed (3 net
-closures); 3 new Phase-2b deferrals enumerated (#14, #15, #16) — all
-named, all destination-tagged.
+closures); 5 new Phase-2b deferrals enumerated (#14, #15, #16, #17,
+#18) — all named, all destination-tagged.
 
 The detailed text for each numbered Compromise follows below. Phase-2b
 additions (#14-#16) appear at the end of the Named Compromises
@@ -218,16 +220,20 @@ round-trips the catalog-code strings through `as_str` / `from_str`.
 
 ### Compromise #4 — WASM runtime is compile-check only — CLOSED
 
-**Closure provenance:** Phase 2b G7 (SANDBOX primitive land) — the `wasmtime` host is now present and exercised end-to-end. G7-A wires the executor + named-manifest registry; G7-B adds Inv-4 + Inv-7 enforcement; G7-C lands the engine + napi + DSL + WASM-host gate.
+**Closure provenance:** Phase 2b waves G7 + 8b + 8h (SANDBOX wire-through). The Phase-2b R4b post-impl audit surfaced that the prior G7-A scaffold left the production dispatch gate returning `PrimitiveNotImplemented` and the executor body returning an empty `SandboxResult` without ever instantiating wasmtime — the closure narrative was aspirational. **Wave-8b** wired the production dispatcher (`crates/benten-eval/src/primitives/mod.rs:91`) to `sandbox::execute(...)` and replaced the executor body with the real `Store + Linker + Instance` lifecycle, fuel/epoch/memory limiters, host-fn trampoline, `CountedSink` PRIMARY+BACKSTOP D17 enforcement, and trap → typed-error mapping with the D21 priority resolver. **Wave-8h** then closed the docs-vs-code audit's three audit-gap drifts (manifest-registry hydration, EMIT broadcast, IVM Algorithm B production registration) so the Named-manifest dispatch path consults the engine's `installed_modules` state.
 
 **Original scope (Phase 1):** the `bindings/napi` crate compiled with `--target wasm32-unknown-unknown` in CI (`wasm-checks.yml`) but did NOT execute a WASM runtime (browser / `wasmtime`) at test time. The Phase-1 WASM surface existed only to guarantee that the napi bindings built for a browser target so Thrum (the Phase-4 consumer) could compile them into its web bundle.
 
-**What now ships at Phase 2b:**
-- A live `wasmtime` host inside `crates/benten-eval/src/primitives/sandbox.rs` runs guest WebAssembly modules per-call (D17 instance lifecycle), with the four enforcement axes (memory / wallclock / fuel / output) bounded by the defaults documented in `docs/SANDBOX-LIMITS.md`.
-- A capability-derived host-function manifest (`crates/benten-eval/host-functions.toml`, G7-A owned) controls which host-fns each guest may import. Capability resolution happens at instance-init time per call; revocation between calls is honoured.
+**What now ships at Phase 2b (post-wave-8b/8h):**
+- A live `wasmtime` host inside `crates/benten-eval/src/primitives/sandbox.rs` runs guest WebAssembly modules per-call (D17 instance lifecycle), with the four enforcement axes (memory / wallclock / fuel / output) bounded by the defaults documented in `docs/SANDBOX-LIMITS.md`. The production engine path routes through the `impl PrimitiveHost for Engine::execute_sandbox` override at `crates/benten-engine/src/primitive_host.rs` which reads module bytes via `Engine::module_bytes_for(cid)`, hydrates the `ManifestRegistry` from `installed_modules`, builds the `SandboxConfig` from the engine's policy + the operation node's properties, and invokes `benten_eval::sandbox::execute`.
+- A capability-derived host-function manifest (`crates/benten-eval/host-functions.toml`, G7-A owned) controls which host-fns each guest may import. Capability resolution happens at instance-init time per call; revocation between calls is honoured. Wave-8h hydrates the registry from the engine's `installed_modules` set so Named-manifest dispatch (e.g. `manifest: "compute-power"`) resolves through the same path that `Engine::install_module` persists state into.
+- ESC defense matrix (16 named escape vectors per `pre-r1-security-deliverables.md` §1):
+  - **Fully wired (9):** ESC-1 OOB linear-memory load (wasmtime trap → `SandboxModuleInvalid`); ESC-3 host-buf overrun (trampoline bounds-check → `SandboxModuleInvalid`); ESC-4 infinite loop (fuel-bound → `SandboxFuelExhausted`); ESC-6 wallclock fingerprint (epoch-interruption ticker → `SandboxWallclockExceeded`); ESC-8 fuel overflow regression (saturated bookkeeping); ESC-11 host-fn after cap-revoke (D18 per-call recheck → `SandboxHostFnDenied`); ESC-12 component type mismatch (link-time → `SandboxModuleInvalid`); ESC-15 manifest unknown (no permissive fallback → `SandboxManifestUnknown`); ESC-16 forged cap-claim section (`forged_cap_claim_section.wat` rejection at `Module::new`).
+  - **Partial / eval-side smoke (5):** ESC-2 linear-memory grow-to-limit (ResourceLimiter cap → `SandboxMemoryExhausted`; the committed `linmem_grow_to_limit.wat` fixture was re-authored in wave-8d-narrative to compile under wasmtime 43); ESC-5 stack-overflow (`max_wasm_stack(512KiB)` partial defense — wasmtime traps but typed-error mapping is partial); ESC-7 host-fn-not-on-manifest (intersection check fires `SandboxHostFnDenied`; wave-8c-cont integration test landed); ESC-9 / ESC-10 helper-fn smoke (renamed from ESC-9 reentrancy / ESC-10 fuel-refill — the original concerns were folded into ESC-11 + nested-dispatch-denied; the helper smoke tests verify trampoline accounting); ESC-13 resource-handle forgery (`test_markers` field separate from production import-list; eval-side test asserts the forgery is structurally rejected).
+  - **Component-model gated (2):** ESC-14 component-type-mismatch + ESC-16 forged-cap-claim — full coverage requires wasm-component-model surface; current defense rejects via `Module::new` structural validation. Phase-3 lifts these to component-model-aware checks if wasmtime's component-model story matures.
 - Cross-platform behaviour:
   - **Native targets (Linux x86_64, macOS arm64, Windows x86_64):** SANDBOX executes guest modules. Per-call cold-start budget gated by `bench_thresholds.toml` per the D22 RESOLVED tiered numerics (see `docs/SANDBOX-LIMITS.md` §6).
-  - **wasm32-unknown-unknown:** the SANDBOX executor is compile-time absent (`#[cfg(not(target_arch = "wasm32"))]`). The DSL surface (`subgraph(...).sandbox(...)`) stays present so authoring works in browsers; invocation surfaces the typed error `E_SANDBOX_UNAVAILABLE_ON_WASM` at execution time, with the wsa-14 actionable text directing operators to either Phase-3 P2P sync against a Node-resident peer or local-development via @benten/engine in a Node.js process.
+  - **wasm32-unknown-unknown / wasm32-wasip1:** the SANDBOX executor is compile-time absent (`#[cfg(not(target_arch = "wasm32"))]`). The DSL surface (`subgraph(...).sandbox(...)`) stays present so authoring works in browsers; invocation surfaces the typed error `E_SANDBOX_UNAVAILABLE_ON_WASM` at execution time, with the wsa-14 actionable text directing operators to either Phase-3 P2P sync against a Node-resident peer or local-development via @benten/engine in a Node.js process.
 
 **Regression tests pinning the closure:**
 - `crates/benten-engine/tests/integration/sandbox_compile_time_disabled_on_wasm32.rs` — pins both halves of the compile-time gate (executor present on native, surfaces typed error on wasm32).
@@ -237,6 +243,8 @@ round-trips the catalog-code strings through `as_str` / `from_str`.
 - `crates/benten-engine/tests/security_posture_md_phase_2b_compromises_documented.rs::security_posture_compromise_4_marked_closed` — asserts THIS section header carries `— CLOSED`.
 
 **Posture claim now in force:** the SANDBOX runtime is a load-bearing primitive. It is expected to run in Phase 2b deployments. The four enforcement axes and the capability-derived host-fn manifest constitute the supply-chain and runtime-isolation perimeter for untrusted-code execution; operators who require additional defence-in-depth (process-level isolation, separate `wasmtime::Engine` per tenant) layer those on top of — not in place of — the in-engine bounds.
+
+**Honest disclosure — Inv-4 runtime threading is structural, not transitive (post-wave-8b/8h).** The `AttributionFrame.sandbox_depth: u8` field is constructed at every production SANDBOX entry with literal value `1` (`crates/benten-engine/src/primitive_host.rs:870, 876`). The depth-counter machinery (`invariants::sandbox_depth::check_runtime_entry`, `propagate_through_call`) is implemented and unit-tested but has no production call site — `cargo grep` of the workspace confirms zero non-test callers. Consequence: a SANDBOX inside a CALL inside a SANDBOX does NOT trip `E_INV_SANDBOX_DEPTH` from runtime threading; it trips only from the registration-time static-graph walk (`invariants::sandbox_depth::validate_registration` at `structural.rs:215, 387`). The brief identifies this as wave-8e item #11 carry-forward — `AttributionFrame.sandbox_depth` runtime threading through `ActiveCall` is bounded and durable; treating it as Phase-3 deferral would understate the Inv-4 enforcement gap. The eval-side `SandboxError::NestedDispatchDepthExceeded` path is plumbed but cannot fire since the depth threading doesn't run.
 
 **Posture claim — per-call-only instance lifecycle is a security win by construction (D3-RESOLVED, sec-pre-r1-12).** Phase 2b ships the SANDBOX executor with a per-call `wasmtime::Instance` lifecycle (D17-RESOLVED) and explicitly NO opt-in instance pool (D3-RESOLVED). This is not solely a DX or perf decision — it is a security posture claim. With per-call instantiation:
 
@@ -252,7 +260,12 @@ The cold-start cost is bounded by the D22 tiered numerics (≤2 ms p95 / ≤5 ms
 - **sec-r6r2-02 — `test-helpers` cfg-gating on the engine surface.** The `Engine::describe_sandbox_node(...)` accessor (G7-C; ts-r4-3 finding) is `#[cfg(any(test, feature = "test-helpers"))]`-gated so the napi cdylib (which opts into the narrower `envelope-cache-test-grade` feature only) does NOT compile this surface into production. The G12-C subgraph type relocation MUST preserve every existing `testing_*` surface gate; G7-C's new accessor adds to the gated set rather than relaxing any prior gate.
 - **sec-r6r3-02 — parse-counter cfg-gate.** The G12-A BudgetExhausted runtime emission wiring (Phase-2b R5 wave-1) routes through the AttributionFrame path and does NOT bypass the parse-counter cfg-gate. The G7-C SANDBOX gate is independent of the parse-counter gate; both must remain.
 
-**Cross-refs.** `docs/SANDBOX-LIMITS.md` (axes + per-platform cold-start); `docs/HOST-FUNCTIONS.md` (host-fn surface); `.addl/phase-2b/00-implementation-plan.md` §3 G7-A/B/C + §5 D3 / D17 / D20 / D21 / D22 / D24 + §sec-pre-r1-12 / sec-pre-r1-13.
+**Wave-8h adjacencies — EMIT broadcast + IVM Algorithm B production registration.** The wave-8h audit-gap fixes addressed two surfaces orthogonal to the SANDBOX wasmtime-invocation axis but adjacent to Compromise #4's overall "Phase-2 primitives are wired end-to-end" posture:
+
+- **EMIT engine wrapper** at `crates/benten-engine/src/primitive_host.rs:405-424` was previously a documented no-op (`Phase-1 EMIT is a no-op at the host level`); a handler with a standalone EMIT primitive (no backing WRITE) silently dropped the payload. Wave-8h wired EMIT to publish through a dedicated `EmitBroadcast` channel (separate from the `ChangeBroadcast` channel which carries storage WRITE events). Public API: `Engine::subscribe_emit_events`. The two channels are intentionally separate — extending `benten_graph::ChangeEvent` with an emit variant would conflate two distinct event shapes (storage commits vs handler-emitted events) that currently serve different downstream consumers (IVM views + cap-recheck pipelines vs ad-hoc observers + log shippers). Phase-3 may converge them when iroh sync introduces a unified P2P event stream; until then the two channels stay distinct and `EmitBroadcast` lives in `crates/benten-engine/src/emit_broadcast.rs`.
+- **IVM Algorithm B production registration** at `crates/benten-engine/src/engine_views.rs` was previously a `ContentListingView` fallback for every `Strategy::B`-declared user view (the view ran on the Phase-1 ContentListingView shape regardless of the spec's declared Strategy::B). Wave-8h wired the dispatch to construct `AlgorithmBView::for_id(spec.id())` for the 5 canonical view IDs that `AlgorithmBView` supports natively. Coverage compromise: non-canonical user-defined view IDs retain the `ContentListingView` fallback (the AlgorithmBView codebase is hand-written for the 5 known view shapes; generalised user-defined Algorithm B handlers are a Phase-3 lift). Documented in `docs/INVARIANT-COVERAGE.md` Algorithm B note. The user-facing impact today: declaring `Strategy::B` on a non-canonical view ID does NOT fail loud; it transparently uses ContentListingView. A drift-detector for "declared B but registered ContentListingView" is on the Phase-3 backlog.
+
+**Cross-refs.** `docs/SANDBOX-LIMITS.md` (axes + per-platform cold-start); `docs/HOST-FUNCTIONS.md` (host-fn surface); `.addl/phase-2b/00-implementation-plan.md` §3 G7-A/B/C + §5 D3 / D17 / D20 / D21 / D22 / D24 + §sec-pre-r1-12 / sec-pre-r1-13; `.addl/phase-2b/wave-8-brief.md` §8b + §8h + §8d-narrative; `.addl/phase-2b/r4b-followup-primitive-executor-docs-vs-code-audit.json` (the post-impl audit that surfaced the wire-through gaps).
 
 ---
 
@@ -951,6 +964,144 @@ additive Phase-2c entry without breaking any Phase-2b modules.
 **Cross-refs.** D1-RESOLVED; `host-functions.toml` deferral comment;
 `crates/benten-eval/tests/sandbox_host_fn_random_deferred.rs`
 regression guard; sec-pre-r1-06 §2.3 reasoning.
+
+---
+
+### Compromise #17 — In-memory module-bytes registry — Phase-2b additive
+
+**Class.** Persistence gap (intentional); deferred to Phase 3 alongside
+the durable `BlobBackend`.
+
+**Shape.** `Engine::register_module_bytes(cid, bytes)` — the API
+that registers compiled WebAssembly module bytes for SANDBOX
+dispatch — stores into a process-local `BTreeMap<Cid, Vec<u8>>`
+guarded by a `Mutex` (`crates/benten-engine/src/engine.rs:766`). The
+bytes are NOT persisted to the engine's redb backend; on `Engine::open`
+the registry starts empty regardless of what was registered against
+the prior process.
+
+**Workflow asymmetry with `Engine::install_module`.** This is the
+load-bearing operator-facing surprise: `install_module(manifest,
+expected_cid)` writes the manifest's canonical-DAG-CBOR bytes into the
+`system:ModuleManifest` zone (a privileged Node write that survives
+engine restart and is sync-eligible for Phase-3 federation). But the
+underlying *wasm bytes* the manifest references (each `modules[i].cid`)
+must be re-registered via `register_module_bytes(cid, bytes)` after
+every engine open — there is no symmetric durable path for blob bytes
+in Phase 2b. A SANDBOX dispatch whose module bytes haven't been
+re-registered fires `E_SANDBOX_MODULE_NOT_INSTALLED` at the engine's
+lookup step (the wave-8d-types typed variant), distinct from
+`E_SANDBOX_MODULE_INVALID` which fires when bytes ARE present but fail
+wasmtime structural validation.
+
+**Why deferred to Phase 3 rather than fixed in 2b:**
+
+1. **Blob storage is the load-bearing Phase-3 lift.** The `BlobBackend`
+   trait — content-addressed mutable storage with iroh-fetchable shape —
+   is on the Phase-3 critical path for P2P sync (Atriums fetch wasm
+   modules from peer caches). Building an interim Phase-2b durable
+   blob store would be wasted work since Phase-3 replaces it.
+2. **Operator footprint is bounded.** Production deployments register
+   modules at engine-open time (alongside `register_handler` /
+   `install_module` calls); the in-memory shape mirrors how
+   `register_subgraph` works (subgraph specs live in process memory and
+   are re-registered on restart). Operators who need durable wasm
+   storage in 2b can persist `Vec<u8>` against their own backing store
+   and call `register_module_bytes` from their bootstrap path.
+3. **No security-class hazard.** `register_module_bytes` does not
+   consult capability policy (registering wasm bytes does NOT authorise
+   any caller to invoke them — authority flows through the SANDBOX
+   node's manifest cap-set + dispatching grant, both checked at execute
+   time). The in-memory shape doesn't widen the trust boundary; it just
+   widens the operator boilerplate at engine-open.
+
+**Posture claim — non-validating API + lazy validation discipline.**
+`register_module_bytes` does NOT verify the supplied CID matches
+`blake3(bytes)` — content integrity is the caller's responsibility,
+mirroring the pattern `Engine::install_module` uses for manifest CIDs.
+Validation fires lazily at SANDBOX dispatch time when wasmtime parses
+the bytes (`Module::new(&engine, &bytes)` in
+`crates/benten-eval/src/sandbox/instance.rs::module_for_bytes`); a
+malformed module surfaces as `E_SANDBOX_MODULE_INVALID`. Phase-3's
+durable `BlobBackend` may add content-addressing-based validation at
+register time (recompute BLAKE3 over the bytes; reject mismatch
+upfront).
+
+**Phase 3 promotion path.** Replace the in-memory `BTreeMap` with a
+`BlobBackend` trait whose default impl writes to redb's blob-store and
+exposes a `Phase-3 iroh-fetch` arm for cross-peer module hydration.
+`register_module_bytes` becomes a thin wrapper that computes the CID,
+asserts content-integrity (recomputed CID matches caller's), and
+delegates to `BlobBackend::put_blob`. `Engine::open` rehydrates the
+in-memory active set from the BlobBackend's stored CIDs.
+
+**Cross-refs.** `crates/benten-engine/src/engine.rs::register_module_bytes`
+docstring; `crates/benten-engine/src/engine_modules.rs::install_module`
+docstring (asymmetry note); Compromise #4 closure narrative
+(execute-time validation discipline); `docs/ERROR-CATALOG.md`
+`E_SANDBOX_MODULE_NOT_INSTALLED` row; `docs/MODULE-MANIFEST.md` install
+lifecycle.
+
+---
+
+### Compromise #18 — In-memory handler-version chain — Phase-2b additive
+
+**Class.** Persistence gap (intentional); sibling to Compromise #17
+with the same Phase-3 promotion path.
+
+**Shape.** `Engine::register_subgraph_replace(spec)` — the wave-8f
+hot-replace API — maintains an in-memory `BTreeMap<HandlerId, Vec<Cid>>`
+of version-chain heads (newest-first). Each successful replace prepends
+the new handler-CID onto the chain; `Engine::handler_version_chain(id)`
+exposes the chain for devserver + audit consumers. The chain is
+process-local and is NOT written to the redb backend; on `Engine::open`
+the chain starts empty regardless of how many replace calls happened in
+the prior process.
+
+**Why a separate compromise from #17 rather than a single bullet.** The
+content is structurally identical (in-memory `BTreeMap` lost on engine
+restart, Phase-3 promotion path the same), but the *audit class*
+differs:
+
+- Compromise #17 covers the **wasm payload** — bytes that wasmtime
+  loads. Lost data: the wasm module's binary content. Operator recovery:
+  re-call `register_module_bytes` from bootstrap.
+- Compromise #18 covers the **handler hot-replace audit metadata** —
+  the temporal sequence of "v1 → v2 → v3" handler swaps that devserver
+  + operators rely on to answer "what was v3 of this handler?". Lost
+  data: the historical CIDs. Operator recovery: there is no recovery —
+  the historical CIDs are gone unless the operator captured them
+  out-of-band (e.g. logs, devserver session state).
+
+The user-visible loss surface differs enough that bundling under #17
+would obscure the audit-trail-erasure aspect.
+
+**Phase 3 promotion path.** Lift to a durable
+`benten_core::version::Anchor` Node + Version-Node chain (the same
+shape `core::version::append_version` already exposes for opt-in
+versioned data). Each `register_subgraph_replace` call writes a new
+Version Node carrying the handler-CID + audit metadata (replace
+timestamp, optional message); the Anchor's CURRENT pointer bumps
+atomically. `Engine::handler_version_chain` reads the chain by walking
+the Anchor's `prior_head` thread. Phase-3 sync forwards the chain
+verbatim across peers (the Version Nodes are content-addressed and
+ride the existing sync surface).
+
+**Posture claim.** The hot-replace contract itself is unchanged by the
+in-memory shape: in-flight `Engine::call` invocations DO NOT see the
+swap (handler_cid resolves once at call entry; the spec Mutex
+re-lookup at `dispatch_call_inner` uses that CID as the third axis of
+the subgraph-cache key). The in-memory shape only erases the
+**historical** chain on restart; the **current** chain is durable for
+the engine's lifetime, which is the contract devserver hot-reload
+relies on.
+
+**Cross-refs.**
+`crates/benten-engine/src/engine.rs::register_subgraph_replace`
+docstring (in-memory note);
+`crates/benten-engine/src/engine.rs::handler_version_chain` docstring;
+Compromise #17 (sibling persistence gap); Phase-2b R5 wave-8f mini-review
+finding 8f-dx-10.
 
 ---
 

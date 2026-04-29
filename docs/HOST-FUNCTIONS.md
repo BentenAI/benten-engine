@@ -16,6 +16,18 @@ deferred `random` host-function is documented at the bottom; calling it
 returns `E_SANDBOX_HOST_FN_NOT_FOUND` with a "deferred to Phase 2c"
 hint.
 
+**Runtime status (post-wave-8b/8h):** the host-fn trampoline is fully
+wired through wasmtime's `Linker::func_wrap`; every listed failure mode
+fires from a real production execution path. The wave-8b runtime
+invocation pipeline (Compromise #4 closure narrative) closed the prior
+"declarations + cap-recheck schema landed; live trampoline pending"
+disclaimer that earlier drafts of this doc carried. Named-manifest
+dispatch (`manifest: "<name>"`) consults the engine's `installed_modules`
+state via the wave-8h `manifest_registry()` accessor, so a SANDBOX node
+referencing an `install_module`-installed manifest resolves through the
+production lookup path rather than failing with
+`E_SANDBOX_MANIFEST_UNKNOWN`.
+
 ## How to call a host function
 
 A SANDBOX node names either a manifest (D2 hybrid `by_name`) or an

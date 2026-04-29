@@ -94,8 +94,10 @@ fn security_posture_documents_phase_2b_new_compromises() {
 }
 
 /// `security_posture_compromise_4_marked_closed` — R2 §6 row.
+///
+/// Wave-8d-narrative un-ignored: the closure marker now lives on the
+/// Compromise #4 section header (post-wave-8b/8h SANDBOX wire-through).
 #[test]
-#[ignore = "Phase 2b G7-C + G11-2b-A pending — Compromise #4 closure in SECURITY-POSTURE.md unimplemented"]
 fn security_posture_compromise_4_marked_closed() {
     let doc = read_security_posture();
     // Find the Compromise #4 section, look for CLOSED disposition.

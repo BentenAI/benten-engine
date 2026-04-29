@@ -86,25 +86,16 @@ fn sandbox_escape_linmem_grow_to_limit_kills() {
     // ESC-2 — memory.grow loop exceeds per-call cap; ResourceLimiter
     // raises MemoryCapExceededMarker → SandboxError::MemoryExhausted.
     //
-    // The committed `linmem_grow_to_limit.wat` fixture uses a `br_if 1`
-    // outside a containing block, which wasmtime 43 rejects at compile.
-    // Wave-8b uses an inline-built fixture that exercises the same
-    // ESC-2 property (memory.grow until cap-breach trips the limiter).
-    // The committed fixture should be re-authored to compile under
-    // wasmtime 43; tracked in 8d (docs reconciliation) follow-up.
-    let bytes = wat::parse_str(
-        "(module
-           (memory (export \"memory\") 1)
-           (func (export \"run\") (result i32)
-             (loop $L
-               (drop (memory.grow (i32.const 1)))
-               br $L
-             )
-             i32.const 0
-           )
-         )",
-    )
-    .unwrap();
+    // Wave-8d-narrative: the committed `linmem_grow_to_limit.wat`
+    // fixture was re-authored to compile under wasmtime 43 (the
+    // original used `br_if 1` outside a containing block which carried
+    // a value into a no-result-type loop and failed to compile). The
+    // re-authored shape wraps the loop in `(block $done (result i32))`
+    // so the limiter-trip branch carries the iteration count out via
+    // `br $done`. The test now exercises the committed fixture
+    // directly rather than the inline-built equivalent wave-8b used as
+    // a workaround.
+    let bytes = load_fixture("linmem_grow_to_limit.wat");
     let registry = ManifestRegistry::new();
     let attribution = dummy_attribution();
     let cfg = SandboxConfig {

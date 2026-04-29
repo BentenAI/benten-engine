@@ -154,8 +154,102 @@ will fail otherwise.
 
 ---
 
+## Runtime status as of `phase-2b-close`
+
+The 16.7% rate is validated against the **architectural primitive
+surface** — i.e. the question "is the primitive set sufficient to
+express each cohort handler shape?". Wave-7 closed the structural
+revalidation; the architectural verdict (PASS at 16.7%) is independent
+of whether each primitive's runtime executor is wired end-to-end.
+
+Wave-8 (post-wave-7 audit closure) wired the production runtime for
+the three Phase-2b primitives so the cohort is now **executable**
+end-to-end:
+
+- **STREAM** (handler #10 `chunked-export`) — wave-8c-stream-infra
+  wired the chunk-producer + tokio-mpsc drain-path; `engine.callStream`
+  yields real chunks rather than `E_PRIMITIVE_NOT_IMPLEMENTED`.
+- **SUBSCRIBE** (handler #9 `change-feed-mirror`) — wave-8c-subscribe-infra
+  wired the ChangeStream port + ThreadsafeFunction trampoline;
+  `engine.onChange` callbacks fire on the libuv main loop with real
+  payloads.
+- **SANDBOX** (handlers #11 `summarize-doc-with-llm`, #12 `image-thumbnail`)
+  — wave-8b wired the wasmtime invocation pipeline; wave-8h hydrated
+  the manifest-registry from `installed_modules` so Named-manifest
+  dispatch resolves through the production lookup path.
+- **WAIT** (handler #5 `payment-confirm`) — wave-8i routed
+  `engine.call()` through eval-side `wait::evaluate_op` and replaced
+  the `should_suspend(handler_id)` heuristic with property-aware
+  suspension that consults `signal/duration_ms/timeout_ms/signal_shape`.
+- **EMIT** (handler #7 `event-fanout`) — wave-8h wired the engine
+  wrapper to publish through the dedicated `EmitBroadcast` channel
+  (separate from `ChangeBroadcast`); `Engine::subscribe_emit_events`
+  exposes the public subscription surface.
+
+Bounded carry-forwards from wave-8 close that don't invalidate the
+revalidation:
+
+- **Inv-4 runtime depth-threading** (wave-8e item #11) — production
+  `AttributionFrame.sandbox_depth` is constructed with literal `1`;
+  threading `parent.sandbox_depth + 1` through `ActiveCall` is bounded
+  structural work. Cohort handlers don't exercise SANDBOX→CALL→SANDBOX
+  chains, so the gap doesn't affect the revalidation verdict.
+- **Compromise #17 module-bytes registry** — operators re-call
+  `register_module_bytes` at engine open. Cohort handlers #11 + #12
+  exercise the in-process register-then-dispatch shape, which is
+  unaffected.
+- **IVM Algorithm B non-canonical-view fallback** — handler #9
+  (`change-feed-mirror`) operates on canonical-view shapes already
+  covered by `AlgorithmBView::for_id`; the non-canonical fallback
+  doesn't bite this cohort.
+
+---
+
+## Process observation — 4-instance metadata-producer-vs-consumer pattern (wave-8 retrospective)
+
+Wave-8's synchronous mini-review pattern caught a recurring class of
+bug **four distinct times** across the wave: a metadata-producing
+surface was added correctly, but the consumer surface that should read
+the metadata silently dropped it. The 4 instances:
+
+1. **Wave-8b sandbox runtime** — the dispatcher was flipped to invoke
+   `sandbox::execute(...)` correctly, but the `manifest_registry()`
+   accessor that hydrates from `installed_modules` was missed; consumer
+   sites at `primitive_host.rs:759, 770, 810` used
+   `ManifestRegistry::new()` (empty). Caught by wave-8h docs-vs-code
+   audit; fixed in wave-8h.
+2. **Wave-8c-subscribe-infra napi** — the engine-side
+   `Engine::on_change_as_with_cursor` wired the cap-recheck closure +
+   actor binding; the napi-side `subscribe_adapter` initially didn't
+   thread the actor through to the closure. Caught by wave-8c-cont
+   mini-review.
+3. **Wave-8i WAIT elapsed_ms metadata** — the eval-side
+   `wait::evaluate_op` correctly stamped suspension metadata
+   (`elapsed_ms`, `signal`, `duration_ms`); the resume path's metadata
+   read consulted only `signal` initially. Caught by wave-8i fix-pass-1
+   mini-review.
+4. **Wave-8i WAIT resume deadline** — `Engine::resume_with_meta` wired
+   the deadline metadata writer; the public engine API didn't read the
+   deadline back on resume. Caught by wave-8i fix-pass-2 verification
+   (orchestrator-direct grep audit; landed at `ba749c3`).
+
+**Reviewer-lens note for R6 phase-close council:** for every
+metadata-producing surface added, EVERY consumer surface that should
+read it must be audited. The 4-instance pattern across one wave
+indicates this is a load-bearing reviewer-lens question. Future review
+briefs should explicitly mandate "for each new metadata field, list
+every consumer site and verify the read happens" as a checklist item.
+This observation is process-only (no code change for paper-prototype
+revalidation); it's recorded here because PAPER-PROTOTYPE-REVALIDATION
+is the canonical wave-8-close artifact + the reviewer pattern matters
+beyond Phase 2b.
+
+---
+
 ## Sign-off
 
 Phase 2b paper-prototype revalidation **PASSES** at 16.7% SANDBOX rate
 against a 30% exit-criterion gate. The 12-primitive vocabulary is
-validated for the close-out of Phase 2b R5.
+validated for the close-out of Phase 2b R5. Post-wave-8 the cohort is
+executable end-to-end against the production runtime; the gate's
+architectural-expressivity verdict carries through unchanged.
