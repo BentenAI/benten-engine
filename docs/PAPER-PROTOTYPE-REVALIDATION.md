@@ -214,10 +214,11 @@ the metadata silently dropped it. The 4 instances:
 
 1. **Wave-8b sandbox runtime** — the dispatcher was flipped to invoke
    `sandbox::execute(...)` correctly, but the `manifest_registry()`
-   accessor that hydrates from `installed_modules` was missed; consumer
-   sites at `primitive_host.rs:759, 770, 810` used
-   `ManifestRegistry::new()` (empty). Caught by wave-8h docs-vs-code
-   audit; fixed in wave-8h.
+   accessor that hydrates from `installed_modules` was missed; the three
+   consumer sites in `primitive_host.rs` (pre-wave-8h line numbers
+   `759, 770, 810`; post-wave-8h these moved to `831, 842, 885` after
+   the audit-gap fix landed) used `ManifestRegistry::new()` (empty).
+   Caught by wave-8h docs-vs-code audit; fixed in wave-8h.
 2. **Wave-8c-subscribe-infra napi** — the engine-side
    `Engine::on_change_as_with_cursor` wired the cap-recheck closure +
    actor binding; the napi-side `subscribe_adapter` initially didn't
