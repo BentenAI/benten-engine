@@ -290,6 +290,31 @@ impl PrimitiveHost for Engine {
     }
 
     fn put_node(&self, node: &Node) -> Result<Cid, benten_eval::EvalError> {
+        // D10 read-only-snapshot enforcement: when the engine was
+        // constructed via `Engine::from_snapshot_blob`, user-facing
+        // WRITE primitives MUST surface `E_BACKEND_READ_ONLY` so a
+        // handler dispatched via `engine.call(...)` cannot corrupt the
+        // snapshot's canonical-bytes invariant. Mirrors the check in
+        // `engine_crud::create_node` for the direct-call path; this
+        // closes the gap on the dispatch-through-handler path that the
+        // `snapshot_blob_round_trip.test.ts::"rejects writes (read-only
+        // contract)"` pin exercises. The check fires BEFORE the
+        // PendingHostOp is buffered so the replay path never sees the
+        // violating write.
+        if self.is_read_only_snapshot() {
+            return Err(benten_eval::EvalError::Host(benten_eval::HostError {
+                code: benten_errors::ErrorCode::BackendReadOnly,
+                source: Box::new(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "backend is read-only: put_node rejected (snapshot-blob engine)",
+                )),
+                context: Some(
+                    "snapshot-blob engine constructed via Engine::from_snapshot_blob is \
+                     user-write-immutable per D10 read-only contract"
+                        .to_string(),
+                ),
+            }));
+        }
         // Phase-2a Inv-11 runtime probe (G5-B-i mini-review C1): a handler
         // WRITE whose Node carries a `system:*` label MUST fire
         // `E_INV_SYSTEM_ZONE` at the evaluator-visible boundary, NOT the

@@ -33,6 +33,7 @@ use std::sync::Arc;
 use benten_engine::{
     Chunk, EmitSubscription, Engine as InnerEngine, SubscribeCursor, Subscription,
 };
+use napi::bindgen_prelude::FnArgs;
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::ThreadsafeFunctionCallMode;
 
@@ -67,13 +68,25 @@ type EngineOnChangeCallback = Arc<dyn Fn(u64, &Chunk) + Send + Sync + 'static>;
 ///      translates the tuple into `(JS number, JS Buffer)` and invokes
 ///      the user's JS callback.
 pub(crate) fn build_on_change_tsfn(
-    cb: napi::bindgen_prelude::Function<'_, (u32, Buffer), ()>,
+    cb: napi::bindgen_prelude::Function<'_, FnArgs<(u32, Buffer)>, ()>,
 ) -> napi::Result<EngineOnChangeCallback> {
     // `weak: false` (the default) keeps the process alive while
     // subscriptions are live — matches the dx contract that
     // `engine.onChange` returns a handle whose Drop controls cleanup.
     // `callee_handled: false` means we don't pass an error first-arg
     // into the JS callback.
+    //
+    // FnArgs<(u32, Buffer)> is the napi-rs 3 idiom for "splat the tuple
+    // into N JS arguments" — without the FnArgs wrapper the tuple's
+    // blanket `JsValuesTupleIntoVec for T where T: ToNapiValue` impl
+    // matches and the tuple is delivered as a single JS Array argument
+    // (see napi-3.8.5/src/bindgen_runtime/js_values/function.rs:19 +
+    // array.rs:388 — tuples impl ToNapiValue as Array). The
+    // `JsValuesTupleIntoVec for FnArgs<tuple>` impl at function.rs:55
+    // is the unpacker that delivers `(seq: number, payload: Buffer)`
+    // as two distinct JS args. Pre-fix the
+    // `subscribe.test.ts::LOAD-BEARING — onChange callback fires`
+    // pin failed because `payload` was undefined on the JS side.
     let tsfn = cb
         .build_threadsafe_function::<OnChangeTsfnPayload>()
         .callee_handled::<false>()
@@ -81,7 +94,7 @@ pub(crate) fn build_on_change_tsfn(
             |ctx: napi::threadsafe_function::ThreadsafeCallContext<OnChangeTsfnPayload>| {
                 let (seq, bytes) = ctx.value;
                 let buf = Buffer::from(bytes);
-                Ok((seq, buf))
+                Ok(FnArgs::from((seq, buf)))
             },
         )?;
     let tsfn_arc = Arc::new(tsfn);
@@ -163,7 +176,7 @@ pub(crate) fn on_change_adapter(
     engine: &InnerEngine,
     pattern: &str,
     cursor_raw: &serde_json::Value,
-    cb: Option<napi::bindgen_prelude::Function<'_, (u32, Buffer), ()>>,
+    cb: Option<napi::bindgen_prelude::Function<'_, FnArgs<(u32, Buffer)>, ()>>,
 ) -> napi::Result<Subscription> {
     let cursor = parse_cursor(cursor_raw)?;
     let engine_cb = match cb {
@@ -186,7 +199,7 @@ pub(crate) fn on_change_as_adapter(
     pattern: &str,
     cursor_raw: &serde_json::Value,
     actor: &benten_core::Cid,
-    cb: Option<napi::bindgen_prelude::Function<'_, (u32, Buffer), ()>>,
+    cb: Option<napi::bindgen_prelude::Function<'_, FnArgs<(u32, Buffer)>, ()>>,
 ) -> napi::Result<Subscription> {
     let cursor = parse_cursor(cursor_raw)?;
     let engine_cb = match cb {
@@ -254,19 +267,30 @@ type OnEmitTsfnPayload = (String, String);
 /// main loop via `napi::ThreadsafeFunction`. Mirrors
 /// [`build_on_change_tsfn`] but for the EMIT broadcast.
 pub(crate) fn build_on_emit_tsfn(
-    cb: napi::bindgen_prelude::Function<'_, (String, String), ()>,
+    cb: napi::bindgen_prelude::Function<'_, FnArgs<(String, String)>, ()>,
 ) -> napi::Result<benten_engine::emit_broadcast::EmitCallback> {
     // Match SUBSCRIBE's defaults: keep the process alive while
     // EMIT subscriptions are live (`weak: false`) + don't pass an
     // error first-arg into the JS callback (`callee_handled: false`).
-    let tsfn =
-        cb.build_threadsafe_function::<OnEmitTsfnPayload>()
-            .callee_handled::<false>()
-            .build_callback(
-                |ctx: napi::threadsafe_function::ThreadsafeCallContext<OnEmitTsfnPayload>| {
-                    Ok(ctx.value)
-                },
-            )?;
+    //
+    // FnArgs<(String, String)> for the same reason as
+    // `build_on_change_tsfn` — without the wrapper napi-rs 3 delivers
+    // the tuple as a single JS Array, so the JS callback's second
+    // parameter (`payload`) is `undefined`. See the explanation on
+    // `build_on_change_tsfn` for the full mechanic. The codebase
+    // previously had a workaround comment on the
+    // `emit_subscribe.test.ts::LOAD-BEARING` test ("napi-rs v3's
+    // `Function<(String, String), ()>` callback-shape delivers the
+    // tuple as a single Array argument rather than splatting to 2
+    // args"); FnArgs IS the production splat mechanic.
+    let tsfn = cb
+        .build_threadsafe_function::<OnEmitTsfnPayload>()
+        .callee_handled::<false>()
+        .build_callback(
+            |ctx: napi::threadsafe_function::ThreadsafeCallContext<OnEmitTsfnPayload>| {
+                Ok(FnArgs::from(ctx.value))
+            },
+        )?;
     let tsfn_arc = Arc::new(tsfn);
     let engine_cb: benten_engine::emit_broadcast::EmitCallback = {
         let tsfn = Arc::clone(&tsfn_arc);
@@ -302,7 +326,7 @@ pub(crate) fn build_on_emit_tsfn(
 pub(crate) fn on_emit_adapter(
     engine: &InnerEngine,
     channel: &str,
-    cb: napi::bindgen_prelude::Function<'_, (String, String), ()>,
+    cb: napi::bindgen_prelude::Function<'_, FnArgs<(String, String)>, ()>,
 ) -> napi::Result<EmitSubscription> {
     let engine_cb = build_on_emit_tsfn(cb)?;
     let want_channel = channel.to_string();

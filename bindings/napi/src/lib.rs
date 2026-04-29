@@ -837,7 +837,13 @@ mod napi_surface {
             &self,
             pattern: String,
             cursor: serde_json::Value,
-            callback: Option<napi::bindgen_prelude::Function<'_, (u32, Buffer), ()>>,
+            callback: Option<
+                napi::bindgen_prelude::Function<
+                    '_,
+                    napi::bindgen_prelude::FnArgs<(u32, Buffer)>,
+                    (),
+                >,
+            >,
         ) -> napi::Result<SubscriptionJs> {
             let sub = on_change_adapter(&self.inner, &pattern, &cursor, callback)?;
             Ok(SubscriptionJs::from_inner(sub))
@@ -860,7 +866,13 @@ mod napi_surface {
             pattern: String,
             cursor: serde_json::Value,
             actor: String,
-            callback: Option<napi::bindgen_prelude::Function<'_, (u32, Buffer), ()>>,
+            callback: Option<
+                napi::bindgen_prelude::Function<
+                    '_,
+                    napi::bindgen_prelude::FnArgs<(u32, Buffer)>,
+                    (),
+                >,
+            >,
         ) -> napi::Result<SubscriptionJs> {
             let actor_cid = parse_actor_cid_or_derive(&actor);
             let sub = on_change_as_adapter(&self.inner, &pattern, &cursor, &actor_cid, callback)?;
@@ -889,7 +901,11 @@ mod napi_surface {
         pub fn on_emit(
             &self,
             channel: String,
-            callback: napi::bindgen_prelude::Function<'_, (String, String), ()>,
+            callback: napi::bindgen_prelude::Function<
+                '_,
+                napi::bindgen_prelude::FnArgs<(String, String)>,
+                (),
+            >,
         ) -> napi::Result<EmitSubscriptionJs> {
             let sub = on_emit_adapter(&self.inner, &channel, callback)?;
             Ok(EmitSubscriptionJs::from_inner(sub, channel))

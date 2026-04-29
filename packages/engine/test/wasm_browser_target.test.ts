@@ -58,7 +58,8 @@ describe("wasm32-unknown-unknown browser target — SANDBOX UX", () => {
       version: "0.0.1",
       modules: [{ name: "identity", cid: "bafy...echo-wasm", requires: [] }],
     };
-    await engine.installModule(manifest, "bafy...manifest");
+    const manifestCid = await engine.computeManifestCid(manifest);
+    await engine.installModule(manifest, manifestCid);
 
     const sg = subgraph("h")
       .action("go")
@@ -92,7 +93,8 @@ describe("wasm32-unknown-unknown browser target — SANDBOX UX", () => {
         version: "0.0.1",
         modules: [{ name: "identity", cid: "bafy...echo-wasm", requires: [] }],
       };
-      await engine.installModule(manifest, "bafy...manifest");
+      const manifestCid = await engine.computeManifestCid(manifest);
+      await engine.installModule(manifest, manifestCid);
 
       const sg = subgraph("h")
         .action("go")
