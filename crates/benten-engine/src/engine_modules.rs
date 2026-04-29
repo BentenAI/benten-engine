@@ -113,7 +113,7 @@ impl Engine {
     /// is durable: the manifest survives engine restart and is
     /// sync-eligible for Phase-3 federation. R6FP-Group-1 (r6-arch-1):
     /// the in-memory active set is rebuilt at engine open via
-    /// [`Self::rehydrate_installed_modules_from_zone`] — pre-fix the
+    /// `Self::rehydrate_installed_modules_from_zone` — pre-fix the
     /// docstring claim above was honoured on disk only and a freshly-
     /// opened engine returned `false` from
     /// [`Self::is_module_installed`] for previously-installed CIDs.

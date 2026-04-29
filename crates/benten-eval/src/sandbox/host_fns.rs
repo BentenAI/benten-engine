@@ -333,9 +333,9 @@ pub struct HostFnContext<'a> {
     /// mutated, so PerCall semantics for kv:read functionally
     /// degrade to PerBoundary at runtime; ESC-9 (cap-revoke
     /// mid-call) is undefended in code. Wiring requires:
-    /// (a) thread an Arc<EngineInner>+actor reference into
+    /// (a) thread an `Arc<EngineInner>`+actor reference into
     /// SandboxStoreData::new at the engine override site;
-    /// (b) replace the Vec<String> live_caps field with a callable
+    /// (b) replace the `Vec<String>` live_caps field with a callable
     /// that consults the engine's revoked-actors set + future
     /// grant-store on each invocation; (c) un-ignore the
     /// sandbox_capability_check_per_call_after_revoke regression
