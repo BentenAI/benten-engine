@@ -501,3 +501,179 @@ fn dummy_subgraph_for_resume() -> benten_eval::Subgraph {
     sb.respond(r);
     sb.build_unvalidated_for_test()
 }
+
+/// Wave-8i fix-pass-2 regression test for `w8i-wait-cag-04`.
+///
+/// **The bug.** Pre-fix-pass-2, `Engine::resume_with_meta` (and the
+/// shared inner `resume_from_bytes_inner`) ran the §9.1 4-step protocol
+/// (envelope decode + tamper check, optional principal binding, pinned-
+/// subgraph drift, capability re-check) and then returned a successful
+/// `terminal_ok_outcome()` regardless of how much time had elapsed
+/// since suspend — even though the eval-side `wait::resume_with_meta`
+/// IS the surface that consumes `WaitMetadata.timeout_ms` /
+/// `suspend_elapsed_ms` and fires `E_WAIT_TIMEOUT` when the deadline
+/// has elapsed. The Wave-8i fix-pass-1 correctly populated
+/// `suspend_elapsed_ms` via the `Engine::elapsed_ms()` override, but
+/// the engine-side public resume API never read the side-table the
+/// fix-pass populated. Production callers reach the engine API not
+/// the eval API; the deadline check on the engine path was silently
+/// disabled.
+///
+/// **What this test asserts.** A WAIT with `duration_ms=100,
+/// timeout_ms=50` is suspended via `engine.call(...)`. The engine's
+/// `MockMonotonicSource` is then advanced past `start + timeout`
+/// (1000ms forward, well past the 50ms deadline). A subsequent
+/// `engine.resume_with_meta(envelope_bytes, ResumePayload::Signal(_))`
+/// call fires `E_WAIT_TIMEOUT` rather than returning a successful
+/// terminal outcome.
+///
+/// This is the load-bearing acceptance gate for the engine-side
+/// deadline check — it directly mirrors
+/// `wait_resume_deadline_fires_against_real_clock` (which targets the
+/// eval-side `benten_eval::resume(...)` surface) but drives the
+/// production-API `Engine::resume_with_meta` path instead.
+#[test]
+fn engine_resume_with_meta_fires_wait_timeout_when_deadline_elapsed() {
+    use benten_engine::ResumePayload;
+    use benten_errors::ErrorCode;
+
+    // Build the engine with a `MockMonotonicSource` so the test can
+    // deterministically advance the engine's clock past the deadline
+    // without a real sleep.
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mock_clock = std::sync::Arc::new(benten_eval::MockMonotonicSource::at_zero());
+    let engine = Engine::builder()
+        .monotonic_source(mock_clock.clone())
+        .open(dir.path().join("engine.redb"))
+        .expect("open engine with mock monotonic source");
+
+    // Same WAIT shape as `wait_resume_deadline_fires_against_real_clock`:
+    // duration_ms makes is_duration=true; timeout_ms < duration_ms so the
+    // resume-time deadline check fires deterministically.
+    let mut props = BTreeMap::new();
+    props.insert("duration_ms".into(), Value::Int(100));
+    props.insert("timeout_ms".into(), Value::Int(50));
+    let spec = SubgraphSpec::builder()
+        .handler_id("wait:engine-deadline")
+        .primitive_with_props(PrimitiveSpec {
+            id: "w0".into(),
+            kind: PrimitiveKind::Wait,
+            properties: props,
+        })
+        .build();
+    engine
+        .register_subgraph(spec)
+        .expect("register engine deadline wait handler");
+
+    // Suspend via the regular-walk path. The Wave-8i fix-pass-1
+    // `Engine::elapsed_ms()` override stamps `suspend_elapsed_ms`
+    // (the mock clock is at 0 here, so start = 0).
+    let handle = match engine.call("wait:engine-deadline", "run", Node::empty()) {
+        Err(EngineError::WaitSuspended { handle }) => handle,
+        other => panic!("expected WaitSuspended, got {other:?}"),
+    };
+
+    // Round-trip the envelope through `suspend_to_bytes` so the test
+    // drives `Engine::resume_with_meta` against real bytes (the
+    // production API surface, exactly as a cross-process resume would
+    // see them).
+    let envelope_bytes = engine
+        .suspend_to_bytes(&handle)
+        .expect("suspend_to_bytes round-trip");
+
+    // Sanity: the metadata side-table records the start reference +
+    // timeout. Pre-fix-pass-1 these would have been None / missing;
+    // the assertions are duplicated from
+    // `wait_resume_deadline_fires_against_real_clock` to make this
+    // test self-contained as a regression for both fix-passes.
+    let store = engine.suspension_store();
+    let meta = store
+        .get_wait(handle.state_cid())
+        .expect("store get_wait")
+        .expect("metadata recorded");
+    assert!(
+        meta.suspend_elapsed_ms.is_some(),
+        "suspend_elapsed_ms must be recorded for the deadline check"
+    );
+    assert_eq!(meta.timeout_ms, Some(50), "timeout_ms must propagate");
+
+    // Advance the engine's monotonic clock well past `start + timeout`.
+    // The pre-fix-pass-2 engine path ignored this entirely and returned
+    // a successful terminal outcome.
+    mock_clock.advance(std::time::Duration::from_secs(1));
+
+    // Drive the production resume API. Post-fix-pass-2, the engine's
+    // `resume_from_bytes_inner` now consults the suspension store's
+    // WaitMetadata and fires `E_WAIT_TIMEOUT` when
+    // `(now - suspend_elapsed_ms) >= timeout_ms`.
+    let result = engine.resume_with_meta(&envelope_bytes, ResumePayload::Signal(Value::Int(0)));
+    match result {
+        Err(EngineError::Other { code, .. }) => assert_eq!(
+            code,
+            ErrorCode::WaitTimeout,
+            "Engine::resume_with_meta MUST fire E_WAIT_TIMEOUT after \
+             the deadline elapses; pre-fix-pass-2 the engine path \
+             returned a successful terminal outcome regardless of \
+             elapsed time, leaving deadline enforcement on the engine \
+             path silently disabled"
+        ),
+        other => panic!(
+            "expected EngineError::Other(E_WAIT_TIMEOUT), got {other:?} \
+             (suggests `resume_from_bytes_inner` did not consult the \
+             suspension store's WaitMetadata; verify w8i-wait-cag-04 \
+             wiring)"
+        ),
+    }
+}
+
+/// Wave-8i fix-pass-2 companion test: confirms `Engine::resume_with_meta`
+/// still returns a successful terminal outcome when the deadline has NOT
+/// elapsed. Guards against an over-eager deadline check that would
+/// reject legitimate in-time resumes.
+#[test]
+fn engine_resume_with_meta_succeeds_when_deadline_not_elapsed() {
+    use benten_engine::ResumePayload;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mock_clock = std::sync::Arc::new(benten_eval::MockMonotonicSource::at_zero());
+    let engine = Engine::builder()
+        .monotonic_source(mock_clock.clone())
+        .open(dir.path().join("engine.redb"))
+        .expect("open engine with mock monotonic source");
+
+    // 50ms timeout, 100ms duration — same as the deadline-firing test,
+    // but here the resume happens at start + 10ms (well within the 50ms
+    // deadline).
+    let mut props = BTreeMap::new();
+    props.insert("duration_ms".into(), Value::Int(100));
+    props.insert("timeout_ms".into(), Value::Int(50));
+    let spec = SubgraphSpec::builder()
+        .handler_id("wait:engine-in-time")
+        .primitive_with_props(PrimitiveSpec {
+            id: "w0".into(),
+            kind: PrimitiveKind::Wait,
+            properties: props,
+        })
+        .build();
+    engine
+        .register_subgraph(spec)
+        .expect("register in-time wait handler");
+
+    let handle = match engine.call("wait:engine-in-time", "run", Node::empty()) {
+        Err(EngineError::WaitSuspended { handle }) => handle,
+        other => panic!("expected WaitSuspended, got {other:?}"),
+    };
+    let envelope_bytes = engine
+        .suspend_to_bytes(&handle)
+        .expect("suspend_to_bytes round-trip");
+
+    // Advance the clock by 10ms — well within the 50ms deadline.
+    mock_clock.advance(std::time::Duration::from_millis(10));
+
+    let result = engine.resume_with_meta(&envelope_bytes, ResumePayload::Signal(Value::Int(0)));
+    let outcome = result.expect("in-time resume should succeed");
+    assert!(
+        outcome.is_ok_edge(),
+        "in-time resume produces the terminal_ok_outcome (OK edge)"
+    );
+}

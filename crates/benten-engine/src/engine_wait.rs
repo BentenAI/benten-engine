@@ -434,13 +434,25 @@ impl Engine {
     /// `tests/integration/cross_process_wait_resume.rs` +
     /// `tests/g12_e_suspension_store_round_trips.rs`).
     ///
+    /// Wave-8i fix-pass-2 (`w8i-wait-cag-04`): the engine resume path
+    /// now consults the [`benten_eval::SuspensionStore`]'s
+    /// [`benten_eval::WaitMetadata`] for the resumed envelope and
+    /// fires [`ErrorCode::WaitTimeout`] when
+    /// `(now - suspend_elapsed_ms) >= timeout_ms`. Prior to fix-pass-2
+    /// this engine-side surface returned a successful terminal outcome
+    /// regardless of elapsed time, even when the regular-walk
+    /// (`engine.call()`) path had stamped a real start reference into
+    /// the metadata.
+    ///
     /// # Errors
     /// Returns [`EngineError`] per
     /// [`Engine::resume_from_bytes_unauthenticated`] (steps 1, 3, 4 of
     /// §9.1) — `E_EXEC_STATE_TAMPERED`, `E_RESUME_SUBGRAPH_DRIFT`,
-    /// `E_CAP_REVOKED_MID_EVAL`, `E_SERIALIZE`, plus the eval-layer
-    /// `E_HOST_BACKEND_UNAVAILABLE` lift on missing metadata
-    /// (Compromise #9 / #10 closure).
+    /// `E_CAP_REVOKED_MID_EVAL`, `E_SERIALIZE`, plus
+    /// `E_WAIT_TIMEOUT` when the envelope's recorded WAIT metadata
+    /// indicates the deadline has elapsed (Wave-8i fix-pass-2), plus
+    /// the eval-layer `E_HOST_BACKEND_UNAVAILABLE` lift on missing
+    /// metadata (Compromise #9 / #10 closure).
     pub fn resume_with_meta(
         &self,
         envelope: &[u8],
@@ -490,6 +502,43 @@ impl Engine {
                     recomputed.to_base32()
                 ),
             });
+        }
+
+        // Step 1.5 (Wave-8i fix-pass-2 w8i-wait-cag-04): WAIT deadline check.
+        //
+        // The eval-side `wait::resume_with_meta` is THE surface that
+        // consumes `WaitMetadata.timeout_ms` + `suspend_elapsed_ms` and
+        // fires `E_WAIT_TIMEOUT` when `(now - start) >= timeout`. The
+        // engine's resume APIs (`resume_with_meta`,
+        // `resume_from_bytes_unauthenticated`, `resume_from_bytes_as`)
+        // route here; pre-fix-pass-2 they returned a successful
+        // `terminal_ok_outcome()` regardless of how much time had elapsed
+        // since suspend, leaving deadline enforcement on the engine path
+        // silently disabled — even though the regular-walk path
+        // (`engine.call()` Wave-8i fix-pass-1) correctly populates the
+        // metadata side-table.
+        //
+        // The lookup is best-effort: a missing entry (fabricated test
+        // envelope, non-WAIT resume reaching this surface, or store
+        // miss in cross-process scenarios after eviction) skips the
+        // deadline check rather than failing — matching the eval-side
+        // `Option<WaitMetadata>` shape's intent for entries the store
+        // legitimately cannot resolve (the eval-side surfaces a typed
+        // `E_HOST_BACKEND_UNAVAILABLE` only when called via the public
+        // `benten_eval::resume` API, which has stricter integrity
+        // expectations than the bytes-only engine resume surfaces).
+        let state_cid = envelope.envelope_cid().map_err(EngineError::Core)?;
+        if let Ok(Some(meta)) = self.suspension_store.get_wait(&state_cid) {
+            let now_ms = u64::try_from(self.monotonic_source.elapsed_since_start().as_millis())
+                .unwrap_or(u64::MAX);
+            if let (Some(timeout), Some(start)) = (meta.timeout_ms, meta.suspend_elapsed_ms)
+                && now_ms.saturating_sub(start) >= timeout
+            {
+                return Err(EngineError::Other {
+                    code: ErrorCode::WaitTimeout,
+                    message: "resume: wait deadline elapsed".into(),
+                });
+            }
         }
 
         // Step 2: principal binding. Only enforced when the caller named a
