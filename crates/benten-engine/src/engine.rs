@@ -1500,6 +1500,15 @@ impl Engine {
         // the trait methods.
         {
             let mut guard = self.active_call.lock_recover();
+            // R6FP-Group-1 (r6-cr-1 / r6-mpc-4 / r6-wsa-1): inherit
+            // sandbox_depth from the parent frame (when there is one)
+            // so a SANDBOX→handler→SANDBOX chain advances the count
+            // correctly at each handler entry. The execute_sandbox
+            // override layers a `+1` at SANDBOX entry on top of this
+            // baseline; together they produce the cumulative nest
+            // depth the eval-side runtime arm consults to fire
+            // `E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED`.
+            let parent_sandbox_depth = guard.last().map_or(0, |f| f.sandbox_depth);
             guard.push(ActiveCall {
                 handler_id: handler_id.to_string(),
                 op: op.to_string(),
@@ -1509,6 +1518,7 @@ impl Engine {
                 inject_failure: false,
                 last_refresh: None,
                 iteration: 0,
+                sandbox_depth: parent_sandbox_depth,
             });
         }
 

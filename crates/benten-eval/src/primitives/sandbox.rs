@@ -340,6 +340,31 @@ pub fn execute(
     grant_caps: &[String],
     attribution: &AttributionFrame,
 ) -> Result<SandboxResult, SandboxError> {
+    // 0. R6FP-Group-1 (r6-cr-1 / r6-mpc-4 / r6-wsa-1) — D20 runtime arm
+    //    enforcement. The dispatching `AttributionFrame.sandbox_depth`
+    //    reflects the cumulative SANDBOX nest count along the active
+    //    call chain (depth=1 = top-level SANDBOX entry, depth=2 = the
+    //    inner SANDBOX of a SANDBOX→handler→SANDBOX chain, etc.). Pre-
+    //    R6FP-G1 the engine-side production override hardcoded
+    //    `sandbox_depth: 1` literally at every entry, so the runtime
+    //    arm could never fire (depth never grew past 1, and 1 is below
+    //    every plausible `max_nest_depth`). Wave-8 "Inv-4 runtime arm
+    //    dormant" was the 3-lens convergent finding (code-reviewer +
+    //    metadata-producer-vs-consumer + wasmtime-sandbox-auditor); the
+    //    fix threads `parent.sandbox_depth + 1` through the engine's
+    //    `ActiveCall` so each nested SANDBOX entry observes the correct
+    //    depth here.
+    //
+    //    Semantics: fire when depth > max_nest_depth (a depth equal to
+    //    the configured max is the FINAL allowed level; the next call
+    //    that would push depth+1 trips). Default max_nest_depth=4 →
+    //    depths 1..=4 admitted, depth 5 fires.
+    if attribution.sandbox_depth > config.max_nest_depth {
+        return Err(SandboxError::NestedDispatchDepthExceeded {
+            max: config.max_nest_depth,
+        });
+    }
+
     // 1. Resolve the manifest. ESC-15 closure: `Named` lookup either
     //    returns a bundle or fires `SandboxError::ManifestUnknown`.
     //    cr-g7a-mr-6 fix-pass: ManifestError::Encode routes through
