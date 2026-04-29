@@ -209,6 +209,16 @@ pub(crate) struct EngineInner {
     /// Phase-3 promotion: the source-of-truth becomes the engine's
     /// grant store; this in-memory set degenerates to a cache hint.
     pub(crate) revoked_actors_for_subscribe: std::sync::Mutex<std::collections::HashSet<Cid>>,
+
+    /// Wave-8c fix-pass cr-w8c-fp-3: opaque test-only marker set.
+    /// Decoupled from `revoked_actors_for_subscribe` so production
+    /// cap-revocation semantics stay distinct from test-helper
+    /// sideband signaling. Consumed by `testing_register_uncounted_host_fn`
+    /// (ESC-13 helper smoke test); production paths NEVER read this set.
+    /// Cfg-gated under `cfg(any(test, feature = "test-helpers"))` so the
+    /// production engine layout does not carry the field at all.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub(crate) test_markers: std::sync::Mutex<std::collections::HashSet<Cid>>,
 }
 
 impl EngineInner {
@@ -238,7 +248,36 @@ impl EngineInner {
             handler_version_chain: std::sync::Mutex::new(std::collections::BTreeMap::new()),
             emit_broadcast: Arc::new(crate::emit_broadcast::EmitBroadcast::new()),
             revoked_actors_for_subscribe: std::sync::Mutex::new(std::collections::HashSet::new()),
+            #[cfg(any(test, feature = "test-helpers"))]
+            test_markers: std::sync::Mutex::new(std::collections::HashSet::new()),
         }
+    }
+
+    /// Wave-8c fix-pass cr-w8c-fp-3: insert an opaque test marker into
+    /// the cfg-gated `test_markers` sideband. Used by ESC-13's
+    /// helper-smoke test (`testing_register_uncounted_host_fn`) so
+    /// integration tests can assert helpers stamp markers without
+    /// overloading the production cap-revocation set.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub(crate) fn insert_test_marker(&self, cid: &Cid) {
+        let mut g = self
+            .test_markers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        g.insert(*cid);
+    }
+
+    /// Wave-8c fix-pass cr-w8c-fp-3: query the opaque test-marker
+    /// sideband set. Returns `true` iff `cid` was previously inserted
+    /// via `insert_test_marker`.
+    #[cfg(any(test, feature = "test-helpers"))]
+    #[must_use]
+    pub(crate) fn has_test_marker(&self, cid: &Cid) -> bool {
+        let g = self
+            .test_markers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        g.contains(cid)
     }
 
     /// Phase 2b Wave-8c-subscribe-infra: return `true` iff the actor

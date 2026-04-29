@@ -128,7 +128,7 @@ mod napi_surface {
         open_stream_adapter,
     };
     use crate::subgraph::{json_to_subgraph_spec, outcome_to_json};
-    use crate::subscribe::{on_change_adapter, on_change_as_adapter, subscription_to_json};
+    use crate::subscribe::{on_change_adapter, on_change_as_adapter};
     #[cfg(feature = "test-helpers")]
     use crate::subscribe::{
         testing_deliver_synthetic_event_for_test_adapter,
@@ -772,24 +772,29 @@ mod napi_surface {
         /// - `{ "kind": "persistent", "subscriberId": <string> }` —
         ///   engine-managed cursor stored across restart
         ///
-        /// Returns the JSON shape of the constructed
-        /// [`benten_engine::Subscription`]:
-        /// `{ active, pattern, cursor, maxDeliveredSeq }`.
+        /// Returns a [`SubscriptionJs`] handle whose `unsubscribe()`
+        /// round-trips to the engine's registry slot release. **The
+        /// JS-side handle MUST be retained for the lifetime of the
+        /// subscription** — dropping the handle (or letting it be GC'd)
+        /// fires Drop on the underlying `benten_engine::Subscription`,
+        /// which calls `unregister_on_change` and tears down the
+        /// `napi::ThreadsafeFunction` Arc that holds the JS callback
+        /// alive. Wave-8c fix-pass cr-w8c-fp-1 lifecycle correction:
+        /// the prior return-as-JSON shape dropped the Subscription at
+        /// end of method scope and JS callbacks could never fire.
         ///
         /// Renamed from `engine.subscribe` per dx-optimizer R1 finding
         /// to avoid name-collision with the DSL
-        /// `subgraph(...).subscribe` builder method. Callbacks are
-        /// wired through G6-A's change-stream port; pre-G6-A the
-        /// returned subscription's `active` is `false`.
+        /// `subgraph(...).subscribe` builder method.
         #[napi]
         pub fn on_change(
             &self,
             pattern: String,
             cursor: serde_json::Value,
             callback: Option<napi::bindgen_prelude::Function<'_, (u32, Buffer), ()>>,
-        ) -> napi::Result<serde_json::Value> {
+        ) -> napi::Result<SubscriptionJs> {
             let sub = on_change_adapter(&self.inner, &pattern, &cursor, callback)?;
-            Ok(subscription_to_json(&sub))
+            Ok(SubscriptionJs::from_inner(sub))
         }
 
         /// Phase 2b wave-8c-subscribe-infra: `onChange` with an explicit
@@ -800,6 +805,9 @@ mod napi_surface {
         /// the registered ad-hoc onChange entry's delivery-time
         /// cap-recheck closure so D5 cap-recheck-at-delivery fires the
         /// named principal's grants on every event.
+        ///
+        /// Returns a [`SubscriptionJs`] handle. Same lifecycle contract
+        /// as [`Engine::on_change`] — see that doc for details.
         #[napi]
         pub fn on_change_as(
             &self,
@@ -807,10 +815,10 @@ mod napi_surface {
             cursor: serde_json::Value,
             actor: String,
             callback: Option<napi::bindgen_prelude::Function<'_, (u32, Buffer), ()>>,
-        ) -> napi::Result<serde_json::Value> {
+        ) -> napi::Result<SubscriptionJs> {
             let actor_cid = parse_actor_cid_or_derive(&actor);
             let sub = on_change_as_adapter(&self.inner, &pattern, &cursor, &actor_cid, callback)?;
-            Ok(subscription_to_json(&sub))
+            Ok(SubscriptionJs::from_inner(sub))
         }
 
         /// ts-r4-2 mirror for SUBSCRIBE (mini-review cr-g6b-mr-5):
@@ -1075,12 +1083,19 @@ mod napi_surface {
     // ---------------------------------------------------------------------
 
     /// JS-side subscription handle. Mirrors
-    /// [`benten_engine::Subscription`] across the napi boundary for
-    /// the cfg-gated test-helper factory + delivery path. Production
-    /// SUBSCRIBE consumers go through `engine.onChange` which returns
-    /// the JSON shape via `subscription_to_json` (the JSON shape is
-    /// the locked surface; this class exists for symmetry with
-    /// `StreamHandleJs` per mini-review cr-g6b-mr-5 only).
+    /// [`benten_engine::Subscription`] across the napi boundary for the
+    /// production `engine.onChange` / `engine.onChangeAs` consumers AND
+    /// the cfg-gated test-helper factory.
+    ///
+    /// **Lifecycle contract (cr-w8c-fp-1 fix-pass):** the handle holds
+    /// the underlying `benten_engine::Subscription` alive for the
+    /// duration of the JS-side reference. When JS drops the handle (or
+    /// calls `unsubscribe()`), Drop fires on the inner Subscription,
+    /// which calls `unregister_on_change` and releases the
+    /// `napi::ThreadsafeFunction` Arc backing the JS callback. Without
+    /// this lifetime extension the production callback path would be
+    /// stillborn (the prior wave-8c return-as-JSON shape dropped the
+    /// Subscription at end of method scope).
     ///
     /// The handle is held behind a `Mutex` so the `&self`-taking napi
     /// methods can share it across JS worker threads.

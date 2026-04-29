@@ -68,10 +68,10 @@ export {
   type NativeStreamHandle,
 } from "./stream.js";
 export {
-  makeSubscription,
+  wrapSubscriptionHandle,
   serializeCursor,
   validateOnChangeArgs,
-  type NativeSubscriptionJson,
+  type NativeSubscriptionJs,
   type OnChangeCallback,
 } from "./subscribe.js";
 

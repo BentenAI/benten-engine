@@ -705,26 +705,34 @@ impl crate::Engine {
         bytes[..len].copy_from_slice(&MARKER[..len]);
     }
 
-    /// ESC-13: register an "uncounted" host-fn name for the in-process
-    /// SANDBOX session. The D17 BACKSTOP at the SANDBOX primitive
-    /// boundary verifies the return-value bytes pass through the
-    /// `CountedSink`; this helper records a marker name in the
-    /// engine's subscribe-cap-revocation set (using the actor channel
-    /// for the registration; the shared mutex namespace makes this a
-    /// clean test bridge) so the integration test under
-    /// `tests/integration/esc_13_uncounted_host_fn.rs` can assert the
-    /// backstop trips. The actual host-fn allowlist construction is
-    /// the eval-side responsibility (G7-A wire-through); this helper
-    /// is the engine-layer marker injector.
+    /// ESC-13 helper: stamp a marker for an "uncounted" host-fn name
+    /// into the engine's cfg-gated `test_markers` sideband (cr-w8c-fp-3
+    /// — decoupled from `revoked_actors_for_subscribe` so production
+    /// cap-revocation semantics stay distinct from test-helper signal).
+    ///
+    /// The companion engine-layer integration test asserts the marker
+    /// round-trips through the same channel a real ESC-13 BACKSTOP
+    /// would write. The actual D17 BACKSTOP at the SANDBOX primitive
+    /// boundary lives eval-side (G7-A wire-through); this helper is the
+    /// engine-layer test-marker injector.
     #[cfg(any(test, feature = "test-helpers"))]
     pub fn testing_register_uncounted_host_fn(&self, name: &str) {
-        // Encode the name as a content-addressed CID so we can re-use
-        // the existing `revoked_actors_for_subscribe` set as a
-        // generic "test marker" sideband. The integration test reads
-        // the same CID back; production never derives CIDs this way.
         let digest = blake3::hash(name.as_bytes());
         let cid = benten_core::Cid::from_blake3_digest(*digest.as_bytes());
-        self.inner.mark_actor_revoked_for_subscribe(&cid);
+        self.inner.insert_test_marker(&cid);
+    }
+
+    /// ESC-13 helper companion: query the cfg-gated `test_markers`
+    /// sideband. Returns `true` iff `name` was previously stamped via
+    /// `testing_register_uncounted_host_fn`. Used by integration tests
+    /// to verify the marker round-trip without reaching into
+    /// `EngineInner` directly.
+    #[cfg(any(test, feature = "test-helpers"))]
+    #[must_use]
+    pub fn testing_has_uncounted_host_fn_marker(&self, name: &str) -> bool {
+        let digest = blake3::hash(name.as_bytes());
+        let cid = benten_core::Cid::from_blake3_digest(*digest.as_bytes());
+        self.inner.has_test_marker(&cid)
     }
 
     /// Wave-8c-subscribe-infra: query the count of in-process ad-hoc

@@ -226,45 +226,9 @@ pub(crate) fn testing_deliver_synthetic_event_for_test_adapter(
     engine.testing_deliver_synthetic_event_for_test(sub, seq)
 }
 
-/// Render a [`Subscription`] handle as the JSON shape the TS wrapper
-/// expects. Carries the active flag, pattern, and current
-/// `max_delivered_seq` so JS-side code can verify the dedup state
-/// machine without holding a raw rust handle reference.
-pub(crate) fn subscription_to_json(sub: &Subscription) -> serde_json::Value {
-    let mut map = serde_json::Map::new();
-    map.insert("active".into(), serde_json::Value::Bool(sub.is_active()));
-    map.insert(
-        "pattern".into(),
-        serde_json::Value::String(sub.pattern().to_string()),
-    );
-    map.insert(
-        "maxDeliveredSeq".into(),
-        serde_json::Value::Number(sub.max_delivered_seq().into()),
-    );
-    map.insert(
-        "cursor".into(),
-        match sub.cursor() {
-            SubscribeCursor::Latest => {
-                let mut m = serde_json::Map::new();
-                m.insert("kind".into(), serde_json::Value::String("latest".into()));
-                serde_json::Value::Object(m)
-            }
-            SubscribeCursor::Sequence(s) => {
-                let mut m = serde_json::Map::new();
-                m.insert("kind".into(), serde_json::Value::String("sequence".into()));
-                m.insert("seq".into(), serde_json::Value::Number((*s).into()));
-                serde_json::Value::Object(m)
-            }
-            SubscribeCursor::Persistent(id) => {
-                let mut m = serde_json::Map::new();
-                m.insert(
-                    "kind".into(),
-                    serde_json::Value::String("persistent".into()),
-                );
-                m.insert("subscriberId".into(), serde_json::Value::String(id.clone()));
-                serde_json::Value::Object(m)
-            }
-        },
-    );
-    serde_json::Value::Object(map)
-}
+// `subscription_to_json` removed in wave-8c fix-pass cr-w8c-fp-1: the
+// JSON-shape return path dropped the underlying Subscription at end of
+// method scope, releasing the `napi::ThreadsafeFunction` Arc that holds
+// the JS callback alive — JS callbacks could never fire. Production
+// consumers + test helpers now route through `SubscriptionJs` which
+// holds the Subscription alive for the lifetime of the JS handle.
