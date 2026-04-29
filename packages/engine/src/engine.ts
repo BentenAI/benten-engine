@@ -109,6 +109,13 @@ interface NativeEngine {
   grantCapability?: (grant: unknown) => string;
   revokeCapability?: (grantCid: string, actor: string) => void;
   createView?: (viewDef: unknown) => string;
+  // R6-FP r6-arch-2: rename create_user_view → register_user_view to
+  // align with the Engine's `register_*` lifecycle pattern (R4b major
+  // #4 carry-forward). Group 1 lands the Rust + napi rename; the TS
+  // shim probes both names so it works with either side of the merge.
+  // The deprecated alias is kept on the napi shim for one cycle to
+  // match Group 1's Rust deprecation pattern.
+  registerUserView?: (spec: unknown) => string;
   createUserView?: (spec: unknown) => string;
   readView?: (viewId: string, query: unknown) => unknown;
   emitEvent?: (name: string, payload: unknown) => void;
@@ -1013,6 +1020,57 @@ export class Engine {
   }
 
   /**
+   * Register a user-defined IVM view (Phase 2b G8-B).
+   *
+   * Pass `{ id, inputPattern, strategy?, project? }`. Returns a
+   * [`UserView`] handle exposing `id`, `strategy`, `inputPattern`,
+   * `snapshot()`, and `onUpdate()`. Strategy defaults to `'B'` per
+   * D8-RESOLVED; `'A'` and `'C'` produce typed errors
+   * (`E_VIEW_STRATEGY_A_REFUSED` / `E_VIEW_STRATEGY_C_RESERVED`).
+   *
+   * # Naming (r6-arch-2 closure)
+   *
+   * Renamed from `createUserView` to `registerUserView` to align with
+   * the Engine's existing `register_*` lifecycle verbs
+   * (`registerSubgraph`, `registerCrud`, `registerModule`). The
+   * `register_*` verb introduces a runtime artifact; `create_*` (e.g.
+   * `createPrincipal`, `createView`) instantiates from a registry /
+   * factory; `install_*` (e.g. `installModule`) loads + verifies
+   * external content. R6-FP Group 1 lands the matching Rust + napi
+   * rename; this TS surface routes through the new `registerUserView`
+   * napi symbol when present and falls back to the legacy
+   * `createUserView` napi symbol on older bindings.
+   *
+   * The canonical-view-from-registry path stays on `createView(viewDef)`
+   * (semantically distinct — instantiates a hand-written view from a
+   * registry-of-strategy; doesn't introduce a new artifact).
+   */
+  public async registerUserView(spec: UserViewSpec): Promise<UserView> {
+    this.assertOpen();
+    const validationError = validateUserViewSpec(spec);
+    if (validationError !== null) {
+      throw new EDslInvalidShape(validationError);
+    }
+    const native =
+      this.inner.registerUserView ?? this.inner.createUserView;
+    if (!native) {
+      throw new EDslInvalidShape(
+        "Engine.registerUserView unavailable on this binding — rebuild the napi cdylib against benten-engine ≥ Phase-2b G8-B",
+      );
+    }
+    const resolvedStrategy = resolveUserViewStrategy(spec);
+    try {
+      // The Rust side enforces the typed E_VIEW_STRATEGY_A_REFUSED /
+      // E_VIEW_STRATEGY_C_RESERVED errors; we forward the strategy
+      // string verbatim so the engine boundary owns the policy.
+      native(userViewSpecToNativeJson(spec));
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+    return buildUserViewHandle(spec, resolvedStrategy);
+  }
+
+  /**
    * Register / materialize an IVM view definition.
    *
    * Two call shapes:
@@ -1025,10 +1083,13 @@ export class Engine {
    *
    * 2. **User-view builder form** (Phase 2b G8-B; `spec: UserViewSpec`):
    *    pass `{ id, inputPattern, strategy?, project? }`. Returns a
-   *    [`UserView`] handle exposing `id`, `strategy`, `inputPattern`,
-   *    `snapshot()`, and `onUpdate()`. Strategy defaults to `'B'` per
-   *    D8-RESOLVED; `'A'` and `'C'` produce typed errors
-   *    (`E_VIEW_STRATEGY_A_REFUSED` / `E_VIEW_STRATEGY_C_RESERVED`).
+   *    [`UserView`] handle.
+   *
+   *    @deprecated since R6-FP — use {@link Engine.registerUserView}
+   *    for the user-view spec form. The `createView(spec)` overload
+   *    forwards to `registerUserView` for one cycle. The legacy
+   *    `createView(viewDef)` form for the 5 Phase-1 hand-written
+   *    views is unchanged.
    */
   public async createView(viewDef: ViewDef): Promise<string>;
   public async createView(spec: UserViewSpec): Promise<UserView>;
@@ -1037,25 +1098,10 @@ export class Engine {
   ): Promise<string | UserView> {
     this.assertOpen();
     if (isUserViewSpec(arg)) {
-      const validationError = validateUserViewSpec(arg);
-      if (validationError !== null) {
-        throw new EDslInvalidShape(validationError);
-      }
-      if (!this.inner.createUserView) {
-        throw new EDslInvalidShape(
-          "Engine.createView (UserViewSpec form) unavailable on this binding — rebuild the napi cdylib against benten-engine ≥ Phase-2b G8-B",
-        );
-      }
-      const resolvedStrategy = resolveUserViewStrategy(arg);
-      try {
-        // The Rust side enforces the typed E_VIEW_STRATEGY_A_REFUSED /
-        // E_VIEW_STRATEGY_C_RESERVED errors; we forward the strategy
-        // string verbatim so the engine boundary owns the policy.
-        this.inner.createUserView(userViewSpecToNativeJson(arg));
-      } catch (err) {
-        throw mapNativeError(err);
-      }
-      return buildUserViewHandle(arg, resolvedStrategy);
+      // r6-arch-2 deprecation alias — forward to the canonical
+      // registerUserView surface. One-cycle alias matching Group 1's
+      // Rust deprecation pattern.
+      return this.registerUserView(arg);
     }
     if (!this.inner.createView) {
       throw new EDslInvalidShape("Engine.createView unavailable on this binding");

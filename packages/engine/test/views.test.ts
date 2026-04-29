@@ -1,9 +1,9 @@
-// R3-followup (R4-FP B-1) red-phase — engine.createView (G8-B exclusive).
+// R3-followup (R4-FP B-1) red-phase — engine.registerUserView (G8-B exclusive).
 //
 // Tests are RED at landing time; G8-B (TS-side) makes them green.
 //
 // Surface contract (per dx-r1-2b + plan §3 G8-B + D8-RESOLVED):
-//   - engine.createView(spec) -> Promise<UserView>
+//   - engine.registerUserView(spec) -> Promise<UserView>
 //     * spec carries id, inputPattern, strategy?, project?
 //     * strategy DEFAULTS to 'B' (D8: hand-written = Rust-only;
 //       user views always go through Algorithm B).
@@ -11,6 +11,11 @@
 //   - The returned UserView exposes:
 //     * snapshot() -> AsyncIterable<Row>  (current rows)
 //     * onUpdate(cb) -> Subscription      (event-emitter for diffs)
+//
+// R6-FP r6-arch-2: renamed from engine.createView → engine.registerUserView
+// to align with the Engine's register_* lifecycle pattern. The legacy
+// engine.createView(spec) overload remains as a one-cycle deprecation
+// alias forwarding to registerUserView.
 //
 // Pin sources: r2-test-landscape.md §7 rows 462-463; r2 §1.7 + §8 D8;
 // r4-qa-expert.json qa-r4-04.
@@ -23,7 +28,7 @@ import {
 } from "@benten/engine";
 import type { UserViewSpec, UserView } from "@benten/engine";
 
-describe("engine.createView", () => {
+describe("engine.registerUserView", () => {
   it.skip("Phase 2b G8-B pending — round-trip create + snapshot materialization", async () => {
     const engine = await Engine.open(":memory:");
 
@@ -37,7 +42,7 @@ describe("engine.createView", () => {
       }),
     };
 
-    const view: UserView = await engine.createView(spec);
+    const view: UserView = await engine.registerUserView(spec);
     expect(view.id).toBe("user_posts_by_author");
 
     // Emit synthetic events through the engine's normal write path.
@@ -88,7 +93,7 @@ describe("engine.createView", () => {
       strategy: "A" as const,
     } as unknown as UserViewSpec;
 
-    await expect(engine.createView(badSpec)).rejects.toMatchObject({
+    await expect(engine.registerUserView(badSpec)).rejects.toMatchObject({
       message: expect.stringMatching(
         /E_VIEW_STRATEGY_A_REFUSED|hand-written|Strategy::A/i,
       ),
@@ -125,7 +130,7 @@ describe("engine.createView", () => {
       strategy: "C" as const,
     } as unknown as UserViewSpec;
 
-    await expect(engine.createView(reservedSpec)).rejects.toMatchObject({
+    await expect(engine.registerUserView(reservedSpec)).rejects.toMatchObject({
       message: expect.stringMatching(/E_VIEW_STRATEGY_C_RESERVED|Phase 3|Z-set/i),
     });
 
@@ -168,7 +173,7 @@ describe("UserView.onUpdate", () => {
   it.skip("Phase 2b G8-B pending — onUpdate fires with diff for matching writes", async () => {
     const engine = await Engine.open(":memory:");
 
-    const view = await engine.createView({
+    const view = await engine.registerUserView({
       id: "user_onupdate_test",
       inputPattern: { label: "post" },
     });

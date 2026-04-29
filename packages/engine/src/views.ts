@@ -1,11 +1,19 @@
-// Phase-2b G8-B — `engine.createView(spec)` DSL builder for user-defined
-// IVM views.
+// Phase-2b G8-B — `engine.registerUserView(spec)` DSL builder for
+// user-defined IVM views (renamed from `createView`/`createUserView` per
+// R6-FP r6-arch-2 to align with the Engine's `register_*` lifecycle
+// pattern).
 //
-// The TS surface is the public face of `Engine::create_user_view` (Rust
-// side) plus the napi `engine.createUserView` bridge. Callers see a
+// The TS surface is the public face of `Engine::register_user_view`
+// (Rust side, renamed from `create_user_view` by R6-FP Group 1) plus
+// the napi `engine.registerUserView` bridge. Callers see a
 // `UserViewSpec` -> `UserView` transformation; the builder shape is
 // intentionally narrow in 2b — the wider Phase-3 sync surface (cursors,
 // causal vectors, distributed snapshots) lands alongside the iroh port.
+//
+// One-cycle deprecation alias: `engine.createView(spec)` continues to
+// work, forwarding to `registerUserView`. The legacy
+// `engine.createView(viewDef)` for the 5 Phase-1 hand-written views is
+// unchanged (semantically distinct — instantiates from a registry).
 //
 // D8-RESOLVED contract:
 //   - `strategy` defaults to `'B'` (the user-view default per D8).
