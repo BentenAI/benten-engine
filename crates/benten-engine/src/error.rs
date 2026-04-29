@@ -199,6 +199,71 @@ pub enum EngineError {
 }
 
 impl EngineError {
+    /// R6FP-Group-1 (Round-2 Instance 8) — structured-field bag for the
+    /// napi error bridge.
+    ///
+    /// The napi `engine_err` adapter formats `EngineError` Display
+    /// alongside the catalog code, but the structured per-variant
+    /// fields (e.g. `ModuleManifestCidMismatch.expected` /
+    /// `.computed` / `.summary`, `Invariant`'s diagnostic context)
+    /// are reduced to a flat string. This accessor returns a
+    /// JSON-serialisable bag the napi bridge attaches as a
+    /// `$$benten-context$$` suffix on the napi error message; the TS
+    /// `mapNativeError` parses it and populates
+    /// `BentenError.context`.
+    ///
+    /// Returns `None` for variants whose Display is already lossless
+    /// (no structured fields to surface beyond the message).
+    #[must_use]
+    pub fn context_json(&self) -> Option<serde_json::Value> {
+        use serde_json::json;
+        match self {
+            EngineError::ModuleManifestCidMismatch {
+                expected,
+                computed,
+                summary,
+            } => Some(json!({
+                "expected": expected.to_base32(),
+                "computed": computed.to_base32(),
+                "summary": summary,
+            })),
+            EngineError::ModuleMigrationsRequirePersistence { migration_count } => Some(json!({
+                "migrationCount": migration_count,
+            })),
+            EngineError::IvmViewStale { view_id } | EngineError::UnknownView { view_id } => {
+                Some(json!({ "viewId": view_id }))
+            }
+            EngineError::ViewStrategyARefused { view_id }
+            | EngineError::ViewStrategyCReserved { view_id } => {
+                Some(json!({ "viewId": view_id }))
+            }
+            EngineError::SubsystemDisabled { subsystem } => Some(json!({ "subsystem": subsystem })),
+            EngineError::DuplicateHandler { handler_id } => {
+                Some(json!({ "handlerId": handler_id }))
+            }
+            EngineError::WaitSuspended { handle } => Some(json!({
+                "envelopeCid": handle.state_cid().to_base32(),
+                "signal": handle.signal_name(),
+            })),
+            EngineError::Invariant(reg_err) => {
+                // RegistrationError's Display + Debug carry diagnostic
+                // context; we surface a minimal bag with the catalog
+                // code + the Display rendering so TS callers can
+                // route on `context.invariantCode` without parsing
+                // the message string. Phase-3 may widen this with
+                // per-RegistrationError-variant structured fields.
+                Some(json!({
+                    "invariantCode": format!("{}", reg_err.code()),
+                    "summary": format!("{reg_err}"),
+                }))
+            }
+            // Variants whose Display is lossless (single-string
+            // message, no structured fields) return None — engine_err
+            // skips the metadata suffix.
+            _ => None,
+        }
+    }
+
     /// Stable catalog code as [`ErrorCode`]. Consumers that want the string
     /// form call `err.error_code().as_str()`.
     #[must_use]

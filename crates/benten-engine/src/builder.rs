@@ -369,14 +369,34 @@ impl EngineBuilder {
                 .as_ref()
                 .and_then(|n| n.canonical_bytes().ok())
                 .unwrap_or_default();
-            let label = event.primary_label().to_string();
+            // R6FP-Group-1 (Round-2 Instance 6 BLOCKER): forward ALL
+            // 9 fields cleanly. Pre-fix this bridge dropped 6 of 9
+            // (tx_id, actor_cid, handler_cid, capability_grant_cid,
+            // edge_endpoints, AND collapsed labels: Vec<String> to a
+            // single primary_label: String). The collapse caused a
+            // real BEHAVIORAL DEFECT: a multi-labeled Node
+            // ["User","Admin"] silently missed delivery to a
+            // SUBSCRIBE consumer matching `Admin:*` because the
+            // matcher only consulted the (single) primary label.
+            // edge_endpoints stays out of the eval-side struct (the
+            // eval ChangeEvent is anchor-centric; edge events ride
+            // the anchor_cid/labels with no separate endpoint
+            // surface). All other 8 fields forward.
             let translated = benten_eval::primitives::subscribe::ChangeEvent {
                 anchor_cid: event.cid,
                 kind,
                 seq: benten_eval::primitives::subscribe::next_engine_seq(),
                 payload_bytes,
+                labels: event.labels.clone(),
+                tx_id: event.tx_id,
+                actor_cid: event.actor_cid,
+                handler_cid: event.handler_cid,
+                capability_grant_cid: event.capability_grant_cid,
             };
-            benten_eval::primitives::subscribe::publish_change_event_with_label(&label, translated);
+            benten_eval::primitives::subscribe::publish_change_event_with_labels(
+                &event.labels,
+                translated,
+            );
         });
 
         // Wire the IVM subscriber when enabled. G5's `Subscriber::new()`

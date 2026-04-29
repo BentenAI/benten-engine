@@ -94,12 +94,12 @@ fn esc_7_revoke_cap_mid_stream_auto_cancels_subscription_on_next_event() {
     // engine's per-event cap-recheck closure consults
     // `inner.is_actor_active(&alice)`, sees the revoked marker, and
     // calls `unregister_on_change` + flips `entry.active` to false.
-    let event = benten_eval::primitives::subscribe::ChangeEvent {
-        anchor_cid: actor("event-anchor-1"),
-        kind: benten_eval::primitives::subscribe::ChangeKind::Created,
-        seq: benten_eval::primitives::subscribe::next_engine_seq(),
-        payload_bytes: vec![0xDE, 0xAD, 0xBE, 0xEF],
-    };
+    let event = benten_eval::primitives::subscribe::ChangeEvent::legacy_minimal(
+        actor("event-anchor-1"),
+        benten_eval::primitives::subscribe::ChangeKind::Created,
+        benten_eval::primitives::subscribe::next_engine_seq(),
+        vec![0xDE, 0xAD, 0xBE, 0xEF],
+    );
     benten_eval::primitives::subscribe::publish_change_event_with_label("revoke-test", event);
 
     // Yield briefly so any same-thread dispatch completes.
@@ -234,12 +234,12 @@ fn helper_smoke_register_uncounted_host_fn_records_marker_in_sideband() {
     // subscription's cap-recheck closure consults the production
     // revoked-actors set (NOT the test_markers sideband), so the
     // delivery succeeds + the subscription stays active.
-    let event = benten_eval::primitives::subscribe::ChangeEvent {
-        anchor_cid: actor("event-anchor-13"),
-        kind: benten_eval::primitives::subscribe::ChangeKind::Created,
-        seq: benten_eval::primitives::subscribe::next_engine_seq(),
-        payload_bytes: Vec::new(),
-    };
+    let event = benten_eval::primitives::subscribe::ChangeEvent::legacy_minimal(
+        actor("event-anchor-13"),
+        benten_eval::primitives::subscribe::ChangeKind::Created,
+        benten_eval::primitives::subscribe::next_engine_seq(),
+        Vec::new(),
+    );
     benten_eval::primitives::subscribe::publish_change_event_with_label("unrelated:foo", event);
     std::thread::sleep(std::time::Duration::from_millis(10));
     assert!(
@@ -373,12 +373,12 @@ fn esc_7_and_test_markers_are_disjoint() {
     // Publish a real event. Bob is not revoked, so delivery succeeds +
     // the subscription stays active.
     let _ = SubscribeCursor::Latest;
-    let event = benten_eval::primitives::subscribe::ChangeEvent {
-        anchor_cid: actor("event-anchor-bob"),
-        kind: benten_eval::primitives::subscribe::ChangeKind::Created,
-        seq: benten_eval::primitives::subscribe::next_engine_seq(),
-        payload_bytes: Vec::new(),
-    };
+    let event = benten_eval::primitives::subscribe::ChangeEvent::legacy_minimal(
+        actor("event-anchor-bob"),
+        benten_eval::primitives::subscribe::ChangeKind::Created,
+        benten_eval::primitives::subscribe::next_engine_seq(),
+        Vec::new(),
+    );
     benten_eval::primitives::subscribe::publish_change_event_with_label("topic", event);
     std::thread::sleep(std::time::Duration::from_millis(10));
     assert!(
