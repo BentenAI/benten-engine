@@ -78,13 +78,15 @@ jobs:
       - name: Install npm workspace + build TS
         # The packages/engine workspace consumes the napi cdylib through
         # the `@benten/engine-native` workspace package. Top-level
-        # `npm install` resolves the workspaces; `npm run build` (or
-        # equivalent tsc invocation) produces the `dist/` consumed by
-        # vitest's import resolution.
+        # `npm install` resolves the workspaces; `npm run build` (= tsc)
+        # produces the `dist/` that `@benten/engine`'s `main` field
+        # points at (`./dist/index.js`). Without an actual emit step,
+        # vitest fails on import resolution with
+        #   `Failed to resolve entry for package "@benten/engine"`
+        # — the prior `tsc --noEmit` only typechecked.
         run: |
           npm install --no-audit --no-fund
-          cd packages/engine
-          npx tsc --noEmit
+          npm run build --workspace=@benten/engine
 
       - name: Run vitest suite against built napi cdylib
         # Runs every test under `packages/engine/test/*.test.ts`.

@@ -33,3 +33,37 @@ failure-output = "immediate-final"
 slow-timeout = { period = "60s", terminate-after = 3 }
 # Don't bail on the first failure in CI — let every leg's full result
 # surface so a cross-leg regression is visible in a single PR.
+
+# Per-test slow-timeout overrides for genuinely-slow property tests
+# whose 1024-case proptest runs exceed the default 180s kill on the
+# slowest CI runners (Intel Mac under MSRV 1.95 toolchain, observed
+# at ~175ms/case × 1024 cases ≈ 180s — right at the kill boundary).
+#
+# `terminate-after = 6` gives 360s wall clock for these specific tests
+# while keeping the 180s guardrail for everything else. The per-test
+# design (vs. raising the global slow-timeout) preserves the
+# 60-minute CI budget the global default protects.
+[[profile.ci.overrides]]
+filter = 'test(=in_memory_observationally_equivalent_to_redb)'
+slow-timeout = { period = "60s", terminate-after = 6 }
+
+# Tests that touch process-wide global state (the wasmtime Module cache
+# in `crates/benten-eval/src/sandbox/`, the EvalContext registry path
+# touched by `benten_eval::resume`) must be serialized against each
+# other and against any sibling that may interact with the same global.
+# Without this group they race intermittently under CI parallelism
+# (observed as `Arc::ptr_eq` mismatch in module-cache-cache-hit pins
+# and as InvRegistration phantom errors in WAIT resume tests).
+#
+# Both the default and ci profiles consume this group so local
+# `cargo nextest run` reproduces the CI scheduling.
+[[profile.ci.overrides]]
+filter = 'test(=sandbox_module_cache_avoids_recompilation_on_repeated_call) | test(=wait_signal_shape_defaults_untyped_accepts_any_value)'
+test-group = "serial-globals"
+
+[[profile.default.overrides]]
+filter = 'test(=sandbox_module_cache_avoids_recompilation_on_repeated_call) | test(=wait_signal_shape_defaults_untyped_accepts_any_value)'
+test-group = "serial-globals"
+
+[test-groups]
+serial-globals = { max-threads = 1 }
