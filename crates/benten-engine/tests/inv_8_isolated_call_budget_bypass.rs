@@ -54,7 +54,7 @@ use benten_engine::Engine;
 /// Major #2: isolated:true CALL MUST reset multiplicative budget to the
 /// callee grant's declared bound. Parent looping cannot leak budget.
 #[test]
-#[ignore = "phase-2a-pending: Inv-8 multiplicative + isolated-CALL reset semantics land in G4-A per plan §9.12 + code-as-graph Major #2. Drop #[ignore] once invariants/budget.rs wires the isolation-boundary reset."]
+#[ignore = "Phase 3 — Inv-8 isolated-CALL budget-reset body deferred per docs/future/phase-3-backlog.md §7.3.C (Phase 2a closed; G4-A budget-isolation reset semantics landed; integration body lands Phase 3)"]
 fn inv_8_isolated_call_resets_to_callee_grant() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
