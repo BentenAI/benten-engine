@@ -1641,13 +1641,27 @@ export class Engine {
   /**
    * Open a STREAM dispatch returning a [`StreamHandle`] whose lifecycle
    * the caller manages via {@link StreamHandle.close}. Same dispatch
-   * path as {@link Engine.callStream} — the only difference is the
-   * lifecycle contract (the `for await` form auto-closes; this form
-   * doesn't).
+   * path as {@link Engine.callStream} — the lifecycle CONVENTION is
+   * different (the `for await` form auto-closes; this form requires an
+   * explicit close()).
    *
    * Use this when you need to start a stream, hand the handle to a
    * different scope (e.g. an Express route), and `close()` it
    * explicitly when the consumer disconnects.
+   *
+   * # Lifecycle enforcement (r6-stream-1 honest scope)
+   *
+   * The engine threads `requires_explicit_close: true` through the
+   * underlying StreamHandle so a future leak detector can fire
+   * `E_STREAM_HANDLE_LEAKED` when an unclosed handle is GC'd. **Phase
+   * 2b does NOT enforce this at the JS surface** — at the API level
+   * `callStream` and `openStream` are functionally indistinguishable
+   * once the handle is in JS-side scope. Production handlers using
+   * openStream must close() the handle explicitly; failing to do so is
+   * a resource leak (the producer thread + chunk sink survive until
+   * Drop). Wiring a `FinalizationRegistry` leak detector + exposing a
+   * `requiresExplicitClose()` napi accessor is named-destination Phase
+   * 3 (R6-FP Group 4 enrichment to docs/future/phase-3-backlog.md).
    */
   public openStream(
     handlerId: string,
