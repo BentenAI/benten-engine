@@ -94,7 +94,7 @@ pub use engine_config::{EngineConfig, EngineConfigError, SandboxSection};
 
 pub use builder::{EngineBuilder, NOAUTH_STARTUP_LOG};
 pub use change_probe::ChangeProbe;
-pub use emit_broadcast::{EmitBroadcast, EmitEvent};
+pub use emit_broadcast::{EmitBroadcast, EmitEvent, EmitSubscription};
 pub use engine::{CHANGE_STREAM_MAX_BUFFERED, Engine};
 pub use engine_transaction::EngineTransaction;
 pub use error::EngineError;

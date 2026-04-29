@@ -88,6 +88,24 @@ impl Engine {
         self.inner.emit_broadcast.subscribe_fn(f);
     }
 
+    /// R6FP-Group-1 (r6-mpc-2 engine half) — subscribe to EMIT events
+    /// AND return an [`crate::emit_broadcast::EmitSubscription`]
+    /// handle. Mirrors the SUBSCRIBE [`Self::on_change`] handle pattern
+    /// so the napi binding (`EmitSubscriptionJs`) can carry a
+    /// JS-visible lifecycle the consumer can `unsubscribe()` / drop.
+    /// The handle's Drop is idempotent with `unsubscribe()` and flips
+    /// an active-flag the publish path consults — subsequent emits
+    /// skip the handler's callback once the handle is gone.
+    pub fn subscribe_emit_events_with_handle<F>(
+        &self,
+        f: F,
+    ) -> crate::emit_broadcast::EmitSubscription
+    where
+        F: Fn(&crate::emit_broadcast::EmitEvent) + Send + Sync + 'static,
+    {
+        self.inner.emit_broadcast.subscribe_with_handle(f)
+    }
+
     /// Wave-8h audit-gap fix — subscriber count for the EMIT broadcast.
     /// Used by tests asserting registration + by operator tooling
     /// surfacing emit-channel observability.
@@ -248,7 +266,7 @@ impl Engine {
     /// - [`EngineError::ViewStrategyCReserved`] when the spec declared
     ///   `Strategy::C` (Z-set / DBSP cancellation reserved for Phase 3+).
     /// - Backend errors from the underlying privileged Node write.
-    pub fn create_user_view(&self, spec: UserViewSpec) -> Result<Cid, EngineError> {
+    pub fn register_user_view(&self, spec: UserViewSpec) -> Result<Cid, EngineError> {
         // D8-RESOLVED: refuse Strategy::A + Strategy::C BEFORE writing the
         // definition Node so a refused registration leaves no on-disk
         // residue (the `system:IVMView` Node only exists for accepted
@@ -358,6 +376,26 @@ impl Engine {
         }
 
         Ok(cid)
+    }
+
+    /// R6FP-Group-1 (r6-arch-2) deprecation alias —
+    /// [`Self::create_user_view`] was renamed to
+    /// [`Self::register_user_view`] to align with the engine's
+    /// `register_*` lifecycle verb (matches `register_subgraph`,
+    /// `register_subgraph_replace`, `register_subgraph_aggregate`,
+    /// `register_crud`, `register_module_bytes`). The alias is held
+    /// alive through one transition window so the TS-side rename in
+    /// Group 2 does not break the build; the alias will be removed in
+    /// a follow-up.
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::register_user_view`].
+    #[deprecated(
+        note = "renamed to register_user_view (R6FP-G1 r6-arch-2); will be removed in a follow-up"
+    )]
+    pub fn create_user_view(&self, spec: UserViewSpec) -> Result<Cid, EngineError> {
+        self.register_user_view(spec)
     }
 
     /// Internal helper mirroring `engine_caps::Engine::privileged_put_node`

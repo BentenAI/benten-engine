@@ -52,6 +52,49 @@ pub struct EmitEvent {
 /// [`crate::change::ChangeCallback`].
 pub type EmitCallback = Arc<dyn Fn(&EmitEvent) + Send + Sync + 'static>;
 
+/// R6FP-Group-1 (r6-mpc-2 engine half) — handle-style subscription
+/// returned by [`EmitBroadcast::subscribe_with_handle`]. Mirrors the
+/// SUBSCRIBE [`crate::engine_subscribe::Subscription`] shape: holds an
+/// AtomicBool the publish path consults to skip-fire after
+/// [`Self::unsubscribe`] is called. The handle's Drop is idempotent
+/// with `unsubscribe()`.
+///
+/// This handle pattern exists primarily so the napi
+/// `EmitSubscriptionJs` class can return a JS-visible handle whose
+/// lifecycle controls the EMIT callback's liveness — without it the
+/// closure-form `subscribe_fn` would leak the JS callback for the
+/// engine's lifetime (the Drop of the JS handle would have no effect
+/// on the registered closure).
+#[derive(Debug)]
+pub struct EmitSubscription {
+    active: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl EmitSubscription {
+    /// `true` while the subscription is still firing the registered
+    /// callback on every published event. Flips to `false` on
+    /// [`Self::unsubscribe`] or Drop.
+    #[must_use]
+    pub fn is_active(&self) -> bool {
+        self.active.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Idempotently flip the active flag to `false` so subsequent
+    /// publishes skip this subscription's callback. The closure
+    /// itself stays in the broadcast's `callbacks` Vec until the
+    /// engine drops; the active flag is the load-bearing
+    /// "subscription ended" signal.
+    pub fn unsubscribe(&self) {
+        self.active.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+impl Drop for EmitSubscription {
+    fn drop(&mut self) {
+        self.unsubscribe();
+    }
+}
+
 /// Handle to the engine's EMIT broadcast.
 ///
 /// Mirrors [`crate::change::ChangeBroadcast`] but for emit-only events.
@@ -89,6 +132,27 @@ impl EmitBroadcast {
     {
         let mut guard = self.callbacks.lock_recover();
         guard.push(Arc::new(f));
+    }
+
+    /// R6FP-Group-1 (r6-mpc-2 engine half) — register a closure-form
+    /// subscriber AND return an [`EmitSubscription`] handle whose
+    /// `unsubscribe()` / Drop flips an active-flag the publish path
+    /// consults. Mirrors the SUBSCRIBE handle pattern in
+    /// `engine_subscribe.rs` so the napi `EmitSubscriptionJs` class
+    /// can carry a JS-visible lifecycle.
+    pub fn subscribe_with_handle<F>(&self, f: F) -> EmitSubscription
+    where
+        F: Fn(&EmitEvent) + Send + Sync + 'static,
+    {
+        let active = Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let active_for_cb = Arc::clone(&active);
+        let mut guard = self.callbacks.lock_recover();
+        guard.push(Arc::new(move |event: &EmitEvent| {
+            if active_for_cb.load(std::sync::atomic::Ordering::SeqCst) {
+                f(event);
+            }
+        }));
+        EmitSubscription { active }
     }
 
     /// Publish an EMIT event to every subscriber. Called by the
