@@ -451,7 +451,7 @@ impl EngineBuilder {
             .time_source
             .unwrap_or_else(|| Arc::new(HlcTimeSource::new()));
 
-        Ok(Engine::from_parts_with_clocks(
+        let engine = Engine::from_parts_with_clocks(
             backend,
             policy,
             caps_enabled,
@@ -461,7 +461,20 @@ impl EngineBuilder {
             ivm,
             monotonic,
             time,
-        ))
+        );
+
+        // R6FP-Group-1 (r6-arch-1): rebuild the in-memory installed-
+        // modules active set from the durable `system:ModuleManifest`
+        // zone. Pre-R6FP-G1 a fresh `Engine::open` after a previous
+        // `install_module` returned `false` from `is_module_installed`
+        // for the previously-installed CID — the manifest survived on
+        // disk but the in-memory indexes the dispatcher consults were
+        // empty. The hydration is best-effort: a corrupt / partial
+        // Node is skipped rather than aborting startup so a single
+        // bad manifest cannot wedge engine open.
+        let _ = engine.rehydrate_installed_modules_from_zone();
+
+        Ok(engine)
     }
 }
 
