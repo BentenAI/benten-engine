@@ -116,13 +116,17 @@
 
 ## 4. Browser / wasm32-unknown-unknown
 
-### 4.1 Compromise #N+8 — IndexedDB-backed persistent module-manifest store
+### 4.1 Compromise #19 — IndexedDB-backed persistent module-manifest store
 
-**Phase 2b state:** `bindings/napi/src/wasm_browser.rs::BrowserManifestStore::is_persistent` returns `false`. Module manifests are in-memory only on the browser target. Compromise #N+8 in `docs/SECURITY-POSTURE.md`.
+**Renumbering note:** previously labeled "Compromise #N+8" before R6FP Group 3 globalized the numbering to match `docs/SECURITY-POSTURE.md` (#1-#21).
+
+**Phase 2b state:** `bindings/napi/src/wasm_browser.rs::BrowserManifestStore::is_persistent` returns `false`. Module manifests are in-memory only on the browser target. Compromise #19 in `docs/SECURITY-POSTURE.md`.
 
 **Phase 3 target:** IndexedDB-backed persistent manifest store. Pairs with PHASE-3-BUNDLE-1 (BrowserBackend) since both are browser-target persistence work — likely a single Phase-3 wave covers both.
 
-### 4.2 Compromise #N+9 — Cross-browser determinism CI cadence
+### 4.2 Compromise #20 — Cross-browser determinism CI cadence
+
+**Renumbering note:** previously labeled "Compromise #N+9" before R6FP Group 3 globalized the numbering to match `docs/SECURITY-POSTURE.md` (#1-#21).
 
 **Phase 2b state:** Per-browser engine bytecode + JIT non-determinism makes per-PR cross-browser CID pinning premature. The cross-browser determinism job in `wasm-browser.yml` is gated on `release` events + `workflow_dispatch` only. Per-PR CI runs the bundle build + size cap + single-browser smoke without pinning a fixture CID across engines.
 
@@ -194,6 +198,16 @@
 
 **Touch size:** ~200-300 LOC tooling + ~50 LOC per-fixture loader update.
 
+### 6.5 RedbSuspensionStore retention-window override
+
+**Phase 2b state:** The `SuspensionStore::is_retention_exhausted` trait method enforces the SUBSCRIBE persistent-cursor retention window (1000-events / 24h). The in-memory test impl overrides correctly; the production `RedbSuspensionStore` uses the trait default `false` and tracks `delivered_count` + `registered_at` in process-local memory. Consequence: a cross-process re-subscribe past the retention window does NOT surface `E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED` because the counters reset on process boot. R6 Round-2 security-auditor (`r6-r2-sec-2`) reissued the Round-1 `r6-sec-4` open finding under HARD-RULE — destination must EXIST + receive entry NOW. Disclosure landed in `docs/SECURITY-POSTURE.md` Compromise #9 closure narrative at the same time as this entry.
+
+**Phase 3 target:** Override `is_retention_exhausted` in `crates/benten-engine/src/suspension_store.rs::impl SuspensionStore for RedbSuspensionStore`. Track `cursor_meta_key(sub) -> (delivered_count: u64, registered_at_unix_secs: u64)` in a redb side-table; `is_retention_exhausted` reads the side-table; `put_cursor` increments `delivered_count` + lazy-creates `registered_at` on first put. Add a round-trip-through-engine-restart regression test that asserts `E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED` fires on cross-process re-subscribe past the window. Pairs with §6.3 D18 live-cap-check (both surfaces want the durable subscriber-side-table shape that grant-store work introduces).
+
+**Why Phase 3:** The retention bookkeeping side-table shape composes with the durable grant-store + per-event read-cap-coverage work (§2.2 + `phase-2-backlog.md` §7.4). Landing it standalone in Phase 2b would require re-shaping the side-table when grant-store lands.
+
+**Touch size:** ~50-60 LOC + 1 regression test pin.
+
 ---
 
 ## 7. Observability + diagnostic completeness
@@ -262,6 +276,26 @@ Together they realize the cr-r4b-10 closure-narrative claim that `E_STREAM_HANDL
 **Why Phase 3:** The migration has a coordinated breaking-change to the message-prefix contract test pins; Phase-2b-close stability favors the minimal-coverage interim. Phase 3's broader API stabilization can absorb the breaking change cleanly.
 
 **Touch size:** ~300-400 LOC including codegen updates + test pin migration.
+
+### 7.6 CODE_TO_CTOR codegen completeness
+
+**Phase 2b state:** `packages/engine/src/errors.ts::CODE_TO_CTOR` is a hand-maintained Record mapping `E_*` strings to typed BentenError subclasses. R6 Round-2 r6-r2-napi-3's Instance 8 round-trip pin (the new `install_module` CID-mismatch test in `packages/engine/test/install_module.test.ts`) surfaced that the map is missing ~28 entries that the codegen emits as classes — so napi errors carrying those codes round-trip through `mapNativeError` with `code: "E_UNKNOWN"` rather than the typed subclass. R6 Round-2 fix-pass added the specific `E_MODULE_MANIFEST_CID_MISMATCH` entry to make the Instance 8 pin pass + named this entry as the destination for the broader sync.
+
+**Phase 3 target:** Generate `CODE_TO_CTOR` from the same single-source-of-truth that powers `errors.generated.ts` (the catalog scrape that emits 98 BentenError subclasses). Either (a) emit a generated `CODE_TO_CTOR_GENERATED` in `errors.generated.ts` that the hand-maintained `CODE_TO_CTOR` extends from, or (b) replace the hand-maintained map entirely and update `mapNativeError` to read from the generated record. Add a vitest smoke test that asserts every catalog code maps to a typed BentenError subclass (no `E_UNKNOWN` fallbacks for known codes).
+
+**Why Phase 3:** The fix is mechanical but interacts with the codegen template + drift detector. Bundling with §7.2 (BentenError.context full structured-field coverage) is natural because both are codegen-completeness lifts on the TS error surface.
+
+**Touch size:** ~50-100 LOC codegen template update + ~10 LOC vitest smoke pin.
+
+### 7.7 napi-rs ThreadsafeFunction tuple-arg splat behavior
+
+**Phase 2b state:** napi-rs v3's `Function<(A, B), Ret>` callback shape currently delivers the `(A, B)` tuple as a single-Array argument to the JS callback rather than splatting to 2 separate args, despite the d.ts emitting `(arg0: A, arg1: B) => Ret`. Affects both `Engine.onChange` (`(seq, payload)`) and the new `Engine.onEmit` (`(channel, payloadJson)`) callback shapes — the JS callback receives `args[0] = [a, b]` rather than `(a, b)`. The R6 Round-2 r6-r2-mpc-1 LOAD-BEARING test in `packages/engine/test/emit_subscribe.test.ts` accepts both delivery shapes via an `Array.isArray(channel)` runtime check; the pre-existing `subscribe.test.ts::LOAD-BEARING — onChange callback fires` test predates the workaround + currently fails on the same delivery shape. The napi-side wiring is correct (the engine-side EMIT broadcast publish IS firing + the TSFN IS delivering); the gap is the splat semantics on the napi-rs ↔ JS call edge.
+
+**Phase 3 target:** Investigate napi-rs v3 release notes for the splat-behavior change between Phase-2a and Phase-2b napi-rs upgrades. Either (a) bump napi-rs to a version with restored splat semantics + remove the in-test `Array.isArray` workaround, or (b) update the engine.ts wrapper's `napiCb = (chanArg, payloadJson) => ...` shape to take a single tuple-arg + destructure inside, and update `subscribe.test.ts::LOAD-BEARING` similarly. Pair with §7.6 (CODE_TO_CTOR codegen completeness) since both touch `errors.generated.ts` codegen + the napi binding.
+
+**Why Phase 3:** The functional behavior (callback fires) is correct in Phase 2b; only the arg-shape ergonomics are degraded. Tightening the splat is a Phase-3 napi-rs lift that bundles cleanly with broader binding-layer cleanup.
+
+**Touch size:** ~30-50 LOC across napi-rs upgrade + test pin updates.
 
 ---
 

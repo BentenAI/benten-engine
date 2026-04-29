@@ -245,6 +245,24 @@ revalidation); it's recorded here because PAPER-PROTOTYPE-REVALIDATION
 is the canonical wave-8-close artifact + the reviewer pattern matters
 beyond Phase 2b.
 
+**Update — R6 Round-1 + Round-2 deep-sweep expanded the count to
+13+ instances.** The 4-instance enumeration above is the wave-8-era
+retrospective. The R6 phase-close council's metadata-producer-vs-consumer
+lens (Round 1 deep-sweep at `e2b1c62`, Round 2 at `fa001fc`) catalogued
+13 distinct instances total — Instances 1-5 are the wave-8 retrospectives
+above, Instances 6-13 are R6-discovered (multi-label ChangeEvent bridge
+drop, TS Subscription max-delivered-seq snapshot, BentenError.context
+sentinel pipeline, DSL Diagnostic line/col, registerSubgraphReplace
+6-key shape, u64→i64 widening, SuspensionBridge state_cid+signal_name).
+Round-2 added one further instance (r6-r2-mpc-1: EmitSubscription engine
+half landed but napi `Engine::on_emit` method missing — closed in this
+fix-pass). The recurrence rate dropped sharply between rounds (Round 1:
+7 new on `e2b1c62`; Round 2: 1 new on `fa001fc`); the
+consumer-audit-table discipline codified in `dispatch-conventions.md`
+§3.6 + §3.7 is the standing rule going forward. See full Round-1 +
+Round-2 enumeration in `.addl/phase-2b/r6-round-2-deep-producer-consumer-sweep.md`
++ `.addl/phase-2b/r6-r2-metadata-producer-vs-consumer.json`.
+
 ---
 
 ## Sign-off
