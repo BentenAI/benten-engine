@@ -65,25 +65,46 @@ describe("ModuleManifest schema parity (TS <-> Rust)", () => {
 
   it("computeManifestCid agrees with Rust testing_compute_manifest_cid", async () => {
     // The strongest parity assertion: a fixture manifest whose Rust-
-    // computed CID is pinned in a fixture file MUST match the CID the
-    // TS side computes. R5 G10-B + R3-fixtures land the pinned CID;
-    // this test compares against it.
+    // computed CID is pinned here MUST match the CID the TS side computes
+    // through the napi bridge. The pinned value below was produced by a
+    // throw-away Rust test that called
+    // `crate::module_manifest::ModuleManifest::compute_cid` (the same
+    // function `testing_compute_manifest_cid` delegates to) on the
+    // logically-equivalent manifest fixture below. If a future change to
+    // the canonical-DAG-CBOR encoder, the field-set of `ModuleManifest`,
+    // or the `Cid::to_base32` rendering shifts the bytes, this test
+    // catches the drift on the TS side BEFORE a downstream cross-process
+    // CID consumer (Phase 3 sync replica) silently observes the mismatch.
     //
-    // R5 wires:
-    //   1. const manifest: ModuleManifest = <fixture from
-    //      crates/benten-engine/tests/fixtures/manifest_parity.json>;
-    //   2. const expectedCidFromRust = <pinned in the same fixture file
-    //      under key "expected_cid_v1_base32">;
-    //   3. const tsCid = await engine.computeManifestCid(manifest);
-    //   4. expect(tsCid).toBe(expectedCidFromRust);
+    // To re-pin (after a deliberate canonical-bytes change): construct
+    // the same `ModuleManifest` literal in a Rust integration test, call
+    // `manifest.compute_cid().unwrap().to_base32()`, copy the value into
+    // `EXPECTED_CID` below, and update the symmetric Rust pin in
+    // `crates/benten-engine/tests/manifest_schema_parity_pin.rs` (added
+    // alongside this fix-pass).
+    const manifest: ModuleManifest = {
+      name: "manifest-parity-fixture",
+      version: "1.0.0",
+      modules: [
+        {
+          name: "module-alpha",
+          cid: "bafy-fixture-cid-alpha",
+          requires: ["host:compute:time"],
+        },
+        {
+          name: "module-beta",
+          cid: "bafy-fixture-cid-beta",
+          requires: [],
+        },
+      ],
+    };
+    const EXPECTED_CID =
+      "bafyr4igihvodf4lnqp5wsjfiotjxiux6kz5bumaf3irk4rjtwlwlkzmer4";
+
     const engine = await Engine.open(":memory:");
     try {
-      // RED-PHASE STUB: R5 G10-B fills in the fixture-driven assertion.
-      // Failing the test loudly so red-phase status is unambiguous.
-      throw new Error(
-        "R5 G10-B pending — wire fixture-driven CID parity assertion " +
-          "(Rust testing_compute_manifest_cid <-> TS engine.computeManifestCid)",
-      );
+      const tsCid = await engine.computeManifestCid(manifest);
+      expect(tsCid).toBe(EXPECTED_CID);
     } finally {
       await engine.close();
     }

@@ -16,6 +16,7 @@ export {
   CATALOG_CODES,
   type CatalogCode,
   EBackendNotFound,
+  EBackendReadOnly,
   ECapAttenuation,
   ECapChainTooDeep,
   ECapDenied,
@@ -90,6 +91,7 @@ export {
 import {
   BentenError,
   EBackendNotFound,
+  EBackendReadOnly,
   ECapAttenuation,
   ECapChainTooDeep,
   ECapDenied,
@@ -214,6 +216,7 @@ const CODE_TO_CTOR: Record<string, BentenErrorCtor> = {
   E_VERSION_BRANCHED: EVersionBranched,
   E_VERSION_UNKNOWN_PRIOR: EVersionUnknownPrior,
   E_BACKEND_NOT_FOUND: EBackendNotFound,
+  E_BACKEND_READ_ONLY: EBackendReadOnly,
   E_NOT_FOUND: ENotFound,
   E_GRAPH_INTERNAL: EGraphInternal,
   E_DUPLICATE_HANDLER: EDuplicateHandler,

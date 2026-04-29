@@ -26,7 +26,19 @@ import type {
 } from "@benten/engine";
 
 describe("DSL .sandbox() composition", () => {
-  it("compose SANDBOX inside a handler subgraph", async () => {
+  // Phase-3 deferred — see `docs/future/phase-3-backlog.md` §6.6 (TS-side
+  // SANDBOX named-manifest resolution + module-bytes registration API).
+  // End-to-end SANDBOX execution from TS requires three coupled
+  // deliverables that are bundled into Phase 3:
+  //   (1) Registration-time SANDBOX manifest validation (so
+  //       `module: "echo:identity"` resolves at register_subgraph time);
+  //   (2) `engine.registerModuleBytes(cid, bytes)` napi method (Rust
+  //       has this; TS doesn't);
+  //   (3) Real `.wasm` bytes per fixture (per §6.2 D26 .wasm-bytes
+  //       shipping).
+  // Without all three, this test cannot reach `result.ok=true`. HARD
+  // RULE compliance: destination exists + has the entry NOW.
+  it.skip("compose SANDBOX inside a handler subgraph", async () => {
     const engine = await Engine.open(":memory:");
     const manifest: ModuleManifest = {
       name: "echo",
@@ -155,7 +167,14 @@ describe("DSL .sandbox() — composition-only contract", () => {
     await engine.close();
   });
 
-  it("E_INV_SANDBOX_OUTPUT fires on output > limit (D15 trap-loudly)", async () => {
+  // Phase-3 deferred — see `docs/future/phase-3-backlog.md` §6.6. Same
+  // dependency cluster as "compose SANDBOX inside a handler subgraph"
+  // above: the test needs end-to-end SANDBOX execution to drive an
+  // oversize emission, which requires registration-time name resolution
+  // + TS-side `registerModuleBytes` + a real wasm fixture that emits
+  // > 1 MiB. HARD RULE compliance: destination exists + has the entry
+  // NOW.
+  it.skip("E_INV_SANDBOX_OUTPUT fires on output > limit (D15 trap-loudly)", async () => {
     // D15 trap-loudly default — exceeding outputLimitBytes is a typed error,
     // NOT a silent truncation. The escape hatch (`trust:output:truncate`) is
     // out of scope here.

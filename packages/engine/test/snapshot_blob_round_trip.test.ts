@@ -40,6 +40,18 @@ describe("D10 snapshot-blob — TS surface round-trip", () => {
     // (snapshot_blob KVBackend is read-only per D10 BackendError::ReadOnly).
     const dst = await Engine.fromSnapshotBlob(blob);
 
+    // The snapshot-blob carries the storage-layer Nodes (the post:create
+    // writes from src above) but does NOT carry the in-memory handler
+    // registry — `Engine::from_snapshot_blob` hydrates Nodes only. Re-
+    // register the canonical CRUD handler on the dst engine so the
+    // subsequent `post:list` dispatch resolves. Re-registering the
+    // canonical CRUD shape is structurally identical so the post.id
+    // round-trips. Note: registerCrud writes only to in-memory handler
+    // tables (no backend mutation) — the read-only contract holds for
+    // user-facing data writes (asserted in the sibling test below).
+    const dstPost = await dst.registerSubgraph(crud("post"));
+    expect(dstPost.id).toBe(post.id);
+
     // Reads round-trip — the dst engine sees the same labels + counts as src.
     const dstPosts = await dst.call(post.id, "post:list", {});
     expect(dstPosts.list).toBeDefined();
@@ -75,6 +87,11 @@ describe("D10 snapshot-blob — TS surface round-trip", () => {
     const blob = await src.exportSnapshotBlob();
 
     const dst = await Engine.fromSnapshotBlob(blob);
+    // Re-register the handler on the dst engine — registerCrud touches
+    // only the in-memory handler tables (no backend write), so the
+    // read-only contract holds for the subsequent `post:create` write
+    // attempt that this test pins.
+    await dst.registerSubgraph(crud("post"));
 
     await expect(dst.call(post.id, "post:create", { title: "x" })).rejects.toMatchObject({
       code: "E_BACKEND_READ_ONLY",

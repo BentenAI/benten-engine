@@ -198,6 +198,25 @@
 
 **Touch size:** ~200-300 LOC tooling + ~50 LOC per-fixture loader update.
 
+### 6.6 TS-side SANDBOX named-manifest resolution + module-bytes registration API
+
+**Phase 2b state:** The Rust-side named-manifest registry (`benten_eval::sandbox::ManifestRegistry` + `Engine::manifest_registry()` projection at `crates/benten-engine/src/engine_modules.rs:430`) keys CapBundle entries by `entry.name` (e.g. `"identity"`), NOT by the colon-joined `"<manifestName>:<entryName>"` shape the TS DSL surface advertises (`SandboxArgsByName.module: "echo:identity"` per `packages/engine/src/types.ts:386`). Wave-8h wired the registry projection but the resolution-from-DSL-shape half is missing on the TS bridge — `register_subgraph` does NOT validate at registration time that a SANDBOX node's `module: "<m>:<e>"` resolves to an installed manifest entry, AND there is NO TS-side `engine.registerModuleBytes(cid, bytes)` API to register the actual wasm bytes (Rust has `Engine::register_module_bytes`, napi-unexposed). Three TS vitest pins were authored RED-PHASE expecting this resolution + registration plumbing:
+
+- `packages/engine/test/install_module.test.ts::"engine.uninstallModule(cid) clean release"` — expects `registerSubgraph` to REJECT with `E_SANDBOX_MANIFEST_UNKNOWN` after uninstall.
+- `packages/engine/test/sandbox.test.ts::"compose SANDBOX inside a handler subgraph"` — expects `engine.call(...)` to return `result.ok=true` (which requires real wasm bytes registered + name-resolution at registration).
+- `packages/engine/test/sandbox.test.ts::"E_INV_SANDBOX_OUTPUT fires on output > limit (D15 trap-loudly)"` — same shape as above; expects an actual wasmtime-driven oversize emission.
+
+The vitest cluster fix-pass (PR linked from `.addl/phase-2b/r6-r2-fp-vitest-cluster-*`) converted these three pins to `.skip` with a destination-here named-NOW per HARD RULE (rule #12, foundational `feedback_no_defer_HARD_RULE`).
+
+**Phase 3 target (3 coupled deliverables):**
+1. **Registration-time SANDBOX manifest validation.** `Engine::register_subgraph` walks the spec for SANDBOX nodes; for each, parse `module` as either `(a)` a bare base32 CID or `(b)` a `"<manifestName>:<entryName>"` lookup. Branch `(b)` is rejected with `ErrorCode::SandboxManifestUnknown` (catalog code `E_SANDBOX_MANIFEST_UNKNOWN`) when the name does not resolve through `installed_modules`. Implementation note: extend `manifest_registry()` to also key entries by the colon-joined name so dispatch + register paths agree on the lookup shape.
+2. **TS-side `engine.registerModuleBytes(cid, bytes)` napi method.** Wires through to `InnerEngine::register_module_bytes(cid, bytes)` (already exists Rust-side) so TS callers can ship a real wasm bytes payload. Pairs with §1.4 (Compromise #17 durable module-bytes registry) since the durable backing is what makes this useful end-to-end.
+3. **Sandbox.test.ts post-`registerModuleBytes` greens.** Re-pin the three currently-`.skip`'d tests to the production-flow shape: install manifest → register module bytes → register subgraph → call → assert outcome. The fixture wasm bytes ship per §6.2 (D26 `.wasm`-bytes-shipping per fixture).
+
+**Why Phase 3:** All three deliverables compose with already-Phase-3-bundled work — §1.4 (durable module-bytes registry, the natural home for the `registerModuleBytes` API) + §6.2 (`.wasm`-bytes shipping for fixture distribution) + the named-manifest registry's eventual sync-replica replication shape. Landing the TS bridge standalone in Phase 2b would require re-shaping when the durable backing arrives.
+
+**Touch size:** ~150-300 LOC (engine-side validation walk + napi wiring + 3 test re-pins). Risk surface: low — additive surface; existing handlers without SANDBOX or with bare-CID `module` strings continue to work unchanged.
+
 ### 6.5 RedbSuspensionStore retention-window override
 
 **Phase 2b state:** The `SuspensionStore::is_retention_exhausted` trait method enforces the SUBSCRIBE persistent-cursor retention window (1000-events / 24h). The in-memory test impl overrides correctly; the production `RedbSuspensionStore` uses the trait default `false` and tracks `delivered_count` + `registered_at` in process-local memory. Consequence: a cross-process re-subscribe past the retention window does NOT surface `E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED` because the counters reset on process boot. R6 Round-2 security-auditor (`r6-r2-sec-2`) reissued the Round-1 `r6-sec-4` open finding under HARD-RULE — destination must EXIST + receive entry NOW. Disclosure landed in `docs/SECURITY-POSTURE.md` Compromise #9 closure narrative at the same time as this entry.

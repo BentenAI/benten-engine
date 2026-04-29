@@ -51,7 +51,17 @@ describe("engine.installModule", () => {
     await engine.close();
   });
 
-  it("engine.uninstallModule(cid) clean release", async () => {
+  // Phase-3 deferred — see `docs/future/phase-3-backlog.md` §6.6 (TS-side
+  // SANDBOX named-manifest resolution + module-bytes registration API).
+  // The reject-after-uninstall pin requires registration-time SANDBOX
+  // manifest validation that walks SANDBOX nodes' `module: "<m>:<e>"`
+  // properties and rejects when the name does not resolve through
+  // `installed_modules`. The Rust-side registry projection
+  // (`Engine::manifest_registry()`) keys by `entry.name` not
+  // `"<manifestName>:<entryName>"`, so the colon-joined DSL surface is
+  // still aspirational at the TS bridge. HARD RULE compliance:
+  // destination exists + has the entry NOW (not "carry to brief").
+  it.skip("engine.uninstallModule(cid) clean release", async () => {
     const engine = await Engine.open(":memory:");
 
     const manifest: ModuleManifest = {

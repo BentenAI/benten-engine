@@ -12,19 +12,44 @@
 // in the PR body is verified at runtime here.
 
 import { describe, it, expect } from "vitest";
-import { Engine, crud } from "@benten/engine";
+import { Engine, crud, subgraph } from "@benten/engine";
 
 describe("engine.replaceSubgraph (R6FP Instance 10)", () => {
   it("returns the full 6-key RegisterReplaceOutcome shape on first replace", async () => {
     const engine = await Engine.open(":memory:");
 
     // First registration via registerSubgraph — establishes v1.
-    const v1 = await engine.registerSubgraph(crud("post"));
+    // Use a hand-built subgraph (same handlerId as the replace target so
+    // the chain links the two registrations) with a distinct shape from
+    // the v2 below — replaceSubgraph short-circuits to replaced=false when
+    // the new content is structurally identical to the existing entry.
+    // This pin exercises the TRUE replace path; the idempotent re-register
+    // path is exercised by the sibling test below.
+    //
+    // The subgraph carries a leading READ so the structural-invariant
+    // battery accepts it (a respond-only handler trips an invariant —
+    // R5/R6 invariant pass requires at least one substantive operation
+    // before a terminal RESPOND). v1 and v2 differ in NODE STRUCTURE
+    // (v1 has one READ; v2 has two READs) so the canonical-bytes CID
+    // computation produces distinct CIDs and `replaceSubgraph` exercises
+    // the genuine replace branch (`replaced=true`, `previousCid` populated).
+    const v1Spec = subgraph("replace-handler")
+      .action("noop")
+      .read({ label: "post" })
+      .respond({ body: "v1" })
+      .build();
+    const v1 = await engine.registerSubgraph(v1Spec);
     expect(typeof v1.id).toBe("string");
 
-    // Replace via the new replaceSubgraph surface (the load-bearing
-    // instance-10 closure).
-    const outcome = await engine.replaceSubgraph(crud("post"));
+    // v2 has the same handlerId but a structurally different node list →
+    // genuine replace.
+    const v2Spec = subgraph("replace-handler")
+      .action("noop")
+      .read({ label: "post" })
+      .read({ label: "post" })
+      .respond({ body: "v2" })
+      .build();
+    const outcome = await engine.replaceSubgraph(v2Spec);
 
     // 6-key shape per the napi → TS contract:
     //   { handlerId, cid, previousCid, chainDepth, versionTag, replaced }
@@ -37,8 +62,8 @@ describe("engine.replaceSubgraph (R6FP Instance 10)", () => {
     });
 
     // previousCid is OPTIONAL per the type but MUST be present for a
-    // replace (vs a fresh registration). Idempotent re-register can
-    // produce replaced=false; that's a separate pin below.
+    // genuine replace (different content from v1). Idempotent re-register
+    // can produce replaced=false; that's a separate pin below.
     expect(typeof outcome.previousCid).toBe("string");
 
     // chainDepth bumped from v1's depth (≥ 2 for v2 chain entry).

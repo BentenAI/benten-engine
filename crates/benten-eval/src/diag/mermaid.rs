@@ -11,6 +11,12 @@
 
 use crate::{OperationNode, PrimitiveKind, Subgraph};
 
+/// Find a node by id within a subgraph (used to look up the source-node
+/// kind when picking an edge style — WAIT outgoing edges render dashed).
+fn find_node<'a>(sg: &'a Subgraph, id: &str) -> Option<&'a OperationNode> {
+    sg.nodes.iter().find(|n| n.id == id)
+}
+
 /// Render a [`Subgraph`] as a Mermaid flowchart string.
 ///
 /// The output starts with `flowchart TD` (top-down) and lists every node
@@ -35,6 +41,22 @@ pub fn render(sg: &Subgraph) -> String {
     for (from, to, label) in &sg.edges {
         out.push_str("    ");
         out.push_str(&sanitize_id(from));
+        // Phase 2a G3-B (dx-r1-9): WAIT outgoing edges render with the
+        // dashed Mermaid arrow `-.->` and the explicit label `on resume`.
+        // The dashed style is Mermaid's visual signal that the edge fires
+        // after a suspend boundary (the WAIT primitive parks the executor
+        // until a signal/duration resolves). All other primitives keep
+        // the solid `-->` arrow with their original edge label.
+        let from_is_wait = matches!(
+            find_node(sg, from).map(|n| n.kind),
+            Some(PrimitiveKind::Wait)
+        );
+        if from_is_wait {
+            out.push_str(" -.->|on resume| ");
+            out.push_str(&sanitize_id(to));
+            out.push('\n');
+            continue;
+        }
         out.push_str(" -->");
         if !label.is_empty() && label != "next" {
             out.push('|');

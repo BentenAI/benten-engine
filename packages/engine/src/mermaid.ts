@@ -48,6 +48,19 @@ export function toMermaid(sg: Subgraph): string {
     const edgeKeys = Object.keys(n.edges).sort();
     for (const edgeLabel of edgeKeys) {
       const targetId = n.edges[edgeLabel];
+      // Phase 2a G3-B (dx-r1-9): WAIT outgoing edges render as dashed
+      // `-.->` with the explicit label `on resume`. The dashed arrow is
+      // Mermaid's visual signal that the edge fires after a suspend
+      // boundary (the WAIT primitive parks the executor until a signal
+      // arrives or a duration elapses). Other primitives keep the solid
+      // `-->` arrow with their original edge label (`NEXT` collapses to
+      // an unlabeled edge).
+      if (n.primitive === "wait") {
+        lines.push(
+          `  ${mermaidId(n.id)} -.->|on resume| ${mermaidId(targetId)}`,
+        );
+        continue;
+      }
       const label = edgeLabel === "NEXT" ? "" : edgeLabel;
       if (label) {
         lines.push(
