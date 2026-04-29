@@ -292,24 +292,27 @@ export class BentenDevServer {
    * as a hint for the JS-side handler-id; the DSL's declared handler id
    * is the authoritative one routed to the engine.
    *
-   * Phase-2a / Phase-2b harness compatibility: this helper writes the
-   * source to disk under `projectRoot/<relPath>` AND immediately
-   * registers it. The on-disk write makes the file watcher harness
-   * happy; the immediate register skips the watcher poll latency for
-   * the test path (which is what existing fixtures already assume).
+   * # Honest scope (r6-dx-3 closure)
+   *
+   * Vitest-fixture helper: write a handler source file relative to the
+   * project root. **THIS HELPER DOES NOT REGISTER THE SOURCE** — pair
+   * with explicit {@link BentenDevServer.registerHandler} /
+   * {@link BentenDevServer.replaceHandler} so the dev-server publishes
+   * a reload event {@link BentenDevServer.waitForReload} can observe.
+   *
+   * The wave-8f-fp-amended waitForReload throws on timeout so the
+   * silent-failure footgun (caller writes a file, calls waitForReload,
+   * waits 1500ms with no diagnostic) is mitigated; it now surfaces a
+   * BentenDevServerError naming the likely mis-wire.
+   *
+   * Prior docstring claimed this helper "immediately registers" the
+   * source AND "emits a synthetic reload tick" — neither was ever
+   * implemented. The honest contract is a plain disk write.
    */
   async editHandler(relPath: string, content: string): Promise<void> {
     const fullPath = `${this.projectRoot}/${relPath}`;
     mkdirSync(dirname(fullPath), { recursive: true });
     writeFileSync(fullPath, content, "utf8");
-    // Per the Phase-2a fixture contract — files in `src/handlers.ts`
-    // produce a handler whose id matches the file's stem.
-    // Phase-2b cutover detail: the harness now drives the DSL through
-    // the dev-server explicitly via `registerHandler` /
-    // `replaceHandler`, so this fallback only fires when the caller
-    // doesn't separately call those methods. We emit a synthetic
-    // reload tick so `waitForReload()` doesn't deadlock on the legacy
-    // `editHandler`-only path.
   }
 
   /**

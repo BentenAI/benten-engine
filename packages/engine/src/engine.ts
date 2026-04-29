@@ -1578,10 +1578,18 @@ export class Engine {
    * iterator's `return()` hook). For an explicit-close lifecycle use
    * {@link Engine.openStream}.
    *
-   * Mirrors {@link Engine.call} naming. Pre-G6-A the underlying executor
-   * isn't wired; the first iterator step throws
-   * `E_PRIMITIVE_NOT_IMPLEMENTED` until G6-A merges. Use
-   * {@link Engine.testingOpenStreamForTest} for harness fixtures.
+   * Mirrors {@link Engine.call} naming.
+   *
+   * # Production runtime (r6-dx-6 closure)
+   *
+   * G6-A + wave-8c-stream-infra wire the underlying STREAM executor
+   * end-to-end: the iterator yields chunks as the chunk-producer
+   * thread pushes them onto the bounded sink + the napi
+   * `next_chunk_adapter` drains them onto the JS async-iterator.
+   * {@link Engine.testingOpenStreamForTest} exists for cfg-gated
+   * harness fixtures that pre-populate chunks without touching the
+   * production executor; it is NOT the supported production
+   * substitute.
    */
   public callStream(
     handlerId: string,
@@ -1610,11 +1618,18 @@ export class Engine {
    *
    * `actor` is a friendly principal identifier (the same shape
    * `engine.callAs` accepts). The principal is threaded through to
-   * the STREAM executor for cap-recheck on chunk emission once the
-   * production runtime wires through (8c-i remainder); pre-wire-
-   * through the surface returns a [`StreamHandle`] whose first
-   * `next()` surfaces `E_PRIMITIVE_NOT_IMPLEMENTED` honestly, the
-   * same as {@link Engine.callStream}.
+   * the napi boundary; per-chunk cap-recheck on emission is a
+   * named-destination Phase-3 surface (r6-stream-2: the production
+   * runtime currently captures the principal but does not consult it
+   * on each chunk emission — STREAM mirroring SUBSCRIBE's
+   * DeliveryCapRecheck is the closure work). Today this method is
+   * functionally equivalent to {@link Engine.callStream} except for
+   * the principal capture.
+   *
+   * Production runtime: G6-A + wave-8c-stream-infra wire the
+   * underlying executor — the iterator yields chunks as the
+   * chunk-producer thread pushes them. (r6-dx-6 closure: dropped the
+   * stale "first next() surfaces E_PRIMITIVE_NOT_IMPLEMENTED" claim.)
    */
   public callStreamAs(
     handlerId: string,
@@ -1759,21 +1774,20 @@ build @benten/engine-native with `--features test-helpers`",
    * Bounded retention window (1000 events OR 24h) for persistent
    * cursors. Cap-check at delivery.
    *
-   * # Wiring status (wave-8c)
+   * # Delivery semantics (r6-dx-2 closure — wave-8c live)
    *
-   * The previous wave-7 stub fired the supplied `callback` once
-   * asynchronously with a sentinel `(seq: 0, payload.length === 0)`
-   * AND surfaced a `console.warn` the first time `onChange` was
-   * invoked per process. This was actively deceptive — consumers
-   * received a callback that was structurally indistinguishable from
-   * a real event. Wave-8c removes the sentinel + warn entirely.
+   * The napi adapter wraps the supplied callback in a
+   * `napi::ThreadsafeFunction` so deliveries from the engine's
+   * ChangeBroadcast publish thread land on the libuv main loop. The
+   * returned `Subscription`'s `active` getter is `true` until
+   * `unsubscribe()` (or the engine-side `Drop` after the JS handle is
+   * GC'd). **Holding a JS-side reference to the Subscription handle
+   * is required** — letting it be GC'd fires `Drop` on the underlying
+   * `benten_engine::Subscription` which de-registers the callback +
+   * releases the `napi::ThreadsafeFunction` Arc that holds the JS
+   * callback alive.
    *
-   * Until the production callback bridge through
-   * `napi::ThreadsafeFunction` lands (wave-8c-cont 8c-ii remainder),
-   * the returned [`Subscription`] reports `active: false` honestly
-   * and the `callback` argument is registered against the engine's
-   * subscription registry but never invoked. Consumers can detect
-   * the pre-wire condition by inspecting `subscription.active`.
+   * Pin: `packages/engine/test/subscribe.test.ts::"LOAD-BEARING — onChange callback fires when a matching write commits"`.
    */
   public onChange(
     pattern: string,
@@ -1818,18 +1832,20 @@ build @benten/engine-native with `--features test-helpers`",
    * Mirrors {@link Engine.callAs} naming.
    *
    * `actor` is the friendly principal identifier whose grants drive
-   * D5 delivery-time cap-recheck (once the production change-stream
-   * port lands; pre-port the principal is captured structurally on
-   * the engine-side Subscription).
+   * D5 delivery-time cap-recheck (D5-RESOLVED — wave-8c-subscribe-infra
+   * wired this in production). The principal is captured on the
+   * registered ad-hoc onChange entry's delivery-time cap-recheck
+   * closure so the named principal's grants gate every event
+   * delivery; if the actor's caps are revoked mid-stream the
+   * subscription auto-cancels per D5 contract.
    *
-   * # Wiring status (wave-8c-cont)
+   * # Delivery semantics (r6-dx-2 closure — same shape as `onChange`)
    *
-   * Until the production callback bridge through
-   * `napi::ThreadsafeFunction` lands, the returned [`Subscription`]
-   * reports `active: false` honestly and the `callback` argument is
-   * captured but not yet invoked. The principal IS threaded through
-   * the napi boundary so the Rust-side Subscription holds the actor
-   * for the future delivery path.
+   * The napi adapter wraps the supplied callback in a
+   * `napi::ThreadsafeFunction`; deliveries land on the libuv main
+   * loop. The returned `Subscription`'s `active` getter is `true`
+   * until `unsubscribe()` (or engine-side Drop). Holding a JS-side
+   * reference to the handle is required.
    */
   public onChangeAs(
     pattern: string,
