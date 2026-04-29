@@ -670,6 +670,20 @@ static ACTIVE_SINKS: AtomicUsize = AtomicUsize::new(0);
 
 impl Drop for BoundedSink {
     fn drop(&mut self) {
+        // wave-8c-stream-infra mini-review S2 (mr-w8c-stream-infra-streaming-systems):
+        // signal closure + wake any consumer parked in `recv_blocking()` so a
+        // panicking producer (or any drop without an explicit close()) does
+        // NOT silently deadlock the consumer. The wave-8c built-in producers
+        // don't panic, but this defends against future producer impls.
+        if let Ok(mut inner) = self.shared.inner.lock() {
+            inner.closed = true;
+            self.shared.not_empty.notify_all();
+        } else {
+            // Mutex poisoned — recover the inner state and still flip closed.
+            let mut inner = self.shared.inner.lock().unwrap_or_else(|p| p.into_inner());
+            inner.closed = true;
+            self.shared.not_empty.notify_all();
+        }
         ACTIVE_SINKS.fetch_sub(1, Ordering::Relaxed);
     }
 }
