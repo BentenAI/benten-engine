@@ -89,10 +89,7 @@ impl SuspensionBridge {
                 let b64 = base64_encode(&handle_bytes);
                 map.insert("handle".into(), serde_json::Value::String(b64));
                 map.insert("stateCid".into(), serde_json::Value::String(state_cid));
-                map.insert(
-                    "signalName".into(),
-                    serde_json::Value::String(signal_name),
-                );
+                map.insert("signalName".into(), serde_json::Value::String(signal_name));
             }
         }
         serde_json::Value::Object(map)
