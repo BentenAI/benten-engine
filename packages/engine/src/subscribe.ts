@@ -16,26 +16,37 @@
 //
 // The wrapper is thin — engine-assigned sequence numbers, dedup at the
 // handler boundary (D5-RESOLVED exactly-once), cursor management, and
-// per-event capability re-check all happen Rust-side. We only render
-// the JSON shape the napi adapter returns into a `Subscription` with
-// the `unsubscribe()` method exposed.
+// per-event capability re-check all happen Rust-side. We hold the
+// napi-class `SubscriptionJs` handle alive on the JS-side
+// `Subscription` so the underlying Rust `benten_engine::Subscription`
+// (which owns the `napi::ThreadsafeFunction` Arc backing the JS
+// callback) stays alive across the napi boundary; dropping the
+// JS-side handle (or calling `unsubscribe()`) calls into Rust to
+// release the registry slot.
 
 import { EDslInvalidShape } from "./errors.js";
 import type { Chunk, SubscribeCursor, Subscription } from "./types.js";
 
 // ---------------------------------------------------------------------------
-// Native shape — JSON returned by the napi `on_change` adapter
+// Native shape — `SubscriptionJs` napi class returned by the adapter
 // ---------------------------------------------------------------------------
 
 /**
- * JSON shape the napi `on_change` adapter returns. Mirrors
- * `subscription_to_json` in `bindings/napi/src/subscribe.rs`.
+ * Native `SubscriptionJs` napi class (cr-w8c-fp-1 fix-pass).
+ *
+ * Mirrors `bindings/napi/src/lib.rs::SubscriptionJs`. The handle holds
+ * the underlying `benten_engine::Subscription` alive on the Rust side;
+ * dropping this handle (or calling `unsubscribe()`) releases the
+ * registry slot AND the `napi::ThreadsafeFunction` Arc backing the JS
+ * callback. The pre-fix-pass JSON-shape return was unsound — the
+ * Subscription dropped at end of method scope and JS callbacks never
+ * fired.
  */
-export interface NativeSubscriptionJson {
-  active: boolean;
-  pattern: string;
-  cursor: SubscribeCursor;
-  maxDeliveredSeq: number;
+export interface NativeSubscriptionJs {
+  isActive(): boolean;
+  pattern(): string;
+  maxDeliveredSeq(): number;
+  unsubscribe(): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -57,33 +68,44 @@ export type OnChangeCallback = (seq: number, chunk: Chunk) => void;
 // ---------------------------------------------------------------------------
 
 /**
- * Wrap a native subscription JSON shape as a [`Subscription`] handle
- * with an `unsubscribe()` method that flips the active flag (and, once
- * G6-A's change-stream port is wired across the napi boundary,
- * de-registers the callback).
+ * Wrap a native `SubscriptionJs` handle as a [`Subscription`] DSL
+ * handle. The wrapper retains the native handle internally so the
+ * underlying Rust `Subscription` (and its `ThreadsafeFunction` Arc) is
+ * held alive for the lifetime of the JS-side reference.
  *
- * The handle's `active` / `maxDeliveredSeq` fields are snapshotted at
- * construction time. Production consumers should call
- * `engine.onChange(...)` again to read fresh state — the JS-side
- * `Subscription` object is intentionally immutable apart from the
- * `unsubscribe()` flip so it composes cleanly with React state, etc.
+ * `cursor` is captured at registration time on the JS side because the
+ * native handle does not currently surface it — the cursor is only
+ * meaningful at registration and to JS callers introspecting the shape
+ * they passed in.
+ *
+ * `unsubscribe()` is idempotent: subsequent calls are a no-op + the
+ * native handle is told `unsubscribe()` exactly once. The native side
+ * is itself idempotent (Rust `Subscription::unsubscribe` is safe to
+ * call multiple times).
  */
-export function makeSubscription(
-  raw: NativeSubscriptionJson,
-  onUnsubscribe: () => void = () => {},
+export function wrapSubscriptionHandle(
+  native: NativeSubscriptionJs,
+  cursor: SubscribeCursor,
 ): Subscription {
-  let live = raw.active;
+  // Snapshot the pattern + initial maxDeliveredSeq so the
+  // `Subscription` shape exposes immutable identity-fields (the
+  // `active` getter remains live so JS code can observe drop /
+  // unsubscribe transitions).
+  const pattern = native.pattern();
+  const initialMaxDeliveredSeq = native.maxDeliveredSeq();
+  let unsubscribed = false;
   return {
     get active(): boolean {
-      return live;
+      if (unsubscribed) return false;
+      return native.isActive();
     },
-    pattern: raw.pattern,
-    cursor: raw.cursor,
-    maxDeliveredSeq: raw.maxDeliveredSeq,
+    pattern,
+    cursor,
+    maxDeliveredSeq: initialMaxDeliveredSeq,
     unsubscribe(): void {
-      if (!live) return;
-      live = false;
-      onUnsubscribe();
+      if (unsubscribed) return;
+      unsubscribed = true;
+      native.unsubscribe();
     },
   };
 }

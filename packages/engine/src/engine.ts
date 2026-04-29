@@ -37,10 +37,10 @@ import {
   type NativeStreamHandle,
 } from "./stream.js";
 import {
-  makeSubscription,
   serializeCursor,
   validateOnChangeArgs,
-  type NativeSubscriptionJson,
+  wrapSubscriptionHandle,
+  type NativeSubscriptionJs,
   type OnChangeCallback,
 } from "./subscribe.js";
 import type {
@@ -153,14 +153,14 @@ interface NativeEngine {
     pattern: string,
     cursor: unknown,
     callback?: (seq: number, payload: Buffer) => void,
-  ) => NativeSubscriptionJson;
+  ) => NativeSubscriptionJs;
   // Phase 2b wave-8c-cont — SUBSCRIBE authenticated variant.
   onChangeAs?: (
     pattern: string,
     cursor: unknown,
     actor: string,
     callback?: (seq: number, payload: Buffer) => void,
-  ) => NativeSubscriptionJson;
+  ) => NativeSubscriptionJs;
   // Phase 2b wave-8c — module-manifest lifecycle bridges.
   installModule?: (manifestJson: unknown, expectedCid: string) => string;
   uninstallModule?: (cid: string) => void;
@@ -1717,13 +1717,13 @@ build @benten/engine-native with `--features test-helpers`",
         console.error("onChange callback threw:", err);
       }
     };
-    let raw: NativeSubscriptionJson;
+    let native: NativeSubscriptionJs;
     try {
-      raw = this.inner.onChange(pattern, serializeCursor(cursor), napiCb);
+      native = this.inner.onChange(pattern, serializeCursor(cursor), napiCb);
     } catch (err) {
       throw mapNativeError(err);
     }
-    return makeSubscription(raw);
+    return wrapSubscriptionHandle(native, cursor ?? { kind: "latest" });
   }
 
   /**
@@ -1770,13 +1770,13 @@ build @benten/engine-native with `--features test-helpers`",
         console.error("onChangeAs callback threw:", err);
       }
     };
-    let raw: NativeSubscriptionJson;
+    let native: NativeSubscriptionJs;
     try {
-      raw = this.inner.onChangeAs(pattern, serializeCursor(cursor), actor, napiCb);
+      native = this.inner.onChangeAs(pattern, serializeCursor(cursor), actor, napiCb);
     } catch (err) {
       throw mapNativeError(err);
     }
-    return makeSubscription(raw);
+    return wrapSubscriptionHandle(native, cursor ?? { kind: "latest" });
   }
 
   // -------- Snapshot blob handoff (Phase 2b wave-8c-cont 8c-iv) --------
