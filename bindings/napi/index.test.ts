@@ -194,42 +194,33 @@ describe("napi engine — extended surface", () => {
   });
 
   it("readView returns a structured ok outcome for a live view id", () => {
-    // Phase-1 contract: `Engine::read_view` surfaces an `Outcome` shape
-    // with `ok: true` and an (intentionally empty) `list` for a live,
-    // non-stale view id. The full materialized-read surface is Phase-2
-    // scope per crates/benten-engine/src/lib.rs#1340:
-    //   "Healthy view — return empty listing (Phase 1: view's full
-    //    read API surface is Phase 2)."
-    // This smoke test pins the napi boundary's projection of the
-    // Outcome so a Phase-2 switch to real payloads trips the populated-
-    // data assertion below, not the shape one.
+    // R6FP-tail (NEW-1 BLOCKER closure): `Engine::read_view` now wires
+    // through `Subscriber::read_view_allow_stale` → `View::read_allow_stale`
+    // (default-delegating to `View::read`) so the user-facing API actually
+    // returns the materialized view rows post-fix. Pre-fix the path
+    // returned `Vec::new()` despite docstring claiming "the view's
+    // current state" — that drift is closed.
     ext.createNode(["post"], { title: "p-1", createdAt: 1000 });
     const outcome = ext.readView("content_listing", {});
     expect(typeof outcome).toBe("object");
     expect(outcome.ok).toBe(true);
     expect(Array.isArray(outcome.list)).toBe(true);
-    // Phase-1: list is empty. Phase-2 will populate — flip this
-    // assertion when that lands.
-    expect(outcome.list.length).toBe(0);
+    // Post-fix: write of 1 post is materialized via ContentListingView.
+    expect(outcome.list.length).toBeGreaterThanOrEqual(1);
   });
 
-  it.skip(
-    "readView returns populated list after matching writes [TODO(phase-2-view-read)]",
-    () => {
-      // Blocked: Phase-1 `read_view` returns an empty list even for
-      // live, fresh views (engine/src/lib.rs#1340). The full read API
-      // surface — including paginated, sorted, label-filtered payload
-      // projection — is Phase-2 scope. Un-skip when the evaluator's
-      // view-read path plumbs `View::read` through to the Outcome.
-      ext.createNode(["post"], { title: "p-1", createdAt: 1000 });
-      ext.createNode(["post"], { title: "p-2", createdAt: 2000 });
-      const outcome = ext.readView("content_listing", {});
-      expect(outcome.list.length).toBeGreaterThanOrEqual(2);
-      const titles = outcome.list.map((n: any) => n.properties?.title);
-      expect(titles).toContain("p-1");
-      expect(titles).toContain("p-2");
-    },
-  );
+  it("readView returns populated list after matching writes", () => {
+    // Un-skip post-NEW-1-BLOCKER closure (was `it.skip` with rationale
+    // "Phase-1 read_view returns empty list" — that contract changed
+    // when R6FP-tail wired the user-facing API through `View::read`).
+    ext.createNode(["post"], { title: "p-1", createdAt: 1000 });
+    ext.createNode(["post"], { title: "p-2", createdAt: 2000 });
+    const outcome = ext.readView("content_listing", {});
+    expect(outcome.list.length).toBeGreaterThanOrEqual(2);
+    const titles = outcome.list.map((n: any) => n.properties?.title);
+    expect(titles).toContain("p-1");
+    expect(titles).toContain("p-2");
+  });
 
   it("callAs dispatches through a handler with an explicit actor CID", () => {
     const handlerId = ext.registerCrud("post");
