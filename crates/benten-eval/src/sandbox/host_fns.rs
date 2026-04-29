@@ -325,6 +325,30 @@ pub struct HostFnContext<'a> {
     /// PerCall host-fns (e.g. `kv:read`) consult this BEFORE every
     /// invocation; PerBoundary host-fns consult [`Self::allowlist`].
     /// See struct-level doc for the G7-A milestone surface caveat.
+    ///
+    /// **R6FP-Group-1 (r6-wsa-2) status:** the callback field is
+    /// declared but no production caller threads a live policy
+    /// lookup through it. SandboxStoreData::live_caps is initialised
+    /// to bundle.caps.clone() at the SANDBOX call entry and never
+    /// mutated, so PerCall semantics for kv:read functionally
+    /// degrade to PerBoundary at runtime; ESC-9 (cap-revoke
+    /// mid-call) is undefended in code. Wiring requires:
+    /// (a) thread an Arc<EngineInner>+actor reference into
+    /// SandboxStoreData::new at the engine override site;
+    /// (b) replace the Vec<String> live_caps field with a callable
+    /// that consults the engine's revoked-actors set + future
+    /// grant-store on each invocation; (c) un-ignore the
+    /// sandbox_capability_check_per_call_after_revoke regression
+    /// test. The structural lift is >100 LOC across the eval-engine
+    /// boundary; BELONGS-NAMED-NOW for Phase-3-backlog.md (see
+    /// TODO(PHASE-3-BUNDLE-D18-live-cap-check) below) — Group 4 is
+    /// landing the named-destination entry.
+    /// TODO(PHASE-3-BUNDLE-D18-live-cap-check): wire a real engine-
+    /// backed callable here so PerCall reaches its documented
+    /// semantics. The Phase-3 grant-store lift is the natural
+    /// pairing wave (UCAN-backed grant resolution makes the
+    /// per-invocation lookup cheap enough to land without per-call
+    /// allocation).
     pub live_cap_check: &'a dyn Fn(&str) -> bool,
 }
 

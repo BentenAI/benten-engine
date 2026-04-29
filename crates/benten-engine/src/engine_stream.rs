@@ -431,6 +431,22 @@ impl Engine {
         input: Node,
         actor: &benten_core::Cid,
     ) -> Result<StreamHandle, EngineError> {
+        // R6FP-Group-1 (r6-stream-2): pre-flight cap check at call
+        // entry — if the actor is already revoked, refuse the stream
+        // open with a typed cap-denial. Mirrors the SUBSCRIBE-side
+        // engine_subscribe.rs pattern. Per-chunk cap-recheck during
+        // production happens via the actor-aware producer wrapper
+        // installed below; this pre-flight catches the
+        // already-revoked-at-call case before any work runs.
+        if !self.inner.is_actor_active(actor) {
+            return Err(EngineError::Other {
+                code: ErrorCode::CapRevokedMidEval,
+                message: format!(
+                    "call_stream_as: actor {} is no longer active (revoked before stream open)",
+                    actor.to_base32()
+                ),
+            });
+        }
         self.call_stream_inner(
             handler_id.as_handler_key().as_str(),
             op,
@@ -476,7 +492,7 @@ impl Engine {
         handler_id: &str,
         op: &str,
         input: Node,
-        _actor: Option<benten_core::Cid>,
+        actor: Option<benten_core::Cid>,
         requires_explicit_close: bool,
     ) -> Result<StreamHandle, EngineError> {
         // wave-8c-stream-infra: handler registration check stays the
@@ -493,7 +509,15 @@ impl Engine {
                 });
             }
         }
-        self.build_stream_handle(handler_id, op, &input, requires_explicit_close)
+        // R6FP-Group-1 (r6-stream-2): thread the actor principal into
+        // build_stream_handle so the per-chunk cap-recheck closure
+        // can consult the engine's revoked-actors set on each
+        // produce() call. Pre-fix `_actor: Option<Cid>` was honest
+        // about being unused — the docstring claimed cap-recheck
+        // would fire mid-stream once the executor wired in, but the
+        // executor wired in (wave-8c-stream-infra) without the
+        // principal threading.
+        self.build_stream_handle(handler_id, op, &input, requires_explicit_close, actor)
     }
 
     /// Phase 2b wave-8c-stream-infra: Process-wide active-stream count.
@@ -553,6 +577,7 @@ impl Engine {
         _op: &str,
         input: &Node,
         requires_explicit_close: bool,
+        actor: Option<benten_core::Cid>,
     ) -> Result<StreamHandle, EngineError> {
         use benten_core::Value;
         use benten_eval::PrimitiveKind;
@@ -604,6 +629,36 @@ impl Engine {
                 Some(Value::Int(n)) if *n > 0 => usize::try_from(*n).unwrap_or(64),
                 _ => 64,
             };
+            // R6FP-Group-1 (r6-stream-3): consult the
+            // `StreamPrimitiveSpec.persist` property. The eval-side
+            // `StreamPersistMode::Persist` variant materializes
+            // chunks as an aggregate Node at completion (phil-r1-1
+            // aggregate-Node behavior); the production-runtime
+            // engine wrapper does NOT yet wire that materialization
+            // (it would require persisting the aggregate through the
+            // backend + a CID-stable round-trip). For Phase-2b-close,
+            // we fail-loud when `persist: true` is declared so the
+            // operator does not silently get an
+            // ephemeral-mode stream while expecting persistence.
+            let persist_requested = matches!(
+                stream_ps.properties.get("persist"),
+                Some(Value::Bool(true))
+            );
+            if persist_requested {
+                return Err(EngineError::Other {
+                    code: ErrorCode::PrimitiveNotImplemented,
+                    message: format!(
+                        "call_stream: handler {handler_id} declares STREAM \
+                         persist:true but the engine wrapper does not yet \
+                         materialize aggregate Nodes at the production \
+                         dispatch layer. This is tracked as a Phase-3 \
+                         backlog item (aggregate-Node persistence pairs \
+                         with the durable BlobBackend lift). For Phase \
+                         2b, drop persist:true or use the eval-side \
+                         test helper `run_stream_persist` directly."
+                    ),
+                });
+            }
             (source, chunk_size)
         };
 
@@ -639,6 +694,24 @@ impl Engine {
                     Box::new(EmptyProducer)
                 }
             }
+        };
+
+        // R6FP-Group-1 (r6-stream-2): when an actor was supplied via
+        // `call_stream_as`, wrap the producer in a per-chunk
+        // cap-recheck guard. On every `produce()` call, consult the
+        // engine's revoked-actors set; if the actor has been revoked
+        // mid-stream, surface a typed Err that the bridge translates
+        // to ClosedByPeer. Mirrors the SUBSCRIBE-side
+        // DeliveryCapRecheck pattern (engine_subscribe.rs:283-298).
+        let producer: Box<dyn ChunkProducer> = if let Some(actor_cid) = actor {
+            let inner_for_check = std::sync::Arc::clone(&self.inner);
+            Box::new(CapRecheckProducer {
+                inner: producer,
+                actor_cid,
+                inner_engine: inner_for_check,
+            })
+        } else {
+            producer
         };
 
         let config = ChunkProducerConfig::default();
@@ -771,6 +844,36 @@ impl benten_eval::chunk_sink::ChunkProducer for EmptyProducer {
         _seq: u64,
     ) -> Result<Option<Vec<u8>>, benten_eval::chunk_sink::ChunkSinkError> {
         Ok(None)
+    }
+}
+
+/// R6FP-Group-1 (r6-stream-2): producer wrapper that consults the
+/// engine's revoked-actors set on every `produce()` call. When the
+/// actor is revoked mid-stream, surfaces `ChunkSinkError::ClosedByPeer`
+/// to terminate the producer thread cleanly + the bridge winds down
+/// (consumer sees EOS). Mirrors SUBSCRIBE's DeliveryCapRecheck closure
+/// (engine_subscribe.rs:283-298) — same semantics adapted to the
+/// per-chunk producer-side polling model.
+struct CapRecheckProducer {
+    inner: Box<dyn benten_eval::chunk_sink::ChunkProducer>,
+    actor_cid: benten_core::Cid,
+    inner_engine: std::sync::Arc<crate::engine::EngineInner>,
+}
+
+impl benten_eval::chunk_sink::ChunkProducer for CapRecheckProducer {
+    fn produce(
+        &mut self,
+        seq: u64,
+    ) -> Result<Option<Vec<u8>>, benten_eval::chunk_sink::ChunkSinkError> {
+        // R6FP-G1 (r6-stream-2): every produce() consults the
+        // revoked-actors set BEFORE delegating to the inner producer.
+        // A revoked actor terminates the stream cleanly via
+        // ClosedByPeer rather than continuing to emit chunks the
+        // caller is no longer authorised to receive.
+        if !self.inner_engine.is_actor_active(&self.actor_cid) {
+            return Err(benten_eval::chunk_sink::ChunkSinkError::ClosedByPeer { seq });
+        }
+        self.inner.produce(seq)
     }
 }
 
