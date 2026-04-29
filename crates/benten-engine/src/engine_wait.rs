@@ -67,6 +67,7 @@ use benten_core::{Cid, Node, Value};
 use benten_errors::ErrorCode;
 use benten_eval::{
     AttributionFrame, ExecutionStateEnvelope, ExecutionStatePayload, Frame, SuspendedHandle,
+    WaitResumeSignal,
 };
 
 use crate::engine::Engine;
@@ -386,12 +387,22 @@ impl Engine {
     /// `E_CAP_REVOKED_MID_EVAL` per §9.1. Never fires
     /// `E_RESUME_ACTOR_MISMATCH` — that's step 2, which this variant
     /// skips by design.
+    ///
+    /// R6FP-Group-1 (r6-mpc-1): the `signal` Value is now threaded
+    /// through to the eval-side `wait::resume_with_meta` consumer for
+    /// `signal_shape` validation (fires `E_INV_REGISTRATION` on shape
+    /// mismatch) AND for routing duration-WAIT vs signal-WAIT branches.
+    /// Legacy callers passing `Value::Null` see the "no value" path
+    /// (duration-WAIT consults the deadline branch; signal-WAIT
+    /// completes with Null when no shape is declared, fires
+    /// `E_INV_REGISTRATION` when a shape is declared and Null doesn't
+    /// match it).
     pub fn resume_from_bytes_unauthenticated(
         &self,
         bytes: &[u8],
-        _signal: Value,
+        signal: Value,
     ) -> Result<Outcome, EngineError> {
-        self.resume_from_bytes_inner(bytes, None)
+        self.resume_from_bytes_inner(bytes, None, ResumePayload::Signal(signal))
     }
 
     /// Phase 2a G3-B: resume-from-bytes with an explicit resumption
@@ -403,13 +414,18 @@ impl Engine {
     /// # Errors
     /// See [`Engine::resume_from_bytes_unauthenticated`] plus
     /// `E_RESUME_ACTOR_MISMATCH` on step-2 principal drift.
+    ///
+    /// R6FP-Group-1 (r6-mpc-1): the `signal` Value is now threaded
+    /// through to the eval-side `wait::resume_with_meta` consumer (see
+    /// [`Self::resume_from_bytes_unauthenticated`] for the full
+    /// rationale).
     pub fn resume_from_bytes_as(
         &self,
         bytes: &[u8],
-        _signal: Value,
+        signal: Value,
         principal: &Cid,
     ) -> Result<Outcome, EngineError> {
-        self.resume_from_bytes_inner(bytes, Some(*principal))
+        self.resume_from_bytes_inner(bytes, Some(*principal), ResumePayload::Signal(signal))
     }
 
     /// Phase 2b wave-8g (G12-E follow-up): engine-level resume entry
@@ -471,17 +487,23 @@ impl Engine {
         envelope: &[u8],
         payload: ResumePayload,
     ) -> Result<Outcome, EngineError> {
-        let signal = match payload {
-            ResumePayload::None => Value::Null,
-            ResumePayload::Signal(v) => v,
-        };
-        self.resume_from_bytes_unauthenticated(envelope, signal)
+        // R6FP-Group-1 (r6-mpc-1): preserve the typed `ResumePayload`
+        // distinction (None vs Signal(v)) into `resume_from_bytes_inner`
+        // rather than collapsing both to a `Value` early. The eval-side
+        // `wait::resume_with_meta` consumer maps `None` to
+        // `WaitResumeSignal::DurationElapsed` (driving the duration-WAIT
+        // timeout branch) and maps `Signal(v)` to
+        // `WaitResumeSignal::Signal { value: v }` (driving the
+        // signal-shape validation branch). Collapsing to `Value::Null`
+        // erased that distinction.
+        self.resume_from_bytes_inner(envelope, None, payload)
     }
 
     fn resume_from_bytes_inner(
         &self,
         bytes: &[u8],
         caller_principal: Option<Cid>,
+        resume_payload: ResumePayload,
     ) -> Result<Outcome, EngineError> {
         // Step 0 / pre-check: empty or malformed DAG-CBOR → E_SERIALIZE.
         if bytes.is_empty() {
@@ -517,26 +539,36 @@ impl Engine {
             });
         }
 
-        // Step 1.5 (Wave-8i fix-pass-2 w8i-wait-cag-04): WAIT deadline check.
+        // Step 1.5 (R6FP-Group-1 r6-mpc-1): full WAIT metadata
+        //   consumer — deadline + duration-variant + signal-shape.
         //
         // The eval-side `wait::resume_with_meta` is THE surface that
-        // consumes `WaitMetadata.timeout_ms` + `suspend_elapsed_ms` and
-        // fires `E_WAIT_TIMEOUT` when `(now - start) >= timeout`. The
-        // engine's resume APIs (`resume_with_meta`,
-        // `resume_from_bytes_unauthenticated`, `resume_from_bytes_as`)
-        // route here; pre-fix-pass-2 they returned a successful
-        // `terminal_ok_outcome()` regardless of how much time had elapsed
-        // since suspend, leaving deadline enforcement on the engine path
-        // silently disabled — even though the regular-walk path
-        // (`engine.call()` Wave-8i fix-pass-1) correctly populates the
-        // metadata side-table.
+        // consumes ALL FOUR `WaitMetadata` fields (`timeout_ms`,
+        // `suspend_elapsed_ms`, `is_duration`, `signal_shape`) and
+        // produces three distinct typed errors:
+        //   (a) `E_WAIT_TIMEOUT` when `(now - start) >= timeout` OR
+        //       when a duration-variant resume's deadline has fired,
+        //   (b) `E_INV_REGISTRATION` (via `EvalError::Invariant`) when
+        //       a typed `signal_shape` declared at suspend time does
+        //       not structurally match the resume payload.
         //
-        // The lookup is best-effort: a missing entry (fabricated test
-        // envelope, non-WAIT resume reaching this surface, or store
-        // miss in cross-process scenarios after eviction) skips the
-        // deadline check rather than failing — matching the eval-side
-        // `Option<WaitMetadata>` shape's intent for entries the store
-        // legitimately cannot resolve (the eval-side surfaces a typed
+        // Wave-8i fix-pass-2 (w8i-wait-cag-04) wired ONLY (a) — and
+        // only the timeout-vs-suspend branch, not the duration-variant
+        // branch. The R6 metadata-producer-vs-consumer lens
+        // (`r6-mpc-1`) caught that two of three branches were silently
+        // dropped on the engine surface even though they fired
+        // correctly through the eval-side direct-resume path. R6FP-G1
+        // delegates to `benten_eval::resume_with_meta` so a single
+        // authoritative consumer lives at the eval layer and the
+        // engine API can no longer drift from it.
+        //
+        // The metadata-store lookup is best-effort: a missing entry
+        // (fabricated test envelope, non-WAIT resume reaching this
+        // surface, or store miss in cross-process scenarios after
+        // eviction) skips the metadata consumer entirely rather than
+        // failing — matching the eval-side `Option<WaitMetadata>`
+        // shape's intent for entries the store legitimately cannot
+        // resolve (the eval-side surfaces a typed
         // `E_HOST_BACKEND_UNAVAILABLE` only when called via the public
         // `benten_eval::resume` API, which has stricter integrity
         // expectations than the bytes-only engine resume surfaces).
@@ -544,13 +576,21 @@ impl Engine {
         if let Ok(Some(meta)) = self.suspension_store.get_wait(&state_cid) {
             let now_ms = u64::try_from(self.monotonic_source.elapsed_since_start().as_millis())
                 .unwrap_or(u64::MAX);
-            if let (Some(timeout), Some(start)) = (meta.timeout_ms, meta.suspend_elapsed_ms)
-                && now_ms.saturating_sub(start) >= timeout
-            {
-                return Err(EngineError::Other {
-                    code: ErrorCode::WaitTimeout,
-                    message: "resume: wait deadline elapsed".into(),
-                });
+            // Map the engine-level `ResumePayload` enum onto the
+            // eval-level `WaitResumeSignal` enum. `None` → DurationElapsed
+            // (drives the duration-variant timeout branch); `Signal(v)`
+            // → Signal { value: v } (drives the signal-shape validation
+            // branch, with `Value::Null` admitted when no shape was
+            // declared at suspend time).
+            let eval_signal = match &resume_payload {
+                ResumePayload::None => WaitResumeSignal::DurationElapsed,
+                ResumePayload::Signal(v) => WaitResumeSignal::Signal { value: v.clone() },
+            };
+            match benten_eval::resume_with_meta(Some(meta), eval_signal, Some(now_ms)) {
+                Ok(_) => { /* metadata consumer accepted; continue to step 2 */ }
+                Err(eval_err) => {
+                    return Err(map_resume_eval_error(eval_err));
+                }
             }
         }
 
@@ -973,6 +1013,49 @@ impl Engine {
             "Phase 2a G2-A descope-witness: group-durability vs immediate \
              latency observation (informational; gate 5 descoped per arch-r1-1)"
         )
+    }
+}
+
+/// R6FP-Group-1 (r6-mpc-1): Map an `EvalError` returned by
+/// `benten_eval::resume_with_meta` onto the public `EngineError` shape
+/// the resume API surfaces. Three concrete shapes:
+///
+/// 1. `EvalError::Host(WaitTimeout)` → `EngineError::Other {
+///    code: WaitTimeout, .. }` — the deadline OR duration-variant branch
+///    fired.
+/// 2. `EvalError::Invariant(Registration)` → `EngineError::Other {
+///    code: InvRegistration, .. }` — declared `signal_shape` did not
+///    structurally match the resume payload (atk-r1: typed mismatch,
+///    NOT a tamper).
+/// 3. Anything else (host errors, missing-metadata loud-fail, etc.) →
+///    catch-all `EngineError::Other` with the eval error's catalog
+///    code preserved through `EvalError::code()`.
+fn map_resume_eval_error(err: benten_eval::EvalError) -> EngineError {
+    match err {
+        benten_eval::EvalError::Host(host_err) => {
+            let code = host_err.code.clone();
+            let message = format!("{host_err}");
+            match code {
+                ErrorCode::WaitTimeout => EngineError::Other {
+                    code: ErrorCode::WaitTimeout,
+                    message: format!("resume: wait deadline elapsed: {message}"),
+                },
+                other_code => EngineError::Other {
+                    code: other_code,
+                    message: format!("resume: eval host error: {message}"),
+                },
+            }
+        }
+        benten_eval::EvalError::Invariant(benten_eval::InvariantViolation::Registration) => {
+            EngineError::Other {
+                code: ErrorCode::InvRegistration,
+                message: "resume: signal payload did not match declared signal_shape".into(),
+            }
+        }
+        other => EngineError::Other {
+            code: other.code(),
+            message: format!("resume: eval error: {other:?}"),
+        },
     }
 }
 

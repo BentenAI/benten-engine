@@ -450,7 +450,20 @@ pub fn resume(
 /// store lost its entry, or the process-local store has not been
 /// shared with the resuming process). Fail loud rather than admit
 /// every signal silently.
-pub(crate) fn resume_with_meta(
+///
+/// # R6FP-Group-1 (r6-mpc-1) — public surface for engine delegation
+///
+/// Lifted from `pub(crate)` to `pub` so the engine-side resume API
+/// (`Engine::resume_with_meta` / `resume_from_bytes_unauthenticated` /
+/// `resume_from_bytes_as`) can delegate the THREE consumer branches
+/// (deadline + duration-variant + signal-shape) to a single
+/// authoritative consumer rather than re-implementing a deadline-only
+/// subset. Prior to this lift the engine surface re-implemented the
+/// deadline check inline (wave-8i fp2) but skipped `is_duration` and
+/// `signal_shape`; the metadata-producer-vs-consumer R6 lens caught
+/// that two of three branches were unwired. See r6-round-1-triage.md
+/// Group 1 r6-mpc-1.
+pub fn resume_with_meta(
     meta: Option<WaitMetadata>,
     signal: WaitResumeSignal,
     current_elapsed_ms_override: Option<u64>,

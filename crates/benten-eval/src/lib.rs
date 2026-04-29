@@ -52,7 +52,9 @@ pub use context::EvalContext;
 pub use exec_state::{AttributionFrame, ExecutionStateEnvelope, ExecutionStatePayload, Frame};
 pub use host::{NullHost, PrimitiveHost, ViewQuery};
 pub use host_error::HostError;
-pub use primitives::wait::{SignalShape, SuspendedHandle, WaitOutcome, WaitResumeSignal};
+pub use primitives::wait::{
+    SignalShape, SuspendedHandle, WaitOutcome, WaitResumeSignal, resume_with_meta,
+};
 pub use suspension_store::{
     InMemorySuspensionStore, SuspensionKey, SuspensionStore, SuspensionStoreError, WaitMetadata,
     default_process_store,
