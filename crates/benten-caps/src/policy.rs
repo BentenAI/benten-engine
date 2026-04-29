@@ -189,8 +189,8 @@ impl ReadContext {
     /// Construct a `ReadContext` for a CID-only read (no label in scope).
     ///
     /// G11-A EVAL wave-1 (G4-A nit): the "empty-label means CID-only"
-    /// convention previously lived as an unwritten rule at
-    /// `benten-engine/src/primitive_host.rs:146` and a few engine
+    /// convention previously lived as an unwritten rule in
+    /// `benten-engine/src/primitive_host.rs` and a few engine
     /// call-sites that constructed `ReadContext { label: String::new(),
     /// target_cid: Some(cid), ..Default::default() }` inline. A typed
     /// constructor makes the convention explicit and gives

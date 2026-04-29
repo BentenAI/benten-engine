@@ -406,7 +406,7 @@ export class ECapAttenuation extends BentenError {
 /**
  * E_WRITE_CONFLICT
  *
- * Thrown at: Evaluation (CAS WRITE). **Runtime surface is edge-routed, not Rust-enum-valued:** WRITE's `cas` mode routes conflicts via the `ON_CONFLICT` edge; the engine stamps `error_code: "E_WRITE_CONFLICT"` on the routed step (`crates/benten-engine/src/primitive_host.rs:~362`). Callers read the code off the edge-routing metadata, not via a `match` on an `Err(EvalError::WriteConflict)` — the enum variant exists for forward-compat with a Phase-2 native Rust path but has no construction site in Phase-1 production code. The drift-detector's `reachability: ignore` annotation reflects this asymmetry.
+ * Thrown at: Evaluation (CAS WRITE). **Runtime surface is edge-routed, not Rust-enum-valued:** WRITE's `cas` mode routes conflicts via the `ON_CONFLICT` edge; the engine stamps `error_code: "E_WRITE_CONFLICT"` on the routed step (`crates/benten-engine/src/primitive_host.rs:1204`). Callers read the code off the edge-routing metadata, not via a `match` on an `Err(EvalError::WriteConflict)` — the enum variant exists for forward-compat with a Phase-2 native Rust path but has no construction site in Phase-1 production code. The drift-detector's `reachability: ignore` annotation reflects this asymmetry.
  * Message template: "Expected version {expected}, found {actual} on {target}"
  */
 export class EWriteConflict extends BentenError {
@@ -1431,9 +1431,9 @@ export class ESandboxHostFnNotFound extends BentenError {
  */
 export class ESandboxManifestUnknown extends BentenError {
   static readonly code = "E_SANDBOX_MANIFEST_UNKNOWN";
-  static readonly fixHint = "ESC-15 escape vector closure: NO permissive fall-through to a default manifest. Either register the manifest (Phase 8 marketplace work — see [E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED]) or use one of the codegen-default names (`compute-basic`, `compute-with-kv`).";
+  static readonly fixHint = "ESC-15 escape vector closure: NO permissive fall-through to a default manifest. Either register the manifest (Phase 8 marketplace work — see `E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED`) or use one of the codegen-default names (`compute-basic`, `compute-with-kv`).";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SANDBOX_MANIFEST_UNKNOWN", "ESC-15 escape vector closure: NO permissive fall-through to a default manifest. Either register the manifest (Phase 8 marketplace work — see [E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED]) or use one of the codegen-default names (`compute-basic`, `compute-with-kv`).", message, context);
+    super("E_SANDBOX_MANIFEST_UNKNOWN", "ESC-15 escape vector closure: NO permissive fall-through to a default manifest. Either register the manifest (Phase 8 marketplace work — see `E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED`) or use one of the codegen-default names (`compute-basic`, `compute-with-kv`).", message, context);
     this.name = "ESandboxManifestUnknown";
   }
 }
@@ -1476,9 +1476,9 @@ export class ESandboxModuleInvalid extends BentenError {
  */
 export class ESandboxModuleNotInstalled extends BentenError {
   static readonly code = "E_SANDBOX_MODULE_NOT_INSTALLED";
-  static readonly fixHint = "A SANDBOX dispatch named a module CID for which no bytes have been registered through `Engine::register_module_bytes(cid, bytes)`. Distinct from [E_SANDBOX_MODULE_INVALID] (bytes are present but failed wasmtime structural validation): this fires BEFORE the executor sees any bytes, at the engine's lookup step. Either call `engine.register_module_bytes(module_cid, wasm_bytes)` before dispatch, or correct the SANDBOX node's `module` property to reference an already-registered CID. The Phase-2b in-memory module-bytes registry is process-local + transient (lost across `Engine` re-open); Phase 3 promotes the registry to a durable `BlobBackend` per Compromise #17. The `install_module(manifest, expected_cid)` path persists the manifest into a system-zone Node but does NOT persist the underlying wasm bytes — that asymmetry IS the Compromise #17 narrative.";
+  static readonly fixHint = "A SANDBOX dispatch named a module CID for which no bytes have been registered through `Engine::register_module_bytes(cid, bytes)`. Distinct from `E_SANDBOX_MODULE_INVALID` (bytes are present but failed wasmtime structural validation): this fires BEFORE the executor sees any bytes, at the engine's lookup step. Either call `engine.register_module_bytes(module_cid, wasm_bytes)` before dispatch, or correct the SANDBOX node's `module` property to reference an already-registered CID. The Phase-2b in-memory module-bytes registry is process-local + transient (lost across `Engine` re-open); Phase 3 promotes the registry to a durable `BlobBackend` per Compromise #17. The `install_module(manifest, expected_cid)` path persists the manifest into a system-zone Node but does NOT persist the underlying wasm bytes — that asymmetry IS the Compromise #17 narrative.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SANDBOX_MODULE_NOT_INSTALLED", "A SANDBOX dispatch named a module CID for which no bytes have been registered through `Engine::register_module_bytes(cid, bytes)`. Distinct from [E_SANDBOX_MODULE_INVALID] (bytes are present but failed wasmtime structural validation): this fires BEFORE the executor sees any bytes, at the engine's lookup step. Either call `engine.register_module_bytes(module_cid, wasm_bytes)` before dispatch, or correct the SANDBOX node's `module` property to reference an already-registered CID. The Phase-2b in-memory module-bytes registry is process-local + transient (lost across `Engine` re-open); Phase 3 promotes the registry to a durable `BlobBackend` per Compromise #17. The `install_module(manifest, expected_cid)` path persists the manifest into a system-zone Node but does NOT persist the underlying wasm bytes — that asymmetry IS the Compromise #17 narrative.", message, context);
+    super("E_SANDBOX_MODULE_NOT_INSTALLED", "A SANDBOX dispatch named a module CID for which no bytes have been registered through `Engine::register_module_bytes(cid, bytes)`. Distinct from `E_SANDBOX_MODULE_INVALID` (bytes are present but failed wasmtime structural validation): this fires BEFORE the executor sees any bytes, at the engine's lookup step. Either call `engine.register_module_bytes(module_cid, wasm_bytes)` before dispatch, or correct the SANDBOX node's `module` property to reference an already-registered CID. The Phase-2b in-memory module-bytes registry is process-local + transient (lost across `Engine` re-open); Phase 3 promotes the registry to a durable `BlobBackend` per Compromise #17. The `install_module(manifest, expected_cid)` path persists the manifest into a system-zone Node but does NOT persist the underlying wasm bytes — that asymmetry IS the Compromise #17 narrative.", message, context);
     this.name = "ESandboxModuleNotInstalled";
   }
 }
@@ -1561,7 +1561,7 @@ export class EBackendReadOnly extends BentenError {
 /**
  * E_SANDBOX_UNAVAILABLE_ON_WASM
  *
- * Thrown at: `crates/benten-engine/src/engine_sandbox.rs::execute_sandbox_native` (wasm32 cfg-gated stub) and the SANDBOX dispatcher path in `crates/benten-eval/src/primitives/mod.rs` when reached on a wasm32 target.
+ * Thrown at: `crates/benten-engine/src/engine_sandbox.rs::execute_sandbox_wasm32_unavailable` (wasm32 cfg-gated stub) and the SANDBOX dispatcher path in `crates/benten-eval/src/primitives/mod.rs` when reached on a wasm32 target.
  * Message template: "SANDBOX is unavailable on the wasm32 build of the engine ({target})"
  */
 export class ESandboxUnavailableOnWasm extends BentenError {

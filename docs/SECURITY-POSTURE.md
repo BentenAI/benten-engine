@@ -227,7 +227,7 @@ round-trips the catalog-code strings through `as_str` / `from_str`.
 
 ### Compromise #4 — WASM runtime is compile-check only — CLOSED
 
-**Closure provenance:** Phase 2b waves G7 + 8b + 8h (SANDBOX wire-through). The Phase-2b R4b post-impl audit surfaced that the prior G7-A scaffold left the production dispatch gate returning `PrimitiveNotImplemented` and the executor body returning an empty `SandboxResult` without ever instantiating wasmtime — the closure narrative was aspirational. **Wave-8b** wired the production dispatcher (`crates/benten-eval/src/primitives/mod.rs:91`) to `sandbox::execute(...)` and replaced the executor body with the real `Store + Linker + Instance` lifecycle, fuel/epoch/memory limiters, host-fn trampoline, `CountedSink` PRIMARY+BACKSTOP D17 enforcement, and trap → typed-error mapping with the D21 priority resolver. **Wave-8h** then closed the docs-vs-code audit's three audit-gap drifts (manifest-registry hydration, EMIT broadcast, IVM Algorithm B production registration) so the Named-manifest dispatch path consults the engine's `installed_modules` state.
+**Closure provenance:** Phase 2b waves G7 + 8b + 8h (SANDBOX wire-through). The Phase-2b R4b post-impl audit surfaced that the prior G7-A scaffold left the production dispatch gate returning `PrimitiveNotImplemented` and the executor body returning an empty `SandboxResult` without ever instantiating wasmtime — the closure narrative was aspirational. **Wave-8b** wired the production dispatcher (`crates/benten-eval/src/primitives/mod.rs:96`) to `sandbox::execute(...)` and replaced the executor body with the real `Store + Linker + Instance` lifecycle, fuel/epoch/memory limiters, host-fn trampoline, `CountedSink` PRIMARY+BACKSTOP D17 enforcement, and trap → typed-error mapping with the D21 priority resolver. **Wave-8h** then closed the docs-vs-code audit's three audit-gap drifts (manifest-registry hydration, EMIT broadcast, IVM Algorithm B production registration) so the Named-manifest dispatch path consults the engine's `installed_modules` state.
 
 **Original scope (Phase 1):** the `bindings/napi` crate compiled with `--target wasm32-unknown-unknown` in CI (`wasm-checks.yml`) but did NOT execute a WASM runtime (browser / `wasmtime`) at test time. The Phase-1 WASM surface existed only to guarantee that the napi bindings built for a browser target so Thrum (the Phase-4 consumer) could compile them into its web bundle.
 
@@ -1004,7 +1004,7 @@ the durable `BlobBackend`.
 **Shape.** `Engine::register_module_bytes(cid, bytes)` — the API
 that registers compiled WebAssembly module bytes for SANDBOX
 dispatch — stores into a process-local `BTreeMap<Cid, Vec<u8>>`
-guarded by a `Mutex` (`crates/benten-engine/src/engine.rs:766`). The
+guarded by a `Mutex` (`crates/benten-engine/src/engine.rs:181`). The
 bytes are NOT persisted to the engine's redb backend; on `Engine::open`
 the registry starts empty regardless of what was registered against
 the prior process.

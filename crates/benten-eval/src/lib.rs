@@ -353,7 +353,7 @@ pub enum EvalError {
     /// or persist the handle bytes via `Engine::suspend_to_bytes`.
     ///
     /// Replaces the Phase-2a `Err(PrimitiveNotImplemented(Wait))` shape
-    /// at the dispatcher (mod.rs:100), which forced callers to know about
+    /// at the dispatcher (mod.rs:111), which forced callers to know about
     /// `call_with_suspension` to use WAIT at all.
     #[error("wait suspended (envelope cid={state_cid}, signal={signal:?})", state_cid = handle.state_cid().to_base32(), signal = handle.signal_name())]
     WaitSuspended {
