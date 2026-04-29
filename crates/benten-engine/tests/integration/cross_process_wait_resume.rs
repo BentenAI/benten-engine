@@ -32,7 +32,7 @@ use benten_engine::Engine;
 /// the same redb path → resume → assert the wait completes with the
 /// correct payload AND the SuspensionStore entry has been removed.
 #[test]
-#[ignore = "Phase 2b G12-E pending — on-disk SuspensionStore + wait.rs rewire unimplemented"]
+#[ignore = "Phase 3 — cross-process resume body deferred per docs/future/phase-3-backlog.md §7.3.A.6 (G12-E SuspensionStore landed structurally; cross-process resume integration body Phase-3)"]
 fn wait_resume_cross_process_metadata_survives_restart() {
     let dir = tempfile::tempdir().unwrap();
     let db_path = dir.path().join("benten.redb");
@@ -90,7 +90,7 @@ fn wait_resume_cross_process_metadata_survives_restart() {
 /// `resume_with_meta` MUST fail closed with a typed error — NOT
 /// permissively complete with the supplied payload.
 #[test]
-#[ignore = "Phase 2b G12-E pending"]
+#[ignore = "Phase 3 — resume_with_meta-fails-closed-on-missing-metadata body deferred per docs/future/phase-3-backlog.md §7.3.A.6"]
 fn resume_with_meta_fails_closed_when_metadata_missing() {
     let dir = tempfile::tempdir().unwrap();
     let mut engine = Engine::builder()

@@ -28,7 +28,7 @@ use std::time::Duration;
 /// (deadline timestamp) is in the persistent SuspensionStore, NOT in
 /// process-local memory.
 #[test]
-#[ignore = "Phase 2b G12-E pending — TTL persistence across Engine::open boundary"]
+#[ignore = "Phase 3 — TTL persistence-across-Engine::open body deferred per docs/future/phase-3-backlog.md §7.3.A.6"]
 fn wait_ttl_cross_process_survives_restart() {
     let dir = tempfile::tempdir().unwrap();
     let db_path = dir.path().join("benten.redb");
@@ -77,7 +77,7 @@ fn wait_ttl_cross_process_survives_restart() {
 /// engine B much later — the deadline anchored at suspend-time MUST
 /// still apply correctly relative to wall-clock-now in engine B.
 #[test]
-#[ignore = "Phase 2b G12-E pending — wall-clock-relative TTL semantics unimplemented"]
+#[ignore = "Phase 3 — wall-clock-relative TTL semantics body deferred per docs/future/phase-3-backlog.md §7.3.A.6"]
 fn wait_ttl_does_not_apply_during_suspend_pause() {
     let dir = tempfile::tempdir().unwrap();
     let db_path = dir.path().join("benten.redb");

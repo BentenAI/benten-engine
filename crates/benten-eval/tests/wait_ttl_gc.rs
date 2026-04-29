@@ -43,7 +43,7 @@ fn fresh_engine() -> (tempfile::TempDir, Engine) {
 /// the suspend operation MUST opportunistically sweep A from the
 /// SuspensionStore (event-driven GC on suspend).
 #[test]
-#[ignore = "Phase 2b G12-E pending — event-driven sweep on suspend unimplemented"]
+#[ignore = "Phase 3 — event-driven GC sweep on suspend body deferred per docs/future/phase-3-backlog.md §7.3.A.6"]
 fn wait_gc_event_driven_suspend_sweeps_expired_siblings() {
     let (_dir, mut engine) = fresh_engine();
 
@@ -84,7 +84,7 @@ fn wait_gc_event_driven_suspend_sweeps_expired_siblings() {
 /// simulates by advancing both the wait-clock AND the interval-clock,
 /// then asserts the entry is gone.
 #[test]
-#[ignore = "Phase 2b G12-E pending — 1h interval backstop GC unimplemented"]
+#[ignore = "Phase 3 — 1h interval backstop GC body deferred per docs/future/phase-3-backlog.md §7.3.A.6"]
 fn wait_gc_interval_backstop_sweeps_idle_engine() {
     let (_dir, mut engine) = fresh_engine();
 
@@ -114,7 +114,7 @@ fn wait_gc_interval_backstop_sweeps_idle_engine() {
 /// If event-driven GC is disabled (config knob), the interval backstop
 /// MUST still ensure no entry survives indefinitely past expiry.
 #[test]
-#[ignore = "Phase 2b G12-E pending — event-driven-disabled config unimplemented"]
+#[ignore = "Phase 3 — event-driven-disabled GC config body deferred per docs/future/phase-3-backlog.md §7.3.A.6"]
 fn wait_gc_disabled_event_driven_still_works_via_interval() {
     let dir = tempfile::tempdir().unwrap();
     let mut engine = Engine::builder()
@@ -156,7 +156,7 @@ fn wait_gc_disabled_event_driven_still_works_via_interval() {
 /// engine, then re-open against the same path and assert the entry is
 /// absent (proving the drop-time sweep removed it from durable storage).
 #[test]
-#[ignore = "Phase 2b G12-E pending — Engine::drop final sweep unimplemented"]
+#[ignore = "Phase 3 — Engine::drop final GC sweep body deferred per docs/future/phase-3-backlog.md §7.3.A.6"]
 fn wait_gc_engine_drop_runs_final_sweep() {
     let dir = tempfile::tempdir().unwrap();
     let db_path = dir.path().join("benten.redb");
