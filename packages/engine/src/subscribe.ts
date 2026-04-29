@@ -93,12 +93,15 @@ export function wrapSubscriptionHandle(
   native: NativeSubscriptionJs,
   cursor: SubscribeCursor,
 ): Subscription {
-  // Snapshot the pattern + initial maxDeliveredSeq so the
-  // `Subscription` shape exposes immutable identity-fields (the
-  // `active` getter remains live so JS code can observe drop /
-  // unsubscribe transitions).
+  // Snapshot the pattern (immutable post-registration) so it can be
+  // exposed as a plain readonly field. `active` + `maxDeliveredSeq`
+  // both go through live getters that round-trip to the native handle
+  // — the underlying engine-side atomic bumps on every delivery, so a
+  // snapshotted value goes stale immediately (Round-2 Instance 7
+  // closure: prior shape captured `maxDeliveredSeq` once at
+  // construction time when the value was 0; consumers reading the
+  // field post-delivery saw a permanent zero).
   const pattern = native.pattern();
-  const initialMaxDeliveredSeq = native.maxDeliveredSeq();
   let unsubscribed = false;
   return {
     get active(): boolean {
@@ -107,7 +110,13 @@ export function wrapSubscriptionHandle(
     },
     pattern,
     cursor,
-    maxDeliveredSeq: initialMaxDeliveredSeq,
+    get maxDeliveredSeq(): number {
+      // Always read through to the native atomic. After unsubscribe
+      // the underlying handle still reports the final value (it is
+      // bumped at delivery time, not unsubscribe time), so we don't
+      // gate this on the unsubscribed flag.
+      return native.maxDeliveredSeq();
+    },
     unsubscribe(): void {
       if (unsubscribed) return;
       unsubscribed = true;

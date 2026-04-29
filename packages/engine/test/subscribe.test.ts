@@ -39,6 +39,32 @@ describe("engine.onChange", () => {
     await engine.close();
   });
 
+  it("[Round-2 Instance 7] maxDeliveredSeq is a live getter (reads through native atomic)", async () => {
+    // Round-2 Instance 7 closure: pre-fix-pass `wrapSubscriptionHandle`
+    // snapshotted `native.maxDeliveredSeq()` at construction time
+    // (when the value was 0) and exposed it as a plain field.
+    // Subsequent native deliveries bumped the underlying atomic but
+    // the TS-side field stayed at 0. This test pins the new live-getter
+    // contract: post-delivery, `subscription.maxDeliveredSeq` reads
+    // through to the native handle and reports the bumped value.
+    const engine = await Engine.open(":memory:");
+    await engine.registerSubgraph(crud("post"));
+
+    const sub = engine.onChange("post", () => {});
+    expect(sub.maxDeliveredSeq).toBe(0);
+
+    await engine.createNode(["post"], { title: "live-getter-pin" });
+    // Drain libuv queue so the native side's atomic gets bumped.
+    for (let i = 0; i < 50 && sub.maxDeliveredSeq === 0; i += 1) {
+      await sleep(5);
+    }
+    // The live getter MUST read through to the native handle.
+    expect(sub.maxDeliveredSeq).toBeGreaterThan(0);
+
+    sub.unsubscribe();
+    await engine.close();
+  });
+
   it("LOAD-BEARING — onChange callback fires when a matching write commits", async () => {
     // cr-w8c-fp-1 acceptance gate: register an onChange callback,
     // commit a matching write via createNode, and assert the callback
