@@ -35,7 +35,7 @@
 
 use benten_core::{Node, Value};
 use benten_engine::{Engine, EngineError, PrimitiveSpec, SubgraphSpec, SuspensionOutcome};
-use benten_eval::{PrimitiveKind, SuspensionStore};
+use benten_eval::{PrimitiveKind, SuspensionStore, WaitOutcome, WaitResumeSignal};
 use std::collections::BTreeMap;
 
 fn open_engine() -> (tempfile::TempDir, Engine) {
@@ -286,4 +286,218 @@ fn wait_primitive_consults_signal_shape_property() {
          the resume path's shape-validation reads this slot"
     );
     assert_eq!(handle.signal_name(), "signal:typed");
+}
+
+// ---------------------------------------------------------------------------
+// Wave-8i fix-pass regression tests (against code-as-graph mini-review)
+// ---------------------------------------------------------------------------
+
+/// Wave-8i fix-pass acceptance test (w8i-wait-cag-01): the caller-named
+/// principal threads through `call_as_with_suspension` into the
+/// suspension envelope's `resumption_principal_cid`, so
+/// `resume_from_bytes_as` step 2 binds correctly for real WAIT
+/// handlers (NOT just for `SubgraphSpec::empty(...)` fixtures).
+///
+/// **The bug.** Pre-fix-pass, the Wave-8i regular-walk path dropped the
+/// caller's principal arg (`let _ = principal;` at engine_wait.rs:782)
+/// and the eval-side `placeholder_payload_for_signal` set
+/// `resumption_principal_cid = BLAKE3(signal_name)` regardless of who
+/// the caller said they were. A subsequent
+/// `resume_from_bytes_as(_, _, &alice_cid)` then compared `alice_cid`
+/// against `BLAKE3("user:click")` and fired `E_RESUME_ACTOR_MISMATCH`
+/// for any non-trivial principal — a silent semantic regression of the
+/// Phase-2a principal-binding contract.
+///
+/// **What the existing tests missed.** Every existing principal-binding
+/// test (e.g. `resume_with_substituted_principal_rejects`) uses
+/// `minimal_wait_handler() = SubgraphSpec::empty(...)` which routes
+/// through the preserved legacy `empty_spec_should_suspend` branch in
+/// `call_as_with_suspension`, so the fix-pass-relevant path was
+/// untested.
+///
+/// **What this test asserts.**
+///  1. Alice suspends a real (non-empty-spec) WAIT-bearing handler.
+///  2. Alice's own resume succeeds (principal binds correctly).
+///  3. Eve's resume against Alice's bytes fires
+///     `E_RESUME_ACTOR_MISMATCH`.
+#[test]
+fn wait_principal_binding_threads_through_real_handler() {
+    let (_dir, engine) = open_engine();
+    engine
+        .register_subgraph(wait_signal_handler("wait:bind", "user:click"))
+        .expect("register real wait handler");
+
+    let alice = benten_engine::testing::principal_cid("alice");
+    let bob = benten_engine::testing::principal_cid("bob");
+    assert_ne!(alice, bob, "principals must hash distinct");
+
+    // Alice suspends a real WAIT-bearing handler under her principal.
+    // Pre-fix-pass: this routed through dispatch_call(_, _, _, None)
+    // and the envelope's resumption_principal_cid was BLAKE3("user:click").
+    // Post-fix-pass: dispatch_call(_, _, _, Some(alice)) -> active_call
+    // stack -> Engine::suspending_principal() -> wait::evaluate_op
+    // overrides resumption_principal_cid = alice.
+    let outcome = engine
+        .call_as_with_suspension("wait:bind", "run", Node::empty(), &alice)
+        .expect("alice's call_as_with_suspension succeeds");
+    let handle = match outcome {
+        SuspensionOutcome::Suspended(h) => h,
+        SuspensionOutcome::Complete(_) => {
+            panic!("real WAIT handler must Suspend, not Complete")
+        }
+    };
+
+    let bytes = engine
+        .suspend_to_bytes(&handle)
+        .expect("serialise alice's suspension envelope");
+
+    // Step-2 principal binding: alice's own resume succeeds. Pre-fix-pass
+    // this would have failed with E_RESUME_ACTOR_MISMATCH because the
+    // envelope carried BLAKE3("user:click") instead of alice's CID.
+    let alice_resume = engine
+        .resume_from_bytes_as(&bytes, Value::text("ok"), &alice)
+        .expect("alice's own resume must succeed (envelope binds her CID)");
+    assert!(
+        alice_resume.is_ok_edge(),
+        "alice's own resume must route OK; got {alice_resume:?}"
+    );
+
+    // Step-2 principal binding: bob's resume must be rejected. This
+    // confirms the binding actually fires — the envelope is not
+    // permissive against any caller, but specifically bound to alice.
+    let err = engine
+        .resume_from_bytes_as(&bytes, Value::text("attack"), &bob)
+        .expect_err("bob must not resume alice's suspension");
+    assert_eq!(
+        err.code(),
+        benten_errors::ErrorCode::ResumeActorMismatch,
+        "bob's resume must fire E_RESUME_ACTOR_MISMATCH (step 2 of the \
+         4-step protocol); got {err:?}"
+    );
+}
+
+/// Wave-8i fix-pass acceptance test (w8i-wait-cag-02): the production
+/// engine's `PrimitiveHost::elapsed_ms` override stamps a real
+/// monotonic-clock reading into `WaitMetadata.suspend_elapsed_ms`,
+/// enabling the resume-time deadline check.
+///
+/// **The bug.** Pre-fix-pass, `impl PrimitiveHost for Engine` overrode
+/// `suspension_store` but NOT `elapsed_ms`. The trait default returned
+/// `None`, so the dispatcher passed `None` into `wait::evaluate_op` and
+/// `WaitMetadata.suspend_elapsed_ms` was always `None` on the regular-
+/// walk path. The eval-side `resume_with_meta`'s deadline check
+/// `if let (Some(timeout), Some(start), Some(now)) = ...` then silently
+/// never fired against a production engine — resume-time deadline
+/// enforcement was disabled for any WAIT reached via `engine.call()`.
+///
+/// **What this test asserts.**
+///  1. After suspending a `timeout_ms`-bearing WAIT through
+///     `engine.call()`, `WaitMetadata.suspend_elapsed_ms` is `Some(_)`
+///     (not `None`) — the engine's monotonic clock was consulted.
+///  2. After a real elapsed delay, the eval-side `resume_with_meta`
+///     deadline check (which now has a real start reference) fires
+///     `E_WAIT_TIMEOUT` for a Signal resume that arrives past the
+///     deadline. (The engine surface `Engine::resume_with_meta` does
+///     not currently consult the eval-side deadline check at the time
+///     of this fix-pass — that wiring is a separate gap. The eval-side
+///     `benten_eval::resume(_, _, _, _)` IS the surface that uses the
+///     metadata, and is what this assertion targets.)
+#[test]
+fn wait_resume_deadline_fires_against_real_clock() {
+    let (_dir, engine) = open_engine();
+    // duration_ms makes is_duration=true; timeout_ms < duration_ms so the
+    // resume-time deadline check fires before any duration-elapsed path
+    // would. Both properties propagate to WaitMetadata via Wave-8i.
+    let mut props = BTreeMap::new();
+    props.insert("duration_ms".into(), Value::Int(100));
+    props.insert("timeout_ms".into(), Value::Int(50));
+    let spec = SubgraphSpec::builder()
+        .handler_id("wait:deadline")
+        .primitive_with_props(PrimitiveSpec {
+            id: "w0".into(),
+            kind: PrimitiveKind::Wait,
+            properties: props,
+        })
+        .build();
+    engine
+        .register_subgraph(spec)
+        .expect("register deadline wait handler");
+
+    let handle = match engine.call("wait:deadline", "run", Node::empty()) {
+        Err(EngineError::WaitSuspended { handle }) => handle,
+        other => panic!("expected WaitSuspended, got {other:?}"),
+    };
+
+    // (1) The engine's monotonic clock reading was stamped — fix-pass
+    //     w8i-wait-cag-02 acceptance gate.
+    let store = engine.suspension_store();
+    let meta = store
+        .get_wait(handle.state_cid())
+        .expect("store get_wait")
+        .expect("metadata recorded");
+    assert!(
+        meta.suspend_elapsed_ms.is_some(),
+        "Engine::elapsed_ms() override MUST stamp suspend_elapsed_ms; \
+         pre-fix-pass this was None and the deadline check silently \
+         never fired"
+    );
+    assert_eq!(
+        meta.timeout_ms,
+        Some(50),
+        "timeout_ms property must propagate into WaitMetadata"
+    );
+    assert!(
+        meta.is_duration,
+        "duration_ms-bearing WAIT must record is_duration=true"
+    );
+
+    // (2) Drive the eval-side resume_with_meta path through the public
+    //     `benten_eval::resume(...)` alias with a `MockTimeSource`
+    //     positioned PAST the engine-stamped suspend time + timeout.
+    //     The deadline check at wait.rs:453 fires E_WAIT_TIMEOUT when
+    //     (now - start) >= timeout. We construct the resume-time ctx
+    //     clock at `start + 1000ms`, well past the 50ms deadline.
+    //
+    //     This is the load-bearing acceptance gate for the
+    //     `elapsed_ms()` Engine override: the metadata's start
+    //     reference is real (sourced from the engine's monotonic
+    //     clock), so a resume-time clock advanced past `start + timeout`
+    //     fires the deadline. Pre-fix-pass, `start = None` made the
+    //     deadline check silently skip regardless of resume-time clock.
+    let start_ms = meta.suspend_elapsed_ms.expect("start stamped");
+    let resume_time_ms = start_ms.saturating_add(1000);
+    let clock = benten_eval::MockTimeSource::at(std::time::Duration::from_millis(resume_time_ms));
+    let mut ctx = benten_eval::EvalContext::with_clock(clock);
+    ctx = ctx.with_suspension_store(engine.suspension_store());
+
+    let outcome = WaitOutcome::Suspended(handle);
+    let signal = WaitResumeSignal::signal("user:click", Value::Int(0));
+    let result = benten_eval::resume(&dummy_subgraph_for_resume(), &mut ctx, outcome, signal);
+    use benten_eval::Outcome as EvalOutcome;
+    match result {
+        EvalOutcome::Err(e) => assert_eq!(
+            e.code(),
+            benten_errors::ErrorCode::WaitTimeout,
+            "post-deadline resume must fire E_WAIT_TIMEOUT (Wave-8i \
+             elapsed_ms() override stamps a real start reference; \
+             pre-fix-pass start=None made the deadline check silently \
+             skip); got {e:?}"
+        ),
+        other => panic!(
+            "expected E_WAIT_TIMEOUT, got {other:?} (suggests the deadline \
+             check did not fire — verify suspend_elapsed_ms threading)"
+        ),
+    }
+}
+
+/// Helper: a minimal subgraph used only to satisfy the `&Subgraph`
+/// signature of `benten_eval::resume`. The resume function currently
+/// ignores the `_sg` arg (it routes by handle.state_cid + suspension
+/// store), but the public signature requires one.
+fn dummy_subgraph_for_resume() -> benten_eval::Subgraph {
+    use benten_eval::{SubgraphBuilder, SubgraphBuilderExt, SubgraphExt};
+    let mut sb = SubgraphBuilder::new("wait:deadline:resume_dummy");
+    let r = sb.read("ignored");
+    sb.respond(r);
+    sb.build_unvalidated_for_test()
 }

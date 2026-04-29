@@ -597,6 +597,45 @@ impl PrimitiveHost for Engine {
         Engine::suspension_store(self)
     }
 
+    /// Phase-2b Wave-8i fix-pass (w8i-wait-cag-02): hand the WAIT
+    /// dispatcher the engine's monotonic-clock reading in milliseconds
+    /// so `WaitMetadata.suspend_elapsed_ms` records a real start
+    /// reference. The trait default returns `None`; without this
+    /// override, the production `engine.call()` WAIT path stamped
+    /// `suspend_elapsed_ms = None` and `resume_with_meta`'s deadline
+    /// check `if let (Some(timeout), Some(start), Some(now)) = ...`
+    /// silently never fired, disabling resume-time deadline
+    /// enforcement on the regular-walk path.
+    fn elapsed_ms(&self) -> Option<u64> {
+        // `Duration::as_millis()` returns u128; saturate to u64 max for
+        // the (theoretically reachable, practically never) >584-million-
+        // year process uptime case rather than truncating with `as u64`
+        // (which would silently wrap and trigger `cast_possible_truncation`
+        // under 1.95 clippy).
+        Some(
+            u64::try_from(self.monotonic_source.elapsed_since_start().as_millis())
+                .unwrap_or(u64::MAX),
+        )
+    }
+
+    /// Phase-2b Wave-8i fix-pass (w8i-wait-cag-01): hand the WAIT
+    /// dispatcher the principal CID the current dispatch is running
+    /// under, drawn from the top of the engine's `active_call` stack.
+    /// `dispatch_call(_, _, _, Some(principal))` pushes the caller's
+    /// principal onto the stack; the trait override here surfaces it
+    /// to `wait::evaluate_op` so the envelope's
+    /// `resumption_principal_cid` is the caller-named CID rather than
+    /// `BLAKE3(signal_name)`.
+    ///
+    /// The active-call stack is the same surface used by attribution
+    /// frame construction (`engine.rs::dispatch_call_inner` line
+    /// `actor_cid` lookup), so this accessor inherits the stack
+    /// discipline that already exists for actor attribution.
+    fn suspending_principal(&self) -> Option<benten_core::Cid> {
+        let guard = benten_graph::MutexExt::lock_recover(&self.active_call);
+        guard.last().and_then(|f| f.actor)
+    }
+
     /// Phase 2b Wave-8b — engine-side SANDBOX dispatch.
     ///
     /// **wsa-w8b-1 fix-pass:** the trait-default body returns

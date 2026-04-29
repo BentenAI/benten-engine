@@ -307,8 +307,32 @@ impl Engine {
         input: Node,
     ) -> Result<SuspensionOutcome, EngineError> {
         let key = handler_id.as_handler_key();
-        let principal = default_principal_for(&key);
-        self.call_as_with_suspension(&key, op, input, &principal)
+        // Phase-2a empty-spec fixture path: a `SubgraphSpec::empty(id)`
+        // test handler has no primitives, so the regular walker would
+        // terminate immediately rather than hit the WAIT dispatcher.
+        // Preserve the legacy synthesized-handle shortcut for the
+        // empty-spec fixture by routing through the explicit
+        // `call_as_with_suspension` form with the deterministic-default
+        // principal (legacy contract, retained verbatim for the
+        // empty-spec branch).
+        if empty_spec_should_suspend(self, &key) {
+            let principal = default_principal_for(&key);
+            return self.call_as_with_suspension(&key, op, input, &principal);
+        }
+        // Wave-8i fix-pass (w8i-wait-cag-01): the unauthenticated
+        // suspension form does NOT bind a principal in the envelope.
+        // Routing through `dispatch_call` with `actor=None` makes the
+        // engine's `suspending_principal()` accessor return `None`, so
+        // `wait::evaluate_op` retains the legacy signal-derived
+        // placeholder behaviour. Convergence with `engine.call()`
+        // (also `actor=None`) is preserved — both surfaces produce the
+        // same envelope CID for the same WAIT properties (the
+        // Wave-8i convergence pin in `wait_primitive_consults_signal_property`).
+        match self.dispatch_call(&key, op, input, None) {
+            Ok(outcome) => Ok(SuspensionOutcome::Complete(outcome)),
+            Err(EngineError::WaitSuspended { handle }) => Ok(SuspensionOutcome::Suspended(handle)),
+            Err(e) => Err(e),
+        }
     }
 
     /// Phase 2a G3-B test-only variant taking a thin engine config. Accepts
@@ -771,16 +795,19 @@ impl Engine {
         // `EvalError::WaitSuspended` via `eval_error_to_engine_error`);
         // we catch it here and return the typed `Suspended` arm.
         //
-        // The `principal` is unused on the Wave-8i path because the
-        // suspension envelope is now built by the eval-side
-        // `wait::evaluate_op` from the WAIT node's own properties rather
-        // than the engine's `payload_for_handler` synthesizer. Cross-
-        // process resume protocol (`resume_from_bytes_as`) still
-        // enforces principal binding when the caller supplies a
-        // principal; the suspend-time envelope just no longer carries a
-        // synthesized principal that would be checked at resume.
-        let _ = principal;
-        match self.dispatch_call(handler_id, op, input, None) {
+        // Wave-8i fix-pass (w8i-wait-cag-01): thread the caller's
+        // principal into `dispatch_call` so it lands on the
+        // `active_call` stack, where the engine's
+        // `suspending_principal()` PrimitiveHost accessor reads it and
+        // hands it to `wait::evaluate_op`, which overrides the
+        // envelope's `resumption_principal_cid`. The pre-fix-pass code
+        // dropped `principal` on the floor (`let _ = principal;`) and
+        // the envelope was keyed on `BLAKE3(signal_name)` — so a
+        // subsequent `resume_from_bytes_as(_, _, &caller_cid)` fired
+        // `E_RESUME_ACTOR_MISMATCH` against the original caller for
+        // every real WAIT handler, silently breaking the principal
+        // binding contract.
+        match self.dispatch_call(handler_id, op, input, Some(*principal)) {
             Ok(outcome) => Ok(SuspensionOutcome::Complete(outcome)),
             Err(EngineError::WaitSuspended { handle }) => Ok(SuspensionOutcome::Suspended(handle)),
             Err(e) => Err(e),

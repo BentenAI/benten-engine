@@ -192,6 +192,29 @@ pub trait PrimitiveHost: Send + Sync {
         None
     }
 
+    /// Phase-2b Wave-8i fix-pass (w8i-wait-cag-01): hand the WAIT
+    /// dispatcher the principal CID the current dispatch was invoked
+    /// under, so the suspension envelope's
+    /// `resumption_principal_cid` carries the caller-named principal
+    /// rather than a signal-derived placeholder.
+    ///
+    /// The mini-review found that the Wave-8i regular-walk path
+    /// silently dropped `call_as_with_suspension`'s `principal` arg;
+    /// the resulting envelope was keyed on `BLAKE3(signal_name)`, so
+    /// `resume_from_bytes_as(_, _, &caller_cid)` fired
+    /// `E_RESUME_ACTOR_MISMATCH` against any non-trivial principal
+    /// for real WAIT handlers. Threading this accessor through the
+    /// trait restores the principal-binding contract for the
+    /// regular-walk path without forcing every `PrimitiveHost`
+    /// implementation to re-plumb its own per-call principal model.
+    ///
+    /// Default: `None` (no principal bound — matches the
+    /// pre-fix-pass behaviour for `NullHost` + every test
+    /// `PrimitiveHost`).
+    fn suspending_principal(&self) -> Option<benten_core::Cid> {
+        None
+    }
+
     /// SANDBOX primitive dispatch (Phase 2b Wave-8b).
     ///
     /// The evaluator routes SANDBOX OperationNode dispatch through this
