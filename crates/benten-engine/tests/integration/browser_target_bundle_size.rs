@@ -34,7 +34,7 @@ const BROWSER_BUNDLE_MAX_BYTES_GZIPPED: usize = 500 * 1024;
 /// `wasm32_unknown_unknown_bundle_size_under_threshold` — plan §3
 /// G10-A-browser must-pass + R2 §2.3.
 #[test]
-#[ignore = "Phase 2b G10-A-browser pending — wasm-browser bundle build unimplemented"]
+#[ignore = "Phase 3 — wasm-browser bundle artifact pinning body deferred per docs/future/phase-3-backlog.md §7.3.A.9 (sub-cluster 9b; wasm-browser.yml workflow exists but dist/ artifact not committed in 2b)"]
 fn wasm32_unknown_unknown_bundle_size_under_threshold() {
     // The bundle is produced by `wasm-browser.yml` and committed to a
     // canonical artifact path under `bindings/napi/dist/browser/`. Until
@@ -71,7 +71,7 @@ fn wasm32_unknown_unknown_bundle_size_under_threshold() {
 /// inadvertently bundles the node binary into the browser dist, this
 /// fires).
 #[test]
-#[ignore = "Phase 2b G10-A-browser pending"]
+#[ignore = "Phase 3 — browser-bundle node-binary-exclusion body deferred per docs/future/phase-3-backlog.md §7.3.A.9 (sub-cluster 9b)"]
 fn browser_bundle_excludes_napi_node_binary() {
     let dist_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../bindings/napi/dist/browser");

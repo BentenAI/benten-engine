@@ -52,7 +52,7 @@ fn workspace_root() -> PathBuf {
 /// If any of these fail, the cargo-vet workflow runs but constrains
 /// nothing (Phase-2a sec-r6r3-01 anti-pattern).
 #[test]
-#[ignore = "Phase 2b G7 entry pending — supply-chain/ + cargo-vet baseline unimplemented"]
+#[ignore = "Phase 3 — cargo-vet supply-chain/ baseline body deferred per docs/future/phase-3-backlog.md §7.3.A.9 (sub-cluster 9a; cargo-vet workflow exists but baseline directory not committed in 2b)"]
 fn cargo_vet_workflow_non_vacuity_self_test_passes() {
     let root = workspace_root();
     let supply_chain_dir = root.join("supply-chain");
