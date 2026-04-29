@@ -19,7 +19,7 @@ describe("engine.replaceSubgraph (R6FP Instance 10)", () => {
     const engine = await Engine.open(":memory:");
 
     // First registration via registerSubgraph — establishes v1.
-    const v1 = engine.registerSubgraph(crud("post"));
+    const v1 = await engine.registerSubgraph(crud("post"));
     expect(typeof v1.id).toBe("string");
 
     // Replace via the new replaceSubgraph surface (the load-bearing
@@ -54,7 +54,7 @@ describe("engine.replaceSubgraph (R6FP Instance 10)", () => {
   it("idempotent re-register returns replaced=false + same chainDepth", async () => {
     const engine = await Engine.open(":memory:");
 
-    engine.registerSubgraph(crud("post"));
+    await engine.registerSubgraph(crud("post"));
     // Identical content → engine recognizes and short-circuits.
     const outcome = await engine.replaceSubgraph(crud("post"));
 

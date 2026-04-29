@@ -33,7 +33,8 @@ describe("DSL .sandbox() composition", () => {
       version: "0.0.1",
       modules: [{ name: "identity", cid: "bafy...echo-wasm", requires: [] }],
     };
-    await engine.installModule(manifest, "bafy...manifest");
+    const manifestCid = await engine.computeManifestCid(manifest);
+    await engine.installModule(manifest, manifestCid);
 
     const sg = subgraph("identity-handler")
       .action("run")
@@ -128,7 +129,8 @@ describe("DSL .sandbox() — composition-only contract", () => {
       version: "0.0.1",
       modules: [{ name: "identity", cid: "bafy...echo-wasm", requires: [] }],
     };
-    await engine.installModule(manifest, "bafy...manifest");
+    const manifestCid = await engine.computeManifestCid(manifest);
+    await engine.installModule(manifest, manifestCid);
 
     const sg = subgraph("default-knobs")
       .action("run")
@@ -163,7 +165,8 @@ describe("DSL .sandbox() — composition-only contract", () => {
       version: "0.0.1",
       modules: [{ name: "emit", cid: "bafy...oversize-wasm", requires: [] }],
     };
-    await engine.installModule(manifest, "bafy...oversize-manifest");
+    const oversizeManifestCid = await engine.computeManifestCid(manifest);
+    await engine.installModule(manifest, oversizeManifestCid);
 
     const sg = subgraph("oversize")
       .action("run")
