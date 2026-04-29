@@ -234,9 +234,7 @@ impl EngineError {
                 Some(json!({ "viewId": view_id }))
             }
             EngineError::ViewStrategyARefused { view_id }
-            | EngineError::ViewStrategyCReserved { view_id } => {
-                Some(json!({ "viewId": view_id }))
-            }
+            | EngineError::ViewStrategyCReserved { view_id } => Some(json!({ "viewId": view_id })),
             EngineError::SubsystemDisabled { subsystem } => Some(json!({ "subsystem": subsystem })),
             EngineError::DuplicateHandler { handler_id } => {
                 Some(json!({ "handlerId": handler_id }))

@@ -484,10 +484,7 @@ mod napi_surface {
         /// `registerUserView` through one transition window so the
         /// Group-2 TS rename does not break the build.
         #[napi(js_name = "registerUserView")]
-        pub fn register_user_view(
-            &self,
-            spec_json: serde_json::Value,
-        ) -> napi::Result<String> {
+        pub fn register_user_view(&self, spec_json: serde_json::Value) -> napi::Result<String> {
             let spec = parse_user_view_spec(&spec_json)?;
             let cid = self.inner.register_user_view(spec).map_err(engine_err)?;
             Ok(cid.to_base32())

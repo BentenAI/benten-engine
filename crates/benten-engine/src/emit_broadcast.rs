@@ -85,7 +85,8 @@ impl EmitSubscription {
     /// engine drops; the active flag is the load-bearing
     /// "subscription ended" signal.
     pub fn unsubscribe(&self) {
-        self.active.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.active
+            .store(false, std::sync::atomic::Ordering::SeqCst);
     }
 }
 

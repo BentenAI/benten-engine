@@ -790,9 +790,7 @@ fn engine_resume_with_meta_duration_wait_fires_e_wait_timeout_on_duration_resume
              r6-mpc-1: pre-fix the engine path's deadline-only check \
              skipped the duration-variant branch)"
         ),
-        other => panic!(
-            "expected E_WAIT_TIMEOUT on duration-variant resume, got {other:?}"
-        ),
+        other => panic!("expected E_WAIT_TIMEOUT on duration-variant resume, got {other:?}"),
     }
 }
 

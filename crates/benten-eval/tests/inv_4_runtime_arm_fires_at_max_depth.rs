@@ -60,14 +60,7 @@ fn inv_4_runtime_arm_fires_when_depth_exceeds_max() {
         sandbox_depth: 3,
     };
 
-    let result = sandbox::execute(
-        &bytes,
-        manifest_ref,
-        &registry,
-        config,
-        &[],
-        &attribution,
-    );
+    let result = sandbox::execute(&bytes, manifest_ref, &registry, config, &[], &attribution);
 
     match result {
         Err(SandboxError::NestedDispatchDepthExceeded { max }) => {
@@ -108,14 +101,7 @@ fn inv_4_runtime_arm_admits_depth_equal_to_max() {
         sandbox_depth: 4,
     };
 
-    let result = sandbox::execute(
-        &bytes,
-        manifest_ref,
-        &registry,
-        config,
-        &[],
-        &attribution,
-    );
+    let result = sandbox::execute(&bytes, manifest_ref, &registry, config, &[], &attribution);
 
     // Must NOT be NestedDispatchDepthExceeded. The trivial module
     // compiles + runs, returning Ok. (If a non-depth-related error

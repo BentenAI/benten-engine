@@ -63,12 +63,11 @@ fn subscribe_multi_label_node_delivers_when_pattern_matches_secondary() {
     // beyond G2-A; transaction is the existing user-write path.)
     engine
         .transaction(|tx| {
-            tx.put_node(&node).map_err(|e| {
-                benten_engine::EngineError::Other {
+            tx.put_node(&node)
+                .map_err(|e| benten_engine::EngineError::Other {
                     code: benten_errors::ErrorCode::Unknown("E_TEST_HARNESS".into()),
                     message: format!("put_node: {e:?}"),
-                }
-            })?;
+                })?;
             Ok(())
         })
         .expect("commit multi-labeled Node");

@@ -21,8 +21,8 @@
 
 use benten_core::{Node, Value};
 use benten_engine::{Engine, EngineError, PrimitiveSpec, SubgraphSpec};
-use benten_eval::PrimitiveKind;
 use benten_errors::ErrorCode;
+use benten_eval::PrimitiveKind;
 use std::collections::BTreeMap;
 
 fn alice_cid() -> benten_core::Cid {
@@ -74,9 +74,7 @@ fn call_stream_as_pre_revoked_actor_refused_at_call() {
              the actor is already revoked at call time (R6FP-G1 r6-stream-2 \
              pre-flight cap-check)"
         ),
-        other => panic!(
-            "expected E_CAP_REVOKED_MID_EVAL at call time, got {other:?}"
-        ),
+        other => panic!("expected E_CAP_REVOKED_MID_EVAL at call time, got {other:?}"),
     }
 }
 

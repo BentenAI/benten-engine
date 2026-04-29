@@ -25,9 +25,9 @@
 #![cfg(not(target_arch = "wasm32"))]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_eval::sandbox::{CapBundle, ManifestRef, ManifestRegistry, SandboxConfig};
 use benten_eval::AttributionFrame;
 use benten_eval::primitives::sandbox;
+use benten_eval::sandbox::{CapBundle, ManifestRef, ManifestRegistry, SandboxConfig};
 
 fn zero_cid() -> benten_core::Cid {
     benten_core::Cid::from_blake3_digest([0u8; 32])

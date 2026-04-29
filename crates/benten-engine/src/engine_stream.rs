@@ -640,10 +640,8 @@ impl Engine {
             // we fail-loud when `persist: true` is declared so the
             // operator does not silently get an
             // ephemeral-mode stream while expecting persistence.
-            let persist_requested = matches!(
-                stream_ps.properties.get("persist"),
-                Some(Value::Bool(true))
-            );
+            let persist_requested =
+                matches!(stream_ps.properties.get("persist"), Some(Value::Bool(true)));
             if persist_requested {
                 return Err(EngineError::Other {
                     code: ErrorCode::PrimitiveNotImplemented,
