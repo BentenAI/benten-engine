@@ -15,7 +15,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 #[test]
-#[ignore = "Phase 2b G7-B (PR #32) + G7-C (PR #33) coordination pending — test fires green when (a) AttributionFrame.sandbox_depth field lands via G7-B PR #32, AND (b) G7-C wires the runtime depth-check into the SANDBOX dispatcher. Tracks both PRs."]
+#[ignore = "Phase 3 — sandbox_depth runtime threading regression body deferred per docs/future/phase-3-backlog.md §7.3.A.1 (SECURITY-POSTURE.md discloses Inv-4 runtime threading is structural-only in 2b)"]
 fn sandbox_depth_inherits_across_call_boundary_not_reset() {
     // wsa-g7a-mr-7 + D20 — assert that 4 nested SANDBOX calls through
     // CALL boundaries (rather than 4 direct nested SANDBOX calls)

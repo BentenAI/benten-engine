@@ -50,7 +50,7 @@ fn fresh_engine() -> (tempfile::TempDir, Engine) {
 /// (e.g. dropping the `#[cfg(not(target_arch = "wasm32"))]` decoration
 /// on the executor module) is caught immediately.
 #[test]
-#[ignore = "pending G10-A wasm32 build target; tracks G10-A's phase-2b/g10/a-wasip1 (wave-5). G7-C delivers the napi cfg-gate; G10-A delivers the wasm32 build that exercises the negative half of sec-pre-r1-05."]
+#[ignore = "Phase 3 — wasm32 build-target exercise body deferred per docs/future/phase-3-backlog.md §7.3.A.1 (G10-A wasip1 + wasm32-unknown-unknown bundles landed structurally; negative-half exercise lands Phase 3)"]
 fn sandbox_compile_time_disabled_on_wasm32_executor() {
     let (_dir, mut engine) = fresh_engine();
 
@@ -89,7 +89,7 @@ fn sandbox_compile_time_disabled_on_wasm32_executor() {
 /// caught at the source level too (defense in depth against the R2-noted
 /// "test-passes-by-accident" anti-pattern).
 #[test]
-#[ignore = "pending G7-A executor; tracks G7-A's phase-2b/g7/a-sandbox-core PR (PR #30). G7-A owns `crates/benten-eval/src/primitives/sandbox.rs`; the source-grep drift detector runs once that module lands."]
+#[ignore = "Phase 3 — source-grep drift detector body deferred per docs/future/phase-3-backlog.md §7.3.A.1 (executor module shipped in 2b; drift-detector body lands Phase 3 first-wave CI-hygiene pass)"]
 fn sandbox_executor_module_carries_wasm32_cfg_gate_in_source() {
     let exec_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../crates/benten-eval/src/primitives/sandbox.rs");

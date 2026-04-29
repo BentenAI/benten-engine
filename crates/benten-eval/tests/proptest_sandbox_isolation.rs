@@ -33,7 +33,7 @@ proptest! {
     /// per-call Store + Instance lifecycle being the explicit default,
     /// this test fires.
     #[test]
-    #[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — no-state-persists property"]
+    #[ignore = "Phase 3 — no-state-persists proptest body deferred per docs/future/phase-3-backlog.md §7.3.A.1 (10k-case property pin)"]
     fn prop_sandbox_no_module_state_persists_across_calls(
         init_value in any::<i32>(),
         set_values in proptest::collection::vec(any::<i32>(), 1..20),

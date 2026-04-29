@@ -37,7 +37,7 @@ proptest! {
     /// counter (e.g., a write of usize::MAX bytes that would
     /// silently wrap consumed to 0).
     #[test]
-    #[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — output bounded property"]
+    #[ignore = "Phase 3 — output bounded proptest body deferred per docs/future/phase-3-backlog.md §7.3.A.1 (10k-case property pin)"]
     fn prop_sandbox_output_size_strictly_bounded(
         limit in 1u64..1_000_000u64,
         batches in proptest::collection::vec(0usize..200_000, 1..50),

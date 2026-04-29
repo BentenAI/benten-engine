@@ -6,7 +6,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 2b G7-C pending (PR #33 engine integration) — Inv-7 streaming end-to-end"]
+#[ignore = "Phase 3 — Inv-7 streaming end-to-end body deferred per docs/future/phase-3-backlog.md §7.3.A.1"]
 fn invariant_7_end_to_end_with_streaming_sandbox_output() {
     // D17 + wsa-18 — full integration: a SANDBOX module emits chunks
     // into a STREAM (host-fn `chunk_emit`). The streaming sink wraps

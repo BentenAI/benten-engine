@@ -15,7 +15,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "pending G7-A executor wiring; tracks G7-A's phase-2b/g7/a-sandbox-core PR (PR #30) — G7-C delivers the surface; G7-A delivers the executor body that makes E2E run"]
+#[ignore = "Phase 3 — engine SANDBOX E2E DSL-composition body deferred per docs/future/phase-3-backlog.md §7.3.A.1"]
 fn engine_sandbox_end_to_end_via_dsl_composition_only() {
     // Plan §3 G7-C — register a SubgraphSpec built via the DSL
     // `subgraph('handler').sandbox({ module: cid, manifest: 'compute-basic' })`.

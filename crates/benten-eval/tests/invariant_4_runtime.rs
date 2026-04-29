@@ -17,7 +17,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "pending G7-A executor wiring; tracks G7-A's phase-2b/g7/a-sandbox-core PR (PR #30)"]
+#[ignore = "Phase 3 — Inv-4 runtime depth-trap body deferred per docs/future/phase-3-backlog.md §7.3.A.1 (SECURITY-POSTURE.md discloses Inv-4 runtime threading is structural, not transitive; runtime depth-counter lands Phase 3)"]
 fn invariant_4_sandbox_runtime_depth_traps() {
     // Plan §3 G7-B — runtime depth check fires for TRANSFORM-computed
     // SANDBOX targets that exceed max_nest_depth at evaluation time.
@@ -36,7 +36,7 @@ fn invariant_4_sandbox_runtime_depth_traps() {
 }
 
 #[test]
-#[ignore = "pending G7-A executor wiring; tracks G7-A's phase-2b/g7/a-sandbox-core PR (PR #30)"]
+#[ignore = "Phase 3 — Inv-4 depth-inherited-across-CALL body deferred per docs/future/phase-3-backlog.md §7.3.A.1 (D20 inherit-not-reset; runtime ActiveCall threading lands Phase 3 per SECURITY-POSTURE.md disclosure)"]
 fn invariant_4_depth_inherited_across_call_boundary() {
     // D20 inherit-not-reset — the actual security claim. Handler A
     // SANDBOXes → CALLs handler B → SANDBOXes is depth-2, NOT two
@@ -60,7 +60,7 @@ fn invariant_4_depth_inherited_across_call_boundary() {
 }
 
 #[test]
-#[ignore = "pending G7-A executor wiring; tracks G7-A's phase-2b/g7/a-sandbox-core PR (PR #30)"]
+#[ignore = "Phase 3 — Inv-4 depth-inherited-through-AttributionFrame body deferred per docs/future/phase-3-backlog.md §7.3.A.1 (D20 white-box depth assertion; ActiveCall threading lands Phase 3)"]
 fn invariant_4_depth_inherited_through_attribution_frame() {
     // D20 white-box — assert the inheritance mechanism. The
     // AttributionFrame propagation pattern from Phase-2a sec-r6r1-01

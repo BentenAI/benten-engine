@@ -12,7 +12,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "pending G7-A executor wiring; tracks G7-A's phase-2b/g7/a-sandbox-core PR (PR #30)"]
+#[ignore = "Phase 3 — Inv-7 CountedSink trap-loudly runtime body deferred per docs/future/phase-3-backlog.md §7.3.A.1 (G7-A/B/C structural surfaces landed; sec-pre-r1-07 runtime body stays deferred)"]
 fn invariant_7_output_traps_loudly_via_counted_sink() {
     // D15 + D17 PRIMARY — Inv-7 fires on output overflow. The
     // CountedSink primary path is what trips the invariant; the
@@ -34,7 +34,7 @@ fn invariant_7_output_traps_loudly_via_counted_sink() {
 }
 
 #[test]
-#[ignore = "pending G7-A executor wiring; tracks G7-A's phase-2b/g7/a-sandbox-core PR (PR #30)"]
+#[ignore = "Phase 3 — Inv-7 no-silent-truncation default runtime body deferred per docs/future/phase-3-backlog.md §7.3.A.1 (D15 + sec-pre-r1-07; SANDBOX runtime ships in 2b but body stays Phase-3)"]
 fn invariant_7_output_no_silent_truncation_default() {
     // D15 + sec-pre-r1-07 — default behavior is trap-loudly. NO opt-in
     // flag in 2b for silent truncation (deferred to Phase 3+ if a

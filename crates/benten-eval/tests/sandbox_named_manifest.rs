@@ -53,7 +53,7 @@ fn sandbox_unknown_named_manifest_rejected_e_sandbox_manifest_unknown() {
 }
 
 #[test]
-#[ignore = "Phase 2b G7-C pending — full TOML codegen drift surface (this PR ships hand-mirrored static; G7-C wires the build.rs codegen pipeline that the drift detector exercises). Tracked at G7-C's phase-2b/g7/c-engine-napi-dsl-wasm-gate PR (PR #33)."]
+#[ignore = "Phase 3 — TOML codegen drift detector body deferred per docs/future/phase-3-backlog.md §7.3.A.1 (build.rs codegen pipeline lands Phase 3; current 2b ships hand-mirrored static manifest)"]
 fn sandbox_named_manifest_codegen_drift() {
     // D2 + wsa-D2 — `host-functions.toml` is the source of truth;
     // build.rs codegen emits `generated::DEFAULT_MANIFESTS`. The drift
