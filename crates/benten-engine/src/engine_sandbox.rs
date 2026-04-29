@@ -174,11 +174,33 @@ impl Engine {
     ///
     /// ## Returns
     ///
-    /// `Ok(description)` on a known SANDBOX node CID; `Err(...)` carrying
-    /// [`ErrorCode::Unknown`] (`"E_SANDBOX_NODE_UNKNOWN"`) when the CID
-    /// does not name a registered SANDBOX node. The exact code is
-    /// reserved for G7-A's error-catalog pass; until then the
-    /// `Unknown(String)` variant rides the stable string identifier.
+    /// **Test-helper variant always returns `Err`.** R6FP-tail NEW-4
+    /// docstring honesty pass: the body unconditionally returns
+    /// `Err(EngineError::Other { code: ErrorCode::Unknown(
+    /// "E_SANDBOX_NODE_UNKNOWN"), .. })` regardless of whether the
+    /// supplied CID names a registered SANDBOX node — there is no
+    /// body-side lookup against any SANDBOX-node table or
+    /// `manifest_registry()` consultation. The `SandboxNodeDescription`
+    /// struct shape is locked here so the TS-side
+    /// `engine.describeSandboxNode(...)` surface compiles + the napi
+    /// adapter can be threaded as soon as the metric-tracking
+    /// runtime lands; until then the accessor returns the unknown-CID
+    /// error variant universally.
+    ///
+    /// Lift to real lookup (resolving fuel/wallclock/output_limit per
+    /// the `SandboxConfig::default` + per-handler property override
+    /// pattern that `primitive_host.rs::execute_sandbox` already
+    /// implements + plumbing the runtime metric tracking through
+    /// `fuel_consumed_high_water` + `last_invocation_ms`) is named-
+    /// destination Phase 3: `phase-3-backlog.md` §7.1 (SANDBOX
+    /// execution metrics propagation — Compromise #17). Cross-ref:
+    /// `docs/SECURITY-POSTURE.md` Compromise #17.
+    ///
+    /// (Pre-NEW-4 the docstring claimed "`Ok(description)` on a known
+    /// SANDBOX node CID" which was aspirational — body delivers Err
+    /// universally. The accessor is `cfg(any(test, feature =
+    /// "test-helpers"))` gated, so production cdylib unaffected;
+    /// devtools opting into `test-helpers` always see the error path.)
     pub fn describe_sandbox_node(
         &self,
         _node_cid: &Cid,
