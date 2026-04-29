@@ -54,7 +54,7 @@ fn sandbox_host_fn_capability_intersection_at_init() {
 }
 
 #[test]
-#[ignore = "Wave-8b ships the per-call cap-recheck trampoline path; the mid-call revoke surface lives at the engine layer (paired 8c work)."]
+#[ignore = "Phase 3 — testing_revoke_cap_mid_call helper deferred per docs/future/phase-3-backlog.md §7.3.A.7 (security-critical SANDBOX-escape pin; cross-ref SECURITY-POSTURE.md ESC matrix entry for ESC-9 + Compromise #4 honest disclosure)"]
 fn sandbox_host_fn_per_call_recheck_after_revoke_for_kv_read() {
     // D18-RESOLVED — `kv:read` declared `cap_recheck = "per_call"` in
     // host-functions.toml (sensitive — mutation/network/cross-tenant
@@ -71,7 +71,7 @@ fn sandbox_host_fn_per_call_recheck_after_revoke_for_kv_read() {
 }
 
 #[test]
-#[ignore = "Wave-8b ships the per-boundary trampoline path that consults the init-snapshot allowlist; mid-call revoke surface for time/log lives at the engine layer (paired 8c work)."]
+#[ignore = "Phase 3 — per_boundary mid-call revoke positive-test deferred per docs/future/phase-3-backlog.md §7.3.A.7 (testing_revoke_cap_mid_call helper; cross-ref SECURITY-POSTURE.md ESC matrix)"]
 fn sandbox_host_fn_per_boundary_recheck_for_time_log() {
     // D18-RESOLVED — `time` and `log` declared `cap_recheck = "per_boundary"`
     // in host-functions.toml (cheap, output-bounded, idempotent reads
@@ -98,7 +98,7 @@ fn sandbox_host_fn_undeclared_cap_recheck_defaults_to_per_call() {
 }
 
 #[test]
-#[ignore = "Wave-8b: the typed-error-not-trap routing is exercised by the host-fn cap-denial trampoline path (HostFnDenialMarker round-trips through trap_to_typed::map_call_error). The integration-shaped pin lives at the engine layer; the unit-level pin is in the trap_to_typed::tests::host_fn_denial_marker_round_trips_cap_denied."]
+#[ignore = "Phase 3 — typed-error-not-trap integration-shape pin deferred per docs/future/phase-3-backlog.md §7.3.A.7 (unit-level pin in trap_to_typed::tests::host_fn_denial_marker_round_trips_cap_denied; cross-ref SECURITY-POSTURE.md ESC matrix)"]
 fn _sandbox_host_fn_undeclared_cap_recheck_defaults_to_per_call_old() {
     // wsa D18 — UNDECLARED `cap_recheck` field defaults to `per_call`
     // (fail-secure). Regression guard: a host-fn TOML entry without
@@ -112,7 +112,7 @@ fn _sandbox_host_fn_undeclared_cap_recheck_defaults_to_per_call_old() {
 }
 
 #[test]
-#[ignore = "Wave-8b: the typed-error-not-trap pin lives in the unit suite as `trap_to_typed::tests::host_fn_denial_marker_round_trips_cap_denied`. The integration shape that exercises the full ABI round-trip lands paired with the engine-side wire-through (8c)."]
+#[ignore = "Phase 3 — typed-error-not-trap full-ABI round-trip integration body deferred per docs/future/phase-3-backlog.md §7.3.A.7 (unit pin in trap_to_typed::tests; cross-ref SECURITY-POSTURE.md ESC matrix)"]
 fn sandbox_host_fn_denied_routes_typed_error_not_trap() {
     // sec-r1 D7 — when a host-fn cap check fails, the engine surfaces
     // E_SANDBOX_HOST_FN_DENIED as a typed error THROUGH the host-fn

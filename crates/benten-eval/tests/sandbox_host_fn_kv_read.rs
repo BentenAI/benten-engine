@@ -77,7 +77,7 @@ fn sandbox_host_fn_kv_read_respects_per_grant_budget_1000() {
 }
 
 #[test]
-#[ignore = "Wave-8b ships the trampoline that consults the live cap-set on every kv:read invocation; the mid-call revoke testing helper that mutates `live_caps` lives at the engine layer (paired 8c work)."]
+#[ignore = "Phase 3 — testing_revoke_cap_mid_call helper for kv:read deferred per docs/future/phase-3-backlog.md §7.3.A.7 (security-critical SANDBOX-escape pin; cross-ref SECURITY-POSTURE.md ESC matrix entry for ESC-9 + Compromise #4)"]
 fn sandbox_host_fn_kv_read_per_call_cap_check_after_revoke() {
     // D18 + ESC-9 — `kv:read` is `cap_recheck = "per_call"` (sensitive).
     //
