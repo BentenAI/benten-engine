@@ -444,6 +444,19 @@ impl Engine {
     /// (`engine.call()`) path had stamped a real start reference into
     /// the metadata.
     ///
+    /// **Suspension-store key invariant:** the metadata lookup uses
+    /// `envelope.envelope_cid()` as the key (matching `put_wait` /
+    /// `get_wait`); the envelope-bytes lookup elsewhere in the resume
+    /// path uses `payload_cid` as the key (matching `put_envelope` /
+    /// `get_envelope`). Two distinct keys for two distinct operations
+    /// — both internally consistent within their respective accessors.
+    /// The `envelope_cid()` is the BLAKE3-of-canonical-envelope-bytes
+    /// (covers `payload_cid` + `schema_version` + the rest of the
+    /// envelope shape per Phase 2a G3-A); `payload_cid` is the
+    /// BLAKE3-of-canonical-payload-bytes (covers the suspended frame
+    /// state). Verified clean by orchestrator-direct grep audit during
+    /// wave-8i fix-pass-2.
+    ///
     /// # Errors
     /// Returns [`EngineError`] per
     /// [`Engine::resume_from_bytes_unauthenticated`] (steps 1, 3, 4 of

@@ -312,6 +312,9 @@ Not yet live:
 - P2P sync and UCAN capabilities (Phase 3)
 - Marketplace / dynamic manifest registration (`register_runtime` reserved with `E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED`; Phase 8)
 - `random` host-fn (deferred to Phase 2c pending CSPRNG framework decision)
+- Durable wasm-module bytes registry — `Engine::register_module_bytes` is in-memory only (Compromise #17); operators re-register module bytes at every engine open. `Engine::install_module` persists the manifest into a system-zone Node, but the underlying wasm bytes are NOT auto-persisted — the asymmetry is bounded by the absence of a Phase-2b durable `BlobBackend` (Phase 3).
+- Durable handler-version chain — `Engine::register_subgraph_replace` keeps an in-memory chain (Compromise #18); historical CIDs are lost on engine restart. Phase 3 lifts this to a durable `core::version::Anchor` chain.
+- Inv-4 runtime depth-threading — registration arm is fully active; runtime depth-threading through `ActiveCall` is wave-8e item #11 carry-forward (`AttributionFrame.sandbox_depth: u8` is constructed with literal `1` at every production SANDBOX entry today). See `docs/INVARIANT-COVERAGE.md` "Inv-4 + Inv-7 runtime arm status" honest disclosure.
 
 If something in the "live" list doesn't behave as documented, file an issue.
 

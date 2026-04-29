@@ -204,26 +204,30 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 - **Message:** "SANDBOX nest depth {depth} exceeds configured max {max}"
 - **Context:** `{ node_id: NodeId, depth: number, max: number }`
-- **Fix:** Reduce SANDBOX nesting (a SANDBOX whose subgraph CALLs another handler that itself SANDBOXes counts toward the same depth — D20 inheritance across CALL boundaries). Either flatten the call chain or increase `max_sandbox_nest_depth` via capability grant.
-- **Thrown at:** Registration (static SubgraphSpec analysis) and Evaluation (TRANSFORM-computed SANDBOX targets that exceed the ceiling at runtime)
-- **Phase:** 2b (G7-B Inv-4 enforcement; counter lives on `AttributionFrame.sandbox_depth: u8` and is INHERITED across CALL boundaries per D20-RESOLVED)
+- **Fix:** Reduce SANDBOX nesting (a SANDBOX whose subgraph CALLs another handler that itself SANDBOXes counts toward the same depth at registration time per D20). Either flatten the call chain or increase `max_sandbox_nest_depth` via capability grant.
+- **Thrown at:** **Registration** (static SubgraphSpec analysis at `invariants::sandbox_depth::validate_registration`) — fully active. **Runtime** (TRANSFORM-computed SANDBOX targets at the `check_runtime_entry` site) — structurally plumbed but not transitively threaded through `ActiveCall` in production today (the `AttributionFrame.sandbox_depth: u8` field is constructed with literal `1` at every production site rather than `parent.sandbox_depth + 1`); the wave-8e item #11 carry-forward closes this with depth threading. See `docs/INVARIANT-COVERAGE.md` "Inv-4 + Inv-7 runtime arm status" honest disclosure.
+- **Phase:** 2b (G7-B Inv-4 registration arm; wave-8b structural plumbing of the runtime field; wave-8e #11 closes the runtime depth-threading)
 
 ### E_INV_SANDBOX_OUTPUT
 
 - **Message:** "SANDBOX output {would_be} bytes exceeds max {limit} (consumed {consumed} + attempted {attempted})"
 - **Context:** `{ node_id: NodeId, consumed: number, attempted: number, would_be: number, limit: number, path: "primary_streaming" | "backstop" }`
 - **Fix:** Reduce output emitted by the SANDBOX module's host-fn calls (or the primitive return value). D15 trap-loudly default — there is no opt-in silent-truncation flag. Use STREAM for progressive output if the workload genuinely needs unbounded byte volume.
-- **Thrown at:** Evaluation. The `path` field distinguishes the D17 PRIMARY streaming `CountedSink` enforcement (fires before host-fn bytes are accepted) from the D17 BACKSTOP return-value enforcement (defense-in-depth at the primitive boundary).
-- **Phase:** 2b (G7-A + G7-B Inv-7 enforcement; D15 + D17 PRIMARY+BACKSTOP)
+- **Thrown at:** **Evaluation — fully active post-wave-8b.** The `path` field distinguishes the D17 PRIMARY streaming `CountedSink::write` enforcement (fires before host-fn bytes are accepted, in `crates/benten-eval/src/sandbox/counted_sink.rs`) from the D17 BACKSTOP return-value enforcement at the primitive boundary (`CountedSink::backstop_check` after the wasm guest returns). Both arms wired through wave-8b's host-fn trampoline + primitive boundary.
+- **Phase:** 2b (G7-A + G7-B Inv-7 enforcement; wave-8b runtime wire-through; D15 + D17 PRIMARY+BACKSTOP)
 - **D21 priority:** Lowest — fires before [E_SANDBOX_FUEL_EXHAUSTED] / [E_SANDBOX_WALLCLOCK_EXCEEDED] / [E_SANDBOX_MEMORY_EXHAUSTED] when ONLY the output axis trips; otherwise higher-priority axes fire first (D21 priority MEMORY > WALLCLOCK > FUEL > OUTPUT). See `docs/SANDBOX-LIMITS.md` for the rationale.
 
 ### E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED
 
+<!-- reachability: ignore -->
+
+> **⚠️ Runtime arm gated on Inv-4 depth-threading (wave-8e item #11 carry-forward).** The eval-side `SandboxError::NestedDispatchDepthExceeded` typed variant is plumbed end-to-end (`SandboxError::code()` → `ErrorCode::SandboxNestedDispatchDepthExceeded`) but the depth-saturation check requires `AttributionFrame.sandbox_depth` to thread transitively across nested SANDBOX entries. Production sites construct frames with literal `1` today; the saturation check therefore cannot fire from a runtime nested SANDBOX dispatch chain. Registration-time over-deep nesting fires `E_INV_SANDBOX_DEPTH` instead. Reachability returns when wave-8e item #11 lands the threading.
+
 - **Message:** "SANDBOX nested-dispatch depth saturated at {depth} (configured max {max})"
 - **Context:** `{ node_id: NodeId, depth: number, max: number, saturation: "u8_ceiling" | "configured_max" }`
-- **Fix:** SANDBOX nest-depth saturation overflow distinct from `E_INV_SANDBOX_DEPTH`. Two saturation paths fire this code: the `sandbox_depth: u8` counter saturates at `u8::MAX` (type-level ceiling — extremely deep CALL chains) and the configured `max_sandbox_nest_depth` boundary (capability-grant ceiling). Either case fires this typed error rather than wrapping silently. Reduce nesting per the same guidance as `E_INV_SANDBOX_DEPTH`; if hitting the u8 ceiling, the call topology is almost certainly accidentally recursive and needs structural redesign rather than a higher cap.
-- **Thrown at:** Evaluation (saturation point at the SANDBOX entry — the counter-saturation check fires before the inner subgraph starts executing).
-- **Phase:** 2b (G7-B Inv-4 enforcement; D20 inheritance — the counter is INHERITED across CALL boundaries per `AttributionFrame.sandbox_depth: u8`)
+- **Fix:** SANDBOX nest-depth saturation overflow distinct from `E_INV_SANDBOX_DEPTH`. Two saturation paths fire this code (once depth-threading lands): the `sandbox_depth: u8` counter saturates at `u8::MAX` (type-level ceiling — extremely deep CALL chains) and the configured `max_sandbox_nest_depth` boundary (capability-grant ceiling). Either case fires this typed error rather than wrapping silently. Reduce nesting per the same guidance as `E_INV_SANDBOX_DEPTH`; if hitting the u8 ceiling, the call topology is almost certainly accidentally recursive and needs structural redesign rather than a higher cap.
+- **Thrown at:** Evaluation (saturation point at the SANDBOX entry — the counter-saturation check fires before the inner subgraph starts executing). Runtime arm reaches its production firing site once wave-8e item #11 threads `sandbox_depth` through `ActiveCall`.
+- **Phase:** 2b (G7-B Inv-4 enforcement plumbing; wave-8e #11 lands the runtime threading)
 
 ### E_IVM_VIEW_STALE
 
@@ -759,41 +763,29 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_SANDBOX_FUEL_EXHAUSTED
 
-<!-- reachability: ignore -->
-
-> **⚠️ Not firing in production yet.** Reserved at Phase 2b G7-A executor scaffold; first runtime firing site lands with G7-C engine integration when the per-call wasmtime `Store` is wired (the `SandboxError::FuelExhausted` typed variant exists in `crates/benten-eval/src/primitives/sandbox.rs` but the trap-callback that constructs it is G7-C scope).
-
 - **Message:** "SANDBOX fuel exhausted: limit={limit} consumed={consumed}"
 - **Context:** `{ limit: u64, consumed: u64 }`
 - **Fix:** wasmtime fuel-meter intercept. Either reduce the per-call computation, raise `SandboxConfig::fuel` (default 1_000_000), or split the workload across multiple SANDBOX calls. Concurrent with the typed-error propagation, the engine emits `TraceStep::BudgetExhausted { budget_type: "sandbox_fuel", consumed, limit, path }` so `engine.trace(...)` consumers observe the exhaustion in-band (mirrors G12-A's `inv_8_iteration` pattern).
-- **Thrown at:** SANDBOX executor (D3-RESOLVED per-call wasmtime `Store` lifecycle).
-- **Phase:** 2b G7-A
+- **Thrown at:** SANDBOX executor — fully active post-wave-8b. The wasmtime `Store::set_fuel` cap + trap-callback maps fuel-exhaustion traps via `crates/benten-eval/src/sandbox/trap_to_typed.rs` to this typed variant. D3-RESOLVED per-call wasmtime `Store` lifecycle.
+- **Phase:** 2b G7-A (variant) / wave-8b (production trap-mapping)
 - **D21 priority:** fires before [E_INV_SANDBOX_OUTPUT] when both trip; loses to [E_SANDBOX_WALLCLOCK_EXCEEDED] / [E_SANDBOX_MEMORY_EXHAUSTED] (D21 priority MEMORY > WALLCLOCK > FUEL > OUTPUT).
 
 ### E_SANDBOX_MEMORY_EXHAUSTED
 
-<!-- reachability: ignore -->
-
-> **⚠️ Not firing in production yet.** Reserved at Phase 2b G7-A; first runtime firing site lands with G7-C engine integration (wasmtime `StoreLimits` callback).
-
 - **Message:** "SANDBOX memory limit exhausted: {limit} bytes"
 - **Context:** `{ limit: u64 }`
-- **Fix:** wasmtime `StoreLimits` intercept fires deterministically BEFORE host OOM. Either reduce module memory pressure, raise `SandboxConfig::memory_bytes` (default 64 MiB), or audit for runaway `memory.grow` (ESC-2 escape vector).
-- **Thrown at:** SANDBOX executor.
-- **Phase:** 2b G7-A
+- **Fix:** wasmtime `ResourceLimiter` intercept fires deterministically BEFORE host OOM (`crates/benten-eval/src/sandbox/resource_limiter.rs`). Either reduce module memory pressure, raise `SandboxConfig::memory_bytes` (default 64 MiB), or audit for runaway `memory.grow` (ESC-2 escape vector).
+- **Thrown at:** SANDBOX executor — fully active post-wave-8b via `ResourceLimiter` impl + memory-trap → typed-error mapping.
+- **Phase:** 2b G7-A (variant) / wave-8b (production ResourceLimiter wiring)
 - **D21 priority:** HIGHEST — fires before [E_SANDBOX_WALLCLOCK_EXCEEDED] / [E_SANDBOX_FUEL_EXHAUSTED] / [E_INV_SANDBOX_OUTPUT] when multiple are simultaneously eligible (D21 priority MEMORY > WALLCLOCK > FUEL > OUTPUT — matches OS-level OOM trump).
 
 ### E_SANDBOX_WALLCLOCK_EXCEEDED
 
-<!-- reachability: ignore -->
-
-> **⚠️ Not firing in production yet.** Reserved at Phase 2b G7-A; first runtime firing site lands with G7-C engine integration (wasmtime epoch-interruption ticker thread).
-
 - **Message:** "SANDBOX wallclock deadline exceeded: {limit_ms} ms"
 - **Context:** `{ limit_ms: u64 }`
 - **Fix:** D24-RESOLVED defaults: 30s default / 5min ceiling. Per-handler `wallclock_ms` opt-in via `SubgraphSpec.primitives` (G12-D widening). Workspace-level overrides via `engine.toml` `[sandbox]` section (Ben's brief addition). Either shrink the workload, raise the per-handler value (within the engine.toml ceiling), or relax the engine.toml ceiling.
-- **Thrown at:** SANDBOX executor (wasmtime `epoch_interruption` driven by a thread-side ticker; D27 `async-support` ENABLED preserves the yield path for Phase-3 iroh forward-compat).
-- **Phase:** 2b G7-A
+- **Thrown at:** SANDBOX executor — fully active post-wave-8b via `wasmtime::Store::set_epoch_deadline` + the wave-8b epoch-interruption ticker thread (`crates/benten-eval/src/sandbox/epoch_ticker.rs`) that ticks the shared engine's epoch on a configured cadence; D27 `async-support` ENABLED preserves the yield path for Phase-3 iroh forward-compat.
+- **Phase:** 2b G7-A (variant) / wave-8b (production epoch-ticker wiring)
 - **D21 priority:** fires before [E_SANDBOX_FUEL_EXHAUSTED] / [E_INV_SANDBOX_OUTPUT] when multiple trip; loses to [E_SANDBOX_MEMORY_EXHAUSTED] (D21 priority MEMORY > WALLCLOCK > FUEL > OUTPUT).
 
 ### E_SANDBOX_WALLCLOCK_INVALID
@@ -814,15 +806,11 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_SANDBOX_HOST_FN_NOT_FOUND
 
-<!-- reachability: ignore -->
-
-> **⚠️ Not firing in production yet.** Reserved at Phase 2b G7-A; first runtime firing site lands with G7-C engine integration (wasmtime link-time host-fn resolver).
-
 - **Message:** "SANDBOX host-fn not found: {name}"
 - **Context:** `{ name: string }`
 - **Fix:** Module attempted to call a host-fn name not in the active manifest. In Phase 2b: this fires for `random` (deferred to Phase 2c per D1 + sec-pre-r1-06 §2.3 — workspace CSPRNG framework decision pending). The error message hint MUST mention "deferred to Phase 2c" for `random` so developers don't think it's a typo. For other names: check the manifest declaration matches the import.
-- **Thrown at:** SANDBOX executor (link-time preferred; call-time fallback).
-- **Phase:** 2b G7-A
+- **Thrown at:** SANDBOX executor — fully active post-wave-8b. The defensive `random`-cap pre-check at `primitives/sandbox.rs:373-382` fires before module link; the wasmtime link-time resolver path (other names) fires when wasmtime fails to resolve an import against the linker.
+- **Phase:** 2b G7-A (variant) / wave-8b (production wiring)
 
 ### E_SANDBOX_MANIFEST_UNKNOWN
 
@@ -858,15 +846,11 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_SANDBOX_NESTED_DISPATCH_DENIED
 
-<!-- reachability: ignore -->
-
-> **⚠️ Not firing in production yet.** Reserved at Phase 2b G7-A; first runtime firing site lands with G7-C engine integration (`Engine::call` re-entry guard from host-fn callback).
-
 - **Message:** "SANDBOX nested dispatch denied"
 - **Context:** `{ host_fn_name: string }`
 - **Fix:** D19-RESOLVED: deny nested `Engine::call` from host-fn (the actual security claim). Closes the SANDBOX → CALL → SANDBOX cap-context-confusion attack class (sec-pre-r1-08). Renamed from the older `E_SANDBOX_REENTRANCY_DENIED` per wsa-7 + r1-security convergence — the name aligns with what's actually being denied. Refactor the host-fn to NOT re-enter the engine; if Phase-3 async host-fns are needed, acquire the reserved `host:async` cap.
-- **Thrown at:** SANDBOX executor (host-fn callback path).
-- **Phase:** 2b G7-A
+- **Thrown at:** SANDBOX executor — fully active post-wave-8b. The host-fn callback path enforces the no-nested-`Engine::call` invariant via the trampoline's typed-error short-circuit before the host-side body runs.
+- **Phase:** 2b G7-A (variant) / wave-8b (production wiring)
 
 <!-- E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED: see canonical entry at the Inv-4/Inv-7 G7-B section above -->
 

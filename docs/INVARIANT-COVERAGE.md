@@ -4,9 +4,11 @@ CLAUDE.md commits to **14 invariants** governing the Benten engine.
 This document tracks per-invariant enforcement state, the enforcing
 crate, and the regression suite that pins it.
 
-**Phase 2b status:** 14 of 14 invariants enforced (Inv-4 + Inv-7 went
-live in Phase 2b G7-B alongside the SANDBOX runtime). The two
-Phase-1 stubs are now removed.
+**Phase 2b status:** 14 of 14 invariants enforced. Inv-4 + Inv-7 went
+ACTIVE in Phase 2b alongside the SANDBOX runtime (registration arm
+landed in G7-B; runtime arm landed across waves 8b + 8h with a bounded
+honest-disclosure for Inv-4 — see the "Inv-4 + Inv-7 runtime arm
+status" section below). The two Phase-1 stubs are now removed.
 
 ---
 
@@ -17,10 +19,10 @@ Phase-1 stubs are now removed.
 | 1 | DAG-ness — no cycles in operation graphs | 1 | `benten-eval::invariants::structural::validate_at_registration` (Kahn cycle detect) | `crates/benten-eval/src/invariants/structural.rs` (cycle test cluster) |
 | 2 | Max operation-subgraph depth | 1 | Bounded longest-path walk + per-CALL increment | `structural.rs::depth_*` tests |
 | 3 | Max fan-out per node | 1 | Edge enumeration at registration | `structural.rs::fan_out_*` tests |
-| 4 | **SANDBOX nest-depth ceiling — ACTIVE (Phase 2b G7-B / D20)** | 2b | `invariants::sandbox_depth` + `AttributionFrame.sandbox_depth: u8` runtime counter (INHERITED across CALL boundaries) | `crates/benten-eval/tests/inv_4_*.rs`, `crates/benten-engine/tests/inv_4_*.rs`, `tests/sandbox_depth_inheritance_through_call.rs` |
+| 4 | **SANDBOX nest-depth ceiling — ACTIVE (Phase 2b G7-B / wave-8b / D20)** | 2b | `invariants::sandbox_depth::validate_registration` (registration); `AttributionFrame.sandbox_depth: u8` field + `SandboxError::NestedDispatchDepthExceeded` plumbing (runtime — see honest disclosure below) | `crates/benten-eval/tests/inv_4_*.rs`, `crates/benten-engine/tests/inv_4_*.rs`, `tests/sandbox_depth_inheritance_through_call.rs` |
 | 5 | Max total nodes per subgraph | 1 | Node-count gate at registration | `structural.rs::node_count_*` tests |
 | 6 | Max total edges per subgraph | 1 | Edge-count gate at registration | `structural.rs::edge_count_*` tests |
-| 7 | **SANDBOX `output_max_bytes` range — ACTIVE (Phase 2b G7-B / D15 + D17 PRIMARY+BACKSTOP)** | 2b | `invariants::sandbox_output` + centralized trampoline counting (D17 PRIMARY) + per-handler ceiling (D15) | `crates/benten-eval/tests/inv_7_*.rs`, `crates/benten-engine/tests/inv_7_*.rs`, `tests/sandbox_output_centralized_counting.rs` |
+| 7 | **SANDBOX `output_max_bytes` range — ACTIVE (Phase 2b G7-B / wave-8b / D15 + D17 PRIMARY+BACKSTOP)** | 2b | `invariants::sandbox_output::validate_registration` (registration); `CountedSink::write` (PRIMARY streaming) + `CountedSink::backstop_check` (return-value BACKSTOP), both wired through wave-8b's host-fn trampoline + primitive boundary | `crates/benten-eval/tests/inv_7_*.rs`, `crates/benten-engine/tests/inv_7_*.rs`, `crates/benten-eval/src/sandbox/counted_sink.rs` |
 | 8 | Multiplicative cumulative budget (CALL × ITERATE) | 2a | `invariants::budget` + `BudgetTracker` per evaluator step | `crates/benten-eval/src/invariants/budget.rs` (proptest cluster) |
 | 9 | Determinism — handlers declared deterministic reject non-determinism sources | 1 (decl) / 2a (rt) | `structural::validate_at_registration` declaration check + runtime fence | `structural.rs::determinism_*` |
 | 10 | Canonical byte encoding (order-independent DAG-CBOR) | 1 | `structural::canonical_bytes` order-independence proptest | `structural.rs::canonical_bytes_*` |
@@ -31,27 +33,54 @@ Phase-1 stubs are now removed.
 
 ---
 
-## Inv-4 + Inv-7 — Phase-2b activations
+## Inv-4 + Inv-7 runtime arm status (honest disclosure)
 
-Phase 1 shipped Inv-4 + Inv-7 as **stubs** because the SANDBOX
-primitive itself was compile-check only (Compromise #4 in
-`docs/SECURITY-POSTURE.md`). Phase 2b G7-B activated both:
+Phase 1 shipped Inv-4 + Inv-7 as **stubs** because the SANDBOX primitive
+itself was compile-check only (Compromise #4 in
+`docs/SECURITY-POSTURE.md`). Phase 2b G7-B added the registration-time
+arms; waves 8b + 8h wired the runtime executor end-to-end. The two
+runtime arms landed asymmetrically — Inv-7 fully, Inv-4 partially:
 
-- **Inv-4** (SANDBOX nest-depth ceiling) gates registration AND
-  runtime. Registration walks the static graph; runtime carries the
-  D20 `AttributionFrame.sandbox_depth: u8` counter, which **inherits
-  across CALL boundaries** so an attacker cannot bypass the ceiling
-  by laundering depth through CALL chains. Nest-depth limit defaults
-  to 3 (configurable via `EngineBuilder::sandbox_nest_depth_max`).
-- **Inv-7** (SANDBOX `output_max_bytes` range) gates the cumulative
-  per-SANDBOX-call wire-bytes from host-fn returns + module return
-  values. Per D17 PRIMARY + BACKSTOP, the host trampoline does the
-  centralised counting; per-handler ceiling per D15. Default ceiling
-  1 MiB; `SandboxArgs.outputLimitBytes` overrides per-call.
+- **Inv-7 (SANDBOX `output_max_bytes` range)** — **fully active at
+  runtime.** The wave-8b host-fn trampoline routes every host-fn
+  byte-emit through `CountedSink::write`'s `OutputCheckPath::PrimaryStreaming`
+  arm; the primitive boundary runs `CountedSink::backstop_check` against
+  the return value (`OutputCheckPath::ReturnBackstop`). Per D17 PRIMARY +
+  BACKSTOP. Per-handler ceiling per D15. Default ceiling 1 MiB;
+  `SandboxArgs.outputLimitBytes` overrides per-call. Note: the
+  `invariants::sandbox_output::check_admission` helper exists and is
+  unit-tested but is NOT the production firing site — `CountedSink`
+  enforces the same arithmetic directly via `SinkOverflow` →
+  `SandboxError::OutputOverflow` mapping. Both paths produce
+  `E_INV_SANDBOX_OUTPUT` typed errors with identical context shapes.
+
+- **Inv-4 (SANDBOX nest-depth ceiling)** — **registration arm fully
+  active; runtime arm structurally plumbed but not transitively
+  threaded.** The `AttributionFrame.sandbox_depth: u8` field exists and
+  is constructed at every production SANDBOX entry, but its value is
+  literal `1` at every site rather than `parent.sandbox_depth + 1`
+  (`crates/benten-engine/src/primitive_host.rs:870, 876`). The depth
+  threading through `ActiveCall` (so a SANDBOX-inside-CALL-inside-SANDBOX
+  inherits the parent's depth) is the wave-8e item #11 carry-forward and
+  is bounded structural work — not a Phase-3 deferral, just unfinished
+  plumbing within the wave-8 envelope. The
+  `invariants::sandbox_depth::check_runtime_entry` and `propagate_through_call`
+  helpers exist and are unit-tested but have zero production callers
+  (verified by grep across the workspace). Consequence: the
+  registration-time static-graph walk catches over-deep SANDBOX nesting
+  declared in a SubgraphSpec; runtime escape via TRANSFORM-computed
+  SANDBOX targets that exceed the ceiling at execution time is NOT
+  caught today. Mitigation: SANDBOX nest-depth ceiling defaults to 3, and
+  the registration-time arm covers the static-graph attack surface
+  (which is the dominant path for declared handlers); the runtime arm
+  closes a narrower attack vector (TRANSFORM-built SANDBOX module
+  references that exceed the ceiling) which lands as part of the
+  wave-8e/Phase-2b-close residual.
 
 Both invariants fire as `E_INV_SANDBOX_DEPTH` (Inv-4) and
 `E_INV_SANDBOX_OUTPUT` (Inv-7) error codes — both pinned in
-`docs/ERROR-CATALOG.md`.
+`docs/ERROR-CATALOG.md`. The catalog rows now reflect the per-arm
+honest disclosure.
 
 The Phase-1 "Phase 2b" stubs that previously appeared in this table
 have been removed; Inv-4 + Inv-7 are now first-class active rows.
@@ -64,8 +93,8 @@ have been removed; Inv-4 + Inv-7 are now first-class active rows.
 ┌────────────────────────────────────────┬─────────────────────────────────────────┐
 │ Registration-time (one-shot)           │ Runtime-time (per-call, per-frame)      │
 ├────────────────────────────────────────┼─────────────────────────────────────────┤
-│ Inv-1 DAG-ness                         │ Inv-4 sandbox_depth runtime counter     │
-│ Inv-2 max depth                        │ Inv-7 sandbox_output trampoline counter │
+│ Inv-1 DAG-ness                         │ Inv-4 sandbox_depth runtime counter*    │
+│ Inv-2 max depth                        │ Inv-7 sandbox_output CountedSink        │
 │ Inv-3 fan-out                          │ Inv-8 BudgetTracker step gate           │
 │ Inv-4 sandbox_depth declaration        │ Inv-13 WriteAuthority firing matrix     │
 │ Inv-5 node count                       │ Inv-14 AttributionFrame propagation     │
@@ -77,7 +106,35 @@ have been removed; Inv-4 + Inv-7 are now first-class active rows.
 │ Inv-12 aggregate roll-up               │                                         │
 │ Inv-14 ATTRIBUTION_PROPERTY_KEY decl   │                                         │
 └────────────────────────────────────────┴─────────────────────────────────────────┘
+
+* Inv-4 runtime counter is structurally plumbed (`AttributionFrame.sandbox_depth: u8`)
+  but the depth-threading through ActiveCall is the wave-8e item #11
+  carry-forward — production sites construct frames with literal `1` rather
+  than `parent.sandbox_depth + 1`. Runtime arm partial; registration arm
+  fully active. See §"Inv-4 + Inv-7 runtime arm status" above.
 ```
+
+---
+
+## IVM Algorithm B production registration (audit-gap closure note)
+
+Wave-8h closed the IVM Algorithm B production-registration drift the
+docs-vs-code audit caught: `Engine::create_user_view` previously
+forced `ContentListingView` for every `Strategy::B`-declared user
+view. Post-wave-8h the dispatch constructs `AlgorithmBView::for_id(spec.id())`
+for the **5 canonical view IDs** that `AlgorithmBView` supports
+natively (the hand-written single-loop dispatch in
+`crates/benten-ivm/src/algorithm_b.rs`).
+
+**Coverage compromise:** non-canonical user-defined view IDs that
+declare `Strategy::B` continue to fall back to `ContentListingView`
+silently. Generalised user-defined Algorithm B handlers are a Phase-3
+lift (paired with the IVM-views coarse-grained read-gate Compromise
+#11). A drift-detector for "declared B but registered ContentListingView"
+on non-canonical IDs is on the Phase-3 backlog. User-facing impact
+today is bounded: the 5 canonical view IDs cover all in-tree user-view
+patterns; declaring `Strategy::B` on a custom ID does not fail loud
+but transparently uses the Phase-1 view shape.
 
 ---
 

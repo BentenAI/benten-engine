@@ -197,16 +197,20 @@ impl Engine {
     /// method (dx-optimizer R1 finding). The TS wrapper exposes this
     /// as `engine.onChange(pattern, callback) -> Subscription`.
     ///
-    /// # Pre-G6-A behavior
+    /// # Cursor mode for ad-hoc `on_change`
     ///
-    /// Until G6-A's change-stream port + executor land, the returned
-    /// handle's `is_active()` is `false` immediately and no callbacks
-    /// fire. The handle's shape is locked here so the wrapper
-    /// `packages/engine/src/subscribe.ts` compiles and exercises the
-    /// round-trip shape before the port wires in. Once G6-A merges,
-    /// this method registers the callback against the port and the
-    /// returned handle stays active until drop / explicit
-    /// unsubscribe.
+    /// This entry point uses [`SubscribeCursor::Latest`] (the default).
+    /// Persistent-cursor mode (`SubscribeCursor::Persistent(id)`) is
+    /// available via [`Engine::on_change_with_cursor`] but its
+    /// restoration story is bounded for ad-hoc onChange:
+    /// subgraph-internal SUBSCRIBE primitives keep the G12-E
+    /// SuspensionStore-backed persistent-cursor restoration path; the
+    /// ad-hoc engine surface falls back to Latest semantics for the
+    /// in-process subscription, since there is no engine-managed
+    /// suspend/resume boundary that would re-hydrate the cursor across
+    /// process restart. Callers needing durable cursor restoration
+    /// across engine restart should use a subgraph with a SUBSCRIBE
+    /// primitive rather than `engine.on_change`.
     ///
     /// # Errors
     /// Returns [`EngineError`] if the engine's policy denies the
@@ -230,6 +234,11 @@ impl Engine {
     /// the principal's caps no longer cover the event's anchor at
     /// delivery time, the subscription is auto-cancelled per D5
     /// contract.
+    ///
+    /// Same cursor-mode caveat as [`Engine::on_change`]: the ad-hoc
+    /// engine surface falls back to Latest semantics for persistent
+    /// cursors; durable cross-restart cursor restoration is reserved
+    /// for subgraph-internal SUBSCRIBE primitives.
     ///
     /// # Errors
     /// See [`Engine::on_change`].

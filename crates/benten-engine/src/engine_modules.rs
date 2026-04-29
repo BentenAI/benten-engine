@@ -105,6 +105,22 @@ impl Engine {
     /// nowhere durable for migrations to land. The in-memory active set
     /// itself works on every target.
     ///
+    /// ## Bytes-persistence asymmetry (Compromise #17)
+    ///
+    /// `install_module` persists the **manifest** (canonical-DAG-CBOR
+    /// bytes + summary + name + version) into the
+    /// `system:ModuleManifest` zone via the privileged write path. This
+    /// is durable: the manifest survives engine restart and is
+    /// sync-eligible for Phase-3 federation.
+    ///
+    /// However, the underlying **wasm bytes** that each manifest entry
+    /// references (`modules[i].cid`) are NOT auto-persisted. Operators
+    /// must call [`Engine::register_module_bytes`] separately, and must
+    /// re-call it after every engine open. The asymmetry IS Compromise
+    /// #17 — see `docs/SECURITY-POSTURE.md` "Compromise #17 — In-memory
+    /// module-bytes registry" for the full narrative + Phase-3
+    /// promotion path (durable `BlobBackend` lifts both arms together).
+    ///
     /// # Errors
     ///
     /// * [`EngineError::ModuleManifestCidMismatch`] on D16 mismatch.

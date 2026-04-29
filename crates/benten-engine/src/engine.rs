@@ -738,25 +738,34 @@ impl Engine {
     ///
     /// The `impl PrimitiveHost for Engine::execute_sandbox` override
     /// reads bytes from this registry when the dispatched SANDBOX
-    /// OperationNode's `module` property names a CID. Phase-3 replaces
-    /// this in-memory shape with durable blob storage backed by the
-    /// engine's Redb backend; the in-memory shape is the minimum surface
-    /// needed to close the production-runtime path in Phase 2b
-    /// (Compromise #4 closure narrative).
+    /// OperationNode's `module` property names a CID.
     ///
-    /// The CID supplied here is the BLAKE3-of-canonical-WASM-bytes per
-    /// the project's content-addressing discipline. Callers that want
-    /// to verify the CID before registering can compute it via
-    /// [`Cid::from_blake3_digest`] applied to `blake3::hash(bytes)`.
+    /// **Compromise #17 — In-memory module-bytes registry (Phase 2b).**
+    /// This API stores bytes in a process-local
+    /// `BTreeMap<Cid, Vec<u8>>` guarded by a `Mutex`. Bytes are NOT
+    /// persisted to the engine's redb backend; on `Engine::open` the
+    /// registry starts empty regardless of what was registered against
+    /// the prior process. The asymmetry with [`Engine::install_module`]
+    /// (which DOES persist the manifest into the system-zone Node) IS
+    /// the Compromise #17 narrative — see `docs/SECURITY-POSTURE.md`
+    /// "Compromise #17 — In-memory module-bytes registry" for the full
+    /// narrative + Phase-3 promotion path (durable `BlobBackend`).
+    ///
+    /// **Lazy-validation discipline (non-validating API).** This API
+    /// does NOT verify the supplied CID matches `blake3(bytes)` —
+    /// content integrity is the caller's responsibility, mirroring the
+    /// pattern `Engine::install_module` uses for manifest CIDs.
+    /// Validation fires lazily at SANDBOX dispatch time when wasmtime
+    /// parses the bytes (`Module::new(&engine, &bytes)` in
+    /// `crates/benten-eval/src/sandbox/instance.rs::module_for_bytes`); a
+    /// malformed module surfaces as `E_SANDBOX_MODULE_INVALID`. Callers
+    /// that want to verify the CID before registering can compute it
+    /// via [`Cid::from_blake3_digest`] applied to `blake3::hash(bytes)`.
     ///
     /// Re-registering the same CID with identical bytes is idempotent;
     /// re-registering with DIFFERENT bytes is a content-addressing bug
     /// at the call site (the CID would no longer match the bytes), but
-    /// the engine accepts the overwrite without complaint — content
-    /// integrity is the caller's responsibility, mirroring the pattern
-    /// `Engine::install_module` uses for manifest CIDs (the engine
-    /// recomputes/verifies, but blob bytes are not re-hashed on every
-    /// dispatch).
+    /// the engine accepts the overwrite without complaint.
     ///
     /// Cap-policy is NOT consulted at this entrypoint: registering wasm
     /// bytes does not authorise any caller to invoke them. Authority
@@ -984,9 +993,17 @@ impl Engine {
     /// version-chain prepend lands in the other, violating the chain's
     /// newest-first invariant that `handler_version_chain()` reports).
     ///
-    /// **Version chain in Phase 2b:** in-memory only. Phase 3 promotes this
-    /// to a durable `core::version::Anchor` + Version-Node chain so reload
-    /// audit survives engine restart.
+    /// **Version chain in Phase 2b (Compromise #18):** in-memory only.
+    /// The chain is a process-local `BTreeMap<HandlerId, Vec<Cid>>` that
+    /// is NOT written to redb; on `Engine::open` it starts empty
+    /// regardless of how many replace calls happened in the prior
+    /// process. Phase 3 lifts this to a durable
+    /// `core::version::Anchor` + Version-Node chain so reload audit
+    /// survives engine restart. See `docs/SECURITY-POSTURE.md`
+    /// "Compromise #18 — In-memory handler-version chain" for the
+    /// full narrative + sibling relationship to Compromise #17 (the
+    /// module-bytes registry; same Phase-3 promotion path, different
+    /// audit class).
     ///
     /// # Errors
     /// - [`EngineError::Invariant`] / [`EngineError::Other`] on the same
