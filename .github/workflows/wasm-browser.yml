@@ -107,38 +107,75 @@ jobs:
       - name: cargo check (wasm32 target compiles cleanly)
         run: cargo check -p benten-napi --target wasm32-unknown-unknown
 
-      - name: Build the wasm32-unknown-unknown library
-        # Phase-2b initial wire builds the `.wasm` library directly via
-        # cargo. wasm-pack / wasm-bindgen integration is a follow-up
-        # once napi-rs v3's wasm32-unknown-unknown packaging story is
-        # exercised end-to-end (the napi-rs build pipeline produces a
-        # `*.wasm` next to its node binary, which we'll surface as the
-        # bundle artifact). Until then, the cargo build + manual
-        # gzip + size cap is the load-bearing assertion.
+      - name: Install binaryen (wasm-opt)
+        # Used to post-process the wasm32-unknown-unknown bundle. The
+        # `release-wasm` Cargo profile already produces a small build
+        # (opt-z + lto=fat + panic=abort), but wasm-opt -Oz peels off
+        # another ~1.5KB by collapsing instruction patterns Cargo's
+        # llvm-pass can't see.
+        #
+        # Apt is faster than `npm i -g wasm-opt` and avoids dragging
+        # node into the toolchain.
+        run: sudo apt-get update -y && sudo apt-get install -y binaryen
+
+      - name: Build the wasm32-unknown-unknown library (release-wasm profile + wasm-opt)
+        # Uses the `release-wasm` profile (defined in workspace
+        # Cargo.toml) — opt-z + lto=fat + panic=abort. Native release
+        # stays on opt-3/lto=thin so criterion benches are unaffected.
+        # Post-process with wasm-opt -Oz before gzip for the final
+        # ~800-byte squeeze.
+        #
+        # Empirical numbers (from .addl/phase-2b/wave-8j-wasm-browser-bundle-bisect.md):
+        #   release             →  724,937 bytes gzipped
+        #   release-wasm        →  500,664 bytes gzipped
+        #   release-wasm + opt  →  499,195 bytes gzipped
         run: |
-          cargo build -p benten-napi --target wasm32-unknown-unknown --release
-          mkdir -p bindings/napi/dist/browser
-          # Locate the built .wasm — name varies by napi-rs build
-          # output ("benten_napi.wasm" or similar). Use a glob so we
-          # don't hard-code a name that drifts under napi-rs version
-          # bumps.
           set -euo pipefail
           shopt -s nullglob
-          built=( target/wasm32-unknown-unknown/release/*.wasm )
+          cargo build -p benten-napi --target wasm32-unknown-unknown --profile release-wasm
+          mkdir -p bindings/napi/dist/browser
+          built=( target/wasm32-unknown-unknown/release-wasm/*.wasm )
           if [ ${#built[@]} -eq 0 ]; then
-            echo "::error::no .wasm produced under target/wasm32-unknown-unknown/release/"
+            echo "::error::no .wasm produced under target/wasm32-unknown-unknown/release-wasm/"
             exit 1
           fi
           src="${built[0]}"
+          # wasm-opt's feature flags must match Cargo's wasm32-unknown-unknown
+          # feature set (multivalue, bulk-memory, reference-types,
+          # mutable-globals, sign-ext, nontrapping-float-to-int, extended-const).
+          # Without these flags wasm-opt rejects the input as containing
+          # unsupported opcodes.
+          wasm-opt -Oz "$src" -o "$src.opt" \
+            --enable-multivalue --enable-bulk-memory --enable-reference-types \
+            --enable-mutable-globals --enable-sign-ext --enable-nontrapping-float-to-int \
+            --enable-extended-const
+          mv "$src.opt" "$src"
           dst=bindings/napi/dist/browser/benten_engine.wasm
           cp "$src" "$dst"
           gzip -9 -k -f "$dst"
           ls -lah bindings/napi/dist/browser/
 
-      - name: Bundle size cap (wasm-r1-7 ≤500KB gzipped)
-        # The Rust integration test enforces the same cap; running it
-        # here in addition gives us a single workflow-step assertion
-        # that the cap is met on this build.
+      - name: Bundle size cap (wasm-r1-7 ≤600KB gzipped)
+        # 2b-frozen cap. The original `wasm-r1-7` recommendation was
+        # 500KB based on an aspirational estimate "engine + DSL +
+        # snapshot-blob backend, NO SANDBOX, NO wasmtime". The estimate
+        # didn't budget redb (the production backend `Engine` is
+        # hard-bound to in 2b — `crates/benten-engine/src/engine.rs:472`
+        # `pub(crate) backend: Arc<RedbBackend>`), nor budget napi-rs v3
+        # glue, nor budget the production STREAM/SUBSCRIBE runtime.
+        #
+        # Measured 2b ceiling: 499,195 bytes with the release-wasm
+        # profile + wasm-opt -Oz. Bumping to 614,400 (600KB) gives
+        # ~115KB headroom that absorbs realistic 2b residuals.
+        #
+        # Phase-3 follow-up: Engine genericism over backend → drop
+        # redb from the wasm32-unknown-unknown bundle (~150-200KB
+        # gzipped reduction). Re-tighten cap to ≤350KB at that point.
+        # Tracked as PHASE-3-BUNDLE-1.
+        #
+        # The Rust integration test
+        # `bindings/napi/tests/wasm32_unknown_unknown_bundle_size_under_threshold.rs`
+        # enforces the same cap; both numbers stay in sync.
         run: |
           set -euo pipefail
           bundle=bindings/napi/dist/browser/benten_engine.wasm.gz
@@ -147,9 +184,9 @@ jobs:
             exit 1
           fi
           size=$(wc -c < "$bundle")
-          echo "Bundle size: $size bytes (cap 512000 = 500KB gzipped)"
-          if [ "$size" -gt 512000 ]; then
-            echo "::error::bundle size $size exceeds wasm-r1-7 cap of 512000 bytes"
+          echo "Bundle size: $size bytes (cap 614400 = 600KB gzipped)"
+          if [ "$size" -gt 614400 ]; then
+            echo "::error::bundle size $size exceeds wasm-r1-7 cap of 614400 bytes (600KB)"
             exit 1
           fi
 

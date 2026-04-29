@@ -327,6 +327,30 @@ codegen-units = 1
 opt-level = 3
 strip = "symbols"
 
+# Size-optimized release profile for the wasm32-unknown-unknown browser
+# bundle (`bindings/napi/src/wasm_browser.rs`). Inherits from `release`
+# but flips opt-level to "z" + LTO fat + panic=abort to drop unwind
+# tables. Native release stays opt-3/lto=thin so the criterion benches
+# and library hot paths aren't slowed.
+#
+# Empirical effect on the wave-8 wasm32-unknown-unknown bundle (per
+# .addl/phase-2b/wave-8j-wasm-browser-bundle-bisect.md):
+#   - opt=3, lto=thin     →  724,937 bytes gzipped (current main)
+#   - opt=z, lto=fat      →  500,664 bytes gzipped
+#   - opt=z, lto=fat,
+#     post-process wasm-opt -Oz → 499,195 bytes gzipped
+#
+# Used by `.github/workflows/wasm-browser.yml` (cargo build with
+# `--profile release-wasm`). Native CI matrix continues to use the
+# default `release` profile.
+[profile.release-wasm]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+
 [profile.bench]
 lto = "thin"
 codegen-units = 1

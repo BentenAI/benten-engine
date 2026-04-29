@@ -1,8 +1,10 @@
-name: Bundle Size (browser, ≤500KB gzipped)
+name: Bundle Size (browser, ≤600KB gzipped)
 
 # Phase 2b R4-FP B-3 (red-phase) STUB. Pin source: plan §3.1 + r1-wasm-target.json
-# wasm-r1-7 (browser bundle MUST be ≤ 500KB gzipped). qa-r4-09 names this
-# as 1 of 3 missing workflow YAMLs.
+# wasm-r1-7 (browser bundle MUST be ≤ 600KB gzipped — was 500KB pre-wave-8j;
+# bumped per .addl/phase-2b/wave-8j-wasm-browser-bundle-bisect.md to reflect
+# the 2b-frozen "Engine hard-bound to RedbBackend" posture). qa-r4-09 names
+# this as 1 of 3 missing workflow YAMLs.
 #
 # Trigger discipline per METH-13: pull_request branches: [main] +
 # push branches: [main]. workflow_dispatch added for ad-hoc reruns.
@@ -11,7 +13,7 @@ name: Bundle Size (browser, ≤500KB gzipped)
 # Status (per ci-decisions-2026-04-22.md §4): INFORMATIONAL ONLY -- not
 # a member of the 5-required-check set. Reports current size + delta from
 # baseline; bundle-size REGRESSIONS appear as a PR comment / step summary
-# so reviewers can decide on the trade-off. The hard 500KB cap is the
+# so reviewers can decide on the trade-off. The hard 600KB cap is the
 # release-cadence wasm-browser.yml gate, not this per-PR informational
 # workflow.
 #
@@ -62,7 +64,7 @@ jobs:
       #   - read baseline from bindings/napi/dist/baseline.json
       #   - emit current_bytes + delta_bytes + delta_pct to step summary
       #   - if delta is regression, also post a PR comment
-      #   - exit 0 ALWAYS (informational; the 500KB hard cap lives in
+      #   - exit 0 ALWAYS (informational; the 600KB hard cap lives in
       #     wasm-browser.yml's release-cadence gate)
       - name: Placeholder — R5 (G10-A-browser) implementation pending
         shell: bash
@@ -78,7 +80,7 @@ jobs:
           echo "  - emit gzipped bundle to bindings/napi/dist/browser/"
           echo "  - measure current size; compare against baseline.json"
           echo "  - emit delta to step summary + PR comment if regression"
-          echo "  - exit 0 (informational; hard 500KB cap is in wasm-browser.yml)"
+          echo "  - exit 0 (informational; hard 600KB cap is in wasm-browser.yml)"
           echo ""
           echo "Status: INFORMATIONAL (not in the 5-required-check set)."
           exit 0

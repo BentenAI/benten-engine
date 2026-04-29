@@ -56,7 +56,27 @@ use std::path::PathBuf;
 /// Plan-pinned hard cap from wasm-r1-7. Tighter caps belong in
 /// per-bundle drift-detection (`bundle-size.yml`); this is the
 /// last-line defense.
-const BROWSER_BUNDLE_MAX_BYTES_GZIPPED: usize = 500 * 1024;
+///
+/// Updated to 600KB in wave-8j-ci-cleanup (was 500KB) to reflect the
+/// 2b-frozen "Engine hard-bound to RedbBackend" posture (per
+/// HANDOFF-2026-04-29-morning §4 row 1 — Arc<dyn KVBackend> refactor
+/// deferred to Phase 3). The original 500KB number was an aspirational
+/// estimate that didn't budget redb (~150-200KB gzipped contribution
+/// to the wasm32-unknown-unknown bundle), napi-rs v3 glue, or the
+/// production STREAM/SUBSCRIBE runtime. Measured 2b ceiling is
+/// 499,195 bytes with the `release-wasm` Cargo profile + wasm-opt
+/// -Oz post-process; bumping to 614,400 (600KB) gives ~115KB headroom
+/// that absorbs realistic wave-9 / phase-close residuals without
+/// abandoning the size-drift signal entirely.
+///
+/// Phase-3 follow-up: PHASE-3-BUNDLE-1 — Engine genericism over
+/// `KVBackend` lets the browser bundle substitute a `BrowserBackend`
+/// (in-RAM keyed map, no B-tree page store). Re-tighten the cap to
+/// ≤350KB (the original wasm-r1-7 spirit) once that lands.
+///
+/// See `.addl/phase-2b/wave-8j-wasm-browser-bundle-bisect.md` for the
+/// full bisect + diagnosis.
+const BROWSER_BUNDLE_MAX_BYTES_GZIPPED: usize = 600 * 1024;
 
 /// Dist directory the `wasm-browser.yml` workflow writes into.
 fn dist_dir() -> PathBuf {
