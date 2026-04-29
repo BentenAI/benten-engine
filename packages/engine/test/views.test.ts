@@ -91,21 +91,16 @@ describe("engine.registerUserView", () => {
     expect(resolved).toBe("B");
   });
 
-  it.skip("Phase 3 (post-G8-A TS engine-boundary error round-trip) — refuses strategy 'A' with typed error via engine boundary (D8)", async () => {
-    // BLOCKER (r6-napi-2 closure): The actual typed-error firing is
-    // covered Rust-side at
-    // crates/benten-engine/tests/user_view_strategy_refusals.rs (the
-    // `E_VIEW_STRATEGY_A_REFUSED` error fires from
-    // `Engine::register_user_view` BEFORE any subscriber side-effect).
-    // The original "in-memory backend pending" rationale is stale —
-    // `:memory:` IS routed at builder.rs:481-498 + works in
-    // sandbox.test.ts / stream.test.ts / snapshot_blob_round_trip.test.ts.
-    // The remaining TS-side gap: the napi error-mapping for the
-    // E_VIEW_STRATEGY_A_REFUSED variant doesn't yet round-trip the
-    // typed message (instance 8 NEW: mapNativeError doesn't read
-    // structured-context metadata). Named destination:
-    // `docs/future/phase-3-backlog.md` UserView.snapshot/onUpdate
-    // entry covers this surface together.
+  it("refuses strategy 'A' with typed error via engine boundary (D8)", async () => {
+    // R6 Round-2 r6-r2-napi-2 closure: the prior `.skip` cited
+    // Instance 8 (mapNativeError structured-context metadata) as the
+    // remaining blocker; Instance 8 IS LANDED at HEAD (engine_err
+    // emits `$$benten-context$$` sentinel; mapNativeError parses it
+    // via `splitContextSentinel`). The Rust-side coverage at
+    // `crates/benten-engine/tests/user_view_strategy_refusals.rs`
+    // pins the typed-error firing; this TS-side test pins the
+    // round-trip through the napi boundary using the
+    // `E_VIEW_STRATEGY_A_REFUSED` typed subclass.
     const engine = await Engine.open(":memory:");
 
     const badSpec = {
@@ -140,12 +135,11 @@ describe("engine.registerUserView", () => {
     expect(explicit).toBe("B");
   });
 
-  it.skip("Phase 3 (post-G8-A TS engine-boundary error round-trip) — refuses strategy 'C' as Phase-3 reserved via engine boundary", async () => {
-    // BLOCKER (r6-napi-2 closure): Same shape as the Strategy-'A'
-    // refusal test above — Rust-side coverage at
-    // crates/benten-engine/tests/user_view_strategy_refusals.rs.
-    // The TS-side gap is napi error-mapping round-trip (instance 8).
-    // Named destination: phase-3-backlog.md (Group 4 enrichment).
+  it("refuses strategy 'C' as Phase-3 reserved via engine boundary", async () => {
+    // R6 Round-2 r6-r2-napi-2 closure: same as Strategy-'A' refusal
+    // above. Instance 8 mapNativeError structured-context metadata
+    // round-trip is wired at HEAD; the prior `.skip` rationale is
+    // stale.
     const engine = await Engine.open(":memory:");
 
     const reservedSpec = {

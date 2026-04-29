@@ -263,12 +263,9 @@ impl ReloadSubscriberJs {
     #[napi]
     pub fn drain(&self) -> napi::Result<Vec<serde_json::Value>> {
         let g = self.inner.lock().map_err(poisoned)?;
-        let sub = g.as_ref().ok_or_else(|| {
-            napi::Error::new(
-                Status::GenericFailure,
-                "E_RELOAD_SUBSCRIBER_UNSUBSCRIBED: drain after unsubscribe",
-            )
-        })?;
+        let sub = g
+            .as_ref()
+            .ok_or_else(|| reload_subscriber_unsubscribed("drain"))?;
         Ok(sub.drain().into_iter().map(reload_event_to_json).collect())
     }
 
@@ -277,12 +274,9 @@ impl ReloadSubscriberJs {
     #[napi(js_name = "hasEvents")]
     pub fn has_events(&self) -> napi::Result<bool> {
         let g = self.inner.lock().map_err(poisoned)?;
-        let sub = g.as_ref().ok_or_else(|| {
-            napi::Error::new(
-                Status::GenericFailure,
-                "E_RELOAD_SUBSCRIBER_UNSUBSCRIBED: hasEvents after unsubscribe",
-            )
-        })?;
+        let sub = g
+            .as_ref()
+            .ok_or_else(|| reload_subscriber_unsubscribed("hasEvents"))?;
         Ok(sub.has_events())
     }
 
@@ -308,10 +302,34 @@ fn poisoned<T>(_: std::sync::PoisonError<T>) -> napi::Error {
     )
 }
 
+/// R6 Round-2 r6-r2-napi-1: typed `E_DEVSERVER_STOPPED` napi error.
+/// Promotes the prior hand-typed string literal to the catalog
+/// `ErrorCode::DevServerStopped` so JS callers get the typed
+/// `EDevServerStopped` BentenError subclass through `mapNativeError`
+/// rather than the synthetic `E_UNKNOWN` fallback.
 fn devserver_stopped() -> napi::Error {
     napi::Error::new(
         Status::GenericFailure,
-        "E_DEVSERVER_STOPPED: dev-server has been stopped — call .start() before further operations",
+        format!(
+            "{}: dev-server has been stopped — call .start() before further operations",
+            benten_errors::ErrorCode::DevServerStopped.as_static_str()
+        ),
+    )
+}
+
+/// R6 Round-2 r6-r2-napi-1: typed
+/// `E_RELOAD_SUBSCRIBER_UNSUBSCRIBED` napi error. Promotes the prior
+/// hand-typed string literal to the catalog
+/// `ErrorCode::ReloadSubscriberUnsubscribed` so JS callers get the
+/// typed `EReloadSubscriberUnsubscribed` BentenError subclass through
+/// `mapNativeError` rather than the synthetic `E_UNKNOWN` fallback.
+fn reload_subscriber_unsubscribed(operation: &str) -> napi::Error {
+    napi::Error::new(
+        Status::GenericFailure,
+        format!(
+            "{}: {operation} after unsubscribe",
+            benten_errors::ErrorCode::ReloadSubscriberUnsubscribed.as_static_str()
+        ),
     )
 }
 

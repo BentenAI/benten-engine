@@ -205,8 +205,8 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Message:** "SANDBOX nest depth {depth} exceeds configured max {max}"
 - **Context:** `{ node_id: NodeId, depth: number, max: number }`
 - **Fix:** Reduce SANDBOX nesting (a SANDBOX whose subgraph CALLs another handler that itself SANDBOXes counts toward the same depth at registration time per D20). Either flatten the call chain or increase `max_sandbox_nest_depth` via capability grant.
-- **Thrown at:** **Registration** (static SubgraphSpec analysis at `invariants::sandbox_depth::validate_registration`) — fully active. **Runtime** (TRANSFORM-computed SANDBOX targets at the `check_runtime_entry` site) — structurally plumbed but not transitively threaded through `ActiveCall` in production today (the `AttributionFrame.sandbox_depth: u8` field is constructed with literal `1` at every production site rather than `parent.sandbox_depth + 1`); the wave-8e item #11 carry-forward closes this with depth threading. See `docs/INVARIANT-COVERAGE.md` "Inv-4 + Inv-7 runtime arm status" honest disclosure.
-- **Phase:** 2b (G7-B Inv-4 registration arm; wave-8b structural plumbing of the runtime field; wave-8e #11 closes the runtime depth-threading)
+- **Thrown at:** **Registration** (static SubgraphSpec analysis at `invariants::sandbox_depth::validate_registration`) — fully active. **Runtime** — fully active at Phase 2b close (R6FP-G1 / PR #62, 3-lens convergent fix). `AttributionFrame.sandbox_depth` threads transitively through `ActiveCall` at `crates/benten-engine/src/primitive_host.rs:901` (`frame.sandbox_depth = frame.sandbox_depth.saturating_add(1)`); the dispatching frame is constructed with `sandbox_depth: nested_depth` in both match arms (`primitive_host.rs:911, 917`) so SANDBOX-inside-CALL-inside-SANDBOX inherits the parent's depth. See `docs/INVARIANT-COVERAGE.md` §"Inv-4 + Inv-7 runtime arm status" for the wiring trace.
+- **Phase:** 2b (G7-B Inv-4 registration arm; wave-8b structural plumbing of the runtime field; R6FP-G1 / PR #62 closes the runtime depth-threading)
 
 ### E_INV_SANDBOX_OUTPUT
 
@@ -219,15 +219,13 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED
 
-<!-- reachability: ignore -->
-
-> **⚠️ Runtime arm gated on Inv-4 depth-threading (wave-8e item #11 carry-forward).** The eval-side `SandboxError::NestedDispatchDepthExceeded` typed variant is plumbed end-to-end (`SandboxError::code()` → `ErrorCode::SandboxNestedDispatchDepthExceeded`) but the depth-saturation check requires `AttributionFrame.sandbox_depth` to thread transitively across nested SANDBOX entries. Production sites construct frames with literal `1` today; the saturation check therefore cannot fire from a runtime nested SANDBOX dispatch chain. Registration-time over-deep nesting fires `E_INV_SANDBOX_DEPTH` instead. Reachability returns when wave-8e item #11 lands the threading.
+> **Runtime arm wired at R6FP-G1 (PR #62).** The eval-side `SandboxError::NestedDispatchDepthExceeded` typed variant fires at `crates/benten-eval/src/primitives/sandbox.rs:362-366` once `attribution.sandbox_depth > config.max_nest_depth`. `AttributionFrame.sandbox_depth` threads transitively across nested SANDBOX entries via the parent `ActiveCall` (PR #62 3-lens convergent fix; see Inv-4 honest-disclosure block in `docs/SECURITY-POSTURE.md`). Both this typed error AND `E_INV_SANDBOX_DEPTH` (registration arm) are now active at Phase 2b close. The ESC-10 adversarial integration test stays `#[ignore]`'d pending the `testing_call_engine_dispatch` host-fn helper per `docs/future/phase-3-backlog.md` §7.3.A.7 — the runtime defense is wired; only the adversarial-test driver is paper-only.
 
 - **Message:** "SANDBOX nested-dispatch depth saturated at {depth} (configured max {max})"
 - **Context:** `{ node_id: NodeId, depth: number, max: number, saturation: "u8_ceiling" | "configured_max" }`
-- **Fix:** SANDBOX nest-depth saturation overflow distinct from `E_INV_SANDBOX_DEPTH`. Two saturation paths fire this code (once depth-threading lands): the `sandbox_depth: u8` counter saturates at `u8::MAX` (type-level ceiling — extremely deep CALL chains) and the configured `max_sandbox_nest_depth` boundary (capability-grant ceiling). Either case fires this typed error rather than wrapping silently. Reduce nesting per the same guidance as `E_INV_SANDBOX_DEPTH`; if hitting the u8 ceiling, the call topology is almost certainly accidentally recursive and needs structural redesign rather than a higher cap.
-- **Thrown at:** Evaluation (saturation point at the SANDBOX entry — the counter-saturation check fires before the inner subgraph starts executing). Runtime arm reaches its production firing site once wave-8e item #11 threads `sandbox_depth` through `ActiveCall`.
-- **Phase:** 2b (G7-B Inv-4 enforcement plumbing; wave-8e #11 lands the runtime threading)
+- **Fix:** SANDBOX nest-depth saturation overflow distinct from `E_INV_SANDBOX_DEPTH`. Two saturation paths fire this code: the `sandbox_depth: u8` counter saturates at `u8::MAX` (type-level ceiling — extremely deep CALL chains) and the configured `max_sandbox_nest_depth` boundary (capability-grant ceiling). Either case fires this typed error rather than wrapping silently. Reduce nesting per the same guidance as `E_INV_SANDBOX_DEPTH`; if hitting the u8 ceiling, the call topology is almost certainly accidentally recursive and needs structural redesign rather than a higher cap.
+- **Thrown at:** Evaluation (saturation point at the SANDBOX entry — the counter-saturation check fires before the inner subgraph starts executing). Runtime firing site at `crates/benten-eval/src/primitives/sandbox.rs:362`.
+- **Phase:** 2b (G7-B Inv-4 enforcement plumbing; R6FP-G1 / PR #62 lands the runtime threading)
 
 ### E_IVM_VIEW_STALE
 
@@ -893,6 +891,28 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Fix:** SANDBOX requires wasmtime, which does not compile to `wasm32-unknown-unknown` (browser target) and is not currently shipped on `wasm32-wasip1` engine builds either. The engine surfaces this typed error rather than `E_SUBSYSTEM_DISABLED` because the operator-actionable signal is target-specific: SANDBOX cannot run here, regardless of build flags. Phase-3 P2P sync re-routes SANDBOX invocations to a non-browser peer; until then, host SANDBOX-bearing handlers on a native `Engine::open(path)` engine and surface their results through SUBSCRIBE / STREAM to the wasm32-hosted client.
 - **Thrown at:** `crates/benten-engine/src/engine_sandbox.rs::execute_sandbox_wasm32_unavailable` (wasm32 cfg-gated stub) and the SANDBOX dispatcher path in `crates/benten-eval/src/primitives/mod.rs` when reached on a wasm32 target.
 - **Phase:** 2b wave-8c
+
+### E_RELOAD_SUBSCRIBER_UNSUBSCRIBED
+
+<!-- reachability: ignore -->
+<!-- Rationale: construction site lives in `bindings/napi/src/devserver.rs::reload_subscriber_unsubscribed` (napi tooling adapter). The drift detector's reachability scanner walks `crates/*/src/` only, so a napi-side construction is a structural false negative. Remove this annotation if the scanner is widened to include `bindings/*/src/` (a Phase-3 detector improvement). -->
+
+- **Message:** "{operation} after unsubscribe"
+- **Context:** `{ operation: "drain" | "hasEvents" }`
+- **Fix:** A `ReloadSubscriberJs` napi method (`drain` / `hasEvents`) was called after `unsubscribe()` released the underlying subscriber. The handle is single-shot; recreate the subscription via `devserver.subscribeReloadEvents()` if more events are expected.
+- **Thrown at:** `bindings/napi/src/devserver.rs::ReloadSubscriberJs::{drain, has_events}` after `unsubscribe()` flips the inner `Mutex<Option<...>>` to `None`. R6 Round-2 r6-r2-napi-1 promoted this from a hand-typed `"E_RELOAD_SUBSCRIBER_UNSUBSCRIBED"` string to a typed catalog variant so JS callers get `EReloadSubscriberUnsubscribed` typed dispatch through `mapNativeError` rather than the synthetic `E_UNKNOWN` fallback.
+- **Phase:** 2b R6 Round-2
+
+### E_DEVSERVER_STOPPED
+
+<!-- reachability: ignore -->
+<!-- Rationale: construction site lives in `bindings/napi/src/devserver.rs::devserver_stopped` (napi tooling adapter). Same scanner asymmetry as E_RELOAD_SUBSCRIBER_UNSUBSCRIBED above. Remove this annotation if the scanner is widened to include `bindings/*/src/`. -->
+
+- **Message:** "dev-server has been stopped — call .start() before further operations"
+- **Context:** `{}`
+- **Fix:** A devserver napi method was called after `DevServer.stop()` flipped the in-memory state to stopped. Restart the dev-server via `.start()` before invoking further operations, or construct a fresh `DevServer` instance.
+- **Thrown at:** `bindings/napi/src/devserver.rs::devserver_stopped` (helper used by every devserver method that requires the dev-server to be running). R6 Round-2 r6-r2-napi-1 promoted this from a hand-typed `"E_DEVSERVER_STOPPED"` string to a typed catalog variant so JS callers get `EDevServerStopped` typed dispatch.
+- **Phase:** 2b R6 Round-2
 
 ## Extending the catalog
 

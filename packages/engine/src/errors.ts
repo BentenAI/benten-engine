@@ -84,6 +84,7 @@ export {
   EWaitSignalShapeMismatch,
   EWaitTimeout,
   EWriteConflict,
+  EModuleManifestCidMismatch,
 } from "./errors.generated.js";
 
 import {
@@ -156,6 +157,7 @@ import {
   EWaitSignalShapeMismatch,
   EWaitTimeout,
   EWriteConflict,
+  EModuleManifestCidMismatch,
 } from "./errors.generated.js";
 
 // ---------------------------------------------------------------------------
@@ -239,6 +241,14 @@ const CODE_TO_CTOR: Record<string, BentenErrorCtor> = {
   E_CAP_CHAIN_TOO_DEEP: ECapChainTooDeep,
   E_CAP_SCOPE_LONE_STAR_REJECTED: ECapScopeLoneStarRejected,
   E_WAIT_SIGNAL_SHAPE_MISMATCH: EWaitSignalShapeMismatch,
+  // R6 Round-2 r6-r2-napi-3 (Instance 8 round-trip pin) — added so
+  // the engine_err sentinel pipeline maps cleanly to the typed
+  // subclass for the install_module CID-mismatch surface. Broader
+  // CODE_TO_CTOR completeness — many codegen'd subclasses are not
+  // yet listed here — tracked in
+  // `docs/future/phase-3-backlog.md` §7.6 (CODE_TO_CTOR codegen
+  // completeness) as a Phase-3 codegen lift.
+  E_MODULE_MANIFEST_CID_MISMATCH: EModuleManifestCidMismatch,
 };
 
 // Match-at-any-position regex for a stable `E_*` code. Codes look like

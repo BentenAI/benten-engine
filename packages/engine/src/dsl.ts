@@ -280,7 +280,17 @@ export class SubgraphBuilder {
     return this.addNode("respond", { ...args } as Record<string, JsonValue>);
   }
   public emit(args: EmitArgs): this {
-    return this.addNode("emit", { ...args } as Record<string, JsonValue>);
+    // R6 Round-2 r6-r2-mpc-1 fix-pass: the eval-side EMIT executor at
+    // `crates/benten-eval/src/primitives/emit.rs:41` reads the `channel`
+    // property; the public DSL `EmitArgs.event` field maps onto that
+    // property name. Pre-fix the spread set `event: ...` and the EMIT
+    // primitive silently dropped the publish (no `channel` property →
+    // `host.emit_event(...)` never fired).
+    const props: Record<string, JsonValue> = { channel: args.event };
+    if (args.payload !== undefined) {
+      props.payload = args.payload;
+    }
+    return this.addNode("emit", props);
   }
 
   // Phase 2a G3-B (dx-r1-8): WAIT accepts either a signal-keyed form or the
@@ -501,7 +511,15 @@ export class CaseBuilder {
     return this.addNode("respond", { ...a } as Record<string, JsonValue>);
   }
   public emit(a: EmitArgs): this {
-    return this.addNode("emit", { ...a } as Record<string, JsonValue>);
+    // R6 Round-2 r6-r2-mpc-1 fix-pass: map `EmitArgs.event` onto the
+    // `channel` property the eval-side EMIT executor reads. See the
+    // sibling builder's `emit()` method earlier in this file for the
+    // full rationale.
+    const props: Record<string, JsonValue> = { channel: a.event };
+    if (a.payload !== undefined) {
+      props.payload = a.payload;
+    }
+    return this.addNode("emit", props);
   }
   public wait(a: WaitArgs): this {
     const s = a as { signal?: string; duration?: string };

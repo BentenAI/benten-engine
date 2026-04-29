@@ -129,6 +129,8 @@ export const CATALOG_CODES = [
   "E_ENGINE_CONFIG_INVALID",
   "E_BACKEND_READ_ONLY",
   "E_SANDBOX_UNAVAILABLE_ON_WASM",
+  "E_RELOAD_SUBSCRIBER_UNSUBSCRIBED",
+  "E_DEVSERVER_STOPPED",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -421,7 +423,7 @@ export class EWriteConflict extends BentenError {
 /**
  * E_INV_SANDBOX_DEPTH
  *
- * Thrown at: **Registration** (static SubgraphSpec analysis at `invariants::sandbox_depth::validate_registration`) — fully active. **Runtime** (TRANSFORM-computed SANDBOX targets at the `check_runtime_entry` site) — structurally plumbed but not transitively threaded through `ActiveCall` in production today (the `AttributionFrame.sandbox_depth: u8` field is constructed with literal `1` at every production site rather than `parent.sandbox_depth + 1`); the wave-8e item #11 carry-forward closes this with depth threading. See `docs/INVARIANT-COVERAGE.md` "Inv-4 + Inv-7 runtime arm status" honest disclosure.
+ * Thrown at: **Registration** (static SubgraphSpec analysis at `invariants::sandbox_depth::validate_registration`) — fully active. **Runtime** — fully active at Phase 2b close (R6FP-G1 / PR #62, 3-lens convergent fix). `AttributionFrame.sandbox_depth` threads transitively through `ActiveCall` at `crates/benten-engine/src/primitive_host.rs:901` (`frame.sandbox_depth = frame.sandbox_depth.saturating_add(1)`); the dispatching frame is constructed with `sandbox_depth: nested_depth` in both match arms (`primitive_host.rs:911, 917`) so SANDBOX-inside-CALL-inside-SANDBOX inherits the parent's depth. See `docs/INVARIANT-COVERAGE.md` §"Inv-4 + Inv-7 runtime arm status" for the wiring trace.
  * Message template: "SANDBOX nest depth {depth} exceeds configured max {max}"
  */
 export class EInvSandboxDepth extends BentenError {
@@ -451,14 +453,14 @@ export class EInvSandboxOutput extends BentenError {
 /**
  * E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED
  *
- * Thrown at: Evaluation (saturation point at the SANDBOX entry — the counter-saturation check fires before the inner subgraph starts executing). Runtime arm reaches its production firing site once wave-8e item #11 threads `sandbox_depth` through `ActiveCall`.
+ * Thrown at: Evaluation (saturation point at the SANDBOX entry — the counter-saturation check fires before the inner subgraph starts executing). Runtime firing site at `crates/benten-eval/src/primitives/sandbox.rs:362`.
  * Message template: "SANDBOX nested-dispatch depth saturated at {depth} (configured max {max})"
  */
 export class ESandboxNestedDispatchDepthExceeded extends BentenError {
   static readonly code = "E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED";
-  static readonly fixHint = "SANDBOX nest-depth saturation overflow distinct from `E_INV_SANDBOX_DEPTH`. Two saturation paths fire this code (once depth-threading lands): the `sandbox_depth: u8` counter saturates at `u8::MAX` (type-level ceiling — extremely deep CALL chains) and the configured `max_sandbox_nest_depth` boundary (capability-grant ceiling). Either case fires this typed error rather than wrapping silently. Reduce nesting per the same guidance as `E_INV_SANDBOX_DEPTH`; if hitting the u8 ceiling, the call topology is almost certainly accidentally recursive and needs structural redesign rather than a higher cap.";
+  static readonly fixHint = "SANDBOX nest-depth saturation overflow distinct from `E_INV_SANDBOX_DEPTH`. Two saturation paths fire this code: the `sandbox_depth: u8` counter saturates at `u8::MAX` (type-level ceiling — extremely deep CALL chains) and the configured `max_sandbox_nest_depth` boundary (capability-grant ceiling). Either case fires this typed error rather than wrapping silently. Reduce nesting per the same guidance as `E_INV_SANDBOX_DEPTH`; if hitting the u8 ceiling, the call topology is almost certainly accidentally recursive and needs structural redesign rather than a higher cap.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED", "SANDBOX nest-depth saturation overflow distinct from `E_INV_SANDBOX_DEPTH`. Two saturation paths fire this code (once depth-threading lands): the `sandbox_depth: u8` counter saturates at `u8::MAX` (type-level ceiling — extremely deep CALL chains) and the configured `max_sandbox_nest_depth` boundary (capability-grant ceiling). Either case fires this typed error rather than wrapping silently. Reduce nesting per the same guidance as `E_INV_SANDBOX_DEPTH`; if hitting the u8 ceiling, the call topology is almost certainly accidentally recursive and needs structural redesign rather than a higher cap.", message, context);
+    super("E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED", "SANDBOX nest-depth saturation overflow distinct from `E_INV_SANDBOX_DEPTH`. Two saturation paths fire this code: the `sandbox_depth: u8` counter saturates at `u8::MAX` (type-level ceiling — extremely deep CALL chains) and the configured `max_sandbox_nest_depth` boundary (capability-grant ceiling). Either case fires this typed error rather than wrapping silently. Reduce nesting per the same guidance as `E_INV_SANDBOX_DEPTH`; if hitting the u8 ceiling, the call topology is almost certainly accidentally recursive and needs structural redesign rather than a higher cap.", message, context);
     this.name = "ESandboxNestedDispatchDepthExceeded";
   }
 }
@@ -1570,5 +1572,35 @@ export class ESandboxUnavailableOnWasm extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_SANDBOX_UNAVAILABLE_ON_WASM", "SANDBOX requires wasmtime, which does not compile to `wasm32-unknown-unknown` (browser target) and is not currently shipped on `wasm32-wasip1` engine builds either. The engine surfaces this typed error rather than `E_SUBSYSTEM_DISABLED` because the operator-actionable signal is target-specific: SANDBOX cannot run here, regardless of build flags. Phase-3 P2P sync re-routes SANDBOX invocations to a non-browser peer; until then, host SANDBOX-bearing handlers on a native `Engine::open(path)` engine and surface their results through SUBSCRIBE / STREAM to the wasm32-hosted client.", message, context);
     this.name = "ESandboxUnavailableOnWasm";
+  }
+}
+
+/**
+ * E_RELOAD_SUBSCRIBER_UNSUBSCRIBED
+ *
+ * Thrown at: `bindings/napi/src/devserver.rs::ReloadSubscriberJs::{drain, has_events}` after `unsubscribe()` flips the inner `Mutex<Option<...>>` to `None`. R6 Round-2 r6-r2-napi-1 promoted this from a hand-typed `"E_RELOAD_SUBSCRIBER_UNSUBSCRIBED"` string to a typed catalog variant so JS callers get `EReloadSubscriberUnsubscribed` typed dispatch through `mapNativeError` rather than the synthetic `E_UNKNOWN` fallback.
+ * Message template: "{operation} after unsubscribe"
+ */
+export class EReloadSubscriberUnsubscribed extends BentenError {
+  static readonly code = "E_RELOAD_SUBSCRIBER_UNSUBSCRIBED";
+  static readonly fixHint = "A `ReloadSubscriberJs` napi method (`drain` / `hasEvents`) was called after `unsubscribe()` released the underlying subscriber. The handle is single-shot; recreate the subscription via `devserver.subscribeReloadEvents()` if more events are expected.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_RELOAD_SUBSCRIBER_UNSUBSCRIBED", "A `ReloadSubscriberJs` napi method (`drain` / `hasEvents`) was called after `unsubscribe()` released the underlying subscriber. The handle is single-shot; recreate the subscription via `devserver.subscribeReloadEvents()` if more events are expected.", message, context);
+    this.name = "EReloadSubscriberUnsubscribed";
+  }
+}
+
+/**
+ * E_DEVSERVER_STOPPED
+ *
+ * Thrown at: `bindings/napi/src/devserver.rs::devserver_stopped` (helper used by every devserver method that requires the dev-server to be running). R6 Round-2 r6-r2-napi-1 promoted this from a hand-typed `"E_DEVSERVER_STOPPED"` string to a typed catalog variant so JS callers get `EDevServerStopped` typed dispatch.
+ * Message template: "dev-server has been stopped — call .start() before further operations"
+ */
+export class EDevserverStopped extends BentenError {
+  static readonly code = "E_DEVSERVER_STOPPED";
+  static readonly fixHint = "A devserver napi method was called after `DevServer.stop()` flipped the in-memory state to stopped. Restart the dev-server via `.start()` before invoking further operations, or construct a fresh `DevServer` instance.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_DEVSERVER_STOPPED", "A devserver napi method was called after `DevServer.stop()` flipped the in-memory state to stopped. Restart the dev-server via `.start()` before invoking further operations, or construct a fresh `DevServer` instance.", message, context);
+    this.name = "EDevserverStopped";
   }
 }

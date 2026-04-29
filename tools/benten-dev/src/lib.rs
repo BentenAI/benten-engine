@@ -392,7 +392,7 @@ impl DevServer {
     }
 
     /// R6FP-tail (Round-2 Instance 10) — replace a handler from DSL +
-    /// return the full structured [`RegisterReplaceOutcome`] when
+    /// return the full structured [`benten_engine::RegisterReplaceOutcome`] when
     /// engine routing is enabled.
     ///
     /// Pre-Instance-10 the dev-server's replace path returned only the

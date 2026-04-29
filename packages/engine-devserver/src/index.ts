@@ -19,6 +19,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { createRequire } from "node:module";
 
+import { mapNativeError } from "@benten/engine/errors";
+
 // ---------------------------------------------------------------------------
 // Native binding shape
 // ---------------------------------------------------------------------------
@@ -247,7 +249,11 @@ export class BentenDevServer {
     op: string,
     source: string,
   ): Promise<string> {
-    return this.inner.registerHandlerFromDsl(handlerId, op, source);
+    try {
+      return this.inner.registerHandlerFromDsl(handlerId, op, source);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
   }
 
   /**
@@ -263,7 +269,11 @@ export class BentenDevServer {
     op: string,
     source: string,
   ): Promise<string> {
-    return this.inner.replaceHandlerFromDsl(handlerId, op, source);
+    try {
+      return this.inner.replaceHandlerFromDsl(handlerId, op, source);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
   }
 
   /**
@@ -302,7 +312,12 @@ export class BentenDevServer {
       // Pre-Instance-10 native binding lacks the structured surface;
       // fall back to the bare-CID surface + lift it into the partial
       // shape so callers can pivot on `legacyOnly` consistently.
-      const cid = this.inner.replaceHandlerFromDsl(handlerId, op, source);
+      let cid: string;
+      try {
+        cid = this.inner.replaceHandlerFromDsl(handlerId, op, source);
+      } catch (err) {
+        throw mapNativeError(err);
+      }
       return {
         handlerId,
         cid,
@@ -312,11 +327,12 @@ export class BentenDevServer {
         replaced: false,
       };
     }
-    const raw = this.inner.replaceHandlerFromDslWithOutcome(
-      handlerId,
-      op,
-      source,
-    );
+    let raw: unknown;
+    try {
+      raw = this.inner.replaceHandlerFromDslWithOutcome(handlerId, op, source);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
     if (
       raw &&
       typeof raw === "object" &&

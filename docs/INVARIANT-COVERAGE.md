@@ -19,7 +19,7 @@ status" section below). The two Phase-1 stubs are now removed.
 | 1 | DAG-ness — no cycles in operation graphs | 1 | `benten-eval::invariants::structural::validate_at_registration` (Kahn cycle detect) | `crates/benten-eval/src/invariants/structural.rs` (cycle test cluster) |
 | 2 | Max operation-subgraph depth | 1 | Bounded longest-path walk + per-CALL increment | `structural.rs::depth_*` tests |
 | 3 | Max fan-out per node | 1 | Edge enumeration at registration | `structural.rs::fan_out_*` tests |
-| 4 | **SANDBOX nest-depth ceiling — ACTIVE (Phase 2b G7-B / wave-8b / D20)** | 2b | `invariants::sandbox_depth::validate_registration` (registration); `AttributionFrame.sandbox_depth: u8` field + `SandboxError::NestedDispatchDepthExceeded` plumbing (runtime — see honest disclosure below) | `crates/benten-eval/tests/inv_4_*.rs`, `crates/benten-engine/tests/inv_4_*.rs`, `tests/sandbox_depth_inheritance_through_call.rs` |
+| 4 | **SANDBOX nest-depth ceiling — ACTIVE (Phase 2b G7-B / wave-8b / D20; both arms wired at R6FP-G1 / PR #62)** | 2b | `invariants::sandbox_depth::validate_registration` (registration); `AttributionFrame.sandbox_depth` runtime threading at `primitive_host.rs:901` (parent-sandbox_depth+1) + `SandboxError::NestedDispatchDepthExceeded` fires at `primitives/sandbox.rs:362` (runtime arm — both arms now active) | `crates/benten-eval/tests/inv_4_*.rs`, `crates/benten-engine/tests/inv_4_*.rs`, `tests/sandbox_depth_inheritance_through_call.rs` |
 | 5 | Max total nodes per subgraph | 1 | Node-count gate at registration | `structural.rs::node_count_*` tests |
 | 6 | Max total edges per subgraph | 1 | Edge-count gate at registration | `structural.rs::edge_count_*` tests |
 | 7 | **SANDBOX `output_max_bytes` range — ACTIVE (Phase 2b G7-B / wave-8b / D15 + D17 PRIMARY+BACKSTOP)** | 2b | `invariants::sandbox_output::validate_registration` (registration); `CountedSink::write` (PRIMARY streaming) + `CountedSink::backstop_check` (return-value BACKSTOP), both wired through wave-8b's host-fn trampoline + primitive boundary | `crates/benten-eval/tests/inv_7_*.rs`, `crates/benten-engine/tests/inv_7_*.rs`, `crates/benten-eval/src/sandbox/counted_sink.rs` |
@@ -38,8 +38,9 @@ status" section below). The two Phase-1 stubs are now removed.
 Phase 1 shipped Inv-4 + Inv-7 as **stubs** because the SANDBOX primitive
 itself was compile-check only (Compromise #4 in
 `docs/SECURITY-POSTURE.md`). Phase 2b G7-B added the registration-time
-arms; waves 8b + 8h wired the runtime executor end-to-end. The two
-runtime arms landed asymmetrically — Inv-7 fully, Inv-4 partially:
+arms; waves 8b + 8h wired the runtime executor end-to-end. R6FP Round-1
+Group-1 (PR #62, 3-lens convergent fix) closed the remaining transitive
+threading gap. Both runtime arms are fully active at Phase 2b close:
 
 - **Inv-7 (SANDBOX `output_max_bytes` range)** — **fully active at
   runtime.** The wave-8b host-fn trampoline routes every host-fn
@@ -54,28 +55,25 @@ runtime arms landed asymmetrically — Inv-7 fully, Inv-4 partially:
   `SandboxError::OutputOverflow` mapping. Both paths produce
   `E_INV_SANDBOX_OUTPUT` typed errors with identical context shapes.
 
-- **Inv-4 (SANDBOX nest-depth ceiling)** — **registration arm fully
-  active; runtime arm structurally plumbed but not transitively
-  threaded.** The `AttributionFrame.sandbox_depth: u8` field exists and
-  is constructed at every production SANDBOX entry, but its value is
-  literal `1` at every site rather than `parent.sandbox_depth + 1`
-  (`crates/benten-engine/src/primitive_host.rs:870, 876`). The depth
-  threading through `ActiveCall` (so a SANDBOX-inside-CALL-inside-SANDBOX
-  inherits the parent's depth) is the wave-8e item #11 carry-forward and
-  is bounded structural work — not a Phase-3 deferral, just unfinished
-  plumbing within the wave-8 envelope. The
-  `invariants::sandbox_depth::check_runtime_entry` and `propagate_through_call`
-  helpers exist and are unit-tested but have zero production callers
-  (verified by grep across the workspace). Consequence: the
-  registration-time static-graph walk catches over-deep SANDBOX nesting
-  declared in a SubgraphSpec; runtime escape via TRANSFORM-computed
-  SANDBOX targets that exceed the ceiling at execution time is NOT
-  caught today. Mitigation: SANDBOX nest-depth ceiling defaults to 3, and
-  the registration-time arm covers the static-graph attack surface
-  (which is the dominant path for declared handlers); the runtime arm
-  closes a narrower attack vector (TRANSFORM-built SANDBOX module
-  references that exceed the ceiling) which lands as part of the
-  wave-8e/Phase-2b-close residual.
+- **Inv-4 (SANDBOX nest-depth ceiling)** — **both arms fully active at
+  Phase 2b close.** (1) Registration arm: `validate_registration` walks
+  the static-graph at registration time. (2) Runtime arm: R6FP-G1 (PR
+  #62) wired the `AttributionFrame.sandbox_depth` threading through the
+  parent `ActiveCall`. At every production SANDBOX entry,
+  `crates/benten-engine/src/primitive_host.rs:901` mutates the parent
+  frame via `frame.sandbox_depth = frame.sandbox_depth.saturating_add(1)`;
+  the dispatching `AttributionFrame` is constructed with `sandbox_depth:
+  nested_depth` in both match arms (`primitive_host.rs:911, 917`) so
+  subsequent CALL pushes inherit. The eval-side runtime arm at
+  `crates/benten-eval/src/primitives/sandbox.rs:362-366` fires
+  `SandboxError::NestedDispatchDepthExceeded` once `attribution.sandbox_depth
+  > config.max_nest_depth`. Default `max_nest_depth = 4` admits depths
+  1..=4; depth 5 fires. SANDBOX-inside-CALL-inside-SANDBOX inherits the
+  parent's depth correctly. Carry-forward residual: the ESC-10
+  adversarial integration test (`sandbox_escape_attempts_denied.rs::sandbox_escape_reentrancy_via_host_fn_denied`)
+  stays `#[ignore]`'d pending the `testing_call_engine_dispatch` host-fn
+  helper per `docs/future/phase-3-backlog.md` §7.3.A.7. The runtime arm
+  is wired; only the adversarial-test driver is paper-only.
 
 Both invariants fire as `E_INV_SANDBOX_DEPTH` (Inv-4) and
 `E_INV_SANDBOX_OUTPUT` (Inv-7) error codes — both pinned in
@@ -93,7 +91,7 @@ have been removed; Inv-4 + Inv-7 are now first-class active rows.
 ┌────────────────────────────────────────┬─────────────────────────────────────────┐
 │ Registration-time (one-shot)           │ Runtime-time (per-call, per-frame)      │
 ├────────────────────────────────────────┼─────────────────────────────────────────┤
-│ Inv-1 DAG-ness                         │ Inv-4 sandbox_depth runtime counter*    │
+│ Inv-1 DAG-ness                         │ Inv-4 sandbox_depth runtime counter     │
 │ Inv-2 max depth                        │ Inv-7 sandbox_output CountedSink        │
 │ Inv-3 fan-out                          │ Inv-8 BudgetTracker step gate           │
 │ Inv-4 sandbox_depth declaration        │ Inv-13 WriteAuthority firing matrix     │
@@ -107,11 +105,9 @@ have been removed; Inv-4 + Inv-7 are now first-class active rows.
 │ Inv-14 ATTRIBUTION_PROPERTY_KEY decl   │                                         │
 └────────────────────────────────────────┴─────────────────────────────────────────┘
 
-* Inv-4 runtime counter is structurally plumbed (`AttributionFrame.sandbox_depth: u8`)
-  but the depth-threading through ActiveCall is the wave-8e item #11
-  carry-forward — production sites construct frames with literal `1` rather
-  than `parent.sandbox_depth + 1`. Runtime arm partial; registration arm
-  fully active. See §"Inv-4 + Inv-7 runtime arm status" above.
+* Inv-4 runtime counter — fully wired at R6FP-G1 (PR #62). Both
+  registration arm + runtime arm are active at Phase 2b close. See
+  §"Inv-4 + Inv-7 runtime arm status" above for the wiring trace.
 ```
 
 ---

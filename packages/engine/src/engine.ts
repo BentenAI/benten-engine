@@ -177,19 +177,21 @@ interface NativeEngine {
     actor: string,
     callback?: (seq: number, payload: Buffer) => void,
   ) => NativeSubscriptionJs;
-  // R6-FP — EMIT broadcast subscription. Mirrors `onChange` but routes
-  // through the engine's dedicated EmitBroadcast (see
-  // crates/benten-engine/src/emit_broadcast.rs). Wired by R6-FP Group 1
-  // (napi class) + Group 2 (TS surface) to close r6-mpc-2 (the wave-8h
-  // audit-gap fix's missing JS-layer consumer).
+  // R6-FP + R6 Round-2 r6-r2-mpc-1 — EMIT broadcast subscription.
+  // Mirrors `onChange` but routes through the engine's dedicated
+  // EmitBroadcast (see crates/benten-engine/src/emit_broadcast.rs).
+  // Wired by R6-FP Group 1 (napi `EmitSubscriptionJs` class) + R6 R2
+  // r6-r2-mpc-1 (this `onEmit` Engine method) to close r6-mpc-2 (the
+  // wave-8h audit-gap fix's missing JS-layer consumer).
   //
-  // Optional on the type so older napi cdylib builds (pre-R6-FP) still
-  // type-check; the wrapper falls back to a typed E_PRIMITIVE_NOT_IMPLEMENTED
-  // if the symbol is absent so consumers get an actionable error rather
-  // than `TypeError: undefined is not a function`.
+  // Optional on the type so older napi cdylib builds (pre-R6 R2) still
+  // type-check; the wrapper falls back to a typed EDslInvalidShape
+  // ("rebuild your binding") if the symbol is absent so consumers get
+  // an actionable error rather than `TypeError: undefined is not a
+  // function`.
   onEmit?: (
     channel: string,
-    callback?: (channel: string, payloadJson: string) => void,
+    callback: (channel: string, payloadJson: string) => void,
   ) => NativeEmitSubscriptionJs;
   // Phase 2b wave-8c — module-manifest lifecycle bridges.
   installModule?: (manifestJson: unknown, expectedCid: string) => string;
@@ -1149,7 +1151,11 @@ export class Engine {
       // The Rust side enforces the typed E_VIEW_STRATEGY_A_REFUSED /
       // E_VIEW_STRATEGY_C_RESERVED errors; we forward the strategy
       // string verbatim so the engine boundary owns the policy.
-      native(userViewSpecToNativeJson(spec));
+      // R6 Round-2 r6-r2-napi-2: bind `native` to `this.inner` —
+      // napi-rs class methods require the napi class instance as
+      // `this`; calling the bare reference throws "Illegal
+      // invocation" before the typed-error guard fires.
+      native.call(this.inner, userViewSpecToNativeJson(spec));
     } catch (err) {
       throw mapNativeError(err);
     }

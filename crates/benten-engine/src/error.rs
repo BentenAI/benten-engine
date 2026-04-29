@@ -316,3 +316,79 @@ impl EngineError {
         self.error_code().routed_edge_label()
     }
 }
+
+#[cfg(test)]
+mod context_json_tests {
+    //! R6 Round-2 r6-r2-napi-3: unit pins for
+    //! [`EngineError::context_json`] across representative variants.
+    //! Guards against the bag-of-fields shape (Instance 8 contract)
+    //! collapsing back to Display-only formatting in a future
+    //! regression. The TS-side round-trip pin lives at
+    //! `packages/engine/test/install_module.test.ts::CID mismatch
+    //! error round-trips structured context fields (Instance 8)`.
+
+    use super::*;
+
+    fn fake_cid(seed: u8) -> Cid {
+        // Build a deterministic Cid via the canonical digest path;
+        // content irrelevance is fine for the bag-shape pin.
+        Cid::from_blake3_digest([seed; 32])
+    }
+
+    #[test]
+    fn module_manifest_cid_mismatch_emits_three_keys() {
+        let err = EngineError::ModuleManifestCidMismatch {
+            expected: fake_cid(1),
+            computed: fake_cid(2),
+            summary: "manifest=echo (1 module / 0 caps)".to_string(),
+        };
+        let bag = err.context_json().expect("context_json populated");
+        assert!(bag.get("expected").and_then(|v| v.as_str()).is_some());
+        assert!(bag.get("computed").and_then(|v| v.as_str()).is_some());
+        assert_eq!(
+            bag.get("summary").and_then(|v| v.as_str()),
+            Some("manifest=echo (1 module / 0 caps)")
+        );
+        // expected != computed in the bag.
+        assert_ne!(
+            bag.get("expected").and_then(|v| v.as_str()),
+            bag.get("computed").and_then(|v| v.as_str())
+        );
+    }
+
+    #[test]
+    fn ivm_view_stale_emits_view_id_key() {
+        let err = EngineError::IvmViewStale {
+            view_id: "user_view_a".to_string(),
+        };
+        let bag = err.context_json().expect("context_json populated");
+        assert_eq!(
+            bag.get("viewId").and_then(|v| v.as_str()),
+            Some("user_view_a")
+        );
+    }
+
+    #[test]
+    fn duplicate_handler_emits_handler_id_key() {
+        let err = EngineError::DuplicateHandler {
+            handler_id: "post.create".to_string(),
+        };
+        let bag = err.context_json().expect("context_json populated");
+        assert_eq!(
+            bag.get("handlerId").and_then(|v| v.as_str()),
+            Some("post.create")
+        );
+    }
+
+    #[test]
+    fn view_strategy_a_refused_emits_view_id_key() {
+        let err = EngineError::ViewStrategyARefused {
+            view_id: "strategy_a_view".to_string(),
+        };
+        let bag = err.context_json().expect("context_json populated");
+        assert_eq!(
+            bag.get("viewId").and_then(|v| v.as_str()),
+            Some("strategy_a_view")
+        );
+    }
+}
