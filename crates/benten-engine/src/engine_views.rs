@@ -136,7 +136,7 @@ impl Engine {
     /// Returns typed errors for the unknown-view, no-IVM, and stale paths.
     /// The healthy-view path delegates to
     /// [`benten_ivm::Subscriber::read_view`] and projects the registered
-    /// view's current state into [`Outcome::list`] (R6FP-tail NEW-1
+    /// view's current state into `Outcome.list` (R6FP-tail NEW-1
     /// wire-through; pre-NEW-1 this branch returned `Vec::new()`). See
     /// [`Self::read_view_with`] for the projection details + the
     /// `ReadViewOptions` knob set.
@@ -178,7 +178,7 @@ impl Engine {
     /// Pre-NEW-1 the healthy-view branch returned `Vec::new()`; subgraphs
     /// composing READ_VIEW against a registered view saw empty results
     /// regardless of contents. The wire-through follows the projection
-    /// pattern used by [`primitive_host::resolve_list_via_view_or_backend`]
+    /// pattern used by `primitive_host::resolve_list_via_view_or_backend`
     /// for Phase-1 content-listing reads, lifted here so user views are
     /// observable through the public engine API.
     pub fn read_view_with(
@@ -271,12 +271,12 @@ impl Engine {
                 offset: None,
                 ..Default::default()
             };
-            return Ok(project_view_read_to_outcome(
+            return project_view_read_to_outcome(
                 self,
                 ivm.read_view(normalized, &query),
                 view_id,
                 opts.allow_stale,
-            )?);
+            );
         }
         // No live view registered for this id. Phase 1 canonical whitelist
         // decides: recognized -> stale (in strict) / last-known-good empty
@@ -546,10 +546,7 @@ fn project_view_read_to_outcome(
             // synthetic-Node projection is the lowest-friction path
             // that matches the rest of the API surface (which is
             // Vec<Node>).
-            let synthetic = Node::new(
-                vec!["system:ivm:Rules".into()],
-                rules.into_iter().collect(),
-            );
+            let synthetic = Node::new(vec!["system:ivm:Rules".into()], rules.into_iter().collect());
             Ok(Outcome {
                 list: Some(vec![synthetic]),
                 ..Outcome::default()

@@ -345,7 +345,10 @@ mod napi_surface {
             spec: serde_json::Value,
         ) -> napi::Result<serde_json::Value> {
             let s = json_to_subgraph_spec(spec)?;
-            let outcome = self.inner.register_subgraph_replace(s).map_err(engine_err)?;
+            let outcome = self
+                .inner
+                .register_subgraph_replace(s)
+                .map_err(engine_err)?;
             Ok(register_replace_outcome_to_json(&outcome))
         }
 

@@ -1541,6 +1541,9 @@ export class Engine {
    * shape) lets callers distinguish "metric is structurally not
    * tracked in 2b" from "node hasn't been invoked yet".
    *
+   * Cross-ref: `docs/SECURITY-POSTURE.md` Compromise #17
+   * (sandbox-execution-metric-propagation).
+   *
    * The remaining fields (`moduleCid` / `manifestId` / `fuel` /
    * `wallclockMs` / `outputLimitBytes`) are synthesized client-side
    * from the registered subgraph spec; sufficient for the

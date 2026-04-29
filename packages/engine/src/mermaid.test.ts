@@ -66,7 +66,15 @@ describe("handler.toMermaid()", () => {
 
     // Stadium shape `([text])` — Mermaid's "stadium" variant. Phase-1
     // uses it only for RESPOND/EMIT; G3-B adds WAIT.
-    expect(mermaid).toMatch(/\(\[\s*WAIT:/);
+    //
+    // R6FP-tail (mermaid.test.ts regex drift): the generator emits
+    // double-quoted node text per Mermaid's quoted-string convention
+    // (`wait_1(["WAIT: wait-1"])`), not raw bare-text. The regex now
+    // accepts the optional opening `"` so the test matches landed
+    // reality. Pre-fix the regex required bare WAIT: and was
+    // failing in the (pre wave-8j) informational vitest run; landed
+    // mermaid output uses the quoted form.
+    expect(mermaid).toMatch(/\(\["?\s*WAIT:/);
     // Dashed resume edge `-.->` labelled `on resume` — explicit signal
     // that this edge fires post-suspend.
     expect(mermaid).toMatch(/-\.->\s*\|?on resume/);
