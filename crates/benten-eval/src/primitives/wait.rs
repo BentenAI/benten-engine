@@ -280,6 +280,7 @@ pub fn evaluate(
         sg.handler_id(),
         ctx.suspension_store(),
         ctx.elapsed_ms(),
+        None,
     )
 }
 
@@ -295,6 +296,20 @@ pub fn evaluate(
 /// dispatch calls within a single handler walk (the only contract
 /// callers depend on).
 ///
+/// # Wave-8i fix-pass (w8i-wait-cag-01) — principal binding
+///
+/// `principal: Option<&Cid>` carries the caller-named principal supplied
+/// by `call_as_with_suspension`. When `Some`, the suspension envelope's
+/// `resumption_principal_cid` is overridden to that CID so a subsequent
+/// `resume_from_bytes_as(bytes, _, &caller_cid)` matches step 2 of the
+/// 4-step resume protocol. When `None` (e.g. `engine.call(..)` without
+/// principal binding), the prior signal-derived placeholder behaviour is
+/// preserved — the envelope is keyed on the WAIT properties, but no
+/// principal is bound (which makes `resume_from_bytes_as` permissive at
+/// step 2 only when caller principals are also derived from signal-name
+/// hashing; in practice the caller would use
+/// `resume_from_bytes_unauthenticated`).
+///
 /// # Errors
 /// Returns [`EvalError::Core`] if DAG-CBOR encoding of the placeholder
 /// payload fails.
@@ -302,8 +317,9 @@ pub fn evaluate_op(
     op: &OperationNode,
     store: std::sync::Arc<dyn crate::suspension_store::SuspensionStore>,
     elapsed_ms: Option<u64>,
+    principal: Option<&Cid>,
 ) -> Result<WaitOutcome, EvalError> {
-    evaluate_op_with_handler_id(op, "__op", store, elapsed_ms)
+    evaluate_op_with_handler_id(op, "__op", store, elapsed_ms, principal)
 }
 
 fn evaluate_op_with_handler_id(
@@ -311,6 +327,7 @@ fn evaluate_op_with_handler_id(
     handler_id: &str,
     store: std::sync::Arc<dyn crate::suspension_store::SuspensionStore>,
     elapsed_ms: Option<u64>,
+    principal: Option<&Cid>,
 ) -> Result<WaitOutcome, EvalError> {
     let signal_name = match wait_node.property("signal") {
         Some(benten_core::Value::Text(s)) => s.clone(),
@@ -339,7 +356,16 @@ fn evaluate_op_with_handler_id(
     } else {
         signal_name.clone()
     };
-    let payload = placeholder_payload_for_signal(&key);
+    let mut payload = placeholder_payload_for_signal(&key);
+    // Wave-8i fix-pass (w8i-wait-cag-01): if the caller bound a
+    // principal at suspend (via `call_as_with_suspension(_, _, _, &p)`),
+    // override the placeholder-derived `resumption_principal_cid` with
+    // it so the envelope carries the caller-named principal. Without
+    // this override the resume protocol's step 2 compares the caller
+    // CID against `BLAKE3(signal_name)` — a silent contract break.
+    if let Some(p) = principal {
+        payload.resumption_principal_cid = *p;
+    }
     let envelope = ExecutionStateEnvelope::new(payload)?;
     let state_cid = envelope.envelope_cid()?;
 

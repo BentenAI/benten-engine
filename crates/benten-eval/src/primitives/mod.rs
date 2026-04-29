@@ -111,7 +111,12 @@ pub fn dispatch(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResu
         PrimitiveKind::Wait => {
             let store = host.suspension_store();
             let elapsed_ms = host.elapsed_ms();
-            match wait::evaluate_op(op, store, elapsed_ms)? {
+            // Wave-8i fix-pass (w8i-wait-cag-01): thread the host's
+            // current suspending principal so the envelope's
+            // `resumption_principal_cid` carries the caller-named
+            // CID for `resume_from_bytes_as` step 2 binding.
+            let principal = host.suspending_principal();
+            match wait::evaluate_op(op, store, elapsed_ms, principal.as_ref())? {
                 WaitOutcome::Suspended(handle) => Err(EvalError::WaitSuspended { handle }),
                 WaitOutcome::Complete(value) => Ok(StepResult {
                     next: None,
