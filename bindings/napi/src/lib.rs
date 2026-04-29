@@ -130,7 +130,7 @@ mod napi_surface {
     use crate::subgraph::{
         json_to_subgraph_spec, outcome_to_json, register_replace_outcome_to_json,
     };
-    use crate::subscribe::{on_change_adapter, on_change_as_adapter};
+    use crate::subscribe::{on_change_adapter, on_change_as_adapter, on_emit_adapter};
     #[cfg(feature = "test-helpers")]
     use crate::subscribe::{
         testing_deliver_synthetic_event_for_test_adapter,
@@ -867,6 +867,34 @@ mod napi_surface {
             Ok(SubscriptionJs::from_inner(sub))
         }
 
+        /// R6 Round-2 r6-r2-mpc-1: drive
+        /// [`benten_engine::Engine::subscribe_emit_events_with_handle`]
+        /// against a JS callback. Closes r6-mpc-2 (the wave-8h
+        /// cross-layer audit gap) by wiring the `EmitSubscriptionJs`
+        /// napi class — the engine half of the bridge had been
+        /// constructed in PR #62 but no Engine method existed to
+        /// produce one, so JS callers always hit the typed
+        /// `EDslInvalidShape("rebuild your binding")` pre-check at
+        /// `engine.ts::onEmit`.
+        ///
+        /// Channel filtering applies engine-side string equality (no
+        /// glob matching at the napi surface in Phase 2b). Returns a
+        /// [`EmitSubscriptionJs`] handle whose `unsubscribe()` /
+        /// JS-side Drop releases the broadcast registration AND the
+        /// `napi::ThreadsafeFunction` Arc holding the JS callback
+        /// alive. **The JS-side handle MUST be retained for the
+        /// lifetime of the subscription** — same lifecycle contract
+        /// as [`Engine::on_change`].
+        #[napi]
+        pub fn on_emit(
+            &self,
+            channel: String,
+            callback: napi::bindgen_prelude::Function<'_, (String, String), ()>,
+        ) -> napi::Result<EmitSubscriptionJs> {
+            let sub = on_emit_adapter(&self.inner, &channel, callback)?;
+            Ok(EmitSubscriptionJs::from_inner(sub, channel))
+        }
+
         /// ts-r4-2 mirror for SUBSCRIBE (mini-review cr-g6b-mr-5):
         /// vitest-harness factory mirroring `testingOpenStreamForTest`.
         /// Construct a [`SubscriptionJs`] handle wired against the
@@ -1252,16 +1280,14 @@ mod napi_surface {
     #[napi]
     pub struct EmitSubscriptionJs {
         inner: std::sync::Mutex<benten_engine::EmitSubscription>,
+        channel: String,
     }
 
     impl EmitSubscriptionJs {
-        #[allow(
-            dead_code,
-            reason = "constructed by Group-2 TS surface adapter; held against the lib for re-export"
-        )]
-        pub(crate) fn from_inner(sub: benten_engine::EmitSubscription) -> Self {
+        pub(crate) fn from_inner(sub: benten_engine::EmitSubscription, channel: String) -> Self {
             Self {
                 inner: std::sync::Mutex::new(sub),
+                channel,
             }
         }
     }
@@ -1280,6 +1306,15 @@ mod napi_surface {
                 )
             })?;
             Ok(g.is_active())
+        }
+
+        /// The channel name this subscription was registered for.
+        /// Returned as a `String` to match the TS-side
+        /// `NativeEmitSubscriptionJs.channel(): string` interface
+        /// declared at `packages/engine/src/subscribe.ts`.
+        #[napi]
+        pub fn channel(&self) -> napi::Result<String> {
+            Ok(self.channel.clone())
         }
 
         /// Explicitly release the subscription. Idempotent.

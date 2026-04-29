@@ -30,11 +30,14 @@
 
 use std::sync::Arc;
 
-use benten_engine::{Chunk, Engine as InnerEngine, SubscribeCursor, Subscription};
+use benten_engine::{
+    Chunk, EmitSubscription, Engine as InnerEngine, SubscribeCursor, Subscription,
+};
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::ThreadsafeFunctionCallMode;
 
 use crate::error::engine_err;
+use crate::node::value_to_json;
 
 /// Wave-8c-subscribe-infra: payload carried across the napi
 /// `ThreadsafeFunction` boundary. A pair of `(seq, payload_bytes)` —
@@ -232,3 +235,81 @@ pub(crate) fn testing_deliver_synthetic_event_for_test_adapter(
 // the JS callback alive — JS callbacks could never fire. Production
 // consumers + test helpers now route through `SubscriptionJs` which
 // holds the Subscription alive for the lifetime of the JS handle.
+
+// =====================================================================
+// EMIT broadcast adapter (R6 Round-2 r6-r2-mpc-1 closure of r6-mpc-2)
+// =====================================================================
+
+/// Payload carried across the napi `ThreadsafeFunction` boundary for
+/// EMIT subscribers. A pair of `(channel, payload_json)` — the
+/// payload-side `Value` is rendered to a JSON string via
+/// [`crate::node::value_to_json`] before crossing because the TS-side
+/// `engine.onEmit` wrapper parses JSON once on receive (matching the
+/// pre-existing `(string, string)` shape declared at
+/// `packages/engine/src/engine.ts::NativeEngine.onEmit`).
+type OnEmitTsfnPayload = (String, String);
+
+/// Build an engine-side `EmitCallback` (`Arc<dyn Fn(&EmitEvent) + Send +
+/// Sync + 'static>`) that fires the supplied JS function on the libuv
+/// main loop via `napi::ThreadsafeFunction`. Mirrors
+/// [`build_on_change_tsfn`] but for the EMIT broadcast.
+pub(crate) fn build_on_emit_tsfn(
+    cb: napi::bindgen_prelude::Function<'_, (String, String), ()>,
+) -> napi::Result<benten_engine::emit_broadcast::EmitCallback> {
+    // Match SUBSCRIBE's defaults: keep the process alive while
+    // EMIT subscriptions are live (`weak: false`) + don't pass an
+    // error first-arg into the JS callback (`callee_handled: false`).
+    let tsfn =
+        cb.build_threadsafe_function::<OnEmitTsfnPayload>()
+            .callee_handled::<false>()
+            .build_callback(
+                |ctx: napi::threadsafe_function::ThreadsafeCallContext<OnEmitTsfnPayload>| {
+                    Ok(ctx.value)
+                },
+            )?;
+    let tsfn_arc = Arc::new(tsfn);
+    let engine_cb: benten_engine::emit_broadcast::EmitCallback = {
+        let tsfn = Arc::clone(&tsfn_arc);
+        Arc::new(move |event: &benten_engine::EmitEvent| {
+            // Render the `Value` payload to its JSON shape before
+            // crossing the TSFN boundary so the TS wrapper at
+            // `engine.ts::onEmit` can `JSON.parse` it once on the JS
+            // side. Matches the pre-existing `(string, string)`
+            // signature declared on the optional native method type.
+            let payload_json = serde_json::to_string(&value_to_json(&event.payload))
+                .unwrap_or_else(|_| "null".to_string());
+            let _status = tsfn.call(
+                (event.channel.clone(), payload_json),
+                ThreadsafeFunctionCallMode::NonBlocking,
+            );
+        })
+    };
+    Ok(engine_cb)
+}
+
+/// Drive `Engine::subscribe_emit_events_with_handle` against the
+/// supplied JS callback. The callback is wrapped in a
+/// `napi::ThreadsafeFunction` via [`build_on_emit_tsfn`] so EMIT
+/// publishes from arbitrary dispatch threads land on the libuv main
+/// loop.
+///
+/// Channel filtering: the engine-side EMIT broadcast fans every
+/// published event out to every subscriber; this adapter applies the
+/// channel filter on the engine-side closure so JS receives only events
+/// whose `channel` matches `channel` exactly (string equality; no glob
+/// matching at the engine surface in Phase 2b — matches the doc
+/// contract at `engine.ts::onEmit`).
+pub(crate) fn on_emit_adapter(
+    engine: &InnerEngine,
+    channel: &str,
+    cb: napi::bindgen_prelude::Function<'_, (String, String), ()>,
+) -> napi::Result<EmitSubscription> {
+    let engine_cb = build_on_emit_tsfn(cb)?;
+    let want_channel = channel.to_string();
+    let sub = engine.subscribe_emit_events_with_handle(move |event| {
+        if event.channel == want_channel {
+            engine_cb(event);
+        }
+    });
+    Ok(sub)
+}
