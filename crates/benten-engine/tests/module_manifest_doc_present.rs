@@ -58,9 +58,11 @@ fn module_manifest_doc_carries_load_bearing_anchors() {
         // D16 dual-CID diff shape
         "computed_cid",
         "manifest summary",
-        // Compromises documented
-        "Compromise #N+5",
-        "Compromise #N+8",
+        // Compromises documented (R6 phase-close lifted these from local
+        // "#N+X" numbering to the global SECURITY-POSTURE.md numbering;
+        // #N+5 → #21 manifest-CID-pin; #N+8 → #19 browser-persistence)
+        "Compromise #19",
+        "Compromise #21",
         // Forward-compat reservation
         "skip_serializing_if",
         "Phase 3",
