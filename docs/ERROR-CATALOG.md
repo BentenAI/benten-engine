@@ -866,7 +866,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 - **Message:** "module manifest declares N migration(s) but the target has no persistent backing store"
 - **Context:** `{ migration_count: usize }`
-- **Fix:** Compromise #N+8 — browser (`wasm32-unknown-unknown`) engines ship in-memory-only manifest persistence in Phase 2b; the IndexedDB / OPFS persistence story lands in Phase 3. Manifests that declare `migrations` need a durable backing store; the rejection prevents the migration runner from silently dropping work. On native (redb-backed) targets the same manifest installs without error. Either (a) defer the migration to a Phase-3 build with persistent storage, or (b) split the manifest into a migrations-free in-memory variant for Phase-2b browser deployments.
+- **Fix:** `docs/SECURITY-POSTURE.md` Compromise #19 — browser (`wasm32-unknown-unknown`) engines ship in-memory-only manifest persistence in Phase 2b; the IndexedDB / OPFS persistence story lands in Phase 3. Manifests that declare `migrations` need a durable backing store; the rejection prevents the migration runner from silently dropping work. On native (redb-backed) targets the same manifest installs without error. Either (a) defer the migration to a Phase-3 build with persistent storage, or (b) split the manifest into a migrations-free in-memory variant for Phase-2b browser deployments.
 - **Thrown at:** `Engine::install_module` (G10-B) on `wasm32-unknown-unknown` only.
 - **Phase:** 2b G10-B
 

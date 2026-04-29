@@ -5,9 +5,10 @@ the engine consumes when installing a Wasm module bundle.
 
 > **Status:** Phase 2b ships the canonical-bytes format + minimal CID-pin
 > integrity gate (D16-RESOLVED-FURTHER); full Ed25519 manifest signing
-> defers to Phase 3 (`Compromise #N+5`). Browser (`wasm32-unknown-unknown`)
-> targets ship in-memory-only manifest persistence in Phase 2b; IndexedDB
-> defers to Phase 3 (`Compromise #N+8`).
+> defers to Phase 3 (see `docs/SECURITY-POSTURE.md` Compromise #21). Browser
+> (`wasm32-unknown-unknown`) targets ship in-memory-only manifest persistence
+> in Phase 2b; IndexedDB defers to Phase 3 (see `docs/SECURITY-POSTURE.md`
+> Compromise #19).
 
 ---
 
@@ -117,11 +118,11 @@ populated `signature` field, so its canonical bytes differ).
 
 Browser engines (`wasm32-unknown-unknown`) ship in-memory-only manifest
 persistence in Phase 2b — the IndexedDB / OPFS persistence story lands
-in Phase 3 (`Compromise #N+8`). Because migrations need a durable
-backing store to land in, installing a manifest with non-empty
-`migrations` on `wasm32-unknown-unknown` fires
-`E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE`. Native (redb-backed)
-engines accept the same manifest without error.
+in Phase 3 (see `docs/SECURITY-POSTURE.md` Compromise #19). Because
+migrations need a durable backing store to land in, installing a
+manifest with non-empty `migrations` on `wasm32-unknown-unknown` fires
+`E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE`. Native (redb-backed) engines
+accept the same manifest without error.
 
 ---
 
@@ -216,10 +217,17 @@ The TypeScript surface mirrors this with
 
 ## 7. Compromises documented
 
+These compromises are recorded against the global compromise table in
+`docs/SECURITY-POSTURE.md`. Prior to R6 phase-close, this table used a
+local "#N+X" numbering scheme; the entries have been lifted to global
+numbering so cross-doc references resolve to a single authoritative
+table.
+
 | # | Description | Closes |
 |---|---|---|
-| #N+5 | Module manifest minimal CID-pin in Phase 2b; full Ed25519 deferred to Phase 3 | Phase 3 (D16) |
-| #N+8 | Browser-target persistent storage absent — manifests in-memory only on `wasm32-unknown-unknown` | Phase 3 (IndexedDB) |
+| #19 | Browser-target persistent storage absent — manifests in-memory only on `wasm32-unknown-unknown` | Phase 3 (IndexedDB / OPFS) |
+| #20 | Cross-browser determinism CI cadence not yet established | Phase 3 (paired with #19 closure) |
+| #21 | Module manifest minimal CID-pin in Phase 2b; full Ed25519 deferred to Phase 3 | Phase 3 (D16 manifest signing) |
 
 ---
 
