@@ -714,3 +714,29 @@ export interface Subscription {
   /** Explicitly release the subscription. Idempotent. */
   unsubscribe(): void;
 }
+
+/**
+ * Handle returned by `engine.onEmit(channel, callback)`.
+ *
+ * Mirrors {@link Subscription} for the EMIT broadcast — the dedicated
+ * channel that carries standalone EMIT events (handlers using EMIT
+ * without a backing WRITE). See `crates/benten-engine/src/emit_broadcast.rs`
+ * for the rationale on a separate channel from ChangeBroadcast.
+ *
+ * Lifecycle: hold the handle alive for the lifetime of the
+ * subscription. Dropping the handle releases the engine-side registry
+ * slot AND the `napi::ThreadsafeFunction` Arc backing the JS callback.
+ *
+ * Wired by R6-FP Group 2 (TS surface) + Group 1 (Rust napi bridge);
+ * closes the wave-8h cross-layer audit gap (r6-mpc-2) where the engine
+ * had a working `Engine::subscribe_emit_events` Rust API but no JS
+ * surface.
+ */
+export interface EmitSubscription {
+  /** `true` while the subscription is registered with the engine. */
+  readonly active: boolean;
+  /** Channel the subscription was registered with. */
+  readonly channel: string;
+  /** Explicitly release the subscription. Idempotent. */
+  unsubscribe(): void;
+}

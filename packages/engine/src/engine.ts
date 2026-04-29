@@ -39,9 +39,13 @@ import {
 import {
   serializeCursor,
   validateOnChangeArgs,
+  validateOnEmitArgs,
+  wrapEmitSubscriptionHandle,
   wrapSubscriptionHandle,
+  type NativeEmitSubscriptionJs,
   type NativeSubscriptionJs,
   type OnChangeCallback,
+  type OnEmitCallback,
 } from "./subscribe.js";
 import type {
   CapabilityGrant,
@@ -54,6 +58,7 @@ import type {
   RegisteredHandler,
   SandboxNodeDescription,
   StreamHandle,
+  EmitSubscription,
   Subgraph,
   SubscribeCursor,
   Subscription,
@@ -161,6 +166,20 @@ interface NativeEngine {
     actor: string,
     callback?: (seq: number, payload: Buffer) => void,
   ) => NativeSubscriptionJs;
+  // R6-FP — EMIT broadcast subscription. Mirrors `onChange` but routes
+  // through the engine's dedicated EmitBroadcast (see
+  // crates/benten-engine/src/emit_broadcast.rs). Wired by R6-FP Group 1
+  // (napi class) + Group 2 (TS surface) to close r6-mpc-2 (the wave-8h
+  // audit-gap fix's missing JS-layer consumer).
+  //
+  // Optional on the type so older napi cdylib builds (pre-R6-FP) still
+  // type-check; the wrapper falls back to a typed E_PRIMITIVE_NOT_IMPLEMENTED
+  // if the symbol is absent so consumers get an actionable error rather
+  // than `TypeError: undefined is not a function`.
+  onEmit?: (
+    channel: string,
+    callback?: (channel: string, payloadJson: string) => void,
+  ) => NativeEmitSubscriptionJs;
   // Phase 2b wave-8c — module-manifest lifecycle bridges.
   installModule?: (manifestJson: unknown, expectedCid: string) => string;
   uninstallModule?: (cid: string) => void;
@@ -1777,6 +1796,80 @@ build @benten/engine-native with `--features test-helpers`",
       throw mapNativeError(err);
     }
     return wrapSubscriptionHandle(native, cursor ?? { kind: "latest" });
+  }
+
+  /**
+   * Subscribe to standalone EMIT events on a named channel.
+   *
+   * EMIT events flow through the engine's dedicated `EmitBroadcast`
+   * (separate from the storage-event ChangeBroadcast that drives
+   * `onChange` + IVM views). The dedicated channel exists because
+   * EMIT events have no Node CID, no commit, no tx-id — they are
+   * publish-only signals from a handler's standalone EMIT primitive.
+   * See `crates/benten-engine/src/emit_broadcast.rs` for the rationale.
+   *
+   * The callback fires synchronously on every EMIT publish whose
+   * `channel` matches `channel` exactly (string equality; no
+   * glob-matching at the engine surface in Phase 2b).
+   *
+   * Returns an [`EmitSubscription`] handle; call `unsubscribe()` (or
+   * let it fall out of scope and rely on the GC-driven Rust-side `Drop`
+   * impl) to release the registration.
+   *
+   * # Wiring status
+   *
+   * Wired by R6-FP Group 1 (napi `EmitSubscriptionJs` class +
+   * `subscribe_emit_events` adapter) + R6-FP Group 2 (this TS surface).
+   * Closes the wave-8h cross-layer audit gap (`r6-mpc-2`): the engine
+   * had a working `Engine::subscribe_emit_events` Rust API but no JS
+   * surface, so JS consumers could not observe events from a
+   * handler-internal EMIT primitive.
+   *
+   * If the loaded napi cdylib pre-dates the bridge, the call surfaces
+   * `E_PRIMITIVE_NOT_IMPLEMENTED` with a "rebuild @benten/engine-native"
+   * fix-hint rather than crashing on a missing native symbol.
+   */
+  public onEmit(
+    channel: string,
+    callback: OnEmitCallback,
+  ): EmitSubscription {
+    this.assertOpen();
+    validateOnEmitArgs(channel, callback);
+    if (!this.inner.onEmit) {
+      throw new EDslInvalidShape(
+        "Engine.onEmit unavailable on this binding — rebuild @benten/engine-native (R6-FP EMIT broadcast bridge required to close r6-mpc-2)",
+      );
+    }
+    // The native EMIT-side callback shape is `(channel, payloadJson)` —
+    // payloadJson is the engine's `Value` payload serialized to JSON
+    // (the same shape engine.call inputs/outputs use). We parse it once
+    // here so the JS-facing callback receives an idiomatic JsonValue
+    // rather than a raw JSON string.
+    const napiCb = (chanArg: string, payloadJson: string): void => {
+      let payload: JsonValue;
+      try {
+        payload = JSON.parse(payloadJson) as JsonValue;
+      } catch {
+        // Defensive: if the napi side delivered a non-JSON payload
+        // (shouldn't happen — payload comes from Value::to_json), pass
+        // the raw string through rather than crashing the listener.
+        payload = payloadJson;
+      }
+      try {
+        callback(chanArg, payload);
+      } catch (err) {
+        // Subscriber-side throws are routine; sub stays alive, log fires.
+        // eslint-disable-next-line no-console
+        console.error("onEmit callback threw:", err);
+      }
+    };
+    let native: NativeEmitSubscriptionJs;
+    try {
+      native = this.inner.onEmit(channel, napiCb);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+    return wrapEmitSubscriptionHandle(native);
   }
 
   // -------- Snapshot blob handoff (Phase 2b wave-8c-cont 8c-iv) --------

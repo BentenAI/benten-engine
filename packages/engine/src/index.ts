@@ -68,17 +68,22 @@ export {
   type NativeStreamHandle,
 } from "./stream.js";
 export {
+  wrapEmitSubscriptionHandle,
   wrapSubscriptionHandle,
   serializeCursor,
   validateOnChangeArgs,
+  validateOnEmitArgs,
+  type NativeEmitSubscriptionJs,
   type NativeSubscriptionJs,
   type OnChangeCallback,
+  type OnEmitCallback,
 } from "./subscribe.js";
 
 export type {
   CapabilityGrant,
   Chunk,
   Edge,
+  EmitSubscription,
   HandlerAdjacencies,
   JsonValue,
   ManifestSignature,
