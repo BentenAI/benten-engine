@@ -3,7 +3,8 @@
 //!
 //! Every section the G10-B brief calls out as documented (D9 canonical
 //! DAG-CBOR, D16 dual-CID + summary error shape, signature-reservation
-//! forward-compat, Compromise #N+5, Compromise #N+8, install +
+//! forward-compat, Compromise #21 (manifest CID-pin; was #N+5 pre-R6),
+//! Compromise #19 (browser persistence; was #N+8 pre-R6), install +
 //! uninstall + idempotence + cap-retraction multi-manifest overlap)
 //! MUST appear by name in the doc. If a future contributor drops one of
 //! the load-bearing anchors, this test surfaces the regression
