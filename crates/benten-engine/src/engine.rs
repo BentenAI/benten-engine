@@ -773,6 +773,28 @@ impl Engine {
     /// grant, both of which are checked at execute time inside
     /// `benten_eval::sandbox::execute`.
     pub fn register_module_bytes(&self, cid: Cid, bytes: Vec<u8>) {
+        // R6FP-Group-1 (r6-cag-8) — debug-only fail-fast assertion that
+        // the supplied CID matches `BLAKE3(bytes)`. Pre-fix the engine
+        // accepted any (cid, bytes) pair without complaint, leaving
+        // mis-paired calls discoverable only at SANDBOX execution time
+        // (a malformed wasm payload installed under a "good" CID would
+        // load mismatched bytes for the manifest's declared cid). The
+        // debug_assert preserves the documented "engine accepts the
+        // overwrite without complaint" production contract per
+        // Compromise #17 — release builds skip the check (the cap-policy
+        // gate at install_module is the load-bearing operator-trust
+        // boundary, not this surface) — but dev/test builds catch the
+        // mis-pair loud rather than silent.
+        debug_assert_eq!(
+            cid,
+            Cid::from_blake3_digest(*blake3::hash(&bytes).as_bytes()),
+            "register_module_bytes: caller-supplied CID does not match \
+             BLAKE3(bytes) — content-addressing invariant break. The \
+             engine accepts the overwrite without complaint in release \
+             (Compromise #17), but dev/test builds fail-fast to catch \
+             the mis-pair at the call site rather than at SANDBOX \
+             execution time."
+        );
         let mut guard = self.inner.module_bytes.lock_recover();
         guard.insert(cid, bytes);
     }
@@ -1500,6 +1522,15 @@ impl Engine {
         // the trait methods.
         {
             let mut guard = self.active_call.lock_recover();
+            // R6FP-Group-1 (r6-cr-1 / r6-mpc-4 / r6-wsa-1): inherit
+            // sandbox_depth from the parent frame (when there is one)
+            // so a SANDBOX→handler→SANDBOX chain advances the count
+            // correctly at each handler entry. The execute_sandbox
+            // override layers a `+1` at SANDBOX entry on top of this
+            // baseline; together they produce the cumulative nest
+            // depth the eval-side runtime arm consults to fire
+            // `E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED`.
+            let parent_sandbox_depth = guard.last().map_or(0, |f| f.sandbox_depth);
             guard.push(ActiveCall {
                 handler_id: handler_id.to_string(),
                 op: op.to_string(),
@@ -1509,6 +1540,7 @@ impl Engine {
                 inject_failure: false,
                 last_refresh: None,
                 iteration: 0,
+                sandbox_depth: parent_sandbox_depth,
             });
         }
 

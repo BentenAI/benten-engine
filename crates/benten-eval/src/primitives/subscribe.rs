@@ -1103,13 +1103,46 @@ pub fn publish_change_event(event: ChangeEvent) {
     publish_change_event_with_label("", event);
 }
 
-/// Publish a change event with the matching anchor label string. Walks
-/// both `ACTIVE_HANDLES` (subgraph-internal SUBSCRIBE primitives) and
+/// Publish a change event with a single matching anchor label. Wrapper
+/// around [`publish_change_event_with_labels`] that lifts the single
+/// `&str` into a one-element slice for backwards compatibility with
+/// pre-R6FP-G1 callers + the test path.
+pub fn publish_change_event_with_label(label: &str, event: ChangeEvent) {
+    if label.is_empty() {
+        publish_change_event_with_labels(&[], event);
+    } else {
+        publish_change_event_with_labels(&[label.to_string()], event);
+    }
+}
+
+/// R6FP-Group-1 (Round-2 Instance 6 BLOCKER) — publish a change event
+/// against the FULL label set of the affected Node. Walks both
+/// `ACTIVE_HANDLES` (subgraph-internal SUBSCRIBE primitives) and
 /// `ON_CHANGE_REGISTRY` (ad-hoc onChange consumers) and dispatches each
 /// match through the per-subscriber dedup gate + D5 delivery-time
 /// cap-recheck.
-pub fn publish_change_event_with_label(label: &str, event: ChangeEvent) {
+///
+/// The matcher fires when ANY label in `labels` matches the
+/// subscriber's pattern. Pre-R6FP-G1, a single `primary_label` was
+/// the only label consulted — a multi-labeled Node `["User","Admin"]`
+/// silently missed delivery to a SUBSCRIBE consumer matching `Admin:*`
+/// because `primary_label = "User"` (the first label) was the only
+/// thing the matcher saw. The widened multi-label matcher closes
+/// Round-2 Instance 6.
+pub fn publish_change_event_with_labels(labels: &[String], event: ChangeEvent) {
     LATEST_CURSOR_HORIZON.fetch_add(1, Ordering::Relaxed);
+
+    let any_label_matches = |pattern: &ChangePattern| -> bool {
+        if labels.is_empty() {
+            // Test path: events minted without a label set don't
+            // exercise pattern routing — match on no-label only when
+            // the pattern itself is a wildcard. Conservative skip
+            // mirrors the pre-R6FP-G1 single-label "empty => skip"
+            // behaviour.
+            return false;
+        }
+        labels.iter().any(|l| pattern.matches_label(l))
+    };
 
     // First: subgraph-internal SUBSCRIBE primitives. Snapshot the keys
     // under a short lock + dispatch outside the lock so a callback that
@@ -1120,11 +1153,15 @@ pub fn publish_change_event_with_label(label: &str, event: ChangeEvent) {
     };
     for id in &active_ids {
         let _ = with_active_handle(id, |sub| {
-            // Pattern match against the anchor label. If the spec used an
-            // `AnchorPrefix` and the label string is empty (test path),
-            // we conservatively skip — the test path that mints events
-            // without a label does not exercise pattern routing.
-            if !label.is_empty() && !sub.spec.pattern.matches_label(label) {
+            // R6FP-G1 (Round-2 Instance 6): walk every label rather
+            // than only the primary. Empty label set still skips for
+            // the AnchorPrefix-test-path consistency reason.
+            if !labels.is_empty() && !any_label_matches(&sub.spec.pattern) {
+                return;
+            }
+            if labels.is_empty() {
+                // Pre-R6FP-G1 behaviour: empty label string still
+                // skipped routing. Preserved for the test path.
                 return;
             }
             // Best-effort inject; the inject path applies cursor + dedup
@@ -1163,11 +1200,13 @@ pub fn publish_change_event_with_label(label: &str, event: ChangeEvent) {
         if !entry.active.load(Ordering::SeqCst) {
             continue;
         }
-        // Pattern match. Empty label => skip (test path).
-        if label.is_empty() {
+        // R6FP-G1 (Round-2 Instance 6): pattern match against the FULL
+        // label set, not the primary label only. Empty label set =>
+        // skip (test path consistent with pre-R6FP-G1 behaviour).
+        if labels.is_empty() {
             continue;
         }
-        if !entry.pattern.matches_label(label) {
+        if !any_label_matches(&entry.pattern) {
             continue;
         }
         // Cursor pre-filter.
@@ -1307,12 +1346,7 @@ pub fn make_change_event(
     payload: serde_json::Value,
 ) -> ChangeEvent {
     let bytes = serde_json::to_vec(&payload).unwrap_or_default();
-    ChangeEvent {
-        anchor_cid,
-        kind,
-        seq: 0,
-        payload_bytes: bytes,
-    }
+    ChangeEvent::legacy_minimal(anchor_cid, kind, 0, bytes)
 }
 
 /// Inject a change event into a subscription. Returns the subscription's

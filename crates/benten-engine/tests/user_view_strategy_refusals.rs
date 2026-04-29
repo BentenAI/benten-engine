@@ -33,7 +33,7 @@ fn user_view_strategy_a_refused_at_registration() {
         .unwrap();
 
     let err = engine
-        .create_user_view(spec)
+        .register_user_view(spec)
         .expect_err("Strategy::A must be refused at registration");
 
     match &err {
@@ -62,7 +62,7 @@ fn user_view_strategy_c_reserved_at_registration() {
         .unwrap();
 
     let err = engine
-        .create_user_view(spec)
+        .register_user_view(spec)
         .expect_err("Strategy::C must be refused at registration");
 
     match &err {
@@ -94,7 +94,7 @@ fn user_view_default_strategy_b_is_accepted() {
     assert_eq!(spec.strategy(), benten_ivm::Strategy::B);
 
     let cid = engine
-        .create_user_view(spec)
+        .register_user_view(spec)
         .expect("default Strategy::B must be accepted");
     // Node CID is content-addressed; assert it round-trips through the
     // base32 encoder so we know a real Node was persisted.
@@ -117,7 +117,7 @@ fn user_view_explicit_strategy_b_matches_default_acceptance() {
         .build()
         .unwrap();
     let _ = engine
-        .create_user_view(explicit)
+        .register_user_view(explicit)
         .expect("explicit Strategy::B accepted");
 
     let default = UserViewSpec::builder()
@@ -126,7 +126,7 @@ fn user_view_explicit_strategy_b_matches_default_acceptance() {
         .build()
         .unwrap();
     let _ = engine
-        .create_user_view(default)
+        .register_user_view(default)
         .expect("default Strategy::B accepted");
 }
 
@@ -146,7 +146,7 @@ fn user_view_subsystem_disabled_when_ivm_off() {
         .unwrap();
 
     let err = engine
-        .create_user_view(spec)
+        .register_user_view(spec)
         .expect_err("create_user_view must refuse when IVM disabled");
     match err {
         EngineError::SubsystemDisabled { subsystem } => assert_eq!(subsystem, "ivm"),

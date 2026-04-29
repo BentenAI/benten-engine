@@ -133,6 +133,18 @@ pub(crate) struct ActiveCall {
     /// `schedule_revocation_at_iteration` test harness so the refresh
     /// path can observe a scheduled revocation target.
     pub(crate) iteration: u64,
+    /// R6FP-Group-1 (r6-cr-1 / r6-mpc-4 / r6-wsa-1) — cumulative
+    /// SANDBOX nest count along the active call chain. The value is
+    /// `0` at the top-level handler entry; the engine's
+    /// [`Engine::execute_sandbox`] override constructs the dispatching
+    /// [`benten_eval::AttributionFrame`] with
+    /// `sandbox_depth: parent.sandbox_depth + 1` so the eval-side
+    /// runtime arm in `benten_eval::sandbox::execute` observes the
+    /// correct nest depth and fires `E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED`
+    /// once the chain exceeds [`benten_eval::SandboxConfig::max_nest_depth`].
+    /// Pre-R6FP-G1 the field was missing and the override hardcoded
+    /// `sandbox_depth: 1` literally — D20 runtime arm dormant.
+    pub(crate) sandbox_depth: u8,
 }
 
 /// A deferred host-side write op, replayed inside `dispatch_call`'s
@@ -849,31 +861,60 @@ impl PrimitiveHost for Engine {
 
         // 6. Build the dispatching AttributionFrame. D20-RESOLVED:
         //    `sandbox_depth` increments at every SANDBOX entry.
+        //
+        //    R6FP-Group-1 (r6-cr-1 / r6-mpc-4 / r6-wsa-1): thread
+        //    `parent.sandbox_depth + 1` from the active-call frame so
+        //    the eval-side runtime arm in `benten_eval::sandbox::execute`
+        //    observes the correct cumulative depth. Pre-R6FP-G1 this
+        //    was hardcoded to literal `1` at both branches and the
+        //    runtime arm could never fire (depth never exceeded
+        //    `max_nest_depth`). The 3-lens convergent finding (R6
+        //    code-reviewer + metadata-producer-vs-consumer + wasmtime-
+        //    sandbox-auditor) named this as the load-bearing fix that
+        //    closes the Inv-4 / D20 dormant-arm gap.
+        //
+        //    Bump the ActiveCall's sandbox_depth on every SANDBOX
+        //    entry so a chain handler1→CALL→handler2→CALL→...→handlerN
+        //    where each handler runs a SANDBOX can deepen: the outer
+        //    SANDBOX's bump is observed by the subsequent CALL push
+        //    (which inherits parent.sandbox_depth at engine.rs:1503),
+        //    so each nested handler's SANDBOX sees a higher depth than
+        //    its predecessor. This is the chain shape the runtime arm
+        //    is designed to defend (Inv-4 / D20 read-side enforcement).
         let attribution = {
-            let guard = self.active_call().lock_recover();
+            let mut guard = self.active_call().lock_recover();
             let zero = Cid::from_blake3_digest([0u8; 32]);
-            match guard.last() {
-                Some(frame) => benten_eval::AttributionFrame {
-                    actor_cid: frame.actor.unwrap_or_else(noauth_pseudo_actor_cid),
-                    handler_cid: frame.handler_cid.unwrap_or(zero),
+            let frame_snapshot = guard.last().map(|frame| {
+                (
+                    frame.actor.unwrap_or_else(noauth_pseudo_actor_cid),
+                    frame.handler_cid.unwrap_or(zero),
+                )
+            });
+            // Persist the bump on the parent ActiveCall so any
+            // subsequent CALL primitive in this handler pushes a child
+            // frame inheriting the bumped depth. This is the
+            // load-bearing semantic for the Inv-4 runtime arm: the
+            // depth grows along the (handler→CALL→inner)-with-SANDBOX
+            // chain even though SANDBOX guest code itself can't drive
+            // a nested dispatch (D19 blocks that path).
+            let nested_depth = if let Some(frame) = guard.last_mut() {
+                frame.sandbox_depth = frame.sandbox_depth.saturating_add(1);
+                frame.sandbox_depth
+            } else {
+                1
+            };
+            match frame_snapshot {
+                Some((actor, handler)) => benten_eval::AttributionFrame {
+                    actor_cid: actor,
+                    handler_cid: handler,
                     capability_grant_cid: noauth_zero_grant_cid(),
-                    // D20: increment at every SANDBOX entry. We're not
-                    // currently threading the dispatcher's
-                    // sandbox_depth through ActiveCall — that lift is
-                    // a Wave-8e/8d concern (Inv-4 durable cycle
-                    // detection). Phase-2b ships this as a structural
-                    // counter the executor can observe; the read-only
-                    // Inv-4 enforcement inside the executor (D20)
-                    // catches over-deep nesting via
-                    // SandboxError::NestedDispatchDepthExceeded once
-                    // the depth threading lands.
-                    sandbox_depth: 1,
+                    sandbox_depth: nested_depth,
                 },
                 None => benten_eval::AttributionFrame {
                     actor_cid: noauth_pseudo_actor_cid(),
                     handler_cid: zero,
                     capability_grant_cid: noauth_zero_grant_cid(),
-                    sandbox_depth: 1,
+                    sandbox_depth: nested_depth,
                 },
             }
         };

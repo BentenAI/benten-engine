@@ -477,11 +477,26 @@ mod napi_surface {
         /// `strategy` defaults to `'B'` per D8-RESOLVED. `'A'` and `'C'`
         /// produce typed errors (`E_VIEW_STRATEGY_A_REFUSED` /
         /// `E_VIEW_STRATEGY_C_RESERVED`).
-        #[napi]
-        pub fn create_user_view(&self, spec_json: serde_json::Value) -> napi::Result<String> {
+        ///
+        /// R6FP-Group-1 (r6-arch-2): renamed from `create_user_view` to
+        /// align with the engine's `register_*` lifecycle verb. The
+        /// js-name `createUserView` deprecation alias is held alongside
+        /// `registerUserView` through one transition window so the
+        /// Group-2 TS rename does not break the build.
+        #[napi(js_name = "registerUserView")]
+        pub fn register_user_view(&self, spec_json: serde_json::Value) -> napi::Result<String> {
             let spec = parse_user_view_spec(&spec_json)?;
-            let cid = self.inner.create_user_view(spec).map_err(engine_err)?;
+            let cid = self.inner.register_user_view(spec).map_err(engine_err)?;
             Ok(cid.to_base32())
+        }
+
+        /// R6FP-Group-1 (r6-arch-2) deprecation alias — renamed to
+        /// [`Self::register_user_view`]. Held through one transition
+        /// window for the Group-2 TS-side rename; remove in a
+        /// follow-up.
+        #[napi(js_name = "createUserView")]
+        pub fn create_user_view(&self, spec_json: serde_json::Value) -> napi::Result<String> {
+            self.register_user_view(spec_json)
         }
 
         /// Read a view. The `query` argument is accepted for forward-
@@ -1174,6 +1189,77 @@ mod napi_surface {
                 napi::Error::new(
                     Status::GenericFailure,
                     "SubscriptionJs: internal lock poisoned",
+                )
+            })?;
+            g.unsubscribe();
+            Ok(())
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // EmitSubscriptionJs — napi class wrapping
+    //   `benten_engine::EmitSubscription` (R6FP-Group-1 r6-mpc-2)
+    // ---------------------------------------------------------------------
+
+    /// JS-side EMIT subscription handle. Mirrors
+    /// [`benten_engine::EmitSubscription`] across the napi boundary so
+    /// the TS wrapper (Group 2) can build `engine.onEmit(channelGlob,
+    /// callback) -> EmitSubscription` on top of this Rust class.
+    ///
+    /// **Lifecycle contract:** the handle holds the underlying
+    /// [`benten_engine::EmitSubscription`] alive for the duration of
+    /// the JS-side reference. When JS drops the handle (or calls
+    /// `unsubscribe()`), Drop fires on the inner subscription, which
+    /// flips its active flag — subsequent emits skip the
+    /// `napi::ThreadsafeFunction` callback rather than firing it. The
+    /// closure itself stays in `EmitBroadcast.callbacks` until the
+    /// engine drops, but the active-flag gate makes the handle's
+    /// lifecycle observable from the JS layer.
+    ///
+    /// Mirrors `SubscriptionJs` (the SUBSCRIBE handle) field-for-field
+    /// minus the SUBSCRIBE-specific `pattern()` / `maxDeliveredSeq()`
+    /// accessors — EMIT events have no per-subscription max-seq state
+    /// (the publish path is broadcast, not seq-tracked).
+    #[napi]
+    pub struct EmitSubscriptionJs {
+        inner: std::sync::Mutex<benten_engine::EmitSubscription>,
+    }
+
+    impl EmitSubscriptionJs {
+        #[allow(
+            dead_code,
+            reason = "constructed by Group-2 TS surface adapter; held against the lib for re-export"
+        )]
+        pub(crate) fn from_inner(sub: benten_engine::EmitSubscription) -> Self {
+            Self {
+                inner: std::sync::Mutex::new(sub),
+            }
+        }
+    }
+
+    #[napi]
+    impl EmitSubscriptionJs {
+        /// `true` while the subscription is registered with the engine.
+        /// Flips to `false` after `unsubscribe()` or when the handle
+        /// drops.
+        #[napi(js_name = "isActive")]
+        pub fn is_active(&self) -> napi::Result<bool> {
+            let g = self.inner.lock().map_err(|_| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    "EmitSubscriptionJs: internal lock poisoned",
+                )
+            })?;
+            Ok(g.is_active())
+        }
+
+        /// Explicitly release the subscription. Idempotent.
+        #[napi]
+        pub fn unsubscribe(&self) -> napi::Result<()> {
+            let g = self.inner.lock().map_err(|_| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    "EmitSubscriptionJs: internal lock poisoned",
                 )
             })?;
             g.unsubscribe();

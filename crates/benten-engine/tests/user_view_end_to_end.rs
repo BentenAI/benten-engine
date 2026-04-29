@@ -56,7 +56,7 @@ fn user_registered_view_end_to_end() {
     assert_eq!(spec.id(), "user_posts_by_author");
 
     let cid = engine
-        .create_user_view(spec)
+        .register_user_view(spec)
         .expect("create_user_view succeeds with default Strategy::B");
     assert!(
         cid.to_base32().starts_with('b'),
@@ -100,6 +100,6 @@ fn engine_create_view_removes_phase_1_todo() {
 
     // Affirmative compile-pin: the public surface MUST exist.
     fn _compile_pin(e: &Engine, s: UserViewSpec) {
-        let _ = e.create_user_view(s);
+        let _ = e.register_user_view(s);
     }
 }

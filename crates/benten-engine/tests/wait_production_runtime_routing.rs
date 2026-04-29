@@ -677,3 +677,174 @@ fn engine_resume_with_meta_succeeds_when_deadline_not_elapsed() {
         "in-time resume produces the terminal_ok_outcome (OK edge)"
     );
 }
+
+// ---------------------------------------------------------------------------
+// R6FP-Group-1 (r6-mpc-1) regression pins — engine resume API consults
+// ALL THREE WaitMetadata branches (deadline + duration-variant + signal-shape)
+// ---------------------------------------------------------------------------
+//
+// Pre-R6FP-G1, `Engine::resume_with_meta` / `resume_from_bytes_unauthenticated`
+// / `resume_from_bytes_as` consulted ONLY the deadline branch (`timeout_ms`
+// + `suspend_elapsed_ms`); they silently dropped `signal_shape` validation
+// and `is_duration` routing. The metadata-producer-vs-consumer R6 lens
+// caught the gap as a BLOCKER. R6FP-G1 wires `engine_wait.rs:resume_from_
+// bytes_inner` to delegate to `benten_eval::resume_with_meta` so a single
+// authoritative consumer handles all three branches.
+
+/// R6FP-G1 (r6-mpc-1) BLOCKER pin: a typed `signal_shape` declared at
+/// suspend time MUST fire `E_INV_REGISTRATION` when the resume payload
+/// does not structurally match the shape, even when the engine path is
+/// the one driving the resume (the eval-side direct-resume path already
+/// fires this; pre-R6FP-G1 the engine path skipped the check entirely).
+#[test]
+fn engine_resume_with_meta_validates_signal_shape_mismatch_fires_inv_registration() {
+    use benten_engine::ResumePayload;
+    use benten_errors::ErrorCode;
+
+    let (_dir, engine) = open_engine();
+    // Declare an Int-typed signal shape; the resume payload below is
+    // Text — eval-side `shapes_match` rejects (Int variant ≠ Text
+    // variant), routes to `EvalError::Invariant(Registration)`,
+    // engine-side maps to E_INV_REGISTRATION.
+    engine
+        .register_subgraph(wait_signal_handler_with_shape(
+            "wait:shape-mismatch",
+            "user:click",
+            Value::Int(0),
+        ))
+        .expect("register typed-shape wait handler");
+
+    let handle = match engine.call("wait:shape-mismatch", "run", Node::empty()) {
+        Err(EngineError::WaitSuspended { handle }) => handle,
+        other => panic!("expected WaitSuspended, got {other:?}"),
+    };
+    let envelope_bytes = engine
+        .suspend_to_bytes(&handle)
+        .expect("suspend_to_bytes round-trip");
+
+    // Resume with a Text payload that violates the declared Int shape.
+    let result = engine.resume_with_meta(
+        &envelope_bytes,
+        ResumePayload::Signal(Value::text("not-an-int")),
+    );
+    match result {
+        Err(EngineError::Other { code, .. }) => assert_eq!(
+            code,
+            ErrorCode::InvRegistration,
+            "engine.resume_with_meta MUST fire E_INV_REGISTRATION on \
+             signal_shape mismatch (R6FP-G1 r6-mpc-1: pre-fix the engine \
+             path skipped the eval-side shape consumer entirely)"
+        ),
+        other => panic!(
+            "expected E_INV_REGISTRATION on shape mismatch, got {other:?} \
+             — suggests resume_from_bytes_inner did not delegate to the \
+             eval-side wait::resume_with_meta consumer"
+        ),
+    }
+}
+
+/// R6FP-G1 (r6-mpc-1) BLOCKER pin: a duration-variant WAIT (declared
+/// via `duration_ms` without an explicit `timeout_ms`) MUST fire
+/// `E_WAIT_TIMEOUT` when resumed via the engine surface with a `None`
+/// payload after the duration has elapsed. Pre-R6FP-G1 the engine
+/// path's deadline-only check did not fire when only the
+/// duration-variant branch (eval-side `meta.is_duration && matches!(
+/// signal, WaitResumeSignal::DurationElapsed)`) would have been the
+/// firing branch.
+#[test]
+fn engine_resume_with_meta_duration_wait_fires_e_wait_timeout_on_duration_resume() {
+    use benten_engine::ResumePayload;
+    use benten_errors::ErrorCode;
+
+    let (_dir, engine) = open_engine();
+    // duration_ms with NO explicit timeout_ms — the eval-side
+    // `evaluate_op_with_handler_id` defaults `timeout_ms` to
+    // `duration_ms` when absent, so this also exercises the
+    // duration-elapsed path on the deadline branch. The
+    // duration-variant DurationElapsed branch additionally fires
+    // unconditionally when the resume payload is `None` and
+    // `is_duration=true`.
+    engine
+        .register_subgraph(wait_duration_handler("wait:duration-resume", 100))
+        .expect("register duration wait handler");
+
+    let handle = match engine.call("wait:duration-resume", "run", Node::empty()) {
+        Err(EngineError::WaitSuspended { handle }) => handle,
+        other => panic!("expected WaitSuspended, got {other:?}"),
+    };
+    let envelope_bytes = engine
+        .suspend_to_bytes(&handle)
+        .expect("suspend_to_bytes round-trip");
+
+    // Drive the duration-variant resume branch via ResumePayload::None
+    // (which maps to WaitResumeSignal::DurationElapsed at the eval
+    // boundary). With `is_duration=true` recorded at suspend, the
+    // eval-side consumer fires `WaitTimeout` unconditionally.
+    let result = engine.resume_with_meta(&envelope_bytes, ResumePayload::None);
+    match result {
+        Err(EngineError::Other { code, .. }) => assert_eq!(
+            code,
+            ErrorCode::WaitTimeout,
+            "engine.resume_with_meta with ResumePayload::None on a \
+             duration-variant WAIT MUST fire E_WAIT_TIMEOUT (R6FP-G1 \
+             r6-mpc-1: pre-fix the engine path's deadline-only check \
+             skipped the duration-variant branch)"
+        ),
+        other => panic!("expected E_WAIT_TIMEOUT on duration-variant resume, got {other:?}"),
+    }
+}
+
+/// R6FP-G1 (r6-mpc-1) BLOCKER happy-path pin: when all three branches
+/// (deadline fresh + matching shape + signal-WAIT routing) pass, the
+/// resume succeeds with a terminal OK outcome. Guards against an
+/// over-eager metadata consumer that rejects legitimate resumes.
+#[test]
+fn engine_resume_with_meta_succeeds_when_all_three_branches_pass() {
+    use benten_engine::ResumePayload;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mock_clock = std::sync::Arc::new(benten_eval::MockMonotonicSource::at_zero());
+    let engine = Engine::builder()
+        .monotonic_source(mock_clock.clone())
+        .open(dir.path().join("engine.redb"))
+        .expect("open engine with mock monotonic source");
+
+    // Signal-variant WAIT with a typed Int shape. Resume below carries
+    // a matching Int payload, well within the deadline window.
+    let mut props = BTreeMap::new();
+    props.insert("signal".into(), Value::text("user:click"));
+    props.insert("timeout_ms".into(), Value::Int(1_000));
+    props.insert("signal_shape".into(), Value::Int(0));
+    let spec = SubgraphSpec::builder()
+        .handler_id("wait:happy-path")
+        .primitive_with_props(PrimitiveSpec {
+            id: "w0".into(),
+            kind: PrimitiveKind::Wait,
+            properties: props,
+        })
+        .build();
+    engine
+        .register_subgraph(spec)
+        .expect("register happy-path wait handler");
+
+    let handle = match engine.call("wait:happy-path", "run", Node::empty()) {
+        Err(EngineError::WaitSuspended { handle }) => handle,
+        other => panic!("expected WaitSuspended, got {other:?}"),
+    };
+    let envelope_bytes = engine
+        .suspend_to_bytes(&handle)
+        .expect("suspend_to_bytes round-trip");
+
+    // Advance only 10ms — well within the 1000ms deadline.
+    mock_clock.advance(std::time::Duration::from_millis(10));
+
+    // Resume with a matching Int payload; deadline is fresh; signal
+    // variant matches the suspend's signal-variant.
+    let outcome = engine
+        .resume_with_meta(&envelope_bytes, ResumePayload::Signal(Value::Int(42)))
+        .expect("happy-path resume should succeed");
+    assert!(
+        outcome.is_ok_edge(),
+        "happy-path resume produces the terminal_ok_outcome (OK edge)"
+    );
+}

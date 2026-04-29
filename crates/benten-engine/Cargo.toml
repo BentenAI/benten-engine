@@ -102,6 +102,16 @@ thiserror = { workspace = true }
 serde = { workspace = true, features = ["std"] }
 serde_ipld_dagcbor = { workspace = true }
 
+# R6FP-Group-1 (Round-2 Instance 8) — JSON-encoded structured-field bag
+# for the napi error bridge. EngineError::context_json() returns
+# serde_json::Value snapshots of per-variant fields (e.g.
+# ModuleManifestCidMismatch.expected/computed/summary) so the napi
+# adapter can attach them as a `$$benten-context$$` suffix on the
+# error message and the TS mapNativeError can populate
+# BentenError.context. Adds ~30KB compiled; the alternative would be
+# hand-written JSON serialisation of every diagnostic variant.
+serde_json = { workspace = true }
+
 # Phase 2b G7-A — `engine.toml` workspace-config parser. Reads at
 # `Engine::open` time; failed parsing surfaces as `E_ENGINE_CONFIG_INVALID`.
 # Per Ben's G7-A brief addition: deployment-level override of D24

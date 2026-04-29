@@ -309,21 +309,33 @@ pub fn run_concurrent_producers(
 
 /// STREAM executor.
 ///
-/// At the primitive level, STREAM allocates a sink + source pair and
-/// surfaces an opaque sink handle on the `"ok"` edge. Runtime chunk
-/// emission is owned by the handler body that consumes the sink (via the
-/// engine's primitive-host bridge); the executor itself is non-blocking.
+/// R6FP-Group-1 (r6-stream-3): the eval-side `stream::execute` is dead
+/// code in the production STREAM dispatch path — `Engine::call_stream`
+/// → `build_stream_handle` builds its own producer thread + sink
+/// directly, bypassing this surface entirely. Pre-fix this body
+/// allocated a sink+source via `make_chunk_sink(DEFAULT_CAPACITY)` and
+/// immediately discarded both, returning `Ok(StepResult{edge_label:
+/// "ok", output: Null})` — a silent no-op. Consequence: a SubgraphSpec
+/// with a STREAM node invoked via `engine.call()` (NOT
+/// `engine.call_stream`) executed the STREAM primitive as a no-op +
+/// the `StreamPrimitiveSpec.persist` enum was orphaned (build_stream_
+/// handle does not read a `persist` property; persist:true was
+/// silently ignored on the production runtime path).
+///
+/// R6FP-G1 fails LOUDLY: `engine.call(handler_with_stream)` now
+/// surfaces `EvalError::PrimitiveNotImplemented` with an actionable
+/// message naming `engine.call_stream` as the correct route. The
+/// silent no-op is a deceptive sentinel; loud-fail matches the
+/// wave-8b "deceptive sentinel removed" discipline.
 ///
 /// # Errors
 ///
-/// Phase-2b G6-A returns `Ok(StepResult { edge_label: "ok" })` on every
-/// invocation; runtime sink failures route through the consumer call
-/// site as typed `ChunkSinkError`.
+/// `EvalError::PrimitiveNotImplemented(Stream)` always — the
+/// production runtime path for STREAM is `engine.call_stream(...)`,
+/// not `engine.call(...)`. The error message names the correct
+/// surface so operators reading logs can route appropriately.
 pub fn execute(_op: &OperationNode, _host: &dyn PrimitiveHost) -> Result<StepResult, EvalError> {
-    let _ = make_chunk_sink(DEFAULT_CAPACITY);
-    Ok(StepResult {
-        next: None,
-        edge_label: "ok".to_string(),
-        output: Value::Null,
-    })
+    Err(EvalError::PrimitiveNotImplemented(
+        crate::PrimitiveKind::Stream,
+    ))
 }

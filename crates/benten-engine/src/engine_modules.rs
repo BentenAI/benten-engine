@@ -111,7 +111,12 @@ impl Engine {
     /// bytes + summary + name + version) into the
     /// `system:ModuleManifest` zone via the privileged write path. This
     /// is durable: the manifest survives engine restart and is
-    /// sync-eligible for Phase-3 federation.
+    /// sync-eligible for Phase-3 federation. R6FP-Group-1 (r6-arch-1):
+    /// the in-memory active set is rebuilt at engine open via
+    /// `Self::rehydrate_installed_modules_from_zone` — pre-fix the
+    /// docstring claim above was honoured on disk only and a freshly-
+    /// opened engine returned `false` from
+    /// [`Self::is_module_installed`] for previously-installed CIDs.
     ///
     /// However, the underlying **wasm bytes** that each manifest entry
     /// references (`modules[i].cid`) are NOT auto-persisted. Operators
@@ -317,6 +322,78 @@ impl Engine {
         manifest
             .compute_cid()
             .map_err(manifest_error_to_engine_error)
+    }
+
+    /// R6FP-Group-1 (r6-arch-1) — Rehydrate the in-memory installed-modules
+    /// active set from the durable `system:ModuleManifest` zone.
+    ///
+    /// Pre-R6FP-G1, [`Self::install_module`] persisted manifests to the
+    /// `system:ModuleManifest` zone (durable across engine restart) but
+    /// the in-memory `installed_modules` BTreeMap was NOT rebuilt at
+    /// engine open — so a freshly-restarted Engine returned `false` from
+    /// [`Self::is_module_installed`] for previously-installed CIDs even
+    /// though the system-zone Node was on disk. The install_module
+    /// docstring claimed "the manifest survives engine restart and is
+    /// sync-eligible for Phase-3 federation"; the code only honoured the
+    /// "survives engine restart" half on disk, not in the in-memory
+    /// indexes the dispatcher consults.
+    ///
+    /// This helper closes the docs/code drift surfaced by R6's
+    /// architect-reviewer lens (r6-arch-1). It is invoked by
+    /// `EngineBuilder::assemble` once after the backend is open + the
+    /// engine is constructed; failures during rehydration are
+    /// non-fatal (logged via tracing warn) so a corrupt or partial
+    /// system-zone Node does not block engine startup.
+    ///
+    /// **wasm32 cut:** the SANDBOX subsystem is `cfg(not(target_arch =
+    /// "wasm32"))`, but the manifest zone scan is target-agnostic
+    /// (uses only `benten_graph` accessors). The wasm32 engine has no
+    /// durable backend so the scan returns an empty set.
+    ///
+    /// # Errors
+    ///
+    /// [`EngineError::Graph`] if the backend's `get_by_label` /
+    /// `get_node` accessors error. Decode failures of individual
+    /// manifest Nodes are logged + skipped rather than aborting the
+    /// scan (best-effort hydration).
+    pub(crate) fn rehydrate_installed_modules_from_zone(&self) -> Result<usize, EngineError> {
+        let cids = self.backend.get_by_label("system:ModuleManifest")?;
+        let mut rebuilt: BTreeMap<Cid, InstalledModule> = BTreeMap::new();
+        for cid in cids {
+            let Some(node) = self.backend.get_node(&cid)? else {
+                continue;
+            };
+            // Pull the canonical-bytes blob out of the Node + decode.
+            let bytes = match node.properties.get("manifest_cbor") {
+                Some(Value::Bytes(b)) => b.clone(),
+                _ => continue, // malformed Node — skip
+            };
+            let manifest = match ModuleManifest::from_canonical_bytes(&bytes) {
+                Ok(m) => m,
+                Err(_) => continue, // decode failure — skip
+            };
+            // Recompute the manifest CID under the canonical hash so a
+            // Node whose `manifest_cid` property has drifted from the
+            // bytes-hash is rejected (defense against on-disk
+            // corruption surfacing as a phantom installed module).
+            let computed = match manifest.compute_cid() {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            rebuilt.insert(computed, InstalledModule { manifest });
+        }
+        let count = rebuilt.len();
+        let mut active = self
+            .installed_modules()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        // Merge into the active set; in practice the active set is
+        // empty at engine open (this is called from assemble()
+        // immediately after `Engine::from_parts_with_clocks`).
+        for (cid, installed) in rebuilt {
+            active.insert(cid, installed);
+        }
+        Ok(count)
     }
 
     /// Wave-8h audit-gap fix — build a [`ManifestRegistry`] hydrated from

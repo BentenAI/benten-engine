@@ -62,7 +62,7 @@ fn ivm_strategy_b_user_view_registers_as_algorithm_b() {
         .unwrap();
 
     engine
-        .create_user_view(spec)
+        .register_user_view(spec)
         .expect("create_user_view with Strategy::B + canonical id must succeed");
 
     let observed = engine.view_strategy("capability_grants").expect(
@@ -102,7 +102,7 @@ fn ivm_strategy_b_routes_through_algorithm_b_for_each_canonical_id() {
         .unwrap();
 
     engine
-        .create_user_view(spec)
+        .register_user_view(spec)
         .expect("create_user_view with Strategy::B + canonical 'version_current' must succeed");
 
     let observed = engine.view_strategy("version_current").expect(

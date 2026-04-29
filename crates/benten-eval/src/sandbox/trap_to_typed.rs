@@ -157,8 +157,28 @@ pub fn map_call_error(
             wasmtime::Trap::Interrupt => SandboxError::WallclockExceeded {
                 limit_ms: wallclock_limit_ms,
             },
+            // R6FP-Group-1 (r6-wsa-8) — narrowed reason string so the
+            // operator-actionable hint differentiates "module
+            // recursed past max_wasm_stack" from generic
+            // wasmtime-invalid-module shapes. Fully splitting into a
+            // dedicated `SandboxError::StackExhausted` variant +
+            // `ErrorCode::SandboxStackExhausted` catalog code is
+            // BELONGS-NAMED-NOW for Group 4 (Phase-3-backlog
+            // enrichment + ERROR-CATALOG.md narrative widening) —
+            // the rename cascades through ~20 sites (drift detector,
+            // catalog tables, narrative docs) and the operator-UX
+            // gain is small enough that the catalog churn does not
+            // belong inside R6FP-G1's already-extended scope. Reason
+            // string carries the actionable hint
+            // ("max_wasm_stack=512KiB") so log-scrapers can route on
+            // it pre-catalog-lift.
             wasmtime::Trap::StackOverflow => SandboxError::ModuleInvalid {
-                reason: "wasmtime stack overflow (max_wasm_stack exceeded)".to_string(),
+                reason: "wasmtime stack overflow — module recursion exceeded \
+                          max_wasm_stack=512KiB; raise the budget if the \
+                          recursion is intentional, harden the module if \
+                          not (TODO(PHASE-3-BACKLOG-r6-wsa-8): split into \
+                          a dedicated SandboxStackExhausted variant)"
+                    .to_string(),
             },
             wasmtime::Trap::UnreachableCodeReached => SandboxError::ModuleInvalid {
                 reason: "wasmtime unreachable instruction".to_string(),

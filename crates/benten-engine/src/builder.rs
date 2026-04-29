@@ -369,14 +369,34 @@ impl EngineBuilder {
                 .as_ref()
                 .and_then(|n| n.canonical_bytes().ok())
                 .unwrap_or_default();
-            let label = event.primary_label().to_string();
+            // R6FP-Group-1 (Round-2 Instance 6 BLOCKER): forward ALL
+            // 9 fields cleanly. Pre-fix this bridge dropped 6 of 9
+            // (tx_id, actor_cid, handler_cid, capability_grant_cid,
+            // edge_endpoints, AND collapsed labels: Vec<String> to a
+            // single primary_label: String). The collapse caused a
+            // real BEHAVIORAL DEFECT: a multi-labeled Node
+            // ["User","Admin"] silently missed delivery to a
+            // SUBSCRIBE consumer matching `Admin:*` because the
+            // matcher only consulted the (single) primary label.
+            // edge_endpoints stays out of the eval-side struct (the
+            // eval ChangeEvent is anchor-centric; edge events ride
+            // the anchor_cid/labels with no separate endpoint
+            // surface). All other 8 fields forward.
             let translated = benten_eval::primitives::subscribe::ChangeEvent {
                 anchor_cid: event.cid,
                 kind,
                 seq: benten_eval::primitives::subscribe::next_engine_seq(),
                 payload_bytes,
+                labels: event.labels.clone(),
+                tx_id: event.tx_id,
+                actor_cid: event.actor_cid,
+                handler_cid: event.handler_cid,
+                capability_grant_cid: event.capability_grant_cid,
             };
-            benten_eval::primitives::subscribe::publish_change_event_with_label(&label, translated);
+            benten_eval::primitives::subscribe::publish_change_event_with_labels(
+                &event.labels,
+                translated,
+            );
         });
 
         // Wire the IVM subscriber when enabled. G5's `Subscriber::new()`
@@ -451,7 +471,7 @@ impl EngineBuilder {
             .time_source
             .unwrap_or_else(|| Arc::new(HlcTimeSource::new()));
 
-        Ok(Engine::from_parts_with_clocks(
+        let engine = Engine::from_parts_with_clocks(
             backend,
             policy,
             caps_enabled,
@@ -461,7 +481,20 @@ impl EngineBuilder {
             ivm,
             monotonic,
             time,
-        ))
+        );
+
+        // R6FP-Group-1 (r6-arch-1): rebuild the in-memory installed-
+        // modules active set from the durable `system:ModuleManifest`
+        // zone. Pre-R6FP-G1 a fresh `Engine::open` after a previous
+        // `install_module` returned `false` from `is_module_installed`
+        // for the previously-installed CID — the manifest survived on
+        // disk but the in-memory indexes the dispatcher consults were
+        // empty. The hydration is best-effort: a corrupt / partial
+        // Node is skipped rather than aborting startup so a single
+        // bad manifest cannot wedge engine open.
+        let _ = engine.rehydrate_installed_modules_from_zone();
+
+        Ok(engine)
     }
 }
 
