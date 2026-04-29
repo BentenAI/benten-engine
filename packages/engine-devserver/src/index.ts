@@ -50,6 +50,16 @@ interface NativeDevServer {
     op: string,
     source: string,
   ): string;
+  // R6FP-tail (Round-2 Instance 10) — structured replace outcome.
+  // Returns either the full RegisterReplaceOutcome JSON
+  // `{ handlerId, cid, previousCid, chainDepth, versionTag, replaced }`
+  // when engine routing is enabled, or `{ legacyOnly: true, handlerId }`
+  // when the dev-server is in legacy in-memory mode.
+  replaceHandlerFromDslWithOutcome?(
+    handlerId: string,
+    op: string,
+    source: string,
+  ): unknown;
   grantCapability(actor: string, scope: string): void;
   grantExists(actor: string, scope: string): boolean;
   subscribeToReloadEvents(): NativeReloadSubscriber;
@@ -254,6 +264,74 @@ export class BentenDevServer {
     source: string,
   ): Promise<string> {
     return this.inner.replaceHandlerFromDsl(handlerId, op, source);
+  }
+
+  /**
+   * R6FP-tail (Round-2 Instance 10) — replace a handler from DSL +
+   * return the structured replace outcome when engine routing is
+   * enabled.
+   *
+   * Returns the full `{ handlerId, cid, previousCid, chainDepth,
+   * versionTag, replaced }` shape (matching
+   * `Engine.replaceSubgraph(...)`'s structured return) so DevServer
+   * consumers can correlate hot-replace observability without
+   * subscribing to reload events. When the dev-server is in legacy
+   * in-memory mode (engine routing disabled), returns
+   * `{ legacyOnly: true, handlerId }`.
+   *
+   * Pre-Instance-10 the only return shape was the new-CID string
+   * (`replaceHandler`); `previousCid` / `chainDepth` / `versionTag`
+   * were dropped at the napi boundary.
+   */
+  async replaceHandlerWithOutcome(
+    handlerId: string,
+    op: string,
+    source: string,
+  ): Promise<
+    | {
+        handlerId: string;
+        cid: string;
+        previousCid: string | null;
+        chainDepth: number;
+        versionTag: string;
+        replaced: boolean;
+      }
+    | { legacyOnly: true; handlerId: string }
+  > {
+    if (typeof this.inner.replaceHandlerFromDslWithOutcome !== "function") {
+      // Pre-Instance-10 native binding lacks the structured surface;
+      // fall back to the bare-CID surface + lift it into the partial
+      // shape so callers can pivot on `legacyOnly` consistently.
+      const cid = this.inner.replaceHandlerFromDsl(handlerId, op, source);
+      return {
+        handlerId,
+        cid,
+        previousCid: null,
+        chainDepth: 1,
+        versionTag: "v1",
+        replaced: false,
+      };
+    }
+    const raw = this.inner.replaceHandlerFromDslWithOutcome(
+      handlerId,
+      op,
+      source,
+    );
+    if (
+      raw &&
+      typeof raw === "object" &&
+      (raw as { legacyOnly?: unknown }).legacyOnly === true
+    ) {
+      return raw as { legacyOnly: true; handlerId: string };
+    }
+    return raw as {
+      handlerId: string;
+      cid: string;
+      previousCid: string | null;
+      chainDepth: number;
+      versionTag: string;
+      replaced: boolean;
+    };
   }
 
   /**

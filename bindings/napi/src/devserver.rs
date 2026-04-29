@@ -153,6 +153,41 @@ impl DevServer {
             .map_err(compile_err_to_napi)
     }
 
+    /// R6FP-tail (Round-2 Instance 10) — replace a handler's body from
+    /// a DSL source string + return the structured replace outcome
+    /// when engine routing is enabled.
+    ///
+    /// Returns JSON `{ handlerId, cid, previousCid, chainDepth,
+    /// versionTag, replaced }` (matching
+    /// [`crate::Engine::registerSubgraphReplace`]'s shape) when engine
+    /// routing produced a real outcome, OR `{ legacyOnly: true,
+    /// handlerId }` when the dev-server is in legacy in-memory mode.
+    /// Pre-Instance-10 callers got only the new-CID String back, with
+    /// `previousCid` / `chainDepth` / `versionTag` recoverable only via
+    /// `subscribeToReloadEvents` correlation.
+    #[napi(js_name = "replaceHandlerFromDslWithOutcome")]
+    pub fn replace_handler_from_dsl_with_outcome(
+        &self,
+        handler_id: String,
+        op: String,
+        source: String,
+    ) -> napi::Result<serde_json::Value> {
+        let g = self.inner.lock().map_err(poisoned)?;
+        let dev = g.as_ref().ok_or_else(devserver_stopped)?;
+        match dev
+            .replace_handler_from_dsl_with_outcome(&handler_id, &op, &source)
+            .map_err(compile_err_to_napi)?
+        {
+            Some(outcome) => Ok(crate::subgraph::register_replace_outcome_to_json(&outcome)),
+            None => {
+                let mut m = serde_json::Map::new();
+                m.insert("legacyOnly".into(), serde_json::Value::Bool(true));
+                m.insert("handlerId".into(), serde_json::Value::String(handler_id));
+                Ok(serde_json::Value::Object(m))
+            }
+        }
+    }
+
     /// Grant a capability to a friendly principal identifier. Mirror of
     /// `Engine.grantCapability` but bound to the dev-server's own grant
     /// table (which survives hot-reload). The `actor` is hashed via the
@@ -280,18 +315,38 @@ fn devserver_stopped() -> napi::Error {
     )
 }
 
+/// R6FP-tail (Round-2 Instance 9) — convert a `CompileError` into a napi
+/// error preserving the diagnostic's structured `line` / `column` fields
+/// for the JS side via the `$$benten-context$$` sentinel suffix used by
+/// `engine_err` (see `bindings/napi/src/error.rs::CONTEXT_SENTINEL`).
+///
+/// Pre-fix the message format `{code}: {msg} (line={line:?} column={col:?})`
+/// encoded `Option<u32>` via `{:?}` (yielding `Some(N)` literals);
+/// JS callers had to regex-parse `Some\((\d+)\)` to recover the structured
+/// fields, ugly + fragile. Post-fix the message prefix carries only the
+/// human-readable head + the sentinel suffix carries the JSON
+/// `{ "line": N | null, "column": N | null }` bag, which the TS-side
+/// `mapNativeError` parses + surfaces on `error.context`.
 fn compile_err_to_napi(err: CompileError) -> napi::Error {
+    const CONTEXT_SENTINEL: &str = " :: $$benten-context$$";
     match err.diagnostic() {
-        Some(d) => napi::Error::new(
-            Status::GenericFailure,
-            format!(
-                "{code}: {msg} (line={line:?} column={col:?})",
-                code = d.error_code,
-                msg = d.message,
-                line = d.line,
-                col = d.column,
-            ),
-        ),
+        Some(d) => {
+            let ctx = serde_json::json!({
+                "line": d.line,
+                "column": d.column,
+            });
+            let ctx_json = serde_json::to_string(&ctx).unwrap_or_else(|_| "{}".into());
+            napi::Error::new(
+                Status::GenericFailure,
+                format!(
+                    "{code}: {msg}{sentinel}{ctx}",
+                    code = d.error_code,
+                    msg = d.message,
+                    sentinel = CONTEXT_SENTINEL,
+                    ctx = ctx_json,
+                ),
+            )
+        }
         None => napi::Error::new(
             Status::GenericFailure,
             format!("E_DSL_COMPILE_ERROR: {err}"),

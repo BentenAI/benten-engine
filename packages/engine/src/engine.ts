@@ -98,6 +98,10 @@ interface NativeEngine {
   edgesFrom?: (cid: string) => unknown[];
   edgesTo?: (cid: string) => unknown[];
   registerSubgraph?: (spec: unknown) => string;
+  // R6FP-tail (Round-2 Instance 10) — Engine::register_subgraph_replace
+  // exposed via napi. Returns JSON
+  // `{ handlerId, cid, previousCid, chainDepth, versionTag, replaced }`.
+  registerSubgraphReplace?: (spec: unknown) => unknown;
   registerCrud?: (label: string) => string;
   call?: (handlerId: string, op: string, input: unknown) => unknown;
   callAs?: (handlerId: string, op: string, input: unknown, actor: string) => unknown;
@@ -578,6 +582,88 @@ export class Engine {
     }
     this.knownHandlers.set(id, actions);
     return makeRegisteredHandler(id, actions, sg, this.inner);
+  }
+
+  /**
+   * R6FP-tail (Round-2 Instance 10) — replace a registered subgraph's
+   * body. Idempotent on identical content under the same handler id;
+   * bumps the engine's in-memory version chain on different content.
+   *
+   * Returns the structured outcome
+   * `{ handlerId, cid, previousCid, chainDepth, versionTag, replaced }`
+   * so JS callers can correlate hot-replace observability without a
+   * side-channel `subscribeToReloadEvents` correlation. Pre-Instance-10
+   * the Rust `Engine::register_subgraph_replace` was NOT exposed via
+   * napi at all; the dev-server's `replaceHandlerFromDsl` path returned
+   * only the new-CID String.
+   *
+   * Emits `EUnknown` (synthetic fallback) when the native binding lacks
+   * the `registerSubgraphReplace` accessor (pre-Instance-10 native
+   * cdylib). Callers can probe via
+   * `typeof engine._inner.registerSubgraphReplace === 'function'`
+   * (the wrapper's `inner` is a private field; in test scenarios pin
+   * via the consumer-audit table on the PR body instead).
+   */
+  public async replaceSubgraph(
+    source: Subgraph | CrudHandler,
+  ): Promise<{
+    handlerId: string;
+    cid: string;
+    previousCid: string | null;
+    chainDepth: number;
+    versionTag: string;
+    replaced: boolean;
+  }> {
+    this.assertOpen();
+    const crud = isCrudHandler(source) ? source : undefined;
+    const sg = crud ? crud.subgraph : isSubgraph(source) ? source : undefined;
+    if (!sg) {
+      throw new EDslInvalidShape(
+        "replaceSubgraph: argument must be a Subgraph (from .build()) or a crud(...) result",
+      );
+    }
+    if (!this.inner.registerSubgraphReplace) {
+      throw new EDslInvalidShape(
+        "replaceSubgraph: @benten/engine-native Engine missing registerSubgraphReplace — rebuild the native binding (R6FP-tail Instance 10 wire-through)",
+      );
+    }
+    const payload = toNativePayload(sg);
+    let raw: unknown;
+    try {
+      raw = this.inner.registerSubgraphReplace(payload);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+    if (
+      !raw ||
+      typeof raw !== "object" ||
+      typeof (raw as { handlerId: unknown }).handlerId !== "string" ||
+      typeof (raw as { cid: unknown }).cid !== "string"
+    ) {
+      throw new EDslInvalidShape(
+        "replaceSubgraph: native binding returned an unexpected shape (expected { handlerId, cid, previousCid?, chainDepth, versionTag, replaced })",
+      );
+    }
+    const obj = raw as {
+      handlerId: string;
+      cid: string;
+      previousCid?: string | null;
+      chainDepth: number;
+      versionTag: string;
+      replaced: boolean;
+    };
+    if (crud) {
+      this.crudLabels.set(obj.handlerId, crud);
+    }
+    this.knownHandlers.set(obj.handlerId, sg.actions);
+    return {
+      handlerId: obj.handlerId,
+      cid: obj.cid,
+      previousCid: obj.previousCid ?? null,
+      chainDepth: obj.chainDepth,
+      versionTag: obj.versionTag,
+      replaced: obj.replaced,
+    };
   }
 
   /**
