@@ -138,7 +138,7 @@
 
 ### 5.1 Drift-detector + non-canonical-view generalization
 
-**Phase 2b state:** Wave-8h wired Algorithm B production registration. The 5 hand-written canonical views (`ContentListingView`, `ChangeIndexView`, `VersionCurrentView`, `ContentFilterView`, `LabelEdgesView`) are pure-delegation kernels; non-canonical user-defined view IDs hit a `ContentListingView` fallback (per `docs/INVARIANT-COVERAGE.md` Algorithm B canonical-only compromise note). Wave-8j-cleanup didn't change this. The R6 ivm-correctness lens (`r6-ivm-2`, `r6-ivm-3`) flagged two gaps:
+**Phase 2b state:** Wave-8h wired Algorithm B production registration. The 5 hand-written canonical views (`CapabilityGrantsView`, `ContentListingView`, `EventDispatchView`, `GovernanceInheritanceView`, `VersionCurrentView` — see `crates/benten-ivm/src/views/mod.rs`) are pure-delegation kernels; non-canonical user-defined view IDs hit a `ContentListingView` fallback (per `docs/INVARIANT-COVERAGE.md` Algorithm B canonical-only compromise note). Wave-8j-cleanup didn't change this. The R6 ivm-correctness lens (`r6-ivm-2`, `r6-ivm-3`) flagged two gaps:
 - Drift-detector for IVM canonical-view-vs-Algorithm-B equivalence is named in SECURITY-POSTURE.md:266 + INVARIANT-COVERAGE.md:133 as "on the Phase-3 backlog" but had no actual entry until this section.
 - 4 of 5 canonical views silently ignore user-supplied label semantics (e.g. `version_current` + Label("post") registers as `Strategy::B` but VersionCurrentView hardcodes NEXT_VERSION). Wave-8j R6-FP Group 2 lands a fail-loud reject for this drift; full generalization to "Algorithm B handles arbitrary user-defined label semantics" remains Phase 3.
 
@@ -200,7 +200,7 @@
 
 ### 6.6 TS-side SANDBOX named-manifest resolution + module-bytes registration API
 
-**Phase 2b state:** The Rust-side named-manifest registry (`benten_eval::sandbox::ManifestRegistry` + `Engine::manifest_registry()` projection at `crates/benten-engine/src/engine_modules.rs:430`) keys CapBundle entries by `entry.name` (e.g. `"identity"`), NOT by the colon-joined `"<manifestName>:<entryName>"` shape the TS DSL surface advertises (`SandboxArgsByName.module: "echo:identity"` per `packages/engine/src/types.ts:386`). Wave-8h wired the registry projection but the resolution-from-DSL-shape half is missing on the TS bridge — `register_subgraph` does NOT validate at registration time that a SANDBOX node's `module: "<m>:<e>"` resolves to an installed manifest entry, AND there is NO TS-side `engine.registerModuleBytes(cid, bytes)` API to register the actual wasm bytes (Rust has `Engine::register_module_bytes`, napi-unexposed). Three TS vitest pins were authored RED-PHASE expecting this resolution + registration plumbing:
+**Phase 2b state:** The Rust-side named-manifest registry (`benten_eval::sandbox::ManifestRegistry` + `Engine::manifest_registry()` projection at `crates/benten-engine/src/engine_modules.rs:431`) keys CapBundle entries by `entry.name` (e.g. `"identity"`), NOT by the colon-joined `"<manifestName>:<entryName>"` shape the TS DSL surface advertises (`SandboxArgsByName.module: "echo:identity"` per `packages/engine/src/types.ts:386`). Wave-8h wired the registry projection but the resolution-from-DSL-shape half is missing on the TS bridge — `register_subgraph` does NOT validate at registration time that a SANDBOX node's `module: "<m>:<e>"` resolves to an installed manifest entry, AND there is NO TS-side `engine.registerModuleBytes(cid, bytes)` API to register the actual wasm bytes (Rust has `Engine::register_module_bytes`, napi-unexposed). Three TS vitest pins were authored RED-PHASE expecting this resolution + registration plumbing:
 
 - `packages/engine/test/install_module.test.ts::"engine.uninstallModule(cid) clean release"` — expects `registerSubgraph` to REJECT with `E_SANDBOX_MANIFEST_UNKNOWN` after uninstall.
 - `packages/engine/test/sandbox.test.ts::"compose SANDBOX inside a handler subgraph"` — expects `engine.call(...)` to return `result.ok=true` (which requires real wasm bytes registered + name-resolution at registration).
@@ -226,6 +226,36 @@ The vitest cluster fix-pass (PR linked from `.addl/phase-2b/r6-r2-fp-vitest-clus
 **Why Phase 3:** The retention bookkeeping side-table shape composes with the durable grant-store + per-event read-cap-coverage work (§2.2 + `phase-2-backlog.md` §7.4). Landing it standalone in Phase 2b would require re-shaping the side-table when grant-store lands.
 
 **Touch size:** ~50-60 LOC + 1 regression test pin.
+
+### 6.7 AArch64 SANDBOX runtime CI cell (Apple Silicon test execution)
+
+**Phase 2b state:** T4 multi-arch coverage (`.github/workflows/multi-arch-cargo-check.yml`) covers `cargo check --target aarch64-apple-darwin` (compile-only). Apple Silicon SANDBOX runtime behaviour (sigaltstack handler, 16-byte stack alignment + max_wasm_stack interaction with M-series memory model, epoch-deadline thread fairness on the heterogeneous E/P core scheduler) is uncovered at runtime CI. R6 Round 1 wasmtime-sandbox-auditor (`r6-wsa-11`) named `phase-2-backlog.md §10.4` as the destination; R6 Round 3 wasmtime-sandbox-auditor-redux (`r6-r3-wsa-1`) verified neither §10.4 nor any phase-3-backlog §6 sub-section actually contained the entry — HARD RULE clause-(b) violation. This entry is the populated destination.
+
+**Phase 3 target:** Add a `runs-on: macos-latest-arm64` cell to the CI matrix running `cargo nextest run -p benten-eval --target aarch64-apple-darwin --test sandbox_basic --test sandbox_escape_attempts_denied --test sandbox_severity_priority`. Couple to the SANDBOX runtime maturity cluster (§6.1 ESC-16 + §6.4 SandboxStackExhausted) since AArch64-specific surfacing of stack-overflow / fingerprint-collapse defects is most likely to come from this cell.
+
+**Why Phase 3:** Pairs with the broader Phase-3 CI hardening pass; isn't blocking for tag close because compile-only T4 catches the most common cross-arch breakage (type-system / target-feature drift). The runtime-specific surfacing only matters once the ecosystem starts running real workloads against AArch64 production builds.
+
+**Touch size:** ~30-40 LOC YAML + monitor wasmtime upstream's Apple Silicon issue surface.
+
+### 6.8 SANDBOX kv:write read-only-snapshot enforcement seam (Phase-3 forward-pointer)
+
+**Phase 2b state:** R6 Round 3 architect-reviewer-redux (`r6-r3-arch-2`) flagged a Phase-3 forward-pointer architectural seam: PR #68 wired D10 read-only-snapshot enforcement at `PrimitiveHost::put_node` (and Group A of R6-R3-FP extends it to `PrimitiveHost::delete_node`). Phase 2b's SANDBOX host-fn surface ships only `time` / `log` / `kv:read` (`crates/benten-eval/src/sandbox/host_fns.rs::build_default_host_fns`) — no storage-mutating host-fn — so a SANDBOX module CANNOT bypass D10 read-only-snapshot via host_fns today. Phase 3's iroh / capability-graph / federation work explicitly extends host-fns; when `kv:write` (and any future edge-mutating fns) ship, the read-only-snapshot enforcement MUST live AT the host-fn dispatch boundary in addition to `PrimitiveHost::put_node`/`delete_node` because the SANDBOX call site doesn't flow through the host's `put_node` trait method — it goes through the dedicated host-fn behaviour bound directly to the wasmtime Linker. A naive wiring that proxies `kv:write` through `PrimitiveHost::put_node` would be safe; a wiring that calls `backend.put_node` directly (e.g. for performance-bypassing buffer/replay) would silently violate D10 against a `fromSnapshotBlob`-backed engine.
+
+**Phase 3 target:** Every storage-mutating SANDBOX host-fn (`kv:write`, `kv:delete`, edge-mutating future fns) MUST run through `PrimitiveHost::put_node`/`PrimitiveHost::delete_node` OR independently invoke `Engine::is_read_only_snapshot()` before the backend call. Cross-link from `crates/benten-eval/src/sandbox/host_fns.rs::build_default_host_fns` docstring (or `HostFnBehavior::KvWrite` when added) to this entry; add a SANDBOX-from-snapshot regression test that verifies a kv:write attempt from inside a SANDBOX against a `fromSnapshotBlob` engine fires `E_READ_ONLY_SNAPSHOT` rather than silently mutating.
+
+**Why Phase 3:** No exploit path in 2b (no kv:write host-fn ships); pairs cleanly with §6.6 (the broader SANDBOX TS-bridge work) AND §1.4 (Compromise #17 durable BlobBackend with module bytes) since both want the same federated-write boundary surface.
+
+**Touch size:** ~10-20 LOC enforcement audit + ~30 LOC regression test pin (when the kv:write host-fn lands).
+
+### 6.9 benten-dev `inspect-state` thin-CLI front-door
+
+**Phase 2b state:** The Rust-side pretty-printer entry point at `tools/benten-dev/src/inspect_state.rs::pretty_print_envelope_bytes` IS shipped, but the wrapping `node bin/benten-dev.mjs` thin-CLI front-door for `benten-dev inspect-state <path>` is not yet shipped. R6 Round 3 stale-deferrals-deep-sweep (`r6-r3-sd-5`) flagged that `tools/benten-dev/test/inspect_state_pretty_prints.test.ts` (1 `describe.skip` + 3 `it.skip`) cited "Phase-2c item" as the destination, but Phase 2c is NOT a defined phase in `docs/FULL-ROADMAP.md` — HARD RULE clause-(b) violation (destination doesn't exist; "Phase 2c" appears informally as a deferred-bucket label in security-posture/error-catalog/host-functions for the deferred `random` host-fn but isn't a real plan-doc / roadmap entry). This entry is the populated destination.
+
+**Phase 3 target:** Ship the `node bin/benten-dev.mjs` thin-CLI front-door wrapping the existing Rust-side pretty-printer. Wire `benten-dev inspect-state <path>` to read the suspended ExecutionState envelope bytes from `<path>` and pretty-print via `pretty_print_envelope_bytes`. Un-skip the 1 describe + 3 it tests in `inspect_state_pretty_prints.test.ts`.
+
+**Why Phase 3:** The benten-dev thin-CLI surface is part of the broader Phase-3 DX hardening pass; the Rust-side entry point is shipped, so the test bodies pin the public-facing surface that lands in Phase 3 hygiene. Bundles cleanly with the rest of the Phase-3 first-wave CI-hygiene cluster (§7.3.A).
+
+**Touch size:** ~30-50 LOC TS CLI wrapper + the 4 test un-skips.
 
 ---
 
@@ -285,6 +315,16 @@ Together they realize the cr-r4b-10 closure-narrative claim that `E_STREAM_HANDL
 **Why deferred:** The `testingAdvanceWaitClock` helper requires test-mode mock-clock plumbing that crosses the napi boundary; Phase-3's broader engine clock-injection work bundles cleanly.
 
 **Touch size:** ~80-150 LOC TS surface + ~30-50 LOC napi binding + 5-7 regression tests + DSL spec doc updates.
+
+### 7.1.5 STREAM ESC defenses per-handler configurability (per-handler chunk-count + wallclock-budget)
+
+**Phase 2b state:** R6 Round 1 streaming-systems lens (`r6-stream-5`) flagged that the STREAM primitive's ESC defenses (chunk-count cap + per-call wallclock budget) are workspace-global constants today rather than per-handler-tunable knobs. R1 disposition was BELONGS-ELSEWHERE-NAMED to "phase-2-backlog.md §10.4 (or new §10.5 STREAM widening)"; R6 Round 3 streaming-systems-redux (`r6-r3-stream-OOS-2`) verified neither destination was populated and surfaced the partial-fail of HARD RULE clause-(b). This entry is the populated destination.
+
+**Phase 3 target:** Lift the chunk-count cap + wallclock-budget for STREAM out of workspace-global constants into per-handler `SubgraphSpec.primitives` properties (mirrors the SANDBOX `wallclock_ms` / `output_max_bytes` per-handler-knob shape per D24/D15). Wire the per-handler reads through the STREAM executor at primitive-entry; surface validation failures as registration-time `E_INV_STREAM_CONFIG` typed-error if the configured values exceed capability-grant ceilings.
+
+**Why Phase 3:** Pairs with Phase-3 STREAM/SUBSCRIBE end-to-end work in §7.3.A.2 (test bodies pinning the configurability surface) + the broader per-handler knob taxonomy that SANDBOX already established (so STREAM lands as the second instance of a now-codified pattern rather than as a one-off knob set).
+
+**Touch size:** ~50-80 LOC eval-side per-handler config read + ~20 LOC registration-time validation + ~30-50 LOC test pins.
 
 ### 7.2 BentenError.context full structured-field coverage
 

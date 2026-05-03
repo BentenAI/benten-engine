@@ -299,7 +299,7 @@ fn wait_primitive_consults_signal_shape_property() {
 /// handlers (NOT just for `SubgraphSpec::empty(...)` fixtures).
 ///
 /// **The bug.** Pre-fix-pass, the Wave-8i regular-walk path dropped the
-/// caller's principal arg (`let _ = principal;` at engine_wait.rs:782)
+/// caller's principal arg (`let _ = principal;` at engine_wait.rs:906)
 /// and the eval-side `placeholder_payload_for_signal` set
 /// `resumption_principal_cid = BLAKE3(signal_name)` regardless of who
 /// the caller said they were. A subsequent
@@ -454,7 +454,9 @@ fn wait_resume_deadline_fires_against_real_clock() {
     // (2) Drive the eval-side resume_with_meta path through the public
     //     `benten_eval::resume(...)` alias with a `MockTimeSource`
     //     positioned PAST the engine-stamped suspend time + timeout.
-    //     The deadline check at wait.rs:453 fires E_WAIT_TIMEOUT when
+    //     The deadline check in `crates/benten-eval/src/primitives/wait.rs`
+    //     (the resume-time deadline branch in `resume_with_meta`) fires
+    //     `E_WAIT_TIMEOUT` when
     //     (now - start) >= timeout. We construct the resume-time ctx
     //     clock at `start + 1000ms`, well past the 50ms deadline.
     //

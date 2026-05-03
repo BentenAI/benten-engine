@@ -408,7 +408,7 @@ export class ECapAttenuation extends BentenError {
 /**
  * E_WRITE_CONFLICT
  *
- * Thrown at: Evaluation (CAS WRITE). **Runtime surface is edge-routed, not Rust-enum-valued:** WRITE's `cas` mode routes conflicts via the `ON_CONFLICT` edge; the engine stamps `error_code: "E_WRITE_CONFLICT"` on the routed step (`crates/benten-engine/src/primitive_host.rs:1204`). Callers read the code off the edge-routing metadata, not via a `match` on an `Err(EvalError::WriteConflict)` — the enum variant exists for forward-compat with a Phase-2 native Rust path but has no construction site in Phase-1 production code. The drift-detector's `reachability: ignore` annotation reflects this asymmetry.
+ * Thrown at: Evaluation (CAS WRITE). **Runtime surface is edge-routed, not Rust-enum-valued:** WRITE's `cas` mode routes conflicts via the `ON_CONFLICT` edge; the engine stamps `error_code: "E_WRITE_CONFLICT"` on the routed step in `crates/benten-engine/src/primitive_host.rs::outcome_from_terminal_with_cid` (`"ON_CONFLICT"` arm of the edge match). Callers read the code off the edge-routing metadata, not via a `match` on an `Err(EvalError::WriteConflict)` — the enum variant exists for forward-compat with a Phase-2 native Rust path but has no construction site in Phase-1 production code. The drift-detector's `reachability: ignore` annotation reflects this asymmetry.
  * Message template: "Expected version {expected}, found {actual} on {target}"
  */
 export class EWriteConflict extends BentenError {
@@ -423,7 +423,7 @@ export class EWriteConflict extends BentenError {
 /**
  * E_INV_SANDBOX_DEPTH
  *
- * Thrown at: **Registration** (static SubgraphSpec analysis at `invariants::sandbox_depth::validate_registration`) — fully active. **Runtime** — fully active at Phase 2b close (R6FP-G1 / PR #62, 3-lens convergent fix). `AttributionFrame.sandbox_depth` threads transitively through `ActiveCall` at `crates/benten-engine/src/primitive_host.rs:901` (`frame.sandbox_depth = frame.sandbox_depth.saturating_add(1)`); the dispatching frame is constructed with `sandbox_depth: nested_depth` in both match arms (`primitive_host.rs:911, 917`) so SANDBOX-inside-CALL-inside-SANDBOX inherits the parent's depth. See `docs/INVARIANT-COVERAGE.md` §"Inv-4 + Inv-7 runtime arm status" for the wiring trace.
+ * Thrown at: **Registration** (static SubgraphSpec analysis at `invariants::sandbox_depth::validate_registration`) — fully active. **Runtime** — fully active at Phase 2b close (R6FP-G1 / PR #62, 3-lens convergent fix). `AttributionFrame.sandbox_depth` threads transitively through `ActiveCall` in `crates/benten-engine/src/primitive_host.rs::execute_sandbox` (`frame.sandbox_depth = frame.sandbox_depth.saturating_add(1)`); the dispatching frame is constructed with `sandbox_depth: nested_depth` in both match arms of the same function so SANDBOX-inside-CALL-inside-SANDBOX inherits the parent's depth. See `docs/INVARIANT-COVERAGE.md` §"Inv-4 + Inv-7 runtime arm status" for the wiring trace.
  * Message template: "SANDBOX nest depth {depth} exceeds configured max {max}"
  */
 export class EInvSandboxDepth extends BentenError {
@@ -453,7 +453,7 @@ export class EInvSandboxOutput extends BentenError {
 /**
  * E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED
  *
- * Thrown at: Evaluation (saturation point at the SANDBOX entry — the counter-saturation check fires before the inner subgraph starts executing). Runtime firing site at `crates/benten-eval/src/primitives/sandbox.rs:362`.
+ * Thrown at: Evaluation (saturation point at the SANDBOX entry — the counter-saturation check fires before the inner subgraph starts executing). Runtime firing site in `crates/benten-eval/src/primitives/sandbox.rs::execute` (depth-check guard).
  * Message template: "SANDBOX nested-dispatch depth saturated at {depth} (configured max {max})"
  */
 export class ESandboxNestedDispatchDepthExceeded extends BentenError {
@@ -1413,7 +1413,7 @@ export class ESandboxHostFnDenied extends BentenError {
 /**
  * E_SANDBOX_HOST_FN_NOT_FOUND
  *
- * Thrown at: SANDBOX executor — fully active post-wave-8b. The defensive `random`-cap pre-check at `primitives/sandbox.rs:373-382` fires before module link; the wasmtime link-time resolver path (other names) fires when wasmtime fails to resolve an import against the linker.
+ * Thrown at: SANDBOX executor — fully active post-wave-8b. The defensive `random`-cap pre-check at `crates/benten-eval/src/primitives/sandbox.rs::execute` (sec-g7a-mr-5 D1 random-host-fn deferral guard, immediately after the `manifest_ref.resolve(...)` block) fires before module link; the wasmtime link-time resolver path (other names) fires when wasmtime fails to resolve an import against the linker.
  * Message template: "SANDBOX host-fn not found: {name}"
  */
 export class ESandboxHostFnNotFound extends BentenError {

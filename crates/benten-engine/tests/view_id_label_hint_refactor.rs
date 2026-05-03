@@ -1,7 +1,8 @@
 #![cfg(feature = "phase_2b_landed")]
 // R3-followup (R4-FP B-1) red-phase: gate against R5-pending G8-B
 // view-registry-driven label resolution (replaces the Phase-1 string-prefix
-// strip at engine_views.rs:91-112).
+// strip in engine_views.rs — pre-fix shape; the strip-prefix logic moved
+// to Engine::read_view_with's `label_hint` derivation post-R6FP-Group-1).
 //
 //! Phase 2b R4-FP (B-1) — carry-ivm-r6-3 label-hint scope refactor (G8-B).
 //!
@@ -14,8 +15,9 @@
 //!   - `.addl/phase-2b/r2-test-landscape.md` §1.7 row 185.
 //!   - `.addl/phase-2b/r4-qa-expert.json` qa-r4-04 (carry test missing).
 //!
-//! Today (Phase-2a): `engine_views.rs:91-112` derives a label by
-//! `view_id.strip_prefix("content_listing_")`. Any user-registered view
+//! Today (Phase-2a, pre-R6FP-Group-1): `engine_views.rs::read_view_with`
+//! `label_hint` derivation strips the `content_listing_` prefix from the
+//! view id. Any user-registered view
 //! whose id does NOT start with `content_listing_` slips through the
 //! read-cap gate (Option-C) silently — the cap check derives an empty
 //! `label`, the `if !label.is_empty()` short-circuits, and the read

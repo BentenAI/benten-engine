@@ -1580,7 +1580,9 @@ impl Engine {
     )]
     // R6 round-2 C2-R2-3: the `_actor: Option<Cid>` parameter became dead
     // after sec-r6r1-01 landed the actor-from-active-call lookup
-    // (`engine.rs:1096-1102`). Removed; the callable dispatch helper now
+    // (the actor is now read from `self.active_call` inside
+    // `dispatch_call_inner` rather than passed in by the caller).
+    // Removed; the callable dispatch helper now
     // takes 6 args, dropping under the default `clippy::too_many_arguments`
     // threshold so its allow attribute is no longer required either.
     fn dispatch_call_inner(

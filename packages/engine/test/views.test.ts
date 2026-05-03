@@ -80,7 +80,8 @@ describe("engine.registerUserView", () => {
     // crates/benten-engine/tests/user_view_strategy_b_default.rs. The
     // resolver is the load-bearing surface the napi bridge round-trips.
     // (r6-dx-4 closure: stale `Engine.open(":memory:")` comment removed —
-    // the in-memory backend IS wired at builder.rs:481-498 and active in
+    // the in-memory backend IS wired in builder.rs (`IN_MEMORY_SENTINEL`
+    // routing in `open_backend_for_path`) and active in
     // sandbox.test.ts / snapshot_blob_round_trip.test.ts.)
     const spec: UserViewSpec = {
       id: "user_default_strategy",

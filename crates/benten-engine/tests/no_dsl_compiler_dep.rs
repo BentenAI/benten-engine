@@ -15,7 +15,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "R5 G12-B red-phase: Cargo.toml scan not yet implemented"]
+#[ignore = "Phase 3 — Cargo.toml dep-graph scan body deferred per docs/future/phase-3-backlog.md §7.3 (G12-B benten-dsl-compiler crate landed; test body lands Phase 3 first-wave CI-hygiene pass)"]
 fn benten_engine_does_not_depend_on_benten_dsl_compiler() {
     todo!(
         "R5 G12-B: read CARGO_MANIFEST_DIR/Cargo.toml; \
@@ -25,7 +25,7 @@ fn benten_engine_does_not_depend_on_benten_dsl_compiler() {
 }
 
 #[test]
-#[ignore = "R5 G12-B red-phase: feature-flag scan not yet implemented"]
+#[ignore = "Phase 3 — public-API surface scan body deferred per docs/future/phase-3-backlog.md §7.3 (G12-B benten-dsl-compiler landed; cargo-public-api snapshot or reflection-based assertion lands Phase 3 first-wave CI-hygiene pass)"]
 fn benten_engine_register_handler_from_str_not_publicly_surfaced_in_phase_2b() {
     // Per arch-reviewer: the optional `register_handler_from_str` API is
     // explicitly NOT shipped in 2b — keeps the cargo-public-api baseline narrow.

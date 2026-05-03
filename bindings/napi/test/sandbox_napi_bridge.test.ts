@@ -6,7 +6,7 @@
 // `sandboxComputeManifestCid`) that were the R3 red-phase scaffolded
 // surface. R4b v2-1's "two-part fix" was supposed to land BOTH the
 // free-fn forms AND the Engine class-method forms; only the
-// class-method half landed (lib.rs:1027/1050/1061 — `engine.installModule`
+// class-method half landed (lib.rs:1118/1141/1152 — `engine.installModule`
 // / `engine.uninstallModule` / `engine.computeManifestCid`). The free-fn
 // shape was never wired, and the test was allowlisted-out of CI by
 // `.github/workflows/napi-vitest.yml` lines 103-128, hiding the surface

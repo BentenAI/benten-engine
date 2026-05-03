@@ -902,7 +902,10 @@ impl PrimitiveHost for Engine {
         //    entry so a chain handler1→CALL→handler2→CALL→...→handlerN
         //    where each handler runs a SANDBOX can deepen: the outer
         //    SANDBOX's bump is observed by the subsequent CALL push
-        //    (which inherits parent.sandbox_depth at engine.rs:1503),
+        //    (which inherits parent.sandbox_depth via the
+        //    `parent_sandbox_depth = guard.last().map_or(0, |f| f.sandbox_depth)`
+        //    read in `crates/benten-engine/src/engine.rs::dispatch_call_inner`
+        //    immediately before the new ActiveCall push),
         //    so each nested handler's SANDBOX sees a higher depth than
         //    its predecessor. This is the chain shape the runtime arm
         //    is designed to defend (Inv-4 / D20 read-side enforcement).
