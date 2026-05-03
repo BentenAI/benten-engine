@@ -189,17 +189,22 @@ end-to-end:
 Bounded carry-forwards from wave-8 close that don't invalidate the
 revalidation:
 
-- **Inv-4 runtime depth-threading** — was a wave-8 carry-forward at the
-  time of revalidation; closed at R6FP-G1 / PR #62 with both arms now
-  active. `AttributionFrame.sandbox_depth` threads transitively through
-  `ActiveCall` (`crates/benten-engine/src/primitive_host.rs::execute_sandbox`
-  saturating-bumps at SANDBOX entry; `engine.rs::dispatch_call_inner`
-  inherits the parent depth at CALL push), and the eval-side runtime arm
-  in `crates/benten-eval/src/primitives/sandbox.rs::execute` fires
+- **Inv-4 runtime depth-threading** (wave-8e item #11; closed at
+  R6FP-G1 / PR #62, ratified again post-r6-r3-pcds-1 closure) — both
+  arms now active. Production `AttributionFrame.sandbox_depth` threads
+  transitively across nested SANDBOX entries via
+  `frame.sandbox_depth.saturating_add(1)` at every SANDBOX boundary
+  (`crates/benten-engine/src/primitive_host.rs::execute_sandbox` at
+  SANDBOX entry; `engine.rs::dispatch_call_inner` inherits parent
+  depth at CALL push), and the eval-side runtime arm in
+  `crates/benten-eval/src/primitives/sandbox.rs::execute` fires
   `E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED` when the inherited depth
-  exceeds `config.max_nest_depth`. Cohort handlers didn't exercise
-  SANDBOX→CALL→SANDBOX chains, so the prior gap had no revalidation
-  impact regardless.
+  exceeds `config.max_nest_depth`. The JS-side surface widens via the
+  napi trace projection so trace UIs / Phase-6 forking can reason about
+  per-step nest depth (R6-R3 r6-r3-pcds-1 closure). Cohort handlers
+  don't exercise SANDBOX → CALL → SANDBOX chains, so even the prior
+  partial-arm wiring would not have changed the revalidation verdict;
+  the now-fully-wired form removes the carry-forward entirely.
 - **Compromise #17 module-bytes registry** — operators re-call
   `register_module_bytes` at engine open. Cohort handlers #11 + #12
   exercise the in-process register-then-dispatch shape, which is

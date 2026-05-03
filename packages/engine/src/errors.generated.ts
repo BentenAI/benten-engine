@@ -103,6 +103,7 @@ export const CATALOG_CODES = [
   "E_CAP_SCOPE_LONE_STAR_REJECTED",
   "E_VIEW_STRATEGY_A_REFUSED",
   "E_VIEW_STRATEGY_C_RESERVED",
+  "E_VIEW_LABEL_MISMATCH",
   "E_WAIT_SIGNAL_SHAPE_MISMATCH",
   "E_WAIT_SUSPENDED",
   "E_STREAM_BACKPRESSURE_DROPPED",
@@ -1182,6 +1183,21 @@ export class EViewStrategyCReserved extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_VIEW_STRATEGY_C_RESERVED", "D8-RESOLVED (Phase 2b). Strategy C is the Z-set / DBSP cancellation algorithm slot reserved for Phase 3+; refused at registration time in Phase 2b. Use `Strategy::B` (or omit the field; user views default to B).", message, context);
     this.name = "EViewStrategyCReserved";
+  }
+}
+
+/**
+ * E_VIEW_LABEL_MISMATCH
+ *
+ * Thrown at: `Engine::register_user_view` registration (R6-R3 fix-pass; mirrored at the TS-DSL pre-napi-boundary in `packages/engine/src/views.ts::validateUserViewSpec`).
+ * Message template: "user view '{view_id}' is reserved for the canonical IVM view with the hardcoded label '{expected_label}'; cannot register with a different label '{got_label}'"
+ */
+export class EViewLabelMismatch extends BentenError {
+  static readonly code = "E_VIEW_LABEL_MISMATCH";
+  static readonly fixHint = "Phase-2b R6-R3 (r6-r3-ivm-1). Four canonical Phase-1 IVM view ids (`capability_grants`, `version_current`, `event_dispatch`, `governance_inheritance`) have hardcoded `input_pattern_label` semantics in the hand-written `AlgorithmBView::for_id` dispatch arms — re-using one of those ids with a different label silently registers a view that filters on the wrong label. Either pick a different `spec.id` (the user-defined fallback honors any label) OR change `spec.inputPattern.label` to match the hardcoded value listed in the message body.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_VIEW_LABEL_MISMATCH", "Phase-2b R6-R3 (r6-r3-ivm-1). Four canonical Phase-1 IVM view ids (`capability_grants`, `version_current`, `event_dispatch`, `governance_inheritance`) have hardcoded `input_pattern_label` semantics in the hand-written `AlgorithmBView::for_id` dispatch arms — re-using one of those ids with a different label silently registers a view that filters on the wrong label. Either pick a different `spec.id` (the user-defined fallback honors any label) OR change `spec.inputPattern.label` to match the hardcoded value listed in the message body.", message, context);
+    this.name = "EViewLabelMismatch";
   }
 }
 

@@ -102,9 +102,12 @@ export function validateUserViewSpec(spec: UserViewSpec): string | null {
   // semantics + the user-supplied label disagrees, surface a typed
   // error. The engine-side equivalent rejection lives in
   // `crates/benten-engine/src/engine_views.rs::register_user_view`
-  // (R6-FP Group 1's Rust-side closure); this TS-side guard is
-  // pre-napi-boundary defence so callers don't have to round-trip
-  // through the napi error envelope to learn the spec is malformed.
+  // (R6-R3-FP r6-r3-ivm-1 Rust-side closure surfacing
+  // `EngineError::ViewLabelMismatch` / catalog `E_VIEW_LABEL_MISMATCH`);
+  // this TS-side guard is pre-napi-boundary defence so callers don't
+  // have to round-trip through the napi error envelope to learn the
+  // spec is malformed. Both surfaces use the same canonical mapping
+  // sourced from `benten_ivm::algorithm_b::CANONICAL_HARDCODED_LABELS`.
   if (hasLabel && typeof ip.label === "string") {
     const hardcodedLabel = CANONICAL_HARDCODED_LABEL_VIEW_IDS.get(spec.id);
     if (hardcodedLabel !== undefined && hardcodedLabel !== ip.label) {

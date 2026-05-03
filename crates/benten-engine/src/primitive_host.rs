@@ -198,6 +198,42 @@ impl Engine {
         }
         Ok(())
     }
+
+    /// R6-R3 r6-r3-arch-1: shared D10 read-only-snapshot enforcement helper.
+    ///
+    /// `Engine::from_snapshot_blob` constructs an engine whose backend is
+    /// CID-pinned + structurally immutable. Every WRITE PrimitiveHost arm
+    /// (`put_node`, `delete_node`; `put_edge` / `delete_edge` when those
+    /// wire in Phase 2c) MUST surface `E_BACKEND_READ_ONLY` when invoked
+    /// against such an engine — both via the direct `engine_crud::*` API
+    /// and via the dispatch-through-handler path that
+    /// `engine.call(handler, ':...', ...)` exercises. The check fires
+    /// BEFORE any `PendingHostOp` is buffered so the replay path never
+    /// sees the violating op.
+    ///
+    /// `op_name` is included in the io::Error message body so logs name
+    /// the specific WRITE arm that was rejected (e.g.
+    /// `"backend is read-only: put_node rejected (snapshot-blob engine)"`).
+    pub(crate) fn check_not_read_only_snapshot(
+        &self,
+        op_name: &'static str,
+    ) -> Result<(), benten_eval::EvalError> {
+        if self.is_read_only_snapshot() {
+            return Err(benten_eval::EvalError::Host(benten_eval::HostError {
+                code: benten_errors::ErrorCode::BackendReadOnly,
+                source: Box::new(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    format!("backend is read-only: {op_name} rejected (snapshot-blob engine)"),
+                )),
+                context: Some(
+                    "snapshot-blob engine constructed via Engine::from_snapshot_blob is \
+                     user-write-immutable per D10 read-only contract"
+                        .to_string(),
+                ),
+            }));
+        }
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -301,20 +337,14 @@ impl PrimitiveHost for Engine {
         // contract)"` pin exercises. The check fires BEFORE the
         // PendingHostOp is buffered so the replay path never sees the
         // violating write.
-        if self.is_read_only_snapshot() {
-            return Err(benten_eval::EvalError::Host(benten_eval::HostError {
-                code: benten_errors::ErrorCode::BackendReadOnly,
-                source: Box::new(std::io::Error::new(
-                    std::io::ErrorKind::PermissionDenied,
-                    "backend is read-only: put_node rejected (snapshot-blob engine)",
-                )),
-                context: Some(
-                    "snapshot-blob engine constructed via Engine::from_snapshot_blob is \
-                     user-write-immutable per D10 read-only contract"
-                        .to_string(),
-                ),
-            }));
-        }
+        //
+        // R6-R3 r6-r3-arch-1: extracted to `check_not_read_only_snapshot`
+        // so `delete_node` (and future `put_edge` / `delete_edge` when
+        // they wire) enforce the contract symmetrically. Pre-extraction
+        // PR #68 wired the put-direction only; `delete_node` silently
+        // permitted deletes from a snapshot-blob engine via dispatched
+        // handlers.
+        self.check_not_read_only_snapshot("put_node")?;
         // Phase-2a Inv-11 runtime probe (G5-B-i mini-review C1): a handler
         // WRITE whose Node carries a `system:*` label MUST fire
         // `E_INV_SYSTEM_ZONE` at the evaluator-visible boundary, NOT the
@@ -385,6 +415,16 @@ impl PrimitiveHost for Engine {
     }
 
     fn delete_node(&self, cid: &Cid) -> Result<(), benten_eval::EvalError> {
+        // R6-R3 r6-r3-arch-1 (MAJOR): D10 read-only-snapshot enforcement
+        // mirrors `put_node`. Pre-fix PR #68 wired the put-direction
+        // only — a handler dispatched via `engine.call(handler, ':delete',
+        // ...)` against an Engine constructed via
+        // `Engine::from_snapshot_blob` SILENTLY DELETED Nodes, bypassing
+        // the read-only-contract guarantee. The check fires BEFORE the
+        // PendingHostOp::DeleteNode is buffered so the replay path never
+        // sees the violating delete. Symmetric to `put_node` via the
+        // shared `check_not_read_only_snapshot` helper.
+        self.check_not_read_only_snapshot("delete_node")?;
         let mut guard = self.active_call().lock_recover();
         if let Some(frame) = guard.last_mut() {
             frame

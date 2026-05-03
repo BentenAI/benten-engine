@@ -32,6 +32,8 @@
 
 **Touch size estimate:** **~800-1,500 LOC production + 200-400 LOC test. 18-30 files. 20-40 implementer hours, multi-session. Risk surface: medium** — public-API additive via type-alias sugar; cross-process determinism unaffected (CIDs computed over canonical Node bytes, not backend state); 558+ existing tests largely compile unchanged.
 
+**Generics-vs-dyn design call (R6-R3 r6-r3-arch-6).** `KVBackend::Error` is an associated type (`crates/benten-graph/src/backend.rs:292-298`) → `Arc<dyn KVBackend>` does NOT work without a `Box<dyn StdError>`-erasure wrapper at the trait boundary. A Phase-3 implementer attempting the dyn-route will hit the Error-type wall and need to convert the trait — a substantive design decision. The recommended shape is `Engine<B: GraphBackend>` generic-cascade (16+ impl blocks in `benten-engine` + napi-binding generic-erasure at the cdylib boundary): preserves the typed-error surface end-to-end, costs the impl-block cascade. The alternative shape adds associated-error-erasure to `KVBackend` itself (e.g. via `type Error = Box<dyn StdError + Send + Sync + 'static>`): smaller blast radius at the impl-block level but compresses backend-specific error context into a string at the trait boundary, breaking the `EngineError::Graph(GraphError)` typed pass-through that currently flows from `RedbBackend` → `EngineError`. The Phase-3 plan MUST close this design call BEFORE implementation begins; orchestrator-side context for that decision is captured at `.addl/phase-2b/wave-8j-backend-genericism-scoping-plan.md` (gitignored). Currently Engine uses `Arc<dyn ...>` only for 4 trait surfaces (`SuspensionStore`, `MonotonicSource`, `TimeSource`, `CapabilityPolicy` via `Box<dyn>`) — none of which carry an associated error type.
+
 ### 1.2 SnapshotBlobBackend direct-wire (engine_snapshot tempdir hydration cleanup)
 
 **Phase 2b state:** `crates/benten-engine/src/engine_snapshot.rs:223` opens a `RedbBackend` against a tempdir to hydrate snapshot bytes — works but an architectural smell ("tempdir-as-backend").
@@ -138,9 +140,9 @@
 
 ### 5.1 Drift-detector + non-canonical-view generalization
 
-**Phase 2b state:** Wave-8h wired Algorithm B production registration. The 5 hand-written canonical views (`CapabilityGrantsView`, `ContentListingView`, `EventDispatchView`, `GovernanceInheritanceView`, `VersionCurrentView` — see `crates/benten-ivm/src/views/mod.rs`) are pure-delegation kernels; non-canonical user-defined view IDs hit a `ContentListingView` fallback (per `docs/INVARIANT-COVERAGE.md` Algorithm B canonical-only compromise note). Wave-8j-cleanup didn't change this. The R6 ivm-correctness lens (`r6-ivm-2`, `r6-ivm-3`) flagged two gaps:
+**Phase 2b state:** Wave-8h wired Algorithm B production registration. The 5 hand-written canonical views (`CapabilityGrantsView`, `ContentListingView`, `EventDispatchView`, `GovernanceInheritanceView`, `VersionCurrentView` — see `crates/benten-ivm/src/views/mod.rs:20-24`) are pure-delegation kernels; non-canonical user-defined view IDs hit a `ContentListingView` fallback (per `docs/INVARIANT-COVERAGE.md` Algorithm B canonical-only compromise note). Wave-8j-cleanup didn't change this. The R6 ivm-correctness lens (`r6-ivm-2`, `r6-ivm-3`) flagged two gaps:
 - Drift-detector for IVM canonical-view-vs-Algorithm-B equivalence is named in SECURITY-POSTURE.md:266 + INVARIANT-COVERAGE.md:133 as "on the Phase-3 backlog" but had no actual entry until this section.
-- 4 of 5 canonical views silently ignore user-supplied label semantics (e.g. `version_current` + Label("post") registers as `Strategy::B` but VersionCurrentView hardcodes NEXT_VERSION). Wave-8j R6-FP Group 2 lands a fail-loud reject for this drift; full generalization to "Algorithm B handles arbitrary user-defined label semantics" remains Phase 3.
+- 4 of 5 canonical views silently ignore user-supplied label semantics (e.g. `version_current` + Label("post") registers as `Strategy::B` but VersionCurrentView hardcodes NEXT_VERSION). R6-R3 r6-r3-ivm-1 lands a fail-loud reject for this drift across BOTH the TS-DSL pre-napi-boundary (`packages/engine/src/views.ts::validateUserViewSpec`) AND the Rust engine boundary (`crates/benten-engine/src/engine_views.rs::register_user_view` surfacing `EngineError::ViewLabelMismatch` / catalog `E_VIEW_LABEL_MISMATCH`). Full generalization to "Algorithm B handles arbitrary user-defined label semantics" remains Phase 3.
 
 **Phase 3 target:**
 - (a) **Algorithm B drift-detector** — proptest harness that compares Algorithm B incremental updates vs from-scratch full computation across all 5 canonical views + a synthetic user-defined view. Treat divergence as a test failure with structured diff. Generalizes into the Phase-3 IVM CI lane.
@@ -150,9 +152,29 @@
 
 **Touch size:** ~400-700 LOC across `crates/benten-ivm/src/` (Algorithm B kernel generalization) + ~200-400 LOC tests (proptest drift detector + per-view-pattern conformance). Risk surface: medium — the 5 canonical views' performance characteristics must be preserved at the fast-path level.
 
+### 5.2 AnchorPrefix selector lift in user-view registration (post-G8-A)
+
+**Phase 2b state:** R6-R3 r6-r3-arch-4 named-destination carry. `Engine::register_user_view` accepts `InputPattern { anchor_prefix: Option<String>, ... }` as part of `UserViewSpec`, but the dispatch path at `crates/benten-engine/src/engine_views.rs::register_user_view` silently coerces `anchor_prefix` → label-equality match (the AnchorPrefix variant feeds the prefix string into the same `input_pattern_label` slot the `Label` variant uses). The pre-G8-A SEMANTIC STUB doc-block at the implementation site is honest about this; the stub bridges through `ContentListingView` until G8-A's per-strategy view dispatch lands. R6 Round 1 (r6-arch-4) flagged that no Phase-3 destination doc named the carry; this entry IS the named destination.
+
+**Phase 3 target:** lift `AnchorPrefix` to genuine prefix matching (e.g. `anchor_prefix="crud:"` matches both `"crud:post"` and `"crud:user"` via a `PrefixMatcher` selector type). Compose with §5.1 generalization so the user-view ingestion path supports per-spec view dispatch with arbitrary `(view_id, label_pattern, projection)` triples + the canonical-only fallback is removed (or kept as a fast-path).
+
+**Why Phase 3:** the AnchorPrefix lift requires the same Algorithm B selector-richness §5.1 covers — testing prefix-not-equality semantics requires the generalized dispatch path itself to exist. Sequencing: lands together with §5.1 in the Phase-3 IVM wave.
+
+**Touch size:** ~30-50 LOC across `engine_views.rs` (extend the matcher), `benten-ivm` subscriber wiring, plus 1 regression test exercising the prefix-not-equality case. Bundles cleanly with §5.1 (~1-2 hour incremental scope).
+
 ---
 
 ## 6. SANDBOX runtime maturity
+
+### 6.0 D10 read-only-snapshot enforcement at the SANDBOX kv:write extension boundary (forward-pointer)
+
+**Phase 2b state:** R6-R3 r6-r3-arch-2 forward-pointer. Phase 2b's SANDBOX host-fn surface is read-only at the storage layer: `crates/benten-eval/src/sandbox/host_fns.rs::default_host_fns` ships ONLY `time`, `log`, and `kv:read`. There is no `kv:write` host-fn; therefore a Phase-2b SANDBOX module CANNOT bypass D10 read-only-snapshot contract via host_fns — there is no surface to bypass. PR #68 wired `is_read_only_snapshot()` enforcement at `crates/benten-engine/src/primitive_host.rs::put_node`; R6-R3 r6-r3-arch-1 fix-pass extended the same enforcement to `delete_node` via the shared `check_not_read_only_snapshot(op_name)` helper. Both checks fire on the dispatch-through-handler path that `engine.call(handler, ':...', ...)` exercises.
+
+**Phase 3 target:** when the iroh / capability-graph / federation work extends host_fns with `kv:write` (and any future `kv:delete` / edge-mutating host-fn), the read-only-snapshot enforcement MUST live AT the host-fn dispatch boundary in addition to `PrimitiveHost::put_node` / `delete_node`. The SANDBOX call site does NOT flow through the host's `put_node` / `delete_node` trait methods — it goes through the dedicated `kv:write` host-fn behavior bound directly to the wasmtime Linker. A naive wiring that proxies `kv:write` through `PrimitiveHost::put_node` would be safe; a wiring that calls `backend.put_node` directly (e.g. for performance-bypassing buffer/replay) would silently violate D10 against a `from_snapshot_blob`-backed engine.
+
+**The architecturally-cheapest closure** is to either (a) route every storage-mutating host-fn through `PrimitiveHost::put_node` / `delete_node` so the existing helper fires, OR (b) have each host-fn closure independently invoke `Engine::is_read_only_snapshot()` before the backend call. Whichever path Phase-3 picks, the design call should be locked when `kv:write` lands so the seam doesn't reopen as a regression. Bundles cleanly with the broader §6.6 SANDBOX TS-bridge work AND §1.4 durable BlobBackend.
+
+**Touch size:** ~5-10 LOC at the host-fn build site, plus 1 regression test asserting `kv:write` from a SANDBOX module against a `from_snapshot_blob` engine surfaces `E_BACKEND_READ_ONLY` (mirrors the Phase-2b `delete_node` regression test landed alongside r6-r3-arch-1 in the engine-side integration suite).
 
 ### 6.1 ESC-16 fingerprint-collapse complete defense
 

@@ -80,6 +80,27 @@ fn trace_step_to_json(step: &TraceStep) -> serde_json::Value {
                     "capabilityGrantCid".to_string(),
                     serde_json::Value::String(attr.capability_grant_cid.to_base32()),
                 );
+                // R6-R3 r6-r3-pcds-1 (Producer/Consumer Drift Instance #15):
+                // `AttributionFrame.sandbox_depth` (added PR #62 wiring
+                // Inv-4 runtime threading via primitive_host.rs:147/901
+                // sandbox_depth.saturating_add(1)) was being dropped at
+                // this projection. Producer = `AttributionFrame` (4
+                // fields); pre-fix napi consumer emitted only 3 fields.
+                // The Inv-4 security claim — SANDBOX-bearing attribution
+                // chains content-distinguishable from non-SANDBOX chains —
+                // was preserved at the Rust CID level (see
+                // `crates/benten-eval/src/exec_state.rs::cid()`) but
+                // INVISIBLE to JS consumers. The TS surface
+                // `packages/engine/src/types.ts::AttributionFrame` widens
+                // alongside this projection so trace-rendering UIs +
+                // Phase 6 AI workflow forking can reason about
+                // "this step happened at SANDBOX nest-depth N".
+                a.insert(
+                    "sandboxDepth".to_string(),
+                    serde_json::Value::Number(serde_json::Number::from(u64::from(
+                        attr.sandbox_depth,
+                    ))),
+                );
                 obj.insert("attribution".to_string(), serde_json::Value::Object(a));
             }
         }

@@ -121,6 +121,31 @@ pub enum EngineError {
         view_id: String,
     },
 
+    /// Phase-2b R6-R3 (r6-r3-ivm-1): a user view registration supplied one
+    /// of the four canonical view ids whose hand-written view has a
+    /// hardcoded `input_pattern_label`, paired with a label that disagrees
+    /// with the hardcoded value. Closes the silent-label-discard footgun
+    /// that the prior `AlgorithmBView::for_id` dispatch arms exhibited for
+    /// `capability_grants`, `version_current`, `event_dispatch`, and
+    /// `governance_inheritance`. Mirrors the TS-DSL pre-napi rejection at
+    /// `packages/engine/src/views.ts::validateUserViewSpec`.
+    #[error(
+        "user view '{view_id}' is reserved for the canonical IVM view with the hardcoded label '{expected_label}'; \
+         cannot register with a different label '{got_label}'. \
+         Use a different spec.id (the user-defined fallback honors any label) \
+         OR change spec.inputPattern.label to '{expected_label}'."
+    )]
+    ViewLabelMismatch {
+        /// Identifier of the rejected user view (one of the 4 canonical ids).
+        view_id: String,
+        /// The hardcoded label that the canonical view's hand-written
+        /// dispatch arm filters on.
+        expected_label: String,
+        /// The label the caller supplied (which would have been silently
+        /// discarded pre-fix).
+        got_label: String,
+    },
+
     /// Nested transaction attempted.
     #[error("nested transaction not supported")]
     NestedTransactionNotSupported,
@@ -235,6 +260,15 @@ impl EngineError {
             }
             EngineError::ViewStrategyARefused { view_id }
             | EngineError::ViewStrategyCReserved { view_id } => Some(json!({ "viewId": view_id })),
+            EngineError::ViewLabelMismatch {
+                view_id,
+                expected_label,
+                got_label,
+            } => Some(json!({
+                "viewId": view_id,
+                "expectedLabel": expected_label,
+                "gotLabel": got_label,
+            })),
             EngineError::SubsystemDisabled { subsystem } => Some(json!({ "subsystem": subsystem })),
             EngineError::DuplicateHandler { handler_id } => {
                 Some(json!({ "handlerId": handler_id }))
@@ -282,6 +316,7 @@ impl EngineError {
             EngineError::UnknownView { .. } => ErrorCode::UnknownView,
             EngineError::ViewStrategyARefused { .. } => ErrorCode::ViewStrategyARefused,
             EngineError::ViewStrategyCReserved { .. } => ErrorCode::ViewStrategyCReserved,
+            EngineError::ViewLabelMismatch { .. } => ErrorCode::ViewLabelMismatch,
             EngineError::NestedTransactionNotSupported => ErrorCode::NestedTransactionNotSupported,
             EngineError::NotImplemented { .. } => ErrorCode::NotImplemented,
             EngineError::ModuleManifestCidMismatch { .. } => ErrorCode::ModuleManifestCidMismatch,

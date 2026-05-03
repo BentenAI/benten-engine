@@ -162,6 +162,18 @@ pub fn default_host_fns() -> Arc<BTreeMap<String, HostFnSpec>> {
 /// through its [`OnceLock`]. Validates each entry's `requires` cap-string
 /// via [`HostFnSpec::validate_requires`] (cr-g7a-mr-5 fix-pass: every
 /// codegen entry SHOULD validate; a build-time typo is caught here).
+///
+/// **Phase-3 forward-pointer (R6-R3 r6-r3-arch-2):** Phase 2b's host-fn
+/// table is read-only at the storage layer (only `time`, `log`, `kv:read`).
+/// When Phase 3 extends the table with `kv:write` (and any future
+/// `kv:delete` / edge-mutating host-fn), the D10 read-only-snapshot
+/// invariant requires every storage-mutating host-fn to either (a) flow
+/// through `PrimitiveHost::put_node` / `delete_node` (which hit the shared
+/// `check_not_read_only_snapshot` helper) OR (b) independently invoke
+/// `Engine::is_read_only_snapshot()` before the backend call. A direct
+/// `backend.put_node(...)` call from a host-fn closure would silently
+/// bypass D10 against a `from_snapshot_blob`-backed engine. See
+/// [`docs/future/phase-3-backlog.md` §6.0](../../../../docs/future/phase-3-backlog.md).
 fn build_default_host_fns() -> Arc<BTreeMap<String, HostFnSpec>> {
     let mut table: BTreeMap<String, HostFnSpec> = BTreeMap::new();
 

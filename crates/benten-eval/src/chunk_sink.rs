@@ -877,10 +877,24 @@ pub fn spawn_chunk_producer(
                     break;
                 }
                 Err(_typed_err) => {
-                    // Producer aborted with typed error. Close the sink
-                    // so the consumer drains; the trace_entry path
-                    // already captures the underlying transport failure
-                    // for the consumer to inspect.
+                    // R6-R3 r6-r3-stream-3 honest-comment fix: pre-fix
+                    // the comment claimed "the trace_entry path already
+                    // captures the underlying transport failure for the
+                    // consumer to inspect" — that is INACCURATE.
+                    // `SinkTraceEntry` (this module's
+                    // BackpressureDropped + WallclockExceeded variants)
+                    // does NOT have a ProducerAborted variant, so the
+                    // typed-error reason is structurally lost when the
+                    // producer aborts. Two-phase fix: surface the typed
+                    // error via a future `SinkTraceEntry::ProducerAborted
+                    // { reason }` variant (Phase-3 catalog widening
+                    // tracked in `docs/future/phase-3-backlog.md` §7
+                    // streaming maturity) — until then the comment is
+                    // honest about the swallow rather than overstating
+                    // observability that doesn't exist. The consumer
+                    // still sees a clean EOS via the closed sink, which
+                    // is the load-bearing termination contract; only
+                    // the per-error reason is lost.
                     let _ = sink.close();
                     break;
                 }

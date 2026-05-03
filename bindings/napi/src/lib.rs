@@ -1359,11 +1359,16 @@ mod napi_surface {
     /// `Buffer | null` (`null` ⇒ end-of-stream). Errors surface as
     /// thrown napi errors.
     ///
-    /// Pre-G6-A: `next()` from a handle constructed via
-    /// `engine.callStream` / `engine.openStream` surfaces
-    /// `E_PRIMITIVE_NOT_IMPLEMENTED` on the first call. Handles
-    /// constructed via the cfg-gated `testingOpenStreamForTest`
-    /// drain their pre-populated chunk vector normally.
+    /// R6-R3 r6-r3-stream-1 docstring sweep: pre-fix the docstring
+    /// claimed `next()` from a handle constructed via `engine.callStream`
+    /// / `engine.openStream` surfaces `E_PRIMITIVE_NOT_IMPLEMENTED` on
+    /// the first call — that was the early-Phase-2a behaviour, no
+    /// longer reflective of landed reality post wave-8c-stream-infra.
+    /// Today both production paths deliver real chunks via the
+    /// producer-bridge at `benten_engine::StreamHandle::bridge_source`.
+    /// Handles constructed via the cfg-gated `testingOpenStreamForTest`
+    /// drain their pre-populated chunk vector normally (the test factory
+    /// paths still use `chunks: VecDeque<Chunk>` rather than the bridge).
     #[napi]
     pub struct StreamHandleJs {
         inner: std::sync::Mutex<Option<benten_engine::StreamHandle>>,
