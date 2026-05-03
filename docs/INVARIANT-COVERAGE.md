@@ -19,7 +19,7 @@ status" section below). The two Phase-1 stubs are now removed.
 | 1 | DAG-ness — no cycles in operation graphs | 1 | `benten-eval::invariants::structural::validate_at_registration` (Kahn cycle detect) | `crates/benten-eval/src/invariants/structural.rs` (cycle test cluster) |
 | 2 | Max operation-subgraph depth | 1 | Bounded longest-path walk + per-CALL increment | `structural.rs::depth_*` tests |
 | 3 | Max fan-out per node | 1 | Edge enumeration at registration | `structural.rs::fan_out_*` tests |
-| 4 | **SANDBOX nest-depth ceiling — ACTIVE (Phase 2b G7-B / wave-8b / D20; both arms wired at R6FP-G1 / PR #62)** | 2b | `invariants::sandbox_depth::validate_registration` (registration); `AttributionFrame.sandbox_depth` runtime threading at `primitive_host.rs:901` (parent-sandbox_depth+1) + `SandboxError::NestedDispatchDepthExceeded` fires at `primitives/sandbox.rs:362` (runtime arm — both arms now active) | `crates/benten-eval/tests/inv_4_*.rs`, `crates/benten-engine/tests/inv_4_*.rs`, `tests/sandbox_depth_inheritance_through_call.rs` |
+| 4 | **SANDBOX nest-depth ceiling — ACTIVE (Phase 2b G7-B / wave-8b / D20; both arms wired at R6FP-G1 / PR #62)** | 2b | `invariants::sandbox_depth::validate_registration` (registration); `AttributionFrame.sandbox_depth` runtime threading in `crates/benten-engine/src/primitive_host.rs::execute_sandbox` (parent-sandbox_depth+1) + `SandboxError::NestedDispatchDepthExceeded` fires in `crates/benten-eval/src/primitives/sandbox.rs::execute` (runtime arm — both arms now active) | `crates/benten-eval/tests/inv_4_*.rs`, `crates/benten-engine/tests/inv_4_*.rs`, `tests/sandbox_depth_inheritance_through_call.rs` |
 | 5 | Max total nodes per subgraph | 1 | Node-count gate at registration | `structural.rs::node_count_*` tests |
 | 6 | Max total edges per subgraph | 1 | Edge-count gate at registration | `structural.rs::edge_count_*` tests |
 | 7 | **SANDBOX `output_max_bytes` range — ACTIVE (Phase 2b G7-B / wave-8b / D15 + D17 PRIMARY+BACKSTOP)** | 2b | `invariants::sandbox_output::validate_registration` (registration); `CountedSink::write` (PRIMARY streaming) + `CountedSink::backstop_check` (return-value BACKSTOP), both wired through wave-8b's host-fn trampoline + primitive boundary | `crates/benten-eval/tests/inv_7_*.rs`, `crates/benten-engine/tests/inv_7_*.rs`, `crates/benten-eval/src/sandbox/counted_sink.rs` |
@@ -60,12 +60,12 @@ threading gap. Both runtime arms are fully active at Phase 2b close:
   the static-graph at registration time. (2) Runtime arm: R6FP-G1 (PR
   #62) wired the `AttributionFrame.sandbox_depth` threading through the
   parent `ActiveCall`. At every production SANDBOX entry,
-  `crates/benten-engine/src/primitive_host.rs:901` mutates the parent
-  frame via `frame.sandbox_depth = frame.sandbox_depth.saturating_add(1)`;
+  `crates/benten-engine/src/primitive_host.rs::execute_sandbox` mutates
+  the parent frame via `frame.sandbox_depth = frame.sandbox_depth.saturating_add(1)`;
   the dispatching `AttributionFrame` is constructed with `sandbox_depth:
-  nested_depth` in both match arms (`primitive_host.rs:911, 917`) so
-  subsequent CALL pushes inherit. The eval-side runtime arm at
-  `crates/benten-eval/src/primitives/sandbox.rs:362-366` fires
+  nested_depth` in both match arms of the same function so subsequent
+  CALL pushes inherit. The eval-side runtime arm in
+  `crates/benten-eval/src/primitives/sandbox.rs::execute` fires
   `SandboxError::NestedDispatchDepthExceeded` once `attribution.sandbox_depth
   > config.max_nest_depth`. Default `max_nest_depth = 4` admits depths
   1..=4; depth 5 fires. SANDBOX-inside-CALL-inside-SANDBOX inherits the

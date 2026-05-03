@@ -12,11 +12,12 @@
 // not yet shipped; the Rust-side pretty-printer entry point at
 // `tools/benten-dev/src/inspect_state.rs::pretty_print_envelope_bytes`
 // IS shipped, but the wrapping `node bin/benten-dev.mjs` thin-CLI
-// front-door is a separate Phase-2c item. These tests stay `it.skip`'d
-// until that ships — the JS-side hot-reload harness in
+// front-door lands in Phase 3 per `docs/future/phase-3-backlog.md` §6.9
+// (benten-dev `inspect-state` thin-CLI front-door). These tests stay
+// `it.skip`'d until that ships — the JS-side hot-reload harness in
 // `devserver.test.ts` + `hotreload_preserves_cap_grants.test.ts` is the
-// load-bearing Wave-8f surface. Re-validating against Wave-8f scope
-// per `.addl/phase-2b/wave-8-brief.md` §8f.
+// load-bearing Wave-8f surface. HARD RULE compliance: destination
+// exists at phase-3-backlog §6.9 with concrete Phase-3 deliverables.
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";

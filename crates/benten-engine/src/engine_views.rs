@@ -191,7 +191,14 @@ impl Engine {
         }
         // Derive a label from the view id for the read-gate. Only
         // content_listing_<label> views carry a Phase-1 label hint;
-        // other view ids pass through unchanged.
+        // other view ids pass through unchanged. r6-r3-ivm-2 BOUNDED
+        // disclosure: this prefix-only heuristic means the 4 hardcoded-
+        // label canonical views + ALL user-defined views bypass the
+        // `check_read` hook on the view-level read path. Bounded by the
+        // Phase-2b cap-policy backends (NoAuth / GrantBacked); see
+        // `docs/SECURITY-POSTURE.md` Compromise #11 sub-block "Phase-2b
+        // R6 Round-3 surfacing — read_view_with view-id-prefix
+        // heuristic" for the full disclosure + Phase-3 lift plan.
         let label_hint = view_id
             .strip_prefix("content_listing_")
             .or_else(|| view_id.strip_prefix("system:ivm:content_listing_"))
@@ -571,20 +578,21 @@ fn project_view_read_to_outcome(
     }
 }
 
-// `is_known_view_id` consultation note (Phase 2b G8-B addresses
-// engine.rs:1976 TODO partially): user-view registration via
-// [`Engine::create_user_view`] adds the user's view id into the IVM
-// subscriber's `view_ids()` set. The `read_view_with` path above already
-// consults the live subscriber FIRST (see the `if let Some(ivm) = ...`
-// block) and only falls back to the canonical-id whitelist when the
-// subscriber has no live view for the id — so user-registered views are
-// observable through `read_view*` immediately after `create_user_view`
-// returns.
+// `is_known_view_id` consultation note (Phase 2b G8-B partially closed
+// the prior user-view-registration TODO that lived in engine.rs):
+// user-view registration via [`Engine::create_user_view`] adds the
+// user's view id into the IVM subscriber's `view_ids()` set. The
+// `read_view_with` path above already consults the live subscriber
+// FIRST (see the `if let Some(ivm) = ...` block) and only falls back
+// to the canonical-id whitelist when the subscriber has no live view
+// for the id — so user-registered views are observable through
+// `read_view*` immediately after `create_user_view` returns.
 //
-// The TODO at engine.rs:1976 ("replace with a per-view definition
-// registration pulled from benten-ivm") is now subscriber-driven for
-// the dynamic-registration path; the static whitelist of canonical ids
-// remains for the 5 hand-written views which do not auto-register a
-// live subscriber on engine open. Full removal of the whitelist waits
-// on G8-A's Algorithm B port to expose a definition-registry method on
-// the subscriber.
+// The user-view-registration TODO that previously lived in engine.rs
+// ("replace with a per-view definition registration pulled from
+// benten-ivm") has been deleted; the registration path is now
+// subscriber-driven for the dynamic-registration path. The static
+// whitelist of canonical ids remains for the 5 hand-written views
+// which do not auto-register a live subscriber on engine open. Full
+// removal of the whitelist waits on G8-A's Algorithm B port to expose
+// a definition-registry method on the subscriber.

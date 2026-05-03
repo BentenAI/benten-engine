@@ -181,8 +181,11 @@ describe("napi STREAM bridge — async-iterator back-pressure (wave-8c-stream-in
     // sleeps between chunks the producer's emitted count stalls at
     // capacity rather than buffering unboundedly. The Rust-side sink
     // already enforces this; the napi-side test requires the
-    // async-iterator return() bridge for graceful for-await break,
-    // which is a future post-wave-8c lift (carry-forward to a
-    // dedicated napi async-iterator wire-through).
+    // async-iterator return() bridge for graceful for-await break.
+    // Phase 3 — bounded-channel back-pressure E2E body deferred per
+    // docs/future/phase-3-backlog.md §7.3.A.2 (STREAM/SUBSCRIBE
+    // end-to-end; G6-A + wave-8c production runtime landed; napi
+    // async-iterator return() bridge for graceful for-await break is
+    // the gating surface). HARD RULE compliance: destination exists.
   });
 });

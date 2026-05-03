@@ -2,7 +2,8 @@
 //!
 //! Pre-NEW-1 the user-facing `Engine::read_view*` healthy-view path
 //! unconditionally returned `Outcome { list: Some(Vec::new()), .. }`
-//! (see `crates/benten-engine/src/engine_views.rs:185-191` pre-fix).
+//! (pre-NEW-1 shape of `engine_views.rs::read_view_with`; the body
+//! moved + grew during the NEW-1 fix).
 //! `Subscriber::read_view` exists + works + is consumed by
 //! `resolve_list_via_view_or_backend` for handler-internal listings, but
 //! the user-facing API never called it; subgraphs composing READ_VIEW

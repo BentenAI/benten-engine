@@ -189,11 +189,17 @@ end-to-end:
 Bounded carry-forwards from wave-8 close that don't invalidate the
 revalidation:
 
-- **Inv-4 runtime depth-threading** (wave-8e item #11) — production
-  `AttributionFrame.sandbox_depth` is constructed with literal `1`;
-  threading `parent.sandbox_depth + 1` through `ActiveCall` is bounded
-  structural work. Cohort handlers don't exercise SANDBOX→CALL→SANDBOX
-  chains, so the gap doesn't affect the revalidation verdict.
+- **Inv-4 runtime depth-threading** — was a wave-8 carry-forward at the
+  time of revalidation; closed at R6FP-G1 / PR #62 with both arms now
+  active. `AttributionFrame.sandbox_depth` threads transitively through
+  `ActiveCall` (`crates/benten-engine/src/primitive_host.rs::execute_sandbox`
+  saturating-bumps at SANDBOX entry; `engine.rs::dispatch_call_inner`
+  inherits the parent depth at CALL push), and the eval-side runtime arm
+  in `crates/benten-eval/src/primitives/sandbox.rs::execute` fires
+  `E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED` when the inherited depth
+  exceeds `config.max_nest_depth`. Cohort handlers didn't exercise
+  SANDBOX→CALL→SANDBOX chains, so the prior gap had no revalidation
+  impact regardless.
 - **Compromise #17 module-bytes registry** — operators re-call
   `register_module_bytes` at engine open. Cohort handlers #11 + #12
   exercise the in-process register-then-dispatch shape, which is

@@ -129,7 +129,8 @@ fn budget_exhausted_runtime_trace_emission() {
     assert_eq!(
         budget_type, "inv_8_iteration",
         "Inv-8 cumulative-step budget rows must carry budget_type \
-         \"inv_8_iteration\" (the lib.rs:1467 enum-variant doc names this \
+         \"inv_8_iteration\" (the TraceStep::BudgetExhausted enum-variant \
+         doc in benten-eval/src/lib.rs names this \
          + \"sandbox_fuel\" as the only valid families)"
     );
     assert!(
