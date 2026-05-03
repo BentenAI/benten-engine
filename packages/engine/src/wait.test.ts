@@ -56,13 +56,23 @@ describe("wait DSL surface", () => {
 
   it("wait_duration_form_still_builds", () => {
     // Phase-1 stub form (timed WAIT) must remain valid.
+    //
+    // R6-R5 r6-r5-pcds-2: the DSL spread now translates
+    // `duration: "5m"` (Text) into `duration_ms: 300_000` (Int) so the
+    // eval-side `wait::evaluate_op_with_handler_id` reader at
+    // `crates/benten-eval/src/primitives/wait.rs` (which reads
+    // `duration_ms`, NOT `duration`) sees the canonical key shape +
+    // stamps `WaitMetadata.is_duration = true`. The public
+    // `WaitDurationArgs.duration: string` interface is unchanged; only
+    // the wire shape changed (per the EMIT/SUBSCRIBE precedents).
     const sg = subgraph("wait-duration-test")
       .action("run")
       .wait({ duration: "5m" })
       .respond({ body: "$result" })
       .build();
     const waitNode = sg.nodes.find((n) => n.primitive === "wait");
-    expect(waitNode?.args.duration).toBe("5m");
+    expect(waitNode?.args.duration).toBeUndefined();
+    expect(waitNode?.args.duration_ms).toBe(300_000);
   });
 
   it("wait_signal_shape_optional_accepted", () => {
