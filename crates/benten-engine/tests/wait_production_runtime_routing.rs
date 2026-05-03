@@ -3,7 +3,7 @@
 //! Closes the docs-vs-code audit's PARTIAL verdict on WAIT: pre-Wave-8i,
 //! a regular `engine.call(handler_with_wait, ...)` walk routed to the
 //! dispatcher's `PrimitiveNotImplemented` arm in
-//! `crates/benten-eval/src/primitives/mod.rs::dispatch_primitive` (the
+//! `crates/benten-eval/src/primitives/mod.rs::dispatch` (the
 //! `_ => Err(EvalError::PrimitiveNotImplemented(op.kind))` catch-all
 //! arm that the Wave-8i wiring lifted WAIT out of via the new
 //! `PrimitiveKind::Wait =>` match arm; symbol form per R6-R4
@@ -95,7 +95,7 @@ fn wait_signal_handler_with_shape(handler_id: &str, signal: &str, shape: Value) 
 ///
 /// Pre-Wave-8i: the dispatcher's WAIT arm fell through to the
 /// `_ => Err(EvalError::PrimitiveNotImplemented(op.kind))` catch-all
-/// in `crates/benten-eval/src/primitives/mod.rs::dispatch_primitive`
+/// in `crates/benten-eval/src/primitives/mod.rs::dispatch`
 /// (symbol form per R6-R4 r6-r4-cp-6 + `dispatch-conventions.md`
 /// §3.5b — the prior `primitives/mod.rs:100` line cite drifted to
 /// `:111`), and that surfaced at `engine.call` as
