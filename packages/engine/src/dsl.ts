@@ -175,7 +175,14 @@ export interface StreamArgs {
 }
 export interface SubscribeArgs {
   event: string;
-  handler?: string;
+  // R6-R4 narrow-iteration r6-r4-narrow-pcds-1 (21st producer/consumer drift):
+  // `handler?: string` removed pending Phase-3 SUBSCRIBE handler-id-router work
+  // (`docs/future/phase-3-backlog.md` §7.10). The eval-side primitive at
+  // `crates/benten-eval/src/primitives/subscribe.rs::execute` reads only
+  // `pattern`; PR #74's r6-r4-cr-1 fix wrote `handler` into the props bag
+  // without an eval-side reader, silently dropping the field. The
+  // worked example at `docs/DSL-SPECIFICATION.md:546-561` is updated to
+  // remove the handler-id-router shape until §7.10 lands.
 }
 // SandboxArgs is defined in `./types.ts` as the discriminated union
 // `SandboxArgsByName | SandboxArgsByCaps` (Phase 2b G7-C). Imported and
@@ -313,18 +320,14 @@ export class SubgraphBuilder {
   public subscribe(args: SubscribeArgs): this {
     // R6-R4 r6-r4-cr-1 fix-pass (19th producer/consumer drift instance):
     // the eval-side SUBSCRIBE primitive at
-    // `crates/benten-eval/src/primitives/subscribe.rs::execute_op` reads
+    // `crates/benten-eval/src/primitives/subscribe.rs::execute` reads
     // the `pattern` property; the public DSL `SubscribeArgs.event` field
     // maps onto that property name. Pre-fix the spread set `event: ...`
     // and the SUBSCRIBE primitive routed `E_SUBSCRIBE_PATTERN_INVALID`
     // for every DSL-composed in-handler subscribe. Mirrors the EMIT
     // precedent (`emit()` above) that PR #66 / R6-R2-FP cluster-1 landed
     // for the same shape.
-    const props: Record<string, JsonValue> = { pattern: args.event };
-    if (args.handler !== undefined) {
-      props.handler = args.handler;
-    }
-    return this.addNode("subscribe", props);
+    return this.addNode("subscribe", { pattern: args.event });
   }
   public sandbox(args: SandboxArgs): this {
     return this.addNode("sandbox", { ...args } as Record<string, JsonValue>);
@@ -554,11 +557,7 @@ export class CaseBuilder {
     // `pattern` property the eval-side SUBSCRIBE primitive reads. See
     // the sibling builder's `subscribe()` method earlier in this file
     // for the full rationale.
-    const props: Record<string, JsonValue> = { pattern: a.event };
-    if (a.handler !== undefined) {
-      props.handler = a.handler;
-    }
-    return this.addNode("subscribe", props);
+    return this.addNode("subscribe", { pattern: a.event });
   }
   public sandbox(a: SandboxArgs): this {
     return this.addNode("sandbox", { ...a } as Record<string, JsonValue>);

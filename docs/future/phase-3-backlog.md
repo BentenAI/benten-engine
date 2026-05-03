@@ -416,7 +416,7 @@ widening (cross-process / cross-actor delivery).
 
 **Phase 2b state:** R6-R4 producer/consumer-deep-sweep-redux surfaced a pre-Phase-2b TS-surface drift candidate that is OUT-OF-SCOPE for the Phase-2b-close tag (named-destination-here per HARD RULE rule (b) + foundational `feedback_no_defer_HARD_RULE`):
 
-- `packages/engine/src/Edge` interface (`packages/engine/src/types.ts::Edge`) declares `{ cid: string, source, target, label }` — 4 fields. The napi producer at `bindings/napi/src/edge.rs::Edge::to_json` emits `{ source, target, label, properties? }` — 4 fields with TWO mismatches: (a) the TS interface declares `cid: string` but the napi producer never emits a `cid` field on the edge JSON (any TS caller reading `edge.cid` gets `undefined` at runtime); (b) the TS interface OMITS `properties` while the napi producer emits it when present (any TS caller wanting `edge.properties` hits a TS compile error).
+- `packages/engine/src/Edge` interface (`packages/engine/src/types.ts::Edge`) declares `{ cid: string, source, target, label }` — 4 fields. The napi producer at `bindings/napi/src/edge.rs::edge_to_json` emits `{ source, target, label, properties? }` — 4 fields with TWO mismatches: (a) the TS interface declares `cid: string` but the napi producer never emits a `cid` field on the edge JSON (any TS caller reading `edge.cid` gets `undefined` at runtime); (b) the TS interface OMITS `properties` while the napi producer emits it when present (any TS caller wanting `edge.properties` hits a TS compile error).
 - Origin: PR `3fc5262` `fix(dx)` from 2026-04-19 (Phase-2a R6 DX work, NOT Phase-2b). Preserved through every Phase-2b R5 wave + every R6 round (R6-R1 / R6-R2 / R6-R3 deep-sweep / R6-R3 narrow-iteration) without surfacing because the existing producer/consumer audits walked the producer-emits-field-vs-consumer-drops-field shape; the Edge case is the INVERTED shape (consumer-declares-field-vs-producer-doesn't-emit-it) which the Phase-2b-bounded sweeps did not target.
 - Behavioral consequence in Phase 2b: zero packages/engine/test/ exercise either `edge.cid` or `edge.properties`, so no test fails today; but any user-code TS caller that consults `edge.cid` for content-addressing or expects `edge.properties` for graph-shape introspection silently mis-behaves.
 
@@ -432,11 +432,40 @@ widening (cross-process / cross-actor delivery).
 
 **Cross-references:**
 - `.addl/phase-2b/r6-r4-producer-consumer-deep-sweep.json` — surfacing finding (`near_findings_examined_and_dismissed.candidate.Edge interface`).
-- `bindings/napi/src/edge.rs::Edge::to_json` — Rust producer.
+- `bindings/napi/src/edge.rs::edge_to_json` — Rust producer.
 - `packages/engine/src/types.ts::Edge` — TS consumer (drift surface).
 - `crates/benten-core/src/lib.rs:162` — by-design `#[serde(skip)] anchor_id` precedent for documenting intentional omissions.
 
 **Touch size:** ~80-150 LOC across `packages/engine/src/types.ts` (interface parity edits) + 1 Rust meta-test pin (~50-80 LOC) + cross-target pre-flight sweep. Risk surface: low — the additions are typed-surface widenings that existing TS callers don't depend on (zero current consumers).
+
+### 7.10 SUBSCRIBE handler-id-router + DSL-args-vs-eval-properties parity meta-test
+
+**Phase 2b state (as of R6-R4 narrow-iteration close):**
+
+R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift instance: `SubscribeArgs.handler` was declared in the TS DSL and actively written to the SubgraphNode props bag (`packages/engine/src/dsl.ts` SubgraphBuilder + CaseBuilder), but the eval-side primitive at `crates/benten-eval/src/primitives/subscribe.rs::execute` reads ONLY the `pattern` property — never `handler`. PR #74's r6-r4-cr-1 fix mirrored EMIT precedent (which DOES route on `handler`) too literally; SUBSCRIBE has no handler-id-router today.
+
+**Phase 2b resolution (orchestrator-direct, post-R6-R4-FP):** removed `handler?: string` from the `SubscribeArgs` interface in dsl.ts + DSL-SPECIFICATION.md + dropped the `props.handler = args.handler` write at both subscribe call sites. SUBSCRIBE today carries only `event` (mapped to eval-side `pattern`). The worked example at DSL-SPECIFICATION.md:557 cross-references this section.
+
+**Phase 3 target:**
+
+1. **Wire SUBSCRIBE handler-id-router**: add a `handler?: string` arm to the eval-side primitive at `subscribe.rs::execute` that, when set, routes change-event delivery through the named handler instead of returning the raw event to the calling subgraph. Mirrors the EMIT routing shape (which is wired through the change-broadcast machinery + handler-id correlation). Restores the `SubscribeArgs.handler` field in TS DSL + DSL-SPECIFICATION.md worked example.
+
+2. **Add DSL-args-vs-eval-primitive-properties parity meta-test** (the structural fix the 4-deep-sweeps recurrence proved is needed):
+   - Walk every `*Args` interface in `packages/engine/src/dsl.ts`
+   - For each, find the corresponding eval primitive at `crates/benten-eval/src/primitives/<primitive>.rs::execute`
+   - Assert every TS field that the DSL spreads to props is read by the eval primitive (and vice versa)
+   - Bundles cleanly with §7.9's Rust-side schema-parity meta-test (same TS-side audit infrastructure: read the dist `.d.ts` at test time, walk the type definitions, assert per-field correspondence against the Rust producer/consumer surface)
+
+**Why Phase 3:** Out-of-scope for Phase-2b-close — handler-id-router is application-layer routing infrastructure that composes more naturally with the Phase-3 cross-actor SUBSCRIBE delivery work (sync deltas + broadcast widening). The structural meta-test belongs in the same Phase-3 first-wave CI-hygiene cluster as §7.9 + §7.3.A.
+
+**Cross-references:**
+- `.addl/phase-2b/r6-r4-narrow-iteration-producer-consumer.json` — surfacing finding (21st p/c drift)
+- `.addl/phase-2b/r6-r3-fp-mr-group-b.json` — original mirror-EMIT-precedent context (PR #66 EMIT routing)
+- §7.9 — sibling Rust-side schema-parity meta-test recommendation (same infrastructure can cover both)
+- `crates/benten-eval/src/primitives/subscribe.rs::execute` — eval-side surface to extend
+- `crates/benten-eval/src/primitives/emit.rs` — EMIT precedent that DOES route on handler
+
+**Touch size:** ~30-50 LOC handler-id-router wiring + ~20 LOC DSL restoration + ~80-150 LOC parity meta-test (combined with §7.9 sibling work, ~150-250 LOC for both meta-tests).
 
 ---
 
