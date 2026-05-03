@@ -95,7 +95,8 @@ export interface RegisteredHandler {
 
 /**
  * Inv-14 attribution frame — the (actor, handler, capability_grant) triple
- * authorizing each emitted trace step. Mirrors `benten_eval::AttributionFrame`.
+ * authorizing each emitted trace step plus the Inv-4 SANDBOX nest-depth
+ * counter. Mirrors `benten_eval::AttributionFrame`.
  */
 export interface AttributionFrame {
   /** CID of the actor (principal) that authored the step. */
@@ -104,6 +105,20 @@ export interface AttributionFrame {
   handlerCid: string;
   /** CID of the capability grant authorising the step. */
   capabilityGrantCid: string;
+  /**
+   * Inv-4 SANDBOX nest-depth counter (D20-RESOLVED). `0` when the step
+   * is NOT inside a SANDBOX boundary; incremented at every SANDBOX
+   * entry (INHERITED across CALL boundaries — CALL itself does NOT
+   * increment). The Rust producer at `benten_eval::AttributionFrame`
+   * canonicalizes the value into the content-addressed CID only when
+   * non-zero so a SANDBOX-bearing attribution chain is provably
+   * content-distinguishable from a non-SANDBOX chain (Inv-4 security
+   * claim). R6-R3 r6-r3-pcds-1 surfaced that pre-fix the napi trace
+   * projection dropped this field; this surface widening makes the
+   * Inv-4 observability available to JS consumers (trace-rendering UIs,
+   * Phase-6 AI workflow forking).
+   */
+  sandboxDepth: number;
 }
 
 /**

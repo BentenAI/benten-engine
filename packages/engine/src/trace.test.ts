@@ -176,4 +176,36 @@ describe("trace TraceStep discriminant variants (Phase 2a)", () => {
       expect(step.attribution!.capabilityGrantCid).toBeTypeOf("string");
     }
   });
+
+  it("trace_step_attribution_carries_sandbox_depth_field (r6-r3-pcds-1)", async () => {
+    // R6-R3 r6-r3-pcds-1 — Producer/Consumer Drift Instance #15 closure.
+    // The `AttributionFrame.sandbox_depth` field (added PR #62 wiring
+    // Inv-4 runtime threading) was being dropped at the napi trace
+    // projection. This pin asserts the field reaches every JS-visible
+    // primitive step's attribution bag — closing the JS-side
+    // observability gap so trace UIs / Phase-6 AI workflow forking can
+    // distinguish SANDBOX-bearing steps. The crud(post):create handler
+    // does not enter SANDBOX, so the expected value is 0 (the default
+    // for non-SANDBOX flows). A future test under a SANDBOX-bearing
+    // handler will assert >= 1.
+    const handler = await engine.registerSubgraph(crud("post"));
+    const trace = await engine.trace(handler.id, "post:create", {
+      title: "sandbox-depth-pin",
+    });
+    let primitiveStepsChecked = 0;
+    for (const step of trace.steps) {
+      if (step.type !== "primitive") continue;
+      expect(step.attribution).toBeTruthy();
+      // Pre-r6-r3-pcds-1 fix this property was undefined — the napi
+      // projection at bindings/napi/src/trace.rs emitted only 3 of the
+      // 4 AttributionFrame fields.
+      expect(step.attribution!.sandboxDepth).toBeTypeOf("number");
+      // crud(post):create runs entirely outside SANDBOX so depth must
+      // be 0; non-zero would indicate the runtime threading regressed
+      // OR a stray SANDBOX entry crept into the crud path.
+      expect(step.attribution!.sandboxDepth).toBe(0);
+      primitiveStepsChecked += 1;
+    }
+    expect(primitiveStepsChecked).toBeGreaterThan(0);
+  });
 });

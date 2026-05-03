@@ -78,6 +78,7 @@ export {
   ETxAborted,
   EUnknown,
   EUnknownView,
+  EViewLabelMismatch,
   EValueFloatNan,
   EValueFloatNonfinite,
   EVersionBranched,
@@ -152,6 +153,7 @@ import {
   ETransformSyntax,
   ETxAborted,
   EUnknownView,
+  EViewLabelMismatch,
   EValueFloatNan,
   EValueFloatNonfinite,
   EVersionBranched,
@@ -224,6 +226,7 @@ const CODE_TO_CTOR: Record<string, BentenErrorCtor> = {
   E_PRODUCTION_REQUIRES_CAPS: EProductionRequiresCaps,
   E_SUBSYSTEM_DISABLED: ESubsystemDisabled,
   E_UNKNOWN_VIEW: EUnknownView,
+  E_VIEW_LABEL_MISMATCH: EViewLabelMismatch,
   E_NOT_IMPLEMENTED: ENotImplemented,
   E_IVM_PATTERN_MISMATCH: EIvmPatternMismatch,
   // Reserved host-error wire codes (G1-A; thrown via napi to TS).

@@ -622,9 +622,47 @@ impl Engine {
         monotonic_source: Arc<dyn benten_eval::MonotonicSource>,
         time_source: Arc<dyn benten_eval::TimeSource>,
     ) -> Self {
-        let suspension_store: Arc<dyn benten_eval::SuspensionStore> = Arc::new(
-            crate::suspension_store::RedbSuspensionStore::new(Arc::clone(&backend)),
-        );
+        Self::from_parts_with_clocks_and_store(
+            backend,
+            policy,
+            caps_enabled,
+            ivm_enabled,
+            broadcast,
+            inner,
+            ivm,
+            monotonic_source,
+            time_source,
+            None,
+        )
+    }
+
+    /// R6-R3 r6-r3-arch-5: builder-only constructor variant that accepts
+    /// an explicit `Arc<dyn SuspensionStore>` injection. When `None`,
+    /// constructs the production
+    /// [`crate::suspension_store::RedbSuspensionStore`] backed by the
+    /// engine's own backend (preserves the prior behaviour of
+    /// [`Self::from_parts_with_clocks`]). When `Some(_)`, the supplied
+    /// store is used verbatim — lets test fixtures inject in-memory
+    /// implementations.
+    #[allow(clippy::too_many_arguments, reason = "builder plumbing")]
+    pub(crate) fn from_parts_with_clocks_and_store(
+        backend: Arc<RedbBackend>,
+        policy: Option<Box<dyn CapabilityPolicy>>,
+        caps_enabled: bool,
+        ivm_enabled: bool,
+        broadcast: Arc<ChangeBroadcast>,
+        inner: Arc<EngineInner>,
+        ivm: Option<Arc<benten_ivm::Subscriber>>,
+        monotonic_source: Arc<dyn benten_eval::MonotonicSource>,
+        time_source: Arc<dyn benten_eval::TimeSource>,
+        suspension_store_override: Option<Arc<dyn benten_eval::SuspensionStore>>,
+    ) -> Self {
+        let suspension_store: Arc<dyn benten_eval::SuspensionStore> = suspension_store_override
+            .unwrap_or_else(|| {
+                Arc::new(crate::suspension_store::RedbSuspensionStore::new(
+                    Arc::clone(&backend),
+                ))
+            });
         Self {
             backend,
             policy,

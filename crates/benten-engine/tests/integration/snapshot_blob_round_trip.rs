@@ -108,3 +108,81 @@ fn snapshot_blob_round_trips_under_canonical_cid() {
          (Phase-3 sync uses this CID as the content-addressed handoff key)"
     );
 }
+
+/// R6-R3 r6-r3-arch-1 — load-bearing end-to-end Rust pin
+/// (per `dispatch-conventions.md` §3.6b). Companion to the TS-side
+/// pin at `packages/engine/test/snapshot_blob_round_trip.test.ts`
+/// "rejects deletes (read-only contract — delete-path symmetry)".
+///
+/// PR #68 wired `is_read_only_snapshot` enforcement at
+/// `PrimitiveHost::put_node` only; `PrimitiveHost::delete_node` had no
+/// matching check. A handler dispatched via
+/// `engine.call("crud:<label>", ":delete", {cid: <base32>})` against
+/// an engine constructed via `Engine::from_snapshot_blob` SILENTLY
+/// DELETED the targeted Node, bypassing D10's read-only contract.
+///
+/// This test drives the production `engine.call` entry point through
+/// the CRUD `delete` action (which routes to
+/// `PrimitiveHost::delete_node` via the WRITE primitive's `op="delete"`
+/// + `target_cid` path) and asserts the call surfaces
+/// `EngineError::Other { code: BackendReadOnly, .. }`.
+///
+/// Would FAIL if the new `check_not_read_only_snapshot` arm in
+/// `delete_node` were silently no-op'd back to its pre-fix permissive
+/// behavior.
+#[test]
+fn snapshot_blob_rejects_delete_via_dispatch_handler() {
+    use benten_core::{Node, Value};
+    use benten_engine::EngineError;
+    use std::collections::BTreeMap;
+
+    // Set up the source engine with one persisted "post" Node, so the
+    // snapshot blob has something for the dst engine to attempt to
+    // delete via dispatch.
+    let src_dir = tempfile::tempdir().unwrap();
+    let src = Engine::builder()
+        .path(src_dir.path().join("benten.redb"))
+        .build()
+        .unwrap();
+    let mut props: BTreeMap<String, Value> = BTreeMap::new();
+    props.insert("title".into(), Value::text("deletable"));
+    let post_node = Node::new(vec!["post".into()], props);
+    let cid = src.create_node(&post_node).unwrap();
+
+    let blob = src.export_snapshot_blob().unwrap();
+
+    // Reconstruct via from_snapshot_blob — D10 read-only contract
+    // applies.
+    let dst = Engine::from_snapshot_blob(&blob).unwrap();
+
+    // Dispatch the CRUD delete action against the snapshot-blob engine.
+    // The "crud:post" handler id route triggers `subgraph_for_crud` →
+    // delete branch → WRITE primitive with op="delete" + target_cid →
+    // `PrimitiveHost::delete_node` invocation.
+    let mut input_props: BTreeMap<String, Value> = BTreeMap::new();
+    input_props.insert("cid".into(), Value::text(cid.to_base32()));
+    let input = Node::new(vec![], input_props);
+
+    let outcome = dst.call("crud:post", ":delete", input);
+
+    // Load-bearing assertion: the dispatch must surface
+    // E_BACKEND_READ_ONLY (typed via EngineError::Other variant carrying
+    // the BackendReadOnly catalog code per host_error_to_engine_error
+    // routing).
+    match outcome {
+        Err(EngineError::Other { ref code, .. })
+            if matches!(code, benten_engine::ErrorCode::BackendReadOnly) =>
+        {
+            // expected
+        }
+        Err(other) => panic!(
+            "expected EngineError::Other {{ code: BackendReadOnly, .. }} \
+             for delete-via-dispatch against snapshot-blob engine; got {other:?}"
+        ),
+        Ok(o) => panic!(
+            "expected delete-via-dispatch against snapshot-blob engine to \
+             FAIL with E_BACKEND_READ_ONLY; pre-r6-r3-arch-1 this would \
+             succeed silently. Got Ok({o:?})"
+        ),
+    }
+}

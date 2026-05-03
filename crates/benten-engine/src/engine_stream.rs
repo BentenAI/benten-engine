@@ -112,23 +112,26 @@ pub enum StreamCursor {
 /// `Ok(Some(chunk))` while data flows, `Ok(None)` at end-of-stream, or
 /// `Err(EngineError)` on a typed error edge.
 ///
-/// Until G6-A merges its real executor body, [`StreamHandle::next_chunk`]
+/// R6-R3 r6-r3-stream-1 docstring sweep: pre-fix the docstring claimed
+/// "Until G6-A merges its real executor body, [`StreamHandle::next_chunk`]
 /// returns `Err(EngineError::Other { code: PrimitiveNotImplemented, ..
-/// })` on the very first poll. The handle's TS-facing surface is
-/// already wired so the wrapper code in `packages/engine/src/stream.ts`
-/// compiles and exercises the round-trip shape before the executor
-/// lands.
+/// })` on the very first poll" — this was the early-Phase-2a behaviour,
+/// no longer reflective of landed reality post wave-8c-stream-infra
+/// (which delivers real chunks via the producer-bridge at
+/// the private `bridge_source` field).
 pub struct StreamHandle {
-    /// Pre-buffered chunks (test factory + future eager-buffered modes).
-    /// G6-A will replace this with a `tokio::sync::mpsc::Receiver<Chunk>`
-    /// once the real executor lands; the public surface (`next` /
-    /// `close`) does not change.
+    /// Pre-buffered chunks for the test factory paths (`with_chunks`,
+    /// `with_pending_error`, `open_with_pending_error`). Production
+    /// streams use the private `bridge_source` field (a real producer-thread
+    /// bridge) instead; `chunks` stays empty for those handles.
     chunks: std::collections::VecDeque<Chunk>,
     /// `true` once the producer has indicated end-of-stream.
     closed: bool,
     /// Pre-populated terminal error returned on the next `next()` call.
-    /// Used by the G6-A-pending stub path to surface
-    /// `E_PRIMITIVE_NOT_IMPLEMENTED` typed.
+    /// Used by the test factories `with_pending_error` /
+    /// `open_with_pending_error` to inject typed-error edges without
+    /// spinning a producer thread (the production runtime path stamps
+    /// errors via the producer-bridge, not this field).
     pending_error: Option<EngineError>,
     /// Engine-assigned sequence counter; bumped per delivered chunk so
     /// the TS wrapper can expose `chunk.seq` for replay/dedup symmetry
@@ -144,7 +147,16 @@ pub struct StreamHandle {
     /// handles are NOT subject to the leak check — `for await`
     /// auto-closes at scope exit. The same Engine `call_stream_inner`
     /// dispatch backs both surfaces; the lifecycle contract is the
-    /// only public-API difference.
+    /// only public-API difference AT THE RUST LAYER.
+    ///
+    /// R6-R3 r6-r3-stream-2 cross-layer honesty note: the JS surface
+    /// does NOT yet expose this flag end-to-end (server-side enforcement
+    /// only; the TS-side `engine.openStream` JSDoc + `phase-3-backlog.md`
+    /// §7.1.2 honestly disclose that JS callers cannot observe the
+    /// difference today). When phase-3-backlog.md §7.1.2 lands the
+    /// `requiresExplicitClose` accessor + `FinalizationRegistry` leak
+    /// detector, the JS layer will see the same lifecycle distinction
+    /// the Rust layer enforces.
     requires_explicit_close: bool,
     /// wave-8c-stream-infra: real producer-bridge `ChunkSource` when this
     /// handle was constructed via [`Self::from_producer_bridge`]. `None`
@@ -335,6 +347,20 @@ impl StreamHandle {
         // wave-8c-stream-infra: pull from the producer-bridge source
         // when present. The receive blocks until either a chunk arrives
         // or the producer thread closes the sink (clean EOS).
+        //
+        // R6-R3 r6-r3-stream-3 (r6-stream-7): the bare `.lock()` here is
+        // INTENTIONAL rather than the workspace's standard `lock_recover`
+        // / `MutexExt::lock_recover` convention. Rationale: poisoning of
+        // this specific mutex implies the producer thread panicked while
+        // holding it (which can only happen inside `recv_blocking` —
+        // a no-panic fast path that just polls the underlying channel).
+        // A poisoned bridge_source is a load-bearing signal that the
+        // producer is in an unrecoverable state; we surface it as a
+        // typed `EngineError::Other { code: GraphInternal, .. }` rather
+        // than silently recovering and continuing to poll a producer
+        // that may emit corrupted data. The other call sites in
+        // `engine_stream.rs` use `lock_recover` because their producer
+        // contracts are recoverable; this one isn't.
         if let Some(source_mtx) = self.bridge_source.as_ref() {
             let mut guard = source_mtx.lock().map_err(|e| EngineError::Other {
                 code: ErrorCode::GraphInternal,

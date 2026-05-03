@@ -267,6 +267,18 @@ impl Engine {
             // point already used by `resolve_list_via_view_or_backend`)
             // and lifts the three `ViewResult` shapes (`Cids` / `Current`
             // / `Rules`) into hydrated `Vec<Node>`.
+            //
+            // R6-R3 r6-r3-ivm-4: relaxed-mode fast-path TOCTOU close.
+            // Between the `view_is_stale` check above and the read below
+            // the view's mutex is released; the view can flip stale in
+            // that window. Pre-fix the relaxed path called `read_view`
+            // (strict) here, which would surface `Err(Stale)` projecting
+            // to an empty-list (per the relaxed-projection arm in
+            // `project_view_read_to_outcome`). Post-fix the relaxed
+            // caller uses `read_view_allow_stale` so the projection
+            // honors its docstring contract: "relaxed reads see
+            // last-known-good data rather than the pre-NEW-1 empty
+            // stub."
             let label_for_query = if label_hint.is_empty() {
                 None
             } else {
@@ -278,12 +290,12 @@ impl Engine {
                 offset: None,
                 ..Default::default()
             };
-            return project_view_read_to_outcome(
-                self,
-                ivm.read_view(normalized, &query),
-                view_id,
-                opts.allow_stale,
-            );
+            let view_result = if opts.allow_stale {
+                ivm.read_view_allow_stale(normalized, &query)
+            } else {
+                ivm.read_view(normalized, &query)
+            };
+            return project_view_read_to_outcome(self, view_result, view_id, opts.allow_stale);
         }
         // No live view registered for this id. Phase 1 canonical whitelist
         // decides: recognized -> stale (in strict) / last-known-good empty
@@ -342,6 +354,17 @@ impl Engine {
     ///   cannot claim that lane).
     /// - [`EngineError::ViewStrategyCReserved`] when the spec declared
     ///   `Strategy::C` (Z-set / DBSP cancellation reserved for Phase 3+).
+    /// - [`EngineError::ViewLabelMismatch`] (R6-R3 r6-r3-ivm-1) when the
+    ///   spec id matches one of the four canonical view ids whose
+    ///   hand-written dispatch arm has hardcoded `input_pattern_label`
+    ///   semantics (`capability_grants`, `version_current`,
+    ///   `event_dispatch`, `governance_inheritance`) AND the supplied
+    ///   `Label(...)` disagrees with the hardcoded label. Mirrors the
+    ///   TS-DSL pre-napi rejection in
+    ///   `packages/engine/src/views.ts::validateUserViewSpec` so direct
+    ///   Rust callers + napi consumers that bypass the TS validator hit
+    ///   the same fail-loud boundary rather than the silent-discard
+    ///   foot-gun.
     /// - Backend errors from the underlying privileged Node write.
     pub fn register_user_view(&self, spec: UserViewSpec) -> Result<Cid, EngineError> {
         // D8-RESOLVED: refuse Strategy::A + Strategy::C BEFORE writing the
@@ -360,6 +383,30 @@ impl Engine {
                 });
             }
             benten_ivm::Strategy::B => { /* accepted */ }
+        }
+
+        // R6-R3 r6-r3-ivm-1: canonical-id-vs-mismatched-label fail-loud.
+        // Four canonical view ids (`capability_grants`, `version_current`,
+        // `event_dispatch`, `governance_inheritance`) drive
+        // `AlgorithmBView::for_id` arms whose hardcoded `input_pattern_label`
+        // ignores the caller-supplied label. Pre-fix the engine silently
+        // accepted the mismatch + the caller would observe a view filtered
+        // on the WRONG label (the `register_view` step coerced the supplied
+        // label into the catalog but the runtime dispatch arm bypassed it).
+        // The TS-DSL `validateUserViewSpec` (`packages/engine/src/views.ts`)
+        // mirrors this rejection at the pre-napi-boundary; this engine-side
+        // guard is the authoritative boundary for direct Rust callers and
+        // napi consumers that bypass the TS validator. Surfaced as
+        // `E_VIEW_LABEL_MISMATCH` (catalog).
+        if let UserViewInputPattern::Label(supplied_label) = spec.input_pattern()
+            && let Some(hardcoded) = benten_ivm::algorithm_b::hardcoded_label_for_id(spec.id())
+            && hardcoded != supplied_label.as_str()
+        {
+            return Err(EngineError::ViewLabelMismatch {
+                view_id: spec.id().to_string(),
+                expected_label: hardcoded.to_string(),
+                got_label: supplied_label.clone(),
+            });
         }
 
         if !self.ivm_enabled {

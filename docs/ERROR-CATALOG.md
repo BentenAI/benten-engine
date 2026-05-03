@@ -672,6 +672,14 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** `Engine::create_view` registration (G8-B)
 - **Phase:** 2b
 
+### E_VIEW_LABEL_MISMATCH
+
+- **Message:** "user view '{view_id}' is reserved for the canonical IVM view with the hardcoded label '{expected_label}'; cannot register with a different label '{got_label}'"
+- **Context:** `{ view_id: string, expected_label: string, got_label: string }`
+- **Fix:** Phase-2b R6-R3 (r6-r3-ivm-1). Four canonical Phase-1 IVM view ids (`capability_grants`, `version_current`, `event_dispatch`, `governance_inheritance`) have hardcoded `input_pattern_label` semantics in the hand-written `AlgorithmBView::for_id` dispatch arms — re-using one of those ids with a different label silently registers a view that filters on the wrong label. Either pick a different `spec.id` (the user-defined fallback honors any label) OR change `spec.inputPattern.label` to match the hardcoded value listed in the message body.
+- **Thrown at:** `Engine::register_user_view` registration (R6-R3 fix-pass; mirrored at the TS-DSL pre-napi-boundary in `packages/engine/src/views.ts::validateUserViewSpec`).
+- **Phase:** 2b
+
 ### E_WAIT_SIGNAL_SHAPE_MISMATCH
 
 > **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 2b (alongside the broader G3-B DX signal-payload typing landing). Integration test at `crates/benten-engine/tests/integration/wait_signal_shape_optional_typing.rs` exercises the surface; the production firing site is reserved.

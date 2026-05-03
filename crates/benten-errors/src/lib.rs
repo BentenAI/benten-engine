@@ -263,6 +263,14 @@ pub enum ErrorCode {
     /// `Strategy::C`. Strategy C is the Z-set / DBSP cancellation algorithm
     /// reserved for Phase 3+; refused at registration time in Phase 2b.
     ViewStrategyCReserved,
+    /// Phase-2b R6-R3 (r6-r3-ivm-1): a user view registration supplied one
+    /// of the four canonical view ids whose hand-written view has a
+    /// hardcoded `input_pattern_label`, paired with a label that disagrees
+    /// with the hardcoded value. The TS-DSL `validateUserViewSpec` mirrors
+    /// this rejection at the pre-napi-boundary; the Rust engine surface is
+    /// the authoritative boundary for direct callers + napi consumers that
+    /// bypass the TS validator.
+    ViewLabelMismatch,
     // -----------------------------------------------------------------
     // Phase 2b G7-A SANDBOX surface (plan §3 G7-A; D1/D2/D3/D9/D17/D18/D19/D20/
     // D21/D24/D25/D27 RESOLVED).
@@ -480,6 +488,10 @@ impl ErrorCode {
     /// `EngineError::code()` delegates through, replacing the former
     /// `static_for` match duplicate (r6-err-10).
     #[must_use]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "exhaustive ErrorCode → catalog-string match; one arm per variant by design (single source of truth per r6-err-10)"
+    )]
     pub fn as_static_str(&self) -> &'static str {
         match self {
             ErrorCode::InvCycle => "E_INV_CYCLE",
@@ -552,6 +564,7 @@ impl ErrorCode {
             ErrorCode::Inv11SystemZoneRead => "E_INV_11_SYSTEM_ZONE_READ",
             ErrorCode::ViewStrategyARefused => "E_VIEW_STRATEGY_A_REFUSED",
             ErrorCode::ViewStrategyCReserved => "E_VIEW_STRATEGY_C_RESERVED",
+            ErrorCode::ViewLabelMismatch => "E_VIEW_LABEL_MISMATCH",
             // Phase 2b G7-A SANDBOX surface
             ErrorCode::InvSandboxDepth => "E_INV_SANDBOX_DEPTH",
             ErrorCode::InvSandboxOutput => "E_INV_SANDBOX_OUTPUT",
@@ -779,7 +792,9 @@ impl ErrorCode {
             // Phase-2b G8-B: view-strategy refusals fire at registration time
             // (Engine::create_view), not along a primitive edge — same routing
             // disposition as DuplicateHandler / InvRegistration.
-            ErrorCode::ViewStrategyARefused | ErrorCode::ViewStrategyCReserved => None,
+            ErrorCode::ViewStrategyARefused
+            | ErrorCode::ViewStrategyCReserved
+            | ErrorCode::ViewLabelMismatch => None,
 
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
@@ -792,6 +807,10 @@ impl ErrorCode {
     /// to [`ErrorCode::Unknown`] with the raw string preserved so forward-
     /// compatible deserialization never panics.
     #[must_use]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "exhaustive catalog-string → ErrorCode match; one arm per variant by design (mirror of as_static_str's structure)"
+    )]
     pub fn from_str(s: &str) -> ErrorCode {
         match s {
             "E_INV_CYCLE" => ErrorCode::InvCycle,
@@ -864,6 +883,7 @@ impl ErrorCode {
             "E_INV_11_SYSTEM_ZONE_READ" => ErrorCode::Inv11SystemZoneRead,
             "E_VIEW_STRATEGY_A_REFUSED" => ErrorCode::ViewStrategyARefused,
             "E_VIEW_STRATEGY_C_RESERVED" => ErrorCode::ViewStrategyCReserved,
+            "E_VIEW_LABEL_MISMATCH" => ErrorCode::ViewLabelMismatch,
             // Phase 2b G7-A SANDBOX surface
             "E_INV_SANDBOX_DEPTH" => ErrorCode::InvSandboxDepth,
             "E_INV_SANDBOX_OUTPUT" => ErrorCode::InvSandboxOutput,

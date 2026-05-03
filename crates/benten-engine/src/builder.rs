@@ -62,6 +62,15 @@ pub struct EngineBuilder {
     /// `monotonic_source` for federation-correlation context; never
     /// primary for cadence (§9.13 dual-source resolution).
     time_source: Option<Arc<dyn TimeSource>>,
+    /// R6-R3 r6-r3-arch-5: explicit `Arc<dyn SuspensionStore>` injection
+    /// for tests + alternative impls. `None` (default) constructs the
+    /// production [`crate::suspension_store::RedbSuspensionStore`] at
+    /// `assemble()` time. When `Some(_)` the supplied store is used
+    /// verbatim — lets test fixtures inject in-memory suspension stores
+    /// without spinning the redb persistence path. Aligns structurally
+    /// with the PHASE-3-BUNDLE-1 GraphBackend genericism work but
+    /// unblocks alternative-store testing today.
+    suspension_store: Option<Arc<dyn benten_eval::SuspensionStore>>,
 }
 
 impl EngineBuilder {
@@ -84,7 +93,25 @@ impl EngineBuilder {
             change_stream_capacity: None,
             monotonic_source: None,
             time_source: None,
+            suspension_store: None,
         }
+    }
+
+    /// R6-R3 r6-r3-arch-5: inject an explicit
+    /// [`benten_eval::SuspensionStore`] implementation. Tests pass an
+    /// in-memory store to exercise WAIT suspend/resume without spinning
+    /// the redb persistence path; production callers leave this unset
+    /// so the private `assemble` constructor builds the default
+    /// `RedbSuspensionStore` backed by the engine's own backend.
+    ///
+    /// Pre-1.0 no-shim. Aligns structurally with PHASE-3-BUNDLE-1's
+    /// GraphBackend genericism work — the suspension-store generalization
+    /// unblocks alternative-store testing without waiting for the full
+    /// Phase-3 lift.
+    #[must_use]
+    pub fn suspension_store(mut self, store: Arc<dyn benten_eval::SuspensionStore>) -> Self {
+        self.suspension_store = Some(store);
+        self
     }
 
     /// Set the on-disk redb path the engine opens. Required for
@@ -312,6 +339,10 @@ impl EngineBuilder {
     }
 
     /// Assemble the engine from a fully-configured backend.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "linear assembly pipeline (broadcast wiring → IVM → policy → noauth log → clocks → engine ctor → rehydrate); extracting any single pass requires threading 6+ parameters and worsens readability"
+    )]
     fn assemble(self, backend: RedbBackend) -> Result<Engine, EngineError> {
         let backend = Arc::new(backend);
         let capacity = self
@@ -471,7 +502,7 @@ impl EngineBuilder {
             .time_source
             .unwrap_or_else(|| Arc::new(HlcTimeSource::new()));
 
-        let engine = Engine::from_parts_with_clocks(
+        let engine = Engine::from_parts_with_clocks_and_store(
             backend,
             policy,
             caps_enabled,
@@ -481,6 +512,7 @@ impl EngineBuilder {
             ivm,
             monotonic,
             time,
+            self.suspension_store,
         );
 
         // R6FP-Group-1 (r6-arch-1): rebuild the in-memory installed-
@@ -492,7 +524,41 @@ impl EngineBuilder {
         // empty. The hydration is best-effort: a corrupt / partial
         // Node is skipped rather than aborting startup so a single
         // bad manifest cannot wedge engine open.
-        let _ = engine.rehydrate_installed_modules_from_zone();
+        //
+        // R6-R3 r6-r3-arch-7: pre-fix the outer-call Result was discarded
+        // via `let _ = ...`, swallowing backend-level read failures (e.g.
+        // redb returns Err on get_by_label). An operator running
+        // `engine_diagnostics` had no observable distinction between
+        // (a) clean fresh engine, (b) successful rehydrate of N
+        // manifests, (c) backend read-error rehydrate-failure that
+        // silently dropped manifests. Now log per-outcome via tracing
+        // so the failure mode is observable in the same logs the
+        // operator already consults.
+        //
+        // The `tracing` crate is gated to `cfg(not(target_arch = "wasm32"))`
+        // in `Cargo.toml` (snapshot-blob-only browser builds explicitly
+        // exclude it; the redb-backed `Engine::open` path that consumes
+        // module-manifest rehydration also doesn't reach wasm32). On
+        // wasm32 the rehydrate result is discarded as before — the
+        // wasm32 build does not surface installed-module manifests.
+        let rehydrate_outcome = engine.rehydrate_installed_modules_from_zone();
+        #[cfg(not(target_arch = "wasm32"))]
+        match rehydrate_outcome {
+            Ok(n) => {
+                tracing::debug!(rehydrated = n, "engine module-manifest rehydrate complete");
+            }
+            Err(e) => {
+                tracing::error!(
+                    error = ?e,
+                    "engine module-manifest rehydrate failed; \
+                     booting with empty active-set (modules registered \
+                     in earlier sessions will not be visible until \
+                     re-installed)"
+                );
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = rehydrate_outcome;
 
         Ok(engine)
     }

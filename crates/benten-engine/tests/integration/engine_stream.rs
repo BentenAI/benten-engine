@@ -191,7 +191,18 @@ fn stream_wire_through_count_source_emits_n_chunks() {
 }
 
 #[test]
-fn stream_wire_through_active_count_drops_to_zero_after_drain() {
+fn stream_wire_through_active_count_increments_during_open() {
+    // R6-R3 r6-r3-stream-3 (r6-stream-8) test rename: pre-fix the test
+    // name promised "drops_to_zero_after_drain" but the body did NOT
+    // assert drop-to-zero — the comment at line 232-235 acknowledges
+    // "we cannot assert the absolute count because concurrent tests may
+    // have their own handles in flight" and the test body never
+    // re-checks the count post-drop. The honest assertion is what the
+    // test ACTUALLY pins: active_stream_count >= 1 right after
+    // construction. Drop-to-zero is validated by the inline tests in
+    // `engine_stream.rs` (single-threaded module-level tests with no
+    // shared counter races).
+    //
     // wave-8c-stream-infra: active stream count tracks producer-bridge
     // handles; the delta returns to baseline after handle is dropped.
     // Tests run concurrently so the absolute count may vary; the delta

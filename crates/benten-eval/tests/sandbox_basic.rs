@@ -126,8 +126,37 @@ fn sandbox_engine_singleton_lifetime() {
     );
 }
 
+/// Process-wide mutex serializing the module-cache size assertions
+/// across concurrent test threads. Without this, the `initial_size` /
+/// `after_size` snapshots race against parallel test threads loading
+/// SANDBOX modules into the SAME shared `MODULE_CACHE`, producing
+/// spurious "after_size > initial_size + 1" failures on the Coverage
+/// workflow (which uses `cargo llvm-cov` parallelism that exposes the
+/// race more reliably than the standard nextest invocation). R6-R3
+/// r6-r3-cr-2 closure: a process-wide mutex is the smallest correct
+/// fix that doesn't pull a new dev-dep (`serial_test`) into the
+/// workspace.
+static MODULE_CACHE_TEST_SERIALIZER: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[test]
 fn sandbox_module_cache_avoids_recompilation_on_repeated_call() {
+    // R6-R3 r6-r3-cr-2 closure: serialize against any other test in
+    // this file (or any future test in the workspace that reads
+    // module_cache_size) so the initial_size / after_size snapshot
+    // window is exclusive. Without this guard the Coverage workflow
+    // alternates failure/success because `MODULE_CACHE` is shared
+    // across tests and parallel execution can interleave a sibling
+    // test's module load between this test's two snapshots.
+    let _serial_guard = MODULE_CACHE_TEST_SERIALIZER
+        .lock()
+        .unwrap_or_else(|poisoned| {
+            // Poisoning means a prior test panicked while holding the
+            // guard; the cache state is recoverable for our purposes
+            // (we read+compare, no mutation), so consume the poison +
+            // proceed.
+            poisoned.into_inner()
+        });
+
     // wsa-20 — `wasmtime::Module` is content-CID-cached. The cold-start
     // budget (D22 ≤2ms p95 Linux x86_64) is unmeetable if Module
     // recompiles per call.

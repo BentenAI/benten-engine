@@ -71,6 +71,43 @@ const KNOWN_VIEW_IDS: &[&str] = &[
     "version_current",
 ];
 
+/// Stable mapping from canonical view id → hardcoded `input_pattern_label`
+/// for the four canonical views whose hand-written dispatch arms IGNORE
+/// caller-supplied label and use a fixed value. `content_listing` is
+/// intentionally absent — its arm honors `definition.input_pattern_label`.
+///
+/// Surfaced as a `pub` accessor (`hardcoded_label_for_id`) so the engine's
+/// `register_user_view` boundary can fail-loud when a caller supplies a
+/// canonical id + a mismatching label (Phase-2b R6-R3 r6-r3-ivm-1 closure).
+const CANONICAL_HARDCODED_LABELS: &[(&str, &str)] = &[
+    ("capability_grants", "system:CapabilityGrant"),
+    ("version_current", "NEXT_VERSION"),
+    ("event_dispatch", "system:EventDispatch"),
+    ("governance_inheritance", "system:GovernanceInheritance"),
+];
+
+/// Return the hardcoded `input_pattern_label` for one of the four canonical
+/// view ids whose hand-written dispatch arm ignores caller-supplied label.
+/// Returns `None` for `content_listing` (which honors the supplied label)
+/// + for any user-defined id outside the canonical set.
+///
+/// Used by `Engine::register_user_view` to surface
+/// `benten_engine::EngineError::ViewLabelMismatch` (catalog code
+/// `E_VIEW_LABEL_MISMATCH`) when the caller supplies a canonical id +
+/// a label that disagrees with the hardcoded value, mirroring the TS-DSL
+/// pre-napi-boundary rejection in
+/// `packages/engine/src/views.ts::validateUserViewSpec`.
+/// (Plain code ref instead of intra-doc link because `benten-ivm` does NOT
+/// depend on `benten-engine` — dependency direction is the inverse — so
+/// stable rustdoc's `broken_intra_doc_links` lint correctly rejects the
+/// cross-crate downstream link.)
+#[must_use]
+pub fn hardcoded_label_for_id(view_id: &str) -> Option<&'static str> {
+    CANONICAL_HARDCODED_LABELS
+        .iter()
+        .find_map(|(id, label)| (*id == view_id).then_some(*label))
+}
+
 /// Generalized Algorithm B view — single-loop dispatch over the 5 Phase-1
 /// view shapes.
 ///

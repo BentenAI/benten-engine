@@ -100,4 +100,59 @@ describe("D10 snapshot-blob — TS surface round-trip", () => {
     await src.close();
     await dst.close();
   });
+
+  // R6-R3 r6-r3-arch-1 — load-bearing end-to-end test pin (per
+  // dispatch-conventions.md §3.6b). The MAJOR finding was that PR #68
+  // wired the read-only-snapshot enforcement at PrimitiveHost::put_node
+  // ONLY — leaving PrimitiveHost::delete_node undefended. A handler
+  // dispatched via `engine.call(handler, ':delete', {cid})` against a
+  // snapshot-blob engine SILENTLY DELETED nodes, bypassing D10. This
+  // test drives the production `engine.call` entry point through the
+  // CRUD `delete` action (which routes to `PrimitiveHost::delete_node`
+  // via the WRITE primitive's op="delete" + target_cid path) and
+  // asserts the call rejects with E_BACKEND_READ_ONLY. The earlier
+  // "rejects writes" test only exercised the put-direction (post:create
+  // → put_node) so the delete-direction gap was silently undefended.
+  // Would FAIL if `delete_node` were silently no-op'd back to its
+  // pre-fix permissive behavior.
+  it("Engine.fromSnapshotBlob rejects deletes (read-only contract — delete-path symmetry r6-r3-arch-1)", async () => {
+    const src = await Engine.open(":memory:");
+    const post = await src.registerSubgraph(crud("post"));
+    // Create a node so the dst engine has something to attempt to
+    // delete; capture its CID so the delete dispatch resolves to a real
+    // target_cid (rather than the delete_missing route).
+    const created = await src.call(post.id, "post:create", { title: "deletable" });
+    expect(created.cid).toBeDefined();
+    const blob = await src.exportSnapshotBlob();
+
+    const dst = await Engine.fromSnapshotBlob(blob);
+    await dst.registerSubgraph(crud("post"));
+
+    // Sanity: the snapshot blob carried the created node — listing the
+    // dst should surface it. This pin is BEFORE the delete attempt so a
+    // future regression that loses the snapshot-import won't masquerade
+    // as a passing read-only test.
+    const dstPosts = await dst.call(post.id, "post:list", {});
+    expect(dstPosts.list).toBeDefined();
+    expect(dstPosts.list!.length).toBe(1);
+
+    // Load-bearing assertion: delete-via-dispatch against a snapshot-blob
+    // engine MUST surface E_BACKEND_READ_ONLY. Pre-r6-r3-arch-1 this
+    // SUCCEEDED silently (PrimitiveHost::delete_node had no
+    // is_read_only_snapshot guard).
+    await expect(
+      dst.call(post.id, "post:delete", { cid: created.cid }),
+    ).rejects.toMatchObject({
+      code: "E_BACKEND_READ_ONLY",
+    });
+
+    // Defence-in-depth: after the rejected delete, the node MUST still
+    // be present in the dst engine — proving the delete didn't partially
+    // apply before the error surfaced.
+    const afterReject = await dst.call(post.id, "post:list", {});
+    expect(afterReject.list!.length).toBe(1);
+
+    await src.close();
+    await dst.close();
+  });
 });

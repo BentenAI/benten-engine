@@ -45,7 +45,15 @@ function readAttribution(raw: unknown): AttributionFrame | undefined {
   const capabilityGrantCid =
     typeof r.capabilityGrantCid === "string" ? r.capabilityGrantCid : undefined;
   if (!actorCid || !handlerCid || !capabilityGrantCid) return undefined;
-  return { actorCid, handlerCid, capabilityGrantCid };
+  // R6-R3 r6-r3-pcds-1: read the napi-projected `sandboxDepth` field
+  // (added at `bindings/napi/src/trace.rs::trace_step_to_json`).
+  // Forward-compat default `0` so a TS consumer reading a trace JSON
+  // produced by an older napi binary (pre-r6-r3-pcds-1) sees the same
+  // shape — the legacy projection emitted no sandboxDepth field, and
+  // every legitimate non-SANDBOX flow produces depth `0` per the
+  // Inv-4 default in `crates/benten-eval/src/exec_state.rs::AttributionFrame`.
+  const sandboxDepth = typeof r.sandboxDepth === "number" ? r.sandboxDepth : 0;
+  return { actorCid, handlerCid, capabilityGrantCid, sandboxDepth };
 }
 
 /**
