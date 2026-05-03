@@ -33,4 +33,14 @@ pub const SYSTEM_ZONE_PREFIXES: &[&str] = &[
     // G1-A per the workspace drift-scan surfacing it; see §9.10 addendum
     // "Additional prefixes are surfaced by a workspace grep".
     "system:ivm:",
+    // R6-R3-FP Group A: canonical-view label literals registered by
+    // `benten-ivm::algorithm_b::CANONICAL_HARDCODED_LABELS` (see
+    // `hardcoded_label_for_id`). Added here so the Inv-11 system-zone
+    // drift detector (`.github/workflows/inv-11-system-zone-drift.yml` +
+    // `crates/benten-engine/tests/inv_11_system_zone_drift_test.rs`)
+    // recognizes them as engine-privileged. Mirrors the
+    // `system:CapabilityGrant` registration that pairs with
+    // `capability_grants` view id.
+    "system:EventDispatch",
+    "system:GovernanceInheritance",
 ];
