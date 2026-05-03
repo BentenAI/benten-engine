@@ -423,7 +423,7 @@ widening (cross-process / cross-actor delivery).
 **Phase 3 target:** A one-shot exhaustive TS-interface-vs-Rust-producer-shape sweep across `packages/engine/src/types.ts` + `bindings/napi/src/`. Mechanical procedure:
 
 1. Enumerate every `pub struct` / serde-derived `pub enum` in `bindings/napi/src/*.rs` that flows to JS via napi.
-2. For each, walk the corresponding TS interface in `packages/engine/src/types.ts` and assert field-for-field parity (modulo by-design omissions like `Node.anchor_id` per `#[serde(skip)]` + `crates/benten-core/src/lib.rs:162` Phase-1 architectural decision).
+2. For each, walk the corresponding TS interface in `packages/engine/src/types.ts` and assert field-for-field parity (modulo by-design omissions like `Node.anchor_id` per `#[serde(skip)]` on the `anchor_id` field of `crates/benten-core/src/lib.rs::Node` Phase-1 architectural decision).
 3. Document each by-design asymmetry with a `// (intentionally NOT mirrored: <reason>)` line so future sweeps don't re-flag.
 4. Fix all unintentional drift inline (likely `Edge.cid` removal + `Edge.properties` addition; possibly other instances surfaced by the sweep).
 5. Add a Rust-side schema-parity meta-test (analogous to `manifest_schema_parity_pin.rs`) that walks the napi struct surface + asserts every public field has a TS-side counterpart by reading the dist `.d.ts` at test time, so the SAME drift cannot recur silently.
@@ -434,7 +434,7 @@ widening (cross-process / cross-actor delivery).
 - `.addl/phase-2b/r6-r4-producer-consumer-deep-sweep.json` — surfacing finding (`near_findings_examined_and_dismissed.candidate.Edge interface`).
 - `bindings/napi/src/edge.rs::edge_to_json` — Rust producer.
 - `packages/engine/src/types.ts::Edge` — TS consumer (drift surface).
-- `crates/benten-core/src/lib.rs:162` — by-design `#[serde(skip)] anchor_id` precedent for documenting intentional omissions.
+- `crates/benten-core/src/lib.rs::Node` — by-design `#[serde(skip)]` on the `anchor_id` field; precedent for documenting intentional omissions.
 
 **Touch size:** ~80-150 LOC across `packages/engine/src/types.ts` (interface parity edits) + 1 Rust meta-test pin (~50-80 LOC) + cross-target pre-flight sweep. Risk surface: low — the additions are typed-surface widenings that existing TS callers don't depend on (zero current consumers).
 
