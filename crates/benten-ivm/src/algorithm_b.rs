@@ -92,11 +92,15 @@ const CANONICAL_HARDCODED_LABELS: &[(&str, &str)] = &[
 /// + for any user-defined id outside the canonical set.
 ///
 /// Used by `Engine::register_user_view` to surface
-/// [`benten_engine::EngineError::ViewLabelMismatch`] (catalog code
+/// `benten_engine::EngineError::ViewLabelMismatch` (catalog code
 /// `E_VIEW_LABEL_MISMATCH`) when the caller supplies a canonical id +
 /// a label that disagrees with the hardcoded value, mirroring the TS-DSL
 /// pre-napi-boundary rejection in
 /// `packages/engine/src/views.ts::validateUserViewSpec`.
+/// (Plain code ref instead of intra-doc link because `benten-ivm` does NOT
+/// depend on `benten-engine` — dependency direction is the inverse — so
+/// stable rustdoc's `broken_intra_doc_links` lint correctly rejects the
+/// cross-crate downstream link.)
 #[must_use]
 pub fn hardcoded_label_for_id(view_id: &str) -> Option<&'static str> {
     CANONICAL_HARDCODED_LABELS
