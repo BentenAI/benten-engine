@@ -67,10 +67,13 @@ async function main(): Promise<void> {
     );
     process.stdout.write(`installed manifest: ${installedCid}\n`);
 
-    // Need a `doc` label to read from inside the SANDBOX handler.
-    await engine.registerSubgraph(crud("doc"));
+    // Need a `doc` label to read from inside the SANDBOX handler. The
+    // engine assigns the handler id as `crud:<label>` for crud()-registered
+    // handlers — capture the returned handle so the dispatch below uses
+    // the engine's exact id (resilient to future label-format changes).
+    const docCrud = await engine.registerSubgraph(crud("doc"));
     await engine.callAs(
-      "doc-handler",
+      docCrud.id,
       "doc:create",
       {
         id: "d-42",

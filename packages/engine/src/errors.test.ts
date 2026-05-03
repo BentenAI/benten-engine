@@ -95,6 +95,43 @@ describe("typed error classes", () => {
     expect(typed.context).toBeUndefined();
   });
 
+  it("map_native_error_round_trips_devserver_stopped_to_typed_class", () => {
+    // R6 Round-3 r6-r3-napi-1 regression pin (16th producer/consumer
+    // drift instance closure).
+    //
+    // Pre-fix: PR #66 promoted `E_DEVSERVER_STOPPED` from a hand-typed
+    // string to a typed catalog variant + generated `EDevServerStopped`
+    // in `errors.generated.ts`, BUT the matching `CODE_TO_CTOR`
+    // registration in this file was missed; the wire-form prefix
+    // `E_DEVSERVER_STOPPED:` from `bindings/napi/src/devserver.rs::
+    // devserver_stopped` round-tripped to the synthetic `E_UNKNOWN`
+    // fallback rather than the typed subclass — defeating the original
+    // promotion's purpose.
+    //
+    // Post-fix: `mapNativeError` produces the typed `EDevServerStopped`
+    // instance + JS callers can dispatch on `instanceof`.
+    const sim = new Error(
+      "E_DEVSERVER_STOPPED: devserver method called after stop()",
+    );
+    const typed = mapNativeError(sim);
+    expect(typed).toBeInstanceOf(errors.EDevserverStopped);
+    expect(typed.code).toBe("E_DEVSERVER_STOPPED");
+  });
+
+  it("map_native_error_round_trips_reload_subscriber_unsubscribed_to_typed_class", () => {
+    // R6 Round-3 r6-r3-napi-1 regression pin (continued).
+    //
+    // Same shape as `E_DEVSERVER_STOPPED` above — PR #66 promoted the
+    // catalog variant; CODE_TO_CTOR registration was missed. Post-fix
+    // the typed dispatch through `mapNativeError` works.
+    const sim = new Error(
+      "E_RELOAD_SUBSCRIBER_UNSUBSCRIBED: drain() after unsubscribe()",
+    );
+    const typed = mapNativeError(sim);
+    expect(typed).toBeInstanceOf(errors.EReloadSubscriberUnsubscribed);
+    expect(typed.code).toBe("E_RELOAD_SUBSCRIBER_UNSUBSCRIBED");
+  });
+
   it("dsl_unregistered_handler_has_suggestions", async () => {
     const { Engine, crud } = await import("@benten/engine");
     const { mkdtempSync } = await import("node:fs");

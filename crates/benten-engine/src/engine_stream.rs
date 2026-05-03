@@ -112,26 +112,26 @@ pub enum StreamCursor {
 /// `Ok(Some(chunk))` while data flows, `Ok(None)` at end-of-stream, or
 /// `Err(EngineError)` on a typed error edge.
 ///
-/// R6-R3 r6-r3-stream-1 docstring sweep: pre-fix the docstring claimed
-/// "Until G6-A merges its real executor body, [`StreamHandle::next_chunk`]
-/// returns `Err(EngineError::Other { code: PrimitiveNotImplemented, ..
-/// })` on the very first poll" — this was the early-Phase-2a behaviour,
-/// no longer reflective of landed reality post wave-8c-stream-infra
-/// (which delivers real chunks via the producer-bridge at
-/// the private `bridge_source` field).
+/// Production runtime (post wave-8c-stream-infra): handles produced by
+/// [`Engine::open_stream`] / [`Engine::call_stream`] are constructed
+/// via [`StreamHandle::from_producer_bridge`] with a live `ChunkSource`
+/// channel; a producer thread runs the STREAM executor body and pushes
+/// chunks into the channel as they're produced; [`StreamHandle::next_chunk`]
+/// pulls from the consumer end. The handle's TS-facing surface
+/// (`packages/engine/src/stream.ts`) consumes via `AsyncIterable<Buffer>`.
 pub struct StreamHandle {
-    /// Pre-buffered chunks for the test factory paths (`with_chunks`,
-    /// `with_pending_error`, `open_with_pending_error`). Production
-    /// streams use the private `bridge_source` field (a real producer-thread
-    /// bridge) instead; `chunks` stays empty for those handles.
+    /// Pre-buffered chunks for the test factory + `with_pending_error`
+    /// paths. The production path (`from_producer_bridge`) drives chunks
+    /// through `bridge_source` instead; the test factory continues to
+    /// use this VecDeque for unit tests that don't need a live producer.
     chunks: std::collections::VecDeque<Chunk>,
     /// `true` once the producer has indicated end-of-stream.
     closed: bool,
     /// Pre-populated terminal error returned on the next `next()` call.
-    /// Used by the test factories `with_pending_error` /
-    /// `open_with_pending_error` to inject typed-error edges without
-    /// spinning a producer thread (the production runtime path stamps
-    /// errors via the producer-bridge, not this field).
+    /// Used by the test-factory paths (`with_pending_error` /
+    /// `open_with_pending_error`) to inject a typed error before any
+    /// chunk is drained, so unit tests can exercise the error-edge
+    /// shape without running a producer thread.
     pending_error: Option<EngineError>,
     /// Engine-assigned sequence counter; bumped per delivered chunk so
     /// the TS wrapper can expose `chunk.seq` for replay/dedup symmetry
@@ -147,16 +147,18 @@ pub struct StreamHandle {
     /// handles are NOT subject to the leak check — `for await`
     /// auto-closes at scope exit. The same Engine `call_stream_inner`
     /// dispatch backs both surfaces; the lifecycle contract is the
-    /// only public-API difference AT THE RUST LAYER.
+    /// only public-API difference at the Rust layer.
     ///
-    /// R6-R3 r6-r3-stream-2 cross-layer honesty note: the JS surface
-    /// does NOT yet expose this flag end-to-end (server-side enforcement
-    /// only; the TS-side `engine.openStream` JSDoc + `phase-3-backlog.md`
-    /// §7.1.2 honestly disclose that JS callers cannot observe the
-    /// difference today). When phase-3-backlog.md §7.1.2 lands the
-    /// `requiresExplicitClose` accessor + `FinalizationRegistry` leak
-    /// detector, the JS layer will see the same lifecycle distinction
-    /// the Rust layer enforces.
+    /// R6 Round-3 r6-r3-stream-2: at the JS-surface layer the two
+    /// surfaces are currently functionally indistinguishable — the
+    /// `requires_explicit_close` flag is server-side-only and not yet
+    /// exposed across the napi boundary; JS-surface enforcement (a
+    /// FinalizationRegistry leak detector + a TS-side
+    /// `requiresExplicitClose` accessor) is named-destination-deferred
+    /// to `docs/future/phase-3-backlog.md` §7.1.2 (openStream
+    /// FinalizationRegistry leak detector + requiresExplicitClose
+    /// accessor). Until §7.1.2 lands, the lifecycle contract differs
+    /// inside the Rust crate but not across the public JS API.
     requires_explicit_close: bool,
     /// wave-8c-stream-infra: real producer-bridge `ChunkSource` when this
     /// handle was constructed via [`Self::from_producer_bridge`]. `None`

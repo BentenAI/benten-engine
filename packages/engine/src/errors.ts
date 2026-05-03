@@ -29,6 +29,7 @@ export {
   ECidParse,
   ECidUnsupportedCodec,
   ECidUnsupportedHash,
+  EDevserverStopped,
   EDslInvalidShape,
   EDslUnregisteredHandler,
   EDuplicateHandler,
@@ -64,6 +65,7 @@ export {
   ENotImplemented,
   EPrimitiveNotImplemented,
   EProductionRequiresCaps,
+  EReloadSubscriberUnsubscribed,
   EResumeActorMismatch,
   EResumeSubgraphDrift,
   ESandboxFuelExhausted,
@@ -105,6 +107,7 @@ import {
   ECidParse,
   ECidUnsupportedCodec,
   ECidUnsupportedHash,
+  EDevserverStopped,
   EDslInvalidShape,
   EDslUnregisteredHandler,
   EDuplicateHandler,
@@ -140,6 +143,7 @@ import {
   ENotImplemented,
   EPrimitiveNotImplemented,
   EProductionRequiresCaps,
+  EReloadSubscriberUnsubscribed,
   EResumeActorMismatch,
   EResumeSubgraphDrift,
   ESandboxFuelExhausted,
@@ -255,6 +259,19 @@ const CODE_TO_CTOR: Record<string, BentenErrorCtor> = {
   // `docs/future/phase-3-backlog.md` §7.6 (CODE_TO_CTOR codegen
   // completeness) as a Phase-3 codegen lift.
   E_MODULE_MANIFEST_CID_MISMATCH: EModuleManifestCidMismatch,
+  // R6 Round-3 r6-r3-napi-1 — both codes were promoted from hand-typed
+  // strings to typed catalog variants by R6 Round-2 r6-r2-napi-1 (PR #66)
+  // for the explicit purpose of typed-dispatch through `mapNativeError`,
+  // but the matching CODE_TO_CTOR entries were missed (the consumer-audit
+  // table on PR #66 didn't include `errors.ts`). Without these entries
+  // the napi devserver paths surfacing `E_RELOAD_SUBSCRIBER_UNSUBSCRIBED:`
+  // / `E_DEVSERVER_STOPPED:` round-trip as the synthetic `E_UNKNOWN`
+  // fallback rather than `EReloadSubscriberUnsubscribed` /
+  // `EDevserverStopped`, defeating the original promotion's purpose.
+  // 16th instance of the producer/consumer drift pattern; folded into
+  // the §7.6 Phase-3 codegen lift to prevent recurrence at source.
+  E_DEVSERVER_STOPPED: EDevserverStopped,
+  E_RELOAD_SUBSCRIBER_UNSUBSCRIBED: EReloadSubscriberUnsubscribed,
 };
 
 // Match-at-any-position regex for a stable `E_*` code. Codes look like

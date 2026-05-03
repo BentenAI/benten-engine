@@ -121,6 +121,107 @@ export interface ReloadEvent {
 }
 
 /**
+ * R6FP-tail (Round-2 Instance 10) discriminated return shape for
+ * {@link BentenDevServer.replaceHandlerWithOutcome}. Engine-routed
+ * branches return the structured outcome; legacy in-memory mode
+ * returns the discriminated `{ legacyOnly: true, handlerId }` shape so
+ * callers can pivot consistently. R6 Round-3 r6-r3-napi-2 lifted the
+ * legacy-fallback synth to honour the discriminator.
+ */
+export type ReplaceOutcomeResult =
+  | {
+      handlerId: string;
+      cid: string;
+      previousCid: string | null;
+      chainDepth: number;
+      versionTag: string;
+      replaced: boolean;
+    }
+  | { legacyOnly: true; handlerId: string };
+
+/**
+ * Internal — minimal native shape `resolveReplaceOutcome` consumes.
+ * Mirrors the subset of {@link NativeDevServer} used by the wrapper
+ * function so unit tests can synthesize stubs without the full native
+ * surface.
+ */
+interface ReplaceOutcomeNativeShape {
+  replaceHandlerFromDsl(
+    handlerId: string,
+    op: string,
+    source: string,
+  ): string;
+  replaceHandlerFromDslWithOutcome?(
+    handlerId: string,
+    op: string,
+    source: string,
+  ): unknown;
+}
+
+/**
+ * R6FP-tail Instance 10 + R6 Round-3 r6-r3-napi-2 — pure helper that
+ * resolves the structured replace-outcome shape against either the
+ * Instance-10 napi surface (`replaceHandlerFromDslWithOutcome`) or the
+ * pre-Instance-10 legacy surface (`replaceHandlerFromDsl` + synthesized
+ * `legacyOnly: true` fallback).
+ *
+ * Exported as a load-bearing helper so the unit-test harness in
+ * `packages/engine-devserver/test/replace_outcome.test.ts` can exercise
+ * the discriminator-pivot contract without instantiating a full
+ * `BentenDevServer` (which requires the native binding to be built).
+ *
+ * R6 Round-3 r6-r3-napi-2 closure: pre-fix the legacy-fallback branch
+ * synthesized `{ chainDepth: 1, versionTag: "v1", replaced: false }`
+ * defaults + omitted the `legacyOnly` discriminator the docstring
+ * promised; consumer pivot logic `if (result.legacyOnly === true)` then
+ * misrouted to the engine-routed branch with fake audit-trail values.
+ * Post-fix: legacy fallback returns `{ legacyOnly: true, handlerId }` so
+ * callers know the structured outcome was unavailable + can rebuild
+ * the native binding to obtain real audit data.
+ */
+export function resolveReplaceOutcome(
+  inner: ReplaceOutcomeNativeShape,
+  handlerId: string,
+  op: string,
+  source: string,
+): ReplaceOutcomeResult {
+  if (typeof inner.replaceHandlerFromDslWithOutcome !== "function") {
+    // Pre-Instance-10 native binding lacks the structured surface; drive
+    // the legacy `replaceHandlerFromDsl` for its side-effect (the
+    // replace itself still happens) + return the discriminated
+    // `{ legacyOnly: true, handlerId }` shape so callers can pivot on
+    // `legacyOnly` per the union return type.
+    try {
+      inner.replaceHandlerFromDsl(handlerId, op, source);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+    return { legacyOnly: true, handlerId };
+  }
+  let raw: unknown;
+  try {
+    raw = inner.replaceHandlerFromDslWithOutcome(handlerId, op, source);
+  } catch (err) {
+    throw mapNativeError(err);
+  }
+  if (
+    raw &&
+    typeof raw === "object" &&
+    (raw as { legacyOnly?: unknown }).legacyOnly === true
+  ) {
+    return raw as { legacyOnly: true; handlerId: string };
+  }
+  return raw as {
+    handlerId: string;
+    cid: string;
+    previousCid: string | null;
+    chainDepth: number;
+    versionTag: string;
+    replaced: boolean;
+  };
+}
+
+/**
  * Typed error surfaced by {@link BentenDevServer} on harness mis-wires
  * (e.g. {@link BentenDevServer.waitForReload} timing out without a
  * reload event). Carries a stable `name` so test fixtures can assert
@@ -297,57 +398,8 @@ export class BentenDevServer {
     handlerId: string,
     op: string,
     source: string,
-  ): Promise<
-    | {
-        handlerId: string;
-        cid: string;
-        previousCid: string | null;
-        chainDepth: number;
-        versionTag: string;
-        replaced: boolean;
-      }
-    | { legacyOnly: true; handlerId: string }
-  > {
-    if (typeof this.inner.replaceHandlerFromDslWithOutcome !== "function") {
-      // Pre-Instance-10 native binding lacks the structured surface;
-      // fall back to the bare-CID surface + lift it into the partial
-      // shape so callers can pivot on `legacyOnly` consistently.
-      let cid: string;
-      try {
-        cid = this.inner.replaceHandlerFromDsl(handlerId, op, source);
-      } catch (err) {
-        throw mapNativeError(err);
-      }
-      return {
-        handlerId,
-        cid,
-        previousCid: null,
-        chainDepth: 1,
-        versionTag: "v1",
-        replaced: false,
-      };
-    }
-    let raw: unknown;
-    try {
-      raw = this.inner.replaceHandlerFromDslWithOutcome(handlerId, op, source);
-    } catch (err) {
-      throw mapNativeError(err);
-    }
-    if (
-      raw &&
-      typeof raw === "object" &&
-      (raw as { legacyOnly?: unknown }).legacyOnly === true
-    ) {
-      return raw as { legacyOnly: true; handlerId: string };
-    }
-    return raw as {
-      handlerId: string;
-      cid: string;
-      previousCid: string | null;
-      chainDepth: number;
-      versionTag: string;
-      replaced: boolean;
-    };
+  ): Promise<ReplaceOutcomeResult> {
+    return resolveReplaceOutcome(this.inner, handlerId, op, source);
   }
 
   /**

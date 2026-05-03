@@ -128,7 +128,13 @@ function shortArgs(n: SubgraphNode): string {
     case "respond":
       return pick("edge") || pick("body") || "";
     case "emit":
-      return pick("event");
+      // R6 Round-3 r6-r3-cr-1: the DSL builders write `channel: args.event`
+      // into the SubgraphNode args bag (see `dsl.ts::emit()` builders) so the
+      // eval-side EMIT primitive (which reads `channel`) fires correctly.
+      // Pre-fix this case picked `event`, which was never present, and the
+      // rendered label was empty `EMIT: `. Read `channel` to match the
+      // landed DSL shape.
+      return pick("channel");
     case "wait":
       return pick("duration");
     case "stream":

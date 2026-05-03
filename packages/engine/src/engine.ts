@@ -1227,10 +1227,17 @@ export class Engine {
   /**
    * Emit a named event with a JSON payload.
    *
-   * Phase-1 contract: surfaces `E_PRIMITIVE_NOT_IMPLEMENTED` — the
-   * standalone EMIT primitive is deferred to Phase 2. Per-WRITE
-   * change-stream fan-out still flows via `createNode` /
-   * `registerCrud:create`.
+   * Phase-2b state: surfaces `E_PRIMITIVE_NOT_IMPLEMENTED` — the
+   * standalone `Engine.emitEvent` surface is named-destination-deferred
+   * to Phase 3 per `docs/future/phase-3-backlog.md` §7.8
+   * (Engine.emitEvent standalone surface — wire through EmitBroadcast
+   * bus). Per-WRITE change-stream fan-out flows via `createNode` /
+   * `registerCrud:create`. In-handler EMIT (the `emit()` DSL builder)
+   * IS wired and routes through the EmitBroadcast bus to
+   * EmitSubscription consumers (R6-R2-FP cluster-1, PR #66) — compose
+   * a small handler whose only Node is `emit(...)` and dispatch it via
+   * `engine.call(...)` if you need standalone-event-emission before
+   * Phase 3 lands the direct surface.
    */
   public async emitEvent(name: string, payload: JsonValue): Promise<void> {
     this.assertOpen();
