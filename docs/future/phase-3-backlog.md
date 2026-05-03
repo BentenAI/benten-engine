@@ -442,13 +442,13 @@ widening (cross-process / cross-actor delivery).
 
 **Phase 2b state (as of R6-R4 narrow-iteration close):**
 
-R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift instance: `SubscribeArgs.handler` was declared in the TS DSL and actively written to the SubgraphNode props bag (`packages/engine/src/dsl.ts` SubgraphBuilder + CaseBuilder), but the eval-side primitive at `crates/benten-eval/src/primitives/subscribe.rs::execute` reads ONLY the `pattern` property — never `handler`. PR #74's r6-r4-cr-1 fix mirrored EMIT precedent (which DOES route on `handler`) too literally; SUBSCRIBE has no handler-id-router today.
+R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift instance: `SubscribeArgs.handler` was declared in the TS DSL and actively written to the SubgraphNode props bag (`packages/engine/src/dsl.ts` SubgraphBuilder + CaseBuilder), but the eval-side primitive at `crates/benten-eval/src/primitives/subscribe.rs::execute` reads ONLY the `pattern` property — never `handler`. PR #74's r6-r4-cr-1 fix mirrored an assumed EMIT precedent too literally; in practice neither EMIT nor SUBSCRIBE routes on a handler-id today (EMIT routes on `channel` name match; SUBSCRIBE on `pattern` match).
 
 **Phase 2b resolution (orchestrator-direct, post-R6-R4-FP):** removed `handler?: string` from the `SubscribeArgs` interface in dsl.ts + DSL-SPECIFICATION.md + dropped the `props.handler = args.handler` write at both subscribe call sites. SUBSCRIBE today carries only `event` (mapped to eval-side `pattern`). The worked example at DSL-SPECIFICATION.md:557 cross-references this section.
 
 **Phase 3 target:**
 
-1. **Wire SUBSCRIBE handler-id-router**: add a `handler?: string` arm to the eval-side primitive at `subscribe.rs::execute` that, when set, routes change-event delivery through the named handler instead of returning the raw event to the calling subgraph. Mirrors the EMIT routing shape (which is wired through the change-broadcast machinery + handler-id correlation). Restores the `SubscribeArgs.handler` field in TS DSL + DSL-SPECIFICATION.md worked example.
+1. **Wire SUBSCRIBE handler-id-router**: add a `handler?: string` arm to the eval-side primitive at `subscribe.rs::execute` that, when set, routes change-event delivery through the named handler instead of returning the raw event to the calling subgraph. (Note: this is NOT mirroring an existing EMIT precedent — landed EMIT at `emit.rs::execute` + `EmitEvent` carry only `channel` + `payload`; subscribers route by channel-name match, not handler-id correlation. The Phase-3 SUBSCRIBE handler-id-router is a NEW routing dimension layered on top of the channel/pattern match, applicable to both primitives in Phase 3.) Restores the `SubscribeArgs.handler` field in TS DSL + DSL-SPECIFICATION.md worked example.
 
 2. **Add DSL-args-vs-eval-primitive-properties parity meta-test** (the structural fix the 4-deep-sweeps recurrence proved is needed):
    - Walk every `*Args` interface in `packages/engine/src/dsl.ts`
@@ -463,7 +463,7 @@ R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift 
 - `.addl/phase-2b/r6-r3-fp-mr-group-b.json` — original mirror-EMIT-precedent context (PR #66 EMIT routing)
 - §7.9 — sibling Rust-side schema-parity meta-test recommendation (same infrastructure can cover both)
 - `crates/benten-eval/src/primitives/subscribe.rs::execute` — eval-side surface to extend
-- `crates/benten-eval/src/primitives/emit.rs` — EMIT precedent that DOES route on handler
+- `crates/benten-eval/src/primitives/emit.rs` — EMIT today (channel/payload only, no handler-id) — Phase-3 handler-id-router would extend BOTH primitives in parallel
 
 **Touch size:** ~30-50 LOC handler-id-router wiring + ~20 LOC DSL restoration + ~80-150 LOC parity meta-test (combined with §7.9 sibling work, ~150-250 LOC for both meta-tests).
 
