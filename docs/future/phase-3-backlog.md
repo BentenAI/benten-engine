@@ -469,6 +469,32 @@ R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift 
 
 ---
 
+### 7.11 Phase-3-pre-R1 process-pattern ratifications + CI infrastructure (carries pim-3 / pim-4 / pim-6 / pim-7 from R6 meta-sweeps)
+
+**Phase 2b state:** R6 Rounds 3-5 pattern-induction meta-sweeps surfaced 8 process-level patterns. 5 of the 8 were codifiable as standing rules in `dispatch-conventions.md` and landed during R6 fix-pass cycles (pim-1 → §3.5b; pim-2 → §3.6b; pim-5 → §3.8 mini-review verdict shape; pim-8 → §3.6c mirror-precedent overshoot guard; pim-9 → §3.5b point 4 NEW-prose-block grep + point 3 high-churn-surface promotion). pim-10 (positive narrow-iteration process-shape) → §3.7b. The remaining 4 (pim-3 / pim-4 / pim-6 / pim-7) require Phase-3-pre-R1 work that doesn't fit Phase-2b scope:
+
+**pim-3 — Round-2 lens-budget surface clustering** (R6-R3 origin). R6 Round 2 dispatched 5 lenses; ALL 5 found docs-or-architecture findings; ZERO found correctness findings. Cause: R2's traditional lens menu (architect / doc-engineer / dx-optimizer / metadata-mpc / pim-meta-sweep) over-indexes on docs/arch surfaces. The Round-1 correctness lenses (code-reviewer / determinism / ivm / security / wasmtime) carry the correctness load. **Phase-3-pre-R1 target:** redesign R2 lens menu to either (a) include 1-2 correctness lenses, or (b) explicitly mark R2 as "docs+arch deep-pass" so orchestrator doesn't expect correctness coverage from it. Touch size: ~50-100 LOC dispatch-conventions edits + R2 brief-template update.
+
+**pim-4 — Wave-8 sibling-wave lock-in pattern** (R6-R3 origin). Mini-review rationales claimed "paired with sibling wave X" coverage that the sibling wave didn't actually do. Cause: parallel-dispatched waves assume each other's coverage without explicit hand-off contracts. **Phase-3-pre-R1 target:** add wave-pairing protocol to dispatch-conventions §2 — when two waves are dispatched as "paired siblings," the briefs MUST cross-reference each other AND the orchestrator MUST verify the claimed pairing closes the named coverage at merge time. Touch size: ~30-50 LOC dispatch-conventions edits.
+
+**pim-6 — Cross-crate workflow blind spot** (R6-R4 origin). Drift detector spans crate boundaries; per-crate scoped pre-flight (§3) misses. Cause: §3.4 cross-crate field-cascade exception was added for STRUCT FIELD additions but doesn't cover WORKFLOW-LEVEL constraints (e.g. a CI script that asserts crate A doesn't depend on crate B). **Phase-3-pre-R1 target:** add a §3.4b cross-crate-workflow-constraint exception extending §3.4 to cover constraint-detector additions. CI infrastructure question: should drift detector additions trigger an automatic workspace-wide regression scan? Touch size: ~50-100 LOC dispatch-conventions edits + 1 CI workflow update.
+
+**pim-7 — Stable rustdoc strict-lint blind spot** (R6-R4 origin). 1.95 clippy + cargo-doc on workspace HEAD doesn't catch all `-D warnings` lints; some only fire on `cargo +stable doc`. Cause: scoped per-package check uses 1.95 toolchain (the MSRV cell), but the cargo-doc cell uses `+stable` (the latest cell). Stable-only lints escape per-package pre-flight. **Phase-3-pre-R1 target:** add `cargo +stable doc -p <crate>` to §3.5 cross-target/cross-toolchain pre-flight (currently the §3.5 list covers stable rustfmt edition + 1.95 clippy + wasm32 compile + drift-detector construction sites; missing the stable doc leg). Touch size: ~10 LOC dispatch-conventions edits + 1 brief-template update.
+
+**Sequencing:** pim-3 / pim-4 are dispatch-conventions edits + briefing-template updates — orchestrator-direct in 1-2 hr. pim-6 / pim-7 also dispatch-conventions edits + may pair with CI infrastructure work that fits Phase-3 plan-doc opening checklist (§8 row 1: "read this file end-to-end").
+
+**Phase-3 plan-doc opening checklist addition (sequencing):** the Phase-3 pre-R1 pass should ratify all 4 patterns above as the FIRST commits before R1 dispatch — same precedent as pim-1/pim-2 ratification cycle (each landed in their own dispatch-conventions update commit before the next R6 round dispatched).
+
+**Cross-references:**
+- `.addl/phase-2b/r6-r3-pattern-induction-meta-sweep.json` — pim-3 / pim-4 / pim-5 origin findings
+- `.addl/phase-2b/r6-r4-pattern-induction-meta-sweep.json` — pim-6 / pim-7 origin findings
+- `.addl/phase-2b/r6-r5-pattern-induction-meta-sweep.json` — pim-8 / pim-9 / pim-10 (5 codified inline; 1 deferred via §7.10's parity meta-test)
+- `.addl/phase-2b/dispatch-conventions.md` §3.5b (pim-1 + pim-9) + §3.6b (pim-2) + §3.6c (pim-8) + §3.7b (pim-10) + §3.8 (pim-5) — already-codified ratifications
+
+**Touch size:** ~150-250 LOC dispatch-conventions edits + 2-3 brief-template updates + 1-2 CI workflow updates. Risk surface: low (purely process; no runtime behavior change). 1-2 orchestrator-direct sessions; NO implementer dispatch needed.
+
+---
+
 ## 7.3 Wave-8j R6 residuals — test bodies need real implementations before un-ignore
 
 **Phase 2b state:** R6 phase-close Round 1 surfaced two `#[ignore]`'d tests with stale rationales — both have empty `todo!()` bodies that REFERENCE landed work but don't actually exercise it:
