@@ -296,7 +296,7 @@ uhlc = "0.2"
 # `clippy::duration_suboptimal_units` allow-directives planted across
 # the cap-policy / wallclock-refresh / subscribe-persist test fleet.
 # See `.github/workflows/msrv.yml` for the matching CI gate.
-wasmtime = { version = "43", default-features = false, features = ["runtime", "cranelift", "std", "async"] }
+wasmtime = { version = "43.0.2", default-features = false, features = ["runtime", "cranelift", "std", "async"] }
 # `wat` — sibling crate to wasmtime; pin to its current minor. Used by
 # the SANDBOX unit tests + integration tests to author wasm fixtures
 # from `.wat` source (dev-time-only; prod ships pre-built `.wasm`).
