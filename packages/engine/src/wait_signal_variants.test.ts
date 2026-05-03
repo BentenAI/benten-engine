@@ -62,19 +62,28 @@ describe("wait DSL signal vs duration variants (dx-r1-8)", () => {
   });
 
   it("wait_duration_variant_preserves_phase_1_shape", () => {
+    // R6-R5 r6-r5-pcds-2: duration-string `5m` translates at the DSL
+    // spread to `duration_ms: 300_000` so the eval-side reader matches
+    // (see `dsl.ts::translateWaitArgs` + the docstring on
+    // `WaitDurationArgs.duration`). Public TS surface unchanged.
     const sg = subgraph("h4")
       .action("run")
       .wait({ duration: "5m" })
       .respond({ body: "$result" })
       .build();
     const w = sg.nodes.find((n) => n.primitive === "wait");
-    expect(w?.args.duration).toBe("5m");
+    expect(w?.args.duration).toBeUndefined();
+    expect(w?.args.duration_ms).toBe(300_000);
     expect(w?.args.signal).toBeUndefined();
   });
 
   it("wait_signal_with_fallback_duration_combines", () => {
     // Combined form — suspend on signal but fire E_WAIT_TIMEOUT if no
-    // signal arrives within the duration.
+    // signal arrives within the duration. R6-R5 r6-r5-pcds-2: in the
+    // signal-with-deadline form the duration translates to
+    // `timeout_ms` per the eval-side reader's deadline semantics
+    // (NOT `duration_ms`, which is reserved for the bare-duration
+    // form that drives `WaitMetadata.is_duration = true`).
     const sg = subgraph("h5")
       .action("run")
       .wait({ signal: "external:ack", duration: "1h" })
@@ -82,7 +91,9 @@ describe("wait DSL signal vs duration variants (dx-r1-8)", () => {
       .build();
     const w = sg.nodes.find((n) => n.primitive === "wait");
     expect(w?.args.signal).toBe("external:ack");
-    expect(w?.args.duration).toBe("1h");
+    expect(w?.args.duration).toBeUndefined();
+    expect(w?.args.timeout_ms).toBe(3_600_000);
+    expect(w?.args.duration_ms).toBeUndefined();
   });
 
   it("wait_empty_args_rejects_at_dsl_build_time", () => {

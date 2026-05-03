@@ -110,4 +110,59 @@ describe("handler.toMermaid()", () => {
     // rendered mermaid so future drift surfaces deterministically.
     expect(mermaid).toMatch(/EMIT:\s*post-summary:built/);
   });
+
+  // R6-R5 r6-r5-pcds-1 (22nd producer/consumer drift): SUBSCRIBE
+  // short-args label must render the pattern name (the property the
+  // eval-side SUBSCRIBE primitive reads + the property name PR #74
+  // canonicalised on at the DSL spread). Pre-fix the `case "subscribe"`
+  // arm in `mermaid.ts::shortArgs` picked `event`, which is GUARANTEED
+  // absent from the rendered args bag (see `subscribe.test.ts:194`
+  // which pins `subscribeNode!.args.event === undefined`). The
+  // rendered label was therefore `SUBSCRIBE:` (empty tail) for every
+  // DSL-built SUBSCRIBE node — identical anti-pattern to the EMIT
+  // mermaid bug PR #69 r6-r3-cr-1 closed.
+  //
+  // §3.6b LOAD-BEARING test pin: this drives the production renderer
+  // (`toMermaid` is the shipped DX surface; see file-header docstring)
+  // on a DSL-built Subgraph. Would FAIL if the spread silently no-op'd
+  // back to `pick("event")` (the rendered match would not contain the
+  // pattern name).
+  // R6-R5 r6-r5-pcds-2 cascade: the DSL spread now translates
+  // `duration: "5m"` into `duration_ms: 300_000` (Int). The mermaid
+  // WAIT arm was updated alongside the spread translation to prefer
+  // `signal` when present + fall back to `<N>ms` rendering of
+  // `duration_ms` / `timeout_ms`. Pre-pcds-2-fix the renderer read
+  // `pick("duration")` which the spread no longer writes — without
+  // this cascade fix the duration-WAIT label would have rendered
+  // empty `WAIT: `.
+  it("wait_duration_renders_ms_in_short_args_label", async () => {
+    const { subgraph, toMermaid } = await import("@benten/engine");
+    const sg = subgraph("mermaid-wait-dur")
+      .action("run")
+      .wait({ duration: "5m" })
+      .respond({ body: "$result" })
+      .build();
+    const mermaid = toMermaid(sg);
+
+    // The label body is `WAIT: 300000ms` post-fix; pre-pcds-2-cascade
+    // it would have been `WAIT: ` because the spread no longer writes
+    // the raw `duration` key.
+    expect(mermaid).toMatch(/WAIT:\s*300000ms/);
+  });
+
+  it("subscribe_renders_pattern_name_in_short_args_label", async () => {
+    const { subgraph, toMermaid } = await import("@benten/engine");
+    const sg = subgraph("mermaid-subscribe")
+      .action("on-post-changed")
+      .subscribe({ event: "post:changed" })
+      .respond({ body: "$result" })
+      .build();
+    const mermaid = toMermaid(sg);
+
+    // The label body is `SUBSCRIBE: <pattern>` post-fix; pre-fix it
+    // was the empty tail `SUBSCRIBE:`. Assert the pattern name is
+    // present in the rendered mermaid so future drift surfaces
+    // deterministically.
+    expect(mermaid).toMatch(/SUBSCRIBE:\s*post:changed/);
+  });
 });

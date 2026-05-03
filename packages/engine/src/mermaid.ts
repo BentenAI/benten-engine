@@ -136,11 +136,37 @@ function shortArgs(n: SubgraphNode): string {
       // landed DSL shape.
       return pick("channel");
     case "wait":
-      return pick("duration");
+      // R6-R5 r6-r5-pcds-2 cascade: the DSL spread now translates
+      // `duration: "5m"` into `duration_ms: 300_000` (Int) +
+      // `signal: <s>` stays as Text + `signal: + duration` translates
+      // duration to `timeout_ms: <ms>` (see `dsl.ts::translateWaitArgs`).
+      // Pre-pcds-2-fix this arm read `duration` (which the spread no
+      // longer writes) and would render `WAIT: ` (empty). Post-fix
+      // prefer the signal name when present (more meaningful at-a-glance
+      // than the millisecond integer); fall back to a `<N>ms` rendering
+      // of the duration.
+      {
+        const sig = pick("signal");
+        if (sig) return sig;
+        const dms = pick("duration_ms");
+        if (dms) return `${dms}ms`;
+        const tms = pick("timeout_ms");
+        if (tms) return `${tms}ms`;
+        return "";
+      }
     case "stream":
       return pick("source");
     case "subscribe":
-      return pick("event");
+      // R6-R5 r6-r5-pcds-1 (22nd producer/consumer drift): the DSL
+      // builders write `pattern: args.event` into the SubgraphNode args
+      // bag (see `dsl.ts::SubgraphBuilder.subscribe` + `CaseBuilder.subscribe`)
+      // so the eval-side SUBSCRIBE primitive (which reads `pattern`)
+      // matches. PR #74 r6-r4-cr-1 landed the DSL-side rename; the
+      // analogous SUBSCRIBE arm of this renderer was missed in that
+      // fix-pass + rendered an empty label `SUBSCRIBE: ` for every
+      // DSL-built SUBSCRIBE node. Read `pattern` to match the landed
+      // DSL shape (mirrors the `case "emit"` precedent above).
+      return pick("pattern");
     case "sandbox":
       return pick("module");
     default:

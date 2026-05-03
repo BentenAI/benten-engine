@@ -168,6 +168,103 @@ export interface WaitDurationArgs {
   signal?: never;
   signal_shape?: never;
 }
+
+// ---------------------------------------------------------------------------
+// WAIT duration-string parser (R6-R5 r6-r5-pcds-2 — 23rd producer/consumer
+// drift fix-pass)
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a duration string of the form `<N>(s|m|h)` into integer
+ * milliseconds. Mirrors the DSL contract documented at
+ * `WaitDurationArgs.duration` ("e.g. `5m`, `30s`, `2h`") + the joined
+ * `WaitSignalArgs.duration` deadline form.
+ *
+ * Pre-R6-R5 the DSL spread wrote the raw `duration: "5m"` (Text)
+ * property into the OperationNode args bag, but the eval-side
+ * `wait::evaluate_op_with_handler_id` reader at
+ * `crates/benten-eval/src/primitives/wait.rs::evaluate_op_with_handler_id`
+ * reads `duration_ms` (Int) — there was NO translation layer. A DSL-built
+ * `wait({ duration: "5m" })` therefore suspended without a deadline +
+ * never auto-resumed. The R6-R5 producer/consumer deep-sweep
+ * (`r6-r5-pcds-2`) closed this by translating at the DSL spread before
+ * the `addNode("wait", ...)` call. See the deep-sweep report at
+ * `.addl/phase-2b/r6-r5-producer-consumer-deep-sweep.json`.
+ *
+ * Throws `EDslInvalidShape` (mapped to `E_DSL_INVALID_SHAPE`) for any
+ * other form (mirroring the existing `.wait()` validation at
+ * `SubgraphBuilder.wait` / `CaseBuilder.wait` which already throws on
+ * empty wait shapes).
+ */
+function parseDurationToMs(s: string): number {
+  if (typeof s !== "string" || s.length === 0) {
+    throw new EDslInvalidShape(
+      "wait({ duration }) requires a non-empty string of the form `<N>(s|m|h)` (E_DSL_INVALID_SHAPE)",
+    );
+  }
+  const match = /^(\d+)(s|m|h)$/.exec(s);
+  if (!match) {
+    throw new EDslInvalidShape(
+      `wait({ duration: "${s}" }) — duration must match \`<N>(s|m|h)\` (e.g. "5s", "30m", "2h"); E_DSL_INVALID_SHAPE`,
+    );
+  }
+  const n = parseInt(match[1]!, 10);
+  if (!Number.isFinite(n) || n <= 0) {
+    throw new EDslInvalidShape(
+      `wait({ duration: "${s}" }) — magnitude must be a positive integer; E_DSL_INVALID_SHAPE`,
+    );
+  }
+  const unit = match[2]!;
+  const multiplier = unit === "s" ? 1_000 : unit === "m" ? 60_000 : 3_600_000;
+  return n * multiplier;
+}
+
+/**
+ * Translate the public `WaitArgs` shape (`signal` / `duration` / `signal_shape`)
+ * into the OperationNode property bag the eval-side `wait` primitive
+ * actually reads (`signal: Text` / `duration_ms: Int` / `timeout_ms: Int`
+ * / `signal_shape: Value`). Mirrors the EMIT precedent (`channel: args.event`)
+ * and SUBSCRIBE precedent (`pattern: args.event`) — translation lives at
+ * the DSL spread so the eval-side reader sees its canonical key shape.
+ *
+ * Branching rules per `WaitSignalArgs` / `WaitDurationArgs`:
+ *   - signal-only form → `{ signal: <s> }`
+ *   - duration-only form → `{ duration_ms: parseDurationToMs(d) }`
+ *   - signal-with-duration form → `{ signal: <s>, timeout_ms: parseDurationToMs(d) }`
+ *     (per `WaitSignalArgs.duration` JSDoc: "Optional deadline — if the
+ *     signal does not arrive in time, `E_WAIT_TIMEOUT` fires.")
+ *   - signal_shape (when present) is forwarded verbatim.
+ *
+ * The empty-args + neither-set rejection happens at the public
+ * `.wait()` builder boundary BEFORE this function fires; this helper
+ * assumes at least one of `signal` / `duration` is set.
+ */
+function translateWaitArgs(
+  args: WaitArgs,
+): Record<string, JsonValue> {
+  const a = args as {
+    signal?: string;
+    signal_shape?: string;
+    duration?: string;
+  };
+  const props: Record<string, JsonValue> = {};
+  if (typeof a.signal === "string" && a.signal.length > 0) {
+    props.signal = a.signal;
+    if (typeof a.duration === "string") {
+      // Signal-with-deadline form — duration translates to `timeout_ms`
+      // per the eval-side reader's signal-variant deadline semantics.
+      props.timeout_ms = parseDurationToMs(a.duration);
+    }
+  } else if (typeof a.duration === "string") {
+    // Bare-duration form — duration translates to `duration_ms` so the
+    // eval-side suspension store stamps `WaitMetadata.is_duration = true`.
+    props.duration_ms = parseDurationToMs(a.duration);
+  }
+  if (typeof a.signal_shape === "string") {
+    props.signal_shape = a.signal_shape;
+  }
+  return props;
+}
 export interface StreamArgs {
   source: string;
   /** Optional chunk-size hint. */
@@ -302,6 +399,14 @@ export class SubgraphBuilder {
 
   // Phase 2a G3-B (dx-r1-8): WAIT accepts either a signal-keyed form or the
   // Phase-1 timed form; exactly one of `signal` / `duration` must be set.
+  // R6-R5 r6-r5-pcds-2 fix-pass (23rd producer/consumer drift): the
+  // eval-side primitive at `wait::evaluate_op_with_handler_id` reads
+  // `duration_ms: Int` (NOT `duration: Text`) + `timeout_ms: Int` for
+  // the signal-with-deadline form. Pre-fix the spread wrote the raw
+  // `duration: "5m"` string verbatim and the duration-variant WAIT
+  // suspended forever (no `WaitMetadata.is_duration` stamped, no
+  // `timeout_ms` deadline). Translate at the DSL spread per
+  // `translateWaitArgs` (mirrors EMIT/SUBSCRIBE translation precedents).
   public wait(args: WaitArgs): this {
     const a = args as { signal?: string; duration?: string };
     if (!a || (a.signal == null && a.duration == null)) {
@@ -309,10 +414,7 @@ export class SubgraphBuilder {
         "wait(args) requires either `signal: string` or `duration: string` (E_DSL_INVALID_SHAPE)",
       );
     }
-    return this.addNode("wait", { ...(args as object) } as Record<
-      string,
-      JsonValue
-    >);
+    return this.addNode("wait", translateWaitArgs(args));
   }
   public stream(args: StreamArgs): this {
     return this.addNode("stream", { ...args } as Record<string, JsonValue>);
@@ -538,16 +640,17 @@ export class CaseBuilder {
     return this.addNode("emit", props);
   }
   public wait(a: WaitArgs): this {
+    // R6-R5 r6-r5-pcds-2 fix-pass: see the sibling builder's `wait()`
+    // method earlier in this file for the full rationale on the
+    // duration-string → duration_ms / timeout_ms translation. Both
+    // builders MUST stay in lockstep on the spread shape.
     const s = a as { signal?: string; duration?: string };
     if (!s || (s.signal == null && s.duration == null)) {
       throw new EDslInvalidShape(
         "wait(args) requires either `signal: string` or `duration: string` (E_DSL_INVALID_SHAPE)",
       );
     }
-    return this.addNode("wait", { ...(a as object) } as Record<
-      string,
-      JsonValue
-    >);
+    return this.addNode("wait", translateWaitArgs(a));
   }
   public stream(a: StreamArgs): this {
     return this.addNode("stream", { ...a } as Record<string, JsonValue>);
