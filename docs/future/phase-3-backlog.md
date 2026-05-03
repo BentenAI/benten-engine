@@ -378,6 +378,46 @@ Together they realize the cr-r4b-10 closure-narrative claim that `E_STREAM_HANDL
 
 **Touch size:** ~30-50 LOC across napi-rs upgrade + test pin updates.
 
+### 7.8 Engine.emitEvent standalone surface — wire through EmitBroadcast bus
+
+**Phase 2b state:** `Engine.emitEvent(name, payload)` (TS at
+`packages/engine/src/engine.ts:1228-1248`) and the matching napi
+adapter `emit_event` (`bindings/napi/src/lib.rs:548-562`) both surface
+`E_PRIMITIVE_NOT_IMPLEMENTED`. The standalone "emit a named event from
+JS without a backing handler call" surface was deferred during Phase 1
+when the change-stream fan-out was driven exclusively by storage
+WRITEs. R6 Round-3 r6-r3-dx-5 surfaced that the original docstring
+("deferred to Phase 2") violates HARD-RULE-12 vague-time-qualifier
+(Phase 2 covers 2a + 2b + 2c; 2a is closed and 2b is closing). Naming
+this entry as the destination + updating both docstrings with the
+specific phase-3-backlog reference closes the disposition gap.
+
+**Why this isn't done in Phase 2b:** The in-handler EMIT primitive
+(`emit()` DSL builder) IS wired and routes through the EmitBroadcast
+bus to EmitSubscription consumers (R6-R2-FP cluster-1, PR #66). The
+standalone `Engine.emitEvent` surface needs a separate plumbing path:
+threading `emit_event(channel, payload)` through the existing
+EmitBroadcast publish entry without going through a handler dispatch.
+Users who want standalone-event-emission today can compose a no-op
+handler whose only Node is `emit(...)` and call it via
+`engine.call(handler.id, "default", { channel, payload })` — friction
+but not blocking.
+
+**Phase 3 target:** Thread `Engine::emit_event(channel, payload)`
+directly through the EmitBroadcast bus (the same channel
+`subscribe_emit_events_with_handle` consumes). Decide on the
+structured-payload story (likely: accept `JsonValue` payload, route as
+the `payload` field of the EmitBroadcast event). Add an end-to-end
+vitest pin: `engine.onEmit(channel, cb)` → `engine.emitEvent(channel,
+{...})` → callback fires with the payload.
+
+**Why Phase 3:** Phase 2b closed in-handler EMIT + EmitSubscription
+delivery; standalone JS-surface emit is a small but separate plumbing
+path that bundles cleanly with the broader Phase-3 event-broadcast
+widening (cross-process / cross-actor delivery).
+
+**Touch size:** ~50 LOC implementation + ~20 LOC test pin.
+
 ---
 
 ## 7.3 Wave-8j R6 residuals — test bodies need real implementations before un-ignore

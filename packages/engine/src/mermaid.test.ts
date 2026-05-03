@@ -79,4 +79,35 @@ describe("handler.toMermaid()", () => {
     // that this edge fires post-suspend.
     expect(mermaid).toMatch(/-\.->\s*\|?on resume/);
   });
+
+  // R6 Round-3 r6-r3-cr-1: EMIT short-args label renders the channel
+  // name (the property the eval-side EMIT primitive reads). PR #66
+  // (R6-R2-FP cluster-1) renamed the DSL builder's SubgraphNode args
+  // property from `event` to `channel` to fix the silent-drop bug
+  // where the eval-side EMIT primitive read `channel` and the DSL
+  // wrote `event`. The mermaid renderer's short-args picker missed
+  // the rename + still picked `event` — rendering an empty label
+  // `EMIT: ` for any DSL-built subgraph containing an EMIT node.
+  //
+  // This test invokes `toMermaid()` directly on the DSL-built
+  // `Subgraph` value (`toMermaid` is a pure function over the TS
+  // Subgraph shape; no Rust round-trip required) so the assertion
+  // pins the load-bearing renderer ↔ DSL contract regardless of
+  // whatever shape the engine round-trips back through the napi
+  // boundary.
+  it("emit_renders_channel_name_in_short_args_label", async () => {
+    const { subgraph, toMermaid } = await import("@benten/engine");
+    const sg = subgraph("mermaid-emit")
+      .action("publish")
+      .emit({ event: "post-summary:built" })
+      .respond({ body: "$result" })
+      .build();
+    const mermaid = toMermaid(sg);
+
+    // EMIT renders as a stadium-shape node `([text])`. The label
+    // body is `EMIT: <channel>` post-fix; pre-fix it was the empty
+    // tail `EMIT:`. Assert the channel name is present in the
+    // rendered mermaid so future drift surfaces deterministically.
+    expect(mermaid).toMatch(/EMIT:\s*post-summary:built/);
+  });
 });

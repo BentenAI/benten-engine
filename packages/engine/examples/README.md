@@ -31,9 +31,18 @@ node --experimental-strip-types examples/subscribe-example.ts
 node --experimental-strip-types examples/sandbox-example.ts    # requires WASM module file
 ```
 
-The SANDBOX example expects a `summarize-v1.wasm` next to it; the
-example runner short-circuits with a clear error if the file is
-missing.
+The SANDBOX example uses hardcoded placeholder CIDs for both the
+module and manifest. Without registering real wasm bytes for the
+placeholder module CID via `Engine.installModule(...)` over a
+manifest authored against compiled module bytes, the
+`engine.callAs(...)` dispatch surfaces a typed napi error at SANDBOX
+entry (likely `E_SANDBOX_MANIFEST_UNKNOWN` or a manifest-resolution
+error from the named-manifest registry). The example demonstrates
+the call SHAPE, not an end-to-end run. See
+`packages/engine/test/sandbox.test.ts` for end-to-end pins that ship
+real wasm bytes via test fixtures, and
+`docs/future/phase-3-backlog.md` §6.6 for the named-manifest
+registration roadmap.
 
 ## Structure rationale
 

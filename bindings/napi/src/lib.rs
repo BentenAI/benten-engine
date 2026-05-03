@@ -545,20 +545,25 @@ mod napi_surface {
 
         /// Emit a named event with a JSON payload.
         ///
-        /// Phase-1: EMIT as a standalone host operation is deferred to
-        /// Phase-2. The change-stream fan-out is driven by storage
-        /// WRITEs today; a standalone EMIT without a backing Node
-        /// mutation doesn't carry a ChangeEvent payload shape yet.
-        /// Rather than silently no-op, we surface
-        /// `E_PRIMITIVE_NOT_IMPLEMENTED` so callers learn their
-        /// `engine.emit_event(...)` had no visible effect. Per-WRITE
-        /// ChangeEvents flow via `create_node` / `register_crud:create`
-        /// unchanged.
+        /// Phase-2b state: the standalone `engine.emit_event(...)`
+        /// surface is named-destination-deferred to Phase 3 per
+        /// `docs/future/phase-3-backlog.md` §7.8 (Engine.emitEvent
+        /// standalone surface — wire through EmitBroadcast bus). The
+        /// in-handler EMIT primitive (DSL `emit()` builder) IS wired
+        /// in Phase 2b and routes through the EmitBroadcast bus to
+        /// EmitSubscription consumers (R6-R2-FP cluster-1, PR #66);
+        /// per-WRITE ChangeEvents continue to flow via `create_node` /
+        /// `register_crud:create` unchanged. Rather than silently
+        /// no-op, surface `E_PRIMITIVE_NOT_IMPLEMENTED` so callers
+        /// learn their `engine.emit_event(...)` had no visible effect.
+        /// R6 Round-3 r6-r3-dx-5 promoted the disposition from
+        /// "deferred to Phase 2" (HARD-RULE-12 vague-time-qualifier)
+        /// to the named §7.8 destination above.
         #[napi]
         pub fn emit_event(&self, _name: String, _payload: serde_json::Value) -> napi::Result<()> {
             Err(napi::Error::new(
                 Status::GenericFailure,
-                "E_PRIMITIVE_NOT_IMPLEMENTED: emit is deferred to Phase 2 — storage writes drive the change stream today",
+                "E_PRIMITIVE_NOT_IMPLEMENTED: standalone Engine.emitEvent is named-destination-deferred to Phase 3 per docs/future/phase-3-backlog.md §7.8 — in-handler emit() DSL builder IS wired today",
             ))
         }
 
@@ -1359,16 +1364,15 @@ mod napi_surface {
     /// `Buffer | null` (`null` ⇒ end-of-stream). Errors surface as
     /// thrown napi errors.
     ///
-    /// R6-R3 r6-r3-stream-1 docstring sweep: pre-fix the docstring
-    /// claimed `next()` from a handle constructed via `engine.callStream`
-    /// / `engine.openStream` surfaces `E_PRIMITIVE_NOT_IMPLEMENTED` on
-    /// the first call — that was the early-Phase-2a behaviour, no
-    /// longer reflective of landed reality post wave-8c-stream-infra.
-    /// Today both production paths deliver real chunks via the
-    /// producer-bridge at `benten_engine::StreamHandle::bridge_source`.
-    /// Handles constructed via the cfg-gated `testingOpenStreamForTest`
-    /// drain their pre-populated chunk vector normally (the test factory
-    /// paths still use `chunks: VecDeque<Chunk>` rather than the bridge).
+    /// Production runtime (post wave-8c-stream-infra): `next()` from
+    /// a handle constructed via `engine.callStream` / `engine.openStream`
+    /// drains real chunks delivered through the producer-bridge
+    /// (`StreamHandle::from_producer_bridge`); the producer thread
+    /// pumps chunks into the `ChunkSource` end of an in-process
+    /// channel and `next_chunk` pulls from the consumer end. The
+    /// cfg-gated `testingOpenStreamForTest` factory continues to
+    /// drain pre-populated chunk vectors for unit tests that don't
+    /// need a live producer.
     #[napi]
     pub struct StreamHandleJs {
         inner: std::sync::Mutex<Option<benten_engine::StreamHandle>>,
