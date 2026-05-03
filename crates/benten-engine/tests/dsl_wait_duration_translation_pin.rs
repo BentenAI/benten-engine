@@ -9,7 +9,7 @@
 //! wrote the OperationNode property bag as `{ duration: Text("5m") }`,
 //! while `crates/benten-eval/src/primitives/wait.rs::evaluate_op_with_handler_id`
 //! reads `properties.get("duration_ms")` (Int). NO translation layer
-//! existed at the napi boundary (`bindings/napi/src/subgraph.rs::json_to_props`
+//! existed at the napi boundary (`bindings/napi/src/node.rs::json_to_props`, invoked from `subgraph.rs:19`
 //! only converts JSON-int → `Value::Int` verbatim — no key rename / no
 //! string-duration parser). The duration-variant WAIT therefore
 //! suspended without a deadline + never auto-resumed.
