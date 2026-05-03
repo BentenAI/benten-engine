@@ -101,9 +101,8 @@ impl EngineBuilder {
     /// [`benten_eval::SuspensionStore`] implementation. Tests pass an
     /// in-memory store to exercise WAIT suspend/resume without spinning
     /// the redb persistence path; production callers leave this unset
-    /// so [`assemble`](Self::assemble) constructs the default
-    /// [`crate::suspension_store::RedbSuspensionStore`] backed by the
-    /// engine's own backend.
+    /// so the private `assemble` constructor builds the default
+    /// `RedbSuspensionStore` backed by the engine's own backend.
     ///
     /// Pre-1.0 no-shim. Aligns structurally with PHASE-3-BUNDLE-1's
     /// GraphBackend genericism work — the suspension-store generalization

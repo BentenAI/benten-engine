@@ -118,11 +118,11 @@ pub enum StreamCursor {
 /// })` on the very first poll" — this was the early-Phase-2a behaviour,
 /// no longer reflective of landed reality post wave-8c-stream-infra
 /// (which delivers real chunks via the producer-bridge at
-/// [`Self::bridge_source`]).
+/// the private `bridge_source` field).
 pub struct StreamHandle {
     /// Pre-buffered chunks for the test factory paths (`with_chunks`,
     /// `with_pending_error`, `open_with_pending_error`). Production
-    /// streams use [`Self::bridge_source`] (a real producer-thread
+    /// streams use the private `bridge_source` field (a real producer-thread
     /// bridge) instead; `chunks` stays empty for those handles.
     chunks: std::collections::VecDeque<Chunk>,
     /// `true` once the producer has indicated end-of-stream.
