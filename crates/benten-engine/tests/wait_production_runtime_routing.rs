@@ -2,7 +2,13 @@
 //!
 //! Closes the docs-vs-code audit's PARTIAL verdict on WAIT: pre-Wave-8i,
 //! a regular `engine.call(handler_with_wait, ...)` walk routed to the
-//! dispatcher's `PrimitiveNotImplemented` arm at `primitives/mod.rs:100`,
+//! dispatcher's `PrimitiveNotImplemented` arm in
+//! `crates/benten-eval/src/primitives/mod.rs::dispatch_primitive` (the
+//! `_ => Err(EvalError::PrimitiveNotImplemented(op.kind))` catch-all
+//! arm that the Wave-8i wiring lifted WAIT out of via the new
+//! `PrimitiveKind::Wait =>` match arm; symbol form per R6-R4
+//! r6-r4-cp-6 + `dispatch-conventions.md` §3.5b — the prior
+//! `primitives/mod.rs:100` line cite drifted to `:111`),
 //! and the engine-side `call_with_suspension` used a
 //! `should_suspend(handler_id)` heuristic that ignored the WAIT node's
 //! actual properties (`signal`, `duration_ms`, `timeout_ms`,
@@ -87,10 +93,14 @@ fn wait_signal_handler_with_shape(handler_id: &str, signal: &str, shape: Value) 
 /// Wave-8i acceptance test #1: `engine.call(handler_with_wait, ...)`
 /// surfaces a Suspended-shape outcome (NOT `E_PRIMITIVE_NOT_IMPLEMENTED`).
 ///
-/// Pre-Wave-8i: the dispatcher's WAIT arm at `primitives/mod.rs:100`
-/// returned `Err(EvalError::PrimitiveNotImplemented(Wait))`, and that
-/// surfaced at `engine.call` as `EngineError::Other { code:
-/// E_PRIMITIVE_NOT_IMPLEMENTED, ... }`. Callers had to know about
+/// Pre-Wave-8i: the dispatcher's WAIT arm fell through to the
+/// `_ => Err(EvalError::PrimitiveNotImplemented(op.kind))` catch-all
+/// in `crates/benten-eval/src/primitives/mod.rs::dispatch_primitive`
+/// (symbol form per R6-R4 r6-r4-cp-6 + `dispatch-conventions.md`
+/// §3.5b — the prior `primitives/mod.rs:100` line cite drifted to
+/// `:111`), and that surfaced at `engine.call` as
+/// `EngineError::Other { code: E_PRIMITIVE_NOT_IMPLEMENTED, ... }`.
+/// Callers had to know about
 /// `engine.call_with_suspension` to use WAIT at all — the engine surface
 /// was incoherent.
 ///

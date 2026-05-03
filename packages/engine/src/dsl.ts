@@ -311,7 +311,20 @@ export class SubgraphBuilder {
     return this.addNode("stream", { ...args } as Record<string, JsonValue>);
   }
   public subscribe(args: SubscribeArgs): this {
-    return this.addNode("subscribe", { ...args } as Record<string, JsonValue>);
+    // R6-R4 r6-r4-cr-1 fix-pass (19th producer/consumer drift instance):
+    // the eval-side SUBSCRIBE primitive at
+    // `crates/benten-eval/src/primitives/subscribe.rs::execute_op` reads
+    // the `pattern` property; the public DSL `SubscribeArgs.event` field
+    // maps onto that property name. Pre-fix the spread set `event: ...`
+    // and the SUBSCRIBE primitive routed `E_SUBSCRIBE_PATTERN_INVALID`
+    // for every DSL-composed in-handler subscribe. Mirrors the EMIT
+    // precedent (`emit()` above) that PR #66 / R6-R2-FP cluster-1 landed
+    // for the same shape.
+    const props: Record<string, JsonValue> = { pattern: args.event };
+    if (args.handler !== undefined) {
+      props.handler = args.handler;
+    }
+    return this.addNode("subscribe", props);
   }
   public sandbox(args: SandboxArgs): this {
     return this.addNode("sandbox", { ...args } as Record<string, JsonValue>);
@@ -537,7 +550,15 @@ export class CaseBuilder {
     return this.addNode("stream", { ...a } as Record<string, JsonValue>);
   }
   public subscribe(a: SubscribeArgs): this {
-    return this.addNode("subscribe", { ...a } as Record<string, JsonValue>);
+    // R6-R4 r6-r4-cr-1 fix-pass: map `SubscribeArgs.event` onto the
+    // `pattern` property the eval-side SUBSCRIBE primitive reads. See
+    // the sibling builder's `subscribe()` method earlier in this file
+    // for the full rationale.
+    const props: Record<string, JsonValue> = { pattern: a.event };
+    if (a.handler !== undefined) {
+      props.handler = a.handler;
+    }
+    return this.addNode("subscribe", props);
   }
   public sandbox(a: SandboxArgs): this {
     return this.addNode("sandbox", { ...a } as Record<string, JsonValue>);

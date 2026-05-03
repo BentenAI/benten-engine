@@ -41,7 +41,9 @@ const engine = await Engine.open(".benten/my-app.redb");
 const handler = await engine.registerSubgraph(postHandlers);
 // `handler.id` is "crud:post" — the engine derives it as `crud:<label>` for
 // crud()-registered handlers (see `Engine::register_crud` at
-// `crates/benten-engine/src/engine.rs:1178-1188`). The most resilient pattern
+// `crates/benten-engine/src/engine.rs::register_crud`; symbol cite per
+// `dispatch-conventions.md` §3.5b high-churn-surface preference — line
+// cites in `engine.rs` drifted across waves 4-8). The most resilient pattern
 // is to capture the returned handle and pass `handler.id` to `engine.call`
 // (as below), so future label-format changes don't break call sites. The
 // action is the second argument to `engine.call`.

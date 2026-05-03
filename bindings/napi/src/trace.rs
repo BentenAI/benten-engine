@@ -82,10 +82,18 @@ fn trace_step_to_json(step: &TraceStep) -> serde_json::Value {
                 );
                 // R6-R3 r6-r3-pcds-1 (Producer/Consumer Drift Instance #15):
                 // `AttributionFrame.sandbox_depth` (added PR #62 wiring
-                // Inv-4 runtime threading via primitive_host.rs:147/901
-                // sandbox_depth.saturating_add(1)) was being dropped at
-                // this projection. Producer = `AttributionFrame` (4
+                // Inv-4 runtime threading via the
+                // `primitive_host.rs::ActiveCall.sandbox_depth` field +
+                // `primitive_host.rs::execute_sandbox`'s
+                // `frame.sandbox_depth.saturating_add(1)` bump in the
+                // SANDBOX entry arm) was being dropped at this
+                // projection. Producer = `AttributionFrame` (4
                 // fields); pre-fix napi consumer emitted only 3 fields.
+                // R6-R4 r6-r4-cp-1 closure: switched from
+                // `primitive_host.rs:147/901` line cite (3rd recurrence
+                // of the :901 line-drift family) to symbol form per
+                // `dispatch-conventions.md` §3.5b high-churn-surface
+                // preference.
                 // The Inv-4 security claim — SANDBOX-bearing attribution
                 // chains content-distinguishable from non-SANDBOX chains —
                 // was preserved at the Rust CID level (see

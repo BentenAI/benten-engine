@@ -106,8 +106,12 @@ export function mapTraceStep(s: Record<string, unknown>): TraceStep {
       // (so the trace renders end-to-end + callers can pattern-match)
       // and emit a one-shot console.warn the first time each distinct
       // discriminant is seen so the skew is visible in dev/CI without
-      // log-spam. The historical loud-fail path at engine.ts:249-258
-      // is intentionally REMOVED.
+      // log-spam. The historical loud-fail path in `engine.ts` (the
+      // `// loud-fail default branch lived here; per D14 it is
+      // replaced by the` marker comment, currently around
+      // `engine.ts:330` per `dispatch-conventions.md` §3.5b
+      // high-churn-surface symbol-cite-not-line preference; was
+      // `engine.ts:249-258` pre-D14) is intentionally REMOVED.
       if (!seenUnknownDiscriminants.has(t)) {
         seenUnknownDiscriminants.add(t);
         // Keep the message actionable: name the discriminant + the

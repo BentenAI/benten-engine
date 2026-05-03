@@ -10,9 +10,14 @@
 //     module-level Set guard); multiple unknown rows of the same
 //     discriminant DO NOT spam.
 //   - All known variants still route correctly — anti-regression guard.
-//   - The historical loud-fail default branch in engine.ts:249-258 is
-//     REMOVED — no source file should contain a `throw new Error("Unknown
-//     TraceStep ...")` pattern after G12-F lands.
+//   - The historical loud-fail default branch in `engine.ts` (the
+//     `// loud-fail default branch lived here; per D14 it is replaced
+//     by the` marker comment, currently around `engine.ts:330` per
+//     `dispatch-conventions.md` §3.5b high-churn-surface
+//     symbol-cite-not-line preference; was `engine.ts:249-258`
+//     pre-D14 and pre-wave-8) is REMOVED — no source file should
+//     contain a `throw new Error("Unknown TraceStep ...")` pattern
+//     after G12-F lands.
 //   - TraceStepUnknown is exported from the public types surface so callers
 //     can pattern-match `s.type === "unknown"` exhaustively.
 //
@@ -90,7 +95,12 @@ describe("mapTraceStep — D14 forward-compat", () => {
   });
 
   it("loud-fail path removed from engine.ts", () => {
-    // Anti-regression pin: engine.ts:249-258 used to `throw new Error("Unknown
+    // Anti-regression pin: `engine.ts` (the `// loud-fail default
+    // branch lived here; per D14 it is replaced by the` marker
+    // comment, currently around `engine.ts:330` per
+    // `dispatch-conventions.md` §3.5b high-churn-surface
+    // symbol-cite-not-line preference; was `engine.ts:249-258`
+    // pre-D14) used to `throw new Error("Unknown
     // TraceStep discriminant ...")`. After G12-F lands, the loud-fail
     // default branch is replaced by the warning-passthrough handler.
     // Source-grep guard so a future PR that re-introduces loud-fail trips a

@@ -35,9 +35,13 @@ describe("engine.registerUserView", () => {
     // view materialization works (Rust integration test
     // `crates/benten-engine/tests/user_view_strategy_b_default.rs`
     // pins it). The TS-side gap is `UserView.snapshot()` returning an
-    // empty AsyncIterable stub (`packages/engine/src/views.ts:123`)
-    // and `UserView.onUpdate(cb)` returning a no-op subscription
-    // (line 126). Both are forward-compatibility stubs awaiting the
+    // empty AsyncIterable stub (the `snapshot()` method on the
+    // `UserView` impl in `packages/engine/src/views.ts` returning the
+    // `emptyAsyncIterable()` factory; symbol form per R6-R4
+    // r6-r4-cp-5 + `dispatch-conventions.md` §3.5b — the prior
+    // `views.ts:123/:126` line cites drifted to `:168/:182` post
+    // wave-8) and `UserView.onUpdate(cb)` returning a no-op
+    // subscription. Both are forward-compatibility stubs awaiting the
     // Phase-3 IVM materialization wire-through that surfaces real
     // rows + real diffs via napi.
     //
@@ -241,8 +245,11 @@ describe("engine.registerUserView", () => {
 describe("UserView.onUpdate", () => {
   it.skip("Phase 3 (post-G8-B view.onUpdate() wire-through) — onUpdate fires with diff for matching writes", async () => {
     // BLOCKER (r6-napi-2 closure): `UserView.onUpdate(cb)` is a
-    // no-op stub at packages/engine/src/views.ts:126. Same Phase-3
-    // named-destination as the snapshot test above.
+    // no-op stub on the `UserView` impl in
+    // `packages/engine/src/views.ts` (symbol form per R6-R4
+    // r6-r4-cp-5 — the prior `views.ts:126` line cite drifted post
+    // wave-8). Same Phase-3 named-destination as the snapshot test
+    // above.
     const engine = await Engine.open(":memory:");
 
     const view = await engine.registerUserView({

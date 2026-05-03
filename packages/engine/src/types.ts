@@ -356,6 +356,30 @@ export interface ModuleManifestEntry {
 }
 
 /**
+ * Phase-3-reserved migration declaration. Mirrors the Rust
+ * `crates/benten-engine/src/module_manifest.rs::MigrationStep` struct.
+ *
+ * On a `wasm32-unknown-unknown` browser-target install, declaring any
+ * non-empty `migrations` array is rejected at install time with
+ * `E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE` — there is no persistent
+ * backing store for migrations to land in. Outside the browser target
+ * the array is shipped through canonical-bytes encoding for CID parity
+ * with the Rust producer.
+ *
+ * The TS shape MUST stay in lock-step with the Rust struct — the
+ * parity check lives in `packages/engine/test/manifest_schema_parity.test.ts`
+ * (R6-R4 r6-r4-pcds-1 added a migrations-bearing fixture pinning CID
+ * parity against the symmetric Rust pin in
+ * `crates/benten-engine/tests/manifest_schema_parity_pin.rs`).
+ */
+export interface MigrationStep {
+  /** Stable migration id (e.g. `"add-author-index-2026-04"`). */
+  id: string;
+  /** Free-form description. Omit (`undefined`) when not provided. */
+  description?: string;
+}
+
+/**
  * The shape `engine.installModule(manifest, manifestCid)` accepts.
  *
  * Phase 2b G10-B owns the install/uninstall surface; Phase 3 adds
@@ -371,6 +395,16 @@ export interface ModuleManifest {
   version: string;
   /** Modules this manifest declares. */
   modules: ModuleManifestEntry[];
+  /**
+   * Phase-3-reserved migration declarations (R6-R4 r6-r4-pcds-1
+   * widening — 19th producer/consumer drift instance closure). When
+   * non-empty on a `wasm32-unknown-unknown` target, install fires
+   * `E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE`. Omit (`undefined` or
+   * empty array) in Phase 2b production-like flows; the canonical-bytes
+   * serializer drops the key entirely when the array is empty per D9
+   * forward-compat.
+   */
+  migrations?: MigrationStep[];
   /**
    * Phase-3 reserved. Omit (i.e. `undefined`, NOT `null`) in Phase 2b —
    * the canonical-bytes serializer omits the key entirely when

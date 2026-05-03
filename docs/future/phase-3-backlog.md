@@ -259,15 +259,9 @@ The vitest cluster fix-pass (PR linked from `.addl/phase-2b/r6-r2-fp-vitest-clus
 
 **Touch size:** ~30-40 LOC YAML + monitor wasmtime upstream's Apple Silicon issue surface.
 
-### 6.8 SANDBOX kv:write read-only-snapshot enforcement seam (Phase-3 forward-pointer)
+### 6.8 SANDBOX kv:write read-only-snapshot enforcement seam (folded into §6.0)
 
-**Phase 2b state:** R6 Round 3 architect-reviewer-redux (`r6-r3-arch-2`) flagged a Phase-3 forward-pointer architectural seam: PR #68 wired D10 read-only-snapshot enforcement at `PrimitiveHost::put_node` (and Group A of R6-R3-FP extends it to `PrimitiveHost::delete_node`). Phase 2b's SANDBOX host-fn surface ships only `time` / `log` / `kv:read` (`crates/benten-eval/src/sandbox/host_fns.rs::build_default_host_fns`) — no storage-mutating host-fn — so a SANDBOX module CANNOT bypass D10 read-only-snapshot via host_fns today. Phase 3's iroh / capability-graph / federation work explicitly extends host-fns; when `kv:write` (and any future edge-mutating fns) ship, the read-only-snapshot enforcement MUST live AT the host-fn dispatch boundary in addition to `PrimitiveHost::put_node`/`delete_node` because the SANDBOX call site doesn't flow through the host's `put_node` trait method — it goes through the dedicated host-fn behaviour bound directly to the wasmtime Linker. A naive wiring that proxies `kv:write` through `PrimitiveHost::put_node` would be safe; a wiring that calls `backend.put_node` directly (e.g. for performance-bypassing buffer/replay) would silently violate D10 against a `fromSnapshotBlob`-backed engine.
-
-**Phase 3 target:** Every storage-mutating SANDBOX host-fn (`kv:write`, `kv:delete`, edge-mutating future fns) MUST run through `PrimitiveHost::put_node`/`PrimitiveHost::delete_node` OR independently invoke `Engine::is_read_only_snapshot()` before the backend call. Cross-link from `crates/benten-eval/src/sandbox/host_fns.rs::build_default_host_fns` docstring (or `HostFnBehavior::KvWrite` when added) to this entry; add a SANDBOX-from-snapshot regression test that verifies a kv:write attempt from inside a SANDBOX against a `fromSnapshotBlob` engine fires `E_READ_ONLY_SNAPSHOT` rather than silently mutating.
-
-**Why Phase 3:** No exploit path in 2b (no kv:write host-fn ships); pairs cleanly with §6.6 (the broader SANDBOX TS-bridge work) AND §1.4 (Compromise #17 durable BlobBackend with module bytes) since both want the same federated-write boundary surface.
-
-**Touch size:** ~10-20 LOC enforcement audit + ~30 LOC regression test pin (when the kv:write host-fn lands).
+**R6-R4 r6-r4-doc-3 dedupe.** §6.0 and this section both named `r6-r3-arch-2` and described the same SANDBOX kv:write read-only-snapshot enforcement seam (PR #70 Group C accidentally created two parallel entries during the R6-R3 docs+cite-precision fix-pass). The canonical content lives at §6.0 above. This stub is preserved (rather than removed) so any in-tree cite of `phase-3-backlog.md §6.8` continues to resolve to the same Phase-3 forward-pointer rather than 404; the wording at §6.0 is the authoritative version.
 
 ### 6.9 benten-dev `inspect-state` thin-CLI front-door
 
@@ -417,6 +411,32 @@ path that bundles cleanly with the broader Phase-3 event-broadcast
 widening (cross-process / cross-actor delivery).
 
 **Touch size:** ~50 LOC implementation + ~20 LOC test pin.
+
+### 7.9 TS-surface-parity sweep (Edge interface phantom `cid` + dropped `properties`; broader latent pre-Phase-2b TS-side drift)
+
+**Phase 2b state:** R6-R4 producer/consumer-deep-sweep-redux surfaced a pre-Phase-2b TS-surface drift candidate that is OUT-OF-SCOPE for the Phase-2b-close tag (named-destination-here per HARD RULE rule (b) + foundational `feedback_no_defer_HARD_RULE`):
+
+- `packages/engine/src/Edge` interface (`packages/engine/src/types.ts::Edge`) declares `{ cid: string, source, target, label }` — 4 fields. The napi producer at `bindings/napi/src/edge.rs::Edge::to_json` emits `{ source, target, label, properties? }` — 4 fields with TWO mismatches: (a) the TS interface declares `cid: string` but the napi producer never emits a `cid` field on the edge JSON (any TS caller reading `edge.cid` gets `undefined` at runtime); (b) the TS interface OMITS `properties` while the napi producer emits it when present (any TS caller wanting `edge.properties` hits a TS compile error).
+- Origin: PR `3fc5262` `fix(dx)` from 2026-04-19 (Phase-2a R6 DX work, NOT Phase-2b). Preserved through every Phase-2b R5 wave + every R6 round (R6-R1 / R6-R2 / R6-R3 deep-sweep / R6-R3 narrow-iteration) without surfacing because the existing producer/consumer audits walked the producer-emits-field-vs-consumer-drops-field shape; the Edge case is the INVERTED shape (consumer-declares-field-vs-producer-doesn't-emit-it) which the Phase-2b-bounded sweeps did not target.
+- Behavioral consequence in Phase 2b: zero packages/engine/test/ exercise either `edge.cid` or `edge.properties`, so no test fails today; but any user-code TS caller that consults `edge.cid` for content-addressing or expects `edge.properties` for graph-shape introspection silently mis-behaves.
+
+**Phase 3 target:** A one-shot exhaustive TS-interface-vs-Rust-producer-shape sweep across `packages/engine/src/types.ts` + `bindings/napi/src/`. Mechanical procedure:
+
+1. Enumerate every `pub struct` / serde-derived `pub enum` in `bindings/napi/src/*.rs` that flows to JS via napi.
+2. For each, walk the corresponding TS interface in `packages/engine/src/types.ts` and assert field-for-field parity (modulo by-design omissions like `Node.anchor_id` per `#[serde(skip)]` + `crates/benten-core/src/lib.rs:162` Phase-1 architectural decision).
+3. Document each by-design asymmetry with a `// (intentionally NOT mirrored: <reason>)` line so future sweeps don't re-flag.
+4. Fix all unintentional drift inline (likely `Edge.cid` removal + `Edge.properties` addition; possibly other instances surfaced by the sweep).
+5. Add a Rust-side schema-parity meta-test (analogous to `manifest_schema_parity_pin.rs`) that walks the napi struct surface + asserts every public field has a TS-side counterpart by reading the dist `.d.ts` at test time, so the SAME drift cannot recur silently.
+
+**Why Phase 3:** Out-of-scope for Phase-2b R6-R4 close (R6-R4 lens scope is post-R6-R3-FP delta, not pre-Phase-2b legacy); the broader TS-surface-parity work bundles cleanly with the Phase-3 first-wave CI-hygiene cluster (`§7.3.A`) since both surfaces want the same TS-side audit infrastructure. Out-of-the-band of Phase-2b's "21-now-bumped-to-21-or-22 producer/consumer drift instances" running tally because the legacy drifts predate the methodology.
+
+**Cross-references:**
+- `.addl/phase-2b/r6-r4-producer-consumer-deep-sweep.json` — surfacing finding (`near_findings_examined_and_dismissed.candidate.Edge interface`).
+- `bindings/napi/src/edge.rs::Edge::to_json` — Rust producer.
+- `packages/engine/src/types.ts::Edge` — TS consumer (drift surface).
+- `crates/benten-core/src/lib.rs:162` — by-design `#[serde(skip)] anchor_id` precedent for documenting intentional omissions.
+
+**Touch size:** ~80-150 LOC across `packages/engine/src/types.ts` (interface parity edits) + 1 Rust meta-test pin (~50-80 LOC) + cross-target pre-flight sweep. Risk surface: low — the additions are typed-surface widenings that existing TS callers don't depend on (zero current consumers).
 
 ---
 

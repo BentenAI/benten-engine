@@ -195,8 +195,8 @@ revalidation:
   transitively across nested SANDBOX entries via
   `frame.sandbox_depth.saturating_add(1)` at every SANDBOX boundary
   (`crates/benten-engine/src/primitive_host.rs::execute_sandbox` at
-  SANDBOX entry; `engine.rs::dispatch_call_inner` inherits parent
-  depth at CALL push), and the eval-side runtime arm in
+  SANDBOX entry; `engine.rs::dispatch_call_with_mode_and_trace`
+  inherits parent depth at CALL push), and the eval-side runtime arm in
   `crates/benten-eval/src/primitives/sandbox.rs::execute` fires
   `E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED` when the inherited depth
   exceeds `config.max_nest_depth`. The JS-side surface widens via the
