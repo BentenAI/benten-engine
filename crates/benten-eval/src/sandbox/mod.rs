@@ -18,10 +18,16 @@
 //!
 //! `BudgetExhausted` runtime emission for `sandbox_fuel` /
 //! `sandbox_memory` / `sandbox_wallclock` / `sandbox_output` budget_type
-//! mirrors G12-A's `inv_8_iteration` pattern at `evaluator.rs:185-192`
-//! (per wsa-17 R3 carry). The SANDBOX call site (G7-C engine integration)
-//! emits the [`crate::TraceStep::BudgetExhausted`] row BEFORE
-//! propagating the typed error; see [`crate::primitives::sandbox::SandboxError::to_budget_exhausted_trace`].
+//! mirrors G12-A's `inv_8_iteration` pattern at
+//! `evaluator.rs::run_with_trace_attributed` (the
+//! `TraceStep::BudgetExhausted` push immediately before the
+//! `IterateBudget` Err return; per wsa-17 R3 carry; symbol form per
+//! R6-R4 r6-r4-cp-2 + `dispatch-conventions.md` §3.5b high-churn-surface
+//! preference — line cites in `evaluator.rs` drifted from `:185-192` to
+//! `:281-290` across waves). The SANDBOX call site (G7-C engine
+//! integration) emits the [`crate::TraceStep::BudgetExhausted`] row
+//! BEFORE propagating the typed error; see
+//! [`crate::primitives::sandbox::SandboxError::to_budget_exhausted_trace`].
 //!
 //! ## Compile-time wasm32 disable (sec-pre-r1-05)
 //!

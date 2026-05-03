@@ -170,6 +170,14 @@ describe("engine.onChange", () => {
     // Composition pin — the fluent builder retains the .subscribe()
     // entry even after the engine.subscribe surface is renamed to
     // engine.onChange.
+    //
+    // R6-R4 r6-r4-cr-1 fix-pass: the DSL `SubscribeArgs.event` field
+    // is now translated to the `pattern` property the eval-side
+    // SUBSCRIBE primitive reads (mirroring the EMIT precedent
+    // PR #66 / R6-R2-FP cluster-1 landed for the same shape). Pre-fix
+    // the spread set `event: ...` and the eval primitive routed
+    // `E_SUBSCRIBE_PATTERN_INVALID` for every DSL-composed in-handler
+    // subscribe.
     const sg = subgraph("analytics")
       .action("on-post-create")
       .subscribe({ event: "post:write" })
@@ -179,7 +187,52 @@ describe("engine.onChange", () => {
 
     const subscribeNode = sg.nodes.find((n) => n.primitive === "subscribe");
     expect(subscribeNode).toBeDefined();
-    expect(subscribeNode!.args.event).toBe("post:write");
+    expect(subscribeNode!.args.pattern).toBe("post:write");
+    // `event` MUST NOT be in the rendered args bag — the spread
+    // translates it to `pattern` so the eval primitive sees the key
+    // it actually reads.
+    expect(subscribeNode!.args.event).toBeUndefined();
+  });
+
+  it("LOAD-BEARING — DSL-composed in-handler subscribe dispatches without routing E_SUBSCRIBE_PATTERN_INVALID (r6-r4-cr-1 §3.6b end-to-end pin)", async () => {
+    // §3.6b end-to-end test pin per `dispatch-conventions.md` for the
+    // r6-r4-cr-1 fix-pass: the SUBSCRIBE DSL spread translates
+    // `args.event` to the `pattern` property the eval-side primitive
+    // reads. Pre-fix this dispatch routed the
+    // `SubscribePatternInvalid` error edge for every DSL-composed
+    // in-handler subscribe; the pre-existing JSON-shape pin only
+    // checked the rendered args bag without ever DRIVING the call
+    // through the production entry point. This test drives the
+    // production entry point (`engine.call(handler, action, ...)`)
+    // and would FAIL if the spread silently no-op'd back to the
+    // pre-fix shape (the call would route the typed error edge with
+    // `E_SUBSCRIBE_PATTERN_INVALID` rather than complete OK).
+    const engine = await Engine.open(":memory:");
+    try {
+      // Subgraph with SUBSCRIBE then RESPOND. Subscribing inside a
+      // handler registers the subscription (returns an opaque
+      // subscriber-id) and then the RESPOND node returns a stable
+      // body so the call resolves with `ok: true` rather than the
+      // SUBSCRIBE error edge.
+      const handler = subgraph("post-summary-view-r6-r4-cr-1-pin")
+        .action("on-post-changed")
+        .subscribe({ event: "post:changed" })
+        .respond({ body: "registered" })
+        .build();
+      const registered = await engine.registerSubgraph(handler);
+      const result = await engine.call(
+        registered.id,
+        "on-post-changed",
+        {},
+      );
+      // Pre-fix: result.ok would be false + the outcome would carry
+      // `E_SUBSCRIBE_PATTERN_INVALID` because the eval primitive's
+      // `op.properties.get("pattern")` returned None. Post-fix: the
+      // subscribe registers + the respond fires.
+      expect(result.ok).toBe(true);
+    } finally {
+      await engine.close();
+    }
   });
 
   it("naming distinct from DSL builder name", () => {

@@ -20,7 +20,7 @@
 
 import { describe, it, expect } from "vitest";
 import { Engine } from "@benten/engine";
-import type { ModuleManifest } from "@benten/engine";
+import type { MigrationStep, ModuleManifest } from "@benten/engine";
 
 describe("ModuleManifest schema parity (TS <-> Rust)", () => {
   it("accepts the same field-set the Rust schema accepts", async () => {
@@ -100,6 +100,64 @@ describe("ModuleManifest schema parity (TS <-> Rust)", () => {
     };
     const EXPECTED_CID =
       "bafyr4igihvodf4lnqp5wsjfiotjxiux6kz5bumaf3irk4rjtwlwlkzmer4";
+
+    const engine = await Engine.open(":memory:");
+    try {
+      const tsCid = await engine.computeManifestCid(manifest);
+      expect(tsCid).toBe(EXPECTED_CID);
+    } finally {
+      await engine.close();
+    }
+  });
+
+  it("computeManifestCid agrees with Rust testing_compute_manifest_cid (migrations-bearing fixture, R6-R4 r6-r4-pcds-1)", async () => {
+    // R6-R4 r6-r4-pcds-1 fix-pass — 19th producer/consumer drift
+    // closure: pre-fix the TS `ModuleManifest` interface declared 4
+    // fields (no `migrations`), so JS callers could not even CONSTRUCT
+    // a manifest with non-empty migrations and the cross-language CID
+    // parity for that branch was untestable. Post-fix the TS interface
+    // declares `migrations?: MigrationStep[]` mirroring the Rust
+    // `ModuleManifest.migrations: Vec<MigrationStep>` field; this test
+    // pins CID parity over a migrations-bearing fixture against the
+    // symmetric Rust pin in
+    // `crates/benten-engine/tests/manifest_schema_parity_pin.rs::manifest_parity_fixture_with_migrations_cid_matches_ts_pin`.
+    //
+    // Drives the production entry point (`engine.computeManifestCid`)
+    // against a migrations-bearing fixture per §3.6b end-to-end pin
+    // requirement; would FAIL if the canonical-bytes encoding silently
+    // dropped the `migrations` field on either side.
+    //
+    // To re-pin (after a deliberate canonical-bytes change): construct
+    // the same fixture in the Rust pin test, recompute via
+    // `manifest.compute_cid().unwrap().to_base32()`, copy the value
+    // into BOTH `EXPECTED_CID` constants.
+    const migrations: MigrationStep[] = [
+      {
+        id: "add-author-index-2026-04",
+        description: "Add author secondary index",
+      },
+      {
+        id: "rename-body-field-2026-05",
+        // description: undefined — MigrationStep.description is optional;
+        // the canonical-bytes serializer omits the key entirely when
+        // undefined per D9 forward-compat (mirrors the
+        // signature?: ManifestSignature pattern at the manifest level).
+      },
+    ];
+    const manifest: ModuleManifest = {
+      name: "manifest-parity-fixture-migrations",
+      version: "1.0.0",
+      modules: [
+        {
+          name: "module-alpha",
+          cid: "bafy-fixture-cid-alpha",
+          requires: ["host:compute:time"],
+        },
+      ],
+      migrations,
+    };
+    const EXPECTED_CID =
+      "bafyr4igx2lddy7jqh4n5n6vwwankcrr4azdjtajpkuqh5vnzlu4wus634m";
 
     const engine = await Engine.open(":memory:");
     try {

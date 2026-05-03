@@ -16,7 +16,12 @@
 //! branch (mapping the typed error onto an `Outcome::ON_ERROR` shape
 //! carrying `E_INV_ITERATE_BUDGET`) so consumers of `engine.trace(...)`
 //! observe the exhaustion in-band rather than as an out-of-band `Err`.
-//! Closes the §9.12 / `benten-eval/src/lib.rs:1430-1431` TODO.
+//! Closes the §9.12 / `benten-eval/src/lib.rs::TraceStep` TODO (the
+//! `TODO(phase-2a-G3-A / G4-A / G5-B)` marker on the `TraceStep` enum
+//! re: wiring `SuspendBoundary`, `ResumeBoundary`, `BudgetExhausted`
+//! firing + attribution threading onto every trace row; symbol form per
+//! R6-R4 r6-r4-cp-3 closure — the prior `:1430-1431` line cite landed
+//! 384 lines past EOF after wave-7/8 `lib.rs` shrinkage).
 //!
 //! G12-A scope: `budget_type = "inv_8_iteration"`. The analogous
 //! `"sandbox_fuel"` budget_type lands when G7-A wires the SANDBOX fuel

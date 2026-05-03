@@ -18,8 +18,13 @@
 //!   the call stack; the evaluator emits
 //!   `TraceStep::BudgetExhausted { budget_type: "stream_backpressure", .. }`
 //!   BEFORE propagating, mirroring G12-A's `inv_8_iteration` pattern at
-//!   `evaluator.rs:185-192`. G6-A landed the typed-error envelopes; the
-//!   trace emission point lives in the evaluator (not in this module).
+//!   `evaluator.rs::run_with_trace_attributed` (the
+//!   `TraceStep::BudgetExhausted` push immediately before the
+//!   `IterateBudget` Err return; symbol form per R6-R4 r6-r4-cp-2 +
+//!   `dispatch-conventions.md` §3.5b high-churn-surface preference —
+//!   line cites in `evaluator.rs` drifted from `:185-192` to `:281-290`
+//!   across waves). G6-A landed the typed-error envelopes; the trace
+//!   emission point lives in the evaluator (not in this module).
 
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;

@@ -278,10 +278,19 @@ describe("napi engine — extended surface", () => {
   });
 
   it("emitEvent surfaces E_PRIMITIVE_NOT_IMPLEMENTED per G8 fix-pass", () => {
-    // Phase-1 contract: standalone EMIT is deferred to Phase 2 (the
-    // change-stream fan-out is driven by storage WRITEs today). The
-    // binding rejects the call with a typed error rather than silently
-    // no-op'ing so callers learn their emit had no visible effect.
+    // Phase-2b contract: standalone Engine.emitEvent surface is
+    // named-destination-deferred to Phase 3 per
+    // `docs/future/phase-3-backlog.md` §7.8. The binding rejects the
+    // call with a typed error (E_PRIMITIVE_NOT_IMPLEMENTED) rather
+    // than silently no-op'ing so callers learn their emit had no
+    // visible effect. In-handler EMIT (the emit() DSL builder) IS
+    // wired and routes through the EmitBroadcast bus to
+    // EmitSubscription consumers (R6-R2-FP cluster-1, PR #66). R6-R4
+    // r6-r4-dx-3 closure: replaces the vague "deferred to Phase 2"
+    // wording with the named §7.8 destination per HARD-RULE-12 +
+    // foundational `feedback_no_defer_HARD_RULE` (mirrors the
+    // r6-r3-dx-5 closure of `engine.ts:1230` JSDoc + `lib.rs:548-562`
+    // Rust docstring).
     expect(() => ext.emitEvent("user.signed_up", { userId: "u1" })).toThrow(
       /E_PRIMITIVE_NOT_IMPLEMENTED/,
     );

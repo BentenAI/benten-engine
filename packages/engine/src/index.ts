@@ -87,6 +87,7 @@ export type {
   HandlerAdjacencies,
   JsonValue,
   ManifestSignature,
+  MigrationStep,
   ModuleManifest,
   ModuleManifestEntry,
   Outcome,
