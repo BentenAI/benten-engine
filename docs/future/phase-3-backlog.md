@@ -265,31 +265,6 @@ The vitest cluster fix-pass (PR linked from `.addl/phase-2b/r6-r2-fp-vitest-clus
 
 **R6-R4 r6-r4-doc-3 dedupe.** §6.0 and this section both named `r6-r3-arch-2` and described the same SANDBOX kv:write read-only-snapshot enforcement seam (PR #70 Group C accidentally created two parallel entries during the R6-R3 docs+cite-precision fix-pass). The canonical content lives at §6.0 above. This stub is preserved (rather than removed) so any in-tree cite of `phase-3-backlog.md §6.8` continues to resolve to the same Phase-3 forward-pointer rather than 404; the wording at §6.0 is the authoritative version.
 
-### 6.10 SANDBOX `random` host-fn deferral (real destination for the "Phase 2c" phantom)
-
-**Phase 2b state:** `crates/benten-eval/src/primitives/sandbox.rs::cap_to_host_fn_index` defensively rejects the `random` host-fn at line 393-403 with the operator-facing message `"random (cap='{required}'): deferred to Phase 2c per D1 + sec-pre-r1-06 §2.3 (workspace CSPRNG framework choice not yet made)"`. Same deferral framing appears at:
-- `host-functions.toml` (4 cites)
-- `docs/HOST-FUNCTIONS.md` (5 cites)
-- `docs/SECURITY-POSTURE.md` (4 cites including Compromise #16)
-- `docs/ERROR-CATALOG.md` (1 cite)
-- `docs/QUICKSTART.md` (1 cite)
-- `crates/benten-eval/tests/sandbox_host_fn_random_deferred.rs:52-53` (HARDCODED test assertion `assert!(name.contains("Phase 2c") || name.contains("deferred"))`)
-
-The "Phase 2c" framing was always a phantom destination (Phase 2c never existed in `docs/FULL-ROADMAP.md` per HARD RULE rule-12 clause-(b)). §6.9 above already named this for the inspect-state CLI cluster; this section names it for the `random` host-fn cluster. **This entry IS the real destination per HARD RULE clause-(b).**
-
-**Phase 3 target:** Make the workspace CSPRNG framework choice (per D1-RESOLVED + `sec-pre-r1-06 §2.3`). Wire the `random` host-fn at `cap_to_host_fn_index`. Update the operator-facing error message + all doc/test cites to drop the phantom "Phase 2c" framing and instead point at this §6.10 destination (or, if D1 design choice happens earlier, drop the deferral entirely + ship the host-fn). Un-pin `sandbox_host_fn_random_deferred.rs:52-53` test contract.
-
-**Why Phase 3:** The CSPRNG framework choice is a Phase-3 architectural decision tied to the broader UCAN / identity / cryptography surface (§2.1 `benten-id` + Ed25519 / DID / VC). Bundling the CSPRNG choice with the cryptographic-primitives architectural cluster is symmetric with Phase-3's identity work, and the deferred-host-fn rejection path is structurally inert today (no shipping handler reaches the `random` arm pre-shipping).
-
-**Touch size:** ~30-50 LOC SANDBOX runtime + ~30-60 LOC test re-pin + ~10-20 LOC doc cite cleanup (~80-130 LOC total). Risk surface: low — the CSPRNG framework choice itself is the architectural cost; the wiring is mechanical once chosen.
-
-**Cross-references:**
-- `crates/benten-eval/src/primitives/sandbox.rs::cap_to_host_fn_index` line 393-403
-- `crates/benten-eval/tests/sandbox_host_fn_random_deferred.rs:52-53`
-- `host-functions.toml` (random host-fn declaration)
-- `docs/SECURITY-POSTURE.md` Compromise #16
-- `.addl/phase-2b/phase-3-prep-deferred-orphan-audit.json` orphan-01 (origin finding for this entry)
-
 ### 6.9 benten-dev `inspect-state` thin-CLI front-door
 
 **Phase 2b state:** The Rust-side pretty-printer entry point at `tools/benten-dev/src/inspect_state.rs::pretty_print_envelope_bytes` IS shipped, but the wrapping `node bin/benten-dev.mjs` thin-CLI front-door for `benten-dev inspect-state <path>` is not yet shipped. R6 Round 3 stale-deferrals-deep-sweep (`r6-r3-sd-5`) flagged that `tools/benten-dev/test/inspect_state_pretty_prints.test.ts` (1 `describe.skip` + 3 `it.skip`) cited "Phase-2c item" as the destination, but Phase 2c is NOT a defined phase in `docs/FULL-ROADMAP.md` — HARD RULE clause-(b) violation (destination doesn't exist; "Phase 2c" appears informally as a deferred-bucket label in security-posture/error-catalog/host-functions for the deferred `random` host-fn but isn't a real plan-doc / roadmap entry). This entry is the populated destination.
