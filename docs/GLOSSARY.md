@@ -6,11 +6,13 @@ Terms that have specific meaning in Benten. Alphabetical.
 
 **ADDL** — Agent-Driven Development Lifecycle. The project's development methodology: plan → critic review → test planning → test writing → test review → implementation → mini-review → quality council. Referenced in commit messages.
 
-**Algorithm B** — The IVM (Incremental View Maintenance) strategy Benten selects for most views: dependency-tracked incremental maintenance. Phase 1 ships five hand-written views; Phase 2b generalizes to a registration-time strategy-selection API.
+**Algorithm B** — The IVM (Incremental View Maintenance) strategy Benten selects for most views: dependency-tracked incremental maintenance. Phase 1 shipped five hand-written views; Phase 2b production-registered Algorithm B with per-view strategy selection (`Strategy::A` / `Strategy::B`) at `Engine::create_user_view` for the 5 canonical view IDs `AlgorithmBView` supports natively. User-defined view IDs declaring `Strategy::B` fall back to `ContentListingView` until the Phase-3 generalization lift (see [`docs/future/phase-3-backlog.md`](future/phase-3-backlog.md) §5).
 
 **Anchor (Anchor Node)** — A Node with stable identity that never changes. External edges point to anchors, not to versions. The anchor has a `CURRENT` edge to its latest Version Node. See "Version chain."
 
 **Attribution** — The Phase-2a Inv-14 contract that every executed `TraceStep` carries an `AttributionFrame` naming the actor (principal CID), handler (registered subgraph CID), and the head-of-chain capability grant CID that authorized the step. Stamped automatically by the DSL on every emitted Operation Node and threaded through the evaluator runtime; opt-out is a Phase-6 affordance, not a Phase-2a one. Missing or malformed frames fire `E_INV_ATTRIBUTION` at registration or runtime.
+
+**`benten-dsl-compiler`** — The Phase-2b crate (G12-B addition) that compiles textual handler-DSL source into a `SubgraphSpec` ready for `Engine::register_subgraph`. Sibling of `benten-engine`; depends only on `benten-core` so it preserves the arch-1 dep break. Used by `packages/engine-devserver` to route hot-reload edits through the canonical engine path rather than parallel infrastructure.
 
 **BLAKE3** — The cryptographic hash function used for CID derivation. Fast, tree-hash-friendly, multi-threaded.
 
@@ -38,6 +40,8 @@ Terms that have specific meaning in Benten. Alphabetical.
 
 **iroh** — The P2P networking library (QUIC, dial-by-public-key, NAT traversal with relay fallback) used in Phase 3.
 
+**Module manifest** — The Phase-2b `ModuleManifest` shape (`benten-engine::module_manifest::ModuleManifest`) that declares one or more WASM modules (name + version + content CID + capability requirements + migration steps + optional signature). Installed via `engine.installModule({manifest, manifestCid})`; see [`MODULE-MANIFEST.md`](MODULE-MANIFEST.md) for the schema and [`SECURITY-POSTURE.md`](SECURITY-POSTURE.md) Compromise #19 for the in-memory persistence boundary that lifts in Phase 3.
+
 **Multiplicative budget** — The Phase-2a Inv-8 cumulative iteration budget. Computed at registration time as the worst-case product of `ITERATE.max` values and non-isolated `CALL` callee bounds along any DAG path through the handler. Caps the worst-case iteration space so nested `ITERATE` + `CALL` combinations cannot trigger combinatorial explosion. `CALL { isolated: true }` resets the cumulative for the callee frame (the callee runs under its own grant's bound). Default registration-time bound: `DEFAULT_INV_8_BUDGET = 500_000`. Exceeding fires `E_INV_ITERATE_BUDGET` at registration; the runtime flat budget (`DEFAULT_ITERATION_BUDGET = 100_000`) remains as a Phase-1 backstop.
 
 **IVM** — Incremental View Maintenance. Benten keeps materialized views up to date via change subscriptions; common reads hit them in O(1).
@@ -56,15 +60,15 @@ Terms that have specific meaning in Benten. Alphabetical.
 
 **redb** — The Phase-1 embedded key-value store: pure Rust, ACID, MVCC (concurrent readers with single writer), crash-safe via copy-on-write B-trees.
 
-**SANDBOX** — The WASM computation escape hatch (Phase 2b, wasmtime-backed, fuel-metered, no re-entrancy, max 1 MB output).
+**SANDBOX** — The WASM computation escape hatch (landed Phase 2b, wasmtime-backed, fuel-metered, no re-entrancy, default 1 MiB output ceiling per call).
 
 **`serde_ipld_dagcbor`** — The CBOR serialization crate Benten uses. Deterministic by default (sorts map keys); IPLD-native.
 
-**STREAM** — A Phase-2b primitive producing partial/ongoing output with back-pressure. For Server-Sent Events, WebSocket messages, LLM token streams, progress updates.
+**STREAM** — A primitive (landed Phase 2b) producing partial/ongoing output with back-pressure. For Server-Sent Events, WebSocket messages, LLM token streams, progress updates.
 
 **Subgraph** — See "Operation subgraph."
 
-**SUBSCRIBE** — A Phase-2b primitive providing reactive change notification. The base primitive on which IVM views, sync delta propagation, and event-driven handlers all compose.
+**SUBSCRIBE** — A primitive (landed Phase 2b) providing reactive change notification. The base primitive on which IVM views, sync delta propagation, and event-driven handlers all compose.
 
 **System zone** — The reserved namespace for engine-internal Nodes (capability grants, version-chain metadata, IVM view definitions, subscriber bookkeeping). Labels and node IDs prefixed with `system:` are off-limits to user subgraphs. Phase-2a Inv-11 enforces this at three layers: registration-time literal-CID rejection in `benten-eval::invariants::system_zone`, runtime resolved-label probing in `benten-engine::primitive_host`, and storage-layer defence-in-depth in `benten-graph::redb_backend::guard_system_zone_node`. Reads collapse to `Ok(None)` on the user-visible surface (symmetric with a backend miss); writes fire `E_INV_SYSTEM_ZONE`. System-zone Nodes are only writable through dedicated engine APIs (`engine.grantCapability`, `engine.createView`, …).
 
@@ -72,10 +76,10 @@ Terms that have specific meaning in Benten. Alphabetical.
 
 **Transaction primitive** — An engine-provided begin/commit/rollback cycle wrapping all WRITEs in a subgraph evaluation. If any WRITE fails, all WRITEs in the transaction roll back atomically.
 
-**UCAN** — User-Controlled Authorization Networks. Capability-based auth tokens. Phase 3 ships UCAN as a `benten-caps` policy backend alongside the default `NoAuthBackend` and the Phase-1 `GrantBackedPolicy`.
+**UCAN** — User-Controlled Authorization Networks. Capability-based auth tokens. Phase 3 ships UCAN as a `benten-caps` policy backend alongside the default `NoAuthBackend` and the existing `GrantBackedPolicy`.
 
 **Version chain** — Benten's opt-in history pattern: Anchor + Version Nodes + `NEXT_VERSION` edges + `CURRENT` pointer. History = traverse. Undo = move `CURRENT`. Sync (Phase 3) = exchange version Nodes. Ephemeral data does not pay versioning cost.
 
-**WAIT** — A Phase-2a primitive that suspends execution until an external signal arrives or a duration elapses. The engine produces an `ExecutionStateEnvelope` at suspend time; resume runs a 4-step integrity + principal + pin + capability protocol before continuing.
+**WAIT** — A primitive (landed Phase 2a) that suspends execution until an external signal arrives or a duration elapses. The engine produces an `ExecutionStateEnvelope` at suspend time; resume runs a 4-step integrity + principal + pin + capability protocol before continuing.
 
-**`wasmtime`** — The WASM runtime for Phase-2b SANDBOX. Rust-native, Bytecode Alliance, fuel-metered, Component Model support.
+**`wasmtime`** — The WASM runtime for SANDBOX (landed Phase 2b at v43.0.2). Rust-native, Bytecode Alliance, fuel-metered, Component Model support.

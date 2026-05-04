@@ -69,14 +69,15 @@ ten minutes from `npx` to a green test:
   `tsconfig.json`) wired to `@benten/engine` via a `file:` link to the
   workspace `packages/engine`. Closes the Phase-1 zero-config DX promise.
   Templates live under `tools/create-benten-app/template/`.
-- `tools/benten-dev/` — the Phase-2a developer-server tool. Watches handler
-  source files, hot-reloads registered subgraphs, and preserves capability
-  grants + in-flight evaluations across reload. Carries an `inspect-state`
-  subcommand that pretty-prints a serialized `ExecutionStateEnvelope`.
-  Currently runs its own minimal in-memory handler registry + grant table
-  rather than threading through `Engine::register_subgraph` — see
-  ["Devserver divergence (Phase-2a posture)"](#devserver-divergence-phase-2a-posture)
-  below for the rationale and the Phase-2b cutover plan.
+- `tools/benten-dev/` — the diagnostic CLI. The `inspect-state <path>`
+  subcommand reads a DAG-CBOR `ExecutionStateEnvelope` from disk and
+  pretty-prints the suspended state.
+- `packages/engine-devserver/` — the napi-rs-backed `BentenDevServer`
+  TypeScript wrapper that wraps a real `Engine` and exposes
+  `replaceHandler` / hot-reload semantics through
+  `Engine::register_subgraph_replace`. Phase 2b G12-B's
+  `benten-dsl-compiler` landing collapsed the prior parallel-infrastructure
+  posture; see ["Devserver path"](#devserver-path) below.
 
 ## The 12 operation primitives
 
@@ -87,7 +88,9 @@ CALL       RESPOND     EMIT            SANDBOX      SUBSCRIBE     STREAM
 
 Each primitive is an Operation Node kind. The evaluator dispatches on `PrimitiveKind` to a per-primitive executor in `crates/benten-eval/src/primitives/`.
 
-| # | Primitive | Purpose | Live |
+All 12 primitives have live executors as of tag `phase-2b-close` (2026-05-03). The "Landed in" column tracks the phase that first wired the executor; every row is in production-runtime use today.
+
+| # | Primitive | Purpose | Landed in |
 |---|---|---|---|
 | 1 | READ | Retrieve a Node by CID, label, or property | Phase 1 |
 | 2 | WRITE | Persist a Node; version-stamps if versioning is enabled on its label | Phase 1 |
@@ -102,7 +105,7 @@ Each primitive is an Operation Node kind. The evaluator dispatches on `Primitive
 | 11 | SUBSCRIBE | Reactive change notification (composition point for IVM) | Phase 2b |
 | 12 | STREAM | Partial output with back-pressure (SSE, WebSockets, LLM tokens) | Phase 2b |
 
-Subgraphs containing Phase-2 primitives pass structural validation at Phase 1 (so Phase-1 and Phase-2 graphs are binary-compatible and round-trip through storage). Phase-2 executors return `E_PRIMITIVE_NOT_IMPLEMENTED` at call time until they land.
+Phase-1 storage was forward-compatible with Phase-2 primitives: subgraphs containing WAIT / SANDBOX / SUBSCRIBE / STREAM Nodes passed structural validation under Phase 1 and round-tripped through storage, even though their executors were stubbed. That binary-compatibility property still holds — older serialised subgraphs continue to load — but the executor stubs are gone; every PrimitiveKind dispatch arm wires to a live runtime.
 
 ## The 14 structural invariants
 
@@ -111,19 +114,19 @@ Validated at registration time or fired at runtime, depending on invariant:
 1. **Entry/exit well-formedness.**
 2. **Max operation-subgraph depth.**
 3. **Max fan-out per Node.**
-4. **SANDBOX nest depth limit.** (Phase 2b)
+4. **SANDBOX nest depth limit.** (landed Phase 2b)
 5. **Max total Nodes per subgraph.**
 6. **Max total Edges per subgraph.**
-7. **SANDBOX fuel budget.** (Phase 2b)
-8. **Iteration budget — multiplicative through CALL and ITERATE nesting.** (Phase 2a)
+7. **SANDBOX fuel budget.** (landed Phase 2b)
+8. **Iteration budget — multiplicative through CALL and ITERATE nesting.** (landed Phase 2a)
 9. **Type-safety of Value flows.**
 10. **Reachability from entry.**
-11. **System-zone Nodes are unreachable from user subgraphs.** (Phase 2a runtime enforcement)
+11. **System-zone Nodes are unreachable from user subgraphs.** (Phase 2a registration + runtime enforcement; Phase 2b extended SUBSCRIBE-pattern validation)
 12. **Terminal Node presence.**
 13. **Immutability — registered subgraphs are not rewritable.** (Phase 2a 5-row firing matrix)
 14. **Causal attribution — every evaluation step carries a principal / handler / grant chain.** (Phase 2a threading)
 
-Invariants 1–3, 5–6, 9–10, 12 ship in Phase 1. Invariants 8, 11, 13, 14 ship in Phase 2a. Invariants 4, 7 ship in Phase 2b with SANDBOX.
+All 14 invariants are enforced as of `phase-2b-close`. Invariants 1–3, 5–6, 9–10, 12 landed in Phase 1; Invariants 8, 11, 13, 14 in Phase 2a; Invariants 4, 7 in Phase 2b alongside the SANDBOX runtime. See [`INVARIANT-COVERAGE.md`](INVARIANT-COVERAGE.md) for per-invariant enforcer + test pins.
 
 ## How a request flows
 
@@ -137,7 +140,7 @@ Invariants 1–3, 5–6, 9–10, 12 ship in Phase 1. Invariants 8, 11, 13, 14 sh
    - BRANCH routes on a condition.
    - CALL invokes another registered subgraph.
    - RESPOND terminates with the handler's output.
-4. Reads flow without capability checks by default. Phase 2a extends check-read to the content path for evaluator-driven reads under the grant-backed policy.
+4. Reads flow without capability checks by default. Phase 2a extended check-read to the content path for evaluator-driven reads under the grant-backed policy.
 
 ### Write (transactional)
 
@@ -147,7 +150,7 @@ Invariants 1–3, 5–6, 9–10, 12 ship in Phase 1. Invariants 8, 11, 13, 14 sh
 4. On commit: content is hashed into CIDs, version chains advance (where enabled), the audit sequence advances, ChangeEvents fire to the IVM subscriber.
 5. IVM updates materialized views whose subscription patterns match the changes.
 
-### Suspend and resume (Phase 2a)
+### Suspend and resume (landed Phase 2a)
 
 A WAIT primitive suspends the evaluator, produces an `ExecutionStateEnvelope` (DAG-CBOR, content-addressed), and returns a `SuspendedHandle` carrying the envelope CID. The caller persists the envelope bytes.
 
@@ -170,7 +173,7 @@ Content is serialized via `serde_ipld_dagcbor` — the IPLD subset of CBOR with 
 
 ## Incremental View Maintenance
 
-`benten-ivm` subscribes to ChangeEvents from the storage layer and keeps views current. Phase 1 ships five hand-written views covering the hot paths: capability resolution, content listings, change-event fan-out, principal resolution, and view-staleness tallies. Phase 2b generalizes this into Algorithm B (dependency-tracked incremental maintenance) with per-view strategy selection so applications can register their own views.
+`benten-ivm` subscribes to ChangeEvents from the storage layer and keeps views current. Phase 1 shipped five hand-written views covering the hot paths: capability resolution, content listings, change-event fan-out, principal resolution, and view-staleness tallies. Phase 2b production-registered Algorithm B (dependency-tracked incremental maintenance) with per-view strategy selection (`Strategy::A` / `Strategy::B`) at `Engine::create_user_view`. The Phase-2b dispatch constructs `AlgorithmBView::for_id` for the 5 canonical view IDs that `AlgorithmBView` supports natively; user-defined view IDs that declare `Strategy::B` continue to fall back to `ContentListingView` silently — generalised user-defined Algorithm B handlers are a Phase-3 lift (see [`docs/future/phase-3-backlog.md`](future/phase-3-backlog.md) §5).
 
 The evaluator does not know IVM exists. Views are materialized Nodes; reads hit them via the normal read path.
 
@@ -184,43 +187,36 @@ fn check_write(&self, ctx: &WriteContext) -> Result<Decision, CapError>;
 
 The engine's default is `NoAuthBackend` — allows everything, zero overhead — so embedded single-user deployments don't pay for capability machinery.
 
-A `GrantBackedPolicy` ships alongside: grants are Nodes with `GRANTED_TO` edges, attenuation is verified along the delegation chain, revocation is a Node write. Phase 2a adds TOCTOU refresh at five points (transaction commit, CALL entry, every N iterations of ITERATE, WAIT resume, wall-clock boundary) with a dual monotonic + HLC clock source. Phase 3 adds UCAN as another policy backend.
+A `GrantBackedPolicy` ships alongside: grants are Nodes with `GRANTED_TO` edges, attenuation is verified along the delegation chain, revocation is a Node write. Phase 2a added TOCTOU refresh at five points (transaction commit, CALL entry, every N iterations of ITERATE, WAIT resume, wall-clock boundary) with a dual monotonic + HLC clock source. Phase 3 adds UCAN as another policy backend.
 
 ## Determinism
 
 The canonical fixture CID `bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda` is stable across x86_64 Linux / macOS / Windows and ARM64 macOS. The `.github/workflows/determinism.yml` workflow computes it on every PR; drift is a merge blocker.
 
-## Devserver divergence (Phase-2a posture)
+## Devserver path
 
-The Phase-2a `tools/benten-dev` developer server runs **parallel infrastructure**
-to the canonical engine path rather than threading through it:
+The developer surface ships in two layers as of `phase-2b-close`:
 
-| Concern | Canonical engine path | `tools/benten-dev` Phase-2a path |
-|---|---|---|
-| Handler registry | `Engine::register_subgraph` against the redb-backed graph | In-memory `OnceLock<Mutex<HashMap<HandlerId, Vec<HandlerVersion>>>>` |
-| Handler CID | Canonical `Subgraph` DAG-CBOR + multicodec `0x71` + multihash `0x1e` | Dev-only surrogate: `BLAKE3(handler_id ‖ op ‖ source ‖ version_tag)` |
-| Capability grants | `benten-caps` policy backend, persisted as `system:CapabilityGrant` Nodes | In-memory grant table, source-text-keyed |
-| WAIT suspension | Canonical DAG-CBOR `ExecutionStateEnvelope` with `payload_cid` round-trip | Custom `BDEV\x01` magic-prefixed envelope wire format |
+- `tools/benten-dev` is the diagnostic CLI; its `inspect-state <path>`
+  subcommand reads a DAG-CBOR `ExecutionStateEnvelope` from disk and
+  pretty-prints the suspended state. It does not host a runtime.
+- `packages/engine-devserver` is the napi-rs-backed `BentenDevServer`
+  TypeScript wrapper that wraps the real `Engine` (Phase 2b G12-B
+  landed `benten-dsl-compiler` so devserver-side handler text now
+  compiles to `SubgraphSpec` and registers through
+  `Engine::register_subgraph` rather than running parallel in-memory
+  infrastructure). Hot reload, grant preservation across reload,
+  in-flight call ordering, suspension-handle survival across reload,
+  and audit-sequence invariance on reload are exercised against the
+  same Engine APIs production callers use.
 
-This is **intentional Phase-2a posture, not a regression.** The real DSL-text →
-`SubgraphSpec` compiler is itself Phase-2b scope (see `docs/DSL-SPECIFICATION.md`),
-so the devserver could not thread reloads through `Engine::register_subgraph`
-without a compiler boundary that does not yet exist. The Phase-2a in-memory
-shape pins the developer-facing contracts (grant preservation across reload,
-in-flight call ordering, suspension-handle survival across reload, audit-sequence
-invariance on reload) which is what the devserver test suite asserts.
-
-**Phase-2b cutover:** when the DSL compiler lands, `tools/benten-dev` is
-refactored to compile source → `SubgraphSpec` → `engine.register_subgraph(spec)`
-and to drop both the in-memory registry and the `BDEV\x01` envelope shim.
-Tracked in `.addl/phase-2b/00-scope-outline.md` §7a "Devserver → Engine routing".
-The Phase-2a `ReloadCoordinator` / `CallGuard` machinery — together with
-`DevServer`'s `RwLock<HandlerTable>::write()` + `Arc<HandlerVersion>`
-snapshot ordering (the `RwLock` serialises concurrent reload-bumps; each
-in-flight call's `Arc<HandlerVersion>` snapshot keeps the pre-reload
-version live for the duration of the call) — survives the cutover. That
-ordering shape is concurrency-coordination, not storage, and applies
-unchanged when the real engine is wired.
+The Phase-2a `ReloadCoordinator` / `CallGuard` concurrency machinery —
+`RwLock<HandlerTable>::write()` serialising concurrent reload-bumps,
+each in-flight call's `Arc<HandlerVersion>` snapshot keeping its
+pre-reload version live for the duration of the call — survived the
+Phase-2b cutover unchanged. That ordering shape is concurrency
+coordination, not storage, and is orthogonal to whether the registry
+is in-memory or engine-backed.
 
 ## The control plane is the graph
 
