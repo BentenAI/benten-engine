@@ -5,8 +5,9 @@
 //! [`Subscriber`] implements [`benten_graph::ChangeSubscriber`] and fans
 //! committed change events out to every registered [`View`]. Each view sees
 //! every event and filters internally — simple fan-out, acceptable for
-//! Phase 1's 5 hand-written views; TODO(phase-2) flag a pattern-based
-//! pre-filtering router once the view count grows.
+//! Phase 1's 5 hand-written views + Phase-2b's user-view registration
+//! (G8-B `create_user_view`); TODO(phase-3 — pattern-based
+//! pre-filtering router) once the view count grows further.
 //!
 //! Graceful degradation: a view whose `update` returns
 //! [`ViewError::BudgetExceeded`] is marked stale via [`View::mark_stale`]
@@ -278,8 +279,10 @@ fn apply_event(view: &mut dyn View, event: &ChangeEvent, applied: &mut usize) {
         }
         Ok(Err(other)) => {
             // PatternMismatch and similar are not fatal — log and keep
-            // fanning out. TODO(phase-2): route to a telemetry channel
-            // instead of stderr.
+            // fanning out. TODO(phase-3 — telemetry channel): route to
+            // a telemetry channel instead of stderr (carried from
+            // Phase-2 generic marker; pairs with the `tracing` dep
+            // landing on benten-ivm in Phase-3).
             log_view_error(&view_id, &other);
         }
         Err(_panic_payload) => {
@@ -293,9 +296,11 @@ fn apply_event(view: &mut dyn View, event: &ChangeEvent, applied: &mut usize) {
 /// the sink (tracing, metrics, structured log) without touching the hot
 /// path.
 ///
-/// TODO(phase-2): route to `tracing` once the engine wires a subscriber.
-/// For now we deliberately discard — PatternMismatch is the expected
-/// "this view doesn't handle this query shape" signal, not an alert.
+/// TODO(phase-3 — tracing wire-up): route to `tracing` once the
+/// engine wires a subscriber. For now we deliberately discard —
+/// PatternMismatch is the expected "this view doesn't handle this
+/// query shape" signal, not an alert. (Carried from Phase-2 generic
+/// marker.)
 #[allow(
     clippy::print_stderr,
     reason = "stderr sink is the Phase 1 placeholder; Phase 2 wires tracing"

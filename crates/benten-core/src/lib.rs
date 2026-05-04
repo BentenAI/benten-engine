@@ -642,7 +642,8 @@ impl CoreError {
 // functions exposed here at the crate root are the thinner compatibility
 // surface for the Phase 1 "simple" case where callers don't need to detect
 // concurrent appends. R5 keeps both; R5 G7 picks a canonical shape once the
-// evaluator lands (cov-f3 residual — `TODO(phase-2)`).
+// evaluator lands (cov-f3 residual — `TODO(phase-3 — version surface
+// consolidation)`; carried from Phase-2 generic marker).
 //
 // State storage: each u64-id anchor owns a `Vec<Cid>` of appended version
 // CIDs (oldest-first), held in a process-wide spinlocked table keyed by
@@ -686,11 +687,12 @@ static ANCHOR_COUNTER: core::sync::atomic::AtomicU64 = core::sync::atomic::Atomi
 /// Per-process u64-id version-chain table. `BTreeMap<id, Vec<Cid>>` keyed by
 /// anchor id; vec stores version CIDs in oldest-first insertion order.
 ///
-/// `TODO(phase-2-anchorstore)`: this table grows unbounded for the life of
-/// the process — every [`Anchor::new`] + [`append_version`] call adds
-/// entries, and there is no `drop_anchor` or GC. Fine for Phase 1 (short
-/// test runs, bounded integration tests); a long-running bench or the
-/// eventual evaluator with churn would want G7's caller-owned `AnchorStore`.
+/// `TODO(phase-3 — anchorstore + GC)`: this table grows unbounded for
+/// the life of the process — every [`Anchor::new`] + [`append_version`]
+/// call adds entries, and there is no `drop_anchor` or GC. Fine for
+/// Phase 1 (short test runs, bounded integration tests); a long-running
+/// bench or the eventual evaluator with churn would want a caller-owned
+/// `AnchorStore`. Carried from `phase-2-anchorstore` generic marker.
 static U64_CHAINS: spin::Lazy<spin::Mutex<BTreeMap<u64, Vec<Cid>>>> =
     spin::Lazy::new(|| spin::Mutex::new(BTreeMap::new()));
 

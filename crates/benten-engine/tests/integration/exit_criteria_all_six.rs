@@ -200,10 +200,12 @@ fn exit_3_cap_denial_routes_on_denied() {
 /// iterates zero predecessors per step and therefore does NOT
 /// rigorously validate ordering. It does, however, pin the
 /// non-emptiness and per-step timing contract, and exercises the
-/// handler_predecessors API surface so the Phase-2 fill-in lands as a
-/// single behavioural change.
-// TODO(phase-2-diag-adjacency): populate HandlerPredecessors from the
-// stored SubgraphSpec so the topological-order loop actually enforces.
+/// handler_predecessors API surface so the eventual fill-in lands as
+/// a single behavioural change.
+// TODO(phase-3 — HandlerPredecessors topological enforcement):
+// populate HandlerPredecessors from the stored SubgraphSpec so the
+// topological-order loop actually enforces. Carried from Phase-2
+// generic marker.
 #[test]
 fn exit_4_trace_non_zero_timing_and_topological_order() {
     let (_dir, engine) = fresh_engine();

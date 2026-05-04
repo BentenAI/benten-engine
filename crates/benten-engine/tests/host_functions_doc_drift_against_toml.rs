@@ -21,9 +21,11 @@
 //! pattern to host-functions because host-fn surface area grows
 //! materially with G7-A.
 //!
-//! **Status:** RED-PHASE (Phase 2b G7-A + G7-C pending). Neither
-//! `host-functions.toml` (G7-A authors it as the codegen source) nor
-//! `docs/HOST-FUNCTIONS.md` (G11-2b-A fills it in) yet exist.
+//! **Status:** SHIPPED at tag `phase-2b-close` (`3d0f018`). Both
+//! `host-functions.toml` (codegen source, G7-A) and
+//! `docs/HOST-FUNCTIONS.md` (operator surface, G11-2b-A) landed
+//! end-to-end; this drift-detector runs against the live shipped
+//! pair (5 live tests / 0 ignored).
 //!
 //! Owned by R3-E (CI/test row in R2 §10).
 

@@ -10,8 +10,10 @@
 //! - `source` is `Box<dyn std::error::Error + Send + Sync>` and MUST NOT
 //!   appear on the wire.
 //!
-//! TODO(phase-2a-G1-B): finish the wire encode/decode to use DAG-CBOR; the
-//! stub below returns placeholder bytes.
+//! TODO(phase-3 — host-error wire encode/decode DAG-CBOR upgrade):
+//! finish the wire encode/decode to use DAG-CBOR; the stub below
+//! returns placeholder bytes. Carried from Phase-2a G1-B (didn't
+//! land); pairs with the broader Phase-3 host-error catalog work.
 
 use benten_errors::ErrorCode;
 
@@ -62,8 +64,10 @@ impl HostError {
         // encode only stable public surface; `source` is intentionally
         // absent per sec-r1-6 / atk-6 wire-leak contract.
         //
-        // TODO(phase-2a-G1-B): switch to DAG-CBOR with a versioned envelope
-        // once the full host-error catalog is live.
+        // TODO(phase-3 — host-error wire encode/decode DAG-CBOR
+        // upgrade): switch to DAG-CBOR with a versioned envelope once
+        // the full host-error catalog is live. Carried from Phase-2a
+        // G1-B.
         let mut out = Vec::new();
         out.extend_from_slice(self.code.as_str().as_bytes());
         out.push(0);

@@ -275,6 +275,18 @@ The vitest cluster fix-pass (PR linked from `.addl/phase-2b/r6-r2-fp-vitest-clus
 
 **Touch size:** ~30-50 LOC TS CLI wrapper + the 4 test un-skips.
 
+### 6.10 `random` host-fn deferral — workspace CSPRNG framework choice
+
+**Phase 2b state:** D1 + sec-pre-r1-06 §2.3 deferred the `random` host-fn at Phase-2b open: shipping `random` before the workspace-wide CSPRNG framework decision was made would commit the engine to a CSPRNG choice (or trait-shape) that hasn't been audited across the rest of the runtime. The deferral was originally labeled "Phase 2c" across ~25 surfaces (security-posture, error-catalog, host-functions toml + docs, quickstart, runtime sandbox.rs error message, multiple test contracts, primitive_host docstrings, error variant doc). "Phase 2c" is NOT a defined phase in `docs/FULL-ROADMAP.md` — HARD RULE clause-(b) violation (same shape as §6.9; the random host-fn is the larger sibling of the inspect-state CLI deferral that was already retensed). This entry is the populated destination for the entire Phase-2c-labeled `random` cluster.
+
+**Operator-runtime contract (today):** A SANDBOX module that imports a `random` host-fn (or a manifest that claims `host:compute:random*`) fires `E_SANDBOX_HOST_FN_NOT_FOUND` at validate-time, with an operator hint that says the host-fn is "not yet implemented (Phase 3 — see `docs/future/phase-3-backlog.md §6.10`)". The defensive guard sits in `crates/benten-eval/src/primitives/sandbox.rs::execute` (the `DEFERRED_HOST_FN_RANDOM_CAP_PREFIX` arm) and is regression-pinned by `crates/benten-eval/tests/sandbox_host_fn_random_deferred.rs`.
+
+**Phase 3 target:** (1) Make the workspace CSPRNG framework decision (candidates: `getrandom` direct, `rand` ecosystem trait shape, deterministic-seed-via-attribution-frame for replay scenarios). (2) Wire the `random` host-fn through the chosen CSPRNG with capability-gated entropy budget. (3) Drop the validate-time deferral guard in `crates/benten-eval/src/primitives/sandbox.rs::execute` (the `DEFERRED_HOST_FN_RANDOM_CAP_PREFIX` arm). (4) Update the operator-hint test contract in `sandbox_host_fn_random_deferred.rs` to assert the host-fn IS available (or repurpose the test for whatever residual deferral semantics remain). (5) Update `host-functions.toml` to mark `random` IMPLEMENTED + drop the deferred-bucket comment block. (6) Sweep the doc surfaces (HOST-FUNCTIONS.md, ERROR-CATALOG.md, SECURITY-POSTURE.md Compromise #16, QUICKSTART.md) to retense from "deferred" to "available".
+
+**Why Phase 3:** The CSPRNG framework decision wants the broader runtime context that lands in Phase 3 (deterministic replay + AttributionFrame seeding for SUBSCRIBE-stored events both want a thought-through entropy story). Wiring `random` ahead of that decision risks committing the engine to a CSPRNG seam the rest of Phase 3 has to redo.
+
+**Touch size:** ~40-60 LOC at implementation time + the doc + toml + test sweep.
+
 ---
 
 ## 7. Observability + diagnostic completeness

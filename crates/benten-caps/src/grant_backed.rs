@@ -59,7 +59,9 @@ pub trait GrantReader: Send + Sync {
     /// single backend read to bound resume-time CPU cost under adversarial
     /// deep chains.
     ///
-    /// TODO(phase-2a-G9-A): concrete single-read override.
+    /// TODO(phase-3 — has_unrevoked_grant_for_any single-read
+    /// override): provide concrete single-read override. Carried from
+    /// Phase-2a G9-A; pairs with §2.1 Durable UCAN backend.
     fn has_unrevoked_grant_for_any(&self, scopes: &[&str]) -> Result<bool, CapError> {
         for s in scopes {
             if self.has_unrevoked_grant_for_scope(s)? {
@@ -93,9 +95,11 @@ impl Default for GrantReaderConfig {
 /// the `grant_reader_max_chain_depth` test references this type (see
 /// consolidation report for the shape compromise).
 ///
-/// TODO(phase-2a-G9-A): replace this synthetic harness with the real grant
-/// reader's chain-depth checker backed by `system:CapabilityGrant` /
-/// `system:CapabilityRevocation` lookups.
+/// TODO(phase-3 — GrantReaderChain synthetic harness replacement):
+/// replace this synthetic harness with the real grant reader's
+/// chain-depth checker backed by `system:CapabilityGrant` /
+/// `system:CapabilityRevocation` lookups. Carried from Phase-2a G9-A;
+/// pairs with §2.1 Durable UCAN backend.
 pub struct GrantReaderChain {
     chain: Vec<crate::grant::CapabilityGrant>,
     config: GrantReaderConfig,

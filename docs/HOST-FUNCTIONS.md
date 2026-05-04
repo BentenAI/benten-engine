@@ -13,8 +13,9 @@ mirrored in this file or CI fails.
 Phase 2b ships **three** host functions (`time`, `log`, `kv:read`) and
 **two** named manifests (`compute-basic`, `compute-with-kv`). The
 deferred `random` host-function is documented at the bottom; calling it
-returns `E_SANDBOX_HOST_FN_NOT_FOUND` with a "deferred to Phase 2c"
-hint.
+returns `E_SANDBOX_HOST_FN_NOT_FOUND` with an operator hint pointing at
+[`docs/future/phase-3-backlog.md §6.10`](future/phase-3-backlog.md) for
+the workspace CSPRNG framework choice.
 
 **Runtime status (post-wave-8b/8h):** the host-fn trampoline is fully
 wired through wasmtime's `Linker::func_wrap`; every listed failure mode
@@ -147,7 +148,7 @@ truncation, not error.
 ### Failure modes
 
 - Cap missing → `E_CAP_DENIED` (`host:compute:log`).
-- Engine log sink unavailable (Phase 2c+ when sink is configurable) → `E_SANDBOX_HOST_FN_INTERNAL`.
+- Engine log sink unavailable (Phase 3+ when sink is configurable; tracked separately from §6.10) → `E_SANDBOX_HOST_FN_INTERNAL`.
 - Cumulative SANDBOX output budget exceeded → `E_INV_SANDBOX_OUTPUT` (Inv-7).
 
 ---
@@ -237,10 +238,12 @@ build-fail.
 
 ## Deferred — `random`
 
-Per D1 + sec-pre-r1-06 §2.3, **`random` is deferred to Phase 2c**. The
-SANDBOX executor returns `E_SANDBOX_HOST_FN_NOT_FOUND` with a
-diagnostic hint mentioning "deferred to Phase 2c" if a module attempts
-to call it. Regression guard:
+Per D1 + sec-pre-r1-06 §2.3, **`random` is deferred to Phase 3** — see
+[`docs/future/phase-3-backlog.md §6.10`](future/phase-3-backlog.md) for
+the destination entry (workspace CSPRNG framework choice). The SANDBOX
+executor returns `E_SANDBOX_HOST_FN_NOT_FOUND` with an
+operator-actionable hint citing §6.10 if a module attempts to call it.
+Regression guard:
 `crates/benten-eval/tests/sandbox_host_fn_random_deferred.rs`.
 
 The deferral reasoning: the workspace CSPRNG framework choice has not
@@ -248,7 +251,7 @@ been made (rand_chacha vs OS-CSPRNG vs hardware-RDRAND fallback) and
 shipping `random` before that decision bakes in a footgun (a module
 that depends on weak randomness today would be a silent security
 regression on a future swap). When the workspace settles on a CSPRNG,
-`random` lands as an additive Phase-2c entry without breaking any
+`random` lands as an additive Phase-3 entry without breaking any
 Phase-2b modules.
 
 ---

@@ -22,11 +22,11 @@ written, referenceable form.
 | 9 | Dedup writes pure-read (sec-r1-4 / atk-3) | 1 | **CLOSED** at Phase 2b G12-E (this phase) |
 | 10 | Resume-time capability re-verification | 2a | **CLOSED** at Phase 2b G12-E (this phase) |
 | 11 | IVM views coarse-grained read-gate | 2a | Open (Phase 3+) |
-| 12 | `DurabilityMode::Group` gate 5 deferred | 1 | Open (deferred to Phase 2c / 3) |
+| 12 | `DurabilityMode::Group` gate 5 deferred | 1 | Open (deferred to Phase 3) |
 | 13 | System-zone reserved-prefix rejection surface | 2a | Open (documented; minor-3) |
 | 14 | SANDBOX cold-start cost (no opt-in pool) | 2b | Open (D3 RESOLVED — additive Phase-3 change if real-workload bottleneck) |
 | 15 | `register_runtime` reserved with deferred error | 2b | Deferred to Phase 8 (marketplace) |
-| 16 | `random` host-fn deferred (no CSPRNG framework chosen) | 2b | Deferred to Phase 2c |
+| 16 | `random` host-fn deferred (no CSPRNG framework chosen) | 2b | Deferred to Phase 3 (see `docs/future/phase-3-backlog.md §6.10`) |
 | 17 | In-memory module-bytes registry (`Engine::register_module_bytes`) | 2b | Open (Phase 3 — durable BlobBackend) |
 | 18 | In-memory handler-version chain (`Engine::register_subgraph_replace`) | 2b | Open (Phase 3 — durable Anchor + Version-Node chain) |
 | 19 | Browser-target persistent storage absent — manifests in-memory only on `wasm32-unknown-unknown` | 2b | Open (Phase 3 — IndexedDB / OPFS persistence) |
@@ -1021,16 +1021,17 @@ manifests" section; `host-functions.toml` `[manifest.*]` entries;
 
 ---
 
-### Compromise #16 — `random` host-fn deferred to Phase 2c — Phase-2b additive
+### Compromise #16 — `random` host-fn deferred to Phase 3 — Phase-2b additive
 
 **Class.** Capability gap (intentional); deferred pending workspace
-CSPRNG framework decision.
+CSPRNG framework decision. Destination doc:
+[`docs/future/phase-3-backlog.md §6.10`](future/phase-3-backlog.md).
 
 **Shape.** D1-RESOLVED — Phase 2b's host-fn set ships `time`, `log`,
-and `kv:read`. `random` is **deferred to Phase 2c**. A SANDBOX module
-that attempts to call a `random` import gets
-`E_SANDBOX_HOST_FN_NOT_FOUND` with a hint mentioning "deferred to
-Phase 2c".
+and `kv:read`. `random` is **deferred to Phase 3** (see §6.10). A
+SANDBOX module that attempts to call a `random` import gets
+`E_SANDBOX_HOST_FN_NOT_FOUND` with an operator-actionable hint citing
+`phase-3-backlog.md §6.10`.
 
 **Why deferred:** the workspace CSPRNG framework choice has not been
 made (rand_chacha vs OS-CSPRNG vs hardware-RDRAND fallback). Shipping

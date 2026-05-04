@@ -289,21 +289,25 @@ pub trait CapabilityPolicy: Send + Sync {
     /// Phase 1, consulted by capability-aware tooling that inspects the
     /// policy directly.
     ///
-    /// TODO(phase-2-iterate-boundary-delegation): wire the engine's
-    /// `PrimitiveHost::iterate_batch_boundary` to delegate to the
-    /// configured `CapabilityPolicy::iterate_batch_boundary` so the
-    /// policy override becomes load-bearing end-to-end.
+    /// TODO(phase-3 — iterate-batch-boundary policy delegation): wire
+    /// the engine's `PrimitiveHost::iterate_batch_boundary` to delegate
+    /// to the configured `CapabilityPolicy::iterate_batch_boundary` so
+    /// the policy override becomes load-bearing end-to-end. Carried
+    /// from Phase-2 generic marker; pairs with §2.1 Durable UCAN
+    /// backend wave.
     ///
     /// Lowering this bound increases capability-check load; raising it
     /// widens the TOCTOU window. Keep in lockstep with the named compromise
     /// prose in `.addl/phase-1/r1-triage.md` if the default is ever
     /// adjusted.
-    // TODO(phase-2-wallclock-toctou): honor wall-clock bound in addition to iteration count per
-    // R4b compromise #1 tightening (auditor finding g4-p2-uc-2). A
-    // TRANSFORM-heavy or CALL-heavy handler at 1 iter/10sec pushes past 10
-    // minutes between refreshes under iteration-count alone; the first real
-    // capability backend MUST additionally enforce a wall-clock ceiling
-    // (min(iteration_count, wall_clock_seconds), default ≤300s).
+    // TODO(phase-3 — wall-clock TOCTOU ceiling): honor wall-clock
+    // bound in addition to iteration count per R4b compromise #1
+    // tightening (auditor finding g4-p2-uc-2). A TRANSFORM-heavy or
+    // CALL-heavy handler at 1 iter/10sec pushes past 10 minutes
+    // between refreshes under iteration-count alone; the first real
+    // capability backend MUST additionally enforce a wall-clock
+    // ceiling (min(iteration_count, wall_clock_seconds), default
+    // ≤300s). Carried from Phase-2 generic marker; pairs with §2.1.
     fn iterate_batch_boundary(&self) -> usize {
         DEFAULT_BATCH_BOUNDARY
     }
@@ -314,8 +318,10 @@ pub trait CapabilityPolicy: Send + Sync {
     /// evaluator's monotonic source drives the cadence, the HLC rides
     /// alongside for federation correlation.
     ///
-    /// TODO(phase-2a-G9-A): wire into the evaluator's refresh path so the
-    /// override becomes load-bearing end-to-end.
+    /// TODO(phase-3 — wallclock-refresh-ceiling evaluator wire-up):
+    /// wire into the evaluator's refresh path so the override becomes
+    /// load-bearing end-to-end. Carried from Phase-2a G9-A (didn't
+    /// land); pairs with §2.1.
     fn wallclock_refresh_ceiling(&self) -> core::time::Duration {
         core::time::Duration::from_mins(5)
     }

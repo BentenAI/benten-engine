@@ -1286,8 +1286,11 @@ impl Engine {
     /// concern and this method exists so tests that spell the
     /// grant-backed intent survive across the Phase-1 / Phase-2
     /// boundary.
-    // TODO(phase-2-grant-backed-policy): route through GrantBackedPolicy
-    // registration so the handler honours grants at call-time.
+    // TODO(phase-3 — register_crud_with_grants GrantBackedPolicy
+    // routing): route through GrantBackedPolicy registration so the
+    // handler honours grants at call-time. Carried from Phase-2
+    // generic marker; pairs with the broader Phase-3 grant-backed
+    // policy work (§2.1 Durable UCAN backend).
     pub fn register_crud_with_grants(&self, label: &str) -> Result<String, EngineError> {
         self.register_crud(label)
     }

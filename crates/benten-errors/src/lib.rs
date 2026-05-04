@@ -324,7 +324,8 @@ pub enum ErrorCode {
     SandboxHostFnDenied,
     /// SANDBOX module attempted to call a host-fn name not present in the
     /// active manifest. Fires at link time (preferred) or call time
-    /// (fallback). Used for `random` since it's deferred to Phase 2c.
+    /// (fallback). Used for `random` since it's deferred to Phase 3
+    /// (see docs/future/phase-3-backlog.md §6.10).
     SandboxHostFnNotFound,
     /// SANDBOX dispatcher named a manifest not present in the codegen
     /// registry AND not registered via the deferred runtime API. ESC-15

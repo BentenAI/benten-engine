@@ -204,7 +204,8 @@ impl Engine {
     /// `Engine::from_snapshot_blob` constructs an engine whose backend is
     /// CID-pinned + structurally immutable. Every WRITE PrimitiveHost arm
     /// (`put_node`, `delete_node`; `put_edge` / `delete_edge` when those
-    /// wire in Phase 2c) MUST surface `E_BACKEND_READ_ONLY` when invoked
+    /// wire in Phase 3 — see docs/future/phase-3-backlog.md §1.1) MUST
+    /// surface `E_BACKEND_READ_ONLY` when invoked
     /// against such an engine — both via the direct `engine_crud::*` API
     /// and via the dispatch-through-handler path that
     /// `engine.call(handler, ':...', ...)` exercises. The check fires

@@ -4,8 +4,11 @@
 //! refresh cadence (drift-exploit-hard); `TimeSource` is consulted
 //! alongside for HLC federation-correlation context.
 //!
-//! TODO(phase-2a-G3-B): back the defaults with `uhlc::HLC` (TimeSource)
-//! and `std::time::Instant` (MonotonicSource).
+//! TODO(phase-3 — TimeSource defaults wire-up): back the defaults
+//! with `uhlc::HLC` (TimeSource) and `std::time::Instant`
+//! (MonotonicSource). Carried from Phase-2a G3-B; the trait shapes
+//! shipped end-to-end in 2b but the default impls need uhlc which
+//! lands with Phase-3 sync work.
 
 use core::time::Duration;
 

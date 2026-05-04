@@ -45,7 +45,7 @@ use benten_errors::ErrorCode;
 ///     the caller's grant does NOT include `admin:write`, so the WRITE is
 ///     denied with `E_CAP_DENIED` routed via `ON_DENIED`.
 #[test]
-#[ignore = "TODO(phase-2-per-primitive-cap-check): GrantBackedPolicy IS wired for static check_write, but per-primitive enforcement (Invariant 13 — each op step's `requires` re-checked individually) requires (a) `policy_with_grants(&[...])` in testing returning a real grant-backed policy instance, (b) `handler_declaring_read_but_writing_admin` populated subgraph, (c) evaluator calling check_write/check_read per-op step, not only at replay. Phase 2."]
+#[ignore = "Phase 3 — per-primitive cap enforcement (Inv-13) deferred per docs/future/phase-3-backlog.md §2.1 (Durable UCAN backend wave). GrantBackedPolicy IS wired for static check_write, but per-primitive enforcement (Invariant 13 — each op step's `requires` re-checked individually) requires (a) `policy_with_grants(&[...])` in testing returning a real grant-backed policy instance, (b) `handler_declaring_read_but_writing_admin` populated subgraph, (c) evaluator calling check_write/check_read per-op step, not only at replay."]
 fn handler_with_understated_requires_denies_excess_writes() {
     let dir = tempfile::tempdir().unwrap();
     // The test subject has `post:read` granted but NOT `admin:write`.
@@ -93,7 +93,7 @@ fn handler_with_understated_requires_denies_excess_writes() {
 /// `requires`. The outer grant is `post:read`; the intersection with
 /// `admin:write` is empty; the inner WRITE fires `E_CAP_DENIED`.
 #[test]
-#[ignore = "TODO(phase-2-call-attenuation): GrantBackedPolicy IS wired, but CALL attenuation (intersection of outer grant ∩ callee requires) needs (a) `policy_with_grants(&[...])` testing helper wired to grant-backed, (b) `handler_with_call_attenuation_escalation` populated CALL subgraph, (c) evaluator attenuating the capability context at CALL entry when `isolated: false`. Phase 2."]
+#[ignore = "Phase 3 — CALL attenuation (intersection of outer grant ∩ callee requires) deferred per docs/future/phase-3-backlog.md §2.1 (Durable UCAN backend wave). GrantBackedPolicy IS wired, but CALL attenuation needs (a) `policy_with_grants(&[...])` testing helper wired to grant-backed, (b) `handler_with_call_attenuation_escalation` populated CALL subgraph, (c) evaluator attenuating the capability context at CALL entry when `isolated: false`."]
 fn handler_cannot_escalate_via_call_attenuation() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
