@@ -1434,9 +1434,9 @@ export class ESandboxHostFnDenied extends BentenError {
  */
 export class ESandboxHostFnNotFound extends BentenError {
   static readonly code = "E_SANDBOX_HOST_FN_NOT_FOUND";
-  static readonly fixHint = "Module attempted to call a host-fn name not in the active manifest. In Phase 2b: this fires for `random` (deferred to Phase 2c per D1 + sec-pre-r1-06 §2.3 — workspace CSPRNG framework decision pending). The error message hint MUST mention \"deferred to Phase 2c\" for `random` so developers don't think it's a typo. For other names: check the manifest declaration matches the import.";
+  static readonly fixHint = "Module attempted to call a host-fn name not in the active manifest. In Phase 2b: this fires for `random` (deferred to Phase 3 per D1 + sec-pre-r1-06 §2.3 — workspace CSPRNG framework decision pending; see `docs/future/phase-3-backlog.md §6.10`). The error message hint MUST cite `phase-3-backlog.md §6.10` for `random` so developers don't think it's a typo. For other names: check the manifest declaration matches the import.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SANDBOX_HOST_FN_NOT_FOUND", "Module attempted to call a host-fn name not in the active manifest. In Phase 2b: this fires for `random` (deferred to Phase 2c per D1 + sec-pre-r1-06 §2.3 — workspace CSPRNG framework decision pending). The error message hint MUST mention \"deferred to Phase 2c\" for `random` so developers don't think it's a typo. For other names: check the manifest declaration matches the import.", message, context);
+    super("E_SANDBOX_HOST_FN_NOT_FOUND", "Module attempted to call a host-fn name not in the active manifest. In Phase 2b: this fires for `random` (deferred to Phase 3 per D1 + sec-pre-r1-06 §2.3 — workspace CSPRNG framework decision pending; see `docs/future/phase-3-backlog.md §6.10`). The error message hint MUST cite `phase-3-backlog.md §6.10` for `random` so developers don't think it's a typo. For other names: check the manifest declaration matches the import.", message, context);
     this.name = "ESandboxHostFnNotFound";
   }
 }

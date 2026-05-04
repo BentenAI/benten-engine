@@ -56,11 +56,11 @@ pub use transaction::{PendingOp, Transaction};
 /// `redb_backend.rs` stays focused on Phase-1 semantics while Phase-2a
 /// stubs surface the new API shape in one place.
 ///
-/// TODO(phase-2b-redb-stubs): implement real bodies; the stubs below
-/// `todo!()` so tests fail at runtime with a clear pointer to the owning
-/// group. Retag from `phase-2a-G2-A / G5-A` after R6FP-R3 architect A11
-/// — both Phase-2a groups closed without picking up these stubs; ownership
-/// migrates to Phase-2b alongside the broader benten-graph storage rewrite.
+/// TODO(phase-3 — RedbBackend benchmark-helper bodies): implement
+/// real bodies; the stubs below `todo!()` so tests fail at runtime
+/// with a clear pointer to the owning group. Carried from Phase-2a
+/// G2-A / G5-A through Phase-2b; the durability-mode pass-through
+/// wiring lands alongside §1.1 backend genericism in Phase-3.
 impl RedbBackend {
     /// Phase 2a G2-A: `create`-alias for the `open_or_create` constructor —
     /// new R3 tests prefer this name.
@@ -200,9 +200,11 @@ impl RedbBackend {
     /// bench (`crud_post_create_dispatch_group_durability.rs`) routes its
     /// iteration body through this helper so the bench compiles today.
     ///
-    /// TODO(phase-2b-benchmark-durability-wiring): wire durability-mode
-    /// pass-through through `put_node` so the Group vs Immediate delta is
-    /// observable. Retag from `phase-2a-G2-A` after R6FP-R3 architect A11.
+    /// TODO(phase-3 — benchmark durability-mode pass-through): wire
+    /// durability-mode pass-through through `put_node` so the Group vs
+    /// Immediate delta is observable. Carried from Phase-2a G2-A
+    /// through Phase-2b; lands alongside §1.1 backend genericism in
+    /// Phase-3.
     pub fn benchmark_helper_crud_post_create_dispatch(&self, _durability: DurabilityMode) {
         todo!(
             "Phase 2a G2-A descope-witness: implement durability-mode pass-through \
@@ -703,9 +705,11 @@ impl WriteContext {
 
     /// Set the [`WriteAuthority`] for this context (builder-style).
     ///
-    /// TODO(phase-2b-write-authority-coherence): wire `EnginePrivileged`
-    /// to also flip `is_privileged = true` at call sites, so both axes
-    /// stay coherent. Retag from `phase-2a-G2-B` after R6FP-R3 architect A11.
+    /// TODO(phase-3 — write-authority/is_privileged coherence): wire
+    /// `EnginePrivileged` to also flip `is_privileged = true` at call
+    /// sites, so both axes stay coherent. Carried from Phase-2a G2-B
+    /// through Phase-2b; lands in Phase-3 alongside the
+    /// WriteAuthority API consolidation.
     #[must_use]
     pub fn with_authority(mut self, authority: WriteAuthority) -> Self {
         if matches!(authority, WriteAuthority::EnginePrivileged) {

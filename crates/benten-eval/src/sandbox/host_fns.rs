@@ -141,7 +141,8 @@ pub fn host_fn_names() -> &'static [&'static str] {
 /// per-call cap) + `kv:read` (per_call, 1000 reads/call).
 ///
 /// `random` is intentionally absent — D1 + sec-pre-r1-06 §2.3 defers it
-/// to Phase 2c until the workspace-wide CSPRNG decision lands.
+/// to Phase 3 until the workspace-wide CSPRNG decision lands. See
+/// `docs/future/phase-3-backlog.md §6.10` for the destination entry.
 ///
 /// **perf-g7a-mr-2 fix-pass:** the table is built ONCE per process via
 /// [`std::sync::OnceLock`] and returned as a shared `Arc`. Per-call
@@ -393,7 +394,8 @@ mod tests {
         assert!(table.contains_key("kv:read"));
         assert!(
             !table.contains_key("random"),
-            "D1 + sec-pre-r1-06 §2.3 — random deferred to Phase 2c"
+            "D1 + sec-pre-r1-06 §2.3 — random deferred to Phase 3 \
+             (see docs/future/phase-3-backlog.md §6.10)"
         );
     }
 

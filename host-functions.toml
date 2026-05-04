@@ -13,7 +13,8 @@
 #
 # Pin sources:
 #   D1-RESOLVED — initial host-fn surface (time / log / kv:read; random
-#                 deferred to Phase 2c).
+#                 deferred to Phase 3 — see docs/future/phase-3-backlog.md
+#                 §6.10 for the workspace CSPRNG framework choice).
 #   D2-RESOLVED — named-manifest registry hybrid (codegen default + reserved
 #                 register_runtime API returning E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED).
 #   D9-RESOLVED — manifest canonical bytes = DAG-CBOR.
@@ -66,12 +67,13 @@ per_call_read_cap = 1000
 bypass_output_budget = false
 requires_async = false
 
-# `random` DEFERRED to Phase 2c per D1 + sec-pre-r1-06 §2.3 reasoning
+# `random` DEFERRED to Phase 3 per D1 + sec-pre-r1-06 §2.3 reasoning
 # (workspace CSPRNG framework choice not yet made; shipping random
-# before that decision bakes in a footgun). The sandbox executor MUST
-# return E_SANDBOX_HOST_FN_NOT_FOUND with a message hint mentioning
-# "deferred to Phase 2c" if a module attempts to call it. Regression
-# guard: tests/sandbox_host_fn_random_deferred.rs.
+# before that decision bakes in a footgun). Destination doc:
+# docs/future/phase-3-backlog.md §6.10. The sandbox executor MUST
+# return E_SANDBOX_HOST_FN_NOT_FOUND with an operator-actionable hint
+# pointing at phase-3-backlog §6.10 if a module attempts to call it.
+# Regression guard: tests/sandbox_host_fn_random_deferred.rs.
 
 # ---------------------------------------------------------------------------
 # Named-manifest bundles (D2 hybrid).

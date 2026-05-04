@@ -2,13 +2,15 @@
 //! correctness across multiple registered IVM views (RESULTS.md §3
 //! contract).
 //!
-//! `crates/benten-ivm/src/lib.rs::TODO(phase-2-ivm-cascade)` (the
-//! cascade-deletion integration TODO marker; symbol form per R6-R4
-//! r6-r4-cp-7 + `dispatch-conventions.md` §3.5b — the prior
-//! `lib.rs:53-56` line cite pointed at the SIBLING
-//! `TODO(phase-2-ivm-bench)` marker after waves shifted insertions
-//! between the two adjacent TODOs) carried a marker noting that
-//! the RESULTS.md §3 cascade contract was unwitnessed
+//! `crates/benten-ivm/src/lib.rs::TODO(phase-3 — IVM
+//! cascade-deletion integration test)` (the cascade-deletion
+//! integration TODO marker; symbol form per R6-R4 r6-r4-cp-7 +
+//! `dispatch-conventions.md` §3.5b — the prior `lib.rs:53-56` line
+//! cite pointed at the SIBLING criterion-benchmarks marker after
+//! waves shifted insertions between the two adjacent TODOs; both
+//! markers retensed Phase-3 per Phase-3-prep orphan-04 cleanup)
+//! carried a marker noting that the RESULTS.md §3 cascade contract
+//! was unwitnessed
 //! after R5. This test closes that gap: it constructs a small multi-view
 //! Subscriber, feeds Create events to populate every view, then a cascade
 //! of Delete events (some bulk, some targeted), and asserts each

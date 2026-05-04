@@ -14,10 +14,13 @@
 //! `OnceLock<Mutex<HashMap>>` and Engine B would either silently
 //! Complete or panic on resume — the Compromise-#9 footgun.
 //!
-//! **Status:** RED-PHASE (Phase 2b G12-E pending). The on-disk
-//! SuspensionStore replacement for `OnceLock<Mutex<HashMap>>` lives in
-//! `crates/benten-eval/src/suspension_store.rs` and is not yet
-//! implemented; the wait.rs metadata_registry rewire is also pending.
+//! **Status:** Test scaffold SHIPPED at tag `phase-2b-close`
+//! (`3d0f018`); both bodies deferred to Phase 3 per
+//! `docs/future/phase-3-backlog.md §7.3.A.6` (G12-E SuspensionStore
+//! landed structurally — `crates/benten-engine/src/suspension_store.rs`
+//! + `wait.rs` metadata-registry rewire — but the cross-process
+//! resume integration body + the resume_with_meta fail-closed body
+//! land in Phase 3 alongside the broader durable-WAIT cluster).
 //!
 //! Owned by R3-E.
 

@@ -188,8 +188,11 @@ pub fn resume(
 /// so test harnesses that pipe `evaluate(...).expect_suspended()` (declared
 /// `-> WaitOutcome`) compile without mapping.
 ///
-/// TODO(phase-2a-G3-B): unify the eval-side and engine-side `Outcome`s after
-/// the WAIT surface is live.
+/// TODO(phase-3 — eval/engine Outcome unification): the WAIT surface
+/// shipped end-to-end at phase-2b-close (3d0f018), but the eval-side
+/// and engine-side `Outcome`s remain distinct shapes. Carried from
+/// Phase-2a G3-B for consolidation in Phase-3 alongside the broader
+/// host-boundary cleanup.
 #[derive(Debug, Clone)]
 pub enum Outcome {
     /// Handler ran to completion.
@@ -853,8 +856,12 @@ pub struct StepResult {
 /// an enum so the boundary/budget variants coexist with the per-primitive
 /// `Step` rows.
 ///
-/// TODO(phase-2a-G3-A / G4-A / G5-B): wire `SuspendBoundary`, `ResumeBoundary`,
-/// `BudgetExhausted` firing + `attribution` threading onto every trace row.
+/// TODO(phase-3 — TraceStep boundary-variant + attribution-threading
+/// completion): boundary variants exist on the enum and attribution
+/// threads onto Step rows; full `SuspendBoundary` / `ResumeBoundary` /
+/// `BudgetExhausted` firing + uniform `attribution` threading on
+/// EVERY trace row carries from Phase-2a G3-A/G4-A/G5-B (didn't
+/// land); pairs with the broader Phase-3 trace-discipline pass.
 #[derive(Debug, Clone)]
 pub enum TraceStep {
     /// A single primitive execution row (Phase 1 baseline shape preserved

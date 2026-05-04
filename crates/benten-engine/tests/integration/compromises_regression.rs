@@ -29,7 +29,7 @@ use std::collections::BTreeMap;
 // the next batch re-reads and sees the revoked cap, so write 101 fails with
 // E_CAP_REVOKED_MID_EVAL.
 #[test]
-#[ignore = "TODO(phase-2-iterate-subgraph): GrantBackedPolicy IS wired for the static cap check, but the TOCTOU-window 100-iter batch semantics need (a) the `SubgraphSpec::iterate(n, ...)` builder (currently fails registration with RegistrationError), (b) a per-batch capability re-read at the ITERATE boundary inside the evaluator, and (c) `call_with_revocation_at` driving an actual mid-evaluation revocation. All three land in Phase 2."]
+#[ignore = "Phase 3 — TOCTOU-at-ITERATE-boundary 100-iter batch semantics deferred per docs/future/phase-3-backlog.md §2.1 (Durable UCAN backend wave brings the per-batch cap-recheck cluster). GrantBackedPolicy IS wired for the static cap check, but the TOCTOU-window 100-iter batch semantics need (a) the `SubgraphSpec::iterate(n, ...)` builder (currently fails registration with RegistrationError), (b) a per-batch capability re-read at the ITERATE boundary inside the evaluator, and (c) `call_with_revocation_at` driving an actual mid-evaluation revocation."]
 fn compromise_1_toctou_window_bound_at_100_iter_batch() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()

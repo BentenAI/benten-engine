@@ -301,10 +301,12 @@ impl Evaluator {
             // mac+Linux the monotonic clock is typically 1–10ns granular, so
             // this only triggers on zero-work primitives.
             //
-            // TODO(phase-2-trace-docs): document in `diag/trace.rs` that trace timing is NOT
-            // included in any content-addressed hash; a trace artifact is an
+            // TODO(phase-3 — trace-timing-non-determinism doc): document
+            // in `diag/trace.rs` that trace timing is NOT included in
+            // any content-addressed hash; a trace artifact is an
             // observability output, not a deterministic-replay fixture.
-            // Mini-review `g6-cr-11` / `g6-cr-12`.
+            // Mini-review `g6-cr-11` / `g6-cr-12`. Carried from Phase-2
+            // generic marker.
             let elapsed = elapsed.max(1);
             match step_res {
                 Ok(r) => {

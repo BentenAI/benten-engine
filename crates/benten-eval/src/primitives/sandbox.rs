@@ -399,8 +399,9 @@ pub fn execute(
         if required.starts_with(DEFERRED_HOST_FN_RANDOM_CAP_PREFIX) {
             return Err(SandboxError::HostFnNotFound {
                 name: format!(
-                    "random (cap='{required}'): deferred to Phase 2c per D1 + \
-                     sec-pre-r1-06 §2.3 (workspace CSPRNG framework choice not yet made)"
+                    "random (cap='{required}'): not yet implemented (Phase 3 — see \
+                     docs/future/phase-3-backlog.md §6.10 for the workspace CSPRNG \
+                     framework choice; original deferral rationale: D1 + sec-pre-r1-06 §2.3)"
                 ),
             });
         }
@@ -1163,9 +1164,14 @@ mod tests {
         .unwrap_err();
         assert_eq!(err.code(), ErrorCode::SandboxHostFnNotFound);
         if let SandboxError::HostFnNotFound { name } = err {
+            // Operator-facing hint MUST signal (a) the host-fn isn't
+            // available yet AND (b) where to find the canonical
+            // destination doc — see phase-3-backlog.md §6.10 for the
+            // workspace CSPRNG framework choice that gates re-enabling.
             assert!(
-                name.contains("Phase 2c") || name.contains("deferred"),
-                "operator hint MUST mention Phase 2c deferral; got: {name}"
+                name.contains("not yet implemented") && name.contains("§6.10"),
+                "operator hint MUST signal random-host-fn not-yet-implemented + \
+                 cite phase-3-backlog §6.10; got: {name}"
             );
         }
     }

@@ -61,7 +61,9 @@ pub use ucan_stub::UcanBackend;
 /// module so the test pins that the engine's `PrimitiveHost` routes through
 /// this helper rather than consulting a constant.
 ///
-/// TODO(phase-2a-G9-A): wire the real evaluator path through this helper.
+/// TODO(phase-3 — evaluator-delegation wire-up): wire the real
+/// evaluator path through this helper. Carried from Phase-2a G9-A;
+/// pairs with §2.1 Durable UCAN backend.
 pub mod evaluator_delegation {
     use crate::policy::CapabilityPolicy;
 
@@ -98,7 +100,10 @@ pub struct HlcStampedRefreshEvent {
 /// the §9.13 dual-source contract (MonotonicSource authoritative; HLC rides
 /// alongside).
 ///
-/// TODO(phase-2a-G9-A): wire this into the real evaluator refresh path.
+/// TODO(phase-3 — emit_refresh_event_for_test → real evaluator
+/// refresh-path wire-up): wire this synthesis path into the real
+/// evaluator refresh-event emission. Carried from Phase-2a G9-A;
+/// pairs with §2.1 Durable UCAN backend.
 #[must_use]
 pub fn emit_refresh_event_for_test() -> HlcStampedRefreshEvent {
     HlcStampedRefreshEvent {

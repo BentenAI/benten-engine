@@ -6,7 +6,8 @@
 //! Pre-fix, the walker at sandbox.rs:678 had a `match host_name.as_str()`
 //! arm covering only "time", "log", "kv:read" with a silent `_ => {}`
 //! fallthrough. If a future entry lands in the codegen table (D1 lift
-//! to add "random" in Phase 2c, or any other host-fn), the walker
+//! to add "random" in Phase 3 — see phase-3-backlog §6.10 — or any
+//! other host-fn), the walker
 //! silently does NOT register it. Then either:
 //!   (i) the module imports it → wasmtime raises "unknown import" → the
 //!   trap_to_typed maps to HostFnNotFound which the operator reads as

@@ -259,24 +259,28 @@ pub struct RedbBackend {
     /// [`GraphError::NestedTransactionNotSupported`] without ever asking
     /// redb to open a second write txn.
     ///
-    /// TODO(phase-2): the flag is per-`Arc<RedbBackend>`; two distinct Arc
-    /// handles opened on the same redb file do not coordinate and fall
-    /// through to redb's single-writer lock (which blocks rather than
-    /// deadlocking). Mini-review g3-ce-7 proposes keying the flag on the
-    /// canonical DB path via a process-wide static. Phase 1 treats the
-    /// single-handle invariant as documented.
+    /// TODO(phase-3 — multi-Arc tx-flag coordination): the flag is
+    /// per-`Arc<RedbBackend>`; two distinct Arc handles opened on the
+    /// same redb file do not coordinate and fall through to redb's
+    /// single-writer lock (which blocks rather than deadlocking).
+    /// Mini-review g3-ce-7 proposes keying the flag on the canonical
+    /// DB path via a process-wide static. Phase-2 treated the
+    /// single-handle invariant as documented; carry to Phase-3
+    /// alongside backend-genericism work (§1.1).
     tx_flag: Arc<Mutex<bool>>,
     /// Monotonically increasing transaction id stamped onto
     /// [`crate::ChangeEvent::tx_id`]. Starts at 1 so that tests can reserve
     /// 0 as "no event". Atomic because the backend may be shared across
     /// threads behind an `Arc`.
     ///
-    /// TODO(phase-2): `tx_id` is process-lifetime-only; reopening the
-    /// backend restarts the counter at 1. An IVM persistence layer that
-    /// uses `tx_id` as a durable high-water-mark would see a monotonicity
-    /// violation across restart. Mini-review g3-ce-8 proposes persisting
-    /// the counter into a dedicated redb table; Phase 1 documents the
-    /// limitation (IVM views rebuild from scratch on restart in Phase 1).
+    /// TODO(phase-3 — durable tx_id high-water-mark): `tx_id` is
+    /// process-lifetime-only; reopening the backend restarts the
+    /// counter at 1. An IVM persistence layer that uses `tx_id` as a
+    /// durable high-water-mark would see a monotonicity violation
+    /// across restart. Mini-review g3-ce-8 proposes persisting the
+    /// counter into a dedicated redb table; Phase 2 documented the
+    /// limitation (IVM views rebuild from scratch on restart). Carry
+    /// to Phase-3 alongside the IVM persistence work.
     next_tx_id: Arc<AtomicU64>,
     /// Wave-1 mini-review SEVERE-2: storage-layer commit counter. Bumped
     /// once per real `put_node_with_context` commit (excluding the dedup

@@ -30,11 +30,13 @@
 //! with the policy's error code in the edge payload — same shape as a
 //! mid-iteration revocation observed at an ITERATE batch boundary.
 //!
-//! TODO(phase-2): add an `Evaluator.call_depth: usize` counter that
+//! TODO(phase-3 — CALL depth counter + multiplicative budget
+//! propagation): add an `Evaluator.call_depth: usize` counter that
 //! increments on CALL entry and decrements on callee terminate, and
 //! propagate remaining iteration budget multiplicatively through the
-//! CALL boundary. Mini-review findings `g6-cag-5` and the ITERATE/CALL
-//! observability concern in `g6-cr-10`.
+//! CALL boundary. Mini-review findings `g6-cag-5` and the
+//! ITERATE/CALL observability concern in `g6-cr-10`. Carried from
+//! Phase-2 generic marker.
 
 use benten_core::{Node, Value};
 
