@@ -1044,7 +1044,7 @@ decision.
 must surface it via input from a CALL-er handler that derives
 randomness from a known-source (engine config, principal-bound seed,
 etc.). When the workspace settles on a CSPRNG, `random` lands as an
-additive Phase-2c entry without breaking any Phase-2b modules.
+additive Phase 3 entry per [`phase-3-backlog.md §6.10`](future/phase-3-backlog.md) without breaking any Phase-2b modules.
 
 **Cross-refs.** D1-RESOLVED; `host-functions.toml` deferral comment;
 `crates/benten-eval/tests/sandbox_host_fn_random_deferred.rs`

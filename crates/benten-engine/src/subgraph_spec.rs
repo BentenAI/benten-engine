@@ -382,7 +382,7 @@ impl WriteSpec {
     /// `Vec<WriteSpec>` view from the widened `primitives` storage.
     ///
     /// Tolerant of partial / missing keys (an empty bag yields a default
-    /// WriteSpec); unknown bag keys are silently ignored so a Phase-2c
+    /// WriteSpec); unknown bag keys are silently ignored so a future
     /// addition of a new WriteSpec field can safely extend the bag without
     /// breaking older readers.
     pub(crate) fn from_primitive_spec(spec: &PrimitiveSpec) -> Self {

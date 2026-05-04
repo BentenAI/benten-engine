@@ -95,7 +95,7 @@ doc_markdown = "allow"
 # clippy 1.95 (stable) reads `+ ` / `- ` mid-line as markdown bullet
 # continuations and demands per-line indentation. These doc comments are
 # placeholder narrative R5 implementers will rewrite; suppress the lint
-# workspace-wide so CI stays green during the red phase. Phase-2c can
+# workspace-wide so CI stays green during the red phase. Phase 3+ can
 # tighten per-file once primitive surfaces stabilise.
 doc_lazy_continuation = "allow"
 # Implicit-Default stubs are intentional during Phase-1 bring-up; Phase-2
