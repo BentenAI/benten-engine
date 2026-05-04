@@ -568,9 +568,11 @@ impl TraceStep {
 
 /// Handle to an Anchor (version-chain identity). **Phase 1 stub.**
 ///
-/// TODO(phase-2-version-chain): a non-zero-sized shape that carries the
-/// anchor id lands when `create_anchor` / `append_version` gain real
-/// implementations (R-nit-07).
+/// TODO(phase-3 — version-chain non-zero-sized shape): a non-zero-sized
+/// shape that carries the anchor id lands when `create_anchor` /
+/// `append_version` gain real implementations (R-nit-07). Carried
+/// from Phase-2 generic marker; pairs with §1.5 Compromise #18
+/// durable handler-version chain.
 #[derive(Debug, Clone)]
 pub struct AnchorHandle {
     #[allow(
@@ -697,8 +699,10 @@ pub struct DiagnosticInfo {
 
 /// Nested-transaction handle. **Phase 1 stub.**
 ///
-/// TODO(phase-2-nested-tx): Phase-1 always rejects nested begin; Phase-2
-/// populates this with the real sub-transaction state (R-nit-07).
+/// TODO(phase-3 — nested-tx sub-transaction state): Phase-1/2 always
+/// rejects nested begin; Phase-3 populates this with the real
+/// sub-transaction state (R-nit-07). Carried from Phase-2 generic
+/// marker.
 #[derive(Debug)]
 pub struct NestedTx {
     #[allow(

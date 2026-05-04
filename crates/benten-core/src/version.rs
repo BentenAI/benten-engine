@@ -10,7 +10,8 @@
 //! ([`crate::Anchor`] / [`crate::append_version`] etc.) for the Phase 1
 //! "simple" use-case where the caller does not need to detect concurrent
 //! appends. R5 keeps both surfaces; R5 G7 picks a canonical shape once the
-//! evaluator is in place (`TODO(phase-2)`).
+//! evaluator is in place (`TODO(phase-3 — version surface
+//! consolidation)`; carried from Phase-2 generic marker).
 //!
 //! ## State storage
 //!
@@ -22,11 +23,12 @@
 //! cross-test state leakage and could not distinguish two independent forks
 //! that happen to share a root CID.
 //!
-//! `TODO(phase-2-anchorstore)`: Phase 3 sync will replace per-anchor state
-//! with CRDT merge under the sync protocol; R5 G7 may still prefer an explicit
-//! `AnchorStore` handle for bulk operations. The per-anchor `Arc<Mutex<...>>`
-//! is the minimum that passes Phase 1 tests without leaking state between
-//! unrelated anchors.
+//! `TODO(phase-3 — anchorstore + CRDT merge)`: Phase 3 sync will
+//! replace per-anchor state with CRDT merge under the sync protocol;
+//! Phase-3 may still prefer an explicit `AnchorStore` handle for bulk
+//! operations. The per-anchor `Arc<Mutex<...>>` is the minimum that
+//! passes Phase 1 tests without leaking state between unrelated
+//! anchors. (Carried from `phase-2-anchorstore` generic marker.)
 
 use alloc::string::String;
 use alloc::sync::Arc;

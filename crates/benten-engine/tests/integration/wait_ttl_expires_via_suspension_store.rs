@@ -19,9 +19,12 @@
 //! `testing_advance_wait_clock` (R3-consolidation addendum) to avoid
 //! wall-clock-real test latency.
 //!
-//! **Status:** RED-PHASE (Phase 2b G12-E pending). `ttl_hours` field on
-//! WaitSpec, GC sweep, `E_WAIT_TTL_EXPIRED` error variant, and
-//! `testing_advance_wait_clock` all unimplemented.
+//! **Status:** Test scaffold SHIPPED at tag `phase-2b-close`
+//! (`3d0f018`); body deferred to Phase 3 per
+//! `docs/future/phase-3-backlog.md §7.3.A.6`. `ttl_hours` field on
+//! WaitSpec + `E_WAIT_TTL_EXPIRED` variant landed structurally; the
+//! GC sweep + `testing_advance_wait_clock` simulated-clock helper
+//! land Phase-3 alongside the broader durable-WAIT cluster.
 //!
 //! Owned by R3-E.
 

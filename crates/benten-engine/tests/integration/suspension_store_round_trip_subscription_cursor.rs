@@ -17,10 +17,15 @@
 //! the persistent-cursor BACKEND, which is the new G12-E generalization
 //! surface).
 //!
-//! **Status:** RED-PHASE (Phase 2b G12-E pending). `SuspensionStore`,
-//! `SubscriberId`, and the persistent-cursor wiring in
-//! `crates/benten-eval/src/primitives/subscribe.rs::persistent_cursors`
-//! do not yet exist.
+//! **Status:** Test scaffold SHIPPED at tag `phase-2b-close`
+//! (`3d0f018`). `SuspensionStore`, `SubscriberId`, and the
+//! persistent-cursor wiring in `subscribe.rs::persistent_cursors` ALL
+//! landed structurally; the `testing_register_persistent_subscriber`
+//! + `testing_emit_n_synthetic_events` driver helpers — needed to
+//! exercise the SUBSCRIBE engine-boundary cursor round-trip — are
+//! deferred to Phase 3 per `docs/future/phase-3-backlog.md §7.3.A.9`
+//! (sub-cluster 9c). One test live (the cursor structural test) +
+//! one `#[ignore]`'d on the helpers.
 //!
 //! Owned by R3-E.
 

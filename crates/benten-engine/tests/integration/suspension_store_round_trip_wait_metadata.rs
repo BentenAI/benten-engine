@@ -19,8 +19,10 @@
 //! is captured inline here as an integration assertion that the two
 //! key-spaces do not alias.
 //!
-//! **Status:** RED-PHASE (Phase 2b G12-E pending). `SuspensionStore`,
-//! `WaitMetadata`, and `SuspensionKey` do not yet exist.
+//! **Status:** SHIPPED at tag `phase-2b-close` (`3d0f018`).
+//! `SuspensionStore`, `WaitMetadata`, and `SuspensionKey` all landed
+//! end-to-end (G12-E); both tests in this file run live against the
+//! shipped surface (0 ignored).
 //!
 //! Owned by R3-E.
 

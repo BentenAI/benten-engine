@@ -178,7 +178,9 @@ impl CapabilityGrant {
     /// `i` indexes distinct grants along a chain so each has a distinct CID.
     /// Real grant issuance is Phase-3 scope.
     ///
-    /// TODO(phase-2a-G9-A): real attenuation flow.
+    /// TODO(phase-3 — real attenuation flow): replace this test-only
+    /// constructor with real attenuation flow. Carried from Phase-2a
+    /// G9-A; pairs with §2.1 Durable UCAN backend.
     #[must_use]
     pub fn attenuated_for_test(actor: &Cid, scope: &str, i: usize) -> Self {
         Self {

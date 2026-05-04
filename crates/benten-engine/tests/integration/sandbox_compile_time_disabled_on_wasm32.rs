@@ -19,10 +19,14 @@
 //! `SubgraphSpec`; on wasm32 the registration call MUST surface the
 //! typed error; on native targets it MUST proceed normally.
 //!
-//! **Status:** RED-PHASE (Phase 2b G7-C + G10-A pending). The cfg-gate
-//! plus typed-error surface live in `crates/benten-eval/src/primitives/sandbox.rs`
-//! (executor) and `crates/benten-engine/src/subgraph_spec.rs`
-//! (registration-time error path).
+//! **Status:** Test scaffold SHIPPED at tag `phase-2b-close`
+//! (`3d0f018`); both bodies deferred to Phase 3 per
+//! `docs/future/phase-3-backlog.md §7.3.A.1` (G10-A wasm32 bundles +
+//! G7-C cfg-gate landed structurally in 2b; the negative-half exercise
+//! plus drift-detector body land in the Phase-3 first-wave CI-hygiene
+//! pass). The cfg-gate + typed-error surface live in
+//! `crates/benten-eval/src/primitives/sandbox.rs` (executor) and
+//! `crates/benten-engine/src/subgraph_spec.rs` (registration path).
 //!
 //! Owned by R3-E.
 

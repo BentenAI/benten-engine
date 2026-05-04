@@ -18,9 +18,12 @@
 //!      (separate `wasm-r1-6` finding — bundle conflation would silently
 //!      bloat the browser path).
 //!
-//! **Status:** RED-PHASE (Phase 2b G10-A-browser pending). The browser
-//! bundle (`bindings/napi/src/wasm_browser.rs` + `wasm-browser.yml`) does
-//! not yet exist.
+//! **Status:** Test scaffold SHIPPED at tag `phase-2b-close`
+//! (`3d0f018`); both bodies deferred to Phase 3 per
+//! `docs/future/phase-3-backlog.md §7.3.A.9` (sub-cluster 9b).
+//! `wasm-browser.yml` workflow ships in 2b CI; the `dist/` artifact
+//! pinning + napi node-binary exclusion checks land Phase-3 once the
+//! workflow's bundle-publication step is wired.
 //!
 //! Owned by R3-E.
 

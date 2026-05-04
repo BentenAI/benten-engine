@@ -69,8 +69,10 @@ fn host_functions_doc_lists_every_codegen_entry() {
     // `E_SANDBOX_HOST_FN_NOT_FOUND` fires when a module attempts the
     // call.
     assert!(
-        body.contains("random") && body.contains("Phase 2c"),
-        "docs/HOST-FUNCTIONS.md MUST call out that `random` is \
-         deferred to Phase 2c (D1 + sec-pre-r1-06 §2.3 reasoning)."
+        body.contains("random") && body.contains("§6.10"),
+        "docs/HOST-FUNCTIONS.md MUST call out that `random` is deferred \
+         to Phase 3 (D1 + sec-pre-r1-06 §2.3 reasoning) with a cite to \
+         docs/future/phase-3-backlog.md §6.10 (workspace CSPRNG \
+         framework choice)."
     );
 }

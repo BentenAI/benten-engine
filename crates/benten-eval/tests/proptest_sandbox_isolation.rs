@@ -54,9 +54,13 @@ proptest! {
         // (rust-test-reviewer.json tq-2b-3).
         prop_assert!(
             false,
-            "Phase 2b G7-C pending (PR #33 engine integration): write no-state-persists-across-calls \
-             property body (replace this prop_assert!(false) with the \
-             read-after-set assertion described in the file pseudo)."
+            "Phase 3 — body deferred per docs/future/phase-3-backlog.md \
+             §7.3.A.1 (G7-C engine integration shipped end-to-end at \
+             tag phase-2b-close 3d0f018; proptest body lands Phase 3 \
+             first-wave CI-hygiene pass). Write the \
+             no-state-persists-across-calls property body (replace this \
+             prop_assert!(false) with the read-after-set assertion \
+             described in the file pseudo)."
         );
     }
 }

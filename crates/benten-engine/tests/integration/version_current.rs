@@ -24,7 +24,7 @@ fn version(n: u32) -> Node {
 }
 
 #[test]
-#[ignore = "TODO(phase-2-version-chain-ivm): Engine::create_anchor / append_version / read_current_version are Phase-2 anchor-lifecycle APIs; the O(1) View-5 wire-through through Engine lands in Phase 2."]
+#[ignore = "Phase 3 — version-chain anchor-lifecycle deferred per docs/future/phase-3-backlog.md §1.5 (Compromise #18 durable handler-version chain). Engine::create_anchor / append_version / read_current_version are anchor-lifecycle APIs; the O(1) View-5 wire-through through Engine lands in Phase-3."]
 fn version_current_o1_resolution_at_every_step() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
@@ -66,7 +66,7 @@ fn version_current_o1_resolution_at_every_step() {
 }
 
 #[test]
-#[ignore = "TODO(phase-2-version-chain-ivm): Engine::create_anchor / append_version are Phase-2 anchor-lifecycle APIs; synchronous View-5 updates through Engine land in Phase 2."]
+#[ignore = "Phase 3 — version-chain anchor-lifecycle deferred per docs/future/phase-3-backlog.md §1.5 (Compromise #18 durable handler-version chain). Engine::create_anchor / append_version are anchor-lifecycle APIs; synchronous View-5 updates through Engine land in Phase-3."]
 fn version_current_updates_synchronously_with_append() {
     // Protects against a regression where View 5 lags append by one ChangeEvent
     // (visible to crud list consumers but invisible to version-chain callers).

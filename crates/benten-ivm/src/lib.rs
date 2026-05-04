@@ -50,19 +50,24 @@ pub use view::{
     IvmError, View, ViewBudget, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState,
 };
 
-// TODO(phase-2-ivm-bench): criterion benchmarks against RESULTS.md §1 targets
-// — one target per view (capability lookup, event dispatch, content listing,
-// governance traversal, version-current resolve). See mini-review g5-ivm-14.
+// TODO(phase-3 — IVM criterion benchmarks): criterion benchmarks
+// against RESULTS.md §1 targets — one target per view (capability
+// lookup, event dispatch, content listing, governance traversal,
+// version-current resolve). See mini-review g5-ivm-14. Carried from
+// Phase-2 generic marker; pairs with §5 IVM Algorithm B maturity work.
 //
-// TODO(phase-2-ivm-cascade): integration test that exercises cascade-deletion
-// correctness (RESULTS.md §3). Construct a small graph, feed Create events
-// through the subscriber, then the cascade of Delete events, and assert every
-// view converges to empty. See mini-review g5-ivm-13.
+// TODO(phase-3 — IVM cascade-deletion integration test): construct a
+// small graph, feed Create events through the subscriber, then the
+// cascade of Delete events, and assert every view converges to empty
+// (RESULTS.md §3). See mini-review g5-ivm-13. Carried from Phase-2
+// generic marker.
 //
-// TODO(phase-2-ivm-replay): 4 rebuild-equivalence tests in view1/2/3/5 are R3
-// defects — they construct an empty rebuilt view and assert equality with a
-// populated incremental one. Fixing requires event-replay, beyond the fix-
-// pass scope. See mini-review g5-ivm-12.
+// TODO(phase-3 — IVM rebuild-equivalence event-replay): 4
+// rebuild-equivalence tests in view1/2/3/5 are R3 defects — they
+// construct an empty rebuilt view and assert equality with a
+// populated incremental one. Fixing requires event-replay, beyond
+// the Phase-2 fix-pass scope. Pairs with §5 IVM Algorithm B
+// maturity work. See mini-review g5-ivm-12.
 // ---------------------------------------------------------------------------
 // The five Phase 1 views — each in its own submodule under `src/views/`.
 // Normalized to a proper `src/views/mod.rs` (see R-minor-12 / g5-cr-1).

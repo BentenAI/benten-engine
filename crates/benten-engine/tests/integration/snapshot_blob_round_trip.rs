@@ -17,9 +17,11 @@
 //! 3. The blob computes a stable CID under `Node::cid` so Phase-3 sync
 //!    can treat blob handoff as a content-addressed transfer.
 //!
-//! **Status:** RED-PHASE (Phase 2b G10-A-wasip1 pending). The
-//! `from_snapshot_blob` / `export_snapshot_blob` APIs do not yet exist
-//! on `Engine`; G10-A-wasip1 implementation lands them.
+//! **Status:** SHIPPED at tag `phase-2b-close` (`3d0f018`). The
+//! `Engine::from_snapshot_blob` / `Engine::export_snapshot_blob` APIs
+//! landed in `crates/benten-engine/src/engine_snapshot.rs`; all 4
+//! tests in this file run live against the shipped surface (0
+//! ignored).
 //!
 //! Owned by R3-E (R3 territory: WASM target + cross-crate integration +
 //! CI workflow tests + SuspensionStore + WAIT TTL).

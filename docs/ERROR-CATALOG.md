@@ -814,7 +814,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 - **Message:** "SANDBOX host-fn not found: {name}"
 - **Context:** `{ name: string }`
-- **Fix:** Module attempted to call a host-fn name not in the active manifest. In Phase 2b: this fires for `random` (deferred to Phase 2c per D1 + sec-pre-r1-06 §2.3 — workspace CSPRNG framework decision pending). The error message hint MUST mention "deferred to Phase 2c" for `random` so developers don't think it's a typo. For other names: check the manifest declaration matches the import.
+- **Fix:** Module attempted to call a host-fn name not in the active manifest. In Phase 2b: this fires for `random` (deferred to Phase 3 per D1 + sec-pre-r1-06 §2.3 — workspace CSPRNG framework decision pending; see `docs/future/phase-3-backlog.md §6.10`). The error message hint MUST cite `phase-3-backlog.md §6.10` for `random` so developers don't think it's a typo. For other names: check the manifest declaration matches the import.
 - **Thrown at:** SANDBOX executor — fully active post-wave-8b. The defensive `random`-cap pre-check at `crates/benten-eval/src/primitives/sandbox.rs::execute` (sec-g7a-mr-5 D1 random-host-fn deferral guard, immediately after the `manifest_ref.resolve(...)` block) fires before module link; the wasmtime link-time resolver path (other names) fires when wasmtime fails to resolve an import against the linker.
 - **Phase:** 2b G7-A (variant) / wave-8b (production wiring)
 

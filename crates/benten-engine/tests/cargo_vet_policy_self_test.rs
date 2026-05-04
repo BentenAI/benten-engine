@@ -21,9 +21,13 @@
 //! `supply-chain/audits.toml` is empty + `imports.toml` references no
 //! upstream sources, so the workflow is verifying nothing.
 //!
-//! **Status:** RED-PHASE (Phase 2b G7 entry pending). The
-//! `supply-chain/` directory + `audits.toml` + `imports.toml` do not
-//! yet exist; cargo-vet baseline lands with G7 entry per plan §3.1.
+//! **Status:** Test scaffold SHIPPED at tag `phase-2b-close`
+//! (`3d0f018`); body deferred to Phase 3 per
+//! `docs/future/phase-3-backlog.md §7.3.A.9` (cargo-vet workflow ships
+//! in Phase 2b CI but the `supply-chain/` baseline directory commits
+//! in Phase 3 alongside the broader supply-chain hardening pass). The
+//! single test in this file is `#[ignore]`'d with the matching
+//! Phase-3 destination; un-ignore when §7.3.A.9 closes.
 //!
 //! Owned by R3-E (CI/test ownership row in R2 §10).
 

@@ -11,8 +11,9 @@
 /// intentionally a slice — test grep + phf-table-codegen both consume it as
 /// an ordered-by-insertion sequence.
 ///
-/// TODO(phase-2a-G5-B-i): populate the phf table from this const at build
-/// time.
+/// TODO(phase-3 — system-zone phf-table codegen): populate the phf
+/// table from this const at build time. Carried from Phase-2a G5-B-i
+/// (didn't land); pairs with the Phase-3 first-wave CI-hygiene pass.
 pub const SYSTEM_ZONE_PREFIXES: &[&str] = &[
     "system:CapabilityGrant",
     "system:IVMView",

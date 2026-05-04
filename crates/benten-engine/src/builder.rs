@@ -10,9 +10,10 @@
 //! toggles are intentionally **build-time** rather than feature-gated.
 //! A binary built against `benten-engine` always links every subsystem;
 //! the toggles decide at `Engine::builder().build()` time whether the
-//! subsystem is wired to the backend. Slim-build variants that omit the
-//! code paths entirely are a Phase-2 concern — see the `testing.rs`
-//! `TODO(phase-2-features)` mirror.
+//! subsystem is wired to the backend. Slim-build variants that omit
+//! the code paths entirely are a Phase-3 concern (slim-build feature
+//! gates land alongside the broader Phase-3 packaging hardening
+//! pass).
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -125,13 +126,14 @@ impl EngineBuilder {
 
     /// Configure an explicit capability policy.
     ///
-    /// TODO(phase-2-policy-kind): napi v3 cannot serialize `Box<dyn CapabilityPolicy>` across
-    /// the JS boundary. G8 will wrap this surface in a `PolicyKind` enum
-    /// (`NoAuth | GrantBacked | Ucan(...) | Custom(Box<dyn...>)`) so the
-    /// native-only `Custom` variant is gated behind
-    /// `#[cfg(not(target_arch = "wasm32"))]` while `NoAuth` / `GrantBacked`
-    /// stay reachable from TypeScript. See code-reviewer finding
-    /// `g7-cr-3`.
+    /// TODO(phase-3 — PolicyKind enum for napi-bridgeable variants):
+    /// napi v3 cannot serialize `Box<dyn CapabilityPolicy>` across the
+    /// JS boundary. Phase-3 will wrap this surface in a `PolicyKind`
+    /// enum (`NoAuth | GrantBacked | Ucan(...) | Custom(Box<dyn...>)`)
+    /// so the native-only `Custom` variant is gated behind
+    /// `#[cfg(not(target_arch = "wasm32"))]` while `NoAuth` /
+    /// `GrantBacked` stay reachable from TypeScript. Carried from
+    /// Phase-2 generic marker; see code-reviewer finding `g7-cr-3`.
     #[must_use]
     pub fn capability_policy(mut self, p: Box<dyn CapabilityPolicy>) -> Self {
         self.policy = Some(p);
@@ -438,11 +440,13 @@ impl EngineBuilder {
         // `.with_test_ivm_budget(b)` is set the view is constructed with
         // that budget so stale-view regression tests can trip it.
         //
-        // TODO(phase-2-content-listing-autoreg): arch-6 flagged the
-        // "post" auto-registration + register_crud auto-registration as
-        // two paths that both materialise `content_listing_<label>` views;
-        // Phase-2 collapses to a single `register_content_listing(label)`
-        // entry point the builder calls on demand.
+        // TODO(phase-3 — content-listing auto-registration unification):
+        // arch-6 flagged the "post" auto-registration +
+        // register_crud auto-registration as two paths that both
+        // materialise `content_listing_<label>` views; Phase-3
+        // collapses to a single `register_content_listing(label)`
+        // entry point the builder calls on demand. Carried from
+        // Phase-2 generic marker.
         let ivm: Option<Arc<benten_ivm::Subscriber>> = if self.without_ivm {
             None
         } else {
