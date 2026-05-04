@@ -27,7 +27,7 @@ CALL      RESPOND   EMIT         SANDBOX    SUBSCRIBE  STREAM
 
 Each corresponds to an Operation Node with its own property shape. `READ` reads a Node. `WRITE` writes one. `TRANSFORM` runs a pure expression. `BRANCH` routes on a condition. `CALL` invokes another subgraph. `RESPOND` is a terminal that produces the handler's final output. The 12 primitives are the complete vocabulary; anything an application wants to do is composed from these.
 
-Eight primitives have live executors today (READ, WRITE, TRANSFORM, BRANCH, ITERATE, CALL, RESPOND, EMIT). WAIT lands in Phase 2a; SANDBOX, STREAM, and SUBSCRIBE in Phase 2b.
+All 12 primitives have live executors at tag `phase-2b-close` (2026-05-03). WAIT shipped in Phase 2a; SANDBOX, STREAM, and SUBSCRIBE shipped in Phase 2b. The earlier eight (READ, WRITE, TRANSFORM, BRANCH, ITERATE, CALL, RESPOND, EMIT) shipped in Phase 1.
 
 **Subgraph.** A DAG of Operation Nodes wired with control-flow Edges. The engine walks this DAG to execute a handler. Because it's a DAG with bounded fan-out, execution is always bounded; the engine is not Turing complete by construction.
 
@@ -72,20 +72,20 @@ Content addressing also shapes security. The default read posture returns `null`
 
 ## What the engine is not
 
-- **Not Turing complete.** Every handler terminates. The escape hatch for genuine compute — arbitrary TypeScript, ML inference, an image resize — is SANDBOX (Phase 2b, WASM, fuel-metered).
+- **Not Turing complete.** Every handler terminates. The escape hatch for genuine compute — arbitrary TypeScript, ML inference, an image resize — is SANDBOX (WASM via wasmtime, fuel-metered).
 - **Not a relational database.** You can model relational shapes in a graph, but the engine isn't optimized for row-oriented scans across large tables. Read patterns that scale are the ones that hit IVM views.
 - **Not an app framework.** It's the engine underneath one. You write handlers in TypeScript; the DSL produces registered subgraphs. A CMS, a chat service, a personal assistant runs on top.
-- **Not finished.** Phase 1 shipped; Phase 2a and 2b extend the primitive set; Phase 3 adds P2P sync. The current state is usable for local single-process work and for evaluating whether the model fits a problem you have.
+- **Not finished.** Phase 1, 2a, and 2b shipped at named tags; the full 12-primitive vocabulary is live. Phase 3 adds P2P sync. The current state is usable for local single-process work and for evaluating whether the model fits a problem you have.
 
 ## The path from here
 
-**Phase 1 (done)** gave the engine a working 8-primitive evaluator, content-addressed storage with MVCC, hand-written IVM views, a pluggable capability policy, TypeScript bindings, a scaffolder, and debug tooling. The canonical fixture CID `bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda` is stable across Linux / macOS / Windows.
+**Phase 1 (shipped 2026-04-21)** gave the engine a working 8-primitive evaluator, content-addressed storage with MVCC, hand-written IVM views, a pluggable capability policy, TypeScript bindings, a scaffolder, and debug tooling. The canonical fixture CID `bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda` is stable across Linux / macOS / Windows.
 
-**Phase 2a (in flight)** finishes the evaluator. Adds WAIT (suspend/resume with DAG-CBOR persisted state). Completes the 14 structural invariants: system-zone enforcement at runtime, multiplicative iteration budgets across CALL/ITERATE nesting, immutability rejection for non-dedup writes, causal attribution threaded through every trace step. Hardens capability TOCTOU with wall-clock revocation checks on a dual monotonic + HLC clock source. Ships the 4-step resume protocol that guards against tampered state, principal mismatch, stale subgraph references, and mid-eval grant revocation.
+**Phase 2a (closed at tag `phase-2a-close`, 2026-04-25)** finished the evaluator. Added WAIT (suspend/resume with DAG-CBOR persisted state). Completed structural invariants 8 + 11 + 13 + 14: system-zone enforcement at runtime, multiplicative iteration budgets across CALL/ITERATE nesting, immutability rejection for non-dedup writes, causal attribution threaded through every trace step. Hardened capability TOCTOU with wall-clock revocation checks on a dual monotonic + HLC clock source. Shipped the 4-step resume protocol that guards against tampered state, principal mismatch, stale subgraph references, and mid-eval grant revocation.
 
-**Phase 2b** adds the WASM SANDBOX (wasmtime-backed, fuel-metered, capability-manifested host functions), the STREAM and SUBSCRIBE primitives (user-visible back-pressured output and reactive change notifications), and Algorithm B generalized for user-registered views with explicit strategy selection.
+**Phase 2b (closed at tag `phase-2b-close`, 2026-05-03)** added the WASM SANDBOX (wasmtime-backed, fuel-metered, capability-manifested host functions), the STREAM and SUBSCRIBE primitives (user-visible back-pressured output and reactive change notifications), and Algorithm B production-registered with per-view strategy selection. Algorithm B's non-canonical-view-ID generalization (user-defined view IDs declaring `Strategy::B`) carries forward to Phase 3.
 
-**Phase 3** adds P2P sync (iroh transport, CRDT-merged content, Merkle Search Tree diff, UCAN capability chains, DID-based identity, HLC timestamps). After Phase 3, two Benten instances hold the same graph and exchange Nodes cryptographically — the first configuration where "Benten communities" become real.
+**Phase 3 (next)** adds P2P sync (iroh transport, CRDT-merged content, Merkle Search Tree diff, UCAN capability chains, DID-based identity, HLC timestamps). After Phase 3, two Benten instances hold the same graph and exchange Nodes cryptographically — the first configuration where "Benten communities" become real. After Phase 3 closes, the project pauses to assess what (if anything) gates a Benten Engine v1 release before continuing into Phases 4–8.
 
 **Phases 4–8** are applications composed from the engine: a CMS migration that exercises the engine under realistic load, platform features (schema-driven rendering, self-composing admin, declarative plugin manifests), a Personal AI Assistant MVP (MCP, PARA knowledge organization, on-demand tool composition), community spaces, and a USD-pegged currency for the network's economic layer.
 
@@ -94,7 +94,7 @@ Each phase layers on the previous without requiring changes below. The engine's 
 ## Where to go from here
 
 - **Try it.** See [`QUICKSTART.md`](QUICKSTART.md) for the 10-minute path. `npx create-benten-app my-app` gives you a scaffolded project with a `crud('post')` handler.
-- **Understand the architecture.** [`ARCHITECTURE.md`](ARCHITECTURE.md) walks the seven crates, the invariant set, the storage layer, and the evaluator's request flow.
+- **Understand the architecture.** [`ARCHITECTURE.md`](ARCHITECTURE.md) walks the eight crates, the invariant set, the storage layer, and the evaluator's request flow.
 - **Read the error catalog.** [`ERROR-CATALOG.md`](ERROR-CATALOG.md) is the stable contract: every error the engine surfaces, by discriminant, with context.
 - **Look at the glossary.** [`GLOSSARY.md`](GLOSSARY.md) names the concepts above and a few more.
 - **Read the source.** The engine is deliberately small. `crates/benten-engine/src/lib.rs` is the integration surface; `crates/benten-eval/src/evaluator.rs` is the walk loop; `crates/benten-graph/src/redb_backend.rs` is the storage. If the docs are confusing, the code is the ground truth.

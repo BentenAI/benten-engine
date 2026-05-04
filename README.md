@@ -56,11 +56,11 @@ console.log(await engine.trace(handler.id, 'post:create', { ... })); // step-by-
 
 ## Current state
 
-Phase 1 shipped (2026-04-21). Phase 2a is closing — implementation complete; quality-council review in progress ahead of the release-era CI pass and tag. Phase 2a extended the evaluator with the WAIT primitive, the multiplicative iteration budget, system-zone runtime enforcement, structural causal attribution, immutability enforcement, capability TOCTOU hardening, and DAG-CBOR suspended-state persistence. Phase 2b adds WASM SANDBOX, STREAM, and SUBSCRIBE.
+Phase 1 shipped 2026-04-21. Phase 2a closed at tag `phase-2a-close` (2026-04-25): the evaluator gained the WAIT primitive, the multiplicative iteration budget, system-zone runtime enforcement, structural causal attribution, immutability enforcement, capability TOCTOU hardening, and DAG-CBOR suspended-state persistence. Phase 2b closed at tag `phase-2b-close` (2026-05-03): WASM SANDBOX, STREAM, and SUBSCRIBE all became production-runtime LIVE alongside Algorithm B's per-view strategy selection and the module-manifest signature surface.
 
-**Live today:** the eight Phase-1 primitives (READ, WRITE, TRANSFORM, BRANCH, ITERATE, CALL, RESPOND, EMIT), the `crud()` zero-config path, content-addressed storage with MVCC, hand-written IVM views, pluggable capability policy, scaffolder, debug tooling, `handler.toMermaid()` and `engine.trace()` introspection. TypeScript bindings via napi-rs; Rust API available directly.
+**Live today:** all 12 operation primitives (READ, WRITE, TRANSFORM, BRANCH, ITERATE, WAIT, CALL, RESPOND, EMIT, SANDBOX, SUBSCRIBE, STREAM), the `crud()` zero-config path, content-addressed storage with MVCC, IVM views (5 hand-written + Algorithm B for user-registered views on canonical IDs), pluggable capability policy, WASM-fueled SANDBOX with capability-derived host-function manifests, scaffolder, debug tooling, `handler.toMermaid()` and `engine.trace()` introspection, suspend/resume across process boundaries, hot-reload dev server. TypeScript bindings via napi-rs; Rust API available directly.
 
-**Not yet live:** SANDBOX, STREAM, and SUBSCRIBE return `E_PRIMITIVE_NOT_IMPLEMENTED` until Phase 2b. P2P sync and UCAN land in Phase 3. See [`docs/HOW-IT-WORKS.md`](docs/HOW-IT-WORKS.md) for how the phases compose.
+**Not yet live:** P2P sync and UCAN land in Phase 3. See [`docs/HOW-IT-WORKS.md`](docs/HOW-IT-WORKS.md) for how the phases compose.
 
 ## Start here
 

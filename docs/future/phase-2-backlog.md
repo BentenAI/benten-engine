@@ -1,28 +1,20 @@
 # Phase 2 Backlog
 
-**Status:** Consolidated list of items deferred from Phase 1 that have a clear Phase 2 landing point. Not forward-guidance on abstractions the way `docs/future/` is — these are things Phase 1 explicitly scoped out, with commits and specs already citing the deferral.
+**Status (2026-05-03):** Phase 2 closed. Phase 2a closed at tag `phase-2a-close` (cb49554, 2026-04-25); Phase 2b closed at tag `phase-2b-close` (3d0f018, 2026-05-03). This document is now an audit artifact: every item below carries its closure status (CLOSED-IN-PHASE-2A / CLOSED-IN-PHASE-2B / PARTIAL-WITH-PHASE-3-CARRY / OPEN-WITH-PHASE-N+-DESTINATION). Items still open carry an explicit named destination per HARD RULE rule-12. The forward-looking surface is now [`docs/future/phase-3-backlog.md`](phase-3-backlog.md).
 
-**Scope distinction from `docs/future/README.md`:**
+**Original scope distinction from `docs/future/README.md`:**
 - `future/` = exploratory proposals, may or may not ship (e.g. `benten-runtime.md`, `compute-marketplace.md`).
-- `phase-2-backlog.md` (this file) = committed deferrals with concrete Phase 1 references. Every item here is expected to land in Phase 2 or has a clear trigger for earlier landing.
+- `phase-2-backlog.md` (this file) = committed deferrals with concrete Phase 1 references. Every item here was expected to land in Phase 2 or had a clear trigger for earlier landing.
 
-**Phase 2 scope anchor:** `docs/FULL-ROADMAP.md` §Phase 2 — "Evaluator completion + WASM SANDBOX + remaining invariants." **Phase 2 was split into Phase 2a + Phase 2b during Phase 2a pre-R1 (2026-04-21)** on review-lens-coherence grounds. Phase 2a (evaluator completion + debt close + 4 of 6 invariants): `.addl/phase-2a/00-implementation-plan.md`. Phase 2b (SANDBOX + WASM + compute): `.addl/phase-2b/00-scope-outline.md` — opens pre-R1 after 2a ships. The backlog items below split across 2a and 2b per the `.addl/phase-2a/00-implementation-plan.md` §11 traceability map.
+**Phase 2 scope anchor:** `docs/FULL-ROADMAP.md` §Phase 2 — "Evaluator completion + WASM SANDBOX + remaining invariants." Phase 2 was split into Phase 2a + Phase 2b during Phase 2a pre-R1 (2026-04-21) on review-lens-coherence grounds: Phase 2a covered evaluator completion + debt close + 4 of 6 deferred invariants; Phase 2b covered SANDBOX + WASM + compute + the remaining 2 deferred invariants. Both sub-phases shipped at named tags as noted above.
 
 ---
 
 ## 1. Architectural deferrals
 
-### 1.1 `benten-eval` → `benten-graph` dependency break (arch-1)
+### 1.1 `benten-eval` → `benten-graph` dependency break (arch-1) — **CLOSED-IN-PHASE-2A**
 
-**Phase 1 state:** `crates/benten-eval/Cargo.toml` depends on `benten-graph` because `EvalError::Graph(#[from] GraphError)` carries a `GraphError` variant. That's the sole cross-crate coupling; the evaluator otherwise talks to storage only through `PrimitiveHost`.
-
-**Phase 2 target:** Remove the dep. `EvalError` no longer surfaces `GraphError`; the engine's `PrimitiveHost` impl catches storage errors at the host boundary and maps them to a new `HostError` type (or an already-stable code in `benten-errors`).
-
-**Why deferred:** The `PrimitiveHost` surface isn't fully stable until Phase 2 adds WAIT / STREAM / SUBSCRIBE / SANDBOX executors. Designing `HostError` now forces guesses about the Phase 2 error surface. The thin-engine philosophy (`docs/DEVELOPMENT-METHODOLOGY.md` Pattern: thin engine, compose everything on top) explicitly cautions against pre-settling abstractions the Phase 2 primitive surface will actually exercise.
-
-**Trigger for earlier landing:** If any Phase 2 primitive implementation needs a `GraphError` shape that the current `#[from]` doesn't carry, do the dep break first rather than growing the coupling.
-
-**Touch size estimate:** 15–30 files. Medium risk.
+The dep break landed in Phase 2a (G1-A / G1-B). `crates/benten-eval/Cargo.toml` no longer depends on `benten-graph`; the comment "benten-graph intentionally absent — arch-1 dep-break" pins the boundary. `EvalError` no longer surfaces `GraphError`; storage errors are caught at the `PrimitiveHost` boundary and mapped to `HostError` (`crates/benten-eval/src/host_error.rs`), which carries an opaque `Box<dyn StdError>` source so no `benten-graph` type leaks.
 
 ### 1.2 File splits not taken in Phase 1
 
@@ -31,67 +23,67 @@
 
 ---
 
-## 2. Deferred primitives (4 of 12)
+## 2. Deferred primitives (4 of 12) — **ALL CLOSED**
 
-All primitive **types** are defined in `benten-eval` and pass structural validation; their executor paths return `E_PRIMITIVE_NOT_IMPLEMENTED`. Phase 2 wires the executors.
+All four executors shipped at named tags. Per-primitive Phase-3-residual enhancements (per-handler tunable config, durable bytes registry, handler-id-router, stream end-to-end pins) are catalogued in [`phase-3-backlog.md`](phase-3-backlog.md) §6 + §7.
 
-| Primitive | Phase 2 work |
-|-----------|--------------|
-| `WAIT` | Serializable execution state (so the evaluator can suspend/resume); time-source abstraction; integration with `uhlc` for deterministic re-entry |
-| `STREAM` | Back-pressure semantics, partial-output emission, WinterTC-compatible ReadableStream bridge at the napi layer |
-| `SUBSCRIBE` (user-visible op) | Currently only the engine-internal change-stream plumbing exists. Phase 2 exposes SUBSCRIBE as a primitive that user subgraphs can write |
-| `SANDBOX` | Full `wasmtime` integration, fuel metering, per-subgraph fuel budgets, no re-entrancy, output size limits, host-function manifest. See `docs/SECURITY-POSTURE.md` Compromise #4 |
+| Primitive | Closure status |
+|-----------|----------------|
+| `WAIT` | **CLOSED-IN-PHASE-2A.** Serializable `ExecutionStateEnvelope` (DAG-CBOR), time-source abstraction (`benten-eval::time_source` with `uhlc::HLC` backing), 4-step resume protocol with payload-CID + principal + subgraph-pin + capability re-check. Production runtime live; cross-process resume metadata persistence (`cap_snapshot_hash`) carries to Phase 3 — see [`phase-3-backlog.md`](phase-3-backlog.md) §7.1.4. |
+| `STREAM` | **CLOSED-IN-PHASE-2B.** `BoundedSink` chunk-sink scheduler at `crates/benten-eval/src/chunk_sink.rs`; back-pressure semantics; partial-output emission via napi-rs ReadableStream bridge. Per-handler chunk-count tunables carry to Phase 3 — see [`phase-3-backlog.md`](phase-3-backlog.md) §7.1.5; STREAM end-to-end test pins at [`phase-3-backlog.md`](phase-3-backlog.md) §7.3.A.2. |
+| `SUBSCRIBE` (user-visible op) | **CLOSED-IN-PHASE-2B.** `ActiveSubscription` at `crates/benten-eval/src/primitives/subscribe.rs`; user-visible SUBSCRIBE primitive; production-runtime change notification path. DSL-args↔eval-properties parity meta-test + handler-id-router carry to Phase 3 — see [`phase-3-backlog.md`](phase-3-backlog.md) §7.10. |
+| `SANDBOX` | **CLOSED-IN-PHASE-2B.** Full `wasmtime` integration (v43.0.2 post CVE-2025 bump), fuel metering, per-subgraph fuel budgets, no re-entrancy, output size limits via `CountedSink`, capability-derived host-function manifest. See [`SECURITY-POSTURE.md`](../SECURITY-POSTURE.md) Compromise #4 (CLOSED) for the ESC matrix; Phase-3 SANDBOX TS-bridge work catalogued at [`phase-3-backlog.md`](phase-3-backlog.md) §6.6. |
 
 ---
 
-## 3. Deferred invariants (6 of 14)
+## 3. Deferred invariants (6 of 14) — **ALL ACTIVE**
 
-All Phase 1 invariants (1, 2, 3, 5, 6, 9, 10, 12) are enforced at registration time. Phase 2 adds:
+All 14 invariants are enforced at `phase-2b-close`. See [`docs/INVARIANT-COVERAGE.md`](../INVARIANT-COVERAGE.md) as the SoT for per-invariant enforcer + test pins.
 
-| Invariant | Phase 2 work |
-|-----------|--------------|
-| 4 — SANDBOX nest depth | Lands with SANDBOX executor |
-| 7 — SANDBOX output size | Lands with SANDBOX executor |
-| 8 — cumulative iteration budget (multiplicative through CALL / ITERATE) | Today a scalar budget with `E_INV_ITERATE_BUDGET` fires; Phase 2 replaces with multiplicative accounting. `E_INV_ITERATE_NEST_DEPTH` is the Phase 1 registration-time stopgap for the nesting aspect |
-| 11 — system-zone labels unreachable from user operations | Phase 1 has `E_SYSTEM_ZONE_WRITE` as a stopgap enforced by the engine's put path; Phase 2 enforces this at the evaluator level so subgraphs cannot reach system-zone CIDs through any primitive |
-| 13 — immutability after registration | Phase 1 registers content-addressed subgraphs but does not enforce "cannot modify a registered subgraph." Phase 2 wires the immutability invariant through the capability layer |
-| 14 — causal attribution on every evaluation | Phase 1 records the `(actor, handler, grant)` triple on writes (attribution exists); Phase 2 formalises the structural requirement that every evaluation step carries causal attribution |
+| Invariant | Closure status |
+|-----------|----------------|
+| 4 — SANDBOX nest depth | **CLOSED-IN-PHASE-2B.** Both arms active: registration-time `validate_registration` + runtime `AttributionFrame.sandbox_depth` threading wired at R6FP-G1 (PR #62). Adversarial integration test (`sandbox_escape_attempts_denied.rs::sandbox_escape_reentrancy_via_host_fn_denied`) stays `#[ignore]`'d pending the `testing_call_engine_dispatch` host-fn helper carried to [`phase-3-backlog.md`](phase-3-backlog.md) §7.3.A.7. |
+| 7 — SANDBOX output size | **CLOSED-IN-PHASE-2B.** PRIMARY (`CountedSink::write` via host-fn trampoline) + BACKSTOP (`CountedSink::backstop_check` at primitive boundary). Default 1 MiB; `SandboxArgs.outputLimitBytes` overrides per-call. |
+| 8 — cumulative iteration budget (multiplicative through CALL / ITERATE) | **CLOSED-IN-PHASE-2A.** `BudgetTracker` per evaluator step in `crates/benten-eval/src/invariants/budget.rs`; default registration-time bound `DEFAULT_INV_8_BUDGET = 500_000`. The Phase-1 scalar budget (`DEFAULT_ITERATION_BUDGET = 100_000`) remains as a runtime backstop. |
+| 11 — system-zone labels unreachable from user operations | **CLOSED-IN-PHASE-2A; EXTENDED-IN-PHASE-2B.** Three-layer defence: registration-time literal-CID rejection in `benten-eval::invariants::system_zone`, runtime resolved-label probing in `benten-engine::primitive_host`, storage-layer guard `benten-graph::redb_backend::guard_system_zone_node`. Phase 2b G6-A added SUBSCRIBE-pattern validation (`E_INV_11_SYSTEM_ZONE_READ`). |
+| 13 — immutability after registration | **CLOSED-IN-PHASE-2A.** `WriteAuthority` (User / EnginePrivileged / SyncReplica) firing matrix at `crates/benten-engine`; User re-puts of an already-persisted CID fire `E_INV_IMMUTABILITY`; privileged dedup paths return `Ok(cid)` without emitting ChangeEvents (named compromise documented in [`SECURITY-POSTURE.md`](../SECURITY-POSTURE.md)). |
+| 14 — causal attribution on every evaluation | **CLOSED-IN-PHASE-2A.** `evaluator::attribution` runtime threading + `ATTRIBUTION_PROPERTY_KEY` registration check; every executed `TraceStep` carries an `AttributionFrame` naming actor + handler + head-of-chain grant CID. |
 
 ---
 
 ## 4. Security posture follow-ups
 
-### 4.1 Option C (Compromise #2) — evaluator-path READ gating
+### 4.1 Option C (Compromise #2) — evaluator-path READ gating — **CLOSED-IN-PHASE-2A**
 
-Phase 1 closure (5d-J) landed symmetric-`None` + `diagnose_read` at the engine orchestrator public API. `PrimitiveHost::check_read_capability` hook is wired with a permissive default. Phase 2 threads the hook into the READ primitive's execute path so `crud:post:get` dispatched through `Engine::call` honours Option C end-to-end without a separate gate at the public API. See `docs/SECURITY-POSTURE.md` §Compromise #2.
+Threaded into the READ primitive's execute path; `crud:post:get` dispatched through `Engine::call` honours Option C end-to-end. See [`SECURITY-POSTURE.md`](../SECURITY-POSTURE.md) §Compromise #2.
 
-### 4.2 Change-stream subscribe bypasses `check_read`
+### 4.2 Change-stream subscribe bypasses `check_read` — **CARRIED-FORWARD-TO-PHASE-3**
 
-`Engine::subscribe_change_events` fans out every committed `ChangeEvent` without a per-event read-check gate. The Engine instance itself is the security boundary in Phase 1. Phase 3 federation / sync introduces cross-trust-boundary replicas; the subscribe path gains per-subscriber filtering at that point. See `docs/SECURITY-POSTURE.md` §"Change-stream subscription bypasses capability read-checks."
+Phase 2b wired the SUBSCRIBE delivery-time cap-recheck closure to consult the engine's `is_actor_active(&actor_cid)` flag (revoked actors stop receiving events) but per-event read-check gating is bounded by the in-process actor-active set — see [`SECURITY-POSTURE.md`](../SECURITY-POSTURE.md) §Compromise #2 + §"Change-stream subscription bypasses capability read-checks." Per-subscriber cap-shape filtering (granular grant resolution at delivery time) carries to Phase 3 alongside the durable grant-store + UCAN backend lift; tracked at [`phase-3-backlog.md`](phase-3-backlog.md) §3.2.
 
-### 4.3 Compromise #6 — BLAKE3 post-quantum reconsideration
+### 4.3 Compromise #6 — BLAKE3 post-quantum reconsideration — **OPEN-WITH-PHASE-N+-DESTINATION**
 
-Current posture: BLAKE3-256 → 128-bit classical collision resistance, 64-bit under Grover. Revisit if post-quantum transitions become a committed requirement (Phase N+). Options D (dual-hash) and the hybrid boundary-translation approach are in `docs/SECURITY-POSTURE.md` §"Hash algorithm choice."
+Current posture stands: BLAKE3-256 → 128-bit classical collision resistance, 64-bit under Grover. Revisit if post-quantum transitions become a committed requirement. Options D (dual-hash) and the hybrid boundary-translation approach remain in [`SECURITY-POSTURE.md`](../SECURITY-POSTURE.md) §"Hash algorithm choice." Long-tail destination (no specific phase target).
 
 ---
 
 ## 5. IVM deferrals
 
-### 5.1 Generalized Algorithm B
+### 5.1 Generalized Algorithm B — **PARTIAL-WITH-PHASE-3-CARRY**
 
-Phase 1 ships **5 hand-written IVM views** (capability-grant resolution, event-handler dispatch table, content listing, governance inheritance, version-chain CURRENT pointer). The generalized Algorithm B with per-view strategy selection (A/B/C) and user-registered views is Phase 2. See `docs/research/ivm-benchmark/RESULTS.md` for the algorithm choice.
+Phase 2b wave-8h production-registered Algorithm B at `Engine::create_user_view` for the 5 canonical view IDs `AlgorithmBView` supports natively. User-defined view IDs declaring `Strategy::B` continue to fall back to `ContentListingView` silently (bounded — the 5 canonical IDs cover all in-tree user-view patterns). Generalised user-defined Algorithm B handlers + a drift-detector for "declared B but registered ContentListingView" carry to Phase 3 — see [`phase-3-backlog.md`](phase-3-backlog.md) §5.1 + §5.2.
 
-### 5.2 `E_IVM_PATTERN_MISMATCH` firing (spec-to-code audit §5.5)
+### 5.2 `E_IVM_PATTERN_MISMATCH` firing (spec-to-code audit §5.5) — **CLOSED-IN-PHASE-2B**
 
-`ViewError::PatternMismatch` exists and is `.code()`-mapped but no concrete view in `benten-ivm/src/views/*.rs` constructs it. The `r5-g5-mini-ivm-algorithm-b-reviewer` flagged this; the fix was not landed in Phase 1 because the five hand-written views over-answer unmatched queries (a behaviour-visible change that would ship cleanest alongside the Phase 2 generalized view registration).
+The five hand-written views in `crates/benten-ivm/src/views/*.rs` now construct `ViewError::PatternMismatch` (→ `E_IVM_PATTERN_MISMATCH`) on out-of-pattern queries rather than over-answering silently — verified across capability-grant / event-handler-dispatch / content-listing / governance-inheritance / version-current views.
 
-### 5.3 `benten.ivm.view_stale_count` metric wiring
+### 5.3 `benten.ivm.view_stale_count` metric wiring — **CLOSED-IN-PHASE-2A**
 
-`metrics_snapshot()` emits `benten.ivm.view_stale_count: 0.0` as a hard-coded placeholder. The subscriber tally (using the existing `View::is_stale()`) is a <10-line wire-up that was deferred out of Phase 1's test-flakiness budget (tallying during `metrics_snapshot` would need to iterate all view handles, which lives behind a mutex). Drop the key or wire it — cheap either way.
+`metrics_snapshot()` now emits a real `benten.ivm.view_stale_count` value computed via the subscriber tally — see `crates/benten-engine/src/engine_diagnostics.rs::metrics_snapshot` (the Phase-2 wire-up the comment block calls out is in production).
 
-### 5.4 IVM rebuild from event log
+### 5.4 IVM rebuild from event log — **OPEN-WITH-PHASE-3-DESTINATION**
 
-Phase 1 views rebuild only by re-applying every committed `ChangeEvent` from engine startup. Phase 2 adds durable view snapshots so a crash doesn't force a full re-walk.
+Phase 2b views still rebuild only by re-applying committed `ChangeEvent`s from engine startup. Durable view snapshots (so a crash doesn't force a full re-walk) carry to Phase 3 alongside the generalised Algorithm B lift — see [`phase-3-backlog.md`](phase-3-backlog.md) §5.
 
 ---
 
@@ -125,55 +117,55 @@ Phase 1 closed this in commit `9b67fc5`: `Cid::from_bytes` now distinguishes cod
 
 ## 7. Capability / UCAN (Phase 3-adjacent)
 
-### 7.1 Wall-clock + iteration TOCTOU delegation
+### 7.1 Wall-clock + iteration TOCTOU delegation — **CLOSED-IN-PHASE-2A**
 
-`crates/benten-caps/src/policy.rs` has `TODO(phase-2-iterate-boundary-delegation)` and `TODO(phase-2-wallclock-toctou)`. Phase 1 checks capabilities at commit, CALL entry, and every `iterate_batch_boundary` (n=100 default) iterations; Phase 2 threads the engine's wall-clock bound through so long-running iterations also honour time-based capability expiry. Compromise #1 in `docs/SECURITY-POSTURE.md` is the spec source.
+Phase 2a hardened five TOCTOU points (transaction commit, CALL entry, every N iterations of ITERATE, WAIT resume, wall-clock revocation ceiling) with a dual monotonic + HLC clock source. See [`SECURITY-POSTURE.md`](../SECURITY-POSTURE.md) Compromise #1 for the spec.
 
-### 7.2 UCAN backend
+### 7.2 UCAN backend — **CARRIED-FORWARD-TO-PHASE-3**
 
-`benten-caps::UCANBackend` is a stub (`CapError::NotImplemented`). Full UCAN chain validation + delegation ships in Phase 3 `benten-id` alongside Ed25519 / DID / VC.
+`benten-caps::UCANBackend` remains a stub. Full UCAN chain validation + delegation ships in Phase 3 `benten-id` alongside Ed25519 / DID / VC — see [`phase-3-backlog.md`](phase-3-backlog.md) §2.1.
 
-### 7.3 Cross-process WAIT resume metadata persistence (Phase-2b)
+### 7.3 Cross-process WAIT resume metadata persistence — **CARRIED-FORWARD-TO-PHASE-3**
 
-Decision 4 from G5-B-i (captured 2026-04-24): the Phase-2a resume protocol re-checks capabilities against the current-process policy snapshot (`docs/SECURITY-POSTURE.md` Compromise #10). A suspend envelope carried across a process boundary re-checks against whatever policy the fresh process configured — which may include grants the original process never saw or omit grants the original flow relied on. Phase-2b grows the `ExecutionStateEnvelope` with a `cap_snapshot_hash` + enough persisted metadata to let the resume path assert the fresh policy's historical state. Fully captured in `.addl/phase-2b/00-scope-outline.md` §7a; this entry is the forward-pointer so a future R1 agent finds the work item from the backlog.
+Phase 2a's resume protocol re-checks capabilities against the current-process policy snapshot ([`SECURITY-POSTURE.md`](../SECURITY-POSTURE.md) Compromise #10 — closed at Phase 2b for in-process semantics). The cap-snapshot-hash + persisted-policy metadata that lets the resume path assert against historical state across process boundaries did not land in Phase 2b; it carries to Phase 3 alongside the durable grant-store + UCAN backend lift — see [`phase-3-backlog.md`](phase-3-backlog.md) §7.1.4 / §2.2.
 
-### 7.4 Durable grant-store + SUBSCRIBE delivery-time cap-recheck (Phase-2b carry-forward to Phase-3)
+### 7.4 Durable grant-store + SUBSCRIBE delivery-time cap-recheck — **PARTIAL-WITH-PHASE-3-CARRY**
 
-Wave-8c-subscribe-infra (Phase-2b) wired the SUBSCRIBE delivery-time cap-recheck closure to consult the engine's `is_actor_active(&actor_cid)` flag — a structural revoked-actors set the engine maintains in-process (`crates/benten-engine/src/engine_subscribe.rs:286-288`). This satisfies the D5 contract minimum (revoked actors stop receiving events) but is bounded:
+Wave-8c-subscribe-infra (Phase-2b) wired the SUBSCRIBE delivery-time cap-recheck closure to consult the engine's `is_actor_active(&actor_cid)` flag — a structural revoked-actors set the engine maintains in-process. This satisfies the D5 contract minimum (revoked actors stop receiving events) but remains bounded:
 
 - The cap-recheck does NOT consult cap-shape grants (e.g. "actor still has `host:compute:log` grant for this anchor"); it only consults the actor-active flag.
 - Deeper grant-resolution requires the `GrantBackedPolicy` to expose a SUBSCRIBE-shape grant query (i.e. "is grant G still valid for actor A against anchor X at HLC time T?") — not present in Phase-2b.
-- The grant-store itself is in-memory per Phase-2b posture; Phase-3 lifts it to a durable backing store alongside the iroh-fetch path.
+- The grant-store itself is in-memory per Phase-2b posture.
 
-**Phase-3 lift:** when the durable grant-store lands (alongside UCAN backend, `benten-id`, Ed25519/DID/VC), the SUBSCRIBE cap-recheck closure threads the grant-shape query so a partial-revoke (e.g. specific grant revoked but actor still active) cancels the affected subscription path. Pairs naturally with the existing 7.1 wallclock TOCTOU work + 7.2 UCAN backend lift. Source carry-forward in `.addl/phase-2b/wave-8-brief.md` §8d-narrative F6.
+**Phase-3 lift:** when the durable grant-store lands (alongside UCAN backend, `benten-id`, Ed25519/DID/VC), the SUBSCRIBE cap-recheck closure threads the grant-shape query so a partial-revoke (e.g. specific grant revoked but actor still active) cancels the affected subscription path. Pairs with §7.1 wallclock TOCTOU work + §7.2 UCAN backend lift. See [`phase-3-backlog.md`](phase-3-backlog.md) §3.2.
 
 ---
 
 ## 8. DX / tooling
 
-### 8.1 Dev server with hot reload
+### 8.1 Dev server with hot reload — **CLOSED-IN-PHASE-2B**
 
-Phase 1 ships the `npm test` path (mechanically verifiable). Dev-server with hot reload is Phase 2. See `.addl/phase-1/00-implementation-plan.md` §1 and `ENGINE-SPEC.md` Rank 10.
+`packages/engine-devserver` (`@benten/engine-devserver`) shipped wave-8f as the napi-rs-backed `BentenDevServer` TypeScript wrapper that wraps a real `Engine` and exposes `replaceHandler` / hot-reload semantics through `Engine::register_subgraph_replace`. The diagnostic CLI (`tools/benten-dev`) carries the `inspect-state <path>` subcommand for serialized `ExecutionStateEnvelope` introspection.
 
-### 8.2 Cross-doc numeric-claim drift lint
+### 8.2 Cross-doc numeric-claim drift lint — **OPEN-WITH-PHASE-N+-DESTINATION**
 
-Phase-1 audit surfaced that performance targets occasionally drift between summary locations and `ENGINE-SPEC.md` §14.6 (the canonical source). A small CI lint that greps `docs/*.md` for numeric performance claims and compares them against ENGINE-SPEC ranges would close the loop. Low priority — the "verify, don't trust docs" review discipline catches most occurrences.
+Anytime / low-priority. A small CI lint that greps `docs/*.md` for numeric performance claims and compares them against `ENGINE-SPEC.md` §14.6 would close the loop; the "verify, don't trust docs" review discipline catches most occurrences in the meantime. No specific phase target.
 
-### 8.3 Per-item `missing_docs` sweep
+### 8.3 Per-item `missing_docs` sweep — **OPEN-WITH-PHASE-3-DESTINATION**
 
-`benten-eval` has ~120 public items with a `warn(missing_docs) + allow(missing_docs, reason="...Phase-2...")` pattern at the crate root. Crate-root + module-root docstrings landed in Phase 1 R6; per-item sweep is deferred to Phase 2 when the public surface is re-audited post-evaluator-completion. Target: drop the `allow(missing_docs)` escape hatch entirely in Phase 2.
+The `benten-eval` `warn(missing_docs) + allow(missing_docs)` escape hatch did not get retired in Phase 2; per-item sweep across the post-Phase-2b public surface (~120+ items) carries to Phase 3 — a concrete pre-public-doc-rewrite task pairing with the DSL-SPECIFICATION public rewrite scope. Target: drop the `allow(missing_docs)` entirely.
 
 ---
 
 ## 9. Performance
 
-### 9.1 macOS APFS fsync floor
+### 9.1 macOS APFS fsync floor — **OPEN-WITH-PHASE-3-DESTINATION**
 
-`ENGINE-SPEC.md` §14.6 documents the ~4–13 ms Immediate-durability fsync floor on macOS APFS. Phase 1's `crud_post_create_dispatch` criterion bench is NOT CI-gated because of this. Phase 2 considers a `DurabilityMode::Group` default for the CRUD fast-path so the 150–300 µs target is reachable on dev hardware.
+`DurabilityMode::Group` exists in `benten-graph::backend::DurabilityMode` and is exercised in test-only diagnostic helpers, but the CRUD fast-path default has not been flipped to `Group`. The 150–300 µs target on dev hardware remains gated by the macOS APFS fsync floor; carries to Phase 3 alongside benchmark CI tightening.
 
-### 9.2 Subgraph AST cache
+### 9.2 Subgraph AST cache — **PARTIAL-WITH-PHASE-3-CARRY**
 
-`Engine::call` still re-parses the subgraph per-call. Phase 2 completes the AST-cache wire-up referenced in `engine.rs:449`.
+The AST-cache template path lands at `Engine::call` (cache stores the static shape of the subgraph for a registered handler); per-call parsing of the subgraph itself remains. Full wire-up carries to Phase 3 — the `engine.rs` comment block at the dispatch site notes "Phase-2 completes the AST-cache wire-up" still applies.
 
 ---
 
@@ -183,15 +175,15 @@ Source: `.addl/phase-2a/ci-maturity-audit-2026-04-22.md` + the decisions compani
 
 **Phase 2a CI items** (CodeQL, branch-protection-as-code, SHA-pinning) land as the Phase 2a §3.1 CI hardening pass — see `.addl/phase-2a/00-implementation-plan.md` §3.1. The 5 publication-coupled items (cargo-semver-checks, napi prebuilt publish, release-plz, SLSA attestation, SBOM) were rescoped on 2026-04-25 into §3.2 "Publish-readiness pass" and deferred to whichever phase actually publishes (provisional: Phase 8/9+ OSS launch) — see `.addl/phase-2a/00-implementation-plan.md` §3.2.
 
-### 10.1 Phase 2b CI additions (land with 2b pre-R1 or implementation)
+### 10.1 Phase 2b CI additions — **PARTIAL: WORKFLOWS LAND, BASELINES CARRY TO PHASE 3**
 
-| Item | When within 2b |
+| Item | Closure status |
 |---|---|
-| `cargo-public-api` tracking | Early 2b (pairs with cargo-semver-checks for full API-surface visibility) |
-| `cargo-vet` trust metadata | 2b entry — SANDBOX brings wasmtime's ~60 transitive deps into scope |
-| `wasm-conformance.yml` — malicious/boundary handler fixture suite | 2b entry — SANDBOX is the attack surface, CI must validate containment |
-| E2E tests — headless browser vitest against scaffolded handlers | 2b mid — real DX-level test |
-| Weekly scheduled security sweep expansion (adds `cargo-vet check` to existing supply-chain.yml Monday cron) | Once cargo-vet is active |
+| `cargo-public-api` tracking | Workflow shipped; baseline file commit carries to Phase 3 — see [`phase-3-backlog.md`](phase-3-backlog.md) §7.3.A.9. |
+| `cargo-vet` trust metadata | Workflow shipped; baseline data commit carries to Phase 3 — see [`phase-3-backlog.md`](phase-3-backlog.md) §7.3.A.9. |
+| `wasm-conformance.yml` — malicious/boundary handler fixture suite | **CLOSED-IN-PHASE-2B.** Adversarial fixture suite shipped alongside SANDBOX runtime; ESC matrix (16 attempted-escape vectors) catalogued in [`SECURITY-POSTURE.md`](../SECURITY-POSTURE.md) Compromise #4. |
+| E2E tests — headless browser vitest against scaffolded handlers | Browser-bundle artifact baseline carries to Phase 3 — see [`phase-3-backlog.md`](phase-3-backlog.md) §7.3.A.9. |
+| Weekly scheduled security sweep expansion (`cargo-vet check` in supply-chain.yml Monday cron) | Carries with `cargo-vet` baseline above. |
 
 ### 10.2 Phase 3 CI additions
 
@@ -221,9 +213,9 @@ Source: `.addl/phase-2a/ci-maturity-audit-2026-04-22.md` + the decisions compani
 
 ---
 
-## 11. In-code `TODO(phase-2-*)` markers
+## 11. In-code `TODO(phase-2-*)` markers — **PARTIAL: STRUCTURAL ITEMS CLOSED, RESIDUALS REMAIN**
 
-At Phase 1 close, the codebase contains ~180 `Phase 2` / `TODO(phase-2-*)` markers across crate source. This backlog doc consolidates the structural items; finer-grained markers stay in-code for the agent that touches that area. Grep for them as needed:
+At Phase 2b close, ~63 `TODO(phase-2-*)` and ~40 `phase-2-*` markers remain across the codebase. The structural items (arch-1 dep break, primitive executors, deferred invariants, IVM pattern-mismatch firing, devserver hot reload, view_stale_count metric) are CLOSED per the sections above. The residuals are concrete implementation hints (uhlc deeper integration, host-error DAG-CBOR envelope versioning, AST-cache wire-up, anchor-store consolidation, etc.) that pair with their respective Phase-3 entries in [`phase-3-backlog.md`](phase-3-backlog.md). Re-grep at any time:
 
 ```bash
 grep -rn "TODO(phase-2\|phase-2-" crates/ bindings/ packages/ tools/
@@ -233,11 +225,6 @@ grep -rn "TODO(phase-2\|phase-2-" crates/ bindings/ packages/ tools/
 
 ## Revival / escalation
 
-When Phase 2 kicks off:
+Phase 2 closed. Phase 2a closed at tag `phase-2a-close` (cb49554, 2026-04-25); Phase 2b closed at tag `phase-2b-close` (3d0f018, 2026-05-03). Items not closed by Phase 2 either rolled into [`phase-3-backlog.md`](phase-3-backlog.md) (next-phase) or are catalogued here as OPEN-WITH-PHASE-N+-DESTINATION. The forward-looking surface is now the phase-3 backlog; the Phase-3 plan-doc opening checklist lives at [`phase-3-backlog.md`](phase-3-backlog.md) §8.
 
-1. This doc seeds the Phase 2 pre-R1 implementation plan.
-2. Items with "Trigger for earlier landing" notes get evaluated against Phase 2's primitive-landing order before the plan locks.
-3. Items that turned out to be non-issues get deleted (not silently left to rot).
-4. New deferrals surfaced during Phase 2 get appended to this file under `## 11. Phase 2 working residuals` (or whatever phase is live) rather than creating a new deferral file per phase.
-
-See `docs/DEVELOPMENT-METHODOLOGY.md` Pattern 1 (After every review, fix or defer — never "noted").
+See `docs/DEVELOPMENT-METHODOLOGY.md` Pattern 1 (After every review, fix or defer — never "noted") + the HARD RULE in CLAUDE.md (default disposition for any finding is FIX-NOW; only OUT-OF-SCOPE / BELONGS-NAMED-NOW / DISAGREE-WITH-EXPLANATION are valid non-fix-now dispositions).
