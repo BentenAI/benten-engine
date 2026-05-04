@@ -6,28 +6,31 @@ For plain-English orientation, start with [`HOW-IT-WORKS.md`](HOW-IT-WORKS.md). 
 
 ---
 
-## Seven crates
+## Eight crates
 
 The Rust workspace:
 
 ```
 crates/
-  benten-errors/    # Stable ErrorCode discriminants. Zero Benten-crate deps.
-                    # Root of the workspace dependency graph.
-  benten-core/      # Node, Edge, Value. Content-addressed hashing
-                    # (BLAKE3 + DAG-CBOR + CIDv1). Version-chain primitives.
-  benten-graph/     # Storage (KVBackend trait + redb impl), indexes, MVCC
-                    # via redb transactions.
-  benten-ivm/       # Incremental View Maintenance. Subscribes to graph
-                    # changes; updates materialized views. Not known to
-                    # the evaluator.
-  benten-caps/      # Capability grants as Nodes. Pre-write hook trait.
-                    # NoAuthBackend default; GrantBackedPolicy ships alongside.
-  benten-eval/      # 12 operation primitives. Iterative evaluator (explicit
-                    # stack, not recursive). Structural validation (14
-                    # invariants). Transaction primitive.
-  benten-engine/    # Composes the above into a public API. Wires the
-                    # capability hook, storage backend, IVM subscriber.
+  benten-errors/        # Stable ErrorCode discriminants. Zero Benten-crate deps.
+                        # Root of the workspace dependency graph.
+  benten-core/          # Node, Edge, Value. Content-addressed hashing
+                        # (BLAKE3 + DAG-CBOR + CIDv1). Version-chain primitives.
+  benten-graph/         # Storage (KVBackend trait + redb impl), indexes, MVCC
+                        # via redb transactions.
+  benten-ivm/           # Incremental View Maintenance. Subscribes to graph
+                        # changes; updates materialized views. Not known to
+                        # the evaluator.
+  benten-caps/          # Capability grants as Nodes. Pre-write hook trait.
+                        # NoAuthBackend default; GrantBackedPolicy ships alongside.
+  benten-eval/          # 12 operation primitives. Iterative evaluator (explicit
+                        # stack, not recursive). Structural validation (14
+                        # invariants). Transaction primitive.
+  benten-dsl-compiler/  # Compiles the textual handler-DSL grammar into
+                        # SubgraphSpec. Phase-2b G12-B addition; routes from
+                        # devserver into Engine.register_subgraph.
+  benten-engine/        # Composes the above into a public API. Wires the
+                        # capability hook, storage backend, IVM subscriber.
 
 bindings/
   napi/             # Node.js bindings via napi-rs v3. Same codebase compiles
@@ -45,7 +48,7 @@ Each crate has one responsibility. A reader can use `benten-engine` with `NoAuth
 
 ## Bindings and tooling
 
-Beyond the seven Rust crates, the workspace ships two ancillary trees that exist
+Beyond the eight Rust crates, the workspace ships two ancillary trees that exist
 to make the engine reachable from JavaScript and to keep developer onboarding
 ten minutes from `npx` to a green test:
 

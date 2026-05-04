@@ -78,7 +78,7 @@ Phase 1 shipped (2026-04-21). Phase 2a is closing — implementation complete; q
 
 ```
 benten-engine/
-├── crates/          # 7-crate Rust workspace (see ARCHITECTURE)
+├── crates/          # 8-crate Rust workspace (see ARCHITECTURE)
 ├── bindings/napi/   # Node.js bindings (native + WASM) via napi-rs v3
 ├── packages/engine/ # TypeScript DSL wrapper (@benten/engine)
 ├── tools/           # create-benten-app scaffolder + dev tooling
@@ -88,9 +88,9 @@ benten-engine/
 
 ## Tech stack
 
-Rust 2024 edition, MSRV 1.89, stable 1.94+.
+Rust 2024 edition, MSRV 1.95.
 
-Core: `blake3`, `serde_ipld_dagcbor`, `multihash`, `redb` 4, `papaya`, `mimalloc`, `thiserror` 2, `tracing`, `criterion` 0.8, `proptest`, `wasmtime` (Phase 2b), `napi-rs` 3, `cargo-nextest`.
+Core: `blake3`, `serde_ipld_dagcbor`, `multihash`, `redb` 4, `papaya`, `mimalloc`, `thiserror` 2, `tracing`, `criterion` 0.8, `proptest`, `wasmtime` 43.0.2, `napi-rs` 3, `cargo-nextest`.
 
 Phase 3+: `iroh`, `Loro`, `ed25519-dalek`, `ssi`, `uhlc`.
 

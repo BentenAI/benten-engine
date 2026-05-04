@@ -1,10 +1,15 @@
 # Phase 2b G7-A — SANDBOX host-function declarations.
 #
-# Source-of-truth dev-time TOML for the codegen pipeline that emits
-# `crates/benten-eval/src/sandbox/host_fns/generated.rs` (build.rs).
+# Source-of-truth dev-time TOML. Hand-mirrored to
+# `crates/benten-eval/src/sandbox/host_fns.rs` (a single .rs, NOT codegen
+# output) and kept in lockstep by drift detectors at
+# `crates/benten-engine/tests/host_functions_*.rs`. The build.rs codegen
+# pipeline is aspirational (deferred per `#[ignore]`'d tests at
+# `crates/benten-eval/tests/sandbox_capability_intersection_at_init.rs`
+# + `sandbox_named_manifest.rs`).
 # Per D9-RESOLVED, the canonical-bytes encoding for cross-CID stability
-# is DAG-CBOR; this file is the dev-ergonomic source that compiles to
-# canonical bytes.
+# is DAG-CBOR; this file is the dev-ergonomic source that ENCODES INTO
+# canonical bytes via the manifest's CBOR serialization.
 #
 # Pin sources:
 #   D1-RESOLVED — initial host-fn surface (time / log / kv:read; random

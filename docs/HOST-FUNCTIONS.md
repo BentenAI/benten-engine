@@ -257,8 +257,8 @@ Phase-2b modules.
 
 | Artifact | Path | Role |
 |----------|------|------|
-| Codegen TOML | [`host-functions.toml`](../host-functions.toml) | Authoritative — drives `build.rs` codegen + drift detectors |
-| Generated host shim | `crates/benten-eval/src/sandbox/host_fns/generated.rs` | Codegen target (do not edit) |
+| Source-of-truth TOML | [`host-functions.toml`](../host-functions.toml) | Authoritative — drives drift detectors. Codegen `build.rs` pipeline is aspirational (deferred to Phase-3+ per the `#[ignore]`'d tests at `crates/benten-eval/tests/sandbox_capability_intersection_at_init.rs:119` + `sandbox_named_manifest.rs:5`); current state is hand-mirrored. |
+| Hand-mirrored host shim | `crates/benten-eval/src/sandbox/host_fns.rs` | The actual file — a single `.rs` (not codegen output), kept in lockstep with the TOML by drift detectors |
 | Operator doc | `docs/HOST-FUNCTIONS.md` (this file) | Surface contract for handler authors |
 | TOML→MD drift detector | `crates/benten-engine/tests/host_functions_doc_drift_against_toml.rs` | Asserts every TOML entry has a doc section |
 | MD→TOML drift detector | `crates/benten-engine/tests/host_functions_md_drift_against_toml.rs` | Asserts no fictional doc entries |
