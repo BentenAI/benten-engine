@@ -1,0 +1,136 @@
+//! R3-C RED-PHASE pins for atrium revocation-order at reconnect
+//! (G16-B + G16-C wave-6b; per r2-test-landscape §2.4 G16-B + plan
+//! §3 G16-B row + device-mesh exploration brief-edits + net-blocker-3
+//! + crypto-major-6).
+//!
+//! ## Pin sources
+//!
+//! - r2-test-landscape §2.4 G16-B rows
+//!   `atrium_revoke_propagates_before_data_to_offline_then_reconnect_peer` +
+//!   `atrium_revocation_message_kind_ordered_before_data_at_handshake` +
+//!   `atrium_device_did_revocation_propagates_before_data_to_offline_then_reconnect_peer`.
+//! - plan §3 G16-B row line "revocation-order pin per device-mesh
+//!   exploration brief-edit 2026-05-04 — when peer-A revokes peer-B's
+//!   grant while B is offline, then both come back online, B MUST
+//!   receive the revocation event BEFORE any subsequent data writes
+//!   A makes; otherwise B continues acting under stale grant".
+//! - `net-blocker-3` BLOCKER (revocation-message-kind ordered before
+//!   data at handshake + MST diff drain).
+//! - `crypto-major-6` (device-DID revocation propagation).
+//! - `.addl/phase-3/exploration-device-mesh.md` brief-edits 2026-05-04.
+//!
+//! ## Revocation-order narrative
+//!
+//! When peer-A revokes peer-B's grant while B is offline, then both
+//! come back online, B MUST receive the revocation event BEFORE any
+//! subsequent data writes A makes. Otherwise B continues acting under
+//! a stale grant — a security failure shape per net-blocker-3 +
+//! crypto-major-6.
+//!
+//! ## RED-PHASE discipline
+//!
+//! `#[ignore]`'d with rationale `"RED-PHASE: G16-B + G16-C wave-6b wire revocation-order"`.
+
+#![allow(clippy::unwrap_used)]
+
+#[test]
+#[ignore = "RED-PHASE: G16-B + G16-C — device-mesh + net-blocker-3 — revocation propagates before data to offline-then-reconnect peer"]
+fn atrium_revoke_propagates_before_data_to_offline_then_reconnect_peer() {
+    // device-mesh exploration brief-edit 2026-05-04 + net-blocker-3
+    // BLOCKER pin. G16-B implementer wires this:
+    //
+    //   let mut peer_a = test_peer(peer_a_did);
+    //   let mut peer_b = test_peer(peer_b_did);
+    //   peer_a.atrium_join(shared_atrium()).await.unwrap();
+    //   peer_b.atrium_join(shared_atrium()).await.unwrap();
+    //
+    //   // peer_a grants peer_b read on /zone/secrets:
+    //   peer_a.atrium_grant(peer_b_did, ucan_grant("/zone/secrets", "read")).await.unwrap();
+    //   wait_for_sync(&[&peer_a, &peer_b]).await;
+    //
+    //   // peer_b goes offline:
+    //   peer_b.disconnect();
+    //
+    //   // peer_a revokes peer_b's grant + writes new data:
+    //   peer_a.atrium_revoke(peer_b_did, "/zone/secrets/*").await.unwrap();
+    //   peer_a.write_node_in_zone("/zone/secrets", make_secret("s1")).await.unwrap();
+    //   peer_a.write_node_in_zone("/zone/secrets", make_secret("s2")).await.unwrap();
+    //
+    //   // peer_b reconnects + drains pending atrium events:
+    //   peer_b.reconnect().await.unwrap();
+    //   peer_b.atrium_drain_pending().await.unwrap();
+    //
+    //   // BEFORE ANY data write reaches peer_b, the revocation arrived:
+    //   let drain_log = peer_b.drain_log();
+    //   let revoke_idx = drain_log.iter().position(|e| matches!(e.kind(), MessageKind::Revocation)).unwrap();
+    //   let first_data_idx = drain_log.iter().position(|e| matches!(e.kind(), MessageKind::Data)).unwrap_or(usize::MAX);
+    //   assert!(revoke_idx < first_data_idx,
+    //       "revocation MUST be drained before any subsequent data write per net-blocker-3");
+    //
+    //   // peer_b's effective cap-set no longer includes /zone/secrets:
+    //   let effective_caps = peer_b.atrium_effective_cap_set();
+    //   assert!(!effective_caps.includes_path("/zone/secrets/*"));
+    //
+    // OBSERVABLE consequence: revocation always arrives ahead of
+    // subsequent data writes; peer_b never observes data under a
+    // stale grant. Defends against the net-blocker-3 BLOCKER attack
+    // class.
+    unimplemented!("G16-B wires revocation-before-data ordering at offline-reconnect");
+}
+
+#[test]
+#[ignore = "RED-PHASE: G16-B wave-6b — net-blocker-3 — revocation message-kind ordered before data at handshake"]
+fn atrium_revocation_message_kind_ordered_before_data_at_handshake() {
+    // net-blocker-3 BLOCKER pin. The handshake protocol explicitly
+    // names `Revocation` as a typed message-kind drained BEFORE
+    // `Data` message-kinds at peer reconnect.
+    //
+    //   use benten_sync::handshake::MessageKind;
+    //   use benten_sync::handshake::HandshakeStateMachine;
+    //
+    //   let mut hs = HandshakeStateMachine::new(peer_b_handle);
+    //   // Inject a queue with mixed message kinds:
+    //   hs.enqueue_pending_message(MessageKind::Data, data_msg_1);
+    //   hs.enqueue_pending_message(MessageKind::Revocation, revoke_msg);
+    //   hs.enqueue_pending_message(MessageKind::Data, data_msg_2);
+    //
+    //   // Drain order is determined by message kind, not arrival order:
+    //   let drain: Vec<_> = hs.drain_pending().collect();
+    //   assert_eq!(drain[0].kind(), MessageKind::Revocation);
+    //   // Data messages come after:
+    //   assert!(drain[1..].iter().all(|m| m.kind() == MessageKind::Data));
+    //
+    // OBSERVABLE consequence: drain order guarantees revocation is
+    // processed first; defends against arrival-order ambiguity.
+    unimplemented!("G16-B wires MessageKind::Revocation drain-priority assertion");
+}
+
+#[test]
+#[ignore = "RED-PHASE: G16-B wave-6b — crypto-major-6 — device-DID revocation propagates before data"]
+fn atrium_device_did_revocation_propagates_before_data_to_offline_then_reconnect_peer() {
+    // crypto-major-6 pin. Companion to the peer-DID revocation pin
+    // above, but at the DEVICE-DID grain. When peer-A revokes a
+    // SPECIFIC DEVICE-DID under peer-B's account (e.g., B's lost
+    // phone), the device-DID revocation propagates before subsequent
+    // data writes reach the affected device.
+    //
+    //   peer_a.atrium_revoke_device_did(peer_b_account, peer_b_lost_phone_did).await.unwrap();
+    //   peer_a.write_node_in_zone("/zone/sensitive", ...).await.unwrap();
+    //
+    //   // peer_b's other devices reconnect; the revoked device's
+    //   // device-DID is in the revocation set BEFORE any data write
+    //   // reaches it (or any of B's other devices that share the
+    //   // same Atrium membership).
+    //   peer_b_phone.reconnect().await.unwrap();
+    //   let drain_log = peer_b_phone.drain_log();
+    //   let revoke_idx = drain_log.iter().position(|e| {
+    //       matches!(e.kind(), MessageKind::Revocation)
+    //           && e.target_device_did() == Some(peer_b_lost_phone_did)
+    //   }).unwrap();
+    //   let first_data_idx = drain_log.iter().position(|e| matches!(e.kind(), MessageKind::Data)).unwrap_or(usize::MAX);
+    //   assert!(revoke_idx < first_data_idx);
+    //
+    // OBSERVABLE consequence: device-DID revocation is observable
+    // at the device-grain across peer reconnects.
+    unimplemented!("G16-B wires device-DID revocation-before-data ordering");
+}

@@ -50,3 +50,48 @@ fn security_posture_compromise_12_marked_closed() {
         "G13-E wires SECURITY-POSTURE.md grep assertion that Compromise #12 is marked CLOSED"
     );
 }
+
+#[test]
+#[ignore = "RED-PHASE: G15-A wave-5a closes Compromise #11 (per-row read-gate at materialization composes G15-A + G14-D)"]
+fn security_posture_compromise_11_materialization_gate_landed_at_g15_a() {
+    // R3-C ownership per r2-test-landscape §13 ambiguous-ownership
+    // pre-emption + ivm-minor-7 (positive claim, not pending).
+    //
+    // G15-A implementer retenses `docs/SECURITY-POSTURE.md` so
+    // Compromise #11 (IVM views coarse-grained read-gate) is marked
+    // CLOSED-IN-PHASE-3-G15-A (or equivalent post-G15-A tense, with
+    // the closure narrative referencing the composition: G15-A
+    // materialization-time gate + G14-D delivery-time gate).
+    //
+    // Concrete shape:
+    //   let posture = std::fs::read_to_string(
+    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //           .join("..").join("..").join("docs").join("SECURITY-POSTURE.md")
+    //   ).unwrap();
+    //   let section = extract_compromise_section(&posture, 11);
+    //   assert!(
+    //       section.to_lowercase().contains("closed"),
+    //       "SECURITY-POSTURE.md Compromise #11 must be marked CLOSED at G15-A per ivm-minor-7"
+    //   );
+    //   assert!(
+    //       section.contains("G15-A") || section.contains("Phase 3"),
+    //       "Compromise #11 closure must cite G15-A (or Phase 3) for traceability"
+    //   );
+    //   // The narrative must reference BOTH layers per plan §1
+    //   // deliverable 6 (G15-A materialization + G14-D delivery):
+    //   assert!(
+    //       (section.contains("materialization") || section.contains("per-row")) &&
+    //           (section.contains("G14-D") || section.contains("delivery") || section.contains("subscriber filtering")),
+    //       "Compromise #11 closure narrative must describe the composed two-layer gate"
+    //   );
+    //
+    // OBSERVABLE consequence: the SECURITY-POSTURE.md compromise
+    // table accurately reflects that #11 is closed by Phase 3, and
+    // the narrative names both the G15-A materialization layer and
+    // the G14-D delivery layer. Defends against the "code change
+    // landed, doc never updated" failure shape (cap-major-2 / pim-1
+    // doc-coupling).
+    unimplemented!(
+        "G15-A wires SECURITY-POSTURE.md grep assertion that Compromise #11 is marked CLOSED with the composed two-layer gate narrative"
+    );
+}

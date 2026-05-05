@@ -58,3 +58,18 @@ harness = false
 # `benches/algorithm_b_thresholds.toml`.
 name = "algorithm_b_vs_handwritten"
 harness = false
+
+[[bench]]
+# Phase-3 G15-A wave-5a: canonical-view fast-path preservation gate
+# under the GENERALIZED Algorithm B kernel. Ivm-disagree-1 acknowledged
+# correction: the 5 hand-written views are inner kernels of
+# Strategy::B (NOT Strategy::A baselines); G15-A's ratio gate measures
+# the canonical-view fast-path against a Strategy::B baseline on the
+# canonical corpus. R3-C RED-PHASE: bench body is a no-op skeleton;
+# G15-A implementer fills with the real comparison + un-ignores the
+# companion test
+# `crates/benten-engine/tests/...algorithm_b_canonical_view_fast_path_preserved_within_20pct_of_strategy_b_baseline`
+# (test placed under benten-ivm/tests/algorithm_b_general.rs for
+# locality at R3-C landing).
+name = "algorithm_b_canonical"
+harness = false

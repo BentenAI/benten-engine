@@ -1,0 +1,41 @@
+[package]
+name = "benten-sync"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Phase-3 G16-A canary stub — Atrium P2P sync (iroh transport + Loro CRDT + MST diff + DID handshake). NATIVE-ONLY per CLAUDE.md baked-in #17 (excluded from wasm32 targets). Real impls land at G16-A/B/C/D (wave 6 + wave 6b)."
+
+[lints]
+workspace = true
+
+[lib]
+# Disable the implicit libtest bench harness. Mirrors crates/benten-core/Cargo.toml.
+bench = false
+
+# G16-A wave-6 canary fills these dependencies (`iroh`, `iroh-net`, `tokio`,
+# `benten-graph`, `benten-id`, `uhlc`); G16-B wave-6b adds `loro` (Loro CRDT);
+# G16-C adds the MST primitives crate(s) chosen at implementation time. Stub
+# keeps the dep list empty so the crate compiles as an empty rlib at R3-C
+# landing time. Per CLAUDE.md baked-in #17 + plan §3 G16-A row, this crate
+# is NATIVE-ONLY: G16-A implementer adds `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`
+# cfg-gating to `iroh` + `loro` so `benten-sync` does NOT compile for
+# wasm32-unknown-unknown. The architectural pin
+# `tests/wasm32_excluded.rs::benten_sync_does_not_compile_for_wasm32_unknown_unknown_per_thin_client_commitment`
+# enforces that posture.
+#
+# arch-r1-11 + D-PHASE-3-14 architectural constraint: `benten-sync` MUST NOT
+# depend on `benten-engine` or `benten-eval`. The dependency direction is
+# engine → sync (engine consumes Atrium surface from sync), never the
+# reverse. Pinned by `tests/dependency_edges.rs`.
+[dependencies]
+
+[dev-dependencies]
+# Proptest carries the 10 000-case property suites:
+#   - `prop_loro_concurrent_writes_converge_via_hlc_ordering` (G16-B)
+#   - `prop_mst_diff_correctness_under_concurrent_writes` (G16-C)
+# All proptest blocks stay `#[ignore]`'d at R3 RED-phase; G16-B / G16-C
+# implementers un-ignore once the real impls land.
+proptest = { workspace = true }
