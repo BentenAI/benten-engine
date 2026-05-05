@@ -223,7 +223,7 @@ pub fn testing_make_manifest_with_caps(
 /// MUST agree with the CID `Engine::install_module` computes
 /// internally — without that property, the helper would be a lying
 /// oracle and the install-time pin would be untestable. Pinned by
-/// `tests/module_install.rs::install_module_compute_cid_helper_round_trips`.
+/// `crates/benten-engine/tests/module_install.rs::install_module_compute_cid_helper_round_trips`.
 ///
 /// # Panics
 ///

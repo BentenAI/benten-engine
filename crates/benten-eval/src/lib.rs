@@ -444,7 +444,7 @@ pub enum InvariantViolation {
     IterateBudget,
     /// Aggregate catch-all for Invariant 12 — fires when two or more
     /// invariants are violated simultaneously. See
-    /// `tests/invariants_9_10_12.rs::registration_catch_all_populates_violated_list`.
+    /// `crates/benten-eval/tests/invariants_9_10_12.rs::registration_catch_all_populates_violated_list`.
     Registration,
     /// Invariant 14 (G5-B-ii): a primitive-type in the subgraph did not
     /// declare whether it consumes an `AttributionFrame`. Fires at

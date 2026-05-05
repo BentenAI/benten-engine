@@ -388,8 +388,9 @@ pub enum TraceStep {
         /// (sec-r6r1-01 landed the eval-side `run_with_trace` carry that
         /// populates `AttributionFrame` through the engine + napi wire);
         /// `Engine::trace` emits `Some(...)` for every `Step` variant on
-        /// every primitive row. The TS regression
-        /// `packages/engine/src/trace.test.ts::trace_step_attribution_field_required_on_every_variant`
+        /// every primitive row. The TS regression at
+        /// `packages/engine/src/trace.test.ts:154` (the
+        /// `it("trace_step_attribution_field_required_on_every_variant", ...)` row)
         /// asserts truthy attribution on every primitive step. The
         /// `Option` wrapper is retained for forward-compatibility with
         /// non-primitive synthetic-step rows (see `outcome.rs` boundary /
