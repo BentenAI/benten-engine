@@ -1,0 +1,26 @@
+[package]
+name = "cite-drift-detector"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Phase-3 G13-pre-A: cite-drift detector. Walks docs/ + README.md (and `.addl/` when present locally) extracting `path/to/file.rs:NN` and `path::symbol` cites; validates each against the actual file at HEAD. Bundles cross-doc numeric-claim drift lint per phase-2-backlog §8.2."
+publish = false
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+bench = false
+
+[[bin]]
+name = "cite-drift-detector"
+path = "src/main.rs"
+
+[dependencies]
+
+[dev-dependencies]
+tempfile = { workspace = true }

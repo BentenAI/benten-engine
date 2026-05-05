@@ -13,6 +13,7 @@ members = [
     "bindings/napi",          # napi-rs v3 bindings (native + WASM)
     "tests/doc_completeness", # Phase-2a R3 qa-expert — docs-vs-code audit tests (local only until R5 G11-A)
     "tools/benten-dev",       # Phase-2a G11-A dev-server stub (hot-reload, inspect-state) — local only until R5 G11-A
+    "tools/cite-drift-detector", # Phase-3 G13-pre-A: cite-drift detector (file:line + path::symbol + numeric-claim drift lint, closes phase-2-backlog §8.2). Workflow: .github/workflows/cite-drift.yml (non-blocking PR comment per D-PHASE-3-10).
 ]
 
 [workspace.package]

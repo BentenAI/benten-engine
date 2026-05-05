@@ -1,0 +1,137 @@
+name: Cite-drift detector (Phase-3 G13-pre-A)
+
+# Walks every doc + source file under the repo extracting `file:line`
+# and `path::symbol` cites + cross-doc numeric-claim phrasings; validates
+# each against the actual file at HEAD. Closes
+# `docs/future/phase-2-backlog.md` §8.2 (cross-doc numeric-claim drift
+# lint) by reusing the same parser/validator.
+#
+# **Non-blocking comment-mode initially** per Phase-3 implementation
+# plan D-PHASE-3-10. The job DOES exit non-zero when findings are
+# present (so the run is visibly RED in the checks panel and PR
+# authors notice), but the workflow is NOT in branch-protection's
+# required-checks list yet — promoting it is its own decision per
+# D-PHASE-3-10. Until then it serves as a non-blocking PR-comment seam.
+#
+# Cross-refs:
+#   - tools/cite-drift-detector/src/lib.rs (the detector)
+#   - .addl/phase-3/00-implementation-plan.md G13-pre-A (wave-1pre row)
+#   - .addl/phase-2b/dispatch-conventions.md §3.5b HARDENED point 4
+#     (high-churn surface symbol-cite enforcement)
+#   - docs/future/phase-2-backlog.md §8.2 (numeric-claim drift lint)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: cite-drift-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  cite-drift:
+    name: file:line + path::symbol + numeric-claim drift detector
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Non-blocking on first deployment — the job runs and posts findings
+    # but failure does not block merge. Promotion-to-required is
+    # D-PHASE-3-10. The `continue-on-error: true` keeps the job's
+    # red-status visible without gating the PR.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          # Fetch full history so the report can resolve cite locations
+          # against the correct base. Shallow clone is fine for the lint
+          # itself (it operates on the working tree at HEAD), but a
+          # deeper clone helps when consumer scripts diff against base.
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      - name: Cache cargo build artifacts
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-cite-drift-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-cite-drift-
+
+      - name: Build the detector (scoped — no workspace cargo)
+        # Per dispatch-conventions §3.3: scoped per-package build only.
+        run: cargo build -p cite-drift-detector --release
+
+      - name: Run the detector against the workspace tree
+        # The binary writes findings to stdout; we capture both for the
+        # job log AND for the PR comment in the next step. Exit code 0
+        # = clean, 1 = findings, 2 = arg error.
+        id: run
+        # `set +e` so we capture exit code without aborting the step;
+        # the workflow itself is `continue-on-error: true` so a non-zero
+        # code surfaces as red without blocking merge.
+        run: |
+          set +e
+          ./target/release/cite-drift-detector . --markdown > cite-drift-report.md
+          echo "EXIT_CODE=$?" >> "$GITHUB_OUTPUT"
+          set -e
+          echo "----- cite-drift report -----"
+          cat cite-drift-report.md
+          echo "-----------------------------"
+
+      - name: Upload report as artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: cite-drift-report
+          path: cite-drift-report.md
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Post / update PR comment with findings
+        # Only on pull_request events; skipped on push-to-main runs.
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('cite-drift-report.md', 'utf8');
+            const exitCode = '${{ steps.run.outputs.EXIT_CODE }}';
+            const marker = '<!-- cite-drift-detector-comment-marker -->';
+            const body =
+              `${marker}\n` +
+              `<!-- exit-code=${exitCode} -->\n` +
+              `### Cite-drift detector (Phase-3 G13-pre-A)\n\n` +
+              (exitCode === '0'
+                ? `:white_check_mark: No cite or numeric-claim drift detected.\n`
+                : `:warning: Cite or numeric-claim drift detected ` +
+                  `(non-blocking on first deployment per D-PHASE-3-10).\n\n` +
+                  report);
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner, repo, issue_number, per_page: 100,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: existing.id, body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number, body,
+              });
+            }
