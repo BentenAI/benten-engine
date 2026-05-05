@@ -42,6 +42,17 @@ publish = false
 # - `thin_client_protocol.rs` — R3-E thin-client wire-protocol pins per
 #   D-PHASE-3-N + CLAUDE.md baked-in #17 (fetch / POST + device-DID auth /
 #   SSE / F6 filtering at full-peer edge / exit-criterion 19 e2e).
+#
+# Phase-3 R3-C additions (G15 IVM + G16 Atriums):
+#
+# - `doc_drift_invariant_coverage.rs` (R3-C) — pins
+#   INVARIANT-COVERAGE.md retense post-G15-A (Algorithm B
+#   generalization drops the canonical-only fallback note).
+#
+# - `doc_drift_security_posture.rs` (R3-C) — pins SECURITY-POSTURE.md
+#   forward-pointer resolution post-G15-B (drift-detector landing
+#   resolves the Phase-2b "drift-detector lands at Phase 3 G15-B"
+#   forward-pointer).
 
 [lib]
 path = "src/lib.rs"
@@ -79,6 +90,36 @@ path = "cargo_vet_policy_phase_3.rs"
 [[test]]
 name = "thin_client_protocol"
 path = "thin_client_protocol.rs"
+
+[[test]]
+name = "doc_drift_invariant_coverage"
+path = "doc_drift_invariant_coverage.rs"
+
+[[test]]
+name = "doc_drift_security_posture"
+path = "doc_drift_security_posture.rs"
+
+[[test]]
+# R3-C end-to-end: two-peer atrium bidirectional sync (exit-criterion 1).
+name = "atrium_two_peer"
+path = "atrium_two_peer.rs"
+
+[[test]]
+# R3-C end-to-end: three-peer Loro convergence under concurrent writes
+# (exit-criterion 15 / C-10).
+name = "atrium_three_peer"
+path = "atrium_three_peer.rs"
+
+[[test]]
+# R3-C end-to-end: two-process atrium bidirectional sync (scope-real-22).
+name = "atrium_two_process"
+path = "atrium_two_process.rs"
+
+[[test]]
+# R3-C end-to-end: two-device same-identity selective zone sync
+# (exit-criterion 16; multi-device under shared identity).
+name = "atrium_two_device"
+path = "atrium_two_device.rs"
 
 [dependencies]
 
