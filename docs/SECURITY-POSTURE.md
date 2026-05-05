@@ -132,7 +132,7 @@ Three distinguishable states:
 
 - `crates/benten-eval/tests/read_denial.rs` — six Option-C tests covering symmetric-None on `get_node`, `edges_from`, the three `diagnose_read` outcomes (`exists_but_denied`, `not_found`, NoAuth-open), and the `debug:read` gate.
 - `crates/benten-engine/tests/integration/compromises_regression.rs::compromise_2_option_c_symmetric_none_plus_diagnose_read` — engine-level regression.
-- `crates/benten-engine/tests/integration/compromises_regression.rs::compromise_2_option_c_is_documented` (implicit, via the doc-grep in the eval-side `compromise_2_option_c_is_documented`) — keeps this section load-bearing.
+- `crates/benten-eval/tests/read_denial.rs::compromise_2_option_c_is_documented` (the eval-side doc-grep regression that keeps this section load-bearing — asserts the SECURITY-POSTURE Compromise #2 narrative remains in the doc).
 
 **Phase 3 revisit (federation / sync):** sync replicas cross trust boundaries; Phase 3 revisits whether a reader CAN observe existence through a sibling peer (the Phase-3 `CapRevoked` scenario) and may upgrade `diagnose_read` to require a federation-aware principal handle. The Option-C surface introduced here stays stable; Phase 3 layers scope on top.
 

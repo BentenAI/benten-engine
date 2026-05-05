@@ -113,8 +113,11 @@ pub enum ChangeKind {
 /// `benten_graph::ChangeEvent` (the producer) carries `labels:
 /// Vec<String>` (full label set), `tx_id: u64`, and the three
 /// attribution CIDs (`actor_cid`, `handler_cid`,
-/// `capability_grant_cid`); the bridge at
-/// `crates/benten-engine/src/builder.rs::translate_change_event`
+/// `capability_grant_cid`); the change-event bridge inside
+/// `crates/benten-engine/src/builder.rs::EngineBuilder` (the wave-8c
+/// closure subscribed via `ChangeBroadcast::subscribe_fn` inside
+/// `EngineBuilder::build` that translates `graph::ChangeEvent` →
+/// eval-side `subscribe::ChangeEvent`)
 /// silently dropped 6 of 9 fields, including collapsing `labels:
 /// Vec<String>` to a single `primary_label: String`. The
 /// CONSEQUENCE was a real BEHAVIORAL DEFECT: a multi-labeled Node

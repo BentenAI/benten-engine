@@ -121,7 +121,7 @@ pub fn emit_refresh_event_for_test() -> HlcStampedRefreshEvent {
 /// compromise #1 above.
 ///
 /// If this default changes, the following must move in lockstep:
-/// - `tests/toctou_iteration.rs::DEFAULT_BATCH_BOUNDARY`,
+/// - `crates/benten-caps/tests/toctou_iteration.rs::DEFAULT_BATCH_BOUNDARY`,
 /// - `.addl/phase-1/r1-triage.md` named compromise #1 prose,
 /// - `docs/SECURITY-POSTURE.md` once that doc lands.
 pub const DEFAULT_BATCH_BOUNDARY: usize = 100;

@@ -278,8 +278,11 @@ export interface SubscribeArgs {
   // `crates/benten-eval/src/primitives/subscribe.rs::execute` reads only
   // `pattern`; PR #74's r6-r4-cr-1 fix wrote `handler` into the props bag
   // without an eval-side reader, silently dropping the field. The
-  // worked example at `docs/DSL-SPECIFICATION.md:546-561` is updated to
-  // remove the handler-id-router shape until §7.10 lands.
+  // worked-example narrative for the SUBSCRIBE handler-id-router lands
+  // alongside DSL-SPECIFICATION.md when that doc is finalized in Phase 3
+  // (see `docs/future/phase-3-backlog.md` §7.10 for the restoration
+  // shape; the DSL public-rewrite scope itself carries from
+  // `docs/future/phase-2-backlog.md` §8.3 deferral).
 }
 // SandboxArgs is defined in `./types.ts` as the discriminated union
 // `SandboxArgsByName | SandboxArgsByCaps` (Phase 2b G7-C). Imported and

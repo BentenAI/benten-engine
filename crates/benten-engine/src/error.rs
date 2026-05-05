@@ -359,8 +359,9 @@ mod context_json_tests {
     //! Guards against the bag-of-fields shape (Instance 8 contract)
     //! collapsing back to Display-only formatting in a future
     //! regression. The TS-side round-trip pin lives at
-    //! `packages/engine/test/install_module.test.ts::CID mismatch
-    //! error round-trips structured context fields (Instance 8)`.
+    //! `packages/engine/test/install_module.test.ts:133` (the
+    //! `it("CID mismatch error round-trips structured context fields
+    //! (Instance 8)", ...)` row).
 
     use super::*;
 
