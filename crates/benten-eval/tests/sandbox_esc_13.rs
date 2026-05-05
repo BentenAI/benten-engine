@@ -1,5 +1,5 @@
 //! R3-D RED-PHASE pins for ESC-13 (Trap during fuel-meter callback /
-//! Store-poison) (G17-A1 wave 5b; D-E + r1-wsa-1 BLOCKER).
+//! Store-poison) (G17-A1 wave-5b; D-E + r1-wsa-1 BLOCKER).
 //!
 //! Pin sources (per r2-test-landscape §2.5 G17-A1 + §8 ESC-7+ESC-13 + r1-revision-triage D-E):
 //!
@@ -40,7 +40,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 #[test]
-#[ignore = "RED-PHASE: G17-A1 wave 5b authors ESC-13 fuel-meter-callback Store-poison defense per D-E + r1-wsa-1 BLOCKER"]
+#[ignore = "RED-PHASE: G17-A1 wave-5b authors ESC-13 fuel-meter-callback Store-poison defense per D-E + r1-wsa-1 BLOCKER"]
 fn esc_13_trap_during_fuel_meter_callback_store_poison_observable() {
     // r1-wsa-1 BLOCKER pin. G17-A1 implementer wires this:
     //
@@ -75,7 +75,7 @@ fn esc_13_trap_during_fuel_meter_callback_store_poison_observable() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G17-A1 wave 5b ESC-13 recovery path — Store NOT poisoned cross-invocation (D-E)"]
+#[ignore = "RED-PHASE: G17-A1 wave-5b ESC-13 recovery path — Store NOT poisoned cross-invocation (D-E)"]
 fn esc_13_trap_during_fuel_meter_callback_does_not_poison_store() {
     // D-E pim-2 LOAD-BEARING recovery-path pin. G17-A1 implementer:
     //

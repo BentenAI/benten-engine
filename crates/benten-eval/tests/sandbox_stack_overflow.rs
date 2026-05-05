@@ -1,5 +1,5 @@
 //! R3-D RED-PHASE pins for `E_SANDBOX_STACK_OVERFLOW` typed-variant
-//! cascade (G17-A1 wave 5b; r1-wsa-7 MAJOR + phase-3-backlog §6.4).
+//! cascade (G17-A1 wave-5b; r1-wsa-7 MAJOR + phase-3-backlog §6.4).
 //!
 //! Pin sources (per r2-test-landscape §2.5 G17-A1):
 //!
@@ -39,7 +39,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 #[test]
-#[ignore = "RED-PHASE: G17-A1 wave 5b mints E_SANDBOX_STACK_OVERFLOW + routes Trap::StackOverflow per phase-3-backlog §6.4"]
+#[ignore = "RED-PHASE: G17-A1 wave-5b mints E_SANDBOX_STACK_OVERFLOW + routes Trap::StackOverflow per phase-3-backlog §6.4"]
 fn sandbox_stack_overflow_routes_to_e_sandbox_stack_overflow_typed_variant() {
     // r1-wsa-7 pin. G17-A1 implementer wires this:
     //
@@ -77,7 +77,7 @@ fn sandbox_stack_overflow_routes_to_e_sandbox_stack_overflow_typed_variant() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G17-A1 wave 5b cascades typed variant through napi + engine-err mapping"]
+#[ignore = "RED-PHASE: G17-A1 wave-5b cascades typed variant through napi + engine-err mapping"]
 fn sandbox_recursive_call_overflow_traps_via_dedicated_variant() {
     // r1-wsa-7 cascade-completeness pin. G17-A1 implementer wires:
     //

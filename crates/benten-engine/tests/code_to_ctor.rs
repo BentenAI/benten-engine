@@ -1,5 +1,5 @@
 //! R3-E RED-PHASE pins for G19-B CODE_TO_CTOR codegen completeness
-//! (wave 7 parallel; §7.6 + r1-napi-5).
+//! (wave-7 parallel; §7.6 + r1-napi-5).
 //!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.7 G19-B +
 //! `.addl/phase-3/00-implementation-plan.md` §3 G19-B must-pass column):

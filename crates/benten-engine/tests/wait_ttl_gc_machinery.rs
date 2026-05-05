@@ -1,5 +1,5 @@
 //! R3-E RED-PHASE pins for G20-A2 §7.3.A.6 WAIT TTL runtime expiry path
-//! GC machinery (wave 8a; MEDIUM-risk per scope-real-03).
+//! GC machinery (wave-8a; MEDIUM-risk per scope-real-03).
 //!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.8 G20-A2 +
 //! `.addl/phase-3/00-implementation-plan.md` §3 G20-A2 must-pass column):

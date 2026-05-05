@@ -1,5 +1,5 @@
 //! R3-D RED-PHASE pins for cross-browser-determinism CI workflow
-//! (G18-A wave 5a; D-PHASE-3-7 + br-r1-4 MAJOR + br-r1-10 MINOR).
+//! (G18-A wave-5a; D-PHASE-3-7 + br-r1-4 MAJOR + br-r1-10 MINOR).
 //!
 //! Pin sources (per r2-test-landscape §2.6 G18-A):
 //!
@@ -67,7 +67,7 @@ fn workflow_path() -> std::path::PathBuf {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a authors cross-browser-determinism.yml Playwright matrix per D-PHASE-3-7"]
+#[ignore = "RED-PHASE: G18-A wave-5a authors cross-browser-determinism.yml Playwright matrix per D-PHASE-3-7"]
 fn cross_browser_determinism_chromium_canonical_bytes_match() {
     // D-PHASE-3-7 pin. G18-A implementer wires this:
     //
@@ -91,7 +91,7 @@ fn cross_browser_determinism_chromium_canonical_bytes_match() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a Gecko cell per D-PHASE-3-7"]
+#[ignore = "RED-PHASE: G18-A wave-5a Gecko cell per D-PHASE-3-7"]
 fn cross_browser_determinism_gecko_canonical_bytes_match() {
     // D-PHASE-3-7 pin. G18-A implementer:
     //
@@ -105,7 +105,7 @@ fn cross_browser_determinism_gecko_canonical_bytes_match() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a WebKit cell per D-PHASE-3-7"]
+#[ignore = "RED-PHASE: G18-A wave-5a WebKit cell per D-PHASE-3-7"]
 fn cross_browser_determinism_webkit_canonical_bytes_match() {
     // D-PHASE-3-7 pin. G18-A implementer:
     //
@@ -120,7 +120,7 @@ fn cross_browser_determinism_webkit_canonical_bytes_match() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a — CID-pin equivalence across three browsers per br-r1-4"]
+#[ignore = "RED-PHASE: G18-A wave-5a — CID-pin equivalence across three browsers per br-r1-4"]
 fn cross_browser_determinism_cid_pin_equivalence_across_three_browsers() {
     // br-r1-4 MAJOR pin. G18-A implementer wires this as a stronger
     // assertion than each per-browser canonical-bytes pin: the matrix
@@ -150,7 +150,7 @@ fn cross_browser_determinism_cid_pin_equivalence_across_three_browsers() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a — flake-budget retry policy per br-r1-10"]
+#[ignore = "RED-PHASE: G18-A wave-5a — flake-budget retry policy per br-r1-10"]
 fn cross_browser_determinism_flake_budget_retry_policy_observed() {
     // br-r1-10 MINOR pin. G18-A implementer:
     //
@@ -200,7 +200,7 @@ fn cross_browser_determinism_flake_budget_retry_policy_observed() {
 // ============================================================================
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a — cross-browser canonical-bytes pin for Node envelope (br-r4-r1-5 #1; engine-determinism surface)"]
+#[ignore = "RED-PHASE: G18-A wave-5a — cross-browser canonical-bytes pin for Node envelope (br-r4-r1-5 #1; engine-determinism surface)"]
 fn cross_browser_canonical_bytes_pin_for_node_envelope() {
     // br-r4-r1-5 #1 pin. G18-A implementer wires the workflow to drive
     // the assertion `node-envelope canonical-bytes match across three
@@ -224,7 +224,7 @@ fn cross_browser_canonical_bytes_pin_for_node_envelope() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a — cross-browser canonical-bytes pin for handler version chain (br-r4-r1-5 #2; engine-determinism surface)"]
+#[ignore = "RED-PHASE: G18-A wave-5a — cross-browser canonical-bytes pin for handler version chain (br-r4-r1-5 #2; engine-determinism surface)"]
 fn cross_browser_canonical_bytes_pin_for_handler_version_chain() {
     // br-r4-r1-5 #2 pin. Distinct engine-determinism surface — handler
     // version chain canonical bytes MUST be identical across browsers.
@@ -245,7 +245,7 @@ fn cross_browser_canonical_bytes_pin_for_handler_version_chain() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a — cross-browser canonical-bytes pin for attribution frame with device DID (br-r4-r1-5 #3)"]
+#[ignore = "RED-PHASE: G18-A wave-5a — cross-browser canonical-bytes pin for attribution frame with device DID (br-r4-r1-5 #3)"]
 fn cross_browser_canonical_bytes_pin_for_attribution_frame_with_device_did() {
     // br-r4-r1-5 #3 pin. AttributionFrame carries device DIDs
     // (Phase-3 G14-A `benten-id`); canonical bytes for an
@@ -272,7 +272,7 @@ fn cross_browser_canonical_bytes_pin_for_attribution_frame_with_device_did() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a — cross-browser CID pin for canonical fixture corpus (br-r4-r1-5 #4)"]
+#[ignore = "RED-PHASE: G18-A wave-5a — cross-browser CID pin for canonical fixture corpus (br-r4-r1-5 #4)"]
 fn cross_browser_cid_pin_for_canonical_fixture_corpus() {
     // br-r4-r1-5 #4 pin. The canonical fixture CID
     // (`bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda`
@@ -297,7 +297,7 @@ fn cross_browser_cid_pin_for_canonical_fixture_corpus() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a — cross-browser BLAKE3 byte identity (br-r4-r1-5 #5)"]
+#[ignore = "RED-PHASE: G18-A wave-5a — cross-browser BLAKE3 byte identity (br-r4-r1-5 #5)"]
 fn cross_browser_blake3_byte_identity() {
     // br-r4-r1-5 #5 pin. BLAKE3 hashing MUST produce byte-identical
     // output across browser SIMD-path divergences. Per CLAUDE.md
@@ -319,7 +319,7 @@ fn cross_browser_blake3_byte_identity() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a — cross-browser Ed25519 signature byte identity (br-r4-r1-5 #6)"]
+#[ignore = "RED-PHASE: G18-A wave-5a — cross-browser Ed25519 signature byte identity (br-r4-r1-5 #6)"]
 fn cross_browser_ed25519_signature_byte_identity() {
     // br-r4-r1-5 #6 pin. Ed25519 signatures (Phase-3 D-DID) MUST be
     // byte-identical across browsers given the same key + message.
@@ -342,7 +342,7 @@ fn cross_browser_ed25519_signature_byte_identity() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a — cross-browser floating-point canonicalization under DSL eval (br-r4-r1-5 #7)"]
+#[ignore = "RED-PHASE: G18-A wave-5a — cross-browser floating-point canonicalization under DSL eval (br-r4-r1-5 #7)"]
 fn cross_browser_floating_point_canonicalization_under_dsl_eval() {
     // br-r4-r1-5 #7 pin. Floating-point arithmetic in DSL TRANSFORM
     // primitive (when ratified — Phase-3 / Phase-4 surface) MUST be

@@ -1,5 +1,5 @@
 //! R3-E RED-PHASE pins for G20-A1 §7.3.A.7 SANDBOX-escape testing helpers
-//! cfg-gating audit (wave 8a; HIGH-risk security-shape per scope-real-03).
+//! cfg-gating audit (wave-8a; HIGH-risk security-shape per scope-real-03).
 //!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.8 G20-A1 +
 //! `.addl/phase-3/00-implementation-plan.md` §3 G20-A1 must-pass column):

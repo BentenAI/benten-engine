@@ -1,5 +1,5 @@
 // R3-D RED-PHASE pin — browser module-manifest survives page reload
-// (G18-A wave 5a; plan §3 G18-A).
+// (G18-A wave-5a; plan §3 G18-A).
 //
 // Pin source: r2-test-landscape §2.6 G18-A row
 // `browser_module_manifest_survives_page_reload`.
@@ -30,7 +30,7 @@
 import { describe, it, expect } from "vitest";
 
 describe("R3-D G18-A — browser module-manifest persistence end-to-end", () => {
-  it.skip("RED-PHASE: G18-A wave 5a wires IndexedDB manifest persistence + page-reload survival per plan §3 G18-A", () => {
+  it.skip("RED-PHASE: G18-A wave-5a wires IndexedDB manifest persistence + page-reload survival per plan §3 G18-A", () => {
     // plan §3 G18-A pin. G18-A implementer wires this:
     //
     //   import { Engine } from "@benten/engine";

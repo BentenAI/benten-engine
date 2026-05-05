@@ -1,5 +1,5 @@
 //! R3-D RED-PHASE pin for `random` host-fn cap-policy check
-//! constant-time discipline (G17-A1 wave 5b; sec-r1-3 + CLAUDE.md
+//! constant-time discipline (G17-A1 wave-5b; sec-r1-3 + CLAUDE.md
 //! baked-in #16 narrative).
 //!
 //! Pin source: r2-test-landscape §2.5 G17-A1 row
@@ -63,7 +63,7 @@ const CONSTANT_TIME_ITERATIONS: usize = 10_000;
 const CONSTANT_TIME_FLAKE_RETRY_BUDGET: usize = 1;
 
 #[test]
-#[ignore = "RED-PHASE: G17-A1 wave 5b wires constant-time cap-policy check on random host-fn per sec-r1-3 + r4-r1-wsa-8 (locked 1.2x ratio + 10k iterations + 1-retry flake budget) + sec-r4r1-8 (statistical signal-collapse pin)"]
+#[ignore = "RED-PHASE: G17-A1 wave-5b wires constant-time cap-policy check on random host-fn per sec-r1-3 + r4-r1-wsa-8 (locked 1.2x ratio + 10k iterations + 1-retry flake budget) + sec-r4r1-8 (statistical signal-collapse pin)"]
 fn random_host_fn_cap_policy_check_constant_time_no_fingerprint_leak() {
     // sec-r1-3 + r4-r1-wsa-8 + sec-r4r1-8 pin. G17-A1 implementer wires
     // this as a STATISTICAL pin with locked-by-R4-FP thresholds:

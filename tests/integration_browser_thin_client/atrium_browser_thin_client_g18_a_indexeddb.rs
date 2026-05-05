@@ -1,5 +1,5 @@
 //! R3-D RED-PHASE pins — G18-A side of the browser-tab-as-thin-client
-//! end-to-end (G14-D + G18-A wave 5; D-PHASE-3-N + CLAUDE.md baked-in
+//! end-to-end (G14-D + G18-A wave-5; D-PHASE-3-N + CLAUDE.md baked-in
 //! #17 + exit-criterion 19).
 //!
 //! Pin sources (per r2-test-landscape §2.6 G18-A + §3.E + §4 + §13):
@@ -44,7 +44,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a wires IndexedDB cache + tab-reopen-cache-hit semantic per exit-criterion 19"]
+#[ignore = "RED-PHASE: G18-A wave-5a wires IndexedDB cache + tab-reopen-cache-hit semantic per exit-criterion 19"]
 fn integration_atrium_browser_tab_as_thin_client_view_into_full_peer_e2e_g18_a_cache_side() {
     // exit-criterion 19 + D-PHASE-3-N + CLAUDE.md baked-in #17 pin.
     //
@@ -87,7 +87,7 @@ fn integration_atrium_browser_tab_as_thin_client_view_into_full_peer_e2e_g18_a_c
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-D + G18-A wave 5 — authenticated thin-client view per exit-criterion 19"]
+#[ignore = "RED-PHASE: G14-D + G18-A wave-5 — authenticated thin-client view per exit-criterion 19"]
 fn browser_tab_thin_client_authenticated_view_into_full_peer_g18_a_cache_side() {
     // exit-criterion 19 pin (G18-A cache-side companion to R3-B's
     // G14-D auth-side body). G18-A implementer:

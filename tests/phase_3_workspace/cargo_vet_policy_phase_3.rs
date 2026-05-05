@@ -1,5 +1,5 @@
 //! R3-E RED-PHASE pins for G20-A3 cargo-vet policy + cargo-public-api
-//! existing-crate baselines (wave 8a; §7.3.A.9 + sec-r1-5).
+//! existing-crate baselines (wave-8a; §7.3.A.9 + sec-r1-5).
 //!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.8 G20-A3 +
 //! `.addl/phase-3/00-implementation-plan.md` §3 G20-A3 must-pass column):

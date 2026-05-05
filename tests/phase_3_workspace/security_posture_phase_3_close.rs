@@ -1,5 +1,5 @@
 //! R3-E RED-PHASE pin for G20-B FINAL Phase-3-close compromise table
-//! (wave 8b).
+//! (wave-8b).
 //!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.8 G20-B):
 //!

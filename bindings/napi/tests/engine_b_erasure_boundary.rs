@@ -1,5 +1,5 @@
 //! R3-A RED-PHASE pin: napi binding erasure boundary at the cdylib edge
-//! (G13-B wave 2; D-PHASE-3-1a + arch-r1-1).
+//! (G13-B wave-2; D-PHASE-3-1a + arch-r1-1).
 //!
 //! Pin source: r2-test-landscape §2.1 G13-B row
 //! `engine_b_napi_binding_erases_at_cdylib_boundary_only`; D-PHASE-3-1a;
@@ -58,7 +58,7 @@ struct EngineErasureWitness {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G13-B wave 2 — napi cdylib erasure boundary (compile-time witness per napi-r4-r1-3)"]
+#[ignore = "RED-PHASE: G13-B wave-2 — napi cdylib erasure boundary (compile-time witness per napi-r4-r1-3)"]
 fn engine_b_napi_binding_erases_at_cdylib_boundary_only() {
     // G13-B implementer wires this (post-napi-r4-r1-3 reshape):
     //

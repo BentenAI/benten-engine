@@ -1,8 +1,8 @@
 //! Surface-pin for the G13-pre-C `cap_recheck` helper.
 //!
 //! This test asserts the public type signature is stable so that both
-//! G14-D F6 SUBSCRIBE filtering (wave 5a) and G17-A1 ESC-9
-//! `live_cap_check` (wave 5b) consume the same shape without
+//! G14-D F6 SUBSCRIBE filtering (wave-5a) and G17-A1 ESC-9
+//! `live_cap_check` (wave-5b) consume the same shape without
 //! refactoring. Any signature change MUST update this test FIRST —
 //! the test failing is the loud signal that downstream consumers will
 //! need to be re-pointed.

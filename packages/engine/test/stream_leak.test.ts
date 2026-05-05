@@ -1,5 +1,5 @@
 // R3-E RED-PHASE pins for G19-C2 openStream FinalizationRegistry leak
-// detector + requiresExplicitClose accessor (wave 7 parallel; §7.1.2 +
+// detector + requiresExplicitClose accessor (wave-7 parallel; §7.1.2 +
 // stream-r1-4 4-scenario enumeration + stream-r1-10 cross-browser scope).
 //
 // Pin sources (per .addl/phase-3/r2-test-landscape.md §2.7 G19-C2 +

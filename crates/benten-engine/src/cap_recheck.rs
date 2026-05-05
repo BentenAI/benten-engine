@@ -3,10 +3,10 @@
 //! This module is the SINGLE consumer surface for the dual-layer capability
 //! recheck pattern that lands at:
 //!
-//! - **G14-D F6 SUBSCRIBE filtering** (wave 5a) — per-subscriber durable grant
+//! - **G14-D F6 SUBSCRIBE filtering** (wave-5a) — per-subscriber durable grant
 //!   store; closure consults this helper at every delivered ChangeEvent so a
 //!   partial-revoke cancels the affected subscription path mid-stream.
-//! - **G17-A1 ESC-9 `live_cap_check`** (wave 5b) — host-fn boundary check;
+//! - **G17-A1 ESC-9 `live_cap_check`** (wave-5b) — host-fn boundary check;
 //!   closure consults this helper at every host-fn invocation so a mid-call
 //!   revocation is observable BEFORE the next sensitive host-fn fires
 //!   (no caching window per `r1-wsa-3`).
@@ -44,7 +44,7 @@
 //! ## `PrincipalId` placeholder
 //!
 //! `PrincipalId` is the typed actor identity that lands in the new
-//! `benten-id` crate at G14-A1 (wave 4a, native + browser). Until that
+//! `benten-id` crate at G14-A1 (wave-4a, native + browser). Until that
 //! crate exists, this module ships a thin placeholder so G13-pre-C can
 //! land a stable surface NOW for the wave-5a + wave-5b consumers. At
 //! G14-A1 the placeholder is replaced by `pub use benten_id::PrincipalId;`
@@ -67,7 +67,7 @@ use std::sync::Arc;
 use benten_core::Cid;
 
 /// Placeholder for the typed actor identity that lands in `benten-id`
-/// at G14-A1 (wave 4a per the Phase-3 plan).
+/// at G14-A1 (wave-4a per the Phase-3 plan).
 ///
 /// At G14-A1 this declaration is replaced by `pub use
 /// benten_id::PrincipalId;`. The placeholder shape is intentionally

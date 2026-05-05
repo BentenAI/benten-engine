@@ -514,6 +514,33 @@ R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift 
 
 ---
 
+### 7.12 Workspace-aware numeric-claim source-of-truth (cite-drift detector pim-12 NEW shape iii closure)
+
+**Phase-3 R4 R1 state (post `82f1c7e` orchestrator-direct cleanup):** the cite-drift detector's `numeric_claims_source_of_truth()` table at `tools/cite-drift-detector/src/lib.rs::numeric_claims_source_of_truth` hardcodes `crates: 10` (bumped 8 → 10 at orchestrator-direct cleanup 2026-05-05 closing pim-12 NEW shape iii at the immediate-fix arm). The hardcode bump closes the false-positive flood (28 findings against correctly-10-crate Phase-3 docs); the recurrence-resistant arm — parsing `Cargo.toml` `members =` at runtime + counting `crates/*` entries dynamically — is the workspace-aware-derivation upgrade backlogged here.
+
+**What landing requires:**
+- Replace the hardcoded `value: 10` for the `crates` claim with a derivation function that:
+  1. Reads `<workspace_root>/Cargo.toml`.
+  2. Parses the `[workspace] members = [...]` table.
+  3. Counts entries whose path starts with `crates/` (excludes `bindings/`, `tests/`, `tools/` per the existing rustdoc-stated rule).
+  4. Returns that count as the authoritative `value`.
+- Decision: keep the `NumericClaim::value` field as a `u32` (current shape) and have the source-of-truth function compute the count once at startup, OR change the API so each claim's `value` can be a closure / derivation. The simpler path is option 1 (compute-once): `numeric_claims_source_of_truth()` invokes `derive_crate_count_from_workspace()` and embeds the result.
+- Add a unit test that plants a synthetic `Cargo.toml` with N `crates/foo-N` rows under tempdir + asserts the derivation returns N.
+- Update the `crates` rustdoc to point at the derivation as the authoritative source rather than the table comment.
+- Remove the "When a Phase-3 group changes these counts, that group's brief MUST update this table" half of the rustdoc that applies to crates — the derivation makes that step unnecessary for the crates row (still applies to `primitives` + `invariants` which remain hardcoded).
+
+**Why deferred (not done at orchestrator-direct cleanup):** the cleanup PR scope was the cross-cutting tracked-file fix. Adding a derivation function + tempdir-based unit test is ~80-150 LOC + 1 new dependency surface (TOML parsing — `cargo_toml` crate or `toml` direct) that warrants its own fix-pass review. The hardcode bump fully resolves the immediate finding (28 false positives gone); the derivation upgrade is the recurrence-resistance arm.
+
+**Touch size:** ~80-150 LOC (derivation fn + 1 test + rustdoc edits + Cargo.toml dep add). Risk surface: low — additive, gated behind the same source-of-truth fn the existing tests already validate.
+
+**Cross-references:**
+- `.addl/phase-2b/dispatch-conventions.md::§3.5c amendment 2026-05-05 — NEW shape (iii) tools-as-meta-spec`
+- `.addl/phase-3/r4-r1-pattern-induction.json` (pim-12 4th-instance + NEW shape iii origin finding)
+- `tools/cite-drift-detector/src/lib.rs::numeric_claims_source_of_truth` (current hardcode site)
+- `tools/cite-drift-detector/tests/numeric_claim_drift_lint_finds_known_drift_fixture.rs` (companion fixture; tracks the lint mechanism not the truth values, so the derivation upgrade is transparent to it)
+
+---
+
 ## 7.3 Wave-8j R6 residuals — test bodies need real implementations before un-ignore
 
 **Phase 2b state:** R6 phase-close Round 1 surfaced two `#[ignore]`'d tests with stale rationales — both have empty `todo!()` bodies that REFERENCE landed work but don't actually exercise it:
@@ -605,10 +632,12 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 
 #### 7.3.A.5 — Doc-drift detector test bodies (G12-B + G11-2b-A landed)
 
-**Phase 2b state:** G12-B (`edb1f93`) + G11-2b-A (`8169807`) both merged with the docs sweep + DSL-SPECIFICATION.md finalization + SECURITY-POSTURE.md Phase-2b compromises + ARCHITECTURE.md 8-crate count. The doc-drift detectors that read the .md files and assert structural invariants have `todo!()` bodies.
+**Phase 2b state:** G12-B (`edb1f93`) + G11-2b-A (`8169807`) both merged with the docs sweep + DSL-SPECIFICATION.md finalization + SECURITY-POSTURE.md Phase-2b compromises + ARCHITECTURE.md crate-count narrative. The doc-drift detectors that read the .md files and assert structural invariants have `todo!()` bodies.
+
+**Phase-3 state update (2026-05-05):** R3-A + R3-C landed `benten-id` + `benten-sync` canary stubs taking the workspace 8 → 10 crates; the 8-crate detector file was renamed + retensed to 10-crate at the orchestrator-direct cite-drift detector source-of-truth bump. Test stays `#[ignore]`'d; body-lift to executable still lands at G20-B per `tests/phase_3_workspace/architecture_md_g20b_final.rs`.
 
 **Files:**
-- `crates/benten-engine/tests/architecture_md_8_crate_count_after_dsl_compiler.rs` — 2 tests (8-crate assertion + benten-dsl-compiler crate creation pin)
+- `crates/benten-engine/tests/architecture_md_10_crate_count_post_phase_3_canaries.rs` — 2 tests (10-crate assertion enumerating benten-id + benten-sync + dsl-compiler + native-only flag for benten-sync, + canary-crate-dir presence pin). Renamed from `architecture_md_8_crate_count_after_dsl_compiler.rs` at orchestrator-direct cleanup 2026-05-05.
 - `crates/benten-engine/tests/dsl_specification_md_finalization.rs` — 1 test (DSL-SPECIFICATION.md finalization assertions)
 - `crates/benten-engine/tests/security_posture_md_phase_2b_compromises_documented.rs` — 1 test (Phase-2b compromise additions assertion)
 - `crates/benten-engine/tests/error_catalog_md_drift_phase_2b.rs` — 2 tests (Phase-2b code presence + fix-hint format enforcement)

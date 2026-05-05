@@ -21,7 +21,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G13-E wave 3 retenses SECURITY-POSTURE.md Compromise #12 to CLOSED"]
+#[ignore = "RED-PHASE: G13-E wave-3 retenses SECURITY-POSTURE.md Compromise #12 to CLOSED"]
 fn security_posture_compromise_12_marked_closed() {
     // S-3 / C-8 pin. G13-E implementer retenses
     // `docs/SECURITY-POSTURE.md` so Compromise #12 (APFS fsync floor)
@@ -59,7 +59,7 @@ fn security_posture_compromise_12_marked_closed() {
 // =====================================================================
 
 #[test]
-#[ignore = "RED-PHASE: G17-A2 wave 5b retenses SECURITY-POSTURE.md Compromise #16 to CLOSED (random host-fn workspace CSPRNG)"]
+#[ignore = "RED-PHASE: G17-A2 wave-5b retenses SECURITY-POSTURE.md Compromise #16 to CLOSED (random host-fn workspace CSPRNG)"]
 fn security_posture_compromise_16_marked_closed() {
     // r2-test-landscape §2.5 G17-A2 pin. G17-A2 implementer wires:
     //
@@ -83,7 +83,7 @@ fn security_posture_compromise_16_marked_closed() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a retenses SECURITY-POSTURE.md Compromise #19 to CLOSED (IndexedDB persistence at thin-client cache scope)"]
+#[ignore = "RED-PHASE: G18-A wave-5a retenses SECURITY-POSTURE.md Compromise #19 to CLOSED (IndexedDB persistence at thin-client cache scope)"]
 fn security_posture_compromise_19_marked_closed() {
     // r2-test-landscape §2.6 G18-A pin. G18-A implementer wires:
     //
@@ -110,7 +110,7 @@ fn security_posture_compromise_19_marked_closed() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a retenses SECURITY-POSTURE.md Compromise #20 to CLOSED (cross-browser determinism CI cadence)"]
+#[ignore = "RED-PHASE: G18-A wave-5a retenses SECURITY-POSTURE.md Compromise #20 to CLOSED (cross-browser determinism CI cadence)"]
 fn security_posture_compromise_20_marked_closed() {
     // r2-test-landscape §2.6 G18-A pin. G18-A implementer wires:
     //

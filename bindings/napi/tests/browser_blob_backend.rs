@@ -1,4 +1,4 @@
-//! R3-D RED-PHASE pin for IndexedDB-backed BlobBackend (G18-A wave 5a;
+//! R3-D RED-PHASE pin for IndexedDB-backed BlobBackend (G18-A wave-5a;
 //! plan §3 G18-A).
 //!
 //! Pin source: r2-test-landscape §2.6 G18-A row
@@ -26,7 +26,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a authors browser_blob_store.rs (IndexedDB BlobBackend variant)"]
+#[ignore = "RED-PHASE: G18-A wave-5a authors browser_blob_store.rs (IndexedDB BlobBackend variant)"]
 fn browser_blob_backend_round_trip() {
     // plan §3 G18-A pin. G18-A implementer wires this:
     //

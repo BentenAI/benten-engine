@@ -1,5 +1,5 @@
 //! R3-D RED-PHASE pins for ESC-9 (cap-revoke mid-call) closure
-//! (G17-A1 wave 5b).
+//! (G17-A1 wave-5b).
 //!
 //! Pin sources (per r2-test-landscape §2.5 G17-A1 row + r1-revision-triage):
 //!
@@ -46,7 +46,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 #[test]
-#[ignore = "RED-PHASE: G17-A1 wave 5b ships the §7.3.A.7 helper SURFACE + live_cap_check wire-through; un-ignores `sandbox_capability_check_per_call_after_revoke`"]
+#[ignore = "RED-PHASE: G17-A1 wave-5b ships the §7.3.A.7 helper SURFACE + live_cap_check wire-through; un-ignores `sandbox_capability_check_per_call_after_revoke`"]
 fn sandbox_capability_check_per_call_after_revoke_un_ignored_and_passes() {
     // ESC-9 closure pin. G17-A1 implementer wires this.
     //
@@ -109,7 +109,7 @@ fn sandbox_capability_check_per_call_after_revoke_un_ignored_and_passes() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G17-A1 wave 5b wires live_cap_check to fire at every host-fn boundary (not cached)"]
+#[ignore = "RED-PHASE: G17-A1 wave-5b wires live_cap_check to fire at every host-fn boundary (not cached)"]
 fn esc_9_live_cap_check_fires_at_every_host_fn_boundary_no_caching_window() {
     // r1-wsa-3 MAJOR pin. G17-A1 implementer wires this:
     //
@@ -149,7 +149,7 @@ fn esc_9_live_cap_check_fires_at_every_host_fn_boundary_no_caching_window() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G17-A1 wave 5b — within-host-fn-call cadence pin (r4-r1-wsa-4; locks r1-wsa-3 disposition (a) once-per-host-fn-entry, NOT once-per-backend-touch)"]
+#[ignore = "RED-PHASE: G17-A1 wave-5b — within-host-fn-call cadence pin (r4-r1-wsa-4; locks r1-wsa-3 disposition (a) once-per-host-fn-entry, NOT once-per-backend-touch)"]
 fn esc_9_live_cap_check_within_kv_read_loop_consults_once_per_call_not_per_iteration() {
     // r4-r1-wsa-4 MAJOR pin. Defends the r1-wsa-3 disposition (a)
     // chosen cadence — within a SINGLE host-fn call, live_cap_check

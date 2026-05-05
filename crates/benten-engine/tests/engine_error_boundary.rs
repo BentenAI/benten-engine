@@ -1,5 +1,5 @@
 //! R3-A RED-PHASE pins for engine error-boundary erasure
-//! (G13-B wave 2; D-PHASE-3-1a / D-B / arch-r1-1 BLOCKER).
+//! (G13-B wave-2; D-PHASE-3-1a / D-B / arch-r1-1 BLOCKER).
 //!
 //! Pin sources (per r2-test-landscape §2.1 G13-B + plan §3 G13-B
 //! must-pass column + plan §6 D-B):

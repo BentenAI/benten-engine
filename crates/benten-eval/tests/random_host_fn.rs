@@ -1,5 +1,5 @@
 //! R3-D RED-PHASE pins for `random` host-fn workspace CSPRNG
-//! (G17-A2 wave 5b; D-PHASE-3-11 RESOLVED-at-R1 + r1-wsa-8 +
+//! (G17-A2 wave-5b; D-PHASE-3-11 RESOLVED-at-R1 + r1-wsa-8 +
 //! CLAUDE.md baked-in #16 closure).
 //!
 //! Pin sources (per r2-test-landscape §2.5 G17-A2):
@@ -39,7 +39,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 #[test]
-#[ignore = "RED-PHASE: G17-A2 wave 5b wires getrandom-backed random host-fn (D-PHASE-3-11 RESOLVED)"]
+#[ignore = "RED-PHASE: G17-A2 wave-5b wires getrandom-backed random host-fn (D-PHASE-3-11 RESOLVED)"]
 fn random_host_fn_csprng_round_trip() {
     // D-PHASE-3-11 pin. G17-A2 implementer wires this:
     //
@@ -69,7 +69,7 @@ fn random_host_fn_csprng_round_trip() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G17-A2 wave 5b enforces capability-gated entropy budget (D-PHASE-3-11 + r1-wsa-8)"]
+#[ignore = "RED-PHASE: G17-A2 wave-5b enforces capability-gated entropy budget (D-PHASE-3-11 + r1-wsa-8)"]
 fn random_host_fn_capability_gated_entropy_budget() {
     // D-PHASE-3-11 + r1-wsa-8 pin. G17-A2 implementer:
     //
@@ -99,7 +99,7 @@ fn random_host_fn_capability_gated_entropy_budget() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G17-A2 wave 5b adds per-manifest budget override via module_manifest field (r1-wsa-8)"]
+#[ignore = "RED-PHASE: G17-A2 wave-5b adds per-manifest budget override via module_manifest field (r1-wsa-8)"]
 fn random_host_fn_per_manifest_budget_override_via_module_manifest_field() {
     // r1-wsa-8 pin. G17-A2 implementer:
     //
@@ -132,7 +132,7 @@ fn random_host_fn_per_manifest_budget_override_via_module_manifest_field() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G17-A2 wave 5b drops Deferred error variant for random (CLAUDE.md baked-in #16 closure)"]
+#[ignore = "RED-PHASE: G17-A2 wave-5b drops Deferred error variant for random (CLAUDE.md baked-in #16 closure)"]
 fn sandbox_host_fn_random_no_longer_returns_deferred_error() {
     // plan §3 G17-A2 pin. G17-A2 implementer:
     //

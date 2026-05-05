@@ -1,5 +1,5 @@
 // R3-E RED-PHASE pins for G19-D 6 TS DSL Args drifts round-trip
-// (wave 7 parallel; §7.9 + r1-napi-3 + D-PHASE-3-29).
+// (wave-7 parallel; §7.9 + r1-napi-3 + D-PHASE-3-29).
 //
 // Pin sources (per .addl/phase-3/r2-test-landscape.md §2.7 G19-D):
 //

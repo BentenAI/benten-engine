@@ -1,5 +1,5 @@
 //! R3-A RED-PHASE pins for native-default napi binding compile
-//! (G13-B wave 2; plan §3 G13-B).
+//! (G13-B wave-2; plan §3 G13-B).
 //!
 //! Pin sources (per r2-test-landscape §2.1 G13-B + plan §3 G13-B
 //! must-pass column):

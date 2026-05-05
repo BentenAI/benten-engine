@@ -1,5 +1,5 @@
 //! R3-E RED-PHASE pin for G20-B paper-prototype revalidation re-run
-//! (wave 8b; phase-3-backlog §8 row 8 + scope-real-19).
+//! (wave-8b; phase-3-backlog §8 row 8 + scope-real-19).
 //!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.8 G20-B):
 //!

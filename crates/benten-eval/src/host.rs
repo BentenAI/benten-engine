@@ -236,7 +236,7 @@ pub trait PrimitiveHost: Send + Sync {
     /// The default impl returns [`EvalError::PrimitiveNotImplemented`]
     /// so existing `NullHost`-backed unit tests continue to behave as
     /// before. The engine implementation in `benten-engine` overrides
-    /// this method to route to the executor (paired wave 8c work).
+    /// this method to route to the executor (paired wave-8c work).
     ///
     /// # Errors
     /// Returns [`EvalError::PrimitiveNotImplemented`] in the default

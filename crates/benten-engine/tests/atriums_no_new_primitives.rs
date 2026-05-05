@@ -1,5 +1,5 @@
 //! R3-E RED-PHASE pin for G20-B atriums-compose-via-existing-primitives
-//! (wave 8b; cag-3 + cag-4 + plan §4 seed).
+//! (wave-8b; cag-3 + cag-4 + plan §4 seed).
 //!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.8 G20-B):
 //!

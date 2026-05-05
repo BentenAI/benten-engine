@@ -1,5 +1,5 @@
 //! R3-D RED-PHASE pin for `BrowserManifestStore::is_persistent`
-//! (G18-A wave 5a; br-r1-8 MINOR).
+//! (G18-A wave-5a; br-r1-8 MINOR).
 //!
 //! Pin source: r2-test-landscape §2.6 G18-A row
 //! `browser_manifest_store_is_persistent_returns_true`; br-r1-8.
@@ -23,7 +23,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a flips BrowserManifestStore::is_persistent → true per br-r1-8"]
+#[ignore = "RED-PHASE: G18-A wave-5a flips BrowserManifestStore::is_persistent → true per br-r1-8"]
 fn browser_manifest_store_is_persistent_returns_true() {
     // br-r1-8 MINOR pin. G18-A implementer wires this:
     //

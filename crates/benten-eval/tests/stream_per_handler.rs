@@ -1,5 +1,5 @@
 //! R3-E RED-PHASE pins for G19-C2 STREAM ESC defenses per-handler config
-//! (wave 7 parallel; §7.1.5 + stream-r1-3 + stream-r1-9).
+//! (wave-7 parallel; §7.1.5 + stream-r1-3 + stream-r1-9).
 //!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.7 G19-C2 +
 //! `.addl/phase-3/00-implementation-plan.md` §3 G19-C2 must-pass column):

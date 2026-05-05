@@ -1,5 +1,5 @@
 //! R3-A RED-PHASE pins: cargo feature × default-Engine-alias mapping
-//! (G13-B wave 2 / G13-C wave 3; arch-r1-9).
+//! (G13-B wave-2 / G13-C wave-3; arch-r1-9).
 //!
 //! Pin sources (per r2-test-landscape §2.1 G13-B + arch-r1-9):
 //!

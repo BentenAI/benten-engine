@@ -36,7 +36,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G16-A + G16-B + G18-A wave 5 audit Loro absence from browser bundle per CLAUDE.md baked-in #17"]
+#[ignore = "RED-PHASE: G16-A + G16-B + G18-A wave-5 audit Loro absence from browser bundle per CLAUDE.md baked-in #17"]
 fn loro_not_in_browser_bundle_per_baked_in_17() {
     // CLAUDE.md baked-in #17 architectural pin. G18-A (or G16-B
     // implementer who completes the architectural callout) wires this:
@@ -83,7 +83,7 @@ fn loro_not_in_browser_bundle_per_baked_in_17() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-A + G18-A wave 5 audit iroh absence from browser bundle per CLAUDE.md baked-in #17"]
+#[ignore = "RED-PHASE: G16-A + G18-A wave-5 audit iroh absence from browser bundle per CLAUDE.md baked-in #17"]
 fn iroh_not_in_browser_bundle_per_baked_in_17() {
     // CLAUDE.md baked-in #17 architectural pin. G18-A wires this:
     //

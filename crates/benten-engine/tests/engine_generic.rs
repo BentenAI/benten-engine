@@ -1,4 +1,4 @@
-//! R3-A RED-PHASE pins for `EngineGeneric<B>` cascade (G13-B wave 2).
+//! R3-A RED-PHASE pins for `EngineGeneric<B>` cascade (G13-B wave-2).
 //!
 //! Pin sources (per r2-test-landscape §2.1 G13-B + plan §3 G13-B
 //! must-pass column):
@@ -23,7 +23,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G13-B wave 2 introduces EngineGeneric<B>"]
+#[ignore = "RED-PHASE: G13-B wave-2 introduces EngineGeneric<B>"]
 fn engine_generic_compiles_with_redb_default() {
     // G13-B implementer wires this:
     //   use benten_engine::{Engine, EngineGeneric};

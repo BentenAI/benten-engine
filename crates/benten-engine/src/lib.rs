@@ -47,9 +47,9 @@
 )]
 
 pub mod builder;
-// Phase-3 G13-pre-C scaffold (wave 1pre) — shared per-event
-// read-cap-coverage helper. Both G14-D F6 SUBSCRIBE filtering (wave 5a)
-// and G17-A1 ESC-9 `live_cap_check` (wave 5b) consume this module from
+// Phase-3 G13-pre-C scaffold (wave-1pre) — shared per-event
+// read-cap-coverage helper. Both G14-D F6 SUBSCRIBE filtering (wave-5a)
+// and G17-A1 ESC-9 `live_cap_check` (wave-5b) consume this module from
 // day one per `seq-minor-6` (extract first; no inline-then-refactor).
 // See `cap_recheck.rs` rustdoc for the design pins.
 pub mod cap_recheck;

@@ -1,6 +1,6 @@
 // R3-D RED-PHASE pins — 24th p/c drift acceptance criterion (TS DSL
 // camelCase → napi snake_case translation; pim-2 LOAD-BEARING; G17-C
-// wave 5b; phase-3-backlog §6.6).
+// wave-5b; phase-3-backlog §6.6).
 //
 // ## What this pins
 //
@@ -55,7 +55,7 @@
 import { describe, it, expect } from "vitest";
 
 describe("R3-D 24th p/c drift — sandbox handler-args camelCase→snake_case round-trip", () => {
-  it.skip("RED-PHASE: G17-C wave 5b authors translateSandboxArgs DSL helper (24th p/c drift acceptance criterion)", () => {
+  it.skip("RED-PHASE: G17-C wave-5b authors translateSandboxArgs DSL helper (24th p/c drift acceptance criterion)", () => {
     // Pin source: r2-test-landscape §2.5 G17-C
     // `sandbox_per_handler_wallclock_ms_camel_case_dsl_round_trips_to_eval_side_snake_case`
     //
@@ -93,7 +93,7 @@ describe("R3-D 24th p/c drift — sandbox handler-args camelCase→snake_case ro
     );
   });
 
-  it.skip("RED-PHASE: G17-C wave 5b — outputLimitBytes axis (camelCase DSL) drops `Bytes` to snake_case `output_limit` (canonical eval-side; r4-r1-wsa-1 recalibration)", () => {
+  it.skip("RED-PHASE: G17-C wave-5b — outputLimitBytes axis (camelCase DSL) drops `Bytes` to snake_case `output_limit` (canonical eval-side; r4-r1-wsa-1 recalibration)", () => {
     // Pin source: r2-test-landscape §2.5 G17-C
     // `sandbox_per_handler_output_limit_camel_case_dsl_round_trips`
     // (RECALIBRATED at R4-FP per r4-r1-wsa-1 BLOCKER — canonical
@@ -130,7 +130,7 @@ describe("R3-D 24th p/c drift — sandbox handler-args camelCase→snake_case ro
     );
   });
 
-  it.skip("RED-PHASE: G17-C wave 5b — sandbox.test.ts existing 3 .skip'd tests re-pinned to production-flow shape", () => {
+  it.skip("RED-PHASE: G17-C wave-5b — sandbox.test.ts existing 3 .skip'd tests re-pinned to production-flow shape", () => {
     // Pin source: r2-test-landscape §2.5 G17-C
     // `sandbox_test_skips_re_pinned_to_production_flow_shape`
     //

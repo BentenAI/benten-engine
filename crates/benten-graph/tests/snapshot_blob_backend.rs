@@ -1,5 +1,5 @@
 //! R3-A RED-PHASE pins for `SnapshotBlobBackend` direct-wire as
-//! `GraphBackend` (G13-D wave 3; plan §3 G13-D).
+//! `GraphBackend` (G13-D wave-3; plan §3 G13-D).
 //!
 //! Pin sources (per r2-test-landscape §2.1 G13-D + plan §3 G13-D
 //! must-pass column):
@@ -24,7 +24,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G13-D wave 3 — SnapshotBlobBackend impls GraphBackend"]
+#[ignore = "RED-PHASE: G13-D wave-3 — SnapshotBlobBackend impls GraphBackend"]
 fn snapshot_blob_backend_impls_graph_backend_read_path() {
     // G13-D implementer wires this:
     //   // Build a snapshot blob from a populated engine:
@@ -49,7 +49,7 @@ fn snapshot_blob_backend_impls_graph_backend_read_path() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G13-D wave 3 — SnapshotBlobBackend write-path read-only error"]
+#[ignore = "RED-PHASE: G13-D wave-3 — SnapshotBlobBackend write-path read-only error"]
 fn snapshot_blob_backend_write_path_returns_read_only_error() {
     // G13-D implementer wires this:
     //   let blob_bytes = ... ;

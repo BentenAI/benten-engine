@@ -1,5 +1,5 @@
 //! R3-E RED-PHASE pins for G19-E Subgraph AST cache full wire-up
-//! (wave 7b single-agent serial after wave-7; §9.2 / phase-2-backlog).
+//! (wave-7b single-agent serial after wave-7; §9.2 / phase-2-backlog).
 //!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.7 G19-E +
 //! `.addl/phase-3/00-implementation-plan.md` §3 G19-E must-pass column):

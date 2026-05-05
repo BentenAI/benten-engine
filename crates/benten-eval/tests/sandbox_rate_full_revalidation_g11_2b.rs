@@ -7,7 +7,7 @@
 //! Companion to `sandbox_rate_under_30_percent.rs` (the G7-close
 //! STAGED CHECK). This test re-runs the SANDBOX-rate gate against the
 //! FULL revised paper-prototype vocabulary at phase close (G11-2b-A
-//! wave 7); the staged check is ≥4 weeks earlier with a smaller
+//! wave-7); the staged check is ≥4 weeks earlier with a smaller
 //! vocabulary so that a high rate can be remediated before the
 //! phase-close hard-fail window.
 //!

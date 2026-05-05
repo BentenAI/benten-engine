@@ -1,5 +1,5 @@
 //! R3-D RED-PHASE pin for ESC-16 (fingerprint-collapse defense)
-//! (G17-A1 wave 5b).
+//! (G17-A1 wave-5b).
 //!
 //! Pin source: r2-test-landscape §2.5 G17-A1 row
 //! `sandbox_esc_16_fingerprint_collapse_fires_via_committed_wat_fixture`;
@@ -35,7 +35,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 #[test]
-#[ignore = "RED-PHASE: G17-A1 wave 5b authors fingerprint.rs helper + commits ESC-16 .wat fixture"]
+#[ignore = "RED-PHASE: G17-A1 wave-5b authors fingerprint.rs helper + commits ESC-16 .wat fixture"]
 fn sandbox_esc_16_fingerprint_collapse_fires_via_committed_wat_fixture() {
     // r1-wsa-4 pin. G17-A1 implementer wires this:
     //

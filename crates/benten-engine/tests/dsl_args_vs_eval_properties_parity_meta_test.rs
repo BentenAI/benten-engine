@@ -1,5 +1,5 @@
 //! R3-E RED-PHASE pin for G19-D LOAD-BEARING DSL-args-vs-eval-primitive-properties
-//! parity meta-test (wave 7 parallel; §7.10 + D-PHASE-3-9 + pim-12).
+//! parity meta-test (wave-7 parallel; §7.10 + D-PHASE-3-9 + pim-12).
 //!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.7 G19-D +
 //! `.addl/phase-3/00-implementation-plan.md` §3 G19-D must-pass column +

@@ -1,5 +1,5 @@
 // R3-E RED-PHASE pins for G19-D Edge interface fix
-// (wave 7 parallel; §7.9 phantom cid + missing properties fix).
+// (wave-7 parallel; §7.9 phantom cid + missing properties fix).
 //
 // Pin sources (per .addl/phase-3/r2-test-landscape.md §2.7 G19-D):
 //

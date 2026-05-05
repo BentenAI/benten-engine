@@ -1,5 +1,5 @@
 //! R3-D RED-PHASE pins for ESC-7 (Fuel-refill via host-fn re-entry)
-//! (G17-A1 wave 5b; D-E + r1-wsa-1 BLOCKER).
+//! (G17-A1 wave-5b; D-E + r1-wsa-1 BLOCKER).
 //!
 //! Pin sources (per r2-test-landscape §2.5 G17-A1 + §8 ESC-7+ESC-13 + r1-revision-triage D-E):
 //!
@@ -38,7 +38,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 #[test]
-#[ignore = "RED-PHASE: G17-A1 wave 5b authors ESC-7 fuel-refill-via-re-entry defense per D-E + r1-wsa-1 BLOCKER"]
+#[ignore = "RED-PHASE: G17-A1 wave-5b authors ESC-7 fuel-refill-via-re-entry defense per D-E + r1-wsa-1 BLOCKER"]
 fn esc_7_fuel_refill_via_host_fn_re_entry_blocked() {
     // r1-wsa-1 BLOCKER pin. G17-A1 implementer wires this:
     //
@@ -76,7 +76,7 @@ fn esc_7_fuel_refill_via_host_fn_re_entry_blocked() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G17-A1 wave 5b routes ESC-7 trap to a typed error (D-E)"]
+#[ignore = "RED-PHASE: G17-A1 wave-5b routes ESC-7 trap to a typed error (D-E)"]
 fn esc_07_fuel_refill_via_host_fn_re_entry_traps_typed_error() {
     // D-E pim-2 LOAD-BEARING pin. G17-A1 implementer wires this:
     //

@@ -1,5 +1,5 @@
 //! R3-E RED-PHASE pins for G19-C1 UserView.snapshot() + onUpdate()
-//! (wave 7 parallel; §7.1.3).
+//! (wave-7 parallel; §7.1.3).
 //!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.7 G19-C1 +
 //! `.addl/phase-3/00-implementation-plan.md` §3 G19-C1 must-pass column):
