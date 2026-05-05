@@ -99,27 +99,13 @@ path = "doc_drift_invariant_coverage.rs"
 name = "doc_drift_security_posture"
 path = "doc_drift_security_posture.rs"
 
-[[test]]
-# R3-C end-to-end: two-peer atrium bidirectional sync (exit-criterion 1).
-name = "atrium_two_peer"
-path = "atrium_two_peer.rs"
-
-[[test]]
-# R3-C end-to-end: three-peer Loro convergence under concurrent writes
-# (exit-criterion 15 / C-10).
-name = "atrium_three_peer"
-path = "atrium_three_peer.rs"
-
-[[test]]
-# R3-C end-to-end: two-process atrium bidirectional sync (scope-real-22).
-name = "atrium_two_process"
-path = "atrium_two_process.rs"
-
-[[test]]
-# R3-C end-to-end: two-device same-identity selective zone sync
-# (exit-criterion 16; multi-device under shared identity).
-name = "atrium_two_device"
-path = "atrium_two_device.rs"
+#
+# Note: 4 atrium end-to-end tests (atrium_two_peer / atrium_three_peer /
+# atrium_two_process / atrium_two_device) were RELOCATED at R4-FP/R3-C
+# to `tests/integration/` per R3-CPC-1 (R4 large-council Round 1
+# cross-partition-consistency lens; r2-test-landscape §2.4 G16-B/G16-D
+# rows name `tests/integration/` as the canonical home; R3-C originally
+# placed them in `tests/phase_3_workspace/` by mistake).
 
 [dependencies]
 

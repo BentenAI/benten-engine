@@ -134,3 +134,93 @@ fn atrium_device_did_revocation_propagates_before_data_to_offline_then_reconnect
     // at the device-grain across peer reconnects.
     unimplemented!("G16-B wires device-DID revocation-before-data ordering");
 }
+
+#[test]
+#[ignore = "RED-PHASE: G16-B + G16-C wave-6b — ds-r4-2 — MST diff preserves temporal ordering of grants/revocations interleaved with data writes during offline-reconnect"]
+fn mst_diff_preserves_temporal_ordering_of_grants_and_revocations_relative_to_data_writes_under_offline_reconnect()
+ {
+    // ds-r4-2 (R4 large-council Round 1 distributed-systems lens) pin.
+    // R1 ds-9 was triaged into 'distribute across G16 row briefs' but
+    // the substantive content (interleaved-during-offline-window
+    // temporal-ordering preservation) was lost.
+    //
+    // The simple revoke-then-data ordering case is covered by
+    // `atrium_revoke_propagates_before_data_to_offline_then_reconnect_peer`
+    // above. THIS pin covers the INTERLEAVED case where during the
+    // phone-offline window peer-A wrote N1, revoked phone's grant,
+    // then wrote N2 — phone reconnects and MST diff offers
+    // {N1, revoke-event, N2} as a SET. Phone needs to apply
+    // revoke-event BETWEEN N1 and N2 to correctly enforce the
+    // partial-revoke (otherwise phone may briefly observe N2 before
+    // the revocation lands locally).
+    //
+    // MST diff converges on a SET-equality basis, not a
+    // temporal-ordering basis by default. The HLC infrastructure
+    // landed at G14-pre-D supports the temporal-ordering observation;
+    // this pin asserts the consumer-side preservation.
+    //
+    //   use benten_sync::mst_diff::MstDiff;
+    //   use benten_sync::handshake::MessageKind;
+    //
+    //   let mut peer_a = test_peer(peer_a_did);
+    //   let mut peer_b_phone = test_peer(peer_b_phone_did);
+    //   peer_a.atrium_join(shared_atrium()).await.unwrap();
+    //   peer_b_phone.atrium_join(shared_atrium()).await.unwrap();
+    //
+    //   // peer_a grants peer_b read on /zone/sub:
+    //   peer_a.atrium_grant(peer_b_phone_did, ucan_grant("/zone/sub/*", "read")).await.unwrap();
+    //   wait_for_sync(&[&peer_a, &peer_b_phone]).await;
+    //
+    //   // peer_b_phone goes offline:
+    //   peer_b_phone.disconnect();
+    //
+    //   // Interleaved sequence at peer_a (with HLC-staggered timestamps):
+    //   let n1 = peer_a.write_node_in_zone("/zone/sub", make_node("n1")).await.unwrap();  // T1
+    //   peer_a.atrium_revoke(peer_b_phone_did, "/zone/sub/*").await.unwrap();              // T2
+    //   let n2 = peer_a.write_node_in_zone("/zone/sub", make_node("n2")).await.unwrap();  // T3
+    //
+    //   // peer_b_phone reconnects + drains MST diff:
+    //   peer_b_phone.reconnect().await.unwrap();
+    //   let diff = MstDiff::compute(&peer_a.mst_root(), &peer_b_phone.mst_root());
+    //   assert!(diff.contains_node(&n1));
+    //   assert!(diff.contains_revocation_for(peer_b_phone_did, "/zone/sub/*"));
+    //   assert!(diff.contains_node(&n2));
+    //
+    //   // Apply diff in HLC-temporal order (NOT raw set order):
+    //   let ordered = diff.into_hlc_ordered_events();
+    //   peer_b_phone.apply_ordered(ordered.clone()).await.unwrap();
+    //
+    //   // ASSERTION: ordered application places revoke-event BETWEEN
+    //   // n1 and n2 (per HLC timestamps T1 < T2 < T3):
+    //   let event_kinds: Vec<_> = ordered.iter().map(|e| e.kind()).collect();
+    //   let revoke_idx = event_kinds.iter().position(|k|
+    //       matches!(k, MessageKind::Revocation)).unwrap();
+    //   let n1_idx = event_kinds.iter().position(|k|
+    //       matches!(k, MessageKind::Data) && /*n1 cid*/).unwrap();
+    //   let n2_idx = event_kinds.iter().position(|k|
+    //       matches!(k, MessageKind::Data) && /*n2 cid*/).unwrap();
+    //   assert!(n1_idx < revoke_idx,
+    //       "n1 (T1) must apply BEFORE revoke (T2) per HLC ordering");
+    //   assert!(revoke_idx < n2_idx,
+    //       "revoke (T2) must apply BEFORE n2 (T3) per HLC ordering — \
+    //        otherwise phone briefly observes n2 under stale grant");
+    //
+    //   // peer_b_phone never saw n2 under stale grant:
+    //   let observation_log = peer_b_phone.observation_log_for("/zone/sub");
+    //   for event in &observation_log {
+    //       if event.cid() == n2.cid() {
+    //           assert!(!event.under_grant_for_did(peer_b_phone_did),
+    //               "n2 must never be observable under the (revoked) grant");
+    //       }
+    //   }
+    //
+    // OBSERVABLE consequence: MST-diff drainage preserves HLC-temporal
+    // ordering of grants/revocations interleaved with data writes
+    // during the offline window; phone never briefly observes data
+    // under a (later-revoked) stale grant. Composes G14-pre-D HLC +
+    // G16-B Loro merges + G16-C MST-diff. Defends against the
+    // SET-vs-ORDER attack class that R1 ds-9 named.
+    unimplemented!(
+        "G16-B + G16-C wire MST-diff HLC-temporal-ordering preservation for interleaved revoke+data offline-reconnect"
+    );
+}

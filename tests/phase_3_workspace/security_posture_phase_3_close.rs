@@ -24,7 +24,7 @@ fn security_posture_phase_3_close_compromise_table_present() {
     //       .join("..").join("..").join("docs").join("SECURITY-POSTURE.md");
     //   let posture = std::fs::read_to_string(&posture_path).unwrap();
     //
-    //   // Every Phase-3 named compromise must be marked CLOSED:
+    //   // Every Phase-3-CLOSED compromise must be marked CLOSED:
     //   for compromise in &[2, 10, 11, 12, 16, 17, 18, 19, 20, 21] {
     //       let section = extract_compromise_section(&posture, *compromise);
     //       assert!(section.to_lowercase().contains("closed"),
@@ -38,6 +38,24 @@ fn security_posture_phase_3_close_compromise_table_present() {
     //           "Compromise #{} closure must cite the closing G-N for traceability",
     //           compromise);
     //   }
+    //
+    //   // Compromise #22 (public-relay metadata leakage) is INTRODUCED at
+    //   // Phase-3 close + DEFERRED to a NAMED future destination per
+    //   // R4-FP/R3-C net-r4-r1-1 + HARD RULE rule-12 clause-b. The
+    //   // entry must EXIST and name a specific destination.
+    //   let section_22 = extract_compromise_section(&posture, 22);
+    //   assert!(section_22.to_lowercase().contains("public-relay")
+    //          || section_22.to_lowercase().contains("public relay"),
+    //       "Compromise #22 must narrate public-relay metadata leakage");
+    //   assert!(
+    //       section_22.contains("Phase 7")
+    //           || section_22.contains("Garden")
+    //           || section_22.contains("Phase 9")
+    //           || section_22.contains("hardened-deployment"),
+    //       "Compromise #22 must name a specific deferral destination \
+    //        (Phase 7 Garden-relay-infrastructure OR Phase 9 \
+    //        hardened-deployment posture)"
+    //   );
     //
     //   // No Phase-3-pending OR Phase-3-deferred entries remain:
     //   assert!(!posture.contains("Phase-3-pending"),

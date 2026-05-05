@@ -19,13 +19,14 @@ import { describe, it, expect } from "vitest";
 
 describe("G20-B Atrium examples compile + run", () => {
   it.skip("RED-PHASE: G20-B wave-8b — atrium peer-management example handler compiles + runs", async () => {
-    // G20-B pin. Implementer wires this:
+    // G20-B pin. Implementer wires this (B-prime DSL per Ben's D1):
     //
     //   const { example } = await import("@benten/engine/examples/atrium-peer-mgmt");
     //   const result = await example.run();
     //   expect(result.ok).toBe(true);
-    //   // Example demonstrates: engine.atrium.join, listPeers, trustPeer,
-    //   // revokePeer, onPeerJoin, onPeerLeave at minimum.
+    //   // Example demonstrates: engine.atrium({config}).join() factory +
+    //   // handle.listPeers, trustPeer, revokePeer, onPeerJoin, onPeerLeave
+    //   // at minimum.
   });
 
   it.skip("RED-PHASE: G20-B wave-8b — atrium sync-trigger example handler compiles + runs", async () => {
@@ -71,6 +72,11 @@ describe("G20-B Atrium examples compile + run", () => {
     //       expect(allowed.has(node.kind)).toBe(true);
     //     }
     //   }
+    //
+    // Composition shape under B-prime: examples may freely call
+    // `engine.atrium({config}).join()` etc. — that's a factory/method
+    // composition, not a new primitive kind. Per cag-4, no new
+    // OperationNode kinds should appear.
     //
     // OBSERVABLE consequence: Atrium DX surface composes via existing
     // primitives. Defends against the failure mode where a new
