@@ -922,6 +922,14 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** `bindings/napi/src/devserver.rs::devserver_stopped` (helper used by every devserver method that requires the dev-server to be running). R6 Round-2 r6-r2-napi-1 promoted this from a hand-typed `"E_DEVSERVER_STOPPED"` string to a typed catalog variant so JS callers get `EDevServerStopped` typed dispatch.
 - **Phase:** 2b R6 Round-2
 
+### E_HLC_SKEW_EXCEEDED
+
+- **Message:** "HLC skew exceeded: remote physical_ms {remote_physical_ms} > local {local_physical_ms} + tolerance {tolerance_ms}ms"
+- **Context:** `{ local_physical_ms: u64, remote_physical_ms: u64, tolerance_ms: u64 }`
+- **Fix:** `Hlc::update(remote)` refused a remote stamp whose physical-clock component exceeds the local physical clock by more than the configured skew tolerance (default 5 minutes per `Hlc::DEFAULT_SKEW_TOLERANCE_MS`). The local HLC state is NOT mutated when this fires — Phase-3 sync rejects the offending message and continues. Inspect peer NTP / system-clock health; legitimate cross-region drift should fit comfortably inside 5 minutes. Operator-tunable knobs land alongside Phase-3 sync wiring.
+- **Thrown at:** `crates/benten-core/src/hlc.rs::Hlc::update` (Phase-3 G14-pre-D). Phase-3 sync wires the firing site into Loro per-property LWW + asymmetric-uptime MST-diff message ingest.
+- **Phase:** 3 G14-pre-D
+
 ## Extending the catalog
 
 When adding a new error:

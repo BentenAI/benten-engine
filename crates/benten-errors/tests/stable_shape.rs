@@ -147,6 +147,12 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // dispatch rather than the synthetic `E_UNKNOWN` fallback.
     ErrorCode::ReloadSubscriberUnsubscribed,
     ErrorCode::DevServerStopped,
+    // Phase-3 G14-pre-D: HLC skew rejection. `Hlc::update(remote)`
+    // refuses a remote stamp whose physical clock exceeds the local
+    // physical clock by more than the configured skew tolerance
+    // (default 5 minutes). Closes the ds-1 BLOCKER + ds-11 typed-error
+    // requirement.
+    ErrorCode::HlcSkewExceeded,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -232,8 +238,15 @@ fn variant_count_is_pinned() {
     // `DevServerStopped` — promotes the two devserver hand-typed
     // string literals to first-class catalog variants. Post-R6-R2:
     // 79 + 2 = 81.
+    //
+    // Phase-3 G14-pre-D adds `HlcSkewExceeded` — typed error fired by
+    // `benten_core::hlc::Hlc::update` when the remote stamp's
+    // physical-clock component exceeds the local clock by more than
+    // the configured skew tolerance (default 5 minutes). Closes the
+    // ds-1 BLOCKER + ds-11 typed-error requirement. Post-G14-pre-D:
+    // 81 + 1 = 82.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 81,
+        CATALOG_VARIANT_COUNT, 82,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

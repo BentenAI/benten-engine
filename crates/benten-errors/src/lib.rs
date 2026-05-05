@@ -423,6 +423,14 @@ pub enum ErrorCode {
     /// [`ErrorCode::ReloadSubscriberUnsubscribed`]. Maps to
     /// `E_DEVSERVER_STOPPED`.
     DevServerStopped,
+    /// Phase-3 G14-pre-D (closes Phase-3 ds-1 BLOCKER + ds-11 typed-error
+    /// requirement): an [`Hlc::update`](../benten_core/hlc/struct.Hlc.html#method.update)
+    /// call rejected an incoming remote HLC because its physical-clock
+    /// component exceeded the configured skew tolerance relative to the
+    /// local physical clock. Phase-3 sync rejects the offending message
+    /// rather than letting an adversarial / mis-configured peer drag the
+    /// local HLC into the future. Maps to `E_HLC_SKEW_EXCEEDED`.
+    HlcSkewExceeded,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -594,6 +602,7 @@ impl ErrorCode {
             ErrorCode::SandboxUnavailableOnWasm => "E_SANDBOX_UNAVAILABLE_ON_WASM",
             ErrorCode::ReloadSubscriberUnsubscribed => "E_RELOAD_SUBSCRIBER_UNSUBSCRIBED",
             ErrorCode::DevServerStopped => "E_DEVSERVER_STOPPED",
+            ErrorCode::HlcSkewExceeded => "E_HLC_SKEW_EXCEEDED",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -783,7 +792,14 @@ impl ErrorCode {
             // typed errors. Surface at the napi method call site, not
             // along a primitive edge of a runnable handler subgraph.
             | ErrorCode::ReloadSubscriberUnsubscribed
-            | ErrorCode::DevServerStopped => None,
+            | ErrorCode::DevServerStopped
+            // Phase-3 G14-pre-D: HLC skew rejection surfaces at the
+            // sync-layer message-receipt boundary (Phase 3 wires it into
+            // Loro per-property LWW + asymmetric-uptime MST-diff), not
+            // along a runnable handler-subgraph primitive edge. Same
+            // routing disposition as resume-protocol failures + builder
+            // configuration errors.
+            | ErrorCode::HlcSkewExceeded => None,
 
             // SUBSCRIBE registration / restart failures — surface at the
             // registration call site, not along a primitive edge. Mirrors
@@ -913,6 +929,7 @@ impl ErrorCode {
             "E_SANDBOX_UNAVAILABLE_ON_WASM" => ErrorCode::SandboxUnavailableOnWasm,
             "E_RELOAD_SUBSCRIBER_UNSUBSCRIBED" => ErrorCode::ReloadSubscriberUnsubscribed,
             "E_DEVSERVER_STOPPED" => ErrorCode::DevServerStopped,
+            "E_HLC_SKEW_EXCEEDED" => ErrorCode::HlcSkewExceeded,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }
