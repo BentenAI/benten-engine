@@ -42,7 +42,7 @@ pub mod transaction;
 
 pub use backend::{BatchOp, DurabilityMode, KVBackend, ScanIter, ScanResult};
 pub use backends::{
-    NetworkFetchStubBackend, NetworkFetchStubError, SnapshotBlob, SnapshotBlobBackend,
+    BlobBackend, NetworkFetchStubBackend, NetworkFetchStubError, SnapshotBlob, SnapshotBlobBackend,
     SnapshotBlobError,
 };
 pub use in_memory_backend::InMemoryBackend;
