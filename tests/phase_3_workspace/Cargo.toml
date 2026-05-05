@@ -1,0 +1,44 @@
+[package]
+name = "phase-3-workspace-tests"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+# Phase-3 R3-A landed this workspace-level test package as the holding
+# pen for cross-cutting Phase-3 architectural pins + compromise-closure
+# pins that don't fit naturally inside any single crate's test
+# directory. Mirrors the Phase-2a `tests/doc_completeness` precedent.
+#
+# Files hosted here:
+#
+# - `architecture_md_state.rs` — pins ARCHITECTURE.md narrative state
+#   (in-flight callouts at G14-A1 + G16-A intermediate states; final
+#   10-crate transition lands at G20-B). R3-A authors the G14-A1
+#   intermediate-state assertion; R3-C extends with G16-A; R3-E
+#   authors the G20-B FINAL pin.
+#
+# - `security_posture_compromises.rs` — pins SECURITY-POSTURE.md
+#   compromise-table state. R3-A owns Compromise #12 (G13-E flip);
+#   R3-B owns #17 #18 #21 #2 #10; R3-C owns #11; R3-D owns #16 #19 #20;
+#   R3-E owns the G20-B FINAL `security_posture_phase_3_close_compromise_table_present`
+#   pin.
+
+[lib]
+path = "src/lib.rs"
+doctest = false
+bench = false
+
+[[test]]
+name = "architecture_md_state"
+path = "architecture_md_state.rs"
+
+[[test]]
+name = "security_posture_compromises"
+path = "security_posture_compromises.rs"
+
+[dependencies]
+
+[lints]
+workspace = true
