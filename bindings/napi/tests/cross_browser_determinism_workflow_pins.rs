@@ -3,11 +3,26 @@
 //!
 //! Pin sources (per r2-test-landscape §2.6 G18-A):
 //!
-//! - `tests/cross_browser_determinism_chromium_canonical_bytes_match` — D-PHASE-3-7
-//! - `tests/cross_browser_determinism_gecko_canonical_bytes_match` — D-PHASE-3-7
-//! - `tests/cross_browser_determinism_webkit_canonical_bytes_match` — D-PHASE-3-7
-//! - `tests/cross_browser_determinism_cid_pin_equivalence_across_three_browsers` — br-r1-4
-//! - `tests/cross_browser_determinism_flake_budget_retry_policy_observed` — br-r1-10
+//! Browser-engine cells (D-PHASE-3-7):
+//! - `tests/cross_browser_determinism_chromium_canonical_bytes_match`
+//! - `tests/cross_browser_determinism_gecko_canonical_bytes_match`
+//! - `tests/cross_browser_determinism_webkit_canonical_bytes_match`
+//!
+//! CID equivalence + flake budget (br-r1-4 / br-r1-10):
+//! - `tests/cross_browser_determinism_cid_pin_equivalence_across_three_browsers`
+//! - `tests/cross_browser_determinism_flake_budget_retry_policy_observed`
+//!
+//! 7 distinct engine-determinism-surface failure-shape pins (br-r4-r1-5
+//! MINOR — added at R4-FP for full br-r1-4 fix-brief coverage; per pim-2
+//! §3.6b each pin asserts the workflow drives a SPECIFIC failure-surface
+//! assertion, NOT just a per-browser-engine cell):
+//! - `tests/cross_browser_canonical_bytes_pin_for_node_envelope`
+//! - `tests/cross_browser_canonical_bytes_pin_for_handler_version_chain`
+//! - `tests/cross_browser_canonical_bytes_pin_for_attribution_frame_with_device_did`
+//! - `tests/cross_browser_cid_pin_for_canonical_fixture_corpus`
+//! - `tests/cross_browser_blake3_byte_identity`
+//! - `tests/cross_browser_ed25519_signature_byte_identity`
+//! - `tests/cross_browser_floating_point_canonicalization_under_dsl_eval`
 //!
 //! ## Workflow-pin shape
 //!
@@ -168,5 +183,186 @@ fn cross_browser_determinism_flake_budget_retry_policy_observed() {
     // Defends br-r1-10 retry-policy specifics.
     unimplemented!(
         "G18-A wires cross-browser-determinism.yml retry-policy assertion + SECURITY-POSTURE.md doc-coupling"
+    );
+}
+
+// ============================================================================
+// br-r4-r1-5 — 7 distinct engine-determinism failure-surface pins
+//
+// The 5 pins above cover (a) per-browser-engine cells (chromium/gecko/webkit)
+// + (b) reduce-step CID equivalence + (c) flake budget. The 7 pins below
+// cover the orthogonal axis: each pin names a DISTINCT engine-determinism
+// surface that the workflow MUST drive an assertion against. Per pim-2
+// §3.6b end-to-end shape — workflow has cells AND drives engine-determinism
+// surfaces, not just one or the other.
+//
+// br-r4-r1-5 fix-brief items 1-7 per the R4 R1 finding.
+// ============================================================================
+
+#[test]
+#[ignore = "RED-PHASE: G18-A wave 5a — cross-browser canonical-bytes pin for Node envelope (br-r4-r1-5 #1; engine-determinism surface)"]
+fn cross_browser_canonical_bytes_pin_for_node_envelope() {
+    // br-r4-r1-5 #1 pin. G18-A implementer wires the workflow to drive
+    // the assertion `node-envelope canonical-bytes match across three
+    // browsers`. Distinct engine-determinism surface from per-browser
+    // cell pin: this is about the SPECIFIC CONTRACT being asserted,
+    // not just the cell existing.
+    //
+    //   let workflow = std::fs::read_to_string(workflow_path()).unwrap();
+    //   assert!(workflow.contains("node_envelope") || workflow.contains("node-envelope")
+    //         || workflow.contains("Node envelope"),
+    //       "cross-browser-determinism.yml MUST drive a Node-envelope canonical-bytes \
+    //        assertion per br-r4-r1-5 #1 (engine-determinism surface)");
+    //
+    // OBSERVABLE consequence: a workflow that has all three browser
+    // cells but doesn't assert Node-envelope canonical-bytes (e.g.
+    // only asserts handler_version_chain) misses a distinct
+    // determinism vector. Defends br-r4-r1-5 directly.
+    unimplemented!(
+        "G18-A wires Node-envelope canonical-bytes failure-surface assertion in cross-browser-determinism.yml"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G18-A wave 5a — cross-browser canonical-bytes pin for handler version chain (br-r4-r1-5 #2; engine-determinism surface)"]
+fn cross_browser_canonical_bytes_pin_for_handler_version_chain() {
+    // br-r4-r1-5 #2 pin. Distinct engine-determinism surface — handler
+    // version chain canonical bytes MUST be identical across browsers.
+    //
+    //   let workflow = std::fs::read_to_string(workflow_path()).unwrap();
+    //   assert!(workflow.contains("handler_version_chain")
+    //         || workflow.contains("handler-version-chain")
+    //         || workflow.contains("HandlerVersionChain"),
+    //       "cross-browser-determinism.yml MUST drive a handler-version-chain \
+    //        canonical-bytes assertion per br-r4-r1-5 #2 (Compromise #18 \
+    //        durable handler-version chain — Phase 3 surface)");
+    //
+    // OBSERVABLE consequence: a regression in handler-version-chain
+    // CBOR encoding (e.g. map-key ordering nondeterminism) that affects
+    // Chrome-vs-WebKit differently is caught here. Defends Compromise
+    // #18 closure narrative + br-r4-r1-5 #2.
+    unimplemented!("G18-A wires handler-version-chain canonical-bytes failure-surface assertion");
+}
+
+#[test]
+#[ignore = "RED-PHASE: G18-A wave 5a — cross-browser canonical-bytes pin for attribution frame with device DID (br-r4-r1-5 #3)"]
+fn cross_browser_canonical_bytes_pin_for_attribution_frame_with_device_did() {
+    // br-r4-r1-5 #3 pin. AttributionFrame carries device DIDs
+    // (Phase-3 G14-A `benten-id`); canonical bytes for an
+    // AttributionFrame containing a DID MUST be identical across
+    // browsers — otherwise sync would silently corrupt attribution
+    // history.
+    //
+    //   let workflow = std::fs::read_to_string(workflow_path()).unwrap();
+    //   assert!(
+    //       (workflow.contains("attribution_frame") || workflow.contains("attribution-frame")
+    //         || workflow.contains("AttributionFrame"))
+    //       && (workflow.contains("device_did") || workflow.contains("device-did")
+    //         || workflow.contains("DID")),
+    //       "cross-browser-determinism.yml MUST drive AttributionFrame-with-device-DID \
+    //        canonical-bytes assertion per br-r4-r1-5 #3 (G14-A `benten-id` cross-browser shape)");
+    //
+    // OBSERVABLE consequence: a regression where DID encoding (CBOR
+    // multibase) differs between browsers + breaks attribution-frame
+    // CID stability silently corrupts the per-edit attribution chain.
+    // Defends br-r4-r1-5 #3.
+    unimplemented!(
+        "G18-A wires AttributionFrame+device-DID canonical-bytes failure-surface assertion"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G18-A wave 5a — cross-browser CID pin for canonical fixture corpus (br-r4-r1-5 #4)"]
+fn cross_browser_cid_pin_for_canonical_fixture_corpus() {
+    // br-r4-r1-5 #4 pin. The canonical fixture CID
+    // (`bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda`
+    // per CLAUDE.md current state — stable Linux/macOS/Windows) MUST
+    // also be reproducible from each browser.
+    //
+    //   let workflow = std::fs::read_to_string(workflow_path()).unwrap();
+    //   assert!(workflow.contains("canonical_fixture") || workflow.contains("canonical-fixture")
+    //         || workflow.contains("bafyr4i"),
+    //       "cross-browser-determinism.yml MUST drive canonical-fixture-corpus \
+    //        CID-pin assertion per br-r4-r1-5 #4 (extends the per-platform CID \
+    //        contract — Linux/macOS/Windows + now Chromium/Gecko/WebKit)");
+    //
+    // OBSERVABLE consequence: a workflow that asserts per-browser bytes
+    // match each other but doesn't ALSO assert they match the native-
+    // platform canonical fixture CID misses the case where all three
+    // browsers diverge IDENTICALLY from the native baseline. Defends
+    // br-r4-r1-5 #4.
+    unimplemented!(
+        "G18-A wires canonical-fixture-corpus CID-pin failure-surface assertion (cross-browser AND cross-platform)"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G18-A wave 5a — cross-browser BLAKE3 byte identity (br-r4-r1-5 #5)"]
+fn cross_browser_blake3_byte_identity() {
+    // br-r4-r1-5 #5 pin. BLAKE3 hashing MUST produce byte-identical
+    // output across browser SIMD-path divergences. Per CLAUDE.md
+    // baked-in #5 — content-addressing relies on stable BLAKE3.
+    //
+    //   let workflow = std::fs::read_to_string(workflow_path()).unwrap();
+    //   assert!(workflow.contains("blake3") || workflow.contains("BLAKE3"),
+    //       "cross-browser-determinism.yml MUST drive a BLAKE3-byte-identity \
+    //        assertion per br-r4-r1-5 #5 (Chromium SIMD vs WebKit non-SIMD path \
+    //        divergence is a known cryptographic regression vector)");
+    //
+    // OBSERVABLE consequence: a browser whose BLAKE3 SIMD path diverges
+    // (e.g. due to wasm-feature gap, wasm-bindgen build flag mismatch,
+    // or browser-specific SIMD intrinsic implementation) is caught
+    // here. Defends br-r4-r1-5 #5 + CLAUDE.md baked-in #5.
+    unimplemented!(
+        "G18-A wires BLAKE3-byte-identity failure-surface assertion across three browsers"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G18-A wave 5a — cross-browser Ed25519 signature byte identity (br-r4-r1-5 #6)"]
+fn cross_browser_ed25519_signature_byte_identity() {
+    // br-r4-r1-5 #6 pin. Ed25519 signatures (Phase-3 D-DID) MUST be
+    // byte-identical across browsers given the same key + message.
+    // Otherwise sync would reject signatures from other browsers as
+    // forgeries.
+    //
+    //   let workflow = std::fs::read_to_string(workflow_path()).unwrap();
+    //   assert!(workflow.contains("ed25519") || workflow.contains("Ed25519"),
+    //       "cross-browser-determinism.yml MUST drive an Ed25519-signature-byte-identity \
+    //        assertion per br-r4-r1-5 #6 (signature determinism is load-bearing for \
+    //        cross-device sync — a non-deterministic signing path would split-brain \
+    //        attribution histories)");
+    //
+    // OBSERVABLE consequence: a browser whose ed25519-dalek wasm32
+    // build produces non-deterministic signatures (e.g. because of
+    // RNG path differences) is caught here. Defends br-r4-r1-5 #6.
+    unimplemented!(
+        "G18-A wires Ed25519-signature-byte-identity failure-surface assertion across three browsers"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G18-A wave 5a — cross-browser floating-point canonicalization under DSL eval (br-r4-r1-5 #7)"]
+fn cross_browser_floating_point_canonicalization_under_dsl_eval() {
+    // br-r4-r1-5 #7 pin. Floating-point arithmetic in DSL TRANSFORM
+    // primitive (when ratified — Phase-3 / Phase-4 surface) MUST be
+    // canonicalized identically across browsers (NaN bit-pattern,
+    // subnormal handling, round-to-even discipline). JavaScript's
+    // `Number` is IEEE 754, but browsers vary on edge cases (NaN
+    // payload preservation, denormal flushing on different JIT tiers).
+    //
+    //   let workflow = std::fs::read_to_string(workflow_path()).unwrap();
+    //   assert!(workflow.contains("floating_point") || workflow.contains("floating-point")
+    //         || workflow.contains("f64") || workflow.contains("IEEE"),
+    //       "cross-browser-determinism.yml MUST drive floating-point-canonicalization \
+    //        assertion per br-r4-r1-5 #7 (NaN bit-pattern + denormal handling + \
+    //        round-to-even discipline — IEEE 754 edge cases vary across browser JITs)");
+    //
+    // OBSERVABLE consequence: a TRANSFORM containing f64 arithmetic
+    // (e.g. price calculation in Credits surface) that produces
+    // different bytes on V8 vs JSC vs SpiderMonkey breaks cross-browser
+    // CID stability of the resulting Node. Defends br-r4-r1-5 #7.
+    unimplemented!(
+        "G18-A wires floating-point-canonicalization failure-surface assertion across three browsers (NaN payload + denormal + round-to-even)"
     );
 }

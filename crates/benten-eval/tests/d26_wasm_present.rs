@@ -22,8 +22,16 @@
 //!   at build time.
 //! - Pre-built `.wasm` bytes are committed alongside `.wat` source at
 //!   `crates/benten-eval/tests/fixtures/sandbox/*.wasm`.
-//! - wasm-tools 1.227.x is workspace-locked dev-dep per r1-wsa-5.
-//! - CID rebake protocol via `cargo bench-wat-rebake` tooling subcommand.
+//! - **`wat` crate is the workspace-locked dep at exact version per
+//!   r1-wsa-5 RECOMMENDATION** (recalibrated R4-FP per r4-r1-wsa-9 — the
+//!   existing dev-dep is `wat = "1"` per workspace `Cargo.toml:309`,
+//!   used at runtime by `crates/benten-eval/tests/sandbox_*.rs`. The
+//!   prior R3-D pin asserted `wasm-tools = ` substring which was a
+//!   different crate (Bytecode Alliance CLI) — would have introduced a
+//!   producer/consumer drift between the build.rs tool choice and the
+//!   existing test-time `wat::parse_str` callers).
+//! - CID rebake protocol via `cargo bench-wat-rebake` tooling subcommand
+//!   driven by the `wat` crate (NOT `wasm-tools`).
 //!
 //! ## Loader fallback shape
 //!
@@ -116,22 +124,54 @@ fn d26_cross_platform_fixture_cid_stable() {
     //   let bytes = benten_eval::tests::fixtures::load_fixture("sandbox_basic");
     //   let cid = compute_cid_blake3_dagcbor(&bytes);
     //   assert_eq!(cid.to_string(), KNOWN_FIXTURE_CID,
-    //       "fixture CID drifted; if wasm-tools version was bumped, run \
+    //       "fixture CID drifted; if `wat` crate version was bumped, run \
     //        `cargo bench-wat-rebake` to regenerate fixtures + bump KNOWN_FIXTURE_CID");
     //
-    //   // The wasm-tools dev-dep is pinned at workspace level per r1-wsa-5:
-    //   let workspace_cargo = std::fs::read_to_string("Cargo.toml").unwrap();
-    //   // implementer pins exact version from r1-wsa-5 (1.227.x):
-    //   assert!(workspace_cargo.contains("wasm-tools = ")
-    //         || workspace_cargo.contains("wasm-tools=\""),
-    //       "workspace Cargo.toml must lock wasm-tools at 1.227.x per r1-wsa-5");
+    //   // The `wat` dev-dep is pinned at workspace level per r1-wsa-5
+    //   // RECOMMENDATION + r4-r1-wsa-9 recalibration. EXACT-version
+    //   // pin (`=` prefix); soft caret/tilde matchers (`^`, `~`, bare
+    //   // version) defeat the determinism contract by permitting silent
+    //   // minor bumps that may change emitted bytes.
+    //   let workspace_cargo = std::fs::read_to_string(
+    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //           .join("..").join("..").join("Cargo.toml")
+    //   ).unwrap();
+    //
+    //   // [workspace.dependencies] section names `wat` (NOT wasm-tools):
+    //   assert!(workspace_cargo.contains("\nwat = ") || workspace_cargo.contains("\nwat="),
+    //       "workspace Cargo.toml [workspace.dependencies] MUST declare `wat` per \
+    //        r1-wsa-5 RECOMMENDATION + r4-r1-wsa-9 recalibration (the wabt-ecosystem \
+    //        crate already used at test time by sandbox_*.rs callers — NOT `wasm-tools` \
+    //        which is a different Bytecode Alliance CLI tool that emits slightly \
+    //        different bytes; mixing tools at build vs test time would break \
+    //        determinism + introduce p/c drift)");
+    //
+    //   // The version is EXACT-pinned (= prefix) — implementer locks
+    //   // the bench-wat-rebake target version (r1-wsa-5 named 1.227.x;
+    //   // the actual chosen exact version is whatever the rebake produces).
+    //   // Reject `^`, `~`, or bare patterns that permit minor bumps:
+    //   assert!(workspace_cargo.contains("wat = \"=") || workspace_cargo.contains("wat=\"="),
+    //       "workspace `wat` dep MUST use `= ` exact-version pin per r4-r1-wsa-9 \
+    //        (`^x.y.z`, `~x.y.z`, or bare `\"x.y.z\"` permit silent minor bumps that \
+    //        may change emitted .wasm bytes + break cross-platform CID stability)");
+    //
+    //   // Forbid `wasm-tools` from sneaking in as a parallel dep (the
+    //   // r4-r1-wsa-9 recalibration explicitly chose `wat` as the single
+    //   // tool; presence of both would invite producer/consumer drift):
+    //   assert!(!workspace_cargo.contains("\nwasm-tools = "),
+    //       "workspace Cargo.toml MUST NOT declare a parallel `wasm-tools` dep \
+    //        per r4-r1-wsa-9 single-tool commitment (would split build-time vs \
+    //        test-time .wat-compilation paths)");
     //
     // OBSERVABLE consequence: a CI run on Linux x86_64 + macOS arm64
-    // produces the same fixture CIDs (because wasm-tools version is
-    // pinned + .wasm bytes are committed). Defends r1-wsa-5
-    // determinism contract.
+    // produces the same fixture CIDs (because `wat` version is exact-
+    // pinned + .wasm bytes are committed + no parallel tool drift).
+    // Defends r1-wsa-5 determinism contract + r4-r1-wsa-9 single-tool +
+    // exact-version recalibration.
     //
     // Pairs with the AArch64 CI cell (also G17-B) which exercises
     // this assertion on the `macos-latest-arm64` runner.
-    unimplemented!("G17-B wires cross-platform CID-stability assertion + wasm-tools version pin");
+    unimplemented!(
+        "G17-B wires cross-platform CID-stability assertion + `wat` exact-version pin per r4-r1-wsa-9 (NOT `wasm-tools`; reject parallel-tool drift)"
+    );
 }

@@ -3,10 +3,18 @@
 //!
 //! Pin sources (per r2-test-landscape §2.5 G17-A2):
 //!
-//! - `tests/redb_suspension_store_retention_window_cross_process_round_trip`
-//!   — phase-3-backlog §6.5
+//! - `tests/redb_suspension_store_retention_window_in_process_round_trip`
+//!   — phase-3-backlog §6.5 (RECALIBRATED at R4-FP per r4-r1-wsa-10
+//!   MINOR — function/file name was `cross_process_round_trip` but the
+//!   body is in-process; renamed for accuracy. The cross-process
+//!   semantics — durability across engine open lifecycles — are
+//!   covered by the second pin `..._override_persists_across_engine_open`,
+//!   so the cross-process narrative is not lost; it's placed at the
+//!   symbol where the body actually drives it).
 //! - `tests/redb_suspension_store_retention_window_override_persists_across_engine_open`
-//!   — r1-wsa-10 (persistent-state shape transition)
+//!   — r1-wsa-10 (persistent-state shape transition; this is the
+//!   actual cross-engine-handle / cross-process-equivalent shape —
+//!   redb durability is process-agnostic at the file level)
 //!
 //! ## Retention-window override shape
 //!
@@ -21,23 +29,27 @@
 //! re-opens — a process that sets the override, closes the engine,
 //! and reopens MUST observe the same retention window.
 //!
-//! ## Why two distinct pin functions
+//! ## Why two distinct pin functions (R4-FP rename per r4-r1-wsa-10)
 //!
-//! - `..._cross_process_round_trip` — same-process round-trip with a
+//! - `..._in_process_round_trip` — single-process round-trip with a
 //!   suspension that exceeds the retention window: the
-//!   `is_retention_exhausted` check fires.
-//! - `..._override_persists_across_engine_open` — a stronger pin: the
-//!   override is set in process A, the engine closes, the same redb
-//!   file is opened in process B (or via second `Engine::open`), and
-//!   process B observes the same retention window. Defends r1-wsa-10
-//!   persistent-state shape transition.
+//!   `is_retention_exhausted` check fires within one
+//!   `RedbSuspensionStore::open` lifecycle. Verifies CORRECTNESS of
+//!   the expiration check.
+//! - `..._override_persists_across_engine_open` — the actual cross-
+//!   engine-handle / cross-process-equivalent shape: the override is
+//!   set in handle A, the store is dropped, the same redb file is
+//!   re-opened in handle B (which is process-agnostic at the file
+//!   level — redb durability is governed by file commits, not handle
+//!   identity), and handle B observes the same retention window.
+//!   Verifies DURABILITY of the override per r1-wsa-10.
 
 #![allow(clippy::unwrap_used)]
 #![cfg(not(target_arch = "wasm32"))]
 
 #[test]
-#[ignore = "RED-PHASE: G17-A2 wave 5b wires RedbSuspensionStore retention-window override per phase-3-backlog §6.5"]
-fn redb_suspension_store_retention_window_cross_process_round_trip() {
+#[ignore = "RED-PHASE: G17-A2 wave 5b wires RedbSuspensionStore retention-window override per phase-3-backlog §6.5 + r4-r1-wsa-10 rename to in_process (body shape is single-lifecycle correctness; durability is the sibling pin's concern)"]
+fn redb_suspension_store_retention_window_in_process_round_trip() {
     // phase-3-backlog §6.5 pin. G17-A2 implementer wires this:
     //
     //   use benten_engine::suspension_store::RedbSuspensionStore;
