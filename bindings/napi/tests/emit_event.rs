@@ -84,26 +84,40 @@ fn engine_emit_event_no_longer_returns_e_primitive_not_implemented() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-D wave-6 — EmitBroadcast bus per-replica filter under cross-trust-boundary (stream-r1-7 + stream-r4r1-3)"]
+#[ignore = "RED-PHASE: G16-D wave-6b un-ignores; G19-B wave-7 + G14-D wave-5a wire prerequisites — napi EmitBroadcast bus per-replica filter under cross-trust-boundary (stream-r1-7 + stream-r4r1-3)"]
 fn napi_emit_broadcast_bus_fan_out_under_cross_trust_boundary_replicas_via_per_subscriber_filtering()
  {
-    // stream-r4r1-3 disambiguation: renamed from
-    // `emit_broadcast_bus_fan_out_under_cross_trust_boundary_replicas_via_per_subscriber_filtering`
-    // (which clashed with the engine-side pin at
-    // `crates/benten-engine/tests/emit_broadcast_replicas.rs`) to the
-    // napi-prefixed form. Per stream-r4r1-3 wave-pairing: this pin
-    // un-ignores at G16-D wave-6 (the LAST of the three required
-    // implementer waves: G14-D wave-5a per-subscriber filtering +
-    // G19-B wave-7 EmitBroadcast standalone surface + G16-D wave-6
-    // sync replication).
+    // stream-r1-7 + stream-r4r1-3 cross-wave coordination pin.
     //
-    // stream-r1-7 cross-pin: G19-B's EmitBroadcast bus must NOT cache
-    // cap-pass decisions across replica boundaries; each Atrium-replica's
-    // per-subscriber cap-recheck fires independently at delivery (the
-    // SUBSCRIBE-side discipline carries through to EMIT — see G16-D
-    // sibling test `tests/emit_event_fan_out_across_atrium_each_replica_filters_independently_at_delivery`).
+    // ## Cross-wave ownership (stream-r4r1-3 RECOMMEND)
     //
-    // G19-B + G16-D implementer wires this:
+    // Three implementer waves contribute to making this test green;
+    // the test is un-ignored by the LAST of the three:
+    //
+    //   - G14-D wave-5a: per-subscriber filtering at delivery
+    //     (cap_recheck closure consulting durable grant store).
+    //   - G19-B wave-7: EmitBroadcast standalone surface
+    //     (engine.emitEvent → EmitBroadcast bus publish path).
+    //   - G16-D wave-6b: Atrium-replica sync replication (the bus
+    //     fans out across replicas for cross-trust-boundary delivery).
+    //
+    // Per pim-4 §3.10 wave-pairing protocol, **G16-D wave-6b** is the
+    // un-ignore wave (the last of the three required-implementer waves
+    // — sync-replication is the load-bearing seam that ties the other
+    // two waves together at runtime).
+    //
+    // ## Test-name disambiguation (stream-r4r1-3)
+    //
+    // This is the napi-side end-to-end pin; the engine-side sibling
+    // pin lives at
+    // `crates/benten-engine/tests/emit_broadcast_replicas.rs::emit_broadcast_bus_fan_out_under_cross_trust_boundary_replicas_via_per_subscriber_filtering`
+    // (R3-B; G14-D-tagged). Renamed from the duplicate engine-side
+    // name to disambiguate per pim-7 §3.5 dim #5 (duplicate test names
+    // across crates are a future drift hazard); the napi-side prefix
+    // `napi_` preserves the cross-binding ownership signal.
+    //
+    // G14-D + G19-B + G16-D implementer wires this (un-ignored at G16-D
+    // wave-6b — see cross-wave ownership note above):
     //   // Two-peer Atrium fan-out scenario:
     //   //   peer-A emits an event;
     //   //   peer-A has subscriber S_A (cap-pass);
@@ -115,5 +129,7 @@ fn napi_emit_broadcast_bus_fan_out_under_cross_trust_boundary_replicas_via_per_s
     //   // Defends against the asymmetry shape (peer-A's cap-recheck
     //   // would authoritatively pass-or-fail for peer-B's subscribers,
     //   // a cross-trust-boundary leak).
-    unimplemented!("G19-B + G16-D wires EmitBroadcast cross-trust-boundary per-replica filtering");
+    unimplemented!(
+        "G16-D wave-6b un-ignores; G14-D + G19-B prerequisites land per-subscriber filter + EmitBroadcast publish path"
+    );
 }

@@ -97,6 +97,23 @@ export interface RegisteredHandler {
  * Inv-14 attribution frame — the (actor, handler, capability_grant) triple
  * authorizing each emitted trace step plus the Inv-4 SANDBOX nest-depth
  * counter. Mirrors `benten_eval::AttributionFrame`.
+ *
+ * # Phase-3 widening (R4-R1 pcds-r4-r1-1 — 25th p/c drift PRE-EMPTION)
+ *
+ * The Rust producer is widened at G14-D wave-5a (`device_did` per
+ * sync_replica_attribution.rs) + G16-B wave-6b (`peer_did_set` per
+ * loro_version_chain.rs + atrium_three_peer.rs). The corresponding TS
+ * consumer fields are declared here as OPTIONAL (`?`) so pre-Phase-3
+ * trace consumers continue to compile; post-G14-D / post-G16-B,
+ * runtime-emitted attribution payloads carry these fields when the
+ * underlying step participated in a Loro merge (peer_did_set) or
+ * cross-device sync replica (device_did).
+ *
+ * Pin source (instance 25 candidate pre-emption): R4-R1 producer-consumer
+ * deep sweep `pcds-r4-r1-1`. Same shape as Phase-2b Instance 18
+ * (`sandboxDepth` widening) caught post-merge by R6-R3 r6-r3-pcds-1.
+ * Pre-empting at R4-R1 corpus revision avoids a 25th instance landing
+ * during R5 G14-D / G16-B implementation.
  */
 export interface AttributionFrame {
   /** CID of the actor (principal) that authored the step. */
@@ -119,6 +136,37 @@ export interface AttributionFrame {
    * Phase-6 AI workflow forking).
    */
   sandboxDepth: number;
+  /**
+   * Phase-3 G16-B widening (pcds-r4-r1-1 instance-25 PRE-EMPTION):
+   * the set of peer DIDs that contributed to the Loro-merged version
+   * the attribution chain references. Populated by G16-B wave-6b's
+   * loro_version_chain producer when the step's underlying anchor
+   * traversed a multi-peer merge; absent (`undefined`) for steps that
+   * did not. Mirrors the Rust producer's
+   * `AttributionFrame::peer_did_set` field at
+   * `crates/benten-engine/src/loro_version_chain.rs`.
+   */
+  peerDidSet?: string[];
+  /**
+   * Phase-3 G14-D widening (pcds-r4-r1-1 instance-25 PRE-EMPTION):
+   * the device DID that authored the step. Populated by G14-D wave-5a's
+   * sync_replica_attribution producer for cross-device sync-replica
+   * writes per CLAUDE.md baked-in #17 device-heterogeneity contract;
+   * absent (`undefined`) when the step originated from the local-only
+   * non-sync-replica path. Mirrors the Rust producer's
+   * `AttributionFrame::device_did` field at
+   * `crates/benten-engine/src/sync_replica_attribution.rs`.
+   */
+  deviceDid?: string;
+  /**
+   * Phase-3 G14-D widening (pcds-r4-r1-1 instance-25 PRE-EMPTION):
+   * optional CID of the device-attestation envelope that authorized
+   * the step's device-DID claim. Populated when the runtime resolves
+   * the device DID against a registered DeviceAttestation (see
+   * [`DeviceAttestation`]); absent when the step originated from the
+   * Atrium-membership root device.
+   */
+  deviceCid?: string;
 }
 
 /**
@@ -234,6 +282,67 @@ export interface Edge {
   source: string;
   target: string;
   label: string;
+}
+
+/**
+ * One capability claim inside a [`DeviceAttestation`]. Mirrors the Rust
+ * producer's per-claim shape at
+ * `bindings/napi/tests/device_attestation_napi.rs` test rationale.
+ *
+ * Phase-3 device-mesh exploration (CLAUDE.md baked-in #17): a browser
+ * tab declares which capabilities its device-DID may exercise against
+ * the full peer's authoritative store; the full peer attenuates the
+ * UCAN chain accordingly.
+ */
+export interface CapabilityClaim {
+  /** Path-glob of resources the claim applies to (e.g. `"/zone/notifications/*"`). */
+  path: string;
+  /** Ability the claim grants (e.g. `"read"` / `"write"` / `"emit"`). */
+  ability: string;
+}
+
+/**
+ * Phase-3 device-attestation envelope declared via
+ * `engine.atrium.declareDeviceAttestation(envelope)`. Mirrors the napi
+ * binding's typed-struct contract (R3-C device_attestation_napi.rs +
+ * D-PHASE-3-25 + r1-napi-2).
+ *
+ * Pin source (instance 26 candidate pre-emption): R4-R1 producer-consumer
+ * deep sweep `pcds-r4-r1-2`. Schema-level interface declared so TS
+ * callers writing `engine.atrium.declareDeviceAttestation({ deviceDid,
+ * capabilities, freshnessWindow })` get compile-time type-checking
+ * rather than implicit `any`/`unknown`. Same shape as Phase-2b §7.9
+ * Edge.cid phantom — the runtime contract was pinned at the test layer
+ * but the TS schema-level declaration was missing.
+ *
+ * # Field semantics
+ *
+ * - `deviceDid` — the `did:key:...` identifier of the declaring device.
+ *   The Rust producer canonicalizes via the keypair envelope; TS callers
+ *   pass the resolved string.
+ * - `capabilities` — the per-claim list narrowing what the device may
+ *   exercise against the full peer's store. Replay-resistance via UCAN
+ *   chain attenuation (G14-A2 + G14-B coverage).
+ * - `freshnessWindow` — TTL in seconds before the attestation must be
+ *   re-declared. Mirrors the Rust producer's freshness-window field
+ *   used by the replay-resistance path at
+ *   `crates/benten-engine/tests/ucan_replay_audience.rs`.
+ *
+ * Defends against Phase-2b Edge.cid phantom recurrence: the TS schema
+ * MUST stay in lock-step with the napi-side typed `#[napi(object)]`
+ * struct (G14-A2 + G16-D ship the typed struct, NOT a loose
+ * `serde_json::Value` parameter). The §7.10 ts_surface_parity_meta_test
+ * walks every `#[napi]` exported struct including this one; mode-5
+ * (schema-parity-missing-field) drift would be caught at G19-D wave-7
+ * meta-test landing.
+ */
+export interface DeviceAttestation {
+  /** `did:key:...` identifier of the declaring device. */
+  deviceDid: string;
+  /** Per-claim capabilities this device may exercise. */
+  capabilities: CapabilityClaim[];
+  /** TTL in seconds before re-declaration is required. */
+  freshnessWindow: number;
 }
 
 /**

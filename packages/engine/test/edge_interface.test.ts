@@ -43,6 +43,9 @@ describe("G19-D Edge interface fix (§7.9)", () => {
     // OBSERVABLE consequence: TS callers no longer access `edge.cid`
     // (which was always undefined). Defends against silent-undefined
     // failure shape where consumers assumed a field that never existed.
+    throw new Error(
+      "RED-PHASE: G19-D wave-7 wires Edge interface no-phantom-cid + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G19-D wave-7 — Edge interface exposes `properties` field", async () => {
@@ -67,5 +70,8 @@ describe("G19-D Edge interface fix (§7.9)", () => {
     // already flowing through napi but unsurfaced in the TS shape. End-to-end
     // pin per pim-2 §3.6b — would FAIL if the field were declared in
     // .d.ts but not present in the runtime payload (sentinel-only fix).
+    throw new Error(
+      "RED-PHASE: G19-D wave-7 wires Edge.properties surfacing + drops .skip + un-comments assertions",
+    );
   });
 });

@@ -69,6 +69,9 @@ describe("G19-C2 openStream FinalizationRegistry leak detector (§7.1.2 + stream
     //
     // Defends against the sentinel-presence failure mode where the
     // leak detector exists but never fires.
+    throw new Error(
+      "RED-PHASE: G19-C2 wave-7 wires FinalizationRegistry leak scenario-a + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G19-C2 wave-7 — leak fires when close() not called assertion (scenario b)", async () => {
@@ -94,6 +97,11 @@ describe("G19-C2 openStream FinalizationRegistry leak detector (§7.1.2 + stream
     //   // throw-vs-return at the callback (different cause field):
     //   expect(errors.length).toBeGreaterThanOrEqual(1);
     //   expect(errors[0].code).toBe("E_STREAM_HANDLE_LEAKED");
+    //
+    // OBSERVABLE consequence: leak detector fires on handler-throw + GC.
+    throw new Error(
+      "RED-PHASE: G19-C2 wave-7 wires FinalizationRegistry leak scenario-b + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G19-C2 wave-7 — GC pressure timeout fires leak (scenario c)", async () => {
@@ -112,6 +120,12 @@ describe("G19-C2 openStream FinalizationRegistry leak detector (§7.1.2 + stream
     //   // Defends against the GC-non-determinism flake mode that
     //   // stream-r1-10 named (Phase-2b coverage.yml flake precedent on
     //   // wait_signal_arrives_after_timeout_fires_e_wait_timeout).
+    //
+    // OBSERVABLE consequence: GC-pressure timeout polling fallback fires
+    // independently of FinalizationRegistry callback scheduling.
+    throw new Error(
+      "RED-PHASE: G19-C2 wave-7 wires GC-pressure timeout fallback + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G19-C2 wave-7 — natural completion does NOT fire leak (scenario d / stream-r1-4 explicit-close-semantics)", async () => {
@@ -141,6 +155,9 @@ describe("G19-C2 openStream FinalizationRegistry leak detector (§7.1.2 + stream
     // Defends against the false-positive failure mode where natural
     // completion erroneously fires the leak event (stream-r1-4 named
     // this as "the easy false-positive").
+    throw new Error(
+      "RED-PHASE: G19-C2 wave-7 wires natural-completion negative pin (no leak fires) + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G19-C2 wave-7 — Engine.shutdown() drains open handles + fires leak (scenario d)", async () => {
@@ -158,6 +175,9 @@ describe("G19-C2 openStream FinalizationRegistry leak detector (§7.1.2 + stream
     //   // OBSERVABLE consequence: shutdown drain fires the leak event
     //   // for the still-open handle (no GC required):
     //   expect(errors.some((e) => e.code === "E_STREAM_HANDLE_LEAKED")).toBe(true);
+    throw new Error(
+      "RED-PHASE: G19-C2 wave-7 wires Engine.shutdown() drain leak + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G19-C2 wave-7 — engine.openStream returned handle exposes requiresExplicitClose accessor", async () => {
@@ -172,5 +192,8 @@ describe("G19-C2 openStream FinalizationRegistry leak detector (§7.1.2 + stream
     // are useful scaffolding but the load-bearing assertion is the
     // observable consequence of the leak detector firing/not-firing
     // per scenario.
+    throw new Error(
+      "RED-PHASE: G19-C2 wave-7 wires requiresExplicitClose accessor + drops .skip + un-comments assertions",
+    );
   });
 });
