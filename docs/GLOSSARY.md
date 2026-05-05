@@ -34,7 +34,7 @@ Terms that have specific meaning in Benten. Alphabetical.
 
 **Handler** — A registered subgraph that acts as an entry point for external calls. `crud('post')` produces a handler with five actions.
 
-**HLC** — Hybrid Logical Clock. Monotonic timestamps combining physical and logical clocks, used for causal ordering. Relevant in Phase 3 (P2P sync) and in Phase-2a capability wall-clock revocation paths. Crate: `uhlc`.
+**HLC** — Hybrid Logical Clock. Monotonic timestamps combining physical and logical clocks, used for causal ordering. Relevant in Phase 3 (P2P sync) and in Phase-2a capability wall-clock revocation paths. Implemented directly in `benten-core::hlc` (per Phase-3 G14-pre-D landing 2026-05-04; rationale at the module rustdoc — `uhlc` crate evaluated and rejected for `async-std` + `no_std` + async-return-shape mismatch).
 
 **Invariant** — A structural or runtime check the engine enforces. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full 14-invariant list and their phase landing.
 
