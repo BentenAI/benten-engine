@@ -14,7 +14,7 @@
 //! in `dsl.ts` against the eval primitive's `execute()` property reads.
 //! For DSL-compiler-mediated primitives (BranchArgs / IterateArgs /
 //! CallArgs etc.) the meta-test walks against the DSL-compiler output
-//! (`crates/benten-dsl-compiler/src/lib.rs::compile`) rather than directly
+//! (`crates/benten-dsl-compiler/src/lib.rs::compile_str`) rather than directly
 //! against eval primitive reads.
 //!
 //! Per stream-r1-5 expansion (D-PHASE-3-9 RECOMMEND): consumer projection
