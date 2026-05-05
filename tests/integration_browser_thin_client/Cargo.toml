@@ -1,0 +1,40 @@
+[package]
+name = "phase-3-integration-browser-thin-client-tests"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+# Phase-3 R3-D scaffold for the G18-A side of the
+# `tests/integration/atrium_browser_tab_as_thin_client_view_into_full_peer_e2e`
+# end-to-end pin.
+#
+# Per r2-test-landscape §13 R3 ambiguous-ownership pre-emption:
+#
+# > `tests/integration/atrium_browser_tab_as_thin_client_view_into_full_peer_e2e`
+# > is owned by R3-B (G14-D thin-client subscription) AND R3-D (G18-A
+# > IndexedDB). Pre-emption: R3-B writes the test asserting full-peer
+# > side filtering; R3-D extends with browser-side IndexedDB cache
+# > assertion. Both reference SAME file but disjoint setup/assertion
+# > blocks.
+#
+# RATIONALE for separate workspace package: R3-B and R3-D land
+# independently; a separate package per agent avoids file-write
+# conflicts. The full §3.E + exit-criterion-19 e2e pin shape is the
+# UNION of both packages' bodies. R3-E (G20-B) consolidates if the
+# resulting two-file shape is awkward at phase-close.
+
+[lib]
+path = "src/lib.rs"
+doctest = false
+bench = false
+
+[[test]]
+name = "atrium_browser_thin_client_g18_a_indexeddb"
+path = "atrium_browser_thin_client_g18_a_indexeddb.rs"
+
+[dependencies]
+
+[lints]
+workspace = true
