@@ -152,18 +152,32 @@ fn multi_sig_surface_no_recovery_protocol_specific_behavior_in_phase_3() {
     // must NOT bake in protocol-specific assumptions (e.g., "Shamir
     // share count" as a method on the trait would break MLS impls).
     //
-    // G14-A2 implementer wires this as a SOURCE-CITE assertion:
+    // G14-A2 implementer wires this as a SOURCE-CITE assertion.
+    // Per crypto-r4-r1-minor-2 (R4 R1 cryptography lens), the
+    // source-grep MUST EXCLUDE comment lines (split on lines, skip
+    // leading `//` `///` and block comments) to avoid false-positives
+    // when doc-comments legitimately mention deferred-protocol names.
     //
     //   let src = std::fs::read_to_string("crates/benten-id/src/multi_sig.rs").unwrap();
+    //   // Strip comment-only lines per crypto-r4-r1-minor-2 hardening:
+    //   let non_comment: String = src.lines()
+    //       .filter(|line| {
+    //           let trimmed = line.trim_start();
+    //           !trimmed.starts_with("//")
+    //       })
+    //       .collect::<Vec<_>>()
+    //       .join("\n");
+    //   // Use word-boundary regex to avoid e.g. `tpm` matching `setpm`:
     //   const FORBIDDEN: &[&str] = &[
-    //       "shamir", "Shamir", "SHAMIR",
-    //       "mls::", "MLS",
-    //       "social_recovery", "SocialRecovery",
-    //       "tpm", "TPM", "hardware_escrow",
+    //       r"\bshamir\b", r"\bShamir\b", r"\bSHAMIR\b",
+    //       r"\bmls::", r"\bMLS\b",
+    //       r"\bsocial_recovery\b", r"\bSocialRecovery\b",
+    //       r"\btpm\b", r"\bTPM\b", r"\bhardware_escrow\b",
     //   ];
     //   for needle in FORBIDDEN {
-    //       assert!(!src.contains(needle),
-    //           "multi_sig.rs MUST NOT name protocol {} per D-PHASE-3-24 deferral", needle);
+    //       let re = regex::Regex::new(needle).unwrap();
+    //       assert!(!re.is_match(&non_comment),
+    //           "multi_sig.rs (NON-COMMENT) MUST NOT name protocol {} per D-PHASE-3-24 deferral", needle);
     //   }
     //
     // OBSERVABLE consequence: the trait surface stays neutral on

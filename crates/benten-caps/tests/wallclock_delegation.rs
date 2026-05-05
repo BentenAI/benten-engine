@@ -111,3 +111,103 @@ fn wallclock_hlc_rides_alongside_monotonic() {
         "MonotonicSource must be the authoritative cadence driver"
     );
 }
+
+// =====================================================================
+// R4-FP-R3-B RED-PHASE pins: Phase-3 evaluator-delegation runtime-arm
+// closure (G14-B wave-4b; cap-r4-8 MINOR closure of cap-minor-8
+// fix-now-action; closes Phase-2a residual TODOs at policy.rs:281-326).
+//
+// Pin sources (per R4 R1 capability-system-reviewer lens, finding
+// r4-r1-cap-8):
+//
+// - `policy_iterate_batch_boundary_evaluator_delegation_observable_in_runtime_arm`
+// - `policy_wallclock_refresh_ceiling_evaluator_delegation_observable_in_runtime_arm`
+//
+// ## Architectural intent
+//
+// The Phase-2a-era SHAPE-PINS above (`caps_iterate_batch_delegation_end_to_end`
+// and `caps_wallclock_refresh_ceiling_cap_grant_configurable`) test the helper
+// shape; they do NOT exercise end-to-end runtime delegation through the
+// engine's evaluator. The TODOs at `policy.rs:281-326` document the
+// remaining wire-up work, paired with G14-B's durable UCAN backend.
+// These pins close that residual end-to-end.
+// =====================================================================
+
+#[test]
+#[ignore = "RED-PHASE: G14-B — cap-r4-8 — iterate-batch evaluator delegation observable in runtime arm"]
+fn policy_iterate_batch_boundary_evaluator_delegation_observable_in_runtime_arm() {
+    // cap-r4-8 pin (cap-minor-8 closure). Custom policy with override
+    // = 5; ITERATE-heavy subgraph; observe refresh fires every 5 iters
+    // in production runtime arm.
+    //
+    // Concrete shape:
+    //   struct OverridePolicy { boundary: usize }
+    //   impl benten_caps::CapabilityPolicy for OverridePolicy {
+    //       fn check_write(&self, _ctx: &benten_caps::WriteContext) -> Result<(), benten_caps::CapError> { Ok(()) }
+    //       fn iterate_batch_boundary(&self) -> usize { self.boundary }
+    //   }
+    //
+    //   let policy = OverridePolicy { boundary: 5 };
+    //   let engine = benten_engine::Engine::builder()
+    //       .with_policy(policy)
+    //       .open(store_dir.path()).unwrap();
+    //
+    //   // Drive an ITERATE-heavy subgraph (e.g., 100 iterations):
+    //   let metrics = engine.run_iterate_subgraph_with_metrics(&iterate_100x_subgraph).unwrap();
+    //
+    //   // Refresh fires every 5 iters (override observed end-to-end):
+    //   assert_eq!(metrics.refresh_count, 100 / 5,
+    //       "evaluator must consult policy override per cap-r4-8");
+    //
+    //   // Source-cite that the TODO at policy.rs:281-326 is closed:
+    //   let src = std::fs::read_to_string("crates/benten-caps/src/policy.rs").unwrap();
+    //   assert!(!src.contains("TODO(phase-3 — iterate-batch-boundary policy delegation)"),
+    //       "policy.rs iterate-batch TODO must be closed at G14-B per cap-r4-8");
+    //
+    // OBSERVABLE consequence: the evaluator threads through to the
+    // policy's iterate_batch_boundary at every batch; not just the
+    // helper shape but the production runtime path. Closes the
+    // Phase-2a residual end-to-end.
+    unimplemented!(
+        "G14-B wires evaluator iterate_batch_boundary delegation end-to-end per cap-r4-8"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G14-B — cap-r4-8 — wallclock refresh ceiling evaluator delegation observable in runtime arm"]
+fn policy_wallclock_refresh_ceiling_evaluator_delegation_observable_in_runtime_arm() {
+    // cap-r4-8 pin (cap-minor-8 closure). Custom policy with override
+    // = 30s; long-running CALL; observe refresh fires at 30s wall-clock
+    // in production runtime arm.
+    //
+    // Concrete shape:
+    //   struct ShortRefreshPolicy;
+    //   impl benten_caps::CapabilityPolicy for ShortRefreshPolicy {
+    //       fn check_write(&self, _ctx: &benten_caps::WriteContext) -> Result<(), benten_caps::CapError> { Ok(()) }
+    //       fn wallclock_refresh_ceiling(&self) -> Duration { Duration::from_secs(30) }
+    //   }
+    //
+    //   let engine = benten_engine::Engine::builder()
+    //       .with_policy(ShortRefreshPolicy)
+    //       .open(store_dir.path()).unwrap();
+    //
+    //   // Drive a long-running CALL (>30s wall-clock):
+    //   let metrics = engine.run_call_with_metrics_for_duration(
+    //       &long_running_subgraph, Duration::from_secs(90)).unwrap();
+    //
+    //   // Refresh fires every 30s (override observed end-to-end):
+    //   assert_eq!(metrics.wallclock_refresh_count, 90 / 30,
+    //       "evaluator must consult policy override per cap-r4-8");
+    //
+    //   // Source-cite that the TODO at policy.rs:281-326 is closed:
+    //   let src = std::fs::read_to_string("crates/benten-caps/src/policy.rs").unwrap();
+    //   assert!(!src.contains("TODO(phase-3 — wallclock-refresh-ceiling evaluator wire-up)"),
+    //       "policy.rs wallclock TODO must be closed at G14-B per cap-r4-8");
+    //
+    // OBSERVABLE consequence: the evaluator threads through to the
+    // policy's wallclock_refresh_ceiling at runtime; production path
+    // not just helper shape. Closes the Phase-2a residual end-to-end.
+    unimplemented!(
+        "G14-B wires evaluator wallclock_refresh_ceiling delegation end-to-end per cap-r4-8"
+    );
+}

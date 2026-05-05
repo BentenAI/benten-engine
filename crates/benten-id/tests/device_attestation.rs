@@ -279,3 +279,190 @@ fn device_attestation_revoked_device_cannot_sign_new_ucan_delegation() {
         "G14-A2 wires post-revocation device-UCAN rejection at chain-walk via device-revocation log"
     );
 }
+
+#[test]
+#[ignore = "RED-PHASE: G14-A2 — cap-r4-7 — envelope must be attenuated by parent DID"]
+fn device_attestation_envelope_must_be_attenuated_by_parent_did() {
+    // cap-r4-7 pin (cap-major-4 capability-system structural closure).
+    // The device-DID attestation envelope MUST be a structurally-
+    // attenuated UCAN claim: issuer = parent identity-DID; subject =
+    // device-DID; capabilities subset of parent's capability set.
+    //
+    // Implementer wires:
+    //
+    //   let parent_kp = benten_id::keypair::Keypair::generate();
+    //   let device_kp = benten_id::keypair::Keypair::generate();
+    //
+    //   // Parent has a constrained authority set (e.g., not host:sandbox:exec):
+    //   let parent_authority = benten_id::ucan::AuthoritySet::new()
+    //       .add_capability("/zone/posts", "read")
+    //       .add_capability("/zone/posts", "write");
+    //
+    //   // Issue attestation: envelope MUST be subset of parent_authority:
+    //   let envelope = benten_id::device_attestation::CapabilityEnvelope {
+    //       runs_sandbox: false, // parent doesn't have host:sandbox:exec, so this is consistent
+    //       holds_zones: benten_id::device_attestation::ZoneScope::Specific(vec!["/zone/posts".into()]),
+    //       ..Default::default()
+    //   };
+    //   let attestation = benten_id::device_attestation::DeviceAttestation::issue_with_authority(
+    //       &parent_kp, device_kp.public_key().to_did(), envelope, parent_authority).unwrap();
+    //
+    //   // Chain-walk: attestation envelope is structurally attenuated:
+    //   let chain = benten_id::ucan::AttenuationChain::from_attestation(&attestation);
+    //   assert_eq!(chain.issuer(), parent_kp.public_key().to_did());
+    //   assert_eq!(chain.subject(), device_kp.public_key().to_did());
+    //   assert!(chain.is_subset_of(&parent_authority),
+    //       "device attestation envelope MUST be subset of parent authority per cap-r4-7");
+    //
+    // OBSERVABLE consequence: attestation envelopes are structurally
+    // tied to parent's capability set; future chain-walkers can
+    // verify attenuation just like any other UCAN delegation. Defends
+    // against the "compromised device self-attests with arbitrary
+    // capabilities" attack class.
+    unimplemented!(
+        "G14-A2 wires structural attenuation: attestation envelope subset of parent authority per cap-r4-7"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G14-A2 — cap-r4-7 — widening parent authority is rejected"]
+fn device_attestation_widening_parent_authority_is_rejected() {
+    // cap-r4-7 pin (cap-major-4 closure, attenuation widening case).
+    // An attestation envelope claiming wider authority than the parent
+    // chain rejects at chain-walk with a typed envelope-widening error.
+    //
+    // Implementer wires:
+    //
+    //   let parent_kp = benten_id::keypair::Keypair::generate();
+    //   let device_kp = benten_id::keypair::Keypair::generate();
+    //
+    //   // Parent: only /zone/posts read.
+    //   let parent_authority = benten_id::ucan::AuthoritySet::new()
+    //       .add_capability("/zone/posts", "read");
+    //
+    //   // Adversarial envelope: claims write on /zone/admin (widening!):
+    //   let widening_envelope = benten_id::device_attestation::CapabilityEnvelope {
+    //       runs_sandbox: true, // parent has no sandbox authority
+    //       holds_zones: benten_id::device_attestation::ZoneScope::Full, // wider than parent's specific zone
+    //       ..Default::default()
+    //   };
+    //
+    //   // Issuance must reject (or chain-walk must reject the envelope):
+    //   let result = benten_id::device_attestation::DeviceAttestation::issue_with_authority(
+    //       &parent_kp, device_kp.public_key().to_did(),
+    //       widening_envelope, parent_authority);
+    //   assert!(matches!(result.unwrap_err(),
+    //       benten_id::device_attestation::IssueError::EnvelopeWidening { .. }),
+    //       "issue must reject envelope widening per cap-r4-7");
+    //
+    // OBSERVABLE consequence: a parent-DID cannot issue an attestation
+    // claiming wider authority than the parent itself holds. Defends
+    // against the "compromised parent issues over-broad device
+    // attestation" failure shape at the issuance gate.
+    unimplemented!(
+        "G14-A2 wires envelope-widening rejection at attestation issuance + chain-walk per cap-r4-7"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G14-A2 — cap-r4-7 — runs_sandbox=false cannot be widened by device-signed re-attestation"]
+fn device_attestation_runs_sandbox_false_cannot_be_widened_by_device_signed_re_attestation() {
+    // cap-r4-7 pin (cap-major-4 closure, self-re-attestation case).
+    // A compromised device that holds the device-keypair MUST NOT be
+    // able to publish a self-signed attestation with widened envelope
+    // (runs_sandbox=true when parent issued runs_sandbox=false).
+    //
+    // Implementer wires:
+    //
+    //   let parent_kp = benten_id::keypair::Keypair::generate();
+    //   let device_kp = benten_id::keypair::Keypair::generate();
+    //
+    //   // Parent issues attestation with runs_sandbox=false:
+    //   let constrained_envelope = benten_id::device_attestation::CapabilityEnvelope {
+    //       runs_sandbox: false,
+    //       ..Default::default()
+    //   };
+    //   let _legit_attestation = benten_id::device_attestation::DeviceAttestation::issue(
+    //       &parent_kp, device_kp.public_key().to_did(), constrained_envelope).unwrap();
+    //
+    //   // Adversarial path: compromised device tries to self-sign a
+    //   // wider envelope. The chain-walker must reject because the
+    //   // issuer (device_kp) is not the parent_kp.
+    //   let widened_envelope = benten_id::device_attestation::CapabilityEnvelope {
+    //       runs_sandbox: true, // widened
+    //       ..Default::default()
+    //   };
+    //   let self_signed_widening = benten_id::device_attestation::DeviceAttestation::issue(
+    //       &device_kp, // SELF-issued, not parent-issued
+    //       device_kp.public_key().to_did(),
+    //       widened_envelope).unwrap();
+    //
+    //   // Acceptor consults parent-DID lookup; rejects self-signed envelope:
+    //   let acceptor = benten_id::device_attestation::Acceptor::with_parent_lookup(
+    //       parent_kp.public_key().to_did());
+    //   let err = acceptor.accept(&self_signed_widening).unwrap_err();
+    //   assert!(matches!(err,
+    //       benten_id::device_attestation::AcceptError::IssuerNotParent { .. })
+    //         || matches!(err,
+    //       benten_id::device_attestation::AcceptError::EnvelopeWidening { .. }),
+    //       "self-signed widening attestation MUST reject per cap-r4-7");
+    //
+    // OBSERVABLE consequence: a stolen device-keypair cannot widen
+    // its own envelope by self-signing. Defends against the most
+    // severe compromise scenario (device key extraction + attempted
+    // privilege escalation).
+    unimplemented!(
+        "G14-A2 wires acceptor rejection of device-self-signed widening re-attestation per cap-r4-7"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G14-A2 — sec-r4r1-6 — capability-envelope downgrade attack blocked"]
+fn device_attestation_capability_envelope_downgrade_attack_blocked_by_runtime_recheck_against_parent_chain()
+ {
+    // sec-r4r1-6 pin (multi-device-identity attack family). A device
+    // that legitimately claims FEWER capabilities than parent envelope
+    // grants (legitimate downgrade), then attempts to invoke a
+    // NOT-claimed capability MUST be blocked by runtime re-check
+    // against the parent UCAN chain.
+    //
+    // Implementer wires:
+    //
+    //   let parent_kp = benten_id::keypair::Keypair::generate();
+    //   let device_kp = benten_id::keypair::Keypair::generate();
+    //
+    //   // Parent grants device a minimal envelope (e.g., read-only):
+    //   let downgrade_envelope = benten_id::device_attestation::CapabilityEnvelope {
+    //       runs_sandbox: false,
+    //       holds_zones: benten_id::device_attestation::ZoneScope::CacheOnly,
+    //       ..Default::default()
+    //   };
+    //   let attestation = benten_id::device_attestation::DeviceAttestation::issue(
+    //       &parent_kp, device_kp.public_key().to_did(), downgrade_envelope).unwrap();
+    //
+    //   // Device attempts to invoke host:sandbox:exec (NOT in envelope):
+    //   let invocation_ucan = benten_id::ucan::Ucan::builder()
+    //       .issuer(device_kp.public_key().to_did())
+    //       .audience(...)
+    //       .capability("host:sandbox:exec", "*")
+    //       .sign(&device_kp).unwrap();
+    //
+    //   // Runtime re-check: chain-walker consults attestation envelope;
+    //   // rejects because runs_sandbox=false:
+    //   let err = benten_id::ucan::validate_chain_with_attestations(
+    //       &[invocation_ucan], &[attestation]).unwrap_err();
+    //   assert!(matches!(err,
+    //       benten_id::ucan::ChainError::DeviceEnvelopeViolated { .. })
+    //         || matches!(err,
+    //       benten_id::ucan::ChainError::CapabilityNotInEnvelope { .. }),
+    //       "device cannot invoke capability outside its own envelope per sec-r4r1-6");
+    //
+    // OBSERVABLE consequence: a device with a constrained envelope
+    // cannot bypass that constraint by signing UCANs that grant
+    // capabilities it doesn't hold. Defends against the
+    // multi-device-identity envelope-downgrade attack family
+    // (sec-r1-7 / sec-r4r1-6).
+    unimplemented!(
+        "G14-A2 wires runtime envelope-vs-invocation re-check at chain-walk per sec-r4r1-6"
+    );
+}

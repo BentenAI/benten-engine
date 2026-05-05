@@ -246,6 +246,77 @@ fn publisher_registry_mutation_requires_ucan_delegation() {
 }
 
 #[test]
+#[ignore = "RED-PHASE: G14-C — cap-r4-6 — verify-mode Any: either path succeeds"]
+fn manifest_signature_verify_mode_any_either_path_succeeds() {
+    // cap-r4-6 pin (cap-minor-2 closure). Operator may opt into
+    // ManifestVerifyMode::Any for non-UCAN deployments per
+    // crypto-minor-5 fallback narrative. With Any: either UCAN-only
+    // OR registry-only presentation succeeds.
+    //
+    // Implementer wires:
+    //
+    //   let policy = benten_engine::ManifestVerifyMode::Any;
+    //
+    //   // UCAN-only present, registry absent → passes:
+    //   let manifest_ucan_only = ...; // signed via UCAN chain only
+    //   benten_engine::verify_manifest_with_mode(
+    //       &manifest_ucan_only, &valid_ucan_chain, None, policy).unwrap();
+    //
+    //   // Registry-only present, UCAN absent → passes:
+    //   let manifest_registry_only = ...; // signed via registry pubkey only
+    //   benten_engine::verify_manifest_with_mode(
+    //       &manifest_registry_only, &[], Some(&valid_registry_pubkey), policy).unwrap();
+    //
+    //   // Neither path present → fails (Any does not mean None):
+    //   let err = benten_engine::verify_manifest_with_mode(
+    //       &manifest_unsigned, &[], None, policy).unwrap_err();
+    //   assert!(matches!(err, benten_engine::ManifestVerifyError::NoPathPresent));
+    //
+    // OBSERVABLE consequence: operator can configure non-UCAN
+    // deployments (registry-only) without forcing UCAN chain
+    // construction. Defends operator choice per crypto-minor-5.
+    unimplemented!(
+        "G14-C wires ManifestVerifyMode::Any either-path-suffices semantics per cap-r4-6"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G14-C — cap-r4-6 — verify-mode All: both paths required"]
+fn manifest_signature_verify_mode_all_both_paths_required() {
+    // cap-r4-6 pin (cap-minor-2 closure). Explicit AND opt-in via
+    // ManifestVerifyMode::All. With All: BOTH UCAN AND registry
+    // paths MUST succeed; either absent → reject.
+    //
+    // Implementer wires:
+    //
+    //   let policy = benten_engine::ManifestVerifyMode::All;
+    //
+    //   // Both present + valid → passes:
+    //   benten_engine::verify_manifest_with_mode(
+    //       &manifest_dual_signed, &valid_ucan_chain, Some(&valid_registry_pubkey),
+    //       policy).unwrap();
+    //
+    //   // UCAN-only (registry absent) → fails (All requires both):
+    //   let err = benten_engine::verify_manifest_with_mode(
+    //       &manifest_ucan_only, &valid_ucan_chain, None, policy).unwrap_err();
+    //   assert!(matches!(err,
+    //       benten_engine::ManifestVerifyError::RegistryRequiredByModeAll));
+    //
+    //   // Registry-only (UCAN absent) → fails (All requires both):
+    //   let err = benten_engine::verify_manifest_with_mode(
+    //       &manifest_registry_only, &[], Some(&valid_registry_pubkey),
+    //       policy).unwrap_err();
+    //   assert!(matches!(err,
+    //       benten_engine::ManifestVerifyError::UcanRequiredByModeAll));
+    //
+    // OBSERVABLE consequence: operator with security-critical
+    // deployment can require BOTH paths via ::All; defaults to ::Any
+    // for backward-compat. Defends crypto-minor-5 + operator policy
+    // expressiveness.
+    unimplemented!("G14-C wires ManifestVerifyMode::All AND-required semantics per cap-r4-6");
+}
+
+#[test]
 #[ignore = "RED-PHASE: G14-C — plan §3 G14-C — install_module rejects unsigned/invalid manifest"]
 fn install_module_rejects_unsigned_or_invalid_manifest() {
     // plan §3 G14-C pin. The install path MUST reject manifests that

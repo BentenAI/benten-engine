@@ -84,8 +84,19 @@ fn engine_emit_event_no_longer_returns_e_primitive_not_implemented() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G19-B wave-7 — EmitBroadcast bus per-replica filter under cross-trust-boundary (stream-r1-7)"]
-fn emit_broadcast_bus_fan_out_under_cross_trust_boundary_replicas_via_per_subscriber_filtering() {
+#[ignore = "RED-PHASE: G16-D wave-6 — EmitBroadcast bus per-replica filter under cross-trust-boundary (stream-r1-7 + stream-r4r1-3)"]
+fn napi_emit_broadcast_bus_fan_out_under_cross_trust_boundary_replicas_via_per_subscriber_filtering()
+ {
+    // stream-r4r1-3 disambiguation: renamed from
+    // `emit_broadcast_bus_fan_out_under_cross_trust_boundary_replicas_via_per_subscriber_filtering`
+    // (which clashed with the engine-side pin at
+    // `crates/benten-engine/tests/emit_broadcast_replicas.rs`) to the
+    // napi-prefixed form. Per stream-r4r1-3 wave-pairing: this pin
+    // un-ignores at G16-D wave-6 (the LAST of the three required
+    // implementer waves: G14-D wave-5a per-subscriber filtering +
+    // G19-B wave-7 EmitBroadcast standalone surface + G16-D wave-6
+    // sync replication).
+    //
     // stream-r1-7 cross-pin: G19-B's EmitBroadcast bus must NOT cache
     // cap-pass decisions across replica boundaries; each Atrium-replica's
     // per-subscriber cap-recheck fires independently at delivery (the

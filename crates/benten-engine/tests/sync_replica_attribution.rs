@@ -103,3 +103,129 @@ fn inv_14_device_did_attribution_observable_in_production_runtime_arm() {
         "G14-D wires Inv-14 device-DID attribution observable in production-runtime durable bytes"
     );
 }
+
+// =====================================================================
+// R4-FP-R3-B RED-PHASE pins: sec-r4r1-2 BLOCKER closure — sync-replica
+// per-write cap-recheck-at-delivery (mirrors SUBSCRIBE side per CLR-2;
+// uses cap_recheck.rs G13-pre-C scaffold).
+//
+// Pin sources (per R4 R1 security-auditor lens, finding sec-r4r1-2):
+//
+// - `sync_replica_write_cap_recheck_at_delivery_against_local_grant_store`
+// - `sync_replica_write_after_local_grant_revoke_post_handshake_rejected_with_e_sync_revoked_during_session`
+//
+// ## Architectural intent (sec-r4r1-2 BLOCKER closure)
+//
+// sec-r1-2 had two halves: (a) E_SYNC_DIVERGENT_CID_REJECTED minted
+// (well-pinned at inv_13_dispatch.rs); (b) per-write cap-recheck-at-
+// delivery for SyncReplica writes mirroring the SUBSCRIBE side.
+//
+// Half (b) is the defense-in-depth that catches mid-session grant
+// revocation when the next handshake hasn't occurred yet. The
+// SUBSCRIBE side has 3 cap-recheck pins; the symmetric WRITE side at
+// the receiving peer's delivery point had ZERO. The cap_recheck.rs
+// (G13-pre-C) helper landed precisely so SUBSCRIBE + sync-replica-WRITE
+// could share infrastructure; only one consumer was shipped at R3.
+// These two pins close the symmetric WRITE side end-to-end.
+// =====================================================================
+
+#[test]
+#[ignore = "RED-PHASE: G14-D — sec-r4r1-2 BLOCKER — sync-replica WRITE per-write cap-recheck at delivery"]
+fn sync_replica_write_cap_recheck_at_delivery_against_local_grant_store() {
+    // sec-r4r1-2 BLOCKER pin (a). The receiving peer's sync-replica
+    // delivery point MUST per-write cap-recheck against the local
+    // grant store via the cap_recheck.rs G13-pre-C helper. This is
+    // the structural mirror of the SUBSCRIBE delivery-time recheck.
+    //
+    // Concrete shape:
+    //   let alice_engine = benten_engine::Engine::open(alice_store.path()).unwrap();
+    //   let bob_engine = benten_engine::Engine::open(bob_store.path()).unwrap();
+    //
+    //   let alice_kp = benten_id::keypair::Keypair::generate();
+    //
+    //   // Bob installs a grant authorizing Alice to write /zone/posts:
+    //   let grant_to_alice = ... .audience(alice_kp.public_key().to_did())
+    //                            .capability("/zone/posts", "write") ... ;
+    //   bob_engine.caps().install_proof(&grant_to_alice).unwrap();
+    //
+    //   // Atrium sync replica: Alice → Bob. Handshake establishes
+    //   // per-peer cap-set ONCE. Now Alice writes:
+    //   alice_engine.write_node(&node_in_zone_posts).unwrap();
+    //
+    //   // Bob's sync-replica receive path observably calls cap_recheck:
+    //   let cap_recheck_calls_before = bob_engine.metrics().sync_replica_cap_recheck_calls();
+    //   bob_engine.consume_sync_replica_message(&alice_outbound_message).unwrap();
+    //   let cap_recheck_calls_after = bob_engine.metrics().sync_replica_cap_recheck_calls();
+    //
+    //   assert!(cap_recheck_calls_after > cap_recheck_calls_before,
+    //       "sync-replica WRITE delivery MUST per-write cap-recheck via cap_recheck.rs helper per sec-r4r1-2");
+    //
+    //   // The write applied (Alice has cap):
+    //   assert!(bob_engine.read_zone("/zone/posts").unwrap()
+    //       .iter().any(|n| n.cid() == node_in_zone_posts.cid()));
+    //
+    //   // Source-cite that the cap_recheck.rs scaffold is consumed at
+    //   // the sync-replica delivery point:
+    //   let src = std::fs::read_to_string("crates/benten-engine/src/sync_replica.rs").unwrap();
+    //   assert!(src.contains("cap_recheck") || src.contains("CapRecheck"),
+    //       "sync_replica.rs must consume cap_recheck.rs helper per sec-r4r1-2");
+    //
+    // OBSERVABLE consequence: cross-trust-boundary WRITE delivery
+    // observably fires per-write cap-recheck at the receiving peer.
+    // Defends against the asymmetry where SUBSCRIBE has defense-in-
+    // depth but WRITE relied solely on handshake-time cap establishment.
+    unimplemented!(
+        "G14-D wires sync-replica WRITE per-write cap-recheck via cap_recheck.rs helper per sec-r4r1-2"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G14-D — sec-r4r1-2 BLOCKER — mid-session revoke after handshake rejects with typed error"]
+fn sync_replica_write_after_local_grant_revoke_post_handshake_rejected_with_e_sync_revoked_during_session()
+ {
+    // sec-r4r1-2 BLOCKER pin (b). Mid-session revocation between
+    // handshake and next sync round: the receiving peer's per-write
+    // cap-recheck observably suppresses delivery + emits a typed
+    // error variant.
+    //
+    // Concrete shape:
+    //   let alice_engine = benten_engine::Engine::open(alice_store.path()).unwrap();
+    //   let bob_engine = benten_engine::Engine::open(bob_store.path()).unwrap();
+    //
+    //   let alice_kp = benten_id::keypair::Keypair::generate();
+    //
+    //   // Bob installs grant + handshake establishes per-peer cap-set:
+    //   let grant_to_alice = ... .audience(alice_kp.public_key().to_did())
+    //                            .capability("/zone/posts", "write") ... ;
+    //   bob_engine.caps().install_proof(&grant_to_alice).unwrap();
+    //   bob_engine.atrium_handshake_with(&alice_kp.public_key().to_did()).unwrap();
+    //
+    //   // Mid-session: Bob revokes Alice's grant LOCALLY (no handshake
+    //   // re-negotiation yet — the revocation hasn't propagated):
+    //   bob_engine.caps().revoke(&grant_to_alice.cid()).unwrap();
+    //
+    //   // Alice writes (still believes she has the grant per her cached set):
+    //   alice_engine.write_node(&node_in_zone_posts).unwrap();
+    //
+    //   // Bob's sync-replica receive path: per-write cap-recheck fires;
+    //   // observes revocation; rejects with typed error variant:
+    //   let result = bob_engine.consume_sync_replica_message(&alice_outbound_message);
+    //   let err = result.unwrap_err();
+    //   assert!(matches!(err,
+    //       benten_engine::EngineError::SyncRevokedDuringSession { .. }),
+    //       "mid-session revoke must reject sync-replica WRITE with typed E_SYNC_REVOKED_DURING_SESSION per sec-r4r1-2");
+    //
+    //   // The write did NOT apply at Bob's side:
+    //   assert!(!bob_engine.read_zone("/zone/posts").unwrap()
+    //       .iter().any(|n| n.cid() == node_in_zone_posts.cid()),
+    //       "write from revoked-mid-session peer must not apply per sec-r4r1-2");
+    //
+    // OBSERVABLE consequence: a peer whose grant was revoked between
+    // handshake and the next sync round CANNOT keep writing — the
+    // per-write cap-recheck at delivery catches the revocation. Defense-
+    // in-depth at the cross-trust-boundary WRITE surface; structurally
+    // analogous to the SUBSCRIBE delivery-time recheck.
+    unimplemented!(
+        "G14-D wires E_SYNC_REVOKED_DURING_SESSION typed-error rejection at sync-replica WRITE delivery per sec-r4r1-2"
+    );
+}
