@@ -229,3 +229,35 @@ fn security_posture_compromise_10_engine_side_asymmetry_marked_closed() {
         "G14-D wires SECURITY-POSTURE.md grep assertion that Compromise #10 is marked CLOSED"
     );
 }
+
+#[test]
+#[ignore = "RED-PHASE: G15-A wave-5a closes Compromise #11 (per-row read-gate at materialization composes G15-A + G14-D)"]
+fn security_posture_compromise_11_materialization_gate_landed_at_g15_a() {
+    // R3-C ownership per r2-test-landscape §13 ambiguous-ownership
+    // pre-emption + ivm-minor-7 (positive claim, not pending).
+    //
+    // G15-A implementer retenses `docs/SECURITY-POSTURE.md` so
+    // Compromise #11 (IVM views coarse-grained read-gate) is marked
+    // CLOSED-IN-PHASE-3-G15-A (or equivalent post-G15-A tense, with
+    // the closure narrative referencing the composition: G15-A
+    // materialization-time gate + G14-D delivery-time gate).
+    //
+    // Concrete shape:
+    //   let posture = std::fs::read_to_string(
+    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //           .join("..").join("..").join("docs").join("SECURITY-POSTURE.md")
+    //   ).unwrap();
+    //   let section = extract_compromise_section(&posture, 11);
+    //   assert!(section.to_lowercase().contains("closed"),
+    //       "SECURITY-POSTURE.md Compromise #11 must be marked CLOSED at G15-A");
+    //   assert!(section.contains("G15-A") || section.contains("G14-D")
+    //         || section.contains("Phase 3"),
+    //       "Compromise #11 closure narrative must cite G15-A (materialization-time gate) and/or G14-D (delivery-time gate)");
+    //
+    // OBSERVABLE consequence: closure narrative reflects the
+    // composition (materialization + delivery) — defends pim-1
+    // doc-coupling + the dual-layer IVM read-gate architecture.
+    unimplemented!(
+        "G15-A wires SECURITY-POSTURE.md grep assertion that Compromise #11 is marked CLOSED via G15-A + G14-D composition"
+    );
+}
