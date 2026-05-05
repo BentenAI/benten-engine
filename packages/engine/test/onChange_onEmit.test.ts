@@ -53,6 +53,9 @@ describe("G19-B napi-rs ThreadsafeFunction tuple-arg splat (§7.7)", () => {
     // Defends against the workaround-fossil shape where engine.ts kept
     // the Array.isArray(channel) check post-G19-B (which would be a
     // pim-1 doc-coupling failure: code shipped, workaround stayed).
+    throw new Error(
+      "RED-PHASE: G19-B wave-7 wires onEmit ThreadsafeFunction tuple-arg splat + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G19-B wave-7 — onChange callback splats args correctly", async () => {
@@ -75,6 +78,12 @@ describe("G19-B napi-rs ThreadsafeFunction tuple-arg splat (§7.7)", () => {
     //
     //   expect(changes.length).toBeGreaterThanOrEqual(1);
     //   // Discrete-args assertion: pattern + event are separate values.
+    //
+    // OBSERVABLE consequence: onChange callback receives discrete
+    // (pattern, event) args — not a tuple-array.
+    throw new Error(
+      "RED-PHASE: G19-B wave-7 wires onChange ThreadsafeFunction tuple-arg splat + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G19-B wave-7 — in-test Array.isArray(channel) workaround retired", async () => {
@@ -97,5 +106,8 @@ describe("G19-B napi-rs ThreadsafeFunction tuple-arg splat (§7.7)", () => {
     // OBSERVABLE consequence: doc-coupling discipline holds — post-fix
     // sweep retires the workaround at its call site (per
     // dispatch-conventions §3.5b HARDENED).
+    throw new Error(
+      "RED-PHASE: G19-B wave-7 retires Array.isArray(channel) workaround in emit_subscribe.test.ts + drops .skip + un-comments assertions",
+    );
   });
 });

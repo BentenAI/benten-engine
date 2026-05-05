@@ -26,6 +26,13 @@ describe("G20-B Atrium examples compile + run", () => {
     //   expect(result.ok).toBe(true);
     //   // Example demonstrates: engine.atrium.join, listPeers, trustPeer,
     //   // revokePeer, onPeerJoin, onPeerLeave at minimum.
+    //
+    // OBSERVABLE consequence: peer-mgmt example handler runs without
+    // throw; defends against the failure shape where engine.atrium.*
+    // surfaces are undefined or example imports fail to resolve.
+    throw new Error(
+      "RED-PHASE: G20-B wave-8b authors atrium-peer-mgmt example + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G20-B wave-8b — atrium sync-trigger example handler compiles + runs", async () => {
@@ -35,6 +42,12 @@ describe("G20-B Atrium examples compile + run", () => {
     //   const result = await example.run();
     //   expect(result.ok).toBe(true);
     //   // Example demonstrates: subgraph-trigger sync via atrium primitives.
+    //
+    // OBSERVABLE consequence: subgraph-trigger sync example runs
+    // without throw; defends against missing atrium primitive surface.
+    throw new Error(
+      "RED-PHASE: G20-B wave-8b authors atrium-sync-trigger example + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G20-B wave-8b — UCAN-grant example handler compiles + runs", async () => {
@@ -44,6 +57,12 @@ describe("G20-B Atrium examples compile + run", () => {
     //   const result = await example.run();
     //   expect(result.ok).toBe(true);
     //   // Example demonstrates: UCAN delegation + chain-walk + revoke.
+    //
+    // OBSERVABLE consequence: UCAN-grant example runs without throw;
+    // defends against missing UCAN delegation surface.
+    throw new Error(
+      "RED-PHASE: G20-B wave-8b authors ucan-grant example + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G20-B wave-8b — DID-resolution example handler compiles + runs", async () => {
@@ -53,6 +72,12 @@ describe("G20-B Atrium examples compile + run", () => {
     //   const result = await example.run();
     //   expect(result.ok).toBe(true);
     //   // Example demonstrates: did:key generation + resolution.
+    //
+    // OBSERVABLE consequence: did:key generation + resolution example
+    // runs without throw; defends against missing benten-id TS surface.
+    throw new Error(
+      "RED-PHASE: G20-B wave-8b authors did-resolution example + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G20-B wave-8b — atrium examples compose entirely from existing 12 primitives (cag-4)", async () => {
@@ -75,5 +100,8 @@ describe("G20-B Atrium examples compile + run", () => {
     // OBSERVABLE consequence: Atrium DX surface composes via existing
     // primitives. Defends against the failure mode where a new
     // primitive kind sneaks in via "atrium examples need it."
+    throw new Error(
+      "RED-PHASE: G20-B wave-8b verifies atrium examples compose via existing 12 primitives + drops .skip + un-comments assertions",
+    );
   });
 });

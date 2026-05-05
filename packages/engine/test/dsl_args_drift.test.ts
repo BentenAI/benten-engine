@@ -52,6 +52,13 @@ describe("G19-D 6 TS DSL Args drifts round-trip (§7.9 + r1-napi-3)", () => {
     //   const result = await engine.call(sg.id, "main", {});
     //   expect(result.body).toEqual({ ok: true });
     //   expect(result.status).toBe(200);
+    //
+    // OBSERVABLE consequence: TS-side RespondArgs(body/edge/status)
+    // round-trip to eval. Defends against silent property drops at
+    // the TS→napi→eval boundary.
+    throw new Error(
+      "RED-PHASE: G19-D wave-7 wires RespondArgs round-trip + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G19-D wave-7 — ReadArgs round-trips through DSL compiler", async () => {
@@ -70,6 +77,12 @@ describe("G19-D 6 TS DSL Args drifts round-trip (§7.9 + r1-napi-3)", () => {
     //   // Eval reads correctly (asserts the routing happened); test
     //   // would FAIL if the args were spread verbatim into the
     //   // OperationNode property bag without translation.
+    //
+    // OBSERVABLE consequence: ReadArgs DSL-compiler-bypass drift closed
+    // — the DSL→eval routing translates field names, not just spreads.
+    throw new Error(
+      "RED-PHASE: G19-D wave-7 wires ReadArgs DSL-compiler routing + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G19-D wave-7 — BranchArgs round-trips through DSL compiler", async () => {
@@ -84,6 +97,12 @@ describe("G19-D 6 TS DSL Args drifts round-trip (§7.9 + r1-napi-3)", () => {
     //   const result1 = await engine.call(sg.id, "main", { kind: "post" });
     //   const result2 = await engine.call(sg.id, "main", { kind: "user" });
     //   // Different code paths fire correctly; routing happened.
+    //
+    // OBSERVABLE consequence: BranchArgs(on/cases) translates to eval
+    // keyspace (match_value/condition_value/cases/has_default/conditions).
+    throw new Error(
+      "RED-PHASE: G19-D wave-7 wires BranchArgs DSL-compiler routing + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G19-D wave-7 — IterateArgs round-trips through DSL compiler", async () => {
@@ -96,6 +115,12 @@ describe("G19-D 6 TS DSL Args drifts round-trip (§7.9 + r1-napi-3)", () => {
     //
     //   const result = await engine.call(sg.id, "main", { list: [1, 2, 3] });
     //   // Iteration fired correctly over the input list.
+    //
+    // OBSERVABLE consequence: IterateArgs(over/max) translates to eval
+    // keyspace (items/requires) with bound-check.
+    throw new Error(
+      "RED-PHASE: G19-D wave-7 wires IterateArgs DSL-compiler routing + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G19-D wave-7 — CallArgs round-trips through DSL compiler", async () => {
@@ -111,6 +136,13 @@ describe("G19-D 6 TS DSL Args drifts round-trip (§7.9 + r1-napi-3)", () => {
     //
     //   const result = await engine.call(parent.id, "main", {});
     //   // CallArgs translated correctly; child handler fired.
+    //
+    // OBSERVABLE consequence: CallArgs(handler/action/input/isolated)
+    // translates to eval keyspace (child_scope/parent_scope/target/
+    // call_op/requires/timeout_ms) with scope resolution.
+    throw new Error(
+      "RED-PHASE: G19-D wave-7 wires CallArgs DSL-compiler routing + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G19-D wave-7 — TransformArgs round-trips with partial overlap fix", async () => {
@@ -122,6 +154,12 @@ describe("G19-D 6 TS DSL Args drifts round-trip (§7.9 + r1-napi-3)", () => {
     //
     //   const result = await engine.call(sg.id, "main", { x: 21 });
     //   expect(result.doubled).toBe(42);
+    //
+    // OBSERVABLE consequence: TransformArgs(expr/as) → eval
+    // (expr/input/result) partial-overlap fix lands.
+    throw new Error(
+      "RED-PHASE: G19-D wave-7 wires TransformArgs partial-overlap fix + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G19-D wave-7 — SubscribeArgs.handler round-trips to eval handler-id-router", async () => {
@@ -144,5 +182,8 @@ describe("G19-D 6 TS DSL Args drifts round-trip (§7.9 + r1-napi-3)", () => {
     // OBSERVABLE consequence: SubscribeArgs.handler reaches eval-side
     // handler-id-router. Defends against the pim-8 mirror-precedent
     // overshoot (PR #74 wrote handler that eval never read).
+    throw new Error(
+      "RED-PHASE: G19-D wave-7 wires SubscribeArgs.handler eval handler-id-router + drops .skip + un-comments assertions",
+    );
   });
 });

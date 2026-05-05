@@ -52,6 +52,9 @@ describe("G19-B BentenError.context structured-field surfacing (§7.2)", () => {
     // OBSERVABLE consequence: structured fields round-trip through the
     // napi boundary verbatim. Defends against the legacy message-prefix
     // shape where fields were dropped or coerced into the message string.
+    throw new Error(
+      "RED-PHASE: G19-B wave-7 wires mapNativeError + BentenError.context + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G19-B wave-7 — CODE_TO_CTOR_GENERATED has no E_UNKNOWN fallback for known code", async () => {
@@ -79,6 +82,13 @@ describe("G19-B BentenError.context structured-field surfacing (§7.2)", () => {
     //   const mapped = mapNativeError(napiErr);
     //   expect(mapped.code).toBe("E_INV_4_OVERFLOW");
     //   expect(mapped.constructor.name).not.toBe("BentenError");
+    //
+    // OBSERVABLE consequence: CODE_TO_CTOR_GENERATED has no E_UNKNOWN
+    // fallback for any known catalog code; every code resolves to a
+    // typed subclass.
+    throw new Error(
+      "RED-PHASE: G19-B wave-7 wires CODE_TO_CTOR_GENERATED no-fallback + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G19-B wave-7 — every EngineError variant surfaces structured fields", async () => {
@@ -103,5 +113,8 @@ describe("G19-B BentenError.context structured-field surfacing (§7.2)", () => {
     // OBSERVABLE consequence: every catalog entry's structured fields
     // surface through mapNativeError unchanged. End-to-end pin per pim-2
     // §3.6b — would FAIL if any variant's fields were silently dropped.
+    throw new Error(
+      "RED-PHASE: G19-B wave-7 wires every-EngineError-variant structured-field round-trip + drops .skip + un-comments assertions",
+    );
   });
 });
