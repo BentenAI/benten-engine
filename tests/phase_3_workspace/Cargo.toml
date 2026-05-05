@@ -23,7 +23,25 @@ publish = false
 #   compromise-table state. R3-A owns Compromise #12 (G13-E flip);
 #   R3-B owns #17 #18 #21 #2 #10; R3-C owns #11; R3-D owns #16 #19 #20;
 #   R3-E owns the G20-B FINAL `security_posture_phase_3_close_compromise_table_present`
-#   pin.
+#   pin in the sibling file `security_posture_phase_3_close.rs`.
+#
+# Phase-3 R3-E additions (G19 observability + G20 docs sweep + thin-client):
+#
+# - `architecture_md_g20b_final.rs` — R3-E G20-B FINAL 10-crate transition
+#   pin (replaces R3-A intermediate-state callout at phase-close).
+# - `security_posture_phase_3_close.rs` — R3-E G20-B FINAL Phase-3
+#   compromise-table closure pin (every closed compromise marked CLOSED).
+# - `paper_prototype_revalidation.rs` — R3-E G20-B paper-prototype
+#   revalidation re-run + SANDBOX rate ≤ 30% (exit-criterion 14) pins.
+# - `missing_docs_workspace.rs` — R3-E G20-B no #[allow(missing_docs)]
+#   sweep + full missing_docs gate + phase-2/3 TODO marker named-destination
+#   architectural pins (C-7 + C-14 + phase-2-backlog §8.3).
+# - `cargo_vet_policy_phase_3.rs` — R3-E G20-A3 §7.3.A.9 cargo-vet +
+#   cargo-public-api existing-crate baseline + browser-bundle + suspension-
+#   cursor + benten-dev inspect-state un-ignore pins.
+# - `thin_client_protocol.rs` — R3-E thin-client wire-protocol pins per
+#   D-PHASE-3-N + CLAUDE.md baked-in #17 (fetch / POST + device-DID auth /
+#   SSE / F6 filtering at full-peer edge / exit-criterion 19 e2e).
 
 [lib]
 path = "src/lib.rs"
@@ -37,6 +55,30 @@ path = "architecture_md_state.rs"
 [[test]]
 name = "security_posture_compromises"
 path = "security_posture_compromises.rs"
+
+[[test]]
+name = "architecture_md_g20b_final"
+path = "architecture_md_g20b_final.rs"
+
+[[test]]
+name = "security_posture_phase_3_close"
+path = "security_posture_phase_3_close.rs"
+
+[[test]]
+name = "paper_prototype_revalidation"
+path = "paper_prototype_revalidation.rs"
+
+[[test]]
+name = "missing_docs_workspace"
+path = "missing_docs_workspace.rs"
+
+[[test]]
+name = "cargo_vet_policy_phase_3"
+path = "cargo_vet_policy_phase_3.rs"
+
+[[test]]
+name = "thin_client_protocol"
+path = "thin_client_protocol.rs"
 
 [dependencies]
 
