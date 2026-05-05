@@ -1,5 +1,5 @@
 //! R3-E RED-PHASE pins for G19-C2 napi requiresExplicitClose accessor
-//! (wave 7 parallel; §7.1.2).
+//! (wave-7 parallel; §7.1.2).
 //!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.7 G19-C2 +
 //! `.addl/phase-3/00-implementation-plan.md` §3 G19-C2 must-pass column):

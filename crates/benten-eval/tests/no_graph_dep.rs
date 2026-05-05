@@ -1,5 +1,5 @@
 //! R3-A RED-PHASE pin: `benten-eval` has NO dependency on `benten-graph`
-//! after G13-A umbrella-trait extraction (G13-A wave 1; arch-1).
+//! after G13-A umbrella-trait extraction (G13-A wave-1; arch-1).
 //!
 //! Pin source: r2-test-landscape §2.1 G13-A row
 //! `arch_1_benten_eval_no_graph_dep_post_g13`; plan §3 G13-A.

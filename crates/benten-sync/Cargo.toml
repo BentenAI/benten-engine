@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Phase-3 G16-A canary stub — Atrium P2P sync (iroh transport + Loro CRDT + MST diff + DID handshake). NATIVE-ONLY per CLAUDE.md baked-in #17 (excluded from wasm32 targets). Real impls land at G16-A/B/C/D (wave 6 + wave 6b)."
+description = "Phase-3 G16-A canary stub — Atrium P2P sync (iroh transport + Loro CRDT + MST diff + DID handshake). NATIVE-ONLY per CLAUDE.md baked-in #17 (excluded from wasm32 targets). Real impls land at G16-A/B/C/D (wave-6 + wave-6b)."
 
 [lints]
 workspace = true

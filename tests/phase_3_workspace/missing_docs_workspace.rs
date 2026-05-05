@@ -1,5 +1,5 @@
 //! R3-E RED-PHASE pin for G20-B missing_docs sweep + escape-hatch retire
-//! (wave 8b; phase-2-backlog §8.3 + C-7).
+//! (wave-8b; phase-2-backlog §8.3 + C-7).
 //!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.8 G20-B):
 //!

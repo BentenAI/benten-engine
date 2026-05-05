@@ -1,5 +1,5 @@
 //! R3-E RED-PHASE pin for G20-A3 §7.3.A.8 Component-Model decision
-//! (wave 8a; conditional per D-PHASE-3-6 + D-PHASE-3-16).
+//! (wave-8a; conditional per D-PHASE-3-6 + D-PHASE-3-16).
 //!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.8 G20-A3 +
 //! `.addl/phase-3/00-implementation-plan.md` §3 G20-A3 must-pass column):

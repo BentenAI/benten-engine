@@ -1,4 +1,4 @@
-//! R3-A RED-PHASE pin: wasm32 bundle does not link redb (G13-C wave 3;
+//! R3-A RED-PHASE pin: wasm32 bundle does not link redb (G13-C wave-3;
 //! plan §4 seed; br-r1-1 BLOCKER companion).
 //!
 //! Pin source: r2-test-landscape §2.1 G13-C row

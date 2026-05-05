@@ -1,5 +1,5 @@
 //! R3-D RED-PHASE pins for `RedbSuspensionStore` retention-window
-//! override (G17-A2 wave 5b; phase-3-backlog §6.5 + r1-wsa-10 MINOR).
+//! override (G17-A2 wave-5b; phase-3-backlog §6.5 + r1-wsa-10 MINOR).
 //!
 //! Pin sources (per r2-test-landscape §2.5 G17-A2):
 //!
@@ -48,7 +48,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 #[test]
-#[ignore = "RED-PHASE: G17-A2 wave 5b wires RedbSuspensionStore retention-window override per phase-3-backlog §6.5 + r4-r1-wsa-10 rename to in_process (body shape is single-lifecycle correctness; durability is the sibling pin's concern)"]
+#[ignore = "RED-PHASE: G17-A2 wave-5b wires RedbSuspensionStore retention-window override per phase-3-backlog §6.5 + r4-r1-wsa-10 rename to in_process (body shape is single-lifecycle correctness; durability is the sibling pin's concern)"]
 fn redb_suspension_store_retention_window_in_process_round_trip() {
     // phase-3-backlog §6.5 pin. G17-A2 implementer wires this:
     //
@@ -79,7 +79,7 @@ fn redb_suspension_store_retention_window_in_process_round_trip() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G17-A2 wave 5b — retention-window override persists across Engine::open per r1-wsa-10"]
+#[ignore = "RED-PHASE: G17-A2 wave-5b — retention-window override persists across Engine::open per r1-wsa-10"]
 fn redb_suspension_store_retention_window_override_persists_across_engine_open() {
     // r1-wsa-10 persistent-state pin. G17-A2 implementer:
     //

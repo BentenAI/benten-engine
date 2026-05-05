@@ -1,5 +1,5 @@
 //! R3-D RED-PHASE pins for D26 `.wasm` bytes per fixture (G17-B
-//! wave 5b; phase-3-backlog §6.2 + r1-wsa-5).
+//! wave-5b; phase-3-backlog §6.2 + r1-wsa-5).
 //!
 //! Pin sources (per r2-test-landscape §2.5 G17-B):
 //!
@@ -50,7 +50,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 #[test]
-#[ignore = "RED-PHASE: G17-B wave 5b authors build.rs that compiles .wat → .wasm + commits the bytes"]
+#[ignore = "RED-PHASE: G17-B wave-5b authors build.rs that compiles .wat → .wasm + commits the bytes"]
 fn d26_wasm_bytes_committed_per_fixture_present() {
     // phase-3-backlog §6.2 pin. G17-B implementer wires this:
     //
@@ -82,7 +82,7 @@ fn d26_wasm_bytes_committed_per_fixture_present() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G17-B wave 5b authors fixture loader with .wasm-prefer + .wat-fallback"]
+#[ignore = "RED-PHASE: G17-B wave-5b authors fixture loader with .wasm-prefer + .wat-fallback"]
 fn d26_wasm_runtime_loader_prefers_wasm_falls_back_to_wat() {
     // phase-3-backlog §6.2 pin. G17-B implementer wires this:
     //
@@ -112,7 +112,7 @@ fn d26_wasm_runtime_loader_prefers_wasm_falls_back_to_wat() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G17-B wave 5b ensures cross-platform fixture-CID stability per §6.2 + r1-wsa-5"]
+#[ignore = "RED-PHASE: G17-B wave-5b ensures cross-platform fixture-CID stability per §6.2 + r1-wsa-5"]
 fn d26_cross_platform_fixture_cid_stable() {
     // phase-3-backlog §6.2 + r1-wsa-5 pin. G17-B implementer:
     //

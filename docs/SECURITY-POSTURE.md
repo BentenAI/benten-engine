@@ -32,6 +32,7 @@ written, referenceable form.
 | 19 | Browser-target persistent storage absent — manifests in-memory only on `wasm32-unknown-unknown` | 2b | Open (Phase 3 — IndexedDB / OPFS persistence) |
 | 20 | Cross-browser determinism CI cadence not yet established | 2b | Open (Phase 3 — wasm32 cross-browser CI matrix) |
 | 21 | Module manifest minimal CID-pin in Phase 2b; full Ed25519 deferred | 2b | Open (Phase 3 — D16 manifest signing) |
+| 22 | Peer-DID + connection metadata leakage to public iroh relays | 3 | Introduced at Phase 3 (Phase 7 Garden-relay closure target) |
 
 **Phase-2b net delta:** Compromises #4 + #9 + #10 closed (3 net
 closures); 8 new Phase-2b deferrals enumerated (#14, #15, #16, #17,
@@ -40,9 +41,16 @@ closures); 8 new Phase-2b deferrals enumerated (#14, #15, #16, #17,
 into the global numbering at R6 phase-close so cross-doc references
 resolve to a single authoritative compromise table.
 
+**Phase-3 additive delta (introduced at phase-3 close, this row's
+landing):** Compromise #22 records the peer-DID + connection-metadata
+leakage to public iroh relays exposed by the Atrium P2P sync transport.
+Full narrative below; closure target is the Phase-7 Garden-relay
+infrastructure (with Phase-9 hardened-deployment as the brutal-but-
+correct fallback if Garden-relays slip).
+
 The detailed text for each numbered Compromise follows below. Phase-2b
 additions (#14-#16) appear at the end of the Named Compromises
-section.
+section. Phase-3 addition (#22) appears at the very end.
 
 ## Named Compromises
 
@@ -1247,6 +1255,36 @@ umbrella trait (PHASE-3-BUNDLE-1).
 **Renumbering note.** This was `Compromise #N+5` in `docs/MODULE-MANIFEST.md`'s local table prior to R6 phase-close; lifted to global #21 here.
 
 **Cross-refs.** `docs/MODULE-MANIFEST.md` §6 + §7; `docs/ERROR-CATALOG.md::E_MODULE_MANIFEST_CID_MISMATCH`; D16 + D9 in `.addl/phase-2b/00-implementation-plan.md`.
+
+---
+
+### Compromise #22 — Peer-DID + connection metadata leakage to public iroh relays — Phase-3 additive
+
+**Status:** Introduced at Phase 3 close (P2P sync via iroh transport landed). **Closure target:** Phase 7 Garden-relay infrastructure (Garden-protocol-controlled relays replacing public iroh relays for sensitive peer-discovery + connection metadata) — failing that, Phase 9 hardened-deployment posture.
+
+**Class.** Network-layer metadata exposure; sibling to Compromise #11's IVM coarse-grained read-gate posture but at the transport layer rather than the eval-layer.
+
+**What ships at Phase 3.** Atrium peer-to-peer sync uses iroh's QUIC + relay protocol for NAT traversal. iroh's default relay infrastructure is *public* (operated by n0 / community relays); peers connecting through these relays expose:
+
+- *Peer DIDs* — `did:key` / future `did:plc` identifiers visible to the relay during connection establishment (the relay sees who is talking to whom, even though it cannot read the encrypted payload).
+- *Connection metadata* — endpoint pairs, timing, peer-availability windows, which Atriums a peer participates in (inferred from connection patterns).
+- *Membership topology* — which DIDs co-occur in connection sessions hints at Atrium membership without the relay decrypting any application-layer content.
+
+End-to-end *content* confidentiality is preserved (iroh's QUIC payload is encrypted; the relay is a forwarder, not an endpoint). The leak is exclusively at the transport-metadata layer.
+
+**What's NOT shipped.** Garden-protocol-controlled relays — relay infrastructure operated under the Atrium's own trust model (Phase 7 Gardens) where relay metadata stays within the Garden's social graph rather than going to a public third-party relay. Also not shipped: relay-bypass via direct hole-punched connections only (would require giving up the NAT-traversal fallback — operationally unviable for many home network topologies).
+
+**Threat model deltas.**
+- *Ships at Phase 3:* an adversary running or compromising a public iroh relay can build a social graph of who-connects-to-whom across Atriums using the engine's default sync transport. This is a metadata-correlation attack class, not a content-disclosure class. The CIDs being exchanged stay encrypted.
+- *Deferred to Phase 7 / 9:* relay-trust posture. Until Garden-relays land, operators with stricter metadata threat models (whistle-blowers, journalists, threatened communities) MUST self-host iroh relay infrastructure for their Atriums or use the engine's full peer (laptop / phone-OS app) shape exclusively on trusted networks where NAT traversal is not needed.
+
+**Phase 7 promotion path.** Wire Garden-protocol relays per the Phase-7 Gardens design: relay infrastructure becomes a first-class Garden resource (a Garden-controlled iroh relay node, accessible only to Atrium members of the Garden, with its operator-set being the Garden's quorum of admins rather than n0 / community). The Atrium-config surface gains a `relays: Vec<RelayDescriptor>` field where each `RelayDescriptor` is either `PublicIroh` (current default — the leaky path with a documented warning) or `GardenRelay { garden_id, relay_did }`. The Atrium join handshake (D-PHASE-3-25 heterogeneity contract; CLAUDE.md baked-in #17 thin-client posture) extends with a relay-trust negotiation step where peers agree on the relay set before falling back to public infrastructure.
+
+**Phase 9 hardened-deployment fallback.** If Phase 7 Garden-relays slip, the Phase-9 hardened deployment posture takes the conservative path: *no* public iroh relays in production builds; full peers MUST be on networks reachable directly OR through self-hosted relays. The hardened-deployment cargo feature flag gates the public-iroh-relay code paths out entirely. This is the brutal but correct fallback if Garden-relays don't land.
+
+**Posture claim.** Compromise IS introduced at Phase 3 close — the public-relay metadata leak goes from theoretical (no P2P sync at Phase 2b) to live (Atriums actually sync through iroh). Operators reading SECURITY-POSTURE.md see this honestly disclosed alongside the named closure target rather than discovering it via post-Phase-3 surveillance. Defends against the failure shape "compromise silently introduced at phase-close while metadata leakage is undocumented."
+
+**Cross-refs.** `tests/phase_3_workspace/security_posture_compromises.rs::compromise_22_public_relay_metadata_leakage_introduced_at_phase_3_close_with_named_phase_7_garden_relay_destination` (R3-pinned RED-PHASE assertion); `tests/phase_3_workspace/security_posture_phase_3_close.rs::security_posture_phase_3_close_compromise_table_present` (G20-B FINAL phase-close compromise-table presence pin); `docs/FULL-ROADMAP.md` §Phase 7 (Gardens — relay infrastructure as a Garden resource); CLAUDE.md baked-in #17 (full peer vs thin compute surface deployment shapes). Origin: Phase-3 R4 large-council Round-1 networking lens (finding `net-r4-r1-1`) cross-corroborated by the security-auditor + pattern-induction lenses; 3-lens cross-corroboration triggered the BELONGS-NAMED-NOW disposition under HARD RULE rule-12 clause-b.
 
 ---
 

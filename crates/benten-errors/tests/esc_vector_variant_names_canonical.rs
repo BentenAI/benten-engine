@@ -1,5 +1,5 @@
 //! R4-FP RED-PHASE pin — EscVector + EscapeAttempt + ERROR-CATALOG
-//! architectural-shape (G17-A1 wave 5b; r4-r1-wsa-5 MAJOR; D-E ESC-7 +
+//! architectural-shape (G17-A1 wave-5b; r4-r1-wsa-5 MAJOR; D-E ESC-7 +
 //! ESC-13 typed-variant naming canonicalization).
 //!
 //! Pin sources:
@@ -59,7 +59,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G17-A1 wave 5b — architectural-shape pin per r4-r1-wsa-5; un-ignored when R5 mints EscVector + EscapeAttempt + ERROR-CATALOG entry"]
+#[ignore = "RED-PHASE: G17-A1 wave-5b — architectural-shape pin per r4-r1-wsa-5; un-ignored when R5 mints EscVector + EscapeAttempt + ERROR-CATALOG entry"]
 fn esc_vector_and_escape_attempt_typed_error_catalog_canonical_per_d_e_and_r4_r1_wsa_5() {
     // r4-r1-wsa-5 architectural-shape pin. G17-A1 implementer wires:
     //

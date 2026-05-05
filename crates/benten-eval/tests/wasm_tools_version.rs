@@ -1,4 +1,4 @@
-//! R3-D RED-PHASE pin for wasm-tools version pin (G17-B wave 5b;
+//! R3-D RED-PHASE pin for wasm-tools version pin (G17-B wave-5b;
 //! r1-wsa-5 MAJOR).
 //!
 //! Pin source: r2-test-landscape §2.5 G17-B
@@ -23,7 +23,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 #[test]
-#[ignore = "RED-PHASE: G17-B wave 5b locks workspace wasm-tools dev-dep at 1.227.x per r1-wsa-5"]
+#[ignore = "RED-PHASE: G17-B wave-5b locks workspace wasm-tools dev-dep at 1.227.x per r1-wsa-5"]
 fn d26_wasm_tools_version_pinned_at_1_227_x_per_r1_wsa_5() {
     // r1-wsa-5 pin. G17-B implementer wires this:
     //

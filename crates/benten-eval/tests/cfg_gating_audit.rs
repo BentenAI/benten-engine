@@ -1,5 +1,5 @@
 //! R3-D RED-PHASE pins for §7.3.A.7 testing-helper cfg-gating audit
-//! (G17-A1 wave 5b; r1-wsa-6 LOAD-BEARING).
+//! (G17-A1 wave-5b; r1-wsa-6 LOAD-BEARING).
 //!
 //! Pin sources (per r2-test-landscape §2.5 G17-A1 + r1-wasmtime-sandbox r1-wsa-6):
 //!
@@ -46,7 +46,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 #[test]
-#[ignore = "RED-PHASE: G17-A1 wave 5b ships testing_helpers.rs cfg-gated under cfg(any(test, feature = \"test-helpers\"))"]
+#[ignore = "RED-PHASE: G17-A1 wave-5b ships testing_helpers.rs cfg-gated under cfg(any(test, feature = \"test-helpers\"))"]
 fn sandbox_testing_helpers_cfg_gated_no_production_attack_surface_widening() {
     // r1-wsa-6 LOAD-BEARING composite pin. G17-A1 implementer wires:
     //
@@ -94,7 +94,7 @@ fn sandbox_testing_helpers_cfg_gated_no_production_attack_surface_widening() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G17-A1 wave 5b — Cargo.toml test-helpers feature off by default"]
+#[ignore = "RED-PHASE: G17-A1 wave-5b — Cargo.toml test-helpers feature off by default"]
 fn test_helpers_feature_flag_off_in_default_features() {
     // r1-wsa-6 Cargo-discipline pin. G17-A1 implementer:
     //
@@ -117,7 +117,7 @@ fn test_helpers_feature_flag_off_in_default_features() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G17-A1 wave 5b — napi cdylib production-build symbol-table assertion (r4-r1-wsa-3 LOAD-BEARING half of pim-2 §3.6b shape)"]
+#[ignore = "RED-PHASE: G17-A1 wave-5b — napi cdylib production-build symbol-table assertion (r4-r1-wsa-3 LOAD-BEARING half of pim-2 §3.6b shape)"]
 fn napi_cdylib_production_build_does_not_export_testing_helper_symbols() {
     // r4-r1-wsa-3 LOAD-BEARING pin (the production-flow half of the
     // pim-2 §3.6b end-to-end shape). The 3 source-cite pins above
@@ -201,7 +201,7 @@ fn napi_cdylib_production_build_does_not_export_testing_helper_symbols() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G17-A1 wave 5b — cfg attribute discipline (not cfg(debug), not unconditional)"]
+#[ignore = "RED-PHASE: G17-A1 wave-5b — cfg attribute discipline (not cfg(debug), not unconditional)"]
 fn cfg_test_path_only_visible_in_test_builds() {
     // r1-wsa-6 cfg-attr discipline pin. G17-A1 implementer:
     //

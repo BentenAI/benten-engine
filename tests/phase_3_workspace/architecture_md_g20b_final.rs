@@ -1,5 +1,5 @@
 //! R3-E RED-PHASE pin for G20-B FINAL 10-crate ARCHITECTURE.md transition
-//! (wave 8b; C-15 + arch-r1-3 final-state).
+//! (wave-8b; C-15 + arch-r1-3 final-state).
 //!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.8 G20-B):
 //!

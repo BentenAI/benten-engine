@@ -1,5 +1,5 @@
 //! R3-A RED-PHASE pin: `Engine::from_snapshot_blob` no longer uses a
-//! tempdir hydration path (G13-D wave 3; plan §3 G13-D).
+//! tempdir hydration path (G13-D wave-3; plan §3 G13-D).
 //!
 //! Pin source: r2-test-landscape §2.1 G13-D row
 //! `from_snapshot_blob_no_tempdir_in_path`; plan §3 G13-D.
@@ -16,7 +16,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G13-D wave 3 — drop tempdir hydration"]
+#[ignore = "RED-PHASE: G13-D wave-3 — drop tempdir hydration"]
 fn from_snapshot_blob_no_tempdir_in_path() {
     // G13-D implementer wires this:
     //

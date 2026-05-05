@@ -1,5 +1,5 @@
 //! R3-E RED-PHASE pin for G19-C2 napi describeSandboxNode real metrics
-//! (wave 7 parallel; §7.1).
+//! (wave-7 parallel; §7.1).
 //!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.7 G19-C2):
 //!

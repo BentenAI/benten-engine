@@ -697,12 +697,16 @@ pub struct NumericClaim {
     pub phrasings: &'static [&'static str],
 }
 
-/// Authoritative count map. As of phase-2b-close (`3d0f018`):
+/// Authoritative count map. As of Phase-3 R3 corpus merge (post `82f1c7e`):
 ///
 ///   - 12 operation primitives (CLAUDE.md baked-in #1)
 ///   - 14 invariants (CLAUDE.md status table; INVARIANT-COVERAGE.md)
-///   - 8 crates (workspace `members =` minus tools/tests/bindings: errors,
-///     core, graph, ivm, caps, eval, engine, dsl-compiler)
+///   - 10 crates (workspace `members =` minus tools/tests/bindings: errors,
+///     core, graph, ivm, caps, eval, engine, id, sync, dsl-compiler).
+///     `benten-id` (Phase-3 G14-A1 canary STUB) + `benten-sync`
+///     (Phase-3 G16-A canary STUB; native-only per CLAUDE.md baked-in
+///     #17) added at R3-A + R3-C respectively, bumping the count
+///     8 → 10 atomically with R3 corpus.
 ///
 /// **Phrasing scope is deliberately tight.** We only flag the
 /// authoritative-total shapes (e.g. "all 12 primitives", "all 14
@@ -714,7 +718,12 @@ pub struct NumericClaim {
 ///
 /// When a Phase-3 group changes these counts, that group's brief MUST
 /// update this table in the SAME commit per pim-1 §3.5b post-fix
-/// doc-coupling (the detector ITSELF is a cited surface).
+/// doc-coupling (the detector ITSELF is a cited surface). The hardcode
+/// bump is the immediate fix-now arm; the recurrence-resistant arm
+/// (workspace-aware derivation parsing `Cargo.toml` `members =` at
+/// runtime) is backlogged at `docs/future/phase-3-backlog.md` §7.12
+/// per pim-12 NEW shape (iii) tools-as-meta-spec
+/// (`dispatch-conventions.md::§3.5c` 2026-05-05 amendment).
 pub fn numeric_claims_source_of_truth() -> Vec<NumericClaim> {
     vec![
         NumericClaim {
@@ -738,7 +747,7 @@ pub fn numeric_claims_source_of_truth() -> Vec<NumericClaim> {
         },
         NumericClaim {
             label: "crates",
-            value: 8,
+            value: 10,
             phrasings: &["all {N} crates", "the {N} crates", "{N}-crate"],
         },
     ]

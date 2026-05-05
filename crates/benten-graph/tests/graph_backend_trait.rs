@@ -1,5 +1,5 @@
 //! R3-A RED-PHASE pins for the `GraphBackend` umbrella trait
-//! (G13-A wave 1).
+//! (G13-A wave-1).
 //!
 //! Pin sources (per r2-test-landscape §2.1 G13-A + plan §3 G13-A
 //! must-pass column):
@@ -31,7 +31,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G13-A wave 1 introduces benten_graph::GraphBackend"]
+#[ignore = "RED-PHASE: G13-A wave-1 introduces benten_graph::GraphBackend"]
 fn graph_backend_trait_surface_complete() {
     // G13-A implementer wires this:
     //   use benten_graph::GraphBackend;

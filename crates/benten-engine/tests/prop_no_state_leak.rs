@@ -1,5 +1,5 @@
 //! R3-A RED-PHASE proptest pin: engine generic does not leak state
-//! across backend substitution (G13-B wave 2; plan §4 seed).
+//! across backend substitution (G13-B wave-2; plan §4 seed).
 //!
 //! Pin source: r2-test-landscape §2.1 G13-B row
 //! `prop_engine_generic_no_state_leak_across_backend_substitution`;
@@ -25,7 +25,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(50))]
 
     #[test]
-    #[ignore = "RED-PHASE: G13-B wave 2 introduces EngineGeneric<B>"]
+    #[ignore = "RED-PHASE: G13-B wave-2 introduces EngineGeneric<B>"]
     fn prop_engine_generic_no_state_leak_across_backend_substitution(
         write_count_a in 0u32..16,
         write_count_b in 0u32..16,

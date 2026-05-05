@@ -1,6 +1,6 @@
 //! R3-A + R4-FP RED-PHASE pins: wasm32-unknown-unknown SANDBOX
 //! unavailable path is observable across ALL 4 entry points (G13-C +
-//! G14-C + G14-D + G16-D wave 3+; br-r1-3 + br-r4-r1-2 + Ben's D3
+//! G14-C + G14-D + G16-D wave-3+; br-r1-3 + br-r4-r1-2 + Ben's D3
 //! LOAD-BEARING decision).
 //!
 //! Pin sources:
@@ -30,13 +30,13 @@
 //! `E_SANDBOX_UNAVAILABLE_ON_WASM` typed error from EVERY production
 //! entry point that can reach SANDBOX dispatch:
 //!
-//! 1. **install_module** (G13-C wave 3) — DSL-driven SANDBOX manifest
+//! 1. **install_module** (G13-C wave-3) — DSL-driven SANDBOX manifest
 //!    install at module registration.
-//! 2. **register_module_bytes** (G14-C wave 4b) — direct module-bytes
+//! 2. **register_module_bytes** (G14-C wave-4b) — direct module-bytes
 //!    registration carrying a SANDBOX handler.
-//! 3. **call→SANDBOX-handler** (G14-D wave 5a / G19) — runtime CALL
+//! 3. **call→SANDBOX-handler** (G14-D wave-5a / G19) — runtime CALL
 //!    primitive dispatching into a registered SANDBOX handler-id.
-//! 4. **atrium-replicated SANDBOX invocation** (G16-D wave 5+) — sync-
+//! 4. **atrium-replicated SANDBOX invocation** (G16-D wave-5+) — sync-
 //!    replica receives Atrium-replicated SANDBOX-bearing data + the
 //!    receiver dispatches into local SANDBOX execution.
 //!
@@ -54,7 +54,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G13-C wave 3 wires the wasm-target SANDBOX unavailable path at install_module entry point"]
+#[ignore = "RED-PHASE: G13-C wave-3 wires the wasm-target SANDBOX unavailable path at install_module entry point"]
 fn wasm32_unknown_unknown_browser_backend_e_sandbox_unavailable_on_wasm_path_observable() {
     // br-r1-3 pin (entry point 1 of 4 — install_module).
     // G13-C implementer wires this:
@@ -102,7 +102,7 @@ fn wasm32_unknown_unknown_browser_backend_e_sandbox_unavailable_on_wasm_path_obs
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-C wave 4b wires fail-loud E_SANDBOX_UNAVAILABLE_ON_WASM at register_module_bytes entry point (br-r1-3 + br-r4-r1-2 + D3)"]
+#[ignore = "RED-PHASE: G14-C wave-4b wires fail-loud E_SANDBOX_UNAVAILABLE_ON_WASM at register_module_bytes entry point (br-r1-3 + br-r4-r1-2 + D3)"]
 fn wasm32_unknown_unknown_browser_register_module_bytes_with_sandbox_handler_returns_e_sandbox_unavailable_on_wasm()
  {
     // br-r1-3 fix-brief item (2) + br-r4-r1-2 + D3 LOAD-BEARING pin —
@@ -161,7 +161,7 @@ fn wasm32_unknown_unknown_browser_register_module_bytes_with_sandbox_handler_ret
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-D / G19 wave 5+ wires fail-loud E_SANDBOX_UNAVAILABLE_ON_WASM at CALL→SANDBOX-handler dispatch entry point (br-r1-3 + br-r4-r1-2 + D3)"]
+#[ignore = "RED-PHASE: G14-D / G19 wave-5+ wires fail-loud E_SANDBOX_UNAVAILABLE_ON_WASM at CALL→SANDBOX-handler dispatch entry point (br-r1-3 + br-r4-r1-2 + D3)"]
 fn wasm32_unknown_unknown_browser_call_primitive_into_sandbox_handler_returns_e_sandbox_unavailable_on_wasm()
  {
     // br-r1-3 fix-brief item (3) + br-r4-r1-2 + D3 LOAD-BEARING pin —
@@ -213,7 +213,7 @@ fn wasm32_unknown_unknown_browser_call_primitive_into_sandbox_handler_returns_e_
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-D wave 5+ wires fail-loud E_SANDBOX_UNAVAILABLE_ON_WASM at atrium-replicated SANDBOX invocation receive (br-r1-3 + br-r4-r1-2 + D3)"]
+#[ignore = "RED-PHASE: G16-D wave-5+ wires fail-loud E_SANDBOX_UNAVAILABLE_ON_WASM at atrium-replicated SANDBOX invocation receive (br-r1-3 + br-r4-r1-2 + D3)"]
 fn wasm32_unknown_unknown_browser_atrium_replicated_sandbox_handler_returns_e_sandbox_unavailable_on_wasm()
  {
     // br-r1-3 fix-brief item (4) + br-r4-r1-2 + D3 LOAD-BEARING pin —

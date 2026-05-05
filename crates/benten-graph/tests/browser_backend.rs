@@ -1,5 +1,5 @@
 //! R3-A RED-PHASE pins for `BrowserBackend` thin-client cache
-//! (G13-C wave 3; CLAUDE.md baked-in #17 + br-r1-* + plan §3 G13-C).
+//! (G13-C wave-3; CLAUDE.md baked-in #17 + br-r1-* + plan §3 G13-C).
 //!
 //! Pin sources (per r2-test-landscape §2.1 G13-C + plan §4 seed):
 //!
@@ -29,7 +29,7 @@
 use proptest::prelude::*;
 
 #[test]
-#[ignore = "RED-PHASE: G13-C wave 3 introduces benten_graph::BrowserBackend"]
+#[ignore = "RED-PHASE: G13-C wave-3 introduces benten_graph::BrowserBackend"]
 fn browser_backend_round_trip() {
     // G13-C implementer wires this:
     //   let backend = benten_graph::BrowserBackend::new();

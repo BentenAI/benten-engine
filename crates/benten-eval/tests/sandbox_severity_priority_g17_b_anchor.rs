@@ -51,7 +51,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 #[test]
-#[ignore = "RED-PHASE: G17-B wave 5b extends multi-arch-cargo-check.yml with macos-latest-arm64 cell per phase-3-backlog §6.7 + r4-r1-wsa-7 shape-hardening (cargo nextest run + --target + flag-position --test invocation)"]
+#[ignore = "RED-PHASE: G17-B wave-5b extends multi-arch-cargo-check.yml with macos-latest-arm64 cell per phase-3-backlog §6.7 + r4-r1-wsa-7 shape-hardening (cargo nextest run + --target + flag-position --test invocation)"]
 fn aarch64_sandbox_runtime_ci_cell_green() {
     // r2-test-landscape §2.5 G17-B AArch64 cell pin. G17-B implementer wires:
     //

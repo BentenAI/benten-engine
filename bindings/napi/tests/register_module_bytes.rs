@@ -1,5 +1,5 @@
 //! R3-D RED-PHASE pin for `engine.registerModuleBytes` napi method
-//! (G17-C wave 5b; phase-3-backlog §6.6).
+//! (G17-C wave-5b; phase-3-backlog §6.6).
 //!
 //! Pin source: r2-test-landscape §2.5 G17-C
 //! `engine_register_module_bytes_napi_method_present`.
@@ -25,7 +25,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G17-C wave 5b authors register_module_bytes napi method per phase-3-backlog §6.6"]
+#[ignore = "RED-PHASE: G17-C wave-5b authors register_module_bytes napi method per phase-3-backlog §6.6"]
 fn engine_register_module_bytes_napi_method_present() {
     // phase-3-backlog §6.6 pin. G17-C implementer wires this:
     //

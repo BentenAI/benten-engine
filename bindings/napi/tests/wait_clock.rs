@@ -1,5 +1,5 @@
 //! R3-E RED-PHASE pins for G19-C1 testing_advance_wait_clock napi binding
-//! (wave 7 parallel; §7.1.4 + r6-napi-2 closure).
+//! (wave-7 parallel; §7.1.4 + r6-napi-2 closure).
 //!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.7 G19-C1 +
 //! `.addl/phase-3/00-implementation-plan.md` §3 G19-C1 must-pass column):

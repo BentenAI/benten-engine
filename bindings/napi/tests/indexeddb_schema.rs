@@ -1,4 +1,4 @@
-//! R3-D RED-PHASE pins for IndexedDB schema-versioning (G18-A wave 5a;
+//! R3-D RED-PHASE pins for IndexedDB schema-versioning (G18-A wave-5a;
 //! D-PHASE-3-27 + br-r1-2 BLOCKER).
 //!
 //! Pin sources (per r2-test-landscape §2.6 G18-A + §4 thin-client + r1-revision-triage):
@@ -48,7 +48,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a authors IndexedDB onupgradeneeded handler per D-PHASE-3-27 / br-r1-2 BLOCKER"]
+#[ignore = "RED-PHASE: G18-A wave-5a authors IndexedDB onupgradeneeded handler per D-PHASE-3-27 / br-r1-2 BLOCKER"]
 fn indexeddb_schema_version_onupgradeneeded_handler_present() {
     // br-r1-2 BLOCKER pin. G18-A implementer wires this:
     //
@@ -77,7 +77,7 @@ fn indexeddb_schema_version_onupgradeneeded_handler_present() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a authors onversionchange handler (closes on remote upgrade) per D-PHASE-3-27"]
+#[ignore = "RED-PHASE: G18-A wave-5a authors onversionchange handler (closes on remote upgrade) per D-PHASE-3-27"]
 fn indexeddb_onversionchange_handler_closes_on_remote_upgrade() {
     // D-PHASE-3-27 / br-r1-2 pin. G18-A implementer:
     //
@@ -102,7 +102,7 @@ fn indexeddb_onversionchange_handler_closes_on_remote_upgrade() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a mints E_STORAGE_QUOTA_EXCEEDED + handles QuotaExceededError per D-PHASE-3-27 / br-r1-2"]
+#[ignore = "RED-PHASE: G18-A wave-5a mints E_STORAGE_QUOTA_EXCEEDED + handles QuotaExceededError per D-PHASE-3-27 / br-r1-2"]
 fn indexeddb_quota_exceeded_error_fires_e_storage_quota_exceeded() {
     // D-PHASE-3-27 / br-r1-2 pin. G18-A implementer:
     //
@@ -137,7 +137,7 @@ fn indexeddb_quota_exceeded_error_fires_e_storage_quota_exceeded() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a authors v1→v2 schema migration round-trip per D-PHASE-3-27 / br-r1-2"]
+#[ignore = "RED-PHASE: G18-A wave-5a authors v1→v2 schema migration round-trip per D-PHASE-3-27 / br-r1-2"]
 fn indexeddb_schema_migration_v1_to_v2_round_trip() {
     // D-PHASE-3-27 / br-r1-2 pin. G18-A implementer:
     //
@@ -171,7 +171,7 @@ fn indexeddb_schema_migration_v1_to_v2_round_trip() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a — schema versioning preserves data across upgrade (no-data-loss)"]
+#[ignore = "RED-PHASE: G18-A wave-5a — schema versioning preserves data across upgrade (no-data-loss)"]
 fn indexeddb_schema_versioning_no_data_loss_across_upgrade() {
     // D-PHASE-3-27 / br-r1-2 pin (additional must-pass). G18-A
     // implementer wires this as a STRONGER pin than
@@ -201,7 +201,7 @@ fn indexeddb_schema_versioning_no_data_loss_across_upgrade() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave 5a — IndexedDB scope is thin-client cache + manifest-store ONLY (CLAUDE.md baked-in #17)"]
+#[ignore = "RED-PHASE: G18-A wave-5a — IndexedDB scope is thin-client cache + manifest-store ONLY (CLAUDE.md baked-in #17)"]
 fn indexeddb_persistence_thin_client_cache_only_per_baked_in_17() {
     // CLAUDE.md baked-in #17 architectural pin. G18-A implementer:
     //

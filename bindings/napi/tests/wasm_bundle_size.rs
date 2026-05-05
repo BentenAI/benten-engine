@@ -1,5 +1,5 @@
 //! R3-A RED-PHASE pin: wasm browser bundle size ≤ 600KB gzipped
-//! (G13-C wave 3; br-r1-1 BLOCKER + spike-bundle-cap-empirical.md).
+//! (G13-C wave-3; br-r1-1 BLOCKER + spike-bundle-cap-empirical.md).
 //!
 //! Pin source: r2-test-landscape §2.1 G13-C row
 //! `wasm_r1_7_browser_bundle_size_at_or_below_600kb_gzipped`; br-r1-1
@@ -29,7 +29,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G13-C wave 3 produces the Phase-3 browser bundle artifact"]
+#[ignore = "RED-PHASE: G13-C wave-3 produces the Phase-3 browser bundle artifact"]
 fn wasm_r1_7_browser_bundle_size_at_or_below_600kb_gzipped() {
     // G13-C implementer wires this against the post-build artifact
     // path. Skip-when-absent shape (matching Phase-2b sibling):

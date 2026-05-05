@@ -1,6 +1,6 @@
 //! Architectural pin: the G13-pre-C `cap_recheck` helper must be
-//! consumed AS-IS by both G14-D F6 SUBSCRIBE filtering (wave 5a) and
-//! G17-A1 ESC-9 `live_cap_check` (wave 5b).
+//! consumed AS-IS by both G14-D F6 SUBSCRIBE filtering (wave-5a) and
+//! G17-A1 ESC-9 `live_cap_check` (wave-5b).
 //!
 //! ## What this test asserts
 //!
@@ -19,8 +19,8 @@
 //!
 //! ## Why this matters (per `seq-minor-6`)
 //!
-//! Both consumer waves ship in parallel — wave 5a (G14-D F6
-//! filtering) and wave 5b (G17-A1 ESC-9 live_cap_check). If either
+//! Both consumer waves ship in parallel — wave-5a (G14-D F6
+//! filtering) and wave-5b (G17-A1 ESC-9 live_cap_check). If either
 //! wave landed an inline ad-hoc shape, we'd pay refactor cost when
 //! the second wave consolidated against it. Extracting the helper
 //! FIRST at G13-pre-C means both waves cite the same module and

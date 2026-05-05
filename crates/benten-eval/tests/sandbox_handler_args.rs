@@ -1,5 +1,5 @@
 //! R3-D RED-PHASE pins for 24th p/c drift acceptance criterion —
-//! Rust eval-side casing discipline (G17-C wave 5b; pim-2 LOAD-BEARING;
+//! Rust eval-side casing discipline (G17-C wave-5b; pim-2 LOAD-BEARING;
 //! phase-3-backlog §6.6 + §3.6b).
 //!
 //! Pin sources (per r2-test-landscape §2.5 G17-C + §3.D 24th p/c drift):
@@ -75,7 +75,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 #[test]
-#[ignore = "RED-PHASE: G17-C wave 5b authors translateSandboxArgs DSL helper + un-ignores eval-side assertion (pim-2 LOAD-BEARING)"]
+#[ignore = "RED-PHASE: G17-C wave-5b authors translateSandboxArgs DSL helper + un-ignores eval-side assertion (pim-2 LOAD-BEARING)"]
 fn sandbox_per_handler_wallclock_ms_camel_case_dsl_round_trips_to_eval_side_snake_case() {
     // pim-2 LOAD-BEARING + 24th p/c drift acceptance criterion pin.
     // G17-C implementer wires this:
@@ -117,7 +117,7 @@ fn sandbox_per_handler_wallclock_ms_camel_case_dsl_round_trips_to_eval_side_snak
 }
 
 #[test]
-#[ignore = "RED-PHASE: G17-C wave 5b 24th p/c drift output-limit round-trip (canonical eval-side name = `output_limit`, NOT `output_limit_bytes` — see r4-r1-wsa-1 + crates/benten-engine/src/primitive_host.rs::execute_sandbox + crates/benten-dsl-compiler/src/lib.rs::permuted_keys_yield_identical_canonical_bytes)"]
+#[ignore = "RED-PHASE: G17-C wave-5b 24th p/c drift output-limit round-trip (canonical eval-side name = `output_limit`, NOT `output_limit_bytes` — see r4-r1-wsa-1 + crates/benten-engine/src/primitive_host.rs::execute_sandbox + crates/benten-dsl-compiler/src/lib.rs::permuted_keys_yield_identical_canonical_bytes)"]
 fn sandbox_per_handler_output_limit_camel_case_dsl_round_trips() {
     // 24th p/c drift sibling pin. RECALIBRATED at R4-FP per r4-r1-wsa-1
     // BLOCKER — the eval-side canonical property is `output_limit`,
@@ -171,7 +171,7 @@ fn sandbox_per_handler_output_limit_camel_case_dsl_round_trips() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G17-C wave 5b — architectural drift-pin (r4-r1-wsa-1; defends against 25th p/c drift recurrence)"]
+#[ignore = "RED-PHASE: G17-C wave-5b — architectural drift-pin (r4-r1-wsa-1; defends against 25th p/c drift recurrence)"]
 fn sandbox_per_handler_property_name_does_not_drift_across_dsl_compiler_and_primitive_host() {
     // r4-r1-wsa-1 architectural drift-pin. Defends against the 25th
     // p/c drift recurrence shape by asserting both PRODUCER sites name

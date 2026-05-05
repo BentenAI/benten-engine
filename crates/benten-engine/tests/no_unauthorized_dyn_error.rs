@@ -1,6 +1,6 @@
 //! R3-A RED-PHASE pin: no unauthorized `Box<dyn std::error::Error>` at
 //! the engine boundary outside the SINGLE authorized site
-//! (G13-B wave 2; D-B).
+//! (G13-B wave-2; D-B).
 //!
 //! Pin source: r2-test-landscape §2.1 G13-B row
 //! `no_unauthorized_box_dyn_std_error_at_engine_boundary`; D-B.

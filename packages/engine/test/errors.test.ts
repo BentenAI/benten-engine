@@ -1,5 +1,5 @@
 // R3-E RED-PHASE pins for G19-B mapNativeError + BentenError.context
-// TS-side surface (wave 7 parallel; §7.2).
+// TS-side surface (wave-7 parallel; §7.2).
 //
 // Pin sources (per .addl/phase-3/r2-test-landscape.md §2.7 G19-B):
 //

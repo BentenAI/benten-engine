@@ -1,6 +1,6 @@
 //! R3-A RED-PHASE pin: `Engine<B>` and `UCANBackend<B>` share the same
 //! backend-generic parameter at construction time
-//! (G13-B wave 2 + G14-B wave-4b; arch-r1-5).
+//! (G13-B wave-2 + G14-B wave-4b; arch-r1-5).
 //!
 //! Pin source: r2-test-landscape §2.1 G13-B row
 //! `engine_generic_b_aligns_with_ucan_backend_b_at_construction_time`;

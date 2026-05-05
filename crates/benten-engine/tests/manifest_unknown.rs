@@ -1,5 +1,5 @@
 //! R3-D RED-PHASE pins for `register_subgraph` SANDBOX named-manifest
-//! resolution (G17-C wave 5b; phase-3-backlog §6.6).
+//! resolution (G17-C wave-5b; phase-3-backlog §6.6).
 //!
 //! Pin sources (per r2-test-landscape §2.5 G17-C):
 //!
@@ -32,7 +32,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 #[test]
-#[ignore = "RED-PHASE: G17-C wave 5b wires register_subgraph manifest-name validation walk per phase-3-backlog §6.6"]
+#[ignore = "RED-PHASE: G17-C wave-5b wires register_subgraph manifest-name validation walk per phase-3-backlog §6.6"]
 fn register_subgraph_rejects_unresolved_sandbox_manifest_name_with_e_sandbox_manifest_unknown() {
     // phase-3-backlog §6.6 deliverable 1 pin. G17-C implementer wires:
     //
@@ -66,7 +66,7 @@ fn register_subgraph_rejects_unresolved_sandbox_manifest_name_with_e_sandbox_man
 }
 
 #[test]
-#[ignore = "RED-PHASE: G17-C wave 5b extends manifest_registry to key by colon-joined name per §6.6"]
+#[ignore = "RED-PHASE: G17-C wave-5b extends manifest_registry to key by colon-joined name per §6.6"]
 fn register_subgraph_resolves_colon_joined_manifest_name() {
     // phase-3-backlog §6.6 pin. G17-C implementer wires:
     //

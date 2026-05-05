@@ -1,5 +1,5 @@
 //! R3-A RED-PHASE pin: `DurabilityMode::default()` flips to `Group`
-//! (G13-E wave 3; plan §3 G13-E + Compromise #12 closure).
+//! (G13-E wave-3; plan §3 G13-E + Compromise #12 closure).
 //!
 //! Pin source: r2-test-landscape §2.1 G13-E row
 //! `durability_mode_group_default_for_crud_fast_path`; plan §3 G13-E;
@@ -20,7 +20,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G13-E wave 3 flips DurabilityMode::default to Group"]
+#[ignore = "RED-PHASE: G13-E wave-3 flips DurabilityMode::default to Group"]
 fn durability_mode_group_default_for_crud_fast_path() {
     // G13-E implementer wires this:
     //   let default = benten_graph::DurabilityMode::default();

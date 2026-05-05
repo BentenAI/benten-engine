@@ -1,5 +1,5 @@
 // R3-E RED-PHASE pins for G20-B atrium examples compile and run
-// (wave 8b; plan §3 G20-B + cag-4).
+// (wave-8b; plan §3 G20-B + cag-4).
 //
 // Pin sources (per .addl/phase-3/r2-test-landscape.md §2.8 G20-B):
 //

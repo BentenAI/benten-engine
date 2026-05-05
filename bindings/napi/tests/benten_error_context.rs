@@ -1,5 +1,5 @@
 //! R3-E RED-PHASE pins for G19-B BentenError.context structured-field
-//! coverage at the napi boundary (wave 7 parallel).
+//! coverage at the napi boundary (wave-7 parallel).
 //!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.7 G19-B +
 //! `.addl/phase-3/00-implementation-plan.md` §3 G19-B must-pass column +

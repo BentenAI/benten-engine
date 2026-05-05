@@ -6,7 +6,7 @@ For plain-English orientation, start with [`HOW-IT-WORKS.md`](HOW-IT-WORKS.md). 
 
 ---
 
-## Eight crates
+## Ten crates
 
 The Rust workspace:
 
@@ -26,6 +26,20 @@ crates/
   benten-eval/          # 12 operation primitives. Iterative evaluator (explicit
                         # stack, not recursive). Structural validation (14
                         # invariants). Transaction primitive.
+  benten-id/            # Phase-3 canary STUB at R3-A landing — Ed25519 +
+                        # did:key + UCAN. Empty until G14-A1 wave-4a fills
+                        # the real implementations; present as a workspace
+                        # member so R3 RED-PHASE test pins compile-but-fail
+                        # at the `use` line (canonical TDD red phase).
+  benten-sync/          # Phase-3 canary STUB at R3-C landing — Atrium P2P
+                        # sync (iroh transport + Loro CRDT + MST diff +
+                        # DID handshake). NATIVE-ONLY per CLAUDE.md
+                        # baked-in #17 (excluded from `wasm32` targets so
+                        # browser / edge thin-compute deployments do not
+                        # carry Loro / iroh in their bundles). G16-A wave-6
+                        # canary fills transport.rs + peer_id.rs + errors.rs;
+                        # G16-B/C/D wave-6b fill crdt.rs + mst.rs +
+                        # handshake.rs.
   benten-dsl-compiler/  # Compiles the textual handler-DSL grammar into
                         # SubgraphSpec. Phase-2b G12-B addition; routes from
                         # devserver into Engine.register_subgraph.
@@ -40,6 +54,12 @@ packages/
   engine/           # TypeScript DSL wrapper (@benten/engine).
 ```
 
+The `benten-id` + `benten-sync` rows landed as canary stubs alongside the
+Phase-3 R3 RED-PHASE corpus (R3-A + R3-C respectively); their executable
+bodies fill in across waves G14-A1 (identity primitives) and G16-A/B/C/D
+(Atrium sync), with the FINAL crate-graph narrative (replacing this
+in-flight description) landing at G20-B per `tests/phase_3_workspace/architecture_md_g20b_final.rs::architecture_md_lists_10_crates_with_benten_id_and_benten_sync`.
+
 The crate graph is DAG-shaped: `benten-errors` has no Benten dependencies; every other crate imports from it for error discriminants; `benten-engine` sits at the top and is the only crate applications link against.
 
 ### Thinness test
@@ -48,7 +68,7 @@ Each crate has one responsibility. A reader can use `benten-engine` with `NoAuth
 
 ## Bindings and tooling
 
-Beyond the eight Rust crates, the workspace ships two ancillary trees that exist
+Beyond the ten Rust crates, the workspace ships two ancillary trees that exist
 to make the engine reachable from JavaScript and to keep developer onboarding
 ten minutes from `npx` to a green test:
 
