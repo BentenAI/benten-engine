@@ -177,8 +177,10 @@ const DEFAULT_SKEW_TOLERANCE_MS: u64 = 5 * 60 * 1000;
 /// Type of the injectable physical-clock callback.
 ///
 /// Returns the current wall-clock time in milliseconds since the UNIX epoch.
-/// Tests inject a deterministic counter; production callers inject
-/// [`system_time_ms`] (gated behind `std`).
+/// Tests inject a deterministic counter; production callers inject a
+/// `std::time::SystemTime`-backed callable wired from `benten-graph` (which
+/// already depends on std via redb), keeping `benten-core` free of an
+/// implicit std-only feature gate.
 pub type PhysicalClockFn = fn() -> u64;
 
 /// HLC state machine.
