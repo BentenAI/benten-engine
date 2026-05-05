@@ -95,13 +95,20 @@ fn subscribe_partial_revoke_cancels_subscription_path() {
     //   engine.write_node(&node_in_admin).unwrap();
     //   assert_eq!(engine.delivered_events_for(sub_admin).len(), 0);
     //
-    //   // sub_admin observably reports cancelled state:
-    //   assert_eq!(engine.subscription_state(sub_admin),
-    //       benten_engine::SubscriptionState::CancelledByCapabilityRevocation);
+    //   // sub_admin observably reports cancelled state via the
+    //   // `subscription_active` accessor (per stream-r4r1-6: narrow
+    //   // to observable boolean assertion to avoid introducing the
+    //   // SubscriptionState enum surface ad-hoc; if the implementer
+    //   // chooses to expose a richer reason-typed enum, that is a
+    //   // separate G14-D scope item with napi/TS parity):
+    //   assert!(!engine.subscription_active(sub_admin),
+    //       "sub_admin must report inactive after partial revoke per F6 + #2 D5");
+    //   // Subsequent admin writes do not deliver:
+    //   assert_eq!(engine.delivered_events_for(sub_admin).len(), 0);
     //
     // OBSERVABLE consequence: precise per-path cancellation; partial
-    // revoke isolates correctly; subscription state surface reports
-    // the cancellation reason.
+    // revoke isolates correctly; observable consequence asserted via
+    // delivery-count + active-flag, not via a new typed enum surface.
     unimplemented!("G14-D wires partial-revoke per-subscription-path cancellation per F6 + #2 D5");
 }
 
