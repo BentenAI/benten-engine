@@ -16,7 +16,7 @@ name: Cite-drift detector (Phase-3 G13-pre-A)
 # Cross-refs:
 #   - tools/cite-drift-detector/src/lib.rs (the detector)
 #   - .addl/phase-3/00-implementation-plan.md G13-pre-A (wave-1pre row)
-#   - .addl/phase-2b/dispatch-conventions.md §3.5b HARDENED point 4
+#   - .addl/phase-2b/dispatch-conventions.md §3.5b HARDENED point 3
 #     (high-churn surface symbol-cite enforcement)
 #   - docs/future/phase-2-backlog.md §8.2 (numeric-claim drift lint)
 
