@@ -10,8 +10,8 @@
 //!   — 24th p/c drift (RECALIBRATED at R4-FP per r4-r1-wsa-1 BLOCKER —
 //!   canonical eval-side property is `output_limit`, NOT
 //!   `output_limit_bytes`; see verification grep at
-//!   `crates/benten-engine/src/primitive_host.rs:877` +
-//!   `crates/benten-dsl-compiler/src/lib.rs:761+765`).
+//!   `crates/benten-engine/src/primitive_host.rs::execute_sandbox` +
+//!   `crates/benten-dsl-compiler/src/lib.rs::permuted_keys_yield_identical_canonical_bytes`).
 //! - `tests/sandbox_per_handler_property_name_does_not_drift_across_dsl_compiler_and_primitive_host`
 //!   — r4-r1-wsa-1 architectural drift-pin (NEW at R4-FP — defends
 //!   against the 25th p/c drift recurrence by asserting both producer
@@ -38,8 +38,8 @@
 //! 3. The napi argv arrives with snake_case keys (`wallclock_ms` +
 //!    `output_limit`).
 //! 4. The eval-side parser reads `wallclock_ms` + `output_limit`
-//!    correctly (existing surface; `primitive_host.rs:877` reads
-//!    `op.properties.get("output_limit")`).
+//!    correctly (existing surface; `crates/benten-engine/src/primitive_host.rs::execute_sandbox`
+//!    reads `op.properties.get("output_limit")`).
 //! 5. SANDBOX execution observes the configured ceiling.
 //!
 //! ## Why the 25th-drift recurrence (r4-r1-wsa-1)
@@ -47,9 +47,10 @@
 //! At R3-D the snake_case target was authored as `output_limit_bytes`
 //! by symmetry with `wallclockMs` → `wallclock_ms` (preserving every
 //! token of the camelCase form). But the eval-side reader at
-//! `primitive_host.rs:877` reads `op.properties.get("output_limit")`
-//! and the DSL-compiler at `dsl-compiler/src/lib.rs:761+765` writes
-//! `output_limit: 65536` (no `_bytes`). The 25th p/c drift would have
+//! `crates/benten-engine/src/primitive_host.rs::execute_sandbox` reads
+//! `op.properties.get("output_limit")` and the DSL-compiler at
+//! `crates/benten-dsl-compiler/src/lib.rs::permuted_keys_yield_identical_canonical_bytes`
+//! writes `output_limit: 65536` (no `_bytes`). The 25th p/c drift would have
 //! materialized inside the 24th-drift fix: the test pin would request
 //! a translation that drops the value into a property name eval ignores,
 //! causing the OutputOverflow assertion to pass by default-fallthrough
@@ -116,7 +117,7 @@ fn sandbox_per_handler_wallclock_ms_camel_case_dsl_round_trips_to_eval_side_snak
 }
 
 #[test]
-#[ignore = "RED-PHASE: G17-C wave 5b 24th p/c drift output-limit round-trip (canonical eval-side name = `output_limit`, NOT `output_limit_bytes` — see r4-r1-wsa-1 + primitive_host.rs:877 + dsl-compiler/src/lib.rs:761+765)"]
+#[ignore = "RED-PHASE: G17-C wave 5b 24th p/c drift output-limit round-trip (canonical eval-side name = `output_limit`, NOT `output_limit_bytes` — see r4-r1-wsa-1 + crates/benten-engine/src/primitive_host.rs::execute_sandbox + crates/benten-dsl-compiler/src/lib.rs::permuted_keys_yield_identical_canonical_bytes)"]
 fn sandbox_per_handler_output_limit_camel_case_dsl_round_trips() {
     // 24th p/c drift sibling pin. RECALIBRATED at R4-FP per r4-r1-wsa-1
     // BLOCKER — the eval-side canonical property is `output_limit`,
@@ -157,7 +158,8 @@ fn sandbox_per_handler_output_limit_camel_case_dsl_round_trips() {
     //      defaulted to the eval-side default 1 MB ceiling).
     //   3. The translator emits the WRONG snake_case target (e.g.
     //      `output_limit_bytes` instead of `output_limit`); eval-side
-    //      reader at primitive_host.rs:877 silently drops the value
+    //      reader at `crates/benten-engine/src/primitive_host.rs::execute_sandbox`
+    //      silently drops the value
     //      and the OutputOverflow assertion would still fire by
     //      default-fallthrough — the 25th p/c drift recurrence shape.
     //      The companion architectural drift-pin
