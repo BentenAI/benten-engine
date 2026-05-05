@@ -7,7 +7,7 @@
 //!   1. **`file:line` line cites** — e.g. `crates/benten-engine/src/engine.rs:472`.
 //!      The detector validates that the file exists at HEAD and contains the
 //!      cited line. It additionally flags any **bare line cite against the
-//!      high-churn surface list** per §3.5b HARDENED point 4 of the Phase-2b
+//!      high-churn surface list** per §3.5b HARDENED point 3 of the Phase-2b
 //!      dispatch-conventions: those surfaces MUST use `path::symbol` form,
 //!      because line numbers drift on every refactor.
 //!
@@ -71,7 +71,7 @@ pub enum FindingKind {
     /// `path/to/file.rs:NN` — file exists but does not have line NN.
     LineCiteLineOutOfRange,
     /// `path/to/file.rs:NN` — file is on the high-churn surface list and
-    /// MUST use `path::symbol` form per §3.5b HARDENED point 4.
+    /// MUST use `path::symbol` form per §3.5b HARDENED point 3.
     LineCiteOnHighChurnSurface,
     /// `path/to/file.rs::symbol` — file does not exist at HEAD.
     SymbolCiteFileMissing,
@@ -96,7 +96,7 @@ impl fmt::Display for FindingKind {
     }
 }
 
-/// Phase-2b §3.5b HARDENED point 4: these surfaces churn fast enough that
+/// Phase-2b §3.5b HARDENED point 3: these surfaces churn fast enough that
 /// line cites go stale within rounds. Cites against them MUST use the
 /// `path::symbol` form. The detector emits
 /// `LineCiteOnHighChurnSurface` for any bare `file.rs:NN` cite that
@@ -212,7 +212,7 @@ struct SymbolCite {
 /// a SECURITY-POSTURE table). These are not validated because the
 /// resolved-from-root form would be ambiguous; the **high-churn surface**
 /// check above DOES still operate on basename, so the surface-coverage
-/// commitment of §3.5b HARDENED point 4 is unaffected.
+/// commitment of §3.5b HARDENED point 3 is unaffected.
 fn extract_line_cites(s: &str) -> Vec<LineCite> {
     let mut out = Vec::new();
     let bytes = s.as_bytes();
@@ -436,7 +436,7 @@ fn check_line_cite(
     let is_bare_basename = !lc.target_path.contains('/');
 
     // High-churn enforcement applies regardless of bare-basename vs
-    // full-path: §3.5b HARDENED point 4 promotes symbol cites to MUST
+    // full-path: §3.5b HARDENED point 3 promotes symbol cites to MUST
     // for these surfaces, and the convention catches both forms (a
     // `primitive_host.rs:899` shorthand inside a doc table is just as
     // stale as a fully-qualified cite).
@@ -446,7 +446,7 @@ fn check_line_cite(
             path: source_path.to_path_buf(),
             line: source_line,
             message: format!(
-                "{}:{} :: high-churn surface; use `path::symbol` form per §3.5b HARDENED point 4",
+                "{}:{} :: high-churn surface; use `path::symbol` form per §3.5b HARDENED point 3",
                 lc.target_path, lc.target_line
             ),
         });
@@ -513,7 +513,7 @@ fn check_symbol_cite(
     // doc-prose forms like `primitive_host.rs::execute_sandbox` that
     // appear inside narrative sentences. The symbol form for
     // high-churn surfaces is still validated when the cite is
-    // fully-qualified, which is the form §3.5b HARDENED point 4
+    // fully-qualified, which is the form §3.5b HARDENED point 3
     // expects callers to migrate TO.
     if !sc.target_path.contains('/') {
         return;
