@@ -117,6 +117,90 @@ fn test_helpers_feature_flag_off_in_default_features() {
 }
 
 #[test]
+#[ignore = "RED-PHASE: G17-A1 wave 5b — napi cdylib production-build symbol-table assertion (r4-r1-wsa-3 LOAD-BEARING half of pim-2 §3.6b shape)"]
+fn napi_cdylib_production_build_does_not_export_testing_helper_symbols() {
+    // r4-r1-wsa-3 LOAD-BEARING pin (the production-flow half of the
+    // pim-2 §3.6b end-to-end shape). The 3 source-cite pins above
+    // catch the easy regression (cfg-attr deletion); THIS pin catches
+    // the harder regression (Cargo feature-graph composition that
+    // accidentally activates benten-eval's `test-helpers` feature
+    // transitively through bindings/napi's production feature set).
+    //
+    // Phase-2a sec-r6r2-02 precedent named this exact regression vector:
+    // a refactor that adds (e.g.) `bindings/napi.test-helpers = ["benten-eval/test-helpers"]`
+    // to enable broader testing, but accidentally lists this in the
+    // [features] default array of bindings/napi/Cargo.toml. The 3
+    // source-cite pins still pass (cfg-attrs unchanged in the .rs files);
+    // the napi cdylib silently exposes the testing helpers in production.
+    //
+    // G17-A1 implementer wires this:
+    //
+    //   // Step 1: invoke the production cdylib build:
+    //   //
+    //   //   cargo build -p benten-napi --release \
+    //   //     --no-default-features \
+    //   //     --features <production-feature-set>   // implementer pins exact set
+    //   //
+    //   // Step 2: locate the cdylib artifact:
+    //   //
+    //   //   let artifact = std::path::PathBuf::from("target/release/libbenten_napi.dylib")
+    //   //       .or("target/release/libbenten_napi.so")
+    //   //       .or("target/release/benten_napi.dll");
+    //   //   if !artifact.exists() {
+    //   //       eprintln!("skip: napi cdylib production build artifact absent");
+    //   //       return;
+    //   //   }
+    //   //
+    //   // Step 3: scan the symbol table for testing-helper symbols. On
+    //   // macOS/Linux: `nm -gU <artifact>`; on Windows: `dumpbin /exports`.
+    //   // The 4 testing-helper functions:
+    //   const TESTING_HELPER_SYMBOLS: &[&str] = &[
+    //       "testing_revoke_cap_mid_call",
+    //       "testing_call_engine_dispatch",
+    //       "testing_inject_forged_cap_claim_section",
+    //       "testing_register_uncounted_host_fn",
+    //   ];
+    //
+    //   //   let nm_output = std::process::Command::new("nm")
+    //   //       .arg("-gU").arg(&artifact).output().unwrap();
+    //   //   let symbols = String::from_utf8_lossy(&nm_output.stdout);
+    //   //   for helper in TESTING_HELPER_SYMBOLS {
+    //   //       assert!(!symbols.contains(helper),
+    //   //           "napi cdylib production build MUST NOT export testing helper {} \
+    //   //            per r4-r1-wsa-3 + Phase-2a sec-r6r2-02; check Cargo feature-graph \
+    //   //            composition — bindings/napi production feature set must NOT \
+    //   //            transitively activate benten-eval's test-helpers feature",
+    //   //           helper);
+    //   //   }
+    //
+    //   // Step 4 (sibling — Cargo feature-graph drift assertion):
+    //   //
+    //   //   let napi_cargo = std::fs::read_to_string("bindings/napi/Cargo.toml").unwrap();
+    //   //   // The dependencies/features tables MUST NOT transitively
+    //   //   // enable benten-eval/test-helpers from any default-active path:
+    //   //   //   - benten-eval = { ..., features = ["test-helpers"] }       FORBIDDEN at default
+    //   //   //   - default = ["...", "..."] with paths reaching test-helpers
+    //   //   //
+    //   //   // Cleanest shape: parse the manifest with toml-rs + walk the
+    //   //   // feature graph reachable from the default array; assert the
+    //   //   // closure does NOT include "benten-eval/test-helpers".
+    //   //
+    //   // OBSERVABLE consequence: a Cargo refactor that accidentally
+    //   // pulls test-helpers into the production cdylib symbol table
+    //   // fails this pin. Defends against the harder regression vector
+    //   // (feature-graph composition) the source-cite pins miss.
+    //
+    // Pairs with the source-cite trio above to compose the pim-2
+    // end-to-end shape: source-cite (cfg-attr presence) + Cargo
+    // feature-graph + production-build symbol-table assertion. This
+    // pin is the LOAD-BEARING half per r4-r1-wsa-3 — the source-cite
+    // alone is insufficient.
+    unimplemented!(
+        "G17-A1 wires napi cdylib production-build symbol-table scan + Cargo feature-graph closure assertion per r4-r1-wsa-3 LOAD-BEARING (pim-2 production-flow half)"
+    );
+}
+
+#[test]
 #[ignore = "RED-PHASE: G17-A1 wave 5b — cfg attribute discipline (not cfg(debug), not unconditional)"]
 fn cfg_test_path_only_visible_in_test_builds() {
     // r1-wsa-6 cfg-attr discipline pin. G17-A1 implementer:
