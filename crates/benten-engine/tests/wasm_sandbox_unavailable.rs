@@ -19,7 +19,8 @@
 //! pins (2)/(3)/(4) covering the remaining 3 SANDBOX entry points so
 //! a R5 implementer who wires the install_module arm + silently no-ops
 //! on the other 3 entry points fires THIS file's pins, not just the
-//! single primitive_host.rs:1022-1045 dispatch site.
+//! single `crates/benten-engine/src/primitive_host.rs::execute_sandbox`
+//! dispatch site.
 //!
 //! ## What this pins
 //!
