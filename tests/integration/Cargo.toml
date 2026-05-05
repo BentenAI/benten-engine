@@ -10,16 +10,28 @@ publish = false
 # end-to-end pins that span multiple crates (atrium browser thin-client,
 # multi-peer atrium sync, two-process bidirectional sync, etc.).
 #
-# Files hosted here as RED-PHASE pins land via R3-B/R3-C/R3-D:
+# Files hosted here:
 #
 # - `atrium_browser_thin_client.rs` — R3-B owns the full-peer-side
 #   filtering pin; R3-D extends with browser-side IndexedDB cache
 #   assertion. Per r2-test-landscape §13 ambiguous-ownership pre-emption,
 #   both R3 agents share the file with disjoint test-fn ownership.
 #
-# Future R3-C / R3-D files (atrium_two_peer.rs, atrium_three_peer.rs,
-# atrium_two_process.rs, atrium_two_device.rs) land in subsequent R3
-# dispatches per r2-test-landscape §13 partition table.
+# - `atrium_two_peer.rs` — R3-C end-to-end: two-peer atrium bidirectional
+#   sync (exit-criterion 1). Relocated from `tests/phase_3_workspace/`
+#   at R4-FP/R3-C per R3-CPC-1 + R2 §2.4 G16-B row.
+#
+# - `atrium_three_peer.rs` — R3-C end-to-end: three-peer Loro convergence
+#   under concurrent writes (exit-criterion 15 / C-10). Hosts ds-r4-1
+#   Byzantine 3+-peer concurrent-writes-AND-revoke proptest sibling at
+#   R4-FP/R3-C.
+#
+# - `atrium_two_process.rs` — R3-C end-to-end: two-process atrium
+#   bidirectional sync (scope-real-22).
+#
+# - `atrium_two_device.rs` — R3-C end-to-end: two-device same-identity
+#   selective zone sync (exit-criterion 16; multi-device under shared
+#   identity).
 
 [lib]
 path = "src/lib.rs"
@@ -29,6 +41,22 @@ bench = false
 [[test]]
 name = "atrium_browser_thin_client"
 path = "atrium_browser_thin_client.rs"
+
+[[test]]
+name = "atrium_two_peer"
+path = "atrium_two_peer.rs"
+
+[[test]]
+name = "atrium_three_peer"
+path = "atrium_three_peer.rs"
+
+[[test]]
+name = "atrium_two_process"
+path = "atrium_two_process.rs"
+
+[[test]]
+name = "atrium_two_device"
+path = "atrium_two_device.rs"
 
 [dependencies]
 

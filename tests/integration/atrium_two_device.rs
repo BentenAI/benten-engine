@@ -21,6 +21,14 @@
 //! desktop runs SANDBOX workflows + holds full data; phone-OS-app
 //! receives notifications only + holds a subset.
 //!
+//! Originally placed in `tests/phase_3_workspace/`; relocated to
+//! `tests/integration/` at R4-FP/R3-C per R3-CPC-1.
+//!
+//! ## Atrium DSL shape (B-prime per Ben's D1 decision 2026-05-04)
+//!
+//! Both devices use `engine.atrium({config, deviceAttestation}).join()`
+//! factory pattern; the handle carries device-grain state.
+//!
 //! ## RED-PHASE discipline
 //!
 //! `#[ignore]`'d with rationale `"RED-PHASE: G14-D + G16-B + G16-D wave-6b — exit-criterion 16 multi-device"`.

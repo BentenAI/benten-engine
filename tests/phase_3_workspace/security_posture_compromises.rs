@@ -261,3 +261,74 @@ fn security_posture_compromise_11_materialization_gate_landed_at_g15_a() {
         "G15-A wires SECURITY-POSTURE.md grep assertion that Compromise #11 is marked CLOSED via G15-A + G14-D composition"
     );
 }
+
+#[test]
+#[ignore = "RED-PHASE: G16-A + G20-B — net-r4-r1-1 + net-major-1 — Compromise #22 introduced (public-relay metadata leakage) + deferred to NAMED Phase-7-Garden-relay-infrastructure or Phase-9-hardened-deployment"]
+fn compromise_22_public_relay_metadata_leakage_introduced_at_phase_3_close_with_named_phase_7_garden_relay_destination()
+ {
+    // R4-FP/R3-C ownership per net-r4-r1-1 BLOCKER (R4 large-council
+    // Round 1 networking lens). R1 net-major-1 specific_action stated:
+    //
+    //   'Add to G16-A files-owned: docs/SECURITY-POSTURE.md line for
+    //    new compromise: Compromise #22 — Public-relay metadata
+    //    leakage (device-DID + connection metadata visible to relay
+    //    operators); Phase-3-named mitigation deferred to Phase 7
+    //    Garden-relay-infrastructure or Phase 9 hardened-deployment
+    //    posture.'
+    //
+    // The disposition is BELONGS-NAMED-NOW per HARD RULE rule-12
+    // clause-b. The named destination (SECURITY-POSTURE.md) must
+    // EXIST + RECEIVE THE ENTRY NOW — not later, not "carried to
+    // brief X". This pin asserts the SECURITY-POSTURE.md narrative
+    // contains Compromise #22 with a NAMED deferral destination.
+    //
+    // G16-A or G20-B implementer wires this:
+    //
+    //   let posture_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //       .join("..").join("..").join("docs").join("SECURITY-POSTURE.md");
+    //   let posture = std::fs::read_to_string(&posture_path).unwrap();
+    //
+    //   // Compromise #22 entry exists:
+    //   let section = extract_compromise_section(&posture, 22);
+    //   assert!(!section.is_empty(),
+    //       "SECURITY-POSTURE.md must enumerate Compromise #22");
+    //
+    //   // Narrative names public-relay metadata leakage:
+    //   let lower = section.to_lowercase();
+    //   assert!(lower.contains("public-relay") || lower.contains("public relay"),
+    //       "Compromise #22 narrative must name public-relay metadata leakage");
+    //   assert!(lower.contains("device-did") || lower.contains("device did")
+    //         || lower.contains("connection metadata"),
+    //       "Compromise #22 narrative must name what leaks (device-DID / connection metadata)");
+    //
+    //   // Specific named deferral destination per HARD RULE clause-b:
+    //   assert!(
+    //       section.contains("Phase 7")
+    //           || section.contains("Garden")
+    //           || section.contains("Phase 9")
+    //           || section.contains("hardened-deployment"),
+    //       "Compromise #22 deferral destination must be specifically NAMED \
+    //        (Phase 7 Garden-relay-infrastructure OR Phase 9 \
+    //        hardened-deployment posture); generic 'future' is INSUFFICIENT \
+    //        per HARD RULE rule-12 clause-b"
+    //   );
+    //
+    //   // Status MUST NOT be 'closed' (it's introduced, not closed):
+    //   assert!(
+    //       lower.contains("introduced") || lower.contains("open")
+    //         || lower.contains("deferred"),
+    //       "Compromise #22 status must reflect INTRODUCED+DEFERRED \
+    //        (NOT closed at Phase-3 close)"
+    //   );
+    //
+    // OBSERVABLE consequence: SECURITY-POSTURE.md carries Compromise
+    // #22 with a specifically-named deferral destination at Phase-3
+    // close. Closes the pim-3 phantom-destination concern that R1
+    // net-major-1 disposition raised. Defends against the failure
+    // mode where 'all named compromises addressed' is claimed at
+    // phase-close while the public-relay metadata leakage is silently
+    // undocumented.
+    unimplemented!(
+        "G16-A or G20-B wires SECURITY-POSTURE.md Compromise #22 introduction + named deferral destination grep assertion"
+    );
+}

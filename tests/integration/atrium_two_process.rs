@@ -18,6 +18,14 @@
 //! IPC), exercising the full transport stack (iroh QUIC + relay
 //! fallback + handshake + UCAN grant exchange) end-to-end.
 //!
+//! Originally placed in `tests/phase_3_workspace/`; relocated to
+//! `tests/integration/` at R4-FP/R3-C per R3-CPC-1.
+//!
+//! ## Atrium DSL shape (B-prime per Ben's D1 decision 2026-05-04)
+//!
+//! `engine.atrium({config}).join()` factory pattern; both processes
+//! use the handle-returning shape.
+//!
 //! ## RED-PHASE discipline
 //!
 //! `#[ignore]`'d with rationale `"RED-PHASE: G16-D wave-6b — scope-real-22 cross-process driver"`.
