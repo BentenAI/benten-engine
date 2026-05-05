@@ -223,6 +223,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "benten-id"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+]
+
+[[package]]
 name = "benten-ivm"
 version = "0.1.0"
 dependencies = [
@@ -1280,6 +1287,10 @@ dependencies = [
  "libc",
  "winapi",
 ]
+
+[[package]]
+name = "phase-3-workspace-tests"
+version = "0.0.0"
 
 [[package]]
 name = "pin-project-lite"

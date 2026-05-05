@@ -9,9 +9,11 @@ members = [
     "crates/benten-caps",     # Capability types + pre-write hook + NoAuthBackend default (STUB)
     "crates/benten-eval",     # 12 primitives, evaluator, transaction primitive, SANDBOX host (STUB)
     "crates/benten-engine",   # Orchestrator: public API
+    "crates/benten-id",       # Phase-3 G14-A1 canary STUB at R3-A landing — Ed25519 + did:key + UCAN. Empty stub crate so R3-A test pins compile-but-fail at the `use` line (canonical RED-phase). G14-A1 wave-4a fills with real impls.
     "crates/benten-dsl-compiler", # Phase-2b G12-B: DSL-text → SubgraphSpec compiler (MINIMAL-FOR-DEVSERVER ~200-300 LOC, 4 public items). Sibling-of-engine; depends on benten-core only.
     "bindings/napi",          # napi-rs v3 bindings (native + WASM)
     "tests/doc_completeness", # Phase-2a R3 qa-expert — docs-vs-code audit tests (local only until R5 G11-A)
+    "tests/phase_3_workspace", # Phase-3 R3-A — workspace-level architectural pins + compromise-closure pins (architecture_md_state.rs + security_posture_compromises.rs; shared file ownership across R3-A/B/C/D/E per r2-test-landscape §13)
     "tools/benten-dev",       # Phase-2a G11-A dev-server stub (hot-reload, inspect-state) — local only until R5 G11-A
     "tools/cite-drift-detector", # Phase-3 G13-pre-A: cite-drift detector (file:line + path::symbol + numeric-claim drift lint, closes phase-2-backlog §8.2). Workflow: .github/workflows/cite-drift.yml (non-blocking PR comment per D-PHASE-3-10).
 ]
