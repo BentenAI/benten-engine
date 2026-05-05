@@ -12,7 +12,7 @@
 //!
 //! `crates/benten-engine/src/engine_sandbox.rs` threads `fuel_consumed`,
 //! `output_consumed`, and `last_invocation_ms` through engine wrapper into
-//! a per-node high-water tracker. `bindings/napi/src/sandbox.rs::describeSandboxNode`
+//! a per-node high-water tracker. `bindings/napi/src/sandbox.rs::describe_sandbox_node`
 //! returns real metric values rather than the placeholder "Unknown" sentinel.
 //!
 //! Per stream-r1-8: high-water metrics are PER-INVOCATION, NOT
@@ -66,7 +66,7 @@ fn describe_sandbox_node_returns_real_fuel_consumed_not_unknown() {
     // §7.1 closure pin. G19-C2 implementer wires the napi side:
     //
     //   // This test pins the napi binding side specifically:
-    //   //   bindings/napi/src/sandbox.rs::describeSandboxNode
+    //   //   bindings/napi/src/sandbox.rs::describe_sandbox_node
     //   //
     //   // The Phase-2b state returns a dict containing
     //   // `{ fuel_consumed: "Unknown", ... }` as a placeholder.
