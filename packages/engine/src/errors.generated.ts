@@ -132,6 +132,7 @@ export const CATALOG_CODES = [
   "E_SANDBOX_UNAVAILABLE_ON_WASM",
   "E_RELOAD_SUBSCRIBER_UNSUBSCRIBED",
   "E_DEVSERVER_STOPPED",
+  "E_HLC_SKEW_EXCEEDED",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -1618,5 +1619,20 @@ export class EDevserverStopped extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_DEVSERVER_STOPPED", "A devserver napi method was called after `DevServer.stop()` flipped the in-memory state to stopped. Restart the dev-server via `.start()` before invoking further operations, or construct a fresh `DevServer` instance.", message, context);
     this.name = "EDevserverStopped";
+  }
+}
+
+/**
+ * E_HLC_SKEW_EXCEEDED
+ *
+ * Thrown at: `crates/benten-core/src/hlc.rs::Hlc::update` (Phase-3 G14-pre-D). Phase-3 sync wires the firing site into Loro per-property LWW + asymmetric-uptime MST-diff message ingest.
+ * Message template: "HLC skew exceeded: remote physical_ms {remote_physical_ms} > local {local_physical_ms} + tolerance {tolerance_ms}ms"
+ */
+export class EHlcSkewExceeded extends BentenError {
+  static readonly code = "E_HLC_SKEW_EXCEEDED";
+  static readonly fixHint = "`Hlc::update(remote)` refused a remote stamp whose physical-clock component exceeds the local physical clock by more than the configured skew tolerance (default 5 minutes per `Hlc::DEFAULT_SKEW_TOLERANCE_MS`). The local HLC state is NOT mutated when this fires — Phase-3 sync rejects the offending message and continues. Inspect peer NTP / system-clock health; legitimate cross-region drift should fit comfortably inside 5 minutes. Operator-tunable knobs land alongside Phase-3 sync wiring.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_HLC_SKEW_EXCEEDED", "`Hlc::update(remote)` refused a remote stamp whose physical-clock component exceeds the local physical clock by more than the configured skew tolerance (default 5 minutes per `Hlc::DEFAULT_SKEW_TOLERANCE_MS`). The local HLC state is NOT mutated when this fires — Phase-3 sync rejects the offending message and continues. Inspect peer NTP / system-clock health; legitimate cross-region drift should fit comfortably inside 5 minutes. Operator-tunable knobs land alongside Phase-3 sync wiring.", message, context);
+    this.name = "EHlcSkewExceeded";
   }
 }

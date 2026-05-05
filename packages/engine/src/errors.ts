@@ -35,6 +35,7 @@ export {
   EDuplicateHandler,
   EExecStateTampered,
   EGraphInternal,
+  EHlcSkewExceeded,
   EHostBackendUnavailable,
   EHostCapabilityExpired,
   EHostCapabilityRevoked,
@@ -113,6 +114,7 @@ import {
   EDuplicateHandler,
   EExecStateTampered,
   EGraphInternal,
+  EHlcSkewExceeded,
   EHostBackendUnavailable,
   EHostCapabilityExpired,
   EHostCapabilityRevoked,
@@ -272,6 +274,14 @@ const CODE_TO_CTOR: Record<string, BentenErrorCtor> = {
   // the §7.6 Phase-3 codegen lift to prevent recurrence at source.
   E_DEVSERVER_STOPPED: EDevserverStopped,
   E_RELOAD_SUBSCRIBER_UNSUBSCRIBED: EReloadSubscriberUnsubscribed,
+  // Phase-3 G14-pre-D: HLC skew rejection. Wired into CODE_TO_CTOR at
+  // landing time per pim-1 / §3.5b doc-coupling pre-flight (the producer
+  // / consumer drift pattern) so napi callers ingesting Phase-3 sync
+  // errors get the typed `EHlcSkewExceeded` dispatch instead of the
+  // synthetic `E_UNKNOWN` fallback. Phase-3 sync wiring registers the
+  // production firing site; the entry here is forward-laid so the consumer
+  // surface is ready when the producer ships.
+  E_HLC_SKEW_EXCEEDED: EHlcSkewExceeded,
 };
 
 // Match-at-any-position regex for a stable `E_*` code. Codes look like

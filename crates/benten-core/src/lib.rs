@@ -74,12 +74,14 @@ use serde::{Deserialize, Serialize};
 
 pub mod change_stream;
 pub mod edge;
+pub mod hlc;
 pub mod subgraph;
 pub mod value;
 pub mod version;
 
 pub use change_stream::{ChangeEvent, ChangeKind, ChangeStream, SubscriberId};
 pub use edge::Edge;
+pub use hlc::{BentenHlc, Hlc, PhysicalClockFn};
 pub use subgraph::{
     ATTRIBUTION_PROPERTY_KEY, NodeHandle, OperationNode, PrimitiveKind, Subgraph, SubgraphBuilder,
     canonical_subgraph_bytes,
@@ -614,6 +616,24 @@ pub enum CoreError {
         /// CID the recomputed bytes actually hash to.
         actual: Cid,
     },
+
+    /// Phase-3 G14-pre-D: an HLC `update(remote)` call refused a remote
+    /// stamp whose physical-clock component exceeded the local physical
+    /// clock by more than the configured skew tolerance. Maps to
+    /// [`ErrorCode::HlcSkewExceeded`] (`E_HLC_SKEW_EXCEEDED`). The local
+    /// HLC state is NOT mutated when this fires — Phase-3 sync rejects the
+    /// offending message and continues. See `crate::hlc::Hlc::update`.
+    #[error(
+        "HLC skew exceeded: remote physical_ms {remote_physical_ms} > local {local_physical_ms} + tolerance {tolerance_ms}ms"
+    )]
+    HlcSkewExceeded {
+        /// Local physical clock at the time of update.
+        local_physical_ms: u64,
+        /// Remote stamp's physical-clock component.
+        remote_physical_ms: u64,
+        /// Skew tolerance the local HLC was configured with.
+        tolerance_ms: u64,
+    },
 }
 
 impl CoreError {
@@ -630,6 +650,7 @@ impl CoreError {
             CoreError::Serialize(_) => ErrorCode::Serialize,
             CoreError::NotFound => ErrorCode::NotFound,
             CoreError::ContentHashMismatch { .. } => ErrorCode::InvContentHash,
+            CoreError::HlcSkewExceeded { .. } => ErrorCode::HlcSkewExceeded,
         }
     }
 }
