@@ -17,7 +17,7 @@
 //! the type alias + constructors at G13-pre-C means neither wave writes
 //! inline-then-refactor code; both waves cite this module directly. Any
 //! future signature change MUST land HERE, not at consumer sites — see
-//! [`tests/cap_recheck_helper_no_refactor_on_g14d_or_g17a1_landing.rs`]
+//! `tests/cap_recheck_helper_no_refactor_on_g14d_or_g17a1_landing.rs`
 //! for the architectural pin asserting the no-refactor contract.
 //!
 //! ## Design pins (apply, do not re-debate)
