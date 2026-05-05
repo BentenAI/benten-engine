@@ -11,8 +11,10 @@
 //! (wasmtime cannot recursively host itself in a browser-tab WASM
 //! runtime). SANDBOX primitive execution on this target must surface
 //! `E_SANDBOX_UNAVAILABLE_ON_WASM` typed error from a specific code
-//! path in `crates/benten-eval/src/primitive_host.rs` (per br-r1-3
-//! line citation `primitive_host.rs:1022-1045`).
+//! path in `crates/benten-engine/src/primitive_host.rs::PrimitiveHost`
+//! impl arm (per br-r1-3; symbol-form per §3.5b HARDENED point 3 for
+//! high-churn surface; G13-C implementer points cite at the precise
+//! arm site when un-ignoring this test).
 //!
 //! The pin asserts the path is OBSERVABLE end-to-end on the browser
 //! target — not just that the typed-error variant exists in the enum,
@@ -43,10 +45,12 @@ fn wasm32_unknown_unknown_browser_backend_e_sandbox_unavailable_on_wasm_path_obs
     //
     // Option B — native source-cite assertion:
     //
-    //   // The host-side primitive dispatch arm at primitive_host.rs:1022-1045
-    //   // (per br-r1-3 line citation) must contain the wasm-arch-conditional
-    //   // SANDBOX-unavailable error path.
-    //   let src = std::fs::read_to_string("crates/benten-eval/src/primitive_host.rs").unwrap();
+    //   // The host-side primitive dispatch arm in
+    //   // `crates/benten-engine/src/primitive_host.rs::PrimitiveHost`
+    //   // must contain the wasm-arch-conditional SANDBOX-unavailable
+    //   // error path (per br-r1-3 + §3.5b HARDENED point 3 — symbol-form
+    //   // for high-churn surface).
+    //   let src = std::fs::read_to_string("crates/benten-engine/src/primitive_host.rs").unwrap();
     //   assert!(src.contains("UnavailableOnWasm")
     //         || src.contains("E_SANDBOX_UNAVAILABLE_ON_WASM"),
     //       "primitive_host.rs MUST surface the wasm32 SANDBOX-unavailable typed error per br-r1-3");
