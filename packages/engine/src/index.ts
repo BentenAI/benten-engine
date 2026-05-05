@@ -80,8 +80,11 @@ export {
 } from "./subscribe.js";
 
 export type {
+  AttributionFrame,
+  CapabilityClaim,
   CapabilityGrant,
   Chunk,
+  DeviceAttestation,
   Edge,
   EmitSubscription,
   HandlerAdjacencies,
