@@ -4,7 +4,7 @@
 //!
 //! Each R3 agent owns DISJOINT test-fn names within this shared file:
 //!
-//! - **R3-A** (this dispatch): G13-E #12 (DurabilityMode::Group flip).
+//! - **R3-A** (R3 canary): G13-E #12 (DurabilityMode::Group flip).
 //! - **R3-B**: G14-C #17 + #18 + #21 + G14-D #2 D5 + #10.
 //! - **R3-C**: G15-A #11 (per-row read-gate).
 //! - **R3-D**: G17-A2 #16 + G18-A #19 + #20.
@@ -142,5 +142,90 @@ fn security_posture_compromise_20_marked_closed() {
     // mechanism actually exists.
     unimplemented!(
         "G18-A wires SECURITY-POSTURE.md + cross-browser-determinism.yml paired existence assertion"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// R3-B compromise-closure pins (G14-C #17 + #18 + #21 + G14-D #2 D5 + #10).
+//
+// Pin sources (per r2-test-landscape §2.2 G14-C + G14-D):
+//
+// - `security_posture_compromise_17_marked_closed` — G14-C plan §3
+// - `security_posture_compromise_18_marked_closed` — G14-C plan §3
+// - `security_posture_compromise_21_marked_closed` — G14-C S-4
+// - `security_posture_compromise_2_marked_closed` — G14-D plan §3
+// - `security_posture_compromise_10_engine_side_asymmetry_marked_closed` — G14-D plan §3
+//
+// Each pin asserts a specific marker has been added to
+// `docs/SECURITY-POSTURE.md` — the docs sweep at the owning wave is
+// the load-bearing producer; this pin is the consumer side.
+// ---------------------------------------------------------------------------
+
+#[test]
+#[ignore = "RED-PHASE: G14-C wave-4b retenses SECURITY-POSTURE.md Compromise #17 to CLOSED"]
+fn security_posture_compromise_17_marked_closed() {
+    // G14-C plan §3 pin. Compromise #17 = durable module-bytes
+    // registry. G14-C wave-4b retenses SECURITY-POSTURE.md so #17 is
+    // marked CLOSED with citation to G14-C.
+    //
+    // Concrete shape:
+    //   let posture = std::fs::read_to_string(
+    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //           .join("..").join("..").join("docs").join("SECURITY-POSTURE.md")
+    //   ).unwrap();
+    //   let section = extract_compromise_section(&posture, 17);
+    //   assert!(section.to_lowercase().contains("closed"),
+    //       "SECURITY-POSTURE.md Compromise #17 must be marked CLOSED at G14-C");
+    //   assert!(section.contains("G14-C") || section.contains("Phase 3"),
+    //       "Compromise #17 closure must cite G14-C for traceability");
+    //
+    // OBSERVABLE consequence: doc-coupling pim-1 closure for #17.
+    unimplemented!(
+        "G14-C wires SECURITY-POSTURE.md grep assertion that Compromise #17 is marked CLOSED"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G14-C wave-4b retenses SECURITY-POSTURE.md Compromise #18 to CLOSED"]
+fn security_posture_compromise_18_marked_closed() {
+    // G14-C plan §3 pin. Compromise #18 = handler-version chain
+    // durability. G14-C wave-4b retenses SECURITY-POSTURE.md so #18
+    // is marked CLOSED.
+    unimplemented!(
+        "G14-C wires SECURITY-POSTURE.md grep assertion that Compromise #18 is marked CLOSED"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G14-C wave-4b retenses SECURITY-POSTURE.md Compromise #21 to CLOSED"]
+fn security_posture_compromise_21_marked_closed() {
+    // G14-C S-4 pin. Compromise #21 = manifest signing populated.
+    // G14-C wave-4b closes via Ed25519 sign at install + verify at
+    // load.
+    unimplemented!(
+        "G14-C wires SECURITY-POSTURE.md grep assertion that Compromise #21 is marked CLOSED"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G14-D wave-5a retenses SECURITY-POSTURE.md Compromise #2 to CLOSED"]
+fn security_posture_compromise_2_marked_closed() {
+    // G14-D plan §3 pin. Compromise #2 D5 = SUBSCRIBE cross-trust-
+    // boundary filtering. G14-D wave-5a closes via per-event cap
+    // recheck against durable grant store + delivery-time filter.
+    unimplemented!(
+        "G14-D wires SECURITY-POSTURE.md grep assertion that Compromise #2 is marked CLOSED"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G14-D wave-5a retenses SECURITY-POSTURE.md Compromise #10 (engine-side) to CLOSED"]
+fn security_posture_compromise_10_engine_side_asymmetry_marked_closed() {
+    // G14-D plan §3 pin. Compromise #10 = WAIT-suspend / WAIT-resume
+    // engine-side asymmetry (cap_snapshot_hash binding). G14-D
+    // wave-5a closes via cross-process round-trip + UCAN proof-chain
+    // binding.
+    unimplemented!(
+        "G14-D wires SECURITY-POSTURE.md grep assertion that Compromise #10 is marked CLOSED"
     );
 }
