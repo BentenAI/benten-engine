@@ -222,3 +222,101 @@ fn ucan_backend_no_longer_returns_not_implemented() {
         "G14-B wires assertion that every UCANBackend entry point returns non-NotImplemented results"
     );
 }
+
+// =====================================================================
+// R4-FP-R3-B RED-PHASE pins: D-PHASE-3-21 D2 closure — UCAN-gated
+// host:atrium:publish_view_result capability accepted in attenuation
+// chain (per Ben's 2026-05-05 ratification of D2: option (iii) +
+// UCAN-gated capability, no new trust-policy primitive).
+//
+// Pin sources (per R4 R1 capability-system-reviewer brief D2 + plan
+// D-PHASE-3-21 resolution):
+//
+// - `ucan_backend_accepts_host_atrium_publish_view_result_capability`
+// - `ucan_backend_attenuates_host_atrium_publish_view_result_in_chain`
+// =====================================================================
+
+#[test]
+#[ignore = "RED-PHASE: G14-B — D2 D-PHASE-3-21 — UCAN backend accepts host:atrium:publish_view_result capability"]
+fn ucan_backend_accepts_host_atrium_publish_view_result_capability() {
+    // D2 D-PHASE-3-21 closure pin (per Ben's 2026-05-05 ratification:
+    // option (iii) + UCAN-gated `host:atrium:publish_view_result`
+    // capability, no new trust-policy primitive). The durable backend
+    // recognizes the new capability string in the chain-walk.
+    //
+    // Concrete shape:
+    //   let store_dir = tempfile::tempdir().unwrap();
+    //   let backend = benten_caps::UCANBackend::open(store_dir.path()).unwrap();
+    //
+    //   let publisher_kp = benten_id::keypair::Keypair::generate();
+    //   let viewer_kp = benten_id::keypair::Keypair::generate();
+    //
+    //   // Issue UCAN granting host:atrium:publish_view_result:
+    //   let ucan = benten_id::ucan::Ucan::builder()
+    //       .issuer(publisher_kp.public_key().to_did())
+    //       .audience(viewer_kp.public_key().to_did())
+    //       .capability("host:atrium:publish_view_result", "*")
+    //       .nbf_now()
+    //       .exp_in_secs(3600)
+    //       .sign(&publisher_kp).unwrap();
+    //
+    //   backend.install_proof(&ucan).unwrap();
+    //
+    //   // Validate at chain-walk: the capability is recognized:
+    //   let invocation = ... .proof_cids(&[ucan.cid()])
+    //                        .invoke_capability("host:atrium:publish_view_result", "*") ... ;
+    //   backend.validate_invocation(&invocation).unwrap();
+    //
+    // OBSERVABLE consequence: the `host:atrium:publish_view_result`
+    // capability is recognized by the durable backend; downstream
+    // user-view-replication paths can gate publish via UCAN delegation
+    // without a new trust-policy primitive. Closes D-PHASE-3-21 D2.
+    unimplemented!(
+        "G14-B recognizes host:atrium:publish_view_result capability per D-PHASE-3-21 D2"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G14-B — D2 D-PHASE-3-21 — host:atrium:publish_view_result attenuates correctly in chain"]
+fn ucan_backend_attenuates_host_atrium_publish_view_result_in_chain() {
+    // D2 D-PHASE-3-21 closure pin (proptest companion at the durable
+    // layer). The new capability participates in attenuation chain
+    // walks: a child cannot widen a parent's host:atrium:publish_view_result
+    // grant.
+    //
+    // Concrete shape:
+    //   let store_dir = tempfile::tempdir().unwrap();
+    //   let backend = benten_caps::UCANBackend::open(store_dir.path()).unwrap();
+    //
+    //   let root_kp = benten_id::keypair::Keypair::generate();
+    //   let middle_kp = benten_id::keypair::Keypair::generate();
+    //
+    //   // Parent: only specific atrium namespace.
+    //   let parent = benten_id::ucan::Ucan::builder()
+    //       .issuer(root_kp.public_key().to_did())
+    //       .audience(middle_kp.public_key().to_did())
+    //       .capability("host:atrium:publish_view_result", "/atrium/specific")
+    //       .sign(&root_kp).unwrap();
+    //
+    //   // Child: tries to widen to ALL atriums (*):
+    //   let widening_child = benten_id::ucan::Ucan::builder()
+    //       .issuer(middle_kp.public_key().to_did())
+    //       .capability("host:atrium:publish_view_result", "*") // widening!
+    //       .proof_cids(&[parent.cid()])
+    //       .sign(&middle_kp).unwrap();
+    //
+    //   backend.install_proof(&parent).unwrap();
+    //   backend.install_proof(&widening_child).unwrap();
+    //
+    //   let err = backend.validate_chain(&[widening_child]).unwrap_err();
+    //   assert!(matches!(err, benten_caps::UCANBackendError::AttenuationViolated { .. }),
+    //       "host:atrium:publish_view_result MUST attenuate per D2 + standard UCAN semantics");
+    //
+    // OBSERVABLE consequence: the new capability participates in
+    // standard UCAN attenuation; no special-case bypass. Defends
+    // against the "new capability bypasses chain-walk" failure shape
+    // (acceptable per option (iii) since standard UCAN semantics apply).
+    unimplemented!(
+        "G14-B applies standard attenuation to host:atrium:publish_view_result per D-PHASE-3-21 D2"
+    );
+}

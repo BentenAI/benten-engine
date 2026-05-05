@@ -38,6 +38,17 @@
 //! implementer un-ignores. Per §3.6b pim-2 the test must drive a
 //! SIMULATED browser tab (likely via headless wasm32 runner) +
 //! observe the production filtering at the full-peer side.
+//!
+//! ## D1 ratification (2026-05-05)
+//!
+//! Per Ben's D1 decision: the Atrium DSL on the TS side uses Pattern
+//! B-prime — `engine.atrium({config}).join()`. This Rust-side
+//! integration test exercises the `ThinClientConnection::connect()`
+//! native API, which composes BENEATH the TS DSL surface. The TS-side
+//! `engine.atrium({...}).join()` shape is pinned at
+//! `packages/engine/test/atrium.test.ts` + `atrium_namespaced.test.ts`.
+//! G16-D handler-id-router pins compose with the Pattern B-prime shape;
+//! no change required to this file.
 
 #![allow(clippy::unwrap_used)]
 

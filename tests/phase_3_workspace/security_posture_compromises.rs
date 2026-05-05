@@ -178,8 +178,16 @@ fn security_posture_compromise_17_marked_closed() {
     //       "SECURITY-POSTURE.md Compromise #17 must be marked CLOSED at G14-C");
     //   assert!(section.contains("G14-C") || section.contains("Phase 3"),
     //       "Compromise #17 closure must cite G14-C for traceability");
+    //   // Closure narrative cites the durable module-bytes registry
+    //   // mechanism (the load-bearing surface, not just the verb):
+    //   assert!(section.contains("module") && (section.contains("durable") || section.contains("registry")),
+    //       "Compromise #17 closure narrative must cite durable module-bytes registry mechanism");
     //
-    // OBSERVABLE consequence: doc-coupling pim-1 closure for #17.
+    // OBSERVABLE consequence: the SECURITY-POSTURE.md compromise table
+    // accurately reflects that Compromise #17 closed at G14-C via the
+    // durable module-bytes registry. Defends against the "code change
+    // landed, doc never updated" failure shape (cap-major-2 / pim-1
+    // doc-coupling closure for #17).
     unimplemented!(
         "G14-C wires SECURITY-POSTURE.md grep assertion that Compromise #17 is marked CLOSED"
     );
@@ -190,7 +198,28 @@ fn security_posture_compromise_17_marked_closed() {
 fn security_posture_compromise_18_marked_closed() {
     // G14-C plan §3 pin. Compromise #18 = handler-version chain
     // durability. G14-C wave-4b retenses SECURITY-POSTURE.md so #18
-    // is marked CLOSED.
+    // is marked CLOSED with citation to G14-C.
+    //
+    // Concrete shape:
+    //   let posture = std::fs::read_to_string(
+    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //           .join("..").join("..").join("docs").join("SECURITY-POSTURE.md")
+    //   ).unwrap();
+    //   let section = extract_compromise_section(&posture, 18);
+    //   assert!(section.to_lowercase().contains("closed"),
+    //       "SECURITY-POSTURE.md Compromise #18 must be marked CLOSED at G14-C");
+    //   assert!(section.contains("G14-C") || section.contains("Phase 3"),
+    //       "Compromise #18 closure must cite G14-C (or Phase 3) for traceability");
+    //   // Closure narrative cites the handler-version chain as the
+    //   // durable mechanism (versus the Phase-2b in-memory shape):
+    //   assert!(section.contains("handler-version") || section.contains("handler version"),
+    //       "Compromise #18 closure narrative must cite the handler-version chain mechanism");
+    //
+    // OBSERVABLE consequence: the SECURITY-POSTURE.md compromise table
+    // accurately reflects that the handler-version chain durability
+    // closed Compromise #18 at G14-C. Defends against the "code change
+    // landed, doc never updated" failure shape (cap-major-2 / pim-1
+    // doc-coupling).
     unimplemented!(
         "G14-C wires SECURITY-POSTURE.md grep assertion that Compromise #18 is marked CLOSED"
     );
@@ -202,6 +231,26 @@ fn security_posture_compromise_21_marked_closed() {
     // G14-C S-4 pin. Compromise #21 = manifest signing populated.
     // G14-C wave-4b closes via Ed25519 sign at install + verify at
     // load.
+    //
+    // Concrete shape:
+    //   let posture = std::fs::read_to_string(
+    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //           .join("..").join("..").join("docs").join("SECURITY-POSTURE.md")
+    //   ).unwrap();
+    //   let section = extract_compromise_section(&posture, 21);
+    //   assert!(section.to_lowercase().contains("closed"),
+    //       "SECURITY-POSTURE.md Compromise #21 must be marked CLOSED at G14-C");
+    //   assert!(section.contains("G14-C") || section.contains("Phase 3"),
+    //       "Compromise #21 closure must cite G14-C (or Phase 3) for traceability");
+    //   // Closure narrative cites Ed25519 sign-at-install + verify-at-load
+    //   // (the load-bearing mechanism, not just the surface):
+    //   assert!(section.contains("Ed25519") || section.contains("ed25519"),
+    //       "Compromise #21 closure narrative must cite Ed25519 signing mechanism");
+    //
+    // OBSERVABLE consequence: the SECURITY-POSTURE.md compromise table
+    // accurately reflects that manifest-signing landed at G14-C. Defends
+    // against the "code change landed, doc never updated" failure shape
+    // (cap-major-2 / pim-1 doc-coupling).
     unimplemented!(
         "G14-C wires SECURITY-POSTURE.md grep assertion that Compromise #21 is marked CLOSED"
     );
@@ -213,6 +262,26 @@ fn security_posture_compromise_2_marked_closed() {
     // G14-D plan §3 pin. Compromise #2 D5 = SUBSCRIBE cross-trust-
     // boundary filtering. G14-D wave-5a closes via per-event cap
     // recheck against durable grant store + delivery-time filter.
+    //
+    // Concrete shape:
+    //   let posture = std::fs::read_to_string(
+    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //           .join("..").join("..").join("docs").join("SECURITY-POSTURE.md")
+    //   ).unwrap();
+    //   let section = extract_compromise_section(&posture, 2);
+    //   assert!(section.to_lowercase().contains("closed"),
+    //       "SECURITY-POSTURE.md Compromise #2 must be marked CLOSED at G14-D");
+    //   assert!(section.contains("G14-D") || section.contains("Phase 3"),
+    //       "Compromise #2 closure must cite G14-D (or Phase 3) for traceability");
+    //   // Closure narrative cites the registration-open + delivery-time
+    //   // filter shape (the load-bearing reversal of the Phase-2b interim):
+    //   assert!(section.contains("delivery") || section.contains("per-event"),
+    //       "Compromise #2 D5 closure narrative must cite delivery-time per-event cap recheck");
+    //
+    // OBSERVABLE consequence: the SECURITY-POSTURE.md table reflects
+    // that Compromise #2 D5 closed at G14-D via the delivery-time
+    // filter shape. Defends against doc-coupling pim-1 + the
+    // registration-open architectural commitment per plan §3 G14-D.
     unimplemented!(
         "G14-D wires SECURITY-POSTURE.md grep assertion that Compromise #2 is marked CLOSED"
     );
@@ -225,6 +294,26 @@ fn security_posture_compromise_10_engine_side_asymmetry_marked_closed() {
     // engine-side asymmetry (cap_snapshot_hash binding). G14-D
     // wave-5a closes via cross-process round-trip + UCAN proof-chain
     // binding.
+    //
+    // Concrete shape:
+    //   let posture = std::fs::read_to_string(
+    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //           .join("..").join("..").join("docs").join("SECURITY-POSTURE.md")
+    //   ).unwrap();
+    //   let section = extract_compromise_section(&posture, 10);
+    //   assert!(section.to_lowercase().contains("closed"),
+    //       "SECURITY-POSTURE.md Compromise #10 must be marked CLOSED at G14-D");
+    //   assert!(section.contains("G14-D") || section.contains("Phase 3"),
+    //       "Compromise #10 closure must cite G14-D (or Phase 3) for traceability");
+    //   // Closure narrative cites cap_snapshot_hash + cross-process resume
+    //   // (the load-bearing mechanism, not just the surface):
+    //   assert!(section.contains("cap_snapshot_hash") || section.contains("cross-process"),
+    //       "Compromise #10 closure narrative must cite cap_snapshot_hash binding mechanism");
+    //
+    // OBSERVABLE consequence: the SECURITY-POSTURE.md table reflects
+    // that Compromise #10 closed at G14-D via cap_snapshot_hash UCAN
+    // proof-chain binding + cross-process round-trip. Defends pim-1
+    // doc-coupling for the WAIT-resume surface.
     unimplemented!(
         "G14-D wires SECURITY-POSTURE.md grep assertion that Compromise #10 is marked CLOSED"
     );
