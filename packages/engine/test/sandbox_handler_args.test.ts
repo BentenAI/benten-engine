@@ -12,10 +12,24 @@
 //
 // to:
 //
-//   { wallclock_ms: 100, output_limit_bytes: 4096 }  // snake_case, napi argv
+//   { wallclock_ms: 100, output_limit: 4096 }  // snake_case, napi argv
 //
 // before crossing the napi boundary. The Rust eval-side then reads
-// snake_case correctly (existing surface).
+// snake_case correctly (existing surface — `primitive_host.rs:877`
+// reads `op.properties.get("output_limit")`; `dsl-compiler/src/lib.rs:761+765`
+// emits `output_limit: 65536`).
+//
+// ## R4-FP recalibration (r4-r1-wsa-1 BLOCKER)
+//
+// The TS DSL surface keeps `outputLimitBytes` (camelCase, with `Bytes`
+// for type-clarity). The translation MUST drop the `Bytes` suffix to
+// produce the canonical eval-side `output_limit` (NOT `output_limit_bytes`).
+// At R3-D the translation target was authored as `output_limit_bytes`
+// by symmetry with `wallclockMs` → `wallclock_ms`; r4-r1-wsa-1 caught
+// this as the 25th p/c drift recurrence shape (eval-side reader silently
+// drops the unknown key + OutputOverflow assertion passes by
+// default-fallthrough rather than by ceiling enforcement). Recalibrated
+// at R4-FP per the canonical eval-side property name verification.
 //
 // ## §3.6b end-to-end pin shape
 //
@@ -79,16 +93,25 @@ describe("R3-D 24th p/c drift — sandbox handler-args camelCase→snake_case ro
     );
   });
 
-  it.skip("RED-PHASE: G17-C wave 5b — output_limit_bytes axis distinct round-trip pin", () => {
+  it.skip("RED-PHASE: G17-C wave 5b — outputLimitBytes axis (camelCase DSL) drops `Bytes` to snake_case `output_limit` (canonical eval-side; r4-r1-wsa-1 recalibration)", () => {
     // Pin source: r2-test-landscape §2.5 G17-C
-    // `sandbox_per_handler_output_limit_bytes_camel_case_dsl_round_trips`
+    // `sandbox_per_handler_output_limit_camel_case_dsl_round_trips`
+    // (RECALIBRATED at R4-FP per r4-r1-wsa-1 BLOCKER — canonical
+    // eval-side property is `output_limit`, NOT `output_limit_bytes`).
     //
     // G17-C implementer (TS-side) wires this:
     //
     //   const sg = subgraph("test").sandbox({
     //     manifestName: "compute:safe-default",
-    //     outputLimitBytes: 4096,      // <-- distinct camelCase axis
+    //     outputLimitBytes: 4096,      // <-- camelCase DSL surface
+    //                                  //     (preserves `Bytes` for type-clarity)
     //   });
+    //
+    //   // After translateSandboxArgs, the napi argv reads:
+    //   //   { manifest_name: "compute:safe-default", output_limit: 4096 }
+    //   //                                            ^^^^^^^^^^^^
+    //   //                                            (drops `Bytes` — canonical eval-side
+    //   //                                             per primitive_host.rs:877)
     //
     //   // Guest that emits 8 KB:
     //   const result = await engine.run({ subgraphName: "test", input: emit8KbInput() });
@@ -98,9 +121,12 @@ describe("R3-D 24th p/c drift — sandbox handler-args camelCase→snake_case ro
     //
     // Distinct observable consequence per pim-2 §3.6b — defends
     // against the failure shape "translator covers wallclockMs but
-    // forgets outputLimitBytes (or vice versa)."
+    // forgets outputLimitBytes (or vice versa) OR translates to a
+    // wrong snake_case target like `output_limit_bytes` that eval
+    // silently ignores (the 25th p/c drift recurrence shape per
+    // r4-r1-wsa-1)."
     expect.fail(
-      "G17-C must wire output_limit_bytes camelCase round-trip (distinct end-to-end axis per pim-2)",
+      "G17-C must wire outputLimitBytes → output_limit camelCase round-trip (drops `Bytes`; canonical eval-side per primitive_host.rs:877)",
     );
   });
 
