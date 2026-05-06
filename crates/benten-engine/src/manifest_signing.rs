@@ -65,23 +65,34 @@ use crate::module_manifest::{ManifestSignature, ModuleManifest};
 
 /// Verification policy for [`Engine::install_module`].
 ///
-/// Per crypto-minor-5 + cap-r4-6, operators may opt into either:
+/// Per crypto-minor-5 + cap-r4-6 + g14-c-mr-1 BLOCKER fix-pass,
+/// callers explicitly choose one of three modes when invoking
+/// [`Engine::install_module`]:
 ///
+/// - [`ManifestVerifyMode::Unsigned`] — DEVELOPMENT-ONLY. Skip
+///   signature verification entirely. Equivalent to the pre-G14-C
+///   install path. Required to be NAMED at the call-site so operators
+///   cannot silently fall through to an unsigned install in production
+///   code; pin
+///   `crates/benten-engine/tests/manifest_signing.rs::install_module_rejects_unsigned_when_verification_required`
+///   asserts that any non-Unsigned mode rejects an unsigned manifest
+///   end-to-end through `Engine::install_module`.
 /// - [`ManifestVerifyMode::All`] — BOTH UCAN delegation chain AND
 ///   publisher-registry signature MUST verify (security-critical
 ///   deployment posture).
-/// - [`ManifestVerifyMode::Any`] (default) — EITHER path is sufficient
+/// - [`ManifestVerifyMode::Any`] — EITHER path is sufficient
 ///   (operator-flexibility posture; non-UCAN deployments verify only
-///   against the registry key).
-///
-/// `Any` does NOT mean "no path required" — when neither path is
-/// present, `verify_manifest_with_mode` returns
-/// [`ManifestVerifyError::NoPathPresent`].
+///   against the registry key). When neither path is present,
+///   `verify_manifest_with_mode` returns
+///   [`ManifestVerifyError::NoPathPresent`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ManifestVerifyMode {
-    /// Either path suffices (default). Defends operator choice for
-    /// non-UCAN deployments while still requiring at least one signed
-    /// path.
+    /// Skip signature verification entirely. Development-only;
+    /// surfaces the relaxation explicitly at the call-site. Production
+    /// code MUST use [`Self::Any`] or [`Self::All`].
+    Unsigned,
+    /// Either path suffices. Defends operator choice for non-UCAN
+    /// deployments while still requiring at least one signed path.
     Any,
     /// BOTH UCAN AND registry paths required. Defends against the
     /// "valid signature but stolen delegation" attack class.
@@ -91,6 +102,115 @@ pub enum ManifestVerifyMode {
 impl Default for ManifestVerifyMode {
     fn default() -> Self {
         Self::Any
+    }
+}
+
+/// Bundle of arguments [`Engine::install_module`] needs to verify a
+/// manifest's signature per the configured [`ManifestVerifyMode`].
+///
+/// ## g14-c-mr-1 BLOCKER fix-pass shape
+///
+/// Pre-fix, `Engine::install_module(manifest, expected_cid)` did NOT
+/// invoke `verify_manifest_with_mode` — the verification helper
+/// existed but was never wired through the production install path.
+/// SECURITY-POSTURE.md Compromise #21's "Audience-binding to
+/// UCAN-proof-chain at install_module verification" claim was false.
+///
+/// Post-fix, `Engine::install_module(manifest, expected_cid,
+/// verify_args)` requires the caller to supply this struct. The
+/// [`ManifestVerifyMode::Unsigned`] variant lets development call
+/// sites opt out explicitly (the existing tests use
+/// [`Self::unsigned_development`] to make the relaxation NAMED at the
+/// call-site).
+///
+/// Production callers construct via [`Self::registry`] /
+/// [`Self::ucan_chain`] / [`Self::dual`] depending on which paths
+/// they want enforced.
+#[derive(Clone, Copy, Debug)]
+pub struct ManifestVerifyArgs<'a> {
+    /// UCAN delegation chain that authorizes the manifest's publisher
+    /// (CLR-2 audience-binding). Empty for registry-only installs.
+    pub ucan_chain: &'a [Ucan],
+    /// Publisher registry public key (operator-deployed trust anchor).
+    /// `None` for UCAN-only installs.
+    pub registry_pubkey: Option<&'a PublicKey>,
+    /// Engine's audience DID — the cross-atrium-replay defense. The
+    /// UCAN chain's leaf MUST be audience-bound to THIS DID.
+    /// Required for non-Unsigned modes.
+    pub engine_audience_did: Option<&'a Did>,
+    /// Verification policy.
+    pub mode: ManifestVerifyMode,
+    /// `now` (seconds since epoch) for `nbf` / `exp` checks on the
+    /// UCAN chain. Ignored when `mode == Unsigned`.
+    pub now: u64,
+}
+
+impl<'a> ManifestVerifyArgs<'a> {
+    /// Development-only constructor — verification skipped, signature
+    /// not required.
+    ///
+    /// Surfaces the relaxation NAMED at the call-site so production
+    /// operators cannot fall through to an unsigned install by
+    /// silently constructing a default. Required by every test fixture
+    /// that does not exercise the signing arms.
+    #[must_use]
+    pub fn unsigned_development() -> Self {
+        Self {
+            ucan_chain: &[],
+            registry_pubkey: None,
+            engine_audience_did: None,
+            mode: ManifestVerifyMode::Unsigned,
+            now: 0,
+        }
+    }
+
+    /// Registry-only verification under [`ManifestVerifyMode::Any`]
+    /// — `engine_audience_did` is still threaded so the typed
+    /// argument shape stays uniform across modes (the registry path
+    /// alone does not consult it but a UCAN path added later does).
+    #[must_use]
+    pub fn registry(
+        registry_pubkey: &'a PublicKey,
+        engine_audience_did: &'a Did,
+        now: u64,
+    ) -> Self {
+        Self {
+            ucan_chain: &[],
+            registry_pubkey: Some(registry_pubkey),
+            engine_audience_did: Some(engine_audience_did),
+            mode: ManifestVerifyMode::Any,
+            now,
+        }
+    }
+
+    /// UCAN-only verification under [`ManifestVerifyMode::Any`].
+    #[must_use]
+    pub fn ucan_chain(ucan_chain: &'a [Ucan], engine_audience_did: &'a Did, now: u64) -> Self {
+        Self {
+            ucan_chain,
+            registry_pubkey: None,
+            engine_audience_did: Some(engine_audience_did),
+            mode: ManifestVerifyMode::Any,
+            now,
+        }
+    }
+
+    /// Full dual-path verification under [`ManifestVerifyMode::All`]
+    /// — BOTH UCAN AND registry paths must verify.
+    #[must_use]
+    pub fn dual(
+        ucan_chain: &'a [Ucan],
+        registry_pubkey: &'a PublicKey,
+        engine_audience_did: &'a Did,
+        now: u64,
+    ) -> Self {
+        Self {
+            ucan_chain,
+            registry_pubkey: Some(registry_pubkey),
+            engine_audience_did: Some(engine_audience_did),
+            mode: ManifestVerifyMode::All,
+            now,
+        }
     }
 }
 
@@ -249,6 +369,15 @@ pub fn verify_manifest_with_mode(
     mode: ManifestVerifyMode,
     now: u64,
 ) -> Result<(), ManifestVerifyError> {
+    // g14-c-mr-1: Unsigned mode is development-only (no verification
+    // performed). The mode is validated here for symmetry with
+    // `Engine::install_module`'s wire-through; standalone callers
+    // that need the dev relaxation pass `ManifestVerifyMode::Unsigned`
+    // and observe `Ok(())` regardless of signature presence.
+    if matches!(mode, ManifestVerifyMode::Unsigned) {
+        return Ok(());
+    }
+
     // The signature must exist before either path can run.
     let sig_bytes = decode_signature(manifest)?;
     let signed_bytes = manifest_signed_bytes(manifest)
@@ -271,6 +400,7 @@ pub fn verify_manifest_with_mode(
                 return Err(ManifestVerifyError::NoPathPresent);
             }
         }
+        ManifestVerifyMode::Unsigned => unreachable!("handled above"),
     }
 
     // UCAN-first per crypto-minor-5. Only validates when present;
@@ -387,6 +517,23 @@ const PUBLISHER_PUBKEY_PROPERTY: &str = "publisher_pubkey";
 /// Ed25519 verifying keys. Backed by `system:PublisherRegistry` zone
 /// Nodes; mutations require a UCAN delegation rooted at the
 /// registry-admin DID per crypto-minor-5.
+///
+/// ## g14-c-mr-2 BLOCKER fix-pass — explicit registry audience
+///
+/// Pre-fix, `require_ucan_delegation` derived the expected audience
+/// from `d.claims.aud` (the same UCAN's own audience field) — making
+/// the audience-binding ct_eq compare a value to itself, tautological.
+/// An attacker who held a UCAN signed by `admin_did` but bound to a
+/// different Atrium's audience could replay it on this Atrium's
+/// registry without rejection.
+///
+/// Post-fix, the expected audience is supplied at registry
+/// construction time as `registry_audience_did` (the engine's own
+/// audience DID, or a registry-admin-bound expected audience the
+/// operator pins). The `validate_chain_for_audience` ct_eq check
+/// compares the chain leaf's audience to THIS pre-set value — so a
+/// cross-atrium replay against a different audience rejects with
+/// `UcanInvalid`.
 pub struct PublisherRegistry<'a> {
     /// Reference to the parent engine — used for the privileged-write
     /// path and the underlying graph backend reads.
@@ -394,14 +541,29 @@ pub struct PublisherRegistry<'a> {
     /// Admin DID — the root issuer that delegates registry-mutation
     /// authority. Provided at construction time.
     admin_did: Did,
+    /// Expected audience DID for delegation chain leaves — the
+    /// cross-atrium-replay defense. Per g14-c-mr-2 BLOCKER, this MUST
+    /// be the engine's own audience DID (or a registry-admin-bound
+    /// expected audience the operator pins) — NOT derived from the
+    /// chain itself.
+    registry_audience_did: Did,
 }
 
 impl<'a> PublisherRegistry<'a> {
     /// Construct a registry handle bound to `engine` with `admin_did`
-    /// as the root delegation authority.
+    /// as the root delegation authority. Per g14-c-mr-2, the
+    /// `registry_audience_did` is the engine's own audience DID — the
+    /// expected audience for any UCAN used to mutate THIS registry.
+    /// A UCAN signed by admin but audience-bound to a different
+    /// Atrium's DID rejects, defending the cross-atrium-replay
+    /// surface.
     #[must_use]
-    pub fn new(engine: &'a Engine, admin_did: Did) -> Self {
-        Self { engine, admin_did }
+    pub fn new(engine: &'a Engine, admin_did: Did, registry_audience_did: Did) -> Self {
+        Self {
+            engine,
+            admin_did,
+            registry_audience_did,
+        }
     }
 
     /// Add a publisher to the registry. Requires a UCAN delegation
@@ -524,12 +686,20 @@ impl<'a> PublisherRegistry<'a> {
                 message: PublisherRegistryError::UcanRequired.to_string(),
             });
         };
-        // Chain root = admin_did. Validate the chain's parent thread.
-        validate_chain_for_audience(std::slice::from_ref(d), &self.audience_from_chain(d)?)
-            .map_err(|e| EngineError::Other {
+        // g14-c-mr-2: Validate the chain's audience against the
+        // PRE-CONFIGURED `registry_audience_did` (the engine's own
+        // audience or the registry-admin-bound expected audience),
+        // NOT against the UCAN's own `d.claims.aud` (which would be a
+        // self-comparison tautology). This is the cross-atrium replay
+        // defense for registry mutations: a UCAN signed by admin_did
+        // but audience-bound to a DIFFERENT Atrium rejects with
+        // `UcanInvalid` here.
+        validate_chain_for_audience(std::slice::from_ref(d), &self.registry_audience_did).map_err(
+            |e| EngineError::Other {
                 code: PublisherRegistryError::UcanInvalid(format!("chain: {e}")).code(),
                 message: format!("publisher-registry UCAN chain invalid: {e}"),
-            })?;
+            },
+        )?;
         d.validate_at(now).map_err(|e| EngineError::Other {
             code: PublisherRegistryError::UcanInvalid(format!("time-window: {e}")).code(),
             message: format!("publisher-registry UCAN time-window: {e}"),
@@ -562,14 +732,6 @@ impl<'a> PublisherRegistry<'a> {
             });
         }
         Ok(vec![d.clone()])
-    }
-
-    fn audience_from_chain(&self, d: &Ucan) -> Result<Did, EngineError> {
-        // Audience is a structurally-validated DID string at sign time;
-        // we wrap it via from_string_unchecked here to reuse the chain
-        // validator's own audience-binding ct_eq check. A malformed
-        // string surfaces as UcanInvalid at the chain validator step.
-        Ok(Did::from_string_unchecked(d.claims.aud.clone()))
     }
 }
 

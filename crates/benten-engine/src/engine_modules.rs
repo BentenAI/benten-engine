@@ -58,6 +58,9 @@ use benten_core::{Cid, Node, Value};
 
 use crate::engine::Engine;
 use crate::error::EngineError;
+use crate::manifest_signing::{
+    ManifestVerifyArgs, ManifestVerifyError, ManifestVerifyMode, verify_manifest_with_mode,
+};
 use crate::module_manifest::{ManifestError, ModuleManifest};
 
 /// One installed-module record held in the engine's in-memory active set.
@@ -126,11 +129,39 @@ impl Engine {
     /// module-bytes registry" for the full narrative + Phase-3
     /// promotion path (durable `BlobBackend` lifts both arms together).
     ///
+    /// ## Signature verification (Compromise #21 closure — g14-c-mr-1)
+    ///
+    /// Pre-fix-pass, this method did NOT invoke
+    /// [`crate::manifest_signing::verify_manifest_with_mode`] — the
+    /// helper existed but was never wired into the production install
+    /// path. SECURITY-POSTURE.md Compromise #21 narrative (audience-
+    /// binding to UCAN-proof-chain at install_module verification)
+    /// was therefore false.
+    ///
+    /// Post-fix-pass, the caller MUST supply a
+    /// [`crate::manifest_signing::ManifestVerifyArgs`] explicitly. The
+    /// argument's [`crate::manifest_signing::ManifestVerifyMode`]
+    /// names the policy:
+    ///
+    /// - [`ManifestVerifyMode::Unsigned`] — development-only;
+    ///   verification skipped. The relaxation is NAMED at the
+    ///   call-site so production code can't fall through silently.
+    /// - [`ManifestVerifyMode::Any`] — UCAN OR registry path verifies.
+    /// - [`ManifestVerifyMode::All`] — BOTH UCAN AND registry paths
+    ///   verify.
+    ///
+    /// Verification runs BEFORE the privileged-write of the manifest
+    /// to the `system:ModuleManifest` zone — a verification failure
+    /// returns [`EngineError::ModuleManifestVerify`] without persisting
+    /// the manifest.
+    ///
     /// # Errors
     ///
     /// * [`EngineError::ModuleManifestCidMismatch`] on D16 mismatch.
     /// * [`EngineError::ModuleMigrationsRequirePersistence`] when
     ///   migrations are declared on a wasm32 target.
+    /// * [`EngineError::ModuleManifestVerify`] when signature
+    ///   verification fails per the supplied [`ManifestVerifyArgs`].
     /// * [`EngineError::Other`] wrapping a manifest encode failure
     ///   (infallible in practice for the [`ModuleManifest`] schema).
     /// * [`EngineError::Graph`] on backend write failure.
@@ -138,6 +169,7 @@ impl Engine {
         &self,
         manifest: ModuleManifest,
         expected_cid: Cid,
+        verify_args: ManifestVerifyArgs<'_>,
     ) -> Result<Cid, EngineError> {
         // wasm32-unknown-unknown — Compromise #N+8 enforcement. The
         // browser engine ships in-memory-only manifests in Phase 2b;
@@ -162,6 +194,35 @@ impl Engine {
                 computed,
                 summary: manifest.summary().to_string(),
             });
+        }
+
+        // g14-c-mr-1 BLOCKER fix-pass (Compromise #21 closure):
+        // signature verification BEFORE persistence + active-set
+        // mutation. Unsigned mode skips verification (development-
+        // only relaxation, NAMED at call-site). Any/All modes run
+        // through `verify_manifest_with_mode` which enforces audience-
+        // binding (CLR-2 / cap-major-2 cross-atrium replay defense)
+        // when a UCAN chain is present.
+        if !matches!(verify_args.mode, ManifestVerifyMode::Unsigned) {
+            // Audience DID is required for non-Unsigned modes — the
+            // typed argument shape forbids a UCAN path without one.
+            // We surface UcanRequiredByModeAll for the All variant
+            // and NoPathPresent for Any when the caller failed to
+            // supply a path.
+            let audience = verify_args.engine_audience_did.ok_or_else(|| {
+                EngineError::ModuleManifestVerify(ManifestVerifyError::UcanInvalid(
+                    "engine_audience_did required for non-Unsigned verify modes".to_string(),
+                ))
+            })?;
+            verify_manifest_with_mode(
+                &manifest,
+                verify_args.ucan_chain,
+                verify_args.registry_pubkey,
+                audience,
+                verify_args.mode,
+                verify_args.now,
+            )
+            .map_err(EngineError::ModuleManifestVerify)?;
         }
 
         // Idempotent re-install — the active set already has this CID,

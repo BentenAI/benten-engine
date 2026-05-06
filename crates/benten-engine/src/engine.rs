@@ -1230,6 +1230,35 @@ impl Engine {
         })?;
         let cid = sg.cid().map_err(EngineError::Core)?;
         let handler_id = sg.handler_id().to_string();
+
+        // g14-c-mr-4 BLOCKER fix-pass: persist BEFORE the in-memory
+        // swap. The same crash-window risk as register_subgraph_replace
+        // applies here on the first-register path. Preview the chain
+        // state under a short read-only lock; persist outside the
+        // lock; then commit to the in-memory tables.
+        //
+        // Two early-exit shapes WITHOUT persist:
+        //   (a) handler already registered at the same CID — idempotent
+        //   (b) handler already registered at a DIFFERENT CID — error
+        // Only the "first registration" branch needs persist.
+        let preview_existing: Option<Cid>;
+        {
+            let handlers_guard = self.inner.handlers.lock_recover();
+            preview_existing = handlers_guard.get(&handler_id).copied();
+        }
+        let preview_replaced = match preview_existing {
+            Some(existing) if existing == cid => false,
+            Some(_) => {
+                return Err(EngineError::DuplicateHandler { handler_id });
+            }
+            None => true,
+        };
+
+        if preview_replaced {
+            // seq=0 (first registration), no predecessor.
+            self.persist_handler_version_entry(&handler_id, &cid, None, 0)?;
+        }
+
         let mut guard = self.inner.handlers.lock_recover();
         match guard.get(&handler_id) {
             Some(existing) if existing == &cid => {
@@ -1247,31 +1276,10 @@ impl Engine {
             let mut spec_guard = self.inner.specs.lock_recover();
             spec_guard.insert(handler_id.clone(), spec);
         }
-        // Seed / extend the version chain. For the legacy `register_subgraph`
-        // path the chain only gains an entry on the FIRST registration of a
-        // handler_id (the duplicate-with-different-content branch above
-        // already returned with `DuplicateHandler`); duplicate-identical
-        // returns idempotently above without growing the chain.
-        //
-        // Phase-3 G14-C (Compromise #18 closure): also persist a
-        // `system:HandlerVersion` zone Node so the chain survives
-        // engine restart. The privileged-write surface mirrors
-        // `install_module`'s `system:ModuleManifest` discipline.
         let mut vc = self.inner.handler_version_chain.lock_recover();
         let chain = vc.entry(handler_id.clone()).or_default();
-        let needs_persist = chain.first() != Some(&cid);
-        if needs_persist {
+        if chain.first() != Some(&cid) {
             chain.insert(0, cid);
-        }
-        let chain_len_after = chain.len();
-        drop(vc);
-        if needs_persist {
-            // seq is the position the new entry occupies AFTER insert
-            // (newest-first map; seq 0 is the oldest, seq=len-1 is the
-            // newest just inserted). We use chain_len_after-1 as the
-            // monotonic per-handler insertion sequence.
-            let seq = u64::try_from(chain_len_after.saturating_sub(1)).unwrap_or(u64::MAX);
-            self.persist_handler_version_entry(&handler_id, &cid, None, seq)?;
         }
         Ok(handler_id)
     }
@@ -1364,6 +1372,65 @@ impl Engine {
         let cid = sg.cid().map_err(EngineError::Core)?;
         let handler_id = sg.handler_id().to_string();
 
+        // g14-c-mr-4 BLOCKER fix-pass: persist BEFORE the in-memory
+        // swap so a backend write failure surfaces as a clean Err to
+        // the caller and the in-memory chain stays consistent with
+        // disk. Pre-fix the durable write happened AFTER lock release
+        // — a process crash between in-memory swap and durable write
+        // produced a "ghost" current-version: the caller saw Ok, but
+        // a subsequent Engine::open rebuild from disk silently
+        // dropped the most recent replace entry (the audit-trail
+        // erasure shape Compromise #18 was supposed to close).
+        //
+        // Mechanism: under a SHORT preview lock we read the previous
+        // CID (if any) + the current chain depth, decide whether
+        // replace would grow the chain, and compute the seq the new
+        // entry would occupy. We THEN persist outside the locks (the
+        // privileged write is a single put_node_with_context — no
+        // long redb transaction). Only after persist succeeds do we
+        // re-acquire the locks and apply the in-memory swap. If a
+        // racing writer commits between the preview and the apply,
+        // we re-detect via a second preview-and-apply pass under the
+        // joint lock; the seq we just persisted may end up not
+        // matching the in-memory chain if a racing writer prepended
+        // first, but that's safe because the rehydrate path sorts by
+        // seq + the racing writer's persist will land its own seq.
+        //
+        // Lock ordering invariant preserved: handlers → specs →
+        // version_chain (the joint-lock acquisition for the mutation
+        // pass keeps the swap order consistent under concurrent
+        // writers).
+        let previous_cid: Option<Cid>;
+        let replaced;
+        let chain_depth_before;
+        {
+            let handlers_guard = self.inner.handlers.lock_recover();
+            let chain_guard = self.inner.handler_version_chain.lock_recover();
+            previous_cid = handlers_guard.get(&handler_id).copied();
+            replaced = previous_cid != Some(cid);
+            chain_depth_before = chain_guard.get(&handler_id).map_or(0, std::vec::Vec::len);
+        }
+
+        // Compromise #18 closure: persist FIRST. Idempotent re-register
+        // (same CID under same handler_id) is a no-op for the chain;
+        // skip the persist call to match the in-memory contract.
+        if replaced {
+            let persist_predecessor = previous_cid;
+            // seq is the position the new entry occupies AFTER insert
+            // (newest-first map; seq=0 is the oldest, seq=len-1 is
+            // the newest just inserted). chain_depth_before is the
+            // length BEFORE the prepend; the new entry's seq is
+            // chain_depth_before (zero-indexed) — i.e. the count of
+            // entries that already exist for this handler.
+            let persist_seq = u64::try_from(chain_depth_before).unwrap_or(u64::MAX);
+            self.persist_handler_version_entry(
+                &handler_id,
+                &cid,
+                persist_predecessor.as_ref(),
+                persist_seq,
+            )?;
+        }
+
         // Atomically: read the previous CID (if any), swap the handlers
         // entry, update the spec table, then prepend onto the version
         // chain. The three locks are acquired in fixed order — handlers,
@@ -1375,45 +1442,26 @@ impl Engine {
         // and their chain prepend in the other, violating the
         // newest-first invariant `handler_version_chain()` reports +
         // the 7 dedicated tests assume.
-        //
-        // Phase-3 G14-C (Compromise #18 closure): durable persistence
-        // happens AFTER the locks drop — keeping the privileged write
-        // outside the held mutex avoids holding three engine locks +
-        // the redb write transaction simultaneously. `needs_persist`
-        // captures the inside-lock decision; `persist_seq` captures
-        // the new chain depth post-mutation; both are read while the
-        // joint lock is still held so they're consistent with the
-        // swap that just landed.
-        let previous_cid: Option<Cid>;
-        let replaced;
-        let chain_depth;
-        let persist_seq: Option<u64>;
-        let persist_predecessor: Option<Cid>;
+        let chain_depth: usize;
         {
             let mut handlers_guard = self.inner.handlers.lock_recover();
             let mut specs_guard = self.inner.specs.lock_recover();
             let mut chain_guard = self.inner.handler_version_chain.lock_recover();
 
             let prev = handlers_guard.get(&handler_id).copied();
-            match prev {
-                Some(existing) if existing == cid => {
-                    // Identical content — idempotent no-op. The chain is
-                    // already led by `cid`; don't grow it.
-                    previous_cid = Some(existing);
-                    replaced = false;
-                }
+            let did_replace = match prev {
+                Some(existing) if existing == cid => false,
                 _ => {
                     handlers_guard.insert(handler_id.clone(), cid);
-                    previous_cid = prev;
-                    replaced = true;
+                    true
                 }
-            }
+            };
 
             if let Some(spec) = stored_spec {
                 specs_guard.insert(handler_id.clone(), spec);
             }
 
-            if replaced {
+            if did_replace {
                 let chain = chain_guard.entry(handler_id.clone()).or_default();
                 // Idempotency guard: don't re-prepend if the chain already
                 // leads with this CID (defence against racing replace-
@@ -1430,32 +1478,8 @@ impl Engine {
             // lock to keep the reported depth consistent with the swap
             // we just performed.
             chain_depth = chain_guard.get(&handler_id).map_or(1, std::vec::Vec::len);
+        }
 
-            // Phase-3 G14-C: stash the persistence inputs while still
-            // under the lock so they're consistent with the in-memory
-            // mutation that just landed. We DON'T hold the privileged
-            // write across the lock — see lock-ordering note above.
-            if replaced {
-                persist_predecessor = previous_cid;
-                // seq is `chain_depth - 1` (newest-first; depth N has
-                // seq 0..=N-1; the just-prepended CID gets seq N-1).
-                persist_seq =
-                    Some(u64::try_from(chain_depth.saturating_sub(1)).unwrap_or(u64::MAX));
-            } else {
-                persist_predecessor = None;
-                persist_seq = None;
-            }
-        }
-        // Compromise #18 closure: durable persist outside the joint
-        // lock. Skipped on the idempotent branch (no chain growth).
-        if let Some(seq) = persist_seq {
-            self.persist_handler_version_entry(
-                &handler_id,
-                &cid,
-                persist_predecessor.as_ref(),
-                seq,
-            )?;
-        }
         Ok(RegisterReplaceOutcome {
             handler_id,
             cid,

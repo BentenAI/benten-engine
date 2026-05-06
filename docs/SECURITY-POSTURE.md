@@ -1323,15 +1323,36 @@ umbrella trait (PHASE-3-BUNDLE-1).
 
 ---
 
-### Compromise #21 — Module manifest signing — CLOSED at Phase-3 G14-C wave-4b
+### Compromise #21 — Module manifest signing — CLOSED at Phase-3 G14-C wave-4b (BLOCKER fix-pass)
 
-**Status:** CLOSED at Phase-3 G14-C wave-4b. Full Ed25519 manifest
-signing landed via `crates/benten-engine/src/manifest_signing.rs`
-(`sign_manifest` + `verify_manifest_with_mode` +
-[`PublisherRegistry`]). UCAN-proof-chain primary +
+**Status:** CLOSED at Phase-3 G14-C wave-4b BLOCKER fix-pass. Full
+Ed25519 manifest signing landed via
+`crates/benten-engine/src/manifest_signing.rs` (`sign_manifest` +
+`verify_manifest_with_mode` + [`PublisherRegistry`]) AND wired through
+the production `Engine::install_module(manifest, expected_cid,
+verify_args)` entry point. UCAN-proof-chain primary +
 publisher-key-registry fallback per D-PHASE-3-20 + crypto-minor-5.
 Audience-binding rejection via
 `benten_id::ucan::validate_chain_for_audience` per CLR-2 / cap-major-2.
+
+**g14-c-mr-1 / mr-2 BLOCKER fix-pass (this commit):**
+- `Engine::install_module` now takes a third `verify_args:
+  ManifestVerifyArgs` argument; the production install path invokes
+  `verify_manifest_with_mode` BEFORE persisting the manifest.
+  Pre-fix-pass the helper existed but was never called from
+  `install_module`, making the audience-binding closure narrative
+  vacuous. End-to-end pin at
+  `crates/benten-engine/tests/manifest_signing.rs::install_module_rejects_unsigned_when_verification_required`
+  drives the production entry point and asserts unsigned + bad-sig
+  manifests reject without persisting.
+- `PublisherRegistry::new` now takes a third `registry_audience_did`
+  argument (the engine's own audience DID, supplied at construction).
+  `require_ucan_delegation` validates the chain against this
+  pre-configured DID — no more `audience_from_chain(d) == d.claims.aud`
+  tautology. Cross-atrium-replay regression at
+  `crates/benten-engine/tests/manifest_signing.rs::publisher_registry_rejects_cross_atrium_replay`
+  asserts a UCAN signed by admin but audience-bound to Atrium-A
+  rejects when replayed at Atrium-B's registry.
 
 **What ships at Phase 2b.** `Engine::install_module(manifest, expected_cid: Cid)` REQUIRES the `expected_cid` argument (D16-RESOLVED-FURTHER — not Optional, prevents the lazy `install_module(m, None)` footgun). The engine recomputes the canonical-bytes CID over the manifest, compares against `expected_cid`, and fires `E_MODULE_MANIFEST_CID_MISMATCH` (with a 1-line manifest summary so an operator can diff without source-code dive) on disagreement. This is the minimal CID-pin integrity gate.
 

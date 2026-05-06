@@ -12,6 +12,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_engine::Engine;
+use benten_engine::manifest_signing::ManifestVerifyArgs;
 use benten_engine::testing::{
     testing_compute_manifest_cid, testing_make_manifest_with_caps, testing_make_minimal_manifest,
 };
@@ -30,7 +31,9 @@ fn uninstall_module_happy_path_after_install() {
     let (_dir, engine) = fresh_engine();
     let m = testing_make_minimal_manifest("acme.posts");
     let cid = testing_compute_manifest_cid(&m);
-    engine.install_module(m, cid).unwrap();
+    engine
+        .install_module(m, cid, ManifestVerifyArgs::unsigned_development())
+        .unwrap();
     assert!(engine.is_module_installed(&cid));
     engine
         .uninstall_module(cid)
@@ -47,7 +50,9 @@ fn uninstall_module_is_idempotent_repeat() {
     let (_dir, engine) = fresh_engine();
     let m = testing_make_minimal_manifest("acme.repeat");
     let cid = testing_compute_manifest_cid(&m);
-    engine.install_module(m, cid).unwrap();
+    engine
+        .install_module(m, cid, ManifestVerifyArgs::unsigned_development())
+        .unwrap();
     engine.uninstall_module(cid).unwrap();
     // Second uninstall on the same CID — must NOT error.
     engine.uninstall_module(cid).expect("idempotent on repeat");
@@ -74,7 +79,9 @@ fn module_uninstall_respects_capability_retraction() {
     let (_dir, engine) = fresh_engine();
     let m = testing_make_manifest_with_caps("acme.caps", &["host:compute:time"]);
     let cid = testing_compute_manifest_cid(&m);
-    engine.install_module(m, cid).unwrap();
+    engine
+        .install_module(m, cid, ManifestVerifyArgs::unsigned_development())
+        .unwrap();
     let active = engine.active_module_capabilities();
     assert!(
         active.contains("host:compute:time"),
@@ -99,8 +106,12 @@ fn module_uninstall_preserves_caps_required_by_sibling_manifest() {
     let n = testing_make_manifest_with_caps("acme.n", &["host:compute:time"]);
     let cid_m = testing_compute_manifest_cid(&m);
     let cid_n = testing_compute_manifest_cid(&n);
-    engine.install_module(m, cid_m).unwrap();
-    engine.install_module(n, cid_n).unwrap();
+    engine
+        .install_module(m, cid_m, ManifestVerifyArgs::unsigned_development())
+        .unwrap();
+    engine
+        .install_module(n, cid_n, ManifestVerifyArgs::unsigned_development())
+        .unwrap();
     engine.uninstall_module(cid_m).unwrap();
     let active = engine.active_module_capabilities();
     assert!(

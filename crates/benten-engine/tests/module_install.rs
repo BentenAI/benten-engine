@@ -14,6 +14,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_engine::Engine;
+use benten_engine::manifest_signing::ManifestVerifyArgs;
 use benten_engine::testing::{
     testing_compute_manifest_cid, testing_make_distinct_dummy_cid, testing_make_minimal_manifest,
 };
@@ -36,7 +37,7 @@ fn install_module_accepts_matching_cid() {
     let m = testing_make_minimal_manifest("acme.posts");
     let cid = testing_compute_manifest_cid(&m);
     let installed = engine
-        .install_module(m, cid)
+        .install_module(m, cid, ManifestVerifyArgs::unsigned_development())
         .expect("happy path: matching CID must succeed");
     assert_eq!(installed, cid);
     assert!(
@@ -54,7 +55,9 @@ fn install_module_persists_in_system_zone() {
     let (_dir, engine) = fresh_engine();
     let m = testing_make_minimal_manifest("acme.persist");
     let cid = testing_compute_manifest_cid(&m);
-    let installed = engine.install_module(m, cid).unwrap();
+    let installed = engine
+        .install_module(m, cid, ManifestVerifyArgs::unsigned_development())
+        .unwrap();
     assert_eq!(installed, cid);
     assert!(engine.is_module_installed(&cid));
 }
@@ -74,7 +77,9 @@ fn install_module_requires_cid_arg_at_compile_time() {
     let cid = testing_compute_manifest_cid(&m);
     // The body simply calls install_module with both args; this asserts
     // the 2-arg signature compiles.
-    let _ = engine.install_module(m, cid).unwrap();
+    let _ = engine
+        .install_module(m, cid, ManifestVerifyArgs::unsigned_development())
+        .unwrap();
 }
 
 #[test]
@@ -85,7 +90,9 @@ fn install_module_error_includes_manifest_summary() {
     let (_dir, engine) = fresh_engine();
     let m = testing_make_minimal_manifest("acme.posts");
     let wrong = testing_make_distinct_dummy_cid();
-    let err = engine.install_module(m, wrong).unwrap_err();
+    let err = engine
+        .install_module(m, wrong, ManifestVerifyArgs::unsigned_development())
+        .unwrap_err();
     let rendered = err.to_string();
     assert!(
         rendered.contains("acme.posts"),
@@ -114,7 +121,11 @@ fn install_module_compute_cid_helper_round_trips() {
         .expect("compute_manifest_cid must agree with the helper");
     assert_eq!(cid_via_helper, cid_via_engine);
     let installed = engine
-        .install_module(m, cid_via_helper)
+        .install_module(
+            m,
+            cid_via_helper,
+            ManifestVerifyArgs::unsigned_development(),
+        )
         .expect("helper-CID must match engine-internal CID");
     assert_eq!(installed, cid_via_helper);
 }
@@ -125,8 +136,12 @@ fn install_module_idempotent_on_repeat() {
     let (_dir, engine) = fresh_engine();
     let m = testing_make_minimal_manifest("acme.idempotent");
     let cid = testing_compute_manifest_cid(&m);
-    let first = engine.install_module(m.clone(), cid).unwrap();
-    let second = engine.install_module(m, cid).unwrap();
+    let first = engine
+        .install_module(m.clone(), cid, ManifestVerifyArgs::unsigned_development())
+        .unwrap();
+    let second = engine
+        .install_module(m, cid, ManifestVerifyArgs::unsigned_development())
+        .unwrap();
     assert_eq!(first, second);
     assert!(engine.is_module_installed(&cid));
 }

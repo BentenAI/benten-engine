@@ -425,3 +425,54 @@ fn legacy_register_subgraph_seeds_version_chain_too() {
     let outcome = engine.register_subgraph_replace(v2).unwrap();
     assert_eq!(outcome.previous_cid, Some(v1_cid));
 }
+
+#[test]
+fn register_subgraph_replace_persists_durable_entry_before_in_memory_swap() {
+    // g14-c-mr-4 BLOCKER fix-pass regression: prior to fix, the
+    // durable system:HandlerVersion zone Node was written AFTER the
+    // in-memory chain mutation under released locks. A process crash
+    // between in-memory commit and disk persist would surface as the
+    // exact "audit-trail erasure" Compromise #18 was supposed to
+    // close — Engine::open rebuild from disk would silently drop the
+    // most-recent replace.
+    //
+    // Post-fix the persist runs FIRST. We assert the contract by
+    // closing the engine after a successful replace, re-opening, and
+    // confirming the durable chain reflects the most recent entry.
+    // This is the observable consequence of "persist BEFORE in-memory
+    // swap" — when the call returns Ok, the disk MUST hold the
+    // entry.
+    let dir = tempdir().unwrap();
+    let store_path = dir.path().join("persist-first.redb");
+
+    let v1_cid;
+    let v2_cid;
+    {
+        let engine = Engine::builder().path(&store_path).build().unwrap();
+        let v1 = build_handler("h-persist-first", "post");
+        v1_cid = v1.cid().unwrap();
+        engine.register_subgraph_replace(v1).unwrap();
+
+        let v2 = build_handler("h-persist-first", "comment");
+        v2_cid = v2.cid().unwrap();
+        let outcome = engine.register_subgraph_replace(v2).unwrap();
+        assert_eq!(outcome.cid, v2_cid);
+        assert_eq!(outcome.previous_cid, Some(v1_cid));
+        assert_eq!(outcome.chain_depth, 2);
+    }
+
+    // Re-open. The durable chain MUST contain BOTH versions in
+    // newest-first order. If the persist had been skipped on either
+    // call (the pre-fix race window), this assertion would FAIL —
+    // the rebuild from disk would either be missing v2 or contain
+    // only v1's seq=0 entry without v2's seq=1.
+    let engine = Engine::builder().path(&store_path).build().unwrap();
+    let chain = engine.handler_version_chain("h-persist-first");
+    assert_eq!(
+        chain.len(),
+        2,
+        "g14-c-mr-4: durable chain MUST hold both replace entries (persist-before-mutation contract)"
+    );
+    assert_eq!(chain[0], v2_cid, "newest-first invariant preserved");
+    assert_eq!(chain[1], v1_cid, "v1 still in chain after re-open");
+}

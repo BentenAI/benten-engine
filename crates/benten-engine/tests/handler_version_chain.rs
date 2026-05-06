@@ -178,3 +178,38 @@ fn canonical_bytes_handler_version_chain_extensible_for_future_attribution_varia
         "DAG-CBOR canonical bytes MUST be byte-stable for identical content"
     );
 }
+
+#[test]
+fn make_version_node_pinned_cid_for_basic_shape() {
+    // g14-c-mr-5: a literal-CID pin for the basic make_version_node
+    // shape (predecessor=None, seq=0). This pin DOES NOT defeat the
+    // additive-extensibility contract above: when a future Phase-3
+    // amendment adds an optional property (e.g. `loro_merge_attribution`),
+    // the make_version_node call site here continues NOT to set that
+    // property, so the canonical-bytes encoding stays byte-stable and
+    // the CID below stays valid. Catches encoder regressions
+    // (e.g. seq encoding flipped from Int to Text) that the structural
+    // pin in the prior test would silently pass.
+    //
+    // Inputs:
+    //   handler_id = "demo:fix"
+    //   version_cid = blake3("fixture-version")
+    //   predecessor = None
+    //   seq = 0
+    let cid = Cid::from_blake3_digest(*blake3::hash(b"fixture-version").as_bytes());
+    let node = make_version_node("demo:fix", &cid, None, 0);
+    let observed_cid_b32 = node
+        .cid()
+        .expect("make_version_node output must have computable CID")
+        .to_base32();
+    // Pinned literal — extracted from the encoder at G14-C HEAD.
+    // If a future change deliberately re-shapes the encoding (e.g.
+    // promoting `seq` to a richer type), the rebake is intentional
+    // and the literal below must update IN THE SAME PR — making
+    // the encoder change observable in code review.
+    const EXPECTED_CID_BASE32: &str = "bafyr4ibvdpffau7453rdofaqtmgvbrjd4opht5nk7swwtwh3gtedep75qy";
+    assert_eq!(
+        observed_cid_b32, EXPECTED_CID_BASE32,
+        "g14-c-mr-5: make_version_node basic-shape CID drift; observed: {observed_cid_b32}"
+    );
+}

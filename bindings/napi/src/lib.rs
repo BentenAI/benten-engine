@@ -1183,9 +1183,20 @@ mod napi_surface {
                     )
                 })?;
             let parsed_cid = parse_cid(&expected_cid)?;
+            // g14-c-mr-1: napi bridge currently runs through the
+            // unsigned-development verify path. Phase-3 G17-C wave-5b
+            // (TS-side SANDBOX named-manifest resolution) extends this
+            // surface with structured signing args (ucan chain bytes,
+            // registry pubkey, audience) — until then the napi caller
+            // explicitly opts into the unsigned relaxation, matching
+            // the pre-G14-C behavior.
             let installed = self
                 .inner
-                .install_module(manifest, parsed_cid)
+                .install_module(
+                    manifest,
+                    parsed_cid,
+                    benten_engine::manifest_signing::ManifestVerifyArgs::unsigned_development(),
+                )
                 .map_err(engine_err)?;
             Ok(installed.to_base32())
         }

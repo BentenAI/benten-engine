@@ -22,11 +22,12 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_engine::manifest_signing::{
-    ManifestVerifyError, ManifestVerifyMode, PublisherRegistry, PublisherRegistryError,
-    manifest_signed_bytes, sign_manifest,
+    ManifestVerifyArgs, ManifestVerifyError, ManifestVerifyMode, PublisherRegistry,
+    PublisherRegistryError, manifest_signed_bytes, sign_manifest,
 };
 use benten_engine::module_manifest::{ManifestSignature, ModuleManifest, ModuleManifestEntry};
 use benten_engine::{Engine, EngineError};
+use benten_id::did::Did;
 use benten_id::keypair::Keypair;
 use benten_id::ucan::Ucan;
 
@@ -155,7 +156,11 @@ fn publisher_registry_mutation_requires_ucan_delegation() {
     let engine = Engine::open(dir.path().join("registry.redb")).unwrap();
     let admin_kp = Keypair::generate();
     let admin_did = admin_kp.public_key().to_did();
-    let registry = PublisherRegistry::new(&engine, admin_did);
+    // g14-c-mr-2: pin the engine's audience DID at registry
+    // construction time. Cross-atrium-replay defense binds the chain
+    // leaf's audience to THIS pre-set value.
+    let engine_audience_did = Did::from_string_unchecked("did:key:atrium-test-self".to_string());
+    let registry = PublisherRegistry::new(&engine, admin_did, engine_audience_did);
 
     // Adversarial path: explicit "no UCAN" entry rejects.
     let publisher_kp = Keypair::generate();
@@ -169,11 +174,71 @@ fn publisher_registry_mutation_requires_ucan_delegation() {
 }
 
 #[test]
-fn install_module_rejects_unsigned_or_invalid_manifest() {
+fn publisher_registry_rejects_cross_atrium_replay() {
+    // g14-c-mr-2 BLOCKER fix-pass: a UCAN signed by admin_did but
+    // audience-bound to a DIFFERENT Atrium's DID MUST be rejected
+    // when used to mutate THIS Atrium's registry. Pre-fix the
+    // require_ucan_delegation path derived the expected audience
+    // from `d.claims.aud` itself — so the audience-binding ct_eq
+    // check was a tautology and any UCAN signed by admin replayed
+    // across Atrium boundaries.
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::open(dir.path().join("xreplay.redb")).unwrap();
+    let admin_kp = Keypair::generate();
+    let admin_did = admin_kp.public_key().to_did();
+
+    // Atrium-B registry — its audience is "atrium-B-self"
+    let atrium_b_audience = Did::from_string_unchecked("did:key:atrium-B-self".to_string());
+    let registry_b = PublisherRegistry::new(&engine, admin_did.clone(), atrium_b_audience.clone());
+
+    // Attacker holds a UCAN signed by admin but audience-bound to
+    // Atrium-A. Replay against Atrium-B's registry.
+    let atrium_a_audience = Did::from_string_unchecked("did:key:atrium-A-self".to_string());
+    let cross_atrium_chain = Ucan::builder()
+        .issuer_did(&admin_did)
+        .audience_did(&atrium_a_audience) // audience-bound to A, not B
+        .capability("registry:publishers", "add")
+        .sign(&admin_kp);
+
+    let publisher_kp = Keypair::generate();
+    let publisher_did = publisher_kp.public_key().to_did();
+    let err = registry_b
+        .add_publisher(
+            &publisher_did,
+            publisher_kp.public_key(),
+            Some(&cross_atrium_chain),
+            0,
+        )
+        .expect_err("cross-atrium-replay UCAN MUST reject at Atrium-B's registry");
+    // Surfaced as EngineError::Other wrapping the UcanInvalid path.
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("UCAN") || msg.contains("ucan") || msg.contains("audience"),
+        "expected UCAN/audience-related error; got: {err:?}"
+    );
+
+    // And confirm: the SAME chain replayed against Atrium-A's
+    // registry (matching audience) verifies cleanly — proving the
+    // cross-atrium path was the only thing that rejected.
+    let registry_a = PublisherRegistry::new(&engine, admin_did.clone(), atrium_a_audience);
+    registry_a
+        .add_publisher(
+            &publisher_did,
+            publisher_kp.public_key(),
+            Some(&cross_atrium_chain),
+            0,
+        )
+        .expect("audience-matching atrium MUST accept the same chain");
+}
+
+#[test]
+fn verify_manifest_with_mode_rejects_unsigned_or_invalid() {
     // The verification arm rejects unsigned + bad-signature manifests
-    // through `verify_manifest_dual`.
+    // through `verify_manifest_with_mode` directly. End-to-end pin
+    // through `Engine::install_module` lives at
+    // `install_module_rejects_unsigned_when_verification_required`
+    // below.
     use benten_engine::manifest_signing::verify_manifest_with_mode;
-    use benten_id::did::Did;
 
     let m = fixture_manifest("acme.posts");
     let kp = Keypair::generate();
@@ -224,6 +289,77 @@ fn install_module_rejects_unsigned_or_invalid_manifest() {
         0,
     )
     .expect("properly signed manifest MUST verify");
+}
+
+#[test]
+fn install_module_rejects_unsigned_when_verification_required() {
+    // g14-c-mr-1 + mr-3: end-to-end pin per pim-2 §3.6b. Drives
+    // `Engine::install_module` with a signature-required policy and
+    // asserts: (a) unsigned manifest REJECTS without persisting; (b)
+    // bogus-signature manifest REJECTS; (c) properly-signed manifest
+    // INSTALLS. The test would FAIL if `install_module` silently
+    // skipped verification (the pre-fix-pass shape).
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::open(dir.path().join("verify.redb")).unwrap();
+
+    let m = fixture_manifest("acme.posts");
+    let kp = Keypair::generate();
+    let cid = engine.compute_manifest_cid(&m).unwrap();
+    let aud = Did::from_public_key(kp.public_key());
+
+    // (a) Unsigned manifest with Mode::Any (registry path) MUST reject
+    //     end-to-end through Engine::install_module.
+    let unsigned_args = ManifestVerifyArgs::registry(kp.public_key(), &aud, 0);
+    let err = engine
+        .install_module(m.clone(), cid, unsigned_args)
+        .expect_err("unsigned manifest MUST reject through install_module");
+    let msg = format!("{err}");
+    assert!(
+        matches!(
+            err,
+            EngineError::ModuleManifestVerify(ManifestVerifyError::Unsigned)
+        ),
+        "expected ModuleManifestVerify(Unsigned); got: {msg}"
+    );
+
+    // Confirm NOT persisted: re-installing under Unsigned mode (which
+    // would skip verification) finds no prior install.
+    assert!(
+        !engine.is_module_installed(&cid),
+        "rejected manifest MUST NOT be persisted to active set"
+    );
+
+    // (b) Bogus-signature manifest under Any rejects with
+    //     RegistryInvalid.
+    let mut bogus = m.clone();
+    bogus.signature = Some(ManifestSignature {
+        ed25519: Some(base64_encode(&[0u8; 64])),
+    });
+    let bogus_cid = engine.compute_manifest_cid(&bogus).unwrap();
+    let bogus_args = ManifestVerifyArgs::registry(kp.public_key(), &aud, 0);
+    let err = engine
+        .install_module(bogus, bogus_cid, bogus_args)
+        .expect_err("bogus signature MUST reject through install_module");
+    assert!(
+        matches!(
+            err,
+            EngineError::ModuleManifestVerify(ManifestVerifyError::RegistryInvalid)
+        ),
+        "expected ModuleManifestVerify(RegistryInvalid); got: {err:?}"
+    );
+
+    // (c) Properly-signed manifest installs successfully.
+    let signed = sign_manifest(&m, &kp).unwrap();
+    let signed_cid = engine.compute_manifest_cid(&signed).unwrap();
+    let signed_args = ManifestVerifyArgs::registry(kp.public_key(), &aud, 0);
+    let installed = engine
+        .install_module(signed, signed_cid, signed_args)
+        .expect("properly signed manifest MUST install");
+    assert_eq!(installed, signed_cid);
+    assert!(
+        engine.is_module_installed(&signed_cid),
+        "successfully verified manifest MUST land in active set"
+    );
 }
 
 #[test]
