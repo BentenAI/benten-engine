@@ -78,7 +78,7 @@ fn sandbox_wallclock_per_handler_override_via_subgraphspec_primitives() {
     //
     // Wave-8c primitive_host.rs already wires per-handler `wallclock_ms`
     // override into SandboxConfig at dispatch time
-    // (`primitive_host.rs:865` reads `op.properties.get("wallclock_ms")`).
+    // (`primitive_host.rs::execute_sandbox` reads `op.properties.get("wallclock_ms")`).
     // Pre-G17-C this test was ignored because the eval-side primitive
     // execute() takes a SandboxConfig directly — the ENGINE-layer
     // property propagation lived behind the

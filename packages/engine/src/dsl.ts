@@ -301,7 +301,7 @@ export interface SubscribeArgs {
  *   - Eval-side reader: `wallclock_ms`, `output_limit` (NOTE: drops
  *     `Bytes` — symmetric with `wallclock_ms` not carrying
  *     `_milliseconds`; r4-r1-wsa-1 BLOCKER recalibration verified
- *     against `primitive_host.rs:877` which reads
+ *     against `primitive_host.rs::execute_sandbox` which reads
  *     `op.properties.get("output_limit")`).
  *   - `module`, `caps`, `input`, `fuel` translate verbatim (already
  *     match the eval-side reader's keys).
@@ -338,18 +338,18 @@ function translateSandboxArgs(
   }
   if (typeof a.fuel === "number") {
     // `fuel` is the canonical eval-side key (no token to translate);
-    // primitive_host.rs:862 reads `op.properties.get("fuel")`.
+    // primitive_host.rs::execute_sandbox reads `op.properties.get("fuel")`.
     props.fuel = a.fuel;
   }
   if (typeof a.wallclockMs === "number") {
     // wallclockMs (camelCase, DSL) → wallclock_ms (snake_case, eval-side).
-    // primitive_host.rs:865 reads `op.properties.get("wallclock_ms")`.
+    // primitive_host.rs::execute_sandbox reads `op.properties.get("wallclock_ms")`.
     props.wallclock_ms = a.wallclockMs;
   }
   if (typeof a.outputLimitBytes === "number") {
     // outputLimitBytes (camelCase, DSL — preserves `Bytes` for type-
     // clarity) → output_limit (snake_case, eval-side — DROPS `Bytes`
-    // per r4-r1-wsa-1 verification against primitive_host.rs:877 which
+    // per r4-r1-wsa-1 verification against primitive_host.rs::execute_sandbox which
     // reads `op.properties.get("output_limit")`). Symmetric with
     // `wallclock_ms` not carrying `_milliseconds`.
     props.output_limit = a.outputLimitBytes;

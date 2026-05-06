@@ -128,7 +128,7 @@ fn sandbox_per_handler_output_limit_bytes_camel_case_dsl_round_trips() {
     //      ceiling fires instead.
     //   3. Translator emits the WRONG snake_case target (e.g.
     //      `output_limit_bytes` instead of `output_limit`); eval-side
-    //      reader at primitive_host.rs:877 silently drops the value;
+    //      reader at primitive_host.rs::execute_sandbox silently drops the value;
     //      OutputOverflow fires by default-fallthrough (1 MB ceiling).
     //      Companion architectural drift-pin
     //      `..._does_not_drift_across_dsl_compiler_and_primitive_host`
