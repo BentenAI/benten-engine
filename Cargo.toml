@@ -312,7 +312,36 @@ toml = { version = "0.8", default-features = false, features = ["parse"] }
 # Phase 3 (sync/identity) — reserved versions for future use:
 # iroh = "0.97"
 # loro = "1"
-# ed25519-dalek = "2"
+
+# Phase 3 G14-A1 (identity) — Ed25519 + did:key + UCAN. The G14-A1 canary
+# (wave-4a) lands the first consumers of these crates inside `benten-id`.
+# Pinned `default-features = false` where supported to keep the wasm32
+# bundle minimal (per CLAUDE.md baked-in #17 thin-client commitment;
+# `benten-id` is consumed by the full-peer native build path. Browser
+# tab thin-client TS surface only carries the type declarations through
+# `packages/engine/src/identity.ts`).
+ed25519-dalek = { version = "2", default-features = false, features = ["std", "rand_core", "zeroize"] }
+# OS CSPRNG primitive (per crypto-major-2: `Keypair::generate` MUST be
+# pinned to OsRng / getrandom; never a deterministic seed). 0.2 is the
+# version `rand_core` 0.6 uses internally; we depend on it directly so
+# the import-path tests can grep the call site.
+getrandom = "0.2"
+# Secret-bytes hygiene (per crypto-blocker-1 BLOCKER): `Zeroize` +
+# `ZeroizeOnDrop` on `SecretKey` newtype + redacted Debug.
+zeroize = { version = "1", default-features = false, features = ["derive", "alloc"] }
+# Constant-time comparison primitive (per crypto-major-4): UCAN signature
+# + DID + proof-CID byte comparisons MUST go through `ConstantTimeEq` to
+# defend against timing-side-channel leak.
+subtle = { version = "2", default-features = false }
+# `rand_core` re-export for OsRng. ed25519-dalek 2.x uses rand_core 0.6.
+rand_core = { version = "0.6", default-features = false, features = ["std", "getrandom"] }
+# `bs58` for did:key base58btc body encode/decode (per crypto-minor-3
+# + W3C did:key spec — multibase prefix `z` is base58btc). Direct dep
+# (rather than going through the `multibase` crate) keeps the
+# encode-path one-liner readable in src + tests.
+bs58 = { version = "0.5", default-features = false, features = ["alloc"] }
+# `hex` for diagnostic + redaction-test paths. dev-only.
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
 
 # Historical dependency note: in Phase 1 the `core2` 0.4.0 crate was archived
 # upstream on 2026-04-14 ("No longer supported. Use core directly.") and

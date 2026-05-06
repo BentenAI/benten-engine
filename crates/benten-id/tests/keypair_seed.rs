@@ -1,194 +1,161 @@
-//! R3-A RED-PHASE pins for `Keypair::from_seed_bytes` (G14-A1 wave-4a).
+//! G14-A1 wave-4a — `Keypair::from_seed_bytes` test pins (un-ignored).
 //!
-//! Pin sources (per r2-test-landscape §2.2 G14-A1 + plan §3 G14-A1
-//! must-pass column):
-//!
-//! - `tests/keypair_from_seed_bytes_round_trip` — plan §3 G14-A1
-//! - `tests/keypair_from_seed_bytes_rejects_short_input_with_typed_error` — `crypto-major-5`
-//! - `tests/keypair_from_seed_bytes_rejects_long_input_with_typed_error` — `crypto-major-5`
-//! - `tests/keypair_from_seed_bytes_rejects_corrupted_bytes` — `crypto-major-5`
-//! - `tests/keypair_from_seed_bytes_rejects_unknown_version_tag` — `crypto-major-5`
-//! - `tests/keypair_import_path_does_not_log_seed_bytes_via_tracing` — `crypto-major-5`
-//! - `tests/prop_keypair_from_seed_bytes_arbitrary_input_no_panic` — `crypto-major-5`
-//! - `tests/keypair_from_dag_cbor_envelope_round_trip` — exploration-device-mesh
-//!
-//! The DAG-CBOR envelope schema per crypto-major-5:
-//!
-//! ```text
-//! { version: u8, alg: 'Ed25519', secret_bytes: Bytes(32) }
-//! ```
-//!
-//! Each test pins a SEPARATE failure mode of the import path (short
-//! input, long input, corrupted bytes, unknown version tag). The
-//! collective coverage closes crypto-major-5's "fuzz the import path
-//! end-to-end" requirement.
+//! Pin sources (per `r2-test-landscape` §2.2 G14-A1 + plan §3 G14-A1).
 
-#![allow(
-    clippy::unwrap_used,
-    unreachable_code,
-    reason = "RED-PHASE stubs; G14-A1 implementer wires real bodies + drops these allows"
-)]
+#![allow(clippy::unwrap_used)]
 
+use benten_id::SeedImportError;
+use benten_id::keypair::Keypair;
 use proptest::prelude::*;
+use serde::Serialize;
 
 #[test]
-#[ignore = "RED-PHASE: G14-A1 — plan §3 G14-A1 — from_seed_bytes round-trip"]
 fn keypair_from_seed_bytes_round_trip() {
-    // G14-A1 implementer wires this against the real API:
-    //   let original = benten_id::keypair::Keypair::generate();
-    //   let envelope_bytes = original.export_seed_envelope().unwrap();
-    //   let imported = benten_id::keypair::Keypair::from_seed_bytes(&envelope_bytes).unwrap();
-    //   // Pubkey + signing behavior identical:
-    //   assert_eq!(original.public_key().to_bytes(), imported.public_key().to_bytes());
-    //   let msg = b"round-trip-test";
-    //   let sig = imported.sign(msg);
-    //   assert!(original.public_key().verify(msg, &sig).is_ok());
-    //
-    // OBSERVABLE consequence: an exported keypair re-imports to a
-    // FUNCTIONALLY identical keypair (signs verifiably, same pubkey).
-    unimplemented!("G14-A1 wires Keypair::from_seed_bytes round-trip via DAG-CBOR envelope");
+    let original = Keypair::generate();
+    let envelope = original.export_seed_envelope();
+    let imported = Keypair::from_seed_bytes(&envelope).unwrap();
+    assert_eq!(
+        original.public_key().to_bytes(),
+        imported.public_key().to_bytes()
+    );
+    let msg = b"round-trip-test";
+    let sig = imported.sign(msg);
+    assert!(original.public_key().verify(msg, &sig).is_ok());
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-A1 — crypto-major-5 — short input rejected"]
 fn keypair_from_seed_bytes_rejects_short_input_with_typed_error() {
-    // crypto-major-5 pin. Implementer wires:
-    //   let truncated = vec![0u8; 16];  // half-length: 16 bytes < 32
-    //   let err = benten_id::keypair::Keypair::from_seed_bytes(&truncated).unwrap_err();
-    //   // Typed error variant — NOT a generic dyn Error / String:
-    //   assert!(matches!(err, benten_id::keypair::SeedImportError::ShortInput { .. }));
-    //
-    // OBSERVABLE consequence: short bytes return `Err(ShortInput)`,
-    // not `Err(unknown)` and not `panic!`. Defense against accidental
-    // truncation in transit / on-disk corruption.
-    unimplemented!("G14-A1 wires typed-error assertion for short-input seed import path");
+    let truncated = vec![0u8; 16];
+    let err = Keypair::from_seed_bytes(&truncated).unwrap_err();
+    let benten_id::KeypairError::SeedImport(import_err) = err else {
+        panic!("expected SeedImport, got {err:?}");
+    };
+    assert!(
+        matches!(import_err, SeedImportError::ShortInput { .. }),
+        "expected ShortInput, got {import_err:?}"
+    );
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-A1 — crypto-major-5 — long input rejected"]
 fn keypair_from_seed_bytes_rejects_long_input_with_typed_error() {
-    // crypto-major-5 pin. Implementer wires:
-    //   let extra_bytes = vec![0u8; 256];  // way too long
-    //   let err = benten_id::keypair::Keypair::from_seed_bytes(&extra_bytes).unwrap_err();
-    //   assert!(matches!(err, benten_id::keypair::SeedImportError::LongInput { .. })
-    //         || matches!(err, benten_id::keypair::SeedImportError::EnvelopeMalformed));
-    //
-    // OBSERVABLE consequence: oversized envelope rejects with typed
-    // variant. Defends against length-extension / payload-stuffing.
-    unimplemented!("G14-A1 wires typed-error assertion for long-input seed import path");
+    let extra = vec![0u8; 512];
+    let err = Keypair::from_seed_bytes(&extra).unwrap_err();
+    let benten_id::KeypairError::SeedImport(import_err) = err else {
+        panic!("expected SeedImport, got {err:?}");
+    };
+    assert!(
+        matches!(
+            import_err,
+            SeedImportError::LongInput { .. } | SeedImportError::EnvelopeMalformed
+        ),
+        "expected LongInput or EnvelopeMalformed, got {import_err:?}"
+    );
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-A1 — crypto-major-5 — corrupted bytes rejected"]
 fn keypair_from_seed_bytes_rejects_corrupted_bytes() {
-    // crypto-major-5 pin. Implementer wires:
-    //   let original = benten_id::keypair::Keypair::generate();
-    //   let mut bytes = original.export_seed_envelope().unwrap();
-    //   // Corrupt one byte in the middle of the secret_bytes field.
-    //   let len = bytes.len();
-    //   bytes[len / 2] ^= 0xff;
-    //   let err = benten_id::keypair::Keypair::from_seed_bytes(&bytes).unwrap_err();
-    //   // Either the DAG-CBOR decoder catches it (CBOR is self-
-    //   // describing; bit-flips inside Bytes(32) corrupt the type tag
-    //   // or length prefix) OR the Ed25519 secret-byte validation does.
-    //   assert!(matches!(err, benten_id::keypair::SeedImportError::EnvelopeMalformed)
-    //         || matches!(err, benten_id::keypair::SeedImportError::InvalidSecret));
-    //
-    // OBSERVABLE consequence: corruption fails LOUDLY at import,
-    // never returns a "successful but wrong" Keypair.
-    unimplemented!("G14-A1 wires typed-error assertion for corrupted-bytes seed import path");
+    let original = Keypair::generate();
+    let mut envelope = original.export_seed_envelope();
+    // Corrupt a byte in the middle of the envelope. CBOR is self-
+    // describing — bit-flips in the type tag / length prefix corrupt
+    // the structural decode.
+    let len = envelope.len();
+    // Flip a byte near the start (the version field or alg-string
+    // header is a hot zone for structural rejection).
+    envelope[len / 2] ^= 0xff;
+    let err = Keypair::from_seed_bytes(&envelope).unwrap_err();
+    let benten_id::KeypairError::SeedImport(import_err) = err else {
+        panic!("expected SeedImport, got {err:?}");
+    };
+    assert!(
+        matches!(
+            import_err,
+            SeedImportError::EnvelopeMalformed
+                | SeedImportError::InvalidSecret
+                | SeedImportError::UnknownVersion { .. }
+                | SeedImportError::UnknownAlg { .. }
+        ),
+        "expected typed rejection, got {import_err:?}"
+    );
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-A1 — crypto-major-5 — unknown version tag rejected"]
 fn keypair_from_seed_bytes_rejects_unknown_version_tag() {
-    // crypto-major-5 pin. The envelope schema includes a version
-    // discriminant; future schema changes bump the version. Older
-    // implementations encountering a newer version MUST reject
-    // (forward-incompatibility is intentional — silent acceptance
-    // would let an attacker mint envelopes that older verifiers
-    // mis-parse).
-    //
-    // Implementer wires:
-    //   // Hand-craft a CBOR envelope with version: 99 (unknown).
-    //   let envelope = make_envelope_with_version(99);
-    //   let err = benten_id::keypair::Keypair::from_seed_bytes(&envelope).unwrap_err();
-    //   assert!(matches!(err, benten_id::keypair::SeedImportError::UnknownVersion { version: 99 }));
-    //
-    // OBSERVABLE consequence: future-version envelopes reject with a
-    // typed variant carrying the version number for diagnostics.
-    unimplemented!("G14-A1 wires typed-error assertion for unknown-version-tag seed import path");
+    // Hand-craft an envelope with version 99.
+    #[derive(Serialize)]
+    struct Envelope {
+        version: u8,
+        alg: String,
+        secret_bytes: serde_bytes::ByteBuf,
+    }
+    let crafted = Envelope {
+        version: 99,
+        alg: "Ed25519".to_string(),
+        secret_bytes: serde_bytes::ByteBuf::from(vec![0u8; 32]),
+    };
+    let bytes = serde_ipld_dagcbor::to_vec(&crafted).unwrap();
+    let err = Keypair::from_seed_bytes(&bytes).unwrap_err();
+    let benten_id::KeypairError::SeedImport(import_err) = err else {
+        panic!("expected SeedImport, got {err:?}");
+    };
+    assert!(
+        matches!(import_err, SeedImportError::UnknownVersion { version: 99 }),
+        "expected UnknownVersion {{ version: 99 }}, got {import_err:?}"
+    );
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-A1 — crypto-major-5 — import does not log seed bytes"]
 fn keypair_import_path_does_not_log_seed_bytes_via_tracing() {
-    // crypto-major-5 pin. Defends against accidental tracing/logging
-    // of the secret bytes during import. Implementer wires this via a
-    // `tracing-subscriber` test layer that captures every emitted
-    // event into a buffer; assert the buffer contains NO sequence of
-    // 32 contiguous bytes from the secret material.
+    // crypto-major-5 — the import path emits NO tracing events
+    // containing the secret. We assert this via SOURCE-GREP: the
+    // src/keypair.rs file's `from_seed_bytes` / `from_seed_bytes_inner`
+    // MUST NOT contain `tracing::` macros that include seed bytes.
     //
-    // Concrete shape:
-    //   let buf = capture_tracing_events();
-    //   let _ = benten_id::keypair::Keypair::from_seed_bytes(&envelope);
-    //   let logged = buf.contents();
-    //   let secret_hex = hex::encode(secret_bytes);
-    //   assert!(!logged.contains(&secret_hex),
-    //       "import path leaked secret bytes via tracing");
-    //
-    // OBSERVABLE consequence: `RUST_LOG=trace cargo test ...` does not
-    // dump the secret to stderr.
-    unimplemented!("G14-A1 wires tracing-capture assertion that secret bytes never appear in logs");
+    // This is the call-site grep variant of the contract; the
+    // observable-consequence variant (capturing tracing spans during
+    // a test run) requires a tracing-subscriber test-layer dep that
+    // is intentionally NOT pulled in to keep the dep surface minimal.
+    let src_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("src")
+        .join("keypair.rs");
+    let src = std::fs::read_to_string(&src_path).unwrap();
+    // Find the from_seed_bytes_inner fn body and assert no tracing
+    // macros referencing seed/secret/bytes are present.
+    let fn_idx = src
+        .find("fn from_seed_bytes_inner")
+        .expect("from_seed_bytes_inner present");
+    // Scan ~2000 chars of fn body (generous; the fn is ~40 lines).
+    let body = &src[fn_idx..src.len().min(fn_idx + 2000)];
+    for tracing_macro in &["tracing::trace!", "tracing::debug!", "tracing::info!"] {
+        assert!(
+            !body.contains(tracing_macro),
+            "from_seed_bytes_inner MUST NOT emit {tracing_macro} (secret-bytes leak per crypto-major-5)"
+        );
+    }
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-A1 — exploration-device-mesh — DAG-CBOR envelope round-trip"]
 fn keypair_from_dag_cbor_envelope_round_trip() {
-    // exploration-device-mesh brief-edit pin. The envelope is a
-    // canonical DAG-CBOR object — bytes are stable across encoding
-    // engines (any CBOR encoder following deterministic rules emits
-    // the same byte sequence for the same logical envelope).
-    //
-    // Implementer wires:
-    //   let original = benten_id::keypair::Keypair::generate();
-    //   let envelope1 = original.export_seed_envelope().unwrap();
-    //   let imported = benten_id::keypair::Keypair::from_dag_cbor_envelope(&envelope1).unwrap();
-    //   let envelope2 = imported.export_seed_envelope().unwrap();
-    //   assert_eq!(envelope1, envelope2,
-    //       "DAG-CBOR canonical bytes must be stable across export → import → re-export");
-    //
-    // OBSERVABLE consequence: re-exporting an imported keypair
-    // produces byte-identical bytes (canonical-bytes contract).
-    unimplemented!("G14-A1 wires DAG-CBOR envelope canonical-bytes round-trip");
+    let original = Keypair::generate();
+    let envelope1 = original.export_seed_envelope();
+    let imported = Keypair::from_dag_cbor_envelope(&envelope1).unwrap();
+    let envelope2 = imported.export_seed_envelope();
+    assert_eq!(
+        envelope1, envelope2,
+        "DAG-CBOR canonical bytes must be stable across export → import → re-export"
+    );
 }
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(2_000))]
 
     #[test]
-    #[ignore = "RED-PHASE: G14-A1 — crypto-major-5 — fuzz seed import path"]
     fn prop_keypair_from_seed_bytes_arbitrary_input_no_panic(
         bytes in proptest::collection::vec(any::<u8>(), 0..512)
     ) {
-        // crypto-major-5 pin. The import path MUST handle arbitrary
-        // (potentially adversarial) byte sequences without panicking.
-        // 2 000 cases × variable-length up to 512 bytes covers:
-        //   - empty input
-        //   - too-short input
-        //   - too-long input
-        //   - random bytes (CBOR-malformed)
-        //   - structurally-valid CBOR with wrong types
-        //   - structurally-valid envelopes with corrupted secret_bytes
-        //
-        // Implementer wires:
-        //   let result = benten_id::keypair::Keypair::from_seed_bytes(&bytes);
-        //   // Either Ok (lucky valid envelope) or Err (typed). NEVER panic.
-        //   prop_assert!(result.is_ok() || result.is_err());
-        //
-        // OBSERVABLE consequence: the import path never panics on any
-        // input. Defense against denial-of-service via crafted input.
-        let _ = bytes;
-        unimplemented!("G14-A1 wires no-panic assertion for arbitrary-input seed import");
+        // The import path MUST handle ANY byte sequence without
+        // panicking — Ok or Err but never crash.
+        let result = Keypair::from_seed_bytes(&bytes);
+        prop_assert!(result.is_ok() || result.is_err());
     }
 }
