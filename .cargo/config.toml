@@ -19,3 +19,16 @@
 [alias]
 t = "nextest run --workspace --features benten-eval/testing,benten-engine/test-helpers"
 test-all = "nextest run --workspace --features benten-eval/testing,benten-engine/test-helpers"
+# Phase-3 G17-B (phase-3-backlog §6.2 + r1-wsa-5 + r4-r1-wsa-9): regenerator
+# for committed `.wasm` SANDBOX fixtures under
+# `crates/benten-eval/tests/fixtures/sandbox/`. Compiles each `.wat` source
+# to its `.wasm` sibling via the workspace-locked exact-version `wat`
+# crate (=1.248.0 per `[workspace.dependencies] wat`). Replaces `scripts/build_wasm.sh`
+# reliance on the host `wabt` (`wat2wasm`) binary per wsa-12 (Windows
+# runners don't have bash; macOS needs Homebrew wabt; Linux needs
+# wasm32-wasip1 target). Pure-Rust + no host tooling dep.
+#
+# Modes:
+#   cargo bench-wat-rebake          # regenerate all .wasm
+#   cargo bench-wat-rebake --check  # report drift without writing (CI parity)
+bench-wat-rebake = "run --release -p bench-wat-rebake --bin bench-wat-rebake --"

@@ -44,6 +44,14 @@ pub mod subgraph_ext;
 pub mod suspension_store;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
+// Phase-3 G17-B SANDBOX `.wat`/`.wasm` fixture loader (phase-3-backlog
+// §6.2 + r1-wsa-5). Native-only (wasm32 cuts SANDBOX entirely per
+// sec-pre-r1-05) + reachable from integration-test binaries
+// (`tests/sandbox_*.rs`) + downstream consumers that opt into the
+// `testing` feature. See `src/test_fixtures.rs` module-level docstring
+// for the loader contract (committed `.wasm`-prefer + `.wat`-fallback).
+#[cfg(all(not(target_arch = "wasm32"), any(test, feature = "testing")))]
+pub mod test_fixtures;
 pub mod time_source;
 
 pub use subgraph_ext::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};

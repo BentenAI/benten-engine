@@ -347,15 +347,20 @@ Estimated touch size: ~300-600 LOC of test infrastructure across `bindings/napi/
 
 **Touch size:** ~80-150 LOC engine-eval + 1-2 regression test pin + cross-target pre-flight. Risk surface: low (purely additive defense; no production-runtime semantics regression — current Phase-2b posture is already PerBoundary-effective).
 
-### 6.2 D26 .wasm-bytes-shipping per fixture
+### 6.2 D26 .wasm-bytes-shipping per fixture — CLOSED at Phase-3 G17-B (wave-5b)
 
 **Phase 2b state:** ESC-1..16 fixtures live as `.wat` source compiled at test time (`wat::parse_str(...)`). D26 design intent calls for shipping pre-built `.wasm` bytes per fixture so cross-platform determinism + canonical CID pinning can apply. R6 wasmtime-sandbox-auditor (`r6-wsa-5`) flagged this gap; wave-8b ran out of budget before completing the tooling.
 
-**Phase 3 target:** Build-time tooling that compiles each `.wat` fixture to `.wasm` + commits the resulting bytes alongside the source. Runtime test loader prefers the pre-built `.wasm` (with `.wat` fallback for development). Cross-platform CID pinning then verifies the same fixture serializes identically across native / wasm32-wasip1 / wasm32-unknown-unknown.
+**Phase 3 closure (G17-B wave-5b):**
+1. **`tools/bench-wat-rebake/`** regenerator binary — compiles every `.wat` under `crates/benten-eval/tests/fixtures/sandbox/**/*.wat` to its committed `.wasm` sibling using the workspace-locked exact-version `wat` crate (`=1.248.0` per `[workspace.dependencies] wat`). Invoked via `cargo bench-wat-rebake` alias in `.cargo/config.toml`. `--check` mode reports drift without writing.
+2. **`crates/benten-eval/build.rs`** — emits `cargo:rerun-if-changed=` directives so a `.wat` source edit retriggers `tests/fixture_wasm_hashes_stable` + `tests/d26_wasm_present` drift detectors.
+3. **`crates/benten-eval/src/test_fixtures.rs`** — runtime fixture loader (`load_fixture(stem)`) prefers committed `.wasm` if present + valid; falls back to `wat::parse_file` only when `.wasm` absent (fresh-checkout case). Both branches compile via the same workspace-locked `wat` crate, so the bytes round-trip is closed.
+4. **r4-r1-wsa-9 single-tool recalibration:** workspace pins `wat = "=1.248.0"` exact-version (no `^`/`~`/bare matchers); `wasm-tools` REJECTED as a parallel dep. The legacy `scripts/build_wasm.sh` (which invoked the host `wabt` binary) is superseded — its output bytes can drift from the `wat` crate's output even on semantically-equivalent modules.
+5. **`tests/fixture_wasm_hashes_stable::PINNED_FIXTURES`** updated for `depth_nest_2`, `depth_nest_3_negative`, `output_overflow_2048` (the three fixtures whose canonical bytes shifted from `wabt`'s output to `wat` crate's output during the recalibration); 14 new committed `.wasm` fixtures landed under `escape/`.
 
-**Why Phase 3:** Bundles cleanly with §4.2 (cross-browser determinism CI cadence promotion). Both surfaces want the same tooling.
+**Cross-platform CID stability** is now defended by three layers: (a) workspace exact-version pin; (b) committed `.wasm` bytes (loader prefers these); (c) per-fixture BLAKE3 drift detector. The new AArch64 SANDBOX runtime CI cell (§6.7) verifies the same fixture CIDs resolve identically on Apple Silicon.
 
-**Touch size:** ~200-300 LOC tooling + ~50 LOC per-fixture loader update.
+**Touch size (actual):** ~600 LOC across tooling crate + build.rs + loader module + workflow + test pins (within G17-B plan ceiling 200-400 LOC + 50% reserve = 600).
 
 ### 6.6 TS-side SANDBOX named-manifest resolution + module-bytes registration API
 
@@ -388,15 +393,17 @@ The vitest cluster fix-pass (PR linked from `.addl/phase-2b/r6-r2-fp-vitest-clus
 
 **Touch size:** ~50-60 LOC + 1 regression test pin.
 
-### 6.7 AArch64 SANDBOX runtime CI cell (Apple Silicon test execution)
+### 6.7 AArch64 SANDBOX runtime CI cell (Apple Silicon test execution) — CLOSED at Phase-3 G17-B (wave-5b)
 
-**Phase 2b state:** T4 multi-arch coverage (`.github/workflows/multi-arch-cargo-check.yml`) covers `cargo check --target aarch64-apple-darwin` (compile-only). Apple Silicon SANDBOX runtime behaviour (sigaltstack handler, 16-byte stack alignment + max_wasm_stack interaction with M-series memory model, epoch-deadline thread fairness on the heterogeneous E/P core scheduler) is uncovered at runtime CI. R6 Round 1 wasmtime-sandbox-auditor (`r6-wsa-11`) named `phase-2-backlog.md §10.4` as the destination; R6 Round 3 wasmtime-sandbox-auditor-redux (`r6-r3-wsa-1`) verified neither §10.4 nor any phase-3-backlog §6 sub-section actually contained the entry — HARD RULE clause-(b) violation. This entry is the populated destination.
+**Phase 2b state:** T4 multi-arch coverage was framed as `cargo check --target aarch64-apple-darwin` (compile-only) but the dedicated `multi-arch-cargo-check.yml` workflow was never authored at Phase 2b — the cite at §6.7 r6-r3-wsa-1 named the file as the destination knowing it would be authored at Phase 3 G17-B. Apple Silicon SANDBOX runtime behaviour (sigaltstack handler, 16-byte stack alignment + max_wasm_stack interaction with M-series memory model, epoch-deadline thread fairness on the heterogeneous E/P core scheduler) was uncovered at runtime CI.
 
-**Phase 3 target:** Add a `runs-on: macos-latest-arm64` cell to the CI matrix running `cargo nextest run -p benten-eval --target aarch64-apple-darwin --test sandbox_basic --test sandbox_escape_attempts_denied --test sandbox_severity_priority`. Couple to the SANDBOX runtime maturity cluster (§6.1 ESC-16 + §6.4 SandboxStackExhausted) since AArch64-specific surfacing of stack-overflow / fingerprint-collapse defects is most likely to come from this cell.
+**Phase 3 closure (G17-B wave-5b):** `.github/workflows/multi-arch-cargo-check.yml` authored with two job tiers:
+1. **`cargo-check-multi-arch`** — compile-only T4 across Linux x86_64 / Linux arm64 / macOS arm64 (macos-14) / macOS x86_64 (macos-15-intel).
+2. **`aarch64-sandbox-runtime`** — runs `cargo nextest run -p benten-eval --target aarch64-apple-darwin --test sandbox_basic --test sandbox_escape_attempts_denied --test sandbox_severity_priority` on `macos-14` (Apple M1).
 
-**Why Phase 3:** Pairs with the broader Phase-3 CI hardening pass; isn't blocking for tag close because compile-only T4 catches the most common cross-arch breakage (type-system / target-feature drift). The runtime-specific surfacing only matters once the ecosystem starts running real workloads against AArch64 production builds.
+The Rust-side anchor test `crates/benten-eval/tests/sandbox_severity_priority_g17_b_anchor.rs::aarch64_sandbox_runtime_ci_cell_green` greps the workflow YAML for the invocation shape per r4-r1-wsa-7 (cargo nextest run + flag-position `--target` + per-test `--test` flag-position) so a refactor that drifts the shape fails the anchor BEFORE reaching the CI cell. Pairs with the SANDBOX runtime maturity cluster (§6.1 ESC-16 + §6.4 SandboxStackExhausted) since AArch64-specific surfacing of stack-overflow / fingerprint-collapse defects is most likely to come from this cell.
 
-**Touch size:** ~30-40 LOC YAML + monitor wasmtime upstream's Apple Silicon issue surface.
+**Touch size (actual):** ~95 LOC YAML + ~80 LOC anchor-test rewrite (within plan ceiling).
 
 ### 6.8 SANDBOX kv:write read-only-snapshot enforcement seam (folded into §6.0)
 
@@ -687,6 +694,38 @@ R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift 
 - `.addl/phase-3/r4-r1-pattern-induction.json` (pim-12 4th-instance + NEW shape iii origin finding)
 - `tools/cite-drift-detector/src/lib.rs::numeric_claims_source_of_truth` (current hardcode site)
 - `tools/cite-drift-detector/tests/numeric_claim_drift_lint_finds_known_drift_fixture.rs` (companion fixture; tracks the lint mechanism not the truth values, so the derivation upgrade is transparent to it)
+
+---
+
+### 7.12b Cite-drift detector coverage envelope (file-tree gap; G17-B mr-7 origin)
+
+**Origin:** G17-B PR #116 mini-review finding `g17-b-mr-cite-drift-detector-coverage-7` (BELONGS-ELSEWHERE-SPECIFICALLY → NAMED entry per HARD RULE clause-b). The detector caught 2 of 7 instances of the original `Cargo.toml:309` cite drift; 5 sites slipped because they live outside the tracked-path envelope.
+
+**Coverage envelope at G17-B fix-pass time** (`tools/cite-drift-detector/src/lib.rs::walk_doc_inputs`):
+- `README.md` (root)
+- `docs/**/*.md`
+- `.addl/**/*.md` (when present locally; gitignored — CI sees `docs/` only)
+- `crates/*/src/**/*.rs` (doc-comment cites)
+- `packages/engine/src/**/*.ts` (doc-comment cites)
+
+**Gaps observed at G17-B mr-7 verification (paths illustrative, not line cites):**
+- `tools/*/src/**/*.rs` — e.g. `tools/bench-wat-rebake/src/lib.rs` (module-doc cite block) slipped
+- `crates/*/build.rs` (crate-root build scripts, not under `src/`) — e.g. `crates/benten-eval/build.rs` (header doc-comment) slipped
+- `crates/*/tests/**/*.rs` (integration-test files) — e.g. `crates/benten-eval/tests/fixture_wasm_hashes_stable.rs` and `d26_wasm_present.rs` (2 sites) slipped
+- `.cargo/config.toml` (and `.toml` files generally) — `.cargo/config.toml` (alias-comment block) slipped
+
+**Why this matters:** pim-1 §3.5b BULK-APPLICATION HARDENED is the standing defense against load-bearing-edit cite drift; the cite-drift-detector is the automated companion. Two dimensions of incompleteness (the human pre-flight + the detector envelope) interact: the G17-B PR demonstrably had cites in 7 sites only 2 of which the detector covers — the human pre-flight failure was the proximate cause but the detector's envelope being narrow widens the blast radius of any single human pre-flight miss.
+
+**Closure shape:** extend `walk_doc_inputs` to additionally walk `tools/*/src/**/*.rs`, `crates/*/build.rs`, `crates/*/tests/**/*.rs`, and `.cargo/config.toml`. The walker's `extract_line_cites` already accepts `.toml` extensions per its docstring's allow-list — the gap is purely in the path enumeration, not the per-file extraction.
+
+**Touch size:** ~30-50 LOC (4 new walker call-sites + 1-2 unit tests asserting paths within those subtrees are scanned). Low risk — additive, no behavioral change for currently-tracked paths.
+
+**Cross-references:**
+- G17-B mini-review (PR #116) finding `g17-b-mr-cite-drift-detector-coverage-7` BELONGS-ELSEWHERE-SPECIFICALLY disposition
+- `tools/cite-drift-detector/src/lib.rs::walk_doc_inputs` (the envelope-definition site)
+- `tools/cite-drift-detector/src/lib.rs::extract_line_cites` (per-file extraction; already extension-permissive)
+
+**Phase target:** Phase-3 R6 prep (orchestrator-direct or small fix-pass dispatch). NOT gating PR #116 merge per finding-7's BELONGS-ELSEWHERE-SPECIFICALLY disposition; entry filed pre-merge per HARD RULE clause-b ("the destination receives the entry NOW").
 
 ---
 
