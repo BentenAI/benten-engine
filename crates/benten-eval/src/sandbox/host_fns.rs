@@ -347,19 +347,18 @@ impl CapAllowlist {
 /// closure surface) + the live cap-recheck callback (consulted by
 /// `per_call` host-fns).
 ///
-/// **G17-A1 wave-5b status (post phase-3-backlog §6.3 closure):** the
-/// `live_cap_check` callback field is wired through-thread per r1-wsa-3
-/// MAJOR. The G17-A2 wave-5b sibling completes the engine-side
-/// override that threads a real engine-backed callable into
-/// SandboxStoreData; the SURFACE shipped at G17-A1 (this struct + the
-/// HostFnContext exposure + the PerCall narrative) is the half the
-/// trampoline reads from. The cadence is BEFORE every host-fn
-/// invocation per the docstring on `live_cap_check` below. The closing
-/// regression test at
-/// `crates/benten-eval/tests/sandbox_capability_check_per_call_after_revoke.rs`
-/// is un-ignored at G17-A1; the full fixture-driven integration arm
-/// at `crates/benten-eval/tests/sandbox_escape_attempts_denied.rs`
-/// (ESC-9 adversarial body) un-ignores at G20-A1 wave-8a.
+/// **Phase-3 wave-5c status (post phase-3-backlog §6.1-followup task #5
+/// closure):** the `live_cap_check` callback is wired through-thread
+/// end-to-end per r1-wsa-3 MAJOR. The engine override at
+/// `benten_engine::primitive_host::execute_sandbox` constructs an
+/// engine-backed callable (cloned `Arc<Mutex<HashSet<Cid>>>` of the
+/// engine's revoked-actors set + the dispatching actor CID) and
+/// threads it into `SandboxStoreData::new` via
+/// `benten_eval::sandbox::execute_with_live_cap_check`. The runtime
+/// arm fires `EscapeAttemptMarker` from the host-fn trampoline when
+/// the callback returns `false` (cap revoked mid-call) — closing
+/// ESC-9 end-to-end. The cadence is BEFORE every host-fn invocation
+/// per the docstring on `live_cap_check` below.
 ///
 /// This is intentionally a thin typed wrapper — `Sandbox` owns the
 /// concrete state; the trampoline borrows this view per-invocation.
@@ -400,11 +399,16 @@ pub struct HostFnContext<'a> {
     /// the strength of the per-host-fn-entry policy snapshot, and the
     /// NEXT host-fn invocation observes the revoke.
     ///
-    /// **G17-A1 wave-5b production-arm status:** the callback field
-    /// is the seam the trampoline reads from. G17-A2 wave-5b ships
-    /// the engine-side override that threads a real engine-backed
-    /// callable through SandboxStoreData. ESC-9 closure (cap-revoke
-    /// mid-call) is wired end-to-end at the G17-A1 + G17-A2 pair.
+    /// **Phase-3 wave-5c production-arm status:** the callback is
+    /// wired end-to-end. The engine override at
+    /// `benten_engine::primitive_host::execute_sandbox` constructs
+    /// the engine-backed callable + threads it into
+    /// `SandboxStoreData::new` via
+    /// `benten_eval::sandbox::execute_with_live_cap_check`. ESC-9
+    /// closure (cap-revoke mid-call) fires
+    /// `EscapeAttemptMarker(Esc7FuelRefillViaReEntry)`-paired
+    /// `HostFnDenialMarker::CapDenied` from the host-fn trampoline
+    /// `cap_check` helper when the callback returns `false`.
     pub live_cap_check: &'a dyn Fn(&str) -> bool,
 }
 

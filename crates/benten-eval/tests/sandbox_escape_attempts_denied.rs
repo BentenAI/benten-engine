@@ -446,20 +446,26 @@ fn _esc_15_unused_marker_old() {
 
 #[test]
 fn sandbox_escape_wallclock_fingerprint_via_time_coarsened() {
-    // ESC-16 — the trampoline's `time` host-fn returns module-relative
-    // monotonic ms coarsened to 100ms. The fixture loops 10000 calls
-    // storing each return value to memory; coarsening to 100ms means a
-    // <50ms execution window collapses to ≤1 distinct value.
+    // ESC-16 end-to-end — the trampoline's `time` host-fn returns
+    // module-relative monotonic ms coarsened to 100ms (the host-fn-
+    // level defense; pinned at
+    // `sandbox_host_fn_time.rs::sandbox_host_fn_time_returns_monotonic_coarsened_100ms`),
+    // AND **Phase-3 wave-5c §6.1-followup task #2 + r1-wsa-4 MAJOR
+    // closure**: repeated `time` calls within a single SANDBOX
+    // dispatch trip the engine-side fingerprint-collapse defense
+    // (`FINGERPRINT_COLLAPSE_THRESHOLD = 3`). The wallclock-correlated
+    // memory-cell side-table is populated by `record_wallclock_write`
+    // on each `time` invocation; `read_collapse_state` increments the
+    // per-call counter; `run_all_checks` at the host-fn boundary
+    // surfaces `SandboxError::EscapeAttempt(Esc16FingerprintCollapse)`
+    // BEFORE the side-channel becomes guest-observable.
     //
-    // Wave-8b shape: we don't read guest memory back in this scope (no
-    // engine-side memory-read helper yet). Instead we exercise a
-    // shorter loop and verify the budget allows it (a non-coarsened
-    // time would burn through fuel faster than coarsened due to system
-    // call cost; the coarsened path is observably cheaper). The
-    // primary ESC-16 PROPERTY is verified at the unit level:
-    // SANDBOX_HOST_FN_TIME_RETURNS_MONOTONIC_COARSENED_100MS pins that
-    // `time` returns coarsened module-relative values, not system
-    // epoch.
+    // Pre-wave-5c this test asserted the 1000-call loop succeeded
+    // under default budget (no defense was wired). Post-wave-5c: the
+    // 1000-call loop trips the defense at the 3rd call; the typed
+    // error fires. Calling `time` >= 3 times within one SANDBOX
+    // dispatch IS the fingerprint-collapse pattern (per the threshold
+    // rationale in `crates/benten-eval/src/sandbox/fingerprint.rs`).
     let bytes = wat::parse_str(
         "(module
            (import \"host\" \"time\" (func $time (result i64)))
@@ -492,9 +498,19 @@ fn sandbox_escape_wallclock_fingerprint_via_time_coarsened() {
         &default_grant(),
         &attribution,
     );
+    let err = res.expect_err(
+        "ESC-16 wave-5c: 1000 `time` calls in one SANDBOX dispatch \
+         MUST trip the fingerprint-collapse defense end-to-end",
+    );
     assert!(
-        res.is_ok(),
-        "ESC-16 — coarsened time host-fn MUST succeed under default budget; got {res:?}"
+        matches!(
+            err,
+            benten_eval::sandbox::SandboxError::EscapeAttempt {
+                vector: benten_eval::sandbox::EscVector::Esc16FingerprintCollapse,
+                ..
+            }
+        ),
+        "ESC-16 end-to-end MUST surface EscapeAttempt(Esc16FingerprintCollapse); got {err:?}"
     );
 }
 

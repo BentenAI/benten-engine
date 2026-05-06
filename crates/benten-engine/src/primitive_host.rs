@@ -1003,14 +1003,46 @@ impl PrimitiveHost for Engine {
         //    registry from installed_modules so Named-manifest dispatch
         //    consults install_module persisted state (the prior
         //    `ManifestRegistry::new()` carried only codegen defaults).
+        //
+        //    Phase-3 wave-5c §6.1-followup task #5 — construct the live
+        //    cap-recheck callback. The callback observes the engine's
+        //    revoked-actors set (cloned `Arc<Mutex<HashSet<Cid>>>`) on
+        //    every invocation: if the dispatching actor has been
+        //    revoked since SANDBOX entry, EVERY cap-string returns
+        //    `false` (the actor has no caps). Otherwise, falls back to
+        //    the grant_caps snapshot (Phase-2b NoAuth posture). Closes
+        //    ESC-9 r1-wsa-3 MAJOR end-to-end. The cadence is fires-on-
+        //    every-host-fn-invocation (cadence (a) per r4-r1-wsa-4).
         let registry = self.manifest_registry();
-        let result = benten_eval::sandbox::execute(
+        let live_cap_check: Option<benten_eval::sandbox::LiveCapCheck> = {
+            let revoked = self.inner.revoked_actors_arc();
+            let actor = attribution.actor_cid;
+            let snapshot: Vec<String> = grant_caps.clone();
+            let callback: benten_eval::sandbox::LiveCapCheck =
+                std::sync::Arc::new(move |cap: &str| -> bool {
+                    let revoked_set = revoked
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    if revoked_set.contains(&actor) {
+                        // Dispatching actor revoked mid-call: every cap
+                        // returns false (host-fn denies). The next host-fn
+                        // invocation observes the revocation; see ESC-9
+                        // closure narrative in `docs/SECURITY-POSTURE.md`.
+                        return false;
+                    }
+                    drop(revoked_set);
+                    snapshot.iter().any(|c| c == cap)
+                });
+            Some(callback)
+        };
+        let result = benten_eval::sandbox::execute_with_live_cap_check(
             &module_bytes,
             manifest_ref,
             &registry,
             config,
             &grant_caps,
             &attribution,
+            live_cap_check,
         );
 
         // 8. Map the result. Wave-8d-types: SandboxError propagates

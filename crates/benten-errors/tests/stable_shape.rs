@@ -310,15 +310,9 @@ fn variant_count_is_pinned() {
     //     `crates/benten-eval/src/sandbox/escape_defenses.rs::run_esc16_check`.
     //     Closes r1-wsa-1 BLOCKER (ESC-7 + ESC-13) + r1-wsa-4 (ESC-16) +
     //     phase-3-backlog §6.1.
-    // Phase-3 G17-A2 wave-5b adds 1 code:
-    //   `SandboxHostFnRandomBudgetExceeded` — typed per-call entropy
-    //     budget overrun for the `random` host-fn (CLAUDE.md baked-in #16
-    //     closure / Compromise #16). Construction site at
-    //     `crates/benten-eval/src/primitives/sandbox.rs::SandboxError::code`
-    //     (cap-string carrier `random:per_call_budget_exceeded`).
-    // Post-G17-A1 + G17-A2: 91 + 2 + 1 = 94.
+    // Post-G17-A1: 91 + 2 = 93.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 94,
+        CATALOG_VARIANT_COUNT, 93,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

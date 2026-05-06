@@ -222,7 +222,12 @@ pub(crate) struct EngineInner {
     ///
     /// Phase-3 promotion: the source-of-truth becomes the engine's
     /// grant store; this in-memory set degenerates to a cache hint.
-    pub(crate) revoked_actors_for_subscribe: std::sync::Mutex<std::collections::HashSet<Cid>>,
+    ///
+    /// Phase-3 wave-5c §6.1-followup task #5 — held in `Arc<Mutex<...>>`
+    /// so the SANDBOX `live_cap_check` callback (constructed at
+    /// `execute_sandbox` dispatch time) can clone the Arc + observe
+    /// revocations that arrive mid-call. Closes ESC-9 r1-wsa-3 MAJOR.
+    pub(crate) revoked_actors_for_subscribe: Arc<std::sync::Mutex<std::collections::HashSet<Cid>>>,
 
     /// Wave-8c fix-pass cr-w8c-fp-3: opaque test-only marker set.
     /// Decoupled from `revoked_actors_for_subscribe` so production
@@ -262,7 +267,9 @@ impl EngineInner {
             module_bytes: std::sync::Mutex::new(std::collections::BTreeMap::new()),
             handler_version_chain: std::sync::Mutex::new(std::collections::BTreeMap::new()),
             emit_broadcast: Arc::new(crate::emit_broadcast::EmitBroadcast::new()),
-            revoked_actors_for_subscribe: std::sync::Mutex::new(std::collections::HashSet::new()),
+            revoked_actors_for_subscribe: Arc::new(std::sync::Mutex::new(
+                std::collections::HashSet::new(),
+            )),
             #[cfg(any(test, feature = "test-helpers"))]
             test_markers: std::sync::Mutex::new(std::collections::HashSet::new()),
         }
@@ -319,6 +326,18 @@ impl EngineInner {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         g.insert(*actor);
+    }
+
+    /// Phase-3 wave-5c §6.1-followup task #5 — clone the Arc'd
+    /// revoked-actors set so the SANDBOX `live_cap_check` callback
+    /// can observe revocations that arrive mid-call. Closes ESC-9
+    /// r1-wsa-3 MAJOR (cap-revoke mid-call cadence: the callback
+    /// fires BEFORE every host-fn invocation per cadence (a) per
+    /// r1-wsa-3 disposition + r4-r1-wsa-4).
+    pub(crate) fn revoked_actors_arc(
+        &self,
+    ) -> Arc<std::sync::Mutex<std::collections::HashSet<Cid>>> {
+        Arc::clone(&self.revoked_actors_for_subscribe)
     }
 
     /// Increment the per-scope + aggregate committed-write counters once per
