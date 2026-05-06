@@ -51,17 +51,19 @@ describe("engine.installModule", () => {
     await engine.close();
   });
 
-  // Phase-3 deferred — see `docs/future/phase-3-backlog.md` §6.6 (TS-side
-  // SANDBOX named-manifest resolution + module-bytes registration API).
-  // The reject-after-uninstall pin requires registration-time SANDBOX
-  // manifest validation that walks SANDBOX nodes' `module: "<m>:<e>"`
-  // properties and rejects when the name does not resolve through
-  // `installed_modules`. The Rust-side registry projection
-  // (`Engine::manifest_registry()`) keys by `entry.name` not
-  // `"<manifestName>:<entryName>"`, so the colon-joined DSL surface is
-  // still aspirational at the TS bridge. HARD RULE compliance:
-  // destination exists + has the entry NOW (not "carry to brief").
-  it.skip("engine.uninstallModule(cid) clean release", async () => {
+  // Phase-3 G17-C wave-5b (phase-3-backlog §6.6 deliverable 1):
+  // un-skipped per G17-C ratification. The pre-G17-C skip
+  // rationale was that the registry projection only keyed by
+  // `entry.name` (not `<manifestName>:<entryName>`); G17-C extends
+  // `Engine::manifest_registry()` to ALSO key by colon-joined name
+  // AND adds the `register_subgraph` validation walk that surfaces
+  // the typed `E_SANDBOX_MANIFEST_UNKNOWN` rejection at registration
+  // time (no longer at execution time as a wallclock-after-zero-
+  // progress shape). The post-uninstall rejection path is the
+  // load-bearing end-to-end pin per pim-2 §3.6b — drives the
+  // production `engine.registerSubgraph` entry point + asserts the
+  // typed-error observable consequence.
+  it("engine.uninstallModule(cid) clean release", async () => {
     const engine = await Engine.open(":memory:");
 
     const manifest: ModuleManifest = {

@@ -1434,6 +1434,75 @@ impl Engine {
 
     // -------- Registration / invariants --------
 
+    /// Phase-3 G17-C wave-5b (phase-3-backlog §6.6 deliverable 1):
+    /// validate that every SANDBOX node in the supplied [`Subgraph`]
+    /// declares a manifest reference that resolves through the
+    /// engine's manifest registry (codegen defaults + colon-joined
+    /// `<manifest>:<entry>` keys + bare `<entry>` keys from installed
+    /// modules).
+    ///
+    /// A SANDBOX node has TWO valid manifest-reference shapes:
+    ///
+    /// 1. Explicit `manifest` property — a Text key naming the manifest
+    ///    entry (e.g. `manifest: "compute-basic"` or
+    ///    `manifest: "echo:identity"` for the colon-joined DSL form).
+    /// 2. Colon-joined `module` property — a Text key whose value is
+    ///    `<manifest>:<entry>` (the TS DSL surface
+    ///    `subgraph(...).sandbox({ module: "echo:identity" })` writes
+    ///    this shape; primitive_host.rs reads `module` as a CID first
+    ///    and falls back to manifest lookup when the parse fails).
+    /// 3. Inline `caps` property (bypasses the registry — escape hatch);
+    ///    not validated here because there is no name to resolve.
+    ///
+    /// Returns [`EngineError::SandboxManifestUnknown`] for the first
+    /// SANDBOX node whose manifest name does not resolve (operator-
+    /// actionable: caller-supplied name + the public hint about the
+    /// codegen-default names lives in the Display impl).
+    #[cfg(not(target_arch = "wasm32"))]
+    fn validate_sandbox_manifest_names(
+        &self,
+        sg: &benten_eval::Subgraph,
+    ) -> Result<(), EngineError> {
+        let known = self.manifest_registry_known_names();
+        for node in &sg.nodes {
+            if !matches!(node.kind, benten_eval::PrimitiveKind::Sandbox) {
+                continue;
+            }
+            // Pick the manifest reference. `manifest` wins; otherwise a
+            // colon-joined `module` Text falls back to the named lookup
+            // path (the eval-side primitive_host applies the same
+            // precedence at dispatch).
+            let manifest_name: Option<String> = match node.properties.get("manifest") {
+                Some(Value::Text(name)) => Some(name.clone()),
+                _ => match node.properties.get("module") {
+                    Some(Value::Text(s)) => {
+                        // Heuristic: a colon-joined string that does
+                        // not parse as a base32 CID is a manifest name
+                        // (`<manifest>:<entry>` shape from the TS DSL).
+                        // A successful CID parse means the caller used
+                        // the inline-caps escape hatch (or supplied a
+                        // raw module CID directly); skip in that case
+                        // since there is no name to resolve.
+                        if s.contains(':') && Cid::from_str(s).is_err() {
+                            Some(s.clone())
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                },
+            };
+            if let Some(name) = manifest_name
+                && !known.contains(&name)
+            {
+                return Err(EngineError::SandboxManifestUnknown {
+                    manifest_name: name,
+                });
+            }
+        }
+        Ok(())
+    }
+
     /// Register a subgraph. Runs the G6 invariant battery (1/2/3/5/6/9/10/12)
     /// and stores the handler id → CID association. Idempotent: re-registering
     /// a subgraph with the same handler id and identical content returns the
@@ -1469,6 +1538,18 @@ impl Engine {
                 message: format!("{e}"),
             }
         })?;
+        // Phase-3 G17-C wave-5b (phase-3-backlog §6.6 deliverable 1):
+        // SANDBOX manifest-name validation walk. Every SANDBOX node that
+        // declares a named manifest reference (via `manifest` property
+        // OR a colon-joined `<manifest>:<entry>` `module` property) MUST
+        // resolve through the engine's manifest registry — otherwise
+        // a misspelled name + post-uninstall residual reference would
+        // hide as a wallclock-after-zero-progress shape at execution
+        // time. The validation walk is cfg-gated NOT-wasm32 to match
+        // `manifest_registry_known_names()` (CLAUDE.md baked-in #16:
+        // browser thin clients do not run SANDBOX).
+        #[cfg(not(target_arch = "wasm32"))]
+        self.validate_sandbox_manifest_names(&sg)?;
         let cid = sg.cid().map_err(EngineError::Core)?;
         let handler_id = sg.handler_id().to_string();
 

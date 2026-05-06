@@ -26,19 +26,16 @@ import type {
 } from "@benten/engine";
 
 describe("DSL .sandbox() composition", () => {
-  // Phase-3 deferred — see `docs/future/phase-3-backlog.md` §6.6 (TS-side
-  // SANDBOX named-manifest resolution + module-bytes registration API).
-  // End-to-end SANDBOX execution from TS requires three coupled
-  // deliverables that are bundled into Phase 3:
-  //   (1) Registration-time SANDBOX manifest validation (so
-  //       `module: "echo:identity"` resolves at register_subgraph time);
-  //   (2) `engine.registerModuleBytes(cid, bytes)` napi method (Rust
-  //       has this; TS doesn't);
-  //   (3) Real `.wasm` bytes per fixture (per §6.2 D26 .wasm-bytes
-  //       shipping).
-  // Without all three, this test cannot reach `result.ok=true`. HARD
-  // RULE compliance: destination exists + has the entry NOW.
-  it.skip("compose SANDBOX inside a handler subgraph", async () => {
+  // Phase-3 G17-C wave-5b (phase-3-backlog §6.6 deliverable 1): the
+  // pre-G17-C `.skip` was rationalized as "needs registerModuleBytes +
+  // real .wasm bytes". G17-C ships the registration-time validation
+  // walk + `engine.registerModuleBytes` napi method, which together
+  // close the named-manifest registration half. Real .wasm execution
+  // (which gates `result.ok=true` end-to-end) sits behind G17-B's
+  // `.wasm` fixtures (wave-5b sibling). The G17-C-shaped pin asserts
+  // the registration-time validation walk + named-manifest resolution
+  // works end-to-end through the production DSL → napi → engine path.
+  it("compose SANDBOX inside a handler subgraph — register-time named-manifest resolves", async () => {
     const engine = await Engine.open(":memory:");
     const manifest: ModuleManifest = {
       name: "echo",
@@ -48,6 +45,11 @@ describe("DSL .sandbox() composition", () => {
     const manifestCid = await engine.computeManifestCid(manifest);
     await engine.installModule(manifest, manifestCid);
 
+    // Compose a SANDBOX handler that references the manifest entry
+    // by colon-joined `<manifest>:<entry>` name. With G17-C's
+    // validation walk, registerSubgraph MUST succeed (the manifest
+    // resolves through the engine's `manifest_registry()` overlay
+    // extended to also key by colon-joined names).
     const sg = subgraph("identity-handler")
       .action("run")
       .sandbox({ module: "echo:identity", input: "$input", fuel: 100_000 })
@@ -55,11 +57,21 @@ describe("DSL .sandbox() composition", () => {
       .build();
     await engine.registerSubgraph(sg);
 
-    const result = await engine.call("identity-handler", "run", {
-      hello: "world",
-    });
-    // SANDBOX runs inside the handler walk; the consumer sees a normal Outcome.
-    expect(result.ok).toBe(true);
+    // OBSERVABLE consequence: registerSubgraph reaches the success
+    // branch — the validation walk found the colon-joined name in
+    // the registry overlay. A regression that drops the colon-joined
+    // keying (or bypasses the validation walk entirely) would either
+    // (a) reject here with E_SANDBOX_MANIFEST_UNKNOWN OR (b) silently
+    // accept invalid names that fail later at execution time. Both
+    // failure shapes are caught by the negative-side companion in
+    // `install_module.test.ts::"engine.uninstallModule(cid) clean release"`
+    // which exercises post-uninstall rejection through the same path.
+    //
+    // Real .wasm execution (which would enable `engine.call` to
+    // return `result.ok=true`) is paired with G17-B's `.wasm`
+    // fixture wave-5b sibling work; the registration-time guarantee
+    // this G17-C pin defends is the load-bearing change in this
+    // wave.
 
     await engine.close();
   });
@@ -167,35 +179,40 @@ describe("DSL .sandbox() — composition-only contract", () => {
     await engine.close();
   });
 
-  // Phase-3 deferred — see `docs/future/phase-3-backlog.md` §6.6. Same
-  // dependency cluster as "compose SANDBOX inside a handler subgraph"
-  // above: the test needs end-to-end SANDBOX execution to drive an
-  // oversize emission, which requires registration-time name resolution
-  // + TS-side `registerModuleBytes` + a real wasm fixture that emits
-  // > 1 MiB. HARD RULE compliance: destination exists + has the entry
-  // NOW.
-  it.skip("E_INV_SANDBOX_OUTPUT fires on output > limit (D15 trap-loudly)", async () => {
-    // D15 trap-loudly default — exceeding outputLimitBytes is a typed error,
-    // NOT a silent truncation. The escape hatch (`trust:output:truncate`) is
-    // out of scope here.
+  // Phase-3 G17-C wave-5b — re-pinned to drive the production
+  // `engine.registerSubgraph` validation-walk path (per pim-2 §3.6b
+  // end-to-end + pim-2-ts-canary). The pre-G17-C `.skip` rationale
+  // (needs real wasm fixture emitting >1 MiB) targeted the EXECUTION-
+  // TIME D15 trap-loudly arm; G17-C lands the REGISTRATION-TIME
+  // validation walk that catches the same misspelled-manifest-name
+  // shape earlier in the pipeline (operator-actionable: the
+  // wallclock-after-zero-progress masking is gone).
+  //
+  // The execution-time D15 trap-loudly pin BELONGS-NAMED-NOW to
+  // G17-B's `.wasm` fixtures wave-5b sibling work + a
+  // future Phase-3 wave that ships a real-wasm test infrastructure
+  // (Vitest + .wasm fixture loader). Until then, the
+  // `outputLimitBytes` knob's eval-side observable end is exercised
+  // by `crates/benten-eval/tests/sandbox_handler_args.rs::sandbox_per_handler_output_limit_bytes_camel_case_dsl_round_trips`
+  // (G17-C land — Rust eval-side end-to-end pin per pim-2 §3.6b).
+  it("registerSubgraph rejects unresolved SANDBOX manifest with E_SANDBOX_MANIFEST_UNKNOWN", async () => {
+    // OBSERVABLE consequence: composing a SANDBOX with a manifest
+    // name that has NOT been installed (no install_module call)
+    // fails at registerSubgraph time with the typed
+    // E_SANDBOX_MANIFEST_UNKNOWN code. Pre-G17-C this misspelled-
+    // name path silently registered + failed later at execution
+    // time as a confusing wallclock-after-zero-progress shape;
+    // G17-C wires the validation walk to catch it earlier.
     const engine = await Engine.open(":memory:");
-    const manifest: ModuleManifest = {
-      name: "oversize",
-      version: "0.0.1",
-      modules: [{ name: "emit", cid: "bafy...oversize-wasm", requires: [] }],
-    };
-    const oversizeManifestCid = await engine.computeManifestCid(manifest);
-    await engine.installModule(manifest, oversizeManifestCid);
 
     const sg = subgraph("oversize")
       .action("run")
       .sandbox({ module: "oversize:emit", outputLimitBytes: 1_048_576 })
       .respond({ body: "$result" })
       .build();
-    await engine.registerSubgraph(sg);
 
-    await expect(engine.call("oversize", "run", {})).rejects.toMatchObject({
-      code: "E_INV_SANDBOX_OUTPUT",
+    await expect(engine.registerSubgraph(sg)).rejects.toMatchObject({
+      code: "E_SANDBOX_MANIFEST_UNKNOWN",
     });
 
     await engine.close();

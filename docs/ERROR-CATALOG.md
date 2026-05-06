@@ -828,11 +828,13 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_SANDBOX_MANIFEST_UNKNOWN
 
-- **Message:** "SANDBOX manifest unknown: {name}"
-- **Context:** `{ name: string }`
-- **Fix:** ESC-15 escape vector closure: NO permissive fall-through to a default manifest. Either register the manifest (Phase 8 marketplace work — see `E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED`) or use one of the codegen-default names (`compute-basic`, `compute-with-kv`).
-- **Thrown at:** `ManifestRegistry::lookup` / `ManifestRef::resolve`.
-- **Phase:** 2b G7-A
+- **Message:** "SANDBOX manifest name '{manifest_name}' is not registered (codegen defaults: compute-basic, compute-with-kv; install via `engine.installModule(...)` or use a different name)"
+- **Context:** `{ manifestName: string }` (Phase-3 G17-C wave-5b structured-context surface; pre-G17-C the variant carried only the message string).
+- **Fix:** ESC-15 escape vector closure: NO permissive fall-through to a default manifest. Either install the manifest via `Engine::install_module` (paired with `Engine::register_module_bytes` for the underlying wasm payload) or use one of the codegen-default names (`compute-basic`, `compute-with-kv`). Phase-3 G17-C wave-5b adds the registration-time validation walk in `Engine::register_subgraph` so misspelled names + post-uninstall residual references trip THIS error at register time (operator-actionable: the wallclock-after-zero-progress masking is gone) instead of at dispatch time as a confusing wallclock trip.
+- **Thrown at:**
+  - **Registration time (Phase-3 G17-C):** `Engine::register_subgraph::validate_sandbox_manifest_names` — walks SANDBOX nodes for unresolved manifest references via either the explicit `manifest` property or the colon-joined `<manifest>:<entry>` `module` property fallback.
+  - **Dispatch time (legacy):** `ManifestRegistry::lookup` / `ManifestRef::resolve` — preserved for non-DSL spec construction paths that bypass the validation walk.
+- **Phase:** 2b G7-A (dispatch-time path); 3 G17-C (registration-time validation walk + structured-context surface).
 
 ### E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED
 

@@ -19,6 +19,7 @@ members = [
     "tests/integration",      # Phase-3 R3-B + R3-C — workspace-level integration test package (atrium_browser_thin_client.rs from R3-B; atrium_two_peer.rs / atrium_three_peer.rs / atrium_two_process.rs / atrium_two_device.rs from R3-C, relocated at R4-FP/R3-C from tests/phase_3_workspace/ per R3-CPC-1 closure at PR #92)
     "tools/benten-dev",       # Phase-2a G11-A dev-server stub (hot-reload, inspect-state) — local only until R5 G11-A
     "tools/cite-drift-detector", # Phase-3 G13-pre-A: cite-drift detector (file:line + path::symbol + numeric-claim drift lint, closes phase-2-backlog §8.2). Workflow: .github/workflows/cite-drift.yml (non-blocking PR comment per D-PHASE-3-10).
+    "tools/bench-wat-rebake", # Phase-3 G17-B: `cargo bench-wat-rebake` regenerator binary that compiles every `.wat` SANDBOX fixture under `crates/benten-eval/tests/fixtures/sandbox/` to its committed `.wasm` sibling using the workspace-locked exact-version `wat` crate. Closes phase-3-backlog §6.2 + r1-wsa-5 (replaces `scripts/build_wasm.sh` reliance on host `wabt` per wsa-12).
 ]
 
 [workspace.package]
@@ -303,10 +304,23 @@ uhlc = "0.2"
 # the cap-policy / wallclock-refresh / subscribe-persist test fleet.
 # See `.github/workflows/msrv.yml` for the matching CI gate.
 wasmtime = { version = "43.0.2", default-features = false, features = ["runtime", "cranelift", "std", "async"] }
-# `wat` — sibling crate to wasmtime; pin to its current minor. Used by
-# the SANDBOX unit tests + integration tests to author wasm fixtures
-# from `.wat` source (dev-time-only; prod ships pre-built `.wasm`).
-wat = "1"
+# `wat` — sibling crate to wasmtime; EXACT-version pin per Phase-3 G17-B
+# (phase-3-backlog §6.2 + r1-wsa-5 RECOMMENDATION + r4-r1-wsa-9
+# recalibration). The `wat` crate is the single source for compiling
+# `.wat` → `.wasm` bytes both at integration-test time
+# (`crates/benten-eval/tests/sandbox_*.rs` callers via `wat::parse_str` /
+# `wat::parse_file`) AND at the `tools/bench-wat-rebake/` regenerator
+# binary that materialises committed `.wasm` fixtures into
+# `crates/benten-eval/tests/fixtures/sandbox/*.wasm`. Soft matchers
+# (`^x.y.z`, `~x.y.z`, bare `"x.y.z"`) permit silent minor bumps that
+# may change emitted bytes — defeating cross-platform fixture-CID
+# stability (D26). Reject `wasm-tools` as a parallel dep per r4-r1-wsa-9
+# single-tool commitment (would split build-time vs test-time
+# .wat-compilation paths). When intentionally bumping: rerun
+# `cargo bench-wat-rebake` to regenerate fixtures + update
+# `tests/fixture_wasm_hashes_stable::PINNED_FIXTURES` in the SAME
+# commit.
+wat = "=1.248.0"
 toml = { version = "0.8", default-features = false, features = ["parse"] }
 
 # Phase 3 (sync/identity) — reserved versions for future use:

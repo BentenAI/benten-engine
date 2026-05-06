@@ -7,6 +7,18 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "Operation primitives and evaluator for the Benten graph engine (Phase 1 stub)."
+# Phase-3 G17-B (phase-3-backlog §6.2 + r1-wsa-5 + r4-r1-wsa-9):
+# build.rs walks `tests/fixtures/sandbox/**/*.wat` and emits
+# `cargo:rerun-if-changed=` directives so a `.wat` source edit
+# automatically retriggers the `tests/fixture_wasm_hashes_stable` +
+# `tests/d26_wasm_present` drift detectors. The canonical `.wasm`
+# bytes are committed alongside their `.wat` sources (regenerated via
+# `cargo bench-wat-rebake`); the test-time loader at
+# `src/test_fixtures.rs::load_fixture` prefers the committed bytes +
+# falls back to `wat::parse_file` only on fresh checkout. Native-target
+# only — the wasm32 build skips this build script via the early-exit
+# cfg-gate in `build.rs` itself.
+build = "build.rs"
 
 [lints]
 workspace = true
@@ -31,7 +43,7 @@ diag = []
 # enabled). Downstream consumers that want the helper in a release-ish
 # profile (e.g. an integration-test binary built under `--release`) must
 # opt in by enabling this feature explicitly.
-testing = ["benten-core/testing"]
+testing = ["benten-core/testing", "dep:wat"]
 # Phase-3 G17-A1 wave-5b — gates the §7.3.A.7 SANDBOX-escape testing
 # helpers at `crates/benten-eval/src/sandbox/testing_helpers.rs`. Per
 # Phase-2a `sec-r6r2-02` precedent + phase-3-backlog §7.3.A.7: the
@@ -89,6 +101,14 @@ thiserror = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 wasmtime = { workspace = true }
 toml = { workspace = true }
+# Phase-3 G17-B (phase-3-backlog §6.2 + r1-wsa-5 + r4-r1-wsa-9): `wat`
+# is the producer/consumer single-tool contract. Direct dep gated under
+# the `testing` feature so the `src/test_fixtures.rs::load_fixture`
+# fallback path can compile `.wat` bytes when the committed `.wasm` is
+# missing (fresh-checkout case). Native-only — wasm32 cuts SANDBOX +
+# its fixture surface entirely. Optional + feature-gated so default
+# release builds still drop the dep.
+wat = { workspace = true, optional = true }
 # Phase-3 G17-A2 — `random` host-fn workspace CSPRNG (D-PHASE-3-11
 # RESOLVED-at-R1: `getrandom` direct, NOT `rand` ecosystem). Native-only:
 # the SANDBOX subsystem itself is already wasm32-cut per sec-pre-r1-05,
