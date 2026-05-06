@@ -231,7 +231,13 @@ jobs:
           version: "latest"
 
       - name: Compile-check bindings/napi for wasm32-unknown-unknown
-        run: cargo check --target wasm32-unknown-unknown -p benten-napi
+        # Per CLAUDE.md baked-in #17, the wasm32 deployment shape uses
+        # BrowserBackend (in-RAM thin-client cache) — redb is cfg-gated
+        # off wasm32 in benten-graph. Enabling `browser-backend` here
+        # selects the BrowserBackend Engine alias arm + the matching
+        # cfg-gated benten-engine consumer paths. Mirrors sister jobs in
+        # `wasm-checks.yml` (T8) and `wasm-browser.yml` (bundle smoke).
+        run: cargo check --target wasm32-unknown-unknown -p benten-napi --features benten-engine/browser-backend --no-default-features
 
       - name: Compile benten-core example for wasm32-wasip1
         run: cargo build --release --target wasm32-wasip1 -p benten-core --example print_canonical_cid --locked

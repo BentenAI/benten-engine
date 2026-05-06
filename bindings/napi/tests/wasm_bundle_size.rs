@@ -43,7 +43,7 @@ fn wasm_r1_7_browser_bundle_size_at_or_below_600kb_gzipped() {
     // `wasm32_unknown_unknown_bundle_size_under_threshold.rs`).
     let bundle = std::path::PathBuf::from("dist/browser/benten_engine_bg.wasm");
     if !bundle.exists() {
-        eprintln!("skip: browser bundle artifact absent at {:?}", bundle);
+        println!("skip: browser bundle artifact absent at {:?}", bundle);
         return;
     }
     let raw = std::fs::read(&bundle).expect("read browser bundle");
