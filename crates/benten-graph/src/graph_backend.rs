@@ -112,7 +112,7 @@ use crate::{GraphError, RedbBackend, SnapshotHandle};
 ///
 /// G13-C wave-3: gated to NON `wasm32-unknown-unknown` targets — the
 /// runner exists alongside [`RedbBackend`]. Browser thin-client builds
-/// substitute [`crate::browser_backend::BrowserTransactionRunner`].
+/// substitute `crate::browser_backend::BrowserTransactionRunner`.
 #[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct RedbTransactionRunner;
@@ -279,7 +279,7 @@ pub trait GraphBackend: KVBackend + NodeStore + EdgeStore {
 ///
 /// G13-C wave-3: gated to NON `wasm32-unknown-unknown` per the
 /// `br-r1-1` BLOCKER pin. Browser thin-client target consumes
-/// [`crate::browser_backend::BrowserBackend`] instead.
+/// `crate::browser_backend::BrowserBackend` instead.
 #[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 impl GraphBackend for RedbBackend {
     type Snapshot = SnapshotHandle;

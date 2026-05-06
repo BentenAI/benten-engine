@@ -608,7 +608,7 @@ impl From<redb::CommitError> for GraphError {
 ///
 /// G13-C wave-3: gated to NON `wasm32-unknown-unknown` targets per the
 /// `br-r1-1` BLOCKER pin (CLAUDE.md baked-in #17). Browser thin-client
-/// builds substitute the [`browser_backend::BrowserSnapshot`] in-RAM clone.
+/// builds substitute the `browser_backend::BrowserSnapshot` in-RAM clone.
 #[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 pub struct SnapshotHandle {
     /// redb ReadTransaction captured at snapshot-open time. redb's read
