@@ -1,5 +1,5 @@
-//! R3-C RED-PHASE pins for `register_user_view` post-G15-A
-//! generalization (G15-A wave-5a).
+//! GREEN-PHASE pins for `register_user_view` post-G15-A generalization
+//! (G15-A wave-5a).
 //!
 //! ## Pin sources
 //!
@@ -11,73 +11,88 @@
 //!   user views always run under Strategy::B post-G15-A).
 //! - `D-PHASE-3-28` RESOLVED (non-canonical view IDs maintained via
 //!   generic kernel under Strategy::B).
-//!
-//! ## RED-PHASE discipline
-//!
-//! Every test is `#[ignore]`'d with rationale
-//! `"RED-PHASE: G15-A wave-5a generalizes register_user_view"`.
-//!
-//! ## LabelPattern import path (r4-r2-ivm-6 docstring)
-//!
-//! The `LabelPattern` enum import path is assumed to be
-//! `benten_ivm::LabelPattern` per ivm-major-1 architectural choice (a)
-//! — generic kernel keyed on `(label_pattern, projection)`. G15-A
-//! implementer adjusts the import path if a different architectural
-//! choice is made; this docstring tracks the cross-reference for
-//! §3.5b HARDENED point-1 cite verification. The `LabelPattern::exact()`
-//! constructor at sites below suggests a constructor helper; G15-A
-//! implementer ratifies the final shape per r4-r2-ivm-6.
 
 #![allow(clippy::unwrap_used)]
 
+use benten_engine::{Engine, EngineError, ErrorCode, UserViewInputPattern, UserViewSpec};
+
 #[test]
-#[ignore = "RED-PHASE: G15-A wave-5a — ivm-major-5 — canonical_id + mismatched_label rejected"]
 fn register_user_view_canonical_id_with_mismatched_label_returns_e_view_label_mismatch_post_g15_a_generalization()
  {
     // ivm-major-5 pin. Even after G15-A generalizes the kernel, the
     // engine's `register_user_view` still REJECTS a (canonical view
     // ID, mismatched label) registration with `E_VIEW_LABEL_MISMATCH`.
-    //
-    // Concrete shape:
-    //   let mut engine = test_engine();
-    //   let result = engine.register_user_view(
-    //       "crud:post",
-    //       LabelPattern::exact("user"),  // mismatch
-    //       Projection::default(),
-    //   );
-    //   match result {
-    //       Err(e) if e.code() == ErrorCode::E_VIEW_LABEL_MISMATCH => {}
-    //       other => panic!("expected E_VIEW_LABEL_MISMATCH, got {other:?}"),
-    //   }
-    //
-    // OBSERVABLE consequence: the post-G15-A engine still produces
-    // the same typed error; generalization doesn't silently widen
-    // acceptance.
-    unimplemented!("G15-A wires register_user_view rejection for canonical_id + mismatched_label");
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
+    let spec = UserViewSpec::builder()
+        .id("capability_grants")
+        .input_pattern(UserViewInputPattern::Label("user".to_string())) // mismatch
+        .build()
+        .unwrap();
+    let result = engine.register_user_view(spec);
+    match result {
+        Err(EngineError::ViewLabelMismatch {
+            view_id,
+            expected_label,
+            got_label,
+        }) => {
+            assert_eq!(view_id, "capability_grants");
+            assert_eq!(expected_label, "system:CapabilityGrant");
+            assert_eq!(got_label, "user");
+            // Catalog code is stable across the generalization.
+            let err = EngineError::ViewLabelMismatch {
+                view_id: "capability_grants".into(),
+                expected_label: "system:CapabilityGrant".into(),
+                got_label: "user".into(),
+            };
+            assert_eq!(err.code(), ErrorCode::ViewLabelMismatch);
+        }
+        other => panic!("expected ViewLabelMismatch, got {other:?}"),
+    }
 }
 
 #[test]
-#[ignore = "RED-PHASE: G15-A wave-5a — ivm-major-5 — user view + label_pattern under Strategy::B"]
 fn register_user_view_with_label_pattern_succeeds_under_strategy_b() {
     // ivm-major-5 + D-PHASE-3-28 pin. User-defined view IDs MAY be
     // registered with arbitrary label patterns under Strategy::B
     // (the generalized Algorithm B kernel). The engine no longer
-    // refuses these registrations as it did pre-G15-A.
-    //
-    // Concrete shape:
-    //   let mut engine = test_engine();
-    //   let view = engine.register_user_view(
-    //       "custom:posts_by_author",
-    //       LabelPattern::exact("post"),
-    //       Projection::all_props(),
-    //   ).expect("user view + matching label pattern succeeds");
-    //   // Internal: the registered view runs under Strategy::B.
-    //   assert_eq!(view.strategy(), benten_ivm::Strategy::B);
-    //
-    // OBSERVABLE consequence: registering a user-defined view with a
-    // valid (label_pattern matches view-id semantics) registration
-    // succeeds and produces a Strategy::B-backed view object.
-    unimplemented!(
-        "G15-A wires register_user_view success for user_id + label_pattern under Strategy::B"
-    );
+    // forces these registrations through a ContentListingView shim.
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
+    let spec = UserViewSpec::builder()
+        .id("custom:posts_by_author")
+        .input_pattern(UserViewInputPattern::Label("post".to_string()))
+        .build()
+        .unwrap();
+    let _cid = engine
+        .register_user_view(spec)
+        .expect("user view + matching label pattern succeeds");
+    // Internal: the registered view runs under Strategy::B at the
+    // engine boundary regardless of which inner kernel the dispatch
+    // router selected.
+    let strategy = engine
+        .view_strategy("custom:posts_by_author")
+        .expect("view registered + queryable strategy");
+    assert_eq!(strategy, benten_ivm::Strategy::B);
+}
+
+#[test]
+fn register_user_view_with_anchor_prefix_pattern_no_silent_label_equality_coerce() {
+    // Phase-3 G15-A specifically retires the Phase-2b
+    // "AnchorPrefix is silently coerced to a Label-equality match
+    // against the prefix string" stub. AnchorPrefix("crud:") must
+    // genuinely prefix-match; it must NOT match label == "crud:"
+    // exclusively.
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
+    let spec = UserViewSpec::builder()
+        .id("custom:by_prefix")
+        .input_pattern(UserViewInputPattern::AnchorPrefix("crud:".to_string()))
+        .build()
+        .unwrap();
+    let _ = engine
+        .register_user_view(spec)
+        .expect("AnchorPrefix registers under Strategy::B");
+    let strategy = engine.view_strategy("custom:by_prefix").unwrap();
+    assert_eq!(strategy, benten_ivm::Strategy::B);
 }

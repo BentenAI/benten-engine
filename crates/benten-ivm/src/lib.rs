@@ -43,6 +43,10 @@ pub mod subscriber;
 pub mod testing;
 pub mod view;
 
+pub use algorithm_b::{
+    Algorithm, AlgorithmBView, AlgorithmError, LabelPattern, Projection, dispatch_for,
+    hardcoded_label_for_id, is_canonical_view_id,
+};
 pub use budget::BudgetTracker;
 pub use strategy::Strategy;
 pub use subscriber::{ChangeStreamSubscriber, Subscriber};

@@ -6,12 +6,18 @@
 //! (`read_view`, `read_view_with`, `read_view_strict`,
 //! `read_view_allow_stale`). Every method is a plain `impl Engine` item.
 //!
-//! **Phase 2b G8-B addition.** [`Engine::create_user_view`] registers
-//! user-defined views via [`UserViewSpec`]. The user-view path is the
-//! generalized Algorithm B lane (`Strategy::B` per D8-RESOLVED). The 5
-//! Phase-1 hand-written views remain on `Strategy::A` (Rust-only) and are
-//! still registered through the legacy `Engine::create_view(view_id, opts)`
-//! surface in [`crate::engine_caps`].
+//! **Phase 2b G8-B addition.** [`Engine::register_user_view`] registers
+//! user-defined views via [`UserViewSpec`]. The user-view path runs under
+//! `Strategy::B` per D8-RESOLVED; `Strategy::A` user-view registration is
+//! refused with a typed error.
+//!
+//! **Phase-3 G15-A generalization.** The Phase-2b "user-defined view IDs
+//! hit a `ContentListingView` fallback" disclaimer is RETIRED. Non-canonical
+//! view ids now route through [`benten_ivm::Algorithm::register`]'s generic
+//! kernel keyed on `(label_pattern, projection)` per `D-PHASE-3-28
+//! RESOLVED`. The 5 hand-written canonical views remain as inner kernels of
+//! Strategy::B per `ivm-disagree-1`; they are reachable via the legacy
+//! `(view_id, ViewCreateOptions)` overload in [`crate::engine_caps`].
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -127,6 +133,65 @@ impl Engine {
     #[must_use]
     pub fn view_strategy(&self, view_id: &str) -> Option<benten_ivm::Strategy> {
         self.ivm.as_ref().and_then(|ivm| ivm.view_strategy(view_id))
+    }
+
+    // -------- Per-row READ gate (Compromise #11 closure, G15-A) --------
+
+    /// Materialize a registered IVM view's row CIDs filtered through the
+    /// G15-A per-row READ gate (Compromise #11 closure).
+    ///
+    /// Returns `Ok(None)` when no view with `view_id` is registered.
+    /// Returns `Ok(Some(cids))` for the row CIDs the actor (`gate`) is
+    /// permitted to READ — fewer than the unfiltered row count when the
+    /// actor's cap-set excludes any row, equal to the unfiltered count
+    /// when every row is permitted.
+    ///
+    /// The materialization-time gate fires SEPARATELY from G14-D's
+    /// delivery-time gate at SUBSCRIBE per `ivm-major-2`; both layers
+    /// compose at `crates/benten-engine/tests/ivm_view_subscribe_compose.rs`.
+    ///
+    /// # Errors
+    ///
+    /// - [`EngineError::SubsystemDisabled`] when IVM is disabled
+    ///   (`.without_ivm()`).
+    /// - [`EngineError::IvmViewStale`] when the view is stale and the
+    ///   gate is not configured for relaxed reads (current shape: always
+    ///   strict — relaxed-mode gate is a Phase-3+ extension).
+    pub fn materialize_view_with_gate(
+        &self,
+        view_id: &str,
+        gate: &crate::ivm_view_read_gate::IvmViewReadGate,
+    ) -> Result<Option<Vec<Cid>>, EngineError> {
+        if !self.ivm_enabled {
+            return Err(EngineError::SubsystemDisabled { subsystem: "ivm" });
+        }
+        let normalized = view_id.strip_prefix("system:ivm:").unwrap_or(view_id);
+        let Some(ivm) = self.ivm.as_ref() else {
+            return Ok(None);
+        };
+        let query = benten_ivm::ViewQuery::default();
+        let Some(read_result) = ivm.read_view(normalized, &query) else {
+            return Ok(None);
+        };
+        let view_result = match read_result {
+            Ok(vr) => vr,
+            Err(benten_ivm::ViewError::Stale { .. }) => {
+                return Err(EngineError::IvmViewStale {
+                    view_id: view_id.to_string(),
+                });
+            }
+            Err(_) => {
+                // Pattern-mismatch / budget: empty list (no useful answer
+                // for this query shape; matches the non-gated read path).
+                return Ok(Some(Vec::new()));
+            }
+        };
+        let unfiltered: Vec<Cid> = match view_result {
+            benten_ivm::ViewResult::Cids(cids) => cids,
+            benten_ivm::ViewResult::Current(Some(cid)) => vec![cid],
+            benten_ivm::ViewResult::Current(None) | benten_ivm::ViewResult::Rules(_) => Vec::new(),
+        };
+        Ok(Some(gate.filter_rows(unfiltered)))
     }
 
     // -------- View reads (IVM) --------
@@ -413,28 +478,20 @@ impl Engine {
             return Err(EngineError::SubsystemDisabled { subsystem: "ivm" });
         }
 
-        // Derive the input-pattern label (used by the ContentListingView
-        // shim until G8-A's generalized Algorithm B port lands; per the
-        // §3 G8-B coordination note the user-view ingestion path stubs
-        // through ContentListingView in the Label case so the registration
-        // round-trip is observable end-to-end on this branch).
-        //
-        // ⚠️ PRE-G8-A SEMANTIC STUB: AnchorPrefix is silently coerced to
-        // a Label-equality match against the prefix string (because
-        // ContentListingView only knows label equality). An app that
-        // declares `inputPattern: { anchorPrefix: "post" }` and then
-        // reads the user view will see results filtered by `label ==
-        // "post"`, NOT by anchor prefix. This is a stub bridge until
-        // G8-A's per-strategy view dispatch lands (then this branch
-        // swaps to the proper anchor-prefix selector). DO NOT rely on
-        // AnchorPrefix semantics in tests or app code that targets the
-        // pre-G8-A engine. The DSL surface (`packages/engine/src/views.ts`
-        // `UserViewInputPattern` doc + `outcome.rs::UserViewInputPattern`)
-        // mirrors this warning.
-        let input_pattern_label = match spec.input_pattern() {
-            UserViewInputPattern::Label(l) => Some(l.clone()),
-            UserViewInputPattern::AnchorPrefix(prefix) => Some(prefix.clone()),
+        // Phase-3 G15-A: derive the kernel-side `LabelPattern` from the
+        // spec's `UserViewInputPattern`. AnchorPrefix is now genuinely
+        // a prefix selector (the Phase-2b silent-coerce-to-Label-equality
+        // stub is RETIRED). The persisted Node still carries the
+        // `input_pattern_label` string (= the pattern's stable shape per
+        // `LabelPattern::as_label_str`) plus a sibling `input_pattern_kind`
+        // discriminating Label vs AnchorPrefix on the persisted side.
+        let label_pattern = match spec.input_pattern() {
+            UserViewInputPattern::Label(l) => benten_ivm::LabelPattern::Exact(l.clone()),
+            UserViewInputPattern::AnchorPrefix(prefix) => {
+                benten_ivm::LabelPattern::AnchorPrefix(prefix.clone())
+            }
         };
+        let input_pattern_label = Some(label_pattern.as_label_str().to_string());
 
         // Persist the view definition Node so the registration is content-
         // addressed + visible to Phase-3 sync. The Node carries the user
@@ -458,42 +515,51 @@ impl Engine {
         let def_node = Node::new(vec!["system:IVMView".into()], def_props);
         let cid = self.privileged_put_node_for_user_view(&def_node)?;
 
-        // Register a live view instance with the IVM subscriber so future
-        // change events propagate. We dedupe by view id so re-registering
-        // the same id is a no-op at the subscriber level.
+        // Phase-3 G15-A: register a live view instance with the IVM
+        // subscriber via [`benten_ivm::Algorithm::register`]. The kernel
+        // routes through the internal Strategy::A vs Strategy::B
+        // dispatch router ([`benten_ivm::dispatch_for`]):
         //
-        // Wave-8h audit-gap fix: route Strategy::B user views through
-        // [`benten_ivm::AlgorithmBView`] when the spec id matches one of
-        // the 5 canonical Phase-1 view ids. The audit at
-        // `.addl/phase-2b/r4b-followup-primitive-executor-docs-vs-code-audit.json`
-        // surfaced that the prior code unconditionally registered
-        // [`ContentListingView`] regardless of the persisted strategy,
-        // so the AlgorithmBView wave-G8-A deliverable was never used in
-        // production. For user-defined ids that don't match the
-        // canonical set, fall back to the ContentListingView shim
-        // keyed on the input pattern label — Phase-3 user-supplied
-        // dispatch lifts this fallback to per-spec view registration.
+        // - canonical view ids → inner kernel is one of the 5 hand-written
+        //   Phase-1 views (per `ivm-disagree-1` they are inner kernels of
+        //   Strategy::B, NOT Strategy::A baselines).
+        // - non-canonical view ids → inner kernel is the generic
+        //   `(label_pattern, projection)`-keyed kernel per `D-PHASE-3-28
+        //   RESOLVED`.
+        //
+        // The Phase-2b silent fallback to `ContentListingView` for
+        // non-canonical ids is RETIRED — non-canonical ids no longer
+        // observe label-equality semantics for AnchorPrefix patterns.
+        // We dedupe by view id so re-registering the same id is a no-op
+        // at the subscriber level.
         if let Some(ivm) = self.ivm.as_ref() {
             let already_registered = ivm.view_ids().iter().any(|id| id == spec.id());
-            if !already_registered && let Some(label) = input_pattern_label.as_deref() {
-                let definition = benten_ivm::ViewDefinition {
-                    view_id: spec.id().to_string(),
-                    input_pattern_label: Some(label.to_string()),
-                    output_label: "system:IVMView".to_string(),
-                    strategy: benten_ivm::Strategy::B,
-                };
-                match benten_ivm::algorithm_b::AlgorithmBView::for_id(spec.id(), definition) {
+            if !already_registered {
+                match benten_ivm::Algorithm::register(
+                    spec.id(),
+                    label_pattern.clone(),
+                    benten_ivm::Projection::all_props(),
+                ) {
                     Ok(view) => {
                         ivm.register_view(Box::new(view));
                     }
-                    Err(_) => {
-                        // User-defined id outside the 5 canonical Phase-1
-                        // ids: AlgorithmBView::for_id rejects with
-                        // PatternMismatch. Fall back to the ContentListingView
-                        // shim so change events still flow to a live View;
-                        // Phase-3 user-supplied dispatch removes this branch.
-                        let view = benten_ivm::views::ContentListingView::new(label);
-                        ivm.register_view(Box::new(view));
+                    Err(benten_ivm::AlgorithmError::ViewLabelMismatch {
+                        view_id,
+                        expected_label,
+                        ..
+                    }) => {
+                        // Defense-in-depth: the kernel-side fail-loud
+                        // mirror should never fire here because the
+                        // engine-side mismatch guard above already
+                        // rejected this case. Surface the mismatch
+                        // through the same engine error so callers see
+                        // a single typed boundary (catalog code
+                        // `E_VIEW_LABEL_MISMATCH`).
+                        return Err(EngineError::ViewLabelMismatch {
+                            view_id,
+                            expected_label,
+                            got_label: label_pattern.as_label_str().to_string(),
+                        });
                     }
                 }
             }

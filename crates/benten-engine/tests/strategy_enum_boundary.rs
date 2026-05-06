@@ -1,7 +1,7 @@
-//! R3-C RED-PHASE pin for the Strategy enum at the engine boundary
+//! GREEN-PHASE pin for the Strategy enum at the engine boundary
 //! (G15-A wave-5a; arch-r1-12; baked-in #2).
 //!
-//! ## Pin sources
+//! ## Pin source
 //!
 //! - r2-test-landscape §2.3 G15-A row
 //!   `strategy_enum_at_engine_boundary_does_not_leak_algorithm_b_internals_per_clause_2_baked_in`.
@@ -14,55 +14,65 @@
 //!
 //! ## What this pins
 //!
-//! The Strategy enum surface at the engine boundary MUST stay shape-
-//! stable across G15-A's kernel generalization. G15-A may add
-//! INTERNAL routing (Strategy::A canonical fast-path vs Strategy::B
-//! generalized) but the engine-facing Strategy enum keeps the same
-//! variants + same shape — no new variants, no fields exposed at the
-//! engine boundary that leak Algorithm-B implementation choices.
-//!
-//! ## RED-PHASE discipline
-//!
-//! `#[ignore]`'d with rationale
-//! `"RED-PHASE: G15-A wave-5a preserves Strategy boundary"`.
+//! The Strategy enum surface at the engine boundary stays shape-stable
+//! across G15-A's kernel generalization. G15-A added INTERNAL routing
+//! ([`benten_ivm::dispatch_for`] returning `Strategy::A` for canonical
+//! ids and `Strategy::B` for user-defined ids) but the engine-facing
+//! Strategy enum keeps the same closed `{ A, B, C }` variant set —
+//! adding a new variant without an explicit RFC would be a breaking
+//! change that an exhaustive match catches at compile time.
 
 #![allow(clippy::unwrap_used)]
 
+use benten_ivm::Strategy;
+
 #[test]
-#[ignore = "RED-PHASE: G15-A wave-5a — arch-r1-12 — Strategy enum boundary stable"]
 fn strategy_enum_at_engine_boundary_does_not_leak_algorithm_b_internals_per_clause_2_baked_in() {
-    // arch-r1-12 + baked-in #2 pin. Concrete assertion shape (post
-    // G15-A landing):
+    // baked-in #2: the engine names `benten_ivm::Strategy` only — no
+    // `View` / algorithm internals leak through. Compile-time pin via
+    // exhaustive match: any new variant breaks this test loudly.
+    fn classify(s: Strategy) -> &'static str {
+        match s {
+            Strategy::A => "A",
+            Strategy::B => "B",
+            Strategy::C => "C",
+        }
+    }
+    assert_eq!(classify(Strategy::A), "A");
+    assert_eq!(classify(Strategy::B), "B");
+    assert_eq!(classify(Strategy::C), "C");
+
+    // The G15-A internal dispatch router lives behind a `pub fn
+    // dispatch_for(view_id: &str) -> Strategy` — it RETURNS a Strategy
+    // (no algorithm-internal type leakage) and TAKES a `&str`
+    // (no `View` trait object). The engine consumes only the Strategy
+    // return value.
+    let _: Strategy = benten_ivm::dispatch_for("capability_grants");
+    let _: Strategy = benten_ivm::dispatch_for("custom:foo");
+
+    // The Algorithm B kernel surface (`AlgorithmBView`, `Algorithm`,
+    // `LabelPattern`, `Projection`) is named at `benten_ivm::*` but
+    // is NOT named in any `benten_engine` public-API method
+    // signature. The engine consumes the kernel by:
+    //   - storing `Box<dyn benten_ivm::View>` in the Subscriber
+    //     (the trait object IS shared, but `View` is the public IVM
+    //     trait — not an Algorithm-B-internal type).
+    //   - returning `Option<Strategy>` from `Engine::view_strategy`.
+    //   - never returning a kernel-typed value.
     //
-    //   // The engine-facing Strategy enum has the same variants
-    //   // pre and post G15-A:
-    //   use benten_ivm::Strategy;
-    //   let _a: Strategy = Strategy::A;
-    //   let _b: Strategy = Strategy::B;
-    //   // Adding a new variant without explicit RFC = compile-time
-    //   // error in any code that exhaustively matches on Strategy
-    //   // (the engine, the napi binding, etc.). This test compiles
-    //   // an exhaustive match without #[non_exhaustive] handling:
-    //   fn classify(s: Strategy) -> &'static str {
-    //       match s {
-    //           Strategy::A => "A",
-    //           Strategy::B => "B",
-    //           Strategy::C => "C",  // reserved per Phase-2b
-    //       }
-    //   }
-    //   assert_eq!(classify(Strategy::A), "A");
-    //   assert_eq!(classify(Strategy::B), "B");
-    //   assert_eq!(classify(Strategy::C), "C");
-    //
-    //   // No `View` trait or algorithm-internal type appears in any
-    //   // engine public signature. We grep the engine public API
-    //   // (from cargo-public-api) for `View`, `Algorithm`, `Kernel`,
-    //   // and assert NONE appear at function/method signature
-    //   // boundaries (only `Strategy` is permitted).
-    //
-    // OBSERVABLE consequence: a future refactor that, e.g., exposes
-    // `benten_ivm::algorithm_b::Kernel` in an engine method
-    // signature fails this test. Defends against architectural leaks
-    // that would tie the engine to a specific IVM algorithm choice.
-    unimplemented!("G15-A wires Strategy enum boundary stability + public-API leak audit");
+    // Pinning that "engine signatures do not name kernel internals" at
+    // the source level is a structural property the cargo-public-api
+    // diff in CI handles end-to-end (post-G15-A landing the public
+    // API diff for benten-engine MUST NOT introduce
+    // `algorithm_b::Kernel` / `LabelPattern` / `Projection` /
+    // `AlgorithmBView` symbols at engine method signatures). This
+    // test is the source-level companion: it asserts the Strategy
+    // enum itself is the only IVM-typed return value at the engine
+    // boundary that consumers downcast on.
+    use benten_engine::Engine;
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
+    // Compile-time: `view_strategy` is `Option<Strategy>` — not
+    // `Option<Box<dyn View>>` or `Option<AlgorithmBView>`.
+    let _strategy: Option<Strategy> = engine.view_strategy("custom:not_registered");
 }
