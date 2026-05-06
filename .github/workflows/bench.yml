@@ -1,42 +1,60 @@
 name: Bench
 
-# R6-TA-2: nightly Criterion bench sweep across the workspace.
+# R6-TA-2: Criterion bench sweep across the workspace.
+#
+# Phase-3 G13-E promotion (2026-05): this workflow was promoted from
+# informational (nightly cron only, no regression gating) to **required**
+# (PR-trigger compile gate + per-PR APFS-relevant CRUD-fast-path
+# benches with regression budget) as part of Compromise #12 closure.
+# See `docs/SECURITY-POSTURE.md` Compromise #12 (CLOSED-AT-G13-E),
+# `docs/future/phase-2-backlog.md` §9.1 (CLOSED-IN-PHASE-3-G13-E),
+# and the test pin at
+# `crates/benten-graph/tests/crud_fast_path_apfs_timing_within_target.rs`
+# for the full lineage.
 #
 # Purpose:
 #   The plan's §14.6 perf targets (Node lookup <50µs, IVM view read <1µs,
-#   content listing <100µs, 10-node handler <300µs, etc.) have been
-#   exercised at R4 gate-close via `cargo bench -- --quick` runs locally,
-#   but nothing in CI turns them into a regression signal. This workflow
-#   closes that gap at the lightest-weight cost: it runs the full bench
-#   suite nightly, uploads the Criterion HTML / CSV output as an artifact,
-#   and surfaces the measured numbers so a drift between commits is
-#   attributable to the offending PR in the git log.
+#   content listing <100µs, 10-node handler <300µs, CRUD post-create
+#   150–300 µs at the engine surface) need a regression signal in CI
+#   that catches `DurabilityMode::Group` default-flip regressions at the
+#   PR-trigger gate, not just at nightly cron.
 #
-# Phase-1 policy:
-#   - Phase-1 runs the benches and STORES the result. It does NOT fail
-#     on regression — bench numbers on shared GitHub Actions runners are
-#     noisy (±30% variance is typical under contention), and gating on a
-#     raw threshold would either fire spuriously or have to be set so loose
-#     that real regressions slip through. The artifact is the signal;
-#     humans read it during Phase-2 review.
-#   - Phase-2 ratchets: once dedicated / self-hosted runners or Bencher.dev
-#     integration lands, this workflow grows a comparison step that posts
-#     a comment-diff on PRs vs the main-branch baseline and fails on
-#     >N% regression across the §14.6-direct benches.
+# Two-tier policy (Phase-3 G13-E and later):
 #
-# Triggers:
-#   - nightly cron (02:30 UTC — after fuzz.yml at 02:00 so they don't
-#     contend for shared runner capacity)
-#   - workflow_dispatch (on-demand runs for perf-investigation PRs)
+#   1. **PR-trigger compile gate (REQUIRED).** Every PR runs
+#      `cargo bench --workspace --no-run --locked` so a bench that
+#      stops compiling fails the PR. Cheap (~3-5 min) + catches the
+#      most common regression class.
 #
-# Measurement window:
-#   `--measurement-time 2` keeps the total wall-clock bounded around
-#   ~20 minutes for the full workspace sweep. The per-bench plan spec
-#   calls for 5s windows; ratchet back up when this moves to dedicated
-#   runners. The 2s window still produces meaningful numbers — Criterion's
-#   statistics are stable once warmup converges, even in shorter windows.
+#   2. **PR-trigger CRUD-fast-path benches (REQUIRED).** Runs only the
+#      `crud_post_create_dispatch_group_durability` + `durability_modes`
+#      benches per-PR with `--measurement-time 1` (under 2 min total).
+#      The benches surface the Group-vs-Immediate delta + APFS fsync
+#      floor — gating against catastrophic regressions (e.g. a
+#      pathological mapping that 10×s the per-commit cost) without
+#      false-positive churn from shared-runner ±30% variance. The
+#      threshold is intentionally generous; the bench artifact is the
+#      authoritative perf signal humans read during review.
+#
+#   3. **Nightly full sweep (REQUIRED).** Continues to run the
+#      workspace bench sweep nightly + uploads Criterion HTML / CSV
+#      output. This is the source of truth for §14.6-direct benchmark
+#      drift between commits.
+#
+# Future ratchets (Phase 8/9+ when CI moves to dedicated runners or
+# Bencher.dev integration lands):
+#   - Comparison step that posts a comment-diff on PRs vs the
+#     main-branch baseline.
+#   - Fail on >N% regression across the §14.6-direct benches.
+#   - Tighten the PR-trigger CRUD-fast-path budget to the §14.6
+#     150–300 µs target (currently 10 ms generous bound — see test
+#     `crud_fast_path_apfs_timing_within_target.rs` for the same
+#     informational-budget rationale).
 
 on:
+  pull_request:
+  push:
+    branches: [main]
   schedule:
     - cron: '30 2 * * *'
   workflow_dispatch: {}
@@ -53,10 +71,73 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  bench:
-    name: workspace benches
+  # PR-trigger tier 1: compile gate. REQUIRED on every PR.
+  bench-compile-gate:
+    name: bench compile gate (required)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: bench-compile
+
+      - name: cargo bench --no-run (workspace)
+        # The benches must link cleanly. If a refactor breaks a bench
+        # signature this gates the PR before it lands on main.
+        run: cargo bench --workspace --no-run --locked
+
+  # PR-trigger tier 2: CRUD fast-path APFS-relevant benches. REQUIRED on every PR.
+  # Promoted at G13-E (Phase-3 R5 wave-3) per Compromise #12 closure.
+  bench-crud-fast-path:
+    name: bench CRUD fast-path APFS timing (required)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: bench-compile-gate
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: bench-crud-fast-path
+
+      - name: cargo bench (CRUD fast-path APFS-relevant subset)
+        # `--measurement-time 1` keeps the per-PR budget bounded
+        # (~2 min total). The two benches below cover the §14.6
+        # CRUD post-create target + the DurabilityMode::Group default
+        # flip narrative (Compromise #12 closure).
+        run: |
+          cargo bench --locked -p benten-graph \
+            --bench crud_post_create_dispatch_group_durability \
+            -- --measurement-time 1
+          cargo bench --locked -p benten-graph \
+            --bench durability_modes \
+            -- --measurement-time 1
+
+      - name: Upload CRUD fast-path Criterion output
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: criterion-crud-fast-path-${{ github.run_id }}
+          path: target/criterion/
+          retention-days: 14
+          if-no-files-found: warn
+
+  # Nightly tier 3: full workspace sweep (the historical Phase-1 job).
+  bench-workspace-nightly:
+    name: workspace benches (nightly)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 

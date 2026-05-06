@@ -59,28 +59,58 @@ pub enum BatchOp {
 
 /// Durability knob for a backend commit.
 ///
-/// The variants are ordered from safest to loosest. Backends pick a default
-/// (redb defaults to [`DurabilityMode::Immediate`]); the enum lives here in
-/// the trait-surface module so that heterogeneous backends can all honor the
-/// same vocabulary.
+/// The variants are ordered from safest to loosest. The trait surface picks
+/// the default; backends are responsible for mapping each variant to their
+/// own durability primitive (redb v4 only exposes `Durability::Immediate`
+/// and `Durability::None`, so [`DurabilityMode::Group`] collapses to
+/// `Durability::Immediate` at the redb backend — see
+/// `crates/benten-graph/src/redb_backend.rs::to_redb_durability`). The
+/// enum lives here in the trait-surface module so heterogeneous backends
+/// can all honor the same vocabulary.
 ///
 /// Semantics finalized in G2-B alongside the `RedbBackend` wiring; this enum
 /// is declared here so the trait-level reshape lands without a circular dep
 /// between `backend.rs` and a redb-specific module.
+///
+/// **Default flipped at Phase-3 G13-E (2026-05-05):** `default()` returns
+/// [`DurabilityMode::Group`] (was [`DurabilityMode::Immediate`] through
+/// Phase-2b). The flip closes `docs/SECURITY-POSTURE.md` Compromise #12
+/// (macOS APFS fsync floor; CRUD fast-path 150–300 µs §14.6 target) by
+/// declaring grouped-fsync as the engine-level default posture for
+/// CRUD writes. Backend mapping is a separate concern: redb v4 still
+/// collapses Group → Immediate (the
+/// `crates/benten-graph/src/redb_backend.rs::warn_if_group_durability_collapsed`
+/// one-shot warning still fires for explicit Group requests on benches).
+/// When redb grows native batched-commit support — or a peer-sync /
+/// in-RAM backend lands a true Group implementation — the engine
+/// surface already defaults to the correct posture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DurabilityMode {
     /// fsync before commit returns. Strongest guarantee, slowest throughput.
+    /// Used by capability-grant writes regardless of the engine-configured
+    /// default — see
+    /// `crates/benten-graph/tests/capability_grant_writes_immediate.rs`.
     Immediate,
     /// Group commits into a batched fsync window. Higher throughput, bounded
     /// tail latency on the fsync flush.
     ///
-    /// **Phase 1 note:** redb v4 does not yet expose grouped-commit
-    /// durability (the underlying API only offers `Durability::Immediate`
-    /// and `Durability::None`). This variant currently collapses to
-    /// [`DurabilityMode::Immediate`] — the safe default — and the
-    /// construction path emits a one-shot warning so operators are not
-    /// misled by benchmark numbers. Phase 2 revisits if redb grows the
-    /// capability; the enum variant is retained to avoid a semver break.
+    /// **Default since Phase-3 G13-E.** `DurabilityMode::default()` returns
+    /// [`DurabilityMode::Group`] for the CRUD fast-path; callers can opt
+    /// back into [`DurabilityMode::Immediate`] explicitly via the
+    /// `_with_durability` constructors (see
+    /// `crates/benten-graph/src/redb_backend.rs::RedbBackend::open_or_create_with_durability`).
+    ///
+    /// **redb v4 backend caveat:** the underlying redb API only exposes
+    /// `Durability::Immediate` and `Durability::None`; `Group` therefore
+    /// collapses to `Durability::Immediate` at the redb mapping today
+    /// (see `crates/benten-graph/src/redb_backend.rs::to_redb_durability`).
+    /// The construction path emits a one-shot warning so operators are
+    /// not misled by benchmark numbers. The default flip is still
+    /// load-bearing because: (a) the engine-level posture is the right
+    /// surface to declare for Compromise #12 closure; (b) non-redb
+    /// backends (in-RAM thin-client, future peer-sync) can implement
+    /// a true grouped fsync without changing call sites; (c) when
+    /// redb grows the capability, the default is already correct.
     Group,
     /// Commit returns before the durable fsync; durability is best-effort and
     /// a crash may lose the last few commits. Test-only / in-memory-mock
@@ -90,9 +120,15 @@ pub enum DurabilityMode {
 
 impl Default for DurabilityMode {
     fn default() -> Self {
-        // Safety posture — disk-backed stores fsync on commit unless the
-        // caller explicitly opts out.
-        DurabilityMode::Immediate
+        // Phase-3 G13-E posture: CRUD fast-path defaults to grouped fsync
+        // (closes `docs/SECURITY-POSTURE.md` Compromise #12). Backends that
+        // cannot honor Group natively (redb v4) collapse to Immediate at
+        // the mapping — see
+        // `crates/benten-graph/src/redb_backend.rs::to_redb_durability`.
+        // Capability-grant writes always use `Immediate` regardless of
+        // the engine-configured default; see
+        // `crates/benten-graph/tests/capability_grant_writes_immediate.rs`.
+        DurabilityMode::Group
     }
 }
 

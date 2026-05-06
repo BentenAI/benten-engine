@@ -159,9 +159,9 @@ The `benten-eval` `warn(missing_docs) + allow(missing_docs)` escape hatch did no
 
 ## 9. Performance
 
-### 9.1 macOS APFS fsync floor — **OPEN-WITH-PHASE-3-DESTINATION**
+### 9.1 macOS APFS fsync floor — **CLOSED-IN-PHASE-3-G13-E**
 
-`DurabilityMode::Group` exists in `benten-graph::backend::DurabilityMode` and is exercised in test-only diagnostic helpers, but the CRUD fast-path default has not been flipped to `Group`. The 150–300 µs target on dev hardware remains gated by the macOS APFS fsync floor; carries to Phase 3 alongside benchmark CI tightening.
+`DurabilityMode::default()` flipped from `Immediate` to `Group` at Phase-3 R5 wave-3 G13-E (engine surface posture; redb v4 backend still collapses Group → `Durability::Immediate` until upstream redb grows native batched-commit support). Benchmark CI workflow `.github/workflows/bench.yml` promoted from informational to required at the same wave + grew the APFS-relevant CRUD fast-path timing benchmarks. Closes [`SECURITY-POSTURE.md`](../SECURITY-POSTURE.md) Compromise #12. Pinned by [`crates/benten-graph/tests/durability_default.rs::durability_mode_group_default_for_crud_fast_path`] (default-flip), [`crates/benten-graph/tests/security_posture_compromise_12_marked_closed`] (CLOSED marker), and [`crates/benten-graph/tests/crud_fast_path_apfs_timing_within_target`] (informational wall-clock gate; the criterion bench is the authoritative perf signal).
 
 ### 9.2 Subgraph AST cache — **PARTIAL-WITH-PHASE-3-CARRY**
 
