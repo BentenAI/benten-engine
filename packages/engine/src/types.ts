@@ -287,7 +287,7 @@ export interface Edge {
 /**
  * One capability claim inside a [`DeviceAttestation`]. Mirrors the Rust
  * producer's per-claim shape at
- * `bindings/napi/tests/device_attestation_napi.rs` test rationale.
+ * `bindings/napi/tests/device_attestation.rs` test rationale.
  *
  * Phase-3 device-mesh exploration (CLAUDE.md baked-in #17): a browser
  * tab declares which capabilities its device-DID may exercise against
@@ -304,7 +304,7 @@ export interface CapabilityClaim {
 /**
  * Phase-3 device-attestation envelope declared via
  * `engine.atrium.declareDeviceAttestation(envelope)`. Mirrors the napi
- * binding's typed-struct contract (R3-C device_attestation_napi.rs +
+ * binding's typed-struct contract (R3-C device_attestation.rs +
  * D-PHASE-3-25 + r1-napi-2).
  *
  * Pin source (instance 26 candidate pre-emption): R4-R1 producer-consumer

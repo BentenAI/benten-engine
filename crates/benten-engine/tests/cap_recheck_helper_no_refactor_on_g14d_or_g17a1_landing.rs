@@ -225,3 +225,106 @@ fn allow_all_and_deny_all_remain_pub_at_module_root() {
     let _allow: CapRecheckFn = allow_all();
     let _deny: CapRecheckFn = deny_all();
 }
+
+/// R3-B RED-PHASE pin per stream-r4r1-7 R4-R2 (25th-p/c-drift candidate
+/// by closure-translation shape).
+///
+/// At G14-D wave-5a, the eval-side `subscribe::execute` runtime stores
+/// a `DeliveryCapRecheck` closure of shape
+/// `Arc<dyn Fn(&ChangeEvent) -> bool + Send + Sync + 'static>`
+/// (per `crates/benten-eval/src/primitives/subscribe.rs::DeliveryCapRecheck`).
+/// The engine-side helper exposes `CapRecheckFn` of shape
+/// `Arc<dyn Fn(&PrincipalId, &str, &Cid) -> bool + Send + Sync + 'static>`
+/// (per `crates/benten-engine/src/cap_recheck.rs::CapRecheckFn`). These are
+/// TWO DISTINCT closure shapes — engine-side helper takes a structured
+/// `(principal, zone, cid)` tuple; eval-side runtime takes the full
+/// `ChangeEvent`. G14-D implementer MUST construct a
+/// `DeliveryCapRecheck` from a `CapRecheckFn` at the eval-side seam by
+/// unwrapping `ChangeEvent → (principal, zone, cid)` (translation-layer
+/// closure-shape — pim-11 §3.6d translation-layer cite-discipline +
+/// pim-2 §3.6b end-to-end pin discipline).
+///
+/// This RED-PHASE pin asserts the translation produces semantically-
+/// equivalent cap-pass decisions when the same `(principal, zone, cid)`
+/// tuple is fed to `CapRecheckFn` directly vs derived from a synthesized
+/// `ChangeEvent`. The pin would FAIL if the translation layer silently
+/// dropped a tuple component or mis-mapped a field — catching the 25th-
+/// p/c-drift shape at the structural layer before runtime.
+///
+/// OBSERVABLE consequence: `CapRecheckFn` decision == `DeliveryCapRecheck`
+/// decision when both consult the same `(principal, zone, cid)`.
+/// Producer (engine-side helper) + consumer (eval-side runtime) name-
+/// alignment verified at runtime test time.
+#[test]
+#[ignore = "RED-PHASE: G14-D wave-5a — translation-layer closure-shape pin per stream-r4r1-7 (DeliveryCapRecheck ↔ CapRecheckFn name-alignment + decision parity)"]
+fn cap_recheck_helper_consumed_with_change_event_to_principal_zone_cid_translation_shape_documented()
+ {
+    // G14-D implementer wires this:
+    //
+    //   use benten_eval::primitives::subscribe::DeliveryCapRecheck;
+    //   use benten_engine::cap_recheck::CapRecheckFn;
+    //
+    //   // Engine-side authoritative cap helper (G13-pre-C):
+    //   let revoked_zone = "user:revoked-posts".to_string();
+    //   let cap_recheck: CapRecheckFn = {
+    //       let revoked = revoked_zone.clone();
+    //       Arc::new(move |_p: &PrincipalId, zone: &str, _cid: &Cid| {
+    //           zone != revoked
+    //       })
+    //   };
+    //
+    //   // Translation seam: G14-D constructs DeliveryCapRecheck from
+    //   // CapRecheckFn by unwrapping ChangeEvent → (principal, zone, cid).
+    //   let delivery: DeliveryCapRecheck = {
+    //       let cap_recheck = Arc::clone(&cap_recheck);
+    //       Arc::new(move |evt: &ChangeEvent| {
+    //           cap_recheck(
+    //               evt.principal(),
+    //               evt.zone(),
+    //               evt.node_cid(),
+    //           )
+    //       })
+    //   };
+    //
+    //   // Decision parity: same (principal, zone, cid) → same decision
+    //   // through both shapes. The translation layer MUST be transparent.
+    //   let p = sample_principal();
+    //   let cid = sample_cid();
+    //   let evt_allowed = ChangeEvent::synthesize_for_test(
+    //       p.clone(), "user:posts".to_string(), cid,
+    //   );
+    //   let evt_revoked = ChangeEvent::synthesize_for_test(
+    //       p.clone(), revoked_zone.clone(), cid,
+    //   );
+    //
+    //   assert_eq!(
+    //       cap_recheck(&p, "user:posts", &cid),
+    //       delivery(&evt_allowed),
+    //       "translation-layer transparency for allowed zone — \
+    //        engine-side helper decision MUST match eval-side runtime \
+    //        decision when fed semantically-equivalent inputs",
+    //   );
+    //   assert_eq!(
+    //       cap_recheck(&p, &revoked_zone, &cid),
+    //       delivery(&evt_revoked),
+    //       "translation-layer transparency for revoked zone — \
+    //        ChangeEvent unwrap MUST preserve cap-pass decision",
+    //   );
+    //   assert!(cap_recheck(&p, "user:posts", &cid));
+    //   assert!(!cap_recheck(&p, &revoked_zone, &cid));
+    //
+    // OBSERVABLE consequence: the eval-side `DeliveryCapRecheck` is a
+    // structurally-equivalent wrapper around the engine-side
+    // `CapRecheckFn`; producer (engine `cap_recheck::CapRecheckFn`) +
+    // consumer (eval `subscribe::DeliveryCapRecheck`) names align in
+    // the translation layer; the 25th-p/c-drift candidate shape
+    // (closure-translation mismatch) is structurally defended.
+    //
+    // Defends per pim-11 §3.6d (translation-layer cite-discipline) +
+    // pim-2 §3.6b (end-to-end pin discipline). Plan G14-D row at line
+    // 429 will carry the translation-shape note alongside this pin's
+    // un-ignore.
+    unimplemented!(
+        "G14-D wires DeliveryCapRecheck ↔ CapRecheckFn translation seam at subscribe.rs eval-side seam"
+    );
+}

@@ -19,6 +19,17 @@
 //!   browser-side IndexedDB cache assertion. Both pins share the file
 //!   with disjoint test-fn ownership.
 //!
+//! ## Sibling-crate companion file (per R3-CPC-3 R4-R2 close)
+//!
+//! R3-D's IndexedDB cache-side pin lives in a separate workspace
+//! crate: `tests/integration_browser_thin_client/atrium_browser_thin_client_g18_a_indexeddb.rs`.
+//! That crate exists because R3-D's pin runs against a wasm32 target
+//! configuration distinct from this `tests/integration/` package's
+//! native-only target. R5 implementer of exit-criterion 19 should read
+//! BOTH files to see the full producer (full-peer-side filtering, here)
+//! + consumer (browser-side IndexedDB cache, sibling crate) shape
+//! without grepping across packages.
+//!
 //! ## Architectural intent (CLAUDE.md baked-in #17)
 //!
 //! Browser tabs are NOT full atrium peers (they are wasm32, no

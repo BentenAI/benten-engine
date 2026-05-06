@@ -26,10 +26,18 @@
 //     (d) Engine.shutdown() called while handle still open — MUST fire
 //         on shutdown drain
 //
-// Per stream-r1-10: tests are Node-only initially (FinalizationRegistry
+// Per stream-r1-10 + stream-r4r1-8: tests are Node-only (FinalizationRegistry
 // GC scheduling differs across Chromium V8 / Gecko SpiderMonkey / WebKit
 // JavaScriptCore); promotion to cross-browser via deterministic
 // GC-pressure helper landing in a Phase-3 narrow-iter cycle.
+//
+// `it.skipIf` guard below enforces the Node-only restriction at the
+// vitest level rather than relying on rationale-comment convention —
+// G18-A's Playwright matrix (br-r1-10 cross-browser-determinism.yml
+// per-PR cadence) MUST NOT consume cross-browser flake budget on these
+// tests when run under non-Node runtimes (Gecko / WebKit). The
+// `IS_NODE_RUNTIME` predicate inspects `process.versions.node` which is
+// truthy under Node + falsy under browser-like runtimes.
 //
 // RED-PHASE discipline:
 //
@@ -37,7 +45,14 @@
 
 import { describe, it, expect } from "vitest";
 
-describe("G19-C2 openStream FinalizationRegistry leak detector (§7.1.2 + stream-r1-4)", () => {
+const IS_NODE_RUNTIME =
+  typeof process !== "undefined" &&
+  typeof process.versions !== "undefined" &&
+  typeof process.versions.node === "string";
+
+describe.skipIf(!IS_NODE_RUNTIME)(
+  "G19-C2 openStream FinalizationRegistry leak detector (§7.1.2 + stream-r1-4)",
+  () => {
   it.skip("RED-PHASE: G19-C2 wave-7 — leak fires E_STREAM_HANDLE_LEAKED via FinalizationRegistry callback (scenario a)", async () => {
     // stream-r1-4 scenario (a): handler returns + handle GC'd without
     // close()/cancel(). G19-C2 implementer wires this:
@@ -196,4 +211,5 @@ describe("G19-C2 openStream FinalizationRegistry leak detector (§7.1.2 + stream
       "RED-PHASE: G19-C2 wave-7 wires requiresExplicitClose accessor + drops .skip + un-comments assertions",
     );
   });
-});
+  },
+);

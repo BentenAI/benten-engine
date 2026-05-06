@@ -170,3 +170,49 @@ fn subgraph_ast_cache_preserves_stream_execute_loud_fail_for_engine_call_path() 
     // stream-r1-3.
     unimplemented!("G19-E preserves STREAM execute() loud-fail under AST-cache wrap");
 }
+
+#[test]
+#[ignore = "RED-PHASE: G19-E wave-7b — AST cache preserves SUBSCRIBE execute() loud-fail (stream-r4r1-9 symmetric to stream-r1-3)"]
+fn subgraph_ast_cache_preserves_subscribe_execute_loud_fail_for_engine_call_path() {
+    // stream-r4r1-9 LOAD-BEARING pin (symmetric to stream-r1-3).
+    // G19-E implementer must NOT resurrect the deceptive-sentinel
+    // pattern for SUBSCRIBE-bearing handlers either — the AST-cache
+    // wrapper at Engine::call dispatch must preserve the loud-fail
+    // behavior (E_PRIMITIVE_NOT_IMPLEMENTED) for SUBSCRIBE-bearing
+    // subgraphs reached via Engine::call (NOT engine.subscribe, the
+    // production-runtime SUBSCRIBE entry point).
+    //
+    // Background: SUBSCRIBE eval-side `execute` (subscribe.rs) is the
+    // Engine::call dispatch arm — it should loud-fail by design when
+    // someone tries to invoke a SUBSCRIBE-bearing subgraph via
+    // Engine::call (the correct entry point is `engine.subscribe`).
+    // Per the symmetric reasoning of stream-r1-3 (which the STREAM
+    // pin defends against above), SUBSCRIBE has the SAME resurrection-
+    // of-deceptive-sentinel risk at the SAME surface. G19-E AST-cache
+    // wrapper at Engine::call could inadvertently cache a parsed AST
+    // that bypasses the loud-fail-when-Engine::call-on-SUBSCRIBE-
+    // bearing-subgraph discipline.
+    //
+    //   let engine = benten_engine::Engine::open_in_memory().unwrap();
+    //   let sg_with_subscribe = engine.register_subgraph_with_subscribe_handler().unwrap();
+    //
+    //   // Engine::call (NOT engine.subscribe) on a SUBSCRIBE-bearing
+    //   // handler must STILL loud-fail post-G19-E:
+    //   let result = engine.call(sg_with_subscribe, "main", json!({}));
+    //   assert!(result.is_err(),
+    //       "Engine::call on SUBSCRIBE-bearing subgraph must loud-fail \
+    //        post-G19-E AST-cache wrap (the stream-r4r1-9 invariant \
+    //        symmetric to stream-r1-3)");
+    //   assert_eq!(result.err().unwrap().error_code(),
+    //       benten_errors::ErrorCode::PrimitiveNotImplemented,
+    //       "loud-fail must produce E_PRIMITIVE_NOT_IMPLEMENTED");
+    //
+    // OBSERVABLE consequence: the symmetric loud-fail discipline
+    // survives the AST-cache wave. Defends against the resurrection-
+    // of-deceptive-sentinel failure mode at the SUBSCRIBE eval-side
+    // `execute` arm. Lower-priority than STREAM (production-runtime
+    // SUBSCRIBE path is `engine.subscribe`, not `call_subscribe`),
+    // but the symmetric pin defends against future regression at the
+    // same surface as stream-r1-3.
+    unimplemented!("G19-E preserves SUBSCRIBE execute() loud-fail under AST-cache wrap");
+}

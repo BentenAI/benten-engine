@@ -16,7 +16,7 @@ members = [
     "tests/doc_completeness", # Phase-2a R3 qa-expert — docs-vs-code audit tests (local only until R5 G11-A)
     "tests/phase_3_workspace", # Phase-3 R3-A — workspace-level architectural pins + compromise-closure pins (architecture_md_state.rs + security_posture_compromises.rs; shared file ownership across R3-A/B/C/D/E per r2-test-landscape §13)
     "tests/integration_browser_thin_client", # Phase-3 R3-D — G18-A IndexedDB cache-side companion to R3-B's atrium_browser_thin_client.rs end-to-end pin (per r2-test-landscape §13 ambiguous-ownership pre-emption)
-    "tests/integration",      # Phase-3 R3-B — workspace-level integration test package (atrium_browser_thin_client.rs; future atrium_two_peer.rs / atrium_three_peer.rs / atrium_two_process.rs / atrium_two_device.rs land via R3-C / R3-D per r2-test-landscape §13)
+    "tests/integration",      # Phase-3 R3-B + R3-C — workspace-level integration test package (atrium_browser_thin_client.rs from R3-B; atrium_two_peer.rs / atrium_three_peer.rs / atrium_two_process.rs / atrium_two_device.rs from R3-C, relocated at R4-FP/R3-C from tests/phase_3_workspace/ per R3-CPC-1 closure at PR #92)
     "tools/benten-dev",       # Phase-2a G11-A dev-server stub (hot-reload, inspect-state) — local only until R5 G11-A
     "tools/cite-drift-detector", # Phase-3 G13-pre-A: cite-drift detector (file:line + path::symbol + numeric-claim drift lint, closes phase-2-backlog §8.2). Workflow: .github/workflows/cite-drift.yml (non-blocking PR comment per D-PHASE-3-10).
 ]
