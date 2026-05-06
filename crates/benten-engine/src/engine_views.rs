@@ -52,7 +52,7 @@ use crate::outcome::{Outcome, ReadViewOptions, UserViewInputPattern, UserViewSpe
 /// the pre-G15-B silent label-equality coercion.
 ///
 /// `anchor_prefix = "crud:"` matches `"crud:post"`, `"crud:user"`, and
-/// `"crud:comment"`, but NOT `"system:Zone"` or `"governance:rule"`.
+/// `"crud:comment"`, but NOT `"ephemeral"` or `"governance:rule"`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrefixMatcher {
     /// The prefix that incoming labels must start with for a match.
