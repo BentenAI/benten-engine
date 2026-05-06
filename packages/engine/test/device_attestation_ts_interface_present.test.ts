@@ -21,7 +21,7 @@
 //   rather than implicit `any`/`unknown`.
 //
 // Pairs with:
-//   - bindings/napi/tests/device_attestation_napi.rs (R3-C napi
+//   - bindings/napi/tests/device_attestation.rs (R3-C napi
 //     producer pin for round-trip)
 //   - packages/engine/test/atrium.test.ts:71 (R3-C TS-DSL round-trip
 //     pin via inline-literal envelope; this file pins the *schema-level*

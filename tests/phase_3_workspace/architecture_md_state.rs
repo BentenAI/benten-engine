@@ -18,6 +18,33 @@
 //! separately-named `#[test] fn` so PR conflicts only fire on shared
 //! prelude / helper edits.
 //!
+//! ## Sibling-file companion: `architecture_md_g20b_final.rs` (per R3-CPC-5 R4-R2 close)
+//!
+//! R3-E's FINAL 10-crate transition pin lives in a separate sibling
+//! file `tests/phase_3_workspace/architecture_md_g20b_final.rs` (single
+//! `#[test] fn architecture_md_lists_10_crates_with_benten_id_and_benten_sync`).
+//! R5 implementer of G20-B wave-8b reads BOTH files: this file holds
+//! the in-flight-callout pins that become OBSOLETE at G20-B; the
+//! sibling file holds the FINAL state pin that lands when G20-B closes.
+//!
+//! ## Obsolescence at G20-B wave-8b (per R3-CPC-5 R4-R2 close)
+//!
+//! Both `#[test] fn` declarations below are IN-FLIGHT-CALLOUT pins that
+//! become DELETION/RETENSE candidates when the FINAL 10-crate transition
+//! pin in the sibling file replaces them. Specifically:
+//!
+//! - `architecture_md_in_flight_callouts_present_for_benten_id_and_benten_sync_native_only`
+//!   (R3-A G14-A1 9-crate intermediate state)
+//! - `architecture_md_in_flight_callout_present_for_benten_sync_native_only_at_g16_a`
+//!   (R3-C G16-A 10-crate intermediate state with native-only callout)
+//!
+//! At G20-B wave-8b, the FINAL 10-crate transition narrative replaces
+//! both intermediate-state HTML comments. The G20-B docs sweep should
+//! either DELETE these two test fns OR retense them to assert the
+//! transitional narrative was REPLACED (not merely extended). Pair with
+//! `architecture_md_g20b_final.rs::architecture_md_lists_10_crates_with_benten_id_and_benten_sync`
+//! as the surviving pin.
+//!
 //! ## Pin sources
 //!
 //! - r2-test-landscape §2.2 G14-A1 row + §2.4 G16-A row (intermediate

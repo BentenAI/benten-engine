@@ -210,6 +210,7 @@ Source: `.addl/phase-2a/ci-maturity-audit-2026-04-22.md` + the decisions compani
 | Ratchet `PROPTEST_CASES` 1024 → 4096 nightly | Free on public runners, costs ~0 to flip |
 | Ratchet `bench.yml --measurement-time` 2s → 5s | Better measurement noise floor |
 | Run `mutants.yml` twice weekly instead of weekly | Free on public runners |
+| `benten-eval` `expr/builtins.rs` random/timestamp surface determinism on browser-target | OOS-deferred from Phase-3 R1 br-r1-12 (browser-runtime lens; OOS-NAMED-DESTINATION per `r1-revision-triage.md`); flag to R6 phase-close determinism-verifier deep-sweep if any expr-builtin surface reachable on browser depends on a non-deterministic source. Closes phantom-destination per HARD RULE rule-12 clause-b (R4 R2 pattern-induction br-r4-r1-9). |
 
 ---
 
