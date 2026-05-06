@@ -1287,39 +1287,40 @@ umbrella trait (PHASE-3-BUNDLE-1).
 
 ---
 
-### Compromise #19 — Browser-target persistent storage absent — Phase-2b additive
+### Compromise #19 — Browser-target persistent storage — CLOSED at Phase-3 G18-A wave-5a
 
-**Status:** Open in Phase 2b. **Closure target:** Phase 3 (IndexedDB / OPFS persistence layer).
+**Status:** CLOSED at Phase-3 G18-A wave-5a (this commit). **Closed via:** IndexedDB-backed durable backing per CLAUDE.md baked-in #17 thin-client commitment + D-PHASE-3-27 schema-versioning + br-r1-2 BLOCKER closure.
 
-**What ships at Phase 2b.** On `wasm32-unknown-unknown` (browser) targets, the engine compiles with an in-memory-only manifest store. Module manifests installed via `Engine::install_module(...)` persist for the lifetime of the engine instance and are lost on page reload. Native (`x86_64`, `aarch64`, `wasm32-wasip1`) targets are unaffected — the redb-backed `Engine::open(path)` constructor persists manifests durably to disk.
+**What shipped at G18-A.** Two new modules close the persistence gap on `wasm32-unknown-unknown`:
 
-**Where this surfaces.**
-- Manifests with non-empty `migrations` on `wasm32-unknown-unknown` fire `E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE` at `install_module` time (because migrations need a durable backing store to land in). Manifests without `migrations` install but vanish on reload.
-- See `docs/MODULE-MANIFEST.md` §3.2 + `docs/ERROR-CATALOG.md` `E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE` row for the operator-actionable text.
+- `bindings/napi/src/browser_indexeddb.rs` — IndexedDB-backed schema-versioning layer. Declares schema-version constant `INDEXEDDB_SCHEMA_VERSION = 1`, the `module_manifest_store` + `blob_cache` object stores, the `on_upgrade_needed` migration handler (walks the v→v+1 chain), the `on_version_change` handler (closes the local IDB connection so a higher-version tab can proceed), and the `map_dom_exception_to_error_code` helper that maps `DOMException(name="QuotaExceededError")` to the typed [`ErrorCode::StorageQuotaExceeded`] variant (`E_STORAGE_QUOTA_EXCEEDED` per `docs/ERROR-CATALOG.md`).
+- `bindings/napi/src/browser_blob_store.rs` — IndexedDB-backed `BlobBackend` variant per the `BlobBackend` trait surface locked at G13-pre-B (`crates/benten-graph/src/backends/blob_backend_trait.rs`). Mirrors the redb-native `RedbBlobBackend`'s defense-in-depth CID validation per D-PHASE-3-12.
+- `bindings/napi/src/wasm_browser.rs::BrowserManifestStore::is_persistent` flips `false → true` per br-r1-8 MINOR — honest reflection of the IndexedDB durable backing.
 
-**Phase 3 promotion path.** Wire IndexedDB (or the newer OPFS / File System Access API where browser support is sufficient) as the durable backing store for browser-target manifest persistence. Same shape the native redb backend exposes (`KVBackend` trait), behind a target-conditional impl. Cross-browser determinism (Compromise #20) needs to be settled in parallel since the canonical-bytes round-trip + CID-pin must be byte-identical across Chromium / Gecko / WebKit.
+**Per CLAUDE.md baked-in #17 thin-client commitment.** The IndexedDB schema declares ONLY thin-client surfaces (`module_manifest_store` + `blob_cache`) — full-sync state (`loro_doc`, `iroh_peers`, `sync_cursor`, `atrium_full_state`) is explicitly absent and forbidden by the architectural pin at `bindings/napi/tests/indexeddb_schema.rs::indexeddb_persistence_thin_client_cache_only_per_baked_in_17`. Browser tabs participate in sync as authenticated thin-client views into a user's full peer per D-PHASE-3-30 (G14-D thin-client subscription); they do NOT carry sync state of their own.
 
-**Posture claim.** This is a *durability* deferral, not a *security* deferral — a browser engine that loses its manifests on reload is still capability-bounded for the lifetime of the page session. The honest disclosure protects operators from assuming durability where none exists.
+**OPFS deferral per D-PHASE-3-27 / br-r1-11.** IndexedDB is primary at G18-A (broad browser support); OPFS / File System Access API is deferred to post-Phase-3. Future Phase-4+ may add an `OpfsBlobStore` sibling via the `BlobBackend` trait surface.
 
-**Renumbering note.** This was `Compromise #N+8` in `docs/MODULE-MANIFEST.md`'s local table prior to R6 phase-close; lifted to global #19 here so cross-doc references resolve to a single authoritative entry.
-
-**Cross-refs.** `docs/MODULE-MANIFEST.md` §3.2; `docs/ERROR-CATALOG.md::E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE`.
+**Cross-refs.** `docs/MODULE-MANIFEST.md` §3.2; `docs/ERROR-CATALOG.md::E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE` + `E_STORAGE_QUOTA_EXCEEDED`; D-PHASE-3-27; br-r1-2 BLOCKER closure narrative; br-r1-8 MINOR closure.
 
 ---
 
-### Compromise #20 — Cross-browser determinism CI cadence not yet established — Phase-2b additive
+### Compromise #20 — Cross-browser determinism CI cadence — CLOSED at Phase-3 G18-A wave-5a
 
-**Status:** Open in Phase 2b. **Closure target:** Phase 3 (cross-browser CI matrix once browser persistence lands).
+**Status:** CLOSED at Phase-3 G18-A wave-5a (this commit). **Closed via:** `.github/workflows/cross-browser-determinism.yml` Playwright matrix per D-PHASE-3-7 + br-r1-4 + br-r1-10.
 
-**What ships at Phase 2b.** The wasm32 build verifies compilation on every PR (existing `wasm-checks.yml` + `wasm-runtime.yml`). What is NOT yet established is a cross-browser determinism CI cadence — a matrix that runs the canonical-bytes round-trip + CID-pin tests under Chromium, Gecko, and WebKit (Playwright or similar) on a recurring schedule and asserts byte-identical CIDs across the three.
+**What shipped at G18-A.** A Playwright matrix workflow runs the wasm32-unknown-unknown bundle under Chromium, Gecko (Firefox), and WebKit (Safari engine) on per-PR cadence. The matrix asserts:
 
-**Why this matters.** Once Compromise #19 lands (browser-target persistence), a manifest installed in Chromium and re-loaded in Gecko MUST produce the same CID — otherwise the engine's content-addressed integrity guarantee silently breaks at the browser boundary. Phase 2b's wasm-checks already verify the canonical-bytes encoding is deterministic across native + wasm32-wasip1; the remaining gap is Browser × Engine matrix coverage on a CI cadence.
+1. **Canonical-bytes determinism per the 7 distinct engine-determinism failure-surfaces** (br-r4-r1-5): Node envelope, handler-version-chain, AttributionFrame-with-device-DID, canonical-fixture corpus CID, BLAKE3 byte identity (SIMD/non-SIMD path), Ed25519 signature byte identity, and floating-point canonicalization under DSL eval (NaN bit-pattern + denormal + round-to-even per IEEE 754 edge cases).
+2. **CID-pin equivalence across the three browsers** via an explicit reduce step (br-r1-4 WHAT FAILS framing) — a divergence indicates a CRDT/DAG-CBOR encoding non-determinism that would silently corrupt cross-browser sync.
+3. **IndexedDB schema-migration round-trip + 1000-key no-data-loss sweep** (D-PHASE-3-27 / br-r1-2 LOAD-BEARING per pim-2 §3.6b): exercise the `on_upgrade_needed` handler under real Chromium / Gecko / WebKit IndexedDB.
+4. **`QuotaExceededError → E_STORAGE_QUOTA_EXCEEDED` typed-error mapping** (D-PHASE-3-27 / br-r1-2): write oversized data + assert the error surfaces as `BentenError(code=E_STORAGE_QUOTA_EXCEEDED)`.
 
-**Phase 3 promotion path.** Add a `cross-browser-determinism.yml` workflow with a Playwright matrix (Chromium / Gecko / WebKit) running the canonical-bytes + CID-pin assertion suite weekly (or on push to a release branch). Until Compromise #19's persistence story lands, this CI surface is moot — there's no per-browser persistence layer to test against. The two compromises close together.
+**Cadence + flake-budget retry policy per br-r1-10.** Per-PR cadence (NOT release-era — Phase-2b's release-era posture is RETIRED at G18-A). Retry policy: 1 retry on browser-launch failure (`PLAYWRIGHT_BROWSER_LAUNCH_RETRIES=1`); budget = 3 launches per 24h via workflow-concurrency cap; promotion-to-required-per-PR after 30 days informational green via `branch-protection.yml` update.
 
-**Posture claim.** No security regression *today* (no browser persistence at Phase 2b means no per-browser determinism question). The compromise records the gap for the moment Compromise #19 closes.
+**Composition with #19.** Compromises #19 + #20 close together at G18-A — the Playwright matrix is the CI cell that proves the IndexedDB persistence is byte-deterministic across browsers, which is the load-bearing claim the persistence layer makes about content-addressed integrity. The matrix workflow's Rust-side anchors live at `bindings/napi/tests/cross_browser_determinism_workflow_pins.rs` (12 source-cite assertions covering per-browser cells + CID-equivalence reduce + flake-budget retry + the 7 br-r4-r1-5 engine-determinism surfaces).
 
-**Cross-refs.** Compromise #19 (the dependency); existing wasm-checks.yml / wasm-runtime.yml.
+**Cross-refs.** Compromise #19 (the durability-half companion); `.github/workflows/cross-browser-determinism.yml`; `bindings/napi/tests/cross_browser_determinism_workflow_pins.rs`; D-PHASE-3-7; br-r1-4 / br-r1-10 / br-r4-r1-5.
 
 ---
 

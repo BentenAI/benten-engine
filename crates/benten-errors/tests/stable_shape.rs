@@ -167,6 +167,10 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::CapBackendStorage,
     ErrorCode::CapRateLimitExceeded,
     ErrorCode::CapPeerBandwidthExceeded,
+    // Phase-3 G18-A wave-5a (D-PHASE-3-27 / br-r1-2 BLOCKER): IndexedDB
+    // QuotaExceededError mapping at the browser thin-client cache write
+    // boundary. Construction site: `bindings/napi/src/browser_indexeddb.rs`.
+    ErrorCode::StorageQuotaExceeded,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -274,8 +278,14 @@ fn variant_count_is_pinned() {
     // `UCANBackend::validate_chain_for_audience_at`). Distinct from
     // `CapDenied` so audit pipelines can route on cross-atrium replay
     // independently of generic denial. Post-mini-review: 89 + 1 = 90.
+    //
+    // Phase-3 G18-A wave-5a adds 1 code: `StorageQuotaExceeded` —
+    // typed mapping for IndexedDB `DOMException(name="QuotaExceededError")`
+    // at the browser thin-client cache write boundary. Construction
+    // site at `bindings/napi/src/browser_indexeddb.rs::map_dom_exception_to_error_code`;
+    // closes D-PHASE-3-27 / br-r1-2 BLOCKER. Post-G18-A: 90 + 1 = 91.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 90,
+        CATALOG_VARIANT_COUNT, 91,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

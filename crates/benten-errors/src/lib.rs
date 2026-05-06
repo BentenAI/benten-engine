@@ -478,6 +478,16 @@ pub enum ErrorCode {
     /// D-PHASE-3-26 / D-PHASE-3-30). Maps to
     /// `E_CAP_PEER_BANDWIDTH_EXCEEDED`.
     CapPeerBandwidthExceeded,
+    /// G18-A wave-5a: IndexedDB write failed with `QuotaExceededError`
+    /// because the origin-storage quota for this browser tab is
+    /// exhausted. Surfaces at the browser thin-client cache write
+    /// boundary (`bindings/napi/src/browser_indexeddb.rs`) per
+    /// D-PHASE-3-27 / br-r1-2 BLOCKER closure. Maps to
+    /// `E_STORAGE_QUOTA_EXCEEDED`. The browser-tab user (or operator)
+    /// resolves by clearing site data or freeing origin-storage
+    /// allocation; the engine surfaces a typed error rather than
+    /// silently dropping the write.
+    StorageQuotaExceeded,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -658,6 +668,7 @@ impl ErrorCode {
             ErrorCode::CapBackendStorage => "E_CAP_BACKEND_STORAGE",
             ErrorCode::CapRateLimitExceeded => "E_CAP_RATE_LIMIT_EXCEEDED",
             ErrorCode::CapPeerBandwidthExceeded => "E_CAP_PEER_BANDWIDTH_EXCEEDED",
+            ErrorCode::StorageQuotaExceeded => "E_STORAGE_QUOTA_EXCEEDED",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -878,7 +889,15 @@ impl ErrorCode {
             // along a runnable handler-subgraph primitive edge. Same
             // routing disposition as resume-protocol failures + builder
             // configuration errors.
-            | ErrorCode::HlcSkewExceeded => None,
+            | ErrorCode::HlcSkewExceeded
+            // Phase-3 G18-A: IndexedDB QuotaExceededError surfaces at
+            // the browser thin-client cache write boundary, not along
+            // a runnable handler-subgraph primitive edge. Same routing
+            // disposition as the rest of the storage / configuration
+            // family. The browser-tab user / operator resolves the
+            // condition out-of-band (clear site data); the engine has
+            // no in-graph recovery path.
+            | ErrorCode::StorageQuotaExceeded => None,
 
             // SUBSCRIBE registration / restart failures — surface at the
             // registration call site, not along a primitive edge. Mirrors
@@ -1021,6 +1040,9 @@ impl ErrorCode {
             "E_CAP_BACKEND_STORAGE" => ErrorCode::CapBackendStorage,
             "E_CAP_RATE_LIMIT_EXCEEDED" => ErrorCode::CapRateLimitExceeded,
             "E_CAP_PEER_BANDWIDTH_EXCEEDED" => ErrorCode::CapPeerBandwidthExceeded,
+            // Phase-3 G18-A wave-5a — IndexedDB QuotaExceededError →
+            // typed E_STORAGE_QUOTA_EXCEEDED per D-PHASE-3-27 / br-r1-2.
+            "E_STORAGE_QUOTA_EXCEEDED" => ErrorCode::StorageQuotaExceeded,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }

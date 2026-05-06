@@ -160,3 +160,27 @@ required-features = ["in-process-test"]
 [[test]]
 name = "wasm32_unknown_unknown_bundle_size_under_threshold"
 required-features = ["in-process-test"]
+
+# Phase-3 G18-A wave-5a — IndexedDB-backed persistent module-manifest
+# store + thin-client snapshot cache (CLAUDE.md baked-in #17 thin-client
+# cache scope ONLY). Closes Compromises #19 + #20 per D-PHASE-3-27 +
+# br-r1-2 BLOCKER + br-r1-8 MINOR + br-r1-4 + br-r1-10 + br-r4-r1-5.
+# Same `in-process-test` rlib gate as the wasm32-* sister tests above:
+# the test binaries link against `benten_napi`'s rlib + reach in to the
+# new module surfaces (`browser_indexeddb` + `browser_blob_store`) which
+# only resolve when napi extern symbols are excluded from the rlib.
+[[test]]
+name = "browser_manifest_store"
+required-features = ["in-process-test"]
+
+[[test]]
+name = "browser_blob_backend"
+required-features = ["in-process-test"]
+
+[[test]]
+name = "indexeddb_schema"
+required-features = ["in-process-test"]
+
+[[test]]
+name = "cross_browser_determinism_workflow_pins"
+required-features = ["in-process-test"]

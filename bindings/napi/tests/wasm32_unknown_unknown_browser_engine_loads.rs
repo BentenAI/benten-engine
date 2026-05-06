@@ -60,11 +60,17 @@ fn wasm32_unknown_unknown_browser_engine_loads() {
         "fresh store must list no installed CIDs"
     );
 
-    // Compromise #N+8 storage-contract: never persistent in Phase 2b
+    // G18-A wave-5a flip — Compromise #19 closure per
+    // D-PHASE-3-27 + br-r1-8 MINOR. The IndexedDB-backed durable
+    // backing landed at `crate::browser_indexeddb`; the flag honestly
+    // reports `true` reflecting durable backing. Per CLAUDE.md
+    // baked-in #17 the SCOPE is thin-client cache + manifest-store
+    // ONLY (not full sync state).
     assert!(
-        !store.is_persistent(),
-        "BrowserManifestStore::is_persistent must be false on every \
-         Phase-2b build (Compromise #N+8)"
+        store.is_persistent(),
+        "G18-A: BrowserManifestStore::is_persistent flips to true \
+         reflecting IndexedDB-backed durable backing per \
+         CLAUDE.md baked-in #17 thin-client cache scope + br-r1-8"
     );
 
     // Target-availability probe: cfg-honest answer.

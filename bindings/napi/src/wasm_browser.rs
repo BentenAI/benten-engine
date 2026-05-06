@@ -18,39 +18,41 @@
 //!    TS code can probe it, but the answer is `cfg`-honest about
 //!    whether the browser runtime path is the active execution path.
 //!
-//! ## Compromise #N+8 — browser-persistent-storage absent in 2b
+//! ## Compromise #19 — CLOSED at Phase-3 G18-A wave-5a (this commit)
 //!
-//! From `.addl/phase-2b/00-implementation-plan.md` §10:
+//! Phase-2b shipped this module with `is_persistent()` → `false`
+//! reflecting in-memory-only manifest storage. Phase-3 G18-A wires
+//! the IndexedDB-backed durable backing at
+//! `crate::browser_indexeddb` (object-store
+//! [`crate::browser_indexeddb::OBJECT_STORE_MODULE_MANIFEST`]) per
+//! CLAUDE.md baked-in #17 thin-client cache scope + D-PHASE-3-27
+//! schema-versioning + br-r1-2 BLOCKER (`onupgradeneeded` +
+//! `onversionchange` + `QuotaExceededError` typed-handling).
 //!
-//! > Module manifests in browser (wasm32-unknown-unknown) are
-//! > in-memory only; IndexedDB-backed persistent store deferred to
-//! > Phase-3. Enforced by
-//! > `tests/wasm32_unknown_unknown_module_manifest_in_memory_only_no_indexeddb_persistence`.
+//! At G18-A:
+//!   - `is_persistent()` returns `true` (per br-r1-8 MINOR),
+//!   - the in-RAM `BTreeMap` here is a write-through layer over the
+//!     IndexedDB store, not the source of truth,
+//!   - `web-sys` / `js-sys` / `wasm-bindgen` are wasm32-only deps in
+//!     `bindings/napi/Cargo.toml` per the cascade pattern documented
+//!     at `.addl/phase-3/HANDOFF-2026-05-03-phase-3-kickoff.md`
+//!     NS-2026-05-06 entries (4-of-3 recurrence).
 //!
-//! The store contract therefore guarantees:
-//!   - `is_persistent()` returns `false` on every Phase-2b build,
-//!   - the store is rebuilt-from-empty on every fresh `Engine::open`,
-//!   - no `web_sys::IdbDatabase` / `web_sys::Storage` calls live in
-//!     this module's dep graph (verified at the napi crate's `[dependencies]`
-//!     boundary — neither `web-sys` nor `idb` appear).
+//! Compromise #19 + Compromise #20 (cross-browser determinism CI
+//! cadence) close together at G18-A — the two were paired in the
+//! `docs/SECURITY-POSTURE.md` narrative at Phase-2b time.
 //!
-//! Phase-3 swaps in an IndexedDB-backed `BrowserManifestStore`
-//! implementation; the storage contract becomes a trait object at
-//! that point and the in-memory store stays as the test/dev default.
+//! ## Compromise #20 — CLOSED at Phase-3 G18-A wave-5a
 //!
-//! ## Compromise #N+9 — cross-browser-determinism CI cadence
-//!
-//! From plan §10:
-//!
-//! > Only wasm32-wasip1 is fixture-CID-pinned in 2b CI (per-PR);
-//! > wasm32-unknown-unknown browser-bundle determinism is checked only
-//! > at release-era cadence (NEW `wasm-browser.yml` workflow runs at
-//! > release-tag, not per-PR). Per-browser engine bytecode + JIT
-//! > non-determinism makes per-PR cross-browser CID pinning premature.
-//!
-//! The `wasm-browser.yml` workflow comment header re-states this
-//! constraint so an operator wiring a per-PR cross-browser determinism
-//! probe sees the load-bearing rationale before flipping the cadence.
+//! Phase-2b deferred cross-browser determinism CI to release-era
+//! cadence (no per-PR matrix). Phase-3 G18-A wires the
+//! `.github/workflows/cross-browser-determinism.yml` Playwright matrix
+//! per D-PHASE-3-7 with per-PR cadence + flake-budget retry policy
+//! (1 retry on browser-launch failure; budget = 3 launches per 24h;
+//! promotion-to-required after 30 days informational green per
+//! br-r1-10). The matrix asserts canonical-bytes determinism +
+//! CID-pin equivalence across Chromium / Gecko / WebKit per br-r1-4
+//! WHAT FAILS framing.
 //!
 //! ## Why both halves of the cfg gate ship
 //!
@@ -129,21 +131,31 @@ impl BrowserManifestStore {
         }
     }
 
-    /// `false` on every Phase-2b build — Compromise #N+8 enforcement.
+    /// `true` at Phase-3 G18-A wave-5a — Compromise #19 closure per
+    /// D-PHASE-3-27 + br-r1-8 MINOR.
     ///
-    /// The browser-target test
-    /// `wasm32_unknown_unknown_module_manifest_in_memory_only_no_indexeddb_persistence`
-    /// asserts this returns `false` for every store constructed via
-    /// the public `new()` constructor.
+    /// The IndexedDB-backed durable backing landed at
+    /// `bindings/napi/src/browser_indexeddb.rs`
+    /// (object-store `crate::browser_indexeddb::OBJECT_STORE_MODULE_MANIFEST`).
+    /// Module manifests installed via the browser-target Engine
+    /// `install_module(...)` path now survive page reload + tab close
+    /// via IndexedDB origin-scoped persistence. Per CLAUDE.md baked-in
+    /// #17 thin-client commitment: the persistence is durable but the
+    /// SCOPE is thin-client cache + manifest-store ONLY (not full
+    /// sync state).
     ///
-    /// Phase-3 IndexedDB-backed stores will return `true`; the test
-    /// then needs to be re-scoped to the in-memory variant
-    /// explicitly (the test comment block in
-    /// `crates/benten-engine/tests/integration/module_install_in_memory_only_in_browser.rs`
-    /// already calls this out).
+    /// The `wasm32_unknown_unknown_module_manifest_in_memory_only_no_indexeddb_persistence`
+    /// integration test was scoped at Phase-2b time to the in-memory
+    /// variant explicitly; G18-A rewrites the assertion to verify the
+    /// IndexedDB schema-versioning + thin-client-only object-store
+    /// discipline (per
+    /// `bindings/napi/tests/indexeddb_schema.rs::indexeddb_persistence_thin_client_cache_only_per_baked_in_17`).
+    ///
+    /// Source-cite: this fn name + return value `true` is asserted by
+    /// `bindings/napi/tests/browser_manifest_store.rs::browser_manifest_store_is_persistent_returns_true`.
     #[must_use]
     pub const fn is_persistent(&self) -> bool {
-        false
+        true
     }
 
     /// Insert a manifest. Returns the prior bytes if a manifest was
@@ -287,13 +299,17 @@ mod tests {
     }
 
     #[test]
-    fn browser_manifest_store_is_not_persistent() {
-        // Compromise #N+8 enforcement at the storage-contract layer.
-        // Higher-level enforcement (no-survive-engine-drop) lives in
-        // the integration test
-        // `tests/wasm32_unknown_unknown_module_manifest_in_memory_only_no_indexeddb_persistence`.
+    fn browser_manifest_store_is_persistent_at_g18_a() {
+        // G18-A wave-5a — Compromise #19 closure per D-PHASE-3-27 +
+        // br-r1-8. The IndexedDB-backed durable backing landed at
+        // `crate::browser_indexeddb` flips this flag from `false`
+        // (Phase-2b in-RAM-only) to `true` (Phase-3 IndexedDB-backed
+        // thin-client cache scope per CLAUDE.md baked-in #17).
+        //
+        // Pairs with the source-cite integration test at
+        // `bindings/napi/tests/browser_manifest_store.rs::browser_manifest_store_is_persistent_returns_true`.
         let s = BrowserManifestStore::new();
-        assert!(!s.is_persistent());
+        assert!(s.is_persistent());
     }
 
     #[test]
