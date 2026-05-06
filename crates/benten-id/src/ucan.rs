@@ -15,14 +15,14 @@
 //! `nbf` and `exp` enforcement happens at chain-walk site — EVERY
 //! link in the chain is checked, not just the leaf. A child token
 //! whose parent has expired rejects even if the child's own `exp` is
-//! in the future. Per `tests/ucan.rs`, this defends against the
+//! in the future. Per `crates/benten-id/tests/ucan.rs`, this defends against the
 //! "renew the leaf forever" delegation attack.
 //!
 //! ## Crypto-major-4 contract
 //!
 //! Signature comparisons go through `ct_signature_eq` (private) which
 //! calls `subtle::ConstantTimeEq`. Source-grep audit at
-//! `tests/ucan.rs::ucan_chain_walk_constant_time_comparison_audit`
+//! `crates/benten-id/tests/ucan.rs::ucan_chain_walk_constant_time_comparison_audit`
 //! pins that no naive `==` on signature/audience/proof-CID bytes
 //! exists in this file. (Look for the `// const-time-eq` markers in
 //! the source.)
@@ -37,7 +37,7 @@
 //!   `DelegationError::AudienceEnvelopeIncompatibleWithCapability`.
 //!
 //! These tests stay `#[ignore]`'d at G14-A1 with rationale strings
-//! pointing at the next wave. See `tests/ucan.rs` for the full pin
+//! pointing at the next wave. See `crates/benten-id/tests/ucan.rs` for the full pin
 //! catalogue.
 
 use ed25519_dalek::{Signature, Signer, Verifier};
@@ -112,7 +112,7 @@ impl Ucan {
     /// Validate this single token at `now` (epoch seconds).
     ///
     /// Composes with [`validate_chain_at`] but at the single-token
-    /// entry point — per `tests/ucan.rs::ucan_chain_nbf_enforcement` /
+    /// entry point — per `crates/benten-id/tests/ucan.rs::ucan_chain_nbf_enforcement` /
     /// `ucan_chain_exp_enforcement`, both entry points converge on
     /// the same `nbf` / `exp` rejection. Does NOT verify signature
     /// (signature verification is a chain-walk-level concern; for a
@@ -242,7 +242,7 @@ impl UcanBuilder {
 /// comparisons go through `subtle::ConstantTimeEq` to defend against
 /// timing-side-channel leak of "how many leading bytes match." The
 /// source-grep audit at
-/// `tests/ucan.rs::ucan_chain_walk_constant_time_comparison_audit`
+/// `crates/benten-id/tests/ucan.rs::ucan_chain_walk_constant_time_comparison_audit`
 /// pins this site as the only byte-equality entry point.
 // const-time-eq: load-bearing — DO NOT replace with naive `==` per crypto-major-4
 fn ct_signature_eq(a: &[u8], b: &[u8]) -> bool {
@@ -264,7 +264,7 @@ pub fn validate_chain_no_time_check(chain: &[Ucan]) -> Result<(), UcanError> {
     // checks to be skipped — pass `now = 0` to skip nbf only if all
     // tokens have nbf = 0. Better: split the check. We deliberately
     // accept the ambiguity at this entry point and direct callers to
-    // `validate_chain_at` for production. The `tests/ucan.rs::ucan_chain_validation_basic`
+    // `validate_chain_at` for production. The `crates/benten-id/tests/ucan.rs::ucan_chain_validation_basic`
     // pin uses well-formed nbf=now-1, exp=now+3600 tokens, so the
     // ambiguity does not surface; attenuation + signature + chain-link
     // structure are the load-bearing checks here.
@@ -283,7 +283,7 @@ pub fn validate_chain_at(chain: &[Ucan], now: u64) -> Result<(), UcanError> {
 
 /// Validate a UCAN delegation chain bound to a specific audience DID.
 ///
-/// Per `tests/ucan.rs::ucan_audience_binding_prevents_cross_atrium_replay`,
+/// Per `crates/benten-id/tests/ucan.rs::ucan_audience_binding_prevents_cross_atrium_replay`,
 /// a UCAN issued to atrium A replayed at atrium B rejects with
 /// [`UcanError::AudienceMismatch`]. Skips `nbf` / `exp` checks
 /// (compose with `validate_chain_at` if both gates are needed).

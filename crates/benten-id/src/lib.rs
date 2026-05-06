@@ -39,7 +39,7 @@
 //!   here that would only work native.
 //! - **arch-r1-10**: `benten-id` does NOT depend on `benten-graph`,
 //!   `benten-engine`, `benten-eval`, or `benten-caps`. The dependency
-//!   graph layer is enforced by `tests/dependency_edges.rs`.
+//!   graph layer is enforced by `crates/benten-id/tests/dependency_edges.rs`.
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![deny(missing_docs)]

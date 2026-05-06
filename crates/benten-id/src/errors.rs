@@ -26,7 +26,7 @@ pub enum KeypairError {
 ///
 /// Each variant pins a SEPARATE failure mode, per `crypto-major-5`'s
 /// "fuzz the import path end-to-end" requirement. The
-/// `tests/keypair_seed.rs` test pins assert that each variant fires
+/// `crates/benten-id/tests/keypair_seed.rs` test pins assert that each variant fires
 /// for its corresponding adversarial input.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum SeedImportError {

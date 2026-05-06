@@ -59,7 +59,7 @@ impl Did {
     /// Resolve a `did:key` string back to its underlying public key.
     ///
     /// Round-trip property (per
-    /// `tests/prop_did_key.rs::prop_did_key_round_trip_byte_identity`):
+    /// `crates/benten-id/tests/prop_did_key.rs::prop_did_key_round_trip_byte_identity`):
     /// for any 32-byte sequence, encoding then resolving recovers the
     /// exact bytes — NO bit can be silently dropped or rewritten by
     /// the encode → decode path.

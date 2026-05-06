@@ -82,7 +82,7 @@ impl SecretKey {
     }
 
     /// Test-only accessor for memory-inspection in
-    /// `tests/keypair.rs::keypair_secret_bytes_zeroized_on_drop`.
+    /// `crates/benten-id/tests/keypair.rs::keypair_secret_bytes_zeroized_on_drop`.
     /// Pointer into the SecretKey's storage so a post-drop
     /// `read_volatile` can assert zeroize ran.
     #[doc(hidden)]
@@ -91,7 +91,7 @@ impl SecretKey {
     }
 
     /// Test-only accessor for hex-comparison in
-    /// `tests/keypair.rs::keypair_secret_redacted_from_debug_display`.
+    /// `crates/benten-id/tests/keypair.rs::keypair_secret_redacted_from_debug_display`.
     /// (Caller is responsible for not leaking the returned slice; this
     /// is gated by the `pub(crate)` visibility on the underlying
     /// bytes accessor at the impl level; the function is exposed
@@ -179,7 +179,7 @@ impl Keypair {
     /// identical keypairs on every cold start, an authentication
     /// catastrophe).
     pub fn generate() -> Self {
-        // Source-cite anchor for `tests/keypair.rs::keypair_generate_uses_os_csprng`
+        // Source-cite anchor for `crates/benten-id/tests/keypair.rs::keypair_generate_uses_os_csprng`
         // (call-site grep test). The `OsRng` path here routes to
         // `getrandom` per the rand_core 0.6 implementation.
         let signing = SigningKey::generate(&mut OsRng);
@@ -213,7 +213,7 @@ impl Keypair {
     }
 
     /// Test-only accessor mirroring [`SecretKey::bytes_for_test`] for
-    /// `tests/keypair.rs::keypair_secret_redacted_from_debug_display`.
+    /// `crates/benten-id/tests/keypair.rs::keypair_secret_redacted_from_debug_display`.
     #[doc(hidden)]
     pub fn secret_bytes_for_test(&self) -> [u8; 32] {
         self.secret.bytes_for_test()
@@ -245,7 +245,7 @@ impl Keypair {
     /// Import a keypair from a DAG-CBOR envelope per `crypto-major-5`.
     ///
     /// Each failure mode returns a DISTINCT [`SeedImportError`]
-    /// variant; the test fleet at `tests/keypair_seed.rs` pins this
+    /// variant; the test fleet at `crates/benten-id/tests/keypair_seed.rs` pins this
     /// contract. The path emits NO `tracing` events containing
     /// secret bytes (the only `tracing` site in this crate is on
     /// the OK arm of [`Keypair::generate`] which logs only the
@@ -348,7 +348,7 @@ impl fmt::Debug for Keypair {
 /// stable across encoders. We rely on serde's `derive(Serialize)`
 /// emitting the fields in declaration order; the canonical-bytes
 /// round-trip test
-/// (`tests/keypair_seed.rs::keypair_from_dag_cbor_envelope_round_trip`)
+/// (`crates/benten-id/tests/keypair_seed.rs::keypair_from_dag_cbor_envelope_round_trip`)
 /// pins this.
 #[derive(Serialize, Deserialize)]
 struct SeedEnvelope {
