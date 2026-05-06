@@ -1,0 +1,126 @@
+name: Multi-Arch Cargo Check (T4) + AArch64 SANDBOX Runtime Cell
+
+# Phase-3 G17-B (phase-3-backlog §6.7 + r4-r1-wsa-7 shape-hardening +
+# CLAUDE.md baked-in #16 SANDBOX surface).
+#
+# Two job tiers:
+#
+#   1. `cargo-check-multi-arch` — compile-only (T4) coverage across
+#      Linux x86_64 / Linux arm64 / macOS arm64 / macOS x86_64. Catches
+#      type-system drift + target-feature regressions early.
+#
+#   2. `aarch64-sandbox-runtime` — Apple Silicon SANDBOX runtime
+#      execution cell. Runs the three named SANDBOX integration test
+#      binaries on `macos-14` (Apple M1):
+#        - `sandbox_basic`
+#        - `sandbox_escape_attempts_denied`
+#        - `sandbox_severity_priority`
+#      Per phase-3-backlog §6.7 + r2-test-landscape §2.5 G17-B. Surfaces
+#      Apple Silicon-specific SANDBOX runtime issues (sigaltstack
+#      handler, 16-byte stack alignment + max_wasm_stack interaction
+#      with M-series memory model, epoch-deadline thread fairness on the
+#      heterogeneous E/P core scheduler) that compile-only T4 misses.
+#
+# Trigger discipline (per METH-13): pull_request branches: [main] +
+# push branches: [main] + workflow_dispatch.
+#
+# r4-r1-wsa-7 shape-hardening: the AArch64 cell MUST invoke
+# `cargo nextest run --target aarch64-apple-darwin --test <name>`
+# (flag-position `--test`, NOT a workspace-wide test invocation which would
+# expand cell scope). The Rust-side anchor test
+# `tests/sandbox_severity_priority_g17_b_anchor.rs::aarch64_sandbox_runtime_ci_cell_green`
+# greps this YAML for the invocation shape; a refactor that drifts the
+# shape fails the anchor test BEFORE reaching this CI cell.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: multi-arch-cargo-check-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  cargo-check-multi-arch:
+    name: cargo check (${{ matrix.leg }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04,     leg: linux-x86_64,  target: x86_64-unknown-linux-gnu  }
+          - { os: ubuntu-24.04-arm, leg: linux-arm64,   target: aarch64-unknown-linux-gnu }
+          - { os: macos-14,         leg: macos-arm64,   target: aarch64-apple-darwin      }
+          - { os: macos-15-intel,   leg: macos-x86_64,  target: x86_64-apple-darwin       }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Free disk space (Linux runners only)
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/free-disk-space
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          key: multi-arch-${{ matrix.leg }}
+
+      - name: cargo check --workspace
+        # `--features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing`
+        # mirrors the canonical feature-set used by the build+test
+        # workflow's `cargo nextest run` invocation. Without these
+        # features the integration tests under `crates/*/tests/` reference
+        # cfg-gated test helpers (e.g. `register_test_callee`) that are
+        # not compiled into the lib's "no testing feature" build, so
+        # `--all-targets` would otherwise fail E0425 on every leg.
+        run: cargo check --workspace --target ${{ matrix.target }} --all-targets --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing
+
+  aarch64-sandbox-runtime:
+    name: AArch64 SANDBOX runtime (macos-14 / Apple M1)
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
+        with:
+          toolchain: stable
+          targets: aarch64-apple-darwin
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          key: aarch64-sandbox-runtime
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@cf525cb33f51aca27cd6fa02034117ab963ff9f1 # v2
+        with:
+          tool: cargo-nextest
+
+      - name: cargo nextest run -p benten-eval (sandbox runtime cell, AArch64)
+        # r4-r1-wsa-7 shape pin: invocation MUST be
+        # `cargo nextest run --target aarch64-apple-darwin
+        #   --test sandbox_basic
+        #   --test sandbox_escape_attempts_denied
+        #   --test sandbox_severity_priority`.
+        # Drift from this shape (e.g. broadening to a workspace-wide
+        # cargo-test invocation) is caught by
+        # `tests/sandbox_severity_priority_g17_b_anchor.rs` BEFORE
+        # reaching this CI cell.
+        run: |
+          cargo nextest run -p benten-eval \
+            --features benten-eval/testing,benten-engine/test-helpers \
+            --target aarch64-apple-darwin \
+            --test sandbox_basic \
+            --test sandbox_escape_attempts_denied \
+            --test sandbox_severity_priority

@@ -877,6 +877,17 @@ impl PrimitiveHost for Engine {
         if let Some(Value::Int(limit)) = op.properties.get("output_limit") {
             config.output_bytes = u64::try_from(*limit).unwrap_or(config.output_bytes);
         }
+        // Phase-3 G17-A2 — per-manifest `random` host-fn budget override
+        // (additive optional `host_fns.random.budget_bytes_per_call` on
+        // `ModuleManifest`; per r1-wsa-8). Resolution flows through
+        // `Engine::random_budget_for_named_manifest` for Named manifests;
+        // Inline manifests cannot carry overrides (no parent manifest
+        // to attach to) and fall through to the codegen default
+        // (4096 bytes/call).
+        if let Some(Value::Text(name)) = op.properties.get("manifest") {
+            config.random_budget_bytes_per_call =
+                self.random_budget_for_named_manifest(name.as_str());
+        }
 
         // 5. Resolve grant caps. Phase-2b NoAuth posture: when no
         //    capability policy is wired, an empty grant cap-set means

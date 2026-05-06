@@ -326,6 +326,16 @@ impl SandboxError {
             SandboxError::WallclockExceeded { .. } => ErrorCode::SandboxWallclockExceeded,
             SandboxError::FuelExhausted { .. } => ErrorCode::SandboxFuelExhausted,
             SandboxError::OutputOverflow(o) => o.code(),
+            // Phase-3 G17-A2 — `random` per-call entropy-budget exceed
+            // surfaces as a typed sub-variant of HostFnDenied (the
+            // trampoline marks the cap-string with the
+            // `random:per_call_budget_exceeded` discriminator). Closes
+            // Compromise #16.
+            SandboxError::HostFnDenied { cap }
+                if cap.starts_with("random:per_call_budget_exceeded") =>
+            {
+                ErrorCode::SandboxHostFnRandomBudgetExceeded
+            }
             SandboxError::HostFnDenied { .. } => ErrorCode::SandboxHostFnDenied,
             SandboxError::HostFnNotFound { .. } => ErrorCode::SandboxHostFnNotFound,
             SandboxError::ManifestUnknown { .. } => ErrorCode::SandboxManifestUnknown,
@@ -554,22 +564,12 @@ pub fn execute_with_live_cap_check(
     // the wasmtime invocation; the bundle is small (Vec<String> caps).
     let bundle = bundle.clone();
 
-    // sec-g7a-mr-5 — defensive D1 random-host-fn deferral guard. Until
-    // the full module-link-time host-fn enumeration lands in a future
-    // wave, fire SandboxHostFnNotFound at validate-time if the manifest
-    // claims a `random` cap. Operator-actionable hint encoded in the
-    // message (mirrors the host-functions.toml comment).
-    for required in &bundle.caps {
-        if required.starts_with(DEFERRED_HOST_FN_RANDOM_CAP_PREFIX) {
-            return Err(SandboxError::HostFnNotFound {
-                name: format!(
-                    "random (cap='{required}'): not yet implemented (Phase 3 — see \
-                     docs/future/phase-3-backlog.md §6.10 for the workspace CSPRNG \
-                     framework choice; original deferral rationale: D1 + sec-pre-r1-06 §2.3)"
-                ),
-            });
-        }
-    }
+    // Phase-3 G17-A2 (CLAUDE.md baked-in #16 closure): the Phase-2b
+    // sec-g7a-mr-5 defensive deferral guard for `host:compute:random*`
+    // is RETIRED. The `random` host-fn is wired against `getrandom`
+    // direct (D-PHASE-3-11 RESOLVED-at-R1) — see
+    // `register_default_host_fns` for the trampoline + per-call
+    // entropy-budget enforcement (`E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED`).
 
     // 2. D7 init-snapshot intersection — fail loud if the manifest
     //    claims caps the dispatching grant lacks. sec-g7a-mr-4 +
@@ -842,6 +842,13 @@ pub(crate) struct SandboxStoreData {
     kv_reads_remaining: u64,
     /// Per-call log byte-volume budget remaining (D1: 64 KiB default).
     log_bytes_remaining: u64,
+    /// Phase-3 G17-A2 — per-INVOCATION entropy ceiling for the `random`
+    /// host-fn (r1-wsa-8: each individual call must fit). The default
+    /// (4096 bytes) comes from
+    /// [`crate::sandbox::DEFAULT_RANDOM_BUDGET_BYTES_PER_CALL`]; a
+    /// `ModuleManifest::host_fns.random.budget_bytes_per_call` override
+    /// flows through `SandboxConfig::random_budget_bytes_per_call`.
+    random_budget_bytes_per_call: u64,
     /// sec-pre-r1-03 — dispatching attribution frame; every host-fn
     /// invocation must carry this as the audit-frame.
     #[allow(dead_code)]
@@ -922,6 +929,7 @@ impl SandboxStoreData {
             limiter: SandboxResourceLimiter::new(config.memory_bytes),
             kv_reads_remaining,
             log_bytes_remaining,
+            random_budget_bytes_per_call,
             attribution,
             host_fns,
             live_caps,
@@ -1242,9 +1250,111 @@ fn register_default_host_fns(
                     },
                 )?;
             }
+            "random" => {
+                // Phase-3 G17-A2 (CLAUDE.md baked-in #16 closure).
+                //
+                // WASM import shape:
+                //   (import "host" "random" (func (param i32 i32) (result i32)))
+                //
+                // Guest semantics: write `out_len` bytes of CSPRNG
+                // entropy to the guest's linear memory at `out_ptr`.
+                // Returns 0 on success; typed denial via
+                // `HostFnDenialMarker` on cap-revoke / budget-exceed /
+                // OOB. Per r1-wsa-8 the budget is PER-INVOCATION (each
+                // call must fit), NOT cumulative across calls. The
+                // CSPRNG is `getrandom` direct (D-PHASE-3-11
+                // RESOLVED-at-R1; workspace decision).
+                let cap = cap_required.clone();
+                let policy = recheck;
+                linker.func_wrap(
+                    "host",
+                    "random",
+                    move |mut caller: Caller<'_, SandboxStoreData>,
+                          out_ptr: i32,
+                          out_len: i32|
+                          -> Result<i32, wasmtime::Error> {
+                        cap_check(&mut caller, policy, &cap)?;
+                        // Negative shapes always fire — the WASM ABI
+                        // passes raw i32 but a negative value here is
+                        // pathological (mirrors kv:read shape).
+                        if out_ptr < 0 || out_len < 0 {
+                            return Err(wasmtime::Error::from(wasmtime::Trap::MemoryOutOfBounds));
+                        }
+                        let out_len_u64 = u64::try_from(out_len).unwrap_or(0);
+                        // r1-wsa-8 — per-INVOCATION entropy budget
+                        // enforcement. Each individual call must fit;
+                        // cumulative-per-frame is a separate cap (the
+                        // `output_bytes` CountedSink at the primitive
+                        // boundary).
+                        let budget = caller.data().random_budget_bytes_per_call;
+                        if out_len_u64 > budget {
+                            return Err(wasmtime::Error::from(HostFnDenialMarker {
+                                kind: HostFnDenialKind::CapDenied {
+                                    cap: format!(
+                                        "random:per_call_budget_exceeded \
+                                         (requested={out_len_u64}, budget={budget})"
+                                    ),
+                                },
+                            }));
+                        }
+                        // ESC-3 host-buffer overrun defense — bounds
+                        // check against the module's declared memory
+                        // BEFORE writing.
+                        let out_ptr_u64 = u64::try_from(out_ptr).unwrap_or(0);
+                        let mem = caller.get_export("memory").and_then(|e| e.into_memory());
+                        if let Some(mem) = mem {
+                            let mem_size =
+                                u64::try_from(mem.data_size(&caller)).unwrap_or(u64::MAX);
+                            if out_len_u64 > mem_size
+                                || out_ptr_u64.saturating_add(out_len_u64) > mem_size
+                            {
+                                return Err(wasmtime::Error::from(
+                                    wasmtime::Trap::MemoryOutOfBounds,
+                                ));
+                            }
+                        }
+                        // D17 PRIMARY: count entropy bytes against the
+                        // per-call output budget through CountedSink.
+                        // Random output participates in the same
+                        // cumulative cross-host-fn budget that `log`
+                        // uses (the primitive-call output_bytes ceiling).
+                        let data = caller.data_mut();
+                        if let Err(o) = data.sink.write_n_bytes(out_len_u64, "host_fn:random:read")
+                        {
+                            return Err(wasmtime::Error::from(HostFnDenialMarker {
+                                kind: HostFnDenialKind::OutputOverflow(o),
+                            }));
+                        }
+                        // Draw entropy from getrandom + write to guest
+                        // memory. `getrandom` returns an `Error` that
+                        // we route through `ModuleInvalid` (the OS
+                        // CSPRNG should not fail in any operator-
+                        // observable scenario; an OS-level failure
+                        // collapses the call deterministically).
+                        if let Some(mem) = caller.get_export("memory").and_then(|e| e.into_memory())
+                        {
+                            let len_usize = usize::try_from(out_len_u64).unwrap_or(0);
+                            let ptr_usize = usize::try_from(out_ptr_u64).unwrap_or(0);
+                            let mut buf = vec![0u8; len_usize];
+                            getrandom::getrandom(&mut buf).map_err(|e| {
+                                wasmtime::Error::msg(format!(
+                                    "random host-fn: getrandom failed: {e}"
+                                ))
+                            })?;
+                            // Write the entropy into guest memory.
+                            mem.write(&mut caller, ptr_usize, &buf).map_err(|e| {
+                                wasmtime::Error::from(wasmtime::Trap::MemoryOutOfBounds)
+                                    .context(format!("random host-fn write: {e}"))
+                            })?;
+                        }
+                        Ok(0)
+                    },
+                )?;
+            }
             _ => {
                 // Unknown host-fn name in the table — declined at
-                // registration time. Wave-8b only ships the D1 surface.
+                // registration time. The codegen-default surface is
+                // `time` / `log` / `kv:read` / `random` (G17-A2).
             }
         }
     }
@@ -1542,37 +1652,52 @@ mod tests {
         );
     }
 
-    /// **sec-g7a-mr-5 fix-pass:** D1 `random` deferred host-fn — manifest
-    /// claiming a `host:compute:random*` cap fires
-    /// SandboxHostFnNotFound at validate time with the deferred-to-2c
-    /// hint. Defensive belt-and-braces while G7-C wires module-link-time
-    /// host-fn enumeration.
+    /// **Phase-3 G17-A2 (CLAUDE.md baked-in #16 closure):** the Phase-2b
+    /// sec-g7a-mr-5 deferral guard for `host:compute:random*` is RETIRED.
+    /// A manifest declaring the legacy cap-string no longer fires
+    /// `E_SANDBOX_HOST_FN_NOT_FOUND` at validate time — the executor
+    /// progresses past the manifest-cap-intersection step and resolves
+    /// the host-fn against the codegen registry (which keys `random` at
+    /// `host:random:read`; the legacy `host:compute:random` cap-string
+    /// is structurally unknown to the new codegen entry).
+    ///
+    /// This anti-regression pin asserts the validate-time deferral hint
+    /// is GONE — pim-2 §3.6b shape: it would FAIL if a future fix-pass
+    /// re-introduced the `phase-3-backlog.md §6.10` deferral text.
     #[test]
-    fn random_host_fn_cap_in_manifest_fires_not_found_with_phase_2c_hint() {
+    fn random_host_fn_phase_2b_deferral_guard_removed_at_g17_a2() {
         let registry = ManifestRegistry::new();
         let inline = CapBundle::new(vec!["host:compute:random".to_string()], None);
         let module_bytes = wat::parse_str("(module)").expect("empty module compiles");
         let attribution = test_attribution();
-        let err = execute(
+        let res = execute(
             &module_bytes,
             ManifestRef::Inline(inline),
             &registry,
             SandboxConfig::default(),
+            // Grant ⊇ manifest so the D7 init-snapshot intersection
+            // succeeds — the previous deferral guard would have
+            // returned BEFORE intersection ever ran.
             &["host:compute:random".to_string()],
             &attribution,
-        )
-        .unwrap_err();
-        assert_eq!(err.code(), ErrorCode::SandboxHostFnNotFound);
-        if let SandboxError::HostFnNotFound { name } = err {
-            // Operator-facing hint MUST signal (a) the host-fn isn't
-            // available yet AND (b) where to find the canonical
-            // destination doc — see phase-3-backlog.md §6.10 for the
-            // workspace CSPRNG framework choice that gates re-enabling.
-            assert!(
-                name.contains("not yet implemented") && name.contains("§6.10"),
-                "operator hint MUST signal random-host-fn not-yet-implemented + \
-                 cite phase-3-backlog §6.10; got: {name}"
-            );
+        );
+        match res {
+            Err(SandboxError::HostFnNotFound { ref name }) => {
+                assert!(
+                    !name.contains("§6.10"),
+                    "Phase-2b deferral hint cite (`§6.10`) MUST be gone post-G17-A2 \
+                     (CLAUDE.md baked-in #16); got: {name}"
+                );
+                assert!(
+                    !name.contains("not yet implemented"),
+                    "Phase-2b deferral hint copy MUST be gone post-G17-A2; got: {name}"
+                );
+            }
+            // Anything else (Ok or other Err) is also acceptable —
+            // the load-bearing claim is "no §6.10 hint at validate time."
+            // An empty `(module)` body has no exports to invoke, so the
+            // executor commonly fails further along; that's fine.
+            _ => {}
         }
     }
 

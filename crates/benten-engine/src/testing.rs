@@ -189,6 +189,7 @@ pub fn testing_make_minimal_manifest(name: &str) -> crate::module_manifest::Modu
             requires: vec![],
         }],
         migrations: vec![],
+        host_fns: None,
         signature: None,
     }
 }
@@ -214,6 +215,7 @@ pub fn testing_make_manifest_with_caps(
             requires: caps.iter().map(|s| (*s).to_string()).collect(),
         }],
         migrations: vec![],
+        host_fns: None,
         signature: None,
     }
 }

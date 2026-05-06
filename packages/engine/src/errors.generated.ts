@@ -120,6 +120,7 @@ export const CATALOG_CODES = [
   "E_SANDBOX_WALLCLOCK_INVALID",
   "E_SANDBOX_HOST_FN_DENIED",
   "E_SANDBOX_HOST_FN_NOT_FOUND",
+  "E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED",
   "E_SANDBOX_MANIFEST_UNKNOWN",
   "E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED",
   "E_SANDBOX_MODULE_INVALID",
@@ -1446,29 +1447,44 @@ export class ESandboxHostFnDenied extends BentenError {
 /**
  * E_SANDBOX_HOST_FN_NOT_FOUND
  *
- * Thrown at: SANDBOX executor — fully active post-wave-8b. The defensive `random`-cap pre-check at `crates/benten-eval/src/primitives/sandbox.rs::execute` (sec-g7a-mr-5 D1 random-host-fn deferral guard, immediately after the `manifest_ref.resolve(...)` block) fires before module link; the wasmtime link-time resolver path (other names) fires when wasmtime fails to resolve an import against the linker.
+ * Thrown at: SANDBOX executor — wasmtime link-time resolver (other names than the 4 codegen-default).
  * Message template: "SANDBOX host-fn not found: {name}"
  */
 export class ESandboxHostFnNotFound extends BentenError {
   static readonly code = "E_SANDBOX_HOST_FN_NOT_FOUND";
-  static readonly fixHint = "Module attempted to call a host-fn name not in the active manifest. In Phase 2b: this fires for `random` (deferred to Phase 3 per D1 + sec-pre-r1-06 §2.3 — workspace CSPRNG framework decision pending; see `docs/future/phase-3-backlog.md §6.10`). The error message hint MUST cite `phase-3-backlog.md §6.10` for `random` so developers don't think it's a typo. For other names: check the manifest declaration matches the import.";
+  static readonly fixHint = "Module attempted to call a host-fn name not in the active manifest. Phase-3 G17-A2 retired the Phase-2b `random`-host-fn deferral guard (CLAUDE.md baked-in #16 closure); `random` is now LIVE alongside `time` / `log` / `kv:read` (cap-string `host:random:read`). For names that fire this code post-G17-A2: check the manifest declaration matches the import + the codegen-default surface (4 host-fns at G17-A2). The wasmtime link-time resolver path fires when wasmtime fails to resolve an import against the linker.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SANDBOX_HOST_FN_NOT_FOUND", "Module attempted to call a host-fn name not in the active manifest. In Phase 2b: this fires for `random` (deferred to Phase 3 per D1 + sec-pre-r1-06 §2.3 — workspace CSPRNG framework decision pending; see `docs/future/phase-3-backlog.md §6.10`). The error message hint MUST cite `phase-3-backlog.md §6.10` for `random` so developers don't think it's a typo. For other names: check the manifest declaration matches the import.", message, context);
+    super("E_SANDBOX_HOST_FN_NOT_FOUND", "Module attempted to call a host-fn name not in the active manifest. Phase-3 G17-A2 retired the Phase-2b `random`-host-fn deferral guard (CLAUDE.md baked-in #16 closure); `random` is now LIVE alongside `time` / `log` / `kv:read` (cap-string `host:random:read`). For names that fire this code post-G17-A2: check the manifest declaration matches the import + the codegen-default surface (4 host-fns at G17-A2). The wasmtime link-time resolver path fires when wasmtime fails to resolve an import against the linker.", message, context);
     this.name = "ESandboxHostFnNotFound";
+  }
+}
+
+/**
+ * E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED
+ *
+ * Thrown at: `register_default_host_fns` "random" trampoline at `crates/benten-eval/src/primitives/sandbox.rs::register_default_host_fns`. The `HostFnDenialMarker` carrier identifies the denial via the `random:per_call_budget_exceeded (requested=<n>, budget=<n>)` cap-string.
+ * Message template: "SANDBOX random host-fn per-call entropy budget exceeded: requested={n} budget={n}"
+ */
+export class ESandboxHostFnRandomBudgetExceeded extends BentenError {
+  static readonly code = "E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED";
+  static readonly fixHint = "Phase-3 G17-A2 (CLAUDE.md baked-in #16 closure). A single `host.random(ptr, len)` call requested more entropy bytes than the per-call budget allows. The codegen default is **4096 bytes per call** (per r1-wsa-8). To draw more entropy, either (a) split the request across multiple sub-budget calls, or (b) override the default per-manifest via the additive optional `host_fns.random.budget_bytes_per_call` field on `ModuleManifest`. The aggregate-per-primitive cap is enforced separately at `CountedSink` (via `output_bytes`); the per-call budget is the additional ceiling on a single invocation. Routes through the `ON_DENIED` family (cap-denial precedent).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED", "Phase-3 G17-A2 (CLAUDE.md baked-in #16 closure). A single `host.random(ptr, len)` call requested more entropy bytes than the per-call budget allows. The codegen default is **4096 bytes per call** (per r1-wsa-8). To draw more entropy, either (a) split the request across multiple sub-budget calls, or (b) override the default per-manifest via the additive optional `host_fns.random.budget_bytes_per_call` field on `ModuleManifest`. The aggregate-per-primitive cap is enforced separately at `CountedSink` (via `output_bytes`); the per-call budget is the additional ceiling on a single invocation. Routes through the `ON_DENIED` family (cap-denial precedent).", message, context);
+    this.name = "ESandboxHostFnRandomBudgetExceeded";
   }
 }
 
 /**
  * E_SANDBOX_MANIFEST_UNKNOWN
  *
- * Thrown at: `ManifestRegistry::lookup` / `ManifestRef::resolve`.
- * Message template: "SANDBOX manifest unknown: {name}"
+ * Thrown at: - **Registration time (Phase-3 G17-C):** `Engine::register_subgraph::validate_sandbox_manifest_names` — walks SANDBOX nodes for unresolved manifest references via either the explicit `manifest` property or the colon-joined `<manifest>:<entry>` `module` property fallback. - **Dispatch time (legacy):** `ManifestRegistry::lookup` / `ManifestRef::resolve` — preserved for non-DSL spec construction paths that bypass the validation walk.
+ * Message template: "SANDBOX manifest name '{manifest_name}' is not registered (codegen defaults: compute-basic, compute-with-kv; install via `engine.installModule(...)` or use a different name)"
  */
 export class ESandboxManifestUnknown extends BentenError {
   static readonly code = "E_SANDBOX_MANIFEST_UNKNOWN";
-  static readonly fixHint = "ESC-15 escape vector closure: NO permissive fall-through to a default manifest. Either register the manifest (Phase 8 marketplace work — see `E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED`) or use one of the codegen-default names (`compute-basic`, `compute-with-kv`).";
+  static readonly fixHint = "ESC-15 escape vector closure: NO permissive fall-through to a default manifest. Either install the manifest via `Engine::install_module` (paired with `Engine::register_module_bytes` for the underlying wasm payload) or use one of the codegen-default names (`compute-basic`, `compute-with-kv`). Phase-3 G17-C wave-5b adds the registration-time validation walk in `Engine::register_subgraph` so misspelled names + post-uninstall residual references trip THIS error at register time (operator-actionable: the wallclock-after-zero-progress masking is gone) instead of at dispatch time as a confusing wallclock trip.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SANDBOX_MANIFEST_UNKNOWN", "ESC-15 escape vector closure: NO permissive fall-through to a default manifest. Either register the manifest (Phase 8 marketplace work — see `E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED`) or use one of the codegen-default names (`compute-basic`, `compute-with-kv`).", message, context);
+    super("E_SANDBOX_MANIFEST_UNKNOWN", "ESC-15 escape vector closure: NO permissive fall-through to a default manifest. Either install the manifest via `Engine::install_module` (paired with `Engine::register_module_bytes` for the underlying wasm payload) or use one of the codegen-default names (`compute-basic`, `compute-with-kv`). Phase-3 G17-C wave-5b adds the registration-time validation walk in `Engine::register_subgraph` so misspelled names + post-uninstall residual references trip THIS error at register time (operator-actionable: the wallclock-after-zero-progress masking is gone) instead of at dispatch time as a confusing wallclock trip.", message, context);
     this.name = "ESandboxManifestUnknown";
   }
 }

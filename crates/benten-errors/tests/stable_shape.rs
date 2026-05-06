@@ -122,6 +122,8 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::SandboxWallclockInvalid,
     ErrorCode::SandboxHostFnDenied,
     ErrorCode::SandboxHostFnNotFound,
+    // Phase-3 G17-A2 — random host-fn per-call entropy budget exceed.
+    ErrorCode::SandboxHostFnRandomBudgetExceeded,
     ErrorCode::SandboxManifestUnknown,
     ErrorCode::SandboxManifestRegistrationDeferred,
     ErrorCode::SandboxModuleInvalid,

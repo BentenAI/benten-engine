@@ -59,8 +59,9 @@ pub use fingerprint::{
     record_wallclock_write,
 };
 pub use host_fns::{
-    CapAllowlist, CapRecheckPolicy, HostFnBehavior, HostFnContext, HostFnReturn, HostFnSpec,
-    RESERVED_HOST_ASYNC_CAP, default_host_fns, host_fn_names,
+    CapAllowlist, CapRecheckPolicy, DEFAULT_RANDOM_BUDGET_BYTES_PER_CALL, HostFnBehavior,
+    HostFnContext, HostFnReturn, HostFnSpec, RESERVED_HOST_ASYNC_CAP, default_host_fns,
+    host_fn_names,
 };
 pub use instance::{module_cache_size, module_for_bytes, shared_engine};
 pub use manifest::{

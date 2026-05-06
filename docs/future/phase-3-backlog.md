@@ -273,6 +273,32 @@ Estimated touch size: ~300-600 LOC of test infrastructure across `bindings/napi/
 
 **Touch size:** ~10-20 LOC (guard tightening) + 1-2 regression tests; bundles with §5.1.
 
+#### 5.1-followup-d Canonical-fast-path perf-gate rework — release-profile-gated or criterion-companion-test (PR #121 dev-profile-flake carry)
+
+**State at PR #121 (2026-05-06):** `crates/benten-ivm/tests/algorithm_b_general.rs::algorithm_b_canonical_view_fast_path_preserved_within_20pct_of_strategy_b_baseline` is the load-bearing canonical-fast-path-not-collapsed gate. The original 1.50x ceiling tripped on slow CI runners under dev-profile cargo test (PR #116 macos-arm64@stable + PR #120 macos-arm64@1.95.0 both observed 1.4-1.7x ratios); PR #121 first attempted to silence with `#[ignore]` (BLOCKED at mini-review per pim-2 §3.6b — claimed criterion bench was the load-bearing gate, but the criterion bench at `crates/benten-ivm/benches/algorithm_b_canonical.rs` only produces measurement-only estimates with NO firing 1.20x assertion + NO CI lane that reads them). PR #121 was reworked to keep the in-test gate firing but loosen the ceiling to 2.00x — preserves "canonical fast-path has not collapsed" protection (3x+ regressions still trip) while surviving slow-CI noise.
+
+**Phase 3 target:** re-tighten the gate to the 1.20x release-profile target via either (a) wiring a criterion-companion test that reads `target/criterion/.../estimates.json` + asserts ratio ≤ 1.20 (the pre-`g15a-mr-major-2` shape, but with FAIL-on-missing-estimates instead of silent-Ok) plus a CI lane that runs `cargo bench` so the estimates exist; OR (b) gating the in-test 1.20x assertion behind `#[cfg(not(debug_assertions))]` so dev-profile runs skip but release-profile runs (which CI gains via `cargo test --release` lane) enforce. Option (a) bundles with §5.1 (a) drift-detector since both want a release-profile bench surface. Option (b) is simpler but requires a separate CI lane.
+
+**Why Phase 3:** the dev-profile vs release-profile divergence is intrinsic to `cargo test` running unoptimized; tightening to 1.20x in dev-profile is unsound. The 2.00x interim ceiling is meaningful protection (catches dispatch-router collapse, capability-table-bypass, kernel-instantiation regression) but not the headline 20% bound the canonical-fast-path commitment cites. The rework lifts the gate back to the documented 1.20x without dev-profile flake.
+
+**Touch size:** option (a) ~50-100 LOC test + ~10-20 LOC CI workflow change; option (b) ~5-10 LOC test attribute + ~10-20 LOC CI workflow change. Bundles with §5.1 / §5.1-followup-a (drift-detector + rebuild) since the same harness consumes the release-profile measurement.
+
+**Cross-references:**
+- `crates/benten-ivm/tests/algorithm_b_general.rs::algorithm_b_canonical_view_fast_path_preserved_within_20pct_of_strategy_b_baseline` (current 2.00x interim site)
+- `crates/benten-ivm/benches/algorithm_b_canonical.rs` (criterion bench surface for the companion-test rework)
+- `.github/workflows/bench-threshold-drift.yml` (existing bench lane, currently `informational` — would gain enforcement via either rework path)
+- PR #121 mini-review (`r5-pr121-mini-review.json`) carrying the BLOCKER → fix-pass narrative.
+
+#### 5.1-followup-e Budget knob on `Algorithm::register` for user-view per-update budgets (g15-b-port carry)
+
+**G15-A state:** `crates/benten-ivm/src/algorithm_b.rs::Algorithm::register(view_id, label_pattern, projection)` does NOT accept a per-update budget — `GenericKernel` has no `BudgetTracker`; the canonical inner kernels' `BudgetTracker` is only reachable via `ContentListingView::with_budget_for_testing(n)` (test-only constructor) or `try_with_budget(n)`. Consequence for the G15-B drift-detector port (`crates/benten-ivm/tests/common.rs` + `tests/algorithm_b_drift_detector.rs`, landed at this PR): the budget-trip / rebuild-after-stale / asymmetric-budget proptests drive `ContentListingView::with_budget_for_testing` directly rather than `Algorithm::register`, because no Algorithm-level surface reaches `BudgetTracker`. The headline drift-detector pin + pattern-extension pin DO drive `Algorithm::register` end-to-end; only the budget-state-machine pins go through the canonical inner kernel's test-only constructor.
+
+**Phase 3 target:** lift the per-update budget into the `Algorithm::register` surface as a fourth parameter (working name: `Algorithm::register_with_budget(view_id, label_pattern, projection, budget)` or richer config struct — design left to the wave's plan-pass). `GenericKernel` gains a `BudgetTracker` field; canonical-id registrations route the budget through the matching hand-written kernel's constructor (which all 5 already accept via their non-test constructors). The drift-detector's budget proptests then drive `Algorithm::register*` end-to-end across all 5 pins, closing the SHAPE-not-SUBSTANCE gap surfaced at G15-B port time.
+
+**Why Phase 3:** the budget-on-register lift requires touching all 5 canonical-kernel constructors plus `GenericKernel`'s `update` path (consume-before-mutate ordering per `ivm-r6-4` precedent). Standalone landing is feasible but bundles cleanly with §5.1's broader generalization wave + §5.1-followup-a (the rebuild seam pairs with budget-on-register since both touch the per-view state machine). Named destination per HARD RULE rule-12 disposition (b) for the g15-b-port carry.
+
+**Touch size:** ~50-100 LOC (`Algorithm::register*` surface + `GenericKernel` budget field + canonical constructor plumbing) + ~50-100 LOC tests (the existing drift-detector budget pins re-driven through `Algorithm::register*`). Bundles with §5.1 / §5.1-followup-a in the Phase-3 IVM wave.
+
 ### 5.2 AnchorPrefix selector lift in user-view registration (post-G8-A)
 
 **Phase 2b state:** R6-R3 r6-r3-arch-4 named-destination carry. `Engine::register_user_view` accepts `InputPattern { anchor_prefix: Option<String>, ... }` as part of `UserViewSpec`, but the dispatch path at `crates/benten-engine/src/engine_views.rs::register_user_view` silently coerces `anchor_prefix` → label-equality match (the AnchorPrefix variant feeds the prefix string into the same `input_pattern_label` slot the `Label` variant uses). The pre-G8-A SEMANTIC STUB doc-block at the implementation site is honest about this; the stub bridges through `ContentListingView` until G8-A's per-strategy view dispatch lands. R6 Round 1 (r6-arch-4) flagged that no Phase-3 destination doc named the carry; this entry IS the named destination.
@@ -359,15 +385,20 @@ Estimated touch size: ~300-600 LOC of test infrastructure across `bindings/napi/
 
 **Touch size (actual):** ~50 LOC engine-side override at `crates/benten-engine/src/primitive_host.rs::execute_sandbox` constructing the callback; ~30 LOC in `EngineInner` for the `Arc` promotion + `revoked_actors_arc()` accessor; ~120 LOC end-to-end test pin. Within the ~80-150 LOC plan.
 
-### 6.2 D26 .wasm-bytes-shipping per fixture
+### 6.2 D26 .wasm-bytes-shipping per fixture — CLOSED at Phase-3 G17-B (wave-5b)
 
 **Phase 2b state:** ESC-1..16 fixtures live as `.wat` source compiled at test time (`wat::parse_str(...)`). D26 design intent calls for shipping pre-built `.wasm` bytes per fixture so cross-platform determinism + canonical CID pinning can apply. R6 wasmtime-sandbox-auditor (`r6-wsa-5`) flagged this gap; wave-8b ran out of budget before completing the tooling.
 
-**Phase 3 target:** Build-time tooling that compiles each `.wat` fixture to `.wasm` + commits the resulting bytes alongside the source. Runtime test loader prefers the pre-built `.wasm` (with `.wat` fallback for development). Cross-platform CID pinning then verifies the same fixture serializes identically across native / wasm32-wasip1 / wasm32-unknown-unknown.
+**Phase 3 closure (G17-B wave-5b):**
+1. **`tools/bench-wat-rebake/`** regenerator binary — compiles every `.wat` under `crates/benten-eval/tests/fixtures/sandbox/**/*.wat` to its committed `.wasm` sibling using the workspace-locked exact-version `wat` crate (`=1.248.0` per `[workspace.dependencies] wat`). Invoked via `cargo bench-wat-rebake` alias in `.cargo/config.toml`. `--check` mode reports drift without writing.
+2. **`crates/benten-eval/build.rs`** — emits `cargo:rerun-if-changed=` directives so a `.wat` source edit retriggers `tests/fixture_wasm_hashes_stable` + `tests/d26_wasm_present` drift detectors.
+3. **`crates/benten-eval/src/test_fixtures.rs`** — runtime fixture loader (`load_fixture(stem)`) prefers committed `.wasm` if present + valid; falls back to `wat::parse_file` only when `.wasm` absent (fresh-checkout case). Both branches compile via the same workspace-locked `wat` crate, so the bytes round-trip is closed.
+4. **r4-r1-wsa-9 single-tool recalibration:** workspace pins `wat = "=1.248.0"` exact-version (no `^`/`~`/bare matchers); `wasm-tools` REJECTED as a parallel dep. The legacy `scripts/build_wasm.sh` (which invoked the host `wabt` binary) is superseded — its output bytes can drift from the `wat` crate's output even on semantically-equivalent modules.
+5. **`tests/fixture_wasm_hashes_stable::PINNED_FIXTURES`** updated for `depth_nest_2`, `depth_nest_3_negative`, `output_overflow_2048` (the three fixtures whose canonical bytes shifted from `wabt`'s output to `wat` crate's output during the recalibration); 14 new committed `.wasm` fixtures landed under `escape/`.
 
-**Why Phase 3:** Bundles cleanly with §4.2 (cross-browser determinism CI cadence promotion). Both surfaces want the same tooling.
+**Cross-platform CID stability** is now defended by three layers: (a) workspace exact-version pin; (b) committed `.wasm` bytes (loader prefers these); (c) per-fixture BLAKE3 drift detector. The new AArch64 SANDBOX runtime CI cell (§6.7) verifies the same fixture CIDs resolve identically on Apple Silicon.
 
-**Touch size:** ~200-300 LOC tooling + ~50 LOC per-fixture loader update.
+**Touch size (actual):** ~600 LOC across tooling crate + build.rs + loader module + workflow + test pins (within G17-B plan ceiling 200-400 LOC + 50% reserve = 600).
 
 ### 6.6 TS-side SANDBOX named-manifest resolution + module-bytes registration API
 
@@ -390,25 +421,27 @@ The vitest cluster fix-pass (PR linked from `.addl/phase-2b/r6-r2-fp-vitest-clus
 
 **Acceptance criterion (added 2026-05-03 R6-R5-narrow producer-consumer-deep-sweep `r6-r5-narrow-pcds-1` — 24th p/c drift instance):** the Phase-3 implementer wiring SANDBOX runtime per the 3 deliverables above MUST also resolve the camelCase/snake_case casing drift between the TS DSL surface and Rust eval-side property reads. Specifically: `packages/engine/src/types.ts` declares `wallclockMs: number` (line 441 / 475) + `outputLimitBytes: number` (line 443 / 477) — camelCase TS-idiomatic. The DSL writers at `packages/engine/src/dsl.ts::SubgraphBuilder` (the `public sandbox(args: SandboxArgs)` method on line ~434) + `packages/engine/src/dsl.ts::CaseBuilder` (the `public sandbox(a: SandboxArgs)` method on line ~665) currently spread `{ ...args }` raw, no translation. The Rust DSL Compiler test at `crates/benten-dsl-compiler/src/lib.rs::permuted_keys_yield_identical_canonical_bytes` writes `wallclock_ms` + `output_limit` (snake_case) in its fixture handler text. The eval-side reader at `crates/benten-engine/src/primitive_host.rs::execute_sandbox` (the per-handler property override block reading `wallclock_ms` + `output_limit` from `op.properties`) reads snake_case. Currently INERT (DSL→runtime SANDBOX path structurally gated on §6.6 deliverable 1; defaults match silently-dropped values per `SandboxConfig::default()`). When deliverable 1 (Engine::register_subgraph manifest validation walk) lands, a `sandbox({ wallclockMs: 5000 })` per-handler tuning override would be silently ignored without this acceptance criterion. **Fix shape:** mirror the WAIT translation precedent (R6-R5-FP PR #76, dsl.ts::translateWaitArgs) — add `translateSandboxArgs` that camelCase→snake_case translates `wallclockMs` → `wallclock_ms` + `outputLimitBytes` → `output_limit` at the DSL spread sites, preserving the public `SandboxArgs` interface unchanged. Pair with §3.6b end-to-end test pin asserting per-handler override flows through to `SandboxConfig` at dispatch. Touch size: ~15-30 LOC TS + ~50-80 LOC Rust regression test. Cross-references: `.addl/phase-2b/r6-r5-narrow-pcds.json` (origin); `crates/benten-eval/tests/sandbox_wallclock.rs:76` (existing `#[ignore]` already cites "lands with phase-3-backlog.md §7.3" — that ignore can also be un-ignored once this criterion + §6.6 deliverables 1+2 land).
 
-### 6.5 RedbSuspensionStore retention-window override
+### 6.5 RedbSuspensionStore retention-window override — CLOSED at Phase-3 G17-A2 wave-5b
 
-**Phase 2b state:** The `SuspensionStore::is_retention_exhausted` trait method enforces the SUBSCRIBE persistent-cursor retention window (1000-events / 24h). The in-memory test impl overrides correctly; the production `RedbSuspensionStore` uses the trait default `false` and tracks `delivered_count` + `registered_at` in process-local memory. Consequence: a cross-process re-subscribe past the retention window does NOT surface `E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED` because the counters reset on process boot. R6 Round-2 security-auditor (`r6-r2-sec-2`) reissued the Round-1 `r6-sec-4` open finding under HARD-RULE — destination must EXIST + receive entry NOW. Disclosure landed in `docs/SECURITY-POSTURE.md` Compromise #9 closure narrative at the same time as this entry.
+**Closure shape (Phase-3 G17-A2 wave-5b):** `RedbSuspensionStore` now overrides `is_retention_exhausted` per the Phase-3 target shape — durable per-subscriber metadata (`PersistedCursorMeta { registered_at_unix_secs, delivered_count }`) lives under the new `sm:<sub_cid>` redb prefix; `put_cursor` lazy-stamps `registered_at_unix_secs` on first put + increments `delivered_count` per put. The retention-window override itself persists durably under the singleton `sr:retention_window` key (`PersistedRetentionWindow { window_ms }`); `RedbSuspensionStore::set_retention_window(Duration)` writes it; `RedbSuspensionStore::retention_window()` reads it. New regression pins at `crates/benten-engine/tests/redb_suspension_in_process.rs` cover both correctness (single-process round-trip) + durability (override persists across `RedbSuspensionStore::open` re-open per r1-wsa-10). A `RedbSuspensionStore::open(path)` convenience constructor opens (or creates) a redb file for store-only deployments.
 
-**Phase 3 target:** Override `is_retention_exhausted` on the `crates/benten-engine/src/suspension_store.rs::RedbSuspensionStore` `SuspensionStore` impl. Track `cursor_meta_key(sub) -> (delivered_count: u64, registered_at_unix_secs: u64)` in a redb side-table; `is_retention_exhausted` reads the side-table; `put_cursor` increments `delivered_count` + lazy-creates `registered_at` on first put. Add a round-trip-through-engine-restart regression test that asserts `E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED` fires on cross-process re-subscribe past the window. Pairs with §6.3 D18 live-cap-check (both surfaces want the durable subscriber-side-table shape that grant-store work introduces).
+**Phase 2b state (historical, pre-G17-A2):** The `SuspensionStore::is_retention_exhausted` trait method enforces the SUBSCRIBE persistent-cursor retention window (1000-events / 24h). The in-memory test impl overrides correctly; the production `RedbSuspensionStore` used the trait default `false` and tracked `delivered_count` + `registered_at` in process-local memory. Consequence: a cross-process re-subscribe past the retention window did NOT surface `E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED` because the counters reset on process boot. R6 Round-2 security-auditor (`r6-r2-sec-2`) reissued the Round-1 `r6-sec-4` open finding under HARD-RULE — destination must EXIST + receive entry NOW. Disclosure landed in `docs/SECURITY-POSTURE.md` Compromise #9 closure narrative at the same time as this entry.
 
 **Why Phase 3:** The retention bookkeeping side-table shape composes with the durable grant-store + per-event read-cap-coverage work (§2.2 + `phase-2-backlog.md` §7.4). Landing it standalone in Phase 2b would require re-shaping the side-table when grant-store lands.
 
 **Touch size:** ~50-60 LOC + 1 regression test pin.
 
-### 6.7 AArch64 SANDBOX runtime CI cell (Apple Silicon test execution)
+### 6.7 AArch64 SANDBOX runtime CI cell (Apple Silicon test execution) — CLOSED at Phase-3 G17-B (wave-5b)
 
-**Phase 2b state:** T4 multi-arch coverage (`.github/workflows/multi-arch-cargo-check.yml`) covers `cargo check --target aarch64-apple-darwin` (compile-only). Apple Silicon SANDBOX runtime behaviour (sigaltstack handler, 16-byte stack alignment + max_wasm_stack interaction with M-series memory model, epoch-deadline thread fairness on the heterogeneous E/P core scheduler) is uncovered at runtime CI. R6 Round 1 wasmtime-sandbox-auditor (`r6-wsa-11`) named `phase-2-backlog.md §10.4` as the destination; R6 Round 3 wasmtime-sandbox-auditor-redux (`r6-r3-wsa-1`) verified neither §10.4 nor any phase-3-backlog §6 sub-section actually contained the entry — HARD RULE clause-(b) violation. This entry is the populated destination.
+**Phase 2b state:** T4 multi-arch coverage was framed as `cargo check --target aarch64-apple-darwin` (compile-only) but the dedicated `multi-arch-cargo-check.yml` workflow was never authored at Phase 2b — the cite at §6.7 r6-r3-wsa-1 named the file as the destination knowing it would be authored at Phase 3 G17-B. Apple Silicon SANDBOX runtime behaviour (sigaltstack handler, 16-byte stack alignment + max_wasm_stack interaction with M-series memory model, epoch-deadline thread fairness on the heterogeneous E/P core scheduler) was uncovered at runtime CI.
 
-**Phase 3 target:** Add a `runs-on: macos-latest-arm64` cell to the CI matrix running `cargo nextest run -p benten-eval --target aarch64-apple-darwin --test sandbox_basic --test sandbox_escape_attempts_denied --test sandbox_severity_priority`. Couple to the SANDBOX runtime maturity cluster (§6.1 ESC-16 + §6.4 SandboxStackExhausted) since AArch64-specific surfacing of stack-overflow / fingerprint-collapse defects is most likely to come from this cell.
+**Phase 3 closure (G17-B wave-5b):** `.github/workflows/multi-arch-cargo-check.yml` authored with two job tiers:
+1. **`cargo-check-multi-arch`** — compile-only T4 across Linux x86_64 / Linux arm64 / macOS arm64 (macos-14) / macOS x86_64 (macos-15-intel).
+2. **`aarch64-sandbox-runtime`** — runs `cargo nextest run -p benten-eval --target aarch64-apple-darwin --test sandbox_basic --test sandbox_escape_attempts_denied --test sandbox_severity_priority` on `macos-14` (Apple M1).
 
-**Why Phase 3:** Pairs with the broader Phase-3 CI hardening pass; isn't blocking for tag close because compile-only T4 catches the most common cross-arch breakage (type-system / target-feature drift). The runtime-specific surfacing only matters once the ecosystem starts running real workloads against AArch64 production builds.
+The Rust-side anchor test `crates/benten-eval/tests/sandbox_severity_priority_g17_b_anchor.rs::aarch64_sandbox_runtime_ci_cell_green` greps the workflow YAML for the invocation shape per r4-r1-wsa-7 (cargo nextest run + flag-position `--target` + per-test `--test` flag-position) so a refactor that drifts the shape fails the anchor BEFORE reaching the CI cell. Pairs with the SANDBOX runtime maturity cluster (§6.1 ESC-16 + §6.4 SandboxStackExhausted) since AArch64-specific surfacing of stack-overflow / fingerprint-collapse defects is most likely to come from this cell.
 
-**Touch size:** ~30-40 LOC YAML + monitor wasmtime upstream's Apple Silicon issue surface.
+**Touch size (actual):** ~95 LOC YAML + ~80 LOC anchor-test rewrite (within plan ceiling).
 
 ### 6.8 SANDBOX kv:write read-only-snapshot enforcement seam (folded into §6.0)
 
@@ -434,17 +467,19 @@ The vitest cluster fix-pass (PR linked from `.addl/phase-2b/r6-r2-fp-vitest-clus
 
 **Touch size:** ~80 LOC drop, ~10 LOC add. One PR.
 
-### 6.10 `random` host-fn deferral — workspace CSPRNG framework choice
+### 6.10 `random` host-fn deferral — workspace CSPRNG framework choice — CLOSED at Phase-3 G17-A2 wave-5b
 
-**Phase 2b state:** D1 + sec-pre-r1-06 §2.3 deferred the `random` host-fn at Phase-2b open: shipping `random` before the workspace-wide CSPRNG framework decision was made would commit the engine to a CSPRNG choice (or trait-shape) that hasn't been audited across the rest of the runtime. The deferral was originally labeled "Phase 2c" across ~25 surfaces (security-posture, error-catalog, host-functions toml + docs, quickstart, runtime sandbox.rs error message, multiple test contracts, primitive_host docstrings, error variant doc). "Phase 2c" is NOT a defined phase in `docs/FULL-ROADMAP.md` — HARD RULE clause-(b) violation (same shape as §6.9; the random host-fn is the larger sibling of the inspect-state CLI deferral that was already retensed). This entry is the populated destination for the entire Phase-2c-labeled `random` cluster.
+**Closure shape (Phase-3 G17-A2 wave-5b):** The workspace CSPRNG decision landed at R1 (D-PHASE-3-11 RESOLVED-at-R1) = `getrandom` direct (NOT `rand` ecosystem; NOT a deterministic seed). G17-A2 wires `random` into the codegen-default surface alongside `time` / `log` / `kv:read` (cap-string `host:random:read`, 4-segment shape mirroring `kv:read`; `cap_recheck = per_call`); the trampoline at `crates/benten-eval/src/primitives/sandbox.rs::register_default_host_fns` invokes `getrandom::getrandom` to fill the guest buffer. Per-call entropy budget defaults to **4096 bytes** (per r1-wsa-8); a manifest may override via the additive optional `host_fns.random.budget_bytes_per_call` field on `ModuleManifest`. Budget overrun fires the typed `E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED` variant (routed `ON_DENIED`). The validate-time deferral guard + `DEFERRED_HOST_FN_RANDOM_CAP_PREFIX` const are RETIRED; `crates/benten-eval/tests/sandbox_host_fn_random_deferred.rs` is deleted; new green-phase regression guards live at `crates/benten-eval/tests/random_host_fn.rs`. Compromise #16 → CLOSED at Phase-3 G17-A2 in `docs/SECURITY-POSTURE.md`. `host-functions.toml` now declares `[host_fn.random]` IMPLEMENTED.
 
-**Operator-runtime contract (today):** A SANDBOX module that imports a `random` host-fn (or a manifest that claims `host:compute:random*`) fires `E_SANDBOX_HOST_FN_NOT_FOUND` at validate-time, with an operator hint that says the host-fn is "not yet implemented (Phase 3 — see `docs/future/phase-3-backlog.md §6.10`)". The defensive guard sits in `crates/benten-eval/src/primitives/sandbox.rs::execute` (the `DEFERRED_HOST_FN_RANDOM_CAP_PREFIX` arm) and is regression-pinned by `crates/benten-eval/tests/sandbox_host_fn_random_deferred.rs`.
+**Phase 2b state (historical, pre-G17-A2):** D1 + sec-pre-r1-06 §2.3 deferred the `random` host-fn at Phase-2b open: shipping `random` before the workspace-wide CSPRNG framework decision was made would commit the engine to a CSPRNG choice (or trait-shape) that hasn't been audited across the rest of the runtime. The deferral was originally labeled "Phase 2c" across ~25 surfaces (security-posture, error-catalog, host-functions toml + docs, quickstart, runtime sandbox.rs error message, multiple test contracts, primitive_host docstrings, error variant doc). "Phase 2c" is NOT a defined phase in `docs/FULL-ROADMAP.md` — HARD RULE clause-(b) violation (same shape as §6.9; the random host-fn is the larger sibling of the inspect-state CLI deferral that was already retensed). This entry was the populated destination for the entire Phase-2c-labeled `random` cluster, now CLOSED via the G17-A2 wave-5b PR.
 
-**Phase 3 target:** (1) Make the workspace CSPRNG framework decision (candidates: `getrandom` direct, `rand` ecosystem trait shape, deterministic-seed-via-attribution-frame for replay scenarios). (2) Wire the `random` host-fn through the chosen CSPRNG with capability-gated entropy budget. (3) Drop the validate-time deferral guard in `crates/benten-eval/src/primitives/sandbox.rs::execute` (the `DEFERRED_HOST_FN_RANDOM_CAP_PREFIX` arm). (4) Update the operator-hint test contract in `sandbox_host_fn_random_deferred.rs` to assert the host-fn IS available (or repurpose the test for whatever residual deferral semantics remain). (5) Update `host-functions.toml` to mark `random` IMPLEMENTED + drop the deferred-bucket comment block. (6) Sweep the doc surfaces (HOST-FUNCTIONS.md, ERROR-CATALOG.md, SECURITY-POSTURE.md Compromise #16, QUICKSTART.md) to retense from "deferred" to "available".
+**Operator-runtime contract (closed shape, post-G17-A2):** A SANDBOX module that imports `random` (cap-string `host:random:read`) succeeds at validate-time and dispatches through the codegen-default trampoline that fills the guest buffer from `getrandom::getrandom`. Per-call entropy requests above 4096 bytes (or above the per-manifest override `host_fns.random.budget_bytes_per_call`) fire the typed `E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED` (`ON_DENIED` family). The pre-G17-A2 validate-time deferral guard at `crates/benten-eval/src/primitives/sandbox.rs::execute` (the `DEFERRED_HOST_FN_RANDOM_CAP_PREFIX` arm) is RETIRED; the regression-pin file `crates/benten-eval/tests/sandbox_host_fn_random_deferred.rs` is DELETED. New green-phase regression guards live at `crates/benten-eval/tests/random_host_fn.rs`.
 
-**Why Phase 3:** The CSPRNG framework decision wants the broader runtime context that lands in Phase 3 (deterministic replay + AttributionFrame seeding for SUBSCRIBE-stored events both want a thought-through entropy story). Wiring `random` ahead of that decision risks committing the engine to a CSPRNG seam the rest of Phase 3 has to redo.
+**Phase 3 closure (DONE at G17-A2 wave-5b):** (1) ✅ workspace CSPRNG decision = `getrandom` direct (D-PHASE-3-11 RESOLVED-at-R1; not `rand` ecosystem; not deterministic-seed-via-attribution which would require the broader replay-context plumbing — kept available as a future widening if Phase-4+ replay surfaces need it). (2) ✅ `random` wired through the trampoline with constant-time cap-policy check (sec-r1-3). (3) ✅ validate-time deferral guard dropped. (4) ✅ deferred-test file deleted; new green-phase regression file at `random_host_fn.rs`. (5) ✅ `host-functions.toml` marks `random` IMPLEMENTED. (6) ✅ doc sweep across SECURITY-POSTURE.md Compromise #16 + ERROR-CATALOG.md (new `E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED` entry + retensed `E_SANDBOX_HOST_FN_NOT_FOUND` body) + QUICKSTART.md (random-host-fn-available retense).
 
-**Touch size:** ~40-60 LOC at implementation time + the doc + toml + test sweep.
+**Why this landed in Phase 3 (rather than holding for replay/AttributionFrame seeding):** The "thought-through entropy story" the original deferral named was scoped at G17-A2 to "non-replay-deterministic CSPRNG with capability-gated budget" — sufficient for the Phase-3 target surface. Replay-determinism via attribution-frame seeding remains an OPEN Phase-4+ widening if the replay surface surfaces it as a real requirement (named at `docs/FULL-ROADMAP.md` Phase 4+ rather than as a Phase-3 deferral). The Phase-3 closure does not commit the engine to a CSPRNG seam Phase-4+ would have to redo; the additive `host_fns.random.budget_bytes_per_call` field per r1-wsa-8 is the per-manifest hook a future replay-deterministic seam would extend.
+
+**Touch size (actual at closure):** ~600 LOC across `crates/benten-eval/{src,tests}/` + `crates/benten-engine/{src,tests}/` + `bindings/napi/` + `docs/{SECURITY-POSTURE,ERROR-CATALOG,HOST-FUNCTIONS,SANDBOX-LIMITS,QUICKSTART}.md` + `host-functions.toml`.
 
 ---
 
@@ -697,6 +732,38 @@ R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift 
 - `.addl/phase-3/r4-r1-pattern-induction.json` (pim-12 4th-instance + NEW shape iii origin finding)
 - `tools/cite-drift-detector/src/lib.rs::numeric_claims_source_of_truth` (current hardcode site)
 - `tools/cite-drift-detector/tests/numeric_claim_drift_lint_finds_known_drift_fixture.rs` (companion fixture; tracks the lint mechanism not the truth values, so the derivation upgrade is transparent to it)
+
+---
+
+### 7.12b Cite-drift detector coverage envelope (file-tree gap; G17-B mr-7 origin)
+
+**Origin:** G17-B PR #116 mini-review finding `g17-b-mr-cite-drift-detector-coverage-7` (BELONGS-ELSEWHERE-SPECIFICALLY → NAMED entry per HARD RULE clause-b). The detector caught 2 of 7 instances of the original `Cargo.toml:309` cite drift; 5 sites slipped because they live outside the tracked-path envelope.
+
+**Coverage envelope at G17-B fix-pass time** (`tools/cite-drift-detector/src/lib.rs::walk_doc_inputs`):
+- `README.md` (root)
+- `docs/**/*.md`
+- `.addl/**/*.md` (when present locally; gitignored — CI sees `docs/` only)
+- `crates/*/src/**/*.rs` (doc-comment cites)
+- `packages/engine/src/**/*.ts` (doc-comment cites)
+
+**Gaps observed at G17-B mr-7 verification (paths illustrative, not line cites):**
+- `tools/*/src/**/*.rs` — e.g. `tools/bench-wat-rebake/src/lib.rs` (module-doc cite block) slipped
+- `crates/*/build.rs` (crate-root build scripts, not under `src/`) — e.g. `crates/benten-eval/build.rs` (header doc-comment) slipped
+- `crates/*/tests/**/*.rs` (integration-test files) — e.g. `crates/benten-eval/tests/fixture_wasm_hashes_stable.rs` and `d26_wasm_present.rs` (2 sites) slipped
+- `.cargo/config.toml` (and `.toml` files generally) — `.cargo/config.toml` (alias-comment block) slipped
+
+**Why this matters:** pim-1 §3.5b BULK-APPLICATION HARDENED is the standing defense against load-bearing-edit cite drift; the cite-drift-detector is the automated companion. Two dimensions of incompleteness (the human pre-flight + the detector envelope) interact: the G17-B PR demonstrably had cites in 7 sites only 2 of which the detector covers — the human pre-flight failure was the proximate cause but the detector's envelope being narrow widens the blast radius of any single human pre-flight miss.
+
+**Closure shape:** extend `walk_doc_inputs` to additionally walk `tools/*/src/**/*.rs`, `crates/*/build.rs`, `crates/*/tests/**/*.rs`, and `.cargo/config.toml`. The walker's `extract_line_cites` already accepts `.toml` extensions per its docstring's allow-list — the gap is purely in the path enumeration, not the per-file extraction.
+
+**Touch size:** ~30-50 LOC (4 new walker call-sites + 1-2 unit tests asserting paths within those subtrees are scanned). Low risk — additive, no behavioral change for currently-tracked paths.
+
+**Cross-references:**
+- G17-B mini-review (PR #116) finding `g17-b-mr-cite-drift-detector-coverage-7` BELONGS-ELSEWHERE-SPECIFICALLY disposition
+- `tools/cite-drift-detector/src/lib.rs::walk_doc_inputs` (the envelope-definition site)
+- `tools/cite-drift-detector/src/lib.rs::extract_line_cites` (per-file extraction; already extension-permissive)
+
+**Phase target:** Phase-3 R6 prep (orchestrator-direct or small fix-pass dispatch). NOT gating PR #116 merge per finding-7's BELONGS-ELSEWHERE-SPECIFICALLY disposition; entry filed pre-merge per HARD RULE clause-b ("the destination receives the entry NOW").
 
 ---
 

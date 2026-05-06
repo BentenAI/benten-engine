@@ -172,35 +172,34 @@ fn sandbox_named_manifest_truly_unknown_still_errors() {
         &module_cid_str,
         "wave8h.never-installed",
     );
-    let handler_id = engine.register_subgraph(spec).unwrap();
 
-    let outcome = engine.call(
-        &handler_id,
-        "run",
-        benten_core::Node::new(vec!["test_input".to_string()], Default::default()),
-    );
+    // Phase-3 G17-C wave-5b (phase-3-backlog §6.6 deliverable 1):
+    // the manifest-name validation walk shifts the rejection from
+    // dispatch time to REGISTRATION time. Pre-G17-C this test asserted
+    // the dispatch path errored (registration silently accepted +
+    // engine.call surfaced the typed error); post-G17-C the typed
+    // error fires earlier in the pipeline. Either rejection point is
+    // acceptable so long as the wave-8h registry-overlay fix did NOT
+    // introduce a permissive fall-through (the failure shape this
+    // companion test defends against).
+    let outcome = engine.register_subgraph(spec);
 
-    // The dispatch MUST error (manifest unknown). Either the call returns
-    // Err, OR the outcome routes through a non-OK edge with the
-    // E_SANDBOX_MANIFEST_UNKNOWN code. Both paths are acceptable so long
-    // as the registry-overlay fix did NOT introduce a permissive
-    // fall-through.
     match outcome {
         Err(e) => {
             let s = format!("{e:?}");
             assert!(
-                s.contains("ManifestUnknown") || s.contains("E_SANDBOX_MANIFEST_UNKNOWN"),
-                "an unknown-named manifest SANDBOX dispatch MUST error \
-                 with the typed manifest-unknown variant; got: {s}"
+                s.contains("SandboxManifestUnknown")
+                    || s.contains("ManifestUnknown")
+                    || s.contains("E_SANDBOX_MANIFEST_UNKNOWN"),
+                "an unknown-named manifest SANDBOX subgraph MUST be rejected \
+                 with the typed manifest-unknown variant (G17-C: at register_subgraph \
+                 time; pre-G17-C: at dispatch time); got: {s}"
             );
         }
-        Ok(o) => {
-            assert!(
-                !o.is_ok_edge(),
-                "an unknown-named manifest SANDBOX dispatch MUST NOT route \
-                 through the OK edge — that would mean the wave-8h fix \
-                 introduced a permissive fall-through. Got outcome: {o:?}"
-            );
-        }
+        Ok(_) => panic!(
+            "register_subgraph (G17-C) OR engine.call (pre-G17-C) MUST reject the unknown-named \
+             manifest; clean acceptance would mean the wave-8h registry-overlay fix introduced \
+             a permissive fall-through"
+        ),
     }
 }

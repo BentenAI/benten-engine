@@ -496,6 +496,7 @@ impl Engine {
             .unwrap_or_else(|p| p.into_inner());
         let mut overlay: BTreeMap<String, benten_eval::sandbox::CapBundle> = BTreeMap::new();
         for installed in active.values() {
+            let manifest_name = installed.manifest.name.as_str();
             for entry in &installed.manifest.modules {
                 // Sort + dedupe the entry's requires list so the
                 // resulting CapBundle satisfies the D9 sorted-canonical
@@ -505,13 +506,107 @@ impl Engine {
                 let mut caps: Vec<String> = entry.requires.clone();
                 caps.sort();
                 caps.dedup();
-                overlay.insert(
-                    entry.name.clone(),
-                    benten_eval::sandbox::CapBundle::new(caps, None),
-                );
+                let bundle = benten_eval::sandbox::CapBundle::new(caps, None);
+
+                // Phase-3 G17-C wave-5b (phase-3-backlog §6.6): key the
+                // overlay by BOTH `entry.name` (legacy wave-8h shape;
+                // preserved for in-tree callers that pre-date the
+                // colon-joined DSL surface) AND the colon-joined
+                // `<manifest_name>:<entry_name>` shape (TS DSL surface
+                // — `subgraph(...).sandbox({ module: "<manifest>:<entry>" })`).
+                // Both keys point to the same `CapBundle` so the
+                // SANDBOX dispatch resolution path agrees with the
+                // `register_subgraph` validation walk regardless of
+                // which shape the caller composed.
+                overlay.insert(entry.name.clone(), bundle.clone());
+                overlay.insert(format!("{manifest_name}:{}", entry.name), bundle);
             }
         }
         benten_eval::sandbox::ManifestRegistry::from_overlay(overlay)
+    }
+
+    /// Phase-3 G17-C wave-5b: read-only projection of the manifest
+    /// registry's known names — codegen defaults plus the colon-joined
+    /// `<manifest_name>:<entry_name>` keys + bare `<entry_name>` keys
+    /// from the `installed_modules` overlay. Used by `register_subgraph`
+    /// to validate SANDBOX-node manifest references at registration
+    /// time without paying the eval-side `Subgraph::validate` cost
+    /// twice.
+    ///
+    /// Cfg-gated NOT-wasm32: matches `manifest_registry`'s gating since
+    /// browser thin clients do not run SANDBOX (CLAUDE.md baked-in #16).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn manifest_registry_known_names(&self) -> std::collections::BTreeSet<String> {
+        let mut names: std::collections::BTreeSet<String> =
+            benten_eval::sandbox::default_manifest_names()
+                .iter()
+                .map(|s| (*s).to_string())
+                .collect();
+        let active = self
+            .installed_modules()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        for installed in active.values() {
+            let manifest_name = installed.manifest.name.as_str();
+            for entry in &installed.manifest.modules {
+                names.insert(entry.name.clone());
+                names.insert(format!("{manifest_name}:{}", entry.name));
+            }
+        }
+        names
+    }
+
+    /// Phase-3 G17-A2 — look up the per-manifest `random` host-fn
+    /// per-call entropy-budget override (if any) for a Named manifest.
+    ///
+    /// Walks the engine's `installed_modules` set; for each installed
+    /// manifest whose **entry name** OR **manifest name** matches
+    /// `manifest_name`, returns
+    /// `manifest.host_fns.random.budget_bytes_per_call` if all
+    /// intermediate fields are present. Returns `None` when:
+    ///   - the manifest name is not installed,
+    ///   - the manifest carries no `host_fns` override,
+    ///   - the override carries no `random` entry, or
+    ///   - the `random` entry carries no `budget_bytes_per_call`.
+    ///
+    /// `None` flows through `SandboxConfig::random_budget_bytes_per_call`
+    /// as "no override" so the codegen default (4096 per r1-wsa-8)
+    /// applies.
+    ///
+    /// **Lookup rationale:** the `manifest` property on a SANDBOX node
+    /// is the manifest registry key at SANDBOX dispatch (e.g. an entry
+    /// `name` from `manifest.modules[i].name`). The manifest-level
+    /// `host_fns` override hangs off the parent `ModuleManifest`, so
+    /// we resolve via entry-match → parent. Codegen-default registry
+    /// names (`compute-basic`, etc.) carry no override and yield
+    /// `None` here, which is correct.
+    ///
+    /// **wasm32 cut:** matches the [`Self::manifest_registry`] gate —
+    /// the only consumer is the production `execute_sandbox` override
+    /// in `primitive_host.rs`, which is itself wasm32-cut.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn random_budget_for_named_manifest(&self, manifest_name: &str) -> Option<u64> {
+        let active = self
+            .installed_modules()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        for installed in active.values() {
+            let manifest_match = installed.manifest.name == manifest_name;
+            let entry_match = installed
+                .manifest
+                .modules
+                .iter()
+                .any(|e| e.name == manifest_name);
+            if manifest_match || entry_match {
+                return installed
+                    .manifest
+                    .host_fns
+                    .as_ref()
+                    .and_then(|hf| hf.random.as_ref())
+                    .and_then(|r| r.budget_bytes_per_call);
+            }
+        }
+        None
     }
 }
 

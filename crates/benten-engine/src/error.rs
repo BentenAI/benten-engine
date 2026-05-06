@@ -233,6 +233,35 @@ pub enum EngineError {
         handle: benten_eval::SuspendedHandle,
     },
 
+    /// Phase-3 G17-C wave-5b (phase-3-backlog §6.6 deliverable 1):
+    /// `register_subgraph` walked a SANDBOX node whose declared manifest
+    /// name does not resolve through any of: (a) the codegen-default
+    /// registry (`compute-basic` / `compute-with-kv`); (b) the
+    /// `installed_modules` overlay (entries from previously-installed
+    /// `ModuleManifest`s); (c) the colon-joined `<manifest>:<entry>`
+    /// keying surface added in this wave.
+    ///
+    /// Fires at REGISTRATION TIME (not at execution time) so misspelled
+    /// manifest names + post-uninstall residual references trip a fast,
+    /// operator-actionable error rather than a confusing
+    /// `wallclock-after-zero-progress` shape during dispatch.
+    ///
+    /// Catalog code: [`ErrorCode::SandboxManifestUnknown`]
+    /// (`E_SANDBOX_MANIFEST_UNKNOWN`). Mirrors the eval-side
+    /// [`benten_eval::sandbox::SandboxError::ManifestUnknown`] that
+    /// fires at dispatch time when this register-time guard is bypassed
+    /// (e.g. via a non-DSL spec construction path).
+    #[error(
+        "SANDBOX manifest name '{manifest_name}' is not registered \
+         (codegen defaults: compute-basic, compute-with-kv; \
+         install via `engine.installModule(...)` or use a different name)"
+    )]
+    SandboxManifestUnknown {
+        /// The unresolved manifest name as it appeared in the SANDBOX
+        /// node's `manifest` (or colon-joined `module`) property.
+        manifest_name: String,
+    },
+
     /// Generic wrapped error carrying a stable catalog code.
     #[error("{message}")]
     Other {
@@ -380,6 +409,9 @@ impl EngineError {
                 "envelopeCid": handle.state_cid().to_base32(),
                 "signal": handle.signal_name(),
             })),
+            EngineError::SandboxManifestUnknown { manifest_name } => Some(json!({
+                "manifestName": manifest_name,
+            })),
             EngineError::Invariant(reg_err) => {
                 // RegistrationError's Display + Debug carry diagnostic
                 // context; we surface a minimal bag with the catalog
@@ -429,6 +461,7 @@ impl EngineError {
             #[cfg(not(feature = "browser-backend"))]
             EngineError::ModuleManifestVerify(e) => e.code(),
             EngineError::WaitSuspended { .. } => ErrorCode::WaitSuspended,
+            EngineError::SandboxManifestUnknown { .. } => ErrorCode::SandboxManifestUnknown,
             EngineError::Other { code, .. } => code.clone(),
             // G13-B (D-PHASE-3-1a): the Backend variant erases backend-
             // specific errors at the public boundary. We try to recover

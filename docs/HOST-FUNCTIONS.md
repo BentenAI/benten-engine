@@ -10,12 +10,15 @@ Drift is enforced bidirectionally by
 (MD → TOML); any addition / rename / deletion in the TOML must be
 mirrored in this file or CI fails.
 
-Phase 2b ships **three** host functions (`time`, `log`, `kv:read`) and
-**two** named manifests (`compute-basic`, `compute-with-kv`). The
-deferred `random` host-function is documented at the bottom; calling it
-returns `E_SANDBOX_HOST_FN_NOT_FOUND` with an operator hint pointing at
-[`docs/future/phase-3-backlog.md §6.10`](future/phase-3-backlog.md) for
-the workspace CSPRNG framework choice.
+Phase 3 (G17-A2) ships **four** host functions (`time`, `log`, `kv:read`,
+`random`) and **two** named manifests (`compute-basic`,
+`compute-with-kv`). The `random` host-fn is the Phase-3 lift of the
+Phase-2b deferral (CLAUDE.md baked-in #16 / Compromise #16 closure):
+workspace CSPRNG = `getrandom` direct (per **D-PHASE-3-11**
+RESOLVED-at-R1); per-call entropy budget defaults to 4096 bytes
+(per **r1-wsa-8**); module manifests may override via the additive
+optional `host_fns.random.budget_bytes_per_call` field on
+`ModuleManifest`.
 
 **Runtime status (post-wave-8b/8h):** the host-fn trampoline is fully
 wired through wasmtime's `Linker::func_wrap`; every listed failure mode
@@ -236,23 +239,65 @@ build-fail.
 
 ---
 
-## Deferred — `random`
+## host_fn.random
 
-Per D1 + sec-pre-r1-06 §2.3, **`random` is deferred to Phase 3** — see
-[`docs/future/phase-3-backlog.md §6.10`](future/phase-3-backlog.md) for
-the destination entry (workspace CSPRNG framework choice). The SANDBOX
-executor returns `E_SANDBOX_HOST_FN_NOT_FOUND` with an
-operator-actionable hint citing §6.10 if a module attempts to call it.
-Regression guard:
-`crates/benten-eval/tests/sandbox_host_fn_random_deferred.rs`.
+- **Cap required:** `host:random:read`
+- **Recheck cadence:** `per_call` (entropy is sensitive; mirrors
+  `kv:read`'s TOCTOU posture)
+- **Per-call entropy budget:** 4096 bytes (default per r1-wsa-8;
+  per-manifest override available)
+- **Since:** 3 (G17-A2)
+- **Description:** Fills a guest buffer with CSPRNG bytes drawn from
+  `getrandom` (the workspace CSPRNG decision per D-PHASE-3-11
+  RESOLVED-at-R1; CLAUDE.md baked-in #16 closure).
 
-The deferral reasoning: the workspace CSPRNG framework choice has not
-been made (rand_chacha vs OS-CSPRNG vs hardware-RDRAND fallback) and
-shipping `random` before that decision bakes in a footgun (a module
-that depends on weak randomness today would be a silent security
-regression on a future swap). When the workspace settles on a CSPRNG,
-`random` lands as an additive Phase-3 entry without breaking any
-Phase-2b modules.
+### Argument schema
+
+```text
+(out_ptr: i32, out_len: i32) -> i32
+// returns: 0 = success (out_len bytes written to guest memory at out_ptr)
+// typed denials surface through the host-fn ABI (NOT a wasmtime trap)
+```
+
+The trampoline writes `out_len` bytes of CSPRNG entropy into the
+guest's linear memory at `out_ptr`. Bounds-check failures (`out_ptr`
+or `out_ptr + out_len` past the module's declared memory) trap as
+`MemoryOutOfBounds`. CSPRNG draw failures (operationally never
+expected on supported platforms) collapse to `E_SANDBOX_MODULE_INVALID`
+with the underlying `getrandom` error in the message.
+
+### Permission semantics
+
+`per_call` recheck — every invocation re-asks the policy whether
+`host:random:read` is still granted on this caller. A revoke that
+lands between two host-fn calls within the same SANDBOX execution is
+observed on the next call. The 4096-byte default budget is per
+INVOCATION (each call must fit) per r1-wsa-8; the cumulative
+per-primitive output budget enforced at `CountedSink` is the second
+ceiling that bounds aggregate entropy across multiple calls.
+
+A module manifest may override the per-call budget via the additive
+optional field:
+
+```toml
+[host_fns.random]
+budget_bytes_per_call = 1024  # tighter than the 4096 default
+```
+
+This flows through the engine's `ModuleManifest::host_fns.random.budget_bytes_per_call`
+into `SandboxConfig::random_budget_bytes_per_call` at SANDBOX dispatch
+(per `crates/benten-engine/src/primitive_host.rs::execute_sandbox`).
+
+### Failure modes
+
+- Cap missing / revoked at host-fn entry → `E_SANDBOX_HOST_FN_DENIED`.
+- Single-call entropy request exceeds the per-call budget →
+  `E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED` (cap-string carrier
+  identifies `random:per_call_budget_exceeded` + carries
+  `requested=<n>` + `budget=<n>` for operator hints).
+- `out_ptr` / `out_ptr+out_len` outside guest memory → wasmtime
+  `MemoryOutOfBounds` trap (mapped to `E_SANDBOX_MODULE_INVALID`).
+- Cumulative SANDBOX output budget exceeded → `E_INV_SANDBOX_OUTPUT`.
 
 ---
 

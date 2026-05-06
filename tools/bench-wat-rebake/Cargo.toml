@@ -1,0 +1,28 @@
+[package]
+name = "bench-wat-rebake"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Phase-3 G17-B: regenerator binary that compiles every `.wat` SANDBOX fixture under `crates/benten-eval/tests/fixtures/sandbox/` to a committed `.wasm` sibling using the workspace-locked exact-version `wat` crate (=1.248.0 per phase-3-backlog §6.2 + r4-r1-wsa-9). Invocation: `cargo bench-wat-rebake` (alias in `.cargo/config.toml`)."
+publish = false
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+bench = false
+
+[[bin]]
+name = "bench-wat-rebake"
+path = "src/main.rs"
+
+# `wat` workspace-locked exact-version per Phase-3 G17-B (r4-r1-wsa-9 +
+# phase-3-backlog §6.2). NOT a [target.'cfg(not(target_arch = "wasm32"))']
+# section — this is a host-side dev tool; wasm32-target builds never run
+# this binary (it's invoked by humans on macOS / Linux dev machines).
+[dependencies]
+wat = { workspace = true }

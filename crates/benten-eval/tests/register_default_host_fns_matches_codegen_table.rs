@@ -86,18 +86,19 @@ fn register_default_host_fns_unknown_wasm_import_surfaces_typed_error() {
 
 /// R6FP-G1 (r6-wsa-7) drift detector: every name returned by
 /// `host_fn_names()` is in the closed set of names the registration
-/// walker handles ({"time", "log", "kv:read"}). When D1 expands the
-/// canonical set to add a new host-fn, BOTH this drift detector AND
-/// the register_default_host_fns match-arm must be updated together
-/// — failure at test-time is preferable to failure at runtime cap
-/// denial.
+/// walker handles ({"time", "log", "kv:read", "random"}). When D1
+/// expands the canonical set to add a new host-fn, BOTH this drift
+/// detector AND the register_default_host_fns match-arm must be
+/// updated together — failure at test-time is preferable to failure
+/// at runtime cap denial. Phase-3 G17-A2 wave-5b added "random" per
+/// D-PHASE-3-11 (CSPRNG via getrandom + cap-policy budget per call).
 #[test]
 fn register_default_host_fns_walker_covers_every_codegen_entry_name() {
     let codegen_names: Vec<&str> = benten_eval::sandbox::host_fns::host_fn_names().to_vec();
-    // The match arms in `register_default_host_fns` at sandbox.rs:703
+    // The match arms in `register_default_host_fns` at sandbox.rs:743
     // cover exactly these names — keep this set in sync when the
     // canonical D1 surface widens.
-    let registered_names: &[&str] = &["time", "log", "kv:read"];
+    let registered_names: &[&str] = &["time", "log", "kv:read", "random"];
     for name in &codegen_names {
         assert!(
             registered_names.contains(name),

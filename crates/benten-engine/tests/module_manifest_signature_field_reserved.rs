@@ -77,6 +77,7 @@ fn module_install_signature_field_omitted_from_canonical_bytes_when_none() {
         version: "0.0.1".into(),
         modules: vec![],
         migrations: vec![],
+        host_fns: None,
         signature: None,
     };
     let bytes = m.to_canonical_bytes().unwrap();

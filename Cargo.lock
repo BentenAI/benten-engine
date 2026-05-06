@@ -111,6 +111,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
+name = "bench-wat-rebake"
+version = "0.1.0"
+dependencies = [
+ "wat",
+]
+
+[[package]]
 name = "benten-caps"
 version = "0.1.0"
 dependencies = [
@@ -204,6 +211,7 @@ dependencies = [
  "benten-errors",
  "blake3",
  "criterion",
+ "getrandom 0.2.17",
  "proptest",
  "serde",
  "serde_ipld_dagcbor",
