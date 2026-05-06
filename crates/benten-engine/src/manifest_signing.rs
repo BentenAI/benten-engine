@@ -872,6 +872,7 @@ mod tests {
             version: "0.0.1".into(),
             modules: vec![],
             migrations: vec![],
+            host_fns: None,
             signature: None,
         };
         let bytes_unsigned = manifest_signed_bytes(&m).unwrap();
@@ -892,6 +893,7 @@ mod tests {
             version: "0.0.1".into(),
             modules: vec![],
             migrations: vec![],
+            host_fns: None,
             signature: None,
         };
         let kp = Keypair::generate();

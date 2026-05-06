@@ -55,6 +55,7 @@ fn manifest_canonical_bytes_dagcbor_dev_time_toml_compiles_to_same_bytes() {
             requires: vec![],
         }],
         migrations: vec![],
+        host_fns: None,
         signature: None,
     };
     let bytes_a = a.to_canonical_bytes().unwrap();

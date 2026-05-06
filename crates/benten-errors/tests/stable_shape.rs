@@ -122,6 +122,8 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::SandboxWallclockInvalid,
     ErrorCode::SandboxHostFnDenied,
     ErrorCode::SandboxHostFnNotFound,
+    // Phase-3 G17-A2 — random host-fn per-call entropy budget exceed.
+    ErrorCode::SandboxHostFnRandomBudgetExceeded,
     ErrorCode::SandboxManifestUnknown,
     ErrorCode::SandboxManifestRegistrationDeferred,
     ErrorCode::SandboxModuleInvalid,
@@ -284,8 +286,16 @@ fn variant_count_is_pinned() {
     // at the browser thin-client cache write boundary. Construction
     // site at `bindings/napi/src/browser_indexeddb.rs::map_dom_exception_to_error_code`;
     // closes D-PHASE-3-27 / br-r1-2 BLOCKER. Post-G18-A: 90 + 1 = 91.
+    //
+    // Phase-3 G17-A2 wave-5b adds 1 code:
+    // `SandboxHostFnRandomBudgetExceeded` — typed per-call entropy
+    // budget overrun for the `random` host-fn (CLAUDE.md baked-in #16
+    // closure / Compromise #16). Construction site at
+    // `crates/benten-eval/src/primitives/sandbox.rs::SandboxError::code`
+    // (cap-string carrier `random:per_call_budget_exceeded`).
+    // Post-G17-A2: 91 + 1 = 92.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 91,
+        CATALOG_VARIANT_COUNT, 92,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

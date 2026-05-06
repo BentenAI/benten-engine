@@ -77,6 +77,7 @@ fn module_install_with_migrations_rejects_on_wasm32() {
             id: "add-author-index-2026-04".into(),
             description: None,
         }],
+        host_fns: None,
         signature: None,
     };
     let cid = testing_compute_manifest_cid(&m);
