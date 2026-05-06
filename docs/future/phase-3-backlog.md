@@ -273,6 +273,22 @@ Estimated touch size: ~300-600 LOC of test infrastructure across `bindings/napi/
 
 **Touch size:** ~10-20 LOC (guard tightening) + 1-2 regression tests; bundles with §5.1.
 
+#### 5.1-followup-d Canonical-fast-path perf-gate rework — release-profile-gated or criterion-companion-test (PR #121 dev-profile-flake carry)
+
+**State at PR #121 (2026-05-06):** `crates/benten-ivm/tests/algorithm_b_general.rs::algorithm_b_canonical_view_fast_path_preserved_within_20pct_of_strategy_b_baseline` is the load-bearing canonical-fast-path-not-collapsed gate. The original 1.50x ceiling tripped on slow CI runners under dev-profile cargo test (PR #116 macos-arm64@stable + PR #120 macos-arm64@1.95.0 both observed 1.4-1.7x ratios); PR #121 first attempted to silence with `#[ignore]` (BLOCKED at mini-review per pim-2 §3.6b — claimed criterion bench was the load-bearing gate, but the criterion bench at `crates/benten-ivm/benches/algorithm_b_canonical.rs` only produces measurement-only estimates with NO firing 1.20x assertion + NO CI lane that reads them). PR #121 was reworked to keep the in-test gate firing but loosen the ceiling to 2.00x — preserves "canonical fast-path has not collapsed" protection (3x+ regressions still trip) while surviving slow-CI noise.
+
+**Phase 3 target:** re-tighten the gate to the 1.20x release-profile target via either (a) wiring a criterion-companion test that reads `target/criterion/.../estimates.json` + asserts ratio ≤ 1.20 (the pre-`g15a-mr-major-2` shape, but with FAIL-on-missing-estimates instead of silent-Ok) plus a CI lane that runs `cargo bench` so the estimates exist; OR (b) gating the in-test 1.20x assertion behind `#[cfg(not(debug_assertions))]` so dev-profile runs skip but release-profile runs (which CI gains via `cargo test --release` lane) enforce. Option (a) bundles with §5.1 (a) drift-detector since both want a release-profile bench surface. Option (b) is simpler but requires a separate CI lane.
+
+**Why Phase 3:** the dev-profile vs release-profile divergence is intrinsic to `cargo test` running unoptimized; tightening to 1.20x in dev-profile is unsound. The 2.00x interim ceiling is meaningful protection (catches dispatch-router collapse, capability-table-bypass, kernel-instantiation regression) but not the headline 20% bound the canonical-fast-path commitment cites. The rework lifts the gate back to the documented 1.20x without dev-profile flake.
+
+**Touch size:** option (a) ~50-100 LOC test + ~10-20 LOC CI workflow change; option (b) ~5-10 LOC test attribute + ~10-20 LOC CI workflow change. Bundles with §5.1 / §5.1-followup-a (drift-detector + rebuild) since the same harness consumes the release-profile measurement.
+
+**Cross-references:**
+- `crates/benten-ivm/tests/algorithm_b_general.rs::algorithm_b_canonical_view_fast_path_preserved_within_20pct_of_strategy_b_baseline` (current 2.00x interim site)
+- `crates/benten-ivm/benches/algorithm_b_canonical.rs` (criterion bench surface for the companion-test rework)
+- `.github/workflows/bench-threshold-drift.yml` (existing bench lane, currently `informational` — would gain enforcement via either rework path)
+- PR #121 mini-review (`r5-pr121-mini-review.json`) carrying the BLOCKER → fix-pass narrative.
+
 ### 5.2 AnchorPrefix selector lift in user-view registration (post-G8-A)
 
 **Phase 2b state:** R6-R3 r6-r3-arch-4 named-destination carry. `Engine::register_user_view` accepts `InputPattern { anchor_prefix: Option<String>, ... }` as part of `UserViewSpec`, but the dispatch path at `crates/benten-engine/src/engine_views.rs::register_user_view` silently coerces `anchor_prefix` → label-equality match (the AnchorPrefix variant feeds the prefix string into the same `input_pattern_label` slot the `Label` variant uses). The pre-G8-A SEMANTIC STUB doc-block at the implementation site is honest about this; the stub bridges through `ContentListingView` until G8-A's per-strategy view dispatch lands. R6 Round 1 (r6-arch-4) flagged that no Phase-3 destination doc named the carry; this entry IS the named destination.
