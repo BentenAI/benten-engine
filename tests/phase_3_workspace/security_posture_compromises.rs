@@ -353,7 +353,10 @@ fn security_posture_compromise_11_materialization_gate_landed_at_g15_a() {
     // the closure narrative referencing the composition: G15-A
     // materialization-time gate + G14-D delivery-time gate).
     //
-    // Concrete shape:
+    // Concrete shape (r4-r2-ivm-5 STRENGTHENED — symbol-form cites per
+    // §3.5b HARDENED point-1: every path::symbol cite verified at HEAD,
+    // proptest-symbol-of-record + materialization-gate-symbol-of-record
+    // for Compromise #11 closure narrative):
     //   let posture = std::fs::read_to_string(
     //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
     //           .join("..").join("..").join("docs").join("SECURITY-POSTURE.md")
@@ -365,11 +368,43 @@ fn security_posture_compromise_11_materialization_gate_landed_at_g15_a() {
     //         || section.contains("Phase 3"),
     //       "Compromise #11 closure narrative must cite G15-A (materialization-time gate) and/or G14-D (delivery-time gate)");
     //
+    //   // r4-r2-ivm-5 STRENGTHENING: closure narrative cites the
+    //   // proptest symbol-of-record (G15-B drift-detector) AND the
+    //   // materialization-gate symbol-of-record (G15-A view-read gate).
+    //   // Replaces the prior generic substring-containment ('G15-A' /
+    //   // 'G14-D' / 'Phase 3') with proptest-symbol cites per
+    //   // ivm-major-2 narrative + §3.5b HARDENED point-1.
+    //   assert!(
+    //       section.contains("prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern"),
+    //       "SECURITY-POSTURE.md Compromise #11 closure narrative MUST cite \
+    //        the proptest-symbol-of-record \
+    //        `prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern` \
+    //        per §3.5b HARDENED point-1 + r4-r2-ivm-5"
+    //   );
+    //   assert!(
+    //       section.contains("ivm_view_per_row_read_gate_against_actor_cap_set"),
+    //       "SECURITY-POSTURE.md Compromise #11 closure narrative MUST cite \
+    //        the materialization-gate symbol-of-record \
+    //        `ivm_view_per_row_read_gate_against_actor_cap_set` \
+    //        per §3.5b HARDENED point-1 + r4-r2-ivm-5"
+    //   );
+    //
     // OBSERVABLE consequence: closure narrative reflects the
-    // composition (materialization + delivery) — defends pim-1
-    // doc-coupling + the dual-layer IVM read-gate architecture.
+    // composition (materialization + delivery) AND cites the specific
+    // proptest + materialization-gate symbols by name. Defends pim-1
+    // doc-coupling + the dual-layer IVM read-gate architecture +
+    // r4-r2-ivm-5 symbol-form-cite strengthening.
+    //
+    // Companion: tools/cite-drift-detector/tests/cite_drift_detector_finds_known_drift_fixture.rs
+    // extended at G15-A landing with a SECURITY-POSTURE Compromise #11
+    // mini-fixture covering both symbols (per r4-r2-ivm-5
+    // recommendation #2).
     unimplemented!(
-        "G15-A wires SECURITY-POSTURE.md grep assertion that Compromise #11 is marked CLOSED via G15-A + G14-D composition"
+        "G15-A wires SECURITY-POSTURE.md grep assertion that Compromise #11 is marked CLOSED \
+         via G15-A + G14-D composition AND cites the proptest-symbol-of-record \
+         (prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern) AND \
+         the materialization-gate symbol-of-record (ivm_view_per_row_read_gate_against_actor_cap_set) \
+         per r4-r2-ivm-5 §3.5b HARDENED point-1 strengthening"
     );
 }
 

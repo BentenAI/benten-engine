@@ -53,18 +53,72 @@ fn loro_not_in_browser_bundle_per_baked_in_17() {
     //
     //   let raw = std::fs::read(&bundle).unwrap();
     //
-    //   // Loro symbol presence check (heuristic — Loro's exported
-    //   // symbol prefix is `loro_` for Rust ABI + `Loro` for typed
-    //   // identifiers; either appearing in the wasm bundle indicates
-    //   // Loro was compiled in):
+    //   // Loro symbol presence check (r4-r2-napi-2 PICK: wasmparser walk,
+    //   // NOT bytewise heuristic — wasm-opt -Oz strip would defeat the
+    //   // bytewise check by removing the name-section debug info).
     //   //
-    //   //   Cleaner: walmparser walks the wasm and collects fn names.
-    //   //   Heuristic: bytewise search for `loro_` ASCII signature.
+    //   // The wasmparser pick walks imports / exports / custom-name-section
+    //   // (when present) + collects function names. It survives wasm-opt
+    //   // -Oz IF the audit runs on the PRE-STRIP artifact; if the audit
+    //   // runs post-strip the walk's symbol coverage is degraded but the
+    //   // Cargo.lock defense-in-depth complement (below) still fires.
+    //   //
+    //   // R5 G18-A implementer wires:
+    //   //
+    //   //   use wasmparser::Parser;
+    //   //   for payload in Parser::new(0).parse_all(&raw) {
+    //   //       match payload.unwrap() {
+    //   //           wasmparser::Payload::ImportSection(imports) => {
+    //   //               for import in imports {
+    //   //                   let import = import.unwrap();
+    //   //                   for marker in &["loro_", "Loro"] {
+    //   //                       assert!(!import.module.contains(marker)
+    //   //                              && !import.name.contains(marker),
+    //   //                           "browser bundle import '{}::{}' contains \
+    //   //                            Loro marker {} per CLAUDE.md baked-in #17",
+    //   //                           import.module, import.name, marker);
+    //   //                   }
+    //   //               }
+    //   //           }
+    //   //           wasmparser::Payload::ExportSection(exports) => {
+    //   //               for export in exports {
+    //   //                   let export = export.unwrap();
+    //   //                   for marker in &["loro_", "Loro"] {
+    //   //                       assert!(!export.name.contains(marker),
+    //   //                           "browser bundle export '{}' contains \
+    //   //                            Loro marker {} per CLAUDE.md baked-in #17",
+    //   //                           export.name, marker);
+    //   //                   }
+    //   //               }
+    //   //           }
+    //   //           wasmparser::Payload::CustomSection(reader)
+    //   //               if reader.name() == "name" => {
+    //   //               // Walk the name-section for fn names; reject any
+    //   //               // containing `loro_` / `Loro`. This section is
+    //   //               // STRIPPED by wasm-opt -Oz; presence is best-effort.
+    //   //           }
+    //   //           _ => {}
+    //   //       }
+    //   //   }
+    //   //
+    //   //   // Pre-strip artifact preferred; if running post-strip, the
+    //   //   // wasmparser walk degrades + Cargo.lock defense-in-depth fires.
     //
-    //   let bundle_str = String::from_utf8_lossy(&raw);
-    //   assert!(!bundle_str.contains("loro_internal::"),
-    //       "browser bundle MUST NOT contain Loro symbols per CLAUDE.md baked-in #17 thin-client commitment; \
-    //        full Loro CRDT machinery is native-only (see crates/benten-sync architecture)");
+    //   // r4-r2-napi-2 DEFENSE-IN-DEPTH: Cargo.lock walk — survives
+    //   // wasm-opt -Oz strip because it asserts at compile-time which
+    //   // crates resolve into the wasm32 build target. The browser
+    //   // crate's resolved deps must NOT include `loro` or `loro-internal`:
+    //   let cargo_lock = std::fs::read_to_string(
+    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //           .join("..").join("..").join("Cargo.lock")
+    //   ).unwrap();
+    //   //   Parse the Cargo.lock; resolve which packages are pulled in
+    //   //   by the wasm32 dep-graph rooted at the browser cdylib crate.
+    //   //   Assert NO transitive resolution to loro / loro-internal /
+    //   //   iroh / iroh-net / iroh-blobs from the wasm32 root.
+    //   //   (Implementation: cargo metadata --filter-platform wasm32-unknown-unknown
+    //   //    + walk resolve.nodes; or parse Cargo.lock by hand under
+    //   //    --locked CI invariant.)
     //
     //   // Sibling assertion: the Cargo workspace declares Loro as
     //   // native-only:

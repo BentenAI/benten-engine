@@ -88,8 +88,8 @@ describe("R3-D 24th p/c drift — sandbox handler-args camelCase→snake_case ro
     // forgets to call translateSandboxArgs (or adds a new arg without
     // updating the translator) silently widens the ceiling to default
     // and fails this expectation.
-    expect.fail(
-      "G17-C must wire packages/engine/src/dsl.ts::translateSandboxArgs + engine end-to-end DSL→napi→eval round-trip",
+    throw new Error(
+      "RED-PHASE: G17-C wave-5b wires packages/engine/src/dsl.ts::translateSandboxArgs + engine end-to-end DSL→napi→eval round-trip + drops .skip + un-comments assertions",
     );
   });
 
@@ -125,8 +125,8 @@ describe("R3-D 24th p/c drift — sandbox handler-args camelCase→snake_case ro
     // wrong snake_case target like `output_limit_bytes` that eval
     // silently ignores (the 25th p/c drift recurrence shape per
     // r4-r1-wsa-1)."
-    expect.fail(
-      "G17-C must wire outputLimitBytes → output_limit camelCase round-trip (drops `Bytes`; canonical eval-side per primitive_host.rs:877)",
+    throw new Error(
+      "RED-PHASE: G17-C wave-5b wires outputLimitBytes → output_limit camelCase round-trip (drops `Bytes`; canonical eval-side per primitive_host.rs:877) + drops .skip + un-comments assertions",
     );
   });
 
@@ -156,8 +156,8 @@ describe("R3-D 24th p/c drift — sandbox handler-args camelCase→snake_case ro
     //
     // OBSERVABLE consequence: the un-skip lands AND the un-skipped
     // tests drive production flow (not just stub-call assertions).
-    expect.fail(
-      "G17-C un-skips the 3 sandbox.test.ts skips with bodies that drive registerModuleBytes production flow per pim-2",
+    throw new Error(
+      "RED-PHASE: G17-C wave-5b un-skips the 3 sandbox.test.ts skips with bodies that drive registerModuleBytes production flow per pim-2 + drops .skip + un-comments assertions",
     );
   });
 });

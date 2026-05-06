@@ -1,10 +1,31 @@
-//! R3-D RED-PHASE pin for `engine.registerModuleBytes` napi method
-//! (G17-C wave-5b; phase-3-backlog §6.6).
+//! R3-D RED-PHASE pin (SOURCE-CITE DIAGNOSTIC) for `engine.registerModuleBytes`
+//! napi method (G17-C wave-5b; phase-3-backlog §6.6).
 //!
 //! Pin source: r2-test-landscape §2.5 G17-C
-//! `engine_register_module_bytes_napi_method_present`.
+//! `engine_register_module_bytes_napi_source_cite_diagnostic`.
 //!
-//! ## Method-presence shape
+//! ## r4-r2-napi-3 RELABEL (2026-05-05)
+//!
+//! Per `r4-r2-napi-3` MINOR + recommendation option (a): this test is
+//! a SOURCE-CITE DIAGNOSTIC, NOT a load-bearing end-to-end pin per
+//! pim-2 §3.6b. The grep-against-source-text shape (`napi_src.contains(
+//! "fn register_module_bytes")`) verifies the method's PRESENCE on the
+//! Rust source surface but does NOT drive the production-grade entry
+//! point with observable behavioral consequence — that contract lives
+//! at the LOAD-BEARING end-to-end pin in
+//! `packages/engine/test/sandbox.test.ts` (Vitest DSL → napi →
+//! engine.registerModuleBytes round-trip exercising the manifest_registry
+//! WRITE path). G17-C R5 implementer un-skips both this diagnostic +
+//! the load-bearing sandbox.test.ts end-to-end pin together.
+//!
+//! Treats source-cite-vs-runtime-pin family per r4-r1-napi-3
+//! reshape precedent (engine_b_erasure_boundary.rs reshaped to
+//! compile-time witness; this companion stays as source-cite diagnostic
+//! by explicit labeling). Per pim-2 §3.6b: source-cite diagnostics are
+//! useful scaffolding pins but do NOT satisfy the end-to-end pin
+//! requirement on their own — the load-bearing pin is at sandbox.test.ts.
+//!
+//! ## Method-presence diagnostic shape
 //!
 //! G17-C ships the `register_module_bytes` napi method at
 //! `bindings/napi/src/engine.rs::register_module_bytes`. It carries
@@ -19,14 +40,15 @@
 //! Pairs with `crates/benten-engine/tests/manifest_unknown.rs` (READ-
 //! AND-VALIDATE side at `register_subgraph` time).
 //!
-//! Pairs with `packages/engine/test/sandbox.test.ts` (TS-Vitest
-//! end-to-end DSL exercises this napi method).
+//! Pairs with `packages/engine/test/sandbox.test.ts` (LOAD-BEARING
+//! Vitest end-to-end DSL pin per pim-2 §3.6b — exercises the napi
+//! method through real production flow).
 
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G17-C wave-5b authors register_module_bytes napi method per phase-3-backlog §6.6"]
-fn engine_register_module_bytes_napi_method_present() {
+#[ignore = "RED-PHASE: G17-C wave-5b authors register_module_bytes napi method (source-cite diagnostic per r4-r2-napi-3; load-bearing end-to-end pin in sandbox.test.ts)"]
+fn engine_register_module_bytes_napi_source_cite_diagnostic() {
     // phase-3-backlog §6.6 pin. G17-C implementer wires this:
     //
     //   // The napi method is exposed on the Engine surface:

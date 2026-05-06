@@ -39,6 +39,18 @@
 //! placeholders that document the intended assertion shape. The
 //! implementer at G15-A replaces the `unimplemented!()` body with the
 //! real assertion against the live API.
+//!
+//! ## LabelPattern import path (r4-r2-ivm-6 docstring)
+//!
+//! The `LabelPattern` enum import path is assumed to be
+//! `benten_ivm::LabelPattern` per ivm-major-1 architectural choice (a)
+//! — generic kernel keyed on `(label_pattern, projection)`. G15-A
+//! implementer adjusts the import path if a different architectural
+//! choice is made; this docstring tracks the cross-reference for
+//! §3.5b HARDENED point-1 cite verification. Pseudo bodies below use
+//! `LabelPattern::exact("post")` / `LabelPattern::exact("user")` /
+//! `LabelPattern::AnchorPrefix(...)` — G15-A implementer ratifies the
+//! final shape per r4-r2-ivm-6.
 
 #![allow(clippy::unwrap_used)]
 
@@ -129,15 +141,25 @@ fn algorithm_b_strategy_a_b_dispatch_router_routes_correctly() {
     // fast path) and Strategy::B (generalized) based on view-id
     // classification.
     //
-    // G15-A implementer wires this against the internal router:
+    // G15-A implementer wires this against the internal router. Per
+    // r4-r2-ivm-4 recalibration: the existing public `benten_ivm::Strategy`
+    // enum is reused; no new `InternalStrategy` parallel type. The
+    // dispatch router is internal — the engine refuses Strategy::A
+    // user-view registration (per ivm-major-5 + D-PHASE-3-28 RESOLVED),
+    // and the canonical fast-path at the kernel level is classified via
+    // the existing Strategy::A variant. The 5 hand-written views are
+    // inner kernels of Strategy::B per ivm-disagree-1; Strategy::A is
+    // reserved at the engine boundary but used internally for the
+    // canonical-view fast-path classification.
+    //
     //   let canonical_strategy = benten_ivm::algorithm_b::dispatch_for(
     //       &ViewId::canonical("crud:post"),
     //   );
-    //   assert_eq!(canonical_strategy, InternalStrategy::A);
+    //   assert_eq!(canonical_strategy, benten_ivm::Strategy::A);
     //   let user_strategy = benten_ivm::algorithm_b::dispatch_for(
     //       &ViewId::user("custom:posts_by_author"),
     //   );
-    //   assert_eq!(user_strategy, InternalStrategy::B);
+    //   assert_eq!(user_strategy, benten_ivm::Strategy::B);
     //
     // OBSERVABLE consequence: the router is deterministic; same
     // view-id always routes to the same strategy. Defends against

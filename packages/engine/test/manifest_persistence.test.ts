@@ -64,8 +64,8 @@ describe("R3-D G18-A — browser module-manifest persistence end-to-end", () => 
     // CAVEAT: this test runs under Playwright (or wasm-bindgen-test
     // with a real IndexedDB shim like `fake-indexeddb`); a vanilla
     // node runtime cannot drive this end-to-end.
-    expect.fail(
-      "G18-A wires page-reload survival end-to-end (Playwright cell or fake-indexeddb under vitest)",
+    throw new Error(
+      "RED-PHASE: G18-A wave-5a wires page-reload survival end-to-end (Playwright cell or fake-indexeddb under vitest) + drops .skip + un-comments assertions",
     );
   });
 });

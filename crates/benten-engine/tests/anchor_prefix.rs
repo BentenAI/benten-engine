@@ -22,6 +22,20 @@
 //! ## RED-PHASE discipline
 //!
 //! `#[ignore]`'d with rationale `"RED-PHASE: G15-B wave-5a lifts AnchorPrefix"`.
+//!
+//! ## LabelPattern import path (r4-r2-ivm-6 docstring)
+//!
+//! The `LabelPattern` enum import path is assumed to be
+//! `benten_ivm::LabelPattern` per ivm-major-1 architectural choice (a)
+//! — generic kernel keyed on `(label_pattern, projection)`. G15-A
+//! implementer adjusts the import path if a different architectural
+//! choice is made; this docstring tracks the cross-reference for
+//! §3.5b HARDENED point-1 cite verification. The `.into()` calls at
+//! the use sites (e.g. `LabelPattern::AnchorPrefix("crud:".into())`)
+//! suggest a String/smol-str newtype payload; the `LabelPattern::exact()`
+//! constructor at register_user_view.rs sites suggests a builder helper.
+//! G15-A implementer ratifies the final shape; this docstring pins the
+//! producer-consumer pair documentation expectation per r4-r2-ivm-6.
 
 #![allow(clippy::unwrap_used)]
 

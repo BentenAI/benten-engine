@@ -73,6 +73,16 @@ fn engine_err_carrier_covers_every_engine_error_variant_with_no_structured_field
     // verifies each variant's structured fields round-trip through the
     // napi boundary without loss.
     //
+    // r4-r2-napi-5 BRIEF DIRECTIVE for G19-B R5 dispatch (LOAD-BEARING):
+    // `EngineError::all_variants_for_test()` MUST be derived via
+    // `#[derive(EnumIter)]` from strum (or via build.rs codegen step
+    // mirroring `scripts/codegen-errors.ts`). It MUST NOT be hand-
+    // maintained — a hand-maintained list silently drifts when a new
+    // EngineError variant ships, recurring the numeric-claim-drift
+    // surface r1-napi-5 flagged. G19-B brief MUST include this
+    // directive verbatim per r4-r2-napi-5 (BRIEF-AUGMENTATION at R5
+    // dispatch time).
+    //
     // Concrete shape:
     //   for variant in benten_engine::EngineError::all_variants_for_test() {
     //       let napi_err = benten_napi::testing::engine_err(variant.clone());
