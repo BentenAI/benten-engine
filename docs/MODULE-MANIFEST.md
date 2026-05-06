@@ -85,6 +85,8 @@ pub struct ModuleManifest {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub migrations: Vec<MigrationStep>,    // Phase-3 reserved
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_fns: Option<HostFnsOverride>, // Phase-3 G17-A2 — additive
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature: Option<ManifestSignature>, // Phase-3 reserved
 }
 
@@ -92,6 +94,23 @@ pub struct ModuleManifestEntry {
     pub name: String,           // module-local name
     pub cid: String,            // base32 CIDv1 of the Wasm bytes
     pub requires: Vec<String>,  // ["host:compute:time", "host:fs:read"]
+}
+
+// Phase-3 G17-A2 — per-host-fn overrides (CLAUDE.md baked-in #16
+// closure / Compromise #16). Additive optional carriers for fields
+// the codegen-default surface ships with a default value.
+pub struct HostFnsOverride {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub random: Option<RandomHostFnOverride>,
+}
+
+pub struct RandomHostFnOverride {
+    /// Per-call entropy budget in bytes. Codegen default is 4096
+    /// (per r1-wsa-8). Manifests MAY tighten or widen this for the
+    /// modules they declare; overrun fires
+    /// `E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub budget_bytes_per_call: Option<u64>,
 }
 ```
 
@@ -113,6 +132,38 @@ bytes after Phase-3 lands the signing surface, producing the same CID
 
 A Phase-3 signed re-issuance gets a **distinct** CID (it carries the
 populated `signature` field, so its canonical bytes differ).
+
+### 3.1.5 The `host_fns: Option<HostFnsOverride>` field (Phase-3 G17-A2)
+
+The `host_fns` field is an **additive optional** override carrier.
+Currently the only declared sub-field is `random.budget_bytes_per_call`,
+which lets a manifest tighten or widen the per-call entropy budget for
+the `random` host-fn (codegen default = 4096 bytes per r1-wsa-8). All
+sub-fields are `Option<T>` with `skip_serializing_if = Option::is_none`;
+when every field is `None`, the entire struct is omitted from canonical
+bytes, so a manifest with no overrides has the SAME CID before and
+after this G17-A2 schema lift (D9 forward-compat).
+
+Example TOML dev-time source declaring a tighter random budget:
+
+```toml
+name = "acme.entropy-tight"
+version = "0.0.1"
+
+[[modules]]
+name = "main"
+cid = "bafy..."
+requires = ["host:random:read"]
+
+[host_fns.random]
+budget_bytes_per_call = 1024  # tighter than the 4096 default
+```
+
+A SANDBOX call against this manifest sees its 1024-byte ceiling
+applied at the `random` trampoline (per
+`crates/benten-engine/src/primitive_host.rs::execute_sandbox`); a
+single-invocation request larger than 1024 bytes fires
+`E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED`.
 
 ### 3.2 The `migrations` field on wasm32-unknown-unknown
 
