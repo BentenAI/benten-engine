@@ -51,7 +51,7 @@ fn engine_napi_binding_compiles_native_redb_default() {
     // proper (which DOES use the alias's redb-specific surface) —
     // this test catches the alias-flip BEFORE the cdylib build's
     // surface-area regression manifests.
-    let _f: fn(&benten_engine::Engine) = _accepts_alias;
+    let _: fn(&benten_engine::Engine) = _accepts_alias;
 }
 
 #[test]
