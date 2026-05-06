@@ -48,8 +48,9 @@ pub mod trap_to_typed;
 
 pub use counted_sink::{CountedSink, OverflowPath, SinkOverflow};
 pub use host_fns::{
-    CapAllowlist, CapRecheckPolicy, HostFnBehavior, HostFnContext, HostFnReturn, HostFnSpec,
-    RESERVED_HOST_ASYNC_CAP, default_host_fns, host_fn_names,
+    CapAllowlist, CapRecheckPolicy, DEFAULT_RANDOM_BUDGET_BYTES_PER_CALL, HostFnBehavior,
+    HostFnContext, HostFnReturn, HostFnSpec, RESERVED_HOST_ASYNC_CAP, default_host_fns,
+    host_fn_names,
 };
 pub use instance::{module_cache_size, module_for_bytes, shared_engine};
 pub use manifest::{
@@ -63,6 +64,6 @@ pub use manifest::{
 // tests) will mostly want `crate::sandbox::Sandbox` shorthand.
 pub use crate::primitives::sandbox as primitives_sandbox;
 pub use crate::primitives::sandbox::{
-    DEFERRED_HOST_FN_RANDOM_CAP_PREFIX, SandboxConfig, SandboxError, SandboxResult,
-    WALLCLOCK_DEFAULT_MS, WALLCLOCK_MAX_MS, execute, resolve_priority,
+    SandboxConfig, SandboxError, SandboxResult, WALLCLOCK_DEFAULT_MS, WALLCLOCK_MAX_MS, execute,
+    resolve_priority,
 };

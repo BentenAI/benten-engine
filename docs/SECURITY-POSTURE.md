@@ -26,7 +26,7 @@ written, referenceable form.
 | 13 | System-zone reserved-prefix rejection surface | 2a | Open (documented; minor-3) |
 | 14 | SANDBOX cold-start cost (no opt-in pool) | 2b | Open (D3 RESOLVED — additive Phase-3 change if real-workload bottleneck) |
 | 15 | `register_runtime` reserved with deferred error | 2b | Deferred to Phase 8 (marketplace) |
-| 16 | `random` host-fn deferred (no CSPRNG framework chosen) | 2b | Deferred to Phase 3 (see `docs/future/phase-3-backlog.md §6.10`) |
+| 16 | `random` host-fn deferred (no CSPRNG framework chosen) | 2b | **CLOSED** at Phase-3 G17-A2 wave-5b (CSPRNG via `getrandom` direct + capability-gated entropy budget per call: 4096 bytes default + per-manifest override at `host_fns.random.budget_bytes_per_call` per r1-wsa-8; constant-time cap-policy check per sec-r1-3) |
 | 17 | In-memory module-bytes registry (`Engine::register_module_bytes`) | 2b | **CLOSED** at Phase-3 G14-C wave-4b (durable `RedbBlobBackend` + CID-validating entry point) |
 | 18 | In-memory handler-version chain (`Engine::register_subgraph_replace`) | 2b | **CLOSED** at Phase-3 G14-C wave-4b (durable `system:HandlerVersion` zone + extensible canonical-bytes encoding per arch-r1-4 / D-C) |
 | 19 | Browser-target persistent storage absent — manifests in-memory only on `wasm32-unknown-unknown` | 2b | Open (Phase 3 — IndexedDB / OPFS persistence) |
@@ -1135,34 +1135,64 @@ manifests" section; `host-functions.toml` `[manifest.*]` entries;
 
 ---
 
-### Compromise #16 — `random` host-fn deferred to Phase 3 — Phase-2b additive
+### Compromise #16 — `random` host-fn deferred to Phase 3 — CLOSED at Phase-3 G17-A2 wave-5b
 
-**Class.** Capability gap (intentional); deferred pending workspace
-CSPRNG framework decision. Destination doc:
-[`docs/future/phase-3-backlog.md §6.10`](future/phase-3-backlog.md).
+**Class.** Capability gap (intentional) — CLOSED at Phase-3 G17-A2
+wave-5b (`benten-wt-r5-g17-a2`).
 
-**Shape.** D1-RESOLVED — Phase 2b's host-fn set ships `time`, `log`,
-and `kv:read`. `random` is **deferred to Phase 3** (see §6.10). A
-SANDBOX module that attempts to call a `random` import gets
+**Closure shape.** D-PHASE-3-11 RESOLVED-at-R1 picked **`getrandom`
+direct** as the workspace CSPRNG (NOT `rand` ecosystem; NOT a
+deterministic seed). G17-A2 wires the `random` host-fn alongside
+`time` / `log` / `kv:read` in the codegen-default surface
+(`crates/benten-eval/src/sandbox/host_fns.rs::default_host_fns`); the
+trampoline at `register_default_host_fns` invokes `getrandom::getrandom`
+to fill a guest buffer per call. Cap-string is `host:random:read`
+(4-segment shape mirroring `kv:read`); `cap_recheck` is `per_call`.
+Per-call entropy budget defaults to **4096 bytes** (per **r1-wsa-8**);
+a module manifest may tighten or widen the override via the additive
+optional `host_fns.random.budget_bytes_per_call` field on
+`ModuleManifest`. Budget overrun fires the typed
+`E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED` variant (routed through the
+`ON_DENIED` family per the `cap_string_for_routing` rules in
+`benten-errors`). The validate-time deferral guard at
+`crates/benten-eval/src/primitives/sandbox.rs::execute` (the
+sec-g7a-mr-5 `DEFERRED_HOST_FN_RANDOM_CAP_PREFIX` arm) is RETIRED;
+`crates/benten-eval/tests/sandbox_host_fn_random_deferred.rs` is
+deleted; the new green-phase regression guards are at
+`crates/benten-eval/tests/random_host_fn.rs` (4 tests including the
+load-bearing source-cite anti-regression
+`sandbox_host_fn_random_no_longer_returns_deferred_error`).
+
+**Shape (historical pre-G17-A2 narrative; preserved for audit).**
+D1-RESOLVED — Phase 2b's host-fn set shipped `time`, `log`, and
+`kv:read`. `random` was **deferred to Phase 3** because the workspace
+CSPRNG framework choice had not been made (rand_chacha vs OS-CSPRNG
+vs hardware-RDRAND fallback). Shipping `random` before that decision
+would have baked in a footgun — a module that depended on weak
+randomness then would be a silent security regression on a future
+swap. Picking the wrong CSPRNG is a hard-to-reverse decision. A
+SANDBOX module that attempted to call a `random` import received
 `E_SANDBOX_HOST_FN_NOT_FOUND` with an operator-actionable hint citing
 `phase-3-backlog.md §6.10`.
 
-**Why deferred:** the workspace CSPRNG framework choice has not been
-made (rand_chacha vs OS-CSPRNG vs hardware-RDRAND fallback). Shipping
-`random` before that decision would bake in a footgun — a module that
-depends on weak randomness today would be a silent security regression
-on a future swap. Picking the wrong CSPRNG is a hard-to-reverse
-decision.
+**Why CLOSED at Phase-3 G17-A2:** the workspace CSPRNG decision
+landed at R1 (D-PHASE-3-11 RESOLVED). `getrandom` direct is
+appropriate because (a) the rest of the workspace already pins it for
+`ed25519-dalek` keypair generation, (b) it doesn't bake the engine
+into the broader `rand` ecosystem trait shape, (c) it's
+deterministic-seed-free by construction (the OS CSPRNG draws — the
+class of footgun the deferral was protecting against). Wiring
+`random` through a centralised cap-gated trampoline (NOT inline in
+each module) preserves the Phase-2b posture that host-fn surface
+additions go through the documented capability + audit-frame
+discipline.
 
-**Mitigation / posture claim.** Modules that need randomness today
-must surface it via input from a CALL-er handler that derives
-randomness from a known-source (engine config, principal-bound seed,
-etc.). When the workspace settles on a CSPRNG, `random` lands as an
-additive Phase 3 entry per [`phase-3-backlog.md §6.10`](future/phase-3-backlog.md) without breaking any Phase-2b modules.
-
-**Cross-refs.** D1-RESOLVED; `host-functions.toml` deferral comment;
-`crates/benten-eval/tests/sandbox_host_fn_random_deferred.rs`
-regression guard; sec-pre-r1-06 §2.3 reasoning.
+**Cross-refs.** D-PHASE-3-11 RESOLVED-at-R1; `host-functions.toml`
+`[host_fn.random]` entry; `crates/benten-eval/tests/random_host_fn.rs`
+green-phase regression guards;
+`crates/benten-eval/src/sandbox/host_fns.rs::DEFAULT_RANDOM_BUDGET_BYTES_PER_CALL`
+(4096 byte default per r1-wsa-8); `docs/HOST-FUNCTIONS.md` operator
+section; `docs/MODULE-MANIFEST.md` per-manifest override field.
 
 ---
 

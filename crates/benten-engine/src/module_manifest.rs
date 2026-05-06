@@ -123,10 +123,44 @@ pub struct ModuleManifest {
     /// `E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub migrations: Vec<MigrationStep>,
+    /// Phase-3 G17-A2 — additive optional per-host-fn overrides.
+    /// Currently the only declared override is
+    /// [`HostFnsOverride::random`] carrying a per-call entropy budget
+    /// (per r1-wsa-8). Omitted from canonical bytes when `None` (D9
+    /// forward-compat — a Phase-2b manifest with no overrides keeps
+    /// its CID across the G17-A2 schema lift).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_fns: Option<HostFnsOverride>,
     /// Phase-3-reserved Ed25519 signature surface. When `None` the
     /// field is OMITTED from canonical bytes (D9 forward-compat).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature: Option<ManifestSignature>,
+}
+
+/// Phase-3 G17-A2 — per-host-fn overrides. Additive optional carriers
+/// for fields that the codegen-default surface ships with a default
+/// value (e.g. the `random` per-call entropy budget). A manifest with
+/// every field `None` is bit-equivalent to no override at all (the
+/// canonical encoder strips `None` fields per D9).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostFnsOverride {
+    /// Override for the `random` host-fn — primarily the per-call
+    /// entropy budget (`budget_bytes_per_call`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub random: Option<RandomHostFnOverride>,
+}
+
+/// Phase-3 G17-A2 — per-manifest overrides for the `random` host-fn.
+/// All fields additive optional; `None` field == codegen default.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RandomHostFnOverride {
+    /// Per-call entropy budget in bytes. Codegen default is 4096
+    /// (r1-wsa-8). Manifests MAY tighten or widen this for the modules
+    /// they declare. The sandbox executor enforces the value
+    /// per-INVOCATION (each call must fit) and routes overruns through
+    /// `E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub budget_bytes_per_call: Option<u64>,
 }
 
 /// 1-line operator-readable summary of a [`ModuleManifest`] embedded
@@ -271,6 +305,7 @@ mod tests {
                 requires: vec!["host:compute:time".into()],
             }],
             migrations: vec![],
+            host_fns: None,
             signature: None,
         }
     }
@@ -335,6 +370,7 @@ mod tests {
                 },
             ],
             migrations: vec![],
+            host_fns: None,
             signature: None,
         };
         let s = m.summary();

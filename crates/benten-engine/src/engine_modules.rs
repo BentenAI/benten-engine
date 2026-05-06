@@ -555,6 +555,59 @@ impl Engine {
         }
         names
     }
+
+    /// Phase-3 G17-A2 — look up the per-manifest `random` host-fn
+    /// per-call entropy-budget override (if any) for a Named manifest.
+    ///
+    /// Walks the engine's `installed_modules` set; for each installed
+    /// manifest whose **entry name** OR **manifest name** matches
+    /// `manifest_name`, returns
+    /// `manifest.host_fns.random.budget_bytes_per_call` if all
+    /// intermediate fields are present. Returns `None` when:
+    ///   - the manifest name is not installed,
+    ///   - the manifest carries no `host_fns` override,
+    ///   - the override carries no `random` entry, or
+    ///   - the `random` entry carries no `budget_bytes_per_call`.
+    ///
+    /// `None` flows through `SandboxConfig::random_budget_bytes_per_call`
+    /// as "no override" so the codegen default (4096 per r1-wsa-8)
+    /// applies.
+    ///
+    /// **Lookup rationale:** the `manifest` property on a SANDBOX node
+    /// is the manifest registry key at SANDBOX dispatch (e.g. an entry
+    /// `name` from `manifest.modules[i].name`). The manifest-level
+    /// `host_fns` override hangs off the parent `ModuleManifest`, so
+    /// we resolve via entry-match → parent. Codegen-default registry
+    /// names (`compute-basic`, etc.) carry no override and yield
+    /// `None` here, which is correct.
+    ///
+    /// **wasm32 cut:** matches the [`Self::manifest_registry`] gate —
+    /// the only consumer is the production `execute_sandbox` override
+    /// in `primitive_host.rs`, which is itself wasm32-cut.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn random_budget_for_named_manifest(&self, manifest_name: &str) -> Option<u64> {
+        let active = self
+            .installed_modules()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        for installed in active.values() {
+            let manifest_match = installed.manifest.name == manifest_name;
+            let entry_match = installed
+                .manifest
+                .modules
+                .iter()
+                .any(|e| e.name == manifest_name);
+            if manifest_match || entry_match {
+                return installed
+                    .manifest
+                    .host_fns
+                    .as_ref()
+                    .and_then(|hf| hf.random.as_ref())
+                    .and_then(|r| r.budget_bytes_per_call);
+            }
+        }
+        None
+    }
 }
 
 /// Map a [`ManifestError`] (encode / decode failure from the
