@@ -187,18 +187,6 @@ fn algorithm_b_strategy_a_b_dispatch_router_routes_correctly() {
 }
 
 #[test]
-// Ignored under default `cargo test` runs — dev-profile execution shows
-// 1.4-1.7x ratios on slow CI runners (macOS arm64 / 1.95.0 toolchain
-// observed; PR #116 + PR #120 both tripped). The 1.20x assertion
-// reflects release-profile expectations; the load-bearing gate is the
-// criterion bench at `benches/algorithm_b_canonical.rs` which runs
-// under release-profile + statistical averaging. Re-enable locally
-// with `--ignored` when iterating on the canonical fast-path.
-//
-// Phase-3 backlog candidate: rework into a `#[cfg(not(debug_assertions))]`
-// gate or move into the criterion bench harness directly so the gate
-// is preserved without dev-profile flakiness.
-#[ignore = "dev-profile flake on slow runners — release-profile criterion bench is load-bearing gate"]
 fn algorithm_b_canonical_view_fast_path_preserved_within_20pct_of_strategy_b_baseline() {
     // ivm-minor-6 + ivm-disagree-1 pin. Per the plan G15-A row line
     // "preserve canonical-view fast-path within 20% gate."
@@ -222,10 +210,19 @@ fn algorithm_b_canonical_view_fast_path_preserved_within_20pct_of_strategy_b_bas
     //     hand-written inner kernel. Adds the dispatch-router hop.
     //
     // The companion criterion bench at
-    // `crates/benten-ivm/benches/algorithm_b_canonical.rs` remains as
-    // a finer-grained measurement surface for when CI gains a bench
-    // lane (named in `docs/future/phase-3-backlog.md` §5.1 as a
-    // follow-on); this in-test gate is the load-bearing 20% bound.
+    // `crates/benten-ivm/benches/algorithm_b_canonical.rs` produces
+    // measurement-only estimates (no firing 1.20x assertion + no CI
+    // lane that reads them), so THIS in-test gate is the only
+    // canonical-fast-path-not-collapsed protection currently firing.
+    // The 2.00x ceiling below is loosened from the original 1.50x
+    // because slow CI runners (macOS arm64 / Rust 1.95.0 toolchain)
+    // produce 1.4-1.7x ratios under dev-profile cargo test (observed
+    // on PR #116 + PR #120 trips). The 1.20x release-profile target
+    // remains aspirational; the criterion-companion-test rework that
+    // would re-tighten this gate is named at
+    // `docs/future/phase-3-backlog.md` §5.1-followup-d. The 2.00x
+    // ceiling here still catches a 3x+ regression — meaningful
+    // protection against canonical-fast-path collapse.
     use std::time::Instant;
 
     const ITERS: u64 = 1_024;
@@ -305,20 +302,23 @@ fn algorithm_b_canonical_view_fast_path_preserved_within_20pct_of_strategy_b_bas
     );
 
     let ratio = post_gen_ns / baseline_ns;
-    // 1.50 ceiling on `cargo test` (debug-profile, noisy) — the bench
-    // surface in benches/algorithm_b_canonical.rs runs the tighter
-    // 1.20 bound under `cargo bench` (release profile, statistical
-    // averaging via criterion). The 1.50 figure here is the
-    // load-bearing canonical-fast-path-not-collapsed bound: a
-    // dispatch-router regression that doubles the cost would trip;
-    // the 20% headline figure is the criterion-bench surface.
+    // 2.00 ceiling on `cargo test` (debug-profile + slow-CI-runner
+    // tolerant). Empirically: macOS arm64 / Rust 1.95.0 hit 1.568x;
+    // macOS arm64 / stable hit similar. linux + macos-x86_64 stay
+    // under 1.20x. The 2.00 ceiling preserves the canonical-fast-path-
+    // not-collapsed protection (dispatch-router regression that
+    // triples or more would trip) without flaking on slow runners.
+    // The 1.20x release-profile target remains aspirational — the
+    // criterion-companion-test rework that would re-tighten this gate
+    // is named at `docs/future/phase-3-backlog.md` §5.1-followup-d.
     assert!(
-        ratio <= 1.50,
+        ratio <= 2.00,
         "G15-A canonical fast-path regressed in `cargo test` measurement \
          (ratio = {ratio:.3}; baseline {baseline_ns:.1}ns/iter; post-gen \
          {post_gen_ns:.1}ns/iter). ivm-disagree-1: gate measures canonical \
-         fast-path vs Strategy::B baseline. The criterion bench at \
-         benches/algorithm_b_canonical.rs runs the tighter 1.20 bound under \
-         release-profile + statistical averaging."
+         fast-path vs Strategy::B baseline. Ratios above 2.00x indicate \
+         the dispatch-router hop has collapsed the fast-path; the 1.20x \
+         release-profile target remains aspirational pending the criterion-\
+         companion-test rework at docs/future/phase-3-backlog.md §5.1-followup-d."
     );
 }
