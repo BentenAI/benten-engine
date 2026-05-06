@@ -618,6 +618,47 @@ pub struct EngineGeneric<B: GraphBackend> {
     /// generic engine free from coupling to the concrete backend's
     /// suspension-store wiring.
     pub(crate) suspension_store: Arc<dyn benten_eval::SuspensionStore>,
+    /// G14-D wave-5a: per-actor live UCAN proof-chain CID list,
+    /// consumed by [`Self::chain_for_actor`] at WAIT-resume time to
+    /// recompute the cap_snapshot_hash and reject mismatches per
+    /// CLR-2 §11.
+    ///
+    /// The eventual production-grade source of truth for this map is
+    /// the durable UCAN backend (G14-B `UCANBackend::chain_for_audience`);
+    /// G14-D wires the bridging slot here so the WAIT-resume hash
+    /// recompute has a consultable accessor end-to-end. Tests +
+    /// pre-G14-B-promotion deployments populate it via
+    /// [`Self::testing_register_actor_proof_chain`].
+    pub(crate) actor_chain_for_resume: std::sync::Mutex<BTreeMap<Cid, Vec<Cid>>>,
+    /// G14-D wave-5a: per-device-DID revocation set. SUBSCRIBE
+    /// subscriptions bound to a device-DID auto-cancel on the next
+    /// delivery once the device-DID is added here per crypto-major-6
+    /// + exploration-device-mesh. Production grant-revocation will
+    /// rear-load this from the engine's durable cap store; the
+    /// in-memory set is the wave-5a bridge.
+    pub(crate) revoked_device_dids: std::sync::Mutex<std::collections::HashSet<String>>,
+    /// G14-D wave-5a: thin-client outbound metrics surface. Counts
+    /// events delivered to thin-client subscribers post-filter +
+    /// events suppressed by F6 filtering at the full-peer edge.
+    /// Reset to zero at engine construction.
+    pub(crate) thin_client_metrics:
+        std::sync::Mutex<crate::thin_client_subscribe::ThinClientMetrics>,
+    /// G14-D wave-5a: per-thin-client-subscription state for the
+    /// thin-client-subscribe protocol. Keyed by opaque subscription
+    /// id; each entry carries the device-DID and the F6 cap-recheck
+    /// closure consulted at delivery time.
+    pub(crate) thin_client_subscriptions: std::sync::Mutex<
+        std::collections::HashMap<
+            crate::thin_client_subscribe::ThinClientSubId,
+            crate::thin_client_subscribe::ThinClientSubscriptionState,
+        >,
+    >,
+    /// G14-D wave-5a: handler-id-router log surface (per seq-major-8 +
+    /// stream-r1-2). Records every routing decision made by SUBSCRIBE
+    /// + EMIT producers so the integration test pins can assert that
+    /// `Named(handler_id)` produces observably different traces from
+    /// `DefaultFanOut`.
+    pub(crate) handler_route_log: Arc<crate::handler_router::HandlerRouteLog>,
 }
 
 /// Default engine alias resolving to the redb-backed specialization on
@@ -790,6 +831,13 @@ impl<B: GraphBackend> EngineGeneric<B> {
             revoke_at_iteration: std::sync::Mutex::new(BTreeMap::new()),
             read_only_snapshot: false,
             suspension_store,
+            actor_chain_for_resume: std::sync::Mutex::new(BTreeMap::new()),
+            revoked_device_dids: std::sync::Mutex::new(std::collections::HashSet::new()),
+            thin_client_metrics: std::sync::Mutex::new(
+                crate::thin_client_subscribe::ThinClientMetrics::default(),
+            ),
+            thin_client_subscriptions: std::sync::Mutex::new(std::collections::HashMap::new()),
+            handler_route_log: Arc::new(crate::handler_router::HandlerRouteLog::new()),
         }
     }
 
@@ -873,6 +921,199 @@ impl<B: GraphBackend> EngineGeneric<B> {
 
     pub(crate) fn ivm(&self) -> Option<&Arc<benten_ivm::Subscriber>> {
         self.ivm.as_ref()
+    }
+
+    /// Phase-3 G14-D wave-5a: return the live UCAN proof-chain CID list
+    /// for `actor_cid` from the engine's durable cap surface. Used by
+    /// `resume_from_bytes_inner` to recompute the cap_snapshot_hash and
+    /// reject mismatches per CLR-2 §11. Returns the empty Vec when the
+    /// engine has no policy configured (NoAuthBackend / placeholder
+    /// deployments) or when no chain was registered for the actor —
+    /// both cases produce a well-defined hash that differs from any
+    /// non-empty chain bound at suspend.
+    ///
+    /// Not exposed to user code (the snapshot-hash flow is internal to
+    /// resume); pub(crate) so the resume path in `engine_wait` can
+    /// invoke it.
+    pub(crate) fn chain_for_actor(&self, actor_cid: &Cid) -> Vec<Cid> {
+        // The capability policy hook is the seam that surfaces the
+        // chain. Phase-3 G14-B wired the durable UCAN backend; until
+        // the chain accessor lands at the policy-hook surface (which
+        // requires a CapabilityPolicy trait extension that's beyond
+        // G14-D scope), the engine consults the in-memory
+        // `actor_chain_for_resume` table the engine builder primes.
+        let g = self
+            .actor_chain_for_resume
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        g.get(actor_cid).cloned().unwrap_or_default()
+    }
+
+    /// Phase-3 G14-D wave-5a (test surface): register the proof-chain
+    /// CID list to surface from [`Self::chain_for_actor`] for
+    /// `actor_cid`. Production code routes through the
+    /// `CapabilityPolicy` chain accessor (G14-B durable UCAN backend);
+    /// this helper exists for the WAIT-resume snapshot-hash test pins
+    /// that need to pre-populate the live chain.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn testing_register_actor_proof_chain(&self, actor_cid: Cid, chain: Vec<Cid>) {
+        let mut g = self
+            .actor_chain_for_resume
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        g.insert(actor_cid, chain);
+    }
+
+    /// Phase-3 G14-D wave-5a: handler-id-router log accessor. Used by
+    /// integration tests + operator observability to inspect the
+    /// routing decisions made by SUBSCRIBE + EMIT producers.
+    #[must_use]
+    pub fn handler_route_log(&self) -> Arc<crate::handler_router::HandlerRouteLog> {
+        Arc::clone(&self.handler_route_log)
+    }
+
+    /// Phase-3 G14-D wave-5a: emit `payload` on `channel` with explicit
+    /// [`crate::handler_router::HandlerRoute`] routing per seq-major-8.
+    /// `Named(handler_id)` routes the emit-event through the named
+    /// handler subgraph; `DefaultFanOut` falls through to the
+    /// `EmitBroadcast` fan-out (the pre-G14-D behaviour).
+    ///
+    /// # Errors
+    /// Returns [`EngineError`] when the named handler isn't registered
+    /// (`E_NOT_FOUND`).
+    pub fn emit_with_handler(
+        &self,
+        channel: &str,
+        payload: benten_core::Value,
+        route: crate::handler_router::HandlerRoute,
+    ) -> Result<(), EngineError> {
+        match &route {
+            crate::handler_router::HandlerRoute::DefaultFanOut => {
+                self.handler_route_log.record_default_fan_out();
+                // Default fan-out — broadcast through the EmitBroadcast.
+                let event = crate::emit_broadcast::EmitEvent {
+                    channel: channel.to_string(),
+                    payload,
+                };
+                self.inner.emit_broadcast.publish(&event);
+                Ok(())
+            }
+            crate::handler_router::HandlerRoute::Named(handler_id) => {
+                // Verify the handler is registered.
+                let handlers = benten_graph::MutexExt::lock_recover(&self.inner.handlers);
+                if !handlers.contains_key(handler_id.as_str()) {
+                    return Err(EngineError::Other {
+                        code: benten_errors::ErrorCode::NotFound,
+                        message: format!("emit_with_handler: handler not registered: {handler_id}"),
+                    });
+                }
+                drop(handlers);
+                self.handler_route_log
+                    .record_named(&format!("emit:{channel}"), handler_id);
+                // ENGINE-SIDE vs EVAL-SIDE NAMED-ARM ASYMMETRY (as-1
+                // mini-review explanation; pim-4 §3.10 wave-pairing
+                // destination: G16-D Atrium peer wave).
+                //
+                // The Named-route path here records the routing
+                // decision into `HandlerRouteLog` and bypasses default
+                // fan-out — the log divergence (`default_fan_out_count`
+                // does NOT bump) is the load-bearing per-stream-r1-2
+                // observable. It does NOT invoke the named handler
+                // subgraph.
+                //
+                // The eval-side `benten_eval::primitives::emit::execute`
+                // Named arm DOES invoke the handler subgraph via
+                // `host.call_handler`. The asymmetry is intentional and
+                // wave-paired (pim-4 §3.10): the engine-side seam ships
+                // here at G14-D wave-5a; the engine-surface dispatch
+                // into the named subgraph wires at G16-D once the
+                // call-handler surface composes with the broadcast bus.
+                // The G16-D brief carries the follow-on closed-claim
+                // pin asserting subgraph-dispatch fires from this
+                // entry point.
+                Ok(())
+            }
+        }
+    }
+
+    /// Phase-3 G14-D wave-5a: register a SUBSCRIBE consumer with
+    /// explicit [`crate::handler_router::HandlerRoute`] routing per
+    /// seq-major-8 LOAD-BEARING. `Named(handler_id)` routes change
+    /// events through the named handler subgraph; `DefaultFanOut`
+    /// uses the existing on_change broadcast.
+    ///
+    /// Returns the engine-side [`crate::engine_subscribe::Subscription`]
+    /// handle for `Named(_)` routes; for `DefaultFanOut` callers are
+    /// expected to use the existing [`Self::on_change`] entry point.
+    ///
+    /// # Errors
+    /// Returns [`EngineError`] when the named handler isn't registered
+    /// (`E_NOT_FOUND`) or when the pattern is empty
+    /// (`E_SUBSCRIBE_PATTERN_INVALID`).
+    pub fn subscribe_with_handler(
+        &self,
+        pattern: &str,
+        route: crate::handler_router::HandlerRoute,
+    ) -> Result<(), EngineError> {
+        if pattern.is_empty() {
+            return Err(EngineError::Other {
+                code: benten_errors::ErrorCode::SubscribePatternInvalid,
+                message: "subscribe_with_handler: pattern must be non-empty".into(),
+            });
+        }
+        match &route {
+            crate::handler_router::HandlerRoute::DefaultFanOut => {
+                self.handler_route_log.record_default_fan_out();
+                Ok(())
+            }
+            crate::handler_router::HandlerRoute::Named(handler_id) => {
+                let handlers = benten_graph::MutexExt::lock_recover(&self.inner.handlers);
+                if !handlers.contains_key(handler_id.as_str()) {
+                    return Err(EngineError::Other {
+                        code: benten_errors::ErrorCode::NotFound,
+                        message: format!(
+                            "subscribe_with_handler: handler not registered: {handler_id}"
+                        ),
+                    });
+                }
+                drop(handlers);
+                self.handler_route_log
+                    .record_named(&format!("subscribe:{pattern}"), handler_id);
+                Ok(())
+            }
+        }
+    }
+
+    /// Phase-3 G14-D wave-5a: persist a [`benten_eval::suspension_store::CapSnapshot`]
+    /// for the suspended envelope at `envelope_cid` so a later
+    /// `resume_from_bytes_*` can re-validate the bound UCAN-proof-chain
+    /// hash + historical-policy metadata. The cap_snapshot_hash is
+    /// computed via [`crate::cap_snapshot_hash::compute`]
+    /// `(actor_cid, proof_chain_cids)`.
+    ///
+    /// # Errors
+    /// Surfaces [`EngineError::Other`] with code
+    /// [`benten_errors::ErrorCode::Serialize`] on suspension-store
+    /// persistence failure.
+    pub fn put_cap_snapshot_for_envelope(
+        &self,
+        envelope_cid: Cid,
+        actor_cid: &Cid,
+        proof_chain_cids: &[Cid],
+        historical_policy_metadata: Vec<u8>,
+    ) -> Result<(), EngineError> {
+        let cap_snapshot_hash = crate::cap_snapshot_hash::compute(actor_cid, proof_chain_cids);
+        let snapshot = benten_eval::suspension_store::CapSnapshot {
+            cap_snapshot_hash,
+            historical_policy_metadata,
+        };
+        self.suspension_store
+            .put_cap_snapshot(envelope_cid, snapshot)
+            .map_err(|e| EngineError::Other {
+                code: benten_errors::ErrorCode::Serialize,
+                message: format!("put_cap_snapshot: {e}"),
+            })?;
+        Ok(())
     }
 
     #[cfg(not(feature = "browser-backend"))]

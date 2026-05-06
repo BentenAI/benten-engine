@@ -28,7 +28,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G14-D — phase-2-backlog §7.3 + Compromise #10 — WAIT cross-process round-trip"]
+#[ignore = "RED-PHASE: G14-D — phase-2-backlog §7.3 + Compromise #10 — WAIT cross-process round-trip (blocked on G14-B durable UCAN backend's `chain-for-audience` accessor wired through `engine.caps()`; G14-B already merged at main `496e144`, un-ignore when accessor stabilizes)"]
 fn wait_resume_cap_snapshot_hash_cross_process_round_trip() {
     // phase-2-backlog §7.3 + Compromise #10 pin. G14-D implementer
     // wires this:
@@ -68,7 +68,7 @@ fn wait_resume_cap_snapshot_hash_cross_process_round_trip() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-D — CLR-2 — cap_snapshot_hash binds UCAN proof chain at envelope"]
+#[ignore = "RED-PHASE: G14-D — CLR-2 — cap_snapshot_hash binds UCAN proof chain at envelope (blocked on G14-B durable UCAN backend's `chain-for-audience` accessor wired through `engine.caps()`; G14-B already merged at main `496e144`, un-ignore when accessor stabilizes)"]
 fn wait_resume_cap_snapshot_hash_binds_ucan_proof_chain_at_envelope() {
     // CLR-2 cluster pin. The cap_snapshot_hash MUST be derived from
     // the UCAN proof chain (specifically: the hashes of every UCAN
@@ -103,7 +103,7 @@ fn wait_resume_cap_snapshot_hash_binds_ucan_proof_chain_at_envelope() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-D — §11 CLR-2 — redundant-distinct: hash binds chain at WAIT-resume"]
+#[ignore = "RED-PHASE: G14-D — §11 CLR-2 — redundant-distinct: hash binds chain at WAIT-resume (blocked on G14-B durable UCAN backend's `chain-for-audience` accessor wired through `engine.caps()`; G14-B already merged at main `496e144`, un-ignore when accessor stabilizes)"]
 fn cap_snapshot_hash_binds_ucan_proof_chain_at_wait_resume() {
     // §11 CLR-2 redundant-distinct pin. Composes with
     // `wait_resume_cap_snapshot_hash_binds_ucan_proof_chain_at_envelope`

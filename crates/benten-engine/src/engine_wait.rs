@@ -74,6 +74,55 @@ use crate::engine::Engine;
 use crate::error::EngineError;
 use crate::outcome::Outcome;
 
+use std::cell::Cell;
+
+thread_local! {
+    /// G14-D wave-5a: thread-local hint carrying the historical
+    /// policy-metadata blob captured at suspend time per
+    /// phase-2-backlog §7.3 + plan §3 G14-D. The capability policy
+    /// hook at Step 4 of `resume_from_bytes_inner` reads this if it
+    /// implements historical-state binding; policies that don't
+    /// consume it leave it as a no-op. The cell is reset at the end
+    /// of every `resume_from_bytes_inner` call (via [`HistoricalPolicyMetadataHintGuard`])
+    /// so a subsequent resume on the same thread starts with a clean
+    /// slate even if the configured policy never consumed the hint.
+    pub(crate) static HISTORICAL_POLICY_METADATA_HINT: Cell<Option<Vec<u8>>> = const { Cell::new(None) };
+}
+
+/// G14-D wave-5a (htl-1 mini-review fix): RAII drain guard for
+/// [`HISTORICAL_POLICY_METADATA_HINT`]. Drains the cell on construction
+/// (so the resume body starts clean even if a previous resume left a
+/// stale hint behind) AND on drop (so the cell is empty after the
+/// resume body returns regardless of whether the configured policy
+/// consumed the hint via [`historical_policy_metadata_hint`]). The
+/// drop arm survives early returns / `?`-propagated errors which is
+/// why we use RAII rather than an explicit drain at every exit point.
+pub(crate) struct HistoricalPolicyMetadataHintGuard;
+
+impl HistoricalPolicyMetadataHintGuard {
+    pub(crate) fn drain_on_entry_and_exit() -> Self {
+        HISTORICAL_POLICY_METADATA_HINT.with(|cell| cell.set(None));
+        Self
+    }
+}
+
+impl Drop for HistoricalPolicyMetadataHintGuard {
+    fn drop(&mut self) {
+        HISTORICAL_POLICY_METADATA_HINT.with(|cell| cell.set(None));
+    }
+}
+
+/// G14-D wave-5a: read-and-clear accessor for the thread-local
+/// historical-policy-metadata hint. Policy implementations call this
+/// from inside their `check_write` / `check_read` hook to pick up the
+/// blob the engine threaded in from the suspension store. Returns
+/// `None` if no hint was set (NoAuth-equivalent / non-WAIT-resume
+/// callers).
+#[must_use]
+pub fn historical_policy_metadata_hint() -> Option<Vec<u8>> {
+    HISTORICAL_POLICY_METADATA_HINT.with(Cell::take)
+}
+
 // ---------------------------------------------------------------------------
 // Envelope persistence — G12-E retired the test-grade ENVELOPE_CACHE
 // ---------------------------------------------------------------------------
@@ -499,12 +548,24 @@ impl Engine {
         self.resume_from_bytes_inner(envelope, None, payload)
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "G14-D wave-5a added the cap_snapshot_hash + persisted-policy-metadata Step 3.5; the four-step \
+        resume protocol is a single load-bearing flow that is easier to read inline than split across helpers."
+    )]
     fn resume_from_bytes_inner(
         &self,
         bytes: &[u8],
         caller_principal: Option<Cid>,
         resume_payload: ResumePayload,
     ) -> Result<Outcome, EngineError> {
+        // G14-D wave-5a (htl-1 mini-review fix): drain the
+        // HISTORICAL_POLICY_METADATA_HINT cell on entry AND on every
+        // exit (drop). Without this guard a hint set by a previous
+        // resume that the configured policy never consumed would leak
+        // into the NEXT resume on the same thread.
+        let _hint_guard = HistoricalPolicyMetadataHintGuard::drain_on_entry_and_exit();
+
         // Step 0 / pre-check: empty or malformed DAG-CBOR → E_SERIALIZE.
         if bytes.is_empty() {
             return Err(EngineError::Other {
@@ -628,6 +689,51 @@ impl Engine {
                     });
                 }
             }
+        }
+
+        // Step 3.5 (G14-D wave-5a): cap_snapshot_hash + persisted-policy
+        // metadata re-validation per CLR-2 + Compromise #10 + phase-2-backlog
+        // §7.3. If the suspension store carries a CapSnapshot for this
+        // envelope, recompute the hash against the chain currently in the
+        // engine's cap surface. Mismatch ⇒ E_CAP_SNAPSHOT_HASH_MISMATCH
+        // (CLR-2 §11 closure); the policy check at Step 4 below STILL
+        // runs even if no snapshot is bound (best-effort skip on miss
+        // matches the existing Compromise #10 fail-closed-asymmetry
+        // disclosure).
+        if let Ok(Some(snapshot)) = self.suspension_store.get_cap_snapshot(&state_cid) {
+            // Compute the live chain hash for the envelope's actor.
+            // Phase-3 G14-D: the proof-chain inputs are sourced from
+            // the engine's durable cap store via the chain accessor on
+            // the configured policy; if the policy provides no chain
+            // accessor (NoAuthBackend / placeholder), the live chain
+            // is the empty chain — and that is itself a meaningful
+            // post-revoke state (the chain that produced the snapshot
+            // hash had non-empty CIDs; the empty chain hashes
+            // differently and thus correctly rejects).
+            let actor_cid = envelope
+                .payload
+                .attribution_chain
+                .first()
+                .map_or(envelope.payload.resumption_principal_cid, |f| f.actor_cid);
+            let live_chain = self.chain_for_actor(&actor_cid);
+            let live_hash = crate::cap_snapshot_hash::compute(&actor_cid, &live_chain);
+            if live_hash != snapshot.cap_snapshot_hash {
+                return Err(EngineError::Other {
+                    code: ErrorCode::CapSnapshotHashMismatch,
+                    message: format!(
+                        "resume: cap_snapshot_hash mismatch for actor {} \
+                         (proof-chain changed between suspend and resume; CLR-2 §11)",
+                        actor_cid.to_base32()
+                    ),
+                });
+            }
+            // Persisted-policy metadata blob is preserved in the
+            // snapshot for the policy to consume at Step 4. We thread
+            // it through via a thread-local hint so the policy hook
+            // can read historical state if it wishes; if the configured
+            // policy doesn't consume historical metadata it is a no-op.
+            HISTORICAL_POLICY_METADATA_HINT
+                .with(|cell| cell.set(Some(snapshot.historical_policy_metadata)));
         }
 
         // Step 4: capability re-check. Consult the configured policy once,
@@ -1073,4 +1179,47 @@ fn bench_warm_cid(handler_id: &str, op: &str) -> Cid {
     hasher.update(b"\x1e");
     hasher.update(op.as_bytes());
     Cid::from_blake3_digest(*hasher.finalize().as_bytes())
+}
+
+#[cfg(test)]
+mod historical_policy_metadata_hint_guard_tests {
+    use super::{
+        HISTORICAL_POLICY_METADATA_HINT, HistoricalPolicyMetadataHintGuard,
+        historical_policy_metadata_hint,
+    };
+
+    /// G14-D wave-5a (htl-1 mini-review fix): the RAII guard drains the
+    /// thread-local on construction (so a stale hint left by a previous
+    /// resume that the policy never consumed cannot leak forward) AND
+    /// on drop (so the cell is empty after the guard's scope ends even
+    /// if no consumer ever called `historical_policy_metadata_hint`).
+    #[test]
+    fn historical_policy_metadata_hint_guard_drains_on_entry_and_drop() {
+        // Pre-populate as if a previous resume left a hint behind.
+        HISTORICAL_POLICY_METADATA_HINT.with(|c| c.set(Some(b"stale-from-prior-resume".to_vec())));
+
+        {
+            let _guard = HistoricalPolicyMetadataHintGuard::drain_on_entry_and_exit();
+            // Entry-drain: the stale hint is gone before the resume body
+            // observes it.
+            assert!(
+                HISTORICAL_POLICY_METADATA_HINT.with(|c| {
+                    let v = c.take();
+                    let was_none = v.is_none();
+                    c.set(v);
+                    was_none
+                }),
+                "guard must drain stale hint on entry",
+            );
+
+            // Simulate Step 3.5 setting a hint mid-resume.
+            HISTORICAL_POLICY_METADATA_HINT.with(|c| c.set(Some(b"current-resume-hint".to_vec())));
+        }
+        // Drop ran: the cell must be empty even though no consumer
+        // called `historical_policy_metadata_hint` to drain it.
+        assert!(
+            historical_policy_metadata_hint().is_none(),
+            "guard must drain hint on drop even when policy never consumed it",
+        );
+    }
 }

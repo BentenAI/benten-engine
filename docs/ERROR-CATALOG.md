@@ -997,6 +997,55 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** `crates/benten-caps/src/rate_limit.rs::RateLimitPolicy::check_peer_bandwidth` (Phase-3 G14-B; D-F + D-PHASE-3-26 + D-PHASE-3-30).
 - **Phase:** 3 G14-B
 
+### E_CAP_SNAPSHOT_HASH_MISMATCH
+
+- **Message:** "resume: cap_snapshot_hash mismatch for actor {actor} (proof-chain changed between suspend and resume; CLR-2 §11)"
+- **Context:** `{ actor: String }`
+- **Fix:** A WAIT-suspended execution attempted to resume against a UCAN proof-chain that materially changed between suspend and resume (e.g. one of the chain's tokens was revoked, or the chain was substituted). Per CLR-2 §11 the resume MUST reject — silently re-running a continuation against a downgraded chain would let an attacker race a revoke with a resume. Re-issue the suspended request from a current envelope; the prior envelope is no longer authoritative. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-engine/src/engine_wait.rs::resume_from_bytes_inner` Step 3.5 (Phase-3 G14-D wave-5a; CLR-2 §11 + Compromise #10 engine-side asymmetry closure). The hash is computed by `crates/benten-engine/src/cap_snapshot_hash.rs::compute(actor_cid, &proof_chain_cids)` and persisted alongside the envelope via `Engine::put_cap_snapshot_for_envelope`.
+- **Phase:** 3 G14-D
+
+### E_SUBSCRIBE_REVOKED_MID_STREAM
+
+<!-- reachability: ignore -->
+<!-- Rationale: Phase-3 G14-D wave-5a ships the catalog code + ON_DENIED routing + from_string round-trip. The production construction site (per-event delivery-time cap-recheck firing on a partial-revoke event) wires once G14-B's durable UCAN backend `chain-for-audience` accessor stabilizes through `engine.caps()`; the RED-PHASE pins at `crates/benten-engine/tests/subscribe_cap_recheck.rs` carry the wave-pairing destination per pim-4 §3.10. Remove this annotation when the F6 SUBSCRIBE per-event recheck composes against the durable grant store. -->
+
+- **Message:** "subscribe: cap revoked mid-stream for subscriber {subscriber} on channel {channel}"
+- **Context:** `{ subscriber: String, channel: String }`
+- **Fix:** A SUBSCRIBE / sync-replica subscription was terminated mid-stream because the subscriber's read-coverage UCAN no longer holds — a partial revoke fired the per-event delivery-time cap-recheck on the next event. Distinct from `E_SUBSCRIBE_DELIVERY_FAILED` (transient delivery-channel failures) — this names the cap-recheck-driven termination per F6 LOAD-BEARING. Re-issue a fresh subscribe with current credentials. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-engine/src/cap_recheck.rs` per-event closure firing (Phase-3 G14-D wave-5a; F6 LOAD-BEARING + Compromise #2 D5). Wave-paired construction sites land alongside G14-B's durable UCAN backend `chain-for-audience` accessor.
+- **Phase:** 3 G14-D
+
+### E_SYNC_REVOKED_DURING_SESSION
+
+<!-- reachability: ignore -->
+<!-- Rationale: Phase-3 G14-D wave-5a ships the catalog code + ON_DENIED routing + from_string round-trip. The production construction site (sync-replica inbound WRITE rejected because the source peer's grant was revoked locally between handshake and the next sync round) wires at the sync-receive boundary in a follow-up wave; G14-D delivers the engine-side cap-recheck scaffold (`cap_recheck.rs`) and CLR-2 mirror code that the sync-receive path consumes. Remove this annotation when `benten-sync` wires the first construction site at the sync-replica WRITE boundary. -->
+
+- **Message:** "sync: peer {peer} grant revoked during session"
+- **Context:** `{ peer: String }`
+- **Fix:** A sync-replica inbound WRITE was rejected because the source peer's grant was revoked locally between the Atrium handshake and the next sync round. Per CLR-2 this mirrors the SUBSCRIBE delivery-time recheck — the receiving peer's per-write cap-recheck consults the local grant store via the `cap_recheck.rs` G13-pre-C scaffold. The peer may re-handshake with a current grant. Routes to `ON_DENIED`.
+- **Thrown at:** sync-replica receive boundary (Phase-3 G14-D wave-5a; sec-r4r1-2 BLOCKER half-b closure; CLR-2 mirror). Wave-paired construction site lands alongside the sync-receive surface.
+- **Phase:** 3 G14-D
+
+### E_SYNC_HOP_DEPTH_EXCEEDED
+
+<!-- reachability: ignore -->
+<!-- Rationale: Phase-3 G14-D wave-5a ships the catalog code + ON_DENIED routing + from_string round-trip. The production construction site (inbound sync-replica AttributionFrame chain exceeding the documented hop-depth bound) wires at the sync-receive validation boundary in a follow-up wave; G14-D delivers the catalog seam and the Inv-4-mirror error-code surface. Remove this annotation when `benten-sync` wires the first construction site at the chain-bound check. -->
+
+- **Message:** "sync: chain hop depth {depth} exceeds bound {bound}"
+- **Context:** `{ depth: usize, bound: usize }`
+- **Fix:** An inbound sync-replica AttributionFrame chain exceeded the documented hop-depth bound (mirrors Inv-4 `sandbox_depth`). Defends against DOS/chain-bloat where an adversarial peer constructs an unbounded false chain. The peer should either issue against a shorter chain or re-handshake with a fresh authority root. Routes to `ON_DENIED`.
+- **Thrown at:** sync-replica chain-bound check (Phase-3 G14-D wave-5a; ds-r4r2-2 closure). Wave-paired construction site lands alongside the sync-receive surface.
+- **Phase:** 3 G14-D
+
+### E_THIN_CLIENT_AUTH_REJECTED
+
+- **Message:** "thin-client connect: device attestation rejected ({reason})"
+- **Context:** `{ reason: String }`
+- **Fix:** A thin-client (browser tab / edge-worker) connection attempt was rejected at the full-peer auth boundary because the connecting tab presented no device-attestation OR presented one bound to a revoked device-DID. Distinct from generic `E_CAP_DENIED` so audit pipelines can route on the thin-client auth boundary independently. Re-attest from a non-revoked device-DID. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-engine/src/thin_client_subscribe.rs::ThinClientConnection::connect` (Phase-3 G14-D wave-5a; D-PHASE-3-30 + CLAUDE.md baked-in #17 — thin compute surface as device with minimum capability envelope).
+- **Phase:** 3 G14-D
+
 ### E_CAP_UCAN_AUDIENCE_MISMATCH
 
 - **Message:** "UCAN audience mismatch: token aud '{actual}' != expected '{expected}'"

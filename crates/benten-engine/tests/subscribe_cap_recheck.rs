@@ -34,7 +34,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G14-D — plan §3 G14-D — per-event cap recheck against durable grant store"]
+#[ignore = "RED-PHASE: G14-D — plan §3 G14-D — per-event cap recheck against durable grant store (blocked on G14-B durable UCAN backend's `chain-for-audience` accessor wired through `engine.caps()`; G14-B already merged at main `496e144`, un-ignore when accessor stabilizes)"]
 fn subscribe_per_event_cap_recheck_against_durable_grant_store() {
     // plan §3 G14-D pin. G14-D implementer wires this:
     //
@@ -69,7 +69,7 @@ fn subscribe_per_event_cap_recheck_against_durable_grant_store() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-D — F6 LOAD-BEARING + Compromise #2 D5 — partial revoke cancels path"]
+#[ignore = "RED-PHASE: G14-D — F6 LOAD-BEARING + Compromise #2 D5 — partial revoke cancels path (blocked on G14-B durable UCAN backend's `chain-for-audience` accessor wired through `engine.caps()`; G14-B already merged at main `496e144`, un-ignore when accessor stabilizes)"]
 fn subscribe_partial_revoke_cancels_subscription_path() {
     // F6 LOAD-BEARING + Compromise #2 D5 pin. When a subscriber's
     // grant is PARTIALLY revoked (e.g., revoke ONLY the read on
@@ -115,7 +115,7 @@ fn subscribe_partial_revoke_cancels_subscription_path() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-D — plan §3 G14-D — cross-trust-boundary filters at delivery"]
+#[ignore = "RED-PHASE: G14-D — plan §3 G14-D — cross-trust-boundary filters at delivery (blocked on G14-B durable UCAN backend's `chain-for-audience` accessor wired through `engine.caps()`; G14-B already merged at main `496e144`, un-ignore when accessor stabilizes)"]
 fn subscribe_cross_trust_boundary_filters_at_delivery_not_registration() {
     // plan §3 G14-D pin. The Phase-2b interim shape filtered cross-
     // trust-boundary subscriptions at REGISTRATION (rejecting at

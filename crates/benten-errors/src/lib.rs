@@ -478,6 +478,41 @@ pub enum ErrorCode {
     /// D-PHASE-3-26 / D-PHASE-3-30). Maps to
     /// `E_CAP_PEER_BANDWIDTH_EXCEEDED`.
     CapPeerBandwidthExceeded,
+    /// G14-D wave-5a: `cap_snapshot_hash` mismatch detected at WAIT-resume.
+    /// The suspended envelope's bound UCAN proof-chain hash differs from
+    /// the chain currently in the durable cap store (e.g. one of the
+    /// chain's UCAN tokens was revoked between suspend and resume). Per
+    /// CLR-2 §11 a resume against a chain that materially changed MUST
+    /// reject. Maps to `E_CAP_SNAPSHOT_HASH_MISMATCH`.
+    CapSnapshotHashMismatch,
+    /// G14-D wave-5a: SUBSCRIBE / sync-replica subscription path was
+    /// terminated mid-stream because the subscriber's read coverage no
+    /// longer holds — partial revoke + per-event delivery-time recheck
+    /// fired on the next event. Distinct from `SubscribeDeliveryFailed`
+    /// (which is used for transient delivery-channel failures); this
+    /// code names the cap-recheck-driven termination per F6 LOAD-BEARING.
+    /// Maps to `E_SUBSCRIBE_REVOKED_MID_STREAM`.
+    SubscribeRevokedMidStream,
+    /// G14-D wave-5a (sec-r4r1-2 BLOCKER half-b closure): a sync-replica
+    /// inbound WRITE was rejected because the source peer's grant was
+    /// revoked locally between handshake and the next sync round. Per
+    /// CLR-2 mirror of the SUBSCRIBE delivery-time recheck — the
+    /// receiving peer's per-write cap-recheck consults the local grant
+    /// store via the `cap_recheck.rs` G13-pre-C scaffold. Maps to
+    /// `E_SYNC_REVOKED_DURING_SESSION`.
+    SyncRevokedDuringSession,
+    /// G14-D wave-5a (ds-r4r2-2 closure): an inbound sync-replica
+    /// AttributionFrame chain exceeded the documented hop-depth bound
+    /// (mirrors Inv-4 sandbox_depth). Defends against DOS/chain-bloat
+    /// attacks where an adversarial peer constructs a long false chain.
+    /// Maps to `E_SYNC_HOP_DEPTH_EXCEEDED`.
+    SyncHopDepthExceeded,
+    /// G14-D wave-5a: thin-client connection attempt was rejected
+    /// because the connecting tab presented no device-attestation OR
+    /// presented one bound to a revoked device-DID. Distinct from
+    /// generic `CapDenied` so audit pipelines can route on thin-client
+    /// auth boundary failures. Maps to `E_THIN_CLIENT_AUTH_REJECTED`.
+    ThinClientAuthRejected,
     /// G18-A wave-5a: IndexedDB write failed with `QuotaExceededError`
     /// because the origin-storage quota for this browser tab is
     /// exhausted. Surfaces at the browser thin-client cache write
@@ -668,6 +703,11 @@ impl ErrorCode {
             ErrorCode::CapBackendStorage => "E_CAP_BACKEND_STORAGE",
             ErrorCode::CapRateLimitExceeded => "E_CAP_RATE_LIMIT_EXCEEDED",
             ErrorCode::CapPeerBandwidthExceeded => "E_CAP_PEER_BANDWIDTH_EXCEEDED",
+            ErrorCode::CapSnapshotHashMismatch => "E_CAP_SNAPSHOT_HASH_MISMATCH",
+            ErrorCode::SubscribeRevokedMidStream => "E_SUBSCRIBE_REVOKED_MID_STREAM",
+            ErrorCode::SyncRevokedDuringSession => "E_SYNC_REVOKED_DURING_SESSION",
+            ErrorCode::SyncHopDepthExceeded => "E_SYNC_HOP_DEPTH_EXCEEDED",
+            ErrorCode::ThinClientAuthRejected => "E_THIN_CLIENT_AUTH_REJECTED",
             ErrorCode::StorageQuotaExceeded => "E_STORAGE_QUOTA_EXCEEDED",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
@@ -743,7 +783,17 @@ impl ErrorCode {
             | ErrorCode::CapUcanAttenuationViolated
             | ErrorCode::CapUcanAudienceMismatch
             | ErrorCode::CapRateLimitExceeded
-            | ErrorCode::CapPeerBandwidthExceeded => Some("ON_DENIED"),
+            | ErrorCode::CapPeerBandwidthExceeded
+            // G14-D wave-5a: cap-recheck-driven family — snapshot-hash
+            // mismatch at WAIT-resume, F6 SUBSCRIBE per-event recheck
+            // termination, sync-replica per-write recheck rejection,
+            // thin-client auth boundary, and hop-depth chain-bloat
+            // defense all join the cap-denial routing family.
+            | ErrorCode::CapSnapshotHashMismatch
+            | ErrorCode::SubscribeRevokedMidStream
+            | ErrorCode::SyncRevokedDuringSession
+            | ErrorCode::SyncHopDepthExceeded
+            | ErrorCode::ThinClientAuthRejected => Some("ON_DENIED"),
 
             // Not-found family — explicit ON_NOT_FOUND. SANDBOX manifest +
             // host-fn lookup miss join here per ESC-15 + D1 random-deferred
@@ -1040,6 +1090,11 @@ impl ErrorCode {
             "E_CAP_BACKEND_STORAGE" => ErrorCode::CapBackendStorage,
             "E_CAP_RATE_LIMIT_EXCEEDED" => ErrorCode::CapRateLimitExceeded,
             "E_CAP_PEER_BANDWIDTH_EXCEEDED" => ErrorCode::CapPeerBandwidthExceeded,
+            "E_CAP_SNAPSHOT_HASH_MISMATCH" => ErrorCode::CapSnapshotHashMismatch,
+            "E_SUBSCRIBE_REVOKED_MID_STREAM" => ErrorCode::SubscribeRevokedMidStream,
+            "E_SYNC_REVOKED_DURING_SESSION" => ErrorCode::SyncRevokedDuringSession,
+            "E_SYNC_HOP_DEPTH_EXCEEDED" => ErrorCode::SyncHopDepthExceeded,
+            "E_THIN_CLIENT_AUTH_REJECTED" => ErrorCode::ThinClientAuthRejected,
             // Phase-3 G18-A wave-5a — IndexedDB QuotaExceededError →
             // typed E_STORAGE_QUOTA_EXCEEDED per D-PHASE-3-27 / br-r1-2.
             "E_STORAGE_QUOTA_EXCEEDED" => ErrorCode::StorageQuotaExceeded,

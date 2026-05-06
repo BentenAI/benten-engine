@@ -19,8 +19,8 @@
 
 use benten_core::{Cid, SubscriberId, Value};
 use benten_engine::{
-    Engine, InMemorySuspensionStore, RedbSuspensionStore, SuspensionKey, SuspensionStore,
-    WaitMetadata,
+    CapSnapshot, Engine, InMemorySuspensionStore, RedbSuspensionStore, SuspensionKey,
+    SuspensionStore, WaitMetadata,
 };
 use benten_eval::{ExecutionStateEnvelope, ExecutionStatePayload};
 use std::sync::Arc;
@@ -232,6 +232,53 @@ fn suspension_store_handles_both_wait_and_cursor_keys_without_collision() {
     assert!(store.get_cursor(&sub).unwrap().is_none());
     assert!(store.get_wait(&shared).unwrap().is_some());
     assert!(store.get_envelope(&env_cid).unwrap().is_some());
+}
+
+/// G14-D wave-5a (sx-1 mini-review fix): extend the collision-freedom
+/// contract to cover the new `sx:` cap-snapshot prefix introduced by
+/// G14-D. Construct a CID + SubscriberId + envelope at the SAME shared
+/// id so that wait / cursor / envelope / cap-snapshot keys all derive
+/// from the same underlying bytes; assert all four namespaces
+/// round-trip distinctly without aliasing. A future regression that
+/// aliases `sx:` with `sw:` / `sc:` / `se:` would be caught here.
+#[test]
+fn suspension_store_handles_cap_snapshot_key_without_collision_with_wait_or_cursor() {
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
+    let store = engine.suspension_store();
+
+    // All four namespaces share the same underlying CID bytes so any
+    // prefix-collision regression aliases the lookups.
+    let shared = cid_for(b"g14d-sx-shared-id");
+    let sub = SubscriberId::from_cid(shared);
+    let env = sample_envelope(b"g14d-sx-shared-id");
+    let env_cid = env.payload_cid;
+    let meta = fresh_meta(60_000);
+    let snapshot = CapSnapshot {
+        cap_snapshot_hash: [0xAB; 32],
+        historical_policy_metadata: b"g14d-sx-policy-bytes".to_vec(),
+    };
+
+    store.put_wait(shared, meta.clone()).unwrap();
+    store.put_envelope(env).unwrap();
+    store.put_cursor(&sub, 11).unwrap();
+    store.put_cap_snapshot(env_cid, snapshot.clone()).unwrap();
+
+    // All four namespaces visible + distinct.
+    assert_eq!(store.get_wait(&shared).unwrap(), Some(meta.clone()));
+    assert!(store.get_envelope(&env_cid).unwrap().is_some());
+    assert_eq!(store.get_cursor(&sub).unwrap(), Some(11));
+    assert_eq!(
+        store.get_cap_snapshot(&env_cid).unwrap(),
+        Some(snapshot.clone())
+    );
+
+    // Delete the cap-snapshot namespace; the other three survive.
+    store.delete(SuspensionKey::CapSnapshot(env_cid)).unwrap();
+    assert!(store.get_cap_snapshot(&env_cid).unwrap().is_none());
+    assert_eq!(store.get_wait(&shared).unwrap(), Some(meta));
+    assert!(store.get_envelope(&env_cid).unwrap().is_some());
+    assert_eq!(store.get_cursor(&sub).unwrap(), Some(11));
 }
 
 /// G12-E must-pass: the in-memory variant carries the same trait shape

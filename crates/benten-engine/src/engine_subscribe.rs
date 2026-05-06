@@ -298,6 +298,59 @@ impl Engine {
         self.register_on_change_internal(pattern, cursor, callback, Some(cap_recheck))
     }
 
+    /// Phase-3 G14-D wave-5a: `on_change` with an explicit per-event
+    /// [`crate::cap_recheck::CapRecheckFn`] consulted at every
+    /// delivery boundary. The closure consults the actor's READ
+    /// coverage against the event's anchor; a partial revoke that
+    /// strikes coverage observably cancels the affected subscription
+    /// path mid-stream per F6 LOAD-BEARING + Compromise #2 D5.
+    ///
+    /// Composes with the G15-A materialization-time per-row gate
+    /// at [`crate::cap_recheck::CapRecheckFn`] — both consumers
+    /// share the helper signature per ds-r4r2-7 frozen-by-G13-pre-C
+    /// scaffold.
+    ///
+    /// # Errors
+    /// See [`Engine::on_change`].
+    pub fn on_change_with_cap_recheck(
+        &self,
+        pattern: &str,
+        callback: OnChangeCallback,
+        actor: &benten_core::Cid,
+        cap_recheck: crate::cap_recheck::CapRecheckFn,
+    ) -> Result<Subscription, EngineError> {
+        if pattern.is_empty() {
+            return Err(EngineError::Other {
+                code: ErrorCode::SubscribePatternInvalid,
+                message: "on_change_with_cap_recheck: pattern must be non-empty".into(),
+            });
+        }
+        // Bridge the engine-level CapRecheckFn (operates over
+        // PrincipalId + zone + cid) into the eval-side
+        // DeliveryCapRecheck (operates over an eval ChangeEvent). The
+        // bridge passes the actor as the principal, the matched
+        // pattern's first label segment as the zone hint, and the
+        // event's anchor CID as the row CID; F6 cancel surfaces as
+        // `false` from the engine-level closure ⇒ subscription drops.
+        let principal = crate::cap_recheck::PrincipalId::from_actor_cid(*actor);
+        let zone_hint = pattern.split(':').next().unwrap_or("").to_string();
+        let recheck_arc = cap_recheck;
+        let inner_for_check = Arc::clone(&self.inner);
+        let actor_cid = *actor;
+        let bridged: benten_eval::primitives::subscribe::DeliveryCapRecheck =
+            Arc::new(move |event: &EvalChangeEvent| -> bool {
+                let _ = (&inner_for_check, &actor_cid);
+                // F6 dual-layer per CLR-2 / cap-major-2:
+                //   1. Coarse actor-active check (defense-in-depth).
+                //   2. Per-event row recheck via CapRecheckFn.
+                if !inner_for_check.is_actor_active(&actor_cid) {
+                    return false;
+                }
+                (recheck_arc)(&principal, zone_hint.as_str(), &event.anchor_cid)
+            });
+        self.register_on_change_internal(pattern, SubscribeCursor::Latest, callback, Some(bridged))
+    }
+
     /// `on_change` with an explicit cursor. The default
     /// [`Engine::on_change`] entry point uses [`SubscribeCursor::Latest`];
     /// callers that want sequence-based replay or persistent cursors
