@@ -23,7 +23,7 @@ test-all = "nextest run --workspace --features benten-eval/testing,benten-engine
 # for committed `.wasm` SANDBOX fixtures under
 # `crates/benten-eval/tests/fixtures/sandbox/`. Compiles each `.wat` source
 # to its `.wasm` sibling via the workspace-locked exact-version `wat`
-# crate (=1.248.0 per `Cargo.toml:309`). Replaces `scripts/build_wasm.sh`
+# crate (=1.248.0 per `[workspace.dependencies] wat`). Replaces `scripts/build_wasm.sh`
 # reliance on the host `wabt` (`wat2wasm`) binary per wsa-12 (Windows
 # runners don't have bash; macOS needs Homebrew wabt; Linux needs
 # wasm32-wasip1 target). Pure-Rust + no host tooling dep.

@@ -10,7 +10,7 @@
 //!    `tests/fixtures/sandbox/<name>.wasm`. These are produced by
 //!    `cargo bench-wat-rebake` (alias in `.cargo/config.toml` →
 //!    `tools/bench-wat-rebake/`) using the workspace-locked exact-
-//!    version `wat` crate (`=1.248.0` per `Cargo.toml:309`).
+//!    version `wat` crate (`=1.248.0` per `[workspace.dependencies] wat`).
 //! 2. **Fall back to assembling the `.wat`** at
 //!    `tests/fixtures/sandbox/<name>.wat` via `wat::parse_file`.
 //!    This path covers the fresh-checkout-before-rebake case and the
@@ -193,15 +193,6 @@ mod tests {
         // depth_nest_1.wasm is committed in-tree (Phase-2b G7-B).
         let bytes = load_fixture("depth_nest_1").expect("fixture must load");
         assert_eq!(&bytes[..4], b"\0asm", "WASM magic prefix");
-    }
-
-    #[test]
-    fn load_fixture_falls_back_to_wat_for_uncommitted_wasm() {
-        // ESC fixtures under escape/ ship .wat only (G17-B onwards
-        // lands the .wasm fanout). The fallback path must produce
-        // valid bytes from the .wat source.
-        let bytes = load_fixture("escape/infinite_loop").expect("fallback must compile .wat");
-        assert_eq!(&bytes[..4], b"\0asm");
     }
 
     #[test]

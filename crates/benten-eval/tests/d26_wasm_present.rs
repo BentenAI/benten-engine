@@ -18,7 +18,7 @@
 //! - Pre-built `.wasm` bytes are committed alongside `.wat` source at
 //!   `crates/benten-eval/tests/fixtures/sandbox/**/*.wasm`.
 //! - The `wat` crate is the workspace-locked exact-version dep
-//!   (`=1.248.0` per `Cargo.toml:309`) per r4-r1-wsa-9
+//!   (`=1.248.0` per `[workspace.dependencies] wat`) per r4-r1-wsa-9
 //!   recalibration — the pre-Phase-3 r1-wsa-5 RECOMMENDATION named
 //!   `wasm-tools 1.227.x` but the actual ecosystem dep we already used
 //!   at integration-test time was the sibling `wat` crate; r4-r1-wsa-9

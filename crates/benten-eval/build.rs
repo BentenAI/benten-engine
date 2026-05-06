@@ -32,7 +32,7 @@
 //! ## Cross-platform CID stability
 //!
 //! Defended by:
-//!   - Workspace `wat = "=1.248.0"` exact-version pin (`Cargo.toml:309`)
+//!   - Workspace `wat = "=1.248.0"` exact-version pin (`[workspace.dependencies] wat`)
 //!   - Committed `.wasm` bytes (this file's rerun-if-changed triggers
 //!     drift detection if the bytes go stale)
 //!   - `tests/fixture_wasm_hashes_stable` (drift detector, BLAKE3 pin

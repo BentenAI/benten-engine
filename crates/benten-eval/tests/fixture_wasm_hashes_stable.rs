@@ -16,7 +16,7 @@
 //!
 //! The canonical regenerator is now `cargo bench-wat-rebake` (alias →
 //! `tools/bench-wat-rebake/`), which uses the workspace-locked exact-
-//! version `wat` crate (`=1.248.0` per `Cargo.toml:309`). The legacy
+//! version `wat` crate (`=1.248.0` per `[workspace.dependencies] wat`). The legacy
 //! `scripts/build_wasm.sh` invoked the host `wabt` binary (`wat2wasm`)
 //! whose output bytes can differ from the `wat` crate's even on
 //! semantically-equivalent modules — this is the producer/consumer drift
@@ -82,7 +82,7 @@ fn fixture_wasm_hashes_stable() {
         let path = root.join(relative);
         assert!(
             path.exists(),
-            "missing committed .wasm at {} — run `./scripts/build_wasm.sh`",
+            "missing committed .wasm at {} — run `cargo bench-wat-rebake`",
             path.display()
         );
         let bytes = std::fs::read(&path).unwrap_or_else(|e| {

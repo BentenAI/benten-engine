@@ -1,7 +1,7 @@
 //! Phase-3 G17-B `bench-wat-rebake` library entry — walks the SANDBOX
 //! fixture root + regenerates committed `.wasm` bytes from each
 //! `.wat` source via the workspace-locked exact-version `wat` crate
-//! (`=1.248.0` per `Cargo.toml:309` + r4-r1-wsa-9 recalibration).
+//! (`=1.248.0` per `[workspace.dependencies] wat` + r4-r1-wsa-9 recalibration).
 //!
 //! Loader strategy mirror: this binary is the **producer** that writes
 //! the committed `.wasm` bytes the test-time **consumer** at

@@ -336,7 +336,7 @@ Estimated touch size: ~300-600 LOC of test infrastructure across `bindings/napi/
 **Phase 2b state:** ESC-1..16 fixtures live as `.wat` source compiled at test time (`wat::parse_str(...)`). D26 design intent calls for shipping pre-built `.wasm` bytes per fixture so cross-platform determinism + canonical CID pinning can apply. R6 wasmtime-sandbox-auditor (`r6-wsa-5`) flagged this gap; wave-8b ran out of budget before completing the tooling.
 
 **Phase 3 closure (G17-B wave-5b):**
-1. **`tools/bench-wat-rebake/`** regenerator binary — compiles every `.wat` under `crates/benten-eval/tests/fixtures/sandbox/**/*.wat` to its committed `.wasm` sibling using the workspace-locked exact-version `wat` crate (`=1.248.0` per `Cargo.toml:309`). Invoked via `cargo bench-wat-rebake` alias in `.cargo/config.toml`. `--check` mode reports drift without writing.
+1. **`tools/bench-wat-rebake/`** regenerator binary — compiles every `.wat` under `crates/benten-eval/tests/fixtures/sandbox/**/*.wat` to its committed `.wasm` sibling using the workspace-locked exact-version `wat` crate (`=1.248.0` per `[workspace.dependencies] wat`). Invoked via `cargo bench-wat-rebake` alias in `.cargo/config.toml`. `--check` mode reports drift without writing.
 2. **`crates/benten-eval/build.rs`** — emits `cargo:rerun-if-changed=` directives so a `.wat` source edit retriggers `tests/fixture_wasm_hashes_stable` + `tests/d26_wasm_present` drift detectors.
 3. **`crates/benten-eval/src/test_fixtures.rs`** — runtime fixture loader (`load_fixture(stem)`) prefers committed `.wasm` if present + valid; falls back to `wat::parse_file` only when `.wasm` absent (fresh-checkout case). Both branches compile via the same workspace-locked `wat` crate, so the bytes round-trip is closed.
 4. **r4-r1-wsa-9 single-tool recalibration:** workspace pins `wat = "=1.248.0"` exact-version (no `^`/`~`/bare matchers); `wasm-tools` REJECTED as a parallel dep. The legacy `scripts/build_wasm.sh` (which invoked the host `wabt` binary) is superseded — its output bytes can drift from the `wat` crate's output even on semantically-equivalent modules.
@@ -676,6 +676,38 @@ R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift 
 - `.addl/phase-3/r4-r1-pattern-induction.json` (pim-12 4th-instance + NEW shape iii origin finding)
 - `tools/cite-drift-detector/src/lib.rs::numeric_claims_source_of_truth` (current hardcode site)
 - `tools/cite-drift-detector/tests/numeric_claim_drift_lint_finds_known_drift_fixture.rs` (companion fixture; tracks the lint mechanism not the truth values, so the derivation upgrade is transparent to it)
+
+---
+
+### 7.12b Cite-drift detector coverage envelope (file-tree gap; G17-B mr-7 origin)
+
+**Origin:** G17-B PR #116 mini-review finding `g17-b-mr-cite-drift-detector-coverage-7` (BELONGS-ELSEWHERE-SPECIFICALLY → NAMED entry per HARD RULE clause-b). The detector caught 2 of 7 instances of the original `Cargo.toml:309` cite drift; 5 sites slipped because they live outside the tracked-path envelope.
+
+**Coverage envelope at G17-B fix-pass time** (`tools/cite-drift-detector/src/lib.rs::walk_doc_inputs`):
+- `README.md` (root)
+- `docs/**/*.md`
+- `.addl/**/*.md` (when present locally; gitignored — CI sees `docs/` only)
+- `crates/*/src/**/*.rs` (doc-comment cites)
+- `packages/engine/src/**/*.ts` (doc-comment cites)
+
+**Gaps observed at G17-B mr-7 verification:**
+- `tools/*/src/**/*.rs` — `tools/bench-wat-rebake/src/lib.rs:4` slipped
+- `crates/*/build.rs` (crate-root build scripts, not under `src/`) — `crates/benten-eval/build.rs:35` slipped
+- `crates/*/tests/**/*.rs` (integration-test files) — `crates/benten-eval/tests/{fixture_wasm_hashes_stable,d26_wasm_present}.rs` slipped (2 sites)
+- `.cargo/config.toml` (and `.toml` files generally) — `.cargo/config.toml:26` slipped
+
+**Why this matters:** pim-1 §3.5b BULK-APPLICATION HARDENED is the standing defense against load-bearing-edit cite drift; the cite-drift-detector is the automated companion. Two dimensions of incompleteness (the human pre-flight + the detector envelope) interact: the G17-B PR demonstrably had cites in 7 sites only 2 of which the detector covers — the human pre-flight failure was the proximate cause but the detector's envelope being narrow widens the blast radius of any single human pre-flight miss.
+
+**Closure shape:** extend `walk_doc_inputs` to additionally walk `tools/*/src/**/*.rs`, `crates/*/build.rs`, `crates/*/tests/**/*.rs`, and `.cargo/config.toml`. The walker's `extract_line_cites` already accepts `.toml` extensions per its docstring's allow-list — the gap is purely in the path enumeration, not the per-file extraction.
+
+**Touch size:** ~30-50 LOC (4 new walker call-sites + 1-2 unit tests asserting paths within those subtrees are scanned). Low risk — additive, no behavioral change for currently-tracked paths.
+
+**Cross-references:**
+- `.addl/phase-3/r5-w5b-g17-b-mini-review.json::findings[g17-b-mr-cite-drift-detector-coverage-7]`
+- `tools/cite-drift-detector/src/lib.rs::walk_doc_inputs` (the envelope-definition site)
+- `tools/cite-drift-detector/src/lib.rs::extract_line_cites` (per-file extraction; already extension-permissive)
+
+**Phase target:** Phase-3 R6 prep (orchestrator-direct or small fix-pass dispatch). NOT gating PR #116 merge per finding-7's BELONGS-ELSEWHERE-SPECIFICALLY disposition; entry filed pre-merge per HARD RULE clause-b ("the destination receives the entry NOW").
 
 ---
 
