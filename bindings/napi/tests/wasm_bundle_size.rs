@@ -32,6 +32,7 @@
 //! the test enforces the 600KB cap.
 
 #![allow(clippy::unwrap_used)]
+#![allow(clippy::print_stdout, reason = "skip-when-absent diagnostic for nextest output")]
 
 /// 600KB gzipped cap, recalibrated from the Phase-2b 350KB figure per
 /// `spike-bundle-cap-empirical.md` § 6 + br-r1-1 BLOCKER.
