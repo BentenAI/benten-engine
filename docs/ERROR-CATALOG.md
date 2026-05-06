@@ -922,6 +922,17 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** `bindings/napi/src/devserver.rs::devserver_stopped` (helper used by every devserver method that requires the dev-server to be running). R6 Round-2 r6-r2-napi-1 promoted this from a hand-typed `"E_DEVSERVER_STOPPED"` string to a typed catalog variant so JS callers get `EDevServerStopped` typed dispatch.
 - **Phase:** 2b R6 Round-2
 
+### E_STORAGE_QUOTA_EXCEEDED
+
+<!-- reachability: ignore -->
+<!-- Rationale: construction site lives in `bindings/napi/src/browser_indexeddb.rs::map_dom_exception_to_error_code` (browser-target IndexedDB napi adapter). The drift detector's reachability scanner walks `crates/*/src/` only, so a napi-side construction is a structural false negative. Same scanner asymmetry as E_RELOAD_SUBSCRIBER_UNSUBSCRIBED + E_DEVSERVER_STOPPED above. Remove this annotation if the scanner is widened to include `bindings/*/src/` (a Phase-3 detector improvement; tracked in `phase-3-backlog §7.11`). -->
+
+- **Message:** "IndexedDB write exceeded origin-storage quota"
+- **Context:** `{ dom_exception_name: "QuotaExceededError" }`
+- **Fix:** A browser thin-client cache write to IndexedDB exceeded the origin's storage allocation (the browser's per-origin quota). The browser surfaces `DOMException(name="QuotaExceededError")` synchronously from the `IDBObjectStore.put` request's `onerror` handler; the napi binding maps this to the typed `E_STORAGE_QUOTA_EXCEEDED` variant via `bindings/napi/src/browser_indexeddb.rs::map_dom_exception_to_error_code`. Resolution is out-of-band: the user (or operator) frees origin-storage allocation by clearing site data, removing unused cached blobs, or migrating to a deployment with larger origin quota. Per CLAUDE.md baked-in #17 thin-client commitment, the browser tab's cache is non-authoritative — losing the cached bytes is recoverable: subsequent reads re-fetch from the connected full peer through the thin-client subscription protocol (D-PHASE-3-30).
+- **Thrown at:** `bindings/napi/src/browser_indexeddb.rs::map_dom_exception_to_error_code` (Phase-3 G18-A wave-5a). Mapping is consumed by the IndexedDB-backed BlobBackend variant at `bindings/napi/src/browser_blob_store.rs` and the persistent module-manifest store at `bindings/napi/src/wasm_browser.rs`. Surface scope per CLAUDE.md baked-in #17: thin-client cache + manifest-store ONLY.
+- **Phase:** 3 G18-A
+
 ### E_HLC_SKEW_EXCEEDED
 
 - **Message:** "HLC skew exceeded: remote physical_ms {remote_physical_ms} > local {local_physical_ms} + tolerance {tolerance_ms}ms"

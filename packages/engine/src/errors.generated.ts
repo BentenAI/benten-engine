@@ -132,6 +132,7 @@ export const CATALOG_CODES = [
   "E_SANDBOX_UNAVAILABLE_ON_WASM",
   "E_RELOAD_SUBSCRIBER_UNSUBSCRIBED",
   "E_DEVSERVER_STOPPED",
+  "E_STORAGE_QUOTA_EXCEEDED",
   "E_HLC_SKEW_EXCEEDED",
   "E_CAP_UCAN_EXPIRED",
   "E_CAP_UCAN_NOT_YET_VALID",
@@ -1632,6 +1633,21 @@ export class EDevserverStopped extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_DEVSERVER_STOPPED", "A devserver napi method was called after `DevServer.stop()` flipped the in-memory state to stopped. Restart the dev-server via `.start()` before invoking further operations, or construct a fresh `DevServer` instance.", message, context);
     this.name = "EDevserverStopped";
+  }
+}
+
+/**
+ * E_STORAGE_QUOTA_EXCEEDED
+ *
+ * Thrown at: `bindings/napi/src/browser_indexeddb.rs::map_dom_exception_to_error_code` (Phase-3 G18-A wave-5a). Mapping is consumed by the IndexedDB-backed BlobBackend variant at `bindings/napi/src/browser_blob_store.rs` and the persistent module-manifest store at `bindings/napi/src/wasm_browser.rs`. Surface scope per CLAUDE.md baked-in #17: thin-client cache + manifest-store ONLY.
+ * Message template: "IndexedDB write exceeded origin-storage quota"
+ */
+export class EStorageQuotaExceeded extends BentenError {
+  static readonly code = "E_STORAGE_QUOTA_EXCEEDED";
+  static readonly fixHint = "A browser thin-client cache write to IndexedDB exceeded the origin's storage allocation (the browser's per-origin quota). The browser surfaces `DOMException(name=\"QuotaExceededError\")` synchronously from the `IDBObjectStore.put` request's `onerror` handler; the napi binding maps this to the typed `E_STORAGE_QUOTA_EXCEEDED` variant via `bindings/napi/src/browser_indexeddb.rs::map_dom_exception_to_error_code`. Resolution is out-of-band: the user (or operator) frees origin-storage allocation by clearing site data, removing unused cached blobs, or migrating to a deployment with larger origin quota. Per CLAUDE.md baked-in #17 thin-client commitment, the browser tab's cache is non-authoritative — losing the cached bytes is recoverable: subsequent reads re-fetch from the connected full peer through the thin-client subscription protocol (D-PHASE-3-30).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_STORAGE_QUOTA_EXCEEDED", "A browser thin-client cache write to IndexedDB exceeded the origin's storage allocation (the browser's per-origin quota). The browser surfaces `DOMException(name=\"QuotaExceededError\")` synchronously from the `IDBObjectStore.put` request's `onerror` handler; the napi binding maps this to the typed `E_STORAGE_QUOTA_EXCEEDED` variant via `bindings/napi/src/browser_indexeddb.rs::map_dom_exception_to_error_code`. Resolution is out-of-band: the user (or operator) frees origin-storage allocation by clearing site data, removing unused cached blobs, or migrating to a deployment with larger origin quota. Per CLAUDE.md baked-in #17 thin-client commitment, the browser tab's cache is non-authoritative — losing the cached bytes is recoverable: subsequent reads re-fetch from the connected full peer through the thin-client subscription protocol (D-PHASE-3-30).", message, context);
+    this.name = "EStorageQuotaExceeded";
   }
 }
 

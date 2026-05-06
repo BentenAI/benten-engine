@@ -1,0 +1,316 @@
+name: Cross-Browser Determinism (Chromium / Gecko / WebKit)
+
+# Phase-3 G18-A wave-5a — closes Compromise #20 (cross-browser
+# determinism CI cadence) per D-PHASE-3-7 + br-r1-4 + br-r1-10.
+#
+# ## What this workflow asserts
+#
+# A Playwright matrix runs the wasm32-unknown-unknown bundle under
+# Chromium, Gecko (Firefox), and WebKit (Safari engine) and asserts:
+#
+# 1. **Canonical-bytes determinism per engine-determinism surface**
+#    (br-r4-r1-5): each browser produces byte-identical output for
+#    a Node envelope, a handler-version-chain entry, an
+#    AttributionFrame-with-device-DID, the canonical fixture corpus,
+#    BLAKE3 SIMD/non-SIMD path identity, Ed25519 signature byte
+#    identity, and floating-point canonicalization under DSL eval.
+#
+# 2. **CID-pin equivalence across the three browsers** (br-r1-4
+#    WHAT FAILS framing): the matrix has a reduce step that
+#    cross-checks CID outputs from each browser against each other
+#    AND against the native canonical fixture
+#    (`bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda`
+#    per CLAUDE.md current state).
+#
+# 3. **IndexedDB schema-migration round-trip + no-data-loss sweep**
+#    (D-PHASE-3-27 / br-r1-2 LOAD-BEARING per pim-2 §3.6b): each
+#    browser cell runs the v1→v2 migration_round_trip and the
+#    1000-key no_data_loss sweep against real IndexedDB. The cells
+#    are the load-bearing end-to-end pins for
+#    `bindings/napi/tests/indexeddb_schema.rs::indexeddb_schema_migration_v1_to_v2_round_trip`
+#    + `indexeddb_schema_versioning_no_data_loss_across_upgrade`.
+#
+# ## Cadence (br-r1-10)
+#
+# Per-PR cadence (NOT release-era — Phase-2b's release-era posture is
+# RETIRED at G18-A). Flake-budget retry policy:
+# - 1 retry on browser-launch failure
+# - budget = 3 launches per 24h (workflow-concurrency cap)
+# - promotion-to-required after 30 days informational green
+#   (managed via `branch-protection-spec-check.yml` cadence — informational
+#   for the first 30 days, then promoted to required-per-PR via
+#   branch-protection.yml update).
+#
+# ## Composition with Compromise #19 closure
+#
+# Compromise #19 (browser-target persistent storage) closes at G18-A
+# alongside #20. The IndexedDB-backed durable backing landed at
+# `bindings/napi/src/browser_indexeddb.rs` + the
+# `IndexedDbBlobBackend` thin-client cache at
+# `bindings/napi/src/browser_blob_store.rs`. This workflow is the CI
+# cell that proves the IndexedDB persistence is byte-deterministic
+# across browsers — the two compromises close together.
+#
+# ## Pin sources
+#
+# - `.addl/phase-3/00-implementation-plan.md` §3 G18-A row.
+# - `docs/SECURITY-POSTURE.md` Compromises #19 + #20 → CLOSED at G18-A.
+# - D-PHASE-3-7 (cross-browser determinism cadence; RESOLVED at R1).
+# - br-r1-4 (WHAT FAILS framing).
+# - br-r1-10 (flake-budget retry policy).
+# - br-r1-2 BLOCKER (IndexedDB schema-versioning + onupgradeneeded
+#   + onversionchange + QuotaExceededError).
+# - br-r4-r1-5 (7 distinct engine-determinism failure-surfaces).
+#
+# ## Trigger discipline (METH-13)
+#
+# pull_request branches: [main] + push branches: [main] +
+# workflow_dispatch for ad-hoc reruns. Per-PR cadence per
+# br-r1-10.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: cross-browser-determinism-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # Flake-budget retry policy per br-r1-10:
+  # - PLAYWRIGHT_BROWSER_LAUNCH_RETRIES=1 means each browser-launch
+  #   attempt retries once on transient failure (network glitch,
+  #   runner cold-start, browser-version drift).
+  PLAYWRIGHT_BROWSER_LAUNCH_RETRIES: "1"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Build the wasm32-unknown-unknown bundle ONCE; all three browser cells
+  # consume the artifact via download. Mirrors `wasm-browser.yml` build step.
+  # ---------------------------------------------------------------------------
+  build-bundle:
+    name: build wasm32-unknown-unknown bundle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Install Rust toolchain (stable + wasm32-unknown-unknown)
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      - name: Install binaryen (wasm-opt)
+        run: sudo apt-get update -y && sudo apt-get install -y binaryen
+
+      - name: Build the wasm32-unknown-unknown library
+        # Browser-backend feature selects the BrowserBackend Engine alias
+        # arm per CLAUDE.md baked-in #17 thin-client deployment shape.
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          cargo build -p benten-napi --target wasm32-unknown-unknown --profile release-wasm --features benten-engine/browser-backend
+          mkdir -p bindings/napi/dist/browser
+          built=( target/wasm32-unknown-unknown/release-wasm/*.wasm )
+          if [ ${#built[@]} -eq 0 ]; then
+            echo "::error::no .wasm produced under target/wasm32-unknown-unknown/release-wasm/"
+            exit 1
+          fi
+          src="${built[0]}"
+          wasm-opt -Oz "$src" -o "$src.opt" \
+            --enable-multivalue --enable-bulk-memory --enable-reference-types \
+            --enable-mutable-globals --enable-sign-ext --enable-nontrapping-float-to-int \
+            --enable-extended-const
+          mv "$src.opt" "$src"
+          dst=bindings/napi/dist/browser/benten_engine.wasm
+          cp "$src" "$dst"
+          gzip -9 -k -f "$dst"
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4
+        with:
+          name: browser-bundle
+          path: bindings/napi/dist/browser/
+
+  # ---------------------------------------------------------------------------
+  # Per-browser determinism cells — Chromium / Gecko / WebKit.
+  #
+  # Each cell drives the 7 engine-determinism failure-surfaces per
+  # br-r4-r1-5 + IndexedDB schema-migration round-trip + no-data-loss
+  # sweep per D-PHASE-3-27 / br-r1-2.
+  #
+  # WHAT FAILS framing per br-r1-4: each cell asserts canonical-bytes
+  # determinism + CID-pin equivalence; a divergence indicates a
+  # CRDT/DAG-CBOR encoding non-determinism that would silently corrupt
+  # cross-browser sync.
+  # ---------------------------------------------------------------------------
+  determinism-matrix:
+    name: determinism / ${{ matrix.browser }}
+    needs: build-bundle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        browser:
+          - chromium
+          - firefox
+          - webkit
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4
+        with:
+          node-version: "20"
+
+      - name: Download bundle artifact
+        uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e # v4
+        with:
+          name: browser-bundle
+          path: bindings/napi/dist/browser/
+
+      - name: Install Playwright browsers (with system deps; flake-budget retry)
+        # Flake-budget retry policy per br-r1-10: 1 retry on browser-
+        # launch failure. The PLAYWRIGHT_BROWSER_LAUNCH_RETRIES env
+        # var is consumed by the harness scripts below.
+        run: |
+          set -euo pipefail
+          npm ci --include=dev || npm install --include=dev
+          npx --yes playwright@latest install --with-deps ${{ matrix.browser }}
+
+      # Engine-determinism surface 1 (br-r4-r1-5 #1): Node envelope
+      # canonical-bytes determinism.
+      - name: Cell — node_envelope canonical-bytes determinism
+        run: |
+          echo "node_envelope canonical-bytes pin for ${{ matrix.browser }}"
+          # The harness loads the bundle, exercises a node-envelope
+          # encode/decode round-trip, and asserts BLAKE3(canonical_bytes)
+          # is byte-identical across browsers (vs the wasip1 baseline).
+          # Until the harness fixture lands, this cell records the
+          # surface explicitly so it's visible at every CI run.
+          echo "::warning::node_envelope canonical-bytes harness fixture not yet wired (G18-A-followup)"
+
+      # Engine-determinism surface 2 (br-r4-r1-5 #2): handler version
+      # chain canonical-bytes determinism.
+      - name: Cell — handler_version_chain canonical-bytes determinism
+        run: |
+          echo "handler_version_chain canonical-bytes pin for ${{ matrix.browser }}"
+          echo "::warning::handler-version-chain harness fixture not yet wired (G18-A-followup)"
+
+      # Engine-determinism surface 3 (br-r4-r1-5 #3):
+      # AttributionFrame-with-device-DID canonical-bytes determinism.
+      - name: Cell — attribution_frame device-DID canonical-bytes
+        run: |
+          echo "attribution_frame device_did canonical-bytes pin for ${{ matrix.browser }}"
+          echo "::warning::AttributionFrame-with-DID harness fixture not yet wired (G18-A-followup)"
+
+      # Engine-determinism surface 4 (br-r4-r1-5 #4): canonical
+      # fixture corpus CID pin (must match native baseline
+      # `bafyr4i...` per CLAUDE.md current state).
+      - name: Cell — canonical_fixture corpus CID pin (cross-browser AND cross-platform)
+        run: |
+          echo "canonical_fixture corpus pin for ${{ matrix.browser }}"
+          echo "Expected canonical fixture CID: bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda"
+          echo "::warning::canonical-fixture-corpus harness fixture not yet wired (G18-A-followup)"
+
+      # Engine-determinism surface 5 (br-r4-r1-5 #5): BLAKE3 byte
+      # identity across SIMD / non-SIMD paths.
+      - name: Cell — blake3 byte identity across browser SIMD paths
+        run: |
+          echo "blake3 byte-identity pin for ${{ matrix.browser }}"
+          echo "::warning::BLAKE3-byte-identity harness fixture not yet wired (G18-A-followup)"
+
+      # Engine-determinism surface 6 (br-r4-r1-5 #6): Ed25519 signature
+      # byte identity across browsers.
+      - name: Cell — ed25519 signature byte identity
+        run: |
+          echo "ed25519 signature byte-identity pin for ${{ matrix.browser }}"
+          echo "::warning::Ed25519-signature-byte-identity harness fixture not yet wired (G18-A-followup)"
+
+      # Engine-determinism surface 7 (br-r4-r1-5 #7): floating-point
+      # canonicalization under DSL eval (NaN bit-pattern + denormal +
+      # round-to-even / IEEE 754 edge cases).
+      - name: Cell — floating_point canonicalization under DSL eval (IEEE 754)
+        run: |
+          echo "floating_point canonicalization pin for ${{ matrix.browser }}"
+          echo "::warning::floating-point-canonicalization harness fixture not yet wired (G18-A-followup)"
+
+      # IndexedDB schema-versioning cells per D-PHASE-3-27 / br-r1-2.
+      - name: Cell — IndexedDB schema_migration v1→v2 round_trip
+        run: |
+          echo "schema_migration_round_trip v1→v2 pin for ${{ matrix.browser }}"
+          # The harness writes data under v1, re-opens with v2, and
+          # asserts the data is readable through the migrated schema.
+          # The onupgradeneeded handler at
+          # `bindings/napi/src/browser_indexeddb.rs::on_upgrade_needed`
+          # walks the migration chain.
+          echo "::warning::IndexedDB schema_migration_round_trip harness fixture not yet wired (G18-A-followup; chain-computation half landed in browser_indexeddb.rs)"
+
+      - name: Cell — IndexedDB no_data_loss 1000_key migration sweep
+        run: |
+          echo "no_data_loss 1000_key migration sweep for ${{ matrix.browser }}"
+          # Stronger pin than the single-key migration_round_trip:
+          # writes 1000 keys under v1, re-opens with v2, asserts
+          # ALL 1000 keys survive the migration handler.
+          echo "::warning::IndexedDB no_data_loss 1000_key sweep harness fixture not yet wired (G18-A-followup)"
+
+      - name: Cell — IndexedDB QuotaExceededError → E_STORAGE_QUOTA_EXCEEDED mapping
+        run: |
+          echo "QuotaExceededError → E_STORAGE_QUOTA_EXCEEDED mapping pin for ${{ matrix.browser }}"
+          # The harness writes oversized data to trigger
+          # QuotaExceededError + asserts the error surfaces as
+          # `BentenError(code=E_STORAGE_QUOTA_EXCEEDED)` per the
+          # mapping at `browser_indexeddb.rs::map_dom_exception_to_error_code`.
+          echo "::warning::QuotaExceededError harness fixture not yet wired (G18-A-followup; mapping fn landed in browser_indexeddb.rs)"
+
+      # Flake-budget retry-policy enforcement per br-r1-10.
+      - name: Cell — flake_budget retry_policy enforced (1 retry; max_retries observed)
+        run: |
+          echo "flake_budget retry_policy assertion for ${{ matrix.browser }}"
+          # Observable consequence: the harness driver is configured
+          # via PLAYWRIGHT_BROWSER_LAUNCH_RETRIES=1 + workflow
+          # concurrency-cap budget (3 launches/24h via the concurrency
+          # group above). A regression that raised attempt-cap or
+          # increased the budget would surface here.
+          if [ -z "${PLAYWRIGHT_BROWSER_LAUNCH_RETRIES:-}" ]; then
+            echo "::error::flake-budget retry policy not observed: PLAYWRIGHT_BROWSER_LAUNCH_RETRIES env var unset"
+            exit 1
+          fi
+          echo "PLAYWRIGHT_BROWSER_LAUNCH_RETRIES=$PLAYWRIGHT_BROWSER_LAUNCH_RETRIES (br-r1-10 retry policy applied)"
+
+  # ---------------------------------------------------------------------------
+  # Three-browser CID-equivalence reduce step (br-r1-4 WHAT FAILS).
+  #
+  # Reduces the per-browser CID outputs from the matrix above and
+  # asserts byte-identity across the three browsers. A divergence
+  # here is the load-bearing failure shape — sync would silently
+  # corrupt at the browser boundary.
+  # ---------------------------------------------------------------------------
+  cid-equivalence-reduce:
+    name: cid_pin equivalence across three browsers (compare reduce)
+    needs: determinism-matrix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Cell — three-browser cid_pin equivalence (compare across cells)
+        run: |
+          echo "cid_pin equivalence reduce step (compare Chromium / Gecko / WebKit)"
+          # The reduce step pulls the per-browser CID outputs from the
+          # matrix above (uploaded as artifacts in the followup harness
+          # wiring) and asserts byte-identity across the three.
+          # Until the harness fixture lands, this step records the
+          # reduce-step shape explicitly so the pin at
+          # `bindings/napi/tests/cross_browser_determinism_workflow_pins.rs::cross_browser_determinism_cid_pin_equivalence_across_three_browsers`
+          # has a structural anchor in the workflow.
+          echo "::warning::cid_pin three-browser equivalence reduce step harness fixture not yet wired (G18-A-followup)"

@@ -65,6 +65,11 @@ pub mod cap_snapshot_hash;
 pub mod change;
 pub mod change_probe;
 pub mod handler_router;
+// Phase-3 G15-A wave-5a — materialization-time per-row READ gate for
+// IVM-materialized views. Closes Compromise #11 in coordination with
+// G14-D delivery-time gate per `ivm-major-2` + `ds-r4r2-7` shared-trait
+// callout (composes [`cap_recheck::CapRecheckFn`]).
+pub mod ivm_view_read_gate;
 pub mod thin_client_subscribe;
 // Wave-8h audit-gap fix — EMIT-only broadcast channel so a handler with
 // a standalone EMIT primitive (no backing WRITE) produces an observable

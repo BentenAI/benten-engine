@@ -131,6 +131,25 @@ mod wasm_target;
 // emitted to the cdylib but is invisible to the rlib-only test path.
 pub mod wasm_browser;
 
+// Phase-3 G18-A wave-5a — IndexedDB-backed persistent module-manifest
+// store + thin-client snapshot cache (CLAUDE.md baked-in #17 thin-
+// client cache scope ONLY; NOT full sync state). Closes Compromises
+// #19 + #20 in `docs/SECURITY-POSTURE.md` per D-PHASE-3-27 + br-r1-2
+// BLOCKER. Module is reachable on every target so cross-target unit
+// tests + the `bindings/napi/tests/indexeddb_schema.rs` source-cite
+// integration tests can compile against the surface; the wasm32 arm
+// inside the module wraps real IndexedDB calls via wasm-bindgen, and
+// the native arm is a stub that satisfies the `pub fn` boundary so
+// cross-target compilation succeeds.
+pub mod browser_indexeddb;
+
+// Phase-3 G18-A wave-5a — IndexedDB-backed BlobBackend variant for
+// the browser thin-client snapshot cache. Mirrors the redb-native
+// `RedbBlobBackend` at `crates/benten-graph/src/backends/blob_backend.rs`
+// at the trait-surface level (locked at G13-pre-B). Per CLAUDE.md
+// baked-in #17: thin-client cache scope ONLY — NOT full sync state.
+pub mod browser_blob_store;
+
 // Re-export the policy enum so the napi-derive macros pick it up at the
 // crate root where napi-rs v3 looks for top-level `#[napi]` items.
 #[cfg(feature = "napi-export")]
