@@ -13,7 +13,7 @@
 //! - [`EscVector::Esc7FuelRefillViaReEntry`] — D-E + r1-wsa-1 BLOCKER:
 //!   guest calls a host-fn whose dispatch path attempts to re-enter the
 //!   guest `Store` and `add_fuel` mid-execution. Defense: a re-entry
-//!   counter on [`SandboxStoreData`] (engine-side) trips the typed
+//!   counter on `SandboxStoreData` (engine-side) trips the typed
 //!   error before the fuel-refill takes effect.
 //! - [`EscVector::Esc13StorePoison`] — D-E + r1-wsa-1 BLOCKER: a
 //!   host-side fuel-meter callback panics or traps; the wasmtime
@@ -52,7 +52,7 @@
 //!    (catalog code `E_SANDBOX_ESCAPE_ATTEMPT`).
 //! 2. The defense [`run_esc7_check`] / [`run_esc13_check`] /
 //!    [`run_esc16_check`] entry points (test-callable via
-//!    [`crate::sandbox::testing_helpers`]; production-callable via the
+//!    `crate::sandbox::testing_helpers`; production-callable via the
 //!    G17-A2 runtime arm wire-up + G20-A1 un-ignore of the §7.3.A.7
 //!    test bodies that exercise the production fixture path).
 //! 3. The trap-routing arm at
@@ -143,7 +143,7 @@ impl EscVector {
 }
 
 /// Per-call ESC-defense state attached to the SANDBOX `Store`.
-/// Lives next to [`crate::primitives::sandbox::SandboxStoreData`] so
+/// Lives next to `crate::primitives::sandbox::SandboxStoreData` (private; see crate root) so
 /// trampolines can mutate counters from `Caller<SandboxStoreData>`
 /// without an extra layer of indirection. G17-A2 runtime-arm wave
 /// threads this through the per-call store at construction time.
@@ -164,7 +164,7 @@ pub struct EscDefenseState {
     /// ESC-13: the fuel-meter callback panicked or trapped during
     /// the most recent guest execution. Set by the panic-catcher in
     /// [`run_esc13_check`]; surfaced as
-    /// [`SandboxError::EscapeAttempt(Esc13StorePoison)`].
+    /// `SandboxError::EscapeAttempt(Esc13StorePoison)`.
     pub fuel_meter_callback_trapped: bool,
     /// ESC-16: number of times the guest read a wallclock-correlated
     /// memory cell during a single SANDBOX call. The fingerprint

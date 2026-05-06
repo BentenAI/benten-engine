@@ -68,7 +68,7 @@ pub const FINGERPRINT_COLLAPSE_THRESHOLD: u32 = 3;
 ///
 /// In the G17-A1 wave-5b SURFACE shape: the side-table is a
 /// `BTreeSet<u32>` of memory addresses living on the per-call
-/// [`crate::primitives::sandbox::SandboxStoreData`]. G17-A2's
+/// `crate::primitives::sandbox::SandboxStoreData` (private; see crate root). G17-A2's
 /// runtime-arm wave widens the trampoline to populate the
 /// side-table from inside the `time` host-fn (which writes the
 /// wallclock-derived value into guest memory at a guest-pointed
