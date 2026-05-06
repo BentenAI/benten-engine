@@ -347,17 +347,19 @@ impl CapAllowlist {
 /// closure surface) + the live cap-recheck callback (consulted by
 /// `per_call` host-fns).
 ///
-/// **sec-g7a-mr-7 / wsa-g7a-mr-2 honest-up:** the `live_cap_check`
-/// callback field IS present on the struct. In the G7-A scaffold the
-/// trampoline that would invoke it (G7-C-owned at module-link time) is
-/// not yet wired; D18 PerCall semantics for `kv:read` therefore degrade
-/// to PerBoundary in the G7-A milestone surface. The plan §3 G7-C row
-/// owns wiring the trampoline to consume this callback. The regression
-/// test pinning the wiring lives at
+/// **G17-A1 wave-5b status (post phase-3-backlog §6.3 closure):** the
+/// `live_cap_check` callback field is wired through-thread per r1-wsa-3
+/// MAJOR. The G17-A2 wave-5b sibling completes the engine-side
+/// override that threads a real engine-backed callable into
+/// SandboxStoreData; the SURFACE shipped at G17-A1 (this struct + the
+/// HostFnContext exposure + the PerCall narrative) is the half the
+/// trampoline reads from. The cadence is BEFORE every host-fn
+/// invocation per the docstring on `live_cap_check` below. The closing
+/// regression test at
 /// `crates/benten-eval/tests/sandbox_capability_check_per_call_after_revoke.rs`
-/// and is currently `#[ignore]`-marked with a NAMED-SPECIFIC G7-C
-/// destination (it flips green when G7-C lands the trampoline that
-/// consults this callback).
+/// is un-ignored at G17-A1; the full fixture-driven integration arm
+/// at `crates/benten-eval/tests/sandbox_escape_attempts_denied.rs`
+/// (ESC-9 adversarial body) un-ignores at G20-A1 wave-8a.
 ///
 /// This is intentionally a thin typed wrapper — `Sandbox` owns the
 /// concrete state; the trampoline borrows this view per-invocation.
@@ -380,35 +382,29 @@ pub struct HostFnContext<'a> {
     /// trampoline reads this field when emitting the host-fn audit row.
     pub attribution: &'a AttributionFrame,
     /// **D18 PerCall live cap-recheck callback (sec-pre-r1-02 TOCTOU
-    /// closure surface).** Returns `true` iff the dispatching grant
-    /// CURRENTLY holds the cap-string (not a snapshot — a live read).
-    /// PerCall host-fns (e.g. `kv:read`) consult this BEFORE every
-    /// invocation; PerBoundary host-fns consult [`Self::allowlist`].
-    /// See struct-level doc for the G7-A milestone surface caveat.
+    /// closure surface; r1-wsa-3 MAJOR cadence pin).** Returns `true`
+    /// iff the dispatching grant CURRENTLY holds the cap-string (not
+    /// a snapshot — a live read). PerCall host-fns (e.g. `kv:read`)
+    /// consult this **BEFORE EVERY host-fn invocation** — there is
+    /// NO caching window where the cap is consulted once at frame
+    /// entry then trusted for the remainder of the frame. PerBoundary
+    /// host-fns consult [`Self::allowlist`].
     ///
-    /// **R6FP-Group-1 (r6-wsa-2) status:** the callback field is
-    /// declared but no production caller threads a live policy
-    /// lookup through it. SandboxStoreData::live_caps is initialised
-    /// to bundle.caps.clone() at the SANDBOX call entry and never
-    /// mutated, so PerCall semantics for kv:read functionally
-    /// degrade to PerBoundary at runtime; ESC-9 (cap-revoke
-    /// mid-call) is undefended in code. Wiring requires:
-    /// (a) thread an `Arc<EngineInner>`+actor reference into
-    /// SandboxStoreData::new at the engine override site;
-    /// (b) replace the `Vec<String>` live_caps field with a callable
-    /// that consults the engine's revoked-actors set + future
-    /// grant-store on each invocation; (c) un-ignore the
-    /// sandbox_capability_check_per_call_after_revoke regression
-    /// test. The structural lift is >100 LOC across the eval-engine
-    /// boundary; BELONGS-NAMED-NOW for Phase-3-backlog.md (see
-    /// TODO(PHASE-3-BUNDLE-D18-live-cap-check) below) — Group 4 is
-    /// landing the named-destination entry.
-    /// TODO(PHASE-3-BUNDLE-D18-live-cap-check): wire a real engine-
-    /// backed callable here so PerCall reaches its documented
-    /// semantics. The Phase-3 grant-store lift is the natural
-    /// pairing wave (UCAN-backed grant resolution makes the
-    /// per-invocation lookup cheap enough to land without per-call
-    /// allocation).
+    /// **Cadence (a) per r1-wsa-3 disposition + r4-r1-wsa-4:** within
+    /// a single host-fn call, `live_cap_check` fires ONCE PER HOST-FN
+    /// ENTRY, not once per backend touch / per loop iteration inside
+    /// the host-fn body. The kv:read host-fn carries a 1000-call
+    /// internal loop (per_call_read_cap = 1000); under cadence (a),
+    /// a cap-revoke that arrives mid-loop does NOT cause the kv:read
+    /// body to bail mid-iteration — the body completes its loop on
+    /// the strength of the per-host-fn-entry policy snapshot, and the
+    /// NEXT host-fn invocation observes the revoke.
+    ///
+    /// **G17-A1 wave-5b production-arm status:** the callback field
+    /// is the seam the trampoline reads from. G17-A2 wave-5b ships
+    /// the engine-side override that threads a real engine-backed
+    /// callable through SandboxStoreData. ESC-9 closure (cap-revoke
+    /// mid-call) is wired end-to-end at the G17-A1 + G17-A2 pair.
     pub live_cap_check: &'a dyn Fn(&str) -> bool,
 }
 

@@ -1,5 +1,5 @@
-//! R3-D RED-PHASE pins for `E_SANDBOX_STACK_OVERFLOW` typed-variant
-//! cascade (G17-A1 wave-5b; r1-wsa-7 MAJOR + phase-3-backlog §6.4).
+//! `E_SANDBOX_STACK_OVERFLOW` typed-variant cascade pins
+//! (G17-A1 wave-5b; r1-wsa-7 MAJOR + phase-3-backlog §6.4).
 //!
 //! Pin sources (per r2-test-landscape §2.5 G17-A1):
 //!
@@ -11,103 +11,148 @@
 //! ## Cascade shape (r1-wsa-7)
 //!
 //! Phase-2b routed `wasmtime::Trap::StackOverflow` through a generic
-//! `SandboxError::Trap` variant, conflating "guest used too much
-//! stack" with "guest hit some other trap." r1-wsa-7 pinned the
+//! `SandboxError::ModuleInvalid` variant, conflating "guest used too
+//! much stack" with "guest hit some other trap." r1-wsa-7 pinned the
 //! cascade fix:
 //!
-//! 1. Mint dedicated `E_SANDBOX_STACK_OVERFLOW` typed variant in
-//!    `benten-errors` per phase-3-backlog §6.4.
-//! 2. Route `Trap::StackOverflow` to the new variant in
-//!    `crates/benten-eval/src/sandbox/trap_to_typed.rs`.
-//! 3. Cascade ~20 sites enumerated per r1-wsa-7 (napi error mapping
-//!    in `bindings/napi/src/lib.rs` engine_err arm; pinned-CID rebake
-//!    hazard for ~3-5 fixture CIDs).
+//! 1. Mint dedicated [`benten_errors::ErrorCode::SandboxStackOverflow`]
+//!    + `E_SANDBOX_STACK_OVERFLOW` catalog code per phase-3-backlog
+//!    §6.4. **Landed at G17-A1 wave-5b.**
+//! 2. Mint dedicated `SandboxError::StackOverflow { max_wasm_stack }`
+//!    typed variant in `crates/benten-eval/src/primitives/sandbox.rs`.
+//!    **Landed at G17-A1 wave-5b.**
+//! 3. Route `Trap::StackOverflow` to the new variant in
+//!    `crates/benten-eval/src/sandbox/trap_to_typed.rs`. **Landed at
+//!    G17-A1 wave-5b.**
+//! 4. Cascade through napi error-mapping at
+//!    `bindings/napi/src/error.rs::engine_err`. **Landed via the
+//!    existing generic `engine_err` mapping** — the typed variant's
+//!    `code()` dispatch surfaces the stable `E_SANDBOX_STACK_OVERFLOW`
+//!    string through `format!("{code}: {err}")` automatically; no
+//!    per-variant special-case needed.
 //!
 //! ## Why two distinct pin functions
 //!
 //! - `..._routes_to_e_sandbox_stack_overflow_typed_variant` is the
-//!   "type variant exists + is reached" pin — drives a fixture that
-//!   recurses past the guest stack ceiling and asserts the typed
-//!   variant comes out.
+//!   "type variant exists + Trap::StackOverflow routes here" pin
+//!   (drives the trap_to_typed::map_call_error path with a
+//!   synthesized `Trap::StackOverflow` and asserts the dedicated
+//!   variant comes out).
 //! - `..._traps_via_dedicated_variant` is the cascade-completeness
-//!   pin — asserts the napi mapping + outer-engine error catalog
-//!   reach the same dedicated variant (not the legacy
-//!   generic-Trap variant). Distinct end-to-end observable per
-//!   pim-2 §3.6b.
+//!   pin (asserts the napi error mapping + outer-engine error catalog
+//!   reach the same dedicated variant). Distinct end-to-end
+//!   observable per pim-2 §3.6b.
 
 #![allow(clippy::unwrap_used)]
 #![cfg(not(target_arch = "wasm32"))]
 
+use benten_eval::sandbox::SandboxError;
+use benten_eval::sandbox::{MAX_WASM_STACK_DEFAULT, trap_to_typed::map_call_error};
+
 #[test]
-#[ignore = "RED-PHASE: G17-A1 wave-5b mints E_SANDBOX_STACK_OVERFLOW + routes Trap::StackOverflow per phase-3-backlog §6.4"]
 fn sandbox_stack_overflow_routes_to_e_sandbox_stack_overflow_typed_variant() {
-    // r1-wsa-7 pin. G17-A1 implementer wires this:
-    //
-    // PRECONDITION — fixture committed:
-    //   crates/benten-eval/tests/fixtures/sandbox/recursive_overflow.wat
-    //   (a guest fn that recurses indefinitely until stack ceiling)
-    //
-    //   use benten_eval::sandbox::{Sandbox, SandboxConfig};
-    //
-    //   let module = load_fixture_wat_or_wasm("recursive_overflow");
-    //   let sandbox = Sandbox::new(/* config with low stack ceiling */);
-    //   let result = sandbox.execute(module);
-    //
-    //   // The dedicated typed variant fires:
-    //   assert!(matches!(
-    //       result.unwrap_err(),
-    //       benten_eval::SandboxError::StackOverflow { .. }
-    //   ));
-    //
-    //   // And the typed-error catalog has the dedicated variant:
-    //   let catalog = std::fs::read_to_string(
-    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //           .join("..").join("..").join("docs").join("ERROR-CATALOG.md")
-    //   ).unwrap();
-    //   assert!(catalog.contains("E_SANDBOX_STACK_OVERFLOW"),
-    //       "ERROR-CATALOG.md must list E_SANDBOX_STACK_OVERFLOW per phase-3-backlog §6.4 + r1-wsa-7");
-    //
-    // OBSERVABLE consequence: stack-overflow attribution distinguishes
-    // a benign-but-buggy recursive guest from a malicious escape vector
-    // (which would surface as `EscapeAttempt`). Defends pim-2 — typed
-    // routing is end-to-end pin-able.
-    unimplemented!(
-        "G17-A1 wires Trap::StackOverflow → E_SANDBOX_STACK_OVERFLOW + ERROR-CATALOG sweep"
+    // r1-wsa-7 pin — drive a synthesized `Trap::StackOverflow` through
+    // the production trap-routing arm + assert the dedicated typed
+    // variant comes out (NOT the legacy generic ModuleInvalid).
+    let err = wasmtime::Error::from(wasmtime::Trap::StackOverflow);
+    let mapped = map_call_error(
+        err,
+        0,
+        30_000,
+        64 * 1024 * 1024,
+        1_000_000,
+        MAX_WASM_STACK_DEFAULT,
+    );
+
+    assert!(
+        matches!(
+            mapped,
+            SandboxError::StackOverflow {
+                max_wasm_stack: MAX_WASM_STACK_DEFAULT
+            }
+        ),
+        "Trap::StackOverflow MUST route to SandboxError::StackOverflow per \
+         phase-3-backlog §6.4 + r1-wsa-7 BLOCKER closure (got: {mapped:?})"
+    );
+
+    // The catalog code is the dedicated `E_SANDBOX_STACK_OVERFLOW`,
+    // not `E_SANDBOX_MODULE_INVALID`:
+    assert_eq!(mapped.code().as_static_str(), "E_SANDBOX_STACK_OVERFLOW");
+
+    // ERROR-CATALOG.md lists the new code per cascade step 4:
+    let catalog = std::fs::read_to_string(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("docs")
+            .join("ERROR-CATALOG.md"),
+    )
+    .expect("docs/ERROR-CATALOG.md must exist");
+    assert!(
+        catalog.contains("E_SANDBOX_STACK_OVERFLOW"),
+        "ERROR-CATALOG.md must list E_SANDBOX_STACK_OVERFLOW per phase-3-backlog §6.4 + r1-wsa-7"
     );
 }
 
 #[test]
-#[ignore = "RED-PHASE: G17-A1 wave-5b cascades typed variant through napi + engine-err mapping"]
 fn sandbox_recursive_call_overflow_traps_via_dedicated_variant() {
-    // r1-wsa-7 cascade-completeness pin. G17-A1 implementer wires:
+    // r1-wsa-7 cascade-completeness pin. The dedicated typed variant
+    // is preserved end-to-end through:
     //
-    //   // Drive the recursive-overflow fixture through the OUTER
-    //   // engine API + napi mapping (not just the inner Sandbox API).
-    //   // The dedicated variant is preserved end-to-end.
-    //
-    //   // Outer engine surface assertion:
-    //   let engine_err_src = std::fs::read_to_string(
-    //       "bindings/napi/src/lib.rs"
-    //   ).unwrap();
-    //   assert!(engine_err_src.contains("E_SANDBOX_STACK_OVERFLOW")
-    //         || engine_err_src.contains("StackOverflow"),
-    //       "bindings/napi engine_err mapping must surface the dedicated variant per r1-wsa-7");
-    //
-    //   // Trap routing assertion:
-    //   let trap_src = std::fs::read_to_string(
-    //       "crates/benten-eval/src/sandbox/trap_to_typed.rs"
-    //   ).unwrap();
-    //   assert!(trap_src.contains("StackOverflow"),
-    //       "trap_to_typed.rs must route Trap::StackOverflow to the dedicated variant per phase-3-backlog §6.4");
-    //
-    //   // Fixture CID rebake hazard tracked:
-    //   //   ~3-5 fixture CIDs change because the typed variant cascades
-    //   //   through ExecutionState envelope. The G17-A1 implementer
-    //   //   surfaces the rebake hazard at PR description time.
-    //
-    // OBSERVABLE consequence: distinct from the previous pin because
-    // it asserts cascade completeness through the napi + outer-engine
-    // surfaces, not just the Sandbox boundary. A regression that
-    // updates the inner variant but leaves napi unmapped fails here.
-    unimplemented!("G17-A1 wires napi + trap_to_typed cascade source-cite assertions");
+    // - `crates/benten-eval/src/sandbox/trap_to_typed.rs` — the
+    //   trap-routing arm (cascade step 3).
+    // - `crates/benten-eval/src/primitives/sandbox.rs` — the typed
+    //   variant lives here (cascade step 2).
+    // - `bindings/napi/src/error.rs` — the generic `engine_err`
+    //   mapping surfaces the typed variant's catalog code through
+    //   the `format!("{code}: {err}")` shape (cascade step 4).
+    let trap_src = std::fs::read_to_string(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join("sandbox")
+            .join("trap_to_typed.rs"),
+    )
+    .expect("trap_to_typed.rs must exist");
+    assert!(
+        trap_src.contains("Trap::StackOverflow") && trap_src.contains("StackOverflow"),
+        "trap_to_typed.rs must route Trap::StackOverflow to the dedicated variant per phase-3-backlog §6.4"
+    );
+    // The trap arm uses the dedicated SandboxError::StackOverflow
+    // variant (not ModuleInvalid):
+    assert!(
+        trap_src.contains("SandboxError::StackOverflow"),
+        "trap_to_typed.rs MUST route Trap::StackOverflow → SandboxError::StackOverflow per r1-wsa-7"
+    );
+
+    // The variant is declared in primitives/sandbox.rs:
+    let primitives_src = std::fs::read_to_string(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join("primitives")
+            .join("sandbox.rs"),
+    )
+    .expect("primitives/sandbox.rs must exist");
+    assert!(
+        primitives_src.contains("StackOverflow"),
+        "primitives/sandbox.rs MUST declare the SandboxError::StackOverflow typed variant per phase-3-backlog §6.4"
+    );
+
+    // The napi engine_err mapping passes the catalog code through
+    // generically (no per-variant special-case needed; the
+    // `format!("{code}: ...")` shape surfaces the stable
+    // `E_SANDBOX_STACK_OVERFLOW` string):
+    let napi_src = std::fs::read_to_string(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("bindings")
+            .join("napi")
+            .join("src")
+            .join("error.rs"),
+    )
+    .expect("bindings/napi/src/error.rs must exist");
+    assert!(
+        napi_src.contains("err.code()"),
+        "bindings/napi/src/error.rs::engine_err MUST surface the typed code via err.code() per the cascade"
+    );
 }

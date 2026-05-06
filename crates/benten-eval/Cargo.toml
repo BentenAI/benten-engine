@@ -44,6 +44,17 @@ diag = []
 # profile (e.g. an integration-test binary built under `--release`) must
 # opt in by enabling this feature explicitly.
 testing = ["benten-core/testing", "dep:wat"]
+# Phase-3 G17-A1 wave-5b — gates the §7.3.A.7 SANDBOX-escape testing
+# helpers at `crates/benten-eval/src/sandbox/testing_helpers.rs`. Per
+# Phase-2a `sec-r6r2-02` precedent + phase-3-backlog §7.3.A.7: the
+# helpers are HIGH-risk security surface (they manufacture the dispatch
+# + state shapes that real attack vectors produce, so the engine-side
+# defenses can be exercised end-to-end). Production cdylib MUST NOT
+# enable this feature; the `tests/sandbox_helpers_no_widening.rs`
+# load-bearing security pin (G20-A1 wave-8a) audits this discipline on
+# every CI build. Test binaries opt in via `features = ["test-helpers"]`
+# on their `[dev-dependencies]` block.
+test-helpers = []
 # `phase_2b_landed` gates compilation of Phase 2b R3 red-phase test files
 # whose `use` statements reference R5-pending APIs (`benten_eval::chunk_sink`,
 # `benten_eval::sandbox`, `benten_eval::testing::testing_*`, etc.). Default

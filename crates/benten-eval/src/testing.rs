@@ -340,3 +340,21 @@ pub fn testing_run_handler_against_sink_b(
 ) -> Vec<u64> {
     drive_handler_against_sink(chunk_count, chunk_size, seed)
 }
+
+// ---------------------------------------------------------------------------
+// Phase-3 G17-A1 wave-5b — §7.3.A.7 SANDBOX-escape testing helpers
+// re-exports.
+//
+// The helpers themselves live in `crate::sandbox::testing_helpers` (so
+// they can compose with the SANDBOX subsystem state) but are
+// re-exported here for the convention `benten_eval::testing::testing_*`
+// path that the §7.3.A.7 RED-PHASE pins use.
+// ---------------------------------------------------------------------------
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use crate::sandbox::testing_helpers::{
+    HelperSurfaceNotYetWired, make_escape_attempt_error, testing_call_engine_dispatch,
+    testing_inject_forged_cap_claim_section, testing_register_uncounted_host_fn,
+    testing_revoke_cap_mid_call, testing_simulate_fingerprint_collapse_pattern,
+    testing_simulate_fuel_meter_callback_trap,
+};

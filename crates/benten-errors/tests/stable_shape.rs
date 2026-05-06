@@ -173,6 +173,16 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // QuotaExceededError mapping at the browser thin-client cache write
     // boundary. Construction site: `bindings/napi/src/browser_indexeddb.rs`.
     ErrorCode::StorageQuotaExceeded,
+    // Phase-3 G17-A1 wave-5b (phase-3-backlog §6.4 + r1-wsa-7 BLOCKER):
+    // dedicated typed variant for `wasmtime::Trap::StackOverflow` —
+    // distinct from `SandboxModuleInvalid` / `SandboxFuelExhausted`.
+    ErrorCode::SandboxStackOverflow,
+    // Phase-3 G17-A1 wave-5b (phase-3-backlog §6.1 + r1-wsa-1 BLOCKER):
+    // dedicated typed variant for ESC defenses (ESC-7 fuel-refill via
+    // host-fn re-entry, ESC-13 fuel-meter callback / Store-poison,
+    // ESC-16 fingerprint-collapse). The discriminating EscVector is
+    // declared in `crates/benten-eval/src/sandbox/escape_defenses.rs`.
+    ErrorCode::SandboxEscapeAttempt,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -287,15 +297,28 @@ fn variant_count_is_pinned() {
     // site at `bindings/napi/src/browser_indexeddb.rs::map_dom_exception_to_error_code`;
     // closes D-PHASE-3-27 / br-r1-2 BLOCKER. Post-G18-A: 90 + 1 = 91.
     //
+    // Phase-3 G17-A1 wave-5b adds 2 codes:
+    //   `SandboxStackOverflow` — dedicated typed variant for
+    //     `wasmtime::Trap::StackOverflow` (formerly catalog-folded into
+    //     `SandboxModuleInvalid`); closes phase-3-backlog §6.4 +
+    //     r1-wsa-7 BLOCKER. Construction site at
+    //     `crates/benten-eval/src/sandbox/trap_to_typed.rs::map_call_error`.
+    //   `SandboxEscapeAttempt` — typed variant for ESC-7 / ESC-13 /
+    //     ESC-16 defenses. Construction sites at
+    //     `crates/benten-eval/src/sandbox/escape_defenses.rs::run_esc7_check`,
+    //     `crates/benten-eval/src/sandbox/escape_defenses.rs::run_esc13_check`, and
+    //     `crates/benten-eval/src/sandbox/escape_defenses.rs::run_esc16_check`.
+    //     Closes r1-wsa-1 BLOCKER (ESC-7 + ESC-13) + r1-wsa-4 (ESC-16) +
+    //     phase-3-backlog §6.1.
     // Phase-3 G17-A2 wave-5b adds 1 code:
-    // `SandboxHostFnRandomBudgetExceeded` — typed per-call entropy
-    // budget overrun for the `random` host-fn (CLAUDE.md baked-in #16
-    // closure / Compromise #16). Construction site at
-    // `crates/benten-eval/src/primitives/sandbox.rs::SandboxError::code`
-    // (cap-string carrier `random:per_call_budget_exceeded`).
-    // Post-G17-A2: 91 + 1 = 92.
+    //   `SandboxHostFnRandomBudgetExceeded` — typed per-call entropy
+    //     budget overrun for the `random` host-fn (CLAUDE.md baked-in #16
+    //     closure / Compromise #16). Construction site at
+    //     `crates/benten-eval/src/primitives/sandbox.rs::SandboxError::code`
+    //     (cap-string carrier `random:per_call_budget_exceeded`).
+    // Post-G17-A1 + G17-A2: 91 + 2 + 1 = 94.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 92,
+        CATALOG_VARIANT_COUNT, 94,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

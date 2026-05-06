@@ -11,6 +11,8 @@
 //! | OOM via ResourceLimiter | `E_SANDBOX_MEMORY_EXHAUSTED` | 1 (highest) |
 //! | Epoch deadline | `E_SANDBOX_WALLCLOCK_EXCEEDED` | 2 |
 //! | `CountedSink` overflow | `E_INV_SANDBOX_OUTPUT` | 4 |
+//! | `wasmtime::Trap::StackOverflow` | `E_SANDBOX_STACK_OVERFLOW` | 5 |
+//! | `EscapeAttemptMarker` | `E_SANDBOX_ESCAPE_ATTEMPT` | 5 |
 //! | Other trap codes | `SandboxError::ModuleInvalid` | 5 |
 //!
 //! D21 priority resolver (`MEMORY > WALLCLOCK > FUEL > OUTPUT`) lives in
@@ -38,6 +40,23 @@
 
 use crate::primitives::sandbox::SandboxError;
 use crate::sandbox::counted_sink::SinkOverflow;
+use crate::sandbox::escape_defenses::EscVector;
+
+/// Marker error the ESC defense raises to signal a typed escape-attempt
+/// detection. The cause-chain walk in [`map_call_error`] downcasts to
+/// this marker and surfaces the typed
+/// [`SandboxError::EscapeAttempt`] variant. Phase-3 G17-A1 wave-5b
+/// sec-r1 D7 sibling discipline for ESC defenses (typed error not
+/// trap so the engine accounting stays clean + the per-call store is
+/// dropped cleanly per D3-RESOLVED).
+#[derive(Debug, thiserror::Error)]
+#[error("sandbox escape-attempt marker: {vector:?} — {reason}")]
+pub struct EscapeAttemptMarker {
+    /// Discriminating ESC vector (ESC-7 / ESC-13 / ESC-16 / etc).
+    pub vector: EscVector,
+    /// Operator-actionable reason string.
+    pub reason: String,
+}
 
 /// Marker error the host-fn trampoline raises to signal a typed,
 /// non-trap denial (cap denial, host-fn-not-found, nested-dispatch).
@@ -90,18 +109,21 @@ impl HostFnDenialKind {
 /// Map a wasmtime `anyhow::Error` from `Instance::call` / `TypedFunc::call`
 /// into a typed [`SandboxError`].
 ///
-/// The `consumed_fuel` + `wallclock_limit_ms` + `memory_limit_bytes`
-/// parameters supply context for the variant payloads; the executor
-/// captures these per-call and threads them through.
+/// The `consumed_fuel` + `wallclock_limit_ms` + `memory_limit_bytes` +
+/// `max_wasm_stack` parameters supply context for the variant
+/// payloads; the executor captures these per-call and threads them
+/// through.
 ///
 /// Order of recognition (NOT priority — that's `resolve_priority`):
 /// 1. Host-fn typed-error marker (sec-r1 D7) — bypasses trap path.
-/// 2. wasmtime `Trap` — classified by code (`OutOfFuel` /
-///    `MemoryOutOfBounds` etc.).
-/// 3. Epoch interruption — wasmtime surfaces as `Trap::Interrupt` in
+/// 2. ESC defense `EscapeAttempt` typed variant — bypasses trap path
+///    (Phase-3 G17-A1 wave-5b; sec-r1 D7 sibling for ESC defenses).
+/// 3. wasmtime `Trap` — classified by code (`OutOfFuel` /
+///    `MemoryOutOfBounds` / `StackOverflow` etc.).
+/// 4. Epoch interruption — wasmtime surfaces as `Trap::Interrupt` in
 ///    43.x (the epoch-deadline mechanism produces an Interrupt trap;
 ///    we map to wallclock).
-/// 4. Anything else → `ModuleInvalid` with the original Display string.
+/// 5. Anything else → `ModuleInvalid` with the original Display string.
 #[must_use]
 pub fn map_call_error(
     err: wasmtime::Error,
@@ -109,6 +131,7 @@ pub fn map_call_error(
     wallclock_limit_ms: u64,
     memory_limit_bytes: u64,
     fuel_limit: u64,
+    max_wasm_stack: u64,
 ) -> SandboxError {
     // 1. Host-fn typed-error marker first (sec-r1 D7).
     if let Some(marker) = err.downcast_ref::<HostFnDenialMarker>() {
@@ -125,7 +148,19 @@ pub fn map_call_error(
         };
     }
 
-    // 1c. Walk the cause chain — wasmtime sometimes wraps the limiter
+    // 1c. ESC defense `EscapeAttempt` marker — Phase-3 G17-A1 wave-5b.
+    //     The trampoline raises an [`EscapeAttemptMarker`] anyhow-error
+    //     when an ESC defense fires; we unwrap to the typed
+    //     `SandboxError::EscapeAttempt` variant. sec-r1 D7 sibling
+    //     discipline for ESC defenses.
+    if let Some(marker) = err.downcast_ref::<EscapeAttemptMarker>() {
+        return SandboxError::EscapeAttempt {
+            vector: marker.vector,
+            reason: marker.reason.clone(),
+        };
+    }
+
+    // 1d. Walk the cause chain — wasmtime sometimes wraps the limiter
     //     error in a context layer; downcast_ref alone may miss the
     //     marker in nested-cause cases.
     for cause in err.chain() {
@@ -137,6 +172,12 @@ pub fn map_call_error(
         {
             return SandboxError::MemoryExhausted {
                 limit: m.limit_bytes,
+            };
+        }
+        if let Some(m) = cause.downcast_ref::<EscapeAttemptMarker>() {
+            return SandboxError::EscapeAttempt {
+                vector: m.vector,
+                reason: m.reason.clone(),
             };
         }
     }
@@ -157,29 +198,18 @@ pub fn map_call_error(
             wasmtime::Trap::Interrupt => SandboxError::WallclockExceeded {
                 limit_ms: wallclock_limit_ms,
             },
-            // R6FP-Group-1 (r6-wsa-8) — narrowed reason string so the
-            // operator-actionable hint differentiates "module
-            // recursed past max_wasm_stack" from generic
-            // wasmtime-invalid-module shapes. Fully splitting into a
-            // dedicated `SandboxError::StackExhausted` variant +
-            // `ErrorCode::SandboxStackExhausted` catalog code is
-            // BELONGS-NAMED-NOW for Group 4 (Phase-3-backlog
-            // enrichment + ERROR-CATALOG.md narrative widening) —
-            // the rename cascades through ~20 sites (drift detector,
-            // catalog tables, narrative docs) and the operator-UX
-            // gain is small enough that the catalog churn does not
-            // belong inside R6FP-G1's already-extended scope. Reason
-            // string carries the actionable hint
-            // ("max_wasm_stack=512KiB") so log-scrapers can route on
-            // it pre-catalog-lift.
-            wasmtime::Trap::StackOverflow => SandboxError::ModuleInvalid {
-                reason: "wasmtime stack overflow — module recursion exceeded \
-                          max_wasm_stack=512KiB; raise the budget if the \
-                          recursion is intentional, harden the module if \
-                          not (TODO(PHASE-3-BACKLOG-r6-wsa-8): split into \
-                          a dedicated SandboxStackExhausted variant)"
-                    .to_string(),
-            },
+            // Phase-3 G17-A1 wave-5b — `wasmtime::Trap::StackOverflow`
+            // routes to a dedicated `SandboxError::StackOverflow` typed
+            // variant per phase-3-backlog §6.4 + r1-wsa-7 BLOCKER closure.
+            // The R6FP-Group-1 r6-wsa-8 BELONGS-NAMED-NOW Phase-3
+            // deferral is honored here: the rename cascades through
+            // ~20 sites (drift detector, catalog tables, ERROR-CATALOG.md
+            // narrative widening) — all delivered as part of G17-A1.
+            // Operators distinguishing "module recursed past
+            // max_wasm_stack" from generic invalid-module shapes
+            // observe `E_SANDBOX_STACK_OVERFLOW` rather than
+            // `E_SANDBOX_MODULE_INVALID`.
+            wasmtime::Trap::StackOverflow => SandboxError::StackOverflow { max_wasm_stack },
             wasmtime::Trap::UnreachableCodeReached => SandboxError::ModuleInvalid {
                 reason: "wasmtime unreachable instruction".to_string(),
             },
@@ -219,7 +249,7 @@ mod tests {
             },
         };
         let err = wasmtime::Error::from(marker);
-        let mapped = map_call_error(err, 0, 30_000, 64 * 1024 * 1024, 1_000_000);
+        let mapped = map_call_error(err, 0, 30_000, 64 * 1024 * 1024, 1_000_000, 524_288);
         assert!(matches!(mapped, SandboxError::HostFnDenied { .. }));
     }
 
@@ -231,7 +261,7 @@ mod tests {
             },
         };
         let err = wasmtime::Error::from(marker);
-        let mapped = map_call_error(err, 0, 30_000, 64 * 1024 * 1024, 1_000_000);
+        let mapped = map_call_error(err, 0, 30_000, 64 * 1024 * 1024, 1_000_000, 524_288);
         assert!(matches!(mapped, SandboxError::HostFnNotFound { .. }));
     }
 
@@ -241,14 +271,14 @@ mod tests {
             kind: HostFnDenialKind::NestedDispatchDenied,
         };
         let err = wasmtime::Error::from(marker);
-        let mapped = map_call_error(err, 0, 30_000, 64 * 1024 * 1024, 1_000_000);
+        let mapped = map_call_error(err, 0, 30_000, 64 * 1024 * 1024, 1_000_000, 524_288);
         assert!(matches!(mapped, SandboxError::NestedDispatchDenied));
     }
 
     #[test]
     fn out_of_fuel_trap_routes_fuel_exhausted() {
         let err = wasmtime::Error::from(wasmtime::Trap::OutOfFuel);
-        let mapped = map_call_error(err, 1_000_000, 30_000, 64 * 1024 * 1024, 1_000_000);
+        let mapped = map_call_error(err, 1_000_000, 30_000, 64 * 1024 * 1024, 1_000_000, 524_288);
         assert!(matches!(
             mapped,
             SandboxError::FuelExhausted {
@@ -261,7 +291,7 @@ mod tests {
     #[test]
     fn interrupt_trap_routes_wallclock() {
         let err = wasmtime::Error::from(wasmtime::Trap::Interrupt);
-        let mapped = map_call_error(err, 0, 1000, 64 * 1024 * 1024, 1_000_000);
+        let mapped = map_call_error(err, 0, 1000, 64 * 1024 * 1024, 1_000_000, 524_288);
         assert!(matches!(
             mapped,
             SandboxError::WallclockExceeded { limit_ms: 1000 }
@@ -271,8 +301,64 @@ mod tests {
     #[test]
     fn memory_oob_trap_routes_module_invalid() {
         let err = wasmtime::Error::from(wasmtime::Trap::MemoryOutOfBounds);
-        let mapped = map_call_error(err, 0, 30_000, 64 * 1024 * 1024, 1_000_000);
+        let mapped = map_call_error(err, 0, 30_000, 64 * 1024 * 1024, 1_000_000, 524_288);
         assert!(matches!(mapped, SandboxError::ModuleInvalid { .. }));
+    }
+
+    #[test]
+    fn stack_overflow_trap_routes_to_dedicated_stack_overflow_variant() {
+        // Phase-3 G17-A1 wave-5b — `wasmtime::Trap::StackOverflow`
+        // routes to the dedicated `SandboxError::StackOverflow` typed
+        // variant per phase-3-backlog §6.4 + r1-wsa-7 BLOCKER closure.
+        // Pre-G17-A1 the trap routed to `ModuleInvalid` with a hint
+        // string; post-G17-A1 the dedicated typed variant carries the
+        // `max_wasm_stack` payload.
+        let err = wasmtime::Error::from(wasmtime::Trap::StackOverflow);
+        let mapped = map_call_error(err, 0, 30_000, 64 * 1024 * 1024, 1_000_000, 524_288);
+        assert!(
+            matches!(
+                mapped,
+                SandboxError::StackOverflow {
+                    max_wasm_stack: 524_288
+                }
+            ),
+            "Trap::StackOverflow MUST route to SandboxError::StackOverflow per \
+             phase-3-backlog §6.4 + r1-wsa-7 BLOCKER closure, not ModuleInvalid"
+        );
+    }
+
+    #[test]
+    fn stack_overflow_routes_to_e_sandbox_stack_overflow_catalog_code() {
+        // r1-wsa-7 cascade-completeness pin: the typed variant
+        // surfaces the dedicated catalog code, not the generic
+        // `E_SANDBOX_MODULE_INVALID`.
+        let err = SandboxError::StackOverflow {
+            max_wasm_stack: 524_288,
+        };
+        assert_eq!(err.code(), benten_errors::ErrorCode::SandboxStackOverflow);
+        assert_eq!(err.code().as_static_str(), "E_SANDBOX_STACK_OVERFLOW");
+    }
+
+    #[test]
+    fn escape_attempt_marker_routes_through_to_typed_variant() {
+        // Phase-3 G17-A1 wave-5b: ESC defenses raise the
+        // `EscapeAttemptMarker` anyhow-error; `map_call_error`
+        // unwraps it into the typed `SandboxError::EscapeAttempt`
+        // variant. sec-r1 D7 sibling discipline — typed-error not
+        // wasmtime trap.
+        let marker = EscapeAttemptMarker {
+            vector: EscVector::Esc7FuelRefillViaReEntry,
+            reason: "test re-entry attempt".to_string(),
+        };
+        let err = wasmtime::Error::from(marker);
+        let mapped = map_call_error(err, 0, 30_000, 64 * 1024 * 1024, 1_000_000, 524_288);
+        assert!(matches!(
+            mapped,
+            SandboxError::EscapeAttempt {
+                vector: EscVector::Esc7FuelRefillViaReEntry,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -287,7 +373,7 @@ mod tests {
             }),
         };
         let err = wasmtime::Error::from(marker);
-        let mapped = map_call_error(err, 0, 30_000, 64 * 1024 * 1024, 1_000_000);
+        let mapped = map_call_error(err, 0, 30_000, 64 * 1024 * 1024, 1_000_000, 524_288);
         assert!(matches!(mapped, SandboxError::OutputOverflow(_)));
     }
 }

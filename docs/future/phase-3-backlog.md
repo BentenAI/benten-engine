@@ -333,6 +333,38 @@ Estimated touch size: ~300-600 LOC of test infrastructure across `bindings/napi/
 
 **Touch size:** ~80-150 LOC.
 
+#### 6.1-followup ESC runtime-arm wiring (wave-5c — recall of G17-A1's claimed BLOCKER closure)
+
+**State at G17-A1 wave-5b (PR #117):** the SCAFFOLDING for ESC-7 / ESC-13 / ESC-16 (and ESC-9) defenses landed — `EscVector` enum + `SandboxError::EscapeAttempt` typed variant + `run_esc7_check` / `run_esc13_check` / `run_esc16_check` defense entry points + `EscDefenseState` per-call carrier + cfg-gated `crates/benten-eval/src/sandbox/testing_helpers.rs` SURFACE. The `Trap::StackOverflow` → `SandboxError::StackOverflow` arm at `crates/benten-eval/src/sandbox/trap_to_typed.rs::map_call_error` is genuinely production-wired (closes r1-wsa-7).
+
+**SHAPE-not-SUBSTANCE finding (PR #117 mini-review 2026-05-06, 4th-of-4 wave recurrence extending wave-5a's G14-C / G15-A / G18-A pattern):** the ESC-7/13/16 defense entry points have ZERO production call sites. `EscDefenseState` is constructed only in tests. `EscapeAttemptMarker` is constructed only inside `#[cfg(test)]`. `SandboxStoreData` has no `esc_defense_state` field. The `time` host-fn never calls `fingerprint::record_wallclock_write`. Integration tests under `crates/benten-eval/tests/sandbox_esc_*.rs` audit the helpers against synthetic state — they would still pass if the entire production trampoline were stripped. Per pim-2 §3.6b: NOT load-bearing closure for r1-wsa-1 BLOCKER (ESC-7 + ESC-13) or r1-wsa-4 MAJOR (ESC-16). r1-wsa-3 (ESC-9 cap-recheck) is the same shape — see §6.3 above.
+
+**Phase 3 target (wave-5c — separate dedicated implementation wave):** wire the production runtime arms:
+
+1. **`SandboxStoreData` field add.** Add `esc_defense_state: EscDefenseState` (or `Cell<EscDefenseState>` for trampoline mutability) to `crates/benten-eval/src/primitives/sandbox.rs::SandboxStoreData`; thread it through the per-call `Store::data_mut()` access pattern.
+
+2. **`time` host-fn fingerprint side-table population.** When the `time` host-fn trampoline writes a wallclock-correlated value into guest memory, it MUST call `crate::sandbox::fingerprint::record_wallclock_write(addr)` and store the resulting `WallclockTaintedAddress` in the per-call side-table on `SandboxStoreData`. Subsequent guest reads of the same address invoke `read_collapse_state(...)` to update the read counter.
+
+3. **Host-fn boundary `run_all_checks` invocation.** Each host-fn trampoline (currently: `time`, `log`, `kv:read`, `random`) invokes `run_all_checks(&state)` BEFORE returning control to guest wasm. If any check returns `Err(SandboxError::EscapeAttempt(_))`, the trampoline injects an `EscapeAttemptMarker` into the wasmtime `Error` cause chain (so `trap_to_typed::map_call_error` can unwrap it on the host side).
+
+4. **Panic-catcher around fuel-meter callback (ESC-13).** Wrap the wasmtime fuel-meter callback in `std::panic::catch_unwind(...)`; on panic, set `state.fuel_meter_callback_trapped = true` and inject `EscapeAttemptMarker(EscVector::Esc13StorePoison)`. Per-call `Store` lifecycle (D3-RESOLVED Phase-2b) already gives the recovery path; ESC-13 just needs the typed-error attribution + the panic-catcher seam.
+
+5. **`live_cap_check` callback through-thread (ESC-9).** Per r1-wsa-3: replace the `Vec<String> live_caps` snapshot field with a callable that consults the engine-side cap-grant store on each invocation. Thread `Arc<EngineInner>` + actor reference into `SandboxStoreData::new`. Un-ignore `sandbox_capability_check_per_call_after_revoke`. Bundles with §6.3 (D18 live-cap-check callback wire-through) — same surface.
+
+6. **End-to-end test pins.** Each wired arm gets a dedicated end-to-end test that drives `Sandbox::execute` through a real production trampoline + asserts observable typed-error firing. The integration tests under `crates/benten-eval/tests/sandbox_esc_*.rs` are SHAPE pins (per their re-narrated `//!` headers post-G17-A1); the wave-5c tests are separately authored end-to-end pins.
+
+**Why a separate wave:** the runtime-arm wiring touches the load-bearing `SandboxStoreData` struct (field add cascades across every host-fn trampoline + the SUBSCRIBE/STREAM paths that share the per-call store). Bundling with G17-A1's SCAFFOLDING PR risked conflating scope + regressing the per-call lifecycle. The wave-5c separation matches Pattern-6 reviewer-composition discipline (security-auditor + wasmtime-sandbox-auditor + correctness-engineer for the runtime arm) without re-running the SCAFFOLDING review.
+
+**Why this is named (not deferred-to-later) per HARD RULE rule-12 BELONGS-NAMED-NOW:** wave-5c is in the active R5 implementation window. The destination IS this entry. Closure of r1-wsa-1 BLOCKER + r1-wsa-4 MAJOR + r1-wsa-3 will be claimed by the wave-5c PR's mini-review on the basis of the end-to-end pins listed in #6 above.
+
+**Touch size:** ~400-700 LOC implementer (`SandboxStoreData` field add + 4 trampoline updates + panic-catcher + live-cap-check threading) + ~150-300 LOC end-to-end tests + ~30-50 LOC HARD RULE narrative updates across SECURITY-POSTURE ESC matrix + integration-test docstring updates from "SHAPE pin" to "load-bearing end-to-end closure" once wave-5c lands.
+
+**Cross-references:**
+- PR #117 G17-A1 mini-review: `.addl/phase-3/r5-w5b-g17-a1-mini-review.json`
+- §6.3 D18 live-cap-check callback wire-through (bundles in #5 above)
+- §6.4 Dedicated `E_SANDBOX_STACK_OVERFLOW` (separately closed at G17-A1 — the only genuinely-runtime-wired G17-A1 piece)
+- pim-N codification candidate: SHAPE-not-SUBSTANCE 4th-of-4 wave recurrence (G14-C / G15-A / G18-A / G17-A1) hits the 3+-recurrence threshold per `feedback_3_plus_recurrence_deep_sweep`. Recommend codifying as pim-18 §3.6e at next dispatch-conventions amendment: implementer briefs MUST include explicit "production call site enumeration" pre-flight item.
+
 ### 6.4 Dedicated `E_SANDBOX_STACK_OVERFLOW` typed variant (operator-UX)
 
 **Phase 2b state:** R6 wasmtime-sandbox-auditor `r6-wsa-8` flagged: `Trap::StackOverflow` from wasmtime currently folds into `E_SANDBOX_MODULE_INVALID` reason string in `crates/benten-eval/src/sandbox/trap_to_typed.rs`. R6-FP Group 1 (PR #62) narrowed the reason string within the existing variant (interim disposition); the agent offered to land a dedicated `E_SANDBOX_STACK_OVERFLOW` typed variant as a follow-up, estimated as ~20-site cascade across drift detector + catalog tables + narrative docs (~50-150 LOC).

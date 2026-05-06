@@ -852,6 +852,22 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** SANDBOX executor (`Module::new` / link / instantiation).
 - **Phase:** 2b G7-A
 
+### E_SANDBOX_STACK_OVERFLOW
+
+- **Message:** "SANDBOX stack overflow: guest exceeded max_wasm_stack ({max_wasm_stack} bytes)"
+- **Context:** `{ max_wasm_stack: u64 }`
+- **Fix:** SANDBOX guest module's call stack exceeded the configured `max_wasm_stack` ceiling (default 512 KiB; matches wasmtime's `Config::max_wasm_stack` default). Distinct from `E_SANDBOX_FUEL_EXHAUSTED` (CPU-bound runaway) and `E_SANDBOX_MODULE_INVALID` (structural validation failure) — stack-overflow-via-recursion is its own observable class so operator dashboards can distinguish a benign-but-buggy recursive guest from a generic invalid module. Either reduce module recursion depth, raise `SandboxConfig::max_wasm_stack`, or audit for adversarial recursion. Phase-3 G17-A1 wave-5b mints the dedicated typed variant per phase-3-backlog §6.4 + r1-wsa-7 BLOCKER closure (the prior R6FP-G1 r6-wsa-8 BELONGS-NAMED-NOW deferral is honored here).
+- **Thrown at:** SANDBOX executor — `wasmtime::Trap::StackOverflow` routes through `crates/benten-eval/src/sandbox/trap_to_typed.rs::map_call_error` to the dedicated variant.
+- **Phase:** Phase-3 G17-A1 wave-5b
+
+### E_SANDBOX_ESCAPE_ATTEMPT
+
+- **Message:** "SANDBOX escape attempt detected: {vector:?} — {reason}"
+- **Context:** `{ vector: EscVector, reason: string }`
+- **Fix:** SANDBOX guest attempted one of the enumerated escape vectors. Phase-3 G17-A1 wave-5b ships defenses for **ESC-7** (fuel-refill via host-fn re-entry — guest calls a host-fn whose dispatch path attempts to re-enter the SANDBOX `Store` and `add_fuel` mid-execution; defense fires from the trampoline before the inner `add_fuel` takes effect), **ESC-13** (trap during fuel-meter callback / Store-poison — host-side fuel-meter callback panics or traps; defense maps via panic-catcher + per-call `Store` lifecycle ensures fresh Store on next call), and **ESC-16** (fingerprint-collapse via wallclock-correlated state read — guest reads a host-written wallclock-derived cell to fingerprint host nondeterminism; defense fires at the next host-fn boundary BEFORE the side-channel becomes guest-observable). The discriminating `EscVector` enum (declared in `crates/benten-eval/src/sandbox/escape_defenses.rs`) carries `Esc7FuelRefillViaReEntry` / `Esc13StorePoison` / `Esc16FingerprintCollapse` variants so audit pipelines can route per-vector. Closes r1-wsa-1 BLOCKER (ESC-7 + ESC-13) + r1-wsa-4 (ESC-16) per phase-3-backlog §6.1 + D-E (R1 revision triage). Either harden the guest module (audit for the enumerated attack patterns) or — if the attack is in a research / test corpus — gate the corpus dispatch behind explicit testing-helper feature flags.
+- **Thrown at:** SANDBOX executor — `crates/benten-eval/src/sandbox/escape_defenses.rs::run_all_checks` (and per-vector `run_esc7_check` / `run_esc13_check` / `run_esc16_check`); routes through `crates/benten-eval/src/sandbox/trap_to_typed.rs::map_call_error` via the `EscapeAttemptMarker` cause-chain unwrap.
+- **Phase:** Phase-3 G17-A1 wave-5b
+
 ### E_SANDBOX_MODULE_NOT_INSTALLED
 
 - **Message:** "SANDBOX module bytes not registered for CID {module_cid}"

@@ -60,6 +60,13 @@ pub struct SandboxConfig {
     /// via [`crate::AttributionFrame`] (when wired). Default 4 per the D20
     /// "safety + audibility" tradeoff.
     pub max_nest_depth: u8,
+    /// Phase-3 G17-A1 wave-5b — max wasmtime guest stack size in bytes
+    /// per phase-3-backlog §6.4 + r1-wsa-7 BLOCKER closure. Default
+    /// 512 KiB (matches wasmtime default). Surfaced through the typed
+    /// [`SandboxError::StackOverflow`] variant when exceeded; carried
+    /// in the variant payload so operator dashboards distinguish a
+    /// recursive-runaway guest from a generic invalid module.
+    pub max_wasm_stack: u64,
     /// Phase-3 G17-A2 — per-call entropy budget for the `random` host-fn,
     /// in BYTES. Default = [`crate::sandbox::DEFAULT_RANDOM_BUDGET_BYTES_PER_CALL`]
     /// (4096 per r1-wsa-8). When `Some(n)`, this overrides the
@@ -77,6 +84,7 @@ impl Default for SandboxConfig {
             wallclock_ms: WALLCLOCK_DEFAULT_MS,
             output_bytes: 1024 * 1024,
             max_nest_depth: 4,
+            max_wasm_stack: MAX_WASM_STACK_DEFAULT,
             // Phase-3 G17-A2 — None == use the codegen default (4096
             // per r1-wsa-8). A per-manifest override flips this to
             // `Some(n)` at the engine boundary.
@@ -124,6 +132,12 @@ impl SandboxConfig {
 pub const WALLCLOCK_DEFAULT_MS: u64 = 30_000;
 /// D24 ceiling (5min).
 pub const WALLCLOCK_MAX_MS: u64 = 5 * 60_000;
+/// Phase-3 G17-A1 wave-5b — default wasmtime guest stack size (512 KiB).
+/// Matches wasmtime's `Config::max_wasm_stack` default. Per
+/// phase-3-backlog §6.4 + r1-wsa-7 BLOCKER closure: stack-overflow
+/// traps route to a dedicated [`SandboxError::StackOverflow`] typed
+/// variant (catalog code `E_SANDBOX_STACK_OVERFLOW`).
+pub const MAX_WASM_STACK_DEFAULT: u64 = 512 * 1024;
 
 /// Result of a single SANDBOX primitive execution.
 #[derive(Debug, Clone)]
@@ -222,6 +236,38 @@ pub enum SandboxError {
     /// Routes to [`ErrorCode::SandboxModuleNotInstalled`].
     #[error("SANDBOX module bytes not registered for CID {0}")]
     ModuleNotInstalled(benten_core::Cid),
+    /// Phase-3 G17-A1 wave-5b — SANDBOX guest module's call stack
+    /// exceeded the configured `max_wasm_stack` ceiling (wasmtime
+    /// default 512 KiB). Distinct from [`SandboxError::FuelExhausted`]
+    /// (CPU-bound runaway) and [`SandboxError::ModuleInvalid`]
+    /// (structural validation failure). Routes to
+    /// [`ErrorCode::SandboxStackOverflow`] per phase-3-backlog §6.4 +
+    /// r1-wsa-7 BLOCKER closure. The trap routing lives at
+    /// [`crate::sandbox::trap_to_typed::map_call_error`] (the
+    /// `wasmtime::Trap::StackOverflow` arm).
+    #[error("SANDBOX stack overflow: guest exceeded max_wasm_stack ({max_wasm_stack} bytes)")]
+    StackOverflow {
+        /// Configured `max_wasm_stack` budget (default 512 KiB).
+        max_wasm_stack: u64,
+    },
+    /// Phase-3 G17-A1 wave-5b — SANDBOX guest attempted one of the
+    /// enumerated escape vectors (ESC-7 / ESC-13 / ESC-16 currently;
+    /// extensible per [`crate::sandbox::escape_defenses::EscVector`]).
+    /// The defense at
+    /// [`crate::sandbox::escape_defenses`] fires this typed variant
+    /// rather than collapsing into [`SandboxError::ModuleInvalid`] so
+    /// audit pipelines can route per-vector. Routes to
+    /// [`ErrorCode::SandboxEscapeAttempt`].
+    ///
+    /// Defends r1-wsa-1 BLOCKER (ESC-7 + ESC-13) + r1-wsa-4 (ESC-16)
+    /// per phase-3-backlog §6.1 + D-E (R1 revision triage).
+    #[error("SANDBOX escape attempt detected: {vector:?} — {reason}")]
+    EscapeAttempt {
+        /// Discriminating ESC vector.
+        vector: crate::sandbox::escape_defenses::EscVector,
+        /// Operator-actionable reason string.
+        reason: String,
+    },
 }
 
 impl SandboxError {
@@ -253,6 +299,8 @@ impl SandboxError {
             }
             SandboxError::ManifestEncodeFailed { .. } => ErrorCode::Serialize,
             SandboxError::ModuleNotInstalled(_) => ErrorCode::SandboxModuleNotInstalled,
+            SandboxError::StackOverflow { .. } => ErrorCode::SandboxStackOverflow,
+            SandboxError::EscapeAttempt { .. } => ErrorCode::SandboxEscapeAttempt,
         }
     }
 
@@ -576,6 +624,7 @@ pub fn execute(
             config.wallclock_ms,
             config.memory_bytes,
             config.fuel,
+            config.max_wasm_stack,
         );
         return Err(mapped);
     }
