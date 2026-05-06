@@ -56,37 +56,30 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G14-A1 wave-4a updates ARCHITECTURE.md with the 9-crate in-flight callout"]
 fn architecture_md_in_flight_callouts_present_for_benten_id_and_benten_sync_native_only() {
-    // arch-r1-3 BLOCKER pin. G14-A1 implementer adds an HTML comment
-    // (or visible line) to `docs/ARCHITECTURE.md` of the form:
+    // arch-r1-3 BLOCKER pin (un-ignored at G14-A1 wave-4a landing).
+    // After G14-A1 lands, ARCHITECTURE.md carries an HTML comment of
+    // the form:
     //
     //   <!-- Phase-3 in flight: 9th crate benten-id added at G14-A1;
     //        10th crate benten-sync added at G16-A as native-only;
     //        full 8→10 transition narrative lands at G20-B docs sweep -->
-    //
-    // (Per plan §3 G14-A1 row.)
-    //
-    // R3-A test: asserts the comment is present at the time G14-A1
-    // PR lands.
-    //
-    // Concrete shape:
-    //   let arch_md = std::fs::read_to_string(
-    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //           .join("..").join("..").join("docs").join("ARCHITECTURE.md")
-    //   ).unwrap();
-    //   assert!(arch_md.contains("benten-id added at G14-A1")
-    //         || arch_md.contains("Phase-3 in flight"),
-    //       "ARCHITECTURE.md must carry the 9-crate in-flight callout at G14-A1 landing");
-    //   assert!(arch_md.contains("benten-sync") && arch_md.contains("native-only"),
-    //       "ARCHITECTURE.md must name benten-sync as native-only per CLAUDE.md baked-in #17");
-    //
-    // OBSERVABLE consequence: after G14-A1 lands, ARCHITECTURE.md
-    // explicitly tells readers a 9th crate has been added with a
-    // forthcoming 10th. Defends against the "code shipped, doc didn't"
-    // failure shape that arch-r1-3 named as a BLOCKER.
-    unimplemented!(
-        "G14-A1 wires ARCHITECTURE.md grep assertion for benten-id + benten-sync in-flight callouts"
+    let arch_md = std::fs::read_to_string(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("docs")
+            .join("ARCHITECTURE.md"),
+    )
+    .unwrap();
+    assert!(
+        arch_md.contains("benten-id added at G14-A1")
+            || arch_md.contains("Phase-3 in flight"),
+        "ARCHITECTURE.md must carry the 9-crate in-flight callout at G14-A1 landing"
+    );
+    assert!(
+        arch_md.contains("benten-sync") && arch_md.contains("native-only"),
+        "ARCHITECTURE.md must name benten-sync as native-only per CLAUDE.md baked-in #17"
     );
 }
 

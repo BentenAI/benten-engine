@@ -8,6 +8,8 @@ For plain-English orientation, start with [`HOW-IT-WORKS.md`](HOW-IT-WORKS.md). 
 
 ## Ten crates
 
+<!-- Phase-3 in flight: 9th crate benten-id added at G14-A1; 10th crate benten-sync added at G16-A as native-only; full 8→10 transition narrative lands at G20-B docs sweep -->
+
 The Rust workspace:
 
 ```
@@ -26,11 +28,10 @@ crates/
   benten-eval/          # 12 operation primitives. Iterative evaluator (explicit
                         # stack, not recursive). Structural validation (14
                         # invariants). Transaction primitive.
-  benten-id/            # Phase-3 canary STUB at R3-A landing — Ed25519 +
-                        # did:key + UCAN. Empty until G14-A1 wave-4a fills
-                        # the real implementations; present as a workspace
-                        # member so R3 RED-PHASE test pins compile-but-fail
-                        # at the `use` line (canonical TDD red phase).
+  benten-id/            # Phase-3 G14-A1 — Ed25519 keypair + did:key +
+                        # UCAN chain validation. G14-A2 wave-4a' adds
+                        # VC + multi_sig + DID rotation + device-DID
+                        # capability-attestation onto the same crate.
   benten-sync/          # Phase-3 canary STUB at R3-C landing — Atrium P2P
                         # sync (iroh transport + Loro CRDT + MST diff +
                         # DID handshake). NATIVE-ONLY per CLAUDE.md

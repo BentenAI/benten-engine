@@ -97,6 +97,15 @@ mod subscribe;
 // the same target gate.
 #[cfg(all(feature = "napi-export", not(target_arch = "wasm32")))]
 mod devserver;
+// Phase 3 G14-A1 wave-4a: identity primitives (Keypair / Did / signing
+// + verify). Native-only because the cryptographic operations + the
+// secret-bytes hygiene contract (zeroize-on-drop, no Clone, redacted
+// Debug) live on the full-peer side per CLAUDE.md baked-in #17. The
+// browser thin-client TS surface (`packages/engine/src/identity.ts`)
+// declares the shape; production identity work runs on the native
+// peer.
+#[cfg(all(feature = "napi-export", not(target_arch = "wasm32")))]
+mod identity;
 // Phase 2b G10-A-wasip1: napi-side wasm32-wasip1 runtime probes
 // (`wasiTargetKind`, `wasiRuntimeSupportsRedbNative`,
 // `wasiCanonicalFixtureCid`). Cfg-split per the same defence-in-depth

@@ -93,6 +93,15 @@ benten-dsl-compiler = { path = "../../crates/benten-dsl-compiler" }
 # depend directly so the napi binding's parser can name the enum without
 # pulling a benten-engine re-export shim.
 benten-ivm = { path = "../../crates/benten-ivm" }
+# Phase 3 G14-A1 (2026-05-06): napi bridge for Keypair / Did / Ucan
+# (identity primitives). `benten-id` is target-agnostic — the
+# Phase-3 R1 thin-client commitment (CLAUDE.md baked-in #17) reaches
+# the wasm32 deployment shape via the TS-side type declarations in
+# `packages/engine/src/identity.ts`; the napi bridge here is the
+# native (full-peer) surface. Per Q1 standing rule (alias-based
+# pragmatic-genericism), this is a thin wrapping bridge — no `<B>`
+# generic cascade.
+benten-id = { path = "../../crates/benten-id" }
 # r6b-dx-C5: used by `parse_actor_cid_or_derive` to hash friendly
 # principal strings into deterministic synthetic CIDs. Same version the
 # engine crates use for content hashing.

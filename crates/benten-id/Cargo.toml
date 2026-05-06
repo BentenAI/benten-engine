@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Phase-3 G14-A1 canary stub — Ed25519 keypair + did:key + UCAN. Real impls land at G14-A1; this is the test-shell that R3-A test pins compile against."
+description = "Phase-3 G14-A1 — Ed25519 keypair + did:key + UCAN chain validation. G14-A2 wave-4a' adds VC + multi_sig + DID rotation + device-DID attestation."
 
 [lints]
 workspace = true
@@ -15,18 +15,44 @@ workspace = true
 # Disable the implicit libtest bench harness. Mirrors crates/benten-core/Cargo.toml.
 bench = false
 
-# G14-A1 wave-4a fills these dependencies (`ed25519-dalek` 2.x + `ssi` 0.7.x +
-# `blake3` + `serde_ipld_dagcbor` + `zeroize` + `secrecy` + `subtle` + `getrandom`
-# per crypto-blocker-1 + crypto-major-2 + crypto-major-4 + crypto-major-5 +
-# sec-r1-11). Stub keeps the dep list empty so the crate compiles as an empty
-# rlib at R3-A landing time; R3-A test pins live under `tests/` and remain
-# `#[ignore]`'d (RED-PHASE: lands at R5 G14-A1).
+# Per arch-r1-10: benten-id MUST NOT depend on benten-graph / benten-engine /
+# benten-eval / benten-caps. The `tests/dependency_edges.rs` pin enforces this
+# (rejects the forbidden set). The allowed set below covers crypto-blocker-1 /
+# crypto-major-2 / crypto-major-4 / crypto-major-5 / crypto-minor-3.
 [dependencies]
+# Ed25519 signing + verifying (plan §3 G14-A1 row).
+ed25519-dalek = { workspace = true }
+# Secret-bytes hygiene (crypto-blocker-1 BLOCKER): `Zeroize` +
+# `ZeroizeOnDrop` derives on the `SecretKey` newtype + redacted Debug.
+# `secrecy` is intentionally NOT pulled in — the redacted Debug + no-Clone
+# discipline is hand-rolled with zeroize alone, which keeps the dep
+# surface minimal and the test-pin call-site groutable. (Per Q3 IFF
+# disagree-with-explanation: brief listed `secrecy` as a candidate but
+# the test contract names assertions on raw bytes layout, not on
+# `Secret<T>` wrappers; pulling secrecy would add an indirection layer
+# without adding a test-pin-named guarantee.)
+zeroize = { workspace = true }
+# Constant-time comparison primitive (crypto-major-4).
+subtle = { workspace = true }
+# OS CSPRNG primitive (crypto-major-2). Direct dep so the import-path
+# audit tests can grep the call site.
+getrandom = { workspace = true }
+rand_core = { workspace = true }
+# DAG-CBOR canonical-bytes envelope (crypto-major-5).
+serde = { workspace = true, features = ["derive"] }
+serde_bytes = { workspace = true }
+serde_ipld_dagcbor = { workspace = true }
+# did:key base58btc (multibase prefix `z`) — crypto-minor-3.
+bs58 = { workspace = true }
+# Typed-error mapping.
+thiserror = { workspace = true }
 
 [dev-dependencies]
-# Proptest carries the 10 000-case property suite (`prop_keypair_generate_distinct_across_1k_calls`,
-# `prop_keypair_from_seed_bytes_arbitrary_input_no_panic`, `prop_did_key_round_trip_byte_identity`,
-# `prop_ucan_chain_attenuation_never_widens_authority`). All proptest blocks
-# stay `#[ignore]`'d at R3 RED-phase; G14-A1 implementer un-ignores once the
-# real impls land.
+# Proptest carries `prop_keypair_generate_distinct_across_1k_calls`,
+# `prop_keypair_from_seed_bytes_arbitrary_input_no_panic`, and
+# `prop_did_key_round_trip_byte_identity`. UCAN attenuation proptest
+# remains G14-A2 scope.
 proptest = { workspace = true }
+hex = { workspace = true }
+toml = { workspace = true }
+serde_json = { workspace = true }
