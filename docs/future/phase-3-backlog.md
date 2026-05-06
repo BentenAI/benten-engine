@@ -567,11 +567,11 @@ R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift 
 **Touch size:** ~150-300 LOC matrix doc + ~10-20 cross-ref edits in `docs/SECURITY-POSTURE.md` + R6 council brief addendum citing matrix as completeness input. Risk: low (purely additive observer doc).
 
 **Cross-references:**
-- `.addl/phase-3/r4-r2-security.json::sec-r4r2-2` (origin finding + DISAGREE narrative)
-- `.addl/phase-3/r4-r1-security.json::sec-r4r1-4` (R1 escalation)
-- `.addl/phase-3/r1-security.json::sec-r1-7` (root R1 finding)
-- `.addl/phase-3/00-implementation-plan.md::§6 line 852` (current implicit-deferral; replace with reference to this entry on next plan-doc edit pass)
-- `crates/benten-sync/tests/attack_*.rs` (3 R4-R2-FP/B concrete-vector pins)
+- Phase-3 R4 R2 security lens finding `sec-r4r2-2` (origin finding + DISAGREE narrative); see `.addl/phase-3/r4-r2-security.json` (gitignored; orchestrator-tree only)
+- Phase-3 R4 R1 security lens finding `sec-r4r1-4` (R1 escalation); see `.addl/phase-3/r4-r1-security.json` (gitignored; orchestrator-tree only)
+- Phase-3 R1 security lens finding `sec-r1-7` (root R1 finding); see `.addl/phase-3/r1-security.json` (gitignored; orchestrator-tree only)
+- Phase-3 implementation plan §6 line 852 (current implicit-deferral; replace with reference to this entry on next plan-doc edit pass); see `.addl/phase-3/00-implementation-plan.md` (gitignored; orchestrator-tree only)
+- `crates/benten-sync/tests/attack_loro_op_log_inv_13.rs` + `attack_mst_diff_cid_mismatch.rs` + `attack_hlc_skew_revocation_ordering.rs` — 3 R4-R2-FP/B concrete-vector pins
 
 ---
 
