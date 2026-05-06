@@ -6,7 +6,7 @@
 //! [`crate::primitives::sandbox::SandboxError::EscapeAttempt`] variant,
 //! the [`run_esc7_check`] / [`run_esc13_check`] / [`run_esc16_check`]
 //! defense entry points, the [`EscDefenseState`] per-call carrier, and
-//! the cfg-gated [`crate::sandbox::testing_helpers`] surface. **The
+//! the cfg-gated `crate::sandbox::testing_helpers` surface. **The
 //! production runtime arms that wire these defenses into the SANDBOX
 //! execution path do NOT land in this PR.** r1-wsa-1 BLOCKER + r1-wsa-4
 //! MAJOR remain OPEN until the wave-5c ESC runtime-arm wiring lands
