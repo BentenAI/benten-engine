@@ -112,25 +112,32 @@ have been removed; Inv-4 + Inv-7 are now first-class active rows.
 
 ---
 
-## IVM Algorithm B production registration (audit-gap closure note)
+## IVM Algorithm B production registration (post-G15-A note)
 
-Wave-8h closed the IVM Algorithm B production-registration drift the
-docs-vs-code audit caught: `Engine::create_user_view` previously
-forced `ContentListingView` for every `Strategy::B`-declared user
-view. Post-wave-8h the dispatch constructs `AlgorithmBView::for_id(spec.id())`
-for the **5 canonical view IDs** that `AlgorithmBView` supports
-natively (the hand-written single-loop dispatch in
-`crates/benten-ivm/src/algorithm_b.rs`).
+Wave-8h originally closed the IVM Algorithm B production-registration
+drift the docs-vs-code audit caught: `Engine::create_user_view`
+previously forced `ContentListingView` for every `Strategy::B`-declared
+user view. Wave-8h wired the dispatch to `AlgorithmBView::for_id(spec.id())`
+for the **5 canonical view IDs** that `AlgorithmBView` supported
+natively. Non-canonical user-defined view IDs continued to land on a
+shim until Phase 3.
 
-**Coverage compromise:** non-canonical user-defined view IDs that
-declare `Strategy::B` continue to fall back to `ContentListingView`
-silently. Generalised user-defined Algorithm B handlers are a Phase-3
-lift (paired with the IVM-views coarse-grained read-gate Compromise
-#11). A drift-detector for "declared B but registered ContentListingView"
-on non-canonical IDs is on the Phase-3 backlog. User-facing impact
-today is bounded: the 5 canonical view IDs cover all in-tree user-view
-patterns; declaring `Strategy::B` on a custom ID does not fail loud
-but transparently uses the Phase-1 view shape.
+**Phase 3 G15-A close.** Algorithm B is **generalized at Phase 3 G15-A**:
+the kernel keys on `(view_id, label_pattern, projection)` triples and
+user-defined views run under `Strategy::B` with their actual label
+patterns. The 5 hand-written Phase-1 views remain as inner kernels of
+`Strategy::B` per the keep-canonical-view-fast-path gate; non-canonical
+user-defined view IDs no longer degrade to a Phase-1 view shape.
+`Engine::register_user_view` admits arbitrary label patterns under
+`Strategy::B`; `Strategy::A` user-view registration is refused at the
+engine boundary per `D8` / `ivm-major-5`.
+
+**Drift-detector landed at G15-B.** A proptest-driven drift-detector
+compares Algorithm B incremental updates vs from-scratch full computation
+across canonical + user-defined views; the harness lives at
+`crates/benten-ivm/tests/algorithm_b_drift_detector.rs`. Three additional
+state-result pins (per `ivm-major-3`) cover budget-trip propagation,
+post-trip recovery, and label-pattern extension observability.
 
 ---
 

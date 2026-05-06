@@ -24,6 +24,172 @@ use crate::engine::{Engine, is_known_view_id};
 use crate::error::EngineError;
 use crate::outcome::{Outcome, ReadViewOptions, UserViewInputPattern, UserViewSpec};
 
+// =============================================================================
+// G15-B (wave-5a) — PrefixMatcher selector type
+// =============================================================================
+//
+// Pre-G15-B `register_user_view` silently coerced `UserViewInputPattern::AnchorPrefix(p)`
+// into a `ContentListingView::new(p)` registration: the runtime view filtered
+// by `label == p` (label-equality), NOT by `label.starts_with(p)` (prefix
+// matching). The "PRE-G8-A SEMANTIC STUB" comment block (now removed) named
+// the foot-gun explicitly.
+//
+// G15-B introduces a real PREFIX matcher via the `PrefixMatcher` selector
+// type + a `PrefixMatchingView` IVM view implementation. The PrefixMatcher
+// is the user-visible selector type (carries the prefix string + a pure
+// `matches(label) -> bool` accessor); the PrefixMatchingView is the runtime
+// `benten_ivm::View` that retains every Node CID whose `label.starts_with(prefix)`.
+//
+// Disjointness from G15-A per seq-blocker-3 repartition: this PrefixMatcher
+// + PrefixMatchingView pair lives ENTIRELY in `benten-engine/src/engine_views.rs`.
+// G15-A owns `benten-ivm/src/algorithm_b.rs` INCLUDING the algorithm-B
+// PrefixMatcher consumer wiring.
+
+/// Prefix-match selector for [`UserViewInputPattern::AnchorPrefix`] (G15-B
+/// wave-5a). Carries the prefix string + a `matches` accessor that performs
+/// `label.starts_with(prefix)` matching — distinguishing prefix matching from
+/// the pre-G15-B silent label-equality coercion.
+///
+/// `anchor_prefix = "crud:"` matches `"crud:post"`, `"crud:user"`, and
+/// `"crud:comment"`, but NOT `"system:zone"` or `"governance:rule"`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrefixMatcher {
+    /// The prefix that incoming labels must start with for a match.
+    prefix: String,
+}
+
+impl PrefixMatcher {
+    /// Construct a matcher for `prefix`. Empty prefix is permitted (matches
+    /// every label) — callers wanting that semantic should prefer it
+    /// explicitly so a typo'd `""` surfaces in the call site.
+    #[must_use]
+    pub fn new(prefix: impl Into<String>) -> Self {
+        Self {
+            prefix: prefix.into(),
+        }
+    }
+
+    /// The prefix string this matcher was constructed with.
+    #[must_use]
+    pub fn prefix(&self) -> &str {
+        &self.prefix
+    }
+
+    /// True if `label` begins with the matcher's prefix.
+    ///
+    /// This is the load-bearing G15-B contract: prefix matching, NOT label
+    /// equality. A regression that silently coerces this to `==` is caught
+    /// by `tests/anchor_prefix.rs::anchor_prefix_no_silent_label_equality_coerce`.
+    #[must_use]
+    pub fn matches(&self, label: &str) -> bool {
+        label.starts_with(&self.prefix)
+    }
+}
+
+/// Phase-3 G15-B prefix-matching IVM view.
+///
+/// Subscribes to every `ChangeEvent` and retains the Node CID for each
+/// `Created` event whose Node carries any label matching the configured
+/// [`PrefixMatcher`]. `Deleted` events remove the matching CID. The retained
+/// CID set surfaces through [`benten_ivm::View::read`] as a
+/// [`benten_ivm::ViewResult::Cids`].
+///
+/// This is the runtime that closes the pre-G15-B silent label-equality
+/// coercion documented in the prior `PRE-G8-A SEMANTIC STUB` comment block —
+/// `AnchorPrefix("crud:")` now genuinely matches `"crud:post"` and
+/// `"crud:user"` rather than degenerating to the empty equality match.
+#[derive(Debug)]
+struct PrefixMatchingView {
+    view_id: String,
+    matcher: PrefixMatcher,
+    /// Retained CIDs in insertion order. List semantics — duplicates
+    /// permitted to mirror `ContentListingView`'s contract.
+    cids: Vec<benten_core::Cid>,
+    stale: bool,
+}
+
+impl PrefixMatchingView {
+    fn new(view_id: impl Into<String>, matcher: PrefixMatcher) -> Self {
+        Self {
+            view_id: view_id.into(),
+            matcher,
+            cids: Vec::new(),
+            stale: false,
+        }
+    }
+
+    fn label_matches_any(&self, labels: &[String]) -> bool {
+        labels.iter().any(|l| self.matcher.matches(l))
+    }
+}
+
+impl benten_ivm::View for PrefixMatchingView {
+    fn update(&mut self, event: &benten_graph::ChangeEvent) -> Result<(), benten_ivm::ViewError> {
+        if self.stale {
+            return Err(benten_ivm::ViewError::Stale {
+                view_id: self.view_id.clone(),
+            });
+        }
+        match event.kind {
+            benten_graph::ChangeKind::Created | benten_graph::ChangeKind::Updated => {
+                if self.label_matches_any(&event.labels) {
+                    self.cids.push(event.cid);
+                }
+            }
+            benten_graph::ChangeKind::Deleted => {
+                if self.label_matches_any(&event.labels) {
+                    self.cids.retain(|c| c != &event.cid);
+                }
+            }
+            // Edge events do not contribute rows to a label-prefix view.
+            benten_graph::ChangeKind::EdgeCreated | benten_graph::ChangeKind::EdgeDeleted => {}
+        }
+        Ok(())
+    }
+
+    fn read(
+        &self,
+        _query: &benten_ivm::ViewQuery,
+    ) -> Result<benten_ivm::ViewResult, benten_ivm::ViewError> {
+        if self.stale {
+            return Err(benten_ivm::ViewError::Stale {
+                view_id: self.view_id.clone(),
+            });
+        }
+        Ok(benten_ivm::ViewResult::Cids(self.cids.clone()))
+    }
+
+    fn read_allow_stale(
+        &self,
+        _query: &benten_ivm::ViewQuery,
+    ) -> Result<benten_ivm::ViewResult, benten_ivm::ViewError> {
+        // Last-known-good projection: even stale, return what we had.
+        Ok(benten_ivm::ViewResult::Cids(self.cids.clone()))
+    }
+
+    fn rebuild(&mut self) -> Result<(), benten_ivm::ViewError> {
+        self.cids.clear();
+        self.stale = false;
+        Ok(())
+    }
+
+    fn id(&self) -> &str {
+        &self.view_id
+    }
+
+    fn is_stale(&self) -> bool {
+        self.stale
+    }
+
+    fn mark_stale(&mut self) {
+        self.stale = true;
+    }
+
+    fn strategy(&self) -> benten_ivm::Strategy {
+        benten_ivm::Strategy::B
+    }
+}
+
 impl Engine {
     // -------- Change stream surface --------
 
@@ -413,24 +579,17 @@ impl Engine {
             return Err(EngineError::SubsystemDisabled { subsystem: "ivm" });
         }
 
-        // Derive the input-pattern label (used by the ContentListingView
-        // shim until G8-A's generalized Algorithm B port lands; per the
-        // §3 G8-B coordination note the user-view ingestion path stubs
-        // through ContentListingView in the Label case so the registration
-        // round-trip is observable end-to-end on this branch).
+        // Derive the input-pattern label (recorded on the persisted
+        // view-definition Node for the catalog).
         //
-        // ⚠️ PRE-G8-A SEMANTIC STUB: AnchorPrefix is silently coerced to
-        // a Label-equality match against the prefix string (because
-        // ContentListingView only knows label equality). An app that
-        // declares `inputPattern: { anchorPrefix: "post" }` and then
-        // reads the user view will see results filtered by `label ==
-        // "post"`, NOT by anchor prefix. This is a stub bridge until
-        // G8-A's per-strategy view dispatch lands (then this branch
-        // swaps to the proper anchor-prefix selector). DO NOT rely on
-        // AnchorPrefix semantics in tests or app code that targets the
-        // pre-G8-A engine. The DSL surface (`packages/engine/src/views.ts`
-        // `UserViewInputPattern` doc + `outcome.rs::UserViewInputPattern`)
-        // mirrors this warning.
+        // G15-B (wave-5a): the previous `AnchorPrefix → ContentListingView`
+        // silent label-equality coercion is GONE. The runtime registration
+        // below routes `AnchorPrefix` through `PrefixMatchingView` (defined
+        // at the head of this module) which performs `label.starts_with(prefix)`
+        // matching. The persisted definition Node still carries
+        // `input_pattern_label = prefix` so the on-disk surface remains
+        // backwards-comparable with the pre-G15-B catalog encoding (it just
+        // means a different runtime view shape).
         let input_pattern_label = match spec.input_pattern() {
             UserViewInputPattern::Label(l) => Some(l.clone()),
             UserViewInputPattern::AnchorPrefix(prefix) => Some(prefix.clone()),
@@ -476,24 +635,42 @@ impl Engine {
         if let Some(ivm) = self.ivm.as_ref() {
             let already_registered = ivm.view_ids().iter().any(|id| id == spec.id());
             if !already_registered && let Some(label) = input_pattern_label.as_deref() {
-                let definition = benten_ivm::ViewDefinition {
-                    view_id: spec.id().to_string(),
-                    input_pattern_label: Some(label.to_string()),
-                    output_label: "system:IVMView".to_string(),
-                    strategy: benten_ivm::Strategy::B,
-                };
-                match benten_ivm::algorithm_b::AlgorithmBView::for_id(spec.id(), definition) {
-                    Ok(view) => {
+                // G15-B (wave-5a): dispatch by input-pattern shape FIRST so
+                // `AnchorPrefix` lands on the prefix-matching runtime
+                // (PrefixMatchingView), rather than being silently coerced
+                // to label-equality via the legacy ContentListingView path.
+                match spec.input_pattern() {
+                    UserViewInputPattern::AnchorPrefix(prefix) => {
+                        let view = PrefixMatchingView::new(
+                            spec.id().to_string(),
+                            PrefixMatcher::new(prefix.clone()),
+                        );
                         ivm.register_view(Box::new(view));
                     }
-                    Err(_) => {
-                        // User-defined id outside the 5 canonical Phase-1
-                        // ids: AlgorithmBView::for_id rejects with
-                        // PatternMismatch. Fall back to the ContentListingView
-                        // shim so change events still flow to a live View;
-                        // Phase-3 user-supplied dispatch removes this branch.
-                        let view = benten_ivm::views::ContentListingView::new(label);
-                        ivm.register_view(Box::new(view));
+                    UserViewInputPattern::Label(_) => {
+                        let definition = benten_ivm::ViewDefinition {
+                            view_id: spec.id().to_string(),
+                            input_pattern_label: Some(label.to_string()),
+                            output_label: "system:IVMView".to_string(),
+                            strategy: benten_ivm::Strategy::B,
+                        };
+                        match benten_ivm::algorithm_b::AlgorithmBView::for_id(spec.id(), definition)
+                        {
+                            Ok(view) => {
+                                ivm.register_view(Box::new(view));
+                            }
+                            Err(_) => {
+                                // User-defined id outside the 5 canonical Phase-1
+                                // ids: AlgorithmBView::for_id rejects with
+                                // PatternMismatch. Fall back to the
+                                // ContentListingView shim so change events still
+                                // flow to a live View. Generalized
+                                // user-supplied dispatch lives in G15-A's
+                                // algorithm_b.rs lift.
+                                let view = benten_ivm::views::ContentListingView::new(label);
+                                ivm.register_view(Box::new(view));
+                            }
+                        }
                     }
                 }
             }

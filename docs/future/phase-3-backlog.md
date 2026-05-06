@@ -167,29 +167,13 @@
 
 ## 5. IVM Algorithm B maturity
 
-### 5.1 Drift-detector + non-canonical-view generalization
+### 5.1 Drift-detector + non-canonical-view generalization — **CLOSED at Phase 3 G15 (wave-5a)**
 
-**Phase 2b state:** Wave-8h wired Algorithm B production registration. The 5 hand-written canonical views (`CapabilityGrantsView`, `ContentListingView`, `EventDispatchView`, `GovernanceInheritanceView`, `VersionCurrentView` — see `crates/benten-ivm/src/views/mod.rs:20-24`) are pure-delegation kernels; non-canonical user-defined view IDs hit a `ContentListingView` fallback (per `docs/INVARIANT-COVERAGE.md` Algorithm B canonical-only compromise note). Wave-8j-cleanup didn't change this. The R6 ivm-correctness lens (`r6-ivm-2`, `r6-ivm-3`) flagged two gaps:
-- Drift-detector for IVM canonical-view-vs-Algorithm-B equivalence is named in SECURITY-POSTURE.md:266 + INVARIANT-COVERAGE.md:133 as "on the Phase-3 backlog" but had no actual entry until this section.
-- 4 of 5 canonical views silently ignore user-supplied label semantics (e.g. `version_current` + Label("post") registers as `Strategy::B` but VersionCurrentView hardcodes NEXT_VERSION). R6-R3 r6-r3-ivm-1 lands a fail-loud reject for this drift across BOTH the TS-DSL pre-napi-boundary (`packages/engine/src/views.ts::validateUserViewSpec`) AND the Rust engine boundary (`crates/benten-engine/src/engine_views.rs::register_user_view` surfacing `EngineError::ViewLabelMismatch` / catalog `E_VIEW_LABEL_MISMATCH`). Full generalization to "Algorithm B handles arbitrary user-defined label semantics" remains Phase 3.
+**Closure (Phase 3 R5 wave-5a).** Algorithm B kernel generalized at G15-A to key on `(view_id, label_pattern, projection)` triples; user-defined views run under `Strategy::B` with their actual label patterns, the 5 hand-written Phase-1 views remain as inner kernels of `Strategy::B` per the keep-canonical-view-fast-path gate. **Drift-detector landed at G15-B** as a proptest harness at `crates/benten-ivm/tests/algorithm_b_drift_detector.rs` (5 proptests at 1 000 cases each: incremental-vs-rebuild equivalence, budget-trip state propagation, post-trip recovery, label-pattern extension observability, BudgetExceeded-vs-rebuild-succeeds asymmetric path). Both halves of the original 5.1 split land together in Phase 3 R5 wave-5a as planned.
 
-**Phase 3 target:**
-- (a) **Algorithm B drift-detector** — proptest harness that compares Algorithm B incremental updates vs from-scratch full computation across all 5 canonical views + a synthetic user-defined view. Treat divergence as a test failure with structured diff. Generalizes into the Phase-3 IVM CI lane.
-- (b) **Non-canonical view generalization** — Algorithm B handles arbitrary `(view_id, label_pattern, projection)` triples; the canonical-only fallback is removed (or kept as fast-path for the 5 known views). User-defined views with custom label semantics no longer silently coerce to `ContentListingView`.
+### 5.2 AnchorPrefix selector lift in user-view registration — **CLOSED at Phase 3 G15-B**
 
-**Why Phase 3:** The drift-detector needs the same surface-completeness Algorithm B's full generalization needs — testing Algorithm B against an arbitrary label pattern requires the generalization itself to exist. Sequencing: (a) and (b) land together in a Phase-3 IVM wave.
-
-**Touch size:** ~400-700 LOC across `crates/benten-ivm/src/` (Algorithm B kernel generalization) + ~200-400 LOC tests (proptest drift detector + per-view-pattern conformance). Risk surface: medium — the 5 canonical views' performance characteristics must be preserved at the fast-path level.
-
-### 5.2 AnchorPrefix selector lift in user-view registration (post-G8-A)
-
-**Phase 2b state:** R6-R3 r6-r3-arch-4 named-destination carry. `Engine::register_user_view` accepts `InputPattern { anchor_prefix: Option<String>, ... }` as part of `UserViewSpec`, but the dispatch path at `crates/benten-engine/src/engine_views.rs::register_user_view` silently coerces `anchor_prefix` → label-equality match (the AnchorPrefix variant feeds the prefix string into the same `input_pattern_label` slot the `Label` variant uses). The pre-G8-A SEMANTIC STUB doc-block at the implementation site is honest about this; the stub bridges through `ContentListingView` until G8-A's per-strategy view dispatch lands. R6 Round 1 (r6-arch-4) flagged that no Phase-3 destination doc named the carry; this entry IS the named destination.
-
-**Phase 3 target:** lift `AnchorPrefix` to genuine prefix matching (e.g. `anchor_prefix="crud:"` matches both `"crud:post"` and `"crud:user"` via a `PrefixMatcher` selector type). Compose with §5.1 generalization so the user-view ingestion path supports per-spec view dispatch with arbitrary `(view_id, label_pattern, projection)` triples + the canonical-only fallback is removed (or kept as a fast-path).
-
-**Why Phase 3:** the AnchorPrefix lift requires the same Algorithm B selector-richness §5.1 covers — testing prefix-not-equality semantics requires the generalized dispatch path itself to exist. Sequencing: lands together with §5.1 in the Phase-3 IVM wave.
-
-**Touch size:** ~30-50 LOC across `engine_views.rs` (extend the matcher), `benten-ivm` subscriber wiring, plus 1 regression test exercising the prefix-not-equality case. Bundles cleanly with §5.1 (~1-2 hour incremental scope).
+**Closure (Phase 3 R5 wave-5a, G15-B).** `crates/benten-engine/src/engine_views.rs` introduces a real `PrefixMatcher` selector type + a `PrefixMatchingView` IVM view implementation. `register_user_view` routes `UserViewInputPattern::AnchorPrefix(p)` to the new view (`label.starts_with(p)` matching), retiring the pre-G15-B label-equality silent coercion. Regression pins live at `crates/benten-engine/tests/anchor_prefix.rs` (`anchor_prefix_matches_prefix_not_equality` + `anchor_prefix_no_silent_label_equality_coerce`).
 
 ---
 
