@@ -16,11 +16,21 @@ workspace = true
 bench = false
 
 # G16-A wave-6 canary fills these dependencies (`iroh`, `iroh-net`, `tokio`,
-# `benten-graph`, `benten-id`, `uhlc`); G16-B wave-6b adds `loro` (Loro CRDT);
-# G16-C adds the MST primitives crate(s) chosen at implementation time. Stub
-# keeps the dep list empty so the crate compiles as an empty rlib at R3-C
-# landing time. Per CLAUDE.md baked-in #17 + plan §3 G16-A row, this crate
-# is NATIVE-ONLY: G16-A implementer adds `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`
+# `benten-graph`, `benten-id`); G16-B wave-6b adds `loro` (Loro CRDT) — pinned
+# at the chosen 0.x semver-pre-1.0 minor version with a `Loro version pinned
+# + Dependabot fast-track per scope-real-10` clause analogous to iroh's
+# G16-A pinning (see plan §3 G16-B row); G16-C adds the MST primitives
+# crate(s) chosen at implementation time. Stub keeps the dep list empty so
+# the crate compiles as an empty rlib at R3-C landing time.
+#
+# Note (per ds-r4r2-5 closure of ds-r4-8): `uhlc` was REJECTED at G14-pre-D
+# (HLC implemented directly in `benten-core` per
+# `crates/benten-core/src/hlc.rs:42` — `Why a direct implementation, not the
+# uhlc crate`). This crate does NOT consume `uhlc`; HLC types arrive via the
+# `benten-core` dependency at G16-A landing.
+#
+# Per CLAUDE.md baked-in #17 + plan §3 G16-A row, this crate is NATIVE-ONLY:
+# G16-A implementer adds `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`
 # cfg-gating to `iroh` + `loro` so `benten-sync` does NOT compile for
 # wasm32-unknown-unknown. The architectural pin
 # `tests/wasm32_excluded.rs::benten_sync_does_not_compile_for_wasm32_unknown_unknown_per_thin_client_commitment`

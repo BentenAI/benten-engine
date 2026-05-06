@@ -37,6 +37,36 @@
 //!   accommodates per-row check `(principal, zone, node_cid)`; G15-A
 //!   label-hint extraction + G14-D per-subscriber filtering both compose
 //!   on this shape.
+//!
+//!   **Wave-5a G14-D + G15-A shared-trait callout (per ds-r4r2-7 — closes
+//!   ds-r4-10).** The [`CapRecheckFn`] alias below is the single
+//!   shared-signature surface that BOTH wave-5a consumers compose on:
+//!
+//!   - **G14-D** `crates/benten-engine/src/engine_subscribe.rs` —
+//!     per-subscriber filtering at SUBSCRIBE delivery boundary calls
+//!     [`CapRecheckFn`] for each delivered ChangeEvent.
+//!   - **G15-A** `crates/benten-engine/src/ivm_view_read_gate.rs` —
+//!     per-row READ gate consults [`CapRecheckFn`] for each row
+//!     before yielding it from a view query (label-hint extraction
+//!     produces the `&str` zone argument; the actor-cap-set check
+//!     happens INSIDE the closure).
+//!
+//!   Both consumers receive `CapRecheckFn` as a constructor parameter
+//!   (no inheritance / no trait-object machinery beyond the existing
+//!   `Arc<dyn Fn(...)>` shape). Wave-5a coordination: any signature
+//!   change to [`CapRecheckFn`] MUST land HERE first — engine_subscribe.rs
+//!   + ivm_view_read_gate.rs both cite this module directly. Per
+//!   `seq-minor-6`, this is the no-refactor-on-landing contract pinned
+//!   by `cap_recheck_helper_no_refactor_on_g14d_or_g17a1_landing` (the
+//!   contract extends to G15-A landing identically).
+//!
+//!   This is the option-(b) closure of ds-r4-10 from
+//!   `.addl/phase-3/r4-r1-distributed-systems.json` (named the
+//!   closure-composition surface inside G13-pre-C's existing
+//!   scaffold, no new file). The R3-B PR #93 cap-r4-3 closure landed
+//!   the test-layer composition pin
+//!   (`crates/benten-engine/tests/ivm_view_subscribe_compose.rs`); this
+//!   scaffold-layer narrative completes the closure end-to-end.
 //! - **Shared with ESC-9 (G17-A1) at host-fn boundary per `r1-wsa-3`.**
 //!   Fires at every host-fn boundary, NOT cached. Same closure shape so
 //!   both waves use the same dispatch type.
