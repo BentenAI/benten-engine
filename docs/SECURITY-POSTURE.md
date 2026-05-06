@@ -22,7 +22,7 @@ written, referenceable form.
 | 9 | Dedup writes pure-read (sec-r1-4 / atk-3) | 1 | **CLOSED** at Phase 2b G12-E (this phase) |
 | 10 | Resume-time capability re-verification | 2a | **CLOSED** at Phase 2b G12-E (this phase) |
 | 11 | IVM views coarse-grained read-gate | 2a | Open (Phase 3+) |
-| 12 | `DurabilityMode::Group` gate 5 deferred | 1 | Open (deferred to Phase 3) |
+| 12 | `DurabilityMode::Group` gate 5 — engine-surface default flip + bench CI promotion | 1 | **CLOSED** at Phase 3 G13-E (this phase) |
 | 13 | System-zone reserved-prefix rejection surface | 2a | Open (documented; minor-3) |
 | 14 | SANDBOX cold-start cost (no opt-in pool) | 2b | Open (D3 RESOLVED — additive Phase-3 change if real-workload bottleneck) |
 | 15 | `register_runtime` reserved with deferred error | 2b | Deferred to Phase 8 (marketplace) |
@@ -40,6 +40,14 @@ closures); 8 new Phase-2b deferrals enumerated (#14, #15, #16, #17,
 #19, #20, #21 were lifted from MODULE-MANIFEST.md's local "#N+X" table
 into the global numbering at R6 phase-close so cross-doc references
 resolve to a single authoritative compromise table.
+
+**Phase-3 G13-E delta (this row's landing):** Compromise #12 closed
+at Phase-3 R5 wave-3 G13-E — `DurabilityMode::default()` flipped
+`Immediate` → `Group` at the engine surface +
+`.github/workflows/bench.yml` promoted from informational to
+required (PR-trigger compile gate + CRUD fast-path APFS-relevant
+bench subset). See the Compromise #12 section below for the full
+closure narrative + the redb-collapse caveat.
 
 **Phase-3 additive delta (introduced at phase-3 close, this row's
 landing):** Compromise #22 records the peer-DID + connection-metadata
@@ -871,47 +879,91 @@ NOW).
 
 ---
 
-### Compromise #12 — `DurabilityMode::Group` gate 5 deferred to Phase 2b / 3 (arch-r1-1)
+### Compromise #12 — `DurabilityMode::Group` gate 5 — **CLOSED-AT-G13-E** (Phase-3 R5 wave-3)
 
 **Class.** Durability / audit-freshness tradeoff under batch
 commits.
 
-**Shape.** The Phase-2a `redb` backend commits under
-`Durability::Immediate` — every write-bearing transaction fsyncs
-the redb journal before `Engine::call` returns. This is the
+**Status.** **CLOSED at G13-E** (Phase-3 R5 wave-3, 2026-05).
+`DurabilityMode::default()` flipped from `Immediate` to `Group`
+at the engine surface (see
+[`crates/benten-graph/src/backend.rs::DurabilityMode`]); the
+benchmark CI workflow `.github/workflows/bench.yml` was promoted
+from informational to required + grew the APFS-relevant CRUD
+fast-path timing benchmarks. The closure is pinned by three
+tests:
+- [`crates/benten-graph/tests/durability_default.rs::durability_mode_group_default_for_crud_fast_path`]
+  (the default-flip itself);
+- [`crates/benten-graph/tests/security_posture_compromise_12_marked_closed`]
+  (this section's CLOSED marker);
+- [`crates/benten-graph/tests/crud_fast_path_apfs_timing_within_target`]
+  (informational wall-clock gate; bench is the authoritative perf signal).
+
+**Shape (historical).** The Phase-2a `redb` backend committed under
+`Durability::Immediate` — every write-bearing transaction fsynced
+the redb journal before `Engine::call` returned. This was the
 correct posture for the Phase-1 / 2a trust model (the ChangeEvent
-and the persisted bytes are both on disk before the caller
-observes success), but it dominates the 150-300 µs §14.6 target on
-macOS APFS (~4 ms fsync floor; see Phase-1 named compromise at the
+and the persisted bytes both on disk before the caller observed
+success), but it dominated the 150-300 µs §14.6 target on macOS
+APFS (~4 ms fsync floor; see Phase-1 named compromise at the
 bench-layer docs).
 
 `DurabilityMode::Group` — grouped commit across a configurable
 window — was considered for Phase 2a but deferred: the gate-5
 interaction (how does the ChangeEvent fan-out interact with a
-deferred fsync?) needs its own invariant pass. If a grouped
-transaction's ChangeEvent reaches a subscriber before the fsync
-lands, and the process crashes, the subscriber has observed an
-event for a write that does not exist on disk at restart.
+deferred fsync?) needed its own invariant pass. If a grouped
+transaction's ChangeEvent reached a subscriber before the fsync
+landed, and the process crashed, the subscriber observed an event
+for a write that did not exist on disk at restart.
 
-**Mitigation (Phase 2a).** Phase-2a stays on Immediate durability.
-The bench `crud_post_create_dispatch_group_durability` reserves
-the shape without making it the default.
+**Closure (Phase-3 G13-E).** Resolution chosen: **(c) leaving
+Group as the engine-surface default while the redb backend
+collapses Group → `Durability::Immediate` until redb grows
+native batched-commit support.** The engine-level posture is the
+right surface to declare; backend-specific mapping is a separate
+concern. Three load-bearing claims that this closure makes:
+1. Non-redb backends (in-RAM thin-client per
+   [`crates/benten-graph/src/browser_backend.rs`] when G13-C lands;
+   future peer-sync) can implement true grouped fsync without
+   changing call sites — the default is already correct for them.
+2. When redb itself grows the capability — see redb tracking
+   issue history at the bench-layer docs — the on-disk behavior
+   improves transparently with no semver break.
+3. ChangeEvent gate-5 invariant: capability-grant writes still
+   force `Durability::Immediate` at the redb mapping layer (see
+   [`crates/benten-graph/tests/capability_grant_writes_immediate.rs`]),
+   so the audit-freshness path that motivated the original
+   deferral is preserved. The CRUD fast-path is the only surface
+   that adopts the Group default.
 
-**Phase 2b / 3 deferral.** Phase 2b's pre-R1 will decide between
-(a) gating ChangeEvent fan-out behind fsync (sync ChangeEvent
-stream, async client), (b) annotating ChangeEvents with a
-"provisional / committed" marker, or (c) leaving Group as an
-opt-in flag whose caller accepts the surface. The decision is
-plan §arch-r1-1 scope; it is NOT a Phase-2a frozen invariant.
+**Mitigation (Phase-3 + later).** Capability-grant writes pin
+`Durability::Immediate` per
+[`crates/benten-graph/tests/capability_grant_writes_immediate.rs`];
+operators wanting the historic per-commit-fsync posture
+explicitly construct via
+[`crates/benten-graph/src/redb_backend.rs::RedbBackend::open_or_create_with_durability`]
+with `DurabilityMode::Immediate`. The
+[`crates/benten-graph/src/redb_backend.rs::warn_if_group_durability_collapsed`]
+one-shot warning still fires on benches so the redb-collapse
+caveat is operator-visible.
 
-**Residual risk.** Operators running Phase-2a on macOS dev
-hardware see ~4 ms per write-bearing handler invocation. This is
-correct / on-posture, not a regression. The Phase-1 audit
-documented it explicitly; the §14.6 target assumes grouped or SSD
-durability.
+**Residual risk.** Operators running on macOS dev hardware
+against the redb backend still see the ~4 ms APFS fsync floor
+per commit because redb v4 collapses Group → Immediate. This
+is correct / on-posture for the redb backend specifically; it is
+no longer a Compromise of the engine-level posture (the engine
+surface declares Group as the default; backend-specific
+mappings are a separate concern with their own visibility).
+The §14.6 target remains aspirational for the redb backend
+until upstream redb (or a Benten write-batching layer) lands;
+non-redb backends are not constrained by it.
 
-**Cross-refs.** plan §arch-r1-1; ENGINE-SPEC §14.6 macOS caveat;
-`crates/benten-graph/benches/crud_post_create_dispatch_group_durability.rs`.
+**Cross-refs.** plan §arch-r1-1; plan §3 G13-E; ENGINE-SPEC
+§14.6 macOS caveat;
+[`crates/benten-graph/benches/crud_post_create_dispatch_group_durability.rs`];
+[`crates/benten-graph/benches/durability_modes.rs`];
+[`docs/future/phase-2-backlog.md`] §9.1 (CLOSED-IN-PHASE-3-G13-E);
+`.github/workflows/bench.yml` (promoted to required at G13-E).
 
 ---
 

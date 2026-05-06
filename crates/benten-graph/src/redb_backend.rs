@@ -137,7 +137,16 @@ pub(crate) fn next_prefix(prefix: &[u8]) -> Option<Vec<u8>> {
 /// `Group` mode the Benten trait exposes has no direct redb equivalent yet,
 /// so it collapses to `Immediate` until redb grows batched-fsync support.
 /// This conservative mapping preserves durability at the cost of the
-/// throughput win; Phase 2 can revisit without breaking the public enum.
+/// throughput win; Phase 3+ can revisit without breaking the public enum.
+///
+/// **Phase-3 G13-E posture:** `DurabilityMode::default()` returns `Group`
+/// (closes Compromise #12 at the engine surface). The redb mapping below
+/// still collapses Group → Immediate, so `RedbBackend::open_or_create`
+/// today gets the same on-disk behavior as before the flip — but the
+/// engine-level posture is now correct, and a non-redb backend (in-RAM
+/// thin-client per `crates/benten-graph/src/browser_backend.rs` when it
+/// lands at G13-C, or a future peer-sync backend) can implement true
+/// grouped fsync without changing call sites.
 fn to_redb_durability(mode: DurabilityMode) -> Durability {
     match mode {
         DurabilityMode::Immediate | DurabilityMode::Group => Durability::Immediate,
@@ -191,11 +200,16 @@ fn warn_if_group_durability_collapsed(mode: DurabilityMode) {
 ///
 /// # Durability
 ///
-/// Both constructors take the default [`DurabilityMode::Immediate`]. The
+/// Both constructors take [`DurabilityMode::default()`] which returns
+/// [`DurabilityMode::Group`] since Phase-3 G13-E (was
+/// [`DurabilityMode::Immediate`] through Phase-2b). At the redb mapping
+/// layer Group still collapses to `Durability::Immediate` until redb v4+
+/// grows native batched-commit support — see
+/// `crates/benten-graph/src/redb_backend.rs::to_redb_durability`. The
 /// [`RedbBackend::open_existing_with_durability`] and
-/// [`RedbBackend::open_or_create_with_durability`] variants let callers pick
-/// a looser mode when correctness under a crash is not load-bearing (bench
-/// harness, ephemeral test fixture).
+/// [`RedbBackend::open_or_create_with_durability`] variants let callers
+/// pick `Immediate` (capability-grant writes; pin-precise crash semantics)
+/// or `Async` (bench harness, ephemeral test fixture) explicitly.
 ///
 /// # Concurrency
 ///
@@ -308,7 +322,12 @@ impl RedbBackend {
     /// safer default for production code paths that want to refuse to
     /// silently materialize a new database under a typoed path.
     ///
-    /// Commits use [`DurabilityMode::Immediate`] (fsync per commit).
+    /// Commits use [`DurabilityMode::default()`] — [`DurabilityMode::Group`]
+    /// since Phase-3 G13-E. At the redb mapping layer this collapses to
+    /// `Durability::Immediate` (fsync per commit) until redb grows native
+    /// batched-commit support. See
+    /// `crates/benten-graph/src/backend.rs::DurabilityMode` for the
+    /// Compromise #12 closure narrative.
     ///
     /// # Errors
     /// - [`GraphError::BackendNotFound`] if `path` does not exist.
@@ -390,7 +409,12 @@ impl RedbBackend {
     /// Open the redb database at `path`, creating it if it doesn't already
     /// exist. Idempotent on an existing file.
     ///
-    /// Commits use [`DurabilityMode::Immediate`] (fsync per commit).
+    /// Commits use [`DurabilityMode::default()`] — [`DurabilityMode::Group`]
+    /// since Phase-3 G13-E. At the redb mapping layer this collapses to
+    /// `Durability::Immediate` (fsync per commit) until redb grows native
+    /// batched-commit support. See
+    /// `crates/benten-graph/src/backend.rs::DurabilityMode` for the
+    /// Compromise #12 closure narrative.
     ///
     /// # Errors
     /// Returns [`GraphError::Redb`] if redb cannot open or create the file,
