@@ -262,9 +262,11 @@ struct GenericKernel {
         reason = "projection currently no-op; placeholder for Phase-3+ narrowing"
     )]
     projection: Projection,
-    /// Maintained set of matched Node CIDs in insertion order via the
-    /// `BTreeSet` (lexicographic-on-CID-bytes sort; deterministic across
-    /// runs).
+    /// Maintained set of matched Node CIDs sorted by `Cid`'s `Ord` impl
+    /// (lexicographic-on-CID-bytes; deterministic across runs). Note: a
+    /// `BTreeSet` is NOT insertion-ordered — it iterates in `Ord` order;
+    /// the determinism guarantee here comes from that `Ord` ordering, not
+    /// from FIFO insertion.
     entries: BTreeSet<Cid>,
     /// Stale flag — flipped when `mark_stale` fires.
     stale: bool,
@@ -281,6 +283,17 @@ impl GenericKernel {
         }
     }
 
+    /// Test the Node's FIRST label against this kernel's label pattern.
+    ///
+    /// Empty-label Nodes never match — a Node with `labels.is_empty()`
+    /// has no "first label" to test, so `first()` returns `None` and the
+    /// `is_some_and` arm short-circuits to `false`. The first-label-only
+    /// convention is shared with the 5 Phase-1 hand-written canonical
+    /// views (e.g. `ContentListingView::matches_label`); secondary labels
+    /// are intentionally NOT consulted at the kernel boundary. Matchers
+    /// that need multi-label semantics belong at a higher selector layer
+    /// (named in `docs/future/phase-3-backlog.md` §5.1-followup-b for
+    /// edge-traversal-keyed views).
     fn first_label_matches(&self, node: &Node) -> bool {
         node.labels
             .first()
@@ -460,6 +473,16 @@ impl AlgorithmBView {
         // mismatched pattern would yield a view filtered on the WRONG
         // label. Fail-loud at registration time per Phase-2b R6-R3
         // `r6-r3-ivm-1` precedent.
+        //
+        // **Bounded by `LabelPattern::matches`** — `AnchorPrefix("")`
+        // prefix-matches every label (including the canonical hardcoded
+        // label), so this guard does NOT fire for an empty-prefix
+        // registration. The data-correctness implications are zero in
+        // practice (the hand-written canonical kernel ignores the
+        // supplied pattern entirely + uses its hardcoded label), but the
+        // tightening — banning AnchorPrefix on canonical-id registration
+        // outright — is named in `docs/future/phase-3-backlog.md` §5.1
+        // as a follow-on per `g15a-mr-minor-4`.
         if let Some(hardcoded) = hardcoded_label_for_id(view_id)
             && !label_pattern.matches(hardcoded)
         {

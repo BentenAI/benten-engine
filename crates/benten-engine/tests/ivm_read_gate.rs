@@ -121,11 +121,19 @@ fn ivm_view_per_row_read_gate_against_actor_cap_set() {
 }
 
 #[test]
-fn ivm_view_read_gate_threads_engine_view_through_materialize_view_with_gate() {
-    // End-to-end Engine wiring per pim-2 §3.6b: the production
-    // `Engine::materialize_view_with_gate` entrypoint composes the
-    // gate with a registered IVM view's row CIDs.
+fn materialize_view_with_gate_filters_rows_per_actor_cap_set_at_engine_entry_point_e2e() {
+    // LOAD-BEARING pim-2 §3.6b end-to-end pin (g15a-mr-blocker-3
+    // closure). Drives the production `Engine::materialize_view_with_gate`
+    // entry point with Nodes WRITTEN through the engine's normal
+    // transaction surface (so the IVM subscriber materialises them via
+    // ChangeEvents) + a CapRecheckFn that admits some CIDs and denies
+    // others. Asserts row-level filtering: the result contains EXACTLY
+    // the admitted CIDs — not all of them (would fail if the gate were
+    // silently bypassed) and not none of them (would fail if the arm
+    // returned `Ok(Some(Vec::new()))` unconditionally).
+    use benten_core::{Node, Value};
     use benten_engine::{Engine, UserViewInputPattern, UserViewSpec};
+
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
     let spec = UserViewSpec::builder()
@@ -134,15 +142,89 @@ fn ivm_view_read_gate_threads_engine_view_through_materialize_view_with_gate() {
         .build()
         .unwrap();
     engine.register_user_view(spec).unwrap();
-    // No rows yet: empty list under any gate posture.
-    let allow_gate = IvmViewReadGate::allow_all_for(principal_for("alice"), "post");
+
+    // Write 4 Nodes through the engine's transaction surface: 2 'post'
+    // (matching the registered view's label pattern) + 2 'user'
+    // (non-matching, won't enter the materialised list anyway). Of the
+    // 2 'post' Nodes the gate admits ONE and denies the OTHER.
+    let mut admitted_props = std::collections::BTreeMap::new();
+    admitted_props.insert("kind".into(), Value::text("admitted"));
+    let admitted_node = Node::new(vec!["post".to_string()], admitted_props);
+    let admitted_cid = admitted_node.cid().unwrap();
+
+    let mut denied_props = std::collections::BTreeMap::new();
+    denied_props.insert("kind".into(), Value::text("denied"));
+    let denied_node = Node::new(vec!["post".to_string()], denied_props);
+    let denied_cid = denied_node.cid().unwrap();
+
+    let mut user_a_props = std::collections::BTreeMap::new();
+    user_a_props.insert("name".into(), Value::text("a"));
+    let user_a = Node::new(vec!["user".to_string()], user_a_props);
+
+    let mut user_b_props = std::collections::BTreeMap::new();
+    user_b_props.insert("name".into(), Value::text("b"));
+    let user_b = Node::new(vec!["user".to_string()], user_b_props);
+
+    engine
+        .transaction(|tx| {
+            for n in [&admitted_node, &denied_node, &user_a, &user_b] {
+                tx.put_node(n)
+                    .map_err(|e| benten_engine::EngineError::Other {
+                        code: benten_errors::ErrorCode::Unknown("E_TEST_HARNESS".into()),
+                        message: format!("put_node: {e:?}"),
+                    })?;
+            }
+            Ok(())
+        })
+        .expect("commit four mixed-label Nodes");
+
+    // Construct a gate that admits ONLY `admitted_cid`.
+    let admitted_set: BTreeSet<Cid> = std::iter::once(admitted_cid).collect();
+    let admitted_set_arc = Arc::new(admitted_set);
+    let cap_recheck: CapRecheckFn = {
+        let set = Arc::clone(&admitted_set_arc);
+        Arc::new(move |_p: &PrincipalId, _zone: &str, cid: &Cid| set.contains(cid))
+    };
+    let gate = IvmViewReadGate::new(principal_for("alice"), "post", cap_recheck);
+
     let result = engine
+        .materialize_view_with_gate("custom:e2e_gate", &gate)
+        .expect("materialize_view_with_gate succeeds");
+    let cids = result.expect("Some(cids) for a registered view");
+    assert_eq!(
+        cids.len(),
+        1,
+        "exactly one row admitted (not 2 = gate-bypass; not 0 = arm-no-op); \
+         pim-2 §3.6b end-to-end behavior: gate filters rows at the engine \
+         entry point. cids = {cids:?}"
+    );
+    assert_eq!(
+        cids[0], admitted_cid,
+        "the admitted CID is the one the cap-recheck closure permits"
+    );
+    assert!(
+        !cids.contains(&denied_cid),
+        "the denied CID is suppressed at materialization time"
+    );
+
+    // Smoke-check: an allow-all gate against the same view sees BOTH
+    // 'post' Nodes (further proves the 1-row count above is gate-driven,
+    // not view-empty).
+    let allow_gate = IvmViewReadGate::allow_all_for(principal_for("alice"), "post");
+    let allowed = engine
         .materialize_view_with_gate("custom:e2e_gate", &allow_gate)
-        .unwrap();
-    assert_eq!(result, Some(Vec::new()));
-    // Unknown view -> Ok(None).
+        .unwrap()
+        .expect("Some(cids)");
+    assert_eq!(
+        allowed.len(),
+        2,
+        "allow-all gate observes both 'post' Nodes (admitted + denied); \
+         gate is the load-bearing filter, not the view's content."
+    );
+
+    // Unknown view -> Ok(None) (existing contract preserved).
     let unknown = engine
         .materialize_view_with_gate("custom:no_such_view", &allow_gate)
         .unwrap();
-    assert!(unknown.is_none());
+    assert!(unknown.is_none(), "unknown view-id yields Ok(None)");
 }

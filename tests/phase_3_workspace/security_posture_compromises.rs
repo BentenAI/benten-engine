@@ -416,19 +416,35 @@ fn security_posture_compromise_11_materialization_gate_landed_at_g15_a() {
         "Compromise #11 closure narrative must cite G15-A (materialization-time gate) \
          and/or G14-D (delivery-time gate)"
     );
-    assert!(
-        section.contains("prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern"),
-        "SECURITY-POSTURE.md Compromise #11 closure narrative MUST cite the \
-         proptest-symbol-of-record \
-         `prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern` \
-         per §3.5b HARDENED point-1 + r4-r2-ivm-5"
-    );
+    // g15a-mr-blocker-2 closure: the prior assertion required the
+    // proptest symbol `prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern`.
+    // That proptest is RED-PHASE (still `#[ignore]`'d with body
+    // `unimplemented!()` until G15-B lands the drift-detector). Citing
+    // it as a closure pin in SECURITY-POSTURE.md was a pim-1
+    // phantom-LIVE-cite. Compromise #11's G15-A closure stands on the
+    // materialization-time gate alone; the proptest is a separate
+    // G15-B closure surface that will be cited by THIS test once
+    // G15-B lands. Until then, the load-bearing GREEN-PHASE pins are
+    // (a) the 50/50 row test that exercises `IvmViewReadGate::filter_rows`
+    // and (b) the end-to-end e2e test that drives
+    // `Engine::materialize_view_with_gate` per pim-2 §3.6b.
     assert!(
         section.contains("ivm_view_per_row_read_gate_against_actor_cap_set"),
         "SECURITY-POSTURE.md Compromise #11 closure narrative MUST cite the \
          materialization-gate symbol-of-record \
          `ivm_view_per_row_read_gate_against_actor_cap_set` \
          per §3.5b HARDENED point-1 + r4-r2-ivm-5"
+    );
+    assert!(
+        section.contains(
+            "materialize_view_with_gate_filters_rows_per_actor_cap_set_at_engine_entry_point_e2e"
+        ),
+        "SECURITY-POSTURE.md Compromise #11 closure narrative MUST cite the \
+         end-to-end pim-2 §3.6b symbol-of-record \
+         `materialize_view_with_gate_filters_rows_per_actor_cap_set_at_engine_entry_point_e2e` \
+         (g15a-mr-blocker-3 closure pin — drives the production \
+         `Engine::materialize_view_with_gate` entry point with row-level \
+         observable filtering)"
     );
 }
 

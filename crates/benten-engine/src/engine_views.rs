@@ -16,8 +16,17 @@
 //! view ids now route through [`benten_ivm::Algorithm::register`]'s generic
 //! kernel keyed on `(label_pattern, projection)` per `D-PHASE-3-28
 //! RESOLVED`. The 5 hand-written canonical views remain as inner kernels of
-//! Strategy::B per `ivm-disagree-1`; they are reachable via the legacy
-//! `(view_id, ViewCreateOptions)` overload in [`crate::engine_caps`].
+//! Strategy::B per `ivm-disagree-1`; post-G15-A they are reachable via TWO
+//! paths:
+//!
+//! - the legacy `(view_id, ViewCreateOptions)` overload in
+//!   [`crate::engine_caps`] (preserved for back-compat with Phase-2b
+//!   registration sites);
+//! - [`Self::register_user_view`] + [`benten_ivm::Algorithm::register`],
+//!   which dispatches canonical view ids through the same hand-written
+//!   inner kernel via [`benten_ivm::dispatch_for`]. Post-G15-A this is the
+//!   preferred path because it gives canonical + user-defined views a
+//!   single registration surface (g15a-mr-minor-1 disambiguation).
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -515,6 +524,23 @@ impl Engine {
         let def_node = Node::new(vec!["system:IVMView".into()], def_props);
         let cid = self.privileged_put_node_for_user_view(&def_node)?;
 
+        // **Re-registration shape (g15a-mr-minor-5 DISAGREE-WITH-EXPLANATION).**
+        // The Node-write happens BEFORE the subscriber-level dedupe
+        // check (see `already_registered` test below). For an
+        // idempotent re-registration of the same `UserViewSpec`, the
+        // persisted Node carries identical canonical bytes → same CID
+        // → redb's transaction layer treats the second write as an
+        // idempotent overwrite (no row duplication, no historical
+        // chain growth). The pre-write order is intentional defense:
+        // it ensures the persisted Node always exists even if the
+        // subscriber's `view_ids()` somehow drifts from the persisted
+        // catalog (post-rebuild rehydration, future event-replay
+        // cases). Swapping to dedupe-first would save the redb-layer
+        // transaction round-trip on the no-op path but would couple
+        // the persisted catalog's freshness to the subscriber's
+        // `view_ids()` snapshot — a tighter coupling than the current
+        // shape. Held DISAGREE per HARD RULE rule-12 disposition (c).
+        //
         // Phase-3 G15-A: register a live view instance with the IVM
         // subscriber via [`benten_ivm::Algorithm::register`]. The kernel
         // routes through the internal Strategy::A vs Strategy::B

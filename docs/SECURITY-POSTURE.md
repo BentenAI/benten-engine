@@ -822,10 +822,21 @@ deny-from-either-layer wins. The closure is pinned by:
   exactly 50 rows for an actor with public-only READ caps).
 - `crates/benten-engine/tests/ivm_read_gate.rs::ivm_view_read_gate_fires_at_materialization_separately_from_g14_d_delivery_gate`
   (`ivm-major-2` — gate is independent of SUBSCRIBE delivery layer).
-- `crates/benten-ivm/tests/algorithm_b_drift_detector.rs::prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern`
-  (G15-B — drift-detector proptest that the kernel's incremental
-  maintenance equals from-scratch rebuild across arbitrary label
-  patterns, including the patterns the materialization gate filters).
+- `crates/benten-engine/tests/ivm_read_gate.rs::materialize_view_with_gate_filters_rows_per_actor_cap_set_at_engine_entry_point_e2e`
+  (LOAD-BEARING pim-2 §3.6b end-to-end pin — drives the production
+  `Engine::materialize_view_with_gate` boundary with mixed-label
+  Nodes written through the engine's transaction surface; asserts
+  row-level filtering behavior that would FAIL if the gate were
+  silently bypassed or if `materialize_view_with_gate` returned an
+  empty list unconditionally).
+
+The G15-B drift-detector proptest harness at
+`crates/benten-ivm/tests/algorithm_b_drift_detector.rs` is reserved as
+a separate G15-B closure surface; it does not pin Compromise #11's
+G15-A closure (which stands on the materialization gate alone). When
+G15-B lands + un-ignores the proptest, this section grows a
+follow-on cite naming
+`prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern`.
 
 **Shape (historical).** Phase 2a G4-A Option C threading gated
 `Engine::read_view` at the per-view level: a caller who held a
