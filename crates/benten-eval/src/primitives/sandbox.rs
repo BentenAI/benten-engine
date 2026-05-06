@@ -30,10 +30,16 @@
 
 use crate::sandbox::counted_sink::{CountedSink, OverflowPath, SinkOverflow};
 use crate::sandbox::epoch_ticker::{epoch_ticks_for_ms, spawn_epoch_ticker};
+use crate::sandbox::escape_defenses::{EscDefenseState, EscVector, run_all_checks};
+use crate::sandbox::fingerprint::{
+    WallclockTaintedAddress, read_collapse_state, record_wallclock_write,
+};
 use crate::sandbox::host_fns::{CapAllowlist, HostFnBehavior, HostFnSpec, default_host_fns};
 use crate::sandbox::manifest::{ManifestRef, ManifestRegistry};
 use crate::sandbox::resource_limiter::SandboxResourceLimiter;
-use crate::sandbox::trap_to_typed::{HostFnDenialKind, HostFnDenialMarker, map_call_error};
+use crate::sandbox::trap_to_typed::{
+    EscapeAttemptMarker, HostFnDenialKind, HostFnDenialMarker, map_call_error,
+};
 use crate::{AttributionFrame, TraceStep};
 use benten_errors::ErrorCode;
 use std::collections::BTreeMap;
@@ -67,6 +73,56 @@ pub struct SandboxConfig {
     /// in the variant payload so operator dashboards distinguish a
     /// recursive-runaway guest from a generic invalid module.
     pub max_wasm_stack: u64,
+    /// **Test-only attack-pattern injection seam (cfg-gated; G20-A1
+    /// wave-8a unwidens further per `tests/sandbox_helpers_no_widening.rs`).**
+    /// Phase-3 wave-5c §6.1-followup tasks #3 + #4: end-to-end test
+    /// pins drive ESC-7 (`Esc7FuelRefillViaReEntry`) + ESC-13
+    /// (`Esc13StorePoison`) detection from inside the `time` host-fn
+    /// trampoline. Production callsites pass `None` (the field
+    /// defaults to `TestEscAttackInjection::None`); test callsites
+    /// pass an explicit attack-pattern enum. The host-fn trampoline
+    /// observes the requested attack-pattern, mutates the per-call
+    /// `EscDefenseState` accordingly, then [`run_all_checks`] fires
+    /// the typed `EscapeAttempt` variant — exercising the SAME runtime
+    /// arm a hypothetical real attack pattern would trigger.
+    ///
+    /// **Why a test-only seam not a real attack:** ESC-7's canonical
+    /// attack pattern requires a host-fn that calls
+    /// `Store::add_fuel` mid-execution — no such host-fn exists in
+    /// the production surface (and CLAUDE.md baked-in #16 forbids
+    /// adding one). ESC-13's canonical attack requires a wasmtime
+    /// fuel-meter callback that panics — wasmtime 43.x offers no
+    /// stable user-pluggable callback to insert one. The test seam
+    /// drives the per-call state shape that BOTH attacks would
+    /// produce, exercising the typed-error routing end-to-end so the
+    /// runtime arm is verified-active rather than verified-inert.
+    /// The seam is feature-gated; the production cdylib never
+    /// compiles the field.
+    #[cfg(any(test, feature = "test-helpers", feature = "testing"))]
+    pub testing_inject_attack: TestEscAttackInjection,
+}
+
+/// Phase-3 wave-5c §6.1-followup tasks #3 + #4 — test-only attack
+/// injection at the host-fn trampoline boundary. See
+/// [`SandboxConfig::testing_inject_attack`].
+#[cfg(any(test, feature = "test-helpers", feature = "testing"))]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TestEscAttackInjection {
+    /// No attack pattern; production-equivalent path.
+    #[default]
+    None,
+    /// Drive ESC-7 detection: the `time` host-fn trampoline marks
+    /// `re_entry_count = 1` while `guest_active = true`; the boundary
+    /// `run_all_checks` invocation fires
+    /// `EscapeAttempt(Esc7FuelRefillViaReEntry)`.
+    Esc7ReEntryAttempt,
+    /// Drive ESC-13 detection: the `time` host-fn trampoline panics
+    /// (simulating a fuel-meter callback panic); the
+    /// `std::panic::catch_unwind` wrapper around `func.call` in
+    /// [`execute_with_live_cap_check`] catches it, sets
+    /// `fuel_meter_callback_trapped = true`, and surfaces typed
+    /// `EscapeAttempt(Esc13StorePoison)`.
+    Esc13FuelMeterCallbackTrap,
 }
 
 impl Default for SandboxConfig {
@@ -78,6 +134,8 @@ impl Default for SandboxConfig {
             output_bytes: 1024 * 1024,
             max_nest_depth: 4,
             max_wasm_stack: MAX_WASM_STACK_DEFAULT,
+            #[cfg(any(test, feature = "test-helpers", feature = "testing"))]
+            testing_inject_attack: TestEscAttackInjection::None,
         }
     }
 }
@@ -341,6 +399,21 @@ pub fn resolve_priority(eligible: Vec<SandboxError>) -> Option<SandboxError> {
     })
 }
 
+/// Phase-3 wave-5c — live cap-recheck callback type. Consulted by the
+/// host-fn trampoline at the BEFORE-EVERY-host-fn-invocation cadence
+/// (cadence (a) per r1-wsa-3 disposition + r4-r1-wsa-4) for `PerCall`
+/// cap-recheck host-fns. Returns `true` iff the dispatching grant
+/// CURRENTLY holds the cap-string (a live read, not a snapshot). The
+/// engine override at
+/// `benten_engine::primitive_host::execute_sandbox` threads an
+/// engine-backed callable that consults the engine's revoked-actors
+/// set + future grant-store; tests use a closure capturing a mutable
+/// state vec for synthetic revoke-mid-call drives.
+///
+/// Closes phase-3-backlog §6.3 + §6.1-followup task #5 (ESC-9
+/// cap-revoke mid-call defense, r1-wsa-3 MAJOR closure).
+pub type LiveCapCheck = Arc<dyn Fn(&str) -> bool + Send + Sync>;
+
 /// Cap-string prefix that identifies the deferred `random` host-fn
 /// (sec-g7a-mr-5 + D1-RESOLVED + sec-pre-r1-06 §2.3). The TOML at
 /// workspace-root `host-functions.toml` declares the deferral; this
@@ -387,6 +460,49 @@ pub fn execute(
     config: SandboxConfig,
     grant_caps: &[String],
     attribution: &AttributionFrame,
+) -> Result<SandboxResult, SandboxError> {
+    execute_with_live_cap_check(
+        module_bytes,
+        manifest_ref,
+        registry,
+        config,
+        grant_caps,
+        attribution,
+        None,
+    )
+}
+
+/// Phase-3 wave-5c — `execute` variant that accepts an optional
+/// [`LiveCapCheck`] callback. Threads the callback into
+/// `SandboxStoreData` (private; see crate root) so the host-fn
+/// trampolines consult it for `PerCall` cap-recheck cadence
+/// (D18 — fires BEFORE every host-fn invocation per r1-wsa-3 MAJOR;
+/// cadence (a) per r4-r1-wsa-4).
+///
+/// The legacy [`execute`] entry point delegates here with `None` —
+/// preserving the Phase-2b grant-caps-snapshot fallback for callers
+/// that have not been migrated to the live-callback shape. The engine
+/// override at
+/// `benten_engine::primitive_host::execute_sandbox` passes
+/// `Some(callback)` so production runs observe live revocation.
+///
+/// Closes phase-3-backlog §6.1-followup tasks #1, #2, #3, #4, #5
+/// (the SandboxStoreData field add + the ESC-7/9/13/16 wiring at
+/// the host-fn trampoline boundary).
+///
+/// # Errors
+/// See [`execute`].
+#[allow(clippy::needless_pass_by_value)]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_arguments)]
+pub fn execute_with_live_cap_check(
+    module_bytes: &[u8],
+    manifest_ref: ManifestRef,
+    registry: &ManifestRegistry,
+    config: SandboxConfig,
+    grant_caps: &[String],
+    attribution: &AttributionFrame,
+    live_cap_check: Option<LiveCapCheck>,
 ) -> Result<SandboxResult, SandboxError> {
     // 0. R6FP-Group-1 (r6-cr-1 / r6-mpc-4 / r6-wsa-1) — D20 runtime arm
     //    enforcement. The dispatching `AttributionFrame.sandbox_depth`
@@ -491,13 +607,17 @@ pub fn execute(
     let engine: &Engine = crate::sandbox::instance::shared_engine();
 
     // Build the per-call store data the host-fn trampolines borrow
-    // through.
+    // through. Phase-3 wave-5c: thread the optional live_cap_check
+    // callback so PerCall recheck cadence consults the engine-side
+    // revoked-actors set; absent → fall back to Phase-2b
+    // grant-caps-snapshot semantics (live_caps frozen at entry).
     let store_data = SandboxStoreData::new(
         config.clone(),
         allowlist.clone(),
         attribution.clone(),
         Arc::clone(&host_fns),
         bundle.caps.clone(),
+        live_cap_check,
     );
 
     let mut store: Store<SandboxStoreData> = Store::new(engine, store_data);
@@ -588,10 +708,62 @@ pub fn execute(
     //     per-fixture trampoline. The return value bytes are derived
     //     from the typed return value (encoded as little-endian) for
     //     the D17 BACKSTOP check.
+    //
+    //     Phase-3 wave-5c §6.1-followup task #4 (ESC-13 panic-catcher
+    //     around the fuel-meter callback): wrap `func.call` in
+    //     `std::panic::catch_unwind` so a panicking host-side callback
+    //     (currently: any of the `time` / `log` / `kv:read` trampolines
+    //     that wrap user-provided panic-prone code) does NOT poison the
+    //     wasmtime `Store` by unwinding through the host frames. On
+    //     panic we set `esc_defense_state.fuel_meter_callback_trapped =
+    //     true` and surface the typed `EscapeAttempt(Esc13StorePoison)`
+    //     via the wasmtime `Error` cause chain. The per-call `Store`
+    //     lifecycle (D3-RESOLVED no-pool) drops the (potentially-
+    //     poisoned) Store on return so the next SANDBOX call gets a
+    //     fresh one.
     let func_ty = func.ty(&store);
     let n_results = func_ty.results().len();
-    let mut results: Vec<wasmtime::Val> = (0..n_results).map(|_| wasmtime::Val::I32(0)).collect();
-    let call_result = func.call(&mut store, &[], &mut results);
+    // Phase-3 wave-5c — mark guest active before the call so host-fn
+    // trampolines that re-enter the Store while guest_active=true bump
+    // the ESC-7 re-entry counter.
+    store.data_mut().esc_defense_state.enter_guest();
+    let panic_caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut results: Vec<wasmtime::Val> =
+            (0..n_results).map(|_| wasmtime::Val::I32(0)).collect();
+        let r = func.call(&mut store, &[], &mut results);
+        (r, results)
+    }));
+    // Always exit guest mode regardless of success / panic / trap so a
+    // subsequent legitimate cleanup re-entry does not falsely fire ESC-7.
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        store.data_mut().esc_defense_state.exit_guest();
+    }));
+    let (call_result, results): (Result<(), wasmtime::Error>, Vec<wasmtime::Val>) =
+        match panic_caught {
+            Ok((r, vs)) => (r, vs),
+            Err(_panic_payload) => {
+                // ESC-13: a host-side callback panicked; wasmtime Store is
+                // poisoned. Per phase-3-backlog §6.1-followup task #4 +
+                // r1-wsa-1 BLOCKER half-b: route the typed
+                // `EscapeAttempt(Esc13StorePoison)` directly (the per-call
+                // Store is dropped on return per D3-RESOLVED).
+                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    store
+                        .data_mut()
+                        .esc_defense_state
+                        .fuel_meter_callback_trapped = true;
+                }));
+                return Err(SandboxError::EscapeAttempt {
+                    vector: EscVector::Esc13StorePoison,
+                    reason: "host-side callback panicked during guest execution; \
+                         wasmtime Store is poisoned and being dropped per \
+                         D3-RESOLVED per-call Store lifecycle. The next \
+                         SANDBOX call gets a fresh Store. Phase-3 wave-5c \
+                         §6.1-followup task #4 + r1-wsa-1 BLOCKER closure"
+                        .to_string(),
+                });
+            }
+        };
 
     // 11. Read fuel-consumed (regardless of success/failure).
     let fuel_remaining = store.get_fuel().unwrap_or(config.fuel);
@@ -677,10 +849,46 @@ pub(crate) struct SandboxStoreData {
     /// Codegen host-fn table reference.
     #[allow(dead_code)]
     host_fns: Arc<BTreeMap<String, HostFnSpec>>,
-    /// Live cap-set for D18 PerCall recheck. In wave-8b this matches
-    /// the init-snapshot; the engine wire-through replaces this with
-    /// a live policy lookup callback.
+    /// Live cap-set for D18 PerCall recheck — Phase-2b grant-caps
+    /// snapshot fallback. Phase-3 wave-5c: when [`Self::live_cap_check`]
+    /// is `Some`, the trampoline consults the callback first; this
+    /// snapshot is the last-resort fallback for callsites that have
+    /// not been migrated to the live-callback shape (engine override at
+    /// `benten_engine::primitive_host::execute_sandbox` always passes
+    /// `Some(callback)`).
     live_caps: Vec<String>,
+    /// Phase-3 wave-5c §6.1-followup task #1 — per-call ESC defense
+    /// state. Carries the ESC-7 re-entry counter, ESC-7 `guest_active`
+    /// flag, ESC-13 `fuel_meter_callback_trapped` flag, ESC-16
+    /// `fingerprint_correlated_reads` counter. Mutated from host-fn
+    /// trampolines via `caller.data_mut()`; consulted by
+    /// [`crate::sandbox::escape_defenses::run_all_checks`] at every
+    /// host-fn boundary BEFORE returning to guest wasm.
+    pub(crate) esc_defense_state: EscDefenseState,
+    /// Phase-3 wave-5c §6.1-followup task #2 — per-call tainted-address
+    /// side-table. Populated by the `time` host-fn trampoline (which
+    /// writes wallclock-correlated values into guest memory) via
+    /// [`record_wallclock_write`]; consulted by subsequent guest
+    /// memory-read paths via
+    /// [`crate::sandbox::fingerprint::read_collapse_state`]. The
+    /// engine-side memory-read helper at
+    /// [`crate::sandbox::fingerprint`] increments
+    /// `esc_defense_state.fingerprint_correlated_reads` when a guest
+    /// read hits an address in this table.
+    pub(crate) tainted_addresses: Vec<WallclockTaintedAddress>,
+    /// Phase-3 wave-5c §6.1-followup task #5 — live cap-recheck
+    /// callback. When `Some`, the trampoline `cap_check` helper
+    /// consults the callback for `PerCall` recheck (live read of the
+    /// dispatching grant's cap-state); when `None`, falls back to the
+    /// [`Self::live_caps`] snapshot. Engine production override always
+    /// passes `Some`; Phase-2b legacy callsites pass `None`.
+    pub(crate) live_cap_check: Option<LiveCapCheck>,
+    /// Phase-3 wave-5c §6.1-followup tasks #3 + #4 — test-only
+    /// attack-pattern injection at the trampoline boundary; mirrors
+    /// [`SandboxConfig::testing_inject_attack`] into the per-call
+    /// store so the host-fn trampoline can observe it.
+    #[cfg(any(test, feature = "test-helpers", feature = "testing"))]
+    pub(crate) testing_inject_attack: TestEscAttackInjection,
 }
 
 impl SandboxStoreData {
@@ -690,6 +898,7 @@ impl SandboxStoreData {
         attribution: AttributionFrame,
         host_fns: Arc<BTreeMap<String, HostFnSpec>>,
         live_caps: Vec<String>,
+        live_cap_check: Option<LiveCapCheck>,
     ) -> Self {
         let kv_reads_remaining = host_fns
             .get("kv:read")
@@ -705,6 +914,8 @@ impl SandboxStoreData {
                 _ => None,
             })
             .unwrap_or(65_536);
+        #[cfg(any(test, feature = "test-helpers", feature = "testing"))]
+        let testing_inject_attack = config.testing_inject_attack;
         Self {
             sink: CountedSink::new(config.output_bytes),
             allowlist,
@@ -714,6 +925,11 @@ impl SandboxStoreData {
             attribution,
             host_fns,
             live_caps,
+            esc_defense_state: EscDefenseState::new(),
+            tainted_addresses: Vec::new(),
+            live_cap_check,
+            #[cfg(any(test, feature = "test-helpers", feature = "testing"))]
+            testing_inject_attack,
         }
     }
 }
@@ -760,6 +976,101 @@ fn register_default_host_fns(
                     "time",
                     move |mut caller: Caller<'_, SandboxStoreData>| -> Result<i64, wasmtime::Error> {
                         cap_check(&mut caller, policy, &cap)?;
+                        // Phase-3 wave-5c §6.1-followup tasks #3 + #4 —
+                        // test-only attack-pattern injection at the
+                        // trampoline boundary. The cfg-gate ensures
+                        // production cdylib never compiles the branch;
+                        // tests drive ESC-7 / ESC-13 detection by
+                        // requesting the attack-pattern via
+                        // [`SandboxConfig::testing_inject_attack`].
+                        #[cfg(any(test, feature = "test-helpers", feature = "testing"))]
+                        {
+                            let attack = caller.data().testing_inject_attack;
+                            match attack {
+                                TestEscAttackInjection::None => {}
+                                TestEscAttackInjection::Esc7ReEntryAttempt => {
+                                    let data = caller.data_mut();
+                                    // Bump re-entry counter while
+                                    // guest_active = true (the attack-
+                                    // pattern state shape per
+                                    // `testing_register_uncounted_host_fn`).
+                                    data.esc_defense_state.re_entry_count = data
+                                        .esc_defense_state
+                                        .re_entry_count
+                                        .saturating_add(1);
+                                }
+                                TestEscAttackInjection::Esc13FuelMeterCallbackTrap => {
+                                    // Simulate a fuel-meter callback
+                                    // panic. The catch_unwind wrapper in
+                                    // `execute_with_live_cap_check`
+                                    // around `func.call` catches the
+                                    // panic + sets
+                                    // `fuel_meter_callback_trapped` +
+                                    // returns the typed
+                                    // `EscapeAttempt(Esc13StorePoison)`.
+                                    panic!(
+                                        "ESC-13 test injection: fuel-meter \
+                                         callback panicked during host-fn \
+                                         dispatch (Phase-3 wave-5c §6.1-\
+                                         followup task #4)"
+                                    );
+                                }
+                            }
+                        }
+                        // Phase-3 wave-5c §6.1-followup task #2 — fingerprint
+                        // side-table population. Each `time` call:
+                        //   (a) records a fresh tainted-address marker (the
+                        //       conceptual destination cell the wallclock-
+                        //       derived value flows into; a synthetic address
+                        //       increment per call so repeated calls
+                        //       accumulate the side-table),
+                        //   (b) reads the collapse-state against the same
+                        //       address — semantically: each `time` call is
+                        //       both a write (host writes wallclock value)
+                        //       AND a read (guest receives + uses the value).
+                        // The 3rd `time` call within a single SANDBOX
+                        // dispatch trips
+                        // [`crate::sandbox::fingerprint::FINGERPRINT_COLLAPSE_THRESHOLD`]
+                        // and the next host-fn boundary
+                        // [`run_all_checks`] fires `EscapeAttempt(Esc16FingerprintCollapse)`.
+                        {
+                            let data = caller.data_mut();
+                            let next_idx = u32::try_from(data.tainted_addresses.len())
+                                .unwrap_or(u32::MAX);
+                            // 8-byte stride so each i64 wallclock value
+                            // gets its own conceptual slot.
+                            let addr = 0x0000_1000_u32.saturating_add(next_idx.saturating_mul(8));
+                            let tainted = record_wallclock_write(addr);
+                            data.tainted_addresses.push(tainted);
+                            // Synthetic guest-read of the just-written cell
+                            // (the host returns the value to the guest,
+                            // which by definition reads it).
+                            // Clone the addresses to avoid borrowing
+                            // `data.tainted_addresses` while also borrowing
+                            // `data.esc_defense_state` mutably.
+                            let tainted_set = data.tainted_addresses.clone();
+                            read_collapse_state(
+                                &mut data.esc_defense_state,
+                                tainted,
+                                &tainted_set,
+                            );
+                        }
+
+                        // ESC defense boundary check BEFORE the host-fn
+                        // returns to guest. If ESC-16 (or any other vector)
+                        // tripped, surface as `EscapeAttemptMarker` so
+                        // [`map_call_error`] unwraps to typed
+                        // `SandboxError::EscapeAttempt`.
+                        if let Err(esc_err) =
+                            run_all_checks(&caller.data().esc_defense_state)
+                            && let SandboxError::EscapeAttempt { vector, reason } = esc_err
+                        {
+                            return Err(wasmtime::Error::from(EscapeAttemptMarker {
+                                vector,
+                                reason,
+                            }));
+                        }
+
                         // D1 monotonic-coarsened-100ms. Phase-2b: derive a
                         // module-start-relative monotonic value coarsened
                         // to the configured granularity (default 100ms);
@@ -830,6 +1141,19 @@ fn register_default_host_fns(
                         // memory in 2b — `log` is fire-and-forget; the
                         // budget enforcement is what's load-bearing.
                         let _ = ptr;
+                        // Phase-3 wave-5c §6.1-followup task #3 — ESC
+                        // defense boundary check BEFORE returning to
+                        // guest. If any vector tripped, surface as
+                        // `EscapeAttemptMarker` so [`map_call_error`]
+                        // unwraps to typed `SandboxError::EscapeAttempt`.
+                        if let Err(esc_err) = run_all_checks(&caller.data().esc_defense_state)
+                            && let SandboxError::EscapeAttempt { vector, reason } = esc_err
+                        {
+                            return Err(wasmtime::Error::from(EscapeAttemptMarker {
+                                vector,
+                                reason,
+                            }));
+                        }
                         Ok(())
                     },
                 )?;
@@ -903,6 +1227,17 @@ fn register_default_host_fns(
                                 kind: HostFnDenialKind::OutputOverflow(o),
                             }));
                         }
+                        // Phase-3 wave-5c §6.1-followup task #3 — ESC
+                        // defense boundary check BEFORE returning to
+                        // guest.
+                        if let Err(esc_err) = run_all_checks(&caller.data().esc_defense_state)
+                            && let SandboxError::EscapeAttempt { vector, reason } = esc_err
+                        {
+                            return Err(wasmtime::Error::from(EscapeAttemptMarker {
+                                vector,
+                                reason,
+                            }));
+                        }
                         Ok(0)
                     },
                 )?;
@@ -919,8 +1254,12 @@ fn register_default_host_fns(
 
 /// Cap-check helper called at the top of every host-fn trampoline.
 /// PerBoundary consults the init-snapshot allowlist; PerCall consults
-/// the live cap-set (currently the same as the snapshot in 2b — the
-/// engine-side wire-through replaces this with a live policy lookup).
+/// the live cap-set (Phase-3 wave-5c §6.1-followup task #5: when
+/// `live_cap_check` callback is present, that callback is the
+/// authoritative source — fires BEFORE every host-fn invocation per
+/// r1-wsa-3 MAJOR cadence (a) per r4-r1-wsa-4. When the callback is
+/// absent, falls back to the Phase-2b `live_caps` snapshot for
+/// backward compatibility with legacy callsites).
 fn cap_check(
     caller: &mut Caller<'_, SandboxStoreData>,
     policy: crate::sandbox::host_fns::CapRecheckPolicy,
@@ -930,7 +1269,19 @@ fn cap_check(
     let data = caller.data();
     let ok = match policy {
         CapRecheckPolicy::PerBoundary => data.allowlist.contains(cap),
-        CapRecheckPolicy::PerCall => data.live_caps.iter().any(|c| c == cap),
+        CapRecheckPolicy::PerCall => match &data.live_cap_check {
+            // Phase-3 wave-5c — consult the live callback (engine-backed
+            // production path observes mid-call cap-revoke per ESC-9
+            // closure). Cadence (a): once per host-fn entry, not per
+            // loop iteration inside the host-fn body (the body completes
+            // its budget on the per-host-fn-entry policy snapshot).
+            Some(callback) => callback(cap),
+            // Phase-2b legacy fallback — snapshot frozen at SANDBOX
+            // entry. Effectively PerBoundary semantics; the engine
+            // override always passes Some(callback) so production runs
+            // never hit this branch.
+            None => data.live_caps.iter().any(|c| c == cap),
+        },
     };
     if !ok {
         return Err(wasmtime::Error::from(HostFnDenialMarker {

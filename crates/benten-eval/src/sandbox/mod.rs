@@ -74,6 +74,10 @@ pub use manifest::{
 // tests) will mostly want `crate::sandbox::Sandbox` shorthand.
 pub use crate::primitives::sandbox as primitives_sandbox;
 pub use crate::primitives::sandbox::{
-    DEFERRED_HOST_FN_RANDOM_CAP_PREFIX, MAX_WASM_STACK_DEFAULT, SandboxConfig, SandboxError,
-    SandboxResult, WALLCLOCK_DEFAULT_MS, WALLCLOCK_MAX_MS, execute, resolve_priority,
+    DEFERRED_HOST_FN_RANDOM_CAP_PREFIX, LiveCapCheck, MAX_WASM_STACK_DEFAULT, SandboxConfig,
+    SandboxError, SandboxResult, WALLCLOCK_DEFAULT_MS, WALLCLOCK_MAX_MS, execute,
+    execute_with_live_cap_check, resolve_priority,
 };
+
+#[cfg(any(test, feature = "test-helpers", feature = "testing"))]
+pub use crate::primitives::sandbox::TestEscAttackInjection;
