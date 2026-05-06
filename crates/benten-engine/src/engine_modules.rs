@@ -496,6 +496,7 @@ impl Engine {
             .unwrap_or_else(|p| p.into_inner());
         let mut overlay: BTreeMap<String, benten_eval::sandbox::CapBundle> = BTreeMap::new();
         for installed in active.values() {
+            let manifest_name = installed.manifest.name.as_str();
             for entry in &installed.manifest.modules {
                 // Sort + dedupe the entry's requires list so the
                 // resulting CapBundle satisfies the D9 sorted-canonical
@@ -505,13 +506,54 @@ impl Engine {
                 let mut caps: Vec<String> = entry.requires.clone();
                 caps.sort();
                 caps.dedup();
-                overlay.insert(
-                    entry.name.clone(),
-                    benten_eval::sandbox::CapBundle::new(caps, None),
-                );
+                let bundle = benten_eval::sandbox::CapBundle::new(caps, None);
+
+                // Phase-3 G17-C wave-5b (phase-3-backlog §6.6): key the
+                // overlay by BOTH `entry.name` (legacy wave-8h shape;
+                // preserved for in-tree callers that pre-date the
+                // colon-joined DSL surface) AND the colon-joined
+                // `<manifest_name>:<entry_name>` shape (TS DSL surface
+                // — `subgraph(...).sandbox({ module: "<manifest>:<entry>" })`).
+                // Both keys point to the same `CapBundle` so the
+                // SANDBOX dispatch resolution path agrees with the
+                // `register_subgraph` validation walk regardless of
+                // which shape the caller composed.
+                overlay.insert(entry.name.clone(), bundle.clone());
+                overlay.insert(format!("{manifest_name}:{}", entry.name), bundle);
             }
         }
         benten_eval::sandbox::ManifestRegistry::from_overlay(overlay)
+    }
+
+    /// Phase-3 G17-C wave-5b: read-only projection of the manifest
+    /// registry's known names — codegen defaults plus the colon-joined
+    /// `<manifest_name>:<entry_name>` keys + bare `<entry_name>` keys
+    /// from the `installed_modules` overlay. Used by `register_subgraph`
+    /// to validate SANDBOX-node manifest references at registration
+    /// time without paying the eval-side `Subgraph::validate` cost
+    /// twice.
+    ///
+    /// Cfg-gated NOT-wasm32: matches `manifest_registry`'s gating since
+    /// browser thin clients do not run SANDBOX (CLAUDE.md baked-in #16).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn manifest_registry_known_names(&self) -> std::collections::BTreeSet<String> {
+        let mut names: std::collections::BTreeSet<String> =
+            benten_eval::sandbox::default_manifest_names()
+                .iter()
+                .map(|s| (*s).to_string())
+                .collect();
+        let active = self
+            .installed_modules()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        for installed in active.values() {
+            let manifest_name = installed.manifest.name.as_str();
+            for entry in &installed.manifest.modules {
+                names.insert(entry.name.clone());
+                names.insert(format!("{manifest_name}:{}", entry.name));
+            }
+        }
+        names
     }
 }
 

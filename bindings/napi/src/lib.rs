@@ -1251,6 +1251,32 @@ mod napi_surface {
                 .map_err(engine_err)?;
             Ok(cid.to_base32())
         }
+
+        /// Phase-3 G17-C wave-5b: napi bridge for
+        /// `Engine::register_module_bytes` (phase-3-backlog §6.6
+        /// deliverable 1; pim-2 24th p/c drift acceptance criterion).
+        ///
+        /// Persists wasm module bytes under their BLAKE3-derived CID via
+        /// the durable `RedbBlobBackend` so SANDBOX dispatch can resolve
+        /// `module: "<base32-cid>"` references at execution time. The
+        /// caller-supplied `cid` MUST match the BLAKE3 of `bytes` —
+        /// mismatch returns `E_MODULE_BYTES_CID_MISMATCH` per
+        /// D-PHASE-3-12.
+        ///
+        /// Sibling of [`Self::install_module`]: `installModule` writes
+        /// the manifest envelope (entries, requires, CID schema);
+        /// `registerModuleBytes` writes the actual wasm payload bytes
+        /// each manifest entry's `cid` field references.
+        ///
+        /// `bytes` arrives as a Node `Buffer`; the underlying byte slice
+        /// is passed through to the inner engine without an extra copy.
+        #[napi(js_name = "registerModuleBytes")]
+        pub fn register_module_bytes(&self, cid: String, bytes: Buffer) -> napi::Result<()> {
+            let parsed = parse_cid(&cid)?;
+            self.inner
+                .register_module_bytes(&parsed, bytes.as_ref())
+                .map_err(engine_err)
+        }
     }
 
     // ---------------------------------------------------------------------

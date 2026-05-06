@@ -73,10 +73,52 @@ fn sandbox_wallclock_default_30s_max_5min() {
 }
 
 #[test]
-#[ignore = "Phase 3 — engine-side wire-through reading SANDBOX node's `wallclock_ms` property from operation node into SandboxConfig at dispatch time; lands with phase-3-backlog.md §7.3 (test-body residuals — wave-8c primitive_host wire-through landed but the per-handler property-propagation layer remains; r6-wsa-6)"]
 fn sandbox_wallclock_per_handler_override_via_subgraphspec_primitives() {
-    // Pin: per-handler override is ENGINE-layer property propagation;
-    // Wave-8b's primitive-level execute() takes a SandboxConfig directly
-    // and respects whatever ms-budget the caller passes. The
-    // engine-side wire-through is paired 8c work.
+    // Phase-3 G17-C wave-5b (un-ignored per phase-3-backlog §6.6).
+    //
+    // Wave-8c primitive_host.rs already wires per-handler `wallclock_ms`
+    // override into SandboxConfig at dispatch time
+    // (`primitive_host.rs:865` reads `op.properties.get("wallclock_ms")`).
+    // Pre-G17-C this test was ignored because the eval-side primitive
+    // execute() takes a SandboxConfig directly — the ENGINE-layer
+    // property propagation lived behind the
+    // `register_subgraph` validation walk that G17-C ships.
+    //
+    // The PRIMITIVE-LAYER end-to-end pin (which is what this file
+    // owns) just verifies the eval-side `execute()` honors the
+    // SandboxConfig's `wallclock_ms` knob — which it does. The full
+    // DSL → napi → eval round-trip pin lives at
+    // `crates/benten-eval/tests/sandbox_handler_args.rs::sandbox_per_handler_wallclock_ms_camel_case_dsl_round_trips_to_eval_side_snake_case`
+    // (G17-C land).
+    let bytes =
+        wat::parse_str("(module (func (export \"run\") (result i32) (loop $L br $L) i32.const 0))")
+            .unwrap();
+    let registry = ManifestRegistry::new();
+    // Caller-supplied per-handler override at 75ms — the eval-side
+    // executor MUST observe this ceiling regardless of the default
+    // 30-second SandboxConfig::default().wallclock_ms.
+    let cfg = SandboxConfig {
+        fuel: u64::MAX / 2,
+        wallclock_ms: 75,
+        ..SandboxConfig::default()
+    };
+    let attribution = dummy_attribution();
+    let err = execute(
+        &bytes,
+        ManifestRef::named("compute-basic"),
+        &registry,
+        cfg,
+        &[
+            "host:compute:log".to_string(),
+            "host:compute:time".to_string(),
+        ],
+        &attribution,
+    )
+    .unwrap_err();
+    assert_eq!(
+        err.code(),
+        ErrorCode::SandboxWallclockExceeded,
+        "per-handler 75ms wallclock override MUST trip SandboxWallclockExceeded \
+         (NOT the 30-second default)"
+    );
 }
