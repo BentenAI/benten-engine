@@ -82,7 +82,14 @@ use benten_core::Cid;
 
 use crate::backend::KVBackend;
 use crate::store::{ChangeSubscriber, EdgeStore, NodeStore};
-use crate::{GraphError, Node, RedbBackend, SnapshotHandle, WriteContext};
+use crate::{Node, WriteContext};
+// G13-C wave-3: `RedbBackend` + `SnapshotHandle` + `GraphError` are
+// gated to NON `wasm32-unknown-unknown` per the `br-r1-1` BLOCKER pin.
+// The `RedbTransactionRunner` marker + the impl block below are
+// similarly gated; the umbrella trait surface itself remains
+// target-agnostic so `BrowserBackend` can satisfy it on browser builds.
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
+use crate::{GraphError, RedbBackend, SnapshotHandle};
 
 /// Marker handle returned by [`GraphBackend::transaction`].
 ///
@@ -102,9 +109,15 @@ use crate::{GraphError, Node, RedbBackend, SnapshotHandle, WriteContext};
 /// turn it into an owned `Arc<RedbBackend>`-bearing struct exposing a
 /// `run<F, R>(self, f: F) -> Result<R, B::Error>` method that
 /// delegates to the inherent closure-based path.
+///
+/// G13-C wave-3: gated to NON `wasm32-unknown-unknown` targets — the
+/// runner exists alongside [`RedbBackend`]. Browser thin-client builds
+/// substitute [`crate::browser_backend::BrowserTransactionRunner`].
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct RedbTransactionRunner;
 
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 impl RedbTransactionRunner {
     /// Construct a fresh runner handle.
     #[must_use]
@@ -263,6 +276,11 @@ pub trait GraphBackend: KVBackend + NodeStore + EdgeStore {
 /// `Arc`-counted), so satisfying `Self::Snapshot: Send + Sync +
 /// 'static` requires no shape change here — the existing snapshot
 /// type already qualifies.
+///
+/// G13-C wave-3: gated to NON `wasm32-unknown-unknown` per the
+/// `br-r1-1` BLOCKER pin. Browser thin-client target consumes
+/// [`crate::browser_backend::BrowserBackend`] instead.
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 impl GraphBackend for RedbBackend {
     type Snapshot = SnapshotHandle;
     type Error = GraphError;
@@ -321,7 +339,10 @@ impl GraphBackend for RedbBackend {
 // Tests
 // ---------------------------------------------------------------------------
 
+// G13-C wave-3: tests reference `RedbBackend`. Gated to NON
+// `wasm32-unknown-unknown` per `br-r1-1` BLOCKER.
 #[cfg(test)]
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 #[allow(
     clippy::unwrap_used,
     clippy::expect_used,

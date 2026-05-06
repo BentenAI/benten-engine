@@ -50,7 +50,10 @@ use std::sync::Mutex;
 
 use crate::GraphError;
 use crate::backend::{KVBackend, ScanResult};
-use crate::redb_backend::next_prefix;
+// G13-C wave-3: `next_prefix` lives in `prefix_helpers` so the helper
+// is target-agnostic (browser thin-client target does not link
+// `redb_backend.rs`).
+use crate::prefix_helpers::next_prefix;
 
 /// In-memory [`KVBackend`]. See module docs.
 ///

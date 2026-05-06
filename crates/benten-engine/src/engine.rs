@@ -600,17 +600,36 @@ pub struct EngineGeneric<B: GraphBackend> {
     pub(crate) suspension_store: Arc<dyn benten_eval::SuspensionStore>,
 }
 
-/// Default engine alias resolving to the redb-backed specialization.
+/// Default engine alias resolving to the redb-backed specialization on
+/// native targets, OR to the in-RAM thin-client cache on
+/// `wasm32-unknown-unknown` browser targets when the `browser-backend`
+/// cargo feature is opted in.
 ///
 /// Existing callers (napi binding, integration tests, `EngineBuilder::open`)
 /// continue to use `Engine` unchanged after the G13-B generic cascade —
 /// API stability per D-PHASE-3-1a / arch-r1-1 BLOCKER closure.
 ///
-/// **Browser-target note (D-PHASE-3-1 + CLAUDE.md baked-in #17):** G13-C
-/// (wave-3) adds a feature-gated alternative `Engine = EngineGeneric<BrowserBackend>`
-/// for the `wasm32-unknown-unknown` thin-client cache target. Until G13-C
-/// lands, this alias is unconditionally `EngineGeneric<RedbBackend>`.
+/// ## Feature gating (G13-C wave-3 + CLAUDE.md baked-in #17)
+///
+/// - **Default features (native):** `Engine = EngineGeneric<RedbBackend>`.
+/// - **`--features browser-backend`:** `Engine = EngineGeneric<BrowserBackend>`.
+///   The browser-target napi cdylib build opts in via this feature so the
+///   alias re-points without churning every `Engine` call site.
+///
+/// The two arms are mutually exclusive at the alias level — the cargo-
+/// feature flip declared in `crates/benten-engine/Cargo.toml` (the
+/// `browser-backend` feature) activates the second arm. Trying to
+/// compile both arms at once is rejected at the type level (the cfg
+/// gates produce a duplicate-type definition error).
+#[cfg(not(feature = "browser-backend"))]
 pub type Engine = EngineGeneric<benten_graph::RedbBackend>;
+
+/// G13-C wave-3 (Phase-3 R5; CLAUDE.md baked-in #17): browser-target
+/// alias resolving to the in-RAM thin-client cache. Enabled by the
+/// `browser-backend` cargo feature. See the docstring on the
+/// non-feature-gated `Engine` alias above for the full design narrative.
+#[cfg(feature = "browser-backend")]
+pub type Engine = EngineGeneric<benten_graph::BrowserBackend>;
 
 impl<B: GraphBackend> std::fmt::Debug for EngineGeneric<B> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -621,6 +640,12 @@ impl<B: GraphBackend> std::fmt::Debug for EngineGeneric<B> {
     }
 }
 
+// G13-C wave-3: redb-specific convenience constructors live on the
+// resolved-alias `impl Engine` block. Gated to NON `browser-backend`
+// feature — the BrowserBackend alias gets its own thin-client-shape
+// constructors (currently just `Engine::new(BrowserBackend::new())`
+// via the generic-cascade `EngineBuilder` path).
+#[cfg(not(feature = "browser-backend"))]
 impl Engine {
     /// Open or create an engine backed by a redb database at `path`.
     ///

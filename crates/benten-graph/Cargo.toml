@@ -47,6 +47,20 @@ bench = false
 # strip both the bin AND the instrumentation.
 default = ["test-fixtures"]
 test-fixtures = []
+# G13-C wave-3 (Phase-3 R5; CLAUDE.md baked-in #17): gates the
+# `BrowserBackend` in-RAM thin-client cache for `wasm32-unknown-unknown`
+# browser tabs. NOT default-enabled — the native CI surface continues to
+# build only the redb-backed backend; downstream consumers (notably the
+# napi cdylib's browser-target build) opt in via
+# `--features benten-graph/browser-backend`.
+#
+# **Load-bearing scope (CLAUDE.md baked-in #17):** thin-client cache
+# only — no transactions, no subscribers, no sync state, no IndexedDB
+# persistence (that ships separately as the browser-blob-backend at
+# G18-A). The `redb` dep is target-conditional; this feature MUST NOT
+# pull redb into the wasm32 link. See `crates/benten-graph/src/
+# browser_backend.rs` module docs for the full thin-client commitment.
+browser-backend = []
 # `testing` gates the test-only instrumentation that would otherwise grow
 # unboundedly at runtime: the `test_event_log`, the `warmed` HashSet inside
 # `CidExistenceCache`, and the `last_durability_by_label` map. Matches the
@@ -69,7 +83,6 @@ benten-errors = { workspace = true }
 # canonical DAG-CBOR bytes. Using the workspace dep keeps the algorithm
 # lockstep with `benten-core`'s CID hashing.
 blake3 = { workspace = true }
-redb = { workspace = true }
 # Phase-2b G10-A-wasip1 (D10-RESOLVED): the snapshot-blob payload struct
 # (`backends/snapshot_blob.rs::SnapshotBlob`) derives Serialize +
 # Deserialize so DAG-CBOR canonical-bytes encoding round-trips through
@@ -78,6 +91,25 @@ redb = { workspace = true }
 serde = { workspace = true }
 serde_ipld_dagcbor = { workspace = true }
 thiserror = { workspace = true }
+
+# G13-C wave-3 (Phase-3 R5; CLAUDE.md baked-in #17 + br-r1-1 BLOCKER): the
+# `redb` dependency is target-conditional. Native targets (x86_64-* /
+# aarch64-* / wasm32-wasip1) compile redb + the `RedbBackend` impl. The
+# `wasm32-unknown-unknown` browser-tab target does NOT pull redb — the
+# browser bundle uses the in-RAM `BrowserBackend` (feature-gated above)
+# and persistence flows through IndexedDB via the browser-blob-backend
+# infrastructure landed at G18-A. See `crates/benten-graph/src/
+# browser_backend.rs` module docs + `.addl/phase-2b/wave-8j-wasm-browser-
+# bundle-bisect.md` § Phase-3 follow-up.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+redb = { workspace = true }
+
+# `wasm32-wasip1` is a NATIVE-shape target (full filesystem access via
+# WASI preview-1), so redb compiles + works there. The exclusion is
+# specifically `wasm32-unknown-unknown` (browser tabs) per the
+# thin-client commitment.
+[target.'cfg(all(target_arch = "wasm32", target_os = "wasi"))'.dependencies]
+redb = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
