@@ -40,13 +40,24 @@
 
 pub mod counted_sink;
 pub mod epoch_ticker;
+pub mod escape_defenses;
+pub mod fingerprint;
 pub mod host_fns;
 pub mod instance;
 pub mod manifest;
 pub mod resource_limiter;
+#[cfg(any(test, feature = "test-helpers", feature = "testing"))]
+pub mod testing_helpers;
 pub mod trap_to_typed;
 
 pub use counted_sink::{CountedSink, OverflowPath, SinkOverflow};
+pub use escape_defenses::{
+    EscDefenseState, EscVector, run_all_checks, run_esc7_check, run_esc13_check, run_esc16_check,
+};
+pub use fingerprint::{
+    FINGERPRINT_COLLAPSE_THRESHOLD, WallclockTaintedAddress, read_collapse_state,
+    record_wallclock_write,
+};
 pub use host_fns::{
     CapAllowlist, CapRecheckPolicy, HostFnBehavior, HostFnContext, HostFnReturn, HostFnSpec,
     RESERVED_HOST_ASYNC_CAP, default_host_fns, host_fn_names,
@@ -63,6 +74,6 @@ pub use manifest::{
 // tests) will mostly want `crate::sandbox::Sandbox` shorthand.
 pub use crate::primitives::sandbox as primitives_sandbox;
 pub use crate::primitives::sandbox::{
-    DEFERRED_HOST_FN_RANDOM_CAP_PREFIX, SandboxConfig, SandboxError, SandboxResult,
-    WALLCLOCK_DEFAULT_MS, WALLCLOCK_MAX_MS, execute, resolve_priority,
+    DEFERRED_HOST_FN_RANDOM_CAP_PREFIX, MAX_WASM_STACK_DEFAULT, SandboxConfig, SandboxError,
+    SandboxResult, WALLCLOCK_DEFAULT_MS, WALLCLOCK_MAX_MS, execute, resolve_priority,
 };

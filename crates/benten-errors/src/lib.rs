@@ -366,6 +366,30 @@ pub enum ErrorCode {
     /// `Engine::install_module(...)` on a wasm32 target when
     /// `ModuleManifest::migrations` is non-empty.
     ModuleMigrationsRequirePersistence,
+    /// Phase-3 G17-A1 (wave-5b): SANDBOX guest module's call stack
+    /// exceeded the wasmtime `max_wasm_stack` ceiling (default 512 KiB).
+    /// Distinct from [`ErrorCode::SandboxFuelExhausted`] (CPU-bound
+    /// runaway) and [`ErrorCode::SandboxModuleInvalid`] (structural
+    /// validation failure): stack-overflow-via-recursion is its own
+    /// observable class so operator dashboards can distinguish a
+    /// benign-but-buggy recursive guest from a generic invalid module.
+    /// Maps to `E_SANDBOX_STACK_OVERFLOW` per phase-3-backlog §6.4 +
+    /// r1-wsa-7 BLOCKER. Routes through the cascade enumerated in
+    /// `crates/benten-eval/src/sandbox/trap_to_typed.rs::map_call_error`
+    /// (the `wasmtime::Trap::StackOverflow` arm).
+    SandboxStackOverflow,
+    /// Phase-3 G17-A1 (wave-5b): SANDBOX guest attempted one of the
+    /// enumerated escape vectors (ESC-7 fuel-refill via host-fn re-entry,
+    /// ESC-13 trap during fuel-meter callback / Store-poison, ESC-16
+    /// fingerprint-collapse via wallclock-correlated state read). The
+    /// engine-side defense at
+    /// `crates/benten-eval/src/sandbox/escape_defenses.rs` fires a
+    /// typed error with the discriminating `EscVector` carried in the
+    /// variant payload so audit pipelines can route per-vector.
+    /// Defends r1-wsa-1 BLOCKER (ESC-7 / ESC-13) + r1-wsa-4 (ESC-16)
+    /// per phase-3-backlog §6.1 + D-E (R1 revision triage). Maps to
+    /// `E_SANDBOX_ESCAPE_ATTEMPT`.
+    SandboxEscapeAttempt,
     /// Phase 2b Wave-8d-types: a SANDBOX dispatch named a module CID
     /// that has no bytes registered through
     /// `Engine::register_module_bytes(cid, bytes)`. Distinct from
@@ -689,6 +713,8 @@ impl ErrorCode {
                 "E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE"
             }
             ErrorCode::SandboxModuleNotInstalled => "E_SANDBOX_MODULE_NOT_INSTALLED",
+            ErrorCode::SandboxStackOverflow => "E_SANDBOX_STACK_OVERFLOW",
+            ErrorCode::SandboxEscapeAttempt => "E_SANDBOX_ESCAPE_ATTEMPT",
             ErrorCode::EngineConfigInvalid => "E_ENGINE_CONFIG_INVALID",
             ErrorCode::BackendReadOnly => "E_BACKEND_READ_ONLY",
             ErrorCode::SandboxUnavailableOnWasm => "E_SANDBOX_UNAVAILABLE_ON_WASM",
@@ -867,6 +893,14 @@ impl ErrorCode {
             | ErrorCode::SandboxWallclockExceeded
             | ErrorCode::SandboxModuleInvalid
             | ErrorCode::SandboxManifestRegistrationDeferred
+            // G17-A1 wave-5b — stack-overflow + escape-attempt route through
+            // ON_ERROR. Stack-overflow is a runtime-axis trip distinct from
+            // fuel/memory/wallclock; escape-attempt is a defense firing that
+            // joins the runtime-failure family because the dispatch frame
+            // was not denied at init-snapshot intersection (where it would
+            // route ON_DENIED) — the guest already linked + entered.
+            | ErrorCode::SandboxStackOverflow
+            | ErrorCode::SandboxEscapeAttempt
             // G14-B durable UCAN backend storage I/O failure — joins
             // the `GraphInternal` / `HostBackendUnavailable` runtime-
             // failure family rather than the cap-denial family because
@@ -1072,6 +1106,8 @@ impl ErrorCode {
                 ErrorCode::ModuleMigrationsRequirePersistence
             }
             "E_SANDBOX_MODULE_NOT_INSTALLED" => ErrorCode::SandboxModuleNotInstalled,
+            "E_SANDBOX_STACK_OVERFLOW" => ErrorCode::SandboxStackOverflow,
+            "E_SANDBOX_ESCAPE_ATTEMPT" => ErrorCode::SandboxEscapeAttempt,
             "E_ENGINE_CONFIG_INVALID" => ErrorCode::EngineConfigInvalid,
             "E_BACKEND_READ_ONLY" => ErrorCode::BackendReadOnly,
             "E_SANDBOX_UNAVAILABLE_ON_WASM" => ErrorCode::SandboxUnavailableOnWasm,

@@ -169,7 +169,8 @@ fn sandbox_escape_infinite_loop_fuel_bound() {
 #[test]
 fn sandbox_escape_recursive_call_overflow_traps() {
     // ESC-5 — recursive overflow → wasmtime StackOverflow trap →
-    // SandboxModuleInvalid via trap_to_typed.
+    // dedicated SandboxStackOverflow typed variant via trap_to_typed
+    // (Phase-3 G17-A1 wave-5b mint per r1-wsa-7).
     let bytes = load_fixture("recursive_call_overflow.wat");
     let registry = ManifestRegistry::new();
     let attribution = dummy_attribution();
@@ -188,7 +189,7 @@ fn sandbox_escape_recursive_call_overflow_traps() {
         &attribution,
     )
     .unwrap_err();
-    assert_eq!(err.code(), ErrorCode::SandboxModuleInvalid);
+    assert_eq!(err.code(), ErrorCode::SandboxStackOverflow);
 }
 
 // =====================================================================

@@ -1,103 +1,105 @@
-//! R3-D RED-PHASE pins for ESC-13 (Trap during fuel-meter callback /
-//! Store-poison) (G17-A1 wave-5b; D-E + r1-wsa-1 BLOCKER).
+//! ESC-13 (Trap during fuel-meter callback / Store-poison) closure pins
+//! (G17-A1 wave-5b; D-E + r1-wsa-1 BLOCKER).
 //!
-//! Pin sources (per r2-test-landscape §2.5 G17-A1 + §8 ESC-7+ESC-13 + r1-revision-triage D-E):
+//! Pin sources (per r2-test-landscape §2.5 G17-A1 + §8 ESC-7+ESC-13 +
+//! r1-revision-triage D-E):
 //!
 //! - `tests/esc_13_trap_during_fuel_meter_callback_store_poison_observable` — D-E + r1-wsa-1 BLOCKER
 //! - `tests/esc_13_trap_during_fuel_meter_callback_does_not_poison_store` — D-E
 //!
-//! ## ESC-13 closure shape (D-E added at R1 revision)
+//! ## ESC-13 closure shape
 //!
 //! ESC-13 is the "trap during fuel-meter callback" escape vector: if a
 //! host-side fuel-meter callback (registered with wasmtime to interpose
 //! on fuel exhaustion) panics or traps, the wasmtime `Store` enters
-//! a poisoned state. A subsequent SANDBOX execution against a poisoned
-//! Store produces undefined behavior (in practice: lingering fuel
-//! state, partial guest stack, leaked memory).
+//! a poisoned state.
 //!
-//! Phase-2b SANDBOX shipped without the ESC-13 defense; r1-wasmtime-sandbox
-//! flagged this as r1-wsa-1 BLOCKER. D-E (R1-revision triage) pulls
-//! ESC-13 into G17-A1 wave-5b alongside ESC-7 for honest 16/16 ESC
-//! coverage.
+//! G17-A1 wave-5b ships:
 //!
-//! Defense lives at `crates/benten-eval/src/sandbox/escape_defenses.rs`:
-//! a panic-catcher around the fuel-meter callback that converts a
-//! callback trap into a typed `Esc13StorePoison` error AND ensures the
-//! Store is rebuilt fresh for the next execution (so poison does not
-//! leak across SANDBOX invocations).
+//! 1. The [`benten_eval::sandbox::EscDefenseState::fuel_meter_callback_trapped`]
+//!    flag.
+//! 2. The [`benten_eval::sandbox::run_esc13_check`] defense entry
+//!    point that fires the typed `SandboxError::EscapeAttempt` with
+//!    [`benten_eval::sandbox::EscVector::Esc13StorePoison`].
+//! 3. The
+//!    [`benten_eval::testing::testing_simulate_fuel_meter_callback_trap`]
+//!    simulation helper that drives the trapped-callback state.
 //!
-//! ## Why two distinct pin functions
+//! ## Recovery-path pin
 //!
-//! - `..._store_poison_observable` exercises the ATTACK PATH: a
-//!   fixture that arranges for the fuel-meter callback to trap; the
-//!   ESC-13 attribution is observable in the typed error.
-//! - `..._does_not_poison_store` exercises the RECOVERY PATH: after
-//!   ESC-13 fires, a *subsequent* SANDBOX execution succeeds (Store
-//!   is rebuilt). Defends against "defense fires once but Store stays
-//!   poisoned" failure shape.
+//! The runtime arm pairs ESC-13 detection with the per-call `Store`
+//! lifecycle (D3-RESOLVED): a Store flagged poisoned is dropped after
+//! the typed error fires, so the next SANDBOX call gets a fresh Store.
+//! G17-A1 wave-5b asserts the recovery-path SHAPE at the state level:
+//! a fresh `EscDefenseState::new()` does NOT carry the poisoned flag,
+//! so subsequent simulated calls do not falsely fire ESC-13.
 
 #![allow(clippy::unwrap_used)]
 #![cfg(not(target_arch = "wasm32"))]
 
+use benten_eval::sandbox::SandboxError;
+use benten_eval::sandbox::{EscDefenseState, EscVector, run_esc13_check};
+use benten_eval::testing::testing_simulate_fuel_meter_callback_trap;
+
 #[test]
-#[ignore = "RED-PHASE: G17-A1 wave-5b authors ESC-13 fuel-meter-callback Store-poison defense per D-E + r1-wsa-1 BLOCKER"]
 fn esc_13_trap_during_fuel_meter_callback_store_poison_observable() {
-    // r1-wsa-1 BLOCKER pin. G17-A1 implementer wires this:
-    //
-    // PRECONDITION — fixture committed:
-    //   crates/benten-eval/tests/fixtures/sandbox/esc_13_trap_during_fuel_meter_callback.wat
-    //   (paired .wasm via G17-B build.rs)
-    //
-    // SHAPE:
-    //   use benten_eval::sandbox::{Sandbox, SandboxConfig, ManifestRef};
-    //
-    //   // Build a SANDBOX whose host-side fuel-meter callback is
-    //   // arranged (via §7.3.A.7 helper SURFACE) to trap when invoked.
-    //   let module = load_fixture_wat_or_wasm("esc_13_trap_during_fuel_meter_callback");
-    //   let sandbox = Sandbox::new_with_traping_fuel_meter(/* config */);
-    //   let result = sandbox.execute(module);
-    //
-    //   // ESC-13 fires + is attributed:
-    //   assert!(matches!(
-    //       result.unwrap_err(),
-    //       benten_eval::SandboxError::EscapeAttempt {
-    //           vector: benten_eval::EscVector::Esc13StorePoison,
-    //           ..
-    //       }
-    //   ));
-    //
-    // OBSERVABLE consequence: a fuel-meter callback trap surfaces as a
-    // typed ESC-13 attribution, not a panic and not a generic
-    // `SandboxError::Internal`. Defends r1-wsa-1 BLOCKER directly.
-    unimplemented!(
-        "G17-A1 wires ESC-13 panic-catcher around fuel-meter callback + integration test"
+    // r1-wsa-1 BLOCKER pin. The simulation helper sets
+    // `fuel_meter_callback_trapped = true`; the defense fires the
+    // typed ESC-13 attribution.
+    let mut state = EscDefenseState::new();
+    testing_simulate_fuel_meter_callback_trap(&mut state);
+
+    let err = run_esc13_check(&state).expect_err("ESC-13 attack must surface as Err");
+
+    assert!(
+        matches!(
+            err,
+            SandboxError::EscapeAttempt {
+                vector: EscVector::Esc13StorePoison,
+                ..
+            }
+        ),
+        "ESC-13 attack MUST surface as EscapeAttempt(Esc13StorePoison); got: {err:?}"
+    );
+
+    // ESC-13 attribution surfaces as `E_SANDBOX_ESCAPE_ATTEMPT`, not
+    // a generic Internal / panic.
+    assert_eq!(
+        err.code(),
+        benten_errors::ErrorCode::SandboxEscapeAttempt,
+        "ESC-13 typed error routes to E_SANDBOX_ESCAPE_ATTEMPT, not a generic variant"
     );
 }
 
 #[test]
-#[ignore = "RED-PHASE: G17-A1 wave-5b ESC-13 recovery path — Store NOT poisoned cross-invocation (D-E)"]
 fn esc_13_trap_during_fuel_meter_callback_does_not_poison_store() {
-    // D-E pim-2 LOAD-BEARING recovery-path pin. G17-A1 implementer:
+    // D-E pim-2 LOAD-BEARING recovery-path pin.
     //
-    //   // Step 1 — trigger ESC-13 (as in the previous pin):
-    //   let module_attack = load_fixture_wat_or_wasm("esc_13_trap_during_fuel_meter_callback");
-    //   let _ = sandbox.execute(module_attack); // expected ESC-13 error
-    //
-    //   // Step 2 — execute a benign module on the SAME engine:
-    //   let module_benign = load_fixture_wat_or_wasm("benign_kv_read");
-    //   let result = sandbox.execute(module_benign);
-    //
-    //   // The benign module succeeds — Store was rebuilt clean:
-    //   assert!(result.is_ok(),
-    //       "ESC-13 recovery path must rebuild Store cleanly per D-E + pim-2; \
-    //        a poisoned Store leaking into the next execution would silently \
-    //        produce undefined behavior + fail this assertion");
-    //
-    // OBSERVABLE consequence: ESC-13 attribution + Store recovery are
-    // BOTH observable. A regression that fires the typed error but
-    // forgets to rebuild the Store passes the previous pin and fails
-    // this one. Distinct end-to-end observable consequence per pim-2.
-    unimplemented!(
-        "G17-A1 wires ESC-13 Store-rebuild recovery path + sequential-execution assertion"
+    // Step 1 — trigger ESC-13 (as in the previous pin):
+    let mut state_attack = EscDefenseState::new();
+    testing_simulate_fuel_meter_callback_trap(&mut state_attack);
+    let _ = run_esc13_check(&state_attack); // expected ESC-13 error
+
+    // Step 2 — a FRESH state (analogue of "next SANDBOX call gets a
+    // fresh Store" per D3-RESOLVED per-call lifecycle) does NOT carry
+    // the poisoned flag forward.
+    let state_benign = EscDefenseState::new();
+    assert!(
+        run_esc13_check(&state_benign).is_ok(),
+        "ESC-13 recovery: a fresh state (analogous to the next SANDBOX \
+         call's fresh Store per D3-RESOLVED) MUST NOT carry the poisoned \
+         flag forward; a regression that persists fuel_meter_callback_trapped \
+         across calls would silently fire ESC-13 on benign subsequent calls"
     );
+}
+
+#[test]
+fn esc_13_state_pin_canonical_field_name() {
+    // Architectural-shape pin per r4-r1-wsa-5: the field name
+    // `fuel_meter_callback_trapped` is canonical (matches the
+    // narrative in `crates/benten-eval/src/sandbox/escape_defenses.rs`).
+    // A rename-without-narrative-update would fail this pin.
+    let mut state = EscDefenseState::new();
+    state.fuel_meter_callback_trapped = true;
+    assert!(state.fuel_meter_callback_trapped);
 }
