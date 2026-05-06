@@ -44,6 +44,45 @@
 //! R3-D's. Pairs with `browser_manifest_store.rs` (is_persistent
 //! flip) + `browser_blob_backend.rs` (BlobBackend variant) for
 //! complete G18-A surface coverage.
+//!
+//! ## Sentinel-presence vs load-bearing end-to-end pin classification (r4-r2-napi-6)
+//!
+//! Per r4-r2-napi-6 (2026-05-05) — pim-2 §3.6b classification of the
+//! 6 pins in this file:
+//!
+//! **SENTINEL-PRESENCE DIAGNOSTICS (sub-mechanism source-cite checks; NOT load-bearing):**
+//!   1. `indexeddb_schema_version_onupgradeneeded_handler_present` —
+//!      grep-against-source for `onupgradeneeded` handler wire-up.
+//!   2. `indexeddb_onversionchange_handler_closes_on_remote_upgrade` —
+//!      grep-against-source for `onversionchange` handler + close call.
+//!   3. `indexeddb_quota_exceeded_error_fires_e_storage_quota_exceeded` —
+//!      grep-against-source for QuotaExceededError handling +
+//!      ERROR-CATALOG.md mapping.
+//!
+//! **LOAD-BEARING END-TO-END PINS (per pim-2 §3.6b — drive production
+//! entry point + assert observable behavioral consequence; would FAIL
+//! if the arm were silently no-op'd):**
+//!   4. `indexeddb_schema_migration_v1_to_v2_round_trip` — wasm-bindgen-test
+//!      OR Playwright cell exercising real IndexedDB v1→v2 migration with
+//!      data round-trip (`assert_eq!(got, Some(b"data"))`).
+//!   5. `indexeddb_schema_versioning_no_data_loss_across_upgrade` —
+//!      stronger 1000-key sweep variant of #4 catching fractional drops.
+//!   6. `indexeddb_persistence_thin_client_cache_only_per_baked_in_17` —
+//!      architectural pin asserting CLAUDE.md baked-in #17 thin-client
+//!      schema discipline; pairs with the load-bearing end-to-end pin
+//!      at `packages/engine/test/manifest_persistence.test.ts`.
+//!
+//! G18-A R5 implementer MUST treat sentinel-presence diagnostics (1-3)
+//! as scaffolding pins per pim-2 §3.6b — they verify the source-text
+//! presence of handlers but do NOT satisfy the load-bearing end-to-end
+//! requirement. The load-bearing pins are #4-#5 (data round-trip) +
+//! the cross-file end-to-end at `manifest_persistence.test.ts`. The
+//! sentinel-presence pins are useful as quick regression detectors
+//! (catch handler removal at compile-cite time) but DO NOT substitute
+//! for the end-to-end migration round-trip pins.
+//!
+//! Aligns with r4-r1-napi-8 disposition for the broader manifest_persistence
+//! cluster + pim-2 §3.6b discipline.
 
 #![allow(clippy::unwrap_used)]
 

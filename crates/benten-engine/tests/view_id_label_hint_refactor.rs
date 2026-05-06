@@ -51,7 +51,7 @@ use benten_engine::Engine;
 /// DeniedRead branch, and returns `Outcome { list: Some(vec![]) }`
 /// (the Option-C empty-list silent-deny shape, NOT a leak).
 #[test]
-#[ignore = "Phase 3 — view-registry label-hint body deferred per docs/future/phase-3-backlog.md §7.3.A.3"]
+#[ignore = "RED-PHASE: G15-A wave-5a — carry-ivm-r6-3 closure — view-registry label-hint derivation from input_pattern not view-id-prefix"]
 fn view_id_to_label_hint_consults_input_pattern_label_not_string_prefix() {
     let dir = tempfile::tempdir().unwrap();
     let mut engine = Engine::builder()
@@ -83,14 +83,19 @@ fn view_id_to_label_hint_consults_input_pattern_label_not_string_prefix() {
     //        DeniedRead path returns empty list. The Phase-1 string-prefix \
     //        strip would have leaked the rows here (carry-ivm-r6-3 closure)."
     //   );
-    todo!("R5 G8-B — assert label derived from input_pattern, NOT view-id prefix");
+    unimplemented!(
+        "G15-A wires label-hint derivation from input_pattern.label \
+         not view-id string-prefix (carry-ivm-r6-3 closure; r4-r2-ivm-3); \
+         see crates/benten-ivm/tests/algorithm_b_general.rs + ivm_view_read_gate \
+         for the G15-A IVM materialization-time gate surface"
+    );
 }
 
 /// Companion: anti-regression — the `content_listing_*` views STILL
 /// resolve correctly through the new registry path. We are replacing
 /// the prefix-strip, not the cap behavior on the canonical 5 views.
 #[test]
-#[ignore = "Phase 3 — canonical-Phase-1 view registry-path coverage body deferred per docs/future/phase-3-backlog.md §7.3.A.3"]
+#[ignore = "RED-PHASE: G15-A wave-5a — carry-ivm-r6-3 anti-regression — canonical 5-view path through registry"]
 fn content_listing_views_still_route_through_registry_post_g8b() {
     let dir = tempfile::tempdir().unwrap();
     let mut engine = Engine::builder()
@@ -112,5 +117,9 @@ fn content_listing_views_still_route_through_registry_post_g8b() {
     //        the registry (its V1 entry is auto-registered at engine open) \
     //        and respect the deny-read policy"
     //   );
-    todo!("R5 G8-B — anti-regression for canonical 5-view path through registry");
+    unimplemented!(
+        "G15-A wires anti-regression for canonical 5-view path through registry \
+         (carry-ivm-r6-3 closure; r4-r2-ivm-3); content_listing views remain readable \
+         while deny-read policy still applies to the underlying label"
+    );
 }

@@ -44,9 +44,12 @@
 // ## RED-PHASE discipline
 //
 // Every test calls `it.skip(...)` until G16-D wave-6b lands the
-// surface. Per R3-A canary precedent, body uses `expect.fail(...)` (not
-// `throw new Error`) so a forgotten un-skip surfaces as a clear failure
-// rather than silently passing.
+// surface. Per pim-2-ts-canary §3.6b amendment 2026-05-05 (Ben's
+// ratification: `throw new Error` shape over `expect.fail` for
+// canonical TS-canary uniformity), body uses
+// `throw new Error("RED-PHASE: ...")` so a forgotten un-skip
+// surfaces as a clear failure rather than silently passing.
+// Updated per r4-r2-napi-4 sweep 2026-05-05.
 
 import { describe, it, expect } from "vitest";
 
@@ -75,7 +78,9 @@ describe("engine.atrium B-prime factory DSL (R3-C / R4-FP RED-PHASE)", () => {
     // Atrium handle whose methods carry per-session state. Defends
     // against the failure shape where ambiguous flat-namespace
     // (`engine.atrium.join`) and factory shapes coexist.
-    expect.fail("G16-D wave-6b fills atrium B-prime factory DSL round-trip");
+    throw new Error(
+      "RED-PHASE: G16-D wave-6b wires atrium B-prime factory DSL round-trip + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G16-D wave-6b — D1 — engine.atrium is a factory function returning Atrium handles", () => {
@@ -109,7 +114,9 @@ describe("engine.atrium B-prime factory DSL (R3-C / R4-FP RED-PHASE)", () => {
     // OBSERVABLE consequence: a future refactor that adds, e.g.,
     // engine.atriumJoin() top-level OR converts engine.atrium to a
     // namespace-only object fails this test.
-    expect.fail("G16-D wave-6b fills B-prime factory architectural assertion");
+    throw new Error(
+      "RED-PHASE: G16-D wave-6b wires B-prime factory architectural assertion + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G16-D + G14-A2 wave-6b — atrium.declareDeviceAttestation TS round-trip per CLAUDE.md baked-in #17", async () => {
@@ -137,7 +144,9 @@ describe("engine.atrium B-prime factory DSL (R3-C / R4-FP RED-PHASE)", () => {
     // OBSERVABLE consequence: TS-side declaration on the constructed
     // handle round-trips into the engine's internal device-attestation
     // table; the declaration is observable both pre- and post-join.
-    expect.fail("G16-D + G14-A2 wave-6b fills declareDeviceAttestation TS round-trip");
+    throw new Error(
+      "RED-PHASE: G16-D + G14-A2 wave-6b wires declareDeviceAttestation TS round-trip + drops .skip + un-comments assertions",
+    );
   });
 
   it.skip("RED-PHASE: G16-D wave-6b — atrium.subscribe round-trip on constructed handle", async () => {
@@ -161,6 +170,8 @@ describe("engine.atrium B-prime factory DSL (R3-C / R4-FP RED-PHASE)", () => {
     // OBSERVABLE consequence: subscribe returns a handle whose
     // unsubscribe() teardown is observable; composes with the G14-D
     // per-subscriber cap-recheck pin.
-    expect.fail("G16-D wave-6b fills atrium.subscribe round-trip on constructed handle");
+    throw new Error(
+      "RED-PHASE: G16-D wave-6b wires atrium.subscribe round-trip on constructed handle + drops .skip + un-comments assertions",
+    );
   });
 });

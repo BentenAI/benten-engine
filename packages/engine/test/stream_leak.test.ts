@@ -53,7 +53,22 @@ const IS_NODE_RUNTIME =
 describe.skipIf(!IS_NODE_RUNTIME)(
   "G19-C2 openStream FinalizationRegistry leak detector (§7.1.2 + stream-r1-4)",
   () => {
-  it.skip("RED-PHASE: G19-C2 wave-7 — leak fires E_STREAM_HANDLE_LEAKED via FinalizationRegistry callback (scenario a)", async () => {
+  // r4-r2-napi-1 scenario renumbering (2026-05-05): test functions
+  // align with the master stream-r1-4 brief enumeration:
+  //   (a) handler-returns + handle GC'd without close() — MUST fire
+  //   (b) handler-throws + handle GC'd — MUST fire
+  //   (c) natural-completion (final_chunk emitted) + handle GC'd
+  //       without close() — must NOT fire (negative pin)
+  //   (d) Engine.shutdown() called while handle still open — MUST fire
+  // The GC-pressure-timeout polling fallback is a SUB-MECHANISM
+  // orthogonal to the 4-scenario enumeration; pinned separately as
+  // `gc_pressure_polling_fallback`.
+  //
+  // Outer describe.skipIf(!IS_NODE_RUNTIME) wraps these per stream-r4r1-8
+  // (R2-FP-E PR #99) — FinalizationRegistry leak detector is Node-only;
+  // browser-target tests skip cleanly per cross-browser-determinism scope.
+
+  it.skip("RED-PHASE: G19-C2 wave-7 — scenario (a) handler-returns-no-close: leak fires E_STREAM_HANDLE_LEAKED via FinalizationRegistry callback", async () => {
     // stream-r1-4 scenario (a): handler returns + handle GC'd without
     // close()/cancel(). G19-C2 implementer wires this:
     //
@@ -89,7 +104,7 @@ describe.skipIf(!IS_NODE_RUNTIME)(
     );
   });
 
-  it.skip("RED-PHASE: G19-C2 wave-7 — leak fires when close() not called assertion (scenario b)", async () => {
+  it.skip("RED-PHASE: G19-C2 wave-7 — scenario (b) handler-throws-no-close: leak fires when close() not called assertion", async () => {
     // stream-r1-4 scenario (b): handler throws + handle GC'd. G19-C2
     // implementer wires this:
     //
@@ -119,10 +134,15 @@ describe.skipIf(!IS_NODE_RUNTIME)(
     );
   });
 
-  it.skip("RED-PHASE: G19-C2 wave-7 — GC pressure timeout fires leak (scenario c)", async () => {
-    // stream-r1-4 scenario (c): GC-pressure-timeout polling fallback
-    // for environments where FinalizationRegistry callbacks are
-    // unreliable (e.g. Node without --expose-gc).
+  it.skip("RED-PHASE: G19-C2 wave-7 — gc_pressure_polling_fallback: GC pressure timeout fires leak (sub-mechanism, orthogonal to 4-scenario enumeration)", async () => {
+    // r4-r2-napi-1 renumbering: this is a SUB-MECHANISM orthogonal to
+    // the master 4-scenario stream-r1-4 enumeration (NOT scenario-c).
+    // The natural-completion negative pin is the master scenario (c);
+    // see the function below.
+    //
+    // GC-pressure-timeout polling fallback for environments where
+    // FinalizationRegistry callbacks are unreliable (e.g. Node without
+    // --expose-gc).
     //
     //   const stream = await engine.openStream(sg, "main", {});
     //   // Drop the reference; rely on a polling-based detector with
@@ -143,10 +163,13 @@ describe.skipIf(!IS_NODE_RUNTIME)(
     );
   });
 
-  it.skip("RED-PHASE: G19-C2 wave-7 — natural completion does NOT fire leak (scenario d / stream-r1-4 explicit-close-semantics)", async () => {
-    // stream-r1-4 scenario (c above in stream-r1-4's enumeration =
-    // scenario d in our test file): handler completes naturally
-    // (final_chunk emitted) + handle GC'd. MUST NOT fire E_STREAM_HANDLE_LEAKED.
+  it.skip("RED-PHASE: G19-C2 wave-7 — scenario (c) natural-completion-no-fire (negative pin): natural completion does NOT fire leak (stream-r1-4 explicit-close-semantics)", async () => {
+    // r4-r2-napi-1 renumbering: per master stream-r1-4 enumeration
+    // this is scenario (c) — the negative pin asserting natural
+    // completion does NOT fire the leak. (Pre-r4-r2-napi-1 this test
+    // was misnumbered scenario (d); now aligned with master brief.)
+    // stream-r1-4 scenario (c): handler completes naturally (final_chunk
+    // emitted) + handle GC'd. MUST NOT fire E_STREAM_HANDLE_LEAKED.
     //
     //   const errors: Array<{ code: string }> = [];
     //   engine.onStreamLeaked((err) => errors.push(err));
@@ -175,7 +198,7 @@ describe.skipIf(!IS_NODE_RUNTIME)(
     );
   });
 
-  it.skip("RED-PHASE: G19-C2 wave-7 — Engine.shutdown() drains open handles + fires leak (scenario d)", async () => {
+  it.skip("RED-PHASE: G19-C2 wave-7 — scenario (d) engine-shutdown-while-open: Engine.shutdown() drains open handles + fires leak", async () => {
     // stream-r1-4 scenario (d): Engine.shutdown() called while a handle
     // is still open. Must fire E_STREAM_HANDLE_LEAKED on shutdown drain
     // rather than wait for GC.

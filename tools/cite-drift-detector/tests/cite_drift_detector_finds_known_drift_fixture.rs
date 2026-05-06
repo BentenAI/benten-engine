@@ -142,3 +142,70 @@ crates/foo/src/utility.rs::real_symbol
         );
     }
 }
+
+// r4-r2-ivm-5 fixture-extension RED-PHASE pin (added 2026-05-05).
+//
+// At G15-A landing, this fixture is extended with a SECURITY-POSTURE
+// Compromise #11 mini-fixture that exercises the cite-drift detector
+// against the proptest-symbol-of-record + materialization-gate
+// symbol-of-record. The narrative covers TWO symbol-form cites that
+// MUST be findable post-G15-A:
+//
+//   crates/benten-ivm/tests/algorithm_b_drift_detector.rs::prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern
+//   crates/benten-engine/tests/<TBD>::ivm_view_per_row_read_gate_against_actor_cap_set
+//
+// Per ivm-major-2 narrative + §3.5b HARDENED point-1: when SECURITY-
+// POSTURE.md Compromise #11 closure narrative cites these symbols, the
+// cite-drift detector verifies the symbols still resolve at HEAD. A
+// regression that renames or deletes either symbol triggers
+// SymbolCiteSymbolMissing finding through this fixture.
+//
+// G15-A wave-5a implementer wires this:
+//
+//   #[test]
+//   fn cite_drift_detector_finds_security_posture_compromise_11_proptest_drift() {
+//       let tmp = tempfile::tempdir().expect("tempdir");
+//       let root = tmp.path();
+//
+//       // Plant the proptest target file with the actual G15-B symbol:
+//       fs::create_dir_all(root.join("crates/benten-ivm/tests")).unwrap();
+//       fs::write(
+//           root.join("crates/benten-ivm/tests/algorithm_b_drift_detector.rs"),
+//           // ... real file contents with the proptest symbol present ...
+//       ).unwrap();
+//
+//       // Plant a SECURITY-POSTURE.md fragment that cites the symbol AND
+//       // a stale (renamed/missing) symbol — assert the detector flags
+//       // the stale one but NOT the live one:
+//       fs::create_dir_all(root.join("docs")).unwrap();
+//       let posture = "\
+// # SECURITY-POSTURE.md (fixture)
+//
+// ## Compromise #11 — IVM views coarse-grained read-gate
+//
+// CLOSED at G15-A via materialization-time gate composing with G14-D
+// delivery-time gate. Closure narrative cites:
+//   - crates/benten-ivm/tests/algorithm_b_drift_detector.rs::prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern (LIVE)
+//   - crates/benten-ivm/tests/algorithm_b_drift_detector.rs::prop_old_renamed_symbol (DRIFTED — should flag)
+// ";
+//       fs::write(root.join("docs/SECURITY-POSTURE.md"), posture).unwrap();
+//
+//       let findings = run_cite_drift_check(root);
+//
+//       // The live symbol cite must NOT flag:
+//       assert!(!findings.iter().any(|f|
+//           f.message.contains("prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern")
+//           && f.kind == FindingKind::SymbolCiteSymbolMissing
+//       ));
+//       // The drifted symbol cite MUST flag:
+//       assert!(findings.iter().any(|f|
+//           f.message.contains("prop_old_renamed_symbol")
+//           && f.kind == FindingKind::SymbolCiteSymbolMissing
+//       ));
+//   }
+//
+// OBSERVABLE consequence: a refactor that renames the proptest-symbol-
+// of-record post-G15-A (and forgets to retense SECURITY-POSTURE.md
+// Compromise #11 closure narrative) is caught by this fixture pin. Per
+// pim-1 §3.5b HARDENED post-fix doc-coupling. r4-r2-ivm-5 fixture-
+// extension closure.
