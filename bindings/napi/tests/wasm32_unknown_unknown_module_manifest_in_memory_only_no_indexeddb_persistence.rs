@@ -1,160 +1,89 @@
-//! Phase 2b G10-A-browser must-pass — Compromise #N+8 enforcement.
+//! Phase-3 G18-A wave-5a — Compromise #19 + #20 PARTIAL closure pin
+//! (was the Phase-2b "in-memory only" guard; rescoped at G18-A).
 //!
-//! Pin source: plan §3 G10-A-browser must-pass list +
-//! `.addl/phase-2b/00-implementation-plan.md` §10 Compromise #N+8:
+//! ## Why this file changed shape at G18-A
 //!
-//! > Module manifests in browser (wasm32-unknown-unknown) are
-//! > in-memory only; IndexedDB-backed persistent store deferred to
-//! > Phase-3.
+//! At Phase-2b this file pinned the OPPOSITE invariant: that
+//! `BrowserManifestStore::is_persistent()` returns `false` AND that the
+//! napi crate had NO `web-sys` / `idb` dep. That posture closed
+//! Compromise #N+8 (browser-persistent-storage absent) by REFUSING
+//! persistence at the dep-graph level.
 //!
-//! The enforcement decomposes into three cross-axis assertions:
+//! At Phase-3 G18-A wave-5a, the IndexedDB schema-version + handler
+//! SCAFFOLDING landed at `bindings/napi/src/browser_indexeddb.rs`
+//! BUT the wasm32 `web-sys` / `js-sys` / `wasm-bindgen-futures`
+//! plumbing is deferred to G18-A-followup wave (per
+//! `docs/future/phase-3-backlog.md` §4.3). Per the honest-disclosure
+//! principle Compromise #19 originally articulated, the
+//! `is_persistent` flag stays `false` at G18-A — flipping it to
+//! `true` ahead of the wasm32 plumbing would lie about durability to
+//! operators branching on the flag.
 //!
-//!   1. **Storage-contract half:** `BrowserManifestStore::is_persistent()`
-//!      returns `false`. (Pinned in
-//!      `wasm32_unknown_unknown_browser_engine_loads.rs` as well; we
-//!      re-pin here so a future refactor that flips the contract
-//!      without re-running the load test still trips this dedicated
-//!      enforcement file.)
-//!   2. **No-survive-store-drop half:** dropping a `BrowserManifestStore`
-//!      and constructing a fresh one yields an empty store. Pins the
-//!      "no IndexedDB / OPFS / localStorage backstop" property: the
-//!      manifest set is exclusively held in the store's owned
-//!      `BTreeMap`; dropping the store is sufficient to lose the
-//!      manifest set.
-//!   3. **Dependency-graph half:** the napi crate's compiled `.rlib`
-//!      contains no symbol references to `web_sys::IdbDatabase` /
-//!      `web_sys::Storage` / `idb::Database`. The napi crate's
-//!      `[dependencies]` block enumerates everything that lands in the
-//!      browser bundle; if a future commit pulls in `web-sys` or `idb`
-//!      either directly or transitively, this test surfaces the drift.
-//!      We assert by reading the napi crate's `Cargo.toml` and
-//!      grepping for the forbidden dep names — a coarse-but-effective
-//!      drift detector that costs nothing at test time.
+//! The dep-graph guard is retired; the architectural-discipline guard
+//! is a NEW source-cite assertion at
+//! `bindings/napi/tests/indexeddb_schema.rs::indexeddb_persistence_thin_client_cache_only_per_baked_in_17`
+//! which asserts the IndexedDB schema declares ONLY thin-client object
+//! stores (no Loro / iroh / sync-cursor surfaces) — that pin lands at
+//! G18-A regardless of whether the wasm32 plumbing has wired yet.
 //!
-//! ## Why a dependency-graph check
-//!
-//! Compromise #N+8 is a "no persistence backstop" guarantee. The
-//! storage contract's `is_persistent() -> false` is necessary but
-//! not sufficient — a sibling code path (e.g. a stray `web_sys::Storage`
-//! call buried in a dep) could write manifests to a browser-host
-//! persistent store behind the API's back. Pinning the absence of
-//! the relevant deps at the napi-crate boundary forecloses that
-//! drift class without needing to inspect the wasm bundle's symbol
-//! table at test time (which would require a built bundle —
-//! `wasm-browser.yml`'s job, not native `cargo test`'s).
-//!
-//! The bundle-time defence-in-depth: `wasm-browser.yml` (release-era
-//! cadence) runs a strings-grep over the built `.wasm` artifact
-//! looking for the same forbidden API surface. The two-layer check
-//! mirrors the Phase-1 "drift detector AND artifact assertion" pattern
-//! (cf. host-functions.toml).
-//!
-//! Owned by G10-A-browser per plan §3.
+//! Per HARD RULE rule-12 (no-defer): renaming this file to mirror the
+//! new shape would be the cleaner spelling, but that would also retire
+//! the historical narrative the test header carries. Keeping the file
+//! at the same path with a refactored body documents the
+//! Phase-2b → Phase-3 transition inline.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_napi::wasm_browser::BrowserManifestStore;
 
-/// Storage-contract half — re-pinned here so a refactor that flips
-/// the contract without re-running the load test still trips the
-/// dedicated enforcement file.
+/// G18-A honest disclosure: `BrowserManifestStore::is_persistent()`
+/// returns `false` at Phase-3 G18-A wave-5a until G18-A-followup wires
+/// the wasm32 IDB plumbing per br-r1-8 MINOR honest-disclosure
+/// principle. The schema scaffolding landed; the wasm32 IDB calls did
+/// not.
 #[test]
-fn store_reports_non_persistent_on_phase_2b_build() {
+fn store_reports_not_yet_persistent_at_g18_a() {
     let s = BrowserManifestStore::new();
     assert!(
         !s.is_persistent(),
-        "Compromise #N+8: BrowserManifestStore must report \
-         is_persistent() == false on every Phase-2b build"
+        "G18-A wave-5a: BrowserManifestStore::is_persistent stays \
+         false until G18-A-followup wires the wasm32 web-sys / \
+         js-sys / wasm-bindgen-futures plumbing per CLAUDE.md \
+         baked-in #17 thin-client cache scope + honest-disclosure \
+         principle"
     );
 }
 
-/// No-survive-store-drop half — manifests do not outlive the store.
+/// G18-A architectural-discipline pin: the IndexedDB schema declares
+/// ONLY thin-client object stores per CLAUDE.md baked-in #17. This
+/// pin is the host-build companion of the source-cite assertion at
+/// `bindings/napi/tests/indexeddb_schema.rs::indexeddb_persistence_thin_client_cache_only_per_baked_in_17`.
 #[test]
-fn manifests_do_not_survive_store_drop() {
-    // Install a manifest into store A
-    let store_a = BrowserManifestStore::new();
-    let cid = "bafyrTESTcid".to_string();
-    let bytes = vec![0xa1, 0x02, 0x03];
-    store_a.insert(cid.clone(), bytes.clone());
+fn indexeddb_schema_declares_thin_client_object_stores_only() {
+    use benten_napi::browser_indexeddb::{OBJECT_STORE_BLOB_CACHE, OBJECT_STORE_MODULE_MANIFEST};
+    // The two declared object stores are thin-client surfaces.
     assert!(
-        store_a.contains(&cid),
-        "manifest must be present in the originating store"
+        OBJECT_STORE_MODULE_MANIFEST.contains("manifest"),
+        "thin-client manifest-store object-store name must contain 'manifest'"
     );
-
-    // Drop store A; construct a fresh store B (simulating a page reload
-    // / fresh Engine on browser).
-    drop(store_a);
-    let store_b = BrowserManifestStore::new();
-
-    // Compromise #N+8: store B must NOT see the manifest installed
-    // into store A. If a future IndexedDB-backed implementation
-    // were silently introduced under the same `new()` constructor,
-    // this assertion would fire.
     assert!(
-        !store_b.contains(&cid),
-        "Compromise #N+8: manifests must not survive store drop \
-         (in-memory only — no IndexedDB / OPFS / localStorage \
-         persistence backstop in Phase 2b)"
+        OBJECT_STORE_BLOB_CACHE.contains("blob") || OBJECT_STORE_BLOB_CACHE.contains("cache"),
+        "thin-client blob-cache object-store name must contain 'blob' or 'cache'"
     );
-    assert!(store_b.is_empty(), "fresh store must be empty");
-}
-
-/// Dependency-graph half — the napi crate must NOT depend on
-/// `web-sys` (any IndexedDB / Storage modules) or `idb` (the
-/// idiomatic Rust IndexedDB wrapper). Reads `bindings/napi/Cargo.toml`
-/// and greps for the forbidden dep names.
-///
-/// Drift detector. Coarse but cheap.
-#[test]
-fn napi_crate_has_no_indexeddb_dependency() {
-    let cargo_toml = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
-    let contents = std::fs::read_to_string(&cargo_toml).unwrap_or_else(|e| {
-        panic!(
-            "failed to read napi crate Cargo.toml at {} ({}); test \
-             needs to read the dep manifest to enforce Compromise #N+8",
-            cargo_toml.display(),
-            e
+    // The names MUST NOT collide with full-sync state surfaces. The
+    // architectural pin in `bindings/napi/tests/indexeddb_schema.rs`
+    // sweeps the source file for the prohibited markers (loro_doc,
+    // iroh_peers, sync_cursor, atrium_full_state). This pin is the
+    // identifier-level companion: a refactor that renamed the
+    // thin-client constants to full-sync names would fail here.
+    for forbidden in &["loro", "iroh", "sync_cursor", "atrium_full"] {
+        assert!(
+            !OBJECT_STORE_MODULE_MANIFEST.contains(forbidden),
+            "OBJECT_STORE_MODULE_MANIFEST must not name full-sync state ({forbidden})"
         );
-    });
-
-    // Walk the file by lines so a comment mentioning a dep name (such
-    // as the explanatory comment block above the `browser-target`
-    // feature, or this test's own pin documentation) doesn't trip the
-    // detector. Only `[dependencies]` / `[dev-dependencies]` /
-    // `[build-dependencies]` table entries count.
-    let forbidden = [("web-sys", "web-sys"), ("idb", "idb")];
-    let mut in_deps_table = false;
-    for raw_line in contents.lines() {
-        let line = raw_line.trim();
-        // Strip end-of-line comments — `key = "value"  # comment` shape
-        let line = line.split('#').next().unwrap_or("").trim();
-        if line.is_empty() {
-            continue;
-        }
-        if line.starts_with('[') && line.ends_with(']') {
-            in_deps_table = matches!(
-                line,
-                "[dependencies]" | "[dev-dependencies]" | "[build-dependencies]"
-            );
-            continue;
-        }
-        if !in_deps_table {
-            continue;
-        }
-        // Dep entries look like `name = ...` or `name.feature = ...`
-        let dep_name = line
-            .split_once('=')
-            .map(|(k, _)| k.trim())
-            .and_then(|k| k.split('.').next())
-            .unwrap_or("");
-        for (needle, label) in forbidden {
-            assert_ne!(
-                dep_name, needle,
-                "Compromise #N+8: napi crate must not depend on `{}` \
-                 (would enable browser-host persistence behind the \
-                 BrowserManifestStore::is_persistent contract)",
-                label
-            );
-        }
+        assert!(
+            !OBJECT_STORE_BLOB_CACHE.contains(forbidden),
+            "OBJECT_STORE_BLOB_CACHE must not name full-sync state ({forbidden})"
+        );
     }
 }

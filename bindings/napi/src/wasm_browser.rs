@@ -18,39 +18,56 @@
 //!    TS code can probe it, but the answer is `cfg`-honest about
 //!    whether the browser runtime path is the active execution path.
 //!
-//! ## Compromise #N+8 — browser-persistent-storage absent in 2b
+//! ## Compromise #19 — PARTIALLY CLOSED at Phase-3 G18-A wave-5a (this commit)
 //!
-//! From `.addl/phase-2b/00-implementation-plan.md` §10:
+//! Phase-2b shipped this module with `is_persistent()` → `false`
+//! reflecting in-memory-only manifest storage. Phase-3 G18-A wires
+//! the IndexedDB schema + handler scaffolding at
+//! `crate::browser_indexeddb` (object-store
+//! [`crate::browser_indexeddb::OBJECT_STORE_MODULE_MANIFEST`]) per
+//! CLAUDE.md baked-in #17 thin-client cache scope + D-PHASE-3-27
+//! schema-versioning + br-r1-2 BLOCKER (`onupgradeneeded` +
+//! `onversionchange` + `QuotaExceededError` typed-handling).
 //!
-//! > Module manifests in browser (wasm32-unknown-unknown) are
-//! > in-memory only; IndexedDB-backed persistent store deferred to
-//! > Phase-3. Enforced by
-//! > `tests/wasm32_unknown_unknown_module_manifest_in_memory_only_no_indexeddb_persistence`.
+//! **HONEST DISCLOSURE — what landed at G18-A vs what is deferred to
+//! G18-A-followup** (per `docs/future/phase-3-backlog.md` §4.3):
+//!   - **LANDED at G18-A:** the IndexedDB schema-version constant, the
+//!     `module_manifest_store` + `blob_cache` object-store names, the
+//!     `on_upgrade_needed` migration walker, the `on_version_change`
+//!     handler, the `map_dom_exception_to_error_code` helper, and the
+//!     typed [`benten_errors::ErrorCode::StorageQuotaExceeded`] variant.
+//!   - **DEFERRED to G18-A-followup:** the wasm32 `web-sys` / `js-sys`
+//!     / `wasm-bindgen-futures` plumbing that opens an `IDBDatabase`
+//!     handle + issues `IDBObjectStore.put` / `IDBObjectStore.get`
+//!     against it. The wasm32 arms of
+//!     [`crate::browser_indexeddb::apply_migration_step`] +
+//!     [`crate::browser_indexeddb::close_database`] are stubs today.
+//!   - **`is_persistent()` returns `false` honestly until G18-A-followup
+//!     wires the wasm32 IDB plumbing.** The in-RAM `BTreeMap` here is
+//!     NOT yet a write-through layer over IndexedDB — it is the source
+//!     of truth at G18-A. Returning `true` would lie about durability
+//!     to operators branching on the flag for survives-page-reload
+//!     semantics. Per the original Compromise #19 articulation
+//!     ("honest disclosure protects operators from assuming durability
+//!     where none exists"), the flag stays `false` until the wasm32
+//!     arm actually persists.
 //!
-//! The store contract therefore guarantees:
-//!   - `is_persistent()` returns `false` on every Phase-2b build,
-//!   - the store is rebuilt-from-empty on every fresh `Engine::open`,
-//!   - no `web_sys::IdbDatabase` / `web_sys::Storage` calls live in
-//!     this module's dep graph (verified at the napi crate's `[dependencies]`
-//!     boundary — neither `web-sys` nor `idb` appear).
+//! Compromise #19 + Compromise #20 (cross-browser determinism CI
+//! cadence) PARTIALLY close together at G18-A — the two were paired
+//! in the `docs/SECURITY-POSTURE.md` narrative at Phase-2b time.
 //!
-//! Phase-3 swaps in an IndexedDB-backed `BrowserManifestStore`
-//! implementation; the storage contract becomes a trait object at
-//! that point and the in-memory store stays as the test/dev default.
+//! ## Compromise #20 — PARTIALLY CLOSED at Phase-3 G18-A wave-5a
 //!
-//! ## Compromise #N+9 — cross-browser-determinism CI cadence
-//!
-//! From plan §10:
-//!
-//! > Only wasm32-wasip1 is fixture-CID-pinned in 2b CI (per-PR);
-//! > wasm32-unknown-unknown browser-bundle determinism is checked only
-//! > at release-era cadence (NEW `wasm-browser.yml` workflow runs at
-//! > release-tag, not per-PR). Per-browser engine bytecode + JIT
-//! > non-determinism makes per-PR cross-browser CID pinning premature.
-//!
-//! The `wasm-browser.yml` workflow comment header re-states this
-//! constraint so an operator wiring a per-PR cross-browser determinism
-//! probe sees the load-bearing rationale before flipping the cadence.
+//! Phase-2b deferred cross-browser determinism CI to release-era
+//! cadence (no per-PR matrix). Phase-3 G18-A wires the
+//! `.github/workflows/cross-browser-determinism.yml` Playwright matrix
+//! workflow + matrix cell structure per D-PHASE-3-7 + br-r1-10 retry
+//! policy. **HONEST DISCLOSURE:** every matrix cell currently emits
+//! `::warning::...harness fixture not yet wired (G18-A-followup)`. The
+//! cells are STRUCTURAL anchors only at G18-A; the canonical-bytes
+//! determinism + CID-pin equivalence + IDB schema-migration assertions
+//! they describe execute once G18-A-followup authors the Playwright
+//! fixture bodies (per `docs/future/phase-3-backlog.md` §4.3).
 //!
 //! ## Why both halves of the cfg gate ship
 //!
@@ -129,18 +146,27 @@ impl BrowserManifestStore {
         }
     }
 
-    /// `false` on every Phase-2b build — Compromise #N+8 enforcement.
+    /// `false` at Phase-3 G18-A wave-5a — Compromise #19 PARTIALLY
+    /// CLOSED. Per the module-level honest-disclosure narrative above,
+    /// the wasm32 IndexedDB plumbing (`web-sys` / `js-sys` /
+    /// `wasm-bindgen-futures`) is NOT yet wired at G18-A; the
+    /// schema + handler scaffolding landed at
+    /// `bindings/napi/src/browser_indexeddb.rs` but the wasm32 arms
+    /// of `apply_migration_step` + `close_database` are stubs. Until
+    /// those arms issue real `IDBDatabase.open` / `IDBObjectStore.put`
+    /// against an IndexedDB connection (G18-A-followup wave per
+    /// `docs/future/phase-3-backlog.md` §4.3), this in-RAM
+    /// `BTreeMap` does NOT survive page reload + tab close. Returning
+    /// `true` would lie about durability to operators branching on
+    /// the flag.
     ///
-    /// The browser-target test
-    /// `wasm32_unknown_unknown_module_manifest_in_memory_only_no_indexeddb_persistence`
-    /// asserts this returns `false` for every store constructed via
-    /// the public `new()` constructor.
+    /// The flag flips to `true` at G18-A-followup wave when
+    /// `BrowserManifestStore::open_indexed_db(...)` lands the
+    /// wasm32 plumbing (or when a runtime IDB-connection probe gates
+    /// the `true` return per finding g18a-mr-3 disposition).
     ///
-    /// Phase-3 IndexedDB-backed stores will return `true`; the test
-    /// then needs to be re-scoped to the in-memory variant
-    /// explicitly (the test comment block in
-    /// `crates/benten-engine/tests/integration/module_install_in_memory_only_in_browser.rs`
-    /// already calls this out).
+    /// Source-cite: this fn name + return value `false` is asserted by
+    /// `bindings/napi/tests/browser_manifest_store.rs::browser_manifest_store_is_persistent_returns_false_until_idb_wired`.
     #[must_use]
     pub const fn is_persistent(&self) -> bool {
         false
@@ -287,11 +313,18 @@ mod tests {
     }
 
     #[test]
-    fn browser_manifest_store_is_not_persistent() {
-        // Compromise #N+8 enforcement at the storage-contract layer.
-        // Higher-level enforcement (no-survive-engine-drop) lives in
-        // the integration test
-        // `tests/wasm32_unknown_unknown_module_manifest_in_memory_only_no_indexeddb_persistence`.
+    fn browser_manifest_store_is_persistent_honest_at_g18_a() {
+        // G18-A wave-5a HONEST DISCLOSURE — Compromise #19 PARTIALLY
+        // CLOSED per br-r1-8 honest-disclosure principle. The
+        // IndexedDB schema + handler scaffolding landed at
+        // `crate::browser_indexeddb` BUT the wasm32 IDB plumbing is
+        // deferred to G18-A-followup wave (per
+        // `docs/future/phase-3-backlog.md` §4.3). The flag stays
+        // `false` honestly until the wasm32 IDB calls wire — flipping
+        // ahead of the plumbing would lie about durability.
+        //
+        // Pairs with the source-cite integration test at
+        // `bindings/napi/tests/browser_manifest_store.rs::browser_manifest_store_is_persistent_returns_false_until_idb_wired`.
         let s = BrowserManifestStore::new();
         assert!(!s.is_persistent());
     }
