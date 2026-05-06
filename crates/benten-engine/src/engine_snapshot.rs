@@ -4,7 +4,7 @@
 //! ## What this is
 //!
 //! Three engine-level methods that pair with the
-//! [`benten_graph::SnapshotBlobBackend`] read-only backend:
+//! `benten_graph::SnapshotBlobBackend` read-only backend:
 //!
 //! - [`Engine::export_snapshot_blob`] — walk the engine's storage and
 //!   encode a canonical DAG-CBOR `SnapshotBlob` for handoff.
@@ -45,9 +45,9 @@
 //!
 //! G13-D delivers what fits in scope-real-15:
 //!
-//! 1. [`SnapshotBlobBackend`] is now a first-class
-//!    [`benten_graph::GraphBackend`] (per the umbrella trait, with
-//!    [`benten_graph::NodeStore`] + [`benten_graph::EdgeStore`] + the
+//! 1. `SnapshotBlobBackend` is now a first-class
+//!    `benten_graph::GraphBackend` (per the umbrella trait, with
+//!    `benten_graph::NodeStore` + `benten_graph::EdgeStore` + the
 //!    snapshot/transaction/subscriber/put-with-context surface). Tests
 //!    pinned at `crates/benten-graph/tests/snapshot_blob_backend.rs`.
 //! 2. `from_snapshot_blob` no longer creates a tempdir — the in-memory
@@ -91,7 +91,7 @@ impl Engine {
     ///
     /// Phase-2b limitation: edges and IVM-view state are not part of the
     /// D10 handoff shape. Phase 3 extends the schema additively under a
-    /// new [`benten_graph::SnapshotBlob::schema_version`].
+    /// new `benten_graph::SnapshotBlob::schema_version`.
     ///
     /// # Errors
     /// - [`EngineError::Graph`] on backend I/O failure.
@@ -216,12 +216,12 @@ impl Engine {
             });
         }
 
-        // Prove the [`SnapshotBlobBackend`] will actually accept the
+        // Prove the `SnapshotBlobBackend` will actually accept the
         // bytes — a separate check from the engine-side hydration so
         // the (G13-D) direct-backed `SnapshotBlobBackend` is exercised
         // along the same input-validation path the in-memory
         // hydration consumes. Defends against schema drift between
-        // the read-only [`SnapshotBlobBackend`] surface and the
+        // the read-only `SnapshotBlobBackend` surface and the
         // engine-side decode.
         let _ = benten_graph::SnapshotBlobBackend::from_bytes(bytes).map_err(
             |e: SnapshotBlobError| EngineError::Other {
