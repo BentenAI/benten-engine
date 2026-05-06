@@ -7,7 +7,9 @@
 
 use benten_id::UcanError;
 use benten_id::keypair::Keypair;
-use benten_id::ucan::{Ucan, validate_chain, validate_chain_at, validate_chain_for_audience};
+use benten_id::ucan::{
+    Ucan, validate_chain_at, validate_chain_for_audience, validate_chain_no_time_check,
+};
 
 fn now_secs() -> u64 {
     1_000_000_000
@@ -25,7 +27,7 @@ fn ucan_chain_validation_basic() {
         .not_before(now - 1)
         .expiry(now + 3600)
         .sign(&issuer);
-    assert!(validate_chain(std::slice::from_ref(&ucan)).is_ok());
+    assert!(validate_chain_no_time_check(std::slice::from_ref(&ucan)).is_ok());
     assert!(validate_chain_at(&[ucan], now).is_ok());
 }
 
@@ -161,7 +163,20 @@ fn ucan_chain_walk_constant_time_comparison_audit() {
         if trimmed.starts_with("//") || trimmed.starts_with("///") {
             continue;
         }
-        for forbidden in &["signature ==", "audience ==", "proof_cid =="] {
+        for forbidden in &[
+            "signature ==",
+            "audience ==",
+            "proof_cid ==",
+            // G14-A1 mini-review MAJOR — capability authority
+            // comparisons in `caps_match_or_subsume` are
+            // security-decision sites; ct-eq UNIFORMITY at these
+            // sites means a future contributor adding a new
+            // authority compare hits this audit.
+            "parent.resource ==",
+            "parent.ability ==",
+            "child.resource ==",
+            "child.ability ==",
+        ] {
             assert!(
                 !line.contains(forbidden),
                 "constant-time comparison required per crypto-major-4: {line}"

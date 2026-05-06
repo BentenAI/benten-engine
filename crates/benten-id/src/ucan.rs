@@ -5,7 +5,7 @@
 //! - In-memory [`Ucan`] envelope: issuer / audience / capabilities /
 //!   `nbf` / `exp` / proof chain.
 //! - [`Ucan::builder`] / [`UcanBuilder::sign`] for issuance.
-//! - [`validate_chain`] / [`validate_chain_at`] /
+//! - [`validate_chain_no_time_check`] / [`validate_chain_at`] /
 //!   [`validate_chain_for_audience`] for chain-walk verification.
 //! - [`Ucan::validate_at`] single-token entry point (composes with
 //!   chain-walk; §11 CLR-2 redundant-distinct shape pins).
@@ -99,7 +99,7 @@ pub struct UcanClaims {
     pub exp: Option<u64>,
     /// Proof chain — the parent UCAN (or chain of parents) whose
     /// authority this claim derives from. Empty for the root token.
-    /// Walked at `validate_chain` site.
+    /// Walked at `validate_chain_no_time_check` / `validate_chain_at` site.
     pub prf: Vec<Ucan>,
 }
 
@@ -259,7 +259,7 @@ fn ct_signature_eq(a: &[u8], b: &[u8]) -> bool {
 /// older parents. Equivalent to [`validate_chain_at`] with `now =
 /// u64::MAX` (which never trips `exp`). Use the timed variant for
 /// production paths.
-pub fn validate_chain(chain: &[Ucan]) -> Result<(), UcanError> {
+pub fn validate_chain_no_time_check(chain: &[Ucan]) -> Result<(), UcanError> {
     // For "no time check", we still want `nbf` / `exp` consistency
     // checks to be skipped — pass `now = 0` to skip nbf only if all
     // tokens have nbf = 0. Better: split the check. We deliberately
@@ -413,22 +413,35 @@ fn validate_chain_inner(
 ///   matches per the wildcard rule above.
 ///
 /// The basic-attenuation pin
-/// (`tests/ucan.rs::ucan_chain_attenuation_rejects_overgrant`) uses
-/// only the exact-match path; the prefix + wildcard widening of the
+/// (`crates/benten-id/tests/ucan.rs::ucan_chain_attenuation_rejects_overgrant`)
+/// uses only the exact-match path; the prefix + wildcard widening of the
 /// match relation is a defensive default that does NOT widen child
 /// authority beyond parent's literal grants.
+///
+/// **Constant-time discipline:** capability `resource` / `ability` strings
+/// are not secret per se (they are the cap-system's public schema), but
+/// the rule-7 brief commits to ct-eq UNIFORMITY at security-decision sites.
+/// All `==` comparisons here go through `ct_signature_eq` so the
+/// `ucan_chain_walk_constant_time_comparison_audit` grep test pins this
+/// surface (resource / ability are the most-likely-future-drift sites for
+/// a contributor who adds a new authority comparison).
 fn caps_match_or_subsume(parent: &Capability, child: &Capability) -> bool {
+    let parent_res = parent.resource.as_bytes();
+    let child_res = child.resource.as_bytes();
+    let parent_ab = parent.ability.as_bytes();
+    let child_ab = child.ability.as_bytes();
+    let star = b"*";
     // Exact match.
-    if parent.resource == child.resource && parent.ability == child.ability {
+    if ct_signature_eq(parent_res, child_res) && ct_signature_eq(parent_ab, child_ab) {
         return true;
     }
     // Wildcard ability.
-    if parent.ability == "*" && parent.resource == child.resource {
+    if ct_signature_eq(parent_ab, star) && ct_signature_eq(parent_res, child_res) {
         return true;
     }
     // Path-prefix resource + matching/wildcard ability.
     if child.resource.starts_with(&parent.resource)
-        && (parent.ability == child.ability || parent.ability == "*")
+        && (ct_signature_eq(parent_ab, child_ab) || ct_signature_eq(parent_ab, star))
     {
         return true;
     }
@@ -445,7 +458,10 @@ mod tests {
 
     #[test]
     fn empty_chain_rejects() {
-        assert_eq!(validate_chain(&[]), Err(UcanError::EmptyChain));
+        assert_eq!(
+            validate_chain_no_time_check(&[]),
+            Err(UcanError::EmptyChain)
+        );
     }
 
     #[test]

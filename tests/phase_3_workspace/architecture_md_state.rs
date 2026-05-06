@@ -73,8 +73,7 @@ fn architecture_md_in_flight_callouts_present_for_benten_id_and_benten_sync_nati
     )
     .unwrap();
     assert!(
-        arch_md.contains("benten-id added at G14-A1")
-            || arch_md.contains("Phase-3 in flight"),
+        arch_md.contains("benten-id added at G14-A1") || arch_md.contains("Phase-3 in flight"),
         "ARCHITECTURE.md must carry the 9-crate in-flight callout at G14-A1 landing"
     );
     assert!(
