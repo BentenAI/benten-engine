@@ -221,9 +221,91 @@ pub enum EngineError {
         /// Human-readable message body.
         message: String,
     },
+
+    /// Phase-3 G13-B (D-PHASE-3-1a / D-B / arch-r1-1 BLOCKER closure):
+    /// backend-specific error erased to `Box<dyn std::error::Error +
+    /// Send + Sync>` at the engine public boundary.
+    ///
+    /// ## Why dyn-erasure at the boundary
+    ///
+    /// Per D-PHASE-3-1a / arch-r1-1: when the engine cascades over
+    /// `<B: GraphBackend>`, every backend's typed `B::Error` would
+    /// otherwise propagate as a different `EngineError` variant per
+    /// backend — breaking API stability for callers (napi binding,
+    /// in-process Rust consumers) the moment a non-redb backend lands.
+    /// Erasing to `Box<dyn std::error::Error + Send + Sync>` keeps the
+    /// public type stable while preserving the typed error inside via
+    /// the standard [`std::error::Error::source`] chain — callers that
+    /// want backend-specific telemetry downcast through `source()`.
+    ///
+    /// ## How typed errors are preserved
+    ///
+    /// The boxed dyn-error implements `std::error::Error::source()`,
+    /// which surfaces the wrapped typed `B::Error` (e.g.
+    /// [`benten_graph::GraphError`] for the redb path). Structured
+    /// logging recovers the typed variant via:
+    ///
+    /// ```ignore
+    /// match err {
+    ///     EngineError::Backend(boxed) => {
+    ///         if let Some(g) = boxed.downcast_ref::<benten_graph::GraphError>() {
+    ///             // typed redb error
+    ///         }
+    ///     }
+    ///     _ => {}
+    /// }
+    /// ```
+    ///
+    /// Both pinned at:
+    /// - `crates/benten-engine/tests/engine_error_boundary.rs::engine_error_boundary_erases_backend_specific_error_to_dyn_std_error`
+    /// - `crates/benten-engine/tests/engine_error_boundary.rs::engine_error_carries_typed_backend_error_per_d_phase_3_1a`
+    ///
+    /// Pre-existing variants ([`EngineError::Graph`], [`EngineError::Core`],
+    /// [`EngineError::Cap`]) remain for in-flight code paths that
+    /// already consume the typed [`benten_graph::GraphError`] (the
+    /// redb default backend's `B::Error`); the [`EngineError::Backend`]
+    /// variant is the public-boundary erasure point that future
+    /// non-redb backends populate via their typed `B::Error`'s
+    /// `Box::new(err) as Box<dyn _>` conversion.
+    #[error("backend: {0}")]
+    Backend(Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl EngineError {
+    /// Phase-3 G13-B (D-PHASE-3-1a / D-B / arch-r1-1 BLOCKER closure):
+    /// erase a backend-construction-path error into the public-boundary
+    /// [`EngineError::Backend`] variant. Used by the resolved-alias
+    /// constructor `Engine::open` so backend-typed errors don't leak as
+    /// the typed [`EngineError::Graph`] variant at the public surface
+    /// — preserves API stability across alternative backends (G13-C
+    /// BrowserBackend, G13-D SnapshotBlobBackend) while keeping the
+    /// typed error recoverable through the `source()` chain.
+    ///
+    /// **Idempotent:** when called on an already-erased
+    /// [`EngineError::Backend`] variant, returns it unchanged. When
+    /// called on the redb-typed [`EngineError::Graph`] variant, wraps
+    /// the inner [`benten_graph::GraphError`] as
+    /// `Box<dyn std::error::Error + Send + Sync>`. Other engine-side
+    /// variants (capability denials, invariant rejections, subsystem-
+    /// disabled errors) pass through unchanged — they're not backend
+    /// errors and shouldn't be erased.
+    ///
+    /// Pinned at `crates/benten-engine/tests/engine_error_boundary.rs`
+    /// (both pins).
+    #[must_use]
+    pub fn erase_backend_at_public_boundary(self) -> Self {
+        match self {
+            EngineError::Graph(g) => {
+                // Box the typed GraphError so callers downcast via
+                // `err.source().and_then(|s| s.downcast_ref::<GraphError>())`
+                // (or directly on the boxed dyn Error). The typed error is
+                // preserved losslessly — D-B resolution.
+                EngineError::Backend(Box::new(g))
+            }
+            other => other,
+        }
+    }
+
     /// R6FP-Group-1 (Round-2 Instance 8) — structured-field bag for the
     /// napi error bridge.
     ///
@@ -325,6 +407,17 @@ impl EngineError {
             }
             EngineError::WaitSuspended { .. } => ErrorCode::WaitSuspended,
             EngineError::Other { code, .. } => code.clone(),
+            // G13-B (D-PHASE-3-1a): the Backend variant erases backend-
+            // specific errors at the public boundary. We try to recover
+            // the typed code by downcasting through the `source` chain
+            // — preserves the Phase-2b error-catalog-drift contract for
+            // the redb-backed default path. Non-redb backends that
+            // don't expose a `GraphError` source fall back to the
+            // generic backend-not-found code, which the catalog
+            // recognizes as a stable "backend complained" sentinel.
+            EngineError::Backend(boxed) => boxed
+                .downcast_ref::<benten_graph::GraphError>()
+                .map_or(ErrorCode::BackendNotFound, |g| g.code()),
         }
     }
 

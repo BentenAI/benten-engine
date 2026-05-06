@@ -39,7 +39,7 @@ use benten_errors::ErrorCode;
 use benten_eval::{
     InvariantConfig, PrimitiveHost, RegistrationError, SubgraphBuilderExt, SubgraphExt,
 };
-use benten_graph::{ChangeEvent, GraphError, MutexExt, RedbBackend};
+use benten_graph::{ChangeEvent, GraphBackend, GraphError, MutexExt};
 
 use crate::builder::EngineBuilder;
 use crate::change::ChangeBroadcast;
@@ -464,12 +464,60 @@ impl SubgraphCache {
 }
 
 // ---------------------------------------------------------------------------
-// Engine
+// Engine — G13-B generic-cascade per D-PHASE-3-1 RESOLVED + arch-r1-1 BLOCKER
 // ---------------------------------------------------------------------------
+//
+// `EngineGeneric<B: GraphBackend>` is the generic engine struct introduced at
+// G13-B (Phase-3 R5 wave-2). The default alias
+//   `pub type Engine = EngineGeneric<RedbBackend>;`
+// preserves API stability for every existing caller — the napi binding,
+// integration tests, and `EngineBuilder::open` all continue to construct an
+// `Engine` (= `EngineGeneric<RedbBackend>`) without changes.
+//
+// **D-PHASE-3-1 RESOLVED scope contract:** the engine consumes `GraphBackend`
+// EXCLUSIVELY via the generic-cascade direction — `<B: GraphBackend>`
+// parameters, never `dyn GraphBackend` / `Box<dyn>` / `Arc<dyn>`. The
+// non-object-safety of `GraphBackend` (`type Error` + `type Snapshot` +
+// `type Transaction` associated types) enforces this at compile time;
+// `crates/benten-engine/tests/engine_no_dyn_graph_backend.rs::engine_does_not_reference_dyn_graph_backend_at_engine_boundary`
+// pins it via syntactic grep so a future refactor that drops the associated
+// types (re-enabling object-safety) cannot silently slip dyn-erasure into
+// the engine boundary.
+//
+// **Where redb lives now (post-G13-B):** the resolved `Engine` alias still
+// has the redb-specific `pub fn open(path)` constructor + the
+// `from_snapshot_blob` rehydration path on a specialized `impl Engine`
+// block (see `engine_snapshot.rs`). Those are convenience constructors
+// that legitimately know they want `RedbBackend`. The cascade pin
+// `crates/benten-engine/tests/engine_generic.rs::engine_generic_cascade_no_inherent_redb_references_outside_default_alias`
+// scans this file (`engine.rs`) line-by-line and rejects any `RedbBackend`
+// reference outside of:
+//   1. The `pub type Engine = EngineGeneric<RedbBackend>;` line.
+//   2. Lines inside `impl Engine { ... }` blocks (the resolved-alias
+//      specialized-impl side; the pin's allowed-list).
+// `impl<B: GraphBackend> EngineGeneric<B> { ... }` blocks (the generic
+// cascade side) are forbidden from referencing `RedbBackend` inherently
+// — every backend operation goes through the `B: GraphBackend` bound.
 
-/// The Benten engine handle.
-pub struct Engine {
-    pub(crate) backend: Arc<RedbBackend>,
+/// The Benten engine handle, generic over a [`GraphBackend`] storage layer.
+///
+/// `EngineGeneric<B>` is the generic shape introduced at G13-B (Phase-3 R5
+/// wave-2). The default alias [`Engine`] resolves to
+/// `EngineGeneric<RedbBackend>` and is what every existing caller, integration
+/// test, and napi binding consumes.
+///
+/// ## Generic-cascade contract
+///
+/// Methods that need backend operations are bounded on `<B: GraphBackend>`
+/// and live on the `impl<B: GraphBackend> EngineGeneric<B>` block. Methods
+/// that legitimately specialize for redb (the convenience `Engine::open(path)`
+/// constructor, `from_snapshot_blob` rehydration, and the engine modules
+/// that consume the closure-based `RedbBackend::transaction(|tx| ...)`
+/// surface) live on the resolved-alias `impl Engine` block.
+///
+/// See the module-level rationale block above for the full design contract.
+pub struct EngineGeneric<B: GraphBackend> {
+    pub(crate) backend: Arc<B>,
     /// Configured capability policy. `None` collapses to
     /// `NoAuthBackend`-equivalent behavior (every commit permitted).
     pub(crate) policy: Option<Box<dyn CapabilityPolicy>>,
@@ -545,13 +593,26 @@ pub struct Engine {
     /// suspended `ExecutionStateEnvelope` bytes, and SUBSCRIBE
     /// persistent-cursor `max_delivered_seq` values. Populated at
     /// engine construction with a [`crate::RedbSuspensionStore`] over
-    /// the engine's existing `Arc<RedbBackend>` so cross-process resume
-    /// hydrates suspended state from disk (closes Phase-2a Compromise
-    /// #10).
+    /// the engine's existing graph backend on the redb path (closes
+    /// Phase-2a Compromise #10). The trait-object boundary keeps the
+    /// generic engine free from coupling to the concrete backend's
+    /// suspension-store wiring.
     pub(crate) suspension_store: Arc<dyn benten_eval::SuspensionStore>,
 }
 
-impl std::fmt::Debug for Engine {
+/// Default engine alias resolving to the redb-backed specialization.
+///
+/// Existing callers (napi binding, integration tests, `EngineBuilder::open`)
+/// continue to use `Engine` unchanged after the G13-B generic cascade —
+/// API stability per D-PHASE-3-1a / arch-r1-1 BLOCKER closure.
+///
+/// **Browser-target note (D-PHASE-3-1 + CLAUDE.md baked-in #17):** G13-C
+/// (wave-3) adds a feature-gated alternative `Engine = EngineGeneric<BrowserBackend>`
+/// for the `wasm32-unknown-unknown` thin-client cache target. Until G13-C
+/// lands, this alias is unconditionally `EngineGeneric<RedbBackend>`.
+pub type Engine = EngineGeneric<benten_graph::RedbBackend>;
+
+impl<B: GraphBackend> std::fmt::Debug for EngineGeneric<B> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Engine")
             .field("caps_enabled", &self.caps_enabled)
@@ -562,16 +623,51 @@ impl std::fmt::Debug for Engine {
 
 impl Engine {
     /// Open or create an engine backed by a redb database at `path`.
+    ///
+    /// Specialized constructor for the resolved-alias `Engine =
+    /// EngineGeneric<RedbBackend>` — legitimately knows the caller wants
+    /// a redb-backed engine because `path` is a filesystem location. The
+    /// generic `EngineGeneric<B>` cascade does not have a uniform
+    /// `open(path)` entry point because each backend defines its own
+    /// construction shape (`BrowserBackend` consumes a JS-side IndexedDB
+    /// handle; `SnapshotBlobBackend` consumes pre-loaded bytes).
+    ///
+    /// **Error-shape contract (D-PHASE-3-1a / D-B / arch-r1-1 BLOCKER
+    /// closure):** backend-construction failures (path-not-found, redb
+    /// corruption, invalid-blob etc.) surface as
+    /// [`EngineError::Backend`] with the typed
+    /// [`benten_graph::GraphError`] preserved inside the
+    /// `Box<dyn std::error::Error + Send + Sync>` source-chain. Callers
+    /// that need backend-specific telemetry recover via
+    /// `err.source().and_then(|s| s.downcast_ref::<benten_graph::GraphError>())`
+    /// — preserves API stability when alternative backends land while
+    /// keeping the typed error path open for diagnostics. Pinned at
+    /// `crates/benten-engine/tests/engine_error_boundary.rs`.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, EngineError> {
-        EngineBuilder::new().open(path)
+        EngineBuilder::new()
+            .open(path)
+            .map_err(EngineError::erase_backend_at_public_boundary)
     }
 
-    /// Begin a new builder.
+    /// Begin a new builder. The current `EngineBuilder` is specialized for
+    /// the redb-backed default path (`Engine = EngineGeneric<RedbBackend>`);
+    /// each future backend (G13-C BrowserBackend, G13-D SnapshotBlobBackend)
+    /// adds its own constructor shape.
     #[must_use]
     pub fn builder() -> EngineBuilder {
         EngineBuilder::new()
     }
+}
 
+/// G13-B generic-cascade: every constructor / accessor that does NOT
+/// require backend-specific machinery lives on this generic-bound impl
+/// block. Methods that need redb-specific surfaces (the closure-based
+/// `transaction(|tx| ...)` execution path on CRUD writes, the
+/// `from_snapshot_blob` rehydration that opens a fresh redb file, the
+/// system-zone privileged write path) stay on the resolved-alias `impl
+/// Engine` blocks (this file's `impl Engine { open / builder }` block
+/// above; `engine_snapshot.rs::impl Engine`).
+impl<B: GraphBackend> EngineGeneric<B> {
     /// Builder-only constructor used by `EngineBuilder::assemble`. Not part
     /// of the public API.
     ///
@@ -580,18 +676,28 @@ impl Engine {
     /// as a convenience for older call sites that predate the G9-A-cont
     /// clock injection; new call sites should use
     /// [`Self::from_parts_with_clocks`].
+    ///
+    /// The caller is responsible for supplying a [`benten_eval::SuspensionStore`]
+    /// — the generic-cascade engine does not bake in the
+    /// `RedbSuspensionStore` default (which is redb-specific). The
+    /// resolved-alias `impl Engine` builder path injects
+    /// [`crate::suspension_store::RedbSuspensionStore`] for the redb
+    /// default; alternative backends supply their own suspension-store
+    /// adapter.
     #[allow(
+        clippy::too_many_arguments,
         dead_code,
-        reason = "retained for symmetry; all live call sites now use from_parts_with_clocks"
+        reason = "builder plumbing; retained for symmetry"
     )]
     pub(crate) fn from_parts(
-        backend: Arc<RedbBackend>,
+        backend: Arc<B>,
         policy: Option<Box<dyn CapabilityPolicy>>,
         caps_enabled: bool,
         ivm_enabled: bool,
         broadcast: Arc<ChangeBroadcast>,
         inner: Arc<EngineInner>,
         ivm: Option<Arc<benten_ivm::Subscriber>>,
+        suspension_store: Arc<dyn benten_eval::SuspensionStore>,
     ) -> Self {
         Self::from_parts_with_clocks(
             backend,
@@ -603,6 +709,7 @@ impl Engine {
             ivm,
             Arc::new(benten_eval::InstantMonotonicSource::new()),
             Arc::new(benten_eval::HlcTimeSource::new()),
+            suspension_store,
         )
     }
 
@@ -612,7 +719,7 @@ impl Engine {
     /// #3 without additional argument threading.
     #[allow(clippy::too_many_arguments, reason = "builder plumbing")]
     pub(crate) fn from_parts_with_clocks(
-        backend: Arc<RedbBackend>,
+        backend: Arc<B>,
         policy: Option<Box<dyn CapabilityPolicy>>,
         caps_enabled: bool,
         ivm_enabled: bool,
@@ -621,48 +728,8 @@ impl Engine {
         ivm: Option<Arc<benten_ivm::Subscriber>>,
         monotonic_source: Arc<dyn benten_eval::MonotonicSource>,
         time_source: Arc<dyn benten_eval::TimeSource>,
+        suspension_store: Arc<dyn benten_eval::SuspensionStore>,
     ) -> Self {
-        Self::from_parts_with_clocks_and_store(
-            backend,
-            policy,
-            caps_enabled,
-            ivm_enabled,
-            broadcast,
-            inner,
-            ivm,
-            monotonic_source,
-            time_source,
-            None,
-        )
-    }
-
-    /// R6-R3 r6-r3-arch-5: builder-only constructor variant that accepts
-    /// an explicit `Arc<dyn SuspensionStore>` injection. When `None`,
-    /// constructs the production
-    /// [`crate::suspension_store::RedbSuspensionStore`] backed by the
-    /// engine's own backend (preserves the prior behaviour of
-    /// [`Self::from_parts_with_clocks`]). When `Some(_)`, the supplied
-    /// store is used verbatim — lets test fixtures inject in-memory
-    /// implementations.
-    #[allow(clippy::too_many_arguments, reason = "builder plumbing")]
-    pub(crate) fn from_parts_with_clocks_and_store(
-        backend: Arc<RedbBackend>,
-        policy: Option<Box<dyn CapabilityPolicy>>,
-        caps_enabled: bool,
-        ivm_enabled: bool,
-        broadcast: Arc<ChangeBroadcast>,
-        inner: Arc<EngineInner>,
-        ivm: Option<Arc<benten_ivm::Subscriber>>,
-        monotonic_source: Arc<dyn benten_eval::MonotonicSource>,
-        time_source: Arc<dyn benten_eval::TimeSource>,
-        suspension_store_override: Option<Arc<dyn benten_eval::SuspensionStore>>,
-    ) -> Self {
-        let suspension_store: Arc<dyn benten_eval::SuspensionStore> = suspension_store_override
-            .unwrap_or_else(|| {
-                Arc::new(crate::suspension_store::RedbSuspensionStore::new(
-                    Arc::clone(&backend),
-                ))
-            });
         Self {
             backend,
             policy,
@@ -718,20 +785,26 @@ impl Engine {
 
     // -------- Cross-module accessors (used by primitive_host.rs) --------
 
-    pub(crate) fn backend(&self) -> &Arc<RedbBackend> {
+    /// G13-B generic-cascade: backend accessor returning the typed
+    /// `Arc<B>` so consumer modules (`primitive_host.rs`,
+    /// `engine_modules.rs`, etc.) can call backend-typed methods through
+    /// the `B: GraphBackend` bound. The resolved-alias `Engine`
+    /// (= `EngineGeneric<RedbBackend>`) sees this as `&Arc<RedbBackend>`
+    /// — preserves every Phase-2b call-site signature unchanged.
+    pub(crate) fn backend(&self) -> &Arc<B> {
         &self.backend
     }
 
     /// Phase 2a G5-B-i test-only backend accessor.
     ///
-    /// The user-facing [`Engine::get_node`] now collapses system-zone
+    /// The user-facing [`EngineGeneric::get_node`] now collapses system-zone
     /// reads to `None` under the Inv-11 runtime probe. Tests that need
     /// to assert an engine-privileged write actually landed (e.g.
     /// `grant_capability_only_via_engine_api`) reach through this
     /// accessor so the privileged back-channel is explicit.
     #[cfg(any(test, feature = "test-helpers"))]
     #[must_use]
-    pub fn backend_for_test(&self) -> &Arc<RedbBackend> {
+    pub fn backend_for_test(&self) -> &Arc<B> {
         &self.backend
     }
 
@@ -854,12 +927,41 @@ impl Engine {
         let guard = self.inner.module_bytes.lock_recover();
         guard.get(cid).cloned()
     }
+}
 
+// ---------------------------------------------------------------------------
+// Engine — resolved-alias specialized impl block (G13-B generic-cascade
+// boundary)
+// ---------------------------------------------------------------------------
+//
+// Per the cite-pin
+// `crates/benten-engine/tests/engine_generic.rs::engine_generic_cascade_no_inherent_redb_references_outside_default_alias`,
+// every method body that names `RedbBackend` directly OR consumes the
+// closure-based `transaction(|tx| ...)` execution surface (which is
+// inherent on `RedbBackend`, not on `GraphBackend`) lives on the
+// resolved-alias `impl Engine` block below — `Engine` =
+// `EngineGeneric<RedbBackend>`, so methods here see the concrete redb
+// surface even though the struct itself is generic.
+//
+// Future waves (G13-C BrowserBackend / G13-D SnapshotBlobBackend / G14-A
+// onward) introduce alternative `Engine = EngineGeneric<<other-backend>>`
+// aliases gated by cargo features; methods that should work across ALL
+// backends would migrate up to `impl<B: GraphBackend> EngineGeneric<B>`
+// (the generic block above) at that time. For Phase-3, the redb path
+// remains the only fully-wired backend, so the cost-of-migration is
+// deferred without sacrificing the generic-cascade contract: the engine
+// boundary IS generic at the type level, and the constructor/accessor
+// surface that an alternative backend would need is already on the
+// generic block.
+
+impl Engine {
     /// Phase 2a G5-A / G11-A: monotonic per-engine audit sequence.
     ///
     /// Returns the current value of the storage-layer commit counter —
-    /// the number of times `RedbBackend::put_node_with_context` produced
-    /// a real commit. §9.11 row 3 names this as the observable sequence
+    /// the number of times the privileged put path produced a real
+    /// commit (corresponds to redb's `writes_committed` AtomicU64;
+    /// `RedbBackend::put_node_with_context` increments it on first-put
+    /// commits per §9.11 row 3). Names this as the observable sequence
     /// the dedup path MUST NOT advance: re-putting identical bytes is a
     /// pure-read and must leave this counter alone.
     ///
