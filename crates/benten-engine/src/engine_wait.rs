@@ -1002,16 +1002,22 @@ impl Engine {
     // ---- Benchmark helpers (Phase 2a descope-witness G2-A) ---------------
 
     /// Phase 2a arch-r1-1: DurabilityMode::Group-vs-Immediate measurement
-    /// for `crud_post_create_dispatch`. The bench's body drives the helper
-    /// with the requested durability mode; the helper `todo!()`s until
-    /// G2-A wires the pass-through.
+    /// surface stub on `Engine`. **Not wired to any bench or test** — the
+    /// `crud_post_create_dispatch_group_durability` bench routes through
+    /// the `RedbBackend`-level helper
+    /// (`benten_graph::RedbBackend::benchmark_helper_crud_post_create_dispatch`)
+    /// instead, which was wired at Phase-3 G13-E. This `Engine`-level
+    /// stub remains as a future surface for engine-level (post-IVM,
+    /// post-capability-policy) per-write-class durability comparisons; it
+    /// has zero callers today.
     pub fn benchmark_helper_crud_post_create_dispatch(
         &self,
         _durability: benten_graph::DurabilityMode,
     ) {
         todo!(
-            "Phase 2a G2-A descope-witness: group-durability vs immediate \
-             latency observation (informational; gate 5 descoped per arch-r1-1)"
+            "Engine-level descope-witness stub; zero callers. The bench at \
+             crates/benten-graph/benches/crud_post_create_dispatch_group_durability.rs \
+             routes through the RedbBackend-level helper."
         )
     }
 }

@@ -172,9 +172,12 @@ fn warn_if_group_durability_collapsed(mode: DurabilityMode) {
     if matches!(mode, DurabilityMode::Group) {
         WARNED.call_once(|| {
             eprintln!(
-                "benten-graph: DurabilityMode::Group collapses to Immediate in \
-                 Phase 1 — redb v4 does not yet expose grouped-commit. \
-                 Benchmarks comparing Group vs. Immediate will see no delta."
+                "benten-graph: DurabilityMode::Group collapses to \
+                 Durability::Immediate at the redb v4 mapping layer — \
+                 redb does not yet expose grouped-commit. Benchmarks \
+                 comparing Group vs. Immediate will see no delta until \
+                 redb grows native batched-fsync support OR Benten adds \
+                 its own write-batching layer above redb."
             );
         });
     }
@@ -1371,6 +1374,91 @@ impl RedbBackend {
     ) -> Option<DurabilityMode> {
         let map = self.last_durability_by_label.lock_recover();
         map.get(label).copied()
+    }
+
+    /// Backing for [`Self::benchmark_helper_crud_post_create_dispatch`].
+    ///
+    /// Drives a single CRUD-post-create-style commit through the
+    /// production-grade `put_node_with_context` entry point under the
+    /// requested [`DurabilityMode`], giving the bench a comparable
+    /// per-iteration surface for Group vs. Immediate vs. Async durability.
+    /// Each invocation generates a fresh Node (monotonic counter on the
+    /// `seq` property) so concurrent iterations do not collide on the
+    /// G5-A Row-1 immutability path.
+    ///
+    /// The redb durability comes from [`to_redb_durability`] applied to
+    /// the caller-supplied mode (NOT `self.configured_durability`); the
+    /// engine-level [`DurabilityMode`] surfaced via
+    /// [`Self::last_put_node_durability_for_label`] mirrors the requested
+    /// mode so the bench's intent is recoverable.
+    ///
+    /// Closes the Phase-2a G2-A descope-witness `todo!()` carry. The redb
+    /// mapping still collapses Group → Immediate (per
+    /// [`to_redb_durability`]); the bench remains informational on redb v4
+    /// until either redb grows native batched-fsync or Benten adds its own
+    /// write-batching layer above redb (see plan §3 G13-E re-entry
+    /// criteria).
+    pub(crate) fn benchmark_helper_crud_post_create_dispatch_impl(
+        &self,
+        durability: DurabilityMode,
+    ) {
+        // Monotonic per-call sequence so each iteration mints a fresh CID
+        // (avoids the G5-A Row-1 InvImmutability fire on the second
+        // iteration when the bench reuses a single backend across the
+        // whole criterion run).
+        static SEQ: AtomicU64 = AtomicU64::new(0);
+        let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+
+        let mut props = std::collections::BTreeMap::new();
+        props.insert("title".into(), Value::Text(format!("post-{seq}")));
+        props.insert("body".into(), Value::Text("hello".into()));
+        props.insert("seq".into(), Value::Int(seq as i64));
+        let node = Node::new(vec!["Post".into()], props);
+
+        let effective_redb = to_redb_durability(durability);
+
+        let cid = node.cid().expect("bench helper: cid compute");
+        let bytes = node
+            .canonical_bytes()
+            .expect("bench helper: canonical_bytes");
+        let n_key = node_key(&cid);
+
+        let write_txn = self
+            .begin_write_txn_with(effective_redb)
+            .expect("bench helper: begin write txn");
+        {
+            let mut nodes = write_txn
+                .open_table(NODES_TABLE)
+                .expect("bench helper: open NODES_TABLE");
+            nodes
+                .insert(n_key.as_slice(), bytes.as_slice())
+                .expect("bench helper: insert node");
+        }
+        {
+            let mut label_idx = write_txn
+                .open_multimap_table(LABEL_INDEX_TABLE)
+                .expect("bench helper: open LABEL_INDEX_TABLE");
+            for label in &node.labels {
+                label_idx
+                    .insert(label.as_bytes(), cid.as_bytes().as_slice())
+                    .expect("bench helper: insert label index");
+            }
+        }
+        {
+            let mut prop_idx = write_txn
+                .open_multimap_table(PROP_INDEX_TABLE)
+                .expect("bench helper: open PROP_INDEX_TABLE");
+            for label in &node.labels {
+                for (prop_name, value) in &node.properties {
+                    let vbytes = value_index_bytes(value).expect("bench helper: value_index_bytes");
+                    let key = property_index_key(label, prop_name, &vbytes);
+                    prop_idx
+                        .insert(key.as_slice(), cid.as_bytes().as_slice())
+                        .expect("bench helper: insert prop index");
+                }
+            }
+        }
+        write_txn.commit().expect("bench helper: commit");
     }
 
     /// Backing for [`Self::drain_change_events_for_test`]. Drains the

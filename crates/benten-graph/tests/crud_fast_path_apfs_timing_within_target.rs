@@ -9,7 +9,7 @@
 //!
 //! Per plan §3 G13-E ("informational then required gate"), this test
 //! ships at G13-E as an INFORMATIONAL timing assertion against a
-//! generous upper bound (10 ms per CRUD-post-create commit on the
+//! generous upper bound (100 ms per CRUD-post-create commit on the
 //! `cargo test` runner). The 150–300 µs §14.6 target is the
 //! aspirational end-state; until either:
 //!
@@ -55,10 +55,20 @@ use std::time::{Duration, Instant};
 /// Generous upper bound for the per-commit wall-clock on the `cargo test`
 /// runner. The §14.6 production target is 150–300 µs; this test runs
 /// under shared-runner variance + tempfile creation overhead + redb's
-/// in-process lock setup, so 10 ms gives headroom against false
-/// positives while still catching pathological regressions (e.g. a
-/// 100 ms-per-commit blunder from a wrong durability mapping).
-const INFORMATIONAL_PER_COMMIT_BUDGET: Duration = Duration::from_millis(10);
+/// in-process lock setup + APFS fsync floor on the macOS runners, so
+/// 100 ms gives headroom against false positives while still catching
+/// pathological regressions (e.g. a 100×-slower mapping that balloons
+/// the per-commit cost into the seconds range).
+///
+/// Empirical signal that motivated the 10 ms → 100 ms calibration
+/// (G13-E mini-review BLOCKER 2): macos-x86_64-stable shared-runner
+/// median measured 13.25 ms with samples ranging 8.1–58.6 ms — APFS
+/// fsync floor + shared-runner variance dominate the wall-clock here.
+/// Linux runners stay well under 10 ms. Bench-grade measurement at
+/// `crates/benten-graph/benches/crud_post_create_dispatch_group_durability.rs`
+/// remains the authoritative perf signal; this test catches gross
+/// regressions only.
+const INFORMATIONAL_PER_COMMIT_BUDGET: Duration = Duration::from_millis(100);
 
 /// Number of CRUD-post-create iterations measured. We take the median
 /// to defang outliers (filesystem flushes, runner contention, GC
