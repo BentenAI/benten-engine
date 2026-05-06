@@ -36,8 +36,9 @@ use crate::outcome::{Outcome, ReadViewOptions, UserViewInputPattern, UserViewSpe
 //
 // G15-B introduces a real PREFIX matcher via the `PrefixMatcher` selector
 // type + a `PrefixMatchingView` IVM view implementation. The PrefixMatcher
-// is the user-visible selector type (carries the prefix string + a pure
-// `matches(label) -> bool` accessor); the PrefixMatchingView is the runtime
+// is an internal selector type (carries the prefix string + a pure
+// `matches(label) -> bool` accessor); user-facing entry point is
+// `UserViewInputPattern::AnchorPrefix(String)`. The PrefixMatchingView is the runtime
 // `benten_ivm::View` that retains every Node CID whose `label.starts_with(prefix)`.
 //
 // Disjointness from G15-A per seq-blocker-3 repartition: this PrefixMatcher

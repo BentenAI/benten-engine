@@ -344,6 +344,15 @@ impl core::fmt::Display for StructuredDiff {
 
 fn make_view(view_def: &ViewDef) -> ContentListingView {
     if let Some(budget) = view_def.budget {
+        // g15b-mr-6 guard: `with_budget_for_testing` hardcodes label "post"
+        // per content_listing.rs:118-122; if a future caller supplies a
+        // budgeted ViewDef with a different label, the inner view would
+        // silently key on "post" and the replay would produce zero rows.
+        // All current callers use label="post"; pin via debug_assert.
+        debug_assert_eq!(
+            view_def.label, "post",
+            "with_budget_for_testing hardcodes label='post'; budgeted ViewDef must use label='post' or use the unbudgeted path"
+        );
         ContentListingView::with_budget_for_testing(budget)
     } else {
         // ContentListingView's `with_budget_for_testing` always uses label
@@ -409,6 +418,13 @@ pub fn try_build_incremental_view(
 
 /// Result-returning sibling of `build_full_view`. Surfaces a budget trip as
 /// `Err(ViewError::BudgetExceeded)`.
+///
+/// **Note (per g15b-mr-5):** the body is identical to
+/// `try_build_incremental_view`; the asymmetric-budget pin
+/// (`prop_drift_detector_reports_one_path_errors_other_succeeds`) achieves
+/// asymmetry by passing TWO DIFFERENT `ViewDef`s (one with budget=1, the
+/// other with budget=u64::MAX), not by these helpers performing different
+/// work. The helper-shape exists to document caller intent.
 pub fn try_build_full_view(
     view_def: &ViewDef,
     writes: &[Write],
@@ -501,6 +517,12 @@ pub fn build_write_seq_from_seed(seq: &[(u64, u64)]) -> Vec<Write> {
 
 /// Build writes that trip the budget at `trip_idx` — the first `trip_idx`
 /// writes are within budget, the rest exceed.
+///
+/// **Caller contract (per g15b-mr-7):** `write_seq_size` MUST exceed
+/// `trip_idx + 1` so the trip-condition fires. The current proptest range
+/// (`write_seq_size in 50..=500, trip_idx in 0..50`) keeps this sound;
+/// loosening either bound risks `prop_rebuild_after_stale_returns_view_to_fresh`'s
+/// `is_stale()` precondition silently failing.
 pub fn build_writes_with_trip_at(write_seq_size: usize, trip_idx: usize) -> (ViewDef, Vec<Write>) {
     let label = "post";
     // The view's budget is exactly `trip_idx + 1` so the (trip_idx+1)th

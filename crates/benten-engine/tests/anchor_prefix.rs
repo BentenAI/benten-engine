@@ -16,7 +16,7 @@
 //! Post-G15-B, `AnchorPrefix` routes through the new `PrefixMatchingView`
 //! (engine_views.rs) — `anchor_prefix="crud:"` materialises rows for every
 //! Node whose label begins with `"crud:"` (e.g. `"crud:post"`, `"crud:user"`,
-//! `"crud:comment"`) but NOT for nodes labelled `"system:Zone"` or
+//! `"crud:comment"`) but NOT for nodes labelled `"zone:public"` or
 //! `"governance:rule"`.
 
 #![allow(clippy::unwrap_used)]
