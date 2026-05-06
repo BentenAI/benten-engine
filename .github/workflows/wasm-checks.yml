@@ -42,6 +42,10 @@ jobs:
       - name: cargo check napi binding for wasm32
         # The napi-rs v3 build matrix compiles this crate to both native
         # (Node.js N-API) and wasm32. We assert the wasm32 leg still
-        # compiles; runtime behavior is Phase 2 scope when the
-        # network-fetch KVBackend lands.
-        run: cargo check --target wasm32-unknown-unknown -p benten-napi
+        # compiles. Per CLAUDE.md baked-in #17, the wasm32 deployment
+        # shape uses BrowserBackend (in-RAM thin-client cache) — redb is
+        # cfg-gated off wasm32 in benten-graph (G13-C R5 wave-3 closure
+        # of br-r1-1 BLOCKER). Enabling `browser-backend` feature here
+        # selects the BrowserBackend Engine alias arm + the matching
+        # cfg-gated benten-engine consumer paths.
+        run: cargo check --target wasm32-unknown-unknown -p benten-napi --features benten-engine/browser-backend --no-default-features
