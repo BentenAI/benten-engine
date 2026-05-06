@@ -1,4 +1,12 @@
-//! ESC-9 (cap-revoke mid-call) closure pins (G17-A1 wave-5b).
+//! ESC-9 (cap-revoke mid-call) SHAPE pins (G17-A1 wave-5b —
+//! SCAFFOLDING ONLY; r1-wsa-3 closure RECALLED to wave-5c per
+//! mini-review at `.addl/phase-3/r5-w5b-g17-a1-mini-review.json`).
+//!
+//! These tests audit the cap-recheck helper logic against synthetic
+//! state — they are NOT end-to-end load-bearing closure. The end-to-
+//! end pin (the `live_cap_check` callback through-thread firing at
+//! every host-fn boundary, not cached) lands at wave-5c per
+//! phase-3-backlog §6.1-followup.
 //!
 //! Pin sources (per r2-test-landscape §2.5 G17-A1 row +
 //! r1-revision-triage):

@@ -1,12 +1,50 @@
-//! SANDBOX escape-defense surface (Phase-3 G17-A1 wave-5b).
+//! SANDBOX escape-defense SURFACE (Phase-3 G17-A1 wave-5b — SCAFFOLDING ONLY).
 //!
-//! Closes r1-wsa-1 BLOCKER (ESC-7 + ESC-13) + r1-wsa-4 MAJOR (ESC-16)
-//! per phase-3-backlog §6.1 + D-E (R1 revision triage). The defenses
-//! live alongside the SANDBOX subsystem because they need access to the
-//! per-call wasmtime `Store` shape + the host-fn trampoline boundary;
-//! routing through the typed [`crate::primitives::sandbox::SandboxError`]
-//! variant keeps audit pipelines per-vector observable rather than
-//! collapsing into a generic `ModuleInvalid` shape.
+//! **Scope re-narrate (post-G17-A1 mini-review 2026-05-06):** this PR ships
+//! the SURFACE for r1-wsa-1 BLOCKER (ESC-7 + ESC-13) + r1-wsa-4 MAJOR
+//! (ESC-16) — the `EscVector` enum, the typed
+//! [`crate::primitives::sandbox::SandboxError::EscapeAttempt`] variant,
+//! the [`run_esc7_check`] / [`run_esc13_check`] / [`run_esc16_check`]
+//! defense entry points, the [`EscDefenseState`] per-call carrier, and
+//! the cfg-gated [`crate::sandbox::testing_helpers`] surface. **The
+//! production runtime arms that wire these defenses into the SANDBOX
+//! execution path do NOT land in this PR.** r1-wsa-1 BLOCKER + r1-wsa-4
+//! MAJOR remain OPEN until the wave-5c ESC runtime-arm wiring lands
+//! (named at `docs/future/phase-3-backlog.md §6.1-followup`):
+//!   * `SandboxStoreData` field add (carries [`EscDefenseState`] per-call).
+//!   * `time` host-fn trampoline calls
+//!     [`crate::sandbox::fingerprint::record_wallclock_write`] when
+//!     writing wallclock-correlated values into guest memory (ESC-16
+//!     side-table population).
+//!   * Host-fn boundary calls [`run_all_checks`] (or the per-vector
+//!     entry points) BEFORE the trampoline returns control to guest
+//!     wasm, so detection fires before guest-observable side-effects.
+//!   * Panic-catcher around the wasmtime fuel-meter callback maps
+//!     callback-trap → `EscapeAttempt(Esc13StorePoison)` via injection
+//!     of `EscapeAttemptMarker` into the `wasmtime::Error` cause chain
+//!     (so [`crate::sandbox::trap_to_typed::map_call_error`] can unwrap).
+//!   * `live_cap_check` callback through-thread for ESC-9 (cap-revoke
+//!     mid-call) — fires at every host-fn boundary, not cached, per
+//!     r1-wsa-3.
+//!
+//! Per pim-2 §3.6b: integration test pins under `crates/benten-eval/tests/sandbox_esc_*.rs`
+//! that exercise these helpers against synthetic `EscDefenseState`
+//! values are SHAPE pins (audit the helper logic). They are NOT
+//! end-to-end load-bearing closure for r1-wsa-1 / r1-wsa-4 — the
+//! end-to-end pins drive a real SANDBOX dispatch + assert observable
+//! behavior, and they are `#[ignore]`'d with NAMED destination
+//! "wave-5c ESC runtime-arm wiring (phase-3-backlog §6.1-followup)"
+//! until that wave lands. The genuinely-production-wired piece in this
+//! PR is the `Trap::StackOverflow` → `SandboxError::StackOverflow` arm
+//! at [`crate::sandbox::trap_to_typed::map_call_error`] (closes
+//! r1-wsa-7 — the dedicated typed variant for stack-overflow-via-recursion).
+//!
+//! The defenses live alongside the SANDBOX subsystem because they need
+//! access to the per-call wasmtime `Store` shape + the host-fn
+//! trampoline boundary; routing through the typed
+//! [`crate::primitives::sandbox::SandboxError`] variant keeps audit
+//! pipelines per-vector observable rather than collapsing into a
+//! generic `ModuleInvalid` shape.
 //!
 //! ## Vectors
 //!
@@ -42,27 +80,33 @@
 //! fires from the trampoline and the wasmtime `Store` is dropped
 //! cleanly per the per-call lifecycle.
 //!
-//! ## Integration with the runtime arm
+//! ## Integration with the runtime arm (LANDS AT WAVE-5C — NOT THIS PR)
 //!
 //! Phase-2b SANDBOX shipped without any of these three defenses; the
 //! corresponding ESC test bodies were deferred to phase-3-backlog
-//! §6.1 + §6.4. G17-A1 ships:
+//! §6.1 + §6.4. G17-A1 ships ONLY the SURFACE pieces:
 //!
 //! 1. The [`EscVector`] enum + [`SandboxError::EscapeAttempt`] wrapper
 //!    (catalog code `E_SANDBOX_ESCAPE_ATTEMPT`).
 //! 2. The defense [`run_esc7_check`] / [`run_esc13_check`] /
-//!    [`run_esc16_check`] entry points (test-callable via
-//!    `crate::sandbox::testing_helpers`; production-callable via the
-//!    G17-A2 runtime arm wire-up + G20-A1 un-ignore of the §7.3.A.7
-//!    test bodies that exercise the production fixture path).
+//!    [`run_esc16_check`] entry points (currently test-callable only via
+//!    `crate::sandbox::testing_helpers`; runtime callers land at
+//!    wave-5c).
 //! 3. The trap-routing arm at
 //!    [`crate::sandbox::trap_to_typed::map_call_error`] (the
-//!    `EscapeAttempt` marker is unwrapped at the cause-chain walk).
+//!    `EscapeAttempt` marker is unwrapped at the cause-chain walk —
+//!    but the marker is not yet INJECTED by any production trampoline;
+//!    that wiring lands at wave-5c).
 //!
 //! The phased approach matches §3.6b end-to-end pin discipline: G17-A1
-//! ships the SURFACE (typed error + helper entry points + Vector enum +
-//! cfg-gated test-helpers); G20-A1 wave-8a un-ignores the runtime test
-//! bodies that drive committed `.wat` fixtures end-to-end.
+//! is correctly scoped IFF it is recognised as SCAFFOLDING + the
+//! `Trap::StackOverflow` arm. r1-wsa-1 BLOCKER + r1-wsa-4 MAJOR closure
+//! claim is RECALLED to wave-5c per the mini-review (CAP-EXEMPT
+//! security-auditor + wasmtime-sandbox-auditor + correctness-engineer)
+//! at `.addl/phase-3/r5-w5b-g17-a1-mini-review.json`. The genuinely-
+//! production-wired piece is `Trap::StackOverflow` →
+//! `SandboxError::StackOverflow` (r1-wsa-7 closure, separate from the
+//! ESC vector cluster).
 //!
 //! `#[cfg(not(target_arch = "wasm32"))]`-gated per sec-pre-r1-05; the
 //! wasm32 build cuts SANDBOX entirely.

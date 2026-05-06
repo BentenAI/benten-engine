@@ -1,5 +1,14 @@
-//! ESC-13 (Trap during fuel-meter callback / Store-poison) closure pins
-//! (G17-A1 wave-5b; D-E + r1-wsa-1 BLOCKER).
+//! ESC-13 (Trap during fuel-meter callback / Store-poison) SHAPE pins
+//! (G17-A1 wave-5b — SCAFFOLDING ONLY; r1-wsa-1 BLOCKER closure
+//! RECALLED to wave-5c per mini-review at
+//! `.addl/phase-3/r5-w5b-g17-a1-mini-review.json`).
+//!
+//! These tests audit the [`benten_eval::sandbox::run_esc13_check`]
+//! helper logic against synthetic [`benten_eval::sandbox::EscDefenseState`]
+//! values — they are NOT end-to-end load-bearing closure for r1-wsa-1
+//! BLOCKER. The end-to-end pin (panic-catcher around the fuel-meter
+//! callback + EscapeAttemptMarker injection through the wasmtime
+//! Error cause chain) lands at wave-5c per phase-3-backlog §6.1-followup.
 //!
 //! Pin sources (per r2-test-landscape §2.5 G17-A1 + §8 ESC-7+ESC-13 +
 //! r1-revision-triage D-E):

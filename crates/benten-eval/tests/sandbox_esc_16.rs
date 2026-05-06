@@ -1,5 +1,15 @@
-//! ESC-16 (fingerprint-collapse defense) closure pins
-//! (G17-A1 wave-5b; r1-wsa-4 MAJOR + phase-3-backlog §6.1).
+//! ESC-16 (fingerprint-collapse defense) SHAPE pins
+//! (G17-A1 wave-5b — SCAFFOLDING ONLY; r1-wsa-4 MAJOR closure
+//! RECALLED to wave-5c per mini-review at
+//! `.addl/phase-3/r5-w5b-g17-a1-mini-review.json`).
+//!
+//! These tests audit the [`benten_eval::sandbox::run_esc16_check`]
+//! helper + [`benten_eval::sandbox::fingerprint`] read-counter logic
+//! against synthetic state — they are NOT end-to-end load-bearing
+//! closure for r1-wsa-4 MAJOR. The end-to-end pin (`time` host-fn
+//! trampoline calling `record_wallclock_write` + `run_esc16_check`
+//! firing at the next host-fn boundary) lands at wave-5c per
+//! phase-3-backlog §6.1-followup.
 //!
 //! Pin sources: r2-test-landscape §2.5 G17-A1 row
 //! `sandbox_esc_16_fingerprint_collapse_fires_via_committed_wat_fixture`;
