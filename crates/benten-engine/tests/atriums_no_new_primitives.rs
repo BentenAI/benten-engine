@@ -66,17 +66,49 @@ fn atrium_examples_handlers_compose_entirely_from_existing_12_primitives_no_engi
     //   let examples_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
     //       .join("..").join("..").join("packages").join("engine").join("examples");
     //
+    //   // cag-r4-4 MINOR (R4 large-council Round 1 + Round 2 carry):
+    //   // generic example-iteration is vacuously green if a category
+    //   // is missing. Track which of the 4 named handler categories
+    //   // {peer-mgmt, sync-trigger, ucan-grant, did-resolution} are
+    //   // represented across the atrium-* examples; assert each is
+    //   // INDIVIDUALLY represented at G20-B close.
+    //   let mut categories_present: std::collections::BTreeSet<&'static str> =
+    //       std::collections::BTreeSet::new();
+    //
     //   for entry in std::fs::read_dir(&examples_dir).unwrap() {
     //       let entry = entry.unwrap();
-    //       if !entry.file_name().to_string_lossy().starts_with("atrium-") { continue; }
+    //       let dir_name = entry.file_name().to_string_lossy().into_owned();
+    //       if !dir_name.starts_with("atrium-") { continue; }
     //       let handler_src = std::fs::read_to_string(entry.path().join("handler.ts")).unwrap();
     //       // Verify handler does NOT call engine.call directly outside a subgraph context:
     //       assert!(!handler_src.contains("\nengine.call("),
     //           "Atrium example {} calls engine.call at top level", entry.path().display());
+    //
+    //       // Tag category from dirname (atrium-peer-mgmt-*, atrium-sync-trigger-*, etc.):
+    //       for category in &["peer-mgmt", "sync-trigger", "ucan-grant", "did-resolution"] {
+    //           if dir_name.contains(category) {
+    //               categories_present.insert(category);
+    //           }
+    //       }
     //   }
     //
-    // OBSERVABLE consequence: examples are composition-pure.
-    unimplemented!("G20-B wires Atrium-examples 12-primitive composition pin");
+    //   // cag-r4-4 MINOR: each of the 4 named categories MUST be
+    //   // represented; missing categories surface visibly:
+    //   for required in &["peer-mgmt", "sync-trigger", "ucan-grant", "did-resolution"] {
+    //       assert!(categories_present.contains(required),
+    //           "Atrium examples MUST include at least one example per category `{}` per cag-r4-4 \
+    //            (Charter 8 — handlers compose from 12 primitives across the 4 named categories)",
+    //           required);
+    //   }
+    //
+    // OBSERVABLE consequence: examples are composition-pure AND
+    // cover all 4 named handler categories. Defends against the
+    // failure shape where G20-B ships 3 of 4 categories and the
+    // generic loop happily green-pins.
+    unimplemented!(
+        "G20-B wires Atrium-examples 12-primitive composition pin + 4-category coverage \
+         assertion {{peer-mgmt, sync-trigger, ucan-grant, did-resolution}} per cag-r4-4"
+    );
 }
 
 #[test]

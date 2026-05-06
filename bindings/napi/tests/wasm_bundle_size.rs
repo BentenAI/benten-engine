@@ -6,6 +6,11 @@
 //! BLOCKER (recalibrated from 350KB per `spike-bundle-cap-empirical.md`
 //! 2026-05-04 — Loro is OUT per CLAUDE.md baked-in #17).
 //!
+//! Originating decision context: `.addl/phase-2b/wave-8j-wasm-browser-bundle-bisect.md`
+//! §Phase-3-followup — the Phase-2b retrospective that surfaced the
+//! 350KB-aspirational gap; recalibrated to 600KB via
+//! `spike-bundle-cap-empirical.md` per pim-1 §3.5b doc-coupling.
+//!
 //! ## What this pins
 //!
 //! The browser-side Phase-3 bundle (engine + graph + eval + caps +
@@ -56,4 +61,151 @@ fn wasm_r1_7_browser_bundle_size_at_or_below_600kb_gzipped() {
     //
     // OBSERVABLE consequence: bundle bloat above 600KB fails CI per-PR.
     unimplemented!("G13-C wires browser-bundle gzip-size assertion against 600KB cap");
+}
+
+#[test]
+#[ignore = "RED-PHASE: G13-C wave-3 — br-r4-r1-3 / br-r4-r2-2 MAJOR — per-contributor bundle delta within budget"]
+fn wasm_r1_7_phase_3_bundle_delta_within_budget() {
+    // br-r4-r1-3 / br-r4-r2-2 MAJOR pin (per-contributor regression
+    // detection). The aggregate 600KB cap pin
+    // (`wasm_r1_7_browser_bundle_size_at_or_below_600kb_gzipped`) is
+    // necessary but not sufficient — Phase 3 grows the bundle by
+    // ~95-175KB across ~5 contributors (benten-id + benten-caps UCAN
+    // backend + BrowserBackend + cap_recheck glue + IndexedDB shim)
+    // over ~10 wave landings. Without per-contributor pinning, the
+    // aggregate cap blows 6 months out by accumulation of each
+    // contributor's "small" overage — exactly the Phase-2b 9-month
+    // aspirational-cap shape that produced the wave-8j-bisect
+    // retrospective.
+    //
+    // G13-C / G14-A1 / G14-B / G18-A implementers progressively un-ignore
+    // sub-pins as their respective contributions land. Each sub-pin
+    // asserts the per-contributor gzipped contribution stays within
+    // the spike-bundle-cap-empirical.md §6 budget × 2.0 multiplier
+    // (the multiplier absorbs realistic dep-tree fan-out without
+    // re-licensing).
+    //
+    // G13-C (BrowserBackend) + G14-A1 (benten-id canary) + G14-B
+    // (durable UCAN backend) + G18-A (IndexedDB shim) implementers wire:
+    //
+    //   let bundle = std::path::PathBuf::from("bindings/napi/dist/browser/benten_engine_bg.wasm");
+    //   if !bundle.exists() {
+    //       eprintln!("skip: browser bundle artifact absent at {:?}", bundle);
+    //       return;
+    //   }
+    //
+    //   // Implementer wires twiggy or wasm-tools to extract per-crate
+    //   // gzipped symbol weight. The budget table from
+    //   // `.addl/phase-3/spike-bundle-cap-empirical.md` §6 (per-milestone
+    //   // estimates × 2.0 multiplier):
+    //   //
+    //   //   benten-id (Ed25519 + did:key + UCAN)         ≤ 240 KB raw / ~120 KB gz
+    //   //   benten-caps durable UCAN backend glue         ≤  80 KB raw / ~ 40 KB gz
+    //   //   BrowserBackend (BTreeMap wrapper)             ≤  20 KB raw / ~ 10 KB gz
+    //   //   cap_recheck dispatch glue                     ≤  20 KB raw / ~ 10 KB gz
+    //   //   IndexedDB persistence shim (G18-A)            ≤  30 KB raw / ~ 15 KB gz
+    //   //
+    //   //   Aggregate per-contributor budget × 2.0       ≤ ~195 KB gzipped
+    //   //
+    //   // Each of these sub-budgets is asserted INDIVIDUALLY (not just
+    //   // the aggregate) so a single contributor blowing past its cell
+    //   // surfaces visibly even when other contributors are under budget.
+    //
+    //   let per_crate = extract_per_crate_gzipped_weight(&bundle).unwrap();
+    //   let budget_kib: &[(&str, usize)] = &[
+    //       ("benten_id",    240),
+    //       ("benten_caps",   80),
+    //       ("benten_graph_browser_backend",  20),
+    //       ("benten_caps_recheck",  20),
+    //       ("benten_napi_indexeddb",  30),
+    //   ];
+    //   for (crate_key, cap_kib) in budget_kib {
+    //       let actual = per_crate.get(*crate_key).copied().unwrap_or(0);
+    //       assert!(actual <= cap_kib * 1024,
+    //           "Phase-3 contributor {} weighs {} bytes gzipped, exceeds \
+    //            spike-bundle-cap-empirical.md §6 per-contributor budget × 2.0 \
+    //            of {} bytes — investigate dep bloat / dead-code-elimination \
+    //            before this rolls into the aggregate 600KB cap surprise \
+    //            (Phase-2b wave-8j-bisect shape recurrence)",
+    //           crate_key, actual, cap_kib * 1024);
+    //   }
+    //
+    // OBSERVABLE consequence: each per-contributor budget overage
+    // surfaces individually with the contributing crate name, BEFORE
+    // accumulated overages blow the aggregate cap. Defends against
+    // the "death by a thousand 5KB regressions" failure shape.
+    //
+    // Cited explicitly per pim-1 §3.5b doc-coupling:
+    // `.addl/phase-3/spike-bundle-cap-empirical.md` §6 (per-milestone
+    // budget table) + §7.2 item 3 (test-pin to add).
+    unimplemented!(
+        "G13-C / G14-A1 / G14-B / G18-A wires per-contributor bundle-delta budget assertion \
+         per spike-bundle-cap-empirical.md §6 budget table × 2.0 multiplier"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G13-C wave-3 — br-r4-r1-8 / br-r4-r2-6 MINOR — cap value consistent across workflow + test pins"]
+fn wasm_r1_7_cap_value_consistent_across_workflow_and_test_pin() {
+    // br-r4-r1-8 / br-r4-r2-6 MINOR pin (cross-file cap-value
+    // equality). The 600KB cap value lives at THREE sites:
+    //
+    //   (1) `.github/workflows/wasm-browser.yml` — CI step
+    //       "Bundle size cap (wasm-r1-7 ≤600KB gzipped)" hardcodes
+    //       614400 (= 600 * 1024).
+    //   (2) `bindings/napi/tests/wasm32_unknown_unknown_bundle_size_under_threshold.rs`
+    //       const `BROWSER_BUNDLE_MAX_BYTES_GZIPPED: usize = 600 * 1024;`
+    //       (Phase-2b carryover).
+    //   (3) `bindings/napi/tests/wasm_bundle_size.rs`
+    //       wasm_r1_7_browser_bundle_size_at_or_below_600kb_gzipped
+    //       (Phase-3 R3-A landing) — also references 600 * 1024.
+    //
+    // A future PR that tightens one site (e.g., re-tightens to 350KB
+    // per the wasm-r1-7 spirit when PHASE-3-BUNDLE-1 lands) but
+    // forgets the others ships divergent constants — the architectural
+    // shape pim'd in phase-3-backlog §6.6 SANDBOX casing-drift
+    // acceptance criterion (Phase-2b 24th producer/consumer drift).
+    //
+    // G13-C implementer wires this:
+    //
+    //   use std::path::PathBuf;
+    //   let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //       .join("..").join("..");
+    //
+    //   // Site (1): workflow YAML.
+    //   let wf = std::fs::read_to_string(
+    //       workspace_root.join(".github/workflows/wasm-browser.yml")
+    //   ).unwrap();
+    //   // Look for the literal cap value 614400 OR `600KB` AND `614400` paired:
+    //   let wf_cap = extract_cap_value_from_workflow_yaml(&wf);
+    //
+    //   // Site (2): Phase-2b carryover test.
+    //   let p2b = std::fs::read_to_string(
+    //       workspace_root.join("bindings/napi/tests/wasm32_unknown_unknown_bundle_size_under_threshold.rs")
+    //   ).unwrap();
+    //   let p2b_cap = extract_const_usize(&p2b, "BROWSER_BUNDLE_MAX_BYTES_GZIPPED");
+    //
+    //   // Site (3): Phase-3 R3-A test (this file).
+    //   let p3 = std::fs::read_to_string(
+    //       workspace_root.join("bindings/napi/tests/wasm_bundle_size.rs")
+    //   ).unwrap();
+    //   let p3_cap = extract_inline_cap_in_assert(&p3,
+    //       "wasm_r1_7_browser_bundle_size_at_or_below_600kb_gzipped");
+    //
+    //   assert_eq!(wf_cap, p2b_cap,
+    //       "wasm-browser.yml cap value ({}) MUST equal Phase-2b carryover \
+    //        const BROWSER_BUNDLE_MAX_BYTES_GZIPPED ({})", wf_cap, p2b_cap);
+    //   assert_eq!(p2b_cap, p3_cap,
+    //       "Phase-2b carryover cap ({}) MUST equal Phase-3 R3-A inline \
+    //        cap ({})", p2b_cap, p3_cap);
+    //
+    // OBSERVABLE consequence: a future tightening that updates one
+    // site without the others fails this test. Same architectural
+    // shape pin as `phase-3-backlog §6.6` SANDBOX casing-drift
+    // acceptance criterion (the Phase-2b 24th p/c drift instance
+    // that motivated this discipline).
+    unimplemented!(
+        "G13-C wires cross-file cap-value equality assertion across .github/workflows/wasm-browser.yml \
+         + wasm32_unknown_unknown_bundle_size_under_threshold.rs + wasm_bundle_size.rs"
+    );
 }

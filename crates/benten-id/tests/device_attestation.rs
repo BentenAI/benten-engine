@@ -11,6 +11,27 @@
 //! - `tests/device_attestation_replay_resistance_via_nonce_freshness_window` — pattern-induction unnamed-defect-class
 //! - `tests/device_attestation_revocation_emitted_by_parent_did_on_loss_event` — crypto-major-6
 //! - `tests/device_attestation_revoked_device_cannot_sign_new_ucan_delegation` — crypto-major-6
+//! - `tests/browser_target_auto_asserts_runs_sandbox_false` — `br-r4-r1-4` / `br-r4-r2-3` MAJOR
+//! - `tests/browser_target_with_runs_sandbox_true_claim_rejected_at_attestation_construction_time` — `br-r4-r1-4` / `br-r4-r2-3` MAJOR
+//! - `tests/ucan_delegation_to_browser_target_for_sandbox_handler_rejected_at_chain_construction_not_invocation` — `br-r4-r1-4` / `br-r4-r2-3` MAJOR
+//!
+//! ## Trust-graph forgery attack surface (br-r4-r1-4 / br-r4-r2-3 MAJOR)
+//!
+//! The 3 composition pins above defend a specific attack surface: a
+//! device-DID claiming `runs_sandbox=true` from a browser-target
+//! context (where wasmtime is unavailable per Phase-2b
+//! `E_SANDBOX_UNAVAILABLE_ON_WASM`) can pollute the trust graph + the
+//! routing layer dispatches to a target that fails at runtime, but
+//! the trust graph believes the routing was correct. The fail must
+//! land at ATTESTATION CONSTRUCTION TIME (or chain-construction
+//! time for derived UCANs) — NOT at invocation time — so the trust
+//! graph never sees the malformed envelope.
+//!
+//! The typed error `E_DEVICE_ATTESTATION_INCOMPATIBLE_WITH_RUNTIME`
+//! fires at the attestation-acceptor + UCAN chain-walker — minted at
+//! G14-A1 wave-4a implementation time per the test-pin contract
+//! (RED-PHASE drives implementer; orchestrator does not pre-empt the
+//! enum mint).
 //!
 //! ## Architectural intent (D-PHASE-3-25)
 //!
@@ -464,5 +485,184 @@ fn device_attestation_capability_envelope_downgrade_attack_blocked_by_runtime_re
     // (sec-r1-7 / sec-r4r1-6).
     unimplemented!(
         "G14-A2 wires runtime envelope-vs-invocation re-check at chain-walk per sec-r4r1-6"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G14-A2 — br-r4-r1-4 / br-r4-r2-3 MAJOR — browser-target attestation auto-asserts runs_sandbox=false"]
+fn browser_target_auto_asserts_runs_sandbox_false() {
+    // br-r4-r1-4 / br-r4-r2-3 MAJOR pin (composition of D-PHASE-3-25
+    // heterogeneity contract + CLAUDE.md baked-in #17 thin-client
+    // commitment). When a browser-target context constructs a
+    // DeviceAttestation, the envelope MUST auto-assert
+    // `runs_sandbox=false`. The browser target has no wasmtime; a
+    // truthful envelope cannot claim runs_sandbox=true on this
+    // platform.
+    //
+    // G14-A2 implementer wires this:
+    //
+    //   // Browser-target context (cfg-gated to wasm32-unknown-unknown
+    //   // OR via a runtime-detected target enum):
+    //   let parent_kp = benten_id::keypair::Keypair::generate();
+    //   let device_kp = benten_id::keypair::Keypair::generate();
+    //
+    //   // Use the browser-target convenience constructor:
+    //   let attestation = benten_id::device_attestation::DeviceAttestation::issue_for_browser_target(
+    //       &parent_kp,
+    //       device_kp.public_key().to_did(),
+    //   ).unwrap();
+    //
+    //   // The envelope MUST have runs_sandbox=false (auto-asserted):
+    //   assert_eq!(attestation.envelope().runs_sandbox, false,
+    //       "browser-target attestation MUST auto-assert runs_sandbox=false \
+    //        per CLAUDE.md baked-in #17 (wasmtime unavailable on \
+    //        wasm32-unknown-unknown per Phase-2b E_SANDBOX_UNAVAILABLE_ON_WASM)");
+    //
+    //   // Other browser-target minimum-envelope auto-assertions:
+    //   assert_eq!(attestation.envelope().holds_zones,
+    //       benten_id::device_attestation::ZoneScope::CacheOnly,
+    //       "browser-target auto-asserts holds_zones=CacheOnly per baked-in #17");
+    //   assert_eq!(attestation.envelope().runs_atrium_peer, false,
+    //       "browser-target auto-asserts runs_atrium_peer=false per baked-in #17");
+    //   assert_eq!(attestation.envelope().online_uptime,
+    //       benten_id::device_attestation::UptimePolicy::SessionBounded,
+    //       "browser-target auto-asserts online_uptime=SessionBounded per baked-in #17");
+    //
+    // OBSERVABLE consequence: the browser-target convenience constructor
+    // produces a truthful envelope that the trust graph can route
+    // against without surprises. Defends against the failure shape
+    // where browser-target code accidentally claims wider capability
+    // than the platform supports.
+    unimplemented!(
+        "G14-A2 wires DeviceAttestation::issue_for_browser_target() auto-asserting \
+         runs_sandbox=false + holds_zones=CacheOnly + runs_atrium_peer=false + \
+         online_uptime=SessionBounded per CLAUDE.md baked-in #17 + D-PHASE-3-25"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G14-A2 — br-r4-r1-4 / br-r4-r2-3 MAJOR — browser-target with runs_sandbox=true claim rejected at attestation-construction time"]
+fn browser_target_with_runs_sandbox_true_claim_rejected_at_attestation_construction_time() {
+    // br-r4-r1-4 / br-r4-r2-3 MAJOR pin (trust-graph forgery defense).
+    // When code on a browser target attempts to construct a
+    // DeviceAttestation with `runs_sandbox=true`, the construction
+    // MUST fail with the typed error
+    // `E_DEVICE_ATTESTATION_INCOMPATIBLE_WITH_RUNTIME`. The fail
+    // lands at construction time (NOT at invocation time) so the
+    // trust graph never receives a forged envelope.
+    //
+    // G14-A2 implementer wires this:
+    //
+    //   let parent_kp = benten_id::keypair::Keypair::generate();
+    //   let device_kp = benten_id::keypair::Keypair::generate();
+    //
+    //   // Adversarial / mistaken envelope: claims runs_sandbox=true
+    //   // from a browser-target context where wasmtime is unavailable.
+    //   let envelope = benten_id::device_attestation::CapabilityEnvelope {
+    //       runs_sandbox: true, // INCOMPATIBLE with browser target
+    //       ..Default::default()
+    //   };
+    //
+    //   // The construction call must observe the runtime context
+    //   // (cfg-gate or RuntimeTarget probe) + reject:
+    //   let result = benten_id::device_attestation::DeviceAttestation::issue_with_runtime_check(
+    //       &parent_kp,
+    //       device_kp.public_key().to_did(),
+    //       envelope,
+    //       benten_id::device_attestation::RuntimeTarget::Browser,
+    //   );
+    //
+    //   let err = result.unwrap_err();
+    //   assert!(
+    //       matches!(err,
+    //           benten_id::device_attestation::IssueError::IncompatibleWithRuntime { .. }),
+    //       "browser-target + runs_sandbox=true MUST reject at construction \
+    //        with IssueError::IncompatibleWithRuntime per br-r4-r1-4");
+    //
+    //   // The error code is the typed catalog code minted at G14-A1:
+    //   assert_eq!(err.code().as_str(), "E_DEVICE_ATTESTATION_INCOMPATIBLE_WITH_RUNTIME",
+    //       "the typed error code must be the canonical E_DEVICE_ATTESTATION_INCOMPATIBLE_WITH_RUNTIME \
+    //        per ERROR-CATALOG.md");
+    //
+    // OBSERVABLE consequence: a browser-target context cannot
+    // construct an attestation that lies about its sandbox capability.
+    // The typed error code is operator-actionable + carries forward
+    // through the napi binding so JS callers get a typed catch.
+    // Defends the trust-graph forgery attack surface explicitly.
+    //
+    // NOTE: implementer-added typed error mint
+    // `ErrorCode::DeviceAttestationIncompatibleWithRuntime` (catalog
+    // string `"E_DEVICE_ATTESTATION_INCOMPATIBLE_WITH_RUNTIME"`)
+    // lands at G14-A1 wave-4a — driven by this test pin per pim-2
+    // §3.6b end-to-end shape (test names the typed error as the
+    // observable consequence; implementer wires the mint).
+    unimplemented!(
+        "G14-A2 wires DeviceAttestation::issue_with_runtime_check rejection at construction \
+         time when browser-target + runs_sandbox=true; typed error \
+         E_DEVICE_ATTESTATION_INCOMPATIBLE_WITH_RUNTIME minted at G14-A1"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G14-A2 + G14-B — br-r4-r1-4 / br-r4-r2-3 MAJOR — UCAN delegation TO browser-target FOR sandbox handler rejected at chain-construction"]
+fn ucan_delegation_to_browser_target_for_sandbox_handler_rejected_at_chain_construction_not_invocation()
+ {
+    // br-r4-r1-4 / br-r4-r2-3 MAJOR pin (chain-construction-time
+    // rejection, not invocation-time). When a UCAN issuer attempts
+    // to delegate `host:sandbox:exec` capability TO a device-DID
+    // whose attestation envelope says `runs_sandbox=false` (e.g., a
+    // browser-target device), the delegation MUST reject at CHAIN
+    // CONSTRUCTION time — NOT at invocation time. Otherwise the
+    // UCAN sits in the trust graph as if valid; the failure surfaces
+    // only at the runtime SANDBOX dispatch where the routing layer
+    // discovers it cannot dispatch (and the trust-graph integrity
+    // is compromised in the meantime).
+    //
+    // G14-A2 + G14-B implementer wires this:
+    //
+    //   let parent_kp = benten_id::keypair::Keypair::generate();
+    //   let browser_device_kp = benten_id::keypair::Keypair::generate();
+    //
+    //   // Browser-target attestation says runs_sandbox=false:
+    //   let attestation = benten_id::device_attestation::DeviceAttestation::issue_for_browser_target(
+    //       &parent_kp, browser_device_kp.public_key().to_did()).unwrap();
+    //
+    //   // Adversarial / mistaken UCAN: delegates host:sandbox:exec
+    //   // to the browser device's DID:
+    //   let attempted_ucan_build = benten_id::ucan::Ucan::builder()
+    //       .issuer(parent_kp.public_key().to_did())
+    //       .audience(browser_device_kp.public_key().to_did())
+    //       .capability("host:sandbox:exec", "*")
+    //       .with_attestation_lookup(&[attestation.clone()])
+    //       .sign(&parent_kp);
+    //
+    //   // The delegation chain construction must reject because the
+    //   // audience's attestation says runs_sandbox=false:
+    //   let err = attempted_ucan_build.unwrap_err();
+    //   assert!(matches!(err,
+    //       benten_id::ucan::DelegationError::AudienceEnvelopeIncompatibleWithCapability { .. }),
+    //       "UCAN delegating host:sandbox:exec to browser-target audience MUST \
+    //        reject at chain-construction (NOT invocation) per br-r4-r1-4");
+    //
+    //   assert_eq!(err.code().as_str(), "E_DEVICE_ATTESTATION_INCOMPATIBLE_WITH_RUNTIME",
+    //       "the typed error code must be E_DEVICE_ATTESTATION_INCOMPATIBLE_WITH_RUNTIME");
+    //
+    //   // CRITICAL: the rejected UCAN MUST NOT have been added to the
+    //   // durable UCAN backend (the backend is the trust graph; we
+    //   // never want a malformed delegation persisted):
+    //   let backend = benten_id::ucan::DurableBackend::test_instance();
+    //   assert!(backend.list_grants_to_audience(&browser_device_kp.public_key().to_did())
+    //       .iter().all(|g| g.capability() != "host:sandbox:exec"),
+    //       "rejected UCAN MUST NOT have been persisted to durable backend; \
+    //        chain-construction rejection happens BEFORE persistence");
+    //
+    // OBSERVABLE consequence: a UCAN whose audience cannot fulfill
+    // the delegated capability never enters the trust graph. The
+    // routing layer never has the opportunity to dispatch to a target
+    // that fails at runtime. Closes the trust-graph forgery surface
+    // br-r4-r1-4 named.
+    unimplemented!(
+        "G14-A2 + G14-B wires UCAN chain-construction-time rejection of delegations to \
+         audience-with-incompatible-attestation-envelope per br-r4-r1-4 + D-PHASE-3-25"
     );
 }

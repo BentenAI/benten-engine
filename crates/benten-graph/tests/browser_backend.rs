@@ -1,6 +1,14 @@
 //! R3-A RED-PHASE pins for `BrowserBackend` thin-client cache
 //! (G13-C wave-3; CLAUDE.md baked-in #17 + br-r1-* + plan §3 G13-C).
 //!
+//! Originating decision context: `.addl/phase-2b/wave-8j-wasm-browser-bundle-bisect.md`
+//! §Phase-3-followup — the Phase-2b retrospective surfaced the
+//! "Engine hard-bound to RedbBackend" posture as the load-bearing
+//! cause of the 600KB browser-bundle blow-up. PHASE-3-BUNDLE-1 closes
+//! that gap by introducing `BrowserBackend` as a non-redb backend
+//! routed via `Arc<dyn KVBackend>` substitution on wasm32-unknown-unknown
+//! per pim-1 §3.5b doc-coupling.
+//!
 //! Pin sources (per r2-test-landscape §2.1 G13-C + plan §4 seed):
 //!
 //! - `tests/browser_backend_round_trip` — plan §3 G13-C
@@ -8,6 +16,8 @@
 //! - `tests/browser_backend_thin_client_cache_no_transaction_atomicity_required` — baked-in #17
 //! - `tests/browser_backend_subscriber_registry_returns_no_op_per_thin_client_scope` — baked-in #17
 //! - `tests/browser_backend_no_redb_dep_on_wasm32_unknown_unknown` — `br-r1-1` BLOCKER
+//! - `tests/browser_backend_snapshot_returns_owned_btreemap_clone_independent_of_live_writes` — `br-r4-r1-1` / `br-r4-r2-1` MAJOR
+//! - `tests/browser_backend_put_node_with_context_thin_client_cache_semantic_pinned` — `br-r4-r1-1` / `br-r4-r2-1` MAJOR
 //!
 //! ## Thin-client cache scope (CLAUDE.md baked-in #17)
 //!
@@ -130,6 +140,102 @@ fn browser_backend_no_redb_dep_on_wasm32_unknown_unknown() {
     // is the authoritative verifier; this in-Rust test is the
     // source-side cite-assertion regression guard.
     unimplemented!("G13-C wires Cargo.toml + cfg-attr assertion that redb is excluded on wasm32");
+}
+
+#[test]
+#[ignore = "RED-PHASE: G13-C — br-r4-r1-1 / br-r4-r2-1 MAJOR — snapshot returns independent clone"]
+fn browser_backend_snapshot_returns_owned_btreemap_clone_independent_of_live_writes() {
+    // br-r4-r1-1 / br-r4-r2-1 MAJOR pin (Option-i Mutex-based shape
+    // per fix-brief). `BrowserBackend::snapshot()` MUST return an owned
+    // `BTreeMap<Cid, NodeBytes>` clone that is INDEPENDENT of the live
+    // backend — subsequent writes to the live backend MUST NOT mutate
+    // the previously-returned snapshot.
+    //
+    // G13-C implementer wires this:
+    //
+    //   let backend = benten_graph::BrowserBackend::new();
+    //   backend.put(b"n:cid_a", &vec![1u8, 2, 3]).unwrap();
+    //   backend.put(b"n:cid_b", &vec![4u8, 5, 6]).unwrap();
+    //
+    //   // Take a snapshot:
+    //   let snap = backend.snapshot();
+    //   assert_eq!(snap.len(), 2);
+    //
+    //   // Mutate the live backend AFTER the snapshot:
+    //   backend.put(b"n:cid_c", &vec![7u8, 8, 9]).unwrap();
+    //   backend.put(b"n:cid_a", &vec![100u8]).unwrap(); // overwrite existing
+    //
+    //   // Snapshot is unchanged — it's an independent owned clone:
+    //   assert_eq!(snap.len(), 2,
+    //       "snapshot len MUST NOT grow when live backend grows after snapshot");
+    //   assert_eq!(snap.get(&b"n:cid_a"[..].into()).map(|v| v.as_slice()),
+    //       Some(&[1u8, 2, 3][..]),
+    //       "snapshot value MUST NOT mutate when live backend overwrites after snapshot");
+    //
+    // OBSERVABLE consequence: the snapshot reads as a point-in-time
+    // immutable view. Defends against the failure shape where
+    // BrowserBackend hands back an Arc<RwLock<BTreeMap>> guard or
+    // similar shared reference that surprises callers when the
+    // underlying map mutates. The Mutex-based shape per fix-brief
+    // option-i is one valid implementation; the test pin asserts the
+    // CONTRACT (independence) without prescribing the implementation
+    // mechanism.
+    unimplemented!(
+        "G13-C wires BrowserBackend::snapshot() independence-from-live-writes assertion"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: G13-C — br-r4-r1-1 / br-r4-r2-1 MAJOR — put_node_with_context thin-client cache semantic"]
+fn browser_backend_put_node_with_context_thin_client_cache_semantic_pinned() {
+    // br-r4-r1-1 / br-r4-r2-1 MAJOR pin (cap-recheck context arm).
+    // `BrowserBackend::put_node_with_context(cid, bytes, ctx)` is the
+    // thin-client-cache write path for inbound subscription deliveries.
+    // The cap-recheck CONTRACT in this arm is intentionally distinct
+    // from full-peer Backend::put_node_with_context:
+    //
+    //   - Full peer: cap-recheck IS the gate (cap-policy plug fires
+    //     pre-write per Phase-2b PrimitiveHost contract).
+    //   - Thin-client BrowserBackend: cap-recheck is BYPASSED by
+    //     design — the upstream subscription (G14-D) already filters
+    //     events per delivered-subscriber's grant; the local cache
+    //     simply mirrors the authorized stream. Re-running cap-policy
+    //     on the cache write path would double-count rate-limits and
+    //     would couple the browser bundle to the cap-policy crate
+    //     (defying the bundle-cap commitment).
+    //
+    // G13-C implementer wires this:
+    //
+    //   let backend = benten_graph::BrowserBackend::new();
+    //   let ctx = benten_graph::WriteContext::new_thin_client_subscription_delivery();
+    //   let cid = b"n:cid_authorized";
+    //   let bytes = vec![1u8, 2, 3];
+    //
+    //   // The thin-client write path accepts the bytes WITHOUT
+    //   // re-invoking cap-policy — the upstream subscription has
+    //   // already filtered, and the bytes are just being mirrored
+    //   // into the local cache:
+    //   backend.put_node_with_context(cid, &bytes, &ctx).unwrap();
+    //
+    //   // Read back via the standard Backend::get path:
+    //   assert_eq!(backend.get(cid).unwrap().as_deref(), Some(&bytes[..]));
+    //
+    //   // Cap-policy was NOT invoked at the cache layer:
+    //   assert_eq!(ctx.cap_policy_invocation_count(), 0,
+    //       "BrowserBackend MUST NOT invoke cap-policy on thin-client \
+    //        subscription-delivery write path per CLAUDE.md baked-in #17 \
+    //        (the upstream subscription already filtered + the cache \
+    //        layer just mirrors)");
+    //
+    // OBSERVABLE consequence: a future regression that wires cap-policy
+    // into the thin-client cache write path would either (a) inflate
+    // the browser bundle with the cap-policy crate (defying the
+    // bundle-cap pin), or (b) double-count rate-limits against the
+    // upstream subscription (breaking the G14-D F6 filter promise).
+    // Both fail this test.
+    unimplemented!(
+        "G13-C wires BrowserBackend::put_node_with_context thin-client-cache-semantic pin per CLAUDE.md baked-in #17"
+    );
 }
 
 proptest! {
