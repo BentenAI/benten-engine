@@ -48,9 +48,10 @@ const WAIT_PREFIX: &[u8] = b"sw:";
 const ENVELOPE_PREFIX: &[u8] = b"se:";
 const CURSOR_PREFIX: &[u8] = b"sc:";
 /// G14-D wave-5a: cap-snapshot key prefix. Disjoint from the other
-/// four prefixes (`n:`, `e:`, `es:`, `et:`, `s:`, `sw:`, `se:`, `sc:`)
+/// eight prefixes (`n:`, `e:`, `es:`, `et:`, `s:`, `sw:`, `se:`, `sc:`)
 /// per the collision-freedom contract pinned at
-/// `suspension_store_handles_both_wait_and_cursor_keys_without_collision`.
+/// `suspension_store_handles_both_wait_and_cursor_keys_without_collision`
+/// and extended at `suspension_store_handles_cap_snapshot_key_without_collision_with_wait_or_cursor`.
 const CAP_SNAPSHOT_PREFIX: &[u8] = b"sx:";
 
 fn wait_key(cid: &Cid) -> Vec<u8> {

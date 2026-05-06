@@ -83,9 +83,33 @@ thread_local! {
     /// hook at Step 4 of `resume_from_bytes_inner` reads this if it
     /// implements historical-state binding; policies that don't
     /// consume it leave it as a no-op. The cell is reset at the end
-    /// of every `resume_from_bytes_inner` call so a subsequent
-    /// resume on the same thread starts with a clean slate.
+    /// of every `resume_from_bytes_inner` call (via [`HistoricalPolicyMetadataHintGuard`])
+    /// so a subsequent resume on the same thread starts with a clean
+    /// slate even if the configured policy never consumed the hint.
     pub(crate) static HISTORICAL_POLICY_METADATA_HINT: Cell<Option<Vec<u8>>> = const { Cell::new(None) };
+}
+
+/// G14-D wave-5a (htl-1 mini-review fix): RAII drain guard for
+/// [`HISTORICAL_POLICY_METADATA_HINT`]. Drains the cell on construction
+/// (so the resume body starts clean even if a previous resume left a
+/// stale hint behind) AND on drop (so the cell is empty after the
+/// resume body returns regardless of whether the configured policy
+/// consumed the hint via [`historical_policy_metadata_hint`]). The
+/// drop arm survives early returns / `?`-propagated errors which is
+/// why we use RAII rather than an explicit drain at every exit point.
+pub(crate) struct HistoricalPolicyMetadataHintGuard;
+
+impl HistoricalPolicyMetadataHintGuard {
+    pub(crate) fn drain_on_entry_and_exit() -> Self {
+        HISTORICAL_POLICY_METADATA_HINT.with(|cell| cell.set(None));
+        Self
+    }
+}
+
+impl Drop for HistoricalPolicyMetadataHintGuard {
+    fn drop(&mut self) {
+        HISTORICAL_POLICY_METADATA_HINT.with(|cell| cell.set(None));
+    }
 }
 
 /// G14-D wave-5a: read-and-clear accessor for the thread-local
@@ -535,6 +559,13 @@ impl Engine {
         caller_principal: Option<Cid>,
         resume_payload: ResumePayload,
     ) -> Result<Outcome, EngineError> {
+        // G14-D wave-5a (htl-1 mini-review fix): drain the
+        // HISTORICAL_POLICY_METADATA_HINT cell on entry AND on every
+        // exit (drop). Without this guard a hint set by a previous
+        // resume that the configured policy never consumed would leak
+        // into the NEXT resume on the same thread.
+        let _hint_guard = HistoricalPolicyMetadataHintGuard::drain_on_entry_and_exit();
+
         // Step 0 / pre-check: empty or malformed DAG-CBOR → E_SERIALIZE.
         if bytes.is_empty() {
             return Err(EngineError::Other {
@@ -1148,4 +1179,47 @@ fn bench_warm_cid(handler_id: &str, op: &str) -> Cid {
     hasher.update(b"\x1e");
     hasher.update(op.as_bytes());
     Cid::from_blake3_digest(*hasher.finalize().as_bytes())
+}
+
+#[cfg(test)]
+mod historical_policy_metadata_hint_guard_tests {
+    use super::{
+        HISTORICAL_POLICY_METADATA_HINT, HistoricalPolicyMetadataHintGuard,
+        historical_policy_metadata_hint,
+    };
+
+    /// G14-D wave-5a (htl-1 mini-review fix): the RAII guard drains the
+    /// thread-local on construction (so a stale hint left by a previous
+    /// resume that the policy never consumed cannot leak forward) AND
+    /// on drop (so the cell is empty after the guard's scope ends even
+    /// if no consumer ever called `historical_policy_metadata_hint`).
+    #[test]
+    fn historical_policy_metadata_hint_guard_drains_on_entry_and_drop() {
+        // Pre-populate as if a previous resume left a hint behind.
+        HISTORICAL_POLICY_METADATA_HINT.with(|c| c.set(Some(b"stale-from-prior-resume".to_vec())));
+
+        {
+            let _guard = HistoricalPolicyMetadataHintGuard::drain_on_entry_and_exit();
+            // Entry-drain: the stale hint is gone before the resume body
+            // observes it.
+            assert!(
+                HISTORICAL_POLICY_METADATA_HINT.with(|c| {
+                    let v = c.take();
+                    let was_none = v.is_none();
+                    c.set(v);
+                    was_none
+                }),
+                "guard must drain stale hint on entry",
+            );
+
+            // Simulate Step 3.5 setting a hint mid-resume.
+            HISTORICAL_POLICY_METADATA_HINT.with(|c| c.set(Some(b"current-resume-hint".to_vec())));
+        }
+        // Drop ran: the cell must be empty even though no consumer
+        // called `historical_policy_metadata_hint` to drain it.
+        assert!(
+            historical_policy_metadata_hint().is_none(),
+            "guard must drain hint on drop even when policy never consumed it",
+        );
+    }
 }

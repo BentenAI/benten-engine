@@ -1010,15 +1010,27 @@ impl<B: GraphBackend> EngineGeneric<B> {
                 drop(handlers);
                 self.handler_route_log
                     .record_named(&format!("emit:{channel}"), handler_id);
-                // The Named-route path bypasses default fan-out
-                // intentionally; the routing log is the observable
-                // proof. A full evaluator-driven dispatch into the
-                // named subgraph happens at G16-D once the engine's
-                // call-handler surface composes with the broadcast
-                // bus; for wave-5a the routing decision IS the
-                // observable behavior — `default_fan_out_count` does
-                // NOT bump, which is the load-bearing per-stream-r1-2
-                // assertion.
+                // ENGINE-SIDE vs EVAL-SIDE NAMED-ARM ASYMMETRY (as-1
+                // mini-review explanation; pim-4 §3.10 wave-pairing
+                // destination: G16-D Atrium peer wave).
+                //
+                // The Named-route path here records the routing
+                // decision into `HandlerRouteLog` and bypasses default
+                // fan-out — the log divergence (`default_fan_out_count`
+                // does NOT bump) is the load-bearing per-stream-r1-2
+                // observable. It does NOT invoke the named handler
+                // subgraph.
+                //
+                // The eval-side `benten_eval::primitives::emit::execute`
+                // Named arm DOES invoke the handler subgraph via
+                // `host.call_handler`. The asymmetry is intentional and
+                // wave-paired (pim-4 §3.10): the engine-side seam ships
+                // here at G14-D wave-5a; the engine-surface dispatch
+                // into the named subgraph wires at G16-D once the
+                // call-handler surface composes with the broadcast bus.
+                // The G16-D brief carries the follow-on closed-claim
+                // pin asserting subgraph-dispatch fires from this
+                // entry point.
                 Ok(())
             }
         }

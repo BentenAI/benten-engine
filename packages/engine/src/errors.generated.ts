@@ -140,6 +140,11 @@ export const CATALOG_CODES = [
   "E_CAP_BACKEND_STORAGE",
   "E_CAP_RATE_LIMIT_EXCEEDED",
   "E_CAP_PEER_BANDWIDTH_EXCEEDED",
+  "E_CAP_SNAPSHOT_HASH_MISMATCH",
+  "E_SUBSCRIBE_REVOKED_MID_STREAM",
+  "E_SYNC_REVOKED_DURING_SESSION",
+  "E_SYNC_HOP_DEPTH_EXCEEDED",
+  "E_THIN_CLIENT_AUTH_REJECTED",
   "E_CAP_UCAN_AUDIENCE_MISMATCH",
 ] as const;
 
@@ -1747,6 +1752,81 @@ export class ECapPeerBandwidthExceeded extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_CAP_PEER_BANDWIDTH_EXCEEDED", "Per-peer bandwidth bytes/sec budget at the Atrium boundary exceeded its limit. Defends against a malicious or buggy peer flooding the sync channel. Routes to `ON_DENIED`.", message, context);
     this.name = "ECapPeerBandwidthExceeded";
+  }
+}
+
+/**
+ * E_CAP_SNAPSHOT_HASH_MISMATCH
+ *
+ * Thrown at: `crates/benten-engine/src/engine_wait.rs::EngineGeneric::resume_from_bytes_inner` Step 3.5 (Phase-3 G14-D wave-5a; CLR-2 §11 + Compromise #10 engine-side asymmetry closure). The hash is computed by `crates/benten-engine/src/cap_snapshot_hash.rs::compute(actor_cid, &proof_chain_cids)` and persisted alongside the envelope via `Engine::put_cap_snapshot_for_envelope`.
+ * Message template: "resume: cap_snapshot_hash mismatch for actor {actor} (proof-chain changed between suspend and resume; CLR-2 §11)"
+ */
+export class ECapSnapshotHashMismatch extends BentenError {
+  static readonly code = "E_CAP_SNAPSHOT_HASH_MISMATCH";
+  static readonly fixHint = "A WAIT-suspended execution attempted to resume against a UCAN proof-chain that materially changed between suspend and resume (e.g. one of the chain's tokens was revoked, or the chain was substituted). Per CLR-2 §11 the resume MUST reject — silently re-running a continuation against a downgraded chain would let an attacker race a revoke with a resume. Re-issue the suspended request from a current envelope; the prior envelope is no longer authoritative. Routes to `ON_DENIED`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_CAP_SNAPSHOT_HASH_MISMATCH", "A WAIT-suspended execution attempted to resume against a UCAN proof-chain that materially changed between suspend and resume (e.g. one of the chain's tokens was revoked, or the chain was substituted). Per CLR-2 §11 the resume MUST reject — silently re-running a continuation against a downgraded chain would let an attacker race a revoke with a resume. Re-issue the suspended request from a current envelope; the prior envelope is no longer authoritative. Routes to `ON_DENIED`.", message, context);
+    this.name = "ECapSnapshotHashMismatch";
+  }
+}
+
+/**
+ * E_SUBSCRIBE_REVOKED_MID_STREAM
+ *
+ * Thrown at: `crates/benten-engine/src/cap_recheck.rs` per-event closure firing (Phase-3 G14-D wave-5a; F6 LOAD-BEARING + Compromise #2 D5). Wave-paired construction sites land alongside G14-B's durable UCAN backend `chain-for-audience` accessor.
+ * Message template: "subscribe: cap revoked mid-stream for subscriber {subscriber} on channel {channel}"
+ */
+export class ESubscribeRevokedMidStream extends BentenError {
+  static readonly code = "E_SUBSCRIBE_REVOKED_MID_STREAM";
+  static readonly fixHint = "A SUBSCRIBE / sync-replica subscription was terminated mid-stream because the subscriber's read-coverage UCAN no longer holds — a partial revoke fired the per-event delivery-time cap-recheck on the next event. Distinct from `E_SUBSCRIBE_DELIVERY_FAILED` (transient delivery-channel failures) — this names the cap-recheck-driven termination per F6 LOAD-BEARING. Re-issue a fresh subscribe with current credentials. Routes to `ON_DENIED`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SUBSCRIBE_REVOKED_MID_STREAM", "A SUBSCRIBE / sync-replica subscription was terminated mid-stream because the subscriber's read-coverage UCAN no longer holds — a partial revoke fired the per-event delivery-time cap-recheck on the next event. Distinct from `E_SUBSCRIBE_DELIVERY_FAILED` (transient delivery-channel failures) — this names the cap-recheck-driven termination per F6 LOAD-BEARING. Re-issue a fresh subscribe with current credentials. Routes to `ON_DENIED`.", message, context);
+    this.name = "ESubscribeRevokedMidStream";
+  }
+}
+
+/**
+ * E_SYNC_REVOKED_DURING_SESSION
+ *
+ * Thrown at: sync-replica receive boundary (Phase-3 G14-D wave-5a; sec-r4r1-2 BLOCKER half-b closure; CLR-2 mirror). Wave-paired construction site lands alongside the sync-receive surface.
+ * Message template: "sync: peer {peer} grant revoked during session"
+ */
+export class ESyncRevokedDuringSession extends BentenError {
+  static readonly code = "E_SYNC_REVOKED_DURING_SESSION";
+  static readonly fixHint = "A sync-replica inbound WRITE was rejected because the source peer's grant was revoked locally between the Atrium handshake and the next sync round. Per CLR-2 this mirrors the SUBSCRIBE delivery-time recheck — the receiving peer's per-write cap-recheck consults the local grant store via the `cap_recheck.rs` G13-pre-C scaffold. The peer may re-handshake with a current grant. Routes to `ON_DENIED`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SYNC_REVOKED_DURING_SESSION", "A sync-replica inbound WRITE was rejected because the source peer's grant was revoked locally between the Atrium handshake and the next sync round. Per CLR-2 this mirrors the SUBSCRIBE delivery-time recheck — the receiving peer's per-write cap-recheck consults the local grant store via the `cap_recheck.rs` G13-pre-C scaffold. The peer may re-handshake with a current grant. Routes to `ON_DENIED`.", message, context);
+    this.name = "ESyncRevokedDuringSession";
+  }
+}
+
+/**
+ * E_SYNC_HOP_DEPTH_EXCEEDED
+ *
+ * Thrown at: sync-replica chain-bound check (Phase-3 G14-D wave-5a; ds-r4r2-2 closure). Wave-paired construction site lands alongside the sync-receive surface.
+ * Message template: "sync: chain hop depth {depth} exceeds bound {bound}"
+ */
+export class ESyncHopDepthExceeded extends BentenError {
+  static readonly code = "E_SYNC_HOP_DEPTH_EXCEEDED";
+  static readonly fixHint = "An inbound sync-replica AttributionFrame chain exceeded the documented hop-depth bound (mirrors Inv-4 `sandbox_depth`). Defends against DOS/chain-bloat where an adversarial peer constructs an unbounded false chain. The peer should either issue against a shorter chain or re-handshake with a fresh authority root. Routes to `ON_DENIED`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SYNC_HOP_DEPTH_EXCEEDED", "An inbound sync-replica AttributionFrame chain exceeded the documented hop-depth bound (mirrors Inv-4 `sandbox_depth`). Defends against DOS/chain-bloat where an adversarial peer constructs an unbounded false chain. The peer should either issue against a shorter chain or re-handshake with a fresh authority root. Routes to `ON_DENIED`.", message, context);
+    this.name = "ESyncHopDepthExceeded";
+  }
+}
+
+/**
+ * E_THIN_CLIENT_AUTH_REJECTED
+ *
+ * Thrown at: `crates/benten-engine/src/thin_client_subscribe.rs::ThinClientConnection::connect` (Phase-3 G14-D wave-5a; D-PHASE-3-30 + CLAUDE.md baked-in #17 — thin compute surface as device with minimum capability envelope).
+ * Message template: "thin-client connect: device attestation rejected ({reason})"
+ */
+export class EThinClientAuthRejected extends BentenError {
+  static readonly code = "E_THIN_CLIENT_AUTH_REJECTED";
+  static readonly fixHint = "A thin-client (browser tab / edge-worker) connection attempt was rejected at the full-peer auth boundary because the connecting tab presented no device-attestation OR presented one bound to a revoked device-DID. Distinct from generic `E_CAP_DENIED` so audit pipelines can route on the thin-client auth boundary independently. Re-attest from a non-revoked device-DID. Routes to `ON_DENIED`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_THIN_CLIENT_AUTH_REJECTED", "A thin-client (browser tab / edge-worker) connection attempt was rejected at the full-peer auth boundary because the connecting tab presented no device-attestation OR presented one bound to a revoked device-DID. Distinct from generic `E_CAP_DENIED` so audit pipelines can route on the thin-client auth boundary independently. Re-attest from a non-revoked device-DID. Routes to `ON_DENIED`.", message, context);
+    this.name = "EThinClientAuthRejected";
   }
 }
 
