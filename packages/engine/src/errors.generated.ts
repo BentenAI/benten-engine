@@ -1758,7 +1758,7 @@ export class ECapPeerBandwidthExceeded extends BentenError {
 /**
  * E_CAP_SNAPSHOT_HASH_MISMATCH
  *
- * Thrown at: `crates/benten-engine/src/engine_wait.rs::EngineGeneric::resume_from_bytes_inner` Step 3.5 (Phase-3 G14-D wave-5a; CLR-2 §11 + Compromise #10 engine-side asymmetry closure). The hash is computed by `crates/benten-engine/src/cap_snapshot_hash.rs::compute(actor_cid, &proof_chain_cids)` and persisted alongside the envelope via `Engine::put_cap_snapshot_for_envelope`.
+ * Thrown at: `crates/benten-engine/src/engine_wait.rs::resume_from_bytes_inner` Step 3.5 (Phase-3 G14-D wave-5a; CLR-2 §11 + Compromise #10 engine-side asymmetry closure). The hash is computed by `crates/benten-engine/src/cap_snapshot_hash.rs::compute(actor_cid, &proof_chain_cids)` and persisted alongside the envelope via `Engine::put_cap_snapshot_for_envelope`.
  * Message template: "resume: cap_snapshot_hash mismatch for actor {actor} (proof-chain changed between suspend and resume; CLR-2 §11)"
  */
 export class ECapSnapshotHashMismatch extends BentenError {
