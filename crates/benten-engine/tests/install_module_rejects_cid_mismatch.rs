@@ -98,6 +98,7 @@ fn module_manifest_supply_chain_by_cid_confusion_rejected() {
             requires: vec!["host:network:*".into()],
         }],
         migrations: vec![],
+        host_fns: None,
         signature: None,
     };
     let cid_a = testing_compute_manifest_cid(&a);

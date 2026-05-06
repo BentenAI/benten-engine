@@ -515,11 +515,55 @@ export interface ModuleManifest {
    */
   migrations?: MigrationStep[];
   /**
+   * Phase-3 G17-A2 — additive optional per-host-fn overrides
+   * (CLAUDE.md baked-in #16 closure / Compromise #16). Currently the
+   * only declared sub-field is `random.budget_bytes_per_call` which
+   * lets a manifest tighten or widen the per-call entropy budget for
+   * the `random` host-fn (codegen default = 4096 per r1-wsa-8).
+   *
+   * Omit (`undefined`) when no override is needed; the canonical-bytes
+   * serializer omits the key entirely when undefined per D9
+   * forward-compat — a Phase-2b manifest with no overrides keeps its
+   * CID across this G17-A2 schema lift.
+   */
+  host_fns?: HostFnsOverride;
+  /**
    * Phase-3 reserved. Omit (i.e. `undefined`, NOT `null`) in Phase 2b —
    * the canonical-bytes serializer omits the key entirely when
    * undefined per D9 forward-compat.
    */
   signature?: ManifestSignature;
+}
+
+/**
+ * Phase-3 G17-A2 — per-host-fn overrides (CLAUDE.md baked-in #16
+ * closure / Compromise #16). Additive optional carriers for fields
+ * the codegen-default surface ships with a default value.
+ *
+ * Mirrors `crates/benten-engine/src/module_manifest.rs::HostFnsOverride`.
+ */
+export interface HostFnsOverride {
+  /**
+   * Override for the `random` host-fn — primarily the per-call
+   * entropy budget (`budget_bytes_per_call`).
+   */
+  random?: RandomHostFnOverride;
+}
+
+/**
+ * Phase-3 G17-A2 — per-manifest overrides for the `random` host-fn.
+ * All fields additive optional; an undefined field == codegen default.
+ *
+ * Mirrors `crates/benten-engine/src/module_manifest.rs::RandomHostFnOverride`.
+ */
+export interface RandomHostFnOverride {
+  /**
+   * Per-call entropy budget in bytes. Codegen default is 4096
+   * (per r1-wsa-8). Manifests MAY tighten or widen this for the
+   * modules they declare; overrun fires
+   * `E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED`.
+   */
+  budget_bytes_per_call?: number;
 }
 
 /**

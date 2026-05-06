@@ -35,6 +35,7 @@
 //! #10 cross-process resume gap (`docs/SECURITY-POSTURE.md`).
 
 use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use benten_core::{Cid, SubscriberId, Value};
 use benten_eval::ExecutionStateEnvelope;
@@ -47,6 +48,19 @@ use serde::{Deserialize, Serialize};
 const WAIT_PREFIX: &[u8] = b"sw:";
 const ENVELOPE_PREFIX: &[u8] = b"se:";
 const CURSOR_PREFIX: &[u8] = b"sc:";
+/// Phase-3 G17-A2 (phase-3-backlog §6.5 + r1-wsa-10) — SUBSCRIBE
+/// persistent-cursor metadata key prefix. Stores per-subscriber
+/// `delivered_count` + `registered_at_unix_secs` so the
+/// `is_retention_exhausted` check works across engine re-opens.
+/// Disjoint from the existing eight prefixes (`n:`, `e:`, `es:`, `et:`,
+/// `s:`, `sw:`, `se:`, `sc:`, `sx:`) per the collision-freedom contract.
+const CURSOR_META_PREFIX: &[u8] = b"sm:";
+/// Phase-3 G17-A2 — singleton key for the durable retention-window
+/// override (per r1-wsa-10 persistence pin). The override is global
+/// to the store; reading at `is_retention_exhausted` time + writing at
+/// `set_retention_window`. Encoded as DAG-CBOR
+/// [`PersistedRetentionWindow`].
+const RETENTION_WINDOW_KEY: &[u8] = b"sr:retention_window";
 /// G14-D wave-5a: cap-snapshot key prefix. Disjoint from the other
 /// eight prefixes (`n:`, `e:`, `es:`, `et:`, `s:`, `sw:`, `se:`, `sc:`)
 /// per the collision-freedom contract pinned at
@@ -81,6 +95,41 @@ fn cap_snapshot_key(envelope_cid: &Cid) -> Vec<u8> {
     k.extend_from_slice(CAP_SNAPSHOT_PREFIX);
     k.extend_from_slice(envelope_cid.as_bytes());
     k
+}
+
+/// Phase-3 G17-A2 (§6.5) — per-subscriber cursor-metadata key.
+fn cursor_meta_key(sub: &SubscriberId) -> Vec<u8> {
+    let cid = sub.as_cid();
+    let mut k = Vec::with_capacity(CURSOR_META_PREFIX.len() + cid.as_bytes().len());
+    k.extend_from_slice(CURSOR_META_PREFIX);
+    k.extend_from_slice(cid.as_bytes());
+    k
+}
+
+/// Phase-3 G17-A2 (§6.5) — per-subscriber retention metadata: tracks
+/// when the cursor was first registered (so age-based windows can
+/// fire) + how many events have been delivered (so count-based windows
+/// can fire). Encoded DAG-CBOR; persisted under `sm:<sub_cid>`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct PersistedCursorMeta {
+    /// First-registration UNIX-seconds wall-clock; used by age-based
+    /// retention windows.
+    registered_at_unix_secs: u64,
+    /// Cumulative delivered-event count; used by count-based retention
+    /// windows (Phase-2b documented 1000-event ceiling).
+    delivered_count: u64,
+}
+
+/// Phase-3 G17-A2 (§6.5 + r1-wsa-10) — durable retention-window
+/// override. `Some(d)` means a custom override is in effect; `None`
+/// (the absence of the singleton key) means default semantics
+/// (`is_retention_exhausted` returns `false`, the trait-default).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PersistedRetentionWindow {
+    /// Window duration in milliseconds. A cursor whose
+    /// `registered_at_unix_secs` is older than NOW − window_ms is
+    /// retention-exhausted.
+    window_ms: u64,
 }
 
 /// G14-D wave-5a: DAG-CBOR-serialisable mirror of [`CapSnapshot`].
@@ -174,6 +223,96 @@ impl RedbSuspensionStore {
     pub fn new(backend: Arc<RedbBackend>) -> Self {
         Self { backend }
     }
+
+    /// Phase-3 G17-A2 (phase-3-backlog §6.5) — convenience constructor
+    /// that opens (or creates) a redb file at `path` and wraps it in a
+    /// `RedbSuspensionStore`. Each call hands back an independent
+    /// `Arc<RedbBackend>`; for the production engine path, prefer
+    /// [`Self::new`] over an existing `Arc<RedbBackend>` so suspension
+    /// state lives alongside graph state in the same redb file.
+    ///
+    /// # Errors
+    /// Surfaces [`SuspensionStoreError::Backend`] on file-open failure.
+    pub fn open(path: impl AsRef<std::path::Path>) -> Result<Self, SuspensionStoreError> {
+        let backend = RedbBackend::create(path).map_err(backend_err)?;
+        Ok(Self {
+            backend: Arc::new(backend),
+        })
+    }
+
+    /// Phase-3 G17-A2 (§6.5 + r1-wsa-10 persistent-state pin) — set the
+    /// SUBSCRIBE persistent-cursor retention window. Persisted in the
+    /// redb side-table; survives engine close + re-open.
+    ///
+    /// Setting the window to `Duration::ZERO` is treated as "every
+    /// cursor is immediately retention-exhausted" (operator force-
+    /// exhaust escape hatch).
+    ///
+    /// # Errors
+    /// Surfaces [`SuspensionStoreError::Backend`] on persistence failure.
+    pub fn set_retention_window(&self, window: Duration) -> Result<(), SuspensionStoreError> {
+        let payload = PersistedRetentionWindow {
+            window_ms: u64::try_from(window.as_millis()).unwrap_or(u64::MAX),
+        };
+        let bytes = serde_ipld_dagcbor::to_vec(&payload).map_err(backend_err)?;
+        self.backend
+            .put(RETENTION_WINDOW_KEY, &bytes)
+            .map_err(backend_err)
+    }
+
+    /// Phase-3 G17-A2 (§6.5 + r1-wsa-10) — read the persisted SUBSCRIBE
+    /// retention window. Returns `Ok(None)` when no override is set
+    /// (trait default semantics apply).
+    ///
+    /// # Errors
+    /// Surfaces [`SuspensionStoreError::Backend`] on persistence failure.
+    pub fn retention_window(&self) -> Result<Option<Duration>, SuspensionStoreError> {
+        let Some(bytes) = self
+            .backend
+            .get(RETENTION_WINDOW_KEY)
+            .map_err(backend_err)?
+        else {
+            return Ok(None);
+        };
+        let parsed: PersistedRetentionWindow =
+            serde_ipld_dagcbor::from_slice(&bytes).map_err(backend_err)?;
+        Ok(Some(Duration::from_millis(parsed.window_ms)))
+    }
+
+    /// Internal — load the per-subscriber cursor metadata if present.
+    fn cursor_meta(
+        &self,
+        sub: &SubscriberId,
+    ) -> Result<Option<PersistedCursorMeta>, SuspensionStoreError> {
+        let Some(bytes) = self
+            .backend
+            .get(&cursor_meta_key(sub))
+            .map_err(backend_err)?
+        else {
+            return Ok(None);
+        };
+        let parsed: PersistedCursorMeta =
+            serde_ipld_dagcbor::from_slice(&bytes).map_err(backend_err)?;
+        Ok(Some(parsed))
+    }
+
+    /// Internal — write per-subscriber cursor metadata.
+    fn put_cursor_meta(
+        &self,
+        sub: &SubscriberId,
+        meta: &PersistedCursorMeta,
+    ) -> Result<(), SuspensionStoreError> {
+        let bytes = serde_ipld_dagcbor::to_vec(meta).map_err(backend_err)?;
+        self.backend
+            .put(&cursor_meta_key(sub), &bytes)
+            .map_err(backend_err)
+    }
+}
+
+fn now_unix_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
 }
 
 fn backend_err<E: std::fmt::Display>(e: E) -> SuspensionStoreError {
@@ -225,7 +364,49 @@ impl SuspensionStore for RedbSuspensionStore {
         let bytes = max_delivered_seq.to_le_bytes();
         self.backend
             .put(&cursor_key(sub), &bytes)
-            .map_err(backend_err)
+            .map_err(backend_err)?;
+        // Phase-3 G17-A2 (§6.5) — lazy-initialise per-subscriber
+        // cursor metadata. `registered_at` is stamped on first put;
+        // `delivered_count` increments per put. Both fields feed the
+        // retention-window override at `is_retention_exhausted`.
+        let mut meta = self.cursor_meta(sub)?.unwrap_or_default();
+        if meta.registered_at_unix_secs == 0 {
+            meta.registered_at_unix_secs = now_unix_secs();
+        }
+        meta.delivered_count = meta.delivered_count.saturating_add(1);
+        self.put_cursor_meta(sub, &meta)
+    }
+
+    /// Phase-3 G17-A2 (§6.5 + r1-wsa-10) override: consults the durable
+    /// retention-window setting + per-subscriber metadata to determine
+    /// whether the cursor has drifted past the window. Without an
+    /// explicit override (no `set_retention_window` call) the
+    /// trait-default `false` semantics apply.
+    fn is_retention_exhausted(&self, sub: &SubscriberId) -> bool {
+        // Read errors are conservatively dispositioned as
+        // "not-exhausted" — a redb-side glitch should not silently
+        // tear down active subscriptions. Operator-visible failures
+        // already surface via the put-side
+        // `SuspensionStoreError::Backend`.
+        let Ok(Some(window)) = self.retention_window() else {
+            return false;
+        };
+        let Ok(Some(meta)) = self.cursor_meta(sub) else {
+            return false;
+        };
+        let now = now_unix_secs();
+        let window_secs = window.as_secs();
+        // Age-based: cursor is exhausted when (now - registered_at) > window.
+        if window_secs == 0 {
+            // Force-exhaust escape hatch — set_retention_window(ZERO)
+            // marks every cursor exhausted.
+            return true;
+        }
+        let registered_at = meta.registered_at_unix_secs;
+        if registered_at == 0 {
+            return false;
+        }
+        now.saturating_sub(registered_at) > window_secs
     }
 
     fn get_cursor(&self, sub: &SubscriberId) -> Result<Option<u64>, SuspensionStoreError> {
@@ -244,6 +425,14 @@ impl SuspensionStore for RedbSuspensionStore {
     }
 
     fn delete(&self, key: SuspensionKey) -> Result<(), SuspensionStoreError> {
+        // Phase-3 G17-A2 (§6.5) — cursor delete also wipes the
+        // companion cursor-metadata side-table entry so a fresh
+        // re-subscribe re-stamps `registered_at_unix_secs` cleanly.
+        if let SuspensionKey::Cursor(sub) = &key {
+            self.backend
+                .delete(&cursor_meta_key(sub))
+                .map_err(backend_err)?;
+        }
         let raw = match key {
             SuspensionKey::WaitMetadata(cid) => wait_key(&cid),
             SuspensionKey::Envelope(cid) => envelope_key(&cid),

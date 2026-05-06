@@ -30,6 +30,7 @@ fn make_manifest(name: &str) -> ModuleManifest {
         name: name.to_string(),
         version: "1.0.0".to_string(),
         modules: vec![entry],
+        host_fns: None,
         signature: None,
         migrations: Vec::new(),
     }
