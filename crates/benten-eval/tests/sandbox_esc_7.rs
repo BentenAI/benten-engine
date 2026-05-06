@@ -1,5 +1,14 @@
-//! ESC-7 (Fuel-refill via host-fn re-entry) closure pins
-//! (G17-A1 wave-5b; D-E + r1-wsa-1 BLOCKER).
+//! ESC-7 (Fuel-refill via host-fn re-entry) SHAPE pins
+//! (G17-A1 wave-5b — SCAFFOLDING ONLY; r1-wsa-1 BLOCKER closure
+//! RECALLED to wave-5c per mini-review at
+//! `.addl/phase-3/r5-w5b-g17-a1-mini-review.json`).
+//!
+//! These tests audit the [`benten_eval::sandbox::run_esc7_check`]
+//! helper logic against synthetic [`benten_eval::sandbox::EscDefenseState`]
+//! values — they are NOT end-to-end load-bearing closure for r1-wsa-1
+//! BLOCKER. The end-to-end pin (driving a real SANDBOX dispatch +
+//! observing the runtime arm fire from a production trampoline) lands
+//! at wave-5c ESC runtime-arm wiring per phase-3-backlog §6.1-followup.
 //!
 //! Pin sources (per r2-test-landscape §2.5 G17-A1 + §8 ESC-7+ESC-13 +
 //! r1-revision-triage D-E):
