@@ -153,6 +153,19 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // (default 5 minutes). Closes the ds-1 BLOCKER + ds-11 typed-error
     // requirement.
     ErrorCode::HlcSkewExceeded,
+    // Phase-3 G14-B (durable UCAN backend in `benten-caps` —
+    // `crates/benten-caps/src/backends/ucan.rs::UCANBackend`). Each
+    // variant maps 1:1 to a chain-walk / rate-limit / storage failure
+    // surface added by the durable backend (`UcanExpired`,
+    // `UcanNotYetValid`, `UcanBadSignature`, `UcanAttenuationViolated`,
+    // `BackendStorage`, `RateLimitExceeded`, `PeerBandwidthExceeded`).
+    ErrorCode::CapUcanExpired,
+    ErrorCode::CapUcanNotYetValid,
+    ErrorCode::CapUcanBadSignature,
+    ErrorCode::CapUcanAttenuationViolated,
+    ErrorCode::CapBackendStorage,
+    ErrorCode::CapRateLimitExceeded,
+    ErrorCode::CapPeerBandwidthExceeded,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -245,8 +258,16 @@ fn variant_count_is_pinned() {
     // the configured skew tolerance (default 5 minutes). Closes the
     // ds-1 BLOCKER + ds-11 typed-error requirement. Post-G14-pre-D:
     // 81 + 1 = 82.
+    //
+    // Phase-3 G14-B adds 7 codes for the durable UCAN backend in
+    // `benten-caps` (`UCANBackend<B: GraphBackend>`): chain-walk
+    // failures (`CapUcanExpired`, `CapUcanNotYetValid`,
+    // `CapUcanBadSignature`, `CapUcanAttenuationViolated`), durable-
+    // store I/O failure (`CapBackendStorage`), rate-limit policy plug
+    // denials (`CapRateLimitExceeded`, `CapPeerBandwidthExceeded`).
+    // Post-G14-B: 82 + 7 = 89.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 82,
+        CATALOG_VARIANT_COUNT, 89,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

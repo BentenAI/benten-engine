@@ -39,14 +39,17 @@
 #![warn(missing_docs)]
 
 pub mod attenuation;
+pub mod backends;
 pub mod error;
 pub mod grant;
 pub mod grant_backed;
 pub mod noauth;
 pub mod policy;
+pub mod rate_limit;
 pub mod ucan_stub;
 
 pub use attenuation::check_attenuation;
+pub use backends::UCANBackend;
 pub use error::CapError;
 pub use grant::{
     CAPABILITY_GRANT_LABEL, CapabilityGrant, GRANTED_TO_LABEL, GrantScope, REVOKED_AT_LABEL,
@@ -54,6 +57,9 @@ pub use grant::{
 pub use grant_backed::{GrantBackedPolicy, GrantReader, GrantReaderChain, GrantReaderConfig};
 pub use noauth::NoAuthBackend;
 pub use policy::{CapabilityPolicy, PendingOp, ReadContext, WriteAuthority, WriteContext};
+pub use rate_limit::{
+    InMemoryRateLimitPolicy, InMemoryRateLimitPolicyBuilder, NullRateLimitPolicy, RateLimitPolicy,
+};
 pub use ucan_stub::UcanBackend;
 
 /// Phase 2a G9-A / P2 test-harness: helper surface the evaluator consults

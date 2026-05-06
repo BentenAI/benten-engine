@@ -431,6 +431,47 @@ pub enum ErrorCode {
     /// rather than letting an adversarial / mis-configured peer drag the
     /// local HLC into the future. Maps to `E_HLC_SKEW_EXCEEDED`.
     HlcSkewExceeded,
+    // -----------------------------------------------------------------
+    // Phase-3 G14-B (durable UCAN backend in `benten-caps` —
+    // `crates/benten-caps/src/backends/ucan.rs::UCANBackend`).
+    //
+    // Closes Phase-2b `CapError::NotImplemented` stub for the UCAN
+    // backend; adds typed catalog entries for the durable UCAN
+    // chain-walk + revocation + delegation + nbf/exp time-window
+    // surfaces (cap-major-1, crypto-blocker-2, CLR-2). Routing: each
+    // variant routes to `ON_DENIED` per the cap-denial family precedent
+    // (see `routed_edge_label` ON_DENIED arm).
+    // -----------------------------------------------------------------
+    /// G14-B: presented UCAN's `exp` window has elapsed at chain-walk
+    /// time (per `crypto-blocker-2`). Distinct from `CapRevoked` so
+    /// operators can tell "expired by TTL" apart from "explicitly
+    /// revoked". Maps to `E_CAP_UCAN_EXPIRED`.
+    CapUcanExpired,
+    /// G14-B: presented UCAN's `nbf` window has not yet opened at
+    /// chain-walk time. Maps to `E_CAP_UCAN_NOT_YET_VALID`.
+    CapUcanNotYetValid,
+    /// G14-B: presented UCAN's signature failed to verify against the
+    /// issuer's resolved public key. Maps to
+    /// `E_CAP_UCAN_BAD_SIGNATURE`.
+    CapUcanBadSignature,
+    /// G14-B: child UCAN's capability widens its parent's authority
+    /// (per crypto-blocker-2 + UCAN attenuation contract). Maps to
+    /// `E_CAP_UCAN_ATTENUATION_VIOLATED`.
+    CapUcanAttenuationViolated,
+    /// G14-B: durable UCAN backend failed to read or write its grant
+    /// store. Surfaces a layered backend I/O failure to the policy
+    /// hook caller. Maps to `E_CAP_BACKEND_STORAGE`.
+    CapBackendStorage,
+    /// G14-B: rate-limit policy plug rejected a write because the
+    /// per-actor writes/sec/zone bucket exceeded its budget (per D-F /
+    /// D-PHASE-3-26). Maps to `E_CAP_RATE_LIMIT_EXCEEDED`.
+    CapRateLimitExceeded,
+    /// G14-B: rate-limit policy plug rejected an inbound chunk
+    /// account because the per-peer bandwidth bytes/sec budget at the
+    /// Atrium boundary exceeded its limit (per D-F /
+    /// D-PHASE-3-26 / D-PHASE-3-30). Maps to
+    /// `E_CAP_PEER_BANDWIDTH_EXCEEDED`.
+    CapPeerBandwidthExceeded,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -603,6 +644,13 @@ impl ErrorCode {
             ErrorCode::ReloadSubscriberUnsubscribed => "E_RELOAD_SUBSCRIBER_UNSUBSCRIBED",
             ErrorCode::DevServerStopped => "E_DEVSERVER_STOPPED",
             ErrorCode::HlcSkewExceeded => "E_HLC_SKEW_EXCEEDED",
+            ErrorCode::CapUcanExpired => "E_CAP_UCAN_EXPIRED",
+            ErrorCode::CapUcanNotYetValid => "E_CAP_UCAN_NOT_YET_VALID",
+            ErrorCode::CapUcanBadSignature => "E_CAP_UCAN_BAD_SIGNATURE",
+            ErrorCode::CapUcanAttenuationViolated => "E_CAP_UCAN_ATTENUATION_VIOLATED",
+            ErrorCode::CapBackendStorage => "E_CAP_BACKEND_STORAGE",
+            ErrorCode::CapRateLimitExceeded => "E_CAP_RATE_LIMIT_EXCEEDED",
+            ErrorCode::CapPeerBandwidthExceeded => "E_CAP_PEER_BANDWIDTH_EXCEEDED",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -644,6 +692,10 @@ impl ErrorCode {
     /// | Wait timeout, attribution, system-zone, write failures, …| `ON_ERROR` |
     /// | Resume protocol / configuration / drift-only codes | `None` |
     #[must_use]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "exhaustive ErrorCode → edge-label match; one arm per family by design (single source of truth per EH2 + r6-err-10). Phase-3 G14-B added 7 cap-denial-family variants which crossed the 100-line threshold — the family-grouped match shape is load-bearing for forward-compat and the per-variant rationale comments are required to keep the routing intent legible."
+    )]
     pub fn routed_edge_label(&self) -> Option<&'static str> {
         match self {
             // Cap denials — explicit ON_DENIED. SANDBOX host-fn denial
@@ -661,7 +713,18 @@ impl ErrorCode {
             | ErrorCode::HostCapabilityRevoked
             | ErrorCode::HostCapabilityExpired
             | ErrorCode::SandboxHostFnDenied
-            | ErrorCode::SandboxNestedDispatchDenied => Some("ON_DENIED"),
+            | ErrorCode::SandboxNestedDispatchDenied
+            // G14-B durable UCAN backend denial family — chain-walk
+            // failures (expired / not-yet-valid / bad-sig / attenuation
+            // violation) + rate-limit denials all join the cap-denial
+            // family per the same routing precedent as `CapDenied` /
+            // `CapRevoked` / `CapAttenuation`.
+            | ErrorCode::CapUcanExpired
+            | ErrorCode::CapUcanNotYetValid
+            | ErrorCode::CapUcanBadSignature
+            | ErrorCode::CapUcanAttenuationViolated
+            | ErrorCode::CapRateLimitExceeded
+            | ErrorCode::CapPeerBandwidthExceeded => Some("ON_DENIED"),
 
             // Not-found family — explicit ON_NOT_FOUND. SANDBOX manifest +
             // host-fn lookup miss join here per ESC-15 + D1 random-deferred
@@ -734,7 +797,15 @@ impl ErrorCode {
             | ErrorCode::SandboxMemoryExhausted
             | ErrorCode::SandboxWallclockExceeded
             | ErrorCode::SandboxModuleInvalid
-            | ErrorCode::SandboxManifestRegistrationDeferred => Some("ON_ERROR"),
+            | ErrorCode::SandboxManifestRegistrationDeferred
+            // G14-B durable UCAN backend storage I/O failure — joins
+            // the `GraphInternal` / `HostBackendUnavailable` runtime-
+            // failure family rather than the cap-denial family because
+            // the backend cannot determine permitted-or-not when its
+            // store is unreadable; the failure is layered through to
+            // the caller as ON_ERROR. Distinct from `CapDenied` (the
+            // backend reached a denial verdict).
+            | ErrorCode::CapBackendStorage => Some("ON_ERROR"),
 
             // Inv-7 SANDBOX output limit — dedicated edge label (matches the
             // SANDBOX primitive's edge surface in `benten-core` subgraph.rs:
@@ -930,6 +1001,17 @@ impl ErrorCode {
             "E_RELOAD_SUBSCRIBER_UNSUBSCRIBED" => ErrorCode::ReloadSubscriberUnsubscribed,
             "E_DEVSERVER_STOPPED" => ErrorCode::DevServerStopped,
             "E_HLC_SKEW_EXCEEDED" => ErrorCode::HlcSkewExceeded,
+            // Phase-3 G14-B (durable UCAN backend) — see ErrorCode
+            // CapUcanExpired / CapUcanNotYetValid / CapUcanBadSignature
+            // / CapUcanAttenuationViolated / CapBackendStorage /
+            // CapRateLimitExceeded / CapPeerBandwidthExceeded.
+            "E_CAP_UCAN_EXPIRED" => ErrorCode::CapUcanExpired,
+            "E_CAP_UCAN_NOT_YET_VALID" => ErrorCode::CapUcanNotYetValid,
+            "E_CAP_UCAN_BAD_SIGNATURE" => ErrorCode::CapUcanBadSignature,
+            "E_CAP_UCAN_ATTENUATION_VIOLATED" => ErrorCode::CapUcanAttenuationViolated,
+            "E_CAP_BACKEND_STORAGE" => ErrorCode::CapBackendStorage,
+            "E_CAP_RATE_LIMIT_EXCEEDED" => ErrorCode::CapRateLimitExceeded,
+            "E_CAP_PEER_BANDWIDTH_EXCEEDED" => ErrorCode::CapPeerBandwidthExceeded,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }

@@ -118,8 +118,12 @@ dependencies = [
  "benten-engine",
  "benten-errors",
  "benten-graph",
+ "benten-id",
+ "blake3",
  "criterion",
  "proptest",
+ "serde_ipld_dagcbor",
+ "subtle",
  "tempfile",
  "thiserror",
 ]

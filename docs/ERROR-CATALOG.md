@@ -930,6 +930,62 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** `crates/benten-core/src/hlc.rs::Hlc::update` (Phase-3 G14-pre-D). Phase-3 sync wires the firing site into Loro per-property LWW + asymmetric-uptime MST-diff message ingest.
 - **Phase:** 3 G14-pre-D
 
+### E_CAP_UCAN_EXPIRED
+
+- **Message:** "UCAN expired (exp={exp}, now={now})"
+- **Context:** `{ exp: u64, now: u64 }`
+- **Fix:** Presented UCAN's `exp` window has elapsed at chain-walk time. Re-issue the UCAN with a fresh `exp`. Defends against the "old proof sitting in disk forever, replayed by attacker who sniffed it pre-exp" attack class per `crypto-blocker-2` BLOCKER + CLR-2.
+- **Thrown at:** `crates/benten-caps/src/backends/ucan.rs::UCANBackend::validate_chain_at` (Phase-3 G14-B). Routes to `ON_DENIED`.
+- **Phase:** 3 G14-B
+
+### E_CAP_UCAN_NOT_YET_VALID
+
+- **Message:** "UCAN not yet valid (nbf={nbf}, now={now})"
+- **Context:** `{ nbf: u64, now: u64 }`
+- **Fix:** Presented UCAN's `nbf` window has not yet opened at chain-walk time. Wait until `now >= nbf` or re-issue with an earlier `nbf`. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-caps/src/backends/ucan.rs::UCANBackend::validate_chain_at` (Phase-3 G14-B).
+- **Phase:** 3 G14-B
+
+### E_CAP_UCAN_BAD_SIGNATURE
+
+- **Message:** "UCAN signature failed verification (link_index={link_index})"
+- **Context:** `{ link_index: usize }`
+- **Fix:** Presented UCAN's signature failed to verify against the issuer's resolved public key. Likely tampered or signed by a different keypair than the one named in `iss`. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-caps/src/backends/ucan.rs::UCANBackend::validate_chain_at` (Phase-3 G14-B). Constant-time comparison via `subtle::ConstantTimeEq` per `crypto-major-4`.
+- **Phase:** 3 G14-B
+
+### E_CAP_UCAN_ATTENUATION_VIOLATED
+
+- **Message:** "UCAN attenuation violated: child cap '{child_cap}' is not subsumed by parent caps"
+- **Context:** `{ child_cap: String, link_index: usize }`
+- **Fix:** Child UCAN's capability widens its parent's authority — a structural delegation violation. Re-issue the child UCAN attenuated to a subset of the parent's `att`. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-caps/src/backends/ucan.rs::UCANBackend::validate_chain_at` (Phase-3 G14-B). Composes with `benten_id::ucan::validate_chain_at` per `crypto-blocker-2`.
+- **Phase:** 3 G14-B
+
+### E_CAP_BACKEND_STORAGE
+
+- **Message:** "UCAN backend storage I/O failure: {reason}"
+- **Context:** `{ reason: String }`
+- **Fix:** Durable UCAN backend failed to read or write its grant store. Surfaces a layered backend I/O failure to the policy hook caller. Inspect underlying `GraphBackend` health (redb file permissions, disk space). Distinct from `E_CAP_DENIED` — the backend cannot determine permitted-or-not when its store is unreadable. Routes to `ON_ERROR`.
+- **Thrown at:** `crates/benten-caps/src/backends/ucan.rs::UCANBackend::{record_grant, record_revocation, validate_chain_with_durable_revocations}` (Phase-3 G14-B).
+- **Phase:** 3 G14-B
+
+### E_CAP_RATE_LIMIT_EXCEEDED
+
+- **Message:** "rate-limit exceeded for actor {actor} on zone {zone}"
+- **Context:** `{ actor: String, zone: String }`
+- **Fix:** Per-actor writes/sec/zone bucket exceeded its budget. Configure a less restrictive `RateLimitPolicy::actor_writes_per_second` for the actor, or back off and retry. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-caps/src/rate_limit.rs::RateLimitPolicy::pre_write` (Phase-3 G14-B; D-F + D-PHASE-3-26).
+- **Phase:** 3 G14-B
+
+### E_CAP_PEER_BANDWIDTH_EXCEEDED
+
+- **Message:** "peer bandwidth budget exceeded for peer {peer} ({bytes} bytes)"
+- **Context:** `{ peer: String, bytes: usize }`
+- **Fix:** Per-peer bandwidth bytes/sec budget at the Atrium boundary exceeded its limit. Defends against a malicious or buggy peer flooding the sync channel. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-caps/src/rate_limit.rs::RateLimitPolicy::account_peer_inbound` (Phase-3 G14-B; D-F + D-PHASE-3-26 + D-PHASE-3-30).
+- **Phase:** 3 G14-B
+
 ## Extending the catalog
 
 When adding a new error:
