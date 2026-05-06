@@ -974,8 +974,8 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 - **Message:** "rate-limit exceeded for actor {actor} on zone {zone}"
 - **Context:** `{ actor: String, zone: String }`
-- **Fix:** Per-actor writes/sec/zone bucket exceeded its budget. Configure a less restrictive `RateLimitPolicy::actor_writes_per_second` for the actor, or back off and retry. Routes to `ON_DENIED`.
-- **Thrown at:** `crates/benten-caps/src/rate_limit.rs::RateLimitPolicy::pre_write` (Phase-3 G14-B; D-F + D-PHASE-3-26).
+- **Fix:** Per-actor writes/sec/zone bucket exceeded its budget. Configure a less restrictive `InMemoryRateLimitPolicyBuilder::actor_writes_per_second` for the actor, or back off and retry. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-caps/src/rate_limit.rs::RateLimitPolicy::check_writes_per_sec` (Phase-3 G14-B; D-F + D-PHASE-3-26).
 - **Phase:** 3 G14-B
 
 ### E_CAP_PEER_BANDWIDTH_EXCEEDED
@@ -983,7 +983,15 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Message:** "peer bandwidth budget exceeded for peer {peer} ({bytes} bytes)"
 - **Context:** `{ peer: String, bytes: usize }`
 - **Fix:** Per-peer bandwidth bytes/sec budget at the Atrium boundary exceeded its limit. Defends against a malicious or buggy peer flooding the sync channel. Routes to `ON_DENIED`.
-- **Thrown at:** `crates/benten-caps/src/rate_limit.rs::RateLimitPolicy::account_peer_inbound` (Phase-3 G14-B; D-F + D-PHASE-3-26 + D-PHASE-3-30).
+- **Thrown at:** `crates/benten-caps/src/rate_limit.rs::RateLimitPolicy::check_peer_bandwidth` (Phase-3 G14-B; D-F + D-PHASE-3-26 + D-PHASE-3-30).
+- **Phase:** 3 G14-B
+
+### E_CAP_UCAN_AUDIENCE_MISMATCH
+
+- **Message:** "UCAN audience mismatch: token aud '{actual}' != expected '{expected}'"
+- **Context:** `{ expected: String, actual: String }`
+- **Fix:** The presented UCAN's audience DID does not match the validation context's expected audience. Defends against cross-atrium replay (a UCAN issued to atrium A persisted in atrium B's durable store and replayed against atrium B). Re-issue the UCAN with the correct `aud` for the local atrium. Distinct from `E_CAP_DENIED` so audit pipelines can route on cross-atrium replay independently. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-caps/src/backends/ucan.rs::UCANBackend::validate_chain_for_audience_at` (Phase-3 G14-B mini-review fix-pass; CLR-2 audience-binding pinned at the durable chain-walk seam). Constant-time DID-bytes comparison via `subtle::ConstantTimeEq` at the `benten_id::ucan::validate_chain_for_audience` upstream.
 - **Phase:** 3 G14-B
 
 ## Extending the catalog

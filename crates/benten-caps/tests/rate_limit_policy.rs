@@ -229,3 +229,82 @@ fn rate_limit_per_actor_zone_buckets_isolated_under_failure() {
         .check_writes_per_sec("did:test:quiet-actor", "/zone/posts")
         .expect("quiet actor's bucket MUST be independent of loud actor's exhaustion");
 }
+
+// =====================================================================
+// Read-budget axis — symmetric coverage to writes_per_sec (per mini-
+// review g14b-mr-4). InMemoryRateLimitPolicy::check_read_budget is
+// fully implemented; these tests pin the three exhaustion / slide /
+// isolation invariants the writes_per_sec axis already pins. Concrete
+// enforcement at G14-D / G16 read-path wiring; these tests pin the
+// plug surface NOW so a future refactor of the bucket internals can't
+// silently regress the read budget.
+// =====================================================================
+
+#[test]
+fn read_budget_under_limit_passes() {
+    let actor = "did:test:reader-a";
+    let policy = InMemoryRateLimitPolicy::builder()
+        .actor_reads_per_second(actor, 5)
+        .build();
+    for i in 0..5 {
+        policy
+            .check_read_budget(actor)
+            .unwrap_or_else(|e| panic!("read {i} within budget unexpectedly rejected: {e:?}"));
+    }
+}
+
+#[test]
+fn read_budget_at_limit_passes_then_next_call_rejects() {
+    let actor = "did:test:reader-a";
+    let policy = InMemoryRateLimitPolicy::builder()
+        .actor_reads_per_second(actor, 3)
+        .build();
+    for _ in 0..3 {
+        policy.check_read_budget(actor).unwrap();
+    }
+    // 4th call MUST reject — bucket exhausted.
+    let err = policy.check_read_budget(actor).unwrap_err();
+    assert!(
+        matches!(err, CapError::RateLimitExceeded { .. }),
+        "4th read within 1-second window MUST reject; got {err:?}"
+    );
+}
+
+#[test]
+fn read_budget_resets_after_window_slide() {
+    let clock = TestClock::new();
+    let actor = "did:test:reader-a";
+    let policy = InMemoryRateLimitPolicy::builder()
+        .actor_reads_per_second(actor, 2)
+        .with_clock(clock.closure())
+        .build();
+    // Exhaust the bucket.
+    policy.check_read_budget(actor).unwrap();
+    policy.check_read_budget(actor).unwrap();
+    assert!(
+        policy.check_read_budget(actor).is_err(),
+        "post-budget call MUST reject"
+    );
+    // Slide past the 1-second window — bucket resets.
+    clock.advance(Duration::from_millis(1_100));
+    policy
+        .check_read_budget(actor)
+        .expect("post-window-slide call MUST pass — bucket resets on window boundary");
+}
+
+#[test]
+fn read_budget_per_actor_buckets_isolated() {
+    let actor_a = "did:test:reader-a";
+    let actor_b = "did:test:reader-b";
+    let policy = InMemoryRateLimitPolicy::builder()
+        .actor_reads_per_second(actor_a, 1)
+        .actor_reads_per_second(actor_b, 1)
+        .build();
+    // Actor A exhausts first.
+    policy.check_read_budget(actor_a).unwrap();
+    let _ = policy.check_read_budget(actor_a);
+    // Actor B's budget MUST remain untouched (isolation across actors).
+    policy
+        .check_read_budget(actor_b)
+        .expect("actor B's read bucket MUST be independent of actor A's exhaustion");
+}

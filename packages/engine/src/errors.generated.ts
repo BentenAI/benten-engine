@@ -140,6 +140,7 @@ export const CATALOG_CODES = [
   "E_CAP_BACKEND_STORAGE",
   "E_CAP_RATE_LIMIT_EXCEEDED",
   "E_CAP_PEER_BANDWIDTH_EXCEEDED",
+  "E_CAP_UCAN_AUDIENCE_MISMATCH",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -1722,14 +1723,14 @@ export class ECapBackendStorage extends BentenError {
 /**
  * E_CAP_RATE_LIMIT_EXCEEDED
  *
- * Thrown at: `crates/benten-caps/src/rate_limit.rs::RateLimitPolicy::pre_write` (Phase-3 G14-B; D-F + D-PHASE-3-26).
+ * Thrown at: `crates/benten-caps/src/rate_limit.rs::RateLimitPolicy::check_writes_per_sec` (Phase-3 G14-B; D-F + D-PHASE-3-26).
  * Message template: "rate-limit exceeded for actor {actor} on zone {zone}"
  */
 export class ECapRateLimitExceeded extends BentenError {
   static readonly code = "E_CAP_RATE_LIMIT_EXCEEDED";
-  static readonly fixHint = "Per-actor writes/sec/zone bucket exceeded its budget. Configure a less restrictive `RateLimitPolicy::actor_writes_per_second` for the actor, or back off and retry. Routes to `ON_DENIED`.";
+  static readonly fixHint = "Per-actor writes/sec/zone bucket exceeded its budget. Configure a less restrictive `InMemoryRateLimitPolicyBuilder::actor_writes_per_second` for the actor, or back off and retry. Routes to `ON_DENIED`.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_CAP_RATE_LIMIT_EXCEEDED", "Per-actor writes/sec/zone bucket exceeded its budget. Configure a less restrictive `RateLimitPolicy::actor_writes_per_second` for the actor, or back off and retry. Routes to `ON_DENIED`.", message, context);
+    super("E_CAP_RATE_LIMIT_EXCEEDED", "Per-actor writes/sec/zone bucket exceeded its budget. Configure a less restrictive `InMemoryRateLimitPolicyBuilder::actor_writes_per_second` for the actor, or back off and retry. Routes to `ON_DENIED`.", message, context);
     this.name = "ECapRateLimitExceeded";
   }
 }
@@ -1737,7 +1738,7 @@ export class ECapRateLimitExceeded extends BentenError {
 /**
  * E_CAP_PEER_BANDWIDTH_EXCEEDED
  *
- * Thrown at: `crates/benten-caps/src/rate_limit.rs::RateLimitPolicy::account_peer_inbound` (Phase-3 G14-B; D-F + D-PHASE-3-26 + D-PHASE-3-30).
+ * Thrown at: `crates/benten-caps/src/rate_limit.rs::RateLimitPolicy::check_peer_bandwidth` (Phase-3 G14-B; D-F + D-PHASE-3-26 + D-PHASE-3-30).
  * Message template: "peer bandwidth budget exceeded for peer {peer} ({bytes} bytes)"
  */
 export class ECapPeerBandwidthExceeded extends BentenError {
@@ -1746,5 +1747,20 @@ export class ECapPeerBandwidthExceeded extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_CAP_PEER_BANDWIDTH_EXCEEDED", "Per-peer bandwidth bytes/sec budget at the Atrium boundary exceeded its limit. Defends against a malicious or buggy peer flooding the sync channel. Routes to `ON_DENIED`.", message, context);
     this.name = "ECapPeerBandwidthExceeded";
+  }
+}
+
+/**
+ * E_CAP_UCAN_AUDIENCE_MISMATCH
+ *
+ * Thrown at: `crates/benten-caps/src/backends/ucan.rs::UCANBackend::validate_chain_for_audience_at` (Phase-3 G14-B mini-review fix-pass; CLR-2 audience-binding pinned at the durable chain-walk seam). Constant-time DID-bytes comparison via `subtle::ConstantTimeEq` at the `benten_id::ucan::validate_chain_for_audience` upstream.
+ * Message template: "UCAN audience mismatch: token aud '{actual}' != expected '{expected}'"
+ */
+export class ECapUcanAudienceMismatch extends BentenError {
+  static readonly code = "E_CAP_UCAN_AUDIENCE_MISMATCH";
+  static readonly fixHint = "The presented UCAN's audience DID does not match the validation context's expected audience. Defends against cross-atrium replay (a UCAN issued to atrium A persisted in atrium B's durable store and replayed against atrium B). Re-issue the UCAN with the correct `aud` for the local atrium. Distinct from `E_CAP_DENIED` so audit pipelines can route on cross-atrium replay independently. Routes to `ON_DENIED`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_CAP_UCAN_AUDIENCE_MISMATCH", "The presented UCAN's audience DID does not match the validation context's expected audience. Defends against cross-atrium replay (a UCAN issued to atrium A persisted in atrium B's durable store and replayed against atrium B). Re-issue the UCAN with the correct `aud` for the local atrium. Distinct from `E_CAP_DENIED` so audit pipelines can route on cross-atrium replay independently. Routes to `ON_DENIED`.", message, context);
+    this.name = "ECapUcanAudienceMismatch";
   }
 }

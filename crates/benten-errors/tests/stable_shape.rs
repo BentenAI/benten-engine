@@ -163,6 +163,7 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::CapUcanNotYetValid,
     ErrorCode::CapUcanBadSignature,
     ErrorCode::CapUcanAttenuationViolated,
+    ErrorCode::CapUcanAudienceMismatch,
     ErrorCode::CapBackendStorage,
     ErrorCode::CapRateLimitExceeded,
     ErrorCode::CapPeerBandwidthExceeded,
@@ -266,8 +267,15 @@ fn variant_count_is_pinned() {
     // store I/O failure (`CapBackendStorage`), rate-limit policy plug
     // denials (`CapRateLimitExceeded`, `CapPeerBandwidthExceeded`).
     // Post-G14-B: 82 + 7 = 89.
+    //
+    // Phase-3 G14-B mini-review fix-pass adds 1 code:
+    // `CapUcanAudienceMismatch` — typed cross-atrium replay denial at
+    // the durable chain-walk seam (CLR-2 audience-binding pinned at
+    // `UCANBackend::validate_chain_for_audience_at`). Distinct from
+    // `CapDenied` so audit pipelines can route on cross-atrium replay
+    // independently of generic denial. Post-mini-review: 89 + 1 = 90.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 89,
+        CATALOG_VARIANT_COUNT, 90,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

@@ -458,6 +458,12 @@ pub enum ErrorCode {
     /// (per crypto-blocker-2 + UCAN attenuation contract). Maps to
     /// `E_CAP_UCAN_ATTENUATION_VIOLATED`.
     CapUcanAttenuationViolated,
+    /// G14-B: presented UCAN's audience DID does not match the
+    /// validation context's expected audience (per CLR-2 cross-atrium
+    /// replay defense). Distinct from `CapUcanBadSignature` so audit
+    /// pipelines can route on cross-atrium replay independently of
+    /// signature-tampering. Maps to `E_CAP_UCAN_AUDIENCE_MISMATCH`.
+    CapUcanAudienceMismatch,
     /// G14-B: durable UCAN backend failed to read or write its grant
     /// store. Surfaces a layered backend I/O failure to the policy
     /// hook caller. Maps to `E_CAP_BACKEND_STORAGE`.
@@ -648,6 +654,7 @@ impl ErrorCode {
             ErrorCode::CapUcanNotYetValid => "E_CAP_UCAN_NOT_YET_VALID",
             ErrorCode::CapUcanBadSignature => "E_CAP_UCAN_BAD_SIGNATURE",
             ErrorCode::CapUcanAttenuationViolated => "E_CAP_UCAN_ATTENUATION_VIOLATED",
+            ErrorCode::CapUcanAudienceMismatch => "E_CAP_UCAN_AUDIENCE_MISMATCH",
             ErrorCode::CapBackendStorage => "E_CAP_BACKEND_STORAGE",
             ErrorCode::CapRateLimitExceeded => "E_CAP_RATE_LIMIT_EXCEEDED",
             ErrorCode::CapPeerBandwidthExceeded => "E_CAP_PEER_BANDWIDTH_EXCEEDED",
@@ -723,6 +730,7 @@ impl ErrorCode {
             | ErrorCode::CapUcanNotYetValid
             | ErrorCode::CapUcanBadSignature
             | ErrorCode::CapUcanAttenuationViolated
+            | ErrorCode::CapUcanAudienceMismatch
             | ErrorCode::CapRateLimitExceeded
             | ErrorCode::CapPeerBandwidthExceeded => Some("ON_DENIED"),
 
@@ -1009,6 +1017,7 @@ impl ErrorCode {
             "E_CAP_UCAN_NOT_YET_VALID" => ErrorCode::CapUcanNotYetValid,
             "E_CAP_UCAN_BAD_SIGNATURE" => ErrorCode::CapUcanBadSignature,
             "E_CAP_UCAN_ATTENUATION_VIOLATED" => ErrorCode::CapUcanAttenuationViolated,
+            "E_CAP_UCAN_AUDIENCE_MISMATCH" => ErrorCode::CapUcanAudienceMismatch,
             "E_CAP_BACKEND_STORAGE" => ErrorCode::CapBackendStorage,
             "E_CAP_RATE_LIMIT_EXCEEDED" => ErrorCode::CapRateLimitExceeded,
             "E_CAP_PEER_BANDWIDTH_EXCEEDED" => ErrorCode::CapPeerBandwidthExceeded,

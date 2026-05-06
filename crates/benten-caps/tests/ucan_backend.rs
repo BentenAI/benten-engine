@@ -360,3 +360,71 @@ fn ucan_backend_attenuates_host_atrium_publish_view_result_in_chain() {
         "host:atrium:publish_view_result MUST attenuate per D-PHASE-3-21 D2 + standard UCAN semantics; got {err:?}"
     );
 }
+
+// ============================================================
+// CLR-2 AUDIENCE-BINDING — pinned at the durable chain-walk seam.
+//
+// Per mini-review g14b-mr-1: a UCAN issued to atrium-A persisted in
+// atrium-B's durable store and replayed against atrium-B's audience
+// MUST reject with the typed CapError::UcanAudienceMismatch (NOT
+// generic CapError::Denied). Drives the production
+// `UCANBackend::validate_chain_for_audience_at` entry point + asserts
+// the observable consequence (cross-atrium replay rejected with the
+// typed audience-mismatch shape so audit pipelines can route on it
+// independently).
+// ============================================================
+
+#[test]
+fn ucan_backend_audience_mismatch_durable_layer_rejects() {
+    // Setup: store a UCAN whose `aud` is atrium-A's audience DID,
+    // chain-walk against atrium-B's audience DID. The durable seam
+    // MUST surface CapError::UcanAudienceMismatch — not a generic
+    // CapError::Denied + not pass through silently.
+    let backend = fresh_backend();
+    let issuer = Keypair::generate();
+    let atrium_a_audience = Keypair::generate();
+    let atrium_b_audience = Keypair::generate();
+    let now = now();
+    let ucan = build_ucan(
+        &issuer,
+        &atrium_a_audience,
+        Capability::new("/zone/posts", "read"),
+        now - 1,
+        now + 3600,
+    );
+
+    // Persist into atrium-B's durable store (cross-atrium replay
+    // shape: a token landed in the wrong atrium's store).
+    backend.install_proof(&ucan).expect("install_proof");
+
+    // Validate against atrium-B's audience — MUST reject with the
+    // typed audience-mismatch error, NOT generic Denied.
+    let atrium_b_did = atrium_b_audience.public_key().to_did();
+    let err = backend
+        .validate_chain_for_audience_at(std::slice::from_ref(&ucan), &atrium_b_did, now)
+        .expect_err("cross-atrium replay MUST reject at the durable seam");
+    let CapError::UcanAudienceMismatch { expected, actual } = err else {
+        panic!(
+            "expected CapError::UcanAudienceMismatch (CLR-2 typed cross-atrium replay); got {err:?}"
+        );
+    };
+    assert_eq!(
+        expected,
+        atrium_b_did.as_str(),
+        "expected audience MUST be atrium-B's DID (the validation context)"
+    );
+    assert_eq!(
+        actual,
+        atrium_a_audience.public_key().to_did().as_str(),
+        "actual audience MUST be atrium-A's DID (the token's `aud` field)"
+    );
+
+    // Sanity: the SAME chain-walk against the CORRECT audience passes
+    // — proves the audience binding is the discriminator, not some
+    // other rejection mode (sig / time-window / revocation) that
+    // happens to fire here.
+    let atrium_a_did = atrium_a_audience.public_key().to_did();
+    backend
+        .validate_chain_for_audience_at(std::slice::from_ref(&ucan), &atrium_a_did, now)
+        .expect("validate against correct audience MUST pass — proves audience binding is the only discriminator");
+}

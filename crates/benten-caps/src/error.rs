@@ -172,6 +172,23 @@ pub enum CapError {
         child_cap: String,
     },
 
+    /// G14-B mini-review fix-pass: the presented UCAN's audience DID
+    /// does not match the validation context's expected audience.
+    /// Defends against cross-atrium replay (a UCAN issued to
+    /// atrium A persisted in atrium B's durable store and replayed)
+    /// per CLR-2. Pinned at the durable chain-walk seam so audit
+    /// pipelines can route on cross-atrium replay independently of
+    /// the generic [`CapError::Denied`] family. Mirrors
+    /// [`benten_id::errors::UcanError::AudienceMismatch`].
+    #[error("UCAN audience mismatch: token aud '{actual}' != expected '{expected}'")]
+    UcanAudienceMismatch {
+        /// The audience the validator expected (the local atrium's DID).
+        expected: String,
+        /// The audience the token actually names (the cross-atrium
+        /// replay source).
+        actual: String,
+    },
+
     /// G14-B: durable UCAN backend failed to read or write its grant
     /// store. Surfaces a layered backend I/O failure to the policy
     /// hook caller. Distinct from [`CapError::Denied`] — the backend
@@ -240,6 +257,7 @@ impl CapError {
             CapError::UcanNotYetValid { .. } => ErrorCode::CapUcanNotYetValid,
             CapError::UcanBadSignature { .. } => ErrorCode::CapUcanBadSignature,
             CapError::UcanAttenuationViolated { .. } => ErrorCode::CapUcanAttenuationViolated,
+            CapError::UcanAudienceMismatch { .. } => ErrorCode::CapUcanAudienceMismatch,
             CapError::BackendStorage { .. } => ErrorCode::CapBackendStorage,
             CapError::RateLimitExceeded { .. } => ErrorCode::CapRateLimitExceeded,
             CapError::PeerBandwidthExceeded { .. } => ErrorCode::CapPeerBandwidthExceeded,

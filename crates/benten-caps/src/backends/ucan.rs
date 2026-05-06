@@ -52,7 +52,7 @@
 //! Attenuation applies uniformly: a child cannot widen the
 //! capability beyond its parent's grant (per UCAN spec).
 //!
-//! ## ssi re-evaluation (per phase-3-backlog §2.1-followup)
+//! ## ssi re-evaluation (per phase-3-backlog §2.1)
 //!
 //! G14-B is the named destination for ssi-for-UCAN-external-interop.
 //! At impl-time the durable backend continues to use the hand-rolled
@@ -63,8 +63,38 @@
 //! external producer-interop becomes required). Adding ssi as a dep
 //! is deferred to the G16 Atrium-handshake landing per
 //! `feedback_no_defer_HARD_RULE` clause (b) BELONGS-ELSEWHERE
-//! (named destination: `docs/future/phase-3-backlog.md §2.1-followup`,
-//! which is updated NOW to point at G16).
+//! (named destination: `docs/future/phase-3-backlog.md §2.1` "Durable
+//! UCAN backend in `benten-id`" — updated NOW with the G16 ssi-
+//! re-evaluation pointer).
+//!
+//! ## Dual durable-grant-store seam (intentional)
+//!
+//! Two parallel durable-grant-store seams coexist in the engine by
+//! design. Each consumer reads its own seam; they are NOT a write-
+//! mirror of one another (per mini-review g14b-mr-3 disposition):
+//!
+//! - **`UCANBackend` raw KV `g14b:grant:<cid>`** (this file). Optimized
+//!   for chain-walk lookup: CID-keyed direct-fetch with no Node-decode
+//!   cycle. The CID is the content-address of the full UCAN envelope
+//!   (claims + signature) so the durable identity for each token is
+//!   deterministic across restarts. Used by signed UCAN-typed proofs
+//!   whose identity IS their content-CID.
+//!
+//! - **`GrantReader` Node-encoded `system:CapabilityGrant` zone**
+//!   (`crates/benten-caps/src/grant_backed.rs`). Optimized for cap-
+//!   recheck delivery-time scans: ChangeSubscriber-driven, used by the
+//!   Phase-2a `NoAuthBackend` / direct-policy seam for unsigned
+//!   capability-grant Nodes (Phase-3 SUBSCRIBE delivery-time recheck
+//!   per §6 G14-D path).
+//!
+//! Both seams will coexist; the G14-D wave (next, per §6 of the
+//! plan) reconciles cross-seam read-during-write semantics where the
+//! SUBSCRIBE delivery-time cap-recheck closure consumes both. A
+//! future "unify the stores" PR is rejected by reference to this
+//! module-doc paragraph: the dual shape is intentional — the two
+//! seams have different read-shapes (CID-keyed direct-fetch vs zone-
+//! prefix scan) and different write-paths (UCAN envelope persist vs
+//! Node-encoded grant write).
 
 use std::sync::Arc;
 
@@ -72,8 +102,11 @@ use benten_core::Cid;
 use benten_graph::GraphBackend;
 use benten_graph::backend::KVBackend;
 use benten_id::device_attestation::DeviceRevocation;
+use benten_id::did::Did;
 use benten_id::errors::UcanError;
-use benten_id::ucan::{Ucan, validate_chain_at, validate_chain_with_device_revocations};
+use benten_id::ucan::{
+    Ucan, validate_chain_at, validate_chain_for_audience, validate_chain_with_device_revocations,
+};
 use serde_ipld_dagcbor as cbor;
 
 use crate::error::CapError;
@@ -139,9 +172,12 @@ fn cap_err_from_ucan(err: UcanError) -> CapError {
             link_index,
             child_cap,
         },
-        UcanError::AudienceMismatch { .. } => CapError::Denied {
-            required: String::new(),
-            entity: "UCAN audience mismatch (cross-atrium replay)".to_string(),
+        UcanError::AudienceMismatch {
+            token_aud,
+            expected,
+        } => CapError::UcanAudienceMismatch {
+            expected,
+            actual: token_aud,
         },
         UcanError::IssuerKeypairSuperseded { issuer } => CapError::Denied {
             required: String::new(),
@@ -369,6 +405,55 @@ impl<B: GraphBackend> UCANBackend<B> {
     /// Same as [`UCANBackend::validate_chain_at`].
     pub fn validate_chain(&self, chain: &[Ucan], now: u64) -> Result<(), CapError> {
         self.validate_chain_at(chain, now)
+    }
+
+    /// Validate a UCAN delegation chain at `now` AND bind the leaf's
+    /// audience to `audience`. Pins CLR-2 (audience-binding) at the
+    /// durable chain-walk seam: a UCAN issued to atrium-A persisted
+    /// in atrium-B's durable store and replayed against atrium-B's
+    /// audience rejects with [`CapError::UcanAudienceMismatch`] —
+    /// distinct from the generic [`CapError::Denied`] family so
+    /// audit pipelines can route on cross-atrium replay independently.
+    ///
+    /// Composes:
+    /// 1. [`benten_id::ucan::validate_chain_for_audience`] — leaf-
+    ///    audience binding (constant-time via `subtle::ConstantTimeEq`
+    ///    per `crypto-major-4`).
+    /// 2. [`benten_id::ucan::validate_chain_at`] — chain integrity +
+    ///    signature + `nbf` / `exp` time-window at every link
+    ///    (per `crypto-blocker-2` + CLR-2).
+    /// 3. Durable per-token revocation lookup (per
+    ///    [`UCANBackend::is_revoked`]).
+    ///
+    /// # Errors
+    ///
+    /// - [`CapError::UcanAudienceMismatch`] when the leaf's `aud` does
+    ///   not match `audience` (cross-atrium replay).
+    /// - Other typed cap errors per the chain-walk failure modes
+    ///   (see `docs/ERROR-CATALOG.md` `E_CAP_UCAN_*`).
+    pub fn validate_chain_for_audience_at(
+        &self,
+        chain: &[Ucan],
+        audience: &Did,
+        now: u64,
+    ) -> Result<(), CapError> {
+        // 1. Audience binding at the leaf — fires
+        //    `CapError::UcanAudienceMismatch` BEFORE the time-window
+        //    walk so a cross-atrium replay rejects with the typed
+        //    audience error rather than (e.g.) an `exp` error if the
+        //    chain happens to be expired.
+        validate_chain_for_audience(chain, audience).map_err(cap_err_from_ucan)?;
+        // 2. Standard chain-walk (signature + time-window at every
+        //    link + chain integrity).
+        validate_chain_at(chain, now).map_err(cap_err_from_ucan)?;
+        // 3. Durable revocation lookup.
+        for token in chain {
+            let cid = ucan_cid(token)?;
+            if self.is_revoked(&cid)? {
+                return Err(CapError::Revoked);
+            }
+        }
+        Ok(())
     }
 
     /// Validate a UCAN chain composing the durable revocation store
