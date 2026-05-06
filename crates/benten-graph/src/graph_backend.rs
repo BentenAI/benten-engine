@@ -332,7 +332,7 @@ mod tests {
 
     /// Compile-time witness: every required method + associated type
     /// is callable through the trait surface. Mirrors the test pin in
-    /// `tests/graph_backend_trait.rs::graph_backend_trait_surface_complete`.
+    /// `crates/benten-graph/tests/graph_backend_trait.rs::graph_backend_trait_surface_complete`.
     #[allow(dead_code)]
     fn assert_trait_surface_complete<B: GraphBackend>() {
         let _: fn(&B) -> <B as GraphBackend>::Transaction = B::transaction;
@@ -343,7 +343,7 @@ mod tests {
 
     /// Compile-time witness: `Self::Snapshot: Send + Sync + 'static`
     /// (per `arch-r1-6`). Mirrors the test pin in
-    /// `tests/graph_backend_trait.rs::graph_backend_snapshot_send_sync_static_for_all_backends`.
+    /// `crates/benten-graph/tests/graph_backend_trait.rs::graph_backend_snapshot_send_sync_static_for_all_backends`.
     #[allow(dead_code)]
     fn assert_snapshot_send_sync_static<B: GraphBackend>() {
         fn assert_send_sync_static<T: Send + Sync + 'static + ?Sized>() {}
