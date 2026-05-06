@@ -93,15 +93,6 @@ benten-dsl-compiler = { path = "../../crates/benten-dsl-compiler" }
 # depend directly so the napi binding's parser can name the enum without
 # pulling a benten-engine re-export shim.
 benten-ivm = { path = "../../crates/benten-ivm" }
-# Phase 3 G14-A1 (2026-05-06): napi bridge for Keypair / Did / Ucan
-# (identity primitives). `benten-id` is target-agnostic — the
-# Phase-3 R1 thin-client commitment (CLAUDE.md baked-in #17) reaches
-# the wasm32 deployment shape via the TS-side type declarations in
-# `packages/engine/src/identity.ts`; the napi bridge here is the
-# native (full-peer) surface. Per Q1 standing rule (alias-based
-# pragmatic-genericism), this is a thin wrapping bridge — no `<B>`
-# generic cascade.
-benten-id = { path = "../../crates/benten-id" }
 # r6b-dx-C5: used by `parse_actor_cid_or_derive` to hash friendly
 # principal strings into deterministic synthetic CIDs. Same version the
 # engine crates use for content hashing.
@@ -118,8 +109,20 @@ serde_json = { workspace = true }
 # baked-in #17). Per pim-1 §3.5b HARDENED point 5 (crate-prefix-cite):
 # the consuming module is `crates/benten-napi/src/devserver.rs::DevServer`
 # and is also `cfg(not(target_arch = "wasm32"))`-gated in `src/lib.rs`.
+#
+# G14-A1 R5 wave-4a fix-pass (2026-05-06): `benten-id` similarly native-only.
+# Transitively pulls `getrandom` for OS CSPRNG keypair generation, which
+# rejects `wasm32-unknown-unknown` without the `js` feature. Per
+# CLAUDE.md baked-in #17, identity work (Ed25519 keygen, signing) lives
+# on the full-peer side; the browser thin-client declares its shape via
+# `packages/engine/src/identity.ts` TS types and delegates real signing
+# to a connected full peer at handshake time. Consuming module
+# `crates/benten-napi/src/identity.rs` is also
+# `cfg(all(feature = "napi-export", not(target_arch = "wasm32")))`-gated
+# in `src/lib.rs`.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 benten-dev = { path = "../../tools/benten-dev" }
+benten-id = { path = "../../crates/benten-id" }
 
 [build-dependencies]
 napi-build = "2"
