@@ -193,6 +193,27 @@ pub enum EngineError {
         migration_count: usize,
     },
 
+    /// Phase-3 G14-C (g14-c-mr-1 BLOCKER fix-pass; Compromise #21
+    /// closure): `Engine::install_module` ran signature verification
+    /// per the supplied [`crate::manifest_signing::ManifestVerifyArgs`]
+    /// and the verification path rejected. The wrapped
+    /// [`crate::manifest_signing::ManifestVerifyError`] names which
+    /// path failed (UCAN audience-mismatch, registry-key mismatch,
+    /// unsigned, malformed signature, or mode-policy gate).
+    ///
+    /// The persistence work is NOT performed when this error fires —
+    /// the manifest is rejected BEFORE the system-zone Node + the
+    /// in-memory active-set entry land. Pinned at
+    /// `crates/benten-engine/tests/manifest_signing.rs::install_module_rejects_unsigned_when_verification_required`.
+    ///
+    /// Cfg-gated to NOT-`browser-backend`: the `manifest_signing`
+    /// module is itself NOT-`browser-backend` (CLAUDE.md baked-in #16
+    /// — browser thin clients do not run SANDBOX) so the variant has
+    /// no construction site on wasm32.
+    #[cfg(not(feature = "browser-backend"))]
+    #[error("module manifest verify: {0}")]
+    ModuleManifestVerify(#[from] crate::manifest_signing::ManifestVerifyError),
+
     /// Phase-2b Wave-8i: WAIT primitive in a regular `Engine::call` walk
     /// drove the evaluator to a suspension boundary. Carries the
     /// [`SuspendedHandle`](benten_eval::SuspendedHandle) the eval-side
@@ -405,6 +426,8 @@ impl EngineError {
             EngineError::ModuleMigrationsRequirePersistence { .. } => {
                 ErrorCode::ModuleMigrationsRequirePersistence
             }
+            #[cfg(not(feature = "browser-backend"))]
+            EngineError::ModuleManifestVerify(e) => e.code(),
             EngineError::WaitSuspended { .. } => ErrorCode::WaitSuspended,
             EngineError::Other { code, .. } => code.clone(),
             // G13-B (D-PHASE-3-1a): the Backend variant erases backend-

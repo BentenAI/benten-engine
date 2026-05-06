@@ -13,6 +13,7 @@
 
 use benten_engine::Engine;
 use benten_engine::ErrorCode;
+use benten_engine::manifest_signing::ManifestVerifyArgs;
 use benten_engine::testing::{
     testing_compute_manifest_cid, testing_make_distinct_dummy_cid, testing_make_minimal_manifest,
 };
@@ -35,7 +36,7 @@ fn install_module_rejects_cid_mismatch_with_dual_cid_diff_in_error() {
     assert_ne!(computed, wrong, "test fixture invariant");
 
     let err = engine
-        .install_module(m, wrong)
+        .install_module(m, wrong, ManifestVerifyArgs::unsigned_development())
         .expect_err("CID mismatch must error, not silently install");
     assert_eq!(err.error_code(), ErrorCode::ModuleManifestCidMismatch);
     let rendered = err.to_string();
@@ -67,7 +68,7 @@ fn module_manifest_swap_after_review_rejected() {
     assert_ne!(audited_cid, cid_b);
 
     let err = engine
-        .install_module(b, audited_cid)
+        .install_module(b, audited_cid, ManifestVerifyArgs::unsigned_development())
         .expect_err("CID-pin gate must catch the swap");
     assert_eq!(err.error_code(), ErrorCode::ModuleManifestCidMismatch);
     // The audited_cid is the EXPECTED arg; cid_b is what the engine
@@ -104,7 +105,7 @@ fn module_manifest_supply_chain_by_cid_confusion_rejected() {
     assert_ne!(cid_a, cid_b);
 
     let err = engine
-        .install_module(b, cid_a)
+        .install_module(b, cid_a, ManifestVerifyArgs::unsigned_development())
         .expect_err("by-CID-confusion attack must be denied by CID-pin gate");
     assert_eq!(err.error_code(), ErrorCode::ModuleManifestCidMismatch);
 }

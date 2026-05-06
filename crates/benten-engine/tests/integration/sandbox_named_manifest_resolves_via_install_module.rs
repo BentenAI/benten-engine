@@ -34,6 +34,7 @@
 use std::collections::BTreeMap;
 
 use benten_core::{Cid, Value};
+use benten_engine::manifest_signing::ManifestVerifyArgs;
 use benten_engine::{Engine, PrimitiveSpec, SubgraphSpec};
 use benten_eval::PrimitiveKind;
 
@@ -84,7 +85,9 @@ fn sandbox_named_manifest_resolves_via_install_module() {
     let module_bytes = trivial_run_module_bytes();
     let module_cid = cid_for_bytes(&module_bytes);
     let module_cid_str = module_cid.to_base32();
-    engine.register_module_bytes(module_cid, module_bytes);
+    engine
+        .register_module_bytes(&module_cid, &module_bytes)
+        .unwrap();
 
     // Build a manifest whose single ModuleManifestEntry is named
     // "wave8h-named-handler" with a `requires: ["host:compute:time"]`
@@ -100,7 +103,11 @@ fn sandbox_named_manifest_resolves_via_install_module() {
     let entry_name = "wave8h.named-manifest-fix.handler";
     let expected_cid = benten_engine::testing::testing_compute_manifest_cid(&manifest);
     engine
-        .install_module(manifest, expected_cid)
+        .install_module(
+            manifest,
+            expected_cid,
+            ManifestVerifyArgs::unsigned_development(),
+        )
         .expect("install_module must succeed when expected_cid matches the canonical CID");
 
     // Register the SANDBOX subgraph that references the manifest BY NAME.
@@ -155,7 +162,9 @@ fn sandbox_named_manifest_truly_unknown_still_errors() {
     let module_bytes = trivial_run_module_bytes();
     let module_cid = cid_for_bytes(&module_bytes);
     let module_cid_str = module_cid.to_base32();
-    engine.register_module_bytes(module_cid, module_bytes);
+    engine
+        .register_module_bytes(&module_cid, &module_bytes)
+        .unwrap();
 
     // No install_module call — the registry overlay is empty.
     let spec = sandbox_spec_with_named_manifest(

@@ -17,6 +17,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_engine::Engine;
+use benten_engine::manifest_signing::ManifestVerifyArgs;
 use benten_engine::testing::{testing_compute_manifest_cid, testing_make_manifest_with_caps};
 
 fn fresh_engine() -> (tempfile::TempDir, Engine) {
@@ -33,7 +34,9 @@ fn module_uninstall_releases_capabilities_end_to_end() {
     let (_dir, engine) = fresh_engine();
     let m = testing_make_manifest_with_caps("acme.scoped", &["host:compute:time"]);
     let cid = testing_compute_manifest_cid(&m);
-    engine.install_module(m, cid).unwrap();
+    engine
+        .install_module(m, cid, ManifestVerifyArgs::unsigned_development())
+        .unwrap();
     assert!(
         engine
             .active_module_capabilities()
@@ -54,8 +57,12 @@ fn module_uninstall_does_not_retract_cap_required_by_sibling_manifest() {
     let n = testing_make_manifest_with_caps("acme.n", &["host:compute:time"]);
     let cid_m = testing_compute_manifest_cid(&m);
     let cid_n = testing_compute_manifest_cid(&n);
-    engine.install_module(m, cid_m).unwrap();
-    engine.install_module(n, cid_n).unwrap();
+    engine
+        .install_module(m, cid_m, ManifestVerifyArgs::unsigned_development())
+        .unwrap();
+    engine
+        .install_module(n, cid_n, ManifestVerifyArgs::unsigned_development())
+        .unwrap();
     engine.uninstall_module(cid_m).unwrap();
     assert!(
         engine

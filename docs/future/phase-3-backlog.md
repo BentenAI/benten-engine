@@ -304,6 +304,16 @@ The vitest cluster fix-pass (PR linked from `.addl/phase-2b/r6-r2-fp-vitest-clus
 
 **Touch size:** ~30-50 LOC TS CLI wrapper + the 4 test un-skips.
 
+### 6.11 G14-C inline base64 → workspace `data-encoding` dep (g14-c-mr-6 follow-up)
+
+**Phase 3 G14-C state:** `crates/benten-engine/src/manifest_signing.rs:619-682` ships an inline ~80 LOC base64 encoder/decoder used by `sign_manifest` / `decode_signature`. Cargo.lock confirms `data-encoding` (and `base64ct`) are already in the dependency graph transitively. The inline implementation is functionally safe (length-checks the 64-byte signature, no panic on malformed input, no information leak in error paths beyond non-secret invalid-char position) but duplicates well-vetted alternatives in the workspace.
+
+**Phase 3 target:** Replace the inline encoder/decoder with `data-encoding::BASE64` (or `base64ct::Base64::decode` for constant-time decode). 4-5 LOC at the call sites; drop the ~80 LOC inline impl + its mirror in `crates/benten-engine/tests/manifest_signing.rs`. Bundle with the broader workspace-level base64 dep convention if one is set during Phase-3 dependency-discipline review.
+
+**Why Phase 3:** Bundle with workspace dep convention. Standalone refactor PR is acceptable but not load-bearing.
+
+**Touch size:** ~80 LOC drop, ~10 LOC add. One PR.
+
 ### 6.10 `random` host-fn deferral — workspace CSPRNG framework choice
 
 **Phase 2b state:** D1 + sec-pre-r1-06 §2.3 deferred the `random` host-fn at Phase-2b open: shipping `random` before the workspace-wide CSPRNG framework decision was made would commit the engine to a CSPRNG choice (or trait-shape) that hasn't been audited across the rest of the runtime. The deferral was originally labeled "Phase 2c" across ~25 surfaces (security-posture, error-catalog, host-functions toml + docs, quickstart, runtime sandbox.rs error message, multiple test contracts, primitive_host docstrings, error variant doc). "Phase 2c" is NOT a defined phase in `docs/FULL-ROADMAP.md` — HARD RULE clause-(b) violation (same shape as §6.9; the random host-fn is the larger sibling of the inspect-state CLI deferral that was already retensed). This entry is the populated destination for the entire Phase-2c-labeled `random` cluster.

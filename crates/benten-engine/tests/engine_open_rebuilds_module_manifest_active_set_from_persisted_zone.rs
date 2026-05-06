@@ -15,6 +15,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use benten_engine::manifest_signing::ManifestVerifyArgs;
 use benten_engine::{Engine, ModuleManifest, ModuleManifestEntry};
 
 fn make_manifest(name: &str) -> ModuleManifest {
@@ -51,7 +52,11 @@ fn engine_open_rebuilds_module_manifest_active_set_from_persisted_zone() {
             .compute_manifest_cid(&manifest)
             .expect("compute manifest cid");
         engine
-            .install_module(manifest.clone(), computed_cid)
+            .install_module(
+                manifest.clone(),
+                computed_cid,
+                ManifestVerifyArgs::unsigned_development(),
+            )
             .expect("install manifest");
         assert!(
             engine.is_module_installed(&computed_cid),

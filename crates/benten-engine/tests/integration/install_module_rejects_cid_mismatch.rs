@@ -12,6 +12,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_engine::Engine;
+use benten_engine::manifest_signing::ManifestVerifyArgs;
 
 fn fresh_engine() -> (tempfile::TempDir, Engine) {
     let dir = tempfile::tempdir().unwrap();
@@ -38,7 +39,11 @@ fn install_module_rejects_cid_mismatch_with_dual_cid_diff_in_error() {
     );
 
     let err = engine
-        .install_module(manifest, wrong_cid)
+        .install_module(
+            manifest,
+            wrong_cid,
+            ManifestVerifyArgs::unsigned_development(),
+        )
         .expect_err("CID mismatch must surface as a typed error, not silent install");
 
     let rendered = err.to_string();

@@ -1,68 +1,82 @@
-//! R3-B RED-PHASE pin: anchor-store consolidation residual closed
-//! (G14-C wave-4b; cov-f3 + phase-2-backlog §6.3).
+//! G14-C wave-4b: anchor-store consolidation closed (cov-f3 +
+//! phase-2-backlog §6.3).
 //!
 //! Pin source: r2-test-landscape §2.2 G14-C row
-//! `anchor_store_consolidation_cov_f3_no_residual`; cov-f3.
+//! `anchor_store_consolidation_cov_f3_no_residual`.
 //!
 //! ## Architectural intent
 //!
-//! Phase-2 left a tracked residual (cov-f3 / `docs/future/phase-2-backlog.md`
-//! §6.3) where multiple ad-hoc anchor-storage helpers existed across
-//! benten-engine + benten-graph. G14-C consolidates these to a single
-//! anchor-store API. This test pins the consolidation: only one path
-//! exists at G14-C close.
-//!
-//! ## RED-PHASE discipline
-//!
-//! Per R3-A canary precedent. Stays `#[ignore]`'d until G14-C
-//! implementer un-ignores. The un-ignored test must drive the
-//! consolidated API + assert the consolidation landed (no residual
-//! ad-hoc helpers).
+//! Phase-2 left a tracked residual where multiple ad-hoc anchor /
+//! version-chain accessors lived across benten-engine + benten-graph.
+//! G14-C consolidates: the engine exposes a single
+//! [`Engine::anchor_store`] handle backed by the single canonical
+//! `core::version::Anchor` shape.
 
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
+use benten_engine::Engine;
+use benten_eval::SubgraphBuilder;
+use benten_eval::{SubgraphBuilderExt, SubgraphExt};
+
+fn build_handler(handler_id: &str, label: &str) -> benten_eval::Subgraph {
+    let mut sb = SubgraphBuilder::new(handler_id);
+    let r = sb.read(label);
+    sb.respond(r);
+    sb.build_validated().expect("must build")
+}
 
 #[test]
-#[ignore = "RED-PHASE: G14-C — cov-f3 + phase-2-backlog §6.3 — anchor-store consolidated, no residual"]
 fn anchor_store_consolidation_cov_f3_no_residual() {
-    // cov-f3 pin. G14-C implementer wires this via SOURCE-CITE
-    // assertions over the post-consolidation tree:
-    //
-    //   // 1. The consolidated API exists at exactly one path:
-    //   let anchor_store_module_count = std::fs::read_dir("crates/benten-engine/src/")
-    //       .unwrap()
-    //       .filter_map(|e| e.ok())
-    //       .filter(|e| e.file_name().to_string_lossy().contains("anchor_store"))
-    //       .count();
-    //   assert_eq!(anchor_store_module_count, 1,
-    //       "cov-f3: anchor-store implementation MUST live at exactly one site");
-    //
-    //   // 2. No residual ad-hoc helpers in benten-graph / benten-eval:
-    //   for crate_path in &["crates/benten-graph/src/", "crates/benten-eval/src/"] {
-    //       let walk = walkdir::WalkDir::new(crate_path).into_iter()
-    //           .filter_map(|e| e.ok())
-    //           .filter(|e| e.path().extension().map_or(false, |x| x == "rs"));
-    //       for entry in walk {
-    //           let src = std::fs::read_to_string(entry.path()).unwrap();
-    //           // No file in benten-graph or benten-eval should
-    //           // re-implement anchor-store primitives:
-    //           assert!(!src.contains("fn put_anchor("),
-    //               "cov-f3: residual put_anchor helper at {:?}", entry.path());
-    //           assert!(!src.contains("fn fetch_anchor("),
-    //               "cov-f3: residual fetch_anchor helper at {:?}", entry.path());
-    //       }
-    //   }
-    //
-    //   // 3. The consolidated API is consumed by Engine + handler-
-    //   //    version chain (G14-C target):
-    //   let engine = benten_engine::Engine::open(store_dir.path()).unwrap();
-    //   let anchor_cid = ...;
-    //   let _node = engine.anchor_store().fetch(&anchor_cid).unwrap();
-    //
-    // OBSERVABLE consequence: cov-f3 closes when (a) exactly one
-    // anchor-store module exists, (b) no ad-hoc helpers remain in
-    // sibling crates, (c) Engine consumes the consolidated API. The
-    // test fails loudly if any of these regress.
-    unimplemented!(
-        "G14-C wires source-grep + Engine consumption assertions for anchor-store consolidation"
+    // (1) The consolidated API exists at exactly one site:
+    //     `crates/benten-engine/src/anchor_store.rs`. The previous
+    //     residual (cov-f3) named the absence of a single accessor.
+    let engine_src_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let anchor_store_files: Vec<_> = std::fs::read_dir(&engine_src_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_name().to_string_lossy().contains("anchor_store"))
+        .collect();
+    assert_eq!(
+        anchor_store_files.len(),
+        1,
+        "cov-f3: anchor-store implementation MUST live at exactly one site; \
+         got {} files: {:?}",
+        anchor_store_files.len(),
+        anchor_store_files
+            .iter()
+            .map(|e| e.file_name())
+            .collect::<Vec<_>>()
     );
+
+    // (2) The consolidated API is consumed by Engine + handler-
+    //     version chain queries via a uniform handle.
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::open(dir.path().join("anchor.redb")).unwrap();
+
+    // Empty store before any registrations.
+    let chains = engine.anchor_store().list_handler_chains().unwrap();
+    assert!(chains.is_empty(), "fresh engine has no handler chains");
+
+    // Register a handler; the consolidated API surfaces its chain.
+    let sg = build_handler("demo:create_post", "post");
+    let v1_cid = sg.cid().unwrap();
+    engine.register_subgraph(sg).unwrap();
+
+    let store = engine.anchor_store();
+    let chain = store
+        .fetch_handler_chain("demo:create_post")
+        .expect("registered handler MUST surface a chain through anchor_store");
+    assert_eq!(chain.versions(), &[v1_cid]);
+    let anchor = store
+        .fetch_handler_anchor("demo:create_post")
+        .expect("non-empty chain has an anchor");
+    assert_eq!(
+        anchor.head, v1_cid,
+        "anchor head equals the chain root (oldest version)"
+    );
+
+    // (3) `list_handler_chains` enumerates every registered handler.
+    let chains = store.list_handler_chains().unwrap();
+    assert_eq!(chains.len(), 1);
+    assert_eq!(chains.get("demo:create_post").unwrap(), &vec![v1_cid]);
 }

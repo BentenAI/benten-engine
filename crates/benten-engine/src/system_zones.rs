@@ -29,6 +29,22 @@ pub const SYSTEM_ZONE_PREFIXES: &[&str] = &[
     // seen the revocation can still recognize the manifest as
     // uninstalled.
     "system:ModuleManifestRevocation",
+    // Phase-3 G14-C wave-4b — Compromise #17 closure. Durable
+    // module-bytes side-table written by `Engine::register_module_bytes`
+    // through `RedbBlobBackend`; rehydrated at engine open via
+    // `Engine::rehydrate_module_bytes_from_zone`.
+    "system:ModuleBytes",
+    // Phase-3 G14-C wave-4b — Compromise #18 closure. Durable
+    // handler-version-chain side-table written by
+    // `Engine::register_subgraph` / `Engine::register_subgraph_replace`
+    // via `Engine::persist_handler_version_entry`; rehydrated at engine
+    // open via `Engine::rehydrate_handler_version_chains_from_zone`.
+    "system:HandlerVersion",
+    // Phase-3 G14-C wave-4b — Compromise #21 closure. Durable
+    // publisher-key registry consulted by `verify_manifest_dual` as the
+    // fallback authentication path. Mutations require UCAN delegation
+    // rooted at the registry-admin DID per crypto-minor-5.
+    "system:PublisherRegistry",
     // Phase 3 R5 wave-3 G13-C BrowserBackend: critical-event browser cache
     // surface. Used by browser_backend.rs put_node_with_context-bypass
     // path for `system:Critical` events propagated to thin-client cache.

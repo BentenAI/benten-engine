@@ -148,6 +148,21 @@ pub use subgraph_spec::{
 // inherent on the closure-based execution path. Gated to NOT-`browser-backend`.
 #[cfg(not(feature = "browser-backend"))]
 pub mod engine_modules;
+// Phase-3 G14-C wave-4b — durable handler-version chain (Compromise #18
+// closure). Persists `system:HandlerVersion` zone Nodes per registration;
+// rebuilds the in-memory `BTreeMap<HandlerId, Vec<Cid>>` chain at engine
+// open via `Engine::rehydrate_handler_version_chains_from_zone`.
+#[cfg(not(feature = "browser-backend"))]
+pub mod handler_versions;
+// Phase-3 G14-C wave-4b — manifest-signing wire-through (Compromise #21
+// closure). Ed25519 sign/verify with UCAN-proof-chain primary +
+// publisher-key-registry fallback per D-PHASE-3-20 / crypto-minor-5.
+#[cfg(not(feature = "browser-backend"))]
+pub mod manifest_signing;
+// Phase-3 G14-C wave-4b — anchor-store consolidation (cov-f3 residual
+// from `docs/future/phase-2-backlog.md` §6.3).
+#[cfg(not(feature = "browser-backend"))]
+pub mod anchor_store;
 pub mod engine_sandbox;
 // Phase-2b G10-A-wasip1 (D10-RESOLVED): snapshot-blob handoff API on
 // `Engine` (`export_snapshot_blob` / `from_snapshot_blob` /

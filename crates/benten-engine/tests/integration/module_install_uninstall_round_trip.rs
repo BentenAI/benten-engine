@@ -12,6 +12,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use benten_engine::manifest_signing::ManifestVerifyArgs;
 use benten_engine::testing::{
     testing_compute_manifest_cid, testing_make_manifest_with_caps, testing_make_minimal_manifest,
 };
@@ -54,7 +55,13 @@ fn module_install_uninstall_round_trip_5_row_fixture_matrix() {
     // sibling still declares it).
     let sibling = testing_make_manifest_with_caps("acme.sibling", &["host:compute:time"]);
     let sibling_cid = testing_compute_manifest_cid(&sibling);
-    engine.install_module(sibling.clone(), sibling_cid).unwrap();
+    engine
+        .install_module(
+            sibling.clone(),
+            sibling_cid,
+            ManifestVerifyArgs::unsigned_development(),
+        )
+        .unwrap();
 
     // Each row: (label, manifest, expected-cap-set-on-the-manifest).
     let rows: Vec<(&'static str, ModuleManifest, Vec<&'static str>)> = vec![
@@ -95,7 +102,11 @@ fn module_install_uninstall_round_trip_5_row_fixture_matrix() {
 
         // (a) install with matching CID
         let installed = engine
-            .install_module(manifest.clone(), cid)
+            .install_module(
+                manifest.clone(),
+                cid,
+                ManifestVerifyArgs::unsigned_development(),
+            )
             .unwrap_or_else(|e| panic!("[{label}] install must succeed: {e}"));
         assert_eq!(installed, cid, "[{label}] returned CID matches");
 

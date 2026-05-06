@@ -294,11 +294,12 @@ fn esc_14_sandbox_dispatch_rejects_forged_cap_claim_module_bytes() {
     Engine::testing_inject_forged_cap_claim_section(&mut bytes);
 
     // Compute a content-addressed CID for the corrupted bytes + register
-    // them in the engine's blob store. (`register_module_bytes` is
-    // non-validating by design — see doc on the method.)
+    // them in the engine's durable blob store (Compromise #17 closed at
+    // G14-C — `register_module_bytes` now validates CID + persists via
+    // `RedbBlobBackend`).
     let module_cid = Cid::from_blake3_digest(*blake3::hash(&bytes).as_bytes());
     let module_cid_str = module_cid.to_base32();
-    engine.register_module_bytes(module_cid, bytes);
+    engine.register_module_bytes(&module_cid, &bytes).unwrap();
 
     // Register a SANDBOX-bearing handler whose `module` property
     // names the corrupted CID. The handler registers cleanly — the

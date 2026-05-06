@@ -20,6 +20,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_engine::Engine;
+use benten_engine::manifest_signing::ManifestVerifyArgs;
 use benten_engine::testing::{testing_compute_manifest_cid, testing_make_minimal_manifest};
 
 fn fresh_engine() -> (tempfile::TempDir, Engine) {
@@ -38,7 +39,9 @@ fn module_install_lifecycle_within_a_single_session() {
     let (_dir, engine) = fresh_engine();
     let m = testing_make_minimal_manifest("acme.posts");
     let cid = testing_compute_manifest_cid(&m);
-    engine.install_module(m, cid).unwrap();
+    engine
+        .install_module(m, cid, ManifestVerifyArgs::unsigned_development())
+        .unwrap();
     assert!(engine.is_module_installed(&cid));
     engine.uninstall_module(cid).unwrap();
     assert!(!engine.is_module_installed(&cid));
@@ -52,7 +55,9 @@ fn module_uninstall_during_session_takes_effect_immediately() {
     let (_dir, engine) = fresh_engine();
     let m = testing_make_minimal_manifest("acme.hotswap");
     let cid = testing_compute_manifest_cid(&m);
-    engine.install_module(m, cid).unwrap();
+    engine
+        .install_module(m, cid, ManifestVerifyArgs::unsigned_development())
+        .unwrap();
     assert!(engine.is_module_installed(&cid));
     engine.uninstall_module(cid).unwrap();
     // Same engine handle — no restart.
@@ -76,7 +81,7 @@ fn module_install_with_migrations_rejects_on_wasm32() {
     };
     let cid = testing_compute_manifest_cid(&m);
     let err = engine
-        .install_module(m, cid)
+        .install_module(m, cid, ManifestVerifyArgs::unsigned_development())
         .expect_err("migrations on wasm32 must reject");
     assert_eq!(
         err.error_code(),

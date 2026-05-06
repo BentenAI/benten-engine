@@ -578,6 +578,57 @@ impl EngineBuilder {
         #[cfg(target_arch = "wasm32")]
         let _ = rehydrate_outcome;
 
+        // Phase-3 G14-C (Compromise #17 closure) — rehydrate the
+        // in-memory module-bytes cache from `system:ModuleBytes`
+        // zone Nodes. Pre-G14-C, register_module_bytes wrote to an
+        // in-memory map only; closure persists via RedbBlobBackend
+        // and the cache is rebuilt at engine open so SANDBOX
+        // dispatch resolves manifests across restart without an
+        // operator re-call. See `crates/benten-engine/src/engine.rs::
+        // rehydrate_module_bytes_from_zone`.
+        let bytes_outcome = engine.rehydrate_module_bytes_from_zone();
+        #[cfg(not(target_arch = "wasm32"))]
+        match bytes_outcome {
+            Ok(n) => {
+                tracing::debug!(rehydrated = n, "engine module-bytes rehydrate complete");
+            }
+            Err(e) => {
+                tracing::error!(
+                    error = ?e,
+                    "engine module-bytes rehydrate failed; \
+                     booting with empty cache (operators must \
+                     re-call register_module_bytes for affected \
+                     SANDBOX manifests until the next successful \
+                     rehydrate)"
+                );
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = bytes_outcome;
+
+        // Phase-3 G14-C (Compromise #18 closure) — rehydrate per-handler
+        // version chains from `system:HandlerVersion` zone Nodes.
+        let chains_outcome = engine.rehydrate_handler_version_chains_from_zone();
+        #[cfg(not(target_arch = "wasm32"))]
+        match chains_outcome {
+            Ok(n) => {
+                tracing::debug!(
+                    rehydrated = n,
+                    "engine handler-version-chain rehydrate complete"
+                );
+            }
+            Err(e) => {
+                tracing::error!(
+                    error = ?e,
+                    "engine handler-version-chain rehydrate failed; \
+                     booting with empty chains (audit consumers will \
+                     not see history from prior process)"
+                );
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = chains_outcome;
+
         Ok(engine)
     }
 }
