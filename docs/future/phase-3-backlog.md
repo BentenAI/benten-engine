@@ -69,6 +69,8 @@
 
 **Cross-ref:** Phase-3 plan §3 G13-D row scope-real-15 line. CLAUDE.md baked-in §17 deployment-shapes commitment (the in-memory redb hop is a temporary convenience for the full-peer path; thin compute surfaces will need this lift to avoid carrying any redb at all on `wasm32-unknown-unknown`).
 
+**RATIFIED 2026-05-05 by Ben (post-W3 surface batch):** alias-based pragmatic-genericism (Engine = EngineGeneric<RedbBackend> + cfg-gated alias arms for browser-backend) is sufficient for Phase-3 close. The full impl-block cascade lift (~1500-3000 LOC) is **deferred to v1-assessment-window** (post-Phase-3-close per CLAUDE.md §15 + memory `feedback_v1_milestone_gate`). Rationale: every Phase-3 actual consumer (BrowserBackend in-RAM thin-client cache per #17, SnapshotBlobBackend read-only via in-memory-redb hop, SyncReplica native-only per #17 baked-in) is satisfied by the alias-based shape — no real Phase-3 consumer needs the full method-cascade. The cascade only matters when alternate durable backends (DynamoDB, PG, S3-stored mmap) materialize as Phase 9+ exploratory destinations. **Standing rule for R5 wave-4+ implementer briefs (G14 / G15 / G18):** preserve the alias-based shape; apply same DISAGREE-WITH-EXPLANATION + BELONGS-NAMED-NOW disposition pointing here when the brief literally calls for impl-block cascade of `<B: GraphBackend>` over redb-specific methods.
+
 ### 1.3 Arc<dyn KVBackend> migration (in-memory backend pivot from wave-5)
 
 **Phase 2b state:** Wave-5 (G10-A wasip1) produced an `InMemoryBackend` impl of `KVBackend` (orchestrator-direct PR #38), but `Engine` is hard-bound to `Arc<RedbBackend>` so the in-memory impl is unused in production. HANDOFF-2026-04-29-morning §4 row 1: "Document tech debt, defer Arc<dyn KVBackend> refactor to Phase 3."
@@ -114,6 +116,18 @@
 **ssi re-evaluation pointer (G16 Atrium-handshake):** the durable backend uses the hand-rolled internal `benten_id::ucan::Ucan` format. Adding `ssi` as a dep for external Benten producer-interop is deferred to G16 — the Atrium-handshake wave names it as its forward-compat axis if external producer-interop becomes required. No external Benten producers exist at G14-B (closed-loop). Per HARD RULE rule-12 clause-b: this section is the named destination for the ssi BELONGS-ELSEWHERE deferral; the destination receives the entry NOW (this paragraph). G16 then either (a) lights up ssi at the Atrium-handshake codec boundary, or (b) re-defers with a fresh named destination + reason.
 
 **Source:** [`phase-2-backlog.md`](./phase-2-backlog.md) §7.1, §7.2, §7.3, §7.4 — all carry forward to Phase 3 verbatim.
+
+### 2.1-followup `ssi` external UCAN/VC spec compatibility re-evaluation at G16 Atrium handshake
+
+**G14-A1 wave-4a state (2026-05-06 R5):** the canary ships an internal-format UCAN with hand-rolled DAG-CBOR canonical-bytes signature input. This is wire-format-compatible with the project's own consumers (Phase-3 Atrium handshake at G16, capability backend at G14-B). External UCAN spec v0.10 wire-format compatibility (interop with non-Benten UCAN producers) was deferred at G14-A1 mini-review per HARD RULE rule-12 disposition (b) — `ssi` dep dropped from canary.
+
+**G14-A2 wave-4a' (2026-05-06):** VC v1.1-INSPIRED hand-rolled surface (NOT W3C JSON-LD wire-format-compatible) shipped without `ssi`. Same deferral logic: external W3C VC consumers can't verify these credentials without a translation layer, but no Phase-3 internal consumer needs that interop.
+
+**G14-B wave-4b (2026-05-06):** Durable UCAN backend confirmed hand-rolled internal format is sufficient — no external Benten producers exist; the durable layer just persists the same hand-rolled envelope shape G14-A1 already produces. **Named-destination shifted from G14-B → G16 Atrium handshake.**
+
+**Phase 3 G16 re-evaluation point:** when G16 lands the iroh + Loro Atrium peer-to-peer handshake protocol, dispatch a `cryptography-reviewer` agent to assess whether external producer-interop (UCAN spec v0.10 + W3C VC v1.1 JSON-LD) is required. The decision turns on whether Atrium peers from outside Benten (e.g., third-party UCAN issuers, external VC providers) need to participate. If yes, re-introduce `ssi` (or alternative spec-compliant lib) as a translation layer at the Atrium boundary. If no (Phase-3 stays internal-only), preserve hand-rolled.
+
+**Source:** `.addl/phase-3/r5-w4a-g14-a1-mini-review.json` + `.addl/phase-3/r5-w4astar-g14-a2-mini-review.json` `agent_dispositions_assessment.ssi_dropped` fields; G14-B PR #109 module docstring confirmation; this followup section captures the cumulative shift.
 
 ### 2.2 SUBSCRIBE delivery-time cap-recheck threading on durable grants (F6)
 
