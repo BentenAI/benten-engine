@@ -133,6 +133,13 @@ export const CATALOG_CODES = [
   "E_RELOAD_SUBSCRIBER_UNSUBSCRIBED",
   "E_DEVSERVER_STOPPED",
   "E_HLC_SKEW_EXCEEDED",
+  "E_CAP_UCAN_EXPIRED",
+  "E_CAP_UCAN_NOT_YET_VALID",
+  "E_CAP_UCAN_BAD_SIGNATURE",
+  "E_CAP_UCAN_ATTENUATION_VIOLATED",
+  "E_CAP_BACKEND_STORAGE",
+  "E_CAP_RATE_LIMIT_EXCEEDED",
+  "E_CAP_PEER_BANDWIDTH_EXCEEDED",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -1634,5 +1641,110 @@ export class EHlcSkewExceeded extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_HLC_SKEW_EXCEEDED", "`Hlc::update(remote)` refused a remote stamp whose physical-clock component exceeds the local physical clock by more than the configured skew tolerance (default 5 minutes per `Hlc::DEFAULT_SKEW_TOLERANCE_MS`). The local HLC state is NOT mutated when this fires — Phase-3 sync rejects the offending message and continues. Inspect peer NTP / system-clock health; legitimate cross-region drift should fit comfortably inside 5 minutes. Operator-tunable knobs land alongside Phase-3 sync wiring.", message, context);
     this.name = "EHlcSkewExceeded";
+  }
+}
+
+/**
+ * E_CAP_UCAN_EXPIRED
+ *
+ * Thrown at: `crates/benten-caps/src/backends/ucan.rs::UCANBackend::validate_chain_at` (Phase-3 G14-B). Routes to `ON_DENIED`.
+ * Message template: "UCAN expired (exp={exp}, now={now})"
+ */
+export class ECapUcanExpired extends BentenError {
+  static readonly code = "E_CAP_UCAN_EXPIRED";
+  static readonly fixHint = "Presented UCAN's `exp` window has elapsed at chain-walk time. Re-issue the UCAN with a fresh `exp`. Defends against the \"old proof sitting in disk forever, replayed by attacker who sniffed it pre-exp\" attack class per `crypto-blocker-2` BLOCKER + CLR-2.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_CAP_UCAN_EXPIRED", "Presented UCAN's `exp` window has elapsed at chain-walk time. Re-issue the UCAN with a fresh `exp`. Defends against the \"old proof sitting in disk forever, replayed by attacker who sniffed it pre-exp\" attack class per `crypto-blocker-2` BLOCKER + CLR-2.", message, context);
+    this.name = "ECapUcanExpired";
+  }
+}
+
+/**
+ * E_CAP_UCAN_NOT_YET_VALID
+ *
+ * Thrown at: `crates/benten-caps/src/backends/ucan.rs::UCANBackend::validate_chain_at` (Phase-3 G14-B).
+ * Message template: "UCAN not yet valid (nbf={nbf}, now={now})"
+ */
+export class ECapUcanNotYetValid extends BentenError {
+  static readonly code = "E_CAP_UCAN_NOT_YET_VALID";
+  static readonly fixHint = "Presented UCAN's `nbf` window has not yet opened at chain-walk time. Wait until `now >= nbf` or re-issue with an earlier `nbf`. Routes to `ON_DENIED`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_CAP_UCAN_NOT_YET_VALID", "Presented UCAN's `nbf` window has not yet opened at chain-walk time. Wait until `now >= nbf` or re-issue with an earlier `nbf`. Routes to `ON_DENIED`.", message, context);
+    this.name = "ECapUcanNotYetValid";
+  }
+}
+
+/**
+ * E_CAP_UCAN_BAD_SIGNATURE
+ *
+ * Thrown at: `crates/benten-caps/src/backends/ucan.rs::UCANBackend::validate_chain_at` (Phase-3 G14-B). Constant-time comparison via `subtle::ConstantTimeEq` per `crypto-major-4`.
+ * Message template: "UCAN signature failed verification (link_index={link_index})"
+ */
+export class ECapUcanBadSignature extends BentenError {
+  static readonly code = "E_CAP_UCAN_BAD_SIGNATURE";
+  static readonly fixHint = "Presented UCAN's signature failed to verify against the issuer's resolved public key. Likely tampered or signed by a different keypair than the one named in `iss`. Routes to `ON_DENIED`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_CAP_UCAN_BAD_SIGNATURE", "Presented UCAN's signature failed to verify against the issuer's resolved public key. Likely tampered or signed by a different keypair than the one named in `iss`. Routes to `ON_DENIED`.", message, context);
+    this.name = "ECapUcanBadSignature";
+  }
+}
+
+/**
+ * E_CAP_UCAN_ATTENUATION_VIOLATED
+ *
+ * Thrown at: `crates/benten-caps/src/backends/ucan.rs::UCANBackend::validate_chain_at` (Phase-3 G14-B). Composes with `benten_id::ucan::validate_chain_at` per `crypto-blocker-2`.
+ * Message template: "UCAN attenuation violated: child cap '{child_cap}' is not subsumed by parent caps"
+ */
+export class ECapUcanAttenuationViolated extends BentenError {
+  static readonly code = "E_CAP_UCAN_ATTENUATION_VIOLATED";
+  static readonly fixHint = "Child UCAN's capability widens its parent's authority — a structural delegation violation. Re-issue the child UCAN attenuated to a subset of the parent's `att`. Routes to `ON_DENIED`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_CAP_UCAN_ATTENUATION_VIOLATED", "Child UCAN's capability widens its parent's authority — a structural delegation violation. Re-issue the child UCAN attenuated to a subset of the parent's `att`. Routes to `ON_DENIED`.", message, context);
+    this.name = "ECapUcanAttenuationViolated";
+  }
+}
+
+/**
+ * E_CAP_BACKEND_STORAGE
+ *
+ * Thrown at: `crates/benten-caps/src/backends/ucan.rs::UCANBackend::{record_grant, record_revocation, validate_chain_with_durable_revocations}` (Phase-3 G14-B).
+ * Message template: "UCAN backend storage I/O failure: {reason}"
+ */
+export class ECapBackendStorage extends BentenError {
+  static readonly code = "E_CAP_BACKEND_STORAGE";
+  static readonly fixHint = "Durable UCAN backend failed to read or write its grant store. Surfaces a layered backend I/O failure to the policy hook caller. Inspect underlying `GraphBackend` health (redb file permissions, disk space). Distinct from `E_CAP_DENIED` — the backend cannot determine permitted-or-not when its store is unreadable. Routes to `ON_ERROR`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_CAP_BACKEND_STORAGE", "Durable UCAN backend failed to read or write its grant store. Surfaces a layered backend I/O failure to the policy hook caller. Inspect underlying `GraphBackend` health (redb file permissions, disk space). Distinct from `E_CAP_DENIED` — the backend cannot determine permitted-or-not when its store is unreadable. Routes to `ON_ERROR`.", message, context);
+    this.name = "ECapBackendStorage";
+  }
+}
+
+/**
+ * E_CAP_RATE_LIMIT_EXCEEDED
+ *
+ * Thrown at: `crates/benten-caps/src/rate_limit.rs::RateLimitPolicy::pre_write` (Phase-3 G14-B; D-F + D-PHASE-3-26).
+ * Message template: "rate-limit exceeded for actor {actor} on zone {zone}"
+ */
+export class ECapRateLimitExceeded extends BentenError {
+  static readonly code = "E_CAP_RATE_LIMIT_EXCEEDED";
+  static readonly fixHint = "Per-actor writes/sec/zone bucket exceeded its budget. Configure a less restrictive `RateLimitPolicy::actor_writes_per_second` for the actor, or back off and retry. Routes to `ON_DENIED`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_CAP_RATE_LIMIT_EXCEEDED", "Per-actor writes/sec/zone bucket exceeded its budget. Configure a less restrictive `RateLimitPolicy::actor_writes_per_second` for the actor, or back off and retry. Routes to `ON_DENIED`.", message, context);
+    this.name = "ECapRateLimitExceeded";
+  }
+}
+
+/**
+ * E_CAP_PEER_BANDWIDTH_EXCEEDED
+ *
+ * Thrown at: `crates/benten-caps/src/rate_limit.rs::RateLimitPolicy::account_peer_inbound` (Phase-3 G14-B; D-F + D-PHASE-3-26 + D-PHASE-3-30).
+ * Message template: "peer bandwidth budget exceeded for peer {peer} ({bytes} bytes)"
+ */
+export class ECapPeerBandwidthExceeded extends BentenError {
+  static readonly code = "E_CAP_PEER_BANDWIDTH_EXCEEDED";
+  static readonly fixHint = "Per-peer bandwidth bytes/sec budget at the Atrium boundary exceeded its limit. Defends against a malicious or buggy peer flooding the sync channel. Routes to `ON_DENIED`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_CAP_PEER_BANDWIDTH_EXCEEDED", "Per-peer bandwidth bytes/sec budget at the Atrium boundary exceeded its limit. Defends against a malicious or buggy peer flooding the sync channel. Routes to `ON_DENIED`.", message, context);
+    this.name = "ECapPeerBandwidthExceeded";
   }
 }
