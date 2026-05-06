@@ -33,13 +33,48 @@ use crate::{EvalError, OperationNode, PrimitiveHost, StepResult};
 /// change-broadcast can fan it out. Returns `"ok"` unconditionally; EMIT is
 /// fire-and-forget and never surfaces subscriber failures.
 ///
+/// # G14-D wave-5a — handler-id-router seam (seq-major-8 + stream-r1-2)
+///
+/// When the OperationNode carries a `handler: Text(handler_id)`
+/// property, the EMIT routes THROUGH the named handler subgraph
+/// instead of the default fan-out. The host's
+/// [`PrimitiveHost::call_handler`] is invoked with the channel as the
+/// op name; any side effects (probe writes, RESPOND values) are
+/// observably attributable to the named handler. The default
+/// fan-out broadcast is SUPPRESSED for this event — the routing
+/// decision must produce observably different traces per
+/// stream-r1-2 LOAD-BEARING.
+///
 /// # Errors
 ///
-/// EMIT does not currently surface any error variants; the function
-/// signature preserves the dispatcher shape used by the other executors.
+/// EMIT's default fan-out arm never surfaces error variants. The
+/// `Named(handler_id)` arm surfaces [`EvalError::Backend`] when the
+/// host's `call_handler` rejects (handler not registered, etc.) but
+/// preserves fire-and-forget on success.
 pub fn execute(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResult, EvalError> {
     if let Some(Value::Text(channel)) = op.properties.get("channel") {
         let payload = op.properties.get("payload").cloned().unwrap_or(Value::Null);
+        // G14-D wave-5a: handler-id-router seam (seq-major-8 +
+        // stream-r1-2). When `handler: Text(id)` is present, route
+        // through the named handler subgraph instead of default
+        // fan-out — observably different runtime trace.
+        if let Some(Value::Text(handler_id)) = op.properties.get("handler") {
+            // Construct a synthetic "input" Node carrying the channel
+            // name + payload. The named handler reads them as
+            // properties on the entrypoint Node.
+            use benten_core::Node;
+            use std::collections::BTreeMap;
+            let mut props: BTreeMap<String, Value> = BTreeMap::new();
+            props.insert("channel".into(), Value::Text(channel.clone()));
+            props.insert("payload".into(), payload.clone());
+            let input = Node::new(vec!["EmitInput".into()], props);
+            let _ = host.call_handler(handler_id.as_str(), channel.as_str(), input)?;
+            return Ok(StepResult {
+                next: None,
+                edge_label: "ok".to_string(),
+                output: Value::Null,
+            });
+        }
         host.emit_event(channel, payload);
     }
     Ok(StepResult {

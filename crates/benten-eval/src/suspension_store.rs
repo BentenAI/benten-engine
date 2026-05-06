@@ -109,6 +109,44 @@ pub struct WaitMetadata {
 }
 
 // ---------------------------------------------------------------------------
+// G14-D wave-5a — WAIT-resume cap_snapshot_hash + persisted-policy-metadata
+// side-table value type. Stored under the envelope CID key so a later
+// `resume_from_bytes_*` can re-validate the bound UCAN proof-chain hash +
+// historical policy metadata against the live cap store.
+//
+// Closes Compromise #10 engine-side asymmetry + phase-2-backlog §7.3 +
+// CLR-2 (cap_snapshot_hash binds the proof-chain CID list at suspend).
+// ---------------------------------------------------------------------------
+
+/// G14-D wave-5a: envelope-bound cap snapshot persisted at suspend time.
+///
+/// `cap_snapshot_hash` is the load-bearing CLR-2 binding — it is a
+/// 32-byte BLAKE3 digest computed over the canonical-bytes
+/// concatenation of `(actor_cid, [proof_chain_cids...])`. A WAIT-resume
+/// recomputes the hash against the current proof-chain in the durable
+/// cap store and rejects with `E_CAP_SNAPSHOT_HASH_MISMATCH` if the
+/// chain changed (e.g. one UCAN was revoked).
+///
+/// `historical_policy_metadata` is the opaque DAG-CBOR-encoded blob the
+/// engine's [`benten_caps::CapabilityPolicy`] persisted at suspend time.
+/// Per plan §3 G14-D, the resume binds historical state — the resumed
+/// continuation runs against the policy metadata in effect at suspend
+/// (rate-limit budgets, attenuation depth, etc.), not the post-suspend
+/// upgraded policy. The blob shape is policy-defined; the suspension
+/// store is opaque.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CapSnapshot {
+    /// 32-byte BLAKE3 digest binding `(actor_cid, proof_chain_cids)` at
+    /// suspend time. CLR-2 binding: the resume MUST re-compute this
+    /// against the current cap store and reject on mismatch.
+    pub cap_snapshot_hash: [u8; 32],
+    /// Opaque historical-policy metadata bytes captured at suspend time
+    /// (DAG-CBOR encoded by the policy). The shape is policy-private;
+    /// the suspension store stores + returns it verbatim.
+    pub historical_policy_metadata: Vec<u8>,
+}
+
+// ---------------------------------------------------------------------------
 // SuspensionStore trait
 // ---------------------------------------------------------------------------
 
@@ -199,6 +237,45 @@ pub trait SuspensionStore: Send + Sync {
         false
     }
 
+    // -- G14-D wave-5a: WAIT-resume cap_snapshot_hash side-table
+    // (keyed by envelope CID; binds the suspended envelope to a
+    // hash of the UCAN proof-chain CID list at suspend time per
+    // CLR-2). Closes Compromise #10 engine-side asymmetry +
+    // phase-2-backlog §7.3.
+    //
+    // The default trait impls fall back to a no-op so existing
+    // backends compile unchanged; the in-memory + redb impls
+    // override.
+
+    /// G14-D wave-5a: persist the [`CapSnapshot`] entry for envelope
+    /// `envelope_cid`. Records the bound UCAN-proof-chain hash + the
+    /// historical-policy metadata so a later resume can re-validate
+    /// against the chain in effect at suspend time.
+    ///
+    /// # Errors
+    /// Surfaces [`SuspensionStoreError::Backend`] on persistence failure.
+    fn put_cap_snapshot(
+        &self,
+        envelope_cid: Cid,
+        snapshot: CapSnapshot,
+    ) -> Result<(), SuspensionStoreError> {
+        let _ = (envelope_cid, snapshot);
+        Ok(())
+    }
+
+    /// G14-D wave-5a: look up the [`CapSnapshot`] for envelope
+    /// `envelope_cid`. Returns `Ok(None)` on a clean miss.
+    ///
+    /// # Errors
+    /// Surfaces [`SuspensionStoreError::Backend`] on persistence failure.
+    fn get_cap_snapshot(
+        &self,
+        envelope_cid: &Cid,
+    ) -> Result<Option<CapSnapshot>, SuspensionStoreError> {
+        let _ = envelope_cid;
+        Ok(None)
+    }
+
     /// Test-only: force the SUBSCRIBE retention window for `sub` to
     /// "exhausted". Default impl is a no-op so production backends never
     /// expose the hook.
@@ -229,6 +306,9 @@ pub enum SuspensionKey {
     Envelope(Cid),
     /// Drop the SUBSCRIBE persistent cursor entry for `sub`.
     Cursor(SubscriberId),
+    /// G14-D wave-5a: drop the cap-snapshot entry (UCAN-proof-chain
+    /// hash + historical-policy metadata) for envelope `cid`.
+    CapSnapshot(Cid),
 }
 
 // ---------------------------------------------------------------------------
@@ -258,6 +338,8 @@ struct InMemoryStoreInner {
     envelopes: HashMap<Cid, ExecutionStateEnvelope>,
     cursors: HashMap<SubscriberId, u64>,
     retention_exhausted: HashMap<SubscriberId, bool>,
+    /// G14-D wave-5a: cap-snapshot side table keyed by envelope CID.
+    cap_snapshots: HashMap<Cid, CapSnapshot>,
 }
 
 impl InMemorySuspensionStore {
@@ -339,8 +421,29 @@ impl SuspensionStore for InMemorySuspensionStore {
                 g.cursors.remove(&sub);
                 g.retention_exhausted.remove(&sub);
             }
+            SuspensionKey::CapSnapshot(cid) => {
+                g.cap_snapshots.remove(&cid);
+            }
         }
         Ok(())
+    }
+
+    fn put_cap_snapshot(
+        &self,
+        envelope_cid: Cid,
+        snapshot: CapSnapshot,
+    ) -> Result<(), SuspensionStoreError> {
+        let mut g = self.inner.lock().expect("suspension store poisoned");
+        g.cap_snapshots.insert(envelope_cid, snapshot);
+        Ok(())
+    }
+
+    fn get_cap_snapshot(
+        &self,
+        envelope_cid: &Cid,
+    ) -> Result<Option<CapSnapshot>, SuspensionStoreError> {
+        let g = self.inner.lock().expect("suspension store poisoned");
+        Ok(g.cap_snapshots.get(envelope_cid).cloned())
     }
 }
 

@@ -61,8 +61,11 @@ pub mod builder;
 // day one per `seq-minor-6` (extract first; no inline-then-refactor).
 // See `cap_recheck.rs` rustdoc for the design pins.
 pub mod cap_recheck;
+pub mod cap_snapshot_hash;
 pub mod change;
 pub mod change_probe;
+pub mod handler_router;
+pub mod thin_client_subscribe;
 // Wave-8h audit-gap fix — EMIT-only broadcast channel so a handler with
 // a standalone EMIT primitive (no backing WRITE) produces an observable
 // event. Mirrors `change::ChangeBroadcast` but for emit-only events.
@@ -220,7 +223,8 @@ pub use suspension_store::RedbSuspensionStore;
 // downstream consumers (napi bindings, integration tests) can name the
 // types without depending on benten-eval directly.
 pub use benten_eval::suspension_store::{
-    InMemorySuspensionStore, SuspensionKey, SuspensionStore, SuspensionStoreError, WaitMetadata,
+    CapSnapshot, InMemorySuspensionStore, SuspensionKey, SuspensionStore, SuspensionStoreError,
+    WaitMetadata,
 };
 pub use module_manifest::{
     ManifestError, ManifestSignature, ManifestSummary, MigrationStep, ModuleManifest,

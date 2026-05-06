@@ -39,7 +39,7 @@ use std::sync::Arc;
 use benten_core::{Cid, SubscriberId, Value};
 use benten_eval::ExecutionStateEnvelope;
 use benten_eval::suspension_store::{
-    SuspensionKey, SuspensionStore, SuspensionStoreError, WaitMetadata,
+    CapSnapshot, SuspensionKey, SuspensionStore, SuspensionStoreError, WaitMetadata,
 };
 use benten_graph::{KVBackend, RedbBackend};
 use serde::{Deserialize, Serialize};
@@ -47,6 +47,11 @@ use serde::{Deserialize, Serialize};
 const WAIT_PREFIX: &[u8] = b"sw:";
 const ENVELOPE_PREFIX: &[u8] = b"se:";
 const CURSOR_PREFIX: &[u8] = b"sc:";
+/// G14-D wave-5a: cap-snapshot key prefix. Disjoint from the other
+/// four prefixes (`n:`, `e:`, `es:`, `et:`, `s:`, `sw:`, `se:`, `sc:`)
+/// per the collision-freedom contract pinned at
+/// `suspension_store_handles_both_wait_and_cursor_keys_without_collision`.
+const CAP_SNAPSHOT_PREFIX: &[u8] = b"sx:";
 
 fn wait_key(cid: &Cid) -> Vec<u8> {
     let mut k = Vec::with_capacity(WAIT_PREFIX.len() + cid.as_bytes().len());
@@ -68,6 +73,41 @@ fn cursor_key(sub: &SubscriberId) -> Vec<u8> {
     k.extend_from_slice(CURSOR_PREFIX);
     k.extend_from_slice(cid.as_bytes());
     k
+}
+
+fn cap_snapshot_key(envelope_cid: &Cid) -> Vec<u8> {
+    let mut k = Vec::with_capacity(CAP_SNAPSHOT_PREFIX.len() + envelope_cid.as_bytes().len());
+    k.extend_from_slice(CAP_SNAPSHOT_PREFIX);
+    k.extend_from_slice(envelope_cid.as_bytes());
+    k
+}
+
+/// G14-D wave-5a: DAG-CBOR-serialisable mirror of [`CapSnapshot`].
+/// Stored in the redb side-table under `sx:<envelope_cid>` so a
+/// cross-process resume can re-validate the bound UCAN-proof-chain
+/// hash + historical-policy metadata against the live cap store.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SerializableCapSnapshot {
+    cap_snapshot_hash: [u8; 32],
+    historical_policy_metadata: Vec<u8>,
+}
+
+impl From<CapSnapshot> for SerializableCapSnapshot {
+    fn from(s: CapSnapshot) -> Self {
+        Self {
+            cap_snapshot_hash: s.cap_snapshot_hash,
+            historical_policy_metadata: s.historical_policy_metadata,
+        }
+    }
+}
+
+impl From<SerializableCapSnapshot> for CapSnapshot {
+    fn from(s: SerializableCapSnapshot) -> Self {
+        Self {
+            cap_snapshot_hash: s.cap_snapshot_hash,
+            historical_policy_metadata: s.historical_policy_metadata,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -207,7 +247,36 @@ impl SuspensionStore for RedbSuspensionStore {
             SuspensionKey::WaitMetadata(cid) => wait_key(&cid),
             SuspensionKey::Envelope(cid) => envelope_key(&cid),
             SuspensionKey::Cursor(sub) => cursor_key(&sub),
+            SuspensionKey::CapSnapshot(cid) => cap_snapshot_key(&cid),
         };
         self.backend.delete(&raw).map_err(backend_err)
+    }
+
+    fn put_cap_snapshot(
+        &self,
+        envelope_cid: Cid,
+        snapshot: CapSnapshot,
+    ) -> Result<(), SuspensionStoreError> {
+        let payload: SerializableCapSnapshot = snapshot.into();
+        let bytes = serde_ipld_dagcbor::to_vec(&payload).map_err(backend_err)?;
+        self.backend
+            .put(&cap_snapshot_key(&envelope_cid), &bytes)
+            .map_err(backend_err)
+    }
+
+    fn get_cap_snapshot(
+        &self,
+        envelope_cid: &Cid,
+    ) -> Result<Option<CapSnapshot>, SuspensionStoreError> {
+        let Some(bytes) = self
+            .backend
+            .get(&cap_snapshot_key(envelope_cid))
+            .map_err(backend_err)?
+        else {
+            return Ok(None);
+        };
+        let parsed: SerializableCapSnapshot =
+            serde_ipld_dagcbor::from_slice(&bytes).map_err(backend_err)?;
+        Ok(Some(parsed.into()))
     }
 }

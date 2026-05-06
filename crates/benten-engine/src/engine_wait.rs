@@ -74,6 +74,31 @@ use crate::engine::Engine;
 use crate::error::EngineError;
 use crate::outcome::Outcome;
 
+use std::cell::Cell;
+
+thread_local! {
+    /// G14-D wave-5a: thread-local hint carrying the historical
+    /// policy-metadata blob captured at suspend time per
+    /// phase-2-backlog §7.3 + plan §3 G14-D. The capability policy
+    /// hook at Step 4 of `resume_from_bytes_inner` reads this if it
+    /// implements historical-state binding; policies that don't
+    /// consume it leave it as a no-op. The cell is reset at the end
+    /// of every `resume_from_bytes_inner` call so a subsequent
+    /// resume on the same thread starts with a clean slate.
+    pub(crate) static HISTORICAL_POLICY_METADATA_HINT: Cell<Option<Vec<u8>>> = const { Cell::new(None) };
+}
+
+/// G14-D wave-5a: read-and-clear accessor for the thread-local
+/// historical-policy-metadata hint. Policy implementations call this
+/// from inside their `check_write` / `check_read` hook to pick up the
+/// blob the engine threaded in from the suspension store. Returns
+/// `None` if no hint was set (NoAuth-equivalent / non-WAIT-resume
+/// callers).
+#[must_use]
+pub fn historical_policy_metadata_hint() -> Option<Vec<u8>> {
+    HISTORICAL_POLICY_METADATA_HINT.with(Cell::take)
+}
+
 // ---------------------------------------------------------------------------
 // Envelope persistence — G12-E retired the test-grade ENVELOPE_CACHE
 // ---------------------------------------------------------------------------
@@ -499,6 +524,11 @@ impl Engine {
         self.resume_from_bytes_inner(envelope, None, payload)
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "G14-D wave-5a added the cap_snapshot_hash + persisted-policy-metadata Step 3.5; the four-step \
+        resume protocol is a single load-bearing flow that is easier to read inline than split across helpers."
+    )]
     fn resume_from_bytes_inner(
         &self,
         bytes: &[u8],
@@ -628,6 +658,51 @@ impl Engine {
                     });
                 }
             }
+        }
+
+        // Step 3.5 (G14-D wave-5a): cap_snapshot_hash + persisted-policy
+        // metadata re-validation per CLR-2 + Compromise #10 + phase-2-backlog
+        // §7.3. If the suspension store carries a CapSnapshot for this
+        // envelope, recompute the hash against the chain currently in the
+        // engine's cap surface. Mismatch ⇒ E_CAP_SNAPSHOT_HASH_MISMATCH
+        // (CLR-2 §11 closure); the policy check at Step 4 below STILL
+        // runs even if no snapshot is bound (best-effort skip on miss
+        // matches the existing Compromise #10 fail-closed-asymmetry
+        // disclosure).
+        if let Ok(Some(snapshot)) = self.suspension_store.get_cap_snapshot(&state_cid) {
+            // Compute the live chain hash for the envelope's actor.
+            // Phase-3 G14-D: the proof-chain inputs are sourced from
+            // the engine's durable cap store via the chain accessor on
+            // the configured policy; if the policy provides no chain
+            // accessor (NoAuthBackend / placeholder), the live chain
+            // is the empty chain — and that is itself a meaningful
+            // post-revoke state (the chain that produced the snapshot
+            // hash had non-empty CIDs; the empty chain hashes
+            // differently and thus correctly rejects).
+            let actor_cid = envelope
+                .payload
+                .attribution_chain
+                .first()
+                .map_or(envelope.payload.resumption_principal_cid, |f| f.actor_cid);
+            let live_chain = self.chain_for_actor(&actor_cid);
+            let live_hash = crate::cap_snapshot_hash::compute(&actor_cid, &live_chain);
+            if live_hash != snapshot.cap_snapshot_hash {
+                return Err(EngineError::Other {
+                    code: ErrorCode::CapSnapshotHashMismatch,
+                    message: format!(
+                        "resume: cap_snapshot_hash mismatch for actor {} \
+                         (proof-chain changed between suspend and resume; CLR-2 §11)",
+                        actor_cid.to_base32()
+                    ),
+                });
+            }
+            // Persisted-policy metadata blob is preserved in the
+            // snapshot for the policy to consume at Step 4. We thread
+            // it through via a thread-local hint so the policy hook
+            // can read historical state if it wishes; if the configured
+            // policy doesn't consume historical metadata it is a no-op.
+            HISTORICAL_POLICY_METADATA_HINT
+                .with(|cell| cell.set(Some(snapshot.historical_policy_metadata)));
         }
 
         // Step 4: capability re-check. Consult the configured policy once,

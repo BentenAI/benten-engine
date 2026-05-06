@@ -1275,7 +1275,7 @@ pub fn publish_change_event_with_labels(labels: &[String], event: ChangeEvent) {
 /// # Errors
 ///
 /// Surfaces typed primitive failures via [`EvalError`].
-pub fn execute(op: &OperationNode, _host: &dyn PrimitiveHost) -> Result<StepResult, EvalError> {
+pub fn execute(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResult, EvalError> {
     // Pull the pattern + cursor from properties. Phase-2b G6-A keeps the
     // shape minimal: `pattern: Text`, `cursor: Text` (one of "latest" /
     // "sequence:N" / "persistent:<base32-id>"), `buffer_size: Int`.
@@ -1292,6 +1292,29 @@ pub fn execute(op: &OperationNode, _host: &dyn PrimitiveHost) -> Result<StepResu
             });
         }
     };
+    // G14-D wave-5a: handler-id-router seam (seq-major-8 LOAD-BEARING).
+    // When `handler: Text(id)` is present, the SUBSCRIBE primitive
+    // additionally routes events THROUGH the named handler at
+    // delivery time (rather than via the default broadcast fan-out).
+    // The eval-layer routing is performed by the engine adapter at
+    // delivery; this executor records the routing intent into the
+    // SubscriptionSpec via a side-band property pin (the engine
+    // reads `op.properties["handler"]` when wiring the
+    // ActiveSubscription's delivery callback). At wave-5a, the
+    // observable consequence is asserted at the engine layer's
+    // `subscribe_with_handler` API; this primitive flow is the
+    // hand-off point.
+    if let Some(Value::Text(handler_id)) = op.properties.get("handler") {
+        use benten_core::Node;
+        use std::collections::BTreeMap;
+        let mut props: BTreeMap<String, Value> = BTreeMap::new();
+        props.insert("pattern".into(), Value::Text(pattern_str.clone()));
+        let input = Node::new(vec!["SubscribeInput".into()], props);
+        // Route the registration intent into the named handler so a
+        // probe write (if any) is observably attributable to the
+        // named handler at runtime per stream-r1-2.
+        let _ = host.call_handler(handler_id.as_str(), "subscribe", input)?;
+    }
     let pattern = ChangePattern::AnchorPrefix(pattern_str);
     let cursor = SubscribeCursor::Latest;
     let buffer = NonZeroUsize::new(64).expect("64 is non-zero");

@@ -109,6 +109,8 @@ Benten uses **BLAKE3-256** specifically (multihash code `0x1e`), not SHA-256 (`0
 
 **Status (2026-04-17, 5d-J workstream 1):** migrated from Option A (honest-but-existence-leaking `E_CAP_DENIED_READ`) to **Option C** (symmetric `None` on denial, diagnostic-capability escape hatch). The existence-leak surface the prior posture named is no longer live; the escape hatch gives operators the signal they need without exposing it to ordinary callers.
 
+**Status (2026-05-05, Phase-3 G14-D wave-5a):** D5 SUBSCRIBE per-event read-cap-coverage CLOSED at G14-D. The Phase-2b coarse-boolean cap-recheck shape (consulted only `is_actor_active`) is replaced by a per-event closure constructed via [`benten_engine::cap_recheck::CapRecheckFn`] + the durable UCAN backend at G14-B; a partial revoke that strikes the actor's read coverage observably cancels the affected subscription path mid-stream via the `E_SUBSCRIBE_REVOKED_MID_STREAM` typed error. The dual-layer per CLR-2 / cap-major-2 — subscribe-time gate AND delivery-time per-row gate — is wired via the new `Engine::on_change_with_cap_recheck` entry point in `crates/benten-engine/src/engine_subscribe.rs`. Cross-trust-boundary filtering happens at DELIVERY (registration is open per plan §3 G14-D); the load-bearing reversal of the Phase-2b interim shape. Composes with the G15-A IVM materialization-time per-row read-gate at `crates/benten-engine/src/ivm_view_read_gate.rs` (both consumers share the `cap_recheck.rs` G13-pre-C scaffold per ds-r4r2-7). Every test under `crates/benten-engine/tests/subscribe_cap_recheck.rs` is the regression surface.
+
 **Primary path — symmetric None.** `Engine::get_node`, `Engine::edges_from`, `Engine::edges_to`, and `Engine::read_view` now collapse a `CapabilityPolicy::check_read` denial onto `Ok(None)` / `Ok(vec![])` / an empty-list `Outcome` — byte-identical with the response an unauthorised caller would see if the CID were genuinely absent. An attacker probing the CID space cannot distinguish denial from not-found through any of these surfaces.
 
 **Escape hatch — `Engine::diagnose_read`.** A new public method surfaces the distinction, but is itself gated on a `debug:read` capability: the configured policy's `check_read` is consulted with label `"debug"` and the target CID; a denial there collapses the probe into `Err(CapError::Denied)` so ordinary callers see the same `E_CAP_DENIED` shape that every other capability denial wears. When permitted, the method returns:
@@ -723,16 +725,31 @@ flanking; ucca-10 pre-R1 review.
 
 ---
 
-### Compromise #10 — Resume-time capability re-verification (G3-A / G5-B-i Decision 4) — CLOSED at Phase 2b G12-E (cross-process metadata arm)
+### Compromise #10 — Resume-time capability re-verification (G3-A / G5-B-i Decision 4) — CLOSED at Phase 2b G12-E (cross-process metadata arm) and CLOSED at Phase 3 G14-D wave-5a (engine-side asymmetry arm)
 
 **Status (2026-04-27).** The cross-process metadata arm of this
 compromise is **CLOSED at Phase 2b G12-E**. The orchestrator
 state log + brief refer to this closure as "Compromise #9" by
 sequencing in the open-compromise tracker; the canonical doc
-reference is #10. The capability re-check arm (the original
-"Decision 4" surface) remains scoped as documented below — G12-E
-addresses the metadata persistence layer the re-check sits on
-top of, not the federation-aware capability snapshot work itself.
+reference is #10.
+
+**Status (2026-05-05, Phase-3 G14-D wave-5a).** The engine-side
+asymmetry between WAIT-suspend and WAIT-resume is now **CLOSED**.
+G14-D wires `cap_snapshot_hash` derivation
+([`benten_engine::cap_snapshot_hash::compute(actor_cid, proof_chain_cids)`])
++ persisted-policy-metadata into a new [`benten_eval::CapSnapshot`]
+side-table on the `SuspensionStore` (keyed by envelope CID). The
+`resume_from_bytes_*` family recomputes the hash against the
+chain currently in the durable cap store and rejects with
+`E_CAP_SNAPSHOT_HASH_MISMATCH` when the chain materially changed
+(e.g. one UCAN was revoked between suspend and resume) per
+CLR-2 §11. A historical-policy metadata blob is preserved across
+the suspend/resume boundary so the resumed continuation runs
+against the policy in effect at suspend (rate-limit budgets,
+attenuation depth). Regression surface lives at
+`crates/benten-engine/tests/wait_resume_cross_process.rs` +
+`crates/benten-engine/tests/wait_resume_policy.rs` +
+`crates/benten-engine/tests/ucan_replay_audience.rs`.
 
 **Class.** Stale-authority resume + cross-process metadata gap.
 
