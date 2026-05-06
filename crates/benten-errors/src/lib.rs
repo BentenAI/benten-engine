@@ -324,9 +324,23 @@ pub enum ErrorCode {
     SandboxHostFnDenied,
     /// SANDBOX module attempted to call a host-fn name not present in the
     /// active manifest. Fires at link time (preferred) or call time
-    /// (fallback). Used for `random` since it's deferred to Phase 3
-    /// (see docs/future/phase-3-backlog.md §6.10).
+    /// (fallback).
+    ///
+    /// **Phase-3 G17-A2 (CLAUDE.md baked-in #16 closure):** the `random`
+    /// host-fn is no longer deferred — `random` lives alongside `time` /
+    /// `log` / `kv:read` in the codegen-default surface. This variant
+    /// still fires for any host-fn name the active manifest does not
+    /// expose (manifest cap-set ∩ codegen registry == empty).
     SandboxHostFnNotFound,
+    /// Phase-3 G17-A2 — SANDBOX `random` host-fn invocation requested
+    /// more entropy bytes than the per-call budget allows. The default
+    /// budget is 4096 bytes/call (per r1-wsa-8). A module manifest may
+    /// override the per-call budget via the additive optional
+    /// `host_fns.random.budget_bytes_per_call` field on the manifest
+    /// (see `docs/MODULE-MANIFEST.md`). This variant routes through the
+    /// `ON_DENIED` family — the host-fn ABI surfaces a typed denial
+    /// rather than a wasmtime trap. Closes Compromise #16.
+    SandboxHostFnRandomBudgetExceeded,
     /// SANDBOX dispatcher named a manifest not present in the codegen
     /// registry AND not registered via the deferred runtime API. ESC-15
     /// escape vector closure: NO permissive fall-through to a default.
@@ -675,6 +689,9 @@ impl ErrorCode {
             ErrorCode::SandboxWallclockInvalid => "E_SANDBOX_WALLCLOCK_INVALID",
             ErrorCode::SandboxHostFnDenied => "E_SANDBOX_HOST_FN_DENIED",
             ErrorCode::SandboxHostFnNotFound => "E_SANDBOX_HOST_FN_NOT_FOUND",
+            ErrorCode::SandboxHostFnRandomBudgetExceeded => {
+                "E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED"
+            }
             ErrorCode::SandboxManifestUnknown => "E_SANDBOX_MANIFEST_UNKNOWN",
             ErrorCode::SandboxManifestRegistrationDeferred => {
                 "E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED"
@@ -771,6 +788,10 @@ impl ErrorCode {
             | ErrorCode::HostCapabilityRevoked
             | ErrorCode::HostCapabilityExpired
             | ErrorCode::SandboxHostFnDenied
+            // Phase-3 G17-A2: per-call entropy-budget denial joins the
+            // cap-denial family per the same routing precedent as
+            // SandboxHostFnDenied (CLAUDE.md baked-in #16 closure).
+            | ErrorCode::SandboxHostFnRandomBudgetExceeded
             | ErrorCode::SandboxNestedDispatchDenied
             // G14-B durable UCAN backend denial family — chain-walk
             // failures (expired / not-yet-valid / bad-sig / attenuation
@@ -1058,6 +1079,9 @@ impl ErrorCode {
             "E_SANDBOX_WALLCLOCK_INVALID" => ErrorCode::SandboxWallclockInvalid,
             "E_SANDBOX_HOST_FN_DENIED" => ErrorCode::SandboxHostFnDenied,
             "E_SANDBOX_HOST_FN_NOT_FOUND" => ErrorCode::SandboxHostFnNotFound,
+            "E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED" => {
+                ErrorCode::SandboxHostFnRandomBudgetExceeded
+            }
             "E_SANDBOX_MANIFEST_UNKNOWN" => ErrorCode::SandboxManifestUnknown,
             "E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED" => {
                 ErrorCode::SandboxManifestRegistrationDeferred

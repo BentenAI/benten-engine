@@ -211,6 +211,7 @@ dependencies = [
  "benten-errors",
  "blake3",
  "criterion",
+ "getrandom 0.2.17",
  "proptest",
  "serde",
  "serde_ipld_dagcbor",

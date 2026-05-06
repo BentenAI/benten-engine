@@ -39,6 +39,7 @@ fn manifest_multi_module(name: &str, count: usize) -> ModuleManifest {
             })
             .collect(),
         migrations: vec![],
+        host_fns: None,
         signature: None,
     }
 }

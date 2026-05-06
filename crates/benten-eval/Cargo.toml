@@ -98,6 +98,12 @@ toml = { workspace = true }
 # its fixture surface entirely. Optional + feature-gated so default
 # release builds still drop the dep.
 wat = { workspace = true, optional = true }
+# Phase-3 G17-A2 — `random` host-fn workspace CSPRNG (D-PHASE-3-11
+# RESOLVED-at-R1: `getrandom` direct, NOT `rand` ecosystem). Native-only:
+# the SANDBOX subsystem itself is already wasm32-cut per sec-pre-r1-05,
+# so the CSPRNG dependency lives behind the same target-conditional
+# section.
+getrandom = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

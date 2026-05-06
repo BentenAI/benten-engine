@@ -147,7 +147,11 @@ function parseCatalog(md: string): CatalogParse {
  */
 function parseRust(rust: string): Set<string> {
   const codes = new Set<string>();
-  const rx = /=>\s*"(E_[A-Z0-9_]+)"/g;
+  // Match both single-line `=> "E_..."` and rustfmt-wrapped brace form
+  // `=> {\n  "E_..." \n}` (the latter triggers when the variant name +
+  // string-literal exceeds rustfmt's max_width, e.g.
+  // `SandboxHostFnRandomBudgetExceeded`).
+  const rx = /=>\s*\{?\s*"(E_[A-Z0-9_]+)"/g;
   let m: RegExpExecArray | null;
   while ((m = rx.exec(rust)) !== null) {
     codes.add(m[1]);
