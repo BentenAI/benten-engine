@@ -54,13 +54,15 @@
 
 use std::sync::Arc;
 
-use benten_core::{Cid, CoreError};
+use benten_core::{Cid, CoreError, Edge, Node, WriteAuthority};
 use benten_errors::ErrorCode;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+use crate::WriteContext;
 use crate::backend::{KVBackend, ScanResult};
-use crate::store::node_key;
+use crate::graph_backend::GraphBackend;
+use crate::store::{ChangeSubscriber, EdgeStore, NodeStore, node_key};
 
 /// Current snapshot-blob schema version. Bumped if the on-disk shape
 /// changes; readers reject blobs whose `schema_version` they don't
@@ -288,6 +290,149 @@ impl KVBackend for SnapshotBlobBackend {
     fn put_batch(&self, _pairs: &[(Vec<u8>, Vec<u8>)]) -> Result<(), Self::Error> {
         Err(SnapshotBlobError::ReadOnly {
             operation: "put_batch",
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// NodeStore + EdgeStore + GraphBackend impls (G13-D wave-3 direct-wire)
+// ---------------------------------------------------------------------------
+//
+// Phase-2b shipped only the [`KVBackend`] impl so the snapshot-blob backend
+// could feed `RedbBackend`-hydrated tempdir paths via `Engine::from_snapshot_blob`.
+// G13-D promotes the snapshot-blob to a first-class [`GraphBackend`] so
+// `EngineGeneric<SnapshotBlobBackend>` consumes it directly without the
+// tempdir hop.
+//
+// Read posture: nodes are decoded from the in-memory blob; edges are not
+// part of the D10 schema-v1 handoff shape so every edge accessor returns
+// the empty result. Phase-3 schema-v2 work extends the blob additively
+// to carry edges; the trait surface here is forward-compatible with that.
+//
+// Write posture: every mutation method surfaces
+// [`SnapshotBlobError::ReadOnly`] (`ErrorCode::BackendReadOnly`) — the
+// snapshot blob is content-addressed and writes would break the
+// canonical-bytes invariant the blob's CID is computed over.
+
+/// Owned MVCC-snapshot marker for [`SnapshotBlobBackend`].
+///
+/// The snapshot-blob is *already* an immutable point-in-time view (it was
+/// content-addressed at export time), so the MVCC concept collapses to a
+/// unit marker. The backend handle itself doubles as the snapshot —
+/// callers that want to read off the snapshot keep their existing
+/// `&SnapshotBlobBackend`. The marker exists to satisfy
+/// `GraphBackend::Snapshot: Send + Sync + 'static` per `arch-r1-6`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SnapshotBlobSnapshotHandle;
+
+/// Owned transaction-runner marker for [`SnapshotBlobBackend`].
+///
+/// The snapshot-blob is read-only — transactions never commit a write.
+/// This unit marker satisfies `GraphBackend::Transaction` without
+/// introducing a runtime concept that has no work to do; any caller
+/// that opens the runner and tries to drive a write will discover the
+/// `ReadOnly` posture through the per-method mutation surface.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SnapshotBlobTransactionRunner;
+
+impl NodeStore for SnapshotBlobBackend {
+    type Error = SnapshotBlobError;
+
+    fn put_node(&self, _node: &Node) -> Result<Cid, Self::Error> {
+        Err(SnapshotBlobError::ReadOnly {
+            operation: "put_node",
+        })
+    }
+
+    fn get_node(&self, cid: &Cid) -> Result<Option<Node>, Self::Error> {
+        let Some(body) = self.blob.nodes.get(cid) else {
+            return Ok(None);
+        };
+        let node: Node = serde_ipld_dagcbor::from_slice(body).map_err(|e| {
+            SnapshotBlobError::Decode(CoreError::Serialize(format!(
+                "snapshot-blob get_node decode {cid}: {e}"
+            )))
+        })?;
+        Ok(Some(node))
+    }
+
+    fn delete_node(&self, _cid: &Cid) -> Result<(), Self::Error> {
+        Err(SnapshotBlobError::ReadOnly {
+            operation: "delete_node",
+        })
+    }
+}
+
+impl EdgeStore for SnapshotBlobBackend {
+    type Error = SnapshotBlobError;
+
+    fn put_edge(&self, _edge: &Edge) -> Result<Cid, Self::Error> {
+        Err(SnapshotBlobError::ReadOnly {
+            operation: "put_edge",
+        })
+    }
+
+    fn get_edge(&self, _cid: &Cid) -> Result<Option<Edge>, Self::Error> {
+        // Edges are not part of the D10 schema-v1 handoff shape; a clean
+        // miss preserves NodeStore-equivalent shape parity for generic
+        // consumers (engine-side reads against a snapshot-blob backend
+        // see `Ok(None)` rather than a typed error).
+        Ok(None)
+    }
+
+    fn delete_edge(&self, _cid: &Cid) -> Result<(), Self::Error> {
+        Err(SnapshotBlobError::ReadOnly {
+            operation: "delete_edge",
+        })
+    }
+
+    fn edges_from(&self, _source: &Cid) -> Result<Vec<Edge>, Self::Error> {
+        Ok(Vec::new())
+    }
+
+    fn edges_to(&self, _target: &Cid) -> Result<Vec<Edge>, Self::Error> {
+        Ok(Vec::new())
+    }
+}
+
+impl GraphBackend for SnapshotBlobBackend {
+    type Snapshot = SnapshotBlobSnapshotHandle;
+    type Error = SnapshotBlobError;
+    type Transaction = SnapshotBlobTransactionRunner;
+
+    fn transaction(&self) -> Self::Transaction {
+        SnapshotBlobTransactionRunner
+    }
+
+    /// No-op — the snapshot-blob backend never emits change events
+    /// (it is content-addressed + immutable). The umbrella shape is
+    /// preserved so the engine can wire IVM views uniformly without
+    /// branching per-backend.
+    fn register_subscriber(&self, _subscriber: Arc<dyn ChangeSubscriber>) {}
+
+    fn snapshot(&self) -> Self::Snapshot {
+        SnapshotBlobSnapshotHandle
+    }
+
+    /// Privileged put-with-context against a content-addressed
+    /// snapshot blob is a contradiction in terms: there is no
+    /// underlying mutable surface to dispatch through the Inv-13
+    /// 5-row matrix. Surfaces `ReadOnly` regardless of the
+    /// [`WriteAuthority`] presented. EnginePrivileged callers that
+    /// reach here have a logic error upstream — the snapshot-blob
+    /// engine is not a write target.
+    fn put_node_with_context(
+        &self,
+        _node: &Node,
+        _ctx: &WriteContext,
+    ) -> Result<Cid, <Self as GraphBackend>::Error> {
+        // Dropping the ctx is intentional — the contract is uniform
+        // regardless of authority. Reference the type once so a future
+        // import-rewrite that drops `WriteAuthority` from the import
+        // line catches it via `cargo check`.
+        let _ = WriteAuthority::User;
+        Err(SnapshotBlobError::ReadOnly {
+            operation: "put_node_with_context",
         })
     }
 }

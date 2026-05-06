@@ -36,13 +36,38 @@
 
 ### 1.2 SnapshotBlobBackend direct-wire (engine_snapshot tempdir hydration cleanup)
 
-**Phase 2b state:** `crates/benten-engine/src/engine_snapshot.rs:223` opens a `RedbBackend` against a tempdir to hydrate snapshot bytes — works but an architectural smell ("tempdir-as-backend").
+**Phase 2b state:** `crates/benten-engine/src/engine_snapshot.rs:223` opened a `RedbBackend` against a tempdir to hydrate snapshot bytes — works but an architectural smell ("tempdir-as-backend").
 
-**Phase 3 target:** Construct `EngineGeneric<SnapshotBlobBackend>` directly from snapshot bytes; no tempdir hydration step. Read-only Engine instance for snapshot inspection.
+**Phase 3 G13-D wave-3 (PARTIAL CLOSE):** `SnapshotBlobBackend` now satisfies the full `GraphBackend` umbrella trait (`NodeStore` + `EdgeStore` + the snapshot/transaction/subscriber/put-with-context surface) in `crates/benten-graph/src/backends/snapshot_blob.rs`. `Engine::from_snapshot_blob` no longer creates a tempdir — hydration goes into `RedbBackend::open_in_memory()` so the function never touches the filesystem. Pinned at `crates/benten-graph/tests/snapshot_blob_backend.rs::snapshot_blob_backend_impls_graph_backend_read_path` + `snapshot_blob_backend_write_path_returns_read_only_error` + `crates/benten-engine/tests/snapshot_no_tempdir.rs::from_snapshot_blob_no_tempdir_in_path`.
 
-**Why deferred:** Same dependency as 1.1 — needs Engine genericism. The Phase 3 wave should bundle 1.1 + 1.2 + the SnapshotBlobBackend trait coverage in a single design pass.
+**Why partial:** The full direct-wire to `EngineGeneric<SnapshotBlobBackend>` (no in-memory redb hop) requires lifting every `impl Engine` method (≈ 10 modules: `engine_crud.rs`, `engine_modules.rs`, `engine_subscribe.rs`, `engine_views.rs`, `engine_caps.rs`, `engine_sandbox.rs`, `engine_stream.rs`, `engine_wait.rs`, `engine_diagnostics.rs`, `primitive_host.rs::PrimitiveHost`) into `impl<B: GraphBackend> EngineGeneric<B>` form. That structural lift is out of G13-D's scope-real-15 budget (~100-200 LOC) and lands as §1.2-followup below per HARD RULE BELONGS-NAMED-NOW.
 
-**Touch size:** ~50-100 LOC engine-side (mostly removing the tempdir code path) + whatever SnapshotBlobBackend needs to satisfy the read-only subset of the umbrella trait.
+**Touch size landed at G13-D:** ~140 LOC graph-side (NodeStore + EdgeStore + GraphBackend impls + unit-marker types) + ~10 LOC engine-side (tempdir → open_in_memory swap + registry retire) + ~155 LOC test-side (3 must-pass pins).
+
+### 1.2-followup EngineGeneric method-cascade lift for SnapshotBlobBackend (G13-D BELONGS-NAMED-NOW carry)
+
+**Source:** Discovered during G13-D wave-3 implementation (R5 wave-3, 2026-05-05). Tracks the engine-side method generic-cascade lift that G13-D's scope-real-15 budget could not deliver.
+
+**Phase 3 G13-D state (post-wave-3):** `Engine::from_snapshot_blob` returns `Engine = EngineGeneric<RedbBackend>` over an in-memory redb backend. The snapshot blob is consumed via `RedbBackend::open_in_memory()` + `put_node` replay rather than via direct `EngineGeneric<SnapshotBlobBackend>` construction. The type-level read-only contract is therefore enforced at the user-facing engine surface (`engine_crud.rs`, `primitive_host.rs::check_not_read_only_snapshot`) per the existing `is_read_only_snapshot()` flag, not at the backend's typed write surface.
+
+**Phase 3 follow-up target:** `Engine::from_snapshot_blob(bytes) -> Result<EngineGeneric<SnapshotBlobBackend>, EngineError>`. The snapshot-blob bytes drive a `SnapshotBlobBackend` directly with no redb hop. Achieves:
+- Truly zero filesystem touch (already true at G13-D) AND zero in-memory redb allocator pressure.
+- Type-level rejection of writes (the backend's `put_node_with_context` surfaces `BackendReadOnly`), so the engine-side `is_read_only_snapshot` flag becomes redundant for snapshot-blob-typed engines.
+- Full direct-wire matching the G13 PHASE-3-BUNDLE-1 architectural intent.
+
+**Required structural lift:**
+- `impl Engine` blocks in 10 modules → `impl<B: GraphBackend> EngineGeneric<B>` (engine_crud, engine_modules, engine_subscribe, engine_views, engine_caps, engine_sandbox, engine_stream, engine_wait, engine_diagnostics, primitive_host).
+- Each module's body uses the redb-specific closure-based `self.backend.transaction(|tx| ...)` execution surface — those call sites need to migrate to the umbrella `GraphBackend::transaction()` handle (currently a unit marker; the lift may evolve the handle into a borrowing runner per `arch-r1-6` recommendation).
+- `EngineBuilder` becomes generic over `B: GraphBackend` (currently hard-bound to `RedbBackend`); separate `from_redb` / `from_snapshot_blob` / `from_browser` constructors handle the per-backend distinct construction shapes.
+- Existing tests in `crates/benten-engine/tests/integration/snapshot_blob_round_trip.rs` (4 LIVE tests, including `snapshot_blob_rejects_delete_via_dispatch_handler` that exercises `dst.call(...)` against the snapshot-blob engine) must continue passing — the lift is a refactor, not a behavior change.
+
+**Why deferred from G13-D:** Scope-real-15 sized G13-D at ~100-200 LOC total (re-sized from ~50-100 to add test coverage). The structural lift is a multi-thousand-LOC + 10-module touch with high cross-wave-blocking risk. Better landed as a dedicated wave with its own R1 + mini-review.
+
+**Touch size estimate:** ~1,500-3,000 LOC engine-side method lift + ~300-600 LOC builder genericism + ~200-400 LOC test updates (cascade through call sites that name `Engine`/`EngineGeneric<RedbBackend>`).
+
+**Suggested wave:** new G13-F or fold into G14-pre/G15-pre depending on which wave-4 work needs `EngineGeneric<B>` cascade for non-redb backends first. The G14-B durable UCAN-backend work also threads `<B: GraphBackend>` so coordination there is natural.
+
+**Cross-ref:** Phase-3 plan §3 G13-D row scope-real-15 line. CLAUDE.md baked-in §17 deployment-shapes commitment (the in-memory redb hop is a temporary convenience for the full-peer path; thin compute surfaces will need this lift to avoid carrying any redb at all on `wasm32-unknown-unknown`).
 
 ### 1.3 Arc<dyn KVBackend> migration (in-memory backend pivot from wave-5)
 

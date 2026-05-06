@@ -78,11 +78,10 @@ pub use transaction::{PendingOp, Transaction};
 /// `redb_backend.rs` stays focused on Phase-1 semantics while Phase-2a
 /// stubs surface the new API shape in one place.
 ///
-/// TODO(phase-3 — RedbBackend benchmark-helper bodies): implement
-/// real bodies; the stubs below `todo!()` so tests fail at runtime
-/// with a clear pointer to the owning group. Carried from Phase-2a
-/// G2-A / G5-A through Phase-2b; the durability-mode pass-through
-/// wiring lands alongside §1.1 backend genericism in Phase-3.
+/// Phase-3 G13-E closed the `benchmark_helper_crud_post_create_dispatch`
+/// `todo!()` carry; the durability-mode pass-through is wired through the
+/// redb backend's `_impl` body. Other stubs in this block remain test-only
+/// or shape-only by design (see per-method doc).
 #[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 impl RedbBackend {
     /// Phase 2a G2-A: `create`-alias for the `open_or_create` constructor —
@@ -221,18 +220,19 @@ impl RedbBackend {
 
     /// Phase 2a arch-r1-1 descope-witness bench helper. The accompanying
     /// bench (`crud_post_create_dispatch_group_durability.rs`) routes its
-    /// iteration body through this helper so the bench compiles today.
+    /// iteration body through this helper.
     ///
-    /// TODO(phase-3 — benchmark durability-mode pass-through): wire
-    /// durability-mode pass-through through `put_node` so the Group vs
-    /// Immediate delta is observable. Carried from Phase-2a G2-A
-    /// through Phase-2b; lands alongside §1.1 backend genericism in
-    /// Phase-3.
-    pub fn benchmark_helper_crud_post_create_dispatch(&self, _durability: DurabilityMode) {
-        todo!(
-            "Phase 2a G2-A descope-witness: implement durability-mode pass-through \
-             per arch-r1-1 + named Compromise #N+3"
-        )
+    /// Phase-3 G13-E wired the durability-mode pass-through: each iteration
+    /// drives a fresh CRUD-post-create commit through the redb backend at
+    /// the caller-supplied [`DurabilityMode`]. The redb mapping still
+    /// collapses Group → Immediate (per
+    /// `crates/benten-graph/src/redb_backend.rs::to_redb_durability`), so
+    /// the bench remains informational on redb v4 — when redb grows native
+    /// batched-fsync OR Benten adds its own write-batching layer, the
+    /// Group vs. Immediate delta becomes observable without changing this
+    /// surface.
+    pub fn benchmark_helper_crud_post_create_dispatch(&self, durability: DurabilityMode) {
+        self.benchmark_helper_crud_post_create_dispatch_impl(durability);
     }
 
     /// Phase 2a test-only hook: return the `DurabilityMode` of the last
