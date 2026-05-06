@@ -73,6 +73,13 @@ pub struct SandboxConfig {
     /// in the variant payload so operator dashboards distinguish a
     /// recursive-runaway guest from a generic invalid module.
     pub max_wasm_stack: u64,
+    /// Phase-3 G17-A2 — per-call entropy budget for the `random` host-fn,
+    /// in BYTES. Default = [`crate::sandbox::DEFAULT_RANDOM_BUDGET_BYTES_PER_CALL`]
+    /// (4096 per r1-wsa-8). When `Some(n)`, this overrides the
+    /// codegen-default `host_fns.random.budget_bytes_per_call` for the
+    /// duration of this call (the `ModuleManifest::host_fns.random.budget_bytes_per_call`
+    /// additive optional field flows through here).
+    pub random_budget_bytes_per_call: Option<u64>,
     /// **Test-only attack-pattern injection seam (cfg-gated; G20-A1
     /// wave-8a unwidens further per `tests/sandbox_helpers_no_widening.rs`).**
     /// Phase-3 wave-5c §6.1-followup tasks #3 + #4: end-to-end test
@@ -134,6 +141,10 @@ impl Default for SandboxConfig {
             output_bytes: 1024 * 1024,
             max_nest_depth: 4,
             max_wasm_stack: MAX_WASM_STACK_DEFAULT,
+            // Phase-3 G17-A2 — None == use the codegen default (4096
+            // per r1-wsa-8). A per-manifest override flips this to
+            // `Some(n)` at the engine boundary.
+            random_budget_bytes_per_call: None,
             #[cfg(any(test, feature = "test-helpers", feature = "testing"))]
             testing_inject_attack: TestEscAttackInjection::None,
         }
@@ -423,14 +434,6 @@ pub fn resolve_priority(eligible: Vec<SandboxError>) -> Option<SandboxError> {
 /// Closes phase-3-backlog §6.3 + §6.1-followup task #5 (ESC-9
 /// cap-revoke mid-call defense, r1-wsa-3 MAJOR closure).
 pub type LiveCapCheck = Arc<dyn Fn(&str) -> bool + Send + Sync>;
-
-/// Cap-string prefix that identifies the deferred `random` host-fn
-/// (sec-g7a-mr-5 + D1-RESOLVED + sec-pre-r1-06 §2.3). The TOML at
-/// workspace-root `host-functions.toml` declares the deferral; this
-/// constant lets the executor fail-loud at validate time IF a manifest
-/// claims any cap matching this prefix (defensive belt-and-braces while
-/// the full module-link-time host-fn-name enumeration lands in G7-C).
-pub const DEFERRED_HOST_FN_RANDOM_CAP_PREFIX: &str = "host:compute:random";
 
 /// Execute a SANDBOX primitive call.
 ///
@@ -921,6 +924,9 @@ impl SandboxStoreData {
                 _ => None,
             })
             .unwrap_or(65_536);
+        let random_budget_bytes_per_call = config
+            .random_budget_bytes_per_call
+            .unwrap_or(crate::sandbox::DEFAULT_RANDOM_BUDGET_BYTES_PER_CALL);
         #[cfg(any(test, feature = "test-helpers", feature = "testing"))]
         let testing_inject_attack = config.testing_inject_attack;
         Self {
