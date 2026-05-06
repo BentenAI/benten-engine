@@ -32,6 +32,7 @@ use crate::store::subgraph_key;
 
 pub mod backend;
 pub mod backends;
+pub mod graph_backend;
 pub mod immutability;
 pub mod in_memory_backend;
 pub(crate) mod indexes;
@@ -45,6 +46,7 @@ pub use backends::{
     BlobBackend, NetworkFetchStubBackend, NetworkFetchStubError, SnapshotBlob, SnapshotBlobBackend,
     SnapshotBlobError,
 };
+pub use graph_backend::{GraphBackend, RedbTransactionRunner};
 pub use in_memory_backend::InMemoryBackend;
 pub use mutex_ext::{MutexExt, RwLockExt};
 pub use redb_backend::RedbBackend;
