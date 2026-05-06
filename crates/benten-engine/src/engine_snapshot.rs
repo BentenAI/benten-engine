@@ -1,5 +1,5 @@
 //! Phase-2b G10-A-wasip1 snapshot-blob handoff API on [`Engine`]
-//! (D10-RESOLVED).
+//! (D10-RESOLVED) — Phase-3 G13-D wave-3 direct-wire (no tempdir).
 //!
 //! ## What this is
 //!
@@ -9,34 +9,54 @@
 //! - [`Engine::export_snapshot_blob`] — walk the engine's storage and
 //!   encode a canonical DAG-CBOR `SnapshotBlob` for handoff.
 //! - [`Engine::from_snapshot_blob`] — decode a snapshot-blob and
-//!   construct a read-only engine over a freshly-hydrated tempdir
-//!   backend; mutation methods surface `E_BACKEND_READ_ONLY`.
+//!   construct a read-only engine over an in-memory hydration backend;
+//!   mutation methods surface `E_BACKEND_READ_ONLY`.
 //! - [`Engine::compute_snapshot_blob_cid`] — static helper hashing an
 //!   already-encoded blob.
 //!
-//! ## Why a tempdir backend (Phase-2b posture)
+//! ## Why an in-memory hydration backend (G13-D wave-3 posture)
 //!
-//! The Engine is hard-bound to [`benten_graph::RedbBackend`] in 2b. To
-//! preserve the full read surface (label-index scans, `register_crud`
-//! handlers, `read_view`, etc.) without re-implementing every
-//! IndexMaintainer against `SnapshotBlobBackend`, `from_snapshot_blob`
-//! materializes the blob's contents into a fresh tempdir-resident redb
-//! file and flips the engine's `read_only_snapshot` flag. Mutation
-//! attempts surface [`benten_errors::ErrorCode::BackendReadOnly`] at the
-//! user-facing surface (engine_crud.rs); the underlying backend is a
-//! plain redb so internal-side reads (e.g. resume-from-bytes envelopes
-//! that need to persist transient state) can still operate on the
-//! tempdir.
+//! Phase-2b shipped a tempdir-resident hydration shape: `from_snapshot_blob`
+//! created a `tempfile::tempdir()` redb file and replayed the blob's nodes
+//! into it. G13-D drops the tempdir — the hydration target is
+//! [`RedbBackend::open_in_memory`] so the function never touches the
+//! filesystem. The engine still consumes [`RedbBackend`] (the existing
+//! resolved-alias `Engine = EngineGeneric<RedbBackend>` shape) so every
+//! engine method (CRUD, dispatched-handler `call`, IVM views, change
+//! subscribers) continues to work uniformly against the snapshot view —
+//! the read-only contract fires at the user-facing engine surface
+//! (`engine_crud.rs`, `primitive_host.rs::check_not_read_only_snapshot`)
+//! exactly as it did pre-G13-D.
 //!
-//! Phase 3 replaces the tempdir hydration with a direct
-//! `SnapshotBlobBackend` wired in once the Engine is generic over its
-//! backend; until then this is the simplest correct shape that
-//! preserves the canonical-bytes round-trip the D10 test pins.
+//! ### What G13-D does NOT do (BELONGS-NAMED-NOW carry)
+//!
+//! The full direct-wire to `EngineGeneric<SnapshotBlobBackend>` —
+//! making the engine consume the snapshot blob *as the backend* without
+//! the in-memory redb hop — requires lifting every `impl Engine`
+//! method (≈ 10 modules: `engine_crud.rs`, `engine_modules.rs`,
+//! `engine_subscribe.rs`, `engine_views.rs`, `engine_caps.rs`,
+//! `engine_sandbox.rs`, `engine_stream.rs`, `engine_wait.rs`,
+//! `engine_diagnostics.rs`, `primitive_host.rs::PrimitiveHost`) into
+//! `impl<B: GraphBackend> EngineGeneric<B>` form. That structural lift is
+//! out of G13-D's scope-real-15 budget (~100-200 LOC) and is carried as
+//! `docs/future/phase-3-backlog.md §1.2-followup` per HARD RULE
+//! BELONGS-NAMED-NOW — the destination row receives the entry in the
+//! same PR as this commit.
+//!
+//! G13-D delivers what fits in scope-real-15:
+//!
+//! 1. [`SnapshotBlobBackend`] is now a first-class
+//!    [`benten_graph::GraphBackend`] (per the umbrella trait, with
+//!    [`benten_graph::NodeStore`] + [`benten_graph::EdgeStore`] + the
+//!    snapshot/transaction/subscriber/put-with-context surface). Tests
+//!    pinned at `crates/benten-graph/tests/snapshot_blob_backend.rs`.
+//! 2. `from_snapshot_blob` no longer creates a tempdir — the in-memory
+//!    redb path replaces the filesystem hop. Pinned at
+//!    `crates/benten-engine/tests/snapshot_no_tempdir.rs`.
 //!
 //! Native-target only — see `lib.rs` for the wasm32 cfg-gate rationale.
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 use benten_core::{Cid, CoreError, Node};
 use benten_errors::ErrorCode;
@@ -53,33 +73,10 @@ use crate::system_zones::SYSTEM_ZONE_PREFIXES;
 // `benten-graph/src/store.rs`.
 const NODE_KEY_PREFIX: &[u8] = b"n:";
 
-/// RAII handle keeping a snapshot-blob engine's tempdir alive for the
-/// engine's lifetime. Stored on the engine via the [`SnapshotEngineGuard`]
-/// global registry indexed by the engine's tempdir CID so the tempdir
-/// is dropped together with the engine.
-///
-/// This is a stop-gap; the proper shape lands when Engine becomes generic
-/// over its backend in a later phase and the snapshot blob can drive a
-/// `SnapshotBlobBackend` directly without spilling to disk.
-struct SnapshotTempDirGuard {
-    _dir: tempfile::TempDir,
-}
-
-// We hold guards in a process-wide registry so the tempdir lives as long
-// as ANY clone of the Engine that points at it; a more polished design
-// would put the guard on `EngineInner` but that's a 50-call-site cascade
-// (every constructor / builder helper). The map is keyed by the
-// snapshot-blob's CID so two engines built from the same blob in the
-// same process share the same tempdir hold — there's no correctness
-// hazard from that because the snapshot is read-only.
-static SNAPSHOT_TEMP_DIRS: std::sync::OnceLock<
-    std::sync::Mutex<BTreeMap<Cid, Arc<SnapshotTempDirGuard>>>,
-> = std::sync::OnceLock::new();
-
-fn snapshot_tempdir_registry() -> &'static std::sync::Mutex<BTreeMap<Cid, Arc<SnapshotTempDirGuard>>>
-{
-    SNAPSHOT_TEMP_DIRS.get_or_init(|| std::sync::Mutex::new(BTreeMap::new()))
-}
+// G13-D wave-3: the Phase-2b `SnapshotTempDirGuard` + process-wide
+// `SNAPSHOT_TEMP_DIRS` registry are retired. The hydration target is
+// `RedbBackend::open_in_memory()` — there is no on-disk tempdir to keep
+// alive, so the keep-alive registry has nothing to guard.
 
 impl Engine {
     /// Phase-2b G10-A-wasip1 (D10-RESOLVED): walk this engine's storage
@@ -169,23 +166,41 @@ impl Engine {
         })
     }
 
-    /// Phase-2b G10-A-wasip1 (D10-RESOLVED): construct a read-only
-    /// engine view over a snapshot-blob handoff payload.
+    /// G13-D wave-3 (D10-RESOLVED + direct-wire): construct a read-only
+    /// engine view over a snapshot-blob handoff payload — without
+    /// touching the filesystem.
     ///
-    /// The bytes are decoded as a canonical DAG-CBOR
-    /// [`SnapshotBlob`]; the contents are hydrated into a fresh
-    /// tempdir-resident redb backend, the engine's
+    /// The bytes are decoded as a canonical DAG-CBOR [`SnapshotBlob`].
+    /// The contents are hydrated into an in-memory [`RedbBackend`]
+    /// (no tempdir, no on-disk path) and the engine's
     /// [`Engine::is_read_only_snapshot`] flag is set so user-facing
-    /// mutations surface [`ErrorCode::BackendReadOnly`], and the
-    /// constructed engine is returned.
+    /// mutations surface [`ErrorCode::BackendReadOnly`].
     ///
-    /// The tempdir is held alive for the engine's lifetime via a
-    /// process-wide registry keyed by the snapshot-blob CID.
+    /// ## G13-D delta vs Phase-2b
+    ///
+    /// Phase-2b spilled the hydration into a `tempfile::tempdir()`
+    /// redb file kept alive via a process-wide guard registry. G13-D
+    /// drops both: the hydration target is [`RedbBackend::open_in_memory`]
+    /// and there is no filesystem touch to keep alive. Pinned at
+    /// `crates/benten-engine/tests/snapshot_no_tempdir.rs::from_snapshot_blob_no_tempdir_in_path`.
+    ///
+    /// The full direct-wire (`EngineGeneric<SnapshotBlobBackend>` with
+    /// no in-memory redb hop) requires lifting every `impl Engine`
+    /// method into `impl<B: GraphBackend> EngineGeneric<B>` form.
+    /// That structural lift is out of G13-D's scope-real-15 budget and
+    /// is carried as a follow-up in
+    /// `docs/future/phase-3-backlog.md §1.2-followup`.
     ///
     /// # Errors
     /// - [`EngineError::Other`] (`E_SERIALIZE`) on snapshot-blob decode
     ///   failure or schema-version mismatch.
-    /// - [`EngineError::Graph`] on tempdir / redb hydration failure.
+    /// - [`EngineError::Graph`] on in-memory redb construction failure
+    ///   (extremely unlikely — only happens on allocator failure
+    ///   inside the redb cache).
+    /// - [`EngineError::Other`] (`E_INV_CONTENT_HASH`) if a hydrated
+    ///   Node's recomputed CID does not match the declared key, which
+    ///   indicates tampering between the source-side canonical encode
+    ///   and the destination-side decode.
     pub fn from_snapshot_blob(bytes: &[u8]) -> Result<Self, EngineError> {
         let blob = SnapshotBlob::from_dag_cbor(bytes).map_err(EngineError::Core)?;
         if blob.schema_version
@@ -201,9 +216,13 @@ impl Engine {
             });
         }
 
-        // Prove the SnapshotBlobBackend will actually accept the bytes
-        // — a separate check from the engine-side hydration so a future
-        // direct-backed Engine reuses the same validation.
+        // Prove the [`SnapshotBlobBackend`] will actually accept the
+        // bytes — a separate check from the engine-side hydration so
+        // the (G13-D) direct-backed `SnapshotBlobBackend` is exercised
+        // along the same input-validation path the in-memory
+        // hydration consumes. Defends against schema drift between
+        // the read-only [`SnapshotBlobBackend`] surface and the
+        // engine-side decode.
         let _ = benten_graph::SnapshotBlobBackend::from_bytes(bytes).map_err(
             |e: SnapshotBlobError| EngineError::Other {
                 code: e.code(),
@@ -211,16 +230,11 @@ impl Engine {
             },
         )?;
 
-        // Hydrate a fresh tempdir-backed redb engine. The blob is keyed
-        // by the snapshot-blob CID so the tempdir guard outlives the
-        // engine clone(s) that point at it.
-        let blob_cid = SnapshotBlob::compute_cid(bytes);
-        let dir = tempfile::tempdir().map_err(|e| EngineError::Other {
-            code: ErrorCode::GraphInternal,
-            message: format!("snapshot-blob tempdir: {e}"),
-        })?;
-        let path = dir.path().join("benten-snapshot.redb");
-        let backend = RedbBackend::open(&path)?;
+        // G13-D: hydrate into an in-memory redb backend instead of a
+        // tempdir-resident on-disk file. `RedbBackend::open_in_memory`
+        // forces durability to `Async` (there is no disk to fsync to)
+        // which is appropriate for a read-only snapshot view.
+        let backend = RedbBackend::open_in_memory()?;
 
         // Replay each Node body through `put_node`. Because the body
         // bytes are canonical DAG-CBOR (the source engine produced them
@@ -257,15 +271,6 @@ impl Engine {
             .without_caps()
             .build()?;
         engine.set_read_only_snapshot();
-
-        // Hold the tempdir alive for the engine's process lifetime.
-        // The guard is keyed by snapshot-blob CID so re-imports of the
-        // same blob in the same process share the hold.
-        let guard = Arc::new(SnapshotTempDirGuard { _dir: dir });
-        let registry = snapshot_tempdir_registry();
-        if let Ok(mut g) = registry.lock() {
-            g.insert(blob_cid, guard);
-        }
 
         Ok(engine)
     }
