@@ -223,3 +223,59 @@ fn loro_merged_node_is_graph_encoded_not_opaque_crdt_blob() {
     // adds a parallel storage layer.
     unimplemented!("G16-B wires graph-encoded merged-Node assertion");
 }
+
+#[test]
+#[ignore = "RED-PHASE: G16-B wave-6b — cag-r4-6 MINOR — SUBSCRIBE fires notification on affected zone after Loro merge"]
+fn loro_merge_fires_subscribe_notification_on_affected_zone_per_charter_9() {
+    // cag-r4-6 MINOR pin (Charter 9 — CRDT merges produce graph-Node
+    // EVENTS reachable via standard engine surfaces). Closes the
+    // notification-shape gap that ivm_view_subscribe_compose.rs
+    // (R4-FP) covers IVM read-side composition but does NOT cross-
+    // reference Loro merge as a producer of SUBSCRIBE events.
+    //
+    // The contract: a Loro-merged Version Node lands in the graph
+    // (storage-shape pinned by `loro_merged_node_is_graph_encoded_*`)
+    // AND fires SUBSCRIBE notifications to subscribers registered on
+    // the affected zone — same ChangeEvent fan-out as a local write.
+    // Without this assertion, a regression could route Loro merges
+    // through a code path that bypasses the SUBSCRIBE registry.
+    //
+    // G16-B implementer wires this:
+    //
+    //   let anchor_id = engine.create_anchor("post:p1");
+    //
+    //   // Register SUBSCRIBE handler on the affected zone:
+    //   let received: std::sync::Arc<std::sync::Mutex<Vec<benten_graph::ChangeEvent>>> =
+    //       std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    //   let received_clone = received.clone();
+    //   engine.subscribe_zone("/zone/posts", move |event| {
+    //       received_clone.lock().unwrap().push(event.clone());
+    //   }).unwrap();
+    //
+    //   // Set up concurrent peers + apply a cross-Atrium Loro merge:
+    //   engine.write_version_under_anchor(anchor_id, props_v1, peer_a_did);
+    //   engine.write_version_under_anchor(anchor_id, props_v2, peer_b_did);
+    //   apply_concurrent_loro_merge_across_atrium(&[anchor_id]).unwrap();
+    //
+    //   // The merged Version Node fires a ChangeEvent referencing
+    //   // its CID:
+    //   let events = received.lock().unwrap();
+    //   let merged = engine.read_current_for_anchor(anchor_id).unwrap();
+    //   assert!(events.iter().any(|e| e.affected_cid() == merged.cid()),
+    //       "SUBSCRIBE handler MUST receive a ChangeEvent referencing the \
+    //        merged Version Node's CID after Loro merge per cag-r4-6 (Charter 9)");
+    //
+    //   // The event references the affected zone (so per-zone subscriptions filter):
+    //   assert!(events.iter().any(|e| e.zone() == "/zone/posts"),
+    //       "ChangeEvent from Loro merge MUST reference the affected zone per cag-r4-6");
+    //
+    // OBSERVABLE consequence: SUBSCRIBE handlers see Loro merges
+    // through the standard ChangeEvent fan-out — same as local
+    // writes. Defends against a regression where Loro merges route
+    // through a code path that bypasses the SUBSCRIBE registry,
+    // making remote merges silently invisible to local subscribers.
+    unimplemented!(
+        "G16-B wires Loro-merge → SUBSCRIBE-notification pin: ChangeEvent referencing \
+         merged-Version-CID + affected-zone delivered to SUBSCRIBE handler per cag-r4-6 (Charter 9)"
+    );
+}

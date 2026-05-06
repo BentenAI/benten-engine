@@ -100,12 +100,34 @@ fn security_posture_compromise_19_marked_closed() {
     //   assert!(section.contains("thin-client") || section.contains("thin client"),
     //       "Compromise #19 closure narrative must reflect thin-client cache scope per CLAUDE.md baked-in #17");
     //
+    //   // br-r4-r1-6 / br-r4-r2-4 MINOR pin: the closure narrative
+    //   // MUST also record the rationale for why IndexedDB was chosen
+    //   // OVER alternatives (notably OPFS / File System Access API).
+    //   // Without this rationale-record the architectural-history
+    //   // trail is lost — Phase-4-or-later cannot revisit the
+    //   // decision because the original tradeoffs aren't recorded.
+    //   // Same shape as Phase-2b 'closed-without-rationale-record'
+    //   // patterns that produced the wave-8j retrospective re-
+    //   // derivations.
+    //   assert!(
+    //       section.contains("OPFS") || section.contains("File System Access"),
+    //       "Compromise #19 closure narrative MUST name the OPFS / File System \
+    //        Access API alternative considered per br-r4-r1-6 / br-r4-r2-4");
+    //   assert!(
+    //       section.contains("chosen") || section.contains("rationale")
+    //         || section.contains("revisit"),
+    //       "Compromise #19 closure narrative MUST record the chosen-over / \
+    //        rationale / revisit-trigger for IndexedDB-vs-OPFS per br-r4-r1-6");
+    //
     // OBSERVABLE consequence: the closure narrative honestly says
     // "closed at thin-client cache scope," not aspirationally "closed
     // at full sync state." Defends architectural commitment +
-    // doc-coupling.
+    // doc-coupling. The rationale-record assertion locks in the
+    // architectural-history trail per pim-1 §3.5b (closed-with-rationale,
+    // not closed-with-only-the-verb).
     unimplemented!(
-        "G18-A wires SECURITY-POSTURE.md grep assertion that Compromise #19 is marked CLOSED at thin-client scope"
+        "G18-A wires SECURITY-POSTURE.md grep assertion that Compromise #19 is marked CLOSED at thin-client scope \
+         + rationale-record asserting OPFS/File System Access alternative + chosen/rationale/revisit per br-r4-r1-6"
     );
 }
 
