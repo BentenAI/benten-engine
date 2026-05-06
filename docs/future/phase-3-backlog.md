@@ -109,6 +109,10 @@
 
 **Phase 3 target:** Full UCAN chain validation + delegation; durable grant store backed by the new graph backend (whichever PHASE-3-BUNDLE-1 produces); `benten-id` crate ships Ed25519 / DID / VC alongside.
 
+**Phase 3 R5 wave-4b status (G14-B LANDED):** `crates/benten-caps/src/backends/ucan.rs::UCANBackend<B: GraphBackend>` ships the durable backend at wave-4b. Composes `benten_id::ucan::validate_chain_at` (in-memory chain-walk + signature + nbf/exp at every link) with a content-CID-keyed durable revocation lookup. Mini-review fix-pass adds `validate_chain_for_audience_at` pinning CLR-2 audience-binding at the durable seam + typed `CapError::UcanAudienceMismatch` for cross-atrium replay routing.
+
+**ssi re-evaluation pointer (G16 Atrium-handshake):** the durable backend uses the hand-rolled internal `benten_id::ucan::Ucan` format. Adding `ssi` as a dep for external Benten producer-interop is deferred to G16 — the Atrium-handshake wave names it as its forward-compat axis if external producer-interop becomes required. No external Benten producers exist at G14-B (closed-loop). Per HARD RULE rule-12 clause-b: this section is the named destination for the ssi BELONGS-ELSEWHERE deferral; the destination receives the entry NOW (this paragraph). G16 then either (a) lights up ssi at the Atrium-handshake codec boundary, or (b) re-defers with a fresh named destination + reason.
+
 **Source:** [`phase-2-backlog.md`](./phase-2-backlog.md) §7.1, §7.2, §7.3, §7.4 — all carry forward to Phase 3 verbatim.
 
 ### 2.2 SUBSCRIBE delivery-time cap-recheck threading on durable grants (F6)

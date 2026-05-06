@@ -21,15 +21,46 @@ bench = false
 benten-core = { path = "../benten-core" }
 benten-errors = { workspace = true }
 thiserror = { workspace = true }
+# G14-B: GraphBackend umbrella trait (G13-A) — the durable UCAN
+# backend is generic over `B: GraphBackend` per arch-r1-1 /
+# D-PHASE-3-1. KV-keyed grant + revocation persistence rides on the
+# inherited `KVBackend` surface. Wasm32-safe: redb-coupled paths in
+# benten-graph are already cfg-gated.
+benten-graph = { path = "../benten-graph" }
+# G14-B: BLAKE3 for UCAN envelope content-CID computation, matching
+# the engine's existing content-address scheme (Node CIDs, Edge CIDs).
+blake3 = { workspace = true }
+# G14-B: DAG-CBOR encode/decode for durable UCAN envelopes +
+# DeviceRevocation entries (matches the workspace canonical-bytes
+# discipline).
+serde_ipld_dagcbor = { workspace = true }
+# G14-B: constant-time byte comparison surface per crypto-major-4.
+# Already used transitively via benten-id; the explicit dep here
+# pins the same minor version at this layer for any future cap-side
+# security-decision compares (see r1-cap-2 brief carry-forward).
+subtle = { workspace = true }
+
+# G14-B durable UCAN backend (wave-4b) — `benten-id` is native-only
+# because it transitively pulls `getrandom` for OS CSPRNG, which
+# rejects `wasm32-unknown-unknown` without the `js` feature. Per
+# CLAUDE.md baked-in #17, identity work lives on the full-peer side;
+# the wasm32 thin-client doesn't need the durable UCAN backend
+# (capability work is full-peer per #17). Mirrors the G13-C / G14-A1
+# pattern (`benten-dev` / `benten-id` are target-conditional in
+# `bindings/napi/Cargo.toml`); the consuming module
+# `crates/benten-caps/src/backends/ucan.rs` is also
+# `cfg(not(target_arch = "wasm32"))`-gated in `src/backends/mod.rs`.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+benten-id = { path = "../benten-id" }
 
 [dev-dependencies]
 proptest = { workspace = true }
 tempfile = { workspace = true }
 criterion = { workspace = true }
-# benten-core re-exposed for `Node::empty()` etc. in test fixtures.
-# benten-core is already a non-dev dep transitively via re-exports, but
-# integration tests live in the test binary and need the path explicit.
-benten-graph = { path = "../benten-graph" }
+# G14-B: benten-graph promoted to non-dev dep above; redb-backed
+# integration tests still consume the same dep. The earlier note
+# explaining this dep's dev-only status no longer applies.
+#
 # Integration tests cross layers; see `check_write_called_at_commit.rs` and
 # `toctou_iteration.rs`. dev-deps cycle between benten-caps and benten-engine
 # is safe because test binaries link separately from the lib crate graph.

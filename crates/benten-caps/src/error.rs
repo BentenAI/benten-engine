@@ -115,6 +115,113 @@ pub enum CapError {
     /// breached during a long-running ITERATE / CALL.
     #[error("capability wall-clock refresh ceiling exceeded")]
     WallclockExpired,
+
+    // -----------------------------------------------------------------
+    // Phase 3 G14-B (durable UCAN backend in
+    // `crates/benten-caps/src/backends/ucan.rs::UCANBackend`).
+    //
+    // Replaces the Phase-2b stub `CapError::NotImplemented` with typed
+    // chain-walk + delegation + revocation + nbf/exp time-window
+    // surfaces. Each variant maps 1:1 to an `ErrorCode` in
+    // `benten-errors::ErrorCode` (see `code()` below) and to the
+    // `docs/ERROR-CATALOG.md` entries
+    // `E_CAP_UCAN_*` / `E_CAP_BACKEND_STORAGE` /
+    // `E_CAP_RATE_LIMIT_EXCEEDED` / `E_CAP_PEER_BANDWIDTH_EXCEEDED`.
+    // -----------------------------------------------------------------
+    /// G14-B: presented UCAN's `exp` window has elapsed at chain-walk
+    /// time. Per `crypto-blocker-2` BLOCKER + CLR-2: every link in the
+    /// chain has its `exp` checked, not just the leaf.
+    #[error("UCAN expired (exp={exp}, now={now})")]
+    UcanExpired {
+        /// The UCAN's `exp` epoch second.
+        exp: u64,
+        /// The chain-walk's evaluation `now` epoch second.
+        now: u64,
+    },
+
+    /// G14-B: presented UCAN's `nbf` window has not yet opened at
+    /// chain-walk time.
+    #[error("UCAN not yet valid (nbf={nbf}, now={now})")]
+    UcanNotYetValid {
+        /// The UCAN's `nbf` epoch second.
+        nbf: u64,
+        /// The chain-walk's evaluation `now` epoch second.
+        now: u64,
+    },
+
+    /// G14-B: signature failed to verify against the issuer's public
+    /// key. Per `crypto-major-4`, comparison goes through
+    /// `subtle::ConstantTimeEq` at the chain-walk layer.
+    #[error("UCAN signature failed verification (link_index={link_index})")]
+    UcanBadSignature {
+        /// The 0-based link index in the chain (leaf-first ordering).
+        link_index: usize,
+    },
+
+    /// G14-B: child UCAN's capability widens its parent's authority.
+    /// Per `crypto-blocker-2` + UCAN attenuation contract — the
+    /// durable backend rejects at chain-walk so the structural
+    /// delegation invariant survives across persistence.
+    #[error(
+        "UCAN attenuation violated: child cap '{child_cap}' is not subsumed by parent caps (link_index={link_index})"
+    )]
+    UcanAttenuationViolated {
+        /// The 0-based link index of the offending child.
+        link_index: usize,
+        /// The widening capability formatted as `resource:ability`.
+        child_cap: String,
+    },
+
+    /// G14-B mini-review fix-pass: the presented UCAN's audience DID
+    /// does not match the validation context's expected audience.
+    /// Defends against cross-atrium replay (a UCAN issued to
+    /// atrium A persisted in atrium B's durable store and replayed)
+    /// per CLR-2. Pinned at the durable chain-walk seam so audit
+    /// pipelines can route on cross-atrium replay independently of
+    /// the generic [`CapError::Denied`] family. Mirrors
+    /// [`benten_id::errors::UcanError::AudienceMismatch`].
+    #[error("UCAN audience mismatch: token aud '{actual}' != expected '{expected}'")]
+    UcanAudienceMismatch {
+        /// The audience the validator expected (the local atrium's DID).
+        expected: String,
+        /// The audience the token actually names (the cross-atrium
+        /// replay source).
+        actual: String,
+    },
+
+    /// G14-B: durable UCAN backend failed to read or write its grant
+    /// store. Surfaces a layered backend I/O failure to the policy
+    /// hook caller. Distinct from [`CapError::Denied`] — the backend
+    /// cannot determine permitted-or-not when its store is unreadable.
+    #[error("UCAN backend storage I/O failure: {reason}")]
+    BackendStorage {
+        /// Human-readable reason for the storage failure (the wrapped
+        /// backend error rendered through `.to_string()`).
+        reason: String,
+    },
+
+    /// G14-B: rate-limit policy plug rejected a write because the
+    /// per-actor writes/sec/zone bucket exceeded its budget (per D-F
+    /// + D-PHASE-3-26).
+    #[error("rate-limit exceeded for actor {actor} on zone {zone}")]
+    RateLimitExceeded {
+        /// Actor DID / hint string.
+        actor: String,
+        /// Zone the write targeted.
+        zone: String,
+    },
+
+    /// G14-B: rate-limit policy plug rejected an inbound chunk
+    /// account because the per-peer bandwidth bytes/sec budget at the
+    /// Atrium boundary exceeded its limit (per D-F + D-PHASE-3-26 +
+    /// D-PHASE-3-30).
+    #[error("peer bandwidth budget exceeded for peer {peer} ({bytes} bytes)")]
+    PeerBandwidthExceeded {
+        /// Peer DID / hint string.
+        peer: String,
+        /// Bytes the offending account-call attempted to push.
+        bytes: usize,
+    },
 }
 
 impl CapError {
@@ -145,6 +252,15 @@ impl CapError {
             CapError::ScopeLoneStarRejected => ErrorCode::CapScopeLoneStarRejected,
             CapError::ChainTooDeep { .. } => ErrorCode::CapChainTooDeep,
             CapError::WallclockExpired => ErrorCode::CapWallclockExpired,
+            // Phase-3 G14-B durable UCAN backend variants.
+            CapError::UcanExpired { .. } => ErrorCode::CapUcanExpired,
+            CapError::UcanNotYetValid { .. } => ErrorCode::CapUcanNotYetValid,
+            CapError::UcanBadSignature { .. } => ErrorCode::CapUcanBadSignature,
+            CapError::UcanAttenuationViolated { .. } => ErrorCode::CapUcanAttenuationViolated,
+            CapError::UcanAudienceMismatch { .. } => ErrorCode::CapUcanAudienceMismatch,
+            CapError::BackendStorage { .. } => ErrorCode::CapBackendStorage,
+            CapError::RateLimitExceeded { .. } => ErrorCode::CapRateLimitExceeded,
+            CapError::PeerBandwidthExceeded { .. } => ErrorCode::CapPeerBandwidthExceeded,
         }
     }
 }
