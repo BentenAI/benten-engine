@@ -1,4 +1,24 @@
-//! W3C Verifiable Credential v1.1 surface (G14-A2 wave-4a').
+//! W3C Verifiable Credential v1.1-INSPIRED surface (G14-A2 wave-4a').
+//!
+//! ## Wire-format compatibility (per g14-a2-mr-3 docstring sharpen)
+//!
+//! This surface ships W3C VC v1.1-INSPIRED **field shape** over
+//! DAG-CBOR + Ed25519. It is **NOT wire-format-compatible** with
+//! external W3C JSON-LD VC consumers:
+//!
+//! - dates are emitted as `u64` epoch seconds, NOT ISO 8601 strings
+//! - the encoding is DAG-CBOR, NOT JSON-LD
+//! - `proof: Vec<u8>` is a flat 64-byte Ed25519 signature, NOT the
+//!   W3C Linked-Data-Proofs envelope (`type: Ed25519Signature2020` +
+//!   `verificationMethod` + `proofPurpose` + `created` + `proofValue`)
+//!
+//! External W3C VC consumers cannot verify these credentials without a
+//! translation layer. That translation layer (full JSON-LD / LDP
+//! interop via `ssi`) lives at G14-B per
+//! `docs/future/phase-3-backlog.md §2.1-followup`. Internal
+//! Phase-3 consumers (Atrium replicas, capability backend) verify
+//! these credentials directly via this hand-rolled surface.
+//!
 //!
 //! ## Crypto-minor-1 contract
 //!
@@ -30,9 +50,10 @@
 //! Per Q3 IFF-clause + HARD RULE rule-12 (only 3 valid non-FIX-NOW
 //! dispositions), this is `(c) DISAGREE-WITH-EXPLANATION` against
 //! the brief's optional-but-recommended `ssi` re-intro: we land
-//! G14-A2 with hand-rolled W3C VC v1.1 fields encoded over the
-//! existing DAG-CBOR + Ed25519 surface that `keypair.rs` already
-//! carries. The follow-up entry stays at
+//! G14-A2 with hand-rolled W3C VC v1.1-INSPIRED field shape over
+//! the existing DAG-CBOR + Ed25519 surface that `keypair.rs` already
+//! carries (NOT wire-format-compatible — see the Wire-format
+//! compatibility section above). The follow-up entry stays at
 //! `docs/future/phase-3-backlog.md §2.1-followup` (ssi-for-VC-spec-
 //! completeness — the JSON-LD / Linked-Data-Proofs interop layer
 //! that lets external systems consume our VCs) — that is the

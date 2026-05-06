@@ -451,3 +451,119 @@ fn ucan_delegation_to_browser_target_for_sandbox_handler_rejected_at_chain_const
     // time gate end-to-end.
     unreachable!("G14-B + G14-C wires this pin");
 }
+
+#[test]
+fn acceptor_rejects_attestation_with_forged_signature() {
+    // g14-a2-mr-1 MAJOR pin. Without signature verification inside
+    // `Acceptor::accept_at`, a forged attestation with valid (nonce,
+    // freshness, parent_did) but corrupted signature would pass
+    // acceptance — a footgun-shaped surface. This test pins the
+    // signature-verification gate END-TO-END per pim-2 §3.6b.
+    let parent = Keypair::generate();
+    let device = Keypair::generate();
+
+    let envelope = CapabilityEnvelope {
+        runs_sandbox: false,
+        holds_zones: ZoneScope::CacheOnly,
+        online_uptime: UptimePolicy::SessionBounded,
+        runs_atrium_peer: false,
+    };
+    let mut attestation =
+        DeviceAttestation::issue(&parent, device.public_key().to_did(), envelope).unwrap();
+
+    // Mutate the signature — flip a single bit so the (nonce,
+    // freshness, parent_did) gates pass but the signature gate must
+    // reject.
+    assert_eq!(attestation.signature.len(), 64, "Ed25519 sig is 64 bytes");
+    attestation.signature[0] ^= 0x01;
+
+    let acceptor = Acceptor::new(FreshnessPolicy::seconds(u64::MAX));
+    let err = acceptor.accept(&attestation).unwrap_err();
+    assert!(
+        matches!(err, DeviceAttestationError::BadSignature),
+        "expected BadSignature, got {err:?}"
+    );
+}
+
+#[test]
+fn envelope_widens_zone_scope_matrix() {
+    // g14-a2-mr-6 MINOR pin. Exercise all 9 (parent, child) zone-scope
+    // combinations + verify edge cases (empty Specific parent + child
+    // wanting Full / Specific) per mini-review fix-pass.
+    use benten_id::device_attestation::CapabilityEnvelope;
+
+    let parent_keypair = Keypair::generate();
+    let device_keypair = Keypair::generate();
+
+    fn try_issue(
+        parent: &Keypair,
+        device: &Keypair,
+        parent_zones: ZoneScope,
+        child_zones: ZoneScope,
+    ) -> Result<(), DeviceAttestationError> {
+        let parent_env = CapabilityEnvelope {
+            runs_sandbox: false,
+            holds_zones: parent_zones,
+            online_uptime: UptimePolicy::AlwaysOn,
+            runs_atrium_peer: false,
+        };
+        let child_env = CapabilityEnvelope {
+            runs_sandbox: false,
+            holds_zones: child_zones,
+            online_uptime: UptimePolicy::AlwaysOn,
+            runs_atrium_peer: false,
+        };
+        DeviceAttestation::issue_with_authority(
+            parent,
+            device.public_key().to_did(),
+            child_env,
+            &parent_env,
+        )
+        .map(|_| ())
+    }
+
+    // Helpers.
+    let full = || ZoneScope::Full;
+    let cache = || ZoneScope::CacheOnly;
+    let spec = |zones: &[&str]| ZoneScope::Specific(zones.iter().map(|s| s.to_string()).collect());
+
+    // (Full, *) → never widens.
+    assert!(try_issue(&parent_keypair, &device_keypair, full(), full()).is_ok());
+    assert!(try_issue(&parent_keypair, &device_keypair, full(), cache()).is_ok());
+    assert!(try_issue(&parent_keypair, &device_keypair, full(), spec(&["z1"])).is_ok());
+
+    // (CacheOnly, *) → only CacheOnly→CacheOnly is allowed.
+    assert!(try_issue(&parent_keypair, &device_keypair, cache(), cache()).is_ok());
+    assert!(try_issue(&parent_keypair, &device_keypair, cache(), full()).is_err());
+    assert!(try_issue(&parent_keypair, &device_keypair, cache(), spec(&["z1"])).is_err());
+
+    // (Specific(_), CacheOnly) → narrowing; OK.
+    assert!(try_issue(&parent_keypair, &device_keypair, spec(&["z1"]), cache()).is_ok());
+    assert!(try_issue(&parent_keypair, &device_keypair, spec(&[]), cache()).is_ok());
+
+    // (Specific(_), Full) → widening.
+    assert!(try_issue(&parent_keypair, &device_keypair, spec(&["z1"]), full()).is_err());
+    assert!(try_issue(&parent_keypair, &device_keypair, spec(&[]), full()).is_err());
+
+    // (Specific(p), Specific(c)) → widens iff c contains zone outside p.
+    assert!(
+        try_issue(
+            &parent_keypair,
+            &device_keypair,
+            spec(&["z1", "z2"]),
+            spec(&["z1"])
+        )
+        .is_ok()
+    );
+    assert!(
+        try_issue(
+            &parent_keypair,
+            &device_keypair,
+            spec(&["z1"]),
+            spec(&["z1", "z2"])
+        )
+        .is_err()
+    );
+    assert!(try_issue(&parent_keypair, &device_keypair, spec(&[]), spec(&[])).is_ok());
+    assert!(try_issue(&parent_keypair, &device_keypair, spec(&[]), spec(&["z1"])).is_err());
+}

@@ -148,39 +148,61 @@ fn ucan_chain_walk_propagates_nbf_exp_through_attenuation() {
 
 #[test]
 fn ucan_chain_walk_constant_time_comparison_audit() {
-    // crypto-major-4. Source-grep: the chain-walk impl in
-    // src/ucan.rs MUST NOT contain naive `==` on signature/audience/
-    // proof_cid bytes; ALL byte-comparison goes through ct_signature_eq
-    // (which itself calls subtle::ConstantTimeEq).
-    let src_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("src")
-        .join("ucan.rs");
-    let src = std::fs::read_to_string(&src_path).unwrap();
-    for line in src.lines() {
-        let trimmed = line.trim_start();
-        // Skip comments + the const-time-eq impl itself + the tests
-        // module.
-        if trimmed.starts_with("//") || trimmed.starts_with("///") {
-            continue;
-        }
-        for forbidden in &[
-            "signature ==",
-            "audience ==",
-            "proof_cid ==",
-            // G14-A1 mini-review MAJOR — capability authority
-            // comparisons in `caps_match_or_subsume` are
-            // security-decision sites; ct-eq UNIFORMITY at these
-            // sites means a future contributor adding a new
-            // authority compare hits this audit.
-            "parent.resource ==",
-            "parent.ability ==",
-            "child.resource ==",
-            "child.ability ==",
-        ] {
-            assert!(
-                !line.contains(forbidden),
-                "constant-time comparison required per crypto-major-4: {line}"
-            );
+    // crypto-major-4. Source-grep: ALL benten-id modules with
+    // security-decision compares MUST NOT contain naive `==` on
+    // signature/audience/proof_cid/DID/nonce bytes; comparison goes
+    // through `ct_signature_eq` (itself calling `subtle::ConstantTimeEq`).
+    //
+    // G14-A2 mini-review g14-a2-mr-2 extension: walk the FULL set of
+    // crypto-bearing modules so a new comparison added to any of them
+    // hits the audit. UNIFORMITY-at-security-decision-sites is the
+    // load-bearing contract.
+    let src_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+    let modules = [
+        "ucan.rs",
+        "did_rotation.rs",
+        "device_attestation.rs",
+        "vc.rs",
+        "multi_sig.rs",
+    ];
+    let forbidden_patterns: &[&str] = &[
+        "signature ==",
+        "audience ==",
+        "proof_cid ==",
+        // G14-A1 mini-review MAJOR — capability authority compares.
+        "parent.resource ==",
+        "parent.ability ==",
+        "child.resource ==",
+        "child.ability ==",
+        // G14-A2 mini-review MAJOR (g14-a2-mr-2) — DID-rotation +
+        // device-attestation security-decision sites. DIDs and nonces
+        // are PUBLIC values but the UNIFORMITY contract means future
+        // contributors hit the audit at these sites.
+        "previous_did ==",
+        "next_did ==",
+        "device_did ==",
+        "parent_did ==",
+        "nonce ==",
+    ];
+    for module in &modules {
+        let src_path = src_root.join(module);
+        let src = std::fs::read_to_string(&src_path)
+            .unwrap_or_else(|_| panic!("audit must read crates/benten-id/src/{module}"));
+        for (lineno, line) in src.lines().enumerate() {
+            let trimmed = line.trim_start();
+            // Skip comments + the const-time-eq impl itself + the
+            // tests module.
+            if trimmed.starts_with("//") || trimmed.starts_with("///") {
+                continue;
+            }
+            for forbidden in forbidden_patterns {
+                assert!(
+                    !line.contains(forbidden),
+                    "constant-time comparison required per crypto-major-4 \
+                     (module {module} line {}): {line}",
+                    lineno + 1
+                );
+            }
         }
     }
     // Verify subtle is in the dep tree.

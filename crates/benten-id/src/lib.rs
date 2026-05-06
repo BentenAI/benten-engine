@@ -17,12 +17,14 @@
 //!
 //! ## G14-A2 wave-4a' scope (LIVE)
 //!
-//! - [`vc`] — Verifiable Credential issuance + verify (W3C VC v1.1
-//!   shape over the existing DAG-CBOR + Ed25519 surface; `ssi` re-
-//!   introduction deferred to G14-B per
-//!   `docs/future/phase-3-backlog.md §2.1-followup` — see
-//!   `crates/benten-id/src/vc.rs` module-level note for the DISAGREE-
-//!   WITH-EXPLANATION rationale per HARD RULE rule-12 disposition (c)).
+//! - [`vc`] — Verifiable Credential issuance + verify (W3C VC v1.1-
+//!   INSPIRED field shape over the existing DAG-CBOR + Ed25519
+//!   surface; **NOT wire-format-compatible with external W3C JSON-LD
+//!   VC consumers** — that interop layer + `ssi` re-introduction
+//!   deferred to G14-B per `docs/future/phase-3-backlog.md
+//!   §2.1-followup`. See `crates/benten-id/src/vc.rs` module-level
+//!   note for the DISAGREE-WITH-EXPLANATION rationale per HARD RULE
+//!   rule-12 disposition (c)).
 //! - [`multi_sig`] — [`multi_sig::MultiSigSurface`] trait +
 //!   [`multi_sig::Ed25519SingleKey`] default impl + compile-only
 //!   [`multi_sig::ThresholdMultiSig`] extension-point per

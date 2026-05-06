@@ -189,7 +189,10 @@ impl RotationLog {
     /// in the log. Used by the chain-walker to reject UCANs signed
     /// by a superseded keypair.
     pub fn is_superseded(&self, did: &Did) -> bool {
-        self.entries.iter().any(|a| a.previous_did == did.as_str())
+        // ct-eq per crypto-major-4 UNIFORMITY (g14-a2-mr-2 fix-pass).
+        self.entries.iter().any(|a| {
+            crate::ucan::ct_signature_eq(a.previous_did.as_bytes(), did.as_str().as_bytes())
+        })
     }
 
     /// Borrow the entries.

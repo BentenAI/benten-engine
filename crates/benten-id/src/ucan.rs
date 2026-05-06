@@ -245,7 +245,9 @@ impl UcanBuilder {
 /// `crates/benten-id/tests/ucan.rs::ucan_chain_walk_constant_time_comparison_audit`
 /// pins this site as the only byte-equality entry point.
 // const-time-eq: load-bearing — DO NOT replace with naive `==` per crypto-major-4
-fn ct_signature_eq(a: &[u8], b: &[u8]) -> bool {
+// Made `pub(crate)` per g14-a2-mr-2 fix-pass so DID-rotation +
+// device-attestation security-decision sites use the same helper.
+pub(crate) fn ct_signature_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
     }
@@ -441,7 +443,8 @@ pub fn validate_chain_with_device_revocations(
     validate_chain_inner(chain, None, None)?;
     for token in chain {
         for r in revocations {
-            if r.device_did == token.claims.iss {
+            // ct-eq per crypto-major-4 UNIFORMITY (g14-a2-mr-2 fix-pass).
+            if ct_signature_eq(r.device_did.as_bytes(), token.claims.iss.as_bytes()) {
                 return Err(UcanError::IssuerDeviceRevoked {
                     issuer: token.claims.iss.clone(),
                 });
@@ -458,6 +461,13 @@ pub fn validate_chain_with_device_revocations(
 /// issuer has an attestation declaring it cannot exercise the
 /// claimed capability (e.g. `host:sandbox:exec` from a
 /// `runs_sandbox=false` device).
+///
+/// **G14-A2 scope (per g14-a2-mr-4 docstring sharpen):** currently
+/// enforces the `runs_sandbox` envelope dimension only. Broader
+/// envelope-dimension enforcement (`runs_atrium_peer`, `holds_zones`,
+/// `online_uptime`) lands at G14-B when atrium-peer + zone caps fully
+/// exist. Backlog: `docs/future/phase-3-backlog.md §2.1-followup` for
+/// the multi-dimension extension.
 pub fn validate_chain_with_attestations(
     chain: &[Ucan],
     attestations: &[crate::device_attestation::DeviceAttestation],
@@ -465,7 +475,8 @@ pub fn validate_chain_with_attestations(
     validate_chain_inner(chain, None, None)?;
     for token in chain {
         for att in attestations {
-            if att.device_did == token.claims.iss {
+            // ct-eq per crypto-major-4 UNIFORMITY (g14-a2-mr-2 fix-pass).
+            if ct_signature_eq(att.device_did.as_bytes(), token.claims.iss.as_bytes()) {
                 for cap in &token.claims.att {
                     if cap.resource.starts_with("host:sandbox:") && !att.envelope.runs_sandbox {
                         return Err(UcanError::DeviceEnvelopeViolated {
