@@ -302,8 +302,10 @@ fn variant_count_is_pinned() {
     //     r1-wsa-7 BLOCKER. Construction site at
     //     `crates/benten-eval/src/sandbox/trap_to_typed.rs::map_call_error`.
     //   `SandboxEscapeAttempt` — typed variant for ESC-7 / ESC-13 /
-    //     ESC-16 defenses. Construction site at
-    //     `crates/benten-eval/src/sandbox/escape_defenses.rs::run_esc{7,13,16}_check`.
+    //     ESC-16 defenses. Construction sites at
+    //     `crates/benten-eval/src/sandbox/escape_defenses.rs::run_esc7_check`,
+    //     `crates/benten-eval/src/sandbox/escape_defenses.rs::run_esc13_check`, and
+    //     `crates/benten-eval/src/sandbox/escape_defenses.rs::run_esc16_check`.
     //     Closes r1-wsa-1 BLOCKER (ESC-7 + ESC-13) + r1-wsa-4 (ESC-16) +
     //     phase-3-backlog §6.1.
     // Post-G17-A1: 91 + 2 = 93.
