@@ -49,6 +49,8 @@ pub mod rate_limit;
 pub mod ucan_stub;
 
 pub use attenuation::check_attenuation;
+// G14-B durable UCAN backend is native-only (see `backends/mod.rs`).
+#[cfg(not(target_arch = "wasm32"))]
 pub use backends::UCANBackend;
 pub use error::CapError;
 pub use grant::{

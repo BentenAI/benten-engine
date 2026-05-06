@@ -181,7 +181,9 @@ fn ucan_backend_revocation_durable_across_restart() {
     {
         let backend = fresh_backend_at(&path);
         cid = backend.install_proof(&ucan).unwrap();
-        backend.validate_chain(std::slice::from_ref(&ucan), now).unwrap();
+        backend
+            .validate_chain(std::slice::from_ref(&ucan), now)
+            .unwrap();
         backend.revoke(&cid).unwrap();
     }
 
@@ -281,7 +283,9 @@ fn ucan_backend_no_longer_returns_not_implemented() {
         Ok(cid) => cid,
         Err(other) => panic!("install_proof unexpected: {other:?}"),
     };
-    if let Err(CapError::NotImplemented { .. }) = backend.validate_chain(std::slice::from_ref(&ucan), now) {
+    if let Err(CapError::NotImplemented { .. }) =
+        backend.validate_chain(std::slice::from_ref(&ucan), now)
+    {
         panic!("validate_chain must NOT return NotImplemented");
     }
     if let Err(CapError::NotImplemented { .. }) = backend.revoke(&cid) {

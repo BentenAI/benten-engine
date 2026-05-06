@@ -21,17 +21,11 @@ bench = false
 benten-core = { path = "../benten-core" }
 benten-errors = { workspace = true }
 thiserror = { workspace = true }
-# G14-B durable UCAN backend (wave-4b): consumes the UCAN envelope +
-# chain-walk + DeviceRevocation surfaces from `benten-id` (G14-A1 +
-# G14-A2). Per CLAUDE.md baked-in #17, benten-caps is a full-peer
-# concern — capability work does NOT cross into the wasm32 thin-client
-# bundle, so this dep does not need cfg-gating against
-# `target_arch = "wasm32"`.
-benten-id = { path = "../benten-id" }
 # G14-B: GraphBackend umbrella trait (G13-A) — the durable UCAN
 # backend is generic over `B: GraphBackend` per arch-r1-1 /
 # D-PHASE-3-1. KV-keyed grant + revocation persistence rides on the
-# inherited `KVBackend` surface.
+# inherited `KVBackend` surface. Wasm32-safe: redb-coupled paths in
+# benten-graph are already cfg-gated.
 benten-graph = { path = "../benten-graph" }
 # G14-B: BLAKE3 for UCAN envelope content-CID computation, matching
 # the engine's existing content-address scheme (Node CIDs, Edge CIDs).
@@ -45,6 +39,19 @@ serde_ipld_dagcbor = { workspace = true }
 # pins the same minor version at this layer for any future cap-side
 # security-decision compares (see r1-cap-2 brief carry-forward).
 subtle = { workspace = true }
+
+# G14-B durable UCAN backend (wave-4b) — `benten-id` is native-only
+# because it transitively pulls `getrandom` for OS CSPRNG, which
+# rejects `wasm32-unknown-unknown` without the `js` feature. Per
+# CLAUDE.md baked-in #17, identity work lives on the full-peer side;
+# the wasm32 thin-client doesn't need the durable UCAN backend
+# (capability work is full-peer per #17). Mirrors the G13-C / G14-A1
+# pattern (`benten-dev` / `benten-id` are target-conditional in
+# `bindings/napi/Cargo.toml`); the consuming module
+# `crates/benten-caps/src/backends/ucan.rs` is also
+# `cfg(not(target_arch = "wasm32"))`-gated in `src/backends/mod.rs`.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+benten-id = { path = "../benten-id" }
 
 [dev-dependencies]
 proptest = { workspace = true }
