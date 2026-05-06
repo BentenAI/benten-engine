@@ -51,7 +51,7 @@ use crate::outcome::{Outcome, ReadViewOptions, UserViewInputPattern, UserViewSpe
 /// the pre-G15-B silent label-equality coercion.
 ///
 /// `anchor_prefix = "crud:"` matches `"crud:post"`, `"crud:user"`, and
-/// `"crud:comment"`, but NOT `"system:zone"` or `"governance:rule"`.
+/// `"crud:comment"`, but NOT `"system:Zone"` or `"governance:rule"`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrefixMatcher {
     /// The prefix that incoming labels must start with for a match.
@@ -79,7 +79,7 @@ impl PrefixMatcher {
     ///
     /// This is the load-bearing G15-B contract: prefix matching, NOT label
     /// equality. A regression that silently coerces this to `==` is caught
-    /// by `tests/anchor_prefix.rs::anchor_prefix_no_silent_label_equality_coerce`.
+    /// by `crates/benten-engine/tests/anchor_prefix.rs::anchor_prefix_no_silent_label_equality_coerce`.
     #[must_use]
     pub fn matches(&self, label: &str) -> bool {
         label.starts_with(&self.prefix)

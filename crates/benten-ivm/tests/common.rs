@@ -478,7 +478,7 @@ pub fn build_view_def_from_seed(view_id_seed: u64, label_pattern_seed: u64) -> V
     // valid label — the drift-detector observes equality between
     // incremental + from-scratch over the SAME view, so the absolute
     // label doesn't matter (just that it's stable across both builders).
-    const LABELS: &[&str] = &["post", "user", "comment", "tag", "system:zone"];
+    const LABELS: &[&str] = &["post", "user", "comment", "tag", "system:Zone"];
     let label = LABELS[(label_pattern_seed % LABELS.len() as u64) as usize];
     ViewDef::new(format!("user_view_{view_id_seed}"), label)
 }
@@ -486,7 +486,7 @@ pub fn build_view_def_from_seed(view_id_seed: u64, label_pattern_seed: u64) -> V
 /// Translate proptest's `Vec<(u64, u64)>` seed into a `Write` sequence over
 /// the small label vocabulary. `(label_pick, created_at_seed)` per entry.
 pub fn build_write_seq_from_seed(seq: &[(u64, u64)]) -> Vec<Write> {
-    const LABELS: &[&str] = &["post", "user", "comment", "tag", "system:zone"];
+    const LABELS: &[&str] = &["post", "user", "comment", "tag", "system:Zone"];
     seq.iter()
         .enumerate()
         .map(|(i, (label_pick, created_at_seed))| {

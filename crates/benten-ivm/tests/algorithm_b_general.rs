@@ -96,7 +96,7 @@ fn algorithm_b_arbitrary_label_pattern_drives_correct_subset() {
     // OBSERVABLE consequence: every label pattern variant produces a
     // subset that matches its filter spec; no fallback / no silent
     // coercion. Pinned against a fixture corpus with mixed labels
-    // ("post", "user", "system:zone", "ephemeral").
+    // ("post", "user", "system:Zone", "ephemeral").
     unimplemented!(
         "G15-A wires arbitrary LabelPattern variants against a mixed-label fixture corpus"
     );
