@@ -197,6 +197,10 @@ interface NativeEngine {
   installModule?: (manifestJson: unknown, expectedCid: string) => string;
   uninstallModule?: (cid: string) => void;
   computeManifestCid?: (manifestJson: unknown) => string;
+  // Phase-3 G17-C wave-5b — module-BYTES registration (paired with
+  // installModule which writes the manifest envelope; this writes the
+  // wasm payload bytes a manifest entry's `cid` field references).
+  registerModuleBytes?: (cid: string, bytes: Buffer) => void;
   // Phase 2b wave-8c-cont — D10 snapshot-blob handoff bridges.
   exportSnapshotBlob?: () => Buffer;
   isReadOnlySnapshot?: () => boolean;
@@ -1671,6 +1675,41 @@ export class Engine {
     }
     try {
       return this.inner.computeManifestCid(manifest as unknown as JsonValue);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /**
+   * Phase-3 G17-C wave-5b (phase-3-backlog §6.6 deliverable 1; pim-2
+   * 24th p/c drift acceptance criterion).
+   *
+   * Persist wasm module bytes under their BLAKE3-derived CID via the
+   * durable redb-backed blob store so SANDBOX dispatch can resolve
+   * `module: "<base32-cid>"` references at execution time. The
+   * caller-supplied `cid` MUST match the BLAKE3 of `bytes` — mismatch
+   * throws `E_MODULE_BYTES_CID_MISMATCH` per D-PHASE-3-12.
+   *
+   * Sibling of [`installModule`] (which writes the manifest envelope —
+   * entries, requires, CID schema). After both calls succeed, a SANDBOX
+   * subgraph that references the manifest by `<manifest>:<entry>` name
+   * resolves at registration time AND has wasm bytes available at
+   * execution time.
+   *
+   * Owned by G17-C. Wave-5b wires the napi bridge.
+   */
+  public async registerModuleBytes(
+    cid: string,
+    bytes: Buffer,
+  ): Promise<void> {
+    this.assertOpen();
+    if (typeof this.inner.registerModuleBytes !== "function") {
+      throw new EDslInvalidShape(
+        "Engine.registerModuleBytes unavailable on this binding — rebuild @benten/engine-native (G17-C wave-5b bridge required)",
+      );
+    }
+    try {
+      this.inner.registerModuleBytes(cid, bytes);
     } catch (err) {
       throw mapNativeError(err);
     }

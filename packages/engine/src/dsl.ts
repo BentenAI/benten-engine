@@ -284,6 +284,83 @@ export interface SubscribeArgs {
   // shape; the DSL public-rewrite scope itself carries from
   // `docs/future/phase-2-backlog.md` §8.3 deferral).
 }
+/**
+ * Phase-3 G17-C wave-5b (phase-3-backlog §6.6 — 24th p/c drift
+ * acceptance criterion; pim-2 LOAD-BEARING). Translate the user-facing
+ * camelCase [`SandboxArgs`] to the snake_case property bag the
+ * eval-side primitive at
+ * `crates/benten-engine/src/primitive_host.rs::execute_sandbox` reads.
+ *
+ * Mirrors the `translateWaitArgs` precedent (PR #76) where a similar
+ * casing drift between DSL surface + eval reader caused signal-with-
+ * deadline WAIT calls to silently misroute. The 24th p/c drift named
+ * the same shape for SANDBOX:
+ *
+ *   - DSL surface: `wallclockMs`, `outputLimitBytes` (camelCase, with
+ *     `Bytes` for type-clarity at the user-facing surface).
+ *   - Eval-side reader: `wallclock_ms`, `output_limit` (NOTE: drops
+ *     `Bytes` — symmetric with `wallclock_ms` not carrying
+ *     `_milliseconds`; r4-r1-wsa-1 BLOCKER recalibration verified
+ *     against `primitive_host.rs::execute_sandbox` which reads
+ *     `op.properties.get("output_limit")`).
+ *   - `module`, `caps`, `input`, `fuel` translate verbatim (already
+ *     match the eval-side reader's keys).
+ *
+ * The translation is applied at the SubgraphBuilder.sandbox() boundary
+ * (both the public + internal builder variants) so every SANDBOX node
+ * authored via the DSL crosses the napi boundary with snake_case keys.
+ * A regression that drops a translation site (or omits a new arg from
+ * the translator) is caught by the load-bearing eval-side end-to-end
+ * pin at
+ * `crates/benten-eval/tests/sandbox_handler_args.rs::sandbox_per_handler_wallclock_ms_camel_case_dsl_round_trips_to_eval_side_snake_case`
+ * + the TS-side meta-pin at
+ * `packages/engine/test/sandbox_handler_args.test.ts`.
+ */
+function translateSandboxArgs(
+  args: SandboxArgs,
+): Record<string, JsonValue> {
+  // Treat `args` as an open-shape record so the translator handles both
+  // discriminants (by-name vs by-caps) without re-narrowing.
+  const a = args as {
+    module?: string;
+    input?: string;
+    fuel?: number;
+    wallclockMs?: number;
+    outputLimitBytes?: number;
+    caps?: readonly string[];
+  };
+  const props: Record<string, JsonValue> = {};
+  if (typeof a.module === "string") {
+    props.module = a.module;
+  }
+  if (typeof a.input === "string") {
+    props.input = a.input;
+  }
+  if (typeof a.fuel === "number") {
+    // `fuel` is the canonical eval-side key (no token to translate);
+    // primitive_host.rs::execute_sandbox reads `op.properties.get("fuel")`.
+    props.fuel = a.fuel;
+  }
+  if (typeof a.wallclockMs === "number") {
+    // wallclockMs (camelCase, DSL) → wallclock_ms (snake_case, eval-side).
+    // primitive_host.rs::execute_sandbox reads `op.properties.get("wallclock_ms")`.
+    props.wallclock_ms = a.wallclockMs;
+  }
+  if (typeof a.outputLimitBytes === "number") {
+    // outputLimitBytes (camelCase, DSL — preserves `Bytes` for type-
+    // clarity) → output_limit (snake_case, eval-side — DROPS `Bytes`
+    // per r4-r1-wsa-1 verification against primitive_host.rs::execute_sandbox which
+    // reads `op.properties.get("output_limit")`). Symmetric with
+    // `wallclock_ms` not carrying `_milliseconds`.
+    props.output_limit = a.outputLimitBytes;
+  }
+  if (Array.isArray(a.caps)) {
+    // by-caps escape hatch — caps key is canonical eval-side.
+    props.caps = a.caps as unknown as JsonValue;
+  }
+  return props;
+}
+
 // SandboxArgs is defined in `./types.ts` as the discriminated union
 // `SandboxArgsByName | SandboxArgsByCaps` (Phase 2b G7-C). Imported and
 // re-exported above so DSL callers see one canonical shape.
@@ -435,7 +512,11 @@ export class SubgraphBuilder {
     return this.addNode("subscribe", { pattern: args.event });
   }
   public sandbox(args: SandboxArgs): this {
-    return this.addNode("sandbox", { ...args } as Record<string, JsonValue>);
+    // Phase-3 G17-C wave-5b (24th p/c drift acceptance criterion; pim-2
+    // LOAD-BEARING): translate camelCase DSL args to snake_case eval-side
+    // keys via translateSandboxArgs. Mirrors the WAIT/EMIT/SUBSCRIBE
+    // translation precedents above.
+    return this.addNode("sandbox", translateSandboxArgs(args));
   }
 
   /**
@@ -666,7 +747,12 @@ export class CaseBuilder {
     return this.addNode("subscribe", { pattern: a.event });
   }
   public sandbox(a: SandboxArgs): this {
-    return this.addNode("sandbox", { ...a } as Record<string, JsonValue>);
+    // Phase-3 G17-C wave-5b (24th p/c drift; pim-2 LOAD-BEARING):
+    // translate camelCase DSL args to snake_case eval-side keys via
+    // translateSandboxArgs. Both SubgraphBuilder.sandbox() variants
+    // route through the same translator so a regression at one site is
+    // caught by the load-bearing eval-side end-to-end pin.
+    return this.addNode("sandbox", translateSandboxArgs(a));
   }
 
   /** Move the scope's nodes out for merging into the parent. */
