@@ -40,7 +40,7 @@
 //! property bags that carry the snake_case keys (the napi-layer
 //! translation is asserted at the TS-side meta-pin in
 //! `packages/engine/test/sandbox_handler_args.test.ts`). The eval-side
-//! reader at `primitive_host.rs::execute_sandbox` (lines 865 + 877)
+//! reader at `primitive_host.rs::execute_sandbox` (reads `wallclock_ms` + `output_limit` keys)
 //! reads these exact keys; a regression that renames either side
 //! (without updating the other) trips the architectural drift-pin
 //! `..._does_not_drift_across_dsl_compiler_and_primitive_host`.
