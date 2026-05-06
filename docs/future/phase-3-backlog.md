@@ -59,7 +59,7 @@
 - `impl Engine` blocks in 10 modules → `impl<B: GraphBackend> EngineGeneric<B>` (engine_crud, engine_modules, engine_subscribe, engine_views, engine_caps, engine_sandbox, engine_stream, engine_wait, engine_diagnostics, primitive_host).
 - Each module's body uses the redb-specific closure-based `self.backend.transaction(|tx| ...)` execution surface — those call sites need to migrate to the umbrella `GraphBackend::transaction()` handle (currently a unit marker; the lift may evolve the handle into a borrowing runner per `arch-r1-6` recommendation).
 - `EngineBuilder` becomes generic over `B: GraphBackend` (currently hard-bound to `RedbBackend`); separate `from_redb` / `from_snapshot_blob` / `from_browser` constructors handle the per-backend distinct construction shapes.
-- Existing tests in `tests/integration/snapshot_blob_round_trip.rs` (4 LIVE tests, including `snapshot_blob_rejects_delete_via_dispatch_handler` that exercises `dst.call(...)` against the snapshot-blob engine) must continue passing — the lift is a refactor, not a behavior change.
+- Existing tests in `crates/benten-engine/tests/integration/snapshot_blob_round_trip.rs` (4 LIVE tests, including `snapshot_blob_rejects_delete_via_dispatch_handler` that exercises `dst.call(...)` against the snapshot-blob engine) must continue passing — the lift is a refactor, not a behavior change.
 
 **Why deferred from G13-D:** Scope-real-15 sized G13-D at ~100-200 LOC total (re-sized from ~50-100 to add test coverage). The structural lift is a multi-thousand-LOC + 10-module touch with high cross-wave-blocking risk. Better landed as a dedicated wave with its own R1 + mini-review.
 
