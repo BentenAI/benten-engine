@@ -41,15 +41,21 @@ use benten_eval::{
 };
 use benten_graph::{ChangeEvent, GraphBackend, GraphError, MutexExt};
 
+// G13-C BLOCKER-2 fix-pass: builder + engine_transaction are gated to
+// NOT-`browser-backend`; mirror the gate at the import here.
+#[cfg(not(feature = "browser-backend"))]
 use crate::builder::EngineBuilder;
 use crate::change::ChangeBroadcast;
 use crate::change_probe::ChangeProbe;
+#[cfg(not(feature = "browser-backend"))]
 use crate::engine_transaction::{EngineTransaction, GraphTxLike};
 use crate::error::EngineError;
 use crate::outcome::{
     AnchorHandle, DiagnosticInfo, HandlerPredecessors, Outcome, ReadViewOptions,
     RegisterReplaceOutcome, Trace, TraceStep, ViewCreateOptions,
 };
+// G13-C BLOCKER-2 fix-pass: primitive_host gated to NOT-`browser-backend`.
+#[cfg(not(feature = "browser-backend"))]
 use crate::primitive_host::{
     ActiveCall, PendingHostOp, cap_error_to_outcome, eval_error_to_engine_error,
     outcome_from_terminal_with_cid, system_zone_to_outcome, tx_aborted_outcome,
@@ -161,6 +167,14 @@ pub(crate) struct EngineInner {
     /// [`crate::engine_modules`]). The active set lets the engine answer
     /// `is_module_installed` and capability-retraction queries without a
     /// backend round-trip.
+    ///
+    /// G13-C BLOCKER-2 fix-pass: gated to NOT-`browser-backend` since
+    /// `engine_modules::InstalledModule` lives in the redb-coupled
+    /// `engine_modules` module that is itself gated out. Browser thin
+    /// clients do not run SANDBOX (per CLAUDE.md baked-in #16, the full
+    /// peer is the SANDBOX execution surface) so the active-module set
+    /// is unused on wasm32.
+    #[cfg(not(feature = "browser-backend"))]
     pub(crate) installed_modules:
         std::sync::Mutex<std::collections::BTreeMap<Cid, crate::engine_modules::InstalledModule>>,
     /// Phase 2b Wave-8b: in-memory registry of WebAssembly module bytes
@@ -243,6 +257,7 @@ impl EngineInner {
             writes_denied_total: std::sync::atomic::AtomicU64::new(0),
             test_iteration_budget: std::sync::Mutex::new(None),
             test_pre_dispatch_gate: std::sync::Mutex::new(None),
+            #[cfg(not(feature = "browser-backend"))]
             installed_modules: std::sync::Mutex::new(std::collections::BTreeMap::new()),
             module_bytes: std::sync::Mutex::new(std::collections::BTreeMap::new()),
             handler_version_chain: std::sync::Mutex::new(std::collections::BTreeMap::new()),
@@ -550,6 +565,11 @@ pub struct EngineGeneric<B: GraphBackend> {
     /// Active `Engine::call` stack. Used by `impl PrimitiveHost` to pick up
     /// per-call context (actor, nested depth) without threading it through
     /// the trait-method signatures.
+    ///
+    /// G13-C BLOCKER-2 fix-pass: gated to NOT-`browser-backend` since
+    /// `ActiveCall` lives in the cfg-gated `primitive_host` module
+    /// (browser thin clients don't run handlers locally).
+    #[cfg(not(feature = "browser-backend"))]
     pub(crate) active_call: std::sync::Mutex<Vec<ActiveCall>>,
     /// Phase 2a G9-A-cont: configured monotonic clock source. Drives
     /// TOCTOU wall-clock-refresh cadence inside `impl PrimitiveHost`
@@ -600,17 +620,36 @@ pub struct EngineGeneric<B: GraphBackend> {
     pub(crate) suspension_store: Arc<dyn benten_eval::SuspensionStore>,
 }
 
-/// Default engine alias resolving to the redb-backed specialization.
+/// Default engine alias resolving to the redb-backed specialization on
+/// native targets, OR to the in-RAM thin-client cache on
+/// `wasm32-unknown-unknown` browser targets when the `browser-backend`
+/// cargo feature is opted in.
 ///
 /// Existing callers (napi binding, integration tests, `EngineBuilder::open`)
 /// continue to use `Engine` unchanged after the G13-B generic cascade —
 /// API stability per D-PHASE-3-1a / arch-r1-1 BLOCKER closure.
 ///
-/// **Browser-target note (D-PHASE-3-1 + CLAUDE.md baked-in #17):** G13-C
-/// (wave-3) adds a feature-gated alternative `Engine = EngineGeneric<BrowserBackend>`
-/// for the `wasm32-unknown-unknown` thin-client cache target. Until G13-C
-/// lands, this alias is unconditionally `EngineGeneric<RedbBackend>`.
+/// ## Feature gating (G13-C wave-3 + CLAUDE.md baked-in #17)
+///
+/// - **Default features (native):** `Engine = EngineGeneric<RedbBackend>`.
+/// - **`--features browser-backend`:** `Engine = EngineGeneric<BrowserBackend>`.
+///   The browser-target napi cdylib build opts in via this feature so the
+///   alias re-points without churning every `Engine` call site.
+///
+/// The two arms are mutually exclusive at the alias level — the cargo-
+/// feature flip declared in `crates/benten-engine/Cargo.toml` (the
+/// `browser-backend` feature) activates the second arm. Trying to
+/// compile both arms at once is rejected at the type level (the cfg
+/// gates produce a duplicate-type definition error).
+#[cfg(not(feature = "browser-backend"))]
 pub type Engine = EngineGeneric<benten_graph::RedbBackend>;
+
+/// G13-C wave-3 (Phase-3 R5; CLAUDE.md baked-in #17): browser-target
+/// alias resolving to the in-RAM thin-client cache. Enabled by the
+/// `browser-backend` cargo feature. See the docstring on the
+/// non-feature-gated `Engine` alias above for the full design narrative.
+#[cfg(feature = "browser-backend")]
+pub type Engine = EngineGeneric<benten_graph::BrowserBackend>;
 
 impl<B: GraphBackend> std::fmt::Debug for EngineGeneric<B> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -621,6 +660,12 @@ impl<B: GraphBackend> std::fmt::Debug for EngineGeneric<B> {
     }
 }
 
+// G13-C wave-3: redb-specific convenience constructors live on the
+// resolved-alias `impl Engine` block. Gated to NON `browser-backend`
+// feature — the BrowserBackend alias gets its own thin-client-shape
+// constructors (currently just `Engine::new(BrowserBackend::new())`
+// via the generic-cascade `EngineBuilder` path).
+#[cfg(not(feature = "browser-backend"))]
 impl Engine {
     /// Open or create an engine backed by a redb database at `path`.
     ///
@@ -738,6 +783,7 @@ impl<B: GraphBackend> EngineGeneric<B> {
             broadcast,
             inner,
             ivm,
+            #[cfg(not(feature = "browser-backend"))]
             active_call: std::sync::Mutex::new(Vec::new()),
             monotonic_source,
             time_source,
@@ -829,6 +875,7 @@ impl<B: GraphBackend> EngineGeneric<B> {
         self.ivm.as_ref()
     }
 
+    #[cfg(not(feature = "browser-backend"))]
     pub(crate) fn active_call(&self) -> &std::sync::Mutex<Vec<ActiveCall>> {
         &self.active_call
     }
@@ -837,6 +884,10 @@ impl<B: GraphBackend> EngineGeneric<B> {
     /// module manifests keyed by canonical-bytes CID. Used by
     /// [`crate::engine_modules`] for install / uninstall lifecycle
     /// queries and by tests asserting cap-retraction behavior.
+    ///
+    /// G13-C BLOCKER-2 fix-pass: gated to NOT-`browser-backend` —
+    /// browser thin clients do not run SANDBOX (CLAUDE.md baked-in #16).
+    #[cfg(not(feature = "browser-backend"))]
     pub(crate) fn installed_modules(
         &self,
     ) -> &std::sync::Mutex<std::collections::BTreeMap<Cid, crate::engine_modules::InstalledModule>>
@@ -953,7 +1004,17 @@ impl<B: GraphBackend> EngineGeneric<B> {
 // boundary IS generic at the type level, and the constructor/accessor
 // surface that an alternative backend would need is already on the
 // generic block.
+//
+// G13-C BLOCKER-2 fix-pass (browser-backend cfg-gating): this block
+// uses `RedbBackend` inherent methods (`writes_committed`,
+// `get_by_label`, `get_by_property`, `transaction(|tx| ...)`,
+// `register_module_bytes`, etc.) that are NOT on the umbrella
+// `GraphBackend` trait. Gated to NOT-`browser-backend` so the
+// wasm32-unknown-unknown thin-client target compiles. The full
+// per-method re-export of this surface to alternative backends is
+// deferred to phase-3-backlog §1.2-followup (impl-block cascade).
 
+#[cfg(not(feature = "browser-backend"))]
 impl Engine {
     /// Phase 2a G5-A / G11-A: monotonic per-engine audit sequence.
     ///
@@ -2540,6 +2601,11 @@ impl Engine {
 
 // `make_engine_tx` constructs an EngineTransaction from a graph Transaction.
 // Kept out of the main flow so the closure reads cleanly.
+//
+// G13-C BLOCKER-2 fix-pass: gated to NOT-`browser-backend` since
+// `benten_graph::Transaction` is itself cfg-gated out on wasm32 per
+// CLAUDE.md baked-in #17 (BrowserBackend has a no-op transaction runner).
+#[cfg(not(feature = "browser-backend"))]
 pub(crate) fn make_engine_tx<'tx, 'coll>(
     tx: &'tx mut benten_graph::Transaction<'_>,
     ops_collector: &'coll std::sync::Mutex<Vec<benten_caps::PendingOp>>,

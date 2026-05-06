@@ -105,7 +105,16 @@ jobs:
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
       - name: cargo check (wasm32 target compiles cleanly)
-        run: cargo check -p benten-napi --target wasm32-unknown-unknown
+        # G13-C R5 wave-3 fix-pass (2026-05-06): the wasm32-unknown-unknown
+        # bundle MUST select the BrowserBackend alias arm of `Engine`
+        # (CLAUDE.md baked-in #17 — thin-client deployment shape; redb
+        # is unavailable on wasm32-unknown-unknown). Without
+        # `--features benten-engine/browser-backend`, the `Engine =
+        # EngineGeneric<RedbBackend>` alias activates and pulls in 17
+        # redb-coupled engine modules that fail to type-check (RedbBackend
+        # / Transaction / SnapshotHandle absent on this target). Mirrors
+        # the sibling T8 invocation in `.github/workflows/wasm-checks.yml`.
+        run: cargo check -p benten-napi --target wasm32-unknown-unknown --features benten-engine/browser-backend
 
       - name: Install binaryen (wasm-opt)
         # Used to post-process the wasm32-unknown-unknown bundle. The
@@ -132,7 +141,10 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          cargo build -p benten-napi --target wasm32-unknown-unknown --profile release-wasm
+          # G13-C R5 wave-3 fix-pass (2026-05-06): browser-backend feature
+          # required to select the BrowserBackend Engine alias arm — see
+          # the matching note on the `cargo check` step above.
+          cargo build -p benten-napi --target wasm32-unknown-unknown --profile release-wasm --features benten-engine/browser-backend
           mkdir -p bindings/napi/dist/browser
           built=( target/wasm32-unknown-unknown/release-wasm/*.wasm )
           if [ ${#built[@]} -eq 0 ]; then

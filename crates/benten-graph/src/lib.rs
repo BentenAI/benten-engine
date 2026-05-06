@@ -32,13 +32,27 @@ use crate::store::subgraph_key;
 
 pub mod backend;
 pub mod backends;
+// G13-C wave-3 (Phase-3 R5): `BrowserBackend` thin-client cache for the
+// `wasm32-unknown-unknown` browser bundle per CLAUDE.md baked-in #17.
+// Feature-gated so the native default-features build does not compile
+// the in-RAM-cache module unless explicitly opted in.
+#[cfg(feature = "browser-backend")]
+pub mod browser_backend;
 pub mod graph_backend;
 pub mod immutability;
 pub mod in_memory_backend;
 pub(crate) mod indexes;
 pub mod mutex_ext;
+pub(crate) mod prefix_helpers;
+// G13-C wave-3: `redb_backend` + `transaction` are gated to NON
+// `wasm32-unknown-unknown` targets per the `br-r1-1` BLOCKER pin
+// (CLAUDE.md baked-in #17). `wasm32-wasip1` is NATIVE-shape and keeps
+// redb. The browser-tab target consumes [`browser_backend::BrowserBackend`]
+// instead.
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 pub mod redb_backend;
 pub mod store;
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 pub mod transaction;
 
 pub use backend::{BatchOp, DurabilityMode, KVBackend, ScanIter, ScanResult};
@@ -46,11 +60,17 @@ pub use backends::{
     BlobBackend, NetworkFetchStubBackend, NetworkFetchStubError, SnapshotBlob, SnapshotBlobBackend,
     SnapshotBlobError,
 };
-pub use graph_backend::{GraphBackend, RedbTransactionRunner};
+#[cfg(feature = "browser-backend")]
+pub use browser_backend::{BrowserBackend, BrowserSnapshot, BrowserTransactionRunner};
+pub use graph_backend::GraphBackend;
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
+pub use graph_backend::RedbTransactionRunner;
 pub use in_memory_backend::InMemoryBackend;
 pub use mutex_ext::{MutexExt, RwLockExt};
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 pub use redb_backend::RedbBackend;
 pub use store::{ChangeEvent, ChangeKind, ChangeSubscriber, EdgeStore, NodeStore};
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 pub use transaction::{PendingOp, Transaction};
 
 /// Phase 2a G2-A / C5 stub: additional test-only and Phase-2a methods on
@@ -62,6 +82,7 @@ pub use transaction::{PendingOp, Transaction};
 /// `todo!()` carry; the durability-mode pass-through is wired through the
 /// redb backend's `_impl` body. Other stubs in this block remain test-only
 /// or shape-only by design (see per-method doc).
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 impl RedbBackend {
     /// Phase 2a G2-A: `create`-alias for the `open_or_create` constructor —
     /// new R3 tests prefer this name.
@@ -384,6 +405,13 @@ pub enum GraphError {
     /// `TransactionError`, `TableError`, `StorageError`, `CommitError`)
     /// each have a native `From<X> for redb::Error`; our `From` impls
     /// funnel through that so the origin kind is preserved.
+    ///
+    /// G13-C wave-3: gated to NON `wasm32-unknown-unknown` targets per the
+    /// `br-r1-1` BLOCKER pin (CLAUDE.md baked-in #17). Browser thin-client
+    /// builds do not pull redb; the `BrowserBackend` surfaces its
+    /// failures through the `Redb(String)` variant or
+    /// [`GraphError::Decode`] instead.
+    #[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
     #[error("redb: {0}")]
     RedbSource(#[from] redb::Error),
 
@@ -486,9 +514,9 @@ impl GraphError {
             // because the underlying redb error kind is opaque to
             // cross-language consumers. The string-payload `Redb` and
             // `Decode` variants carry the same catalog code for parity.
-            GraphError::RedbSource(_) | GraphError::Redb(_) | GraphError::Decode(_) => {
-                ErrorCode::GraphInternal
-            }
+            #[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
+            GraphError::RedbSource(_) => ErrorCode::GraphInternal,
+            GraphError::Redb(_) | GraphError::Decode(_) => ErrorCode::GraphInternal,
             GraphError::BackendNotFound { .. } => ErrorCode::BackendNotFound,
             GraphError::SystemZoneWrite { .. } => ErrorCode::SystemZoneWrite,
             GraphError::NestedTransactionNotSupported {} => {
@@ -516,26 +544,34 @@ fn redact_path_for_display(path: &std::path::Path) -> String {
 // Each redb sub-error type has a native `From<X> for redb::Error` in the
 // redb crate, so we funnel through `redb::Error` and store it under
 // `RedbSource` with `#[source]` preservation via `thiserror`'s `#[from]`.
+//
+// G13-C wave-3: gated to NON `wasm32-unknown-unknown` targets per the
+// `br-r1-1` BLOCKER pin. The browser-tab build does not link redb.
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 impl From<redb::DatabaseError> for GraphError {
     fn from(e: redb::DatabaseError) -> Self {
         GraphError::RedbSource(e.into())
     }
 }
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 impl From<redb::TransactionError> for GraphError {
     fn from(e: redb::TransactionError) -> Self {
         GraphError::RedbSource(e.into())
     }
 }
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 impl From<redb::TableError> for GraphError {
     fn from(e: redb::TableError) -> Self {
         GraphError::RedbSource(e.into())
     }
 }
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 impl From<redb::StorageError> for GraphError {
     fn from(e: redb::StorageError) -> Self {
         GraphError::RedbSource(e.into())
     }
 }
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 impl From<redb::CommitError> for GraphError {
     fn from(e: redb::CommitError) -> Self {
         GraphError::RedbSource(e.into())
@@ -569,6 +605,11 @@ impl From<redb::CommitError> for GraphError {
 ///
 /// Implements `Drop` so explicit `drop(handle)` in tests is the idiomatic
 /// way to release the snapshot's read-transaction lifetime.
+///
+/// G13-C wave-3: gated to NON `wasm32-unknown-unknown` targets per the
+/// `br-r1-1` BLOCKER pin (CLAUDE.md baked-in #17). Browser thin-client
+/// builds substitute the `browser_backend::BrowserSnapshot` in-RAM clone.
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 pub struct SnapshotHandle {
     /// redb ReadTransaction captured at snapshot-open time. redb's read
     /// transactions are lightweight (no writer lock held) and observe the
@@ -576,6 +617,7 @@ pub struct SnapshotHandle {
     pub(crate) read_txn: Option<redb::ReadTransaction>,
 }
 
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 impl Drop for SnapshotHandle {
     fn drop(&mut self) {
         // Dropping the `ReadTransaction` releases the snapshot naturally.
@@ -583,6 +625,7 @@ impl Drop for SnapshotHandle {
     }
 }
 
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 impl SnapshotHandle {
     /// Retrieve a Node by CID from the snapshot view. Reads through the
     /// handle observe the point-in-time state captured when
@@ -744,7 +787,11 @@ impl WriteContext {
 // Tests
 // ---------------------------------------------------------------------------
 
+// G13-C wave-3: tests module references `RedbBackend` for the historical
+// Phase-1 round-trip suite. Gated to NON `wasm32-unknown-unknown` per the
+// `br-r1-1` BLOCKER pin (browser thin-client target does not link redb).
 #[cfg(test)]
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 #[allow(
     clippy::unwrap_used,
     clippy::expect_used,

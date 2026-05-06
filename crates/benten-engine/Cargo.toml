@@ -85,6 +85,16 @@ phase_2b_landed = []
 # stays. The next Phase-2b R6 wave can audit per-file and lapse the
 # gate as the WAIT bodies fill in.
 phase_2a_pending_apis = []
+# G13-C wave-3 (Phase-3 R5; CLAUDE.md baked-in #17): re-points the
+# default `Engine` alias to `EngineGeneric<BrowserBackend>` under this
+# feature, so the napi cdylib's browser-target build (`cargo
+# --target wasm32-unknown-unknown --features browser-backend
+# --no-default-features`) consumes the in-RAM thin-client cache instead
+# of `RedbBackend`. The alias is the only surface the feature flips —
+# the generic cascade landed at G13-B accepts ANY `GraphBackend`
+# implementor uniformly. Forwards to `benten-graph/browser-backend` so
+# enabling the engine-side feature lights up the storage-side impl.
+browser-backend = ["benten-graph/browser-backend"]
 
 [dependencies]
 benten-caps = { path = "../benten-caps" }

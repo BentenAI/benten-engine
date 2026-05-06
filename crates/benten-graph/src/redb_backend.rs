@@ -111,24 +111,11 @@ const TEST_EVENT_LOG_CAP: usize = 10_000;
 #[cfg(any(test, feature = "testing"))]
 const LAST_DURABILITY_MAP_CAP: usize = 1_000;
 
-/// Lexicographic successor of `prefix` — the smallest byte string strictly
-/// greater than every string that begins with `prefix`. Used to turn a
-/// prefix scan into a bounded range scan.
-///
-/// Returns `None` when `prefix` is all-`0xff` (no successor exists in the
-/// byte-string ordering), signalling that the caller should do an
-/// unbounded `prefix..` scan instead.
-pub(crate) fn next_prefix(prefix: &[u8]) -> Option<Vec<u8>> {
-    let mut out = prefix.to_vec();
-    while let Some(last) = out.last_mut() {
-        if *last < 0xff {
-            *last += 1;
-            return Some(out);
-        }
-        out.pop();
-    }
-    None
-}
+// G13-C wave-3: `next_prefix` was promoted to `crate::prefix_helpers` so
+// it can be shared with `BrowserBackend` (cfg-gated independently of
+// redb). Re-exported here so existing call sites + the in-module test
+// continue to find it under the historical path.
+pub(crate) use crate::prefix_helpers::next_prefix;
 
 /// Map a [`DurabilityMode`] onto redb's own `Durability` enum.
 ///

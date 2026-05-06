@@ -54,51 +54,46 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G13-C wave-3 wires the wasm-target SANDBOX unavailable path at install_module entry point"]
 fn wasm32_unknown_unknown_browser_backend_e_sandbox_unavailable_on_wasm_path_observable() {
-    // br-r1-3 pin (entry point 1 of 4 — install_module).
-    // G13-C implementer wires this:
+    // br-r1-3 GREEN pin (entry point 1 of 4 — install_module).
     //
-    // Option A — runtime test under wasm-bindgen-test (requires wasm32 target):
-    //
-    //   #[cfg(target_arch = "wasm32")]
-    //   {
-    //       let engine = browser_engine_with_browser_backend();
-    //       let module_with_sandbox = build_subgraph_with_sandbox_node();
-    //       let result = engine.execute(module_with_sandbox);
-    //       assert!(matches!(
-    //           result.unwrap_err(),
-    //           benten_engine::EngineError::Sandbox(
-    //               benten_eval::SandboxError::UnavailableOnWasm
-    //           ),
-    //       ));
-    //   }
-    //
-    // Option B — native source-cite assertion:
-    //
-    //   // The host-side primitive dispatch arm in
-    //   // `crates/benten-engine/src/primitive_host.rs::PrimitiveHost`
-    //   // must contain the wasm-arch-conditional SANDBOX-unavailable
-    //   // error path (per br-r1-3 + §3.5b HARDENED point 3 — symbol-form
-    //   // for high-churn surface).
-    //   let src = std::fs::read_to_string("crates/benten-engine/src/primitive_host.rs").unwrap();
-    //   assert!(src.contains("UnavailableOnWasm")
-    //         || src.contains("E_SANDBOX_UNAVAILABLE_ON_WASM"),
-    //       "primitive_host.rs MUST surface the wasm32 SANDBOX-unavailable typed error per br-r1-3");
-    //
-    // OBSERVABLE consequence: a browser-side SANDBOX call returns a
-    // typed `UnavailableOnWasm` error rather than panic or generic
-    // failure. Defends against the regression where wasm32 builds
-    // silently skip SANDBOX primitives (which would expose the
-    // browser tab to "module loaded but did not enforce its limits"
-    // failure shape).
-    //
-    // This pin is companion to G19-D's `ts_surface_parity_meta_test`
-    // (which checks the TS DSL exposes the same error code) — both
-    // sides pin the same browser-side observable.
-    unimplemented!(
-        "G13-C wires runtime/source-cite assertion for E_SANDBOX_UNAVAILABLE_ON_WASM browser-side observability at install_module"
+    // The host-side primitive dispatch arm in
+    // `crates/benten-engine/src/primitive_host.rs::PrimitiveHost`
+    // contains the wasm-arch-conditional SANDBOX-unavailable error
+    // path (per br-r1-3 + §3.5b HARDENED point 3 — symbol-form for
+    // high-churn surface).
+    use std::path::PathBuf;
+    let primitive_host_path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/primitive_host.rs");
+    let src = std::fs::read_to_string(&primitive_host_path).unwrap_or_else(|e| {
+        panic!(
+            "read crates/benten-engine/src/primitive_host.rs: {} (path={:?})",
+            e, primitive_host_path
+        )
+    });
+    assert!(
+        src.contains("E_SANDBOX_UNAVAILABLE_ON_WASM"),
+        "primitive_host.rs MUST surface the wasm32 SANDBOX-unavailable typed error \
+         (E_SANDBOX_UNAVAILABLE_ON_WASM) per br-r1-3 + wsa-14 / Compromise # — \
+         defends against regression where wasm32 builds silently skip SANDBOX primitives"
     );
+    // Verify the wasm32 conditional gate is actually present (so the
+    // typed error path fires on browser builds, not just exists in
+    // dead code on native builds):
+    assert!(
+        src.contains("#[cfg(target_arch = \"wasm32\")]"),
+        "primitive_host.rs MUST contain a `#[cfg(target_arch = \"wasm32\")]` arm \
+         that emits E_SANDBOX_UNAVAILABLE_ON_WASM per br-r1-3"
+    );
+
+    // OBSERVABLE consequence: a browser-side SANDBOX call routes
+    // through the wasm32 arm + surfaces the typed UnavailableOnWasm
+    // error rather than panic or generic failure. The wasm-bindgen
+    // runtime arm (`#[cfg(target_arch = "wasm32")]` test that drives
+    // the actual install_module path) lands at G14-C alongside the
+    // register_module_bytes entry point per the 4-way uniformity pin
+    // landing schedule. This G13-C pin is the source-cite regression
+    // guard for entry point 1.
 }
 
 #[test]

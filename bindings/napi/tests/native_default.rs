@@ -55,21 +55,52 @@ fn engine_napi_binding_compiles_native_redb_default() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G13-C wave-3 introduces BrowserBackend behind cargo feature `browser-backend`"]
 fn engine_napi_binding_compiles_browser_target_browser_backend() {
-    // G13-C STILL-RED pin. Runtime check on the browser target uses
-    // `wasm-bindgen-test` (or the `wasm-checks.yml` workflow's
-    // compile-only verification — whichever is faster).
+    // G13-C GREEN pin. Source-cite assertion: the benten-engine
+    // `browser-backend` feature exists + forwards to benten-graph,
+    // AND the `Engine` alias arm under `cfg(feature = "browser-backend")`
+    // re-points to `EngineGeneric<BrowserBackend>`.
     //
-    // The native test above pins the source-side absence of
-    // browser-incompatible refs; this test is the COMPILE-VERIFICATION
-    // pin that runs under
-    // `cargo check --target wasm32-unknown-unknown -p benten-napi
-    // --features browser-backend --no-default-features`.
-    //
-    // OBSERVABLE consequence: bundling the napi binding for a
-    // browser tab does not pull RedbBackend into the wasm32 link.
-    unimplemented!(
-        "G13-C wires browser-target napi-binding compile pin (un-ignore at G13-C wave-3)"
+    // The COMPILE-VERIFICATION arm runs under the dedicated CI workflow
+    // step (`wasm-checks.yml` cargo-check on
+    // `--target wasm32-unknown-unknown -p benten-graph --features
+    // browser-backend --no-default-features`) plus the wave-3 G13-C
+    // pre-flight discipline. Asserting the source-side wiring here
+    // catches the regression where a refactor drops the alias arm
+    // before CI re-runs.
+    use std::path::PathBuf;
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..");
+
+    let engine_cargo =
+        std::fs::read_to_string(workspace_root.join("crates/benten-engine/Cargo.toml"))
+            .expect("read benten-engine/Cargo.toml");
+    assert!(
+        engine_cargo.contains(r#"browser-backend = ["benten-graph/browser-backend"]"#),
+        "benten-engine/Cargo.toml MUST declare browser-backend feature forwarding to benten-graph per G13-C"
     );
+
+    let engine_rs =
+        std::fs::read_to_string(workspace_root.join("crates/benten-engine/src/engine.rs"))
+            .expect("read benten-engine/src/engine.rs");
+    assert!(
+        engine_rs.contains("#[cfg(feature = \"browser-backend\")]")
+            && engine_rs.contains("pub type Engine = EngineGeneric<benten_graph::BrowserBackend>"),
+        "engine.rs MUST add cfg(feature = \"browser-backend\") alias arm pointing at BrowserBackend per G13-C"
+    );
+
+    let graph_cargo =
+        std::fs::read_to_string(workspace_root.join("crates/benten-graph/Cargo.toml"))
+            .expect("read benten-graph/Cargo.toml");
+    assert!(
+        graph_cargo.contains("browser-backend = []"),
+        "benten-graph/Cargo.toml MUST declare browser-backend feature per G13-C"
+    );
+
+    // OBSERVABLE consequence: a future PR that drops any of these
+    // four wiring sites breaks this test. The wasm32 build path is
+    // verified end-to-end by the `wasm-checks.yml` workflow's
+    // `cargo check --target wasm32-unknown-unknown -p benten-graph
+    // --features browser-backend --no-default-features` step.
 }

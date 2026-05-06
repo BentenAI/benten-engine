@@ -30,12 +30,18 @@ use benten_core::{Cid, CoreError, Value};
 /// Redb multimap table holding `label_bytes -> node_cid_bytes`. One multimap
 /// entry per `(node, label)` pair. Multi-label nodes produce one entry per
 /// label.
+///
+/// G13-C wave-3: gated to NON `wasm32-unknown-unknown` per `br-r1-1` BLOCKER.
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 pub(crate) const LABEL_INDEX_TABLE: redb::MultimapTableDefinition<&[u8], &[u8]> =
     redb::MultimapTableDefinition::new("benten_label_index");
 
 /// Redb multimap table holding `property_key -> node_cid_bytes`. The property
 /// key packs `(label, prop_name, value_bytes)` together — see
 /// [`property_index_key`] for the layout.
+///
+/// G13-C wave-3: gated to NON `wasm32-unknown-unknown` per `br-r1-1` BLOCKER.
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 pub(crate) const PROP_INDEX_TABLE: redb::MultimapTableDefinition<&[u8], &[u8]> =
     redb::MultimapTableDefinition::new("benten_prop_index");
 

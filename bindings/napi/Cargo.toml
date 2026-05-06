@@ -77,7 +77,15 @@ benten-errors = { workspace = true }
 # so the JS surface can render typed Diagnostic data on bad-DSL input
 # without prose-string parsing (matches the surface
 # `register_handler_from_dsl` already exposes Rust-side).
-benten-dev = { path = "../../tools/benten-dev" }
+#
+# G13-C R5 wave-3 fix-pass (2026-05-06): benten-dev is moved to a
+# target-conditional dep below (native-only). Browser thin-client
+# bundle (`wasm32-unknown-unknown`) does not ship the dev-server —
+# DevServer is a scaffolding-tool surface for native developer workflow,
+# not a runtime concern of the browser deployment shape (CLAUDE.md
+# baked-in #17). The matching `mod devserver` declaration in
+# `src/lib.rs` is target-arch-gated so the napi binding crate also
+# omits the `#[napi]` DevServer class on wasm32.
 benten-dsl-compiler = { path = "../../crates/benten-dsl-compiler" }
 # Phase 2b G8-B: needed for `Strategy` enum parsing in `parse_user_view_spec`
 # (the `engine.createUserView({ strategy })` napi entry point). The Strategy
@@ -92,6 +100,17 @@ blake3 = { workspace = true }
 napi = { workspace = true, features = ["napi4", "serde-json"], optional = true }
 napi-derive = { workspace = true, optional = true }
 serde_json = { workspace = true }
+
+# G13-C R5 wave-3 fix-pass (2026-05-06): native-only deps. `benten-dev`
+# transitively pulls Phase-2a `tokio`/notify/tempfile and consumes the
+# native-only redb-coupled `Engine` API surface (`Engine::builder()`,
+# `register_subgraph_replace`); none of these are valid on the
+# `wasm32-unknown-unknown` thin-client deployment shape (CLAUDE.md
+# baked-in #17). Per pim-1 §3.5b HARDENED point 5 (crate-prefix-cite):
+# the consuming module is `crates/benten-napi/src/devserver.rs::DevServer`
+# and is also `cfg(not(target_arch = "wasm32"))`-gated in `src/lib.rs`.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+benten-dev = { path = "../../tools/benten-dev" }
 
 [build-dependencies]
 napi-build = "2"

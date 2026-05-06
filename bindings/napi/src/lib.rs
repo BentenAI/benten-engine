@@ -58,20 +58,44 @@ mod view;
 // `#[napi]` impl methods consuming these helpers live in `napi_surface`
 // below; split into its own file so the suspend/resume codec surface
 // stays diff-reviewable.
-#[cfg(feature = "napi-export")]
+//
+// G13-C R5 wave-3 fix-pass (2026-05-06): additionally gated off
+// `wasm32-unknown-unknown` because the helpers consume
+// `InnerEngine::call_with_suspension` and friends — those inherent
+// methods only exist on the redb-bound `Engine = EngineGeneric<RedbBackend>`
+// alias which is itself gated to non-browser-backend / non-wasm32 targets.
+// Browser thin-clients don't run handlers (CLAUDE.md baked-in #17), so
+// WAIT/STREAM/SUBSCRIBE adapters are gated out of the browser bundle
+// alongside `napi_surface`. Using `target_arch` (not the
+// `benten-engine/browser-backend` feature) because benten-napi does not
+// expose its own `browser-backend` feature flag — wasm32-unknown-unknown
+// is a precise proxy for "browser bundle build".
+#[cfg(all(feature = "napi-export", not(target_arch = "wasm32")))]
 mod wait;
 // Phase 2b G6-B: STREAM + SUBSCRIBE napi-bridge helpers. Same split
 // pattern as `wait` — adapters are plain Rust functions here, the
 // `#[napi]` impl methods consuming them live in `napi_surface` below.
-#[cfg(feature = "napi-export")]
+//
+// G13-C R5 wave-3 fix-pass (2026-05-06): wasm32 gating per the matching
+// note on `mod wait` above.
+#[cfg(all(feature = "napi-export", not(target_arch = "wasm32")))]
 mod stream;
-#[cfg(feature = "napi-export")]
+#[cfg(all(feature = "napi-export", not(target_arch = "wasm32")))]
 mod subscribe;
 // Phase 2b Wave-8f: napi `DevServer` class wrapping `benten_dev::DevServer`.
 // Self-contained surface (its own `#[napi]` impl block) — kept in its own
 // file because the dev-server bridge has zero overlap with the existing
 // `napi_surface::Engine` impl block.
-#[cfg(feature = "napi-export")]
+//
+// G13-C R5 wave-3 fix-pass (2026-05-06): additionally gated to
+// `not(target_arch = "wasm32")` because `benten-dev` is a native-only
+// scaffolding tool (consumes `Engine::builder()` /
+// `register_subgraph_replace` paths that are themselves redb-coupled
+// and gated off browser-backend per CLAUDE.md baked-in #17). The
+// `benten-dev` dep is already target-conditional in `Cargo.toml`; the
+// module-level cfg here keeps the `mod devserver;` line honest under
+// the same target gate.
+#[cfg(all(feature = "napi-export", not(target_arch = "wasm32")))]
 mod devserver;
 // Phase 2b G10-A-wasip1: napi-side wasm32-wasip1 runtime probes
 // (`wasiTargetKind`, `wasiRuntimeSupportsRedbNative`,
@@ -106,8 +130,25 @@ pub use policy::PolicyKind;
 // ---------------------------------------------------------------------------
 // Engine class (napi surface)
 // ---------------------------------------------------------------------------
-
-#[cfg(feature = "napi-export")]
+//
+// G13-C R5 wave-3 fix-pass (2026-05-06): the `napi_surface::Engine` class
+// consumes ~50 inherent methods on the `Engine = EngineGeneric<RedbBackend>`
+// alias (`Engine::open` / `create_node` / `call` / `register_subgraph` /
+// `install_module` / etc). Per Q1 ratification 2026-05-05 (alias-based
+// pragmatic-genericism), these methods are NOT cascaded to
+// `<B: GraphBackend>` in Phase-3 R5; lifting is deferred to the
+// v1-assessment-window. Consequently the napi_surface::Engine class is
+// gated off the `wasm32-unknown-unknown` target: the browser bundle
+// exports only the in-memory `wasm_browser::BrowserManifestStore` + the
+// `browser_runtime_available()` probe (CLAUDE.md baked-in #17 — thin
+// clients hold no full-peer Engine surface; reads/writes flow through
+// the full peer's authenticated subscription protocol per G14-D).
+// Using `target_arch` (not a benten-napi feature) because benten-napi
+// does not expose a `browser-backend` feature flag of its own; the
+// wasm-browser CI workflow propagates `--features benten-engine/browser-backend`
+// to select the BrowserBackend Engine alias arm in benten-engine, and
+// the napi binding distinguishes target via `target_arch = "wasm32"`.
+#[cfg(all(feature = "napi-export", not(target_arch = "wasm32")))]
 mod napi_surface {
     use std::collections::BTreeMap;
     use std::sync::Arc;
