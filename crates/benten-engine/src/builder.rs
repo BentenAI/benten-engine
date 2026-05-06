@@ -506,7 +506,21 @@ impl EngineBuilder {
             .time_source
             .unwrap_or_else(|| Arc::new(HlcTimeSource::new()));
 
-        let engine = Engine::from_parts_with_clocks_and_store(
+        // G13-B generic-cascade: the `EngineGeneric::from_parts_with_clocks`
+        // constructor requires an injected `Arc<dyn SuspensionStore>` (the
+        // generic engine cannot know how to construct a suspension store
+        // for an arbitrary backend `B`). The redb-backed builder fills in
+        // the default `RedbSuspensionStore` here when the caller did not
+        // inject an alternative; this is the redb-specific specialization
+        // half of D-PHASE-3-1 RESOLVED.
+        let suspension_store: Arc<dyn benten_eval::SuspensionStore> =
+            self.suspension_store.unwrap_or_else(|| {
+                Arc::new(crate::suspension_store::RedbSuspensionStore::new(
+                    Arc::clone(&backend),
+                ))
+            });
+
+        let engine = Engine::from_parts_with_clocks(
             backend,
             policy,
             caps_enabled,
@@ -516,7 +530,7 @@ impl EngineBuilder {
             ivm,
             monotonic,
             time,
-            self.suspension_store,
+            suspension_store,
         );
 
         // R6FP-Group-1 (r6-arch-1): rebuild the in-memory installed-
