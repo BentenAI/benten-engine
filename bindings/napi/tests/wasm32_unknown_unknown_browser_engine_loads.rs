@@ -60,17 +60,21 @@ fn wasm32_unknown_unknown_browser_engine_loads() {
         "fresh store must list no installed CIDs"
     );
 
-    // G18-A wave-5a flip — Compromise #19 closure per
-    // D-PHASE-3-27 + br-r1-8 MINOR. The IndexedDB-backed durable
-    // backing landed at `crate::browser_indexeddb`; the flag honestly
-    // reports `true` reflecting durable backing. Per CLAUDE.md
-    // baked-in #17 the SCOPE is thin-client cache + manifest-store
-    // ONLY (not full sync state).
+    // G18-A wave-5a HONEST DISCLOSURE — Compromise #19 PARTIALLY
+    // CLOSED. The IndexedDB schema + handler scaffolding landed at
+    // `crate::browser_indexeddb`; the wasm32 `web-sys` / `js-sys`
+    // / `wasm-bindgen-futures` plumbing is deferred to G18-A-followup
+    // wave per `docs/future/phase-3-backlog.md` §4.3. The flag stays
+    // `false` honestly until the wasm32 IDB calls wire — flipping it
+    // to `true` ahead of the plumbing would lie about durability to
+    // operators branching on the flag (br-r1-8 honest-disclosure
+    // principle). The scope per CLAUDE.md baked-in #17 remains
+    // thin-client cache + manifest-store ONLY.
     assert!(
-        store.is_persistent(),
-        "G18-A: BrowserManifestStore::is_persistent flips to true \
-         reflecting IndexedDB-backed durable backing per \
-         CLAUDE.md baked-in #17 thin-client cache scope + br-r1-8"
+        !store.is_persistent(),
+        "G18-A: BrowserManifestStore::is_persistent stays false until \
+         G18-A-followup wires the wasm32 IDB plumbing per CLAUDE.md \
+         baked-in #17 thin-client cache scope + br-r1-8 honest-disclosure"
     );
 
     // Target-availability probe: cfg-honest answer.

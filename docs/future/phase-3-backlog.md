@@ -155,6 +155,8 @@
 
 **Phase 3 target:** IndexedDB-backed persistent manifest store. Pairs with PHASE-3-BUNDLE-1 (BrowserBackend) since both are browser-target persistence work — likely a single Phase-3 wave covers both.
 
+**Phase 3 G18-A wave-5a state (PARTIAL).** Schema + handler scaffolding landed at G18-A (`bindings/napi/src/browser_indexeddb.rs` + `bindings/napi/src/browser_blob_store.rs`); wasm32 `web-sys` / `js-sys` / `wasm-bindgen-futures` plumbing deferred to §4.3 G18-A-followup wave below. `BrowserManifestStore::is_persistent()` + `IndexedDbBlobBackend::is_persistent()` HONESTLY stay `false` until that wave wires per the honest-disclosure principle Compromise #19 originally articulated.
+
 ### 4.2 Compromise #20 — Cross-browser determinism CI cadence
 
 **Renumbering note:** previously labeled "Compromise #N+9" before R6FP Group 3 globalized the numbering to match `docs/SECURITY-POSTURE.md` (#1-#21).
@@ -162,6 +164,50 @@
 **Phase 2b state:** Per-browser engine bytecode + JIT non-determinism makes per-PR cross-browser CID pinning premature. The cross-browser determinism job in `wasm-browser.yml` is gated on `release` events + `workflow_dispatch` only. Per-PR CI runs the bundle build + size cap + single-browser smoke without pinning a fixture CID across engines.
 
 **Phase 3 target:** Engine-side determinism work that closes the compromise; flip the cross-browser job to per-PR cadence. Source: `docs/future/phase-2-backlog.md` §10.2.
+
+**Phase 3 G18-A wave-5a state (PARTIAL).** Workflow + matrix cell structure landed at G18-A (`.github/workflows/cross-browser-determinism.yml`); fixture bodies deferred to §4.3 G18-A-followup wave below.
+
+### 4.3 G18-A-followup — IndexedDB integration + Playwright fixture authoring
+
+**Named destination for two G18-A wave-5a Q3 IFF-clause deferrals** (per HARD RULE rule-12 clause-b — destination NAMED + receiving the entries NOW). Closes the BLOCKER finding `g18a-mr-1` from PR #114 mini-review and the PARTIAL-CLOSURE narrative carry on Compromise #19 + #20 in `docs/SECURITY-POSTURE.md`.
+
+**Two coupled work items (single follow-up wave or split — TBD at dispatch time):**
+
+**(a) wasm32 IndexedDB plumbing — `web-sys` / `js-sys` / `wasm-bindgen-futures` wire-up.** Phase-3 G18-A landed the IndexedDB schema + handler scaffolding at `bindings/napi/src/browser_indexeddb.rs` (schema-version constant, object-store names, `on_upgrade_needed` chain walker, `on_version_change` handler shape, `map_dom_exception_to_error_code`, `INDEXEDDB_DATABASE_NAME`) but the wasm32 arms of `apply_migration_step` + `close_database` are stubs with comments-only. G18-A-followup wires the wasm32 arms to actual `IDBDatabase.open` / `IDBObjectStore.put` / `IDBObjectStore.get` / `IDBDatabase.close` calls via `web-sys` + `wasm-bindgen-futures::JsFuture` adapters. Adds `web-sys` (with required feature flags for `IdbDatabase`, `IdbFactory`, `IdbObjectStore`, `IdbRequest`, `IdbVersionChangeEvent`), `js-sys`, `wasm-bindgen-futures` deps under `[target.'cfg(target_arch = "wasm32")'.dependencies]` in `bindings/napi/Cargo.toml` (the existing `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]` cascade pattern is preserved INTACT). Once wired:
+- `BrowserManifestStore::is_persistent()` flips `false → true` on wasm32 (gated on runtime IDB-open success — returns `false` on native).
+- `IndexedDbBlobBackend::is_persistent()` flips `false → true` on wasm32 (same gate).
+- `BrowserManifestStore::open_indexed_db(...)` constructor lands as the production browser-target manifest-store entry point (the existing `new()` stays for tests + non-browser dev hosts).
+- `Engine::open_with_browser_blob_backend(...)` constructor lands wiring `IndexedDbBlobBackend` into the engine snapshot-cache surface via the `BlobBackend` trait surface locked at G13-pre-B.
+
+Estimated touch size: ~200-400 LOC across `browser_indexeddb.rs` (wasm32 arms) + `browser_blob_store.rs` (wasm32 arms + `is_persistent` cfg-gating) + `wasm_browser.rs` (`is_persistent` cfg-gating + `open_indexed_db` constructor) + `bindings/napi/Cargo.toml` (wasm32-only dep additions) + 2-3 new integration tests. Bundle-size impact: estimated ~30-80 KB raw / ~10-25 KB gzipped (web-sys feature flags are conservative; only `IdbDatabase` family symbols added) — keeps the wasm-r1-7 ≤600 KB cap honest.
+
+**(b) Playwright fixture authoring for `cross-browser-determinism.yml` matrix cells.** Phase-3 G18-A landed the workflow + matrix cell structure at `.github/workflows/cross-browser-determinism.yml`; every cell currently emits `::warning::...harness fixture not yet wired (G18-A-followup)`. G18-A-followup authors the fixture bodies that drive each cell to real assertions per pim-2 §3.6b end-to-end test pin requirement. The 11 fixture bodies (per the 11 `::warning::` emit sites in the workflow):
+
+1. `node_envelope` canonical-bytes — load bundle in browser, encode a canonical Node envelope, assert byte-identity against native canonical fixture (`bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda`).
+2. `handler-version-chain` — encode a handler-version-chain entry in browser, assert byte-identity.
+3. `AttributionFrame-with-DID` — encode an AttributionFrame with device DID in browser, assert byte-identity.
+4. `canonical-fixture-corpus` — load the canonical fixture corpus in browser, assert CID match.
+5. `BLAKE3-byte-identity` — drive a BLAKE3 hash through the browser SIMD path + non-SIMD path, assert byte-identity with native.
+6. `Ed25519-signature-byte-identity` — sign a fixed message in browser, assert signature byte-identity with native (deterministic-signing path).
+7. `floating-point-canonicalization` — exercise NaN bit-pattern + denormal + round-to-even DSL eval cases, assert canonical-bytes match.
+8. `IndexedDB schema_migration_round_trip` — call `IDBFactory.open` with `version=1`, populate, then call with `version=2` to trigger `onupgradeneeded`, assert chain-walker fired in correct order + no data loss.
+9. `IndexedDB no_data_loss 1000_key sweep` — populate 1000 keys at v1, upgrade to v2, assert all 1000 keys still readable.
+10. `QuotaExceededError → E_STORAGE_QUOTA_EXCEEDED typed-error mapping` — write an oversized blob to IndexedDB until quota fires, assert the error surfaces as `BentenError(code=E_STORAGE_QUOTA_EXCEEDED)`.
+11. `cid_pin three-browser equivalence reduce step` — collect CID outputs from chromium / gecko / webkit cells, cross-check identity in a reduce job.
+
+Estimated touch size: ~300-600 LOC of test infrastructure across `bindings/napi/tests/playwright/` (NEW dir) + `package.json` Playwright dep additions + `playwright.config.ts` + 11 fixture spec files. Each fixture body is ~30-60 LOC (load bundle / set up IDB / drive assertion / report exit-code). Workflow-side changes: replace each `::warning::...harness fixture not yet wired` echo with the actual `npx playwright test --grep "<fixture-name>"` invocation gated on the fixture spec file existing. The Rust-side workflow-pin tests at `bindings/napi/tests/cross_browser_determinism_workflow_pins.rs` get re-shaped to assert the fixture INVOCATIONS (not the warning emits) are present in the YAML.
+
+**Acceptance criteria for closing Compromise #19 + #20 fully (status `CLOSED` not `PARTIALLY CLOSED`):**
+
+- `BrowserManifestStore::is_persistent()` returns `true` on wasm32 builds (gated on runtime IDB-open success).
+- `IndexedDbBlobBackend::is_persistent()` returns `true` on wasm32 builds (same gate).
+- All 11 Playwright matrix cells in `cross-browser-determinism.yml` execute real assertions (no `::warning::...harness fixture not yet wired` emits remain).
+- The matrix workflow's GitHub Actions job-summary shows assertion pass/fail per cell (not just structural success).
+- A regression that breaks canonical-bytes determinism in the wasm32 bundle would FAIL the matrix workflow per pim-2 §3.6b.
+
+**Why deferred from G18-A.** The schema + handler scaffolding + workflow + matrix structure are the LARGER surface that lets the full closure work be split cleanly. Wiring the wasm32 IDB plumbing + authoring 11 Playwright fixture bodies + adding `web-sys` deps in one wave would have crossed the implementer-agent sweet-spot LOC budget (~400-800) by ~2x. Splitting at the scaffolding boundary lets each half land cleanly with its own mini-review pass.
+
+**Touch size:** ~500-1000 LOC total (a-half ~200-400 + b-half ~300-600).
 
 ---
 

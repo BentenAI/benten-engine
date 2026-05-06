@@ -240,24 +240,35 @@ jobs:
             --test indexeddb_schema \
             --test cross_browser_determinism_workflow_pins
 
-      - name: Compromise #N+8 — bundle string-table check (RETIRED at G18-A)
-        # G18-A wave-5a — Compromise #19 closure flipped the posture
-        # from "no IDB symbols allowed in the browser bundle" to
-        # "IDB symbols ARE load-bearing in the bundle for the
-        # IndexedDB-backed persistence layer per CLAUDE.md baked-in
-        # #17 thin-client scope". The string-table guard is therefore
-        # retired; presence of `IDBDatabase` / `indexedDB` in the
-        # bundle is now expected (they're called by the IndexedDB
-        # backing in `bindings/napi/src/browser_indexeddb.rs`). The
-        # `localStorage` exclusion stays informationally — Compromise
-        # #19 closure went via IndexedDB, not localStorage.
+      - name: Compromise #N+8 — bundle string-table check (ACTIVE at G18-A; retires at G18-A-followup)
+        # G18-A wave-5a HONEST DISCLOSURE — Compromise #19 PARTIALLY
+        # CLOSED. The IndexedDB schema + handler scaffolding landed at
+        # `bindings/napi/src/browser_indexeddb.rs` BUT the wasm32
+        # `web-sys` / `js-sys` / `wasm-bindgen-futures` plumbing is
+        # deferred to G18-A-followup wave per
+        # `docs/future/phase-3-backlog.md` §4.3. Until that plumbing
+        # wires, the bundle does NOT contain IDB symbols — the
+        # forbidden-symbol grep stays ACTIVE as a fail-closed guard
+        # against accidental `localStorage` / IDB usage slipping in
+        # via a transitive dep ahead of the named G18-A-followup
+        # surface. The guard retires (or flips to a positive-presence
+        # assertion) at G18-A-followup when the wasm32 IDB plumbing
+        # actually lands and bundles real symbols.
         run: |
           set -euo pipefail
           bundle=bindings/napi/dist/browser/benten_engine.wasm
-          if strings "$bundle" | grep -F -q "localStorage"; then
-            echo "::warning::bundle references localStorage; Compromise #19 closed via IndexedDB (not localStorage). Verify the reference is intentional."
+          forbidden=( "IDBDatabase" "IDBFactory" "IDBObjectStore" "IDBTransaction" "indexedDB" "localStorage" )
+          fail=0
+          for sym in "${forbidden[@]}"; do
+            if strings "$bundle" | grep -F -q "$sym"; then
+              echo "::error::bundle references forbidden symbol '$sym' — Compromise #19 wasm32 IDB plumbing is deferred to G18-A-followup; symbols MUST NOT appear in the bundle until that wave wires per docs/future/phase-3-backlog.md §4.3"
+              fail=1
+            fi
+          done
+          if [ "$fail" -eq 1 ]; then
+            exit 1
           fi
-          echo "string-table guard retired at G18-A — IDB symbols are load-bearing in the bundle per Compromise #19 closure"
+          echo "string-table guard PASSED at G18-A — no IDB / localStorage symbols leaked into the bundle (wasm32 IDB plumbing deferred to G18-A-followup)"
 
       - name: Headless-browser smoke (placeholder)
         # The full headless-browser smoke harness (Playwright / wasm-bindgen-test

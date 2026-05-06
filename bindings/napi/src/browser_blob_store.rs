@@ -15,8 +15,10 @@
 //!   handlers + QuotaExceededError mapping shared across both the
 //!   manifest store and this blob cache.
 //! - `bindings/napi/src/wasm_browser.rs` — the in-RAM
-//!   `BrowserManifestStore` G18-A flips `is_persistent()` → `true`
-//!   for, reflecting this module's IndexedDB durable backing.
+//!   `BrowserManifestStore` whose `is_persistent()` honestly stays
+//!   `false` at G18-A until the wasm32 IDB plumbing wires at
+//!   G18-A-followup wave (per
+//!   `docs/future/phase-3-backlog.md` §4.3).
 //! - `crates/benten-graph/src/backends/blob_backend.rs::RedbBlobBackend` —
 //!   the redb-native sister impl this module mirrors at the trait
 //!   boundary.
@@ -29,13 +31,18 @@
 //! landed at G14-D wave-5a). It is NOT a sync state store; full sync
 //! state lives on the native peer per CLAUDE.md baked-in #17.
 //!
-//! The trait's
-//! `BlobBackend::is_persistent()` returns `true` here — the IndexedDB
-//! backing IS durable across page reload, even though the surface is
-//! cache-only. Callers branching on `is_persistent` for durability
-//! semantics get the correct answer; callers needing source-of-truth
-//! semantics must delegate to the full peer (which the thin-client
-//! protocol already arranges).
+//! ## `is_persistent()` honest disclosure at G18-A
+//!
+//! `IndexedDbBlobBackend::is_persistent()` returns `false` at G18-A
+//! per the honest-disclosure principle Compromise #19 articulates.
+//! The IndexedDB schema + handler scaffolding landed at G18-A but the
+//! wasm32 `web-sys` / `js-sys` / `wasm-bindgen-futures` plumbing that
+//! actually opens an `IDBDatabase` connection is deferred to
+//! G18-A-followup wave (per `docs/future/phase-3-backlog.md` §4.3).
+//! Until that plumbing wires, neither the native arm (which uses an
+//! in-RAM `BTreeMap` mirror) nor the wasm32 arm (where `IDBObjectStore.put`
+//! has not been called) actually persists across process restart /
+//! page reload. The flag flips to `true` at G18-A-followup wave.
 //!
 //! ## Async-shape via wasm-bindgen-futures (wasm32) / `ready` (native)
 //!
@@ -267,13 +274,31 @@ impl IndexedDbBlobBackend {
     }
 
     /// True iff this backend's writes survive page reload.
-    /// IndexedDB-backed → `true`. Per CLAUDE.md baked-in #17 the
-    /// scope is thin-client cache, but the durability claim is
-    /// honest: the bytes survive page reload via the IndexedDB
-    /// origin-scoped persistence layer.
+    ///
+    /// **Honest disclosure at G18-A wave-5a (Compromise #19 PARTIAL
+    /// CLOSURE):** the IndexedDB schema + handler scaffolding landed
+    /// at G18-A but the wasm32 `web-sys` / `js-sys` /
+    /// `wasm-bindgen-futures` plumbing is deferred to G18-A-followup
+    /// wave (per `docs/future/phase-3-backlog.md` §4.3). On native
+    /// targets the `native_mirror` BTreeMap is in-RAM only (native
+    /// consumers must use the `RedbBlobBackend` sister at
+    /// `crates/benten-graph/src/backends/blob_backend.rs` for true
+    /// durability). On `wasm32-unknown-unknown` the IDB-open path
+    /// has not yet wired so the in-RAM mirror is the source of truth
+    /// there too. Per the honest-disclosure principle the flag
+    /// returns `false` on every target until G18-A-followup wires
+    /// the wasm32 IDB plumbing AND the runtime IDB-connection probe
+    /// confirms the open succeeded.
     #[must_use]
     pub fn is_persistent(&self) -> bool {
-        true
+        // G18-A-followup wave will gate this on:
+        //   #[cfg(target_arch = "wasm32")]
+        //   self.idb_connection_open()
+        //   #[cfg(not(target_arch = "wasm32"))]
+        //   false
+        // For G18-A the wasm32 IDB plumbing is not wired so the
+        // honest answer on every target is `false`.
+        false
     }
 }
 
@@ -445,12 +470,17 @@ mod tests {
     }
 
     #[test]
-    fn is_persistent_true_for_indexeddb_backend() {
-        // Per CLAUDE.md baked-in #17: the IndexedDB backing is
-        // durable across page reload (thin-client SCOPE, but the
-        // PERSISTENCE claim is honest at the trait boundary).
+    fn is_persistent_false_until_idb_wired() {
+        // G18-A wave-5a HONEST DISCLOSURE — Compromise #19 PARTIALLY
+        // CLOSED. The wasm32 IDB plumbing is deferred to
+        // G18-A-followup wave per `docs/future/phase-3-backlog.md`
+        // §4.3; native consumers must use `RedbBlobBackend` for
+        // durable persistence. Until G18-A-followup wires both arms
+        // (cfg-gated wasm32 web-sys plumbing + native passthrough to
+        // `RedbBlobBackend` or honest false), the flag returns false
+        // on every target per the honest-disclosure principle.
         let backend = IndexedDbBlobBackend::new();
-        assert!(backend.is_persistent());
+        assert!(!backend.is_persistent());
     }
 
     #[test]

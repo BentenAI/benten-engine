@@ -1287,40 +1287,48 @@ umbrella trait (PHASE-3-BUNDLE-1).
 
 ---
 
-### Compromise #19 — Browser-target persistent storage — CLOSED at Phase-3 G18-A wave-5a
+### Compromise #19 — Browser-target persistent storage — PARTIALLY CLOSED at Phase-3 G18-A wave-5a
 
-**Status:** CLOSED at Phase-3 G18-A wave-5a (this commit). **Closed via:** IndexedDB-backed durable backing per CLAUDE.md baked-in #17 thin-client commitment + D-PHASE-3-27 schema-versioning + br-r1-2 BLOCKER closure.
+**Status:** **PARTIALLY CLOSED** at Phase-3 G18-A wave-5a (this commit); **FULL CLOSURE** deferred to G18-A-followup wave (per `docs/future/phase-3-backlog.md` §4.3) when the wasm32 `web-sys` / `js-sys` / `wasm-bindgen-futures` plumbing lands. **Partially closed via:** IndexedDB schema + handler scaffolding per CLAUDE.md baked-in #17 thin-client commitment + D-PHASE-3-27 schema-versioning + br-r1-2 BLOCKER scaffolding.
 
-**What shipped at G18-A.** Two new modules close the persistence gap on `wasm32-unknown-unknown`:
+**What landed at G18-A (scaffolding half).** Two new modules ship the persistence-layer architectural surface on `wasm32-unknown-unknown`:
 
-- `bindings/napi/src/browser_indexeddb.rs` — IndexedDB-backed schema-versioning layer. Declares schema-version constant `INDEXEDDB_SCHEMA_VERSION = 1`, the `module_manifest_store` + `blob_cache` object stores, the `on_upgrade_needed` migration handler (walks the v→v+1 chain), the `on_version_change` handler (closes the local IDB connection so a higher-version tab can proceed), and the `map_dom_exception_to_error_code` helper that maps `DOMException(name="QuotaExceededError")` to the typed [`ErrorCode::StorageQuotaExceeded`] variant (`E_STORAGE_QUOTA_EXCEEDED` per `docs/ERROR-CATALOG.md`).
-- `bindings/napi/src/browser_blob_store.rs` — IndexedDB-backed `BlobBackend` variant per the `BlobBackend` trait surface locked at G13-pre-B (`crates/benten-graph/src/backends/blob_backend_trait.rs`). Mirrors the redb-native `RedbBlobBackend`'s defense-in-depth CID validation per D-PHASE-3-12.
-- `bindings/napi/src/wasm_browser.rs::BrowserManifestStore::is_persistent` flips `false → true` per br-r1-8 MINOR — honest reflection of the IndexedDB durable backing.
+- `bindings/napi/src/browser_indexeddb.rs` — IndexedDB schema-versioning layer (handler scaffolding). Declares schema-version constant `INDEXEDDB_SCHEMA_VERSION = 1`, the `module_manifest_store` + `blob_cache` object stores, the `on_upgrade_needed` migration handler (walks the v→v+1 chain — chain-computation half is wired; the wasm32 IDB-side dispatch is a stub), the `on_version_change` handler (stub on wasm32; the host build exercises the chain logic), and the `map_dom_exception_to_error_code` helper that maps `DOMException(name="QuotaExceededError")` to the typed [`ErrorCode::StorageQuotaExceeded`] variant (`E_STORAGE_QUOTA_EXCEEDED` per `docs/ERROR-CATALOG.md`).
+- `bindings/napi/src/browser_blob_store.rs` — `IndexedDbBlobBackend` handle declaration mirroring the `BlobBackend` trait surface locked at G13-pre-B (`crates/benten-graph/src/backends/blob_backend_trait.rs`). Mirrors the redb-native `RedbBlobBackend`'s defense-in-depth CID validation per D-PHASE-3-12. The `IndexedDbBlobBackend::is_persistent()` returns `false` honestly at G18-A — the native arm uses an in-RAM `BTreeMap` mirror (native consumers must use `RedbBlobBackend`); the wasm32 arm has no IDB plumbing yet.
 
-**Per CLAUDE.md baked-in #17 thin-client commitment.** The IndexedDB schema declares ONLY thin-client surfaces (`module_manifest_store` + `blob_cache`) — full-sync state (`loro_doc`, `iroh_peers`, `sync_cursor`, `atrium_full_state`) is explicitly absent and forbidden by the architectural pin at `bindings/napi/tests/indexeddb_schema.rs::indexeddb_persistence_thin_client_cache_only_per_baked_in_17`. Browser tabs participate in sync as authenticated thin-client views into a user's full peer per D-PHASE-3-30 (G14-D thin-client subscription); they do NOT carry sync state of their own.
+**What is DEFERRED to G18-A-followup (per `docs/future/phase-3-backlog.md` §4.3).**
+
+- The wasm32 `web-sys` / `js-sys` / `wasm-bindgen-futures` deps that issue real `IDBDatabase.open` / `IDBObjectStore.put` / `IDBObjectStore.get` calls. The wasm32 arms of `apply_migration_step` + `close_database` are stubs today. Until those wire, `BrowserManifestStore::is_persistent()` and `IndexedDbBlobBackend::is_persistent()` BOTH return `false` honestly per the disclosure principle Compromise #19 originally articulated ("honest disclosure protects operators from assuming durability where none exists").
+- The `BlobBackend` trait integration through the `Engine::open_with_browser_blob_backend(...)` constructor. The handle ships; the engine wire-up is the follow-up scope.
+
+**Per CLAUDE.md baked-in #17 thin-client commitment.** The IndexedDB schema declares ONLY thin-client surfaces (`module_manifest_store` + `blob_cache`) — full-sync state (`loro_doc`, `iroh_peers`, `sync_cursor`, `atrium_full_state`) is explicitly absent and forbidden by the architectural pin at `bindings/napi/tests/indexeddb_schema.rs::indexeddb_persistence_thin_client_cache_only_per_baked_in_17`. Browser tabs participate in sync as authenticated thin-client views into a user's full peer per D-PHASE-3-30 (G14-D thin-client subscription); they do NOT carry sync state of their own. This pin lands at G18-A regardless of whether the wasm32 plumbing has wired yet.
 
 **OPFS deferral per D-PHASE-3-27 / br-r1-11.** IndexedDB is primary at G18-A (broad browser support); OPFS / File System Access API is deferred to post-Phase-3. Future Phase-4+ may add an `OpfsBlobStore` sibling via the `BlobBackend` trait surface.
 
-**Cross-refs.** `docs/MODULE-MANIFEST.md` §3.2; `docs/ERROR-CATALOG.md::E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE` + `E_STORAGE_QUOTA_EXCEEDED`; D-PHASE-3-27; br-r1-2 BLOCKER closure narrative; br-r1-8 MINOR closure.
+**Cross-refs.** `docs/MODULE-MANIFEST.md` §3.2; `docs/ERROR-CATALOG.md::E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE` + `E_STORAGE_QUOTA_EXCEEDED`; D-PHASE-3-27; br-r1-2 BLOCKER scaffolding; br-r1-8 MINOR honest-disclosure principle; `docs/future/phase-3-backlog.md` §4.3 (G18-A-followup wave named destination).
 
 ---
 
-### Compromise #20 — Cross-browser determinism CI cadence — CLOSED at Phase-3 G18-A wave-5a
+### Compromise #20 — Cross-browser determinism CI cadence — PARTIALLY CLOSED at Phase-3 G18-A wave-5a
 
-**Status:** CLOSED at Phase-3 G18-A wave-5a (this commit). **Closed via:** `.github/workflows/cross-browser-determinism.yml` Playwright matrix per D-PHASE-3-7 + br-r1-4 + br-r1-10.
+**Status:** **PARTIALLY CLOSED** at Phase-3 G18-A wave-5a (this commit); **FULL CLOSURE** deferred to G18-A-followup wave (per `docs/future/phase-3-backlog.md` §4.3) when the Playwright fixture bodies are authored. **Partially closed via:** `.github/workflows/cross-browser-determinism.yml` Playwright matrix workflow + matrix cell structure per D-PHASE-3-7 + br-r1-4 + br-r1-10.
 
-**What shipped at G18-A.** A Playwright matrix workflow runs the wasm32-unknown-unknown bundle under Chromium, Gecko (Firefox), and WebKit (Safari engine) on per-PR cadence. The matrix asserts:
+**What landed at G18-A (workflow + matrix cell structure).** A Playwright matrix workflow runs under Chromium, Gecko (Firefox), and WebKit (Safari engine) on per-PR cadence with the matrix-cell structure for the assertions documented below. Per HONEST DISCLOSURE: every matrix cell currently emits `::warning::...harness fixture not yet wired (G18-A-followup)` — the cells are STRUCTURAL anchors only at G18-A and do NOT execute the asserted determinism logic. A regression that broke canonical-bytes determinism in the wasm32 bundle would NOT be caught by this workflow at G18-A as currently structured. The Rust-side workflow-pin tests (`bindings/napi/tests/cross_browser_determinism_workflow_pins.rs`) verify the YAML contains the expected strings — the YAML strings themselves are no-ops at G18-A.
+
+**Matrix cells the structure pins (full-closure-eligible at G18-A-followup).**
 
 1. **Canonical-bytes determinism per the 7 distinct engine-determinism failure-surfaces** (br-r4-r1-5): Node envelope, handler-version-chain, AttributionFrame-with-device-DID, canonical-fixture corpus CID, BLAKE3 byte identity (SIMD/non-SIMD path), Ed25519 signature byte identity, and floating-point canonicalization under DSL eval (NaN bit-pattern + denormal + round-to-even per IEEE 754 edge cases).
 2. **CID-pin equivalence across the three browsers** via an explicit reduce step (br-r1-4 WHAT FAILS framing) — a divergence indicates a CRDT/DAG-CBOR encoding non-determinism that would silently corrupt cross-browser sync.
 3. **IndexedDB schema-migration round-trip + 1000-key no-data-loss sweep** (D-PHASE-3-27 / br-r1-2 LOAD-BEARING per pim-2 §3.6b): exercise the `on_upgrade_needed` handler under real Chromium / Gecko / WebKit IndexedDB.
 4. **`QuotaExceededError → E_STORAGE_QUOTA_EXCEEDED` typed-error mapping** (D-PHASE-3-27 / br-r1-2): write oversized data + assert the error surfaces as `BentenError(code=E_STORAGE_QUOTA_EXCEEDED)`.
 
+**What is DEFERRED to G18-A-followup (per `docs/future/phase-3-backlog.md` §4.3).** The Playwright fixture bodies that drive each matrix cell. Estimated ~200-400 LOC of test infrastructure — the cells go from `::warning::...harness fixture not yet wired` to real assertions that would FAIL on regression per pim-2 §3.6b end-to-end test pin requirement.
+
 **Cadence + flake-budget retry policy per br-r1-10.** Per-PR cadence (NOT release-era — Phase-2b's release-era posture is RETIRED at G18-A). Retry policy: 1 retry on browser-launch failure (`PLAYWRIGHT_BROWSER_LAUNCH_RETRIES=1`); budget = 3 launches per 24h via workflow-concurrency cap; promotion-to-required-per-PR after 30 days informational green via `branch-protection.yml` update.
 
-**Composition with #19.** Compromises #19 + #20 close together at G18-A — the Playwright matrix is the CI cell that proves the IndexedDB persistence is byte-deterministic across browsers, which is the load-bearing claim the persistence layer makes about content-addressed integrity. The matrix workflow's Rust-side anchors live at `bindings/napi/tests/cross_browser_determinism_workflow_pins.rs` (12 source-cite assertions covering per-browser cells + CID-equivalence reduce + flake-budget retry + the 7 br-r4-r1-5 engine-determinism surfaces).
+**Composition with #19.** Compromises #19 + #20 PARTIALLY close together at G18-A — the Playwright matrix is the CI cell that WILL prove the IndexedDB persistence is byte-deterministic across browsers once both halves' G18-A-followup work lands. The matrix workflow's Rust-side anchors live at `bindings/napi/tests/cross_browser_determinism_workflow_pins.rs` (12 source-cite assertions covering per-browser cells + CID-equivalence reduce + flake-budget retry + the 7 br-r4-r1-5 engine-determinism surfaces) — these pins assert the WORKFLOW STRUCTURE is in place; they do not assert the fixture bodies execute.
 
-**Cross-refs.** Compromise #19 (the durability-half companion); `.github/workflows/cross-browser-determinism.yml`; `bindings/napi/tests/cross_browser_determinism_workflow_pins.rs`; D-PHASE-3-7; br-r1-4 / br-r1-10 / br-r4-r1-5.
+**Cross-refs.** Compromise #19 (the durability-half companion); `.github/workflows/cross-browser-determinism.yml`; `bindings/napi/tests/cross_browser_determinism_workflow_pins.rs`; D-PHASE-3-7; br-r1-4 / br-r1-10 / br-r4-r1-5; `docs/future/phase-3-backlog.md` §4.3 (G18-A-followup wave named destination).
 
 ---
 

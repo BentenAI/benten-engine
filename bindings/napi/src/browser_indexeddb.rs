@@ -125,10 +125,14 @@
 //!
 //! ## Integration with `BrowserManifestStore::is_persistent`
 //!
-//! At G18-A, `BrowserManifestStore::is_persistent()` flips to `true`
-//! reflecting the IndexedDB durable backing this module provides. The
-//! flag flip is the load-bearing observable consequence of br-r1-8 MINOR
-//! closure: an honest persistence claim that callers can branch on.
+//! At G18-A, `BrowserManifestStore::is_persistent()` HONESTLY stays
+//! `false` per br-r1-8 MINOR honest-disclosure principle: the IndexedDB
+//! schema + handler scaffolding this module provides is the load-bearing
+//! architectural surface, but the wasm32 `web-sys` / `js-sys` /
+//! `wasm-bindgen-futures` plumbing that issues real `IDBDatabase.open` /
+//! `IDBObjectStore.put` calls is deferred to G18-A-followup wave (per
+//! `docs/future/phase-3-backlog.md` §4.3). The flag flips to `true` at
+//! that follow-up wave when the wasm32 IDB calls actually persist.
 
 #![allow(dead_code)]
 

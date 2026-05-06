@@ -1,5 +1,5 @@
-//! Phase-3 G18-A wave-5a — Compromise #19 + #20 closure pin (was the
-//! Phase-2b "in-memory only" guard; rescoped at G18-A).
+//! Phase-3 G18-A wave-5a — Compromise #19 + #20 PARTIAL closure pin
+//! (was the Phase-2b "in-memory only" guard; rescoped at G18-A).
 //!
 //! ## Why this file changed shape at G18-A
 //!
@@ -9,17 +9,22 @@
 //! Compromise #N+8 (browser-persistent-storage absent) by REFUSING
 //! persistence at the dep-graph level.
 //!
-//! At Phase-3 G18-A wave-5a (D-PHASE-3-27 + br-r1-2 BLOCKER closure +
-//! br-r1-8 MINOR closure), the IndexedDB-backed durable backing landed
-//! at `bindings/napi/src/browser_indexeddb.rs`. The flag flips to
-//! `true` (per CLAUDE.md baked-in #17 thin-client cache scope — the
-//! persistence is durable, but the SCOPE is thin-client cache +
-//! manifest-store ONLY, not full sync state). The dep-graph guard is
-//! retired; the architectural-discipline guard is a NEW source-cite
-//! assertion at
+//! At Phase-3 G18-A wave-5a, the IndexedDB schema-version + handler
+//! SCAFFOLDING landed at `bindings/napi/src/browser_indexeddb.rs`
+//! BUT the wasm32 `web-sys` / `js-sys` / `wasm-bindgen-futures`
+//! plumbing is deferred to G18-A-followup wave (per
+//! `docs/future/phase-3-backlog.md` §4.3). Per the honest-disclosure
+//! principle Compromise #19 originally articulated, the
+//! `is_persistent` flag stays `false` at G18-A — flipping it to
+//! `true` ahead of the wasm32 plumbing would lie about durability to
+//! operators branching on the flag.
+//!
+//! The dep-graph guard is retired; the architectural-discipline guard
+//! is a NEW source-cite assertion at
 //! `bindings/napi/tests/indexeddb_schema.rs::indexeddb_persistence_thin_client_cache_only_per_baked_in_17`
 //! which asserts the IndexedDB schema declares ONLY thin-client object
-//! stores (no Loro / iroh / sync-cursor surfaces).
+//! stores (no Loro / iroh / sync-cursor surfaces) — that pin lands at
+//! G18-A regardless of whether the wasm32 plumbing has wired yet.
 //!
 //! Per HARD RULE rule-12 (no-defer): renaming this file to mirror the
 //! new shape would be the cleaner spelling, but that would also retire
@@ -31,17 +36,21 @@
 
 use benten_napi::wasm_browser::BrowserManifestStore;
 
-/// G18-A flip: `BrowserManifestStore::is_persistent()` returns `true`
-/// at Phase-3 reflecting IndexedDB-backed durable backing per
-/// br-r1-8 MINOR closure.
+/// G18-A honest disclosure: `BrowserManifestStore::is_persistent()`
+/// returns `false` at Phase-3 G18-A wave-5a until G18-A-followup wires
+/// the wasm32 IDB plumbing per br-r1-8 MINOR honest-disclosure
+/// principle. The schema scaffolding landed; the wasm32 IDB calls did
+/// not.
 #[test]
-fn store_reports_persistent_at_g18_a() {
+fn store_reports_not_yet_persistent_at_g18_a() {
     let s = BrowserManifestStore::new();
     assert!(
-        s.is_persistent(),
-        "G18-A wave-5a: BrowserManifestStore::is_persistent flips to \
-         true reflecting IndexedDB-backed durable backing per \
-         CLAUDE.md baked-in #17 thin-client cache scope"
+        !s.is_persistent(),
+        "G18-A wave-5a: BrowserManifestStore::is_persistent stays \
+         false until G18-A-followup wires the wasm32 web-sys / \
+         js-sys / wasm-bindgen-futures plumbing per CLAUDE.md \
+         baked-in #17 thin-client cache scope + honest-disclosure \
+         principle"
     );
 }
 

@@ -216,6 +216,20 @@ fn indexeddb_persistence_thin_client_cache_only_per_baked_in_17() {
             // Match object-store name declaration:
             //   pub const OBJECT_STORE_X: &str = "loro_state";
             // The name appears inside a string literal RHS of `: &str =`.
+            //
+            // Heuristic-limitation note (g18a-mr-5 MINOR
+            // DISAGREE-WITH-EXPLANATION): this `&str = ` split misses
+            // alternate string-typed const decl shapes (e.g.
+            // `&'static str = "..."` or a `String` typed const) and
+            // multi-line declarations. Defense-in-depth is acceptable
+            // here because the source-cite has a companion
+            // architectural pin at the constant-declaration level in
+            // `bindings/napi/tests/wasm32_unknown_unknown_module_manifest_in_memory_only_no_indexeddb_persistence.rs::indexeddb_schema_declares_thin_client_object_stores_only`
+            // which asserts the OBJECT_STORE_* constants by VALUE
+            // (catching the `&'static str` case). A future tightening
+            // could regex this as `&'?[\\w_]*'?\\s*str\\s*=` shape;
+            // current heuristic is sufficient because the production
+            // declarations all use the bare `&str = ` shape.
             if let Some(rhs) = line.split_once("&str = ") {
                 return rhs.1.contains(full_sync_only_marker);
             }
