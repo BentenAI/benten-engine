@@ -176,4 +176,202 @@ pub enum UcanError {
     /// Token CBOR could not be decoded.
     #[error("UCAN token decode failed")]
     DecodeFailed,
+    /// Issuer keypair has been rotated; post-rotation UCANs reject
+    /// per `crypto-major-3`.
+    #[error("UCAN issuer keypair superseded by rotation: issuer={issuer}")]
+    IssuerKeypairSuperseded {
+        /// Superseded issuer DID.
+        issuer: String,
+    },
+    /// Issuer device has been revoked by its parent DID per
+    /// `crypto-major-6`.
+    #[error("UCAN issuer device revoked: issuer={issuer}")]
+    IssuerDeviceRevoked {
+        /// Revoked device DID.
+        issuer: String,
+    },
+    /// Device envelope does not authorize the capability the UCAN
+    /// grants (e.g. `host:sandbox:exec` from a device whose
+    /// envelope says `runs_sandbox=false`).
+    #[error("UCAN device envelope violated: issuer={issuer} cap={cap}")]
+    DeviceEnvelopeViolated {
+        /// Issuer DID.
+        issuer: String,
+        /// Offending capability.
+        cap: String,
+    },
+}
+
+/// Errors emitted by [`crate::vc`] Verifiable Credential paths.
+///
+/// Per `crypto-minor-1`, the VC verification path returns typed
+/// variants (NEVER a generic `dyn Error` / `String`) so callers can
+/// branch on the failure mode (expired / revoked / issuer-not-trusted
+/// / signature-invalid / parse-error).
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum VcError {
+    /// VC `expirationDate` rejected at validation time.
+    #[error("VC expired: exp={exp} <= now={now}")]
+    Expired {
+        /// Expiration epoch seconds.
+        exp: u64,
+        /// Validation time in epoch seconds.
+        now: u64,
+    },
+    /// VC `credentialStatus` URL has been revoked.
+    #[error("VC revoked: credentialStatus URL {status_id} listed in revocation registry")]
+    Revoked {
+        /// The revoked credentialStatus identifier.
+        status_id: String,
+    },
+    /// Issuer DID is not present in the trust-domain allow-list.
+    #[error("VC issuer not trusted: issuer {issuer} not in allow-list")]
+    IssuerNotTrusted {
+        /// The untrusted issuer DID.
+        issuer: String,
+    },
+    /// Signature verification failed (issuer mismatch / tampered claims).
+    #[error("VC signature verification failed")]
+    BadSignature,
+    /// VC could not be decoded from canonical bytes.
+    #[error("VC decode failed")]
+    DecodeFailed,
+    /// VC missing a load-bearing field (issuer / issuanceDate / etc.).
+    #[error("VC missing required field: {field}")]
+    MissingField {
+        /// Name of the missing field.
+        field: &'static str,
+    },
+    /// VC `nbf` (not-yet-valid) — issuanceDate in the future relative
+    /// to validation time. (W3C VC v1.1 does not formally define an
+    /// `nbf`; we treat `issuanceDate > now` as a rejection on principle.)
+    #[error("VC not yet valid: issuanceDate={issued_at} > now={now}")]
+    NotYetValid {
+        /// Issuance epoch seconds.
+        issued_at: u64,
+        /// Validation time in epoch seconds.
+        now: u64,
+    },
+}
+
+/// Errors emitted by [`crate::multi_sig::MultiSigSurface`] paths.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum MultiSigError {
+    /// Signature verification failed.
+    #[error("multi-sig signature verification failed")]
+    BadSignature,
+    /// Underlying signer / verifier rejected the input.
+    #[error("multi-sig surface rejected input: {0}")]
+    Rejected(&'static str),
+    /// Surface is shape-only / not yet implemented (post-Phase-3
+    /// v1-assessment-window per D-PHASE-3-24).
+    #[error("multi-sig surface unimplemented (post-Phase-3 v1-assessment-window per D-PHASE-3-24)")]
+    PostPhase3,
+}
+
+/// Errors emitted by [`crate::did_rotation`] paths.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum DidRotationError {
+    /// The OLD keypair did not sign the rotation attestation
+    /// (verifier rejection).
+    #[error("rotation attestation signature invalid")]
+    BadSignature,
+    /// Attestation references a DID that does not match the supplied
+    /// previous keypair's public key.
+    #[error("rotation attestation previous-DID mismatch: claimed={claimed} actual={actual}")]
+    PreviousDidMismatch {
+        /// The DID the attestation names as previous.
+        claimed: String,
+        /// The DID derived from the supplied OLD keypair.
+        actual: String,
+    },
+    /// Attestation could not be decoded from canonical bytes.
+    #[error("rotation attestation decode failed")]
+    DecodeFailed,
+}
+
+/// Errors emitted by [`crate::device_attestation`] paths.
+///
+/// Per `crypto-major-6` + `br-r4-r1-4` / `br-r4-r2-3` MAJOR + the
+/// device-DID-attestation-replay defect-class, every reject path on
+/// the attestation acceptor returns a distinct typed variant.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum DeviceAttestationError {
+    /// Attestation signature is invalid (parent key mismatch / tamper).
+    #[error("device attestation signature invalid")]
+    BadSignature,
+    /// Attestation older than the freshness window allows.
+    #[error(
+        "device attestation freshness expired: issued_at={issued_at} now={now} window={window}"
+    )]
+    FreshnessExpired {
+        /// Issuance epoch seconds.
+        issued_at: u64,
+        /// Validation time in epoch seconds.
+        now: u64,
+        /// Freshness window in seconds.
+        window: u64,
+    },
+    /// Same nonce already accepted within the freshness window
+    /// (replay defense via per-issuer nonce store).
+    #[error("device attestation nonce replay rejected")]
+    NonceReplay,
+    /// Device has been revoked by its parent DID.
+    #[error("device attestation rejected: device {device_did} has been revoked")]
+    DeviceRevoked {
+        /// The revoked device-DID.
+        device_did: String,
+    },
+    /// Browser-target context produced an attestation claiming
+    /// `runs_sandbox=true` (the wasmtime SANDBOX runtime is
+    /// unavailable on `wasm32-unknown-unknown` per Phase-2b
+    /// `E_SANDBOX_UNAVAILABLE_ON_WASM`). Closes the
+    /// `br-r4-r1-4` / `br-r4-r2-3` MAJOR trust-graph forgery surface.
+    /// Catalog code: `E_DEVICE_ATTESTATION_INCOMPATIBLE_WITH_RUNTIME`.
+    #[error(
+        "device attestation incompatible with runtime: {detail} (E_DEVICE_ATTESTATION_INCOMPATIBLE_WITH_RUNTIME)"
+    )]
+    IncompatibleWithRuntime {
+        /// Operator-readable detail string.
+        detail: &'static str,
+    },
+    /// Acceptor expected the parent DID to issue the attestation but
+    /// the issuer was a different DID (e.g., self-signed widening).
+    #[error(
+        "device attestation issuer is not parent: issuer={issuer} expected_parent={expected_parent}"
+    )]
+    IssuerNotParent {
+        /// Issuer DID.
+        issuer: String,
+        /// Expected parent DID.
+        expected_parent: String,
+    },
+    /// Device claimed wider authority than parent grants.
+    #[error("device attestation envelope widens parent authority: {detail}")]
+    EnvelopeWidening {
+        /// Operator-readable detail string.
+        detail: &'static str,
+    },
+    /// Decode failure on canonical bytes.
+    #[error("device attestation decode failed")]
+    DecodeFailed,
+}
+
+impl DeviceAttestationError {
+    /// Stable error code for catalog lookup. Matches the
+    /// `ERROR-CATALOG.md` entry for `IncompatibleWithRuntime`.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::BadSignature => "E_DEVICE_ATTESTATION_BAD_SIGNATURE",
+            Self::FreshnessExpired { .. } => "E_DEVICE_ATTESTATION_FRESHNESS_EXPIRED",
+            Self::NonceReplay => "E_DEVICE_ATTESTATION_NONCE_REPLAY",
+            Self::DeviceRevoked { .. } => "E_DEVICE_ATTESTATION_DEVICE_REVOKED",
+            Self::IncompatibleWithRuntime { .. } => {
+                "E_DEVICE_ATTESTATION_INCOMPATIBLE_WITH_RUNTIME"
+            }
+            Self::IssuerNotParent { .. } => "E_DEVICE_ATTESTATION_ISSUER_NOT_PARENT",
+            Self::EnvelopeWidening { .. } => "E_DEVICE_ATTESTATION_ENVELOPE_WIDENING",
+            Self::DecodeFailed => "E_DEVICE_ATTESTATION_DECODE_FAILED",
+        }
+    }
 }

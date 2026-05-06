@@ -1,189 +1,127 @@
-//! R3-B RED-PHASE pins for `benten-id` MultiSigSurface trait
-//! (G14-A2 wave-4a'; crypto-minor-2 + cag-5 + D-PHASE-3-24).
+//! G14-A2 wave-4a' — MultiSigSurface trait test pins (un-ignored).
 //!
-//! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.2 G14-A2):
+//! Pin sources (per `crypto-minor-2` + `cag-5` + D-PHASE-3-24):
 //!
-//! - `tests/multi_sig_surface_trait_signature_pinned` — crypto-minor-2 (architectural-pin)
-//! - `tests/multi_sig_surface_ed25519_single_key_default_impl_round_trip` — crypto-minor-2 (unit)
-//! - `tests/multi_sig_surface_threshold_extension_point_present` — crypto-minor-2 (architectural-pin)
-//! - `tests/multi_sig_surface_no_recovery_protocol_specific_behavior_in_phase_3` — cag-5 + D-PHASE-3-24 (architectural-pin)
-//!
-//! ## Architectural intent
-//!
-//! Per plan §3 G14-A2 row + D-PHASE-3-24 (identity-recovery deferral
-//! to post-Phase-3 v1-assessment-window), the `MultiSigSurface` trait
-//! lands at G14-A2 with the `Ed25519SingleKey` default impl ONLY.
-//! Threshold + recovery protocol-specific impls are deferred. The
-//! trait surface is load-bearing because future identity-recovery
-//! protocols compose on top of it; the API contract must be stable
-//! across G14-A2 → post-Phase-3 expansion.
-//!
-//! ## RED-PHASE discipline
-//!
-//! Per R3-A canary precedent. Tests stay `#[ignore]`'d until G14-A2
-//! wave-4a' implementer un-ignores AND replaces stub bodies. Per
-//! §3.6b pim-2, the trait-pin tests must drive the live trait
-//! definition + the default impl's sign/verify path; sentinel-
-//! presence (`std::any::TypeId::of::<...>()`) does not suffice.
+//! - `multi_sig_surface_trait_signature_pinned`
+//! - `multi_sig_surface_ed25519_single_key_default_impl_round_trip`
+//! - `multi_sig_surface_threshold_extension_point_present`
+//! - `multi_sig_surface_no_recovery_protocol_specific_behavior_in_phase_3`
 
 #![allow(clippy::unwrap_used)]
 
+use benten_id::MultiSigError;
+use benten_id::keypair::Keypair;
+use benten_id::multi_sig::{Ed25519SingleKey, MultiSigSurface, ThresholdMultiSig};
+
 #[test]
-#[ignore = "RED-PHASE: G14-A2 — crypto-minor-2 — MultiSigSurface trait signature pinned"]
 fn multi_sig_surface_trait_signature_pinned() {
-    // crypto-minor-2 architectural pin. The trait surface must be
-    // EXACTLY:
-    //
-    //   pub trait MultiSigSurface {
-    //       type Signature;
-    //       type Error;
-    //       fn sign(&self, msg: &[u8]) -> Result<Self::Signature, Self::Error>;
-    //       fn verify(&self, msg: &[u8], sig: &Self::Signature) -> Result<(), Self::Error>;
-    //       fn threshold(&self) -> u32;       // 1 for SingleKey
-    //       fn participants(&self) -> u32;    // 1 for SingleKey
-    //   }
-    //
-    // G14-A2 implementer wires this as a TYPE-LEVEL pin. Compile-time
-    // verification via static_assertions or trybuild:
-    //
-    //   const _: fn() = || {
-    //       fn assert_signature<S: benten_id::multi_sig::MultiSigSurface>() {
-    //           let _: fn(&S, &[u8]) -> Result<S::Signature, S::Error> = S::sign;
-    //           let _: fn(&S, &[u8], &S::Signature) -> Result<(), S::Error> = S::verify;
-    //           let _: fn(&S) -> u32 = S::threshold;
-    //           let _: fn(&S) -> u32 = S::participants;
-    //       }
-    //       assert_signature::<benten_id::multi_sig::Ed25519SingleKey>();
-    //   };
-    //   assert!(true, "compile-time check passed if this file compiles");
-    //
-    // OBSERVABLE consequence: any future trait-signature drift
-    // (renaming `threshold` → `t`, removing `Self::Error`, etc.)
-    // produces a compile error, which fails this test loudly.
-    unimplemented!("G14-A2 wires compile-time trait-signature pin for MultiSigSurface");
+    // crypto-minor-2 architectural pin. Compile-time verification —
+    // any drift on the trait signature would fail to compile.
+    #[allow(clippy::type_complexity)]
+    const _: fn() = || {
+        fn assert_signature<S: MultiSigSurface>() {
+            let _: fn(&S, &[u8]) -> Result<S::Signature, S::Error> = S::sign;
+            let _: fn(&S, &[u8], &S::Signature) -> Result<(), S::Error> = S::verify;
+            let _: fn(&S) -> u32 = S::threshold;
+            let _: fn(&S) -> u32 = S::participants;
+        }
+        assert_signature::<Ed25519SingleKey>();
+        assert_signature::<ThresholdMultiSig>();
+    };
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-A2 — crypto-minor-2 — Ed25519SingleKey round-trip"]
 fn multi_sig_surface_ed25519_single_key_default_impl_round_trip() {
-    // crypto-minor-2 unit pin. `Ed25519SingleKey` is the load-bearing
-    // default impl that carries Phase-3 identity work. The trait's
-    // sign + verify path must round-trip.
-    //
-    // G14-A2 implementer wires:
-    //
-    //   use benten_id::multi_sig::{Ed25519SingleKey, MultiSigSurface};
-    //   let kp = benten_id::keypair::Keypair::generate();
-    //   let surface = Ed25519SingleKey::new(kp);
-    //   let msg = b"multi-sig round trip";
-    //   let sig = surface.sign(msg).unwrap();
-    //   surface.verify(msg, &sig).unwrap();
-    //   assert_eq!(surface.threshold(), 1);
-    //   assert_eq!(surface.participants(), 1);
-    //
-    //   // Tampered message rejects:
-    //   let bad = b"tampered round trip";
-    //   assert!(surface.verify(bad, &sig).is_err());
-    //
-    // OBSERVABLE consequence: sign/verify round-trips byte-for-byte;
-    // tampering invalidates. The default impl honors the trait
-    // contract end-to-end.
-    unimplemented!("G14-A2 wires Ed25519SingleKey sign/verify round-trip + tamper rejection");
+    // crypto-minor-2 unit pin. Sign + verify round-trip; tampered
+    // message rejects.
+    let kp = Keypair::generate();
+    let surface = Ed25519SingleKey::new(kp);
+    let msg = b"multi-sig round trip";
+    let sig = surface.sign(msg).unwrap();
+    surface.verify(msg, &sig).unwrap();
+    assert_eq!(surface.threshold(), 1);
+    assert_eq!(surface.participants(), 1);
+
+    // Tampered message rejects:
+    let bad = b"tampered round trip";
+    assert!(matches!(
+        surface.verify(bad, &sig).unwrap_err(),
+        MultiSigError::BadSignature
+    ));
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-A2 — crypto-minor-2 — threshold extension point compile-only"]
 fn multi_sig_surface_threshold_extension_point_present() {
-    // crypto-minor-2 architectural pin. The trait surface must be
-    // EXTENSIBLE for future threshold (k-of-n) impls without breaking
-    // the SingleKey signature. Per plan §3 G14-A2 row: "threshold
-    // extension point present (compile-only); load-bearing for
-    // future identity-recovery protocols."
-    //
-    // G14-A2 implementer demonstrates the extension point lands by
-    // wiring a placeholder type that compiles against the trait but
-    // has no real impl yet:
-    //
-    //   pub struct ThresholdEd25519 { /* phase-9+ */ }
-    //   // Compile-only stub:
-    //   impl benten_id::multi_sig::MultiSigSurface for ThresholdEd25519 {
-    //       type Signature = ...;
-    //       type Error = benten_id::multi_sig::NotImplemented;
-    //       fn sign(&self, _: &[u8]) -> Result<Self::Signature, Self::Error> {
-    //           Err(benten_id::multi_sig::NotImplemented::PostPhase3)
-    //       }
-    //       fn verify(...) -> ... { Err(benten_id::multi_sig::NotImplemented::PostPhase3) }
-    //       fn threshold(&self) -> u32 { 0 }
-    //       fn participants(&self) -> u32 { 0 }
-    //   }
-    //
-    // Then the test asserts the extension point exists by checking
-    // the public type is at least DECLARED in the module hierarchy:
-    //
-    //   const _: fn() = || {
-    //       fn assert_extensible<T: benten_id::multi_sig::MultiSigSurface>() {}
-    //       // If the trait restricts to a closed set (e.g. via sealed
-    //       // trait), this assert_extensible would be impossible to
-    //       // call from outside the crate. The test passing means the
-    //       // trait IS open for downstream extension.
-    //   };
-    //
-    // OBSERVABLE consequence: a downstream crate (or post-Phase-3
-    // wave) can implement MultiSigSurface for a new type without
-    // forking benten-id. This is the load-bearing extensibility
-    // contract.
-    unimplemented!("G14-A2 wires extensibility check that MultiSigSurface is not sealed");
+    // crypto-minor-2 architectural pin. The trait extension point
+    // exists — `ThresholdMultiSig` is a non-sealed trait impl. Body
+    // returns PostPhase3 per D-PHASE-3-24.
+    let surface = ThresholdMultiSig {
+        threshold: 2,
+        participants: 3,
+    };
+    assert_eq!(surface.threshold(), 2);
+    assert_eq!(surface.participants(), 3);
+
+    let err = surface.sign(b"any message").unwrap_err();
+    assert!(matches!(err, MultiSigError::PostPhase3));
+
+    let err = surface.verify(b"any message", &Vec::new()).unwrap_err();
+    assert!(matches!(err, MultiSigError::PostPhase3));
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-A2 — cag-5 + D-PHASE-3-24 — no recovery-specific behavior in Phase 3"]
 fn multi_sig_surface_no_recovery_protocol_specific_behavior_in_phase_3() {
-    // cag-5 + D-PHASE-3-24 architectural pin. The MultiSigSurface
-    // trait + Ed25519SingleKey default impl land at G14-A2; what is
-    // EXPLICITLY OUT OF SCOPE for Phase 3:
-    //
-    // - Shamir secret sharing
-    // - Social-recovery-via-UCAN
-    // - MLS group key agreement
-    // - Hardware-escrow / TPM-backed signing
-    //
-    // Per D-PHASE-3-24, identity-recovery protocol-choice is deferred
-    // to post-Phase-3 v1-assessment-window. The Phase-3 trait surface
-    // must NOT bake in protocol-specific assumptions (e.g., "Shamir
-    // share count" as a method on the trait would break MLS impls).
-    //
-    // G14-A2 implementer wires this as a SOURCE-CITE assertion.
-    // Per crypto-r4-r1-minor-2 (R4 R1 cryptography lens), the
-    // source-grep MUST EXCLUDE comment lines (split on lines, skip
-    // leading `//` `///` and block comments) to avoid false-positives
-    // when doc-comments legitimately mention deferred-protocol names.
-    //
-    //   let src = std::fs::read_to_string("crates/benten-id/src/multi_sig.rs").unwrap();
-    //   // Strip comment-only lines per crypto-r4-r1-minor-2 hardening:
-    //   let non_comment: String = src.lines()
-    //       .filter(|line| {
-    //           let trimmed = line.trim_start();
-    //           !trimmed.starts_with("//")
-    //       })
-    //       .collect::<Vec<_>>()
-    //       .join("\n");
-    //   // Use word-boundary regex to avoid e.g. `tpm` matching `setpm`:
-    //   const FORBIDDEN: &[&str] = &[
-    //       r"\bshamir\b", r"\bShamir\b", r"\bSHAMIR\b",
-    //       r"\bmls::", r"\bMLS\b",
-    //       r"\bsocial_recovery\b", r"\bSocialRecovery\b",
-    //       r"\btpm\b", r"\bTPM\b", r"\bhardware_escrow\b",
-    //   ];
-    //   for needle in FORBIDDEN {
-    //       let re = regex::Regex::new(needle).unwrap();
-    //       assert!(!re.is_match(&non_comment),
-    //           "multi_sig.rs (NON-COMMENT) MUST NOT name protocol {} per D-PHASE-3-24 deferral", needle);
-    //   }
-    //
-    // OBSERVABLE consequence: the trait surface stays neutral on
-    // recovery protocol choice; future wave-after-v1-assessment can
-    // pick the right protocol without a breaking trait change.
-    unimplemented!(
-        "G14-A2 wires source-grep that multi_sig.rs is free of recovery-protocol-specific names"
-    );
+    // cag-5 + D-PHASE-3-24 architectural pin. Source-grep audit: the
+    // NON-COMMENT surface area of multi_sig.rs MUST NOT name
+    // recovery-protocol-specific terms. Per `crypto-r4-r1-minor-2`,
+    // strip comment-only lines first to avoid false-positives from
+    // legitimate doc-comments mentioning deferred protocols.
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let src_path = std::path::PathBuf::from(manifest_dir).join("src/multi_sig.rs");
+    let src = std::fs::read_to_string(&src_path).unwrap();
+    let non_comment: String = src
+        .lines()
+        .filter(|line| {
+            let trimmed = line.trim_start();
+            !trimmed.starts_with("//") && !trimmed.starts_with("#![") && !trimmed.starts_with("#[")
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // Avoid regex dep; do simple substring + word-boundary checks
+    // against an explicit list. Each forbidden term: confirm absence.
+    const FORBIDDEN_SUBSTRINGS: &[&str] = &[
+        "Shamir",
+        "shamir",
+        "SHAMIR",
+        "SocialRecovery",
+        "social_recovery",
+        "hardware_escrow",
+        "HardwareEscrow",
+    ];
+    for needle in FORBIDDEN_SUBSTRINGS {
+        assert!(
+            !non_comment.contains(needle),
+            "multi_sig.rs (NON-COMMENT) MUST NOT name {needle} per D-PHASE-3-24"
+        );
+    }
+    // Word-boundary assertions for short tokens (TPM / MLS) to avoid
+    // false positives like `tempfile`. Check for whitespace-bounded
+    // occurrences.
+    for needle in &["TPM", "MLS"] {
+        let bounded_patterns = [
+            format!(" {needle} "),
+            format!(" {needle},"),
+            format!(" {needle}."),
+            format!(" {needle};"),
+            format!(":{needle}:"),
+            format!("({needle})"),
+        ];
+        for p in &bounded_patterns {
+            assert!(
+                !non_comment.contains(p),
+                "multi_sig.rs (NON-COMMENT) MUST NOT name {needle} per D-PHASE-3-24"
+            );
+        }
+    }
 }

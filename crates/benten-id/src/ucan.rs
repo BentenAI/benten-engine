@@ -245,7 +245,9 @@ impl UcanBuilder {
 /// `crates/benten-id/tests/ucan.rs::ucan_chain_walk_constant_time_comparison_audit`
 /// pins this site as the only byte-equality entry point.
 // const-time-eq: load-bearing — DO NOT replace with naive `==` per crypto-major-4
-fn ct_signature_eq(a: &[u8], b: &[u8]) -> bool {
+// Made `pub(crate)` per g14-a2-mr-2 fix-pass so DID-rotation +
+// device-attestation security-decision sites use the same helper.
+pub(crate) fn ct_signature_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
     }
@@ -402,6 +404,90 @@ fn validate_chain_inner(
         }
     }
 
+    Ok(())
+}
+
+/// Validate a chain against a [`crate::did_rotation::RotationLog`].
+///
+/// Per `crates/benten-id/tests/did_rotation.rs::superseded_did_cannot_sign_new_ucan_delegations`,
+/// any UCAN whose issuer DID has been rotated rejects with
+/// [`UcanError::IssuerKeypairSuperseded`] — the chain-walker
+/// consults the rotation log so post-rotation UCANs from the OLD
+/// keypair are observably rejected even when their signature is
+/// structurally valid.
+pub fn validate_chain_with_rotation_log(
+    chain: &[Ucan],
+    log: &crate::did_rotation::RotationLog,
+) -> Result<(), UcanError> {
+    validate_chain_inner(chain, None, None)?;
+    for token in chain {
+        let did = Did::from_string_unchecked(token.claims.iss.clone());
+        if log.is_superseded(&did) {
+            return Err(UcanError::IssuerKeypairSuperseded {
+                issuer: token.claims.iss.clone(),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Validate a chain against a list of [`crate::device_attestation::DeviceRevocation`]s.
+///
+/// Per `crates/benten-id/tests/device_attestation.rs::device_attestation_revoked_device_cannot_sign_new_ucan_delegation`,
+/// any UCAN whose issuer DID has been revoked rejects with
+/// [`UcanError::IssuerDeviceRevoked`].
+pub fn validate_chain_with_device_revocations(
+    chain: &[Ucan],
+    revocations: &[crate::device_attestation::DeviceRevocation],
+) -> Result<(), UcanError> {
+    validate_chain_inner(chain, None, None)?;
+    for token in chain {
+        for r in revocations {
+            // ct-eq per crypto-major-4 UNIFORMITY (g14-a2-mr-2 fix-pass).
+            if ct_signature_eq(r.device_did.as_bytes(), token.claims.iss.as_bytes()) {
+                return Err(UcanError::IssuerDeviceRevoked {
+                    issuer: token.claims.iss.clone(),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Validate a chain against a list of
+/// [`crate::device_attestation::DeviceAttestation`]s. Per
+/// `crates/benten-id/tests/device_attestation.rs::device_attestation_consumed_at_ucan_delegation_chain_walk`,
+/// rejects with [`UcanError::DeviceEnvelopeViolated`] when a token's
+/// issuer has an attestation declaring it cannot exercise the
+/// claimed capability (e.g. `host:sandbox:exec` from a
+/// `runs_sandbox=false` device).
+///
+/// **G14-A2 scope (per g14-a2-mr-4 docstring sharpen):** currently
+/// enforces the `runs_sandbox` envelope dimension only. Broader
+/// envelope-dimension enforcement (`runs_atrium_peer`, `holds_zones`,
+/// `online_uptime`) lands at G14-B when atrium-peer + zone caps fully
+/// exist. Backlog: `docs/future/phase-3-backlog.md §2.1-followup` for
+/// the multi-dimension extension.
+pub fn validate_chain_with_attestations(
+    chain: &[Ucan],
+    attestations: &[crate::device_attestation::DeviceAttestation],
+) -> Result<(), UcanError> {
+    validate_chain_inner(chain, None, None)?;
+    for token in chain {
+        for att in attestations {
+            // ct-eq per crypto-major-4 UNIFORMITY (g14-a2-mr-2 fix-pass).
+            if ct_signature_eq(att.device_did.as_bytes(), token.claims.iss.as_bytes()) {
+                for cap in &token.claims.att {
+                    if cap.resource.starts_with("host:sandbox:") && !att.envelope.runs_sandbox {
+                        return Err(UcanError::DeviceEnvelopeViolated {
+                            issuer: token.claims.iss.clone(),
+                            cap: format!("{}:{}", cap.resource, cap.ability),
+                        });
+                    }
+                }
+            }
+        }
+    }
     Ok(())
 }
 
