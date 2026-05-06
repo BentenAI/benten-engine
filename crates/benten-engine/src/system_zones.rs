@@ -29,6 +29,10 @@ pub const SYSTEM_ZONE_PREFIXES: &[&str] = &[
     // seen the revocation can still recognize the manifest as
     // uninstalled.
     "system:ModuleManifestRevocation",
+    // Phase 3 R5 wave-3 G13-C BrowserBackend: critical-event browser cache
+    // surface. Used by browser_backend.rs put_node_with_context-bypass
+    // path for `system:Critical` events propagated to thin-client cache.
+    "system:Critical",
     // IVM view-id namespace prefix. Entries like `system:ivm:content_listing`
     // resolve into built-in views; the prefix is engine-privileged. Added at
     // G1-A per the workspace drift-scan surfacing it; see §9.10 addendum
