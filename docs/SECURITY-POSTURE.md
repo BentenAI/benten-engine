@@ -802,42 +802,79 @@ envelope; G5-B-i Decision 4; `.addl/phase-2b/00-scope-outline.md`
 
 ---
 
-### Compromise #11 — IVM views coarse-grained read-gate (sec-r1-5)
+### Compromise #11 — IVM views coarse-grained read-gate (sec-r1-5) — **CLOSED at G15-A** (Phase-3 R5 wave-5a)
 
 **Class.** Over-read through an IVM view under a per-view grant.
 
-**Shape.** Phase 2a G4-A Option C threading gates `Engine::read_view`
-at the per-view level: a caller who holds a `store:<view>:read`
-grant for view X can read ALL rows the view returns. The gate
-does not differentiate between rows in the view that come from
-source Nodes the caller could directly read vs. source Nodes the
-caller could not. A view over a mixed-sensitivity label set can
-therefore surface row data the caller lacks the underlying
-per-Node grant for.
+**Status.** **CLOSED at G15-A** (Phase-3 R5 wave-5a, 2026-05).
+Per-row read-gate at materialization time landed via
+[`crates/benten-engine/src/ivm_view_read_gate.rs::IvmViewReadGate`]
+which composes label-hint extraction with the
+[`crates/benten-engine/src/cap_recheck.rs::CapRecheckFn`] actor-cap-set
+check; the engine surfaces this through
+[`crates/benten-engine/src/engine_views.rs::Engine::materialize_view_with_gate`].
+The closure is end-to-end: G15-A's materialization-time gate composes
+with G14-D's delivery-time gate at SUBSCRIBE per `cap-r4-3` —
+deny-from-either-layer wins. The closure is pinned by:
 
-**Mitigation (Phase 2a).** Per-view grants are treated as an
-explicit operator opt-in — granting `store:<view>:read` is a
-conscious "this view is ok to read, whatever its underlying
-Nodes" decision. The view-ID registry (user-authored views land
-in Phase 2b under `P2.ivm.user-views`) makes it explicit that a
-view's scope is defined at registration; operators should not
-grant view-level read to actors they would not grant the union of
-the source-label reads to.
+- `crates/benten-engine/tests/ivm_read_gate.rs::ivm_view_per_row_read_gate_against_actor_cap_set`
+  (LOAD-BEARING #11 closure pin — 100-row 50/50 fixture yields
+  exactly 50 rows for an actor with public-only READ caps).
+- `crates/benten-engine/tests/ivm_read_gate.rs::ivm_view_read_gate_fires_at_materialization_separately_from_g14_d_delivery_gate`
+  (`ivm-major-2` — gate is independent of SUBSCRIBE delivery layer).
+- `crates/benten-engine/tests/ivm_read_gate.rs::materialize_view_with_gate_filters_rows_per_actor_cap_set_at_engine_entry_point_e2e`
+  (LOAD-BEARING pim-2 §3.6b end-to-end pin — drives the production
+  `Engine::materialize_view_with_gate` boundary with mixed-label
+  Nodes written through the engine's transaction surface; asserts
+  row-level filtering behavior that would FAIL if the gate were
+  silently bypassed or if `materialize_view_with_gate` returned an
+  empty list unconditionally).
 
-**Residual risk.** The coarse-grained gate is a DX tradeoff. A
-per-row gate — resolving each returned row's source Node through
-`check_read` — is Phase 3 scope (plan / sec-r1-5 deferral). The
-Phase-3 resolution aligns with the "Change-stream subscription
-bypasses capability read-checks" section: both surfaces tighten
-when `benten-id` lands a typed principal + federation-aware
-`check_read` extension.
+The G15-B drift-detector proptest harness at
+`crates/benten-ivm/tests/algorithm_b_drift_detector.rs` is reserved as
+a separate G15-B closure surface; it does not pin Compromise #11's
+G15-A closure (which stands on the materialization gate alone). When
+G15-B lands + un-ignores the proptest, this section grows a
+follow-on cite naming
+`prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern`.
 
-**Regression tests.** `crates/benten-engine/tests/integration/read_view_option_c.rs`
-pins per-view denial symmetry; per-row gate tests are Phase-3
-`#[ignore]`-reserved.
+**Shape (historical).** Phase 2a G4-A Option C threading gated
+`Engine::read_view` at the per-view level: a caller who held a
+`store:<view>:read` grant for view X could read ALL rows the view
+returned. The gate did not differentiate between rows in the view
+that come from source Nodes the caller could directly read vs.
+source Nodes the caller could not. A view over a mixed-sensitivity
+label set could therefore surface row data the caller lacked the
+underlying per-Node grant for.
+
+**Mitigation (historical Phase 2a).** Per-view grants were treated
+as an explicit operator opt-in — granting `store:<view>:read` was a
+conscious "this view is ok to read, whatever its underlying Nodes"
+decision. The view-ID registry (user-authored views landed in
+Phase 2b under `P2.ivm.user-views`) made it explicit that a view's
+scope was defined at registration; operators were instructed not
+to grant view-level read to actors they would not grant the union
+of the source-label reads to.
+
+**G15-A closure narrative.** Phase 3 G15-A retires the residual
+risk by wiring per-row READ gating at materialization time (this
+was the `Phase-3` deferred resolution path the original sec-r1-5
+review named). The materialization gate consults the actor's
+cap-set per row via [`benten_engine::cap_recheck::CapRecheckFn`]
+— the same shared scaffold G14-D consumes for delivery-time
+recheck per `ds-r4r2-7`. Because both layers compose:
+
+- **Materialization deny wins:** a row whose underlying Node the
+  actor cannot READ does NOT enter the materialised view, so the
+  delivery layer never sees it.
+- **Delivery deny wins:** a row that passed materialization is
+  still subject to G14-D's per-event recheck at SUBSCRIBE; a
+  partial-revoke mid-stream cancels delivery on rows the
+  materialization gate had already admitted.
 
 **Cross-refs.** Compromise #2 Option C; plan §G4-A; sec-r1-5
-pre-R1 review; dual-layer read-cap section above.
+pre-R1 review; dual-layer read-cap section above; G14-D F6
+SUBSCRIBE filtering at delivery boundary.
 
 **Phase-2b R6 Round-3 surfacing — `read_view_with` view-id-prefix
 heuristic (BOUNDED).** R6 Round 3's `r6-r3-ivm-2` finding observes that

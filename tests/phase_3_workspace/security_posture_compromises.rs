@@ -342,7 +342,6 @@ fn security_posture_compromise_10_engine_side_asymmetry_marked_closed() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G15-A wave-5a closes Compromise #11 (per-row read-gate at materialization composes G15-A + G14-D)"]
 fn security_posture_compromise_11_materialization_gate_landed_at_g15_a() {
     // R3-C ownership per r2-test-landscape §13 ambiguous-ownership
     // pre-emption + ivm-minor-7 (positive claim, not pending).
@@ -399,13 +398,71 @@ fn security_posture_compromise_11_materialization_gate_landed_at_g15_a() {
     // extended at G15-A landing with a SECURITY-POSTURE Compromise #11
     // mini-fixture covering both symbols (per r4-r2-ivm-5
     // recommendation #2).
-    unimplemented!(
-        "G15-A wires SECURITY-POSTURE.md grep assertion that Compromise #11 is marked CLOSED \
-         via G15-A + G14-D composition AND cites the proptest-symbol-of-record \
-         (prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern) AND \
-         the materialization-gate symbol-of-record (ivm_view_per_row_read_gate_against_actor_cap_set) \
-         per r4-r2-ivm-5 §3.5b HARDENED point-1 strengthening"
+    let posture = std::fs::read_to_string(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("docs")
+            .join("SECURITY-POSTURE.md"),
+    )
+    .unwrap();
+    let section = extract_compromise_section(&posture, 11);
+    assert!(
+        section.to_lowercase().contains("closed"),
+        "SECURITY-POSTURE.md Compromise #11 must be marked CLOSED at G15-A"
     );
+    assert!(
+        section.contains("G15-A") || section.contains("G14-D") || section.contains("Phase 3"),
+        "Compromise #11 closure narrative must cite G15-A (materialization-time gate) \
+         and/or G14-D (delivery-time gate)"
+    );
+    // g15a-mr-blocker-2 closure: the prior assertion required the
+    // proptest symbol `prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern`.
+    // That proptest is RED-PHASE (still `#[ignore]`'d with body
+    // `unimplemented!()` until G15-B lands the drift-detector). Citing
+    // it as a closure pin in SECURITY-POSTURE.md was a pim-1
+    // phantom-LIVE-cite. Compromise #11's G15-A closure stands on the
+    // materialization-time gate alone; the proptest is a separate
+    // G15-B closure surface that will be cited by THIS test once
+    // G15-B lands. Until then, the load-bearing GREEN-PHASE pins are
+    // (a) the 50/50 row test that exercises `IvmViewReadGate::filter_rows`
+    // and (b) the end-to-end e2e test that drives
+    // `Engine::materialize_view_with_gate` per pim-2 §3.6b.
+    assert!(
+        section.contains("ivm_view_per_row_read_gate_against_actor_cap_set"),
+        "SECURITY-POSTURE.md Compromise #11 closure narrative MUST cite the \
+         materialization-gate symbol-of-record \
+         `ivm_view_per_row_read_gate_against_actor_cap_set` \
+         per §3.5b HARDENED point-1 + r4-r2-ivm-5"
+    );
+    assert!(
+        section.contains(
+            "materialize_view_with_gate_filters_rows_per_actor_cap_set_at_engine_entry_point_e2e"
+        ),
+        "SECURITY-POSTURE.md Compromise #11 closure narrative MUST cite the \
+         end-to-end pim-2 §3.6b symbol-of-record \
+         `materialize_view_with_gate_filters_rows_per_actor_cap_set_at_engine_entry_point_e2e` \
+         (g15a-mr-blocker-3 closure pin — drives the production \
+         `Engine::materialize_view_with_gate` entry point with row-level \
+         observable filtering)"
+    );
+}
+
+/// Extract the section of `docs/SECURITY-POSTURE.md` for `Compromise #N`.
+/// Returns the substring from the section header up to the next
+/// `### Compromise #` (or end of file). Used by every compromise-closure
+/// pin in this file so each test reads the same posture-section shape.
+fn extract_compromise_section(posture: &str, n: u32) -> &str {
+    let header_needle = format!("### Compromise #{n}");
+    let Some(start) = posture.find(&header_needle) else {
+        return "";
+    };
+    let after_start = &posture[start..];
+    // Find the next `### Compromise #` header AFTER our start.
+    let next_header_offset = after_start[header_needle.len()..]
+        .find("### Compromise #")
+        .map_or(after_start.len(), |o| o + header_needle.len());
+    &after_start[..next_header_offset]
 }
 
 #[test]

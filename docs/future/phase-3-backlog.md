@@ -195,6 +195,38 @@
 
 **Touch size:** ~400-700 LOC across `crates/benten-ivm/src/` (Algorithm B kernel generalization) + ~200-400 LOC tests (proptest drift detector + per-view-pattern conformance). Risk surface: medium — the 5 canonical views' performance characteristics must be preserved at the fast-path level.
 
+#### 5.1-followup-a GenericKernel rebuild without event-replay seam (g15a-mr-major-3 carry)
+
+**G15-A state:** `crates/benten-ivm/src/algorithm_b.rs::GenericKernel::rebuild()` clears `entries` + resets the stale flag fresh (lines ~326-335). The docstring acknowledges the gap: `"Phase-3+ event-replay rebuild wires the snapshot store; until then `rebuild` clears + resets fresh so a previously stale-tripped view is observably re-armed."` Consequence: when a user view trips stale mid-stream (BudgetExceeded / external `mark_stale`), `rebuild()` produces an EMPTY view with no rebuild-from-source path. Subsequent `read()` returns `Ok(ViewResult::Cids(vec![]))` — observable as "view exists but is empty," indistinguishable from "view exists + has no matching rows." The 5 hand-written canonical kernels share the same gap by Phase-2b precedent, but they materialize fixed system-zone surfaces whose rebuild semantics are bounded; the generic kernel exposes the gap on user-defined views, which is exactly the surface where rebuild matters most.
+
+**Phase 3 target (lands at G15-B / G15-C with the event-replay surface):** wire `GenericKernel::rebuild()` to the snapshot-store / event-replay seam so a stale-tripped view re-materializes from the durable backend. Two coupling points:
+- The SnapshotBlobBackend hop named in §1.2 produces the rewind seam.
+- The drift-detector proptest harness (§5.1 (a)) is the verification surface for `rebuild() ≡ from-scratch` parity post-replay.
+
+**Why Phase 3:** The Phase-2b precedent (the 5 hand-written kernels' rebuild = clear + flip fresh) was acceptable when their rebuild scope was bounded by system-zone fixity; the generic-kernel surface lifts that bound. This is the named destination per HARD RULE rule-12 disposition (b) BELONGS-ELSEWHERE-SPECIFICALLY for `g15a-mr-major-3`.
+
+**Touch size:** ~50-100 LOC (rebuild seam) + ~100-150 LOC tests; bundles cleanly with §5.1 (a) (drift-detector exercises the rebuild equivalence).
+
+#### 5.1-followup-b Edge-traversal-keyed user views (g15a-mr-minor-6 carry)
+
+**G15-A state:** `crates/benten-ivm/src/algorithm_b.rs::GenericKernel::update`'s `ChangeKind::EdgeCreated | ChangeKind::EdgeDeleted` arm silently drops edge events (lines ~307-308). Comment: `"Edge events do not affect Node-keyed views."` Correct for the Phase-3 G15-A scope (`(view_id, label_pattern, projection)` triples are Node-label-keyed); future user views needing edge-traversal-keyed semantics (e.g. `"all posts authored by an actor"`, `"all messages in a thread"`) cannot be built on the generic kernel as it stands. Consistent with Phase-1 hand-written views (also Node-label-keyed), but worth a named destination so the constraint surfaces when downstream user views need it.
+
+**Phase 3 target:** introduce a sibling selector type (working name: `EdgeKeyedSelector`, materializing as a `LabelPattern` extension or a parallel `Selector::Edge { from_label, edge_label, to_label }` shape — design left to the wave's plan-pass) that consumes `ChangeKind::EdgeCreated` / `EdgeDeleted` events. Compose with §5.1's generic-kernel core so user views can declare a Node-keyed OR edge-traversal-keyed input pattern at registration. Bundles with §5.1 + §5.2 in the same Phase-3 IVM wave; the edge-keyed lift is a third axis alongside `LabelPattern::Exact` + `LabelPattern::AnchorPrefix`.
+
+**Why Phase 3:** the edge-traversal extension shares the same surface-completeness §5.1 needs — a registration shape rich enough to express edge-keyed selection requires the generalization itself to exist. Named destination per HARD RULE rule-12 disposition (b) for `g15a-mr-minor-6`.
+
+**Touch size:** ~150-300 LOC (selector type + GenericKernel edge-event arm) + ~100-200 LOC tests; bundles with §5.1.
+
+#### 5.1-followup-c Tighten canonical-id-vs-AnchorPrefix fail-loud guard (g15a-mr-minor-4 carry)
+
+**G15-A state:** `crates/benten-ivm/src/algorithm_b.rs::Algorithm::register`'s fail-loud guard rejects `(canonical_id, label_pattern)` registrations where `!label_pattern.matches(hardcoded)`. For `LabelPattern::AnchorPrefix("")` the prefix-matches-everything semantic means the guard does NOT fire — a `(capability_grants, AnchorPrefix(""))` registration succeeds + routes to the canonical inner kernel via `for_id`. The hand-written canonical kernel ignores the supplied pattern entirely + uses its hardcoded label, so data-correctness is preserved in practice; the docstring framing ("canonical id + mismatched label EXCLUDES the canonical hardcoded label") is stronger than the actual guard.
+
+**Phase 3 target:** tighten the guard to require `LabelPattern::Exact` for canonical ids (banning `AnchorPrefix` outright on canonical-id registration). Pairs naturally with §5.1's full kernel generalization wave since the test surface for `r6-r3-ivm-1` precedent extension is the same harness. Bundles with §5.1 / §5.2 in the Phase-3 IVM wave.
+
+**Why Phase 3:** the data-correctness implications are zero in practice today (the canonical kernel ignores the pattern), so this is a doc-vs-code-strength gap rather than a defect. Lifting it requires the same generalization §5.1 covers; standalone landing is more churn than benefit. Named destination per HARD RULE rule-12 disposition (b) for `g15a-mr-minor-4`.
+
+**Touch size:** ~10-20 LOC (guard tightening) + 1-2 regression tests; bundles with §5.1.
+
 ### 5.2 AnchorPrefix selector lift in user-view registration (post-G8-A)
 
 **Phase 2b state:** R6-R3 r6-r3-arch-4 named-destination carry. `Engine::register_user_view` accepts `InputPattern { anchor_prefix: Option<String>, ... }` as part of `UserViewSpec`, but the dispatch path at `crates/benten-engine/src/engine_views.rs::register_user_view` silently coerces `anchor_prefix` → label-equality match (the AnchorPrefix variant feeds the prefix string into the same `input_pattern_label` slot the `Label` variant uses). The pre-G8-A SEMANTIC STUB doc-block at the implementation site is honest about this; the stub bridges through `ContentListingView` until G8-A's per-strategy view dispatch lands. R6 Round 1 (r6-arch-4) flagged that no Phase-3 destination doc named the carry; this entry IS the named destination.

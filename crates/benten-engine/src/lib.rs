@@ -61,8 +61,13 @@ pub mod builder;
 // day one per `seq-minor-6` (extract first; no inline-then-refactor).
 // See `cap_recheck.rs` rustdoc for the design pins.
 pub mod cap_recheck;
+// Phase-3 G15-A wave-5a — materialization-time per-row READ gate for
+// IVM-materialized views. Closes Compromise #11 in coordination with
+// G14-D delivery-time gate per `ivm-major-2` + `ds-r4r2-7` shared-trait
+// callout (composes [`cap_recheck::CapRecheckFn`]).
 pub mod change;
 pub mod change_probe;
+pub mod ivm_view_read_gate;
 // Wave-8h audit-gap fix — EMIT-only broadcast channel so a handler with
 // a standalone EMIT primitive (no backing WRITE) produces an observable
 // event. Mirrors `change::ChangeBroadcast` but for emit-only events.
