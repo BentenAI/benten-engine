@@ -46,6 +46,14 @@
     reason = "Phase-1 scope: primitive-dispatch deliverables remain as typed todos until benten-eval's evaluator gains a PrimitiveHost trait (Phase 2)."
 )]
 
+// G13-C BLOCKER-2 fix-pass (browser-backend cfg-gating): the
+// `EngineBuilder` is redb-bound (carries `Option<RedbBackend>` field +
+// `assemble(backend: RedbBackend)` body). Gated to NOT-`browser-backend`
+// so the wasm32-unknown-unknown thin-client target compiles. The browser
+// bundle constructs `EngineGeneric<BrowserBackend>` directly via the
+// generic `from_parts*` constructors on the `impl<B: GraphBackend>
+// EngineGeneric<B>` block.
+#[cfg(not(feature = "browser-backend"))]
 pub mod builder;
 // Phase-3 G13-pre-C scaffold (wave-1pre) — shared per-event
 // read-cap-coverage helper. Both G14-D F6 SUBSCRIBE filtering (wave-5a)
@@ -60,6 +68,12 @@ pub mod change_probe;
 // event. Mirrors `change::ChangeBroadcast` but for emit-only events.
 pub mod emit_broadcast;
 pub mod engine;
+// G13-C BLOCKER-2 fix-pass: redb-coupled CRUD/caps/diagnostics modules
+// gated to NOT-`browser-backend`. They consume `RedbBackend` inherent
+// methods (`get_node`, `get_by_label`, `transaction(|tx| ...)`, etc.)
+// which the umbrella `GraphBackend` trait does not surface (deferred
+// to phase-3-backlog §1.2-followup).
+#[cfg(not(feature = "browser-backend"))]
 pub(crate) mod engine_caps;
 // Phase 2b G7-A — workspace-level `engine.toml` loader (Ben's brief
 // addition). Compile-time wasm32-disabled per the same sec-pre-r1-05
@@ -67,12 +81,26 @@ pub(crate) mod engine_caps;
 // built-in defaults.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod engine_config;
+#[cfg(not(feature = "browser-backend"))]
 pub(crate) mod engine_crud;
+#[cfg(not(feature = "browser-backend"))]
 pub(crate) mod engine_diagnostics;
+#[cfg(not(feature = "browser-backend"))]
 pub mod engine_transaction;
+// G13-C BLOCKER-2 fix-pass: engine_views uses `RedbBackend::put_node_with_context`
+// + `get_node` inherent paths in the privileged view-creation flow. Gated out
+// of the browser thin-client bundle (views are read-only projections of the
+// full peer's state in the wasm32 target).
+#[cfg(not(feature = "browser-backend"))]
 pub(crate) mod engine_views;
 pub mod error;
 pub mod outcome;
+// G13-C BLOCKER-2 fix-pass: primitive_host hosts the
+// `impl PrimitiveHost for Engine` boundary that drives evaluator-side
+// writes through the engine's redb-bound CRUD path. Browser thin clients
+// don't run handlers (stateless reads only per CLAUDE.md baked-in #17),
+// so this module is gated out of the wasm32 bundle.
+#[cfg(not(feature = "browser-backend"))]
 pub mod primitive_host;
 pub mod subgraph_spec;
 // R6 round-2 sec-r6r2-02: gate the test-helper surface (`principal_cid`,
@@ -98,10 +126,12 @@ pub use benten_eval::PrimitiveKind;
 #[cfg(not(target_arch = "wasm32"))]
 pub use engine_config::{EngineConfig, EngineConfigError, SandboxSection};
 
+#[cfg(not(feature = "browser-backend"))]
 pub use builder::{EngineBuilder, NOAUTH_STARTUP_LOG};
 pub use change_probe::ChangeProbe;
 pub use emit_broadcast::{EmitBroadcast, EmitEvent, EmitSubscription};
 pub use engine::{CHANGE_STREAM_MAX_BUFFERED, Engine, EngineGeneric};
+#[cfg(not(feature = "browser-backend"))]
 pub use engine_transaction::EngineTransaction;
 pub use error::EngineError;
 pub use outcome::{
@@ -114,6 +144,9 @@ pub use subgraph_spec::{
     RevokeSubject, SubgraphSpec, SubgraphSpecBuilder, WriteSpec,
 };
 
+// G13-C BLOCKER-2 fix-pass: engine_modules consumes `RedbBackend::transaction(|tx| ...)`
+// inherent on the closure-based execution path. Gated to NOT-`browser-backend`.
+#[cfg(not(feature = "browser-backend"))]
 pub mod engine_modules;
 pub mod engine_sandbox;
 // Phase-2b G10-A-wasip1 (D10-RESOLVED): snapshot-blob handoff API on
@@ -122,15 +155,35 @@ pub mod engine_sandbox;
 // don't yet ship the redb tempdir backend the snapshot-blob construct
 // path materializes into; revisited when G10-A-browser lands a
 // snapshot-blob-backed engine for wasm32-unknown-unknown.
-#[cfg(not(target_arch = "wasm32"))]
+// G13-C BLOCKER-2 fix-pass: engine_snapshot uses RedbBackend tempdir +
+// EngineBuilder. Gated to NOT-`browser-backend` (additive to the
+// pre-existing not-wasm32 gate from Phase-2b G10-A-wasip1).
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "browser-backend")))]
 pub mod engine_snapshot;
+// G13-C BLOCKER-2 fix-pass: engine_stream consumes `engine_wait::HandlerRef`
+// (handler-driven STREAM primitive). Browser thin clients receive STREAM
+// chunks over the thin-client subscription protocol from the full peer;
+// they don't initiate handler-driven streams locally.
+#[cfg(not(feature = "browser-backend"))]
 pub mod engine_stream;
 pub mod engine_subscribe;
+// G13-C BLOCKER-2 fix-pass: engine_wait dispatches calls through the
+// `impl Engine`-block `dispatch_call` (redb-coupled) and reads
+// `get_node_label_only` off the inherent RedbBackend path. Gated out of
+// the browser bundle (WAIT primitive runs on full peers per CLAUDE.md
+// baked-in #17).
+#[cfg(not(feature = "browser-backend"))]
 pub mod engine_wait;
 // Phase-2b G12-E — engine-side `RedbSuspensionStore` adapter wiring the
 // engine's existing `Arc<RedbBackend>` into `benten_eval::SuspensionStore`.
 // Closes the Phase-2a Compromise #10 cross-process WAIT-resume gap +
 // retires the test-grade `engine_wait::ENVELOPE_CACHE` surface.
+//
+// G13-C BLOCKER-2 fix-pass: gated to NOT-`browser-backend` since the
+// adapter holds `Arc<RedbBackend>` directly. Browser thin-client tabs
+// don't need durable WAIT/SUBSCRIBE persistence — those run on the full
+// peer per CLAUDE.md baked-in #17.
+#[cfg(not(feature = "browser-backend"))]
 pub mod suspension_store;
 // Phase 2b G10-B — module manifest format (D9-RESOLVED canonical
 // DAG-CBOR; D16-RESOLVED-FURTHER REQUIRED expected_cid arg on
@@ -141,9 +194,12 @@ pub mod system_zones;
 
 pub use benten_eval::chunk_sink::{Chunk, ChunkSink};
 pub use engine_sandbox::{SANDBOX_UNAVAILABLE_ON_WASM_TEXT, SandboxNodeDescription};
+#[cfg(not(feature = "browser-backend"))]
 pub use engine_stream::{StreamCursor, StreamHandle};
 pub use engine_subscribe::{OnChangeCallback, SubscribeCursor, Subscription};
+#[cfg(not(feature = "browser-backend"))]
 pub use engine_wait::{ResumePayload, SuspensionOutcome};
+#[cfg(not(feature = "browser-backend"))]
 pub use suspension_store::RedbSuspensionStore;
 // Phase-2b G12-E re-exports of the eval-layer trait + value types so
 // downstream consumers (napi bindings, integration tests) can name the

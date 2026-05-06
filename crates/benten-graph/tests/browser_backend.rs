@@ -281,8 +281,8 @@ fn browser_backend_put_node_with_context_thin_client_cache_semantic_pinned() {
     // failure shape "thin-client subscription delivered a system-zone
     // event without privilege and the cache silently mirrored it"):
     let mut sys_node = canonical_test_node();
-    sys_node.labels = vec!["system:critical".into()];
-    let ctx_sys = WriteContext::new("system:critical"); // non-privileged
+    sys_node.labels = vec!["system:Critical".into()];
+    let ctx_sys = WriteContext::new("system:Critical"); // non-privileged
     let err = backend
         .put_node_with_context(&sys_node, &ctx_sys)
         .unwrap_err();

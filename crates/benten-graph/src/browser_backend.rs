@@ -657,8 +657,8 @@ mod tests {
     fn put_node_with_context_system_zone_gate_preserved() {
         let backend = BrowserBackend::new();
         let mut sys_node = canonical_test_node();
-        sys_node.labels = vec!["system:critical".into()];
-        let ctx = WriteContext::new("system:critical"); // non-privileged
+        sys_node.labels = vec!["system:Critical".into()];
+        let ctx = WriteContext::new("system:Critical"); // non-privileged
         let err = backend
             .put_node_with_context(&sys_node, &ctx)
             .expect_err("non-privileged system-zone write rejected");
