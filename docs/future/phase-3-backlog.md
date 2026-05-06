@@ -690,11 +690,11 @@ R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift 
 - `crates/*/src/**/*.rs` (doc-comment cites)
 - `packages/engine/src/**/*.ts` (doc-comment cites)
 
-**Gaps observed at G17-B mr-7 verification:**
-- `tools/*/src/**/*.rs` — `tools/bench-wat-rebake/src/lib.rs:4` slipped
-- `crates/*/build.rs` (crate-root build scripts, not under `src/`) — `crates/benten-eval/build.rs:35` slipped
-- `crates/*/tests/**/*.rs` (integration-test files) — `crates/benten-eval/tests/{fixture_wasm_hashes_stable,d26_wasm_present}.rs` slipped (2 sites)
-- `.cargo/config.toml` (and `.toml` files generally) — `.cargo/config.toml:26` slipped
+**Gaps observed at G17-B mr-7 verification (paths illustrative, not line cites):**
+- `tools/*/src/**/*.rs` — e.g. `tools/bench-wat-rebake/src/lib.rs` (module-doc cite block) slipped
+- `crates/*/build.rs` (crate-root build scripts, not under `src/`) — e.g. `crates/benten-eval/build.rs` (header doc-comment) slipped
+- `crates/*/tests/**/*.rs` (integration-test files) — e.g. `crates/benten-eval/tests/fixture_wasm_hashes_stable.rs` and `d26_wasm_present.rs` (2 sites) slipped
+- `.cargo/config.toml` (and `.toml` files generally) — `.cargo/config.toml` (alias-comment block) slipped
 
 **Why this matters:** pim-1 §3.5b BULK-APPLICATION HARDENED is the standing defense against load-bearing-edit cite drift; the cite-drift-detector is the automated companion. Two dimensions of incompleteness (the human pre-flight + the detector envelope) interact: the G17-B PR demonstrably had cites in 7 sites only 2 of which the detector covers — the human pre-flight failure was the proximate cause but the detector's envelope being narrow widens the blast radius of any single human pre-flight miss.
 
@@ -703,7 +703,7 @@ R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift 
 **Touch size:** ~30-50 LOC (4 new walker call-sites + 1-2 unit tests asserting paths within those subtrees are scanned). Low risk — additive, no behavioral change for currently-tracked paths.
 
 **Cross-references:**
-- `.addl/phase-3/r5-w5b-g17-b-mini-review.json::findings[g17-b-mr-cite-drift-detector-coverage-7]`
+- G17-B mini-review (PR #116) finding `g17-b-mr-cite-drift-detector-coverage-7` BELONGS-ELSEWHERE-SPECIFICALLY disposition
 - `tools/cite-drift-detector/src/lib.rs::walk_doc_inputs` (the envelope-definition site)
 - `tools/cite-drift-detector/src/lib.rs::extract_line_cites` (per-file extraction; already extension-permissive)
 

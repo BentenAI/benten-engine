@@ -75,7 +75,14 @@ jobs:
           key: multi-arch-${{ matrix.leg }}
 
       - name: cargo check --workspace
-        run: cargo check --workspace --target ${{ matrix.target }} --all-targets
+        # `--features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing`
+        # mirrors the canonical feature-set used by the build+test
+        # workflow's `cargo nextest run` invocation. Without these
+        # features the integration tests under `crates/*/tests/` reference
+        # cfg-gated test helpers (e.g. `register_test_callee`) that are
+        # not compiled into the lib's "no testing feature" build, so
+        # `--all-targets` would otherwise fail E0425 on every leg.
+        run: cargo check --workspace --target ${{ matrix.target }} --all-targets --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing
 
   aarch64-sandbox-runtime:
     name: AArch64 SANDBOX runtime (macos-14 / Apple M1)
