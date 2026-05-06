@@ -75,6 +75,18 @@ pub enum HostFnBehavior {
         /// Per-primitive-call read budget (D1 default 1000).
         per_call_read_cap: u64,
     },
+    /// Phase-3 G17-A2 `random` host-fn — fills a guest buffer with
+    /// CSPRNG bytes from `getrandom` (the workspace CSPRNG decision per
+    /// D-PHASE-3-11 RESOLVED-at-R1; CLAUDE.md baked-in #16 closure).
+    /// Capability-gated by `host:random:read`. The per-call entropy
+    /// budget caps how many bytes a single host-fn invocation may draw
+    /// (default 4096 per r1-wsa-8); a module manifest may override the
+    /// default via the additive optional `host_fns.random.budget_bytes_per_call`
+    /// field.
+    Random {
+        /// Per-call entropy budget in bytes. Default 4096 (per r1-wsa-8).
+        budget_bytes_per_call: u64,
+    },
 }
 
 /// Declarative spec for a single host-fn entry.
@@ -128,7 +140,18 @@ pub struct HostFnSpec {
 /// to [`default_host_fns`] below. The drift detector test
 /// (`sandbox_host_fn_cap_recheck_codegen_drift_total`) re-parses the
 /// TOML at runtime and asserts byte-for-byte match.
-const HOST_FN_NAMES: &[&str] = &["time", "log", "kv:read"];
+///
+/// **Phase-3 G17-A2 (CLAUDE.md baked-in #16 closure):** `random` joins
+/// the codegen surface — workspace CSPRNG decision is `getrandom`
+/// direct per D-PHASE-3-11 RESOLVED-at-R1. The per-call entropy budget
+/// defaults to 4096 bytes/call; module manifests may override per
+/// `host_fns.random.budget_bytes_per_call` (additive optional).
+const HOST_FN_NAMES: &[&str] = &["time", "log", "kv:read", "random"];
+
+/// Phase-3 G17-A2 default per-call entropy budget for `random`
+/// (4096 bytes per r1-wsa-8). Public so module-manifest overrides can
+/// fall back to this when the manifest does not name an explicit value.
+pub const DEFAULT_RANDOM_BUDGET_BYTES_PER_CALL: u64 = 4096;
 
 /// Names exposed for drift / coverage tests.
 #[must_use]
@@ -136,13 +159,15 @@ pub fn host_fn_names() -> &'static [&'static str] {
     HOST_FN_NAMES
 }
 
-/// Build the codegen-default host-fn table. D1-RESOLVED initial surface:
+/// Build the codegen-default host-fn table. Phase-3 G17-A2 surface:
 /// `time` (per_boundary, monotonic-100ms) + `log` (per_boundary, 64KiB
-/// per-call cap) + `kv:read` (per_call, 1000 reads/call).
+/// per-call cap) + `kv:read` (per_call, 1000 reads/call) + `random`
+/// (per_call, 4096-byte entropy budget per call).
 ///
-/// `random` is intentionally absent — D1 + sec-pre-r1-06 §2.3 defers it
-/// to Phase 3 until the workspace-wide CSPRNG decision lands. See
-/// `docs/future/phase-3-backlog.md §6.10` for the destination entry.
+/// **CLAUDE.md baked-in #16 closure (G17-A2 wave-5b):** `random` is now
+/// LIVE — the Phase-2b deferral guard at
+/// `crates/benten-eval/src/primitives/sandbox.rs::execute` is dropped
+/// (D-PHASE-3-11 RESOLVED-at-R1, workspace CSPRNG = `getrandom` direct).
 ///
 /// **perf-g7a-mr-2 fix-pass:** the table is built ONCE per process via
 /// [`std::sync::OnceLock`] and returned as a shared `Arc`. Per-call
@@ -213,6 +238,28 @@ fn build_default_host_fns() -> Arc<BTreeMap<String, HostFnSpec>> {
             bypass_output_budget: false,
             requires_async: false,
             description: Some("Reads a value by CID from the engine KV backend.".to_string()),
+        },
+        // Phase-3 G17-A2 — `random` host-fn (CLAUDE.md baked-in #16
+        // closure). Cap-string `host:random:read` (4-segment shape;
+        // matches the kv:read precedent). PerCall recheck cadence —
+        // entropy is sensitive (mirroring kv:read's TOCTOU posture per
+        // sec-pre-r1-06). Default per-call budget = 4096 bytes per
+        // r1-wsa-8.
+        HostFnSpec {
+            name: "random".to_string(),
+            requires: "host:random:read".to_string(),
+            cap_recheck: CapRecheckPolicy::PerCall,
+            behavior: HostFnBehavior::Random {
+                budget_bytes_per_call: DEFAULT_RANDOM_BUDGET_BYTES_PER_CALL,
+            },
+            bypass_output_budget: false,
+            requires_async: false,
+            description: Some(
+                "Fills a guest buffer with CSPRNG bytes from getrandom (workspace decision \
+                 per D-PHASE-3-11). Per-call entropy budget defaults to 4096 bytes; module \
+                 manifests may override via host_fns.random.budget_bytes_per_call."
+                    .to_string(),
+            ),
         },
     ];
 
@@ -382,17 +429,43 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_host_fns_match_d1_resolved_surface() {
+    fn default_host_fns_match_phase_3_g17_a2_surface() {
+        // Phase-3 G17-A2 (CLAUDE.md baked-in #16 closure): random joins
+        // the codegen-default surface. The Phase-2b D1 deferral is
+        // RETIRED — random is now LIVE alongside time + log + kv:read.
         let table = default_host_fns();
-        assert_eq!(table.len(), 3, "D1 surface = time + log + kv:read");
+        assert_eq!(
+            table.len(),
+            4,
+            "Phase-3 G17-A2 surface = time + log + kv:read + random"
+        );
         assert!(table.contains_key("time"));
         assert!(table.contains_key("log"));
         assert!(table.contains_key("kv:read"));
         assert!(
-            !table.contains_key("random"),
-            "D1 + sec-pre-r1-06 §2.3 — random deferred to Phase 3 \
-             (see docs/future/phase-3-backlog.md §6.10)"
+            table.contains_key("random"),
+            "G17-A2 (D-PHASE-3-11 RESOLVED) — random LIVE with getrandom-direct CSPRNG"
         );
+    }
+
+    #[test]
+    fn random_default_budget_matches_r1_wsa_8() {
+        let table = default_host_fns();
+        let spec = table.get("random").expect("random landed at G17-A2");
+        match &spec.behavior {
+            HostFnBehavior::Random {
+                budget_bytes_per_call,
+            } => {
+                assert_eq!(
+                    *budget_bytes_per_call, DEFAULT_RANDOM_BUDGET_BYTES_PER_CALL,
+                    "r1-wsa-8 — default per-call budget is 4096 bytes"
+                );
+                assert_eq!(*budget_bytes_per_call, 4096);
+            }
+            other => panic!("expected HostFnBehavior::Random, got {other:?}"),
+        }
+        assert_eq!(spec.requires, "host:random:read");
+        assert_eq!(spec.cap_recheck, CapRecheckPolicy::PerCall);
     }
 
     #[test]
@@ -419,6 +492,13 @@ mod tests {
             table["kv:read"].cap_recheck,
             CapRecheckPolicy::PerCall,
             "D1 — kv:read is sensitive → per_call"
+        );
+        // Phase-3 G17-A2 — random joins the per_call cohort (entropy is
+        // sensitive in the same TOCTOU sense as kv:read).
+        assert_eq!(
+            table["random"].cap_recheck,
+            CapRecheckPolicy::PerCall,
+            "G17-A2 — random is sensitive → per_call"
         );
     }
 

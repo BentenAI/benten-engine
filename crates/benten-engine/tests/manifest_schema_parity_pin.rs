@@ -31,6 +31,7 @@ fn manifest_parity_fixture_cid_matches_ts_pin() {
             },
         ],
         migrations: vec![],
+        host_fns: None,
         signature: None,
     };
 
@@ -80,6 +81,7 @@ fn manifest_parity_fixture_with_migrations_cid_matches_ts_pin() {
                 description: None,
             },
         ],
+        host_fns: None,
         signature: None,
     };
 

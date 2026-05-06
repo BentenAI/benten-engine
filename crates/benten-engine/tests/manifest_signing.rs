@@ -41,6 +41,7 @@ fn fixture_manifest(name: &str) -> ModuleManifest {
             requires: vec!["host:compute:time".into()],
         }],
         migrations: vec![],
+        host_fns: None,
         signature: None,
     }
 }

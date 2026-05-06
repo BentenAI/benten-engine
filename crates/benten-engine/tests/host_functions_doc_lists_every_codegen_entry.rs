@@ -64,15 +64,21 @@ fn host_functions_doc_lists_every_codegen_entry() {
         );
     }
 
-    // The deferred `random` host-fn MUST be called out explicitly so
-    // operators reading the doc see why the typed
-    // `E_SANDBOX_HOST_FN_NOT_FOUND` fires when a module attempts the
-    // call.
+    // Post-Phase-3-G17-A2 wave-5b: `random` is no longer deferred —
+    // CSPRNG via `getrandom` direct + capability-gated entropy budget
+    // landed in the codegen-default surface alongside `time`/`log`/
+    // `kv:read` (cap-string `host:random:read`). Doc MUST document the
+    // available host-fn including the per-call entropy-budget shape
+    // (4096-byte default + per-manifest override at
+    // `host_fns.random.budget_bytes_per_call` per r1-wsa-8) so
+    // operators reading the doc see the live contract rather than the
+    // retired deferral.
     assert!(
-        body.contains("random") && body.contains("§6.10"),
-        "docs/HOST-FUNCTIONS.md MUST call out that `random` is deferred \
-         to Phase 3 (D1 + sec-pre-r1-06 §2.3 reasoning) with a cite to \
-         docs/future/phase-3-backlog.md §6.10 (workspace CSPRNG \
-         framework choice)."
+        body.contains("random") && body.contains("budget_bytes_per_call"),
+        "docs/HOST-FUNCTIONS.md MUST document the available `random` \
+         host-fn including the per-call entropy-budget contract \
+         (`host_fns.random.budget_bytes_per_call` per r1-wsa-8). The \
+         pre-G17-A2 'deferred' framing is retired; Compromise #16 \
+         CLOSED at Phase-3 G17-A2 wave-5b per docs/SECURITY-POSTURE.md."
     );
 }
