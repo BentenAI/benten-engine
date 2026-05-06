@@ -26,7 +26,7 @@ written, referenceable form.
 | 13 | System-zone reserved-prefix rejection surface | 2a | Open (documented; minor-3) |
 | 14 | SANDBOX cold-start cost (no opt-in pool) | 2b | Open (D3 RESOLVED — additive Phase-3 change if real-workload bottleneck) |
 | 15 | `register_runtime` reserved with deferred error | 2b | Deferred to Phase 8 (marketplace) |
-| 16 | `random` host-fn deferred (no CSPRNG framework chosen) | 2b | Deferred to Phase 3 (see `docs/future/phase-3-backlog.md §6.10`) |
+| 16 | `random` host-fn deferred (no CSPRNG framework chosen) | 2b | **CLOSED** at Phase-3 G17-A2 wave-5b (CSPRNG via `getrandom` direct + capability-gated entropy budget per call: 4096 bytes default + per-manifest override at `host_fns.random.budget_bytes_per_call` per r1-wsa-8; constant-time cap-policy check per sec-r1-3) |
 | 17 | In-memory module-bytes registry (`Engine::register_module_bytes`) | 2b | **CLOSED** at Phase-3 G14-C wave-4b (durable `RedbBlobBackend` + CID-validating entry point) |
 | 18 | In-memory handler-version chain (`Engine::register_subgraph_replace`) | 2b | **CLOSED** at Phase-3 G14-C wave-4b (durable `system:HandlerVersion` zone + extensible canonical-bytes encoding per arch-r1-4 / D-C) |
 | 19 | Browser-target persistent storage absent — manifests in-memory only on `wasm32-unknown-unknown` | 2b | Open (Phase 3 — IndexedDB / OPFS persistence) |
