@@ -148,7 +148,9 @@ fn sandbox_execute_via_engine_dispatch_invokes_executor() {
     );
 
     // ------ HALF 2: register bytes, call succeeds ---------------------
-    engine.register_module_bytes(module_cid, module_bytes);
+    engine
+        .register_module_bytes(&module_cid, &module_bytes)
+        .unwrap();
 
     let outcome = engine
         .call(

@@ -102,6 +102,15 @@ benten-core = { path = "../benten-core" }
 benten-errors = { workspace = true }
 benten-eval = { path = "../benten-eval", features = ["diag"] }
 benten-graph = { path = "../benten-graph" }
+# G14-C wave-4b — manifest-signing wire-through (Compromise #21).
+# `benten-id` provides Ed25519 keypair + UCAN chain validation. The
+# install_module path consults UCAN-proof-chain primary +
+# publisher-key-registry fallback per D-PHASE-3-20 + crypto-minor-5.
+# Constant-time signature comparison + audience-binding flow through
+# benten-id's existing `validate_chain_for_audience` surface (CLR-2
+# / cap-major-2). Plain dep — no cfg gating; native + wasip1 + the
+# native side of the napi cdylib all consume the surface.
+benten-id = { path = "../benten-id" }
 benten-ivm = { path = "../benten-ivm" }
 blake3 = { workspace = true }
 thiserror = { workspace = true }

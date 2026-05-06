@@ -84,7 +84,9 @@ fn sandbox_named_manifest_resolves_via_install_module() {
     let module_bytes = trivial_run_module_bytes();
     let module_cid = cid_for_bytes(&module_bytes);
     let module_cid_str = module_cid.to_base32();
-    engine.register_module_bytes(module_cid, module_bytes);
+    engine
+        .register_module_bytes(&module_cid, &module_bytes)
+        .unwrap();
 
     // Build a manifest whose single ModuleManifestEntry is named
     // "wave8h-named-handler" with a `requires: ["host:compute:time"]`
@@ -155,7 +157,9 @@ fn sandbox_named_manifest_truly_unknown_still_errors() {
     let module_bytes = trivial_run_module_bytes();
     let module_cid = cid_for_bytes(&module_bytes);
     let module_cid_str = module_cid.to_base32();
-    engine.register_module_bytes(module_cid, module_bytes);
+    engine
+        .register_module_bytes(&module_cid, &module_bytes)
+        .unwrap();
 
     // No install_module call — the registry overlay is empty.
     let spec = sandbox_spec_with_named_manifest(

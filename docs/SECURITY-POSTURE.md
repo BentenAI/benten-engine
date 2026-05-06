@@ -27,11 +27,11 @@ written, referenceable form.
 | 14 | SANDBOX cold-start cost (no opt-in pool) | 2b | Open (D3 RESOLVED — additive Phase-3 change if real-workload bottleneck) |
 | 15 | `register_runtime` reserved with deferred error | 2b | Deferred to Phase 8 (marketplace) |
 | 16 | `random` host-fn deferred (no CSPRNG framework chosen) | 2b | Deferred to Phase 3 (see `docs/future/phase-3-backlog.md §6.10`) |
-| 17 | In-memory module-bytes registry (`Engine::register_module_bytes`) | 2b | Open (Phase 3 — durable BlobBackend) |
-| 18 | In-memory handler-version chain (`Engine::register_subgraph_replace`) | 2b | Open (Phase 3 — durable Anchor + Version-Node chain) |
+| 17 | In-memory module-bytes registry (`Engine::register_module_bytes`) | 2b | **CLOSED** at Phase-3 G14-C wave-4b (durable `RedbBlobBackend` + CID-validating entry point) |
+| 18 | In-memory handler-version chain (`Engine::register_subgraph_replace`) | 2b | **CLOSED** at Phase-3 G14-C wave-4b (durable `system:HandlerVersion` zone + extensible canonical-bytes encoding per arch-r1-4 / D-C) |
 | 19 | Browser-target persistent storage absent — manifests in-memory only on `wasm32-unknown-unknown` | 2b | Open (Phase 3 — IndexedDB / OPFS persistence) |
 | 20 | Cross-browser determinism CI cadence not yet established | 2b | Open (Phase 3 — wasm32 cross-browser CI matrix) |
-| 21 | Module manifest minimal CID-pin in Phase 2b; full Ed25519 deferred | 2b | Open (Phase 3 — D16 manifest signing) |
+| 21 | Module manifest minimal CID-pin in Phase 2b; full Ed25519 deferred | 2b | **CLOSED** at Phase-3 G14-C wave-4b (Ed25519 sign + UCAN-proof-chain primary + publisher-key-registry fallback per D-PHASE-3-20 + crypto-minor-5) |
 | 22 | Peer-DID + connection metadata leakage to public iroh relays | 3 | Introduced at Phase 3 (Phase 7 Garden-relay closure target) |
 
 **Phase-2b net delta:** Compromises #4 + #9 + #10 closed (3 net
@@ -1112,17 +1112,29 @@ regression guard; sec-pre-r1-06 §2.3 reasoning.
 
 ---
 
-### Compromise #17 — In-memory module-bytes registry — Phase-2b additive
+### Compromise #17 — In-memory module-bytes registry — CLOSED at Phase-3 G14-C wave-4b
 
-**Class.** Persistence gap (intentional); deferred to Phase 3 alongside
-the durable `BlobBackend`.
+**Class.** Persistence gap — CLOSED at Phase-3 G14-C wave-4b.
 
-**Shape.** `Engine::register_module_bytes(cid, bytes)` — the API
+**Closure shape.** `Engine::register_module_bytes(&cid, &bytes)` now
+recomputes `BLAKE3(bytes)` against the caller-supplied CID at the
+entry point (D-PHASE-3-12 RESOLVED: typed
+`E_MODULE_BYTES_CID_MISMATCH` rejection on mismatch), persists the
+bytes via the durable
+`crates/benten-graph/src/backends/blob_backend.rs::RedbBlobBackend`
+(`system:ModuleBytes` zone Nodes), and mirrors them into the
+in-memory hot-path cache. On `Engine::open`,
+`Engine::rehydrate_module_bytes_from_zone` (called from
+`EngineBuilder::assemble`) walks the zone and rebuilds the in-memory
+cache so SANDBOX dispatch resolves without an operator re-call.
+
+**Shape (historical pre-G14-C narrative; preserved for audit).**
+`Engine::register_module_bytes(cid, bytes)` — the API
 that registers compiled WebAssembly module bytes for SANDBOX
-dispatch — stores into a process-local `BTreeMap<Cid, Vec<u8>>`
+dispatch — used to store into a process-local `BTreeMap<Cid, Vec<u8>>`
 guarded by a `Mutex` (the `module_bytes` field on `crates/benten-engine/src/engine.rs::Engine`). The
-bytes are NOT persisted to the engine's redb backend; on `Engine::open`
-the registry starts empty regardless of what was registered against
+bytes were NOT persisted to the engine's redb backend; on `Engine::open`
+the registry started empty regardless of what was registered against
 the prior process.
 
 **Workflow asymmetry with `Engine::install_module`.** This is the
@@ -1172,36 +1184,56 @@ durable `BlobBackend` may add content-addressing-based validation at
 register time (recompute BLAKE3 over the bytes; reject mismatch
 upfront).
 
-**Phase 3 promotion path.** Replace the in-memory `BTreeMap` with a
-`BlobBackend` trait whose default impl writes to redb's blob-store and
-exposes a `Phase-3 iroh-fetch` arm for cross-peer module hydration.
-`register_module_bytes` becomes a thin wrapper that computes the CID,
-asserts content-integrity (recomputed CID matches caller's), and
-delegates to `BlobBackend::put_blob`. `Engine::open` rehydrates the
-in-memory active set from the BlobBackend's stored CIDs.
+**Phase-3 G14-C closure** (LANDED). The Phase-3 promotion path the
+Phase-2b plan described is the closure that landed: the in-memory
+`BTreeMap` is mirrored against a `BlobBackend` impl
+(`RedbBlobBackend`) that writes blobs as `system:ModuleBytes` zone
+Nodes; `register_module_bytes` recomputes the CID + asserts
+content-integrity + delegates to `BlobBackend::put`; `Engine::open`
+rehydrates the in-memory active set via
+`Engine::rehydrate_module_bytes_from_zone`. The trait surface is
+defined at `crates/benten-graph/src/backends/blob_backend_trait.rs`;
+the redb-native impl at `crates/benten-graph/src/backends/blob_backend.rs`;
+the IndexedDB-browser impl deferred to G18-A wave-5a per
+CLAUDE.md baked-in #17 (thin-client commitment).
 
 **Cross-refs.** `crates/benten-engine/src/engine.rs::register_module_bytes`
 docstring; `crates/benten-engine/src/engine_modules.rs::install_module`
-docstring (asymmetry note); Compromise #4 closure narrative
-(execute-time validation discipline); `docs/ERROR-CATALOG.md`
-`E_SANDBOX_MODULE_NOT_INSTALLED` row; `docs/MODULE-MANIFEST.md` install
-lifecycle.
+docstring; Compromise #4 closure narrative (execute-time validation
+discipline); `docs/ERROR-CATALOG.md` `E_SANDBOX_MODULE_NOT_INSTALLED`
+row; `docs/MODULE-MANIFEST.md` install lifecycle;
+`crates/benten-engine/tests/module_bytes_cid.rs` (G14-C end-to-end
+pin per §3.6b pim-2).
 
 ---
 
-### Compromise #18 — In-memory handler-version chain — Phase-2b additive
+### Compromise #18 — In-memory handler-version chain — CLOSED at Phase-3 G14-C wave-4b
 
-**Class.** Persistence gap (intentional); sibling to Compromise #17
-with the same Phase-3 promotion path.
+**Class.** Persistence gap — CLOSED at Phase-3 G14-C wave-4b
+(sibling to Compromise #17; both closed in the same fix-pass).
 
-**Shape.** `Engine::register_subgraph_replace(spec)` — the wave-8f
-hot-replace API — maintains an in-memory `BTreeMap<HandlerId, Vec<Cid>>`
-of version-chain heads (newest-first). Each successful replace prepends
+**Closure shape.** Each `register_subgraph` /
+`register_subgraph_replace` invocation persists a
+`system:HandlerVersion` zone Node carrying `(handler_id, version_cid,
+predecessor_cid?, seq)` per
+`crates/benten-engine/src/handler_versions.rs`. The encoding is
+additively extensible per arch-r1-4 / D-C — Phase-3 G16-B's
+Loro-merge attribution variant slot lands without breaking existing
+chain CIDs. On `Engine::open`,
+`Engine::rehydrate_handler_version_chains_from_zone` (called from
+`EngineBuilder::assemble`) walks the zone, groups by `handler_id`,
+sorts by `seq`, and rebuilds the in-memory newest-first `Vec<Cid>`
+chain. The full audit history survives engine restart.
+
+**Shape (historical pre-G14-C narrative; preserved for audit).**
+`Engine::register_subgraph_replace(spec)` — the wave-8f
+hot-replace API — maintained an in-memory `BTreeMap<HandlerId, Vec<Cid>>`
+of version-chain heads (newest-first). Each successful replace prepended
 the new handler-CID onto the chain; `Engine::handler_version_chain(id)`
-exposes the chain for devserver + audit consumers. The chain is
-process-local and is NOT written to the redb backend; on `Engine::open`
-the chain starts empty regardless of how many replace calls happened in
-the prior process.
+exposed the chain for devserver + audit consumers. The chain was
+process-local and was NOT written to the redb backend; on `Engine::open`
+the chain started empty regardless of how many replace calls happened
+in the prior process.
 
 **Why a separate compromise from #17 rather than a single bullet.** The
 content is structurally identical (in-memory `BTreeMap` lost on engine
@@ -1221,16 +1253,17 @@ differs:
 The user-visible loss surface differs enough that bundling under #17
 would obscure the audit-trail-erasure aspect.
 
-**Phase 3 promotion path.** Lift to a durable
-`benten_core::version::Anchor` Node + Version-Node chain (the same
-shape `core::version::append_version` already exposes for opt-in
-versioned data). Each `register_subgraph_replace` call writes a new
-Version Node carrying the handler-CID + audit metadata (replace
-timestamp, optional message); the Anchor's CURRENT pointer bumps
-atomically. `Engine::handler_version_chain` reads the chain by walking
-the Anchor's `prior_head` thread. Phase-3 sync forwards the chain
-verbatim across peers (the Version Nodes are content-addressed and
-ride the existing sync surface).
+**Phase-3 G14-C closure** (LANDED). The promotion path the Phase-2b
+plan described is the closure that landed:
+`benten_core::version::Anchor` Node + Version-Node chain shape; each
+`register_subgraph_replace` call writes a `system:HandlerVersion`
+zone Node carrying the handler-CID + per-handler `seq` (insertion
+order); `Engine::handler_version_chain_with_anchor` walks the
+rebuilt chain and returns a `core::version::Anchor` rooted at the
+oldest registered version. Phase-3 sync forwards the chain verbatim
+across peers (the Version Nodes are content-addressed). G16-B
+Loro-merge attribution lands as an additive variant slot per
+arch-r1-4 / D-C without breaking existing chain CIDs.
 
 **Posture claim.** The hot-replace contract itself is unchanged by the
 in-memory shape: in-flight `Engine::call` invocations DO NOT see the
@@ -1290,19 +1323,62 @@ umbrella trait (PHASE-3-BUNDLE-1).
 
 ---
 
-### Compromise #21 — Module manifest minimal CID-pin in Phase 2b; full Ed25519 deferred — Phase-2b additive
+### Compromise #21 — Module manifest signing — CLOSED at Phase-3 G14-C wave-4b
 
-**Status:** Open in Phase 2b. **Closure target:** Phase 3 (D16 manifest signing — Ed25519 + UCAN integration).
+**Status:** CLOSED at Phase-3 G14-C wave-4b. Full Ed25519 manifest
+signing landed via `crates/benten-engine/src/manifest_signing.rs`
+(`sign_manifest` + `verify_manifest_with_mode` +
+[`PublisherRegistry`]). UCAN-proof-chain primary +
+publisher-key-registry fallback per D-PHASE-3-20 + crypto-minor-5.
+Audience-binding rejection via
+`benten_id::ucan::validate_chain_for_audience` per CLR-2 / cap-major-2.
 
 **What ships at Phase 2b.** `Engine::install_module(manifest, expected_cid: Cid)` REQUIRES the `expected_cid` argument (D16-RESOLVED-FURTHER — not Optional, prevents the lazy `install_module(m, None)` footgun). The engine recomputes the canonical-bytes CID over the manifest, compares against `expected_cid`, and fires `E_MODULE_MANIFEST_CID_MISMATCH` (with a 1-line manifest summary so an operator can diff without source-code dive) on disagreement. This is the minimal CID-pin integrity gate.
 
-**What's NOT shipped.** Ed25519 manifest signing — i.e. the manifest carrying a signature field that the engine verifies against a publisher public key before installing. The `signature` field IS reserved in the canonical encoding (omitted-when-`None` so future signed manifests don't break the wire format) but is not consumed by the install path.
+**What's NOT shipped (pre-G14-C narrative; preserved for audit).**
+Ed25519 manifest signing — i.e. the manifest carrying a signature
+field that the engine verifies against a publisher public key before
+installing — was deferred to Phase-3 at Phase-2b close. The
+`signature` field WAS reserved in the canonical encoding
+(omitted-when-`None` so future signed manifests don't break the wire
+format) but was not consumed by the install path.
+
+**What's NOW SHIPPED (G14-C wave-4b).** The
+`crates/benten-engine/src/manifest_signing.rs::sign_manifest` helper
+populates the `signature.ed25519` field using
+`benten_id::keypair::Keypair`. Verification flows through
+`verify_manifest_with_mode(manifest, ucan_chain, registry_pubkey,
+engine_audience_did, mode, now)`:
+
+- **`ManifestVerifyMode::All`** — BOTH UCAN AND registry paths must
+  verify (security-critical posture).
+- **`ManifestVerifyMode::Any`** (default) — EITHER path is sufficient
+  (operator-flexibility posture for non-UCAN deployments).
+- **UCAN check FIRST** when both paths are present (per
+  crypto-minor-5).
+- **Audience-binding rejection** via
+  `validate_chain_for_audience` (CLR-2 / cap-major-2: cross-atrium
+  replay defended).
+- **Canonical-bytes excludes signature** (crypto-major-1):
+  `manifest_signed_bytes` clears `signature → None` before
+  re-encoding so the bytes the signature signs are stable across
+  signed-vs-unsigned manifests.
+
+Mutations to the durable [`PublisherRegistry`] require a UCAN
+delegation rooted at the registry-admin DID (crypto-minor-5; defends
+"anyone can publish").
 
 **Threat model deltas.**
 - *Ships at 2b:* tampering with manifest bytes between source and `install_module` call is detected (CID mismatch → typed rejection). This protects against in-transit corruption + simple substitution attacks where the operator has the expected CID out-of-band (e.g. from a published release manifest).
 - *Deferred to Phase 3:* publisher authentication. A manifest with a forged-but-byte-consistent payload installs without complaint; the engine has no per-publisher trust anchor. Trust is established via the `expected_cid` arg the operator supplies; the manifest itself doesn't carry an unforgeable origin claim.
 
-**Phase 3 promotion path.** Wire Ed25519 signing per D16: `manifest.signature: Option<Ed25519Signature>` populated; `install_module` verifies the signature against a configured publisher key registry (or, when UCAN delegation is in scope, against the UCAN proof chain). The canonical-bytes encoding already reserves the field (D9-RESOLVED) so adding the verification arm is additive — no wire-format break.
+**Phase-3 G14-C closure** (LANDED). Ed25519 signing per D16:
+`manifest.signature: Option<ManifestSignature>` populated via
+`sign_manifest`; verification consults UCAN proof chain primary +
+publisher key registry fallback (per D-PHASE-3-20 + crypto-minor-5)
+through `verify_manifest_with_mode`. The canonical-bytes encoding
+preserves the reserved-field (D9-RESOLVED) discipline; the
+verification arm is additive — no wire-format break.
 
 **Renumbering note.** This was `Compromise #N+5` in `docs/MODULE-MANIFEST.md`'s local table prior to R6 phase-close; lifted to global #21 here.
 

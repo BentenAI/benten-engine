@@ -880,6 +880,22 @@ impl<B: GraphBackend> EngineGeneric<B> {
         &self.active_call
     }
 
+    /// Phase-3 G14-C accessor — locked guard for the in-memory
+    /// per-handler version-chain map (newest-first `Vec<Cid>` per
+    /// `handler_id`). Consumed by [`crate::handler_versions`]'s
+    /// rehydrate path so the chain can be rebuilt from durable
+    /// `system:HandlerVersion` zone Nodes at engine open.
+    ///
+    /// Public to crate (not crate::handler_versions only) so the
+    /// rehydrate impl can write directly to the same map
+    /// `register_subgraph_replace` mutates.
+    #[cfg(not(feature = "browser-backend"))]
+    pub(crate) fn handler_version_chain_in_memory_lock(
+        &self,
+    ) -> std::sync::MutexGuard<'_, std::collections::BTreeMap<String, Vec<Cid>>> {
+        self.inner.handler_version_chain.lock_recover()
+    }
+
     /// Phase 2b G10-B accessor — the in-memory active set of installed
     /// module manifests keyed by canonical-bytes CID. Used by
     /// [`crate::engine_modules`] for install / uninstall lifecycle
@@ -893,72 +909,6 @@ impl<B: GraphBackend> EngineGeneric<B> {
     ) -> &std::sync::Mutex<std::collections::BTreeMap<Cid, crate::engine_modules::InstalledModule>>
     {
         &self.inner.installed_modules
-    }
-
-    /// Phase 2b Wave-8b — register WebAssembly module bytes under their
-    /// canonical CID for SANDBOX dispatch.
-    ///
-    /// The `impl PrimitiveHost for Engine::execute_sandbox` override
-    /// reads bytes from this registry when the dispatched SANDBOX
-    /// OperationNode's `module` property names a CID.
-    ///
-    /// **Compromise #17 — In-memory module-bytes registry (Phase 2b).**
-    /// This API stores bytes in a process-local
-    /// `BTreeMap<Cid, Vec<u8>>` guarded by a `Mutex`. Bytes are NOT
-    /// persisted to the engine's redb backend; on `Engine::open` the
-    /// registry starts empty regardless of what was registered against
-    /// the prior process. The asymmetry with [`Engine::install_module`]
-    /// (which DOES persist the manifest into the system-zone Node) IS
-    /// the Compromise #17 narrative — see `docs/SECURITY-POSTURE.md`
-    /// "Compromise #17 — In-memory module-bytes registry" for the full
-    /// narrative + Phase-3 promotion path (durable `BlobBackend`).
-    ///
-    /// **Lazy-validation discipline (non-validating API).** This API
-    /// does NOT verify the supplied CID matches `blake3(bytes)` —
-    /// content integrity is the caller's responsibility, mirroring the
-    /// pattern `Engine::install_module` uses for manifest CIDs.
-    /// Validation fires lazily at SANDBOX dispatch time when wasmtime
-    /// parses the bytes (`Module::new(&engine, &bytes)` in
-    /// `crates/benten-eval/src/sandbox/instance.rs::module_for_bytes`); a
-    /// malformed module surfaces as `E_SANDBOX_MODULE_INVALID`. Callers
-    /// that want to verify the CID before registering can compute it
-    /// via [`Cid::from_blake3_digest`] applied to `blake3::hash(bytes)`.
-    ///
-    /// Re-registering the same CID with identical bytes is idempotent;
-    /// re-registering with DIFFERENT bytes is a content-addressing bug
-    /// at the call site (the CID would no longer match the bytes), but
-    /// the engine accepts the overwrite without complaint.
-    ///
-    /// Cap-policy is NOT consulted at this entrypoint: registering wasm
-    /// bytes does not authorise any caller to invoke them. Authority
-    /// flows through the SANDBOX node's manifest cap-set + dispatching
-    /// grant, both of which are checked at execute time inside
-    /// `benten_eval::sandbox::execute`.
-    pub fn register_module_bytes(&self, cid: Cid, bytes: Vec<u8>) {
-        // R6FP-Group-1 (r6-cag-8) — debug-only fail-fast assertion that
-        // the supplied CID matches `BLAKE3(bytes)`. Pre-fix the engine
-        // accepted any (cid, bytes) pair without complaint, leaving
-        // mis-paired calls discoverable only at SANDBOX execution time
-        // (a malformed wasm payload installed under a "good" CID would
-        // load mismatched bytes for the manifest's declared cid). The
-        // debug_assert preserves the documented "engine accepts the
-        // overwrite without complaint" production contract per
-        // Compromise #17 — release builds skip the check (the cap-policy
-        // gate at install_module is the load-bearing operator-trust
-        // boundary, not this surface) — but dev/test builds catch the
-        // mis-pair loud rather than silent.
-        debug_assert_eq!(
-            cid,
-            Cid::from_blake3_digest(*blake3::hash(&bytes).as_bytes()),
-            "register_module_bytes: caller-supplied CID does not match \
-             BLAKE3(bytes) — content-addressing invariant break. The \
-             engine accepts the overwrite without complaint in release \
-             (Compromise #17), but dev/test builds fail-fast to catch \
-             the mis-pair at the call site rather than at SANDBOX \
-             execution time."
-        );
-        let mut guard = self.inner.module_bytes.lock_recover();
-        guard.insert(cid, bytes);
     }
 
     /// Phase 2b Wave-8b — look up registered WebAssembly module bytes by
@@ -1046,6 +996,144 @@ impl Engine {
     #[must_use]
     pub fn audit_sequence(&self) -> u64 {
         self.backend.writes_committed()
+    }
+
+    /// Phase-3 G14-C — register WebAssembly module bytes under their
+    /// canonical CID for SANDBOX dispatch.
+    ///
+    /// **Compromise #17 — CLOSED at G14-C wave-4b.** Bytes are now
+    /// persisted into the redb-backed
+    /// [`benten_graph::backends::RedbBlobBackend`] (`system:ModuleBytes`
+    /// zone Nodes) AND mirrored into the in-memory cache for hot-path
+    /// SANDBOX dispatch. Across an `Engine::open` cycle the durable
+    /// blobs are rehydrated by the crate-internal
+    /// `rehydrate_module_bytes_from_zone` accessor
+    /// (called from `EngineBuilder::assemble`), so a process restart no
+    /// longer requires the operator to re-call `register_module_bytes`.
+    /// See `docs/SECURITY-POSTURE.md` "Compromise #17" for the full
+    /// closure narrative.
+    ///
+    /// **D-PHASE-3-12 RESOLVED — strict CID validation at the entry
+    /// point.** This API recomputes
+    /// `Cid::from_blake3_digest(BLAKE3(bytes))` and rejects with a
+    /// typed `E_MODULE_BYTES_CID_MISMATCH` error when the
+    /// caller-supplied CID does not match. Defense in depth: the
+    /// concrete redb [`benten_graph::backends::RedbBlobBackend::put_sync`]
+    /// rechecks (so direct-to-storage writes are also defended), but
+    /// the engine boundary is the authoritative gate.
+    ///
+    /// Re-registering the same CID with identical bytes is idempotent
+    /// (the redb-side Inv-13 dedup early-return; the in-memory map
+    /// overwrites with the same value).
+    ///
+    /// Cap-policy is NOT consulted at this entrypoint: registering wasm
+    /// bytes does not authorise any caller to invoke them. Authority
+    /// flows through the SANDBOX node's manifest cap-set + dispatching
+    /// grant, both of which are checked at execute time inside
+    /// `benten_eval::sandbox::execute`.
+    ///
+    /// # Errors
+    ///
+    /// - [`EngineError::Other`] with `code:
+    ///   ErrorCode::Unknown("E_MODULE_BYTES_CID_MISMATCH")` when
+    ///   `BLAKE3(bytes) != cid`.
+    /// - [`EngineError::Graph`] when the underlying redb privileged-
+    ///   write surface surfaces a backend error.
+    pub fn register_module_bytes(&self, cid: &Cid, bytes: &[u8]) -> Result<(), EngineError> {
+        // D-PHASE-3-12 — recompute BLAKE3 over the bytes and compare
+        // against the caller-supplied CID. Reject mismatch as a typed
+        // error before any side-effecting work.
+        let recomputed = Cid::from_blake3_digest(*blake3::hash(bytes).as_bytes());
+        if &recomputed != cid {
+            return Err(EngineError::Other {
+                code: benten_errors::ErrorCode::Unknown("E_MODULE_BYTES_CID_MISMATCH".to_string()),
+                message: format!(
+                    "register_module_bytes: caller-supplied CID does not match BLAKE3(bytes); \
+                     expected={expected} computed={computed}",
+                    expected = cid.to_base32(),
+                    computed = recomputed.to_base32(),
+                ),
+            });
+        }
+
+        // Compromise #17 closure: persist via the durable BlobBackend
+        // FIRST so a crash between in-memory insert and disk-flush
+        // doesn't leave the in-memory map advertising bytes the
+        // restart can't rehydrate.
+        let blob_backend =
+            benten_graph::backends::RedbBlobBackend::new(std::sync::Arc::clone(&self.backend));
+        blob_backend.put_sync(cid, bytes).map_err(|e| match e {
+            benten_graph::backends::BlobError::CidMismatch { .. } => EngineError::Other {
+                code: benten_errors::ErrorCode::Unknown("E_MODULE_BYTES_CID_MISMATCH".to_string()),
+                message: format!("blob backend re-check tripped for cid={}", cid.to_base32()),
+            },
+            benten_graph::backends::BlobError::Graph(g) => EngineError::Graph(g),
+            other => EngineError::Other {
+                code: other.code(),
+                message: other.to_string(),
+            },
+        })?;
+
+        // Mirror into the in-memory cache so the SANDBOX dispatch hot
+        // path stays free of disk reads. The cache is rebuilt at engine
+        // open via `rehydrate_module_bytes_from_zone`.
+        let mut guard = self.inner.module_bytes.lock_recover();
+        guard.insert(*cid, bytes.to_vec());
+        Ok(())
+    }
+
+    /// Phase-3 G14-C — public accessor for previously-registered module
+    /// bytes by CID. Returns `Some(Vec<u8>)` if the bytes have been
+    /// registered (or rehydrated from a prior engine open) and `None`
+    /// otherwise.
+    ///
+    /// Pinned by `crates/benten-engine/tests/module_bytes_cid.rs::module_bytes_durable_across_engine_restart`
+    /// (Compromise #17 closure end-to-end pin per §3.6b pim-2):
+    /// re-opening the engine at the same store path resurrects the
+    /// registered bytes via the crate-internal
+    /// `rehydrate_module_bytes_from_zone` accessor.
+    #[must_use]
+    pub fn fetch_module_bytes(&self, cid: &Cid) -> Option<Vec<u8>> {
+        // Fast path: in-memory cache (populated by `register_module_bytes`
+        // and rehydrate_module_bytes_from_zone at open time).
+        self.module_bytes_for(cid)
+    }
+
+    /// Phase-3 G14-C (Compromise #17 closure) — rebuild the in-memory
+    /// module-bytes cache from the durable
+    /// [`benten_graph::backends::RedbBlobBackend`]'s `system:ModuleBytes`
+    /// zone.
+    ///
+    /// Mirrors `Self::rehydrate_installed_modules_from_zone` (G10-B
+    /// R6FP-Group-1 r6-arch-1) for the manifest side. Called from
+    /// `EngineBuilder::assemble` once after the backend opens + the
+    /// engine is constructed. Failures during rehydration log via
+    /// tracing and are non-fatal — a corrupt or partial Node does not
+    /// block engine startup.
+    ///
+    /// # Errors
+    ///
+    /// [`EngineError::Graph`] when the backend's
+    /// `get_by_label("system:ModuleBytes")` accessor errors.
+    pub(crate) fn rehydrate_module_bytes_from_zone(&self) -> Result<usize, EngineError> {
+        let blob_backend =
+            benten_graph::backends::RedbBlobBackend::new(std::sync::Arc::clone(&self.backend));
+        let blob_cids = blob_backend.list_blob_cids().map_err(EngineError::Graph)?;
+        let mut guard = self.inner.module_bytes.lock_recover();
+        let mut count = 0usize;
+        for cid in blob_cids {
+            match blob_backend.get_sync(&cid) {
+                Ok(Some(bytes)) => {
+                    guard.insert(cid, bytes);
+                    count += 1;
+                }
+                Ok(None) | Err(_) => {
+                    // Best-effort: skip a blob whose Node was indexed
+                    // under the label but couldn't be re-read.
+                }
+            }
+        }
+        Ok(count)
     }
 
     /// Phase 2a G11-A Wave 1 test-only alias spelled the way the R3 test
@@ -1164,12 +1252,27 @@ impl Engine {
         // handler_id (the duplicate-with-different-content branch above
         // already returned with `DuplicateHandler`); duplicate-identical
         // returns idempotently above without growing the chain.
+        //
+        // Phase-3 G14-C (Compromise #18 closure): also persist a
+        // `system:HandlerVersion` zone Node so the chain survives
+        // engine restart. The privileged-write surface mirrors
+        // `install_module`'s `system:ModuleManifest` discipline.
         let mut vc = self.inner.handler_version_chain.lock_recover();
         let chain = vc.entry(handler_id.clone()).or_default();
-        if chain.first() != Some(&cid) {
+        let needs_persist = chain.first() != Some(&cid);
+        if needs_persist {
             chain.insert(0, cid);
         }
+        let chain_len_after = chain.len();
         drop(vc);
+        if needs_persist {
+            // seq is the position the new entry occupies AFTER insert
+            // (newest-first map; seq 0 is the oldest, seq=len-1 is the
+            // newest just inserted). We use chain_len_after-1 as the
+            // monotonic per-handler insertion sequence.
+            let seq = u64::try_from(chain_len_after.saturating_sub(1)).unwrap_or(u64::MAX);
+            self.persist_handler_version_entry(&handler_id, &cid, None, seq)?;
+        }
         Ok(handler_id)
     }
 
@@ -1272,9 +1375,20 @@ impl Engine {
         // and their chain prepend in the other, violating the
         // newest-first invariant `handler_version_chain()` reports +
         // the 7 dedicated tests assume.
+        //
+        // Phase-3 G14-C (Compromise #18 closure): durable persistence
+        // happens AFTER the locks drop — keeping the privileged write
+        // outside the held mutex avoids holding three engine locks +
+        // the redb write transaction simultaneously. `needs_persist`
+        // captures the inside-lock decision; `persist_seq` captures
+        // the new chain depth post-mutation; both are read while the
+        // joint lock is still held so they're consistent with the
+        // swap that just landed.
         let previous_cid: Option<Cid>;
         let replaced;
         let chain_depth;
+        let persist_seq: Option<u64>;
+        let persist_predecessor: Option<Cid>;
         {
             let mut handlers_guard = self.inner.handlers.lock_recover();
             let mut specs_guard = self.inner.specs.lock_recover();
@@ -1316,6 +1430,31 @@ impl Engine {
             // lock to keep the reported depth consistent with the swap
             // we just performed.
             chain_depth = chain_guard.get(&handler_id).map_or(1, std::vec::Vec::len);
+
+            // Phase-3 G14-C: stash the persistence inputs while still
+            // under the lock so they're consistent with the in-memory
+            // mutation that just landed. We DON'T hold the privileged
+            // write across the lock — see lock-ordering note above.
+            if replaced {
+                persist_predecessor = previous_cid;
+                // seq is `chain_depth - 1` (newest-first; depth N has
+                // seq 0..=N-1; the just-prepended CID gets seq N-1).
+                persist_seq =
+                    Some(u64::try_from(chain_depth.saturating_sub(1)).unwrap_or(u64::MAX));
+            } else {
+                persist_predecessor = None;
+                persist_seq = None;
+            }
+        }
+        // Compromise #18 closure: durable persist outside the joint
+        // lock. Skipped on the idempotent branch (no chain growth).
+        if let Some(seq) = persist_seq {
+            self.persist_handler_version_entry(
+                &handler_id,
+                &cid,
+                persist_predecessor.as_ref(),
+                seq,
+            )?;
         }
         Ok(RegisterReplaceOutcome {
             handler_id,

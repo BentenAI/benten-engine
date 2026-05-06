@@ -18,14 +18,25 @@
 //!   G14-C (redb-native) and G18-A (IndexedDB-browser) impls can be
 //!   sequenced independently. Generic-cascade per D-PHASE-3-1; async-shape
 //!   per D-PHASE-3-7; CID-validating `put` per D-PHASE-3-12.
+//! - [`blob_backend`] — Phase-3 G14-C concrete redb-native [`RedbBlobBackend`]
+//!   implementation closing **Compromise #17** (in-memory module-bytes
+//!   registry). Stores blobs as `system:ModuleBytes` zone Nodes;
+//!   defense-in-depth CID re-check at the put boundary mirrors
+//!   `Engine::register_module_bytes`'s authoritative validator.
 //!
 //! The redb-backed [`crate::RedbBackend`] is the production native-target
 //! backend and lives at the crate root for legacy-call-site discoverability.
 
+#[cfg(not(feature = "browser-backend"))]
+pub mod blob_backend;
 pub mod blob_backend_trait;
 pub mod network_fetch_stub;
 pub mod snapshot_blob;
 
+#[cfg(not(feature = "browser-backend"))]
+pub use blob_backend::{
+    BLOB_BYTES_PROPERTY, BLOB_CID_PROPERTY, BlobError, MODULE_BYTES_LABEL, RedbBlobBackend,
+};
 pub use blob_backend_trait::BlobBackend;
 pub use network_fetch_stub::{NetworkFetchStubBackend, NetworkFetchStubError};
 pub use snapshot_blob::{SnapshotBlob, SnapshotBlobBackend, SnapshotBlobError};
