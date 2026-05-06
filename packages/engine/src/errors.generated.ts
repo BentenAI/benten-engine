@@ -1459,14 +1459,14 @@ export class ESandboxHostFnNotFound extends BentenError {
 /**
  * E_SANDBOX_MANIFEST_UNKNOWN
  *
- * Thrown at: `ManifestRegistry::lookup` / `ManifestRef::resolve`.
- * Message template: "SANDBOX manifest unknown: {name}"
+ * Thrown at: - **Registration time (Phase-3 G17-C):** `Engine::register_subgraph::validate_sandbox_manifest_names` — walks SANDBOX nodes for unresolved manifest references via either the explicit `manifest` property or the colon-joined `<manifest>:<entry>` `module` property fallback. - **Dispatch time (legacy):** `ManifestRegistry::lookup` / `ManifestRef::resolve` — preserved for non-DSL spec construction paths that bypass the validation walk.
+ * Message template: "SANDBOX manifest name '{manifest_name}' is not registered (codegen defaults: compute-basic, compute-with-kv; install via `engine.installModule(...)` or use a different name)"
  */
 export class ESandboxManifestUnknown extends BentenError {
   static readonly code = "E_SANDBOX_MANIFEST_UNKNOWN";
-  static readonly fixHint = "ESC-15 escape vector closure: NO permissive fall-through to a default manifest. Either register the manifest (Phase 8 marketplace work — see `E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED`) or use one of the codegen-default names (`compute-basic`, `compute-with-kv`).";
+  static readonly fixHint = "ESC-15 escape vector closure: NO permissive fall-through to a default manifest. Either install the manifest via `Engine::install_module` (paired with `Engine::register_module_bytes` for the underlying wasm payload) or use one of the codegen-default names (`compute-basic`, `compute-with-kv`). Phase-3 G17-C wave-5b adds the registration-time validation walk in `Engine::register_subgraph` so misspelled names + post-uninstall residual references trip THIS error at register time (operator-actionable: the wallclock-after-zero-progress masking is gone) instead of at dispatch time as a confusing wallclock trip.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SANDBOX_MANIFEST_UNKNOWN", "ESC-15 escape vector closure: NO permissive fall-through to a default manifest. Either register the manifest (Phase 8 marketplace work — see `E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED`) or use one of the codegen-default names (`compute-basic`, `compute-with-kv`).", message, context);
+    super("E_SANDBOX_MANIFEST_UNKNOWN", "ESC-15 escape vector closure: NO permissive fall-through to a default manifest. Either install the manifest via `Engine::install_module` (paired with `Engine::register_module_bytes` for the underlying wasm payload) or use one of the codegen-default names (`compute-basic`, `compute-with-kv`). Phase-3 G17-C wave-5b adds the registration-time validation walk in `Engine::register_subgraph` so misspelled names + post-uninstall residual references trip THIS error at register time (operator-actionable: the wallclock-after-zero-progress masking is gone) instead of at dispatch time as a confusing wallclock trip.", message, context);
     this.name = "ESandboxManifestUnknown";
   }
 }
