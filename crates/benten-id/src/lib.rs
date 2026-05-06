@@ -15,12 +15,26 @@
 //!   BLOCKER; constant-time-comparison via `subtle::ConstantTimeEq`
 //!   per `crypto-major-4`; audience-binding rejection.
 //!
-//! ## G14-A2 wave-4a' scope (NOT YET LANDED)
+//! ## G14-A2 wave-4a' scope (LIVE)
 //!
-//! - `vc` — Verifiable Credential issuance + verify.
-//! - `multi_sig` — `MultiSigSurface` trait + `Ed25519SingleKey` default impl.
-//! - `did_rotation` — `Did::rotate_keypair` + `superseded_by` chain.
-//! - `device_attestation` — Device-DID capability-attestation.
+//! - [`vc`] — Verifiable Credential issuance + verify (W3C VC v1.1
+//!   shape over the existing DAG-CBOR + Ed25519 surface; `ssi` re-
+//!   introduction deferred to G14-B per
+//!   `docs/future/phase-3-backlog.md §2.1-followup` — see
+//!   `crates/benten-id/src/vc.rs` module-level note for the DISAGREE-
+//!   WITH-EXPLANATION rationale per HARD RULE rule-12 disposition (c)).
+//! - [`multi_sig`] — [`multi_sig::MultiSigSurface`] trait +
+//!   [`multi_sig::Ed25519SingleKey`] default impl + compile-only
+//!   [`multi_sig::ThresholdMultiSig`] extension-point per
+//!   D-PHASE-3-24 deferral.
+//! - [`did_rotation`] — [`did_rotation::rotate_keypair`] +
+//!   [`did_rotation::RotationAttestation`] +
+//!   [`did_rotation::RotationLog`] in-RAM chain-walk helper.
+//! - [`device_attestation`] — [`device_attestation::DeviceAttestation`] +
+//!   [`device_attestation::Acceptor`] (freshness + nonce-store +
+//!   revocation) + [`device_attestation::DeviceRevocation`] +
+//!   `runs_sandbox=true`+browser-target rejection at construction
+//!   per `br-r4-r1-4` / `br-r4-r2-3` MAJOR.
 //!
 //! ## Architectural commitments (CLAUDE.md baked-in references)
 //!
@@ -45,9 +59,16 @@
 #![deny(missing_docs)]
 #![forbid(unsafe_code)]
 
+pub mod device_attestation;
 pub mod did;
+pub mod did_rotation;
 pub mod errors;
 pub mod keypair;
+pub mod multi_sig;
 pub mod ucan;
+pub mod vc;
 
-pub use errors::{DidError, KeypairError, SeedImportError, UcanError};
+pub use errors::{
+    DeviceAttestationError, DidError, DidRotationError, KeypairError, MultiSigError,
+    SeedImportError, UcanError, VcError,
+};

@@ -405,6 +405,81 @@ fn validate_chain_inner(
     Ok(())
 }
 
+/// Validate a chain against a [`crate::did_rotation::RotationLog`].
+///
+/// Per `crates/benten-id/tests/did_rotation.rs::superseded_did_cannot_sign_new_ucan_delegations`,
+/// any UCAN whose issuer DID has been rotated rejects with
+/// [`UcanError::IssuerKeypairSuperseded`] — the chain-walker
+/// consults the rotation log so post-rotation UCANs from the OLD
+/// keypair are observably rejected even when their signature is
+/// structurally valid.
+pub fn validate_chain_with_rotation_log(
+    chain: &[Ucan],
+    log: &crate::did_rotation::RotationLog,
+) -> Result<(), UcanError> {
+    validate_chain_inner(chain, None, None)?;
+    for token in chain {
+        let did = Did::from_string_unchecked(token.claims.iss.clone());
+        if log.is_superseded(&did) {
+            return Err(UcanError::IssuerKeypairSuperseded {
+                issuer: token.claims.iss.clone(),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Validate a chain against a list of [`crate::device_attestation::DeviceRevocation`]s.
+///
+/// Per `crates/benten-id/tests/device_attestation.rs::device_attestation_revoked_device_cannot_sign_new_ucan_delegation`,
+/// any UCAN whose issuer DID has been revoked rejects with
+/// [`UcanError::IssuerDeviceRevoked`].
+pub fn validate_chain_with_device_revocations(
+    chain: &[Ucan],
+    revocations: &[crate::device_attestation::DeviceRevocation],
+) -> Result<(), UcanError> {
+    validate_chain_inner(chain, None, None)?;
+    for token in chain {
+        for r in revocations {
+            if r.device_did == token.claims.iss {
+                return Err(UcanError::IssuerDeviceRevoked {
+                    issuer: token.claims.iss.clone(),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Validate a chain against a list of
+/// [`crate::device_attestation::DeviceAttestation`]s. Per
+/// `crates/benten-id/tests/device_attestation.rs::device_attestation_consumed_at_ucan_delegation_chain_walk`,
+/// rejects with [`UcanError::DeviceEnvelopeViolated`] when a token's
+/// issuer has an attestation declaring it cannot exercise the
+/// claimed capability (e.g. `host:sandbox:exec` from a
+/// `runs_sandbox=false` device).
+pub fn validate_chain_with_attestations(
+    chain: &[Ucan],
+    attestations: &[crate::device_attestation::DeviceAttestation],
+) -> Result<(), UcanError> {
+    validate_chain_inner(chain, None, None)?;
+    for token in chain {
+        for att in attestations {
+            if att.device_did == token.claims.iss {
+                for cap in &token.claims.att {
+                    if cap.resource.starts_with("host:sandbox:") && !att.envelope.runs_sandbox {
+                        return Err(UcanError::DeviceEnvelopeViolated {
+                            issuer: token.claims.iss.clone(),
+                            cap: format!("{}:{}", cap.resource, cap.ability),
+                        });
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Subsume rule: parent grants child's capability iff:
 /// - exact match (resource AND ability equal), OR
 /// - parent's `ability` is `*` and resource matches, OR

@@ -191,3 +191,113 @@ export function verifySignature(
       "thin-client targets route identity operations to the full peer via D-PHASE-3-30 protocol",
   );
 }
+
+// ============================================================================
+// G14-A2 wave-4a' — VC + DeviceAttestation type surfaces
+// ============================================================================
+//
+// Per pim-2-ts-canary §3.6b amendment, RED-PHASE TypeScript pins use
+// `throw new Error("RED-PHASE: <reason>")` (NOT `unimplemented!()`
+// Rust analog). The runtime crypto path lives at
+// `bindings/napi/src/identity.rs` (full-peer); thin-client targets
+// route identity operations to the full peer over the authenticated
+// thin-client protocol (D-PHASE-3-30).
+
+/**
+ * W3C Verifiable Credential v1.1 view (G14-A2). Mirrors
+ * `benten_id::vc::Credential` on the Rust side.
+ *
+ * Issued via {@link issueVerifiableCredential} / verified via
+ * {@link verifyVerifiableCredentialAt}. The signing path runs on the
+ * full peer (napi); the thin client receives this object as a typed
+ * view + delegates verification to the full peer over the
+ * authenticated thin-client protocol.
+ */
+export interface VerifiableCredential {
+  /** Issuer DID (signs the VC). */
+  issuer: Did;
+  /** Subject DID (the credential applies to). */
+  subject: Did;
+  /** Single claim — name + value. */
+  claim: { name: string; value: string };
+  /** Issuance epoch seconds. */
+  issuanceDate: number;
+  /** Optional expiration epoch seconds. */
+  expirationDate?: number;
+}
+
+/**
+ * Issue a VC on the full peer via the napi binding.
+ *
+ * @throws on thin-client (browser tab / edge worker) targets per
+ *   pim-2-ts-canary §3.6b — VC issuance routes to the full peer via
+ *   D-PHASE-3-30 protocol.
+ */
+export function issueVerifiableCredential(
+  _issuer: KeypairHandle,
+  _subject: Did,
+  _claimName: string,
+  _claimValue: string,
+  _issuanceDate: number,
+  _expirationDate?: number,
+): VerifiableCredential {
+  throw new Error(
+    "RED-PHASE: G14-A2 wires issueVerifiableCredential() into the napi cdylib for full-peer targets; " +
+      "thin-client targets route VC issuance to the full peer via D-PHASE-3-30 protocol",
+  );
+}
+
+/**
+ * Verify a VC at a given epoch second (rejects expired credentials).
+ *
+ * @throws on thin-client targets per pim-2-ts-canary §3.6b.
+ */
+export function verifyVerifiableCredentialAt(
+  _vc: VerifiableCredential,
+  _expectedIssuer: Did,
+  _now: number,
+): boolean {
+  throw new Error(
+    "RED-PHASE: G14-A2 wires verifyVerifiableCredentialAt() into the napi cdylib for full-peer targets; " +
+      "thin-client targets route VC verification to the full peer via D-PHASE-3-30 protocol",
+  );
+}
+
+/**
+ * Device-DID capability-attestation view (G14-A2). Mirrors
+ * `benten_id::device_attestation::DeviceAttestation` on the Rust side.
+ *
+ * Per CLAUDE.md baked-in #17 + D-PHASE-3-25, the thin client uses
+ * {@link declareDeviceAttestation} to declare its envelope at
+ * handshake time. The full peer signs + persists the attestation;
+ * the chain-walker consults the envelope at UCAN delegation time so
+ * per-device cap policy can enforce envelope-derived limits.
+ */
+export interface DeviceAttestation {
+  deviceDid: Did;
+  parentDid: Did;
+  envelope: IdentityHandshake["envelope"];
+}
+
+/**
+ * Declare a device-DID attestation (full-peer surface; thin client
+ * delegates).
+ *
+ * Per `br-r4-r1-4` / `br-r4-r2-3` MAJOR, when the runtime is
+ * `browser` and the envelope claims `runs_sandbox=true`, the
+ * underlying napi factory throws with the typed catalog code
+ * `E_DEVICE_ATTESTATION_INCOMPATIBLE_WITH_RUNTIME`. The trust graph
+ * never receives a forged envelope.
+ *
+ * @throws on thin-client targets per pim-2-ts-canary §3.6b.
+ */
+export function declareDeviceAttestation(_handshake: IdentityHandshake): DeviceAttestation {
+  // Full-peer code links the napi binding's `DeviceAttestation.issue(...)`
+  // factory at runtime. Thin-client builds reach this surface and route
+  // to the full peer over the authenticated thin-client protocol
+  // (D-PHASE-3-30) per CLAUDE.md baked-in #17.
+  throw new Error(
+    "RED-PHASE: G14-A2 wires declareDeviceAttestation() into the napi cdylib for full-peer targets; " +
+      "thin-client targets route attestation issuance to the full peer via D-PHASE-3-30 protocol",
+  );
+}
