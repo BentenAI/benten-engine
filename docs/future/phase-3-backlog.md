@@ -541,6 +541,40 @@ R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift 
 
 ---
 
+### 7.13 Phase-3 attack-surface matrix authoring (sec-r4r2-2 / sec-r4r1-4 matrix-prose half)
+
+**Origin:** R4-R2 security-auditor lens finding `sec-r4r2-2` MAJOR (escalation of R4-R1 `sec-r4r1-4` MAJOR; root R1 finding `sec-r1-7`). The R1 lens cited that "enumerating attack vectors ahead of implementation" was the discipline that gave the Phase-2b ESC matrix its structural value. Phase-3 has TWO halves to that work:
+
+1. **Concrete-vector test pins** (test-pin-enumeration). Closed at R4-R2-FP/B via 3 RED-PHASE pins in `crates/benten-sync/tests/`:
+   - `attack_loro_op_log_inv_13.rs::loro_merge_op_log_violating_inv_13_immutability_rejected_at_dispatch_not_just_at_cid_divergence`
+   - `attack_mst_diff_cid_mismatch.rs::mst_diff_entry_with_cid_byte_mismatch_rejected_at_application_layer`
+   - `attack_hlc_skew_revocation_ordering.rs::hlc_skew_exceeded_in_inbound_sync_frame_rejected_with_e_hlc_skew_exceeded`
+
+2. **Matrix-prose meta-document** (the doc-level enumeration of all Phase-3 attack surfaces). DEFERRED to this entry as a Phase-3-close R6 hardening surface (NOT pre-R5 / not gating R5 implementation).
+
+**DISAGREE-WITH-EXPLANATION rebuttal of the R1 "must land before R5" framing:** the matrix's role is meta-completeness at R6 phase-close (a checklist that every named attack surface has at least one test pin driving it), NOT the R5 implementation target itself. The Phase-2b ESC matrix's effectiveness came from per-vector test enumeration (closed by half (1) above), not from matrix-as-doc presence at R5 dispatch time. The matrix-prose document is a **completeness audit** running over R5 corpus, not a **plan input** that R5 implementers consume. Item (1) is the load-bearing deliverable for R5-time defense; item (2) is the load-bearing deliverable for R6-time completeness. The two halves are separable.
+
+**What landing requires (when this opens at Phase-3 R6 phase-close):**
+- Author `.addl/phase-3/attack-surface-matrix-phase-3.md` enumerating Phase-3 attack surfaces:
+  - Atrium peer-handshake (signature tampering, replay window, DID forgery)
+  - UCAN proof-chain transport (window-widening, authority-widening, revocation propagation)
+  - Sync-replica trust-boundary (Loro op-log Inv-13 violation, MST-diff CID-byte mismatch, HLC skew injection)
+  - Device-DID attestation (envelope downgrade, parent-chain forgery, freshness-window replay)
+  - iroh-relay metadata (peer-DID disclosure, connection-metadata observability — Compromise #22)
+- For each surface, cite the test pin(s) that drive its concrete attack vectors. If a surface has no driving test pin, FILE A FINDING (matrix's primary completeness role).
+- Cross-reference from `docs/SECURITY-POSTURE.md` named compromises section.
+
+**Touch size:** ~150-300 LOC matrix doc + ~10-20 cross-ref edits in `docs/SECURITY-POSTURE.md` + R6 council brief addendum citing matrix as completeness input. Risk: low (purely additive observer doc).
+
+**Cross-references:**
+- `.addl/phase-3/r4-r2-security.json::sec-r4r2-2` (origin finding + DISAGREE narrative)
+- `.addl/phase-3/r4-r1-security.json::sec-r4r1-4` (R1 escalation)
+- `.addl/phase-3/r1-security.json::sec-r1-7` (root R1 finding)
+- `.addl/phase-3/00-implementation-plan.md::§6 line 852` (current implicit-deferral; replace with reference to this entry on next plan-doc edit pass)
+- `crates/benten-sync/tests/attack_*.rs` (3 R4-R2-FP/B concrete-vector pins)
+
+---
+
 ## 7.3 Wave-8j R6 residuals — test bodies need real implementations before un-ignore
 
 **Phase 2b state:** R6 phase-close Round 1 surfaced two `#[ignore]`'d tests with stale rationales — both have empty `todo!()` bodies that REFERENCE landed work but don't actually exercise it:

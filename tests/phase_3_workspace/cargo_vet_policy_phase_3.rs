@@ -53,9 +53,46 @@ fn cargo_vet_policy_self_test_un_ignored() {
     //   assert!(config.contains("safe-to-deploy"),
     //       "cargo-vet config must declare safe-to-deploy criteria");
     //
+    //   // sec-r4r2-3 / sec-r4r1-7 (R4-R2 MINOR carry): the
+    //   // crypto-reviewed criteria binding is load-bearing — without
+    //   // it, supply-chain policy passes with safe-to-deploy alone (a
+    //   // hollow gate per sec-r1-5's premise). Assert (a) the
+    //   // crypto-reviewed criteria is declared in the config, AND (b)
+    //   // the load-bearing Phase-3 cryptographic dependencies
+    //   // (`ed25519-dalek` + `ssi`) are bound to the crypto-reviewed
+    //   // criteria via `[policy.<crate>]` sections.
+    //   assert!(config.contains("crypto-reviewed"),
+    //       "cargo-vet config must declare crypto-reviewed criteria \
+    //        (sec-r4r2-3 / sec-r4r1-7) — without it, manual-review tier \
+    //        for security-critical crates is unenforced");
+    //   assert!(config.contains("ed25519-dalek"),
+    //       "cargo-vet config must bind ed25519-dalek to a [policy] entry \
+    //        (sec-r4r2-3 / sec-r4r1-7)");
+    //   assert!(config.contains("ssi"),
+    //       "cargo-vet config must bind ssi to a [policy] entry \
+    //        (sec-r4r2-3 / sec-r4r1-7)");
+    //
+    //   // Each must map to crypto-reviewed in its [policy] section.
+    //   // The [policy.ed25519-dalek] section MUST appear before its
+    //   // criteria list; assert the criteria includes crypto-reviewed:
+    //   let ed25519_section = extract_policy_section(&config, "ed25519-dalek");
+    //   assert!(ed25519_section.contains("crypto-reviewed"),
+    //       "[policy.ed25519-dalek] must require crypto-reviewed criteria \
+    //        (sec-r4r2-3 / sec-r4r1-7) — defends against safe-to-deploy-alone \
+    //        gate on cornerstone signature crate");
+    //   let ssi_section = extract_policy_section(&config, "ssi");
+    //   assert!(ssi_section.contains("crypto-reviewed"),
+    //       "[policy.ssi] must require crypto-reviewed criteria \
+    //        (sec-r4r2-3 / sec-r4r1-7) — defends against safe-to-deploy-alone \
+    //        gate on cornerstone DID/UCAN crate");
+    //
     // OBSERVABLE consequence: cargo-vet onboarding lands at Phase-3
-    // close per §7.3.A.9 + sec-r1-5 policy.
-    unimplemented!("G20-A3 wires cargo-vet policy self-test");
+    // close per §7.3.A.9 + sec-r1-5 policy WITH the crypto-reviewed
+    // criteria binding for ed25519-dalek + ssi load-bearing per
+    // sec-r4r2-3 / sec-r4r1-7 closure (without that binding, the
+    // safe-to-deploy-alone gate is a hollow defense for the cornerstone
+    // Phase-3 cryptographic dependencies).
+    unimplemented!("G20-A3 wires cargo-vet policy self-test + sec-r4r2-3 crypto-reviewed binding");
 }
 
 #[test]
