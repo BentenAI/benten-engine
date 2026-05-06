@@ -193,3 +193,88 @@ fn integration_atrium_browser_tab_as_thin_client_view_into_full_peer_e2e() {
     // thin-client views — exit-criterion 19 holds.
     unimplemented!("G14-D + G18-A wires browser-tab-as-thin-client e2e exit-criterion 19 pin");
 }
+
+// =====================================================================
+// R4-R2-FP-C architectural-absence pin: ds-r4r2-8 (closes ds-r4-11).
+//
+// Pin source (per .addl/phase-3/r4-r2-distributed-systems.json
+// ds-r4r2-8): asserts the design intent that browser engines are NOT
+// Atrium peers in Phase-3 — they consume engine state via the
+// thin-client protocol (D-PHASE-3-30) per CLAUDE.md baked-in #17.
+//
+// Existing pins assert mechanical wasm32-incompatibility:
+//
+// - crates/benten-sync/tests/wasm32_excluded.rs (compile-time exclusion)
+// - bindings/napi/tests/wasm_bundle_content.rs (Loro/iroh not in
+//   browser bundle)
+//
+// This pin asserts the architectural-INTENT layer: browser-edge Atrium-
+// peer participation is deferred to Phase-4+ (Thrum-migration era);
+// in Phase-3, browsers are authenticated thin-client views via the
+// fetch / SSE / device-DID auth protocol pinned above in this file.
+//
+// This is an architectural-absence pin (no unimplemented!() body) —
+// the pin asserts intent at the doc layer; it stays #[ignore]'d
+// post-Phase-3-close. It will REMAIN inert until Phase-4+ chooses
+// to expand browser scope to include Atrium-peer participation.
+// =====================================================================
+
+#[test]
+#[ignore = "ARCHITECTURAL-ABSENCE: browser engines are NOT Atrium peers in Phase-3; they consume engine state via thin-client protocol (D-PHASE-3-30) per CLAUDE.md baked-in #17"]
+fn browser_engines_are_not_atrium_peers_in_phase_3_consume_via_thin_client_protocol() {
+    // ds-r4r2-8 architectural-absence pin (closes ds-r4-11). Per
+    // CLAUDE.md baked-in commitment #17:
+    //
+    //   "Engine deployment shapes: full peer vs thin compute surface."
+    //
+    // Two deployment shapes in Phase-3:
+    //
+    //   (a) Full peer — native Rust on user-owned hardware (laptop,
+    //       phone OS app, desktop). Includes Loro CRDT, iroh
+    //       transport, SANDBOX runtime, durable storage (redb), full
+    //       Atrium sync participation. THIS shape is an Atrium peer.
+    //
+    //   (b) Thin compute surface — wasm32 deployment target (browser
+    //       tab, Phase-9+ exploratory edge worker). Stateless reads
+    //       against snapshot data; writes via fetch to a full peer.
+    //       NO Loro, NO iroh, NO SANDBOX, NO direct sync state.
+    //       THIS shape is NOT an Atrium peer.
+    //
+    // The architectural-absence claims this pin asserts:
+    //
+    //   1. Browser engines (wasm32-unknown-unknown target) MUST NOT
+    //      ship Loro / iroh / SANDBOX / direct sync state in the
+    //      bundle. Pinned mechanically by:
+    //      - crates/benten-sync/tests/wasm32_excluded.rs
+    //      - bindings/napi/tests/wasm_bundle_content.rs
+    //
+    //   2. Browser engines participate in the user's data via the
+    //      authenticated thin-client protocol (fetch GET for
+    //      snapshot reads / POST with device-DID auth header for
+    //      writes / SSE-or-WebSocket for change events). Pinned
+    //      protocol-shape by the 4 thin-client pins above:
+    //      - thin_client_snapshot_read_via_fetch_get_against_full_peer_endpoint
+    //      - thin_client_write_via_post_with_device_did_auth_header
+    //      - thin_client_change_event_stream_via_sse_or_websocket_from_full_peer
+    //      - thin_client_f6_subscribe_filtering_applied_at_full_peer_edge_not_thin_client
+    //
+    //   3. Phase-4+ Thrum-migration era MAY revisit browser-edge
+    //      Atrium-peer participation. Phase-3 deliberately defers it.
+    //      Future agent proposals to ship Loro / iroh / direct-sync
+    //      state in the wasm32 bundle MUST be rejected with reference
+    //      to CLAUDE.md baked-in #17 unless they ALSO re-open the
+    //      commitment (those decisions move together).
+    //
+    // OBSERVABLE-INTENT consequence: a fresh agent reading the
+    // Phase-3 corpus learns that the absence of browser Atrium-peer
+    // code is INTENTIONAL — not an oversight. Defends against the
+    // failure mode where a future agent "fixes" the missing
+    // browser-side iroh/Loro by adding it (which would silently
+    // violate baked-in #17 + invalidate the wasm32-bundle-size
+    // budget exit criteria).
+    //
+    // This test body is INERT (no unimplemented!()) — the pin is
+    // the #[ignore] rationale itself, asserting architectural-
+    // absence at doc layer. Will remain #[ignore]'d post-Phase-3-
+    // close.
+}

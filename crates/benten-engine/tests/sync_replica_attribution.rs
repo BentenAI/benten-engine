@@ -229,3 +229,116 @@ fn sync_replica_write_after_local_grant_revoke_post_handshake_rejected_with_e_sy
         "G14-D wires E_SYNC_REVOKED_DURING_SESSION typed-error rejection at sync-replica WRITE delivery per sec-r4r1-2"
     );
 }
+
+// =====================================================================
+// R4-R2-FP-C RED-PHASE pin: ds-r4r2-2 AttributionFrame sync_hop_depth
+// bound + E_SYNC_HOP_DEPTH_EXCEEDED typed variant.
+//
+// Pin source (per .addl/phase-3/r4-r2-distributed-systems.json
+// ds-r4r2-2; closes ds-r4-5 per R4-R2 re-emergent finding):
+//
+// - sync_replica_attribution_frame_sync_hop_depth_bounded_with_e_sync_hop_depth_exceeded
+//
+// ## Architectural intent (mirrors Inv-4 sandbox_depth precedent)
+//
+// Under transitive Atrium sync (peer A writes → syncs to B → B's
+// SUBSCRIBE re-emits / cascades to peer C), the AttributionFrame chain
+// depth grows unboundedly. Inv-4 enforces SANDBOX nest-depth via
+// AttributionFrame.sandbox_depth: u8 (cap = 8). The analogous
+// sync_hop_depth: u8 field bounds Atrium peer-hop chain depth, defending
+// against DOS / chain-bloat attacks where an adversarial peer
+// constructs a long false chain. Default bound = 8 hops per ds-r4-5
+// RECOMMEND, matching the Inv-4 sandbox_depth precedent.
+//
+// Cascades canonical-bytes of AttributionFrame (per ds-8 / D-PHASE-3-19a;
+// in-scope for the existing 10+ pinned-CID test rewrite cohort at
+// G14-D wave-5a). The sync_hop_depth field becomes part of the
+// canonical bytes; pinned-CID fixtures rebake at that wave.
+// =====================================================================
+
+#[test]
+#[ignore = "RED-PHASE: G14-D — ds-r4r2-2 — sync_hop_depth bounded; E_SYNC_HOP_DEPTH_EXCEEDED on overflow (mirrors Inv-4 sandbox_depth)"]
+fn sync_replica_attribution_frame_sync_hop_depth_bounded_with_e_sync_hop_depth_exceeded() {
+    // ds-r4r2-2 pin (closes ds-r4-5). G14-D / G16-B implementer wires:
+    //
+    //   use benten_engine::{AttributionFrame, EngineError, ErrorCode};
+    //
+    //   const SYNC_HOP_DEPTH_MAX: u8 = 8;  // mirrors Inv-4 sandbox_depth cap
+    //
+    //   // Build a chain of 4 peers; each Atrium-sync hop increments
+    //   // sync_hop_depth by 1 on the AttributionFrame's per-hop
+    //   // counter.
+    //   let peer_a = benten_engine::Engine::open(a_store.path()).unwrap();
+    //   let peer_b = benten_engine::Engine::open(b_store.path()).unwrap();
+    //   let peer_c = benten_engine::Engine::open(c_store.path()).unwrap();
+    //   let peer_d = benten_engine::Engine::open(d_store.path()).unwrap();
+    //
+    //   // Peer A writes; peer B receives via sync-replica (hop 1):
+    //   let cid = peer_a.write_node(&node).unwrap();
+    //   peer_a.atrium_sync_to(peer_b.local_did()).unwrap();
+    //   let frame_at_b = peer_b.fetch_attribution_frame(&cid).unwrap();
+    //   assert_eq!(frame_at_b.sync_hop_depth(), 1u8,
+    //       "first hop A→B must report sync_hop_depth = 1");
+    //
+    //   // Peer B's SUBSCRIBE re-emits to peer C (hop 2):
+    //   peer_b.atrium_sync_to(peer_c.local_did()).unwrap();
+    //   let frame_at_c = peer_c.fetch_attribution_frame(&cid).unwrap();
+    //   assert_eq!(frame_at_c.sync_hop_depth(), 2u8,
+    //       "two-hop chain A→B→C must report sync_hop_depth = 2");
+    //
+    //   // Peer C re-emits to peer D (hop 3):
+    //   peer_c.atrium_sync_to(peer_d.local_did()).unwrap();
+    //   let frame_at_d = peer_d.fetch_attribution_frame(&cid).unwrap();
+    //   assert_eq!(frame_at_d.sync_hop_depth(), 3u8,
+    //       "three-hop chain A→B→C→D must report sync_hop_depth = 3");
+    //
+    //   // OBSERVABLE consequence (i): sync_hop_depth advances
+    //   // monotonically per peer hop.
+    //
+    //   // Now construct an adversarial chain at SYNC_HOP_DEPTH_MAX:
+    //   // an inbound message claims sync_hop_depth = 8 (already at
+    //   // the cap). The next hop would push depth to 9 — must reject
+    //   // with the typed error variant + stable error code.
+    //   let adversarial_msg = build_inbound_sync_message_with_hop_depth(
+    //       SYNC_HOP_DEPTH_MAX);
+    //   let result = peer_d.consume_sync_replica_message(&adversarial_msg);
+    //   let err = result.unwrap_err();
+    //   assert!(matches!(err,
+    //       EngineError::SyncHopDepthExceeded { observed_depth, max_depth }
+    //           if observed_depth == SYNC_HOP_DEPTH_MAX
+    //              && max_depth == SYNC_HOP_DEPTH_MAX),
+    //       "hop-depth overflow must reject with typed SyncHopDepthExceeded \
+    //        carrying observed/max depth diagnostic state per ds-r4r2-2");
+    //   assert_eq!(err.error_code(), ErrorCode::SyncHopDepthExceeded,
+    //       "typed error must map to stable code E_SYNC_HOP_DEPTH_EXCEEDED");
+    //
+    //   // OBSERVABLE consequence (ii): hop-depth overflow rejects with
+    //   // typed E_SYNC_HOP_DEPTH_EXCEEDED before the frame is persisted.
+    //
+    //   // OBSERVABLE consequence (iii): bounded depth is observable via
+    //   // the AttributionFrame query API:
+    //   let bounded = AttributionFrame::sync_hop_depth_max();
+    //   assert_eq!(bounded, SYNC_HOP_DEPTH_MAX,
+    //       "AttributionFrame::sync_hop_depth_max() must report the documented bound");
+    //
+    //   // OBSERVABLE consequence (iv): canonical bytes of
+    //   // AttributionFrame include sync_hop_depth — pinned-CID fixtures
+    //   // rebake at G14-D wave-5a per D-PHASE-3-19a 10+-rebake cohort.
+    //   let frame_bytes = frame_at_b.to_canonical_bytes().unwrap();
+    //   let round_trip = AttributionFrame::from_canonical_bytes(&frame_bytes).unwrap();
+    //   assert_eq!(round_trip.sync_hop_depth(), 1u8,
+    //       "sync_hop_depth must round-trip through canonical-bytes encoding");
+    //
+    // OBSERVABLE consequence: AttributionFrame.sync_hop_depth bounds
+    // peer-hop chain depth at 8 (mirroring Inv-4 sandbox_depth);
+    // overflow rejects with typed E_SYNC_HOP_DEPTH_EXCEEDED before
+    // persistence; bounded depth is queryable + included in canonical
+    // bytes. Defends against the DOS / chain-bloat attack class where
+    // an adversarial peer constructs a long false chain. Composes
+    // G14-D AttributionFrame surface + G16-B sync-replica delivery +
+    // canonical-bytes-pinning per D-PHASE-3-19a.
+    unimplemented!(
+        "G14-D / G16-B wires AttributionFrame.sync_hop_depth bound + E_SYNC_HOP_DEPTH_EXCEEDED \
+         typed variant per ds-r4r2-2 (mirrors Inv-4 sandbox_depth precedent)"
+    );
+}
