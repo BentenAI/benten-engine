@@ -2090,6 +2090,8 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_STREAM_BACKPRESSURE_DROPPED": EStreamBackpressureDropped,
   "E_STREAM_CLOSED_BY_PEER": EStreamClosedByPeer,
   "E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED": EStreamProducerWallclockExceeded,
+  "E_INV_STREAM_CONFIG": EInvStreamConfig,
+  "E_STREAM_HANDLE_LEAKED": EStreamHandleLeaked,
   "E_SUBSCRIBE_DELIVERY_FAILED": ESubscribeDeliveryFailed,
   "E_SUBSCRIBE_PATTERN_INVALID": ESubscribePatternInvalid,
   "E_SUBSCRIBE_CURSOR_LOST": ESubscribeCursorLost,
