@@ -106,6 +106,17 @@ mod devserver;
 // peer.
 #[cfg(all(feature = "napi-export", not(target_arch = "wasm32")))]
 mod identity;
+// Phase 3 G16-D wave-6b — Atrium TS DSL bridge (Pattern B-prime
+// factory-handle form per Ben's D1 ratification 2026-05-05). Surfaces
+// `JsAtrium` (the typed handle returned from `engine.atrium({config})`)
+// + `AtriumConfig` / `DeviceAttestationDeclaration` / `CapabilityClaim`
+// typed structs. Native-only because the underlying handshake protocol
+// body (G16-D's `crates/benten-sync/src/handshake.rs`) is native-only
+// per CLAUDE.md baked-in #17. Browser thin-clients consume the same TS
+// surface but route their declared device-attestation through to the
+// connected full peer (D-PHASE-3-30 thin-client protocol).
+#[cfg(all(feature = "napi-export", not(target_arch = "wasm32")))]
+mod atrium;
 // Phase 2b G10-A-wasip1: napi-side wasm32-wasip1 runtime probes
 // (`wasiTargetKind`, `wasiRuntimeSupportsRedbNative`,
 // `wasiCanonicalFixtureCid`). Cfg-split per the same defence-in-depth

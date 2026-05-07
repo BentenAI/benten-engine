@@ -164,7 +164,13 @@ compile_error!(
 pub mod errors;
 
 #[cfg(not(target_arch = "wasm32"))]
+pub mod handshake;
+
+#[cfg(not(target_arch = "wasm32"))]
 pub mod handshake_wire;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod peer_discovery;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod peer_id;
