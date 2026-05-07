@@ -998,6 +998,76 @@ mod napi_surface {
             }
         }
 
+        /// Phase-3 G19-C2 wave-7 (§7.1): napi bridge for the engine's
+        /// `describe_sandbox_node_for_handler` accessor. Returns a JSON
+        /// object with the resolved-defaults triple + the high-water
+        /// metric values populated by `primitive_host::execute_sandbox`.
+        ///
+        /// Returns `null` when no SANDBOX invocation has been recorded
+        /// for the named handler — the TS-side wrapper at
+        /// `packages/engine/src/engine.ts::describeSandboxNode` falls
+        /// back to the synthesized "unknown" sentinel shape in that case
+        /// (the operator must call the handler at least once before the
+        /// metric record exists).
+        ///
+        /// cfg-gated under `feature = "test-helpers"` matching the
+        /// engine-side accessor's gate. Production cdylib builds DO NOT
+        /// expose this method.
+        #[napi(js_name = "describeSandboxNode")]
+        pub fn describe_sandbox_node_napi(
+            &self,
+            handler_id: String,
+        ) -> napi::Result<Option<String>> {
+            #[cfg(feature = "test-helpers")]
+            {
+                match self.inner.describe_sandbox_node_for_handler(&handler_id) {
+                    Ok(desc) => {
+                        // Serialize to JSON for the napi bridge — the TS
+                        // side parses + projects to `SandboxNodeDescription`.
+                        // Manual format because `SandboxNodeDescription`
+                        // is not Serialize-derivable without pulling
+                        // serde across the stable-shape contract.
+                        let manifest = match desc.manifest_id {
+                            Some(s) => {
+                                format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
+                            }
+                            None => "null".to_string(),
+                        };
+                        let fuel_consumed_high_water = match desc.fuel_consumed_high_water {
+                            Some(n) => n.to_string(),
+                            None => "null".to_string(),
+                        };
+                        let last_invocation_ms = match desc.last_invocation_ms {
+                            Some(n) => n.to_string(),
+                            None => "null".to_string(),
+                        };
+                        Ok(Some(format!(
+                            r#"{{"moduleCid":"{}","manifestId":{},"fuel":{},"wallclockMs":{},"outputLimitBytes":{},"fuelConsumedHighWater":{},"lastInvocationMs":{}}}"#,
+                            desc.module_cid.to_base32(),
+                            manifest,
+                            desc.fuel,
+                            desc.wallclock_ms,
+                            desc.output_limit_bytes,
+                            fuel_consumed_high_water,
+                            last_invocation_ms,
+                        )))
+                    }
+                    // No metrics record yet — TS falls back to sentinels.
+                    Err(_) => Ok(None),
+                }
+            }
+            #[cfg(not(feature = "test-helpers"))]
+            {
+                let _ = handler_id;
+                Err(napi::Error::new(
+                    Status::GenericFailure,
+                    "E_PRIMITIVE_NOT_IMPLEMENTED: describeSandboxNode \
+                     requires the cdylib to be built with `--features test-helpers` \
+                     (vitest / dev build only).",
+                ))
+            }
+        }
+
         // -------- SUBSCRIBE (Phase 2b G6-B) --------
 
         /// Phase 2b G6-B: register an ad-hoc change-stream consumer.
@@ -1683,6 +1753,32 @@ mod napi_surface {
             Ok(match g.as_ref() {
                 Some(h) => i64::try_from(h.seq_so_far()).unwrap_or(i64::MAX),
                 None => 0,
+            })
+        }
+
+        /// Phase-3 G19-C2 wave-7 (§7.1.2 + stream-r1-4): exposes the
+        /// underlying `StreamHandle::requires_explicit_close` flag
+        /// across the napi boundary so the TS-side wrapper at
+        /// `packages/engine/src/stream.ts` can decide whether to arm
+        /// the `FinalizationRegistry` leak detector for a given handle.
+        ///
+        /// Handles produced by `engine.openStream(...)` return `true`
+        /// (explicit-close lifecycle); handles produced by
+        /// `engine.callStream(...)` return `false` (AsyncIterable
+        /// auto-close on `for-await` scope-exit). Pre-G19-C2 the flag
+        /// existed engine-side but did not cross to JS — the TS
+        /// surfaces were functionally indistinguishable.
+        #[napi(js_name = "requiresExplicitClose")]
+        pub fn requires_explicit_close(&self) -> napi::Result<bool> {
+            let g = self.inner.lock().map_err(|_| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    "StreamHandle: internal lock poisoned",
+                )
+            })?;
+            Ok(match g.as_ref() {
+                Some(h) => h.requires_explicit_close(),
+                None => false,
             })
         }
     }

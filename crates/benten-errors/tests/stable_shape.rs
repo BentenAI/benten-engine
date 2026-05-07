@@ -201,6 +201,20 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // — carries observable original_hlc / replay_hlc / window_ms
     // diagnostic fields per pim-2 production-flow drive.
     ErrorCode::HandshakeReplayWithinBoundedWindow,
+    // Phase-3 G19-C2 wave-7 (stream-r1-9 + §7.1.5): per-handler STREAM
+    // chunkCountCap / wallclockBudgetMs config widening the workspace
+    // grant ceiling fires this typed error at registration / call time.
+    // Construction site:
+    // `crates/benten-engine/src/engine_stream.rs::build_stream_handle`
+    // (resolves per-handler properties + validates against
+    // workspace defaults).
+    ErrorCode::InvStreamConfig,
+    // Phase-3 G19-C2 wave-7 (§7.1.2 + stream-r1-4): JS-side
+    // FinalizationRegistry leak detector for handles produced by
+    // `engine.openStream`. Surfaces via the operator observability
+    // surface; no native-side construction site (the typed code is
+    // surfaced from `packages/engine/src/stream.ts`).
+    ErrorCode::StreamHandleLeaked,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -363,11 +377,26 @@ fn variant_count_is_pinned() {
     //     `crates/benten-sync/src/handshake.rs::HandshakeError::ReplayWithinBoundedWindow`,
     //     carrying observable original_hlc / replay_hlc / window_ms
     //     diagnostic fields. Closes ds-r4-3.
-    // Post-G16-D: 97 + 1 = 98. The hardcoded count below tracks
-    // `ALL_CATALOG_VARIANTS.len()`
-    // exactly.
+    // Post-G16-D: 97 + 1 = 98.
+    //
+    // Phase-3 G19-C2 wave-7 adds 2 codes (per-handler STREAM config +
+    // FinalizationRegistry leak):
+    //   `InvStreamConfig` — per-handler STREAM config widens the
+    //     workspace grant ceiling. Construction site at
+    //     `crates/benten-engine/src/engine_stream.rs::build_stream_handle`
+    //     (validates resolved per-handler `chunkCountCap` /
+    //     `wallclockBudgetMs` against workspace defaults; widening
+    //     fails loud per stream-r1-9).
+    //   `StreamHandleLeaked` — JS-side handle dropped without
+    //     `close()`. Surfaced from
+    //     `packages/engine/src/stream.ts::ensureLeakRegistry`
+    //     (FinalizationRegistry callback) + the `Engine.shutdown()`
+    //     drain on `packages/engine/src/engine.ts::Engine` against
+    //     the `engine.onStreamLeaked` operator surface (§7.1.2).
+    // Post-G19-C2: 98 + 2 = 100. The hardcoded count below tracks
+    // `ALL_CATALOG_VARIANTS.len()` exactly.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 98,
+        CATALOG_VARIANT_COUNT, 100,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

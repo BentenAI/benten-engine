@@ -37,9 +37,12 @@ import {
 import { mapTraceStep } from "./internal/trace.js";
 import { toMermaid } from "./mermaid.js";
 import {
+  fireStreamLeak,
+  registerStreamLeakCallback,
   validateStreamCallArgs,
   wrapStreamHandle,
   type NativeStreamHandle,
+  type StreamHandleLeakedEvent,
 } from "./stream.js";
 import {
   serializeCursor,
@@ -222,6 +225,12 @@ interface NativeEngine {
   // Phase 2b wave-8c-cont — D10 snapshot-blob handoff bridges.
   exportSnapshotBlob?: () => Buffer;
   isReadOnlySnapshot?: () => boolean;
+  // Phase-3 G19-C2 wave-7 (§7.1) — describe_sandbox_node native bridge.
+  // cfg-gated under `--features test-helpers` matching the engine-side
+  // accessor; absent on production cdylib builds. Returns a JSON string
+  // (or `null` if no SANDBOX invocation has been recorded for the
+  // handler yet) so the TS wrapper can fall back cleanly.
+  describeSandboxNode?: (handlerId: string) => string | null;
 }
 
 interface NativeEngineCtor {
@@ -548,6 +557,88 @@ export class Engine {
     if (this.closed) return;
     this.closed = true;
   }
+
+  /**
+   * Phase-3 G19-C2 wave-7 (§7.1.2 + stream-r1-4): register a callback
+   * that fires whenever an `engine.openStream(...)` handle is detected
+   * as leaked.
+   *
+   * Two leak paths exist:
+   *
+   * 1. **GC-without-close** — the JS-side handle becomes unreachable
+   *    without `close()` having been called. The TS-side
+   *    FinalizationRegistry callback at
+   *    `packages/engine/src/stream.ts::ensureLeakRegistry` fires
+   *    `E_STREAM_HANDLE_LEAKED` with `cause: "gc-without-close"`.
+   *
+   * 2. **Shutdown drain** — `Engine.shutdown()` walks any open
+   *    explicit-close handles registered with this Engine instance
+   *    and fires `E_STREAM_HANDLE_LEAKED` with
+   *    `cause: "shutdown-drain"` for each (drains synchronously
+   *    instead of waiting for GC).
+   *
+   * Returns a disposer the caller can invoke to remove the callback.
+   * Process-wide registry — shared across all `Engine` instances per
+   * stream-r1-10 (FinalizationRegistry is itself process-global).
+   * Multi-Engine tests should unregister via the returned disposer
+   * before constructing a fresh engine.
+   */
+  public onStreamLeaked(
+    callback: (event: StreamHandleLeakedEvent) => void,
+  ): () => void {
+    this.assertOpen();
+    if (typeof callback !== "function") {
+      throw new EDslInvalidShape(
+        "Engine.onStreamLeaked: callback must be a function",
+      );
+    }
+    return registerStreamLeakCallback(callback);
+  }
+
+  /**
+   * Phase-3 G19-C2 wave-7 (§7.1.2 + stream-r1-4 scenario d): Synchronous
+   * drain of any still-open `openStream` handles registered with this
+   * Engine instance, then close the wrapper. Each still-open handle
+   * fires the registered `onStreamLeaked` callbacks with
+   * `cause: "shutdown-drain"`.
+   *
+   * The native ownership semantics stay correct regardless (Rust
+   * `Drop` joins the producer thread); `shutdown()` is the operator
+   * observability hook for "we are tearing down — don't wait for GC
+   * to surface in-flight handle leaks."
+   *
+   * Idempotent — a second call is a no-op.
+   */
+  public async shutdown(): Promise<void> {
+    if (this.closed) return;
+    // Walk the still-open handles + fire shutdown-drain leaks.
+    for (const handle of this.openExplicitCloseHandles) {
+      try {
+        handle.close();
+      } catch {
+        // Best-effort: swallow per-handle close failures so one
+        // misbehaving handle doesn't block the rest of the drain.
+      }
+      fireStreamLeak({
+        code: "E_STREAM_HANDLE_LEAKED",
+        cause: "shutdown-drain",
+      });
+    }
+    this.openExplicitCloseHandles.clear();
+    this.closed = true;
+  }
+
+  /**
+   * Phase-3 G19-C2 wave-7 (§7.1.2 + stream-r1-4 scenario d): bookkeeping
+   * for `Engine.shutdown()` drain. Holds weak-ish references to the
+   * still-open `openStream` handles registered with this Engine
+   * instance so the shutdown drain can fire their leak events. We use
+   * a `Set<StreamHandle>` rather than a `WeakSet` because `WeakSet`
+   * would race the FinalizationRegistry callback for the
+   * gc-without-close path; the Set entry is removed in close()
+   * (which the wrapper's `wrapStreamHandle` close path invokes).
+   */
+  private readonly openExplicitCloseHandles = new Set<StreamHandle>();
 
   private assertOpen(): void {
     if (this.closed) {
@@ -1740,16 +1831,61 @@ export class Engine {
         { handlerId, suggestions: [...this.knownHandlers.keys()] },
       );
     }
+    // Phase-3 G19-C2 wave-7 (§7.1): when the napi cdylib carries the
+    // `describeSandboxNode` bridge (cfg-gated under
+    // `--features test-helpers`), call into it and return the real
+    // metric values populated by `primitive_host::execute_sandbox`.
+    // Fall back to the synthesized "unknown" shape when the bridge is
+    // absent (production cdylib build) OR when the named handler has
+    // no recorded SANDBOX invocation yet.
+    if (typeof this.inner.describeSandboxNode === "function") {
+      let nativeJson: string | null;
+      try {
+        nativeJson = this.inner.describeSandboxNode(handlerId);
+      } catch {
+        nativeJson = null;
+      }
+      if (nativeJson) {
+        try {
+          const parsed = JSON.parse(nativeJson) as {
+            moduleCid?: string;
+            manifestId?: string | null;
+            fuel?: number;
+            wallclockMs?: number;
+            outputLimitBytes?: number;
+            fuelConsumedHighWater?: number | null;
+            lastInvocationMs?: number | null;
+          };
+          return {
+            moduleCid: parsed.moduleCid ?? nodeId,
+            manifestId: parsed.manifestId ?? null,
+            fuel: parsed.fuel ?? 1_000_000,
+            wallclockMs: parsed.wallclockMs ?? 30_000,
+            outputLimitBytes: parsed.outputLimitBytes ?? 1_048_576,
+            fuelConsumedHighWater:
+              typeof parsed.fuelConsumedHighWater === "number"
+                ? parsed.fuelConsumedHighWater
+                : "unknown",
+            lastInvocationMs:
+              typeof parsed.lastInvocationMs === "number"
+                ? parsed.lastInvocationMs
+                : "unknown",
+          };
+        } catch {
+          // Fall through to the legacy synthesized shape on parse fail.
+        }
+      }
+    }
     return {
       moduleCid: nodeId,
       manifestId: null,
       fuel: 1_000_000,
       wallclockMs: 30_000,
       outputLimitBytes: 1_048_576,
-      // Honest "unknown" sentinel per r6-mpc-3 — metrics are not
-      // tracked at the eval-engine boundary in 2b. Phase-3 will
-      // return a real `number` once SandboxResult.fuelConsumed +
-      // durationMs propagate through StepResult.
+      // Honest "unknown" sentinel per r6-mpc-3 — fall-through shape
+      // when the native cdylib lacks the test-helpers describeSandboxNode
+      // bridge OR when no SANDBOX invocation has been recorded for the
+      // handler yet (the metric record is created lazily on first call).
       fuelConsumedHighWater: "unknown",
       lastInvocationMs: "unknown",
     };
@@ -2000,7 +2136,34 @@ export class Engine {
     } catch (err) {
       throw mapNativeError(err);
     }
-    return wrapStreamHandle(native);
+    // Phase-3 G19-C2 wave-7 (§7.1.2 + stream-r1-4 scenario d): register
+    // explicit-close handles with this Engine so `shutdown()` can drain
+    // them and fire shutdown-drain leak events synchronously. The
+    // wrapper's `close()` path removes the entry; if the consumer never
+    // calls close() the FinalizationRegistry path fires GC-without-close
+    // when the handle becomes unreachable.
+    const handle = wrapStreamHandle(native);
+    if (handle.requiresExplicitClose()) {
+      this.openExplicitCloseHandles.add(handle);
+      const innerClose = handle.close.bind(handle);
+      // Wrap close() to deregister from the shutdown-drain set on
+      // explicit close. Idempotent — set.delete is a no-op if absent.
+      const wrappedClose = () => {
+        this.openExplicitCloseHandles.delete(handle);
+        innerClose();
+      };
+      // Override the close binding on the handle. Property
+      // re-assignment is acceptable here because StreamHandle is a
+      // plain object literal returned by wrapStreamHandle (not a
+      // class instance with read-only descriptors).
+      Object.defineProperty(handle, "close", {
+        value: wrappedClose,
+        writable: true,
+        configurable: true,
+        enumerable: true,
+      });
+    }
+    return handle;
   }
 
   /**

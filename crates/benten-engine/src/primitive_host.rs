@@ -1035,6 +1035,28 @@ impl PrimitiveHost for Engine {
                 });
             Some(callback)
         };
+        // Phase-3 G19-C2 wave-7 (§7.1 SANDBOX execution metrics
+        // propagation): capture the resolved per-call limits + the
+        // dispatching handler-id BEFORE the executor call so we can
+        // populate the engine-side high-water tracker on success.
+        // Manifest-id captured as the named-manifest string (None for
+        // the inline `caps` escape hatch).
+        let metrics_handler_id: Option<String> = self
+            .active_call()
+            .lock_recover()
+            .last()
+            .map(|frame| frame.handler_id.clone());
+        let metrics_manifest_id: Option<String> =
+            if let Some(Value::Text(name)) = op.properties.get("manifest") {
+                Some(name.clone())
+            } else {
+                None
+            };
+        let metrics_fuel = config.fuel;
+        let metrics_wallclock_ms = config.wallclock_ms;
+        let metrics_output_limit_bytes = config.output_bytes;
+        let metrics_invocation_start = std::time::Instant::now();
+
         let result = benten_eval::sandbox::execute_with_live_cap_check(
             &module_bytes,
             manifest_ref,
@@ -1050,11 +1072,34 @@ impl PrimitiveHost for Engine {
         //    `#[from]` impl), preserving the stable `E_SANDBOX_*`
         //    catalog code for the downstream TS layer.
         match result {
-            Ok(sandbox_result) => Ok(benten_eval::StepResult {
-                next: None,
-                edge_label: "ok".to_string(),
-                output: Value::Bytes(sandbox_result.output),
-            }),
+            Ok(sandbox_result) => {
+                // Phase-3 G19-C2 wave-7 (§7.1): record per-invocation
+                // measurements + bump the per-handler high-water mark
+                // so `Engine::describe_sandbox_node_for_handler` returns
+                // real metrics.
+                if let Some(handler_id) = metrics_handler_id {
+                    let elapsed_ms = u64::try_from(metrics_invocation_start.elapsed().as_millis())
+                        .unwrap_or(u64::MAX);
+                    self.inner.record_sandbox_metric(
+                        &handler_id,
+                        crate::engine::SandboxNodeMetrics {
+                            module_cid: Some(module_cid),
+                            manifest_id: metrics_manifest_id,
+                            fuel: metrics_fuel,
+                            wallclock_ms: metrics_wallclock_ms,
+                            output_limit_bytes: metrics_output_limit_bytes,
+                            fuel_consumed_high_water: Some(sandbox_result.fuel_consumed),
+                            output_consumed_high_water: Some(sandbox_result.output_consumed),
+                            last_invocation_ms: Some(elapsed_ms),
+                        },
+                    );
+                }
+                Ok(benten_eval::StepResult {
+                    next: None,
+                    edge_label: "ok".to_string(),
+                    output: Value::Bytes(sandbox_result.output),
+                })
+            }
             Err(sandbox_err) => Err(benten_eval::EvalError::Sandbox(sandbox_err)),
         }
     }

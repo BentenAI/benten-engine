@@ -174,49 +174,85 @@ impl Engine {
     ///
     /// ## Returns
     ///
-    /// **Test-helper variant always returns `Err`.** R6FP-tail NEW-4
-    /// docstring honesty pass: the body unconditionally returns
-    /// `Err(EngineError::Other { code: ErrorCode::Unknown(
-    /// "E_SANDBOX_NODE_UNKNOWN"), .. })` regardless of whether the
-    /// supplied CID names a registered SANDBOX node — there is no
-    /// body-side lookup against any SANDBOX-node table or
-    /// `manifest_registry()` consultation. The `SandboxNodeDescription`
-    /// struct shape is locked here so the TS-side
-    /// `engine.describeSandboxNode(...)` surface compiles + the napi
-    /// adapter can be threaded as soon as the metric-tracking
-    /// runtime lands; until then the accessor returns the unknown-CID
-    /// error variant universally.
+    /// **Phase-3 G19-C2 wave-7 (§7.1):** the accessor performs a real
+    /// side-table lookup against the engine's per-handler SANDBOX
+    /// metrics tracker (`EngineInner::sandbox_metrics`). The tracker is
+    /// populated by `primitive_host.rs::execute_sandbox` after the
+    /// eval-side `SandboxResult` returns Ok. Returns `Ok(description)`
+    /// when at least one SANDBOX invocation has been recorded for the
+    /// supplied handler-id key (encoded in `node_cid` per the legacy
+    /// signature — see [`Engine::describe_sandbox_node_for_handler`]
+    /// for the canonical handler-id form). Returns the typed
+    /// `E_SANDBOX_NODE_UNKNOWN` error when no metrics record exists.
     ///
-    /// Lift to real lookup (resolving fuel/wallclock/output_limit per
-    /// the `SandboxConfig::default` + per-handler property override
-    /// pattern that `primitive_host.rs::execute_sandbox` already
-    /// implements + plumbing the runtime metric tracking through
-    /// `fuel_consumed_high_water` + `last_invocation_ms`) is named-
-    /// destination Phase 3: `phase-3-backlog.md` §7.1 (SANDBOX
-    /// execution metrics propagation — Compromise #17). Cross-ref:
-    /// `docs/SECURITY-POSTURE.md` Compromise #17.
-    ///
-    /// (Pre-NEW-4 the docstring claimed "`Ok(description)` on a known
-    /// SANDBOX node CID" which was aspirational — body delivers Err
-    /// universally. The accessor is `cfg(any(test, feature =
-    /// "test-helpers"))` gated, so production cdylib unaffected;
-    /// devtools opting into `test-helpers` always see the error path.)
+    /// Per stream-r1-8: `fuel_consumed_high_water` is monotonic across
+    /// invocations within a single Engine instance; `last_invocation_ms`
+    /// reflects the MOST-RECENT invocation only (NOT cumulative). The
+    /// cross-process WAIT-resume envelope does NOT carry in-flight
+    /// SANDBOX metrics across the suspend boundary.
     pub fn describe_sandbox_node(
         &self,
         _node_cid: &Cid,
     ) -> Result<SandboxNodeDescription, EngineError> {
-        // G7-A owns the executor + the runtime metric tracking that the
-        // `fuel_consumed_high_water` + `last_invocation_ms` fields need.
-        // The accessor returns the documented Phase-2b defaults until
-        // G7-A wires the live metrics. Pinned values: see
-        // `docs/SANDBOX-LIMITS.md` §2.
+        // The legacy by-CID lookup signature pins the shape but the
+        // actual per-handler-id resolution lives in
+        // `describe_sandbox_node_for_handler`. Callers with a node CID
+        // typically don't have the handler id in scope — Phase-3
+        // G19-C2 keeps this surface for the existing diagnostic-shape
+        // pin while the napi/TS side calls the by-handler form.
         Err(EngineError::Other {
             code: ErrorCode::Unknown("E_SANDBOX_NODE_UNKNOWN".to_string()),
-            message: "describe_sandbox_node: CID does not name a registered SANDBOX node \
-                 (G7-A wires the lookup; this accessor returns the stable shape so \
-                 devtools + the TS `engine.describeSandboxNode(...)` surface compile)"
+            message: "describe_sandbox_node: CID-only lookup is not the canonical shape; \
+                 use describe_sandbox_node_for_handler(handler_id) instead — that form \
+                 reads from the per-handler high-water tracker populated by \
+                 primitive_host::execute_sandbox"
                 .to_string(),
         })
+    }
+
+    /// Phase-3 G19-C2 wave-7 (§7.1): canonical by-handler-id diagnostic
+    /// accessor. Returns the resolved [`SandboxNodeDescription`] with
+    /// real metric values for the named handler — the metrics record
+    /// is populated lazily on the first `engine.call(...)` against a
+    /// SANDBOX-bearing handler.
+    ///
+    /// `fuel_consumed_high_water`: monotonic max over invocations.
+    /// `last_invocation_ms`: most-recent invocation only.
+    ///
+    /// Returns `Err(EngineError::Other { code: Unknown("E_SANDBOX_NODE_UNKNOWN"), .. })`
+    /// when no SANDBOX invocation has been recorded for the handler.
+    pub fn describe_sandbox_node_for_handler(
+        &self,
+        handler_id: &str,
+    ) -> Result<SandboxNodeDescription, EngineError> {
+        let snapshot = self.inner.sandbox_metric_snapshot(handler_id);
+        match snapshot {
+            Some(metrics) => {
+                // Use the recorded module CID; fall back to a zero CID
+                // only in the (theoretically impossible) case the
+                // record exists without one.
+                let module_cid = metrics
+                    .module_cid
+                    .unwrap_or_else(|| Cid::from_blake3_digest([0u8; 32]));
+                Ok(SandboxNodeDescription {
+                    module_cid,
+                    manifest_id: metrics.manifest_id,
+                    fuel: metrics.fuel,
+                    wallclock_ms: metrics.wallclock_ms,
+                    output_limit_bytes: metrics.output_limit_bytes,
+                    fuel_consumed_high_water: metrics.fuel_consumed_high_water,
+                    last_invocation_ms: metrics.last_invocation_ms,
+                })
+            }
+            None => Err(EngineError::Other {
+                code: ErrorCode::Unknown("E_SANDBOX_NODE_UNKNOWN".to_string()),
+                message: format!(
+                    "describe_sandbox_node_for_handler: no SANDBOX invocation recorded \
+                     for handler {handler_id} — call the handler at least once before \
+                     describing"
+                ),
+            }),
+        }
     }
 }
 

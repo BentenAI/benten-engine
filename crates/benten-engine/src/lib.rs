@@ -227,7 +227,9 @@ pub mod engine_sync;
 pub use benten_eval::chunk_sink::{Chunk, ChunkSink};
 pub use engine_sandbox::{SANDBOX_UNAVAILABLE_ON_WASM_TEXT, SandboxNodeDescription};
 #[cfg(not(feature = "browser-backend"))]
-pub use engine_stream::{StreamCursor, StreamHandle};
+pub use engine_stream::{
+    STREAM_GRANT_CEILING_CHUNK_COUNT, STREAM_GRANT_CEILING_WALLCLOCK_MS, StreamCursor, StreamHandle,
+};
 pub use engine_subscribe::{OnChangeCallback, SubscribeCursor, Subscription};
 #[cfg(not(feature = "browser-backend"))]
 pub use engine_wait::{ResumePayload, SuspensionOutcome};

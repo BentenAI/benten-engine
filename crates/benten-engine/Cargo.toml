@@ -195,6 +195,17 @@ serde_ipld_dagcbor = { workspace = true }
 wat = { workspace = true }
 blake3 = { workspace = true }
 
+# Phase-3 G19-C2 wave-7 (§7.1) — SANDBOX execution-metrics propagation
+# tests. The `describe_sandbox_node_for_handler` accessor lives behind
+# `cfg(any(test, feature = "test-helpers"))` per Phase-2a sec-r6r2-02
+# discipline; the integration test crate compiles separately from the
+# library crate so the `cfg(test)` arm there is NOT visible to the lib.
+# Pinning `required-features = ["test-helpers"]` opts the test in
+# explicitly so the accessor symbol is present at link time.
+[[test]]
+name = "sandbox_metrics"
+required-features = ["test-helpers"]
+
 [[bench]]
 name = "roundtrip"
 harness = false

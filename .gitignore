@@ -62,7 +62,15 @@ SPIKE-phase-1-stack-RESULTS.md
 # rewritten for a public audience.
 docs/VISION.md
 docs/ENGINE-SPEC.md
-docs/DSL-SPECIFICATION.md
+# `docs/DSL-SPECIFICATION.md` re-tracked in Phase 3 G19-D wave-7: the
+# G19-D worked example for the SUBSCRIBE handler-id-router is named
+# from `docs/future/phase-3-backlog.md` (lines 655, 659, 895, 901) per
+# HARD RULE rule-12 clause-(b) — destination MUST EXIST in fresh CI
+# clones for the BELONGS-NAMED-NOW disposition to hold. Same re-tracking
+# pattern as `docs/SECURITY-POSTURE.md` (G11-A Wave 3a) +
+# `docs/INVARIANT-COVERAGE.md` + `docs/HOST-FUNCTIONS.md` (Phase 2b
+# G11-2b) — public-rewrite-pending content stays as-is; visibility is
+# what re-tracking restores.
 docs/TRANSFORM-GRAMMAR.md
 docs/FULL-ROADMAP.md
 # `docs/SECURITY-POSTURE.md` re-tracked in G11-A Wave 3a DOC-REGRESSION:

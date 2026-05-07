@@ -495,6 +495,8 @@ The Rust-side anchor test `crates/benten-eval/tests/sandbox_severity_priority_g1
 
 **Touch size:** ~150-200 LOC.
 
+**Phase-3 G19-C2 wave-7 landing state (2026-05-07):** parts (a) RAM-only per-handler high-water tracker + (b) napi `describeSandboxNode` cfg-gated bridge + (c) TS-side `Engine.describeSandboxNode` consuming real numeric values landed. Per stream-r1-8: high-water values are PER-INVOCATION updates against the high-water mark within a single Engine instance; the cross-process WAIT-resume envelope does NOT carry in-flight SANDBOX metrics across the suspend boundary (a fresh `Engine::open` starts with an empty metrics map by design). Persistent durable cross-restart metrics are still §1.1 GraphBackend umbrella trait shaped — RAM-only tracker is the Phase-3 minimum-viable; durable promotion follows §1.1 / §1.2 Snapshot direct-wire.
+
 ### 7.1.1 SnapshotBlobBackend metric-propagation entry (cross-ref §1.2)
 
 **Phase 2b state:** §7.1 above describes SANDBOX execution-metrics propagation (`fuel_consumed`/`output_consumed` propagation through engine wrapper into a per-node high-water tracker). The SnapshotBlobBackend direct-wire (§1.2) is the structural unblocker because the per-node side-table that holds those metrics lives in the GraphBackend umbrella trait the genericism unlocks. R6-FP Group 2 PR #61 docstrings cite this entry by name (`packages/engine/src/engine.ts:1567` — the `public async describeSandboxNode(...)` JSDoc; class-method, so cited by line — and `bindings/napi/src/sandbox.rs:108-119` comment block).
@@ -514,6 +516,14 @@ The Rust-side anchor test `crates/benten-eval/tests/sandbox_severity_priority_g1
 Together they realize the cr-r4b-10 closure-narrative claim that `E_STREAM_HANDLE_LEAKED` fires on a leaked open-stream handle.
 
 **Touch size:** ~30-40 LOC napi + ~20-30 LOC TS + 1 leak-detector test. Risk surface: low (purely additive observer; no production-runtime semantics change).
+
+**Phase-3 G19-C2 wave-7 landing state (2026-05-07):** parts (a) + (b) landed. The 4 master scenarios from stream-r1-4 are pinned:
+- (a) handler-returns-no-close + GC: gated on `typeof globalThis.gc === "function"` (requires `--expose-gc`); fires through the FinalizationRegistry callback.
+- (b) handler-throws-no-close + GC: same `--expose-gc` gate; fires through the same callback path.
+- (c) natural-completion negative pin: deterministic — the iterator's `return()` path disarms the bookkeeping flag so `for-await ... break` / drain-to-end does NOT fire `E_STREAM_HANDLE_LEAKED`.
+- (d) `Engine.shutdown()` drain: deterministic — walks the engine's open-explicit-close-handle set, fires shutdown-drain leak events for each, then closes the wrapper.
+
+**Sub-mechanism — GC-pressure-timeout polling fallback (§7.1.2.1):** for environments without `--expose-gc` (Node default + most browser-target runtimes), the FinalizationRegistry callback timing is non-deterministic. A bounded-retry polling fallback that fires the leak event on a configurable timeout (default ~5s) is a follow-up. Touch size: ~50-100 LOC TS + 2-3 test scenarios. Lands in a Phase-3 narrow-iter cycle (post-G19-C2 close); the 4 master scenarios are sufficient for §7.1.2's load-bearing observable-consequence contract per pim-2 §3.6b.
 
 ### 7.1.3 UserView.snapshot() + onUpdate() runtime materialization (post-G8-B)
 
@@ -616,9 +626,11 @@ through the napi cdylib; G19-B wave-7 onEmit callback splats args
 correctly + onChange splat + retired-marker-grep tests). The `engine.ts::emitEvent` wrapper drops the "deferred"
 verbiage in its docstring and surfaces the EmitBroadcast direct path.
 
-### 7.9 TS-surface-parity sweep (Edge interface phantom `cid` + dropped `properties`; broader latent pre-Phase-2b TS-side drift)
+### 7.9 TS-surface-parity sweep (Edge interface phantom `cid` + dropped `properties`; broader latent pre-Phase-2b TS-side drift) — CLOSED IN G19-D WAVE-7
 
-**Phase 2b state:** R6-R4 producer/consumer-deep-sweep-redux surfaced a pre-Phase-2b TS-surface drift candidate that is OUT-OF-SCOPE for the Phase-2b-close tag (named-destination-here per HARD RULE rule (b) + foundational `feedback_no_defer_HARD_RULE`):
+**Phase-3 G19-D wave-7 RESOLUTION:** Edge interface fix landed (drop phantom `cid`; add `properties?: Record<string, JsonValue>`). Rust-side schema-parity meta-test landed at `crates/benten-engine/tests/ts_surface_parity_meta_test.rs` walking the napi `edge_to_json` producer keys against the TS Edge interface field set. Synthetic-drift fixture rejection (`tests/ts_surface_parity_meta_test_rejects_synthetic_drift_fixture`) defends against silent-no-op meta-test failure (pim-2 §3.6b). TS-side compile-time pin at `packages/engine/test/edge_interface.test.ts`. The structural defense closes the Edge phantom-cid recurrence vector at the test layer.
+
+**Phase 2b state (preserved for narrative):** R6-R4 producer/consumer-deep-sweep-redux surfaced a pre-Phase-2b TS-surface drift candidate that is OUT-OF-SCOPE for the Phase-2b-close tag (named-destination-here per HARD RULE rule (b) + foundational `feedback_no_defer_HARD_RULE`):
 
 - `packages/engine/src/Edge` interface (`packages/engine/src/types.ts::Edge`) declares `{ cid: string, source, target, label }` — 4 fields. The napi producer at `bindings/napi/src/edge.rs::edge_to_json` emits `{ source, target, label, properties? }` — 4 fields with TWO mismatches: (a) the TS interface declares `cid: string` but the napi producer never emits a `cid` field on the edge JSON (any TS caller reading `edge.cid` gets `undefined` at runtime); (b) the TS interface OMITS `properties` while the napi producer emits it when present (any TS caller wanting `edge.properties` hits a TS compile error).
 - Origin: PR `3fc5262` `fix(dx)` from 2026-04-19 (Phase-2a R6 DX work, NOT Phase-2b). Preserved through every Phase-2b R5 wave + every R6 round (R6-R1 / R6-R2 / R6-R3 deep-sweep / R6-R3 narrow-iteration) without surfacing because the existing producer/consumer audits walked the producer-emits-field-vs-consumer-drops-field shape; the Edge case is the INVERTED shape (consumer-declares-field-vs-producer-doesn't-emit-it) which the Phase-2b-bounded sweeps did not target.
@@ -642,9 +654,11 @@ verbiage in its docstring and surfaces the EmitBroadcast direct path.
 
 **Touch size:** ~80-150 LOC across `packages/engine/src/types.ts` (interface parity edits) + 1 Rust meta-test pin (~50-80 LOC) + cross-target pre-flight sweep. Risk surface: low — the additions are typed-surface widenings that existing TS callers don't depend on (zero current consumers).
 
-### 7.10 SUBSCRIBE handler-id-router + DSL-args-vs-eval-properties parity meta-test
+### 7.10 SUBSCRIBE handler-id-router + DSL-args-vs-eval-properties parity meta-test — CLOSED IN G19-D WAVE-7 (handler-id-router seam wired in G14-D wave-5a; meta-test landed in G19-D wave-7)
 
-**Phase 2b state (as of R6-R4 narrow-iteration close):**
+**Phase-3 G19-D wave-7 RESOLUTION:** SUBSCRIBE handler-id-router seam was wired in G14-D wave-5a per seq-major-8 (`crates/benten-eval/src/primitives/subscribe.rs::execute` lines 1295-1317); G19-D wave-7 restored the corresponding TS DSL surface field (`SubscribeArgs.handler?`) + landed the LOAD-BEARING DSL-args-vs-eval-primitive-properties parity meta-test at `crates/benten-engine/tests/dsl_args_vs_eval_properties_parity_meta_test.rs`. The meta-test walks every `*Args` interface in `dsl.ts` against the eval-side primitive's canonical keyspace + 4 consumer projections (mermaid producer + drift-detector + ChangeEvent translation + DSL helper modules). 6 Args translators landed in dsl.ts (translateReadArgs / translateBranchArgs / translateIterateArgs / translateTransformArgs / translateCallArgs / translateRespondArgs). 5 synthetic-drift-fixture rejection meta-meta tests defend against silent-no-op meta-test failure (pim-2 §3.6b end-to-end). DSL-SPECIFICATION.md worked example for SUBSCRIBE handler-id-router published at `docs/DSL-SPECIFICATION.md`. The structural defense converges the 24-instance long-tail recurrence at the structural layer.
+
+**Phase 2b state (preserved for narrative; as of R6-R4 narrow-iteration close):**
 
 R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift instance: `SubscribeArgs.handler` was declared in the TS DSL and actively written to the SubgraphNode props bag (`packages/engine/src/dsl.ts` SubgraphBuilder + CaseBuilder), but the eval-side primitive at `crates/benten-eval/src/primitives/subscribe.rs::execute` reads ONLY the `pattern` property — never `handler`. PR #74's r6-r4-cr-1 fix mirrored an assumed EMIT precedent too literally; in practice neither EMIT nor SUBSCRIBE routes on a handler-id today (EMIT routes on `channel` name match; SUBSCRIBE on `pattern` match).
 
