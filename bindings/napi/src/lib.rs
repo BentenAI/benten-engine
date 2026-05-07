@@ -628,6 +628,62 @@ mod napi_surface {
             Ok(outcome_to_json(&outcome))
         }
 
+        /// Phase-3 G19-C1 — runtime accessor for `view.snapshot()`
+        /// (per `docs/future/phase-3-backlog.md` §7.1.3). Returns the
+        /// view's currently-materialized rows as a JSON array (or
+        /// `null` when no view is registered with `view_id`).
+        ///
+        /// JS surface: `engine.userViewSnapshot(viewId) -> Node[] | null`
+        #[napi(js_name = "userViewSnapshot")]
+        pub fn user_view_snapshot(&self, view_id: String) -> napi::Result<serde_json::Value> {
+            match crate::view::user_view_snapshot_adapter(&self.inner, &view_id)? {
+                Some(arr) => Ok(arr),
+                None => Ok(serde_json::Value::Null),
+            }
+        }
+
+        /// Phase-3 G19-C1 — incremental delta drain accessor for
+        /// `view.onUpdate()` (per `docs/future/phase-3-backlog.md`
+        /// §7.1.3). Stateless cursor protocol — the JS-side async
+        /// iterator passes its prior `nextOffset` per call and the
+        /// engine drains every ChangeEvent matching the view's input
+        /// label since that cursor.
+        ///
+        /// Return shape:
+        /// ```text
+        /// {
+        ///   registered: boolean,
+        ///   events: ChangeEventJson[],
+        ///   nextOffset: number
+        /// }
+        /// ```
+        ///
+        /// JS surface: `engine.userViewDrainUpdates(viewId, sinceOffset)`.
+        #[napi(js_name = "userViewDrainUpdates")]
+        pub fn user_view_drain_updates(
+            &self,
+            view_id: String,
+            since_offset: i64,
+        ) -> napi::Result<serde_json::Value> {
+            // i64 → u64 with negative-cursor clamp at 0 (a JS caller
+            // passing -1 means "start from the beginning"; the engine's
+            // observed_events is bounded so this is safe).
+            let offset = u64::try_from(since_offset).unwrap_or(0);
+            crate::view::user_view_drain_updates_adapter(&self.inner, &view_id, offset)
+        }
+
+        /// Phase-3 G19-C1 — head-cursor accessor mirroring
+        /// [`Self::user_view_drain_updates`]'s `nextOffset` field. Used
+        /// by the JS wrapper as the starting cursor for a freshly-
+        /// constructed `view.onUpdate()` async iterator (so an iterator
+        /// created BEFORE any writes registers cleanly at offset 0,
+        /// while an iterator created mid-session starts at the current
+        /// head and only sees events strictly newer than now).
+        #[napi(js_name = "userViewChangeOffset")]
+        pub fn user_view_change_offset(&self) -> i64 {
+            i64::try_from(self.inner.user_view_change_offset()).unwrap_or(i64::MAX)
+        }
+
         // -------- Misc --------
 
         /// Emit a named event with a JSON payload.
@@ -775,6 +831,54 @@ mod napi_surface {
             principal_cid: String,
         ) -> napi::Result<serde_json::Value> {
             resume_from_bytes_as_adapter(&self.inner, bytes.as_ref(), signal_value, &principal_cid)
+        }
+
+        /// Phase-3 G19-C1 (§7.1.4 + r6-napi-2 closure): testing-only
+        /// wallclock-advance hook for the WAIT TTL expiry path.
+        ///
+        /// Tests exercising the TTL-expired branch of `resume_with_meta`
+        /// would otherwise have to wait `timeout_ms` real wall-clock
+        /// time before resuming; this binding lets the harness fast-
+        /// forward the engine's `MonotonicSource` past the deadline
+        /// deterministically.
+        ///
+        /// The body is `test-helpers`-feature-gated per Phase-2a
+        /// sec-r6r2-02 cfg-gating audit precedent: the production
+        /// cdylib build (default `napi-export` features only) surfaces
+        /// `E_PRIMITIVE_NOT_IMPLEMENTED` so callers learn the binding
+        /// is test-grade rather than silently no-op'ing. Vitest /
+        /// integration-test cdylib builds compile with
+        /// `--features test-helpers` and inherit the engine-side
+        /// `testing_advance_wait_clock` helper at
+        /// `crates/benten-engine/src/testing.rs`.
+        #[napi(js_name = "testingAdvanceWaitClock")]
+        pub fn testing_advance_wait_clock(&self, delta_ms: u32) -> napi::Result<()> {
+            #[cfg(any(test, feature = "test-helpers"))]
+            {
+                // Phase-3 G19-C1 (phase-3-backlog §7.1.4) wired entry
+                // point. Forwards to the engine-side helper at
+                // `crates/benten-engine/src/testing.rs::testing_advance_wait_clock`
+                // (no-op stub today; D12 lifts the body to a real
+                // MockMonotonicSource advance). Signature relaxed
+                // upstream to `&Engine` (was `&mut Engine`) so the
+                // napi `Arc<InnerEngine>` shape forwards without an
+                // owned-clone shim — interior mutation will live on
+                // the time-source field once D12 lands. Pre-flight
+                // guard: a negative delta is rejected at the adapter.
+                crate::wait::testing_advance_wait_clock_adapter(&self.inner, i64::from(delta_ms))?;
+                Ok(())
+            }
+            #[cfg(not(any(test, feature = "test-helpers")))]
+            {
+                let _ = delta_ms;
+                Err(napi::Error::new(
+                    Status::GenericFailure,
+                    "E_PRIMITIVE_NOT_IMPLEMENTED: testingAdvanceWaitClock \
+                     requires the cdylib to be built with `--features test-helpers` \
+                     (vitest harness build only). Production cdylib consumers \
+                     should never reach this surface.",
+                ))
+            }
         }
 
         // -------- STREAM (Phase 2b G6-B) --------
@@ -1877,6 +1981,34 @@ pub mod testing {
                 Ok(Value::Map(out))
             }
         }
+    }
+
+    /// Phase-3 G19-C1 (§7.1.4 + r6-napi-2 closure) — testing-only
+    /// wallclock-advance hook for the WAIT TTL expiry path.
+    ///
+    /// Returns `Ok(())` for a zero delta (sentinel-presence pin
+    /// `testing_advance_wait_clock_napi_binding_present`). For non-zero
+    /// deltas the body forwards to the engine-side stub at
+    /// `crates/benten-engine/src/testing.rs::testing_advance_wait_clock`,
+    /// which D12-resolves to a real `MockMonotonicSource` advance once
+    /// the source-injection plumbing lands. Until then non-zero deltas
+    /// resolve to `Ok(())` deterministically — the function shape is
+    /// forward-compatible.
+    ///
+    /// Cfg-gating discipline (sec-r6r2-02 precedent): this helper lives
+    /// in the rlib-only `testing` module so the production cdylib does
+    /// NOT carry the binding. The corresponding `#[napi]` method on the
+    /// `Engine` class (test-helpers feature-gated) shares the same
+    /// no-widening-of-production-attack-surface contract.
+    ///
+    /// # Errors
+    ///
+    /// Currently never errors. Returns `Result<(), String>` so the
+    /// signature can carry a typed error once the MockMonotonicSource
+    /// injection lands without breaking callers.
+    pub fn testing_advance_wait_clock(_delta_ms: u64) -> Result<(), String> {
+        // Forward-compatible no-op; see method docstring above.
+        Ok(())
     }
 }
 

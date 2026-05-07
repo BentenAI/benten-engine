@@ -239,6 +239,19 @@ pub(crate) struct EngineInner {
     #[cfg(any(test, feature = "test-helpers"))]
     pub(crate) test_markers: std::sync::Mutex<std::collections::HashSet<Cid>>,
 
+    /// Phase-3 G19-C1 (phase-3-backlog §7.1.3) — in-memory map of
+    /// user-view input-label hints captured at
+    /// [`Engine::register_user_view`] time. Used by
+    /// [`Engine::user_view_on_update`] to derive the label filter for
+    /// the returned [`ChangeProbe`] without round-tripping through the
+    /// persisted `system:IVMView` Node. Canonical hand-written views
+    /// have their input label resolved via
+    /// [`benten_ivm::hardcoded_label_for_id`]; this map covers the
+    /// generic user-defined fallback path. Maps `view_id` → input
+    /// label string (the same value persisted as
+    /// `input_pattern_label` on the `system:IVMView` Node).
+    pub(crate) user_view_input_labels: std::sync::Mutex<BTreeMap<String, String>>,
+
     /// Phase-3 G19-C2 wave-7 (§7.1 SANDBOX execution metrics
     /// propagation): per-handler-id cumulative-high-water tracker for
     /// SANDBOX `fuel_consumed`, `output_consumed`, and the most-recent
@@ -322,6 +335,7 @@ impl EngineInner {
             )),
             #[cfg(any(test, feature = "test-helpers"))]
             test_markers: std::sync::Mutex::new(std::collections::HashSet::new()),
+            user_view_input_labels: std::sync::Mutex::new(BTreeMap::new()),
             sandbox_metrics: std::sync::Mutex::new(BTreeMap::new()),
         }
     }

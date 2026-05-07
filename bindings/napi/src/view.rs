@@ -9,8 +9,11 @@
 //! building forward-compatible view definitions doesn't get silently
 //! ignored.
 
-use benten_engine::{UserViewInputPattern, UserViewSpec};
+use benten_engine::{Engine as InnerEngine, UserViewInputPattern, UserViewSpec};
 use napi::bindgen_prelude::*;
+
+use crate::error::engine_err;
+use crate::node::node_to_json;
 
 /// Known Phase-1 view-definition fields. Anything outside this set
 /// surfaces `E_INPUT_LIMIT` so a typo or a forward-compatible field
@@ -149,4 +152,114 @@ pub(crate) fn parse_user_view_spec(v: &serde_json::Value) -> napi::Result<UserVi
     builder
         .build()
         .map_err(|msg| napi::Error::new(Status::InvalidArg, msg))
+}
+
+// ---------------------------------------------------------------------------
+// Phase-3 G19-C1 — UserView.snapshot() + onUpdate() runtime materialization
+// (per `docs/future/phase-3-backlog.md` §7.1.3)
+// ---------------------------------------------------------------------------
+
+/// Internal: drive [`InnerEngine::user_view_snapshot`] and project the
+/// returned `Vec<Node>` to a JSON array. Each row is the same shape the
+/// existing `read_view` napi entry point returns inside `Outcome.list`.
+///
+/// Returns:
+/// - `Ok(Some(json_array))` — view registered; rows materialized.
+/// - `Ok(None)` — no view with this id is registered.
+/// - `Err(...)` — IVM-disabled / view-stale (typed engine errors round-tripped
+///   through `engine_err`).
+///
+/// Cfg-gated `cfg(not(feature = "browser-backend"))` because the
+/// underlying `Engine::user_view_snapshot` lives in `engine_views.rs`
+/// which is itself gated out of the browser thin-client bundle (per
+/// CLAUDE.md baked-in #17 — views are read-only projections of the
+/// full peer's state in the wasm32 target). The lib.rs call site is
+/// inside `napi_surface` which is also `cfg(not(target_arch = "wasm32"))`-gated,
+/// so this gating is consistent.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn user_view_snapshot_adapter(
+    engine: &InnerEngine,
+    view_id: &str,
+) -> napi::Result<Option<serde_json::Value>> {
+    match engine.user_view_snapshot(view_id).map_err(engine_err)? {
+        None => Ok(None),
+        Some(rows) => {
+            let arr: Vec<serde_json::Value> = rows.iter().map(node_to_json).collect();
+            Ok(Some(serde_json::Value::Array(arr)))
+        }
+    }
+}
+
+/// Internal: drive [`InnerEngine::user_view_drain_updates_since`] and
+/// project the returned ChangeEvents to a JSON object the JS-side
+/// `view.onUpdate()` async iterator consumes:
+///
+/// ```text
+/// {
+///   "registered": true | false,
+///   "events": [<ChangeEvent-JSON>],
+///   "next_offset": <u64>
+/// }
+/// ```
+///
+/// `registered: false` signals "no view with this id" so the JS side
+/// can surface a typed error to the caller; `events` is empty until at
+/// least one ChangeEvent matching the view's input label is recorded
+/// after `since_offset`. The TS wrapper records `next_offset` after
+/// each drain so the next async-iterator step replays only events
+/// strictly newer than the prior cursor.
+///
+/// Cfg-gated `cfg(not(feature = "browser-backend"))` for the same
+/// reason as `user_view_snapshot_adapter` above — `engine_views.rs`
+/// is gated out under browser-backend per CLAUDE.md baked-in #17.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn user_view_drain_updates_adapter(
+    engine: &InnerEngine,
+    view_id: &str,
+    since_offset: u64,
+) -> napi::Result<serde_json::Value> {
+    let mut map = serde_json::Map::new();
+    let drained = engine
+        .user_view_drain_updates_since(view_id, since_offset)
+        .map_err(engine_err)?;
+    let Some(events) = drained else {
+        map.insert("registered".into(), serde_json::Value::Bool(false));
+        map.insert("events".into(), serde_json::Value::Array(Vec::new()));
+        map.insert(
+            "next_offset".into(),
+            serde_json::Value::Number(serde_json::Number::from(since_offset)),
+        );
+        return Ok(serde_json::Value::Object(map));
+    };
+    let next_offset = engine.user_view_change_offset();
+    let mut events_json = Vec::with_capacity(events.len());
+    for ev in events {
+        let mut evmap = serde_json::Map::new();
+        evmap.insert(
+            "kind".into(),
+            serde_json::Value::String(format!("{:?}", ev.kind)),
+        );
+        evmap.insert(
+            "labels".into(),
+            serde_json::Value::Array(
+                ev.labels
+                    .iter()
+                    .map(|l| serde_json::Value::String(l.clone()))
+                    .collect(),
+            ),
+        );
+        evmap.insert("cid".into(), serde_json::Value::String(ev.cid.to_base32()));
+        evmap.insert(
+            "tx_id".into(),
+            serde_json::Value::Number(serde_json::Number::from(ev.tx_id)),
+        );
+        events_json.push(serde_json::Value::Object(evmap));
+    }
+    map.insert("registered".into(), serde_json::Value::Bool(true));
+    map.insert("events".into(), serde_json::Value::Array(events_json));
+    map.insert(
+        "next_offset".into(),
+        serde_json::Value::Number(serde_json::Number::from(next_offset)),
+    );
+    Ok(serde_json::Value::Object(map))
 }

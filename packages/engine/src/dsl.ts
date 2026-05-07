@@ -277,6 +277,39 @@ export interface WaitDurationArgs {
   signal_shape?: never;
 }
 
+/**
+ * Phase-3 G19-C1 (§7.1.4 + r6-napi-2 closure) — argument shape for
+ * `subgraph(...).waitWithTtl(args)`.
+ *
+ * Pre-G19-C1 the TS DSL surface had two paths for a TTL-bounded
+ * signal-WAIT: the bare-string `wait({ signal, duration: "60s" })`
+ * (parsed via `parseDurationToMs`) or the lower-level `WaitArgs`
+ * shape. Neither accepted milliseconds directly; r6-napi-2 named the
+ * gap. `WaitWithTtlArgs` collapses the public surface for the common
+ * case (numeric milliseconds at the boundary) and preserves the
+ * load-bearing camelCase → snake_case translation (camelCase `ttlMs`
+ * here → snake_case `timeout_ms` on the OperationNode property bag
+ * the eval-side primitive at
+ * `crates/benten-eval/src/primitives/wait.rs::evaluate_op_with_handler_id`
+ * reads).
+ *
+ * Signal-with-TTL is the only shape this method accepts — a bare-
+ * duration WAIT (no signal) continues to use `wait({ duration })`.
+ */
+export interface WaitWithTtlArgs {
+  /** Signal name the WAIT suspends on (e.g. `"external:payment"`). */
+  signal: string;
+  /**
+   * Deadline in milliseconds — translates to `timeout_ms` on the
+   * OperationNode property bag. If the signal does not arrive within
+   * `ttlMs`, the eval-side `wait::resume_with_meta` consumer fires
+   * `E_WAIT_TIMEOUT` per the existing signal-with-deadline contract.
+   */
+  ttlMs: number;
+  /** Optional payload schema (forwarded verbatim to the eval-side reader). */
+  signal_shape?: string;
+}
+
 // ---------------------------------------------------------------------------
 // WAIT duration-string parser (R6-R5 r6-r5-pcds-2 — 23rd producer/consumer
 // drift fix-pass)
@@ -895,6 +928,67 @@ export class SubgraphBuilder {
   }
 
   /**
+   * Phase-3 G19-C1 (phase-3-backlog §7.1.4) — declarative TTL on a
+   * WAIT primitive. Builds a signal-keyed WAIT whose `timeout_ms`
+   * deadline is set from `ttlMs`. If the signal does not arrive within
+   * the TTL the engine fires `E_WAIT_TIMEOUT` at the suspension
+   * deadline rather than suspending forever.
+   *
+   * Equivalent imperative form:
+   * ```ts
+   * subgraph(...).action("run").wait({ signal, duration: "<N>(s|m|h)" })
+   * ```
+   * The `waitWithTtl` builder is the ergonomic surface — it accepts
+   * milliseconds directly so callers don't have to format duration
+   * strings, and it stamps `timeout_ms` directly on the OperationNode
+   * args bag (skipping the `parseDurationToMs` translator since the
+   * caller already supplies milliseconds). Mirrors `WaitSignalArgs`'s
+   * "signal-with-deadline" shape from the Rust-side WAIT primitive.
+   *
+   * Throws `EDslInvalidShape` for non-positive `ttlMs` (the eval-side
+   * reader at `wait::evaluate_op_with_handler_id` treats `timeout_ms <=
+   * 0` as "no deadline"; surfacing the rejection here gives callers
+   * an immediate failure rather than a silently-suspended handler).
+   */
+  public waitWithTtl(args: WaitWithTtlArgs): this;
+  public waitWithTtl(signal: string, opts: { ttlMs: number; signal_shape?: string }): this;
+  public waitWithTtl(
+    signalOrArgs: string | WaitWithTtlArgs,
+    optsArg?: { ttlMs: number; signal_shape?: string },
+  ): this {
+    const a: WaitWithTtlArgs =
+      typeof signalOrArgs === "string"
+        ? {
+            signal: signalOrArgs,
+            ttlMs: optsArg?.ttlMs as number,
+            signal_shape: optsArg?.signal_shape,
+          }
+        : signalOrArgs;
+    const signal = a.signal;
+    if (typeof signal !== "string" || signal.length === 0) {
+      throw new EDslInvalidShape(
+        "waitWithTtl(args) requires a non-empty signal string (E_DSL_INVALID_SHAPE)",
+      );
+    }
+    if (
+      typeof a.ttlMs !== "number" ||
+      !Number.isFinite(a.ttlMs) ||
+      a.ttlMs <= 0
+    ) {
+      throw new EDslInvalidShape(
+        "waitWithTtl(args) requires a positive finite millisecond ttlMs (E_DSL_INVALID_SHAPE)",
+      );
+    }
+    // Stamp directly into the eval-side reader's canonical key shape
+    // (`signal: Text`, `timeout_ms: Int`) — bypass `translateWaitArgs`
+    // since the caller already supplies milliseconds.
+    return this.addNode("wait", {
+      signal,
+      timeout_ms: Math.floor(a.ttlMs),
+    });
+  }
+
+  /**
    * Open a BRANCH switching on the expression supplied in `args.on`.
    * Case bodies are supplied via `.case(value, s => s.respond(...))`.
    * Each case sub-builder receives a fresh scope; returned sub-nodes
@@ -1138,6 +1232,48 @@ export class CaseBuilder {
     // route through the same translator so a regression at one site is
     // caught by the load-bearing eval-side end-to-end pin.
     return this.addNode("sandbox", translateSandboxArgs(a));
+  }
+
+  /**
+   * Phase-3 G19-C1 — `waitWithTtl` mirror inside a CaseBuilder
+   * (BRANCH case body). See `SubgraphBuilder.waitWithTtl` for the full
+   * rationale; both builders MUST stay in lockstep on the spread
+   * shape so a CASE-arm WAIT-TTL behaves identically to a top-level
+   * WAIT-TTL.
+   */
+  public waitWithTtl(args: WaitWithTtlArgs): this;
+  public waitWithTtl(signal: string, opts: { ttlMs: number; signal_shape?: string }): this;
+  public waitWithTtl(
+    signalOrArgs: string | WaitWithTtlArgs,
+    optsArg?: { ttlMs: number; signal_shape?: string },
+  ): this {
+    const a: WaitWithTtlArgs =
+      typeof signalOrArgs === "string"
+        ? {
+            signal: signalOrArgs,
+            ttlMs: optsArg?.ttlMs as number,
+            signal_shape: optsArg?.signal_shape,
+          }
+        : signalOrArgs;
+    const signal = a.signal;
+    if (typeof signal !== "string" || signal.length === 0) {
+      throw new EDslInvalidShape(
+        "waitWithTtl(args) requires a non-empty signal string (E_DSL_INVALID_SHAPE)",
+      );
+    }
+    if (
+      typeof a.ttlMs !== "number" ||
+      !Number.isFinite(a.ttlMs) ||
+      a.ttlMs <= 0
+    ) {
+      throw new EDslInvalidShape(
+        "waitWithTtl(args) requires a positive finite millisecond ttlMs (E_DSL_INVALID_SHAPE)",
+      );
+    }
+    return this.addNode("wait", {
+      signal,
+      timeout_ms: Math.floor(a.ttlMs),
+    });
   }
 
   /** Move the scope's nodes out for merging into the parent. */

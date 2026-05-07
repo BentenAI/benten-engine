@@ -409,6 +409,176 @@ impl Engine {
         self.read_view_with(view_id, ReadViewOptions::allow_stale())
     }
 
+    // -------- User-view snapshot + on_update (Phase-3 G19-C1, §7.1.3) --------
+
+    /// Phase-3 G19-C1 — runtime materialization accessor for a
+    /// registered IVM view (per `docs/future/phase-3-backlog.md` §7.1.3).
+    ///
+    /// Returns the current materialized rows for a registered view as
+    /// a hydrated `Vec<Node>`. The seam is the same one
+    /// [`Self::read_view_with`] consumes ([`benten_ivm::Subscriber::read_view`]
+    /// + `ViewResult` projection); this entry point lifts the rows into
+    /// a flat `Option<Vec<Node>>` shape the napi bridge can render
+    /// directly without the surrounding `Outcome` wrapper.
+    ///
+    /// - `Ok(None)` — no view registered with `view_id`.
+    /// - `Ok(Some(rows))` — the live subscriber's current materialization.
+    ///
+    /// Per CLAUDE.md baked-in #2 the engine consults the IVM `Subscriber`
+    /// surface only — no `View` / algorithm internals leak through the
+    /// boundary. Stale-view semantics mirror the `read_view_with`
+    /// strict path: a stale view fires
+    /// [`EngineError::IvmViewStale`] (callers wanting last-known-good
+    /// reads use [`Self::read_view_allow_stale`] which is already
+    /// generalized).
+    ///
+    /// # Errors
+    ///
+    /// - [`EngineError::SubsystemDisabled`] when IVM is disabled
+    ///   (`.without_ivm()`).
+    /// - [`EngineError::IvmViewStale`] when the view is stale.
+    pub fn user_view_snapshot(&self, view_id: &str) -> Result<Option<Vec<Node>>, EngineError> {
+        if !self.ivm_enabled {
+            return Err(EngineError::SubsystemDisabled { subsystem: "ivm" });
+        }
+        let normalized = view_id.strip_prefix("system:ivm:").unwrap_or(view_id);
+        let Some(ivm) = self.ivm.as_ref() else {
+            return Ok(None);
+        };
+        if ivm.view_is_stale(normalized).is_none() {
+            return Ok(None);
+        }
+        // Strict read — stale views surface as IvmViewStale per the
+        // CLAUDE.md baked-in #2 boundary contract; relaxed reads remain
+        // the existing `read_view_allow_stale` entry point.
+        let outcome = self.read_view_with(view_id, ReadViewOptions::strict())?;
+        Ok(Some(outcome.list.unwrap_or_default()))
+    }
+
+    /// Phase-3 G19-C1 — incremental delta probe for a registered IVM
+    /// view (per `docs/future/phase-3-backlog.md` §7.1.3).
+    ///
+    /// Returns `Ok(None)` when no view is registered for `view_id`.
+    /// Returns `Ok(Some(probe))` carrying a [`ChangeProbe`] filtered to
+    /// the view's input-pattern label — calls to `probe.drain()` after
+    /// new WRITEs commit will yield the [`benten_graph::ChangeEvent`]s
+    /// the view observed since the probe was created. Each ChangeEvent
+    /// represents one incremental delta; consumers project to their
+    /// preferred shape.
+    ///
+    /// The label filter is derived from the view's registration
+    /// metadata: canonical hand-written view ids map through
+    /// [`benten_ivm::hardcoded_label_for_id`]; user-defined views are
+    /// served from the in-memory `user_view_input_labels` map populated
+    /// at [`Self::register_user_view`] time.
+    ///
+    /// Per CLAUDE.md baked-in #2 this surface composes the existing
+    /// engine-level [`Self::subscribe_change_events`] probe rather than
+    /// reaching into IVM internals — change events flow through the
+    /// engine's own change stream and are filtered by label at the
+    /// engine boundary.
+    ///
+    /// # Errors
+    ///
+    /// - [`EngineError::SubsystemDisabled`] when IVM is disabled.
+    pub fn user_view_on_update(&self, view_id: &str) -> Result<Option<ChangeProbe>, EngineError> {
+        if !self.ivm_enabled {
+            return Err(EngineError::SubsystemDisabled { subsystem: "ivm" });
+        }
+        let normalized = view_id.strip_prefix("system:ivm:").unwrap_or(view_id);
+        let Some(ivm) = self.ivm.as_ref() else {
+            return Ok(None);
+        };
+        // Confirm the view is registered before returning a probe; an
+        // unknown view returns None so the napi bridge can surface a
+        // typed error to the caller.
+        if ivm.view_is_stale(normalized).is_none() {
+            return Ok(None);
+        }
+        // Derive the input label. Canonical ids resolve via
+        // `hardcoded_label_for_id`; user-defined ids consult the
+        // in-memory cache populated at registration time.
+        let label = if let Some(hardcoded) = benten_ivm::hardcoded_label_for_id(normalized) {
+            Some(hardcoded.to_string())
+        } else {
+            let guard = self
+                .inner
+                .user_view_input_labels
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            guard.get(normalized).cloned()
+        };
+        Ok(Some(ChangeProbe {
+            inner: Arc::clone(&self.inner),
+            start_offset: self
+                .inner
+                .event_count
+                .load(std::sync::atomic::Ordering::SeqCst),
+            label_filter: label,
+        }))
+    }
+
+    /// Phase-3 G19-C1 — cursor-aware drain helper for the napi bridge.
+    ///
+    /// Mirrors [`Self::user_view_on_update`] but stamps the probe's
+    /// `start_offset` from the caller-supplied cursor and immediately
+    /// drains. Returns `Ok(None)` when no view is registered for
+    /// `view_id`; otherwise returns the (filtered) ChangeEvents
+    /// observed since `since_offset`. Used by the napi
+    /// `userViewDrainUpdates` accessor so the TypeScript-side iterator
+    /// is stateless across calls (the JS wrapper records
+    /// `next_offset` per call and re-issues the drain on the next
+    /// async-iterator step).
+    ///
+    /// # Errors
+    ///
+    /// - [`EngineError::SubsystemDisabled`] when IVM is disabled.
+    pub fn user_view_drain_updates_since(
+        &self,
+        view_id: &str,
+        since_offset: u64,
+    ) -> Result<Option<Vec<benten_graph::ChangeEvent>>, EngineError> {
+        if !self.ivm_enabled {
+            return Err(EngineError::SubsystemDisabled { subsystem: "ivm" });
+        }
+        let normalized = view_id.strip_prefix("system:ivm:").unwrap_or(view_id);
+        let Some(ivm) = self.ivm.as_ref() else {
+            return Ok(None);
+        };
+        if ivm.view_is_stale(normalized).is_none() {
+            return Ok(None);
+        }
+        let label = if let Some(hardcoded) = benten_ivm::hardcoded_label_for_id(normalized) {
+            Some(hardcoded.to_string())
+        } else {
+            let guard = self
+                .inner
+                .user_view_input_labels
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            guard.get(normalized).cloned()
+        };
+        let probe = ChangeProbe {
+            inner: Arc::clone(&self.inner),
+            start_offset: since_offset,
+            label_filter: label,
+        };
+        Ok(Some(probe.drain()))
+    }
+
+    /// Phase-3 G19-C1 — accessor for the engine's current ChangeEvent
+    /// head offset. The napi-side `view.onUpdate()` iterator records
+    /// the head as the `next_offset` it will pass back on the next
+    /// drain step. Mirrors [`Self::change_event_count`] but lifted to
+    /// the public surface as a paired accessor next to the
+    /// view-on-update entry point.
+    #[must_use]
+    pub fn user_view_change_offset(&self) -> u64 {
+        self.inner
+            .event_count
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
     // -------- User-view registration (Phase 2b G8-B) --------
 
     /// Register a user-defined IVM view via the [`UserViewSpec`] builder.
@@ -501,6 +671,21 @@ impl Engine {
             }
         };
         let input_pattern_label = Some(label_pattern.as_label_str().to_string());
+
+        // Phase-3 G19-C1 (phase-3-backlog §7.1.3): cache the resolved
+        // input label so [`Engine::user_view_on_update`] can derive the
+        // probe's label filter without hitting the backend. Insert
+        // happens BEFORE the backend Node-write so a registration
+        // failure leaves no stale entry in the map (the persisted Node
+        // is the durable source-of-truth; this map is a lookup hint).
+        if let Some(label) = input_pattern_label.as_deref() {
+            let mut guard = self
+                .inner
+                .user_view_input_labels
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            guard.insert(spec.id().to_string(), label.to_string());
+        }
 
         // Persist the view definition Node so the registration is content-
         // addressed + visible to Phase-3 sync. The Node carries the user

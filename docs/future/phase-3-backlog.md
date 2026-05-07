@@ -537,6 +537,8 @@ Together they realize the cr-r4b-10 closure-narrative claim that `E_STREAM_HANDL
 
 **Touch size:** ~150-250 LOC engine + napi + TS + 3-5 regression tests. Risk surface: medium (introduces a new public API).
 
+**Phase-3 G19-C1 wave-7 LANDING STATUS:** (a) + (b) LANDED — `Engine::user_view_snapshot` + `Engine::user_view_on_update` (engine_views.rs) + napi `userViewSnapshot` / `userViewDrainUpdates` / `userViewChangeOffset` accessors + TS-side `view.snapshot()` AsyncIterable + `view.onUpdate(cb)` polling subscription wired through `UserViewRuntimeShim` in `packages/engine/src/views.ts`. Tests `user_view_snapshot_returns_current_materialized_rows` + `user_view_on_update_yields_incremental_deltas` GREEN. The polling cadence (25ms) is tunable post-Algorithm-B-port if back-pressure surfaces.
+
 ### 7.1.4 WAIT TTL TS DSL + suspend/resume DX surface widening (post-G12-E)
 
 **Phase 2b state:** G12-E (PR #43, #57) shipped the engine-side WAIT envelope + suspension store. The TS-side DSL helpers for WAIT-TTL (declarative time-bounded waits with auto-resume on TTL expiry) + ergonomic suspend/resume call shapes are red-phase-deferred. R6-FP Group 2 PR #61 `packages/engine/test/wait_ttl.test.ts:34-36` `.skip` rationale names this entry as the destination.
@@ -549,6 +551,8 @@ Together they realize the cr-r4b-10 closure-narrative claim that `E_STREAM_HANDL
 **Why deferred:** The `testingAdvanceWaitClock` helper requires test-mode mock-clock plumbing that crosses the napi boundary; Phase-3's broader engine clock-injection work bundles cleanly.
 
 **Touch size:** ~80-150 LOC TS surface + ~30-50 LOC napi binding + 5-7 regression tests + DSL spec doc updates.
+
+**Phase-3 G19-C1 wave-7 LANDING STATUS:** (a) + (b) entry-point + (c) LANDED — `subgraph(...).waitWithTtl({ signal, ttlMs })` (+ positional overload) on `SubgraphBuilder` + `CaseBuilder` (dsl.ts); `Engine.resumeWithMeta(envelope, signal)` ergonomic wrapper carrying `ResumeWithMetaResult` discriminated union (engine.ts); `Engine::testingAdvanceWaitClock(deltaMs)` napi `#[napi]` method test-helpers feature-gated + `benten_napi::testing::testing_advance_wait_clock` rlib free function. The (b) `resumeWithMeta` body currently always resolves to `{ kind: "complete", outcome }` — the discriminated `kind: "suspended"` arm exists in the public type contract for forward-compat with cross-process re-suspension (post-D12 wiring). The (c) `testing_advance_wait_clock` body is a forward-compatible no-op until D12's `MockMonotonicSource` injection plumbing lands. Tests `wait_ttl_dsl_subgraph_builder_round_trip` (+ overload + reject pins) + `engine_resume_with_meta_ergonomic_wrapper` + `testing_advance_wait_clock_napi_binding_present` GREEN.
 
 ### 7.1.5 STREAM ESC defenses per-handler configurability (per-handler chunk-count + wallclock-budget)
 
