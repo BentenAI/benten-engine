@@ -138,21 +138,24 @@ fn sandbox_recursive_call_overflow_traps_via_dedicated_variant() {
     );
 
     // The napi engine_err mapping passes the catalog code through
-    // generically (no per-variant special-case needed; the
-    // `format!("{code}: ...")` shape surfaces the stable
-    // `E_SANDBOX_STACK_OVERFLOW` string):
-    let napi_src = std::fs::read_to_string(
+    // generically (no per-variant special-case needed; post Phase-3
+    // G19-B (PR #127) the JSON envelope formatter lives in
+    // `bindings/napi/src/error_envelope.rs` — `err.code()` is invoked
+    // there to populate the structured `code` field. The cascade is
+    // honored via the JSON envelope shape (the production
+    // `engine_err` carrier consumes `error_envelope::engine_err_envelope_json`).
+    let napi_envelope_src = std::fs::read_to_string(
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("..")
             .join("..")
             .join("bindings")
             .join("napi")
             .join("src")
-            .join("error.rs"),
+            .join("error_envelope.rs"),
     )
-    .expect("bindings/napi/src/error.rs must exist");
+    .expect("bindings/napi/src/error_envelope.rs must exist");
     assert!(
-        napi_src.contains("err.code()"),
-        "bindings/napi/src/error.rs::engine_err MUST surface the typed code via err.code() per the cascade"
+        napi_envelope_src.contains("err.code()"),
+        "bindings/napi/src/error_envelope.rs::engine_err_envelope_json MUST surface the typed code via err.code() per the cascade (post G19-B refactor)"
     );
 }

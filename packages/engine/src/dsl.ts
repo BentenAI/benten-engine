@@ -65,22 +65,77 @@ function stampAttribution(
 // ---------------------------------------------------------------------------
 // Primitive-specific argument shapes (public; consumed by the DSL methods)
 // ---------------------------------------------------------------------------
+//
+// # Phase-3 G19-D §7.9 + r1-napi-3 / D-PHASE-3-29 surface-parity sweep
+//
+// Each *Args interface declares the user-facing surface; the DSL
+// builder's primitive method (e.g. `subgraph(...).read(args)`) routes
+// the args through a per-primitive `translateXxxArgs` helper that maps
+// the DSL surface field names onto the eval-side primitive's actual
+// keyspace (the keys that `crates/benten-eval/src/primitives/<p>.rs::execute`
+// reads via `op.properties.get("...")`).
+//
+// This mirrors the WAIT precedent (PR #76 `translateWaitArgs`) + the
+// SANDBOX precedent (G17-C wave-5b `translateSandboxArgs`). Pre-G19-D
+// six pre-existing TS DSL Args drifts existed where the user-facing
+// fields were spread verbatim into the OperationNode property bag and
+// the eval-side primitive read DIFFERENT keys — silent value-loss /
+// no-op routing for any DSL caller exercising the affected primitive
+// end-to-end.
+//
+// The corresponding eval-side keyspaces (per
+// `crates/benten-eval/src/primitives/*.rs::execute`):
+//
+//   ReadArgs       → `query_kind` / `target_cid` / `label`
+//                    DSL surface: { label, by, value, as }
+//   BranchArgs     → `match_value` / `condition_value` / `cases` /
+//                    `has_default` / `conditions`
+//                    DSL surface: { on }
+//   IterateArgs    → `items` / `requires`
+//                    DSL surface: { over, max }
+//   TransformArgs  → `expr` / `input` / `result`
+//                    DSL surface: { expr, as }
+//   CallArgs       → `child_scope` / `parent_scope` / `target` /
+//                    `call_op` / `requires` / `timeout_ms`
+//                    DSL surface: { handler, action, input, isolated }
+//   RespondArgs    → `status` / `body`
+//                    DSL surface: { body, edge, status }
+//
+// A translator-output orphan (DSL field with no eval-side reader) OR a
+// canonical-key orphan (eval-side reader with no DSL producer) is
+// caught structurally by the LOAD-BEARING parity meta-test at
+// `crates/benten-engine/tests/dsl_args_vs_eval_properties_parity_meta_test.rs`.
+// See `translateReadArgs` / `translateBranchArgs` / `translateIterateArgs`
+// / `translateTransformArgs` / `translateCallArgs` / `translateRespondArgs`
+// below for the per-primitive translation contract.
 
 export interface ReadArgs {
-  /** Label to read from. */
+  /** Label to read from. Translates to eval-side `label` (verbatim). */
   label: string;
-  /** Lookup key (`"id"` / `"cid"` / `"property-name"`). */
+  /**
+   * Lookup key. `"cid"` translates to eval-side `query_kind: "by_cid"`
+   * + `target_cid: <value>` (the eval-side READ primitive's
+   * by-CID query path); `"_listView"` translates to eval-side
+   * `query_kind: "list_view"`; `"id"` is treated as the by-CID alias
+   * for ergonomics. Other values pass through as `query_kind` verbatim
+   * — the by-property-name path lights up in Phase-3+ when the
+   * generalized READ keyspace expands.
+   */
   by?: string;
-  /** Optional literal value to filter on (when `by` is set). */
+  /**
+   * Literal value to filter on (consumed by the corresponding `by`
+   * mode). When `by === "cid"`, the value translates to eval-side
+   * `target_cid: Text(<value>)`.
+   */
   value?: JsonValue;
-  /** Bind the READ result under this key on `$result`. */
+  /** Bind the READ result under this key on `$result` (DSL-side; not read by eval). */
   as?: string;
 }
 
 export interface WriteArgs {
-  /** Label for the Node being written. */
+  /** Label for the Node being written. Eval-side reads `label` verbatim. */
   label: string;
-  /** Properties to write (merged with injected DSL-side fields). */
+  /** Properties to write. Eval-side reads `properties` verbatim. */
   properties?: Record<string, JsonValue>;
   /** Optional `requires` capability (gates the WRITE at commit). */
   requires?: string;
@@ -89,45 +144,98 @@ export interface WriteArgs {
 export interface TransformArgs {
   /**
    * The TRANSFORM expression source (a subset of JS per
-   * `docs/TRANSFORM-GRAMMAR.md`). Parsed at registration.
+   * `docs/TRANSFORM-GRAMMAR.md`). Parsed at registration. Eval-side
+   * reads `expr` verbatim.
    */
   expr: string;
-  /** Where to bind the result on `$result`. */
+  /**
+   * Where to bind the result on `$result`. DSL-side bind hint; the
+   * eval-side primitive reads `result` (the projection target key)
+   * after evaluation — `as` translates to `result` per
+   * `translateTransformArgs`.
+   */
   as?: string;
 }
 
 export interface BranchArgs {
-  /** Expression over `$result` / `$input` to switch on. */
+  /**
+   * Expression over `$result` / `$input` to switch on. Translates to
+   * eval-side `match_value: Text(<expr>)` (the canonical match-on-text
+   * key the BRANCH primitive reads). Per-case routing is handled
+   * separately by the builder via `.case(value, body)` calls which
+   * stamp `CASE:<value>` outgoing edges; the `cases` / `has_default` /
+   * `conditions` keys the eval-side primitive reads are populated by
+   * the engine builder's compile path from the edge table (NOT spread
+   * into the args bag here).
+   */
   on: string;
 }
 
 export interface IterateArgs {
-  /** Source list expression. */
+  /**
+   * Source list expression. Translates to eval-side
+   * `items: Text(<expr>)` — the iteration-over-list key the eval-side
+   * ITERATE primitive reads.
+   */
   over: string;
-  /** Max iteration count (required — invariant 9). */
+  /**
+   * Max iteration count (required — invariant 9). Translates to
+   * eval-side `max` (verbatim — Inv-9 budget is enforced from the
+   * `max` property on the OperationNode at evaluator setup time).
+   */
   max: number;
 }
 
 export interface CallArgs {
-  /** Handler id to CALL. */
+  /**
+   * Handler id to CALL. Translates to eval-side `target: Text(<id>)`
+   * (the canonical target-handler key the CALL primitive's dispatch
+   * path reads).
+   */
   handler: string;
-  /** Action on the target handler (e.g. `"post:get"`). */
+  /**
+   * Action on the target handler (e.g. `"post:get"`). Translates to
+   * eval-side `call_op: Text(<action>)` (the action-name key the CALL
+   * primitive reads when dispatching to the named handler).
+   */
   action?: string;
-  /** Input expression bound to the callee's `$input`. */
+  /**
+   * Input expression bound to the callee's `$input`. DSL-side bind
+   * hint; preserved verbatim into the args bag for the engine's
+   * compile path.
+   */
   input?: string;
   /**
    * If `true`, the CALL enters an isolated capability scope and cannot
-   * delegate parent caps. Default `false`.
+   * delegate parent caps (default `false`). Translates to eval-side
+   * `child_scope: Bool(true)` when set; absent (`undefined` / `false`)
+   * produces no `child_scope` key (the eval-side CALL primitive's
+   * default scope-inheritance path applies).
    */
   isolated?: boolean;
 }
 
 export interface RespondArgs {
-  /** Response body expression. */
+  /**
+   * Response body expression. Eval-side reads `body` verbatim
+   * (`crates/benten-eval/src/primitives/respond.rs::execute` reads
+   * `op.properties.get("body")`).
+   */
   body?: string;
-  /** Optional typed error edge to route through (e.g. `"ON_NOT_FOUND"`). */
+  /**
+   * Optional typed error edge to route through (e.g. `"ON_NOT_FOUND"`).
+   * DSL-side routing hint; surfaces on the OperationNode's outgoing
+   * edge table (NOT spread into the args bag — the BRANCH/RESPOND
+   * routing is edge-driven, not properties-driven, per the engine's
+   * compile path).
+   */
   edge?: string;
-  /** Optional status code override (HTTP mapping — not enforced in Phase 1). */
+  /**
+   * Optional status code override (HTTP mapping — not enforced in
+   * Phase 1). Eval-side reads `status` verbatim
+   * (`crates/benten-eval/src/primitives/respond.rs::execute` reads
+   * `op.properties.get("status")`).
+   */
   status?: number;
 }
 
@@ -271,18 +379,36 @@ export interface StreamArgs {
   chunkSize?: number;
 }
 export interface SubscribeArgs {
+  /**
+   * Event/pattern the SUBSCRIBE matches. DSL surface name retained for
+   * developer ergonomics; translates to eval-side
+   * `pattern: Text(<event>)` per the SUBSCRIBE primitive's match path
+   * (`crates/benten-eval/src/primitives/subscribe.rs::execute` reads
+   * `op.properties.get("pattern")`).
+   */
   event: string;
-  // R6-R4 narrow-iteration r6-r4-narrow-pcds-1 (21st producer/consumer drift):
-  // `handler?: string` removed pending Phase-3 SUBSCRIBE handler-id-router work
-  // (`docs/future/phase-3-backlog.md` §7.10). The eval-side primitive at
-  // `crates/benten-eval/src/primitives/subscribe.rs::execute` reads only
-  // `pattern`; PR #74's r6-r4-cr-1 fix wrote `handler` into the props bag
-  // without an eval-side reader, silently dropping the field. The
-  // worked-example narrative for the SUBSCRIBE handler-id-router lands
-  // alongside DSL-SPECIFICATION.md when that doc is finalized in Phase 3
-  // (see `docs/future/phase-3-backlog.md` §7.10 for the restoration
-  // shape; the DSL public-rewrite scope itself carries from
-  // `docs/future/phase-2-backlog.md` §8.3 deferral).
+  /**
+   * Phase-3 G19-D §7.10 + §7.9 + r1-napi-3 (D-PHASE-3-29):
+   * **SubscribeArgs.handler RE-INTRODUCED** post-Phase-2b removal. The
+   * eval-side handler-id-router seam was wired in G14-D wave-5a per
+   * seq-major-8 (`crates/benten-eval/src/primitives/subscribe.rs::execute`
+   * reads `op.properties.get("handler")`); G19-D wave-7 restores the corresponding TS DSL
+   * surface field that PR #75's R6-R4-narrow fix-pass had to drop
+   * pending the eval-side wiring.
+   *
+   * When set, the SUBSCRIBE primitive routes change-event delivery
+   * THROUGH the named handler instead of the default broadcast
+   * fan-out. Translates to eval-side `handler: Text(<id>)` per the
+   * G14-D handler-id-router seam. See `docs/DSL-SPECIFICATION.md`
+   * worked example for the handler-id-router routing model.
+   *
+   * Closes the 21st producer/consumer drift (R6-R4-narrow-pcds-1)
+   * loop: pre-G14-D the field was a phantom (TS DSL produced it; eval
+   * never read it); post-G14-D + post-G19-D the field is wired
+   * end-to-end with the LOAD-BEARING parity meta-test asserting no
+   * orphan reads/writes on either side.
+   */
+  handler?: string;
 }
 /**
  * Phase-3 G17-C wave-5b (phase-3-backlog §6.6 — 24th p/c drift
@@ -357,6 +483,245 @@ function translateSandboxArgs(
   if (Array.isArray(a.caps)) {
     // by-caps escape hatch — caps key is canonical eval-side.
     props.caps = a.caps as unknown as JsonValue;
+  }
+  return props;
+}
+
+// ---------------------------------------------------------------------------
+// Phase-3 G19-D §7.9 + r1-napi-3 — per-primitive Args→eval-keyspace translators
+// ---------------------------------------------------------------------------
+//
+// Each translator mirrors the WAIT (PR #76 `translateWaitArgs`) +
+// SANDBOX (G17-C wave-5b `translateSandboxArgs`) precedents: the DSL
+// surface is the user-facing field-name vocabulary; the eval-side
+// primitive at `crates/benten-eval/src/primitives/<p>.rs::execute`
+// reads its OWN canonical key vocabulary. The translator bridges the
+// two so a regression that drops a translation site (or omits a new
+// field from the translator) is caught by the LOAD-BEARING
+// `dsl_args_vs_eval_properties_parity_meta_test` at structural layer.
+//
+// Translation discipline (per pim-11 §3.6d + §3.6 consumer-audit):
+//   - The translator's OUTPUT keyspace MUST be a subset of the
+//     eval-side primitive's actual `op.properties.get("...")` reads.
+//   - Every eval-side reader MUST have a translator producer (catches
+//     orphan-reader shape: a key the eval reads with no DSL producer).
+//   - Field-by-field translation, NOT a verbatim spread (catches
+//     phantom-field shape: a DSL field the eval never reads).
+
+/**
+ * G19-D §7.9 — translate `ReadArgs` to the eval-side READ primitive's
+ * keyspace per `crates/benten-eval/src/primitives/read.rs::execute`.
+ *
+ *   DSL surface          → eval-side keyspace
+ *   {label}              → label: Text(<label>)
+ *   {by: "cid"}          → query_kind: Text("by_cid")
+ *   {by: "id"}           → query_kind: Text("by_cid") (id is alias)
+ *   {by: "_listView"}    → query_kind: Text("list_view")
+ *   {by: "<other>"}      → query_kind: Text("<other>") (passthrough)
+ *   {value: <v>}         → target_cid: Text(<v>) (when by === "cid"/"id")
+ *
+ * `as` is a DSL-side bind hint NOT spread to the eval side (the eval
+ * READ primitive does not project on a bind alias; the engine compile
+ * path consumes `as` upstream of property-bag construction when
+ * relevant).
+ */
+function translateReadArgs(args: ReadArgs): Record<string, JsonValue> {
+  const props: Record<string, JsonValue> = {};
+  if (typeof args.label === "string") {
+    props.label = args.label;
+  }
+  if (typeof args.by === "string") {
+    if (args.by === "cid" || args.by === "id") {
+      props.query_kind = "by_cid";
+      if (args.value !== undefined) {
+        // The eval-side reader at primitives/read.rs lines 52-57
+        // accepts `target_cid` as Bytes OR Text; the TS DSL spread
+        // produces Text — the napi `json_to_props` round-trip
+        // preserves it as Value::Text which the eval-side fallback
+        // arm handles.
+        props.target_cid = args.value as JsonValue;
+      }
+    } else if (args.by === "_listView") {
+      props.query_kind = "list_view";
+    } else {
+      // Passthrough — Phase-3+ widening of the READ primitive's
+      // by-property path will read additional `query_kind` discriminants;
+      // the meta-test would fire if the discriminant has no eval-side
+      // reader.
+      props.query_kind = args.by;
+      if (args.value !== undefined) {
+        props.target_cid = args.value as JsonValue;
+      }
+    }
+  }
+  return props;
+}
+
+/**
+ * G19-D §7.9 — translate `BranchArgs` to the eval-side BRANCH
+ * primitive's keyspace per `primitives/branch.rs::execute`.
+ *
+ *   DSL surface → eval-side keyspace
+ *   {on}        → match_value: Text(<on-expr>)
+ *
+ * The `cases` / `has_default` / `conditions` keys the eval-side
+ * primitive reads (lines 53 / 66 / 102) are populated by the engine
+ * compile path from the BRANCH node's outgoing edge table (`CASE:<v>`
+ * labels), NOT spread into the args bag from the DSL surface. The DSL
+ * builder's `.case(value, body)` calls stamp those edges; the engine
+ * compile path consumes them and emits the per-case keyspace as
+ * needed.
+ */
+function translateBranchArgs(args: BranchArgs): Record<string, JsonValue> {
+  const props: Record<string, JsonValue> = {};
+  if (typeof args.on === "string") {
+    props.match_value = args.on;
+  }
+  return props;
+}
+
+/**
+ * G19-D §7.9 — translate `IterateArgs` to the eval-side ITERATE
+ * primitive's keyspace per `primitives/iterate.rs::execute`.
+ *
+ *   DSL surface  → eval-side keyspace
+ *   {over}       → items: Text(<over-expr>)
+ *   {max}        → max: Int(<max>) (Inv-9 budget — verbatim key)
+ *
+ * The eval-side `requires` key (line 94) is populated by the engine
+ * compile path from a separate capability declaration when relevant;
+ * NOT spread from the DSL surface here.
+ */
+function translateIterateArgs(args: IterateArgs): Record<string, JsonValue> {
+  const props: Record<string, JsonValue> = {};
+  if (typeof args.over === "string") {
+    props.items = args.over;
+  }
+  if (typeof args.max === "number") {
+    // `max` is canonical eval-side key — Inv-9 budget enforced from
+    // the OperationNode property bag at evaluator setup time.
+    props.max = args.max;
+  }
+  return props;
+}
+
+/**
+ * G19-D §7.9 — translate `TransformArgs` to the eval-side TRANSFORM
+ * primitive's keyspace per `primitives/transform.rs::execute`.
+ *
+ *   DSL surface → eval-side keyspace
+ *   {expr}      → expr: Text(<expr>) (verbatim — canonical key)
+ *   {as}        → result: Text(<bind-key>) (projection-target key)
+ *
+ * The eval-side `input` key (line 61) is populated by the engine
+ * compile path when the TRANSFORM has an upstream binding; NOT spread
+ * from the DSL surface here.
+ */
+function translateTransformArgs(
+  args: TransformArgs,
+): Record<string, JsonValue> {
+  const props: Record<string, JsonValue> = {};
+  if (typeof args.expr === "string") {
+    props.expr = args.expr;
+  }
+  if (typeof args.as === "string") {
+    props.result = args.as;
+  }
+  return props;
+}
+
+/**
+ * G19-D §7.9 — translate `CallArgs` to the eval-side CALL primitive's
+ * keyspace per `primitives/call.rs::execute`.
+ *
+ *   DSL surface       → eval-side keyspace
+ *   {handler}         → target: Text(<handler-id>)
+ *   {action}          → call_op: Text(<action>)
+ *   {input}           → input: Text(<input-expr>) (DSL-side bind hint
+ *                       preserved verbatim for the engine compile path)
+ *   {isolated: true}  → child_scope: Bool(true)
+ *
+ * The eval-side `parent_scope` / `requires` / `timeout_ms` /
+ * `elapsed_ms` keys (lines 82 / 66 / 100 / 101) are populated by the
+ * engine compile path from the surrounding CALL frame, NOT spread from
+ * the DSL surface. (Per CallArgs JSDoc above: timeout/scope-inheritance
+ * is engine-driven, not DSL-surface-driven.)
+ */
+function translateCallArgs(args: CallArgs): Record<string, JsonValue> {
+  const props: Record<string, JsonValue> = {};
+  if (typeof args.handler === "string") {
+    props.target = args.handler;
+  }
+  if (typeof args.action === "string") {
+    props.call_op = args.action;
+  }
+  if (typeof args.input === "string") {
+    // Preserve DSL-side bind hint; engine compile path consumes.
+    props.input = args.input;
+  }
+  if (args.isolated === true) {
+    // Set `child_scope` only when truthy — the eval-side path treats
+    // absence as "inherit parent scope" (the default behavior).
+    props.child_scope = true;
+  }
+  return props;
+}
+
+/**
+ * G19-D §7.9 — translate `RespondArgs` to the eval-side RESPOND
+ * primitive's keyspace per `primitives/respond.rs::execute`.
+ *
+ *   DSL surface → eval-side keyspace
+ *   {body}      → body: Text(<body-expr>) (verbatim)
+ *   {status}    → status: Int(<status>) (verbatim)
+ *   {edge}      → (NOT spread; routing is edge-driven via
+ *                  the OperationNode's outgoing edge table — the
+ *                  engine compile path consumes the `edge` hint to
+ *                  stamp the appropriate routing edge label).
+ *
+ * RespondArgs is the closest-to-no-drift Args interface — `body` +
+ * `status` translate verbatim. The `edge` hint is by-design omitted
+ * from the property bag (its surface lives on the edge table).
+ */
+function translateRespondArgs(args: RespondArgs): Record<string, JsonValue> {
+  const props: Record<string, JsonValue> = {};
+  if (typeof args.body === "string") {
+    props.body = args.body;
+  }
+  if (typeof args.status === "number") {
+    props.status = args.status;
+  }
+  return props;
+}
+
+/**
+ * G19-D §7.10 — translate `SubscribeArgs` to the eval-side SUBSCRIBE
+ * primitive's keyspace per `primitives/subscribe.rs::execute`.
+ *
+ *   DSL surface → eval-side keyspace
+ *   {event}     → pattern: Text(<event>) (match path)
+ *   {handler}   → handler: Text(<handler-id>) (handler-id-router seam
+ *                 wired in G14-D wave-5a per seq-major-8; routes
+ *                 change-event delivery through the named handler
+ *                 instead of default fan-out)
+ *
+ * Mirrors the EMIT translation precedent — both primitives carry an
+ * optional `handler` field in their respective Args interfaces, and
+ * both eval primitives read the same key (`primitives/emit.rs::execute`
+ * reads `op.properties.get("handler")` + `primitives/subscribe.rs::execute`
+ * reads `op.properties.get("handler")`).
+ * The G19-D §7.10 worked example in `docs/DSL-SPECIFICATION.md` shows
+ * the handler-id-router routing model end-to-end.
+ */
+function translateSubscribeArgs(
+  args: SubscribeArgs,
+): Record<string, JsonValue> {
+  const props: Record<string, JsonValue> = {};
+  if (typeof args.event === "string") {
+    props.pattern = args.event;
+  }
+  if (typeof args.handler === "string") {
+    props.handler = args.handler;
   }
   return props;
 }
@@ -441,13 +806,20 @@ export class SubgraphBuilder {
   }
 
   public read(args: ReadArgs): this {
-    return this.addNode("read", { ...args } as Record<string, JsonValue>);
+    // G19-D §7.9: translate DSL surface → eval-side READ keyspace
+    // (`label` / `query_kind` / `target_cid` per primitives/read.rs::execute).
+    return this.addNode("read", translateReadArgs(args));
   }
   public write(args: WriteArgs): this {
+    // WRITE: DSL surface ALREADY matches eval keyspace (label / properties / requires).
+    // Spread verbatim; no translation step needed (the engine compile path
+    // owns the WriteSpec extraction at `bindings/napi/src/subgraph.rs::extract_write_args`).
     return this.addNode("write", { ...args } as Record<string, JsonValue>);
   }
   public transform(args: TransformArgs): this {
-    return this.addNode("transform", { ...args } as Record<string, JsonValue>);
+    // G19-D §7.9: translate DSL surface → eval-side TRANSFORM keyspace
+    // (`expr` / `result` per primitives/transform.rs::execute).
+    return this.addNode("transform", translateTransformArgs(args));
   }
   public iterate(args: IterateArgs): this {
     if (typeof args.max !== "number" || args.max <= 0) {
@@ -455,13 +827,20 @@ export class SubgraphBuilder {
         "iterate requires a positive integer `max` (invariant E_INV_ITERATE_MAX_MISSING)",
       );
     }
-    return this.addNode("iterate", { ...args } as Record<string, JsonValue>);
+    // G19-D §7.9: translate DSL surface → eval-side ITERATE keyspace
+    // (`items` / `max` per primitives/iterate.rs::execute).
+    return this.addNode("iterate", translateIterateArgs(args));
   }
   public call(args: CallArgs): this {
-    return this.addNode("call", { ...args } as Record<string, JsonValue>);
+    // G19-D §7.9: translate DSL surface → eval-side CALL keyspace
+    // (`target` / `call_op` / `input` / `child_scope` per primitives/call.rs::execute).
+    return this.addNode("call", translateCallArgs(args));
   }
   public respond(args: RespondArgs = {}): this {
-    return this.addNode("respond", { ...args } as Record<string, JsonValue>);
+    // G19-D §7.9: translate DSL surface → eval-side RESPOND keyspace
+    // (`body` / `status` per primitives/respond.rs::execute; `edge` is
+    // edge-table routing, not properties-bag).
+    return this.addNode("respond", translateRespondArgs(args));
   }
   public emit(args: EmitArgs): this {
     // R6 Round-2 r6-r2-mpc-1 fix-pass: the eval-side EMIT executor at
@@ -500,16 +879,12 @@ export class SubgraphBuilder {
     return this.addNode("stream", { ...args } as Record<string, JsonValue>);
   }
   public subscribe(args: SubscribeArgs): this {
-    // R6-R4 r6-r4-cr-1 fix-pass (19th producer/consumer drift instance):
-    // the eval-side SUBSCRIBE primitive at
-    // `crates/benten-eval/src/primitives/subscribe.rs::execute` reads
-    // the `pattern` property; the public DSL `SubscribeArgs.event` field
-    // maps onto that property name. Pre-fix the spread set `event: ...`
-    // and the SUBSCRIBE primitive routed `E_SUBSCRIBE_PATTERN_INVALID`
-    // for every DSL-composed in-handler subscribe. Mirrors the EMIT
-    // precedent (`emit()` above) that PR #66 / R6-R2-FP cluster-1 landed
-    // for the same shape.
-    return this.addNode("subscribe", { pattern: args.event });
+    // G19-D §7.10: translate DSL surface → eval-side SUBSCRIBE keyspace
+    // (`pattern` / `handler` per primitives/subscribe.rs::execute). The
+    // `handler?` field is RE-INTRODUCED post-G14-D handler-id-router
+    // wiring; closes 21st p/c drift end-to-end at structural layer.
+    // Mirrors the WAIT/SANDBOX/EMIT translation precedents.
+    return this.addNode("subscribe", translateSubscribeArgs(args));
   }
   public sandbox(args: SandboxArgs): this {
     // Phase-3 G17-C wave-5b (24th p/c drift acceptance criterion; pim-2
@@ -526,7 +901,12 @@ export class SubgraphBuilder {
    * are attached to the BRANCH via an edge labeled `CASE:<value>`.
    */
   public branch(args: BranchArgs): BranchBuilder {
-    this.addNode("branch", { ...args } as Record<string, JsonValue>);
+    // G19-D §7.9: translate DSL surface → eval-side BRANCH keyspace
+    // (`match_value` per primitives/branch.rs::execute). The
+    // `cases` / `has_default` / `conditions` keys are populated by the
+    // engine compile path from the BRANCH node's outgoing edges
+    // (`CASE:<value>` labels stamped by `.case(value, body)` below).
+    this.addNode("branch", translateBranchArgs(args));
     const branchNodeId = this.lastId!;
     return new BranchBuilder(this, branchNodeId);
   }
@@ -695,22 +1075,29 @@ export class CaseBuilder {
   }
 
   public read(a: ReadArgs): this {
-    return this.addNode("read", { ...a } as Record<string, JsonValue>);
+    // G19-D §7.9 — see SubgraphBuilder.read() for translation rationale.
+    // Both builders MUST stay in lockstep on the spread shape.
+    return this.addNode("read", translateReadArgs(a));
   }
   public write(a: WriteArgs): this {
+    // WRITE: DSL surface matches eval keyspace verbatim. See SubgraphBuilder.write().
     return this.addNode("write", { ...a } as Record<string, JsonValue>);
   }
   public transform(a: TransformArgs): this {
-    return this.addNode("transform", { ...a } as Record<string, JsonValue>);
+    // G19-D §7.9 — see SubgraphBuilder.transform() for translation rationale.
+    return this.addNode("transform", translateTransformArgs(a));
   }
   public iterate(a: IterateArgs): this {
-    return this.addNode("iterate", { ...a } as Record<string, JsonValue>);
+    // G19-D §7.9 — see SubgraphBuilder.iterate() for translation rationale.
+    return this.addNode("iterate", translateIterateArgs(a));
   }
   public call(a: CallArgs): this {
-    return this.addNode("call", { ...a } as Record<string, JsonValue>);
+    // G19-D §7.9 — see SubgraphBuilder.call() for translation rationale.
+    return this.addNode("call", translateCallArgs(a));
   }
   public respond(a: RespondArgs = {}): this {
-    return this.addNode("respond", { ...a } as Record<string, JsonValue>);
+    // G19-D §7.9 — see SubgraphBuilder.respond() for translation rationale.
+    return this.addNode("respond", translateRespondArgs(a));
   }
   public emit(a: EmitArgs): this {
     // R6 Round-2 r6-r2-mpc-1 fix-pass: map `EmitArgs.event` onto the
@@ -740,11 +1127,9 @@ export class CaseBuilder {
     return this.addNode("stream", { ...a } as Record<string, JsonValue>);
   }
   public subscribe(a: SubscribeArgs): this {
-    // R6-R4 r6-r4-cr-1 fix-pass: map `SubscribeArgs.event` onto the
-    // `pattern` property the eval-side SUBSCRIBE primitive reads. See
-    // the sibling builder's `subscribe()` method earlier in this file
-    // for the full rationale.
-    return this.addNode("subscribe", { pattern: a.event });
+    // G19-D §7.10 — see SubgraphBuilder.subscribe() for translation rationale.
+    // `handler?` re-introduced post-G14-D; both builders MUST stay in lockstep.
+    return this.addNode("subscribe", translateSubscribeArgs(a));
   }
   public sandbox(a: SandboxArgs): this {
     // Phase-3 G17-C wave-5b (24th p/c drift; pim-2 LOAD-BEARING):

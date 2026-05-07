@@ -114,19 +114,38 @@ function shortArgs(n: SubgraphNode): string {
     a[k] === undefined ? "" : String(a[k]);
   switch (n.primitive) {
     case "read":
-      return [pick("label"), pick("by")].filter(Boolean).join(":");
+      // G19-D §7.9 cascade: post-translateReadArgs the property bag
+      // carries `label` (verbatim) + `query_kind` (translated from
+      // user-facing `by`). Render the translated keys to match the
+      // landed DSL shape.
+      return [pick("label"), pick("query_kind")].filter(Boolean).join(":");
     case "write":
       return pick("label");
     case "transform":
+      // G19-D §7.9 cascade: TRANSFORM keeps `expr` verbatim. No change.
       return pick("expr").slice(0, 40);
     case "branch":
-      return pick("on");
+      // G19-D §7.9 cascade: post-translateBranchArgs the BRANCH primitive
+      // node's args bag carries `match_value` (translated from user-facing
+      // `on`). Pre-cascade this arm read `pick("on")` and rendered empty.
+      return pick("match_value");
     case "iterate":
-      return `${pick("over")} x${pick("max")}`;
+      // G19-D §7.9 cascade: post-translateIterateArgs the ITERATE node
+      // carries `items` (translated from user-facing `over`) + `max`
+      // (verbatim). Render translated keys.
+      return `${pick("items")} x${pick("max")}`;
     case "call":
-      return [pick("handler"), pick("action")].filter(Boolean).join("/");
+      // G19-D §7.9 cascade: post-translateCallArgs the CALL node carries
+      // `target` (translated from user-facing `handler`) + `call_op`
+      // (translated from user-facing `action`). Render translated keys.
+      return [pick("target"), pick("call_op")].filter(Boolean).join("/");
     case "respond":
-      return pick("edge") || pick("body") || "";
+      // G19-D §7.9 cascade: RespondArgs.edge is by-design NOT spread
+      // into the property bag (edge-table-driven routing); RESPOND args
+      // bag carries `body` + `status`. Pre-cascade this arm tried to
+      // pick `edge` first which was always absent — the body fallback
+      // happened to work. Now read body/status directly.
+      return pick("body") || pick("status") || "";
     case "emit":
       // R6 Round-3 r6-r3-cr-1: the DSL builders write `channel: args.event`
       // into the SubgraphNode args bag (see `dsl.ts::emit()` builders) so the
