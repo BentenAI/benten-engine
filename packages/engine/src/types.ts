@@ -276,12 +276,42 @@ export interface HandlerAdjacencies {
 /**
  * Shape of an Edge as returned by `Engine.getEdge` / `edgesFrom` /
  * `edgesTo`. CIDs are base32-multibase strings (prefix `b`).
+ *
+ * # Phase-3 G19-D §7.9 fix (TS-surface-parity sweep)
+ *
+ * Pre-G19-D this interface declared `cid: string` (a phantom field —
+ * the napi producer at `bindings/napi/src/edge.rs::edge_to_json` never
+ * emitted a `cid` key) AND omitted `properties` (a missing field — the
+ * napi producer DOES emit `properties` when the underlying Edge carries
+ * a non-empty property bag). G19-D drops the phantom + adds the missing
+ * field per the producer/consumer audit + the `tests/edge_interface_*`
+ * RED-PHASE pins. The Rust producer at `edge.rs::edge_to_json` is
+ * UNCHANGED; the fix is purely TS-surface-parity. See the §7.10
+ * `ts_surface_parity_meta_test` for the structural defense against
+ * recurrence.
+ *
+ * # By-design omission
+ *
+ * The Rust `benten_core::Edge` struct carries an `anchor_id` field
+ * marked `#[serde(skip)]`; the napi projection consequently never emits
+ * it and the TS interface intentionally omits it (mirrors the
+ * `Node.anchor_id` precedent in `crates/benten-core/src/lib.rs::Node`).
  */
 export interface Edge {
-  cid: string;
+  /** CID of the Edge's source Node (base32-multibase, prefix `b`). */
   source: string;
+  /** CID of the Edge's target Node (base32-multibase, prefix `b`). */
   target: string;
+  /** Edge label (e.g. `"NEXT"` / `"CURRENT"` / `"GRANTED_TO"`). */
   label: string;
+  /**
+   * Optional property bag carried on the Edge. Omitted (`undefined`)
+   * when the underlying Edge has no properties; populated when the
+   * napi producer emits a non-empty `properties` map. Mirrors the
+   * Rust producer's `Edge::properties: Option<BTreeMap<String, Value>>`
+   * field at `crates/benten-core/src/lib.rs::Edge`.
+   */
+  properties?: Record<string, JsonValue>;
 }
 
 /**
