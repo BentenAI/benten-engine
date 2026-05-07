@@ -20,6 +20,11 @@ import { createRequire } from "node:module";
 import { dirname } from "node:path";
 
 import {
+  makeAtriumFactory,
+  type AtriumFactory,
+  type NativeAtriumFactoryConstruct,
+} from "./atrium.js";
+import {
   isCrudHandler,
   isSubgraph,
   type CrudHandler,
@@ -384,8 +389,25 @@ export class Engine {
   // the native surface echoes the property back.
   private readonly stampedCreatedAt = new Map<string, number>();
 
+  /**
+   * G16-D wave-6b — Atrium B-prime factory per Ben's D1 ratification
+   * 2026-05-05. CALLABLE: `engine.atrium({config})` returns a typed
+   * `Atrium` handle (NOT a flat namespace object). See
+   * `packages/engine/src/atrium.ts`.
+   */
+  public readonly atrium: AtriumFactory;
+
   private constructor(inner: NativeEngine) {
     this.inner = inner;
+    // Wire the atrium factory bound to the napi-side `JsAtrium`
+    // constructor (when present). The fallback in-memory shim path
+    // inside `makeAtriumFactory` allows the B-prime factory shape to
+    // be exercised even when the napi binding pre-dates the wave-6b
+    // landing.
+    const nativeAtriumFactory = (
+      this.inner as unknown as { JsAtrium?: NativeAtriumFactoryConstruct }
+    ).JsAtrium;
+    this.atrium = makeAtriumFactory(nativeAtriumFactory);
   }
 
   /**

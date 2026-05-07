@@ -601,6 +601,17 @@ pub enum ErrorCode {
     /// unavailability). Maps to `E_SYNC_DIVERGENT_CID_REJECTED`.
     /// Routes to `ON_ERROR`.
     SyncDivergentCidRejected,
+    /// G16-D wave-6b (Phase-3 Atrium handshake protocol; ds-r4-3
+    /// distributed-systems lens): a handshake frame replayed within
+    /// the bounded HLC acceptance window was rejected. Surfaces at
+    /// the `crates/benten-sync/src/handshake.rs` state machine per
+    /// `HandshakeError::ReplayWithinBoundedWindow`. The error carries
+    /// observable diagnostic state (original_hlc / replay_hlc /
+    /// window_ms) so operators can distinguish bounded-window replay
+    /// from transport-layer degradation. Maps to
+    /// `E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW`. Routes to
+    /// `ON_ERROR`. Composes with G14-pre-D HLC bounded-window math.
+    HandshakeReplayWithinBoundedWindow,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -795,7 +806,12 @@ impl ErrorCode {
             // Phase-3 G16-A — Atrium transport surface
             ErrorCode::AtriumRelayUnreachable => "E_ATRIUM_RELAY_UNREACHABLE",
             ErrorCode::AtriumTransportDegraded => "E_ATRIUM_TRANSPORT_DEGRADED",
+            // Phase-3 G16-B — Atrium CRDT integration surface (Inv-13 row-4b)
             ErrorCode::SyncDivergentCidRejected => "E_SYNC_DIVERGENT_CID_REJECTED",
+            // Phase-3 G16-D — Atrium handshake-protocol surface
+            ErrorCode::HandshakeReplayWithinBoundedWindow => {
+                "E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW"
+            }
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -985,7 +1001,16 @@ impl ErrorCode {
             // (transport-layer failure surfacing as runtime ON_ERROR).
             | ErrorCode::AtriumRelayUnreachable
             | ErrorCode::AtriumTransportDegraded
-            | ErrorCode::SyncDivergentCidRejected => Some("ON_ERROR"),
+            // Phase-3 G16-B — Inv-13 row-4b sync-replica reject for
+            // system-zone / Anchor-immutable divergent-CID. Joins
+            // ON_ERROR family per D21 (semantic-layer reject without
+            // a more-specific edge — caller had the cap, the merge
+            // is rejected on Inv-13 row-4b grounds, not auth grounds).
+            | ErrorCode::SyncDivergentCidRejected
+            // Phase-3 G16-D — handshake-protocol bounded-window replay
+            // rejection surfaces alongside the transport-surface
+            // family (peer-to-peer connection establishment failures).
+            | ErrorCode::HandshakeReplayWithinBoundedWindow => Some("ON_ERROR"),
 
             // Inv-7 SANDBOX output limit — dedicated edge label (matches the
             // SANDBOX primitive's edge surface in `benten-core` subgraph.rs:
@@ -1218,7 +1243,13 @@ impl ErrorCode {
             // (net-blocker-2 BLOCKER typed errors).
             "E_ATRIUM_RELAY_UNREACHABLE" => ErrorCode::AtriumRelayUnreachable,
             "E_ATRIUM_TRANSPORT_DEGRADED" => ErrorCode::AtriumTransportDegraded,
+            // Phase-3 G16-B wave-6b — Inv-13 row-4b sync-replica reject.
             "E_SYNC_DIVERGENT_CID_REJECTED" => ErrorCode::SyncDivergentCidRejected,
+            // Phase-3 G16-D wave-6b — handshake-protocol bounded-window
+            // replay rejection.
+            "E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW" => {
+                ErrorCode::HandshakeReplayWithinBoundedWindow
+            }
             other => ErrorCode::Unknown(other.to_string()),
         }
     }

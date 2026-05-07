@@ -164,6 +164,9 @@ compile_error!(
 pub mod errors;
 
 #[cfg(not(target_arch = "wasm32"))]
+pub mod handshake;
+
+#[cfg(not(target_arch = "wasm32"))]
 pub mod handshake_wire;
 
 // G16-C wave-6b: light-client verification API + Merkle proof
@@ -186,6 +189,9 @@ pub mod mst;
 // arrival).
 #[cfg(not(target_arch = "wasm32"))]
 pub mod mst_proto;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod peer_discovery;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod peer_id;

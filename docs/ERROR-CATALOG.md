@@ -1104,6 +1104,14 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** `crates/benten-engine/src/engine_sync.rs::AtriumError::DivergentCidRejected` (Phase-3 G16-B wave-6b; ds-4 Inv-13 row-4 SPLIT). PRE-merge classifier at `engine_sync.rs::merge_remote_change` walks `SYSTEM_ZONE_PREFIXES` and rejects divergent CIDs targeting system-zone paths before applying any Loro state. Mapped via `engine_sync.rs::AtriumError::code` to the stable code.
 - **Phase:** 3 G16-B
 
+### E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW
+
+- **Message:** "handshake replay within bounded window: original_hlc={original_hlc} replay_hlc={replay_hlc} window_ms={window_ms}"
+- **Context:** `{ original_hlc: u64, replay_hlc: u64, window_ms: u64 }`
+- **Fix:** A handshake frame was replayed within the bounded HLC acceptance window (default `DEFAULT_REPLAY_WINDOW_MS = 5000`). The handshake state machine rejects bounded-window replays via symmetric drift math (`now.abs_diff(hlc_physical_ms) > replay_window_ms`) so future-stamped frames are also rejected — defends against clock-skew injection. The diagnostic fields (`original_hlc`, `replay_hlc`, `window_ms`) let operators distinguish bounded-window replay from transport-layer degradation. Per `ds-r4-3`, the replay defense is EXPLICIT and TYPED — not a generic transport error. The canonical replay-detection mechanism (per-peer nonce cache) is deferred to a follow-on wave per the source comment at `crates/benten-sync/src/handshake.rs::Handshake::respond`; G16-D ships only the bounded-window math. Distinct from `E_ATRIUM_TRANSPORT_DEGRADED` (transport-layer signal) — this is a semantic-layer reject. Routes to `ON_ERROR`.
+- **Thrown at:** `crates/benten-sync/src/handshake.rs::HandshakeError::ReplayWithinBoundedWindow` (Phase-3 G16-D wave-6b; ds-r4-3). Surfaces from `Handshake::respond` and `Handshake::finalise` when the carried HLC drift exceeds the replay window. Composes with G14-pre-D HLC bounded-window math.
+- **Phase:** 3 G16-D
+
 ## Extending the catalog
 
 When adding a new error:

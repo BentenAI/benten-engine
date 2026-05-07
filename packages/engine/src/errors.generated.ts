@@ -153,6 +153,7 @@ export const CATALOG_CODES = [
   "E_ATRIUM_RELAY_UNREACHABLE",
   "E_ATRIUM_TRANSPORT_DEGRADED",
   "E_SYNC_DIVERGENT_CID_REJECTED",
+  "E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -1954,5 +1955,20 @@ export class ESyncDivergentCidRejected extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_SYNC_DIVERGENT_CID_REJECTED", "An inbound sync-replica frame targets a system-zone / Anchor-immutable path (per `crates/benten-engine::system_zones::SYSTEM_ZONE_PREFIXES`) with a divergent CID. Per ds-4 Inv-13 row-4b, system-zone targets are immutable-via-sync — divergent CIDs are rejected PRE-merge by the classifier walk in `crates/benten-engine/src/engine_sync.rs::merge_remote_change` BEFORE the Loro merge applies (not post-merge cleanup). The remote peer SHOULD treat the rejection as authoritative for the system-zone path; user-data zones (Inv-13 row-4a) continue to merge via the Loro CRDT + D-C HYBRID Anchor+Version+CURRENT pattern. Distinct from `E_ATRIUM_TRANSPORT_DEGRADED` (transport-layer degrade) and `E_ATRIUM_RELAY_UNREACHABLE` (relay unavailability) — this is a semantic-layer reject, not a transport failure. Routes to `ON_ERROR`.", message, context);
     this.name = "ESyncDivergentCidRejected";
+  }
+}
+
+/**
+ * E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW
+ *
+ * Thrown at: `crates/benten-sync/src/handshake.rs::HandshakeError::ReplayWithinBoundedWindow` (Phase-3 G16-D wave-6b; ds-r4-3). Surfaces from `Handshake::respond` and `Handshake::finalise` when the carried HLC drift exceeds the replay window. Composes with G14-pre-D HLC bounded-window math.
+ * Message template: "handshake replay within bounded window: original_hlc={original_hlc} replay_hlc={replay_hlc} window_ms={window_ms}"
+ */
+export class EHandshakeReplayWithinBoundedWindow extends BentenError {
+  static readonly code = "E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW";
+  static readonly fixHint = "A handshake frame was replayed within the bounded HLC acceptance window (default `DEFAULT_REPLAY_WINDOW_MS = 5000`). The handshake state machine rejects bounded-window replays via symmetric drift math (`now.abs_diff(hlc_physical_ms) > replay_window_ms`) so future-stamped frames are also rejected — defends against clock-skew injection. The diagnostic fields (`original_hlc`, `replay_hlc`, `window_ms`) let operators distinguish bounded-window replay from transport-layer degradation. Per `ds-r4-3`, the replay defense is EXPLICIT and TYPED — not a generic transport error. The canonical replay-detection mechanism (per-peer nonce cache) is deferred to a follow-on wave per the source comment at `crates/benten-sync/src/handshake.rs::Handshake::respond`; G16-D ships only the bounded-window math. Distinct from `E_ATRIUM_TRANSPORT_DEGRADED` (transport-layer signal) — this is a semantic-layer reject. Routes to `ON_ERROR`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW", "A handshake frame was replayed within the bounded HLC acceptance window (default `DEFAULT_REPLAY_WINDOW_MS = 5000`). The handshake state machine rejects bounded-window replays via symmetric drift math (`now.abs_diff(hlc_physical_ms) > replay_window_ms`) so future-stamped frames are also rejected — defends against clock-skew injection. The diagnostic fields (`original_hlc`, `replay_hlc`, `window_ms`) let operators distinguish bounded-window replay from transport-layer degradation. Per `ds-r4-3`, the replay defense is EXPLICIT and TYPED — not a generic transport error. The canonical replay-detection mechanism (per-peer nonce cache) is deferred to a follow-on wave per the source comment at `crates/benten-sync/src/handshake.rs::Handshake::respond`; G16-D ships only the bounded-window math. Distinct from `E_ATRIUM_TRANSPORT_DEGRADED` (transport-layer signal) — this is a semantic-layer reject. Routes to `ON_ERROR`.", message, context);
+    this.name = "EHandshakeReplayWithinBoundedWindow";
   }
 }

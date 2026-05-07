@@ -9,6 +9,17 @@
 
 export { Engine, PolicyKind } from "./engine.js";
 
+// Phase-3 G16-D wave-6b — Atrium B-prime factory-handle TS surface
+// per Ben's D1 ratification 2026-05-05.
+export type {
+  Atrium,
+  AtriumConfig,
+  AtriumFactory,
+  AtriumSubscription,
+  PeerLifecycleCallback,
+  SubscribeCallback,
+} from "./atrium.js";
+
 export {
   branch,
   call,

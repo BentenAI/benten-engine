@@ -465,6 +465,39 @@ impl Endpoint {
         })
     }
 
+    /// Internal constructor for the wave-6b
+    /// [`crate::peer_discovery::bind_atrium_peer`] entry point.
+    ///
+    /// G16-A canary owns [`Endpoint::bind_with_keypair`] +
+    /// [`Endpoint::bind_loopback`]; G16-D wave-6b owns the
+    /// `peer_discovery::bind_atrium_peer` flow that constructs the
+    /// underlying `iroh::Endpoint` directly with a chosen
+    /// [`crate::peer_discovery::BootstrapMode`]. This constructor wraps
+    /// the produced iroh Endpoint into our typed `Endpoint` so the
+    /// rest of the transport surface (status / connect / accept) lights
+    /// up unchanged.
+    ///
+    /// Status defaults to `TransportKind::Direct` for `Disabled` /
+    /// `Relay` for the relay-default + custom-peer-list modes — the
+    /// background relay-handshake task will refine the kind once the
+    /// connection lands per G16-A's mark_degraded / status pipeline.
+    pub fn from_iroh_parts(
+        inner: iroh::Endpoint,
+        peer_id: PeerId,
+        bootstrap: &crate::peer_discovery::BootstrapMode,
+    ) -> Self {
+        use crate::peer_discovery::BootstrapMode;
+        let kind = match bootstrap {
+            BootstrapMode::Disabled => TransportKind::Direct,
+            BootstrapMode::DefaultRelay | BootstrapMode::CustomPeerList(_) => TransportKind::Relay,
+        };
+        Self {
+            inner,
+            peer_id,
+            status: Arc::new(Mutex::new(TransportStatus::Healthy { kind })),
+        }
+    }
+
     /// Bind a relay-using endpoint that fails fast against an
     /// unreachable / malformed relay URL per net-blocker-2 typed-error
     /// contract.
