@@ -565,7 +565,7 @@ pub enum ErrorCode {
     /// BLOCKER): the configured iroh relay endpoint is unreachable
     /// (DNS-resolution failure / TLS handshake refused / transport-
     /// level timeout). Surfaces at the
-    /// [`crates/benten-sync/src/transport.rs`] connect/bind boundary
+    /// `crates/benten-sync/src/transport.rs` connect/bind boundary
     /// per `crates/benten-sync/src/errors.rs::AtriumTransportError::RelayUnreachable`.
     /// Maps to `E_ATRIUM_RELAY_UNREACHABLE`. Per net-blocker-2 the
     /// relay-unreachable failure mode MUST be a typed error variant —
@@ -581,7 +581,7 @@ pub enum ErrorCode {
     /// packet-loss above threshold, relay-fallback active, direct
     /// connection lost, or handshake wire-format violation surfaced at
     /// the transport layer. Surfaces at the
-    /// [`crates/benten-sync/src/transport.rs`] connection boundary per
+    /// `crates/benten-sync/src/transport.rs` connection boundary per
     /// `crates/benten-sync/src/errors.rs::AtriumTransportError::TransportDegraded`.
     /// The engine-side `engine.atrium_status()` surface (G16-B/D)
     /// propagates this state observably. Maps to
