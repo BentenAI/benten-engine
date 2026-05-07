@@ -43,12 +43,28 @@ proptest! {
             sandbox_depth: 0,
         };
 
-        // Module with mutable global initialised to `init_value`. The
-        // per-call Store lifecycle means EVERY new call gets a fresh
-        // global at `init_value` (no carry-over from earlier calls).
+        // Module with mutable global initialised to `init_value`. A
+        // `start` function writes `set_value` into the global at
+        // instantiation time — this exercises the `global.set`
+        // instruction path so the proptest input drives a real write
+        // (not just a read) on every fresh-Store instantiation.
+        //
+        // The per-call Store lifecycle means EVERY new call gets a
+        // fresh global initialised to `init_value` + then written to
+        // `set_value` by `start`; if the Store carried state across
+        // calls, the second call would observe `set_value` from call
+        // 1's instance instead of re-running `start` against a fresh
+        // global. The fresh-Store invariant is: both calls instantiate
+        // identically, so both observe `set_value` after `start` —
+        // any divergence (e.g., Err in one + Ok in the other) signals
+        // state leakage.
         let module_wat = format!(
             "(module
                (global $g (mut i32) (i32.const {init_value}))
+               (func $writer
+                 i32.const {set_value}
+                 global.set $g)
+               (start $writer)
                (func (export \"read_global\") (result i32)
                  global.get $g)
              )"
@@ -69,7 +85,6 @@ proptest! {
         );
         let res1 = run();
         let res2 = run();
-        let _ = set_value;
 
         // Two fresh Stores ⇒ two structurally-identical outcomes
         // (either both Ok with the same return shape, or both Err
