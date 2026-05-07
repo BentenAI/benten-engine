@@ -189,6 +189,12 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // `crates/benten-sync/src/errors.rs::AtriumTransportError::code`.
     ErrorCode::AtriumRelayUnreachable,
     ErrorCode::AtriumTransportDegraded,
+    // Phase-3 G16-D wave-6b (ds-r4-3): handshake-frame replay
+    // within the bounded HLC acceptance window. Construction site:
+    // `crates/benten-sync/src/handshake.rs::HandshakeError::ReplayWithinBoundedWindow`
+    // — carries observable original_hlc / replay_hlc / window_ms
+    // diagnostic fields per pim-2 production-flow drive.
+    ErrorCode::HandshakeReplayWithinBoundedWindow,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -331,10 +337,21 @@ fn variant_count_is_pinned() {
     //     `crates/benten-sync/src/handshake_wire.rs::HandshakeFrame::from_canonical_bytes`.
     //     Closes net-blocker-2 BLOCKER (half).
     // Post-G16-A: net +2 from `AtriumRelayUnreachable` +
-    // `AtriumTransportDegraded`. The hardcoded count below tracks
-    // `ALL_CATALOG_VARIANTS.len()` exactly.
+    // `AtriumTransportDegraded`.
+    //
+    // Phase-3 G16-D wave-6b adds 1 code:
+    //   `HandshakeReplayWithinBoundedWindow` — typed variant for
+    //     handshake frames replayed within the bounded HLC
+    //     acceptance window (DEFAULT_REPLAY_WINDOW_MS = 5000).
+    //     Construction site at
+    //     `crates/benten-sync/src/handshake.rs::HandshakeError::ReplayWithinBoundedWindow`,
+    //     carrying observable original_hlc / replay_hlc / window_ms
+    //     diagnostic fields. Closes ds-r4-3.
+    // Post-G16-D: net +1 from `HandshakeReplayWithinBoundedWindow`.
+    // The hardcoded count below tracks `ALL_CATALOG_VARIANTS.len()`
+    // exactly.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 96,
+        CATALOG_VARIANT_COUNT, 97,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

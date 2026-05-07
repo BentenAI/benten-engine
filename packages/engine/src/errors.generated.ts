@@ -152,6 +152,7 @@ export const CATALOG_CODES = [
   "E_CAP_UCAN_AUDIENCE_MISMATCH",
   "E_ATRIUM_RELAY_UNREACHABLE",
   "E_ATRIUM_TRANSPORT_DEGRADED",
+  "E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -1938,5 +1939,20 @@ export class EAtriumTransportDegraded extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_ATRIUM_TRANSPORT_DEGRADED", "The established Atrium transport has degraded — packet-loss above threshold, relay-fallback active mid-stream, direct connection lost, or handshake wire-format violation surfaced at the transport layer. The engine-side `engine.atrium_status()` surface (Phase-3 G16-B/D) propagates this state observably so operators can react. Investigate network conditions (packet-loss, NAT path) and the connecting peer's reachability. Per `net-blocker-2` BLOCKER, the degraded transport state is EXPLICIT — not a missing value, not a panic. Distinct from `E_ATRIUM_RELAY_UNREACHABLE` (which signals the relay endpoint itself is unreachable at connect time). Routes to `ON_ERROR`.", message, context);
     this.name = "EAtriumTransportDegraded";
+  }
+}
+
+/**
+ * E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW
+ *
+ * Thrown at: `crates/benten-sync/src/handshake.rs::HandshakeError::ReplayWithinBoundedWindow` (Phase-3 G16-D wave-6b; ds-r4-3). Surfaces from `Handshake::respond` and `Handshake::finalise` when the carried HLC drift exceeds the replay window. Composes with G14-pre-D HLC bounded-window math.
+ * Message template: "handshake replay within bounded window: original_hlc={original_hlc} replay_hlc={replay_hlc} window_ms={window_ms}"
+ */
+export class EHandshakeReplayWithinBoundedWindow extends BentenError {
+  static readonly code = "E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW";
+  static readonly fixHint = "A handshake frame was replayed within the bounded HLC acceptance window (default `DEFAULT_REPLAY_WINDOW_MS = 5000`). The handshake state machine rejects bounded-window replays via symmetric drift math (`now.abs_diff(hlc_physical_ms) > replay_window_ms`) so future-stamped frames are also rejected — defends against clock-skew injection. The diagnostic fields (`original_hlc`, `replay_hlc`, `window_ms`) let operators distinguish bounded-window replay from transport-layer degradation. Per `ds-r4-3`, the replay defense is EXPLICIT and TYPED — not a generic transport error. The canonical replay-detection mechanism (per-peer nonce cache) is deferred to a follow-on wave per the source comment at `crates/benten-sync/src/handshake.rs::Handshake::respond`; G16-D ships only the bounded-window math. Distinct from `E_ATRIUM_TRANSPORT_DEGRADED` (transport-layer signal) — this is a semantic-layer reject. Routes to `ON_ERROR`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW", "A handshake frame was replayed within the bounded HLC acceptance window (default `DEFAULT_REPLAY_WINDOW_MS = 5000`). The handshake state machine rejects bounded-window replays via symmetric drift math (`now.abs_diff(hlc_physical_ms) > replay_window_ms`) so future-stamped frames are also rejected — defends against clock-skew injection. The diagnostic fields (`original_hlc`, `replay_hlc`, `window_ms`) let operators distinguish bounded-window replay from transport-layer degradation. Per `ds-r4-3`, the replay defense is EXPLICIT and TYPED — not a generic transport error. The canonical replay-detection mechanism (per-peer nonce cache) is deferred to a follow-on wave per the source comment at `crates/benten-sync/src/handshake.rs::Handshake::respond`; G16-D ships only the bounded-window math. Distinct from `E_ATRIUM_TRANSPORT_DEGRADED` (transport-layer signal) — this is a semantic-layer reject. Routes to `ON_ERROR`.", message, context);
+    this.name = "EHandshakeReplayWithinBoundedWindow";
   }
 }
