@@ -389,9 +389,10 @@ fn variant_count_is_pinned() {
     //     fails loud per stream-r1-9).
     //   `StreamHandleLeaked` — JS-side handle dropped without
     //     `close()`. Surfaced from
-    //     `packages/engine/src/stream.ts::wrapOpenStreamHandle`
-    //     FinalizationRegistry callback against the
-    //     `engine.onStreamLeaked` operator surface (§7.1.2).
+    //     `packages/engine/src/stream.ts::ensureLeakRegistry`
+    //     (FinalizationRegistry callback) + the `Engine.shutdown()`
+    //     drain on `packages/engine/src/engine.ts::Engine` against
+    //     the `engine.onStreamLeaked` operator surface (§7.1.2).
     // Post-G19-C2: 98 + 2 = 100. The hardcoded count below tracks
     // `ALL_CATALOG_VARIANTS.len()` exactly.
     assert_eq!(

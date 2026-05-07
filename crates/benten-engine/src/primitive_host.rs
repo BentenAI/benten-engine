@@ -1078,9 +1078,8 @@ impl PrimitiveHost for Engine {
                 // so `Engine::describe_sandbox_node_for_handler` returns
                 // real metrics.
                 if let Some(handler_id) = metrics_handler_id {
-                    let elapsed_ms =
-                        u64::try_from(metrics_invocation_start.elapsed().as_millis())
-                            .unwrap_or(u64::MAX);
+                    let elapsed_ms = u64::try_from(metrics_invocation_start.elapsed().as_millis())
+                        .unwrap_or(u64::MAX);
                     self.inner.record_sandbox_metric(
                         &handler_id,
                         crate::engine::SandboxNodeMetrics {

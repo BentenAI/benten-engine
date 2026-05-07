@@ -398,11 +398,7 @@ impl EngineInner {
     /// `SandboxResult` is dropped at the `StepResult` boundary
     /// (Phase-2b/3 keeps `StepResult` slim by design — see
     /// `crates/benten-eval/src/lib.rs::StepResult`).
-    pub(crate) fn record_sandbox_metric(
-        &self,
-        handler_id: &str,
-        observation: SandboxNodeMetrics,
-    ) {
+    pub(crate) fn record_sandbox_metric(&self, handler_id: &str, observation: SandboxNodeMetrics) {
         let mut guard = self.sandbox_metrics.lock_recover();
         let entry = guard
             .entry(handler_id.to_string())
@@ -410,9 +406,7 @@ impl EngineInner {
         // Resolved-defaults snapshot — overwrite (the latest invocation's
         // resolved values are the freshest).
         entry.module_cid = observation.module_cid.or(entry.module_cid);
-        entry.manifest_id = observation
-            .manifest_id
-            .or_else(|| entry.manifest_id.take());
+        entry.manifest_id = observation.manifest_id.or_else(|| entry.manifest_id.take());
         entry.fuel = observation.fuel;
         entry.wallclock_ms = observation.wallclock_ms;
         entry.output_limit_bytes = observation.output_limit_bytes;
@@ -435,9 +429,7 @@ impl EngineInner {
         };
         // Last-invocation overwrite — most-recent semantic is intentional
         // per stream-r1-8 (NOT cumulative across resumes).
-        entry.last_invocation_ms = observation
-            .last_invocation_ms
-            .or(entry.last_invocation_ms);
+        entry.last_invocation_ms = observation.last_invocation_ms.or(entry.last_invocation_ms);
     }
 
     /// Phase-3 G19-C2 wave-7 (§7.1): snapshot the metrics record for the

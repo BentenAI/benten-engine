@@ -495,6 +495,8 @@ The Rust-side anchor test `crates/benten-eval/tests/sandbox_severity_priority_g1
 
 **Touch size:** ~150-200 LOC.
 
+**Phase-3 G19-C2 wave-7 landing state (2026-05-07):** parts (a) RAM-only per-handler high-water tracker + (b) napi `describeSandboxNode` cfg-gated bridge + (c) TS-side `Engine.describeSandboxNode` consuming real numeric values landed. Per stream-r1-8: high-water values are PER-INVOCATION updates against the high-water mark within a single Engine instance; the cross-process WAIT-resume envelope does NOT carry in-flight SANDBOX metrics across the suspend boundary (a fresh `Engine::open` starts with an empty metrics map by design). Persistent durable cross-restart metrics are still §1.1 GraphBackend umbrella trait shaped — RAM-only tracker is the Phase-3 minimum-viable; durable promotion follows §1.1 / §1.2 Snapshot direct-wire.
+
 ### 7.1.1 SnapshotBlobBackend metric-propagation entry (cross-ref §1.2)
 
 **Phase 2b state:** §7.1 above describes SANDBOX execution-metrics propagation (`fuel_consumed`/`output_consumed` propagation through engine wrapper into a per-node high-water tracker). The SnapshotBlobBackend direct-wire (§1.2) is the structural unblocker because the per-node side-table that holds those metrics lives in the GraphBackend umbrella trait the genericism unlocks. R6-FP Group 2 PR #61 docstrings cite this entry by name (`packages/engine/src/engine.ts:1567` — the `public async describeSandboxNode(...)` JSDoc; class-method, so cited by line — and `bindings/napi/src/sandbox.rs:108-119` comment block).
@@ -514,6 +516,14 @@ The Rust-side anchor test `crates/benten-eval/tests/sandbox_severity_priority_g1
 Together they realize the cr-r4b-10 closure-narrative claim that `E_STREAM_HANDLE_LEAKED` fires on a leaked open-stream handle.
 
 **Touch size:** ~30-40 LOC napi + ~20-30 LOC TS + 1 leak-detector test. Risk surface: low (purely additive observer; no production-runtime semantics change).
+
+**Phase-3 G19-C2 wave-7 landing state (2026-05-07):** parts (a) + (b) landed. The 4 master scenarios from stream-r1-4 are pinned:
+- (a) handler-returns-no-close + GC: gated on `typeof globalThis.gc === "function"` (requires `--expose-gc`); fires through the FinalizationRegistry callback.
+- (b) handler-throws-no-close + GC: same `--expose-gc` gate; fires through the same callback path.
+- (c) natural-completion negative pin: deterministic — the iterator's `return()` path disarms the bookkeeping flag so `for-await ... break` / drain-to-end does NOT fire `E_STREAM_HANDLE_LEAKED`.
+- (d) `Engine.shutdown()` drain: deterministic — walks the engine's open-explicit-close-handle set, fires shutdown-drain leak events for each, then closes the wrapper.
+
+**Sub-mechanism — GC-pressure-timeout polling fallback (§7.1.2.1):** for environments without `--expose-gc` (Node default + most browser-target runtimes), the FinalizationRegistry callback timing is non-deterministic. A bounded-retry polling fallback that fires the leak event on a configurable timeout (default ~5s) is a follow-up. Touch size: ~50-100 LOC TS + 2-3 test scenarios. Lands in a Phase-3 narrow-iter cycle (post-G19-C2 close); the 4 master scenarios are sufficient for §7.1.2's load-bearing observable-consequence contract per pim-2 §3.6b.
 
 ### 7.1.3 UserView.snapshot() + onUpdate() runtime materialization (post-G8-B)
 

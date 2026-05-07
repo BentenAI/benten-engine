@@ -734,10 +734,13 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_STREAM_HANDLE_LEAKED
 
+<!-- reachability: ignore -->
+<!-- Rationale: Phase-3 G19-C2 §7.1.2 — `E_STREAM_HANDLE_LEAKED` is fired ONLY from JS at `packages/engine/src/stream.ts::ensureLeakRegistry` (FinalizationRegistry callback path) + on the `Engine.shutdown()` drain path defined on the `Engine` class at `packages/engine/src/engine.ts::Engine`. The typed catalog code exists Rust-side so error-code round-trip stays consistent across the napi boundary, but no native construction site exists by design (the leak is a JS-surface observability hook; native ownership stays correct via Rust `Drop` joining the producer thread). -->
+
 - **Message:** "STREAM handle dropped without explicit close()"
 - **Context:** `{ scenario: "finalization" | "shutdown" | "gc-pressure-timeout", handler_id?: string }`
-- **Fix:** A `StreamHandle` returned by `engine.openStream(...)` was garbage-collected (or the engine was shut down) without an explicit `close()` / `cancel()` call. Native-side ownership is correct (Rust `Drop` joins the producer thread); this surface fires JS-side leak detection so operators can spot leaking call sites. Either consume the handle to natural completion (which auto-closes via the natural-final-chunk path), call `close()` explicitly, or use `engine.callStream(...)` which wraps for-await auto-close. Per stream-r1-4: 4 enumerated leak scenarios (handler-returns-no-close, handler-throws-no-close, gc-pressure-timeout, engine-shutdown-while-open). Native-Node-only — V8 + WHATWG GC schedule per stream-r1-10. Phase-3 G19-C2.
-- **Thrown at:** `packages/engine/src/stream.ts::registerOpenStreamLeakDetector` (FinalizationRegistry callback against `engine.onStreamLeaked` operator surface; never thrown across the napi boundary).
+- **Fix:** A `StreamHandle` returned by `engine.openStream(...)` was garbage-collected (or the engine was shut down) without an explicit `close()` / `cancel()` call. Native-side ownership is correct (Rust `Drop` joins the producer thread); this surface fires JS-side leak detection so operators can spot leaking call sites. Either consume the handle to natural completion (which auto-closes via the natural-final-chunk path), call `close()` explicitly, or use `engine.callStream(...)` which wraps for-await auto-close. Per stream-r1-4: 4 enumerated leak scenarios (handler-returns-no-close, handler-throws-no-close, natural-completion-no-fire-negative, engine-shutdown-while-open) plus a sub-mechanism GC-pressure-timeout polling fallback. Native-Node-only — V8 + WHATWG GC schedule per stream-r1-10. Phase-3 G19-C2.
+- **Thrown at:** `packages/engine/src/stream.ts::ensureLeakRegistry` (FinalizationRegistry callback) + `packages/engine/src/stream.ts::fireStreamLeak` (broadcast helper used by both the FinalizationRegistry callback path and the `Engine.shutdown()` drain path on `packages/engine/src/engine.ts::Engine`); never thrown across the napi boundary.
 - **Phase:** 3
 
 ### E_SUBSCRIBE_DELIVERY_FAILED
