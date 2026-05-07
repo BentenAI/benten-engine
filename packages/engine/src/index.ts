@@ -126,9 +126,9 @@ export type {
   UserView,
   UserViewInputPattern,
   UserViewSpec,
-  UserViewSubscription,
   Value,
   ViewDef,
+  ViewDelta,
 } from "./types.js";
 
 export {
