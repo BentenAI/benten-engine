@@ -1,0 +1,121 @@
+{
+  "_comment": "Per-NEW-crate cargo-public-api baseline per seq-minor-5. This file is the seed baseline at G16-A wave-6 canary landing time. The `cargo-public-api` workflow (or its successor at G20-A3 wave-8a §7.3.A.9) will populate the structured surface entries on the next push that includes the workflow. Until then, this placeholder serves as the file-existence pin per `tests/cargo_public_api_drift_un_ignored` (G20-A3 wave-8a) + the per-NEW-crate ownership commitment.",
+  "_baseline_seed_at_commit": "G16-A wave-6 canary landing",
+  "_crate": "benten-sync",
+  "_version": "0.1.0",
+  "_native_only_per_claude_md_baked_in_17": true,
+  "_target_arch_excluded": ["wasm32"],
+  "_surfaces": [
+    "pub mod errors",
+    "pub mod handshake_wire",
+    "pub mod peer_id",
+    "pub mod transport",
+
+    "pub enum errors::AtriumTransportError [non_exhaustive]",
+    "  variant errors::AtriumTransportError::RelayUnreachable { url: String, reason: String }",
+    "  variant errors::AtriumTransportError::TransportDegraded { reason: String }",
+    "  variant errors::AtriumTransportError::PeerConnectFailed { peer: String, reason: String, relay_side: bool }",
+    "  variant errors::AtriumTransportError::HandshakeWireFormat { reason: String }",
+    "pub fn errors::AtriumTransportError::code(&self) -> ErrorCode [maps to E_ATRIUM_RELAY_UNREACHABLE / E_ATRIUM_TRANSPORT_DEGRADED per net-blocker-2]",
+    "pub type errors::AtriumTransportResult<T> = Result<T, AtriumTransportError>",
+
+    "pub struct peer_id::PeerId [Clone, Copy, Debug, Eq, Hash, PartialEq, Ord, PartialOrd, Serialize, Deserialize, transparent 32-byte Ed25519 pubkey == iroh EndpointId per crypto-minor-4]",
+    "pub fn peer_id::PeerId::from_public_key(pk: &benten_id::keypair::PublicKey) -> Self",
+    "pub fn peer_id::PeerId::from_bytes(bytes: [u8; 32]) -> Self",
+    "pub fn peer_id::PeerId::as_bytes(&self) -> &[u8; 32]",
+    "pub fn peer_id::PeerId::to_bytes(&self) -> [u8; 32]",
+    "pub fn peer_id::PeerId::to_canonical_bytes(&self) -> Vec<u8>",
+    "pub fn peer_id::PeerId::to_dag_cbor_bytes(&self) -> Vec<u8>",
+    "pub fn peer_id::PeerId::from_dag_cbor_bytes(bytes: &[u8]) -> Result<Self, PeerIdDecodeError>",
+    "pub struct peer_id::PeerIdDecodeError { pub reason: String } [thiserror::Error]",
+
+    "pub struct handshake_wire::HandshakeFrame { version: u8, peer_did: Did, device_did: Did, peer_id: PeerId, protocol_payload: Vec<u8> } [Clone, Debug, Eq, PartialEq, Serialize, Deserialize]",
+    "pub const handshake_wire::HANDSHAKE_WIRE_VERSION: u8 = 1",
+    "pub fn handshake_wire::HandshakeFrame::builder() -> HandshakeFrameBuilder<NoPeerDid, NoDeviceDid, NoPeerId>",
+    "pub fn handshake_wire::HandshakeFrame::to_canonical_bytes(&self) -> Result<Vec<u8>, AtriumTransportError>",
+    "pub fn handshake_wire::HandshakeFrame::from_canonical_bytes(bytes: &[u8]) -> Result<Self, AtriumTransportError>",
+    "pub struct handshake_wire::HandshakeFrameBuilder<P, D, K> [type-state pattern enforces both-DIDs-required at construction per net-blocker-4 BLOCKER]",
+    "pub fn handshake_wire::HandshakeFrameBuilder::version(self, version: u8) -> Self",
+    "pub fn handshake_wire::HandshakeFrameBuilder::protocol_payload(self, payload: Vec<u8>) -> Self",
+    "pub fn handshake_wire::HandshakeFrameBuilder<NoPeerDid, _, _>::peer_did(self, did: Did) -> HandshakeFrameBuilder<WithPeerDid, _, _>",
+    "pub fn handshake_wire::HandshakeFrameBuilder<_, NoDeviceDid, _>::device_did(self, did: Did) -> HandshakeFrameBuilder<_, WithDeviceDid, _>",
+    "pub fn handshake_wire::HandshakeFrameBuilder<_, _, NoPeerId>::peer_id(self, peer_id: PeerId) -> HandshakeFrameBuilder<_, _, WithPeerId>",
+    "pub fn handshake_wire::HandshakeFrameBuilder<WithPeerDid, WithDeviceDid, WithPeerId>::build(self) -> HandshakeFrame [ONLY this type-state has build()]",
+    "pub struct handshake_wire::NoPeerDid",
+    "pub struct handshake_wire::WithPeerDid(Did)",
+    "pub struct handshake_wire::NoDeviceDid",
+    "pub struct handshake_wire::WithDeviceDid(Did)",
+    "pub struct handshake_wire::NoPeerId",
+    "pub struct handshake_wire::WithPeerId(PeerId)",
+
+    "pub const transport::ATRIUM_ALPN: &[u8] = b\"benten/atrium/1\"",
+    "pub enum transport::TransportKind { Direct, Relay, Loopback } [Clone, Copy, Debug, Eq, PartialEq]",
+    "pub enum transport::TransportStatus { Healthy { kind }, Degraded { reason }, NotConnected } [Clone, Debug, Eq, PartialEq]",
+    "pub fn transport::TransportStatus::error_code(&self) -> Option<ErrorCode>",
+    "pub struct transport::Endpoint",
+    "pub fn transport::Endpoint::bind_loopback() -> AtriumTransportResult<Self> [async]",
+    "pub fn transport::Endpoint::bind_loopback_with_keypair(keypair: &Keypair) -> AtriumTransportResult<Self> [async]",
+    "pub fn transport::Endpoint::bind_with_keypair(keypair: &Keypair) -> AtriumTransportResult<Self> [async]",
+    "pub fn transport::Endpoint::peer_id(&self) -> PeerId",
+    "pub fn transport::Endpoint::loopback_addr(&self) -> AtriumTransportResult<EndpointAddr>",
+    "pub fn transport::Endpoint::transport_status(&self) -> TransportStatus [async]",
+    "pub fn transport::Endpoint::mark_degraded(&self, reason: impl Into<String>) [async]",
+    "pub fn transport::Endpoint::simulate_packet_loss(&self, fraction: f32) [async; test-fixture path per net-blocker-2]",
+    "pub fn transport::Endpoint::connect(&self, remote: PeerId) -> AtriumTransportResult<Connection> [async]",
+    "pub fn transport::Endpoint::connect_to_addr(&self, remote_addr: EndpointAddr) -> AtriumTransportResult<Connection> [async]",
+    "pub fn transport::Endpoint::accept_next(&self) -> AtriumTransportResult<Connection> [async]",
+    "pub fn transport::Endpoint::close(self) [async]",
+    "pub struct transport::Connection",
+    "pub fn transport::Connection::transport_kind(&self) -> TransportKind",
+    "pub fn transport::Connection::remote_peer(&self) -> PeerId",
+    "pub fn transport::Connection::send_bytes(&self, payload: &[u8]) -> AtriumTransportResult<()> [async]",
+    "pub fn transport::Connection::recv_bytes(&self) -> AtriumTransportResult<Vec<u8>> [async]",
+    "pub fn transport::Connection::close(self)",
+    "pub fn transport::wait_briefly_for_home() [async]"
+  ],
+  "_dependencies": [
+    "benten-id (workspace path) — Ed25519 keypair + Did per net-minor-2 + ds-8 + crypto-minor-4",
+    "benten-errors (workspace) — stable ErrorCode catalog",
+    "serde + serde_ipld_dagcbor + serde_bytes — DAG-CBOR canonical-bytes per CLAUDE.md baked-in #5",
+    "thiserror + tracing — typed error + observability",
+    "iroh = 0.98 (cfg-gated [target.'cfg(not(target_arch = \"wasm32\"))'.dependencies] per CLAUDE.md baked-in #17) — QUIC transport core, tls-ring",
+    "tokio = 1 (cfg-gated, native-only) — async runtime",
+    "bytes (cfg-gated, native-only)"
+  ],
+  "_forbidden_dependencies": [
+    "benten-engine — per arch-r1-11 + D-PHASE-3-14 (engine consumes sync, never reverse)",
+    "benten-eval — per arch-r1-11 + D-PHASE-3-14 (eval consumes sync, never reverse)"
+  ],
+  "_pin_sources": [
+    "r2-test-landscape §2.4 G16-A row",
+    "plan §3 G16-A row",
+    "CLAUDE.md baked-in #17 (full-peer / thin-client commitment)",
+    "D-PHASE-3-3 RESOLVED-at-R1 (iroh QUIC + holepunch + relay-default)",
+    "net-minor-1 (single-process two-Endpoint loopback round-trip)",
+    "net-minor-2 + ds-8 + crypto-minor-4 (peer-id deterministic from Ed25519 pubkey)",
+    "net-blocker-2 BLOCKER (typed E_ATRIUM_RELAY_UNREACHABLE + E_ATRIUM_TRANSPORT_DEGRADED)",
+    "net-blocker-4 BLOCKER (peer-handshake metadata carries peer-DID AND device-DID)",
+    "scope-real-10 (CI-conditional gating for holepunch / relay-fallback fixtures)",
+    "arch-r1-11 + D-PHASE-3-14 (no benten-engine / benten-eval dep)",
+    "cag-2 + cag-r4-3 (no persistent state at G16-A canary scope; G16-B/D wave-6b lands)",
+    "seq-minor-5 (per-NEW-crate cargo-public-api baseline)"
+  ],
+  "_wave_6b_seams": {
+    "G16-B (Loro CRDT)": [
+      "consumes transport::Connection::send_bytes / recv_bytes for sync-replica delivery",
+      "lands crates/benten-sync/src/crdt.rs (NOT in this PR)",
+      "un-ignores tests/loro_lww.rs / tests/loro_rich_type.rs / tests/hlc_loro_property_lww.rs / tests/prop_loro_converge.rs"
+    ],
+    "G16-C (MST diff + light-client)": [
+      "consumes transport::Connection for MST diff exchange",
+      "lands crates/benten-sync/src/mst.rs + mst_proto.rs + light_client.rs (NOT in this PR)",
+      "un-ignores tests/mst_diff.rs / tests/mst_revocation_priority.rs / tests/light_client.rs / tests/light_client_distinct.rs / tests/prop_mst.rs"
+    ],
+    "G16-D (DID handshake protocol body + peer discovery)": [
+      "consumes handshake_wire::HandshakeFrame as the on-the-wire envelope",
+      "consumes transport::Endpoint::accept_next / connect for handshake-state-machine wiring",
+      "lands crates/benten-sync/src/handshake.rs + peer_discovery.rs (NOT in this PR)",
+      "un-ignores tests/handshake.rs / tests/transport_loopback.rs::iroh_transport_relay_fallback_when_holepunch_fails / tests/transport_loopback.rs::iroh_transport_holepunch_smoke / tests/atrium_revoke_order.rs / tests/atrium_partial_partition.rs / tests/atrium_join.rs"
+    ]
+  }
+}

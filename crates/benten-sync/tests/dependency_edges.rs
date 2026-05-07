@@ -1,5 +1,5 @@
-//! R3-C RED-PHASE pin for `benten-sync` dependency-edge architectural
-//! constraint (G16-A wave-6 canary; arch-r1-11 + D-PHASE-3-14).
+//! G16-A LANDED pin for `benten-sync` dependency-edge architectural
+//! constraint per arch-r1-11 + D-PHASE-3-14.
 //!
 //! ## Pin source
 //!
@@ -8,9 +8,7 @@
 //! - `arch-r1-11` (architectural constraint: dependency direction
 //!   is engine → sync, never the reverse).
 //! - `D-PHASE-3-14` (per-NEW-crate dep-edge audit).
-//! - plan §3 G16-A row line "deps `iroh`, `iroh-net`, `tokio`,
-//!   `benten-graph`, `benten-id`, `uhlc`; **NO benten-engine /
-//!   benten-eval dep per arch-r1-11**".
+//! - plan §3 G16-A row.
 //!
 //! ## Architectural constraint
 //!
@@ -23,61 +21,65 @@
 //! - `benten-eval` (evaluator — `benten-sync` is consumed BY the
 //!   evaluator's primitive arms, not the reverse).
 //!
-//! The expected dependency manifest (per plan §3 G16-A row):
+//! ## Implementation note
 //!
-//! ```text
-//! [dependencies]
-//! iroh = "..."
-//! iroh-net = "..."
-//! tokio = "..."
-//! benten-graph = ...
-//! benten-id = ...
-//! uhlc = "..."
-//! # G16-B adds: loro = "..."
-//! # plus optionally benten-core (for Cid reuse) and benten-errors.
-//! ```
-//!
-//! NO other workspace crate names (specifically: NO benten-engine, NO benten-eval).
-//!
-//! ## RED-PHASE discipline
-//!
-//! `#[ignore]`'d with rationale `"RED-PHASE: G16-A wave-6 fills Cargo.toml deps; arch-r1-11 audit at landing time"`.
+//! The pin walks Cargo.toml's dep-tables PROGRAMMATICALLY (toml
+//! parse) rather than raw-grepping the manifest text. Otherwise the
+//! prose comment in `[lib]` that NAMES `benten-engine`/`benten-eval`
+//! (to document the forbidden-list) would false-positive.
 
 #![allow(clippy::unwrap_used)]
 
+use std::collections::BTreeSet;
+
 #[test]
-#[ignore = "RED-PHASE: G16-A wave-6 — arch-r1-11 + D-PHASE-3-14 — dependency edges constrained"]
 fn benten_sync_no_dependency_on_benten_engine_or_eval() {
-    // arch-r1-11 + D-PHASE-3-14 pin. G16-A implementer wires this
-    // against the post-implementation crates/benten-sync/Cargo.toml.
-    // The test reads the manifest and asserts the dependency table
-    // (and target-specific dep tables) contains NO forbidden
-    // workspace-crate names.
-    //
-    // Concrete shape:
-    //   let manifest_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //       .join("Cargo.toml");
-    //   let manifest = std::fs::read_to_string(&manifest_path).unwrap();
-    //   const FORBIDDEN: &[&str] = &["benten-engine", "benten-eval"];
-    //   for forbidden in FORBIDDEN {
-    //       assert!(
-    //           !manifest.contains(forbidden),
-    //           "benten-sync MUST NOT depend on {} per arch-r1-11 + D-PHASE-3-14 (dependency direction is engine → sync, never reverse)",
-    //           forbidden
-    //       );
-    //   }
-    //
-    // (More precise: parse Cargo.toml as TOML and walk every
-    // dependency table including target-specific tables. The naive
-    // string-grep above suffices for the architectural pin since
-    // the forbidden names don't appear elsewhere in a valid
-    // benten-sync manifest.)
-    //
-    // OBSERVABLE consequence: a future refactor that adds
-    // `benten-engine` or `benten-eval` to benten-sync's dep
-    // manifest fails this test loudly, preventing the layering
-    // inversion before it lands.
-    unimplemented!(
-        "G16-A wires Cargo.toml manifest grep against {{benten-engine, benten-eval}} forbidden list"
-    );
+    let manifest_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+    let raw = std::fs::read_to_string(&manifest_path).expect("read Cargo.toml");
+    let parsed: toml::Value = toml::from_str(&raw).expect("parse Cargo.toml");
+
+    // Walk every dep-table (top-level + target.*-conditional) +
+    // collect dep-key names.
+    let mut deps: BTreeSet<String> = BTreeSet::new();
+    collect_deps(&parsed, &mut deps);
+
+    const FORBIDDEN: &[&str] = &["benten-engine", "benten-eval"];
+    for forbidden in FORBIDDEN {
+        assert!(
+            !deps.contains(*forbidden),
+            "benten-sync MUST NOT depend on {forbidden} per arch-r1-11 + D-PHASE-3-14 \
+             (dependency direction is engine → sync, never reverse). \
+             Found `{forbidden}` in dep tables of {manifest_path:?}.",
+        );
+    }
+}
+
+/// Recursively collect dep-key names from a TOML value, walking the
+/// canonical `[dependencies]` / `[dev-dependencies]` /
+/// `[build-dependencies]` / `[target.*.dependencies]` etc. tables.
+fn collect_deps(value: &toml::Value, deps: &mut BTreeSet<String>) {
+    let toml::Value::Table(table) = value else {
+        return;
+    };
+    for (key, sub) in table {
+        match key.as_str() {
+            "dependencies" | "dev-dependencies" | "build-dependencies" => {
+                if let toml::Value::Table(t) = sub {
+                    for k in t.keys() {
+                        deps.insert(k.clone());
+                    }
+                }
+            }
+            "target" => {
+                // `target.<cfg>.dependencies` → recurse.
+                if let toml::Value::Table(targets) = sub {
+                    for (_cfg, cfg_table) in targets {
+                        collect_deps(cfg_table, deps);
+                    }
+                }
+            }
+            // Don't recurse into [package] / [lib] / [features] / etc.
+            _ => {}
+        }
+    }
 }

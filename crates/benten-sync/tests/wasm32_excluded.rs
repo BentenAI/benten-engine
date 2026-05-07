@@ -1,14 +1,13 @@
-//! R3-C RED-PHASE architectural pin for `benten-sync` native-only
-//! commitment per CLAUDE.md baked-in #17 (G16-A wave-6 canary).
+//! G16-A LANDED architectural pin for `benten-sync` native-only
+//! commitment per CLAUDE.md baked-in #17.
 //!
 //! ## Pin source
 //!
-//! - r2-test-landscape §2.4 G16-A row + §3.E thin-client cluster +
-//!   §4 baked-in #17 architectural pins.
+//! - r2-test-landscape §2.4 G16-A row + §3.E thin-client cluster.
 //! - plan §3 G16-A row line "`benten-sync` excluded from wasm32
 //!   targets per CLAUDE.md baked-in #17".
 //! - CLAUDE.md baked-in #17 (full-peer / thin-client commitment;
-//!   browser tabs participate via D-PHASE-3-N protocol, not as full
+//!   browser tabs participate via D-PHASE-3-30 protocol, not as full
 //!   peers).
 //! - plan §3 G16-A row line "iroh transport NEVER compiles for
 //!   wasm32: Cargo.toml `[target.'cfg(not(target_arch = \"wasm32\"))']`
@@ -18,62 +17,62 @@
 //!
 //! `benten-sync` MUST NOT compile for `wasm32-unknown-unknown` target.
 //! Browser tabs participate in Atriums as authenticated thin-client
-//! views (D-PHASE-3-N: snapshot CID + authenticated POST + SSE/WS
-//! subscription against a full peer) — NOT as full peers running
-//! iroh + Loro + MST natively.
+//! views (D-PHASE-3-30: snapshot CID + authenticated POST + SSE/WS
+//! subscription against a full peer) — NOT as full peers running iroh
+//! + Loro + MST natively.
 //!
-//! ## RED-PHASE discipline
+//! Two layers defend the native-only commitment:
 //!
-//! `#[ignore]`'d with rationale `"RED-PHASE: G16-A wave-6 wires Cargo.toml cfg-gate; wasm32 build asserted to fail post-G16-A"`.
+//! 1. **lib.rs `compile_error!`** — fires immediately for any wasm32
+//!    build attempt with a clear error pointing at CLAUDE.md baked-in
+//!    #17 + the thin-client surface alternative.
+//! 2. **Cargo.toml cfg-gated dependency tables** — iroh + tokio live
+//!    behind `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`,
+//!    so even a downstream consumer that bypasses the lib.rs gate
+//!    cannot resolve the dep chain on wasm32.
+//!
+//! This test asserts BOTH defenses are present at the source-of-truth
+//! manifests.
 
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G16-A wave-6 — CLAUDE.md baked-in #17 — benten-sync wasm32-excluded"]
 fn benten_sync_does_not_compile_for_wasm32_unknown_unknown_per_thin_client_commitment() {
-    // CLAUDE.md baked-in #17 architectural pin. G16-A implementer
-    // wires this against a build-time assertion + a CI cell that
-    // attempts `cargo check -p benten-sync --target wasm32-unknown-unknown`
-    // and asserts the build FAILS (with a clear error).
-    //
-    // Concrete shape (preferred — at the source level):
-    //   #[cfg(target_arch = "wasm32")]
-    //   compile_error!(
-    //       "benten-sync is native-only per CLAUDE.md baked-in #17. \
-    //        Browser tabs participate via D-PHASE-3-N thin-client protocol, \
-    //        not as full Atrium peers. Use `benten-engine`'s thin-client \
-    //        surfaces from wasm32 builds."
-    //   );
-    //
-    // Companion CI cell (`.github/workflows/cross-target-build.yml`
-    // or similar) attempts a wasm32 build of benten-sync and
-    // asserts FAILURE — i.e. the absence of the cfg-gate would be
-    // a regression. The test in this file is the in-tree assertion
-    // shape that documents the expected behavior.
-    //
-    // The Rust-side test asserts the cfg-gate is in place by
-    // checking Cargo.toml's target-specific dependency tables
-    // (sync-only deps must NOT appear under
-    // `[target.'cfg(target_arch = "wasm32")'.dependencies]`):
-    //   let manifest = std::fs::read_to_string(
-    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //           .join("Cargo.toml")
-    //   ).unwrap();
-    //   // benten-sync's iroh + loro + mst deps must live behind a
-    //   // not-wasm32 cfg-gate. The simplest assertion: the manifest
-    //   // includes a `cfg(not(target_arch = "wasm32"))` table OR the
-    //   // top-level dependencies table excludes iroh/loro entirely
-    //   // (with a build-time compile_error! for wasm32 builds in lib.rs).
-    //   assert!(
-    //       manifest.contains("cfg(not(target_arch = \"wasm32\"))")
-    //           || std::fs::read_to_string("src/lib.rs").unwrap().contains("compile_error"),
-    //       "benten-sync must cfg-gate iroh/loro deps OR emit compile_error! on wasm32 per CLAUDE.md baked-in #17"
-    //   );
-    //
-    // OBSERVABLE consequence: any future refactor that accidentally
-    // ships iroh/loro into a wasm32 build of benten-sync fails this
-    // assertion + the companion CI cell.
-    unimplemented!(
-        "G16-A wires Cargo.toml cfg-gate + lib.rs compile_error! for wasm32-unknown-unknown"
+    // CLAUDE.md baked-in #17 architectural pin. Verify both defenses:
+    let crate_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let manifest = std::fs::read_to_string(crate_root.join("Cargo.toml")).expect("read Cargo.toml");
+    let lib_rs = std::fs::read_to_string(crate_root.join("src/lib.rs")).expect("read src/lib.rs");
+
+    // Defense 1: lib.rs `compile_error!` for wasm32.
+    assert!(
+        lib_rs.contains("compile_error!"),
+        "src/lib.rs MUST emit a compile_error! macro for wasm32 builds \
+         per CLAUDE.md baked-in #17 (full-peer / thin-client commitment)"
+    );
+    assert!(
+        lib_rs.contains("target_arch = \"wasm32\"") || lib_rs.contains("target_arch=\"wasm32\""),
+        "src/lib.rs MUST cfg-gate on `target_arch = \"wasm32\"` \
+         per CLAUDE.md baked-in #17"
+    );
+    assert!(
+        lib_rs.contains("CLAUDE.md baked-in #17") || lib_rs.contains("baked-in #17"),
+        "src/lib.rs compile_error! MUST cite CLAUDE.md baked-in #17 by name \
+         so future maintainers find the architectural commitment"
+    );
+
+    // Defense 2: Cargo.toml cfg-gated [target.'cfg(not(target_arch =
+    // "wasm32"))'.dependencies] table for the iroh/tokio chain.
+    assert!(
+        manifest.contains("cfg(not(target_arch = \"wasm32\"))")
+            || manifest.contains("cfg(not(target_arch=\"wasm32\"))"),
+        "Cargo.toml MUST carry a `cfg(not(target_arch = \"wasm32\"))` \
+         dependency table so iroh/tokio chain is not resolvable on wasm32 \
+         per CLAUDE.md baked-in #17"
+    );
+    assert!(
+        manifest.contains("iroh"),
+        "Cargo.toml MUST reference iroh — the load-bearing wasm32-excluded \
+         dep that this test guards against accidentally promoting to a \
+         wasm32-resolvable dep table"
     );
 }

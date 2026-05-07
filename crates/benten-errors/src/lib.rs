@@ -561,6 +561,34 @@ pub enum ErrorCode {
     /// allocation; the engine surfaces a typed error rather than
     /// silently dropping the write.
     StorageQuotaExceeded,
+    /// G16-A wave-6 (Phase-3 Atrium transport canary; net-blocker-2
+    /// BLOCKER): the configured iroh relay endpoint is unreachable
+    /// (DNS-resolution failure / TLS handshake refused / transport-
+    /// level timeout). Surfaces at the
+    /// [`crates/benten-sync/src/transport.rs`] connect/bind boundary
+    /// per `crates/benten-sync/src/errors.rs::AtriumTransportError::RelayUnreachable`.
+    /// Maps to `E_ATRIUM_RELAY_UNREACHABLE`. Per net-blocker-2 the
+    /// relay-unreachable failure mode MUST be a typed error variant —
+    /// never a panic, never an untyped String. Distinct from
+    /// [`ErrorCode::AtriumTransportDegraded`] (which signals an
+    /// established connection has degraded mid-flight). Routes to
+    /// `ON_ERROR`. Compromise #22 in `docs/SECURITY-POSTURE.md` records
+    /// the relay-operator metadata-leakage posture; Phase-7
+    /// Garden-relays land as the operator-controlled alternative.
+    AtriumRelayUnreachable,
+    /// G16-A wave-6 (Phase-3 Atrium transport canary; net-blocker-2
+    /// BLOCKER): the established Atrium transport has degraded —
+    /// packet-loss above threshold, relay-fallback active, direct
+    /// connection lost, or handshake wire-format violation surfaced at
+    /// the transport layer. Surfaces at the
+    /// [`crates/benten-sync/src/transport.rs`] connection boundary per
+    /// `crates/benten-sync/src/errors.rs::AtriumTransportError::TransportDegraded`.
+    /// The engine-side `engine.atrium_status()` surface (G16-B/D)
+    /// propagates this state observably. Maps to
+    /// `E_ATRIUM_TRANSPORT_DEGRADED`. Per net-blocker-2 the degraded
+    /// transport state is EXPLICIT — not a missing value, not a
+    /// panic. Routes to `ON_ERROR`.
+    AtriumTransportDegraded,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -752,6 +780,9 @@ impl ErrorCode {
             ErrorCode::SyncHopDepthExceeded => "E_SYNC_HOP_DEPTH_EXCEEDED",
             ErrorCode::ThinClientAuthRejected => "E_THIN_CLIENT_AUTH_REJECTED",
             ErrorCode::StorageQuotaExceeded => "E_STORAGE_QUOTA_EXCEEDED",
+            // Phase-3 G16-A — Atrium transport surface
+            ErrorCode::AtriumRelayUnreachable => "E_ATRIUM_RELAY_UNREACHABLE",
+            ErrorCode::AtriumTransportDegraded => "E_ATRIUM_TRANSPORT_DEGRADED",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -929,7 +960,18 @@ impl ErrorCode {
             // store is unreadable; the failure is layered through to
             // the caller as ON_ERROR. Distinct from `CapDenied` (the
             // backend reached a denial verdict).
-            | ErrorCode::CapBackendStorage => Some("ON_ERROR"),
+            | ErrorCode::CapBackendStorage
+            // Phase-3 G16-A — Atrium transport surface (net-blocker-2
+            // BLOCKER): relay-unreachable + transport-degraded join the
+            // ON_ERROR runtime-failure family. The engine surfaces these
+            // through the `engine.atrium_status()` accessor (G16-B/D)
+            // observability rather than along an in-graph primitive
+            // edge of a runnable handler subgraph; transport surfaces
+            // are evaluator-adjacent, not evaluator-arm-internal. The
+            // routing pattern matches `HostBackendUnavailable`
+            // (transport-layer failure surfacing as runtime ON_ERROR).
+            | ErrorCode::AtriumRelayUnreachable
+            | ErrorCode::AtriumTransportDegraded => Some("ON_ERROR"),
 
             // Inv-7 SANDBOX output limit — dedicated edge label (matches the
             // SANDBOX primitive's edge surface in `benten-core` subgraph.rs:
@@ -1158,6 +1200,10 @@ impl ErrorCode {
             // Phase-3 G18-A wave-5a — IndexedDB QuotaExceededError →
             // typed E_STORAGE_QUOTA_EXCEEDED per D-PHASE-3-27 / br-r1-2.
             "E_STORAGE_QUOTA_EXCEEDED" => ErrorCode::StorageQuotaExceeded,
+            // Phase-3 G16-A wave-6 — Atrium transport surface
+            // (net-blocker-2 BLOCKER typed errors).
+            "E_ATRIUM_RELAY_UNREACHABLE" => ErrorCode::AtriumRelayUnreachable,
+            "E_ATRIUM_TRANSPORT_DEGRADED" => ErrorCode::AtriumTransportDegraded,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }

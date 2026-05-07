@@ -83,36 +83,33 @@ fn architecture_md_in_flight_callouts_present_for_benten_id_and_benten_sync_nati
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-A wave-6 updates ARCHITECTURE.md with the 10-crate in-flight callout naming benten-sync as native-only"]
 fn architecture_md_in_flight_callout_present_for_benten_sync_native_only_at_g16_a() {
     // R3-C extension per r2-test-landscape §13 ambiguous-ownership
     // pre-emption ("R3-C extends with G16-A intermediate-state
-    // assertion (10-crate in-flight callout)"). G16-A implementer
-    // updates `docs/ARCHITECTURE.md` so the in-flight callout
-    // narrates the 10-crate transition (post-G14-A1 9-crate state +
-    // G16-A landing the 10th crate `benten-sync` as native-only).
-    //
-    // Concrete shape:
-    //   let arch_md = std::fs::read_to_string(
-    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //           .join("..").join("..").join("docs").join("ARCHITECTURE.md")
-    //   ).unwrap();
-    //   assert!(
-    //       arch_md.contains("benten-sync added at G16-A")
-    //         || arch_md.contains("10th crate benten-sync"),
-    //       "ARCHITECTURE.md must carry the 10-crate in-flight callout at G16-A landing per arch-r1-3 BLOCKER"
-    //   );
-    //   assert!(
-    //       arch_md.contains("native-only"),
-    //       "ARCHITECTURE.md must explicitly mark benten-sync as native-only per CLAUDE.md baked-in #17"
-    //   );
+    // assertion (10-crate in-flight callout)"). G16-A LANDED:
+    // `docs/ARCHITECTURE.md` carries the 10-crate in-flight callout
+    // naming `benten-sync` as native-only per CLAUDE.md baked-in #17.
     //
     // OBSERVABLE consequence: after G16-A lands, ARCHITECTURE.md
     // explicitly tells readers the 10th crate (benten-sync) is now
     // present + is native-only (excluded from wasm32 targets).
     // Defends against the "code shipped, doc didn't" failure shape
     // that arch-r1-3 named as a BLOCKER.
-    unimplemented!(
-        "G16-A wires ARCHITECTURE.md grep assertion for benten-sync 10th-crate native-only in-flight callout"
+    let arch_md = std::fs::read_to_string(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("docs")
+            .join("ARCHITECTURE.md"),
+    )
+    .unwrap();
+    assert!(
+        arch_md.contains("benten-sync added at G16-A")
+            || arch_md.contains("10th crate benten-sync"),
+        "ARCHITECTURE.md must carry the 10-crate in-flight callout at G16-A landing per arch-r1-3 BLOCKER"
+    );
+    assert!(
+        arch_md.contains("native-only"),
+        "ARCHITECTURE.md must explicitly mark benten-sync as native-only per CLAUDE.md baked-in #17"
     );
 }

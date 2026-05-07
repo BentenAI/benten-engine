@@ -323,9 +323,22 @@ wasmtime = { version = "43.0.2", default-features = false, features = ["runtime"
 wat = "=1.248.0"
 toml = { version = "0.8", default-features = false, features = ["parse"] }
 
-# Phase 3 (sync/identity) — reserved versions for future use:
-# iroh = "0.97"
-# loro = "1"
+# Phase 3 (sync) — Atrium P2P transport. iroh wires at G16-A wave-6
+# canary; Loro wires at G16-B wave-6b.
+#
+# iroh: pinned at 0.98 minor + Dependabot fast-track per scope-real-10
+# (relay infrastructure availability for holepunch/relay-fallback CI
+# cells stabilizes alongside iroh's ecosystem maintenance cadence).
+# Pulled by `crates/benten-sync` only, behind the
+# `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]` cfg-gate
+# per CLAUDE.md baked-in #17 native-only commitment.
+# G16-A wave-6 canary lands transport core; G16-B wave-6b adds Loro;
+# G16-C/D add MST + handshake protocol body. The version pin lives at
+# the consumer crate's manifest (`crates/benten-sync/Cargo.toml`)
+# rather than this workspace.dependencies table because benten-sync
+# is the only consumer; promoting to workspace.dependencies happens
+# if/when a sibling crate also needs the dep.
+# loro = "1"  — reserved for G16-B wave-6b; not yet pulled.
 
 # Phase 3 G14-A1 (identity) — Ed25519 + did:key + UCAN. The G14-A1 canary
 # (wave-4a) lands the first consumers of these crates inside `benten-id`.
