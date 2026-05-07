@@ -109,6 +109,8 @@ export const CATALOG_CODES = [
   "E_STREAM_BACKPRESSURE_DROPPED",
   "E_STREAM_CLOSED_BY_PEER",
   "E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED",
+  "E_INV_STREAM_CONFIG",
+  "E_STREAM_HANDLE_LEAKED",
   "E_SUBSCRIBE_DELIVERY_FAILED",
   "E_SUBSCRIBE_PATTERN_INVALID",
   "E_SUBSCRIBE_CURSOR_LOST",
@@ -1299,6 +1301,36 @@ export class EStreamProducerWallclockExceeded extends BentenError {
 }
 
 /**
+ * E_INV_STREAM_CONFIG
+ *
+ * Thrown at: `crates/benten-engine/src/engine_stream.rs::build_stream_handle` (resolves per-handler properties from the registered `SubgraphSpec` + validates against `ChunkProducerConfig::default`).
+ * Message template: "STREAM per-handler config widens workspace grant ceiling"
+ */
+export class EInvStreamConfig extends BentenError {
+  static readonly code = "E_INV_STREAM_CONFIG";
+  static readonly fixHint = "Per-handler STREAM `chunkCountCap` / `wallclockBudgetMs` properties NARROW but cannot WIDEN the workspace defaults. Drop the per-handler override or align it below the workspace ceiling. Per stream-r1-9: extension-vs-replace policy is \"narrow only\" — widen attempts at registration / call time are rejected to defend against the over-permissive-escape failure mode. Phase-3 G19-C2.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_INV_STREAM_CONFIG", "Per-handler STREAM `chunkCountCap` / `wallclockBudgetMs` properties NARROW but cannot WIDEN the workspace defaults. Drop the per-handler override or align it below the workspace ceiling. Per stream-r1-9: extension-vs-replace policy is \"narrow only\" — widen attempts at registration / call time are rejected to defend against the over-permissive-escape failure mode. Phase-3 G19-C2.", message, context);
+    this.name = "EInvStreamConfig";
+  }
+}
+
+/**
+ * E_STREAM_HANDLE_LEAKED
+ *
+ * Thrown at: `packages/engine/src/stream.ts::ensureLeakRegistry` (FinalizationRegistry callback) + `packages/engine/src/stream.ts::fireStreamLeak` (broadcast helper used by both the FinalizationRegistry callback path and the `Engine.shutdown()` drain path on `packages/engine/src/engine.ts::Engine`); never thrown across the napi boundary.
+ * Message template: "STREAM handle dropped without explicit close()"
+ */
+export class EStreamHandleLeaked extends BentenError {
+  static readonly code = "E_STREAM_HANDLE_LEAKED";
+  static readonly fixHint = "A `StreamHandle` returned by `engine.openStream(...)` was garbage-collected (or the engine was shut down) without an explicit `close()` / `cancel()` call. Native-side ownership is correct (Rust `Drop` joins the producer thread); this surface fires JS-side leak detection so operators can spot leaking call sites. Either consume the handle to natural completion (which auto-closes via the natural-final-chunk path), call `close()` explicitly, or use `engine.callStream(...)` which wraps for-await auto-close. Per stream-r1-4: 4 enumerated leak scenarios (handler-returns-no-close, handler-throws-no-close, natural-completion-no-fire-negative, engine-shutdown-while-open) plus a sub-mechanism GC-pressure-timeout polling fallback. Native-Node-only — V8 + WHATWG GC schedule per stream-r1-10. Phase-3 G19-C2.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_STREAM_HANDLE_LEAKED", "A `StreamHandle` returned by `engine.openStream(...)` was garbage-collected (or the engine was shut down) without an explicit `close()` / `cancel()` call. Native-side ownership is correct (Rust `Drop` joins the producer thread); this surface fires JS-side leak detection so operators can spot leaking call sites. Either consume the handle to natural completion (which auto-closes via the natural-final-chunk path), call `close()` explicitly, or use `engine.callStream(...)` which wraps for-await auto-close. Per stream-r1-4: 4 enumerated leak scenarios (handler-returns-no-close, handler-throws-no-close, natural-completion-no-fire-negative, engine-shutdown-while-open) plus a sub-mechanism GC-pressure-timeout polling fallback. Native-Node-only — V8 + WHATWG GC schedule per stream-r1-10. Phase-3 G19-C2.", message, context);
+    this.name = "EStreamHandleLeaked";
+  }
+}
+
+/**
  * E_SUBSCRIBE_DELIVERY_FAILED
  *
  * Thrown at: `benten_eval::primitives::subscribe::ActiveSubscription::inject` (delivery-time cap re-check).
@@ -2058,6 +2090,8 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_STREAM_BACKPRESSURE_DROPPED": EStreamBackpressureDropped,
   "E_STREAM_CLOSED_BY_PEER": EStreamClosedByPeer,
   "E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED": EStreamProducerWallclockExceeded,
+  "E_INV_STREAM_CONFIG": EInvStreamConfig,
+  "E_STREAM_HANDLE_LEAKED": EStreamHandleLeaked,
   "E_SUBSCRIBE_DELIVERY_FAILED": ESubscribeDeliveryFailed,
   "E_SUBSCRIBE_PATTERN_INVALID": ESubscribePatternInvalid,
   "E_SUBSCRIBE_CURSOR_LOST": ESubscribeCursorLost,

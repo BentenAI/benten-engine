@@ -238,6 +238,56 @@ pub(crate) struct EngineInner {
     /// production engine layout does not carry the field at all.
     #[cfg(any(test, feature = "test-helpers"))]
     pub(crate) test_markers: std::sync::Mutex<std::collections::HashSet<Cid>>,
+
+    /// Phase-3 G19-C2 wave-7 (§7.1 SANDBOX execution metrics
+    /// propagation): per-handler-id cumulative-high-water tracker for
+    /// SANDBOX `fuel_consumed`, `output_consumed`, and the most-recent
+    /// invocation's wall-clock duration. Populated at the
+    /// `primitive_host.rs::execute_sandbox` boundary AFTER the eval-side
+    /// `SandboxResult` returns; consumed by
+    /// `engine_sandbox.rs::describe_sandbox_node` so the diagnostic
+    /// accessor returns real metrics rather than the legacy `Unknown`
+    /// placeholder.
+    ///
+    /// Per stream-r1-8: high-water values are PER-INVOCATION updates
+    /// against the high-water mark within a single Engine instance —
+    /// the cross-process WAIT-resume envelope does NOT carry in-flight
+    /// SANDBOX metrics across the suspend boundary. A second-process
+    /// resume that re-enters the SANDBOX node sees the second
+    /// invocation's measurement (the fresh Engine has an empty
+    /// metrics map).
+    ///
+    /// Keyed by handler_id (string) rather than node CID because the
+    /// Phase-2b/3 dispatch surface tracks SANDBOX entries at the
+    /// handler boundary; per-node sub-aggregation is a future
+    /// devtools refinement once Phase 3+ adds richer node-level
+    /// resolution. The shape is the resolved-defaults
+    /// `SandboxNodeDescription` triple plus the high-water + last
+    /// invocation-ms readings.
+    pub(crate) sandbox_metrics:
+        std::sync::Mutex<std::collections::BTreeMap<String, SandboxNodeMetrics>>,
+}
+
+/// Phase-3 G19-C2 wave-7 (§7.1): per-invocation high-water tracker
+/// for SANDBOX execution metrics. Populated at
+/// `primitive_host.rs::execute_sandbox` AFTER the eval-side
+/// `SandboxResult` returns; consumed by
+/// `engine_sandbox.rs::describe_sandbox_node`.
+///
+/// `fuel_consumed_high_water` and `output_consumed_high_water` are
+/// monotonically non-decreasing across invocations within a single
+/// Engine instance; `last_invocation_ms` is the wall-clock duration
+/// of the MOST-RECENT invocation only (NOT a high-water).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct SandboxNodeMetrics {
+    pub(crate) module_cid: Option<Cid>,
+    pub(crate) manifest_id: Option<String>,
+    pub(crate) fuel: u64,
+    pub(crate) wallclock_ms: u64,
+    pub(crate) output_limit_bytes: u64,
+    pub(crate) fuel_consumed_high_water: Option<u64>,
+    pub(crate) output_consumed_high_water: Option<u64>,
+    pub(crate) last_invocation_ms: Option<u64>,
 }
 
 impl EngineInner {
@@ -272,6 +322,7 @@ impl EngineInner {
             )),
             #[cfg(any(test, feature = "test-helpers"))]
             test_markers: std::sync::Mutex::new(std::collections::HashSet::new()),
+            sandbox_metrics: std::sync::Mutex::new(BTreeMap::new()),
         }
     }
 
@@ -326,6 +377,69 @@ impl EngineInner {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         g.insert(*actor);
+    }
+
+    /// Phase-3 G19-C2 wave-7 (§7.1): record a SANDBOX-execution metric
+    /// observation against the per-handler high-water tracker.
+    ///
+    /// `fuel_consumed` + `output_consumed` update the `*_high_water`
+    /// fields monotonically (max-of-prior-and-new); `last_invocation_ms`
+    /// is overwritten with the most-recent invocation's wall-clock
+    /// duration (NOT a high-water — per stream-r1-8 the "last" semantic
+    /// is intentional). The resolved-defaults triple
+    /// (`fuel`/`wallclock_ms`/`output_limit_bytes`) plus
+    /// `module_cid`/`manifest_id` are folded in unconditionally so a
+    /// fresh entry carries the resolved-defaults snapshot from the
+    /// first invocation.
+    ///
+    /// Called from `primitive_host.rs::execute_sandbox` immediately
+    /// after the eval-side `SandboxResult` returns Ok; the engine-side
+    /// is the structural place to track because the eval-side
+    /// `SandboxResult` is dropped at the `StepResult` boundary
+    /// (Phase-2b/3 keeps `StepResult` slim by design — see
+    /// `crates/benten-eval/src/lib.rs::StepResult`).
+    pub(crate) fn record_sandbox_metric(&self, handler_id: &str, observation: SandboxNodeMetrics) {
+        let mut guard = self.sandbox_metrics.lock_recover();
+        let entry = guard
+            .entry(handler_id.to_string())
+            .or_insert_with(SandboxNodeMetrics::default);
+        // Resolved-defaults snapshot — overwrite (the latest invocation's
+        // resolved values are the freshest).
+        entry.module_cid = observation.module_cid.or(entry.module_cid);
+        entry.manifest_id = observation.manifest_id.or_else(|| entry.manifest_id.take());
+        entry.fuel = observation.fuel;
+        entry.wallclock_ms = observation.wallclock_ms;
+        entry.output_limit_bytes = observation.output_limit_bytes;
+        // Monotonic high-water max — never regresses across invocations.
+        entry.fuel_consumed_high_water = match (
+            entry.fuel_consumed_high_water,
+            observation.fuel_consumed_high_water,
+        ) {
+            (None, x) => x,
+            (Some(prev), None) => Some(prev),
+            (Some(prev), Some(new)) => Some(prev.max(new)),
+        };
+        entry.output_consumed_high_water = match (
+            entry.output_consumed_high_water,
+            observation.output_consumed_high_water,
+        ) {
+            (None, x) => x,
+            (Some(prev), None) => Some(prev),
+            (Some(prev), Some(new)) => Some(prev.max(new)),
+        };
+        // Last-invocation overwrite — most-recent semantic is intentional
+        // per stream-r1-8 (NOT cumulative across resumes).
+        entry.last_invocation_ms = observation.last_invocation_ms.or(entry.last_invocation_ms);
+    }
+
+    /// Phase-3 G19-C2 wave-7 (§7.1): snapshot the metrics record for the
+    /// named handler. Returns `None` when no SANDBOX invocation has
+    /// occurred for this handler yet (the entry is created lazily on
+    /// first record). Consumed by
+    /// `engine_sandbox.rs::describe_sandbox_node`.
+    pub(crate) fn sandbox_metric_snapshot(&self, handler_id: &str) -> Option<SandboxNodeMetrics> {
+        let guard = self.sandbox_metrics.lock_recover();
+        guard.get(handler_id).cloned()
     }
 
     /// Phase-3 wave-5c §6.1-followup task #5 — clone the Arc'd

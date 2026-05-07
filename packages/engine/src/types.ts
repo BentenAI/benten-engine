@@ -934,6 +934,21 @@ export interface StreamHandle extends AsyncIterable<Chunk> {
    * per `next()` returning a chunk; `0` before the first chunk drains.
    */
   seqSoFar(): number;
+
+  /**
+   * Phase-3 G19-C2 wave-7 (§7.1.2 + stream-r1-4): `true` for handles
+   * produced by `engine.openStream(...)` (explicit-close lifecycle);
+   * `false` for handles produced by `engine.callStream(...)`
+   * (AsyncIterable auto-close on `for-await` scope-exit).
+   *
+   * The TS-side `FinalizationRegistry` leak detector consults this
+   * accessor to decide whether to fire `E_STREAM_HANDLE_LEAKED` when
+   * a handle is GC'd without `close()` being called. Native-side
+   * stream ownership stays correct regardless (the producer thread
+   * joins on Drop); the leak event is the JS-surface
+   * observability hook.
+   */
+  requiresExplicitClose(): boolean;
 }
 
 // ---------------------------------------------------------------------------
