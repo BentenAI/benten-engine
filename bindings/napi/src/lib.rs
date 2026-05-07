@@ -635,10 +635,7 @@ mod napi_surface {
         ///
         /// JS surface: `engine.userViewSnapshot(viewId) -> Node[] | null`
         #[napi(js_name = "userViewSnapshot")]
-        pub fn user_view_snapshot(
-            &self,
-            view_id: String,
-        ) -> napi::Result<serde_json::Value> {
+        pub fn user_view_snapshot(&self, view_id: String) -> napi::Result<serde_json::Value> {
             match crate::view::user_view_snapshot_adapter(&self.inner, &view_id)? {
                 Some(arr) => Ok(arr),
                 None => Ok(serde_json::Value::Null),
@@ -855,10 +852,7 @@ mod napi_surface {
         /// `testing_advance_wait_clock` helper at
         /// `crates/benten-engine/src/testing.rs`.
         #[napi(js_name = "testingAdvanceWaitClock")]
-        pub fn testing_advance_wait_clock(
-            &self,
-            delta_ms: u32,
-        ) -> napi::Result<()> {
+        pub fn testing_advance_wait_clock(&self, delta_ms: u32) -> napi::Result<()> {
             #[cfg(any(test, feature = "test-helpers"))]
             {
                 // Phase-3 G19-C1 (phase-3-backlog §7.1.4) wired entry
@@ -871,10 +865,7 @@ mod napi_surface {
                 // owned-clone shim — interior mutation will live on
                 // the time-source field once D12 lands. Pre-flight
                 // guard: a negative delta is rejected at the adapter.
-                crate::wait::testing_advance_wait_clock_adapter(
-                    &self.inner,
-                    i64::from(delta_ms),
-                )?;
+                crate::wait::testing_advance_wait_clock_adapter(&self.inner, i64::from(delta_ms))?;
                 Ok(())
             }
             #[cfg(not(any(test, feature = "test-helpers")))]

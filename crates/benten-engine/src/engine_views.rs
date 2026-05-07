@@ -437,10 +437,7 @@ impl Engine {
     /// - [`EngineError::SubsystemDisabled`] when IVM is disabled
     ///   (`.without_ivm()`).
     /// - [`EngineError::IvmViewStale`] when the view is stale.
-    pub fn user_view_snapshot(
-        &self,
-        view_id: &str,
-    ) -> Result<Option<Vec<Node>>, EngineError> {
+    pub fn user_view_snapshot(&self, view_id: &str) -> Result<Option<Vec<Node>>, EngineError> {
         if !self.ivm_enabled {
             return Err(EngineError::SubsystemDisabled { subsystem: "ivm" });
         }
@@ -484,10 +481,7 @@ impl Engine {
     /// # Errors
     ///
     /// - [`EngineError::SubsystemDisabled`] when IVM is disabled.
-    pub fn user_view_on_update(
-        &self,
-        view_id: &str,
-    ) -> Result<Option<ChangeProbe>, EngineError> {
+    pub fn user_view_on_update(&self, view_id: &str) -> Result<Option<ChangeProbe>, EngineError> {
         if !self.ivm_enabled {
             return Err(EngineError::SubsystemDisabled { subsystem: "ivm" });
         }
@@ -504,9 +498,7 @@ impl Engine {
         // Derive the input label. Canonical ids resolve via
         // `hardcoded_label_for_id`; user-defined ids consult the
         // in-memory cache populated at registration time.
-        let label = if let Some(hardcoded) =
-            benten_ivm::hardcoded_label_for_id(normalized)
-        {
+        let label = if let Some(hardcoded) = benten_ivm::hardcoded_label_for_id(normalized) {
             Some(hardcoded.to_string())
         } else {
             let guard = self
@@ -556,9 +548,7 @@ impl Engine {
         if ivm.view_is_stale(normalized).is_none() {
             return Ok(None);
         }
-        let label = if let Some(hardcoded) =
-            benten_ivm::hardcoded_label_for_id(normalized)
-        {
+        let label = if let Some(hardcoded) = benten_ivm::hardcoded_label_for_id(normalized) {
             Some(hardcoded.to_string())
         } else {
             let guard = self

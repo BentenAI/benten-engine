@@ -151,33 +151,130 @@ export function userViewSpecToNativeJson(
 }
 
 /**
+ * Phase-3 G19-C1 (§7.1.3) — runtime-materialization shim the
+ * [`Engine.registerUserView`] caller threads in so [`buildUserViewHandle`]
+ * can light up `view.snapshot()` + `view.onUpdate()` against the live
+ * napi cdylib. The shim isolates the napi surface from `views.ts` (a
+ * pure module) so unit tests can stub it without spinning a native
+ * cdylib.
+ *
+ * - `snapshotRows(viewId)` — drives the engine-side
+ *   `Engine::user_view_snapshot` napi accessor; returns `null` for an
+ *   unknown view id and an array of node rows otherwise.
+ * - `currentChangeOffset()` — current head cursor of the engine's
+ *   ChangeEvent stream; the `view.onUpdate()` async iterator stamps
+ *   this as its starting cursor.
+ * - `drainUpdates(viewId, sinceOffset)` — drains incremental deltas
+ *   the view observed since `sinceOffset`; the iterator records
+ *   `next_offset` per call so subsequent steps replay only events
+ *   strictly newer than the prior cursor.
+ */
+export interface UserViewRuntimeShim {
+  snapshotRows(viewId: string): unknown[] | null;
+  currentChangeOffset(): number;
+  drainUpdates(
+    viewId: string,
+    sinceOffset: number,
+  ): { registered: boolean; events: unknown[]; nextOffset: number };
+}
+
+/**
  * Construct a [`UserView`] handle from a resolved spec + the napi-side
  * registration result. The runtime materialization paths (`snapshot()`
- * iterator, `onUpdate()` subscription) light up alongside G8-A's
- * Algorithm B landing — pre-G8-A this returns the empty / no-op
- * implementations so app code is forward-compatible today.
+ * iterator, `onUpdate()` subscription) consult the threaded
+ * [`UserViewRuntimeShim`]; older napi cdylib builds (pre-G19-C1) lack
+ * the runtime accessors — the shim's `snapshotRows` returns `null` and
+ * `drainUpdates.registered` is `false`, surfacing as no-op iterables
+ * so app code is forward-compatible.
  */
 export function buildUserViewHandle(
   spec: UserViewSpec,
   resolvedStrategy: Strategy,
+  runtime: UserViewRuntimeShim | null = null,
 ): UserView {
   return {
     id: spec.id,
     strategy: resolvedStrategy,
     inputPattern: spec.inputPattern as UserViewInputPattern,
     snapshot(): AsyncIterable<unknown> {
-      return emptyAsyncIterable();
+      if (runtime === null) {
+        return emptyAsyncIterable();
+      }
+      const rows = runtime.snapshotRows(spec.id);
+      if (rows === null || rows.length === 0) {
+        return emptyAsyncIterable();
+      }
+      return rowArrayAsyncIterable(rows);
     },
-    onUpdate(_cb: (diff: unknown) => void): UserViewSubscription {
+    onUpdate(cb: (diff: unknown) => void): UserViewSubscription {
+      if (runtime === null) {
+        return {
+          async unsubscribe(): Promise<void> {
+            // No-op when the napi runtime shim is not threaded in.
+          },
+        };
+      }
+      // Stateless cursor protocol per the napi
+      // `userViewDrainUpdates` adapter: capture the current head
+      // offset at subscription time, then poll at a low cadence,
+      // forwarding each ChangeEvent to the caller-supplied callback.
+      // The `drainUpdates.registered` field is checked once so an
+      // unknown-view subscription is observably no-op (matches the
+      // engine-side `Ok(None)` contract).
+      let cursor = runtime.currentChangeOffset();
+      let active = true;
+      const tick = (): void => {
+        if (!active) return;
+        let drained: ReturnType<UserViewRuntimeShim["drainUpdates"]>;
+        try {
+          drained = runtime.drainUpdates(spec.id, cursor);
+        } catch {
+          // Swallow native-binding faults so subscription teardown
+          // doesn't depend on the engine staying alive — the
+          // unsubscribe path below already disables further ticks.
+          active = false;
+          return;
+        }
+        if (!drained.registered) {
+          active = false;
+          return;
+        }
+        cursor = drained.nextOffset;
+        for (const ev of drained.events) {
+          try {
+            cb(ev);
+          } catch {
+            // Caller errors must not break the subscription loop.
+          }
+        }
+        if (active) {
+          timer = setTimeout(tick, POLL_MS);
+        }
+      };
+      let timer: ReturnType<typeof setTimeout> | null = setTimeout(
+        tick,
+        POLL_MS,
+      );
       return {
         async unsubscribe(): Promise<void> {
-          // No-op pre-G8-A; the subscription handle exists for forward
-          // compatibility with the post-G8-A diff-streaming surface.
+          active = false;
+          if (timer !== null) {
+            clearTimeout(timer);
+            timer = null;
+          }
         },
       };
     },
   };
 }
+
+/**
+ * Polling cadence for `view.onUpdate()` async-iterator step. The napi
+ * `userViewDrainUpdates` adapter is cheap (atomic-load + filtered Vec
+ * iteration), so a 25ms cadence is responsive without burning CPU on
+ * an idle subscription. Tunable post-G19-C1 if back-pressure surfaces.
+ */
+const POLL_MS = 25;
 
 function emptyAsyncIterable(): AsyncIterable<unknown> {
   return {
@@ -185,6 +282,24 @@ function emptyAsyncIterable(): AsyncIterable<unknown> {
       return {
         next(): Promise<IteratorResult<unknown>> {
           return Promise.resolve({ value: undefined, done: true });
+        },
+      };
+    },
+  };
+}
+
+function rowArrayAsyncIterable(rows: unknown[]): AsyncIterable<unknown> {
+  return {
+    [Symbol.asyncIterator](): AsyncIterator<unknown> {
+      let idx = 0;
+      return {
+        next(): Promise<IteratorResult<unknown>> {
+          if (idx >= rows.length) {
+            return Promise.resolve({ value: undefined, done: true });
+          }
+          const value = rows[idx];
+          idx += 1;
+          return Promise.resolve({ value, done: false });
         },
       };
     },

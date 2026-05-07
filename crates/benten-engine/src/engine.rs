@@ -250,8 +250,7 @@ pub(crate) struct EngineInner {
     /// generic user-defined fallback path. Maps `view_id` → input
     /// label string (the same value persisted as
     /// `input_pattern_label` on the `system:IVMView` Node).
-    pub(crate) user_view_input_labels:
-        std::sync::Mutex<BTreeMap<String, String>>,
+    pub(crate) user_view_input_labels: std::sync::Mutex<BTreeMap<String, String>>,
 }
 
 impl EngineInner {

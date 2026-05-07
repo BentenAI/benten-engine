@@ -609,7 +609,7 @@ export class SubgraphBuilder {
     // since the caller already supplies milliseconds.
     return this.addNode("wait", {
       signal,
-      timeout_ms: Math.floor(opts.ttlMs),
+      timeout_ms: Math.floor(a.ttlMs),
     });
   }
 
@@ -887,7 +887,7 @@ export class CaseBuilder {
     }
     return this.addNode("wait", {
       signal,
-      timeout_ms: Math.floor(opts.ttlMs),
+      timeout_ms: Math.floor(a.ttlMs),
     });
   }
 

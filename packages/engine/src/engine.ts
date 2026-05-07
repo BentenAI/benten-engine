@@ -68,6 +68,7 @@ import type {
   SubscribeCursor,
   Subscription,
   SuspensionResult,
+  ResumeWithMetaResult,
   Trace,
   TraceStep,
   UserView,
@@ -79,6 +80,7 @@ import {
   resolveUserViewStrategy,
   userViewSpecToNativeJson,
   validateUserViewSpec,
+  type UserViewRuntimeShim,
 } from "./views.js";
 
 // ---------------------------------------------------------------------------
@@ -149,6 +151,17 @@ interface NativeEngine {
     signalValue: unknown,
     principalCid: string,
   ) => unknown;
+  // Phase-3 G19-C1 (§7.1.3) — UserView runtime materialization bridge.
+  // `userViewSnapshot(viewId) → Node[] | null` + cursor-aware delta
+  // drain `userViewDrainUpdates(viewId, sinceOffset) → { registered,
+  // events, next_offset }` + head-cursor accessor `userViewChangeOffset()`.
+  userViewSnapshot?: (viewId: string) => unknown;
+  userViewDrainUpdates?: (viewId: string, sinceOffset: number) => unknown;
+  userViewChangeOffset?: () => number;
+  // Phase-3 G19-C1 (§7.1.4 + r6-napi-2 closure) — testing-only
+  // wallclock-advance hook (test-helpers feature gated; production
+  // cdylib surfaces E_PRIMITIVE_NOT_IMPLEMENTED).
+  testingAdvanceWaitClock?: (deltaMs: number) => void;
   // Phase 2b G6-B — STREAM + SUBSCRIBE bridge.
   callStream?: (
     handlerId: string,
@@ -1185,7 +1198,65 @@ export class Engine {
     } catch (err) {
       throw mapNativeError(err);
     }
-    return buildUserViewHandle(spec, resolvedStrategy);
+    return buildUserViewHandle(
+      spec,
+      resolvedStrategy,
+      this.userViewRuntimeShim(),
+    );
+  }
+
+  /**
+   * Phase-3 G19-C1 (§7.1.3) — construct a [`UserViewRuntimeShim`] that
+   * forwards `view.snapshot()` / `view.onUpdate()` calls to the napi
+   * cdylib's `userViewSnapshot` / `userViewDrainUpdates` /
+   * `userViewChangeOffset` accessors. Returns `null` when the cdylib
+   * lacks the G19-C1 surface (older builds) so [`buildUserViewHandle`]
+   * falls back to the no-op shape.
+   */
+  private userViewRuntimeShim(): UserViewRuntimeShim | null {
+    const snap = this.inner.userViewSnapshot;
+    const drain = this.inner.userViewDrainUpdates;
+    const head = this.inner.userViewChangeOffset;
+    if (!snap || !drain || !head) {
+      return null;
+    }
+    const native = this.inner;
+    return {
+      snapshotRows(viewId: string): unknown[] | null {
+        const raw = snap.call(native, viewId);
+        if (raw === null || raw === undefined) {
+          return null;
+        }
+        if (!Array.isArray(raw)) {
+          // Defensive — pre-G19-C1 napi shapes returned other types
+          // for unknown views; treat as "no rows" so the caller sees
+          // an empty iterable rather than a runtime panic.
+          return [];
+        }
+        return raw;
+      },
+      currentChangeOffset(): number {
+        const raw = head.call(native);
+        return typeof raw === "number" ? raw : 0;
+      },
+      drainUpdates(
+        viewId: string,
+        sinceOffset: number,
+      ): { registered: boolean; events: unknown[]; nextOffset: number } {
+        const raw = drain.call(native, viewId, sinceOffset) as
+          | { registered?: boolean; events?: unknown; next_offset?: number }
+          | null
+          | undefined;
+        if (!raw || typeof raw !== "object") {
+          return { registered: false, events: [], nextOffset: sinceOffset };
+        }
+        const registered = raw.registered === true;
+        const events = Array.isArray(raw.events) ? raw.events : [];
+        const nextOffset =
+          typeof raw.next_offset === "number" ? raw.next_offset : sinceOffset;
+        return { registered, events, nextOffset };
+      },
+    };
   }
 
   /**
@@ -1497,6 +1568,64 @@ export class Engine {
     } catch (err) {
       throw mapNativeError(err);
     }
+  }
+
+  /**
+   * Phase-3 G19-C1 (phase-3-backlog §7.1.4) — ergonomic resume wrapper.
+   *
+   * Lifts {@link Engine.resumeFromBytes} into a discriminated-union
+   * return shape that surfaces metadata about whether the resumed
+   * handler ran to completion or re-suspended on a downstream WAIT.
+   * Closes the r6-napi-2 ergonomics gap (raw-Buffer + raw-Outcome was
+   * the actual surface; callers wrote ad-hoc shape-introspection to
+   * detect re-suspension).
+   *
+   * Accepts EITHER a raw `Buffer` envelope (the `resumeFromBytes`
+   * shape) OR the structurally-typed
+   * {@link SuspensionResult} suspended-arm shape so the call site can
+   * idiomatically chain `callWithSuspension` → `resumeWithMeta` without
+   * unwrapping the envelope by hand.
+   *
+   * Always returns:
+   * - `{ kind: "complete", outcome }` — the handler completed; `outcome`
+   *   is the same shape `engine.call` returns.
+   * - `{ kind: "suspended", handle, stateCid, signalName }` — reserved
+   *   for the post-D12 cross-process re-suspension wire-up. Today the
+   *   underlying napi `resumeFromBytesUnauthenticated` always resolves
+   *   to a terminal Outcome; the suspended arm of the result type
+   *   exists in the public contract so the post-D12 wiring is purely
+   *   additive (caller code that already destructures both arms
+   *   continues to work).
+   *
+   * @param envelope Either the raw `Buffer` from
+   *   {@link Engine.callWithSuspension}'s `handle` field, or the
+   *   suspended-arm object itself.
+   * @param signal Signal value to resume with (same shape as
+   *   {@link Engine.resumeFromBytes}).
+   */
+  public async resumeWithMeta(
+    envelope:
+      | Buffer
+      | { handle: Buffer; stateCid?: string; signalName?: string },
+    signal: JsonValue,
+  ): Promise<ResumeWithMetaResult> {
+    this.assertOpen();
+    const bytes: Buffer = Buffer.isBuffer(envelope)
+      ? envelope
+      : envelope?.handle;
+    if (!Buffer.isBuffer(bytes)) {
+      throw new EDslInvalidShape(
+        "Engine.resumeWithMeta: envelope must be a Buffer or an object carrying { handle: Buffer } (E_DSL_INVALID_SHAPE)",
+      );
+    }
+    const outcome = await this.resumeFromBytes(bytes, signal);
+    // Pre-D12: the underlying napi resumeFromBytesUnauthenticated always
+    // resolves to a terminal Outcome. The suspended arm of the public
+    // ResumeWithMetaResult contract exists for forward-compat with
+    // cross-process re-suspension; once the engine learns to surface a
+    // re-suspension envelope through resume, this wrapper destructures
+    // the new shape without changing the call-site contract.
+    return { kind: "complete", outcome };
   }
 
   // -------------------------------------------------------------------------

@@ -643,10 +643,7 @@ pub fn testing_emit_n_synthetic_events(
 /// `testing_revoke_cap_mid_call` shape (also `&Self`) added in
 /// wave-8c-subscribe-infra.
 #[cfg(any(test, feature = "test-helpers"))]
-pub fn testing_advance_wait_clock(
-    _engine: &crate::engine::Engine,
-    _delta: std::time::Duration,
-) {
+pub fn testing_advance_wait_clock(_engine: &crate::engine::Engine, _delta: std::time::Duration) {
     // Phase-3 D12 brief lifts this to a real MockTimeSource advance.
 }
 

@@ -234,10 +234,7 @@ pub(crate) fn user_view_drain_updates_adapter(
                     .collect(),
             ),
         );
-        evmap.insert(
-            "cid".into(),
-            serde_json::Value::String(ev.cid.to_base32()),
-        );
+        evmap.insert("cid".into(), serde_json::Value::String(ev.cid.to_base32()));
         evmap.insert(
             "tx_id".into(),
             serde_json::Value::Number(serde_json::Number::from(ev.tx_id)),
