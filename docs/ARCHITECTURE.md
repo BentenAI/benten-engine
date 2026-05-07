@@ -32,15 +32,16 @@ crates/
                         # UCAN chain validation. G14-A2 wave-4a' adds
                         # VC + multi_sig + DID rotation + device-DID
                         # capability-attestation onto the same crate.
-  benten-sync/          # Phase-3 canary STUB at R3-C landing — Atrium P2P
-                        # sync (iroh transport + Loro CRDT + MST diff +
-                        # DID handshake). NATIVE-ONLY per CLAUDE.md
-                        # baked-in #17 (excluded from `wasm32` targets so
-                        # browser / edge thin-compute deployments do not
-                        # carry Loro / iroh in their bundles). G16-A wave-6
-                        # canary fills transport.rs + peer_id.rs + errors.rs;
-                        # G16-B/C/D wave-6b fill crdt.rs + mst.rs +
-                        # handshake.rs.
+  benten-sync/          # Phase-3 G16-A wave-6 — Atrium P2P sync. G16-A
+                        # canary lands the iroh transport core
+                        # (transport.rs + peer_id.rs + errors.rs +
+                        # handshake_wire.rs); G16-B/C/D wave-6b fill
+                        # crdt.rs + mst.rs + handshake.rs (Loro CRDT,
+                        # MST diff, DID handshake protocol body).
+                        # NATIVE-ONLY per CLAUDE.md baked-in #17
+                        # (excluded from `wasm32` targets so browser /
+                        # edge thin-compute deployments do not carry
+                        # iroh / Loro in their bundles).
   benten-dsl-compiler/  # Compiles the textual handler-DSL grammar into
                         # SubgraphSpec. Phase-2b G12-B addition; routes from
                         # devserver into Engine.register_subgraph.

@@ -13,6 +13,8 @@
 
 use core::fmt;
 
+use serde::{Deserialize, Serialize};
+
 use crate::errors::DidError;
 use crate::keypair::PublicKey;
 
@@ -31,7 +33,19 @@ pub const DID_KEY_PREFIX: &str = "did:key:z";
 /// Construct via [`Did::from_public_key`] (forward path) or
 /// [`Did::resolve`] (reverse-direction round-trip; consumers that
 /// receive a DID string from the wire validate-then-resolve).
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+///
+/// `Serialize` + `Deserialize` impls round-trip the resolved string
+/// form (canonical-bytes-symmetric with the rest of the engine when
+/// flowed through DAG-CBOR). Phase-3 G16-A wave-6 wired these for the
+/// `benten-sync` handshake wire-format struct
+/// (`crates/benten-sync/src/handshake_wire.rs::HandshakeFrame`) which
+/// requires both peer-DID + device-DID at the wire-format level per
+/// `net-blocker-4` BLOCKER. Deserialization does NOT validate the
+/// `did:key:z` prefix or pubkey bytes — callers that need
+/// validate-on-deserialize call [`Did::resolve`] explicitly to
+/// surface a typed [`DidError`].
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct Did(String);
 
 impl Did {

@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Phase-3 G16-A canary stub — Atrium P2P sync (iroh transport + Loro CRDT + MST diff + DID handshake). NATIVE-ONLY per CLAUDE.md baked-in #17 (excluded from wasm32 targets). Real impls land at G16-A/B/C/D (wave-6 + wave-6b)."
+description = "Phase-3 G16-A canary — Atrium P2P sync (iroh transport core; Loro CRDT + MST diff + DID handshake bodies land at G16-B/C/D wave-6b). NATIVE-ONLY per CLAUDE.md baked-in #17 (excluded from wasm32 targets via top-level src/lib.rs `compile_error!` + cfg-gated [target.'cfg(not(target_arch = \"wasm32\"))'] dependency tables)."
 
 [lints]
 workspace = true
@@ -15,37 +15,108 @@ workspace = true
 # Disable the implicit libtest bench harness. Mirrors crates/benten-core/Cargo.toml.
 bench = false
 
-# G16-A wave-6 canary fills these dependencies (`iroh`, `iroh-net`, `tokio`,
-# `benten-graph`, `benten-id`); G16-B wave-6b adds `loro` (Loro CRDT) — pinned
-# at the chosen 0.x semver-pre-1.0 minor version with a `Loro version pinned
-# + Dependabot fast-track per scope-real-10` clause analogous to iroh's
-# G16-A pinning (see plan §3 G16-B row); G16-C adds the MST primitives
-# crate(s) chosen at implementation time. Stub keeps the dep list empty so
-# the crate compiles as an empty rlib at R3-C landing time.
-#
-# Note (per ds-r4r2-5 closure of ds-r4-8): `uhlc` was REJECTED at G14-pre-D
-# (HLC implemented directly in `benten-core` per
-# `crates/benten-core/src/hlc.rs:42` — `Why a direct implementation, not the
-# uhlc crate`). This crate does NOT consume `uhlc`; HLC types arrive via the
-# `benten-core` dependency at G16-A landing.
-#
-# Per CLAUDE.md baked-in #17 + plan §3 G16-A row, this crate is NATIVE-ONLY:
-# G16-A implementer adds `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`
-# cfg-gating to `iroh` + `loro` so `benten-sync` does NOT compile for
-# wasm32-unknown-unknown. The architectural pin
+# G16-A wave-6 canary: this crate is NATIVE-ONLY per CLAUDE.md baked-in
+# #17. Browser tabs participate as authenticated thin-client views via
+# the D-PHASE-3-30 protocol, NOT as full Atrium peers running iroh
+# natively. The architectural pin
 # `tests/wasm32_excluded.rs::benten_sync_does_not_compile_for_wasm32_unknown_unknown_per_thin_client_commitment`
-# enforces that posture.
+# enforces the posture by reading this manifest + the lib.rs
+# `compile_error!` macro.
 #
-# arch-r1-11 + D-PHASE-3-14 architectural constraint: `benten-sync` MUST NOT
-# depend on `benten-engine` or `benten-eval`. The dependency direction is
-# engine → sync (engine consumes Atrium surface from sync), never the
-# reverse. Pinned by `tests/dependency_edges.rs`.
+# arch-r1-11 + D-PHASE-3-14: `benten-sync` MUST NOT depend on
+# `benten-engine` or `benten-eval`. Dependency direction is engine →
+# sync (engine consumes Atrium surface from sync), never the reverse.
+# Pinned by `tests/dependency_edges.rs`.
+#
+# Note (per ds-r4r2-5 closure of ds-r4-8): `uhlc` was REJECTED at
+# G14-pre-D (HLC implemented directly in `benten-core`). HLC types
+# arrive via `benten-core` if/when the sync layer needs them at G16-B+;
+# G16-A canary scope (transport core) does NOT consume HLC.
+#
+# G16-B wave-6b adds: loro = "..."  — pinned at the chosen 0.x
+# semver-pre-1.0 minor version with a `Loro version pinned + Dependabot
+# fast-track per scope-real-10` clause analogous to iroh's G16-A pinning.
+# G16-C adds: the MST primitives crate(s) chosen at G16-C dispatch time.
 [dependencies]
+# benten-id provides the Ed25519 Keypair / PublicKey / Did surfaces that
+# peer_id.rs derives the iroh NodeId from (per net-minor-2 + ds-8 +
+# crypto-minor-4: PeerId == iroh NodeId == Ed25519 pubkey design).
+benten-id = { path = "../benten-id" }
+# benten-errors provides the stable ErrorCode catalog — typed
+# atrium-transport errors (E_ATRIUM_RELAY_UNREACHABLE +
+# E_ATRIUM_TRANSPORT_DEGRADED) map to ErrorCode variants per
+# net-blocker-2 BLOCKER.
+benten-errors = { workspace = true }
+# Canonical-bytes encoding for the handshake wire-format struct
+# (HandshakeFrame::to_canonical_bytes / from_canonical_bytes). DAG-CBOR
+# matches the workspace canonical-bytes posture per CLAUDE.md baked-in
+# #5 (BLAKE3 + DAG-CBOR + CIDv1).
+serde = { workspace = true }
+serde_ipld_dagcbor = { workspace = true }
+serde_bytes = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+# G16-A wave-6 canary: iroh transport core. Native-only — cfg-gated
+# behind `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`
+# below. The top-level [dependencies] table above is wasm-safe (no
+# iroh / tokio entries); compilation for wasm32-unknown-unknown still
+# fails fast via the lib.rs `compile_error!` macro per CLAUDE.md
+# baked-in #17, but the cfg-gated tables here ALSO defend against the
+# scenario where a downstream consumer attempts to skip benten-sync's
+# top-level lib.rs gate and pull a single module directly: the deps
+# themselves are not even resolvable on wasm32 builds.
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# iroh: P2P QUIC transport with holepunch + relay-default per
+# D-PHASE-3-3 RESOLVED-at-R1. Pinned to 0.98 (current latest stable as
+# of 2026-05-06) + Dependabot fast-track per scope-real-10. Per
+# scope-real-10, holepunch tests are CI-conditional (gated to specific
+# runner cells with relay infrastructure available); loopback +
+# relay-fallback are required-on-every-PR.
+iroh = { version = "0.98", default-features = false, features = ["tls-ring"] }
+# tokio: async runtime for iroh's QUIC transport. Per workspace
+# convention, only the features we actually use ("rt", "rt-multi-thread"
+# for runtime; "macros" for #[tokio::test]; "sync" for channels;
+# "io-util" for AsyncReadExt; "time" for timeout).
+tokio = { version = "1", default-features = false, features = [
+    "rt",
+    "rt-multi-thread",
+    "macros",
+    "sync",
+    "io-util",
+    "time",
+    "net",
+] }
+# Bytes-handling utility used by iroh's Connection API.
+bytes = { version = "1", default-features = false }
 
 [dev-dependencies]
-# Proptest carries the 10 000-case property suites:
+# Proptest carries the 10 000-case property suites that G16-B wave-6b
+# un-ignores once Loro / MST land:
 #   - `prop_loro_concurrent_writes_converge_via_hlc_ordering` (G16-B)
 #   - `prop_mst_diff_correctness_under_concurrent_writes` (G16-C)
-# All proptest blocks stay `#[ignore]`'d at R3 RED-phase; G16-B / G16-C
-# implementers un-ignore once the real impls land.
+# All proptest blocks stay `#[ignore]`'d at G16-A canary landing; G16-B
+# / G16-C implementers un-ignore once the real impls land.
 proptest = { workspace = true }
+# TOML parser for the dependency-edges architectural pin
+# (`tests/dependency_edges.rs`). The pin walks Cargo.toml's
+# dep-tables programmatically rather than raw-grepping so prose
+# comments containing the forbidden names don't false-positive.
+toml = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+# Async-test harness for the iroh two-Endpoint loopback round-trip
+# pin (net-minor-1) + the relay-unreachable typed-error pin
+# (net-blocker-2). Same tokio version as the lib dep; dev-dep so test
+# binaries can drive #[tokio::test].
+tokio = { version = "1", default-features = false, features = [
+    "rt",
+    "rt-multi-thread",
+    "macros",
+    "sync",
+    "io-util",
+    "time",
+    "net",
+    "test-util",
+] }

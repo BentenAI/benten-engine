@@ -183,6 +183,12 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // ESC-16 fingerprint-collapse). The discriminating EscVector is
     // declared in `crates/benten-eval/src/sandbox/escape_defenses.rs`.
     ErrorCode::SandboxEscapeAttempt,
+    // Phase-3 G16-A wave-6 (net-blocker-2 BLOCKER): typed
+    // atrium-transport errors. Construction sites:
+    // `crates/benten-sync/src/transport.rs` +
+    // `crates/benten-sync/src/errors.rs::AtriumTransportError::code`.
+    ErrorCode::AtriumRelayUnreachable,
+    ErrorCode::AtriumTransportDegraded,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -311,8 +317,24 @@ fn variant_count_is_pinned() {
     //     Closes r1-wsa-1 BLOCKER (ESC-7 + ESC-13) + r1-wsa-4 (ESC-16) +
     //     phase-3-backlog §6.1.
     // Post-G17-A1: 91 + 2 = 93.
+    //
+    // Phase-3 G16-A wave-6 adds 2 codes:
+    //   `AtriumRelayUnreachable` — typed variant for relay-unreachable
+    //     surface (DNS / TLS / transport-timeout). Construction site at
+    //     `crates/benten-sync/src/transport.rs::Endpoint::bind_with_relay_url`
+    //     + `Endpoint::connect`. Closes net-blocker-2 BLOCKER (half).
+    //   `AtriumTransportDegraded` — typed variant for established-
+    //     connection-degraded surface (packet-loss / relay-fallback-
+    //     active / direct-connection-lost / handshake-wire-format-
+    //     violation). Construction site at
+    //     `crates/benten-sync/src/transport.rs::Endpoint::*` +
+    //     `crates/benten-sync/src/handshake_wire.rs::HandshakeFrame::from_canonical_bytes`.
+    //     Closes net-blocker-2 BLOCKER (half).
+    // Post-G16-A: net +2 from `AtriumRelayUnreachable` +
+    // `AtriumTransportDegraded`. The hardcoded count below tracks
+    // `ALL_CATALOG_VARIANTS.len()` exactly.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 93,
+        CATALOG_VARIANT_COUNT, 96,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

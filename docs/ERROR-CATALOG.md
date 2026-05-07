@@ -1080,6 +1080,22 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** `crates/benten-caps/src/backends/ucan.rs::UCANBackend::validate_chain_for_audience_at` (Phase-3 G14-B mini-review fix-pass; CLR-2 audience-binding pinned at the durable chain-walk seam). Constant-time DID-bytes comparison via `subtle::ConstantTimeEq` at the `benten_id::ucan::validate_chain_for_audience` upstream.
 - **Phase:** 3 G14-B
 
+### E_ATRIUM_RELAY_UNREACHABLE
+
+- **Message:** "atrium relay unreachable at {url}: {reason}"
+- **Context:** `{ url: String, reason: String }`
+- **Fix:** The configured iroh relay endpoint is unreachable (DNS-resolution failure, TLS handshake refused, transport-level timeout). Verify the relay URL is reachable from this peer's network (curl / nslookup / openssl s_client). For Phase-3 deployments the iroh public relay default applies; operators with stricter metadata threat models can opt into self-hosted relay infrastructure (Compromise #22 in `docs/SECURITY-POSTURE.md` — Phase-7 Garden-relays land as the operator-controlled alternative). Per `net-blocker-2` BLOCKER, this is a typed error variant — never a panic, never an untyped String. Distinct from `E_ATRIUM_TRANSPORT_DEGRADED` (which signals an established connection has degraded mid-flight). Routes to `ON_ERROR`.
+- **Thrown at:** `crates/benten-sync/src/transport.rs::Endpoint::bind_with_relay_url` + `crates/benten-sync/src/transport.rs::Endpoint::connect` (Phase-3 G16-A wave-6; net-blocker-2 BLOCKER). Mapped from the `AtriumTransportError::RelayUnreachable` typed variant via `crates/benten-sync/src/errors.rs::AtriumTransportError::code`.
+- **Phase:** 3 G16-A
+
+### E_ATRIUM_TRANSPORT_DEGRADED
+
+- **Message:** "atrium transport degraded: {reason}"
+- **Context:** `{ reason: String }`
+- **Fix:** The established Atrium transport has degraded — packet-loss above threshold, relay-fallback active mid-stream, direct connection lost, or handshake wire-format violation surfaced at the transport layer. The engine-side `engine.atrium_status()` surface (Phase-3 G16-B/D) propagates this state observably so operators can react. Investigate network conditions (packet-loss, NAT path) and the connecting peer's reachability. Per `net-blocker-2` BLOCKER, the degraded transport state is EXPLICIT — not a missing value, not a panic. Distinct from `E_ATRIUM_RELAY_UNREACHABLE` (which signals the relay endpoint itself is unreachable at connect time). Routes to `ON_ERROR`.
+- **Thrown at:** `crates/benten-sync/src/transport.rs::Endpoint::*` (Phase-3 G16-A wave-6 connection-establishment + send/recv paths; net-blocker-2 BLOCKER). Also fires from `crates/benten-sync/src/handshake_wire.rs::HandshakeFrame::from_canonical_bytes` when the wire-format frame is missing required fields per net-blocker-4 BLOCKER. Mapped from the `AtriumTransportError::TransportDegraded` / `AtriumTransportError::HandshakeWireFormat` typed variants via `crates/benten-sync/src/errors.rs::AtriumTransportError::code`.
+- **Phase:** 3 G16-A
+
 ## Extending the catalog
 
 When adding a new error:
