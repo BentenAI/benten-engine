@@ -309,7 +309,7 @@ export interface Edge {
    * when the underlying Edge has no properties; populated when the
    * napi producer emits a non-empty `properties` map. Mirrors the
    * Rust producer's `Edge::properties: Option<BTreeMap<String, Value>>`
-   * field at `crates/benten-core/src/lib.rs::Edge`.
+   * field at `crates/benten-core/src/edge.rs::Edge`.
    */
   properties?: Record<string, JsonValue>;
 }

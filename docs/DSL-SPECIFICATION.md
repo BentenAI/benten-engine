@@ -142,8 +142,11 @@ Together these make the 6-Args drift fix structural rather than per-instance.
 
 - `crates/benten-eval/src/primitives/<p>.rs::execute` — eval-side
   property-bag readers (canonical keyspace source-of-truth).
-- `packages/engine/src/dsl.ts::translate*Args` — DSL→eval translator
-  helpers (translation contract authors).
+- `packages/engine/src/dsl.ts::translateBranchArgs` (and the sibling
+  `translateReadArgs` / `translateIterateArgs` / `translateTransformArgs` /
+  `translateCallArgs` / `translateRespondArgs` / `translateWaitArgs` /
+  `translateSubscribeArgs` / `translateSandboxArgs` helpers) — DSL→eval
+  translator helpers (translation contract authors).
 - `crates/benten-engine/tests/dsl_args_vs_eval_properties_parity_meta_test.rs` —
   LOAD-BEARING parity meta-test (D-PHASE-3-9 EXPANDED + pim-12).
 - `crates/benten-engine/tests/ts_surface_parity_meta_test.rs` —
