@@ -66,12 +66,11 @@ mod integration {
     pub mod stream_napi; // G6-B streaming-systems must_pass napi async iter
     pub mod subscribe_emit; // G6-B plan §4 SUBSCRIBE integration (all `#[ignore]`d pending G6-A)
 
-    // R3-B (G7-A integration) — SANDBOX composition:
-    #[cfg(feature = "phase_2b_landed")]
+    // R3-B (G7-A integration) — SANDBOX composition. G20-A1 wave-8a
+    // un-gated: bodies un-ignored against the production runtime
+    // arms shipped at phase-2b-close + Phase-3 G17-A1 wave-5b.
     pub mod engine_sandbox; // G7-C plan §3 G7-C
-    #[cfg(feature = "phase_2b_landed")]
     pub mod sandbox_in_crud; // G7-A plan §4 SANDBOX integration
-    #[cfg(feature = "phase_2b_landed")]
     pub mod stream_into_sandbox; // G7-A wsa-18 + arch-pre-r1-9
 
     // R3-E (red-phase) — WASM target + SuspensionStore + WAIT TTL:
@@ -85,7 +84,8 @@ mod integration {
     pub mod module_install_in_memory_only_in_browser; // r1-wasm-target G10-B
     pub mod module_install_uninstall_round_trip; // exit criterion #4 5-row matrix
     pub mod module_uninstall_releases_capabilities; // cap-retraction integration
-    #[cfg(feature = "phase_2b_landed")]
+    // G20-A1 wave-8a un-gated: testing_make_minimal_sandbox_spec
+    // helper + body un-ignored.
     pub mod sandbox_compile_time_disabled_on_wasm32; // sec-pre-r1-05 + wasm-r1-3
     #[cfg(feature = "phase_2b_landed")]
     pub mod snapshot_blob_round_trip; // D10 export/import round-trip

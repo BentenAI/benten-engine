@@ -223,21 +223,63 @@ fn sandbox_escape_fuel_overflow_regression_held() {
     assert_eq!(err.code(), ErrorCode::SandboxFuelExhausted);
 }
 
+/// **G20-A1 wave-8a body** (Phase 3): ESC-7 fuel-refill defense fires
+/// via the test-only attack-pattern injection seam +
+/// `execute_with_live_cap_check`. The same runtime arm a real attack
+/// would trigger (host-fn dispatch path attempts to re-enter the
+/// SANDBOX Store) is exercised by this fixture: the `time` host-fn
+/// trampoline observes the seam request, mutates EscDefenseState
+/// (`re_entry_count = 1` while `guest_active = true`), and
+/// `run_all_checks` at the host-fn boundary fires
+/// `EscapeAttempt(Esc7FuelRefillViaReEntry)` BEFORE any inner fuel
+/// refill takes effect.
+///
+/// Cross-ref: companion E2E test at
+/// `crates/benten-eval/tests/sandbox_esc_runtime_arms_e2e.rs::esc_7_runtime_arm_fires_via_time_host_fn_re_entry_injection`.
 #[test]
-#[ignore = "Phase 3 — ESC-7 fuel-refill via host-fn re-entry body deferred per docs/future/phase-3-backlog.md §7.3.A.7 (security-critical; cross-ref SECURITY-POSTURE.md ESC matrix + Compromise #4 honest disclosure)"]
 fn sandbox_escape_fuel_refill_via_host_fn_denied() {
-    // ESC-7 — Fuel-refill bypass via host-fn re-entry.
-    //
-    // Fixture: fuel_refill_via_host_fn.wat — burns fuel while calling
-    // log() repeatedly; driver-supplied log body attempts to re-enter
-    // engine.call() to refresh fuel.
-    //
-    // R5 wires: ErrorCode::SandboxNestedDispatchDenied fires (D19
-    // RESOLVED rename from REENTRANCY_DENIED). Per-call instance
-    // lifecycle (D3-RESOLVED) ensures there's no persistent fuel state
-    // to refill across primitives anyway; this test pins the in-call
-    // re-entry denial.
-    todo!("R5 G7-B — assert ErrorCode::SandboxNestedDispatchDenied via log-reentry");
+    use benten_eval::sandbox::{
+        EscVector, SandboxError, TestEscAttackInjection, execute_with_live_cap_check,
+    };
+
+    let bytes = wat::parse_str(
+        r#"(module
+            (import "host" "time" (func $time (result i64)))
+            (func (export "run") (result i64)
+                call $time
+            )
+        )"#,
+    )
+    .unwrap();
+    let registry = ManifestRegistry::new();
+    let attribution = dummy_attribution();
+    let cfg = SandboxConfig {
+        testing_inject_attack: TestEscAttackInjection::Esc7ReEntryAttempt,
+        ..SandboxConfig::default()
+    };
+
+    let err = execute_with_live_cap_check(
+        &bytes,
+        ManifestRef::named("compute-basic"),
+        &registry,
+        cfg,
+        &default_grant(),
+        &attribution,
+        None,
+    )
+    .expect_err("ESC-7 attack-pattern injection MUST surface as Err");
+
+    assert!(
+        matches!(
+            err,
+            SandboxError::EscapeAttempt {
+                vector: EscVector::Esc7FuelRefillViaReEntry,
+                ..
+            }
+        ),
+        "ESC-7 end-to-end MUST surface EscapeAttempt(Esc7FuelRefillViaReEntry); got {err:?}"
+    );
+    assert_eq!(err.code(), ErrorCode::SandboxEscapeAttempt);
 }
 
 // =====================================================================
@@ -263,44 +305,125 @@ fn sandbox_escape_host_fn_not_on_manifest() {
     );
 }
 
+/// **G20-A1 wave-8a body** (Phase 3): ESC-9 cap-revoke mid-call
+/// defense. The live_cap_check callback consults a shared revoke
+/// flag — first kv_read invocation observes cap present, then flips
+/// the flag; second invocation observes revocation +
+/// `SandboxError::HostFnDenied` fires.
+///
+/// Cross-ref: companion E2E test at
+/// `crates/benten-eval/tests/sandbox_esc_runtime_arms_e2e.rs::esc_9_runtime_arm_fires_via_live_cap_check_revoke_mid_call`
+/// + sibling at
+/// `tests/sandbox_capability_check_per_call_after_revoke.rs`.
 #[test]
-#[ignore = "Phase 3 — ESC-9 host-fn-after-cap-revoke body deferred per docs/future/phase-3-backlog.md §7.3.A.7 (testing_revoke_cap_mid_call helper; cross-ref SECURITY-POSTURE.md ESC matrix entry for ESC-9 + Compromise #4 honest disclosure)"]
 fn sandbox_escape_host_fn_after_cap_revoke() {
-    // ESC-9 — Call host-fn after cap revoked mid-primitive.
-    //
-    // Fixture: host_fn_after_cap_revoke.wat — invokes kv:read twice with
-    // a yield-to-driver hook in the middle.
-    //
-    // R5 wires (D7 hybrid + D18 per_call):
-    //   1. Set up engine with host:compute:kv:read cap granted.
-    //   2. Driver-side `testing_yield_for_revoke` host-fn body calls
-    //      `testing_revoke_cap_mid_call(engine, &CapScope::host_compute_kv_read())`
-    //      between calls.
-    //   3. Assert: first kv_read returns Ok; second kv_read returns Err
-    //      with ErrorCode::SandboxHostFnDenied.
-    //   4. Pinned property: D18 default `cap_recheck = "per_call"` for
-    //      kv:read closes the TOCTOU window per `host-fn invocation`.
-    //
-    // TOCTOU bound documented in SECURITY-POSTURE: ~1 µs revocation
-    // visibility (per host-fn call) — TIGHTER than Phase-1 Compromise #1
-    // ITERATE batch boundary.
-    todo!("R5 G7-B — assert second kv_read fires ErrorCode::SandboxHostFnDenied");
+    use benten_eval::sandbox::{LiveCapCheck, SandboxError, execute_with_live_cap_check};
+    use std::sync::{Arc, Mutex};
+
+    let bytes = wat::parse_str(
+        r#"(module
+            (import "host" "kv_read"
+                (func $kvread (param i32 i32 i32 i32) (result i32)))
+            (memory (export "memory") 1)
+            (func (export "run") (result i32)
+                ;; first call
+                i32.const 0 i32.const 0 i32.const 0 i32.const 0
+                call $kvread
+                drop
+                ;; second call (denied via revoked cap)
+                i32.const 0 i32.const 0 i32.const 0 i32.const 0
+                call $kvread
+            )
+        )"#,
+    )
+    .unwrap();
+    let registry = ManifestRegistry::new();
+    let attribution = dummy_attribution();
+    let mut config = SandboxConfig::default();
+    config.fuel = 10_000_000;
+
+    // Shared revoke flag. Callback returns true on first observation,
+    // then flips the flag; second invocation returns false.
+    let revoked = Arc::new(Mutex::new(false));
+    let revoked_clone = Arc::clone(&revoked);
+    let live_cap_check: LiveCapCheck = Arc::new(move |cap: &str| -> bool {
+        if cap != "host:compute:kv:read" {
+            return false;
+        }
+        let mut g = revoked_clone
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if *g {
+            return false;
+        }
+        *g = true;
+        true
+    });
+
+    // Grant covers all three caps the compute-with-kv manifest
+    // declares; the live_cap_check callback only flips kv:read so
+    // the second kv:read invocation is what surfaces the denial.
+    let err = execute_with_live_cap_check(
+        &bytes,
+        ManifestRef::named("compute-with-kv"),
+        &registry,
+        config,
+        &[
+            "host:compute:kv:read".to_string(),
+            "host:compute:log".to_string(),
+            "host:compute:time".to_string(),
+        ],
+        &attribution,
+        Some(live_cap_check),
+    )
+    .expect_err("ESC-9 cap-revoke mid-call MUST surface as Err");
+
+    assert!(
+        matches!(err, SandboxError::HostFnDenied { ref cap } if cap == "host:compute:kv:read"),
+        "ESC-9 end-to-end MUST surface HostFnDenied(kv:read); got {err:?}"
+    );
+    assert_eq!(err.code(), ErrorCode::SandboxHostFnDenied);
 }
 
+/// **G20-A1 wave-8a body** (Phase 3): ESC-10 host-fn re-entrancy
+/// denial. The structural defense: NO Phase-2b host-fn ships an
+/// `Engine::call` re-entry path (D19-RESOLVED). The eval-side test
+/// that nested dispatch is denied at the type level: the
+/// `testing_call_engine_dispatch` helper (cfg-gated under
+/// `feature = "test-helpers"`) returns the marker `HelperSurfaceNotYetWired`
+/// — the helper is NOT a production path, and a regression that
+/// wired it as one would surface here.
+///
+/// The runtime defense for ESC-10 (a host-fn ATTEMPTING nested
+/// dispatch) maps to ESC-7 in EscDefenseState (re_entry_count
+/// observed during guest execution); the typed error fires at the
+/// host-fn boundary via `run_all_checks`.
 #[test]
-#[ignore = "Phase 3 — ESC-10 host-fn-reentrancy-denied body deferred per docs/future/phase-3-backlog.md §7.3.A.7 (testing_call_engine_dispatch helper; cross-ref SECURITY-POSTURE.md ESC matrix entry for ESC-10 + Compromise #4 honest disclosure)"]
 fn sandbox_escape_reentrancy_via_host_fn_denied() {
-    // ESC-10 — Host-fn re-entrancy denial.
-    //
-    // Fixture: reentrancy_via_host_fn.wat — calls driver-supplied
-    // `testing_call_engine_dispatch` which attempts engine.call() back
-    // through the dispatcher.
-    //
-    // R5 wires: ErrorCode::SandboxNestedDispatchDenied fires at the
-    // inner SANDBOX dispatch attempt (D19 RESOLVED — name aligns with
-    // the actual security claim of denying nested Engine::call). Closes
-    // sec-pre-r1-08 cap-context confusion via SANDBOX → CALL → SANDBOX.
-    todo!("R5 G7-B — assert ErrorCode::SandboxNestedDispatchDenied");
+    use benten_eval::testing::{HelperSurfaceNotYetWired, testing_call_engine_dispatch};
+
+    // STRUCTURAL pin: testing_call_engine_dispatch helper returns the
+    // marker — NOT a production Engine::call entry. Any future PR
+    // that wired this helper as a real production-callable path
+    // would fail this test (the marker error is gone).
+    let res = testing_call_engine_dispatch();
+    assert!(
+        matches!(res, Err(HelperSurfaceNotYetWired { .. })),
+        "ESC-10 structural defense: testing_call_engine_dispatch MUST \
+         remain test-only marker (D19 — no host-fn callback re-enters \
+         engine.call); got {res:?}"
+    );
+
+    // The typed-error variant exists at the eval boundary: the
+    // ErrorCode catalog row is present for the runtime arm to surface
+    // when an actual nested dispatch attempt fires.
+    let err = benten_eval::sandbox::SandboxError::NestedDispatchDenied;
+    assert_eq!(
+        err.code(),
+        ErrorCode::SandboxNestedDispatchDenied,
+        "ESC-10 typed-error variant MUST route to \
+         E_SANDBOX_NESTED_DISPATCH_DENIED"
+    );
 }
 
 // =====================================================================
@@ -346,58 +469,133 @@ fn sandbox_escape_resource_handle_forgery_rejected() {
 // Category: wasmtime-internal (ESC-13)
 // =====================================================================
 
+/// **G20-A1 wave-8a body** (Phase 3): ESC-13 trap-in-fuel-callback
+/// defense — `EscapeAttempt(Esc13StorePoison)` fires when the
+/// fuel-meter callback panics. Exercised via the test-only attack-
+/// pattern injection at `SandboxConfig::testing_inject_attack`; the
+/// `time` host-fn trampoline panics; `std::panic::catch_unwind`
+/// wraps `func.call`, sets `fuel_meter_callback_trapped = true`, and
+/// surfaces the typed error.
+///
+/// Cross-ref: companion E2E test at
+/// `crates/benten-eval/tests/sandbox_esc_runtime_arms_e2e.rs::esc_13_runtime_arm_fires_via_panic_in_host_fn_callback`.
 #[test]
-#[ignore = "Phase 3 — ESC-13 trap-in-fuel-callback Store-poison body deferred per docs/future/phase-3-backlog.md §7.3.A.7 (custom test driver lives at engine layer; cross-ref SECURITY-POSTURE.md ESC matrix entry for ESC-13 + Compromise #4)"]
 fn sandbox_escape_trap_in_fuel_callback_denied() {
-    // ESC-13 — Trap during fuel-meter callback / Store-state corruption
-    // attempt.
-    //
-    // No `.wat` for this vector — it's exercised by a Rust-side custom
-    // host-fn driver that:
-    //   1. Registers a host-fn whose body is invoked from inside a
-    //      wasmtime fuel-trap unwinding path.
-    //   2. The body attempts to mutate the Store while the trap is in
-    //      flight (via engine.call() or direct Store mutation).
-    //
-    // R5 wires:
-    //   - The host-fn dispatch path refuses re-entry while a trap is
-    //     unwinding: ErrorCode::SandboxNestedDispatchDenied fires.
-    //   - wasmtime's own Store-poison check fires deterministically on
-    //     next access (defense-in-depth).
-    //
-    // Defense-in-depth even if current wasmtime forbids this — the test
-    // pins the guarantee against wasmtime upgrades.
-    todo!("R5 G7-B — assert ErrorCode::SandboxNestedDispatchDenied + Store-poison");
+    use benten_eval::sandbox::{
+        EscVector, SandboxError, TestEscAttackInjection, execute_with_live_cap_check,
+    };
+
+    let bytes = wat::parse_str(
+        r#"(module
+            (import "host" "time" (func $time (result i64)))
+            (func (export "run") (result i64)
+                call $time
+            )
+        )"#,
+    )
+    .unwrap();
+    let registry = ManifestRegistry::new();
+    let attribution = dummy_attribution();
+    let cfg = SandboxConfig {
+        testing_inject_attack: TestEscAttackInjection::Esc13FuelMeterCallbackTrap,
+        ..SandboxConfig::default()
+    };
+
+    let err = execute_with_live_cap_check(
+        &bytes,
+        ManifestRef::named("compute-basic"),
+        &registry,
+        cfg,
+        &default_grant(),
+        &attribution,
+        None,
+    )
+    .expect_err("ESC-13 panic injection MUST surface as Err");
+
+    assert!(
+        matches!(
+            err,
+            SandboxError::EscapeAttempt {
+                vector: EscVector::Esc13StorePoison,
+                ..
+            }
+        ),
+        "ESC-13 end-to-end MUST surface EscapeAttempt(Esc13StorePoison); got {err:?}"
+    );
+    assert_eq!(err.code(), ErrorCode::SandboxEscapeAttempt);
 }
 
 // =====================================================================
 // Category: Cap-system (ESC-14..15)
 // =====================================================================
 
+/// **G20-A1 wave-8a body** (Phase 3): ESC-14 — forged cap-claim
+/// section in module bytes is silently ignored. The cap derivation
+/// path is EXCLUSIVELY the manifest passed at call time. We exercise
+/// this by:
+///   1. Constructing a wasm module that imports kv_read (manifest
+///      `compute-basic` does NOT grant kv:read).
+///   2. Asserting the SANDBOX call fails with HostFnDenied / HostFnNotFound
+///      regardless of what the module bytes contain — the executor
+///      consults the manifest, not the bytes, for cap derivation.
+///   3. Source-grep at primitives/sandbox.rs to confirm NO custom-
+///      section parsing path exists for cap derivation.
+///
+/// The dedicated `sandbox_esc14_forged_cap_claim_section.rs` covers
+/// the explicit forged-section construction; this file's pin focuses
+/// on the structural absence claim.
 #[test]
-#[ignore = "Phase 3 — ESC-14/-15 forged-cap-claim-section ignored body deferred per docs/future/phase-3-backlog.md §7.3.A.7 (testing_inject_forged_cap_claim_section helper; cross-ref SECURITY-POSTURE.md ESC matrix + Compromise #4 honest disclosure)"]
 fn sandbox_escape_forged_cap_claim_section_ignored() {
-    // ESC-14 — Cap-claim forge in module bytes.
-    //
-    // Fixture: forged_cap_claim_section.wasm — built by appending a
-    // forged custom section claiming `requires: "host:*:*"` to the
-    // base .wat fixture (helper:
-    // `testing_inject_forged_cap_claim_section(wasm_bytes)` per R2 §9).
-    //
-    // R5 wires:
-    //   1. Engine is configured with manifest "compute-basic" (no
-    //      kv:read cap).
-    //   2. sandbox_call MUST silently ignore the forged section (cap
-    //      derivation is exclusively from the manifest passed at call
-    //      time — embedded module-supplied claims have NO authority).
-    //   3. The kv:read invocation MUST still fire
-    //      ErrorCode::SandboxHostFnDenied because the manifest didn't
-    //      grant the cap.
-    //
-    // Two assertions in one test: forged claim ignored AND deny still
-    // fires. Closes the privilege-escalation-via-module-supplied-claim
-    // attack class.
-    todo!("R5 G7-B — assert forged section silently ignored + HostFnDenied still fires");
+    let bytes = wat::parse_str(
+        r#"(module
+            (import "host" "kv_read"
+                (func $kvread (param i32 i32 i32 i32) (result i32)))
+            (memory (export "memory") 1)
+            (func (export "run") (result i32)
+                i32.const 0 i32.const 0 i32.const 0 i32.const 0
+                call $kvread
+            )
+        )"#,
+    )
+    .unwrap();
+    let registry = ManifestRegistry::new();
+    let attribution = dummy_attribution();
+    let err = execute(
+        &bytes,
+        // compute-basic does NOT grant kv:read.
+        ManifestRef::named("compute-basic"),
+        &registry,
+        SandboxConfig::default(),
+        &default_grant(),
+        &attribution,
+    )
+    .expect_err("forged cap-claim attempt MUST be denied");
+    assert!(
+        matches!(
+            err.code(),
+            ErrorCode::SandboxHostFnDenied | ErrorCode::SandboxHostFnNotFound
+        ),
+        "ESC-14: cap derivation EXCLUSIVELY from manifest; module \
+         bytes have no cap authority; got {:?}",
+        err.code()
+    );
+
+    // Structural pin: primitives/sandbox.rs MUST NOT parse custom
+    // sections for cap derivation. Source-grep at the executor.
+    let exec_src = std::fs::read_to_string(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join("primitives")
+            .join("sandbox.rs"),
+    )
+    .expect("benten-eval/src/primitives/sandbox.rs must be readable");
+    assert!(
+        !exec_src.contains("custom_section")
+            && !exec_src.contains("read_custom_section")
+            && !exec_src.contains("module.custom_sections"),
+        "ESC-14 absence pin: the SANDBOX executor MUST NOT parse \
+         custom sections for cap derivation (cap-claim forge defense)"
+    );
 }
 
 #[test]

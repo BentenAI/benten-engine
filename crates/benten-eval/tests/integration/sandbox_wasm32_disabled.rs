@@ -12,29 +12,54 @@
 //! covers the eval-crate-internal absence of the SANDBOX executor
 //! symbol — the wasmtime-touching code in `crates/benten-eval/src/sandbox/`
 //! must not compile into wasm32 targets.
+//!
+//! **G20-A1 wave-8a** (Phase 3): body un-ignored. Source-grep approach
+//! (the cfg-gate decoration on `src/primitives/sandbox.rs` + the
+//! `src/sandbox/mod.rs` module-level gate) is the canonical pin
+//! shape; the actual wasm32 build cell in CI is the runtime
+//! verification.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
-#![allow(unused_imports, dead_code, unused_variables)]
 
 #[test]
-#[ignore = "Phase 3 — eval-side wasm32 absence pin body deferred per docs/future/phase-3-backlog.md §7.3.A.1"]
 fn sandbox_compile_time_disabled_on_wasm32_executor() {
-    // sec-pre-r1-05 + wasm-r1-3 — assert that the wasmtime-touching
-    // SANDBOX executor in `benten-eval` is compile-time excluded from
-    // wasm32 builds. The crate-level cfg-gate is on
-    // `crates/benten-eval/src/sandbox/mod.rs` and `primitives/sandbox.rs`.
+    // sec-pre-r1-05 + wasm-r1-3 — the wasmtime-touching SANDBOX
+    // executor in `benten-eval/src/sandbox/` MUST be cfg-gated out of
+    // wasm32 builds. The structural pin: source-grep at the executor
+    // module + the sandbox subsystem mod.rs to confirm the
+    // `#[cfg(not(target_arch = "wasm32"))]` decoration is present.
     //
-    // Strategy:
-    //   - Run `cargo check --target wasm32-wasip1 -p benten-eval`.
-    //   - Assert: the build succeeds.
-    //   - Assert: the resulting rmeta does NOT contain
-    //     `benten_eval::sandbox::execute_sandbox` symbol.
-    //   - Optionally: a `compile_fail` doctest under
-    //     `#[cfg(target_arch = "wasm32")]` proving the symbol cannot
-    //     be referenced.
-    //
-    // Distinct from the engine-side R3-E test which checks the
-    // higher-level `Engine::sandbox_*` surface absence; this is the
-    // eval-internal layer.
-    todo!("R5 G7-C — wasm32 build + symbol absence assertion at eval layer");
+    // The runtime wasm32-build verification lives in CI's
+    // `wasm-browser.yml` workflow (which builds the napi crate
+    // against wasm32-unknown-unknown + asserts the bundle does NOT
+    // pull in wasmtime symbols).
+
+    // Audit 1: sandbox/mod.rs carries the module-level wasm32 cut.
+    let mod_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("src")
+        .join("sandbox")
+        .join("mod.rs");
+    let mod_src = std::fs::read_to_string(&mod_path)
+        .expect("benten-eval/src/sandbox/mod.rs must be readable");
+    assert!(
+        mod_src.contains("#![cfg(not(target_arch = \"wasm32\"))]"),
+        "sandbox/mod.rs MUST carry `#![cfg(not(target_arch = \"wasm32\"))]` \
+         to enforce the SANDBOX subsystem cut on wasm32 (sec-pre-r1-05 \
+         + wasm-r1-3)"
+    );
+
+    // Audit 2: the executor primitives/sandbox.rs carries its own
+    // wasm32 cut.
+    let exec_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("src")
+        .join("primitives")
+        .join("sandbox.rs");
+    let exec_src = std::fs::read_to_string(&exec_path)
+        .expect("benten-eval/src/primitives/sandbox.rs must be readable");
+    assert!(
+        exec_src.contains("#![cfg(not(target_arch = \"wasm32\"))]")
+            || exec_src.contains("#[cfg(not(target_arch = \"wasm32\"))]"),
+        "primitives/sandbox.rs MUST carry the wasm32 cut decoration \
+         to enforce sec-pre-r1-05 + wasm-r1-3"
+    );
 }

@@ -190,15 +190,42 @@ fn sandbox_output_at_exact_limit_succeeds() {
     );
 }
 
+/// **G20-A1 wave-8a body** (Phase 3): D17 BACKSTOP defense-in-depth
+/// pin. Exercises both halves of the §7.3.A.7 testing-helpers
+/// SURFACE shipped at G17-A1 wave-5b:
+///   1. `testing_register_uncounted_host_fn` flips the
+///      `EscDefenseState` into the ESC-7 attack-state shape; the
+///      boundary `run_esc7_check` fires.
+///   2. `CountedSink::backstop_check` traps a >limit return-value
+///      payload with `OverflowPath::ReturnBackstop` (the BACKSTOP
+///      catches host-fns that bypassed the streaming primary).
 #[test]
-#[ignore = "Phase 3 — testing_register_uncounted_host_fn helper deferred per docs/future/phase-3-backlog.md §7.3.A.7 (D17 BACKSTOP defense-in-depth pin; cross-ref SECURITY-POSTURE.md ESC matrix + Compromise #4)"]
 fn sandbox_output_limit_return_value_backstop_catches_misbehaving_host_fn() {
-    // The BACKSTOP path is implemented (CountedSink::backstop_check is
-    // called against the return-value bytes at the primitive boundary
-    // in `execute()`). What's deferred is the test fixture that
-    // exercises it: a `testing_register_uncounted_host_fn` helper that
-    // intentionally bypasses the PRIMARY path so we can prove the
-    // BACKSTOP catches it. Without that helper the BACKSTOP path is
-    // exercised only by very-small return-value-bytes overflows, which
-    // a clean implementation avoids.
+    use benten_eval::sandbox::{CountedSink, EscDefenseState, OverflowPath, run_esc7_check};
+    use benten_eval::testing::testing_register_uncounted_host_fn;
+
+    // 1. ESC-7 helper SURFACE — testing_register_uncounted_host_fn
+    //    flips the state; the boundary check fires the typed error.
+    let mut state = EscDefenseState::new();
+    testing_register_uncounted_host_fn(&mut state);
+    assert!(state.guest_active, "guest_active flag set");
+    assert_eq!(state.re_entry_count, 1, "re_entry_count bumped");
+    let err = run_esc7_check(&state).expect_err("ESC-7 fires from helper-driven state");
+    assert_eq!(err.code(), ErrorCode::SandboxEscapeAttempt);
+
+    // 2. BACKSTOP path semantics — a CountedSink that has accepted
+    //    100 bytes via the PRIMARY path; a 2000-byte return-value
+    //    from a host-fn that bypassed the streaming sink trips the
+    //    BACKSTOP at the primitive boundary.
+    let mut sink = CountedSink::new(1024);
+    sink.write_n_bytes(100, "test_host_fn").unwrap();
+    let overflow = sink
+        .backstop_check(2000, "test_host_fn")
+        .expect_err("BACKSTOP MUST trip on >limit return-value bytes");
+    assert!(
+        matches!(overflow.path, OverflowPath::ReturnBackstop),
+        "the trap path MUST be ReturnBackstop (NOT PrimaryStreaming) — \
+         this is the load-bearing claim that the BACKSTOP catches \
+         host-fns that bypass the streaming sink"
+    );
 }

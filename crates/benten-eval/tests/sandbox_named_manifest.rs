@@ -17,7 +17,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use benten_errors::ErrorCode;
-use benten_eval::sandbox::{CapBundle, ManifestError, ManifestRegistry};
+use benten_eval::sandbox::{CapBundle, ManifestError, ManifestRegistry, default_manifests};
 
 #[test]
 fn sandbox_named_manifest_resolves_caps() {
@@ -53,15 +53,76 @@ fn sandbox_unknown_named_manifest_rejected_e_sandbox_manifest_unknown() {
 }
 
 #[test]
-#[ignore = "Phase 3 — TOML codegen drift detector body deferred per docs/future/phase-3-backlog.md §7.3.A.1 (build.rs codegen pipeline lands Phase 3; current 2b ships hand-mirrored static manifest)"]
 fn sandbox_named_manifest_codegen_drift() {
     // D2 + wsa-D2 — `host-functions.toml` is the source of truth;
-    // build.rs codegen emits `generated::DEFAULT_MANIFESTS`. The drift
-    // detector mirrors error_code_drift_test pattern: parse the TOML at
-    // runtime + compare to the generated table; assert byte-for-byte
-    // equality. G7-A ships the static table inline (no build.rs); the
-    // codegen drift surface lands in G7-C.
-    todo!("G7-C — runtime parse of TOML + compare to generated table");
+    // the hand-mirrored `default_manifests()` table in
+    // `crates/benten-eval/src/sandbox/manifest.rs` MUST agree with
+    // every `[manifest.<name>]` entry in the TOML.
+    //
+    // **G20-A1 wave-8a body** (Phase 3): walks the TOML at runtime
+    // and compares to `default_manifests()` output. A regression where
+    // someone adds a manifest to TOML without mirroring it (or vice
+    // versa) fires this drift detector.
+    let toml_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("host-functions.toml");
+    let toml_src = std::fs::read_to_string(&toml_path)
+        .expect("workspace host-functions.toml must be readable");
+
+    // Parse out [manifest.<name>] entries + their `caps = [...]`.
+    let mut toml_manifests: std::collections::BTreeMap<String, Vec<String>> =
+        std::collections::BTreeMap::new();
+    let mut current_name: Option<String> = None;
+    for line in toml_src.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("[manifest.") {
+            // [manifest.compute-basic] → "compute-basic"
+            let name = trimmed
+                .trim_start_matches("[manifest.")
+                .trim_end_matches(']')
+                .to_string();
+            current_name = Some(name);
+            continue;
+        }
+        if let Some(ref name) = current_name
+            && trimmed.starts_with("caps = [")
+        {
+            // Parse: caps = ["host:compute:log", "host:compute:time"]
+            let inner = trimmed.trim_start_matches("caps = [").trim_end_matches(']');
+            let caps: Vec<String> = inner
+                .split(',')
+                .map(|s| s.trim().trim_matches('"').to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            toml_manifests.insert(name.clone(), caps);
+            current_name = None;
+        }
+    }
+
+    // Compare to the codegen-emitted table.
+    let codegen = default_manifests();
+    for (name, toml_caps) in &toml_manifests {
+        let bundle = codegen.get(name).unwrap_or_else(|| {
+            panic!(
+                "TOML declares manifest {name:?} but codegen-emitted \
+                 default_manifests() does NOT carry it — drift detector \
+                 (sandbox_named_manifest_codegen_drift) FIRED"
+            )
+        });
+        assert_eq!(
+            &bundle.caps, toml_caps,
+            "manifest {name:?} caps drift: TOML={:?} codegen={:?}",
+            toml_caps, bundle.caps
+        );
+    }
+    for codegen_name in codegen.keys() {
+        assert!(
+            toml_manifests.contains_key(codegen_name),
+            "codegen-emitted manifest {codegen_name:?} is NOT declared \
+             in host-functions.toml — drift detector FIRED"
+        );
+    }
 }
 
 #[test]

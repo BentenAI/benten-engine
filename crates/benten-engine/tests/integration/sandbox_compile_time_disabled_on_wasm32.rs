@@ -53,16 +53,21 @@ fn fresh_engine() -> (tempfile::TempDir, Engine) {
 /// This test confirms BOTH halves of the cfg-gate so a future regression
 /// (e.g. dropping the `#[cfg(not(target_arch = "wasm32"))]` decoration
 /// on the executor module) is caught immediately.
+/// **G20-A1 wave-8a body** (Phase 3): un-ignored. Drives the
+/// production `register_subgraph` entry point with a SANDBOX-bearing
+/// SubgraphSpec via `testing_make_minimal_sandbox_spec`. On native
+/// targets the registration succeeds; on wasm32 the cfg-gate fires
+/// the typed `E_SANDBOX_DISABLED_ON_WASM32` error before the executor
+/// is consulted.
 #[test]
-#[ignore = "Phase 3 — wasm32 build-target exercise body deferred per docs/future/phase-3-backlog.md §7.3.A.1 (G10-A wasip1 + wasm32-unknown-unknown bundles landed structurally; negative-half exercise lands Phase 3)"]
 fn sandbox_compile_time_disabled_on_wasm32_executor() {
-    let (_dir, mut engine) = fresh_engine();
+    let (_dir, engine) = fresh_engine();
 
     // Build a SANDBOX-bearing SubgraphSpec via the testing helper
-    // (G7-A owns the helper signature; this is a §9 backdoor).
+    // (G20-A1 wave-8a owns the helper signature).
     let spec = benten_engine::testing::testing_make_minimal_sandbox_spec();
 
-    let result = engine.register_subgraph("sandbox.test", spec);
+    let result = engine.register_subgraph(spec);
 
     #[cfg(target_arch = "wasm32")]
     {
@@ -70,11 +75,10 @@ fn sandbox_compile_time_disabled_on_wasm32_executor() {
             "registration of a SANDBOX-bearing handler MUST fail on wasm32 \
              with E_SANDBOX_DISABLED_ON_WASM32 (sec-pre-r1-05 compile-time gate)",
         );
-        let rendered = err.to_string();
+        let rendered = format!("{err:?}");
         assert!(
             rendered.contains("E_SANDBOX_DISABLED_ON_WASM32"),
-            "error must be the typed E_SANDBOX_DISABLED_ON_WASM32 code, got: {}",
-            rendered
+            "error must be the typed E_SANDBOX_DISABLED_ON_WASM32 code, got: {rendered}"
         );
     }
 
@@ -92,8 +96,8 @@ fn sandbox_compile_time_disabled_on_wasm32_executor() {
 /// in the executor module source so a future refactor that drops it is
 /// caught at the source level too (defense in depth against the R2-noted
 /// "test-passes-by-accident" anti-pattern).
+/// **G20-A1 wave-8a** (Phase 3): drift-detector body un-ignored.
 #[test]
-#[ignore = "Phase 3 — source-grep drift detector body deferred per docs/future/phase-3-backlog.md §7.3.A.1 (executor module shipped in 2b; drift-detector body lands Phase 3 first-wave CI-hygiene pass)"]
 fn sandbox_executor_module_carries_wasm32_cfg_gate_in_source() {
     let exec_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../crates/benten-eval/src/primitives/sandbox.rs");

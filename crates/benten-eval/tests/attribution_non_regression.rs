@@ -7,25 +7,83 @@
 //! sandbox_depth == 0.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
-#![allow(unused_imports, dead_code, unused_variables)]
+
+use benten_core::Cid;
+use benten_eval::AttributionFrame;
+
+fn zero_cid() -> Cid {
+    Cid::from_blake3_digest([0u8; 32])
+}
 
 #[test]
-#[ignore = "Phase 3 — sec-pre-r1-13 non-regression carry body deferred per docs/future/phase-3-backlog.md §7.3.A.1"]
 fn attribution_frame_extension_preserves_phase_2a_sec_r6r1_01_inv_14_wiring() {
-    // sec-pre-r1-13 — D20's `sandbox_depth: u8` field added to
-    // AttributionFrame MUST NOT break Phase-2a's invariant_14 wiring
-    // (which pins the (actor, handler, capability_grant) tuple shape).
+    // **G20-A1 wave-8a body** (Phase 3): sec-pre-r1-13 — D20's
+    // `sandbox_depth: u8` field added to AttributionFrame MUST NOT
+    // break Phase-2a's invariant_14 wiring.
     //
-    // Test:
-    //   1. Construct AttributionFrame with sandbox_depth = 0 (default).
-    //   2. Assert: frame.cid() == the Phase-2a-pinned fixture CID
-    //      (re-use the constant from invariant_14_fixture_cid.rs).
-    //   3. Construct AttributionFrame with sandbox_depth = 1.
-    //   4. Assert: frame.cid() != the pinned CID (proves the field is
-    //      load-bearing in canonical bytes when non-zero — extension
-    //      semantics are correct).
-    //   5. Round-trip a frame at sandbox_depth = 0 through DAG-CBOR
-    //      decode/encode + Inv-14 attribution check; assert the
-    //      Phase-2a wiring still passes.
-    todo!("R5 G7-B — Inv-14 wiring preserved across D20 extension");
+    // The Phase-2a-pinned schema fixture CID for a default
+    // (`sandbox_depth = 0`) frame:
+    const PHASE_2A_FIXTURE: &str = "bafyr4ig26oo2jmvq47wewho4sdpiscjpluvpzev3uerleuj2rtl63r7c5a";
+
+    // 1. Default frame canonicalises to the Phase-2a CID (the slot is
+    //    omitted from canonical bytes when zero per
+    //    exec_state.rs::AttributionFrame::cid).
+    let frame_zero = AttributionFrame {
+        actor_cid: zero_cid(),
+        handler_cid: zero_cid(),
+        capability_grant_cid: zero_cid(),
+        sandbox_depth: 0,
+    };
+    let cid_zero = frame_zero.cid().expect("default frame encodes");
+    assert_eq!(
+        cid_zero.to_base32(),
+        PHASE_2A_FIXTURE,
+        "Phase-2a Inv-14 wiring preserved: depth-0 frame CID matches \
+         the Phase-2a-pinned schema fixture"
+    );
+
+    // 2. Non-zero depth produces a DIFFERENT CID (the slot becomes
+    //    load-bearing in canonical bytes — extension semantics
+    //    correct).
+    let frame_one = AttributionFrame {
+        sandbox_depth: 1,
+        ..frame_zero
+    };
+    let cid_one = frame_one.cid().expect("depth-1 frame encodes");
+    assert_ne!(
+        cid_one, cid_zero,
+        "non-zero sandbox_depth MUST produce distinct CID (Phase-2b \
+         D20 extension load-bearing in canonical bytes)"
+    );
+
+    // 3. Round-trip via DAG-CBOR encode/decode preserves canonical
+    //    bytes for default-zero frame (Phase-2a non-regression).
+    let encoded =
+        serde_ipld_dagcbor::to_vec(&frame_zero).expect("DAG-CBOR encode of default frame");
+    let decoded: AttributionFrame =
+        serde_ipld_dagcbor::from_slice(&encoded).expect("DAG-CBOR decode");
+    assert_eq!(
+        decoded.sandbox_depth, 0,
+        "DAG-CBOR round-trip preserves default sandbox_depth = 0"
+    );
+    let cid_decoded = decoded.cid().expect("decoded frame encodes");
+    assert_eq!(
+        cid_decoded, cid_zero,
+        "round-tripped depth-0 frame CID matches the Phase-2a fixture"
+    );
+
+    // 4. Companion regression: non-zero round-trip.
+    let encoded_one =
+        serde_ipld_dagcbor::to_vec(&frame_one).expect("DAG-CBOR encode of depth-1 frame");
+    let decoded_one: AttributionFrame =
+        serde_ipld_dagcbor::from_slice(&encoded_one).expect("DAG-CBOR decode");
+    assert_eq!(
+        decoded_one.sandbox_depth, 1,
+        "DAG-CBOR round-trip preserves sandbox_depth = 1"
+    );
+    assert_eq!(
+        decoded_one.cid().unwrap(),
+        cid_one,
+        "round-tripped depth-1 frame CID stable"
+    );
 }
