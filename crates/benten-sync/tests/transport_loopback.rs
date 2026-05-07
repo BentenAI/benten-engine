@@ -97,6 +97,96 @@ async fn iroh_transport_two_peer_loopback_round_trip() {
     peer_a.close().await;
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn external_keypair_loopback_round_trip_uses_caller_provided_keypair() {
+    // g16a-mr-minor-1 closure pin: exercises `Endpoint::bind_loopback_with_keypair`
+    // + `Connection::remote_peer()` end-to-end so the public symbols
+    // ship with real consumer call sites (not just zero-call-site
+    // declarations). Mirrors the canonical loopback round-trip but
+    // with caller-managed keypairs — production scenarios where the
+    // keypair lives on benten-id's secure store, not auto-generated.
+    //
+    // OBSERVABLE consequence: the connection's `remote_peer()` returns
+    // peer_b's PeerId derived from peer_b's externally-provided
+    // keypair. If `bind_loopback_with_keypair` regressed to ignoring
+    // the caller's keypair (e.g., generated a fresh one internally),
+    // this test would fail because the observed remote peer-id would
+    // not match the keypair's pubkey.
+    let kp_a = benten_id::keypair::Keypair::generate();
+    let kp_b = benten_id::keypair::Keypair::generate();
+    let expected_peer_b = benten_sync::peer_id::PeerId::from_public_key(kp_b.public_key());
+
+    let peer_a = Endpoint::bind_loopback_with_keypair(&kp_a)
+        .await
+        .expect("bind a with external keypair");
+    let peer_b = Endpoint::bind_loopback_with_keypair(&kp_b)
+        .await
+        .expect("bind b with external keypair");
+
+    let peer_b_addr = peer_b.loopback_addr().expect("peer_b loopback_addr");
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let accept_task = tokio::spawn(async move {
+        let conn = peer_b.accept_next().await.expect("accept_next");
+        let received = conn.recv_bytes().await.expect("recv_bytes");
+        let _ = tx.send(received);
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        conn.close();
+    });
+
+    let conn_a_to_b =
+        tokio::time::timeout(Duration::from_secs(15), peer_a.connect_to_addr(peer_b_addr))
+            .await
+            .expect("connect did not time out")
+            .expect("connect a→b");
+
+    // Load-bearing assertion: remote_peer() returns peer_b's id
+    // derived from kp_b. If bind_loopback_with_keypair silently
+    // ignored kp_b (or remote_peer() were unwired), this would not
+    // hold.
+    assert_eq!(
+        conn_a_to_b.remote_peer(),
+        expected_peer_b,
+        "Connection::remote_peer() must return peer_b's id derived from the externally-provided keypair"
+    );
+
+    conn_a_to_b
+        .send_bytes(b"hello with external keypair")
+        .await
+        .expect("send a→b");
+
+    let received_at_b = tokio::time::timeout(Duration::from_secs(15), rx)
+        .await
+        .expect("recv did not time out")
+        .expect("recv side ran");
+    assert_eq!(received_at_b, b"hello with external keypair");
+
+    accept_task.await.expect("accept-task join");
+    conn_a_to_b.close();
+    peer_a.close().await;
+}
+
+#[tokio::test]
+async fn bind_with_keypair_non_loopback_returns_endpoint_with_caller_keypair() {
+    // g16a-mr-minor-1 closure pin: exercises `Endpoint::bind_with_keypair`
+    // (non-loopback bind path). The endpoint is the production-shape
+    // bind that wave-6b's relay-mode wires through; G16-A canary scope
+    // returns a bound endpoint whose status reports a non-loopback
+    // kind. If `bind_with_keypair` regressed to invoking the loopback
+    // path internally, this test would fail.
+    let kp = benten_id::keypair::Keypair::generate();
+    let ep = Endpoint::bind_with_keypair(&kp)
+        .await
+        .expect("bind with external keypair (non-loopback)");
+    match ep.transport_status().await {
+        TransportStatus::Healthy {
+            kind: TransportKind::Direct | TransportKind::Relay,
+        } => {}
+        other => panic!("expected non-loopback Healthy kind from bind_with_keypair, got {other:?}"),
+    }
+    ep.close().await;
+}
+
 #[tokio::test]
 async fn iroh_transport_loopback_reports_loopback_status() {
     // net-minor-1 companion pin: the loopback canary's status surface

@@ -46,7 +46,7 @@
 //!   [`benten_errors::ErrorCode::AtriumTransportDegraded`].
 //! - [`peer_id`] — peer-id derived from `benten-id::Keypair` Ed25519
 //!   pubkey per net-minor-2 + ds-8 + crypto-minor-4: PeerId == iroh
-//!   NodeId == Ed25519 pubkey design. Cross-process determinism is
+//!   EndpointId == Ed25519 pubkey design. Cross-process determinism is
 //!   load-bearing for the multi-process / multi-device peer-mesh per
 //!   D-PHASE-3-25.
 //! - [`handshake_wire`] — wire-format struct
@@ -122,7 +122,7 @@
 //!   AND device-DID).
 //! - `net-minor-1` (single-process two-Endpoint loopback round-trip).
 //! - `net-minor-2` + `ds-8` + `crypto-minor-4` (peer-id derived
-//!   deterministically from Ed25519 pubkey + iroh NodeId reuse).
+//!   deterministically from Ed25519 pubkey + iroh EndpointId reuse).
 //! - `scope-real-10` (CI-conditional gating: holepunch smoke gated to
 //!   specific runner cell; loopback + relay-fallback required-on-every-PR).
 //! - `arch-r1-11` + `D-PHASE-3-14` (no benten-engine / benten-eval dep

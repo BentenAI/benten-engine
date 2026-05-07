@@ -3,8 +3,9 @@
 //! ## Design contract (net-minor-2 + ds-8 + crypto-minor-4)
 //!
 //! [`PeerId`] is the 32-byte Ed25519 public-key bytes — IDENTICAL to the
-//! iroh `NodeId` per crypto-minor-4: iroh's NodeId is also 32 bytes of
-//! Ed25519 public key, and reusing the same key serves both the Atrium
+//! iroh `EndpointId` per crypto-minor-4 (pre-iroh-0.98 `NodeId`): iroh's
+//! EndpointId is also 32 bytes of Ed25519 public key, and reusing the
+//! same key serves both the Atrium
 //! peer-identity and the iroh QUIC-transport peer-identity. This
 //! key-reuse posture is acknowledged + documented:
 //!
@@ -31,14 +32,14 @@
 //! - plan §3 G16-A row.
 //! - `net-minor-2` (round-trip + cross-process determinism).
 //! - `ds-8` (peer-id is content-addressable + deterministic).
-//! - `crypto-minor-4` (iroh NodeId == Ed25519 pubkey design).
+//! - `crypto-minor-4` (iroh EndpointId == Ed25519 pubkey design; pre-iroh-0.98 `NodeId`).
 
 use benten_id::keypair::PublicKey;
 use serde::{Deserialize, Serialize};
 
 /// Peer identifier — 32-byte Ed25519 public-key bytes.
 ///
-/// Identical to the iroh `NodeId` per crypto-minor-4. See module-level
+/// Identical to the iroh `EndpointId` per crypto-minor-4 (pre-iroh-0.98 `NodeId`). See module-level
 /// docs for the key-reuse-posture acknowledgment.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -65,7 +66,7 @@ impl PeerId {
 
     /// Construct a `PeerId` directly from the 32-byte pubkey form.
     ///
-    /// Inverse of [`PeerId::as_bytes`]. Used by the iroh-NodeId-to-PeerId
+    /// Inverse of [`PeerId::as_bytes`]. Used by the iroh-EndpointId-to-PeerId
     /// adapter site in [`crate::transport`] + by deserializers consuming
     /// the canonical-bytes envelope.
     #[must_use]

@@ -718,17 +718,60 @@ mod tests {
     #[tokio::test]
     async fn bind_with_relay_url_rejects_malformed_url_with_typed_error() {
         // net-blocker-2 BLOCKER pin (typed-error construction at the
-        // bind boundary). A malformed relay URL surfaces as
-        // `AtriumTransportError::RelayUnreachable` — never a panic,
-        // never an untyped String. Production-grade relay-handshake
-        // failure (DNS / TLS / relay-refused) surfaces the same
-        // typed code at connect-time; G16-D wave-6b wires the
-        // CI-conditional relay-fallback fixture per scope-real-10.
+        // bind boundary; URL-PARSE arm). A malformed relay URL surfaces
+        // as `AtriumTransportError::RelayUnreachable` with a parse-
+        // failure reason — never a panic, never an untyped String.
+        // Distinguishing assertion: the reason MUST cite "invalid
+        // relay url" (the parse-rejection arm at line ~503), NOT the
+        // canary-scope marker (the wave-6b promotion-seam arm).
+        // g16a-mr-minor-2 closure pin: this test must FAIL if the
+        // parse arm regresses to bypassing parse + always returning
+        // the canary-scope error.
         let kp = benten_id::keypair::Keypair::generate();
-        let result = Endpoint::bind_with_relay_url(&kp, "not-a-valid-url::wat").await;
+        // Empty string is one of the cleanest URL-parse failures —
+        // url::Url::parse("") returns Err("relative URL without a
+        // base") deterministically across all url-crate versions.
+        // Other "obviously-bad" strings like "not-a-valid-url::wat"
+        // can pass url::Url::parse (which is lenient) and then
+        // surface the canary-scope arm instead — so they don't
+        // discriminate the parse arm. Empty-string is the load-
+        // bearing parse-failure pin.
+        let result = Endpoint::bind_with_relay_url(&kp, "").await;
         match result {
-            Err(AtriumTransportError::RelayUnreachable { .. }) => {}
-            other => panic!("expected RelayUnreachable, got {other:?}"),
+            Err(AtriumTransportError::RelayUnreachable { reason, .. }) => {
+                assert!(
+                    reason.starts_with("invalid relay url:"),
+                    "malformed URL must surface the parse-rejection reason, not the canary-scope marker; got: {reason}"
+                );
+            }
+            other => panic!("expected RelayUnreachable from URL parse, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn bind_with_relay_url_well_formed_returns_canary_scope_typed_error() {
+        // g16a-mr-minor-2 companion pin (typed-error construction at
+        // the bind boundary; CANARY-SCOPE arm). A well-formed relay
+        // URL parses successfully then surfaces the canary-scope
+        // marker because G16-A's relay-mode wiring is not yet in
+        // place; G16-D wave-6b promotes this path to a real iroh
+        // RelayMode::Custom binding per pim-4 §3.10.
+        //
+        // Distinguishing assertion: the reason MUST cite "G16-A
+        // canary scope" (the wave-6b promotion-seam arm, NOT the
+        // parse-rejection arm). Together with the malformed-URL
+        // companion test, these two pins exercise BOTH error arms
+        // discriminatingly.
+        let kp = benten_id::keypair::Keypair::generate();
+        let result = Endpoint::bind_with_relay_url(&kp, "https://relay.example.test:443/").await;
+        match result {
+            Err(AtriumTransportError::RelayUnreachable { reason, .. }) => {
+                assert!(
+                    reason.contains("G16-A canary scope"),
+                    "well-formed URL must surface the canary-scope marker (wave-6b promotion seam), not the parse-rejection reason; got: {reason}"
+                );
+            }
+            other => panic!("expected RelayUnreachable from canary-scope arm, got {other:?}"),
         }
     }
 

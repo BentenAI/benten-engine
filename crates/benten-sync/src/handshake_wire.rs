@@ -71,7 +71,7 @@ pub struct HandshakeFrame {
     pub device_did: Did,
 
     /// Sender's [`PeerId`] (Ed25519 pubkey bytes). Per crypto-minor-4,
-    /// this is identical to the iroh NodeId — the receiver's transport
+    /// this is identical to the iroh EndpointId — the receiver's transport
     /// layer can verify the QUIC-level peer-identity matches this
     /// declared identity.
     pub peer_id: PeerId,
@@ -241,7 +241,7 @@ impl<P, K> HandshakeFrameBuilder<P, NoDeviceDid, K> {
 
 impl<P, D> HandshakeFrameBuilder<P, D, NoPeerId> {
     /// Set the peer-id (Ed25519 pubkey bytes). Per crypto-minor-4,
-    /// identical to the iroh NodeId.
+    /// identical to the iroh EndpointId.
     #[must_use]
     pub fn peer_id(self, peer_id: PeerId) -> HandshakeFrameBuilder<P, D, WithPeerId> {
         HandshakeFrameBuilder {
