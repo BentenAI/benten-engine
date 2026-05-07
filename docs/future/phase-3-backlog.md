@@ -607,9 +607,9 @@ opens an in-memory engine, subscribes, publishes, and asserts the
 callback fires with the payload) +
 `engine_emit_event_no_longer_returns_e_primitive_not_implemented`
 (rust-side; negative pin — verifies the deferred sentinel is GONE) +
-`packages/engine/test/onChange_onEmit.test.ts::G19-B wave-7 — onEmit
-callback splats args correctly` (TS-side end-to-end through the napi
-cdylib). The `engine.ts::emitEvent` wrapper drops the "deferred"
+`packages/engine/test/onChange_onEmit.test.ts` (TS-side end-to-end
+through the napi cdylib; G19-B wave-7 onEmit callback splats args
+correctly + onChange splat + retired-marker-grep tests). The `engine.ts::emitEvent` wrapper drops the "deferred"
 verbiage in its docstring and surfaces the EmitBroadcast direct path.
 
 ### 7.9 TS-surface-parity sweep (Edge interface phantom `cid` + dropped `properties`; broader latent pre-Phase-2b TS-side drift) — CLOSED IN G19-D WAVE-7
