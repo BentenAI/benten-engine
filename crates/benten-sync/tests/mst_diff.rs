@@ -142,16 +142,32 @@ fn mst_diff_convergence_under_divergent_node_count_n_definition() {
 
 #[test]
 fn mst_diff_convergence_o_log_n_for_corpus_with_depth_4_branch_8() {
-    // net-major-2 canonical fixture pin.
+    // net-major-2 canonical fixture pin (per g16-c-mr-2 MINOR
+    // fix-pass tightening).
+    //
+    // Two assertions: a TIGHT bound matching the actual BTreeMap-flat
+    // shape (1-2 rounds), and a LOOSE bound that preserves headroom
+    // for G16-B's planned partial-sync-cursor wrap (which exposes
+    // one tree-level per round → log_2(4096) ~= 12 rounds at
+    // canonical depth, with 4× constant giving 48-round headroom).
     let (mut mst_a, mut mst_b) = build_depth4_branch8_corpus();
     let rounds = run_mst_diff_to_convergence(&mut mst_a, &mut mst_b);
-    // For depth 4 / branch 8 → log2(4096) = 12; 4× constant gives
-    // 48-round headroom. The MST diff implementation typically
-    // converges in 1-2 rounds for the BTreeMap-backed shape, well
-    // below the bound.
+    // Tight bound: BTreeMap-flat shape resolves the entire divergence
+    // in 1-2 rounds for n=4096. A regression that breaks the
+    // O(1)-rounds property of the flat shape would trip this even
+    // before crossing the 48-round headroom.
+    assert!(
+        rounds <= 4,
+        "canonical depth-4/branch-8 MST diff converged in {rounds} rounds for the BTreeMap-flat shape; expected <= 4 (per g16-c-mr-2: tight bound captures the load-bearing 1-2-round behavior)"
+    );
+    // Loose bound: preserved headroom for the G16-B partial-sync-cursor
+    // shape (one tree-level per round → log_2(n) ~= 12 + 4× constant).
+    // When G16-B re-shapes the MST around partial-sync cursors per
+    // the convergence-claim docstring, this bound is the contract
+    // the round-driven shape must hold.
     assert!(
         rounds <= 48,
-        "canonical depth-4/branch-8 MST diff converged in {rounds} rounds; expected <= 48"
+        "canonical depth-4/branch-8 MST diff converged in {rounds} rounds; G16-B partial-sync-cursor headroom <= 48"
     );
     assert_eq!(
         mst_a.root_cid(),

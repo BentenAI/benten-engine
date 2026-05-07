@@ -20,8 +20,11 @@
 //! Phase-3 commits to mode-(a) only. Architectural-absence pins for
 //! modes (b) + (c) at this file's tail clarify intent for fresh
 //! agents per the HARD-RULE rule-12 BELONGS-NAMED-NOW disposition
-//! (named destination: FULL-ROADMAP.md Phase 4+ light-client
-//! extensions).
+//! (named destination: `docs/future/v1-gate-refactor.md` Phase-4
+//! Benten Platform v1 deferrals — light-client mode-(b) range-query
+//! proof + mode-(c) signed-checkpoint; FULL-ROADMAP.md does not
+//! NAME these specific surfaces today, so the v1-gate-refactor doc
+//! is the live destination per g16-c-mr-3 MINOR fix-pass).
 //!
 //! ## What this pins (distinct from the MST diff pin)
 //!
@@ -93,7 +96,7 @@ fn light_client_verifies_node_cid_inclusion_in_subgraph_root_via_merkle_proof() 
 
 // =====================================================================
 // Architectural-absence pins per ds-r4r2-3 — light-client modes (b) +
-// (c) OOS for Phase-3, deferred to FULL-ROADMAP.md Phase-4+
+// (c) OOS for Phase-3, deferred to docs/future/v1-gate-refactor.md Phase-4 Benten Platform v1
 // light-client extensions.
 //
 // These pins use #[ignore] with explicit OOS rationale (not
@@ -103,7 +106,7 @@ fn light_client_verifies_node_cid_inclusion_in_subgraph_root_via_merkle_proof() 
 // =====================================================================
 
 #[test]
-#[ignore = "ARCHITECTURAL-ABSENCE: light-client mode-(b) range-query proof is OOS for Phase-3; deferred to Phase-4+ per FULL-ROADMAP.md light-client extensions"]
+#[ignore = "ARCHITECTURAL-ABSENCE: light-client mode-(b) range-query proof is OOS for Phase-3; deferred to Phase-4 Benten Platform v1 per docs/future/v1-gate-refactor.md (light-client mode-b range-query + mode-c signed-checkpoint deferrals)"]
 fn light_client_mode_b_range_query_proof_oos_phase_3_deferred_to_phase_4() {
     // ds-r4r2-3 architectural-absence pin (closes ds-r4-6 mode-(b)
     // ambiguity). Phase-3 commits to mode-(a) only:
@@ -128,7 +131,7 @@ fn light_client_mode_b_range_query_proof_oos_phase_3_deferred_to_phase_4() {
 }
 
 #[test]
-#[ignore = "ARCHITECTURAL-ABSENCE: light-client mode-(c) signed checkpoint is OOS for Phase-3; deferred to Phase-4+ per FULL-ROADMAP.md light-client extensions"]
+#[ignore = "ARCHITECTURAL-ABSENCE: light-client mode-(c) signed checkpoint is OOS for Phase-3; deferred to Phase-4 Benten Platform v1 per docs/future/v1-gate-refactor.md (light-client mode-b range-query + mode-c signed-checkpoint deferrals)"]
 fn light_client_mode_c_signed_checkpoint_oos_phase_3_deferred_to_phase_4() {
     // ds-r4r2-3 architectural-absence pin (closes ds-r4-6 mode-(c)
     // ambiguity). Mode-(c) signed-checkpoint verification requires:
