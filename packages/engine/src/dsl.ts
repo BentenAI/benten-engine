@@ -218,7 +218,8 @@ export interface CallArgs {
 export interface RespondArgs {
   /**
    * Response body expression. Eval-side reads `body` verbatim
-   * (`primitives/respond.rs::execute` line 41).
+   * (`crates/benten-eval/src/primitives/respond.rs::execute` reads
+   * `op.properties.get("body")`).
    */
   body?: string;
   /**
@@ -232,7 +233,8 @@ export interface RespondArgs {
   /**
    * Optional status code override (HTTP mapping — not enforced in
    * Phase 1). Eval-side reads `status` verbatim
-   * (`primitives/respond.rs::execute` line 38).
+   * (`crates/benten-eval/src/primitives/respond.rs::execute` reads
+   * `op.properties.get("status")`).
    */
   status?: number;
 }
@@ -381,7 +383,8 @@ export interface SubscribeArgs {
    * Event/pattern the SUBSCRIBE matches. DSL surface name retained for
    * developer ergonomics; translates to eval-side
    * `pattern: Text(<event>)` per the SUBSCRIBE primitive's match path
-   * (`crates/benten-eval/src/primitives/subscribe.rs::execute` line 1282).
+   * (`crates/benten-eval/src/primitives/subscribe.rs::execute` reads
+   * `op.properties.get("pattern")`).
    */
   event: string;
   /**
@@ -389,7 +392,7 @@ export interface SubscribeArgs {
    * **SubscribeArgs.handler RE-INTRODUCED** post-Phase-2b removal. The
    * eval-side handler-id-router seam was wired in G14-D wave-5a per
    * seq-major-8 (`crates/benten-eval/src/primitives/subscribe.rs::execute`
-   * lines 1295-1317); G19-D wave-7 restores the corresponding TS DSL
+   * reads `op.properties.get("handler")`); G19-D wave-7 restores the corresponding TS DSL
    * surface field that PR #75's R6-R4-narrow fix-pass had to drop
    * pending the eval-side wiring.
    *
@@ -669,8 +672,8 @@ function translateCallArgs(args: CallArgs): Record<string, JsonValue> {
  * primitive's keyspace per `primitives/respond.rs::execute`.
  *
  *   DSL surface → eval-side keyspace
- *   {body}      → body: Text(<body-expr>) (verbatim — line 41)
- *   {status}    → status: Int(<status>) (verbatim — line 38)
+ *   {body}      → body: Text(<body-expr>) (verbatim)
+ *   {status}    → status: Int(<status>) (verbatim)
  *   {edge}      → (NOT spread; routing is edge-driven via
  *                  the OperationNode's outgoing edge table — the
  *                  engine compile path consumes the `edge` hint to
@@ -696,16 +699,17 @@ function translateRespondArgs(args: RespondArgs): Record<string, JsonValue> {
  * primitive's keyspace per `primitives/subscribe.rs::execute`.
  *
  *   DSL surface → eval-side keyspace
- *   {event}     → pattern: Text(<event>) (line 1282 — match path)
- *   {handler}   → handler: Text(<handler-id>) (lines 1295-1317 —
- *                 handler-id-router seam wired in G14-D wave-5a per
- *                 seq-major-8; routes change-event delivery through
- *                 the named handler instead of default fan-out)
+ *   {event}     → pattern: Text(<event>) (match path)
+ *   {handler}   → handler: Text(<handler-id>) (handler-id-router seam
+ *                 wired in G14-D wave-5a per seq-major-8; routes
+ *                 change-event delivery through the named handler
+ *                 instead of default fan-out)
  *
  * Mirrors the EMIT translation precedent — both primitives carry an
  * optional `handler` field in their respective Args interfaces, and
  * both eval primitives read the same key (`primitives/emit.rs::execute`
- * lines 61-77 + `primitives/subscribe.rs::execute` lines 1295-1317).
+ * reads `op.properties.get("handler")` + `primitives/subscribe.rs::execute`
+ * reads `op.properties.get("handler")`).
  * The G19-D §7.10 worked example in `docs/DSL-SPECIFICATION.md` shows
  * the handler-id-router routing model end-to-end.
  */
@@ -898,7 +902,7 @@ export class SubgraphBuilder {
    */
   public branch(args: BranchArgs): BranchBuilder {
     // G19-D §7.9: translate DSL surface → eval-side BRANCH keyspace
-    // (`match_value` per primitives/branch.rs::execute line 49). The
+    // (`match_value` per primitives/branch.rs::execute). The
     // `cases` / `has_default` / `conditions` keys are populated by the
     // engine compile path from the BRANCH node's outgoing edges
     // (`CASE:<value>` labels stamped by `.case(value, body)` below).

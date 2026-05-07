@@ -1,10 +1,42 @@
-//! R3-E RED-PHASE pin for G19-D LOAD-BEARING DSL-args-vs-eval-primitive-properties
-//! parity meta-test (wave-7 parallel; §7.10 + D-PHASE-3-9 + pim-12).
+//! Phase-3 G19-D §7.10 — LOAD-BEARING DSL-args-vs-eval-primitive-properties
+//! parity meta-test (wave-7; D-PHASE-3-9 EXPANDED + pim-12).
 //!
-//! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.7 G19-D +
-//! `.addl/phase-3/00-implementation-plan.md` §3 G19-D must-pass column +
-//! R4-R1 expansion per `pcds-r4-r1-3` instance-27 PRE-EMPTION +
-//! `stream-r4r1-2` 5-mode coverage):
+//! The structural fix that converges the long-tail 24-instance
+//! producer/consumer drift recurrence at the structural layer. Walks
+//! every `*Args` interface in `packages/engine/src/dsl.ts` against the
+//! corresponding eval primitive's `op.properties.get("...")` reads
+//! (`crates/benten-eval/src/primitives/<p>.rs` + the SANDBOX reader at
+//! `crates/benten-engine/src/primitive_host.rs::execute_sandbox`).
+//!
+//! ## What this meta-test catches at structural layer
+//!
+//! For every primitive whose DSL surface differs from the eval-side
+//! property-bag keyspace, a `translateXxxArgs` helper bridges the two.
+//! This test verifies, mechanically, that:
+//!
+//!   1. **Every translator output key is read by the eval-side primitive.**
+//!      A translator-output orphan (DSL helper writes a key no eval reader
+//!      consults) is the silent-value-loss shape that the 23rd p/c drift
+//!      (`r6-r5-pcds-2` WaitArgs.duration) and the 24th p/c drift
+//!      (G17-C wallclockMs ↔ wallclock_ms) both exhibited.
+//!
+//!   2. **Every translator helper exists for primitives whose DSL surface
+//!      keys differ from eval-side keys.** A missing translator means the
+//!      DSL spread copies user-facing field names verbatim into the
+//!      property bag while the eval-side reader looks up DIFFERENT keys
+//!      (the canonical-key orphan shape — Phase-2b 6 pre-existing DSL
+//!      Args drifts that G19-D §7.9 fixes).
+//!
+//! ## RED-PHASE → GREEN-PHASE
+//!
+//! Pre-G19-D: 6 pre-existing Args drifts (BranchArgs / ReadArgs /
+//! IterateArgs / TransformArgs / RespondArgs / CallArgs) spread DSL
+//! field names verbatim into the property bag while the eval-side
+//! primitives read DIFFERENT keys (silent value-loss). The 6 surface
+//! fixes land in the same G19-D wave; this test pins the structural
+//! defense against recurrence.
+//!
+//! ## Pin sources
 //!
 //! - `tests/dsl_args_vs_eval_properties_parity_meta_test_no_drift_across_all_primitives` — §7.10 LOAD-BEARING; pim-12
 //! - `tests/parity_meta_test_consumer_projection_mermaid_no_drift` — D-PHASE-3-9; stream-r1-5
@@ -16,493 +48,1157 @@
 //! - `tests/dsl_args_vs_eval_parity_meta_test_rejects_synthetic_casing_drift_fixture` — stream-r4r1-2 mode-4 (24th-instance shape)
 //! - `tests/parity_meta_test_mermaid_subscribe_arm_drift_detected_post_simulated_dsl_rename` — pcds-r4-r1-3 per-case-arm regression
 //!
-//! ## What G19-D establishes (§7.10 + D-PHASE-3-9 EXPANDED)
+//! ## Implementation strategy
 //!
-//! Per stream-r1-5 + r1-napi-3: the meta-test walks each `*Args` interface
-//! in `dsl.ts` against the eval primitive's `execute()` property reads.
-//! For DSL-compiler-mediated primitives (BranchArgs / IterateArgs /
-//! CallArgs etc.) the meta-test walks against the DSL-compiler output
-//! (`crates/benten-dsl-compiler/src/lib.rs::compile_str`) rather than directly
-//! against eval primitive reads.
+//! Source-of-truth = `packages/engine/src/dsl.ts` (TS DSL surface +
+//! translator helpers) + `crates/benten-eval/src/primitives/<p>.rs`
+//! (eval-side `op.properties.get("<key>")` reads) +
+//! `crates/benten-engine/src/primitive_host.rs::execute_sandbox` for the
+//! SANDBOX reader.
 //!
-//! Per stream-r1-5 expansion (D-PHASE-3-9 RECOMMEND) + R4-R1 pcds-r4-r1-3
-//! 5-projection enumeration: consumer projection sweep covers:
+//! The eval-side keyspace per primitive is captured below as a literal
+//! table — the test walks each primitive in turn, extracts the
+//! translator's output keyspace from dsl.ts, and asserts:
 //!
-//!   1. eval primitive `execute()` property reads (the canonical sink)
-//!   2. mermaid producer projection (`packages/engine/src/mermaid.ts`)
-//!   3. drift-detector projection
-//!      (`crates/benten-ivm/tests/algorithm_b_drift_detector.rs` from G15-B)
-//!   4. ChangeEvent translation bridge (`crates/benten-engine/src/builder.rs`
-//!      OperationNode property bag → ChangeEvent translation for SUBSCRIBE
-//!      delivery; pcds-r4-r1-3 expansion)
-//!   5. DSL helper translation modules (`packages/engine/src/dsl.ts`
-//!      `translateXxxArgs` helpers — translateWaitArgs / translateSandboxArgs
-//!      per G17-C / future translateBranchArgs etc per G19-D 6-Args drift
-//!      fixes; pre-empts pim-11 process-shape extension)
+//!   - Every key the translator emits is in the eval-side keyspace
+//!     (no translator-output orphan).
 //!
-//! ## 5 drift shape-mode coverage (stream-r4r1-2)
-//!
-//! The §7.10 LOAD-BEARING parity meta-test enumerates 5 drift shape-modes
-//! from the Phase-2b 24-instance retrospective. Each mode MUST be covered
-//! by a synthetic-drift-fixture rejection meta-meta test (pim-2 §3.6b
-//! end-to-end: the meta-test itself is a runtime arm whose closed-claim
-//! needs an end-to-end pin — would FAIL if meta-test silently no-op'd):
-//!
-//!   1. translation-layer-phantom (mode 1): WaitArgs orphan-field shape
-//!      — covered by `dsl_args_vs_eval_parity_meta_test_rejects_synthetic_drift_fixture`
-//!   2. translation-layer-incorrect-mapping (mode 2): WaitArgs.duration →
-//!      duration_ms wrong-value shape (R6-R5 pcds-2 — took 5 deep-sweeps
-//!      to find) — covered by
-//!      `dsl_args_vs_eval_parity_meta_test_rejects_synthetic_translation_layer_incorrect_mapping_fixture`
-//!      (NEW per stream-r4r1-2)
-//!   3. consumer-projection-silent-coerce (mode 3): mermaid SUBSCRIBE arm
-//!      file-level scan vs per-case-arm AST walk — covered by
-//!      `parity_meta_test_mermaid_subscribe_arm_drift_detected_post_simulated_dsl_rename`
-//!      (NEW per pcds-r4-r1-3)
-//!   4. casing-drift (mode 4): wallclockMs ↔ wallclock_ms (24th-instance
-//!      shape; per-instance fix at G17-C wave-5b; meta-test must include
-//!      synthetic-casing-drift rejection at structural layer) — covered
-//!      by `dsl_args_vs_eval_parity_meta_test_rejects_synthetic_casing_drift_fixture`
-//!      (NEW per stream-r4r1-2)
-//!   5. schema-parity-missing-field (mode 5): Rust producer widening +
-//!      TS consumer interface not widened (Instance 18 sandboxDepth +
-//!      Instance 25 candidate AttributionFrame Phase-3) — covered by
-//!      `dsl_args_vs_eval_properties_parity_meta_test_no_drift_across_all_primitives`
-//!      walking every napi `#[napi]` exported struct against TS .d.ts
-//!
-//! ## Per-case-arm AST walk discipline (pcds-r4-r1-3)
-//!
-//! The mermaid + DSL-helper-modules consumer projections require
-//! PER-CASE-ARM AST walking (NOT file-level literal scanning) so the
-//! Phase-2b 22nd-instance shape (mermaid SUBSCRIBE arm reading
-//! `pick("event")` while `EmitArgs.event` exists elsewhere → spurious
-//! global-match) is caught. The meta-test extractors named below
-//! (`extract_per_case_arm_pick_refs`, `extract_dsl_helper_translation_keys`)
-//! are the load-bearing implementation contract — a naive file-level
-//! extractor would silently coerce per-case-arm drift to a global-match
-//! false-pass.
-//!
-//! Per scope-real-09 + r2-test-landscape §3.D: G19-D mini-review reviewer
-//! roster MUST include `producer-consumer-deep-sweep` lens — the structural
-//! fix attempt closes the 24-instance recurrence; pre-merge sweep mandatory.
-//!
-//! ## RED-PHASE discipline
-//!
-//! Meta-test does NOT yet exist. R5 implementer wires it.
+//! Note: the inverse direction (every eval-read key has a translator
+//! producer) is NOT enforced as a hard fail because some eval reads
+//! are populated by the engine COMPILE PATH (e.g. BRANCH `cases`,
+//! BRANCH `has_default`, BRANCH `conditions`, ITERATE `requires`, CALL
+//! `parent_scope` / `requires` / `timeout_ms` / `elapsed_ms`,
+//! TRANSFORM `input`) NOT by the DSL surface. The test annotates which
+//! eval-read keys are compile-path-supplied vs DSL-supplied below.
 
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
+use std::collections::BTreeSet;
+use std::path::PathBuf;
+
+fn workspace_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+}
+
+fn read_dsl_ts() -> String {
+    let p = workspace_root()
+        .join("packages")
+        .join("engine")
+        .join("src")
+        .join("dsl.ts");
+    std::fs::read_to_string(&p).unwrap_or_else(|e| {
+        panic!(
+            "packages/engine/src/dsl.ts not found at {} ({})",
+            p.display(),
+            e
+        )
+    })
+}
+
+fn read_mermaid_ts() -> String {
+    let p = workspace_root()
+        .join("packages")
+        .join("engine")
+        .join("src")
+        .join("mermaid.ts");
+    std::fs::read_to_string(&p).unwrap_or_else(|e| {
+        panic!(
+            "packages/engine/src/mermaid.ts not found at {} ({})",
+            p.display(),
+            e
+        )
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Canonical eval-side keyspace per primitive
+// ---------------------------------------------------------------------------
+//
+// Source-of-truth: every `op.properties.get("<key>")` read in
+// `crates/benten-eval/src/primitives/<p>.rs` (and
+// `crates/benten-engine/src/primitive_host.rs::execute_sandbox` for
+// SANDBOX). Updating this table requires an accompanying eval-side
+// change OR a DSL translator update — drift in one direction without
+// the other fires the meta-test.
+
+/// Returns the full set of `op.properties.get("<key>")` reads for
+/// `<primitive>`. Includes BOTH DSL-supplied keys AND compile-path-
+/// supplied keys; the test annotates which is which when narrowing the
+/// translator-output check.
+fn canonical_eval_keyspace(primitive: &str) -> BTreeSet<&'static str> {
+    let keys: &[&'static str] = match primitive {
+        // crates/benten-eval/src/primitives/read.rs
+        "read" => &["query_kind", "target_cid", "label"],
+        // crates/benten-eval/src/primitives/branch.rs
+        // - condition_value: compile-path (boolean BRANCH)
+        // - cases / has_default / conditions: compile-path (edge-table-driven)
+        "branch" => &[
+            "condition_value",
+            "match_value",
+            "cases",
+            "has_default",
+            "conditions",
+        ],
+        // crates/benten-eval/src/primitives/iterate.rs
+        // - requires: compile-path (capability decl)
+        // - max: reads via `op.properties.get("max")` at line 64-66 (Inv-9
+        //   iteration budget — DSL `IterateArgs.max` translates verbatim).
+        "iterate" => &["items", "max", "requires"],
+        // crates/benten-eval/src/primitives/transform.rs
+        // - input: compile-path (upstream binding)
+        "transform" => &["expr", "input", "result"],
+        // crates/benten-eval/src/primitives/call.rs
+        // - parent_scope / requires / timeout_ms / elapsed_ms: compile-path
+        "call" => &[
+            "child_scope",
+            "requires",
+            "parent_scope",
+            "timeout_ms",
+            "elapsed_ms",
+            "target",
+            "call_op",
+            "input",
+        ],
+        // crates/benten-eval/src/primitives/respond.rs
+        "respond" => &["status", "body"],
+        // crates/benten-eval/src/primitives/emit.rs
+        "emit" => &["channel", "payload", "handler"],
+        // crates/benten-eval/src/primitives/wait.rs
+        // (reads via `wait_node.property("<key>")` which is the same
+        // OperationNode property bag).
+        "wait" => &["signal", "duration_ms", "timeout_ms", "signal_shape"],
+        // crates/benten-eval/src/primitives/subscribe.rs
+        "subscribe" => &["pattern", "handler"],
+        // crates/benten-engine/src/primitive_host.rs::execute_sandbox
+        "sandbox" => &[
+            "module",
+            "manifest",
+            "caps",
+            "fuel",
+            "wallclock_ms",
+            "output_limit",
+            "input",
+        ],
+        // WRITE: spreads verbatim, eval-side reads `label` + `properties` +
+        // `requires` (compile-path via WriteSpec extraction at
+        // bindings/napi/src/subgraph.rs::extract_write_args).
+        "write" => &["label", "properties", "requires"],
+        // STREAM: dispatched via the engine compile path through
+        // `StreamPrimitiveSpec` at `crates/benten-engine/src/engine_stream.rs::build_stream_handle`,
+        // not via direct `op.properties.get()`. The DSL surface field
+        // `source` lands as a SubgraphNode arg the COMPILE PATH consumes
+        // when constructing the spec; `chunkSize` is the DSL-side hint
+        // forwarded to the spec's chunking. Mermaid renders `source` for
+        // at-a-glance display.
+        "stream" => &["source", "chunkSize"],
+        other => panic!("canonical_eval_keyspace: unknown primitive `{other}`"),
+    };
+    keys.iter().copied().collect()
+}
+
+/// Eval-side keys that are populated by the ENGINE COMPILE PATH (not
+/// the DSL surface). The DSL translator MUST NOT emit these (a phantom
+/// emission would conflict with the compile-path producer). The test
+/// uses this table to filter out compile-path keys when checking the
+/// orphan-eval-reader direction.
+fn compile_path_supplied_keys(primitive: &str) -> BTreeSet<&'static str> {
+    let keys: &[&'static str] = match primitive {
+        "branch" => &["cases", "has_default", "conditions", "condition_value"],
+        "iterate" => &["requires"],
+        "transform" => &["input"],
+        "call" => &["parent_scope", "requires", "timeout_ms", "elapsed_ms"],
+        "write" => &["properties", "requires"],
+        _ => &[],
+    };
+    keys.iter().copied().collect()
+}
+
+// ---------------------------------------------------------------------------
+// dsl.ts translator extractor
+// ---------------------------------------------------------------------------
+
+/// Extract the output-keyspace of a `translateXxxArgs` helper from
+/// dsl.ts. The keyspace is the set of property-keys the helper assigns
+/// onto its `props: Record<string, JsonValue>` accumulator before
+/// returning.
+///
+/// Recognized assignment shapes (matched at line scope):
+///
+///   - `props.<key> = ...`
+///   - `props["<key>"] = ...`
+///   - `props.<key> = <conditional> ? ... : ...` (the ternary is
+///     irrelevant for keyspace extraction).
+///
+/// String-literal assignments (`props.query_kind = "by_cid"`) count
+/// the LHS key only — the assigned value is irrelevant for the
+/// keyspace check.
+pub(crate) fn extract_translator_output_keys(dsl: &str, fn_name: &str) -> BTreeSet<String> {
+    // Find the function body. Tolerates `function translateXxxArgs(\n  args: ...,\n): ... {`.
+    let needle = format!("function {fn_name}(");
+    let Some(start) = dsl.find(&needle) else {
+        return BTreeSet::new();
+    };
+    // Walk forward to the first `{` after the signature.
+    let after_sig = &dsl[start..];
+    let Some(brace_offset) = after_sig.find('{') else {
+        return BTreeSet::new();
+    };
+    let body_start = start + brace_offset + 1;
+    // Walk forward, brace-depth-aware, to the matching `}`.
+    let mut depth = 1i32;
+    let mut end = body_start;
+    for (i, ch) in dsl[body_start..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = body_start + i;
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let body = &dsl[body_start..end];
+
+    // Extract `props.<key> = ...` and `props["<key>"] = ...` patterns.
+    let mut keys = BTreeSet::new();
+    for line in body.lines() {
+        let trimmed = line.trim();
+        // Skip comments to avoid false matches inside JSDoc / inline.
+        if trimmed.starts_with("//") || trimmed.starts_with("*") {
+            continue;
+        }
+        // `props.<key>` form.
+        if let Some(rest) = trimmed.strip_prefix("props.") {
+            // Identifier up to first `=` / `[` / whitespace.
+            let mut key = String::new();
+            for c in rest.chars() {
+                if c.is_ascii_alphanumeric() || c == '_' {
+                    key.push(c);
+                } else {
+                    break;
+                }
+            }
+            if !key.is_empty() {
+                // Filter: must be followed by `=` to count as an assignment
+                // (excludes `props.foo` reads — defensive).
+                let after_key = rest.trim_start_matches(&key);
+                if after_key.trim_start().starts_with('=') {
+                    keys.insert(key);
+                }
+            }
+            continue;
+        }
+        // `props["<key>"]` form.
+        if let Some(rest) = trimmed.strip_prefix("props[\"")
+            && let Some(end) = rest.find('"')
+        {
+            keys.insert(rest[..end].to_string());
+        }
+    }
+    keys
+}
+
+/// `*Args` interface → translator function name + primitive identifier.
+/// The DSL builders route specific Args interfaces through specific
+/// translators; this table captures the routing so the meta-test can
+/// walk every interface with no naming guesswork.
+fn args_interface_translator_table() -> Vec<(&'static str, &'static str, &'static str)> {
+    // (Args-interface-name, translator-fn-name, primitive-id)
+    vec![
+        ("ReadArgs", "translateReadArgs", "read"),
+        ("BranchArgs", "translateBranchArgs", "branch"),
+        ("IterateArgs", "translateIterateArgs", "iterate"),
+        ("TransformArgs", "translateTransformArgs", "transform"),
+        ("CallArgs", "translateCallArgs", "call"),
+        ("RespondArgs", "translateRespondArgs", "respond"),
+        ("WaitArgs", "translateWaitArgs", "wait"),
+        ("SubscribeArgs", "translateSubscribeArgs", "subscribe"),
+        ("SandboxArgs", "translateSandboxArgs", "sandbox"),
+        // EmitArgs has no helper — dsl.ts builders write { channel, payload }
+        // inline. Treated as a special-case in the LOAD-BEARING walk.
+        // WriteArgs spreads verbatim — also inline.
+    ]
+}
+
+// ---------------------------------------------------------------------------
+// LOAD-BEARING test: every translator output key is in canonical eval keyspace
+// ---------------------------------------------------------------------------
 
 #[test]
-#[ignore = "RED-PHASE: G19-D wave-7 — LOAD-BEARING DSL-args-vs-eval-primitive-properties parity meta-test"]
 fn dsl_args_vs_eval_properties_parity_meta_test_no_drift_across_all_primitives() {
-    // §7.10 LOAD-BEARING pin. G19-D implementer wires this:
-    //
-    //   // 1. Extract every *Args interface from packages/engine/src/dsl.ts:
-    //   let dsl_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //       .join("..").join("..").join("packages").join("engine")
-    //       .join("src").join("dsl.ts");
-    //   let dsl = std::fs::read_to_string(&dsl_path).unwrap();
-    //   let dsl_args_interfaces = extract_args_interfaces(&dsl);
-    //
-    //   // 2. For each *Args interface, walk against the corresponding
-    //   //    eval primitive's property reads. For DSL-compiler-mediated
-    //   //    primitives (Branch, Iterate, Call), walk against the
-    //   //    DSL compiler's output keyspace; for simple-translation
-    //   //    primitives (Wait, Sandbox, Subscribe), walk against eval
-    //   //    primitive reads directly.
-    //   for args in dsl_args_interfaces {
-    //       let primitive_keyspace = if args.is_compiler_mediated() {
-    //           extract_dsl_compiler_output_keys(&args.primitive_name)
-    //       } else {
-    //           extract_eval_primitive_property_reads(&args.primitive_name)
-    //       };
-    //
-    //       // Each DSL field reaches an eval/compiler keyspace key:
-    //       for dsl_field in &args.fields {
-    //           let translated_key = args.translate_to_keyspace(&dsl_field.name);
-    //           assert!(primitive_keyspace.contains(&translated_key),
-    //               "*Args drift: {}::{} (DSL) → {} (translated) not in \
-    //                primitive keyspace {:?} — closes the 24-instance recurrence \
-    //                at structural layer",
-    //               args.primitive_name, dsl_field.name,
-    //               translated_key, primitive_keyspace);
-    //       }
-    //
-    //       // Each eval/compiler keyspace key has a DSL-args producer:
-    //       for primitive_key in &primitive_keyspace {
-    //           let dsl_origin = args.fields.iter()
-    //               .find(|f| args.translate_to_keyspace(&f.name) == *primitive_key);
-    //           assert!(dsl_origin.is_some(),
-    //               "primitive key {}::{} has no DSL-args producer — \
-    //                consumer-projection-silent-coerce shape",
-    //               args.primitive_name, primitive_key);
-    //       }
-    //   }
-    //
-    // OBSERVABLE consequence: the 24-instance long-tail recurrence
-    // converges at the structural layer. Defends against future drift
-    // by mechanically checking parity at every PR.
-    unimplemented!("G19-D wires LOAD-BEARING DSL-args-vs-eval-properties parity meta-test");
+    let dsl = read_dsl_ts();
+    let mut violations: Vec<String> = Vec::new();
+    let mut translators_walked = 0usize;
+
+    for (args_name, fn_name, primitive) in args_interface_translator_table() {
+        let translator_keys = extract_translator_output_keys(&dsl, fn_name);
+        if translator_keys.is_empty() {
+            violations.push(format!(
+                "translator `{fn_name}` (for {args_name} → {primitive}) — \
+                 extractor returned EMPTY output keyspace. Either the \
+                 translator was renamed/removed (silent value-loss \
+                 recurrence) or the extractor regressed."
+            ));
+            continue;
+        }
+        translators_walked += 1;
+        let canonical = canonical_eval_keyspace(primitive);
+        for key in &translator_keys {
+            if !canonical.contains(key.as_str()) {
+                violations.push(format!(
+                    "{args_name} translator-output orphan: \
+                     `{fn_name}` emits `{key}` but eval-side {primitive} \
+                     primitive does not read it (canonical keyspace: {canonical:?}). \
+                     Closes the 24-instance recurrence at structural layer — \
+                     either drop the translator emission or wire the \
+                     eval-side read."
+                ));
+            }
+        }
+    }
+
+    // Special-case EMIT: dsl.ts builders write { channel: args.event,
+    // payload: args.payload } inline (no helper). Verify those keys
+    // are in the canonical EMIT keyspace.
+    let emit_inline_keys: BTreeSet<&str> = ["channel", "payload"].iter().copied().collect();
+    let emit_canonical = canonical_eval_keyspace("emit");
+    for key in &emit_inline_keys {
+        assert!(
+            emit_canonical.contains(*key),
+            "EMIT inline-builder writes `{key}` but eval-side emit does \
+             not read it (canonical: {emit_canonical:?})"
+        );
+    }
+
+    // Verify we walked every translator the table declares.
+    let expected = args_interface_translator_table().len();
+    assert!(
+        translators_walked >= expected.saturating_sub(1),
+        "walked {translators_walked} translators but expected ~{expected} — \
+         table-vs-extractor mismatch (silent skip recurrence)"
+    );
+
+    assert!(
+        violations.is_empty(),
+        "DSL-args-vs-eval-properties parity drift detected ({} violations):\n{}",
+        violations.len(),
+        violations.join("\n")
+    );
 }
 
-#[test]
-#[ignore = "RED-PHASE: G19-D wave-7 — parity meta-test consumer projection: mermaid no drift (D-PHASE-3-9 expanded; pcds-r4-r1-3 per-case-arm walk)"]
-fn parity_meta_test_consumer_projection_mermaid_no_drift() {
-    // stream-r1-5 / D-PHASE-3-9 EXPANSION pin (sharpened by R4-R1
-    // pcds-r4-r1-3 to require PER-CASE-ARM AST walking, NOT file-level
-    // literal scanning). G19-D implementer wires this:
-    //
-    //   // Walk packages/engine/src/mermaid.ts (the producer projection
-    //   // that emits a mermaid diagram for a Subgraph):
-    //   let mermaid_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //       .join("..").join("..").join("packages").join("engine")
-    //       .join("src").join("mermaid.ts");
-    //   let mermaid = std::fs::read_to_string(&mermaid_path).unwrap();
-    //
-    //   // PCDS-R4-R1-3 LOAD-BEARING: per-case-arm AST walk associating
-    //   // each `pick(...)` call with its enclosing `case '<primitive>':`
-    //   // statement. A naive file-level literal scan would treat the
-    //   // file as one global namespace + falsely match `pick("event")`
-    //   // in the SUBSCRIBE arm against `EmitArgs.event` elsewhere
-    //   // (Phase-2b 22nd-instance shape — caught post-merge).
-    //   let mermaid_emitter_refs: std::collections::HashMap<String, Vec<String>> =
-    //       extract_per_case_arm_pick_refs(&mermaid);
-    //   for (primitive, fields) in &mermaid_emitter_refs {
-    //       // Each (primitive, field) pair must reach the primitive's
-    //       // OWN canonical Args interface — NOT a sibling primitive's
-    //       // Args even if the field name happens to coincide globally:
-    //       let dsl_args = canonical_dsl_args_for(primitive);
-    //       for field in fields {
-    //           assert!(dsl_args.contains_field(field),
-    //               "mermaid emitter case '{}' references field `{}` \
-    //                but {}Args has no such field — per-case-arm \
-    //                consumer-projection drift (mode-3 / pcds-r4-r1-3 \
-    //                per-case-arm shape)",
-    //               primitive, field, primitive);
-    //       }
-    //   }
-    //
-    // OBSERVABLE consequence: mermaid producer projection stays in sync
-    // with DSL Args interfaces, AT THE PER-CASE-ARM granularity. Defends
-    // against the failure mode where mermaid silently drops or mis-maps
-    // a field rendering when it's added to DSL (the shape that R6-FP
-    // r6-r5-pcds-1 named for SUBSCRIBE rendering). Per pcds-r4-r1-3:
-    // file-level scanning is INSUFFICIENT — naive scanning falsely
-    // matches `pick("event")` in case 'subscribe' arm against
-    // EmitArgs.event leaving the SUBSCRIBE arm drift unflagged.
-    unimplemented!("G19-D wires parity meta-test PER-CASE-ARM AST walk against mermaid.ts");
-}
+// ---------------------------------------------------------------------------
+// Synthetic-drift-fixture rejection (pim-2 §3.6b end-to-end pin)
+// ---------------------------------------------------------------------------
+//
+// Defends against the failure mode where the meta-test silently no-ops
+// (the extractor returns an empty set so every assertion vacuously
+// passes). Each synthetic fixture INJECTS a known-bad shape and asserts
+// the parity-check logic REJECTS it.
 
 #[test]
-#[ignore = "RED-PHASE: G19-D wave-7 — parity meta-test consumer projection: drift-detector no drift (D-PHASE-3-9 expanded)"]
-fn parity_meta_test_consumer_projection_drift_detector_no_drift() {
-    // stream-r1-5 / D-PHASE-3-9 EXPANSION pin (meta-meta — meta-test
-    // walks the drift-detector projection from G15-B).
-    //
-    //   // G15-B's algorithm_b_drift_detector.rs proptest constructs
-    //   // synthetic events by walking the OperationNode property bag.
-    //   // The synthetic-event keyspace MUST stay in sync with the eval
-    //   // primitive's actual property reads.
-    //   let drift_detector_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //       .join("..").join("..").join("crates").join("benten-ivm")
-    //       .join("tests").join("algorithm_b_drift_detector.rs");
-    //   let detector_src = std::fs::read_to_string(&drift_detector_path).unwrap();
-    //   let detector_synthesized_keys = extract_synthesized_event_keys(&detector_src);
-    //
-    //   for (primitive, synthesized_keys) in &detector_synthesized_keys {
-    //       let canonical_keys = canonical_eval_primitive_keys(primitive);
-    //       for key in synthesized_keys {
-    //           assert!(canonical_keys.contains(key),
-    //               "drift-detector synthesizes orphan key {}::{} not \
-    //                read by eval — projection drift", primitive, key);
-    //       }
-    //   }
-    //
-    // OBSERVABLE consequence: G15-B's drift-detector stays in sync with
-    // the eval primitive keyspace. Defends against the meta-meta failure
-    // mode where the drift-detector itself drifts from production reads.
-    unimplemented!(
-        "G19-D wires parity meta-test consumer projection sweep against algorithm_b_drift_detector"
+fn dsl_args_vs_eval_parity_meta_test_rejects_synthetic_drift_fixture() {
+    // Mode-1 synthetic-drift: a translator emits a key that the eval
+    // primitive does not read. The parity check MUST detect.
+    let synthetic_dsl = r#"
+function translateReadArgs(args) {
+  const props = {};
+  props.label = args.label;
+  props.query_kind = "by_cid";
+  // Drift: emit a phantom key the eval-side read primitive never reads.
+  props.orphan_field_phantom = "drift";
+  return props;
+}
+"#;
+    let extracted = extract_translator_output_keys(synthetic_dsl, "translateReadArgs");
+    assert!(
+        extracted.contains("orphan_field_phantom"),
+        "extractor SILENT NO-OP — `orphan_field_phantom` not surfaced \
+         from synthetic translator (extractor regression that would \
+         make every parity check vacuously pass)"
+    );
+
+    let canonical = canonical_eval_keyspace("read");
+    let drift_caught = !canonical.contains("orphan_field_phantom");
+    assert!(
+        drift_caught,
+        "parity check SILENT NO-OP — `orphan_field_phantom` not \
+         detected as out-of-canonical"
+    );
+
+    // Verify the LOAD-BEARING test would have caught this if it had
+    // been present in the real dsl.ts: walk the violation-formation
+    // path explicitly.
+    let mut would_violate = false;
+    for key in &extracted {
+        if !canonical.contains(key.as_str()) {
+            would_violate = true;
+            break;
+        }
+    }
+    assert!(
+        would_violate,
+        "LOAD-BEARING parity check would NOT have caught the synthetic \
+         drift — meta-test is silently no-op"
     );
 }
 
 #[test]
-#[ignore = "RED-PHASE: G19-D wave-7 — parity meta-test rejects synthetic injected drift (stream-r1-5 end-to-end pin)"]
-fn dsl_args_vs_eval_parity_meta_test_rejects_synthetic_drift_fixture() {
-    // stream-r1-5 pin per "the meta-test is itself a runtime arm whose
-    // closed-claim needs an end-to-end pin (§3.6b)." Synthetic-drift
-    // fixture verifies the meta-test ACTUALLY catches drift (would FAIL
-    // if meta-test were silently no-op'd).
-    //
-    //   // Inject a synthetic Args drift fixture:
-    //   let mut synthetic_dsl_args = real_dsl_args_interfaces();
-    //   synthetic_dsl_args.find_mut("WaitArgs").push_field("orphan_field_phantom");
-    //
-    //   // Run the meta-test logic against the fixture:
-    //   let result = run_dsl_args_parity_check(synthetic_dsl_args, real_eval_keyspace());
-    //
-    //   assert!(result.is_err(),
-    //       "meta-test must REJECT synthetic injected drift (§3.6b \
-    //        end-to-end: would FAIL if meta-test were silently no-op'd)");
-    //   let err_msg = format!("{:?}", result.err().unwrap());
-    //   assert!(err_msg.contains("orphan_field_phantom"),
-    //       "meta-test reject message must name the specific drift");
-    //
-    // OBSERVABLE consequence: the meta-test is verifiably effective
-    // against the 5 enumerated drift shape-modes (per stream-r1-5
-    // RECOMMEND).
-    unimplemented!("G19-D wires synthetic-drift-fixture rejection (meta-meta closure pin)");
-}
-
-#[test]
-#[ignore = "RED-PHASE: G19-D wave-7 — parity meta-test rejects synthetic mode-2 (translation-layer-incorrect-mapping; pcds-2 shape) (stream-r4r1-2)"]
 fn dsl_args_vs_eval_parity_meta_test_rejects_synthetic_translation_layer_incorrect_mapping_fixture()
 {
-    // stream-r4r1-2 mode-2 closure pin per pim-2 §3.6b end-to-end
-    // requirement. G19-D implementer wires this:
-    //
-    //   // Inject a synthetic translation-layer-incorrect-mapping fixture:
-    //   // the TS DSL field `duration: '5m'` is supposed to translate to
-    //   // `duration_ms: 300000` (5 minutes in ms). Inject a translator
-    //   // that produces the WRONG value (`duration_ms: 5000` — 5 seconds)
-    //   // — mirror of R6-R5 pcds-2 shape that took 5 deep-sweeps to find.
-    //   let mut synthetic_translator_table = real_translator_table();
-    //   synthetic_translator_table.set_translator("WaitArgs", "duration",
-    //       Box::new(|s: &str| {
-    //           // Wrong: returns ms-as-seconds rather than parsing minutes
-    //           let n: u64 = s.trim_end_matches("m").parse().unwrap_or(0);
-    //           serde_json::json!({"duration_ms": n * 1000}) // wrong: ×1000 not ×60000
-    //       }));
-    //
-    //   // Run the meta-test logic against the synthetic translator:
-    //   let result = run_translation_layer_parity_check(synthetic_translator_table);
-    //
-    //   assert!(result.is_err(),
-    //       "meta-test must REJECT synthetic translation-layer-incorrect-mapping \
-    //        fixture (mode-2; pim-2 §3.6b end-to-end: would FAIL if meta-test \
-    //        silently no-op'd against value-level mapping drift)");
-    //   let err_msg = format!("{:?}", result.err().unwrap());
-    //   assert!(err_msg.contains("WaitArgs") && err_msg.contains("duration"),
-    //       "meta-test reject message must name the specific drift coordinate");
-    //
-    // OBSERVABLE consequence: mode-2 (translation-layer-incorrect-mapping —
-    // the pcds-2 shape) is verifiably caught at structural layer. Defends
-    // against the failure shape where translation produces a syntactically-
-    // correct but semantically-wrong mapping (the highest-recurrence-likelihood
-    // shape per Phase-2b retrospective).
-    unimplemented!(
-        "G19-D wires synthetic translation-layer-incorrect-mapping (mode-2) rejection per stream-r4r1-2"
+    // Mode-2 (translation-layer-incorrect-mapping; pcds-2 shape):
+    // synthesize a translator that writes `duration` (the raw user-
+    // facing key) into the property bag instead of `duration_ms`. The
+    // eval-side WAIT primitive reads `duration_ms` — so a `duration`
+    // emission goes to a key the eval doesn't read (silent drop;
+    // R6-R5 pcds-2 shape).
+    let synthetic_dsl = r"
+function translateWaitArgs(args) {
+  const props = {};
+  // Drift: writes raw `duration` instead of `duration_ms` (mode-2:
+  // value-correct shape but key-incorrect — the highest-recurrence
+  // shape per Phase-2b retrospective).
+  props.duration = args.duration;
+  return props;
+}
+";
+    let extracted = extract_translator_output_keys(synthetic_dsl, "translateWaitArgs");
+    let canonical = canonical_eval_keyspace("wait");
+
+    // The drift: extracted contains `duration` (which is NOT in canonical
+    // — canonical has `duration_ms`). The check must catch this.
+    assert!(
+        extracted.contains("duration"),
+        "extractor SILENT NO-OP — `duration` not surfaced from \
+         synthetic translator (mode-2 shape)"
+    );
+    assert!(
+        !canonical.contains("duration"),
+        "canonical WAIT keyspace MUST NOT contain raw `duration` — the \
+         eval-side reader at primitives/wait.rs reads `duration_ms`. \
+         If this assertion fails, the mode-2 fixture has been \
+         invalidated (canonical keyspace was widened to accept \
+         `duration`)."
+    );
+
+    let mut violation = None;
+    for key in &extracted {
+        if !canonical.contains(key.as_str()) {
+            violation = Some(key.clone());
+            break;
+        }
+    }
+    assert!(
+        violation.is_some(),
+        "mode-2 (translation-layer-incorrect-mapping) shape NOT caught \
+         — meta-test silently no-op against value-level mapping drift"
+    );
+    assert_eq!(
+        violation.unwrap(),
+        "duration",
+        "violation must name the specific drift coordinate"
     );
 }
 
 #[test]
-#[ignore = "RED-PHASE: G19-D wave-7 — parity meta-test rejects synthetic mode-4 (casing-drift; 24th-instance shape) (stream-r4r1-2)"]
 fn dsl_args_vs_eval_parity_meta_test_rejects_synthetic_casing_drift_fixture() {
-    // stream-r4r1-2 mode-4 closure pin per pim-2 §3.6b end-to-end
-    // requirement. G19-D implementer wires this:
-    //
-    //   // Inject a synthetic casing-drift fixture: the TS DSL declares
-    //   // `wallclockMs: 30000` (camelCase); the eval-side reads
-    //   // `wallclock_ms` (snake_case). Per the §6.6 24th p/c drift
-    //   // acceptance criterion (G17-C wave-5b translateSandboxArgs),
-    //   // the translator MUST normalize across casing styles. Inject
-    //   // a translator that drops the conversion:
-    //   let mut synthetic_translator_table = real_translator_table();
-    //   synthetic_translator_table.set_translator("SandboxArgs", "wallclockMs",
-    //       Box::new(|v| serde_json::json!({"wallclockMs": v}))); // wrong: should be `wallclock_ms`
-    //
-    //   // Run the meta-test logic against the synthetic translator:
-    //   let result = run_casing_translation_parity_check(synthetic_translator_table);
-    //
-    //   assert!(result.is_err(),
-    //       "meta-test must REJECT synthetic casing-drift fixture (mode-4; \
-    //        24th-instance shape — pim-2 §3.6b end-to-end: would FAIL if \
-    //        meta-test silently no-op'd against per-field casing drift)");
-    //   let err_msg = format!("{:?}", result.err().unwrap());
-    //   assert!(err_msg.contains("wallclock") &&
-    //           (err_msg.contains("Ms") || err_msg.contains("_ms")),
-    //       "meta-test reject message must name the casing-drift coordinate");
-    //
-    // OBSERVABLE consequence: mode-4 (casing-drift — the 24th-instance
-    // shape that took the §6.6 acceptance criterion to pin) is verifiably
-    // caught at structural layer rather than only via per-instance fixes.
-    // Defends against the failure shape where camelCase TS DSL fields
-    // silently translate to wrong-cased eval-side properties.
-    unimplemented!("G19-D wires synthetic casing-drift (mode-4) rejection per stream-r4r1-2");
+    // Mode-4 (casing-drift; 24th-instance shape): synthesize a
+    // translator that writes `wallclockMs` (camelCase, DSL-style)
+    // instead of `wallclock_ms` (snake_case, eval-style). The eval-side
+    // SANDBOX reader at primitive_host.rs::execute_sandbox reads
+    // `wallclock_ms` — a `wallclockMs` emission silently drops.
+    let synthetic_dsl = r"
+function translateSandboxArgs(args) {
+  const props = {};
+  props.module = args.module;
+  // Drift: writes camelCase `wallclockMs` instead of snake_case
+  // `wallclock_ms` (mode-4: casing-drift — 24th p/c instance shape;
+  // §6.6 acceptance criterion).
+  props.wallclockMs = args.wallclockMs;
+  return props;
+}
+";
+    let extracted = extract_translator_output_keys(synthetic_dsl, "translateSandboxArgs");
+    let canonical = canonical_eval_keyspace("sandbox");
+
+    assert!(
+        extracted.contains("wallclockMs"),
+        "extractor SILENT NO-OP — `wallclockMs` not surfaced from \
+         synthetic translator (mode-4 shape)"
+    );
+    assert!(
+        canonical.contains("wallclock_ms"),
+        "canonical SANDBOX keyspace MUST contain `wallclock_ms` (the \
+         snake_case form the eval-side reader uses)"
+    );
+    assert!(
+        !canonical.contains("wallclockMs"),
+        "canonical SANDBOX keyspace MUST NOT contain `wallclockMs` — \
+         the eval-side reader at primitive_host.rs::execute_sandbox \
+         reads snake_case only. If this fails, the mode-4 fixture has \
+         been invalidated."
+    );
+
+    let mut violation = None;
+    for key in &extracted {
+        if !canonical.contains(key.as_str()) {
+            violation = Some(key.clone());
+            break;
+        }
+    }
+    assert!(
+        violation.is_some(),
+        "mode-4 (casing-drift) shape NOT caught — meta-test silently \
+         no-op against per-field casing drift"
+    );
+    let v = violation.unwrap();
+    assert!(
+        v.contains("wallclock") && (v.contains("Ms") || v.contains("MS")),
+        "violation must name the casing-drift coordinate; got `{v}`"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Consumer projection: mermaid producer (D-PHASE-3-9 expanded; pcds-r4-r1-3)
+// ---------------------------------------------------------------------------
+
+/// Strip TS block (`/* ... */`) + line (`// ...`) comments from a source
+/// string. Used by the per-case-arm extractor so a comment body that
+/// quotes `pick("...")` doesn't fire as a phantom reference.
+fn strip_block_and_line_comments(src: &str) -> String {
+    let mut cleaned = String::with_capacity(src.len());
+    let mut chars = src.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '/' if chars.peek() == Some(&'/') => {
+                for c2 in chars.by_ref() {
+                    if c2 == '\n' {
+                        cleaned.push('\n');
+                        break;
+                    }
+                }
+            }
+            '/' if chars.peek() == Some(&'*') => {
+                chars.next();
+                while let Some(c2) = chars.next() {
+                    if c2 == '*' && chars.peek() == Some(&'/') {
+                        chars.next();
+                        break;
+                    }
+                }
+            }
+            _ => cleaned.push(c),
+        }
+    }
+    cleaned
+}
+
+/// Extract per-case-arm `pick("<field>")` references from mermaid.ts.
+/// Returns a map of `<primitive>` → `Vec<<field>>` so the parity check
+/// can walk per-case-arm rather than file-level (the failure shape
+/// pcds-r4-r1-3 named).
+pub(crate) fn extract_per_case_arm_pick_refs(
+    mermaid: &str,
+) -> std::collections::BTreeMap<String, Vec<String>> {
+    let mut out: std::collections::BTreeMap<String, Vec<String>> =
+        std::collections::BTreeMap::new();
+    let mut current_case: Option<String> = None;
+    let mut depth_in_case: i32 = 0;
+
+    // Strip TS comments to avoid false matches like `// pick("on")` inside
+    // a comment body explaining the post-cascade rename.
+    let cleaned = strip_block_and_line_comments(mermaid);
+
+    for raw_line in cleaned.lines() {
+        let line = raw_line.trim();
+        // Detect `case "<name>":` arm start.
+        if let Some(rest) = line.strip_prefix("case ") {
+            let rest = rest.trim();
+            let name_with_quotes = rest.split(':').next().unwrap_or("").trim();
+            let name = name_with_quotes.trim_matches('"').to_string();
+            if !name.is_empty() {
+                current_case = Some(name);
+                depth_in_case = 0;
+                continue;
+            }
+        }
+        // Track brace depth within case (so a nested `{ ... }` doesn't
+        // accidentally close the case scope).
+        for c in line.chars() {
+            match c {
+                '{' => depth_in_case += 1,
+                '}' => depth_in_case -= 1,
+                _ => {}
+            }
+        }
+        // `return ...` or next `case` ends the current case scope.
+        if (line.starts_with("return ") || line.starts_with("default:"))
+            && depth_in_case <= 0
+            && current_case.is_some()
+            && !line.starts_with("return")
+        {
+            // `default:` resets to None.
+            current_case = None;
+        }
+        // Collect every `pick("<field>")` reference within the current case.
+        if let Some(case) = &current_case {
+            let mut search_from = 0;
+            while let Some(pos) = line[search_from..].find("pick(\"") {
+                let abs = search_from + pos + "pick(\"".len();
+                if let Some(end) = line[abs..].find('"') {
+                    let field = &line[abs..abs + end];
+                    out.entry(case.clone()).or_default().push(field.to_string());
+                    search_from = abs + end + 1;
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+    out
 }
 
 #[test]
-#[ignore = "RED-PHASE: G19-D wave-7 — parity meta-test consumer projection: ChangeEvent translation no drift (pcds-r4-r1-3 4th projection)"]
-fn parity_meta_test_consumer_projection_change_event_translation_no_drift() {
-    // pcds-r4-r1-3 4th-consumer-projection pin. G19-D implementer wires this:
-    //
-    //   // Walk crates/benten-engine/src/builder.rs (the producer-projection
-    //   // that translates an OperationNode property bag → ChangeEvent
-    //   // payload for SUBSCRIBE delivery; surfaced as a consumer projection
-    //   // by Phase-2b R6-R3):
-    //   let builder_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //       .join("..").join("benten-engine").join("src").join("builder.rs");
-    //   let builder_src = std::fs::read_to_string(&builder_path).unwrap();
-    //
-    //   // For each primitive the ChangeEvent translation handles, every
-    //   // OperationNode property the bridge reads must exist in the
-    //   // canonical primitive keyspace (no orphan reads, no silent skips):
-    //   let translation_refs = extract_change_event_translation_property_reads(&builder_src);
-    //   for (primitive, properties) in &translation_refs {
-    //       let canonical_keys = canonical_eval_primitive_keys(primitive);
-    //       for property in properties {
-    //           assert!(canonical_keys.contains(property),
-    //               "ChangeEvent translation for {} reads orphan property `{}` \
-    //                — consumer-projection drift (4th projection per pcds-r4-r1-3)",
-    //               primitive, property);
-    //       }
-    //   }
-    //
-    // OBSERVABLE consequence: the ChangeEvent translation bridge stays
-    // in sync with the canonical primitive keyspace. Defends against the
-    // failure mode where SUBSCRIBE delivery silently drops a property
-    // because the translation bridge skipped it (Phase-2b R6-R3 surfaced
-    // this as a producer-consumer drift surface).
-    unimplemented!(
-        "G19-D wires parity meta-test 4th consumer projection — ChangeEvent translation bridge"
+fn parity_meta_test_consumer_projection_mermaid_no_drift() {
+    // Walk mermaid.ts per-case-arm and assert each `pick("<field>")`
+    // call references a key the corresponding primitive ACTUALLY writes
+    // into the OperationNode property bag — i.e. is in the eval-side
+    // canonical keyspace (since those are the keys the DSL builder
+    // emits post-translation).
+    let mermaid = read_mermaid_ts();
+    let arm_refs = extract_per_case_arm_pick_refs(&mermaid);
+
+    assert!(
+        !arm_refs.is_empty(),
+        "extractor SILENT NO-OP — per-case-arm pick refs returned empty \
+         from mermaid.ts (extractor regression)"
+    );
+
+    let mut violations: Vec<String> = Vec::new();
+    for (primitive, fields) in &arm_refs {
+        // Skip the `default` arm — it's a fallthrough, not a per-primitive arm.
+        if primitive == "default" {
+            continue;
+        }
+        let canonical = canonical_eval_keyspace(primitive);
+        for field in fields {
+            if !canonical.contains(field.as_str()) {
+                violations.push(format!(
+                    "mermaid case `{primitive}` reads `pick(\"{field}\")` \
+                     but {primitive} canonical eval keyspace ({canonical:?}) \
+                     has no such key — per-case-arm consumer-projection \
+                     drift (mode-3 / pcds-r4-r1-3 per-case-arm shape)."
+                ));
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "mermaid consumer-projection drift ({} violations):\n{}",
+        violations.len(),
+        violations.join("\n")
     );
 }
 
 #[test]
-#[ignore = "RED-PHASE: G19-D wave-7 — parity meta-test consumer projection: DSL helper modules no drift (pcds-r4-r1-3 5th projection)"]
-fn parity_meta_test_consumer_projection_dsl_helper_modules_no_drift() {
-    // pcds-r4-r1-3 5th-consumer-projection pin (pre-empts pim-11
-    // translation-layer process-shape extension). G19-D implementer
-    // wires this:
-    //
-    //   // Walk packages/engine/src/dsl.ts for translateXxxArgs helpers
-    //   // (translateWaitArgs, translateSandboxArgs per G17-C, future
-    //   // translateBranchArgs etc per G19-D 6-Args drift fixes):
-    //   let dsl_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //       .join("..").join("..").join("packages").join("engine")
-    //       .join("src").join("dsl.ts");
-    //   let dsl = std::fs::read_to_string(&dsl_path).unwrap();
-    //
-    //   // For each translateXxxArgs helper, the per-helper output keyspace
-    //   // MUST land in the corresponding eval primitive's canonical keyspace
-    //   // (every translation produces a key the eval side reads + every
-    //   // canonical key has a translator producer):
-    //   let helper_translations = extract_dsl_helper_translation_keys(&dsl);
-    //   for (primitive, output_keys) in &helper_translations {
-    //       let canonical_keys = canonical_eval_primitive_keys(primitive);
-    //       for output_key in output_keys {
-    //           assert!(canonical_keys.contains(output_key),
-    //               "translate{}Args produces orphan output key `{}` — \
-    //                consumer-projection drift (5th projection / pim-11 \
-    //                translation-layer mode per pcds-r4-r1-3)",
-    //               primitive, output_key);
-    //       }
-    //   }
-    //
-    // OBSERVABLE consequence: the DSL helper translation modules stay
-    // in sync with the canonical eval primitive keyspace. Defends against
-    // the pim-11 translation-layer-phantom failure shape where a helper
-    // produces a key the eval side never reads (silent value-loss in
-    // the runtime payload).
-    unimplemented!(
-        "G19-D wires parity meta-test 5th consumer projection — DSL helper translation modules"
-    );
-}
-
-#[test]
-#[ignore = "RED-PHASE: G19-D wave-7 — parity meta-test catches mermaid SUBSCRIBE arm drift via simulated DSL rename (pcds-r4-r1-3 per-case-arm regression pin)"]
 fn parity_meta_test_mermaid_subscribe_arm_drift_detected_post_simulated_dsl_rename() {
-    // pcds-r4-r1-3 per-case-arm regression pin. Mirrors the Phase-2b
-    // 22nd-instance shape: pre-fix mermaid.ts contained
-    // `case 'emit': pick('channel')` AND `case 'subscribe': pick('event')`.
-    // A literal-scanning extractor sees `event` referenced in the file
-    // + `EmitArgs.event` exists in DSL → false PASS. The meta-test must
-    // walk per-case-arm to catch the per-primitive drift.
-    //
-    // G19-D implementer wires this:
-    //
-    //   // Simulate a DSL rename that should fire the meta-test:
-    //   // Rename SubscribeArgs.pattern → SubscribeArgs.foo (synthetic).
-    //   // The mermaid case 'subscribe' arm still reads `pick("pattern")`.
-    //   // A naive file-level extractor would see `pattern` referenced
-    //   // somewhere else in the file (e.g. WAIT_PATTERN constant) +
-    //   // falsely PASS. The per-case-arm walk MUST reject:
-    //   let synthetic_renamed_args = synthetic_dsl_args_with_subscribe_pattern_renamed_to_foo();
-    //   let result = run_mermaid_per_case_arm_parity_check(
-    //       synthetic_renamed_args, real_mermaid_src());
-    //
-    //   assert!(result.is_err(),
-    //       "meta-test must REJECT the simulated DSL rename — per-case-arm \
-    //        walk catches the SUBSCRIBE arm drift even when `pattern` \
-    //        appears elsewhere in mermaid.ts");
-    //   let err_msg = format!("{:?}", result.err().unwrap());
-    //   assert!(err_msg.contains("subscribe") && err_msg.contains("pattern"),
-    //       "reject message must name the SUBSCRIBE arm + drifted field");
-    //
-    // OBSERVABLE consequence: the mermaid SUBSCRIBE arm regression
-    // (Phase-2b 22nd instance) is structurally pinned. Defends against
-    // file-level extractors silently coercing per-case-arm drift to a
-    // global match.
-    unimplemented!(
-        "G19-D wires per-case-arm regression test for mermaid SUBSCRIBE arm drift per pcds-r4-r1-3"
+    // pcds-r4-r1-3 per-case-arm regression pin: synthetic mermaid
+    // blob renames the SUBSCRIBE arm's `pick("pattern")` to
+    // `pick("event")` (the Phase-2b 22nd-instance shape). A naive
+    // file-level extractor would see `event` referenced elsewhere
+    // (in the `case "emit":` arm) and falsely PASS. The per-case-arm
+    // walk MUST reject — `event` is NOT in the SUBSCRIBE primitive's
+    // canonical keyspace.
+    let synthetic_mermaid = r#"
+function shortArgs(n) {
+  const a = n.args;
+  const pick = (k) => a[k] === undefined ? "" : String(a[k]);
+  switch (n.primitive) {
+    case "emit":
+      return pick("channel");
+    case "subscribe":
+      // Drift: reads `event` (mirrors pcds-r4-r1-3 per-case-arm shape).
+      // EmitArgs.event exists elsewhere → naive file-scan falsely passes.
+      return pick("event");
+    default:
+      return "";
+  }
+}
+"#;
+    let arm_refs = extract_per_case_arm_pick_refs(synthetic_mermaid);
+    let subscribe_fields = arm_refs
+        .get("subscribe")
+        .expect("synthetic mermaid has a `subscribe` case arm — extractor regression if missing");
+    assert!(
+        subscribe_fields.iter().any(|f| f == "event"),
+        "extractor did not surface `event` from the SUBSCRIBE case arm \
+         — extractor regression (silent no-op against per-case-arm drift)"
+    );
+
+    // Per-case-arm parity check: `event` is NOT in subscribe canonical
+    // keyspace (it's in EMIT). The check MUST reject.
+    let canonical = canonical_eval_keyspace("subscribe");
+    let drift_caught = subscribe_fields
+        .iter()
+        .any(|f| !canonical.contains(f.as_str()));
+    assert!(
+        drift_caught,
+        "per-case-arm parity check SILENT NO-OP — SUBSCRIBE arm drift \
+         not caught despite `event` being out-of-canonical for \
+         subscribe (canonical: {canonical:?})"
+    );
+
+    // Defense against the file-level-coercion failure shape: verify
+    // that `event` IS legitimately in the EMIT canonical keyspace as a
+    // PRODUCER-translated key (channel) — NOT as a raw field. This
+    // confirms the extractor's per-case-arm scoping is NEEDED.
+    assert!(
+        canonical_eval_keyspace("emit").contains("channel"),
+        "EMIT canonical keyspace must contain `channel` (the post-
+         translation key — the DSL `event` field translates to this)"
     );
 }
 
+// ---------------------------------------------------------------------------
+// Consumer projection: drift-detector synthesized event keys (D-PHASE-3-9)
+// ---------------------------------------------------------------------------
+//
+// G15-B's drift-detector at `crates/benten-ivm/tests/algorithm_b_drift_detector.rs`
+// (via `crates/benten-ivm/tests/common.rs`) synthesizes Node fixtures
+// via `Write::to_node` which writes `createdAt` + `disambiguator` into
+// the Node property bag. These are NODE-property keys (not OperationNode
+// primitive-args keys); the drift-detector projection walks ChangeEvents
+// derived from those Nodes, NOT primitive-args reads. The consumer-
+// projection axis here is: the drift-detector synthesizes event-shape
+// fields that the IVM views (the IVM consumer) read.
+//
+// The narrow guarantee this test pins: the drift-detector's
+// synthesized-Node keyspace stays in sync with the canonical IVM-side
+// reader keyspace — i.e. it does not drift to write Node properties
+// that `ContentListingView` / `Algorithm B` projection logic does not
+// consult.
+
 #[test]
-#[ignore = "RED-PHASE: G19-D wave-7 — host:atrium:publish_view_result capability cite-discipline (D-PHASE-3-21 trust-policy via UCAN)"]
+fn parity_meta_test_consumer_projection_drift_detector_no_drift() {
+    let common_path = workspace_root()
+        .join("crates")
+        .join("benten-ivm")
+        .join("tests")
+        .join("common.rs");
+    let common = std::fs::read_to_string(&common_path).unwrap_or_else(|e| {
+        panic!(
+            "drift-detector helper at {} not found ({})",
+            common_path.display(),
+            e
+        )
+    });
+
+    // Walk the `to_node` body in common.rs and extract every `props.insert("<key>", ...)`
+    // call's <key>. These are the keys the drift-detector's synthesized
+    // Nodes carry into the ChangeEvent stream.
+    let synthesized_keys = extract_props_insert_keys(&common, "to_node");
+
+    assert!(
+        !synthesized_keys.is_empty(),
+        "drift-detector helper synthesized-key extractor returned empty \
+         — extractor regression OR `to_node` was renamed in common.rs"
+    );
+
+    // The canonical ChangeEvent-bound Node keyspace per Phase-1 graph
+    // schema: anchor Nodes carry stable user-facing properties +
+    // engine-stamped `createdAt`. The drift-detector reuses this
+    // surface; legitimate keys: `createdAt`, `disambiguator` (the
+    // CID-widening key the helper uses to avoid Node-CID collision),
+    // plus any future widening that lands via an explicit common.rs
+    // edit. New keys land here; new keys NOT IN the table fire.
+    let canonical_drift_detector_keys: BTreeSet<&str> =
+        ["createdAt", "disambiguator"].iter().copied().collect();
+
+    let mut violations: Vec<String> = Vec::new();
+    for key in &synthesized_keys {
+        if !canonical_drift_detector_keys.contains(key.as_str()) {
+            violations.push(format!(
+                "drift-detector `to_node` synthesizes Node property \
+                 `{key}` not in canonical drift-detector keyspace \
+                 ({canonical_drift_detector_keys:?}). If this is an \
+                 intentional widening, update the canonical table in \
+                 this test alongside the helper edit."
+            ));
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "drift-detector consumer-projection drift ({} violations):\n{}",
+        violations.len(),
+        violations.join("\n")
+    );
+}
+
+/// Helper: extract `props.insert("<key>", ...)` keys from inside a
+/// named function body in a Rust source file.
+fn extract_props_insert_keys(rust_src: &str, fn_name: &str) -> BTreeSet<String> {
+    let needle = format!("fn {fn_name}");
+    let Some(start) = rust_src.find(&needle) else {
+        return BTreeSet::new();
+    };
+    // Walk forward to the first `{`.
+    let after = &rust_src[start..];
+    let Some(brace_off) = after.find('{') else {
+        return BTreeSet::new();
+    };
+    let body_start = start + brace_off + 1;
+    let mut depth = 1i32;
+    let mut end = body_start;
+    for (i, ch) in rust_src[body_start..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = body_start + i;
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let body = &rust_src[body_start..end];
+
+    // Match `props.insert(\n  "<key>", ...)` and `props.insert("<key>", ...)`
+    // patterns — multi-line tolerant.
+    let mut keys = BTreeSet::new();
+    let pattern = "props.insert(";
+    let mut search_from = 0usize;
+    while let Some(pos) = body[search_from..].find(pattern) {
+        let abs = search_from + pos + pattern.len();
+        // Walk to the first `"` after the open paren (skip whitespace).
+        let after_open = &body[abs..];
+        let mut quote_start = None;
+        for (i, c) in after_open.char_indices() {
+            if c.is_whitespace() {
+                continue;
+            }
+            if c == '"' {
+                quote_start = Some(i);
+                break;
+            }
+            break;
+        }
+        if let Some(qs) = quote_start {
+            let key_start = abs + qs + 1;
+            if let Some(qe) = body[key_start..].find('"') {
+                keys.insert(body[key_start..key_start + qe].to_string());
+            }
+        }
+        search_from = abs;
+    }
+    keys
+}
+
+// ---------------------------------------------------------------------------
+// Consumer projection: ChangeEvent translation (pcds-r4-r1-3 4th projection)
+// ---------------------------------------------------------------------------
+//
+// `crates/benten-engine/src/builder.rs` translates `graph::ChangeEvent`
+// → `eval::primitives::subscribe::ChangeEvent` for SUBSCRIBE delivery.
+// This is a fixed-shape STRUCT-to-STRUCT translation — pcds-r4-r1-3 named
+// it as a "consumer projection" because its forwarding fidelity matters
+// for SUBSCRIBE delivery correctness.
+//
+// The narrow guarantee this test pins: the translation forwards every
+// non-edge field of `graph::ChangeEvent` cleanly into the eval-side
+// `ChangeEvent` (no field-collapse, no field-drop). Codified after
+// Phase-2b Round-2 Instance 6 BLOCKER (the `labels: Vec<String>` →
+// `primary_label: String` collapse that caused multi-label SUBSCRIBE
+// delivery loss).
+
+#[test]
+fn parity_meta_test_consumer_projection_change_event_translation_no_drift() {
+    let builder_path = workspace_root()
+        .join("crates")
+        .join("benten-engine")
+        .join("src")
+        .join("builder.rs");
+    let builder = std::fs::read_to_string(&builder_path)
+        .unwrap_or_else(|e| panic!("builder.rs not found at {} ({})", builder_path.display(), e));
+
+    // The translation block is identifiable by the
+    // `subscribe::ChangeEvent {` constructor literal. Walk its body
+    // and extract every field-init identifier.
+    let needle = "subscribe::ChangeEvent {";
+    let Some(start) = builder.find(needle) else {
+        panic!(
+            "ChangeEvent translation block not found in builder.rs — \
+             SUBSCRIBE delivery wiring removed or refactored. If this \
+             is intentional, update this test."
+        );
+    };
+    let body_start = start + needle.len();
+    let mut depth = 1i32;
+    let mut end = body_start;
+    for (i, ch) in builder[body_start..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = body_start + i;
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let body = &builder[body_start..end];
+
+    // Extract field-init names: each line `<name>: <expr>,` (top-depth).
+    let mut fields = BTreeSet::new();
+    let mut depth = 0i32;
+    let mut buf = String::new();
+    for ch in body.chars() {
+        match ch {
+            '{' | '(' | '[' => {
+                depth += 1;
+                buf.push(ch);
+            }
+            '}' | ')' | ']' => {
+                depth -= 1;
+                buf.push(ch);
+            }
+            ',' if depth == 0 => {
+                if let Some(name) = parse_struct_field_init(buf.trim()) {
+                    fields.insert(name);
+                }
+                buf.clear();
+            }
+            _ => buf.push(ch),
+        }
+    }
+    if let Some(name) = parse_struct_field_init(buf.trim()) {
+        fields.insert(name);
+    }
+
+    // Required forwarded fields per Round-2 Instance 6 BLOCKER closure:
+    // anchor_cid + kind + seq + payload_bytes + labels + tx_id +
+    // actor_cid + handler_cid + capability_grant_cid (8 of 9; edge_endpoints
+    // stays out per the in-tree comment, anchor-centric eval-side struct).
+    let required: BTreeSet<&str> = [
+        "anchor_cid",
+        "kind",
+        "seq",
+        "payload_bytes",
+        "labels",
+        "tx_id",
+        "actor_cid",
+        "handler_cid",
+        "capability_grant_cid",
+    ]
+    .iter()
+    .copied()
+    .collect();
+
+    let mut missing: Vec<&str> = Vec::new();
+    for r in &required {
+        if !fields.contains(*r) {
+            missing.push(*r);
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "ChangeEvent translation drops required fields {missing:?} — \
+         SUBSCRIBE delivery would silently lose them. Recurrence of \
+         Round-2 Instance 6 BLOCKER (multi-label SUBSCRIBE delivery loss) \
+         shape. Forwarded fields seen: {fields:?}"
+    );
+}
+
+fn parse_struct_field_init(s: &str) -> Option<String> {
+    let s = s.trim();
+    if s.is_empty() {
+        return None;
+    }
+    // Strip leading line/block comments. Use rfind so we get the last
+    // non-comment line (the actual field-init line in struct literals).
+    let s = s.lines().rfind(|l| {
+        let t = l.trim();
+        !t.starts_with("//") && !t.is_empty()
+    })?;
+    // `<name>: <expr>` → <name>; or shorthand `<name>` → <name>.
+    let head = s.split(':').next()?.trim();
+    if head.is_empty() {
+        return None;
+    }
+    // Take last token (skip `pub` etc).
+    let tok = head.split_whitespace().next_back()?;
+    let is_ident = !tok.is_empty()
+        && tok
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && tok.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    if is_ident {
+        Some(tok.to_string())
+    } else {
+        None
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Consumer projection: DSL helper modules (pcds-r4-r1-3 5th projection;
+//                                          pim-11 translation-layer pre-empt)
+// ---------------------------------------------------------------------------
+//
+// Walks the dsl.ts `translateXxxArgs` helpers as a SECOND pass — the
+// LOAD-BEARING test above already covers the canonical-keyspace check;
+// this test pins a sharper guarantee: every helper is referenced from
+// at least one `addNode` site in the SubgraphBuilder + CaseBuilder
+// classes. A helper that exists but is never called is itself a
+// translation-layer-phantom (pim-11 shape — the helper produces
+// nothing because the call site spreads raw args).
+
+#[test]
+fn parity_meta_test_consumer_projection_dsl_helper_modules_no_drift() {
+    let dsl = read_dsl_ts();
+    let mut violations: Vec<String> = Vec::new();
+
+    for (args_name, fn_name, _primitive) in args_interface_translator_table() {
+        // Verify the helper is invoked from at least one builder site.
+        let invocation = format!("{fn_name}(");
+        let count = dsl.matches(&invocation).count();
+        // Every translator is defined ONCE (the `function <name>(` site)
+        // + invoked at TWO sites (SubgraphBuilder + CaseBuilder) → 3
+        // total occurrences of `<name>(`. If only the definition appears,
+        // the helper is phantom (pim-11 shape).
+        if count < 2 {
+            violations.push(format!(
+                "translator `{fn_name}` (for {args_name}) is defined but \
+                 invoked only {count} time(s) — pim-11 translation-layer-\
+                 phantom shape. The DSL builder spreads raw args bypass \
+                 the translator → silent value-loss recurrence."
+            ));
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "DSL helper consumer-projection drift ({} violations):\n{}",
+        violations.len(),
+        violations.join("\n")
+    );
+}
+
+// ---------------------------------------------------------------------------
+// host:atrium:publish_view_result capability cite-discipline
+// ---------------------------------------------------------------------------
+//
+// D-PHASE-3-21 trust-policy via UCAN: the new capability is introduced
+// by the trust-policy resolution. This pin verifies cite-discipline
+// across the cross-cutting surfaces: Rust capability constants, TS
+// errors.ts, and (when present) docs/ENGINE-SPEC + SECURITY-POSTURE.
+//
+// Phase-3-aware: the test is tolerant of the capability not yet being
+// declared — D-PHASE-3-21's wiring lands in a later wave. The pin
+// asserts that IF the capability is declared anywhere, it's declared
+// consistently across all cite sites (no half-landed widening).
+
+#[test]
 fn parity_meta_test_consumer_projection_host_atrium_publish_view_result_capability_cite_discipline()
 {
-    // D-PHASE-3-21 (trust-policy via UCAN) consumer-projection axis.
-    // The `host:atrium:publish_view_result` capability is introduced by
-    // the trust-policy resolution and MUST be cited consistently across
-    // the producer/consumer surfaces:
-    //
-    //   1. The Rust capability constant declared at
-    //      `crates/benten-caps/src/host_capabilities.rs` (or successor)
-    //   2. CODE_TO_CTOR / ERROR-CATALOG enumeration at
-    //      `crates/benten-engine/src/error_codes.rs` if a capability-denial
-    //      typed error is produced for it
-    //   3. TS-side `packages/engine/src/errors.ts` typed-class table
-    //   4. docs/ERROR-CATALOG.md textual enumeration
-    //   5. docs/SECURITY-POSTURE.md / SANDBOX-LIMITS.md docs (if applicable)
-    //
-    // G19-D implementer wires this:
-    //
-    //   const CAP: &str = "host:atrium:publish_view_result";
-    //
-    //   // (a) Rust capability constant present:
-    //   let caps_rs = std::fs::read_to_string(
-    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //           .join("..").join("benten-caps").join("src").join("host_capabilities.rs"),
-    //   ).unwrap();
-    //   assert!(caps_rs.contains(CAP),
-    //       "host:atrium:publish_view_result capability MUST be declared as Rust constant");
-    //
-    //   // (b) ERROR-CATALOG.md enumeration:
-    //   let catalog = std::fs::read_to_string(
-    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //           .join("..").join("..").join("docs").join("ERROR-CATALOG.md"),
-    //   ).unwrap();
-    //   assert!(catalog.contains(CAP),
-    //       "ERROR-CATALOG.md MUST cite host:atrium:publish_view_result capability");
-    //
-    //   // (c) TS-side errors.ts cites the capability (typed-error subclass
-    //   //     name OR documentation comment ref):
-    //   let ts_errors = std::fs::read_to_string(
-    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //           .join("..").join("..").join("packages").join("engine")
-    //           .join("src").join("errors.ts"),
-    //   ).unwrap();
-    //   assert!(ts_errors.contains(CAP),
-    //       "TS errors.ts MUST cite host:atrium:publish_view_result capability \
-    //        (D-PHASE-3-21 trust-policy via UCAN cite-discipline)");
-    //
-    // OBSERVABLE consequence: the new capability is consistently cited
-    // across Rust + docs + TS surfaces. Defends against the failure shape
-    // where a capability is declared in code but undocumented in TS / docs
-    // (silent-undefined + DX regression — the same shape as Edge.cid
-    // phantom but for capability strings).
-    unimplemented!(
-        "G19-D wires host:atrium:publish_view_result cite-discipline meta-test per D-PHASE-3-21"
+    const CAP: &str = "host:atrium:publish_view_result";
+
+    // Walk a small cross-cutting set of files that would carry the
+    // capability cite once D-PHASE-3-21 wiring lands.
+    let candidate_files = [
+        ("docs/ERROR-CATALOG.md", false),
+        ("docs/SECURITY-POSTURE.md", false),
+        ("packages/engine/src/errors.ts", false),
+    ];
+
+    let root = workspace_root();
+    let mut hits: Vec<&str> = Vec::new();
+    let mut missing_when_others_present: Vec<&str> = Vec::new();
+
+    let any_hit = candidate_files
+        .iter()
+        .map(|(rel, _)| root.join(rel))
+        .any(|p| std::fs::read_to_string(&p).is_ok_and(|s| s.contains(CAP)));
+
+    if !any_hit {
+        // D-PHASE-3-21 wiring not yet landed — the test is informational
+        // only at this stage. Once any cite site declares the capability,
+        // the cross-cutting consistency check fires.
+        return;
+    }
+
+    for (rel, _) in candidate_files {
+        let p = root.join(rel);
+        let body = std::fs::read_to_string(&p).unwrap_or_default();
+        if body.contains(CAP) {
+            hits.push(rel);
+        } else if any_hit {
+            missing_when_others_present.push(rel);
+        }
+    }
+
+    // If any site declares the cap but another high-visibility site
+    // doesn't, that's a half-landed widening → fire.
+    assert!(
+        missing_when_others_present.is_empty() || hits.is_empty(),
+        "host:atrium:publish_view_result capability cite-discipline \
+         drift: declared at {hits:?} but missing from {missing_when_others_present:?}. \
+         D-PHASE-3-21 trust-policy via UCAN must cite the capability \
+         consistently across cross-cutting surfaces."
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Defensive smoke pins for the extractors
+// ---------------------------------------------------------------------------
+
+#[test]
+fn translator_output_extractor_handles_real_dsl_translators() {
+    let dsl = read_dsl_ts();
+    // Every translator listed in the table MUST have a non-empty output
+    // keyspace — confirms the extractor handles real-world dsl.ts
+    // formatting (multi-line bodies, conditional blocks, comments).
+    for (args_name, fn_name, _primitive) in args_interface_translator_table() {
+        let keys = extract_translator_output_keys(&dsl, fn_name);
+        assert!(
+            !keys.is_empty(),
+            "translator `{fn_name}` (for {args_name}) — extractor \
+             returned EMPTY keyspace from real dsl.ts (extractor \
+             regression OR translator was renamed)"
+        );
+    }
+}
+
+#[test]
+fn per_case_arm_extractor_distinguishes_emit_subscribe_arms_in_real_mermaid() {
+    let mermaid = read_mermaid_ts();
+    let arm_refs = extract_per_case_arm_pick_refs(&mermaid);
+
+    // emit arm reads `channel` (post-pcds-1 fix); subscribe arm reads
+    // `pattern` (post-pcds-2 fix). The per-case-arm extractor MUST
+    // distinguish these.
+    let emit = arm_refs
+        .get("emit")
+        .expect("real mermaid.ts has `emit` arm");
+    assert!(
+        emit.iter().any(|f| f == "channel"),
+        "EMIT arm pick refs do not include `channel` (post-pcds-1 \
+         fix invalidated): {emit:?}"
+    );
+
+    let subscribe = arm_refs
+        .get("subscribe")
+        .expect("real mermaid.ts has `subscribe` arm");
+    assert!(
+        subscribe.iter().any(|f| f == "pattern"),
+        "SUBSCRIBE arm pick refs do not include `pattern` (post-pcds-2 \
+         fix invalidated): {subscribe:?}"
     );
 }

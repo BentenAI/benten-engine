@@ -31,10 +31,10 @@
 //! gives the same parity guarantees with no build coupling.
 //!
 //! Source-of-truth for the napi producer = `bindings/napi/src/edge.rs`
-//! + `bindings/napi/src/node.rs` + sibling files. The meta-test enumerates
-//! the structural-claim narrative in each file rather than re-parsing
-//! arbitrary Rust syntax — the load-bearing pairs are the ones that
-//! surfaced as drift in Phase-2b (Edge → §7.9; Node → already pinned by
+//! + sibling files. The meta-test enumerates the structural-claim
+//! narrative in each file rather than re-parsing arbitrary Rust syntax —
+//! the load-bearing pairs are the ones that surfaced as drift in
+//! Phase-2b (Edge → §7.9; Node → already pinned by
 //! `manifest_schema_parity_pin.rs` for the SANDBOX module surface).
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -69,7 +69,11 @@ fn read_edge_rs() -> String {
         .join("src")
         .join("edge.rs");
     std::fs::read_to_string(&p).unwrap_or_else(|e| {
-        panic!("bindings/napi/src/edge.rs not found at {} ({})", p.display(), e)
+        panic!(
+            "bindings/napi/src/edge.rs not found at {} ({})",
+            p.display(),
+            e
+        )
     })
 }
 
@@ -77,8 +81,10 @@ fn read_edge_rs() -> String {
 ///
 /// The extractor walks from `interface <Name> {` to the matching `}` and
 /// collects each field name (the identifier preceding `?:` / `:`).
-/// Comments / blank lines / nested type-literals are tolerated.
-fn extract_ts_interface_fields(src: &str, interface_name: &str) -> Vec<String> {
+/// Comments / blank lines / nested type-literals are tolerated. Type
+/// annotations are stripped before identifier extraction so multi-line
+/// declarations and inline-literal types don't cause phantom matches.
+pub(crate) fn extract_ts_interface_fields(src: &str, interface_name: &str) -> Vec<String> {
     let needle = format!("interface {interface_name} {{");
     let Some(start) = src.find(&needle) else {
         panic!(
@@ -107,12 +113,51 @@ fn extract_ts_interface_fields(src: &str, interface_name: &str) -> Vec<String> {
 
     // Strip block + line comments to avoid false-matches on doc-comment
     // identifiers (e.g. `* @field name`).
-    let mut cleaned = String::with_capacity(body.len());
-    let mut chars = body.chars().peekable();
+    let cleaned = strip_ts_comments(body);
+
+    // Split top-level statements at `;` boundaries, brace-depth-aware
+    // so type-literal `{ ... }` nesting doesn't fragment a field
+    // declaration. Each statement is then matched against
+    // `<modifier>* <name>?:` / `<modifier>* <name>:` to extract the
+    // identifier before the type annotation.
+    let mut fields = Vec::new();
+    let mut depth = 0i32;
+    let mut buf = String::new();
+    for ch in cleaned.chars() {
+        match ch {
+            '{' => {
+                depth += 1;
+                buf.push(ch);
+            }
+            '}' => {
+                depth -= 1;
+                buf.push(ch);
+            }
+            ';' if depth == 0 => {
+                if let Some(name) = parse_field_name(buf.trim()) {
+                    fields.push(name);
+                }
+                buf.clear();
+            }
+            _ => buf.push(ch),
+        }
+    }
+    // Trailing statement without semicolon (rare in our types.ts but
+    // tolerate to avoid false negatives).
+    if let Some(name) = parse_field_name(buf.trim()) {
+        fields.push(name);
+    }
+    fields
+}
+
+/// Strip TS block + line comments. Caller invokes this before structural
+/// parsing to avoid identifier matches inside comment bodies.
+fn strip_ts_comments(src: &str) -> String {
+    let mut cleaned = String::with_capacity(src.len());
+    let mut chars = src.chars().peekable();
     while let Some(c) = chars.next() {
         match c {
             '/' if chars.peek() == Some(&'/') => {
-                // line comment to EOL
                 for c2 in chars.by_ref() {
                     if c2 == '\n' {
                         cleaned.push('\n');
@@ -121,7 +166,6 @@ fn extract_ts_interface_fields(src: &str, interface_name: &str) -> Vec<String> {
                 }
             }
             '/' if chars.peek() == Some(&'*') => {
-                // block comment to */
                 chars.next();
                 while let Some(c2) = chars.next() {
                     if c2 == '*' && chars.peek() == Some(&'/') {
@@ -133,52 +177,44 @@ fn extract_ts_interface_fields(src: &str, interface_name: &str) -> Vec<String> {
             _ => cleaned.push(c),
         }
     }
-
-    // Match field declarations: identifier (possibly preceded by `readonly`
-    // / `public` modifiers) followed by `?:` or `:` at top brace-depth.
-    // We track depth here too so type-literal nesting (`{ ... }`) doesn't
-    // produce phantom fields.
-    let mut fields = Vec::new();
-    let mut depth = 0i32;
-    let mut buf = String::new();
-    for ch in cleaned.chars() {
-        match ch {
-            '{' => {
-                depth += 1;
-                buf.clear();
-            }
-            '}' => {
-                depth -= 1;
-                buf.clear();
-            }
-            ';' | '\n' if depth == 0 => {
-                // End of a field declaration (or a line). Inspect buf.
-                let trimmed = buf.trim();
-                if let Some(name) = parse_field_name(trimmed) {
-                    fields.push(name);
-                }
-                buf.clear();
-            }
-            _ if depth == 0 => buf.push(ch),
-            _ => {}
-        }
-    }
-    fields
+    cleaned
 }
 
-/// Parse `<modifier>* <name>?:` / `<modifier>* <name>:` → `<name>`.
+/// Parse `<modifier>* <name>?:` / `<modifier>* <name>:` → `<name>` from a
+/// statement string (which may include the trailing type annotation).
+/// Returns `None` for non-field statements (e.g. method signatures with
+/// parens before colons, leading punctuation tokens).
 fn parse_field_name(line: &str) -> Option<String> {
     if line.is_empty() {
         return None;
     }
-    // Find the first `:` (the type annotation start).
-    let colon_pos = line.find(':')?;
-    let head = &line[..colon_pos];
+    // Collect everything up to the FIRST top-level `:` (the type
+    // annotation). Brace/paren depth-aware so nested `{ a: b }` literals
+    // don't confuse the parser. If we encounter `(` before `:`, this is
+    // a method declaration — skip.
+    let mut head = String::new();
+    let mut depth = 0i32;
+    for c in line.chars() {
+        match c {
+            '{' | '[' | '<' => {
+                depth += 1;
+                head.push(c);
+            }
+            '}' | ']' | '>' => {
+                depth -= 1;
+                head.push(c);
+            }
+            '(' if depth == 0 => return None, // method, not a field
+            ':' if depth == 0 => break,
+            _ => head.push(c),
+        }
+    }
+    if head.is_empty() {
+        return None;
+    }
     // Strip trailing `?` (optional marker).
-    let head = head.trim_end_matches('?').trim();
-    // Strip modifiers: `readonly` / `public` / `private` / `static` / `protected`.
+    let head = head.trim().trim_end_matches('?').trim();
     let last_token = head.split_whitespace().last()?;
-    // Validate it looks like an identifier (start with letter/_, then alnum/_).
     let is_ident = !last_token.is_empty()
         && last_token
             .chars()
@@ -196,19 +232,40 @@ fn parse_field_name(line: &str) -> Option<String> {
 
 /// Extract the literal field-name set the napi `edge_to_json` projector
 /// emits — walks for `out.insert("<name>", ...)` / `out.insert("<name>"`
-/// patterns. Both Edge.cid (NEGATIVE — must NOT appear) and the
-/// positive set (source / target / label / properties) are walked.
-fn extract_edge_to_json_emitted_keys(edge_rs: &str) -> Vec<String> {
+/// patterns, brace/depth-aware so multi-line `out.insert(\n  "key"\n  ...)`
+/// invocations are caught (the original single-line regex missed them).
+pub(crate) fn extract_edge_to_json_emitted_keys(edge_rs: &str) -> Vec<String> {
     let mut keys = Vec::new();
-    for line in edge_rs.lines() {
-        // Match `out.insert("<key>"`.
-        let needle = "out.insert(\"";
-        if let Some(start) = line.find(needle) {
-            let after = &line[start + needle.len()..];
-            if let Some(end) = after.find('"') {
-                keys.push(after[..end].to_string());
+    // Find each `out.insert(` call, then walk to the first string literal
+    // inside the parens. Tolerates whitespace + newlines between `(` and
+    // the first `"`.
+    let needle = "out.insert(";
+    let mut search_from = 0usize;
+    while let Some(pos) = edge_rs[search_from..].find(needle) {
+        let abs = search_from + pos + needle.len();
+        // Walk forward until first `"` (string literal start).
+        let after = &edge_rs[abs..];
+        let chars = after.char_indices();
+        let mut quote_pos: Option<usize> = None;
+        for (i, c) in chars {
+            if c.is_whitespace() {
+                continue;
+            }
+            if c == '"' {
+                quote_pos = Some(i);
+                break;
+            }
+            // Anything else means this isn't `out.insert("..."` — skip.
+            break;
+        }
+        if let Some(qstart) = quote_pos {
+            let key_start = abs + qstart + 1;
+            // Find the closing `"` (no escapes in our keys).
+            if let Some(qend) = edge_rs[key_start..].find('"') {
+                keys.push(edge_rs[key_start..key_start + qend].to_string());
             }
         }
+        search_from = abs;
     }
     keys
 }
@@ -227,6 +284,18 @@ fn ts_surface_parity_meta_test_walks_napi_struct_surface_no_drift() {
     // 1. Edge surface — the §7.9 anchor pin.
     let ts_edge_fields = extract_ts_interface_fields(&types_ts, "Edge");
     let napi_emitted = extract_edge_to_json_emitted_keys(&edge_rs);
+
+    assert!(
+        !napi_emitted.is_empty(),
+        "extract_edge_to_json_emitted_keys returned empty — extractor \
+         regression. Check the multi-line `out.insert(...)` pattern."
+    );
+    assert!(
+        !ts_edge_fields.is_empty(),
+        "extract_ts_interface_fields(Edge) returned empty — extractor \
+         regression. Check the type-annotation parser handles multi-line \
+         declarations."
+    );
 
     // (a) Phantom-field rejection: the napi producer never emits `cid`,
     //     so the TS interface MUST NOT declare it (mode-5
@@ -296,14 +365,14 @@ fn ts_surface_parity_meta_test_walks_napi_struct_surface_no_drift() {
 fn ts_surface_parity_meta_test_rejects_synthetic_drift_fixture() {
     // Synthetic types.ts blob with Edge.cid_phantom (mode-5 inverted
     // shape — TS declares; napi never emits).
-    let synthetic = r#"
+    let synthetic = r"
 export interface Edge {
   source: string;
   target: string;
   label: string;
   cid_phantom: string;
 }
-"#;
+";
     let fields = extract_ts_interface_fields(synthetic, "Edge");
     assert!(
         fields.iter().any(|f| f == "cid_phantom"),
@@ -315,8 +384,7 @@ export interface Edge {
 
     // Synthetic napi emitted-key set without `cid_phantom` — the
     // parity check MUST reject the synthetic TS surface.
-    let synthetic_napi: Vec<String> =
-        vec!["source".into(), "target".into(), "label".into()];
+    let synthetic_napi: Vec<String> = vec!["source".into(), "target".into(), "label".into()];
 
     let phantom_rejected = !synthetic_napi.iter().any(|e| e == "cid_phantom");
     assert!(
@@ -327,8 +395,12 @@ export interface Edge {
 
     // Synthetic napi emitted set with a missing `properties` key
     // — the parity check MUST reject (mode-5 forward variant).
-    let synthetic_napi_emits_props: Vec<String> =
-        vec!["source".into(), "target".into(), "label".into(), "properties".into()];
+    let synthetic_napi_emits_props: Vec<String> = vec![
+        "source".into(),
+        "target".into(),
+        "label".into(),
+        "properties".into(),
+    ];
     let synthetic_ts_drops_props = vec!["source", "target", "label"]
         .into_iter()
         .map(String::from)
@@ -343,6 +415,33 @@ export interface Edge {
          missing-from-TS by the napi-emitted-must-be-in-TS assertion \
          path (mode-5 forward variant)"
     );
+
+    // Verify the extract_edge_to_json_emitted_keys extractor handles
+    // multi-line `out.insert(\n  "key",\n  ...)` invocations — the
+    // shape the actual edge.rs uses. A single-line regex would silently
+    // return an empty set + every assertion would vacuously pass.
+    let synthetic_rs = r#"
+pub fn edge_to_json(edge: &Edge) -> serde_json::Value {
+    let mut out = serde_json::Map::new();
+    out.insert(
+        "source".to_string(),
+        serde_json::Value::String(edge.source.to_base32()),
+    );
+    out.insert("target".to_string(), serde_json::Value::String(edge.target.to_base32()));
+    out
+}
+"#;
+    let extracted = extract_edge_to_json_emitted_keys(synthetic_rs);
+    assert!(
+        extracted.iter().any(|k| k == "source"),
+        "multi-line out.insert extractor SILENT NO-OP — `source` not \
+         surfaced from synthetic Rust blob"
+    );
+    assert!(
+        extracted.iter().any(|k| k == "target"),
+        "single-line out.insert extractor SILENT NO-OP — `target` not \
+         surfaced from synthetic Rust blob"
+    );
 }
 
 /// Defensive smoke pin for the field-name extractor: parses a known
@@ -351,7 +450,7 @@ export interface Edge {
 /// types.ts content.
 #[test]
 fn ts_interface_field_extractor_handles_modifiers_optionals_comments() {
-    let src = r#"
+    let src = r"
 /** Doc */
 export interface Sample {
   // line comment
@@ -361,10 +460,19 @@ export interface Sample {
   withType: { nested: boolean };
   trailing: string;
 }
-"#;
+";
     let fields = extract_ts_interface_fields(src, "Sample");
-    assert!(fields.iter().any(|f| f == "id"), "id missing");
-    assert!(fields.iter().any(|f| f == "optional"), "optional missing");
-    assert!(fields.iter().any(|f| f == "withType"), "withType missing");
-    assert!(fields.iter().any(|f| f == "trailing"), "trailing missing");
+    assert!(fields.iter().any(|f| f == "id"), "id missing: {fields:?}");
+    assert!(
+        fields.iter().any(|f| f == "optional"),
+        "optional missing: {fields:?}"
+    );
+    assert!(
+        fields.iter().any(|f| f == "withType"),
+        "withType missing: {fields:?}"
+    );
+    assert!(
+        fields.iter().any(|f| f == "trailing"),
+        "trailing missing: {fields:?}"
+    );
 }
