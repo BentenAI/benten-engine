@@ -124,9 +124,10 @@ fn stream_chunk_count_per_handler_override() {
             // EngineError translation.
             Err(_) => break,
         }
-        if received > 50 {
-            panic!("per-handler chunk_count_cap must enforce a bound; saw {received} chunks");
-        }
+        assert!(
+            received <= 50,
+            "per-handler chunk_count_cap must enforce a bound; saw {received} chunks"
+        );
     }
     assert!(
         received <= 5,
