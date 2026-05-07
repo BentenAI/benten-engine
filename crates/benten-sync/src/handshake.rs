@@ -529,6 +529,33 @@ impl Handshake {
             });
         }
 
+        // (d) UCAN chain validation per g16-d-mr-3 fix-pass.
+        //
+        // The remote-issued grant's signature + proof chain are
+        // validated here so a maliciously-issued UCAN whose internal
+        // chain doesn't link cleanly cannot get past handshake-time
+        // (closes the "EffectiveCapSet is advisory at handshake-time"
+        // defect class flagged in the G16-D mini-review).
+        //
+        // `validate_chain_no_time_check` skips nbf/exp time-window
+        // checks because:
+        //   1. The frame-level replay-window check (above) already
+        //      bounds the wallclock-skew dimension at the handshake
+        //      boundary.
+        //   2. nbf/exp re-check happens at G14-D delivery-time
+        //      recheck via `validate_chain_at(now)` per the
+        //      established F6 SUBSCRIBE delivery-time gate (cap
+        //      grants are re-evaluated EVERY delivery, not only at
+        //      handshake) — composing the two layers gives full
+        //      defense-in-depth.
+        if let Some(grant) = remote_grant_to_local.as_ref() {
+            benten_id::ucan::validate_chain_no_time_check(std::slice::from_ref(grant)).map_err(
+                |e| HandshakeError::InvalidSignature {
+                    reason: format!("remote grant UCAN chain failed validation: {e}"),
+                },
+            )?;
+        }
+
         // Construct the response frame. Echo the initiator's nonce so
         // the initiator can match the reply to its outstanding
         // request.
@@ -633,6 +660,20 @@ impl Handshake {
                 reason: format!("respond signature verify: {e}"),
             }
         })?;
+
+        // UCAN chain validation per g16-d-mr-3 fix-pass (symmetric with
+        // `respond()`). Validates the responder's grant signature +
+        // proof chain at handshake-time so a maliciously-issued UCAN
+        // doesn't get past the Session boundary. nbf/exp time-window
+        // checks defer to G14-D delivery-time recheck per the
+        // established F6 SUBSCRIBE delivery-time gate.
+        if let Some(grant) = remote_grant_to_local.as_ref() {
+            benten_id::ucan::validate_chain_no_time_check(std::slice::from_ref(grant)).map_err(
+                |e| HandshakeError::InvalidSignature {
+                    reason: format!("responder grant UCAN chain failed validation: {e}"),
+                },
+            )?;
+        }
 
         let local_did = local_kp.public_key().to_did();
         let mut synchronized_revocations = local_revocation_set;
@@ -839,18 +880,26 @@ impl EffectiveCapSet {
             .any(|c| c.resource == resource && c.ability == ability)
     }
 
-    /// UCAN-chain-validation surface — proxies the
-    /// `validate_chain_no_time_check` discipline at the cap-set level.
-    /// G16-D wave-6b lands the Capability/UCAN-chain composition; the
-    /// full UCAN-chain walk lives in `benten-id::ucan` and composes
-    /// with G14-D delivery-time recheck.
+    /// UCAN-chain-validation surface.
+    ///
+    /// Per g16-d-mr-3 fix-pass: the carrying UCAN grant's signature +
+    /// proof chain ARE validated at handshake-time inside
+    /// [`Handshake::respond`] + [`Handshake::finalise`] via
+    /// `benten_id::ucan::validate_chain_no_time_check`. A
+    /// maliciously-issued UCAN whose internal chain doesn't link
+    /// cleanly cannot reach this `Session`. nbf/exp time-window
+    /// checks defer to G14-D delivery-time recheck per the
+    /// established F6 SUBSCRIBE delivery-time gate (cap grants are
+    /// re-evaluated EVERY delivery, not only at handshake) —
+    /// composing the two layers gives full defense-in-depth.
+    ///
+    /// This accessor returns `true` because the chain WAS validated
+    /// during construction; reaching this surface implies the
+    /// validation gate passed. Downstream consumers should still
+    /// treat the cap-set as composing with delivery-time intersection
+    /// (G14-D F6) for full grant-resolution.
     #[must_use]
     pub fn intersection_validates_against_ucan_chain(&self) -> bool {
-        // The UCAN grant carrying these caps was already chain-validated
-        // by `Handshake::respond` / `Handshake::finalise` via the
-        // signature verify on the carrying frame. Intersection-against-
-        // local-policy is a delivery-time recheck (G14-D F6) — at
-        // handshake-time we surface the post-grant cap-set.
         true
     }
 }

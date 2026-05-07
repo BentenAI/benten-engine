@@ -106,6 +106,36 @@ describe("engine.atrium B-prime factory DSL (G16-D wave-6b LANDED)", () => {
     expect(typeof a.onPeerLeave).toBe("function");
   });
 
+  it("D1 negative half — Engine class has NO flattened atrium methods (per g16-d-mr-1)", async () => {
+    // Per g16-d-mr-1 fix-pass: the D1 positive half (factory shape +
+    // handle methods exist) is asserted above; the NEGATIVE half
+    // (flattened `engine.atriumJoin` / `engine.atriumLeave` / etc.
+    // do NOT exist on the Engine class) is structurally enforced by
+    // the codebase but was previously not pinned. A future drift could
+    // re-introduce a flattened method undetected; this test cements
+    // the contract.
+    //
+    // The assertion runs against the Engine prototype to defend
+    // against per-instance / per-prototype additions.
+    const { Engine } = await import("../src/engine");
+    const flatNames = [
+      "atriumJoin",
+      "atriumLeave",
+      "atriumListPeers",
+      "atriumSubscribe",
+      "atriumTrustPeer",
+      "atriumRevokePeer",
+      "atriumDeclareDeviceAttestation",
+      "atriumListDeclaredDeviceAttestations",
+      "atriumOnPeerJoin",
+      "atriumOnPeerLeave",
+    ];
+    for (const name of flatNames) {
+      expect((Engine as unknown as Record<string, unknown>)[name]).toBeUndefined();
+      expect((Engine.prototype as unknown as Record<string, unknown>)[name]).toBeUndefined();
+    }
+  });
+
   it("each call to engine.atrium({...}) returns a fresh per-handle Atrium", () => {
     // Multi-Atrium-as-default per Ben's framing: separate calls
     // produce distinct handles whose state is independent (even if
