@@ -189,6 +189,12 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // `crates/benten-sync/src/errors.rs::AtriumTransportError::code`.
     ErrorCode::AtriumRelayUnreachable,
     ErrorCode::AtriumTransportDegraded,
+    // Phase-3 G16-B wave-6b (ds-4 Inv-13 row-4b): sync-replica
+    // frame targeting a system-zone / Anchor-immutable path with a
+    // divergent CID. Construction site:
+    // `crates/benten-engine/src/engine_sync.rs::AtriumError::DivergentCidRejected`
+    // mapped via `engine_sync.rs::AtriumError::code`.
+    ErrorCode::SyncDivergentCidRejected,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -331,10 +337,21 @@ fn variant_count_is_pinned() {
     //     `crates/benten-sync/src/handshake_wire.rs::HandshakeFrame::from_canonical_bytes`.
     //     Closes net-blocker-2 BLOCKER (half).
     // Post-G16-A: net +2 from `AtriumRelayUnreachable` +
-    // `AtriumTransportDegraded`. The hardcoded count below tracks
-    // `ALL_CATALOG_VARIANTS.len()` exactly.
+    // `AtriumTransportDegraded`.
+    //
+    // Phase-3 G16-B wave-6b adds 1 code:
+    //   `SyncDivergentCidRejected` — typed variant for inbound sync
+    //     frames targeting system-zone / Anchor-immutable paths with
+    //     a divergent CID (ds-4 Inv-13 row-4b). Construction site at
+    //     `crates/benten-engine/src/engine_sync.rs::AtriumError::DivergentCidRejected`
+    //     mapped via `engine_sync.rs::AtriumError::code`. PRE-merge
+    //     classifier walks `SYSTEM_ZONE_PREFIXES` so reject fires
+    //     BEFORE the Loro merge applies — not post-merge cleanup.
+    // Post-G16-B: net +1 from `SyncDivergentCidRejected`. The
+    // hardcoded count below tracks `ALL_CATALOG_VARIANTS.len()`
+    // exactly.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 96,
+        CATALOG_VARIANT_COUNT, 97,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

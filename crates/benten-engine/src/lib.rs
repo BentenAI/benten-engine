@@ -214,6 +214,15 @@ pub mod suspension_store;
 // spec and `engine_modules.rs` for the install/uninstall lifecycle.
 pub mod module_manifest;
 pub mod system_zones;
+// Phase-3 G16-B wave-6b — Atrium API surface (engine-side wrapper for
+// the iroh transport + Loro CRDT in `benten-sync`). Native-only per
+// CLAUDE.md baked-in #17 — gated to non-wasm32 + non-browser-backend
+// (browser tabs participate as authenticated thin-client views via
+// `thin_client_subscribe.rs`, NOT as full Atrium peers running iroh).
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "browser-backend")))]
+pub mod atrium_api;
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "browser-backend")))]
+pub mod engine_sync;
 
 pub use benten_eval::chunk_sink::{Chunk, ChunkSink};
 pub use engine_sandbox::{SANDBOX_UNAVAILABLE_ON_WASM_TEXT, SandboxNodeDescription};

@@ -192,3 +192,8 @@ pub mod peer_id;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod transport;
+
+// G16-B wave-6b — Loro CRDT integration at Node-property granularity per
+// D-PHASE-3-4 RESOLVED-at-R1. Native-only alongside iroh + Loro deps.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod crdt;
