@@ -309,7 +309,7 @@ fn sandbox_escape_reentrancy_via_host_fn_denied() {
 // =====================================================================
 
 #[test]
-#[ignore = "Phase 4+ Thrum-driven OR wasmtime-Component-Model-GA — Component-Model held cut at Phase-3 R1 per D-PHASE-3-6 RESOLVED-at-R1; rationale rewritten per D-PHASE-3-16 named destination ratified 2026-05-05 (docs/FULL-ROADMAP.md Phase 4 entry naming wasmtime Component-Model re-evaluation). Phase-4 pre-R1 inherits this deferral when Phase 4 opens; if wasmtime Component-Model GA-stability changes materially before then, surface for re-evaluation."]
+#[ignore = "Phase 4+ Thrum-driven OR wasmtime-Component-Model-GA — Component-Model held cut at Phase-3 R1 per D-PHASE-3-6 RESOLVED-at-R1; rationale rewritten per D-PHASE-3-16 named destination ratified 2026-05-05 (docs/future/phase-3-backlog.md §7.3.A.8 + the Component-Model held-cut decision pin at component_model_phase3_decision_lands_per_d_phase_3_6.rs). Phase-4 pre-R1 inherits this deferral when Phase 4 opens; if wasmtime Component-Model GA-stability changes materially before then, surface for re-evaluation."]
 #[cfg(feature = "component-model")]
 fn sandbox_escape_component_type_mismatch_rejected() {
     // ESC-11 — Component-Model type mismatch with declared interface.
@@ -326,7 +326,7 @@ fn sandbox_escape_component_type_mismatch_rejected() {
 }
 
 #[test]
-#[ignore = "Phase 4+ Thrum-driven OR wasmtime-Component-Model-GA — Component-Model held cut at Phase-3 R1 per D-PHASE-3-6 RESOLVED-at-R1; rationale rewritten per D-PHASE-3-16 named destination ratified 2026-05-05 (docs/FULL-ROADMAP.md Phase 4 entry naming wasmtime Component-Model re-evaluation). Phase-4 pre-R1 inherits this deferral when Phase 4 opens; if wasmtime Component-Model GA-stability changes materially before then, surface for re-evaluation."]
+#[ignore = "Phase 4+ Thrum-driven OR wasmtime-Component-Model-GA — Component-Model held cut at Phase-3 R1 per D-PHASE-3-6 RESOLVED-at-R1; rationale rewritten per D-PHASE-3-16 named destination ratified 2026-05-05 (docs/future/phase-3-backlog.md §7.3.A.8 + the Component-Model held-cut decision pin at component_model_phase3_decision_lands_per_d_phase_3_6.rs). Phase-4 pre-R1 inherits this deferral when Phase 4 opens; if wasmtime Component-Model GA-stability changes materially before then, surface for re-evaluation."]
 #[cfg(feature = "component-model")]
 fn sandbox_escape_resource_handle_forgery_rejected() {
     // ESC-12 — Resource handle forgery.
