@@ -589,6 +589,18 @@ pub enum ErrorCode {
     /// transport state is EXPLICIT — not a missing value, not a
     /// panic. Routes to `ON_ERROR`.
     AtriumTransportDegraded,
+    /// G16-B wave-6b (Phase-3 Atrium CRDT integration; ds-4 Inv-13
+    /// row-4 SPLIT): an inbound sync-replica frame carries a
+    /// system-zone / Anchor-immutable target (per
+    /// `crates/benten-engine::system_zones::SYSTEM_ZONE_PREFIXES`)
+    /// with a divergent CID. Per ds-4 Inv-13 row-4b, system-zone
+    /// targets are immutable-via-sync — divergent CIDs reject with
+    /// this typed code. Distinct from
+    /// [`ErrorCode::AtriumTransportDegraded`] (transport-layer
+    /// degrade) and [`ErrorCode::AtriumRelayUnreachable`] (relay
+    /// unavailability). Maps to `E_SYNC_DIVERGENT_CID_REJECTED`.
+    /// Routes to `ON_ERROR`.
+    SyncDivergentCidRejected,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -783,6 +795,7 @@ impl ErrorCode {
             // Phase-3 G16-A — Atrium transport surface
             ErrorCode::AtriumRelayUnreachable => "E_ATRIUM_RELAY_UNREACHABLE",
             ErrorCode::AtriumTransportDegraded => "E_ATRIUM_TRANSPORT_DEGRADED",
+            ErrorCode::SyncDivergentCidRejected => "E_SYNC_DIVERGENT_CID_REJECTED",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -971,7 +984,8 @@ impl ErrorCode {
             // routing pattern matches `HostBackendUnavailable`
             // (transport-layer failure surfacing as runtime ON_ERROR).
             | ErrorCode::AtriumRelayUnreachable
-            | ErrorCode::AtriumTransportDegraded => Some("ON_ERROR"),
+            | ErrorCode::AtriumTransportDegraded
+            | ErrorCode::SyncDivergentCidRejected => Some("ON_ERROR"),
 
             // Inv-7 SANDBOX output limit — dedicated edge label (matches the
             // SANDBOX primitive's edge surface in `benten-core` subgraph.rs:
@@ -1204,6 +1218,7 @@ impl ErrorCode {
             // (net-blocker-2 BLOCKER typed errors).
             "E_ATRIUM_RELAY_UNREACHABLE" => ErrorCode::AtriumRelayUnreachable,
             "E_ATRIUM_TRANSPORT_DEGRADED" => ErrorCode::AtriumTransportDegraded,
+            "E_SYNC_DIVERGENT_CID_REJECTED" => ErrorCode::SyncDivergentCidRejected,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }

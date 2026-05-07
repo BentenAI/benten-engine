@@ -42,6 +42,9 @@ bench = false
 # peer_id.rs derives the iroh NodeId from (per net-minor-2 + ds-8 +
 # crypto-minor-4: PeerId == iroh NodeId == Ed25519 pubkey design).
 benten-id = { path = "../benten-id" }
+# benten-core provides the `BentenHlc` HLC primitive that Loro per-property
+# LWW carries inside each stamped value at G16-B per D-PHASE-3-4.
+benten-core = { path = "../benten-core" }
 # benten-errors provides the stable ErrorCode catalog — typed
 # atrium-transport errors (E_ATRIUM_RELAY_UNREACHABLE +
 # E_ATRIUM_TRANSPORT_DEGRADED) map to ErrorCode variants per
@@ -75,6 +78,12 @@ tracing = { workspace = true }
 # runner cells with relay infrastructure available); loopback +
 # relay-fallback are required-on-every-PR.
 iroh = { version = "0.98", default-features = false, features = ["tls-ring"] }
+# Loro: high-performance CRDT framework. Pinned at 1.12 minor (current
+# latest stable 2026-05-06) + Dependabot fast-track per scope-real-10.
+# Native-only (alongside iroh) — Loro stays in `benten-sync` which is
+# native-only per CLAUDE.md baked-in #17, closing br-r1-5 MAJOR via
+# the thin-client commitment (Loro DOES NOT ship to browser bundle).
+loro = "1.12"
 # tokio: async runtime for iroh's QUIC transport. Per workspace
 # convention, only the features we actually use ("rt", "rt-multi-thread"
 # for runtime; "macros" for #[tokio::test]; "sync" for channels;

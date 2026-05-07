@@ -158,6 +158,22 @@ serde_ipld_dagcbor = { workspace = true }
 # verified manifests from full peers). Mirrors the G13-C / G14-A1 /
 # G14-B native-only-target-dep pattern.
 benten-id = { path = "../benten-id" }
+# Phase-3 G16-B wave-6b — engine-side Atrium API surface
+# (`engine_sync.rs` + `atrium_api.rs`) consumes the iroh transport core
+# (G16-A) + Loro CRDT (G16-B) from `benten-sync`. Native-only per
+# CLAUDE.md baked-in #17 — `benten-sync` itself is wasm32-rejected via
+# its top-level `compile_error!`; here we cfg-gate the dep at the
+# target-table layer so the dep chain is not even resolvable on wasm32.
+# tokio + iroh ride alongside for the async Atrium API surface +
+# `EndpointAddr` re-export at `sync_subgraph` arguments.
+benten-sync = { path = "../benten-sync" }
+tokio = { version = "1", default-features = false, features = [
+    "rt",
+    "rt-multi-thread",
+    "macros",
+    "sync",
+] }
+iroh = { version = "0.98", default-features = false, features = ["tls-ring"] }
 
 [dev-dependencies]
 criterion = { workspace = true }
