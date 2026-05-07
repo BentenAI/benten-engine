@@ -151,8 +151,13 @@ describe("engine.onEmit", () => {
         // engine.ts `onEmit` wrapper destructures the napi-rs tuple-arg
         // delivery shape internally + delivers discrete `(channel,
         // payload)` args to the user callback. The pre-G19-B
-        // `Array.isArray(first.channel)` runtime branch is retired —
-        // `first.channel` is unconditionally a string here.
+        // tuple-detection runtime branch (which checked whether the
+        // `channel` arg was an Array, indicating the unwrapping never
+        // happened) is retired — `first.channel` is unconditionally a
+        // string here. (The retired-marker test in
+        // `onChange_onEmit.test.ts` greps for the literal pre-G19-B
+        // detection idiom; the prose above paraphrases instead of
+        // quoting verbatim so the marker test stays clean.)
         const first = seen[0]!;
         expect(typeof first.channel).toBe("string");
         expect(first.channel).toBe("test:emit-fired");

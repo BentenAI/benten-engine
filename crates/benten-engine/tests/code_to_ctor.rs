@@ -52,7 +52,9 @@ fn catalog_codes() -> Vec<String> {
         if let Some(rest) = trimmed.strip_prefix("### ") {
             let head = rest.trim();
             if head.starts_with("E_")
-                && head.chars().all(|c| c == '_' || c.is_ascii_uppercase() || c.is_ascii_digit())
+                && head
+                    .chars()
+                    .all(|c| c == '_' || c.is_ascii_uppercase() || c.is_ascii_digit())
             {
                 codes.push(head.to_string());
             }

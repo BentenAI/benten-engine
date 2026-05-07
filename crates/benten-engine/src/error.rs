@@ -361,11 +361,12 @@ impl EngineError {
     ///
     /// Originally landed at R6FP-Group-1 (Round-2 Instance 8) for a
     /// minimal subset of variants; G19-B widens to every variant per
-    /// phase-3-backlog.md §7.2. The napi `engine_err` adapter formats
-    /// `EngineError` Display alongside the catalog code; this accessor
-    /// returns a JSON-serialisable bag the napi bridge attaches as a
-    /// `$$benten-context$$` suffix on the napi error message. The TS
-    /// `mapNativeError` parses it and populates `BentenError.context`.
+    /// phase-3-backlog.md §7.2 + replaces the legacy `$$benten-context$$`
+    /// sentinel-suffix carrier with a JSON-shape envelope
+    /// `{ code, message, fields? }` (see
+    /// `bindings/napi/src/error_envelope.rs::engine_err_envelope_json`).
+    /// The TS `mapNativeError` JSON-parses the envelope body and
+    /// populates `BentenError.context` from the `fields` key.
     ///
     /// **Coverage discipline:** every variant returns `Some(...)`. For
     /// variants without obviously-structured fields (e.g. wrapper
@@ -378,6 +379,12 @@ impl EngineError {
     /// authored — defends against the structured-field-loss recurrence
     /// per pim-1 doc-coupling discipline.
     #[must_use]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "G19-B match-exhaustive variant coverage (~30 arms × inline JSON synthesis); \
+                  splitting per-variant helpers would scatter the structured-field surface across \
+                  helpers and obscure the load-bearing match-exhaustive contract"
+    )]
     pub fn context_json(&self) -> Option<serde_json::Value> {
         use serde_json::json;
         let bag = match self {

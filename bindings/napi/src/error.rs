@@ -22,7 +22,6 @@
 //! `napi::Error` with a plain string message) still round-trip cleanly.
 
 use napi::bindgen_prelude::*;
-use serde_json::json;
 
 /// Map any `Display`able error into a napi error carrying the debug repr.
 pub(crate) fn to_napi<E: core::fmt::Display>(err: E) -> napi::Error {
@@ -41,25 +40,7 @@ pub(crate) fn to_napi<E: core::fmt::Display>(err: E) -> napi::Error {
 /// so the JS side sees `error.context === undefined` rather than an
 /// empty `{}`.
 pub(crate) fn engine_err(err: benten_engine::EngineError) -> napi::Error {
-    let code = err.code();
-    let display = format!("{err}");
-    let body = match err.context_json() {
-        Some(fields) => json!({
-            "code": code.as_static_str(),
-            "message": display,
-            "fields": fields,
-        }),
-        None => json!({
-            "code": code.as_static_str(),
-            "message": display,
-        }),
-    };
-    let message = serde_json::to_string(&body).unwrap_or_else(|_| {
-        // Should be infeasible — `serde_json::Value` always serialises
-        // — but keep the napi error path closed under the unlikely
-        // failure with the Display rendering as a degraded carrier.
-        format!("{}: {display}", code.as_static_str())
-    });
+    let message = crate::error_envelope::engine_err_envelope_json(&err);
     napi::Error::new(Status::GenericFailure, message)
 }
 
@@ -68,13 +49,6 @@ pub(crate) fn engine_err(err: benten_engine::EngineError) -> napi::Error {
 /// on the TS side. CoreError variants don't currently carry structured
 /// fields beyond Display, so `"fields"` is omitted.
 pub(crate) fn core_err(err: benten_core::CoreError) -> napi::Error {
-    let code = err.code();
-    let display = format!("{err}");
-    let body = json!({
-        "code": code.as_static_str(),
-        "message": display,
-    });
-    let message = serde_json::to_string(&body)
-        .unwrap_or_else(|_| format!("{}: {display}", code.as_static_str()));
+    let message = crate::error_envelope::core_err_envelope_json(&err);
     napi::Error::new(Status::InvalidArg, message)
 }

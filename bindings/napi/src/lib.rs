@@ -37,6 +37,12 @@
 mod edge;
 #[cfg(feature = "napi-export")]
 mod error;
+// Phase-3 G19-B (§7.2): JSON-envelope formatter shared by the production
+// `error::engine_err` carrier (napi-export ON) AND the rlib-test helper
+// `testing::engine_err_message` (in-process-test ON). The formatter
+// itself has no napi-rs dep, so it's reachable from both build modes.
+#[cfg(any(feature = "napi-export", feature = "in-process-test", test))]
+mod error_envelope;
 #[cfg(feature = "napi-export")]
 mod node;
 #[cfg(feature = "napi-export")]
@@ -1673,13 +1679,13 @@ pub mod testing {
     /// (the production carrier; see `bindings/napi/src/error.rs`).
     /// Tests JSON-parse the return value and assert
     /// `code` / `message` / `fields` match the EngineError variant.
+    ///
+    /// Reaches into the shared [`crate::error_envelope`] formatter so
+    /// the wire shape this helper produces is byte-identical to what
+    /// the production `engine_err` carrier embeds in `napi::Error`.
     #[must_use]
     pub fn engine_err_message(err: benten_engine::EngineError) -> String {
-        let n = crate::error::engine_err(err);
-        // `napi::Error::reason()` returns the message body; on the
-        // rlib-test build the napi-rs runtime is absent, so reach the
-        // body via Display (which is the same string).
-        format!("{n}").trim_start_matches("Error: ").to_string()
+        crate::error_envelope::engine_err_envelope_json(&err)
     }
 
     /// G19-B (§7.8): drive `engine.emit_event` end-to-end through the
@@ -1692,6 +1698,15 @@ pub mod testing {
     /// The callback fires synchronously on the publish thread (the
     /// EmitBroadcast contract); tests can lock a `Mutex<Vec<...>>` to
     /// capture observations.
+    ///
+    /// Gated additionally on `in-process-test` (vs the parent `testing`
+    /// module's `cfg(any(test, feature = "in-process-test"))`) because
+    /// the body uses `tempfile::tempdir()` and `tempfile` is itself
+    /// gated on `in-process-test` (production cdylib build never
+    /// pulls it). Under `cargo test` with default features ON, the
+    /// helper is compiled out so the production-feature build path
+    /// stays clean.
+    #[cfg(feature = "in-process-test")]
     pub fn emit_event_round_trip<F>(
         channel: &str,
         payload: serde_json::Value,
@@ -1720,6 +1735,10 @@ pub mod testing {
     /// napi `Status` type — keeping this rlib-only shim free of napi
     /// imports lets the in-process-test feature compile cleanly with
     /// `--no-default-features`.
+    ///
+    /// Same `in-process-test` gate as the `emit_event_round_trip`
+    /// helper above (its sole consumer).
+    #[cfg(feature = "in-process-test")]
     fn json_to_value(v: serde_json::Value) -> Result<Value, benten_engine::EngineError> {
         match v {
             serde_json::Value::Null => Ok(Value::Null),

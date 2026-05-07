@@ -1976,15 +1976,18 @@ build @benten/engine-native with `--features test-helpers`",
         "Engine.onChange unavailable on this binding — rebuild @benten/engine-native",
       );
     }
-    // Phase-3 G19-B (§7.7, r1-napi-4 keep-wrapper path b): the napi-rs
-    // ThreadsafeFunction delivers `Function<(seq, Buffer), ()>` as a
-    // single tuple-array argument `[seq, payload]`, NOT discrete
-    // `(seq, payload)` args (the d.ts type-shape is misleading here —
-    // see phase-3-backlog §7.7). The wrapper takes the single
-    // tuple-arg + destructures inside, retiring the in-test
-    // `Array.isArray(...)` workaround.
-    const napiCb = (args: [number, Buffer]): void => {
-      const [seq, payload] = args;
+    // Phase-3 G19-B (§7.7, r1-napi-4 keep-wrapper path b): napi-rs v3.x
+    // ThreadsafeFunction with `FnArgs<(u32, Buffer)>` delivers discrete
+    // `(seq, payload)` args to the JS callback (verified end-to-end
+    // 2026-05-07; the pre-G19-B "single tuple-array" delivery shape
+    // documented in phase-3-backlog §7.7 belonged to an earlier napi-rs
+    // build). The wrapper shape below preserves the user-callback's
+    // discrete-args contract + adds the exception-isolation log path
+    // dx-r1-2b-4 / r6-dx-2 require, and reads identically to the
+    // intended d.ts surface. The in-test `Array.isArray(...)` runtime
+    // tuple-detection workaround is retired (no longer needed; the
+    // splatted-args shape is the production reality).
+    const napiCb = (seq: number, payload: Buffer): void => {
       try {
         callback(seq, payload);
       } catch (err) {
@@ -1996,15 +1999,7 @@ build @benten/engine-native with `--features test-helpers`",
     };
     let native: NativeSubscriptionJs;
     try {
-      // The napi-rs d.ts emits `(arg0: number, arg1: Buffer) => void`
-      // for the `Function<FnArgs<(u32, Buffer)>, ()>` Rust signature,
-      // but the runtime delivers a single tuple-array arg. The cast
-      // below contains the d.ts-vs-runtime mismatch to a single line.
-      native = this.inner.onChange(
-        pattern,
-        serializeCursor(cursor),
-        napiCb as unknown as (seq: number, payload: Buffer) => void,
-      );
+      native = this.inner.onChange(pattern, serializeCursor(cursor), napiCb);
     } catch (err) {
       throw mapNativeError(err);
     }
@@ -2045,12 +2040,11 @@ build @benten/engine-native with `--features test-helpers`",
       );
     }
     // Phase-3 G19-B (§7.7, r1-napi-4 keep-wrapper path b): same
-    // tuple-arg destructuring shape as `onChange`. The principal is
+    // splatted-args wrapper shape as `onChange`. The principal is
     // captured Rust-side so D5 delivery-time cap-recheck fires this
     // actor's grants on every event; if the actor's caps are revoked
     // mid-stream the subscription auto-cancels per D5 contract.
-    const napiCb = (args: [number, Buffer]): void => {
-      const [seq, payload] = args;
+    const napiCb = (seq: number, payload: Buffer): void => {
       try {
         callback(seq, payload);
       } catch (err) {
@@ -2064,7 +2058,7 @@ build @benten/engine-native with `--features test-helpers`",
         pattern,
         serializeCursor(cursor),
         actor,
-        napiCb as unknown as (seq: number, payload: Buffer) => void,
+        napiCb,
       );
     } catch (err) {
       throw mapNativeError(err);
@@ -2114,21 +2108,23 @@ build @benten/engine-native with `--features test-helpers`",
         "Engine.onEmit unavailable on this binding — rebuild @benten/engine-native (R6-FP EMIT broadcast bridge required to close r6-mpc-2)",
       );
     }
-    // Phase-3 G19-B (§7.7, r1-napi-4 keep-wrapper path b): the native
-    // EMIT-side callback shape is `Function<(String, String), ()>`.
-    // napi-rs ThreadsafeFunction delivers it as a single tuple-array
-    // arg `[chanArg, payloadJson]`, NOT discrete `(chanArg, payloadJson)`
-    // args (per phase-3-backlog §7.7). The wrapper takes the single
-    // tuple-arg + destructures inside, retiring the in-test
-    // `Array.isArray(channel)` workaround the pre-G19-B `emit_subscribe.test.ts`
-    // load-bearing pin used as a runtime branch.
+    // Phase-3 G19-B (§7.7, r1-napi-4 keep-wrapper path b): napi-rs v3.x
+    // ThreadsafeFunction with `FnArgs<(String, String)>` delivers
+    // discrete `(chanArg, payloadJson)` args (verified end-to-end
+    // 2026-05-07; the pre-G19-B "single tuple-array" delivery shape
+    // documented in phase-3-backlog §7.7 + the
+    // `emit_subscribe.test.ts` load-bearing-pre-merge runtime
+    // tuple-detection branch belonged to an earlier napi-rs build).
+    // The wrapper preserves the user-callback's discrete-args contract,
+    // parses the JSON payload to an idiomatic JsonValue, and adds the
+    // exception-isolation log path. The runtime tuple-detection
+    // workaround is retired.
     //
     // payloadJson is the engine's `Value` payload serialized to JSON
     // (the same shape engine.call inputs/outputs use). We parse it once
     // here so the JS-facing callback receives an idiomatic JsonValue
     // rather than a raw JSON string.
-    const napiCb = (args: [string, string]): void => {
-      const [chanArg, payloadJson] = args;
+    const napiCb = (chanArg: string, payloadJson: string): void => {
       let payload: JsonValue;
       try {
         payload = JSON.parse(payloadJson) as JsonValue;
@@ -2148,10 +2144,7 @@ build @benten/engine-native with `--features test-helpers`",
     };
     let native: NativeEmitSubscriptionJs;
     try {
-      native = this.inner.onEmit(
-        channel,
-        napiCb as unknown as (chanArg: string, payloadJson: string) => void,
-      );
+      native = this.inner.onEmit(channel, napiCb);
     } catch (err) {
       throw mapNativeError(err);
     }
