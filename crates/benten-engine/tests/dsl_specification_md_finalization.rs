@@ -29,7 +29,6 @@ fn workspace_root() -> PathBuf {
 /// `dsl_specification_md_marked_final_post_g12b` — plan §3.2 G12-B +
 /// G11-2b-A doc sweep.
 #[test]
-#[ignore = "Phase 3 — DSL-SPECIFICATION.md finalization body deferred per docs/future/phase-3-backlog.md §7.3.A.5 (G12-B + G11-2b-A both landed)"]
 fn dsl_specification_md_marked_final_post_g12b() {
     let root = workspace_root();
     let doc_path = root.join("docs/DSL-SPECIFICATION.md");

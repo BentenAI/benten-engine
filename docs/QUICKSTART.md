@@ -176,7 +176,7 @@ console.log(trace.steps);
 // fire a ChangeEvent; it's safe to run repeatedly.
 ```
 
-## Streaming results back to the client (Phase 2b)
+## Streaming results back to the client (STREAM — Phase 2b)
 
 Long-running queries (large list pulls, log tailers, aggregate
 exports) shouldn't materialise the full result before responding. The
@@ -247,33 +247,19 @@ the wasmtime host with capability-derived host-fn manifest:
 ```typescript
 import { Engine, subgraph } from "@benten/engine";
 
-// Install a module manifest declaring one or more WASM modules.
-// `moduleCid` is the CIDv1 of the compiled WASM bytes (produced by
-// your build pipeline); `manifestCid` is the canonical-DAG-CBOR CID
-// of the manifest itself (compute via `engine.computeManifestCid()`).
-const installedCid = await engine.installModule({
-  name: "example.summarizer",
-  version: "0.1.0",
-  modules: [{
-    name: "summarize-v1",
-    cid: moduleCid,
-    requires: ["host:compute:log", "host:compute:time", "host:compute:kv:read"],
-  }],
+await engine.installModule({ name: "example.summarizer", version: "0.1.0",
+  modules: [{ name: "summarize-v1", cid: moduleCid,
+    requires: ["host:compute:log", "host:compute:time", "host:compute:kv:read"] }],
 }, manifestCid);
 
-const summariseHandler = subgraph("summarize")
+const handler = subgraph("summarize")
   .read({ label: "doc", by: "id", value: "$input.doc_id" })
-  .sandbox({
-    module: "example.summarizer:summarize-v1",   // <manifestName>:<moduleName>
-    fuel: 1_000_000,              // wasmtime fuel cap (per-call)
-    wallclockMs: 30_000,          // hard wallclock kill (per-call)
-    outputLimitBytes: 1_048_576,  // Inv-7 ceiling (per-call)
-  })
+  .sandbox({ module: "example.summarizer:summarize-v1",
+    fuel: 1_000_000, wallclockMs: 30_000, outputLimitBytes: 1_048_576 })
   .write({ label: "summary" })
   .respond({ body: "$result" })
   .build();
-
-await engine.registerSubgraph(summariseHandler);
+await engine.registerSubgraph(handler);
 const out = await engine.call("summarize", "default", { doc_id: "d-42" });
 ```
 

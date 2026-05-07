@@ -22,8 +22,8 @@
 //! docs").
 //!
 //! Owned by R3-E (CI workflow tests row); test landed by R4-FP B-4
-//! (8-crate form); renamed + retensed to 10-crate at orchestrator-direct
-//! cross-cutting cleanup 2026-05-05.
+//! (eight-crate historical form); renamed + retensed to 10-crate at
+//! orchestrator-direct cross-cutting cleanup 2026-05-05.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -45,7 +45,6 @@ fn workspace_root() -> PathBuf {
 /// canary stubs land, operators reading the doc will miss the
 /// `benten-id` + `benten-sync` boundaries.
 #[test]
-#[ignore = "Phase 3 — ARCHITECTURE.md 10-crate doc-drift body deferred per docs/future/phase-3-backlog.md §7.3.A.5 (G12-B + G11-2b-A both landed; R3-A + R3-C added 9th/10th canary crates; doc-drift detector body lands Phase 3 alongside G20-B FINAL transition pin)"]
 fn architecture_md_says_ten_crates_after_phase_3_canaries() {
     let root = workspace_root();
     let doc_path = root.join("docs/ARCHITECTURE.md");
@@ -116,7 +115,6 @@ fn architecture_md_says_ten_crates_after_phase_3_canaries() {
 /// exist; this test asserts both directories are present so the
 /// 10-crate doc claim is not aspirational.
 #[test]
-#[ignore = "Phase 3 — workspace-has-canary-crate-dirs body deferred per docs/future/phase-3-backlog.md §7.3.A.5 (G14-A1 + G16-A canary stub crates landed at R3-A + R3-C respectively; doc-drift detector body lands Phase 3)"]
 fn workspace_has_phase_3_canary_crate_dirs() {
     let root = workspace_root();
     let dsl_compiler_dir = root.join("crates/benten-dsl-compiler");

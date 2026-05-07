@@ -309,7 +309,7 @@ fn sandbox_escape_reentrancy_via_host_fn_denied() {
 // =====================================================================
 
 #[test]
-#[ignore = "Phase 3+ — Component-Model feature wsa-3-removed from 2b scope; ESC-11 component-type-mismatch body deferred per docs/future/phase-3-backlog.md §7.3.A.8 (Phase-3 plan-doc opening checklist re-evaluates wsa-3 Component-Model removal decision)"]
+#[ignore = "Phase 4+ Thrum-driven OR wasmtime-Component-Model-GA — Component-Model held cut at Phase-3 R1 per D-PHASE-3-6 RESOLVED-at-R1; rationale rewritten per D-PHASE-3-16 named destination ratified 2026-05-05 (docs/FULL-ROADMAP.md Phase 4 entry naming wasmtime Component-Model re-evaluation). Phase-4 pre-R1 inherits this deferral when Phase 4 opens; if wasmtime Component-Model GA-stability changes materially before then, surface for re-evaluation."]
 #[cfg(feature = "component-model")]
 fn sandbox_escape_component_type_mismatch_rejected() {
     // ESC-11 — Component-Model type mismatch with declared interface.
@@ -326,7 +326,7 @@ fn sandbox_escape_component_type_mismatch_rejected() {
 }
 
 #[test]
-#[ignore = "Phase 3+ — Component-Model feature wsa-3-removed from 2b scope; ESC-12 resource-handle-forgery body deferred per docs/future/phase-3-backlog.md §7.3.A.8"]
+#[ignore = "Phase 4+ Thrum-driven OR wasmtime-Component-Model-GA — Component-Model held cut at Phase-3 R1 per D-PHASE-3-6 RESOLVED-at-R1; rationale rewritten per D-PHASE-3-16 named destination ratified 2026-05-05 (docs/FULL-ROADMAP.md Phase 4 entry naming wasmtime Component-Model re-evaluation). Phase-4 pre-R1 inherits this deferral when Phase 4 opens; if wasmtime Component-Model GA-stability changes materially before then, surface for re-evaluation."]
 #[cfg(feature = "component-model")]
 fn sandbox_escape_resource_handle_forgery_rejected() {
     // ESC-12 — Resource handle forgery.

@@ -54,7 +54,7 @@ use benten_engine::Engine;
 /// Major #2: isolated:true CALL MUST reset multiplicative budget to the
 /// callee grant's declared bound. Parent looping cannot leak budget.
 #[test]
-#[ignore = "Phase 3 — Inv-8 isolated-CALL budget-reset body deferred per docs/future/phase-3-backlog.md §7.3.C (Phase 2a closed; G4-A budget-isolation reset semantics landed; integration body lands Phase 3)"]
+#[ignore = "Phase 3+ anytime backlog — Inv-8 isolated-CALL budget-reset integration pin. Destination: docs/future/phase-3-backlog.md §7.3.C row 2 (inv_8_isolated_call_budget_bypass.rs:57). Phase 2a closed; G4-A budget-isolation reset semantics landed structurally (the per-call budget reset on isolated-CALL is in primitive_host.rs::dispatch_call_inner); the integration body that drives a parent CALL with budget B making an isolated CALL inside it consuming B + asserts the parent retains its remaining budget post-return is deferred to the next round of budget-axis property-coverage hardening (reassessment cadence: v1-assessment-window per CLAUDE.md baked-in #15)."]
 fn inv_8_isolated_call_resets_to_callee_grant() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()

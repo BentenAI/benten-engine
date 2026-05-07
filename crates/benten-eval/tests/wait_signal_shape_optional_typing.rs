@@ -95,7 +95,7 @@ fn wait_signal_shape_validates_against_schema_when_set() {
 }
 
 #[test]
-#[ignore = "Phase 3 — runtime signal-shape check body deferred per docs/future/phase-3-backlog.md §7.3.C (WaitSignalShapeMismatch shape-reserved per docs/ERROR-CATALOG.md; runtime check addition in wait::evaluate_op lands Phase 3)"]
+#[ignore = "Phase 3+ anytime backlog — wait_signal_shape_mismatch runtime check. Destination: docs/future/phase-3-backlog.md §7.3.C row 7. The runtime shape-match logic IS wired at `crates/benten-eval/src/primitives/wait.rs::resume_with_meta` (the `signal_shape` arm consults `WaitMetadata.signal_shape` via `shapes_match`), and `WaitMetadata.signal_shape` is round-tripped through `SuspensionStore::put_wait`/`get_wait`. The OUTSTANDING gap is the SUSPEND-time path: when `wait::evaluate_op` suspends, it stores `WaitMetadata` WITHOUT populating `signal_shape` from the WAIT node's `signal_shape` property bag (the producer side at suspend-time is decoupled from the property reader at evaluate-time). Closing this gap requires wiring property-bag -> WaitMetadata.signal_shape on suspend. Bundle with the next round of WAIT-axis property-coverage hardening (reassessment cadence: v1-assessment-window per CLAUDE.md baked-in #15)."]
 fn wait_signal_shape_mismatch_fires_typed_error_routed_on_error() {
     // Shape declares `Int`; resume with `Text` shape mismatches → typed
     // error, routed through ON_ERROR.

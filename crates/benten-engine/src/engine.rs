@@ -285,6 +285,19 @@ pub(crate) struct EngineInner {
     /// invocation-ms readings.
     pub(crate) sandbox_metrics:
         std::sync::Mutex<std::collections::BTreeMap<String, SandboxNodeMetrics>>,
+
+    /// Phase-3 G20-A3 wave-8a (phase-3-backlog §7.3.A.9 sub-cluster
+    /// 9c): test-only registry of SubscriberIds whose persistent
+    /// cursors are driven by the `testing_register_persistent_subscriber`
+    /// + `testing_emit_n_synthetic_events` test helpers. The helpers
+    /// pin the SuspensionStore put_cursor → get_cursor round-trip
+    /// under caller-controlled SubscriberIds; this map is the
+    /// side-channel they walk on emit-events to locate registered
+    /// subscribers. Production SUBSCRIBE ack flow does NOT consult
+    /// this map — it lives behind the same cfg-gating as
+    /// `test_markers` so the production cdylib does not ship it.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub(crate) testing_persistent_subscribers: std::sync::Mutex<Vec<benten_core::SubscriberId>>,
 }
 
 /// Phase-3 G19-C2 wave-7 (§7.1): per-invocation high-water tracker
@@ -344,6 +357,8 @@ impl EngineInner {
             test_markers: std::sync::Mutex::new(std::collections::HashSet::new()),
             user_view_input_labels: std::sync::Mutex::new(BTreeMap::new()),
             sandbox_metrics: std::sync::Mutex::new(BTreeMap::new()),
+            #[cfg(any(test, feature = "test-helpers"))]
+            testing_persistent_subscribers: std::sync::Mutex::new(Vec::new()),
         }
     }
 

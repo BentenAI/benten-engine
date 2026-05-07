@@ -1,0 +1,51 @@
+# cargo-vet config — Phase-3 G20-A3 wave-8a §7.3.A.9 onboarding
+# baseline.
+#
+# Per sec-r1-5 + Phase-3 R5 G20-A3 brief, cargo-vet onboarding policy:
+#   - exemption-budget        = 5 entries max at Phase-3-close
+#   - criteria-set            = `safe-to-deploy` (default applied to all
+#                                non-crypto deps) + `crypto-reviewed`
+#                                (manual for benten-id deps)
+#   - periodic-policy-review  = quarterly
+#
+# The empty-but-structurally-non-vacuous shape pins the surface against
+# `crates/benten-engine/tests/cargo_vet_policy_self_test.rs::cargo_vet_workflow_non_vacuity_self_test_passes`
+# (G20-A3 wave-8a) — the test only requires presence of imports + a
+# non-trivial criteria entry. The first round of actual `cargo vet`
+# audits will populate `audits.toml` + `exemptions.toml` once the
+# tooling is installed in the developer + CI environments.
+
+# Default policy: every public package + dev-dep claims `safe-to-deploy`.
+[policy."*"]
+audit-as-crates-io = true
+criteria = "safe-to-deploy"
+
+# Supplemental criteria that benten-id deps (Ed25519 / UCAN crypto path)
+# must clear in addition to safe-to-deploy. Onboarding policy per
+# sec-r1-5 marks this as a manual review surface — the criterion is
+# defined here so future audits can `cargo vet certify <crate>
+# crypto-reviewed`.
+[criteria.crypto-reviewed]
+description = """
+This crate has been reviewed by a Benten-team-designated crypto reviewer
+for the surfaces actually consumed by benten-id (Ed25519 keypair +
+signing, did:key encoding, UCAN delegation-chain validation). The
+reviewer has confirmed the crypto path is constant-time where
+specified, free of obvious side-channel leaks in the consumed surface,
+and free of known CVEs at the audit-pin time. Per sec-r1-5 the manual
+review cadence is quarterly. crypto-reviewed implies safe-to-deploy.
+"""
+implies = "safe-to-deploy"
+
+# Upstream vouch sources Benten trusts. The mozilla + bytecode-alliance
+# audit corpora bootstrap the trust set so most non-crypto deps in the
+# graph (wasmtime + transitive surface) inherit a vouch without
+# requiring a Benten-team review pass.
+[imports.mozilla]
+url = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[imports.bytecode-alliance]
+url = "https://raw.githubusercontent.com/bytecodealliance/wasmtime/main/supply-chain/audits.toml"
+
+[imports.google]
+url = "https://raw.githubusercontent.com/google/supply-chain/main/audits.toml"

@@ -8,16 +8,14 @@
 // ships in G11 (dev-server group) as a pretty-print command. JSON-
 // equivalent readability without paying a format cost."
 //
-// Status: this CLI surface (`tools/benten-dev/bin/benten-dev.mjs`) is
-// not yet shipped; the Rust-side pretty-printer entry point at
+// Status: re-enabled at Phase-3 G20-A3 wave-8a — the
+// `tools/benten-dev/bin/benten-dev.mjs` thin-CLI front-door now wraps
+// the Rust-side pretty-printer entry point at
 // `tools/benten-dev/src/inspect_state.rs::pretty_print_envelope_bytes`
-// IS shipped, but the wrapping `node bin/benten-dev.mjs` thin-CLI
-// front-door lands in Phase 3 per `docs/future/phase-3-backlog.md` §6.9
-// (benten-dev `inspect-state` thin-CLI front-door). These tests stay
-// `it.skip`'d until that ships — the JS-side hot-reload harness in
-// `devserver.test.ts` + `hotreload_preserves_cap_grants.test.ts` is the
-// load-bearing Wave-8f surface. HARD RULE compliance: destination
-// exists at phase-3-backlog §6.9 with concrete Phase-3 deliverables.
+// per `docs/future/phase-3-backlog.md` §6.9 (CLOSED). The test
+// requires the Rust binary to be built (`cargo build -p benten-dev`)
+// before running so the spawned `benten-dev` subprocess can resolve
+// to a real executable.
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
@@ -26,7 +24,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Engine, subgraph } from "@benten/engine";
 
-describe.skip("benten-dev inspect-state", () => {
+describe("benten-dev inspect-state", () => {
   let tmp: string;
   let bytesPath: string;
   let engine: Engine;
@@ -55,7 +53,7 @@ describe.skip("benten-dev inspect-state", () => {
     rmSync(tmp, { recursive: true, force: true });
   });
 
-  it.skip("inspect_state_pretty_prints_envelope_shape", () => {
+  it("inspect_state_pretty_prints_envelope_shape", () => {
     // CLI binary path — G11-A publishes this at
     // `tools/benten-dev/bin/benten-dev.mjs`.
     const cliPath = join(
@@ -81,7 +79,7 @@ describe.skip("benten-dev inspect-state", () => {
     expect(output).toMatch(/frame_index/);
   });
 
-  it.skip("inspect_state_surfaces_resume_protocol_hints", () => {
+  it("inspect_state_surfaces_resume_protocol_hints", () => {
     // The pretty-printer should also echo the 4-step resume protocol
     // headers so operators know what to check against: payload_cid
     // recomputation, resumption_principal match, pinned_subgraph re-
@@ -103,7 +101,7 @@ describe.skip("benten-dev inspect-state", () => {
     expect(output).toMatch(/check_write/i);
   });
 
-  it.skip("inspect_state_rejects_nonexistent_path_with_typed_exit", () => {
+  it("inspect_state_rejects_nonexistent_path_with_typed_exit", () => {
     const cliPath = join(
       __dirname,
       "..",

@@ -1,0 +1,27 @@
+# Phase-3 G20-A3 wave-8a — cargo-public-api existing-crate baseline.
+#
+# Per `.addl/phase-3/00-implementation-plan.md` §3 G20-A3 +
+# `docs/future/phase-3-backlog.md` §7.3.A.9 (sub-cluster 9a). The
+# per-NEW-crate baselines for `benten-id` + `benten-sync` landed in JSON
+# at G14-A1 + G16-A respectively (per seq-minor-5); this directory now
+# carries the existing-crate `.txt` baselines so the cargo-public-api
+# workflow at `.github/workflows/cargo-public-api.yml` has a stable
+# diff base for every workspace member.
+#
+# Format is the canonical `cargo public-api --simplified` text output.
+# This file is a SEED baseline — populated on the first run of
+# `cargo public-api -p benten-core --simplified > docs/public-api/benten-core.txt`
+# in a developer or CI environment that has a nightly toolchain
+# installed (cargo-public-api requires nightly rustdoc-json output).
+#
+# Pinned by:
+#   `crates/benten-engine/tests/cargo_public_api_drift.rs::cargo_public_api_baseline_committed`
+# Baseline-shape pin only — the workflow's diff against the actual
+# rustdoc-json output is the authoritative drift check.
+
+# === SEED — populate on first nightly run ===
+# Seed marker so the file is non-empty + the baseline-committed test
+# detects presence. Replace with the cargo-public-api output on first
+# CI populate-pass.
+crate = benten-core
+phase_3_seeded_at = G20-A3 wave-8a

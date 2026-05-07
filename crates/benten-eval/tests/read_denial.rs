@@ -221,8 +221,14 @@ fn edges_from_on_denied_cid_returns_empty_symmetric_with_zero_outgoing() {
     );
 }
 
+// Phase-3 G20-A3 wave-8a: re-enabled — SECURITY-POSTURE.md is now
+// tracked-public again (the `phase-3-backlog.md §7.3.C` row 6
+// re-tracks-public condition is satisfied; the doc is in `docs/`
+// committed and contains both "Option C" + `diagnose_read`/
+// `diagnoseRead` references). Pre-G20-A3 the rationale claimed the
+// doc was internal-only post-default-untrack-pass (2026-04-23), but
+// that staleness was caught by the §7.3.C audit + closed.
 #[test]
-#[ignore = "Phase 3+ — SECURITY-POSTURE.md is internal-only post-default-untrack-pass (2026-04-23). Re-enable deferred per docs/future/phase-3-backlog.md §7.3.C; Phase-3 evaluates whether SECURITY-POSTURE.md re-tracks-public alongside other launch-readiness docs (FULL-ROADMAP §Phase 9+ OSS launch era)"]
 fn compromise_2_option_c_is_documented() {
     // Pinned the Phase-1 Option C posture by reading SECURITY-POSTURE.md
     // from disk. Now that the posture doc is internal-only, this

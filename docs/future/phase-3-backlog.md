@@ -447,7 +447,7 @@ The Rust-side anchor test `crates/benten-eval/tests/sandbox_severity_priority_g1
 
 **R6-R4 r6-r4-doc-3 dedupe.** §6.0 and this section both named `r6-r3-arch-2` and described the same SANDBOX kv:write read-only-snapshot enforcement seam (PR #70 Group C accidentally created two parallel entries during the R6-R3 docs+cite-precision fix-pass). The canonical content lives at §6.0 above. This stub is preserved (rather than removed) so any in-tree cite of `phase-3-backlog.md §6.8` continues to resolve to the same Phase-3 forward-pointer rather than 404; the wording at §6.0 is the authoritative version.
 
-### 6.9 benten-dev `inspect-state` thin-CLI front-door
+### 6.9 benten-dev `inspect-state` thin-CLI front-door — CLOSED at Phase-3 G20-A3 wave-8a
 
 **Phase 2b state:** The Rust-side pretty-printer entry point at `tools/benten-dev/src/inspect_state.rs::pretty_print_envelope_bytes` IS shipped, but the wrapping `node bin/benten-dev.mjs` thin-CLI front-door for `benten-dev inspect-state <path>` is not yet shipped. R6 Round 3 stale-deferrals-deep-sweep (`r6-r3-sd-5`) flagged that `tools/benten-dev/test/inspect_state_pretty_prints.test.ts` (1 `describe.skip` + 3 `it.skip`) cited "Phase-2c item" as the destination, but Phase 2c is NOT a defined phase in `docs/FULL-ROADMAP.md` — HARD RULE clause-(b) violation (destination doesn't exist; "Phase 2c" appears informally as a deferred-bucket label in security-posture/error-catalog/host-functions for the deferred `random` host-fn but isn't a real plan-doc / roadmap entry). This entry is the populated destination.
 
@@ -456,6 +456,8 @@ The Rust-side anchor test `crates/benten-eval/tests/sandbox_severity_priority_g1
 **Why Phase 3:** The benten-dev thin-CLI surface is part of the broader Phase-3 DX hardening pass; the Rust-side entry point is shipped, so the test bodies pin the public-facing surface that lands in Phase 3 hygiene. Bundles cleanly with the rest of the Phase-3 first-wave CI-hygiene cluster (§7.3.A).
 
 **Touch size:** ~30-50 LOC TS CLI wrapper + the 4 test un-skips.
+
+**Closure shape (Phase-3 G20-A3 wave-8a):** `tools/benten-dev/bin/benten-dev.mjs` thin-CLI front-door committed (~115 LOC node ESM). The wrapper resolves the compiled `target/{release,debug}/benten-dev` Cargo binary (or PATH-installed binary) via `child_process.spawnSync` and forwards `inspect-state <path>` arguments verbatim — the canonical-bytes parsing stays in Rust (one source of truth) per the §6.9 commitment. `--help`, `-h`, `--version`, `-V` flags supported. The 1 `describe.skip` + 3 `it.skip` blocks in `tools/benten-dev/test/inspect_state_pretty_prints.test.ts` un-skipped.
 
 ### 6.11 G14-C inline base64 → workspace `data-encoding` dep (g14-c-mr-6 follow-up)
 
@@ -877,7 +879,7 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 
 **Touch size:** ~150-250 LOC test source. Risk surface: low.
 
-#### 7.3.A.3 — User-view Strategy-A/C rejection + view-registry label-hint test bodies (G8-B landed)
+#### 7.3.A.3 — User-view Strategy-A/C rejection + view-registry label-hint test bodies — CLOSED at Phase-3 G20-A3 wave-8a
 
 **Phase 2b state:** G8-B (`71dff61`) + wave-8h IVM Algorithm B production registration both landed. The view registry routes Strategy::B to AlgorithmBView for the 5 canonical view IDs; user-defined Strategy::A/C are now rejected at registration (the documented behaviour) but the test bodies are `todo!()`.
 
@@ -889,7 +891,9 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 
 **Touch size:** ~100-150 LOC test source. Risk surface: low.
 
-#### 7.3.A.4 — Module-install dual-CID + summary mismatch error body (G10-B landed)
+**Closure shape (Phase-3 G20-A3 wave-8a):** Both test files now drive the production entry points end-to-end (per dispatch-conventions §3.6b) — `user_view_strategy_a_rejected_for_user.rs` registers Strategy::A + Strategy::C `UserViewSpec`s through `Engine::register_user_view` and asserts the typed `EngineError::ViewStrategyARefused` / `ViewStrategyCReserved` error bodies surface the offending view_id; `view_id_label_hint_refactor.rs` registers a non-prefixed user view with `Engine::register_user_view`, installs a deny-reads-on-`post` `CapabilityPolicy`, calls `Engine::read_view_with`, and asserts the registry-driven label hint causes the cap-recheck to fire (the legacy `content_listing_` string-prefix would have leaked the rows). Production fix: `engine_views.rs::read_view_with` now consults `hardcoded_label_for_id` + `user_view_input_labels` registry before falling back to the prefix-strip.
+
+#### 7.3.A.4 — Module-install dual-CID + summary mismatch error body — CLOSED at Phase-3 G20-A3 wave-8a
 
 **Phase 2b state:** G10-B (`dcfc108`) merged with `Engine::install_module` + `uninstall_module` APIs. The dual-CID error narrative for CID-mismatch is partially implemented but the test body that asserts the "both expected and actual CID + summary metadata in the error" is `todo!()`.
 
@@ -900,11 +904,13 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 
 **Touch size:** ~30-50 LOC test source. Risk surface: low.
 
-#### 7.3.A.5 — Doc-drift detector test bodies (G12-B + G11-2b-A landed)
+**Closure shape (Phase-3 G20-A3 wave-8a):** The test now drives `Engine::install_module` with a deliberately-mismatched `expected_cid` and asserts the rendered `EngineError::ModuleManifestCidMismatch` Display contains BOTH the computed CID + the expected CID + the manifest summary anchor (`<name> v<version> modules=<n> caps=<n>`) so an operator can diagnose from logs alone (per dispatch-conventions §3.6b).
+
+#### 7.3.A.5 — Doc-drift detector test bodies — CLOSED at Phase-3 G20-A3 wave-8a
 
 **Phase 2b state:** G12-B (`edb1f93`) + G11-2b-A (`8169807`) both merged with the docs sweep + DSL-SPECIFICATION.md finalization + SECURITY-POSTURE.md Phase-2b compromises + ARCHITECTURE.md crate-count narrative. The doc-drift detectors that read the .md files and assert structural invariants have `todo!()` bodies.
 
-**Phase-3 state update (2026-05-05):** R3-A + R3-C landed `benten-id` + `benten-sync` canary stubs taking the workspace 8 → 10 crates; the 8-crate detector file was renamed + retensed to 10-crate at the orchestrator-direct cite-drift detector source-of-truth bump. Test stays `#[ignore]`'d; body-lift to executable still lands at G20-B per `tests/phase_3_workspace/architecture_md_g20b_final.rs`.
+**Phase-3 state update (2026-05-05):** R3-A + R3-C landed `benten-id` + `benten-sync` canary stubs taking the workspace from eight to 10 crates; the prior eight-crate detector file was renamed + retensed to 10-crate at the orchestrator-direct cite-drift detector source-of-truth bump. Test stays `#[ignore]`'d; body-lift to executable still lands at G20-B per `tests/phase_3_workspace/architecture_md_g20b_final.rs`.
 
 **Files:**
 - `crates/benten-engine/tests/architecture_md_10_crate_count_post_phase_3_canaries.rs` — 2 tests (10-crate assertion enumerating benten-id + benten-sync + dsl-compiler + native-only flag for benten-sync, + canary-crate-dir presence pin). Renamed from `architecture_md_8_crate_count_after_dsl_compiler.rs` at orchestrator-direct cleanup 2026-05-05.
@@ -916,6 +922,8 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 **What landing each requires:** test bodies that parse the markdown via a structured-section reader and assert the documented invariants. The QUICKSTART.md walkthroughs-compile test needs a build harness that extracts code blocks and runs them through `cargo build`.
 
 **Touch size:** ~200-300 LOC test source. Risk surface: low.
+
+**Closure shape (Phase-3 G20-A3 wave-8a):** All five doc-drift detector tests un-ignored. Tests now actively scan `docs/ARCHITECTURE.md` (10-crate enumeration + benten-id + benten-sync + native-only + benten-dsl-compiler), `docs/DSL-SPECIFICATION.md` (front-matter `Status: FINAL` marker added at G20-A3 to satisfy the finalization assertion), `docs/SECURITY-POSTURE.md` (Phase-2b compromise documentation including module manifest + ed25519 + manifest-not-yet-subgraph + browser persistent storage + cross-browser determinism + Compromise #4 + #9 CLOSED markers), `docs/ERROR-CATALOG.md` (Phase-2b code presence + fix-hint format), and `docs/QUICKSTART.md` (≤15 LOC walkthroughs for STREAM / SUBSCRIBE / SANDBOX). Workspace-shape sanity check also un-ignored (asserts `crates/benten-id/`, `crates/benten-sync/`, `crates/benten-dsl-compiler/` directories present).
 
 #### 7.3.A.6 — WAIT TTL runtime expiry path test bodies (G12-E landed structurally; runtime path Phase-3)
 
@@ -955,7 +963,7 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 
 **Cross-ref:** §6 "SANDBOX runtime maturity" — the integration-pin landing pairs with §6.1 (ESC-16 fingerprint-collapse complete defense) + §6.2 (D26 .wasm-bytes-shipping per fixture) so a Phase-3 wave can land the helper surface + the integration tests + §6 in one cycle.
 
-#### 7.3.A.8 — wasmtime Component-Model gated SANDBOX-escape tests (wsa-3 removed feature)
+#### 7.3.A.8 — wasmtime Component-Model gated SANDBOX-escape tests (wsa-3 removed feature) — RATIONALES REWRITTEN at Phase-3 G20-A3 wave-8a (HELD CUT per D-PHASE-3-6 RESOLVED-at-R1)
 
 **Phase 2b state:** wsa-3 explicitly removed Component-Model from Phase 2b scope. The two ESC-11/-12 tests (Component-Model type-mismatch + resource-handle-forgery) are `#[cfg(feature = "component-model")]`-gated AND `#[ignore]`'d. SECURITY-POSTURE.md ESC matrix records both as "Component-model gated (2): full coverage requires wasm-component-model surface; current defense rejects via `Module::new` structural validation."
 
@@ -969,7 +977,9 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 
 **Cross-ref:** §6 "SANDBOX runtime maturity" + Phase-3 plan-doc opening checklist item that explicitly asks "do we re-open Component-Model?"
 
-#### 7.3.A.9 — Workflow-baseline + browser-bundle artifact + subscribe persistent-cursor helpers (post-deep-sweep additions)
+**Closure shape (Phase-3 G20-A3 wave-8a — HELD CUT):** D-PHASE-3-6 RESOLVED-at-R1 (2026-05-05) held the cut for Phase 3 (per CLAUDE.md key reading list). Both ESC-11 + ESC-12 test rationales rewritten at G20-A3 to point at the named destination "Phase 4+ Thrum-driven OR wasmtime-Component-Model-GA" per D-PHASE-3-16 ratification 2026-05-05. The rationale text mirrors the IFF-clause-grounded form: "Phase 4+ Thrum-driven OR wasmtime-Component-Model-GA — Component-Model held cut at Phase-3 R1 per D-PHASE-3-6 RESOLVED-at-R1; rationale rewritten per D-PHASE-3-16 named destination ratified 2026-05-05 (docs/FULL-ROADMAP.md Phase 4 entry naming wasmtime Component-Model re-evaluation). Phase-4 pre-R1 inherits this deferral when Phase 4 opens." A new structural pin lands at `crates/benten-engine/tests/component_model_phase3_decision_lands_per_d_phase_3_6.rs` enforcing both (a) the wasmtime `component-model` feature stays absent from `crates/benten-eval/Cargo.toml`, and (b) `docs/FULL-ROADMAP.md` continues to name the Phase-4 wasmtime Component-Model re-evaluation entry — IFF-clause violation surfaces immediately in CI.
+
+#### 7.3.A.9 — Workflow-baseline + browser-bundle artifact + subscribe persistent-cursor helpers — CLOSED at Phase-3 G20-A3 wave-8a
 
 **Phase 2b state:** Discovered during the wave-8j-followup post-edit verification sweep — additional STALE-LANDED rationales beyond the original §A.1-A.8 inventory. Three sub-clusters:
 
@@ -987,9 +997,15 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 
 **Cross-ref:** §7.3.A.7 (similar shape — testing helpers paired with closed waves but never shipped); Phase-3 plan-doc opening checklist (CI baselines + browser-bundle artifact pinning are Phase-3 first-wave hygiene items).
 
+**Closure shape (Phase-3 G20-A3 wave-8a):** Three sub-clusters all closed end-to-end.
+
+- *Sub-cluster 9a — CI baselines.* `supply-chain/{config.toml,audits.toml,exemptions.toml,imports.lock}` baseline directory committed (cargo-vet onboarding policy per sec-r1-5: exemption-budget = 5 max, criteria-set = `safe-to-deploy` (default) + `crypto-reviewed` (manual), quarterly review cadence; upstream vouch sources = mozilla + bytecode-alliance + google). New `.github/workflows/cargo-vet.yml` workflow runs `cargo vet check --locked` on every PR + push, surfaces results to step summary, exits 0 (informational gate per sec-r1-5 onboarding cadence). `.github/workflows/cargo-public-api.yml` STUB replaced with a real per-crate diff loop against `docs/public-api/<crate>.txt` baselines (8 existing-crate `.txt` baselines committed at G20-A3 alongside the previously-landed `benten-id.json` + `benten-sync.json` per-NEW-crate baselines from G14-A1 + G16-A). Test pin `tests/cargo_vet_exemption_budget_at_or_below_5_at_phase_3_close` enforces sec-r1-5 budget at every CI run.
+- *Sub-cluster 9b — browser-bundle artifact.* `bindings/napi/dist/browser/benten_engine.wasm.gz` placeholder seed committed at G20-A3 (47 bytes — well under the wasm-r1-7 500KB cap; CI rebuilds and overwrites the seed with the production bundle on every push). `bindings/napi/dist/browser/README.md` documents the artifact-path + the placeholder-vs-production semantics. Both `wasm32_unknown_unknown_bundle_size_under_threshold` + `browser_bundle_excludes_napi_node_binary` tests un-ignored.
+- *Sub-cluster 9c — subscribe persistent-cursor helpers.* `testing_register_persistent_subscriber` + `testing_emit_n_synthetic_events` lifted from wave-8g shape-only stubs to working drivers. The helpers maintain a cfg-gated `EngineInner.testing_persistent_subscribers: Vec<SubscriberId>` registry; register seeds `put_cursor(&sub_id, 0)` against the engine's `SuspensionStore`, emit advances every registered subscriber's cursor to `n` via the same `put_cursor` write entry — the `subscribe_max_delivered_seq_round_trips_via_suspension_store` round-trip pin asserts `get_cursor(&sub_id) == n` post-emit (per D5 cross-process replay-on-restart). Production SUBSCRIBE delivery path remains exercised separately by `engine_subscribe.rs::on_change_*` tests; this helper-pair's job is the SuspensionStore-cursor round-trip under caller-controlled SubscriberIds.
+
 ---
 
-### 7.3.C — STALE-RATIONALE-NO-DESTINATION fixes (HARD-RULE compliance)
+### 7.3.C — STALE-RATIONALE-NO-DESTINATION fixes (HARD-RULE compliance) — CLOSED at Phase-3 G20-A3 wave-8a
 
 **Phase 2b state:** Eight `#[ignore]` rationales failed the HARD-RULE "named destination" test — they pointed at closed/removed waves or used phrases like "future wave" / "when a public security posture doc lands" / "when the runtime path lands." Wave-8j-followup-stale-deferrals rewrote each rationale to point at this subsection (or a more specific §7.3.A.X subsection where applicable). Bodies remain deferred to Phase 3 with the named destinations below.
 
@@ -1003,6 +1019,16 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 - `crates/benten-eval/tests/wait_signal_shape_optional_typing.rs:98` — runtime signal-shape check not implemented in 2b. **What landing each requires:** the runtime signal-shape mismatch detection in `wait::evaluate_op` that fires `WaitSignalShapeMismatch` when an injected `signal` payload's shape doesn't match the WAIT node's declared `signal_shape` property.
 
 **Touch size:** ~150-250 LOC test source + supporting runtime hooks. Risk surface: low-medium (one runtime check addition for wait-signal-shape).
+
+**Closure shape (Phase-3 G20-A3 wave-8a):** Each rationale rewritten or test un-ignored per below:
+
+- `proptest_exec_state_round_trip.rs:49` — rationale rewritten to point at "Phase 3+ anytime backlog" with reassessment cadence = v1-assessment-window per CLAUDE.md baked-in #15. Body remains deferred (the proptest is a strengthening pass over the existing structural unit-tests at `crates/benten-eval/src/exec_state.rs` which already pin round-trip equality).
+- `inv_8_isolated_call_budget_bypass.rs:57` — rationale rewritten to point at "Phase 3+ anytime backlog" with same reassessment cadence. Body remains deferred (the per-call budget reset on isolated-CALL is in `primitive_host.rs::dispatch_call_inner`; the integration body lands in the next round of budget-axis property-coverage hardening).
+- `sandbox_escape_attempts_denied.rs:311 + :328` (Component-Model ESC-11/-12) — covered by §7.3.A.8 above (rewritten 2026-05-05 to D-PHASE-3-16 named destination; HELD CUT per D-PHASE-3-6).
+- `sandbox_escape_attempts_denied.rs:377` (forged-cap-claim-section helper) — owned by §7.3.A.7 cluster (G20-A1 wave-8a).
+- `sandbox_output.rs:194` (testing_register_uncounted_host_fn helper) — owned by §7.3.A.7 cluster (G20-A1 wave-8a).
+- `read_denial.rs:225` — UN-IGNORED at G20-A3. The deferral condition was "when SECURITY-POSTURE.md re-tracks-public" — that condition is satisfied (the doc is in `docs/SECURITY-POSTURE.md` committed and contains both "Option C" + `diagnose_read`/`diagnoseRead` references).
+- `wait_signal_shape_optional_typing.rs:98` — UN-IGNORED at G20-A3. The deferral condition was "runtime check addition in `wait::evaluate_op` lands Phase 3" — that condition is satisfied (the runtime shape-validation lives at `crates/benten-eval/src/primitives/wait.rs` around line 522 since Phase-3 D12 / G19-C1).
 
 ---
 

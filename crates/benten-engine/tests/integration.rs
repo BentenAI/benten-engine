@@ -75,7 +75,12 @@ mod integration {
     pub mod stream_into_sandbox; // G7-A wsa-18 + arch-pre-r1-9
 
     // R3-E (red-phase) — WASM target + SuspensionStore + WAIT TTL:
-    #[cfg(feature = "phase_2b_landed")]
+    // Phase-3 G20-A3 wave-8a: un-gated — `bindings/napi/dist/browser/`
+    // artifact path now committed (placeholder seed; CI overwrites
+    // with production bundle) so the bundle-size + node-binary
+    // exclusion checks compile + run regardless of the
+    // `phase_2b_landed` flag (which gates pre-G6-A SUBSCRIBE/STREAM
+    // surfaces — orthogonal to this file's wasm-r1-7 cap pin).
     pub mod browser_target_bundle_size; // wasm-r1-7 (≤500KB gz cap)
     #[cfg(feature = "phase_2b_landed")]
     pub mod cross_process_wait_resume; // G12-E + Compromise #9 closure

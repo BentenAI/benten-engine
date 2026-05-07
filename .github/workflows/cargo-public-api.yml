@@ -1,29 +1,19 @@
 name: cargo-public-api (API drift detector)
 
-# Phase 2b R4-FP B-3 (red-phase) STUB. Pin source: plan §3.1 Phase-2b CI
-# additions ("`cargo-public-api` — wire on PR alongside G6 first push;
-# blocks accidental API breakage / additions slipping into a release
-# without a deliberate baseline update"). qa-r4-09 names this as 1 of 3
-# missing workflow YAMLs.
+# Phase-3 G20-A3 wave-8a — cargo-public-api workflow per
+# `.addl/phase-3/00-implementation-plan.md` §3 G20-A3 +
+# `docs/future/phase-3-backlog.md` §7.3.A.9 (sub-cluster 9a). Replaces
+# the Phase-2b R4-FP B-3 RED-PHASE STUB.
 #
 # Trigger discipline per METH-13: pull_request branches: [main] +
 # push branches: [main]. workflow_dispatch added for ad-hoc baseline
 # refresh runs. No `push: branches: ['**']`.
 #
-# Status (per ci-decisions-2026-04-22.md §4): INFORMATIONAL ONLY -- not
-# a member of the 5-required-check set. Drift surfaces as a PR comment
-# / step summary so reviewers can decide "intentional addition,
+# Status (per ci-decisions-2026-04-22.md §4): INFORMATIONAL ONLY — not
+# a member of the required-check set. Drift surfaces as a PR comment /
+# step summary so reviewers can decide "intentional addition,
 # baseline-update needed" vs "accidental break, fix the patch."
-#
-# This is a SCAFFOLD. R5 implementation (G6 first push) fills in the
-# actual job steps:
-#   - install Rust nightly (cargo-public-api requires nightly rustdoc-json)
-#   - install cargo-public-api (pinned version)
-#   - run cargo public-api -p benten-engine --diff main..HEAD
-#   - emit diff into $GITHUB_STEP_SUMMARY + post PR comment if non-empty
-#   - exit 0 either way (informational)
-#
-# Owned by R4-FP B-3 (R3-followup); R5 owner G6 first push.
+# Promotion to required is a Phase-9+ OSS-launch-era decision.
 
 on:
   push:
@@ -40,39 +30,46 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  cargo-public-api-stub:
-    name: API drift detector — RED-PHASE STUB
+  cargo-public-api:
+    name: API drift detector (informational)
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           fetch-depth: 0   # need full history for main..HEAD diff
 
-      # TODO(Phase 2b G6 first push): implement actual job steps.
-      # R5 implementer replaces this placeholder with:
-      #   - actions-rust-lang/setup-rust-toolchain@... with toolchain
-      #     nightly + components rustfmt (cargo-public-api requires
-      #     nightly rustdoc-json output)
-      #   - cargo install cargo-public-api --locked --version <pinned>
-      #   - per-crate diff loop (benten-core, benten-graph, benten-eval,
-      #     benten-ivm, benten-engine, benten-caps, benten-errors):
-      #       cargo public-api --simplified -p <crate> --diff main..HEAD
-      #     emit non-empty diffs to $GITHUB_STEP_SUMMARY
-      #   - if PR has any non-empty diff, post a single consolidated PR
-      #     comment listing the changed surfaces (operator review nudge)
-      #   - exit 0 ALWAYS (informational; no required-check gate)
-      - name: Placeholder — R5 (G6 first push) implementation pending
+      - name: Install Rust nightly (cargo-public-api requires nightly rustdoc-json)
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # nightly via @nightly
+        with:
+          toolchain: nightly
+
+      - name: Install cargo-public-api (prebuilt)
+        # taiki-e/install-action: ~3s for prebuilt cargo-public-api vs
+        # ~120s for `cargo install --locked cargo-public-api` from
+        # source. Pin to the action SHA + tool name; cargo-public-api
+        # versioning is the tool's own.
+        uses: taiki-e/install-action@cf525cb33f51aca27cd6fa02034117ab963ff9f1 # v2
+        with:
+          tool: cargo-public-api
+
+      - name: Diff public API surface against committed baselines (informational)
+        # Per-crate diff: cargo-public-api emits the public surface in
+        # text form; we compare against `docs/public-api/<crate>.txt`
+        # baselines committed at G20-A3. Drift surfaces as a step
+        # summary; the workflow always exits 0 (informational gate).
         shell: bash
         run: |
-          echo "RED-PHASE STUB: cargo-public-api.yml awaits G6 first push"
-          echo "implementation per plan §3.1."
-          echo ""
-          echo "When implemented this job MUST:"
-          echo "  - install Rust nightly + cargo-public-api (pinned)"
-          echo "  - per-crate diff main..HEAD using cargo public-api"
-          echo "  - emit diffs to step summary + PR comment if non-empty"
-          echo "  - exit 0 (informational; no required-check gate)"
-          echo ""
-          echo "Status: INFORMATIONAL (not in the 5-required-check set)."
-          exit 0
+          set -o pipefail
+          {
+            echo '## cargo-public-api drift report'
+            echo
+            for crate in benten-core benten-errors benten-graph benten-caps benten-ivm benten-eval benten-engine benten-dsl-compiler; do
+              echo "### $crate"
+              echo
+              echo '```'
+              cargo +nightly public-api --simplified -p "$crate" 2>&1 | diff -u "docs/public-api/$crate.txt" - || true
+              echo '```'
+              echo
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"

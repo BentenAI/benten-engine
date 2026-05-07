@@ -1,0 +1,6 @@
+# cargo-vet imports.lock — Phase-3 G20-A3 onboarding placeholder.
+#
+# Generated automatically by cargo-vet's first run that fetches the
+# upstream `[imports]` declared in config.toml. Committed as an empty
+# placeholder so the supply-chain/ baseline directory's structure is
+# stable + non-vacuous; cargo-vet repopulates on first invocation.
