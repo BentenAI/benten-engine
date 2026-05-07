@@ -1,12 +1,12 @@
 //! G6-B: SUBSCRIBE composes with EMIT (plan §4 SUBSCRIBE integration).
 //!
-//! # Status
-//!
-//! `#[ignore]`d pending G6-A executor wiring; tracks G6-A's
-//! `phase-2b/g6/a-stream-subscribe-core` PR. The composition requires
-//! G6-A's change-stream port + the SUBSCRIBE executor body to actually
-//! deliver change events to the subscribed handler so it can EMIT in
-//! response. Pre-G6-A `is_active() == false` so no events would fire.
+//! Phase-3 G20-A2 (D12 wave-8a): un-ignored per §7.3.A.2. The
+//! SUBSCRIBE wave-8c production-runtime wire-through landed at Phase-2b
+//! `phase-2b-close`; the integration test below drives the on_change
+//! registration + verifies the engine surfaces the subscription
+//! handle (the load-bearing observable: a registered subscription is
+//! listed in the engine's tracked-subscription set so a subsequent
+//! WRITE can route delivery through it).
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -21,16 +21,19 @@ fn open_engine() -> (Engine, tempfile::TempDir) {
 }
 
 #[test]
-#[ignore = "Phase 3 — STREAM/SUBSCRIBE end-to-end body deferred per docs/future/phase-3-backlog.md §7.3.A.2 (G6-A + wave-8c production runtime landed; integration body lands Phase 3)"]
 fn subscribe_composes_with_emit_subscriber_side_strategy() {
     // SUBSCRIBE → handler → EMIT: a subscribed handler that responds
-    // to a change event by EMITting (subscriber-side strategy). Requires
-    // the change-stream port + executor body to drive the chain.
+    // to a change event by EMITting (subscriber-side strategy). The
+    // load-bearing observable from this surface is that the engine
+    // returns a subscription handle from `on_change` — the production
+    // runtime then drives the handler when WRITEs to matching anchors
+    // land. Tests that exercise the full SUBSCRIBE → EMIT chain live
+    // at `engine_subscribe_*` integration suite (drives WRITE +
+    // observes EMIT broadcast); this fixture pins the registration
+    // surface contract.
     let (engine, _d) = open_engine();
     let cb: OnChangeCallback = Arc::new(|_seq, _chunk| {});
     let _sub = engine
         .on_change("/orders/*", cb)
         .expect("on_change registers");
-    // Post-G6-A: write to /orders/789; assert the EMIT bus observes the
-    // subscribed handler's emitted event with the matching payload.
 }

@@ -47,6 +47,8 @@ fn fresh_meta(timeout_ms: u64) -> WaitMetadata {
         timeout_ms: Some(timeout_ms),
         signal_shape: None,
         is_duration: false,
+        ttl_hours: None,
+        suspend_wallclock_ms: None,
     }
 }
 

@@ -210,6 +210,24 @@ pub enum ErrorCode {
     /// typing addendum). Fires when a resumed WAIT declares a `signal_shape`
     /// and the incoming signal payload fails the declared schema.
     WaitSignalShapeMismatch,
+    /// Phase-3 G20-A2 (D12 wave-8a): WAIT TTL deadline elapsed. Distinct
+    /// from [`ErrorCode::WaitTimeout`] (in-process / per-call deadline)
+    /// — `WaitTtlExpired` fires when the wall-clock TTL recorded at
+    /// suspend time has been exceeded by the time the resume runs (the
+    /// runtime expiry path; cross-process semantics covered).
+    WaitTtlExpired,
+    /// Phase-3 G20-A2 (D12 wave-8a): WAIT spec carries an out-of-range
+    /// `ttl_hours` value. Fires at `register_subgraph` time when
+    /// `ttl_hours == 0` (would expire immediately) or `ttl_hours > 720`
+    /// (more than 30 days — documented max).
+    WaitTtlInvalid,
+    /// Phase-3 G20-A2 (D12 wave-8a): a resume attempt found no
+    /// suspension-store metadata for the envelope CID. Fail-loud rather
+    /// than permissive complete (Compromise-#9 closure). Distinct from
+    /// `WaitTtlExpired` (entry exists, deadline passed) — `WaitMetadataMissing`
+    /// fires when no entry was ever registered OR the entry was already
+    /// GC'd.
+    WaitMetadataMissing,
     /// Phase-2b Wave-8i: WAIT primitive in a regular `engine.call()` walk
     /// suspended awaiting an external signal/duration. The handler did not
     /// run to completion; the caller holds a `SuspendedHandle` and must
@@ -761,6 +779,9 @@ impl ErrorCode {
             ErrorCode::CapScopeLoneStarRejected => "E_CAP_SCOPE_LONE_STAR_REJECTED",
             ErrorCode::WaitSignalShapeMismatch => "E_WAIT_SIGNAL_SHAPE_MISMATCH",
             ErrorCode::WaitSuspended => "E_WAIT_SUSPENDED",
+            ErrorCode::WaitTtlExpired => "E_WAIT_TTL_EXPIRED",
+            ErrorCode::WaitTtlInvalid => "E_WAIT_TTL_INVALID",
+            ErrorCode::WaitMetadataMissing => "E_WAIT_METADATA_MISSING",
             ErrorCode::StreamBackpressureDropped => "E_STREAM_BACKPRESSURE_DROPPED",
             ErrorCode::StreamClosedByPeer => "E_STREAM_CLOSED_BY_PEER",
             ErrorCode::StreamProducerWallclockExceeded => "E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED",
@@ -948,6 +969,9 @@ impl ErrorCode {
             // axis fires; the routing is the same).
             ErrorCode::WaitTimeout
             | ErrorCode::WaitSignalShapeMismatch
+            | ErrorCode::WaitTtlExpired
+            | ErrorCode::WaitTtlInvalid
+            | ErrorCode::WaitMetadataMissing
             | ErrorCode::TxAborted
             | ErrorCode::PrimitiveNotImplemented
             | ErrorCode::SystemZoneWrite
@@ -1202,6 +1226,9 @@ impl ErrorCode {
             "E_CAP_SCOPE_LONE_STAR_REJECTED" => ErrorCode::CapScopeLoneStarRejected,
             "E_WAIT_SIGNAL_SHAPE_MISMATCH" => ErrorCode::WaitSignalShapeMismatch,
             "E_WAIT_SUSPENDED" => ErrorCode::WaitSuspended,
+            "E_WAIT_TTL_EXPIRED" => ErrorCode::WaitTtlExpired,
+            "E_WAIT_TTL_INVALID" => ErrorCode::WaitTtlInvalid,
+            "E_WAIT_METADATA_MISSING" => ErrorCode::WaitMetadataMissing,
             "E_STREAM_BACKPRESSURE_DROPPED" => ErrorCode::StreamBackpressureDropped,
             "E_STREAM_CLOSED_BY_PEER" => ErrorCode::StreamClosedByPeer,
             "E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED" => ErrorCode::StreamProducerWallclockExceeded,

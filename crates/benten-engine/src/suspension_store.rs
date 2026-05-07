@@ -177,6 +177,15 @@ struct SerializableWaitMetadata {
     /// the WAIT primitive captured at suspend time.
     signal_shape: Option<Value>,
     is_duration: bool,
+    /// Phase-3 G20-A2 (D12 wave-8a): TTL hours from the WAIT spec. Optional
+    /// for forward / backward compatibility — DAG-CBOR de-encoder treats
+    /// missing keys as `None` so a Phase-2b-shape on-disk entry parses
+    /// cleanly under the Phase-3 schema.
+    #[serde(default)]
+    ttl_hours: Option<u32>,
+    /// Phase-3 G20-A2 (D12 wave-8a): wall-clock anchor for the TTL.
+    #[serde(default)]
+    suspend_wallclock_ms: Option<u64>,
 }
 
 impl From<WaitMetadata> for SerializableWaitMetadata {
@@ -186,6 +195,8 @@ impl From<WaitMetadata> for SerializableWaitMetadata {
             timeout_ms: m.timeout_ms,
             signal_shape: m.signal_shape,
             is_duration: m.is_duration,
+            ttl_hours: m.ttl_hours,
+            suspend_wallclock_ms: m.suspend_wallclock_ms,
         }
     }
 }
@@ -197,6 +208,8 @@ impl From<SerializableWaitMetadata> for WaitMetadata {
             timeout_ms: m.timeout_ms,
             signal_shape: m.signal_shape,
             is_duration: m.is_duration,
+            ttl_hours: m.ttl_hours,
+            suspend_wallclock_ms: m.suspend_wallclock_ms,
         }
     }
 }

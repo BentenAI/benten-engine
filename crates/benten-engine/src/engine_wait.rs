@@ -69,6 +69,7 @@ use benten_eval::{
     AttributionFrame, ExecutionStateEnvelope, ExecutionStatePayload, Frame, SuspendedHandle,
     WaitResumeSignal,
 };
+use benten_graph::MutexExt;
 
 use crate::engine::Engine;
 use crate::error::EngineError;
@@ -380,7 +381,16 @@ impl Engine {
         // Wave-8i convergence pin in `wait_primitive_consults_signal_property`).
         match self.dispatch_call(&key, op, input, None) {
             Ok(outcome) => Ok(SuspensionOutcome::Complete(outcome)),
-            Err(EngineError::WaitSuspended { handle }) => Ok(SuspensionOutcome::Suspended(handle)),
+            Err(EngineError::WaitSuspended { handle }) => {
+                // Phase-3 G20-A2 (D12 wave-8a): track the envelope for GC
+                // sweeps + run an opportunistic event-driven sweep on
+                // suspend (unless event-driven GC is disabled). The sweep
+                // is best-effort — failure to sweep does not abort the
+                // suspend.
+                self.wait_ttl_track_envelope(*handle.state_cid());
+                self.wait_ttl_run_event_driven_sweep_if_enabled();
+                Ok(SuspensionOutcome::Suspended(handle))
+            }
             Err(e) => Err(e),
         }
     }
@@ -635,6 +645,36 @@ impl Engine {
         // expectations than the bytes-only engine resume surfaces).
         let state_cid = envelope.envelope_cid().map_err(EngineError::Core)?;
         if let Ok(Some(meta)) = self.suspension_store.get_wait(&state_cid) {
+            // Phase-3 G20-A2 (D12 wave-8a): wall-clock TTL deadline
+            // check fires BEFORE the in-process timeout check. The TTL
+            // deadline is wall-clock-anchored (`suspend_wallclock_ms +
+            // ttl_hours * 3_600_000`); if the recorded TTL has elapsed
+            // we surface E_WAIT_TTL_EXPIRED + GC the entry rather than
+            // proceeding into the rest of the resume protocol.
+            let wall_now_ms = crate::wait_ttl_gc::wallclock_now_ms(
+                *self.wait_wall_clock_override_ms.lock_recover(),
+            );
+            if crate::wait_ttl_gc::is_expired(&meta, wall_now_ms) {
+                // Best-effort GC of the expired entry as part of the
+                // resume hot-path's event-driven sweep contract.
+                let _ = crate::wait_ttl_gc::reap_one(&self.suspension_store, &state_cid);
+                self.wait_ttl_untrack_envelope(&state_cid);
+                {
+                    let mut stats = self.wait_ttl_gc_stats.lock_recover();
+                    stats.reaped_count = stats.reaped_count.saturating_add(1);
+                    stats.sweep_count = stats.sweep_count.saturating_add(1);
+                }
+                return Err(EngineError::Other {
+                    code: ErrorCode::WaitTtlExpired,
+                    message: format!(
+                        "E_WAIT_TTL_EXPIRED: resume: WAIT TTL deadline elapsed for envelope {} \
+                         (suspended {:?} ms wall-clock; ttl_hours={:?}; now {wall_now_ms} ms)",
+                        state_cid.to_base32(),
+                        meta.suspend_wallclock_ms,
+                        meta.ttl_hours,
+                    ),
+                });
+            }
             let now_ms = u64::try_from(self.monotonic_source.elapsed_since_start().as_millis())
                 .unwrap_or(u64::MAX);
             // Map the engine-level `ResumePayload` enum onto the
@@ -1027,6 +1067,13 @@ impl Engine {
             let envelope = ExecutionStateEnvelope::new(payload).map_err(EngineError::Core)?;
             let state_cid = cache_put(self, envelope)?;
             let handle = SuspendedHandle::new(state_cid, DEFAULT_SYNTHETIC_SIGNAL);
+            // Phase-3 G20-A2 (D12 wave-8a): track even synthetic
+            // empty-spec suspends so the GC sweep + Engine::drop final
+            // sweep reach them. The empty-spec path doesn't carry TTL
+            // metadata so the sweep is a no-op for it (no deadline =
+            // not expired) — but the tracking keeps the bookkeeping
+            // uniform across surfaces.
+            self.wait_ttl_track_envelope(state_cid);
             return Ok(SuspensionOutcome::Suspended(handle));
         }
 
@@ -1054,7 +1101,13 @@ impl Engine {
         // binding contract.
         match self.dispatch_call(handler_id, op, input, Some(*principal)) {
             Ok(outcome) => Ok(SuspensionOutcome::Complete(outcome)),
-            Err(EngineError::WaitSuspended { handle }) => Ok(SuspensionOutcome::Suspended(handle)),
+            Err(EngineError::WaitSuspended { handle }) => {
+                // Phase-3 G20-A2 (D12 wave-8a): same suspend-time GC hook
+                // as `call_with_suspension`.
+                self.wait_ttl_track_envelope(*handle.state_cid());
+                self.wait_ttl_run_event_driven_sweep_if_enabled();
+                Ok(SuspensionOutcome::Suspended(handle))
+            }
             Err(e) => Err(e),
         }
     }

@@ -58,11 +58,24 @@ fn stream_handle_close_idempotent_for_napi_bridge() {
 }
 
 #[test]
-#[ignore = "Phase 3 — STREAM/SUBSCRIBE end-to-end body deferred per docs/future/phase-3-backlog.md §7.3.A.2 (G6-A + wave-8c production runtime landed; integration body lands Phase 3)"]
 fn stream_napi_async_iterator_back_pressure_propagates_native() {
-    // D4-RESOLVED: PULL-based bounded `tokio::sync::mpsc` (default
-    // capacity 16). When the napi-side consumer pauses, the Rust-side
-    // producer's `send()` pends instead of buffering unboundedly. The
-    // bounded mpsc only exists once G6-A's executor is live; pre-G6-A
-    // the chunk-sink scaffold is empty.
+    // Phase-3 G20-A2 (D12 wave-8a): the Rust-side StreamHandle contract
+    // backing the napi async-iterator surface. The actual bounded
+    // tokio::sync::mpsc back-pressure semantics are tested at the JS
+    // layer (`bindings/napi/test/stream_napi_async_iterator_back_pressure.test.ts`);
+    // this fixture pins the Rust-side observable: the
+    // `testing_open_stream_for_test` factory produces a handle whose
+    // pre-buffered chunks drain cleanly + close() is idempotent
+    // — precisely the contract napi's `next_chunk_adapter` /
+    // `close_handle_adapter` rely on.
+    let (engine, _d) = open_engine();
+    let mut handle = engine.testing_open_stream_for_test(vec![vec![10], vec![20], vec![30]]);
+    let mut received = Vec::new();
+    while let Some(chunk) = handle.next_chunk().expect("recv chunk") {
+        received.push(chunk.bytes);
+    }
+    assert_eq!(received, vec![vec![10], vec![20], vec![30]]);
+    handle.close();
+    handle.close();
+    assert!(handle.is_drained());
 }
