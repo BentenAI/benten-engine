@@ -418,6 +418,32 @@ export type SuspensionResult =
     };
 
 /**
+ * Phase-3 G19-C1 (phase-3-backlog §7.1.4) — discriminated-union return
+ * shape for [`Engine.resumeWithMeta`], the ergonomic wrapper over
+ * [`Engine.resumeFromBytes`] that surfaces metadata about whether the
+ * resumed handler ran to completion or suspended again on a downstream
+ * WAIT.
+ *
+ * - `complete` — the handler completed; `outcome` carries the terminal
+ *   `Outcome` shape (same shape `engine.call` returns).
+ * - `suspended` — the resumed handler hit ANOTHER WAIT primitive and
+ *   re-suspended; the resume cycle continues with a fresh
+ *   `handle` / `stateCid` / `signalName` triple. Mirrors the
+ *   [`SuspensionResult`] suspended-arm shape so callers can
+ *   structurally re-enter the resume loop.
+ */
+export type ResumeWithMetaResult =
+  | { kind: "complete"; outcome: Outcome }
+  | {
+      kind: "suspended";
+      handle: Buffer;
+      /** Engine-assigned base32 CID of the new persisted envelope. */
+      stateCid: string;
+      /** Signal name the new suspension is waiting for. */
+      signalName: string;
+    };
+
+/**
  * Input shape for `Engine.createView` (legacy id-string form). Phase-1
  * recognizes the well-known id family `content_listing_<label>`; extra
  * fields are reserved for Phase-2 user-defined views.

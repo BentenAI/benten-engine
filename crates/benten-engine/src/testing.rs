@@ -632,9 +632,19 @@ pub fn testing_emit_n_synthetic_events(
 /// Tests depending on the helper's behaviour (specifically
 /// `wait_ttl_expires_via_suspension_store`) remain `#[ignore]`-d under
 /// the D12 brief.
+///
+/// Phase-3 G19-C1 (phase-3-backlog §7.1.4): the napi binding
+/// `testingAdvanceWaitClock` consumes this helper. The Phase-2b
+/// `&mut Engine` signature relaxed to `&Engine` because the no-op
+/// stub does not require interior mutation; the D12 lift to a real
+/// MockTimeSource advance will route through `Arc<...>` interior
+/// mutation on the time-source field rather than the outer reference,
+/// preserving the relaxed signature post-lift. Mirrors the
+/// `testing_revoke_cap_mid_call` shape (also `&Self`) added in
+/// wave-8c-subscribe-infra.
 #[cfg(any(test, feature = "test-helpers"))]
 pub fn testing_advance_wait_clock(
-    _engine: &mut crate::engine::Engine,
+    _engine: &crate::engine::Engine,
     _delta: std::time::Duration,
 ) {
     // Phase-3 D12 brief lifts this to a real MockTimeSource advance.

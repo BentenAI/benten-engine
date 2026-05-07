@@ -206,3 +206,12 @@ required-features = ["in-process-test"]
 [[test]]
 name = "cross_browser_determinism_workflow_pins"
 required-features = ["in-process-test"]
+
+# Phase-3 G19-C1 wave-7 — r6-napi-2 closure: testingAdvanceWaitClock
+# napi free-function binding-present pin (§7.1.4). Same `in-process-test`
+# rlib gate as the cross-browser sister tests above: the test reaches
+# into `benten_napi::testing` which only resolves when napi extern
+# symbols are excluded from the rlib.
+[[test]]
+name = "wait_clock"
+required-features = ["in-process-test"]

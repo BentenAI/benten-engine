@@ -257,3 +257,39 @@ fn base64_encode(input: &[u8]) -> String {
 /// the import changes no behavior; retaining it documents intent.
 #[allow(dead_code, reason = "exported to sibling napi-surface glue")]
 pub(crate) fn _touch_cid(_c: &Cid) {}
+
+// ---------------------------------------------------------------------------
+// Phase-3 G19-C1 (phase-3-backlog §7.1.4) — testingAdvanceWaitClock napi
+// adapter
+//
+// Drives `benten_engine::testing::testing_advance_wait_clock`, which is
+// the phase-3-backlog §7.1.4 entry point for advancing the engine's
+// MockTimeSource so WAIT-TTL tests can synthesize a TTL expiry without
+// real wall-clock latency. The Rust-side implementation is a no-op stub
+// today (D12 brief lift not yet landed); this napi adapter is the
+// JS-surface plumbing that the TS wait-test fixtures call directly.
+//
+// Cfg-gated: this surface compiles ONLY under `cfg(any(test, feature =
+// "test-helpers"))`, mirroring the engine-side gating discipline so the
+// production cdylib does not ship the testing accessor.
+// ---------------------------------------------------------------------------
+
+/// Internal: drive `Engine::testing_advance_wait_clock`. The caller
+/// supplies a milliseconds delta; the engine-side helper applies it to
+/// the injected MockTimeSource. JS callers that want to synthesize a
+/// 5-minute TTL expiry pass `300_000`.
+#[cfg(any(test, feature = "test-helpers"))]
+pub(crate) fn testing_advance_wait_clock_adapter(
+    engine: &InnerEngine,
+    delta_ms: i64,
+) -> napi::Result<()> {
+    if delta_ms < 0 {
+        return Err(napi::Error::new(
+            Status::InvalidArg,
+            "testingAdvanceWaitClock: delta_ms must be non-negative",
+        ));
+    }
+    let delta = std::time::Duration::from_millis(u64::try_from(delta_ms).unwrap_or(0));
+    benten_engine::testing::testing_advance_wait_clock(engine, delta);
+    Ok(())
+}
