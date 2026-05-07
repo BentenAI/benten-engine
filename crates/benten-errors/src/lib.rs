@@ -233,6 +233,23 @@ pub enum ErrorCode {
     /// available capacity. Kills permanently-stalled sends. streaming-systems
     /// implementation hint per D4-RESOLVED.
     StreamProducerWallclockExceeded,
+    /// Phase-3 G19-C2 wave-7 (stream-r1-9 + §7.1.5): per-handler STREAM
+    /// `chunkCountCap` / `wallclockBudgetMs` configuration violates the
+    /// workspace grant ceiling. Per-handler config NARROWS but cannot
+    /// WIDEN the workspace default — widening attempts fire this typed
+    /// error at registration / call time. Distinct from
+    /// `StreamBackpressureDropped` (runtime budget overrun) — fires
+    /// BEFORE any chunks flow.
+    InvStreamConfig,
+    /// Phase-3 G19-C2 wave-7 (§7.1.2 + stream-r1-4): a JS-side
+    /// `StreamHandle` constructed via `engine.openStream` was garbage-
+    /// collected without an explicit `close()` call. The TS-side
+    /// `FinalizationRegistry` leak detector fires this typed error
+    /// against the operator observability surface (`engine.onStreamLeaked`
+    /// callback). Native-side stream ownership remains correct (Drop
+    /// joins the producer thread); this error surfaces JS-side handle
+    /// leakage so operators can spot leaking call sites.
+    StreamHandleLeaked,
     /// SUBSCRIBE delivery-time failure (capability re-check denied at
     /// delivery, downstream consumer dropped, etc.). D5-RESOLVED cap-check
     /// at delivery.
@@ -747,6 +764,8 @@ impl ErrorCode {
             ErrorCode::StreamBackpressureDropped => "E_STREAM_BACKPRESSURE_DROPPED",
             ErrorCode::StreamClosedByPeer => "E_STREAM_CLOSED_BY_PEER",
             ErrorCode::StreamProducerWallclockExceeded => "E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED",
+            ErrorCode::InvStreamConfig => "E_INV_STREAM_CONFIG",
+            ErrorCode::StreamHandleLeaked => "E_STREAM_HANDLE_LEAKED",
             ErrorCode::SubscribeDeliveryFailed => "E_SUBSCRIBE_DELIVERY_FAILED",
             ErrorCode::SubscribePatternInvalid => "E_SUBSCRIBE_PATTERN_INVALID",
             ErrorCode::SubscribeCursorLost => "E_SUBSCRIBE_CURSOR_LOST",
@@ -1031,7 +1050,16 @@ impl ErrorCode {
             | ErrorCode::InvRegistration
             | ErrorCode::InvIterateMaxMissing
             | ErrorCode::DuplicateHandler
-            | ErrorCode::InvSandboxDepth => None,
+            | ErrorCode::InvSandboxDepth
+            // Phase-3 G19-C2 (stream-r1-9): per-handler STREAM config
+            // widen attempt fires at registration / call-time, not along
+            // a primitive edge.
+            | ErrorCode::InvStreamConfig
+            // Phase-3 G19-C2 (§7.1.2 + stream-r1-4): JS-side handle leak
+            // surfaces at the operator observability surface
+            // (`engine.onStreamLeaked` callback), not along an in-graph
+            // primitive edge.
+            | ErrorCode::StreamHandleLeaked => None,
 
             // Resume-protocol failures — surface at the resume call site,
             // not along a primitive edge. No routing. WAIT-suspended is a
@@ -1177,6 +1205,8 @@ impl ErrorCode {
             "E_STREAM_BACKPRESSURE_DROPPED" => ErrorCode::StreamBackpressureDropped,
             "E_STREAM_CLOSED_BY_PEER" => ErrorCode::StreamClosedByPeer,
             "E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED" => ErrorCode::StreamProducerWallclockExceeded,
+            "E_INV_STREAM_CONFIG" => ErrorCode::InvStreamConfig,
+            "E_STREAM_HANDLE_LEAKED" => ErrorCode::StreamHandleLeaked,
             "E_SUBSCRIBE_DELIVERY_FAILED" => ErrorCode::SubscribeDeliveryFailed,
             "E_SUBSCRIBE_PATTERN_INVALID" => ErrorCode::SubscribePatternInvalid,
             "E_SUBSCRIBE_CURSOR_LOST" => ErrorCode::SubscribeCursorLost,

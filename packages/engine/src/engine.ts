@@ -37,9 +37,12 @@ import {
 import { mapTraceStep } from "./internal/trace.js";
 import { toMermaid } from "./mermaid.js";
 import {
+  fireStreamLeak,
+  registerStreamLeakCallback,
   validateStreamCallArgs,
   wrapStreamHandle,
   type NativeStreamHandle,
+  type StreamHandleLeakedEvent,
 } from "./stream.js";
 import {
   serializeCursor,

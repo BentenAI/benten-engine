@@ -1580,6 +1580,32 @@ mod napi_surface {
                 None => 0,
             })
         }
+
+        /// Phase-3 G19-C2 wave-7 (§7.1.2 + stream-r1-4): exposes the
+        /// underlying `StreamHandle::requires_explicit_close` flag
+        /// across the napi boundary so the TS-side wrapper at
+        /// `packages/engine/src/stream.ts` can decide whether to arm
+        /// the `FinalizationRegistry` leak detector for a given handle.
+        ///
+        /// Handles produced by `engine.openStream(...)` return `true`
+        /// (explicit-close lifecycle); handles produced by
+        /// `engine.callStream(...)` return `false` (AsyncIterable
+        /// auto-close on `for-await` scope-exit). Pre-G19-C2 the flag
+        /// existed engine-side but did not cross to JS — the TS
+        /// surfaces were functionally indistinguishable.
+        #[napi(js_name = "requiresExplicitClose")]
+        pub fn requires_explicit_close(&self) -> napi::Result<bool> {
+            let g = self.inner.lock().map_err(|_| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    "StreamHandle: internal lock poisoned",
+                )
+            })?;
+            Ok(match g.as_ref() {
+                Some(h) => h.requires_explicit_close(),
+                None => false,
+            })
+        }
     }
 }
 

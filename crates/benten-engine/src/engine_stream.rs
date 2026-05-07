@@ -66,11 +66,34 @@
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 
 use benten_core::Node;
 use benten_errors::ErrorCode;
 use benten_eval::chunk_sink::{Chunk, ChunkSource};
 use benten_graph::MutexExt;
+
+/// Phase-3 G19-C2 wave-7 (§7.1.5 + stream-r1-9): workspace-default
+/// chunk-count grant ceiling. Per-handler `chunkCountCap` overrides
+/// must NARROW (declare a value `<= ceiling`) — widening attempts fire
+/// `E_INV_STREAM_CONFIG` at registration / call time.
+///
+/// Mirrors the
+/// `benten_eval::chunk_sink::ChunkProducerConfig::default()::max_chunks`
+/// value (1,000,000) so the engine-side ceiling and the eval-side
+/// runtime default agree without duplicate cross-crate constants.
+pub const STREAM_GRANT_CEILING_CHUNK_COUNT: u64 = 1_000_000;
+
+/// Phase-3 G19-C2 wave-7 (§7.1.5 + stream-r1-9): workspace-default
+/// wallclock-budget grant ceiling in milliseconds. Per-handler
+/// `wallclockBudgetMs` overrides must NARROW (declare a value
+/// `<= ceiling`) — widening attempts fire `E_INV_STREAM_CONFIG`.
+///
+/// Set to the Phase-2b 30s SANDBOX wallclock parity value so STREAM
+/// + SANDBOX share a single "longest a single primitive call may
+/// occupy a producer thread" ceiling. Independent tightening per
+/// handler narrows below this default.
+pub const STREAM_GRANT_CEILING_WALLCLOCK_MS: u64 = 30_000;
 
 use crate::engine::Engine;
 use crate::engine_wait::HandlerRef;
@@ -644,8 +667,14 @@ impl Engine {
         use benten_eval::PrimitiveKind;
         use benten_eval::chunk_sink::{ChunkProducer, ChunkProducerConfig, spawn_chunk_producer};
 
-        // Find the STREAM node in the registered SubgraphSpec.
-        let (source_expr, chunk_size) = {
+        // Find the STREAM node in the registered SubgraphSpec. Read
+        // per-handler ESC-defense config (`chunkCountCap` /
+        // `wallclockBudgetMs`) per Phase-3 G19-C2 wave-7 §7.1.5 +
+        // stream-r1-3 + stream-r1-9 alongside the existing
+        // `source` / `chunkSize` / `persist` properties. Per-handler
+        // values NARROW (must be `<= STREAM_GRANT_CEILING_*`); widening
+        // attempts fire `E_INV_STREAM_CONFIG` BEFORE any chunks flow.
+        let (source_expr, chunk_size, chunk_count_cap, wallclock_budget_ms) = {
             let specs = self.inner.specs.lock_recover();
             let Some(spec) = specs.get(handler_id) else {
                 // No DSL spec registered (e.g. crud:* path) — there's no
@@ -718,7 +747,88 @@ impl Engine {
                     ),
                 });
             }
-            (source, chunk_size)
+            // Phase-3 G19-C2 wave-7 (§7.1.5 + stream-r1-9): read
+            // per-handler `chunkCountCap` + `wallclockBudgetMs`.
+            // Validate AGAINST the workspace grant ceiling — widening
+            // attempts (per-handler value > ceiling) fire
+            // `E_INV_STREAM_CONFIG` BEFORE any chunks flow. The
+            // narrow-only policy preserves the workspace's
+            // ESC-defense-in-depth semantic.
+            let chunk_count_cap = match stream_ps.properties.get("chunkCountCap") {
+                Some(Value::Int(n)) if *n > 0 => {
+                    let cap = u64::try_from(*n).unwrap_or(u64::MAX);
+                    if cap > STREAM_GRANT_CEILING_CHUNK_COUNT {
+                        return Err(EngineError::Other {
+                            code: ErrorCode::InvStreamConfig,
+                            message: format!(
+                                "call_stream: handler {handler_id} per-handler \
+                                 chunkCountCap={cap} exceeds workspace grant \
+                                 ceiling {STREAM_GRANT_CEILING_CHUNK_COUNT}. \
+                                 Per-handler config NARROWS but cannot WIDEN \
+                                 the workspace default (stream-r1-9)."
+                            ),
+                        });
+                    }
+                    Some(cap)
+                }
+                Some(Value::Int(n)) if *n <= 0 => {
+                    return Err(EngineError::Other {
+                        code: ErrorCode::InvStreamConfig,
+                        message: format!(
+                            "call_stream: handler {handler_id} per-handler \
+                             chunkCountCap must be a positive Int (got {n})"
+                        ),
+                    });
+                }
+                Some(_other) => {
+                    return Err(EngineError::Other {
+                        code: ErrorCode::InvStreamConfig,
+                        message: format!(
+                            "call_stream: handler {handler_id} per-handler \
+                             chunkCountCap must be Int (got non-Int)"
+                        ),
+                    });
+                }
+                None => None,
+            };
+            let wallclock_budget_ms = match stream_ps.properties.get("wallclockBudgetMs") {
+                Some(Value::Int(n)) if *n > 0 => {
+                    let ms = u64::try_from(*n).unwrap_or(u64::MAX);
+                    if ms > STREAM_GRANT_CEILING_WALLCLOCK_MS {
+                        return Err(EngineError::Other {
+                            code: ErrorCode::InvStreamConfig,
+                            message: format!(
+                                "call_stream: handler {handler_id} per-handler \
+                                 wallclockBudgetMs={ms} exceeds workspace grant \
+                                 ceiling {STREAM_GRANT_CEILING_WALLCLOCK_MS}. \
+                                 Per-handler config NARROWS but cannot WIDEN \
+                                 the workspace default (stream-r1-9)."
+                            ),
+                        });
+                    }
+                    Some(ms)
+                }
+                Some(Value::Int(n)) if *n <= 0 => {
+                    return Err(EngineError::Other {
+                        code: ErrorCode::InvStreamConfig,
+                        message: format!(
+                            "call_stream: handler {handler_id} per-handler \
+                             wallclockBudgetMs must be a positive Int (got {n})"
+                        ),
+                    });
+                }
+                Some(_other) => {
+                    return Err(EngineError::Other {
+                        code: ErrorCode::InvStreamConfig,
+                        message: format!(
+                            "call_stream: handler {handler_id} per-handler \
+                             wallclockBudgetMs must be Int (got non-Int)"
+                        ),
+                    });
+                }
+                None => None,
+            };
+            (source, chunk_size, chunk_count_cap, wallclock_budget_ms)
         };
 
         // Resolve `source_expr` against the input node. Source supports the
@@ -773,7 +883,22 @@ impl Engine {
             producer
         };
 
-        let config = ChunkProducerConfig::default();
+        // Phase-3 G19-C2 wave-7 (§7.1.5 + stream-r1-3): apply per-handler
+        // ESC-defense narrowing to the producer config. `max_chunks` +
+        // `wallclock_budget` are the engine→eval-side bridges; the
+        // eval-side `BoundedSink` enforces both at runtime. Per
+        // stream-r1-3, the production-runtime path is here in
+        // `build_stream_handle`; the dead `crates/benten-eval/src/primitives/stream.rs::execute`
+        // arm stays loud-fail (E_PRIMITIVE_NOT_IMPLEMENTED) so a
+        // regression that resurrects the deceptive-sentinel pattern is
+        // observable.
+        let mut config = ChunkProducerConfig::default();
+        if let Some(cap) = chunk_count_cap {
+            config.max_chunks = Some(cap);
+        }
+        if let Some(ms) = wallclock_budget_ms {
+            config.wallclock_budget = Some(Duration::from_millis(ms));
+        }
         let (source, thread_handle) = spawn_chunk_producer(producer, config);
         Ok(StreamHandle::from_producer_bridge(
             source,
