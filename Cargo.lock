@@ -420,6 +420,7 @@ dependencies = [
  "benten-core",
  "benten-errors",
  "benten-id",
+ "blake3",
  "bytes",
  "iroh",
  "loro",

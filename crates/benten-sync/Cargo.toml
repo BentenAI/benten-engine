@@ -59,6 +59,16 @@ serde_ipld_dagcbor = { workspace = true }
 serde_bytes = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+# G16-C wave-6b: BLAKE3 for Merkle Search Tree node-hash + Merkle-proof
+# verification. Parity with `benten-core::Cid` (multihash 0x1e blake3)
+# per CLAUDE.md baked-in #5 (BLAKE3 + DAG-CBOR + CIDv1). MST node hashes
+# are 32-byte BLAKE3 digests; the `MstCid` newtype in `mst.rs` wraps
+# the raw digest. We do NOT depend on `benten-core` from the sync layer
+# — the dependency direction is engine → sync per arch-r1-11 (verified
+# by `tests/dependency_edges.rs`); the engine bridges benten-core CIDs
+# ↔ MST CIDs at the consume boundary when wiring the production
+# sync-replica path.
+blake3 = { workspace = true }
 
 # G16-A wave-6 canary: iroh transport core. Native-only — cfg-gated
 # behind `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`
