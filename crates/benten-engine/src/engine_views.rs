@@ -567,7 +567,7 @@ impl Engine {
     }
 
     /// Phase-3 G19-C1 — accessor for the engine's current ChangeEvent
-    /// head offset. The napi-side [`view.onUpdate()`] iterator records
+    /// head offset. The napi-side `view.onUpdate()` iterator records
     /// the head as the `next_offset` it will pass back on the next
     /// drain step. Mirrors [`Self::change_event_count`] but lifted to
     /// the public surface as a paired accessor next to the
