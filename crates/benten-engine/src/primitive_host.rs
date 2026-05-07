@@ -714,6 +714,32 @@ impl PrimitiveHost for Engine {
         guard.last().and_then(|f| f.actor)
     }
 
+    /// Phase-3 G19-E (wave-7b): TRANSFORM AST cache lookup.
+    ///
+    /// Closes `docs/future/phase-2-backlog.md` §9.2 by serving the
+    /// pre-parsed [`benten_eval::expr::Expr`] for the supplied
+    /// `node_id` from the engine's `crate::ast_cache::AstCache`. The
+    /// cache is keyed on `(handler_cid, node_id)`; we resolve
+    /// `handler_cid` from the top of the engine's `active_call` stack
+    /// (the same surface attribution + `suspending_principal` use). On
+    /// miss — including the absent-handler-frame case (defensive; should
+    /// not happen on a real dispatch) and the
+    /// `testing_force_reregister_with_different_cid` scenario (the test
+    /// hook flips `handler_cid` without re-populating the cache) — we
+    /// return `None` so the TRANSFORM executor falls through to the
+    /// per-call parse path.
+    fn cached_transform_ast(
+        &self,
+        node_id: &str,
+    ) -> Option<std::sync::Arc<benten_eval::expr::Expr>> {
+        let handler_cid = {
+            let guard = benten_graph::MutexExt::lock_recover(&self.active_call);
+            guard.last().and_then(|f| f.handler_cid)
+        };
+        let handler_cid = handler_cid?;
+        self.inner.ast_cache.lookup(&handler_cid, node_id)
+    }
+
     /// Phase 2b Wave-8b — engine-side SANDBOX dispatch.
     ///
     /// **wsa-w8b-1 fix-pass:** the trait-default body returns

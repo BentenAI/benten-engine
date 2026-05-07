@@ -912,6 +912,31 @@ impl Engine {
             })
     }
 
+    /// Phase-3 G19-E (wave-7b) test-only: snapshot the per-handler
+    /// TRANSFORM AST cache's hit / miss counters and current entry
+    /// count.
+    ///
+    /// Used by the `subgraph_ast_cache_full_wire_up` integration test
+    /// to assert the dispatch path actually consults the cache (defends
+    /// against the "cache exists but never consulted" failure mode per
+    /// the R3-E pin's pim-2 §3.6b end-to-end requirement). Cfg-gated to
+    /// keep the test-only API out of the napi cdylib, matching the
+    /// sibling `testing_parse_counter` gate.
+    #[cfg(any(test, feature = "test-helpers"))]
+    #[must_use]
+    pub fn testing_ast_cache_stats(&self) -> crate::ast_cache::AstCacheStats {
+        self.inner.ast_cache.stats()
+    }
+
+    /// Phase-3 G19-E (wave-7b) test-only: reset the AST cache's hit /
+    /// miss counters to zero. Used by the wire-up integration test +
+    /// the per-call parse cost reduction test to measure a single
+    /// dispatch sequence cleanly.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn testing_reset_ast_cache_counters(&self) {
+        self.inner.ast_cache.reset_counters();
+    }
+
     /// Phase 2a G2-B test-only: reset the AST-cache parse counter to zero.
     ///
     /// R6FP-R3 sec-r6r3-02: cfg-gated to keep test-only API out of the napi cdylib.
@@ -966,6 +991,18 @@ impl Engine {
             "force-reregister must produce a distinct CID"
         );
         guard.insert(handler_id.to_string(), fresh);
+        drop(guard);
+        // G19-E (phase-2-backlog §9.2): drop the OLD CID's entries from
+        // the per-handler AST cache so a re-population pass does not
+        // accumulate. The NEW CID has no entries yet — TRANSFORM
+        // dispatch under the new CID will fall through to the per-call
+        // parse path until something else populates the cache (the test
+        // hook intentionally bypasses `register_subgraph_replace` so
+        // this is the expected behaviour). The integration test
+        // `subgraph_ast_cache_correctness_under_handler_re_register`
+        // exercises the load-bearing flip via the full
+        // `register_subgraph_replace` path which DOES re-populate.
+        self.inner.ast_cache.invalidate_handler(&existing);
         Ok(())
     }
 

@@ -55,6 +55,13 @@
 // EngineGeneric<B>` block.
 #[cfg(not(feature = "browser-backend"))]
 pub mod builder;
+// Phase-3 G19-E (wave-7b): per-handler TRANSFORM AST cache. Closes
+// `docs/future/phase-2-backlog.md` §9.2 by storing parsed `Expr` ASTs
+// keyed by `(handler_cid, node_id)` so per-call dispatch consults the
+// cache via `PrimitiveHost::cached_transform_ast` instead of re-parsing
+// the `expr` source string. See module rustdoc for the population +
+// invalidation contract.
+pub mod ast_cache;
 // Phase-3 G13-pre-C scaffold (wave-1pre) — shared per-event
 // read-cap-coverage helper. Both G14-D F6 SUBSCRIBE filtering (wave-5a)
 // and G17-A1 ESC-9 `live_cap_check` (wave-5b) consume this module from
@@ -134,6 +141,7 @@ pub use benten_eval::PrimitiveKind;
 #[cfg(not(target_arch = "wasm32"))]
 pub use engine_config::{EngineConfig, EngineConfigError, SandboxSection};
 
+pub use ast_cache::AstCacheStats;
 #[cfg(not(feature = "browser-backend"))]
 pub use builder::{EngineBuilder, NOAUTH_STARTUP_LOG};
 pub use change_probe::ChangeProbe;

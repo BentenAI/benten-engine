@@ -11,10 +11,20 @@
 //! Every TRANSFORM node's `expr` is parsed at `register_subgraph` time via
 //! [`crate::invariants::validate_transform_expressions`]; unparseable
 //! grammar surfaces `E_TRANSFORM_SYNTAX` during registration, not at call
-//! time. The runtime executor re-parses defensively — the AST cache that
-//! would make the re-parse free is Phase-2 scope (Phase-2
-//! evaluator-performance pass). The observable behaviour from a caller's
-//! perspective is identical either way.
+//! time.
+//!
+//! # AST cache (Phase-3 G19-E — phase-2-backlog §9.2 CLOSURE)
+//!
+//! Per Phase-3 R5 wave-7b G19-E, the runtime executor consults the host's
+//! [`crate::PrimitiveHost::cached_transform_ast`] hook BEFORE re-parsing
+//! the `expr` source on every call. The `benten-engine` host populates
+//! the cache at `register_subgraph` / `register_subgraph_replace` time
+//! (entries keyed by `(handler_cid, node_id)`); subsequent calls under
+//! the same handler version skip the parse entirely. The cache is
+//! invalidated when the handler's CID flips (re-register). Defensive
+//! re-parse remains the fallback path when `cached_transform_ast`
+//! returns `None` (Phase-1 `NullHost` + every test host); observable
+//! behaviour is identical either way.
 //!
 //! Phase-1 contract (R2 §2.5 row 7):
 //!
@@ -30,10 +40,18 @@
 
 use benten_core::Value;
 
-use crate::expr::{eval::Env, eval::eval_with_namespaces, parser::parse};
-use crate::{EvalError, OperationNode, StepResult};
+use crate::expr::{Expr, eval::Env, eval::eval_with_namespaces, parser::parse};
+use crate::{EvalError, OperationNode, PrimitiveHost, StepResult};
 
 /// Execute a TRANSFORM primitive.
+///
+/// G19-E (phase-2-backlog §9.2 closure): consults
+/// [`PrimitiveHost::cached_transform_ast`] for a pre-parsed
+/// [`crate::expr::Expr`] before falling through to the per-call parse
+/// path. The host's default impl returns `None` (Phase-1 NullHost + every
+/// test host); the `benten-engine` impl populates the cache at
+/// `register_subgraph` time so repeated calls at the same handler version
+/// skip the parse entirely.
 ///
 /// # Errors
 ///
@@ -41,7 +59,16 @@ use crate::{EvalError, OperationNode, StepResult};
 /// parse. Other runtime failures are routed through the `ON_ERROR` edge
 /// rather than bubbled as `Err`, matching the [`StepResult`]-as-edge-
 /// routing contract used by READ / WRITE.
-pub fn execute(op: &OperationNode) -> Result<StepResult, EvalError> {
+pub fn execute(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResult, EvalError> {
+    // G19-E: AST cache fast path. When the host returns a pre-parsed
+    // Expr for this node, skip the source-property lookup and the parse
+    // step entirely. Falls through to the parse path on cache miss
+    // (default trait impl) so Phase-1 NullHost + unit tests keep
+    // working unchanged.
+    if let Some(cached) = host.cached_transform_ast(&op.id) {
+        return run_with_expr(op, cached.as_ref());
+    }
+
     let expr_src = match op.properties.get("expr") {
         Some(Value::Text(s)) => s.clone(),
         _ => return Ok(on_error("TRANSFORM operation missing `expr` property")),
@@ -58,12 +85,19 @@ pub fn execute(op: &OperationNode) -> Result<StepResult, EvalError> {
         }
     };
 
+    run_with_expr(op, &expr)
+}
+
+/// Evaluate a TRANSFORM `Expr` (cache-hit or fresh-parse) against the
+/// node's `input` / `result` properties. Shared by the cached and
+/// non-cached paths so behaviour is identical either way.
+fn run_with_expr(op: &OperationNode, expr: &Expr) -> Result<StepResult, EvalError> {
     let mut env = Env::with_input(op.properties.get("input").cloned().unwrap_or(Value::Null));
     if let Some(result) = op.properties.get("result") {
         env.set("$result", result.clone());
     }
 
-    match eval_with_namespaces(&expr, &mut env) {
+    match eval_with_namespaces(expr, &mut env) {
         Ok(v) => Ok(StepResult {
             next: None,
             edge_label: "ok".to_string(),

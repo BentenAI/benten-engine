@@ -75,7 +75,7 @@ pub fn dispatch(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResu
         PrimitiveKind::Write => write::execute(op, host),
         PrimitiveKind::Respond => respond::execute(op),
         PrimitiveKind::Emit => emit::execute(op, host),
-        PrimitiveKind::Transform => transform::execute(op),
+        PrimitiveKind::Transform => transform::execute(op, host),
         PrimitiveKind::Branch => branch::execute(op),
         PrimitiveKind::Iterate => iterate::execute(op, host),
         PrimitiveKind::Call => call::execute(op, host),
