@@ -483,3 +483,104 @@ impl SuspensionStore for RedbSuspensionStore {
         Ok(Some(parsed.into()))
     }
 }
+
+#[cfg(test)]
+mod backward_compat_tests {
+    //! Phase-3 G20-A2 wave-8a mr-5: backward-compat pin for the
+    //! Phase-2b on-disk shape of `SerializableWaitMetadata`. Old
+    //! persisted entries (from before the `ttl_hours` +
+    //! `suspend_wallclock_ms` fields were added) MUST deserialize
+    //! cleanly via `#[serde(default)]` and MUST NOT be classified as
+    //! TTL-expired by the resume-time deadline check (since the entry
+    //! was never stamped with a TTL deadline; the in-process
+    //! `timeout_ms` is the only authoritative deadline a Phase-2b-shape
+    //! entry carries).
+    //!
+    //! Without this pin, an old persisted state could regress silently
+    //! if a future change drops `#[serde(default)]` or changes the
+    //! deadline-check semantics on a `None` field.
+
+    use super::SerializableWaitMetadata;
+    use crate::wait_ttl_gc;
+    use benten_eval::suspension_store::WaitMetadata;
+    use serde::{Deserialize, Serialize};
+
+    /// Phase-2b-shape `SerializableWaitMetadata` mirror — exactly the
+    /// fields that existed pre-Phase-3-G20-A2. Serializing this
+    /// produces the canonical Phase-2b on-disk byte shape.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    struct LegacyPhase2bWaitMetadata {
+        suspend_elapsed_ms: Option<u64>,
+        timeout_ms: Option<u64>,
+        signal_shape: Option<benten_core::Value>,
+        is_duration: bool,
+    }
+
+    #[test]
+    fn phase_2b_shape_deserializes_with_serde_default_no_ttl_fields() {
+        let legacy = LegacyPhase2bWaitMetadata {
+            suspend_elapsed_ms: Some(1_000),
+            timeout_ms: Some(60_000),
+            signal_shape: None,
+            is_duration: false,
+        };
+        let bytes = serde_ipld_dagcbor::to_vec(&legacy)
+            .expect("legacy phase-2b shape encodes via DAG-CBOR cleanly");
+
+        // Decode under the Phase-3 schema: #[serde(default)] must fill
+        // the new fields with `None` rather than failing the decode.
+        let parsed: SerializableWaitMetadata = serde_ipld_dagcbor::from_slice(&bytes)
+            .expect("phase-2b on-disk bytes MUST round-trip into the Phase-3 SerializableWaitMetadata via #[serde(default)]");
+        let meta: WaitMetadata = parsed.into();
+
+        assert_eq!(meta.suspend_elapsed_ms, Some(1_000));
+        assert_eq!(meta.timeout_ms, Some(60_000));
+        assert!(!meta.is_duration);
+        assert_eq!(
+            meta.ttl_hours, None,
+            "phase-2b shape MUST decode with ttl_hours=None (entry was never stamped with a TTL)"
+        );
+        assert_eq!(
+            meta.suspend_wallclock_ms, None,
+            "phase-2b shape MUST decode with suspend_wallclock_ms=None"
+        );
+    }
+
+    #[test]
+    fn phase_2b_shape_resume_does_not_fire_ttl_expired() {
+        // Build a phase-2b-shape entry as it would have looked on
+        // disk; verify the deadline check is a no-op (returns false /
+        // None) regardless of how far into the future `now_ms` is.
+        let legacy = LegacyPhase2bWaitMetadata {
+            suspend_elapsed_ms: Some(0),
+            timeout_ms: Some(60_000),
+            signal_shape: None,
+            is_duration: false,
+        };
+        let bytes = serde_ipld_dagcbor::to_vec(&legacy).unwrap();
+        let parsed: SerializableWaitMetadata = serde_ipld_dagcbor::from_slice(&bytes).unwrap();
+        let meta: WaitMetadata = parsed.into();
+
+        // `deadline_ms` returns `None` when either `ttl_hours` or
+        // `suspend_wallclock_ms` is `None`. A phase-2b-shape entry has
+        // both fields as `None` so the deadline is not computed.
+        assert_eq!(
+            wait_ttl_gc::deadline_ms(&meta),
+            None,
+            "phase-2b shape MUST NOT compute a deadline (entry was never stamped with TTL)"
+        );
+
+        // `is_expired` consults `deadline_ms` and is `false` when the
+        // deadline is `None`. Exercise across a wide range of `now_ms`
+        // values to confirm: a phase-2b entry is NEVER classified as
+        // TTL-expired by the resume-time check, so its in-process
+        // `timeout_ms` remains the only authoritative deadline.
+        for now_ms in [0u64, 1_000, 60_000, 3_600_000, u64::MAX / 2, u64::MAX] {
+            assert!(
+                !wait_ttl_gc::is_expired(&meta, now_ms),
+                "phase-2b shape MUST NOT fire TTL-expired at now_ms={now_ms} \
+                 (regression — the deadline-check semantics on missing fields drifted)"
+            );
+        }
+    }
+}

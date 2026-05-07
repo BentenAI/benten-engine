@@ -811,6 +811,46 @@ R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift 
 
 ---
 
+### 7.14 WAIT TTL GC tokio-interval backstop production wiring (G20-A2 wave-8a mr-6)
+
+**Phase-3 G20-A2 wave-8a state:** The WAIT TTL GC machinery (`crates/benten-engine/src/wait_ttl_gc.rs`) ships THREE sweep paths per the D12 hybrid-GC contract: (1) event-driven on every suspend / resume, (2) interval backstop, (3) drop-final on `Engine::drop`. Paths (1) + (3) are wired in production today via `engine_wait.rs::call_with_suspension` / `call_as_with_suspension` + `Engine::drop`. Path (2) is **DOCUMENTED but NOT PRODUCTION-WIRED** — the interval-backstop sweep is invoked only via the test-only helper `Engine::testing_run_wait_ttl_gc_pass`. A production engine that suspends one entry and then sits idle (no further suspend / resume traffic + no shutdown) leaves the expired entry in the SuspensionStore until the next suspend / resume / shutdown event.
+
+**Why this is non-blocking for v1-foundation:** the resume-time deadline check at `engine_wait.rs::resume_from_bytes_inner` (Step 1.5) consults `wait_ttl_gc::is_expired` against persisted `WaitMetadata` and fires `E_WAIT_TTL_EXPIRED` independently of whether GC has reaped the entry yet. The deadline-on-resume check is the LOAD-BEARING correctness mechanism; the GC sweep is a STORAGE-CLEANUP mechanism. An idle engine with un-reaped expired entries does NOT permit the entries to resume successfully — they just consume disk until the next sweep fires.
+
+**Phase-3 target:** Wire a tokio interval task at `EngineBuilder::build` (or `Engine::new`) that calls `crate::wait_ttl_gc::run_interval_tick` on a configurable cadence (default 1h per the wait_ttl_gc.rs module doc; tunable via `EngineBuilder::wait_ttl_gc_interval(Duration)`). The task must:
+- Run on the engine's tokio runtime (introducing tokio as a Phase-3 engine-side runtime dependency if it isn't already present in the build path used for the engine surface).
+- Hold a `Weak<EngineGeneric<B>>` so the task auto-shuts-down when the engine drops (Drop's final sweep is the authoritative shutdown path).
+- Be suppressible via `EngineBuilder::wait_ttl_gc_interval(Duration::ZERO)` for test scenarios that drive the interval synchronously via `testing_run_wait_ttl_gc_pass`.
+
+**Touch size:** ~80-150 LOC engine-side + ~30-50 LOC tests. Risk surface: low — purely additive (the GC contract today is correct without it; this entry hardens the storage-cleanup discipline for idle-engine workloads).
+
+**Cross-references:**
+- `crates/benten-engine/src/wait_ttl_gc.rs` module doc (lines 17-22): cites the production-wiring intent + names this entry as the destination.
+- `crates/benten-engine/src/engine.rs::EngineGeneric::drop` + companion comment: documents the (3) drop-final sweep is wired.
+- `crates/benten-engine/src/engine_wait.rs::call_with_suspension` / `call_as_with_suspension`: documents the (1) event-driven sweep is wired.
+- G20-A2 wave-8a mini-review finding `g20-a2-mr-6` (origin); see `.addl/phase-3/r5-w8a-g20-a2-mini-review.json`.
+
+---
+
+### 7.15 WAIT TTL property-test case-count + pure-eval-layer sibling (G20-A2 wave-8a mr-7)
+
+**Phase-3 G20-A2 wave-8a state:** `crates/benten-eval/tests/proptest_wait_ttl.rs::prop_wait_ttl_no_silent_expiry_in_resume` ships at 256 cases per iteration (~80ms each → ~25s total). The R2 spec target was 10k cases. The current proptest drives the FULL engine boundary (`Engine::builder().path().build()` per iteration); 256 cases samples ~1.6% of the actual `(ttl_hours ∈ [1, 720]) × (offset_hours ∈ [0, 2000])` input space (~1.4M pairs). The property under test (deadline-on-resume vs wall-clock advance) is correct at the eval-layer (`benten_eval::resume_with_meta` consumes `WaitMetadata` directly without engine-boundary cost); a pure-eval-layer sibling proptest could feasibly hit 10k cases at ~0.1ms per iteration (~1s total).
+
+**Phase-3 target:** Land a sibling proptest at `crates/benten-eval/tests/proptest_wait_ttl_pure_eval.rs` (or similar) at 10k cases that:
+- Fabricates `WaitMetadata` directly (no engine, no SuspensionStore, no redb).
+- Calls `benten_eval::resume_with_meta(Some(meta), WaitResumeSignal::DurationElapsed, Some(now_ms))`.
+- Asserts the same property: `(now_ms - suspend_wallclock_ms) >= (ttl_hours * 3_600_000)` ↔ `EvalError::Host(WaitTimeout)` fires.
+
+The engine-boundary proptest stays at 256 cases (load-bearing for cross-process correctness — drives the persistence + resume protocol's full-stack interactions); the pure-eval-layer sibling carries the high-iteration coverage.
+
+**Touch size:** ~50-100 LOC test source. Risk surface: low — purely additive observer.
+
+**Cross-references:**
+- `crates/benten-eval/tests/proptest_wait_ttl.rs::prop_wait_ttl_no_silent_expiry_in_resume` (256-case engine-boundary proptest; load-bearing for cross-process semantics).
+- G20-A2 wave-8a mini-review finding `g20-a2-mr-7` (origin); see `.addl/phase-3/r5-w8a-g20-a2-mini-review.json`.
+
+---
+
 ## 7.3 Wave-8j R6 residuals — test bodies need real implementations before un-ignore
 
 **Phase 2b state:** R6 phase-close Round 1 surfaced two `#[ignore]`'d tests with stale rationales — both have empty `todo!()` bodies that REFERENCE landed work but don't actually exercise it:

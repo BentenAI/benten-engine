@@ -104,3 +104,107 @@ fn resume_with_meta_fails_closed_when_metadata_missing() {
         "expected typed serialize-shape error, got: {rendered}",
     );
 }
+
+/// Phase-3 G20-A2 wave-8a mr-2 fix-pass: end-to-end pin for the
+/// `WaitMetadataMissing` firing path. A real WAIT-suspended envelope
+/// whose envelope-side record is present in the SuspensionStore but
+/// whose metadata-side record has been evicted (test-driven via
+/// `delete(SuspensionKey::WaitMetadata(_))` to simulate the
+/// GC-reaped / cross-process-divergent / partial-GC-corruption
+/// scenarios) MUST surface `E_WAIT_METADATA_MISSING` rather than the
+/// permissive `Complete` fallback that Phase-2a's open API allowed.
+///
+/// pim-2 §3.6b end-to-end discipline: this test drives the production
+/// resume entry point + asserts an observable behavioral consequence
+/// that would FAIL if the engine's metadata-missing seam silently
+/// no-op'd back to the pre-G20-A2 skip-on-miss path.
+///
+/// The fail-loud discriminator is the envelope-side record's presence
+/// — the eval-side wait primitive persists BOTH `put_wait(cid, meta)`
+/// AND `put_envelope(envelope)` for every real WAIT suspend. A
+/// mismatch (envelope present, metadata absent) is the
+/// engine-detectable signature of metadata-missing for a real WAIT
+/// envelope; the `testing_make_unregistered_envelope` fabricated
+/// fixture has neither side and routes through the legacy permissive
+/// path covered by `resume_with_meta_fails_closed_when_metadata_missing`.
+#[test]
+fn resume_against_real_envelope_with_evicted_metadata_fires_e_wait_metadata_missing() {
+    use benten_eval::{SuspensionKey, SuspensionStore};
+
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("benten.redb");
+
+    // Process A: register a WAIT handler + suspend so the
+    // SuspensionStore ends up with a real `WaitMetadata` entry + a
+    // matching `Envelope` entry (both written by the eval-side wait
+    // primitive's suspend hook).
+    let envelope = {
+        let mut engine_a = Engine::builder().path(&db_path).build().unwrap();
+        let spec = benten_engine::testing::testing_make_wait_spec_with_ttl_hours(24);
+        let handler_id = engine_a.register_subgraph(spec).unwrap();
+        benten_engine::testing::testing_call_to_suspend(&mut engine_a, &handler_id)
+            .expect("handler must reach WAIT cleanly in process A")
+    };
+
+    // Process B: open against the same path. Metadata is present
+    // initially (cross-process survivability already pinned by
+    // `wait_resume_cross_process_metadata_survives_restart`). Now
+    // simulate the evicted-metadata scenario: delete the WaitMetadata
+    // key from the store BEFORE attempting resume, leaving the
+    // envelope-side record intact.
+    let engine_b = Engine::builder().path(&db_path).build().unwrap();
+    assert!(
+        benten_engine::testing::testing_suspension_store_has_wait(&engine_b, &envelope),
+        "pre-condition: metadata must be present BEFORE the eviction"
+    );
+
+    let env =
+        benten_eval::ExecutionStateEnvelope::from_dagcbor(&envelope).expect("envelope round-trips");
+    let state_cid = env.envelope_cid().expect("envelope_cid computes");
+    let store = benten_engine::testing::testing_get_suspension_store(&engine_b);
+
+    // Pre-condition: the envelope record IS present (the eval-side
+    // wait primitive persisted it via `put_envelope`).
+    assert!(
+        store
+            .get_envelope(&state_cid)
+            .expect("envelope lookup")
+            .is_some(),
+        "pre-condition: envelope-side record must be present (real WAIT suspend)"
+    );
+
+    store
+        .delete(SuspensionKey::WaitMetadata(state_cid))
+        .expect("delete WaitMetadata must succeed");
+
+    // Post-condition: only the metadata side is evicted; envelope
+    // side remains. This is the load-bearing discriminator the new
+    // engine-side fail-loud branch consults.
+    assert!(
+        !benten_engine::testing::testing_suspension_store_has_wait(&engine_b, &envelope),
+        "post-condition: metadata must be evicted before resume"
+    );
+    assert!(
+        store
+            .get_envelope(&state_cid)
+            .expect("envelope lookup")
+            .is_some(),
+        "post-condition: envelope-side record must still be present (only metadata evicted)"
+    );
+
+    // Resume MUST now fire E_WAIT_METADATA_MISSING — the engine's
+    // envelope-side check at `engine_wait.rs::resume_from_bytes_inner`
+    // detects (envelope present + metadata absent) as the load-bearing
+    // metadata-missing signature.
+    let err = engine_b
+        .resume_with_meta(&envelope, benten_engine::ResumePayload::None)
+        .expect_err(
+            "resume against a real WAIT envelope whose metadata has been evicted \
+             MUST fail loud via E_WAIT_METADATA_MISSING (regression — silent skip-on-miss)",
+        );
+    let rendered = err.to_string();
+    assert!(
+        rendered.contains("E_WAIT_METADATA_MISSING"),
+        "expected E_WAIT_METADATA_MISSING, got: {rendered}"
+    );
+}

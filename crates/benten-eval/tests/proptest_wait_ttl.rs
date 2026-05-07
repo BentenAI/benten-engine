@@ -14,9 +14,14 @@ proptest! {
     // 256 cases — the per-iteration cost involves building a real engine,
     // registering a subgraph, calling to suspension, advancing the clock,
     // and resuming (~80ms each). 256 iterations stays within ~25s; the
-    // R2 spec's 10k-case target is achievable when the eval-side helpers
-    // skip the full engine boundary, which the eval-only tests can pin
-    // separately.
+    // R2 spec's 10k-case target is documented-deferred to
+    // `docs/future/phase-3-backlog.md §7.15` per G20-A2 wave-8a mr-7 —
+    // a sibling pure-eval-layer proptest at `proptest_wait_ttl_pure_eval.rs`
+    // (no engine boundary, fabricates `WaitMetadata` directly) carries
+    // the high-iteration coverage. This engine-boundary proptest stays
+    // at 256 cases so it remains load-bearing for cross-process
+    // semantics (drives the persistence + resume protocol's full-stack
+    // interactions).
     #![proptest_config(ProptestConfig::with_cases(256))]
 
     /// `prop_wait_ttl_no_silent_expiry_in_resume` — D12 + R2 §3 + R1

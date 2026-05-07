@@ -34,6 +34,20 @@ fn e_wait_ttl_invalid_present_in_catalog() {
     );
 }
 
+/// `e_wait_metadata_missing_present_in_catalog` — Phase-3 G20-A2 wave-8a
+/// mr-1 fix-pass: round-trip pin for the third WAIT TTL catalog variant
+/// added in this wave. Mirrors the shape of the `WaitTtlExpired` and
+/// `WaitTtlInvalid` pins above.
+#[test]
+fn e_wait_metadata_missing_present_in_catalog() {
+    let code = ErrorCode::WaitMetadataMissing;
+    assert_eq!(code.as_str(), "E_WAIT_METADATA_MISSING");
+    assert_eq!(
+        ErrorCode::from_str("E_WAIT_METADATA_MISSING"),
+        ErrorCode::WaitMetadataMissing
+    );
+}
+
 /// Anti-rename guard: assert no plausible deprecated alias for the new
 /// variants leaks back into the catalog. CLAUDE.md non-negotiable
 /// rule #5: no deprecated aliases or backward-compat shims.

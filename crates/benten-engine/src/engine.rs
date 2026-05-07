@@ -1797,7 +1797,7 @@ impl Engine {
                     ),
                 });
             };
-            if *raw < 1 || *raw > 720 {
+            if (*raw < 1) || (*raw > 720) {
                 return Err(EngineError::Other {
                     code: ErrorCode::WaitTtlInvalid,
                     message: format!(
@@ -3600,9 +3600,15 @@ impl<B: GraphBackend> EngineGeneric<B> {
     }
 
     /// Phase-3 G20-A2 (D12 wave-8a): interval-backstop sweep entry point.
-    /// Production deployments wire a 1h tokio interval that calls this;
-    /// tests drive it synchronously via
-    /// `testing_run_wait_ttl_gc_pass` / `testing_run_gc_interval_tick`.
+    /// Tests drive it synchronously via
+    /// `testing_run_wait_ttl_gc_pass`. Production tokio-interval wiring
+    /// (a 1h timer registered at `EngineBuilder::build`) is documented-
+    /// deferred to `docs/future/phase-3-backlog.md §7.14` per G20-A2
+    /// wave-8a mr-6 — the resume-time deadline check at
+    /// `engine_wait.rs::resume_from_bytes_inner` is the load-bearing
+    /// correctness mechanism (fires `E_WAIT_TTL_EXPIRED` independently
+    /// of whether GC ran first); the interval backstop hardens
+    /// disk-usage on idle engines but does not gate correctness.
     pub fn wait_ttl_run_interval_tick(&self) -> u64 {
         let now =
             crate::wait_ttl_gc::wallclock_now_ms(*self.wait_wall_clock_override_ms.lock_recover());
@@ -3683,9 +3689,15 @@ impl<B: GraphBackend> EngineGeneric<B> {
 impl<B: GraphBackend> Drop for EngineGeneric<B> {
     fn drop(&mut self) {
         // Phase-3 G20-A2 (D12 wave-8a): final WAIT TTL GC sweep before
-        // the SuspensionStore handle releases. Best-effort — we silence
-        // any error since a Drop panic would mask the real shutdown
-        // path.
-        let _ = self.wait_ttl_run_drop_final_sweep();
+        // the SuspensionStore handle releases. Best-effort — we discard
+        // the reap-count return value (a `u64` from
+        // `wait_ttl_run_drop_final_sweep`; the sweep helpers are
+        // infallible and `lock_recover` recovers poisoned mutexes
+        // explicitly so no panic crosses this boundary in practice). If
+        // a future change introduces a fallible path here it must wrap
+        // the call in `std::panic::catch_unwind` rather than relying on
+        // implicit silencing — Drop panics abort the process under the
+        // C++-style two-panic rule.
+        let _: u64 = self.wait_ttl_run_drop_final_sweep();
     }
 }

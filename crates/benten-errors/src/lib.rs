@@ -970,7 +970,14 @@ impl ErrorCode {
             ErrorCode::WaitTimeout
             | ErrorCode::WaitSignalShapeMismatch
             | ErrorCode::WaitTtlExpired
-            | ErrorCode::WaitTtlInvalid
+            // mr-8 (g20-a2 mini-review): `WaitTtlInvalid` fires at
+            // `register_subgraph` time (out-of-range / non-integer
+            // `ttl_hours` property) — a registration-time configuration
+            // error, not a runtime-deadline failure. Routes to the
+            // registration-time `None` group below alongside
+            // `InvRegistration` / `DuplicateHandler` / `InvSandboxDepth`
+            // so audit pipelines can route on the registration axis
+            // independently of in-graph WAIT-runtime failures.
             | ErrorCode::WaitMetadataMissing
             | ErrorCode::TxAborted
             | ErrorCode::PrimitiveNotImplemented
@@ -1083,7 +1090,11 @@ impl ErrorCode {
             // surfaces at the operator observability surface
             // (`engine.onStreamLeaked` callback), not along an in-graph
             // primitive edge.
-            | ErrorCode::StreamHandleLeaked => None,
+            | ErrorCode::StreamHandleLeaked
+            // Phase-3 G20-A2 (mr-8 fix-pass): WAIT TTL ttl_hours validator
+            // fires at `register_subgraph` time, same disposition as
+            // the rest of this registration-time group.
+            | ErrorCode::WaitTtlInvalid => None,
 
             // Resume-protocol failures — surface at the resume call site,
             // not along a primitive edge. No routing. WAIT-suspended is a

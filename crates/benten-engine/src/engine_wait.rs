@@ -633,18 +633,60 @@ impl Engine {
         // authoritative consumer lives at the eval layer and the
         // engine API can no longer drift from it.
         //
-        // The metadata-store lookup is best-effort: a missing entry
-        // (fabricated test envelope, non-WAIT resume reaching this
-        // surface, or store miss in cross-process scenarios after
-        // eviction) skips the metadata consumer entirely rather than
-        // failing — matching the eval-side `Option<WaitMetadata>`
-        // shape's intent for entries the store legitimately cannot
-        // resolve (the eval-side surfaces a typed
-        // `E_HOST_BACKEND_UNAVAILABLE` only when called via the public
-        // `benten_eval::resume` API, which has stricter integrity
-        // expectations than the bytes-only engine resume surfaces).
+        // The metadata-store lookup discriminates two shapes of
+        // resume input via the SuspensionStore's envelope-side
+        // record:
+        //
+        // (1) **Real WAIT envelope** — the eval-side wait primitive
+        //     persists BOTH the WAIT metadata (`put_wait(cid, meta)`
+        //     at `crates/benten-eval/src/primitives/wait.rs`) AND the
+        //     envelope itself (`put_envelope(envelope)`). For real
+        //     envelopes, `get_envelope(state_cid)` returns `Some(_)`
+        //     and `get_wait(state_cid)` MUST also return `Some(_)`. A
+        //     mismatch (envelope present, metadata absent) is the
+        //     load-bearing fail-loud surface: (a) the WAIT TTL GC
+        //     reaped the metadata side without the envelope side
+        //     (impossible by the GC contract — `reap_one` deletes
+        //     both), (b) cross-process resume hit a divergent
+        //     SuspensionStore that has the envelope record but lost
+        //     metadata (the bug surface Compromise #9 named), or
+        //     (c) a caller fabricated an envelope-side record without
+        //     a metadata-side counterpart. All three are
+        //     E_WAIT_METADATA_MISSING — distinct from
+        //     E_WAIT_TTL_EXPIRED (entry exists but deadline passed).
+        //
+        // (2) **Fabricated test envelope** — the
+        //     `testing_make_unregistered_envelope` fixture path
+        //     produces an envelope that was NEVER paired with either
+        //     side of the store. `get_envelope(state_cid)` returns
+        //     `None`. The resume routes through the rest of the
+        //     4-step protocol's `terminal_ok_outcome()` arm — the
+        //     existing `resume_with_meta_fails_closed_when_metadata_missing`
+        //     test surface depends on this disposition.
+        //
+        // Phase-3 G20-A2 (D12 wave-8a; Compromise #9 closure;
+        // mr-2 fix-pass): promotes the eval-side
+        // `E_HOST_BACKEND_UNAVAILABLE` fail-loud to the engine-layer
+        // typed code so callers can route on the metadata-missing
+        // axis independently of generic backend-unavailable failures.
         let state_cid = envelope.envelope_cid().map_err(EngineError::Core)?;
-        if let Ok(Some(meta)) = self.suspension_store.get_wait(&state_cid) {
+        let meta_lookup = self.suspension_store.get_wait(&state_cid);
+        let envelope_lookup = self.suspension_store.get_envelope(&state_cid);
+        let envelope_record_present = matches!(envelope_lookup, Ok(Some(_)));
+        if envelope_record_present && matches!(meta_lookup, Ok(None)) {
+            return Err(EngineError::Other {
+                code: ErrorCode::WaitMetadataMissing,
+                message: format!(
+                    "resume: WAIT metadata missing for envelope {} \
+                     (envelope record present in SuspensionStore but metadata side absent — \
+                     cross-process resume against divergent store, \
+                     fabricated half-record, or partial GC corruption): \
+                     E_WAIT_METADATA_MISSING",
+                    state_cid.to_base32()
+                ),
+            });
+        }
+        if let Ok(Some(meta)) = meta_lookup {
             // Phase-3 G20-A2 (D12 wave-8a): wall-clock TTL deadline
             // check fires BEFORE the in-process timeout check. The TTL
             // deadline is wall-clock-anchored (`suspend_wallclock_ms +
@@ -1242,6 +1284,26 @@ fn map_resume_eval_error(err: benten_eval::EvalError) -> EngineError {
                     code: ErrorCode::WaitTimeout,
                     message: format!("resume: wait deadline elapsed: {message}"),
                 },
+                // Phase-3 G20-A2 (D12 wave-8a): the eval-side production
+                // fail-loud at `benten_eval::resume_with_meta` returns
+                // `EvalError::Host(HostBackendUnavailable)` when called
+                // with `meta: None` (the missing-metadata path —
+                // Compromise #9 / G12-E closure; see
+                // `crates/benten-eval/src/primitives/wait.rs::resume_with_meta`).
+                // The engine layer promotes that to the typed
+                // `WaitMetadataMissing` so callers can route on the
+                // metadata-missing axis independently of generic
+                // backend-unavailable. The eval-side ErrorCode remains
+                // `HostBackendUnavailable` (broader semantic surface);
+                // the engine-layer remap is the user-facing typed code.
+                ErrorCode::HostBackendUnavailable
+                    if message.contains("wait resume: suspension store has no metadata") =>
+                {
+                    EngineError::Other {
+                        code: ErrorCode::WaitMetadataMissing,
+                        message: format!("resume: WAIT metadata missing: {message}"),
+                    }
+                }
                 other_code => EngineError::Other {
                     code: other_code,
                     message: format!("resume: eval host error: {message}"),

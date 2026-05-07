@@ -15,11 +15,19 @@
 //!    Suppressible via `EngineBuilder::gc_event_driven(false)` — the
 //!    interval backstop + drop-final still fire.
 //!
-//! 2. **Interval backstop** — a tick driven externally (in production:
-//!    a 1h timer registered at engine construction; in tests:
-//!    `testing_run_gc_interval_tick` invokes [`run_interval_tick`]
-//!    synchronously). Catches expired entries on idle engines that
-//!    receive no suspend / resume traffic.
+//! 2. **Interval backstop** — a tick driven externally. In tests:
+//!    `Engine::testing_run_wait_ttl_gc_pass` invokes
+//!    [`run_interval_tick`] synchronously. Production tokio-interval
+//!    wiring (a 1h timer registered at `EngineBuilder::build`) is
+//!    DOCUMENTED-DEFERRED to `docs/future/phase-3-backlog.md §7.14`
+//!    per G20-A2 wave-8a mr-6 — the resume-time deadline check at
+//!    `engine_wait.rs::resume_from_bytes_inner` is the LOAD-BEARING
+//!    correctness mechanism (fires `E_WAIT_TTL_EXPIRED` independently
+//!    of whether the GC sweep ran first); the interval backstop is a
+//!    STORAGE-CLEANUP mechanism that hardens disk-usage on idle
+//!    engines but is not gating v1-foundation correctness. Catches
+//!    expired entries on idle engines that receive no suspend /
+//!    resume traffic once wired.
 //!
 //! 3. **Drop-final** — `Engine::drop` calls
 //!    [`run_drop_final_sweep`] so an explicit shutdown leaves the
@@ -102,10 +110,45 @@ pub fn wallclock_now_ms(wall_override_ms: Option<u64>) -> u64 {
 /// clock anchor or the TTL field — the deadline check is then a no-op
 /// (the metadata's in-process `timeout_ms` is the only authoritative
 /// deadline).
+///
+/// # Overflow safety (mr-3)
+///
+/// The math uses saturating arithmetic on every operation:
+///
+/// ```text
+/// deadline_ms = suspend_wallclock_ms.saturating_add(
+///     u64::from(ttl_hours).saturating_mul(3_600_000)
+/// )
+/// ```
+///
+/// Saturation is fail-safe-CLOSED: any saturated `u64::MAX` deadline
+/// rejects on the next resume via `is_expired` returning `true` (the
+/// resume-time engine's wall-clock is below `u64::MAX`, so
+/// `now_ms >= u64::MAX` is `true` only at the actual epoch saturation —
+/// otherwise the saturated deadline genuinely is in the past and
+/// rejection is correct). Concretely: a hand-crafted
+/// `SerializableWaitMetadata` carrying `ttl_hours = u32::MAX` (~5.1M
+/// hours; well above the 720h registration ceiling) saturates the
+/// deadline to `u64::MAX` and the resume rejects via `E_WAIT_TTL_EXPIRED`.
+/// No panic, no silent wrap, no "instantly expired but deadline says
+/// distant future" half-state.
+///
+/// The registration-time validator at
+/// `crates/benten-engine/src/engine.rs::register_subgraph` enforces
+/// `1 <= ttl_hours <= 720` so legitimate entries can never saturate.
+/// `debug_assert!` below catches out-of-range values in dev builds in
+/// case a future change relaxes the registration validator without
+/// updating this comment.
 #[must_use]
 pub fn deadline_ms(meta: &WaitMetadata) -> Option<u64> {
     let anchor = meta.suspend_wallclock_ms?;
-    let ttl_hours = u64::from(meta.ttl_hours?);
+    let ttl_hours_raw = meta.ttl_hours?;
+    debug_assert!(
+        ttl_hours_raw <= 720,
+        "deadline_ms: ttl_hours={ttl_hours_raw} exceeds the 720h registration ceiling \
+         (saturating math fails closed but this signals a registration-validator drift)"
+    );
+    let ttl_hours = u64::from(ttl_hours_raw);
     Some(anchor.saturating_add(ttl_hours.saturating_mul(3_600_000)))
 }
 
