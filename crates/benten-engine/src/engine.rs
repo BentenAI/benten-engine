@@ -1134,6 +1134,40 @@ impl<B: GraphBackend> EngineGeneric<B> {
         Arc::clone(&self.handler_route_log)
     }
 
+    /// Phase-3 G19-B (§7.8): standalone `emit_event` surface — publish
+    /// `payload` on `channel` directly through the engine's
+    /// [`crate::emit_broadcast::EmitBroadcast`] without going through
+    /// a handler dispatch. Mirrors the in-handler EMIT primitive's
+    /// publish path so `Engine::subscribe_emit_events` consumers
+    /// observe both standalone + handler-driven events on the same
+    /// channel.
+    ///
+    /// Pre-G19-B the napi `emit_event` surface returned
+    /// `E_PRIMITIVE_NOT_IMPLEMENTED` with a "named-destination-deferred
+    /// to Phase 3 §7.8" hint. G19-B wires this directly through
+    /// `EmitBroadcast::publish` so JS callers calling
+    /// `engine.emitEvent(channel, payload)` see the event delivered to
+    /// every `engine.onEmit(channel, ...)` consumer end-to-end.
+    ///
+    /// # Errors
+    ///
+    /// Currently infallible — the publish path is panic-isolated and
+    /// the EmitBroadcast accepts any `(channel, payload)` pair. The
+    /// `Result<(), EngineError>` return type is reserved for
+    /// future-proofing (cap-recheck / rate-limiting hooks).
+    pub fn emit_event(
+        &self,
+        channel: &str,
+        payload: benten_core::Value,
+    ) -> Result<(), EngineError> {
+        let event = crate::emit_broadcast::EmitEvent {
+            channel: channel.to_string(),
+            payload,
+        };
+        self.inner.emit_broadcast.publish(&event);
+        Ok(())
+    }
+
     /// Phase-3 G14-D wave-5a: emit `payload` on `channel` with explicit
     /// [`crate::handler_router::HandlerRoute`] routing per seq-major-8.
     /// `Named(handler_id)` routes the emit-event through the named

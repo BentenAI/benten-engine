@@ -356,79 +356,156 @@ impl EngineError {
         }
     }
 
-    /// R6FP-Group-1 (Round-2 Instance 8) — structured-field bag for the
-    /// napi error bridge.
+    /// Phase-3 G19-B (§7.2) — structured-field bag for the napi error
+    /// bridge, FULL COVERAGE across every `EngineError` variant.
     ///
-    /// The napi `engine_err` adapter formats `EngineError` Display
-    /// alongside the catalog code, but the structured per-variant
-    /// fields (e.g. `ModuleManifestCidMismatch.expected` /
-    /// `.computed` / `.summary`, `Invariant`'s diagnostic context)
-    /// are reduced to a flat string. This accessor returns a
-    /// JSON-serialisable bag the napi bridge attaches as a
-    /// `$$benten-context$$` suffix on the napi error message; the TS
-    /// `mapNativeError` parses it and populates
-    /// `BentenError.context`.
+    /// Originally landed at R6FP-Group-1 (Round-2 Instance 8) for a
+    /// minimal subset of variants; G19-B widens to every variant per
+    /// phase-3-backlog.md §7.2 + replaces the legacy `$$benten-context$$`
+    /// sentinel-suffix carrier with a JSON-shape envelope
+    /// `{ code, message, fields? }` (see
+    /// `bindings/napi/src/error_envelope.rs::engine_err_envelope_json`).
+    /// The TS `mapNativeError` JSON-parses the envelope body and
+    /// populates `BentenError.context` from the `fields` key.
     ///
-    /// Returns `None` for variants whose Display is already lossless
-    /// (no structured fields to surface beyond the message).
+    /// **Coverage discipline:** every variant returns `Some(...)`. For
+    /// variants without obviously-structured fields (e.g. wrapper
+    /// variants like `Core`, `Graph`, `Cap`, marker variants like
+    /// `NestedTransactionNotSupported`), the bag carries a minimum-
+    /// viable `kind` + Display rendering so TS consumers always see
+    /// `error.context` populated rather than `undefined`. Phase-3
+    /// G19-B is `match`-exhaustive (no `_ =>` arm) so adding a new
+    /// `EngineError` variant fails to compile until its bag is
+    /// authored — defends against the structured-field-loss recurrence
+    /// per pim-1 doc-coupling discipline.
     #[must_use]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "G19-B match-exhaustive variant coverage (~30 arms × inline JSON synthesis); \
+                  splitting per-variant helpers would scatter the structured-field surface across \
+                  helpers and obscure the load-bearing match-exhaustive contract"
+    )]
     pub fn context_json(&self) -> Option<serde_json::Value> {
         use serde_json::json;
-        match self {
-            EngineError::ModuleManifestCidMismatch {
-                expected,
-                computed,
-                summary,
-            } => Some(json!({
-                "expected": expected.to_base32(),
-                "computed": computed.to_base32(),
-                "summary": summary,
-            })),
-            EngineError::ModuleMigrationsRequirePersistence { migration_count } => Some(json!({
-                "migrationCount": migration_count,
-            })),
-            EngineError::IvmViewStale { view_id } | EngineError::UnknownView { view_id } => {
-                Some(json!({ "viewId": view_id }))
-            }
-            EngineError::ViewStrategyARefused { view_id }
-            | EngineError::ViewStrategyCReserved { view_id } => Some(json!({ "viewId": view_id })),
+        let bag = match self {
+            EngineError::Core(e) => json!({
+                "kind": "core",
+                "code": e.code().as_static_str(),
+                "summary": format!("{e}"),
+            }),
+            EngineError::Graph(e) => json!({
+                "kind": "graph",
+                "code": e.code().as_static_str(),
+                "summary": format!("{e}"),
+            }),
+            EngineError::Cap(e) => json!({
+                "kind": "capability",
+                "code": e.code().as_static_str(),
+                "summary": format!("{e}"),
+            }),
+            EngineError::Invariant(reg_err) => json!({
+                "kind": "invariant",
+                "invariantCode": format!("{}", reg_err.code()),
+                "summary": format!("{reg_err}"),
+            }),
+            EngineError::DuplicateHandler { handler_id } => json!({
+                "kind": "duplicateHandler",
+                "handlerId": handler_id,
+            }),
+            EngineError::NoCapabilityPolicyConfigured => json!({
+                "kind": "noCapabilityPolicyConfigured",
+            }),
+            EngineError::ProductionRequiresCaps => json!({
+                "kind": "productionRequiresCaps",
+            }),
+            EngineError::SubsystemDisabled { subsystem } => json!({
+                "kind": "subsystemDisabled",
+                "subsystem": subsystem,
+            }),
+            EngineError::IvmViewStale { view_id } => json!({
+                "kind": "ivmViewStale",
+                "viewId": view_id,
+            }),
+            EngineError::UnknownView { view_id } => json!({
+                "kind": "unknownView",
+                "viewId": view_id,
+            }),
+            EngineError::ViewStrategyARefused { view_id } => json!({
+                "kind": "viewStrategyARefused",
+                "viewId": view_id,
+            }),
+            EngineError::ViewStrategyCReserved { view_id } => json!({
+                "kind": "viewStrategyCReserved",
+                "viewId": view_id,
+            }),
             EngineError::ViewLabelMismatch {
                 view_id,
                 expected_label,
                 got_label,
-            } => Some(json!({
+            } => json!({
+                "kind": "viewLabelMismatch",
                 "viewId": view_id,
                 "expectedLabel": expected_label,
                 "gotLabel": got_label,
-            })),
-            EngineError::SubsystemDisabled { subsystem } => Some(json!({ "subsystem": subsystem })),
-            EngineError::DuplicateHandler { handler_id } => {
-                Some(json!({ "handlerId": handler_id }))
-            }
-            EngineError::WaitSuspended { handle } => Some(json!({
+            }),
+            EngineError::NestedTransactionNotSupported => json!({
+                "kind": "nestedTransactionNotSupported",
+            }),
+            EngineError::NotImplemented { feature } => json!({
+                "kind": "notImplemented",
+                "feature": feature,
+            }),
+            EngineError::ModuleManifestCidMismatch {
+                expected,
+                computed,
+                summary,
+            } => json!({
+                "kind": "moduleManifestCidMismatch",
+                "expected": expected.to_base32(),
+                "computed": computed.to_base32(),
+                "summary": summary,
+            }),
+            EngineError::ModuleMigrationsRequirePersistence { migration_count } => json!({
+                "kind": "moduleMigrationsRequirePersistence",
+                "migrationCount": migration_count,
+            }),
+            #[cfg(not(feature = "browser-backend"))]
+            EngineError::ModuleManifestVerify(e) => json!({
+                "kind": "moduleManifestVerify",
+                "code": e.code().as_static_str(),
+                "summary": format!("{e}"),
+            }),
+            EngineError::WaitSuspended { handle } => json!({
+                "kind": "waitSuspended",
                 "envelopeCid": handle.state_cid().to_base32(),
                 "signal": handle.signal_name(),
-            })),
-            EngineError::SandboxManifestUnknown { manifest_name } => Some(json!({
+            }),
+            EngineError::SandboxManifestUnknown { manifest_name } => json!({
+                "kind": "sandboxManifestUnknown",
                 "manifestName": manifest_name,
-            })),
-            EngineError::Invariant(reg_err) => {
-                // RegistrationError's Display + Debug carry diagnostic
-                // context; we surface a minimal bag with the catalog
-                // code + the Display rendering so TS callers can
-                // route on `context.invariantCode` without parsing
-                // the message string. Phase-3 may widen this with
-                // per-RegistrationError-variant structured fields.
-                Some(json!({
-                    "invariantCode": format!("{}", reg_err.code()),
-                    "summary": format!("{reg_err}"),
-                }))
+            }),
+            EngineError::Other { code, message } => json!({
+                "kind": "other",
+                "code": code.as_static_str(),
+                "message": message,
+            }),
+            EngineError::Backend(boxed) => {
+                // G13-B (D-PHASE-3-1a) erases backend-specific errors
+                // at the public boundary. Carry the typed `code` when
+                // the source chain exposes a known typed error
+                // (currently only the redb-backed `GraphError`); fall
+                // back to the generic backend-not-found code otherwise.
+                let typed_code = boxed
+                    .downcast_ref::<benten_graph::GraphError>()
+                    .map_or(ErrorCode::BackendNotFound, |g| g.code());
+                json!({
+                    "kind": "backend",
+                    "code": typed_code.as_static_str(),
+                    "summary": format!("{boxed}"),
+                })
             }
-            // Variants whose Display is lossless (single-string
-            // message, no structured fields) return None — engine_err
-            // skips the metadata suffix.
-            _ => None,
-        }
+        };
+        Some(bag)
     }
 
     /// Stable catalog code as [`ErrorCode`]. Consumers that want the string

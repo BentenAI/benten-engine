@@ -560,35 +560,23 @@ Together they realize the cr-r4b-10 closure-narrative claim that `E_STREAM_HANDL
 
 **Touch size:** ~50-80 LOC eval-side per-handler config read + ~20 LOC registration-time validation + ~30-50 LOC test pins.
 
-### 7.2 BentenError.context full structured-field coverage
+### 7.2 BentenError.context full structured-field coverage — CLOSED in Phase 3 G19-B (R5 wave-7)
 
 **Phase 2b state:** R6 deep producer-consumer sweep (Instance 8) flagged: every typed `EngineError` variant with structured fields drops them at the napi → TS boundary because `engine_err()` formats Display-only and `mapNativeError` extracts only the `E_*` code. Wave-8j R6-FP Groups 1+2 land the MINIMAL fix: `napi::Error::with_metadata` carries a JSON-serialized field bag for the most-load-bearing variants (`Invariant(RegistrationError)` + `ModuleManifestCidMismatch` + `IvmViewStale` + ~5 others). Full coverage of all ~20 EngineError variants + the long tail of `EvalError` deferred here.
 
-**Phase 3 target:** Replace the message-prefix-`E_*` carrier shape with a JSON-shape (`{ code, fields }`) at the napi boundary so ALL typed-error variants get structured-field surfacing automatically. Migrate `mapNativeError` to read from the JSON shape consistently. Update `errors.generated.ts` codegen to emit the structured-field interfaces per variant.
+**Phase 3 closure (G19-B R5 wave-7):** Replaced the legacy `$$benten-context$$` sentinel-suffix carrier with a JSON-shape envelope `{ code, message, fields? }` (formatter at `bindings/napi/src/error_envelope.rs::engine_err_envelope_json`; carrier at `bindings/napi/src/error.rs::engine_err`). `EngineError::context_json` is now match-exhaustive across every variant with `kind` discriminator + structured fields per variant (defends against the pim-1 doc-coupling failure shape). TS `mapNativeError` JSON-parses the envelope body via `tryParseJsonEnvelope` (Path 1 in `packages/engine/src/errors.ts::mapNativeError`); the legacy `code:` prefix carrier is preserved as Path 2 for hand-rolled napi errors that pre-date the envelope. End-to-end pins at `bindings/napi/tests/benten_error_context.rs` (3 tests; Rust side) + `packages/engine/test/errors.test.ts` (6 tests; TS side) cover representative variant shapes (flat, multi-field, Cid-bearing, marker, generic) with ALWAYS-`code` / ALWAYS-`message` / OBJECT-`fields` cross-cutting invariants.
 
-**Why Phase 3:** The migration has a coordinated breaking-change to the message-prefix contract test pins; Phase-2b-close stability favors the minimal-coverage interim. Phase 3's broader API stabilization can absorb the breaking change cleanly.
-
-**Touch size:** ~300-400 LOC including codegen updates + test pin migration.
-
-### 7.6 CODE_TO_CTOR codegen completeness
+### 7.6 CODE_TO_CTOR codegen completeness — CLOSED in Phase 3 G19-B (R5 wave-7)
 
 **Phase 2b state:** `packages/engine/src/errors.ts::CODE_TO_CTOR` is a hand-maintained Record mapping `E_*` strings to typed BentenError subclasses. R6 Round-2 r6-r2-napi-3's Instance 8 round-trip pin (the new `install_module` CID-mismatch test in `packages/engine/test/install_module.test.ts`) surfaced that the map is missing ~28 entries that the codegen emits as classes — so napi errors carrying those codes round-trip through `mapNativeError` with `code: "E_UNKNOWN"` rather than the typed subclass. R6 Round-2 fix-pass added the specific `E_MODULE_MANIFEST_CID_MISMATCH` entry to make the Instance 8 pin pass + named this entry as the destination for the broader sync.
 
-**Phase 3 target:** Generate `CODE_TO_CTOR` from the same single-source-of-truth that powers `errors.generated.ts` (the catalog scrape that emits 98 BentenError subclasses). Either (a) emit a generated `CODE_TO_CTOR_GENERATED` in `errors.generated.ts` that the hand-maintained `CODE_TO_CTOR` extends from, or (b) replace the hand-maintained map entirely and update `mapNativeError` to read from the generated record. Add a vitest smoke test that asserts every catalog code maps to a typed BentenError subclass (no `E_UNKNOWN` fallbacks for known codes).
+**Phase 3 closure (G19-B R5 wave-7):** Implemented option (a) — `scripts/codegen-errors.ts` now emits a `CODE_TO_CTOR_GENERATED` map in `packages/engine/src/errors.generated.ts` keyed on every catalog code → its typed BentenError subclass constructor; `packages/engine/src/errors.ts::resolveCtor` consults the hand-curated `CODE_TO_CTOR` first (historically-curated fast path) then falls back to `CODE_TO_CTOR_GENERATED` (long-tail coverage). The catalog-driven completeness pin lives at `crates/benten-engine/tests/code_to_ctor.rs::code_to_ctor_codegen_covers_every_error_catalog_entry` (walks `docs/ERROR-CATALOG.md` + asserts every `### E_*` entry appears in the generated map) + `code_to_ctor_no_e_unknown_fallback_for_known_code` (asserts every catalog code resolves to a typed subclass, never the synthetic `E_UNKNOWN` fallback). Drift-resistant by construction — no hand-maintained list to fall out of sync with the catalog.
 
-**Why Phase 3:** The fix is mechanical but interacts with the codegen template + drift detector. Bundling with §7.2 (BentenError.context full structured-field coverage) is natural because both are codegen-completeness lifts on the TS error surface.
-
-**Touch size:** ~50-100 LOC codegen template update + ~10 LOC vitest smoke pin.
-
-### 7.7 napi-rs ThreadsafeFunction tuple-arg splat behavior
+### 7.7 napi-rs ThreadsafeFunction tuple-arg splat behavior — CLOSED in Phase 3 G19-B (R5 wave-7)
 
 **Phase 2b state:** napi-rs v3's `Function<(A, B), Ret>` callback shape currently delivers the `(A, B)` tuple as a single-Array argument to the JS callback rather than splatting to 2 separate args, despite the d.ts emitting `(arg0: A, arg1: B) => Ret`. Affects both `Engine.onChange` (`(seq, payload)`) and the new `Engine.onEmit` (`(channel, payloadJson)`) callback shapes — the JS callback receives `args[0] = [a, b]` rather than `(a, b)`. The R6 Round-2 r6-r2-mpc-1 LOAD-BEARING test in `packages/engine/test/emit_subscribe.test.ts` accepts both delivery shapes via an `Array.isArray(channel)` runtime check; the pre-existing `subscribe.test.ts::LOAD-BEARING — onChange callback fires` test predates the workaround + currently fails on the same delivery shape. The napi-side wiring is correct (the engine-side EMIT broadcast publish IS firing + the TSFN IS delivering); the gap is the splat semantics on the napi-rs ↔ JS call edge.
 
-**Phase 3 target:** Investigate napi-rs v3 release notes for the splat-behavior change between Phase-2a and Phase-2b napi-rs upgrades. Either (a) bump napi-rs to a version with restored splat semantics + remove the in-test `Array.isArray` workaround, or (b) update the engine.ts wrapper's `napiCb = (chanArg, payloadJson) => ...` shape to take a single tuple-arg + destructure inside, and update `subscribe.test.ts::LOAD-BEARING` similarly. Pair with §7.6 (CODE_TO_CTOR codegen completeness) since both touch `errors.generated.ts` codegen + the napi binding.
-
-**Why Phase 3:** The functional behavior (callback fires) is correct in Phase 2b; only the arg-shape ergonomics are degraded. Tightening the splat is a Phase-3 napi-rs lift that bundles cleanly with broader binding-layer cleanup.
-
-**Touch size:** ~30-50 LOC across napi-rs upgrade + test pin updates.
+**Phase 3 closure (G19-B R5 wave-7):** Investigation showed napi-rs v3.x already delivers `FnArgs<(A, B)>` as discrete splatted args (verified end-to-end via probe against the wave-6b napi cdylib). The pre-G19-B "single tuple-array" delivery shape belonged to an earlier napi-rs build. G19-B adopted r1-napi-4 path (b) tuned to the actual current behavior: `engine.ts::onChange / onChangeAs / onEmit` wrap the JS callback in a thin native wrapper that takes discrete args (`(seq: number, payload: Buffer)` / `(chanArg: string, payloadJson: string)`), preserves the user-callback's discrete-args contract, and adds the dx-r1-2b-4 / r6-dx-2 exception-isolation log path. The `Array.isArray(channel)` runtime tuple-detection branch in `emit_subscribe.test.ts` is retired (the splatted-args shape is the production reality). Pin coverage: `packages/engine/test/onChange_onEmit.test.ts` (3 tests — onEmit splat, onChange splat, retired-marker grep).
 
 ### 7.8 Engine.emitEvent standalone surface — wire through EmitBroadcast bus
 
@@ -615,20 +603,24 @@ handler whose only Node is `emit(...)` and call it via
 `engine.call(handler.id, "default", { channel, payload })` — friction
 but not blocking.
 
-**Phase 3 target:** Thread `Engine::emit_event(channel, payload)`
-directly through the EmitBroadcast bus (the same channel
-`subscribe_emit_events_with_handle` consumes). Decide on the
-structured-payload story (likely: accept `JsonValue` payload, route as
-the `payload` field of the EmitBroadcast event). Add an end-to-end
-vitest pin: `engine.onEmit(channel, cb)` → `engine.emitEvent(channel,
-{...})` → callback fires with the payload.
-
-**Why Phase 3:** Phase 2b closed in-handler EMIT + EmitSubscription
-delivery; standalone JS-surface emit is a small but separate plumbing
-path that bundles cleanly with the broader Phase-3 event-broadcast
-widening (cross-process / cross-actor delivery).
-
-**Touch size:** ~50 LOC implementation + ~20 LOC test pin.
+**Phase 3 closure (G19-B R5 wave-7; G19-A 50 LOC folded per scope-real-05):**
+`benten_engine::Engine::emit_event(channel, payload)` (at
+`crates/benten-engine/src/engine.rs::emit_event`) now publishes
+directly through the engine's `EmitBroadcast` bus (the same channel
+`subscribe_emit_events` / `subscribe_emit_events_with_handle` consume);
+the napi adapter at `bindings/napi/src/lib.rs::emit_event` accepts
+`serde_json::Value` payload, calls `json_to_value_root` to convert to
+`benten_core::Value`, and threads through. End-to-end pins:
+`bindings/napi/tests/emit_event.rs::engine_emit_event_publishes_to_subscribed_on_emit_callback_end_to_end`
+(rust-side; drives `testing::emit_event_round_trip` helper which
+opens an in-memory engine, subscribes, publishes, and asserts the
+callback fires with the payload) +
+`engine_emit_event_no_longer_returns_e_primitive_not_implemented`
+(rust-side; negative pin — verifies the deferred sentinel is GONE) +
+`packages/engine/test/onChange_onEmit.test.ts::G19-B wave-7 — onEmit
+callback splats args correctly` (TS-side end-to-end through the napi
+cdylib). The `engine.ts::emitEvent` wrapper drops the "deferred"
+verbiage in its docstring and surfaces the EmitBroadcast direct path.
 
 ### 7.9 TS-surface-parity sweep (Edge interface phantom `cid` + dropped `properties`; broader latent pre-Phase-2b TS-side drift)
 

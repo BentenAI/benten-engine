@@ -37,6 +37,12 @@
 mod edge;
 #[cfg(feature = "napi-export")]
 mod error;
+// Phase-3 G19-B (§7.2): JSON-envelope formatter shared by the production
+// `error::engine_err` carrier (napi-export ON) AND the rlib-test helper
+// `testing::engine_err_message` (in-process-test ON). The formatter
+// itself has no napi-rs dep, so it's reachable from both build modes.
+#[cfg(any(feature = "napi-export", feature = "in-process-test", test))]
+mod error_envelope;
 #[cfg(feature = "napi-export")]
 mod node;
 #[cfg(feature = "napi-export")]
@@ -200,7 +206,8 @@ mod napi_surface {
     use crate::edge::edge_to_json;
     use crate::error::engine_err;
     use crate::node::{
-        json_to_props, node_json_to_node, node_to_json, parse_actor_cid_or_derive, parse_cid,
+        json_to_props, json_to_value_root, node_json_to_node, node_to_json,
+        parse_actor_cid_or_derive, parse_cid,
     };
     use crate::policy::{PolicyKind, parse_grant_json};
     use crate::stream::{
@@ -625,26 +632,20 @@ mod napi_surface {
 
         /// Emit a named event with a JSON payload.
         ///
-        /// Phase-2b state: the standalone `engine.emit_event(...)`
-        /// surface is named-destination-deferred to Phase 3 per
-        /// `docs/future/phase-3-backlog.md` §7.8 (Engine.emitEvent
-        /// standalone surface — wire through EmitBroadcast bus). The
-        /// in-handler EMIT primitive (DSL `emit()` builder) IS wired
-        /// in Phase 2b and routes through the EmitBroadcast bus to
-        /// EmitSubscription consumers (R6-R2-FP cluster-1, PR #66);
-        /// per-WRITE ChangeEvents continue to flow via `create_node` /
-        /// `register_crud:create` unchanged. Rather than silently
-        /// no-op, surface `E_PRIMITIVE_NOT_IMPLEMENTED` so callers
-        /// learn their `engine.emit_event(...)` had no visible effect.
-        /// R6 Round-3 r6-r3-dx-5 promoted the disposition from
-        /// "deferred to Phase 2" (HARD-RULE-12 vague-time-qualifier)
-        /// to the named §7.8 destination above.
+        /// Phase-3 G19-B (§7.8): wires the standalone `emit_event`
+        /// surface directly through the engine's
+        /// `EmitBroadcast` bus (the same channel
+        /// `subscribe_emit_events_with_handle` consumes). JS callers
+        /// invoking `engine.emitEvent(channel, payload)` see the event
+        /// delivered to every `engine.onEmit(channel, ...)` consumer
+        /// end-to-end, with no handler-dispatch in between.
+        ///
+        /// Pre-G19-B this surface returned `E_PRIMITIVE_NOT_IMPLEMENTED`
+        /// with a phase-3-backlog §7.8 named-destination hint.
         #[napi]
-        pub fn emit_event(&self, _name: String, _payload: serde_json::Value) -> napi::Result<()> {
-            Err(napi::Error::new(
-                Status::GenericFailure,
-                "E_PRIMITIVE_NOT_IMPLEMENTED: standalone Engine.emitEvent is named-destination-deferred to Phase 3 per docs/future/phase-3-backlog.md §7.8 — in-handler emit() DSL builder IS wired today",
-            ))
+        pub fn emit_event(&self, name: String, payload: serde_json::Value) -> napi::Result<()> {
+            let value = json_to_value_root(payload)?;
+            self.inner.emit_event(&name, value).map_err(engine_err)
         }
 
         /// Count of Nodes stored under `label`.
@@ -1758,6 +1759,124 @@ pub mod testing {
     #[must_use]
     pub fn rss_kb() -> Option<u64> {
         None
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase-3 G19-B (§7.2 + §7.8) — in-process helpers for the napi-side
+    // integration tests at `bindings/napi/tests/benten_error_context.rs` +
+    // `bindings/napi/tests/emit_event.rs`. These helpers exercise the
+    // engine_err carrier shape + the standalone emit_event surface
+    // without going through the cdylib + napi-rs runtime.
+    // -----------------------------------------------------------------------
+
+    /// G19-B (§7.2): expose the [`crate::error::engine_err`] carrier
+    /// shape via the rlib-test surface. Returns the JSON-encoded
+    /// message body the napi adapter would attach to a `napi::Error`
+    /// (the production carrier; see `bindings/napi/src/error.rs`).
+    /// Tests JSON-parse the return value and assert
+    /// `code` / `message` / `fields` match the EngineError variant.
+    ///
+    /// Reaches into the shared [`crate::error_envelope`] formatter so
+    /// the wire shape this helper produces is byte-identical to what
+    /// the production `engine_err` carrier embeds in `napi::Error`.
+    #[must_use]
+    pub fn engine_err_message(err: benten_engine::EngineError) -> String {
+        crate::error_envelope::engine_err_envelope_json(&err)
+    }
+
+    /// G19-B (§7.8): drive `engine.emit_event` end-to-end through the
+    /// engine's EmitBroadcast bus. Opens an in-memory engine, attaches
+    /// the supplied callback as an EMIT subscriber, publishes
+    /// `(channel, payload)` via the production-grade
+    /// [`benten_engine::Engine::emit_event`] entry point, and returns
+    /// the engine handle so the test can drain or assert further.
+    ///
+    /// The callback fires synchronously on the publish thread (the
+    /// EmitBroadcast contract); tests can lock a `Mutex<Vec<...>>` to
+    /// capture observations.
+    ///
+    /// Gated additionally on `in-process-test` (vs the parent `testing`
+    /// module's `cfg(any(test, feature = "in-process-test"))`) because
+    /// the body uses `tempfile::tempdir()` and `tempfile` is itself
+    /// gated on `in-process-test` (production cdylib build never
+    /// pulls it). Under `cargo test` with default features ON, the
+    /// helper is compiled out so the production-feature build path
+    /// stays clean.
+    #[cfg(feature = "in-process-test")]
+    pub fn emit_event_round_trip<F>(
+        channel: &str,
+        payload: serde_json::Value,
+        on_emit: F,
+    ) -> Result<benten_engine::Engine, benten_engine::EngineError>
+    where
+        F: Fn(&benten_engine::EmitEvent) + Send + Sync + 'static,
+    {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let engine = benten_engine::Engine::open(dir.path().join("benten.redb"))?;
+        engine.subscribe_emit_events(on_emit);
+        let value = json_to_value(payload)?;
+        engine.emit_event(channel, value)?;
+        // Tempdir kept alive via env var since we return the engine;
+        // production callers don't see this path. The redb file lives
+        // in tempdir which is dropped at process exit — fine for
+        // in-process tests.
+        std::mem::forget(dir);
+        Ok(engine)
+    }
+
+    /// G19-B helper: convert a `serde_json::Value` into a
+    /// `benten_core::Value` mirroring the napi `json_to_value_root`
+    /// path. Reproduced here (rather than re-exported) because the
+    /// production helper lives in `crate::node` which depends on the
+    /// napi `Status` type — keeping this rlib-only shim free of napi
+    /// imports lets the in-process-test feature compile cleanly with
+    /// `--no-default-features`.
+    ///
+    /// Same `in-process-test` gate as the `emit_event_round_trip`
+    /// helper above (its sole consumer).
+    #[cfg(feature = "in-process-test")]
+    fn json_to_value(v: serde_json::Value) -> Result<Value, benten_engine::EngineError> {
+        match v {
+            serde_json::Value::Null => Ok(Value::Null),
+            serde_json::Value::Bool(b) => Ok(Value::Bool(b)),
+            serde_json::Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    return Ok(Value::Int(i));
+                }
+                if let Some(f) = n.as_f64() {
+                    if !f.is_finite() {
+                        return Err(benten_engine::EngineError::Other {
+                            code: benten_errors::ErrorCode::InputLimit,
+                            message: "non-finite number".into(),
+                        });
+                    }
+                    if f.fract() == 0.0 {
+                        #[allow(clippy::cast_possible_truncation)]
+                        return Ok(Value::Int(f as i64));
+                    }
+                    return Ok(Value::Float(f));
+                }
+                Err(benten_engine::EngineError::Other {
+                    code: benten_errors::ErrorCode::InputLimit,
+                    message: "unsupported numeric shape".into(),
+                })
+            }
+            serde_json::Value::String(s) => Ok(Value::Text(s)),
+            serde_json::Value::Array(items) => {
+                let mut out = Vec::with_capacity(items.len());
+                for item in items {
+                    out.push(json_to_value(item)?);
+                }
+                Ok(Value::List(out))
+            }
+            serde_json::Value::Object(map) => {
+                let mut out = std::collections::BTreeMap::new();
+                for (k, val) in map {
+                    out.insert(k, json_to_value(val)?);
+                }
+                Ok(Value::Map(out))
+            }
+        }
     }
 }
 

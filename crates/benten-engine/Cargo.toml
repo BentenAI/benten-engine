@@ -116,10 +116,12 @@ serde_ipld_dagcbor = { workspace = true }
 # for the napi error bridge. EngineError::context_json() returns
 # serde_json::Value snapshots of per-variant fields (e.g.
 # ModuleManifestCidMismatch.expected/computed/summary) so the napi
-# adapter can attach them as a `$$benten-context$$` suffix on the
-# error message and the TS mapNativeError can populate
-# BentenError.context. Adds ~30KB compiled; the alternative would be
-# hand-written JSON serialisation of every diagnostic variant.
+# adapter encodes them in the structured JSON envelope that engine_err
+# emits per Phase-3 G19-B (supersedes the pre-G19-B `$$benten-context$$`
+# suffix on the error message); the TS mapNativeError parses the
+# JSON-shape carrier and populates BentenError.context. Adds ~30KB
+# compiled; the alternative would be hand-written JSON serialisation
+# of every diagnostic variant.
 serde_json = { workspace = true }
 
 # Phase 2b G7-A — `engine.toml` workspace-config parser. Reads at

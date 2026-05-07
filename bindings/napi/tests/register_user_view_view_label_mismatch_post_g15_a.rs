@@ -20,8 +20,9 @@
 //! at the napi bridge (`bindings/napi/src/lib.rs::register_user_view`).
 //! Asserts an OBSERVABLE behavioral consequence — the typed
 //! `E_VIEW_LABEL_MISMATCH` error fires through the napi-rs error-context
-//! surface (per Phase-2b $$benten-context$$ sentinel pattern, Instance 8
-//! mapNativeError round-trip).
+//! surface (per G19-B JSON envelope carrier; supersedes the pre-G19-B
+//! Phase-2b `$$benten-context$$` sentinel suffix pattern; Instance 8
+//! mapNativeError round-trip preserved).
 //!
 //! Would FAIL if the arm were silently no-op'd (e.g., a refactor that
 //! widens acceptance for canonical view ids + mismatched labels post
@@ -81,10 +82,11 @@ fn napi_register_user_view_canonical_id_with_mismatched_label_returns_e_view_lab
     //
     //   // (iii) Assert the typed E_VIEW_LABEL_MISMATCH error fires
     //   //       through the napi-rs error-context surface. Instance 8
-    //   //       (R6 Round-2 r6-r2-napi-3) wired the
-    //   //       $$benten-context$$ sentinel suffix that engine_err
-    //   //       emits for structured EngineError variants —
-    //   //       mapNativeError parses it via splitContextSentinel.
+    //   //       (R6 Round-2 r6-r2-napi-3) wired the structured JSON
+    //   //       envelope that engine_err emits for structured
+    //   //       EngineError variants per G19-B (supersedes the
+    //   //       pre-G19-B `$$benten-context$$` sentinel suffix);
+    //   //       mapNativeError parses the JSON-shape carrier.
     //   //       The structured-context fields surface here:
     //   match result {
     //       Err(napi_err) => {

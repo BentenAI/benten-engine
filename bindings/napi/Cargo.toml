@@ -27,7 +27,11 @@ bench = false
 [features]
 default = ["napi-export"]
 # Test-only feature used by the in-process integration test.
-in-process-test = []
+# Phase-3 G19-B (§7.8): pulls `dep:tempfile` so the rlib-side
+# `testing::emit_event_round_trip` helper can open an in-memory engine
+# backed by a tempdir-scoped redb file. The production cdylib never
+# enables this feature so tempfile is excluded from production builds.
+in-process-test = ["dep:tempfile"]
 # When "napi-export" is enabled (default for the cdylib build), the crate
 # pulls napi-rs and exports the `#[napi]` surface. Disabling the feature
 # yields a pure-Rust rlib that the in-process integration test can link
@@ -100,6 +104,11 @@ blake3 = { workspace = true }
 napi = { workspace = true, features = ["napi4", "serde-json"], optional = true }
 napi-derive = { workspace = true, optional = true }
 serde_json = { workspace = true }
+# Phase-3 G19-B (§7.8): tempdir-scoped redb file for the rlib-side
+# `testing::emit_event_round_trip` helper. Optional — only pulled in
+# under `--features in-process-test` for tests; production cdylib build
+# never enables it.
+tempfile = { workspace = true, optional = true }
 
 # G13-C R5 wave-3 fix-pass (2026-05-06): native-only deps. `benten-dev`
 # transitively pulls Phase-2a `tokio`/notify/tempfile and consumes the
@@ -126,6 +135,19 @@ benten-id = { path = "../../crates/benten-id" }
 
 [build-dependencies]
 napi-build = "2"
+
+# Phase-3 G19-B (§7.2 + §7.8): the `benten_error_context` + `emit_event`
+# integration tests reach into `benten_napi::testing` (the rlib-only
+# helper surface). Same `in-process-test` gate as `input_validation`
+# above — under the production cdylib build (`napi-export` ON) the napi
+# extern symbols don't resolve in libtest's link.
+[[test]]
+name = "benten_error_context"
+required-features = ["in-process-test"]
+
+[[test]]
+name = "emit_event"
+required-features = ["in-process-test"]
 
 [[test]]
 name = "input_validation"

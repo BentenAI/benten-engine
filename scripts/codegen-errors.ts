@@ -170,7 +170,41 @@ export class ${cls} extends BentenError {
     })
     .join("\n");
 
-  return header + classes;
+  // Phase-3 G19-B (§7.6): emit a `CODE_TO_CTOR_GENERATED` map keyed
+  // on every catalog code -> its typed subclass constructor.
+  // `packages/engine/src/errors.ts::mapNativeError` consults this map
+  // (alongside the hand-curated `CODE_TO_CTOR`) so every catalog
+  // entry resolves to a typed BentenError subclass at the napi
+  // boundary, with no `E_UNKNOWN` fallback for known codes.
+  //
+  // The pin
+  // `code_to_ctor_codegen_covers_every_error_catalog_entry`
+  // (crates/benten-engine/tests/code_to_ctor.rs) asserts the map
+  // tracks the catalog one-to-one.
+  const generatedMap =
+    `\n/**\n` +
+    ` * Phase-3 G19-B (§7.6): codegen-emitted ` +
+    `CODE_TO_CTOR_GENERATED map. Keys are stable\n` +
+    ` * catalog codes (\`E_*\`); values are the typed BentenError ` +
+    `subclass constructor for each\n` +
+    ` * code. Updated automatically every time \`scripts/codegen-errors.ts\` ` +
+    `runs against\n` +
+    ` * \`docs/ERROR-CATALOG.md\`. The runtime helper \`mapNativeError\` ` +
+    `consults this map so\n` +
+    ` * every catalog entry resolves to a typed subclass — there is NO ` +
+    `\`E_UNKNOWN\` fallback\n` +
+    ` * for known catalog codes.\n` +
+    ` */\n` +
+    `export const CODE_TO_CTOR_GENERATED: Readonly<` +
+    `Record<string, new (message: string, context?: Record<string, unknown>) => ` +
+    `BentenError>> = Object.freeze({\n` +
+    entries
+      .map((e) => `  ${JSON.stringify(e.code)}: ${toClassName(e.code)},`)
+      .join("\n") +
+    `\n}) as Readonly<Record<string, new (message: string, ` +
+    `context?: Record<string, unknown>) => BentenError>>;\n`;
+
+  return header + classes + generatedMap;
 }
 
 // ---------------------------------------------------------------------------
