@@ -125,13 +125,13 @@ describe("engine.installModule", () => {
   });
 
   // R6 Round-2 r6-r2-napi-3 closure: Instance 8 round-trip pin.
-  // Asserts `BentenError.context` populates from the
-  // `$$benten-context$$` sentinel suffix that `engine_err` emits for
-  // structured EngineError variants. Pre-Instance-8 the context was
-  // structurally typed at the TS surface but `mapNativeError` never
-  // populated it; this regression pin guards against the sentinel
-  // emit being collapsed back to a Display-only formatting in a
-  // future regression.
+  // Asserts `BentenError.context` populates from the structured JSON
+  // envelope that `engine_err` emits per G19-B (supersedes the
+  // pre-G19-B `$$benten-context$$` sentinel suffix carrier).
+  // Pre-Instance-8 the context was structurally typed at the TS
+  // surface but `mapNativeError` never populated it; this regression
+  // pin guards against the JSON-envelope emit being collapsed back to
+  // a Display-only formatting in a future regression.
   it("CID mismatch error round-trips structured context fields (Instance 8)", async () => {
     const engine = await Engine.open(":memory:");
     try {
