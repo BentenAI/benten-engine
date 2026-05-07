@@ -302,73 +302,75 @@ fn poisoned<T>(_: std::sync::PoisonError<T>) -> napi::Error {
     )
 }
 
-/// R6 Round-2 r6-r2-napi-1: typed `E_DEVSERVER_STOPPED` napi error.
-/// Promotes the prior hand-typed string literal to the catalog
-/// `ErrorCode::DevServerStopped` so JS callers get the typed
-/// `EDevServerStopped` BentenError subclass through `mapNativeError`
-/// rather than the synthetic `E_UNKNOWN` fallback.
+/// Phase-3 G19-B (§7.2): typed `E_DEVSERVER_STOPPED` napi error using
+/// the `{ code, message }` JSON-shape that `mapNativeError` parses on
+/// the TS side. Pre-G19-B this used a `code: prefix` carrier; the
+/// JSON-shape uniformity is the §7.2 contract.
 fn devserver_stopped() -> napi::Error {
-    napi::Error::new(
-        Status::GenericFailure,
+    let body = serde_json::json!({
+        "code": benten_errors::ErrorCode::DevServerStopped.as_static_str(),
+        "message": "dev-server has been stopped — call .start() before further operations",
+    });
+    let message = serde_json::to_string(&body).unwrap_or_else(|_| {
         format!(
-            "{}: dev-server has been stopped — call .start() before further operations",
+            "{}: dev-server has been stopped",
             benten_errors::ErrorCode::DevServerStopped.as_static_str()
-        ),
-    )
+        )
+    });
+    napi::Error::new(Status::GenericFailure, message)
 }
 
-/// R6 Round-2 r6-r2-napi-1: typed
-/// `E_RELOAD_SUBSCRIBER_UNSUBSCRIBED` napi error. Promotes the prior
-/// hand-typed string literal to the catalog
-/// `ErrorCode::ReloadSubscriberUnsubscribed` so JS callers get the
-/// typed `EReloadSubscriberUnsubscribed` BentenError subclass through
-/// `mapNativeError` rather than the synthetic `E_UNKNOWN` fallback.
+/// Phase-3 G19-B (§7.2): typed `E_RELOAD_SUBSCRIBER_UNSUBSCRIBED` napi
+/// error using the JSON-shape carrier; `operation` rides under
+/// `"fields"` for structured access via `error.context.operation`.
 fn reload_subscriber_unsubscribed(operation: &str) -> napi::Error {
-    napi::Error::new(
-        Status::GenericFailure,
+    let body = serde_json::json!({
+        "code": benten_errors::ErrorCode::ReloadSubscriberUnsubscribed.as_static_str(),
+        "message": format!("{operation} after unsubscribe"),
+        "fields": { "operation": operation },
+    });
+    let message = serde_json::to_string(&body).unwrap_or_else(|_| {
         format!(
             "{}: {operation} after unsubscribe",
             benten_errors::ErrorCode::ReloadSubscriberUnsubscribed.as_static_str()
-        ),
-    )
+        )
+    });
+    napi::Error::new(Status::GenericFailure, message)
 }
 
-/// R6FP-tail (Round-2 Instance 9) — convert a `CompileError` into a napi
-/// error preserving the diagnostic's structured `line` / `column` fields
-/// for the JS side via the `$$benten-context$$` sentinel suffix used by
-/// `engine_err` (see `bindings/napi/src/error.rs::CONTEXT_SENTINEL`).
+/// Phase-3 G19-B (§7.2) — convert a `CompileError` into a napi error
+/// using the same JSON-shape `{ code, message, fields? }` as
+/// `bindings/napi/src/error.rs::engine_err`. Diagnostic `line` / `column`
+/// fields ride under `"fields"`; the TS-side `mapNativeError` parses
+/// the message body and surfaces them on `BentenError.context`.
 ///
-/// Pre-fix the message format `{code}: {msg} (line={line:?} column={col:?})`
-/// encoded `Option<u32>` via `{:?}` (yielding `Some(N)` literals);
-/// JS callers had to regex-parse `Some\((\d+)\)` to recover the structured
-/// fields, ugly + fragile. Post-fix the message prefix carries only the
-/// human-readable head + the sentinel suffix carries the JSON
-/// `{ "line": N | null, "column": N | null }` bag, which the TS-side
-/// `mapNativeError` parses + surfaces on `error.context`.
+/// Pre-G19-B this helper used the `$$benten-context$$` sentinel suffix
+/// carrier; post-G19-B every napi-emitted error uses the uniform
+/// JSON shape, so `mapNativeError` doesn't need branch-by-shape logic.
 fn compile_err_to_napi(err: CompileError) -> napi::Error {
-    const CONTEXT_SENTINEL: &str = " :: $$benten-context$$";
     match err.diagnostic() {
         Some(d) => {
-            let ctx = serde_json::json!({
-                "line": d.line,
-                "column": d.column,
+            let body = serde_json::json!({
+                "code": d.error_code,
+                "message": d.message,
+                "fields": {
+                    "line": d.line,
+                    "column": d.column,
+                },
             });
-            let ctx_json = serde_json::to_string(&ctx).unwrap_or_else(|_| "{}".into());
-            napi::Error::new(
-                Status::GenericFailure,
-                format!(
-                    "{code}: {msg}{sentinel}{ctx}",
-                    code = d.error_code,
-                    msg = d.message,
-                    sentinel = CONTEXT_SENTINEL,
-                    ctx = ctx_json,
-                ),
-            )
+            let message = serde_json::to_string(&body)
+                .unwrap_or_else(|_| format!("{}: {}", d.error_code, d.message));
+            napi::Error::new(Status::GenericFailure, message)
         }
-        None => napi::Error::new(
-            Status::GenericFailure,
-            format!("E_DSL_COMPILE_ERROR: {err}"),
-        ),
+        None => {
+            let body = serde_json::json!({
+                "code": "E_DSL_COMPILE_ERROR",
+                "message": format!("{err}"),
+            });
+            let message = serde_json::to_string(&body)
+                .unwrap_or_else(|_| format!("E_DSL_COMPILE_ERROR: {err}"));
+            napi::Error::new(Status::GenericFailure, message)
+        }
     }
 }
 
