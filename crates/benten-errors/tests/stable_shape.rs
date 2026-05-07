@@ -189,6 +189,12 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // `crates/benten-sync/src/errors.rs::AtriumTransportError::code`.
     ErrorCode::AtriumRelayUnreachable,
     ErrorCode::AtriumTransportDegraded,
+    // Phase-3 G16-B wave-6b (ds-4 Inv-13 row-4b): sync-replica
+    // frame targeting a system-zone / Anchor-immutable path with a
+    // divergent CID. Construction site:
+    // `crates/benten-engine/src/engine_sync.rs::AtriumError::DivergentCidRejected`
+    // mapped via `engine_sync.rs::AtriumError::code`.
+    ErrorCode::SyncDivergentCidRejected,
     // Phase-3 G16-D wave-6b (ds-r4-3): handshake-frame replay
     // within the bounded HLC acceptance window. Construction site:
     // `crates/benten-sync/src/handshake.rs::HandshakeError::ReplayWithinBoundedWindow`
@@ -339,6 +345,16 @@ fn variant_count_is_pinned() {
     // Post-G16-A: net +2 from `AtriumRelayUnreachable` +
     // `AtriumTransportDegraded`.
     //
+    // Phase-3 G16-B wave-6b adds 1 code:
+    //   `SyncDivergentCidRejected` — typed variant for inbound sync
+    //     frames targeting system-zone / Anchor-immutable paths with
+    //     a divergent CID (ds-4 Inv-13 row-4b). Construction site at
+    //     `crates/benten-engine/src/engine_sync.rs::AtriumError::DivergentCidRejected`
+    //     mapped via `engine_sync.rs::AtriumError::code`. PRE-merge
+    //     classifier walks `SYSTEM_ZONE_PREFIXES` so reject fires
+    //     BEFORE the Loro merge applies — not post-merge cleanup.
+    // Post-G16-B: 96 + 1 = 97.
+    //
     // Phase-3 G16-D wave-6b adds 1 code:
     //   `HandshakeReplayWithinBoundedWindow` — typed variant for
     //     handshake frames replayed within the bounded HLC
@@ -347,11 +363,11 @@ fn variant_count_is_pinned() {
     //     `crates/benten-sync/src/handshake.rs::HandshakeError::ReplayWithinBoundedWindow`,
     //     carrying observable original_hlc / replay_hlc / window_ms
     //     diagnostic fields. Closes ds-r4-3.
-    // Post-G16-D: net +1 from `HandshakeReplayWithinBoundedWindow`.
-    // The hardcoded count below tracks `ALL_CATALOG_VARIANTS.len()`
+    // Post-G16-D: 97 + 1 = 98. The hardcoded count below tracks
+    // `ALL_CATALOG_VARIANTS.len()`
     // exactly.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 97,
+        CATALOG_VARIANT_COUNT, 98,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

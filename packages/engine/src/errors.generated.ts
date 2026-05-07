@@ -152,6 +152,7 @@ export const CATALOG_CODES = [
   "E_CAP_UCAN_AUDIENCE_MISMATCH",
   "E_ATRIUM_RELAY_UNREACHABLE",
   "E_ATRIUM_TRANSPORT_DEGRADED",
+  "E_SYNC_DIVERGENT_CID_REJECTED",
   "E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW",
 ] as const;
 
@@ -1939,6 +1940,21 @@ export class EAtriumTransportDegraded extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_ATRIUM_TRANSPORT_DEGRADED", "The established Atrium transport has degraded — packet-loss above threshold, relay-fallback active mid-stream, direct connection lost, or handshake wire-format violation surfaced at the transport layer. The engine-side `engine.atrium_status()` surface (Phase-3 G16-B/D) propagates this state observably so operators can react. Investigate network conditions (packet-loss, NAT path) and the connecting peer's reachability. Per `net-blocker-2` BLOCKER, the degraded transport state is EXPLICIT — not a missing value, not a panic. Distinct from `E_ATRIUM_RELAY_UNREACHABLE` (which signals the relay endpoint itself is unreachable at connect time). Routes to `ON_ERROR`.", message, context);
     this.name = "EAtriumTransportDegraded";
+  }
+}
+
+/**
+ * E_SYNC_DIVERGENT_CID_REJECTED
+ *
+ * Thrown at: `crates/benten-engine/src/engine_sync.rs::AtriumError::DivergentCidRejected` (Phase-3 G16-B wave-6b; ds-4 Inv-13 row-4 SPLIT). PRE-merge classifier at `engine_sync.rs::merge_remote_change` walks `SYSTEM_ZONE_PREFIXES` and rejects divergent CIDs targeting system-zone paths before applying any Loro state. Mapped via `engine_sync.rs::AtriumError::code` to the stable code.
+ * Message template: "sync replica frame rejected: system-zone target {zone} carries divergent CID {observed_cid} (Anchor-immutable per Inv-13 row-4b)"
+ */
+export class ESyncDivergentCidRejected extends BentenError {
+  static readonly code = "E_SYNC_DIVERGENT_CID_REJECTED";
+  static readonly fixHint = "An inbound sync-replica frame targets a system-zone / Anchor-immutable path (per `crates/benten-engine::system_zones::SYSTEM_ZONE_PREFIXES`) with a divergent CID. Per ds-4 Inv-13 row-4b, system-zone targets are immutable-via-sync — divergent CIDs are rejected PRE-merge by the classifier walk in `crates/benten-engine/src/engine_sync.rs::merge_remote_change` BEFORE the Loro merge applies (not post-merge cleanup). The remote peer SHOULD treat the rejection as authoritative for the system-zone path; user-data zones (Inv-13 row-4a) continue to merge via the Loro CRDT + D-C HYBRID Anchor+Version+CURRENT pattern. Distinct from `E_ATRIUM_TRANSPORT_DEGRADED` (transport-layer degrade) and `E_ATRIUM_RELAY_UNREACHABLE` (relay unavailability) — this is a semantic-layer reject, not a transport failure. Routes to `ON_ERROR`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SYNC_DIVERGENT_CID_REJECTED", "An inbound sync-replica frame targets a system-zone / Anchor-immutable path (per `crates/benten-engine::system_zones::SYSTEM_ZONE_PREFIXES`) with a divergent CID. Per ds-4 Inv-13 row-4b, system-zone targets are immutable-via-sync — divergent CIDs are rejected PRE-merge by the classifier walk in `crates/benten-engine/src/engine_sync.rs::merge_remote_change` BEFORE the Loro merge applies (not post-merge cleanup). The remote peer SHOULD treat the rejection as authoritative for the system-zone path; user-data zones (Inv-13 row-4a) continue to merge via the Loro CRDT + D-C HYBRID Anchor+Version+CURRENT pattern. Distinct from `E_ATRIUM_TRANSPORT_DEGRADED` (transport-layer degrade) and `E_ATRIUM_RELAY_UNREACHABLE` (relay unavailability) — this is a semantic-layer reject, not a transport failure. Routes to `ON_ERROR`.", message, context);
+    this.name = "ESyncDivergentCidRejected";
   }
 }
 

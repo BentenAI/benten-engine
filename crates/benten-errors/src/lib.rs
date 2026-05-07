@@ -589,6 +589,18 @@ pub enum ErrorCode {
     /// transport state is EXPLICIT — not a missing value, not a
     /// panic. Routes to `ON_ERROR`.
     AtriumTransportDegraded,
+    /// G16-B wave-6b (Phase-3 Atrium CRDT integration; ds-4 Inv-13
+    /// row-4 SPLIT): an inbound sync-replica frame carries a
+    /// system-zone / Anchor-immutable target (per
+    /// `crates/benten-engine::system_zones::SYSTEM_ZONE_PREFIXES`)
+    /// with a divergent CID. Per ds-4 Inv-13 row-4b, system-zone
+    /// targets are immutable-via-sync — divergent CIDs reject with
+    /// this typed code. Distinct from
+    /// [`ErrorCode::AtriumTransportDegraded`] (transport-layer
+    /// degrade) and [`ErrorCode::AtriumRelayUnreachable`] (relay
+    /// unavailability). Maps to `E_SYNC_DIVERGENT_CID_REJECTED`.
+    /// Routes to `ON_ERROR`.
+    SyncDivergentCidRejected,
     /// G16-D wave-6b (Phase-3 Atrium handshake protocol; ds-r4-3
     /// distributed-systems lens): a handshake frame replayed within
     /// the bounded HLC acceptance window was rejected. Surfaces at
@@ -794,6 +806,8 @@ impl ErrorCode {
             // Phase-3 G16-A — Atrium transport surface
             ErrorCode::AtriumRelayUnreachable => "E_ATRIUM_RELAY_UNREACHABLE",
             ErrorCode::AtriumTransportDegraded => "E_ATRIUM_TRANSPORT_DEGRADED",
+            // Phase-3 G16-B — Atrium CRDT integration surface (Inv-13 row-4b)
+            ErrorCode::SyncDivergentCidRejected => "E_SYNC_DIVERGENT_CID_REJECTED",
             // Phase-3 G16-D — Atrium handshake-protocol surface
             ErrorCode::HandshakeReplayWithinBoundedWindow => {
                 "E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW"
@@ -987,6 +1001,12 @@ impl ErrorCode {
             // (transport-layer failure surfacing as runtime ON_ERROR).
             | ErrorCode::AtriumRelayUnreachable
             | ErrorCode::AtriumTransportDegraded
+            // Phase-3 G16-B — Inv-13 row-4b sync-replica reject for
+            // system-zone / Anchor-immutable divergent-CID. Joins
+            // ON_ERROR family per D21 (semantic-layer reject without
+            // a more-specific edge — caller had the cap, the merge
+            // is rejected on Inv-13 row-4b grounds, not auth grounds).
+            | ErrorCode::SyncDivergentCidRejected
             // Phase-3 G16-D — handshake-protocol bounded-window replay
             // rejection surfaces alongside the transport-surface
             // family (peer-to-peer connection establishment failures).
@@ -1223,6 +1243,8 @@ impl ErrorCode {
             // (net-blocker-2 BLOCKER typed errors).
             "E_ATRIUM_RELAY_UNREACHABLE" => ErrorCode::AtriumRelayUnreachable,
             "E_ATRIUM_TRANSPORT_DEGRADED" => ErrorCode::AtriumTransportDegraded,
+            // Phase-3 G16-B wave-6b — Inv-13 row-4b sync-replica reject.
+            "E_SYNC_DIVERGENT_CID_REJECTED" => ErrorCode::SyncDivergentCidRejected,
             // Phase-3 G16-D wave-6b — handshake-protocol bounded-window
             // replay rejection.
             "E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW" => {

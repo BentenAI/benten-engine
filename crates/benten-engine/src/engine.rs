@@ -762,6 +762,35 @@ impl Engine {
     pub fn builder() -> EngineBuilder {
         EngineBuilder::new()
     }
+
+    /// Open an Atrium peer-to-peer sync session bound to this engine.
+    ///
+    /// Phase-3 G16-B wave-6b. Native-only per CLAUDE.md baked-in #17;
+    /// browser tabs participate via authenticated thin-client views,
+    /// NOT as full Atrium peers.
+    ///
+    /// Returns the [`crate::engine_sync::AtriumHandle`] session
+    /// handle (per Ben's D1 session-handle B-prime ratification);
+    /// the handle carries the iroh transport endpoint, the per-zone
+    /// Loro CRDT documents, and the merge-dispatch surface
+    /// implementing the Inv-13 row-4 SPLIT classifier per ds-4.
+    ///
+    /// G16-B canary scope: the returned handle is logically
+    /// independent of the engine's own state — a future R6-FP /
+    /// G14-D integration will wire change-broadcast + Version-Node
+    /// mint paths through the handle's merge-dispatch hooks.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::engine_sync::AtriumError`] if the iroh
+    /// `Endpoint` binding fails.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn open_atrium(
+        &self,
+        config: crate::atrium_api::AtriumConfig,
+    ) -> Result<crate::engine_sync::AtriumHandle, crate::engine_sync::AtriumError> {
+        crate::engine_sync::AtriumHandle::open(config).await
+    }
 }
 
 /// G13-B generic-cascade: every constructor / accessor that does NOT

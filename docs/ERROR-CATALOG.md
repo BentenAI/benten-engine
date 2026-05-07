@@ -1096,6 +1096,14 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** `crates/benten-sync/src/transport.rs::Endpoint::*` (Phase-3 G16-A wave-6 connection-establishment + send/recv paths; net-blocker-2 BLOCKER). Also fires from `crates/benten-sync/src/handshake_wire.rs::HandshakeFrame::from_canonical_bytes` when the wire-format frame is missing required fields per net-blocker-4 BLOCKER. Mapped from the `AtriumTransportError::TransportDegraded` / `AtriumTransportError::HandshakeWireFormat` typed variants via `crates/benten-sync/src/errors.rs::AtriumTransportError::code`.
 - **Phase:** 3 G16-A
 
+### E_SYNC_DIVERGENT_CID_REJECTED
+
+- **Message:** "sync replica frame rejected: system-zone target {zone} carries divergent CID {observed_cid} (Anchor-immutable per Inv-13 row-4b)"
+- **Context:** `{ zone: String, observed_cid: String, anchor_cid: String }`
+- **Fix:** An inbound sync-replica frame targets a system-zone / Anchor-immutable path (per `crates/benten-engine::system_zones::SYSTEM_ZONE_PREFIXES`) with a divergent CID. Per ds-4 Inv-13 row-4b, system-zone targets are immutable-via-sync — divergent CIDs are rejected PRE-merge by the classifier walk in `crates/benten-engine/src/engine_sync.rs::merge_remote_change` BEFORE the Loro merge applies (not post-merge cleanup). The remote peer SHOULD treat the rejection as authoritative for the system-zone path; user-data zones (Inv-13 row-4a) continue to merge via the Loro CRDT + D-C HYBRID Anchor+Version+CURRENT pattern. Distinct from `E_ATRIUM_TRANSPORT_DEGRADED` (transport-layer degrade) and `E_ATRIUM_RELAY_UNREACHABLE` (relay unavailability) — this is a semantic-layer reject, not a transport failure. Routes to `ON_ERROR`.
+- **Thrown at:** `crates/benten-engine/src/engine_sync.rs::AtriumError::DivergentCidRejected` (Phase-3 G16-B wave-6b; ds-4 Inv-13 row-4 SPLIT). PRE-merge classifier at `engine_sync.rs::merge_remote_change` walks `SYSTEM_ZONE_PREFIXES` and rejects divergent CIDs targeting system-zone paths before applying any Loro state. Mapped via `engine_sync.rs::AtriumError::code` to the stable code.
+- **Phase:** 3 G16-B
+
 ### E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW
 
 - **Message:** "handshake replay within bounded window: original_hlc={original_hlc} replay_hlc={replay_hlc} window_ms={window_ms}"

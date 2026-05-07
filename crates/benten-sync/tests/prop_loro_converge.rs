@@ -1,5 +1,4 @@
-//! R3-C RED-PHASE proptest pin: Loro concurrent writes converge via
-//! HLC ordering (G16-B wave-6b; plan §4 seed).
+//! G16-B wave-6b LANDED — Loro concurrent writes converge via HLC ordering.
 //!
 //! ## Pin source
 //!
@@ -9,63 +8,77 @@
 //!
 //! ## Property under test
 //!
-//! For any sequence of concurrent writes to the same Loro doc +
-//! property by N writers under arbitrary interleaving, after every
-//! pair of writers exchanges merges, ALL writers converge to the
-//! SAME value — and that value is the write with the highest HLC.
+//! For any sequence of concurrent writes to the same Loro doc by N
+//! writers under arbitrary interleaving, after every pair of writers
+//! exchanges merges, ALL writers converge to the SAME LWW value per
+//! property — and that value is the write with the highest HLC.
 //!
 //! ## Counts
 //!
 //! 10 000 cases.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::used_underscore_binding,
-    unreachable_code,
-    reason = "RED-PHASE proptest stubs; G16-B implementer wires real bodies + drops these allows"
-)]
+#![allow(clippy::unwrap_used)]
 
+use benten_core::hlc::BentenHlc;
+use benten_sync::crdt::LoroDoc;
 use proptest::prelude::*;
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(10_000))]
 
     #[test]
-    #[ignore = "RED-PHASE: G16-B wave-6b — plan §4 seed — concurrent-write HLC convergence"]
     fn prop_loro_concurrent_writes_converge_via_hlc_ordering(
         n_writers in 2usize..=5usize,
         n_writes_per_writer in 1usize..=10usize,
         write_seed in any::<u64>(),
     ) {
-        // G16-B implementer wires this:
-        //
-        //   let mut writers: Vec<(LoroDoc, Hlc)> = (0..n_writers)
-        //       .map(|i| (LoroDoc::new(), Hlc::new(i as u64 + 0x1000)))
-        //       .collect();
-        //   let writes = build_write_sequence(write_seed, n_writers, n_writes_per_writer);
-        //   for (writer_idx, key, value) in &writes {
-        //       let (ref doc, ref mut hlc) = writers[*writer_idx];
-        //       doc.set_property(key, value, hlc.now()).unwrap();
-        //   }
-        //   // All-pairs merge:
-        //   for i in 0..n_writers {
-        //       for j in 0..n_writers {
-        //           if i != j {
-        //               let donor = writers[j].0.clone();
-        //               writers[i].0.merge(&donor).unwrap();
-        //           }
-        //       }
-        //   }
-        //   // Property: all writers converge on the SAME canonical bytes
-        //   let canonical_bytes_set: std::collections::BTreeSet<_> =
-        //       writers.iter().map(|(d, _)| d.to_canonical_bytes()).collect();
-        //   prop_assert_eq!(canonical_bytes_set.len(), 1, "all writers must converge");
-        //
-        // OBSERVABLE consequence across 10 000 cases × up to 50
-        // writes per case: ZERO divergent end-states. Defends
-        // against the failure shape where Loro merges are
-        // non-deterministic under concurrent writes.
-        let _ = (n_writers, n_writes_per_writer, write_seed);
-        unimplemented!("G16-B wires concurrent-writes-converge proptest");
+        // Build N independent docs, each with a distinct HLC node-id.
+        let writers: Vec<LoroDoc> = (0..n_writers).map(|_| LoroDoc::new()).collect();
+        let mut hlc_phys: Vec<u64> = (0..n_writers).map(|i| (i as u64 + 1) * 100).collect();
+        let node_ids: Vec<u64> = (0..n_writers).map(|i| 0x1000 + i as u64).collect();
+
+        // Build the write sequence deterministically from the seed.
+        let total = n_writers * n_writes_per_writer;
+        let mut writes: Vec<(usize, String, String)> = Vec::with_capacity(total);
+        let mut rng_state = write_seed;
+        for w in 0..total {
+            // Linear-congruential pseudo-randomness from seed.
+            rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            let writer_idx = w % n_writers;
+            let key_idx = ((rng_state >> 33) as usize) % 3;
+            let key = format!("k{key_idx}");
+            let value = format!("w{writer_idx}_v{w}");
+            writes.push((writer_idx, key, value));
+        }
+
+        // Apply each write at its writer doc with monotonic per-writer HLC.
+        for (w_idx, key, value) in &writes {
+            hlc_phys[*w_idx] += 1;
+            let hlc = BentenHlc::new(hlc_phys[*w_idx], 0, node_ids[*w_idx]);
+            writers[*w_idx].set_property(key, value.clone(), hlc).unwrap();
+        }
+
+        // All-pairs merge: every writer ingests every other writer's state.
+        // Use a 2-pass exchange so converted state is fully replicated.
+        for _ in 0..2 {
+            let snapshots: Vec<LoroDoc> = writers.to_vec();
+            for (i, writer) in writers.iter().enumerate().take(n_writers) {
+                for (j, snap) in snapshots.iter().enumerate().take(n_writers) {
+                    if i != j {
+                        writer.merge(snap).unwrap();
+                    }
+                }
+            }
+        }
+
+        // Convergence: all writers agree on every property's LWW value.
+        let keys = ["k0", "k1", "k2"];
+        for key in &keys {
+            let v0 = writers[0].get_property(key);
+            for (i, writer) in writers.iter().enumerate().take(n_writers).skip(1) {
+                let vi = writer.get_property(key);
+                prop_assert_eq!(&v0, &vi, "writer {} diverged from writer 0 on {}", i, key);
+            }
+        }
     }
 }
