@@ -247,6 +247,26 @@ pub trait PrimitiveHost: Send + Sync {
             crate::PrimitiveKind::Sandbox,
         ))
     }
+
+    /// Phase-3 G19-E: TRANSFORM AST cache lookup hook.
+    ///
+    /// Returns a parsed [`crate::expr::Expr`] for the TRANSFORM operation
+    /// node identified by `node_id` within the currently-dispatching
+    /// handler. The host resolves `node_id` against its current
+    /// `active_call` frame's `handler_cid` so the lookup is keyed on the
+    /// `(handler_cid, node_id)` pair the cache stores at registration
+    /// time.
+    ///
+    /// `None` falls back to the per-call parse path inside
+    /// [`crate::primitives::transform::execute`]. The Phase-1 default
+    /// returns `None` so `NullHost` + every test `PrimitiveHost` keeps the
+    /// pre-G19-E re-parse-every-call behaviour. The
+    /// `benten-engine` impl overrides this to consult the engine's
+    /// `AstCache` populated at `register_subgraph` /
+    /// `register_subgraph_replace` time. Per phase-2-backlog §9.2 closure.
+    fn cached_transform_ast(&self, _node_id: &str) -> Option<std::sync::Arc<crate::expr::Expr>> {
+        None
+    }
 }
 
 /// A no-op [`PrimitiveHost`] for unit tests and benchmarks that exercise

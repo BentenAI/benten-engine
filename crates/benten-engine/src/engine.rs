@@ -121,6 +121,12 @@ pub(crate) struct EngineInner {
     pub(crate) subgraph_cache: SubgraphCache,
     /// Phase 2a G2-B / dx-r1: count of subgraph template builds (cache misses).
     pub(crate) parse_counter: std::sync::atomic::AtomicU64,
+    /// Phase-3 G19-E (wave-7b) per-handler TRANSFORM AST cache, keyed on
+    /// `(handler_cid, node_id)`. Closes `phase-2-backlog.md` §9.2.
+    /// Populated at `register_subgraph` / `register_subgraph_replace`
+    /// time; consumed via the `PrimitiveHost::cached_transform_ast`
+    /// override at TRANSFORM dispatch.
+    pub(crate) ast_cache: crate::ast_cache::AstCache,
     /// Per-capability-scope tally of writes that passed the policy's
     /// `check_write` gate (i.e. committed). Keyed by the derived scope
     /// string (`store:<label>:write`). Closes named compromise #5 — the
@@ -319,6 +325,7 @@ impl EngineInner {
             created_at_seq: std::sync::atomic::AtomicU64::new(0),
             subgraph_cache: SubgraphCache::new(),
             parse_counter: std::sync::atomic::AtomicU64::new(0),
+            ast_cache: crate::ast_cache::AstCache::new(),
             cap_write_committed: std::sync::Mutex::new(BTreeMap::new()),
             cap_write_denied: std::sync::Mutex::new(BTreeMap::new()),
             writes_committed_total: std::sync::atomic::AtomicU64::new(0),
@@ -1740,8 +1747,11 @@ impl Engine {
         // 5d-J workstream 3: parse every TRANSFORM node's expression at
         // registration time so an unparseable grammar trips `register_*`
         // rather than surviving to `engine.call`. The runtime executor
-        // still re-parses per-call (Phase-2 completes the AST-cache
-        // perf pass); this is the fail-fast guarantee only.
+        // path now consults [`crate::ast_cache::AstCache`] for the
+        // pre-parsed AST (G19-E / wave-7b — closes phase-2-backlog
+        // §9.2): the cache is populated below via
+        // `ast_cache.populate_for_handler` once the `handler_cid` is
+        // known.
         benten_eval::invariants::validate_transform_expressions(&sg).map_err(|e| {
             EngineError::Other {
                 code: e.code(),
@@ -1813,6 +1823,15 @@ impl Engine {
         if chain.first() != Some(&cid) {
             chain.insert(0, cid);
         }
+        drop(vc);
+
+        // G19-E (phase-2-backlog §9.2 closure): populate the per-handler
+        // TRANSFORM AST cache so subsequent dispatches via `Engine::call`
+        // skip the per-call parse step. Idempotent re-registration
+        // (same CID) re-inserts the same Expr instances under the same
+        // `(handler_cid, node_id)` key — cheap and correct.
+        self.inner.ast_cache.populate_for_handler(&cid, &sg);
+
         Ok(handler_id)
     }
 
@@ -2011,6 +2030,21 @@ impl Engine {
             // we just performed.
             chain_depth = chain_guard.get(&handler_id).map_or(1, std::vec::Vec::len);
         }
+
+        // G19-E (phase-2-backlog §9.2 closure): the AST cache is keyed
+        // on `handler_cid`, so the replaced version's entries become
+        // unreachable on key change. Drop them explicitly so a future
+        // call into the OLD CID via the version-chain audit surface
+        // doesn't reach a stale parse, then re-populate for the new CID.
+        // Idempotent same-CID re-register is a no-op for the cache —
+        // populate_for_handler simply re-inserts the same Expr instances
+        // under the same key.
+        if let Some(prev_cid) = previous_cid
+            && prev_cid != cid
+        {
+            self.inner.ast_cache.invalidate_handler(&prev_cid);
+        }
+        self.inner.ast_cache.populate_for_handler(&cid, &sg);
 
         Ok(RegisterReplaceOutcome {
             handler_id,
