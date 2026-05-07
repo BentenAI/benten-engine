@@ -242,6 +242,54 @@ pub fn testing_compute_manifest_cid(
         .expect("ModuleManifest canonical-bytes encoding is infallible")
 }
 
+/// Phase-3 G20-A1 wave-8a test helper: build a minimal SANDBOX-bearing
+/// `SubgraphSpec` for the `sandbox_compile_time_disabled_on_wasm32`
+/// integration pin (R3-E territory).
+///
+/// The spec is a 2-node SANDBOX → RESPOND chain with a placeholder
+/// `module` CID property + an inline `caps` list (the inline manifest
+/// escape hatch). On native targets the spec registers cleanly; on
+/// wasm32 the registration path surfaces the typed
+/// `E_SANDBOX_DISABLED_ON_WASM32` error before the executor is
+/// consulted.
+///
+/// Used by `crates/benten-engine/tests/integration/sandbox_compile_time_disabled_on_wasm32.rs`.
+#[cfg(any(test, feature = "test-helpers"))]
+#[must_use]
+pub fn testing_make_minimal_sandbox_spec() -> SubgraphSpec {
+    use std::collections::BTreeMap;
+
+    use benten_core::Value;
+    use benten_eval::PrimitiveKind;
+
+    use crate::subgraph_spec::{PrimitiveSpec, SubgraphSpec};
+
+    let mut props: BTreeMap<String, Value> = BTreeMap::new();
+    // Placeholder module CID — register_subgraph does NOT consult
+    // module bytes (those flow through register_module_bytes); it
+    // only inspects the SANDBOX node's structural properties for
+    // wasm32 cut-detection. The dummy base32 string here is the
+    // shape we need to pass parser-level validation.
+    props.insert(
+        "module".into(),
+        Value::Text("bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda".into()),
+    );
+    props.insert(
+        "caps".into(),
+        Value::List(vec![Value::Text("host:compute:time".to_string())]),
+    );
+
+    SubgraphSpec::builder()
+        .handler_id("sandbox.minimal_for_wasm32_disabled_test")
+        .primitive_with_props(PrimitiveSpec {
+            id: "s0".into(),
+            kind: PrimitiveKind::Sandbox,
+            properties: props,
+        })
+        .respond()
+        .build()
+}
+
 /// Phase 2b G10-B test helper: mint a `Cid` known to differ from any
 /// CID a real manifest would produce.
 ///

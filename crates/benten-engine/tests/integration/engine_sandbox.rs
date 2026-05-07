@@ -12,19 +12,69 @@
 //!     `engine.uninstallModule(cid)` (G10-B owned).
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
-#![allow(unused_imports, dead_code, unused_variables)]
+
+use std::collections::BTreeMap;
+
+use benten_core::{Cid, Value};
+use benten_engine::{Engine, PrimitiveSpec, SubgraphSpec};
+use benten_eval::PrimitiveKind;
 
 #[test]
-#[ignore = "Phase 3 — engine SANDBOX E2E DSL-composition body deferred per docs/future/phase-3-backlog.md §7.3.A.1"]
 fn engine_sandbox_end_to_end_via_dsl_composition_only() {
-    // Plan §3 G7-C — register a SubgraphSpec built via the DSL
-    // `subgraph('handler').sandbox({ module: cid, manifest: 'compute-basic' })`.
-    // engine.call('handler', input) routes through the evaluator,
-    // which dispatches the SANDBOX primitive.
+    // **G20-A1 wave-8a body** (Phase 3): plan §3 G7-C — register a
+    // SubgraphSpec via the DSL composition path
+    // `subgraph('handler').sandbox({ module: cid, caps: [...] })`.
+    // engine.call('handler', input) routes through the evaluator
+    // which dispatches the SANDBOX primitive end-to-end through the
+    // wasmtime executor.
     //
-    // No top-level `engine.sandbox(...)` API is invoked — the
-    // composition is what's tested.
-    todo!("R5 G7-C — DSL builder + register + engine.call + assertion");
+    // This is the load-bearing test that NO top-level
+    // `engine.sandbox(...)` API exists (covered by the absence-pin
+    // test below) AND the DSL composition path successfully invokes
+    // the engine's `execute_sandbox` PrimitiveHost override.
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
+
+    let module_bytes =
+        wat::parse_str("(module (func (export \"run\") (result i32) i32.const 42))").unwrap();
+    let module_cid = Cid::from_blake3_digest(*blake3::hash(&module_bytes).as_bytes());
+    let module_cid_str = module_cid.to_base32();
+    engine
+        .register_module_bytes(&module_cid, &module_bytes)
+        .unwrap();
+
+    let mut props: BTreeMap<String, Value> = BTreeMap::new();
+    props.insert("module".into(), Value::Text(module_cid_str));
+    props.insert(
+        "caps".into(),
+        Value::List(vec![Value::Text("host:compute:time".to_string())]),
+    );
+    let spec = SubgraphSpec::builder()
+        .handler_id("g20a1.engine_sandbox_e2e")
+        .primitive_with_props(PrimitiveSpec {
+            id: "s0".into(),
+            kind: PrimitiveKind::Sandbox,
+            properties: props,
+        })
+        .respond()
+        .build();
+
+    let handler_id = engine
+        .register_subgraph(spec)
+        .expect("DSL-composed SANDBOX SubgraphSpec MUST register on native");
+
+    let outcome = engine
+        .call(
+            &handler_id,
+            "run",
+            benten_core::Node::new(vec!["test_input".to_string()], Default::default()),
+        )
+        .expect("DSL-composed SANDBOX dispatch through engine.call MUST succeed");
+    assert!(
+        outcome.is_ok_edge(),
+        "DSL-composed SANDBOX call MUST route through OK edge end-to-end \
+         via the evaluator's execute_sandbox primitive host override"
+    );
 }
 
 #[test]
