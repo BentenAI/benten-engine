@@ -854,13 +854,48 @@ export interface UserViewSpec {
 }
 
 /**
- * Handle returned by `engine.createView(spec)` when `spec` is a
- * [`UserViewSpec`]. Exposes the resolved id + strategy and the per-view
- * `snapshot()` / `onUpdate()` surfaces (the snapshot iterator yields
- * the current materialized rows; `onUpdate` registers a per-diff
- * callback). Phase-2b G8-B ships the registration round-trip — runtime
- * materialization (snapshot rows + diff streaming) lights up once
- * G8-A's Algorithm B port lands.
+ * One incremental delta yielded by [`UserView.onUpdate`].
+ *
+ * Phase-3 G19-C1-fp wave-7-fp shape: the underlying napi
+ * `userViewDrainUpdates` accessor surfaces opaque ChangeEvent payloads
+ * the engine's per-view side-table observed since the prior cursor.
+ * The TS-side wrapper preserves the payload verbatim under
+ * `payload` so app code can pattern-match against the raw
+ * `ChangeEvent` JSON shape without an extra projection step.
+ *
+ * The `kind: "change"` discriminator is the intentional Phase-3
+ * minimum-viable shape — the engine's Algorithm B generalization
+ * (phase-3-backlog §5.1) will widen this to a discriminated union
+ * (`"insert"` / `"update"` / `"delete"`) once the per-view side-table
+ * tracks row-level mutation kind. Forward-compat: existing app code
+ * `for await (const delta of view.onUpdate()) { if (delta.kind ===
+ * "change") ... }` continues to compile against the widened union.
+ */
+export type ViewDelta<T = unknown> = {
+  /** Discriminator. Phase-3 minimum-viable; widens to insert/update/delete post-Algorithm-B. */
+  kind: "change";
+  /** Raw ChangeEvent payload from the napi `userViewDrainUpdates` accessor. */
+  payload: T;
+};
+
+/**
+ * Handle returned by `engine.registerUserView(spec)`. Exposes the
+ * resolved id + strategy and the per-view `snapshot()` / `onUpdate()`
+ * surfaces:
+ *
+ * - `snapshot()` — async iterator over currently-materialized rows.
+ * - `onUpdate()` — async-iterable iterator over incremental deltas.
+ *   Consumed via `for await (const delta of view.onUpdate()) { ... }`;
+ *   call `iterator.return()` (or `break` out of `for-await`) to stop
+ *   polling cleanly. The native cdylib's per-call accessors
+ *   (`userViewDrainUpdates` + `userViewChangeOffset`) drive the
+ *   internal 25ms polling cadence; older napi cdylib builds (pre-G19-C1)
+ *   yield zero deltas + close cleanly so app code is forward-compatible.
+ *
+ * Phase-3 G19-C1-fp wave-7-fp lifts `onUpdate` from the prior callback
+ * shape (`onUpdate(cb) -> UserViewSubscription`) to the
+ * AsyncIterableIterator shape; the callback overload was a clean break
+ * since pre-Phase-3 surfaces aren't in customer hands.
  */
 export interface UserView {
   /** Resolved view id. */
@@ -877,17 +912,14 @@ export interface UserView {
    */
   snapshot: () => AsyncIterable<unknown>;
   /**
-   * Subscribe to per-diff change notifications. Returns a `Subscription`
-   * with an `unsubscribe()` method. As with `snapshot()`, the runtime
-   * dispatch lights up alongside G8-A; the subscription handle exists
-   * pre-G8-A so app code is forward-compatible.
+   * Async-iterable iterator over per-diff change notifications.
+   * Consumed via `for await (const delta of view.onUpdate()) { ... }`;
+   * `iterator.return()` (or `break` from a `for-await` loop) stops the
+   * polling loop cleanly without leaking the timer. When the runtime
+   * shim is unavailable (pre-G19-C1 cdylib) the iterator yields zero
+   * deltas + closes cleanly.
    */
-  onUpdate: (cb: (diff: unknown) => void) => UserViewSubscription;
-}
-
-/** Handle returned by `UserView.onUpdate` for cleanup. */
-export interface UserViewSubscription {
-  unsubscribe: () => Promise<void>;
+  onUpdate: () => AsyncIterableIterator<ViewDelta>;
 }
 
 // ---------------------------------------------------------------------------

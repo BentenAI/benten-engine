@@ -23,10 +23,15 @@
 import { describe, it, expect } from "vitest";
 import {
   Engine,
+  buildUserViewHandle,
   resolveUserViewStrategy,
   validateUserViewSpec,
 } from "@benten/engine";
-import type { UserViewSpec, UserView } from "@benten/engine";
+import type {
+  UserView,
+  UserViewSpec,
+  ViewDelta,
+} from "@benten/engine";
 
 describe("engine.registerUserView", () => {
   it.skip("Phase 3 (post-G8-B view.snapshot() AsyncIterable wire-through) — round-trip create + snapshot materialization", async () => {
@@ -244,13 +249,13 @@ describe("engine.registerUserView", () => {
 });
 
 describe("UserView.onUpdate", () => {
-  it.skip("Phase 3 (post-G8-B view.onUpdate() wire-through) — onUpdate fires with diff for matching writes", async () => {
-    // BLOCKER (r6-napi-2 closure): `UserView.onUpdate(cb)` is a
-    // no-op stub on the `UserView` impl in
-    // `packages/engine/src/views.ts` (symbol form per R6-R4
-    // r6-r4-cp-5 — the prior `views.ts:126` line cite drifted post
-    // wave-8). Same Phase-3 named-destination as the snapshot test
-    // above.
+  it.skip("Phase 3 (post-G8-B view.onUpdate() wire-through) — async iterator yields ViewDeltas for matching writes", async () => {
+    // BLOCKER (r6-napi-2 closure): pre-G8-A the runtime materialization
+    // path is not lit up, so the iterator yields zero deltas + closes
+    // cleanly. Same Phase-3 named-destination as the snapshot test
+    // above. Post-G8-A this test goes GREEN end-to-end: the for-await
+    // loop receives one ViewDelta per write that matches the view's
+    // input pattern.
     const engine = await Engine.open(":memory:");
 
     const view = await engine.registerUserView({
@@ -258,16 +263,176 @@ describe("UserView.onUpdate", () => {
       inputPattern: { label: "post" },
     });
 
-    const diffs: unknown[] = [];
-    const sub = view.onUpdate((diff) => diffs.push(diff));
-
     const post = await engine.registerSubgraph(/* crud("post") */ {} as never);
-    await engine.call(post.id, "post:create", { v: 1 });
 
-    await new Promise((r) => setTimeout(r, 50));
-    expect(diffs.length).toBeGreaterThan(0);
+    // Drive a write before opening the iterator; the iterator stamps
+    // the head cursor at construction so it picks up only events
+    // strictly newer than that.
+    const collected: ViewDelta[] = [];
+    const iter = view.onUpdate();
 
-    await sub.unsubscribe();
+    // Concurrent producer: write while the consumer is iterating.
+    const producer = (async () => {
+      await engine.call(post.id, "post:create", { v: 1 });
+    })();
+
+    // Bounded consume: read up to 1 delta, then break (which calls
+    // iterator.return() implicitly).
+    for await (const delta of iter) {
+      collected.push(delta);
+      if (collected.length >= 1) break;
+    }
+
+    await producer;
+    expect(collected.length).toBeGreaterThan(0);
+    expect(collected[0]?.kind).toBe("change");
+
     await engine.close();
+  });
+
+  it("graceful-fallback (no runtime shim) — iterator yields zero deltas + closes cleanly", async () => {
+    // End-to-end test pin (per dispatch-conventions §3.6b pim-2): drives
+    // the production entry point `for await (const delta of view.onUpdate())`
+    // through `buildUserViewHandle` with `runtime: null` — the path that
+    // older napi cdylib builds (pre-G19-C1) take. Asserts the iterator
+    // closes cleanly via `done: true` rather than hanging or throwing.
+    // Would FAIL if the AsyncIterableIterator's null-runtime branch were
+    // silently no-op'd to a never-resolving Promise.
+    const view: UserView = buildUserViewHandle(
+      {
+        id: "user_no_runtime",
+        inputPattern: { label: "post" },
+      },
+      "B",
+      null, // runtime shim absent — pre-G19-C1 cdylib path
+    );
+
+    const collected: ViewDelta[] = [];
+    for await (const delta of view.onUpdate()) {
+      collected.push(delta);
+    }
+    expect(collected).toEqual([]);
+  });
+
+  it("cancellation via iterator.return() stops polling cleanly", async () => {
+    // End-to-end test pin (per dispatch-conventions §3.6b pim-2): drives
+    // the production cancellation path `iterator.return()` against a
+    // controllable runtime stub. Asserts:
+    //   1. The iterator transitions to `done: true` after `return()`.
+    //   2. `drainUpdates` is no longer called after cancellation (the
+    //      timer is cleared so no leaked polling occurs).
+    // Would FAIL if the `return()` implementation forgot to clear the
+    // pending timer or didn't flip the closed flag — a regression here
+    // would cause the iterator to keep polling indefinitely.
+    let drainCallCount = 0;
+    const stubRuntime = {
+      snapshotRows: () => null,
+      currentChangeOffset: () => 0,
+      drainUpdates: () => {
+        drainCallCount += 1;
+        return { registered: true, events: [], nextOffset: 0 };
+      },
+    };
+
+    const view: UserView = buildUserViewHandle(
+      {
+        id: "user_cancel_test",
+        inputPattern: { label: "post" },
+      },
+      "B",
+      stubRuntime,
+    );
+
+    const iter = view.onUpdate();
+
+    // Wait one poll cycle to confirm polling is active.
+    await new Promise((r) => setTimeout(r, 40));
+    expect(drainCallCount).toBeGreaterThanOrEqual(1);
+
+    // Cancel — the iterator's return() stops the polling loop.
+    const returnResult = await iter.return!();
+    expect(returnResult.done).toBe(true);
+
+    // Subsequent next() returns done=true deterministically.
+    const next = await iter.next();
+    expect(next.done).toBe(true);
+
+    // No further drainUpdates calls after cancellation. Wait long
+    // enough for any orphan timer to have fired.
+    const drainCountAfterReturn = drainCallCount;
+    await new Promise((r) => setTimeout(r, 80));
+    expect(drainCallCount).toBe(drainCountAfterReturn);
+  });
+
+  it("yields deltas wrapped in ViewDelta { kind: 'change', payload } shape", async () => {
+    // End-to-end test pin: drives the production entry point + asserts
+    // the runtime-emitted ViewDelta wraps the underlying ChangeEvent
+    // payload verbatim under `payload`. Would FAIL if the
+    // buildOnUpdateIterator forgot to wrap (e.g. yielded the raw event)
+    // or set the wrong discriminator.
+    const events = [{ id: 1 }, { id: 2 }, { id: 3 }];
+    let drainCalls = 0;
+    const stubRuntime = {
+      snapshotRows: () => null,
+      currentChangeOffset: () => 0,
+      drainUpdates: (_viewId: string, _since: number) => {
+        drainCalls += 1;
+        if (drainCalls === 1) {
+          return { registered: true, events, nextOffset: 3 };
+        }
+        // Subsequent polls return the empty + signal end via
+        // `registered: false` to terminate the iterator cleanly.
+        return { registered: false, events: [], nextOffset: 3 };
+      },
+    };
+
+    const view: UserView = buildUserViewHandle(
+      {
+        id: "user_payload_shape",
+        inputPattern: { label: "post" },
+      },
+      "B",
+      stubRuntime,
+    );
+
+    const collected: ViewDelta[] = [];
+    for await (const delta of view.onUpdate()) {
+      collected.push(delta);
+    }
+
+    expect(collected).toHaveLength(3);
+    for (let i = 0; i < 3; i++) {
+      expect(collected[i]?.kind).toBe("change");
+      expect(collected[i]?.payload).toEqual(events[i]);
+    }
+  });
+
+  it("native-binding fault during drainUpdates closes iterator cleanly", async () => {
+    // Defends against the regression where a native-binding throw
+    // during a backgrounded poll surfaces as an unhandled rejection.
+    // The iterator must catch + close cleanly so consumers observe
+    // `done: true`.
+    const stubRuntime = {
+      snapshotRows: () => null,
+      currentChangeOffset: () => 0,
+      drainUpdates: () => {
+        throw new Error("simulated native-binding fault");
+      },
+    };
+
+    const view: UserView = buildUserViewHandle(
+      {
+        id: "user_fault_test",
+        inputPattern: { label: "post" },
+      },
+      "B",
+      stubRuntime,
+    );
+
+    const collected: ViewDelta[] = [];
+    for await (const delta of view.onUpdate()) {
+      collected.push(delta);
+    }
+    expect(collected).toEqual([]);
   });
 });

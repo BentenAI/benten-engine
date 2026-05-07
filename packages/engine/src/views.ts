@@ -32,7 +32,7 @@ import type {
   UserView,
   UserViewInputPattern,
   UserViewSpec,
-  UserViewSubscription,
+  ViewDelta,
 } from "./types.js";
 
 /**
@@ -181,7 +181,7 @@ export interface UserViewRuntimeShim {
 /**
  * Construct a [`UserView`] handle from a resolved spec + the napi-side
  * registration result. The runtime materialization paths (`snapshot()`
- * iterator, `onUpdate()` subscription) consult the threaded
+ * iterator, `onUpdate()` AsyncIterableIterator) consult the threaded
  * [`UserViewRuntimeShim`]; older napi cdylib builds (pre-G19-C1) lack
  * the runtime accessors — the shim's `snapshotRows` returns `null` and
  * `drainUpdates.registered` is `false`, surfacing as no-op iterables
@@ -206,66 +206,136 @@ export function buildUserViewHandle(
       }
       return rowArrayAsyncIterable(rows);
     },
-    onUpdate(cb: (diff: unknown) => void): UserViewSubscription {
-      if (runtime === null) {
-        return {
-          async unsubscribe(): Promise<void> {
-            // No-op when the napi runtime shim is not threaded in.
-          },
-        };
-      }
-      // Stateless cursor protocol per the napi
-      // `userViewDrainUpdates` adapter: capture the current head
-      // offset at subscription time, then poll at a low cadence,
-      // forwarding each ChangeEvent to the caller-supplied callback.
-      // The `drainUpdates.registered` field is checked once so an
-      // unknown-view subscription is observably no-op (matches the
-      // engine-side `Ok(None)` contract).
-      let cursor = runtime.currentChangeOffset();
-      let active = true;
-      const tick = (): void => {
-        if (!active) return;
-        let drained: ReturnType<UserViewRuntimeShim["drainUpdates"]>;
-        try {
-          drained = runtime.drainUpdates(spec.id, cursor);
-        } catch {
-          // Swallow native-binding faults so subscription teardown
-          // doesn't depend on the engine staying alive — the
-          // unsubscribe path below already disables further ticks.
-          active = false;
-          return;
-        }
-        if (!drained.registered) {
-          active = false;
-          return;
-        }
-        cursor = drained.nextOffset;
-        for (const ev of drained.events) {
-          try {
-            cb(ev);
-          } catch {
-            // Caller errors must not break the subscription loop.
-          }
-        }
-        if (active) {
-          timer = setTimeout(tick, POLL_MS);
-        }
-      };
-      let timer: ReturnType<typeof setTimeout> | null = setTimeout(
-        tick,
-        POLL_MS,
-      );
-      return {
-        async unsubscribe(): Promise<void> {
-          active = false;
-          if (timer !== null) {
-            clearTimeout(timer);
-            timer = null;
-          }
-        },
-      };
+    onUpdate(): AsyncIterableIterator<ViewDelta> {
+      return buildOnUpdateIterator(spec.id, runtime);
     },
   };
+}
+
+/**
+ * Construct the AsyncIterableIterator returned by [`UserView.onUpdate`].
+ *
+ * The iterator drives the napi `userViewDrainUpdates` accessor at a
+ * 25ms polling cadence (per [`POLL_MS`]) and yields each delivered
+ * ChangeEvent wrapped in a [`ViewDelta`]. When the runtime shim is
+ * unavailable (pre-G19-C1 cdylib) OR the underlying view is unregistered
+ * (the engine-side `Ok(None)` contract from `Engine::user_view_drain_updates_since`),
+ * the iterator yields zero deltas + closes cleanly via `done: true`.
+ *
+ * Cancellation contract: the consumer calls `iterator.return()` (which
+ * `for-await ... break` invokes implicitly) to stop the polling loop.
+ * `return()` flips `closed = true`, resolves any pending `next()` with
+ * `{ done: true }`, and clears the pending timer so no further polls
+ * occur. Subsequent `next()` calls return `{ done: true }` deterministically.
+ *
+ * Defends against:
+ *   - native-binding faults during a `drainUpdates` call (caught + close
+ *     cleanly so the iterator's caller doesn't observe an unhandled
+ *     rejection from a backgrounded tick).
+ *   - racing `return()` against an in-flight scheduled tick (the tick
+ *     re-checks `closed` after re-entering the closure and exits without
+ *     scheduling the next poll).
+ */
+function buildOnUpdateIterator(
+  viewId: string,
+  runtime: UserViewRuntimeShim | null,
+): AsyncIterableIterator<ViewDelta> {
+  // Buffer of pre-yielded ChangeEvents drained from the napi accessor.
+  // The polling loop fills it; `next()` pulls from it FIFO.
+  const buffer: ViewDelta[] = [];
+  // Pending `next()` awaiters when the buffer is empty + the loop is
+  // still active. Resolved either by the next poll's events or by
+  // `return()` + final `next()` to flush done-state.
+  type Resolver = (result: IteratorResult<ViewDelta>) => void;
+  const pending: Resolver[] = [];
+
+  let closed = runtime === null;
+  // Cursor stamped at iterator start so `for await` from registration
+  // time sees only events strictly newer than the head at subscription.
+  let cursor = runtime !== null ? runtime.currentChangeOffset() : 0;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const drainPending = (result: IteratorResult<ViewDelta>): void => {
+    while (pending.length > 0) {
+      const resolve = pending.shift()!;
+      resolve(result);
+    }
+  };
+
+  const closeIterator = (): void => {
+    if (closed) return;
+    closed = true;
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    drainPending({ value: undefined, done: true });
+  };
+
+  const tick = (): void => {
+    timer = null;
+    if (closed || runtime === null) return;
+    let drained: ReturnType<UserViewRuntimeShim["drainUpdates"]>;
+    try {
+      drained = runtime.drainUpdates(viewId, cursor);
+    } catch {
+      // Native-binding faults close the iterator cleanly — consumers
+      // observe `done: true` rather than an unhandled rejection from a
+      // backgrounded scheduled tick.
+      closeIterator();
+      return;
+    }
+    if (!drained.registered) {
+      // `Engine::user_view_drain_updates_since(viewId)` returned
+      // `Ok(None)` — the view is not registered (or has been
+      // unregistered). End-of-stream contract.
+      closeIterator();
+      return;
+    }
+    cursor = drained.nextOffset;
+    for (const ev of drained.events) {
+      const delta: ViewDelta = { kind: "change", payload: ev };
+      if (pending.length > 0) {
+        const resolve = pending.shift()!;
+        resolve({ value: delta, done: false });
+      } else {
+        buffer.push(delta);
+      }
+    }
+    if (!closed) {
+      timer = setTimeout(tick, POLL_MS);
+    }
+  };
+
+  // Kick off the first poll if the runtime shim is available. When
+  // runtime is null, `closed` is already true so `next()` returns
+  // `{ done: true }` immediately on first call.
+  if (runtime !== null) {
+    timer = setTimeout(tick, POLL_MS);
+  }
+
+  const iterator: AsyncIterableIterator<ViewDelta> = {
+    next(): Promise<IteratorResult<ViewDelta>> {
+      if (buffer.length > 0) {
+        const value = buffer.shift()!;
+        return Promise.resolve({ value, done: false });
+      }
+      if (closed) {
+        return Promise.resolve({ value: undefined, done: true });
+      }
+      return new Promise<IteratorResult<ViewDelta>>((resolve) => {
+        pending.push(resolve);
+      });
+    },
+    return(): Promise<IteratorResult<ViewDelta>> {
+      closeIterator();
+      return Promise.resolve({ value: undefined, done: true });
+    },
+    [Symbol.asyncIterator](): AsyncIterableIterator<ViewDelta> {
+      return iterator;
+    },
+  };
+  return iterator;
 }
 
 /**
