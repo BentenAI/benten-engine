@@ -168,6 +168,15 @@ pub(crate) fn parse_user_view_spec(v: &serde_json::Value) -> napi::Result<UserVi
 /// - `Ok(None)` — no view with this id is registered.
 /// - `Err(...)` — IVM-disabled / view-stale (typed engine errors round-tripped
 ///   through `engine_err`).
+///
+/// Cfg-gated `cfg(not(feature = "browser-backend"))` because the
+/// underlying `Engine::user_view_snapshot` lives in `engine_views.rs`
+/// which is itself gated out of the browser thin-client bundle (per
+/// CLAUDE.md baked-in #17 — views are read-only projections of the
+/// full peer's state in the wasm32 target). The lib.rs call site is
+/// inside `napi_surface` which is also `cfg(not(target_arch = "wasm32"))`-gated,
+/// so this gating is consistent.
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn user_view_snapshot_adapter(
     engine: &InnerEngine,
     view_id: &str,
@@ -199,6 +208,11 @@ pub(crate) fn user_view_snapshot_adapter(
 /// after `since_offset`. The TS wrapper records `next_offset` after
 /// each drain so the next async-iterator step replays only events
 /// strictly newer than the prior cursor.
+///
+/// Cfg-gated `cfg(not(feature = "browser-backend"))` for the same
+/// reason as `user_view_snapshot_adapter` above — `engine_views.rs`
+/// is gated out under browser-backend per CLAUDE.md baked-in #17.
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn user_view_drain_updates_adapter(
     engine: &InnerEngine,
     view_id: &str,
