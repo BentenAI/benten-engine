@@ -1,7 +1,7 @@
 //! Per-handler TRANSFORM AST cache (Phase-3 G19-E — wave-7b).
 //!
-//! Closes [`docs/future/phase-2-backlog.md`] §9.2. The
-//! [`crate::engine::SubgraphCache`] (G2-B / arch-r1-5) caches built
+//! Closes `docs/future/phase-2-backlog.md` §9.2. The
+//! `crate::engine::SubgraphCache` (G2-B / arch-r1-5) caches built
 //! `benten_eval::Subgraph` *templates* keyed on
 //! `(handler_id, op, subgraph_cid)`. That cache memoises the structural
 //! shape — node + edge bag, static property keys — but does NOT eliminate
@@ -11,7 +11,7 @@
 //!
 //! G19-E adds a sibling cache that stores the *parsed* `Expr` AST for
 //! every TRANSFORM node in a registered handler. The lookup key is
-//! `(handler_cid, node_id)` — orthogonal to the [`SubgraphCache`] key
+//! `(handler_cid, node_id)` — orthogonal to the `SubgraphCache` key
 //! because TRANSFORM ASTs are content-defined by the registered subgraph
 //! shape, not by the dispatch op. Population happens at
 //! `register_subgraph` / `register_subgraph_replace` time (synchronous
@@ -39,7 +39,7 @@
 //!
 //! # Concurrency
 //!
-//! [`AstCache`] uses `RwLock<HashMap<...>>` matching the [`SubgraphCache`]
+//! `AstCache` uses `RwLock<HashMap<...>>` matching the `SubgraphCache`
 //! discipline. Lookups (the hot path) take a read lock; population +
 //! invalidation take a write lock. Populating is rare (registration
 //! only); lookups happen on every TRANSFORM dispatch.

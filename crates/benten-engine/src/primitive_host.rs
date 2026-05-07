@@ -716,9 +716,9 @@ impl PrimitiveHost for Engine {
 
     /// Phase-3 G19-E (wave-7b): TRANSFORM AST cache lookup.
     ///
-    /// Closes [`docs/future/phase-2-backlog.md`] §9.2 by serving the
+    /// Closes `docs/future/phase-2-backlog.md` §9.2 by serving the
     /// pre-parsed [`benten_eval::expr::Expr`] for the supplied
-    /// `node_id` from the engine's [`crate::ast_cache::AstCache`]. The
+    /// `node_id` from the engine's `crate::ast_cache::AstCache`. The
     /// cache is keyed on `(handler_cid, node_id)`; we resolve
     /// `handler_cid` from the top of the engine's `active_call` stack
     /// (the same surface attribution + `suspending_principal` use). On
