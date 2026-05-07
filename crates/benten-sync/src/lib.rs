@@ -166,6 +166,27 @@ pub mod errors;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod handshake_wire;
 
+// G16-C wave-6b: light-client verification API + Merkle proof
+// construction + verification against published roots. Distinct
+// deliverable from MST diff per ROADMAP-2 — works WITHOUT full
+// subgraph download.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod light_client;
+
+// G16-C wave-6b: Merkle Search Tree diff for subgraph sync. Converges
+// in O(log n) rounds; canonical fixture corpus depth 4 / branch 8 per
+// net-major-2.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod mst;
+
+// G16-C wave-6b: MST diff wire-protocol shape. `MessageKind::Revocation`
+// is ordered before `MessageKind::Data` per net-blocker-3 BLOCKER —
+// both at the wire-protocol enum (variant ordering / discriminant) AND
+// at the runtime drainer (revocation drains first under concurrent
+// arrival).
+#[cfg(not(target_arch = "wasm32"))]
+pub mod mst_proto;
+
 #[cfg(not(target_arch = "wasm32"))]
 pub mod peer_id;
 
