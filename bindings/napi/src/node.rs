@@ -98,6 +98,22 @@ pub(crate) fn json_to_props(v: serde_json::Value) -> napi::Result<BTreeMap<Strin
     }
 }
 
+/// Phase-3 G19-B (§7.8): root-level JSON → `benten_core::Value`
+/// conversion for surfaces that accept any JSON value (not just an
+/// object root). Currently used by the napi `emit_event` adapter so
+/// `engine.emitEvent(channel, payload)` carries arbitrary JSON
+/// payloads through to the EmitBroadcast bus. Charges the same
+/// per-string + aggregate-byte budget as `json_to_props`.
+///
+/// # Errors
+///
+/// * `E_INPUT_LIMIT` — depth, per-string, or aggregate-bytes limit
+///   exceeded.
+pub(crate) fn json_to_value_root(v: serde_json::Value) -> napi::Result<Value> {
+    let mut budget = ByteBudget::default();
+    json_to_value(v, 1, &mut budget)
+}
+
 /// Walk a `serde_json::Value` into a `benten_core::Value`, charging each
 /// textual leaf against `budget` so the aggregate-bytes cap applies.
 fn json_to_value(

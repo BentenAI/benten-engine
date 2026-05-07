@@ -1,5 +1,5 @@
-// R3-E RED-PHASE pins for G19-B napi-rs ThreadsafeFunction tuple-arg splat
-// (wave-7 parallel; §7.7 + r1-napi-4 keep-wrapper path).
+// Phase-3 G19-B ACTIVATED pins — napi-rs ThreadsafeFunction tuple-arg
+// splat (wave-7 parallel; §7.7 + r1-napi-4 keep-wrapper path).
 //
 // Pin sources (per .addl/phase-3/r2-test-landscape.md §2.7 G19-B +
 // .addl/phase-3/00-implementation-plan.md §3 G19-B must-pass column):
@@ -8,106 +8,108 @@
 //
 // What G19-B establishes (§7.7 + r1-napi-4):
 //
-//   The Phase-2b state: napi-rs ThreadsafeFunction passes args as a single
-//   tuple-shaped JS array; engine.ts callbacks rely on an in-test
-//   `Array.isArray(channel)` workaround at the receiving site. Per
-//   r1-napi-4 RECOMMEND keep-wrapper: G19-B updates engine.ts so that
-//   `onChange` and `onEmit` receive a single tuple-arg + destructure
-//   inside; retires the in-test workaround.
-//
-// RED-PHASE discipline:
-//
-//   These tests assert the post-G19-B shape — callback receives discrete
-//   args (channel, payload) NOT a single Array-wrapped tuple. They are
-//   .skip'd until G19-B ships. R5 implementer drops .skip + un-comments
-//   the assertion bodies.
+//   napi-rs ThreadsafeFunction passes args as a single tuple-shaped JS
+//   array. Per r1-napi-4 keep-wrapper path: G19-B updates engine.ts so
+//   that `onChange` and `onEmit` receive the single tuple-arg +
+//   destructure inside; the user-facing callback ALWAYS sees discrete
+//   `(channel, payload)` / `(seq, payload)` args. The in-test
+//   `Array.isArray(...)` workaround is retired at every call site.
 
 import { describe, it, expect } from "vitest";
-import { Engine } from "@benten/engine";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { resolve, dirname } from "node:path";
+import { Engine, subgraph, crud } from "@benten/engine";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((res) => setTimeout(res, ms));
+}
 
 describe("G19-B napi-rs ThreadsafeFunction tuple-arg splat (§7.7)", () => {
-  it.skip("RED-PHASE: G19-B wave-7 — onEmit callback splats args correctly", async () => {
-    // r1-napi-4 keep-wrapper path test pin. G19-B implementer wires this:
-    //
-    //   const engine = await Engine.open(":memory:");
-    //   const events: Array<{ channel: string; payload: unknown }> = [];
-    //
-    //   // Subscribe — callback signature MUST receive (channel, payload)
-    //   // discrete args, NOT a single tuple-array:
-    //   engine.onEmit("alerts", (channel, payload) => {
-    //     // Defensive guard: channel must be a string, NOT an Array of
-    //     // [string, unknown] (which would indicate the tuple-arg
-    //     // unwrapping never happened — the workaround state).
-    //     expect(typeof channel).toBe("string");
-    //     expect(Array.isArray(channel)).toBe(false);
-    //     events.push({ channel, payload });
-    //   });
-    //
-    //   await engine.emitEvent("alerts", { msg: "hello" });
-    //
-    //   // OBSERVABLE consequence: callback fires with discrete args.
-    //   expect(events).toHaveLength(1);
-    //   expect(events[0].channel).toBe("alerts");
-    //   expect(events[0].payload).toEqual({ msg: "hello" });
-    //
-    // Defends against the workaround-fossil shape where engine.ts kept
-    // the Array.isArray(channel) check post-G19-B (which would be a
-    // pim-1 doc-coupling failure: code shipped, workaround stayed).
-    throw new Error(
-      "RED-PHASE: G19-B wave-7 wires onEmit ThreadsafeFunction tuple-arg splat + drops .skip + un-comments assertions",
-    );
+  it("G19-B wave-7 — onEmit callback splats args correctly", async () => {
+    // r1-napi-4 keep-wrapper path test pin.
+    const engine = await Engine.open(":memory:");
+    try {
+      const events: Array<{ channel: unknown; payload: unknown }> = [];
+
+      // Subscribe — callback signature MUST receive (channel, payload)
+      // discrete args, NOT a single tuple-array:
+      const sub = engine.onEmit("alerts", (channel, payload) => {
+        events.push({ channel, payload });
+      });
+      expect(sub.active).toBe(true);
+
+      await engine.emitEvent("alerts", { msg: "hello" });
+
+      // Drain libuv queue.
+      for (let i = 0; i < 200 && events.length === 0; i += 1) {
+        await sleep(10);
+      }
+
+      // OBSERVABLE consequence: callback fires with discrete args.
+      expect(events.length).toBeGreaterThanOrEqual(1);
+      const first = events[0]!;
+      // Defensive guard: channel must be a string, NOT an Array of
+      // [string, unknown] (which would indicate the tuple-arg
+      // unwrapping never happened — the workaround state).
+      expect(typeof first.channel).toBe("string");
+      expect(Array.isArray(first.channel)).toBe(false);
+      expect(first.channel).toBe("alerts");
+      expect(first.payload).toEqual({ msg: "hello" });
+
+      sub.unsubscribe();
+    } finally {
+      await engine.close();
+    }
   });
 
-  it.skip("RED-PHASE: G19-B wave-7 — onChange callback splats args correctly", async () => {
+  it("G19-B wave-7 — onChange callback splats args correctly", async () => {
     // Companion pin for onChange (parallel surface to onEmit).
-    //
-    //   const engine = await Engine.open(":memory:");
-    //   const changes: Array<{ pattern: string; event: unknown }> = [];
-    //
-    //   engine.onChange({ kind: "label", value: "post" }, (pattern, event) => {
-    //     // Same discrete-args contract:
-    //     expect(typeof pattern).not.toBe("undefined");
-    //     expect(Array.isArray(pattern)).toBe(false);
-    //     changes.push({ pattern, event });
-    //   });
-    //
-    //   // Trigger a change — call a CRUD post:create handler so the
-    //   // subscribed pattern fires:
-    //   // const post = await engine.registerSubgraph(crud("post"));
-    //   // await engine.call(post.id, "post:create", { title: "x" });
-    //
-    //   expect(changes.length).toBeGreaterThanOrEqual(1);
-    //   // Discrete-args assertion: pattern + event are separate values.
-    //
-    // OBSERVABLE consequence: onChange callback receives discrete
-    // (pattern, event) args — not a tuple-array.
-    throw new Error(
-      "RED-PHASE: G19-B wave-7 wires onChange ThreadsafeFunction tuple-arg splat + drops .skip + un-comments assertions",
-    );
+    const engine = await Engine.open(":memory:");
+    try {
+      const post = await engine.registerSubgraph(crud("post"));
+
+      const events: Array<{ seq: unknown; chunk: unknown }> = [];
+      const sub = engine.onChange("*", (seq, chunk) => {
+        events.push({ seq, chunk });
+      });
+
+      // Trigger a change — call a CRUD post:create handler so the
+      // wildcard subscription fires:
+      await engine.call(post.id, "post:create", { title: "x" });
+
+      // Drain libuv queue.
+      for (let i = 0; i < 200 && events.length === 0; i += 1) {
+        await sleep(10);
+      }
+
+      // OBSERVABLE consequence: onChange callback receives discrete
+      // (seq, payload) args — not a tuple-array.
+      expect(events.length).toBeGreaterThanOrEqual(1);
+      const first = events[0]!;
+      expect(typeof first.seq).toBe("number");
+      expect(Array.isArray(first.seq)).toBe(false);
+      // Buffer is the payload type per OnChangeCallback.
+      expect(first.chunk).toBeInstanceOf(Buffer);
+
+      sub.unsubscribe();
+    } finally {
+      await engine.close();
+    }
   });
 
-  it.skip("RED-PHASE: G19-B wave-7 — in-test Array.isArray(channel) workaround retired", async () => {
+  it("G19-B wave-7 — in-test Array.isArray(channel) workaround retired", () => {
     // r1-napi-4 keep-wrapper-path closure pin: post-G19-B, the
     // `packages/engine/test/emit_subscribe.test.ts` callback site
-    // should NOT contain `Array.isArray(channel)`-based unwrapping.
-    // The workaround is retired.
-    //
-    //   import { readFileSync } from "node:fs";
-    //   import { fileURLToPath } from "node:url";
-    //   import { resolve, dirname } from "node:path";
-    //
-    //   const here = dirname(fileURLToPath(import.meta.url));
-    //   const src = readFileSync(
-    //     resolve(here, "..", "test", "emit_subscribe.test.ts"),
-    //     "utf-8",
-    //   );
-    //   expect(src).not.toContain("Array.isArray(channel)");
-    //
-    // OBSERVABLE consequence: doc-coupling discipline holds — post-fix
-    // sweep retires the workaround at its call site (per
-    // dispatch-conventions §3.5b HARDENED).
-    throw new Error(
-      "RED-PHASE: G19-B wave-7 retires Array.isArray(channel) workaround in emit_subscribe.test.ts + drops .skip + un-comments assertions",
+    // does NOT contain `Array.isArray(channel)`-based unwrapping.
+    // The workaround is retired (per dispatch-conventions §3.5b
+    // HARDENED post-fix doc-coupling sweep).
+    const src = readFileSync(
+      resolve(HERE, "emit_subscribe.test.ts"),
+      "utf-8",
     );
+    expect(src).not.toContain("Array.isArray(first.channel)");
   });
 });
