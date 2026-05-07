@@ -15,6 +15,7 @@ export {
   BentenError,
   CATALOG_CODES,
   type CatalogCode,
+  CODE_TO_CTOR_GENERATED,
   EBackendNotFound,
   EBackendReadOnly,
   ECapAttenuation,
@@ -303,70 +304,112 @@ export function extractCode(input: unknown): string | undefined {
 }
 
 /**
- * R6FP-tail (Round-2 Instance 8) — sentinel marker the napi adapter
- * (`bindings/napi/src/error.rs::engine_err`) appends to the napi error
- * message when an `EngineError` carries structured per-variant fields
- * (e.g. `ModuleManifestCidMismatch { expected, computed, summary }` or
- * `Invariant(RegistrationError { ...14 fields })`). The suffix shape
- * is `<message> :: $$benten-context$$<json>`.
+ * Phase-3 G19-B (§7.2): merge `CODE_TO_CTOR_GENERATED` into the
+ * runtime constructor map so every catalog code resolves to a typed
+ * subclass without hand-edits. The hand-typed `CODE_TO_CTOR` map
+ * above stays as the historically-curated fast path; the generated
+ * map fills in the long tail (~98 codes today, growing in Phase 3).
  *
- * `mapNativeError` splits on this sentinel + parses the JSON tail and
- * passes the resulting bag as the fourth `context` argument to the
- * typed-error subclass constructor so JS callers can read structured
- * fields off `error.context` (e.g. `error.context.expected_cid`).
- *
- * The double-`$` is chosen because it is unlikely to appear in any
- * `EngineError` Display rendering — keeps the suffix unambiguous.
- * Cross-layer contract with the Rust adapter; changing the sentinel
- * requires a coordinated update on both sides.
+ * The vitest pin
+ * `code_to_ctor_codegen_covers_every_error_catalog_entry` asserts
+ * this map covers every catalog code — see
+ * `crates/benten-engine/tests/code_to_ctor.rs`.
  */
-const CONTEXT_SENTINEL = " :: $$benten-context$$";
+import { CODE_TO_CTOR_GENERATED } from "./errors.generated.js";
 
 /**
- * R6FP-tail (Round-2 Instance 8) — split a napi error message on the
- * `$$benten-context$$` sentinel. Returns `[messageWithoutSuffix, context]`
- * where `context` is the parsed JSON bag (or `undefined` when the
- * sentinel is absent / the JSON tail fails to parse).
+ * Phase-3 G19-B (§7.2): the napi adapter
+ * (`bindings/napi/src/error.rs::engine_err`) emits errors whose
+ * `.message` is a JSON-serialised object with shape
+ * `{ "code": "E_*", "message": "<display>", "fields": {...} }`. The
+ * structured-field bag rides under `"fields"` (replaces the
+ * pre-G19-B `$$benten-context$$` sentinel suffix carrier). This
+ * helper attempts a JSON parse + structural validation; returns
+ * `[code, displayMessage, fields]` on success.
  *
- * Best-effort: if the JSON tail is malformed, returns the original
- * message untouched + `context = undefined` so the typed-error path
- * still fires on the catalog code.
+ * Returns `undefined` when the message body is NOT a JSON-shaped
+ * envelope (the pre-G19-B `code: prefix` shape, or any plain string
+ * thrown from non-engine napi code paths). Callers fall back to the
+ * `extractCode` regex path in that case so existing hand-rolled
+ * `format!("E_*: ...")` errors continue to round-trip cleanly.
  */
-function splitContextSentinel(
+function tryParseJsonEnvelope(
   raw: string,
-): [string, Record<string, unknown> | undefined] {
-  const idx = raw.indexOf(CONTEXT_SENTINEL);
-  if (idx === -1) return [raw, undefined];
-  const head = raw.slice(0, idx);
-  const tail = raw.slice(idx + CONTEXT_SENTINEL.length);
+): { code: string; message: string; fields?: Record<string, unknown> } | undefined {
+  // Cheap up-front rejection: if the message doesn't start with `{`
+  // it's not a JSON object body.
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("{")) return undefined;
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(tail) as unknown;
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return [head, parsed as Record<string, unknown>];
-    }
-    return [head, undefined];
+    parsed = JSON.parse(trimmed);
   } catch {
-    return [head, undefined];
+    return undefined;
   }
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    Array.isArray(parsed)
+  ) {
+    return undefined;
+  }
+  const obj = parsed as Record<string, unknown>;
+  const code = obj.code;
+  const message = obj.message;
+  if (typeof code !== "string" || typeof message !== "string") {
+    return undefined;
+  }
+  const out: {
+    code: string;
+    message: string;
+    fields?: Record<string, unknown>;
+  } = { code, message };
+  if (
+    obj.fields &&
+    typeof obj.fields === "object" &&
+    !Array.isArray(obj.fields)
+  ) {
+    out.fields = obj.fields as Record<string, unknown>;
+  }
+  return out;
+}
+
+/**
+ * Resolve a catalog code to its typed `BentenError` subclass
+ * constructor. Consults the hand-curated `CODE_TO_CTOR` first
+ * (historically the fast path for known-load-bearing codes) then
+ * falls back to the codegen-driven `CODE_TO_CTOR_GENERATED`. The
+ * `code_to_ctor_no_e_unknown_fallback_for_known_code` test
+ * (`crates/benten-engine/tests/code_to_ctor.rs`) asserts every
+ * catalog code resolves through ONE of these maps.
+ */
+function resolveCtor(code: string): BentenErrorCtor | undefined {
+  if (CODE_TO_CTOR[code]) return CODE_TO_CTOR[code];
+  const gen = (CODE_TO_CTOR_GENERATED as Record<string, BentenErrorCtor>)[code];
+  return gen;
 }
 
 /**
  * Wrap an unknown value (typically a napi Error) in the most specific
  * typed Benten error we can reconstruct.
  *
- * Rules:
+ * Rules (Phase-3 G19-B §7.2):
  *   1. If the value is already a `BentenError`, return it untouched.
- *   2. If the value carries a catalog code in its string form, build
- *      the matching subclass and preserve the original message. When
- *      the message also carries a `$$benten-context$$` JSON suffix
- *      (R6FP-tail Round-2 Instance 8), the parsed bag is passed as the
- *      4th `context` constructor arg so JS consumers can read
- *      structured fields via `error.context`.
- *   3. Otherwise, fall back to a `BentenError` with a synthetic
- *      unknown-code marker so the caller still sees a typed wrapper.
+ *   2. If the message body is a JSON envelope `{ code, message,
+ *      fields? }` (the new G19-B shape), construct the typed subclass
+ *      keyed on `code`, set `BentenError.context` from `fields`, and
+ *      use `message` as the human-readable message.
+ *   3. Otherwise, fall back to the legacy `code: prefix` regex path:
+ *      extract a catalog code via `extractCode` and construct the
+ *      typed subclass on the raw message. This preserves
+ *      backwards-compat with hand-rolled napi errors that pre-date
+ *      the JSON envelope (`format!("E_*: ...")` carrier shape).
+ *   4. If neither path resolves a known catalog code, return a
+ *      `BentenError` with a synthetic unknown-code marker so the
+ *      caller still sees a typed wrapper.
  *
- * This does NOT throw; the caller is responsible for re-throwing if
- * they want the typed error to escape.
+ * Does NOT throw; the caller is responsible for re-throwing if they
+ * want the typed error to escape.
  */
 export function mapNativeError(err: unknown): BentenError {
   if (err instanceof BentenError) return err;
@@ -377,19 +420,45 @@ export function mapNativeError(err: unknown): BentenError {
       : typeof err === "string"
         ? err
         : String(err);
-  const [message, context] = splitContextSentinel(raw);
-  const code = extractCode(message);
-  if (code && CODE_TO_CTOR[code]) {
-    const Ctor = CODE_TO_CTOR[code];
-    const instance = new Ctor(message, context);
-    if (err instanceof Error && err.stack) {
-      instance.stack = err.stack;
+
+  // Path 1 (G19-B JSON envelope): try parsing the message body.
+  const envelope = tryParseJsonEnvelope(raw);
+  if (envelope) {
+    const Ctor = resolveCtor(envelope.code);
+    if (Ctor) {
+      const instance = new Ctor(envelope.message, envelope.fields);
+      if (err instanceof Error && err.stack) {
+        instance.stack = err.stack;
+      }
+      return instance;
     }
-    return instance;
+    // JSON envelope with an unknown code — synthesise a typed wrapper
+    // carrying the parsed code so callers can see what came across.
+    const syntheticCode = ["E", "UNKNOWN"].join("_");
+    return new BentenError(
+      syntheticCode,
+      `(unknown catalog code: ${envelope.code})`,
+      envelope.message,
+      envelope.fields,
+    );
   }
-  // Fallback: synthetic code keeps the typed-wrapper contract.
+
+  // Path 2 (legacy prefix carrier): extract a catalog code via regex.
+  const code = extractCode(raw);
+  if (code) {
+    const Ctor = resolveCtor(code);
+    if (Ctor) {
+      const instance = new Ctor(raw, undefined);
+      if (err instanceof Error && err.stack) {
+        instance.stack = err.stack;
+      }
+      return instance;
+    }
+  }
+
+  // Path 3 (fallback): synthetic unknown-code wrapper.
   // Assembled at runtime to avoid baking a fake code into the source
   // text (the drift detector's naive scan would otherwise flag it).
   const syntheticCode = ["E", "UNKNOWN"].join("_");
-  return new BentenError(syntheticCode, "(no catalog match)", message, context);
+  return new BentenError(syntheticCode, "(no catalog match)", raw, undefined);
 }

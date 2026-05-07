@@ -1,86 +1,101 @@
-//! R3-E RED-PHASE pins for G19-B Engine.emitEvent EmitBroadcast wire-through
-//! (wave-7 parallel; §7.8 + r1-napi-8).
+//! Phase-3 G19-B ACTIVATED pins (wave-7 parallel) — Engine.emitEvent
+//! EmitBroadcast wire-through (§7.8 + r1-napi-8).
 //!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.7 G19-B +
 //! `.addl/phase-3/00-implementation-plan.md` §3 G19-B must-pass column):
 //!
 //! - `tests/engine_emit_event_publishes_to_subscribed_on_emit_callback_end_to_end` —
-//!   r1-napi-8 (renamed from `engine_emit_event_napi_surface_wires_through_emit_broadcast_bus`
-//!   to enforce the pim-2 §3.6b end-to-end pin: production entry point +
-//!   observable consequence + would FAIL if silently no-op'd).
+//!   r1-napi-8 (renamed to enforce the pim-2 §3.6b end-to-end pin:
+//!   production entry point + observable consequence + would FAIL if
+//!   silently no-op'd).
 //! - `tests/engine_emit_event_no_longer_returns_e_primitive_not_implemented` — §7.8
 //!
 //! ## What G19-B establishes (§7.8)
 //!
-//! G19-A (50 LOC) folded into G19-B per scope-real-05. The current state:
-//! `engine.emitEvent` is wired to return `E_PRIMITIVE_NOT_IMPLEMENTED`
-//! (deferred sentinel). G19-B drops "deferred" + threads
-//! `engine.emitEvent` directly through `EmitBroadcast` bus so that any
-//! `engine.onEmit(channel, cb)` subscriber receives the payload.
+//! G19-A (50 LOC) folded into G19-B per scope-real-05. Pre-G19-B
+//! `engine.emitEvent` returned `E_PRIMITIVE_NOT_IMPLEMENTED`; G19-B
+//! drops the deferred sentinel + threads `engine.emitEvent` directly
+//! through the `EmitBroadcast` bus so any
+//! `engine.subscribe_emit_events(cb)` subscriber receives the payload.
 //!
-//! ## RED-PHASE discipline
+//! ## Pim-2 §3.6b end-to-end discipline
 //!
-//! Per pim-2 §3.6b end-to-end pin requirement: this test drives the
-//! production-grade entry point (real `engine.emitEvent` call) AND
-//! asserts an observable consequence (the subscribed callback fires
-//! with the payload). If the wire-through were silently no-op'd back
-//! to `E_PRIMITIVE_NOT_IMPLEMENTED`, the test would FAIL.
+//! Drives the production-grade entry point (real `Engine::emit_event`
+//! call via `benten_napi::testing::emit_event_round_trip` — which itself
+//! threads through the same code path the napi cdylib `#[napi] fn
+//! emit_event` consumes) AND asserts an observable consequence (the
+//! subscribed callback fires with the verbatim payload). Would FAIL if
+//! the wire-through were silently no-op'd back to
+//! `E_PRIMITIVE_NOT_IMPLEMENTED`.
 
 #![allow(clippy::unwrap_used)]
 
+use std::sync::{Arc, Mutex};
+
 #[test]
-#[ignore = "RED-PHASE: G19-B wave-7 wires engine.emitEvent through EmitBroadcast bus"]
 fn engine_emit_event_publishes_to_subscribed_on_emit_callback_end_to_end() {
-    // r1-napi-8 LOAD-BEARING pin per §3.6b. G19-B implementer wires this:
-    //
-    //   let engine = benten_napi::testing::open_in_memory_engine().unwrap();
-    //   let received = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
-    //   let received_clone = received.clone();
-    //
-    //   // Subscribe via the production-grade onEmit entry point:
-    //   engine.on_emit("test-channel", move |payload: &serde_json::Value| {
-    //       received_clone.lock().unwrap().push(payload.to_string());
-    //   }).unwrap();
-    //
-    //   // Drive the production-grade emit_event entry point:
-    //   let payload = serde_json::json!({"hello": "world"});
-    //   engine.emit_event("test-channel", payload.clone()).unwrap();
-    //
-    //   // OBSERVABLE consequence: subscribed callback received the payload
-    //   // verbatim. Sentinel-presence (the bus instance exists) does NOT
-    //   // suffice; the callback firing is the load-bearing assertion.
-    //   let collected = received.lock().unwrap();
-    //   assert_eq!(collected.len(), 1, "subscribed onEmit callback must fire once");
-    //   assert!(collected[0].contains("\"hello\""),
-    //       "subscribed onEmit callback received the wrong payload");
-    //
-    // The pim-2 contract: would FAIL if engine.emitEvent silently no-op'd
-    // (the prior E_PRIMITIVE_NOT_IMPLEMENTED state OR a regression that
-    // left the bus publish unwired).
-    unimplemented!("G19-B wires engine.emitEvent → EmitBroadcast → onEmit callback round-trip");
+    // r1-napi-8 LOAD-BEARING pin per §3.6b. Drives the production-grade
+    // emit_event entry point + asserts the subscribed callback fires.
+    let received: Arc<Mutex<Vec<benten_engine::EmitEvent>>> = Arc::new(Mutex::new(Vec::new()));
+    let received_clone = Arc::clone(&received);
+
+    let payload = serde_json::json!({"hello": "world"});
+
+    let _engine = benten_napi::testing::emit_event_round_trip(
+        "test-channel",
+        payload.clone(),
+        move |event: &benten_engine::EmitEvent| {
+            received_clone.lock().unwrap().push(event.clone());
+        },
+    )
+    .expect("emit_event_round_trip must succeed post-G19-B");
+
+    // OBSERVABLE consequence: subscribed callback received the payload
+    // verbatim. Sentinel-presence (the bus instance exists) does NOT
+    // suffice — the callback firing is the load-bearing assertion.
+    let collected = received.lock().unwrap();
+    assert_eq!(
+        collected.len(),
+        1,
+        "subscribed onEmit callback must fire once post-G19-B; got {} events",
+        collected.len()
+    );
+    assert_eq!(collected[0].channel, "test-channel");
+    // The Value is a benten_core::Value::Map; round-trip via Display
+    // (the EmitEvent payload is a Value, not a JSON Value, so we
+    // just verify the channel + presence here; the structured-field
+    // surfacing is covered by the `benten_error_context` test).
+    let payload_repr = format!("{:?}", collected[0].payload);
+    assert!(
+        payload_repr.contains("hello"),
+        "payload must round-trip; repr was {payload_repr}"
+    );
 }
 
 #[test]
-#[ignore = "RED-PHASE: G19-B wave-7 retires E_PRIMITIVE_NOT_IMPLEMENTED for emitEvent"]
 fn engine_emit_event_no_longer_returns_e_primitive_not_implemented() {
     // §7.8 pin (negative — verifies the deferred sentinel is GONE).
-    // G19-B implementer wires this:
+    // Per pim-2 §3.6b: drives the production entry point + asserts
+    // the deferred-state placeholder is fully retired.
     //
-    //   let engine = benten_napi::testing::open_in_memory_engine().unwrap();
-    //   let result = engine.emit_event("test-channel", serde_json::json!({}));
-    //   assert!(result.is_ok(),
-    //       "engine.emitEvent should not return E_PRIMITIVE_NOT_IMPLEMENTED \
-    //        after G19-B; got {:?}", result.err());
-    //
-    //   // Defensive: even the non-Ok path must NOT carry E_PRIMITIVE_NOT_IMPLEMENTED:
-    //   if let Err(e) = engine.emit_event("nonexistent-channel-no-subscribers", serde_json::json!({})) {
-    //       assert_ne!(e.code(), "E_PRIMITIVE_NOT_IMPLEMENTED",
-    //           "post-G19-B emit_event must not return the deferred sentinel");
-    //   }
-    //
-    // OBSERVABLE consequence: the deferred-state placeholder is fully
-    // retired. Composes with the positive end-to-end pin above.
-    unimplemented!("G19-B retires E_PRIMITIVE_NOT_IMPLEMENTED for emit_event");
+    // Calling emit_event_round_trip with no subscribed listeners
+    // should still succeed (publishing an event with no subscribers
+    // is not an error); the no-op closure here just ensures the
+    // helper completes without an EngineError surface.
+    let result = benten_napi::testing::emit_event_round_trip(
+        "no-subscribers-channel",
+        serde_json::json!({}),
+        |_event: &benten_engine::EmitEvent| { /* drop event */ },
+    );
+    assert!(
+        result.is_ok(),
+        "engine.emitEvent must NOT return E_PRIMITIVE_NOT_IMPLEMENTED post-G19-B; got {:?}",
+        result.err()
+    );
+
+    // OBSERVABLE consequence: even when no subscribers exist, the
+    // emit path completes cleanly through EmitBroadcast — there is
+    // no deferred-sentinel guard left in the code path.
 }
 
 #[test]

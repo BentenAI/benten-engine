@@ -1253,17 +1253,16 @@ export class Engine {
   /**
    * Emit a named event with a JSON payload.
    *
-   * Phase-2b state: surfaces `E_PRIMITIVE_NOT_IMPLEMENTED` — the
-   * standalone `Engine.emitEvent` surface is named-destination-deferred
-   * to Phase 3 per `docs/future/phase-3-backlog.md` §7.8
-   * (Engine.emitEvent standalone surface — wire through EmitBroadcast
-   * bus). Per-WRITE change-stream fan-out flows via `createNode` /
-   * `registerCrud:create`. In-handler EMIT (the `emit()` DSL builder)
-   * IS wired and routes through the EmitBroadcast bus to
-   * EmitSubscription consumers (R6-R2-FP cluster-1, PR #66) — compose
-   * a small handler whose only Node is `emit(...)` and dispatch it via
-   * `engine.call(...)` if you need standalone-event-emission before
-   * Phase 3 lands the direct surface.
+   * Phase-3 G19-B (§7.8): wires through the engine's
+   * `EmitBroadcast` bus directly. The event is delivered to every
+   * `engine.onEmit(name, ...)` consumer (string-equality channel
+   * match) without going through a handler dispatch. Mirrors the
+   * in-handler EMIT primitive's publish path so standalone +
+   * handler-driven events on the same channel observe the same
+   * subscriber set.
+   *
+   * Returns once the publish has been queued onto the broadcast bus.
+   * The TSFN delivery to JS subscribers happens on a libuv tick.
    */
   public async emitEvent(name: string, payload: JsonValue): Promise<void> {
     this.assertOpen();
@@ -1977,13 +1976,17 @@ build @benten/engine-native with `--features test-helpers`",
         "Engine.onChange unavailable on this binding — rebuild @benten/engine-native",
       );
     }
-    // Wave-8c-subscribe-infra: the napi `onChange` adapter accepts
-    // an optional JS callback (third argument) which it wraps in a
-    // `napi::ThreadsafeFunction` so deliveries from the engine's
-    // ChangeBroadcast publish path land on the libuv main loop. The
-    // adapter's `(seq, payload: Buffer)` shape is mapped to the
-    // user-facing `OnChangeCallback`'s `(seq, chunk)` here so
-    // downstream code can keep treating the payload as a `Chunk`.
+    // Phase-3 G19-B (§7.7, r1-napi-4 keep-wrapper path b): napi-rs v3.x
+    // ThreadsafeFunction with `FnArgs<(u32, Buffer)>` delivers discrete
+    // `(seq, payload)` args to the JS callback (verified end-to-end
+    // 2026-05-07; the pre-G19-B "single tuple-array" delivery shape
+    // documented in phase-3-backlog §7.7 belonged to an earlier napi-rs
+    // build). The wrapper shape below preserves the user-callback's
+    // discrete-args contract + adds the exception-isolation log path
+    // dx-r1-2b-4 / r6-dx-2 require, and reads identically to the
+    // intended d.ts surface. The in-test `Array.isArray(...)` runtime
+    // tuple-detection workaround is retired (no longer needed; the
+    // splatted-args shape is the production reality).
     const napiCb = (seq: number, payload: Buffer): void => {
       try {
         callback(seq, payload);
@@ -2036,11 +2039,11 @@ build @benten/engine-native with `--features test-helpers`",
         "Engine.onChangeAs unavailable on this binding — rebuild @benten/engine-native (wave-8c-cont bridge required)",
       );
     }
-    // Wave-8c-subscribe-infra: same callback adapter shape as
-    // `onChange` above. The principal is captured Rust-side so D5
-    // delivery-time cap-recheck fires this actor's grants on every
-    // event; if the actor's caps are revoked mid-stream the
-    // subscription auto-cancels per D5 contract.
+    // Phase-3 G19-B (§7.7, r1-napi-4 keep-wrapper path b): same
+    // splatted-args wrapper shape as `onChange`. The principal is
+    // captured Rust-side so D5 delivery-time cap-recheck fires this
+    // actor's grants on every event; if the actor's caps are revoked
+    // mid-stream the subscription auto-cancels per D5 contract.
     const napiCb = (seq: number, payload: Buffer): void => {
       try {
         callback(seq, payload);
@@ -2051,7 +2054,12 @@ build @benten/engine-native with `--features test-helpers`",
     };
     let native: NativeSubscriptionJs;
     try {
-      native = this.inner.onChangeAs(pattern, serializeCursor(cursor), actor, napiCb);
+      native = this.inner.onChangeAs(
+        pattern,
+        serializeCursor(cursor),
+        actor,
+        napiCb,
+      );
     } catch (err) {
       throw mapNativeError(err);
     }
@@ -2100,7 +2108,18 @@ build @benten/engine-native with `--features test-helpers`",
         "Engine.onEmit unavailable on this binding — rebuild @benten/engine-native (R6-FP EMIT broadcast bridge required to close r6-mpc-2)",
       );
     }
-    // The native EMIT-side callback shape is `(channel, payloadJson)` —
+    // Phase-3 G19-B (§7.7, r1-napi-4 keep-wrapper path b): napi-rs v3.x
+    // ThreadsafeFunction with `FnArgs<(String, String)>` delivers
+    // discrete `(chanArg, payloadJson)` args (verified end-to-end
+    // 2026-05-07; the pre-G19-B "single tuple-array" delivery shape
+    // documented in phase-3-backlog §7.7 + the
+    // `emit_subscribe.test.ts` load-bearing-pre-merge runtime
+    // tuple-detection branch belonged to an earlier napi-rs build).
+    // The wrapper preserves the user-callback's discrete-args contract,
+    // parses the JSON payload to an idiomatic JsonValue, and adds the
+    // exception-isolation log path. The runtime tuple-detection
+    // workaround is retired.
+    //
     // payloadJson is the engine's `Value` payload serialized to JSON
     // (the same shape engine.call inputs/outputs use). We parse it once
     // here so the JS-facing callback receives an idiomatic JsonValue

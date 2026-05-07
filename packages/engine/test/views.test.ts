@@ -100,8 +100,9 @@ describe("engine.registerUserView", () => {
     // R6 Round-2 r6-r2-napi-2 closure: the prior `.skip` cited
     // Instance 8 (mapNativeError structured-context metadata) as the
     // remaining blocker; Instance 8 IS LANDED at HEAD (engine_err
-    // emits `$$benten-context$$` sentinel; mapNativeError parses it
-    // via `splitContextSentinel`). The Rust-side coverage at
+    // emits the structured JSON envelope per G19-B; mapNativeError
+    // parses the JSON-shape carrier — supersedes the pre-G19-B
+    // `$$benten-context$$` sentinel suffix). The Rust-side coverage at
     // `crates/benten-engine/tests/user_view_strategy_refusals.rs`
     // pins the typed-error firing; this TS-side test pins the
     // round-trip through the napi boundary using the

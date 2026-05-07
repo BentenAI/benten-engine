@@ -38,23 +38,35 @@ describe("typed error classes", () => {
     await engine.close();
   });
 
-  it("map_native_error_round_trips_context_via_benten_context_sentinel", () => {
-    // R6FP-tail (Round-2 Instance 8) regression pin.
+  it("map_native_error_round_trips_context_via_g19_b_json_envelope", () => {
+    // R6FP-tail (Round-2 Instance 8) regression pin — UPDATED for G19-B.
     //
-    // Pre-fix: napi error message of the form `format!("{code}: {err}")`
-    // dropped per-variant structured fields at the napi -> TS boundary;
-    // `mapNativeError` constructed the typed subclass with `(message)`
-    // only and `error.context` was always `undefined`.
+    // Pre-G19-B: the napi adapter (`engine_err`) appended a JSON-encoded
+    // structured-field bag as a `$$benten-context$$` suffix on the
+    // message string. The test originally pinned that exact carrier
+    // shape ("`<message> :: $$benten-context$$<json>`").
     //
-    // Post-fix: the Rust adapter (`engine_err`) appends a JSON-encoded
-    // structured-field bag as a `$$benten-context$$` suffix. This test
-    // simulates that exact napi message shape + asserts the parsed bag
-    // surfaces on `error.context`. Contract: the sentinel string
-    // `" :: $$benten-context$$"` is the cross-layer carrier.
+    // Post-G19-B (§7.2): the carrier is a JSON-shape envelope
+    // `{ code, message, fields? }` that occupies the entire napi error
+    // message body — NOT a sentinel-suffix on a prefix-carrier message.
+    // `mapNativeError` JSON-parses the body via `tryParseJsonEnvelope`
+    // (Path 1 in `errors.ts::mapNativeError`) and returns the typed
+    // subclass with `.context` populated from `fields`.
+    //
+    // This test is the live continuation of the Instance-8 contract:
+    // structured-field round-trip from napi to TS via the engine's
+    // structured-field carrier. The carrier's wire shape changed; the
+    // contract did not.
     const sim = new Error(
-      "E_INV_DEPTH_EXCEEDED: registration violated invariants " +
-        ":: $$benten-context$$" +
-        '{"depth_actual":42,"depth_max":32,"longest_path":["a","b","c"]}',
+      JSON.stringify({
+        code: "E_INV_DEPTH_EXCEEDED",
+        message: "registration violated invariants",
+        fields: {
+          depth_actual: 42,
+          depth_max: 32,
+          longest_path: ["a", "b", "c"],
+        },
+      }),
     );
     const typed = mapNativeError(sim);
     expect(typed).toBeInstanceOf(errors.EInvDepthExceeded);
@@ -64,17 +76,18 @@ describe("typed error classes", () => {
       depth_actual: 42,
       depth_max: 32,
     });
-    // Message strips the sentinel suffix; consumers reading `.message`
-    // see only the human-readable head.
-    expect(typed.message).not.toContain("$$benten-context$$");
-    expect(typed.message).toContain("registration violated invariants");
+    // Message is the `message` field from the envelope; the JSON
+    // envelope itself is consumed by mapNativeError and never leaks
+    // into the user-visible BentenError.message.
+    expect(typed.message).toBe("registration violated invariants");
   });
 
-  it("map_native_error_handles_missing_sentinel_unchanged", () => {
-    // Backward-compatibility pin: a napi error with no
-    // `$$benten-context$$` suffix is still mapped to the typed subclass
-    // identically to pre-Instance-8 behavior — `error.context` is
-    // `undefined` (NOT a partial / malformed bag).
+  it("map_native_error_handles_legacy_prefix_carrier_unchanged", () => {
+    // Backward-compatibility pin (G19-B Path 2 — legacy `code: prefix`
+    // carrier): a napi error message that is NOT a JSON envelope is
+    // still mapped to the typed subclass via the regex extractCode
+    // path; `error.context` is `undefined` (the legacy carrier never
+    // had structured fields).
     const sim = new Error("E_NOT_FOUND: node not found");
     const typed = mapNativeError(sim);
     expect(typed).toBeInstanceOf(errors.ENotFound);
@@ -82,14 +95,12 @@ describe("typed error classes", () => {
     expect(typed.message).toContain("E_NOT_FOUND: node not found");
   });
 
-  it("map_native_error_tolerates_malformed_context_json", () => {
-    // Defensive pin: if the JSON tail is malformed (e.g. truncation
-    // mid-stream), `mapNativeError` MUST fall back to `context = undefined`
-    // rather than throwing — the typed-error path on the catalog code
-    // remains the load-bearing shape.
-    const sim = new Error(
-      "E_NOT_FOUND: node missing :: $$benten-context$${not-json",
-    );
+  it("map_native_error_tolerates_malformed_envelope_json", () => {
+    // Defensive pin (G19-B): if the JSON envelope is malformed (e.g.
+    // truncation mid-stream), `mapNativeError` MUST fall back to the
+    // legacy regex path rather than throwing — the typed-error path
+    // on the catalog code remains the load-bearing shape.
+    const sim = new Error("{not-valid-json E_NOT_FOUND: node missing");
     const typed = mapNativeError(sim);
     expect(typed).toBeInstanceOf(errors.ENotFound);
     expect(typed.context).toBeUndefined();

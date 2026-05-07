@@ -147,16 +147,20 @@ describe("engine.onEmit", () => {
         // This proves r6-mpc-2 / r6-r2-mpc-1 closure end-to-end.
         expect(seen.length).toBeGreaterThanOrEqual(1);
 
-        // Channel-arg shape: napi-rs v3 currently delivers
-        // `(String, String)` tuples as a single-Array arg in some
-        // build configurations; tolerate both delivery shapes so
-        // this load-bearing test pins the firing without depending
-        // on the splat behavior the Phase-3 napi-rs upgrade tightens.
+        // Phase-3 G19-B (§7.7, r1-napi-4 keep-wrapper path b): the
+        // engine.ts `onEmit` wrapper destructures the napi-rs tuple-arg
+        // delivery shape internally + delivers discrete `(channel,
+        // payload)` args to the user callback. The pre-G19-B
+        // tuple-detection runtime branch (which checked whether the
+        // `channel` arg was an Array, indicating the unwrapping never
+        // happened) is retired — `first.channel` is unconditionally a
+        // string here. (The retired-marker test in
+        // `onChange_onEmit.test.ts` greps for the literal pre-G19-B
+        // detection idiom; the prose above paraphrases instead of
+        // quoting verbatim so the marker test stays clean.)
         const first = seen[0]!;
-        const channelObserved = Array.isArray(first.channel)
-          ? (first.channel as unknown[])[0]
-          : first.channel;
-        expect(channelObserved).toBe("test:emit-fired");
+        expect(typeof first.channel).toBe("string");
+        expect(first.channel).toBe("test:emit-fired");
 
         sub.unsubscribe();
         expect(sub.active).toBe(false);
