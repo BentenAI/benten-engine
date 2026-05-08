@@ -997,6 +997,31 @@ impl Engine {
     ) -> Result<benten_core::Value, EngineError> {
         // `eval_error_to_engine_error` already imported at top of file
         // (R6 Wave 2 split). PrimitiveHost trait already in scope as well.
+        //
+        // G21-T2 fp-mini-review BLOCKER-1 closure: gate the napi entry
+        // through the same per-op cap-check the eval-side
+        // `execute_typed_call` (CALL primitive's typed-CALL fork) runs
+        // BEFORE invoking `dispatch_typed_call`. Pre-fix the napi
+        // `engine.typedCall(...)` path bypassed the cap-check entirely
+        // — under `PolicyKind::Ucan` / `PolicyKind::GrantBacked` an
+        // actor with NO grant for `cap:typed:crypto-sign` could still
+        // run `engine.typedCall('ed25519_sign', ...)` and obtain a
+        // valid signature. The fix mirrors `execute_typed_call`'s
+        // cap-check arm + maps a generic `Capability` denial back to
+        // the typed `TypedCallCapDenied` so the catalog code is
+        // identical to the subgraph route (`E_TYPED_CALL_CAP_DENIED`,
+        // not the broader `E_CAP_DENIED`).
+        if let Err(e) = <Self as PrimitiveHost>::check_capability(self, op.required_cap(), None) {
+            if matches!(e, benten_eval::EvalError::Capability(_)) {
+                return Err(eval_error_to_engine_error(
+                    benten_eval::EvalError::TypedCallCapDenied {
+                        op_name: op.name(),
+                        required: op.required_cap().to_string(),
+                    },
+                ));
+            }
+            return Err(eval_error_to_engine_error(e));
+        }
         self.dispatch_typed_call(op, input)
             .map_err(eval_error_to_engine_error)
     }

@@ -890,3 +890,122 @@ fn typed_call_cap_denied_routes_on_denied_other_three_route_on_error() {
         );
     }
 }
+
+/// G21-T2 fp-mini-review BLOCKER-1 end-to-end pin: the
+/// `dispatch_typed_call_public` napi entry MUST consult the
+/// configured `CapabilityPolicy` BEFORE dispatching the underlying op.
+///
+/// Pre-fix: the napi `engine.typedCall(...)` path bypassed the cap-
+/// check entirely — under a deny-all policy the typed-CALL still
+/// produced a real signature, observable as
+/// `output.contains_key("signature")`. Post-fix: a cap-denying policy
+/// causes `dispatch_typed_call_public` to surface the typed
+/// `EngineError` carrying `ErrorCode::TypedCallCapDenied` BEFORE the
+/// underlying op runs.
+///
+/// This is the "production napi entry point" companion to the existing
+/// `typed_call_cap_denied_via_capability_policy_returns_on_denied_edge`
+/// pin (which exercises the eval-side subgraph route). Without this
+/// pin, an actor with NO grant for `cap:typed:crypto-sign` could still
+/// run `engine.typedCall('ed25519_sign', ...)` from JS and obtain a
+/// valid signature.
+#[test]
+fn dispatch_typed_call_public_napi_entry_gates_on_capability_policy() {
+    use benten_caps::{CapError, CapabilityPolicy, ReadContext, WriteContext};
+    use benten_engine::EngineError;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    /// Policy that denies `cap:typed:crypto-sign` + counts denials.
+    #[derive(Debug)]
+    struct DenyTypedCryptoSign {
+        denied_count: Arc<AtomicU32>,
+    }
+    impl CapabilityPolicy for DenyTypedCryptoSign {
+        fn check_write(&self, ctx: &WriteContext) -> Result<(), CapError> {
+            if ctx.label == "cap:typed:crypto-sign" {
+                self.denied_count.fetch_add(1, Ordering::SeqCst);
+                return Err(CapError::Denied {
+                    required: "cap:typed:crypto-sign".to_string(),
+                    entity: "test-actor".to_string(),
+                });
+            }
+            Ok(())
+        }
+        fn check_read(&self, _ctx: &ReadContext) -> Result<(), CapError> {
+            Ok(())
+        }
+    }
+
+    let denied_count = Arc::new(AtomicU32::new(0));
+    let dir = tempfile::tempdir().unwrap();
+    let engine = benten_engine::Engine::builder()
+        .path(dir.path().join("benten.redb"))
+        .capability_policy(Box::new(DenyTypedCryptoSign {
+            denied_count: Arc::clone(&denied_count),
+        }))
+        .build()
+        .unwrap();
+
+    // Drive `dispatch_typed_call_public` (the napi-binding entry) with
+    // a structurally-VALID Ed25519Sign input. Without the gate fix, the
+    // dispatch would produce a signature; with the gate, the call
+    // surfaces `TypedCallCapDenied`.
+    let input = map_value(&[
+        ("private_key", Value::Bytes(vec![0u8; 32])),
+        ("message", Value::Bytes(b"hello".to_vec())),
+    ]);
+    let result = engine.dispatch_typed_call_public(TypedCallOp::Ed25519Sign, &input);
+
+    let err = result
+        .err()
+        .expect("dispatch_typed_call_public MUST deny when policy denies cap:typed:crypto-sign — without this gate the napi entry point bypasses cap policy entirely (BLOCKER-1)");
+    let code = match &err {
+        EngineError::Other { code, .. } => code.clone(),
+        other => panic!("expected EngineError::Other{{TypedCallCapDenied,..}}; got {other:?}"),
+    };
+    assert!(
+        matches!(code, ErrorCode::TypedCallCapDenied),
+        "denial MUST surface as ErrorCode::TypedCallCapDenied; got {code:?}"
+    );
+    assert_eq!(
+        denied_count.load(Ordering::SeqCst),
+        1,
+        "policy.check_write MUST have been consulted exactly once \
+         (gate fired); 0 means the napi entry bypasses the cap policy"
+    );
+
+    // Negative pin: a cap-PERMIT policy passes through. Without this
+    // assertion the test would pass trivially even if `dispatch_typed_
+    // call_public` always returned an error.
+    let dir2 = tempfile::tempdir().unwrap();
+    let engine_permit = benten_engine::Engine::builder()
+        .path(dir2.path().join("benten.redb"))
+        .build()
+        .unwrap();
+    // Generate a fresh keypair so the dispatch input is well-formed.
+    let kp_out = engine_permit
+        .dispatch_typed_call_public(TypedCallOp::KeypairGenerate, &Value::Map(BTreeMap::new()))
+        .expect("permit-policy keypair_generate must succeed");
+    let priv_key = match &kp_out {
+        Value::Map(m) => match m.get("private_key").unwrap() {
+            Value::Bytes(b) => b.clone(),
+            _ => panic!("private_key must be Bytes"),
+        },
+        _ => panic!("keypair_generate must return Map"),
+    };
+    let permit_input = map_value(&[
+        ("private_key", Value::Bytes(priv_key)),
+        ("message", Value::Bytes(b"hello".to_vec())),
+    ]);
+    let permit_out = engine_permit
+        .dispatch_typed_call_public(TypedCallOp::Ed25519Sign, &permit_input)
+        .expect("permit-policy ed25519_sign must succeed (no policy = NoAuth-permit)");
+    match permit_out {
+        Value::Map(m) => assert!(
+            matches!(m.get("signature"), Some(Value::Bytes(_))),
+            "ed25519_sign output MUST carry a signature under a permit policy"
+        ),
+        other => panic!("ed25519_sign must return Map; got {other:?}"),
+    }
+}
