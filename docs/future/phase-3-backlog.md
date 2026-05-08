@@ -235,7 +235,7 @@
 **Cross-references:**
 - `bindings/napi/src/atrium.rs::JsAtrium::from_engine` — DX-4 surface.
 - `crates/benten-engine/src/error.rs::EngineError::Other` — DX-2 surface.
-- `crates/benten-engine/tests/typed_call_engine_dispatch.rs::ucan_validate_chain_returns_*` — DX-3 surface.
+- `crates/benten-engine/tests/typed_call_engine_dispatch.rs::ucan_validate_chain_returns_true_for_well_formed_chain` (and the 3 other `ucan_validate_chain_returns_*` siblings in the same file) — DX-3 surface.
 
 **Cross-references:**
 - `crates/benten-engine/src/typed_call_dispatch.rs` — sec-minor-2 + sec-minor-3 surfaces.
