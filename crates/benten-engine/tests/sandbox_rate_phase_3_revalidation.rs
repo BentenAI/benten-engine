@@ -26,7 +26,7 @@
 //! existing primitives), the orchestrator-local classified doc would
 //! retense + this test would retense in lockstep.
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::cast_precision_loss)]
 
 /// Phase-3 paper-prototype handler classification — encoded from
 /// `.addl/phase-3/paper-prototype-phase-3-classified.md` (local-only

@@ -1187,6 +1187,14 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** `crates/benten-engine/src/primitive_host.rs::dispatch_typed_call` (Phase-3 G21-T1). Per-op error mapping promotes the underlying typed error from `benten-id` / `benten-core` to this code with the op name + a brief `reason` string for diagnostic routing.
 - **Phase:** 3 G21-T1
 
+### E_RESERVED_HANDLER_NAMESPACE
+
+- **Message:** "register_subgraph: handler_id `{handler_id}` is in the reserved `engine:typed:` namespace; this prefix is the typed-CALL registry (see CLAUDE.md baked-in #16 + phase-3-backlog §2.5(d)). E_RESERVED_HANDLER_NAMESPACE"
+- **Context:** `{ handler_id: String }`
+- **Fix:** A user attempted to register a handler whose `handler_id` starts with the reserved `engine:typed:` namespace. The eval-side dispatch fork (`crates/benten-eval/src/primitives/call.rs::execute`) pre-empts user-handler routing for this prefix — the typed-CALL registry is closed (10 ops at Phase-3 G21-T1), and extension is a Rust-only engine concern per CLAUDE.md baked-in commitment #16 (SANDBOX is for compute that doesn't fit other primitives — typed crypto / hash / DID / UCAN / VC ops fit CALL). Without this guard the user registration would be silent dead code; the registration-time reject surfaces the user-error sooner than the eval-time `E_TYPED_CALL_UNKNOWN_OP` would. Choose a non-`engine:typed:` handler_id (e.g. drop the prefix, or use a project-specific namespace). The catalog entry is paper-trail: this code does NOT route along a primitive edge (registration-time refusal, same disposition as `E_VIEW_STRATEGY_A_REFUSED` / `E_DUPLICATE_HANDLER`).
+- **Thrown at:** `crates/benten-engine/src/engine.rs::register_subgraph` + `register_subgraph_replace` (Phase-3 G21-T3 §2.5(d) fold-in; corr-minor-3 carry from G21-T1 fp-mini-review). Fires BEFORE invariant validation / subgraph CID derivation so a misnamed registration has zero observable side effect on engine state.
+- **Phase:** 3 G21-T3
+
 ## Extending the catalog
 
 When adding a new error:

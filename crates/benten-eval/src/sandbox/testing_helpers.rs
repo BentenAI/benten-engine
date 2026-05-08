@@ -213,7 +213,10 @@ pub fn testing_inject_forged_cap_claim_section(
     let payload = forged_claim.as_bytes();
 
     let mut name_len_buf: Vec<u8> = Vec::new();
-    leb128_u32(u32::try_from(name.len()).unwrap_or(u32::MAX), &mut name_len_buf);
+    leb128_u32(
+        u32::try_from(name.len()).unwrap_or(u32::MAX),
+        &mut name_len_buf,
+    );
 
     // Section content = [name_len_LEB128 | name_bytes | payload_bytes].
     let mut content: Vec<u8> = Vec::with_capacity(name_len_buf.len() + name.len() + payload.len());
@@ -227,7 +230,8 @@ pub fn testing_inject_forged_cap_claim_section(
         &mut size_buf,
     );
 
-    let mut out: Vec<u8> = Vec::with_capacity(fixture_bytes.len() + 1 + size_buf.len() + content.len());
+    let mut out: Vec<u8> =
+        Vec::with_capacity(fixture_bytes.len() + 1 + size_buf.len() + content.len());
     out.extend_from_slice(fixture_bytes);
     out.push(0u8); // SECTION_ID_CUSTOM
     out.extend_from_slice(&size_buf);
@@ -354,7 +358,10 @@ mod tests {
     #[test]
     fn testing_call_engine_dispatch_simulates_nested_dispatch_attack_state() {
         let mut state = EscDefenseState::new();
-        assert!(!state.guest_active, "fresh state must have guest_active=false");
+        assert!(
+            !state.guest_active,
+            "fresh state must have guest_active=false"
+        );
         assert_eq!(state.re_entry_count, 0);
 
         testing_call_engine_dispatch(&mut state);

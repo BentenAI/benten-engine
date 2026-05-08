@@ -422,8 +422,8 @@ fn sandbox_escape_reentrancy_via_host_fn_denied() {
 
     // run_all_checks at the host-fn boundary MUST surface the typed
     // error — the production defense the simulation pins.
-    let err = run_all_checks(&state)
-        .expect_err("ESC-10/ESC-7 simulation MUST trip the runtime defense");
+    let err =
+        run_all_checks(&state).expect_err("ESC-10/ESC-7 simulation MUST trip the runtime defense");
     assert!(
         matches!(
             err,
