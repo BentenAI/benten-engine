@@ -99,7 +99,7 @@ Landed in Phase 1 as the close-out of R7 audit finding F-R7-004: `Cid::from_str`
 
 ### 6.3 Anchor-store consolidation (cov-f3 residual) — **CLOSED-IN-PHASE-3-G14-C**
 
-Closed at Phase-3 G14-C wave-4b. The cov-f3 closure landed `crates/benten-engine/src/anchor_store.rs` as the single consolidation site (one source of truth for the anchor-store handle); `crates/benten-engine/tests/anchor_store.rs::cov_f3_anchor_store_implementation_lives_at_one_site` is the regression-pin asserting the implementation lives at exactly one path. The `phase-2-anchorstore` generic markers in `crates/benten-core/src/version.rs:13-31` + `crates/benten-core/src/lib.rs:711-716` now name `phase-3 — anchorstore + CRDT merge` (Phase 3 sync layer) — that arm is its own forward-looking item, not a Phase-2 residual.
+Closed at Phase-3 G14-C wave-4b. The cov-f3 closure landed `crates/benten-engine/src/anchor_store.rs` as the single consolidation site (one source of truth for the anchor-store handle); `crates/benten-engine/tests/anchor_store.rs::anchor_store_consolidation_cov_f3_no_residual` is the regression-pin asserting the implementation lives at exactly one path. The `phase-2-anchorstore` generic markers (carried in `crates/benten-core/src/version.rs` + `crates/benten-core/src/lib.rs` doc-comments) now name `phase-3 — anchorstore + CRDT merge` / `phase-3 — anchorstore + GC` (Phase 3 sync layer) — that arm is its own forward-looking item, not a Phase-2 residual.
 
 ### 6.4 Dependency unpins
 
