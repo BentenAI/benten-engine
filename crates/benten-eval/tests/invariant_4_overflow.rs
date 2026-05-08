@@ -35,6 +35,7 @@ fn frame_with_depth(depth: u8) -> AttributionFrame {
         handler_cid: zero_cid(),
         capability_grant_cid: zero_cid(),
         sandbox_depth: depth,
+        ..Default::default()
     }
 }
 
@@ -105,6 +106,7 @@ fn attribution_frame_sandbox_depth_field_present_default_zero() {
         handler_cid: zero_cid(),
         capability_grant_cid: zero_cid(),
         sandbox_depth: 0,
+        ..Default::default()
     };
     assert_eq!(frame.sandbox_depth, 0, "default sandbox_depth is 0");
 

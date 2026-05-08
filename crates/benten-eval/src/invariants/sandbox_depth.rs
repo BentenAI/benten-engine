@@ -241,6 +241,13 @@ pub fn check_runtime_entry(
         handler_cid: parent.handler_cid,
         capability_grant_cid: parent.capability_grant_cid,
         sandbox_depth: next,
+        // Phase-3 G16-B sync-boundary fields propagate unchanged through
+        // SANDBOX entry — SANDBOX is a compute primitive, not a sync
+        // primitive (CLAUDE.md baked-in #16). Sync attribution semantics
+        // attach at the merge seam, not at SANDBOX entry.
+        peer_did_set: parent.peer_did_set.clone(),
+        device_did: parent.device_did.clone(),
+        sync_hop_depth: parent.sync_hop_depth,
     })
 }
 
@@ -258,6 +265,12 @@ pub fn propagate_through_call(parent: &AttributionFrame) -> AttributionFrame {
         handler_cid: parent.handler_cid,
         capability_grant_cid: parent.capability_grant_cid,
         sandbox_depth: parent.sandbox_depth,
+        // Phase-3 G16-B sync-boundary fields inherit through CALL —
+        // CALL does NOT alter sync hop-depth or peer attribution
+        // (sync semantics attach only at merge boundaries).
+        peer_did_set: parent.peer_did_set.clone(),
+        device_did: parent.device_did.clone(),
+        sync_hop_depth: parent.sync_hop_depth,
     }
 }
 
@@ -276,6 +289,7 @@ mod tests {
             handler_cid: zero_cid(),
             capability_grant_cid: zero_cid(),
             sandbox_depth: depth,
+            ..Default::default()
         }
     }
 

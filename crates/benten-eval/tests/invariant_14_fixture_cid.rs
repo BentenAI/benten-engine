@@ -40,6 +40,7 @@ fn attribution_schema_fixture_cid_matches_checked_in_const() {
         // includes the `sandbox_depth` slot in the canonical Node when
         // the value is non-zero — see exec_state.rs `cid()` discipline.
         sandbox_depth: 0,
+        ..Default::default()
     };
     let cid = frame.cid().expect("attribution frame cid");
     let actual = cid.to_string();

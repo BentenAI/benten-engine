@@ -207,16 +207,16 @@ fn cap_snapshot_hash_pure_function_round_trip() {
         Cid::from_blake3_digest(*blake3::hash(b"u:1").as_bytes()),
         Cid::from_blake3_digest(*blake3::hash(b"u:2").as_bytes()),
     ];
-    let h = cap_snapshot_hash::compute(&actor, &chain);
-    assert!(cap_snapshot_hash::verify(&actor, &chain, &h));
+    let h = cap_snapshot_hash::compute_legacy(&actor, &chain);
+    assert!(cap_snapshot_hash::verify_legacy(&actor, &chain, &h));
 
     // Reorder doesn't change the hash:
     let reordered = vec![chain[1], chain[0]];
-    assert_eq!(h, cap_snapshot_hash::compute(&actor, &reordered));
+    assert_eq!(h, cap_snapshot_hash::compute_legacy(&actor, &reordered));
 
     // Different chain produces a different hash:
     let different = vec![Cid::from_blake3_digest(*blake3::hash(b"u:99").as_bytes())];
-    assert_ne!(h, cap_snapshot_hash::compute(&actor, &different));
+    assert_ne!(h, cap_snapshot_hash::compute_legacy(&actor, &different));
 }
 
 #[test]
@@ -230,7 +230,7 @@ fn put_cap_snapshot_round_trips_through_redb_suspension_store() {
     let actor = Cid::from_blake3_digest(*blake3::hash(b"actor:1").as_bytes());
     let chain = vec![Cid::from_blake3_digest(*blake3::hash(b"u:1").as_bytes())];
 
-    let expected_hash = cap_snapshot_hash::compute(&actor, &chain);
+    let expected_hash = cap_snapshot_hash::compute_legacy(&actor, &chain);
     {
         let e = Engine::open(&path).unwrap();
         e.put_cap_snapshot_for_envelope(envelope_cid, &actor, &chain, b"policy-meta-v1".to_vec())

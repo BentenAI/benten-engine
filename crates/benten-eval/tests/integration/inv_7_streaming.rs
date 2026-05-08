@@ -74,6 +74,7 @@ fn invariant_7_end_to_end_with_streaming_sandbox_output() {
         handler_cid: zero,
         capability_grant_cid: zero,
         sandbox_depth: 0,
+        ..Default::default()
     };
     let err = execute(
         &bytes,

@@ -62,6 +62,7 @@ fn sandbox_attribution_frame_sandbox_depth_inherited_not_reset_across_call() {
         handler_cid: zero_cid(),
         capability_grant_cid: zero_cid(),
         sandbox_depth: 1,
+        ..Default::default()
     };
     let res_outer = execute(
         &bytes,
@@ -174,6 +175,7 @@ fn attribution_frame_extension_does_not_leak_to_unauthorized_consumers() {
         handler_cid: zero_cid(),
         capability_grant_cid: zero_cid(),
         sandbox_depth: 0,
+        ..Default::default()
     };
     const PHASE_2A_FIXTURE: &str = "bafyr4ig26oo2jmvq47wewho4sdpiscjpluvpzev3uerleuj2rtl63r7c5a";
     assert_eq!(

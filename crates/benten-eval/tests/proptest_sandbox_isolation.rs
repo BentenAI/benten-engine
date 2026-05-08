@@ -44,6 +44,7 @@ proptest! {
             handler_cid: zero,
             capability_grant_cid: zero,
             sandbox_depth: 0,
+            ..Default::default()
         };
 
         // Module with mutable global initialised to `init_value`. A

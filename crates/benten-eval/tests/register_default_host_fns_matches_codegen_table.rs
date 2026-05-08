@@ -64,6 +64,7 @@ fn register_default_host_fns_unknown_wasm_import_surfaces_typed_error() {
         handler_cid: zero_cid(),
         capability_grant_cid: zero_cid(),
         sandbox_depth: 1,
+        ..Default::default()
     };
 
     let result = sandbox::execute(&bytes, manifest_ref, &registry, config, &[], &attribution);

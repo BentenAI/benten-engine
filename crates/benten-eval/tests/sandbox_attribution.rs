@@ -48,6 +48,7 @@ fn sandbox_attribution_frame_threads_through_host_fn() {
         handler_cid: Cid::from_blake3_digest(*handler_digest.as_bytes()),
         capability_grant_cid: Cid::from_blake3_digest(*grant_digest.as_bytes()),
         sandbox_depth: 1,
+        ..Default::default()
     };
 
     // The frame is non-default in all four slots; `execute` accepts

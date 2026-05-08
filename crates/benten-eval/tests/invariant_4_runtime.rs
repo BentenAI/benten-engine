@@ -58,6 +58,7 @@ fn invariant_4_sandbox_runtime_depth_traps() {
         capability_grant_cid: zero_cid(),
         // Depth 5 strictly exceeds max 4 — runtime arm trips.
         sandbox_depth: 5,
+        ..Default::default()
     };
 
     let bytes = trivial_module_bytes();
@@ -103,12 +104,13 @@ fn invariant_4_depth_inherited_across_call_boundary() {
         handler_cid: zero_cid(),
         capability_grant_cid: zero_cid(),
         sandbox_depth: 0,
+        ..Default::default()
     };
 
     // Outer SANDBOX entry — depth bumped to 1. Admits.
     let frame_outer = AttributionFrame {
         sandbox_depth: 1,
-        ..base_frame
+        ..base_frame.clone()
     };
     let res_outer = execute(
         &bytes,
@@ -130,7 +132,7 @@ fn invariant_4_depth_inherited_across_call_boundary() {
     // Admits at the boundary.
     let frame_inner = AttributionFrame {
         sandbox_depth: 2,
-        ..base_frame
+        ..base_frame.clone()
     };
     let res_inner = execute(
         &bytes,
@@ -151,7 +153,7 @@ fn invariant_4_depth_inherited_across_call_boundary() {
     // Depth-3: the chain HAS deepened past the max.
     let frame_too_deep = AttributionFrame {
         sandbox_depth: 3,
-        ..base_frame
+        ..base_frame.clone()
     };
     let err = execute(
         &bytes,
@@ -190,6 +192,7 @@ fn invariant_4_depth_inherited_through_attribution_frame() {
         handler_cid: zero_cid(),
         capability_grant_cid: zero_cid(),
         sandbox_depth: 0,
+        ..Default::default()
     };
     let cid_zero = frame_zero.cid().expect("default frame encodes");
     assert_eq!(
@@ -202,7 +205,7 @@ fn invariant_4_depth_inherited_through_attribution_frame() {
 
     let frame_one = AttributionFrame {
         sandbox_depth: 1,
-        ..frame_zero
+        ..frame_zero.clone()
     };
     let cid_one = frame_one.cid().expect("depth-1 frame encodes");
     assert_ne!(
@@ -212,7 +215,7 @@ fn invariant_4_depth_inherited_through_attribution_frame() {
 
     let frame_one_again = AttributionFrame {
         sandbox_depth: 1,
-        ..frame_zero
+        ..frame_zero.clone()
     };
     assert_eq!(
         frame_one_again.cid().unwrap(),
@@ -222,7 +225,7 @@ fn invariant_4_depth_inherited_through_attribution_frame() {
 
     let frame_two = AttributionFrame {
         sandbox_depth: 2,
-        ..frame_zero
+        ..frame_zero.clone()
     };
     assert_ne!(
         frame_two.cid().unwrap(),

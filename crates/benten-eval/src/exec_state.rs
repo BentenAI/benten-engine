@@ -12,12 +12,24 @@
 //! payload bytes (32-byte digest wrapped in a CIDv1 `dag-cbor` / `blake3`
 //! envelope — matches `benten_core::Cid` throughout the engine).
 
+use std::collections::BTreeSet;
+
 use benten_core::{Cid, CoreError, Value};
 use serde::{Deserialize, Serialize};
 
+/// A `did:key:...` identifier (logical-principal or device-grain).
+///
+/// Phase-3 G16-B canary uses `String` at the eval layer to avoid pulling
+/// `benten-id` into `benten-eval`'s dep graph (layering: eval is identity-
+/// ignorant per arch-r1-10). Downstream consumers (engine_sync glue) wrap
+/// the resolved-string form of `benten_id::did::Did` and round-trip it
+/// through `Did::resolve` at the engine boundary when typed identity is
+/// required.
+pub type Did = String;
+
 /// A single attribution frame: `(actor, handler, capability_grant)`.
 /// Plan §9.1 + ucca-1 / ucca-4: chain (not 3-tuple) carries this frame as
-/// its element type. Phase-2a ships the 3-field shape; Phase-6 additions
+/// its element type. Phase-2a ships the 3-field shape; Phase-3 additions
 /// are provably additive (pinned by `invariant_14_fixture_cid` test).
 ///
 /// Phase-2b G7-B (D20-RESOLVED): adds `sandbox_depth: u8` for Inv-4
@@ -30,6 +42,31 @@ use serde::{Deserialize, Serialize};
 /// A frame with `sandbox_depth = 0` therefore round-trips to the exact
 /// Phase-2a CID; a frame with non-zero depth produces a distinct CID
 /// (asserted by `invariant_4_overflow.rs::attribution_frame_sandbox_depth_field_present_default_zero`).
+///
+/// Phase-3 G16-B (ds-r4b-1 BLOCKER closure): adds three sync-boundary
+/// fields for Inv-14 device-grain attribution at the Loro merge seam:
+///
+/// - `peer_did_set`: `None` for purely-local writes; `Some(BTreeSet<Did>)`
+///   for frames that originate from a sync merge (carries the set of
+///   contributing peer DIDs observed via `LoroDoc::winning_attribution`).
+/// - `device_did`: `None` for legacy / actor-only writes; `Some(Did)` for
+///   sync-attributed or device-DID-attested writes per D-PHASE-3-25
+///   device-heterogeneity contract.
+/// - `sync_hop_depth`: `0` for local writes; increments by 1 per CRDT
+///   merge hop. Bounded by [`SYNC_HOP_DEPTH_CAP`]; overflow surfaces as
+///   `E_SYNC_HOP_DEPTH_EXCEEDED`.
+///
+/// Per the Phase-2a-CID-stability discipline (D20-RESOLVED precedent),
+/// each new slot is included in the canonical Node ONLY when its value is
+/// non-default (`None` / `0`). A frame with all three fields default
+/// therefore canonicalises to the exact Phase-2a 3-key Node and produces
+/// the pinned schema-fixture CID; any non-default value adds the slot
+/// and produces a distinct CID — the security claim of Inv-14
+/// (a sync-bearing attribution chain is content-distinguishable from a
+/// purely-local chain).
+///
+/// `serde(default)` lets older DAG-CBOR payloads decode cleanly into the
+/// extended struct.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AttributionFrame {
     /// CID of the actor (principal) that authored the step.
@@ -45,6 +82,68 @@ pub struct AttributionFrame {
     /// DAG-CBOR payloads decode cleanly into the extended struct.
     #[serde(default)]
     pub sandbox_depth: u8,
+    /// Phase-3 G16-B sync-boundary extension. `Some(set)` when this frame
+    /// originates from a Loro CRDT merge (row-4a per ds-4); captures the
+    /// contributing peer DIDs observed via
+    /// `benten_sync::crdt::LoroDoc::winning_attribution`. `None` for
+    /// purely-local writes. The exact peer-node-id → DID resolution is
+    /// performed by the engine layer (`crates/benten-engine/src/engine_sync.rs`)
+    /// against the local trust store; pre-trust-store-wireup the engine
+    /// emits raw node-ids serialised as decimal strings (see
+    /// G16-B wave-6b residual at `docs/future/phase-3-backlog.md`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peer_did_set: Option<BTreeSet<Did>>,
+    /// Phase-3 G16-B device-grain attribution per Inv-14 sync-grain
+    /// requirement + D-PHASE-3-25 device-heterogeneity contract.
+    /// `None` for legacy / local writes; `Some(did)` for sync-attributed
+    /// or device-DID-attested writes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_did: Option<Did>,
+    /// Phase-3 G16-B sync-hop-depth bound (D-PHASE-3-25
+    /// sync-hop-depth-bounded contract). Increments per CRDT merge hop;
+    /// `E_SYNC_HOP_DEPTH_EXCEEDED` fires at the configured cap
+    /// ([`SYNC_HOP_DEPTH_CAP`] default). Default `0` keeps the Phase-2a
+    /// schema-fixture CID stable for purely-local frames; the field is
+    /// elided from the serde-encoded map when zero so envelope bytes
+    /// for purely-local frames stay byte-identical to Phase-2a (mirrors
+    /// the `peer_did_set` / `device_did` skip-on-default discipline).
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub sync_hop_depth: u32,
+}
+
+/// Phase-3 G16-B sync-hop-depth cap mirroring the Inv-4 sandbox_depth
+/// cap precedent. A frame whose `sync_hop_depth` would exceed this cap
+/// after a merge MUST surface as
+/// [`benten_errors::ErrorCode::SyncHopDepthExceeded`] at the merge seam.
+pub const SYNC_HOP_DEPTH_CAP: u32 = 8;
+
+/// `skip_serializing_if` predicate for [`AttributionFrame::sync_hop_depth`].
+/// Non-pub helper kept here so the canonical Node encoding stays byte-
+/// stable with the Phase-2a 4-key shape when the field is zero.
+///
+/// `serde`'s `skip_serializing_if` requires a `&u32` signature even
+/// though the trivial `Copy` could pass by value — silence the lint
+/// here.
+#[allow(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if requires the &T signature"
+)]
+fn is_zero_u32(v: &u32) -> bool {
+    *v == 0
+}
+
+impl Default for AttributionFrame {
+    fn default() -> Self {
+        Self {
+            actor_cid: Cid::from_blake3_digest([0u8; 32]),
+            handler_cid: Cid::from_blake3_digest([0u8; 32]),
+            capability_grant_cid: Cid::from_blake3_digest([0u8; 32]),
+            sandbox_depth: 0,
+            peer_did_set: None,
+            device_did: None,
+            sync_hop_depth: 0,
+        }
+    }
 }
 
 impl AttributionFrame {
@@ -84,6 +183,30 @@ impl AttributionFrame {
             props.insert(
                 "sandbox_depth".into(),
                 Value::Int(i64::from(self.sandbox_depth)),
+            );
+        }
+        // Phase-3 G16-B Inv-14 sync-boundary extension: each slot is
+        // included only when its value is non-default. A purely-local
+        // frame (peer_did_set=None, device_did=None, sync_hop_depth=0)
+        // canonicalises to the Phase-2a 3-key Node. Any non-default
+        // value adds a slot — sync-attributed frames are content-
+        // distinguishable from local frames per Inv-14.
+        if let Some(peer_set) = &self.peer_did_set {
+            // Encode as a sorted list of DID strings (BTreeSet already
+            // gives sorted iteration order; canonical-bytes-stable).
+            let list: Vec<Value> = peer_set
+                .iter()
+                .map(|did| Value::text(did.clone()))
+                .collect();
+            props.insert("peer_did_set".into(), Value::List(list));
+        }
+        if let Some(device) = &self.device_did {
+            props.insert("device_did".into(), Value::text(device.clone()));
+        }
+        if self.sync_hop_depth != 0 {
+            props.insert(
+                "sync_hop_depth".into(),
+                Value::Int(i64::from(self.sync_hop_depth)),
             );
         }
         let node = Node::new(vec!["AttributionFrame".into()], props);

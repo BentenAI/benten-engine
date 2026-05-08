@@ -298,6 +298,7 @@ fn payload_for_handler(
         handler_cid,
         capability_grant_cid: grant_cid,
         sandbox_depth: 0,
+        ..Default::default()
     };
 
     ExecutionStatePayload {
@@ -835,7 +836,16 @@ impl Engine {
                 .first()
                 .map_or(envelope.payload.resumption_principal_cid, |f| f.actor_cid);
             let live_chain = self.chain_for_actor(&actor_cid);
-            let live_hash = crate::cap_snapshot_hash::compute(&actor_cid, &live_chain);
+            // Phase-3 G16-B canary (r4b-cap-2 transition): the legacy
+            // 2-input compute path is preserved here pending engine-side
+            // capture-of-revocation-set + policy-backend-tag at suspend
+            // time. Downstream wave (G16-B wave-6b post-canary) replaces
+            // `compute_legacy` with `compute` once the suspend-side
+            // capture sites surface the full 4-dimension input. Both
+            // paths produce identical hashes for `(empty revocation set,
+            // PolicyBackendTag::no_auth())` so existing pinned bytes
+            // stay byte-identical.
+            let live_hash = crate::cap_snapshot_hash::compute_legacy(&actor_cid, &live_chain);
             if live_hash != snapshot.cap_snapshot_hash {
                 return Err(EngineError::Other {
                     code: ErrorCode::CapSnapshotHashMismatch,
@@ -869,6 +879,7 @@ impl Engine {
                 actor_hint: None,
                 pending_ops: Vec::new(),
                 authority: benten_caps::WriteAuthority::User,
+                ..Default::default()
             };
             policy.check_write(&ctx).map_err(|e| EngineError::Other {
                 code: ErrorCode::CapRevokedMidEval,
@@ -903,6 +914,7 @@ impl Engine {
                 handler_cid,
                 capability_grant_cid: grant_cid,
                 sandbox_depth: 0,
+                ..Default::default()
             }],
             pinned_subgraph_cids: Vec::new(),
             context_binding_snapshots: Vec::new(),

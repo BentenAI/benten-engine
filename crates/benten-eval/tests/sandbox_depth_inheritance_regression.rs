@@ -57,6 +57,7 @@ fn sandbox_depth_inherits_across_call_boundary_not_reset() {
             handler_cid: zero_cid(),
             capability_grant_cid: zero_cid(),
             sandbox_depth: depth,
+            ..Default::default()
         };
         let res = execute(
             &bytes,
@@ -78,6 +79,7 @@ fn sandbox_depth_inherits_across_call_boundary_not_reset() {
         handler_cid: zero_cid(),
         capability_grant_cid: zero_cid(),
         sandbox_depth: 5,
+        ..Default::default()
     };
     let err = execute(
         &bytes,

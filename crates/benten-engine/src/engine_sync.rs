@@ -23,15 +23,35 @@
 //! - **row-4a** (user-data): the targets fall outside the
 //!   `system:` zone-prefix list per
 //!   [`crate::system_zones::SYSTEM_ZONE_PREFIXES`]. The Loro merge
-//!   applies via [`AtriumHandle::merge_remote_change`]; the engine
-//!   mints a new Version Node via the existing Anchor + Version +
-//!   CURRENT pattern (Phase-1 shipped) per arch-r1-4 D-C HYBRID.
-//!   AttributionFrame at the new Version captures contributing
-//!   peer-`node_id`s observed via [`LoroDoc::winning_attribution`].
+//!   applies via [`AtriumHandle::merge_remote_change`]; the merge
+//!   surfaces an `benten_eval::AttributionFrame` seed populated from
+//!   [`benten_sync::crdt::LoroDoc::winning_attribution`] (G16-B canary
+//!   landed) — engine-side mint of a new Version Node via the existing
+//!   Anchor + Version + CURRENT pattern (per arch-r1-4 D-C HYBRID)
+//!   wires through G16-B wave-6b (post-canary; the AttributionFrame
+//!   structural fields `peer_did_set` + `device_did` + `sync_hop_depth`
+//!   are added at G16-B canary so wave-6b can populate them).
 //! - **row-4b** (system-zone / Anchor-immutable): the targets fall
 //!   inside the system-zone prefix list. The merge is REJECTED with
 //!   [`AtriumError::DivergentCidRejected`] mapping to the stable
 //!   error code [`benten_errors::ErrorCode::SyncDivergentCidRejected`].
+//!
+//! ## State at HEAD (G16-B canary)
+//!
+//! - Landed: [`AtriumHandle::open`] / [`AtriumHandle::merge_remote_change`]
+//!   row-4 SPLIT classifier; [`benten_sync::crdt::LoroDoc::winning_attribution`]
+//!   accessor surfacing contributing peer node-ids; sync-hop-depth
+//!   bound check at the merge seam (rejects with
+//!   [`benten_errors::ErrorCode::SyncHopDepthExceeded`] when the
+//!   incoming frame's hop-depth would exceed
+//!   [`benten_eval::exec_state::SYNC_HOP_DEPTH_CAP`]).
+//! - Pinned-deferred (G16-B wave-6b post-canary): engine-side Version
+//!   Node mint via [`crate::Engine::create_anchor`] +
+//!   `append_version` (currently Phase-1 stubs returning
+//!   `E_NOT_IMPLEMENTED` — wiring lands alongside the broader
+//!   anchor-store wave). The structural `benten_eval::AttributionFrame` surface
+//!   that wave-6b populates is shipped at G16-B canary so the wiring
+//!   has an existing carrier shape.
 //!
 //! ## Pin sources
 //!
@@ -41,6 +61,10 @@
 //!   `atrium_sync_subgraph_two_peer_bidirectional`.
 //! - `D-PHASE-3-22` RESOLVED + `arch-r1-4` D-C HYBRID.
 //! - `ds-4` Inv-13 row-4 SPLIT.
+//! - `ds-r4b-1` BLOCKER (R4b round 1 distributed-systems lens) —
+//!   AttributionFrame field-layer extension at sync boundary.
+//! - `arch-r4b-1` (R4b round 1 architect lens) — module rustdoc retense
+//!   distinguishing landed-state from pinned-deferred-state.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -88,6 +112,43 @@ pub enum AtriumError {
         /// Operator-readable reason.
         reason: String,
     },
+
+    /// G16-B canary (ds-r4b-1 BLOCKER closure): an inbound CRDT merge
+    /// would push the resulting `AttributionFrame::sync_hop_depth` past
+    /// [`benten_eval::exec_state::SYNC_HOP_DEPTH_CAP`]. Maps to
+    /// [`benten_errors::ErrorCode::SyncHopDepthExceeded`].
+    #[error(
+        "atrium sync hop-depth bound exceeded: incoming_hop_depth={incoming_hop_depth} cap={cap}"
+    )]
+    SyncHopDepthExceeded {
+        /// Hop-depth carried by the incoming frame.
+        incoming_hop_depth: u32,
+        /// The configured cap.
+        cap: u32,
+    },
+}
+
+/// Phase-3 G16-B canary (ds-r4b-1 BLOCKER closure): the
+/// AttributionFrame seed surfaced by a successful row-4a Loro merge.
+///
+/// Composes with the engine-side Version Node mint (G16-B wave-6b
+/// post-canary) to populate the new Version's
+/// [`benten_eval::AttributionFrame`] with `peer_did_set` (after engine-
+/// side trust-store resolution of the `peer_node_ids` to peer-DIDs) +
+/// `sync_hop_depth` (carried verbatim).
+#[derive(Debug, Clone)]
+pub struct SyncMergeAttribution {
+    /// Contributing peer node-ids observed via
+    /// [`benten_sync::crdt::LoroDoc::winning_attribution`]. The engine
+    /// resolves these to `did:key:` DIDs via the local trust-store at
+    /// G16-B wave-6b — pre-trust-store the engine emits the raw
+    /// node-ids serialised as decimal strings into
+    /// [`benten_eval::AttributionFrame::peer_did_set`].
+    pub peer_node_ids: std::collections::BTreeSet<u64>,
+    /// New `sync_hop_depth` for the AttributionFrame minted at this
+    /// merge boundary (= incoming_hop_depth + 1, bounded by
+    /// [`benten_eval::exec_state::SYNC_HOP_DEPTH_CAP`]).
+    pub sync_hop_depth: u32,
 }
 
 impl AtriumError {
@@ -101,6 +162,9 @@ impl AtriumError {
                 benten_errors::ErrorCode::SyncDivergentCidRejected
             }
             AtriumError::InvalidState { .. } => benten_errors::ErrorCode::AtriumTransportDegraded,
+            AtriumError::SyncHopDepthExceeded { .. } => {
+                benten_errors::ErrorCode::SyncHopDepthExceeded
+            }
         }
     }
 }
@@ -405,11 +469,20 @@ impl AtriumHandle {
     /// Inv-13 row-4 SPLIT classifier (per ds-4).
     ///
     /// row-4a (user-data): the merge applies; AttributionFrame seed is
-    /// available via [`LoroDoc::winning_attribution`] for the engine
-    /// to capture peer contribution.
+    /// available via [`benten_sync::crdt::LoroDoc::winning_attribution`]
+    /// for the engine to capture peer contribution. The G16-B canary
+    /// returns the seed CRDT-layer node-id set; the engine-side Version
+    /// Node mint that consumes the seed lands at G16-B wave-6b
+    /// post-canary (per `arch-r4b-1` rustdoc retense at module level).
     /// row-4b (system-zone / Anchor-immutable): the merge is rejected
     /// with [`AtriumError::DivergentCidRejected`] mapping to
     /// [`benten_errors::ErrorCode::SyncDivergentCidRejected`].
+    ///
+    /// G16-B canary additionally enforces the sync-hop-depth bound at
+    /// the merge seam — see [`AtriumHandle::merge_remote_change_with_hop_depth`]
+    /// for the depth-aware variant. The plain entry point preserves
+    /// the Phase-2b call shape and is equivalent to passing
+    /// `incoming_hop_depth = 0` (i.e. fresh-from-source).
     ///
     /// # Errors
     ///
@@ -417,6 +490,36 @@ impl AtriumHandle {
     /// frame's targets include a system-zone Node;
     /// [`AtriumError::Crdt`] if the underlying Loro merge fails.
     pub async fn merge_remote_change(&self, zone: &str, bytes: &[u8]) -> AtriumResult<()> {
+        self.merge_remote_change_with_hop_depth(zone, bytes, 0)
+            .await
+            .map(|_seed| ())
+    }
+
+    /// Apply a remote sync frame with an explicit incoming
+    /// `sync_hop_depth` per D-PHASE-3-25 sync-hop-depth-bounded
+    /// contract (G16-B canary; ds-r4b-1 BLOCKER closure).
+    ///
+    /// Returns the [`SyncMergeAttribution`] seed surfacing contributing
+    /// peer node-ids + the new hop-depth (incoming + 1) that the engine
+    /// consumes to populate `benten_eval::AttributionFrame::peer_did_set`
+    /// + `benten_eval::AttributionFrame::sync_hop_depth` when minting a
+    /// new Version Node post-merge.
+    ///
+    /// Bounds: rejects with
+    /// [`benten_errors::ErrorCode::SyncHopDepthExceeded`] when the
+    /// resulting hop-depth would exceed
+    /// [`benten_eval::exec_state::SYNC_HOP_DEPTH_CAP`] (default 8).
+    ///
+    /// # Errors
+    ///
+    /// As [`AtriumHandle::merge_remote_change`] plus
+    /// [`AtriumError::SyncHopDepthExceeded`] when the bound is hit.
+    pub async fn merge_remote_change_with_hop_depth(
+        &self,
+        zone: &str,
+        bytes: &[u8],
+        incoming_hop_depth: u32,
+    ) -> AtriumResult<SyncMergeAttribution> {
         // row-4 SPLIT classification: walk the zone path against the
         // system-zone prefix list. The crdt-layer op_log_targets
         // surface gives us per-container granularity; for G16-B
@@ -429,10 +532,35 @@ impl AtriumHandle {
                 target: zone.to_string(),
             });
         }
+        // G16-B canary: enforce sync-hop-depth bound BEFORE the merge.
+        // checked_add(1) = None on u32::MAX overflow; > cap = explicit
+        // reject. The pre-merge order ensures a rejected frame leaves
+        // the doc state unchanged (ds-r4b-1 closure semantics).
+        let next_depth =
+            incoming_hop_depth
+                .checked_add(1)
+                .ok_or(AtriumError::SyncHopDepthExceeded {
+                    incoming_hop_depth,
+                    cap: benten_eval::exec_state::SYNC_HOP_DEPTH_CAP,
+                })?;
+        if next_depth > benten_eval::exec_state::SYNC_HOP_DEPTH_CAP {
+            return Err(AtriumError::SyncHopDepthExceeded {
+                incoming_hop_depth,
+                cap: benten_eval::exec_state::SYNC_HOP_DEPTH_CAP,
+            });
+        }
         let mut zones = self.inner.zones.lock().await;
         let doc = zones.entry(zone.to_string()).or_insert_with(LoroDoc::new);
         doc.apply_remote_update(bytes)?;
-        Ok(())
+        // Capture the AttributionFrame seed: contributing peer node-ids
+        // observed via Loro's per-container winning-attribution view +
+        // the new sync-hop-depth. Engine-side wave-6b consumes this
+        // seed when minting a new Version Node post-merge.
+        let peer_node_ids = doc.winning_attribution();
+        Ok(SyncMergeAttribution {
+            peer_node_ids,
+            sync_hop_depth: next_depth,
+        })
     }
 
     /// The local peer's HLC `node_id`, derived from the peer-pubkey

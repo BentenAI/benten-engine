@@ -41,6 +41,7 @@ fn attribution_frame_shape_is_actor_handler_grant_depth() {
         handler_cid: zero_cid(),
         capability_grant_cid: zero_cid(),
         sandbox_depth: 0,
+        ..Default::default()
     };
     assert_eq!(frame.actor_cid, zero_cid());
     assert_eq!(frame.handler_cid, zero_cid());
@@ -59,6 +60,7 @@ fn attribution_frame_no_delegation_parent_in_2b() {
         handler_cid: zero_cid(),
         capability_grant_cid: zero_cid(),
         sandbox_depth: 0,
-        // intentionally NO delegation_parent field here.
+        // intentionally NO delegation_parent field here.,
+        ..Default::default()
     };
 }
