@@ -132,6 +132,26 @@ fn is_zero_u32(v: &u32) -> bool {
     *v == 0
 }
 
+/// Default `AttributionFrame` with all-zero CIDs and purely-local
+/// (non-sync) Phase-3 sync fields.
+///
+/// **Architectural intent:** this `Default` exists to support the
+/// `..Default::default()` spread pattern at test/bench/legacy callsites
+/// that pre-date the Phase-3 G16-B sync-boundary fields (`peer_did_set`,
+/// `device_did`, `sync_hop_depth`). Cascading struct-literal additions
+/// across ~50 construction sites is the carrying cost we accept in
+/// exchange for keeping the canonical Node encoding additive.
+///
+/// **Production callsites should NOT rely on this `Default`.** The
+/// engine's WRITE path constructs frames explicitly (see
+/// `crates/benten-engine/src/engine_sync.rs`) and SANDBOX entry points
+/// derive `sandbox_depth` from the parent frame; the all-zero CID
+/// values here are placeholders that would not pass invariant checks
+/// in a live evaluator. The default is intentionally test-/bench-
+/// shaped: `actor_cid` / `handler_cid` / `capability_grant_cid` are
+/// all-zero, `sandbox_depth = 0`, and the three Phase-3 sync slots
+/// default to `None` / `0` so `serde` elides them from the canonical
+/// envelope (preserving the Phase-2a schema-fixture CID).
 impl Default for AttributionFrame {
     fn default() -> Self {
         Self {

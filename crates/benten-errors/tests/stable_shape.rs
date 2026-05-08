@@ -245,6 +245,12 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // user-handler IDs in the reserved `engine:typed:` namespace
     // (typed-CALL surface lands at G21-T1 PR #145).
     ErrorCode::ReservedHandlerNamespace,
+    // Phase-3 G16-B-A canary (D-PHASE-3-25 sync-hop-depth-bounded
+    // contract): typed code surfaced when a CRDT-merge frame would
+    // exceed `SYNC_HOP_DEPTH_CAP` (default 8). Construction site at the
+    // CRDT merge seam; carries the observed depth + cap diagnostic
+    // fields. Mirrors the Inv-4 sandbox-depth precedent.
+    ErrorCode::SyncHopDepthExceeded,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -442,10 +448,11 @@ fn variant_count_is_pinned() {
     //     (Step 1.5 fail-loud branch + `map_resume_eval_error` remap
     //     of eval-side `HostBackendUnavailable`).
     // Post-G20-A2: 100 + 3 = 103.
-    // Post-G21-T3 §2.5(d): + ReservedHandlerNamespace = 104. The
-    // hardcoded count below tracks `ALL_CATALOG_VARIANTS.len()` exactly.
+    // Post-G21-T3 §2.5(d): + ReservedHandlerNamespace = 104.
+    // Post-G16-B-A canary: + SyncHopDepthExceeded = 105. The hardcoded
+    // count below tracks `ALL_CATALOG_VARIANTS.len()` exactly.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 104,
+        CATALOG_VARIANT_COUNT, 105,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

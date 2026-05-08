@@ -82,6 +82,10 @@ fn dummy_attribution() -> AttributionFrame {
         handler_cid: zero,
         capability_grant_cid: zero,
         sandbox_depth: 0,
+        // Phase-3 G16-B sync-boundary fields default to None/0 for
+        // purely-local benches — keeps the canonical Node encoding at the
+        // Phase-2a 3/4-key shape so the schema-fixture CID stays stable.
+        ..Default::default()
     }
 }
 

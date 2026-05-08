@@ -910,6 +910,49 @@ recheck per `ds-r4r2-7`. Because both layers compose:
 pre-R1 review; dual-layer read-cap section above; G14-D F6
 SUBSCRIBE filtering at delivery boundary.
 
+**Phase-3 G16-B-A canary deepening (2026-05-08).** G16-B-A's canary
+landed three structural-surface pins that complete Compromise #11's
+device-grain composition story alongside the Phase-3 sync-merge path:
+
+- **Materialization-only structural pin** —
+  `crates/benten-engine/tests/ivm_view_subscribe_compose.rs::compromise_11_materialization_deny_wins_over_delivery_admit_at_view_layer`
+  asserts the materialization gate's row filtering operates
+  independently of any SUBSCRIBE delivery state. The pin stands GREEN
+  at canary scope.
+- **Mat-deny-wins composition pin** — same file, asserts that a row
+  the materialization gate denies is observably absent from the
+  SUBSCRIBE delivery surface (mat-deny-wins composition over
+  G14-D delivery-time recheck). Stands GREEN at canary scope.
+- **Delivery-gate-registration pin** — pins that
+  `Engine::materialize_view_with_gate` correctly registers its
+  per-view gate hook against the same `CapRecheckFn` scaffold G14-D
+  consumes for SUBSCRIBE delivery, so the layered defense is wired
+  through one shared dispatch. Stands GREEN at canary scope.
+
+**Deferred deeper-e2e pin** —
+`compromise_11_both_gates_compose_observable_delivery_end_to_end`
+remains RED-PHASE pending the engine-side test surface that exposes
+ChangeEvent.anchor_cid directly (the production `OnChangeCallback`
+receives chunked-encoded CBOR; parsing in the test layer is brittle).
+Tracked at `docs/future/phase-3-backlog.md` §6.12 item 2 with two
+options: (a) introduce a `test_subscribe_observable_change_events`
+engine helper that bypasses chunk encoding; (b) ship a CBOR parser at
+the test scope. The structural composition pins above are sufficient
+for canary-scope mat-deny-wins coverage; the deepest end-to-end
+observation is the residual.
+
+**Sync-grain interaction.** Compromise #11's row-level gate composes
+with the Phase-3 G16-B `AttributionFrame` extensions
+(`peer_did_set` + `device_did` + `sync_hop_depth`, see
+`docs/INVARIANT-COVERAGE.md` "Inv-14 Phase-3 G16-B device-grain
+extension"): the gate's per-row check is grain-orthogonal — it gates
+on label-derived hints and actor cap-set, NOT on the merge frame's
+device origin. Per-device read policy is a separate Phase-3 surface
+tracked at `docs/future/phase-3-backlog.md` §6.12 item 3
+(production-runtime threading of `device_cid` through engine
+WriteContext construction sites). Both surfaces share the
+`CapRecheckFn` scaffold but resolve at different layers.
+
 **Phase-2b R6 Round-3 surfacing — `read_view_with` view-id-prefix
 heuristic — CLOSED at Phase-3 G20-A3 wave-8a.** R6 Round 3's
 `r6-r3-ivm-2` finding observed that `Engine::read_view_with`
