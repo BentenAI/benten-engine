@@ -1201,7 +1201,8 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 **Origin (Pre-R4b 2026-05-08):** the `wait_signal_shape_optional_typing.rs::wait_signal_shape_mismatch_fires_typed_error_routed_on_error` test currently `#[ignore]`'s with a destination naming this row. The test asserts that a typed-shape mismatch routes to `WaitSignalShapeMismatch` rather than `WaitSignalShapeBypass` when the wait signal carries a routed edge label.
 
 **Phase 3 target:** Bundle with the next round of routed-edge-label classification hardening so the `wait_signal_shape_mismatch_fires_typed_error_routed_on_error` ignore can lift. Specifically:
-- Audit the `crates/benten-eval/src/primitives/wait.rs::resolve_signal_shape` routing logic to confirm typed-shape mismatch + routed-edge-label combos route correctly.
+- Audit the `crates/benten-errors/src/lib.rs::routed_edge_label` classification table to either reclassify `ErrorCode::InvRegistration` under the runtime-error group when fired from a WAIT-resume shape-mismatch path (so the test's `Some("ON_ERROR")` assertion holds), OR adjust the test's expected edge label to `None` to match the registration-time classification.
+- Cross-check against the WAIT shape-match runtime path (`crates/benten-eval/src/primitives/wait.rs::shapes_match` consumed by `evaluate_op_with_handler_id`) to confirm the routing classification matches the operator-observable contract.
 - Pin the `routed_edge_label` cases in the same test file alongside the existing `defaults_untyped_accepts_any_value` pin.
 
 **Touch size:** ~20-40 LOC investigation + ~20-30 LOC pin (+ removal of the `#[ignore]` once the routing is confirmed).
