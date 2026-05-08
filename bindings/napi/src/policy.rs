@@ -20,8 +20,17 @@
 #[cfg(feature = "napi-export")]
 #[napi_derive::napi(string_enum)]
 pub enum PolicyKind {
+    /// `NoAuthBackend` — no capability checking. The Phase-1 default;
+    /// suitable for trusted single-process embedding only.
     NoAuth,
+    /// `UcanBackend` — Phase-3 G14-B durable UCAN-grounded grants
+    /// (chain-walking + nbf/exp validation + revocation via Node writes).
+    /// Layered on top of `GrantBacked` for revocation reuse.
     Ucan,
+    /// `GrantBackedPolicy` — Phase-2b revocation-aware policy backed by
+    /// the engine's own `system:CapabilityGrant` /
+    /// `system:CapabilityRevocation` Nodes. Per-actor scope checks fire
+    /// at WRITE / SUBSCRIBE / SANDBOX entry.
     GrantBacked,
 }
 

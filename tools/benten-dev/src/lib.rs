@@ -463,6 +463,18 @@ impl DevServer {
         &self.reload_coordinator
     }
 
+    /// Compile + register a DSL handler source string against the
+    /// devserver's underlying real engine. The compile step routes
+    /// through `benten-dsl-compiler::compile_str`; the engine
+    /// registration goes via `Engine::register_subgraph` on the
+    /// devserver's owned engine handle.
+    ///
+    /// Returns the engine's typed `ErrorCode` if compilation or
+    /// registration fails. Hot-reloads against an existing
+    /// `handler_id` swap the registered Subgraph atomically under
+    /// the `ReloadCoordinator` write lock, so any in-flight
+    /// `CallGuard`s against the previous version drain before the
+    /// new version becomes visible.
     pub fn register_handler_from_str(
         &self,
         handler_id: &str,

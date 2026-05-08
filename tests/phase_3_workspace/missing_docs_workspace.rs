@@ -13,59 +13,112 @@
 
 #![allow(clippy::unwrap_used)]
 
+/// C-7 architectural pin (G20-B Phase-3 close).
+///
+/// Walks every Rust source file under `crates/` and `bindings/napi/src/` +
+/// asserts no `#[allow(missing_docs)]` / `#![allow(missing_docs)]`
+/// escape hatch remains. Per phase-2-backlog §8.3 + C-7, the Phase-3
+/// close pulls every public surface into the missing_docs gate.
+///
+/// The sibling `full_missing_docs_sweep_no_warnings_workspace_wide`
+/// pin then drives `cargo doc --workspace --no-deps` with
+/// `-D missing_docs` to verify the gate succeeds end-to-end.
 #[test]
-#[ignore = "RED-PHASE: G20-B wave-8b — no #[allow(missing_docs)] at Phase-3 close (C-7)"]
 fn no_allow_missing_docs_at_phase_3_close() {
-    // C-7 architectural pin. G20-B implementer wires this:
-    //
-    //   // Walk every crates/*/src/**/*.rs + bindings/napi/src/**/*.rs.
-    //   // No `#[allow(missing_docs)]` may remain post-G20-B.
-    //   let workspace_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //       .join("..").join("..");
-    //   let mut violators = Vec::new();
-    //   for src_root in &[workspace_root.join("crates"), workspace_root.join("bindings/napi/src")] {
-    //       for entry in walkdir::WalkDir::new(src_root) {
-    //           let entry = entry.unwrap();
-    //           if entry.path().extension().and_then(|e| e.to_str()) != Some("rs") {
-    //               continue;
-    //           }
-    //           let src = std::fs::read_to_string(entry.path()).unwrap();
-    //           if src.contains("#[allow(missing_docs)]")
-    //              || src.contains("#![allow(missing_docs)]") {
-    //               violators.push(entry.path().display().to_string());
-    //           }
-    //       }
-    //   }
-    //   assert!(violators.is_empty(),
-    //       "G20-B must drop all #[allow(missing_docs)] escape hatches; \
-    //        residuals:\n{}", violators.join("\n"));
-    //
-    // OBSERVABLE consequence: the workspace public-doc discipline is
-    // strict at Phase-3 close.
-    unimplemented!("G20-B wires no-#[allow(missing_docs)] sweep pin");
+    use std::path::Path;
+    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("workspace root resolves two levels up")
+        .to_path_buf();
+
+    let mut violators: Vec<String> = Vec::new();
+    for src_root in &[
+        workspace_root.join("crates"),
+        workspace_root.join("bindings").join("napi").join("src"),
+        workspace_root.join("tools"),
+    ] {
+        if !src_root.is_dir() {
+            continue;
+        }
+        scan_for_escape_hatch(src_root, &mut violators);
+    }
+
+    assert!(
+        violators.is_empty(),
+        "G20-B C-7 architectural pin: workspace MUST drop all \
+         #[allow(missing_docs)] escape hatches at Phase-3 close. \
+         Residuals:\n{}",
+        violators.join("\n"),
+    );
 }
 
+/// phase-2-backlog §8.3 architectural pin (G20-B Phase-3 close).
+///
+/// Drives `cargo doc --workspace --no-deps` with
+/// `RUSTDOCFLAGS=-D missing_docs` and asserts zero missing-docs
+/// warnings across the workspace. End-to-end pin per pim-2 §3.6b —
+/// would FAIL if any public surface lacks a docstring.
 #[test]
-#[ignore = "RED-PHASE: G20-B wave-8b — full missing_docs sweep no warnings workspace-wide (phase-2-backlog §8.3)"]
 fn full_missing_docs_sweep_no_warnings_workspace_wide() {
-    // phase-2-backlog §8.3 pin. G20-B implementer wires this:
-    //
-    //   // Drive `cargo doc --workspace --no-deps -- -D warnings` and
-    //   // verify zero missing_docs warnings on stable rust:
-    //   let output = std::process::Command::new("cargo")
-    //       .arg("+stable").arg("doc").arg("--workspace").arg("--no-deps")
-    //       .env("RUSTDOCFLAGS", "-D missing_docs")
-    //       .current_dir(/* workspace root */)
-    //       .output()
-    //       .unwrap();
-    //   assert!(output.status.success(),
-    //       "missing_docs sweep failed; stderr:\n{}",
-    //       String::from_utf8_lossy(&output.stderr));
-    //
-    // OBSERVABLE consequence: every public surface has docstring
-    // coverage. End-to-end pin per pim-2 §3.6b — would FAIL if any
-    // surface remained undocumented.
-    unimplemented!("G20-B wires full missing_docs sweep pin");
+    use std::path::Path;
+    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("workspace root resolves two levels up")
+        .to_path_buf();
+
+    let output = std::process::Command::new("cargo")
+        .arg("doc")
+        .arg("--workspace")
+        .arg("--no-deps")
+        .env("RUSTDOCFLAGS", "-D missing_docs")
+        .current_dir(&workspace_root)
+        .output()
+        .expect("cargo doc invocation should not fail to spawn");
+    assert!(
+        output.status.success(),
+        "G20-B phase-2-backlog §8.3 architectural pin: workspace-wide \
+         missing_docs sweep MUST pass at Phase-3 close.\n\
+         stderr:\n{}\n\
+         stdout:\n{}",
+        String::from_utf8_lossy(&output.stderr),
+        String::from_utf8_lossy(&output.stdout),
+    );
+}
+
+fn scan_for_escape_hatch(root: &std::path::Path, violators: &mut Vec<String>) {
+    let mut stack: Vec<std::path::PathBuf> = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if matches!(name, "target" | "node_modules" | ".git") {
+                continue;
+            }
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+                continue;
+            }
+            // Skip test-side meta files that document the rule itself.
+            let path_str = path.to_string_lossy();
+            if path_str.contains("/tests/") || path_str.contains("\\tests\\") {
+                continue;
+            }
+            let Ok(src) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            if src.contains("#[allow(missing_docs)]") || src.contains("#![allow(missing_docs)]") {
+                violators.push(path.display().to_string());
+            }
+        }
+    }
 }
 
 /// C-14 architectural pin (G20-B Phase-3 close).

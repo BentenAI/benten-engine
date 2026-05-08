@@ -142,6 +142,10 @@ impl SlowTransformGate {
 }
 
 impl ReloadCoordinator {
+    /// Construct a fresh `ReloadCoordinator` with zero in-flight
+    /// calls + an empty subscriber list. The devserver creates one
+    /// per process; tests that drive reload semantics may construct
+    /// their own.
     #[must_use]
     pub const fn new() -> Self {
         Self {
