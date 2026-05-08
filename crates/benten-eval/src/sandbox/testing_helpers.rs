@@ -125,53 +125,114 @@ pub fn testing_revoke_cap_mid_call(
     Ok(())
 }
 
-/// ESC-10 helper SURFACE: simulate a host-fn dispatching back into
-/// the engine (the nested-dispatch attack pattern). G17-A1 ships
-/// the SURFACE; G20-A1 wave-8a wires the body to drive the actual
-/// nested-dispatch adversarial fixture.
+/// ESC-10 helper: simulate a host-fn dispatching back into the
+/// engine (the nested-dispatch attack pattern). The simulation
+/// shape stamps the [`EscDefenseState`] with the "guest active +
+/// re-entry observed" markers a real attack would produce, so a
+/// caller can then invoke
+/// [`crate::sandbox::escape_defenses::run_esc7_check`] (the
+/// fuel-refill-via-re-entry vector ESC-10 maps to in the
+/// EscDefenseState matrix per audit-5 finding #2 + the inline
+/// narrative at `sandbox_escape_attempts_denied.rs::
+/// sandbox_escape_reentrancy_via_host_fn_denied`) and assert the
+/// typed `SandboxError::EscapeAttempt(Esc7FuelRefillViaReEntry)`
+/// fires.
 ///
-/// **Phase-2b D19-RESOLVED:** nested dispatch is denied by typed
-/// error (`SandboxError::NestedDispatchDenied`); ESC-10 closure
-/// asserts the typed error fires for the adversarial case where a
-/// host-fn callback attempts `Engine::call`. G17-A1 returns the
-/// marker error so the un-ignored G20-A1 body has a stable hook.
-///
-/// # Errors
-/// Returns [`HelperSurfaceNotYetWired`] — G20-A1 wave-8a fills in
-/// the body to construct an adversarial host-fn dispatch + assert
-/// `SandboxError::NestedDispatchDenied`.
-pub fn testing_call_engine_dispatch() -> Result<(), HelperSurfaceNotYetWired> {
-    Err(HelperSurfaceNotYetWired {
-        reason: "testing_call_engine_dispatch: G20-A1 wave-8a wires the \
-                 adversarial host-fn dispatch fixture per phase-3-backlog \
-                 §7.3.A.7 ESC-10 closure. SURFACE shipped at G17-A1 wave-5b."
-            .to_string(),
-    })
+/// **Phase-3 G21-T3 fill (audit-5 ESC-10 carry):** prior to G21-T3
+/// the helper returned [`HelperSurfaceNotYetWired`] as a structural-
+/// hook stub; this fill drives the EscDefenseState transition that
+/// matches what a real nested-dispatch attempt would observe. The
+/// production defense path (D19-RESOLVED — no host-fn callback
+/// re-enters `Engine::call`) is asserted at the engine layer by
+/// `crates/benten-engine/tests/integration/esc_subscribe_integration.rs::
+/// helper_smoke_call_engine_dispatch_routes_through_production_call`
+/// + by the absence of a re-entry path in `Engine::call` itself.
+/// This eval-side helper exists so the eval-only adversarial
+/// integration tests can drive the EscDefenseState transition
+/// without taking an engine dependency.
+pub fn testing_call_engine_dispatch(state: &mut EscDefenseState) {
+    // Mirror the EscDefenseState transitions the host-fn
+    // trampoline would observe if a guest module invoked a
+    // host-fn that itself attempted nested dispatch:
+    //   1. Guest is currently executing (enter_guest).
+    //   2. The host-fn dispatched back, observed as a re-entry.
+    state.enter_guest();
+    state.re_entry_count = state.re_entry_count.saturating_add(1);
 }
 
-/// ESC-14 helper SURFACE: inject a forged cap-claim WAT section
-/// into a fixture so the integration test can assert the engine
-/// rejects forged claims at module-validation time.
+/// ESC-14 helper: inject a forged cap-claim custom-section into a
+/// wasm module's bytes so the integration test can assert the
+/// engine SILENTLY IGNORES the forged section (cap derivation is
+/// EXCLUSIVELY from the call-time manifest per ESC-14 closure).
 ///
-/// **G17-A1 surface shape:** takes the fixture bytes + the forged
-/// claim text; returns the modified fixture bytes ready to feed
-/// `Sandbox::execute`. G17-A1 returns the marker error (un-wired
-/// SURFACE); G20-A1 wave-8a fills in the body.
+/// Takes the well-formed wasm module bytes + the forged claim text
+/// (e.g. `"requires:host:*:*"`); returns the bytes with a
+/// custom-section appended. The wasm binary format permits
+/// arbitrary `id=0` "custom sections" trailing the well-formed
+/// module body; they are spec-mandated to be IGNORED by execution
+/// AND by cap derivation. This helper's appended section is exactly
+/// what a malicious module-author would attempt — engineering risk
+/// being a future wasmtime feature OR a codegen mistake reads the
+/// section + treats it as authoritative.
 ///
-/// # Errors
-/// Returns [`HelperSurfaceNotYetWired`] — G20-A1 wave-8a wires
-/// the body that mutates the fixture's custom-section table.
+/// **Phase-3 G21-T3 fill (audit-5 ESC-14 carry):** prior to G21-T3
+/// the helper returned [`HelperSurfaceNotYetWired`]; this fill
+/// mutates the bytes per the WASM custom-section grammar
+/// (`SECTION_ID_CUSTOM=0` + LEB128 size + LEB128 name-len +
+/// name-bytes + payload). Mirrors the inline `append_forged_custom_section`
+/// in `crates/benten-eval/tests/sandbox_esc14_forged_cap_claim_section.rs`.
+///
+/// **Caveat:** the input bytes MUST be a well-formed wasm module
+/// (header + valid section sequence). If the input is malformed,
+/// the appended section is appended verbatim — wasmtime will
+/// reject the resulting module at parse time, which is also a
+/// valid outcome (the forged cap-claim is not consulted because
+/// the module was rejected before any cap derivation).
+#[must_use]
 pub fn testing_inject_forged_cap_claim_section(
-    _fixture_bytes: &[u8],
-    _forged_claim: &str,
-) -> Result<Vec<u8>, HelperSurfaceNotYetWired> {
-    Err(HelperSurfaceNotYetWired {
-        reason: "testing_inject_forged_cap_claim_section: G20-A1 wave-8a wires \
-                 the WAT custom-section mutator + integrates with \
-                 sandbox_esc14_forged_cap_claim_section.rs. SURFACE shipped at \
-                 G17-A1 wave-5b."
-            .to_string(),
-    })
+    fixture_bytes: &[u8],
+    forged_claim: &str,
+) -> Vec<u8> {
+    // Custom-section format: id=0 (1 byte) + section size (LEB128 u32) +
+    // name length (LEB128 u32) + name (UTF-8) + payload bytes.
+    fn leb128_u32(mut x: u32, out: &mut Vec<u8>) {
+        loop {
+            let mut byte = (x & 0x7f) as u8;
+            x >>= 7;
+            if x != 0 {
+                byte |= 0x80;
+            }
+            out.push(byte);
+            if x == 0 {
+                break;
+            }
+        }
+    }
+
+    let name = b"benten:forged_caps";
+    let payload = forged_claim.as_bytes();
+
+    let mut name_len_buf: Vec<u8> = Vec::new();
+    leb128_u32(u32::try_from(name.len()).unwrap_or(u32::MAX), &mut name_len_buf);
+
+    // Section content = [name_len_LEB128 | name_bytes | payload_bytes].
+    let mut content: Vec<u8> = Vec::with_capacity(name_len_buf.len() + name.len() + payload.len());
+    content.extend_from_slice(&name_len_buf);
+    content.extend_from_slice(name);
+    content.extend_from_slice(payload);
+
+    let mut size_buf: Vec<u8> = Vec::new();
+    leb128_u32(
+        u32::try_from(content.len()).unwrap_or(u32::MAX),
+        &mut size_buf,
+    );
+
+    let mut out: Vec<u8> = Vec::with_capacity(fixture_bytes.len() + 1 + size_buf.len() + content.len());
+    out.extend_from_slice(fixture_bytes);
+    out.push(0u8); // SECTION_ID_CUSTOM
+    out.extend_from_slice(&size_buf);
+    out.extend_from_slice(&content);
+    out
 }
 
 /// ESC-7 helper SURFACE: register a host-fn that simulates the
@@ -285,5 +346,61 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    /// G21-T3 ESC-10 helper fill: `testing_call_engine_dispatch`
+    /// drives the EscDefenseState through the nested-dispatch
+    /// attack-pattern transition (enter_guest + re_entry_count bump).
+    #[test]
+    fn testing_call_engine_dispatch_simulates_nested_dispatch_attack_state() {
+        let mut state = EscDefenseState::new();
+        assert!(!state.guest_active, "fresh state must have guest_active=false");
+        assert_eq!(state.re_entry_count, 0);
+
+        testing_call_engine_dispatch(&mut state);
+
+        assert!(
+            state.guest_active,
+            "ESC-10 helper MUST flip guest_active=true"
+        );
+        assert_eq!(
+            state.re_entry_count, 1,
+            "ESC-10 helper MUST bump re_entry_count to 1"
+        );
+    }
+
+    /// G21-T3 ESC-14 helper fill:
+    /// `testing_inject_forged_cap_claim_section` appends a custom
+    /// section to the wasm bytes per the WASM custom-section grammar.
+    #[test]
+    fn testing_inject_forged_cap_claim_section_appends_custom_section() {
+        // Minimal well-formed wasm header (magic + version).
+        let bytes: Vec<u8> = vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00];
+        let forged = testing_inject_forged_cap_claim_section(&bytes, "requires:host:*:*");
+
+        // Original bytes preserved verbatim at the head.
+        assert!(
+            forged.starts_with(&bytes),
+            "forged bytes MUST preserve the original module bytes verbatim"
+        );
+        // Trailing section starts with id=0 (custom-section).
+        assert_eq!(
+            forged[bytes.len()],
+            0u8,
+            "appended section MUST be id=0 (custom-section)"
+        );
+        // The forged claim payload is present in the trailing bytes.
+        let tail = &forged[bytes.len()..];
+        assert!(
+            tail.windows(b"requires:host:*:*".len())
+                .any(|w| w == b"requires:host:*:*"),
+            "forged-claim payload MUST be embedded in the appended section"
+        );
+        // The section's name marker is present.
+        assert!(
+            tail.windows(b"benten:forged_caps".len())
+                .any(|w| w == b"benten:forged_caps"),
+            "forged section MUST carry the `benten:forged_caps` name marker"
+        );
     }
 }
