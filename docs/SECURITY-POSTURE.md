@@ -306,7 +306,7 @@ The cold-start cost is bounded by the D22 tiered numerics (≤2 ms p95 / ≤5 ms
 **Wave-8h adjacencies — EMIT broadcast + IVM Algorithm B production registration.** The wave-8h audit-gap fixes addressed two surfaces orthogonal to the SANDBOX wasmtime-invocation axis but adjacent to Compromise #4's overall "Phase-2 primitives are wired end-to-end" posture:
 
 - **EMIT engine wrapper** at `crates/benten-engine/src/primitive_host.rs::emit_event` was previously a documented no-op (`Phase-1 EMIT is a no-op at the host level`); a handler with a standalone EMIT primitive (no backing WRITE) silently dropped the payload. Wave-8h wired EMIT to publish through a dedicated `EmitBroadcast` channel (separate from the `ChangeBroadcast` channel which carries storage WRITE events). Public API: `Engine::subscribe_emit_events`. The two channels are intentionally separate — extending `benten_graph::ChangeEvent` with an emit variant would conflate two distinct event shapes (storage commits vs handler-emitted events) that currently serve different downstream consumers (IVM views + cap-recheck pipelines vs ad-hoc observers + log shippers). Phase-3 may converge them when iroh sync introduces a unified P2P event stream; until then the two channels stay distinct and `EmitBroadcast` lives in `crates/benten-engine/src/emit_broadcast.rs`.
-- **IVM Algorithm B production registration** at `crates/benten-engine/src/engine_views.rs` was previously a `ContentListingView` fallback for every `Strategy::B`-declared user view (the view ran on the Phase-1 ContentListingView shape regardless of the spec's declared Strategy::B). Wave-8h wired the dispatch to construct `AlgorithmBView::for_id(spec.id())` for the 5 canonical view IDs that `AlgorithmBView` supports natively. Coverage compromise: non-canonical user-defined view IDs retain the `ContentListingView` fallback (the AlgorithmBView codebase is hand-written for the 5 known view shapes; generalised user-defined Algorithm B handlers are a Phase-3 lift). Documented in `docs/INVARIANT-COVERAGE.md` Algorithm B note. The user-facing impact today: declaring `Strategy::B` on a non-canonical view ID does NOT fail loud; it transparently uses ContentListingView. A drift-detector for "declared B but registered ContentListingView" is on the Phase-3 backlog: see [`docs/future/phase-3-backlog.md` §5.1 IVM Algorithm B drift-detector + non-canonical-view generalization](../docs/future/phase-3-backlog.md).
+- **IVM Algorithm B production registration** at `crates/benten-engine/src/engine_views.rs` was previously a `ContentListingView` fallback for every `Strategy::B`-declared user view (the view ran on the Phase-1 ContentListingView shape regardless of the spec's declared Strategy::B). Wave-8h wired the dispatch to construct `AlgorithmBView::for_id(spec.id())` for the 5 canonical view IDs that `AlgorithmBView` supports natively. **Phase-3 G15-A + G15-B + R5 wave-9 W9-T1 closure:** the non-canonical-view fallback is RETIRED — `Algorithm::register` (and the budget-aware sibling `Algorithm::register_with_budget`) instantiates a generic single-loop kernel (`GenericKernel`) for non-canonical view ids keyed on `(label_pattern, projection)`. The Phase-2b coverage compromise no longer applies: non-canonical view IDs no longer silently coerce to `ContentListingView`. The drift-detector proptest harness (`crates/benten-ivm/tests/algorithm_b_drift_detector.rs`, 5 pins × 1 000 cases each) is the verification surface for "incremental updates equal from-scratch rebuild" parity across the merged kernel. Closure tracking + cross-references in [`docs/future/phase-3-backlog.md` §5.1](../docs/future/phase-3-backlog.md).
 
 **Cross-refs.** `docs/SANDBOX-LIMITS.md` (axes + per-platform cold-start); `docs/HOST-FUNCTIONS.md` (host-fn surface); `.addl/phase-2b/00-implementation-plan.md` §3 G7-A/B/C + §5 D3 / D17 / D20 / D21 / D22 / D24 + §sec-pre-r1-12 / sec-pre-r1-13; `.addl/phase-2b/wave-8-brief.md` §8b + §8h + §8d-narrative; `.addl/phase-2b/r4b-followup-primitive-executor-docs-vs-code-audit.json` (the post-impl audit that surfaced the wire-through gaps).
 
@@ -848,12 +848,19 @@ deny-from-either-layer wins. The closure is pinned by:
   empty list unconditionally).
 
 The G15-B drift-detector proptest harness at
-`crates/benten-ivm/tests/algorithm_b_drift_detector.rs` is reserved as
-a separate G15-B closure surface; it does not pin Compromise #11's
-G15-A closure (which stands on the materialization gate alone). When
-G15-B lands + un-ignores the proptest, this section grows a
-follow-on cite naming
-`prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern`.
+`crates/benten-ivm/tests/algorithm_b_drift_detector.rs` is the
+companion verification surface for the merged
+`benten_ivm::algorithm_b::Algorithm::register` kernel post-G15-B; it
+does not pin Compromise #11's G15-A closure (which stands on the
+materialization gate alone). The 5 active proptest pins are
+`prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern`,
+`prop_budget_trip_state_propagation_consistent`,
+`prop_rebuild_after_stale_returns_view_to_fresh`,
+`prop_drift_detector_observes_label_pattern_extension`,
+`prop_drift_detector_reports_one_path_errors_other_succeeds`. R5
+wave-9 W9-T1 retensed the harness's headline pin description in
+`docs/future/phase-3-backlog.md` §5.1 alongside the
+`Algorithm::register_with_budget` budget-knob lift.
 
 **Shape (historical).** Phase 2a G4-A Option C threading gated
 `Engine::read_view` at the per-view level: a caller who held a
