@@ -323,15 +323,11 @@ Estimated touch size: ~300-600 LOC of test infrastructure across `bindings/napi/
 
 **Touch size:** ~5-10 LOC at the host-fn build site, plus 1 regression test asserting `kv:write` from a SANDBOX module against a `from_snapshot_blob` engine surfaces `E_BACKEND_READ_ONLY` (mirrors the Phase-2b `delete_node` regression test landed alongside r6-r3-arch-1 in the engine-side integration suite).
 
-### 6.1 ESC-16 fingerprint-collapse complete defense
+### 6.1 ESC-16 fingerprint-collapse complete defense — CLOSED at Phase-3 wave-5c
 
-**Phase 2b state:** Wave-8b wired the SANDBOX runtime (Store + Linker + Instance + fuel/memory/wallclock + epoch ticker). 9 of 16 ESC vectors fully fire typed errors. ESC-16 (wallclock fingerprint collapse) has a `.wat` fixture committed but R6 wasmtime-sandbox-auditor (`r6-wsa-3`) flagged that the test bypasses it with an inline shape that doesn't exercise the fingerprint-collapse property end-to-end. Wave-8j-cleanup didn't address this.
+**Phase 2b state (historical):** Wave-8b wired the SANDBOX runtime (Store + Linker + Instance + fuel/memory/wallclock + epoch ticker). 9 of 16 ESC vectors fully fire typed errors. ESC-16 (wallclock fingerprint collapse) had a `.wat` fixture committed but R6 wasmtime-sandbox-auditor (`r6-wsa-3`) flagged that the test bypassed it with an inline shape that didn't exercise the fingerprint-collapse property end-to-end. Wave-8j-cleanup didn't address this.
 
-**Phase 3 target:** Re-author the ESC-16 test to drive the committed `.wat` fixture through the full wasmtime pipeline + assert the fingerprint-collapse defense fires before guest-observable wallclock divergence. Engine-side memory-read helper for the assertion shape.
-
-**Why Phase 3:** The engine-side memory-read helper needed by the assertion is a Phase-3 surface (wasm32-unknown-unknown browser-target requires a different memory-introspection path than native wasmtime; a unified helper is cleaner once §1.1 + §4.1 land).
-
-**Touch size:** ~80-150 LOC.
+**Phase-3 closure (wave-5c, ratified 2026-05-07):** ESC-16 fingerprint-collapse is now FULLY WIRED end-to-end. The closure narrative + 6-task implementation + production-call-site audit live in §6.1-followup below. The end-to-end pin at `crates/benten-eval/tests/sandbox_esc_runtime_arms_e2e.rs::esc_16_runtime_arm_fires_after_threshold_time_host_fn_calls` drives `Sandbox::execute` through real `wasmtime::Module` + `Instance::call` and asserts observable typed-error firing per pim-2 §3.6b. The below-threshold pin (`esc_16_silent_below_threshold_two_time_calls_pass`) proves the defense is silent on legitimate use. SECURITY-POSTURE.md ESC-16 row updated to "Fully wired end-to-end" at Phase-3 wave-5c. r1-wsa-4 MAJOR closed end-to-end.
 
 #### 6.1-followup ESC runtime-arm wiring — **CLOSED at wave-5c** (recall of G17-A1's claimed BLOCKER closure)
 
@@ -363,15 +359,11 @@ Estimated touch size: ~300-600 LOC of test infrastructure across `bindings/napi/
 - §6.4 Dedicated `E_SANDBOX_STACK_OVERFLOW` (closed at G17-A1 — runtime-wired piece)
 - pim-N codification candidate: SHAPE-not-SUBSTANCE 4th-of-4 wave recurrence (G14-C / G15-A / G18-A / G17-A1) hits the 3+-recurrence threshold per `feedback_3_plus_recurrence_deep_sweep`. Recommend codifying as pim-18 §3.6e at next dispatch-conventions amendment: implementer briefs MUST include explicit "production call site enumeration" pre-flight item. Wave-5c PR followed this discipline pre-emptively (see the §6.1-followup brief). The wave-5c PR's pre-merge grep audit (`grep -rn 'EscapeAttemptMarker\b\|run_all_checks' crates/benten-eval/src/ | grep -v 'cfg(test)'` returns matches in `crates/benten-eval/src/primitives/sandbox.rs` host-fn trampolines, not test contexts) is the load-bearing pin against the SHAPE-not-SUBSTANCE shape.
 
-### 6.4 Dedicated `E_SANDBOX_STACK_OVERFLOW` typed variant (operator-UX)
+### 6.4 Dedicated `E_SANDBOX_STACK_OVERFLOW` typed variant — CLOSED at Phase-3 G17-A1 wave-5b
 
-**Phase 2b state:** R6 wasmtime-sandbox-auditor `r6-wsa-8` flagged: `Trap::StackOverflow` from wasmtime currently folds into `E_SANDBOX_MODULE_INVALID` reason string in `crates/benten-eval/src/sandbox/trap_to_typed.rs`. R6-FP Group 1 (PR #62) narrowed the reason string within the existing variant (interim disposition); the agent offered to land a dedicated `E_SANDBOX_STACK_OVERFLOW` typed variant as a follow-up, estimated as ~20-site cascade across drift detector + catalog tables + narrative docs (~50-150 LOC).
+**Phase 2b state (historical):** R6 wasmtime-sandbox-auditor `r6-wsa-8` flagged: `Trap::StackOverflow` from wasmtime currently folds into `E_SANDBOX_MODULE_INVALID` reason string in `crates/benten-eval/src/sandbox/trap_to_typed.rs`. R6-FP Group 1 (PR #62) narrowed the reason string within the existing variant (interim disposition); the agent offered to land a dedicated `E_SANDBOX_STACK_OVERFLOW` typed variant as a follow-up, estimated as ~20-site cascade across drift detector + catalog tables + narrative docs (~50-150 LOC).
 
-**Phase 3 target:** Mint dedicated `E_SANDBOX_STACK_OVERFLOW` variant in `crates/benten-errors/src/`; update `trap_to_typed::map_call_error` priority resolver to route `Trap::StackOverflow` to it; update ERROR-CATALOG.md; update SECURITY-POSTURE.md ESC-5 matrix entry; regenerate `errors.generated.ts`; update test pin in `sandbox_escape_attempts_denied.rs:170` (`sandbox_escape_recursive_call_overflow_traps`).
-
-**Why Phase 3 (not 2b):** Operator-UX improvement; current narrowed-reason-string interim is functionally correct (the reason text reads "stack overflow" so operators see the cause). The dedicated variant is a clean catalog-correctness win but the cascade footprint is larger than typical wave-8 tail-cleanup scope. Bundles cleanly with §6.1 ESC-16 + §6.2 D26 in a single Phase-3 SANDBOX-runtime-maturity wave.
-
-**Touch size:** ~50-150 LOC across catalog + narrative docs + test pin.
+**Phase-3 closure (G17-A1 wave-5b):** dedicated `ErrorCode::SandboxStackOverflow` variant + `E_SANDBOX_STACK_OVERFLOW` catalog code minted in `crates/benten-errors/src/lib.rs` + atomic 4-surface update per dispatch-conventions §3.5g (lib.rs enum + as_str arm + `stable_shape.rs::ALL_CATALOG_VARIANTS` + `docs/ERROR-CATALOG.md` E_SANDBOX_STACK_OVERFLOW section + `packages/engine/src/errors.generated.ts::ESandboxStackOverflow` regenerated). Routing arm at `crates/benten-eval/src/sandbox/trap_to_typed.rs::map_call_error`: `wasmtime::Trap::StackOverflow` → `SandboxError::StackOverflow { max_wasm_stack }` typed variant in `crates/benten-eval/src/primitives/sandbox.rs`. `bindings/napi/src/error_envelope.rs::engine_err_envelope_json` surfaces `err.code()` so the typed `E_SANDBOX_STACK_OVERFLOW` propagates through the JSON envelope without per-variant special-case. SECURITY-POSTURE.md ESC-5 row updated to cite the dedicated variant. End-to-end + cascade-completeness test pins at `crates/benten-eval/tests/sandbox_stack_overflow.rs::sandbox_stack_overflow_routes_to_e_sandbox_stack_overflow_typed_variant` + `..._traps_via_dedicated_variant`. r1-wsa-7 BLOCKER + r6-wsa-8 BELONGS-NAMED-NOW deferral both retired.
 
 ### 6.3 D18 live-cap-check callback wire-through (ESC-9 cap-revoke mid-call) — **CLOSED at wave-5c**
 
@@ -786,7 +778,7 @@ R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift 
 
 ---
 
-### 7.13 Phase-3 attack-surface matrix authoring (sec-r4r2-2 / sec-r4r1-4 matrix-prose half)
+### 7.13 Phase-3 attack-surface matrix authoring (sec-r4r2-2 / sec-r4r1-4 matrix-prose half) — CLOSED at Phase-3 R5 wave-9 W9-T2
 
 **Origin:** R4-R2 security-auditor lens finding `sec-r4r2-2` MAJOR (escalation of R4-R1 `sec-r4r1-4` MAJOR; root R1 finding `sec-r1-7`). The R1 lens cited that "enumerating attack vectors ahead of implementation" was the discipline that gave the Phase-2b ESC matrix its structural value. Phase-3 has TWO halves to that work:
 
@@ -799,17 +791,14 @@ R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift 
 
 **DISAGREE-WITH-EXPLANATION rebuttal of the R1 "must land before R5" framing:** the matrix's role is meta-completeness at R6 phase-close (a checklist that every named attack surface has at least one test pin driving it), NOT the R5 implementation target itself. The Phase-2b ESC matrix's effectiveness came from per-vector test enumeration (closed by half (1) above), not from matrix-as-doc presence at R5 dispatch time. The matrix-prose document is a **completeness audit** running over R5 corpus, not a **plan input** that R5 implementers consume. Item (1) is the load-bearing deliverable for R5-time defense; item (2) is the load-bearing deliverable for R6-time completeness. The two halves are separable.
 
-**What landing requires (when this opens at Phase-3 R6 phase-close):**
-- Author `.addl/phase-3/attack-surface-matrix-phase-3.md` enumerating Phase-3 attack surfaces:
-  - Atrium peer-handshake (signature tampering, replay window, DID forgery)
-  - UCAN proof-chain transport (window-widening, authority-widening, revocation propagation)
-  - Sync-replica trust-boundary (Loro op-log Inv-13 violation, MST-diff CID-byte mismatch, HLC skew injection)
-  - Device-DID attestation (envelope downgrade, parent-chain forgery, freshness-window replay)
-  - iroh-relay metadata (peer-DID disclosure, connection-metadata observability — Compromise #22)
-- For each surface, cite the test pin(s) that drive its concrete attack vectors. If a surface has no driving test pin, FILE A FINDING (matrix's primary completeness role).
-- Cross-reference from `docs/SECURITY-POSTURE.md` named compromises section.
+**Closure (Phase-3 R5 wave-9 W9-T2):** matrix authored as `docs/ATTACK-SURFACE-MATRIX.md` (tracked-tree destination, NOT `.addl/` per the W9-T2 brief decision — keeps the matrix visible to OSS contributors + cite-drift detector coverage). Two-part structure:
 
-**Touch size:** ~150-300 LOC matrix doc + ~10-20 cross-ref edits in `docs/SECURITY-POSTURE.md` + R6 council brief addendum citing matrix as completeness input. Risk: low (purely additive observer doc).
+1. **Part 1 — Phase-2b SANDBOX ESC matrix** (re-issued for cross-reference; authoritative status table remains `docs/SECURITY-POSTURE.md` Compromise #4 to avoid two-source drift).
+2. **Part 2 — Phase-3 P2P-sync attack surfaces** with the 6 sub-sections enumerated (§2.1 Atrium peer-handshake / §2.2 UCAN proof-chain / §2.3 sync-replica trust-boundary / §2.4 device-DID attestation / §2.5 iroh-relay metadata / §2.6 Atrium join + revocation-ordering / §2.7 iroh peer-id derivation).
+
+For each surface row, the matrix cites the file:symbol test pin (per dispatch-conventions §3.5b HARDENED). All cited test pins were grep-verified to exist at HEAD before merge. Audit-cycle instructions for R6 phase-close completeness checks live at the doc's "Audit instructions" section. Cross-reference added to `docs/SECURITY-POSTURE.md` under the close compromise table.
+
+**Touch size (actual):** ~280 LOC matrix doc + 10 LOC cross-ref edit in `docs/SECURITY-POSTURE.md`. Within plan envelope.
 
 **Cross-references:**
 - Phase-3 R4 R2 security lens finding `sec-r4r2-2` (origin finding + DISAGREE narrative); see `.addl/phase-3/r4-r2-security.json` (gitignored; orchestrator-tree only)

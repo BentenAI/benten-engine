@@ -60,6 +60,16 @@ The detailed text for each numbered Compromise follows below. Phase-2b
 additions (#14-#16) appear at the end of the Named Compromises
 section. Phase-3 addition (#22) appears at the very end.
 
+**Attack-surface matrix cross-reference.** The doc-level enumeration of
+every named attack surface (Phase-2b SANDBOX ESC-1..16 + Phase-3 P2P-sync
+surfaces) lives at [`docs/ATTACK-SURFACE-MATRIX.md`](ATTACK-SURFACE-MATRIX.md)
+(authored at Phase-3 R5 wave-9 W9-T2 closing
+`docs/future/phase-3-backlog.md` §7.13 sec-r4r2-2 / sec-r4r1-4). This
+file remains the authoritative single-source-of-truth for the
+per-compromise prose; the matrix complements it by serving as the
+meta-completeness audit destination at every R6 phase-close (a checklist
+that every named attack surface has at least one driving test pin).
+
 ## Named Compromises
 
 ### Compromise #6 — BLAKE3 128-bit effective collision resistance
