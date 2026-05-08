@@ -7,7 +7,7 @@
 //!    a partial-revoke (only ONE subscription path's cap removed)
 //!    cancels the affected path while leaving unrelated subscriptions
 //!    delivering. Exercises the production cap-recheck arm at
-//!    `crates/benten-eval/src/primitives/subscribe.rs:1238-1247`.
+//!    `crates/benten-eval/src/primitives/subscribe.rs::publish_change_event_with_labels`.
 //!
 //! 2. **corr-minor-1 — UCAN forged-sig pin** — forge a UCAN token
 //!    with a tampered signature → run through `ucan_validate_chain`
@@ -20,7 +20,7 @@
 //!    typed-CALL op + assert the result Map shape threads through.
 //!    The integration of typed-CALL ops INSIDE a registered subgraph
 //!    (where a CALL Node carries `target: "engine:typed:..."`) is
-//!    pinned at `tests/typed_call_engine_dispatch.rs::ed25519_sign_then_verify_round_trip_via_dispatch_typed_call`
+//!    pinned at `crates/benten-engine/tests/typed_call_engine_dispatch.rs::ed25519_sign_then_verify_round_trip_via_dispatch_typed_call`
 //!    via the eval-side `call::execute` fork; this file's test
 //!    drives the engine-layer entry point.
 //!
