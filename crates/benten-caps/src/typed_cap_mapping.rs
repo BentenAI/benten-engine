@@ -32,7 +32,7 @@
 
 /// Closed-set typed-cap groups corresponding to the 8 distinct
 /// `cap:typed:*` strings produced by
-/// [`benten_eval::TypedCallOp::required_cap`]. Mirrors the closed
+/// `benten_eval::TypedCallOp::required_cap`. Mirrors the closed
 /// set; extending requires adding a variant here AND a corresponding
 /// `TypedCallOp::required_cap` arm.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,7 +58,7 @@ pub enum TypedCapGroup {
 impl TypedCapGroup {
     /// Stable scope-string identifier for this typed-cap group —
     /// matches the `cap:typed:*` form
-    /// [`benten_eval::TypedCallOp::required_cap`] returns.
+    /// `benten_eval::TypedCallOp::required_cap` returns.
     #[must_use]
     pub fn cap_string(self) -> &'static str {
         match self {
