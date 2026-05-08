@@ -957,9 +957,9 @@ fn dispatch_typed_call_public_napi_entry_gates_on_capability_policy() {
     ]);
     let result = engine.dispatch_typed_call_public(TypedCallOp::Ed25519Sign, &input);
 
-    let err = result
-        .err()
-        .expect("dispatch_typed_call_public MUST deny when policy denies cap:typed:crypto-sign — without this gate the napi entry point bypasses cap policy entirely (BLOCKER-1)");
+    let err = result.expect_err(
+        "dispatch_typed_call_public MUST deny when policy denies cap:typed:crypto-sign — without this gate the napi entry point bypasses cap policy entirely (BLOCKER-1)",
+    );
     let code = match &err {
         EngineError::Other { code, .. } => code.clone(),
         other => panic!("expected EngineError::Other{{TypedCallCapDenied,..}}; got {other:?}"),
