@@ -47,6 +47,15 @@ slow-timeout = { period = "60s", terminate-after = 3 }
 filter = 'test(=in_memory_observationally_equivalent_to_redb)'
 slow-timeout = { period = "60s", terminate-after = 6 }
 
+# proptest WAIT-TTL no-silent-expiry property test exceeds 180s on
+# macos-x86_64 @ 1.95.0 (Intel Mac under MSRV; ~175ms/case × 1024 cases ≈
+# 180s — right at the boundary, slow runners cross it). `terminate-after
+# = 6` gives 360s wall clock — same per-test design as
+# `in_memory_observationally_equivalent_to_redb` above.
+[[profile.ci.overrides]]
+filter = 'test(=prop_wait_ttl_no_silent_expiry_in_resume)'
+slow-timeout = { period = "60s", terminate-after = 6 }
+
 # G20-B Phase-3-close §8.3 architectural pin invokes `cargo doc
 # --workspace --no-deps` from a test process. macos-x86_64 @ 1.95.0
 # reproducibly timed out at default 180s (macos-arm64 + linux runners
