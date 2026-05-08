@@ -106,13 +106,41 @@ impl HostFnDenialKind {
     }
 }
 
+/// Per-call context threaded through [`map_call_error`].
+///
+/// Pre-R4b (NS-T49) refactor: the prior 6-arg positional signature
+/// (`err, consumed_fuel, wallclock_limit_ms, memory_limit_bytes,
+/// fuel_limit, max_wasm_stack`) was caller-error-prone — the four
+/// `u64` limits were trivial to swap at the call site. Bundling
+/// limits + consumed-fuel into a named struct makes call sites
+/// self-documenting + survives any future addition of context fields
+/// (e.g. table-element budgets) without breaking the public-arity
+/// signature. The `err` itself stays a separate parameter because it
+/// is the operative input being classified, not threaded context.
+#[derive(Debug, Clone, Copy)]
+pub struct MapCallErrorContext {
+    /// Fuel consumed by the failed call (used for `FuelExhausted.consumed`).
+    pub consumed_fuel: u64,
+    /// Per-call wallclock limit in milliseconds (used for
+    /// `WallclockExceeded.limit_ms` + epoch-interrupt mapping).
+    pub wallclock_limit_ms: u64,
+    /// Module memory ceiling in bytes (used for
+    /// `MemoryExhausted.limit` when the limiter rejects growth).
+    pub memory_limit_bytes: u64,
+    /// Fuel ceiling configured for the call (used for
+    /// `FuelExhausted.limit`).
+    pub fuel_limit: u64,
+    /// `max_wasm_stack` ceiling configured for the call (used for
+    /// `StackOverflow.max_wasm_stack` per Phase-3 G17-A1 wave-5b).
+    pub max_wasm_stack: u64,
+}
+
 /// Map a wasmtime `anyhow::Error` from `Instance::call` / `TypedFunc::call`
 /// into a typed [`SandboxError`].
 ///
-/// The `consumed_fuel` + `wallclock_limit_ms` + `memory_limit_bytes` +
-/// `max_wasm_stack` parameters supply context for the variant
-/// payloads; the executor captures these per-call and threads them
-/// through.
+/// The [`MapCallErrorContext`] supplies the per-call limits + consumed
+/// fuel that variant payloads need; the executor captures these per
+/// call and threads them through.
 ///
 /// Order of recognition (NOT priority — that's `resolve_priority`):
 /// 1. Host-fn typed-error marker (sec-r1 D7) — bypasses trap path.
@@ -125,14 +153,14 @@ impl HostFnDenialKind {
 ///    we map to wallclock).
 /// 5. Anything else → `ModuleInvalid` with the original Display string.
 #[must_use]
-pub fn map_call_error(
-    err: wasmtime::Error,
-    consumed_fuel: u64,
-    wallclock_limit_ms: u64,
-    memory_limit_bytes: u64,
-    fuel_limit: u64,
-    max_wasm_stack: u64,
-) -> SandboxError {
+pub fn map_call_error(err: wasmtime::Error, ctx: MapCallErrorContext) -> SandboxError {
+    let MapCallErrorContext {
+        consumed_fuel,
+        wallclock_limit_ms,
+        memory_limit_bytes,
+        fuel_limit,
+        max_wasm_stack,
+    } = ctx;
     // 1. Host-fn typed-error marker first (sec-r1 D7).
     if let Some(marker) = err.downcast_ref::<HostFnDenialMarker>() {
         return marker.kind.clone().into_sandbox_error();
@@ -241,6 +269,17 @@ pub fn map_call_error(
 mod tests {
     use super::*;
 
+    /// Standard test context: 30s wallclock / 64 MiB memory / 1M fuel /
+    /// 512 KiB max_wasm_stack. Used for cases where the variant payload
+    /// is not the assertion target.
+    const STD_CTX: MapCallErrorContext = MapCallErrorContext {
+        consumed_fuel: 0,
+        wallclock_limit_ms: 30_000,
+        memory_limit_bytes: 64 * 1024 * 1024,
+        fuel_limit: 1_000_000,
+        max_wasm_stack: 524_288,
+    };
+
     #[test]
     fn host_fn_denial_marker_round_trips_cap_denied() {
         let marker = HostFnDenialMarker {
@@ -249,7 +288,7 @@ mod tests {
             },
         };
         let err = wasmtime::Error::from(marker);
-        let mapped = map_call_error(err, 0, 30_000, 64 * 1024 * 1024, 1_000_000, 524_288);
+        let mapped = map_call_error(err, STD_CTX);
         assert!(matches!(mapped, SandboxError::HostFnDenied { .. }));
     }
 
@@ -261,7 +300,7 @@ mod tests {
             },
         };
         let err = wasmtime::Error::from(marker);
-        let mapped = map_call_error(err, 0, 30_000, 64 * 1024 * 1024, 1_000_000, 524_288);
+        let mapped = map_call_error(err, STD_CTX);
         assert!(matches!(mapped, SandboxError::HostFnNotFound { .. }));
     }
 
@@ -271,14 +310,20 @@ mod tests {
             kind: HostFnDenialKind::NestedDispatchDenied,
         };
         let err = wasmtime::Error::from(marker);
-        let mapped = map_call_error(err, 0, 30_000, 64 * 1024 * 1024, 1_000_000, 524_288);
+        let mapped = map_call_error(err, STD_CTX);
         assert!(matches!(mapped, SandboxError::NestedDispatchDenied));
     }
 
     #[test]
     fn out_of_fuel_trap_routes_fuel_exhausted() {
         let err = wasmtime::Error::from(wasmtime::Trap::OutOfFuel);
-        let mapped = map_call_error(err, 1_000_000, 30_000, 64 * 1024 * 1024, 1_000_000, 524_288);
+        let mapped = map_call_error(
+            err,
+            MapCallErrorContext {
+                consumed_fuel: 1_000_000,
+                ..STD_CTX
+            },
+        );
         assert!(matches!(
             mapped,
             SandboxError::FuelExhausted {
@@ -291,7 +336,13 @@ mod tests {
     #[test]
     fn interrupt_trap_routes_wallclock() {
         let err = wasmtime::Error::from(wasmtime::Trap::Interrupt);
-        let mapped = map_call_error(err, 0, 1000, 64 * 1024 * 1024, 1_000_000, 524_288);
+        let mapped = map_call_error(
+            err,
+            MapCallErrorContext {
+                wallclock_limit_ms: 1000,
+                ..STD_CTX
+            },
+        );
         assert!(matches!(
             mapped,
             SandboxError::WallclockExceeded { limit_ms: 1000 }
@@ -301,7 +352,7 @@ mod tests {
     #[test]
     fn memory_oob_trap_routes_module_invalid() {
         let err = wasmtime::Error::from(wasmtime::Trap::MemoryOutOfBounds);
-        let mapped = map_call_error(err, 0, 30_000, 64 * 1024 * 1024, 1_000_000, 524_288);
+        let mapped = map_call_error(err, STD_CTX);
         assert!(matches!(mapped, SandboxError::ModuleInvalid { .. }));
     }
 
@@ -314,7 +365,7 @@ mod tests {
         // string; post-G17-A1 the dedicated typed variant carries the
         // `max_wasm_stack` payload.
         let err = wasmtime::Error::from(wasmtime::Trap::StackOverflow);
-        let mapped = map_call_error(err, 0, 30_000, 64 * 1024 * 1024, 1_000_000, 524_288);
+        let mapped = map_call_error(err, STD_CTX);
         assert!(
             matches!(
                 mapped,
@@ -351,7 +402,7 @@ mod tests {
             reason: "test re-entry attempt".to_string(),
         };
         let err = wasmtime::Error::from(marker);
-        let mapped = map_call_error(err, 0, 30_000, 64 * 1024 * 1024, 1_000_000, 524_288);
+        let mapped = map_call_error(err, STD_CTX);
         assert!(matches!(
             mapped,
             SandboxError::EscapeAttempt {
@@ -373,7 +424,7 @@ mod tests {
             }),
         };
         let err = wasmtime::Error::from(marker);
-        let mapped = map_call_error(err, 0, 30_000, 64 * 1024 * 1024, 1_000_000, 524_288);
+        let mapped = map_call_error(err, STD_CTX);
         assert!(matches!(mapped, SandboxError::OutputOverflow(_)));
     }
 }

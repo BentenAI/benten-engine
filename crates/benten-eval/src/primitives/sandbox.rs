@@ -38,7 +38,7 @@ use crate::sandbox::host_fns::{CapAllowlist, HostFnBehavior, HostFnSpec, default
 use crate::sandbox::manifest::{ManifestRef, ManifestRegistry};
 use crate::sandbox::resource_limiter::SandboxResourceLimiter;
 use crate::sandbox::trap_to_typed::{
-    EscapeAttemptMarker, HostFnDenialKind, HostFnDenialMarker, map_call_error,
+    EscapeAttemptMarker, HostFnDenialKind, HostFnDenialMarker, MapCallErrorContext, map_call_error,
 };
 use crate::{AttributionFrame, TraceStep};
 use benten_errors::ErrorCode;
@@ -780,11 +780,13 @@ pub fn execute_with_live_cap_check(
     if let Err(e) = call_result {
         let mapped = map_call_error(
             e,
-            fuel_consumed,
-            config.wallclock_ms,
-            config.memory_bytes,
-            config.fuel,
-            config.max_wasm_stack,
+            MapCallErrorContext {
+                consumed_fuel: fuel_consumed,
+                wallclock_limit_ms: config.wallclock_ms,
+                memory_limit_bytes: config.memory_bytes,
+                fuel_limit: config.fuel,
+                max_wasm_stack: config.max_wasm_stack,
+            },
         );
         return Err(mapped);
     }
