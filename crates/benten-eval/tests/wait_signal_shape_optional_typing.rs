@@ -28,9 +28,11 @@
 use benten_core::Value;
 use benten_errors::ErrorCode;
 use benten_eval::{
-    EvalContext, MockTimeSource, Outcome, SignalShape, SubgraphBuilder, WaitResumeSignal,
+    EvalContext, InMemorySuspensionStore, MockTimeSource, Outcome, SignalShape, SubgraphBuilder,
+    SuspensionStore, WaitResumeSignal,
 };
 use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
+use std::sync::Arc;
 use std::time::Duration;
 
 fn subgraph_with_optional_shape(shape: Option<SignalShape>) -> benten_eval::Subgraph {
@@ -44,13 +46,48 @@ fn subgraph_with_optional_shape(shape: Option<SignalShape>) -> benten_eval::Subg
     sb.build_validated().expect("validation")
 }
 
-#[ignore = "destination: docs/future/phase-3-backlog.md §7.16 — wait_signal_shape_defaults_untyped_accepts_any_value registration-validation flake. Diagnosed at W9-T4 (Phase-3 R5 wave-9): root cause is a downstream race/state-isolation issue in WAIT registration when no signal_shape is set, NOT a coverage-tooling issue. The `serial-globals` nextest override does NOT fire under cargo-llvm-cov (which shells out to `cargo test --tests` rather than `cargo nextest run`), so the test panics intermittently when the underlying race + the serialization-bypass coincide. Fix path is at the registration-validation layer per §7.16, not at the test-harness layer."]
+/// Build an `EvalContext` with a fresh per-test [`InMemorySuspensionStore`]
+/// so the WAIT primitive's metadata side-table is isolated from any
+/// sibling test running concurrently in the same `cargo test` binary.
+///
+/// # §7.16 fix (untyped-shape flake root cause)
+///
+/// Three tests in this file all WAIT on signal name `"go"`, which
+/// derives an identical envelope CID via
+/// `BLAKE3("go")` (see `placeholder_payload_for_signal` in
+/// `crates/benten-eval/src/primitives/wait.rs`). Without an injected
+/// store, each test falls back to
+/// `crate::suspension_store::default_process_store()` — a process-wide
+/// `OnceLock<Arc<InMemorySuspensionStore>>` shared across the whole
+/// test binary. When `cargo test` runs the file's tests in parallel
+/// (the default outside the `serial-globals` nextest test-group, which
+/// `cargo-llvm-cov` does NOT honor since it shells out to plain
+/// `cargo test --tests`), one test's `WaitMetadata{signal_shape: Some(_)}`
+/// wins the last-write race against another test's
+/// `WaitMetadata{signal_shape: None}` under the SAME envelope CID,
+/// flipping the resume-time shape check intermittently.
+///
+/// Threading a fresh store per test eliminates the shared key space.
+/// This also makes the test pass cleanly under `cargo test`,
+/// `cargo nextest run` (with or without serial-globals), and
+/// `cargo-llvm-cov` — i.e. the fix is at the WAIT registration-validation
+/// isolation layer per §7.16, not at the harness layer.
+fn ctx_with_isolated_store() -> EvalContext {
+    let clock = MockTimeSource::at(Duration::ZERO);
+    let store: Arc<dyn SuspensionStore> = Arc::new(InMemorySuspensionStore::new());
+    EvalContext::with_clock(clock).with_suspension_store(store)
+}
+
 #[test]
 fn wait_signal_shape_defaults_untyped_accepts_any_value() {
     // No shape declared → resume accepts any Value payload.
+    //
+    // §7.16 closure: a fresh per-test `InMemorySuspensionStore` isolates
+    // this test from sibling tests in the same binary that suspend on
+    // the same signal-derived envelope CID with a `signal_shape: Some(_)`
+    // payload. See `ctx_with_isolated_store` above.
     let sg = subgraph_with_optional_shape(None);
-    let clock = MockTimeSource::at(Duration::ZERO);
-    let mut ctx = EvalContext::with_clock(clock);
+    let mut ctx = ctx_with_isolated_store();
     let handle = match benten_eval::evaluate(&sg, &mut ctx, Value::unit()) {
         Outcome::Suspended(h) => h,
         other => panic!("must suspend, got {other:?}"),
@@ -75,8 +112,7 @@ fn wait_signal_shape_validates_against_schema_when_set() {
     let shape = SignalShape::map_of([("count", SignalShape::int())]);
     let sg = subgraph_with_optional_shape(Some(shape));
 
-    let clock = MockTimeSource::at(Duration::ZERO);
-    let mut ctx = EvalContext::with_clock(clock);
+    let mut ctx = ctx_with_isolated_store();
 
     let handle = match benten_eval::evaluate(&sg, &mut ctx, Value::unit()) {
         Outcome::Suspended(h) => h,
@@ -103,8 +139,7 @@ fn wait_signal_shape_mismatch_fires_typed_error_routed_on_error() {
     let shape = SignalShape::int();
     let sg = subgraph_with_optional_shape(Some(shape));
 
-    let clock = MockTimeSource::at(Duration::ZERO);
-    let mut ctx = EvalContext::with_clock(clock);
+    let mut ctx = ctx_with_isolated_store();
     let handle = match benten_eval::evaluate(&sg, &mut ctx, Value::unit()) {
         Outcome::Suspended(h) => h,
         other => panic!("must suspend"),

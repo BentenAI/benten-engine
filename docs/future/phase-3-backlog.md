@@ -1230,23 +1230,24 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 
 ---
 
-### 7.16 wait_signal_shape_defaults_untyped_accepts_any_value flake (W9-T4 retense origin)
+### 7.16 wait_signal_shape_defaults_untyped_accepts_any_value flake — CLOSED 2026-05-08 (root cause: shared default_process_store across in-binary tests with colliding signal-derived envelope CIDs)
 
 **Origin (2026-05-07):** §7.5 diagnosis traced the cargo-llvm-cov coverage workflow's intermittent reds to this single test panicking with `untyped shape must accept any Value, got Err(InvRegistration)`. The test asserts that an "untyped shape" (no `signal_shape` property set) accepts any Value at registration time, but the runtime is sometimes returning `Err(InvRegistration)` instead of `Ok(_)` for that case.
 
-**Symptoms:**
-- Intermittent — passes most of the time, fails maybe ~30-50% of runs.
-- Panic site: `crates/benten-eval/tests/wait_signal_shape_optional_typing.rs:64` (the `expect("untyped shape must accept any Value")` line).
-- Aborts the parent `cargo test --tests` invocation, which in turn fails cargo-llvm-cov's coverage workflow.
+**Closure shape (2026-05-08):** root cause is **test isolation against the process-default suspension store**. The three `wait_signal_shape_*` tests all suspend on signal name `"go"`, which derives an identical envelope CID via `crates/benten-eval/src/primitives/wait.rs::placeholder_payload_for_signal` (BLAKE3-hash of the signal name). Without an injected store, `EvalContext::with_clock(...)` falls back to `crates/benten-eval/src/suspension_store.rs::default_process_store` — a process-wide `OnceLock<Arc<InMemorySuspensionStore>>` shared across the whole test binary. When `cargo test` runs the tests in parallel (the default outside the `serial-globals` nextest test-group, which `cargo-llvm-cov` does NOT honor since it shells out to plain `cargo test --tests`), one test's `WaitMetadata{signal_shape: Some(_)}` wins the last-write race against another test's `WaitMetadata{signal_shape: None}` under the SAME envelope CID, flipping the resume-time shape check intermittently.
 
-**Likely root cause categories (to investigate during fix):**
-- Race in WAIT registration validation when no `signal_shape` is set (default-untyped path).
-- Test isolation issue — adjacent test in the same `cargo test` binary mutating shared state.
-- Property-test seed sensitivity if the "any Value" generator is randomized.
+**Fix shape:** added a `ctx_with_isolated_store()` helper in the test file that builds an `EvalContext` with a fresh per-test `InMemorySuspensionStore` injected via `with_suspension_store(...)`. The fresh store eliminates the shared key space — each test's WAIT metadata lives in its own isolated `Arc<dyn SuspensionStore>` regardless of the harness scheduling. The previously-`#[ignore]`'d `wait_signal_shape_defaults_untyped_accepts_any_value` is now active and passes 50/50 consecutive runs locally.
 
-**Touch size:** ~10-30 LOC investigation + fix; depends on which root cause category.
+**Bundled in same PR — same root cause class:** `crates/benten-eval/tests/wait_timeout.rs` exhibited an identical pre-existing flake under shared-store collisions. `wait_signal_arrives_after_timeout_fires_e_wait_timeout` (timeout=100ms) and `wait_signal_arrives_before_timeout_resumes_normally` (timeout=1000ms) both suspend on signal name `"user_resumes"` → identical envelope CID → last-write race on `WaitMetadata.timeout_ms`. Reproduced ~30% red on origin/main (6/20 fail rate measured 2026-05-08). Same `ctx_with_isolated_store(clock)` helper applied; 30/30 consecutive runs pass post-fix. The brief's "bundle with any other wait-signal-shape stabilization work" guidance applies — both share the `default_process_store` + signal-name-keyed envelope-CID-collision pattern.
 
-**Phase target:** Phase-3 R5 anytime (ahead of the coverage workflow being expected green for v1-assess). Bundle with any other wait-signal-shape stabilization work.
+**Verification:** `cargo test -p benten-eval --test wait_signal_shape_optional_typing` 60/60 consecutive runs PASS (3 active + 1 still-ignored §7.17 routing-classification). `cargo test -p benten-eval --test wait_timeout` 30/30 consecutive runs PASS. Full benten-eval test surface (`cargo test -p benten-eval --tests --features benten-eval/testing`, 129 binaries) passes with no regressions.
+
+**Cross-references:**
+- `crates/benten-eval/tests/wait_signal_shape_optional_typing.rs::ctx_with_isolated_store` (per-test isolated-store helper for `signal_shape` collisions)
+- `crates/benten-eval/tests/wait_timeout.rs::ctx_with_isolated_store` (per-test isolated-store helper for `timeout_ms` collisions; same closure pattern)
+- `crates/benten-eval/src/primitives/wait.rs::placeholder_payload_for_signal` (the signal-name → envelope-CID derivation)
+- `crates/benten-eval/src/suspension_store.rs::default_process_store` (the process-wide singleton that was the shared-state source)
+- `.config/nextest.toml::serial-globals` (test-group override; still honored under nextest, but the in-test isolated store now removes the dependency on serialization scheduling for correctness)
 
 ---
 
