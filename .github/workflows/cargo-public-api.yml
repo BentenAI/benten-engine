@@ -40,7 +40,10 @@ jobs:
           fetch-depth: 0   # need full history for main..HEAD diff
 
       - name: Install Rust nightly (cargo-public-api requires nightly rustdoc-json)
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # nightly via @nightly
+        # SHA pin is the dtolnay/rust-toolchain action code; `toolchain: nightly`
+        # below is what selects the actual nightly compiler. SHA is from the
+        # `stable` branch head (Dependabot-rotated) — action code is branch-agnostic.
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # action SHA from stable; toolchain: nightly below
         with:
           toolchain: nightly
 
