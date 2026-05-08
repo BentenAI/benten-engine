@@ -25,38 +25,53 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G20-B wave-8b — ARCHITECTURE.md FINAL 10-crate transition narrative"]
 fn architecture_md_lists_10_crates_with_benten_id_and_benten_sync() {
-    // C-15 + arch-r1-3 FINAL pin. G20-B implementer wires this:
-    //
-    //   let arch_md_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //       .join("..").join("..").join("docs").join("ARCHITECTURE.md");
-    //   let arch_md = std::fs::read_to_string(&arch_md_path).unwrap();
-    //
-    //   // The doc must enumerate all 10 crates by name:
-    //   let required_crates = [
-    //       "benten-errors", "benten-core", "benten-graph", "benten-ivm",
-    //       "benten-caps", "benten-eval", "benten-engine", "benten-dsl-compiler",
-    //       "benten-id", "benten-sync",
-    //   ];
-    //   for c in &required_crates {
-    //       assert!(arch_md.contains(c),
-    //           "ARCHITECTURE.md must list crate '{}' at G20-B FINAL", c);
-    //   }
-    //
-    //   // benten-sync must be marked native-only per CLAUDE.md baked-in #17:
-    //   // (find the benten-sync section + verify the constraint is named)
-    //   assert!(arch_md.contains("native-only") || arch_md.contains("native only"),
-    //       "ARCHITECTURE.md must declare benten-sync as native-only \
-    //        per CLAUDE.md baked-in #17");
-    //
-    //   // The intermediate "in-flight" callouts from G14-A1 + G16-A are
-    //   // GONE (replaced by the durable 10-crate narrative):
-    //   assert!(!arch_md.contains("Phase-3 in flight"),
-    //       "G20-B must replace in-flight callouts with durable narrative");
+    // C-15 + arch-r1-3 FINAL pin. G20-B-wired (wave-8b).
     //
     // OBSERVABLE consequence: the 8→10 crate transition lands as the
     // canonical narrative. Defends against the failure mode where
     // intermediate callouts persist after the phase closes.
-    unimplemented!("G20-B wires ARCHITECTURE.md FINAL 10-crate transition narrative pin");
+    let arch_md_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("docs")
+        .join("ARCHITECTURE.md");
+    let arch_md = std::fs::read_to_string(&arch_md_path).unwrap();
+
+    // The doc must enumerate all 10 crates by name:
+    let required_crates = [
+        "benten-errors",
+        "benten-core",
+        "benten-graph",
+        "benten-ivm",
+        "benten-caps",
+        "benten-eval",
+        "benten-engine",
+        "benten-dsl-compiler",
+        "benten-id",
+        "benten-sync",
+    ];
+    for c in &required_crates {
+        assert!(
+            arch_md.contains(c),
+            "ARCHITECTURE.md must list crate '{c}' at G20-B FINAL"
+        );
+    }
+
+    // benten-sync must be marked native-only per CLAUDE.md baked-in #17:
+    assert!(
+        arch_md.contains("native-only")
+            || arch_md.contains("native only")
+            || arch_md.contains("NATIVE-ONLY"),
+        "ARCHITECTURE.md must declare benten-sync as native-only \
+         per CLAUDE.md baked-in #17"
+    );
+
+    // The intermediate "in-flight" callouts from G14-A1 + G16-A are
+    // GONE (replaced by the durable 10-crate narrative):
+    assert!(
+        !arch_md.contains("Phase-3 in flight"),
+        "G20-B must replace in-flight callouts with durable narrative; \
+         residual 'Phase-3 in flight' callout still present"
+    );
 }
