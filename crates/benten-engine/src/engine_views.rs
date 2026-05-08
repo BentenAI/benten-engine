@@ -218,6 +218,43 @@ impl Engine {
         self.read_view_with(view_id, ReadViewOptions::strict())
     }
 
+    /// Phase-3 G20-A3 (carry-ivm-r6-3 closure): resolve the read-gate
+    /// label hint for `view_id`. Canonical hand-written ids resolve
+    /// via [`benten_ivm::hardcoded_label_for_id`]; user-defined views
+    /// consult the in-memory `user_view_input_labels` map populated at
+    /// [`Self::register_user_view`] time; the legacy `content_listing_`
+    /// string-prefix is preserved as a final fallback for pre-canonical-
+    /// registry tests (the canonical 5 views are auto-registered at
+    /// `EngineBuilder::assemble`).
+    ///
+    /// Pre-G20-A3 the prefix-strip yielded `""` for any user-registered
+    /// view whose id did not start with `content_listing_`,
+    /// short-circuiting the cap gate (carry-ivm-r6-3 / r4-r2-ivm-3).
+    /// Post-G20-A3 the registry is the source of truth — closes
+    /// Compromise #11 sub-block "Phase-2b R6 Round-3 surfacing —
+    /// read_view_with view-id-prefix heuristic".
+    fn resolve_read_view_label_hint(&self, view_id: &str) -> String {
+        let normalized = view_id.strip_prefix("system:ivm:").unwrap_or(view_id);
+        if let Some(hc) = benten_ivm::hardcoded_label_for_id(normalized) {
+            return hc.to_string();
+        }
+        let registry_label = {
+            let guard = self
+                .inner
+                .user_view_input_labels
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            guard.get(normalized).cloned()
+        };
+        registry_label.unwrap_or_else(|| {
+            view_id
+                .strip_prefix("content_listing_")
+                .or_else(|| view_id.strip_prefix("system:ivm:content_listing_"))
+                .unwrap_or("")
+                .to_string()
+        })
+    }
+
     /// Read an IVM view with explicit options.
     ///
     /// Consults the live IVM subscriber (philosophy g7-ep-2): the healthy
@@ -263,21 +300,10 @@ impl Engine {
         if !self.ivm_enabled {
             return Err(EngineError::SubsystemDisabled { subsystem: "ivm" });
         }
-        // Derive a label from the view id for the read-gate. Only
-        // content_listing_<label> views carry a Phase-1 label hint;
-        // other view ids pass through unchanged. r6-r3-ivm-2 BOUNDED
-        // disclosure: this prefix-only heuristic means the 4 hardcoded-
-        // label canonical views + ALL user-defined views bypass the
-        // `check_read` hook on the view-level read path. Bounded by the
-        // Phase-2b cap-policy backends (NoAuth / GrantBacked); see
-        // `docs/SECURITY-POSTURE.md` Compromise #11 sub-block "Phase-2b
-        // R6 Round-3 surfacing — read_view_with view-id-prefix
-        // heuristic" for the full disclosure + Phase-3 lift plan.
-        let label_hint = view_id
-            .strip_prefix("content_listing_")
-            .or_else(|| view_id.strip_prefix("system:ivm:content_listing_"))
-            .unwrap_or("")
-            .to_string();
+        // Phase-3 G20-A3 (carry-ivm-r6-3 closure / phase-3-backlog
+        // §7.3.A.3): derive read-gate label from the view registry
+        // (closes Compromise #11 sub-block "view-id-prefix heuristic").
+        let label_hint = self.resolve_read_view_label_hint(view_id);
         if let Some(policy) = self.policy.as_deref()
             && !label_hint.is_empty()
         {

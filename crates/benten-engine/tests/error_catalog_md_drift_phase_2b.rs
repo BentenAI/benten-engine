@@ -47,16 +47,23 @@ fn workspace_root() -> PathBuf {
         .join("..")
 }
 
+// Phase-3 G20-A3 wave-8a — list calibrated to ACTUAL landed codes
+// (the original R3-E list under-specified `E_STREAM_PRODUCER_TIMEOUT`
+// + `E_STREAM_OUTPUT_LIMIT` + `E_WAIT_TTL_EXPIRED` + `E_WAIT_TTL_INVALID`
+// — those names never landed in the ErrorCode enum at
+// `crates/benten-errors/src/lib.rs`. The actual names that DID land
+// are below; calibration matches the enum to the catalog so the
+// drift detector pins what shipped, not what the R3-E author
+// imagined would ship).
 const PHASE_2B_NEW_CODES: &[&str] = &[
-    // STREAM (G6-A)
+    // STREAM (G6-A) — landed names
     "E_STREAM_BACKPRESSURE_DROPPED",
-    "E_STREAM_PRODUCER_TIMEOUT",
-    "E_STREAM_OUTPUT_LIMIT",
+    "E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED",
+    "E_STREAM_CLOSED_BY_PEER",
     // SUBSCRIBE (G6-A)
     "E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED",
     "E_SUBSCRIBE_PATTERN_INVALID",
-    // SANDBOX (G7-A) — cr-g7a-mr-3 fix-pass: names mirror landed
-    // ErrorCode::* enum at crates/benten-errors/src/lib.rs.
+    // SANDBOX (G7-A)
     "E_SANDBOX_FUEL_EXHAUSTED",
     "E_SANDBOX_MEMORY_EXHAUSTED",
     "E_INV_SANDBOX_OUTPUT",
@@ -73,9 +80,6 @@ const PHASE_2B_NEW_CODES: &[&str] = &[
     "E_ENGINE_CONFIG_INVALID",
     // Module manifest (G10-B)
     "E_MODULE_MANIFEST_CID_MISMATCH",
-    // WAIT TTL (G6-A / G12-E; D12)
-    "E_WAIT_TTL_EXPIRED",
-    "E_WAIT_TTL_INVALID",
 ];
 
 fn read_error_catalog() -> String {
@@ -93,7 +97,6 @@ fn read_error_catalog() -> String {
 
 /// `error_catalog_drift_phase_2b_codes_present` — R2 §6 + dx-r1-2b-2.
 #[test]
-#[ignore = "Phase 3 — Phase-2b error-catalog drift body deferred per docs/future/phase-3-backlog.md §7.3.A.5 (G6 + G10-B + G12-E + G11-2b-A all landed)"]
 fn error_catalog_drift_phase_2b_codes_present() {
     let doc = read_error_catalog();
 
@@ -120,7 +123,6 @@ fn error_catalog_drift_phase_2b_codes_present() {
 /// new code's section must contain a `fix-hint` line within ~30 lines
 /// of the code header.
 #[test]
-#[ignore = "Phase 3 — Phase-2b error-catalog fix-hint format-enforcement body deferred per docs/future/phase-3-backlog.md §7.3.A.5"]
 fn error_catalog_phase_2b_codes_carry_fix_hints() {
     let doc = read_error_catalog();
     let lines: Vec<&str> = doc.lines().collect();
@@ -140,8 +142,15 @@ fn error_catalog_phase_2b_codes_carry_fix_hints() {
 
         let scan_end = (start + 30).min(lines.len());
         let has_hint = lines[start..scan_end].iter().any(|l| {
-            l.to_ascii_lowercase().contains("fix-hint")
-                || l.to_ascii_lowercase().contains("fix hint")
+            let lower = l.to_ascii_lowercase();
+            lower.contains("fix-hint")
+                || lower.contains("fix hint")
+                // T7 + ERROR-CATALOG.md convention uses `**Fix:**`
+                // (markdown bold) as the operator-actionable hint
+                // marker; semantic-equivalent to "fix-hint" — both
+                // acceptable per the spec evolution.
+                || lower.contains("**fix:**")
+                || lower.contains("- **fix:**")
         });
         if !has_hint {
             codes_without_hint.push(*code);

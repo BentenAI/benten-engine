@@ -5,75 +5,67 @@
 //! crossing the boundary.
 //!
 //! Pin source: plan §4 + wsa-D17.
-//! Iterations: 10k (per R2 §3).
+//! Iterations: 10k cases (the property test is purely in-memory + cheap).
+//!
+//! **G20-A1 wave-8a** (Phase 3): body un-ignored. Drives the production
+//! `CountedSink` directly with random write-batch schedules.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
-#![allow(unused_imports, dead_code, unused_variables)]
+#![cfg(not(target_arch = "wasm32"))]
 
 use proptest::prelude::*;
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(10_000))]
 
-    /// `prop_sandbox_output_size_strictly_bounded` — consumed <= limit
-    /// for any write-batch schedule.
+    /// `prop_sandbox_output_size_strictly_bounded` — `consumed <= limit`
+    /// holds for any write-batch schedule. EITHER all batches fit
+    /// (consumed == sum of batch sizes), OR a batch trips and
+    /// `consumed` reflects only the writes that succeeded BEFORE the
+    /// trap.
     ///
-    /// Strategy:
-    ///   - Random output_max_bytes limit in [1, 1_000_000].
-    ///   - Random write-batch sizes (Vec<usize>) summing to potentially
-    ///     more than the limit.
-    ///   - Replay the writes through a real CountedSink; collect the
-    ///     observed `consumed` value AT THE END.
-    ///   - Assert: consumed <= limit always.
-    ///
-    /// The test also pins that EITHER:
-    ///   (a) all writes fit (sum of batch sizes <= limit) → all
-    ///       writes succeeded + consumed == sum;
-    ///   (b) some write would have crossed the boundary → that write
-    ///       trapped + consumed reflects only the writes that
-    ///       succeeded BEFORE the trap (deterministic boundary).
-    ///
-    /// Defends against arithmetic-overflow attacks on the AtomicU64
-    /// counter (e.g., a write of usize::MAX bytes that would
-    /// silently wrap consumed to 0).
+    /// Defends against arithmetic-overflow attacks on the consumed
+    /// counter: a write of `usize::MAX` bytes that would silently wrap
+    /// `consumed` to 0 fails this property (saturating arithmetic in
+    /// `write_n_bytes` ensures `consumed` saturates AT limit + 1
+    /// rather than wrapping).
     #[test]
-    #[ignore = "Phase 3 — output bounded proptest body deferred per docs/future/phase-3-backlog.md §7.3.A.1 (10k-case property pin)"]
     fn prop_sandbox_output_size_strictly_bounded(
         limit in 1u64..1_000_000u64,
-        batches in proptest::collection::vec(0usize..200_000, 1..50),
+        batches in proptest::collection::vec(0u64..200_000u64, 1..50),
     ) {
-        // R5 G7-A pseudo:
-        //   let mut sink = CountedSink::new(SandboxOutputBudget {
-        //       consumed: AtomicU64::new(0),
-        //       limit,
-        //   });
-        //   let mut consumed = 0u64;
-        //   let mut tripped = false;
-        //   for n in &batches {
-        //       let bytes = vec![0u8; *n];
-        //       match sink.write(&bytes) {
-        //           Ok(()) => consumed = consumed.saturating_add(*n as u64),
-        //           Err(Inv7Trap { .. }) => { tripped = true; break; }
-        //       }
-        //   }
-        //   prop_assert!(consumed <= limit);
-        //   if !tripped {
-        //       prop_assert_eq!(consumed, batches.iter().sum::<usize>() as u64);
-        //   }
-        let _ = (limit, batches);
-        // R4-FP-A — `prop_assume!(false)` DISCARDS the case (silent
-        // vacuous-pass after un-ignore); `prop_assert!(false, ...)`
-        // actually fails the case, preserving fail-fast intent
-        // (rust-test-reviewer.json tq-2b-3).
+        use benten_eval::sandbox::CountedSink;
+
+        let mut sink = CountedSink::new(limit);
+        let mut tripped = false;
+        let mut sum_written: u64 = 0;
+        for n in &batches {
+            match sink.write_n_bytes(*n, "test_host_fn") {
+                Ok(()) => sum_written = sum_written.saturating_add(*n),
+                Err(_overflow) => {
+                    tripped = true;
+                    break;
+                }
+            }
+        }
+
+        // Property 1: consumed never exceeds limit.
         prop_assert!(
-            false,
-            "Phase 3 — body deferred per docs/future/phase-3-backlog.md \
-             §7.3.A.1 (G7-C engine integration shipped end-to-end at \
-             tag phase-2b-close 3d0f018; proptest body lands Phase 3 \
-             first-wave CI-hygiene pass). Write the \
-             output-strictly-bounded property body (replace this \
-             prop_assert!(false) with the consumed-vs-limit assertion \
-             described in the file pseudo)."
+            sink.consumed() <= limit,
+            "CountedSink invariant: consumed ({}) MUST NOT exceed \
+             limit ({}); batches={:?}",
+            sink.consumed(),
+            limit,
+            batches
         );
+
+        // Property 2: when no trap fired, consumed == Σ(written).
+        if !tripped {
+            prop_assert_eq!(
+                sink.consumed(),
+                sum_written,
+                "no-trap path: consumed must equal sum of accepted batches"
+            );
+        }
     }
 }

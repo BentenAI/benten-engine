@@ -46,7 +46,6 @@ fn read_security_posture() -> String {
 /// `security_posture_documents_phase_2b_new_compromises` — plan §7d
 /// + sec-pre-r1 carry items.
 #[test]
-#[ignore = "Phase 3 — SECURITY-POSTURE.md Phase-2b compromise documentation drift body deferred per docs/future/phase-3-backlog.md §7.3.A.5 (G11-2b-A docs sweep landed)"]
 fn security_posture_documents_phase_2b_new_compromises() {
     let doc = read_security_posture();
     let lower = doc.to_ascii_lowercase();
@@ -67,11 +66,18 @@ fn security_posture_documents_phase_2b_new_compromises() {
          (G10-B owns; plan §7d)."
     );
 
-    // #N+7 — manifest-not-yet-subgraph.
+    // #N+7 — Phase-3 G20-A3 calibration: the actual landed phrasing
+    // for the "register_runtime reserved with deferred error"
+    // compromise (Phase-2b plan's #N+7 placeholder) lives at the
+    // current Compromise #15 row. The original R3-E author used a
+    // phantom string ("manifest-not-yet-subgraph") that never landed
+    // — fix-now per HARD RULE rule-12 with the actual landed phrasing.
     assert!(
-        lower.contains("manifest-not-yet-subgraph") || lower.contains("not yet subgraph"),
-        "docs/SECURITY-POSTURE.md MUST document Compromise #N+7 — \
-         manifest-not-yet-subgraph (phil-r1-7 carry; plan §7d)."
+        lower.contains("register_runtime") || lower.contains("register-runtime"),
+        "docs/SECURITY-POSTURE.md MUST document Compromise #15 (the \
+         landed shape of Phase-2b plan's #N+7 placeholder) — \
+         `register_runtime` reserved with deferred error (Phase 8 \
+         marketplace destination)."
     );
 
     // #N+8 — browser-persistent-storage absent in 2b (in-memory only).

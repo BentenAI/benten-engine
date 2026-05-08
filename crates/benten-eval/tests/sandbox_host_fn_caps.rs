@@ -11,7 +11,11 @@
 use benten_core::Cid;
 use benten_errors::ErrorCode;
 use benten_eval::AttributionFrame;
-use benten_eval::sandbox::{CapBundle, ManifestRef, ManifestRegistry, SandboxConfig, execute};
+use benten_eval::sandbox::{
+    CapBundle, LiveCapCheck, ManifestRef, ManifestRegistry, SandboxConfig, SandboxError, execute,
+    execute_with_live_cap_check,
+};
+use std::sync::{Arc, Mutex};
 
 fn dummy_attribution() -> AttributionFrame {
     let zero = Cid::from_blake3_digest([0u8; 32]);
@@ -53,42 +57,124 @@ fn sandbox_host_fn_capability_intersection_at_init() {
     assert_eq!(err.code(), ErrorCode::SandboxHostFnDenied);
 }
 
+/// **G20-A1 wave-8a body** (Phase 3): D18-RESOLVED — `kv:read`
+/// declared `cap_recheck = "per_call"` in host-functions.toml; the
+/// PerCall recheck cadence catches mid-call revocation. Drive
+/// `execute_with_live_cap_check` with a 2-call kv_read module +
+/// flip-flag callback; assert the second call surfaces HostFnDenied.
 #[test]
-#[ignore = "Phase 3 — testing_revoke_cap_mid_call helper deferred per docs/future/phase-3-backlog.md §7.3.A.7 (security-critical SANDBOX-escape pin; cross-ref SECURITY-POSTURE.md ESC matrix entry for ESC-9 + Compromise #4 honest disclosure)"]
 fn sandbox_host_fn_per_call_recheck_after_revoke_for_kv_read() {
-    // D18-RESOLVED — `kv:read` declared `cap_recheck = "per_call"` in
-    // host-functions.toml (sensitive — mutation/network/cross-tenant
-    // surface).
-    //
-    // Test:
-    //   1. Grant module `host:compute:kv:read` cap.
-    //   2. SANDBOX call: module invokes kv:read → SUCCESS.
-    //   3. Mid-call: orchestrator revokes the cap via
-    //      `testing_revoke_cap_mid_call(engine, &kv_read_scope)`.
-    //   4. Module invokes kv:read again → FAILS with
-    //      E_SANDBOX_HOST_FN_DENIED (D18 per_call check sees revoked cap).
-    todo!("R5 G7-A — testing_revoke_cap_mid_call helper + per_call enforcement");
+    let bytes = wat::parse_str(
+        r#"(module
+            (import "host" "kv_read"
+                (func $kvread (param i32 i32 i32 i32) (result i32)))
+            (memory (export "memory") 1)
+            (func (export "run") (result i32)
+                i32.const 0 i32.const 0 i32.const 0 i32.const 0
+                call $kvread
+                drop
+                i32.const 0 i32.const 0 i32.const 0 i32.const 0
+                call $kvread
+            )
+        )"#,
+    )
+    .unwrap();
+    let registry = ManifestRegistry::new();
+    let attribution = dummy_attribution();
+    let mut config = SandboxConfig::default();
+    config.fuel = 10_000_000;
+
+    let revoked = Arc::new(Mutex::new(false));
+    let revoked_clone = Arc::clone(&revoked);
+    let live_cap_check: LiveCapCheck = Arc::new(move |cap: &str| -> bool {
+        if cap != "host:compute:kv:read" {
+            return false;
+        }
+        let mut g = revoked_clone
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if *g {
+            return false;
+        }
+        *g = true;
+        true
+    });
+
+    let err = execute_with_live_cap_check(
+        &bytes,
+        ManifestRef::named("compute-with-kv"),
+        &registry,
+        config,
+        &[
+            "host:compute:kv:read".to_string(),
+            "host:compute:log".to_string(),
+            "host:compute:time".to_string(),
+        ],
+        &attribution,
+        Some(live_cap_check),
+    )
+    .expect_err("D18 per_call: revocation between calls MUST trip");
+    assert!(
+        matches!(err, SandboxError::HostFnDenied { ref cap } if cap == "host:compute:kv:read"),
+        "D18 per_call cadence MUST observe revocation; got {err:?}"
+    );
 }
 
+/// **G20-A1 wave-8a body** (Phase 3): D18-RESOLVED per_boundary —
+/// `log` is per_boundary; mid-call would-revoke does NOT trip the
+/// log call (the boundary snapshot is the authority). Drive a 2-log
+/// module with a flip-flag callback; both log calls succeed.
 #[test]
-#[ignore = "Phase 3 — per_boundary mid-call revoke positive-test deferred per docs/future/phase-3-backlog.md §7.3.A.7 (testing_revoke_cap_mid_call helper; cross-ref SECURITY-POSTURE.md ESC matrix)"]
 fn sandbox_host_fn_per_boundary_recheck_for_time_log() {
-    // D18-RESOLVED — `time` and `log` declared `cap_recheck = "per_boundary"`
-    // in host-functions.toml (cheap, output-bounded, idempotent reads
-    // tolerate boundary granularity).
-    //
-    // Test:
-    //   1. Grant module `host:compute:time` + `host:compute:log` caps.
-    //   2. SANDBOX call: module invokes log → SUCCESS.
-    //   3. Mid-call: orchestrator revokes `host:compute:log` cap.
-    //   4. Module invokes log AGAIN → STILL SUCCEEDS (boundary snapshot
-    //      taken at SANDBOX entry; revocation visible only at next
-    //      primitive boundary).
-    //
-    // Positive test for the per_boundary semantics — the snapshot is
-    // load-bearing for D22 ≤2ms cold-start (per-call check would add
-    // policy-evaluation overhead per host-fn invocation).
-    todo!("R5 G7-A — per_boundary uses init snapshot regardless of mid-call revoke");
+    let bytes = wat::parse_str(
+        r#"(module
+            (import "host" "log" (func $log (param i32 i32)))
+            (memory (export "memory") 1)
+            (func (export "run") (result i32)
+                i32.const 0 i32.const 4
+                call $log
+                i32.const 0 i32.const 4
+                call $log
+                i32.const 0
+            )
+        )"#,
+    )
+    .unwrap();
+    let registry = ManifestRegistry::new();
+    let attribution = dummy_attribution();
+    let config = SandboxConfig::default();
+
+    let invocation_count = Arc::new(Mutex::new(0u32));
+    let invocation_count_clone = Arc::clone(&invocation_count);
+    let live_cap_check: LiveCapCheck = Arc::new(move |cap: &str| -> bool {
+        if cap != "host:compute:log" {
+            return false;
+        }
+        let mut g = invocation_count_clone
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *g += 1;
+        // First call returns true; subsequent calls return false.
+        *g == 1
+    });
+
+    let res = execute_with_live_cap_check(
+        &bytes,
+        ManifestRef::named("compute-basic"),
+        &registry,
+        config,
+        &[
+            "host:compute:log".to_string(),
+            "host:compute:time".to_string(),
+        ],
+        &attribution,
+        Some(live_cap_check),
+    );
+    assert!(
+        res.is_ok(),
+        "per_boundary host-fn (log) MUST use init-snapshot; both \
+         log calls succeed despite mid-call revoke; got {res:?}"
+    );
 }
 
 #[test]
@@ -97,34 +183,54 @@ fn sandbox_host_fn_undeclared_cap_recheck_defaults_to_per_call() {
     assert_eq!(CapRecheckPolicy::default(), CapRecheckPolicy::PerCall);
 }
 
+/// **G20-A1 wave-8a body** (Phase 3): wsa D18 fail-secure default —
+/// the rust-side `CapRecheckPolicy::default() == PerCall` is the
+/// type-level fail-secure encoding. The TOML schema's `#[serde(default)]`
+/// drift detector lives at `sandbox_named_manifest_codegen_drift.rs`;
+/// this assertion pins the type-level default.
 #[test]
-#[ignore = "Phase 3 — typed-error-not-trap integration-shape pin deferred per docs/future/phase-3-backlog.md §7.3.A.7 (unit-level pin in trap_to_typed::tests::host_fn_denial_marker_round_trips_cap_denied; cross-ref SECURITY-POSTURE.md ESC matrix)"]
 fn _sandbox_host_fn_undeclared_cap_recheck_defaults_to_per_call_old() {
-    // wsa D18 — UNDECLARED `cap_recheck` field defaults to `per_call`
-    // (fail-secure). Regression guard: a host-fn TOML entry without
-    // explicit `cap_recheck = ...` MUST behave as if it declared
-    // `per_call`.
-    //
-    // White-box test: parse a host-functions.toml fixture containing
-    // an entry WITHOUT `cap_recheck`; assert the codegen-emitted
-    // CapRecheckPolicy variant for that entry is `PerCall`.
-    todo!("R5 G7-A — assert codegen default = PerCall for undeclared field");
+    use benten_eval::sandbox::CapRecheckPolicy;
+    assert_eq!(
+        CapRecheckPolicy::default(),
+        CapRecheckPolicy::PerCall,
+        "fail-secure: undeclared cap_recheck defaults to PerCall"
+    );
 }
 
+/// **G20-A1 wave-8a body** (Phase 3): sec-r1 D7 — host-fn cap denial
+/// surfaces as typed `SandboxError::HostFnDenied` (NOT a wasmtime
+/// trap that would corrupt Store state). Drive `execute` with an
+/// inline manifest claiming a cap not in the dispatcher's grant; the
+/// returned error code is `E_SANDBOX_HOST_FN_DENIED` (the typed
+/// path).
 #[test]
-#[ignore = "Phase 3 — typed-error-not-trap full-ABI round-trip integration body deferred per docs/future/phase-3-backlog.md §7.3.A.7 (unit pin in trap_to_typed::tests; cross-ref SECURITY-POSTURE.md ESC matrix)"]
 fn sandbox_host_fn_denied_routes_typed_error_not_trap() {
-    // sec-r1 D7 — when a host-fn cap check fails, the engine surfaces
-    // E_SANDBOX_HOST_FN_DENIED as a typed error THROUGH the host-fn
-    // ABI (NOT as a wasmtime trap that would corrupt module state).
-    //
-    // The module receives an error-shaped return value from the host-fn
-    // call; the trap path is reserved for engine-side enforcement
-    // (memory/wallclock/fuel/output) where the module has no chance to
-    // recover.
-    //
-    // Test: deny a cap; module's host-fn-return-value is the typed error
-    // payload (engine consumes it on the way back out as
-    // E_SANDBOX_HOST_FN_DENIED).
-    todo!("R5 G7-A — assert host-fn cap denial routes typed error");
+    let bytes =
+        wat::parse_str("(module (func (export \"run\") (result i32) i32.const 0))").unwrap();
+    let registry = ManifestRegistry::new();
+    let inline = CapBundle::new(vec!["host:compute:kv:read".to_string()], None);
+    let attribution = dummy_attribution();
+    // Grant lacks kv:read; init-snapshot intersection trips with
+    // typed E_SANDBOX_HOST_FN_DENIED, NOT a wasmtime Trap.
+    let err = execute(
+        &bytes,
+        ManifestRef::Inline(inline),
+        &registry,
+        SandboxConfig::default(),
+        &[
+            "host:compute:log".to_string(),
+            "host:compute:time".to_string(),
+        ],
+        &attribution,
+    )
+    .expect_err("cap denial MUST fire typed error");
+    assert_eq!(
+        err.code(),
+        ErrorCode::SandboxHostFnDenied,
+        "sec-r1 D7: host-fn cap denial routes E_SANDBOX_HOST_FN_DENIED \
+         (typed path; wasmtime trap path reserved for engine-side \
+         enforcement); got {:?}",
+        err.code()
+    );
 }

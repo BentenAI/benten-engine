@@ -9,42 +9,99 @@
 //!
 //! Pin sources: D18-RESOLVED hybrid `cap_recheck` policy; wsa D18 drift
 //! detector recommendation; r2-test-landscape.md §1.3 sibling row.
+//!
+//! **G20-A1 wave-8a** (Phase 3): body un-ignored. Walks host-functions.toml
+//! `[host_fn.<name>]` entries and asserts each entry's `cap_recheck`
+//! declaration matches the codegen-emitted `default_host_fns()` table.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
-#![allow(unused_imports, dead_code, unused_variables)]
+#![cfg(not(target_arch = "wasm32"))]
 
-// R5 surfaces consumed:
-//   benten_eval::sandbox::manifest::MANIFEST_DEFAULT_BUNDLE
-//       (codegen-emitted const HashMap<&'static str, CapBundle>)
-//   benten_eval::sandbox::manifest::CapBundle
-//   benten_caps::CapScope
-//
-// The TOML source path:
-//   <workspace_root>/host-functions.toml
-//   [manifest."compute-basic"] caps = ["host:compute:time", "host:compute:log"]
-//   [manifest."compute-with-kv"] caps = [..., "host:compute:kv:read"]
+use benten_eval::sandbox::{CapRecheckPolicy, default_host_fns};
 
 #[test]
-#[ignore = "Phase 3 — D2 hybrid + wsa D18 cap_recheck drift detector body deferred per docs/future/phase-3-backlog.md §7.3.A.1"]
 fn sandbox_host_fn_cap_recheck_codegen_drift_total() {
-    // Companion drift detector — every [host_fn.<name>] entry's
-    // `cap_recheck` field MUST round-trip through codegen.
-    //
-    // R5 wires:
-    //   1. Walk every [host_fn.<name>] in host-functions.toml.
-    //   2. For each entry, assert codegen-emitted CapRecheckPolicy
-    //      matches the TOML declaration (default PerCall when absent —
-    //      sibling test
-    //      `sandbox_host_fn_undeclared_cap_recheck_defaults_to_per_call`
-    //      pins the default semantics).
-    //   3. Assert: no codegen CapRecheckPolicy variants exist beyond
-    //      what TOML declared.
-    //
-    // Companion shape to the named-manifest drift; covers the
-    // per-host-fn cap_recheck cadence policy (D18) which is the other
-    // load-bearing drift surface.
-    todo!(
-        "R5 G7-A — walk host-functions.toml [host_fn.*] cap_recheck + assert \
-         codegen agreement"
+    // Walk every [host_fn.<name>] in host-functions.toml. Parse the
+    // `cap_recheck` field (defaulting to PerCall per D18 fail-secure).
+    // Compare to codegen-emitted `default_host_fns()` agreement.
+    let toml_src = std::fs::read_to_string(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("host-functions.toml"),
+    )
+    .expect("workspace host-functions.toml must be readable");
+
+    // Parse [host_fn.<name>] sections with their cap_recheck fields.
+    // The TOML keys may appear quoted (`[host_fn."kv:read"]`) or
+    // unquoted (`[host_fn.time]`); handle both shapes.
+    let mut current_name: Option<String> = None;
+    let mut toml_recheck: std::collections::BTreeMap<String, CapRecheckPolicy> =
+        std::collections::BTreeMap::new();
+    for line in toml_src.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("[host_fn.") {
+            // Strip prefix + trailing `]`. Inner may have surrounding quotes.
+            let inner = trimmed
+                .trim_start_matches("[host_fn.")
+                .trim_end_matches(']');
+            let name = inner.trim_matches('"').to_string();
+            // Default is PerCall (D18 fail-secure) if entry omits the
+            // declaration; pre-populate so we capture undeclared cases.
+            toml_recheck.insert(name.clone(), CapRecheckPolicy::PerCall);
+            current_name = Some(name);
+            continue;
+        }
+        if trimmed.starts_with('[') {
+            // Different section starting (e.g. [manifest.X]).
+            current_name = None;
+            continue;
+        }
+        if let Some(ref name) = current_name
+            && let Some(rest) = trimmed.strip_prefix("cap_recheck")
+        {
+            // `trimmed` after the prefix is e.g. ` = "per_boundary"`.
+            // Walk past whitespace + `=` + whitespace; strip the
+            // surrounding double-quotes from the literal.
+            let after_eq: &str = rest.trim_start().strip_prefix('=').unwrap_or(rest);
+            let value = after_eq.trim().trim_matches('"').to_string();
+            let policy = match value.as_str() {
+                "per_call" => CapRecheckPolicy::PerCall,
+                "per_boundary" => CapRecheckPolicy::PerBoundary,
+                other => panic!(
+                    "host-functions.toml [host_fn.{name}] cap_recheck = \
+                     {other:?}: unknown variant"
+                ),
+            };
+            toml_recheck.insert(name.clone(), policy);
+        }
+    }
+
+    // Compare against codegen-emitted table.
+    let codegen = default_host_fns();
+    assert!(
+        !toml_recheck.is_empty(),
+        "host-functions.toml MUST declare at least one [host_fn.*] entry"
     );
+    for (name, toml_policy) in &toml_recheck {
+        let spec = codegen.get(name).unwrap_or_else(|| {
+            panic!(
+                "host-functions.toml declares [host_fn.{name}] but \
+                 codegen-emitted default_host_fns() does NOT carry an \
+                 entry — drift detector FIRED"
+            )
+        });
+        assert_eq!(
+            &spec.cap_recheck, toml_policy,
+            "host_fn {name:?} cap_recheck drift: TOML={:?} codegen={:?}",
+            toml_policy, spec.cap_recheck
+        );
+    }
+    for codegen_name in codegen.keys() {
+        assert!(
+            toml_recheck.contains_key(codegen_name),
+            "codegen-emitted host_fn {codegen_name:?} is NOT declared \
+             in host-functions.toml — drift detector FIRED"
+        );
+    }
 }

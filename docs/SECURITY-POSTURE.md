@@ -894,18 +894,19 @@ pre-R1 review; dual-layer read-cap section above; G14-D F6
 SUBSCRIBE filtering at delivery boundary.
 
 **Phase-2b R6 Round-3 surfacing — `read_view_with` view-id-prefix
-heuristic (BOUNDED).** R6 Round 3's `r6-r3-ivm-2` finding observes that
-`Engine::read_view_with` (`crates/benten-engine/src/engine_views.rs::read_view_with`)
-derives its `label_hint` for the `CapabilityPolicy::check_read` gate
+heuristic — CLOSED at Phase-3 G20-A3 wave-8a.** R6 Round 3's
+`r6-r3-ivm-2` finding observed that `Engine::read_view_with`
+(`crates/benten-engine/src/engine_views.rs::read_view_with`) derived
+its `label_hint` for the `CapabilityPolicy::check_read` gate
 exclusively by stripping the `content_listing_<label>` (or
 `system:ivm:content_listing_<label>`) prefix from `view_id`. When
-`label_hint` is non-empty the cap-policy `check_read` hook fires and
-`DeniedRead` collapses to an empty list. When `label_hint` is empty
-— which is the case for ALL view ids that don't match the
+`label_hint` was non-empty the cap-policy `check_read` hook fired and
+`DeniedRead` collapsed to an empty list. When `label_hint` was empty
+— which was the case for ALL view ids that didn't match the
 `content_listing_*` prefix, including the 4 canonical hardcoded-label
 views (`capability_grants`, `version_current`, `event_dispatch`,
 `governance_inheritance`) and ALL user-defined views — the
-`check_read` hook is NOT invoked at the view-level read path. The
+`check_read` hook was NOT invoked at the view-level read path. The
 underlying `Subscriber::read_view` still runs and returns Node CIDs.
 A user can register a custom view subscribing to any label (including
 `system:` prefixes — `register_user_view` does not validate input
@@ -921,15 +922,20 @@ denial behaviour is provided by the lower-level CID reads in
 through view-id-derived hints will silently NOT fire on user-defined
 view reads. Default-config users see no impact. The Inv-7 write-side
 system-zone reservation is intact (users cannot WRITE `system:` Nodes)
-— this finding is purely about the read path's check-firing
-asymmetry. **Phase-3 resolution path:** lift `label_hint` extraction
-to use the registered view's `input_pattern_label` (which the engine
-already has when `register_user_view` runs) rather than parsing from
-view_id prefix; pairs with the Compromise #11 per-row gate work above
-since both surfaces want the same `benten-id` typed-principal
-foundation. Doc-only disclosure here per HARD RULE clause-(b);
-destination = this Compromise #11 sub-block (existing + populated
-NOW).
+— this finding was purely about the read path's check-firing
+asymmetry. **Phase-3 G20-A3 wave-8a closure:** `read_view_with` now
+extracts the `label_hint` via a registry helper
+(`Engine::resolve_read_view_label_hint`) that consults
+`benten_ivm::hardcoded_label_for_id` for canonical ids first, then
+the engine's `user_view_input_labels` map (populated at
+`register_user_view` time) for user-defined views, falling back to
+the `content_listing_` prefix-strip only as a final resort for
+pre-canonical-registry tests. End-to-end pin lives at
+`crates/benten-engine/tests/view_id_label_hint_refactor.rs::view_id_to_label_hint_consults_input_pattern_label_not_string_prefix`
+(per dispatch-conventions §3.6b — drives `Engine::read_view_with`
+through a deny-reads-on-`post` cap policy and asserts the silent-deny
+empty-list path fires). Anti-regression for canonical 5-view path at
+`content_listing_views_still_route_through_registry_post_g20a3`.
 
 ---
 

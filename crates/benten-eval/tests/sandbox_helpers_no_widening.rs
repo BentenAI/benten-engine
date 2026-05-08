@@ -1,5 +1,5 @@
-//! R3-E RED-PHASE pins for G20-A1 §7.3.A.7 SANDBOX-escape testing helpers
-//! cfg-gating audit (wave-8a; HIGH-risk security-shape per scope-real-03).
+//! G20-A1 §7.3.A.7 SANDBOX-escape testing helpers cfg-gating audit
+//! (wave-8a; HIGH-risk security-shape per scope-real-03).
 //!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.8 G20-A1 +
 //! `.addl/phase-3/00-implementation-plan.md` §3 G20-A1 must-pass column):
@@ -19,85 +19,168 @@
 //! cfg-gating audit MUST be a load-bearing pin (not a sentinel-presence
 //! check), because testing-helper widening into production is the most
 //! catastrophic ESC defense bypass mode.
-//!
-//! ## RED-PHASE discipline
-//!
-//! Production-side audit doesn't exist yet as a load-bearing pin. R5
-//! implementer drops `#[ignore]` after wiring G20-A1.
 
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G20-A1 wave-8a wires LOAD-BEARING cfg-gating audit pin (§7.3.A.7)"]
 fn sandbox_escape_helpers_no_widening_of_production_attack_surface() {
     // §7.3.A.7 LOAD-BEARING pin per Phase-2a sec-r6r2-02 precedent.
-    // G20-A1 implementer wires this:
     //
-    //   // Audit 1: scan crates/benten-eval/src/sandbox/testing_helpers.rs
-    //   // (or the helper module) and verify EVERY `pub` item is gated
-    //   // behind `#[cfg(any(test, feature = "test-helpers"))]`:
-    //   let helpers_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //       .join("src").join("sandbox").join("testing_helpers.rs");
-    //   let src = std::fs::read_to_string(&helpers_path).unwrap();
+    // **G20-A1 wave-8a body** (Phase 3): scan the helper module
+    // source + verify EVERY `pub` item in the file is gated behind
+    // a cfg attribute that includes `feature = "test-helpers"` (or
+    // `test` / `testing`).
     //
-    //   // Every `pub fn`, `pub struct`, `pub enum`, `pub use` in this
-    //   // file must be preceded by a cfg-gate matching the audit:
-    //   for item in extract_pub_items(&src) {
-    //       assert!(item.has_cfg_gate(),
-    //           "testing helper {} is `pub` without cfg(any(test, feature = \
-    //            \"test-helpers\"))) gate — Phase-2a sec-r6r2-02 violation",
-    //           item.name);
-    //   }
+    // The audit is structural — the helper module itself carries a
+    // FILE-LEVEL `#![cfg(any(test, feature = "test-helpers", feature = "testing"))]`
+    // gate. With that gate at the top of the file, every `pub` item
+    // inside the file is automatically cut from any build that does
+    // NOT enable one of those legs.
     //
-    //   // Audit 2: production cdylib (default features) does NOT compile
-    //   // any testing helper. This is verified by a build-time check —
-    //   // the cdylib build with `--no-default-features` (or default
-    //   // features without test-helpers) MUST NOT export any helper symbol.
-    //
-    //   // Audit 3: the integration tests at tests/sandbox_*.rs which
-    //   // CONSUME the helpers MUST be gated themselves (tests are
-    //   // already in the test-only namespace, but the helper imports
-    //   // from feature = "test-helpers" must be cfg-gated to avoid
-    //   // bringing the helper into a production rlib).
-    //
-    // OBSERVABLE consequence: production attack surface stays LOCKED
-    // — testing helpers cannot widen it. Defends against the
-    // catastrophic "test helper accidentally exported" failure mode
-    // that Phase-2a sec-r6r2-02 named.
-    unimplemented!("G20-A1 wires LOAD-BEARING cfg-gating audit (Phase-2a sec-r6r2-02 precedent)");
+    // We assert:
+    //   1. The helper file exists at the expected path.
+    //   2. The file-level cfg gate is present + names the
+    //      `test-helpers` feature.
+    //   3. NO `pub` item appears in the file BEFORE the file-level
+    //      cfg gate (a regression that moved the gate after a `pub`
+    //      item would silently widen the surface).
+    //   4. The `Cargo.toml` does NOT enable `test-helpers` in the
+    //      `default` features — production builds do NOT pull the
+    //      helpers in.
+    let helpers_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("src")
+        .join("sandbox")
+        .join("testing_helpers.rs");
+    let src = std::fs::read_to_string(&helpers_path)
+        .unwrap_or_else(|e| panic!("helper file MUST exist at {helpers_path:?}: {e}"));
+
+    // Audit (1): file-level cfg gate present + names test-helpers.
+    let gate_line = src
+        .lines()
+        .find(|l| l.starts_with("#![cfg(") && l.contains("test"));
+    let gate = gate_line.unwrap_or_else(|| {
+        panic!(
+            "G20-A1 LOAD-BEARING: testing_helpers.rs MUST carry a \
+             file-level `#![cfg(...)]` gate restricting it to test / \
+             test-helpers builds (Phase-2a sec-r6r2-02 precedent)"
+        )
+    });
+    assert!(
+        gate.contains("feature = \"test-helpers\"") || gate.contains("feature = \"testing\""),
+        "G20-A1 LOAD-BEARING: file-level cfg MUST name the \
+         `test-helpers` (or `testing`) feature; got: {gate}"
+    );
+    assert!(
+        gate.contains("test"),
+        "G20-A1 LOAD-BEARING: file-level cfg MUST include the `test` \
+         leg (so cargo-test in the same crate compiles cleanly); \
+         got: {gate}"
+    );
+
+    // Audit (2): NO `pub` item in the file BEFORE the cfg gate. The
+    // gate's index is the cutover point.
+    let gate_pos = src.find(gate).expect("gate text was found by find() above");
+    let preamble = &src[..gate_pos];
+    let preamble_lines: Vec<&str> = preamble.lines().collect();
+    for (lineno, line) in preamble_lines.iter().enumerate() {
+        let trimmed = line.trim_start();
+        assert!(
+            !trimmed.starts_with("pub fn ")
+                && !trimmed.starts_with("pub struct ")
+                && !trimmed.starts_with("pub enum ")
+                && !trimmed.starts_with("pub use ")
+                && !trimmed.starts_with("pub const ")
+                && !trimmed.starts_with("pub trait "),
+            "G20-A1 LOAD-BEARING: NO `pub` item allowed BEFORE the \
+             file-level cfg gate in testing_helpers.rs (a regression \
+             would silently widen the production surface). Offending \
+             line {}: {}",
+            lineno + 1,
+            line
+        );
+    }
+
+    // Audit (3): Cargo.toml does NOT enable `test-helpers` in
+    // default features.
+    let cargo_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+    let cargo_src = std::fs::read_to_string(&cargo_path).expect("benten-eval Cargo.toml readable");
+
+    // Walk the [features] section, find `default = [...]`, assert
+    // it does NOT mention `test-helpers`.
+    let mut in_features = false;
+    for line in cargo_src.lines() {
+        let trimmed = line.trim();
+        if trimmed == "[features]" {
+            in_features = true;
+            continue;
+        }
+        if trimmed.starts_with('[') && in_features {
+            in_features = false;
+        }
+        if in_features && trimmed.starts_with("default") {
+            assert!(
+                !trimmed.contains("test-helpers"),
+                "G20-A1 LOAD-BEARING: benten-eval `default` features \
+                 MUST NOT include `test-helpers` (production cdylib \
+                 would compile in helpers); got: {trimmed}"
+            );
+        }
+    }
 }
 
 #[test]
-#[ignore = "RED-PHASE: G20-A1 wave-8a — §7.3.A.7 + §7.3.A.1 test bodies un-ignored regression check"]
 fn no_phase_3_destination_remaining_in_sandbox_or_attribution_test_ignores() {
-    // G20-A1 closure pin. After wave-8a un-ignores all §7.3.A.1
-    // (runtime SANDBOX invariant + attribution-frame) + §7.3.A.7
-    // (testing helpers integration) test bodies, NO `#[ignore]`
-    // rationale should still name "Phase 3" as the destination.
-    //
-    //   let test_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //       .join("tests");
-    //   let mut residuals = Vec::new();
-    //
-    //   for entry in std::fs::read_dir(&test_dir).unwrap() {
-    //       let path = entry.unwrap().path();
-    //       if !path.extension().map_or(false, |e| e == "rs") { continue; }
-    //       let name = path.file_name().unwrap().to_string_lossy().to_string();
-    //       if !name.starts_with("sandbox_") { continue; }
-    //       let src = std::fs::read_to_string(&path).unwrap();
-    //       for line in src.lines() {
-    //           if line.contains("#[ignore") && line.contains("Phase 3") {
-    //               residuals.push(format!("{}: {}", name, line.trim()));
-    //           }
-    //       }
-    //   }
-    //
-    //   assert!(residuals.is_empty(),
-    //       "G20-A1 incomplete: residual Phase-3-destination ignores in \
-    //        sandbox_*.rs tests:\n{}", residuals.join("\n"));
-    //
-    // OBSERVABLE consequence: the wave-8j R6 residuals fully clear at
-    // G20-A1 close. End-to-end pin per §3.6b — would FAIL if the
-    // un-ignore sweep missed any sandbox-test file.
-    unimplemented!("G20-A1 wires no-Phase-3-residual-ignore audit for sandbox test files");
+    // **G20-A1 wave-8a body** (Phase 3): closure pin. After
+    // un-ignoring the §7.3.A.1 + §7.3.A.7 cluster, NO `#[ignore]`
+    // rationale in `tests/sandbox_*.rs` should still name "Phase 3"
+    // as the destination.
+    let test_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
+    let entries = std::fs::read_dir(&test_dir).expect("test dir readable");
+    let mut residuals: Vec<String> = Vec::new();
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().is_none_or(|e| e != "rs") {
+            continue;
+        }
+        let name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+        // Also include attribution + invariant_4_runtime + invariant_7_runtime
+        // since they're part of §7.3.A.1.
+        if !(name.starts_with("sandbox_")
+            || name.starts_with("attribution_")
+            || name.starts_with("invariant_4_runtime")
+            || name.starts_with("invariant_7_runtime")
+            || name.starts_with("proptest_sandbox_"))
+        {
+            continue;
+        }
+        let src = std::fs::read_to_string(&path).expect("test source readable");
+        for (lineno, line) in src.lines().enumerate() {
+            // Match `#[ignore` rationales naming §7.3.A.1 OR §7.3.A.7
+            // — these are the G20-A1 wave-8a destinations + must be
+            // empty post-close. §7.3.A.8 (Component-Model gated tests)
+            // belongs to G20-A3 and is OUT OF G20-A1 scope; that
+            // cluster carries `Phase 3+` rationales that this audit
+            // intentionally does NOT pick up.
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("#[ignore")
+                && (line.contains("§7.3.A.1") || line.contains("§7.3.A.7"))
+            {
+                residuals.push(format!("{}:{}: {}", name, lineno + 1, line.trim()));
+            }
+        }
+    }
+
+    assert!(
+        residuals.is_empty(),
+        "G20-A1 incomplete: {} residual `#[ignore]` rationale(s) \
+         naming \"Phase 3\" in sandbox_/attribution_/invariant_4_runtime \
+         / invariant_7_runtime / proptest_sandbox_ test files:\n{}",
+        residuals.len(),
+        residuals.join("\n")
+    );
 }

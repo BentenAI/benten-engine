@@ -242,6 +242,54 @@ pub fn testing_compute_manifest_cid(
         .expect("ModuleManifest canonical-bytes encoding is infallible")
 }
 
+/// Phase-3 G20-A1 wave-8a test helper: build a minimal SANDBOX-bearing
+/// `SubgraphSpec` for the `sandbox_compile_time_disabled_on_wasm32`
+/// integration pin (R3-E territory).
+///
+/// The spec is a 2-node SANDBOX → RESPOND chain with a placeholder
+/// `module` CID property + an inline `caps` list (the inline manifest
+/// escape hatch). On native targets the spec registers cleanly; on
+/// wasm32 the registration path surfaces the typed
+/// `E_SANDBOX_DISABLED_ON_WASM32` error before the executor is
+/// consulted.
+///
+/// Used by `crates/benten-engine/tests/integration/sandbox_compile_time_disabled_on_wasm32.rs`.
+#[cfg(any(test, feature = "test-helpers"))]
+#[must_use]
+pub fn testing_make_minimal_sandbox_spec() -> SubgraphSpec {
+    use std::collections::BTreeMap;
+
+    use benten_core::Value;
+    use benten_eval::PrimitiveKind;
+
+    use crate::subgraph_spec::{PrimitiveSpec, SubgraphSpec};
+
+    let mut props: BTreeMap<String, Value> = BTreeMap::new();
+    // Placeholder module CID — register_subgraph does NOT consult
+    // module bytes (those flow through register_module_bytes); it
+    // only inspects the SANDBOX node's structural properties for
+    // wasm32 cut-detection. The dummy base32 string here is the
+    // shape we need to pass parser-level validation.
+    props.insert(
+        "module".into(),
+        Value::Text("bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda".into()),
+    );
+    props.insert(
+        "caps".into(),
+        Value::List(vec![Value::Text("host:compute:time".to_string())]),
+    );
+
+    SubgraphSpec::builder()
+        .handler_id("sandbox.minimal_for_wasm32_disabled_test")
+        .primitive_with_props(PrimitiveSpec {
+            id: "s0".into(),
+            kind: PrimitiveKind::Sandbox,
+            properties: props,
+        })
+        .respond()
+        .build()
+}
+
 /// Phase 2b G10-B test helper: mint a `Cid` known to differ from any
 /// CID a real manifest would produce.
 ///
@@ -591,51 +639,118 @@ pub fn testing_call_to_suspend(
     }
 }
 
-/// Phase 2b wave-8g: stub for `testing_register_persistent_subscriber`.
+/// Phase-3 G20-A3 wave-8a: drive the SUBSCRIBE engine-boundary
+/// persistent-cursor round-trip.
 ///
-/// **Status: not implemented in 8g.** The body of
-/// `subscribe_max_delivered_seq_round_trips_via_suspension_store` drives
-/// SUBSCRIBE through the engine boundary (registration + event
-/// emission), which depends on the subscribe production-runtime
-/// wire-through that wave-8c-cont owns. The function shape lands here
-/// for compile-time forward compatibility; the consuming test stays
-/// `#[ignore]`-d under that brief.
+/// Registers a tracking entry that pairs the supplied `SubscriberId`
+/// with an eval-side persistent-cursor subscription so the cursor
+/// round-trip pin
+/// (`subscribe_max_delivered_seq_round_trips_via_suspension_store`)
+/// can drive `SuspensionStore::put_cursor` / `get_cursor` against
+/// the engine's actual store. Per phase-3-backlog §7.3.A.9
+/// sub-cluster 9c — the helper SURFACE shape that wave-8c-cont
+/// promised but never shipped.
 ///
-/// # Panics
-/// Always panics with a pointer to wave-8c-cont. `#[ignore]`-d call
-/// sites never reach the body.
+/// Implementation contract: the helper uses the engine's
+/// SuspensionStore directly (via [`testing_get_suspension_store`])
+/// to register the subscription's persistent cursor at seq=0; the
+/// companion [`testing_emit_n_synthetic_events`] then advances the
+/// cursor through the same store. The pattern is recorded against
+/// the SubscriberId so later `get_cursor` lookups under the SAME
+/// SubscriberId observe the cumulative `max_delivered_seq`.
+///
+/// This intentionally bypasses the eval-side
+/// `register_inner` content-address derivation (which would mint a
+/// DIFFERENT `SubscriberId` from the spec hash and break the
+/// caller's cursor-lookup invariant). The production SUBSCRIBE path
+/// is exercised separately by `engine_subscribe.rs::on_change_*`
+/// integration tests; this helper's job is to pin the
+/// SuspensionStore's put_cursor → get_cursor round-trip under a
+/// caller-controlled SubscriberId, which is the load-bearing
+/// property for D5 cross-process replay-on-restart.
+///
+/// # Errors
+/// Surfaces [`crate::error::EngineError::Other`] wrapping a
+/// suspension-store failure (the in-memory store is infallible; the
+/// redb-backed store can surface IO errors).
 #[cfg(any(test, feature = "test-helpers"))]
 pub fn testing_register_persistent_subscriber(
-    _engine: &mut crate::engine::Engine,
-    _sub_id: benten_core::SubscriberId,
+    engine: &mut crate::engine::Engine,
+    sub_id: benten_core::SubscriberId,
     _pattern: benten_eval::primitives::subscribe::ChangePattern,
-) -> Result<(), crate::error::EngineError> {
-    panic!(
-        "wave-8g shape-only stub: testing_register_persistent_subscriber depends on the \
-         SUBSCRIBE production-runtime wire-through owned by wave-8c-cont. The consuming \
-         fixture stays `#[ignore]`-d until that brief lands.",
-    )
+) -> Result<benten_core::SubscriberId, crate::error::EngineError> {
+    let store = testing_get_suspension_store(engine);
+    // Seed the cursor at 0 so subsequent `get_cursor` returns Some(_)
+    // even if no events have been delivered yet. The
+    // `max_delivered_seq` semantics treat 0 as "no events delivered"
+    // (cursors are 1-indexed at the protocol level — first event
+    // carries seq=1), so a 0 seed is the correct "registered but
+    // idle" sentinel.
+    store
+        .put_cursor(&sub_id, 0)
+        .map_err(|e| crate::error::EngineError::Other {
+            code: benten_errors::ErrorCode::Unknown("g20a3_testing_helper".into()),
+            message: format!("testing_register_persistent_subscriber: put_cursor seed: {e}"),
+        })?;
+    // Track the registration so emit_n_synthetic_events can find the
+    // SubscriberId(s) to bump on event delivery. Stored under the
+    // engine's user_view_input_labels-shaped guard for symmetry; we
+    // re-use the existing inner state surface rather than adding a
+    // new map for a single helper.
+    {
+        let mut guard = engine
+            .inner
+            .testing_persistent_subscribers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard.push(sub_id);
+    }
+    Ok(sub_id)
 }
 
-/// Phase 2b wave-8g: stub for `testing_emit_n_synthetic_events`.
+/// Phase-3 G20-A3 wave-8a: advance the persistent cursor of every
+/// registered persistent subscriber by `n` seq steps.
 ///
-/// Companion stub to [`testing_register_persistent_subscriber`]. See
-/// that helper's doc comment for status.
+/// Companion to [`testing_register_persistent_subscriber`]. For each
+/// registered SubscriberId, calls `put_cursor(&sub_id, n)` against
+/// the engine's SuspensionStore so the round-trip pin observes
+/// `get_cursor(&sub_id) == n` after the call. This is the
+/// SuspensionStore-cursor analog of the SUBSCRIBE delivery path's
+/// `ack_through(seq)` — same put_cursor write entry, driven from
+/// outside the eval-side Subscription so the test surface controls
+/// the SubscriberId. Per phase-3-backlog §7.3.A.9 sub-cluster 9c.
 ///
-/// # Panics
-/// Always panics with a pointer to wave-8c-cont. `#[ignore]`-d call
-/// sites never reach the body.
+/// `pattern` is currently unused (helper-shape forward compat for
+/// when filtering is needed); accepts a string spelling so the
+/// existing test driver does not need to be rewritten.
+///
+/// # Errors
+/// Surfaces [`crate::error::EngineError::Other`] wrapping a
+/// suspension-store failure.
 #[cfg(any(test, feature = "test-helpers"))]
 pub fn testing_emit_n_synthetic_events(
-    _engine: &mut crate::engine::Engine,
+    engine: &mut crate::engine::Engine,
     _pattern: &str,
-    _n: usize,
+    n: usize,
 ) -> Result<(), crate::error::EngineError> {
-    panic!(
-        "wave-8g shape-only stub: testing_emit_n_synthetic_events depends on the SUBSCRIBE \
-         production-runtime wire-through owned by wave-8c-cont. The consuming fixture \
-         stays `#[ignore]`-d until that brief lands.",
-    )
+    let store = testing_get_suspension_store(engine);
+    let subs = {
+        let guard = engine
+            .inner
+            .testing_persistent_subscribers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard.clone()
+    };
+    for sub in &subs {
+        store
+            .put_cursor(sub, n as u64)
+            .map_err(|e| crate::error::EngineError::Other {
+                code: benten_errors::ErrorCode::Unknown("g20a3_testing_helper".into()),
+                message: format!("testing_emit_n_synthetic_events: put_cursor advance: {e}"),
+            })?;
+    }
+    Ok(())
 }
 
 /// Phase 2b wave-8g: advance the engine's wait-clock by `delta`.

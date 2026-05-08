@@ -9,6 +9,21 @@ dist/
 build/
 *.tsbuildinfo
 
+# Phase-3 G20-A3: re-track the browser-bundle artifact directory under
+# `bindings/napi/dist/browser/` (carved out from the global `dist/`
+# exclusion above). The browser_target_bundle_size test pin reads the
+# committed placeholder seed (47-byte gzipped wasm) + README; CI's
+# wasm-browser.yml workflow replaces the seed with the real production
+# bundle on push. Without re-tracking, fresh CI clones see no artifact
+# and the test pin fails. Same re-tracking shape as
+# `docs/SECURITY-POSTURE.md` (G11-A Wave 3a) +
+# `docs/INVARIANT-COVERAGE.md` (Phase 2b G11-2b) +
+# `docs/DSL-SPECIFICATION.md` (Phase 3 G19-D fp).
+!bindings/napi/dist/
+!bindings/napi/dist/browser/
+!bindings/napi/dist/browser/benten_engine.wasm.gz
+!bindings/napi/dist/browser/README.md
+
 # Environment
 .env
 .env.local

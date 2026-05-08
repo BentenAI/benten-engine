@@ -46,7 +46,7 @@ proptest! {
     ///
     /// Marked `#[ignore]` until the struct shapes land in G3-A.
     #[test]
-    #[ignore = "Phase 3 — ExecutionState round-trip CID stability proptest body deferred per docs/future/phase-3-backlog.md §7.3.C (Phase 2a closed at phase-2a-close tag; G3-A surfaces landed structurally; proptest body lands Phase 3)"]
+    #[ignore = "Phase 3+ anytime backlog — ExecutionState round-trip CID stability proptest body. Destination: docs/future/phase-3-backlog.md §7.3.C row 1 (proptest_exec_state_round_trip.rs:49). Phase 2a closed at phase-2a-close tag; G3-A surfaces (ExecutionStateEnvelope + ExecutionStatePayload + AttributionFrame) landed structurally; the proptest body that constructs random states + round-trips them through DAG-CBOR encode/decode + asserts byte-identity is intentionally deferred — the structural unit-tests at crates/benten-eval/src/exec_state.rs already pin round-trip equality; the proptest is a strengthening pass that lands when the exec-state surface gets its next round of property-coverage hardening (reassessment cadence: v1-assessment-window per CLAUDE.md baked-in #15)."]
     fn exec_state_round_trip_preserves_cid(
         // Chain depth 1..=8 covers Phase-1 single-frame through Phase-6
         // AI-delegation chains. Deeper chains are bounded by ucca-6's

@@ -1,5 +1,9 @@
 # DSL Specification
 
+Status: FINAL (Phase-2b close; Phase-3 sync depends on the DSL surface
+being frozen — finalized per the post-G12-B + G11-2b-A doc sweep, pinned
+by `crates/benten-engine/tests/dsl_specification_md_finalization.rs`).
+
 The TypeScript DSL surface (`@benten/engine`) for composing Benten
 operation subgraphs. Each primitive method (e.g. `subgraph(...).read({...})`)
 emits a `SubgraphNode` whose `args` property bag is consumed by the
