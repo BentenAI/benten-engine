@@ -18,7 +18,10 @@
 use proptest::prelude::*;
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(64))]
+    // G20-B audit-3-mr-3 (Phase-3 close): bumped 64 → 256 — sandbox
+    // memory-isolation property is security-critical and 64 random
+    // case counts is too thin to surface edge-case escape attempts.
+    #![proptest_config(ProptestConfig::with_cases(256))]
 
     /// `prop_sandbox_no_module_state_persists_across_calls` — per-call
     /// fresh Store + Instance. Two sequential calls of the same module

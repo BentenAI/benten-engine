@@ -55,14 +55,6 @@ testing = ["benten-core/testing", "dep:wat"]
 # every CI build. Test binaries opt in via `features = ["test-helpers"]`
 # on their `[dev-dependencies]` block.
 test-helpers = []
-# `phase_2b_landed` gates compilation of Phase 2b R3 red-phase test files
-# whose `use` statements reference R5-pending APIs (`benten_eval::chunk_sink`,
-# `benten_eval::sandbox`, `benten_eval::testing::testing_*`, etc.). Default
-# OFF so the CI required-check fleet (which does NOT enable this feature)
-# can compile + run the workspace cleanly during R3-consolidation. R5
-# implementer briefs flip this on per-group as the referenced surfaces
-# land. See `.addl/phase-2b/r3-consolidation.md` §4.
-phase_2b_landed = []
 # `component-model` is reserved per wsa-3 (Phase 2b removed wasmtime's
 # component-model feature). The feature flag is declared here so R3 tests
 # (`sandbox_escape_attempts_denied.rs` ESC-11 + ESC-12) can `#[cfg]`-gate
@@ -153,23 +145,16 @@ harness = false
 name = "transform_expression_latency"
 harness = false
 
-# Phase 2b R3-B SANDBOX bench skeletons (G7-A / G7-C). `required-features`
-# tells cargo to skip compilation when `phase_2b_landed` is OFF (the default
-# CI feature posture during R3 consolidation), so the bench files can ship
-# `criterion_main!()` unconditionally without breaking the default build.
-# R5 G7-A / G7-C wires the bench bodies + flips the feature on at run time.
-# r4-rust-test-coverage.json A1 + r3-consolidation.md §5 item 17 — fix-pass
-# landing the missing registration the consolidation flagged but didn't land.
+# Phase 2b R3-B SANDBOX bench skeletons (G7-A / G7-C). The
+# `phase_2b_landed` feature flag gating these benches at R3 was retired
+# at G20-B Phase-3-close (audit-3-mr-1) — Phase 2b shipped at
+# `phase-2b-close` 2026-05-03 and the bench bodies compile cleanly
+# under default features. `sandbox_fuel` retains its scaffold body
+# pending full Store+Instance+invocation measurement landing.
 [[bench]]
 name = "sandbox_cold_start"
 harness = false
-# perf-g7a-mr-1 fix-pass: dropped `required-features = ["phase_2b_landed"]`
-# — the bench body now exercises the G7-A scaffold path (Engine
-# singleton + Module cache + cap-intersection scaffold) so it compiles
-# under default features. Full Store+Instance+invocation measurement
-# lands when G7-C wires the executor.
 
 [[bench]]
 name = "sandbox_fuel"
 harness = false
-required-features = ["phase_2b_landed"]

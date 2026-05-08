@@ -54,6 +54,9 @@ use std::path::{Path, PathBuf};
 /// locate the offending source-of-cite (NOT the cited target).
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Finding {
+    /// Discriminates the drift kind (line-cite vs symbol-cite vs
+    /// numeric-claim drift) so consumers can format / route findings
+    /// per kind.
     pub kind: FindingKind,
     /// File the cite appears IN (the doc/source emitting the cite).
     pub path: PathBuf,

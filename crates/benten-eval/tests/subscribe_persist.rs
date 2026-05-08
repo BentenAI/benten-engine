@@ -1,5 +1,3 @@
-#![cfg(feature = "phase_2b_landed")]
-// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: SUBSCRIBE persistent-cursor + retention-window (G6-A).
 //!
 //! Pin source: D5-RESOLVED + G12-E SuspensionStore generalization.

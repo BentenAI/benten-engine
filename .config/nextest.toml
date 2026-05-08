@@ -47,6 +47,20 @@ slow-timeout = { period = "60s", terminate-after = 3 }
 filter = 'test(=in_memory_observationally_equivalent_to_redb)'
 slow-timeout = { period = "60s", terminate-after = 6 }
 
+# G20-B Phase-3-close §8.3 architectural pin invokes `cargo doc
+# --workspace --no-deps` from a test process. macos-x86_64 @ 1.95.0
+# reproducibly timed out at default 180s (macos-arm64 + linux runners
+# complete in ~18-30s; Intel Mac under MSRV is ~3-4× slower for the
+# workspace compile-doc pass). `terminate-after = 8` gives 480s wall
+# clock — same per-test design rationale as `in_memory_observationally_*`
+# above, preserving the 60-minute CI budget for everything else.
+[[profile.ci.overrides]]
+filter = 'test(=full_missing_docs_sweep_no_warnings_workspace_wide)'
+slow-timeout = { period = "60s", terminate-after = 8 }
+[[profile.default.overrides]]
+filter = 'test(=full_missing_docs_sweep_no_warnings_workspace_wide)'
+slow-timeout = { period = "60s", terminate-after = 8 }
+
 # Tests that touch process-wide global state (the wasmtime Module cache
 # in `crates/benten-eval/src/sandbox/`, the EvalContext registry path
 # touched by `benten_eval::resume`) must be serialized against each

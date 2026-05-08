@@ -137,6 +137,60 @@
 
 **Source:** [`phase-2-backlog.md`](./phase-2-backlog.md) §7.4. Cross-refs `.addl/phase-2b/wave-8-brief.md` §8d-narrative F6.
 
+### 2.3 napi-UCAN-wireup — route `PolicyKind::Ucan` through the durable `UCANBackend` (G21 T2)
+
+**Origin (G20-B mini-review, 2026-05-07):** the doc-engineer + dx-optimizer mini-reviewers on PR #143 (G20-B docs sweep) flagged a doc-vs-code drift cluster: §2.1 above shipped the durable `UCANBackend<B>` at G14-B wave-4b, but the napi binding at `bindings/napi/src/lib.rs::PolicyKind::Ucan` STILL routes to the legacy Phase-1 `benten_caps::UcanBackend` stub (returns `CapError::NotImplemented` / `E_CAP_NOT_IMPLEMENTED` on every `check_write`). End-to-end Atrium examples (`packages/engine/examples/atrium-*.ts`, `ucan-grant-flow.ts`, `did-resolution.ts`) compile + import cleanly against the documented public surface but surface `E_CAP_NOT_IMPLEMENTED` at the first WRITE through the napi layer. The Rust-side durable backend is untouched + correct; the gap is at the binding seam only.
+
+**Findings consolidated here per HARD RULE rule-12 clause-b (named destination receives the entry NOW):**
+- `g20b-dx-1` — napi binding routes `PolicyKind::Ucan` to the legacy stub at `bindings/napi/src/lib.rs::Engine::open_with_policy` (the `PolicyKind::Ucan` match arm wires `benten_caps::UcanBackend` rather than the durable `benten_caps::UCANBackend`); the variant docstring at `bindings/napi/src/policy.rs::PolicyKind::Ucan` ("Phase-3 G14-B durable UCAN-grounded grants") was retensed in G20-B but the wire-up was not.
+- `g20b-dx-4` — `parse_grant_json` (`bindings/napi/src/policy.rs::parse_grant_json`) reads only `actor` + `scope`; the `issuer` + `hlc` fields documented on `CapabilityGrant` (`packages/engine/src/types.ts:389-392` "Optional issuer CID (Phase-3 UCAN grounding — ignored in Phase 1)") are silently dropped before reaching any backend. Even after the stub→durable rewire, the parser still drops these fields; widening it is part of this entry.
+- `g20b-dx-5` — `atrium-sync-trigger.ts` subscribe-callback shim drift (TS-side records the closure; G16-B reconciliation drains real change events). The subscribe wireup half belongs at §3.2 / §7.10 (handler-id-router + per-subscriber filtering); the UCAN-cap-recheck half (delivery-time cap recheck per F6 / §2.2 above) lights up once the durable backend is reachable from the napi surface.
+- `g20b-dx-7` — `packages/engine/src/types.ts:389-392` CapabilityGrant docstrings still say "ignored in Phase 1"; retense to past-tense + named-fields-flow-through narrative once G21 T2 lands.
+- `g20b-dx-8` — `packages/engine/src/engine.ts:271-272` `PolicyKind.Ucan` JSDoc still says "Phase-3 UCAN stub. Opens but surfaces E_CAP_NOT_IMPLEMENTED at check time" — currently HONEST under stub state; flip to durable narrative once G21 T2 lands.
+
+**Phase 3 target (G21 T2 scope, per `.addl/phase-3/HANDOFF-2026-05-03-phase-3-kickoff.md` NS-T49):**
+- (a) Construct `benten_caps::UCANBackend<B>` (note casing — durable, NOT the stub `UcanBackend`) at `bindings/napi/src/lib.rs::Engine::open_with_policy::PolicyKind::Ucan` arm. The constructor takes a `GraphBackend` reference + `PublisherRegistry` + clock; mirror the `capability_policy_grant_backed()` builder helper shape so the napi adapter does not need to thread the ref soup itself.
+- (b) Widen `bindings/napi/src/policy.rs::parse_grant_json` to also read `issuer` (DID string → CID) + `hlc` (numeric stamp). Thread these to `engine.grantCapability(...)` through the napi `grant_capability` adapter so they reach the durable backend's chain-walker.
+- (c) Retense `bindings/napi/src/policy.rs:6-7` module doc + `:26-28` variant doc (currently honest for the stub; flip to durable narrative).
+- (d) Retense `packages/engine/src/types.ts::CapabilityGrant` `issuer` + `hlc` JSDoc to "consumed by the durable UCAN backend" (drop "ignored in Phase 1").
+- (e) Retense `packages/engine/src/engine.ts:271-272` `PolicyKind.Ucan` JSDoc to durable narrative.
+- (f) Flip `packages/engine/test/atrium_examples.test.ts` run-invocation pins (added at G20-B-MR fix-pass) from "expect stub failure shape" to "expect successful run() outcome" — this is the GREEN-phase signal that the runtime end-to-end half is real per pim-2 §3.6b.
+- (g) End-to-end integration test `bindings/napi/tests/ucan_round_trip.rs` (or equivalent) walking `openWithPolicy(Ucan) → grantCapability → callAs (succeeds) → revokeCapability → callAs (fails E_CAP_DENIED)` end-to-end, with the durable backend genuinely consulted.
+- (h) Retense `docs/QUICKSTART.md` Atrium walkthrough `Note (Phase-3-close honest state)` callout — drop the callout (currently warns about the stub) once the wireup lands.
+
+**Touch size:** ~80-150 LOC napi binding (constructor + parser widening + module/variant doc retense) + ~30-50 LOC TS docstring retense + ~50-80 LOC integration test + 4 example test pin flips. Risk surface: low (constructor wiring + parser widening are mechanical; the durable backend is already shipped + tested at the Rust layer).
+
+**Why Phase-3 R5 (NOT Phase-3 close):** the durable `UCANBackend<B>` shipped at G14-B wave-4b but napi binding wireup landed in a separate gate (G21) that absorbs the napi adapter half. NS-T49 (HANDOFF) records the scope expansion: G21 was originally the typed-CALL redirect entry; the napi-UCAN-wireup is FOLDED INTO G21 T2 as a sibling task. The G20-B fix-pass that produced this entry is orchestrator-direct (doc-side admission of the gap + test strengthening to assert the stub-state shape); the actual code-side wireup is owned by the G21 T2 implementer.
+
+**Cross-references:**
+- §2.1 Durable UCAN backend in `benten-id` (the durable Rust backend; CLOSED at G14-B).
+- §2.2 SUBSCRIBE delivery-time cap-recheck threading on durable grants (F6) — once §2.3 lands, the SUBSCRIBE cap-recheck path threads through the durable grant-store via napi.
+- `bindings/napi/src/lib.rs::Engine::open_with_policy` `PolicyKind::Ucan` match arm — the literal surface to rewire.
+- `bindings/napi/src/policy.rs::parse_grant_json` — the JSON parser to widen.
+- `crates/benten-caps/src/backends/ucan.rs::UCANBackend` — the durable backend (already shipped).
+- `packages/engine/test/atrium_examples.test.ts` — run-invocation pins to flip GREEN.
+- `.addl/phase-3/HANDOFF-2026-05-03-phase-3-kickoff.md` NS-T49 — the G21 T2 expanded scope.
+- `.addl/phase-3/mini-review-pr-143-g20-b-dx-optimizer.json` (g20b-dx-1, g20b-dx-4, g20b-dx-7, g20b-dx-8) — origin findings.
+- `.addl/phase-3/mini-review-pr-143-g20-b-doc-engineer.json` (doc-2) — symbol-cite drift sibling.
+
+### 2.4 `phase_2b_landed` feature gate retirement in benten-core / benten-ivm / benten-engine / benten-errors (audit-3-mr-1-extended)
+
+**Origin (G20-B audit-3 mini-review, 2026-05-07):** G20-B v3 closed the `phase_2b_landed` feature gate in `benten-eval` + `benten-dsl-compiler` + `benten-dev` (Cargo.toml entries deleted + `#![cfg]` gates stripped from 23+ test files; commit message documents the narrow scope). The audit-3 reviewer extended scope flagged that the feature gate STILL exists in the other four crates: `benten-core`, `benten-ivm`, `benten-engine`, `benten-errors`. These were intentionally out-of-scope at G20-B v3 to keep the wave's audit-3 narrowly scoped. The residual is named here per HARD RULE rule-12 clause-b — the destination receives the entry NOW, not "later".
+
+**Phase 3 target (orchestrator-direct fix-pass batch, scheduled pre-R4b dispatch per HANDOFF NS-T49):**
+- (a) Audit each of `crates/benten-core`, `crates/benten-ivm`, `crates/benten-engine`, `crates/benten-errors` Cargo.toml for `phase_2b_landed` feature entries — delete.
+- (b) Strip every `#![cfg(feature = "phase_2b_landed")]` / `#[cfg(feature = "phase_2b_landed")]` + adjacent `#[cfg(not(feature = "phase_2b_landed"))]` gate from `tests/**/*.rs` + `src/**/*.rs` in those four crates.
+- (c) `cargo +stable check --workspace --all-targets` to confirm no stale references remain (the gate name itself should not appear in the workspace anywhere post-batch).
+
+**Touch size:** ~30-50 LOC mechanical (4 Cargo.toml edits + N test-file gate strips). Risk surface: low (the gate is technical debt post-Phase-2b-close; the gate name no longer carries semantic meaning).
+
+**Why Phase-3 R5 (NOT G20-B v3):** G20-B's commit-message-documented narrow scope kept v3 targeted. The audit-3-mr-1-extended finding is the right shape to fold into a sibling orchestrator-direct fix-pass batch — the batch is scheduled in HANDOFF NS-T49 PRE-R4b dispatch so R4b reviewers see a clean tree.
+
+**Cross-references:**
+- `.addl/phase-3/HANDOFF-2026-05-03-phase-3-kickoff.md` NS-T49 — the orchestrator-direct fix-pass batch destination.
+- `.addl/phase-3/mini-review-pr-143-g20-b-doc-engineer.json` doc-4 — origin disposition flag (HARD RULE clause-b destination-naming).
+- G20-B v3 commit narrative — narrow-scope rationale for the partial close.
+
 ---
 
 ## 3. Networking / sync

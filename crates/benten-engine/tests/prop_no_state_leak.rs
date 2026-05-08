@@ -22,7 +22,10 @@
 use proptest::prelude::*;
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(50))]
+    // G20-B audit-3-mr-3 (Phase-3 close): bumped 50 → 1000 — state
+    // machine property tests typically need 1k+ iterations to expose
+    // corner-case leaks across backend substitution.
+    #![proptest_config(ProptestConfig::with_cases(1_000))]
 
     #[test]
     #[ignore = "RED-PHASE: G13-B wave-2 introduces EngineGeneric<B>"]

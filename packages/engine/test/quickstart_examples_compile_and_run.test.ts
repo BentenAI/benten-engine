@@ -71,11 +71,19 @@ describe("quickstart_examples_compile_and_run", () => {
 
     // SANDBOX node MUST carry the per-call tuning knobs the example
     // illustrates — the example doc claim "fuel / wallclockMs /
-    // outputLimitBytes (per-call)" is load-bearing.
+    // outputLimitBytes (per-call)" is load-bearing. Note: the DSL
+    // builder translates camelCase user input to snake_case eval-form
+    // at the `.sandbox()` boundary (see dsl.ts::translateSandboxArgs),
+    // so post-build args use snake_case + `output_limit` (not
+    // `outputLimitBytes`) per r4-r1-wsa-1.
     const sandboxNode = handler.nodes.find((n) => n.primitive === "sandbox");
-    expect(sandboxNode?.args.fuel).toBe(1_000_000);
-    expect(sandboxNode?.args.wallclockMs).toBe(30_000);
-    expect(sandboxNode?.args.outputLimitBytes).toBe(1_048_576);
+    expect((sandboxNode?.args as Record<string, unknown>).fuel).toBe(1_000_000);
+    expect((sandboxNode?.args as Record<string, unknown>).wallclock_ms).toBe(
+      30_000,
+    );
+    expect((sandboxNode?.args as Record<string, unknown>).output_limit).toBe(
+      1_048_576,
+    );
   });
 
   it("examples cover all three Phase-2b primitives at least once", () => {

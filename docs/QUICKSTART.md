@@ -92,7 +92,7 @@ await engine.grantCapability({ actor: "alice", scope: "store:post:*" });
 await engine.callAs(handler.id, "post:create", { title: "x" }, "alice");
 ```
 
-The default `PolicyKind.NoAuth` permits everything (the embedded / single-user model). Swap in `PolicyKind.GrantBacked` for the revocation-aware Phase-1 policy. UCAN lands in Phase 3.
+The default `PolicyKind.NoAuth` permits everything (the embedded / single-user model). Swap in `PolicyKind.GrantBacked` for the revocation-aware Phase-1 policy. Phase 3 added `PolicyKind.Ucan` — a durable UCAN-grant policy backend (Rust-side struct `UCANBackend` in `benten-caps`) over `benten-id`'s claim envelope + chain validation surface (DID-based actor identity, `nbf`/`exp` time-windows, attenuation along delegation chains, constant-time signature comparison). See the Atrium walkthrough below.
 
 ## Diagnosing denied reads
 
@@ -279,33 +279,137 @@ attribution chaining all flow through the evaluator).
 
 Runnable example handlers ship at
 [`packages/engine/examples/`](../packages/engine/examples/) covering
-all three Phase-2b primitives.
+all three Phase-2b primitives plus four Phase-3 Atrium examples
+(see below).
+
+## Joining an Atrium (Phase 3)
+
+> **Note (Phase-3-close honest state).** The durable Phase-3 UCAN
+> backend ships in Rust at `crates/benten-caps/src/backends/ucan.rs`
+> (struct `UCANBackend`). The TS-surface `PolicyKind.Ucan` enum
+> variant is wired in the napi binding at
+> `bindings/napi/src/lib.rs::PolicyKind::Ucan`, but at Phase-3 close
+> the binding still routes to the Phase-1 `UcanBackend` stub which
+> returns `E_CAP_NOT_IMPLEMENTED` on the first WRITE. End-to-end
+> Atrium examples that use `PolicyKind.Ucan` (the four runners listed
+> below — `atrium-peer-mgmt.ts`, `atrium-sync-trigger.ts`,
+> `ucan-grant-flow.ts`, `did-resolution.ts`) compile, type-check, and
+> import cleanly against the documented public surface (the
+> companion Vitest pin `packages/engine/test/atrium_examples.test.ts`
+> verifies the SHAPE half), but a write-touching call (`callAs`,
+> `engine.atrium(...).join()` paths that materialize state, etc.)
+> will surface `E_CAP_NOT_IMPLEMENTED` until the napi-UCAN-wireup
+> lands. That wireup is named at
+> [`docs/future/phase-3-backlog.md` §2.3 (G21 T2)](future/phase-3-backlog.md);
+> the runtime end-to-end half flips GREEN at G21 T2 close.
+
+An **Atrium** is a peer-to-peer-synchronized graph shared by a small
+set of full-peer engines (a user's laptop + phone-OS app + desktop;
+or a community of cooperating users). The `engine.atrium({...})`
+factory call returns an `Atrium` handle whose `.join()` initiates
+peer discovery + handshake; the same handle exposes `trustPeer()`,
+`listPeers()`, `subscribe()`, and `declareDeviceAttestation()`:
+
+```typescript
+import { Engine, PolicyKind } from "@benten/engine";
+
+// Phase 3's durable UCANBackend is selected via PolicyKind.Ucan.
+// (Phase-2b: PolicyKind.GrantBacked is the revocation-aware
+// per-actor policy; Phase 3 layered UCAN attenuation + chain
+// validation on top via benten-id.)
+const engine = await Engine.openWithPolicy(
+  ".benten/my-app.redb",
+  PolicyKind.Ucan,
+);
+
+// `engine.atrium` is a callable factory (D1 B-prime per Ben's
+// 2026-05-05 ratification). Each call returns a fresh handle.
+const family = engine.atrium({ atriumId: "family" });
+await family.join();
+
+// Trust a peer DID — extends the trust set this handle uses for
+// per-session subscriptions + device-attestation walking.
+await family.trustPeer("did:key:z6MkrJVnaZkeFzdQyMZu1c...");
+
+const peers = family.listPeers();
+console.log(peers); // ["did:key:z6Mk...", ...]
+
+// Subscribe to a path; handler fires on each ChangeEvent the full
+// peer routes through F6 cap-recheck.
+const sub = await family.subscribe("/zone/posts", (event) => {
+  console.log("post changed", event);
+});
+
+// Tear down the per-session state when done.
+await sub.unsubscribe();
+await family.leave();
+```
+
+A full peer is the durable Atrium participant — the Rust crate set
+includes `benten-id` (DID + UCAN claim envelope) and `benten-sync`
+(the iroh + Loro + Merkle Search Tree sync runtime). Browser engines
+do **not** join Atriums directly; they consume engine state via the
+thin-client protocol (fetch GET for snapshot reads + POST with a
+device-DID-signed auth header for writes + Server-Sent-Events for
+ChangeEvent streams). See the four runnable examples shipped at
+`packages/engine/examples/`:
+
+- `atrium-peer-mgmt.ts` — invite, list, role transitions, eviction.
+- `atrium-sync-trigger.ts` — manual + scheduled sync; observe MST
+  diff stats.
+- `ucan-grant-flow.ts` — minting, attenuating, revoking UCAN grants
+  end-to-end against the durable `UCANBackend`.
+- `did-resolution.ts` — `did:key` round-trip + (Phase-9-future)
+  `did:plc` placeholder.
+
+Compromise #22 (peer-DID + connection-metadata leakage to public
+iroh relays) is honestly disclosed in [`SECURITY-POSTURE.md`](SECURITY-POSTURE.md);
+operators with stricter metadata threat models should self-host an
+iroh relay or wait for Phase 7 Garden-controlled relays.
 
 ## What works today
 
-Phase 1 shipped, Phase 2a closed at tag `phase-2a-close`, and Phase
-2b closes with this commit. Live:
+Phase 1 shipped, Phase 2a closed at tag `phase-2a-close`, Phase 2b
+closed at tag `phase-2b-close`, and Phase 3 closes with this commit.
+Live:
 
 - `crud('post')` zero-config path
 - **All 12 primitives** (READ, WRITE, TRANSFORM, BRANCH, ITERATE,
   WAIT, CALL, RESPOND, EMIT, SANDBOX, SUBSCRIBE, STREAM) — Phase-2b
   added the last three.
 - WAIT with signal + duration variants and the full 4-step resume protocol
-- Capability enforcement via `PolicyKind.GrantBacked` + `grantCapability` + `revokeCapability`
+- Capability enforcement via `PolicyKind.GrantBacked`, `grantCapability`,
+  `revokeCapability`, and Phase-3's durable `PolicyKind.Ucan` (TS-surface
+  variant; Rust-side struct named `UCANBackend`)
+  over `benten-id` (DID-based actors, attenuation, revocation, time-window
+  validation, constant-time signature comparison)
 - `handler.toMermaid()` visualization
 - `engine.trace()` step-by-step evaluation records
 - `engine.diagnoseRead()` operator introspection
 - `engine.callStream()` AsyncIterable + `engine.openStream()`
 - Reactive SUBSCRIBE handlers driven off the change-event bus
-- SANDBOX primitive with wasmtime host + named-manifest registry
+- SANDBOX primitive with wasmtime host + named-manifest registry +
+  durable `BlobBackend` (Phase-3 G14-C closed Compromise #17)
+- Durable handler-version chain via `core::version::Anchor` (Phase-3
+  G14-C closed Compromise #18)
+- Algorithm B generalized at G15-A — user-defined view IDs run under
+  `Strategy::B` with their actual label patterns rather than being
+  coerced to `ContentListingView` semantics (Compromise #11 closed)
+- Atriums — peer-to-peer sync between full peers (laptop / phone-OS app /
+  desktop) over iroh QUIC + Merkle Search Tree diff + Loro CRDT merge
+- Browser-as-thin-client — wasm32 engines participate as views into
+  full peers via fetch/POST + SSE; no iroh / Loro / SANDBOX in the
+  wasm32 bundle; optional IndexedDB cache for snapshot data
+- Verify-on-read at every Node-bytes surface — `RedbBackend::get_node`
+  routes through `Node::load_verified(cid, &bytes)` so on-disk tamper
+  fires `E_INV_CONTENT_HASH` rather than returning the wrong-but-decodable
+  Node (W9-T6 closure)
 
 Not yet live:
 
-- P2P sync and UCAN capabilities (Phase 3)
 - Marketplace / dynamic manifest registration (`register_runtime` reserved with `E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED`; Phase 8)
-- Durable wasm-module bytes registry — `Engine::register_module_bytes` is in-memory only (Compromise #17); operators re-register module bytes at every engine open. `Engine::install_module` persists the manifest into a system-zone Node, but the underlying wasm bytes are NOT auto-persisted — the asymmetry is bounded by the absence of a Phase-2b durable `BlobBackend` (Phase 3).
-- Durable handler-version chain — `Engine::register_subgraph_replace` keeps an in-memory chain (Compromise #18); historical CIDs are lost on engine restart. Phase 3 lifts this to a durable `core::version::Anchor` chain.
-- Inv-4 runtime depth-threading — both arms fully active at Phase 2b close. Registration arm validates statically; runtime arm threads `AttributionFrame.sandbox_depth` transitively through `ActiveCall` via `frame.sandbox_depth.saturating_add(1)` at every SANDBOX entry, firing `E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED` when the inherited depth exceeds `config.max_nest_depth` (R6FP-G1 / PR #62, 3-lens convergent fix). The `sandboxDepth` field is also surfaced on the JS-side `AttributionFrame` interface via the napi trace projection (R6-R3 r6-r3-pcds-1 closure) so trace UIs and Phase-6 AI workflow forking can reason about per-step nest depth. The ESC-10 adversarial integration test stays `#[ignore]`'d pending the `testing_call_engine_dispatch` host-fn helper per `docs/future/phase-3-backlog.md` §7.3.A.7 — the runtime defense is wired; only the adversarial-test driver is paper-only. See `docs/INVARIANT-COVERAGE.md` "Inv-4 + Inv-7 runtime arm status" for the wiring trace.
+- Garden-controlled iroh relays (Phase 7) — until then, public iroh relays leak peer-DID + connection-metadata at the transport layer (Compromise #22)
+- Inv-4 runtime depth-threading — both arms fully active. The ESC-10 adversarial integration test stays `#[ignore]`'d pending the `testing_call_engine_dispatch` host-fn helper per `docs/future/phase-3-backlog.md` §7.3.A.7 — the runtime defense is wired; only the adversarial-test driver is paper-only. See `docs/INVARIANT-COVERAGE.md` "Inv-4 + Inv-7 runtime arm status" for the wiring trace.
 
 If something in the "live" list doesn't behave as documented, file an issue.
 

@@ -35,7 +35,7 @@ All 12 primitives have live executors at tag `phase-2b-close` (2026-05-03). WAIT
 
 **View.** A materialized query result kept current by subscribing to graph changes. A list-by-label read hits a view; it's O(1) because the view is already computed. Views are regular Nodes that an internal subscriber advances on every ChangeEvent.
 
-**Capability.** A grant — "this actor may write Nodes matching this pattern" — stored as a Node with a `GRANTED_TO` edge. Writes hit a pre-write policy hook; the default policy (`NoAuth`) allows everything; a `GrantBacked` policy checks the grant graph. UCAN lands in Phase 3 as another policy backend.
+**Capability.** A grant — "this actor may write Nodes matching this pattern" — stored as a Node with a `GRANTED_TO` edge. Writes hit a pre-write policy hook; the default policy (`NoAuth`) allows everything; a `GrantBacked` policy checks the grant graph. Phase 3 added a durable `UCANBackend` over `benten-id`'s claim envelope + chain validation surface — UCAN grants attenuate on delegation, propagate revocations, and validate `nbf`/`exp` time-windows at chain-walk time with constant-time signature comparison.
 
 **Anchor + Version + CURRENT.** When you need history (undo, audit, time-travel), you opt into the version-chain pattern: an Anchor Node with stable identity points at the latest Version Node via a CURRENT edge. Version Nodes are immutable once written; updating is "write a new Version, advance CURRENT atomically." Ephemeral data doesn't pay the versioning cost.
 
@@ -63,7 +63,7 @@ This is the same code path for the native Rust API, the napi-rs TypeScript wrapp
 
 Two Benten machines with the same set of Nodes agree bit-for-bit on what everything is. A Node's CID is a hash of its canonical DAG-CBOR bytes; byte-identical content yields byte-identical CIDs. This has consequences:
 
-- **Sync is content exchange.** When Phase 3 ships, two peers synchronizing don't reconcile schema-level changes; they exchange content-addressed Nodes and the receiver cryptographically verifies what arrived.
+- **Sync is content exchange.** Phase 3 shipped Atrium peer-to-peer sync (iroh QUIC transport + Merkle Search Tree diff + Loro CRDT merge): two peers synchronizing don't reconcile schema-level changes; they exchange content-addressed Nodes and the receiver cryptographically verifies what arrived. Browser engines participate as thin-client views *into* full peers (laptop / phone-OS app / desktop) over a fetch/POST + SSE protocol rather than running iroh / Loro themselves; full peers are the sync participants.
 - **Handlers are referenceable by hash.** A subgraph registered under `crud:post` has a CID. Forking it points at a different CID. Sending a handler across the network lets the receiver verify it matches what you claimed before running it.
 - **Audit trails are free.** Every write produces a content-hashed change record; the history is the graph.
 - **Dedup is automatic.** Two writers producing identical content produce a single Node.
@@ -75,7 +75,7 @@ Content addressing also shapes security. The default read posture returns `null`
 - **Not Turing complete.** Every handler terminates. The escape hatch for genuine compute — arbitrary TypeScript, ML inference, an image resize — is SANDBOX (WASM via wasmtime, fuel-metered).
 - **Not a relational database.** You can model relational shapes in a graph, but the engine isn't optimized for row-oriented scans across large tables. Read patterns that scale are the ones that hit IVM views.
 - **Not an app framework.** It's the engine underneath one. You write handlers in TypeScript; the DSL produces registered subgraphs. A CMS, a chat service, a personal assistant runs on top.
-- **Not finished.** Phase 1, 2a, and 2b shipped at named tags; the full 12-primitive vocabulary is live. Phase 3 adds P2P sync. The current state is usable for local single-process work and for evaluating whether the model fits a problem you have.
+- **Not finished.** Phase 1, 2a, 2b, and 3 shipped at named tags; the full 12-primitive vocabulary is live and Atriums (peer-to-peer sync over iroh + Loro) are real. The current state is usable for local single-process work, for multi-device sync between full peers a single user owns, and for evaluating whether the model fits a problem you have. The Benten Engine v1 milestone gate is a deliberate post-Phase-3 PAUSE-AND-ASSESS step.
 
 ## The path from here
 
@@ -83,9 +83,9 @@ Content addressing also shapes security. The default read posture returns `null`
 
 **Phase 2a (closed at tag `phase-2a-close`, 2026-04-25)** finished the evaluator. Added WAIT (suspend/resume with DAG-CBOR persisted state). Completed structural invariants 8 + 11 + 13 + 14: system-zone enforcement at runtime, multiplicative iteration budgets across CALL/ITERATE nesting, immutability rejection for non-dedup writes, causal attribution threaded through every trace step. Hardened capability TOCTOU with wall-clock revocation checks on a dual monotonic + HLC clock source. Shipped the 4-step resume protocol that guards against tampered state, principal mismatch, stale subgraph references, and mid-eval grant revocation.
 
-**Phase 2b (closed at tag `phase-2b-close`, 2026-05-03)** added the WASM SANDBOX (wasmtime-backed, fuel-metered, capability-manifested host functions), the STREAM and SUBSCRIBE primitives (user-visible back-pressured output and reactive change notifications), and Algorithm B production-registered with per-view strategy selection. Algorithm B's non-canonical-view-ID generalization (user-defined view IDs declaring `Strategy::B`) carries forward to Phase 3.
+**Phase 2b (closed at tag `phase-2b-close`, 2026-05-03)** added the WASM SANDBOX (wasmtime-backed, fuel-metered, capability-manifested host functions), the STREAM and SUBSCRIBE primitives (user-visible back-pressured output and reactive change notifications), and Algorithm B production-registered with per-view strategy selection. Algorithm B's non-canonical-view-ID generalization (user-defined view IDs declaring `Strategy::B`) was finished in Phase 3.
 
-**Phase 3 (next)** adds P2P sync (iroh transport, CRDT-merged content, Merkle Search Tree diff, UCAN capability chains, DID-based identity, HLC timestamps). After Phase 3, two Benten instances hold the same graph and exchange Nodes cryptographically — the first configuration where "Benten communities" become real. After Phase 3 closes, the project pauses to assess what (if anything) gates a Benten Engine v1 release before continuing into Phases 4–8.
+**Phase 3 (closed at tag `phase-3-close`, pending)** added P2P sync as **Atriums** — durable UCAN capability chains over `benten-id` (DID-based identity, Ed25519 envelopes, claim-chain validation), iroh QUIC transport, Merkle Search Tree diff, Loro CRDT merge, and HLC timestamps. The native crate count grew from 8 to 10 with `benten-id` (9th, identity + claims) and `benten-sync` (10th, sync runtime — native-only, excluded from wasm32 targets). Algorithm B was generalized at G15-A so user-defined view IDs run under `Strategy::B` with their actual label patterns rather than being coerced to `ContentListingView` semantics. Browser engines participate as thin-client views into full peers via a fetch/POST + SSE protocol (no iroh / Loro / SANDBOX in the wasm32 bundle), with optional IndexedDB cache for snapshot data. After Phase 3, two Benten instances hold the same graph and exchange Nodes cryptographically — the first configuration where "Benten communities" become real. The project now pauses to assess what (if anything) gates a Benten Engine v1 release before continuing into Phases 4–8.
 
 **Phases 4–8** are applications composed from the engine: a CMS migration that exercises the engine under realistic load, platform features (schema-driven rendering, self-composing admin, declarative plugin manifests), a Personal AI Assistant MVP (MCP, PARA knowledge organization, on-demand tool composition), community spaces, and a USD-pegged currency for the network's economic layer.
 
@@ -94,7 +94,7 @@ Each phase layers on the previous without requiring changes below. The engine's 
 ## Where to go from here
 
 - **Try it.** See [`QUICKSTART.md`](QUICKSTART.md) for the 10-minute path. `npx create-benten-app my-app` gives you a scaffolded project with a `crud('post')` handler.
-- **Understand the architecture.** [`ARCHITECTURE.md`](ARCHITECTURE.md) walks the eight crates, the invariant set, the storage layer, and the evaluator's request flow.
+- **Understand the architecture.** [`ARCHITECTURE.md`](ARCHITECTURE.md) walks the ten crates (eight foundational + `benten-id` + `benten-sync`), the invariant set, the storage layer, and the evaluator's request flow.
 - **Read the error catalog.** [`ERROR-CATALOG.md`](ERROR-CATALOG.md) is the stable contract: every error the engine surfaces, by discriminant, with context.
 - **Look at the glossary.** [`GLOSSARY.md`](GLOSSARY.md) names the concepts above and a few more.
 - **Read the source.** The engine is deliberately small. `crates/benten-engine/src/lib.rs` is the integration surface; `crates/benten-eval/src/evaluator.rs` is the walk loop; `crates/benten-graph/src/redb_backend.rs` is the storage. If the docs are confusing, the code is the ground truth.

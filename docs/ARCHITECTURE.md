@@ -8,9 +8,12 @@ For plain-English orientation, start with [`HOW-IT-WORKS.md`](HOW-IT-WORKS.md). 
 
 ## Ten crates
 
-<!-- Phase-3 in flight: 9th crate benten-id added at G14-A1; 10th crate benten-sync added at G16-A as native-only; full 8→10 transition narrative lands at G20-B docs sweep -->
-
-The Rust workspace:
+The Rust workspace ships ten Rust crates plus the napi bindings + the
+TypeScript DSL wrapper. The 8 → 10 crate transition completed across
+Phase 3 R5 (`benten-id` 9th crate at G14-A1; `benten-sync` 10th crate
+at G16-A; bodies filled in by G14-A2 + G16-B/C/D). The narrative below
+is the FINAL Phase-3-close shape — the prior in-flight callouts have
+been retired.
 
 ```
 crates/
@@ -28,41 +31,87 @@ crates/
   benten-eval/          # 12 operation primitives. Iterative evaluator (explicit
                         # stack, not recursive). Structural validation (14
                         # invariants). Transaction primitive.
-  benten-id/            # Phase-3 G14-A1 — Ed25519 keypair + did:key +
-                        # UCAN chain validation. G14-A2 wave-4a' adds
-                        # VC + multi_sig + DID rotation + device-DID
-                        # capability-attestation onto the same crate.
-  benten-sync/          # Phase-3 G16-A wave-6 — Atrium P2P sync. G16-A
-                        # canary lands the iroh transport core
-                        # (transport.rs + peer_id.rs + errors.rs +
-                        # handshake_wire.rs); G16-B/C/D wave-6b fill
-                        # crdt.rs + mst.rs + handshake.rs (Loro CRDT,
-                        # MST diff, DID handshake protocol body).
-                        # NATIVE-ONLY per CLAUDE.md baked-in #17
-                        # (excluded from `wasm32` targets so browser /
-                        # edge thin-compute deployments do not carry
-                        # iroh / Loro in their bundles).
+  benten-id/            # 9th crate (Phase-3 G14-A1 + G14-A2). Ed25519
+                        # keypair management with secret-key zeroization on
+                        # drop, did:key DID generation (z-multibase prefix
+                        # + 0xed01 multicodec per W3C spec), UCAN claim
+                        # envelope + chain validation + nbf/exp time-window
+                        # enforcement, VC issuance / verification with
+                        # `credentialStatus` revocation, DID rotation with
+                        # `superseded_by` attestation chain,
+                        # MultiSigSurface trait (Ed25519SingleKey default
+                        # impl + threshold extension point), and the
+                        # device-DID capability-attestation surface
+                        # (replay-resistant via nonce + freshness window
+                        # + nonce-store). Dependency edges:
+                        # `ed25519-dalek`, `ssi`, `blake3`,
+                        # `serde_ipld_dagcbor`, `zeroize`, `secrecy`,
+                        # `subtle`, `getrandom` only — NO edges back to
+                        # `benten-graph` / `benten-eval` /
+                        # `benten-engine` per arch-r1-10.
+  benten-sync/          # 10th crate (Phase-3 G16-A canary + G16-B/C/D
+                        # body). Atrium P2P sync layer: iroh transport
+                        # (loopback + relay + holepunch fallback), Loro
+                        # CRDT for per-property LWW with HLC ordering,
+                        # MST diff for delta computation, DID handshake
+                        # protocol with mutual auth, and the
+                        # `host:atrium:*` capability surface
+                        # (`publish_view_result` UCAN-gated per Phase-3
+                        # D2 ratification + D-PHASE-3-21 — view-result
+                        # replication does NOT introduce a new
+                        # trust-policy primitive). NATIVE-ONLY per
+                        # CLAUDE.md baked-in commitment #17: the crate
+                        # is excluded from `wasm32` targets so browser
+                        # tabs and edge thin-compute deployments do not
+                        # carry iroh / Loro in their bundles. Browser /
+                        # edge surfaces sync THROUGH a full peer via
+                        # authenticated thin-client protocol; they are
+                        # not full Atrium peers themselves.
   benten-dsl-compiler/  # Compiles the textual handler-DSL grammar into
                         # SubgraphSpec. Phase-2b G12-B addition; routes from
                         # devserver into Engine.register_subgraph.
   benten-engine/        # Composes the above into a public API. Wires the
                         # capability hook, storage backend, IVM subscriber.
+                        # Phase-3 added the Atrium DSL session-handle
+                        # `engine.atrium({config}).join()` (per Phase-3 D1
+                        # ratification — Atrium DSL session-handle B-prime).
 
 bindings/
-  napi/             # Node.js bindings via napi-rs v3. Same codebase compiles
-                    # to native and WASM.
+  napi/             # Node.js bindings via napi-rs v3. Compiles to a
+                    # native dynamic library (`.node`) for desktop /
+                    # server AND to a wasm32 module for browser / edge
+                    # runtimes. The wasm32 build is a thin compute
+                    # surface per CLAUDE.md commitment #17: stateless
+                    # reads against snapshot data + writes via fetch to
+                    # a full peer; no Loro / iroh / direct sync state in
+                    # the bundle.
 
 packages/
-  engine/           # TypeScript DSL wrapper (@benten/engine).
+  engine/           # TypeScript DSL wrapper (@benten/engine). Phase 3
+                    # adds the Atrium walkthrough surface (peer connect /
+                    # sync trigger / UCAN grant flow / DID resolution)
+                    # over the napi surface.
 ```
 
-The `benten-id` + `benten-sync` rows landed as canary stubs alongside the
-Phase-3 R3 RED-PHASE corpus (R3-A + R3-C respectively); their executable
-bodies fill in across waves G14-A1 (identity primitives) and G16-A/B/C/D
-(Atrium sync), with the FINAL crate-graph narrative (replacing this
-in-flight description) landing at G20-B per `tests/phase_3_workspace/architecture_md_g20b_final.rs::architecture_md_lists_10_crates_with_benten_id_and_benten_sync`.
+The architectural pin
+`tests/phase_3_workspace/architecture_md_g20b_final.rs::architecture_md_lists_10_crates_with_benten_id_and_benten_sync`
+verifies all ten crate names + the `native-only` annotation on
+`benten-sync` are present + the in-flight callouts are gone — i.e. the
+Phase-3 close state of this doc is the durable narrative, not an
+intermediate transitional one.
 
-The crate graph is DAG-shaped: `benten-errors` has no Benten dependencies; every other crate imports from it for error discriminants; `benten-engine` sits at the top and is the only crate applications link against.
+The crate graph is DAG-shaped:
+
+- `benten-errors` has no Benten dependencies; every other crate imports
+  from it for error discriminants.
+- `benten-id` depends only on third-party crypto crates (no edges back
+  to graph / eval / engine), so the identity surface is reusable
+  outside the engine if needed.
+- `benten-sync` depends on `benten-id` (DID + UCAN) and `benten-core`
+  (Node + content-addressing) but NOT on `benten-eval` (per arch-r1-10) —
+  sync is not allowed to walk the evaluator.
+- `benten-engine` sits at the top and is the only crate applications
+  link against.
 
 ### Thinness test
 
@@ -195,7 +244,7 @@ Content is serialized via `serde_ipld_dagcbor` — the IPLD subset of CBOR with 
 
 ## Incremental View Maintenance
 
-`benten-ivm` subscribes to ChangeEvents from the storage layer and keeps views current. Phase 1 shipped five hand-written views covering the hot paths: capability resolution, content listings, change-event fan-out, principal resolution, and view-staleness tallies. Phase 2b production-registered Algorithm B (dependency-tracked incremental maintenance) with per-view strategy selection (`Strategy::A` / `Strategy::B`) at `Engine::create_user_view`. The Phase-2b dispatch constructs `AlgorithmBView::for_id` for the 5 canonical view IDs that `AlgorithmBView` supports natively; user-defined view IDs that declare `Strategy::B` continue to fall back to `ContentListingView` silently — generalised user-defined Algorithm B handlers are a Phase-3 lift (see [`docs/future/phase-3-backlog.md`](future/phase-3-backlog.md) §5).
+`benten-ivm` subscribes to ChangeEvents from the storage layer and keeps views current. Phase 1 shipped five hand-written views covering the hot paths: capability resolution, content listings, change-event fan-out, principal resolution, and view-staleness tallies. Phase 2b production-registered Algorithm B (dependency-tracked incremental maintenance) with per-view strategy selection (`Strategy::A` / `Strategy::B`) at `Engine::create_user_view`. Phase 3 (G15-A + G15-B + W9-T1) generalised Algorithm B beyond the 5 canonical view IDs: `Algorithm::register(view_id, label_pattern, projection)` (and the budget-aware sibling `Algorithm::register_with_budget`) instantiates a generic single-loop kernel (`benten_ivm::algorithm_b::GenericKernel`) for non-canonical view IDs keyed on `(label_pattern, projection)`, with the `AnchorPrefix` selector lift (post-G15-A) shipping in `register_user_view`. The drift-detector proptest harness at `crates/benten-ivm/tests/algorithm_b_drift_detector.rs` runs incremental-vs-rebuild parity end-to-end (5 pins × 1 000 cases). The `ContentListingView` silent-fallback for user-defined Strategy::B views is RETIRED.
 
 The evaluator does not know IVM exists. Views are materialized Nodes; reads hit them via the normal read path.
 
@@ -209,7 +258,7 @@ fn check_write(&self, ctx: &WriteContext) -> Result<Decision, CapError>;
 
 The engine's default is `NoAuthBackend` — allows everything, zero overhead — so embedded single-user deployments don't pay for capability machinery.
 
-A `GrantBackedPolicy` ships alongside: grants are Nodes with `GRANTED_TO` edges, attenuation is verified along the delegation chain, revocation is a Node write. Phase 2a added TOCTOU refresh at five points (transaction commit, CALL entry, every N iterations of ITERATE, WAIT resume, wall-clock boundary) with a dual monotonic + HLC clock source. Phase 3 adds UCAN as another policy backend.
+A `GrantBackedPolicy` ships alongside: grants are Nodes with `GRANTED_TO` edges, attenuation is verified along the delegation chain, revocation is a Node write. Phase 2a added TOCTOU refresh at five points (transaction commit, CALL entry, every N iterations of ITERATE, WAIT resume, wall-clock boundary) with a dual monotonic + HLC clock source. Phase 3 (G14-B) landed `UCANBackend` — a durable UCAN-grant policy backend over `benten-id`'s claim envelope + chain validation surface. UCAN grants attenuate on delegation, propagate revocations, and validate `nbf`/`exp` time-windows at chain-walk time per crypto-blocker-2; constant-time signature comparison via `subtle::ConstantTimeEq` per crypto-major-4. Compromise #11 (IVM views per-row read-gate) closed end-to-end via the G15-A label-hint extraction + G14-D delivery-side filtering composition.
 
 ## Determinism
 

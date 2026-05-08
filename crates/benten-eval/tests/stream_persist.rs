@@ -1,5 +1,3 @@
-#![cfg(feature = "phase_2b_landed")]
-// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: STREAM persist option (phil-r1-1) (G6-A).
 //!
 //! Pin source: phil-r1-1 — opt-in `stream({ persist: true })` materializes
