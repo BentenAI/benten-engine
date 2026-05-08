@@ -95,21 +95,17 @@ mod integration {
     // G20-A1 wave-8a un-gated: testing_make_minimal_sandbox_spec
     // helper + body un-ignored.
     pub mod sandbox_compile_time_disabled_on_wasm32; // sec-pre-r1-05 + wasm-r1-3
-    #[cfg(feature = "phase_2b_landed")]
     pub mod snapshot_blob_round_trip; // D10 export/import round-trip
-    // wave-8g un-gated: G12-E follow-up landed `resume_with_meta` engine
-    // API + the four `testing_*` helpers these fixtures consume. The
-    // `phase_2b_landed` gate stays on for the broader sibling fixtures
-    // whose helpers (TTL spec, persistent subscriber registration, etc.)
-    // remain on Phase-3 / 8c-cont briefs. The wave-8c-cont-pending second
-    // half of `suspension_store_round_trip_subscription_cursor` keeps its
-    // `#[ignore]` marker so the file as a whole can compile + the first
-    // test can run.
+    // Pre-R4b cleanup: `phase_2b_landed` gate retired across the suite.
+    // The four `testing_*` helpers (`testing_make_wait_spec_with_ttl_hours`,
+    // `testing_call_to_suspend`, `testing_suspension_store_has_wait`,
+    // `testing_advance_wait_clock`) + `Engine::resume_with_meta` +
+    // `Engine::testing_advance_wait_clock_by` all landed at G19/G20-A2;
+    // the wasm32-wasip1 cross-target canonical-CID test runs against the
+    // production runtime arms that shipped at phase-2b-close.
     pub mod suspension_store_round_trip_subscription_cursor; // G12-E + D5 cursor
     pub mod suspension_store_round_trip_wait_metadata; // G12-E generalization
-    #[cfg(feature = "phase_2b_landed")]
     pub mod wait_ttl_expires_via_suspension_store; // D12 + Q4 (G12-E owns TTL)
-    #[cfg(feature = "phase_2b_landed")]
     pub mod wasip1_target_canonical_cid; // wasm-r1-1 dual-target gate
 
     // ---- Phase 2b Wave-8h audit-gap fixes ----

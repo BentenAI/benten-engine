@@ -76,7 +76,6 @@ pub fn try_construct_view_with_strategy(strategy: Strategy) -> Result<Box<dyn Vi
 /// - missing file at the expected path (no Criterion run staged)
 /// - file present but not valid JSON
 /// - JSON missing the `mean.point_estimate` field
-#[cfg(feature = "phase_2b_landed")]
 pub fn criterion_estimates_mean_ns(
     group: &str,
     view: &str,
@@ -115,27 +114,4 @@ pub fn criterion_estimates_mean_ns(
             )
         })?;
     Ok(mean)
-}
-
-/// Stub variant when `phase_2b_landed` is OFF. The bench gate test is
-/// itself gated on the same feature so the real parser is only needed
-/// when the gate runs.
-#[cfg(not(feature = "phase_2b_landed"))]
-pub fn criterion_estimates_mean_ns(
-    _group: &str,
-    _view: &str,
-    _axis: &str,
-    _value: &str,
-) -> Result<f64, String> {
-    Err(String::from(
-        "criterion_estimates_mean_ns requires `phase_2b_landed` feature",
-    ))
-}
-
-// Internal compile-time use to satisfy the unused-import warning when the
-// feature flag flips. `String` is actually used in both branches but the
-// combined lint sometimes mis-reports.
-#[allow(dead_code)]
-fn _force_string_use() -> String {
-    String::new()
 }

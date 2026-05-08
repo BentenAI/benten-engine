@@ -1,14 +1,6 @@
 //! Criterion bench: Algorithm B (`Strategy::B`) vs hand-written (`Strategy::A`),
 //! per view (G8-A).
 //!
-//! ## R3-consolidation gating
-//!
-//! When `phase_2b_landed` is OFF (CI required-check default during R3), this
-//! bench is a no-op `main()`. The `[[bench]] harness = false` row in
-//! Cargo.toml needs the file to provide a `main`, so we cannot use a
-//! crate-level `#![cfg]` to make the file empty. R5 G8-A flips the feature
-//! to enable the real body. See `.addl/phase-2b/r3-consolidation.md` §4.
-//!
 //! ## Gate
 //!
 //! Algorithm B must run within **20%** of the corresponding hand-written
@@ -34,17 +26,6 @@
 
 // THRESHOLD_NS=informational policy=ratio_gate source=§G8-A-b-within-20pct-of-a
 
-// G8-A: `phase_2b_landed` is now enabled by default (see Cargo.toml). The
-// non-landed cfg branch below remains as a guard so building this bench
-// with `--no-default-features` still produces a runnable (no-op) main rather
-// than a hard compile error.
-
-#[cfg(not(feature = "phase_2b_landed"))]
-fn main() {
-    // No-op: `phase_2b_landed` feature disabled.
-}
-
-#[cfg(feature = "phase_2b_landed")]
 #[allow(
     clippy::unwrap_used,
     clippy::expect_used,
@@ -295,5 +276,4 @@ mod inner {
     );
 }
 
-#[cfg(feature = "phase_2b_landed")]
 criterion::criterion_main!(inner::benches);

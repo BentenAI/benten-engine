@@ -13,7 +13,6 @@
 //!
 //! Owner: R5 G12-B (qa-r4-01 R3-followup); lifted to GREEN at R6-R3-FP.
 
-#![cfg(feature = "phase_2b_landed")]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 /// Scan `crates/benten-engine/Cargo.toml` for any entry matching
