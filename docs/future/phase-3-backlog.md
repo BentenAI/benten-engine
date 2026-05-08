@@ -459,15 +459,13 @@ The Rust-side anchor test `crates/benten-eval/tests/sandbox_severity_priority_g1
 
 **Closure shape (Phase-3 G20-A3 wave-8a):** `tools/benten-dev/bin/benten-dev.mjs` thin-CLI front-door committed (~115 LOC node ESM). The wrapper resolves the compiled `target/{release,debug}/benten-dev` Cargo binary (or PATH-installed binary) via `child_process.spawnSync` and forwards `inspect-state <path>` arguments verbatim — the canonical-bytes parsing stays in Rust (one source of truth) per the §6.9 commitment. `--help`, `-h`, `--version`, `-V` flags supported. The 1 `describe.skip` + 3 `it.skip` blocks in `tools/benten-dev/test/inspect_state_pretty_prints.test.ts` un-skipped.
 
-### 6.11 G14-C inline base64 → workspace `data-encoding` dep (g14-c-mr-6 follow-up)
+### 6.11 G14-C inline base64 → workspace `data-encoding` dep (g14-c-mr-6 follow-up) — CLOSED at Phase-3 R5 wave-9 W9-T5
 
-**Phase 3 G14-C state:** `crates/benten-engine/src/manifest_signing.rs:619-682` ships an inline ~80 LOC base64 encoder/decoder used by `sign_manifest` / `decode_signature`. Cargo.lock confirms `data-encoding` (and `base64ct`) are already in the dependency graph transitively. The inline implementation is functionally safe (length-checks the 64-byte signature, no panic on malformed input, no information leak in error paths beyond non-secret invalid-char position) but duplicates well-vetted alternatives in the workspace.
+**Closure shape (Phase-3 R5 wave-9 W9-T5):** Workspace-level `data-encoding = "2"` (default-features off + `alloc`) declared in `Cargo.toml [workspace.dependencies]`; `crates/benten-engine/Cargo.toml` consumes via `data-encoding = { workspace = true }`. The ~80 LOC inline base64 encoder/decoder in `crates/benten-engine/src/manifest_signing.rs` (and its ~30 LOC mirror in `crates/benten-engine/tests/manifest_signing.rs`) are deleted; production call sites at `sign_manifest` and `decode_signature` now invoke `data_encoding::BASE64.encode(...)` / `data_encoding::BASE64.decode(b64.as_bytes())` directly. Round-trip equivalence for the RFC 4648 known-vector set pinned by `crates/benten-engine/src/manifest_signing.rs::tests::base64_round_trip_known_vectors_via_data_encoding`. Manifest-signing integration suite (12 tests at `crates/benten-engine/tests/manifest_signing.rs`) green; existing on-disk manifests round-trip identically (RFC 4648 alphabet + padding match the prior inline impl).
 
-**Phase 3 target:** Replace the inline encoder/decoder with `data-encoding::BASE64` (or `base64ct::Base64::decode` for constant-time decode). 4-5 LOC at the call sites; drop the ~80 LOC inline impl + its mirror in `crates/benten-engine/tests/manifest_signing.rs`. Bundle with the broader workspace-level base64 dep convention if one is set during Phase-3 dependency-discipline review.
+**Phase 3 G14-C state (historical, pre-W9-T5):** `crates/benten-engine/src/manifest_signing.rs:619-682` shipped an inline ~80 LOC base64 encoder/decoder used by `sign_manifest` / `decode_signature`. Cargo.lock confirmed `data-encoding` (and `base64ct`) were already in the dependency graph transitively. The inline implementation was functionally safe (length-checked the 64-byte signature, no panic on malformed input, no information leak in error paths beyond non-secret invalid-char position) but duplicated well-vetted alternatives in the workspace.
 
-**Why Phase 3:** Bundle with workspace dep convention. Standalone refactor PR is acceptable but not load-bearing.
-
-**Touch size:** ~80 LOC drop, ~10 LOC add. One PR.
+**Touch size (actual at closure):** ~110 LOC drop, ~14 LOC add (call-site swaps + workspace-dep entry + retained known-vector roundtrip test against the new dep).
 
 ### 6.10 `random` host-fn deferral — workspace CSPRNG framework choice — CLOSED at Phase-3 G17-A2 wave-5b
 

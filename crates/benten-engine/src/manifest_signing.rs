@@ -342,7 +342,7 @@ pub fn sign_manifest(
     let sig = publisher_kp.sign(&bytes);
     let mut signed = manifest.clone();
     signed.signature = Some(ManifestSignature {
-        ed25519: Some(base64_encode(sig.to_bytes().as_slice())),
+        ed25519: Some(data_encoding::BASE64.encode(sig.to_bytes().as_slice())),
     });
     Ok(signed)
 }
@@ -490,7 +490,8 @@ fn decode_signature(manifest: &ModuleManifest) -> Result<Vec<u8>, ManifestVerify
     let Some(b64) = &sig.ed25519 else {
         return Err(ManifestVerifyError::Unsigned);
     };
-    let bytes = base64_decode(b64)
+    let bytes = data_encoding::BASE64
+        .decode(b64.as_bytes())
         .map_err(|e| ManifestVerifyError::SignatureMalformed(format!("base64: {e}")))?;
     if bytes.len() != 64 {
         return Err(ManifestVerifyError::SignatureMalformed(format!(
@@ -775,81 +776,28 @@ impl Engine {
 }
 
 // ---------------------------------------------------------------------------
-// Base64 — small inline implementation to avoid an extra dep.
+// Base64 codec
+//
+// Phase-3 R5 wave-9 W9-T5 (§6.11 g14-c-mr-6 follow-up): the inline ~80 LOC
+// base64 encoder/decoder that lived here was replaced by the workspace-level
+// `data-encoding` dep. `data_encoding::BASE64` matches RFC 4648 alphabet +
+// padding, so existing on-disk manifests round-trip identically. Call sites
+// upstream now invoke `data_encoding::BASE64.encode` / `.decode` directly.
 // ---------------------------------------------------------------------------
-
-fn base64_encode(bytes: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
-    let mut chunks = bytes.chunks_exact(3);
-    for chunk in chunks.by_ref() {
-        let n = (u32::from(chunk[0]) << 16) | (u32::from(chunk[1]) << 8) | u32::from(chunk[2]);
-        out.push(ALPHABET[((n >> 18) & 0x3F) as usize] as char);
-        out.push(ALPHABET[((n >> 12) & 0x3F) as usize] as char);
-        out.push(ALPHABET[((n >> 6) & 0x3F) as usize] as char);
-        out.push(ALPHABET[(n & 0x3F) as usize] as char);
-    }
-    let rem = chunks.remainder();
-    match rem.len() {
-        1 => {
-            let n = u32::from(rem[0]) << 16;
-            out.push(ALPHABET[((n >> 18) & 0x3F) as usize] as char);
-            out.push(ALPHABET[((n >> 12) & 0x3F) as usize] as char);
-            out.push('=');
-            out.push('=');
-        }
-        2 => {
-            let n = (u32::from(rem[0]) << 16) | (u32::from(rem[1]) << 8);
-            out.push(ALPHABET[((n >> 18) & 0x3F) as usize] as char);
-            out.push(ALPHABET[((n >> 12) & 0x3F) as usize] as char);
-            out.push(ALPHABET[((n >> 6) & 0x3F) as usize] as char);
-            out.push('=');
-        }
-        _ => {}
-    }
-    out
-}
-
-fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
-    fn idx(c: u8) -> Result<u32, String> {
-        match c {
-            b'A'..=b'Z' => Ok(u32::from(c - b'A')),
-            b'a'..=b'z' => Ok(u32::from(c - b'a') + 26),
-            b'0'..=b'9' => Ok(u32::from(c - b'0') + 52),
-            b'+' => Ok(62),
-            b'/' => Ok(63),
-            _ => Err(format!("invalid base64 char: 0x{c:02x}")),
-        }
-    }
-    let s = s.as_bytes();
-    if !s.len().is_multiple_of(4) {
-        return Err(format!("base64 length {} not divisible by 4", s.len()));
-    }
-    let mut out = Vec::with_capacity(s.len() / 4 * 3);
-    for chunk in s.chunks_exact(4) {
-        let pad = chunk.iter().rev().take_while(|&&b| b == b'=').count();
-        let n = (idx(chunk[0])? << 18)
-            | (idx(chunk[1])? << 12)
-            | (if pad >= 2 { 0 } else { idx(chunk[2])? }) << 6
-            | (if pad >= 1 { 0 } else { idx(chunk[3])? });
-        out.push(((n >> 16) & 0xFF) as u8);
-        if pad < 2 {
-            out.push(((n >> 8) & 0xFF) as u8);
-        }
-        if pad < 1 {
-            out.push((n & 0xFF) as u8);
-        }
-    }
-    Ok(out)
-}
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
+    /// Phase-3 R5 wave-9 W9-T5 (§6.11 g14-c-mr-6 follow-up).
+    ///
+    /// Pin: `data_encoding::BASE64` produces the same canonical output as
+    /// the previous inline encoder for the RFC 4648 known-vector set. If
+    /// the workspace `data-encoding` dep is ever swapped (e.g. to a URL-
+    /// safe variant), this test fires to catch the silent semantic shift.
     #[test]
-    fn base64_round_trip_known_vectors() {
+    fn base64_round_trip_known_vectors_via_data_encoding() {
         let cases: &[(&[u8], &str)] = &[
             (b"", ""),
             (b"f", "Zg=="),
@@ -860,8 +808,11 @@ mod tests {
             (b"foobar", "Zm9vYmFy"),
         ];
         for (raw, encoded) in cases {
-            assert_eq!(base64_encode(raw), *encoded);
-            assert_eq!(base64_decode(encoded).unwrap(), *raw);
+            assert_eq!(data_encoding::BASE64.encode(raw), *encoded);
+            assert_eq!(
+                data_encoding::BASE64.decode(encoded.as_bytes()).unwrap(),
+                *raw
+            );
         }
     }
 

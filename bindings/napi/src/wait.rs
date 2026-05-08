@@ -86,7 +86,7 @@ impl SuspensionBridge {
                 // Base64-encode the bytes so the JSON surface is self-
                 // contained. The TS wrapper decodes with `Buffer.from(s, 'base64')`
                 // to produce the `Buffer` the public API promises.
-                let b64 = base64_encode(&handle_bytes);
+                let b64 = data_encoding::BASE64.encode(&handle_bytes);
                 map.insert("handle".into(), serde_json::Value::String(b64));
                 map.insert("stateCid".into(), serde_json::Value::String(state_cid));
                 map.insert("signalName".into(), serde_json::Value::String(signal_name));
@@ -218,39 +218,13 @@ fn json_to_value(v: serde_json::Value) -> napi::Result<Value> {
 }
 
 // ---------------------------------------------------------------------------
-// Minimal base64 encoder (avoids a new direct dep on `base64`)
+// Phase-3 R5 wave-9 W9-T5 (§6.11 g14-c-mr-6 follow-up): the inline base64
+// encoder that lived here was retired in favor of the workspace-level
+// `data-encoding` dep. The `SuspensionBridge::Suspended` JSON-bridge call
+// site above invokes `data_encoding::BASE64.encode(...)` directly. The TS
+// wrapper continues to decode with `Buffer.from(s, 'base64')`; alphabet +
+// padding match RFC 4648 (same shape the prior inline impl produced).
 // ---------------------------------------------------------------------------
-
-const B64_ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-fn base64_encode(input: &[u8]) -> String {
-    let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
-    let mut i = 0;
-    while i + 3 <= input.len() {
-        let n =
-            (u32::from(input[i]) << 16) | (u32::from(input[i + 1]) << 8) | u32::from(input[i + 2]);
-        out.push(B64_ALPHABET[((n >> 18) & 0x3f) as usize] as char);
-        out.push(B64_ALPHABET[((n >> 12) & 0x3f) as usize] as char);
-        out.push(B64_ALPHABET[((n >> 6) & 0x3f) as usize] as char);
-        out.push(B64_ALPHABET[(n & 0x3f) as usize] as char);
-        i += 3;
-    }
-    let rem = input.len() - i;
-    if rem == 1 {
-        let n = u32::from(input[i]) << 16;
-        out.push(B64_ALPHABET[((n >> 18) & 0x3f) as usize] as char);
-        out.push(B64_ALPHABET[((n >> 12) & 0x3f) as usize] as char);
-        out.push('=');
-        out.push('=');
-    } else if rem == 2 {
-        let n = (u32::from(input[i]) << 16) | (u32::from(input[i + 1]) << 8);
-        out.push(B64_ALPHABET[((n >> 18) & 0x3f) as usize] as char);
-        out.push(B64_ALPHABET[((n >> 12) & 0x3f) as usize] as char);
-        out.push(B64_ALPHABET[((n >> 6) & 0x3f) as usize] as char);
-        out.push('=');
-    }
-    out
-}
 
 /// Keep `Cid` imported for the `parse_cid` / principal-adapter path when
 /// napi-rs re-runs the build against different feature flags. Removing

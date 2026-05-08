@@ -104,6 +104,12 @@ benten-eval = { path = "../benten-eval", features = ["diag"] }
 benten-graph = { path = "../benten-graph" }
 benten-ivm = { path = "../benten-ivm" }
 blake3 = { workspace = true }
+# Phase-3 R5 wave-9 W9-T5 (§6.11) — workspace-level base64 codec for
+# `manifest_signing.rs`. Replaces the previous ~80 LOC inline base64
+# encoder/decoder (g14-c-mr-6 follow-up). `data-encoding::BASE64` matches
+# RFC 4648 alphabet + padding so signatures round-trip identically to the
+# previous inline impl.
+data-encoding = { workspace = true }
 thiserror = { workspace = true }
 # Phase 2b G10-B — `ModuleManifest` canonical DAG-CBOR encoding (D9-RESOLVED).
 # Production code paths (`Engine::install_module`, `Engine::compute_manifest_cid`)
