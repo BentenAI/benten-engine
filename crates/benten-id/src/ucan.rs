@@ -296,6 +296,95 @@ pub fn validate_chain_for_audience(
     validate_chain_inner(chain, None, Some(expected_audience.as_str()))
 }
 
+/// Validate a UCAN delegation chain at a given audience for a specific
+/// required capability.
+///
+/// Composes [`validate_chain_for_audience`] + [`validate_chain_at`]
+/// + a leaf-claim check that the leaf token's `att` array actually
+/// grants the requested `(resource, ability)` capability. The leaf-
+/// claim check uses the same subsume relation as
+/// [`validate_chain_at`]'s attenuation walk
+/// ([`capability_satisfies_requirement`]) so the engine's own
+/// internal subsume rule is the SAME relation external callers
+/// query.
+///
+/// Per the typed-CALL `ucan_validate_chain` op: a chain that's
+/// structurally sound (audience-bound + signed + in-window +
+/// well-attenuated) but whose leaf does NOT name the requested
+/// capability MUST reject. Without this gate, a handler asking "does
+/// this chain grant `zone:write` to `audience`?" gets `valid: true`
+/// regardless of the leaf `att` — a defense-in-depth hole at the
+/// heart of the Phase-3 Atrium / UCAN authorization story.
+///
+/// Required capability format: `"<resource>:<ability>"` where
+/// `<ability>` is the LAST `:`-separated segment. Example:
+/// `"zone:user:write"` parses to
+/// `Capability { resource: "zone:user", ability: "write" }`. The
+/// caller MUST pass a string with at least one `:`; an
+/// ability-only string (no `:`) returns
+/// [`UcanError::CapabilityNotGranted`].
+///
+/// # Errors
+///
+/// Returns [`UcanError::AudienceMismatch`] if the leaf is not bound
+/// to `expected_audience`; [`UcanError::Expired`] /
+/// [`UcanError::NotYetValid`] if any link is out of `now`'s window;
+/// [`UcanError::BadSignature`] / [`UcanError::ChainLinkBroken`] /
+/// [`UcanError::AttenuationViolated`] from the chain walk;
+/// [`UcanError::CapabilityNotGranted`] if the leaf does not name
+/// the requested capability.
+pub fn validate_chain_for_capability(
+    chain: &[Ucan],
+    expected_audience: &Did,
+    required: &Capability,
+    now: u64,
+) -> Result<(), UcanError> {
+    // Audience binding + chain walk (signature + nbf/exp + chain-link
+    // integrity + attenuation) all happen in `validate_chain_inner`.
+    validate_chain_inner(chain, Some(now), Some(expected_audience.as_str()))?;
+
+    // Leaf-claim check: the leaf's `att` MUST contain a capability
+    // that subsumes the requested one (exact / wildcard-ability /
+    // path-prefix-resource per `caps_match_or_subsume`).
+    let leaf = chain.first().ok_or(UcanError::EmptyChain)?;
+    let granted = leaf
+        .claims
+        .att
+        .iter()
+        .any(|granted_cap| caps_match_or_subsume(granted_cap, required));
+    if !granted {
+        let leaf_caps = leaf
+            .claims
+            .att
+            .iter()
+            .map(|c| format!("{}:{}", c.resource, c.ability))
+            .collect();
+        return Err(UcanError::CapabilityNotGranted {
+            required: format!("{}:{}", required.resource, required.ability),
+            leaf_caps,
+        });
+    }
+    Ok(())
+}
+
+/// Test whether `granted` subsumes `required` per the same subsume
+/// relation `validate_chain_at`'s internal attenuation walk uses.
+///
+/// Public so engine-side code (typed-CALL dispatch in
+/// `benten-engine`) can answer "does this chain grant `required`?"
+/// using the SAME relation the chain-walk uses internally — single
+/// source of truth.
+///
+/// Subsume relation:
+/// - exact match (`resource` AND `ability` equal), OR
+/// - `granted.ability` is `*` AND `resource` matches, OR
+/// - `granted.resource` is a path-prefix of `required.resource` AND
+///   ability matches per the wildcard rule above.
+#[must_use]
+pub fn capability_satisfies_requirement(granted: &Capability, required: &Capability) -> bool {
+    caps_match_or_subsume(granted, required)
+}
+
 fn validate_chain_inner(
     chain: &[Ucan],
     now: Option<u64>,

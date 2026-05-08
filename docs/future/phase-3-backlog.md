@@ -173,6 +173,32 @@
 - `.addl/phase-3/mini-review-pr-143-g20-b-dx-optimizer.json` (g20b-dx-1, g20b-dx-4, g20b-dx-7, g20b-dx-8) — origin findings.
 - `.addl/phase-3/mini-review-pr-143-g20-b-doc-engineer.json` (doc-2) — symbol-cite drift sibling.
 
+### 2.5 typed-CALL fp-mini-review residuals (G21-T1 sec-minor-2/3/4 + corr-minor-3)
+
+**Origin (G21-T1 fp-mini-review, 2026-05-08):** the security mini-review on PR #145 surfaced 4 MAJORs (closed end-to-end at PR #145 fix-pass) plus 4 minors. The MAJORs are closed; the four named carries below land in a follow-up wave so the canary-scope PR remains tight.
+
+**Carry items:**
+
+**(a) typed-CALL secret-byte zeroize discipline (sec-minor-2).** `build_seed_envelope` in `crates/benten-engine/src/typed_call_dispatch.rs` constructs a `Vec<u8>` carrying a 32-byte seed; the Vec is dropped naturally but is NOT zeroized-on-drop. The `keypair_generate` / `keypair_from_seed` ops also surface raw seed bytes inside a `Value::Bytes` wrapper that has no zeroize discipline. Phase 3 target: introduce a `zeroize::Zeroizing<Vec<u8>>` wrapper at the `build_seed_envelope` site + audit the per-op `Value::Bytes` outputs for whether wrapping at the dispatch boundary is feasible without breaking the public Value contract. `zeroize` is already a workspace dep (`Cargo.toml` line 367) + `benten-id` consumes it; threading into `benten-engine` is a one-line `Cargo.toml` add. Touch size: ~30-60 LOC (wrapper + 2-3 callsite swaps + a "zeroize-discipline-pin" memory-pattern test).
+
+**(b) `did_resolve` op DID-method validation (sec-minor-3).** `crates/benten-engine/src/typed_call_dispatch.rs::did_resolve` hardcodes `method: "key"` in the output map but the input string is not parsed for its DID method. Phase-3+ `did:web:`, `did:plc:` etc. would silently produce a wrong `method` field. Phase 3 target: parse the method dynamically from the DID prefix (the segment between `did:` and the next `:`); if `did:key:`, route through current resolver; non-`did:key:` methods either route through future resolvers OR reject with a typed error. Touch size: ~20-40 LOC + 2-3 input-shape pins.
+
+**(c) `cap:typed:*` namespace consumer-side mapping (sec-minor-4).** The 8 typed-CALL caps (`cap:typed:crypto-sign` / `cap:typed:crypto-verify` / `cap:typed:crypto-keygen` / `cap:typed:hash` / `cap:typed:codec` / `cap:typed:did-resolve` / `cap:typed:ucan-validate` / `cap:typed:vc-verify`) are STRUCTURALLY declared at `TypedCallOp::required_cap()` but `crates/benten-caps/src/backends/ucan.rs::UCANBackend` does not yet have a policy-mapping table that says "this UCAN claim string corresponds to typed-CALL cap X." Under `NoAuthBackend` all typed caps are permitted (canary-scope intent); under UCAN the cap-deny-by-default behavior surfaces because no UCAN claim grants a `cap:typed:*` capability. Phase 3 target: add a UCANBackend → typed-cap mapping function so a UCAN claim like `Capability::new("typed:crypto", "sign")` grants `cap:typed:crypto-sign` (or whatever cap-grammar Phase-3 sync settles on). Touch size: ~50-100 LOC + per-op mapping pin.
+
+**(d) Reserved `engine:typed:` handler-id namespace registration reject (corr-minor-3).** `Engine::register_subgraph` does not currently reject a handler whose `handler_id` starts with `engine:typed:`. The eval-side dispatch fork pre-empts user-handler routing for the prefix, so user registration is effectively dead code (currently pinned at `crates/benten-engine/tests/typed_call_engine_dispatch.rs::typed_call_namespace_pre_empts_user_handler_registry_for_unknown_op`), but a hard registration-time REJECT would surface the user-error sooner. Phase 3 target: add an `EngineError::ReservedHandlerNamespace { handler_id }` variant + corresponding `ErrorCode::ReservedHandlerNamespace` (4-surface §3.5g atomic update across `benten-errors` lib + JS adapter regen + ERROR-CATALOG row + TS bindings). Touch size: ~80-120 LOC across the 4 ErrorCode surfaces + 1 register_subgraph guard + 1 pin.
+
+**Phase 3 target:** post-G21-T1 follow-on (T2/T3/T4 or a sibling cleanup wave). Each item is independently scoped; (c) couples to the napi-UCAN-wireup G21-T2 work in §2.3.
+
+**Touch size:** ~180-320 LOC total across (a)-(d).
+
+**Cross-references:**
+- `crates/benten-engine/src/typed_call_dispatch.rs` — sec-minor-2 + sec-minor-3 surfaces.
+- `crates/benten-eval/src/typed_call.rs::TypedCallOp::required_cap` — sec-minor-4 cap-name source.
+- `crates/benten-caps/src/backends/ucan.rs::UCANBackend` — sec-minor-4 destination.
+- `crates/benten-engine/src/engine.rs::register_subgraph` — corr-minor-3 destination.
+
+---
+
 ### 2.4 `phase_2b_landed` feature gate retirement in benten-core / benten-ivm / benten-engine / benten-errors (audit-3-mr-1-extended) — CLOSED at Pre-R4b orchestrator-direct fix-pass batch (PR #144 commit bd87cde)
 
 **Origin (G20-B audit-3 mini-review, 2026-05-07):** G20-B v3 closed the `phase_2b_landed` feature gate in `benten-eval` + `benten-dsl-compiler` + `benten-dev` (Cargo.toml entries deleted + `#![cfg]` gates stripped from 23+ test files; commit message documents the narrow scope). The audit-3 reviewer extended scope flagged that the feature gate STILL exists in the other four crates: `benten-core`, `benten-ivm`, `benten-engine`, `benten-errors`. These were intentionally out-of-scope at G20-B v3 to keep the wave's audit-3 narrowly scoped. The residual is named here per HARD RULE rule-12 clause-b — the destination receives the entry NOW, not "later".

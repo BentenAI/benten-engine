@@ -23,7 +23,7 @@
 //!
 //! - [`TypedCallOp`] enumerates the closed set of engine-known op
 //!   names + their per-op required capability.
-//! - Input validation lives entirely in `benten-eval` ([`validate_input`]
+//! - Input validation lives entirely in `benten-eval` ([`TypedCallOp::validate_input`]
 //!   per-op arms): the `benten-eval` crate cannot depend on `benten-id`
 //!   or `benten-graph` (arch-r1-10), so the actual crypto / codec /
 //!   DID-resolve invocations happen on the host-side
@@ -131,12 +131,21 @@ pub enum TypedCallOp {
     /// error.
     /// Required cap: `cap:typed:ucan-validate`.
     UcanValidateChain,
-    /// Verify a Verifiable Credential's signature + issuer binding.
-    /// Input shape: `{ credential: Bytes, expected_issuer_did: Text }`
+    /// Verify a Verifiable Credential's signature + issuer binding +
+    /// `expirationDate` time-window. Per sec-major-3: the dispatch
+    /// path routes through `benten_id::vc::verify_at(...)` (NOT bare
+    /// `vc::verify`) so an expired VC returns `valid: false` — bare
+    /// `verify` skips the expiration gate by design.
+    /// Input shape: `{ credential: Bytes, expected_issuer_did: Text, now: Int }`
     /// where `credential` is the DAG-CBOR-encoded canonical bytes of
-    /// the Credential envelope. The verifier consults `now` from the
-    /// caller's `now: Int` field for time-window checks (defaults to
-    /// the engine's monotonic-clock-derived wall-clock if omitted).
+    /// the Credential envelope, `expected_issuer_did` is the issuer
+    /// DID the VC must be bound to, and `now` is the wall-clock time
+    /// in seconds-since-epoch the verifier uses for the
+    /// `expirationDate` / `issuanceDate` gates. `now` is REQUIRED —
+    /// callers without an external clock should pass the engine's
+    /// `time` host-fn output. (Engine-internal default-clock
+    /// fallback is intentionally NOT provided so the time-source is
+    /// always operator-visible at the call site.)
     /// Output shape: `{ valid: Bool, issuer: Text, subject: Text }`.
     /// Required cap: `cap:typed:vc-verify`.
     VcVerify,
@@ -180,6 +189,48 @@ impl TypedCallOp {
             Self::DidResolve => "did_resolve",
             Self::UcanValidateChain => "ucan_validate_chain",
             Self::VcVerify => "vc_verify",
+        }
+    }
+
+    /// Determinism classification for this typed-CALL op.
+    ///
+    /// Mirrors [`crate::PrimitiveKind::is_deterministic`] at the
+    /// typed-CALL granularity: per sec-major-2, the bare CALL primitive
+    /// classifies `is_deterministic = true`, but `keypair_generate`
+    /// (OS CSPRNG) leaks non-determinism into the returned `Value`.
+    /// Inv-9's registration-time walker MUST reflect this — when a
+    /// CALL Node's `target` starts with `engine:typed:`, the Inv-9
+    /// gate consults THIS classification on top of the primitive's
+    /// own.
+    ///
+    /// **Conservative defaults** for ops whose determinism could
+    /// shift with backend choice (e.g. `did_resolve` returning
+    /// non-`did:key:` methods that hit the network):
+    /// - `keypair_generate` → false (OS CSPRNG).
+    /// - `did_resolve` → false (future `did:web` resolves over
+    ///   network even though `did:key:` resolution is pure).
+    /// All other typed-CALL ops are pure functions of their inputs
+    /// and classify true.
+    #[must_use]
+    pub fn is_deterministic(self) -> bool {
+        match self {
+            // Non-deterministic: OS CSPRNG.
+            Self::KeypairGenerate => false,
+            // Non-deterministic conservative — the resolver may hit
+            // the network for non-`did:key:` methods (Phase-3+
+            // `did:web` etc). `did:key:` is provably pure but the
+            // op's input space includes future methods. Conservative
+            // answer keeps Inv-9 honest under method extension.
+            Self::DidResolve => false,
+            // Pure functions of inputs: no clock, no RNG, no network.
+            Self::Ed25519Sign
+            | Self::Ed25519Verify
+            | Self::KeypairFromSeed
+            | Self::Blake3Hash
+            | Self::MultibaseEncode
+            | Self::MultibaseDecode
+            | Self::UcanValidateChain
+            | Self::VcVerify => true,
         }
     }
 
@@ -312,6 +363,7 @@ impl TypedCallOp {
             Self::VcVerify => {
                 require_bytes(self.name(), map, "credential")?;
                 require_text(self.name(), map, "expected_issuer_did")?;
+                require_int(self.name(), map, "now")?;
                 Ok(())
             }
         }

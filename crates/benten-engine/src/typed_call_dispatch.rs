@@ -15,9 +15,10 @@
 //! storage-/identity-ignorant). The actual op dispatch must therefore
 //! happen in `benten-engine` where both crates are visible. The
 //! `dispatch` function is invoked from
-//! [`crate::primitive_host::Engine::dispatch_typed_call`] AFTER the
-//! eval-side `execute_typed_call` (CALL primitive's typed-CALL fork)
-//! has cleared the cap-check + input-shape validation.
+//! `<Engine as benten_eval::PrimitiveHost>::dispatch_typed_call`
+//! (lives in `crate::primitive_host`) AFTER the eval-side
+//! `execute_typed_call` (CALL primitive's typed-CALL fork) has
+//! cleared the cap-check + input-shape validation.
 //!
 //! ## Native-only
 //!
@@ -314,7 +315,7 @@ fn ucan_validate_chain(input: &Value) -> Result<Value, EvalError> {
         }
     };
     let audience_str = expect_text(map, "audience")?;
-    let _capability_str = expect_text(map, "capability")?;
+    let capability_str = expect_text(map, "capability")?;
     let now: u64 = match map.get("now") {
         Some(Value::Int(n)) if *n >= 0 => *n as u64,
         _ => {
@@ -346,34 +347,85 @@ fn ucan_validate_chain(input: &Value) -> Result<Value, EvalError> {
         chain.push(ucan);
     }
 
+    // Parse the required-capability string into a `(resource,
+    // ability)` pair. Format: `<resource>:<ability>` where the LAST
+    // `:`-separated segment is the ability (per Phase-3 typed-CALL
+    // contract — matches the test fixtures' `"zone:user:write"`
+    // shape that built `Capability::new("zone:user", "write")`).
+    // A capability string with no `:` cannot name a (resource,
+    // ability) pair, so it is treated as a clean negative
+    // (`valid: false`) — NOT a dispatch error, since the input is
+    // shape-valid Text but semantically rejects.
+    let required_cap = match capability_str.rsplit_once(':') {
+        Some((resource, ability)) if !resource.is_empty() && !ability.is_empty() => {
+            benten_id::ucan::Capability::new(resource, ability)
+        }
+        _ => {
+            let mut out = BTreeMap::new();
+            out.insert("valid".to_string(), Value::Bool(false));
+            out.insert(
+                "reason".to_string(),
+                Value::Text(format!(
+                    "capability: must be '<resource>:<ability>'; got '{capability_str}'"
+                )),
+            );
+            return Ok(Value::Map(out));
+        }
+    };
+
     // Compose: audience binding + signature/time/attenuation chain
-    // walk. A clean negative is `valid: false` with the reason; only
-    // a structurally-malformed input bubbles `TypedCallDispatchError`.
+    // walk + LEAF-CAPABILITY-CLAIM check (defense-in-depth — without
+    // this, a chain that's structurally sound but lacks the requested
+    // claim would still validate: true; sec-major-1 fix). A clean
+    // negative is `valid: false` with the reason; only a structurally-
+    // malformed input bubbles `TypedCallDispatchError`.
     let audience_did = benten_id::did::Did::from_string_unchecked(audience_str.clone());
 
-    if let Err(e) = benten_id::ucan::validate_chain_for_audience(&chain, &audience_did) {
-        let mut out = BTreeMap::new();
-        out.insert("valid".to_string(), Value::Bool(false));
-        out.insert("reason".to_string(), Value::Text(format!("audience: {e}")));
-        return Ok(Value::Map(out));
+    match benten_id::ucan::validate_chain_for_capability(&chain, &audience_did, &required_cap, now)
+    {
+        Ok(()) => {
+            let mut out = BTreeMap::new();
+            out.insert("valid".to_string(), Value::Bool(true));
+            out.insert("reason".to_string(), Value::Text(String::new()));
+            Ok(Value::Map(out))
+        }
+        Err(e) => {
+            // Tag the reason with the failure family so callers can
+            // distinguish audience / time-window / chain / leaf-claim
+            // failures without re-running the validator.
+            let family = match e {
+                benten_id::errors::UcanError::AudienceMismatch { .. } => "audience",
+                benten_id::errors::UcanError::Expired { .. }
+                | benten_id::errors::UcanError::NotYetValid { .. } => "time",
+                benten_id::errors::UcanError::CapabilityNotGranted { .. } => "capability",
+                _ => "chain",
+            };
+            let mut out = BTreeMap::new();
+            out.insert("valid".to_string(), Value::Bool(false));
+            out.insert("reason".to_string(), Value::Text(format!("{family}: {e}")));
+            Ok(Value::Map(out))
+        }
     }
-    if let Err(e) = benten_id::ucan::validate_chain_at(&chain, now) {
-        let mut out = BTreeMap::new();
-        out.insert("valid".to_string(), Value::Bool(false));
-        out.insert("reason".to_string(), Value::Text(format!("chain: {e}")));
-        return Ok(Value::Map(out));
-    }
-
-    let mut out = BTreeMap::new();
-    out.insert("valid".to_string(), Value::Bool(true));
-    out.insert("reason".to_string(), Value::Text(String::new()));
-    Ok(Value::Map(out))
 }
 
 fn vc_verify(input: &Value) -> Result<Value, EvalError> {
     let map = expect_map(input)?;
     let credential_bytes = expect_bytes(map, "credential")?;
     let expected_issuer_str = expect_text(map, "expected_issuer_did")?;
+    // `now` (epoch seconds) drives the `expirationDate` time-window
+    // gate per sec-major-3 — without it, expired VCs would otherwise
+    // return `valid: true` because bare `vc::verify` skips the
+    // expiration check by design (the timed gate lives on
+    // `vc::verify_at`). Required by the typed-CALL contract.
+    let now: u64 = match map.get("now") {
+        Some(Value::Int(n)) if *n >= 0 => *n as u64,
+        _ => {
+            return Err(EvalError::TypedCallInvalidInput {
+                op_name: TypedCallOp::VcVerify.name(),
+                reason: "now must be non-negative Int (epoch seconds)".to_string(),
+            });
+        }
+    };
 
     let credential: benten_id::vc::Credential = serde_ipld_dagcbor::from_slice(credential_bytes)
         .map_err(|e| EvalError::TypedCallDispatchError {
@@ -383,10 +435,11 @@ fn vc_verify(input: &Value) -> Result<Value, EvalError> {
 
     let expected_issuer = benten_id::did::Did::from_string_unchecked(expected_issuer_str.clone());
 
-    let valid = match benten_id::vc::verify(&credential, &expected_issuer) {
-        Ok(()) => true,
-        Err(_) => false,
-    };
+    // `verify_at` enforces signature + issuer-binding + issuance/
+    // expiration time-window. A semantic rejection (bad signature /
+    // expired / not-yet-valid / wrong issuer) is a clean negative
+    // `valid: false`; only well-formed-input failures bubble.
+    let valid = benten_id::vc::verify_at(&credential, &expected_issuer, now).is_ok();
 
     let issuer = credential.issuer().to_string();
     let subject = credential.subject().to_string();

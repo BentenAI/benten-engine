@@ -200,6 +200,23 @@ pub enum UcanError {
         /// Offending capability.
         cap: String,
     },
+    /// Leaf token's `att` array does not grant the required capability.
+    /// Defends against the typed-CALL `ucan_validate_chain` op accepting
+    /// a structurally-sound chain bound to the right audience but
+    /// lacking the requested `(resource, ability)` claim — a
+    /// defense-in-depth gap that would otherwise let a handler
+    /// asking "does this chain grant `zone:write` to `audience`?"
+    /// receive `valid: true` regardless of the leaf's actual `att`.
+    #[error(
+        "UCAN leaf does not grant required capability: required={required} leaf_caps={leaf_caps:?}"
+    )]
+    CapabilityNotGranted {
+        /// Required `resource:ability` string the caller asked about.
+        required: String,
+        /// The leaf's actual `att` array, formatted as
+        /// `<resource>:<ability>` strings, for diagnostic.
+        leaf_caps: Vec<String>,
+    },
 }
 
 /// Errors emitted by [`crate::vc`] Verifiable Credential paths.

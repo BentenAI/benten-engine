@@ -194,6 +194,13 @@ fn cap_err_from_ucan(err: UcanError) -> CapError {
         UcanError::DecodeFailed => CapError::BackendStorage {
             reason: "UCAN decode failure".to_string(),
         },
+        UcanError::CapabilityNotGranted {
+            required,
+            leaf_caps,
+        } => CapError::Denied {
+            required,
+            entity: format!("UCAN leaf does not grant required cap; leaf_caps={leaf_caps:?}"),
+        },
     }
 }
 
