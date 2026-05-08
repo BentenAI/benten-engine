@@ -106,6 +106,20 @@ pub struct WaitMetadata {
     /// Whether this WAIT is the `duration` variant (i.e. has
     /// `duration_ms` instead of `signal`).
     pub is_duration: bool,
+    /// Phase-3 G20-A2 (D12 wave-8a): TTL in hours declared on the WAIT
+    /// node spec. Carried alongside the WAIT metadata so cross-process
+    /// resume + GC see the same deadline. `None` means no TTL was
+    /// declared (default-24h applies separately at registration time).
+    pub ttl_hours: Option<u32>,
+    /// Phase-3 G20-A2 (D12 wave-8a): wall-clock millisecond timestamp
+    /// of the suspend instant (UNIX epoch ms). Used as the anchor for
+    /// the wall-clock-relative TTL deadline:
+    ///   `deadline = suspend_wallclock_ms + ttl_hours * 3_600_000`.
+    /// `None` if the engine had no wall-clock at suspend time
+    /// (test fixtures, deterministic-clock paths). When `None` the
+    /// TTL check is skipped — the in-process `timeout_ms` deadline
+    /// is the only authoritative deadline.
+    pub suspend_wallclock_ms: Option<u64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -502,6 +516,8 @@ mod tests {
             timeout_ms: Some(50),
             signal_shape: None,
             is_duration: false,
+            ttl_hours: None,
+            suspend_wallclock_ms: None,
         };
         store.put_wait(cid, meta.clone()).unwrap();
         assert_eq!(store.get_wait(&cid).unwrap(), Some(meta));
@@ -541,6 +557,8 @@ mod tests {
                     timeout_ms: None,
                     signal_shape: None,
                     is_duration: false,
+                    ttl_hours: None,
+                    suspend_wallclock_ms: None,
                 },
             )
             .unwrap();

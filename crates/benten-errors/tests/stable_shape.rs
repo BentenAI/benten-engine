@@ -215,6 +215,32 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // surface; no native-side construction site (the typed code is
     // surfaced from `packages/engine/src/stream.ts`).
     ErrorCode::StreamHandleLeaked,
+    // Phase-3 G20-A2 wave-8a (D12): WAIT TTL runtime expiry path +
+    // GC machinery. Three new variants:
+    //   `WaitTtlExpired` — wall-clock TTL deadline elapsed at resume.
+    //     Construction site at
+    //     `crates/benten-engine/src/engine_wait.rs::resume_from_bytes_inner`
+    //     (Step 1.5 deadline check; consults
+    //     `crate::wait_ttl_gc::is_expired` and reaps the entry on fire).
+    //   `WaitTtlInvalid` — registration-time validator: WAIT node's
+    //     `ttl_hours` property is non-integer or out-of-range
+    //     `[1, 720]`. Construction site at
+    //     `crates/benten-engine/src/engine.rs::register_subgraph` (the
+    //     WAIT-TTL validation walk).
+    //   `WaitMetadataMissing` — resume against an envelope whose WAIT
+    //     metadata is absent from the SuspensionStore (GC-evicted /
+    //     cross-process-divergent / fabricated-real-envelope
+    //     scenarios). Construction site at
+    //     `crates/benten-engine/src/engine_wait.rs::resume_from_bytes_inner`
+    //     (Step 1.5 fail-loud branch when `pinned_subgraph_cids` is
+    //     non-empty + metadata lookup returns `Ok(None)`); secondary
+    //     mapping at `engine_wait.rs::map_resume_eval_error` promotes
+    //     the eval-side `HostBackendUnavailable` fail-loud to this
+    //     code so the engine layer carries the metadata-missing
+    //     semantic separately from generic backend-unavailable.
+    ErrorCode::WaitTtlExpired,
+    ErrorCode::WaitTtlInvalid,
+    ErrorCode::WaitMetadataMissing,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -393,10 +419,28 @@ fn variant_count_is_pinned() {
     //     (FinalizationRegistry callback) + the `Engine.shutdown()`
     //     drain on `packages/engine/src/engine.ts::Engine` against
     //     the `engine.onStreamLeaked` operator surface (§7.1.2).
-    // Post-G19-C2: 98 + 2 = 100. The hardcoded count below tracks
+    // Post-G19-C2: 98 + 2 = 100.
+    //
+    // Phase-3 G20-A2 wave-8a adds 3 codes (D12 WAIT TTL runtime
+    // expiry + GC machinery):
+    //   `WaitTtlExpired` — wall-clock TTL deadline elapsed at resume.
+    //     Construction site at
+    //     `crates/benten-engine/src/engine_wait.rs::resume_from_bytes_inner`
+    //     (Step 1.5 deadline check + reap_one).
+    //   `WaitTtlInvalid` — registration-time `ttl_hours` validator
+    //     (out-of-range `[1, 720]` or non-integer). Construction site
+    //     at `crates/benten-engine/src/engine.rs::register_subgraph`.
+    //   `WaitMetadataMissing` — resume against a real WAIT envelope
+    //     whose metadata is absent from the SuspensionStore
+    //     (GC-evicted / cross-process / fabricated). Construction
+    //     site at
+    //     `crates/benten-engine/src/engine_wait.rs::resume_from_bytes_inner`
+    //     (Step 1.5 fail-loud branch + `map_resume_eval_error` remap
+    //     of eval-side `HostBackendUnavailable`).
+    // Post-G20-A2: 100 + 3 = 103. The hardcoded count below tracks
     // `ALL_CATALOG_VARIANTS.len()` exactly.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 100,
+        CATALOG_VARIANT_COUNT, 103,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

@@ -216,6 +216,12 @@ pub mod engine_wait;
 // peer per CLAUDE.md baked-in #17.
 #[cfg(not(feature = "browser-backend"))]
 pub mod suspension_store;
+// Phase-3 G20-A2 (D12 wave-8a) — WAIT TTL GC machinery. Production
+// code (NOT test source — backlog miscategorization corrected per
+// scope-real-03). Three sweep paths: event-driven (suspend / resume),
+// 1h interval backstop, Engine::drop final.
+pub mod wait_ttl_gc;
+pub use wait_ttl_gc::WaitTtlGcStats;
 // Phase 2b G10-B — module manifest format (D9-RESOLVED canonical
 // DAG-CBOR; D16-RESOLVED-FURTHER REQUIRED expected_cid arg on
 // `Engine::install_module`). See `module_manifest.rs` for the format

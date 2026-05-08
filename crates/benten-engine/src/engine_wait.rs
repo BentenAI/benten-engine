@@ -69,6 +69,7 @@ use benten_eval::{
     AttributionFrame, ExecutionStateEnvelope, ExecutionStatePayload, Frame, SuspendedHandle,
     WaitResumeSignal,
 };
+use benten_graph::MutexExt;
 
 use crate::engine::Engine;
 use crate::error::EngineError;
@@ -380,7 +381,16 @@ impl Engine {
         // Wave-8i convergence pin in `wait_primitive_consults_signal_property`).
         match self.dispatch_call(&key, op, input, None) {
             Ok(outcome) => Ok(SuspensionOutcome::Complete(outcome)),
-            Err(EngineError::WaitSuspended { handle }) => Ok(SuspensionOutcome::Suspended(handle)),
+            Err(EngineError::WaitSuspended { handle }) => {
+                // Phase-3 G20-A2 (D12 wave-8a): track the envelope for GC
+                // sweeps + run an opportunistic event-driven sweep on
+                // suspend (unless event-driven GC is disabled). The sweep
+                // is best-effort — failure to sweep does not abort the
+                // suspend.
+                self.wait_ttl_track_envelope(*handle.state_cid());
+                self.wait_ttl_run_event_driven_sweep_if_enabled();
+                Ok(SuspensionOutcome::Suspended(handle))
+            }
             Err(e) => Err(e),
         }
     }
@@ -623,18 +633,127 @@ impl Engine {
         // authoritative consumer lives at the eval layer and the
         // engine API can no longer drift from it.
         //
-        // The metadata-store lookup is best-effort: a missing entry
-        // (fabricated test envelope, non-WAIT resume reaching this
-        // surface, or store miss in cross-process scenarios after
-        // eviction) skips the metadata consumer entirely rather than
-        // failing — matching the eval-side `Option<WaitMetadata>`
-        // shape's intent for entries the store legitimately cannot
-        // resolve (the eval-side surfaces a typed
-        // `E_HOST_BACKEND_UNAVAILABLE` only when called via the public
-        // `benten_eval::resume` API, which has stricter integrity
-        // expectations than the bytes-only engine resume surfaces).
+        // The metadata-store lookup discriminates THREE shapes of
+        // resume input via the SuspensionStore's envelope-side
+        // record + the envelope's payload shape:
+        //
+        // (1) **Real WAIT envelope** — the eval-side wait primitive
+        //     persists BOTH the WAIT metadata (`put_wait(cid, meta)`
+        //     at `crates/benten-eval/src/primitives/wait.rs`) AND the
+        //     envelope itself (`put_envelope(envelope)`). The payload
+        //     for these envelopes is built by
+        //     `placeholder_payload_for_signal`, which produces
+        //     `attribution_chain: Vec::new()` (empty). For real WAIT
+        //     envelopes, `get_envelope(state_cid)` returns `Some(_)`
+        //     and `get_wait(state_cid)` MUST also return `Some(_)`. A
+        //     mismatch (envelope present, metadata absent, payload
+        //     shape consistent with eval-side WAIT) is the
+        //     load-bearing fail-loud surface: (a) the WAIT TTL GC
+        //     reaped the metadata side without the envelope side
+        //     (impossible by the GC contract — `reap_one` deletes
+        //     both), (b) cross-process resume hit a divergent
+        //     SuspensionStore that has the envelope record but lost
+        //     metadata (the bug surface Compromise #9 named), or
+        //     (c) a caller fabricated an envelope-side record without
+        //     a metadata-side counterpart. All three are
+        //     E_WAIT_METADATA_MISSING — distinct from
+        //     E_WAIT_TTL_EXPIRED (entry exists but deadline passed).
+        //
+        // (2) **Fabricated test envelope** — the
+        //     `testing_make_unregistered_envelope` fixture path
+        //     produces an envelope that was NEVER paired with either
+        //     side of the store. `get_envelope(state_cid)` returns
+        //     `None`. The resume routes through the rest of the
+        //     4-step protocol's `terminal_ok_outcome()` arm — the
+        //     existing `resume_with_meta_fails_closed_when_metadata_missing`
+        //     test surface depends on this disposition.
+        //
+        // (3) **Empty-spec test fixture envelope** — the
+        //     `SubgraphSpec::empty(id)` shortcut path at
+        //     `Engine::call_as_with_suspension` (line ~1107) writes
+        //     ONLY the envelope side via `cache_put`'s
+        //     `put_envelope`; it never invokes the eval-side WAIT
+        //     primitive so `put_wait` is NOT called. The payload is
+        //     built by `payload_for_handler`, which populates
+        //     `attribution_chain: vec![attribution]` (NON-empty,
+        //     containing the synthesised principal/handler/grant
+        //     frame). This is the legitimate phase-2a fixture path
+        //     for shape-pin tests in `engine_wait_api_shape.rs` —
+        //     it must NOT trip the WaitMetadataMissing fail-loud.
+        //     The non-empty `attribution_chain` is the
+        //     content-addressed signature that distinguishes shape
+        //     (3) from shape (1) without an extra side-table.
+        //
+        // Phase-3 G20-A2 (D12 wave-8a; Compromise #9 closure;
+        // mr-2 fix-pass + fix-pass-2): promotes the eval-side
+        // `E_HOST_BACKEND_UNAVAILABLE` fail-loud to the engine-layer
+        // typed code so callers can route on the metadata-missing
+        // axis independently of generic backend-unavailable failures.
+        // fix-pass-2 refines the discriminator to also check
+        // `attribution_chain.is_empty()` so the empty-spec fixture
+        // path (shape 3) doesn't false-positive — caught by
+        // `engine_wait_api_shape.rs` regressing on the initial
+        // fix-pass.
         let state_cid = envelope.envelope_cid().map_err(EngineError::Core)?;
-        if let Ok(Some(meta)) = self.suspension_store.get_wait(&state_cid) {
+        let meta_lookup = self.suspension_store.get_wait(&state_cid);
+        let envelope_lookup = self.suspension_store.get_envelope(&state_cid);
+        let envelope_record_present = matches!(envelope_lookup, Ok(Some(_)));
+        // Shape (1) signature: payload built by
+        // `placeholder_payload_for_signal` → empty
+        // `attribution_chain`. Shape (3) signature: payload built by
+        // `payload_for_handler` → non-empty `attribution_chain`. The
+        // discriminator filters shape (3) out of the WaitMetadataMissing
+        // fail-loud so empty-spec fixtures keep their legitimate
+        // skip-on-miss behaviour while real-WAIT-envelope-with-evicted-
+        // metadata still fails loud (the load-bearing
+        // `resume_against_real_envelope_with_evicted_metadata_fires_e_wait_metadata_missing`
+        // pin in `tests/integration/cross_process_wait_resume.rs`).
+        let payload_is_real_wait_shape = envelope.payload.attribution_chain.is_empty();
+        if envelope_record_present && matches!(meta_lookup, Ok(None)) && payload_is_real_wait_shape
+        {
+            return Err(EngineError::Other {
+                code: ErrorCode::WaitMetadataMissing,
+                message: format!(
+                    "resume: WAIT metadata missing for envelope {} \
+                     (envelope record present in SuspensionStore but metadata side absent — \
+                     cross-process resume against divergent store, \
+                     fabricated half-record, or partial GC corruption): \
+                     E_WAIT_METADATA_MISSING",
+                    state_cid.to_base32()
+                ),
+            });
+        }
+        if let Ok(Some(meta)) = meta_lookup {
+            // Phase-3 G20-A2 (D12 wave-8a): wall-clock TTL deadline
+            // check fires BEFORE the in-process timeout check. The TTL
+            // deadline is wall-clock-anchored (`suspend_wallclock_ms +
+            // ttl_hours * 3_600_000`); if the recorded TTL has elapsed
+            // we surface E_WAIT_TTL_EXPIRED + GC the entry rather than
+            // proceeding into the rest of the resume protocol.
+            let wall_now_ms = crate::wait_ttl_gc::wallclock_now_ms(
+                *self.wait_wall_clock_override_ms.lock_recover(),
+            );
+            if crate::wait_ttl_gc::is_expired(&meta, wall_now_ms) {
+                // Best-effort GC of the expired entry as part of the
+                // resume hot-path's event-driven sweep contract.
+                let _ = crate::wait_ttl_gc::reap_one(&self.suspension_store, &state_cid);
+                self.wait_ttl_untrack_envelope(&state_cid);
+                {
+                    let mut stats = self.wait_ttl_gc_stats.lock_recover();
+                    stats.reaped_count = stats.reaped_count.saturating_add(1);
+                    stats.sweep_count = stats.sweep_count.saturating_add(1);
+                }
+                return Err(EngineError::Other {
+                    code: ErrorCode::WaitTtlExpired,
+                    message: format!(
+                        "E_WAIT_TTL_EXPIRED: resume: WAIT TTL deadline elapsed for envelope {} \
+                         (suspended {:?} ms wall-clock; ttl_hours={:?}; now {wall_now_ms} ms)",
+                        state_cid.to_base32(),
+                        meta.suspend_wallclock_ms,
+                        meta.ttl_hours,
+                    ),
+                });
+            }
             let now_ms = u64::try_from(self.monotonic_source.elapsed_since_start().as_millis())
                 .unwrap_or(u64::MAX);
             // Map the engine-level `ResumePayload` enum onto the
@@ -1027,6 +1146,13 @@ impl Engine {
             let envelope = ExecutionStateEnvelope::new(payload).map_err(EngineError::Core)?;
             let state_cid = cache_put(self, envelope)?;
             let handle = SuspendedHandle::new(state_cid, DEFAULT_SYNTHETIC_SIGNAL);
+            // Phase-3 G20-A2 (D12 wave-8a): track even synthetic
+            // empty-spec suspends so the GC sweep + Engine::drop final
+            // sweep reach them. The empty-spec path doesn't carry TTL
+            // metadata so the sweep is a no-op for it (no deadline =
+            // not expired) — but the tracking keeps the bookkeeping
+            // uniform across surfaces.
+            self.wait_ttl_track_envelope(state_cid);
             return Ok(SuspensionOutcome::Suspended(handle));
         }
 
@@ -1054,7 +1180,13 @@ impl Engine {
         // binding contract.
         match self.dispatch_call(handler_id, op, input, Some(*principal)) {
             Ok(outcome) => Ok(SuspensionOutcome::Complete(outcome)),
-            Err(EngineError::WaitSuspended { handle }) => Ok(SuspensionOutcome::Suspended(handle)),
+            Err(EngineError::WaitSuspended { handle }) => {
+                // Phase-3 G20-A2 (D12 wave-8a): same suspend-time GC hook
+                // as `call_with_suspension`.
+                self.wait_ttl_track_envelope(*handle.state_cid());
+                self.wait_ttl_run_event_driven_sweep_if_enabled();
+                Ok(SuspensionOutcome::Suspended(handle))
+            }
             Err(e) => Err(e),
         }
     }
@@ -1189,6 +1321,26 @@ fn map_resume_eval_error(err: benten_eval::EvalError) -> EngineError {
                     code: ErrorCode::WaitTimeout,
                     message: format!("resume: wait deadline elapsed: {message}"),
                 },
+                // Phase-3 G20-A2 (D12 wave-8a): the eval-side production
+                // fail-loud at `benten_eval::resume_with_meta` returns
+                // `EvalError::Host(HostBackendUnavailable)` when called
+                // with `meta: None` (the missing-metadata path —
+                // Compromise #9 / G12-E closure; see
+                // `crates/benten-eval/src/primitives/wait.rs::resume_with_meta`).
+                // The engine layer promotes that to the typed
+                // `WaitMetadataMissing` so callers can route on the
+                // metadata-missing axis independently of generic
+                // backend-unavailable. The eval-side ErrorCode remains
+                // `HostBackendUnavailable` (broader semantic surface);
+                // the engine-layer remap is the user-facing typed code.
+                ErrorCode::HostBackendUnavailable
+                    if message.contains("wait resume: suspension store has no metadata") =>
+                {
+                    EngineError::Other {
+                        code: ErrorCode::WaitMetadataMissing,
+                        message: format!("resume: WAIT metadata missing: {message}"),
+                    }
+                }
                 other_code => EngineError::Other {
                     code: other_code,
                     message: format!("resume: eval host error: {message}"),

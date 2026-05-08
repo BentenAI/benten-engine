@@ -1,31 +1,19 @@
-#![cfg(feature = "phase_2b_landed")]
-// R3-followup (R4-FP B-1) red-phase: gate against R5-pending G12-E
-// error-catalog additions (E_WAIT_TTL_EXPIRED + E_WAIT_TTL_INVALID).
+// Phase-3 G20-A2 (D12 wave-8a) — D12 WAIT TTL error-catalog drift detector.
 //
-//! Phase 2b R4-FP (B-1) — D12 WAIT TTL error-catalog drift detector.
-//!
-//! Pin source:
-//!   - `.addl/phase-2b/00-implementation-plan.md` §5 D12 (new
-//!     `E_WAIT_TTL_EXPIRED` + `E_WAIT_TTL_INVALID` error codes).
-//!   - `.addl/phase-2b/r2-test-landscape.md` §1.10 + §8.1 rows 525-526.
-//!   - `.addl/phase-2b/r4-qa-expert.json` qa-r4-06.
-//!
-//! Mirrors the R3-B `sandbox_codes_present.rs` + R3-A `stream_codes_present.rs`
-//! drift-detector pattern: assert the new codes round-trip through
-//! `as_str` / `from_str`, and assert no deprecated alias survives.
-//!
-//! Owned by R4-FP B-1.
+// `phase_2b_landed` cfg gate retired at G20-A2 wave-8a — the
+// `WaitTtlExpired` + `WaitTtlInvalid` variants now exist as production
+// catalog entries.
+//
+// Mirrors the R3-B `sandbox_codes_present.rs` + R3-A `stream_codes_present.rs`
+// drift-detector pattern: assert the new codes round-trip through
+// `as_str` / `from_str`, and assert no deprecated alias survives.
 
 #![allow(clippy::unwrap_used)]
 
 use benten_errors::ErrorCode;
 
 /// `e_wait_ttl_expired_present_in_catalog` — D12 + R2 row 525.
-///
-/// `E_WAIT_TTL_EXPIRED` MUST exist as a stable variant in `ErrorCode`
-/// and round-trip through `from_str` / `as_str`.
 #[test]
-#[ignore = "Phase 3 — WaitTtlExpired catalog-presence body deferred per docs/future/phase-3-backlog.md §7.3.A.6 (variant landed via G12-E; runtime expiry path Phase-3)"]
 fn e_wait_ttl_expired_present_in_catalog() {
     let code = ErrorCode::WaitTtlExpired;
     assert_eq!(code.as_str(), "E_WAIT_TTL_EXPIRED");
@@ -36,12 +24,7 @@ fn e_wait_ttl_expired_present_in_catalog() {
 }
 
 /// `e_wait_ttl_invalid_present_in_catalog` — D12 + R2 row 526.
-///
-/// `E_WAIT_TTL_INVALID` MUST exist as a stable variant in `ErrorCode`
-/// and round-trip. Fired by the registration-time validation when
-/// `ttl_hours: 0` or `ttl_hours > 720`.
 #[test]
-#[ignore = "Phase 3 — WaitTtlInvalid catalog-presence body deferred per docs/future/phase-3-backlog.md §7.3.A.6"]
 fn e_wait_ttl_invalid_present_in_catalog() {
     let code = ErrorCode::WaitTtlInvalid;
     assert_eq!(code.as_str(), "E_WAIT_TTL_INVALID");
@@ -51,17 +34,29 @@ fn e_wait_ttl_invalid_present_in_catalog() {
     );
 }
 
+/// `e_wait_metadata_missing_present_in_catalog` — Phase-3 G20-A2 wave-8a
+/// mr-1 fix-pass: round-trip pin for the third WAIT TTL catalog variant
+/// added in this wave. Mirrors the shape of the `WaitTtlExpired` and
+/// `WaitTtlInvalid` pins above.
+#[test]
+fn e_wait_metadata_missing_present_in_catalog() {
+    let code = ErrorCode::WaitMetadataMissing;
+    assert_eq!(code.as_str(), "E_WAIT_METADATA_MISSING");
+    assert_eq!(
+        ErrorCode::from_str("E_WAIT_METADATA_MISSING"),
+        ErrorCode::WaitMetadataMissing
+    );
+}
+
 /// Anti-rename guard: assert no plausible deprecated alias for the new
 /// variants leaks back into the catalog. CLAUDE.md non-negotiable
 /// rule #5: no deprecated aliases or backward-compat shims.
 #[test]
-#[ignore = "Phase 3 — WAIT-TTL anti-rename guard body deferred per docs/future/phase-3-backlog.md §7.3.A.6"]
 fn wait_ttl_no_deprecated_aliases() {
     // None of these should round-trip to the new variants — they MUST
-    // collapse to ErrorCode::Unknown(_).
+    // collapse to a different (or unknown) variant.
     for alias in &[
         "E_WAIT_EXPIRED",
-        "E_WAIT_TIMEOUT",
         "E_WAIT_TTL_TIMEOUT",
         "E_WAIT_DEADLINE_EXCEEDED",
     ] {
@@ -72,6 +67,20 @@ fn wait_ttl_no_deprecated_aliases() {
              aliases per CLAUDE.md rule #5)"
         );
     }
+    // E_WAIT_TIMEOUT is a distinct existing variant; it MUST parse to
+    // ErrorCode::WaitTimeout (NOT to WaitTtlExpired).
+    assert_eq!(
+        ErrorCode::from_str("E_WAIT_TIMEOUT"),
+        ErrorCode::WaitTimeout
+    );
+    assert!(
+        !matches!(
+            ErrorCode::from_str("E_WAIT_TIMEOUT"),
+            ErrorCode::WaitTtlExpired
+        ),
+        "E_WAIT_TIMEOUT MUST NOT alias E_WAIT_TTL_EXPIRED — distinct semantics"
+    );
+
     for alias in &[
         "E_WAIT_TTL_BAD",
         "E_WAIT_TTL_OUT_OF_RANGE",

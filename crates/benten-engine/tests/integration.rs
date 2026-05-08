@@ -81,7 +81,10 @@ mod integration {
     // `phase_2b_landed` flag (which gates pre-G6-A SUBSCRIBE/STREAM
     // surfaces — orthogonal to this file's wasm-r1-7 cap pin).
     pub mod browser_target_bundle_size; // wasm-r1-7 (≤500KB gz cap)
-    #[cfg(feature = "phase_2b_landed")]
+    // Phase-3 G20-A2 wave-8a — `phase_2b_landed` cfg gate retired
+    // for cross_process_wait_resume per the file header rationale
+    // (G12-E + Compromise #9 closure surfaces all landed at the
+    // engine-side WAIT TTL runtime expiry path + GC machinery).
     pub mod cross_process_wait_resume; // G12-E + Compromise #9 closure
     // G10-B landed (R5 wave-5 — Phase 2b): un-gated below.
     pub mod install_module_rejects_cid_mismatch; // G10-B + D16 dual-CID error

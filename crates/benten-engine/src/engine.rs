@@ -828,6 +828,31 @@ pub struct EngineGeneric<B: GraphBackend> {
     /// `Named(handler_id)` produces observably different traces from
     /// `DefaultFanOut`.
     pub(crate) handler_route_log: Arc<crate::handler_router::HandlerRouteLog>,
+    /// Phase-3 G20-A2 (D12 wave-8a): WAIT TTL wall-clock test override
+    /// (UNIX-epoch milliseconds). When `Some`, the engine consults this
+    /// value at TTL deadline checks instead of `SystemTime::now()` —
+    /// lets `testing_advance_wait_clock` simulate TTL expiry without
+    /// real wallclock latency. Production engines never set this; the
+    /// `&Engine`-receiving setters live under `cfg(any(test, feature =
+    /// "test-helpers"))`.
+    pub(crate) wait_wall_clock_override_ms: std::sync::Mutex<Option<u64>>,
+    /// Phase-3 G20-A2 (D12 wave-8a): runtime GC machinery — observable
+    /// reaped-count stats for the `testing_wait_ttl_gc_stats` helper +
+    /// the GC pass entry point.
+    pub(crate) wait_ttl_gc_stats: std::sync::Mutex<crate::WaitTtlGcStats>,
+    /// Phase-3 G20-A2 (D12 wave-8a): when `true` the engine's WAIT-side
+    /// event-driven GC sweep is suppressed (suspend / resume operations
+    /// do NOT opportunistically reap expired siblings). The 1h interval
+    /// backstop + the Engine::drop final sweep still fire. Set via
+    /// EngineBuilder::gc_event_driven(false). Default `false`.
+    pub(crate) wait_ttl_gc_event_driven_disabled: std::sync::atomic::AtomicBool,
+    /// Phase-3 G20-A2 (D12 wave-8a): tracked envelope CIDs we've stamped
+    /// WAIT metadata for. Used to drive GC sweeps without enumerating
+    /// the entire suspension store key space (the redb store does not
+    /// currently expose a prefix-scan API). Populated by suspend; pruned
+    /// by GC + delete.
+    pub(crate) wait_ttl_tracked_envelopes:
+        std::sync::Mutex<std::collections::HashSet<benten_core::Cid>>,
 }
 
 /// Default engine alias resolving to the redb-backed specialization on
@@ -1036,6 +1061,10 @@ impl<B: GraphBackend> EngineGeneric<B> {
             ),
             thin_client_subscriptions: std::sync::Mutex::new(std::collections::HashMap::new()),
             handler_route_log: Arc::new(crate::handler_router::HandlerRouteLog::new()),
+            wait_wall_clock_override_ms: std::sync::Mutex::new(None),
+            wait_ttl_gc_stats: std::sync::Mutex::new(crate::WaitTtlGcStats::default()),
+            wait_ttl_gc_event_driven_disabled: std::sync::atomic::AtomicBool::new(false),
+            wait_ttl_tracked_envelopes: std::sync::Mutex::new(std::collections::HashSet::new()),
         }
     }
 
@@ -1759,6 +1788,41 @@ impl Engine {
                 message: format!("{other:?}"),
             },
         })?;
+        // Phase-3 G20-A2 (D12 wave-8a): WAIT TTL validation walk. Every
+        // WAIT node carrying a `ttl_hours` property must satisfy
+        // `1 <= ttl_hours <= 720` (30 days max). 0 would expire
+        // immediately on suspend (a footgun); >720 is the documented
+        // ceiling. Both reject at registration time with the typed
+        // E_WAIT_TTL_INVALID error rather than at suspend time so a
+        // miswritten spec doesn't survive into running state.
+        for node in sg.nodes() {
+            if !matches!(node.kind, benten_eval::PrimitiveKind::Wait) {
+                continue;
+            }
+            let Some(prop) = node.property("ttl_hours") else {
+                continue;
+            };
+            let Value::Int(raw) = prop else {
+                return Err(EngineError::Other {
+                    code: ErrorCode::WaitTtlInvalid,
+                    message: format!(
+                        "register_subgraph: WAIT node {} has non-integer ttl_hours property; \
+                         expected integer in [1, 720]: E_WAIT_TTL_INVALID",
+                        node.id
+                    ),
+                });
+            };
+            if (*raw < 1) || (*raw > 720) {
+                return Err(EngineError::Other {
+                    code: ErrorCode::WaitTtlInvalid,
+                    message: format!(
+                        "register_subgraph: WAIT node {} has out-of-range ttl_hours={}; \
+                         expected integer in [1, 720]: E_WAIT_TTL_INVALID",
+                        node.id, raw
+                    ),
+                });
+            }
+        }
         // 5d-J workstream 3: parse every TRANSFORM node's expression at
         // registration time so an unparseable grammar trips `register_*`
         // rather than surviving to `engine.call`. The runtime executor
@@ -3494,4 +3558,161 @@ pub(crate) fn is_known_view_id(id: &str) -> bool {
         return canonical.contains(&suffix) || suffix.starts_with("content_listing");
     }
     id.starts_with("content_listing_")
+}
+
+// ---------------------------------------------------------------------------
+// Phase-3 G20-A2 (D12 wave-8a): WAIT TTL GC machinery — Engine impl + Drop.
+//
+// The GC implementation lives in `crate::wait_ttl_gc`; the methods below
+// expose the entry points that the wait surface (engine_wait.rs) calls
+// from the suspend / resume hot paths plus the test-only helpers under
+// `cfg(any(test, feature = "test-helpers"))`.
+//
+// Scheduling correctness: the three sweep paths (event-driven, interval-
+// backstop, drop-final) are documented in `wait_ttl_gc.rs`; the
+// integration-correctness pin is `tests/wait_ttl_runtime_expiry_path_gc_machinery_correct`.
+// ---------------------------------------------------------------------------
+
+impl<B: GraphBackend> EngineGeneric<B> {
+    /// Phase-3 G20-A2 (D12 wave-8a): record `cid` in the engine's tracked
+    /// envelope set so subsequent GC sweeps reach it. Idempotent.
+    /// Crate-private — only the suspend hooks in engine_wait.rs call this.
+    pub(crate) fn wait_ttl_track_envelope(&self, cid: Cid) {
+        let mut tracked = self.wait_ttl_tracked_envelopes.lock_recover();
+        tracked.insert(cid);
+    }
+
+    /// Phase-3 G20-A2 (D12 wave-8a): drop `cid` from the engine's tracked
+    /// envelope set. Called from the resume hot path after a successful
+    /// reap (so the next sweep doesn't re-walk the already-gone entry).
+    pub(crate) fn wait_ttl_untrack_envelope(&self, cid: &Cid) {
+        let mut tracked = self.wait_ttl_tracked_envelopes.lock_recover();
+        tracked.remove(cid);
+    }
+
+    /// Phase-3 G20-A2 (D12 wave-8a): event-driven sweep entry point.
+    /// No-op when event-driven GC has been disabled
+    /// (`EngineBuilder::gc_event_driven(false)` in production; the
+    /// disabled-path is exercised by the
+    /// `wait_gc_disabled_event_driven_still_works_via_interval` test).
+    pub(crate) fn wait_ttl_run_event_driven_sweep_if_enabled(&self) -> u64 {
+        if self
+            .wait_ttl_gc_event_driven_disabled
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            return 0;
+        }
+        let now =
+            crate::wait_ttl_gc::wallclock_now_ms(*self.wait_wall_clock_override_ms.lock_recover());
+        let mut tracked = self.wait_ttl_tracked_envelopes.lock_recover();
+        let mut stats = self.wait_ttl_gc_stats.lock_recover();
+        crate::wait_ttl_gc::run_event_driven_sweep(
+            &self.suspension_store,
+            &mut tracked,
+            now,
+            &mut stats,
+        )
+    }
+
+    /// Phase-3 G20-A2 (D12 wave-8a): interval-backstop sweep entry point.
+    /// Tests drive it synchronously via
+    /// `testing_run_wait_ttl_gc_pass`. Production tokio-interval wiring
+    /// (a 1h timer registered at `EngineBuilder::build`) is documented-
+    /// deferred to `docs/future/phase-3-backlog.md §7.14` per G20-A2
+    /// wave-8a mr-6 — the resume-time deadline check at
+    /// `engine_wait.rs::resume_from_bytes_inner` is the load-bearing
+    /// correctness mechanism (fires `E_WAIT_TTL_EXPIRED` independently
+    /// of whether GC ran first); the interval backstop hardens
+    /// disk-usage on idle engines but does not gate correctness.
+    pub fn wait_ttl_run_interval_tick(&self) -> u64 {
+        let now =
+            crate::wait_ttl_gc::wallclock_now_ms(*self.wait_wall_clock_override_ms.lock_recover());
+        let mut tracked = self.wait_ttl_tracked_envelopes.lock_recover();
+        let mut stats = self.wait_ttl_gc_stats.lock_recover();
+        crate::wait_ttl_gc::run_interval_tick(&self.suspension_store, &mut tracked, now, &mut stats)
+    }
+
+    /// Phase-3 G20-A2 (D12 wave-8a): drop-final sweep entry point.
+    /// Called from `Engine::drop` so an explicit shutdown leaves the
+    /// suspension store in the same shape an interval-tick would
+    /// eventually produce.
+    pub(crate) fn wait_ttl_run_drop_final_sweep(&self) -> u64 {
+        let now =
+            crate::wait_ttl_gc::wallclock_now_ms(*self.wait_wall_clock_override_ms.lock_recover());
+        let mut tracked = self.wait_ttl_tracked_envelopes.lock_recover();
+        let mut stats = self.wait_ttl_gc_stats.lock_recover();
+        crate::wait_ttl_gc::run_drop_final_sweep(
+            &self.suspension_store,
+            &mut tracked,
+            now,
+            &mut stats,
+        )
+    }
+
+    /// Phase-3 G20-A2 (D12 wave-8a): test-only — observable WAIT TTL GC
+    /// stats snapshot. Enables `wait_ttl_runtime_expiry_path_gc_machinery_correct`
+    /// to assert "the GC actually ran + reaped N entries" rather than
+    /// only sentinel state.
+    #[cfg(any(test, feature = "test-helpers"))]
+    #[must_use]
+    pub fn testing_wait_ttl_gc_stats(&self) -> crate::WaitTtlGcStats {
+        self.wait_ttl_gc_stats.lock_recover().clone()
+    }
+
+    /// Phase-3 G20-A2 (D12 wave-8a): test-only — drive the GC interval
+    /// backstop synchronously. Returns the number of envelopes reaped
+    /// by the call.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn testing_run_wait_ttl_gc_pass(&self) -> u64 {
+        self.wait_ttl_run_interval_tick()
+    }
+
+    /// Phase-3 G20-A2 (D12 wave-8a): test-only — set / unset the wall-
+    /// clock override (UNIX-epoch ms). Drives the
+    /// `testing_advance_wait_clock` helper so tests can simulate TTL
+    /// expiry without real wall-clock latency.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn testing_set_wait_wall_clock_override_ms(&self, ms: Option<u64>) {
+        let mut g = self.wait_wall_clock_override_ms.lock_recover();
+        *g = ms;
+    }
+
+    /// Phase-3 G20-A2 (D12 wave-8a): test-only — advance the wall-clock
+    /// override by `delta`. If no override is set, seeds from the
+    /// current system time. Used by
+    /// `benten_engine::testing::testing_advance_wait_clock`.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn testing_advance_wait_clock_by(&self, delta: std::time::Duration) {
+        let mut g = self.wait_wall_clock_override_ms.lock_recover();
+        let base = g.unwrap_or_else(|| crate::wait_ttl_gc::wallclock_now_ms(None));
+        let delta_ms = u64::try_from(delta.as_millis()).unwrap_or(u64::MAX);
+        *g = Some(base.saturating_add(delta_ms));
+    }
+
+    /// Phase-3 G20-A2 (D12 wave-8a): test-only — toggle event-driven GC
+    /// path. When set to `true` the event-driven sweep on suspend /
+    /// resume is suppressed; the interval backstop + Engine::drop final
+    /// sweeps still fire. Used by
+    /// `wait_gc_disabled_event_driven_still_works_via_interval`.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn testing_set_event_driven_gc_disabled(&self, disabled: bool) {
+        self.wait_ttl_gc_event_driven_disabled
+            .store(disabled, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+impl<B: GraphBackend> Drop for EngineGeneric<B> {
+    fn drop(&mut self) {
+        // Phase-3 G20-A2 (D12 wave-8a): final WAIT TTL GC sweep before
+        // the SuspensionStore handle releases. Best-effort — we discard
+        // the reap-count return value (a `u64` from
+        // `wait_ttl_run_drop_final_sweep`; the sweep helpers are
+        // infallible and `lock_recover` recovers poisoned mutexes
+        // explicitly so no panic crosses this boundary in practice). If
+        // a future change introduces a fallible path here it must wrap
+        // the call in `std::panic::catch_unwind` rather than relying on
+        // implicit silencing — Drop panics abort the process under the
+        // C++-style two-panic rule.
+        let _: u64 = self.wait_ttl_run_drop_final_sweep();
+    }
 }

@@ -344,6 +344,23 @@ fn evaluate_op_with_handler_id(
     };
     let signal_shape = wait_node.property("signal_shape").cloned();
 
+    // Phase-3 G20-A2 (D12 wave-8a): WAIT TTL — read from the node spec
+    // (Engine::register_subgraph stamped it during validation; default
+    // 24h applies when the property is omitted).
+    let ttl_hours = match wait_node.property("ttl_hours") {
+        Some(benten_core::Value::Int(i)) => u32::try_from(*i).ok(),
+        _ => Some(24),
+    };
+    // Wall-clock at suspend time. Engine wires this through via the
+    // ctx; here in `evaluate_op` we only have the elapsed_ms (monotonic),
+    // so we compute the wall-clock from the host's system clock as a
+    // best-effort anchor. Fixture / deterministic-clock paths can leave
+    // this `None` by skipping system-time entirely.
+    let suspend_wallclock_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .and_then(|d| u64::try_from(d.as_millis()).ok());
+
     // Derive a deterministic envelope key. For the duration variant the
     // handler id is a sufficient registry key; for the signal variant we
     // include the signal name so two WAITs on distinct signals in the
@@ -379,6 +396,8 @@ fn evaluate_op_with_handler_id(
             timeout_ms,
             signal_shape,
             is_duration,
+            ttl_hours,
+            suspend_wallclock_ms,
         },
     );
     // Persist the envelope itself so cross-process `suspend_to_bytes`

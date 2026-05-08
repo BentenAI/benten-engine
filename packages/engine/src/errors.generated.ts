@@ -156,6 +156,9 @@ export const CATALOG_CODES = [
   "E_ATRIUM_TRANSPORT_DEGRADED",
   "E_SYNC_DIVERGENT_CID_REJECTED",
   "E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW",
+  "E_WAIT_TTL_EXPIRED",
+  "E_WAIT_TTL_INVALID",
+  "E_WAIT_METADATA_MISSING",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -2006,6 +2009,51 @@ export class EHandshakeReplayWithinBoundedWindow extends BentenError {
 }
 
 /**
+ * E_WAIT_TTL_EXPIRED
+ *
+ * Thrown at: `crates/benten-engine/src/engine_wait.rs::resume_from_bytes_inner` (Phase-3 G20-A2 wave-8a; D12). The pre-deadline check at the resume hot-path consults `crate::wait_ttl_gc::is_expired` against the persisted `WaitMetadata`; on expiry, calls `crate::wait_ttl_gc::reap_one` + increments stats + returns this typed error. Companion GC machinery at `crates/benten-engine/src/wait_ttl_gc.rs` runs three sweep paths (event-driven on suspend / resume + interval-backstop + drop-final).
+ * Message template: "resume: WAIT TTL deadline elapsed for envelope {envelope_cid} (suspended {suspend_wallclock_ms} ms wall-clock; ttl_hours={ttl_hours}; now {now_ms} ms)"
+ */
+export class EWaitTtlExpired extends BentenError {
+  static readonly code = "E_WAIT_TTL_EXPIRED";
+  static readonly fixHint = "A `resume_with_meta` (or `resume_from_bytes_*`) call landed against a SuspensionStore entry whose wall-clock TTL deadline has elapsed. The TTL is anchored at suspend time as `suspend_wallclock_ms + ttl_hours * 3_600_000` and persisted alongside the envelope; a fresh engine opening the same redb path computes the same deadline (cross-process correctness). When elapsed, the resume hot-path reaps the entry from the SuspensionStore + bumps the `WaitTtlGcStats.reaped_count` counter + returns this typed error. Distinct from `E_WAIT_TIMEOUT` (in-process / per-call deadline that fires from the eval-side resume_with_meta consumer) — `E_WAIT_TTL_EXPIRED` is the wall-clock deadline that survives suspend / restart. Per the D12 wave-8a hybrid-GC contract, expiry is detected on every resume regardless of whether the GC sweep ran first (deadline-on-resume safety is independent of the sweep schedule). Routes to `ON_ERROR`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_WAIT_TTL_EXPIRED", "A `resume_with_meta` (or `resume_from_bytes_*`) call landed against a SuspensionStore entry whose wall-clock TTL deadline has elapsed. The TTL is anchored at suspend time as `suspend_wallclock_ms + ttl_hours * 3_600_000` and persisted alongside the envelope; a fresh engine opening the same redb path computes the same deadline (cross-process correctness). When elapsed, the resume hot-path reaps the entry from the SuspensionStore + bumps the `WaitTtlGcStats.reaped_count` counter + returns this typed error. Distinct from `E_WAIT_TIMEOUT` (in-process / per-call deadline that fires from the eval-side resume_with_meta consumer) — `E_WAIT_TTL_EXPIRED` is the wall-clock deadline that survives suspend / restart. Per the D12 wave-8a hybrid-GC contract, expiry is detected on every resume regardless of whether the GC sweep ran first (deadline-on-resume safety is independent of the sweep schedule). Routes to `ON_ERROR`.", message, context);
+    this.name = "EWaitTtlExpired";
+  }
+}
+
+/**
+ * E_WAIT_TTL_INVALID
+ *
+ * Thrown at: `crates/benten-engine/src/engine.rs::register_subgraph` (Phase-3 G20-A2 wave-8a; D12). The validation walk inspects every WAIT node's `ttl_hours` property; non-integer payloads + out-of-range integers + zero values all fire this code with the offending node id + raw value carried in the message.
+ * Message template: "register_subgraph: WAIT node {node_id} has out-of-range ttl_hours={raw}; expected integer in [1, 720]"
+ */
+export class EWaitTtlInvalid extends BentenError {
+  static readonly code = "E_WAIT_TTL_INVALID";
+  static readonly fixHint = "A WAIT primitive's `ttl_hours` property failed registration-time validation. `ttl_hours == 0` would expire immediately on suspend (a footgun); `ttl_hours > 720` exceeds the documented 30-day ceiling. The check fires at `register_subgraph` time so a miswritten spec does not survive into running state. Either (a) drop the `ttl_hours` property entirely (defaults to no-TTL, matching the Phase-2b behaviour), (b) set it to an integer in `[1, 720]`, or (c) split the wait into staged shorter waits at the spec layer if a wait longer than 30 days is genuinely required. Distinct from `E_WAIT_TTL_EXPIRED` (runtime-deadline elapse) and `E_WAIT_TIMEOUT` (in-process per-call deadline) — this is a configuration-time error, not a runtime-deadline failure. Routes to `None` (the registration-time disposition matching `E_INV_REGISTRATION` / `E_DUPLICATE_HANDLER` / `E_INV_SANDBOX_DEPTH`); the registration error surfaces at the `register_subgraph` call site, not along an in-graph primitive edge.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_WAIT_TTL_INVALID", "A WAIT primitive's `ttl_hours` property failed registration-time validation. `ttl_hours == 0` would expire immediately on suspend (a footgun); `ttl_hours > 720` exceeds the documented 30-day ceiling. The check fires at `register_subgraph` time so a miswritten spec does not survive into running state. Either (a) drop the `ttl_hours` property entirely (defaults to no-TTL, matching the Phase-2b behaviour), (b) set it to an integer in `[1, 720]`, or (c) split the wait into staged shorter waits at the spec layer if a wait longer than 30 days is genuinely required. Distinct from `E_WAIT_TTL_EXPIRED` (runtime-deadline elapse) and `E_WAIT_TIMEOUT` (in-process per-call deadline) — this is a configuration-time error, not a runtime-deadline failure. Routes to `None` (the registration-time disposition matching `E_INV_REGISTRATION` / `E_DUPLICATE_HANDLER` / `E_INV_SANDBOX_DEPTH`); the registration error surfaces at the `register_subgraph` call site, not along an in-graph primitive edge.", message, context);
+    this.name = "EWaitTtlInvalid";
+  }
+}
+
+/**
+ * E_WAIT_METADATA_MISSING
+ *
+ * Thrown at: Primary site at `crates/benten-engine/src/engine_wait.rs::resume_from_bytes_inner` (Phase-3 G20-A2 wave-8a; D12) Step 1.5 envelope-vs-metadata mismatch check. Secondary mapping at `crates/benten-engine/src/engine_wait.rs::map_resume_eval_error` promotes the eval-side `HostBackendUnavailable` fail-loud (from `crates/benten-eval/src/primitives/wait.rs::resume_with_meta`'s `meta: None` arm) to this typed code at the resume boundary so the engine API surface preserves the metadata-missing semantic uniformly across direct-eval and engine-mediated callers. The eval-side ErrorCode stays `HostBackendUnavailable` (broader semantic — generic backend-unavailable surface); the engine-layer typed code is the user-facing one.
+ * Message template: "resume: suspension store has no WAIT metadata for envelope CID {envelope_cid} (cross-process resume without a shared SuspensionStore, fabricated handle, or evicted entry)"
+ */
+export class EWaitMetadataMissing extends BentenError {
+  static readonly code = "E_WAIT_METADATA_MISSING";
+  static readonly fixHint = "A resume call landed against an envelope whose WAIT metadata is absent from the SuspensionStore. Per Compromise #9 / G12-E closure, missing metadata is a fail-loud surface — Phase-2a's permissive `Complete(value)` fallback was a documented gap that silently dropped the deadline + signal-shape checks. The discriminator is the envelope-side record's presence: the eval-side wait primitive persists BOTH `put_wait(cid, meta)` AND `put_envelope(envelope)` for every real WAIT suspend, so a mismatch (envelope present, metadata absent) is the engine-detectable signature of metadata-missing for a real WAIT envelope. Three legitimate scenarios trigger this: (a) a cross-process resume against a different physical SuspensionStore that holds the envelope record but lost metadata; (b) the metadata-side entry was evicted by the WAIT TTL GC (event-driven sweep / interval-backstop / drop-final) without the envelope side being reaped (impossible by `reap_one`'s contract — a partial-GC-corruption signal); (c) a caller fabricated an envelope-side record without a metadata-side counterpart. Distinct from `E_WAIT_TTL_EXPIRED` (entry exists but deadline has passed — a timing failure that the resume actively detects and reaps) — `E_WAIT_METADATA_MISSING` fires when no metadata entry exists for an envelope record that should have one. The eval-layer surfaces a parallel fail-loud at `benten_eval::resume_with_meta` via `EvalError::Host(HostBackendUnavailable)` (when the public eval API is called directly with `meta: None`); the engine's `map_resume_eval_error` ALSO promotes that path to `E_WAIT_METADATA_MISSING` so direct-eval-callers route consistently. Routes to `ON_ERROR`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_WAIT_METADATA_MISSING", "A resume call landed against an envelope whose WAIT metadata is absent from the SuspensionStore. Per Compromise #9 / G12-E closure, missing metadata is a fail-loud surface — Phase-2a's permissive `Complete(value)` fallback was a documented gap that silently dropped the deadline + signal-shape checks. The discriminator is the envelope-side record's presence: the eval-side wait primitive persists BOTH `put_wait(cid, meta)` AND `put_envelope(envelope)` for every real WAIT suspend, so a mismatch (envelope present, metadata absent) is the engine-detectable signature of metadata-missing for a real WAIT envelope. Three legitimate scenarios trigger this: (a) a cross-process resume against a different physical SuspensionStore that holds the envelope record but lost metadata; (b) the metadata-side entry was evicted by the WAIT TTL GC (event-driven sweep / interval-backstop / drop-final) without the envelope side being reaped (impossible by `reap_one`'s contract — a partial-GC-corruption signal); (c) a caller fabricated an envelope-side record without a metadata-side counterpart. Distinct from `E_WAIT_TTL_EXPIRED` (entry exists but deadline has passed — a timing failure that the resume actively detects and reaps) — `E_WAIT_METADATA_MISSING` fires when no metadata entry exists for an envelope record that should have one. The eval-layer surfaces a parallel fail-loud at `benten_eval::resume_with_meta` via `EvalError::Host(HostBackendUnavailable)` (when the public eval API is called directly with `meta: None`); the engine's `map_resume_eval_error` ALSO promotes that path to `E_WAIT_METADATA_MISSING` so direct-eval-callers route consistently. Routes to `ON_ERROR`.", message, context);
+    this.name = "EWaitMetadataMissing";
+  }
+}
+
+/**
  * Phase-3 G19-B (§7.6): codegen-emitted CODE_TO_CTOR_GENERATED map. Keys are stable
  * catalog codes (`E_*`); values are the typed BentenError subclass constructor for each
  * code. Updated automatically every time `scripts/codegen-errors.ts` runs against
@@ -2137,4 +2185,7 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_ATRIUM_TRANSPORT_DEGRADED": EAtriumTransportDegraded,
   "E_SYNC_DIVERGENT_CID_REJECTED": ESyncDivergentCidRejected,
   "E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW": EHandshakeReplayWithinBoundedWindow,
+  "E_WAIT_TTL_EXPIRED": EWaitTtlExpired,
+  "E_WAIT_TTL_INVALID": EWaitTtlInvalid,
+  "E_WAIT_METADATA_MISSING": EWaitMetadataMissing,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;

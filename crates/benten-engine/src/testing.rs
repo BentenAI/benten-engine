@@ -565,12 +565,14 @@ pub fn testing_make_subscriber_id(label: &str) -> benten_core::SubscriberId {
 /// to a TTL semantic this brief is out-of-scope for.
 #[cfg(any(test, feature = "test-helpers"))]
 #[must_use]
-pub fn testing_make_wait_metadata_with_ttl_hours(_ttl_hours: u32) -> benten_eval::WaitMetadata {
+pub fn testing_make_wait_metadata_with_ttl_hours(ttl_hours: u32) -> benten_eval::WaitMetadata {
     benten_eval::WaitMetadata {
         suspend_elapsed_ms: Some(0),
         timeout_ms: Some(60_000),
         signal_shape: None,
         is_duration: false,
+        ttl_hours: Some(ttl_hours),
+        suspend_wallclock_ms: None,
     }
 }
 
@@ -611,14 +613,30 @@ pub fn testing_call_to_suspend(
     engine: &mut crate::engine::Engine,
     handler_id: &str,
 ) -> Result<Vec<u8>, crate::error::EngineError> {
-    // Derive a deterministic principal so a second call against the
-    // same handler_id produces bit-identical envelope bytes (the
-    // existing fabricate_test_suspend_envelope contract).
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(b"phase-2b:wave-8g:testing_call_to_suspend:principal:");
-    hasher.update(handler_id.as_bytes());
-    let principal = benten_core::Cid::from_blake3_digest(*hasher.finalize().as_bytes());
-    engine.fabricate_test_suspend_envelope(&principal)
+    // Phase-3 G20-A2 (D12 wave-8a): drive a real WAIT handler to its
+    // suspension boundary via `call_with_suspension`, then encode the
+    // resulting `SuspendedHandle` to DAG-CBOR via `suspend_to_bytes`.
+    // The earlier wave-8g body fabricated a synthetic envelope without
+    // routing through the production suspend path, which left the
+    // SuspensionStore entry unset — the §7.3.A.6 GC tests need the
+    // store entry to exist so they can assert presence / removal.
+    let outcome = engine.call_with_suspension(handler_id, "go", benten_core::Node::empty())?;
+    match outcome {
+        crate::engine_wait::SuspensionOutcome::Suspended(handle) => {
+            engine.suspend_to_bytes(&handle)
+        }
+        crate::engine_wait::SuspensionOutcome::Complete(_) => {
+            // Fallback: synthesise a deterministic envelope so the
+            // empty-spec / non-WAIT-bearing test fixture path retains
+            // the bytes-out contract. Used by tests that pre-date the
+            // real WAIT handler shape.
+            let mut hasher = blake3::Hasher::new();
+            hasher.update(b"phase-3:g20-a2:testing_call_to_suspend:principal:");
+            hasher.update(handler_id.as_bytes());
+            let principal = benten_core::Cid::from_blake3_digest(*hasher.finalize().as_bytes());
+            engine.fabricate_test_suspend_envelope(&principal)
+        }
+    }
 }
 
 /// Phase-3 G20-A3 wave-8a: drive the SUBSCRIBE engine-boundary
@@ -758,8 +776,180 @@ pub fn testing_emit_n_synthetic_events(
 /// `testing_revoke_cap_mid_call` shape (also `&Self`) added in
 /// wave-8c-subscribe-infra.
 #[cfg(any(test, feature = "test-helpers"))]
-pub fn testing_advance_wait_clock(_engine: &crate::engine::Engine, _delta: std::time::Duration) {
-    // Phase-3 D12 brief lifts this to a real MockTimeSource advance.
+pub fn testing_advance_wait_clock(engine: &crate::engine::Engine, delta: std::time::Duration) {
+    // Phase-3 G20-A2 (D12 wave-8a): drives the engine's wall-clock
+    // override forward by `delta`. Used by the WAIT TTL runtime expiry
+    // path test bodies so simulated TTL expiry doesn't depend on real
+    // wall-clock latency.
+    engine.testing_advance_wait_clock_by(delta);
+}
+
+/// Phase-3 G20-A2 (D12 wave-8a): set the engine's wall-clock baseline to
+/// `instant_ms` (UNIX-epoch milliseconds). Subsequent
+/// `testing_advance_wait_clock` calls advance from this anchor.
+/// Used by `wait_ttl_does_not_apply_during_suspend_pause` to simulate
+/// "engine slept for N hours and reopened".
+#[cfg(any(test, feature = "test-helpers"))]
+pub fn testing_set_wall_clock_baseline(
+    engine: &crate::engine::Engine,
+    instant: std::time::Duration,
+) {
+    let ms = u64::try_from(instant.as_millis()).unwrap_or(u64::MAX);
+    engine.testing_set_wait_wall_clock_override_ms(Some(ms));
+}
+
+/// Phase-3 G20-A2 (D12 wave-8a): drive the GC interval-backstop sweep
+/// synchronously. Used by `wait_gc_interval_backstop_sweeps_idle_engine`
+/// + `wait_gc_disabled_event_driven_still_works_via_interval`.
+#[cfg(any(test, feature = "test-helpers"))]
+pub fn testing_run_gc_interval_tick(engine: &crate::engine::Engine) {
+    engine.testing_run_wait_ttl_gc_pass();
+}
+
+/// Phase-3 G20-A2 (D12 wave-8a): build a [`crate::SubgraphSpec`] whose
+/// single WAIT primitive carries `ttl_hours: ttl`. Used by the
+/// §7.3.A.6 test bodies to register a TTL-bearing handler without
+/// hand-rolling a `PrimitiveSpec`.
+#[cfg(any(test, feature = "test-helpers"))]
+#[must_use]
+pub fn testing_make_wait_spec_with_ttl_hours(ttl: u32) -> crate::subgraph_spec::SubgraphSpec {
+    let mut props = std::collections::BTreeMap::new();
+    props.insert(
+        "signal".into(),
+        benten_core::Value::Text("test:phase-3:g20-a2:ttl".into()),
+    );
+    props.insert("ttl_hours".into(), benten_core::Value::Int(i64::from(ttl)));
+    let wait_ps = crate::subgraph_spec::PrimitiveSpec {
+        id: "w0".into(),
+        kind: benten_eval::PrimitiveKind::Wait,
+        properties: props,
+    };
+    crate::subgraph_spec::SubgraphSpec::builder()
+        .handler_id("phase_3_g20_a2_ttl_handler")
+        .primitive_with_props(wait_ps)
+        .respond()
+        .build()
+}
+
+/// Phase-3 G20-A2 (D12 wave-8a): build a SubgraphSpec carrying an
+/// out-of-range `ttl_hours` value (skips the typed validation that
+/// `testing_make_wait_spec_with_ttl_hours` would normally reject at the
+/// type level). Used by the `_rejected_at_registration` /
+/// `_exceeds_max_rejected` tests to construct specs the engine will
+/// reject at register-time.
+#[cfg(any(test, feature = "test-helpers"))]
+#[must_use]
+pub fn testing_make_wait_spec_with_ttl_hours_unchecked(
+    ttl: u32,
+) -> crate::subgraph_spec::SubgraphSpec {
+    // Same construction; the "unchecked" variant exists for symmetry
+    // with the test rationale (the type doesn't actually have a
+    // validated constructor — this helper signals "the caller knows
+    // they're feeding an out-of-range value").
+    testing_make_wait_spec_with_ttl_hours(ttl)
+}
+
+/// Phase-3 G20-A2 (D12 wave-8a): build a SubgraphSpec whose WAIT
+/// primitive carries no explicit `ttl_hours` property — i.e. the
+/// 24h default applies. Used by `wait_ttl_default_24h_applies_when_omitted`.
+#[cfg(any(test, feature = "test-helpers"))]
+#[must_use]
+pub fn testing_make_wait_spec_default_ttl() -> crate::subgraph_spec::SubgraphSpec {
+    let mut props = std::collections::BTreeMap::new();
+    props.insert(
+        "signal".into(),
+        benten_core::Value::Text("test:phase-3:g20-a2:default_ttl".into()),
+    );
+    let wait_ps = crate::subgraph_spec::PrimitiveSpec {
+        id: "w0".into(),
+        kind: benten_eval::PrimitiveKind::Wait,
+        properties: props,
+    };
+    crate::subgraph_spec::SubgraphSpec::builder()
+        .handler_id("phase_3_g20_a2_ttl_default_handler")
+        .primitive_with_props(wait_ps)
+        .respond()
+        .build()
+}
+
+/// Phase-3 G20-A2 (D12 wave-8a): inspect the WAIT metadata that the
+/// engine's SuspensionStore holds for `envelope_bytes`. Returns the
+/// metadata if the entry exists; `None` otherwise.
+#[cfg(any(test, feature = "test-helpers"))]
+#[must_use]
+pub fn testing_inspect_wait_metadata(
+    engine: &crate::engine::Engine,
+    envelope_bytes: &[u8],
+) -> Option<benten_eval::WaitMetadata> {
+    let envelope = benten_eval::ExecutionStateEnvelope::from_dagcbor(envelope_bytes).ok()?;
+    let cid = envelope.envelope_cid().ok()?;
+    engine.suspension_store().get_wait(&cid).ok().flatten()
+}
+
+/// Phase-3 G20-A2 (D12 wave-8a): true iff the engine's SuspensionStore
+/// holds WAIT metadata for `envelope_bytes`. Used by the cross-process
+/// resume + GC tests to assert presence / absence of the entry.
+#[cfg(any(test, feature = "test-helpers"))]
+#[must_use]
+pub fn testing_suspension_store_has_wait(
+    engine: &crate::engine::Engine,
+    envelope_bytes: &[u8],
+) -> bool {
+    testing_inspect_wait_metadata(engine, envelope_bytes).is_some()
+}
+
+/// Phase-3 G20-A2 (D12 wave-8a): build a `ResumePayload::Signal(...)`
+/// carrying a `Value::Text(text)`. Convenience helper for the tests
+/// that want to assert "resume completes with this signal value".
+#[cfg(any(test, feature = "test-helpers"))]
+#[must_use]
+pub fn testing_make_resume_payload(text: &str) -> crate::engine_wait::ResumePayload {
+    crate::engine_wait::ResumePayload::Signal(benten_core::Value::Text(text.to_string()))
+}
+
+/// Phase-3 G20-A2 (D12 wave-8a): assert that `outcome` represents a
+/// "complete" resume (success edge) regardless of whether the signal
+/// payload was preserved. Phase-3 R5 Outcome carries an `OK` edge for
+/// completed WAIT resumes; the helper centralises that assertion.
+///
+/// # Panics
+/// Panics if `outcome` does not represent a successful resume. Tests
+/// rely on the panic to surface failures.
+#[cfg(any(test, feature = "test-helpers"))]
+pub fn testing_assert_outcome_complete(outcome: &crate::outcome::Outcome, _expected_payload: &str) {
+    assert!(
+        outcome.is_ok_edge(),
+        "expected a successful resume outcome, got: {outcome:?}",
+    );
+}
+
+/// Phase-3 G20-A2 (D12 wave-8a): build envelope bytes that have NEVER
+/// been registered with the engine's SuspensionStore. Used by the
+/// `resume_with_meta_fails_closed_when_metadata_missing` test to
+/// confirm fail-loud behaviour on missing metadata.
+#[cfg(any(test, feature = "test-helpers"))]
+#[must_use]
+pub fn testing_make_unregistered_envelope() -> Vec<u8> {
+    use benten_eval::{ExecutionStateEnvelope, ExecutionStatePayload, Frame};
+    // Deterministic CID derived from a fixed tag distinct from the
+    // `default_principal_for` tag the production suspend path uses, so
+    // the envelope CID definitely doesn't collide with a previously-
+    // suspended envelope.
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"phase-3:g20-a2:testing_make_unregistered_envelope:");
+    let principal = benten_core::Cid::from_blake3_digest(*hasher.finalize().as_bytes());
+    let payload = ExecutionStatePayload {
+        attribution_chain: Vec::new(),
+        pinned_subgraph_cids: Vec::new(),
+        context_binding_snapshots: Vec::new(),
+        resumption_principal_cid: principal,
+        frame_stack: vec![Frame::root()],
+        frame_index: 0,
+    };
+    let envelope = ExecutionStateEnvelope::new(payload).expect("envelope encode");
+    envelope
+        .to_dagcbor()
+        .expect("envelope encode (DAG-CBOR infallible for this shape)")
 }
 
 // ---------------------------------------------------------------------------
