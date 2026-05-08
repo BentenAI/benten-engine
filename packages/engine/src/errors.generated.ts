@@ -316,14 +316,14 @@ export class EInvIterateNestDepth extends BentenError {
 /**
  * E_INV_CONTENT_HASH
  *
- * Thrown at: Registration / read
+ * Thrown at: (1) Subgraph load via `Subgraph::load_verified_with_cid` (graph-layer wrapper: `RedbBackend::load_subgraph_verified`); (2) Node load via `Node::load_verified` (graph-layer wrapper: `RedbBackend::get_node` — verify-on-read promoted in W9-T6 Phase-3 R5 wave-9); (3) cross-peer Node ingest via `Mst::apply_entries` per-entry rehash (sec-r4r2-1).
  * Message template: "Content hash mismatch for {node_id}: expected {expected}, computed {actual}"
  */
 export class EInvContentHash extends BentenError {
   static readonly code = "E_INV_CONTENT_HASH";
-  static readonly fixHint = "A stored Node's computed content hash does not match its key. Indicates on-disk corruption or an incompatible serialization migration. Re-hash the Node from source; if persistent, restore from a backup or re-ingest.";
+  static readonly fixHint = "Stored bytes' computed content hash does not match the key under which they are addressed. Indicates on-disk corruption, hardware bit-flip, in-flight tamper, or an incompatible serialization migration. Re-hash from source; if persistent, restore from a backup or re-ingest.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_INV_CONTENT_HASH", "A stored Node's computed content hash does not match its key. Indicates on-disk corruption or an incompatible serialization migration. Re-hash the Node from source; if persistent, restore from a backup or re-ingest.", message, context);
+    super("E_INV_CONTENT_HASH", "Stored bytes' computed content hash does not match the key under which they are addressed. Indicates on-disk corruption, hardware bit-flip, in-flight tamper, or an incompatible serialization migration. Re-hash from source; if persistent, restore from a backup or re-ingest.", message, context);
     this.name = "EInvContentHash";
   }
 }

@@ -1553,6 +1553,29 @@ End-to-end *content* confidentiality is preserved (iroh's QUIC payload is encryp
 
 ---
 
+## Content-hash verify-on-read at every Node-bytes surface (W9-T6 Phase-3 R5 wave-9)
+
+**Defense added (W9-T6, ratified 2026-05-08).** `RedbBackend::get_node` now verifies the content-hash of stored bytes against the requested CID before returning the decoded Node. The redb file is treated as a system boundary; CID semantics ("self-validating identifier") are honored on every read.
+
+**Threat model closed.** Local-disk tamper (an attacker with filesystem access to the redb file) and hardware bit-flip (cosmic-ray / disk-controller corruption) on Node-rehydration paths — handler_versions chain rehydration on `Engine::open`, engine_modules manifest+wasm-bytes registry rehydration, IVM materialise paths that rehydrate Node bodies. Pre-W9-T6, `RedbBackend::get_node` decoded the stored bytes and returned the wrong-but-decodable Node; an attacker who could swap bytes at rest could substitute one Node for another at a given CID slot, and the engine would happily execute the substituted Node as if it were the legitimate one.
+
+**Closure shape.** `RedbBackend::get_node` routes through `benten_core::Node::load_verified(cid, &bytes)` — the same hash-then-decode helper that subgraph-load uses. Three-outcome contract pinned at the type level:
+
+- `Ok(None)` — clean miss; CID never written.
+- `Err(GraphError::Core(CoreError::ContentHashMismatch))` — bytes present but corrupted/tampered (`E_INV_CONTENT_HASH`).
+- `Err(GraphError::Core(CoreError::Serialize))` — bytes hash-match but fail to decode (genuine codec drift, `E_SERIALIZE`).
+- `Ok(Some(node))` — clean roundtrip; bytes hash-match and decode.
+
+End-to-end pin lives at `crates/benten-graph/tests/get_node_verifies_content_hash_on_read.rs` (5 tests, including a "would-FAIL on silent no-op" pin per dispatch-conventions §3.6b that uses the test-only `corrupt_node_bytes_for_test` hook to mutate on-disk bytes after `put_node` and assert the next `get_node` fires `E_INV_CONTENT_HASH`).
+
+**Out of scope (already defended elsewhere).** Cross-peer Node ingestion is defended by `Mst::apply_entries` per-entry rehash (sec-r4r2-1) — every entry's `payload` is BLAKE3-rehashed and compared byte-for-byte against the declared `cid` before insertion. Subgraph-load is defended by `Subgraph::load_verified_with_cid` (`RedbBackend::load_subgraph_verified` graph-layer wrapper). W9-T6 closes the remaining `Node`-read on-disk surface.
+
+**Performance.** BLAKE3 over canonical DAG-CBOR Node bytes adds ~3-10 µs per `get_node` call on Apple Silicon (the budget Ben accepted at the §6.2 ratification). Hot-loop callers (IVM materialise, repeated rehydration) absorb the cost; if future perf measurement shows the cost is load-bearing, an internal escape hatch (e.g. `get_node_unverified` for trusted callers that have already verified upstream) can be added with documented justification per CLAUDE.md "Don't design for hypothetical future requirements." No `get_node_verified` opt-in shipped — verify-on-read is unconditional.
+
+**Cross-refs.** `crates/benten-graph/src/redb_backend.rs::get_node` (the verify-on-read site); `crates/benten-graph/src/lib.rs::corrupt_node_bytes_for_test` (test-only tamper hook); `crates/benten-graph/tests/get_node_verifies_content_hash_on_read.rs` (end-to-end pin); `docs/ERROR-CATALOG.md::E_INV_CONTENT_HASH` (Thrown-at line enumerates all three firing surfaces); `docs/future/phase-2-backlog.md` §6.2 (closure narrative); `crates/benten-sync/src/mst.rs::Mst::apply_entries` (sec-r4r2-1 cross-peer ingest precedent that this PR mirrors at the on-disk boundary).
+
+---
+
 ## Repository security configuration (Phase 2a §3.1 hardening pass)
 
 **CodeQL code scanning.** Workflow at `.github/workflows/codeql.yml` runs

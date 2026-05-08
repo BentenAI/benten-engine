@@ -111,9 +111,9 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 - **Message:** "Content hash mismatch for {node_id}: expected {expected}, computed {actual}"
 - **Context:** `{ node_id: NodeId, expected: Cid, actual: Cid }`
-- **Fix:** A stored Node's computed content hash does not match its key. Indicates on-disk corruption or an incompatible serialization migration. Re-hash the Node from source; if persistent, restore from a backup or re-ingest.
-- **Thrown at:** Registration / read
-- **Phase:** 1 (invariant 10 enforcement)
+- **Fix:** Stored bytes' computed content hash does not match the key under which they are addressed. Indicates on-disk corruption, hardware bit-flip, in-flight tamper, or an incompatible serialization migration. Re-hash from source; if persistent, restore from a backup or re-ingest.
+- **Thrown at:** (1) Subgraph load via `Subgraph::load_verified_with_cid` (graph-layer wrapper: `RedbBackend::load_subgraph_verified`); (2) Node load via `Node::load_verified` (graph-layer wrapper: `RedbBackend::get_node` — verify-on-read promoted in W9-T6 Phase-3 R5 wave-9); (3) cross-peer Node ingest via `Mst::apply_entries` per-entry rehash (sec-r4r2-1).
+- **Phase:** 1 (invariant 10 enforcement; Node-read firing surface promoted in Phase-3 W9-T6)
 
 ### E_INV_REGISTRATION
 
