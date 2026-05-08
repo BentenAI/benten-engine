@@ -356,22 +356,52 @@ impl JsAtrium {
         &self,
         attestation: DeviceAttestationDeclaration,
     ) -> Result<()> {
-        let mut state = self.state.lock().expect("atrium state mutex");
-        // Replace any existing entry for the same device-DID.
-        state
-            .declared_attestations
-            .retain(|a| a.device_did != attestation.device_did);
-        state.declared_attestations.push(attestation);
-        // G21-T2 §D audit-6-3 wireup hook: when an engine-side
-        // `AtriumHandle` is present, the declaration would forward
-        // to the handshake machinery here. The handshake protocol
-        // body (`crates/benten-sync/src/handshake.rs`) defines the
-        // `DeviceAttestationFrame` shape consumed at peer
-        // handshake-time. Wiring is a noop until G16-D wave-6b
-        // lands the on-the-wire frame emission; the local state
-        // above is the load-bearing pin per pcds-r4-r1-2 +
-        // r1-napi-2 round-trip contract.
-        let _ = state.engine_atrium.is_some(); // hold the lock through forward path
+        // First snapshot for the engine-side forward; release lock
+        // before driving async to avoid deadlock under heavy parallel
+        // declare flows.
+        let engine_atrium = {
+            let mut state = self.state.lock().expect("atrium state mutex");
+            // Replace any existing entry for the same device-DID
+            // (local round-trip surface per r1-napi-2 + pcds-r4-r1-2).
+            state
+                .declared_attestations
+                .retain(|a| a.device_did != attestation.device_did);
+            state.declared_attestations.push(attestation.clone());
+            state.engine_atrium.clone()
+        };
+        // G21-T2 §D audit-6-3 closure: forward the declaration to the
+        // engine-side `AtriumHandle::register_device_attestation` so
+        // the envelope rides the handshake-time presentation path.
+        // The engine-side recording is the load-bearing pin —
+        // `AtriumHandle::list_declared_device_attestations` round-trips
+        // the recorded envelopes; the on-the-wire frame-emission to
+        // peer handshakes wires through G16-D wave-6b's broader
+        // handshake protocol body work (BELONGS-NAMED-NOW per HARD
+        // RULE rule-12 to phase-3-backlog §3.1 Atrium peer-handshake).
+        if let Some(handle) = engine_atrium {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| {
+                    napi::Error::new(
+                        Status::GenericFailure,
+                        format!("E_GRAPH_INTERNAL: tokio runtime init failed: {e}"),
+                    )
+                })?;
+            let envelope = benten_engine::engine_sync::DeclaredDeviceAttestation {
+                device_did: attestation.device_did.clone(),
+                claims: attestation
+                    .capabilities
+                    .iter()
+                    .map(|c| benten_engine::engine_sync::DeclaredCapabilityClaim {
+                        path: c.path.clone(),
+                        ability: c.ability.clone(),
+                    })
+                    .collect(),
+                freshness_window: attestation.freshness_window,
+            };
+            runtime.block_on(handle.register_device_attestation(envelope));
+        }
         Ok(())
     }
 

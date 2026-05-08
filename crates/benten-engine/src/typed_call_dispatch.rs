@@ -46,6 +46,7 @@ use std::collections::BTreeMap;
 use benten_core::Value;
 use benten_eval::{EvalError, TypedCallOp};
 use benten_id::keypair::{ENVELOPE_ALG, ENVELOPE_VERSION, Keypair, PublicKey, Signature};
+use zeroize::Zeroizing;
 
 /// Dispatch one of the 10 typed-CALL ops to its underlying
 /// implementation.
@@ -458,7 +459,16 @@ fn vc_verify(input: &Value) -> Result<Value, EvalError> {
 /// Build a DAG-CBOR `{version, alg, secret_bytes}` envelope for the
 /// given 32-byte seed. Round-trips byte-identically through
 /// [`Keypair::from_dag_cbor_envelope`].
-fn build_seed_envelope(seed: &[u8]) -> Vec<u8> {
+///
+/// G21-T2 §D §2.5(a) sec-minor-2 closure — the returned buffer is
+/// wrapped in `zeroize::Zeroizing<Vec<u8>>` so the 32-byte seed
+/// material that the envelope embeds is scrubbed on Drop. The
+/// `Zeroizing` wrapper transparently coerces to `&[u8]` via Deref so
+/// the caller's `Keypair::from_dag_cbor_envelope(&envelope)` call
+/// site is unchanged. Pre-G21-T2 the buffer was a bare `Vec<u8>`
+/// and a stale stack-spill / heap-fragment read could leak the seed
+/// after the function returned.
+fn build_seed_envelope(seed: &[u8]) -> Zeroizing<Vec<u8>> {
     debug_assert_eq!(seed.len(), 32, "seed must be exactly 32 bytes");
     #[derive(serde::Serialize)]
     struct SeedEnvelope<'a> {
@@ -471,8 +481,10 @@ fn build_seed_envelope(seed: &[u8]) -> Vec<u8> {
         alg: ENVELOPE_ALG,
         secret_bytes: serde_bytes::Bytes::new(seed),
     };
-    serde_ipld_dagcbor::to_vec(&env)
-        .expect("DAG-CBOR encoding of fixed-shape SeedEnvelope cannot fail")
+    Zeroizing::new(
+        serde_ipld_dagcbor::to_vec(&env)
+            .expect("DAG-CBOR encoding of fixed-shape SeedEnvelope cannot fail"),
+    )
 }
 
 fn expect_map(v: &Value) -> Result<&BTreeMap<String, Value>, EvalError> {

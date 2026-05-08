@@ -129,6 +129,37 @@ struct AtriumInner {
     /// The keypair the local peer uses for HLC node-id derivation.
     /// HLC carries via [`benten_core::hlc::BentenHlc::node_id_from_peer_id_bytes`].
     peer_keypair: Keypair,
+    /// G21-T2 §D audit-6-3 wireup hook — declared device-attestation
+    /// envelopes to present at handshake time, keyed by `device_did`.
+    /// Populated by [`AtriumHandle::register_device_attestation`].
+    /// Frame emission at peer-handshake time wires through the
+    /// `crates/benten-sync/src/handshake_wire.rs::HandshakeFrame` builder
+    /// once the broader G16-D wave-6b handshake protocol body lands.
+    declared_device_attestations: Mutex<BTreeMap<String, DeclaredDeviceAttestation>>,
+}
+
+/// Phase-3 G21-T2 §D — declared device-attestation envelope recorded
+/// on an [`AtriumHandle`]. Round-trip surface so the
+/// [`AtriumHandle::register_device_attestation`] caller can list /
+/// inspect declared envelopes; the on-the-wire emission to peer
+/// handshakes wires through G16-D wave-6b.
+#[derive(Clone, Debug)]
+pub struct DeclaredDeviceAttestation {
+    /// `did:key:...` identifier of the declaring device.
+    pub device_did: String,
+    /// Per-claim capabilities the device may exercise.
+    pub claims: Vec<DeclaredCapabilityClaim>,
+    /// TTL in seconds before the attestation must be re-declared.
+    pub freshness_window: u32,
+}
+
+/// One capability claim inside a [`DeclaredDeviceAttestation`].
+#[derive(Clone, Debug)]
+pub struct DeclaredCapabilityClaim {
+    /// Path-glob the claim applies to.
+    pub path: String,
+    /// Ability the claim grants (e.g. `read` / `write` / `emit`).
+    pub ability: String,
 }
 
 impl std::fmt::Debug for AtriumHandle {
@@ -191,8 +222,36 @@ impl AtriumHandle {
                 endpoint,
                 zones: Mutex::new(BTreeMap::new()),
                 peer_keypair: keypair,
+                declared_device_attestations: Mutex::new(BTreeMap::new()),
             }),
         })
+    }
+
+    /// Phase-3 G21-T2 §D audit-6-3 — record a declared
+    /// device-attestation envelope on this handle. The envelope is
+    /// presented at peer-handshake time so peers observe the local
+    /// device's capability declaration on the wire.
+    ///
+    /// G21-T2 scope: the recording surface lands here so the napi
+    /// `JsAtrium.declareDeviceAttestation` shim can forward to it.
+    /// The on-the-wire emission of these envelopes via
+    /// `HandshakeFrame::device_did` decoration wires through G16-D
+    /// wave-6b's broader handshake protocol body work
+    /// (`crates/benten-sync/src/handshake.rs`); pre-G16-D-wave-6b
+    /// the recording is observable via
+    /// [`AtriumHandle::list_declared_device_attestations`] but does
+    /// not yet ride the wire frame.
+    pub async fn register_device_attestation(&self, attestation: DeclaredDeviceAttestation) {
+        let mut tbl = self.inner.declared_device_attestations.lock().await;
+        tbl.insert(attestation.device_did.clone(), attestation);
+    }
+
+    /// List declared device-attestation envelopes recorded on this
+    /// handle. Round-trip companion to
+    /// [`AtriumHandle::register_device_attestation`].
+    pub async fn list_declared_device_attestations(&self) -> Vec<DeclaredDeviceAttestation> {
+        let tbl = self.inner.declared_device_attestations.lock().await;
+        tbl.values().cloned().collect()
     }
 
     /// The local peer's [`PeerId`] (Ed25519 pubkey == iroh EndpointId

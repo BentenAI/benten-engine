@@ -316,6 +316,7 @@ dependencies = [
  "toml",
  "tracing",
  "wat",
+ "zeroize",
 ]
 
 [[package]]

@@ -50,6 +50,7 @@ pub mod grant_backed;
 pub mod noauth;
 pub mod policy;
 pub mod rate_limit;
+pub mod typed_cap_mapping;
 pub mod ucan_stub;
 
 pub use attenuation::check_attenuation;
@@ -66,6 +67,7 @@ pub use policy::{CapabilityPolicy, PendingOp, ReadContext, WriteAuthority, Write
 pub use rate_limit::{
     InMemoryRateLimitPolicy, InMemoryRateLimitPolicyBuilder, NullRateLimitPolicy, RateLimitPolicy,
 };
+pub use typed_cap_mapping::{TypedCapGroup, typed_cap_for_ucan_claim};
 pub use ucan_stub::LegacyUcanStubBackend;
 
 /// Phase 2a G9-A / P2 test-harness: helper surface the evaluator consults
