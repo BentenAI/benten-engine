@@ -1,0 +1,69 @@
+name: cargo-vet (supply-chain attestation)
+
+# Phase-3 G20-A3 wave-8a — `cargo-vet` workflow per
+# `.addl/phase-3/00-implementation-plan.md` §3 G20-A3 +
+# `docs/future/phase-3-backlog.md` §7.3.A.9.
+#
+# Trigger discipline per METH-13: pull_request + push, branches: [main].
+# workflow_dispatch added for ad-hoc audit runs.
+#
+# Status (per ci-decisions-2026-04-22.md §4 + sec-r1-5 onboarding
+# policy): INFORMATIONAL ONLY — not a member of the required-check set.
+# Drift surfaces as a step summary so reviewers can decide
+# "intentional addition needs `cargo vet certify`" vs "exemption-budget
+# overrun, fix the dep set." Promotion to required gate is a Phase-9+
+# OSS-launch-era decision.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: cargo-vet-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cargo-vet:
+    name: cargo-vet (informational supply-chain attestation)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      - name: Install cargo-vet (prebuilt)
+        # taiki-e/install-action installs prebuilt cargo-vet (~3s
+        # vs ~60s for `cargo install --locked cargo-vet`).
+        uses: taiki-e/install-action@cf525cb33f51aca27cd6fa02034117ab963ff9f1 # v2
+        with:
+          tool: cargo-vet
+
+      - name: Run cargo-vet check (informational)
+        # `--locked` ensures the run uses the committed Cargo.lock as
+        # the source of truth; cargo-vet then walks the dep graph and
+        # reports missing audits / exemption entries against the
+        # policy in `supply-chain/config.toml`. We pipe both stdout
+        # and stderr to the step summary + always exit 0 (informational
+        # gate, per sec-r1-5 onboarding cadence).
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            echo '## cargo-vet check'
+            echo
+            echo '```'
+            cargo vet check --locked 2>&1 || true
+            echo '```'
+            echo
+            echo 'Onboarding policy (sec-r1-5): exemption-budget = 5 max at Phase-3-close;'
+            echo 'criteria-set = `safe-to-deploy` (default) + `crypto-reviewed` (manual);'
+            echo 'periodic-policy-review cadence quarterly.'
+          } | tee -a "$GITHUB_STEP_SUMMARY"

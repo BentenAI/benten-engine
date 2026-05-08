@@ -95,7 +95,7 @@ fn wait_signal_shape_validates_against_schema_when_set() {
 }
 
 #[test]
-#[ignore = "Phase 3 — runtime signal-shape check body deferred per docs/future/phase-3-backlog.md §7.3.C (WaitSignalShapeMismatch shape-reserved per docs/ERROR-CATALOG.md; runtime check addition in wait::evaluate_op lands Phase 3)"]
+#[ignore = "Phase 3+ anytime backlog — wait_signal_shape_mismatch routed-edge-label classification. Destination: docs/future/phase-3-backlog.md §7.3.C row 7. End-to-end shape-match correctness IS fully wired: SUSPEND-time populates `WaitMetadata.signal_shape` at `crates/benten-eval/src/primitives/wait.rs::evaluate_op_with_handler_id` (reads `wait_node.property(\"signal_shape\").cloned()`); resume-time consults via `crates/benten-eval/src/primitives/wait.rs::shapes_match` in `resume_with_meta`; `SuspensionStore::put_wait`/`get_wait` round-trips the field. The OUTSTANDING gap is purely a routing classification: `ErrorCode::InvRegistration` is routed to `None` in `crates/benten-errors/src/lib.rs::routed_edge_label` (registration-time None group), but this test asserts `Some(\"ON_ERROR\")`. Either the test's expected edge label needs adjustment OR the variant needs reclassification under the runtime-error group. Bundle with the next round of routed_edge_label classification hardening (reassessment cadence: v1-assessment-window per CLAUDE.md baked-in #15)."]
 fn wait_signal_shape_mismatch_fires_typed_error_routed_on_error() {
     // Shape declares `Int`; resume with `Text` shape mismatches → typed
     // error, routed through ON_ERROR.

@@ -101,7 +101,6 @@ fn parse_walkthrough_loc(md_src: &str) -> Vec<(&'static str, usize)> {
 /// structural companion to Vitest body). Verifies every primitive
 /// walkthrough is at most 15 LOC.
 #[test]
-#[ignore = "Phase 3 — QUICKSTART.md walkthroughs-compile body deferred per docs/future/phase-3-backlog.md §7.3.A.5"]
 fn quickstart_md_walkthroughs_under_15_loc() {
     let root = workspace_root();
     let doc_path = root.join("docs/QUICKSTART.md");

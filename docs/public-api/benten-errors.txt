@@ -1,0 +1,11 @@
+# Phase-3 G20-A3 wave-8a — cargo-public-api existing-crate baseline.
+#
+# Per `.addl/phase-3/00-implementation-plan.md` §3 G20-A3 +
+# `docs/future/phase-3-backlog.md` §7.3.A.9 (sub-cluster 9a). Seed
+# baseline; first nightly cargo-public-api run replaces with full
+# `cargo public-api -p benten-errors --simplified` output.
+#
+# Pinned by `crates/benten-engine/tests/cargo_public_api_drift.rs`.
+
+crate = benten-errors
+phase_3_seeded_at = G20-A3 wave-8a

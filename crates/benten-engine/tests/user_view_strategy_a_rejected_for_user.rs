@@ -1,101 +1,94 @@
-#![cfg(feature = "phase_2b_landed")]
-// R3-followup (R4-FP B-1) red-phase: gate against R5-pending G8-B
-// `engine.create_view` Strategy::A rejection.
+// Phase 3 G20-A3 — un-ignored: production code at
+// `crates/benten-engine/src/engine_views.rs::register_user_view`
+// already rejects Strategy::A + Strategy::C; this file lifts the
+// red-phase pin to a green-phase end-to-end driver per dispatch-
+// conventions §3.6b (production entry point + observable
+// consequence).
 //
-//! Phase 2b R4-FP (B-1) — D8-RESOLVED: user views REFUSE Strategy::A.
+//! Phase 3 G20-A3 (Phase 2b R4-FP B-1 origin) — D8-RESOLVED:
+//! `Engine::register_user_view` REFUSES Strategy::A + Strategy::C
+//! at registration time.
 //!
 //! Pin source:
 //!   - `.addl/phase-2b/00-implementation-plan.md` §5 D8-RESOLVED
 //!     ("REFUSES `'A'` with typed error since hand-written = Rust-only
 //!     and not user-registerable from TS").
-//!   - `.addl/phase-2b/r2-test-landscape.md` §7 row 463 (TS pin) +
-//!     §8 D8 row.
+//!   - `.addl/phase-2b/r2-test-landscape.md` §7 + §8 D8 row.
 //!   - `.addl/phase-2b/r4-qa-expert.json` qa-r4-04.
+//!   - `docs/future/phase-3-backlog.md §7.3.A.3` (CLOSED at G20-A3).
 //!
-//! Rust-side defense-in-depth pin: even if a future TS-bridge bug
-//! permits `'A'` to slip through to the Rust surface, `engine.create_view`
-//! MUST reject it with a typed `ViewRegistrationError`. The TS DSL
-//! refusal is the front-line gate; this test is the backstop.
-//!
-//! Owned by R4-FP B-1.
+//! Each test drives the production entry point
+//! `Engine::register_user_view` (§3.6b end-to-end pin) — would
+//! FAIL silently if the engine_views.rs strategy match arms ever
+//! regressed to silent-accept.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
-#![allow(unused_imports, dead_code, unused_variables, unused_mut)]
 
-use benten_engine::Engine;
+use benten_engine::{Engine, UserViewInputPattern, UserViewSpec};
 
 /// `user_view_strategy_a_refused_with_typed_error` — D8 + plan §3 G8-B.
 ///
-/// Building a `UserViewSpec` with `.strategy(Strategy::A)` MUST yield
-/// either a builder-time error OR a registration-time typed error
-/// (`E_VIEW_STRATEGY_A_REFUSED_FOR_USER_VIEW` — exact code TBD by R5
-/// G8-B, but the test asserts a recognizably typed error renders).
+/// Building a `UserViewSpec` with `.strategy(Strategy::A)` and passing
+/// it to `Engine::register_user_view` MUST yield a typed
+/// `EngineError::ViewStrategyARefused`.
 #[test]
-#[ignore = "Phase 3 — Strategy::A rejection-for-user-views body deferred per docs/future/phase-3-backlog.md §7.3.A.3 (G8-B + wave-8h IVM Algorithm B production registration landed)"]
 fn user_view_strategy_a_refused_with_typed_error() {
     let dir = tempfile::tempdir().unwrap();
-    let mut engine = Engine::builder()
+    let engine = Engine::builder()
         .path(dir.path().join("benten.redb"))
         .build()
         .unwrap();
 
-    // R5 G8-B pseudo (one of two acceptable shapes):
-    //
-    // Shape A — builder rejects:
-    //   let err = UserViewSpec::builder()
-    //       .id("user_a_attempt")
-    //       .input_pattern(ChangePattern::AnchorPrefix("post"))
-    //       .strategy(Strategy::A)
-    //       .build()
-    //       .expect_err("builder MUST reject Strategy::A for user views");
-    //
-    // Shape B — registration rejects:
-    //   let spec = UserViewSpec::builder_unchecked()
-    //       .id("user_a_attempt")
-    //       .input_pattern(ChangePattern::AnchorPrefix("post"))
-    //       .strategy(Strategy::A)
-    //       .build();
-    //   let err = engine.create_view(spec).expect_err(
-    //       "create_view MUST reject Strategy::A for user views"
-    //   );
-    //
-    // Either way:
-    //   let rendered = err.to_string();
-    //   assert!(
-    //       rendered.contains("E_VIEW_STRATEGY_A_REFUSED")
-    //           || rendered.contains("hand-written")
-    //           || rendered.contains("Strategy::A"),
-    //       "expected typed Strategy::A-refused error, got: {rendered}"
-    //   );
-    todo!("R5 G8-B — assert Strategy::A rejection for user views");
+    let spec = UserViewSpec::builder()
+        .id("user_a_attempt")
+        .input_pattern(UserViewInputPattern::AnchorPrefix("post".into()))
+        .strategy(benten_ivm::Strategy::A)
+        .build()
+        .expect("UserViewSpec builder constructs (rejection lives at register_user_view)");
+
+    let err = engine
+        .register_user_view(spec)
+        .expect_err("register_user_view MUST reject Strategy::A for user views");
+
+    let rendered = err.to_string();
+    assert!(
+        rendered.contains("Strategy::A") || rendered.contains("Strategy A"),
+        "expected typed Strategy::A-refused error, got: {rendered}"
+    );
+    assert!(
+        rendered.contains("user_a_attempt"),
+        "error must surface the offending view_id, got: {rendered}"
+    );
 }
 
 /// Companion: `Strategy::C` (reserved for Phase-3 Z-set cancellation
-/// per g8-concern-3) MUST also be refused for user views in Phase 2b.
-/// Different error code path than Strategy::A — A is "Rust-only",
-/// C is "not yet implemented".
+/// per g8-concern-3) MUST also be refused for user views.
 #[test]
-#[ignore = "Phase 3 — Strategy::C reserved-for-phase-3 rejection body deferred per docs/future/phase-3-backlog.md §7.3.A.3"]
 fn user_view_strategy_c_refused_as_reserved() {
     let dir = tempfile::tempdir().unwrap();
-    let mut engine = Engine::builder()
+    let engine = Engine::builder()
         .path(dir.path().join("benten.redb"))
         .build()
         .unwrap();
 
-    // R5 G8-B pseudo:
-    //   let err = UserViewSpec::builder()
-    //       .id("user_c_attempt")
-    //       .input_pattern(ChangePattern::AnchorPrefix("post"))
-    //       .strategy(Strategy::C)
-    //       .build()
-    //       .expect_err("Strategy::C MUST be rejected — Phase 3 reserved");
-    //   let rendered = err.to_string();
-    //   assert!(
-    //       rendered.contains("E_VIEW_STRATEGY_C_RESERVED")
-    //           || rendered.contains("Phase 3")
-    //           || rendered.contains("Z-set"),
-    //       "expected Strategy::C-reserved error, got: {rendered}"
-    //   );
-    todo!("R5 G8-B — assert Strategy::C reserved-for-Phase-3 rejection");
+    let spec = UserViewSpec::builder()
+        .id("user_c_attempt")
+        .input_pattern(UserViewInputPattern::AnchorPrefix("post".into()))
+        .strategy(benten_ivm::Strategy::C)
+        .build()
+        .expect("UserViewSpec builder constructs (rejection lives at register_user_view)");
+
+    let err = engine
+        .register_user_view(spec)
+        .expect_err("register_user_view MUST reject Strategy::C for user views");
+
+    let rendered = err.to_string();
+    assert!(
+        rendered.contains("Strategy::C") || rendered.contains("Strategy C"),
+        "expected typed Strategy::C-reserved error, got: {rendered}"
+    );
+    assert!(
+        rendered.contains("user_c_attempt"),
+        "error must surface the offending view_id, got: {rendered}"
+    );
 }
