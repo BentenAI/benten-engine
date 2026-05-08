@@ -21,7 +21,17 @@
 
 import { Engine, PolicyKind } from "@benten/engine";
 
-async function main(): Promise<void> {
+/**
+ * Run the Atrium peer-management example end-to-end.
+ *
+ * Exported as `run` (rather than auto-invoked on import) so the
+ * `quickstart_examples_compile_and_run` companion pin
+ * `atrium_examples` can import the module under Vitest without
+ * triggering napi side effects. Direct CLI execution still works:
+ * the bottom of the module gates `run()` on `import.meta.url`
+ * matching the launching script.
+ */
+export async function run(): Promise<{ ok: true }> {
   // Phase 3 layered the durable UCANBackend on top of GrantBacked.
   // PolicyKind.Ucan opens an engine wired to consult UCAN-grounded
   // grants (issuer + audience + nbf/exp validation walking through
@@ -73,9 +83,19 @@ async function main(): Promise<void> {
   } finally {
     await engine.close();
   }
+  return { ok: true };
 }
 
-main().catch((err: unknown) => {
-  process.stderr.write(`atrium-peer-mgmt failed: ${String(err)}\n`);
-  process.exit(1);
-});
+// Direct-invocation guard — run only when the example is the
+// process entry point (e.g. `node --experimental-strip-types
+// examples/atrium-peer-mgmt.ts`).
+const isMainModule =
+  typeof process !== "undefined" &&
+  process.argv[1] !== undefined &&
+  import.meta.url === `file://${process.argv[1]}`;
+if (isMainModule) {
+  run().catch((err: unknown) => {
+    process.stderr.write(`atrium-peer-mgmt failed: ${String(err)}\n`);
+    process.exit(1);
+  });
+}

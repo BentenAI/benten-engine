@@ -1,15 +1,31 @@
 # `@benten/engine` examples
 
-Runnable example handlers for the three Phase-2b primitives. Each
-example pairs an `*-handler.ts` (the handler definition — pure DSL,
-no engine startup) with an `*-example.ts` (the runner that wires the
-handler into an in-memory `Engine` and exercises it end-to-end).
+Runnable examples for the three Phase-2b primitives + the Phase-3
+Atrium DSL surface. Phase-2b examples pair an `*-handler.ts` (the
+handler definition — pure DSL, no engine startup) with an
+`*-example.ts` (the runner that wires the handler into an in-memory
+`Engine` and exercises it end-to-end). Phase-3 Atrium examples are
+single-file runners (the Atrium DSL composes via factory + handle
+methods, not via subgraph definitions, so there's no separate handler
+module).
+
+Phase-2b primitive examples:
 
 | Primitive | Handler | Runner |
 |-----------|---------|--------|
 | STREAM | [`stream-handler.ts`](./stream-handler.ts) | [`stream-example.ts`](./stream-example.ts) |
 | SUBSCRIBE | [`subscribe-handler.ts`](./subscribe-handler.ts) | [`subscribe-example.ts`](./subscribe-example.ts) |
 | SANDBOX | [`sandbox-handler.ts`](./sandbox-handler.ts) | [`sandbox-example.ts`](./sandbox-example.ts) |
+
+Phase-3 Atrium examples (each exports a `run()` async function +
+gates direct CLI invocation via `import.meta.url`):
+
+| Surface | Runner |
+|---------|--------|
+| Peer management (D1 B-prime factory + `trustPeer` / `revokePeer` / `onPeerJoin` / `onPeerLeave`) | [`atrium-peer-mgmt.ts`](./atrium-peer-mgmt.ts) |
+| Subscribe / sync trigger (per-handle `subscribe(path, cb)`) | [`atrium-sync-trigger.ts`](./atrium-sync-trigger.ts) |
+| UCAN grant flow (`Engine.openWithPolicy(path, PolicyKind.Ucan)` + `grantCapability` / `revokeCapability` / `callAs`) | [`ucan-grant-flow.ts`](./ucan-grant-flow.ts) |
+| DID resolution (`did:key` round-trip + `declareDeviceAttestation`) | [`did-resolution.ts`](./did-resolution.ts) |
 
 ## Type-check
 
@@ -29,6 +45,14 @@ npm run build
 node --experimental-strip-types examples/stream-example.ts
 node --experimental-strip-types examples/subscribe-example.ts
 node --experimental-strip-types examples/sandbox-example.ts    # requires WASM module file
+
+# Phase-3 Atrium examples (require an Atrium full peer to be online —
+# the DSL surface compiles + types-checks on its own; running
+# end-to-end requires UCANBackend + iroh + a configured Atrium DID).
+node --experimental-strip-types examples/atrium-peer-mgmt.ts
+node --experimental-strip-types examples/atrium-sync-trigger.ts
+node --experimental-strip-types examples/ucan-grant-flow.ts
+node --experimental-strip-types examples/did-resolution.ts
 ```
 
 The SANDBOX example uses hardcoded placeholder CIDs for both the

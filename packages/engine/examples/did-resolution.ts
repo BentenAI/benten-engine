@@ -32,7 +32,12 @@
 import { Engine, PolicyKind } from "@benten/engine";
 import type { DeviceAttestation } from "@benten/engine";
 
-async function main(): Promise<void> {
+/**
+ * Run the DID-resolution example. Exported as `run` so the
+ * `atrium_examples` companion pin can import the module without
+ * triggering napi side effects on import.
+ */
+export async function run(): Promise<{ ok: true }> {
   const engine = await Engine.openWithPolicy(
     ".benten/example-did-resolution.redb",
     PolicyKind.Ucan,
@@ -78,9 +83,16 @@ async function main(): Promise<void> {
   } finally {
     await engine.close();
   }
+  return { ok: true };
 }
 
-main().catch((err: unknown) => {
-  process.stderr.write(`did-resolution failed: ${String(err)}\n`);
-  process.exit(1);
-});
+const isMainModule =
+  typeof process !== "undefined" &&
+  process.argv[1] !== undefined &&
+  import.meta.url === `file://${process.argv[1]}`;
+if (isMainModule) {
+  run().catch((err: unknown) => {
+    process.stderr.write(`did-resolution failed: ${String(err)}\n`);
+    process.exit(1);
+  });
+}

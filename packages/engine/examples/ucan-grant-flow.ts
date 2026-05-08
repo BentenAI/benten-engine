@@ -33,7 +33,12 @@
 
 import { Engine, PolicyKind, crud } from "@benten/engine";
 
-async function main(): Promise<void> {
+/**
+ * Run the UCAN-grant-flow example. Exported as `run` so the
+ * `atrium_examples` companion pin can import the module without
+ * triggering napi side effects on import.
+ */
+export async function run(): Promise<{ ok: true }> {
   const engine = await Engine.openWithPolicy(
     ".benten/example-ucan-grant.redb",
     PolicyKind.Ucan,
@@ -45,8 +50,9 @@ async function main(): Promise<void> {
     // Grant alice the wildcard capability on the `post` zone. Phase-3
     // optional `issuer` field carries the UCAN-grounding root DID;
     // `hlc` carries the causal stamp the chain-walker uses for
-    // before/after ordering.
-    await engine.grantCapability({
+    // before/after ordering. The grant CID returned is what
+    // `revokeCapability(grantCid, actor)` consumes downstream.
+    const grantCid = await engine.grantCapability({
       actor: aliceDid,
       scope: "store:post:*",
       issuer: aliceDid, // self-signed root grant
@@ -70,14 +76,11 @@ async function main(): Promise<void> {
     );
     process.stdout.write(`created: ${JSON.stringify(out)}\n`);
 
-    // Revoke the grant. UCANBackend treats revocation as a Node
-    // write that the chain-walker consults on the next dispatch;
-    // any in-flight handler that re-checks the cap surfaces
+    // Revoke the grant. `revokeCapability(grantCid, actor)` writes
+    // the revocation Node; UCANBackend consults it on the next
+    // dispatch + any in-flight handler that re-checks the cap surfaces
     // E_CAP_REVOKED_MID_EVAL per Phase-2a hardening.
-    await engine.revokeCapability({
-      actor: aliceDid,
-      scope: "store:post:*",
-    });
+    await engine.revokeCapability(grantCid, aliceDid);
 
     // The next dispatch fails with E_CAP_DENIED — the chain no longer
     // attenuates to `store:post:write` because the grant is revoked.
@@ -95,9 +98,16 @@ async function main(): Promise<void> {
   } finally {
     await engine.close();
   }
+  return { ok: true };
 }
 
-main().catch((err: unknown) => {
-  process.stderr.write(`ucan-grant-flow failed: ${String(err)}\n`);
-  process.exit(1);
-});
+const isMainModule =
+  typeof process !== "undefined" &&
+  process.argv[1] !== undefined &&
+  import.meta.url === `file://${process.argv[1]}`;
+if (isMainModule) {
+  run().catch((err: unknown) => {
+    process.stderr.write(`ucan-grant-flow failed: ${String(err)}\n`);
+    process.exit(1);
+  });
+}
