@@ -112,40 +112,41 @@ describe("G20-B Atrium examples compile + run", () => {
     ).toBe(true);
   };
 
-  it("atrium-peer-mgmt run() surfaces stub failure under napi-stub state", async () => {
-    await expect(atriumPeerMgmt.run()).rejects.toThrow();
+  // Single-invocation pattern: each example opens a redb path, so a
+  // double-invocation in one test would hit `EGraphInternal: Database
+  // already open` on the second call before reaching the napi-UCAN
+  // surface — defeating the pin's purpose.
+  const captureRunError = async (
+    runFn: () => Promise<unknown>,
+  ): Promise<unknown> => {
+    let captured: unknown = null;
     try {
-      await atriumPeerMgmt.run();
+      await runFn();
     } catch (err) {
-      expectStubFailureShape(err);
+      captured = err;
     }
+    expect(captured).not.toBeNull();
+    return captured;
+  };
+
+  it("atrium-peer-mgmt run() surfaces stub failure under napi-stub state", async () => {
+    const err = await captureRunError(() => atriumPeerMgmt.run());
+    expectStubFailureShape(err);
   });
 
   it("atrium-sync-trigger run() surfaces stub failure under napi-stub state", async () => {
-    await expect(atriumSyncTrigger.run()).rejects.toThrow();
-    try {
-      await atriumSyncTrigger.run();
-    } catch (err) {
-      expectStubFailureShape(err);
-    }
+    const err = await captureRunError(() => atriumSyncTrigger.run());
+    expectStubFailureShape(err);
   });
 
   it("ucan-grant-flow run() surfaces stub failure under napi-stub state", async () => {
-    await expect(ucanGrantFlow.run()).rejects.toThrow();
-    try {
-      await ucanGrantFlow.run();
-    } catch (err) {
-      expectStubFailureShape(err);
-    }
+    const err = await captureRunError(() => ucanGrantFlow.run());
+    expectStubFailureShape(err);
   });
 
   it("did-resolution run() surfaces stub failure under napi-stub state", async () => {
-    await expect(didResolution.run()).rejects.toThrow();
-    try {
-      await didResolution.run();
-    } catch (err) {
-      expectStubFailureShape(err);
-    }
+    const err = await captureRunError(() => didResolution.run());
+    expectStubFailureShape(err);
   });
 
   it("atrium examples compose entirely from existing 12 primitives (cag-4)", () => {
