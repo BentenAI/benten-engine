@@ -8,14 +8,10 @@
 //!
 //! Owner: R4-FP Bucket A fix-pass (orchestrator).
 //!
-//! Why a `cfg(feature = "phase_2b_landed")` aggregator: the contained
-//! `subscribe_caps.rs` uses `#![cfg(feature = "phase_2b_landed")]` as its
-//! file-level gate, so listing `pub mod subscribe_caps;` here unconditionally
-//! would still produce a (gated-empty) module under default features and is
-//! safe — but mirroring the gate at the aggregator keeps the discipline
-//! visible at the discovery point.
-
-#![cfg(feature = "phase_2b_landed")]
+//! The `phase_2b_landed` feature gate that originally protected this
+//! aggregator + its submodule was retired at G20-B Phase-3-close per
+//! audit-3-mr-1 — Phase 2b shipped at `phase-2b-close` 2026-05-03 and
+//! the contained tests run cleanly under default features.
 
 #[path = "security/subscribe_caps.rs"]
 pub mod subscribe_caps;

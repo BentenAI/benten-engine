@@ -1,5 +1,3 @@
-#![cfg(feature = "phase_2b_landed")]
-// R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! R3-A red-phase: SUBSCRIBE security-class — capability gating + Inv-11 +
 //! Option-C compliance (G6-A).
 //!

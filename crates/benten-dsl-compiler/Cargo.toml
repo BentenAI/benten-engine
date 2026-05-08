@@ -16,14 +16,6 @@ workspace = true
 path = "src/lib.rs"
 bench = false
 
-[features]
-# `phase_2b_landed` gates compilation of red-phase test files whose `use`
-# statements reference R5-pending APIs (`compile_str`, `CompileError`, etc.).
-# Default OFF so the CI required-check fleet (which does NOT enable this
-# feature) can compile + run the workspace cleanly during R3-consolidation.
-# R5 G12-B brief flips this on when the surface lands.
-phase_2b_landed = []
-
 [dependencies]
 # Per arch-pre-r1-3 + plan §3.2 G12-B + r1-architect-reviewer.json:
 # benten-dsl-compiler depends on benten-core (Subgraph + SubgraphSpec types)

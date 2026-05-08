@@ -8,7 +8,6 @@
 //!
 //! Owner: R5 G12-B (qa-r4-01 R3-followup).
 
-#![cfg(feature = "phase_2b_landed")]
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::doc_lazy_continuation)]
 

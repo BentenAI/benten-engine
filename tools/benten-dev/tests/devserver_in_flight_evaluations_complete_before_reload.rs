@@ -12,7 +12,6 @@
 //!
 //! Lifted from red-phase 2026-04-28 (R5 G12-B implementer).
 
-#![cfg(feature = "phase_2b_landed")]
 #![allow(clippy::unwrap_used)]
 
 use benten_dev::DevServer;
