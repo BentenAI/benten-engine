@@ -63,6 +63,21 @@ export async function run(): Promise<{ ok: true }> {
     );
 
     // Extend trust to two peer DIDs (laptop + phone-OS app).
+    //
+    // G21-T1 typed-CALL: ed25519_verify — when a peer authenticates
+    // its trust extension, the engine-side `trustPeer` path consults
+    // the typed-CALL `engine:typed:ed25519_verify` op (handler-author
+    // composition) to verify the peer's signed authorization envelope
+    // against the presented public key. The T2 napi widening exposes
+    // a sibling `engine.typedCall(...)` helper for direct invocation
+    // from TS; the engine-internal trust path uses the same op surface
+    // via the CALL primitive's typed-CALL fork (per CLAUDE.md baked-in
+    // commitment #16: SANDBOX is for compute that doesn't fit other
+    // primitives — crypto verify is a typed-CALL composition).
+    //
+    // G21-T1 typed-CALL: ed25519_sign — symmetric to verify; the local
+    // peer's outbound trust-extension is itself signed via the same
+    // typed-CALL op family at the full-peer Rust layer.
     const laptopDid =
       "did:key:z6MkrJVnaZkeFzdQyMZu1csdAuLAaKSzjGpJSjm9V1F4xzm";
     const phoneDid =

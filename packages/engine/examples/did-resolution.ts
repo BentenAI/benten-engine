@@ -49,6 +49,15 @@ export async function run(): Promise<{ ok: true }> {
     // Round-trip a `did:key:z<...>` string through the trust surface.
     // The napi binding parses the DID via benten-id's did_key parser
     // and rejects malformed strings with a typed error.
+    //
+    // G21-T1 typed-CALL: did_resolve — the engine-internal DID parse
+    // is the typed-CALL `engine:typed:did_resolve` op. A handler-author
+    // composing a DID-routing subgraph invokes it via a CALL Node
+    // `target: "engine:typed:did_resolve"` to get the public-key bytes
+    // back as `Value::Map { method, public_key }` per the op's output
+    // schema (see `crates/benten-eval/src/typed_call.rs`). The T2 napi
+    // widening exposes `engine.typedCall(...)` as a TS sibling so the
+    // same op is reachable from JS land.
     const peerDid =
       "did:key:z6MkrJVnaZkeFzdQyMZu1csdAuLAaKSzjGpJSjm9V1F4xzm";
     await home.trustPeer(peerDid);
