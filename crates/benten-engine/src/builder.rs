@@ -552,8 +552,7 @@ impl EngineBuilder {
                         Some(Box::new(benten_caps::UcanGroundedPolicy::new(
                             grant_backed,
                             ucan_backend,
-                        ))
-                            as Box<dyn CapabilityPolicy>),
+                        )) as Box<dyn CapabilityPolicy>),
                         false,
                     )
                 } else {

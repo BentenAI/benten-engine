@@ -142,10 +142,16 @@ fn keypair_generate() -> Result<Value, EvalError> {
     // `getrandom`).
     let kp = Keypair::generate();
     let envelope = kp.export_seed_envelope();
-    // Recover the raw 32-byte seed from the envelope (test-side
-    // accessor only — production callers see the envelope shape).
-    // We need raw 32 bytes for the typed-CALL output schema.
-    let secret_bytes = kp.secret_bytes_for_test();
+    // G21-T2 fp-mini-review MAJOR-6 closure (option (b)): the raw
+    // 32-byte private-key bytes flow out the typed-CALL output
+    // schema as a `Value::Bytes` wrapper. Per phase-3-backlog §2.5
+    // (e) the proper zeroize-on-drop discipline lands when the
+    // `Value::SensitiveBytes` discriminant extension is wired
+    // (cross-crate touch on every Value consumer). Today we use the
+    // production-named `secret_bytes_unprotected` accessor so the
+    // unprotected nature of the surface is explicit at the call
+    // site (rename of `secret_bytes_for_test`).
+    let secret_bytes = kp.secret_bytes_unprotected();
     let _ = envelope; // envelope round-trip path validated; not surfaced
 
     let public_bytes = kp.public_key().to_bytes();
@@ -175,7 +181,10 @@ fn keypair_from_seed(input: &Value) -> Result<Value, EvalError> {
     })?;
 
     let public_bytes = kp.public_key().to_bytes();
-    let secret_bytes = kp.secret_bytes_for_test();
+    // G21-T2 fp-mini-review MAJOR-6 closure: same unprotected-Value
+    // narrative as `keypair_generate` above. phase-3-backlog §2.5 (e)
+    // tracks the `Value::SensitiveBytes` extension.
+    let secret_bytes = kp.secret_bytes_unprotected();
 
     let mut out = BTreeMap::new();
     out.insert(

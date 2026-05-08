@@ -48,13 +48,48 @@
 //!   `DeviceAttestationDeclaration` napi struct).
 //! - audit-6-2 BLOCKER — `JsAtrium` delegation to engine-side `Atrium`.
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use benten_engine::Engine as InnerEngine;
 use benten_engine::atrium_api::AtriumConfig as EngineAtriumConfig;
 use benten_engine::engine_sync::AtriumHandle;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
+
+/// G21-T2 fp-mini-review MAJOR-5 closure — a process-singleton tokio
+/// runtime shared across every JsAtrium handle.
+///
+/// Pre-fp-mini-review the napi `JsAtrium::join` and
+/// `declare_device_attestation` each constructed a fresh
+/// `tokio::runtime::Builder::new_current_thread().build()` per call.
+/// iroh's `Endpoint` drives background tasks via the runtime context
+/// active at construction; when the per-call runtime drops post-
+/// `block_on`, those background tasks terminate. The stored
+/// `AtriumHandle` then points to an `Endpoint` whose driving runtime
+/// is gone, so subsequent operations (especially when real engine-
+/// side delegation lands) deadlock or fail.
+///
+/// The shared runtime is built once on first access (multi-threaded
+/// flavor with `enable_all`) and reused for every async operation
+/// driven through the JsAtrium napi boundary. The runtime is owned
+/// by the static — it lives for the lifetime of the cdylib, so the
+/// `Endpoint`'s background tasks survive across multiple JS-side
+/// `await`-driven calls.
+///
+/// Multi-threaded flavor (vs current-thread): iroh's networking
+/// layer is multi-threaded internally; using current-thread here
+/// would serialize all atrium-side work onto the single thread that
+/// happens to drive the first `block_on` and back-pressure JS calls.
+fn js_atrium_runtime() -> &'static tokio::runtime::Runtime {
+    static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+    RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .thread_name("benten-js-atrium")
+            .build()
+            .expect("benten js-atrium tokio runtime init must succeed (cdylib startup)")
+    })
+}
 
 /// Configuration object for the Atrium factory call.
 ///
@@ -254,20 +289,17 @@ impl JsAtrium {
             state.engine.clone()
         };
         if let Some(engine) = engine_opt {
-            // Drive the engine-side open_atrium asynchronously through
-            // a small tokio runtime. block_on is acceptable here — the
-            // open is bounded (iroh Endpoint::bind returns once the
-            // socket binds) and JS callers explicitly await this method.
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .map_err(|e| {
-                    napi::Error::new(
-                        Status::GenericFailure,
-                        format!("E_GRAPH_INTERNAL: tokio runtime init failed: {e}"),
-                    )
-                })?;
-            let handle = runtime
+            // G21-T2 fp-mini-review MAJOR-5 closure: drive the
+            // engine-side open_atrium through the process-singleton
+            // shared runtime (`js_atrium_runtime()`). Pre-fp-mini-
+            // review a fresh `new_current_thread()` runtime was
+            // constructed per call; the runtime dropped at the end
+            // of `block_on` so iroh's `Endpoint` background tasks
+            // (driven by the runtime's reactor) terminated and
+            // subsequent operations on the stored `AtriumHandle`
+            // would deadlock once real engine-side delegation
+            // arrives.
+            let handle = js_atrium_runtime()
                 .block_on(engine.open_atrium(EngineAtriumConfig::for_test()))
                 .map_err(|e| {
                     napi::Error::new(
@@ -291,16 +323,37 @@ impl JsAtrium {
 
     /// Leave the atrium — tears down the per-session state.
     ///
-    /// G21-T2 §C: drops the engine-side `AtriumHandle` clone (the
-    /// underlying iroh `Endpoint` closes when the last clone drops).
+    /// G21-T2 fp-mini-review MAJOR-4 closure: drives the engine-side
+    /// `AtriumHandle::close().await` through the shared runtime
+    /// (see `js_atrium_runtime()` at the top of this file). Pre-fp-
+    /// mini-review the napi `leave()` body merely cleared
+    /// `engine_atrium = None`; iroh's `Endpoint::close()` does NOT
+    /// fire from synchronous Drop, so in-flight datagrams may not
+    /// flush and OS sockets may linger. Calling `close().await`
+    /// explicitly closes the endpoint cleanly.
+    ///
     /// Trust + declared-attestation rosters survive across
     /// leave/rejoin per the engine-side persistence contract; only
     /// joined-state resets.
     #[napi]
     pub fn leave(&self) -> Result<()> {
-        let mut state = self.state.lock().expect("atrium state mutex");
-        state.engine_atrium = None;
-        state.joined_no_engine = false;
+        // Take the engine_atrium handle out of state under the lock
+        // (so a concurrent `is_joined` cannot observe a half-torn-
+        // down state). Then drive `close().await` outside the lock
+        // because `close` is async + can take a few hundred ms to
+        // flush in-flight datagrams.
+        let handle_opt = {
+            let mut state = self.state.lock().expect("atrium state mutex");
+            state.joined_no_engine = false;
+            state.engine_atrium.take()
+        };
+        if let Some(handle) = handle_opt {
+            // `AtriumHandle::close(self)` consumes the handle so the
+            // last Arc-clone drops + the underlying iroh Endpoint
+            // shuts down. Awaiting on the shared runtime ensures the
+            // shutdown completes before `leave()` returns.
+            js_atrium_runtime().block_on(handle.close());
+        }
         Ok(())
     }
 
@@ -379,15 +432,9 @@ impl JsAtrium {
         // handshake protocol body work (BELONGS-NAMED-NOW per HARD
         // RULE rule-12 to phase-3-backlog §3.1 Atrium peer-handshake).
         if let Some(handle) = engine_atrium {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .map_err(|e| {
-                    napi::Error::new(
-                        Status::GenericFailure,
-                        format!("E_GRAPH_INTERNAL: tokio runtime init failed: {e}"),
-                    )
-                })?;
+            // G21-T2 fp-mini-review MAJOR-5 closure: shared runtime
+            // (see `js_atrium_runtime()` rationale at the top of
+            // this file).
             let envelope = benten_engine::engine_sync::DeclaredDeviceAttestation {
                 device_did: attestation.device_did.clone(),
                 claims: attestation
@@ -400,7 +447,7 @@ impl JsAtrium {
                     .collect(),
                 freshness_window: attestation.freshness_window,
             };
-            runtime.block_on(handle.register_device_attestation(envelope));
+            js_atrium_runtime().block_on(handle.register_device_attestation(envelope));
         }
         Ok(())
     }

@@ -208,9 +208,34 @@
 
 **(d) Reserved `engine:typed:` handler-id namespace registration reject (corr-minor-3).** `Engine::register_subgraph` does not currently reject a handler whose `handler_id` starts with `engine:typed:`. The eval-side dispatch fork pre-empts user-handler routing for the prefix, so user registration is effectively dead code (currently pinned at `crates/benten-engine/tests/typed_call_engine_dispatch.rs::typed_call_namespace_pre_empts_user_handler_registry_for_unknown_op`), but a hard registration-time REJECT would surface the user-error sooner. Phase 3 target: add an `EngineError::ReservedHandlerNamespace { handler_id }` variant + corresponding `ErrorCode::ReservedHandlerNamespace` (4-surface §3.5g atomic update across `benten-errors` lib + JS adapter regen + ERROR-CATALOG row + TS bindings). Touch size: ~80-120 LOC across the 4 ErrorCode surfaces + 1 register_subgraph guard + 1 pin.
 
-**Phase 3 target:** post-G21-T1 follow-on (T2/T3/T4 or a sibling cleanup wave). Each item is independently scoped; (c) couples to the napi-UCAN-wireup G21-T2 work in §2.3.
+**(e) `Value::SensitiveBytes` discriminant for typed-CALL secret-byte zeroize discipline (G21-T2 fp-mini-review MAJOR-6, deferred-half).** PR #148 fp-mini-review MAJOR-6 closure took option (b) — renamed `Keypair::secret_bytes_for_test` → `secret_bytes_unprotected` so the lack of zeroize-on-drop on the returned `[u8; 32]` is explicit at every call site. The proper option (a) — introducing a `Value::SensitiveBytes(Zeroizing<Vec<u8>>)` discriminant on the `benten_core::Value` enum — is deferred here because it is a cross-crate touch on every `Value` consumer (matchers in `benten-eval`, `benten-engine`, every primitive impl, every napi marshaller, the DSL compiler's value-shape builder, the IVM-view query path). Phase 3 target: add the discriminant on `Value`, route typed-CALL secret-byte outputs through it, audit `napi-rs` marshalling at the JS boundary so the bytes flow into a JS `Uint8Array` without first materializing as a non-Zeroizing intermediate. Touch size: ~150-250 LOC across the 6+ Value-consumer crates + new variant on `benten-eval::EvalError::TypedCallInvalidInput` shape audit if `SensitiveBytes` flows in to dispatch input. Cross-cuts §2.5 (a) which scoped the simpler `build_seed_envelope` `Zeroizing<Vec<u8>>` wrap (already landed at G21-T1 fix-pass).
 
-**Touch size:** ~180-320 LOC total across (a)-(d).
+**Phase 3 target:** post-G21-T1 follow-on (T2/T3/T4 or a sibling cleanup wave). Each item is independently scoped; (c) couples to the napi-UCAN-wireup G21-T2 work in §2.3; (e) is named at G21-T2 fp-mini-review.
+
+**Touch size:** ~330-570 LOC total across (a)-(e).
+
+#### 2.5 (f) — G21-T2 fp-mini-review DX residuals cluster
+
+**Origin (G21-T2 fp-mini-review, 2026-05-08):** the fp-mini-review surfaced 4 minor DX-class findings disposed as SKIP-here-with-named-destination per HARD RULE clause-b. None block the load-bearing security closures (BLOCKERs 1-3 + MAJORs 4-7); each is named here NOW so a future DX cleanup wave can pick up.
+
+**Carry items (4 minors, follow-up wave):**
+
+1. **DX-1: cargo dx items** — observed during fp-mini-review across the fix-pass commit set; symptom is workspace-level cargo command surface ergonomics. Surface: workspace `Cargo.toml` + `xtask` if added; touch ≤30 LOC.
+
+2. **DX-2: display rendering improvement** — the `format!("{err:?}")` debug-rendering patterns in the new typed-CALL pin set produce verbose output. A `Display` impl on the typed `EngineError` variants would render more readably. Surface: `crates/benten-engine/src/error.rs::EngineError::Other` Display arm; touch ≤30 LOC.
+
+3. **DX-3: `ucan_validate_chain` test fragility** — the existing `ucan_validate_chain_returns_*` pins in `crates/benten-engine/tests/typed_call_engine_dispatch.rs` build chains via the `Ucan::builder` + manual `now`-fixture composition; a test fixture helper that bundles the pattern would reduce duplication + clarify intent. Surface: a new `tests/common/ucan_fixtures.rs` shared helper module; touch ≤80 LOC.
+
+4. **DX-4: multi-Atrium handle dedup** — `bindings/napi/src/atrium.rs::JsAtrium::from_engine` constructs a fresh `AtriumHandleState` per call; multiple calls with the same `atriumId` produce distinct handles routing to the same logical atrium per Ben's D1 ratification (intentional). However, the `AtriumHandleState::declared_attestations` registry is per-handle, so attestations declared on handle A are NOT visible on handle B for the same atrium. Phase 3 target: hoist the per-atrium registries to an engine-level table keyed on `atriumId`. Surface: `bindings/napi/src/atrium.rs` + new engine-level registry on `Engine`; touch ~50-80 LOC.
+
+**Phase 3 target:** post-G21-T2-close DX cleanup wave. Independently scoped from §2.5 (a)-(e) above; lands in a separate sibling PR.
+
+**Touch size:** ~190-220 LOC total across the 4 minors.
+
+**Cross-references:**
+- `bindings/napi/src/atrium.rs::JsAtrium::from_engine` — DX-4 surface.
+- `crates/benten-engine/src/error.rs::EngineError::Other` — DX-2 surface.
+- `crates/benten-engine/tests/typed_call_engine_dispatch.rs::ucan_validate_chain_returns_*` — DX-3 surface.
 
 **Cross-references:**
 - `crates/benten-engine/src/typed_call_dispatch.rs` — sec-minor-2 + sec-minor-3 surfaces.

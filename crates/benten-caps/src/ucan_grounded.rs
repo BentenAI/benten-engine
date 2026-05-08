@@ -247,13 +247,7 @@ mod tests {
         }
     }
 
-    fn build_ucan(
-        kp: &Keypair,
-        resource: &str,
-        ability: &str,
-        nbf: u64,
-        exp: u64,
-    ) -> Ucan {
+    fn build_ucan(kp: &Keypair, resource: &str, ability: &str, nbf: u64, exp: u64) -> Ucan {
         let did = kp.public_key().to_did();
         Ucan::builder()
             .issuer(did.as_str().to_string())

@@ -217,10 +217,7 @@ impl Engine {
     /// Returns [`EngineError`] when the capability subsystem is
     /// disabled or the durable store rejects the write.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn install_ucan_proof(
-        &self,
-        ucan: &benten_id::ucan::Ucan,
-    ) -> Result<Cid, EngineError> {
+    pub fn install_ucan_proof(&self, ucan: &benten_id::ucan::Ucan) -> Result<Cid, EngineError> {
         if !self.caps_enabled {
             return Err(EngineError::SubsystemDisabled {
                 subsystem: "capabilities",
@@ -233,11 +230,9 @@ impl Engine {
         // write-check time. Constructing a fresh wrapper per call is
         // cheap (the wrapper holds an Arc ref + the rate-limit plug).
         let backend = benten_caps::UCANBackend::new(Arc::clone(&self.backend));
-        backend
-            .install_proof(ucan)
-            .map_err(|e| EngineError::Other {
-                code: e.code(),
-                message: format!("install_ucan_proof: {e}"),
-            })
+        backend.install_proof(ucan).map_err(|e| EngineError::Other {
+            code: e.code(),
+            message: format!("install_ucan_proof: {e}"),
+        })
     }
 }
