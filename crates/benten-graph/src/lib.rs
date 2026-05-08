@@ -364,6 +364,41 @@ impl RedbBackend {
         self.put(&subgraph_key(&cid), bytes)?;
         Ok(cid)
     }
+
+    /// W9-T6 test-only hook: corrupt on-disk Node bytes via a mutator
+    /// closure.
+    ///
+    /// Mirrors [`Self::corrupt_subgraph_bytes_for_test`] for the Node-store
+    /// surface. Reads the bytes at `n:CID`, hands them to `mutate` for
+    /// in-place modification, writes them back under the ORIGINAL key.
+    /// The key is preserved (not re-computed from the mutated bytes) so
+    /// the next `get_node(cid)` observes the CID-vs-content drift as
+    /// `E_INV_CONTENT_HASH` (W9-T6 verify-on-read defense) rather than
+    /// returning the wrong-but-decodable Node.
+    ///
+    /// Cfg-gated behind `any(test, feature = "testing")` so a release
+    /// build cannot reach the corruption primitive.
+    ///
+    /// # Errors
+    /// Returns [`GraphError::Redb`] with a string payload if the CID is
+    /// missing (the hook has no bytes to corrupt), or propagates I/O
+    /// failures from the underlying put/get.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn corrupt_node_bytes_for_test<F>(&self, cid: &Cid, mutate: F) -> Result<(), GraphError>
+    where
+        F: FnOnce(&mut [u8]),
+    {
+        use crate::store::node_key;
+        let key = node_key(cid);
+        let Some(mut bytes) = self.get(&key)? else {
+            return Err(GraphError::Redb(format!(
+                "corrupt_node_bytes_for_test: CID {cid:?} not present"
+            )));
+        };
+        mutate(&mut bytes);
+        self.put(&key, &bytes)?;
+        Ok(())
+    }
 }
 
 /// Re-export of [`benten_core::WriteAuthority`]. Phase 2a ucca-9 / arch-r1-2

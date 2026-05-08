@@ -93,9 +93,21 @@ Phase 2b views still rebuild only by re-applying committed `ChangeEvent`s from e
 
 Landed in Phase 1 as the close-out of R7 audit finding F-R7-004: `Cid::from_str` now decodes the base32-lower-nopad multibase form (the inverse of `Cid::to_base32`) and hands the resulting bytes to `Cid::from_bytes`, so string-path callers get the same three typed failure classes (`CoreError::InvalidCid` / `CidUnsupportedCodec` / `CidUnsupportedHash`) as byte-path callers. The catalog fix-hint for `E_CID_PARSE` was updated to drop the "Phase 2 path still stubbed" caveat. Tests: `crates/benten-core/tests/cid_from_str.rs` (roundtrip + canonical fixture + prefix / alphabet / length rejections) plus a lib-level `cid_string_roundtrip` unit test.
 
-### 6.2 `get_node_verified` read-path hash check (spec-to-code audit §5.7)
+### 6.2 `get_node_verified` read-path hash check — CLOSED-AT-PHASE-3-W9-T6
 
-`RedbBackend::get_node` does NOT re-hash the decoded Node and compare against the requested CID; a corrupted `{key, value}` pair returns a wrong-but-decodable Node. The `ERROR-CATALOG.md` entry for `E_INV_CONTENT_HASH` says "Thrown at: Registration / read" — but read-path firing is subgraph-only (via `Subgraph::load_verified`). Phase 2: add optional `get_node_verified(&self, cid)` that re-hashes on read (~3–10 µs BLAKE3 per call), or tighten the catalog entry to distinguish "Registration / Subgraph load" from "Node read."
+**Closure shape (W9-T6, Phase-3 R5 wave-9, ratified 2026-05-08).** Ben chose Option 1B (stronger): promote `RedbBackend::get_node` itself to always-verify on read — no opt-in, no `get_node_verified` escape hatch. The 3-10 µs BLAKE3 cost is acceptable to defend rehydration→exec paths (handler_versions / engine_modules / IVM materialise) against local-disk tamper + hardware bit-flip. Cross-peer ingestion is already defended by `Mst::apply_entries` rehash (sec-r4r2-1); subgraph-load is defended by `Subgraph::load_verified_with_cid`. This closes the on-disk Node-read boundary.
+
+The architectural framing: the on-disk redb file IS a system boundary by definition (CLAUDE.md "validate at system boundaries"). CID semantics are "self-validating identifier"; honoring that on read is the architecturally honest move.
+
+**Three-outcome contract** now pinned by `RedbBackend::get_node`:
+- `Ok(None)` — clean miss; CID never written to this backend.
+- `Err(GraphError::Core(CoreError::ContentHashMismatch))` — bytes present but corrupted/tampered.
+- `Err(GraphError::Core(CoreError::Serialize))` — bytes hash-match but fail to decode (genuine codec drift).
+- `Ok(Some(node))` — clean roundtrip; bytes hash-match and decode.
+
+Implementation routes through `benten_core::Node::load_verified(cid, &bytes)` (the same helper subgraph-load uses, mirrored). End-to-end pin lives at `crates/benten-graph/tests/get_node_verifies_content_hash_on_read.rs` (5 tests including the §3.6b "would-FAIL on silent no-op" pin via `corrupt_node_bytes_for_test`). The `ERROR-CATALOG.md` `E_INV_CONTENT_HASH` entry's "Thrown at" line was updated in the same PR to enumerate all three firing surfaces (subgraph-load, node-read, cross-peer ingest).
+
+Original deferral rationale (preserved for audit): `RedbBackend::get_node` did NOT re-hash the decoded Node and compare against the requested CID; a corrupted `{key, value}` pair returned a wrong-but-decodable Node. The `ERROR-CATALOG.md` entry for `E_INV_CONTENT_HASH` said "Thrown at: Registration / read" — but read-path firing was subgraph-only (via `Subgraph::load_verified`). The Phase-2 deferral framed this as "add optional `get_node_verified(&self, cid)` that re-hashes on read OR tighten the catalog entry"; the W9-T6 closure does BOTH (verify-on-read at every call site + catalog wording fix) and goes further by NOT adding an opt-in escape hatch (per CLAUDE.md "Don't design for hypothetical future requirements" — if perf measurement later shows verify-on-read is load-bearing in IVM hot loops, that's when to add an internal escape hatch, not now).
 
 ### 6.3 Anchor-store consolidation (cov-f3 residual) — **CLOSED-IN-PHASE-3-G14-C**
 

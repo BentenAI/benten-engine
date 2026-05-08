@@ -650,8 +650,30 @@ impl RedbBackend {
 
     /// Retrieve a Node by CID. Returns `Ok(None)` on a clean miss.
     ///
+    /// **Verifies content-hash on read (W9-T6, Phase 3 R5 wave-9).** Before
+    /// returning the decoded Node, recomputes its CID from the stored bytes
+    /// (BLAKE3 over the canonical DAG-CBOR bytes — ~3-10µs per call) and
+    /// compares against the requested `cid`. On mismatch, fires
+    /// [`benten_core::CoreError::ContentHashMismatch`] (`E_INV_CONTENT_HASH`) instead of
+    /// returning the wrong-but-decodable Node.
+    ///
+    /// This closes the on-disk-tamper / hardware-bit-flip gap on
+    /// rehydration paths (handler_versions, engine_modules, IVM materialise).
+    /// The redb file is treated as a system boundary; CID semantics
+    /// ("self-validating identifier") are honored on read. Cross-peer
+    /// ingestion is defended separately by the MST `apply_entries` rehash
+    /// (sec-r4r2-1); subgraph-load is defended by
+    /// `Subgraph::load_verified_with_cid`. This method closes the
+    /// remaining `Node`-read surface.
+    ///
     /// # Errors
-    /// Propagates the [`NodeStore`] error shape.
+    /// - `Ok(None)` — clean miss; CID was never written to this backend.
+    /// - [`GraphError::Core`] carrying [`benten_core::CoreError::ContentHashMismatch`] —
+    ///   stored bytes do not hash to the requested CID (tamper / corruption).
+    /// - [`GraphError::Core`] carrying [`benten_core::CoreError::Serialize`] — bytes
+    ///   hash-match but fail to decode as a Node (genuine codec drift).
+    /// - [`GraphError::Redb`] / [`GraphError::RedbSource`] on underlying
+    ///   redb I/O failure.
     ///
     /// # Examples
     /// ```rust
@@ -669,9 +691,16 @@ impl RedbBackend {
         let Some(bytes) = self.get(&node_key(cid))? else {
             return Ok(None);
         };
-        let node: Node = serde_ipld_dagcbor::from_slice(&bytes)
-            .map_err(decode_err)
-            .map_err(GraphError::from)?;
+        // Verify-on-read (W9-T6): hash the stored bytes FIRST, before
+        // attempting decode. A tamper that happens to corrupt the CBOR
+        // structure would otherwise surface as a `Serialize` error,
+        // masking the real failure (integrity). Bytes-level hash is the
+        // authoritative check because, by the canonical-DAG-CBOR contract,
+        // a Node's CID is a pure function of its encoded bytes.
+        //
+        // Mirrors `Node::load_verified` (benten-core/src/lib.rs:244) and
+        // `Subgraph::load_verified_with_cid` (benten-core/src/subgraph.rs:478).
+        let node = benten_core::Node::load_verified(cid, &bytes).map_err(GraphError::from)?;
         Ok(Some(node))
     }
 
