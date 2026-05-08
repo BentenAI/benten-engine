@@ -9,8 +9,14 @@
 //      engine wired to consult UCAN-grounded grants.
 //   2. `engine.grantCapability({ actor, scope, issuer?, hlc? })` —
 //      Phase-1 surface extended with optional `issuer` (UCAN-grounding
-//      DID) and `hlc` (causal stamp) fields. Ignored fields tolerated
-//      on the wire by the Rust parser; UCANBackend consults them.
+//      DID) and `hlc` (causal stamp) fields. NOTE: at Phase-3 close
+//      the napi-side `parse_grant_json`
+//      (`bindings/napi/src/policy.rs::parse_grant_json`) reads only
+//      `actor` + `scope` and silently drops `issuer` + `hlc` before
+//      they reach the durable backend. The fields are reserved for
+//      G21 T2 napi-UCAN-wireup which widens `parse_grant_json` to
+//      thread them through to `UCANBackend`. See
+//      `docs/future/phase-3-backlog.md` §2.3.
 //   3. `engine.revokeCapability({ actor, scope })` — revocation is a
 //      Node write; UCANBackend re-walks the chain on next check.
 //   4. `engine.callAs(handler, action, input, actor)` — dispatch
@@ -52,6 +58,13 @@ export async function run(): Promise<{ ok: true }> {
     // `hlc` carries the causal stamp the chain-walker uses for
     // before/after ordering. The grant CID returned is what
     // `revokeCapability(grantCid, actor)` consumes downstream.
+    //
+    // NOTE (Phase-3-close honest state): the napi `parse_grant_json`
+    // reads only `actor` + `scope` today; `issuer` and `hlc` are
+    // dropped before reaching the backend. G21 T2 widens the parser
+    // and wires the durable `UCANBackend` so these fields flow
+    // through. Until then, this call surfaces `E_CAP_NOT_IMPLEMENTED`
+    // at the first WRITE (`callAs` below).
     const grantCid = await engine.grantCapability({
       actor: aliceDid,
       scope: "store:post:*",

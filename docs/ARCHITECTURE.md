@@ -87,7 +87,7 @@ bindings/
                     # the bundle.
 
 packages/
-  engine/           # TypeScript DSL wrapper (@bentenai/engine). Phase 3
+  engine/           # TypeScript DSL wrapper (@benten/engine). Phase 3
                     # adds the Atrium walkthrough surface (peer connect /
                     # sync trigger / UCAN grant flow / DID resolution)
                     # over the napi surface.

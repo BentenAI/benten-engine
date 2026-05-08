@@ -21,7 +21,7 @@ written, referenceable form.
 | 8 | `Engine::call` bypasses the evaluator for CRUD handlers | 1 | **CLOSED** at Phase 2a G4-A |
 | 9 | Dedup writes pure-read (sec-r1-4 / atk-3) | 1 | **CLOSED** at Phase 2b G12-E (this phase) |
 | 10 | Resume-time capability re-verification | 2a | **CLOSED** at Phase 2b G12-E (this phase) |
-| 11 | IVM views coarse-grained read-gate | 2a | Open (Phase 3+) |
+| 11 | IVM views coarse-grained read-gate | 2a | **CLOSED** at Phase-3 G15-A wave-5a (per-row `IvmViewReadGate` + addendum at G20-A3 documenting `read_view_with` heuristic bound) |
 | 12 | `DurabilityMode::Group` gate 5 — engine-surface default flip + bench CI promotion | 1 | **CLOSED** at Phase 3 G13-E (this phase) |
 | 13 | System-zone reserved-prefix rejection surface | 2a | Open (documented; minor-3) |
 | 14 | SANDBOX cold-start cost (no opt-in pool) | 2b | Open (D3 RESOLVED — additive Phase-3 change if real-workload bottleneck) |
@@ -29,8 +29,8 @@ written, referenceable form.
 | 16 | `random` host-fn deferred (no CSPRNG framework chosen) | 2b | **CLOSED** at Phase-3 G17-A2 wave-5b (CSPRNG via `getrandom` direct + capability-gated entropy budget per call: 4096 bytes default + per-manifest override at `host_fns.random.budget_bytes_per_call` per r1-wsa-8; constant-time cap-policy check per sec-r1-3) |
 | 17 | In-memory module-bytes registry (`Engine::register_module_bytes`) | 2b | **CLOSED** at Phase-3 G14-C wave-4b (durable `RedbBlobBackend` + CID-validating entry point) |
 | 18 | In-memory handler-version chain (`Engine::register_subgraph_replace`) | 2b | **CLOSED** at Phase-3 G14-C wave-4b (durable `system:HandlerVersion` zone + extensible canonical-bytes encoding per arch-r1-4 / D-C) |
-| 19 | Browser-target persistent storage absent — manifests in-memory only on `wasm32-unknown-unknown` | 2b | Open (Phase 3 — IndexedDB / OPFS persistence) |
-| 20 | Cross-browser determinism CI cadence not yet established | 2b | Open (Phase 3 — wasm32 cross-browser CI matrix) |
+| 19 | Browser-target persistent storage absent — manifests in-memory only on `wasm32-unknown-unknown` | 2b | **PARTIALLY CLOSED** at Phase-3 G18-A wave-5a (IndexedDB schema + handler scaffolding; full closure deferred per phase-3-backlog §4.3) |
+| 20 | Cross-browser determinism CI cadence not yet established | 2b | **PARTIALLY CLOSED** at Phase-3 G18-A wave-5a (Playwright matrix workflow exists; fixture bodies deferred per phase-3-backlog §4.3) |
 | 21 | Module manifest minimal CID-pin in Phase 2b; full Ed25519 deferred | 2b | **CLOSED** at Phase-3 G14-C wave-4b (Ed25519 sign + UCAN-proof-chain primary + publisher-key-registry fallback per D-PHASE-3-20 + crypto-minor-5) |
 | 22 | Peer-DID + connection metadata leakage to public iroh relays | 3 | Introduced at Phase 3 (Phase 7 Garden-relay closure target) |
 
@@ -80,7 +80,7 @@ Benten uses **BLAKE3-256** with a 32-byte digest embedded in every CIDv1. The ac
 
 - **Content-addressed Nodes (`Cid`).** A collision would allow a malicious writer to forge a Node that hashes to the same CID as a legitimate Node — a "masquerade" attack. 128-bit resistance requires ~`2^128` hashes to find a collision; infeasible under any classical threat model.
 - **Version-chain `prior_head` threading** (`benten_core::version::append_version`). The API uses CIDs to name the head each writer observed. A collision on a CID used as `prior_head` could, in principle, let an attacker smuggle an alternative chain past the fork-detection check. The same 128-bit bound applies.
-- **Phase 3 UCAN-by-CID.** Phase 3 will reference capability grants by CID. Revoke-by-CID paths assume the CID of a grant is unique; again, 128-bit collision resistance is the assumption.
+- **Phase 3 UCAN-by-CID.** Phase 3 references capability grants by CID (landed at G14-B wave-5a durable UCAN backend). Revoke-by-CID paths assume the CID of a grant is unique; again, 128-bit collision resistance is the assumption.
 
 **What this posture does NOT claim:**
 
