@@ -633,17 +633,21 @@ impl Engine {
         // authoritative consumer lives at the eval layer and the
         // engine API can no longer drift from it.
         //
-        // The metadata-store lookup discriminates two shapes of
+        // The metadata-store lookup discriminates THREE shapes of
         // resume input via the SuspensionStore's envelope-side
-        // record:
+        // record + the envelope's payload shape:
         //
         // (1) **Real WAIT envelope** — the eval-side wait primitive
         //     persists BOTH the WAIT metadata (`put_wait(cid, meta)`
         //     at `crates/benten-eval/src/primitives/wait.rs`) AND the
-        //     envelope itself (`put_envelope(envelope)`). For real
+        //     envelope itself (`put_envelope(envelope)`). The payload
+        //     for these envelopes is built by
+        //     `placeholder_payload_for_signal`, which produces
+        //     `attribution_chain: Vec::new()` (empty). For real WAIT
         //     envelopes, `get_envelope(state_cid)` returns `Some(_)`
         //     and `get_wait(state_cid)` MUST also return `Some(_)`. A
-        //     mismatch (envelope present, metadata absent) is the
+        //     mismatch (envelope present, metadata absent, payload
+        //     shape consistent with eval-side WAIT) is the
         //     load-bearing fail-loud surface: (a) the WAIT TTL GC
         //     reaped the metadata side without the envelope side
         //     (impossible by the GC contract — `reap_one` deletes
@@ -664,16 +668,49 @@ impl Engine {
         //     existing `resume_with_meta_fails_closed_when_metadata_missing`
         //     test surface depends on this disposition.
         //
+        // (3) **Empty-spec test fixture envelope** — the
+        //     `SubgraphSpec::empty(id)` shortcut path at
+        //     `Engine::call_as_with_suspension` (line ~1107) writes
+        //     ONLY the envelope side via `cache_put`'s
+        //     `put_envelope`; it never invokes the eval-side WAIT
+        //     primitive so `put_wait` is NOT called. The payload is
+        //     built by `payload_for_handler`, which populates
+        //     `attribution_chain: vec![attribution]` (NON-empty,
+        //     containing the synthesised principal/handler/grant
+        //     frame). This is the legitimate phase-2a fixture path
+        //     for shape-pin tests in `engine_wait_api_shape.rs` —
+        //     it must NOT trip the WaitMetadataMissing fail-loud.
+        //     The non-empty `attribution_chain` is the
+        //     content-addressed signature that distinguishes shape
+        //     (3) from shape (1) without an extra side-table.
+        //
         // Phase-3 G20-A2 (D12 wave-8a; Compromise #9 closure;
-        // mr-2 fix-pass): promotes the eval-side
+        // mr-2 fix-pass + fix-pass-2): promotes the eval-side
         // `E_HOST_BACKEND_UNAVAILABLE` fail-loud to the engine-layer
         // typed code so callers can route on the metadata-missing
         // axis independently of generic backend-unavailable failures.
+        // fix-pass-2 refines the discriminator to also check
+        // `attribution_chain.is_empty()` so the empty-spec fixture
+        // path (shape 3) doesn't false-positive — caught by
+        // `engine_wait_api_shape.rs` regressing on the initial
+        // fix-pass.
         let state_cid = envelope.envelope_cid().map_err(EngineError::Core)?;
         let meta_lookup = self.suspension_store.get_wait(&state_cid);
         let envelope_lookup = self.suspension_store.get_envelope(&state_cid);
         let envelope_record_present = matches!(envelope_lookup, Ok(Some(_)));
-        if envelope_record_present && matches!(meta_lookup, Ok(None)) {
+        // Shape (1) signature: payload built by
+        // `placeholder_payload_for_signal` → empty
+        // `attribution_chain`. Shape (3) signature: payload built by
+        // `payload_for_handler` → non-empty `attribution_chain`. The
+        // discriminator filters shape (3) out of the WaitMetadataMissing
+        // fail-loud so empty-spec fixtures keep their legitimate
+        // skip-on-miss behaviour while real-WAIT-envelope-with-evicted-
+        // metadata still fails loud (the load-bearing
+        // `resume_against_real_envelope_with_evicted_metadata_fires_e_wait_metadata_missing`
+        // pin in `tests/integration/cross_process_wait_resume.rs`).
+        let payload_is_real_wait_shape = envelope.payload.attribution_chain.is_empty();
+        if envelope_record_present && matches!(meta_lookup, Ok(None)) && payload_is_real_wait_shape
+        {
             return Err(EngineError::Other {
                 code: ErrorCode::WaitMetadataMissing,
                 message: format!(
