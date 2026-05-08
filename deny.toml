@@ -50,21 +50,21 @@ ignore = [
     # Closure plan: Phase-3 R5 close iroh-version-bump cycle (Dependabot
     # fast-track per `scope-real-10`); Phase-7 Garden-relay work may
     # alternatively replace hickory-dns with a minimal in-process resolver.
-    # Track at `docs/future/phase-3-backlog.md` §10 (security-advisory carries).
+    # Track at `docs/future/phase-3-backlog.md` §9 (security-advisory carries).
     # Remove when iroh upstream picks up a hickory-dns fix or when we drop
     # the dep edge.
-    { id = "RUSTSEC-2026-0119", reason = "transitive via iroh -> hickory-resolver; closure tracked at docs/future/phase-3-backlog.md §10 (Phase-3 R5 close iroh-version-bump cycle / Phase-7 Garden-relay alt)" },
+    { id = "RUSTSEC-2026-0119", reason = "transitive via iroh -> hickory-resolver; closure tracked at docs/future/phase-3-backlog.md §9 (Phase-3 R5 close iroh-version-bump cycle / Phase-7 Garden-relay alt)" },
 
     # RUSTSEC-2026-0120: hickory-dns NSEC3 unbounded loop on cross-zone responses.
     # Same transitive root + same closure path as RUSTSEC-2026-0119.
-    { id = "RUSTSEC-2026-0120", reason = "transitive via iroh -> hickory-resolver; closure tracked at docs/future/phase-3-backlog.md §10 (Phase-3 R5 close iroh-version-bump cycle / Phase-7 Garden-relay alt)" },
+    { id = "RUSTSEC-2026-0120", reason = "transitive via iroh -> hickory-resolver; closure tracked at docs/future/phase-3-backlog.md §9 (Phase-3 R5 close iroh-version-bump cycle / Phase-7 Garden-relay alt)" },
 
     # RUSTSEC-2024-0436: paste unmaintained advisory (informational; no exploit).
     # Transitive via netlink-packet-core -> netdev -> netwatch -> iroh.
     # Closure plan: same iroh bump cycle. Phase-3 R5 close eligible to land an
     # iroh patch that swaps `paste` for `pastey` (drop-in fork). Tracked at
-    # `docs/future/phase-3-backlog.md` §10 (security-advisory carries).
-    { id = "RUSTSEC-2024-0436", reason = "transitive via iroh -> netwatch -> netlink-packet-core -> paste; informational unmaintained advisory; closure tracked at docs/future/phase-3-backlog.md §10 (iroh-version-bump cycle / pastey swap)" },
+    # `docs/future/phase-3-backlog.md` §9 (security-advisory carries).
+    { id = "RUSTSEC-2024-0436", reason = "transitive via iroh -> netwatch -> netlink-packet-core -> paste; informational unmaintained advisory; closure tracked at docs/future/phase-3-backlog.md §9 (iroh-version-bump cycle / pastey swap)" },
 ]
 
 # ---------------------------------------------------------------------------
@@ -142,8 +142,8 @@ multiple-versions = "warn"
 # CI. The Phase 8/9+ pass will: (a) flip every internal crate to
 # `publish = false` (or set explicit version-aligned path+version deps for
 # the ones we ARE publishing), and (b) re-enable `wildcards = "deny"` here.
-# Tracked at `docs/future/phase-2-backlog.md` §10.3 (Phase 9+ OSS launch
-# era — publish-readiness pass).
+# Tracked at `.addl/phase-2a/00-implementation-plan.md` §3.2 (publish-readiness
+# pass deferred to Phase 8/9+; CLAUDE.md status table records the deferral).
 wildcards = "warn"
 allow-wildcard-paths = true
 highlight = "all"

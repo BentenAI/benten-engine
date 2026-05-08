@@ -195,6 +195,8 @@ Source: `.addl/phase-2a/ci-maturity-audit-2026-04-22.md` + the decisions compani
 
 **Phase 2a CI items** (CodeQL, branch-protection-as-code, SHA-pinning) land as the Phase 2a §3.1 CI hardening pass — see `.addl/phase-2a/00-implementation-plan.md` §3.1. The 5 publication-coupled items (cargo-semver-checks, napi prebuilt publish, release-plz, SLSA attestation, SBOM) were rescoped on 2026-04-25 into §3.2 "Publish-readiness pass" and deferred to whichever phase actually publishes (provisional: Phase 8/9+ OSS launch) — see `.addl/phase-2a/00-implementation-plan.md` §3.2.
 
+**Cross-reference:** restoring `wildcards = "deny"` in `deny.toml` (currently downgraded to `"warn"` because workspace path-deps appear as wildcards and `allow-wildcard-paths` only fires for crates marked `publish = false`) is part of the §3.2 publish-readiness pass — alongside flipping internal crates to `publish = false`. Tracked there, not here.
+
 ### 10.1 Phase 2b CI additions — **PARTIAL: WORKFLOWS LAND, BASELINES CARRY TO PHASE 3**
 
 | Item | Closure status |
