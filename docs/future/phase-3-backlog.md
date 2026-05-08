@@ -1320,3 +1320,40 @@ Phase-3 sync introduces iroh + Loro CRDT, which transitively pull in dep tails c
 - `deny.toml::[advisories].ignore` — the active ignore entries with reason text.
 - `.github/workflows/supply-chain.yml` — the CI invocation point.
 - `CONTRIBUTING.md::Supply chain` — the yank-response protocol.
+
+---
+
+## 10. Supply-chain CI hygiene
+
+### 10.1 Third-party GitHub Action SHA-pin coverage — AUDIT-CLOSED 2026-05-08
+
+**Origin (Phase-2a §3.1 commitment):** `.addl/phase-2a/00-implementation-plan.md` §3.1 item 3 ("SHA-pin third-party actions") committed to SHA-pinning third-party GitHub Actions for supply-chain defense, closing the original CI-3 deferral. Implementation landed across two commits (`9e68f84` SHA-pin sweep + `e014653` v5 alignment) on 2026-04-25.
+
+**Audit pass (2026-05-08):** spot-check inquiry suggested `@master` / `@stable` / `@nightly` references might still exist in `.github/workflows/*.yml`. Full audit performed on `fix/sha-pin-coverage-audit` branch.
+
+**Findings:**
+- **Zero literal `@master` / `@stable` / `@nightly` / `@main` / `@latest` `uses:` refs.** All third-party action invocations are pinned to 40-hex-char SHAs. Inline comments such as `# stable` / `# master` / `# nightly` / `# v4` / `# v5` are version-tracking annotations on existing SHA pins, NOT actual unsanitized refs. The spot-check finding was a misread of those comments.
+- **Local composite action** `./.github/actions/free-disk-space` is pure shell (no nested `uses:`); no SHA-pin concern.
+- **Toolchain selectors** allowlisted per the original §3.1 policy (`dtolnay/rust-toolchain`, `actions-rust-lang/setup-rust-toolchain`, `rui314/setup-mold`) all use SHA pins resolved from semantic branches (`master`, `stable`, `nightly`); Dependabot rotates these weekly per the `github-actions` block in `.github/dependabot.yml`.
+- **One genuine inconsistency fixed:** `.github/workflows/branch-protection-spec-check.yml` was pinned to `actions/checkout@34e114876` (v4.3.1, resolved 2026-04-25) while every other workflow uses `actions/checkout@93cb6efe` (v5.0.1, standardized in commit `e014653`). Bumped to v5.0.1 SHA for workspace-wide consistency.
+- **One misleading comment fixed:** `.github/workflows/cargo-public-api.yml` line 43 carried the comment `# nightly via @nightly` next to a SHA from the `stable` branch head. The action's behavior is correct (the `with: toolchain: nightly` parameter selects the compiler; the action SHA is branch-agnostic), but the comment misled. Replaced with an explanatory comment clarifying that the SHA is the action code (Dependabot-rotated from `stable` branch) while `toolchain: nightly` controls the installed compiler.
+
+**Genuine version inconsistencies NOT fixed in this audit (out of scope per HARD RULE rule-12 clause-a):**
+- `actions/upload-artifact` has 3 SHAs in active use — `043fb46d` (v7.0.1, most workflows), `ea165f8d` (v4.6.2, cite-drift.yml line 95), `b4b15b8c` (v4.4.3, cross-browser-determinism.yml line 138).
+- `actions/download-artifact` has 2 SHAs in active use — `3e5f45b2` (v8.0.1) and `65a9edc5` (v4.1.7).
+- `actions/setup-node` has 2 SHAs in active use — `49933ea5` (v4.4.0) and `1d0ff469` (v4.2.0).
+
+These are NOT SHA-pin coverage gaps (all are pinned SHAs). They are major-version straddles: some workflows are on v4 while others have moved to v5/v7/v8. v4→v7 `upload-artifact` carries breaking changes (artifact immutability + naming); v4→v6 `setup-node` may carry minor API shape changes. Per `.github/dependabot.yml`, major-version bumps are intentionally globally-ignored to avoid Monday-morning PR storms, with major bumps coming via human-driven planned upgrades on purpose-built branches. Out-of-scope here per HARD RULE rule-12 clause-a; the right disposition is a future "action major-version normalization" wave (NOT named NOW because no Phase-3 close-blocker depends on it; `actions/upload-artifact` v4 vs v7 mostly affects artifact-retrieval ergonomics, not security posture — both are SHA-pinned, both are maintained majors, both are reproducibly-pinned).
+
+**Verification log:**
+- `awk '/uses:/ && !/^[[:space:]]*#/' .github/workflows/*.yml | sed -E 's/.*uses:[[:space:]]+//; s/[[:space:]]+#.*$//' | grep -vE '@[0-9a-f]{40}$' | grep -v '^\./'` → empty (no non-SHA refs).
+- `grep -n '@master\|@stable\|@nightly\|@latest\|@main' .github/workflows/*.yml | grep -vE '^[^:]+:\s*#|via @nightly|@v4 →|@v5 →|@v3 →'` → empty (no literal version-tag refs).
+- `for f in .github/workflows/*.yml; do python3 -c "import yaml; yaml.safe_load(open('$f'))"; done` → all parse OK.
+- `git ls-remote https://github.com/dtolnay/rust-toolchain` confirms current SHAs match `master` (3c5f7ea), `stable` (29eef336), `nightly` (5b842231) branch heads at 2026-05-08 audit time — Dependabot active.
+
+**Closure shape:** SHA-pin coverage is and remains 100%. The §3.1 item 3 commitment is verified ongoing; Dependabot rotation per the `github-actions` block in `.github/dependabot.yml` keeps SHAs fresh.
+
+**Cross-references:**
+- `.addl/phase-2a/00-implementation-plan.md::§3.1` — original ship-now commitment.
+- the `github-actions` block in `.github/dependabot.yml` — weekly minor+patch rotation policy.
+- `fix/sha-pin-coverage-audit` PR — the audit-closure changeset.
