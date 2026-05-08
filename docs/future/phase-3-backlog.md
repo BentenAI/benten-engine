@@ -227,19 +227,21 @@ Estimated touch size: ~300-600 LOC of test infrastructure across `bindings/napi/
 
 ## 5. IVM Algorithm B maturity
 
-### 5.1 Drift-detector + non-canonical-view generalization
+### 5.1 Drift-detector + non-canonical-view generalization — **CLOSED at G15-A / G15-B / W9-T1**
 
-**Phase 2b state:** Wave-8h wired Algorithm B production registration. The 5 hand-written canonical views (`CapabilityGrantsView`, `ContentListingView`, `EventDispatchView`, `GovernanceInheritanceView`, `VersionCurrentView` — see `crates/benten-ivm/src/views/mod.rs:20-24`) are pure-delegation kernels; non-canonical user-defined view IDs hit a `ContentListingView` fallback (per `docs/INVARIANT-COVERAGE.md` Algorithm B canonical-only compromise note). Wave-8j-cleanup didn't change this. The R6 ivm-correctness lens (`r6-ivm-2`, `r6-ivm-3`) flagged two gaps:
-- Drift-detector for IVM canonical-view-vs-Algorithm-B equivalence is named in SECURITY-POSTURE.md:266 + INVARIANT-COVERAGE.md:133 as "on the Phase-3 backlog" but had no actual entry until this section.
-- 4 of 5 canonical views silently ignore user-supplied label semantics (e.g. `version_current` + Label("post") registers as `Strategy::B` but VersionCurrentView hardcodes NEXT_VERSION). R6-R3 r6-r3-ivm-1 lands a fail-loud reject for this drift across BOTH the TS-DSL pre-napi-boundary (`packages/engine/src/views.ts::validateUserViewSpec`) AND the Rust engine boundary (`crates/benten-engine/src/engine_views.rs::register_user_view` surfacing `EngineError::ViewLabelMismatch` / catalog `E_VIEW_LABEL_MISMATCH`). Full generalization to "Algorithm B handles arbitrary user-defined label semantics" remains Phase 3.
+**Closure shape (Phase-3 G15-A + G15-B + R5 wave-9 W9-T1):**
+- (a) **Algorithm B drift-detector** — `crates/benten-ivm/tests/algorithm_b_drift_detector.rs` ships 5 proptest pins driving the merged G15-A `Algorithm::register` surface end-to-end (1 000 cases each, ~25s wallclock total under MSRV 1.95): `prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern` (headline drift detector — incremental vs from-scratch parity), `prop_budget_trip_state_propagation_consistent`, `prop_rebuild_after_stale_returns_view_to_fresh`, `prop_drift_detector_observes_label_pattern_extension`, `prop_drift_detector_reports_one_path_errors_other_succeeds`. The structured-diff helper at `crates/benten-ivm/tests/common.rs::structured_diff` reports drift with row counts + canonical-bytes comparison.
+- (b) **Non-canonical view generalization** — `crates/benten-ivm/src/algorithm_b.rs::GenericKernel` is the load-bearing generic kernel for non-canonical view ids per `D-PHASE-3-28 RESOLVED`. `Algorithm::register(view_id, label_pattern, projection)` instantiates `GenericKernel` for non-canonical ids; canonical ids route through the matching hand-written inner kernel via `for_id`. The Phase-2b `ContentListingView` silent-fallback is RETIRED — non-canonical user-defined ids no longer coerce to label-equality semantics for AnchorPrefix patterns.
+- W9-T1 hardening: `Algorithm::register_with_budget` lifts the per-update budget knob into the registration surface (closes `5.1-followup-e`); the kernel-side AnchorPrefix-on-canonical-id guard (closes `5.1-followup-c`) fails loud at registration with `AlgorithmError::CanonicalIdAnchorPrefixRefused`, mirrored at the engine boundary as `EngineError::ViewLabelMismatch`.
 
-**Phase 3 target:**
-- (a) **Algorithm B drift-detector** — proptest harness that compares Algorithm B incremental updates vs from-scratch full computation across all 5 canonical views + a synthetic user-defined view. Treat divergence as a test failure with structured diff. Generalizes into the Phase-3 IVM CI lane.
-- (b) **Non-canonical view generalization** — Algorithm B handles arbitrary `(view_id, label_pattern, projection)` triples; the canonical-only fallback is removed (or kept as fast-path for the 5 known views). User-defined views with custom label semantics no longer silently coerce to `ContentListingView`.
+**Cross-references:**
+- `crates/benten-ivm/src/algorithm_b.rs::AlgorithmBView` (Strategy::B wrapper handling either inner kernel)
+- `crates/benten-ivm/src/algorithm_b.rs::GenericKernel` (non-canonical inner kernel)
+- `crates/benten-ivm/tests/algorithm_b_drift_detector.rs` (5 proptest pins)
+- `crates/benten-ivm/tests/common.rs::structured_diff` (drift-reporting helper)
+- `crates/benten-engine/src/engine_views.rs::register_user_view` (engine-side dispatch through `Algorithm::register`)
 
-**Why Phase 3:** The drift-detector needs the same surface-completeness Algorithm B's full generalization needs — testing Algorithm B against an arbitrary label pattern requires the generalization itself to exist. Sequencing: (a) and (b) land together in a Phase-3 IVM wave.
-
-**Touch size:** ~400-700 LOC across `crates/benten-ivm/src/` (Algorithm B kernel generalization) + ~200-400 LOC tests (proptest drift detector + per-view-pattern conformance). Risk surface: medium — the 5 canonical views' performance characteristics must be preserved at the fast-path level.
+**Residual followups:** `5.1-followup-a` (rebuild event-replay seam — bundles with §1.2 SnapshotBlobBackend), `5.1-followup-b` (edge-traversal-keyed selector type), `5.1-followup-d` (canonical-fast-path 1.20x perf-gate rework). All carry their own named-destination dispositions per HARD RULE rule-12.
 
 #### 5.1-followup-a GenericKernel rebuild without event-replay seam (g15a-mr-major-3 carry)
 
@@ -263,15 +265,15 @@ Estimated touch size: ~300-600 LOC of test infrastructure across `bindings/napi/
 
 **Touch size:** ~150-300 LOC (selector type + GenericKernel edge-event arm) + ~100-200 LOC tests; bundles with §5.1.
 
-#### 5.1-followup-c Tighten canonical-id-vs-AnchorPrefix fail-loud guard (g15a-mr-minor-4 carry)
+#### 5.1-followup-c Tighten canonical-id-vs-AnchorPrefix fail-loud guard — **CLOSED at W9-T1**
 
-**G15-A state:** `crates/benten-ivm/src/algorithm_b.rs::Algorithm::register`'s fail-loud guard rejects `(canonical_id, label_pattern)` registrations where `!label_pattern.matches(hardcoded)`. For `LabelPattern::AnchorPrefix("")` the prefix-matches-everything semantic means the guard does NOT fire — a `(capability_grants, AnchorPrefix(""))` registration succeeds + routes to the canonical inner kernel via `for_id`. The hand-written canonical kernel ignores the supplied pattern entirely + uses its hardcoded label, so data-correctness is preserved in practice; the docstring framing ("canonical id + mismatched label EXCLUDES the canonical hardcoded label") is stronger than the actual guard.
+**Closure shape (Phase-3 R5 wave-9 W9-T1):** `crates/benten-ivm/src/algorithm_b.rs::Algorithm::register_inner` now fires `AlgorithmError::CanonicalIdAnchorPrefixRefused` BEFORE the existing `ViewLabelMismatch` guard whenever `(canonical_id, AnchorPrefix(_))` is registered — regardless of whether the supplied prefix would match the canonical hardcoded label. The doc-vs-code-strength gap (`AnchorPrefix("")` silently matched-everything) is closed: AnchorPrefix is canonical-id-incompatible at the kernel boundary AND at the engine boundary (`crates/benten-engine/src/engine_views.rs::register_user_view` mirrors the kernel-side guard, surfacing `EngineError::ViewLabelMismatch` with `expected_label = canonical hardcoded label` + `got_label = "AnchorPrefix(<prefix>)"`). Catalog code `E_VIEW_LABEL_MISMATCH` is reused (a canonical id requiring an Exact label IS a label mismatch when the supplied pattern is a prefix selector).
 
-**Phase 3 target:** tighten the guard to require `LabelPattern::Exact` for canonical ids (banning `AnchorPrefix` outright on canonical-id registration). Pairs naturally with §5.1's full kernel generalization wave since the test surface for `r6-r3-ivm-1` precedent extension is the same harness. Bundles with §5.1 / §5.2 in the Phase-3 IVM wave.
-
-**Why Phase 3:** the data-correctness implications are zero in practice today (the canonical kernel ignores the pattern), so this is a doc-vs-code-strength gap rather than a defect. Lifting it requires the same generalization §5.1 covers; standalone landing is more churn than benefit. Named destination per HARD RULE rule-12 disposition (b) for `g15a-mr-minor-4`.
-
-**Touch size:** ~10-20 LOC (guard tightening) + 1-2 regression tests; bundles with §5.1.
+**Cross-references:**
+- `crates/benten-ivm/src/algorithm_b.rs::AlgorithmError::CanonicalIdAnchorPrefixRefused` (new variant, W9-T1)
+- `crates/benten-ivm/src/algorithm_b.rs::Algorithm::register_inner` (guard #1 fires on AnchorPrefix discriminator BEFORE label-match check)
+- `crates/benten-ivm/src/algorithm_b.rs::tests::register_canonical_view_with_anchor_prefix_refused_even_when_prefix_matches` (kernel-level pin)
+- `crates/benten-engine/tests/user_view_canonical_id_anchor_prefix_refused.rs` (4 engine-level end-to-end pins covering all 5 canonical ids — empty prefix, non-empty prefix, content_listing edge case, non-canonical sanity).
 
 #### 5.1-followup-d Canonical-fast-path perf-gate rework — release-profile-gated or criterion-companion-test (PR #121 dev-profile-flake carry)
 
@@ -289,25 +291,30 @@ Estimated touch size: ~300-600 LOC of test infrastructure across `bindings/napi/
 - `.github/workflows/bench-threshold-drift.yml` (existing bench lane, currently `informational` — would gain enforcement via either rework path)
 - PR #121 mini-review (`r5-pr121-mini-review.json`) carrying the BLOCKER → fix-pass narrative.
 
-#### 5.1-followup-e Budget knob on `Algorithm::register` for user-view per-update budgets (g15-b-port carry)
+#### 5.1-followup-e Budget knob on `Algorithm::register` for user-view per-update budgets — **CLOSED at W9-T1**
 
-**G15-A state:** `crates/benten-ivm/src/algorithm_b.rs::Algorithm::register(view_id, label_pattern, projection)` does NOT accept a per-update budget — `GenericKernel` has no `BudgetTracker`; the canonical inner kernels' `BudgetTracker` is only reachable via `ContentListingView::with_budget_for_testing(n)` (test-only constructor) or `try_with_budget(n)`. Consequence for the G15-B drift-detector port (`crates/benten-ivm/tests/common.rs` + `tests/algorithm_b_drift_detector.rs`, landed at this PR): the budget-trip / rebuild-after-stale / asymmetric-budget proptests drive `ContentListingView::with_budget_for_testing` directly rather than `Algorithm::register`, because no Algorithm-level surface reaches `BudgetTracker`. The headline drift-detector pin + pattern-extension pin DO drive `Algorithm::register` end-to-end; only the budget-state-machine pins go through the canonical inner kernel's test-only constructor.
+**Closure shape (Phase-3 R5 wave-9 W9-T1):** `crates/benten-ivm/src/algorithm_b.rs::Algorithm::register_with_budget(view_id, label_pattern, projection, budget)` is the new budget-aware registration surface. `GenericKernel` gains a `BudgetTracker` field (default constructor unchanged: `u64::MAX` unbounded sentinel); the per-event `update` path consumes one budget unit per matching write (Created/Updated whose first label matches OR Deleted whose CID was previously admitted). Canonical-id registrations route through the new sibling `AlgorithmBView::for_id_with_budget`, which forwards the budget into the matching canonical kernel's `with_budget_for_testing` constructor (the `_for_testing` suffix is preserved on the inner constructors as the Phase-1 source-of-truth shape; the user-facing path is `register_with_budget`). `is_stale` returns the OR of (kernel-level mark_stale, budget-tracker-level BudgetExceeded); `rebuild` restores the budget cap + clears stale across both sources.
 
-**Phase 3 target:** lift the per-update budget into the `Algorithm::register` surface as a fourth parameter (working name: `Algorithm::register_with_budget(view_id, label_pattern, projection, budget)` or richer config struct — design left to the wave's plan-pass). `GenericKernel` gains a `BudgetTracker` field; canonical-id registrations route the budget through the matching hand-written kernel's constructor (which all 5 already accept via their non-test constructors). The drift-detector's budget proptests then drive `Algorithm::register*` end-to-end across all 5 pins, closing the SHAPE-not-SUBSTANCE gap surfaced at G15-B port time.
+**Residual:** `content_listing` with a non-`"post"` label + budget falls back to unbounded (the Phase-1 `ContentListingView::with_budget_for_testing` constructor hard-codes label `"post"`). Lifting the canonical constructor to `(label, budget)` requires touching the 5 hand-written kernels' construction shape; intentionally NOT taken in W9-T1 (the W9-T1 close is the load-bearing `Algorithm::register_with_budget` surface lift; the inner-kernel constructor lift is a smaller follow-on bundling with §5.1-followup-a's per-view state-machine work).
 
-**Why Phase 3:** the budget-on-register lift requires touching all 5 canonical-kernel constructors plus `GenericKernel`'s `update` path (consume-before-mutate ordering per `ivm-r6-4` precedent). Standalone landing is feasible but bundles cleanly with §5.1's broader generalization wave + §5.1-followup-a (the rebuild seam pairs with budget-on-register since both touch the per-view state machine). Named destination per HARD RULE rule-12 disposition (b) for the g15-b-port carry.
+**Cross-references:**
+- `crates/benten-ivm/src/algorithm_b.rs::Algorithm::register_with_budget` (new surface)
+- `crates/benten-ivm/src/algorithm_b.rs::AlgorithmBView::for_id_with_budget` (canonical-routing sibling)
+- `crates/benten-ivm/src/algorithm_b.rs::GenericKernel::with_budget` (kernel-level constructor)
+- `crates/benten-ivm/src/algorithm_b.rs::tests::register_with_budget_*` (4 unit pins covering: cap trip + canonical forwarding + guard inheritance + u64::MAX = unbounded shape).
 
-**Touch size:** ~50-100 LOC (`Algorithm::register*` surface + `GenericKernel` budget field + canonical constructor plumbing) + ~50-100 LOC tests (the existing drift-detector budget pins re-driven through `Algorithm::register*`). Bundles with §5.1 / §5.1-followup-a in the Phase-3 IVM wave.
+### 5.2 AnchorPrefix selector lift in user-view registration — **CLOSED at G15-A**
 
-### 5.2 AnchorPrefix selector lift in user-view registration (post-G8-A)
+**Closure shape (Phase-3 G15-A):** `crates/benten-engine/src/engine_views.rs::register_user_view` no longer silent-coerces `UserViewInputPattern::AnchorPrefix` → label-equality. The Phase-3 G15-A landing routes the variant into `benten_ivm::LabelPattern::AnchorPrefix(prefix)`, which `GenericKernel::first_label_matches` consumes via the genuine `starts_with` semantic (`crates/benten-ivm/src/algorithm_b.rs::LabelPattern::matches`). The persisted view-definition Node carries both `input_pattern_label` (the prefix string) AND a sibling `input_pattern_kind` discriminator (`"label"` vs `"anchor_prefix"`) so future readers can disambiguate without re-parsing the pattern surface.
 
-**Phase 2b state:** R6-R3 r6-r3-arch-4 named-destination carry. `Engine::register_user_view` accepts `InputPattern { anchor_prefix: Option<String>, ... }` as part of `UserViewSpec`, but the dispatch path at `crates/benten-engine/src/engine_views.rs::register_user_view` silently coerces `anchor_prefix` → label-equality match (the AnchorPrefix variant feeds the prefix string into the same `input_pattern_label` slot the `Label` variant uses). The pre-G8-A SEMANTIC STUB doc-block at the implementation site is honest about this; the stub bridges through `ContentListingView` until G8-A's per-strategy view dispatch lands. R6 Round 1 (r6-arch-4) flagged that no Phase-3 destination doc named the carry; this entry IS the named destination.
+**W9-T1 hardening:** canonical view ids + AnchorPrefix is REFUSED at the engine boundary (closes `5.1-followup-c`); the AnchorPrefix selector is therefore strictly a non-canonical-id surface, matching its semantic intent (prefix selection is incompatible with canonical kernels' Exact-label hardcoded shape).
 
-**Phase 3 target:** lift `AnchorPrefix` to genuine prefix matching (e.g. `anchor_prefix="crud:"` matches both `"crud:post"` and `"crud:user"` via a `PrefixMatcher` selector type). Compose with §5.1 generalization so the user-view ingestion path supports per-spec view dispatch with arbitrary `(view_id, label_pattern, projection)` triples + the canonical-only fallback is removed (or kept as a fast-path).
-
-**Why Phase 3:** the AnchorPrefix lift requires the same Algorithm B selector-richness §5.1 covers — testing prefix-not-equality semantics requires the generalized dispatch path itself to exist. Sequencing: lands together with §5.1 in the Phase-3 IVM wave.
-
-**Touch size:** ~30-50 LOC across `engine_views.rs` (extend the matcher), `benten-ivm` subscriber wiring, plus 1 regression test exercising the prefix-not-equality case. Bundles cleanly with §5.1 (~1-2 hour incremental scope).
+**Cross-references:**
+- `crates/benten-engine/src/outcome.rs::UserViewInputPattern::AnchorPrefix`
+- `crates/benten-engine/src/engine_views.rs::register_user_view` (genuine prefix routing post-G15-A)
+- `crates/benten-ivm/src/algorithm_b.rs::LabelPattern::AnchorPrefix` (kernel-side selector)
+- `crates/benten-ivm/src/algorithm_b.rs::tests::generic_kernel_anchor_prefix_pattern_drives_correct_subset` (kernel-level prefix semantic pin)
+- `crates/benten-engine/tests/user_view_canonical_id_anchor_prefix_refused.rs::register_user_view_non_canonical_id_with_anchor_prefix_succeeds` (engine-level non-canonical AnchorPrefix sanity).
 
 ---
 

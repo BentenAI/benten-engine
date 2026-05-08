@@ -122,15 +122,20 @@ for the **5 canonical view IDs** that `AlgorithmBView` supports
 natively (the hand-written single-loop dispatch in
 `crates/benten-ivm/src/algorithm_b.rs`).
 
-**Coverage compromise:** non-canonical user-defined view IDs that
-declare `Strategy::B` continue to fall back to `ContentListingView`
-silently. Generalised user-defined Algorithm B handlers are a Phase-3
-lift (paired with the IVM-views coarse-grained read-gate Compromise
-#11). A drift-detector for "declared B but registered ContentListingView"
-on non-canonical IDs is on the Phase-3 backlog. User-facing impact
-today is bounded: the 5 canonical view IDs cover all in-tree user-view
-patterns; declaring `Strategy::B` on a custom ID does not fail loud
-but transparently uses the Phase-1 view shape.
+**Phase-3 G15-A + G15-B + R5 wave-9 W9-T1 closure:** the
+non-canonical-view fallback is RETIRED. `Algorithm::register(view_id,
+label_pattern, projection)` (and the budget-aware sibling
+`Algorithm::register_with_budget`) instantiates a generic single-loop
+kernel (`benten_ivm::algorithm_b::GenericKernel`) for non-canonical
+view IDs keyed on `(label_pattern, projection)`. The genuine
+`AnchorPrefix` selector lift (post-G15-A) ships in `register_user_view`;
+the kernel-side guard refuses canonical-id + AnchorPrefix
+registrations with the typed `AlgorithmError::CanonicalIdAnchorPrefixRefused`
+variant (mirrored at the engine boundary as
+`EngineError::ViewLabelMismatch`). The drift-detector proptest harness
+at `crates/benten-ivm/tests/algorithm_b_drift_detector.rs` (5 pins,
+1 000 cases each) drives the merged `Algorithm::register` surface
+end-to-end + reports incremental-vs-rebuild parity.
 
 ---
 

@@ -162,6 +162,7 @@ fn algorithm_b_view_label_mismatch_fail_loud_remains_present() {
             assert_eq!(expected_label, "system:CapabilityGrant");
         }
         Ok(_) => panic!("expected ViewLabelMismatch, got Ok"),
+        Err(other) => panic!("expected ViewLabelMismatch, got {other:?}"),
     }
 }
 

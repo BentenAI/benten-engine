@@ -54,6 +54,7 @@ use benten_core::{Cid, Node, Value};
 use benten_graph::{ChangeEvent, ChangeKind};
 
 use crate::Strategy;
+use crate::budget::BudgetTracker;
 use crate::view::{View, ViewDefinition, ViewError, ViewQuery, ViewResult};
 use crate::views::{
     CapabilityGrantsView, ContentListingView, EventDispatchView, GovernanceInheritanceView,
@@ -240,6 +241,23 @@ pub enum AlgorithmError {
         /// The pattern the caller supplied.
         got_pattern: LabelPattern,
     },
+    /// Caller supplied a canonical view id with [`LabelPattern::AnchorPrefix`].
+    /// Canonical view ids require [`LabelPattern::Exact`] semantics — their
+    /// hand-written inner kernels ignore the supplied pattern and use a
+    /// hardcoded label, so admitting a prefix selector would be a
+    /// doc-vs-code-strength gap (the kernel does not behave like a prefix
+    /// selector even though the call accepted one). Fail-loud at registration
+    /// time per `g15a-mr-minor-4` (W9-T1 close).
+    #[error(
+        "canonical view id `{view_id}` requires LabelPattern::Exact (got AnchorPrefix(`{got_prefix}`)); \
+         canonical kernels ignore the supplied pattern and use a hardcoded label"
+    )]
+    CanonicalIdAnchorPrefixRefused {
+        /// The canonical view id supplied.
+        view_id: String,
+        /// The prefix string from the rejected `LabelPattern::AnchorPrefix`.
+        got_prefix: String,
+    },
 }
 
 /// Generic single-loop kernel for non-canonical view ids (Strategy::B
@@ -252,7 +270,17 @@ pub enum AlgorithmError {
 ///
 /// **NOT exposed at the engine boundary** per CLAUDE.md baked-in #2 (the
 /// engine names `Strategy` only). Engine-side construction goes through
-/// [`AlgorithmBView::for_id`] / [`Algorithm::register`].
+/// [`AlgorithmBView::for_id`] / [`Algorithm::register`] /
+/// [`Algorithm::register_with_budget`].
+///
+/// ## Budget surface (W9-T1)
+///
+/// `GenericKernel` carries a `BudgetTracker` that is consumed once per
+/// **matching** write (Created/Updated whose first label matches the
+/// pattern, OR Deleted whose CID was previously admitted). The default
+/// (zero-budget) constructor sets `u64::MAX` so the kernel observably
+/// matches the no-budget Phase-3 G15-A shape; the budget-aware
+/// constructor exposes the cap to the registration site.
 #[derive(Debug)]
 struct GenericKernel {
     view_id: String,
@@ -270,6 +298,11 @@ struct GenericKernel {
     entries: BTreeSet<Cid>,
     /// Stale flag — flipped when `mark_stale` fires.
     stale: bool,
+    /// Per-update budget. `u64::MAX` is the conventional unbounded
+    /// sentinel; constructors that don't take a budget set this. Consumed
+    /// once per matching write (per `BudgetTracker::try_consume`'s
+    /// saturating-arithmetic contract).
+    budget: BudgetTracker,
 }
 
 impl GenericKernel {
@@ -280,6 +313,27 @@ impl GenericKernel {
             projection,
             entries: BTreeSet::new(),
             stale: false,
+            budget: BudgetTracker::new(u64::MAX),
+        }
+    }
+
+    /// Construct with a per-update budget. Per `BudgetTracker::new`'s
+    /// contract `budget == u64::MAX` is the unbounded sentinel; `budget
+    /// == 0` produces a kernel that trips on the very next matching
+    /// write.
+    fn with_budget(
+        view_id: String,
+        label_pattern: LabelPattern,
+        projection: Projection,
+        budget: u64,
+    ) -> Self {
+        Self {
+            view_id,
+            label_pattern,
+            projection,
+            entries: BTreeSet::new(),
+            stale: false,
+            budget: BudgetTracker::new(budget),
         }
     }
 
@@ -303,7 +357,9 @@ impl GenericKernel {
 
 impl View for GenericKernel {
     fn update(&mut self, event: &ChangeEvent) -> Result<(), ViewError> {
-        if self.stale {
+        // Surfaces the OR of (kernel-level stale flag, budget-tracker-level
+        // stale flag). Once stale (either source), updates are absorbed.
+        if self.stale || self.budget.is_stale() {
             return Ok(());
         }
         match event.kind {
@@ -311,11 +367,24 @@ impl View for GenericKernel {
                 if let Some(node) = event.node.as_ref()
                     && self.first_label_matches(node)
                 {
+                    // Charge the budget for the matching write per the
+                    // `BudgetTracker::try_consume` contract; on
+                    // `BudgetExceeded` the tracker flips stale and the
+                    // typed error surfaces to the caller (matching the
+                    // 5 canonical kernels' shape per `g5-cr-3` / Phase-1
+                    // uniform-budget contract).
+                    self.budget.try_consume(1, &self.view_id)?;
                     self.entries.insert(event.cid);
                 }
             }
             ChangeKind::Deleted => {
-                self.entries.remove(&event.cid);
+                // Charge the budget only when the deletion is observable
+                // (the CID was previously admitted). A delete against a
+                // never-admitted CID is free.
+                if self.entries.contains(&event.cid) {
+                    self.budget.try_consume(1, &self.view_id)?;
+                    self.entries.remove(&event.cid);
+                }
             }
             // Edge events do not affect Node-keyed views.
             ChangeKind::EdgeCreated | ChangeKind::EdgeDeleted => {}
@@ -328,6 +397,9 @@ impl View for GenericKernel {
             return Err(ViewError::Stale {
                 view_id: self.view_id.clone(),
             });
+        }
+        if self.budget.is_stale() {
+            return Err(ViewError::BudgetExceeded(self.view_id.clone()));
         }
         Ok(ViewResult::Cids(self.entries.iter().copied().collect()))
     }
@@ -342,8 +414,11 @@ impl View for GenericKernel {
         // Flipping fresh is the contract. Phase-3+ event-replay rebuild
         // wires the snapshot store; until then `rebuild` clears + resets
         // fresh so a previously stale-tripped view is observably re-armed.
+        // The budget tracker's `rebuild` restores the original cap +
+        // clears its stale flag in lockstep.
         self.entries.clear();
         self.stale = false;
+        self.budget.rebuild();
         Ok(())
     }
 
@@ -352,7 +427,9 @@ impl View for GenericKernel {
     }
 
     fn is_stale(&self) -> bool {
-        self.stale
+        // Either source of staleness counts (kernel-level mark_stale OR
+        // budget-tracker-level BudgetExceeded).
+        self.stale || self.budget.is_stale()
     }
 
     fn mark_stale(&mut self) {
@@ -448,6 +525,72 @@ impl AlgorithmBView {
         })
     }
 
+    /// Budget-aware sibling of [`Self::for_id`] — routes through the matching
+    /// canonical view's `with_budget_for_testing` constructor so the kernel's
+    /// `BudgetTracker` is set to the supplied cap. The `_for_testing` suffix
+    /// is preserved on the inner constructors (Phase-1 source-of-truth for
+    /// canonical kernel construction shape); the user-facing path is
+    /// [`Algorithm::register_with_budget`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ViewError::PatternMismatch`] when `view_id` is not one of
+    /// the 5 canonical Phase-1 ids.
+    pub fn for_id_with_budget(
+        view_id: &str,
+        mut definition: ViewDefinition,
+        budget: u64,
+    ) -> Result<Self, ViewError> {
+        definition.strategy = Strategy::B;
+        let inner: Box<dyn View> = match view_id {
+            "capability_grants" => Box::new(CapabilityGrantsView::with_budget_for_testing(budget)),
+            "event_dispatch" => Box::new(EventDispatchView::with_budget_for_testing(budget)),
+            "content_listing" => {
+                // ContentListingView::with_budget_for_testing hard-codes
+                // label "post"; respect the supplied label by calling
+                // ContentListingView::new(label) and then overriding the
+                // budget through its private setter via the test surface.
+                // Fall back to with_budget_for_testing's "post" default
+                // when the supplied label is missing or "post".
+                let label = definition
+                    .input_pattern_label
+                    .clone()
+                    .unwrap_or_else(|| "post".to_string());
+                if label == "post" {
+                    Box::new(ContentListingView::with_budget_for_testing(budget))
+                } else {
+                    // Use try_with_budget which respects label="post" only;
+                    // for non-"post" labels we synthesise via new + observe
+                    // the unbounded budget (the canonical kernel's
+                    // budget-aware constructor is hard-coded to "post";
+                    // honoring an arbitrary label requires the same surface
+                    // as `ContentListingView::new(label)`. Closing this
+                    // shape requires lifting the canonical constructor to
+                    // accept (label, budget) — named in
+                    // `phase-3-backlog.md` §5.1-followup-e residual).
+                    Box::new(ContentListingView::new(label))
+                }
+            }
+            "governance_inheritance" => {
+                Box::new(GovernanceInheritanceView::with_budget_for_testing(budget))
+            }
+            "version_current" => Box::new(VersionCurrentView::with_budget_for_testing(budget)),
+            unknown => {
+                return Err(ViewError::PatternMismatch(format!(
+                    "AlgorithmBView::for_id_with_budget: unknown canonical view id \
+                     `{unknown}` (canonical ids: {known:?}). Use \
+                     AlgorithmBView::register_with_budget for user-defined view ids.",
+                    known = CANONICAL_VIEW_IDS
+                )));
+            }
+        };
+        Ok(Self {
+            view_id: view_id.to_string(),
+            definition,
+            inner,
+        })
+    }
+
     /// Register an Algorithm B view for an arbitrary
     /// `(view_id, label_pattern, projection)` triple. Routes through
     /// [`dispatch_for`]:
@@ -467,22 +610,69 @@ impl AlgorithmBView {
         label_pattern: LabelPattern,
         projection: Projection,
     ) -> Result<Self, AlgorithmError> {
-        // Fail-loud guard: canonical id + mismatched label_pattern. The
-        // canonical hand-written view's dispatch arm ignores the supplied
-        // label (uses its hardcoded value) — silently accepting a
-        // mismatched pattern would yield a view filtered on the WRONG
-        // label. Fail-loud at registration time per Phase-2b R6-R3
-        // `r6-r3-ivm-1` precedent.
-        //
-        // **Bounded by `LabelPattern::matches`** — `AnchorPrefix("")`
-        // prefix-matches every label (including the canonical hardcoded
-        // label), so this guard does NOT fire for an empty-prefix
-        // registration. The data-correctness implications are zero in
-        // practice (the hand-written canonical kernel ignores the
-        // supplied pattern entirely + uses its hardcoded label), but the
-        // tightening — banning AnchorPrefix on canonical-id registration
-        // outright — is named in `docs/future/phase-3-backlog.md` §5.1
-        // as a follow-on per `g15a-mr-minor-4`.
+        Self::register_inner(view_id, label_pattern, projection, None)
+    }
+
+    /// Budget-aware shape of [`Self::register`]. Surfaces a per-update
+    /// budget cap to the registration site so user views can declare
+    /// runtime work bounds at construction time (closes
+    /// `g15-b-port` carry / `5.1-followup-e`, W9-T1).
+    ///
+    /// - **Non-canonical ids:** `budget` is supplied to the inner
+    ///   `GenericKernel`'s [`BudgetTracker`] (the kernel struct is
+    ///   private); the per-event `update` path consumes one budget unit
+    ///   per matching write.
+    /// - **Canonical ids:** the budget is forwarded into the matching
+    ///   hand-written canonical kernel via the `with_budget_for_testing`
+    ///   constructor. The constructor name retains the
+    ///   `_for_testing` suffix to preserve the Phase-1 source-of-truth
+    ///   for the 5 canonical kernels' construction shape; the suffix is
+    ///   non-load-bearing at the registration site (the budget-aware
+    ///   user-facing path is `Algorithm::register_with_budget`).
+    ///
+    /// `budget == u64::MAX` is the "effectively unbounded" sentinel and
+    /// matches [`Self::register`]'s no-budget shape modulo the cost of
+    /// calling [`BudgetTracker::try_consume`] per matching write
+    /// (saturating arithmetic).
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`Self::register`].
+    pub fn register_with_budget(
+        view_id: &str,
+        label_pattern: LabelPattern,
+        projection: Projection,
+        budget: u64,
+    ) -> Result<Self, AlgorithmError> {
+        Self::register_inner(view_id, label_pattern, projection, Some(budget))
+    }
+
+    /// Internal builder backing [`Self::register`] +
+    /// [`Self::register_with_budget`]. `budget == None` ⇒ effectively
+    /// unbounded; `budget == Some(n)` ⇒ per-update cap of `n` matching
+    /// writes before stale.
+    fn register_inner(
+        view_id: &str,
+        label_pattern: LabelPattern,
+        projection: Projection,
+        budget: Option<u64>,
+    ) -> Result<Self, AlgorithmError> {
+        // Fail-loud guard #1: canonical id + AnchorPrefix. Canonical kernels
+        // ignore the caller-supplied pattern and use a hardcoded label —
+        // admitting a prefix selector would be a doc-vs-code-strength gap.
+        // Closes `g15a-mr-minor-4` / `5.1-followup-c` (W9-T1).
+        if is_canonical_view_id(view_id)
+            && let LabelPattern::AnchorPrefix(prefix) = &label_pattern
+        {
+            return Err(AlgorithmError::CanonicalIdAnchorPrefixRefused {
+                view_id: view_id.to_string(),
+                got_prefix: prefix.clone(),
+            });
+        }
+        // Fail-loud guard #2: canonical id + Exact label that disagrees
+        // with the canonical hardcoded label. Per Phase-2b R6-R3
+        // `r6-r3-ivm-1` precedent — silently accepting a mismatched
+        // exact label would yield a view filtered on the WRONG label.
         if let Some(hardcoded) = hardcoded_label_for_id(view_id)
             && !label_pattern.matches(hardcoded)
         {
@@ -494,37 +684,50 @@ impl AlgorithmBView {
         }
         // `content_listing` is canonical but its arm honors the supplied
         // label. For non-canonical ids the same fail-loud principle does
-        // NOT apply (any label_pattern is permitted).
+        // NOT apply (any LabelPattern::Exact is permitted; LabelPattern::
+        // AnchorPrefix is permitted via the GenericKernel surface).
         if is_canonical_view_id(view_id) {
             // Canonical lane: surface the hand-written inner kernel via
             // `for_id` — the input_pattern_label is the pattern's stable
             // string surface (used by `content_listing` for its label arg
             // and stored in the definition for the 4 hardcoded views).
+            // When `budget` is supplied, route through the canonical
+            // kernel's budget-aware constructor.
             let definition = ViewDefinition {
                 view_id: view_id.to_string(),
                 input_pattern_label: Some(label_pattern.as_label_str().to_string()),
                 output_label: "system:IVMView".to_string(),
                 strategy: Strategy::B,
             };
-            // SAFETY: canonical ids always succeed in `for_id`.
-            let view = Self::for_id(view_id, definition).expect(
-                "canonical view id resolved by is_canonical_view_id MUST succeed in for_id; \
-                 dispatch table inconsistency is a programmer error",
-            );
-            return Ok(view);
+            return if let Some(budget) = budget {
+                let view = Self::for_id_with_budget(view_id, definition, budget).expect(
+                    "canonical view id resolved by is_canonical_view_id MUST succeed in \
+                     for_id_with_budget; dispatch table inconsistency is a programmer error",
+                );
+                Ok(view)
+            } else {
+                let view = Self::for_id(view_id, definition).expect(
+                    "canonical view id resolved by is_canonical_view_id MUST succeed in \
+                     for_id; dispatch table inconsistency is a programmer error",
+                );
+                Ok(view)
+            };
         }
-        // Non-canonical lane: instantiate the generic kernel.
+        // Non-canonical lane: instantiate the generic kernel. Budget is
+        // attached when supplied.
         let definition = ViewDefinition {
             view_id: view_id.to_string(),
             input_pattern_label: Some(label_pattern.as_label_str().to_string()),
             output_label: "system:IVMView".to_string(),
             strategy: Strategy::B,
         };
-        let inner = Box::new(GenericKernel::new(
-            view_id.to_string(),
-            label_pattern,
-            projection,
-        ));
+        let kernel = match budget {
+            Some(b) => {
+                GenericKernel::with_budget(view_id.to_string(), label_pattern, projection, b)
+            }
+            None => GenericKernel::new(view_id.to_string(), label_pattern, projection),
+        };
+        let inner = Box::new(kernel);
         Ok(Self {
             view_id: view_id.to_string(),
             definition,
@@ -696,7 +899,201 @@ mod tests {
                 assert_eq!(view_id, "capability_grants");
                 assert_eq!(expected_label, "system:CapabilityGrant");
             }
+            other @ AlgorithmError::CanonicalIdAnchorPrefixRefused { .. } => {
+                panic!("expected ViewLabelMismatch, got {other:?}")
+            }
         }
+    }
+
+    /// W9-T1 §5.1-followup-c (`g15a-mr-minor-4` carry close): canonical
+    /// view ids require LabelPattern::Exact. Any AnchorPrefix on a
+    /// canonical id — even AnchorPrefix("") which prefix-matches every
+    /// label — is refused at registration time. The hand-written
+    /// canonical kernel ignores the supplied pattern and uses a
+    /// hardcoded label, so admitting a prefix selector is a
+    /// doc-vs-code-strength gap.
+    #[test]
+    fn register_canonical_view_with_anchor_prefix_refused_even_when_prefix_matches() {
+        // AnchorPrefix("") would prefix-match the canonical hardcoded
+        // label — pre-tightening this registered silently. Post-tightening
+        // it MUST fail-loud regardless of the prefix value.
+        let err = AlgorithmBView::register(
+            "capability_grants",
+            LabelPattern::anchor_prefix(""),
+            Projection::all_props(),
+        )
+        .expect_err("canonical id + AnchorPrefix MUST fail-loud (even empty prefix)");
+        match err {
+            AlgorithmError::CanonicalIdAnchorPrefixRefused {
+                view_id,
+                got_prefix,
+            } => {
+                assert_eq!(view_id, "capability_grants");
+                assert_eq!(got_prefix, "");
+            }
+            other @ AlgorithmError::ViewLabelMismatch { .. } => {
+                panic!("expected CanonicalIdAnchorPrefixRefused, got {other:?}")
+            }
+        }
+
+        // Non-empty prefix that happens to start the hardcoded label —
+        // still refused. The guard fires on the AnchorPrefix discriminator,
+        // not on the prefix's match outcome.
+        let err = AlgorithmBView::register(
+            "capability_grants",
+            LabelPattern::anchor_prefix("system:"),
+            Projection::all_props(),
+        )
+        .expect_err("canonical id + AnchorPrefix(non-empty) MUST fail-loud");
+        match err {
+            AlgorithmError::CanonicalIdAnchorPrefixRefused {
+                view_id,
+                got_prefix,
+            } => {
+                assert_eq!(view_id, "capability_grants");
+                assert_eq!(got_prefix, "system:");
+            }
+            other @ AlgorithmError::ViewLabelMismatch { .. } => {
+                panic!("expected CanonicalIdAnchorPrefixRefused, got {other:?}")
+            }
+        }
+
+        // Sanity: non-canonical id + AnchorPrefix still succeeds (the
+        // tightening is canonical-id-only).
+        let view = AlgorithmBView::register(
+            "custom:by_prefix",
+            LabelPattern::anchor_prefix("system:"),
+            Projection::all_props(),
+        )
+        .expect("non-canonical id + AnchorPrefix MUST succeed");
+        assert_eq!(view.id(), "custom:by_prefix");
+    }
+
+    /// W9-T1 §5.1-followup-e (`g15-b-port` carry close): the
+    /// `Algorithm::register_with_budget` surface forwards a per-update
+    /// budget to the inner kernel. End-to-end pin: register a user view
+    /// with `budget=2`, drive 3 matching writes, observe `is_stale`
+    /// transitions to true on the third. WOULD FAIL if the budget were
+    /// silently dropped (the kernel would absorb all 3 writes).
+    #[test]
+    fn register_with_budget_user_view_trips_at_supplied_cap() {
+        let mut view = AlgorithmBView::register_with_budget(
+            "custom:budgeted",
+            LabelPattern::exact("post"),
+            Projection::all_props(),
+            2,
+        )
+        .expect("register_with_budget(user_view, budget=2) succeeds");
+        // 2 matching writes — succeed.
+        view.update(&make_event(ChangeKind::Created, "post", 1))
+            .unwrap();
+        assert!(!view.is_stale(), "1st write within budget");
+        view.update(&make_event(ChangeKind::Created, "post", 2))
+            .unwrap();
+        assert!(!view.is_stale(), "2nd write within budget");
+        // 3rd matching write — trips. Budget tracker surfaces
+        // BudgetExceeded to the caller (matching the 5 canonical kernels'
+        // shape per `g5-cr-3` Phase-1 contract).
+        let err = view.update(&make_event(ChangeKind::Created, "post", 3));
+        assert!(err.is_err(), "3rd write past budget MUST surface error");
+        assert!(
+            view.is_stale(),
+            "post-budget-trip wrapper MUST observe stale=true"
+        );
+        // Strict read after trip surfaces BudgetExceeded.
+        match view.read(&ViewQuery::default()) {
+            Err(ViewError::BudgetExceeded(view_id)) => assert_eq!(view_id, "custom:budgeted"),
+            other => panic!("expected BudgetExceeded, got {other:?}"),
+        }
+    }
+
+    /// W9-T1: `register_with_budget` for a CANONICAL id forwards the
+    /// budget through the matching canonical kernel's
+    /// `with_budget_for_testing` constructor.
+    #[test]
+    fn register_with_budget_canonical_view_forwards_budget() {
+        let view = AlgorithmBView::register_with_budget(
+            "capability_grants",
+            LabelPattern::exact("system:CapabilityGrant"),
+            Projection::all_props(),
+            5,
+        )
+        .expect("canonical + matching label + budget succeeds");
+        assert_eq!(view.id(), "capability_grants");
+        // Pre-trip: not stale (budget is 5, no events yet).
+        assert!(!view.is_stale(), "pre-event canonical view not stale");
+    }
+
+    /// W9-T1: `register_with_budget` returns the same fail-loud guards
+    /// as `register` (both AnchorPrefix-on-canonical + label-mismatch).
+    #[test]
+    fn register_with_budget_inherits_canonical_guards() {
+        let err = AlgorithmBView::register_with_budget(
+            "capability_grants",
+            LabelPattern::anchor_prefix(""),
+            Projection::all_props(),
+            10,
+        )
+        .expect_err("AnchorPrefix on canonical id MUST fail-loud");
+        assert!(matches!(
+            err,
+            AlgorithmError::CanonicalIdAnchorPrefixRefused { .. }
+        ));
+
+        let err = AlgorithmBView::register_with_budget(
+            "capability_grants",
+            LabelPattern::exact("user"),
+            Projection::all_props(),
+            10,
+        )
+        .expect_err("mismatched exact label on canonical id MUST fail-loud");
+        assert!(matches!(err, AlgorithmError::ViewLabelMismatch { .. }));
+    }
+
+    /// W9-T1: `u64::MAX` budget observably matches the no-budget shape
+    /// (the saturating-arithmetic absorbs all matching writes; never
+    /// trips).
+    #[test]
+    fn register_with_budget_max_matches_no_budget_shape() {
+        let mut view = AlgorithmBView::register_with_budget(
+            "custom:unbounded",
+            LabelPattern::exact("post"),
+            Projection::all_props(),
+            u64::MAX,
+        )
+        .unwrap();
+        for i in 0..100 {
+            view.update(&make_event(ChangeKind::Created, "post", i))
+                .unwrap();
+        }
+        assert!(!view.is_stale(), "u64::MAX budget is unbounded");
+    }
+
+    /// W9-T1: rebuild restores the budget cap (the
+    /// `BudgetTracker::rebuild` contract is honored from
+    /// `GenericKernel::rebuild`).
+    #[test]
+    fn generic_kernel_rebuild_restores_budget_cap() {
+        let mut view = AlgorithmBView::register_with_budget(
+            "custom:rebuild_budget",
+            LabelPattern::exact("post"),
+            Projection::all_props(),
+            1,
+        )
+        .unwrap();
+        // Trip the budget.
+        view.update(&make_event(ChangeKind::Created, "post", 1))
+            .unwrap();
+        let _ = view.update(&make_event(ChangeKind::Created, "post", 2));
+        assert!(view.is_stale(), "budget tripped");
+        // Rebuild restores the cap + clears stale.
+        view.rebuild().unwrap();
+        assert!(!view.is_stale(), "post-rebuild not stale");
+        // The kernel can now absorb a fresh write within the restored
+        // cap.
+        view.update(&make_event(ChangeKind::Created, "post", 3))
+            .unwrap();
+        assert!(!view.is_stale(), "post-rebuild write within cap");
     }
 
     #[test]

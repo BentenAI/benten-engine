@@ -636,6 +636,13 @@ impl Engine {
     ///   the same fail-loud boundary rather than the silent-discard
     ///   foot-gun.
     /// - Backend errors from the underlying privileged Node write.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "register_user_view is the load-bearing user-view registration \
+                  surface — splitting it would obscure the linear flow through \
+                  the strategy refusal / canonical-id guards / kernel \
+                  registration / persisted-Node write sequence"
+    )]
     pub fn register_user_view(&self, spec: UserViewSpec) -> Result<Cid, EngineError> {
         // D8-RESOLVED: refuse Strategy::A + Strategy::C BEFORE writing the
         // definition Node so a refused registration leaves no on-disk
@@ -676,6 +683,34 @@ impl Engine {
                 view_id: spec.id().to_string(),
                 expected_label: hardcoded.to_string(),
                 got_label: supplied_label.clone(),
+            });
+        }
+
+        // W9-T1 §5.1-followup-c (`g15a-mr-minor-4` carry close): canonical
+        // view ids require LabelPattern::Exact at the kernel boundary —
+        // an AnchorPrefix on a canonical id is refused. Mirror the
+        // kernel-side `AlgorithmError::CanonicalIdAnchorPrefixRefused`
+        // guard at the engine boundary so the typed catalog error
+        // (`E_VIEW_LABEL_MISMATCH`) surfaces consistently regardless of
+        // whether the registration goes through the TS DSL, the napi
+        // bridge, or a direct Rust caller. The catalog code is reused
+        // (a canonical id requiring an Exact label IS a label mismatch
+        // when the supplied pattern is a prefix selector — `expected_label`
+        // is the canonical hardcoded label, `got_label` is the literal
+        // string `AnchorPrefix(<prefix>)` so the operator sees both the
+        // shape + the supplied prefix value).
+        if let UserViewInputPattern::AnchorPrefix(prefix) = spec.input_pattern()
+            && benten_ivm::algorithm_b::is_canonical_view_id(spec.id())
+        {
+            let expected_label = benten_ivm::algorithm_b::hardcoded_label_for_id(spec.id())
+                .map_or_else(
+                    || "<exact label>".to_string(),
+                    std::string::ToString::to_string,
+                );
+            return Err(EngineError::ViewLabelMismatch {
+                view_id: spec.id().to_string(),
+                expected_label,
+                got_label: format!("AnchorPrefix({prefix:?})"),
             });
         }
 
@@ -796,6 +831,29 @@ impl Engine {
                             view_id,
                             expected_label,
                             got_label: label_pattern.as_label_str().to_string(),
+                        });
+                    }
+                    Err(benten_ivm::AlgorithmError::CanonicalIdAnchorPrefixRefused {
+                        view_id,
+                        got_prefix,
+                    }) => {
+                        // W9-T1 §5.1-followup-c defense-in-depth — the
+                        // engine-side AnchorPrefix-on-canonical-id guard
+                        // above already rejected this case; this arm
+                        // exists for the same single-typed-boundary
+                        // reason as the ViewLabelMismatch arm. Surface
+                        // through `E_VIEW_LABEL_MISMATCH` (the catalog
+                        // semantic for "registration label disagrees
+                        // with canonical kernel's hardcoded shape").
+                        let expected_label =
+                            benten_ivm::algorithm_b::hardcoded_label_for_id(&view_id).map_or_else(
+                                || "<exact label>".to_string(),
+                                std::string::ToString::to_string,
+                            );
+                        return Err(EngineError::ViewLabelMismatch {
+                            view_id,
+                            expected_label,
+                            got_label: format!("AnchorPrefix({got_prefix:?})"),
                         });
                     }
                 }
