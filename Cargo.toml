@@ -238,6 +238,15 @@ serde_ipld_dagcbor = "0.6.4"
 multihash = "0.19"
 redb = "4"
 
+# Phase-3 R5 wave-9 W9-T5 (§6.11) — workspace-level base64 codec.
+# Replaces the inline ~80 LOC base64 encoder/decoder previously embedded in
+# `crates/benten-engine/src/manifest_signing.rs` (g14-c-mr-6 follow-up).
+# `data-encoding` is no_std-friendly, well-vetted, already in the dep graph
+# transitively (multiple wasmtime + ed25519 chain consumers carry it). Used
+# by `manifest_signing` for ed25519 signature serialisation in
+# `ModuleManifest.signature.ed25519`.
+data-encoding = { version = "2", default-features = false, features = ["alloc"] }
+
 # Concurrency & allocator
 papaya = "0.2"
 mimalloc = { version = "0.1", default-features = false }

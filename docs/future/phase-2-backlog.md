@@ -97,9 +97,9 @@ Landed in Phase 1 as the close-out of R7 audit finding F-R7-004: `Cid::from_str`
 
 `RedbBackend::get_node` does NOT re-hash the decoded Node and compare against the requested CID; a corrupted `{key, value}` pair returns a wrong-but-decodable Node. The `ERROR-CATALOG.md` entry for `E_INV_CONTENT_HASH` says "Thrown at: Registration / read" — but read-path firing is subgraph-only (via `Subgraph::load_verified`). Phase 2: add optional `get_node_verified(&self, cid)` that re-hashes on read (~3–10 µs BLAKE3 per call), or tighten the catalog entry to distinguish "Registration / Subgraph load" from "Node read."
 
-### 6.3 Anchor-store consolidation (cov-f3 residual)
+### 6.3 Anchor-store consolidation (cov-f3 residual) — **CLOSED-IN-PHASE-3-G14-C**
 
-`benten-core/src/version.rs` uses per-anchor `Arc<Mutex<...>>` for chain state. R5 G7 may prefer an explicit `AnchorStore` handle for bulk operations once the evaluator surface is stable. See the `TODO(phase-2-anchorstore)` in `version.rs`.
+Closed at Phase-3 G14-C wave-4b. The cov-f3 closure landed `crates/benten-engine/src/anchor_store.rs` as the single consolidation site (one source of truth for the anchor-store handle); `crates/benten-engine/tests/anchor_store.rs::anchor_store_consolidation_cov_f3_no_residual` is the regression-pin asserting the implementation lives at exactly one path. The `phase-2-anchorstore` generic markers (carried in `crates/benten-core/src/version.rs` + `crates/benten-core/src/lib.rs` doc-comments) now name `phase-3 — anchorstore + CRDT merge` / `phase-3 — anchorstore + GC` (Phase 3 sync layer) — that arm is its own forward-looking item, not a Phase-2 residual.
 
 ### 6.4 Dependency unpins
 
@@ -147,9 +147,9 @@ Wave-8c-subscribe-infra (Phase-2b) wired the SUBSCRIBE delivery-time cap-recheck
 
 `packages/engine-devserver` (`@benten/engine-devserver`) shipped wave-8f as the napi-rs-backed `BentenDevServer` TypeScript wrapper that wraps a real `Engine` and exposes `replaceHandler` / hot-reload semantics through `Engine::register_subgraph_replace`. The diagnostic CLI (`tools/benten-dev`) carries the `inspect-state <path>` subcommand for serialized `ExecutionStateEnvelope` introspection.
 
-### 8.2 Cross-doc numeric-claim drift lint — **OPEN-WITH-PHASE-N+-DESTINATION**
+### 8.2 Cross-doc numeric-claim drift lint — **CLOSED-IN-PHASE-3-G13-PRE-A**
 
-Anytime / low-priority. A small CI lint that greps `docs/*.md` for numeric performance claims and compares them against `ENGINE-SPEC.md` §14.6 would close the loop; the "verify, don't trust docs" review discipline catches most occurrences in the meantime. No specific phase target.
+Closed at Phase-3 G13-pre-A. The `tools/cite-drift-detector/` workspace member (per `Cargo.toml` line 21 narrative) carries a `numeric_claim` pass that scans documentation for numeric performance claims and compares them against the source-of-truth set declared in `numeric_claims_source_of_truth()` (`tools/cite-drift-detector/src/lib.rs`). The non-blocking PR comment workflow at `.github/workflows/cite-drift.yml` surfaces drift on every PR per D-PHASE-3-10. The grep-source-of-truth shape called out in the original Phase-2 entry is the mechanic the detector implements.
 
 ### 8.3 Per-item `missing_docs` sweep — **OPEN-WITH-PHASE-3-DESTINATION**
 

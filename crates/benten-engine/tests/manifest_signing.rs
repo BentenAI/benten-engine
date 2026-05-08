@@ -115,7 +115,7 @@ fn manifest_signature_includes_signature_in_signed_bytes_rejects() {
     use benten_id::did::Did;
     let mut tampered = m.clone();
     tampered.signature = Some(ManifestSignature {
-        ed25519: Some(base64_encode(bad_sig.to_bytes().as_slice())),
+        ed25519: Some(data_encoding::BASE64.encode(bad_sig.to_bytes().as_slice())),
     });
     let aud = Did::from_public_key(kp.public_key());
     let err = verify_manifest_with_mode(
@@ -263,7 +263,7 @@ fn verify_manifest_with_mode_rejects_unsigned_or_invalid() {
     // Bogus signature: rejects.
     let mut bogus = m.clone();
     bogus.signature = Some(ManifestSignature {
-        ed25519: Some(base64_encode(&[0u8; 64])),
+        ed25519: Some(data_encoding::BASE64.encode(&[0u8; 64])),
     });
     let err = verify_manifest_with_mode(
         &bogus,
@@ -334,7 +334,7 @@ fn install_module_rejects_unsigned_when_verification_required() {
     //     RegistryInvalid.
     let mut bogus = m.clone();
     bogus.signature = Some(ManifestSignature {
-        ed25519: Some(base64_encode(&[0u8; 64])),
+        ed25519: Some(data_encoding::BASE64.encode(&[0u8; 64])),
     });
     let bogus_cid = engine.compute_manifest_cid(&bogus).unwrap();
     let bogus_args = ManifestVerifyArgs::registry(kp.public_key(), &aud, 0);
@@ -499,40 +499,7 @@ fn manifest_signature_dual_presentation_both_must_verify() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// Local base64-encode mirror of the inline encoder in
-// `crates/benten-engine/src/manifest_signing.rs`. Keeps the test fixture
-// self-contained without exposing the encoder publicly.
-// ---------------------------------------------------------------------------
-
-fn base64_encode(bytes: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
-    let mut chunks = bytes.chunks_exact(3);
-    for chunk in chunks.by_ref() {
-        let n = (u32::from(chunk[0]) << 16) | (u32::from(chunk[1]) << 8) | u32::from(chunk[2]);
-        out.push(ALPHABET[((n >> 18) & 0x3F) as usize] as char);
-        out.push(ALPHABET[((n >> 12) & 0x3F) as usize] as char);
-        out.push(ALPHABET[((n >> 6) & 0x3F) as usize] as char);
-        out.push(ALPHABET[(n & 0x3F) as usize] as char);
-    }
-    let rem = chunks.remainder();
-    match rem.len() {
-        1 => {
-            let n = u32::from(rem[0]) << 16;
-            out.push(ALPHABET[((n >> 18) & 0x3F) as usize] as char);
-            out.push(ALPHABET[((n >> 12) & 0x3F) as usize] as char);
-            out.push('=');
-            out.push('=');
-        }
-        2 => {
-            let n = (u32::from(rem[0]) << 16) | (u32::from(rem[1]) << 8);
-            out.push(ALPHABET[((n >> 18) & 0x3F) as usize] as char);
-            out.push(ALPHABET[((n >> 12) & 0x3F) as usize] as char);
-            out.push(ALPHABET[((n >> 6) & 0x3F) as usize] as char);
-            out.push('=');
-        }
-        _ => {}
-    }
-    out
-}
+// Phase-3 R5 wave-9 W9-T5 (§6.11 g14-c-mr-6 follow-up): the inline
+// `base64_encode` mirror that lived here was retired in favor of the
+// workspace-level `data-encoding` dep. Test sites above invoke
+// `data_encoding::BASE64.encode` directly.
