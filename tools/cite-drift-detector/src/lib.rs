@@ -128,7 +128,17 @@ pub const HIGH_CHURN_SURFACES: &[&str] = &[
 ///   - `README.md` at the root
 ///   - every `.md` under `.addl/` (only when the directory exists; it is
 ///     gitignored, so CI runs against `docs/` + `README.md` only).
-///   - rust source files under `crates/*/src/` (extracts doc-comment cites)
+///   - every `.rs` under `crates/` (recursive — covers `crates/*/src/`,
+///     `crates/*/tests/`, and `crates/*/build.rs` automatically since
+///     `walk_ext_recursive` matches by extension and walks the full
+///     subtree).
+///   - every `.rs` under `tools/` (orchestrator-side tooling; §7.12b
+///     file-tree-gap closure — `walk_ext_recursive` skips per-tool
+///     `target/` build outputs).
+///   - every `.toml` under `.cargo/` — typically `.cargo/config.toml`
+///     alias-comment blocks; §7.12b file-tree-gap closure.
+///     `extract_line_cites` already accepts the `.toml` extension per
+///     its allow-list.
 ///   - typescript source files under `packages/engine/src/` (extracts
 ///     doc-comment cites)
 pub fn walk_doc_inputs(root: &Path) -> Vec<PathBuf> {
@@ -152,6 +162,20 @@ pub fn walk_doc_inputs(root: &Path) -> Vec<PathBuf> {
     // crates/*/src/**/*.rs (doc-comment cites)
     walk_ext_recursive(&root.join("crates"), "rs", &mut out);
 
+    // tools/*/src/**/*.rs (orchestrator-side tooling; §7.12b extension).
+    // Walks the entire `tools/` subtree — `walk_ext_recursive` already
+    // skips `target/` + `node_modules/` so per-tool `target/` build
+    // outputs are excluded automatically. Picks up build.rs at any depth
+    // by virtue of `.rs` extension (the walker matches by extension, not
+    // path-component name).
+    walk_ext_recursive(&root.join("tools"), "rs", &mut out);
+
+    // .cargo/config.toml — alias-comment blocks frequently cite source
+    // files. Use the `walk_ext_recursive` walker for consistency with
+    // the rest of the envelope; `.cargo/` typically only holds
+    // `config.toml`, so the walker terminates after one entry.
+    walk_ext_recursive(&root.join(".cargo"), "toml", &mut out);
+
     // packages/engine/src/**/*.ts (doc-comment cites)
     walk_ext_recursive(
         &root.join("packages").join("engine").join("src"),
@@ -159,7 +183,12 @@ pub fn walk_doc_inputs(root: &Path) -> Vec<PathBuf> {
         &mut out,
     );
 
+    // De-duplicate before sort: `walk_ext_recursive` is invoked
+    // multiple times and the `crates/` walk already covers `crates/*/build.rs`
+    // + `crates/*/tests/**/*.rs`, but a defensive de-dup guards against
+    // future walker rearrangement double-listing.
     out.sort();
+    out.dedup();
     out
 }
 
@@ -172,9 +201,18 @@ fn walk_ext_recursive(dir: &Path, ext: &str, out: &mut Vec<PathBuf>) {
     for entry in rd.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            // Skip target/ + node_modules/
+            // Skip build/cache subtrees + the detector's own subtree.
+            // The detector's `src/` + `tests/` files contain intentional
+            // cite-shaped fixture strings (extract_line_cites unit-test
+            // inputs, fixture-doc-narrative test bodies); scanning them
+            // as input would double-count those fixtures as real cites.
+            // Self-exclusion is the simplest discipline that doesn't
+            // require generic cfg-test awareness.
             let basename = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
-            if basename == "target" || basename == "node_modules" {
+            if basename == "target"
+                || basename == "node_modules"
+                || basename == "cite-drift-detector"
+            {
                 continue;
             }
             walk_ext_recursive(&path, ext, out);
@@ -569,11 +607,75 @@ fn check_symbol_cite(
     }
 }
 
+/// Return `true` when `text` contains a `pub use` re-export naming
+/// `symbol`. Handles three shapes:
+///
+///   1. Single-line: `pub use foo::Symbol;` (no brace list)
+///   2. Single-line brace list: `pub use foo::{A, Symbol, B};`
+///   3. Multi-line brace list:
+///      ```text
+///      pub use foo::{
+///          A,
+///          Symbol,
+///          B,
+///      };
+///      ```
+///
+/// The scanner looks for `pub use` then walks until the next `;`,
+/// extracting every identifier appearing as a comma- / brace- /
+/// whitespace-bounded token inside that span. Aliases (`A as Symbol`)
+/// match on the alias side since the cite refers to the re-exported
+/// name. Glob re-exports (`pub use foo::*;`) are NOT inferred — we
+/// can't tell from this side what names they cover.
+fn text_reexports_symbol(text: &str, symbol: &str) -> bool {
+    let mut rest = text;
+    while let Some(idx) = rest.find("pub use") {
+        // Validate that this match is at start-of-line / preceded by
+        // whitespace (so we don't trip on `// pub use` doc-comment
+        // narrative — the leading-`//` case is implicitly excluded
+        // because doc-comments still produce real `pub use` re-exports
+        // in their explanations only via prose. Acceptable noise.)
+        let after = &rest[idx + "pub use".len()..];
+        // Find terminating `;` or end-of-text.
+        let end = after.find(';').unwrap_or(after.len());
+        let span = &after[..end];
+        // Tokenise on whitespace + `{}` + `,` + `:` + `as`.
+        // Walk the span byte-by-byte collecting identifier tokens.
+        let bytes = span.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            if is_ident_char(bytes[i]) {
+                let start = i;
+                while i < bytes.len() && is_ident_char(bytes[i]) {
+                    i += 1;
+                }
+                let token = &span[start..i];
+                if token == symbol {
+                    return true;
+                }
+            } else {
+                i += 1;
+            }
+        }
+        rest = &after[end..];
+    }
+    false
+}
+
 /// Return `true` when `text` contains a syntactic definition of `symbol`.
 /// Matches keyword-prefixed shapes from Rust + TypeScript — we do NOT
 /// parse the language, but we look for the canonical definition forms
-/// that mainstream code uses.
+/// that mainstream code uses. Also recognises `pub use ... { Symbol, ... }`
+/// re-exports, since many crate roots expose their public API surface
+/// via re-export from sibling modules; a cite to the re-export site is
+/// legitimate even though the in-place definition lives elsewhere.
 fn target_text_defines_symbol(text: &str, symbol: &str) -> bool {
+    // First, the cheap re-export scan (handles both single-line
+    // `pub use foo::Symbol;` and multi-line `pub use foo::{ Symbol, ... };`
+    // shapes). Returns early on hit.
+    if text_reexports_symbol(text, symbol) {
+        return true;
+    }
     // Canonical definition prefixes — we look for `<keyword> <space> <symbol>`
     // followed by a non-identifier character (so `fn foo` matches but
     // `fn foo_bar` does not match a search for `foo`).
@@ -699,14 +801,18 @@ pub struct NumericClaim {
 
 /// Authoritative count map. As of Phase-3 R3 corpus merge (post `82f1c7e`):
 ///
-///   - 12 operation primitives (CLAUDE.md baked-in #1)
-///   - 14 invariants (CLAUDE.md status table; INVARIANT-COVERAGE.md)
-///   - 10 crates (workspace `members =` minus tools/tests/bindings: errors,
-///     core, graph, ivm, caps, eval, engine, id, sync, dsl-compiler).
-///     `benten-id` (Phase-3 G14-A1 canary STUB) + `benten-sync`
-///     (Phase-3 G16-A canary STUB; native-only per CLAUDE.md baked-in
-///     #17) added at R3-A + R3-C respectively, bumping the count
-///     8 → 10 atomically with R3 corpus.
+///   - 12 operation primitives (CLAUDE.md baked-in #1) — hardcoded
+///   - 14 invariants (CLAUDE.md status table; INVARIANT-COVERAGE.md) —
+///     hardcoded
+///   - **`crates` count is now derived dynamically** from the workspace
+///     `Cargo.toml` `members =` table at the supplied root. See
+///     `derive_crate_count_from_workspace`. Pim-12 NEW shape (iii)
+///     tools-as-meta-spec closure: the detector self-derives this row so
+///     the count never drifts when a crate is added or removed.
+///     Fallback when `Cargo.toml` is unparseable: returns the
+///     historical static value 10 (last manually-confirmed count) so
+///     the lint still operates against a stable baseline rather than
+///     silently disabling.
 ///
 /// **Phrasing scope is deliberately tight.** We only flag the
 /// authoritative-total shapes (e.g. "all 12 primitives", "all 14
@@ -716,15 +822,25 @@ pub struct NumericClaim {
 /// those in narrative context would generate noise. The lint targets
 /// **claims of authority**, not all numeric mentions.
 ///
-/// When a Phase-3 group changes these counts, that group's brief MUST
-/// update this table in the SAME commit per pim-1 §3.5b post-fix
-/// doc-coupling (the detector ITSELF is a cited surface). The hardcode
-/// bump is the immediate fix-now arm; the recurrence-resistant arm
-/// (workspace-aware derivation parsing `Cargo.toml` `members =` at
-/// runtime) is backlogged at `docs/future/phase-3-backlog.md` §7.12
-/// per pim-12 NEW shape (iii) tools-as-meta-spec
-/// (`dispatch-conventions.md::§3.5c` 2026-05-05 amendment).
+/// `primitives` + `invariants` remain hardcoded because their
+/// authoritative source is documentation (CLAUDE.md baked-in
+/// commitments), not workspace structure. When either of those
+/// counts changes, the touching group's brief MUST update this table
+/// in the SAME commit per pim-1 §3.5b post-fix doc-coupling (the
+/// detector ITSELF is a cited surface).
+///
+/// **Backwards-compatible API:** the `value: u32` field shape is
+/// unchanged; the dynamic derivation runs once at this function's
+/// call site and embeds the result.
 pub fn numeric_claims_source_of_truth() -> Vec<NumericClaim> {
+    numeric_claims_source_of_truth_at(Path::new("."))
+}
+
+/// Variant of `numeric_claims_source_of_truth` that takes the workspace
+/// root explicitly. Used by tests + by callers (e.g. the CLI) that
+/// invoke the detector against an arbitrary path.
+pub fn numeric_claims_source_of_truth_at(root: &Path) -> Vec<NumericClaim> {
+    let crate_count = derive_crate_count_from_workspace(root).unwrap_or(10);
     vec![
         NumericClaim {
             label: "primitives",
@@ -747,15 +863,51 @@ pub fn numeric_claims_source_of_truth() -> Vec<NumericClaim> {
         },
         NumericClaim {
             label: "crates",
-            value: 10,
+            value: crate_count,
             phrasings: &["all {N} crates", "the {N} crates", "{N}-crate"],
         },
     ]
 }
 
+/// Parse `<root>/Cargo.toml` and count the number of workspace members
+/// whose path begins with `crates/`. The `crates` numeric-claim
+/// authoritative value is derived from this count rather than
+/// hardcoded — closes pim-12 NEW shape (iii) per
+/// `dispatch-conventions.md::§3.5c` 2026-05-05 amendment.
+///
+/// Returns `Some(count)` on success; `None` when the file is missing,
+/// unparseable, or has no `[workspace] members = [...]` table. Callers
+/// fall back to the historical static value (10) when this returns
+/// `None` — the lint stays operational even if a tree-state change
+/// invalidates the parse temporarily.
+///
+/// **Counting rule:** every entry whose path string starts with the
+/// literal segment `crates/` counts. `tools/`, `bindings/`, and
+/// `tests/` entries are excluded. This matches the original rustdoc
+/// rule for the static count.
+pub fn derive_crate_count_from_workspace(root: &Path) -> Option<u32> {
+    let cargo_toml = root.join("Cargo.toml");
+    let text = fs::read_to_string(&cargo_toml).ok()?;
+    let parsed: toml::Value = toml::from_str(&text).ok()?;
+    let workspace = parsed.get("workspace")?.as_table()?;
+    let members = workspace.get("members")?.as_array()?;
+    let mut count: u32 = 0;
+    for entry in members {
+        let Some(s) = entry.as_str() else { continue };
+        if s.starts_with("crates/") {
+            count = count.saturating_add(1);
+        }
+    }
+    Some(count)
+}
+
 /// Run the numeric-claim drift pass. Returns one finding per disagreement.
+///
+/// The `crates` row is derived from `<root>/Cargo.toml`'s `members =`
+/// table per `derive_crate_count_from_workspace`; `primitives` +
+/// `invariants` rows remain hardcoded.
 pub fn run_numeric_claim_check(root: &Path) -> Vec<Finding> {
-    run_numeric_claim_check_with_truth(root, &numeric_claims_source_of_truth())
+    run_numeric_claim_check_with_truth(root, &numeric_claims_source_of_truth_at(root))
 }
 
 /// Same as `run_numeric_claim_check` but with an explicit truth set —
@@ -1013,5 +1165,224 @@ mod parse_unit_tests {
     fn target_text_defines_struct() {
         let txt = "pub(crate) struct PrimitiveHost { backend: B }\n";
         assert!(target_text_defines_symbol(txt, "PrimitiveHost"));
+    }
+
+    // -----------------------------------------------------------------
+    // §7.12: workspace-aware crate-count derivation tests
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn derive_crate_count_synthetic_workspace_with_n_crates() {
+        // Plant a synthetic workspace with 7 `crates/` rows + 3 non-crate
+        // rows; assert the derivation returns exactly 7.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let cargo = tmp.path().join("Cargo.toml");
+        std::fs::write(
+            &cargo,
+            r#"
+[workspace]
+resolver = "3"
+members = [
+    "crates/foo-1",
+    "crates/foo-2",
+    "crates/foo-3",
+    "crates/foo-4",
+    "crates/foo-5",
+    "crates/foo-6",
+    "crates/foo-7",
+    "tools/some-tool",
+    "bindings/napi",
+    "tests/integration",
+]
+"#,
+        )
+        .unwrap();
+        let count = derive_crate_count_from_workspace(tmp.path()).expect("derivation");
+        assert_eq!(count, 7);
+    }
+
+    #[test]
+    fn derive_crate_count_excludes_non_crate_paths() {
+        // A workspace with only non-`crates/` entries should derive 0,
+        // not None.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            tmp.path().join("Cargo.toml"),
+            r#"
+[workspace]
+resolver = "3"
+members = [
+    "tools/x",
+    "tests/y",
+    "bindings/z",
+]
+"#,
+        )
+        .unwrap();
+        let count = derive_crate_count_from_workspace(tmp.path()).expect("derivation");
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn derive_crate_count_returns_none_on_missing_cargo_toml() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        // No Cargo.toml at all.
+        assert!(derive_crate_count_from_workspace(tmp.path()).is_none());
+    }
+
+    #[test]
+    fn derive_crate_count_returns_none_on_unparseable_cargo_toml() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            tmp.path().join("Cargo.toml"),
+            "this is not [valid TOML} content =",
+        )
+        .unwrap();
+        assert!(derive_crate_count_from_workspace(tmp.path()).is_none());
+    }
+
+    #[test]
+    fn derive_crate_count_returns_none_when_workspace_table_missing() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            tmp.path().join("Cargo.toml"),
+            r#"
+[package]
+name = "single-crate"
+version = "0.1.0"
+"#,
+        )
+        .unwrap();
+        assert!(derive_crate_count_from_workspace(tmp.path()).is_none());
+    }
+
+    #[test]
+    fn numeric_claims_at_root_uses_derived_count() {
+        // The crate-count row must reflect the derivation result.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            tmp.path().join("Cargo.toml"),
+            r#"
+[workspace]
+members = ["crates/a", "crates/b", "crates/c"]
+"#,
+        )
+        .unwrap();
+        let claims = numeric_claims_source_of_truth_at(tmp.path());
+        let crates_claim = claims
+            .iter()
+            .find(|c| c.label == "crates")
+            .expect("crates claim present");
+        assert_eq!(crates_claim.value, 3);
+    }
+
+    #[test]
+    fn numeric_claims_at_root_falls_back_to_static_when_cargo_unparseable() {
+        // When the workspace can't be parsed, fall back to the historical
+        // static value (10) so the lint stays operational.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        // No Cargo.toml at all → derivation returns None → fallback to 10.
+        let claims = numeric_claims_source_of_truth_at(tmp.path());
+        let crates_claim = claims
+            .iter()
+            .find(|c| c.label == "crates")
+            .expect("crates claim present");
+        assert_eq!(crates_claim.value, 10);
+    }
+
+    // -----------------------------------------------------------------
+    // §7.12b: walker file-tree gap closure tests
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn walker_includes_tools_subtree() {
+        // Plant a synthetic root with `tools/foo/src/lib.rs` and assert
+        // the walker enumerates it. The original walker only covered
+        // `crates/*/src/**/*.rs` + `packages/engine/src/**/*.ts` +
+        // `docs/**/*.md` + `README.md` — `tools/` was a §7.12b gap.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let tools_src = tmp.path().join("tools").join("foo").join("src");
+        std::fs::create_dir_all(&tools_src).unwrap();
+        let lib_rs = tools_src.join("lib.rs");
+        std::fs::write(&lib_rs, "//! tools-side rust file.\n").unwrap();
+
+        let inputs = walk_doc_inputs(tmp.path());
+        assert!(
+            inputs.iter().any(|p| p == &lib_rs),
+            "walker did not enumerate {}",
+            lib_rs.display()
+        );
+    }
+
+    #[test]
+    fn walker_includes_dot_cargo_config_toml() {
+        // Plant `.cargo/config.toml` and assert the walker enumerates
+        // it. `.cargo/` was a §7.12b gap.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let cargo_dir = tmp.path().join(".cargo");
+        std::fs::create_dir_all(&cargo_dir).unwrap();
+        let config_toml = cargo_dir.join("config.toml");
+        std::fs::write(&config_toml, "# alias-comment block.\n").unwrap();
+
+        let inputs = walk_doc_inputs(tmp.path());
+        assert!(
+            inputs.iter().any(|p| p == &config_toml),
+            "walker did not enumerate {}",
+            config_toml.display()
+        );
+    }
+
+    #[test]
+    fn walker_includes_crates_build_rs_and_tests() {
+        // Confirm `crates/*/build.rs` and `crates/*/tests/*.rs` are
+        // covered by the recursive `crates/` walk. The §7.12b origin
+        // doc cited these as gaps; the walker has actually been
+        // recursive since G13-pre-A so they were already covered —
+        // this test pins the coverage so a future walker rewrite
+        // doesn't accidentally narrow the envelope.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let crate_root = tmp.path().join("crates").join("benten-foo");
+        std::fs::create_dir_all(crate_root.join("tests")).unwrap();
+        let build_rs = crate_root.join("build.rs");
+        std::fs::write(&build_rs, "// header doc-comment.\n").unwrap();
+        let tests_rs = crate_root.join("tests").join("integration.rs");
+        std::fs::write(&tests_rs, "//! integration test.\n").unwrap();
+
+        let inputs = walk_doc_inputs(tmp.path());
+        assert!(
+            inputs.iter().any(|p| p == &build_rs),
+            "walker did not enumerate {}",
+            build_rs.display()
+        );
+        assert!(
+            inputs.iter().any(|p| p == &tests_rs),
+            "walker did not enumerate {}",
+            tests_rs.display()
+        );
+    }
+
+    #[test]
+    fn walker_skips_target_subtree_under_tools() {
+        // The `target/` skip should apply uniformly under `tools/` too —
+        // a synthetic `tools/foo/target/release/build/lib.rs` should NOT
+        // be enumerated.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let target_dir = tmp
+            .path()
+            .join("tools")
+            .join("foo")
+            .join("target")
+            .join("release")
+            .join("build");
+        std::fs::create_dir_all(&target_dir).unwrap();
+        let target_rs = target_dir.join("lib.rs");
+        std::fs::write(&target_rs, "//! build-output.\n").unwrap();
+
+        let inputs = walk_doc_inputs(tmp.path());
+        assert!(
+            !inputs.iter().any(|p| p == &target_rs),
+            "walker leaked target/ subtree: {}",
+            target_rs.display()
+        );
     }
 }
