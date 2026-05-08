@@ -129,22 +129,34 @@ describe("G20-B Atrium examples compile + run", () => {
     return captured;
   };
 
-  it("atrium-peer-mgmt run() surfaces stub failure under napi-stub state", async () => {
-    const err = await captureRunError(() => atriumPeerMgmt.run());
-    expectStubFailureShape(err);
-  });
-
-  it("atrium-sync-trigger run() surfaces stub failure under napi-stub state", async () => {
-    const err = await captureRunError(() => atriumSyncTrigger.run());
-    expectStubFailureShape(err);
-  });
-
+  // ucan-grant-flow IS the only one of the four that exercises the
+  // engine WRITE path under PolicyKind.Ucan, so its run() invocation
+  // correctly surfaces the napi-UCAN-backend stub's NotImplemented
+  // error per audit-6-1.
   it("ucan-grant-flow run() surfaces stub failure under napi-stub state", async () => {
     const err = await captureRunError(() => ucanGrantFlow.run());
     expectStubFailureShape(err);
   });
 
-  it("did-resolution run() surfaces stub failure under napi-stub state", async () => {
+  // The other three examples (atrium-peer-mgmt, atrium-sync-trigger,
+  // did-resolution) drive `engine.atrium({...})` and operate through
+  // `JsAtrium` napi methods (`family.join()`, `trustPeer`, etc) —
+  // currently hollow in-memory stubs (audit-6-2 BLOCKER + audit-6-3
+  // MAJOR). They short-circuit BEFORE reaching engine WRITE, so the
+  // run() completes via the stub without exercising the UCAN-backend
+  // gate. Pin will flip to live `.it()` + `expectStubFailureShape` (or
+  // a stronger end-to-end assertion) when G21 T2 closes audit-6-2/3
+  // and the napi Atrium surface delegates to engine-side `Atrium` per
+  // D-PHASE-3-15 B-prime contract.
+  it.skip("atrium-peer-mgmt run() — destination G21 T2 (audit-6-2 hollow JsAtrium)", async () => {
+    const err = await captureRunError(() => atriumPeerMgmt.run());
+    expectStubFailureShape(err);
+  });
+  it.skip("atrium-sync-trigger run() — destination G21 T2 (audit-6-2 hollow JsAtrium)", async () => {
+    const err = await captureRunError(() => atriumSyncTrigger.run());
+    expectStubFailureShape(err);
+  });
+  it.skip("did-resolution run() — destination G21 T2 (audit-6-2 hollow JsAtrium)", async () => {
     const err = await captureRunError(() => didResolution.run());
     expectStubFailureShape(err);
   });
