@@ -95,9 +95,7 @@ fn ucan_grounded_denies_typed_call_when_proof_grants_wrong_cap() {
     engine.install_ucan_proof(&token).unwrap();
 
     let result = engine.dispatch_typed_call_public(TypedCallOp::Ed25519Sign, &ed25519_sign_input());
-    let err = result
-        .err()
-        .expect("forged-cap-claim proof MUST be rejected (BLOCKER-2)");
+    let err = result.expect_err("forged-cap-claim proof MUST be rejected (BLOCKER-2)");
     let msg = format!("{err:?}");
     assert!(
         msg.contains("TypedCallCapDenied") || msg.contains("CapDenied") || msg.contains("denied"),
@@ -112,9 +110,9 @@ fn ucan_grounded_denies_typed_call_when_no_proof_installed() {
     // `system:CapabilityGrant` Node for `cap:typed:crypto-sign`,
     // the call MUST be denied.
     let result = engine.dispatch_typed_call_public(TypedCallOp::Ed25519Sign, &ed25519_sign_input());
-    let err = result
-        .err()
-        .expect("no-proof + no-grant MUST deny typed-CALL under PolicyKind::Ucan (fail-closed)");
+    let err = result.expect_err(
+        "no-proof + no-grant MUST deny typed-CALL under PolicyKind::Ucan (fail-closed)",
+    );
     let msg = format!("{err:?}");
     assert!(
         msg.contains("TypedCallCapDenied") || msg.contains("CapDenied") || msg.contains("denied"),
