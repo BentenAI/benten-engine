@@ -365,6 +365,52 @@ impl<B: GraphBackend> UCANBackend<B> {
             })
     }
 
+    /// Enumerate every UCAN proof currently persisted under
+    /// `g14b:grant:*` in the durable store.
+    ///
+    /// G21-T2 fp-mini-review BLOCKER-2 + BLOCKER-3 closure: the
+    /// [`UcanGroundedPolicy`](crate::UcanGroundedPolicy) consumer
+    /// uses this to fetch every installed proof at write-check time,
+    /// run [`UCANBackend::validate_chain_at`] (signature + time-
+    /// window + revocation) on each, and check via
+    /// [`crate::typed_cap_for_ucan_claim`] whether any leaf-claim
+    /// satisfies the required `cap:typed:*` capability. Without this
+    /// iteration surface the durable backend's chain-walker was
+    /// reachable only via direct CID lookup — no policy code path
+    /// consumed it.
+    ///
+    /// Skips entries whose body fails to DAG-CBOR-decode (logs nothing
+    /// — caller is the policy hook, which should treat decode failures
+    /// as "ignore this entry" rather than fail-open or fail-closed).
+    /// A future hardening pass tightens this to surfacing a typed
+    /// `CapError::BackendStorage` when decode fails (would require
+    /// distinguishing real corruption from forward-compat envelope
+    /// shapes).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapError::BackendStorage`] on KV scan failure.
+    pub fn iter_installed_proofs(&self) -> Result<Vec<Ucan>, CapError> {
+        let scan = self
+            .backend
+            .scan(KV_GRANT_PREFIX)
+            .map_err(|e| CapError::BackendStorage {
+                reason: format!("KV scan grants: {e}"),
+            })?;
+        let mut proofs = Vec::new();
+        for (_key, value) in scan.iter() {
+            // Decode failures are skipped rather than aborting the
+            // policy check — a corrupt or forward-compat-shaped entry
+            // should not cause every cap-check to fail-closed at the
+            // backend layer. The cap policy fails-closed at the
+            // higher-level "no chain grants this cap" disposition.
+            if let Ok(token) = cbor::from_slice::<Ucan>(value) {
+                proofs.push(token);
+            }
+        }
+        Ok(proofs)
+    }
+
     /// Probe whether `ucan_cid` is recorded as revoked.
     ///
     /// # Errors

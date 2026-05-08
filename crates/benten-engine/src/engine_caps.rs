@@ -7,6 +7,7 @@
 //! privileged `WriteContext`. Every method is a plain `impl Engine` item.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use benten_core::{Cid, Node, Value};
 
@@ -191,5 +192,52 @@ impl Engine {
             node,
             &benten_graph::WriteContext::privileged_for_engine_api(),
         )?)
+    }
+
+    /// Phase-3 G21-T2 fp-mini-review BLOCKER-3 closure — install a
+    /// signed UCAN proof into the durable
+    /// [`benten_caps::UCANBackend`] proof-store (`g14b:grant:<cid>`
+    /// KV namespace) so [`benten_caps::UcanGroundedPolicy`] can
+    /// consult it at write-check time.
+    ///
+    /// Pre-fp-mini-review there was NO call site for
+    /// [`benten_caps::UCANBackend::install_proof`] in the engine; the
+    /// chain-walker was reachable only from tests. Wiring the adapter
+    /// here lets `PolicyKind::Ucan` actually exercise the durable
+    /// chain-walker for `cap:typed:*` capabilities (BLOCKER-2 partial
+    /// closure scope, see [`crate::EngineBuilder::capability_policy_ucan_durable`]
+    /// for the full composition narrative).
+    ///
+    /// The persisted UCAN survives engine restarts via the underlying
+    /// KV store. Subsequent calls with the same proof are idempotent
+    /// (the KV layer overwrites with byte-identical body — same CID).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EngineError`] when the capability subsystem is
+    /// disabled or the durable store rejects the write.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn install_ucan_proof(
+        &self,
+        ucan: &benten_id::ucan::Ucan,
+    ) -> Result<Cid, EngineError> {
+        if !self.caps_enabled {
+            return Err(EngineError::SubsystemDisabled {
+                subsystem: "capabilities",
+            });
+        }
+        // Compose a fresh UCANBackend over the engine's own backend
+        // — the underlying KV store is shared so a proof installed
+        // here is the same proof
+        // `UcanGroundedPolicy::typed_cap_permitted_by_proof` reads at
+        // write-check time. Constructing a fresh wrapper per call is
+        // cheap (the wrapper holds an Arc ref + the rate-limit plug).
+        let backend = benten_caps::UCANBackend::new(Arc::clone(&self.backend));
+        backend
+            .install_proof(ucan)
+            .map_err(|e| EngineError::Other {
+                code: e.code(),
+                message: format!("install_ucan_proof: {e}"),
+            })
     }
 }

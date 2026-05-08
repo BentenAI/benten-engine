@@ -173,6 +173,27 @@
 - `.addl/phase-3/mini-review-pr-143-g20-b-dx-optimizer.json` (g20b-dx-1, g20b-dx-4, g20b-dx-7, g20b-dx-8) — origin findings.
 - `.addl/phase-3/mini-review-pr-143-g20-b-doc-engineer.json` (doc-2) — symbol-cite drift sibling.
 
+#### 2.3 (i) — `WriteContext` audience + clock threading for arbitrary-scope UCAN proof-chain enforcement (G21-T2 fp-mini-review BLOCKER-2 partial-deferral)
+
+**Origin (G21-T2 fp-mini-review, 2026-05-08, post-PR-#148):** the fp-mini-review BLOCKER-2 sec-finding flagged that `EngineBuilder::capability_policy_ucan_durable` was a verbatim alias for `capability_policy_grant_backed` — UCAN proof-chain validation NEVER fired under `PolicyKind::Ucan`. The PR #148 fix-pass closes this for **typed-CALL `cap:typed:*` capabilities** by composing [`benten_caps::UcanGroundedPolicy`] which wraps `GrantBackedPolicy` + `UCANBackend` proof-chain validation + the [`benten_caps::typed_cap_for_ucan_claim`] mapping table.
+
+**What's deferred here (named-destination + named-timing per HARD RULE clause-b):** per-write proof-chain enforcement for ARBITRARY scope-strings (e.g. `store:post:write`, `zone:user:read`, etc.) — the wider lift requires three coupled threading axes:
+
+1. **`WriteContext::actor_hint`-as-DID propagation.** Today `actor_hint` carries an opaque `Cid` (Phase-1 principal); the chain-walker requires a `&Did` for `validate_chain_for_audience_at`. Threading the actor's DID through the CRUD write path + the SUBSCRIBE delivery-time recheck closure is a multi-crate touch (`benten-graph::WriteContext`, `benten-eval::PrimitiveHost::check_capability`, `benten-engine::primitive_host` cap-gate, all `benten-engine/src/engine_*.rs` privileged-write paths).
+2. **`WriteContext::now`-as-real-clock injection.** Today the `UcanGroundedPolicy::now_secs` defaults to `0` (epoch start) so present-day fixtures with `nbf=0`+positive-`exp` accept; tests inject custom values via `with_now_for_test`. Production needs `WriteContext::now_secs: u64` populated by the engine's `TimeSource` at every write-check entry. This is the same threading axis as Phase-2a G9-A's wall-clock-refresh cadence work but at the policy-hook surface (vs the per-iteration boundary).
+3. **Multi-token chain reference in WriteContext.** Today `UcanGroundedPolicy::iter_installed_proofs` treats each persisted token as a singleton chain (`std::slice::from_ref(proof)`). Multi-token delegation chains need either (a) per-actor chain assembly via parent-CID indexes in the durable store, OR (b) `WriteContext::ucan_chain_ref: Option<Cid>` carrying the leaf-CID with the durable store reconstructing the chain.
+
+**Phase 3 target:** post-G21-T2-close follow-on wave (T3 / T4 or a sibling cleanup wave). Each axis is independently scoped; (1) and (2) compose; (3) is a chain-walker extension.
+
+**Touch size:** ~150-300 LOC across `benten-graph::WriteContext` + `benten-eval::PrimitiveHost` + `benten-engine` cap-gate sites + UcanGroundedPolicy slow-path widening + integration test pins for arbitrary-scope proof-chain enforcement.
+
+**Cross-references:**
+- `crates/benten-caps/src/ucan_grounded.rs::UcanGroundedPolicy::typed_cap_permitted_by_proof` — the slow path that today only fires for `cap:typed:*`; this work widens it to arbitrary scope strings with audience binding.
+- `crates/benten-caps/src/ucan_grounded.rs::DEFAULT_NOW_SECS` — the epoch-0 fallback that goes away once `WriteContext::now_secs` is populated.
+- `crates/benten-engine/src/primitive_host.rs::check_capability` — the policy-hook entry that threads `WriteContext` (currently builds it with `label`-only).
+- `crates/benten-engine/tests/typed_call_ucan_grounded.rs` — the BLOCKER-2 partial-closure pin set (3 pins covering typed-cap proof-chain validation under `capability_policy_ucan_durable`).
+- `bindings/napi/test/typed_call_napi_cap_gate.test.ts` — the BLOCKER-1 napi-entry-cap-gate companion.
+
 ### 2.5 typed-CALL fp-mini-review residuals (G21-T1 sec-minor-2/3/4 + corr-minor-3)
 
 **Origin (G21-T1 fp-mini-review, 2026-05-08):** the security mini-review on PR #145 surfaced 4 MAJORs (closed end-to-end at PR #145 fix-pass) plus 4 minors. The MAJORs are closed; the four named carries below land in a follow-up wave so the canary-scope PR remains tight.

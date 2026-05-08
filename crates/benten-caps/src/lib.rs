@@ -51,6 +51,8 @@ pub mod noauth;
 pub mod policy;
 pub mod rate_limit;
 pub mod typed_cap_mapping;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod ucan_grounded;
 pub mod ucan_stub;
 
 pub use attenuation::check_attenuation;
@@ -68,6 +70,8 @@ pub use rate_limit::{
     InMemoryRateLimitPolicy, InMemoryRateLimitPolicyBuilder, NullRateLimitPolicy, RateLimitPolicy,
 };
 pub use typed_cap_mapping::{TypedCapGroup, typed_cap_for_ucan_claim};
+#[cfg(not(target_arch = "wasm32"))]
+pub use ucan_grounded::UcanGroundedPolicy;
 pub use ucan_stub::LegacyUcanStubBackend;
 
 /// Phase 2a G9-A / P2 test-harness: helper surface the evaluator consults

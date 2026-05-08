@@ -30,10 +30,24 @@ pub enum PolicyKind {
     /// suitable for trusted single-process embedding only.
     NoAuth,
     /// Durable UCAN-grounded grant-backed policy (G14-B + G21-T2
-    /// audit-6-1 closure). Composes `GrantBackedPolicy` (the durable
-    /// revocation-aware policy hook) with the underlying
+    /// audit-6-1 + G21-T2 fp-mini-review BLOCKER-2 closure). Routes
+    /// the engine through `benten_caps::UcanGroundedPolicy` which
+    /// composes `GrantBackedPolicy` (Phase-2b revocation-aware Node-
+    /// encoded grant store) with the durable
     /// `benten_caps::backends::UCANBackend` proof-chain validator
-    /// (chain-walking + nbf/exp validation + per-token revocation).
+    /// (signature + `nbf` / `exp` time-window at every link +
+    /// attenuation + per-token revocation) and the
+    /// `benten_caps::typed_cap_for_ucan_claim` mapping table.
+    ///
+    /// **Today's enforcement scope:** `cap:typed:*` capability
+    /// requirements consult both seams (grant store fast path; UCAN
+    /// proof-chain slow path with leaf-claim → typed-cap mapping).
+    /// Arbitrary scope strings (`store:*` / `zone:*`) consult only
+    /// the Node-encoded grant store — the per-write proof-chain
+    /// extension for arbitrary scopes (with audience binding +
+    /// `WriteContext::now` real-clock injection) is named at
+    /// `docs/future/phase-3-backlog.md §2.3 (i)`.
+    ///
     /// Grants minted under this kind carry `issuer` + `hlc` for
     /// chain-walker correlation.
     Ucan,
