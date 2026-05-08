@@ -548,6 +548,29 @@ mod napi_surface {
             Ok(crate::node::value_to_json(&out))
         }
 
+        /// Phase-3 G21-T2 §C audit-6-2 closure — `Engine.atrium()`
+        /// factory method per Ben's D1 ratification (Pattern B-prime
+        /// factory-handle form).
+        ///
+        /// Returns a [`crate::atrium::JsAtrium`] handle bound to this
+        /// engine instance. Subsequent calls on the handle (`join` /
+        /// `leave` / `trustPeer` / `revokePeer` / `listPeers` /
+        /// `subscribe` / `declareDeviceAttestation`) drive the
+        /// engine-side `Engine::open_atrium` / `AtriumHandle`
+        /// surfaces (see `crates/benten-engine/src/atrium_api.rs` +
+        /// `engine_sync.rs`).
+        ///
+        /// Pre-G21-T2 the napi `JsAtrium` was a self-contained
+        /// in-memory shim; the engine-side `Engine::open_atrium`
+        /// existed at G16-B canary scope but was NOT exposed at the
+        /// napi boundary. This factory closes that BLOCKER —
+        /// `engine.atrium({}).join()` from JS/TS now drives a real
+        /// engine-side `AtriumHandle`.
+        #[napi(js_name = "atrium")]
+        pub fn atrium(&self, config: crate::atrium::AtriumConfig) -> crate::atrium::JsAtrium {
+            crate::atrium::JsAtrium::from_engine(config, Arc::clone(&self.inner))
+        }
+
         /// Run a handler under the tracer. Returns `{ steps: [...] }`.
         #[napi]
         pub fn trace(

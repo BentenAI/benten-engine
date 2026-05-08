@@ -416,6 +416,7 @@ dependencies = [
  "napi-derive",
  "serde_json",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]

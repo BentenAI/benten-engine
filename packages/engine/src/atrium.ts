@@ -149,9 +149,25 @@ interface NativeDeviceAttestation {
 
 /**
  * Shape of the napi factory exposed at `native.JsAtrium.create(config)`.
+ *
+ * Pre-G21-T2 path (used when the napi cdylib pre-dates the G21-T2
+ * binding): the static `create()` method constructs a self-contained
+ * `JsAtrium` with no engine reference. Post-G21-T2 the production
+ * path is `engine.atrium({config})` (instance method on the Engine
+ * class — see `NativeEngineWithAtrium` below).
  */
 export interface NativeAtriumFactoryConstruct {
   create: (config: { atriumId: string }) => NativeAtrium;
+}
+
+/**
+ * G21-T2 §C audit-6-2 closure — shape of the napi `Engine.atrium`
+ * instance method. Post-G21-T2 the engine-bound JsAtrium drives
+ * `Engine::open_atrium(...)` at `join()` time to produce a real
+ * engine-side `AtriumHandle`.
+ */
+export interface NativeEngineWithAtrium {
+  atrium?: (config: { atriumId: string }) => NativeAtrium;
 }
 
 // ---------------------------------------------------------------------------
@@ -299,9 +315,21 @@ class AtriumHandle implements Atrium {
  *
  * Per Ben's D1, the returned function is a CALLABLE that returns
  * `Atrium` handles — NOT a flat namespace object.
+ *
+ * G21-T2 §C audit-6-2 closure: the factory now accepts an optional
+ * `nativeEngine.atrium(config)` instance-method (post-G21-T2 napi
+ * surface) AND falls back to the legacy `JsAtrium.create(config)`
+ * static-factory path (pre-G21-T2 napi binding). When
+ * `nativeEngine.atrium` is present the produced JsAtrium is bound to
+ * the engine-side `Arc<Engine>` so `join()` drives a real engine-side
+ * `AtriumHandle`; when only the legacy static factory is present, the
+ * produced JsAtrium runs in pre-G21-T2 hollow-state mode (kept for
+ * backwards compat with TS round-trip pins that exercise the typed
+ * struct surface independent of engine state).
  */
 export function makeAtriumFactory(
   nativeFactory: NativeAtriumFactoryConstruct | undefined,
+  nativeEngine?: NativeEngineWithAtrium,
 ): AtriumFactory {
   return (config: AtriumConfig): Atrium => {
     if (config === null || typeof config !== "object") {
@@ -310,12 +338,15 @@ export function makeAtriumFactory(
     if (typeof config.atriumId !== "string" || config.atriumId.length === 0) {
       throw new Error("engine.atrium config.atriumId must be a non-empty string");
     }
+    // G21-T2 preferred path: engine-bound JsAtrium via instance method.
+    if (nativeEngine && typeof nativeEngine.atrium === "function") {
+      const native = nativeEngine.atrium({ atriumId: config.atriumId });
+      return new AtriumHandle(native, config);
+    }
     if (!nativeFactory || typeof nativeFactory.create !== "function") {
       // Fallback in-memory shim: allows the TS DSL test pin to
       // exercise the B-prime factory shape end-to-end without a
-      // built napi binding. G16-B reconciliation: at merge, the napi
-      // factory is always present; this branch becomes the
-      // unavailable-error path.
+      // built napi binding.
       const inMemory: NativeAtrium = makeInMemoryNativeAtrium(config.atriumId);
       return new AtriumHandle(inMemory, config);
     }

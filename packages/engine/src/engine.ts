@@ -23,6 +23,7 @@ import {
   makeAtriumFactory,
   type AtriumFactory,
   type NativeAtriumFactoryConstruct,
+  type NativeEngineWithAtrium,
 } from "./atrium.js";
 import {
   isCrudHandler,
@@ -439,10 +440,17 @@ export class Engine {
     // inside `makeAtriumFactory` allows the B-prime factory shape to
     // be exercised even when the napi binding pre-dates the wave-6b
     // landing.
+    //
+    // G21-T2 §C audit-6-2 closure: prefer the engine-bound factory
+    // path (`nativeEngine.atrium(config)` instance method) when
+    // available, so the JsAtrium delegates to the engine-side
+    // `AtriumHandle` at `join()` time. Falls back to the legacy
+    // static-factory path for older napi cdylib builds.
     const nativeAtriumFactory = (
       this.inner as unknown as { JsAtrium?: NativeAtriumFactoryConstruct }
     ).JsAtrium;
-    this.atrium = makeAtriumFactory(nativeAtriumFactory);
+    const nativeEngineWithAtrium = this.inner as unknown as NativeEngineWithAtrium;
+    this.atrium = makeAtriumFactory(nativeAtriumFactory, nativeEngineWithAtrium);
   }
 
   /**
