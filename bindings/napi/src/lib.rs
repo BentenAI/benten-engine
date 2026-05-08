@@ -492,6 +492,54 @@ mod napi_surface {
             Ok(outcome_to_json(&outcome))
         }
 
+        /// Phase-3 G21-T2 — typed-CALL surface. Drives the engine's
+        /// `engine:typed:<op>` dispatch arm directly without first
+        /// registering a CALL-bearing subgraph.
+        ///
+        /// `op_name` is the trailing op-name segment (e.g.
+        /// `"ed25519_sign"`); `input` is the per-op input shape per
+        /// `crates/benten-eval/src/typed_call.rs::TypedCallOp` rustdoc.
+        /// Returns the op's typed output as JSON (Bytes round-trip
+        /// through the napi numeric-keyed-object shape — same as
+        /// `engine.createNode` properties).
+        ///
+        /// Errors map to the stable `E_TYPED_CALL_*` catalog codes:
+        /// - `E_TYPED_CALL_UNKNOWN_OP` — `op_name` is not one of the
+        ///   10 ops in the closed registry.
+        /// - `E_TYPED_CALL_INVALID_INPUT` — input shape rejects.
+        /// - `E_TYPED_CALL_CAP_DENIED` — capability gate denies (only
+        ///   under non-NoAuth policies).
+        /// - `E_TYPED_CALL_DISPATCH_ERROR` — op-internal failure
+        ///   (malformed key bytes / corrupted UCAN envelope / etc).
+        #[napi(js_name = "typedCall")]
+        pub fn typed_call(
+            &self,
+            op_name: String,
+            input: serde_json::Value,
+        ) -> napi::Result<serde_json::Value> {
+            // Parse op-name into the closed-set TypedCallOp variant.
+            // Unknown ops surface E_TYPED_CALL_UNKNOWN_OP via the
+            // engine catch-all (we route through the engine's
+            // dispatch fork even for the unknown case so the catalog
+            // attribution stays uniform).
+            let op = benten_engine::TypedCallOp::parse(&op_name).ok_or_else(|| {
+                // Surface the catalog code in the message so the TS
+                // mapNativeError extracts the right `E_TYPED_CALL_*`
+                // class. Mirrors the JSON-envelope shape engine_err
+                // produces for typed EngineError variants.
+                let body = format!(
+                    r#"{{"code":"E_TYPED_CALL_UNKNOWN_OP","message":"typed-CALL dispatch: unknown op '{op_name}' (engine:typed:* registry has no matching entry)"}}"#
+                );
+                napi::Error::new(Status::GenericFailure, body)
+            })?;
+            let value = json_to_value_root(input)?;
+            let out = self
+                .inner
+                .dispatch_typed_call_public(op, &value)
+                .map_err(engine_err)?;
+            Ok(crate::node::value_to_json(&out))
+        }
+
         /// Run a handler under the tracer. Returns `{ steps: [...] }`.
         #[napi]
         pub fn trace(

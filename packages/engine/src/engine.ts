@@ -74,6 +74,9 @@ import type {
   ResumeWithMetaResult,
   Trace,
   TraceStep,
+  TypedCallInput,
+  TypedCallOp,
+  TypedCallOutput,
   UserView,
   UserViewSpec,
   ViewDef,
@@ -115,6 +118,10 @@ interface NativeEngine {
   registerCrud?: (label: string) => string;
   call?: (handlerId: string, op: string, input: unknown) => unknown;
   callAs?: (handlerId: string, op: string, input: unknown, actor: string) => unknown;
+  // Phase-3 G21-T2 — typed-CALL surface. Drives the engine's
+  // `engine:typed:<op>` dispatch arm. See
+  // `bindings/napi/src/lib.rs::Engine::typed_call`.
+  typedCall?: (opName: string, input: unknown) => unknown;
   trace?: (handlerId: string, op: string, input: unknown) => {
     steps: unknown[];
     result?: unknown;
@@ -1194,6 +1201,56 @@ export class Engine {
     // of `callAs` see `reread.title` instead of `reread.list[0].properties.title`.
     applyCrudPostProcessing(flattened, crud, dispatchOp, input);
     return flattened;
+  }
+
+  /**
+   * Phase-3 G21-T2 — typed-CALL surface. Drives the engine's
+   * `engine:typed:<op>` dispatch arm directly without first
+   * registering a CALL-bearing subgraph.
+   *
+   * The op-name is the trailing segment of the typed-CALL `target`
+   * (e.g. `"ed25519_sign"`); the input shape is op-specific (see
+   * `TypedCallInput` for per-op TypeScript shapes mirroring the Rust
+   * `TypedCallOp` rustdoc). Returns the op's typed output.
+   *
+   * Bytes inputs/outputs cross the napi boundary as `Uint8Array` /
+   * `Buffer`; the Rust-side detector reconstructs the bytes
+   * unambiguously (see
+   * `bindings/napi/src/node.rs::detect_typed_array_bytes`).
+   *
+   * Errors map to the stable `E_TYPED_CALL_*` catalog codes:
+   * - `E_TYPED_CALL_UNKNOWN_OP` — `op` not in the closed registry.
+   * - `E_TYPED_CALL_INVALID_INPUT` — input shape rejects.
+   * - `E_TYPED_CALL_CAP_DENIED` — cap-gate denies (under non-NoAuth
+   *   policies; under `NoAuthBackend` all typed-CALL caps are
+   *   permitted).
+   * - `E_TYPED_CALL_DISPATCH_ERROR` — op-internal failure.
+   *
+   * Example:
+   * ```ts
+   * const { signature } = await engine.typedCall("ed25519_sign", {
+   *   private_key: privBytes,
+   *   message: msgBytes,
+   * });
+   * ```
+   */
+  public async typedCall<Op extends TypedCallOp>(
+    op: Op,
+    input: TypedCallInput<Op>,
+  ): Promise<TypedCallOutput<Op>> {
+    this.assertOpen();
+    if (!this.inner.typedCall) {
+      throw new EDslInvalidShape(
+        "Engine.typedCall unavailable on this binding (rebuild @benten/engine-native against G21-T2 napi surface)",
+      );
+    }
+    let raw: unknown;
+    try {
+      raw = this.inner.typedCall(op, input as unknown);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+    return raw as TypedCallOutput<Op>;
   }
 
   /**

@@ -146,6 +146,13 @@ pub mod testing;
 
 pub use benten_errors::ErrorCode;
 pub use benten_eval::PrimitiveKind;
+// Phase-3 G21-T2: typed-CALL surface re-exports so napi binding +
+// downstream consumers can name `TypedCallOp` / `TYPED_CALL_PREFIX`
+// without depending on `benten-eval` directly. Mirrors the existing
+// `PrimitiveKind` re-export pattern above. The host-side dispatch trait
+// method `PrimitiveHost::dispatch_typed_call` lives in `benten-eval`;
+// engine consumers reach it via `<Engine as PrimitiveHost>::dispatch_typed_call`.
+pub use benten_eval::{TYPED_CALL_PREFIX, TypedCallOp};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use engine_config::{EngineConfig, EngineConfigError, SandboxSection};

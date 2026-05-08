@@ -966,6 +966,40 @@ impl Engine {
     ) -> Result<crate::engine_sync::AtriumHandle, crate::engine_sync::AtriumError> {
         crate::engine_sync::AtriumHandle::open(config).await
     }
+
+    /// Phase-3 G21-T2 — dispatch a typed-CALL op directly through the
+    /// engine's `dispatch_typed_call` arm without first registering a
+    /// CALL-bearing subgraph.
+    ///
+    /// This is the inherent-method convenience path that the napi
+    /// binding's `engine.typedCall(...)` surface routes through. The
+    /// returned `Value` is the op's typed output (per
+    /// [`benten_eval::TypedCallOp`] per-op rustdoc).
+    ///
+    /// Internally calls
+    /// `<Engine as benten_eval::PrimitiveHost>::dispatch_typed_call` so
+    /// the same dispatch arm exercised by the production CALL primitive
+    /// fork is exercised here. Eval-side errors are mapped to
+    /// [`EngineError`] via the existing
+    /// [`crate::primitive_host::eval_error_to_engine_error`] catch-all
+    /// (TypedCall variants surface as `EngineError::Other` carrying
+    /// the stable `ErrorCode::TypedCall*` discriminant).
+    ///
+    /// # Errors
+    ///
+    /// Returns the typed [`EngineError`] for input validation /
+    /// dispatch / cap-denial failures.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn dispatch_typed_call_public(
+        &self,
+        op: benten_eval::TypedCallOp,
+        input: &benten_core::Value,
+    ) -> Result<benten_core::Value, EngineError> {
+        // `eval_error_to_engine_error` already imported at top of file
+        // (R6 Wave 2 split). PrimitiveHost trait already in scope as well.
+        self.dispatch_typed_call(op, input)
+            .map_err(eval_error_to_engine_error)
+    }
 }
 
 /// G13-B generic-cascade: every constructor / accessor that does NOT
