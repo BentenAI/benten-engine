@@ -981,7 +981,7 @@ impl Engine {
     /// the same dispatch arm exercised by the production CALL primitive
     /// fork is exercised here. Eval-side errors are mapped to
     /// [`EngineError`] via the existing
-    /// [`crate::primitive_host::eval_error_to_engine_error`] catch-all
+    /// `crate::primitive_host::eval_error_to_engine_error` catch-all
     /// (TypedCall variants surface as `EngineError::Other` carrying
     /// the stable `ErrorCode::TypedCall*` discriminant).
     ///
