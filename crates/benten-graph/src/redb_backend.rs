@@ -698,8 +698,8 @@ impl RedbBackend {
         // authoritative check because, by the canonical-DAG-CBOR contract,
         // a Node's CID is a pure function of its encoded bytes.
         //
-        // Mirrors `Node::load_verified` (benten-core/src/lib.rs:244) and
-        // `Subgraph::load_verified_with_cid` (benten-core/src/subgraph.rs:478).
+        // Mirrors `benten_core::Node::load_verified` and
+        // `benten_core::Subgraph::load_verified_with_cid`.
         let node = benten_core::Node::load_verified(cid, &bytes).map_err(GraphError::from)?;
         Ok(Some(node))
     }
