@@ -65,6 +65,13 @@ ignore = [
     # iroh patch that swaps `paste` for `pastey` (drop-in fork). Tracked at
     # `docs/future/phase-3-backlog.md` §9 (security-advisory carries).
     { id = "RUSTSEC-2024-0436", reason = "transitive via iroh -> netwatch -> netlink-packet-core -> paste; informational unmaintained advisory; closure tracked at docs/future/phase-3-backlog.md §9 (iroh-version-bump cycle / pastey swap)" },
+
+    # RUSTSEC-2023-0089: atomic-polyfill unmaintained advisory (informational).
+    # Transitive via postcard 1.1.3 -> heapless 0.7.17 -> atomic-polyfill 1.0.3.
+    # postcard is used in benten-eval for ExecutionState wire-encoding.
+    # Closure plan: heapless 0.8+ drops the atomic-polyfill dep; tracked alongside
+    # the postcard upstream's heapless bump at `docs/future/phase-3-backlog.md` §9.
+    { id = "RUSTSEC-2023-0089", reason = "transitive via postcard -> heapless 0.7 -> atomic-polyfill; informational unmaintained advisory; closure on heapless 0.8+ bump tracked at docs/future/phase-3-backlog.md §9" },
 ]
 
 # ---------------------------------------------------------------------------
