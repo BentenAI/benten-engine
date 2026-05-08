@@ -88,6 +88,9 @@ fn read_view_unknown_view_id_errors() {
     // exists, no entries").
     let (engine, _dir) = engine_with_low_budget_view();
     let err = engine
+        // non-canonical-view-id-ok: deliberate unknown view id to drive the
+        // EngineError::UnknownView error path; lint exemption per
+        // tools/cite-drift-detector `read_view_with` lint.
         .read_view_with("system:ivm:nonexistent", ReadViewOptions::strict())
         .expect_err("unknown view id must error");
     match err {
