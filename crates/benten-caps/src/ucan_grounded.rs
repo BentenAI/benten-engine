@@ -5,7 +5,7 @@
 //!
 //! ## Why this exists
 //!
-//! Pre-fp-mini-review, [`benten_engine::EngineBuilder::capability_policy_ucan_durable`]
+//! Pre-fp-mini-review, `benten_engine::EngineBuilder::capability_policy_ucan_durable`
 //! was a verbatim alias for `capability_policy_grant_backed` — the
 //! `Ucan` policy variant under `PolicyKind::Ucan` consulted ONLY the
 //! `system:CapabilityGrant` Node-encoded grant store, NEVER the
