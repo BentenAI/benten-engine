@@ -20,9 +20,7 @@
 fn extract_compromise_section(posture: &str, n: u32) -> &str {
     let needle = format!("### Compromise #{n} ");
     let Some(start) = posture.find(&needle) else {
-        panic!(
-            "SECURITY-POSTURE.md must contain `### Compromise #{n}` heading at G20-B close"
-        );
+        panic!("SECURITY-POSTURE.md must contain `### Compromise #{n}` heading at G20-B close");
     };
     let tail = &posture[start..];
     // Find the next sibling heading. Sibling headings are either another
