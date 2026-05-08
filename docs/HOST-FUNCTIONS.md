@@ -71,7 +71,7 @@ const handler = subgraph("summarize")
 |-------|---------|---------|
 | `cap_recheck` | `per_call` | When the host trampoline re-consults the policy. `per_call` means every host-fn invocation; `per_boundary` means once at SANDBOX entry (D18 fail-secure default). |
 | `bypass_output_budget` | `false` | If `false`, the host-fn's wire-bytes count against the SANDBOX output budget (centralized D17 PRIMARY trampoline counting). |
-| `requires_async` | `false` | Reserved for Phase-3 iroh host-fns; in Phase 2b every host-fn is sync (D19). |
+| `requires_async` | `false` | Reserved for future async host-fns; through Phase 3 every host-fn is sync (D19). Phase-3 iroh-driven sync runs entirely inside `benten-sync`, not as a SANDBOX host-fn, so this carrier is still unused at Phase 3 close. |
 
 A host-fn invocation that exhausts a per-call cap fires
 `E_INV_SANDBOX_OUTPUT` (Inv-7) at the trampoline boundary; the SANDBOX

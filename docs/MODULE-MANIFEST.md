@@ -3,12 +3,19 @@
 **Phase 2b G10-B.** Format spec for `ModuleManifest`, the data structure
 the engine consumes when installing a Wasm module bundle.
 
-> **Status:** Phase 2b ships the canonical-bytes format + minimal CID-pin
-> integrity gate (D16-RESOLVED-FURTHER); full Ed25519 manifest signing
-> defers to Phase 3 (see `docs/SECURITY-POSTURE.md` Compromise #21). Browser
-> (`wasm32-unknown-unknown`) targets ship in-memory-only manifest persistence
-> in Phase 2b; IndexedDB defers to Phase 3 (see `docs/SECURITY-POSTURE.md`
-> Compromise #19).
+> **Status:** Phase 2b shipped the canonical-bytes format + minimal CID-pin
+> integrity gate (D16-RESOLVED-FURTHER). Phase 3 G14-C closed Compromise #21
+> (Ed25519 manifest signing landed: `signature: Option<ManifestSignature>`
+> populated at install time; signature verified against the publisher DID
+> via `benten-id`'s claim envelope before the module is registered).
+> Phase 3 G14-C also closed Compromise #17 (durable `BlobBackend` over redb;
+> wasm bytes registered with `Engine::register_module_bytes` survive engine
+> restart) and Compromise #18 (durable handler-version chain via
+> `core::version::Anchor`). Phase 3 G18-A landed the wasm32 IndexedDB
+> manifest-store + blob-cache (PARTIALLY closed Compromise #19 — wasm32
+> arms of `apply_migration_step` + `close_database` remain stubs; until
+> those wire, `BrowserManifestStore::is_persistent()` returns `false`
+> honestly per the disclosure principle Compromise #19 articulated).
 
 ---
 
@@ -21,8 +28,8 @@ distribution. One manifest declares:
 - One or more **modules** (Wasm bytes addressed by their CID).
 - Per-module **`requires`** capability list — the host functions the
   module's imports will resolve against.
-- (Phase-3 reserved) **migrations** the install runner should execute.
-- (Phase-3 reserved) an **Ed25519 signature** field.
+- (Phase-3 G18-A landed) **migrations** the install runner should execute (browser-side migration step apply remains stubbed pending the wasm32 IndexedDB `apply_migration_step` arm; Compromise #19 partial closure).
+- (Phase-3 G14-C landed) an **Ed25519 signature** field — populated by `manifest_signing::sign_manifest`, verified by `verify_manifest_with_mode` + `PublisherRegistry` at install time (Compromise #21 closure).
 
 The manifest itself is a small, content-addressed, canonically-encoded
 blob — **NOT** the WebAssembly bytes. The Wasm bytes are referenced by
@@ -83,11 +90,11 @@ pub struct ModuleManifest {
     pub version: String,             // "0.0.1" (semver-shaped, not parsed)
     pub modules: Vec<ModuleManifestEntry>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub migrations: Vec<MigrationStep>,    // Phase-3 reserved
+    pub migrations: Vec<MigrationStep>,    // Phase-3 G18-A — landed (wasm32 stub)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub host_fns: Option<HostFnsOverride>, // Phase-3 G17-A2 — additive
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub signature: Option<ManifestSignature>, // Phase-3 reserved
+    pub signature: Option<ManifestSignature>, // Phase-3 G14-C — landed (Compromise #21)
 }
 
 pub struct ModuleManifestEntry {
@@ -118,19 +125,25 @@ The TypeScript shape (`packages/engine/src/types.ts`) mirrors this
 field-for-field. Parity is asserted by
 `packages/engine/test/manifest_schema_parity.test.ts`.
 
-### 3.1 The `signature: Option<ManifestSignature>` reservation
+### 3.1 The `signature: Option<ManifestSignature>` field (Phase-3 G14-C — landed)
 
-The `signature` field is reserved on the struct **for Phase 3**. In
-Phase 2b every install ships with `signature == None`.
+Phase 3 G14-C landed Ed25519 manifest signing end-to-end (Compromise
+#21 closed). `manifest_signing::sign_manifest` populates the field
+when an installer signs a manifest; `Engine::install_module(manifest,
+expected_cid, verify_args)` invokes `verify_manifest_with_mode`
+BEFORE persisting, with `PublisherRegistry` providing the audience-bound
+publisher-key lookup. UCAN-proof-chain primary + publisher-key-registry
+fallback per D-PHASE-3-20.
 
-The `skip_serializing_if = "Option::is_none"` attribute is **load-bearing**:
-when `None`, the field is **omitted** from canonical bytes (NOT
-serialized as `null`). This is the forward-compat invariant — a
-Phase-2b manifest whose CID is `X` today MUST canonicalize to the same
-bytes after Phase-3 lands the signing surface, producing the same CID
-`X`. The unsigned-manifest CID stays stable.
+The `skip_serializing_if = "Option::is_none"` attribute remains
+**load-bearing** for backward-compat: when `None` (an unsigned
+manifest), the field is **omitted** from canonical bytes (NOT
+serialized as `null`). A Phase-2b manifest whose CID was `X` today
+MUST canonicalize to the same bytes after Phase-3's signing surface
+landed, producing the same CID `X`. The unsigned-manifest CID stayed
+stable across the Phase-2b → Phase-3 transition.
 
-A Phase-3 signed re-issuance gets a **distinct** CID (it carries the
+A signed re-issuance gets a **distinct** CID (it carries the
 populated `signature` field, so its canonical bytes differ).
 
 ### 3.1.5 The `host_fns: Option<HostFnsOverride>` field (Phase-3 G17-A2)
@@ -167,11 +180,17 @@ single-invocation request larger than 1024 bytes fires
 
 ### 3.2 The `migrations` field on wasm32-unknown-unknown
 
-Browser engines (`wasm32-unknown-unknown`) ship in-memory-only manifest
-persistence in Phase 2b — the IndexedDB / OPFS persistence story lands
-in Phase 3 (see `docs/SECURITY-POSTURE.md` Compromise #19). Because
-migrations need a durable backing store to land in, installing a
-manifest with non-empty `migrations` on `wasm32-unknown-unknown` fires
+Browser engines (`wasm32-unknown-unknown`) shipped in-memory-only
+manifest persistence through Phase 2b. Phase 3 G18-A landed an
+IndexedDB-backed `BrowserManifestStore` + `IndexedDbBlobBackend`
+(snapshot-cache scope per CLAUDE.md baked-in #17 thin-compute-surface
+posture). Compromise #19 is PARTIALLY closed — the wasm32 arms of
+`apply_migration_step` + `close_database` remain stubs today, so
+`BrowserManifestStore::is_persistent()` and
+`IndexedDbBlobBackend::is_persistent()` BOTH return `false` honestly
+per the disclosure principle Compromise #19 originally articulated.
+Until the migration-step apply arm wires, installing a manifest with
+non-empty `migrations` on `wasm32-unknown-unknown` fires
 `E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE`. Native (redb-backed) engines
 accept the same manifest without error.
 
@@ -218,7 +237,10 @@ matches the storage layer's `inv_13` dedup behavior.
 Installed manifests are persisted to the `system:ModuleManifest` zone
 via the engine's privileged write path (mirrors `grant_capability`).
 The Node carries the canonical-bytes blob under property `manifest_cbor`
-so a Phase-3 sync replica can rehydrate without re-encoding.
+so an Atrium sync replica can rehydrate without re-encoding. Phase 3
+G14-C also landed a durable `BlobBackend` (Compromise #17 closure)
+so the underlying wasm bytes referenced by `modules[*].cid` survive
+engine restart on native targets.
 
 ---
 
@@ -230,7 +252,7 @@ engine.uninstall_module(cid)?;
 
 Removes the manifest from the engine's in-memory active set and writes
 a `system:ModuleManifestRevocation` Node (mirrors `revoke_capability`).
-The revocation Node lets a Phase-3 sync replica recognize the uninstall
+The revocation Node lets an Atrium sync replica recognize the uninstall
 even if it never observed the original install.
 
 ### 5.1 Idempotence
@@ -274,11 +296,13 @@ local "#N+X" numbering scheme; the entries have been lifted to global
 numbering so cross-doc references resolve to a single authoritative
 table.
 
-| # | Description | Closes |
+| # | Description | Status |
 |---|---|---|
-| #19 | Browser-target persistent storage absent — manifests in-memory only on `wasm32-unknown-unknown` | Phase 3 (IndexedDB / OPFS) |
-| #20 | Cross-browser determinism CI cadence not yet established | Phase 3 (paired with #19 closure) |
-| #21 | Module manifest minimal CID-pin in Phase 2b; full Ed25519 deferred to Phase 3 | Phase 3 (D16 manifest signing) |
+| #17 | In-memory module-bytes registry (no durable BlobBackend) | CLOSED at Phase-3 G14-C |
+| #18 | In-memory handler-version chain | CLOSED at Phase-3 G14-C |
+| #19 | Browser-target persistent storage absent — manifests in-memory only on `wasm32-unknown-unknown` | PARTIALLY CLOSED at Phase-3 G18-A (wasm32 stubs remain for migration-apply + close-database) |
+| #20 | Cross-browser determinism CI cadence not yet established | PARTIALLY CLOSED at Phase-3 G18-A |
+| #21 | Module manifest Ed25519 signing | CLOSED at Phase-3 G14-C |
 
 ---
 
