@@ -1769,6 +1769,15 @@ impl Engine {
     /// a subgraph with the same handler id and identical content returns the
     /// same CID. Different content under the same handler id returns
     /// [`EngineError::DuplicateHandler`].
+    #[allow(
+        clippy::too_many_lines,
+        reason = "register_subgraph is the engine's central registration boundary — \
+                  invariant validation walk + WAIT TTL check + TRANSFORM parse + \
+                  SANDBOX manifest validation + persist + in-memory swap all live \
+                  here by single-source-of-truth design (matches register_subgraph_replace). \
+                  Phase-3 G21-T3 added the §2.5(d) reserved-namespace guard which pushed \
+                  past the 100-line clippy threshold."
+    )]
     pub fn register_subgraph<S>(&self, spec: S) -> Result<String, EngineError>
     where
         S: IntoSubgraphSpec,
@@ -1778,6 +1787,32 @@ impl Engine {
         // empty spec recorded — `call()` falls through to CRUD dispatch.
         let stored_spec = spec.as_subgraph_spec();
         let sg = spec.into_eval_subgraph()?;
+
+        // Phase-3 G21-T3 §2.5(d) (corr-minor-3 fold-in): hard reject
+        // any registration whose handler_id starts with the reserved
+        // `engine:typed:` namespace. Fires BEFORE invariant validation
+        // so a misnamed registration has zero observable side effect
+        // on engine state. The eval-side dispatch fork
+        // (`crates/benten-eval/src/primitives/call.rs::execute`)
+        // pre-empts user-handler routing for this prefix — typed-CALL
+        // registry is closed; extension is a Rust-only engine concern
+        // per CLAUDE.md baked-in commitment #16. Without this guard,
+        // the user registration would be silent dead code; the
+        // registration-time reject surfaces the user-error sooner
+        // than the eval-time `E_TYPED_CALL_UNKNOWN_OP` would.
+        if sg.handler_id().starts_with(benten_eval::TYPED_CALL_PREFIX) {
+            return Err(EngineError::Other {
+                code: ErrorCode::ReservedHandlerNamespace,
+                message: format!(
+                    "register_subgraph: handler_id `{}` is in the reserved \
+                     `engine:typed:` namespace; this prefix is the typed-CALL registry \
+                     (see CLAUDE.md baked-in #16 + phase-3-backlog §2.5(d)). \
+                     E_RESERVED_HANDLER_NAMESPACE",
+                    sg.handler_id()
+                ),
+            });
+        }
+
         let cfg = InvariantConfig::default();
         sg.validate(&cfg).map_err(|e| match e {
             benten_eval::EvalError::Invariant(kind) => {
@@ -1983,6 +2018,28 @@ impl Engine {
     {
         let stored_spec = spec.as_subgraph_spec();
         let sg = spec.into_eval_subgraph()?;
+
+        // Phase-3 G21-T3 §2.5(d) (corr-minor-3 fold-in): hard reject
+        // re-registration of a handler whose handler_id is in the
+        // reserved `engine:typed:` namespace; same rationale as
+        // `register_subgraph` above. Defense-in-depth: even if a
+        // future change accidentally bypassed the `register_subgraph`
+        // check, the replace path still rejects. Fires BEFORE
+        // invariant validation so a misnamed replace has zero side
+        // effect.
+        if sg.handler_id().starts_with(benten_eval::TYPED_CALL_PREFIX) {
+            return Err(EngineError::Other {
+                code: ErrorCode::ReservedHandlerNamespace,
+                message: format!(
+                    "register_subgraph_replace: handler_id `{}` is in the reserved \
+                     `engine:typed:` namespace; this prefix is the typed-CALL registry \
+                     (see CLAUDE.md baked-in #16 + phase-3-backlog §2.5(d)). \
+                     E_RESERVED_HANDLER_NAMESPACE",
+                    sg.handler_id()
+                ),
+            });
+        }
+
         let cfg = InvariantConfig::default();
         sg.validate(&cfg).map_err(|e| match e {
             benten_eval::EvalError::Invariant(kind) => {

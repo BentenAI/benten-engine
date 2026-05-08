@@ -241,6 +241,10 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::WaitTtlExpired,
     ErrorCode::WaitTtlInvalid,
     ErrorCode::WaitMetadataMissing,
+    // Phase-3 G21-T3 §2.5(d): registration-time hard reject of
+    // user-handler IDs in the reserved `engine:typed:` namespace
+    // (typed-CALL surface lands at G21-T1 PR #145).
+    ErrorCode::ReservedHandlerNamespace,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -437,10 +441,11 @@ fn variant_count_is_pinned() {
     //     `crates/benten-engine/src/engine_wait.rs::resume_from_bytes_inner`
     //     (Step 1.5 fail-loud branch + `map_resume_eval_error` remap
     //     of eval-side `HostBackendUnavailable`).
-    // Post-G20-A2: 100 + 3 = 103. The hardcoded count below tracks
-    // `ALL_CATALOG_VARIANTS.len()` exactly.
+    // Post-G20-A2: 100 + 3 = 103.
+    // Post-G21-T3 §2.5(d): + ReservedHandlerNamespace = 104. The
+    // hardcoded count below tracks `ALL_CATALOG_VARIANTS.len()` exactly.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 103,
+        CATALOG_VARIANT_COUNT, 104,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

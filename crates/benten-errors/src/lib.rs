@@ -692,6 +692,18 @@ pub enum ErrorCode {
     /// `KeypairError` / `UcanError` / `VcError` that bubbles out of
     /// the typed-CALL dispatch boundary). Routes to `ON_ERROR`.
     TypedCallDispatchError,
+    /// Phase-3 G21-T3 §2.5(d): a user attempted to register a
+    /// handler whose `handler_id` starts with the reserved
+    /// `engine:typed:` namespace. The eval-side dispatch fork
+    /// pre-empts user-handler routing for this prefix (the
+    /// typed-CALL registry is closed; extension is a Rust-only
+    /// engine concern per CLAUDE.md baked-in commitment #16), so a
+    /// user registration in this namespace would be silent dead
+    /// code. The hard reject at registration time surfaces the
+    /// user-error sooner than the eval-time `E_TYPED_CALL_UNKNOWN_OP`
+    /// would. Routes to `ON_ERROR`. See `phase-3-backlog.md` §2.5(d)
+    /// (corr-minor-3 carry from G21-T1 fp-mini-review).
+    ReservedHandlerNamespace,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -902,6 +914,8 @@ impl ErrorCode {
             ErrorCode::TypedCallInvalidInput => "E_TYPED_CALL_INVALID_INPUT",
             ErrorCode::TypedCallCapDenied => "E_TYPED_CALL_CAP_DENIED",
             ErrorCode::TypedCallDispatchError => "E_TYPED_CALL_DISPATCH_ERROR",
+            // Phase-3 G21-T3 §2.5(d) — reserved handler-id namespace
+            ErrorCode::ReservedHandlerNamespace => "E_RESERVED_HANDLER_NAMESPACE",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -1223,6 +1237,14 @@ impl ErrorCode {
             | ErrorCode::ViewStrategyCReserved
             | ErrorCode::ViewLabelMismatch => None,
 
+            // Phase-3 G21-T3 §2.5(d): reserved handler-id namespace
+            // refusal fires at register_subgraph time (engine
+            // registration boundary), not along a primitive edge —
+            // same routing disposition as ViewStrategyARefused /
+            // DuplicateHandler. The user-visible call site is the
+            // registration API; no `ON_*` edge label applies.
+            ErrorCode::ReservedHandlerNamespace => None,
+
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
             // through the catch-all rather than dropping on the floor.
@@ -1386,6 +1408,8 @@ impl ErrorCode {
             "E_TYPED_CALL_INVALID_INPUT" => ErrorCode::TypedCallInvalidInput,
             "E_TYPED_CALL_CAP_DENIED" => ErrorCode::TypedCallCapDenied,
             "E_TYPED_CALL_DISPATCH_ERROR" => ErrorCode::TypedCallDispatchError,
+            // Phase-3 G21-T3 §2.5(d) — reserved handler-id namespace.
+            "E_RESERVED_HANDLER_NAMESPACE" => ErrorCode::ReservedHandlerNamespace,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }

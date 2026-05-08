@@ -53,6 +53,28 @@ export async function run(): Promise<{ ok: true }> {
     const aliceDid =
       "did:key:z6MkrJVnaZkeFzdQyMZu1csdAuLAaKSzjGpJSjm9V1F4xzm";
 
+    // G21-T1 typed-CALL: keypair_from_seed — the issuer side of a
+    // grant flow derives its keypair via the typed-CALL
+    // `engine:typed:keypair_from_seed` op (deterministic seed →
+    // Ed25519 keypair). A handler-author building a fresh issuer
+    // identity uses the seed-from-bytes path; T2 napi widens
+    // `engine.typedCall(...)` so TS callers reach the same op.
+    //
+    // G21-T1 typed-CALL: ucan_validate_chain — when a grant is
+    // consumed (the `callAs` invocation below), the engine-side
+    // policy check delegates UCAN chain validation to the typed-CALL
+    // `engine:typed:ucan_validate_chain` op. The op walks the chain,
+    // verifies signatures, checks nbf/exp windows, and asserts the
+    // requested capability is granted by the leaf claim. Per
+    // CLAUDE.md baked-in #16, this is primitive composition (typed
+    // engine op), not SANDBOX. Per phase-3-backlog §2.3, the napi
+    // `parse_grant_json` widening at G21 T2 carries the issuer + hlc
+    // fields through to the durable UCANBackend.
+    //
+    // G21-T1 typed-CALL: vc_verify — sibling op; verifiable
+    // credentials presented during grant issuance are verified via
+    // `engine:typed:vc_verify`.
+
     // Grant alice the wildcard capability on the `post` zone. Phase-3
     // optional `issuer` field carries the UCAN-grounding root DID;
     // `hlc` carries the causal stamp the chain-walker uses for

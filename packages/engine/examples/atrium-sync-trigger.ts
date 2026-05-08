@@ -46,6 +46,15 @@ export async function run(): Promise<{ ok: true }> {
     // the full peer routes through; F6 cap-recheck applies at the
     // full-peer edge (D-PHASE-3-N) so the thin client surface never
     // sees disallowed events.
+    //
+    // G21-T1 typed-CALL: blake3_hash — when the engine routes change
+    // events into the subscribe pipeline, it consults the typed-CALL
+    // `engine:typed:blake3_hash` op for content-addressing checks
+    // (anchor-CID derivation, dedup-on-content-hash). A handler-author
+    // composing a sync-trigger subgraph would invoke the same op via
+    // a CALL Node `target: "engine:typed:blake3_hash"` per CLAUDE.md
+    // baked-in #16. The T2 napi widening exposes `engine.typedCall(...)`
+    // as a direct-from-TS sibling.
     const sub = await team.subscribe("/zone/posts", (event) => {
       process.stdout.write(`change-event: ${JSON.stringify(event)}\n`);
     });

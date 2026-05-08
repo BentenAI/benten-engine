@@ -385,33 +385,56 @@ fn sandbox_escape_host_fn_after_cap_revoke() {
     assert_eq!(err.code(), ErrorCode::SandboxHostFnDenied);
 }
 
-/// **G20-A1 wave-8a body** (Phase 3): ESC-10 host-fn re-entrancy
-/// denial. The structural defense: NO Phase-2b host-fn ships an
-/// `Engine::call` re-entry path (D19-RESOLVED). The eval-side test
-/// that nested dispatch is denied at the type level: the
-/// `testing_call_engine_dispatch` helper (cfg-gated under
-/// `feature = "test-helpers"`) returns the marker `HelperSurfaceNotYetWired`
-/// — the helper is NOT a production path, and a regression that
-/// wired it as one would surface here.
+/// **G21-T3 fill** (Phase-3, audit-5 ESC-10 carry): ESC-10 host-fn
+/// re-entrancy denial. The structural defense: NO Phase-2b host-fn
+/// ships an `Engine::call` re-entry path (D19-RESOLVED).
 ///
 /// The runtime defense for ESC-10 (a host-fn ATTEMPTING nested
 /// dispatch) maps to ESC-7 in EscDefenseState (re_entry_count
 /// observed during guest execution); the typed error fires at the
 /// host-fn boundary via `run_all_checks`.
+///
+/// **G21-T3 widening:** the eval-side `testing_call_engine_dispatch`
+/// helper now drives the EscDefenseState transition the host-fn
+/// trampoline would observe, so this test asserts the defense
+/// fires end-to-end via the typed `EscapeAttempt` variant rather
+/// than only pinning the helper-stub return shape.
 #[test]
 fn sandbox_escape_reentrancy_via_host_fn_denied() {
-    use benten_eval::testing::{HelperSurfaceNotYetWired, testing_call_engine_dispatch};
+    use benten_eval::sandbox::escape_defenses::{EscDefenseState, EscVector, run_all_checks};
+    use benten_eval::testing::testing_call_engine_dispatch;
 
-    // STRUCTURAL pin: testing_call_engine_dispatch helper returns the
-    // marker — NOT a production Engine::call entry. Any future PR
-    // that wired this helper as a real production-callable path
-    // would fail this test (the marker error is gone).
-    let res = testing_call_engine_dispatch();
+    // Drive the EscDefenseState through the helper. The helper
+    // simulates the host-fn trampoline observing a nested-dispatch
+    // attempt: enter_guest + re_entry_count bump.
+    let mut state = EscDefenseState::new();
+    testing_call_engine_dispatch(&mut state);
     assert!(
-        matches!(res, Err(HelperSurfaceNotYetWired { .. })),
-        "ESC-10 structural defense: testing_call_engine_dispatch MUST \
-         remain test-only marker (D19 — no host-fn callback re-enters \
-         engine.call); got {res:?}"
+        state.guest_active,
+        "ESC-10 helper MUST flip guest_active=true (matches host-fn \
+         trampoline state during re-entry attempt)"
+    );
+    assert_eq!(
+        state.re_entry_count, 1,
+        "ESC-10 helper MUST bump re_entry_count to 1 (matches host-\
+         fn trampoline re-entry observation)"
+    );
+
+    // run_all_checks at the host-fn boundary MUST surface the typed
+    // error — the production defense the simulation pins.
+    let err =
+        run_all_checks(&state).expect_err("ESC-10/ESC-7 simulation MUST trip the runtime defense");
+    assert!(
+        matches!(
+            err,
+            benten_eval::sandbox::SandboxError::EscapeAttempt {
+                vector: EscVector::Esc7FuelRefillViaReEntry,
+                ..
+            }
+        ),
+        "ESC-10 nested-dispatch simulation MUST surface \
+         EscapeAttempt(Esc7FuelRefillViaReEntry) — the EscDefenseState \
+         vector ESC-10's runtime arm maps to per audit-5; got {err:?}"
     );
 
     // The typed-error variant exists at the eval boundary: the
@@ -595,6 +618,74 @@ fn sandbox_escape_forged_cap_claim_section_ignored() {
             && !exec_src.contains("module.custom_sections"),
         "ESC-14 absence pin: the SANDBOX executor MUST NOT parse \
          custom sections for cap derivation (cap-claim forge defense)"
+    );
+}
+
+/// **G21-T3 fill** (Phase-3, audit-5 ESC-14 carry): drive the
+/// ESC-14 forged-cap-claim defense via the eval-side helper
+/// `testing_inject_forged_cap_claim_section` (filled at G21-T3
+/// per audit-5 disposition; previously paper-only marker).
+///
+/// The helper appends a custom section naming a `host:*:*`-style
+/// forged claim onto well-formed wasm bytes. The dispatch then
+/// asserts the engine STILL refuses kv:read access — proving cap
+/// derivation is EXCLUSIVELY from the call-time manifest, not from
+/// embedded bytes. Sibling to the inline-helper variant at
+/// `sandbox_esc14_forged_cap_claim_section.rs::
+/// engine_silently_ignores_forged_cap_claim_custom_section`.
+#[test]
+fn sandbox_escape_forged_cap_claim_section_helper_driven() {
+    use benten_eval::testing::testing_inject_forged_cap_claim_section;
+
+    // Well-formed module that imports kv_read; manifest "compute-
+    // basic" does NOT grant kv:read.
+    let bytes = wat::parse_str(
+        r#"(module
+            (import "host" "kv_read"
+                (func $kvread (param i32 i32 i32 i32) (result i32)))
+            (memory (export "memory") 1)
+            (func (export "run") (result i32)
+                i32.const 0 i32.const 0 i32.const 0 i32.const 0
+                call $kvread
+            )
+        )"#,
+    )
+    .unwrap();
+
+    // Inject the forged cap-claim section via the helper.
+    let forged_bytes = testing_inject_forged_cap_claim_section(&bytes, "requires:host:*:*");
+    assert!(
+        forged_bytes.len() > bytes.len(),
+        "ESC-14 helper MUST extend the bytes with the forged section"
+    );
+    assert!(
+        forged_bytes.starts_with(&bytes),
+        "ESC-14 helper MUST preserve the original module bytes verbatim \
+         (forge appends a trailing custom section)"
+    );
+
+    // Drive the forged module through SANDBOX execution. The engine
+    // MUST consult the call-time manifest exclusively — the embedded
+    // forged claim has zero cap authority.
+    let registry = ManifestRegistry::new();
+    let attribution = dummy_attribution();
+    let err = execute(
+        &forged_bytes,
+        ManifestRef::named("compute-basic"),
+        &registry,
+        SandboxConfig::default(),
+        &default_grant(),
+        &attribution,
+    )
+    .expect_err("forged cap-claim section MUST be denied (manifest is authoritative)");
+    assert!(
+        matches!(
+            err.code(),
+            ErrorCode::SandboxHostFnDenied | ErrorCode::SandboxHostFnNotFound
+        ),
+        "ESC-14 helper-driven: cap derivation EXCLUSIVELY from manifest; \
+         forged custom section MUST NOT widen caps; got {:?}",
+        err.code()
     );
 }
 
