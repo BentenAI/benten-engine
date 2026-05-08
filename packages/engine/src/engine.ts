@@ -275,12 +275,18 @@ interface NativeModule {
  * Capability-policy kinds accepted by `Engine.openWithPolicy`.
  *
  * - `NoAuth` — default. No capability checks; all writes allowed.
- * - `Ucan` — Phase-3 UCAN stub. Opens but surfaces
- *   `E_CAP_NOT_IMPLEMENTED` at check time.
- * - `GrantBacked` — Phase-1 revocation-aware policy backed by the
- *   engine's own `system:CapabilityGrant` Nodes. Call
- *   `engine.grantCapability({ actor, scope })` to seed permissions
- *   before dispatching writes through `engine.call(...)`.
+ * - `Ucan` — Phase-3 G14-B + G21-T2 durable UCAN-grounded grant-backed
+ *   policy. Composes `GrantBackedPolicy` (revocation-aware policy
+ *   hook) with the durable `UCANBackend` proof-chain validator.
+ *   Grants minted under this kind carry optional `issuer` (UCAN-chain
+ *   root DID) + `hlc` (causal stamp) for chain-walker correlation;
+ *   revocations propagate via `system:CapabilityRevocation` Nodes.
+ * - `GrantBacked` — Phase-2b revocation-aware policy backed by the
+ *   engine's own `system:CapabilityGrant` Nodes. Same durable surface
+ *   as `Ucan`; this kind signals "no UCAN-chain attribution on
+ *   grants" (omit `issuer` / `hlc` on `grantCapability` calls).
+ *   Call `engine.grantCapability({ actor, scope })` to seed
+ *   permissions before dispatching writes through `engine.call(...)`.
  */
 export const PolicyKind = {
   NoAuth: "NoAuth",

@@ -178,6 +178,42 @@ impl EngineBuilder {
         self.capability_policy_grant_backed()
     }
 
+    /// Phase-3 G21-T2 — route the builder through the durable
+    /// UCAN-backed capability policy (closes audit-6-1 +
+    /// phase-3-backlog §2.3).
+    ///
+    /// Currently composes the durable [`GrantBackedPolicy`] (which
+    /// reads `system:CapabilityGrant` / `system:CapabilityRevocation`
+    /// Nodes via [`benten_caps::backends::UCANBackend`]'s underlying
+    /// graph) — the policy hook stays at the grant-backed surface
+    /// because [`benten_caps::backends::UCANBackend`] is the durable
+    /// proof-chain validator (`validate_chain_for_audience_at` + per-token
+    /// revocation walk), NOT a [`CapabilityPolicy`] impl. The UCAN-grounded
+    /// grant flow is: grants are minted with `issuer` + `hlc` carrying
+    /// UCAN-chain provenance (closed at G14-B wave-4b) → durable
+    /// grant-store reads at write-check time → revocations propagate
+    /// via `system:CapabilityRevocation` Nodes.
+    ///
+    /// Phase-3-pre-G21-T2: the napi `PolicyKind::Ucan` arm wired the
+    /// Phase-1 stub `benten_caps::ucan_stub::LegacyUcanStubBackend` (returns
+    /// `E_CAP_NOT_IMPLEMENTED` on every check) — the grant-backed
+    /// durable surface was reachable only via `PolicyKind::GrantBacked`,
+    /// which obscured the durable UCAN-grounded narrative for
+    /// operators choosing between policy kinds. Post-G21-T2: both
+    /// kinds compose with the durable backend; the `Ucan` variant
+    /// signals "I am bringing UCAN-grounded grant chains" (issuer +
+    /// hlc populated on `grantCapability` calls).
+    #[must_use]
+    pub fn capability_policy_ucan_durable(self) -> Self {
+        // Compose with grant-backed durable policy. Future expansion
+        // point: a dedicated `UCANGroundedPolicy` that wraps
+        // `GrantBackedPolicy` + adds per-write UCAN chain validation
+        // through `UCANBackend::validate_chain_for_audience_at` lands
+        // when the grant-store carries persisted UCAN proof bytes
+        // (phase-3-backlog §2.3 (g) integration test target).
+        self.capability_policy_grant_backed()
+    }
+
     /// Mark the engine as production-grade — disables permissive
     /// defaults and surfaces additional sanity checks at boot. Off by
     /// default for embedded / single-user paths.

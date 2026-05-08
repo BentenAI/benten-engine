@@ -17,7 +17,7 @@ pub struct NoAuthBackend;
 
 impl NoAuthBackend {
     /// Construct a new `NoAuthBackend`. Constructor form is kept symmetric
-    /// with [`crate::UcanBackend::new`] so swapping backends is a one-token
+    /// with [`crate::LegacyUcanStubBackend::new`] so swapping backends is a one-token
     /// edit in the builder chain.
     #[must_use]
     pub fn new() -> Self {

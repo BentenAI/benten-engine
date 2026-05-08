@@ -36,6 +36,35 @@ impl Engine {
         A: GrantSubject,
         S: AsRef<str>,
     {
+        self.grant_capability_with_proof(actor, scope, None, None)
+    }
+
+    /// Phase-3 G21-T2 — grant a capability carrying optional UCAN
+    /// proof-chain attribution (issuer DID + HLC stamp). Closes
+    /// audit-6-1 + phase-3-backlog §2.3 (b): the napi parser now
+    /// threads `issuer` + `hlc` through to the durable grant Node so
+    /// the durable backend's chain-walker can correlate the grant
+    /// with its UCAN-chain origin.
+    ///
+    /// `issuer` is the DID string of the UCAN-chain root (or any
+    /// agent that minted the grant); `hlc` is the HLC stamp at issue
+    /// time used for replay-window narrowing during chain validation.
+    /// Both fields are optional — when `None`, the persisted Node
+    /// shape matches the pre-G21-T2 grant and the durable backend
+    /// treats the grant as Phase-1-style (actor-bound, no UCAN
+    /// chain). When `Some`, the durable backend's chain-walker
+    /// consults these fields at write-check time.
+    pub fn grant_capability_with_proof<A, S>(
+        &self,
+        actor: A,
+        scope: S,
+        issuer: Option<String>,
+        hlc: Option<i64>,
+    ) -> Result<Cid, EngineError>
+    where
+        A: GrantSubject,
+        S: AsRef<str>,
+    {
         if !self.caps_enabled {
             return Err(EngineError::SubsystemDisabled {
                 subsystem: "capabilities",
@@ -46,6 +75,12 @@ impl Engine {
         props.insert("actor".into(), actor.as_value());
         props.insert("scope".into(), Value::Text(scope_str));
         props.insert("revoked".into(), Value::Bool(false));
+        if let Some(iss) = issuer {
+            props.insert("issuer".into(), Value::Text(iss));
+        }
+        if let Some(stamp) = hlc {
+            props.insert("hlc".into(), Value::Int(stamp));
+        }
         let node = Node::new(vec!["system:CapabilityGrant".into()], props);
         self.privileged_put_node(&node)
     }

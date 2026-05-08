@@ -7,7 +7,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use benten_caps::{CapError, CapabilityPolicy, NoAuthBackend, UcanBackend, WriteContext};
+use benten_caps::{CapError, CapabilityPolicy, LegacyUcanStubBackend, NoAuthBackend, WriteContext};
 
 #[test]
 fn trait_signature_accepts_write_context_by_ref() {
@@ -23,7 +23,7 @@ fn trait_is_object_safe_for_noauth() {
 
 #[test]
 fn trait_is_object_safe_for_ucan() {
-    let _: Box<dyn CapabilityPolicy> = Box::new(UcanBackend);
+    let _: Box<dyn CapabilityPolicy> = Box::new(LegacyUcanStubBackend);
 }
 
 #[test]
@@ -31,7 +31,7 @@ fn two_backends_implement_the_same_trait() {
     // Minimal smoke: a slice of boxed policies compiles + can be iterated.
     let ctx = WriteContext::default();
     let policies: Vec<Box<dyn CapabilityPolicy>> =
-        vec![Box::new(NoAuthBackend), Box::new(UcanBackend)];
+        vec![Box::new(NoAuthBackend), Box::new(LegacyUcanStubBackend)];
     let outcomes: Vec<Result<(), CapError>> =
         policies.iter().map(|p| p.check_write(&ctx)).collect();
     assert_eq!(outcomes.len(), 2);

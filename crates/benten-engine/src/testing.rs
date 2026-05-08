@@ -22,7 +22,7 @@ pub fn iterate_write_handler(_max: u32) -> SubgraphSpec {
 /// Build a minimal single-WRITE handler — WRITE(label=`minimal`) → RESPOND.
 ///
 /// Used by the UCAN stub routing test (r6-sec-4) to verify that a
-/// configured `UcanBackend` routes its `NotImplemented` error through
+/// configured `LegacyUcanStubBackend` routes its `NotImplemented` error through
 /// the `ON_ERROR` typed edge rather than `ON_DENIED`. The minimal WRITE
 /// must reach the capability hook, so the spec carries one `WriteSpec`
 /// and a RESPOND terminal — not the earlier empty shell.

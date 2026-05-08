@@ -263,11 +263,19 @@ mod napi_surface {
             //   containing a `GrantReader` from here because the reader
             //   needs the engine's `Arc<RedbBackend>`, which only exists
             //   after `.open(&path)` runs.
+            // G21-T2 audit-6-1 closure: `PolicyKind::Ucan` now routes
+            // through the durable UCAN-grounded grant-backed policy
+            // (closes phase-3-backlog §2.3). Pre-G21-T2 this arm wired
+            // the Phase-1 stub `benten_caps::LegacyUcanStubBackend`
+            // (renamed from `UcanBackend` so a misroute import-error
+            // surfaces at compile time rather than at runtime). The
+            // durable backend reads the engine's own
+            // `system:CapabilityGrant` / `system:CapabilityRevocation`
+            // Nodes; the underlying UCAN proof-chain validator lives
+            // at `benten_caps::backends::UCANBackend` (G14-B wave-4b).
             let builder = match policy {
                 PolicyKind::NoAuth => EngineBuilder::new(),
-                PolicyKind::Ucan => {
-                    EngineBuilder::new().capability_policy(Box::new(benten_caps::UcanBackend))
-                }
+                PolicyKind::Ucan => EngineBuilder::new().capability_policy_ucan_durable(),
                 PolicyKind::GrantBacked => EngineBuilder::new().capability_policy_grant_backed(),
             };
             let inner = builder.open(&path).map_err(engine_err)?;
@@ -586,12 +594,27 @@ mod napi_surface {
         // -------- Capabilities --------
 
         /// Grant a capability. Returns the grant Node's CID.
+        ///
+        /// Phase-3 G21-T2: the JSON grant shape is widened to accept
+        /// optional `issuer` (DID string) + `hlc` (numeric stamp) for
+        /// UCAN-grounded grants — these flow through to the durable
+        /// backend's chain-walker via
+        /// [`benten_engine::Engine::grant_capability_with_proof`].
+        /// Phase-1 callers passing only `{ actor, scope }` continue
+        /// to work unchanged (the Node persisted has no `issuer` /
+        /// `hlc` properties; the durable backend treats the grant as
+        /// Phase-1-style).
         #[napi]
         pub fn grant_capability(&self, grant: serde_json::Value) -> napi::Result<String> {
-            let (actor, scope) = parse_grant_json(grant)?;
+            let parsed = parse_grant_json(grant)?;
             let cid = self
                 .inner
-                .grant_capability(actor.as_str(), scope.as_str())
+                .grant_capability_with_proof(
+                    parsed.actor.as_str(),
+                    parsed.scope.as_str(),
+                    parsed.issuer,
+                    parsed.hlc,
+                )
                 .map_err(engine_err)?;
             Ok(cid.to_base32())
         }

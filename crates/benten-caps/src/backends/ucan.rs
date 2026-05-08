@@ -1,6 +1,6 @@
 //! Durable UCAN backend (G14-B wave-4b).
 //!
-//! Replaces the Phase-2b stub `crate::ucan_stub::UcanBackend` — which
+//! Replaces the Phase-2b stub `crate::ucan_stub::LegacyUcanStubBackend` — which
 //! returned [`CapError::NotImplemented`] from every entry point —
 //! with a durable grant store backed by the
 //! [`benten_graph::GraphBackend`] umbrella trait (G13-A) plus full

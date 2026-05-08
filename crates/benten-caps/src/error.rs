@@ -77,7 +77,7 @@ pub enum CapError {
     RevokedMidEval,
 
     /// The configured capability backend is not implemented. Emitted by
-    /// [`crate::UcanBackend`] in Phase 1 (UCAN lands with `benten-id` in
+    /// [`crate::LegacyUcanStubBackend`] in Phase 1 (UCAN lands with `benten-id` in
     /// Phase 3). The message intentionally names the backend AND the phase
     /// AND the interim alternative so operators read it as a config pointer,
     /// not a bug.
