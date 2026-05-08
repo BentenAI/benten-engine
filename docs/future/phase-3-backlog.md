@@ -720,9 +720,24 @@ R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift 
 
 ---
 
-### 7.12 Workspace-aware numeric-claim source-of-truth (cite-drift detector pim-12 NEW shape iii closure)
+### 7.12 Workspace-aware numeric-claim source-of-truth — CLOSED at Phase-3 R5 wave-9 W9-T4
 
-**Phase-3 R4 R1 state (post `82f1c7e` orchestrator-direct cleanup):** the cite-drift detector's `numeric_claims_source_of_truth()` table at `tools/cite-drift-detector/src/lib.rs::numeric_claims_source_of_truth` hardcodes `crates: 10` (bumped 8 → 10 at orchestrator-direct cleanup 2026-05-05 closing pim-12 NEW shape iii at the immediate-fix arm). The hardcode bump closes the false-positive flood (28 findings against correctly-10-crate Phase-3 docs); the recurrence-resistant arm — parsing `Cargo.toml` `members =` at runtime + counting `crates/*` entries dynamically — is the workspace-aware-derivation upgrade backlogged here.
+**Closure shape (Phase-3 R5 wave-9 W9-T4, 2026-05-07):** the `crates` row in `tools/cite-drift-detector/src/lib.rs::numeric_claims_source_of_truth` is now derived dynamically from the workspace's `Cargo.toml` `members =` table via `tools/cite-drift-detector/src/lib.rs::derive_crate_count_from_workspace`. The new function reads `<root>/Cargo.toml`, parses the `[workspace] members = [...]` array, and counts entries whose path begins with `crates/`. `numeric_claims_source_of_truth_at(root)` exposes the path-aware variant; `numeric_claims_source_of_truth()` invokes it against `Path::new(".")` for callers that operate from the workspace root. Fallback when `Cargo.toml` is unparseable: returns the historical static value 10 so the lint stays operational.
+
+**Phrase-source-of-truth scope:** `primitives` (12) + `invariants` (14) remain hardcoded — their authoritative source is documentation (CLAUDE.md baked-in commitments), not workspace structure. Only the `crates` row was suitable for workspace-derivation.
+
+**Test coverage landed at W9-T4:**
+- `derive_crate_count_synthetic_workspace_with_n_crates` — plants a synthetic 7-member Cargo.toml + asserts derivation returns 7.
+- `derive_crate_count_excludes_non_crate_paths` — workspace with only `tools/`/`tests/`/`bindings/` rows derives 0.
+- `derive_crate_count_returns_none_on_missing_cargo_toml` — clean `None` propagation.
+- `derive_crate_count_returns_none_on_unparseable_cargo_toml` — malformed-TOML `None` propagation.
+- `derive_crate_count_returns_none_when_workspace_table_missing` — single-crate Cargo.toml (no `[workspace]`) returns `None`.
+- `numeric_claims_at_root_uses_derived_count` — end-to-end: synthetic workspace with 3 members makes the `crates` claim's `value` == 3.
+- `numeric_claims_at_root_falls_back_to_static_when_cargo_unparseable` — confirms the 10-fallback when derivation fails.
+
+**Touch size at W9-T4:** ~70 LOC derivation function + ~120 LOC tests + ~10 LOC rustdoc edits + 1 workspace-dep add (`toml` already in workspace deps; pulled into `tools/cite-drift-detector/Cargo.toml`).
+
+**Origin (preserved for retrospective):** the cite-drift detector's `numeric_claims_source_of_truth()` table previously hardcoded `crates: 10` (bumped 8 → 10 at orchestrator-direct cleanup 2026-05-05 closing pim-12 NEW shape iii at the immediate-fix arm). The hardcode bump closed the false-positive flood (28 findings against correctly-10-crate Phase-3 docs); the recurrence-resistant arm — parsing `Cargo.toml` `members =` at runtime + counting `crates/*` entries dynamically — was deferred here and is now closed.
 
 **What landing requires:**
 - Replace the hardcoded `value: 10` for the `crates` claim with a derivation function that:
@@ -747,35 +762,22 @@ R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift 
 
 ---
 
-### 7.12b Cite-drift detector coverage envelope (file-tree gap; G17-B mr-7 origin)
+### 7.12b Cite-drift detector coverage envelope — CLOSED at Phase-3 R5 wave-9 W9-T4
 
-**Origin:** G17-B PR #116 mini-review finding `g17-b-mr-cite-drift-detector-coverage-7` (BELONGS-ELSEWHERE-SPECIFICALLY → NAMED entry per HARD RULE clause-b). The detector caught 2 of 7 instances of the original `Cargo.toml:309` cite drift; 5 sites slipped because they live outside the tracked-path envelope.
-
-**Coverage envelope at G17-B fix-pass time** (`tools/cite-drift-detector/src/lib.rs::walk_doc_inputs`):
+**Closure shape (Phase-3 R5 wave-9 W9-T4, 2026-05-07):** the `tools/cite-drift-detector/src/lib.rs::walk_doc_inputs` walker now covers:
 - `README.md` (root)
 - `docs/**/*.md`
 - `.addl/**/*.md` (when present locally; gitignored — CI sees `docs/` only)
-- `crates/*/src/**/*.rs` (doc-comment cites)
+- **`crates/**/*.rs`** — fully recursive, automatically covers `crates/*/src/`, `crates/*/tests/`, and `crates/*/build.rs` (the walker matches by extension and walks the full subtree). Pinned by `walker_includes_crates_build_rs_and_tests` test.
+- **`tools/**/*.rs`** — orchestrator-side tooling (e.g. `tools/bench-wat-rebake/src/lib.rs`, `tools/benten-dev/src/`); pinned by `walker_includes_tools_subtree` test. The detector's own subtree (`tools/cite-drift-detector/`) is excluded so its intentional cite-shaped fixture strings don't double-count as real cites; pinned by `walker_skips_target_subtree_under_tools` (companion test demonstrates target/ skip uniformity).
+- **`.cargo/*.toml`** — alias-comment blocks (the walker's `extract_line_cites` already accepts `.toml` extension); pinned by `walker_includes_dot_cargo_config_toml` test.
 - `packages/engine/src/**/*.ts` (doc-comment cites)
 
-**Gaps observed at G17-B mr-7 verification (paths illustrative, not line cites):**
-- `tools/*/src/**/*.rs` — e.g. `tools/bench-wat-rebake/src/lib.rs` (module-doc cite block) slipped
-- `crates/*/build.rs` (crate-root build scripts, not under `src/`) — e.g. `crates/benten-eval/build.rs` (header doc-comment) slipped
-- `crates/*/tests/**/*.rs` (integration-test files) — e.g. `crates/benten-eval/tests/fixture_wasm_hashes_stable.rs` and `d26_wasm_present.rs` (2 sites) slipped
-- `.cargo/config.toml` (and `.toml` files generally) — `.cargo/config.toml` (alias-comment block) slipped
+**Symbol-cite re-export recognition:** the cite-drift-detector's `target_text_defines_symbol` was extended at W9-T4 to recognise `pub use` re-exports (single-line `pub use <path>;` shape, single-line brace lists, and multi-line brace lists). This eliminates a class of false positives where a crate root re-exports types from sibling modules and a cite to the re-export site at `lib.rs` was previously flagged because no in-place `struct` / `enum` definition exists in the re-exporting file.
 
-**Why this matters:** pim-1 §3.5b BULK-APPLICATION HARDENED is the standing defense against load-bearing-edit cite drift; the cite-drift-detector is the automated companion. Two dimensions of incompleteness (the human pre-flight + the detector envelope) interact: the G17-B PR demonstrably had cites in 7 sites only 2 of which the detector covers — the human pre-flight failure was the proximate cause but the detector's envelope being narrow widens the blast radius of any single human pre-flight miss.
+**Touch size at W9-T4:** ~25 LOC walker extensions + ~50 LOC re-export recognition function + ~80 LOC tests + rustdoc edits.
 
-**Closure shape:** extend `walk_doc_inputs` to additionally walk `tools/*/src/**/*.rs`, `crates/*/build.rs`, `crates/*/tests/**/*.rs`, and `.cargo/config.toml`. The walker's `extract_line_cites` already accepts `.toml` extensions per its docstring's allow-list — the gap is purely in the path enumeration, not the per-file extraction.
-
-**Touch size:** ~30-50 LOC (4 new walker call-sites + 1-2 unit tests asserting paths within those subtrees are scanned). Low risk — additive, no behavioral change for currently-tracked paths.
-
-**Cross-references:**
-- G17-B mini-review (PR #116) finding `g17-b-mr-cite-drift-detector-coverage-7` BELONGS-ELSEWHERE-SPECIFICALLY disposition
-- `tools/cite-drift-detector/src/lib.rs::walk_doc_inputs` (the envelope-definition site)
-- `tools/cite-drift-detector/src/lib.rs::extract_line_cites` (per-file extraction; already extension-permissive)
-
-**Phase target:** Phase-3 R6 prep (orchestrator-direct or small fix-pass dispatch). NOT gating PR #116 merge per finding-7's BELONGS-ELSEWHERE-SPECIFICALLY disposition; entry filed pre-merge per HARD RULE clause-b ("the destination receives the entry NOW").
+**Origin (preserved for retrospective):** G17-B PR #116 mini-review finding `g17-b-mr-cite-drift-detector-coverage-7` (BELONGS-ELSEWHERE-SPECIFICALLY → NAMED entry per HARD RULE clause-b). The detector previously caught 2 of 7 instances of the original `Cargo.toml:309` cite drift; the slipped 5 sites lived outside the tracked-path envelope (now closed). Pim-1 §3.5b BULK-APPLICATION HARDENED is the standing human-discipline defense; the cite-drift-detector is the automated companion. Both dimensions of incompleteness (human pre-flight + detector envelope) interact, so widening the envelope narrows the blast radius of any single human pre-flight miss.
 
 ---
 
@@ -1080,27 +1082,62 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 
 ---
 
-## 7.5 cargo-llvm-cov coverage workflow investigation (anytime)
+## 7.5 cargo-llvm-cov coverage workflow investigation — DIAGNOSED 2026-05-07 (Phase-3 R5 wave-9 W9-T4); root cause is downstream test flake, not coverage tooling
 
-**Phase 2b state:** `.github/workflows/coverage.yml` runs `cargo-llvm-cov` to produce HTML + summary + lcov coverage reports. It's been failing on main since at least wave-8c-stream-infra (verified `c030fed` red). Informational by workflow design (not in `.github/branch-protection.yml` required-status-checks list). Likely caused by either (a) the same test surface drift that affects the vitest informational workflow (since coverage runs the full test matrix under instrumentation), (b) a coverage-tool config issue with the wave-8 surface additions, or (c) the same Intel-Mac timeout family fixed for nextest in PR #59 §1.
+**Phase-3 R5 wave-9 W9-T4 diagnosis (2026-05-07, post `28031fa`):** the coverage workflow ITSELF is functional — recent runs against `main` show a green/red mix tracking the underlying test suite's stability (e.g. run `25529408373` red on `0913a0d`, run `25529646063` green on `3c97f3b`, ~50% green over the last 20 runs). The historical "failing since wave-8c-stream-infra" framing was correct at the time it was written but the surface has shifted: coverage's recent reds are caused by **downstream test flakes**, not coverage-tool config drift.
 
-**Phase 3+ target:** Diagnose root cause + restore green. If informational stays informational (likely), no urgency; if it should graduate to required for release-readiness, this is the unblocker.
+**Concrete root cause for the current flake-class:** the `wait_signal_shape_defaults_untyped_accepts_any_value` test in `crates/benten-eval/tests/wait_signal_shape_optional_typing.rs` panics intermittently with `untyped shape must accept any Value, got Err(InvRegistration)`. This is a **wait-signal-shape registration validation** issue independent of coverage instrumentation — when the test passes (most of the time), coverage runs to completion and produces a green report; when the test fails, the entire `cargo llvm-cov --workspace` invocation aborts with exit 101 because llvm-cov shells out to `cargo test --tests` and propagates the test-suite exit code.
 
-**Touch size:** ~30-100 LOC tooling/config; investigation surface unbounded.
+**Disposition:** the coverage workflow itself does NOT need restoration work — it is a faithful reflector of the underlying test suite. The downstream flake belongs in the test-stability bucket, not the coverage-tooling bucket. Cause-(a) from the original §7.5 framing ("the same test surface drift that affects the vitest informational workflow") is confirmed; causes (b) coverage-tool config and (c) Intel-Mac nextest timeouts are ruled out for the current flake-class.
 
-## 7.4 CI lint: file:line cite drift detector (anytime / Phase-3+)
+**Forward-looking cleanup:**
+- The `wait_signal_shape_defaults_untyped_accepts_any_value` flake is BELONGS-ELSEWHERE-SPECIFICALLY → file as a fresh §7.16 entry below (the wait-signal-shape registration-validation row); fixing that flake will green coverage as a side-effect.
+- If a future flake-class shows up on coverage that is NOT a downstream test issue (e.g. cargo-llvm-cov action update breaks the workflow), reopen this entry with the new diagnosis.
 
-**Source:** R6 Round 1 cite-precision-drift deep retrospective sweep (2026-04-29) found **13 instances** of stale `file.rs:LINE` cites across docs + Rustdoc + test files. Six fixed inline by Group 3 + mini-review-#60-fix-pass + r6fp-tail-comprehensive (post-Group-1-merge). The pattern recurs because file:line cites are inherently fragile against any code edit.
+**Touch size at the diagnosis pass (this entry):** 0 LOC tooling change. The retense itself is the deliverable.
 
-**Phase 3+ target:** Add a CI lint that:
-- Greps for `\.(rs|ts):\d+(-\d+)?` patterns in `docs/**/*.md` + Rust doc-comments + TS JSDoc
-- For each, verifies the cited line range exists at the cite's commit
-- For each, optionally verifies a sentinel anchor (e.g. function name) appears at the cited line range — protects against "file shrunk + line range now points elsewhere"
-- Surfaces drift as a non-blocking PR comment (initially) or a required check (later)
+**Cross-references:**
+- `.github/workflows/coverage.yml` (workflow definition; no change needed)
+- `crates/benten-eval/tests/wait_signal_shape_optional_typing.rs::wait_signal_shape_defaults_untyped_accepts_any_value` (downstream flake; queue as §7.16 below)
+- Run history sample: `https://github.com/BentenAI/benten-engine/actions/workflows/coverage.yml` (~50% green over the most-recent 20 runs at diagnosis time)
 
-**Scope:** ~150-300 LOC tooling + 1 CI workflow. Risk: low (purely additive observer).
+---
 
-**Why deferred:** Phase 2b focuses on engine correctness + production runtime; doc-discipline tooling competes with structural work. R6's deep-sweep methodology (3+-recurrence triggers a per-pattern audit) is sufficient interim coverage.
+### 7.16 wait_signal_shape_defaults_untyped_accepts_any_value flake (W9-T4 retense origin)
+
+**Origin (2026-05-07):** §7.5 diagnosis traced the cargo-llvm-cov coverage workflow's intermittent reds to this single test panicking with `untyped shape must accept any Value, got Err(InvRegistration)`. The test asserts that an "untyped shape" (no `signal_shape` property set) accepts any Value at registration time, but the runtime is sometimes returning `Err(InvRegistration)` instead of `Ok(_)` for that case.
+
+**Symptoms:**
+- Intermittent — passes most of the time, fails maybe ~30-50% of runs.
+- Panic site: `crates/benten-eval/tests/wait_signal_shape_optional_typing.rs:64` (the `expect("untyped shape must accept any Value")` line).
+- Aborts the parent `cargo test --tests` invocation, which in turn fails cargo-llvm-cov's coverage workflow.
+
+**Likely root cause categories (to investigate during fix):**
+- Race in WAIT registration validation when no `signal_shape` is set (default-untyped path).
+- Test isolation issue — adjacent test in the same `cargo test` binary mutating shared state.
+- Property-test seed sensitivity if the "any Value" generator is randomized.
+
+**Touch size:** ~10-30 LOC investigation + fix; depends on which root cause category.
+
+**Phase target:** Phase-3 R5 anytime (ahead of the coverage workflow being expected green for v1-assess). Bundle with any other wait-signal-shape stabilization work.
+
+---
+
+## 7.4 CI lint: file:line cite drift detector — CLOSED at Phase-3 G13-pre-A (cite-drift-detector landed)
+
+**Closure shape (Phase-3 G13-pre-A, 2026-05; envelope hardened at Phase-3 R5 wave-9 W9-T4):** the `tools/cite-drift-detector` Rust tool + its `.github/workflows/cite-drift.yml` non-blocking CI workflow ship every dimension of the original §7.4 ask:
+- **`file:line` cite extraction** — `tools/cite-drift-detector/src/lib.rs::extract_line_cites` recognises `.rs`, `.ts`, `.tsx`, `.toml`, `.wat`, `.wasm`, `.md`, `.json`, `.yml`, `.yaml` extensions across `docs/**/*.md`, `crates/`, `tools/`, `packages/engine/src/`, `.cargo/config.toml`, and `.addl/` (when present locally).
+- **Line-range existence check** — `tools/cite-drift-detector/src/lib.rs::check_line_cite` validates the file exists at HEAD and contains the cited line; emits `LineCiteFileMissing` / `LineCiteLineOutOfRange` findings.
+- **Sentinel-anchor protection** — implemented in stronger form via §3.5b HARDENED point 3: any line cite to a high-churn surface (the `tools/cite-drift-detector/src/lib.rs::HIGH_CHURN_SURFACES` list — currently `primitive_host.rs`, `engine_views.rs`, `evaluator.rs`, `lib.rs`, `builder.rs`, `wait.rs`, `subscribe.rs`, `mermaid.ts`, `dsl.ts`) emits `LineCiteOnHighChurnSurface` with the message "use `path::symbol` form per §3.5b HARDENED point 3". This is **stronger than the original sentinel-anchor proposal** because it catches the antipattern at the cite-shape level rather than after a stale-anchor confirms drift.
+- **Non-blocking PR comment** — `.github/workflows/cite-drift.yml` runs on every PR with `continue-on-error: true` + the `actions/github-script` step that posts a marker-keyed comment; promotion-to-required is tracked as `D-PHASE-3-10` in the Phase-3 implementation plan.
+
+**Coverage envelope hardening at W9-T4:** the walker's coverage envelope was widened at Phase-3 R5 wave-9 W9-T4 (this fix-pass) to additionally cover `tools/*/src/**/*.rs` + `.cargo/*.toml` (closing §7.12b file-tree gaps). Re-export recognition was added to `target_text_defines_symbol` so cites to a crate-root `lib.rs` symbol resolve cleanly when the lib only `pub use`s that symbol from a sibling module.
+
+**Cross-references:**
+- `tools/cite-drift-detector/src/lib.rs` (the detector implementation)
+- `.github/workflows/cite-drift.yml` (the CI workflow)
+- `.addl/phase-2b/dispatch-conventions.md::§3.5b HARDENED point 3` (the high-churn-surface symbol-cite enforcement rule)
+- §7.12 + §7.12b (this doc) — workspace-aware numeric-claim source-of-truth + file-tree-gap closure (both addressed at W9-T4)
 
 ---
 
