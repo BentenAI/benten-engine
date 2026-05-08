@@ -17,6 +17,7 @@
 // the napi artifact hasn't been built yet.
 
 import { EDslInvalidShape } from "./errors.js";
+import { TYPED_CALL_PREFIX } from "./types.js";
 import type {
   JsonValue,
   Primitive,
@@ -25,6 +26,7 @@ import type {
   SandboxArgsByName,
   Subgraph,
   SubgraphNode,
+  TypedCallOp,
 } from "./types.js";
 
 // Re-export the SANDBOX argument shapes through the DSL surface so DSL
@@ -1321,6 +1323,68 @@ export function iterate(args: IterateArgs): {
 }
 export function call(args: CallArgs): { primitive: "call"; args: CallArgs } {
   return { primitive: "call", args };
+}
+
+/**
+ * Phase-3 G21-T2 — typed-CALL DSL helper. Builds a CALL primitive
+ * targeting the engine's reserved `engine:typed:<op>` namespace.
+ *
+ * The returned shape is a CallArgs-shaped helper so it composes into
+ * a `SubgraphBuilder` chain alongside the bare `call(...)` helper:
+ *
+ * ```ts
+ * subgraph("sign-handler")
+ *   .read({ ... })
+ *   .typedCall({ op: "ed25519_sign", inputBinding: "$input.body" })
+ *   .respond({ body: "$result" });
+ * ```
+ *
+ * The `op` field is constrained to the closed-set `TypedCallOp`
+ * union so a typo surfaces at TypeScript compile time (mirroring the
+ * Rust `TypedCallOp::parse` reject path on the engine side).
+ *
+ * Per CLAUDE.md baked-in #1 (12-primitive irreducibility): typed-CALL
+ * is NOT a 13th primitive — the OperationNode that lands in the
+ * subgraph is a regular CALL primitive, just with its `target`
+ * pointing at the engine's reserved `engine:typed:` namespace. The
+ * eval-side dispatch fork at `crates/benten-eval/src/primitives/call.rs`
+ * recognises the prefix + routes to the typed-CALL registry.
+ */
+export interface TypedCallNodeArgs {
+  /** Closed-set typed-CALL op-name. */
+  op: TypedCallOp;
+  /**
+   * Optional input-binding expression evaluated against the handler's
+   * scope and supplied as the typed-CALL op's input map. The
+   * expression must produce a Map shape conformant to the op's
+   * input schema (see `TypedCallInputShapes`).
+   */
+  inputBinding?: string;
+  /**
+   * If `true`, the typed-CALL enters an isolated capability scope
+   * (no parent-cap delegation). Mirrors `CallArgs.isolated`.
+   */
+  isolated?: boolean;
+}
+
+export function typedCall(args: TypedCallNodeArgs): {
+  primitive: "call";
+  args: CallArgs;
+} {
+  if (typeof args.op !== "string" || args.op.length === 0) {
+    throw new EDslInvalidShape(
+      "typedCall(args) requires `op: TypedCallOp` (E_DSL_INVALID_SHAPE)",
+    );
+  }
+  return {
+    primitive: "call",
+    args: {
+      handler: `${TYPED_CALL_PREFIX}${args.op}`,
+      action: "default",
+      ...(args.inputBinding != null ? { input: args.inputBinding } : {}),
+      ...(args.isolated === true ? { isolated: true } : {}),
+    },
+  };
 }
 export function respond(args: RespondArgs = {}): {
   primitive: "respond";

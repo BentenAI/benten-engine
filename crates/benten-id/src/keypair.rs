@@ -219,6 +219,33 @@ impl Keypair {
         self.secret.bytes_for_test()
     }
 
+    /// G21-T2 fp-mini-review MAJOR-6 closure (option (b)) — production
+    /// alias of [`Self::secret_bytes_for_test`] with a name that
+    /// reflects the lack of zeroize-on-drop on the returned value.
+    ///
+    /// The returned `[u8; 32]` is a stack-allocated array. Caller is
+    /// responsible for either:
+    ///   - Wrapping in [`zeroize::Zeroizing`] if the bytes are held
+    ///     past the immediate dispatch return.
+    ///   - Copying into a `Value::Bytes` Vec that flows out a
+    ///     production napi boundary (today; phase-3-backlog §2.5 (e)
+    ///     names the proper `Value::SensitiveBytes` discriminant
+    ///     extension).
+    ///
+    /// Use sites that accept the unprotected contract today:
+    ///   - `crates/benten-engine/src/typed_call_dispatch.rs::keypair_generate`
+    ///     + `keypair_from_seed` — the typed-CALL output schema
+    ///     surfaces raw private-key bytes in a `Value::Bytes` wrapper.
+    ///     Per phase-3-backlog §2.5 (e) the bytes will move to a
+    ///     zeroize-on-drop wrapper once the Value enum extension lands.
+    ///   - `crates/benten-sync/src/transport.rs` +
+    ///     `crates/benten-sync/src/peer_discovery.rs` — iroh transport
+    ///     keypair material for the peer-discovery handshake.
+    #[must_use]
+    pub fn secret_bytes_unprotected(&self) -> [u8; 32] {
+        self.secret.bytes_for_test()
+    }
+
     /// Export this keypair as a canonical DAG-CBOR envelope per
     /// `crypto-major-5`:
     ///

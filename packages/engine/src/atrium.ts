@@ -97,11 +97,35 @@ export interface Atrium {
   trustPeer(peerDid: string): Promise<void>;
   /** Revoke trust + terminate active subscriptions per exit-criterion 15. */
   revokePeer(peerDid: string): Promise<void>;
-  /** Subscribe to a path within this atrium's per-session scope. */
+  /**
+   * Subscribe to a path within this atrium's per-session scope.
+   *
+   * G21-T2 fp-mini-review MAJOR-7 honest-state callout: today the
+   * subscription is recorded locally and the returned
+   * `unsubscribe()` teardown is observable, but engine-side change-
+   * event delivery to the supplied callback is reserved for the
+   * G16-B SUBSCRIBE wireup wave (when the engine-attached SUBSCRIBE
+   * primitive composes with the delivery-time cap-recheck closure
+   * per G14-D F6). The `leave()` teardown cancels every active
+   * subscription deterministically.
+   */
   subscribe(path: string, callback: SubscribeCallback): Promise<AtriumSubscription>;
-  /** Register a peer-join lifecycle hook. */
+  /**
+   * Register a peer-join lifecycle hook.
+   *
+   * G21-T2 fp-mini-review MAJOR-7 honest-state callout: callbacks
+   * are recorded; engine-side peer-join firing wires through when
+   * G16-B's peer-event stream lands. `leave()` clears the registry.
+   */
   onPeerJoin(callback: PeerLifecycleCallback): void;
-  /** Register a peer-leave lifecycle hook. */
+  /**
+   * Register a peer-leave lifecycle hook.
+   *
+   * G21-T2 fp-mini-review MAJOR-7 honest-state callout: callbacks
+   * are recorded + fire today on `revokePeer()` (synthetic leave
+   * event); the engine-side peer-leave-on-disconnect wireup lands
+   * with G16-B. `leave()` clears the registry.
+   */
   onPeerLeave(callback: PeerLifecycleCallback): void;
   /** Declare a device-attestation envelope on this handle. */
   declareDeviceAttestation(envelope: DeviceAttestation): Promise<void>;
@@ -149,9 +173,25 @@ interface NativeDeviceAttestation {
 
 /**
  * Shape of the napi factory exposed at `native.JsAtrium.create(config)`.
+ *
+ * Pre-G21-T2 path (used when the napi cdylib pre-dates the G21-T2
+ * binding): the static `create()` method constructs a self-contained
+ * `JsAtrium` with no engine reference. Post-G21-T2 the production
+ * path is `engine.atrium({config})` (instance method on the Engine
+ * class — see `NativeEngineWithAtrium` below).
  */
 export interface NativeAtriumFactoryConstruct {
   create: (config: { atriumId: string }) => NativeAtrium;
+}
+
+/**
+ * G21-T2 §C audit-6-2 closure — shape of the napi `Engine.atrium`
+ * instance method. Post-G21-T2 the engine-bound JsAtrium drives
+ * `Engine::open_atrium(...)` at `join()` time to produce a real
+ * engine-side `AtriumHandle`.
+ */
+export interface NativeEngineWithAtrium {
+  atrium?: (config: { atriumId: string }) => NativeAtrium;
 }
 
 // ---------------------------------------------------------------------------
@@ -163,6 +203,14 @@ class AtriumHandle implements Atrium {
   private readonly config: AtriumConfig;
   private readonly peerJoinCallbacks: PeerLifecycleCallback[] = [];
   private readonly peerLeaveCallbacks: PeerLifecycleCallback[] = [];
+  /**
+   * G21-T2 fp-mini-review MAJOR-7 closure — track active
+   * subscriptions so `leave()` can deactivate them deterministically.
+   * Pre-fp-mini-review the subscribe callback registry was
+   * scoped to the `unsubscribe()` closure only; `leave()` did not
+   * tear down lingering subscriptions.
+   */
+  private readonly activeSubscriptions: { deactivate: () => void }[] = [];
 
   constructor(native: NativeAtrium, config: AtriumConfig) {
     this.native = native;
@@ -189,6 +237,20 @@ class AtriumHandle implements Atrium {
       throw new Error("Atrium.leave unavailable on this native binding");
     }
     this.native.leave();
+    // G21-T2 fp-mini-review MAJOR-7 closure: drop the
+    // peer-lifecycle + subscribe callback registries on `leave()`.
+    // Pre-fp-mini-review a stale callback list survived leave/rejoin
+    // (the registry was never cleared), so a re-`join()` would
+    // notify callbacks installed BEFORE the leave — a registry leak
+    // + subtle correctness bug if the JS caller assumed leave reset
+    // the lifecycle hooks. Dropping the registries here matches the
+    // observable lifecycle contract.
+    for (const entry of this.activeSubscriptions) {
+      entry.deactivate();
+    }
+    this.peerJoinCallbacks.length = 0;
+    this.peerLeaveCallbacks.length = 0;
+    this.activeSubscriptions.length = 0;
   }
 
   listPeers(): string[] {
@@ -237,7 +299,24 @@ class AtriumHandle implements Atrium {
     // delivery-time cap-recheck composes here). At wave-6b napi-shim
     // scope, we record the subscription locally so the round-trip
     // pin's `unsubscribe()` teardown surface is observable.
+    //
+    // G21-T2 fp-mini-review MAJOR-7 closure: the active flag is
+    // closed-over by both `unsubscribe()` (caller-driven teardown)
+    // AND the `activeSubscriptions` registry (`leave()`-driven
+    // teardown). Either path flips `active = false` so that when the
+    // engine-side SUBSCRIBE delivery wires through (G16-B), an
+    // already-deactivated subscription is a no-op. The registry-
+    // tracked entry is dropped as part of the `leave()` cleanup +
+    // the `unsubscribe()` closure removes itself from the registry
+    // so a long-lived atrium doesn't leak entries.
     let active = true;
+    const entry = {
+      deactivate: () => {
+        active = false;
+      },
+    };
+    this.activeSubscriptions.push(entry);
+    const subs = this.activeSubscriptions;
     return {
       unsubscribe: async () => {
         active = false;
@@ -246,6 +325,12 @@ class AtriumHandle implements Atrium {
         void callback;
         void active;
         void path;
+        // Remove from the active-subscription registry so
+        // long-running atriums don't accumulate entries.
+        const idx = subs.indexOf(entry);
+        if (idx >= 0) {
+          subs.splice(idx, 1);
+        }
       },
     };
   }
@@ -299,9 +384,21 @@ class AtriumHandle implements Atrium {
  *
  * Per Ben's D1, the returned function is a CALLABLE that returns
  * `Atrium` handles — NOT a flat namespace object.
+ *
+ * G21-T2 §C audit-6-2 closure: the factory now accepts an optional
+ * `nativeEngine.atrium(config)` instance-method (post-G21-T2 napi
+ * surface) AND falls back to the legacy `JsAtrium.create(config)`
+ * static-factory path (pre-G21-T2 napi binding). When
+ * `nativeEngine.atrium` is present the produced JsAtrium is bound to
+ * the engine-side `Arc<Engine>` so `join()` drives a real engine-side
+ * `AtriumHandle`; when only the legacy static factory is present, the
+ * produced JsAtrium runs in pre-G21-T2 hollow-state mode (kept for
+ * backwards compat with TS round-trip pins that exercise the typed
+ * struct surface independent of engine state).
  */
 export function makeAtriumFactory(
   nativeFactory: NativeAtriumFactoryConstruct | undefined,
+  nativeEngine?: NativeEngineWithAtrium,
 ): AtriumFactory {
   return (config: AtriumConfig): Atrium => {
     if (config === null || typeof config !== "object") {
@@ -310,12 +407,15 @@ export function makeAtriumFactory(
     if (typeof config.atriumId !== "string" || config.atriumId.length === 0) {
       throw new Error("engine.atrium config.atriumId must be a non-empty string");
     }
+    // G21-T2 preferred path: engine-bound JsAtrium via instance method.
+    if (nativeEngine && typeof nativeEngine.atrium === "function") {
+      const native = nativeEngine.atrium({ atriumId: config.atriumId });
+      return new AtriumHandle(native, config);
+    }
     if (!nativeFactory || typeof nativeFactory.create !== "function") {
       // Fallback in-memory shim: allows the TS DSL test pin to
       // exercise the B-prime factory shape end-to-end without a
-      // built napi binding. G16-B reconciliation: at merge, the napi
-      // factory is always present; this branch becomes the
-      // unavailable-error path.
+      // built napi binding.
       const inMemory: NativeAtrium = makeInMemoryNativeAtrium(config.atriumId);
       return new AtriumHandle(inMemory, config);
     }

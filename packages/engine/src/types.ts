@@ -386,11 +386,144 @@ export interface CapabilityGrant {
   actor: string;
   /** Scope expression (e.g. `"store:post:write"`). */
   scope: string;
-  /** Optional issuer CID (Phase-3 UCAN grounding — ignored in Phase 1). */
+  /**
+   * Issuer CID consumed by the durable UCAN backend's chain-walker
+   * (G14-B + G21-T2). When present, the Rust-side `parse_grant_json`
+   * threads this through to the durable `UCANBackend<B>` so the
+   * grant's signing-issuer claim is verified against the chain root.
+   *
+   * Phase-3-pre-G21-T2 honest state: this field was silently dropped
+   * by the napi parser (Phase-1 stub). Post-G21-T2 (audit-6-1
+   * closure) it flows through to the durable backend.
+   */
   issuer?: string;
-  /** Optional HLC stamp (Phase-3 — ignored in Phase 1). */
+  /**
+   * HLC stamp consumed by the durable UCAN backend for replay-window
+   * narrowing (G14-B). When present, the chain-walker uses this as
+   * the `now` reference for nbf/exp checks instead of the engine's
+   * wall-clock — useful for cross-peer correlation in Atrium sync.
+   *
+   * Phase-3-pre-G21-T2 honest state: this field was silently dropped
+   * by the napi parser. Post-G21-T2 it flows through.
+   */
   hlc?: number;
 }
+
+/**
+ * Phase-3 G21-T2 — typed-CALL op-name closed registry.
+ *
+ * Mirrors the Rust closed-set `benten_eval::TypedCallOp` 10-variant
+ * `#[non_exhaustive]` enum at
+ * `crates/benten-eval/src/typed_call.rs::TypedCallOp`. Phase-3 G21-T1
+ * ships exactly these 10 ops; the registry is closed (no
+ * user-registered typed-CALL ops). Extending the registry is a
+ * Rust-only engine concern.
+ *
+ * Per-op input/output schemas live below in the
+ * [`TypedCallInput`] / [`TypedCallOutput`] discriminated unions.
+ */
+export type TypedCallOp =
+  | "ed25519_sign"
+  | "ed25519_verify"
+  | "keypair_generate"
+  | "keypair_from_seed"
+  | "blake3_hash"
+  | "multibase_encode"
+  | "multibase_decode"
+  | "did_resolve"
+  | "ucan_validate_chain"
+  | "vc_verify";
+
+/**
+ * Per-op input shapes for [`TypedCallOp`]. Mirrors the per-op
+ * input/output rustdoc at
+ * `crates/benten-eval/src/typed_call.rs::TypedCallOp`.
+ *
+ * Bytes fields cross the napi boundary as `Buffer` / `Uint8Array`
+ * (napi-rs renders these as numeric-keyed objects on the JSON side
+ * but the runtime detector at the napi layer reconstructs the bytes
+ * unambiguously — see `bindings/napi/src/node.rs::detect_typed_array_bytes`).
+ *
+ * The discriminated union is keyed by op-name; callers pick the
+ * matching shape per the op they invoke. Phase-3 G21-T2 callers
+ * write `engine.typedCall("ed25519_sign", { privateKey, message })`
+ * with the exact field names below.
+ */
+export interface TypedCallInputShapes {
+  ed25519_sign: { private_key: Uint8Array | Buffer; message: Uint8Array | Buffer };
+  ed25519_verify: {
+    public_key: Uint8Array | Buffer;
+    message: Uint8Array | Buffer;
+    signature: Uint8Array | Buffer;
+  };
+  keypair_generate: Record<string, never> | { seed: null };
+  keypair_from_seed: { seed: Uint8Array | Buffer };
+  blake3_hash: { data: Uint8Array | Buffer };
+  multibase_encode: { data: Uint8Array | Buffer; base: string };
+  multibase_decode: { encoded: string };
+  did_resolve: { did: string };
+  ucan_validate_chain: {
+    tokens: (Uint8Array | Buffer)[];
+    audience: string;
+    capability: string;
+    now: number;
+  };
+  vc_verify: {
+    credential: Uint8Array | Buffer;
+    expected_issuer_did: string;
+    now: number;
+  };
+}
+
+/** Per-op output shapes for [`TypedCallOp`]. */
+export interface TypedCallOutputShapes {
+  ed25519_sign: { signature: Uint8Array };
+  ed25519_verify: { valid: boolean };
+  keypair_generate: { private_key: Uint8Array; public_key: Uint8Array };
+  keypair_from_seed: { private_key: Uint8Array; public_key: Uint8Array };
+  blake3_hash: { hash: Uint8Array };
+  multibase_encode: { encoded: string };
+  multibase_decode: { data: Uint8Array; base: string };
+  did_resolve: { method: string; public_key: Uint8Array };
+  ucan_validate_chain: { valid: boolean; reason: string };
+  vc_verify: { valid: boolean; issuer: string; subject: string };
+}
+
+/** Look up the input shape for a given typed-CALL op. */
+export type TypedCallInput<Op extends TypedCallOp> = TypedCallInputShapes[Op];
+/** Look up the output shape for a given typed-CALL op. */
+export type TypedCallOutput<Op extends TypedCallOp> = TypedCallOutputShapes[Op];
+
+/**
+ * Per-op required capability strings under the `cap:typed:*`
+ * namespace. Mirrors `TypedCallOp::required_cap()`.
+ *
+ * Under `NoAuthBackend` all typed-CALL caps are permitted; under
+ * the durable UCAN backend (G14-B + G21-T2) the chain-walker gates
+ * each op by claim. See `crates/benten-caps/src/backends/ucan.rs`
+ * for the consumer-side mapping (phase-3-backlog §2.5(c)).
+ */
+export const TYPED_CALL_REQUIRED_CAP: Record<TypedCallOp, string> = {
+  ed25519_sign: "cap:typed:crypto-sign",
+  ed25519_verify: "cap:typed:crypto-verify",
+  keypair_generate: "cap:typed:crypto-keygen",
+  keypair_from_seed: "cap:typed:crypto-keygen",
+  blake3_hash: "cap:typed:hash",
+  multibase_encode: "cap:typed:codec",
+  multibase_decode: "cap:typed:codec",
+  did_resolve: "cap:typed:did-resolve",
+  ucan_validate_chain: "cap:typed:ucan-validate",
+  vc_verify: "cap:typed:vc-verify",
+};
+
+/**
+ * Reserved handler-id namespace prefix for typed-CALL dispatch.
+ *
+ * Mirrors `benten_eval::TYPED_CALL_PREFIX`. A CALL operation node
+ * whose `target` starts with this prefix routes through the typed-CALL
+ * registry instead of the user handler registry.
+ */
+export const TYPED_CALL_PREFIX = "engine:typed:";
 
 /**
  * Terminal outcome of a handler invocation. Mirrors the napi-side

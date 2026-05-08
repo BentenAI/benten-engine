@@ -263,11 +263,19 @@ mod napi_surface {
             //   containing a `GrantReader` from here because the reader
             //   needs the engine's `Arc<RedbBackend>`, which only exists
             //   after `.open(&path)` runs.
+            // G21-T2 audit-6-1 closure: `PolicyKind::Ucan` now routes
+            // through the durable UCAN-grounded grant-backed policy
+            // (closes phase-3-backlog §2.3). Pre-G21-T2 this arm wired
+            // the Phase-1 stub `benten_caps::LegacyUcanStubBackend`
+            // (renamed from `UcanBackend` so a misroute import-error
+            // surfaces at compile time rather than at runtime). The
+            // durable backend reads the engine's own
+            // `system:CapabilityGrant` / `system:CapabilityRevocation`
+            // Nodes; the underlying UCAN proof-chain validator lives
+            // at `benten_caps::backends::UCANBackend` (G14-B wave-4b).
             let builder = match policy {
                 PolicyKind::NoAuth => EngineBuilder::new(),
-                PolicyKind::Ucan => {
-                    EngineBuilder::new().capability_policy(Box::new(benten_caps::UcanBackend))
-                }
+                PolicyKind::Ucan => EngineBuilder::new().capability_policy_ucan_durable(),
                 PolicyKind::GrantBacked => EngineBuilder::new().capability_policy_grant_backed(),
             };
             let inner = builder.open(&path).map_err(engine_err)?;
@@ -492,6 +500,77 @@ mod napi_surface {
             Ok(outcome_to_json(&outcome))
         }
 
+        /// Phase-3 G21-T2 — typed-CALL surface. Drives the engine's
+        /// `engine:typed:<op>` dispatch arm directly without first
+        /// registering a CALL-bearing subgraph.
+        ///
+        /// `op_name` is the trailing op-name segment (e.g.
+        /// `"ed25519_sign"`); `input` is the per-op input shape per
+        /// `crates/benten-eval/src/typed_call.rs::TypedCallOp` rustdoc.
+        /// Returns the op's typed output as JSON (Bytes round-trip
+        /// through the napi numeric-keyed-object shape — same as
+        /// `engine.createNode` properties).
+        ///
+        /// Errors map to the stable `E_TYPED_CALL_*` catalog codes:
+        /// - `E_TYPED_CALL_UNKNOWN_OP` — `op_name` is not one of the
+        ///   10 ops in the closed registry.
+        /// - `E_TYPED_CALL_INVALID_INPUT` — input shape rejects.
+        /// - `E_TYPED_CALL_CAP_DENIED` — capability gate denies (only
+        ///   under non-NoAuth policies).
+        /// - `E_TYPED_CALL_DISPATCH_ERROR` — op-internal failure
+        ///   (malformed key bytes / corrupted UCAN envelope / etc).
+        #[napi(js_name = "typedCall")]
+        pub fn typed_call(
+            &self,
+            op_name: String,
+            input: serde_json::Value,
+        ) -> napi::Result<serde_json::Value> {
+            // Parse op-name into the closed-set TypedCallOp variant.
+            // Unknown ops surface E_TYPED_CALL_UNKNOWN_OP via the
+            // engine catch-all (we route through the engine's
+            // dispatch fork even for the unknown case so the catalog
+            // attribution stays uniform).
+            let op = benten_engine::TypedCallOp::parse(&op_name).ok_or_else(|| {
+                // Surface the catalog code in the message so the TS
+                // mapNativeError extracts the right `E_TYPED_CALL_*`
+                // class. Mirrors the JSON-envelope shape engine_err
+                // produces for typed EngineError variants.
+                let body = format!(
+                    r#"{{"code":"E_TYPED_CALL_UNKNOWN_OP","message":"typed-CALL dispatch: unknown op '{op_name}' (engine:typed:* registry has no matching entry)"}}"#
+                );
+                napi::Error::new(Status::GenericFailure, body)
+            })?;
+            let value = json_to_value_root(input)?;
+            let out = self
+                .inner
+                .dispatch_typed_call_public(op, &value)
+                .map_err(engine_err)?;
+            Ok(crate::node::value_to_json(&out))
+        }
+
+        /// Phase-3 G21-T2 §C audit-6-2 closure — `Engine.atrium()`
+        /// factory method per Ben's D1 ratification (Pattern B-prime
+        /// factory-handle form).
+        ///
+        /// Returns a [`crate::atrium::JsAtrium`] handle bound to this
+        /// engine instance. Subsequent calls on the handle (`join` /
+        /// `leave` / `trustPeer` / `revokePeer` / `listPeers` /
+        /// `subscribe` / `declareDeviceAttestation`) drive the
+        /// engine-side `Engine::open_atrium` / `AtriumHandle`
+        /// surfaces (see `crates/benten-engine/src/atrium_api.rs` +
+        /// `engine_sync.rs`).
+        ///
+        /// Pre-G21-T2 the napi `JsAtrium` was a self-contained
+        /// in-memory shim; the engine-side `Engine::open_atrium`
+        /// existed at G16-B canary scope but was NOT exposed at the
+        /// napi boundary. This factory closes that BLOCKER —
+        /// `engine.atrium({}).join()` from JS/TS now drives a real
+        /// engine-side `AtriumHandle`.
+        #[napi(js_name = "atrium")]
+        pub fn atrium(&self, config: crate::atrium::AtriumConfig) -> crate::atrium::JsAtrium {
+            crate::atrium::JsAtrium::from_engine(config, Arc::clone(&self.inner))
+        }
+
         /// Run a handler under the tracer. Returns `{ steps: [...] }`.
         #[napi]
         pub fn trace(
@@ -538,12 +617,27 @@ mod napi_surface {
         // -------- Capabilities --------
 
         /// Grant a capability. Returns the grant Node's CID.
+        ///
+        /// Phase-3 G21-T2: the JSON grant shape is widened to accept
+        /// optional `issuer` (DID string) + `hlc` (numeric stamp) for
+        /// UCAN-grounded grants — these flow through to the durable
+        /// backend's chain-walker via
+        /// [`benten_engine::Engine::grant_capability_with_proof`].
+        /// Phase-1 callers passing only `{ actor, scope }` continue
+        /// to work unchanged (the Node persisted has no `issuer` /
+        /// `hlc` properties; the durable backend treats the grant as
+        /// Phase-1-style).
         #[napi]
         pub fn grant_capability(&self, grant: serde_json::Value) -> napi::Result<String> {
-            let (actor, scope) = parse_grant_json(grant)?;
+            let parsed = parse_grant_json(grant)?;
             let cid = self
                 .inner
-                .grant_capability(actor.as_str(), scope.as_str())
+                .grant_capability_with_proof(
+                    parsed.actor.as_str(),
+                    parsed.scope.as_str(),
+                    parsed.issuer,
+                    parsed.hlc,
+                )
                 .map_err(engine_err)?;
             Ok(cid.to_base32())
         }

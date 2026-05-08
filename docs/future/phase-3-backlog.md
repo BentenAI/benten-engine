@@ -173,6 +173,27 @@
 - `.addl/phase-3/mini-review-pr-143-g20-b-dx-optimizer.json` (g20b-dx-1, g20b-dx-4, g20b-dx-7, g20b-dx-8) — origin findings.
 - `.addl/phase-3/mini-review-pr-143-g20-b-doc-engineer.json` (doc-2) — symbol-cite drift sibling.
 
+#### 2.3 (i) — `WriteContext` audience + clock threading for arbitrary-scope UCAN proof-chain enforcement (G21-T2 fp-mini-review BLOCKER-2 partial-deferral)
+
+**Origin (G21-T2 fp-mini-review, 2026-05-08, post-PR-#148):** the fp-mini-review BLOCKER-2 sec-finding flagged that `EngineBuilder::capability_policy_ucan_durable` was a verbatim alias for `capability_policy_grant_backed` — UCAN proof-chain validation NEVER fired under `PolicyKind::Ucan`. The PR #148 fix-pass closes this for **typed-CALL `cap:typed:*` capabilities** by composing [`benten_caps::UcanGroundedPolicy`] which wraps `GrantBackedPolicy` + `UCANBackend` proof-chain validation + the [`benten_caps::typed_cap_for_ucan_claim`] mapping table.
+
+**What's deferred here (named-destination + named-timing per HARD RULE clause-b):** per-write proof-chain enforcement for ARBITRARY scope-strings (e.g. `store:post:write`, `zone:user:read`, etc.) — the wider lift requires three coupled threading axes:
+
+1. **`WriteContext::actor_hint`-as-DID propagation.** Today `actor_hint` carries an opaque `Cid` (Phase-1 principal); the chain-walker requires a `&Did` for `validate_chain_for_audience_at`. Threading the actor's DID through the CRUD write path + the SUBSCRIBE delivery-time recheck closure is a multi-crate touch (`benten-graph::WriteContext`, `benten-eval::PrimitiveHost::check_capability`, `benten-engine::primitive_host` cap-gate, all `benten-engine/src/engine_*.rs` privileged-write paths).
+2. **`WriteContext::now`-as-real-clock injection.** Today the `UcanGroundedPolicy::now_secs` defaults to `0` (epoch start) so present-day fixtures with `nbf=0`+positive-`exp` accept; tests inject custom values via `with_now_for_test`. Production needs `WriteContext::now_secs: u64` populated by the engine's `TimeSource` at every write-check entry. This is the same threading axis as Phase-2a G9-A's wall-clock-refresh cadence work but at the policy-hook surface (vs the per-iteration boundary).
+3. **Multi-token chain reference in WriteContext.** Today `UcanGroundedPolicy::iter_installed_proofs` treats each persisted token as a singleton chain (`std::slice::from_ref(proof)`). Multi-token delegation chains need either (a) per-actor chain assembly via parent-CID indexes in the durable store, OR (b) `WriteContext::ucan_chain_ref: Option<Cid>` carrying the leaf-CID with the durable store reconstructing the chain.
+
+**Phase 3 target:** post-G21-T2-close follow-on wave (T3 / T4 or a sibling cleanup wave). Each axis is independently scoped; (1) and (2) compose; (3) is a chain-walker extension.
+
+**Touch size:** ~150-300 LOC across `benten-graph::WriteContext` + `benten-eval::PrimitiveHost` + `benten-engine` cap-gate sites + UcanGroundedPolicy slow-path widening + integration test pins for arbitrary-scope proof-chain enforcement.
+
+**Cross-references:**
+- `crates/benten-caps/src/ucan_grounded.rs::UcanGroundedPolicy::typed_cap_permitted_by_proof` — the slow path that today only fires for `cap:typed:*`; this work widens it to arbitrary scope strings with audience binding.
+- `crates/benten-caps/src/ucan_grounded.rs::DEFAULT_NOW_SECS` — the epoch-0 fallback that goes away once `WriteContext::now_secs` is populated.
+- `crates/benten-engine/src/primitive_host.rs::check_capability` — the policy-hook entry that threads `WriteContext` (currently builds it with `label`-only).
+- `crates/benten-engine/tests/typed_call_ucan_grounded.rs` — the BLOCKER-2 partial-closure pin set (3 pins covering typed-cap proof-chain validation under `capability_policy_ucan_durable`).
+- `bindings/napi/test/typed_call_napi_cap_gate.test.ts` — the BLOCKER-1 napi-entry-cap-gate companion.
+
 ### 2.5 typed-CALL fp-mini-review residuals (G21-T1 sec-minor-2/3/4 + corr-minor-3)
 
 **Origin (G21-T1 fp-mini-review, 2026-05-08):** the security mini-review on PR #145 surfaced 4 MAJORs (closed end-to-end at PR #145 fix-pass) plus 4 minors. The MAJORs are closed; the four named carries below land in a follow-up wave so the canary-scope PR remains tight.
@@ -187,9 +208,34 @@
 
 **(d) Reserved `engine:typed:` handler-id namespace registration reject (corr-minor-3).** `Engine::register_subgraph` does not currently reject a handler whose `handler_id` starts with `engine:typed:`. The eval-side dispatch fork pre-empts user-handler routing for the prefix, so user registration is effectively dead code (currently pinned at `crates/benten-engine/tests/typed_call_engine_dispatch.rs::typed_call_namespace_pre_empts_user_handler_registry_for_unknown_op`), but a hard registration-time REJECT would surface the user-error sooner. Phase 3 target: add an `EngineError::ReservedHandlerNamespace { handler_id }` variant + corresponding `ErrorCode::ReservedHandlerNamespace` (4-surface §3.5g atomic update across `benten-errors` lib + JS adapter regen + ERROR-CATALOG row + TS bindings). Touch size: ~80-120 LOC across the 4 ErrorCode surfaces + 1 register_subgraph guard + 1 pin.
 
-**Phase 3 target:** post-G21-T1 follow-on (T2/T3/T4 or a sibling cleanup wave). Each item is independently scoped; (c) couples to the napi-UCAN-wireup G21-T2 work in §2.3.
+**(e) `Value::SensitiveBytes` discriminant for typed-CALL secret-byte zeroize discipline (G21-T2 fp-mini-review MAJOR-6, deferred-half).** PR #148 fp-mini-review MAJOR-6 closure took option (b) — renamed `Keypair::secret_bytes_for_test` → `secret_bytes_unprotected` so the lack of zeroize-on-drop on the returned `[u8; 32]` is explicit at every call site. The proper option (a) — introducing a `Value::SensitiveBytes(Zeroizing<Vec<u8>>)` discriminant on the `benten_core::Value` enum — is deferred here because it is a cross-crate touch on every `Value` consumer (matchers in `benten-eval`, `benten-engine`, every primitive impl, every napi marshaller, the DSL compiler's value-shape builder, the IVM-view query path). Phase 3 target: add the discriminant on `Value`, route typed-CALL secret-byte outputs through it, audit `napi-rs` marshalling at the JS boundary so the bytes flow into a JS `Uint8Array` without first materializing as a non-Zeroizing intermediate. Touch size: ~150-250 LOC across the 6+ Value-consumer crates + new variant on `benten-eval::EvalError::TypedCallInvalidInput` shape audit if `SensitiveBytes` flows in to dispatch input. Cross-cuts §2.5 (a) which scoped the simpler `build_seed_envelope` `Zeroizing<Vec<u8>>` wrap (already landed at G21-T1 fix-pass).
 
-**Touch size:** ~180-320 LOC total across (a)-(d).
+**Phase 3 target:** post-G21-T1 follow-on (T2/T3/T4 or a sibling cleanup wave). Each item is independently scoped; (c) couples to the napi-UCAN-wireup G21-T2 work in §2.3; (e) is named at G21-T2 fp-mini-review.
+
+**Touch size:** ~330-570 LOC total across (a)-(e).
+
+#### 2.5 (f) — G21-T2 fp-mini-review DX residuals cluster
+
+**Origin (G21-T2 fp-mini-review, 2026-05-08):** the fp-mini-review surfaced 4 minor DX-class findings disposed as SKIP-here-with-named-destination per HARD RULE clause-b. None block the load-bearing security closures (BLOCKERs 1-3 + MAJORs 4-7); each is named here NOW so a future DX cleanup wave can pick up.
+
+**Carry items (4 minors, follow-up wave):**
+
+1. **DX-1: cargo dx items** — observed during fp-mini-review across the fix-pass commit set; symptom is workspace-level cargo command surface ergonomics. Surface: workspace `Cargo.toml` + `xtask` if added; touch ≤30 LOC.
+
+2. **DX-2: display rendering improvement** — the `format!("{err:?}")` debug-rendering patterns in the new typed-CALL pin set produce verbose output. A `Display` impl on the typed `EngineError` variants would render more readably. Surface: `crates/benten-engine/src/error.rs::EngineError::Other` Display arm; touch ≤30 LOC.
+
+3. **DX-3: `ucan_validate_chain` test fragility** — the existing `ucan_validate_chain_returns_*` pins in `crates/benten-engine/tests/typed_call_engine_dispatch.rs` build chains via the `Ucan::builder` + manual `now`-fixture composition; a test fixture helper that bundles the pattern would reduce duplication + clarify intent. Surface: a new `tests/common/ucan_fixtures.rs` shared helper module; touch ≤80 LOC.
+
+4. **DX-4: multi-Atrium handle dedup** — `bindings/napi/src/atrium.rs::JsAtrium::from_engine` constructs a fresh `AtriumHandleState` per call; multiple calls with the same `atriumId` produce distinct handles routing to the same logical atrium per Ben's D1 ratification (intentional). However, the `AtriumHandleState::declared_attestations` registry is per-handle, so attestations declared on handle A are NOT visible on handle B for the same atrium. Phase 3 target: hoist the per-atrium registries to an engine-level table keyed on `atriumId`. Surface: `bindings/napi/src/atrium.rs` + new engine-level registry on `Engine`; touch ~50-80 LOC.
+
+**Phase 3 target:** post-G21-T2-close DX cleanup wave. Independently scoped from §2.5 (a)-(e) above; lands in a separate sibling PR.
+
+**Touch size:** ~190-220 LOC total across the 4 minors.
+
+**Cross-references:**
+- `bindings/napi/src/atrium.rs::JsAtrium::from_engine` — DX-4 surface.
+- `crates/benten-engine/src/error.rs::EngineError::Other` — DX-2 surface.
+- `crates/benten-engine/tests/typed_call_engine_dispatch.rs::ucan_validate_chain_returns_true_for_well_formed_chain` (and the 3 other `ucan_validate_chain_returns_*` siblings in the same file) — DX-3 surface.
 
 **Cross-references:**
 - `crates/benten-engine/src/typed_call_dispatch.rs` — sec-minor-2 + sec-minor-3 surfaces.

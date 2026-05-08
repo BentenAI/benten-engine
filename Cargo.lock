@@ -316,6 +316,7 @@ dependencies = [
  "toml",
  "tracing",
  "wat",
+ "zeroize",
 ]
 
 [[package]]
@@ -416,6 +417,7 @@ dependencies = [
  "napi-derive",
  "serde_json",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]

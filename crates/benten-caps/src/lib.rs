@@ -6,9 +6,13 @@
 //!   [`ReadContext`].
 //! - [`NoAuthBackend`] — the zero-cost Phase 1 default; permits every write
 //!   and every read.
-//! - [`UcanBackend`] — a stub that cleanly errors with
-//!   [`CapError::NotImplemented`] so operator misconfiguration in Phase 1
-//!   surfaces as a distinct error code, not a denial.
+//! - [`LegacyUcanStubBackend`] (renamed from `UcanBackend` at G21-T2
+//!   audit-6-1 closure) — a stub that cleanly errors with
+//!   [`CapError::NotImplemented`] so legacy callsites that still
+//!   reach for the Phase-1 stub surface a distinct error. Production
+//!   code uses `EngineBuilder::capability_policy_ucan_durable` which
+//!   composes the durable [`backends::UCANBackend`] + Phase-3
+//!   [`GrantBackedPolicy`].
 //! - [`CapabilityGrant`] — the typed grant Node + [`GrantScope`] parsing +
 //!   the canonical [`GRANTED_TO_LABEL`] / [`REVOKED_AT_LABEL`] edge labels.
 //! - [`check_attenuation`] — the segment-wise subset check consumed by the
@@ -46,6 +50,9 @@ pub mod grant_backed;
 pub mod noauth;
 pub mod policy;
 pub mod rate_limit;
+pub mod typed_cap_mapping;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod ucan_grounded;
 pub mod ucan_stub;
 
 pub use attenuation::check_attenuation;
@@ -62,7 +69,10 @@ pub use policy::{CapabilityPolicy, PendingOp, ReadContext, WriteAuthority, Write
 pub use rate_limit::{
     InMemoryRateLimitPolicy, InMemoryRateLimitPolicyBuilder, NullRateLimitPolicy, RateLimitPolicy,
 };
-pub use ucan_stub::UcanBackend;
+pub use typed_cap_mapping::{TypedCapGroup, typed_cap_for_ucan_claim};
+#[cfg(not(target_arch = "wasm32"))]
+pub use ucan_grounded::UcanGroundedPolicy;
+pub use ucan_stub::LegacyUcanStubBackend;
 
 /// Phase 2a G9-A / P2 test-harness: helper surface the evaluator consults
 /// for iteration-batch + wall-clock refresh delegation. Split into its own

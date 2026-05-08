@@ -46,6 +46,7 @@ use std::collections::BTreeMap;
 use benten_core::Value;
 use benten_eval::{EvalError, TypedCallOp};
 use benten_id::keypair::{ENVELOPE_ALG, ENVELOPE_VERSION, Keypair, PublicKey, Signature};
+use zeroize::Zeroizing;
 
 /// Dispatch one of the 10 typed-CALL ops to its underlying
 /// implementation.
@@ -141,10 +142,16 @@ fn keypair_generate() -> Result<Value, EvalError> {
     // `getrandom`).
     let kp = Keypair::generate();
     let envelope = kp.export_seed_envelope();
-    // Recover the raw 32-byte seed from the envelope (test-side
-    // accessor only — production callers see the envelope shape).
-    // We need raw 32 bytes for the typed-CALL output schema.
-    let secret_bytes = kp.secret_bytes_for_test();
+    // G21-T2 fp-mini-review MAJOR-6 closure (option (b)): the raw
+    // 32-byte private-key bytes flow out the typed-CALL output
+    // schema as a `Value::Bytes` wrapper. Per phase-3-backlog §2.5
+    // (e) the proper zeroize-on-drop discipline lands when the
+    // `Value::SensitiveBytes` discriminant extension is wired
+    // (cross-crate touch on every Value consumer). Today we use the
+    // production-named `secret_bytes_unprotected` accessor so the
+    // unprotected nature of the surface is explicit at the call
+    // site (rename of `secret_bytes_for_test`).
+    let secret_bytes = kp.secret_bytes_unprotected();
     let _ = envelope; // envelope round-trip path validated; not surfaced
 
     let public_bytes = kp.public_key().to_bytes();
@@ -174,7 +181,10 @@ fn keypair_from_seed(input: &Value) -> Result<Value, EvalError> {
     })?;
 
     let public_bytes = kp.public_key().to_bytes();
-    let secret_bytes = kp.secret_bytes_for_test();
+    // G21-T2 fp-mini-review MAJOR-6 closure: same unprotected-Value
+    // narrative as `keypair_generate` above. phase-3-backlog §2.5 (e)
+    // tracks the `Value::SensitiveBytes` extension.
+    let secret_bytes = kp.secret_bytes_unprotected();
 
     let mut out = BTreeMap::new();
     out.insert(
@@ -458,7 +468,16 @@ fn vc_verify(input: &Value) -> Result<Value, EvalError> {
 /// Build a DAG-CBOR `{version, alg, secret_bytes}` envelope for the
 /// given 32-byte seed. Round-trips byte-identically through
 /// [`Keypair::from_dag_cbor_envelope`].
-fn build_seed_envelope(seed: &[u8]) -> Vec<u8> {
+///
+/// G21-T2 §D §2.5(a) sec-minor-2 closure — the returned buffer is
+/// wrapped in `zeroize::Zeroizing<Vec<u8>>` so the 32-byte seed
+/// material that the envelope embeds is scrubbed on Drop. The
+/// `Zeroizing` wrapper transparently coerces to `&[u8]` via Deref so
+/// the caller's `Keypair::from_dag_cbor_envelope(&envelope)` call
+/// site is unchanged. Pre-G21-T2 the buffer was a bare `Vec<u8>`
+/// and a stale stack-spill / heap-fragment read could leak the seed
+/// after the function returned.
+fn build_seed_envelope(seed: &[u8]) -> Zeroizing<Vec<u8>> {
     debug_assert_eq!(seed.len(), 32, "seed must be exactly 32 bytes");
     #[derive(serde::Serialize)]
     struct SeedEnvelope<'a> {
@@ -471,8 +490,10 @@ fn build_seed_envelope(seed: &[u8]) -> Vec<u8> {
         alg: ENVELOPE_ALG,
         secret_bytes: serde_bytes::Bytes::new(seed),
     };
-    serde_ipld_dagcbor::to_vec(&env)
-        .expect("DAG-CBOR encoding of fixed-shape SeedEnvelope cannot fail")
+    Zeroizing::new(
+        serde_ipld_dagcbor::to_vec(&env)
+            .expect("DAG-CBOR encoding of fixed-shape SeedEnvelope cannot fail"),
+    )
 }
 
 fn expect_map(v: &Value) -> Result<&BTreeMap<String, Value>, EvalError> {

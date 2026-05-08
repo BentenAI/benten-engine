@@ -23,6 +23,7 @@ import {
   makeAtriumFactory,
   type AtriumFactory,
   type NativeAtriumFactoryConstruct,
+  type NativeEngineWithAtrium,
 } from "./atrium.js";
 import {
   isCrudHandler,
@@ -74,6 +75,9 @@ import type {
   ResumeWithMetaResult,
   Trace,
   TraceStep,
+  TypedCallInput,
+  TypedCallOp,
+  TypedCallOutput,
   UserView,
   UserViewSpec,
   ViewDef,
@@ -115,6 +119,10 @@ interface NativeEngine {
   registerCrud?: (label: string) => string;
   call?: (handlerId: string, op: string, input: unknown) => unknown;
   callAs?: (handlerId: string, op: string, input: unknown, actor: string) => unknown;
+  // Phase-3 G21-T2 — typed-CALL surface. Drives the engine's
+  // `engine:typed:<op>` dispatch arm. See
+  // `bindings/napi/src/lib.rs::Engine::typed_call`.
+  typedCall?: (opName: string, input: unknown) => unknown;
   trace?: (handlerId: string, op: string, input: unknown) => {
     steps: unknown[];
     result?: unknown;
@@ -268,12 +276,18 @@ interface NativeModule {
  * Capability-policy kinds accepted by `Engine.openWithPolicy`.
  *
  * - `NoAuth` — default. No capability checks; all writes allowed.
- * - `Ucan` — Phase-3 UCAN stub. Opens but surfaces
- *   `E_CAP_NOT_IMPLEMENTED` at check time.
- * - `GrantBacked` — Phase-1 revocation-aware policy backed by the
- *   engine's own `system:CapabilityGrant` Nodes. Call
- *   `engine.grantCapability({ actor, scope })` to seed permissions
- *   before dispatching writes through `engine.call(...)`.
+ * - `Ucan` — Phase-3 G14-B + G21-T2 durable UCAN-grounded grant-backed
+ *   policy. Composes `GrantBackedPolicy` (revocation-aware policy
+ *   hook) with the durable `UCANBackend` proof-chain validator.
+ *   Grants minted under this kind carry optional `issuer` (UCAN-chain
+ *   root DID) + `hlc` (causal stamp) for chain-walker correlation;
+ *   revocations propagate via `system:CapabilityRevocation` Nodes.
+ * - `GrantBacked` — Phase-2b revocation-aware policy backed by the
+ *   engine's own `system:CapabilityGrant` Nodes. Same durable surface
+ *   as `Ucan`; this kind signals "no UCAN-chain attribution on
+ *   grants" (omit `issuer` / `hlc` on `grantCapability` calls).
+ *   Call `engine.grantCapability({ actor, scope })` to seed
+ *   permissions before dispatching writes through `engine.call(...)`.
  */
 export const PolicyKind = {
   NoAuth: "NoAuth",
@@ -426,10 +440,17 @@ export class Engine {
     // inside `makeAtriumFactory` allows the B-prime factory shape to
     // be exercised even when the napi binding pre-dates the wave-6b
     // landing.
+    //
+    // G21-T2 §C audit-6-2 closure: prefer the engine-bound factory
+    // path (`nativeEngine.atrium(config)` instance method) when
+    // available, so the JsAtrium delegates to the engine-side
+    // `AtriumHandle` at `join()` time. Falls back to the legacy
+    // static-factory path for older napi cdylib builds.
     const nativeAtriumFactory = (
       this.inner as unknown as { JsAtrium?: NativeAtriumFactoryConstruct }
     ).JsAtrium;
-    this.atrium = makeAtriumFactory(nativeAtriumFactory);
+    const nativeEngineWithAtrium = this.inner as unknown as NativeEngineWithAtrium;
+    this.atrium = makeAtriumFactory(nativeAtriumFactory, nativeEngineWithAtrium);
   }
 
   /**
@@ -1194,6 +1215,56 @@ export class Engine {
     // of `callAs` see `reread.title` instead of `reread.list[0].properties.title`.
     applyCrudPostProcessing(flattened, crud, dispatchOp, input);
     return flattened;
+  }
+
+  /**
+   * Phase-3 G21-T2 — typed-CALL surface. Drives the engine's
+   * `engine:typed:<op>` dispatch arm directly without first
+   * registering a CALL-bearing subgraph.
+   *
+   * The op-name is the trailing segment of the typed-CALL `target`
+   * (e.g. `"ed25519_sign"`); the input shape is op-specific (see
+   * `TypedCallInput` for per-op TypeScript shapes mirroring the Rust
+   * `TypedCallOp` rustdoc). Returns the op's typed output.
+   *
+   * Bytes inputs/outputs cross the napi boundary as `Uint8Array` /
+   * `Buffer`; the Rust-side detector reconstructs the bytes
+   * unambiguously (see
+   * `bindings/napi/src/node.rs::detect_typed_array_bytes`).
+   *
+   * Errors map to the stable `E_TYPED_CALL_*` catalog codes:
+   * - `E_TYPED_CALL_UNKNOWN_OP` — `op` not in the closed registry.
+   * - `E_TYPED_CALL_INVALID_INPUT` — input shape rejects.
+   * - `E_TYPED_CALL_CAP_DENIED` — cap-gate denies (under non-NoAuth
+   *   policies; under `NoAuthBackend` all typed-CALL caps are
+   *   permitted).
+   * - `E_TYPED_CALL_DISPATCH_ERROR` — op-internal failure.
+   *
+   * Example:
+   * ```ts
+   * const { signature } = await engine.typedCall("ed25519_sign", {
+   *   private_key: privBytes,
+   *   message: msgBytes,
+   * });
+   * ```
+   */
+  public async typedCall<Op extends TypedCallOp>(
+    op: Op,
+    input: TypedCallInput<Op>,
+  ): Promise<TypedCallOutput<Op>> {
+    this.assertOpen();
+    if (!this.inner.typedCall) {
+      throw new EDslInvalidShape(
+        "Engine.typedCall unavailable on this binding (rebuild @benten/engine-native against G21-T2 napi surface)",
+      );
+    }
+    let raw: unknown;
+    try {
+      raw = this.inner.typedCall(op, input as unknown);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+    return raw as TypedCallOutput<Op>;
   }
 
   /**

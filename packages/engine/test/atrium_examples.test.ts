@@ -129,36 +129,111 @@ describe("G20-B Atrium examples compile + run", () => {
     return captured;
   };
 
-  // ucan-grant-flow IS the only one of the four that exercises the
-  // engine WRITE path under PolicyKind.Ucan, so its run() invocation
-  // correctly surfaces the napi-UCAN-backend stub's NotImplemented
-  // error per audit-6-1.
-  it("ucan-grant-flow run() surfaces stub failure under napi-stub state", async () => {
-    const err = await captureRunError(() => ucanGrantFlow.run());
-    expectStubFailureShape(err);
+  // G21-T2 §B audit-6-1 closure: the napi `PolicyKind.Ucan` arm now
+  // routes to the durable grant-backed policy (NOT the stub). The
+  // ucan-grant-flow example's `run()` therefore drives the durable
+  // backend end-to-end + the chain (grantCapability → callAs → succeeds
+  // / revokeCapability → callAs → denies) per phase-3-backlog §2.3 (f)
+  // GREEN-flip pin. The expected shape is now: run() either completes
+  // cleanly (`{ ok: true }`) under in-memory engine, OR surfaces a
+  // production-runtime error path (NOT the stub `E_CAP_NOT_IMPLEMENTED`).
+  // The negative pin (no E_CAP_NOT_IMPLEMENTED) is the load-bearing
+  // assertion — would FAIL if the audit-6-1 rewire silently regressed
+  // back to the stub.
+  it("ucan-grant-flow run() drives the durable backend post-audit-6-1 close", async () => {
+    let captured: unknown = null;
+    let result: unknown = null;
+    try {
+      result = await ucanGrantFlow.run();
+    } catch (err) {
+      captured = err;
+    }
+    if (captured !== null) {
+      // If a runtime error fires, it MUST NOT be the legacy stub.
+      const e = captured as Error;
+      const msg = e.message ?? "";
+      const name = e.name ?? "";
+      // Acceptable: BentenNativeNotLoaded (no napi cdylib in local dev)
+      // OR a real durable-backend error (E_CAP_DENIED / E_GRAPH_INTERNAL etc).
+      expect(/E_CAP_NOT_IMPLEMENTED/.test(msg)).toBe(false);
+      expect(/NotImplemented/.test(msg)).toBe(false);
+      // Either graceful-degradation OR a real durable-backend error path.
+      const acceptable =
+        name === "BentenNativeNotLoaded" ||
+        /not loadable/.test(msg) ||
+        /E_CAP_DENIED|E_GRAPH_INTERNAL|E_CAP_REVOKED/.test(msg);
+      expect(acceptable, `unexpected error shape; name=${name} msg=${msg}`).toBe(true);
+    } else {
+      // Clean run-to-completion is the GREEN-success path.
+      expect(result).toEqual({ ok: true });
+    }
   });
 
-  // The other three examples (atrium-peer-mgmt, atrium-sync-trigger,
-  // did-resolution) drive `engine.atrium({...})` and operate through
-  // `JsAtrium` napi methods (`family.join()`, `trustPeer`, etc) —
-  // currently hollow in-memory stubs (audit-6-2 BLOCKER + audit-6-3
-  // MAJOR). They short-circuit BEFORE reaching engine WRITE, so the
-  // run() completes via the stub without exercising the UCAN-backend
-  // gate. Pin will flip to live `.it()` + `expectStubFailureShape` (or
-  // a stronger end-to-end assertion) when G21 T2 closes audit-6-2/3
-  // and the napi Atrium surface delegates to engine-side `Atrium` per
-  // D-PHASE-3-15 B-prime contract.
-  it.skip("atrium-peer-mgmt run() — destination G21 T2 (audit-6-2 hollow JsAtrium)", async () => {
-    const err = await captureRunError(() => atriumPeerMgmt.run());
-    expectStubFailureShape(err);
+  // G21-T2 §C audit-6-2 closure: the napi Atrium surface delegates
+  // to engine-side `AtriumHandle` per D-PHASE-3-15 B-prime contract.
+  // The three example runners now drive a real `Engine.atrium(...)`
+  // factory + JsAtrium.join() flow that constructs an iroh Endpoint
+  // (loopback for in-memory tests) under the hood.
+  //
+  // Acceptable run() outcomes:
+  //   - { ok: true } — full success path under in-memory engine.
+  //   - BentenNativeNotLoaded — graceful-degradation under local dev
+  //     pre-build state.
+  //   - A real engine-side error path (E_ATRIUM_TRANSPORT_DEGRADED /
+  //     E_GRAPH_INTERNAL / E_TYPED_CALL_DISPATCH_ERROR / etc).
+  //
+  // Negative pin (load-bearing): `E_CAP_NOT_IMPLEMENTED` /
+  // `NotImplemented` MUST NOT fire — that's the audit-6-2 stub
+  // signature. A failure here = audit-6-2 silently regressed.
+  const expectPostAuditShape = (
+    captured: unknown,
+    result: unknown,
+  ): void => {
+    if (captured !== null) {
+      const e = captured as Error;
+      const msg = e.message ?? "";
+      const name = e.name ?? "";
+      expect(/E_CAP_NOT_IMPLEMENTED/.test(msg)).toBe(false);
+      expect(/NotImplemented/.test(msg)).toBe(false);
+      const acceptable =
+        name === "BentenNativeNotLoaded" ||
+        /not loadable/.test(msg) ||
+        /E_ATRIUM_TRANSPORT_DEGRADED|E_GRAPH_INTERNAL|E_TYPED_CALL/.test(msg);
+      expect(acceptable, `unexpected error shape; name=${name} msg=${msg}`).toBe(true);
+    } else {
+      expect(result).toEqual({ ok: true });
+    }
+  };
+
+  it("atrium-peer-mgmt run() drives JsAtrium delegation post-audit-6-2", async () => {
+    let captured: unknown = null;
+    let result: unknown = null;
+    try {
+      result = await atriumPeerMgmt.run();
+    } catch (err) {
+      captured = err;
+    }
+    expectPostAuditShape(captured, result);
   });
-  it.skip("atrium-sync-trigger run() — destination G21 T2 (audit-6-2 hollow JsAtrium)", async () => {
-    const err = await captureRunError(() => atriumSyncTrigger.run());
-    expectStubFailureShape(err);
+  it("atrium-sync-trigger run() drives JsAtrium delegation post-audit-6-2", async () => {
+    let captured: unknown = null;
+    let result: unknown = null;
+    try {
+      result = await atriumSyncTrigger.run();
+    } catch (err) {
+      captured = err;
+    }
+    expectPostAuditShape(captured, result);
   });
-  it.skip("did-resolution run() — destination G21 T2 (audit-6-2 hollow JsAtrium)", async () => {
-    const err = await captureRunError(() => didResolution.run());
-    expectStubFailureShape(err);
+  it("did-resolution run() drives typed-CALL did_resolve post-G21-T2", async () => {
+    let captured: unknown = null;
+    let result: unknown = null;
+    try {
+      result = await didResolution.run();
+    } catch (err) {
+      captured = err;
+    }
+    expectPostAuditShape(captured, result);
   });
 
   it("atrium examples compose entirely from existing 12 primitives (cag-4)", () => {

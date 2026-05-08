@@ -38,6 +38,7 @@ export {
   CaseBuilder,
   subscribe,
   transform,
+  typedCall,
   wait,
   write,
   type BranchArgs,
@@ -52,6 +53,7 @@ export {
   type StreamArgs,
   type SubscribeArgs,
   type TransformArgs,
+  type TypedCallNodeArgs,
   type WaitArgs,
   type WriteArgs,
 } from "./dsl.js";
@@ -123,6 +125,11 @@ export type {
   Trace,
   TraceStep,
   TraceStepUnknown,
+  TypedCallInput,
+  TypedCallInputShapes,
+  TypedCallOp,
+  TypedCallOutput,
+  TypedCallOutputShapes,
   UserView,
   UserViewInputPattern,
   UserViewSpec,
@@ -130,6 +137,9 @@ export type {
   ViewDef,
   ViewDelta,
 } from "./types.js";
+
+// Phase-3 G21-T2 — typed-CALL value re-exports (constants).
+export { TYPED_CALL_PREFIX, TYPED_CALL_REQUIRED_CAP } from "./types.js";
 
 export {
   buildUserViewHandle,

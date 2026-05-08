@@ -176,6 +176,14 @@ serde_bytes = { workspace = true }
 # bs58 lives in the native-target dependency section alongside the
 # rest of the typed-CALL chain.
 bs58 = { workspace = true }
+# Phase-3 G21-T2 §D §2.5(a) sec-minor-2 closure — zeroize-on-drop
+# wrapper for the seed envelope buffer constructed in
+# `typed_call_dispatch::build_seed_envelope`. The buffer holds 32
+# bytes of private-key seed material until the keypair envelope
+# decode consumes it; wrapping in `zeroize::Zeroizing<Vec<u8>>`
+# scrubs the buffer on Drop so a stale stack-spill / heap-fragment
+# read can't leak it. Workspace dep already used by `benten-id`.
+zeroize = { workspace = true }
 # Phase-3 G16-B wave-6b — engine-side Atrium API surface
 # (`engine_sync.rs` + `atrium_api.rs`) consumes the iroh transport core
 # (G16-A) + Loro CRDT (G16-B) from `benten-sync`. Native-only per

@@ -51,6 +51,15 @@ pub struct EngineBuilder {
     /// cap refresh policy (see named compromise #1 / R4b finding
     /// `g4-p2-uc-2`).
     allow_revocation: bool,
+    /// Set by `.capability_policy_ucan_durable()`. When true, the
+    /// builder wraps the grant-backed surface in
+    /// [`benten_caps::UcanGroundedPolicy`] composing the durable
+    /// [`benten_caps::UCANBackend`] proof-chain validator alongside
+    /// [`benten_caps::GrantBackedPolicy`]. Closes G21-T2 fp-mini-review
+    /// BLOCKER-2 — the prior `capability_policy_ucan_durable` was a
+    /// verbatim alias for the grant-backed builder so UCAN proof-chain
+    /// validation never fired under `PolicyKind::Ucan`.
+    use_ucan_grounded: bool,
     /// Upper bound on the in-memory change-event buffer. `None` defaults to
     /// [`CHANGE_STREAM_MAX_BUFFERED`]. See r6-sec-5.
     change_stream_capacity: Option<usize>,
@@ -91,6 +100,7 @@ impl EngineBuilder {
             backend: None,
             use_grant_backed: false,
             allow_revocation: false,
+            use_ucan_grounded: false,
             change_stream_capacity: None,
             monotonic_source: None,
             time_source: None,
@@ -176,6 +186,59 @@ impl EngineBuilder {
     #[must_use]
     pub fn with_grant_backed_policy(self) -> Self {
         self.capability_policy_grant_backed()
+    }
+
+    /// Phase-3 G21-T2 — route the builder through the durable
+    /// UCAN-backed capability policy (closes audit-6-1 +
+    /// phase-3-backlog §2.3 + G21-T2 fp-mini-review BLOCKER-2).
+    ///
+    /// Composes [`benten_caps::UcanGroundedPolicy`] which wraps
+    /// [`benten_caps::GrantBackedPolicy`] (Phase-2b revocation-aware
+    /// `system:CapabilityGrant` Node-encoded grant store) AND
+    /// [`benten_caps::UCANBackend`] proof-chain validation (signature +
+    /// `nbf`/`exp` time-window + attenuation + per-token revocation
+    /// at every link, plus the [`benten_caps::typed_cap_for_ucan_claim`]
+    /// claim → `cap:typed:*` mapping table).
+    ///
+    /// ## Composition
+    ///
+    /// 1. `GrantBackedPolicy` is consulted first (fast path); a stored
+    ///    grant permits the write immediately.
+    /// 2. If GrantBackedPolicy denies AND the required capability is
+    ///    in the `cap:typed:*` namespace, the policy enumerates
+    ///    persisted UCAN proofs via
+    ///    [`benten_caps::UCANBackend::iter_installed_proofs`] and
+    ///    accepts the first chain whose leaf-claim maps to the
+    ///    required typed-cap AND passes the chain-walker.
+    /// 3. Otherwise the original GrantBackedPolicy denial bubbles.
+    ///
+    /// ## Pre-G21-T2 fp-mini-review state (now closed)
+    ///
+    /// The Phase-3-G21-T2-pre-fp method body was a verbatim alias for
+    /// `capability_policy_grant_backed` — UCAN proof-chain validation
+    /// NEVER fired under `PolicyKind::Ucan`. A forged UCAN with
+    /// audience-right + capability-wrong, an expired token, or an
+    /// attenuation-violation chain was NEVER rejected on the basis of
+    /// the chain — only on the basis of literal entry in
+    /// `system:CapabilityGrant`. This method now runs the chain-walker
+    /// for `cap:typed:*` requirements.
+    ///
+    /// ## Out of scope (named at phase-3-backlog §2.3 (i))
+    ///
+    /// Per-write proof-chain enforcement for arbitrary `store:*` /
+    /// other scope-strings (with audience binding +
+    /// `WriteContext::actor_hint`-as-DID propagation +
+    /// `WriteContext::now`-as-real-clock injection) is the wider
+    /// architectural lift. That extension is named at
+    /// `docs/future/phase-3-backlog.md §2.3 (i)`.
+    #[must_use]
+    pub fn capability_policy_ucan_durable(mut self) -> Self {
+        // Both flags fire: the grant-backed reader is the inner
+        // surface; `use_ucan_grounded` triggers the
+        // UcanGroundedPolicy wrap at assemble time.
+        self.use_grant_backed = true;
+        self.use_ucan_grounded = true;
+        self
     }
 
     /// Mark the engine as production-grade — disables permissive
@@ -475,7 +538,29 @@ impl EngineBuilder {
             } else if self.use_grant_backed {
                 let reader: Arc<dyn GrantReader> =
                     Arc::new(BackendGrantReader::new(Arc::clone(&backend)));
-                (Some(Box::new(GrantBackedPolicy::new(reader))), false)
+                let grant_backed = GrantBackedPolicy::new(reader);
+                if self.use_ucan_grounded {
+                    // G21-T2 fp-mini-review BLOCKER-2 closure: wrap
+                    // the grant-backed policy in
+                    // `UcanGroundedPolicy` so `cap:typed:*` writes
+                    // also consult the durable UCAN proof-chain
+                    // validator (signature + nbf/exp + attenuation +
+                    // revocation + typed-cap-claim mapping).
+                    let ucan_backend =
+                        Arc::new(benten_caps::UCANBackend::new(Arc::clone(&backend)));
+                    (
+                        Some(Box::new(benten_caps::UcanGroundedPolicy::new(
+                            grant_backed,
+                            ucan_backend,
+                        )) as Box<dyn CapabilityPolicy>),
+                        false,
+                    )
+                } else {
+                    (
+                        Some(Box::new(grant_backed) as Box<dyn CapabilityPolicy>),
+                        false,
+                    )
+                }
             } else {
                 (Some(Box::new(NoAuthBackend::new())), true)
             }
