@@ -88,7 +88,7 @@ pub enum FindingKind {
     /// (`content_listing_<label>` or `system:ivm:content_listing_<label>`).
     /// Compromise #11 (IVM views coarse-grained read-gate) closure relies
     /// on the registry-driven label-hint resolution at
-    /// [`crates/benten-engine/src/engine_views.rs::resolve_read_view_label_hint`];
+    /// `crates/benten-engine/src/engine_views.rs::resolve_read_view_label_hint`;
     /// the `content_listing_` prefix-strip is the final fallback for
     /// pre-canonical-registry tests. A non-canonical literal in production
     /// or new test code is a regression risk: if the view is NOT
