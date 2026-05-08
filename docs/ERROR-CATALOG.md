@@ -1155,6 +1155,38 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** Primary site at `crates/benten-engine/src/engine_wait.rs::resume_from_bytes_inner` (Phase-3 G20-A2 wave-8a; D12) Step 1.5 envelope-vs-metadata mismatch check. Secondary mapping at `crates/benten-engine/src/engine_wait.rs::map_resume_eval_error` promotes the eval-side `HostBackendUnavailable` fail-loud (from `crates/benten-eval/src/primitives/wait.rs::resume_with_meta`'s `meta: None` arm) to this typed code at the resume boundary so the engine API surface preserves the metadata-missing semantic uniformly across direct-eval and engine-mediated callers. The eval-side ErrorCode stays `HostBackendUnavailable` (broader semantic — generic backend-unavailable surface); the engine-layer typed code is the user-facing one.
 - **Phase:** 3 G20-A2
 
+### E_TYPED_CALL_UNKNOWN_OP
+
+- **Message:** "typed-CALL dispatch: unknown op '{op_name}' (engine:typed:* registry has no matching entry)"
+- **Context:** `{ op_name: String }`
+- **Fix:** A CALL primitive dispatched a `target` in the reserved `engine:typed:*` namespace, but the trailing op name does not match any registered typed-CALL op. Phase-3 G21-T1 ships 10 ops: `ed25519_sign`, `ed25519_verify`, `keypair_generate`, `keypair_from_seed`, `blake3_hash`, `multibase_encode`, `multibase_decode`, `did_resolve`, `ucan_validate_chain`, `vc_verify`. Verify the op name spelling; the registry is closed (no user-registered typed-CALL ops in Phase 3 — extension is a Rust-only engine concern per CLAUDE.md baked-in commitment #16). Distinct from `E_NOT_FOUND` (handler-id miss in the user handler registry): this code fires AFTER the `engine:typed:` prefix is recognised. Routes to `ON_ERROR`.
+- **Thrown at:** `crates/benten-eval/src/typed_call.rs::TypedCallOp::parse` (Phase-3 G21-T1; CLAUDE.md baked-in commitment #16 SANDBOX-vs-CALL framing). The dispatch fork at `crates/benten-eval/src/primitives/call.rs::execute` recognises the `engine:typed:` prefix and routes to the typed-CALL registry; an unknown op surfaces this code rather than falling through to the user handler registry.
+- **Phase:** 3 G21-T1
+
+### E_TYPED_CALL_INVALID_INPUT
+
+- **Message:** "typed-CALL '{op_name}' input shape rejected: {reason}"
+- **Context:** `{ op_name: String, reason: String }`
+- **Fix:** A typed-CALL dispatch supplied an input shape that does not match the named op's expected schema. Failure modes include: missing required field (e.g. `ed25519_sign` requires both `private_key` and `message`); wrong CBOR type (string passed where bytes expected); byte-length mismatch for fixed-width fields (Ed25519 secret keys MUST be 32 bytes; signatures MUST be 64 bytes; public keys MUST be 32 bytes). The op's input/output schema is documented inline at `crates/benten-eval/src/typed_call.rs::TypedCallOp` per-op rustdoc. Distinct from `E_TRANSFORM_SYNTAX` (TRANSFORM expression parse failure) — this is a typed-CALL op-input validation failure that fires at dispatch time before any underlying crypto/codec call. Routes to `ON_ERROR`.
+- **Thrown at:** `crates/benten-eval/src/typed_call.rs` per-op input validation (Phase-3 G21-T1). Each op's `validate_input` arm rejects malformed input with this code + a per-op `reason` string before the engine-side handler in `crates/benten-engine/src/primitive_host.rs::dispatch_typed_call` is invoked.
+- **Phase:** 3 G21-T1
+
+### E_TYPED_CALL_CAP_DENIED
+
+- **Message:** "typed-CALL '{op_name}' denied: required capability '{required}' not held"
+- **Context:** `{ op_name: String, required: String }`
+- **Fix:** A typed-CALL dispatch was rejected because the dispatching grant's capability set does not include the per-op required capability. Each typed-CALL op declares a cap requirement (e.g. `cap:typed:crypto-sign` for `ed25519_sign`, `cap:typed:crypto-verify` for `ed25519_verify`, `cap:typed:did-resolve` for `did_resolve`, `cap:typed:ucan-validate` for `ucan_validate_chain`); the host's `check_capability` hook gates the op before dispatch. Under `NoAuthBackend` all typed-CALL caps are permitted; UCAN backend gates per chain claim. Joins the cap-denial family routing (`ON_DENIED`) per the same precedent as `E_CAP_DENIED` / `E_SANDBOX_HOST_FN_DENIED`.
+- **Thrown at:** `crates/benten-engine/src/primitive_host.rs::dispatch_typed_call` (Phase-3 G21-T1). The cap-check fires BEFORE the underlying `benten-id` / `benten-core` op is invoked so a denied call has zero observable side effect.
+- **Phase:** 3 G21-T1
+
+### E_TYPED_CALL_DISPATCH_ERROR
+
+- **Message:** "typed-CALL '{op_name}' dispatch failed: {reason}"
+- **Context:** `{ op_name: String, reason: String }`
+- **Fix:** A typed-CALL op's underlying implementation in `benten-id` / `benten-core` returned a typed error that bubbles out of the typed-CALL dispatch boundary. Examples: `keypair_from_seed` against a malformed envelope (returns `KeypairError`); `did_resolve` against an unsupported method (returns `DidError`); `ucan_validate_chain` against a malformed JWT (returns `UcanError::Decode`). Note: a clean negative result (Ed25519 verify returns `false`, UCAN chain expired) is NOT this code — those return a structured `{ valid: false, ... }` Map with the op-internal failure reason. This code fires only when the underlying API call cannot produce a well-formed result. Routes to `ON_ERROR`.
+- **Thrown at:** `crates/benten-engine/src/primitive_host.rs::dispatch_typed_call` (Phase-3 G21-T1). Per-op error mapping promotes the underlying typed error from `benten-id` / `benten-core` to this code with the op name + a brief `reason` string for diagnostic routing.
+- **Phase:** 3 G21-T1
+
 ## Extending the catalog
 
 When adding a new error:
