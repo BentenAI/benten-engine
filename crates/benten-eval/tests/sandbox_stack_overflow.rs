@@ -47,7 +47,10 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use benten_eval::sandbox::SandboxError;
-use benten_eval::sandbox::{MAX_WASM_STACK_DEFAULT, trap_to_typed::map_call_error};
+use benten_eval::sandbox::{
+    MAX_WASM_STACK_DEFAULT,
+    trap_to_typed::{MapCallErrorContext, map_call_error},
+};
 
 #[test]
 fn sandbox_stack_overflow_routes_to_e_sandbox_stack_overflow_typed_variant() {
@@ -57,11 +60,13 @@ fn sandbox_stack_overflow_routes_to_e_sandbox_stack_overflow_typed_variant() {
     let err = wasmtime::Error::from(wasmtime::Trap::StackOverflow);
     let mapped = map_call_error(
         err,
-        0,
-        30_000,
-        64 * 1024 * 1024,
-        1_000_000,
-        MAX_WASM_STACK_DEFAULT,
+        MapCallErrorContext {
+            consumed_fuel: 0,
+            wallclock_limit_ms: 30_000,
+            memory_limit_bytes: 64 * 1024 * 1024,
+            fuel_limit: 1_000_000,
+            max_wasm_stack: MAX_WASM_STACK_DEFAULT,
+        },
     );
 
     assert!(

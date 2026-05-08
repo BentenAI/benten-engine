@@ -157,6 +157,17 @@ fn snapshot_blob_rejects_delete_via_dispatch_handler() {
     // applies.
     let dst = Engine::from_snapshot_blob(&blob).unwrap();
 
+    // Register the crud handler on the dst engine so `dst.call(...)` can
+    // route through to the WRITE primitive's delete arm. Snapshot-blob
+    // rehydration restores GRAPH STATE only (nodes + system-zone index);
+    // handler registry is per-engine runtime state and does NOT survive
+    // the snapshot envelope by design (D10 ships graph bytes, not handler
+    // bytecode). Without this registration the dispatch surfaces
+    // `NotFound { handler not registered: crud:post }` BEFORE reaching
+    // the read-only WRITE check, masking the load-bearing assertion.
+    dst.register_crud("post")
+        .expect("register crud:post on snapshot-blob dst engine");
+
     // Dispatch the CRUD delete action against the snapshot-blob engine.
     // The "crud:post" handler id route triggers `subgraph_for_crud` →
     // delete branch → WRITE primitive with op="delete" + target_cid →

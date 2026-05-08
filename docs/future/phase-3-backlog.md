@@ -173,7 +173,7 @@
 - `.addl/phase-3/mini-review-pr-143-g20-b-dx-optimizer.json` (g20b-dx-1, g20b-dx-4, g20b-dx-7, g20b-dx-8) — origin findings.
 - `.addl/phase-3/mini-review-pr-143-g20-b-doc-engineer.json` (doc-2) — symbol-cite drift sibling.
 
-### 2.4 `phase_2b_landed` feature gate retirement in benten-core / benten-ivm / benten-engine / benten-errors (audit-3-mr-1-extended)
+### 2.4 `phase_2b_landed` feature gate retirement in benten-core / benten-ivm / benten-engine / benten-errors (audit-3-mr-1-extended) — CLOSED at Pre-R4b orchestrator-direct fix-pass batch (PR #144 commit bd87cde)
 
 **Origin (G20-B audit-3 mini-review, 2026-05-07):** G20-B v3 closed the `phase_2b_landed` feature gate in `benten-eval` + `benten-dsl-compiler` + `benten-dev` (Cargo.toml entries deleted + `#![cfg]` gates stripped from 23+ test files; commit message documents the narrow scope). The audit-3 reviewer extended scope flagged that the feature gate STILL exists in the other four crates: `benten-core`, `benten-ivm`, `benten-engine`, `benten-errors`. These were intentionally out-of-scope at G20-B v3 to keep the wave's audit-3 narrowly scoped. The residual is named here per HARD RULE rule-12 clause-b — the destination receives the entry NOW, not "later".
 
@@ -1133,7 +1133,7 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 - `sandbox_escape_attempts_denied.rs:377` (forged-cap-claim-section helper) — owned by §7.3.A.7 cluster (G20-A1 wave-8a).
 - `sandbox_output.rs:194` (testing_register_uncounted_host_fn helper) — owned by §7.3.A.7 cluster (G20-A1 wave-8a).
 - `read_denial.rs:225` — UN-IGNORED at G20-A3. The deferral condition was "when SECURITY-POSTURE.md re-tracks-public" — that condition is satisfied (the doc is in `docs/SECURITY-POSTURE.md` committed and contains both "Option C" + `diagnose_read`/`diagnoseRead` references).
-- `wait_signal_shape_optional_typing.rs:98` — RE-IGNORED at G20-A3 with re-targeted rationale (the deferral condition "runtime check addition in `wait::evaluate_op` lands Phase 3" IS satisfied — runtime shape-match wired end-to-end at `crates/benten-eval/src/primitives/wait.rs::evaluate_op_with_handler_id` SUSPEND-time + `crates/benten-eval/src/primitives/wait.rs::shapes_match` consumed by `resume_with_meta` resume-time + `SuspensionStore` round-trip). The re-ignore reason is a routed_edge_label classification mismatch: `ErrorCode::InvRegistration` is routed to `None` in `crates/benten-errors/src/lib.rs::routed_edge_label` (registration-time None group), but the test asserts `Some("ON_ERROR")`. Either the test's expected edge label needs adjustment OR the variant needs reclassification under the runtime-error group. Bundle with the next round of routed_edge_label classification hardening (reassessment cadence: v1-assessment-window per CLAUDE.md baked-in #15).
+- `wait_signal_shape_optional_typing.rs:98` — RE-IGNORED at G20-A3 with re-targeted rationale (the deferral condition "runtime check addition in `wait::evaluate_op` lands Phase 3" IS satisfied — runtime shape-match wired end-to-end at `crates/benten-eval/src/primitives/wait.rs::evaluate_op_with_handler_id` SUSPEND-time + `crates/benten-eval/src/primitives/wait.rs::shapes_match` consumed by `resume_with_meta` resume-time + `SuspensionStore` round-trip). The re-ignore reason is a routed_edge_label classification mismatch: `ErrorCode::InvRegistration` is routed to `None` in `crates/benten-errors/src/lib.rs::routed_edge_label` (registration-time None group), but the test asserts `Some("ON_ERROR")`. Either the test's expected edge label needs adjustment OR the variant needs reclassification under the runtime-error group. Destination: §7.17 — bundle with the next round of routed_edge_label classification hardening.
 
 ---
 
@@ -1196,6 +1196,21 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 
 ---
 
+### 7.17 routed_edge_label classification hardening (carry list)
+
+**Origin (Pre-R4b 2026-05-08):** the `wait_signal_shape_optional_typing.rs::wait_signal_shape_mismatch_fires_typed_error_routed_on_error` test currently `#[ignore]`'s with a destination naming this row. The test asserts that a typed-shape mismatch routes to `WaitSignalShapeMismatch` rather than registration-time `None` routing when the wait signal carries a routed edge label.
+
+**Phase 3 target:** Bundle with the next round of routed-edge-label classification hardening so the `wait_signal_shape_mismatch_fires_typed_error_routed_on_error` ignore can lift. Specifically:
+- Audit the `crates/benten-errors/src/lib.rs::routed_edge_label` classification table to either reclassify `ErrorCode::InvRegistration` under the runtime-error group when fired from a WAIT-resume shape-mismatch path (so the test's `Some("ON_ERROR")` assertion holds), OR adjust the test's expected edge label to `None` to match the registration-time classification.
+- Cross-check against the WAIT shape-match runtime path (`crates/benten-eval/src/primitives/wait.rs::shapes_match` consumed by `evaluate_op_with_handler_id`) to confirm the routing classification matches the operator-observable contract.
+- Pin the `routed_edge_label` cases in the same test file alongside the existing `defaults_untyped_accepts_any_value` pin.
+
+**Touch size:** ~20-40 LOC investigation + ~20-30 LOC pin (+ removal of the `#[ignore]` once the routing is confirmed).
+
+**Phase target:** R6 phase-close convergence-round residuals (bundle with §7.16 if both surface in same round).
+
+---
+
 ## 8. Phase 3 plan-doc opening checklist
 
 When Phase 3 pre-R1 opens, the planning agent should:
@@ -1208,3 +1223,28 @@ When Phase 3 pre-R1 opens, the planning agent should:
 6. Bundle the §7.3.A test-body residuals (~85 `#[ignore]`'d cases) into a single first-wave CI-hygiene sub-track. §7.3.A.1-A.8 are independently scoped; A.7 is highest-priority (security claims).
 7. Re-evaluate the wsa-3 Component-Model removal decision (§7.3.A.8) — decide whether wasmtime's component-model story is mature enough to re-enable the cargo feature.
 8. Note: per CLAUDE.md §15, Phase 3 close is the natural PAUSE-AND-ASSESS point for v1 milestone evaluation. The Phase 3 plan should list out what would and wouldn't be in scope for "v1 shippable" at the assess point — not as a binding decision but as a starting frame Ben can confirm/redirect.
+
+---
+
+## 9. Security-advisory carries (transitive deps; closure-tracked here)
+
+Phase-3 sync introduces iroh + Loro CRDT, which transitively pull in dep tails carrying RUSTSEC advisories the project does not directly create. These are documented + ignored in `deny.toml::[advisories].ignore` so CI's cargo-deny job stays GREEN; this row is the named destination for closure tracking per HARD RULE rule-12 disposition (b).
+
+**RUSTSEC-2026-0119 — hickory-dns CPU exhaustion via O(n²) name compression.**
+- Transitive root: `iroh 0.98.2 -> hickory-resolver 0.26.0-beta.4 -> hickory-proto`.
+- Closure plan: (a) Phase-3 R5 close iroh-version-bump cycle picks up an upstream hickory-dns fix (Dependabot fast-track per `scope-real-10`); (b) Phase-7 Garden-relay work may alternatively replace hickory-dns with a minimal in-process resolver, dropping the dep edge entirely.
+- Remove the `deny.toml` ignore when iroh upstream picks up a hickory-dns fix or when we drop the dep edge.
+
+**RUSTSEC-2026-0120 — hickory-dns NSEC3 unbounded loop on cross-zone responses.**
+- Same transitive root as RUSTSEC-2026-0119 (hickory-resolver -> hickory-proto).
+- Same closure path.
+
+**RUSTSEC-2024-0436 — paste unmaintained advisory.**
+- Transitive root: `iroh 0.98.2 -> netwatch 0.16.0 -> netlink-packet-core 0.8.1 -> paste 1.0.15`.
+- Informational unmaintained advisory (no exploit). Possible alternatives: `pastey` (drop-in fork of paste, actively maintained) or `with_builtin_macros`.
+- Closure plan: same iroh bump cycle. Phase-3 R5 close eligible to land an iroh patch that swaps `paste` for `pastey`.
+
+**Cross-references:**
+- `deny.toml::[advisories].ignore` — the active ignore entries with reason text.
+- `.github/workflows/supply-chain.yml` — the CI invocation point.
+- `CONTRIBUTING.md::Supply chain` — the yank-response protocol.

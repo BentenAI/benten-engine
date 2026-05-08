@@ -13,7 +13,6 @@
 //!
 //! Owner: R5 G12-B (qa-r4-01 R3-followup); lifted to GREEN at R6-R3-FP.
 
-#![cfg(feature = "phase_2b_landed")]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 /// Scan `crates/benten-engine/Cargo.toml` for any entry matching
@@ -109,7 +108,7 @@ fn walk_rs_files(dir: &std::path::Path, visit: &mut dyn FnMut(&std::path::Path, 
         let ft = entry.file_type().expect("file_type");
         if ft.is_dir() {
             walk_rs_files(&path, visit);
-        } else if ft.is_file() && path.extension().map(|e| e == "rs").unwrap_or(false) {
+        } else if ft.is_file() && path.extension().is_some_and(|e| e == "rs") {
             let contents = std::fs::read_to_string(&path)
                 .unwrap_or_else(|e| panic!("read_to_string({}): {e}", path.display()));
             visit(&path, &contents);

@@ -23,17 +23,23 @@ use std::time::Duration;
 /// `E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED`.
 ///
 /// Pre-R4b orchestrator-direct fix-pass batch item #8 (CI-flake-hardening):
-/// 50ms wallclock budget + 200ms upper-bound assertion are too tight on
-/// slow CI runners (macos-arm64 @ 1.95.0 reproducibly exceeds the 4×budget
-/// upper bound). Test was previously gated behind `phase_2b_landed`
-/// (retired at G20-B phase-5a 16a5a4f) and only surfaced now. Either bump
-/// the budget to ≥200ms or relax the upper-bound multiplier; pin remains
-/// to assert WALLCLOCK firing semantics, not timing fidelity.
-#[ignore = "destination: pre-R4b orchestrator-direct fix-pass batch item #8 (CI-flake-hardening — bump budget or relax 4× multiplier)"]
+/// the original 50ms wallclock budget + `elapsed < budget * 4` upper bound
+/// (200ms) was too tight on slow CI runners (macos-arm64 @ 1.95.0
+/// reproducibly exceeded the 4×-budget upper bound). Bumped to a 200ms
+/// budget with the same `elapsed < budget * 4` semantic upper bound (now
+/// 800ms), giving slow runners 4× headroom without weakening the
+/// assertion: the test still pins (a) WALLCLOCK firing happens (NOT a
+/// permanent hang), (b) firing happens AFTER the configured budget (not
+/// pre-emptively), and (c) firing surfaces the typed
+/// `E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED` code with a
+/// `ProducerWallclockExceeded` ChunkSinkError variant.
 #[test]
 fn stream_producer_wallclock_kills_blocked_send() {
     let cap = NonZeroUsize::new(1).unwrap();
-    let budget = Duration::from_millis(50);
+    // 200ms budget (4× the original 50ms): gives macos-arm64 1.95 enough
+    // wallclock headroom for the wallclock-fire latency to land inside the
+    // upper bound below.
+    let budget = Duration::from_millis(200);
     let (mut sink, _src) = testing_make_chunk_sink_with_wallclock(cap, budget);
 
     // First send fills the buffer; subsequent send must block.
@@ -59,6 +65,10 @@ fn stream_producer_wallclock_kills_blocked_send() {
     ));
     assert_eq!(err.error_code(), ErrorCode::StreamProducerWallclockExceeded);
 
+    // Upper bound: 4× the budget = 800ms. Pins "wallclock fires near the
+    // configured budget, not hangs indefinitely" — the WALLCLOCK semantic.
+    // Slow CI runners need the 4× headroom; the assertion still fails if a
+    // regression makes the producer block far longer than its budget.
     assert!(
         elapsed < budget * 4,
         "wallclock should fire near the configured budget, not hang indefinitely; elapsed = {elapsed:?}"

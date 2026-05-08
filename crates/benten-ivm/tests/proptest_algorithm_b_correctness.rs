@@ -1,4 +1,3 @@
-#![cfg(feature = "phase_2b_landed")]
 // R3-consolidation: gate red-phase test against R5-pending APIs (see .addl/phase-2b/r3-consolidation.md §4)
 //! `prop_algorithm_b_incremental_equals_rebuild` (G8-A — 10k cases).
 //!
