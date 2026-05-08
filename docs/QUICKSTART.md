@@ -287,34 +287,43 @@ all three Phase-2b primitives plus four Phase-3 Atrium examples
 An **Atrium** is a peer-to-peer-synchronized graph shared by a small
 set of full-peer engines (a user's laptop + phone-OS app + desktop;
 or a community of cooperating users). The `engine.atrium({...})`
-session-handle entry point joins or creates an Atrium and returns a
-handle the rest of your code keeps using:
+factory call returns an `Atrium` handle whose `.join()` initiates
+peer discovery + handshake; the same handle exposes `trustPeer()`,
+`listPeers()`, `subscribe()`, and `declareDeviceAttestation()`:
 
 ```typescript
-import { Engine } from "@benten/engine";
+import { Engine, PolicyKind } from "@benten/engine";
 
-const engine = await Engine.openWithUcan(".benten/my-app.redb", {
-  myDid: "did:key:z6MkrJVnaZkeFzdQyMZu1c...",
-  signingKey: "...",
+// Phase 3's durable UCANBackend is selected via PolicyKind.Ucan.
+// (Phase-2b: PolicyKind.GrantBacked is the revocation-aware
+// per-actor policy; Phase 3 layered UCAN attenuation + chain
+// validation on top via benten-id.)
+const engine = await Engine.openWithPolicy(
+  ".benten/my-app.redb",
+  PolicyKind.Ucan,
+);
+
+// `engine.atrium` is a callable factory (D1 B-prime per Ben's
+// 2026-05-05 ratification). Each call returns a fresh handle.
+const family = engine.atrium({ atriumId: "family" });
+await family.join();
+
+// Trust a peer DID — extends the trust set this handle uses for
+// per-session subscriptions + device-attestation walking.
+await family.trustPeer("did:key:z6MkrJVnaZkeFzdQyMZu1c...");
+
+const peers = family.listPeers();
+console.log(peers); // ["did:key:z6Mk...", ...]
+
+// Subscribe to a path; handler fires on each ChangeEvent the full
+// peer routes through F6 cap-recheck.
+const sub = await family.subscribe("/zone/posts", (event) => {
+  console.log("post changed", event);
 });
 
-// Join an existing Atrium by DID, or create a new one.
-const atrium = await engine
-  .atrium({
-    atriumDid: "did:plc:my-personal-atrium",
-    relays: [{ kind: "PublicIroh" }],
-    storageBackend: "redb",
-  })
-  .join();
-
-// Once joined, peer ops are durable + content-addressed.
-await atrium.invitePeer({ peerDid: "did:key:z6Mk...", roles: ["reader"] });
-const peers = await atrium.listPeers();
-console.log(peers.map((p) => `${p.did} (${p.online ? "online" : "offline"})`));
-
-// Trigger a sync round (background sync runs on a schedule; this is
-// the manual nudge):
-await atrium.sync();
+// Tear down the per-session state when done.
+await sub.unsubscribe();
+await family.leave();
 ```
 
 A full peer is the durable Atrium participant — the Rust crate set
