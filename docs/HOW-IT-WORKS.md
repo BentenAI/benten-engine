@@ -29,6 +29,8 @@ Each corresponds to an Operation Node with its own property shape. `READ` reads 
 
 All 12 primitives have live executors at tag `phase-2b-close` (2026-05-03). WAIT shipped in Phase 2a; SANDBOX, STREAM, and SUBSCRIBE shipped in Phase 2b. The earlier eight (READ, WRITE, TRANSFORM, BRANCH, ITERATE, CALL, RESPOND, EMIT) shipped in Phase 1.
 
+Phase 3 added a **typed-CALL** dispatch surface on top of the existing CALL primitive (NOT a 13th primitive — the 12-primitive commitment holds). When a CALL Node's `target` starts with the reserved `engine:typed:` prefix, the eval-side dispatch fork routes through the typed-CALL registry — a closed set of 10 engine-known ops (Ed25519 sign / verify, BLAKE3 hash, multibase encode/decode, DID resolve, UCAN chain validation, VC verify, keypair generation) needed by the Atrium / UCAN / DID story. See [`TYPED-CALL.md`](TYPED-CALL.md) for the engineer-facing reference. SANDBOX host-fns stay minimum-viable per `CLAUDE.md` baked-in #16 (`time` / `log` / `kv:read` / `random` only); typed-CALL is the surface for engine-known fixed-shape compute that fits CALL semantics.
+
 **Subgraph.** A DAG of Operation Nodes wired with control-flow Edges. The engine walks this DAG to execute a handler. Because it's a DAG with bounded fan-out, execution is always bounded; the engine is not Turing complete by construction.
 
 **Handler.** A subgraph registered with the engine under a name. `crud('post')` produces a handler with five actions — create, get, list, update, delete — each action its own walk through the subgraph.
@@ -96,5 +98,6 @@ Each phase layers on the previous without requiring changes below. The engine's 
 - **Try it.** See [`QUICKSTART.md`](QUICKSTART.md) for the 10-minute path. `npx create-benten-app my-app` gives you a scaffolded project with a `crud('post')` handler.
 - **Understand the architecture.** [`ARCHITECTURE.md`](ARCHITECTURE.md) walks the ten crates (eight foundational + `benten-id` + `benten-sync`), the invariant set, the storage layer, and the evaluator's request flow.
 - **Read the error catalog.** [`ERROR-CATALOG.md`](ERROR-CATALOG.md) is the stable contract: every error the engine surfaces, by discriminant, with context.
+- **Read the typed-CALL reference.** [`TYPED-CALL.md`](TYPED-CALL.md) covers the Phase-3 typed-CALL dispatch surface — the 10 engine-known ops + their cap requirements + the SANDBOX-vs-typed-CALL decision tree.
 - **Look at the glossary.** [`GLOSSARY.md`](GLOSSARY.md) names the concepts above and a few more.
 - **Read the source.** The engine is deliberately small. `crates/benten-engine/src/lib.rs` is the integration surface; `crates/benten-eval/src/evaluator.rs` is the walk loop; `crates/benten-graph/src/redb_backend.rs` is the storage. If the docs are confusing, the code is the ground truth.

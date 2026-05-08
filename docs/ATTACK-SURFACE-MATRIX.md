@@ -161,6 +161,43 @@ The iroh peer-id is deterministically derived from the ed25519 public key — th
 
 **Cross-reference.** `crates/benten-sync/src/peer_id.rs`.
 
+### 2.8 — Typed-CALL dispatch surface (Phase-3 G21-T1)
+
+The Phase-3 G21-T1 typed-CALL dispatch surface (see [`docs/TYPED-CALL.md`](TYPED-CALL.md)) adds a closed registry of 10 engine-known ops dispatched through the existing CALL primitive when the `target` (handler id) starts with `engine:typed:`. Per `CLAUDE.md` baked-in **#16**, typed-CALL is the home for engine-known fixed-shape compute that fits CALL semantics (Ed25519 sign/verify, BLAKE3 hash, multibase, DID resolve, UCAN chain validation, VC verify, keypair generation) while the SANDBOX host-fn surface stays minimum-viable. The dispatch surface adds new attack vectors orthogonal to the Phase-2b SANDBOX surface set.
+
+**Concrete attack vectors:**
+
+| # | Vector | Defense | Test pin |
+|---|--------|---------|----------|
+| TC-1 | Per-op cap-bypass (handler dispatches a typed-CALL op without holding the per-op `cap:typed:*` cap) | `PrimitiveHost::check_capability` hook gates BEFORE the underlying `benten-id` / `benten-core` op is invoked; denied dispatch routes to `ON_DENIED` with `E_TYPED_CALL_CAP_DENIED` and zero observable side effect. | `crates/benten-engine/tests/typed_call_engine_dispatch.rs::typed_call_cap_denied_via_capability_policy_returns_on_denied_edge` + `typed_call_cap_denied_routes_on_denied_other_three_route_on_error` |
+| TC-2 | Cap-claim forge via crafted `target` string (handler crafts `engine:typed:<op>` to invoke an op whose cap they don't hold) | Cap requirement derives from the closed `TypedCallOp` enum's `required_cap()` arm at dispatch time — the cap string is NOT taken from any user-controlled bytes, so a forged `target` cannot widen the required-cap envelope. The cap-check (TC-1) then enforces. | `crates/benten-eval/src/typed_call.rs::TypedCallOp::required_cap` (production source-of-truth; closed-enum mitigation is by construction) + `crates/benten-engine/tests/typed_call_engine_dispatch.rs::typed_call_required_caps_each_op_namespaced` |
+| TC-3 | Reserved-namespace squat (user handler registered at `engine:typed:<op>` to shadow engine dispatch) | At G21-T1 the eval-side dispatch fork pre-empts user-handler routing for the `engine:typed:` prefix — a registered handler at this namespace is dead code rather than a routing override. Registration-time hard reject (`E_RESERVED_HANDLER_NAMESPACE`) lands at G21-T3 per `docs/future/phase-3-backlog.md` §2.5(d). | `crates/benten-engine/tests/typed_call_engine_dispatch.rs::typed_call_namespace_pre_empts_user_handler_registry_for_unknown_op` |
+| TC-4 | Inv-9 determinism violation (a non-deterministic typed-CALL op like `keypair_generate` dispatched from a `is_deterministic = true` finalized subgraph) | `TypedCallOp::is_deterministic` per-op classification consulted by the Inv-9 finalization-time walker; non-deterministic ops in a deterministic subgraph rejected at finalization. | `crates/benten-eval/tests/invariant_9_finalized.rs::invariant_9_fires_for_typed_call_keypair_generate_in_deterministic_handler` + `invariant_9_permits_deterministic_typed_call_op_in_deterministic_handler` |
+| TC-5 | Input-shape exploitation (malformed `Value::Map` driving an op into an unsafe code path in `benten-id` / `benten-core`) | Per-op `validate_input` shape check rejects malformed inputs with `E_TYPED_CALL_INVALID_INPUT` BEFORE the underlying API call; fixed-width fields (Ed25519 keys 32B, signatures 64B) are length-checked at dispatch time. | `crates/benten-engine/tests/typed_call_engine_dispatch.rs::typed_call_invalid_input_via_call_primitive_routes_typed_error` |
+| TC-6 | Unknown-op probe (handler dispatches `engine:typed:nonexistent` to fingerprint engine version) | `TypedCallOp::parse` returns `None` for unknown ops; dispatch surfaces `E_TYPED_CALL_UNKNOWN_OP` rather than falling through to the user-handler registry (which would have surfaced `E_NOT_FOUND` and leaked registry membership). | `crates/benten-engine/tests/typed_call_engine_dispatch.rs::typed_call_unknown_op_via_call_primitive_routes_typed_error` |
+| TC-7 | UCAN chain forge / window-widening / audience-replay through `ucan_validate_chain` op | Op delegates to `benten_id::ucan::validate_chain_inner` which is the same chain-walk seam covered by §2.2 UC-1..UC-7 vectors; typed-CALL is a thin facade. | `crates/benten-engine/tests/typed_call_engine_dispatch.rs::ucan_validate_chain_returns_false_with_reason_on_audience_mismatch` + `ucan_validate_chain_returns_false_when_leaf_att_does_not_grant_required_capability` (composes with §2.2 UC-1..UC-7 chain-walk pins) |
+| TC-8 | Expired-VC replay through `vc_verify` op | Op routes through `benten_id::vc::verify_at(..., now)` (NOT bare `vc::verify`) so an expired VC returns `valid: false` rather than a bypass — `now` is REQUIRED in the input shape so the time-source is operator-visible at the call site. | `crates/benten-engine/tests/typed_call_engine_dispatch.rs::vc_verify_returns_false_when_credential_is_expired_at_now` |
+
+**Open carries (Phase-3 named follow-up — `docs/future/phase-3-backlog.md` §2.5):**
+
+| # | Carry | Status | Phase-3 destination |
+|---|-------|--------|---------------------|
+| TC-CARRY-1 | Secret-byte zeroize discipline at `build_seed_envelope` + per-op `Value::Bytes` outputs (sec-minor-2) | Open carry — natural Vec drop occurs but no zeroize-on-drop wrapper | `phase-3-backlog.md` §2.5(a); `zeroize` already a workspace dep. |
+| TC-CARRY-2 | `did_resolve` DID-method validation (sec-minor-3) — input DID's method prefix not parsed; non-`did:key:` would silently produce a wrong `method: "key"` field | Open carry — conservative `is_deterministic = false` already set in anticipation | `phase-3-backlog.md` §2.5(b). See [`TYPED-CALL.md`](TYPED-CALL.md) §"did_resolve DID-method validation". |
+| TC-CARRY-3 | UCANBackend → `cap:typed:*` policy mapping (sec-minor-4) — under UCAN, no claim grants any `cap:typed:*` cap; cap-deny-by-default surfaces | Open carry; under `NoAuthBackend` all permitted (canary-scope intent) | `phase-3-backlog.md` §2.5(c); couples to G21-T2 napi-UCAN-wireup. |
+| TC-CARRY-4 | Reserved-namespace registration-time reject (corr-minor-3) — `register_subgraph` does not currently reject `handler_id` starting with `engine:typed:` | Open carry; eval-side fork pre-empts so user registration is dead code | `phase-3-backlog.md` §2.5(d); G21-T3 lands `E_RESERVED_HANDLER_NAMESPACE` 4-surface §3.5g atomic update. |
+
+**Cross-reference.** `crates/benten-engine/src/typed_call_dispatch.rs` (engine-side per-op dispatch impls), `crates/benten-eval/src/typed_call.rs::TypedCallOp` (closed enum + per-op validate_input + required_cap + is_deterministic). [`docs/TYPED-CALL.md`](TYPED-CALL.md) is the engineer-facing reference. The 4 typed-CALL `ErrorCode` rows live in [`docs/ERROR-CATALOG.md`](ERROR-CATALOG.md) (`E_TYPED_CALL_UNKNOWN_OP` / `E_TYPED_CALL_INVALID_INPUT` / `E_TYPED_CALL_CAP_DENIED` / `E_TYPED_CALL_DISPATCH_ERROR`).
+
+**Audit note (silent-weakening check at G21-T1 close).** Walked Part 1 + Part 2 + Part 3 entries to verify typed-CALL did not silently weaken any defense. Findings:
+
+1. ESC-14 (cap-claim forge in module bytes) — *not weakened.* ESC-14's mitigation is "engine ignores embedded WASM custom sections; cap derivation is exclusively from manifest passed at call time." Typed-CALL's cap derivation (TC-2) is from the closed enum — same construction-class mitigation, additive surface.
+2. §3.1 Compromise #1 (Cap TOCTOU) — *not weakened.* Typed-CALL fires `check_capability` at dispatch entry (the CALL-primitive boundary), same as bare CALL; the TOCTOU window bound at CALL entry covers the typed-CALL fork.
+3. §3.2 Inv-13 — *not weakened.* Typed-CALL ops do NOT mutate engine state directly; the WRITE primitive remains the only path. Per CLAUDE.md baked-in #16: SANDBOX modules return values that the engine's WRITE primitive persists — typed-CALL ops follow the same pattern (return values, not direct writes).
+4. §3.3 Inv-14 attribution — *not weakened.* Typed-CALL dispatch occurs inside a CALL primitive's `ActiveCall`, so the attribution frame propagates through the dispatcher stack unchanged.
+
+No silently-weakened entries identified.
+
 ---
 
 ## Part 3 — Engine-layer attack surfaces (cross-phase)

@@ -89,6 +89,11 @@ fn view_id_to_label_hint_consults_input_pattern_label_not_string_prefix() {
     // Read the view. The registry-driven label hint must derive
     // "post" → DeniedRead → silent-deny empty list.
     let outcome = engine
+        // non-canonical-view-id-ok: this test pin INTENTIONALLY exercises the
+        // registry-driven label-hint path for a non-canonical view id (the
+        // Compromise #11 closure pin); the lint at
+        // tools/cite-drift-detector::run_read_view_with_lint must NOT flag
+        // this callsite.
         .read_view_with("arbitrary_user_view_42", ReadViewOptions::strict())
         .expect("read_view returns Outcome (Option-C empty list, NOT a leak)");
     assert_eq!(

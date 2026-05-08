@@ -83,6 +83,21 @@ pub enum FindingKind {
     SymbolCiteSymbolMissing,
     /// A cross-doc numeric claim does not match the source-of-truth value.
     NumericClaimDrift,
+    /// A `read_view_with(<view_id>, ...)` callsite passes a string-literal
+    /// view id that does NOT match the canonical view-id shape
+    /// (`content_listing_<label>` or `system:ivm:content_listing_<label>`).
+    /// Compromise #11 (IVM views coarse-grained read-gate) closure relies
+    /// on the registry-driven label-hint resolution at
+    /// `crates/benten-engine/src/engine_views.rs::resolve_read_view_label_hint`;
+    /// the `content_listing_` prefix-strip is the final fallback for
+    /// pre-canonical-registry tests. A non-canonical literal in production
+    /// or new test code is a regression risk: if the view is NOT
+    /// registered through `register_user_view`, the prefix-strip yields
+    /// `""` and the cap gate short-circuits (the original Compromise #11
+    /// shape). Phase-3 closure narrative at
+    /// `docs/future/phase-3-backlog.md` §1.2 / §7.3.A.3 + closure pin at
+    /// `crates/benten-engine/tests/view_id_label_hint_refactor.rs`.
+    NonCanonicalReadViewWithViewId,
 }
 
 impl fmt::Display for FindingKind {
@@ -94,6 +109,7 @@ impl fmt::Display for FindingKind {
             FindingKind::SymbolCiteFileMissing => "symbol-cite-file-missing",
             FindingKind::SymbolCiteSymbolMissing => "symbol-cite-symbol-missing",
             FindingKind::NumericClaimDrift => "numeric-claim-drift",
+            FindingKind::NonCanonicalReadViewWithViewId => "non-canonical-read-view-with-view-id",
         };
         f.write_str(s)
     }
@@ -1059,6 +1075,193 @@ fn scan_phrasing(line: &str, phrasing: &str) -> Vec<u32> {
             }
             start = d2_end;
         }
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
+// `read_view_with` non-canonical view-id lint (Compromise #11 regression guard)
+// ---------------------------------------------------------------------------
+
+/// Canonical view-id prefixes accepted by the `read_view_with` lint.
+///
+/// A string-literal view id passed to `read_view_with(<lit>, ...)` MUST
+/// start with one of these prefixes. Pre-G20-A3 the engine's
+/// `resolve_read_view_label_hint` derived the cap-gate label by
+/// `view_id.strip_prefix("content_listing_")` — a non-prefix view id
+/// silently yielded `""` and the cap gate short-circuited (the
+/// Compromise #11 sub-block "view-id-prefix heuristic" surfaced at
+/// Phase-2b R6 Round-3). Post-G20-A3 the registry is the source of
+/// truth; the prefix-strip is the final fallback. This lint guards
+/// against new code drifting back to the heuristic-only pattern.
+///
+/// The accepted prefixes mirror the canonical Phase-1 view-id set
+/// (`capability_grants`, `event_dispatch`, `content_listing`,
+/// `governance_inheritance`, `version_current` — see
+/// `crates/benten-ivm/src/algorithm_b.rs::CANONICAL_VIEW_IDS`) plus
+/// the `content_listing_<label>` family (the only canonical id that
+/// composes a label suffix into the view-id string at the engine
+/// boundary), each optionally prefixed with `system:ivm:`. Either form
+/// (bare canonical id or `system:ivm:`-prefixed) routes through the
+/// engine's `resolve_read_view_label_hint` registry path.
+///
+/// User-defined views registered through `register_user_view` may use
+/// any view id at runtime; this static lint only flags string literals
+/// in source files (test code + production code), not runtime-computed
+/// view ids. It is a regression-prevention sanity layer, not a
+/// completeness gate.
+pub const CANONICAL_VIEW_ID_PREFIXES: &[&str] = &[
+    // `content_listing` family (the only canonical id that composes a
+    // `<label>` suffix into the view-id string at the engine boundary).
+    "content_listing",
+    "system:ivm:content_listing",
+    // The other 4 canonical Phase-1 view ids whose dispatch arms ignore
+    // caller-supplied label and use the hardcoded value.
+    "capability_grants",
+    "system:ivm:capability_grants",
+    "event_dispatch",
+    "system:ivm:event_dispatch",
+    "governance_inheritance",
+    "system:ivm:governance_inheritance",
+    "version_current",
+    "system:ivm:version_current",
+];
+
+/// Run the `read_view_with` non-canonical-view-id lint pass. Scans every
+/// `.rs` file under `walk_doc_inputs` for callsites of the shape
+/// `<receiver>.read_view_with(<view_id_literal>, <opts>)` and flags any
+/// callsite whose first arg is a string literal NOT starting with one of
+/// [`CANONICAL_VIEW_ID_PREFIXES`].
+///
+/// **Heuristic, not a parser.** The implementation byte-scans for the
+/// substring `read_view_with(` and inspects the first character after
+/// the opening paren. Only literal forms (`"..."`) are checked; runtime
+/// expressions (variables, function calls, format strings) are skipped
+/// because static analysis cannot resolve them.
+///
+/// **Cross-reference.** Compromise #11 narrative at
+/// `docs/SECURITY-POSTURE.md`; closure pin at
+/// `crates/benten-engine/tests/view_id_label_hint_refactor.rs`;
+/// production resolution at
+/// `crates/benten-engine/src/engine_views.rs::resolve_read_view_label_hint`.
+pub fn run_read_view_with_lint(root: &Path) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    let inputs = walk_doc_inputs(root);
+    for input in &inputs {
+        // Only inspect Rust source — the lint is shaped around the
+        // method call syntax `<recv>.read_view_with(...)`.
+        let Some(ext) = input.extension().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if ext != "rs" {
+            continue;
+        }
+        // Skip the lint's own self-test fixture file (a deliberate
+        // known-drift sample) so we don't fail-loud on intentional
+        // negative cases. Detected by basename.
+        let basename = input.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        if basename == "read_view_with_lint_known_drift_fixture.rs" {
+            continue;
+        }
+        let Ok(text) = fs::read_to_string(input) else {
+            continue;
+        };
+        let lines: Vec<&str> = text.lines().collect();
+        for (line_idx, line) in lines.iter().enumerate() {
+            // Opt-out marker: a callsite that deliberately exercises a
+            // non-canonical literal (e.g. registry-driven path tests at
+            // `view_id_label_hint_refactor.rs`) can include the comment
+            // `// non-canonical-view-id-ok` on EITHER (a) the same line
+            // as the callsite (trailing comment) OR (b) any of the six
+            // preceding lines (multi-line method-chain forms with a
+            // multi-line opt-out comment block; the 6-line lookback is
+            // empirically sufficient for the engine tests' indentation
+            // patterns). The opt-out is intentionally verbose so it's
+            // grep-able + reviewable in PRs.
+            let opted_out_on_this_line = line.contains("non-canonical-view-id-ok");
+            let opted_out_above = (1..=6)
+                .filter_map(|n| line_idx.checked_sub(n).and_then(|i| lines.get(i)))
+                .any(|prev| prev.contains("non-canonical-view-id-ok"));
+            if opted_out_on_this_line || opted_out_above {
+                continue;
+            }
+            for offending_literal in find_non_canonical_read_view_with_literals(line) {
+                findings.push(Finding {
+                    kind: FindingKind::NonCanonicalReadViewWithViewId,
+                    path: input.clone(),
+                    line: line_idx + 1,
+                    message: format!(
+                        "read_view_with(\"{offending_literal}\", ...) — view id is not a canonical view-id literal (see `CANONICAL_VIEW_ID_PREFIXES`); Compromise #11 closure relies on registry-driven label-hint resolution. Add `// non-canonical-view-id-ok` to silence if intentional. Phase-3-backlog §1.2 / §7.3.A.3."
+                    ),
+                });
+            }
+        }
+    }
+    findings.sort();
+    findings.dedup();
+    findings
+}
+
+/// Return every offending string-literal first-argument of every
+/// `read_view_with(...)` callsite on a line. Callsites whose first arg
+/// is not a string literal (variable, function call, etc) are skipped
+/// — static analysis cannot resolve them.
+fn find_non_canonical_read_view_with_literals(line: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let needle = b"read_view_with(";
+    let bytes = line.as_bytes();
+    let mut start = 0usize;
+    while start <= bytes.len() {
+        let Some(off) = find_subslice(&bytes[start..], needle) else {
+            break;
+        };
+        let after = start + off + needle.len();
+        // Reject contextual non-callsite mentions: a doc-comment
+        // containing the substring inside a backtick-fenced phrase
+        // typically carries `read_view_with(<view_id>, ...)` in
+        // angle-brackets. We only inspect when the next non-whitespace
+        // char is `"` (string literal start). Anything else is skipped
+        // (variable, doc-comment placeholder, etc).
+        let mut i = after;
+        while i < bytes.len() && (bytes[i] == b' ' || bytes[i] == b'\t') {
+            i += 1;
+        }
+        if i >= bytes.len() || bytes[i] != b'"' {
+            start = after;
+            continue;
+        }
+        // Walk the string literal body. Bail out on `\` (escape; rare
+        // for view ids) — the lint conservatively skips escaped literals
+        // since they're unusual in view-id callsites.
+        let lit_start = i + 1;
+        let mut j = lit_start;
+        let mut escaped = false;
+        while j < bytes.len() {
+            let b = bytes[j];
+            if b == b'\\' {
+                escaped = true;
+                break;
+            }
+            if b == b'"' {
+                break;
+            }
+            j += 1;
+        }
+        if escaped || j >= bytes.len() {
+            start = j.saturating_add(1);
+            continue;
+        }
+        let Ok(literal) = std::str::from_utf8(&bytes[lit_start..j]) else {
+            start = j + 1;
+            continue;
+        };
+        if !CANONICAL_VIEW_ID_PREFIXES
+            .iter()
+            .any(|p| literal.starts_with(p))
+        {
+            out.push(literal.to_string());
+        }
+        start = j + 1;
     }
     out
 }

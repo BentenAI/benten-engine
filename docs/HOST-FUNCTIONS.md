@@ -20,6 +20,23 @@ RESOLVED-at-R1); per-call entropy budget defaults to 4096 bytes
 optional `host_fns.random.budget_bytes_per_call` field on
 `ModuleManifest`.
 
+**SANDBOX host-fns vs. typed-CALL (CLAUDE.md baked-in #16).** The
+SANDBOX host-fn surface stays *minimum-viable* by design. Storage
+mutation (`kv:write` / `kv:delete` / edge mutation) and other
+domain-specific actions are explicitly NOT engine concerns — those
+would be parallel-write-pathways that bypass the WRITE primitive's
+capability gating + Inv-13 firing matrix + IVM materialization seam.
+SANDBOX is the escape hatch for compute that wasm runtime is needed
+for (heavy math, ML inference, custom transformers); SANDBOX modules
+return values that the engine's WRITE primitive persists, emit
+events that EMIT broadcasts, and signal completion via RESPOND. For
+engine-known fixed-shape compute (Ed25519 sign / verify, BLAKE3 hash,
+multibase, DID resolve, UCAN chain validation, VC verify) the
+Phase-3 G21 typed-CALL surface is the right home — see
+[`TYPED-CALL.md`](TYPED-CALL.md). Future agent proposals to add
+storage-mutating host-fns must be rejected with reference to this
+commitment.
+
 **Runtime status (post-wave-8b/8h):** the host-fn trampoline is fully
 wired through wasmtime's `Linker::func_wrap`; every listed failure mode
 fires from a real production execution path. The wave-8b runtime
