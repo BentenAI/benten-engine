@@ -311,15 +311,11 @@ fn ucan_validate_chain_returns_true_for_well_formed_chain() {
         .expiry(2_000_000_000)
         .sign(&issuer_kp);
 
-    let bytes =
-        serde_ipld_dagcbor::to_vec(&ucan).expect("Ucan DAG-CBOR encode must succeed");
+    let bytes = serde_ipld_dagcbor::to_vec(&ucan).expect("Ucan DAG-CBOR encode must succeed");
 
     let input = map_value(&[
         ("tokens", Value::List(vec![Value::Bytes(bytes)])),
-        (
-            "audience",
-            Value::Text(audience_did.as_str().to_string()),
-        ),
+        ("audience", Value::Text(audience_did.as_str().to_string())),
         ("capability", Value::Text("zone:user:write".to_string())),
         ("now", Value::Int(1_500_000)),
     ]);

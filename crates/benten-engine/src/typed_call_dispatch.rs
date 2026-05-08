@@ -149,8 +149,14 @@ fn keypair_generate() -> Result<Value, EvalError> {
     let public_bytes = kp.public_key().to_bytes();
 
     let mut out = BTreeMap::new();
-    out.insert("private_key".to_string(), Value::Bytes(secret_bytes.to_vec()));
-    out.insert("public_key".to_string(), Value::Bytes(public_bytes.to_vec()));
+    out.insert(
+        "private_key".to_string(),
+        Value::Bytes(secret_bytes.to_vec()),
+    );
+    out.insert(
+        "public_key".to_string(),
+        Value::Bytes(public_bytes.to_vec()),
+    );
     Ok(Value::Map(out))
 }
 
@@ -170,8 +176,14 @@ fn keypair_from_seed(input: &Value) -> Result<Value, EvalError> {
     let secret_bytes = kp.secret_bytes_for_test();
 
     let mut out = BTreeMap::new();
-    out.insert("private_key".to_string(), Value::Bytes(secret_bytes.to_vec()));
-    out.insert("public_key".to_string(), Value::Bytes(public_bytes.to_vec()));
+    out.insert(
+        "private_key".to_string(),
+        Value::Bytes(secret_bytes.to_vec()),
+    );
+    out.insert(
+        "public_key".to_string(),
+        Value::Bytes(public_bytes.to_vec()),
+    );
     Ok(Value::Map(out))
 }
 
@@ -180,10 +192,7 @@ fn blake3_hash(input: &Value) -> Result<Value, EvalError> {
     let data = expect_bytes(map, "data")?;
     let digest = blake3::hash(data);
     let mut out = BTreeMap::new();
-    out.insert(
-        "hash".to_string(),
-        Value::Bytes(digest.as_bytes().to_vec()),
-    );
+    out.insert("hash".to_string(), Value::Bytes(digest.as_bytes().to_vec()));
     Ok(Value::Map(out))
 }
 
@@ -225,30 +234,33 @@ fn multibase_decode(input: &Value) -> Result<Value, EvalError> {
     let encoded = expect_text(map, "encoded")?;
 
     let mut chars = encoded.chars();
-    let prefix = chars.next().ok_or_else(|| EvalError::TypedCallDispatchError {
-        op_name: TypedCallOp::MultibaseDecode.name(),
-        reason: "encoded string is empty (no multibase prefix)".to_string(),
-    })?;
+    let prefix = chars
+        .next()
+        .ok_or_else(|| EvalError::TypedCallDispatchError {
+            op_name: TypedCallOp::MultibaseDecode.name(),
+            reason: "encoded string is empty (no multibase prefix)".to_string(),
+        })?;
     let body: String = chars.collect();
 
     let (data, base) = match prefix {
         'b' => {
             let upper = body.to_ascii_uppercase();
-            let bytes = data_encoding::BASE32_NOPAD.decode(upper.as_bytes()).map_err(
-                |e| EvalError::TypedCallDispatchError {
+            let bytes = data_encoding::BASE32_NOPAD
+                .decode(upper.as_bytes())
+                .map_err(|e| EvalError::TypedCallDispatchError {
                     op_name: TypedCallOp::MultibaseDecode.name(),
                     reason: format!("base32 decode: {e}"),
-                },
-            )?;
+                })?;
             (bytes, "b".to_string())
         }
         'z' => {
-            let bytes = bs58::decode(&body).into_vec().map_err(|e| {
-                EvalError::TypedCallDispatchError {
-                    op_name: TypedCallOp::MultibaseDecode.name(),
-                    reason: format!("base58btc decode: {e}"),
-                }
-            })?;
+            let bytes =
+                bs58::decode(&body)
+                    .into_vec()
+                    .map_err(|e| EvalError::TypedCallDispatchError {
+                        op_name: TypedCallOp::MultibaseDecode.name(),
+                        reason: format!("base58btc decode: {e}"),
+                    })?;
             (bytes, "z".to_string())
         }
         other => {
@@ -272,10 +284,12 @@ fn did_resolve(input: &Value) -> Result<Value, EvalError> {
     let did_str = expect_text(map, "did")?;
 
     let did = benten_id::did::Did::from_string_unchecked(did_str.clone());
-    let pk = did.resolve().map_err(|e| EvalError::TypedCallDispatchError {
-        op_name: TypedCallOp::DidResolve.name(),
-        reason: format!("did_resolve: {e}"),
-    })?;
+    let pk = did
+        .resolve()
+        .map_err(|e| EvalError::TypedCallDispatchError {
+            op_name: TypedCallOp::DidResolve.name(),
+            reason: format!("did_resolve: {e}"),
+        })?;
 
     let pk_bytes = pk.to_bytes();
     let mut out = BTreeMap::new();
@@ -323,13 +337,12 @@ fn ucan_validate_chain(input: &Value) -> Result<Value, EvalError> {
                 });
             }
         };
-        let ucan: benten_id::ucan::Ucan =
-            serde_ipld_dagcbor::from_slice(bytes).map_err(|e| {
-                EvalError::TypedCallDispatchError {
-                    op_name: TypedCallOp::UcanValidateChain.name(),
-                    reason: format!("tokens[{i}] DAG-CBOR decode: {e}"),
-                }
-            })?;
+        let ucan: benten_id::ucan::Ucan = serde_ipld_dagcbor::from_slice(bytes).map_err(|e| {
+            EvalError::TypedCallDispatchError {
+                op_name: TypedCallOp::UcanValidateChain.name(),
+                reason: format!("tokens[{i}] DAG-CBOR decode: {e}"),
+            }
+        })?;
         chain.push(ucan);
     }
 
@@ -362,12 +375,10 @@ fn vc_verify(input: &Value) -> Result<Value, EvalError> {
     let credential_bytes = expect_bytes(map, "credential")?;
     let expected_issuer_str = expect_text(map, "expected_issuer_did")?;
 
-    let credential: benten_id::vc::Credential =
-        serde_ipld_dagcbor::from_slice(credential_bytes).map_err(|e| {
-            EvalError::TypedCallDispatchError {
-                op_name: TypedCallOp::VcVerify.name(),
-                reason: format!("credential DAG-CBOR decode: {e}"),
-            }
+    let credential: benten_id::vc::Credential = serde_ipld_dagcbor::from_slice(credential_bytes)
+        .map_err(|e| EvalError::TypedCallDispatchError {
+            op_name: TypedCallOp::VcVerify.name(),
+            reason: format!("credential DAG-CBOR decode: {e}"),
         })?;
 
     let expected_issuer = benten_id::did::Did::from_string_unchecked(expected_issuer_str.clone());
@@ -421,10 +432,7 @@ fn expect_map(v: &Value) -> Result<&BTreeMap<String, Value>, EvalError> {
     }
 }
 
-fn expect_bytes<'a>(
-    map: &'a BTreeMap<String, Value>,
-    field: &str,
-) -> Result<&'a [u8], EvalError> {
+fn expect_bytes<'a>(map: &'a BTreeMap<String, Value>, field: &str) -> Result<&'a [u8], EvalError> {
     match map.get(field) {
         Some(Value::Bytes(b)) => Ok(b.as_slice()),
         _ => Err(EvalError::TypedCallInvalidInput {
@@ -452,10 +460,7 @@ fn expect_bytes_exact<'a>(
     Ok(bytes)
 }
 
-fn expect_text<'a>(
-    map: &'a BTreeMap<String, Value>,
-    field: &str,
-) -> Result<&'a String, EvalError> {
+fn expect_text<'a>(map: &'a BTreeMap<String, Value>, field: &str) -> Result<&'a String, EvalError> {
     match map.get(field) {
         Some(Value::Text(s)) => Ok(s),
         _ => Err(EvalError::TypedCallInvalidInput {

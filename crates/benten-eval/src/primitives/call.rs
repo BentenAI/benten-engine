@@ -113,10 +113,10 @@ pub fn execute(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResul
     // dispatch surface instead of the user handler registry. The
     // typed-CALL registry is closed (10 ops); see `crate::typed_call`
     // for the full enumeration + per-op cap requirements.
-    if let Some(Value::Text(target)) = op.properties.get("target") {
-        if let Some(typed_op_name) = target.strip_prefix(crate::typed_call::TYPED_CALL_PREFIX) {
-            return execute_typed_call(op, host, typed_op_name);
-        }
+    if let Some(Value::Text(target)) = op.properties.get("target")
+        && let Some(typed_op_name) = target.strip_prefix(crate::typed_call::TYPED_CALL_PREFIX)
+    {
+        return execute_typed_call(op, host, typed_op_name);
     }
 
     // Dispatch through the host when a `target` + `op` are staged. Real
@@ -239,10 +239,7 @@ fn execute_typed_call(
             edge_label: "ok".to_string(),
             output: v,
         }),
-        Err(EvalError::TypedCallCapDenied {
-            op_name,
-            required,
-        }) => Ok(StepResult {
+        Err(EvalError::TypedCallCapDenied { op_name, required }) => Ok(StepResult {
             next: None,
             edge_label: "ON_DENIED".to_string(),
             output: Value::text(format!(

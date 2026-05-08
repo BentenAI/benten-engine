@@ -244,13 +244,13 @@ impl TypedCallOp {
             Self::KeypairGenerate => {
                 // Optional `seed: Null` accepted; non-null seed is
                 // an error (caller should use `keypair_from_seed`).
-                if let Some(v) = map.get("seed") {
-                    if !matches!(v, Value::Null) {
-                        return Err(EvalError::TypedCallInvalidInput {
-                            op_name: self.name(),
-                            reason: "non-null seed must use keypair_from_seed".to_string(),
-                        });
-                    }
+                if let Some(v) = map.get("seed")
+                    && !matches!(v, Value::Null)
+                {
+                    return Err(EvalError::TypedCallInvalidInput {
+                        op_name: self.name(),
+                        reason: "non-null seed must use keypair_from_seed".to_string(),
+                    });
                 }
                 Ok(())
             }

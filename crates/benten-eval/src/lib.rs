@@ -49,9 +49,9 @@ pub mod suspension_store;
 // host-fn surface. The 12-primitive commitment (#1) holds — typed-
 // CALL is dispatched THROUGH the existing CALL primitive when its
 // `target` starts with `engine:typed:`.
-pub mod typed_call;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
+pub mod typed_call;
 // Phase-3 G17-B SANDBOX `.wat`/`.wasm` fixture loader (phase-3-backlog
 // §6.2 + r1-wsa-5). Native-only (wasm32 cuts SANDBOX entirely per
 // sec-pre-r1-05) + reachable from integration-test binaries
