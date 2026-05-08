@@ -1196,6 +1196,45 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 
 ---
 
+### 7.17 routed_edge_label classification hardening (carry list)
+
+**Origin (Pre-R4b 2026-05-08):** the `wait_signal_shape_optional_typing.rs::wait_signal_shape_mismatch_fires_typed_error_routed_on_error` test currently `#[ignore]`'s with a destination naming this row. The test asserts that a typed-shape mismatch routes to `WaitSignalShapeMismatch` rather than `WaitSignalShapeBypass` when the wait signal carries a routed edge label.
+
+**Phase 3 target:** Bundle with the next round of routed-edge-label classification hardening so the `wait_signal_shape_mismatch_fires_typed_error_routed_on_error` ignore can lift. Specifically:
+- Audit the `crates/benten-eval/src/primitives/wait.rs::resolve_signal_shape` routing logic to confirm typed-shape mismatch + routed-edge-label combos route correctly.
+- Pin the `routed_edge_label` cases in the same test file alongside the existing `defaults_untyped_accepts_any_value` pin.
+
+**Touch size:** ~20-40 LOC investigation + ~20-30 LOC pin (+ removal of the `#[ignore]` once the routing is confirmed).
+
+**Phase target:** Phase-3 R5 post-pre-R4b cleanup OR Phase-3 close residuals wave. Bundle with §7.16 if both stabilize together.
+
+---
+
+## 10. Security-advisory carries (transitive deps; closure-tracked here)
+
+Phase-3 sync introduces iroh + Loro CRDT, which transitively pull in dep tails carrying RUSTSEC advisories the project does not directly create. These are documented + ignored in `deny.toml::[advisories].ignore` so CI's cargo-deny job stays GREEN; this row is the named destination for closure tracking per HARD RULE rule-12 disposition (b).
+
+**RUSTSEC-2026-0119 — hickory-dns CPU exhaustion via O(n²) name compression.**
+- Transitive root: `iroh 0.98.2 -> hickory-resolver 0.26.0-beta.4 -> hickory-proto`.
+- Closure plan: (a) Phase-3 R5 close iroh-version-bump cycle picks up an upstream hickory-dns fix (Dependabot fast-track per `scope-real-10`); (b) Phase-7 Garden-relay work may alternatively replace hickory-dns with a minimal in-process resolver, dropping the dep edge entirely.
+- Remove the `deny.toml` ignore when iroh upstream picks up a hickory-dns fix or when we drop the dep edge.
+
+**RUSTSEC-2026-0120 — hickory-dns NSEC3 unbounded loop on cross-zone responses.**
+- Same transitive root as RUSTSEC-2026-0119 (hickory-resolver -> hickory-proto).
+- Same closure path.
+
+**RUSTSEC-2024-0436 — paste unmaintained advisory.**
+- Transitive root: `iroh 0.98.2 -> netwatch 0.16.0 -> netlink-packet-core 0.8.1 -> paste 1.0.15`.
+- Informational unmaintained advisory (no exploit). Possible alternatives: `pastey` (drop-in fork of paste, actively maintained) or `with_builtin_macros`.
+- Closure plan: same iroh bump cycle. Phase-3 R5 close eligible to land an iroh patch that swaps `paste` for `pastey`.
+
+**Cross-references:**
+- `deny.toml::[advisories].ignore` — the active ignore entries with reason text.
+- `.github/workflows/supply-chain.yml` — the CI invocation point.
+- `CONTRIBUTING.md::Supply chain` — the yank-response protocol.
+
+---
+
 ## 8. Phase 3 plan-doc opening checklist
 
 When Phase 3 pre-R1 opens, the planning agent should:

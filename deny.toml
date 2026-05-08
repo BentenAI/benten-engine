@@ -41,8 +41,30 @@ ignore = [
     # the advisory ID, the impacted crate, the rationale, and a target date
     # for removing the ignore. If an entry lacks all four, the CI lint fails.
     #
-    # Example format (commented until we have a real one):
+    # Example format:
     # { id = "RUSTSEC-XXXX-YYYY", reason = "only reachable via `foo` crate's test-only path; upstream fix tracked at <URL>; remove by 2026-06-01" }
+
+    # RUSTSEC-2026-0119: hickory-dns CPU exhaustion via O(n^2) name compression.
+    # Reachable only via iroh's DNS resolver (Phase-3 P2P sync transport).
+    # Transitive root: iroh 0.98.2 -> hickory-resolver 0.26.0-beta.4 -> hickory-proto.
+    # Closure plan: Phase-3 R5 close iroh-version-bump cycle (Dependabot
+    # fast-track per `scope-real-10`); Phase-7 Garden-relay work may
+    # alternatively replace hickory-dns with a minimal in-process resolver.
+    # Track at `docs/future/phase-3-backlog.md` §10 (security-advisory carries).
+    # Remove when iroh upstream picks up a hickory-dns fix or when we drop
+    # the dep edge.
+    { id = "RUSTSEC-2026-0119", reason = "transitive via iroh -> hickory-resolver; closure tracked at docs/future/phase-3-backlog.md §10 (Phase-3 R5 close iroh-version-bump cycle / Phase-7 Garden-relay alt)" },
+
+    # RUSTSEC-2026-0120: hickory-dns NSEC3 unbounded loop on cross-zone responses.
+    # Same transitive root + same closure path as RUSTSEC-2026-0119.
+    { id = "RUSTSEC-2026-0120", reason = "transitive via iroh -> hickory-resolver; closure tracked at docs/future/phase-3-backlog.md §10 (Phase-3 R5 close iroh-version-bump cycle / Phase-7 Garden-relay alt)" },
+
+    # RUSTSEC-2024-0436: paste unmaintained advisory (informational; no exploit).
+    # Transitive via netlink-packet-core -> netdev -> netwatch -> iroh.
+    # Closure plan: same iroh bump cycle. Phase-3 R5 close eligible to land an
+    # iroh patch that swaps `paste` for `pastey` (drop-in fork). Tracked at
+    # `docs/future/phase-3-backlog.md` §10 (security-advisory carries).
+    { id = "RUSTSEC-2024-0436", reason = "transitive via iroh -> netwatch -> netlink-packet-core -> paste; informational unmaintained advisory; closure tracked at docs/future/phase-3-backlog.md §10 (iroh-version-bump cycle / pastey swap)" },
 ]
 
 # ---------------------------------------------------------------------------
@@ -62,6 +84,35 @@ allow = [
     "Unicode-DFS-2016",
     "Unicode-3.0",
     "Zlib",
+    # Phase-3 transitive-dep additions (deny.toml ratified pre-R4b 2026-05-08).
+    # All four are compatible with the Benten Engine's MIT/Apache-2.0 dual
+    # licensing posture: the engine itself stays MIT/Apache-2.0-dual; transitive
+    # binary deps under these licenses do not impose copyleft on Benten source.
+    #
+    # MPL-2.0 (Mozilla Public License 2.0) — weak/file-level copyleft. OSI-approved,
+    # FSF Free/Libre. Compatible with MIT/Apache-2.0 because MPL's reciprocity is
+    # at the FILE level only — modifications to MPL-licensed FILES must stay MPL,
+    # but linking from MIT/Apache-2.0-licensed code is unrestricted.
+    # Transitive roots: bitmaps + im + sized-chunks (loro CRDT data-structures
+    # stack via `loro-internal`).
+    "MPL-2.0",
+    # Unlicense — public-domain-equivalent dedication. OSI-approved, FSF
+    # Free/Libre. Strictly more permissive than MIT.
+    # Transitive roots: pharos + ws_stream_wasm + async_io_stream (iroh-relay
+    # WebSocket transport stack).
+    "Unlicense",
+    # CDLA-Permissive-2.0 (Community Data License Agreement, Permissive 2.0).
+    # Linux-Foundation-stewarded permissive data license — used by Mozilla's
+    # webpki-roots crates to publish the bundled root-CA list. Permissive at
+    # the data level (no reciprocity); compatible with MIT/Apache-2.0 binary
+    # distribution.
+    # Transitive roots: webpki-roots + webpki-root-certs (rustls TLS stack).
+    "CDLA-Permissive-2.0",
+    # BSL-1.0 (Boost Software License 1.0). OSI-approved, FSF Free/Libre.
+    # Strictly more permissive than MIT (no notice-preservation requirement on
+    # binary redistribution).
+    # Transitive root: xxhash-rust (loro-internal hash-mix).
+    "BSL-1.0",
 ]
 # Everything else — proprietary, copyleft (GPL, AGPL, LGPL), or unlicensed — is
 # denied by omission. This prevents a transitive dep from silently forcing a
@@ -79,7 +130,22 @@ exceptions = [
 
 [bans]
 multiple-versions = "warn"
-wildcards = "deny"
+# Workspace path-dependencies (`benten-foo = { path = "../benten-foo" }`)
+# are treated as wildcard dependencies by cargo-deny. The `allow-wildcard-paths`
+# escape hatch only fires for crates marked `publish = false`; benten-engine
+# crates are not yet `publish = false` (publication is deferred to Phase 8/9+
+# per CLAUDE.md, and the publish-readiness pass at Phase-2a §3.2 was deferred
+# accordingly).
+#
+# Until the Phase 8/9+ publish-readiness pass, downgrade wildcards from
+# "deny" to "warn" so cargo-deny still emits the diagnostic but doesn't fail
+# CI. The Phase 8/9+ pass will: (a) flip every internal crate to
+# `publish = false` (or set explicit version-aligned path+version deps for
+# the ones we ARE publishing), and (b) re-enable `wildcards = "deny"` here.
+# Tracked at `docs/future/phase-2-backlog.md` §10.3 (Phase 9+ OSS launch
+# era — publish-readiness pass).
+wildcards = "warn"
+allow-wildcard-paths = true
 highlight = "all"
 workspace-default-features = "allow"
 external-default-features = "allow"
