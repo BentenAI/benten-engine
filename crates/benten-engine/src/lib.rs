@@ -118,6 +118,15 @@ pub mod outcome;
 #[cfg(not(feature = "browser-backend"))]
 pub mod primitive_host;
 pub mod subgraph_spec;
+// Phase-3 G21-T1 — engine-side typed-CALL dispatch implementations.
+// Wires the 10 typed-CALL ops (Ed25519 sign/verify, BLAKE3, multibase,
+// DID resolve, UCAN chain validation, VC verify) to their underlying
+// APIs in `benten-id` + `benten-core`. Per CLAUDE.md baked-in #16 +
+// #17: full-peer-only (thin clients consume already-verified results
+// from full peers); module is `cfg(not(target_arch = "wasm32"))`-
+// gated at its single call site in `primitive_host.rs`.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod typed_call_dispatch;
 // R6 round-2 sec-r6r2-02: gate the test-helper surface (`principal_cid`,
 // `minimal_wait_handler`, `policy_with_grants`, `counting_capability_policy`,
 // `subgraph_bytes_for_handler`, etc.) behind `cfg(any(test, feature =

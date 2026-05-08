@@ -248,6 +248,47 @@ pub trait PrimitiveHost: Send + Sync {
         ))
     }
 
+    /// Phase-3 G21-T1: typed-CALL engine-side dispatch hook.
+    ///
+    /// The CALL primitive routes here when its `target` (handler_id)
+    /// starts with [`crate::typed_call::TYPED_CALL_PREFIX`]
+    /// (`"engine:typed:"`). The host implementation is responsible
+    /// for:
+    ///   1. Capability gating — calling
+    ///      [`PrimitiveHost::check_capability`] with
+    ///      [`crate::typed_call::TypedCallOp::required_cap`] before
+    ///      invoking the underlying op (a denied call has zero
+    ///      observable side effect).
+    ///   2. Dispatching the named op against the underlying
+    ///      `benten-id` / `benten-core` API (`benten-eval` cannot
+    ///      depend on those crates per arch-r1-10, so the actual op
+    ///      runs here).
+    ///   3. Mapping op-internal typed errors (e.g. `KeypairError` /
+    ///      `UcanError` / `VcError`) to
+    ///      [`EvalError::TypedCallDispatchError`].
+    ///
+    /// The default impl returns
+    /// [`EvalError::TypedCallDispatchError`] with reason
+    /// `"typed-CALL dispatch not implemented on this host"` so
+    /// existing `NullHost`-backed unit tests continue to behave as
+    /// before. The engine implementation in `benten-engine`
+    /// overrides this method to route to the real op handlers.
+    ///
+    /// # Errors
+    /// Returns [`EvalError::TypedCallCapDenied`] when the per-op
+    /// cap-check denies; [`EvalError::TypedCallDispatchError`] on
+    /// op-internal failure.
+    fn dispatch_typed_call(
+        &self,
+        op: crate::typed_call::TypedCallOp,
+        _input: &Value,
+    ) -> Result<Value, EvalError> {
+        Err(EvalError::TypedCallDispatchError {
+            op_name: op.name(),
+            reason: "typed-CALL dispatch not implemented on this host".to_string(),
+        })
+    }
+
     /// Phase-3 G19-E: TRANSFORM AST cache lookup hook.
     ///
     /// Returns a parsed [`crate::expr::Expr`] for the TRANSFORM operation

@@ -251,9 +251,16 @@ pub fn validate_subgraph(
     // round-trip re-runs the same per-primitive classification check
     // the builder-snapshot path applied. See mini-review findings
     // `g6-cag-4` / `g6-opl-5` for the earlier state.
+    //
+    // Phase-3 G21-T1 sec-major-2: in addition to the per-primitive
+    // classification, a CALL Node whose `target` starts with
+    // `engine:typed:` MUST also reflect the typed-CALL op's own
+    // determinism — `keypair_generate` (OS CSPRNG) and `did_resolve`
+    // (network reach for non-`did:key:` methods) leak non-determinism
+    // through the otherwise-deterministic CALL primitive.
     if sg.deterministic {
         for n in &sg.nodes {
-            if !n.kind.is_deterministic() {
+            if !node_is_deterministic_under_inv_9(n) {
                 violations.push(InvariantViolation::Determinism);
                 if !aggregate {
                     let mut err = RegistrationError::new(InvariantViolation::Determinism);
@@ -453,10 +460,13 @@ pub(crate) fn validate_builder(
     }
 
     // Invariant 9 — determinism. A handler declared deterministic rejects
-    // any primitive whose classification is non-deterministic.
+    // any primitive whose classification is non-deterministic — INCLUDING
+    // typed-CALL ops whose `target` starts with `engine:typed:` and
+    // whose typed-op classification (e.g. `keypair_generate` =
+    // false) is non-deterministic per Phase-3 G21-T1 sec-major-2.
     if sn.deterministic {
         for n in sn.nodes {
-            if !n.kind.is_deterministic() {
+            if !node_is_deterministic_under_inv_9(n) {
                 violations.push(InvariantViolation::Determinism);
                 if !aggregate {
                     let mut err = RegistrationError::new(InvariantViolation::Determinism);
@@ -544,6 +554,41 @@ pub(crate) fn validate_builder(
         Ok(())
     } else {
         Err(finalize(out, violations))
+    }
+}
+
+/// Inv-9 determinism check at the OperationNode granularity.
+///
+/// Composes the per-primitive [`PrimitiveKind::is_deterministic`]
+/// classification with the typed-CALL fork's per-op classification:
+/// when `n.kind == PrimitiveKind::Call` AND `n.properties["target"]`
+/// names a typed-CALL op (`engine:typed:<op_name>`), the op's own
+/// [`crate::TypedCallOp::is_deterministic`] vote is AND-ed with the
+/// primitive's vote. Per Phase-3 G21-T1 sec-major-2: bare
+/// `PrimitiveKind::Call.is_deterministic()` returns `true`, but
+/// `engine:typed:keypair_generate` (OS CSPRNG) leaks non-determinism
+/// through the CALL primitive — Inv-9's gate must reflect that or
+/// the registration-time guarantee is a lie.
+fn node_is_deterministic_under_inv_9(n: &OperationNode) -> bool {
+    if !n.kind.is_deterministic() {
+        return false;
+    }
+    if !matches!(n.kind, PrimitiveKind::Call) {
+        return true;
+    }
+    let Some(Value::Text(target)) = n.properties.get("target") else {
+        return true;
+    };
+    let Some(op_name) = target.strip_prefix(crate::typed_call::TYPED_CALL_PREFIX) else {
+        return true;
+    };
+    // Unknown typed-CALL ops surface at runtime as
+    // `E_TYPED_CALL_UNKNOWN_OP`; here, we only constrain the
+    // determinism judgement when the op IS known. An unknown op is
+    // permissive at Inv-9 (the runtime gate handles it).
+    match crate::typed_call::TypedCallOp::parse(op_name) {
+        Some(typed_op) => typed_op.is_deterministic(),
+        None => true,
     }
 }
 

@@ -161,6 +161,21 @@ serde_ipld_dagcbor = { workspace = true }
 # verified manifests from full peers). Mirrors the G13-C / G14-A1 /
 # G14-B native-only-target-dep pattern.
 benten-id = { path = "../benten-id" }
+# Phase-3 G21-T1 — `typed_call_dispatch::build_seed_envelope` constructs
+# the `{version, alg, secret_bytes: Bytes(32)}` DAG-CBOR envelope shape
+# that `Keypair::from_dag_cbor_envelope` expects. `serde_bytes` keeps
+# the `secret_bytes` field on CBOR major type 2 (byte string) so the
+# round-trip is byte-identical with the `benten-id`-side encoder.
+serde_bytes = { workspace = true }
+# Phase-3 G21-T1 — typed-CALL `multibase_encode` / `multibase_decode`
+# ops + `did_resolve` op. `bs58` provides base58btc encode/decode for
+# the multibase `z` prefix (W3C did:key body); `data-encoding` (already
+# in the workspace section above) provides RFC4648 base32/base64. The
+# typed-CALL surface is full-peer-only per CLAUDE.md baked-in #16
+# (crypto compute lives on full peers; thin clients fetch results) so
+# bs58 lives in the native-target dependency section alongside the
+# rest of the typed-CALL chain.
+bs58 = { workspace = true }
 # Phase-3 G16-B wave-6b — engine-side Atrium API surface
 # (`engine_sync.rs` + `atrium_api.rs`) consumes the iroh transport core
 # (G16-A) + Loro CRDT (G16-B) from `benten-sync`. Native-only per

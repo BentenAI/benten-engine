@@ -1160,6 +1160,34 @@ impl PrimitiveHost for Engine {
                 .to_string(),
         ))
     }
+
+    /// Phase-3 G21-T1 — engine-side typed-CALL dispatch.
+    ///
+    /// Wires the 10 typed-CALL ops to their underlying implementations
+    /// in `benten-id` (Ed25519 / DID / UCAN / VC) + `benten-core`
+    /// (BLAKE3 / multibase). Per CLAUDE.md baked-in commitment #16:
+    /// SANDBOX is for compute that does NOT fit other primitives —
+    /// crypto ops fit CALL because they're input → typed result, no
+    /// side effects on engine state. The 12-primitive commitment (#1)
+    /// holds; typed-CALL is dispatched THROUGH the existing CALL
+    /// primitive when its `target` starts with `engine:typed:`.
+    ///
+    /// The cap-check has already fired in the eval-side
+    /// `execute_typed_call` (via `host.check_capability`); this method
+    /// is invoked AFTER the gate clears. A clean negative result (e.g.
+    /// `Ed25519Verify` returns `valid: false`) is NOT a dispatch error
+    /// — it's a structured `{ valid: false }` Map. Only well-formed
+    /// op-internal failures (malformed key bytes / corrupted UCAN
+    /// envelope / unsupported DID method) surface as
+    /// `EvalError::TypedCallDispatchError`.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn dispatch_typed_call(
+        &self,
+        op: benten_eval::TypedCallOp,
+        input: &Value,
+    ) -> Result<Value, benten_eval::EvalError> {
+        crate::typed_call_dispatch::dispatch(op, input)
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -42,8 +42,16 @@ pub mod primitives;
 pub mod sandbox;
 pub mod subgraph_ext;
 pub mod suspension_store;
+// Phase-3 G21-T1 — typed-CALL engine-side dispatch surface (10 ops:
+// Ed25519 sign/verify, BLAKE3 hash, multibase, DID resolve, UCAN
+// chain validation, VC verify). Per CLAUDE.md baked-in commitment
+// #16 (SANDBOX-vs-CALL framing): crypto ops fit CALL, not SANDBOX
+// host-fn surface. The 12-primitive commitment (#1) holds — typed-
+// CALL is dispatched THROUGH the existing CALL primitive when its
+// `target` starts with `engine:typed:`.
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
+pub mod typed_call;
 // Phase-3 G17-B SANDBOX `.wat`/`.wasm` fixture loader (phase-3-backlog
 // §6.2 + r1-wsa-5). Native-only (wasm32 cuts SANDBOX entirely per
 // sec-pre-r1-05) + reachable from integration-test binaries
@@ -55,6 +63,7 @@ pub mod test_fixtures;
 pub mod time_source;
 
 pub use subgraph_ext::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
+pub use typed_call::{TYPED_CALL_PREFIX, TypedCallOp};
 
 pub use context::EvalContext;
 pub use exec_state::{AttributionFrame, ExecutionStateEnvelope, ExecutionStatePayload, Frame};
@@ -371,6 +380,51 @@ pub enum EvalError {
         /// Handle to the persisted suspension envelope; CID + signal name.
         handle: SuspendedHandle,
     },
+
+    /// Phase-3 G21-T1: a typed-CALL dispatch named an op not in the
+    /// engine's typed-CALL registry. Maps to
+    /// `ErrorCode::TypedCallUnknownOp`.
+    #[error("typed-CALL: unknown op '{op_name}'")]
+    TypedCallUnknownOp {
+        /// The op name that was not recognised.
+        op_name: String,
+    },
+
+    /// Phase-3 G21-T1: a typed-CALL dispatch supplied an input shape
+    /// that does not match the named op's expected schema. Maps to
+    /// `ErrorCode::TypedCallInvalidInput`.
+    #[error("typed-CALL '{op_name}' input rejected: {reason}")]
+    TypedCallInvalidInput {
+        /// The op name whose input failed validation.
+        op_name: &'static str,
+        /// Brief diagnostic reason (which field, what was wrong).
+        reason: String,
+    },
+
+    /// Phase-3 G21-T1: a typed-CALL dispatch was rejected because
+    /// the dispatching grant's capability set does not include the
+    /// per-op required capability. Maps to
+    /// `ErrorCode::TypedCallCapDenied`.
+    #[error("typed-CALL '{op_name}' denied: required capability '{required}' not held")]
+    TypedCallCapDenied {
+        /// The op name whose cap-check failed.
+        op_name: &'static str,
+        /// The required capability string.
+        required: String,
+    },
+
+    /// Phase-3 G21-T1: a typed-CALL op's underlying implementation
+    /// returned a typed error that bubbles out of the dispatch
+    /// boundary (e.g. `KeypairError` / `UcanError` / `VcError` from
+    /// `benten-id`; CID parse failure from `benten-core`). Maps to
+    /// `ErrorCode::TypedCallDispatchError`.
+    #[error("typed-CALL '{op_name}' dispatch failed: {reason}")]
+    TypedCallDispatchError {
+        /// The op name whose dispatch failed.
+        op_name: &'static str,
+        /// Brief diagnostic reason from the underlying op.
+        reason: String,
+    },
 }
 
 impl EvalError {
@@ -410,6 +464,10 @@ impl EvalError {
             #[cfg(not(target_arch = "wasm32"))]
             EvalError::Sandbox(s) => s.code(),
             EvalError::WaitSuspended { .. } => ErrorCode::WaitSuspended,
+            EvalError::TypedCallUnknownOp { .. } => ErrorCode::TypedCallUnknownOp,
+            EvalError::TypedCallInvalidInput { .. } => ErrorCode::TypedCallInvalidInput,
+            EvalError::TypedCallCapDenied { .. } => ErrorCode::TypedCallCapDenied,
+            EvalError::TypedCallDispatchError { .. } => ErrorCode::TypedCallDispatchError,
         }
     }
 }

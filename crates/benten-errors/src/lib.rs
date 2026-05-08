@@ -647,6 +647,51 @@ pub enum ErrorCode {
     /// `E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW`. Routes to
     /// `ON_ERROR`. Composes with G14-pre-D HLC bounded-window math.
     HandshakeReplayWithinBoundedWindow,
+    // -----------------------------------------------------------------
+    // Phase-3 G21-T1 — typed-CALL engine-side dispatch surface.
+    //
+    // Typed-CALL extends the existing CALL primitive with a registry of
+    // engine-known operations (Ed25519 sign/verify, BLAKE3 hash,
+    // multibase, DID resolve, UCAN chain validation, VC verify). Per
+    // CLAUDE.md baked-in commitment #16 (SANDBOX is for compute that
+    // does NOT fit other primitives) — crypto ops fit CALL because
+    // they're input → typed result, no side effects on engine state.
+    // The typed-CALL surface is dispatched through the existing CALL
+    // primitive when the `target` (handler_id) starts with the
+    // reserved `engine:typed:` namespace. The 12-primitive commitment
+    // (#1) is preserved — typed-CALL is NOT a new primitive.
+    // -----------------------------------------------------------------
+    /// Phase-3 G21-T1: a typed-CALL dispatch named an op that is not
+    /// in the engine's typed-CALL registry. Distinct from
+    /// `E_NOT_FOUND` (handler-id miss in the user handler registry):
+    /// `E_TYPED_CALL_UNKNOWN_OP` fires when the `engine:typed:`
+    /// namespace prefix is recognised but the trailing op name does
+    /// not match any registered typed-CALL op. Routes to `ON_ERROR`.
+    TypedCallUnknownOp,
+    /// Phase-3 G21-T1: a typed-CALL dispatch supplied an input shape
+    /// that does not match the named op's expected schema (missing
+    /// required field, wrong CBOR type, byte-length mismatch for
+    /// fixed-width fields like Ed25519 keys/signatures). Routes to
+    /// `ON_ERROR`. Distinct from `E_TRANSFORM_SYNTAX` (TRANSFORM
+    /// expression parse failure) — this is a typed-CALL op-input
+    /// validation failure.
+    TypedCallInvalidInput,
+    /// Phase-3 G21-T1: a typed-CALL dispatch was rejected because the
+    /// dispatching grant's capability set does not include the
+    /// per-op required capability. Each typed-CALL op declares a
+    /// cap requirement (e.g. `cap:typed:crypto-sign`) at dispatch
+    /// time; the host's `check_capability` hook gates the op before
+    /// it runs. Joins the cap-denial family routing (`ON_DENIED`)
+    /// per the same precedent as `CapDenied` / `CapAttenuation`.
+    TypedCallCapDenied,
+    /// Phase-3 G21-T1: a typed-CALL op's underlying implementation
+    /// returned an error (e.g. Ed25519 signature verification
+    /// returned `false` is NOT this code — it's a clean `valid: false`
+    /// return; this code fires only when the op-internal call into
+    /// `benten-id` / `benten-core` produced a typed error like a
+    /// `KeypairError` / `UcanError` / `VcError` that bubbles out of
+    /// the typed-CALL dispatch boundary). Routes to `ON_ERROR`.
+    TypedCallDispatchError,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -852,6 +897,11 @@ impl ErrorCode {
             ErrorCode::HandshakeReplayWithinBoundedWindow => {
                 "E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW"
             }
+            // Phase-3 G21-T1 — typed-CALL engine-side dispatch surface
+            ErrorCode::TypedCallUnknownOp => "E_TYPED_CALL_UNKNOWN_OP",
+            ErrorCode::TypedCallInvalidInput => "E_TYPED_CALL_INVALID_INPUT",
+            ErrorCode::TypedCallCapDenied => "E_TYPED_CALL_CAP_DENIED",
+            ErrorCode::TypedCallDispatchError => "E_TYPED_CALL_DISPATCH_ERROR",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -940,7 +990,12 @@ impl ErrorCode {
             | ErrorCode::SubscribeRevokedMidStream
             | ErrorCode::SyncRevokedDuringSession
             | ErrorCode::SyncHopDepthExceeded
-            | ErrorCode::ThinClientAuthRejected => Some("ON_DENIED"),
+            | ErrorCode::ThinClientAuthRejected
+            // Phase-3 G21-T1 — typed-CALL cap-denial joins the
+            // cap-denial routing family per the same precedent as
+            // `CapDenied` / `SandboxHostFnDenied` (the dispatching
+            // grant lacked the per-op required capability).
+            | ErrorCode::TypedCallCapDenied => Some("ON_DENIED"),
 
             // Not-found family — explicit ON_NOT_FOUND. SANDBOX manifest +
             // host-fn lookup miss join here per ESC-15 + D1 random-deferred
@@ -1060,7 +1115,15 @@ impl ErrorCode {
             // Phase-3 G16-D — handshake-protocol bounded-window replay
             // rejection surfaces alongside the transport-surface
             // family (peer-to-peer connection establishment failures).
-            | ErrorCode::HandshakeReplayWithinBoundedWindow => Some("ON_ERROR"),
+            | ErrorCode::HandshakeReplayWithinBoundedWindow
+            // Phase-3 G21-T1 — typed-CALL non-cap-denial failures
+            // route through ON_ERROR. Unknown-op + invalid-input are
+            // dispatch-time validation failures; dispatch-error is
+            // an op-internal failure (e.g. `KeypairError` /
+            // `UcanError` bubbling out of the typed-CALL handler).
+            | ErrorCode::TypedCallUnknownOp
+            | ErrorCode::TypedCallInvalidInput
+            | ErrorCode::TypedCallDispatchError => Some("ON_ERROR"),
 
             // Inv-7 SANDBOX output limit — dedicated edge label (matches the
             // SANDBOX primitive's edge surface in `benten-core` subgraph.rs:
@@ -1318,6 +1381,11 @@ impl ErrorCode {
             "E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW" => {
                 ErrorCode::HandshakeReplayWithinBoundedWindow
             }
+            // Phase-3 G21-T1 — typed-CALL engine-side dispatch surface
+            "E_TYPED_CALL_UNKNOWN_OP" => ErrorCode::TypedCallUnknownOp,
+            "E_TYPED_CALL_INVALID_INPUT" => ErrorCode::TypedCallInvalidInput,
+            "E_TYPED_CALL_CAP_DENIED" => ErrorCode::TypedCallCapDenied,
+            "E_TYPED_CALL_DISPATCH_ERROR" => ErrorCode::TypedCallDispatchError,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }
