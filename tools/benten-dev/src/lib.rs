@@ -546,8 +546,17 @@ impl DevServer {
             // path so the Phase-2a tests stay green. Real DSL sources
             // (using the `->` token + a `respond` keyword) route through
             // the engine.
-            if let Ok(compiled) = compile_str(source) {
-                match engine.register_subgraph_replace(compiled.subgraph) {
+            //
+            // R6 fp Wave C2 (dx-r6-r1-1): typed `E_DSL_INVALID_SHAPE`
+            // diagnostics from the dsl-compiler's shape-validation pass
+            // (`benten_dsl_compiler::validate_shapes`) propagate as
+            // `ErrorCode::DslInvalidShape` so JS callers consuming this
+            // surface (devserver hot-reload error envelope) see the
+            // matching typed `EDslInvalidShape` BentenError subclass.
+            // Other diagnostic codes continue routing through
+            // `ErrorCode::Unknown` until they earn first-class variants.
+            match compile_str(source) {
+                Ok(compiled) => match engine.register_subgraph_replace(compiled.subgraph) {
                     Ok(outcome) => {
                         new_engine_cid = Some(outcome.cid);
                         prev_engine_cid = outcome.previous_cid;
@@ -557,6 +566,21 @@ impl DevServer {
                             "devserver_engine_register: {e:?}"
                         )));
                     }
+                },
+                Err(compile_err) => {
+                    // Surface typed `E_DSL_INVALID_SHAPE` diagnostics as
+                    // the matching `ErrorCode::DslInvalidShape` variant;
+                    // any other compile-error path falls back to the
+                    // legacy in-memory routing (preserves Phase-2a tests
+                    // that pass non-DSL arbitrary source strings).
+                    if compile_err
+                        .diagnostic()
+                        .is_some_and(|d| d.error_code == "E_DSL_INVALID_SHAPE")
+                    {
+                        return Err(ErrorCode::DslInvalidShape);
+                    }
+                    // Else: not a structural parse-OK shape rejection —
+                    // ignore and fall through to legacy in-memory routing.
                 }
             }
         }

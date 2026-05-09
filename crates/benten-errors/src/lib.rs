@@ -761,6 +761,31 @@ pub enum ErrorCode {
     /// would. Routes to `ON_ERROR`. See `phase-3-backlog.md` §2.5(d)
     /// (corr-minor-3 carry from G21-T1 fp-mini-review).
     ReservedHandlerNamespace,
+    /// Phase-3 R6 fix-pass Wave C2 (closes dx-r6-r1-1 MAJOR, half — DSL
+    /// orphan codes): DSL-layer shape validation rejected a value that did
+    /// not match the expected structural shape. Construction site:
+    /// `crates/benten-dsl-compiler/src/lib.rs` (object/pair shape
+    /// validation in the parser/emit pass). Mirrors the TS-side
+    /// `EDslInvalidShape` thrown by `packages/engine/src/dsl.ts` builder
+    /// methods so a Rust call-site emitting this code surfaces the same
+    /// typed `BentenError` subclass on the wire. Routes to `ON_ERROR`.
+    /// Maps to `E_DSL_INVALID_SHAPE`.
+    DslInvalidShape,
+    /// Phase-3 R6 fix-pass Wave C2 (closes dx-r6-r1-1 MAJOR, half — DSL
+    /// orphan codes): an `Engine::call` / `Engine::handler_to_mermaid` /
+    /// `Engine::handler_predecessors` / `Engine::call_stream` /
+    /// `Engine::dispatch_call_with_mode_and_trace` invocation referenced
+    /// a `handler_id` that has not been registered with
+    /// `Engine::register_subgraph` / `Engine::register_crud`. Construction
+    /// sites at the unregistered-handler boundary in
+    /// `crates/benten-engine/src/engine.rs` + `engine_stream.rs`. Mirrors
+    /// the TS-side `EDslUnregisteredHandler` thrown by
+    /// `packages/engine/src/engine.ts::call` so a Rust callsite emitting
+    /// this code surfaces the same typed `BentenError` subclass on the
+    /// wire. Routes to `ON_NOT_FOUND` (the handler-id namespace miss is
+    /// a registry lookup failure, joining the `NotFound` /
+    /// `BackendNotFound` family). Maps to `E_DSL_UNREGISTERED_HANDLER`.
+    DslUnregisteredHandler,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -976,6 +1001,9 @@ impl ErrorCode {
             ErrorCode::TypedCallDispatchError => "E_TYPED_CALL_DISPATCH_ERROR",
             // Phase-3 G21-T3 §2.5(d) — reserved handler-id namespace
             ErrorCode::ReservedHandlerNamespace => "E_RESERVED_HANDLER_NAMESPACE",
+            // Phase-3 R6 fp Wave C2 — DSL orphan-code closure (dx-r6-r1-1)
+            ErrorCode::DslInvalidShape => "E_DSL_INVALID_SHAPE",
+            ErrorCode::DslUnregisteredHandler => "E_DSL_UNREGISTERED_HANDLER",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -1080,7 +1108,9 @@ impl ErrorCode {
 
             // Not-found family — explicit ON_NOT_FOUND. SANDBOX manifest +
             // host-fn lookup miss join here per ESC-15 + D1 random-deferred
-            // shaping.
+            // shaping. R6 fp Wave C2: `DslUnregisteredHandler` joins the
+            // family — the handler-id namespace miss is a registry lookup
+            // failure shape-matching `BackendNotFound`.
             ErrorCode::NotFound
             | ErrorCode::BackendNotFound
             | ErrorCode::HostNotFound
@@ -1088,7 +1118,8 @@ impl ErrorCode {
             | ErrorCode::UnknownView
             | ErrorCode::SandboxHostFnNotFound
             | ErrorCode::SandboxManifestUnknown
-            | ErrorCode::SandboxModuleNotInstalled => Some("ON_NOT_FOUND"),
+            | ErrorCode::SandboxModuleNotInstalled
+            | ErrorCode::DslUnregisteredHandler => Some("ON_NOT_FOUND"),
 
             // Optimistic-concurrency conflict — explicit ON_CONFLICT.
             // EH2 fix: previously fell into the wildcard ON_ERROR which
@@ -1124,6 +1155,11 @@ impl ErrorCode {
             | ErrorCode::CidUnsupportedCodec
             | ErrorCode::CidUnsupportedHash
             | ErrorCode::TransformSyntax
+            // R6 fp Wave C2 (dx-r6-r1-1): DSL shape-validation failure
+            // routes ON_ERROR alongside `TransformSyntax` — both are
+            // structural-shape rejections at the DSL boundary surfaced
+            // along the conventional error edge.
+            | ErrorCode::DslInvalidShape
             | ErrorCode::InputLimit
             | ErrorCode::Serialize
             | ErrorCode::GraphInternal
@@ -1481,6 +1517,9 @@ impl ErrorCode {
             "E_TYPED_CALL_DISPATCH_ERROR" => ErrorCode::TypedCallDispatchError,
             // Phase-3 G21-T3 §2.5(d) — reserved handler-id namespace.
             "E_RESERVED_HANDLER_NAMESPACE" => ErrorCode::ReservedHandlerNamespace,
+            // Phase-3 R6 fp Wave C2 — DSL orphan-code closure (dx-r6-r1-1)
+            "E_DSL_INVALID_SHAPE" => ErrorCode::DslInvalidShape,
+            "E_DSL_UNREGISTERED_HANDLER" => ErrorCode::DslUnregisteredHandler,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }

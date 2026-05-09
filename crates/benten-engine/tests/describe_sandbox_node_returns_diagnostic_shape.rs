@@ -43,6 +43,11 @@ fn describe_sandbox_node_diagnostic_shape_field_set_is_stable() {
         wallclock_ms: 30_000,
         output_limit_bytes: 1_048_576,
         fuel_consumed_high_water: None,
+        // R6 fp Wave C2 (obs-r6r1-1 closure): output high-water is the
+        // 25th p/c drift instance — recorded at record_sandbox_metric,
+        // now threaded through SandboxNodeDescription. `None` until
+        // first invocation matches the fuel_consumed sibling shape.
+        output_consumed_high_water: None,
         last_invocation_ms: None,
     };
 
@@ -56,6 +61,10 @@ fn describe_sandbox_node_diagnostic_shape_field_set_is_stable() {
     assert_eq!(
         example.fuel_consumed_high_water, None,
         "fuel_consumed_high_water None until first invocation"
+    );
+    assert_eq!(
+        example.output_consumed_high_water, None,
+        "output_consumed_high_water None until first invocation (Phase-3 §7.1 trio)"
     );
     assert_eq!(
         example.last_invocation_ms, None,
@@ -75,6 +84,8 @@ fn describe_sandbox_node_manifest_id_none_for_caps_escape_hatch() {
         wallclock_ms: 30_000,
         output_limit_bytes: 1_048_576,
         fuel_consumed_high_water: Some(42),
+        // R6 fp Wave C2 (obs-r6r1-1 closure).
+        output_consumed_high_water: Some(13),
         last_invocation_ms: Some(7),
     };
     assert!(
@@ -82,5 +93,6 @@ fn describe_sandbox_node_manifest_id_none_for_caps_escape_hatch() {
         "caps-escape-hatch DSL form sets manifest_id = None"
     );
     assert_eq!(example.fuel_consumed_high_water, Some(42));
+    assert_eq!(example.output_consumed_high_water, Some(13));
     assert_eq!(example.last_invocation_ms, Some(7));
 }

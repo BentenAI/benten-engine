@@ -43,6 +43,11 @@ fn handler_predecessors_rejects_unregistered_handler() {
     let err = engine
         .handler_predecessors("nonexistent_handler_id")
         .unwrap_err();
-    // Normalised via EngineError::Other { code: NotFound } path.
-    assert_eq!(err.error_code().as_str(), "E_NOT_FOUND");
+    // R6 fp Wave C2 (dx-r6-r1-1): typed `E_DSL_UNREGISTERED_HANDLER`
+    // mirrors the TS-side `EDslUnregisteredHandler` thrown at the
+    // `engine.call(handlerId, ...)` boundary so Rust + TS surfaces
+    // emit the same typed error for the unregistered-handler case.
+    // Routes via `ON_NOT_FOUND` (`Engine::handler_predecessors` is the
+    // diagnostic-shape companion to the dispatch path).
+    assert_eq!(err.error_code().as_str(), "E_DSL_UNREGISTERED_HANDLER");
 }

@@ -135,9 +135,10 @@ impl Engine {
         Ok(self.backend.get_by_label(label)?.len())
     }
 
-    /// Metric snapshot for compromise-5 regression tests.
+    /// Metric snapshot for compromise-5 regression tests + Phase-3
+    /// observer dashboard surface.
     ///
-    /// Surfaces:
+    /// Phase-1 / Phase-2 surfaces:
     /// - `benten.writes.total` — cumulative ChangeEvents observed.
     /// - `benten.ivm.view_stale_count` — Phase-1 placeholder; Phase-2 wires
     ///   the real counter.
@@ -147,6 +148,26 @@ impl Engine {
     ///   increase the capacity via
     ///   [`crate::builder::EngineBuilder::change_stream_capacity`] or ensure
     ///   probes drain.
+    /// - `benten.writes.committed` / `benten.writes.denied` aggregates
+    ///   plus per-scope fan-out keys.
+    ///
+    /// Phase-3 R6 fp Wave C2 additions (closes obs-r6r1-2 MAJOR — Phase-3
+    /// observability counters not surfaced in the canonical operator-
+    /// dashboard key/value bag):
+    /// - `benten.sandbox.handler.<handler_id>.fuel_consumed_high_water` —
+    ///   per-handler SANDBOX cumulative fuel high-water (monotonic).
+    /// - `benten.sandbox.handler.<handler_id>.output_consumed_high_water` —
+    ///   per-handler SANDBOX cumulative guest-output bytes high-water
+    ///   (monotonic; closes the §7.1 trio with fuel + last_invocation_ms).
+    /// - `benten.sandbox.handler.<handler_id>.last_invocation_ms` — wall-
+    ///   clock duration of the most recent invocation (NOT cumulative).
+    /// - `benten.subscribe.on_change_registration_count` — total active +
+    ///   inactive ad-hoc onChange entries (eval-side global registry).
+    /// - `benten.emit.subscriber_count` — registered subscribers on the
+    ///   EMIT broadcast bus.
+    /// - `benten.sync_replica.cap_recheck_calls` — cumulative count of
+    ///   per-row cap-recheck calls fired by `apply_atrium_merge`'s
+    ///   structural-always-on per-write loop (G16-B-F sec-r4r1-2 closure).
     #[must_use]
     pub fn metrics_snapshot(&self) -> BTreeMap<String, f64> {
         let mut out = BTreeMap::new();
@@ -204,6 +225,75 @@ impl Engine {
             reason = "stale view counts are bounded by registered-view count; f64 is lossless well past any realistic view-registry size"
         )]
         out.insert("benten.ivm.view_stale_count".to_string(), stale as f64);
+
+        // R6 fp Wave C2 (obs-r6r1-2 closure): lift the Phase-3
+        // observability counters that were public accessors only into
+        // the canonical operator-dashboard key/value bag.
+
+        // Per-handler SANDBOX fuel/output/wallclock high-water. The
+        // accessor returns a fresh clone of the per-handler map so
+        // formatting doesn't hold the metric lock.
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "SANDBOX high-water values are u64 monotonic counters; lossy f64 cast acceptable for operator-dashboard surface (matches the writes.committed / dropped_events precedent above)"
+        )]
+        for (handler_id, metrics) in self.inner.sandbox_metric_snapshot_all() {
+            if let Some(fuel) = metrics.fuel_consumed_high_water {
+                out.insert(
+                    format!("benten.sandbox.handler.{handler_id}.fuel_consumed_high_water"),
+                    fuel as f64,
+                );
+            }
+            if let Some(output) = metrics.output_consumed_high_water {
+                out.insert(
+                    format!("benten.sandbox.handler.{handler_id}.output_consumed_high_water"),
+                    output as f64,
+                );
+            }
+            if let Some(last_ms) = metrics.last_invocation_ms {
+                out.insert(
+                    format!("benten.sandbox.handler.{handler_id}.last_invocation_ms"),
+                    last_ms as f64,
+                );
+            }
+        }
+
+        // SUBSCRIBE on_change registration count (eval-side process-
+        // scoped registry). The accessor surfaces total active + inactive
+        // entries; GC reaps inactive ones on each publish so a steady
+        // non-zero value reflects active subscriber counts.
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "subscriber counts bounded by registered-handler count; f64 lossless past realistic registry sizes"
+        )]
+        {
+            let on_change_count =
+                benten_eval::primitives::subscribe::on_change_registration_count();
+            out.insert(
+                "benten.subscribe.on_change_registration_count".to_string(),
+                on_change_count as f64,
+            );
+
+            // EMIT broadcast subscriber count.
+            let emit_subs = self.emit_subscriber_count();
+            out.insert("benten.emit.subscriber_count".to_string(), emit_subs as f64);
+        }
+
+        // Sync-replica per-row cap-recheck count (G16-B-F sec-r4r1-2
+        // BLOCKER closure). Cumulative count of per-write cap-recheck
+        // calls fired by apply_atrium_merge's structural-always-on loop.
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "cap-recheck call count is a u64 cumulative counter; lossy f64 cast acceptable for operator-dashboard surface"
+        )]
+        {
+            let recheck_calls = self.sync_replica_cap_recheck_calls();
+            out.insert(
+                "benten.sync_replica.cap_recheck_calls".to_string(),
+                recheck_calls as f64,
+            );
+        }
+
         out
     }
 

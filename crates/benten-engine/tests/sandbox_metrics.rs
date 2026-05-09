@@ -254,3 +254,65 @@ fn sandbox_metrics_propagation_through_cross_process_resume_via_envelope() {
     );
     // The shape-level pin: the documented semantic is implemented.
 }
+
+/// R6 fp Wave C2 (closes obs-r6r1-1 MAJOR — 25th p/c drift instance):
+/// would-FAIL-if-no-op'd end-to-end pin per pim-2 §3.6b. Asserts the
+/// Phase-3 §7.1 trio (fuel + output + wallclock) all reach the
+/// `SandboxNodeDescription` consumer surface after a real SANDBOX
+/// invocation through the production-runtime arm. Pre-Wave-C2 the
+/// `output_consumed_high_water` field was recorded at
+/// `engine.rs::record_sandbox_metric` but DROPPED at
+/// `describe_sandbox_node_for_handler` — only fuel + wallclock reached
+/// the napi/TS surface. This test would fail (sentinel `None` instead
+/// of `Some(>0)`) if the threading regression was reintroduced.
+#[test]
+fn describe_sandbox_node_returns_real_output_consumed_high_water_phase_3_7_1_trio() {
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
+
+    let module_bytes = trivial_run_module_bytes();
+    let module_cid = cid_for_bytes(&module_bytes);
+    let module_cid_str = module_cid.to_base32();
+    engine
+        .register_module_bytes(&module_cid, &module_bytes)
+        .unwrap();
+
+    let spec = sandbox_spec("sandbox.output_high_water_phase_3_trio", &module_cid_str);
+    let handler_id = engine.register_subgraph(spec).unwrap();
+
+    let outcome = engine
+        .call(
+            &handler_id,
+            "run",
+            benten_core::Node::new(vec!["test_input".to_string()], Default::default()),
+        )
+        .expect("dispatch must succeed");
+    assert!(outcome.is_ok_edge());
+
+    let descriptor = engine
+        .describe_sandbox_node_for_handler(&handler_id)
+        .expect("describe_sandbox_node_for_handler returns Ok after a call lands");
+
+    // (1/3) fuel high-water reaches consumer surface.
+    assert!(
+        descriptor.fuel_consumed_high_water.is_some(),
+        "fuel_consumed_high_water must be Some — pre-Wave-C2 covered case (sub-§7.1)"
+    );
+    // (2/3) output high-water reaches consumer surface — this is the
+    // Wave-C2 closure point. Pre-Wave-C2 this would be `None` even
+    // though the metric is recorded upstream.
+    assert!(
+        descriptor.output_consumed_high_water.is_some(),
+        "output_consumed_high_water MUST be Some — Phase-3 §7.1 trio closure \
+         (R6 fp Wave C2 / obs-r6r1-1). The trivial wat module returns i32 = 42 \
+         (4 bytes); the high-water tracker MUST observe >= 0 for any successful \
+         invocation. None here means the field is being dropped at \
+         describe_sandbox_node_for_handler — the 25th p/c drift instance \
+         regression."
+    );
+    // (3/3) last_invocation_ms reaches consumer surface.
+    assert!(
+        descriptor.last_invocation_ms.is_some(),
+        "last_invocation_ms must be Some after a successful invocation"
+    );
+}

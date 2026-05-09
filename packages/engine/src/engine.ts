@@ -1925,6 +1925,7 @@ export class Engine {
             wallclockMs?: number;
             outputLimitBytes?: number;
             fuelConsumedHighWater?: number | null;
+            outputConsumedHighWater?: number | null;
             lastInvocationMs?: number | null;
           };
           return {
@@ -1936,6 +1937,14 @@ export class Engine {
             fuelConsumedHighWater:
               typeof parsed.fuelConsumedHighWater === "number"
                 ? parsed.fuelConsumedHighWater
+                : "unknown",
+            // R6 fp Wave C2 (obs-r6r1-1 closure): closes the Phase-3
+            // §7.1 trio — output_consumed_high_water now flows through
+            // the napi bridge instead of being dropped at
+            // describe_sandbox_node_for_handler.
+            outputConsumedHighWater:
+              typeof parsed.outputConsumedHighWater === "number"
+                ? parsed.outputConsumedHighWater
                 : "unknown",
             lastInvocationMs:
               typeof parsed.lastInvocationMs === "number"
@@ -1958,6 +1967,7 @@ export class Engine {
       // bridge OR when no SANDBOX invocation has been recorded for the
       // handler yet (the metric record is created lazily on first call).
       fuelConsumedHighWater: "unknown",
+      outputConsumedHighWater: "unknown",
       lastInvocationMs: "unknown",
     };
   }
