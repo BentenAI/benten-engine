@@ -871,6 +871,13 @@ impl Engine {
         // accept.
         if let Some(policy) = self.policy.as_deref() {
             let head = envelope.payload.attribution_chain.first();
+            // Phase-3 G16-B-prime fp (consumer-audit closure of cor-1 /
+            // cap-g16bp-2): thread the engine's configured device-DID-
+            // attestation CID into the WAIT-resume cap-recheck so cross-
+            // process device-attestation continuity holds at the
+            // suspend/resume boundary per D-PHASE-3-25. `None` for legacy
+            // / non-attested engines preserves prior behavior.
+            let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
             let ctx = CapWriteContext {
                 label: "system:WaitResume".into(),
                 actor_cid: head.map(|f| f.actor_cid),
@@ -879,7 +886,7 @@ impl Engine {
                 actor_hint: None,
                 pending_ops: Vec::new(),
                 authority: benten_caps::WriteAuthority::User,
-                ..Default::default()
+                device_cid,
             };
             policy.check_write(&ctx).map_err(|e| EngineError::Other {
                 code: ErrorCode::CapRevokedMidEval,

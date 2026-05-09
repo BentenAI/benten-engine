@@ -397,3 +397,31 @@ fn loro_merge_fires_subscribe_notification_on_affected_zone_per_charter_9() {
     // zone-keyed SUBSCRIBE notification on Loro-merge boundaries is
     // out of scope here; named at phase-3-backlog §6.12 deferred.
 }
+
+#[test]
+fn create_anchor_is_idempotent_under_repeated_calls() {
+    // G16-B-prime fp closure (cor-3 MINOR): repeated create_anchor
+    // calls under the same name MUST be idempotent. Returns a handle
+    // pointing at the same anchor entry so the second call cannot
+    // accidentally reset chain state. Defends against a regression
+    // where re-init would clobber the version chain head.
+    use benten_engine::Engine;
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
+    let h1 = engine.create_anchor("post:idempotent").unwrap();
+    let h2 = engine.create_anchor("post:idempotent").unwrap();
+    assert_eq!(
+        h1.name(),
+        h2.name(),
+        "AnchorHandle::name MUST be stable across repeated create_anchor calls"
+    );
+    // Second call must not advance / reset the chain — current
+    // pointer remains at the seed cid.
+    let head_after_first = engine.read_current_version(&h1).unwrap();
+    let head_after_second = engine.read_current_version(&h2).unwrap();
+    assert_eq!(
+        head_after_first, head_after_second,
+        "create_anchor MUST NOT mutate an existing anchor's CURRENT \
+         pointer on repeated calls"
+    );
+}

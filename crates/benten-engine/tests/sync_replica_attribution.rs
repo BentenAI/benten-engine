@@ -104,10 +104,14 @@ async fn sync_replica_write_attribution_carries_device_did_alongside_parent() {
     );
     // The device-DID slot is populated; reconstruct the frame the
     // engine would have minted post-G16-B-prime apply_atrium_merge.
-    // Per the engine's contract: actor_cid = local engine's device_cid
-    // (or all-zero if unset), handler_cid + capability_grant_cid all-zero
-    // pre-handler-attribution-flow landing, sandbox_depth=0, and the
-    // sync slots carry the merge seed.
+    // Per the engine's contract POST G16-B-prime fp (cap-g16bp-1 /
+    // Ben's RATIFIED Option A 2026-05-08):
+    //   - actor_cid = `effective_actor_cid()` which falls back to
+    //     device_cid when set_actor_cid has not been called (single-
+    //     user single-device case, exercised here).
+    //   - handler_cid + capability_grant_cid all-zero pre-handler-
+    //     attribution-flow landing.
+    //   - sandbox_depth=0; sync slots carry the merge seed.
     let frame_with_device = benten_eval::AttributionFrame {
         actor_cid: device_cid,
         handler_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
@@ -124,6 +128,113 @@ async fn sync_replica_write_attribution_carries_device_did_alongside_parent() {
         frame_cid_bytes,
         expected.as_bytes().to_vec(),
         "frame CID matches the expected (device_did + peer_did_set + hop_depth=1) shape"
+    );
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "browser-backend")))]
+#[tokio::test]
+async fn sync_replica_explicit_actor_cid_decouples_from_device_cid() {
+    // Phase-3 G16-B-prime fp closure (cap-g16bp-1 / Ben's RATIFIED
+    // Option A 2026-05-08):
+    //   When `set_actor_cid(Some(actor))` is called, the
+    //   AttributionFrame.actor_cid minted by apply_atrium_merge MUST
+    //   carry the EXPLICIT actor identity, NOT the device identity.
+    //   Defends against the failure shape where actor_cid + device_did
+    //   are conflated at sync-merge boundaries (would lose Phase-4+
+    //   AI-agent / handler-attribution principal identity).
+    use benten_core::Cid;
+    use benten_core::hlc::BentenHlc;
+    use benten_engine::Engine;
+    use benten_engine::atrium_api::AtriumConfig;
+    use benten_engine::engine_sync::AtriumHandle;
+
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
+
+    // Distinct actor and device identities — the load-bearing input.
+    let device_cid = Cid::from_blake3_digest(*blake3::hash(b"device:laptop").as_bytes());
+    let actor_cid = Cid::from_blake3_digest(*blake3::hash(b"actor:user-parent").as_bytes());
+    assert_ne!(
+        device_cid, actor_cid,
+        "test inputs must differ to assert decoupling"
+    );
+    engine.set_device_cid(Some(device_cid));
+    engine.set_actor_cid(Some(actor_cid));
+
+    let peer_a = engine.open_atrium(AtriumConfig::for_test()).await.unwrap();
+    let peer_b = AtriumHandle::open(AtriumConfig::for_test()).await.unwrap();
+    let zone = "/zone/posts";
+    peer_a.register_zone(zone).await;
+    peer_b.register_zone(zone).await;
+    peer_b
+        .with_zone(zone, |doc| {
+            doc.set_property("title", "x", BentenHlc::new(200, 0, peer_b.hlc_node_id()))
+                .unwrap();
+        })
+        .await
+        .unwrap();
+    let bytes = peer_b
+        .with_zone(zone, |doc| doc.export_update().unwrap())
+        .await
+        .unwrap();
+    peer_a
+        .register_peer_did(peer_b.hlc_node_id(), "did:key:peer-b-test")
+        .await;
+
+    let anchor = engine.create_anchor("post:p2").unwrap();
+    let merged_cid = engine
+        .apply_atrium_merge(&peer_a, &anchor, zone, &bytes, 0)
+        .await
+        .unwrap();
+
+    let merged = engine.get_node(&merged_cid).unwrap().unwrap();
+    let frame_cid_bytes = match merged.properties.get("attribution_frame_cid") {
+        Some(benten_core::Value::Bytes(b)) => b.clone(),
+        other => panic!("expected Bytes for attribution_frame_cid, got {other:?}"),
+    };
+
+    // The expected frame uses the EXPLICIT actor_cid + device-cid-string
+    // device_did. If the engine wrongly conflated the two we'd get
+    // a CID matching the device-as-actor frame instead.
+    let expected_correct = benten_eval::AttributionFrame {
+        actor_cid,
+        handler_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        capability_grant_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        sandbox_depth: 0,
+        device_did: Some(format!("device-cid:{device_cid}")),
+        peer_did_set: Some(std::collections::BTreeSet::from([
+            "did:key:peer-b-test".to_string()
+        ])),
+        sync_hop_depth: 1,
+    }
+    .cid()
+    .unwrap();
+    let conflated_wrong = benten_eval::AttributionFrame {
+        actor_cid: device_cid,
+        handler_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        capability_grant_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        sandbox_depth: 0,
+        device_did: Some(format!("device-cid:{device_cid}")),
+        peer_did_set: Some(std::collections::BTreeSet::from([
+            "did:key:peer-b-test".to_string()
+        ])),
+        sync_hop_depth: 1,
+    }
+    .cid()
+    .unwrap();
+
+    assert_eq!(
+        frame_cid_bytes,
+        expected_correct.as_bytes().to_vec(),
+        "AttributionFrame.actor_cid MUST carry the explicitly-set \
+         actor identity per cap-g16bp-1 Option A. NOT the device CID."
+    );
+    assert_ne!(
+        frame_cid_bytes,
+        conflated_wrong.as_bytes().to_vec(),
+        "regression-guard: the conflated (actor_cid == device_cid) \
+         frame would be wrong — assertion would fail if the fallback \
+         path ignored set_actor_cid()."
     );
 }
 

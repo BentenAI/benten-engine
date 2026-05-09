@@ -323,6 +323,19 @@ pub(crate) struct EngineInner {
     /// wired in a [`benten_id::device_attestation::DeviceAttestation`]
     /// CID via [`crate::Engine::set_device_cid`].
     pub(crate) device_cid: std::sync::Mutex<Option<Cid>>,
+
+    /// Phase-3 G16-B-prime fp (cap-g16bp-1 closure / Ben's RATIFIED
+    /// Option A 2026-05-08): the engine's logical-actor identity for
+    /// sync-merge AttributionFrame minting. Decouples actor identity
+    /// from device identity so AttributionFrame.actor_cid carries the
+    /// PRINCIPAL identity (parent / handler-attributed agent) while
+    /// AttributionFrame.device_did carries the DEVICE identity. Falls
+    /// back to [`Self::device_cid`] when unset, preserving Phase-3
+    /// single-user single-device behavior. Phase-4+ AI-agent /
+    /// handler-attribution-flow callers set this explicitly via
+    /// [`crate::Engine::set_actor_cid`] to retain principal identity
+    /// across sync merges.
+    pub(crate) actor_cid: std::sync::Mutex<Option<Cid>>,
 }
 
 /// Phase-3 G16-B-prime (§6.12 item 1): one entry in the engine's
@@ -402,6 +415,7 @@ impl EngineInner {
             testing_persistent_subscribers: std::sync::Mutex::new(Vec::new()),
             anchor_store: std::sync::Mutex::new(BTreeMap::new()),
             device_cid: std::sync::Mutex::new(None),
+            actor_cid: std::sync::Mutex::new(None),
         }
     }
 
@@ -1059,6 +1073,20 @@ impl Engine {
         bytes: &[u8],
         incoming_hop_depth: u32,
     ) -> Result<Cid, EngineError> {
+        // Phase-3 G16-B-prime fp (cap-g16bp-5 D10 closure): refuse
+        // sync-merged writes against a read-only-snapshot engine
+        // (e.g. one constructed via `Engine::from_snapshot_blob`).
+        // Defense-in-depth: prevents an Atrium merge from reaching
+        // `backend.put_node` on a snapshot engine — symmetrical with
+        // the `engine_crud.rs::create_node` / `update_node` /
+        // `delete_node` / `create_edge` / `delete_edge` guards.
+        if self.is_read_only_snapshot() {
+            return Err(EngineError::Other {
+                code: ErrorCode::BackendReadOnly,
+                message: "apply_atrium_merge: backend is read-only (snapshot engine)".into(),
+            });
+        }
+
         // 1. Apply the CRDT merge.
         let seed = atrium
             .merge_remote_change_with_hop_depth(zone, bytes, incoming_hop_depth)
@@ -1098,9 +1126,16 @@ impl Engine {
             // attestation envelope-on-the-wire flow lands.
             format!("device-cid:{cid}")
         });
+        // Phase-3 G16-B-prime fp (cap-g16bp-1 / Ben's RATIFIED Option A
+        // 2026-05-08): source the AttributionFrame.actor_cid from
+        // `effective_actor_cid` — falls back to device_cid when no
+        // explicit actor identity has been set, preserving Phase-3
+        // single-user single-device behavior. Phase-4+ AI-agent /
+        // handler-attribution flows that call `set_actor_cid(...)`
+        // observably retain principal identity across sync merges.
         let attribution = benten_eval::AttributionFrame {
             actor_cid: self
-                .device_cid()
+                .effective_actor_cid()
                 .unwrap_or_else(|| Cid::from_blake3_digest([0u8; 32])),
             handler_cid: Cid::from_blake3_digest([0u8; 32]),
             capability_grant_cid: Cid::from_blake3_digest([0u8; 32]),

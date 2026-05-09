@@ -275,9 +275,15 @@ impl Engine {
         // is open (matches NoAuth posture — embedded single-user
         // deployments get diagnostics out of the box).
         if let Some(policy) = self.policy.as_deref() {
+            // Phase-3 G16-B-prime fp (consumer-audit closure of cor-1 /
+            // cap-g16bp-3): thread the engine's configured device-DID-
+            // attestation CID into the debug:read gate ReadContext so
+            // heterogeneous policies dispatch per-device per D-PHASE-3-25.
+            let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
             let ctx = benten_caps::ReadContext {
                 label: "debug".into(),
                 target_cid: Some(*cid),
+                device_cid,
                 ..Default::default()
             };
             if let Err(e) = policy.check_read(&ctx) {
@@ -308,9 +314,14 @@ impl Engine {
         // DiagnosticInfo carries an accurate `denied_by_policy` signal.
         let denied_by_policy = if exists_in_backend {
             if let Some(policy) = self.policy.as_deref() {
+                // Phase-3 G16-B-prime fp (consumer-audit closure of cor-1
+                // / cap-g16bp-3): thread device-DID-attestation CID for
+                // diagnostic-replay symmetry with the gate path above.
+                let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
                 let ctx = benten_caps::ReadContext {
                     label: label.clone(),
                     target_cid: Some(*cid),
+                    device_cid,
                     ..Default::default()
                 };
                 match policy.check_read(&ctx) {
@@ -458,6 +469,20 @@ impl Engine {
     /// pre-write cap-check arm both populate `device_cid` from this
     /// setter. Legacy engines that never call this setter behave as
     /// before (`device_cid: None`).
+    ///
+    /// **Mutability contract (cap-g16bp-4):** this setter is mutable
+    /// across the engine's lifetime to support device-rotation. A
+    /// caller invokes `set_device_cid(Some(new_cid))` after re-
+    /// validating a fresh [`benten_id::device_attestation::DeviceAttestation`]
+    /// envelope (e.g. after a compromised device is revoked + a
+    /// freshly-attested device is bound). Re-setting with the same
+    /// value is a no-op; re-setting with a different value updates
+    /// the engine's device-CID slot. The setter is intentionally
+    /// **NOT locked-once** because device-DID rotation is an expected
+    /// operational pattern under the multi-device contract, not an
+    /// abuse vector — the producing-device-DID slot in
+    /// AttributionFrame must reflect the current device, and freezing
+    /// the slot would break the rotation flow.
     pub fn set_device_cid(&self, device_cid: Option<Cid>) {
         let mut g = benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
         *g = device_cid;
@@ -469,6 +494,38 @@ impl Engine {
     #[must_use]
     pub fn device_cid(&self) -> Option<Cid> {
         *benten_graph::MutexExt::lock_recover(&self.inner.device_cid)
+    }
+
+    /// Phase-3 G16-B-prime fp (cap-g16bp-1 closure / Ben's RATIFIED
+    /// Option A 2026-05-08): set the engine's logical-actor identity.
+    ///
+    /// This is the identity that vouches for writes initiated through
+    /// this engine, including sync-merged writes minted at
+    /// [`Self::apply_atrium_merge`]. Defaults to [`Self::device_cid`]
+    /// when unset (single-user single-device case). Phase-4+ AI-agent
+    /// flows set this explicitly so AttributionFrame.actor_cid retains
+    /// the PRINCIPAL identity while AttributionFrame.device_did still
+    /// reflects the producing DEVICE.
+    ///
+    /// Pass `None` to clear (default state). Pass `Some(cid)` after
+    /// the engine has bound itself to a logical-actor identity (e.g.
+    /// the user's parent DID or an AI-agent's delegated identity).
+    pub fn set_actor_cid(&self, actor_cid: Option<Cid>) {
+        let mut g = benten_graph::MutexExt::lock_recover(&self.inner.actor_cid);
+        *g = actor_cid;
+    }
+
+    /// Phase-3 G16-B-prime fp (cap-g16bp-1 closure): read the engine's
+    /// configured logical-actor CID, falling back to [`Self::device_cid`]
+    /// when unset. Round-trip companion to [`Self::set_actor_cid`] but
+    /// returns the EFFECTIVE actor identity used at AttributionFrame
+    /// minting (so callers don't have to replicate the fallback).
+    #[must_use]
+    pub fn effective_actor_cid(&self) -> Option<Cid> {
+        match *benten_graph::MutexExt::lock_recover(&self.inner.actor_cid) {
+            Some(cid) => Some(cid),
+            None => *benten_graph::MutexExt::lock_recover(&self.inner.device_cid),
+        }
     }
 
     /// Walk the full version-chain history under `anchor`, yielding

@@ -47,6 +47,23 @@ impl CapabilityPolicy for RecordingDevicePolicy {
     }
 }
 
+/// G16-B-prime fp (mini-review consumer-audit extension): records
+/// every `device_cid` observed at `check_read` time. Permits all reads.
+#[derive(Debug, Default)]
+struct RecordingDeviceReadPolicy {
+    observed: Arc<Mutex<Vec<Option<Cid>>>>,
+}
+
+impl CapabilityPolicy for RecordingDeviceReadPolicy {
+    fn check_write(&self, _ctx: &WriteContext) -> Result<(), CapError> {
+        Ok(())
+    }
+    fn check_read(&self, ctx: &ReadContext) -> Result<(), CapError> {
+        self.observed.lock().unwrap().push(ctx.device_cid);
+        Ok(())
+    }
+}
+
 #[test]
 fn capability_policy_per_device_cid_dispatch_observable_in_runtime_arm() {
     // cap-r4-4 (c) pin (pim-2 production-runtime-arm assertion).
@@ -146,5 +163,54 @@ fn legacy_engine_without_device_cid_observes_none_in_writecontext() {
         captures.iter().all(|d| d.is_none()),
         "legacy engine (no set_device_cid) MUST surface device_cid: None \
          per cap-r4-4 (b) backward-compat. Captures: {captures:?}"
+    );
+}
+
+#[test]
+fn capability_policy_per_device_cid_dispatch_observable_on_read_path() {
+    // G16-B-prime fp consumer-audit closure (cor-1 / cap-g16bp-3
+    // BLOCKER-equivalent): the device_cid threading on the READ side
+    // mirrors the WRITE side per D-PHASE-3-25. Without this pin a
+    // read-path consumer-audit gap would let the field exist on
+    // ReadContext but NEVER get populated by the engine's primary
+    // get_node read-gate ReadContext-construction site.
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    let policy = RecordingDeviceReadPolicy {
+        observed: Arc::clone(&observed),
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::builder()
+        .path(dir.path().join("benten.redb"))
+        .capability_policy(Box::new(policy))
+        .build()
+        .unwrap();
+
+    let device_cid = Cid::from_blake3_digest(*blake3::hash(b"device:laptop").as_bytes());
+    engine.set_device_cid(Some(device_cid));
+
+    // Drive a write (commit-hook check_write does not record on the
+    // read-policy variant) then read it back through engine_crud.rs's
+    // get_node — the load-bearing read-gate site.
+    let mut props: std::collections::BTreeMap<String, Value> = std::collections::BTreeMap::new();
+    props.insert("title".into(), Value::Text("hello".into()));
+    let node = Node::new(vec!["post".into()], props);
+    let cid = engine.transaction(|tx| tx.create_node(&node)).unwrap();
+
+    // Clear out any read observations from the create_node path so the
+    // explicit read below is the load-bearing assertion.
+    observed.lock().unwrap().clear();
+    let _read = engine.get_node(&cid).unwrap();
+
+    let captures = observed.lock().unwrap().clone();
+    assert!(
+        !captures.is_empty(),
+        "engine.get_node MUST drive the policy's check_read at read-gate \
+         time per the post-G16-B-prime read-path consumer-audit closure"
+    );
+    assert!(
+        captures.iter().all(|d| *d == Some(device_cid)),
+        "production-runtime ReadContext MUST carry device_cid populated \
+         from Engine::set_device_cid per cor-1 / cap-g16bp-3. \
+         Captures: {captures:?}"
     );
 }
