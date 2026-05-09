@@ -1046,16 +1046,37 @@ R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift 
 - Fix path: codify §3.6e — implementer briefs MUST include "production call site enumeration" pre-flight item.
 
 **pim-codification-feedback-loop candidate — codification of standing rule doesn't auto-propagate to in-flight agent briefs.**
-- Origin: NS-T52 candidate from Phase-3 R4-close + 1 instance from G20-B fix-pass §3.5g-miss. Sub-threshold (1-2 instances).
+- Origin: NS-T52 candidate from Phase-3 R4-close + 1 instance from G20-B fix-pass §3.5g-miss + 1 self-reference instance at R6 R1 (the R6 R1 ratification batch's in-flight R4b-residual fix-pass + sibling R6 R1 lenses operated against pre-ratification rules). Sub-threshold (1-2 → 2-3 instances; STILL sub-3-recurrence; track only).
 - Fix path: when a new pim-N is codified, sweep in-flight agent briefs + send updates to active agents OR explicitly note "this codification applies to NEW dispatches only."
+- **Status 2026-05-09 (R6 R1 sub-threshold-track-only verdict):** sub-3-recurrence; codify if/when 3rd recurrence fires.
+
+**pim-cryptographic-attestation-transport-reuse candidate — wire-shape needs trust-model closure → COMPOSE existing hardened primitives, NOT introduce parallel unsigned transport.**
+- Origin: G16-D wave-6b fp V2 envelope (parent-signed attestation + Acceptor + FreshnessPolicy + payload-hash binding composed at the wire boundary instead of introducing parallel unsigned transport). Named in g16d6b-fp-corr mini-review as WORTH_R6_RATIFICATION_AS_pim-13_CANDIDATE; renumbered sub-threshold-track-only at R6 R1.
+- 1 instance currently. Sub-3-recurrence threshold; ratify only if 2 more instances surface in Phase-4+ networking work (heterogeneous-cap-envelope per §6.12 item 9, peer-DID rotation envelopes, handler-attestation envelopes).
+- Fix path: codify §3.6 extension (or new §3.6g) when 3rd recurrence fires, naming the COMPOSE-existing-hardened-primitives-at-wire-boundary discipline.
+- **Status 2026-05-09 (R6 R1 sub-threshold-track-only verdict):** track at this entry; codify if/when 3rd recurrence fires.
+
+**pim-atomic-multi-MAJOR-fix-pass-scope-expansion candidate — N findings sharing canonical-bytes shape → atomic landing preferred over wave-splitting.**
+- Origin: G16-D wave-6b fp (4 findings: DID forgery + replay + frame-pair-binding + version validation, all sharing one canonical-bytes shape). Fix-pass scope expanded from ~200-400 LOC to ~850 LOC; JUSTIFIED-NOT-GOLD-PLATING because splitting would ship an unstable intermediate V1.5 shape on disk.
+- 1 instance currently. Sub-3-recurrence threshold; track at this entry.
+- Fix path: codify §3.6 extension when 3rd recurrence fires, naming the atomic-landing-when-shared-canonical-bytes-shape discipline. Composes with `feedback_subtrack_sizing_heuristic` + `feedback_canary_first_parallel_implementation`.
+- **Status 2026-05-09 (R6 R1 sub-threshold-track-only verdict):** track at this entry; codify if/when 3rd recurrence fires.
+
+**fix-pass-mini-review-json-schema candidate — fix-pass mini-reviews demonstrate higher structural depth than R5 group-implementation mini-reviews.**
+- Origin: g16d6b-fp-corr mini-review JSON structure (`prior_findings_closure` + `would_fail_if_no_opd` 4-of-4 axes + `section_3_5g_4_surface_atomic_update` 5-of-5 surfaces + `section_3_5b_HARDENED_post_fix_doc_coupling` + `loc_scope_validation` + `phantom_destination_check` + `criterion_X_closure_verdict` + `lens_focus_coverage`). 1-2 instances at fix-pass depth.
+- Sub-3-recurrence threshold; track at this entry. Codify at dispatch-conventions §3.8 extension if/when 3rd fix-pass exhibits the same structural depth.
+- **Status 2026-05-09 (R6 R1 sub-threshold-track-only verdict):** track at this entry; codify if/when 3rd recurrence fires.
 
 **Cross-references:**
 - `.addl/phase-3/r4b-pattern-induction.json` (pattern-induction-meta-sweep R4b output naming r4b-pim-2-amendment + pim-18 explicitly)
 - `.addl/phase-3/r4b-{cryptography,capability-system,wasmtime-sandbox}.json` (3-lens corroboration of pim-12 candidate)
+- `.addl/phase-3/r6-r1-pattern-induction.json` (R6 R1 ratification recommendations naming the 4 ratify-inline pim-Ns + 4 sub-threshold-track-only candidates)
 - `docs/history/PHASE-1.md §5` (R7 origin) + `docs/history/PHASE-2b.md §5` (pim-1 through pim-11 catalog)
 - Memory `feedback_pattern_induction_meta_sweep.md` (load-bearing operational tier; companion to known-pattern reduxes).
 
 **Touch size:** orchestrator-direct dispatch-conventions §3.X edits (~150-300 LOC across pim-12 / pim-13 / pim-18 / pim-2-amendment / pim-codification-feedback-loop) at R6 ratification + memory file authoring per pim if needed.
+
+**Status 2026-05-09 (R6 R1 ratification batch CLOSED for the 4 ratify-inline candidates):** pim-2-amendment codified at dispatch-conventions §3.6b sub-rule 4 + memory `feedback_pim_2_amendment_per_finding_granularity`; pim-12 codified at dispatch-conventions §3.6e + memory `feedback_pim_12_red_phase_staged_pin_un_ignore_discipline`; pim-13 codified at dispatch-conventions §3.12 + memory `feedback_pim_13_r7_spec_to_code_compliance_audit`; pim-18 codified at dispatch-conventions §3.6f + memory `feedback_pim_18_shape_not_substance_pre_flight`. The 4 sub-threshold-track-only candidates (pim-codification-feedback-loop + pim-cryptographic-attestation-transport-reuse + pim-atomic-multi-MAJOR-fix-pass-scope-expansion + fix-pass-mini-review-json-schema) remain at this §7.11b entry pending 3rd-recurrence fire.
 
 ---
 
