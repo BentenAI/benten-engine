@@ -92,8 +92,6 @@ Terms that have specific meaning in Benten. Alphabetical.
 
 **Thin compute surface** — The Phase-3 wasm32 deployment shape (browser tab + edge worker / WinterTC-compatible runtime) that is NOT a sync participant. Stateless reads against snapshot data; writes go via fetch to a Full peer. Excludes Loro / iroh / SANDBOX / direct sync state from the bundle. IndexedDB persistence (where target supports it) is for snapshot cache + manifest-store, NOT full sync state. Per CLAUDE.md baked-in #17 deployment-shape commitment. Contrast with "Full peer."
 
-**Typed-CALL** — The Phase-3 G21 dispatch surface for the 10 engine-known fixed-shape ops (ed25519_sign / ed25519_verify / keypair_generate / keypair_from_seed / blake3_hash / multibase_encode / multibase_decode / did_resolve / ucan_validate_chain / vc_verify). Reserved handler-id namespace `engine:typed:`; closed registry (no user-extensibility — see [`TYPED-CALL.md`](TYPED-CALL.md)). Each op declares required cap + determinism class + input/output shape. Consumed via `Engine::typed_call` (Rust) / `engine.typedCall()` (napi+DSL).
-
 **SANDBOX** — The WASM computation escape hatch (landed Phase 2b, wasmtime-backed, fuel-metered, no re-entrancy, default 1 MiB output ceiling per call).
 
 **`serde_ipld_dagcbor`** — The CBOR serialization crate Benten uses. Deterministic by default (sorts map keys); IPLD-native.
