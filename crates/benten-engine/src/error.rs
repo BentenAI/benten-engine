@@ -262,6 +262,35 @@ pub enum EngineError {
         manifest_name: String,
     },
 
+    /// Phase-3 G16-B-F (sec-r4r1-2 BLOCKER closure): the per-row
+    /// cap-recheck inside [`crate::engine::Engine::apply_atrium_merge`]
+    /// rejected an inbound sync-replica WRITE because the originating
+    /// peer's grant was revoked locally between the Atrium handshake
+    /// and the next sync round.
+    ///
+    /// Defense-in-depth mirror of the SUBSCRIBE-side
+    /// [`ErrorCode::SubscribeRevokedMidStream`] per CLR-2 dual-layer
+    /// recheck architecture: the structural-always-on per-row check
+    /// inside the merge loop suppresses delivery for any row whose
+    /// originating peer no longer holds a live grant. Catalog code:
+    /// [`ErrorCode::SyncRevokedDuringSession`]
+    /// (`E_SYNC_REVOKED_DURING_SESSION`); routes via `ON_DENIED`.
+    ///
+    /// Construction site:
+    /// `crates/benten-engine/src/engine.rs::apply_atrium_merge` per-row
+    /// apply loop. Pinned at
+    /// `crates/benten-engine/tests/sync_replica_attribution.rs::sync_replica_write_after_local_grant_revoke_post_handshake_rejected_with_e_sync_revoked_during_session`.
+    #[error("sync: peer {peer_did} grant revoked during session for zone {zone}")]
+    SyncRevokedDuringSession {
+        /// DID-string of the originating peer whose grant was revoked.
+        peer_did: String,
+        /// Zone label of the rejected sync-replica row.
+        zone: String,
+        /// CID of the rejected merge Version Node (or pre-mint placeholder
+        /// if the rejection fires before the Version Node is built).
+        cid: Cid,
+    },
+
     /// Generic wrapped error carrying a stable catalog code.
     #[error("{message}")]
     Other {
@@ -484,6 +513,16 @@ impl EngineError {
                 "kind": "sandboxManifestUnknown",
                 "manifestName": manifest_name,
             }),
+            EngineError::SyncRevokedDuringSession {
+                peer_did,
+                zone,
+                cid,
+            } => json!({
+                "kind": "syncRevokedDuringSession",
+                "peerDid": peer_did,
+                "zone": zone,
+                "cid": cid.to_base32(),
+            }),
             EngineError::Other { code, message } => json!({
                 "kind": "other",
                 "code": code.as_static_str(),
@@ -539,6 +578,7 @@ impl EngineError {
             EngineError::ModuleManifestVerify(e) => e.code(),
             EngineError::WaitSuspended { .. } => ErrorCode::WaitSuspended,
             EngineError::SandboxManifestUnknown { .. } => ErrorCode::SandboxManifestUnknown,
+            EngineError::SyncRevokedDuringSession { .. } => ErrorCode::SyncRevokedDuringSession,
             EngineError::Other { code, .. } => code.clone(),
             // G13-B (D-PHASE-3-1a): the Backend variant erases backend-
             // specific errors at the public boundary. We try to recover

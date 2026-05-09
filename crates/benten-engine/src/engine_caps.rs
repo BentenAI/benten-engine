@@ -16,6 +16,116 @@ use crate::error::EngineError;
 use crate::outcome::ViewCreateOptions;
 use crate::subgraph_spec::{GrantSubject, RevokeScope, RevokeSubject};
 
+/// Phase-3 G16-B-F (sec-r4r1-2 BLOCKER closure) — capability-grant
+/// mutation handle returned by [`Engine::caps`]. Wraps a borrow of the
+/// engine + exposes thin `install_proof` / `revoke` surfaces that route
+/// through the engine's existing privileged
+/// [`Engine::grant_capability`] / [`Engine::revoke_capability`] paths.
+///
+/// The handle is the production-equivalent surface the sec-r4r1-2
+/// RED-PHASE pins consume. Distinct from the test-only
+/// `testing_revoke_actor_for_subscribe` helper because it ALSO updates
+/// the in-memory `(actor, zone)` revocation pair set that
+/// [`Engine::apply_atrium_merge`]'s per-row cap-recheck consults — a
+/// caller that revokes via this handle observes the rejection at the
+/// next sync-replica merge boundary.
+pub struct EngineCapsHandle<'eng> {
+    /// Engine borrow. Crate-private so external code MUST go through
+    /// the public methods.
+    pub(crate) engine: &'eng Engine,
+}
+
+/// Phase-3 G16-B-F — opaque capability proof shape consumed by
+/// [`EngineCapsHandle::install_proof`].
+///
+/// Carries the `(actor_cid, scope)` pair the grant authorizes. The
+/// scope string mirrors the scope handed to
+/// [`Engine::grant_capability`] (e.g. `"/zone/posts:write"` or the
+/// Phase-1 `"store:<label>:write"` form). The `proof_cid` slot is the
+/// CID of the durable grant Node minted by `grant_capability` when
+/// `install_proof` runs — callers retain it to address `revoke`
+/// surgically.
+///
+/// Phase-3 wave-5a-style placeholder until G14-B's full UCAN-chain
+/// proof shape lands; the public surface name + arity stay stable per
+/// the no-refactor-on-G14-B-landing contract.
+#[derive(Debug, Clone)]
+pub struct CapProof {
+    /// Actor CID the grant authorizes.
+    pub actor_cid: Cid,
+    /// Scope string (e.g. `"/zone/posts:write"`).
+    pub scope: String,
+    /// CID of the durable grant Node (populated by
+    /// [`EngineCapsHandle::install_proof`]; `None` pre-install).
+    pub proof_cid: Option<Cid>,
+}
+
+impl CapProof {
+    /// Construct a fresh `CapProof` for `(actor_cid, scope)`.
+    #[must_use]
+    pub fn new(actor_cid: Cid, scope: impl Into<String>) -> Self {
+        Self {
+            actor_cid,
+            scope: scope.into(),
+            proof_cid: None,
+        }
+    }
+}
+
+impl<'eng> EngineCapsHandle<'eng> {
+    /// Install a capability proof — routes through
+    /// [`Engine::grant_capability`] internally to mint a
+    /// `system:CapabilityGrant` Node.
+    ///
+    /// On success, populates `proof.proof_cid` with the minted grant's
+    /// CID so callers can `revoke` surgically.
+    ///
+    /// # Errors
+    ///
+    /// Forwards [`EngineError`] from [`Engine::grant_capability`] —
+    /// most commonly [`EngineError::SubsystemDisabled`] when the
+    /// engine was built with `.without_caps()`.
+    pub fn install_proof(&self, proof: &mut CapProof) -> Result<Cid, EngineError> {
+        let cid = self
+            .engine
+            .grant_capability(&proof.actor_cid, &proof.scope)?;
+        proof.proof_cid = Some(cid);
+        // Recover from any prior revocation: an install observed AFTER
+        // a revoke for the same `(actor, scope)` pair lifts the in-memory
+        // revocation. Symmetric with the durable
+        // `system:CapabilityGrant` Node + `system:CapabilityRevocation`
+        // Node ordering — the latest write wins.
+        self.engine
+            .inner
+            .revoked_actor_zone_pairs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&(proof.actor_cid, proof.scope.clone()));
+        Ok(cid)
+    }
+
+    /// Revoke a previously-installed proof. Updates BOTH the durable
+    /// `system:CapabilityRevocation` zone (via
+    /// [`Engine::revoke_capability`]) AND the in-memory
+    /// `(actor_cid, scope)` revocation pair set consulted by
+    /// [`Engine::apply_atrium_merge`]'s per-row cap-recheck.
+    ///
+    /// # Errors
+    ///
+    /// Forwards [`EngineError`] from [`Engine::revoke_capability`].
+    pub fn revoke(&self, proof: &CapProof) -> Result<(), EngineError> {
+        self.engine
+            .revoke_capability(&proof.actor_cid, proof.scope.as_str())?;
+        // Mark the in-memory mirror so the next sync-replica merge
+        // boundary observes the revocation synchronously per the
+        // sec-r4r1-2 BLOCKER closure pattern.
+        self.engine
+            .inner
+            .mark_actor_revoked_for_zone(&proof.actor_cid, proof.scope.clone());
+        Ok(())
+    }
+}
+
 impl Engine {
     // -------- System-zone privileged API (N7) --------
 

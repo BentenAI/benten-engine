@@ -163,6 +163,11 @@ pub use builder::{EngineBuilder, NOAUTH_STARTUP_LOG};
 pub use change_probe::ChangeProbe;
 pub use emit_broadcast::{EmitBroadcast, EmitEvent, EmitSubscription};
 pub use engine::{CHANGE_STREAM_MAX_BUFFERED, Engine, EngineGeneric};
+// Phase-3 G16-B-F (sec-r4r1-2 BLOCKER closure): re-export the
+// capability-grant mutation handle + proof shape consumed by
+// `Engine::caps()` and the SUBSCRIBE / sync-replica RED-PHASE pins.
+#[cfg(not(feature = "browser-backend"))]
+pub use engine_caps::{CapProof, EngineCapsHandle};
 #[cfg(not(feature = "browser-backend"))]
 pub use engine_transaction::EngineTransaction;
 pub use error::EngineError;

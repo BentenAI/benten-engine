@@ -235,6 +235,23 @@ pub(crate) struct EngineInner {
     /// revocations that arrive mid-call. Closes ESC-9 r1-wsa-3 MAJOR.
     pub(crate) revoked_actors_for_subscribe: Arc<std::sync::Mutex<std::collections::HashSet<Cid>>>,
 
+    /// Phase-3 G16-B-F (sec-r4r1-2 BLOCKER closure): in-memory mirror of
+    /// the revoked `(actor_cid, scope)` pairs the engine has observed
+    /// since construction. Consulted by the per-row cap-recheck inside
+    /// [`Engine::apply_atrium_merge`] for the structural-always-on
+    /// recheck mirror of the SUBSCRIBE-side revocation surface.
+    ///
+    /// Production grant-revocation will rear-load this from the durable
+    /// `system:CapabilityRevocation` write path; the in-memory set is
+    /// the wave-5a-style bridge so the per-row recheck has a synchronous
+    /// surface to consult without re-reading the backend on every
+    /// merged row. Symmetric with `revoked_actors_for_subscribe` for
+    /// SUBSCRIBE delivery-time recheck — but keyed on
+    /// `(actor_cid, scope_string)` so the per-zone WRITE recheck can
+    /// scope precisely (a peer revoked from `/zone/posts` may still be
+    /// permitted to write `/zone/calendar`).
+    pub(crate) revoked_actor_zone_pairs: std::sync::Mutex<std::collections::HashSet<(Cid, String)>>,
+
     /// Wave-8c fix-pass cr-w8c-fp-3: opaque test-only marker set.
     /// Decoupled from `revoked_actors_for_subscribe` so production
     /// cap-revocation semantics stay distinct from test-helper
@@ -407,6 +424,7 @@ impl EngineInner {
             revoked_actors_for_subscribe: Arc::new(std::sync::Mutex::new(
                 std::collections::HashSet::new(),
             )),
+            revoked_actor_zone_pairs: std::sync::Mutex::new(std::collections::HashSet::new()),
             #[cfg(any(test, feature = "test-helpers"))]
             test_markers: std::sync::Mutex::new(std::collections::HashSet::new()),
             user_view_input_labels: std::sync::Mutex::new(BTreeMap::new()),
@@ -470,6 +488,37 @@ impl EngineInner {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         g.insert(*actor);
+    }
+
+    /// Phase-3 G16-B-F (sec-r4r1-2 BLOCKER closure): mark `(actor, scope)`
+    /// as revoked at the in-memory mirror. The next sync-replica merge
+    /// whose row would write under `scope` from `actor` fails the
+    /// per-row cap-recheck and surfaces
+    /// [`crate::error::EngineError::SyncRevokedDuringSession`].
+    ///
+    /// Symmetric with [`Self::mark_actor_revoked_for_subscribe`] but
+    /// scope-keyed: a peer revoked from `/zone/posts` may still write
+    /// `/zone/calendar` if the scope-pair set does not name the latter.
+    pub(crate) fn mark_actor_revoked_for_zone(&self, actor: &Cid, scope: impl Into<String>) {
+        let mut g = self
+            .revoked_actor_zone_pairs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        g.insert((*actor, scope.into()));
+    }
+
+    /// Phase-3 G16-B-F: query whether `(actor, zone)` is in the in-memory
+    /// revocation set. Consulted by [`Engine::apply_atrium_merge`]'s
+    /// per-row cap-recheck loop. Match is "either an exact `(actor, zone)`
+    /// pair OR an `(actor, "")` zone-wildcard pair was revoked"; the
+    /// wildcard form lets a single-call revoke cover every zone the
+    /// peer might write under without enumerating each.
+    pub(crate) fn is_actor_revoked_for_zone(&self, actor: &Cid, zone: &str) -> bool {
+        let g = self
+            .revoked_actor_zone_pairs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        g.contains(&(*actor, zone.to_string())) || g.contains(&(*actor, String::new()))
     }
 
     /// Phase-3 G19-C2 wave-7 (§7.1): record a SANDBOX-execution metric
@@ -869,6 +918,14 @@ pub struct EngineGeneric<B: GraphBackend> {
     /// Reset to zero at engine construction.
     pub(crate) thin_client_metrics:
         std::sync::Mutex<crate::thin_client_subscribe::ThinClientMetrics>,
+    /// Phase-3 G16-B-F (sec-r4r1-2 BLOCKER closure / cap-r4-3 +
+    /// r4b-cap-4 reinforcement): sync-replica per-write cap-recheck
+    /// counter. Incremented once per per-row recheck call inside
+    /// [`Engine::apply_atrium_merge`]'s structural-always-on
+    /// per-write loop (NOT once per merge — once per row written by
+    /// the merge). Surfaced via [`Engine::sync_replica_cap_recheck_calls`]
+    /// so test pins can assert the recheck observably fires.
+    pub(crate) sync_replica_cap_recheck_count: std::sync::atomic::AtomicU64,
     /// G14-D wave-5a: per-thin-client-subscription state for the
     /// thin-client-subscribe protocol. Keyed by opaque subscription
     /// id; each entry carries the device-DID and the F6 cap-recheck
@@ -1064,7 +1121,18 @@ impl Engine {
     /// - [`EngineError::Graph`] / [`EngineError::Other`]
     ///   ([`ErrorCode::VersionBranched`] / [`ErrorCode::VersionUnknownPrior`])
     ///   on backend put or version-chain append failure.
+    /// - [`EngineError::SyncRevokedDuringSession`] when the per-row
+    ///   cap-recheck (sec-r4r1-2 BLOCKER closure) catches a
+    ///   mid-session revocation against the originating peer.
     #[cfg(not(target_arch = "wasm32"))]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "G16-B-F (sec-r4r1-2 BLOCKER closure) inlines the per-row cap-recheck loop \
+                  + structural-always-on policy.check_write hook + peer-DID resolution \
+                  inside the merge orchestrator; splitting into helpers would scatter the \
+                  defense-in-depth narrative across multiple call sites and obscure the \
+                  before/after merge ordering contract"
+    )]
     pub async fn apply_atrium_merge(
         &self,
         atrium: &crate::engine_sync::AtriumHandle,
@@ -1107,6 +1175,122 @@ impl Engine {
                 code: e.code(),
                 message: e.to_string(),
             })?;
+
+        // 3.5. sec-r4r1-2 BLOCKER closure (Phase-3 G16-B-F): per-row
+        //      cap-recheck-at-delivery. Mirrors the SUBSCRIBE-side
+        //      delivery-time recheck per CLR-2 dual-layer recheck
+        //      architecture. STRUCTURAL-ALWAYS-ON per Ben's RATIFIED
+        //      Option (a) — no source enum / no caller bypass.
+        //
+        //      For each row produced by the Loro merge we (a) bump the
+        //      observability counter so tests can assert the recheck
+        //      observably fires, and (b) consult the in-memory
+        //      `(actor_cid, scope)` revocation set (populated by
+        //      `EngineCapsHandle::revoke`) — if the originating peer's
+        //      grant for this zone has been revoked, fire the typed
+        //      `SyncRevokedDuringSession` rejection BEFORE the merge
+        //      Version Node is minted. Mirrors the SUBSCRIBE-side
+        //      `E_SUBSCRIBE_REVOKED_MID_STREAM` shape.
+        //
+        //      Peer-actor-cid resolution: pre-G14-B durable identity
+        //      backend, the engine derives a deterministic actor CID
+        //      from the FIRST resolved peer-DID via the canonical
+        //      blake3-of-utf8-bytes shape (matches the convention
+        //      `EngineCapsHandle::install_proof` uses when the test
+        //      installs a grant under a known actor CID — the test
+        //      uses the same hashing path so the in-memory revocation
+        //      pair set keys agree across the install/revoke + the
+        //      per-row recheck). When no peer_did is present, falls
+        //      back to the engine's `effective_actor_cid()` (single-
+        //      peer single-device test fixture path).
+        let peer_actor_cid = atrium
+            .resolve_peer_dids(&seed.peer_node_ids)
+            .await
+            .first()
+            .map(|did| Cid::from_blake3_digest(*blake3::hash(did.as_bytes()).as_bytes()))
+            .or_else(|| self.effective_actor_cid());
+        for (key, _stamped) in &writes {
+            // Bump the per-row recheck counter — observable via
+            // `Engine::sync_replica_cap_recheck_calls`. Pinned in
+            // `sync_replica_attribution.rs::sync_replica_write_cap_recheck_at_delivery_against_local_grant_store`.
+            self.sync_replica_cap_recheck_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+            // Per-row revocation check: if `(actor_cid, scope)` is in
+            // the in-memory revocation set under EITHER the bare zone
+            // form OR the `<zone>:write` action-scoped form, reject
+            // the entire merge before the Version Node is minted. The
+            // merge is atomic — partial application would leave the
+            // zone in an inconsistent state relative to the
+            // originating peer's expected post-merge bytes, so a
+            // single revoked row vetoes the whole merge. Checking
+            // BOTH zone-shapes lets `EngineCapsHandle::revoke` be
+            // ergonomic with a `:write`-scoped CapProof while the
+            // merge boundary names just the bare zone.
+            let zone_write = format!("{zone}:write");
+            if let Some(actor_cid) = peer_actor_cid
+                && (self.is_actor_revoked_for_zone(&actor_cid, zone)
+                    || self.is_actor_revoked_for_zone(&actor_cid, &zone_write))
+            {
+                let peer_did = atrium
+                    .resolve_peer_dids(&seed.peer_node_ids)
+                    .await
+                    .into_iter()
+                    .next()
+                    .unwrap_or_else(|| "<unresolved-peer>".to_string());
+                return Err(EngineError::SyncRevokedDuringSession {
+                    peer_did,
+                    zone: zone.to_string(),
+                    cid: Cid::from_blake3_digest(*blake3::hash(key.as_bytes()).as_bytes()),
+                });
+            }
+
+            // Additional structural recheck via the
+            // `CapabilityPolicy::check_write` hook — preserves the
+            // policy's view of the cap-recheck for backends that
+            // route revocation through `system:CapabilityRevocation`
+            // Node writes (the durable UCAN backend at G14-B). The
+            // hook is consulted with a synthetic `WriteContext`
+            // shaped per the row's zone + the resolved peer
+            // actor_cid; a `Denied` / `Revoked` / `DeniedRead`
+            // verdict surfaces the same typed
+            // `SyncRevokedDuringSession` rejection as the in-memory
+            // mirror.
+            if let Some(policy) = self.policy.as_ref() {
+                let scope = format!("{zone}:write");
+                let ctx = benten_caps::WriteContext {
+                    label: zone.to_string(),
+                    actor_cid: peer_actor_cid,
+                    scope: scope.clone(),
+                    is_privileged: false,
+                    actor_hint: None,
+                    pending_ops: Vec::new(),
+                    authority: benten_caps::WriteAuthority::User,
+                    device_cid: None,
+                };
+                if let Err(cap_err) = policy.check_write(&ctx) {
+                    use benten_caps::CapError;
+                    if matches!(cap_err, CapError::Revoked | CapError::Denied { .. }) {
+                        let peer_did = atrium
+                            .resolve_peer_dids(&seed.peer_node_ids)
+                            .await
+                            .into_iter()
+                            .next()
+                            .unwrap_or_else(|| "<unresolved-peer>".to_string());
+                        return Err(EngineError::SyncRevokedDuringSession {
+                            peer_did,
+                            zone: zone.to_string(),
+                            cid: Cid::from_blake3_digest(*blake3::hash(key.as_bytes()).as_bytes()),
+                        });
+                    }
+                    // Other CapError variants (NotImplemented, etc.)
+                    // surface via the typed Cap pass-through —
+                    // preserves existing semantics for non-revocation
+                    // policy verdicts.
+                    return Err(EngineError::Cap(cap_err));
+                }
+            }
+        }
 
         // 4. Build the merge Version Node. Properties carry the merged
         //    string values + a serialized AttributionFrame slot ("attribution_frame_cid")
@@ -1170,6 +1354,65 @@ impl Engine {
         let merge_node = Node::new(vec!["version".into()], props);
         let cid = self.append_version(anchor, &merge_node)?;
         Ok(cid)
+    }
+
+    /// Phase-3 G16-B-F (sec-r4r1-2 BLOCKER closure / cap-r4-3 +
+    /// r4b-cap-4 reinforcement): cumulative count of per-row cap-recheck
+    /// calls fired by [`Self::apply_atrium_merge`]'s structural-always-on
+    /// per-write loop.
+    ///
+    /// Mirrors the SUBSCRIBE-side per-event cap-recheck observability
+    /// surface; tests assert this counter increments when a sync-replica
+    /// merge applies, and that the rejection arm fires
+    /// [`EngineError::SyncRevokedDuringSession`] when the originating
+    /// peer's grant was revoked locally between the Atrium handshake and
+    /// the next sync round.
+    #[must_use]
+    pub fn sync_replica_cap_recheck_calls(&self) -> u64 {
+        self.sync_replica_cap_recheck_count
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Phase-3 G16-B-F — capability-grant mutation handle, returned by
+    /// the `caps()` accessor on the engine. Wraps a borrow of the
+    /// engine + exposes thin `install_proof` / `revoke` surfaces that
+    /// route through the engine's existing privileged
+    /// [`Engine::grant_capability`] / [`Engine::revoke_capability`]
+    /// paths.
+    ///
+    /// The handle is the surface the sec-r4r1-2 RED-PHASE pins
+    /// consume (per
+    /// `crates/benten-engine/tests/sync_replica_attribution.rs`); it
+    /// names the production-equivalent surface for grant install /
+    /// revoke without re-routing the existing system-zone
+    /// `system:CapabilityGrant` / `system:CapabilityRevocation` Node
+    /// writes.
+    ///
+    /// Cfg-gated to NOT-`browser-backend` because the underlying
+    /// privileged `grant_capability` / `revoke_capability` paths live
+    /// in `engine_caps` which is itself NOT-`browser-backend` (the
+    /// browser thin client routes grant mutations through the full
+    /// peer per CLAUDE.md baked-in #17).
+    #[cfg(not(feature = "browser-backend"))]
+    #[must_use]
+    pub fn caps(&self) -> crate::engine_caps::EngineCapsHandle<'_> {
+        crate::engine_caps::EngineCapsHandle { engine: self }
+    }
+
+    /// Phase-3 G16-B-F — current-epoch snapshot of every revoked
+    /// `(actor_cid, scope)` pair that the in-memory cap layer has
+    /// observed on this engine.
+    ///
+    /// Consulted by [`Self::apply_atrium_merge`]'s per-row
+    /// cap-recheck. The Phase-1-stub [`crate::engine_caps`] grant
+    /// path does NOT today maintain a typed in-memory revocation
+    /// store (revocations land as `system:CapabilityRevocation`
+    /// Nodes that the durable backend reads at write-check time);
+    /// the in-memory mirror lives on [`EngineInner::revoked_actors`]
+    /// so the per-row recheck has a synchronous surface to consult
+    /// without re-reading the backend on every merged row.
+    pub(crate) fn is_actor_revoked_for_zone(&self, actor_cid: &Cid, zone: &str) -> bool {
+        self.inner.is_actor_revoked_for_zone(actor_cid, zone)
     }
 
     /// Phase-3 G21-T2 — dispatch a typed-CALL op directly through the
@@ -1323,6 +1566,7 @@ impl<B: GraphBackend> EngineGeneric<B> {
             thin_client_metrics: std::sync::Mutex::new(
                 crate::thin_client_subscribe::ThinClientMetrics::default(),
             ),
+            sync_replica_cap_recheck_count: std::sync::atomic::AtomicU64::new(0),
             thin_client_subscriptions: std::sync::Mutex::new(std::collections::HashMap::new()),
             handler_route_log: Arc::new(crate::handler_router::HandlerRouteLog::new()),
             wait_wall_clock_override_ms: std::sync::Mutex::new(None),

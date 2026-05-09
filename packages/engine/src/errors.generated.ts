@@ -1898,14 +1898,14 @@ export class ESubscribeRevokedMidStream extends BentenError {
 /**
  * E_SYNC_REVOKED_DURING_SESSION
  *
- * Thrown at: sync-replica receive boundary (Phase-3 G14-D wave-5a; sec-r4r1-2 BLOCKER half-b closure; CLR-2 mirror). Wave-paired construction site lands alongside the sync-receive surface.
- * Message template: "sync: peer {peer} grant revoked during session"
+ * Thrown at: `crates/benten-engine/src/engine.rs::apply_atrium_merge` per-row apply loop (Phase-3 G16-B-F; sec-r4r1-2 BLOCKER closure; CLR-2 mirror of SUBSCRIBE-side `E_SUBSCRIBE_REVOKED_MID_STREAM`).
+ * Message template: "sync: peer {peer_did} grant revoked during session for zone {zone}"
  */
 export class ESyncRevokedDuringSession extends BentenError {
   static readonly code = "E_SYNC_REVOKED_DURING_SESSION";
-  static readonly fixHint = "A sync-replica inbound WRITE was rejected because the source peer's grant was revoked locally between the Atrium handshake and the next sync round. Per CLR-2 this mirrors the SUBSCRIBE delivery-time recheck — the receiving peer's per-write cap-recheck consults the local grant store via the `cap_recheck.rs` G13-pre-C scaffold. The peer may re-handshake with a current grant. Routes to `ON_DENIED`.";
+  static readonly fixHint = "A sync-replica inbound WRITE was rejected because the source peer's grant was revoked locally between the Atrium handshake and the next sync round. Per CLR-2 this mirrors the SUBSCRIBE delivery-time recheck — the receiving peer's per-write cap-recheck consults the local grant store via the `cap_recheck.rs` G13-pre-C scaffold + the `CapabilityPolicy::check_write` per-row hook. The peer may re-handshake with a current grant. Routes to `ON_DENIED`.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SYNC_REVOKED_DURING_SESSION", "A sync-replica inbound WRITE was rejected because the source peer's grant was revoked locally between the Atrium handshake and the next sync round. Per CLR-2 this mirrors the SUBSCRIBE delivery-time recheck — the receiving peer's per-write cap-recheck consults the local grant store via the `cap_recheck.rs` G13-pre-C scaffold. The peer may re-handshake with a current grant. Routes to `ON_DENIED`.", message, context);
+    super("E_SYNC_REVOKED_DURING_SESSION", "A sync-replica inbound WRITE was rejected because the source peer's grant was revoked locally between the Atrium handshake and the next sync round. Per CLR-2 this mirrors the SUBSCRIBE delivery-time recheck — the receiving peer's per-write cap-recheck consults the local grant store via the `cap_recheck.rs` G13-pre-C scaffold + the `CapabilityPolicy::check_write` per-row hook. The peer may re-handshake with a current grant. Routes to `ON_DENIED`.", message, context);
     this.name = "ESyncRevokedDuringSession";
   }
 }
