@@ -1602,51 +1602,81 @@ impl Engine {
     /// # Errors
     ///
     /// - [`EngineError::Other`] with `code:
+    ///   ErrorCode::SandboxUnavailableOnWasm` when called on
+    ///   `target_arch = "wasm32"` (D3 entry-point 2 uniformity per
+    ///   r4b-wsa-2; module bytes are exclusively consumed by the
+    ///   SANDBOX runtime which is compile-time absent on wasm32 per
+    ///   CLAUDE.md baked-in #17).
+    /// - [`EngineError::Other`] with `code:
     ///   ErrorCode::Unknown("E_MODULE_BYTES_CID_MISMATCH")` when
     ///   `BLAKE3(bytes) != cid`.
     /// - [`EngineError::Graph`] when the underlying redb privileged-
     ///   write surface surfaces a backend error.
     pub fn register_module_bytes(&self, cid: &Cid, bytes: &[u8]) -> Result<(), EngineError> {
-        // D-PHASE-3-12 — recompute BLAKE3 over the bytes and compare
-        // against the caller-supplied CID. Reject mismatch as a typed
-        // error before any side-effecting work.
-        let recomputed = Cid::from_blake3_digest(*blake3::hash(bytes).as_bytes());
-        if &recomputed != cid {
+        // r4b-wsa-2 D3 entry-point 2 uniformity (Ben 2026-05-04 D3
+        // LOAD-BEARING). On wasm32-unknown-unknown the SANDBOX
+        // runtime (wasmtime) is compile-time absent, so registered
+        // module bytes have no execution path. Surface the typed
+        // E_SANDBOX_UNAVAILABLE_ON_WASM error at registration so a
+        // browser thin-client caller observes the actionable failure
+        // immediately, rather than an opaque "module accepted but
+        // never executes" surface. Mirrors `Engine::execute_sandbox`
+        // wasm32 stub at `primitive_host.rs::execute_sandbox`.
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = (cid, bytes);
             return Err(EngineError::Other {
-                code: benten_errors::ErrorCode::Unknown("E_MODULE_BYTES_CID_MISMATCH".to_string()),
-                message: format!(
-                    "register_module_bytes: caller-supplied CID does not match BLAKE3(bytes); \
-                     expected={expected} computed={computed}",
-                    expected = cid.to_base32(),
-                    computed = recomputed.to_base32(),
-                ),
+                code: benten_errors::ErrorCode::SandboxUnavailableOnWasm,
+                message: crate::engine_sandbox::SANDBOX_UNAVAILABLE_ON_WASM_TEXT.to_string(),
             });
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // D-PHASE-3-12 — recompute BLAKE3 over the bytes and compare
+            // against the caller-supplied CID. Reject mismatch as a typed
+            // error before any side-effecting work.
+            let recomputed = Cid::from_blake3_digest(*blake3::hash(bytes).as_bytes());
+            if &recomputed != cid {
+                return Err(EngineError::Other {
+                    code: benten_errors::ErrorCode::Unknown(
+                        "E_MODULE_BYTES_CID_MISMATCH".to_string(),
+                    ),
+                    message: format!(
+                        "register_module_bytes: caller-supplied CID does not match BLAKE3(bytes); \
+                         expected={expected} computed={computed}",
+                        expected = cid.to_base32(),
+                        computed = recomputed.to_base32(),
+                    ),
+                });
+            }
 
-        // Compromise #17 closure: persist via the durable BlobBackend
-        // FIRST so a crash between in-memory insert and disk-flush
-        // doesn't leave the in-memory map advertising bytes the
-        // restart can't rehydrate.
-        let blob_backend =
-            benten_graph::backends::RedbBlobBackend::new(std::sync::Arc::clone(&self.backend));
-        blob_backend.put_sync(cid, bytes).map_err(|e| match e {
-            benten_graph::backends::BlobError::CidMismatch { .. } => EngineError::Other {
-                code: benten_errors::ErrorCode::Unknown("E_MODULE_BYTES_CID_MISMATCH".to_string()),
-                message: format!("blob backend re-check tripped for cid={}", cid.to_base32()),
-            },
-            benten_graph::backends::BlobError::Graph(g) => EngineError::Graph(g),
-            other => EngineError::Other {
-                code: other.code(),
-                message: other.to_string(),
-            },
-        })?;
+            // Compromise #17 closure: persist via the durable BlobBackend
+            // FIRST so a crash between in-memory insert and disk-flush
+            // doesn't leave the in-memory map advertising bytes the
+            // restart can't rehydrate.
+            let blob_backend =
+                benten_graph::backends::RedbBlobBackend::new(std::sync::Arc::clone(&self.backend));
+            blob_backend.put_sync(cid, bytes).map_err(|e| match e {
+                benten_graph::backends::BlobError::CidMismatch { .. } => EngineError::Other {
+                    code: benten_errors::ErrorCode::Unknown(
+                        "E_MODULE_BYTES_CID_MISMATCH".to_string(),
+                    ),
+                    message: format!("blob backend re-check tripped for cid={}", cid.to_base32()),
+                },
+                benten_graph::backends::BlobError::Graph(g) => EngineError::Graph(g),
+                other => EngineError::Other {
+                    code: other.code(),
+                    message: other.to_string(),
+                },
+            })?;
 
-        // Mirror into the in-memory cache so the SANDBOX dispatch hot
-        // path stays free of disk reads. The cache is rebuilt at engine
-        // open via `rehydrate_module_bytes_from_zone`.
-        let mut guard = self.inner.module_bytes.lock_recover();
-        guard.insert(*cid, bytes.to_vec());
-        Ok(())
+            // Mirror into the in-memory cache so the SANDBOX dispatch hot
+            // path stays free of disk reads. The cache is rebuilt at engine
+            // open via `rehydrate_module_bytes_from_zone`.
+            let mut guard = self.inner.module_bytes.lock_recover();
+            guard.insert(*cid, bytes.to_vec());
+            Ok(())
+        }
     }
 
     /// Phase-3 G14-C — public accessor for previously-registered module
