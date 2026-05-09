@@ -250,8 +250,7 @@ pub(crate) struct EngineInner {
     /// `(actor_cid, scope_string)` so the per-zone WRITE recheck can
     /// scope precisely (a peer revoked from `/zone/posts` may still be
     /// permitted to write `/zone/calendar`).
-    pub(crate) revoked_actor_zone_pairs:
-        std::sync::Mutex<std::collections::HashSet<(Cid, String)>>,
+    pub(crate) revoked_actor_zone_pairs: std::sync::Mutex<std::collections::HashSet<(Cid, String)>>,
 
     /// Wave-8c fix-pass cr-w8c-fp-3: opaque test-only marker set.
     /// Decoupled from `revoked_actors_for_subscribe` so production
@@ -1122,7 +1121,18 @@ impl Engine {
     /// - [`EngineError::Graph`] / [`EngineError::Other`]
     ///   ([`ErrorCode::VersionBranched`] / [`ErrorCode::VersionUnknownPrior`])
     ///   on backend put or version-chain append failure.
+    /// - [`EngineError::SyncRevokedDuringSession`] when the per-row
+    ///   cap-recheck (sec-r4r1-2 BLOCKER closure) catches a
+    ///   mid-session revocation against the originating peer.
     #[cfg(not(target_arch = "wasm32"))]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "G16-B-F (sec-r4r1-2 BLOCKER closure) inlines the per-row cap-recheck loop \
+                  + structural-always-on policy.check_write hook + peer-DID resolution \
+                  inside the merge orchestrator; splitting into helpers would scatter the \
+                  defense-in-depth narrative across multiple call sites and obscure the \
+                  before/after merge ordering contract"
+    )]
     pub async fn apply_atrium_merge(
         &self,
         atrium: &crate::engine_sync::AtriumHandle,
@@ -1260,10 +1270,7 @@ impl Engine {
                 };
                 if let Err(cap_err) = policy.check_write(&ctx) {
                     use benten_caps::CapError;
-                    if matches!(
-                        cap_err,
-                        CapError::Revoked { .. } | CapError::Denied { .. }
-                    ) {
+                    if matches!(cap_err, CapError::Revoked | CapError::Denied { .. }) {
                         let peer_did = atrium
                             .resolve_peer_dids(&seed.peer_node_ids)
                             .await

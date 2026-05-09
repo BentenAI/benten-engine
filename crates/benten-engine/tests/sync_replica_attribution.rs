@@ -451,8 +451,7 @@ async fn sync_replica_write_cap_recheck_at_delivery_against_local_grant_store() 
     // in-memory revocation pair set keys agree. Alice's peer-DID is
     // the canonical resolved-by-trust-store form.
     let alice_did = "did:key:peer-alice-test";
-    let alice_actor_cid =
-        Cid::from_blake3_digest(*blake3::hash(alice_did.as_bytes()).as_bytes());
+    let alice_actor_cid = Cid::from_blake3_digest(*blake3::hash(alice_did.as_bytes()).as_bytes());
 
     // Bob installs a grant authorizing Alice to write /zone/posts.
     // The scope shape `<zone>:write` matches what the per-row
@@ -460,19 +459,29 @@ async fn sync_replica_write_cap_recheck_at_delivery_against_local_grant_store() 
     let zone = "/zone/posts";
     let mut grant = benten_engine::CapProof::new(alice_actor_cid, format!("{zone}:write"));
     bob_engine.caps().install_proof(&mut grant).unwrap();
-    assert!(grant.proof_cid.is_some(), "install_proof should mint grant CID");
+    assert!(
+        grant.proof_cid.is_some(),
+        "install_proof should mint grant CID"
+    );
 
     // Open Bob's atrium + register the trust-store mapping for Alice.
     // Build an Alice-side Loro doc that produces a writes-set the
     // merge will consume.
-    let bob_atrium = bob_engine.open_atrium(AtriumConfig::for_test()).await.unwrap();
+    let bob_atrium = bob_engine
+        .open_atrium(AtriumConfig::for_test())
+        .await
+        .unwrap();
     let alice_atrium = AtriumHandle::open(AtriumConfig::for_test()).await.unwrap();
     bob_atrium.register_zone(zone).await;
     alice_atrium.register_zone(zone).await;
     alice_atrium
         .with_zone(zone, |doc| {
-            doc.set_property("title", "alice-post", BentenHlc::new(100, 0, alice_atrium.hlc_node_id()))
-                .unwrap();
+            doc.set_property(
+                "title",
+                "alice-post",
+                BentenHlc::new(100, 0, alice_atrium.hlc_node_id()),
+            )
+            .unwrap();
         })
         .await
         .unwrap();
@@ -532,21 +541,27 @@ async fn sync_replica_write_after_local_grant_revoke_post_handshake_rejected_wit
     let bob_engine = Engine::open(dir.path().join("bob.redb")).unwrap();
 
     let alice_did = "did:key:peer-alice-test";
-    let alice_actor_cid =
-        Cid::from_blake3_digest(*blake3::hash(alice_did.as_bytes()).as_bytes());
+    let alice_actor_cid = Cid::from_blake3_digest(*blake3::hash(alice_did.as_bytes()).as_bytes());
 
     let zone = "/zone/posts";
     let mut grant = benten_engine::CapProof::new(alice_actor_cid, format!("{zone}:write"));
     bob_engine.caps().install_proof(&mut grant).unwrap();
 
-    let bob_atrium = bob_engine.open_atrium(AtriumConfig::for_test()).await.unwrap();
+    let bob_atrium = bob_engine
+        .open_atrium(AtriumConfig::for_test())
+        .await
+        .unwrap();
     let alice_atrium = AtriumHandle::open(AtriumConfig::for_test()).await.unwrap();
     bob_atrium.register_zone(zone).await;
     alice_atrium.register_zone(zone).await;
     alice_atrium
         .with_zone(zone, |doc| {
-            doc.set_property("title", "alice-post-2", BentenHlc::new(200, 0, alice_atrium.hlc_node_id()))
-                .unwrap();
+            doc.set_property(
+                "title",
+                "alice-post-2",
+                BentenHlc::new(200, 0, alice_atrium.hlc_node_id()),
+            )
+            .unwrap();
         })
         .await
         .unwrap();
@@ -574,10 +589,7 @@ async fn sync_replica_write_after_local_grant_revoke_post_handshake_rejected_wit
         .await;
     let err = result.expect_err("revoked-mid-session merge MUST reject");
     assert!(
-        matches!(
-            err,
-            EngineError::SyncRevokedDuringSession { .. }
-        ),
+        matches!(err, EngineError::SyncRevokedDuringSession { .. }),
         "mid-session revoke must reject with typed E_SYNC_REVOKED_DURING_SESSION per sec-r4r1-2; got {err:?}"
     );
 
