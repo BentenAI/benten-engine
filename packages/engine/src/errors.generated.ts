@@ -624,7 +624,7 @@ export class ESerialize extends BentenError {
 /**
  * E_SYNC_HASH_MISMATCH
  *
- * Thrown at: Sync-receive
+ * Thrown at: Sync-receive (`crates/benten-sync/src/mst.rs::Mst::apply_entries` rehash check; the variant exists at the catalog level as a sync-crate-half closure of the MST-diff-CID-byte-mismatch attack surface. The `apply_atrium_merge` engine receive-boundary today consumes Loro-CRDT byte-merge bytes, NOT MstDiff entries — engine-side wireup is the missing half. Per Wave-C1 cryptography mini-review (c1-crypto-mr-1): scope the closure claim to "sync-crate-half pending engine wireup"; the engine-half lands when MstDiff routing through the Atrium receive-boundary lands as a future Phase-3 follow-up wave OR v1-window concern. Reachability-ignored in the meantime, mirroring `E_SYNC_CAP_UNVERIFIED` forward-compat reservation pattern.)
  * Message template: "Received content hash {received} does not match expected {expected}"
  */
 export class ESyncHashMismatch extends BentenError {

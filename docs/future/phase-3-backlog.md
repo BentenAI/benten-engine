@@ -723,7 +723,7 @@ The Rust-side anchor test `crates/benten-eval/tests/sandbox_severity_priority_g1
 **Cross-references:**
 - `crates/benten-engine/src/engine_sync.rs::AtriumHandle::open` (the hardcoded site)
 - `crates/benten-core/src/hlc.rs::Hlc::with_skew_tolerance` (the existing constructor)
-- R6 fp Wave C1 cryptography mini-review JSON: `.addl/phase-3/r6-fp-wave-c1-mini-review-cryptography.json::c1-crypto-mr-2`
+- R6 fp Wave C1 cryptography mini-review JSON (orchestrator-local, gitignored): `.addl/phase-3/r6-fp-wave-c1-mini-review-cryptography.json` finding `c1-crypto-mr-2`
 
 ---
 

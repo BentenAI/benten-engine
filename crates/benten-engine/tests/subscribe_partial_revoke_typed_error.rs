@@ -5,9 +5,10 @@
 //!
 //! ## What this defends against
 //!
-//! Pre-Wave-C1, the cap-recheck-driven auto-cancel at
-//! `crates/benten-eval/src/primitives/subscribe.rs:1240-1244` SILENTLY
-//! flipped the active flag + unregistered the entry without firing any
+//! Pre-Wave-C1, the cap-recheck-driven auto-cancel inside
+//! `crates/benten-eval/src/primitives/subscribe.rs::publish_change_event_with_labels`
+//! (the `ON_CHANGE_REGISTRY` snapshot loop's per-entry cap-recheck arm)
+//! SILENTLY flipped the active flag + unregistered the entry without firing any
 //! typed error to the consumer. JS/TS consumers via napi could not
 //! distinguish 'subscription auto-cancelled because cap revoked' from
 //! 'subscription dropped events because of buffer overflow / GC /
