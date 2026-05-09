@@ -3581,6 +3581,7 @@ dependencies = [
  "benten-core",
  "benten-engine",
  "benten-eval",
+ "benten-id",
  "blake3",
  "tempfile",
  "tokio",
