@@ -30,9 +30,38 @@
 
 use benten_core::Value;
 use benten_errors::ErrorCode;
-use benten_eval::{MockTimeSource, Outcome, SubgraphBuilder, WaitOutcome, WaitResumeSignal};
+use benten_eval::{
+    EvalContext, InMemorySuspensionStore, MockTimeSource, Outcome, SubgraphBuilder,
+    SuspensionStore, WaitOutcome, WaitResumeSignal,
+};
 use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
+use std::sync::Arc;
 use std::time::Duration;
+
+/// Build an `EvalContext` carrying the supplied clock plus a fresh per-test
+/// [`InMemorySuspensionStore`].
+///
+/// # §7.16 fix (signal-derived envelope-CID collision)
+///
+/// `wait_signal_arrives_after_timeout_fires_e_wait_timeout` and
+/// `wait_signal_arrives_before_timeout_resumes_normally` both WAIT on
+/// signal name `"user_resumes"`, which derives an identical envelope
+/// CID via `crates/benten-eval/src/primitives/wait.rs::placeholder_payload_for_signal`
+/// (BLAKE3-hash of the signal name). Without an injected store, both
+/// fall back to `crate::suspension_store::default_process_store()` —
+/// a process-wide singleton shared across the whole test binary —
+/// and one's `WaitMetadata{timeout_ms = 100}` races against the other's
+/// `WaitMetadata{timeout_ms = 1000}` under the same key. When the
+/// "before timeout" test wins the last-write race, the "after timeout"
+/// test reads timeout=1000 (instead of 100), so the 200ms-elapsed
+/// resume falls under the deadline and completes normally instead of
+/// firing `E_WAIT_TIMEOUT`. Threading a fresh store per test eliminates
+/// the shared key space — same closure shape as the `wait_signal_shape_*`
+/// tests covered by §7.16.
+fn ctx_with_isolated_store(clock: MockTimeSource) -> EvalContext {
+    let store: Arc<dyn SuspensionStore> = Arc::new(InMemorySuspensionStore::new());
+    EvalContext::with_clock(clock).with_suspension_store(store)
+}
 
 fn wait_duration_subgraph(ms: u64) -> benten_eval::Subgraph {
     let mut sb = SubgraphBuilder::new("wait_duration_edge");
@@ -56,7 +85,7 @@ fn wait_duration_past_deadline_fires_e_wait_timeout() {
     // E_WAIT_TIMEOUT. This is the degenerate timeout case.
     let sg = wait_duration_subgraph(0);
     let clock = MockTimeSource::at(Duration::from_secs(0));
-    let mut ctx = benten_eval::EvalContext::with_clock(clock.clone());
+    let mut ctx = ctx_with_isolated_store(clock.clone());
 
     let step1 = benten_eval::evaluate(&sg, &mut ctx, Value::unit());
     let handle = match step1 {
@@ -90,7 +119,7 @@ fn wait_signal_arrives_after_timeout_fires_e_wait_timeout() {
     // timeout must win.
     let sg = wait_signal_subgraph_with_timeout_ms(100);
     let clock = MockTimeSource::at(Duration::from_secs(0));
-    let mut ctx = benten_eval::EvalContext::with_clock(clock.clone());
+    let mut ctx = ctx_with_isolated_store(clock.clone());
 
     let outcome = benten_eval::evaluate(&sg, &mut ctx, Value::unit());
     let handle = outcome.expect_suspended();
@@ -122,7 +151,7 @@ fn wait_signal_arrives_before_timeout_resumes_normally() {
     // Outcome::Complete.
     let sg = wait_signal_subgraph_with_timeout_ms(1000);
     let clock = MockTimeSource::at(Duration::from_secs(0));
-    let mut ctx = benten_eval::EvalContext::with_clock(clock.clone());
+    let mut ctx = ctx_with_isolated_store(clock.clone());
 
     let handle = benten_eval::evaluate(&sg, &mut ctx, Value::unit()).expect_suspended();
 
@@ -146,7 +175,7 @@ fn wait_timeout_error_is_distinct_from_denial() {
     // the error-code string must not see a denial when a timeout fires.
     let sg = wait_duration_subgraph(0);
     let clock = MockTimeSource::at(Duration::from_secs(0));
-    let mut ctx = benten_eval::EvalContext::with_clock(clock.clone());
+    let mut ctx = ctx_with_isolated_store(clock.clone());
 
     let handle = benten_eval::evaluate(&sg, &mut ctx, Value::unit()).expect_suspended();
     clock.advance(Duration::from_millis(1));
