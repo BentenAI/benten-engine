@@ -11,9 +11,31 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use benten_core::hlc::{BentenHlc, Hlc};
 
-static MOCK_MS: AtomicU64 = AtomicU64::new(0);
-fn mock_clock() -> u64 {
-    MOCK_MS.load(Ordering::SeqCst)
+// Per-test mock clocks: each test owns its own `static AtomicU64` + `fn`
+// pointer, eliminating the cross-test race that the previous shared-
+// `static MOCK_MS` shape carried (phase-3-backlog §7.18 + §7.16 same-
+// class precedent). `Hlc::new` takes a `fn() -> u64` pointer (not an
+// `impl Fn` closure), so each test needs its own free `fn` wrapping a
+// distinct static.
+
+static MOCK_DEFAULT: AtomicU64 = AtomicU64::new(0);
+fn clock_default() -> u64 {
+    MOCK_DEFAULT.load(Ordering::SeqCst)
+}
+
+static MOCK_CUSTOM: AtomicU64 = AtomicU64::new(0);
+fn clock_custom() -> u64 {
+    MOCK_CUSTOM.load(Ordering::SeqCst)
+}
+
+static MOCK_BOUNDARY: AtomicU64 = AtomicU64::new(0);
+fn clock_boundary() -> u64 {
+    MOCK_BOUNDARY.load(Ordering::SeqCst)
+}
+
+static MOCK_PAST: AtomicU64 = AtomicU64::new(0);
+fn clock_past() -> u64 {
+    MOCK_PAST.load(Ordering::SeqCst)
 }
 
 /// Remote stamp ahead of local by 1 second; default 5-minute tolerance
@@ -23,8 +45,8 @@ fn mock_clock() -> u64 {
 /// state mutated so subsequent `now()` calls also exceed the remote.
 #[test]
 fn update_within_default_tolerance_accepts() {
-    MOCK_MS.store(1_000_000, Ordering::SeqCst);
-    let hlc = Hlc::new(0xAAAA_AAAA_AAAA_AAAA, mock_clock);
+    MOCK_DEFAULT.store(1_000_000, Ordering::SeqCst);
+    let hlc = Hlc::new(0xAAAA_AAAA_AAAA_AAAA, clock_default);
     let remote = BentenHlc::new(1_001_000, 3, 0xBBBB_BBBB_BBBB_BBBB);
 
     let after = hlc.update(&remote).expect("within tolerance must accept");
@@ -40,8 +62,8 @@ fn update_within_default_tolerance_accepts() {
 /// remote's physical clock dominates.
 #[test]
 fn update_within_custom_tolerance_accepts() {
-    MOCK_MS.store(50_000, Ordering::SeqCst);
-    let hlc = Hlc::with_skew_tolerance(7, mock_clock, 1_000);
+    MOCK_CUSTOM.store(50_000, Ordering::SeqCst);
+    let hlc = Hlc::with_skew_tolerance(7, clock_custom, 1_000);
     let remote = BentenHlc::new(50_500, 11, 9);
 
     let after = hlc
@@ -58,8 +80,8 @@ fn update_within_custom_tolerance_accepts() {
 /// refactor can't silently flip it.
 #[test]
 fn update_at_exact_tolerance_boundary_accepts() {
-    MOCK_MS.store(100_000, Ordering::SeqCst);
-    let hlc = Hlc::with_skew_tolerance(1, mock_clock, 5_000);
+    MOCK_BOUNDARY.store(100_000, Ordering::SeqCst);
+    let hlc = Hlc::with_skew_tolerance(1, clock_boundary, 5_000);
     let remote = BentenHlc::new(105_000, 0, 2); // exactly local + 5_000
 
     let after = hlc
@@ -74,8 +96,8 @@ fn update_at_exact_tolerance_boundary_accepts() {
 /// case, not an adversarial one.
 #[test]
 fn update_with_past_remote_accepts_regardless_of_tolerance() {
-    MOCK_MS.store(1_000_000, Ordering::SeqCst);
-    let hlc = Hlc::with_skew_tolerance(1, mock_clock, 100); // very tight
+    MOCK_PAST.store(1_000_000, Ordering::SeqCst);
+    let hlc = Hlc::with_skew_tolerance(1, clock_past, 100); // very tight
     let ancient_remote = BentenHlc::new(0, 0, 99);
     let _ = hlc
         .update(&ancient_remote)

@@ -14,7 +14,7 @@
 //! r1-revision-triage D-E):
 //!
 //! - `tests/esc_7_fuel_refill_via_host_fn_re_entry_blocked` — D-E + r1-wsa-1 BLOCKER
-//! - `tests/esc_07_fuel_refill_via_host_fn_re_entry_traps_typed_error` — D-E
+//! - `tests/esc_7_fuel_refill_via_host_fn_re_entry_traps_typed_error` — D-E
 //!
 //! ## ESC-7 closure shape (D-E added at R1 revision)
 //!
@@ -80,7 +80,7 @@ fn esc_7_fuel_refill_via_host_fn_re_entry_blocked() {
 }
 
 #[test]
-fn esc_07_fuel_refill_via_host_fn_re_entry_traps_typed_error() {
+fn esc_7_fuel_refill_via_host_fn_re_entry_traps_typed_error() {
     // D-E pim-2 LOAD-BEARING typed-routing pin. The OUTER dispatch
     // path observes a typed error (not a panic / generic trap /
     // collapsed FuelExhausted).
@@ -106,7 +106,7 @@ fn esc_07_fuel_refill_via_host_fn_re_entry_traps_typed_error() {
 }
 
 #[test]
-fn esc_07_post_guest_exit_re_entry_is_silent() {
+fn esc_7_post_guest_exit_re_entry_is_silent() {
     // Recovery-path pin: re-entry AFTER `guest_active = false`
     // (legitimate cleanup) does NOT trip the defense. A regression
     // that fires on EVERY non-zero re_entry_count would falsely
