@@ -34,13 +34,14 @@
 //! separate fix (per tcc-r1-5 R3-A territory). This file pins the
 //! deterministic cases at the durable layer (G14-B).
 //!
-//! ## RED-PHASE discipline
+//! ## Status — un-ignored at Phase-3 G16-B-B-rest (PR #158, 2026-05-09)
 //!
-//! Per R3-A canary precedent. Stays `#[ignore]`'d until G14-B
-//! implementer un-ignores AND replaces stub bodies. Per §3.6b pim-2
-//! these tests must drive the production
+//! Per R3-A canary precedent. Originally RED-PHASE pending G14-B durable
+//! UCAN backend wave (PR #109 commit `496e144`); un-ignored at G16-B-B-rest
+//! once `validate_chain_inner` step #5 (parent-relative time-window
+//! narrowing) landed. Pins drive the production
 //! `UCANBackend::validate_chain_at` path + assert typed-error variants
-//! naming the specific window violation.
+//! naming the specific window violation per §3.6b pim-2.
 
 #![allow(clippy::unwrap_used)]
 

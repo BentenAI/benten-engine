@@ -134,7 +134,7 @@ fn wallclock_hlc_rides_alongside_monotonic() {
 // =====================================================================
 
 #[test]
-#[ignore = "RED-PHASE: G14-B — cap-r4-8 — iterate-batch evaluator delegation observable in runtime arm"]
+#[ignore = "RED-PHASE: phase-3-backlog §2.3 (ii) — cap-r4-8 — iterate-batch evaluator delegation observable in runtime arm (v1-assessment-window; G14-B durable-backend wave shipped at PR #109 commit 496e144 but did NOT thread iterate_batch_boundary through evaluator runtime arm; un-ignore once Engine::run_iterate_subgraph_with_metrics + IterateMetrics::refresh_count land per §2.3 (ii) item 1)"]
 fn policy_iterate_batch_boundary_evaluator_delegation_observable_in_runtime_arm() {
     // cap-r4-8 pin (cap-minor-8 closure). Custom policy with override
     // = 5; ITERATE-heavy subgraph; observe refresh fires every 5 iters
@@ -169,12 +169,12 @@ fn policy_iterate_batch_boundary_evaluator_delegation_observable_in_runtime_arm(
     // helper shape but the production runtime path. Closes the
     // Phase-2a residual end-to-end.
     unimplemented!(
-        "G14-B wires evaluator iterate_batch_boundary delegation end-to-end per cap-r4-8"
+        "phase-3-backlog §2.3 (ii) item 1 — Engine::run_iterate_subgraph_with_metrics + IterateMetrics::refresh_count + policy.rs:281-326 TODO closure (v1-assessment-window per CLAUDE.md item #15)"
     );
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-B — cap-r4-8 — wallclock refresh ceiling evaluator delegation observable in runtime arm"]
+#[ignore = "RED-PHASE: phase-3-backlog §2.3 (ii) — cap-r4-8 — wallclock refresh ceiling evaluator delegation observable in runtime arm (v1-assessment-window; un-ignore once Engine::run_call_with_metrics_for_duration + CallMetrics::wallclock_refresh_count land per §2.3 (ii) item 2)"]
 fn policy_wallclock_refresh_ceiling_evaluator_delegation_observable_in_runtime_arm() {
     // cap-r4-8 pin (cap-minor-8 closure). Custom policy with override
     // = 30s; long-running CALL; observe refresh fires at 30s wall-clock
@@ -208,6 +208,6 @@ fn policy_wallclock_refresh_ceiling_evaluator_delegation_observable_in_runtime_a
     // policy's wallclock_refresh_ceiling at runtime; production path
     // not just helper shape. Closes the Phase-2a residual end-to-end.
     unimplemented!(
-        "G14-B wires evaluator wallclock_refresh_ceiling delegation end-to-end per cap-r4-8"
+        "phase-3-backlog §2.3 (ii) item 2 — Engine::run_call_with_metrics_for_duration + CallMetrics::wallclock_refresh_count + policy.rs:281-326 TODO closure (v1-assessment-window per CLAUDE.md item #15)"
     );
 }

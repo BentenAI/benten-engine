@@ -592,10 +592,7 @@ impl EngineBuilder {
                         // walk cleanly past the fail-closed branch.
                         policy = policy.with_now_for_test(now_secs);
                     }
-                    (
-                        Some(Box::new(policy) as Box<dyn CapabilityPolicy>),
-                        false,
-                    )
+                    (Some(Box::new(policy) as Box<dyn CapabilityPolicy>), false)
                 } else {
                     (
                         Some(Box::new(grant_backed) as Box<dyn CapabilityPolicy>),

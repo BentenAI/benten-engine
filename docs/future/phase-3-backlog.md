@@ -206,6 +206,49 @@
 - `crates/benten-engine/tests/typed_call_ucan_grounded.rs` — the BLOCKER-2 partial-closure pin set (3 pins covering typed-cap proof-chain validation under `capability_policy_ucan_durable`).
 - `bindings/napi/test/typed_call_napi_cap_gate.test.ts` — the BLOCKER-1 napi-entry-cap-gate companion.
 
+#### 2.3 (ii) — `iterate_batch_boundary` + `wallclock_refresh_ceiling` evaluator-delegation runtime-arm instrumentation (cap-r4-8 carry; G16-B-B-rest BELONGS-NAMED-NOW)
+
+**Origin (R4 cap-system lens; cap-r4-8 / cap-minor-8 closure):** the `crates/benten-caps/src/policy.rs::CapabilityPolicy` trait declares `iterate_batch_boundary(&self) -> usize` + `wallclock_refresh_ceiling(&self) -> Duration` policy hooks (cap-minor-8 R4 finding). Phase-1 + Phase-2a shipped the trait surface; Phase-2a's R6 named cap-minor-8 closure as "G14-B durable UCAN backend wave; bundled with policy delegation tests". G14-B PR #109 (commit `496e144`, 2026-04-30) shipped the durable backend but did NOT thread the policy hooks through to the evaluator runtime arm. The 2 RED-PHASE pins at `crates/benten-caps/tests/wallclock_delegation.rs::policy_iterate_batch_boundary_evaluator_delegation_observable_in_runtime_arm` + `policy_wallclock_refresh_ceiling_evaluator_delegation_observable_in_runtime_arm` carry the closure shape but stayed `#[ignore]`'d through wave-5b/c/wave-7/wave-8a/wave-9 + G16-B/B-prime/B-D/B-rest waves, with a stale rationale referencing G14-B.
+
+**G16-B-B-rest (PR #158, 2026-05-09) disposition:** OUT-OF-SCOPE for the cap+crypto un-ignore wave (the engine-level instrumentation is its own architectural lift; sub-item A budget was 5 R4-FP-file un-ignores at ~50-150 LOC ceiling). NAMED-NOW destination filed here per HARD RULE rule-12 clause-(b) so the stale-rationale-no-destination + phantom-destination anti-pattern doesn't perpetuate.
+
+**What's deferred here (NAMED-NOW destination + named-timing per HARD RULE clause-b):** engine-level evaluator-metrics surface that exposes the per-iteration / per-wallclock-tick refresh-count consumption-points, so the 2 RED-PHASE pins can drive against an observable runtime metric:
+
+1. **`Engine::run_iterate_subgraph_with_metrics(subgraph: &Subgraph) -> Result<IterateMetrics, EngineError>`** — runs an ITERATE-heavy subgraph + returns a metrics struct exposing `refresh_count` (number of times the policy's `iterate_batch_boundary` was consulted). The current `policy.rs:281-326` TODO documents the wire-up gap: the evaluator's iterate_batch loop does NOT today consult `policy.iterate_batch_boundary()` — the loop uses a hardcoded constant.
+
+2. **`Engine::run_call_with_metrics_for_duration(subgraph: &Subgraph, duration: Duration) -> Result<CallMetrics, EngineError>`** — drives a long-running CALL + returns a metrics struct exposing `wallclock_refresh_count` (number of times `policy.wallclock_refresh_ceiling()` triggered). Sibling TODO at `policy.rs:281-326`: the evaluator's CALL slow-path does NOT today consult `policy.wallclock_refresh_ceiling()`.
+
+3. **Un-ignore both pins.** Once items (1) + (2) land, the assertions `assert_eq!(metrics.refresh_count, 100 / 5)` (override = 5; 100 iters → 20 refreshes) + `assert_eq!(metrics.wallclock_refresh_count, 90 / 30)` (override = 30s; 90s call → 3 refreshes) drive end-to-end + each pin gains the source-cite assertion that the `policy.rs:281-326` TODO is closed.
+
+**Phase 3 target (NAMED at G16-B-B-rest 2026-05-09):** **v1-assessment-window** per CLAUDE.md item #15. The cap-r4-8 instrumentation is part of the broader v1-shippable cap-policy delegation surface; whether it's pre-tag closure-blocking depends on (a) whether v1 multi-tenant deployments need policy-driven iterate-batch / wallclock refresh tuning + (b) whether Compromise #1 TOCTOU window bound at iterate boundary (tracked at §10.1) gets revisited together (the 2 hooks compose: policy-driven iterate boundary + cap-snapshot refresh at boundary).
+
+**Touch size:** ~80-150 LOC engine-side (`run_iterate_subgraph_with_metrics` + `run_call_with_metrics_for_duration` runtime entry-points + `IterateMetrics`/`CallMetrics` struct + threading to evaluator) + ~10 LOC test pin un-ignore + ~6 LOC source-cite TODO close at `policy.rs:281-326`.
+
+**Cross-references:**
+- `crates/benten-caps/src/policy.rs::CapabilityPolicy::iterate_batch_boundary` + `::wallclock_refresh_ceiling` — the policy hooks today (default-impl returns hardcoded constants; engine evaluator does NOT consult the trait method)
+- `crates/benten-caps/tests/wallclock_delegation.rs` — the 2 cap-r4-8 RED-PHASE pins (un-ignore body + the rationale string updated 2026-05-09 G16-B-B-rest fix-pass per HARD RULE clause-b)
+- `crates/benten-caps/src/policy.rs:281-326` — the TODO comment block flagging the engine-side wire-up gap
+- §10.1 Compromise #1 TOCTOU window bound — the v1-assessment-window peer item that may compose (iterate-batch-boundary cap-recheck cadence is a shared concern)
+
+#### 2.3 (iii) — W3C did:key external interop cross-vector verification (G16-B-B-rest cryptography MINOR carry)
+
+**Origin (G16-B-B-rest cryptography mini-review, 2026-05-09):** sub-item C added 3 W3C did:key "test vectors" + a fail-closed multicodec pin (`UnknownMulticodec(0x00, 0x00)`) at `crates/benten-id/tests/did_key.rs`. The added vectors are derived by feeding hex pubkeys through the canonical W3C did:key v1.0 pipeline and then asserting the encoder's output matches itself — meaning a systematic encoder bug would round-trip with itself. The pre-existing G14-A2 deferral specifically named cross-implementation interop as the unmet criterion.
+
+**G16-B-B-rest disposition:** the encoder-output pinning DOES catch encoding-step drift (round-trip with re-encode) but does NOT catch encoder bugs that deviate from W3C reference implementations. The cryptographic-discipline distinction matters for v1-shippable cross-protocol UCAN interop: another DID-resolving stack (ssi crate, did-key.rs, kepler.xyz, etc.) accepting Benten-emitted did:keys requires byte-equality with externally-published reference vectors, NOT just encoder self-consistency.
+
+**Phase 3 target:** **v1-assessment-window** per CLAUDE.md item #15. Lift options:
+
+1. **Cross-check against `did-key.rs` crate's exposed test fixtures.** Add a dev-dep + import their pinned test vectors; assert byte-equality against Benten encoder output. Catches divergence from the reference impl.
+2. **Inline externally-published W3C reference vectors verbatim** (not derived). Source: `https://w3c-ccg.github.io/did-method-key/test-vectors/` (verify availability + license at v1-assessment-window time). Catches encoder drift independent of any specific reference impl.
+3. **Both** — defends against encoder bugs (option 1) AND drift from W3C spec (option 2).
+
+**Touch size:** ~30-80 LOC test-fixture inline + dev-dep update if option 1 chosen.
+
+**Cross-references:**
+- `crates/benten-id/tests/did_key.rs` — the 3 encoder-output-pinned vectors + the fail-closed `UnknownMulticodec` pin landed at PR #158
+- `crates/benten-id/src/did.rs` — the encoder + decoder; the multibase z-prefix + 0xed01 multicodec discriminator
+- G14-A2 cryptography mini-review (`.addl/phase-3/r5-w4a-g14-a1-mini-review.json`) — the original cross-implementation interop deferral
+
 ### 2.5 typed-CALL fp-mini-review residuals (G21-T1 sec-minor-2/3/4 + corr-minor-3)
 
 **Origin (G21-T1 fp-mini-review, 2026-05-08):** the security mini-review on PR #145 surfaced 4 MAJORs (closed end-to-end at PR #145 fix-pass) plus 4 minors. The MAJORs are closed; the four named carries below land in a follow-up wave so the canary-scope PR remains tight.
