@@ -276,7 +276,7 @@ The Phase-1 commitments that became permanent in the engine. CLAUDE.md captures 
 1. **12 operation primitives — final canonical set.**
    - **Phase / wave:** Phase 1 pre-R1 (2026-04-14 reconciliation).
    - **Source:** Plan §2.5 E1; ENGINE-SPEC §3 finalized; CLAUDE.md decision #1.
-   - **Lives:** `benten-eval/src/lib.rs:390-393` (`PrimitiveKind` enum); `benten-eval/src/primitives/mod.rs` (executor dispatch); `docs/ENGINE-SPEC.md` §3.
+   - **Lives:** `benten-eval/src/lib.rs` `PrimitiveKind` enum; `benten-eval/src/primitives/mod.rs` (executor dispatch); `docs/ENGINE-SPEC.md` §3.
    - **Why it matters:** Adding/removing a primitive cascades through invariant validation, evaluator dispatch, error catalog, DSL surface, IVM views, capability enforcement matrix, and every stored subgraph. Phase 2b commitment #16 (SANDBOX is for compute that doesn't fit other 11 primitives) reaffirmed irreducibility.
 
 2. **IVM Algorithm B (dependency-tracked incremental) with per-view strategy selection.**
@@ -300,7 +300,7 @@ The Phase-1 commitments that became permanent in the engine. CLAUDE.md captures 
 5. **Content-addressed hashing: BLAKE3 + DAG-CBOR + CIDv1. Multicodec `0x71` (dag-cbor); multihash `0x1e` (BLAKE3). Hashes labels + properties; NOT anchor_id, NOT timestamps, NOT edges (excluded per ENGINE-SPEC §7).**
    - **Phase / wave:** Phase 1 G1.
    - **Source:** SPIKE validation + plan §2.1 C1-C4; ENGINE-SPEC §7; CLAUDE.md decision #5.
-   - **Lives:** `benten-core/src/lib.rs:92-95` (constants); `Node::cid()` excludes `anchor_id` via `#[serde(skip)]`; `Edge::cid()` separate content-addressing (4 fields).
+   - **Lives:** `benten-core/src/lib.rs` BLAKE3 + CIDv1 constants; `Node::cid()` excludes `anchor_id` via `#[serde(skip)]`; `Edge::cid()` separate content-addressing (4 fields).
    - **Why it matters:** Canonical fixture CID `bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda` stable across all platforms, MSRVs, and wasm32-wasip1 runtime — verified by T9 cross-leg determinism gate. Phase 3 sync depends on byte-identical hashing across peer machines.
 
 6. **Transaction primitive (begin/commit/rollback) as first-class API, not `transactional: true` property.**

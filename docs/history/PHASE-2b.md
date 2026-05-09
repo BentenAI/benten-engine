@@ -59,7 +59,7 @@ The wave-8 night-shift was also where the most foundational process memories cry
 
 ### R6 quality council (6 rounds)
 
-The R6 quality council opened on 2026-04-29 against `e2b1c62`, the wave-8 close-out HEAD that had finally wired the SANDBOX/STREAM/SUBSCRIBE/WAIT production runtime end-to-end. R5 wave-8 had landed the load-bearing plumbing — the eval-side sandbox::execute body, the engine override at primitive_host.rs:718-907, the engine_stream.rs producer-bridge wire-through, the napi SubscriptionJs class with ThreadsafeFunction trampoline, the WAIT envelope/suspension-store dual-key contract.
+The R6 quality council opened on 2026-04-29 against `e2b1c62`, the wave-8 close-out HEAD that had finally wired the SANDBOX/STREAM/SUBSCRIBE/WAIT production runtime end-to-end. R5 wave-8 had landed the load-bearing plumbing — the eval-side `sandbox::execute` body, the engine override at `primitive_host.rs`, the `engine_stream.rs` producer-bridge wire-through, the napi `SubscriptionJs` class with `ThreadsafeFunction` trampoline, the WAIT envelope/suspension-store dual-key contract.
 
 **Round 1** dispatched 12 lenses in parallel. The tally: **1 BLOCKER + 1 CRITICAL + 16 MAJOR + 46 minor/nit = 64 findings**. The BLOCKER was r6-mpc-1 (`Engine::resume_with_meta` consults only `timeout_ms` + `suspend_elapsed_ms` then returns terminal_ok_outcome — the `meta.signal_shape` validation + `meta.is_duration` deadline branch were skipped). The CRITICAL was r6-dx-1 (QUICKSTART.md `handler.id` claim wrong). The 3-lens convergence pattern surfaced: Inv-4 sandbox_depth runtime arm dormant (cr-1 + mpc-4 + wsa-1); describe_sandbox_node synthetic defaults (mpc-3 + napi-3 + dx-10); ESC matrix mislabel + double-count (doc-1 + sec-1 + wsa-9).
 

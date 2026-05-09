@@ -308,7 +308,7 @@
 **Wave shape:** likely a separate G16-B-E or G16-C wave dispatched after G16-B-substantive (canary + parallel-3) merges. The structural surface from canary G16-B-A is the precondition; G16-B-E rides on top.
 
 **Cross-references:**
-- `.addl/phase-3/r4b-distributed-systems.json::ds-r4b-1` (BLOCKER finding origin)
+- ds-r4b-1 finding in `.addl/phase-3/r4b-distributed-systems.json` (BLOCKER origin)
 - `.addl/phase-3/00-implementation-plan.md §1` exit criteria 1 / 15 / 16
 - `.addl/phase-3/HANDOFF-2026-05-03-phase-3-kickoff.md` NS-T64 + NS-T65 (canary scope clarification 2026-05-08)
 
@@ -1447,7 +1447,7 @@ Items surfaced during 2026-05-08 cross-phase retrospective audit as orphans (Pha
 ### 11.2 SHA-pin coverage gap audit — RESOLVED at PR #150 (2026-05-08; coverage was already 100% — orphan-rescue framing was incorrect)
 
 - **Origin:** Phase-2a §3.1 CI hardening pass committed to SHA-pin third-party GitHub Actions for supply-chain defense. Spot-check 2026-05-08 surfaced apparent `@master` / `@stable` / `@nightly` references in `.github/workflows/*.yml`.
-- **Audit outcome (PR #150 by sha-pin-sweep agent):** **SHA-pin coverage is and remains 100%.** The 2026-05-08 spot-check claim was a misread of inline version-tracking comments — every `# stable` / `# master` / `# nightly` in workflow files is an annotation describing where a SHA was resolved from, NOT an unsafe ref. Verified via `awk` extract of `uses:` directives stripping comments — zero non-SHA refs remaining. The original Phase-2a §3.1 item-3 commitment (commits `9e68f84` SHA-pin sweep + `e014653` v5 alignment, 2026-04-25) is verified ongoing; Dependabot rotates SHAs weekly via `.github/dependabot.yml::github-actions`.
+- **Audit outcome (PR #150 by sha-pin-sweep agent):** **SHA-pin coverage is and remains 100%.** The 2026-05-08 spot-check claim was a misread of inline version-tracking comments — every `# stable` / `# master` / `# nightly` in workflow files is an annotation describing where a SHA was resolved from, NOT an unsafe ref. Verified via `awk` extract of `uses:` directives stripping comments — zero non-SHA refs remaining. The original Phase-2a §3.1 item-3 commitment (commits `9e68f84` SHA-pin sweep + `e014653` v5 alignment, 2026-04-25) is verified ongoing; Dependabot rotates SHAs weekly via the github-actions package-ecosystem in `.github/dependabot.yml`.
 - **Minor improvements landed in PR #150:** `actions/checkout` v4.3.1 → v5.0.1 alignment in `branch-protection-spec-check.yml` (matches workspace-wide pin); comment clarification in `cargo-public-api.yml` (misleading `# nightly via @nightly` comment now clarifies SHA is action code from `stable` branch + `toolchain: nightly` selects compiler). Documented exceptions for `actions/upload-artifact` / `actions/download-artifact` / `actions/setup-node` major-version straddles (Dependabot globally-ignored to avoid Monday-morning PR storms; future planned upgrade wave on a purpose-built branch).
 - **Status:** RESOLVED.
 
