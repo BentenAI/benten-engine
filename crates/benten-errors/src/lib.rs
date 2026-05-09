@@ -647,6 +647,17 @@ pub enum ErrorCode {
     /// transport state is EXPLICIT — not a missing value, not a
     /// panic. Routes to `ON_ERROR`.
     AtriumTransportDegraded,
+    /// G16-B-G wave (Phase-3 Atrium leave/rejoin lifecycle): an Atrium
+    /// handle was used after `AtriumHandle::leave()` flipped its
+    /// `is_active` flag to false but before `rejoin()` flipped it back.
+    /// The handle is in a graceful-leave quiesced state — distinct from
+    /// transport degradation ([`ErrorCode::AtriumTransportDegraded`])
+    /// because the iroh endpoint remains bound + the lifecycle change
+    /// is intentional (operator-initiated, not a fault). Surfaces at
+    /// `crates/benten-engine/src/engine_sync.rs::AtriumHandle::merge_remote_change`
+    /// + outbound fan-out paths during the leave window. Maps to
+    /// `E_ATRIUM_INACTIVE`. Routes to `ON_ERROR`.
+    AtriumInactive,
     /// G16-B wave-6b (Phase-3 Atrium CRDT integration; ds-4 Inv-13
     /// row-4 SPLIT): an inbound sync-replica frame carries a
     /// system-zone / Anchor-immutable target (per
@@ -927,6 +938,7 @@ impl ErrorCode {
             // Phase-3 G16-A — Atrium transport surface
             ErrorCode::AtriumRelayUnreachable => "E_ATRIUM_RELAY_UNREACHABLE",
             ErrorCode::AtriumTransportDegraded => "E_ATRIUM_TRANSPORT_DEGRADED",
+            ErrorCode::AtriumInactive => "E_ATRIUM_INACTIVE",
             // Phase-3 G16-B — Atrium CRDT integration surface (Inv-13 row-4b)
             ErrorCode::SyncDivergentCidRejected => "E_SYNC_DIVERGENT_CID_REJECTED",
             // Phase-3 G16-D — Atrium handshake-protocol surface
@@ -1150,6 +1162,7 @@ impl ErrorCode {
             // (transport-layer failure surfacing as runtime ON_ERROR).
             | ErrorCode::AtriumRelayUnreachable
             | ErrorCode::AtriumTransportDegraded
+            | ErrorCode::AtriumInactive
             // Phase-3 G16-B — Inv-13 row-4b sync-replica reject for
             // system-zone / Anchor-immutable divergent-CID. Joins
             // ON_ERROR family per D21 (semantic-layer reject without
@@ -1427,6 +1440,7 @@ impl ErrorCode {
             // (net-blocker-2 BLOCKER typed errors).
             "E_ATRIUM_RELAY_UNREACHABLE" => ErrorCode::AtriumRelayUnreachable,
             "E_ATRIUM_TRANSPORT_DEGRADED" => ErrorCode::AtriumTransportDegraded,
+            "E_ATRIUM_INACTIVE" => ErrorCode::AtriumInactive,
             // Phase-3 G16-B wave-6b — Inv-13 row-4b sync-replica reject.
             "E_SYNC_DIVERGENT_CID_REJECTED" => ErrorCode::SyncDivergentCidRejected,
             // Phase-3 G16-D wave-6b — handshake-protocol bounded-window
