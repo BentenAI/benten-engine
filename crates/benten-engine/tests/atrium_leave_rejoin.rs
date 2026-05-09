@@ -20,7 +20,7 @@
 //! below trip on each failure mode.
 
 #![cfg(all(not(target_arch = "wasm32"), not(feature = "browser-backend")))]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::too_many_lines)]
 
 use benten_core::hlc::BentenHlc;
 use benten_engine::Engine;
@@ -80,12 +80,8 @@ async fn peer_leave_then_rejoin_reconciles_state_via_loro_merge() {
     // populated here MUST survive across the leave-rejoin window).
     peer_a
         .with_zone(zone, |doc| {
-            doc.set_property(
-                "title",
-                "pre-leave",
-                BentenHlc::new(100, 0, peer_a_node_id),
-            )
-            .unwrap();
+            doc.set_property("title", "pre-leave", BentenHlc::new(100, 0, peer_a_node_id))
+                .unwrap();
         })
         .await
         .unwrap();
