@@ -77,7 +77,7 @@ fn view1_id_is_capability_grants() {
 /// answer the same query with the same concrete payload as an incrementally
 /// maintained one.
 #[test]
-#[ignore = "Phase 3 — IVM rebuild-equivalence event-replay deferred per docs/future/phase-3-backlog.md §5 (Algorithm B maturity). rebuild() is Phase-1 clear-to-Fresh (no source-of-truth); Phase-3 adds event-log replay by threading an EventLog or KVBackend into the View trait. When populated, assert incremental == rebuild."]
+#[ignore = "phase-3-backlog §7.3.D — view1 IVM rebuild-equivalence event-replay. §5.1 IVM Algorithm B drift-detector + GenericKernel CLOSED at G15-A / G15-B / W9-T1 (PR #113); §5.1-followup-a GenericKernel rebuild without event-replay seam (g15a-mr-major-3) carries the event-log replay surface. Test body pins specific incremental==rebuild equivalence contract; un-ignore at §5.1-followup-a landing per Wave-E rationale-only sweep."]
 fn view1_rebuild_matches_incremental_state() {
     let mut incremental = CapabilityGrantsView::new();
     incremental

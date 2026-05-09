@@ -21,7 +21,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G20-A3 wave-8a — Component-Model decision per D-PHASE-3-6 lands"]
+#[ignore = "phase-3-backlog §7.3.D — Component-Model decision per D-PHASE-3-6 lands. G20-A3 wave-8a CLOSED Component-Model HELD CUT decision per §7.3.A.8 (RATIONALES REWRITTEN at Phase-3 G20-A3 wave-8a; D-PHASE-3-6 RESOLVED-at-R1; component_model_phase3_decision_lands_per_d_phase_3_6.rs structural pin lives at HEAD); this test body is its own pin sibling that needs driver authoring; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn component_model_phase3_decision_lands_per_d_phase_3_6() {
     // D-PHASE-3-6 architectural pin. G20-A3 implementer wires this:
     //

@@ -71,7 +71,7 @@ fn view5_id_is_version_current() {
 
 /// Category 1: rebuild matches incremental.
 #[test]
-#[ignore = "Phase 3 — IVM rebuild-equivalence event-replay deferred per docs/future/phase-3-backlog.md §5 (Algorithm B maturity). rebuild() is Phase-1 clear-to-Fresh (no source-of-truth); Phase-3 adds event-log replay. When populated, assert incremental == rebuild."]
+#[ignore = "phase-3-backlog §7.3.D — view5 IVM rebuild-equivalence event-replay. §5.1 IVM Algorithm B CLOSED; §5.1-followup-a GenericKernel rebuild without event-replay seam carries the event-log replay surface. Test body pins specific incremental==rebuild equivalence contract; un-ignore at §5.1-followup-a landing per Wave-E rationale-only sweep."]
 fn view5_rebuild_matches_incremental_state() {
     let mut incremental = VersionCurrentView::new();
     incremental

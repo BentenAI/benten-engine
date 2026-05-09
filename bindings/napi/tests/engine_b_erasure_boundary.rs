@@ -58,7 +58,7 @@ struct EngineErasureWitness {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G13-B wave-2 — napi cdylib erasure boundary (compile-time witness per napi-r4-r1-3)"]
+#[ignore = "phase-3-backlog §7.3.D — napi cdylib erasure boundary compile-time witness. G13-B wave-2 shipped (commit 4238ed7); test body pins specific cdylib erasure-boundary structural contract that composes with §4.4 Bundle-content audit pins (R4b architecture / wasm-bundle lens); un-ignore at §4.4 landing per Wave-E rationale-only sweep."]
 fn engine_b_napi_binding_erases_at_cdylib_boundary_only() {
     // G13-B implementer wires this (post-napi-r4-r1-3 reshape):
     //

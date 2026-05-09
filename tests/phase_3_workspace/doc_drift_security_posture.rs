@@ -20,12 +20,12 @@
 //!
 //! ## RED-PHASE discipline
 //!
-//! `#[ignore]`'d with rationale `"RED-PHASE: G15-B wave-5a resolves SECURITY-POSTURE forward-pointer"`.
+//! `#[ignore]`'d with rationale pointing to phase-3-backlog §7.3.D STALE-RATIONALE sweep #2; destination next Phase-3-close orchestrator-direct fix-pass batch.
 
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G15-B wave-5a — resolve SECURITY-POSTURE.md drift-detector forward-pointer"]
+#[ignore = "phase-3-backlog §7.3.D — SECURITY-POSTURE.md drift-detector forward-pointer resolution. G15-B wave-5a shipped (W9-T1 §5.1 IVM Algorithm B); test body pins doc-drift assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn security_posture_drift_detector_forward_pointer_resolved_to_g15_b() {
     // plan §3 G15-B pin. G15-B implementer:
     //

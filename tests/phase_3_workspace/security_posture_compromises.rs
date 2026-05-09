@@ -21,7 +21,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G13-E wave-3 retenses SECURITY-POSTURE.md Compromise #12 to CLOSED"]
+#[ignore = "phase-3-backlog §7.3.D — SECURITY-POSTURE.md Compromise #12 retense. G13-E wave-3 shipped DurabilityMode::Group default flip (PR #105) + Compromise #12 CLOSED in SECURITY-POSTURE.md; test body pins specific doc-drift assertion that needs driver authoring; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch (sibling to §7.3.A.5 doc-drift detector closure shape) per Wave-E rationale-only sweep."]
 fn security_posture_compromise_12_marked_closed() {
     // S-3 / C-8 pin. G13-E implementer retenses
     // `docs/SECURITY-POSTURE.md` so Compromise #12 (APFS fsync floor)
@@ -59,7 +59,7 @@ fn security_posture_compromise_12_marked_closed() {
 // =====================================================================
 
 #[test]
-#[ignore = "RED-PHASE: G17-A2 wave-5b retenses SECURITY-POSTURE.md Compromise #16 to CLOSED (random host-fn workspace CSPRNG)"]
+#[ignore = "phase-3-backlog §7.3.D — SECURITY-POSTURE.md Compromise #16 retense (random host-fn workspace CSPRNG). G17-A2 wave-5b shipped (PR #118); test body pins doc-drift assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn security_posture_compromise_16_marked_closed() {
     // r2-test-landscape §2.5 G17-A2 pin. G17-A2 implementer wires:
     //
@@ -83,7 +83,7 @@ fn security_posture_compromise_16_marked_closed() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave-5a retenses SECURITY-POSTURE.md Compromise #19 to CLOSED (IndexedDB persistence at thin-client cache scope)"]
+#[ignore = "phase-3-backlog §7.3.D — SECURITY-POSTURE.md Compromise #19 retense (IndexedDB persistence). G18-A wave-5a shipped PARTIAL closure; full closure tracked at §4.3 G18-A-followup destination; test body pins doc-drift assertion; un-ignore at §4.3 landing per Wave-E rationale-only sweep."]
 fn security_posture_compromise_19_marked_closed() {
     // r2-test-landscape §2.6 G18-A pin. G18-A implementer wires:
     //
@@ -132,7 +132,7 @@ fn security_posture_compromise_19_marked_closed() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave-5a retenses SECURITY-POSTURE.md Compromise #20 to CLOSED (cross-browser determinism CI cadence)"]
+#[ignore = "phase-3-backlog §7.3.D — SECURITY-POSTURE.md Compromise #20 retense (cross-browser determinism CI cadence). G18-A wave-5a shipped PARTIAL closure; full closure tracked at §4.3 G18-A-followup destination; test body pins doc-drift assertion; un-ignore at §4.3 landing per Wave-E rationale-only sweep."]
 fn security_posture_compromise_20_marked_closed() {
     // r2-test-landscape §2.6 G18-A pin. G18-A implementer wires:
     //
@@ -184,7 +184,7 @@ fn security_posture_compromise_20_marked_closed() {
 // ---------------------------------------------------------------------------
 
 #[test]
-#[ignore = "RED-PHASE: G14-C wave-4b retenses SECURITY-POSTURE.md Compromise #17 to CLOSED"]
+#[ignore = "phase-3-backlog §7.3.D — SECURITY-POSTURE.md Compromise #17 retense. G14-C wave-4b shipped (PR #110); test body pins doc-drift assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn security_posture_compromise_17_marked_closed() {
     // G14-C plan §3 pin. Compromise #17 = durable module-bytes
     // registry. G14-C wave-4b retenses SECURITY-POSTURE.md so #17 is
@@ -216,7 +216,7 @@ fn security_posture_compromise_17_marked_closed() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-C wave-4b retenses SECURITY-POSTURE.md Compromise #18 to CLOSED"]
+#[ignore = "phase-3-backlog §7.3.D — SECURITY-POSTURE.md Compromise #18 retense. G14-C wave-4b shipped; test body pins doc-drift assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn security_posture_compromise_18_marked_closed() {
     // G14-C plan §3 pin. Compromise #18 = handler-version chain
     // durability. G14-C wave-4b retenses SECURITY-POSTURE.md so #18
@@ -248,7 +248,7 @@ fn security_posture_compromise_18_marked_closed() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-C wave-4b retenses SECURITY-POSTURE.md Compromise #21 to CLOSED"]
+#[ignore = "phase-3-backlog §7.3.D — SECURITY-POSTURE.md Compromise #21 retense. G14-C wave-4b shipped; test body pins doc-drift assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn security_posture_compromise_21_marked_closed() {
     // G14-C S-4 pin. Compromise #21 = manifest signing populated.
     // G14-C wave-4b closes via Ed25519 sign at install + verify at
@@ -279,7 +279,7 @@ fn security_posture_compromise_21_marked_closed() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-D wave-5a retenses SECURITY-POSTURE.md Compromise #2 to CLOSED"]
+#[ignore = "phase-3-backlog §7.3.D — SECURITY-POSTURE.md Compromise #2 retense. G14-D wave-5a shipped (PR #115); test body pins doc-drift assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn security_posture_compromise_2_marked_closed() {
     // G14-D plan §3 pin. Compromise #2 D5 = SUBSCRIBE cross-trust-
     // boundary filtering. G14-D wave-5a closes via per-event cap
@@ -310,7 +310,7 @@ fn security_posture_compromise_2_marked_closed() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-D wave-5a retenses SECURITY-POSTURE.md Compromise #10 (engine-side) to CLOSED"]
+#[ignore = "phase-3-backlog §7.3.D — SECURITY-POSTURE.md Compromise #10 (engine-side) retense. G14-D wave-5a shipped; test body pins doc-drift assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn security_posture_compromise_10_engine_side_asymmetry_marked_closed() {
     // G14-D plan §3 pin. Compromise #10 = WAIT-suspend / WAIT-resume
     // engine-side asymmetry (cap_snapshot_hash binding). G14-D
@@ -466,7 +466,7 @@ fn extract_compromise_section(posture: &str, n: u32) -> &str {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-A + G20-B — net-r4-r1-1 + net-major-1 — Compromise #22 introduced (public-relay metadata leakage) + deferred to NAMED Phase-7-Garden-relay-infrastructure or Phase-9-hardened-deployment"]
+#[ignore = "phase-3-backlog §7.3.D — Compromise #22 (public-relay metadata leakage) deferral assertion. G16-A + G20-B shipped Compromise #22 introduction; deferral destination is Phase-7-Garden-relay-infrastructure OR Phase-9-hardened-deployment per docs/SECURITY-POSTURE.md Compromise #22 entry; test body pins doc-drift assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn compromise_22_public_relay_metadata_leakage_introduced_at_phase_3_close_with_named_phase_7_garden_relay_destination()
  {
     // R4-FP/R3-C ownership per net-r4-r1-1 BLOCKER (R4 large-council

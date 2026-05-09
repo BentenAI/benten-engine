@@ -21,7 +21,7 @@
 //!
 //! ## RED-PHASE discipline
 //!
-//! `#[ignore]`'d with rationale `"RED-PHASE: G15-B wave-5a lifts AnchorPrefix"`.
+//! `#[ignore]`'d with rationale pointing to phase-3-backlog §7.3.D STALE-RATIONALE sweep #2; destination next Phase-3-close orchestrator-direct fix-pass batch (G15-B + W9-T1 §5.1 closed).
 //!
 //! ## LabelPattern import path (r4-r2-ivm-6 docstring)
 //!
@@ -40,7 +40,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G15-B wave-5a — plan §3 G15-B — prefix matching"]
+#[ignore = "phase-3-backlog §7.3.D — anchor-prefix prefix-matching. G15-B closed at §5.1 IVM Algorithm B (W9-T1); test body pins post-G15-B prefix-matching invariant contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn anchor_prefix_matches_prefix_not_equality() {
     // plan §3 G15-B pin. G15-B implementer wires this against the
     // new PrefixMatcher selector type:
@@ -72,7 +72,7 @@ fn anchor_prefix_matches_prefix_not_equality() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G15-B wave-5a — plan §3 G15-B — no silent equality coerce"]
+#[ignore = "phase-3-backlog §7.3.D — anchor-prefix no-silent-equality-coerce invariant. G15-B closed; test body pins specific equality-coerce-rejection invariant; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn anchor_prefix_no_silent_label_equality_coerce() {
     // plan §3 G15-B pin. G15-B explicitly REJECTS the silent coerce
     // back to label-equality. If a future refactor accidentally

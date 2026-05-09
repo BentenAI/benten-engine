@@ -28,7 +28,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G13-B introduces the SINGLE authorized erasure site"]
+#[ignore = "phase-3-backlog §7.3.D — no-unauthorized-dyn-error: Engine<B> generic cascade SINGLE authorized erasure site. G13-B wave-2 shipped napi cdylib erasure boundary; test body pins specific erasure-site-uniqueness audit; un-ignore at §4.4 Bundle-content audit pins landing per Wave-E rationale-only sweep."]
 fn no_unauthorized_box_dyn_std_error_at_engine_boundary() {
     // G13-B implementer wires this:
     //

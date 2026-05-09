@@ -56,7 +56,7 @@
 #![allow(clippy::unwrap_used, dead_code)]
 
 #[test]
-#[ignore = "RED-PHASE: G15-A wave-5a — ivm-r4-3 / r4-r2-ivm-1 — napi-boundary register_user_view view-label-mismatch fail-loud preserved post-generalization"]
+#[ignore = "phase-3-backlog §7.3.D — napi-boundary register_user_view view-label-mismatch fail-loud preservation post-generalization. G15-A wave-5a shipped (PR #113 — IVM Algorithm B kernel generalization + Compromise #11 closure); test body pins specific napi-boundary fail-loud contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn napi_register_user_view_canonical_id_with_mismatched_label_returns_e_view_label_mismatch_post_g15_a()
  {
     // r4-r2-ivm-1 BLOCKER closure (napi-boundary regression pin).

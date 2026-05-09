@@ -22,7 +22,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G13-C — wasm32 engine bundle excludes redb"]
+#[ignore = "phase-3-backlog §7.3.D — wasm32 engine bundle excludes redb. G13-C wave-3 shipped BrowserBackend thin-client cache impl (PR #106); test body pins wasm32-bundle-content audit (no redb symbol section); un-ignore at §4.4 Bundle-content audit pins landing (R4b architecture / wasm-bundle lens carry; G16-B-D sub-item D NAMED-NOW destination; CI workflow wasm-bundle-content-audit.yml) per Wave-E rationale-only sweep."]
 fn wasm32_unknown_unknown_bundle_does_not_link_redb() {
     // G13-C implementer wires this:
     //   // Engine's lib.rs and engine.rs MUST gate any `RedbBackend`

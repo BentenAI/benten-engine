@@ -34,7 +34,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G14-D — plan §3 G14-D — per-event cap recheck against durable grant store (blocked on G14-B durable UCAN backend's `chain-for-audience` accessor wired through `engine.caps()`; G14-B already merged at main `496e144`, un-ignore when accessor stabilizes)"]
+#[ignore = "phase-3-backlog §7.3.D — per-event cap recheck against durable grant store. G14-B durable UCAN backend chain-for-audience accessor SHIPPED (validate_chain_for_audience_at exists at crates/benten-caps/src/backends/ucan.rs:487 + crates/benten-id/src/ucan.rs:292); test body pins per-event recheck against durable store contract; un-ignore at §2.3 (i) WriteContext audience + clock threading landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn subscribe_per_event_cap_recheck_against_durable_grant_store() {
     // plan §3 G14-D pin. G14-D implementer wires this:
     //
@@ -69,7 +69,7 @@ fn subscribe_per_event_cap_recheck_against_durable_grant_store() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-D — F6 LOAD-BEARING + Compromise #2 D5 — partial revoke cancels path (blocked on G14-B durable UCAN backend's `chain-for-audience` accessor wired through `engine.caps()`; G14-B already merged at main `496e144`, un-ignore when accessor stabilizes)"]
+#[ignore = "phase-3-backlog §7.3.D — F6 + Compromise #2 D5 partial-revoke cancels path. G14-B chain-for-audience accessor SHIPPED; G14-D wave-5a + G21-T3 PR #147 shipped partial-revoke production path; test body pins specific partial-revoke cancellation contract; un-ignore at §2.3 (i) landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn subscribe_partial_revoke_cancels_subscription_path() {
     // F6 LOAD-BEARING + Compromise #2 D5 pin. When a subscriber's
     // grant is PARTIALLY revoked (e.g., revoke ONLY the read on
@@ -115,7 +115,7 @@ fn subscribe_partial_revoke_cancels_subscription_path() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-D — plan §3 G14-D — cross-trust-boundary filters at delivery (blocked on G14-B durable UCAN backend's `chain-for-audience` accessor wired through `engine.caps()`; G14-B already merged at main `496e144`, un-ignore when accessor stabilizes)"]
+#[ignore = "phase-3-backlog §7.3.D — cross-trust-boundary filters at delivery. G14-B chain-for-audience accessor SHIPPED; G14-D wave-5a + G21-T3 PR #147 shipped delivery-time filters; test body pins cross-trust-boundary filter contract; un-ignore at §2.3 (i) landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn subscribe_cross_trust_boundary_filters_at_delivery_not_registration() {
     // plan §3 G14-D pin. The Phase-2b interim shape filtered cross-
     // trust-boundary subscriptions at REGISTRATION (rejecting at
@@ -207,7 +207,7 @@ fn subscribe_cross_trust_boundary_filters_at_delivery_not_registration() {
 // =====================================================================
 
 #[test]
-#[ignore = "RED-PHASE: G14-D + G16-B — ds-r4r2-1(b) — cross-peer revocation terminates in-flight subscription within HLC-bounded window"]
+#[ignore = "phase-3-backlog §7.3.D — cross-peer revocation terminates in-flight subscription within HLC-bounded window. G14-D + G16-B + G16-D wave-6b all shipped (PR #115/#126/#163); test body pins HLC-bounded-window cross-peer revocation termination contract; un-ignore at §2.3 (i) WriteContext clock threading landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn atrium_grant_revocation_synced_across_peers_terminates_in_flight_subscriptions_within_hlc_bound()
 {
     // ds-r4r2-1(b) pin (closes ds-r4-4(b) per R4-R2 distributed-systems
@@ -319,7 +319,7 @@ fn atrium_grant_revocation_synced_across_peers_terminates_in_flight_subscription
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-D — ds-r4r2-6 — per-zone scoping unit decomposition (phone subscribes to one zone, receives only that zone's writes)"]
+#[ignore = "phase-3-backlog §7.3.D — per-zone scoping unit decomposition. G14-D wave-5a shipped F6 filtering; test body pins per-zone-scoping subscription contract; un-ignore at §2.3 (i) landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn subscribe_per_zone_scoping_phone_receives_only_subscribed_zone_writes() {
     // ds-r4r2-6 pin (closes ds-r4-9 per R4-R2 distributed-systems
     // re-emergent finding). Unit-shape decomposition of the multi-

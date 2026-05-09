@@ -436,7 +436,7 @@ fn browser_target_with_runs_sandbox_true_claim_rejected_at_attestation_construct
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-B + G14-C — UCAN chain-construction-time rejection requires durable backend integration; G14-A2 establishes envelope shape"]
+#[ignore = "phase-3-backlog §7.3.D — device-attestation UCAN chain-construction-time rejection. G14-B + G14-C + G14-A2 all shipped; test body pins UCAN chain-construction-rejection contract; un-ignore at §2.1-followup ssi external UCAN/VC spec compatibility re-evaluation outcome (G16-D wave-6b PR #163 shipped) per Wave-E rationale-only sweep."]
 fn ucan_delegation_to_browser_target_for_sandbox_handler_rejected_at_chain_construction_not_invocation()
  {
     // br-r4-r1-4 / br-r4-r2-3 MAJOR cross-wave pin. The chain-

@@ -31,7 +31,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G14-A2 wave-4a' fills bindings/napi/src/identity.rs device-attestation surface"]
+#[ignore = "phase-3-backlog §7.3.D — napi device-attestation surface. G14-A2 wave-4a' shipped (PR #108) — bindings/napi/src/identity.rs device-attestation surface lives at HEAD; test body pins specific napi-side round-trip contract that needs driver authoring; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn engine_declare_device_attestation_round_trip_via_napi() {
     // r1-napi-2 MAJOR pin. G14-A2 implementer wires this:
     //

@@ -29,12 +29,12 @@
 //!
 //! ## RED-PHASE discipline
 //!
-//! `#[ignore]`'d with rationale `"RED-PHASE: G16-B + G16-C wave-6b wire revocation-order"`.
+//! `#[ignore]`'d with rationale pointing to phase-3-backlog §7.3.D STALE-RATIONALE sweep #2 (Phase-3 R6 R1 fix-pass Wave E 2026-05-09); destination §6.12 G16-B post-canary residuals (v1-assessment-window).
 
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G16-B + G16-C — device-mesh + net-blocker-3 — revocation propagates before data to offline-then-reconnect peer"]
+#[ignore = "phase-3-backlog §7.3.D — revocation propagates before data to offline-then-reconnect peer. G16-B + G16-C wave-6b shipped MST diff + Loro CRDT integration; test body pins specific revocation-ordering defensive contract that composes with §6.12 G16-B post-canary residuals + §3.1-followup multi-peer iroh sync (CLOSED at G16-B-E PR #160). Body un-ignore at §6.12 v1-assessment-window landing per Wave-E rationale-only sweep."]
 fn atrium_revoke_propagates_before_data_to_offline_then_reconnect_peer() {
     // device-mesh exploration brief-edit 2026-05-04 + net-blocker-3
     // BLOCKER pin. G16-B implementer wires this:
@@ -79,7 +79,7 @@ fn atrium_revoke_propagates_before_data_to_offline_then_reconnect_peer() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — net-blocker-3 — revocation message-kind ordered before data at handshake"]
+#[ignore = "phase-3-backlog §7.3.D — revocation message-kind ordered before data at handshake. G16-B wave-6b shipped Atrium API; test body pins revocation-message-ordering defensive contract; un-ignore at §6.12 G16-B post-canary residuals landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn atrium_revocation_message_kind_ordered_before_data_at_handshake() {
     // net-blocker-3 BLOCKER pin. The handshake protocol explicitly
     // names `Revocation` as a typed message-kind drained BEFORE
@@ -106,7 +106,7 @@ fn atrium_revocation_message_kind_ordered_before_data_at_handshake() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — crypto-major-6 — device-DID revocation propagates before data"]
+#[ignore = "phase-3-backlog §7.3.D — device-DID revocation propagates before data. G16-D wave-6b PR #163 shipped on-the-wire device-DID-attestation envelope; test body pins device-DID-revocation propagation order; un-ignore at §6.12 G16-B post-canary residuals landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn atrium_device_did_revocation_propagates_before_data_to_offline_then_reconnect_peer() {
     // crypto-major-6 pin. Companion to the peer-DID revocation pin
     // above, but at the DEVICE-DID grain. When peer-A revokes a
@@ -136,7 +136,7 @@ fn atrium_device_did_revocation_propagates_before_data_to_offline_then_reconnect
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-B + G16-C wave-6b — ds-r4-2 — MST diff preserves temporal ordering of grants/revocations interleaved with data writes during offline-reconnect"]
+#[ignore = "phase-3-backlog §7.3.D — MST diff preserves temporal ordering of grants/revocations interleaved with data writes during offline-reconnect. G16-C wave-6b shipped MST diff (PR #124); test body pins offline-reconnect temporal-ordering defensive contract; un-ignore at §6.12 G16-B post-canary residuals landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn mst_diff_preserves_temporal_ordering_of_grants_and_revocations_relative_to_data_writes_under_offline_reconnect()
  {
     // ds-r4-2 (R4 large-council Round 1 distributed-systems lens) pin.

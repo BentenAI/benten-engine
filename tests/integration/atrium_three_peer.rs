@@ -194,7 +194,7 @@ async fn atrium_three_peer_loro_convergence_under_concurrent_writes() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-B + G14-D wave-6b — ds-r4-1 — Byzantine 3+-peer concurrent-writes-AND-partial-revoke-AND-offline-reconnect proptest"]
+#[ignore = "phase-3-backlog §7.3.D — Byzantine 3+-peer concurrent-writes-AND-partial-revoke-AND-offline-reconnect proptest. G16-B + G14-D + G16-B-E PR #160 shipped multi-peer iroh sync substantive close; test body pins 3+-peer Byzantine proptest contract that needs 3-peer test infrastructure authoring; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn atrium_three_peer_concurrent_writes_under_partial_revoke_with_offline_reconnect_converges() {
     // ds-r4-1 stays RED-PHASE — pairs with G14-D wave-6b partial-
     // revoke + G16-C MST-diff-on-reconnect surfaces. G16-B-E ships

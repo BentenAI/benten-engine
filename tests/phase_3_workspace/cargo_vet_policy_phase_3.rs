@@ -33,7 +33,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G20-A3 wave-8a — cargo-vet policy self-test un-ignored (§7.3.A.9)"]
+#[ignore = "phase-3-backlog §7.3.D — cargo-vet policy self-test. G20-A3 wave-8a shipped (PR #135); §7.3.A.9 closure narrative landed; test body pins specific cargo-vet self-test assertion that needs driver authoring; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn cargo_vet_policy_self_test_un_ignored() {
     // §7.3.A.9 G20-A3 pin. Implementer wires this:
     //
@@ -96,7 +96,7 @@ fn cargo_vet_policy_self_test_un_ignored() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G20-A3 wave-8a — cargo-vet exemption budget ≤ 5 at Phase-3 close (sec-r1-5)"]
+#[ignore = "phase-3-backlog §7.3.D — cargo-vet exemption budget ≤ 5 at Phase-3 close. G20-A3 wave-8a shipped; test body pins exemption-budget assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn cargo_vet_exemption_budget_at_or_below_5_at_phase_3_close() {
     // sec-r1-5 budget pin. G20-A3 implementer wires this:
     //
@@ -116,7 +116,7 @@ fn cargo_vet_exemption_budget_at_or_below_5_at_phase_3_close() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G20-A3 wave-8a — cargo-public-api drift workflow un-ignored (§7.3.A.9)"]
+#[ignore = "phase-3-backlog §7.3.D — cargo-public-api drift workflow. G20-A3 wave-8a shipped; test body pins workflow-presence assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn cargo_public_api_drift_un_ignored() {
     // §7.3.A.9 G20-A3 pin. Implementer wires this:
     //
@@ -144,7 +144,7 @@ fn cargo_public_api_drift_un_ignored() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G20-A3 wave-8a — browser-target bundle size un-ignored (§7.3.A.9)"]
+#[ignore = "phase-3-backlog §7.3.D — browser-target bundle size. G20-A3 wave-8a shipped; test body pins bundle-size assertion that composes with §4.4 Bundle-content audit pins; un-ignore at §4.4 landing per Wave-E rationale-only sweep."]
 fn browser_target_bundle_size_un_ignored() {
     // §7.3.A.9 G20-A3 closure pin. Implementer wires this:
     //
@@ -170,7 +170,7 @@ fn browser_target_bundle_size_un_ignored() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G20-A3 wave-8a — suspension store subscription cursor un-ignored (§7.3.A.9)"]
+#[ignore = "phase-3-backlog §7.3.D — suspension store subscription cursor. G20-A3 wave-8a shipped; test body pins subscription-cursor assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn suspension_store_round_trip_subscription_cursor_un_ignored() {
     // §7.3.A.9 G20-A3 closure pin. Implementer wires the missing
     // subscribe-persistent-cursor helpers + un-ignores existing skips.
@@ -189,7 +189,7 @@ fn suspension_store_round_trip_subscription_cursor_un_ignored() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G20-A3 wave-8a — benten-dev inspect-state CLI un-ignored (§6.9)"]
+#[ignore = "phase-3-backlog §7.3.D — benten-dev inspect-state CLI. G20-A3 wave-8a shipped (§6.9 CLOSED); test body pins CLI-presence assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn inspect_state_pretty_prints_un_ignored() {
     // §6.9 pin. G20-A3 implementer wires `tools/benten-dev/bin/benten-dev.mjs`
     // thin-CLI front-door + un-skips the 4 inspect_state_pretty_prints

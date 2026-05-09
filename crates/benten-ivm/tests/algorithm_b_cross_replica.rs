@@ -27,12 +27,12 @@
 //!
 //! ## RED-PHASE discipline
 //!
-//! `#[ignore]`'d with rationale `"RED-PHASE: G15-B + G16-B wave-6b — ivm-r4-1 — cross-replica Algorithm B + Loro convergence"`.
+//! `#[ignore]`'d with rationale pointing to phase-3-backlog §7.3.D STALE-RATIONALE sweep #2; destination §3.1-followup multi-peer iroh sync (CLOSED at G16-B-E PR #160) + next Phase-3-close orchestrator-direct fix-pass batch.
 
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G15-B + G16-B wave-6b — ivm-r4-1 + ivm-major-4 — Algorithm B incremental state converges across two replicas after Loro merge"]
+#[ignore = "phase-3-backlog §7.3.D — Algorithm B incremental state converges across two replicas after Loro merge. G15-A + G15-B + W9-T1 closed §5.1 IVM Algorithm B drift-detector + GenericKernel; G16-B wave-6b shipped Loro CRDT integration. Test body pins cross-replica convergence observable contract; un-ignore at §3.1-followup landing (CLOSED at G16-B-E PR #160; test driver authoring tracked at next Phase-3-close orchestrator-direct fix-pass batch) per Wave-E rationale-only sweep."]
 fn algorithm_b_incremental_state_converges_across_two_replicas_after_loro_merge() {
     // ivm-r4-1 BLOCKER pin closing R1 ivm-major-4. G15-B + G16-B
     // implementers wire this:

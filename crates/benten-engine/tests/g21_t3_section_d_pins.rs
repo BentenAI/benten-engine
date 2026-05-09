@@ -444,14 +444,18 @@ fn handshake_wire_carries_device_did_audit_6_3_scaffold() {
 /// the engine-side declared-attestation slot on `AtriumHandle`, this
 /// test un-ignores + drives the cross-peer flow end-to-end.
 #[tokio::test]
-#[ignore = "RED-PHASE: G21-T2 napi-UCAN-wireup follow-on — wire \
-            JsAtrium::declare_device_attestation into Engine::open_atrium \
-            so the declared envelope flows into the handshake protocol. \
-            Today the napi shim stores declarations in-memory only \
-            (audit-6-3 root cause); when T2 lands the engine slot, \
-            un-ignore this test + drive the cross-peer flow per audit-6-3 \
-            recommended disposition (`.addl/phase-3/g20-pre-r6-audits/\
-            audit-6-napi-wireup-drift.md` §audit-6-3)."]
+#[ignore = "phase-3-backlog §7.3.D — declared device attestation flows \
+            through handshake to remote peer. G21-T2 napi-UCAN-wireup \
+            CLOSED at PR #148 commit 7a6c36a; G16-D wave-6b PR #163 shipped \
+            on-the-wire device-DID-attestation envelope. Test body pins \
+            specific cross-peer flow contract for declared-attestation \
+            propagation through Engine::open_atrium → JsAtrium → handshake; \
+            the engine-side slot exists at HEAD but the napi shim's \
+            in-memory dedup gap (audit-6-3 root cause) composes with §2.5(f) \
+            DX-4 multi-Atrium handle dedup (v1-assessment-window per \
+            CLAUDE.md item #15; D1 ratification re-evaluation). Body \
+            un-ignore at §2.5(f) DX-4 v1-assessment-window landing per \
+            Wave-E rationale-only sweep."]
 async fn declared_device_attestation_flows_through_handshake_to_remote_peer() {
     // Test shape (un-ignores when G21-T2 lands engine-side slot):
     //

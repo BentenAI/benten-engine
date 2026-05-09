@@ -39,7 +39,7 @@
 //! ## RED-PHASE discipline
 //!
 //! All 10 pins `#[ignore]`'d with rationale
-//! `"RED-PHASE: G16-B wave-6b lands canonical-bytes encoding for merged Version Nodes; CID rebake at landing time"`.
+//! Rationale pointing to phase-3-backlog §7.3.D STALE-RATIONALE sweep #2; destination next Phase-3-close orchestrator-direct fix-pass batch (G16-B wave-6b CLOSED at PR #126).
 
 #![allow(clippy::unwrap_used)]
 
@@ -58,7 +58,7 @@ fn fixture_n(_n: usize) {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — D-PHASE-3-22 — CID-rebake cohort site 1"]
+#[ignore = "phase-3-backlog §7.3.D — CID-rebake cohort site 1. G16-B wave-6b shipped Loro CRDT integration (PR #126) + canonical-bytes encoding for merged Version Nodes. Test body pins specific CID-rebake site contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn canonical_bytes_loro_merged_version_pinned_cid_site_1() {
     // G16-B implementer fills RED_PHASE_PLACEHOLDER_CID with the
     // actual canonical CID for fixture #1, then asserts:
@@ -72,7 +72,7 @@ fn canonical_bytes_loro_merged_version_pinned_cid_site_1() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — D-PHASE-3-22 — CID-rebake cohort site 2"]
+#[ignore = "phase-3-backlog §7.3.D — CID-rebake cohort site 2. G16-B wave-6b shipped; test body pins specific CID-rebake site contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn canonical_bytes_loro_merged_version_pinned_cid_site_2() {
     fixture_n(2);
     let _ = RED_PHASE_PLACEHOLDER_CID;
@@ -80,7 +80,7 @@ fn canonical_bytes_loro_merged_version_pinned_cid_site_2() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — D-PHASE-3-22 — CID-rebake cohort site 3"]
+#[ignore = "phase-3-backlog §7.3.D — CID-rebake cohort site 3. G16-B wave-6b shipped; test body pins specific CID-rebake site contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn canonical_bytes_loro_merged_version_pinned_cid_site_3() {
     fixture_n(3);
     let _ = RED_PHASE_PLACEHOLDER_CID;
@@ -88,7 +88,7 @@ fn canonical_bytes_loro_merged_version_pinned_cid_site_3() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — D-PHASE-3-22 — CID-rebake cohort site 4"]
+#[ignore = "phase-3-backlog §7.3.D — CID-rebake cohort site 4. G16-B wave-6b shipped; test body pins specific CID-rebake site contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn canonical_bytes_loro_merged_version_pinned_cid_site_4() {
     fixture_n(4);
     let _ = RED_PHASE_PLACEHOLDER_CID;
@@ -96,7 +96,7 @@ fn canonical_bytes_loro_merged_version_pinned_cid_site_4() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — D-PHASE-3-22 — CID-rebake cohort site 5"]
+#[ignore = "phase-3-backlog §7.3.D — CID-rebake cohort site 5. G16-B wave-6b shipped; test body pins specific CID-rebake site contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn canonical_bytes_loro_merged_version_pinned_cid_site_5() {
     fixture_n(5);
     let _ = RED_PHASE_PLACEHOLDER_CID;
@@ -104,7 +104,7 @@ fn canonical_bytes_loro_merged_version_pinned_cid_site_5() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — D-PHASE-3-22 — CID-rebake cohort site 6"]
+#[ignore = "phase-3-backlog §7.3.D — CID-rebake cohort site 6. G16-B wave-6b shipped; test body pins specific CID-rebake site contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn canonical_bytes_loro_merged_version_pinned_cid_site_6() {
     fixture_n(6);
     let _ = RED_PHASE_PLACEHOLDER_CID;
@@ -112,7 +112,7 @@ fn canonical_bytes_loro_merged_version_pinned_cid_site_6() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — D-PHASE-3-22 — CID-rebake cohort site 7"]
+#[ignore = "phase-3-backlog §7.3.D — CID-rebake cohort site 7. G16-B wave-6b shipped; test body pins specific CID-rebake site contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn canonical_bytes_loro_merged_version_pinned_cid_site_7() {
     fixture_n(7);
     let _ = RED_PHASE_PLACEHOLDER_CID;
@@ -120,7 +120,7 @@ fn canonical_bytes_loro_merged_version_pinned_cid_site_7() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — D-PHASE-3-22 — CID-rebake cohort site 8"]
+#[ignore = "phase-3-backlog §7.3.D — CID-rebake cohort site 8. G16-B wave-6b shipped; test body pins specific CID-rebake site contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn canonical_bytes_loro_merged_version_pinned_cid_site_8() {
     fixture_n(8);
     let _ = RED_PHASE_PLACEHOLDER_CID;
@@ -128,7 +128,7 @@ fn canonical_bytes_loro_merged_version_pinned_cid_site_8() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — D-PHASE-3-22 — CID-rebake cohort site 9"]
+#[ignore = "phase-3-backlog §7.3.D — CID-rebake cohort site 9. G16-B wave-6b shipped; test body pins specific CID-rebake site contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn canonical_bytes_loro_merged_version_pinned_cid_site_9() {
     fixture_n(9);
     let _ = RED_PHASE_PLACEHOLDER_CID;
@@ -136,7 +136,7 @@ fn canonical_bytes_loro_merged_version_pinned_cid_site_9() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — D-PHASE-3-22 — CID-rebake cohort site 10"]
+#[ignore = "phase-3-backlog §7.3.D — CID-rebake cohort site 1. G16-B wave-6b shipped Loro CRDT integration (PR #126) + canonical-bytes encoding for merged Version Nodes. Test body pins specific CID-rebake site contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn canonical_bytes_loro_merged_version_pinned_cid_site_10() {
     fixture_n(10);
     let _ = RED_PHASE_PLACEHOLDER_CID;

@@ -28,12 +28,12 @@
 //!
 //! ## RED-PHASE discipline
 //!
-//! `#[ignore]`'d with rationale `"RED-PHASE: G16-D wave-6b — scope-real-22 cross-process driver"`.
+//! `#[ignore]`'d with rationale pointing to phase-3-backlog §7.3.D STALE-RATIONALE sweep #2; destination next Phase-3-close orchestrator-direct fix-pass batch (G16-D wave-6b CLOSED at PR #163).
 
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G16-D wave-6b — scope-real-22 — atrium two-process bidirectional sync"]
+#[ignore = "phase-3-backlog §7.3.D — atrium two-process bidirectional sync. G16-D wave-6b shipped (PR #163) + G16-B-E PR #160 (substantive end-to-end multi-peer iroh sync); test body pins specific cross-process driver contract that needs test infrastructure authoring; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn atrium_two_process_bidirectional_sync_end_to_end() {
     // scope-real-22 + plan §3 G16-D pin. G16-D implementer wires
     // this against a cross-process test fixture (~150-250 LOC):

@@ -134,7 +134,7 @@ fn wallclock_hlc_rides_alongside_monotonic() {
 // =====================================================================
 
 #[test]
-#[ignore = "RED-PHASE: phase-3-backlog §2.3 (ii) — cap-r4-8 — iterate-batch evaluator delegation observable in runtime arm (v1-assessment-window; G14-B durable-backend wave shipped at PR #109 commit 496e144 but did NOT thread iterate_batch_boundary through evaluator runtime arm; un-ignore once Engine::run_iterate_subgraph_with_metrics + IterateMetrics::refresh_count land per §2.3 (ii) item 1)"]
+#[ignore = "phase-3-backlog §2.3 (ii) — cap-r4-8 — iterate-batch evaluator delegation observable in runtime arm. Destination: v1-assessment-window co-routed with §10.1 Compromise #1 TOCTOU window bound (the two items share the same iterate-batch-boundary cap-recheck mechanism + must ship together; coupling is structural, not speculative). Un-ignore once Engine::run_iterate_subgraph_with_metrics + IterateMetrics::refresh_count + the §10.1 bound-revisit decision land per §2.3 (ii) item 1."]
 fn policy_iterate_batch_boundary_evaluator_delegation_observable_in_runtime_arm() {
     // cap-r4-8 pin (cap-minor-8 closure). Custom policy with override
     // = 5; ITERATE-heavy subgraph; observe refresh fires every 5 iters
@@ -174,7 +174,7 @@ fn policy_iterate_batch_boundary_evaluator_delegation_observable_in_runtime_arm(
 }
 
 #[test]
-#[ignore = "RED-PHASE: phase-3-backlog §2.3 (ii) — cap-r4-8 — wallclock refresh ceiling evaluator delegation observable in runtime arm (v1-assessment-window; un-ignore once Engine::run_call_with_metrics_for_duration + CallMetrics::wallclock_refresh_count land per §2.3 (ii) item 2)"]
+#[ignore = "phase-3-backlog §2.3 (ii) — cap-r4-8 — wallclock refresh ceiling evaluator delegation observable in runtime arm. Destination: v1-assessment-window co-routed with §10.1 Compromise #1 TOCTOU window bound (shared iterate-batch-boundary cap-recheck mechanism; structural coupling). Un-ignore once Engine::run_call_with_metrics_for_duration + CallMetrics::wallclock_refresh_count + the §10.1 bound-revisit decision land per §2.3 (ii) item 2."]
 fn policy_wallclock_refresh_ceiling_evaluator_delegation_observable_in_runtime_arm() {
     // cap-r4-8 pin (cap-minor-8 closure). Custom policy with override
     // = 30s; long-running CALL; observe refresh fires at 30s wall-clock

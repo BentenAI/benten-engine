@@ -29,25 +29,25 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G14-B + G14-C — durable graph-Node persistence lands at the benten-caps + benten-graph seam (arch-r1-10 forbids benten-id::benten-graph dep)"]
+#[ignore = "phase-3-backlog §7.3.D — durable graph-Node persistence at benten-caps + benten-graph seam. G14-B + G14-C wave-4b shipped (PRs #109 + #110); test body pins specific graph-Node persistence shape contract; un-ignore at §2.1-followup ssi external UCAN/VC spec compatibility re-evaluation outcome per Wave-E rationale-only sweep."]
 fn benten_id_durable_nodes_are_graph_encoded_no_opaque_blobs() {
     unreachable!("G14-B + G14-C wires this pin at the benten-caps / benten-graph seam");
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-B — UCAN-grant graph-Node persistence lands at benten-caps::UCANBackend per cag-r4-2 + ARCHITECTURE.md:181-191 + Compromise #11 closure floor"]
+#[ignore = "phase-3-backlog §7.3.D — UCAN-grant graph-Node persistence at benten-caps::UCANBackend. G14-B PR #109 + G15-A PR #113 (Compromise #11 closure) both shipped; test body pins specific UCAN-grant persistence contract; un-ignore at §2.1-followup re-evaluation outcome per Wave-E rationale-only sweep."]
 fn benten_id_ucan_claim_envelope_persisted_as_graph_node_with_granted_to_edge() {
     unreachable!("G14-B wires this pin at benten-caps::UCANBackend");
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-B — VC-receipt graph-Node persistence lands at benten-caps + benten-graph per cag-r4-2 (arch-r1-10 forbids benten-id::benten-graph dep)"]
+#[ignore = "phase-3-backlog §7.3.D — VC-receipt graph-Node persistence at benten-caps + benten-graph. G14-B + G14-A2 shipped; test body pins specific VC-receipt persistence contract; un-ignore at §2.1-followup re-evaluation outcome per Wave-E rationale-only sweep."]
 fn benten_id_vc_issuance_receipt_persisted_as_graph_node() {
     unreachable!("G14-B wires this pin at benten-caps + benten-graph");
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-B — device-DID attestation graph-Edge persistence lands at benten-caps + benten-graph per cag-r4-5"]
+#[ignore = "phase-3-backlog §7.3.D — device-DID attestation graph-Edge persistence. G14-B + G16-D wave-6b shipped (PRs #109 + #163; on-the-wire device-DID-attestation envelope); test body pins specific graph-Edge persistence contract; un-ignore at §2.1-followup re-evaluation outcome per Wave-E rationale-only sweep."]
 fn device_did_attestation_attests_identity_via_graph_edge_not_string_property() {
     unreachable!("G14-B wires this pin at benten-caps + benten-graph");
 }

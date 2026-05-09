@@ -193,7 +193,7 @@ proptest! {
     /// full rebuild. Widened at R4 triage (M7) to 0..256 cases and to assert
     /// payload equality (actual `Vec<Cid>`), not just variant discriminant.
     #[test]
-    #[ignore = "Phase 3 — IVM rebuild-equivalence event-replay deferred per docs/future/phase-3-backlog.md §5 (Algorithm B maturity). rebuild() is Phase-1 clear-to-Fresh (no source-of-truth); Phase-3 adds event-log replay. When populated, assert incremental == rebuild across 0..256 cases."]
+    #[ignore = "phase-3-backlog §7.3.D — view3 IVM rebuild-equivalence event-replay across 0..256 cases. §5.1 IVM Algorithm B CLOSED; §5.1-followup-a GenericKernel rebuild without event-replay seam carries the event-log replay surface. Test body pins specific incremental==rebuild equivalence proptest contract; un-ignore at §5.1-followup-a landing per Wave-E rationale-only sweep."]
     fn prop_content_listing_incremental_equivalence(n in 0usize..256) {
         let mut incremental = ContentListingView::new("Post");
         for _ in 0..n {

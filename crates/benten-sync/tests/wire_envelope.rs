@@ -30,12 +30,12 @@
 //!
 //! ## RED-PHASE discipline
 //!
-//! `#[ignore]`'d with rationale `"RED-PHASE: G16-A + G16-B + G16-C wave-6b — net-r4-r1-2 — wire envelope device-DID at every message kind"`.
+//! `#[ignore]`'d with rationale pointing to phase-3-backlog §7.3.D STALE-RATIONALE sweep #2 (Phase-3 R6 R1 fix-pass Wave E 2026-05-09); destination §6.12 G16-B post-canary residuals (v1-assessment-window).
 
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G16-A + G16-B + G16-C wave-6b — net-r4-r1-2 — Atrium wire envelope carries peer-DID AND device-DID at every message kind"]
+#[ignore = "phase-3-backlog §7.3.D — Atrium wire envelope carries peer-DID AND device-DID at every message kind. G16-D wave-6b PR #163 shipped on-the-wire device-DID-attestation envelope (DeviceAttestationEnvelope v1); test body pins per-message-kind envelope-content defensive contract; un-ignore at §6.12 G16-B post-canary residuals landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn iroh_wire_envelope_carries_peer_did_and_device_did_distinguishably_at_every_message_kind() {
     // net-r4-r1-2 pin. G16-A + G16-B + G16-C implementers wire this
     // against the production envelope-construction path per

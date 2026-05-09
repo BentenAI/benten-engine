@@ -36,7 +36,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G16-A + G16-B + G18-A wave-5 audit Loro absence from browser bundle per CLAUDE.md baked-in #17"]
+#[ignore = "phase-3-backlog §7.3.D — wasm bundle Loro absence audit per CLAUDE.md baked-in #17 (full peer vs thin compute surface). G16-A + G16-B + G18-A wave-5 ALL shipped; test body pins specific Loro-absence symbol-section audit; un-ignore at §4.4 Bundle-content audit pins landing (CI workflow wasm-bundle-content-audit.yml) per Wave-E rationale-only sweep."]
 fn loro_not_in_browser_bundle_per_baked_in_17() {
     // CLAUDE.md baked-in #17 architectural pin. G18-A (or G16-B
     // implementer who completes the architectural callout) wires this:
@@ -137,7 +137,7 @@ fn loro_not_in_browser_bundle_per_baked_in_17() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-A + G18-A wave-5 audit iroh absence from browser bundle per CLAUDE.md baked-in #17"]
+#[ignore = "phase-3-backlog §7.3.D — wasm bundle iroh absence audit per CLAUDE.md baked-in #17. G16-A + G18-A wave-5 ALL shipped; test body pins specific iroh-absence symbol-section audit; un-ignore at §4.4 Bundle-content audit pins landing per Wave-E rationale-only sweep."]
 fn iroh_not_in_browser_bundle_per_baked_in_17() {
     // CLAUDE.md baked-in #17 architectural pin. G18-A wires this:
     //

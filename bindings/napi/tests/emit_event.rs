@@ -99,7 +99,7 @@ fn engine_emit_event_no_longer_returns_e_primitive_not_implemented() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-D wave-6b un-ignores; G19-B wave-7 + G14-D wave-5a wire prerequisites — napi EmitBroadcast bus per-replica filter under cross-trust-boundary (stream-r1-7 + stream-r4r1-3)"]
+#[ignore = "phase-3-backlog §7.3.D — napi EmitBroadcast bus per-replica filter under cross-trust-boundary. G14-D wave-5a + G19-B wave-7 + G16-D wave-6b ALL shipped (PR #115 + #127 + #163); test body pins specific napi EmitBroadcast cross-trust-boundary filter contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn napi_emit_broadcast_bus_fan_out_under_cross_trust_boundary_replicas_via_per_subscriber_filtering()
  {
     // stream-r1-7 + stream-r4r1-3 cross-wave coordination pin.

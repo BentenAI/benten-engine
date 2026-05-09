@@ -22,7 +22,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G14-D wire HLC into AttributionFrame; G14-pre-D HLC already shipped"]
+#[ignore = "phase-3-backlog §7.3.D — HLC wired into AttributionFrame. G14-D wave-5a + G16-D wave-6b shipped AttributionFrame Phase-3 + HLC field; test body pins specific HLC-in-AttributionFrame structural contract; un-ignore at §2.3 (i) WriteContext clock threading landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn hlc_used_in_attribution_frame_per_inv_14() {
     // D-A + Inv-14 pin. G14-D implementer wires this against the
     // production-runtime arm:

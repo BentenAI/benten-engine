@@ -27,12 +27,12 @@
 //!
 //! ## RED-PHASE discipline
 //!
-//! `#[ignore]`'d with rationale `"RED-PHASE: G16-B wave-6b — D-F + D-PHASE-3-26 — Loro merge throttle consumes rate-limit policy"`.
+//! `#[ignore]`'d with rationale pointing to phase-3-backlog §7.3.D STALE-RATIONALE sweep #2; destination §10.2 Compromise #5 No write rate-limits (v1-assessment-window).
 
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — D-F + D-PHASE-3-26 + tcc-r1-2 — Loro merge throttle consumes rate_limit_policy from benten-caps"]
+#[ignore = "phase-3-backlog §7.3.D — Loro merge throttle consumes rate_limit_policy from benten-caps. G16-B wave-6b shipped Loro CRDT integration (PR #126); rate_limit_policy plug seam landed at G14-B PR #109; the throttle-consumption integration composes with §10.2 Compromise #5 No write rate-limits (v1-assessment-window). Body un-ignore at §10.2 v1-assessment-window landing per Wave-E rationale-only sweep."]
 fn rate_limit_policy_consumed_by_g16_b_loro_merge_throttle() {
     // tcc-r1-2 + D-F + D-PHASE-3-26 pin. G16-B implementer wires this
     // against the Loro-merge throttle path that consumes the policy

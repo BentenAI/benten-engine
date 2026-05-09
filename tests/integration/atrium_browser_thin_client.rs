@@ -64,7 +64,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G14-D + G18-A — D-PHASE-3-N + baked-in #17 + exit-criterion 19 — browser thin-client e2e"]
+#[ignore = "phase-3-backlog §7.3.D — browser thin-client e2e. G14-D + G18-A shipped; test body pins exit-criterion-19 + CLAUDE.md baked-in #17 (full peer vs thin compute surface) e2e contract; un-ignore at §4.3 G18-A-followup landing per Wave-E rationale-only sweep."]
 fn atrium_browser_tab_as_thin_client_view_into_full_peer_e2e() {
     // R3-B owns this pin. G14-D + G18-A implementer wires this:
     //
@@ -127,7 +127,7 @@ fn atrium_browser_tab_as_thin_client_view_into_full_peer_e2e() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-D — exit-criterion 19 — redundant-distinct: thin client is authenticated view"]
+#[ignore = "phase-3-backlog §7.3.D — redundant-distinct: thin client is authenticated view. G14-D + G16-D wave-6b shipped authenticated thin-client + on-the-wire device-DID handshake; test body pins exit-criterion-19 distinct-pin contract; un-ignore at §4.3 G18-A-followup landing per Wave-E rationale-only sweep."]
 fn browser_tab_thin_client_authenticated_view_into_full_peer() {
     // exit-criterion 19 redundant-distinct pin (CLR-2-style). Composes
     // with `atrium_browser_tab_as_thin_client_view_into_full_peer_e2e`

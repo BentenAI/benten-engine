@@ -66,7 +66,7 @@ fn ucan_chain_attenuation_rejects_overgrant() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-B wave-4b — RevocationSet + validate_chain_with_revocations are durable-backend scope"]
+#[ignore = "phase-3-backlog §7.3.D — RevocationSet + validate_chain_with_revocations durable-backend integration. G14-B wave-4b shipped (PR #109 commit 496e144); RevocationSet + validate_chain_with_revocations production code lives at HEAD; test body pins specific revocation-set integration contract; un-ignore at §2.1-followup ssi external UCAN/VC spec compatibility re-evaluation outcome per Wave-E rationale-only sweep."]
 fn ucan_chain_revocation_propagates() {
     // Stays #[ignore]'d until G14-B's UCANBackend lands the
     // revocation store + `validate_chain_with_revocations` entry
