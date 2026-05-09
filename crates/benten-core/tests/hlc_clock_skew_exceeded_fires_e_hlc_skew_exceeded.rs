@@ -16,16 +16,39 @@ use benten_core::CoreError;
 use benten_core::hlc::{BentenHlc, Hlc};
 use benten_errors::ErrorCode;
 
-static MOCK_MS: AtomicU64 = AtomicU64::new(0);
-fn mock_clock() -> u64 {
-    MOCK_MS.load(Ordering::SeqCst)
+// Per-test mock clocks: each test owns its own `static AtomicU64` + `fn`
+// pointer, eliminating the cross-test race that the previous shared-
+// `static MOCK_MS` shape carried (phase-3-backlog §7.18 sister-file fix
+// 2026-05-09; same root-cause class as `hlc_clock_skew_within_tolerance.rs`
+// closed at PR #156). `Hlc::new` takes a `fn() -> u64` pointer (not an
+// `impl Fn` closure), so each test needs its own free `fn` wrapping a
+// distinct static.
+
+static MOCK_BEYOND: AtomicU64 = AtomicU64::new(0);
+fn clock_beyond() -> u64 {
+    MOCK_BEYOND.load(Ordering::SeqCst)
+}
+
+static MOCK_CATALOG: AtomicU64 = AtomicU64::new(0);
+fn clock_catalog() -> u64 {
+    MOCK_CATALOG.load(Ordering::SeqCst)
+}
+
+static MOCK_BOUNDARY: AtomicU64 = AtomicU64::new(0);
+fn clock_boundary() -> u64 {
+    MOCK_BOUNDARY.load(Ordering::SeqCst)
+}
+
+static MOCK_NO_MUTATE: AtomicU64 = AtomicU64::new(0);
+fn clock_no_mutate() -> u64 {
+    MOCK_NO_MUTATE.load(Ordering::SeqCst)
 }
 
 /// Remote 6 minutes in the future > 5-minute default → typed error fires.
 #[test]
 fn update_beyond_default_tolerance_fires_typed_error() {
-    MOCK_MS.store(1_000_000, Ordering::SeqCst);
-    let hlc = Hlc::new(1, mock_clock);
+    MOCK_BEYOND.store(1_000_000, Ordering::SeqCst);
+    let hlc = Hlc::new(1, clock_beyond);
     let remote = BentenHlc::new(1_000_000 + 6 * 60 * 1000, 0, 2);
     let err = hlc.update(&remote).expect_err("must reject");
     match err {
@@ -47,8 +70,8 @@ fn update_beyond_default_tolerance_fires_typed_error() {
 /// drift-detector run) catches any silent rename.
 #[test]
 fn skew_error_maps_to_e_hlc_skew_exceeded_catalog_code() {
-    MOCK_MS.store(0, Ordering::SeqCst);
-    let hlc = Hlc::with_skew_tolerance(1, mock_clock, 100);
+    MOCK_CATALOG.store(0, Ordering::SeqCst);
+    let hlc = Hlc::with_skew_tolerance(1, clock_catalog, 100);
     let remote = BentenHlc::new(50_000, 0, 2);
     let err = hlc.update(&remote).unwrap_err();
     let code = err.code();
@@ -66,8 +89,8 @@ fn skew_error_maps_to_e_hlc_skew_exceeded_catalog_code() {
 /// direction (>, not >=) so a future refactor can't silently flip it.
 #[test]
 fn update_one_ms_past_boundary_fires_typed_error() {
-    MOCK_MS.store(10_000, Ordering::SeqCst);
-    let hlc = Hlc::with_skew_tolerance(1, mock_clock, 1_000);
+    MOCK_BOUNDARY.store(10_000, Ordering::SeqCst);
+    let hlc = Hlc::with_skew_tolerance(1, clock_boundary, 1_000);
     // 10_000 + 1_000 + 1 = 11_001 — one ms past the inclusive boundary
     let remote = BentenHlc::new(11_001, 0, 2);
     let err = hlc.update(&remote).expect_err("just-past-boundary rejects");
@@ -79,8 +102,8 @@ fn update_one_ms_past_boundary_fires_typed_error() {
 /// before the rejected `update`.
 #[test]
 fn skew_rejection_does_not_mutate_local_state() {
-    MOCK_MS.store(500_000, Ordering::SeqCst);
-    let hlc = Hlc::with_skew_tolerance(42, mock_clock, 1_000);
+    MOCK_NO_MUTATE.store(500_000, Ordering::SeqCst);
+    let hlc = Hlc::with_skew_tolerance(42, clock_no_mutate, 1_000);
     let before = hlc.now();
     // before: (500_000, 0, 42)
 
