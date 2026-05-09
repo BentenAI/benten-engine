@@ -715,7 +715,10 @@ impl JsAtrium {
     /// `JsDeviceAttestation::accept_at` pattern).
     ///
     /// `freshness_window_secs = 0` rejects any attestation older than
-    /// `now`; very large values (up to `u64::MAX`) accept-any-age.
+    /// `now`; very large values (up to `u32::MAX` ≈ 136 years; the
+    /// engine-side `set_acceptor` accepts `u64` but the napi sig caps
+    /// at `u32` — sufficient for any realistic operator deployment)
+    /// accept-any-age.
     /// Production deployments typically configure a window matching
     /// the local UCAN backend's calibration (post-promotion) +
     /// optionally seed a revocation list — the latter requires the
