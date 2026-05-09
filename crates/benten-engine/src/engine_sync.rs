@@ -150,6 +150,83 @@ pub struct SyncMergeAttribution {
     /// merge boundary (= incoming_hop_depth + 1, bounded by
     /// [`benten_eval::exec_state::SYNC_HOP_DEPTH_CAP`]).
     pub sync_hop_depth: u32,
+    /// Phase-3 G16-D wave-6b: device-DID-attestation observed on the
+    /// wire envelope from the remote peer (the device that ORIGINATED
+    /// the writes carried in this merge). `None` when the remote peer
+    /// did not declare a device-DID at sync time (legacy / pre-G16-D
+    /// peers). Consumed by [`crate::Engine::apply_atrium_merge`] to
+    /// populate [`benten_eval::AttributionFrame::device_did`] with the
+    /// originating-device identity rather than the local merging-engine's
+    /// own device-CID. Closes plan §1 exit-criterion 16 (multi-device
+    /// support for a single identity) by giving cross-device merges
+    /// the device-grain provenance Inv-14 names.
+    pub remote_device_did: Option<String>,
+}
+
+/// Phase-3 G16-D wave-6b: on-the-wire device-DID-attestation envelope.
+///
+/// Emitted by [`AtriumHandle::sync_subgraph`] /
+/// [`AtriumHandle::accept_sync_subgraph`] BEFORE the Loro CRDT export
+/// payload so the receiver can populate
+/// [`benten_eval::AttributionFrame::device_did`] from the originating
+/// device's declared identity (rather than the receiver's own
+/// `device_cid`). The envelope is DAG-CBOR encoded for canonical-bytes
+/// determinism + cross-platform parity with the rest of the on-wire
+/// envelope shapes (e.g. [`benten_sync::handshake_wire::HandshakeFrame`]).
+///
+/// Pre-G16-D peers / handles with no declared `local_device_did`
+/// emit `device_did = None`; receivers tolerate this for
+/// backward-compat with the G16-B-E shipped wire shape.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DeviceAttestationEnvelope {
+    /// Wire-format version. Always 1 for G16-D wave-6b-era envelopes.
+    pub version: u8,
+    /// Originating device's DID, or `None` when the local handle has
+    /// not been bound to a device-attestation envelope. Receiver-side
+    /// [`crate::Engine::apply_atrium_merge`] threads this into
+    /// [`benten_eval::AttributionFrame::device_did`] preserving the
+    /// originating-device-identity per Inv-14 device-grain attribution.
+    pub device_did: Option<String>,
+}
+
+impl DeviceAttestationEnvelope {
+    /// Current wire-format version for the device-attestation envelope.
+    pub const WIRE_VERSION: u8 = 1;
+
+    /// Construct an envelope with the current wire-format version.
+    #[must_use]
+    pub fn new(device_did: Option<String>) -> Self {
+        Self {
+            version: Self::WIRE_VERSION,
+            device_did,
+        }
+    }
+
+    /// Encode this envelope as DAG-CBOR canonical bytes for on-wire
+    /// emission.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtriumError::InvalidState`] if DAG-CBOR encoding fails
+    /// (impossible for the fixed-shape envelope under valid inputs;
+    /// the result-shape preserves explicit-failure semantics).
+    pub fn to_canonical_bytes(&self) -> AtriumResult<Vec<u8>> {
+        serde_ipld_dagcbor::to_vec(self).map_err(|e| AtriumError::InvalidState {
+            reason: format!("DeviceAttestationEnvelope encode failed: {e}"),
+        })
+    }
+
+    /// Decode a [`DeviceAttestationEnvelope`] from on-wire bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtriumError::InvalidState`] if the bytes do not decode
+    /// as a valid envelope.
+    pub fn from_canonical_bytes(bytes: &[u8]) -> AtriumResult<Self> {
+        serde_ipld_dagcbor::from_slice(bytes).map_err(|e| AtriumError::InvalidState {
+            reason: format!("DeviceAttestationEnvelope decode failed: {e}"),
+        })
+    }
 }
 
 impl AtriumError {
@@ -230,6 +307,28 @@ struct AtriumInner {
     /// leave-rejoin window so post-rejoin merges reconcile via
     /// CRDT-natural delta-state replay.
     is_active: AtomicBool,
+    /// Phase-3 G16-D wave-6b: this handle's local device-DID, emitted
+    /// in the on-the-wire [`DeviceAttestationEnvelope`] sent at the
+    /// front of every [`AtriumHandle::sync_subgraph`] /
+    /// [`AtriumHandle::accept_sync_subgraph`] exchange. Populated
+    /// explicitly via [`AtriumHandle::set_local_device_did`] (typically
+    /// after the local device-attestation envelope has been verified).
+    /// Defaults to `None` (no device declared on the wire); receivers
+    /// observe `device_did = None` envelopes and fall back to the
+    /// receiver's own `device_cid` per pim-2 end-to-end-pin discipline.
+    local_device_did: Mutex<Option<String>>,
+    /// Phase-3 G16-D wave-6b: most-recently-received remote
+    /// device-DID-envelope keyed by zone. Populated by
+    /// [`AtriumHandle::sync_subgraph`] /
+    /// [`AtriumHandle::accept_sync_subgraph`] when the inbound envelope
+    /// declares a `device_did`. Consumed by
+    /// [`crate::Engine::apply_atrium_merge`] to populate
+    /// [`benten_eval::AttributionFrame::device_did`] with the
+    /// ORIGINATING device's identity (so post-merge attribution
+    /// reflects the writer's device, not the receiver's). Cleared
+    /// per-zone after a successful merge so a stale envelope does not
+    /// leak into a later merge that didn't get a fresh wire envelope.
+    last_received_remote_device_did: Mutex<BTreeMap<String, Option<String>>>,
 }
 
 /// Phase-3 G21-T2 §D — declared device-attestation envelope recorded
@@ -319,8 +418,68 @@ impl AtriumHandle {
                 declared_device_attestations: Mutex::new(BTreeMap::new()),
                 peer_did_registry: Mutex::new(BTreeMap::new()),
                 is_active: AtomicBool::new(true),
+                local_device_did: Mutex::new(None),
+                last_received_remote_device_did: Mutex::new(BTreeMap::new()),
             }),
         })
+    }
+
+    /// Phase-3 G16-D wave-6b: bind a local device-DID for emission in
+    /// the on-the-wire [`DeviceAttestationEnvelope`].
+    ///
+    /// Callers typically invoke this AFTER the local device-attestation
+    /// envelope has been verified (production flow) OR with a fixed
+    /// test-DID for two-device same-identity selective-zone-sync
+    /// integration tests. Setting `None` clears the binding (next
+    /// outbound sync emits an envelope with `device_did = None`).
+    ///
+    /// The binding is idempotent / replaceable — calling twice with
+    /// different DIDs replaces the slot. This composes with
+    /// [`crate::Engine::set_device_cid`] (which sets the engine-side
+    /// `device_cid` slot consumed by `apply_atrium_merge` for the
+    /// LOCAL-merging-engine fallback path); this setter governs the
+    /// REMOTE-receiver-observed device-DID.
+    pub async fn set_local_device_did(&self, did: Option<String>) {
+        let mut g = self.inner.local_device_did.lock().await;
+        *g = did;
+    }
+
+    /// Phase-3 G16-D wave-6b: read the local device-DID currently bound
+    /// for on-the-wire emission. Round-trip companion to
+    /// [`AtriumHandle::set_local_device_did`].
+    pub async fn local_device_did(&self) -> Option<String> {
+        self.inner.local_device_did.lock().await.clone()
+    }
+
+    /// Phase-3 G16-D wave-6b: read the most-recently-received remote
+    /// device-DID for a zone (the `device_did` carried in the inbound
+    /// [`DeviceAttestationEnvelope`] of the latest
+    /// [`AtriumHandle::sync_subgraph`] /
+    /// [`AtriumHandle::accept_sync_subgraph`] for that zone).
+    ///
+    /// Returns `Some(Some(did))` when a fresh envelope declared a
+    /// device-DID; `Some(None)` when a fresh envelope declared
+    /// `device_did = None` (legacy / pre-G16-D peer); `None` when no
+    /// envelope has been received for the zone yet (or the slot was
+    /// cleared post-merge).
+    pub async fn last_received_remote_device_did(&self, zone: &str) -> Option<Option<String>> {
+        self.inner
+            .last_received_remote_device_did
+            .lock()
+            .await
+            .get(zone)
+            .cloned()
+    }
+
+    /// Phase-3 G16-D wave-6b: clear the per-zone last-received
+    /// remote-device-DID slot. Called by
+    /// [`crate::Engine::apply_atrium_merge`] after the post-merge
+    /// AttributionFrame has consumed the slot, so a subsequent merge
+    /// that did NOT get a fresh wire envelope cannot inherit the prior
+    /// envelope's device-DID.
+    pub(crate) async fn clear_last_received_remote_device_did(&self, zone: &str) {
+        let mut g = self.inner.last_received_remote_device_did.lock().await;
+        g.remove(zone);
     }
 
     /// Phase-3 G21-T2 §D audit-6-3 — record a declared
@@ -477,6 +636,18 @@ impl AtriumHandle {
     /// As [`AtriumHandle::sync_subgraph`].
     pub async fn sync_subgraph_over(&self, zone: &str, conn: &Connection) -> AtriumResult<()> {
         self.ensure_active("sync_subgraph_over")?;
+        // Phase-3 G16-D wave-6b: emit the device-DID-attestation
+        // envelope as the FIRST wire frame. The receiver consumes the
+        // envelope BEFORE the Loro export so the merge-time
+        // AttributionFrame can populate `device_did` with the
+        // originating device's identity (per Inv-14 device-grain
+        // attribution + plan §1 exit-criterion 16 multi-device
+        // support).
+        let envelope_bytes = {
+            let did = self.inner.local_device_did.lock().await.clone();
+            DeviceAttestationEnvelope::new(did).to_canonical_bytes()?
+        };
+        conn.send_bytes(&envelope_bytes).await?;
         // Export local state for this zone.
         let local_export = {
             let zones = self.inner.zones.lock().await;
@@ -487,8 +658,20 @@ impl AtriumHandle {
         };
         // Send local state to remote.
         conn.send_bytes(&local_export).await?;
+        // Receive remote envelope FIRST, then remote Loro export, in
+        // the same order the connect-side emitted them.
+        let remote_envelope_bytes = conn.recv_bytes().await?;
+        let remote_envelope = DeviceAttestationEnvelope::from_canonical_bytes(
+            &remote_envelope_bytes,
+        )?;
         // Receive remote state.
         let remote_bytes = conn.recv_bytes().await?;
+        // Stash the remote-device-DID before merge so apply_atrium_merge
+        // can consume it via `last_received_remote_device_did`.
+        {
+            let mut tbl = self.inner.last_received_remote_device_did.lock().await;
+            tbl.insert(zone.to_string(), remote_envelope.device_did);
+        }
         // Apply via merge-dispatch (fires Inv-13 row-4 SPLIT).
         self.merge_remote_change(zone, &remote_bytes).await?;
         Ok(())
@@ -508,10 +691,28 @@ impl AtriumHandle {
     pub async fn accept_sync_subgraph(&self, zone: &str) -> AtriumResult<Connection> {
         self.ensure_active("accept_sync_subgraph")?;
         let conn = self.inner.endpoint.accept_next().await?;
-        // Accept-side mirrors connect-side: receive remote, then send local.
-        // Receive remote first to keep the protocol symmetric across
-        // both sides.
+        // Accept-side mirrors connect-side: receive remote envelope +
+        // export FIRST, then send local envelope + export. Connect-side
+        // emits envelope-then-export, so accept-side consumes
+        // envelope-then-export.
+        let remote_envelope_bytes = conn.recv_bytes().await?;
+        let remote_envelope = DeviceAttestationEnvelope::from_canonical_bytes(
+            &remote_envelope_bytes,
+        )?;
         let remote_bytes = conn.recv_bytes().await?;
+        // Stash the remote-device-DID before merge so apply_atrium_merge
+        // can consume it via `last_received_remote_device_did`.
+        {
+            let mut tbl = self.inner.last_received_remote_device_did.lock().await;
+            tbl.insert(zone.to_string(), remote_envelope.device_did);
+        }
+        // Phase-3 G16-D wave-6b: emit local envelope BEFORE the Loro
+        // export, mirroring connect-side ordering.
+        let envelope_bytes = {
+            let did = self.inner.local_device_did.lock().await.clone();
+            DeviceAttestationEnvelope::new(did).to_canonical_bytes()?
+        };
+        conn.send_bytes(&envelope_bytes).await?;
         let local_export = {
             let zones = self.inner.zones.lock().await;
             let doc = zones.get(zone).ok_or_else(|| AtriumError::InvalidState {
@@ -644,9 +845,27 @@ impl AtriumHandle {
         // the new sync-hop-depth. Engine-side wave-6b consumes this
         // seed when minting a new Version Node post-merge.
         let peer_node_ids = doc.winning_attribution();
+        drop(zones);
+        // Phase-3 G16-D wave-6b: surface the remote-device-DID stashed
+        // by `sync_subgraph` / `accept_sync_subgraph` (or `None` when
+        // the merge was driven directly via `apply_atrium_merge`
+        // without a wire-side envelope, e.g. test fixtures that bypass
+        // the iroh transport). The receiver-side
+        // `Engine::apply_atrium_merge` consumes this slot to populate
+        // `AttributionFrame.device_did` with the originating-device
+        // identity, closing exit-criterion 16.
+        let remote_device_did = self
+            .inner
+            .last_received_remote_device_did
+            .lock()
+            .await
+            .get(zone)
+            .cloned()
+            .unwrap_or(None);
         Ok(SyncMergeAttribution {
             peer_node_ids,
             sync_hop_depth: next_depth,
+            remote_device_did,
         })
     }
 
