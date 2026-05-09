@@ -61,6 +61,8 @@ path = "atrium_two_device.rs"
 [dependencies]
 benten-core = { path = "../../crates/benten-core" }
 benten-engine = { path = "../../crates/benten-engine" }
+benten-eval = { path = "../../crates/benten-eval" }
+blake3 = "1"
 tempfile = "3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "sync"] }
 

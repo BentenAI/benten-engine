@@ -3577,6 +3577,8 @@ version = "0.0.0"
 dependencies = [
  "benten-core",
  "benten-engine",
+ "benten-eval",
+ "blake3",
  "tempfile",
  "tokio",
 ]
