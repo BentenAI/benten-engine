@@ -77,9 +77,11 @@
 
 **Phase 3 target:** Item 1.1 is the actual structural fix; this is the same item by another name. Folded into PHASE-3-BUNDLE-1.
 
-### 1.4 Compromise #17 durable module-bytes registry
+### 1.4 Compromise #17 durable module-bytes registry — CLOSED at Phase-3 G14-C wave-4b
 
-**Phase 2b state:** Wave-8 ships an in-memory module-bytes registry (`crates/benten-engine/src/engine.rs::register_module_bytes` plus the in-memory active set in `engine_modules.rs::install_module`). Two structural compromises rolled up under Compromise #17 in `docs/SECURITY-POSTURE.md`:
+**Closure narrative:** durable `RedbBlobBackend` + CID-validating entry point landed at G14-C wave-4b (PR #110 commit `6003ed0`). `Engine::register_module_bytes` at `crates/benten-engine/src/engine.rs:1612` now BLAKE3-mismatch-rejects; durable backing at `crates/benten-graph/src/backends/blob_backend.rs:94` (`RedbBlobBackend::new`); engine open path rehydrates active set via the `system:ModuleManifest` zone + persisted blobs. SECURITY-POSTURE.md retensed accordingly.
+
+**Phase 2b state (historical):** Wave-8 shipped an in-memory module-bytes registry (`crates/benten-engine/src/engine.rs::register_module_bytes` plus the in-memory active set in `engine_modules.rs::install_module`). Two structural compromises rolled up under Compromise #17 in `docs/SECURITY-POSTURE.md`:
 - (a) **Non-validating registration API** — `register_module_bytes` does NOT verify the supplied CID matches `blake3(bytes)`. Validation fires lazily at SANDBOX dispatch when wasmtime parses bytes (`Module::new(&engine, &bytes)` → `E_SANDBOX_MODULE_INVALID`). Wave-8j-cleanup added a 3-LOC `debug_assert` for dev-build fail-fast, but release builds still trust the caller-supplied CID.
 - (b) **Process-local lifetime** — registered bytes are not durable across `Engine::open` cycles. The `system:ModuleManifest` zone persists module *manifests* but the actual wasm bytes blob is in-memory only; a process restart drops them.
 
@@ -91,9 +93,11 @@
 
 **Touch size:** ~150-300 LOC. Runs alongside §4.1 IndexedDB persistence on the browser side.
 
-### 1.5 Compromise #18 durable handler-version chain
+### 1.5 Compromise #18 durable handler-version chain — CLOSED at Phase-3 G14-C wave-4b
 
-**Phase 2b state:** Wave-8f's `register_subgraph_replace` builds a handler-version chain in memory: an in-RAM `HashMap<handler_id, VersionChain>` where each chain holds (anchor_cid, current_version_cid, predecessor_cid, chain_depth). Per-PR audit-class differentiation from #17 (in-memory module bytes) — distinct concerns: #17 is content-bytes; #18 is graph-encoded version metadata. Documented in `docs/SECURITY-POSTURE.md` Compromise #18.
+**Closure narrative:** durable `system:HandlerVersion` zone + extensible canonical-bytes encoding (per arch-r1-4 / D-C) landed at G14-C wave-4b (PR #110 commit `6003ed0`). The version chain is now graph-encoded as Anchor + Version Nodes in the system zone (loaded at `crates/benten-engine/src/engine.rs:1448` engine-open hydration); the in-memory `BTreeMap` at `engine.rs:351` is a CACHE, durable backing is the zone Nodes. SECURITY-POSTURE.md retensed accordingly.
+
+**Phase 2b state (historical):** Wave-8f's `register_subgraph_replace` built a handler-version chain in memory: an in-RAM `HashMap<handler_id, VersionChain>` where each chain held (anchor_cid, current_version_cid, predecessor_cid, chain_depth). Per-PR audit-class differentiation from #17 (in-memory module bytes) — distinct concerns: #17 is content-bytes; #18 is graph-encoded version metadata. Documented in `docs/SECURITY-POSTURE.md` Compromise #18.
 
 **Phase 3 target:** Lift to the canonical Phase-1-shipped `core::version::Anchor` + Version-Node-chain pattern, persisted via the new GraphBackend umbrella trait. The chain becomes a real graph subtree (Anchor Node + Version Nodes + CURRENT pointer) rather than a side-table HashMap.
 
@@ -103,9 +107,19 @@
 
 ---
 
+### 1.6 `get_node_verified` read-path hash check — CLOSED at Phase-3 W9-T6 PR #142 (closure-shape-divergence)
+
+**Closure narrative:** Phase-1 R7 spec-to-code-compliance audit named the gap as "Phase 2 deliverable." Phase-1 retrospective claimed this was deferred to Phase 2 and never landed; **2026-05-08 cross-phase orphan-rescue audit incorrectly carried it forward** based on that retrospective claim. Verification at HEAD `7a6c36a`: W9-T6 PR #142 (commit `92bd65e`) PROMOTED base `RedbBackend::get_node` to verify-on-read at `crates/benten-graph/src/redb_backend.rs:690-705` (calls `Node::load_verified`); test pin at `crates/benten-graph/tests/get_node_verifies_content_hash_on_read.rs`.
+
+**Closure shape diverged from Phase-1 framing:** Phase-1 framing was "add an optional `_verified` variant API; default `get_node` stays unverified-for-speed." Actual closure shape: base `get_node` was promoted to verify-on-read (no separate `_verified` variant). Defense-in-depth applies uniformly at every read; no trust-boundary callsite migration required because every read is now verified.
+
+**Cross-reference:** `docs/history/PHASE-1.md §4.2` (original Phase-1 deferral); 2026-05-08 cross-phase retrospective audit memo (orphan-rescue trigger; the audit was based on a stale Phase-1 retrospective claim that the work never landed — verification at HEAD found W9-T6 had already closed it).
+
+---
+
 ## 2. Capability / identity
 
-### 2.1 Durable UCAN backend in `benten-id`
+### 2.1 Durable UCAN backend in `benten-id` — CLOSED at Phase-3 G14-B wave-4b (PR #109 commit `496e144`)
 
 **Phase 2b state:** `benten-caps::UCANBackend` is a `CapError::NotImplemented` stub. Phase 1's `phase-2-backlog.md` §7 already names this. Phase 2b's wave-8c-subscribe-infra adds the SUBSCRIBE delivery-time cap-recheck closure that hooks into the (in-memory) grant store — Phase 3 lifts the grant store to durable backing.
 
@@ -129,15 +143,13 @@
 
 **Source:** `.addl/phase-3/r5-w4a-g14-a1-mini-review.json` + `.addl/phase-3/r5-w4astar-g14-a2-mini-review.json` `agent_dispositions_assessment.ssi_dropped` fields; G14-B PR #109 module docstring confirmation; this followup section captures the cumulative shift.
 
-### 2.2 SUBSCRIBE delivery-time cap-recheck threading on durable grants (F6)
+### 2.2 SUBSCRIBE delivery-time cap-recheck threading on durable grants (F6) — CLOSED at Phase-3 G14-D wave-5a (PR #115 commit `4d3f688`) + Phase-3 G21-T3 PR #147 partial-revoke
 
-**Phase 2b state:** Wave-8c-subscribe-infra wired the SUBSCRIBE delivery-time cap-recheck closure (D5 invariant). The grant store is in-memory per Phase-2b posture; Phase-3 lifts it to durable backing alongside the iroh-fetch path.
+**Closure narrative:** F6 SUBSCRIBE per-subscriber filtering wired at G14-D wave-5a; `Engine::subscribe_change_events` consults a per-subscriber read-cap-coverage closure on each delivery (`crates/benten-engine/src/engine_subscribe.rs::on_change_with_cap_recheck` at lines 301-340; CLR-2 / cap-major-2 dual-layer recheck per audience-binding). Partial-revoke pin (specific grant revoked while actor still active) closed at G21-T3 PR #147 commit `f9147d9`. Replaces the boolean `revoked_actors` set; cross-trust-boundary replicas filter at delivery rather than registration. **§3.2 Per-subscriber filtering is the same item by another name** — see consolidation at §3.2.
 
-**Phase 3 lift:** When the durable grant-store lands, the SUBSCRIBE cap-recheck closure threads the grant-shape query so a partial-revoke (e.g. specific grant revoked but actor still active) cancels the affected subscription path.
+**Source (historical):** [`phase-2-backlog.md`](./phase-2-backlog.md) §7.4. Cross-refs `.addl/phase-2b/wave-8-brief.md` §8d-narrative F6.
 
-**Source:** [`phase-2-backlog.md`](./phase-2-backlog.md) §7.4. Cross-refs `.addl/phase-2b/wave-8-brief.md` §8d-narrative F6.
-
-### 2.3 napi-UCAN-wireup — route `PolicyKind::Ucan` through the durable `UCANBackend` (G21 T2)
+### 2.3 napi-UCAN-wireup — route `PolicyKind::Ucan` through the durable `UCANBackend` — CLOSED at Phase-3 G21-T2 PR #148 commit `7a6c36a`
 
 **Origin (G20-B mini-review, 2026-05-07):** the doc-engineer + dx-optimizer mini-reviewers on PR #143 (G20-B docs sweep) flagged a doc-vs-code drift cluster: §2.1 above shipped the durable `UCANBackend<B>` at G14-B wave-4b, but the napi binding at `bindings/napi/src/lib.rs::PolicyKind::Ucan` STILL routes to the legacy Phase-1 `benten_caps::UcanBackend` stub (returns `CapError::NotImplemented` / `E_CAP_NOT_IMPLEMENTED` on every `check_write`). End-to-end Atrium examples (`packages/engine/examples/atrium-*.ts`, `ucan-grant-flow.ts`, `did-resolution.ts`) compile + import cleanly against the documented public surface but surface `E_CAP_NOT_IMPLEMENTED` at the first WRITE through the napi layer. The Rust-side durable backend is untouched + correct; the gap is at the binding seam only.
 
@@ -183,7 +195,7 @@
 2. **`WriteContext::now`-as-real-clock injection.** Today the `UcanGroundedPolicy::now_secs` defaults to `0` (epoch start) so present-day fixtures with `nbf=0`+positive-`exp` accept; tests inject custom values via `with_now_for_test`. Production needs `WriteContext::now_secs: u64` populated by the engine's `TimeSource` at every write-check entry. This is the same threading axis as Phase-2a G9-A's wall-clock-refresh cadence work but at the policy-hook surface (vs the per-iteration boundary).
 3. **Multi-token chain reference in WriteContext.** Today `UcanGroundedPolicy::iter_installed_proofs` treats each persisted token as a singleton chain (`std::slice::from_ref(proof)`). Multi-token delegation chains need either (a) per-actor chain assembly via parent-CID indexes in the durable store, OR (b) `WriteContext::ucan_chain_ref: Option<Cid>` carrying the leaf-CID with the durable store reconstructing the chain.
 
-**Phase 3 target:** post-G21-T2-close follow-on wave (T3 / T4 or a sibling cleanup wave). Each axis is independently scoped; (1) and (2) compose; (3) is a chain-walker extension.
+**Phase 3 target (re-named 2026-05-08 retense pass):** **v1-assessment-window** per CLAUDE.md item #15. Original "post-G21-T2-close follow-on wave (T3/T4 or sibling cleanup)" became phantom when T3 PR #147 + T4 PR #146 merged without absorbing this scope. Cross-references §10 Compromise registry forward-revisit (the v1-assessment-window destination registry). Each axis (DID propagation / clock injection / multi-token chain reference) is independently scoped; (1) and (2) compose; (3) is a chain-walker extension. The decision shape at v1-assessment is whether arbitrary-scope-string proof-chain enforcement is v1-shippable-blocking — it composes on top of the typed-CALL `cap:typed:*` proof-chain enforcement that DID land at G21-T2.
 
 **Touch size:** ~150-300 LOC across `benten-graph::WriteContext` + `benten-eval::PrimitiveHost` + `benten-engine` cap-gate sites + UcanGroundedPolicy slow-path widening + integration test pins for arbitrary-scope proof-chain enforcement.
 
@@ -273,15 +285,38 @@
 
 **Phase 3 target:** This IS Phase 3's headline scope per FULL-ROADMAP.md. Iroh (peer-to-peer transport) + Loro (CRDT for collaborative graph merges) + ed25519-dalek + ssi (Ed25519 / DID / VC for identity).
 
+**Phase-3 R5 landing state (2026-05-08):** structural surface partially landed across G14-D (per-subscriber filtering F6) + G16 wave (iroh transport canary + Loro per-zone CRDT registry + benten-sync 10th crate native-only) + G21-T2 (Engine.atrium factory + JsAtrium delegation closing audit-6-2 BLOCKER) + G21-T3 (DeviceAttestation engine-side recording + RED-PHASE pin for on-the-wire emission). **Substantive end-to-end multi-peer iroh sync remains in scope for Phase-3-close per Ben ratification 2026-05-08.** Work named at §3.1-followup below.
+
 **Source:** [`docs/VISION.md`](../VISION.md) "Atriums (Phase 3 committed) — peer-to-peer direct connections."
 
-### 3.2 Per-subscriber filtering on the change-event stream
+### 3.1-followup Substantive end-to-end multi-peer iroh sync (Phase-3-close-blocking per Ben 2026-05-08)
 
-**Phase 2b state:** `Engine::subscribe_change_events` fans out every committed `ChangeEvent` without a per-event read-check gate. The Engine instance itself is the security boundary in Phase 2b — single-trust-zone.
+**Origin:** R4b distributed-systems lens flagged that the iroh transport + multi-peer end-to-end sync test pins remain RED-PHASE at HEAD `7a6c36a`. Plan §1 exit-criterion 1 mandates "Two full peer instances of `benten-engine` ... sync a shared subgraph bidirectionally over iroh transport" + the named end-to-end pins (`atrium_two_peer_bidirectional_sync` + `atrium_three_peer_loro_convergence_under_concurrent_writes` + `atrium_two_process_bidirectional_sync_end_to_end` + `atrium_partial_partition_asymmetric_reachability_observable_state_explicit`).
 
-**Phase 3 target:** Phase 3 federation / sync introduces cross-trust-boundary replicas; the subscribe path gains per-subscriber filtering at that point.
+**Phase-3-close target:** Wire end-to-end iroh transport between two `benten-engine` peers + drive the named test pins green. Composes on top of the canary G16-B-A structural-surface contract (AttributionFrame extensions + LoroDoc::winning_attribution → AttributionFrame engine glue) — once the canary lands, the iroh transport substantive work has the cross-peer attribution seams it needs.
 
-**Source:** [`phase-2-backlog.md`](./phase-2-backlog.md) §1, [`docs/SECURITY-POSTURE.md`](../SECURITY-POSTURE.md) §"Change-stream subscription bypasses capability read-checks."
+**Touch size estimate:** ~800-1500 LOC. Components:
+- iroh `Endpoint` connect/listen wiring at `crates/benten-sync/src/transport.rs` (G16-A canary already shipped the scaffold; substantive connect+exchange remains)
+- Per-zone Loro CRDT message-exchange protocol over iroh streams
+- Two-peer + three-peer integration test harness (probably under `tests/integration/atrium_*`)
+- ChangeEvent fan-out to receiver-side IVM materialization
+- Asymmetric reachability + relay-fallback test pins
+- Cross-process two-process variant
+
+**Why Phase-3-close-blocking:** plan §1 exit-criterion 1 + criterion 15 (Atrium as working sociotechnical unit) + criterion 16 (multi-device support for a single identity) all literally require this end-to-end. Ben confirmed 2026-05-08: "end-to-end multi-peer iroh sync is definitely part of phase 3."
+
+**Wave shape:** likely a separate G16-B-E or G16-C wave dispatched after G16-B-substantive (canary + parallel-3) merges. The structural surface from canary G16-B-A is the precondition; G16-B-E rides on top.
+
+**Cross-references:**
+- ds-r4b-1 finding in `.addl/phase-3/r4b-distributed-systems.json` (BLOCKER origin)
+- `.addl/phase-3/00-implementation-plan.md §1` exit criteria 1 / 15 / 16
+- `.addl/phase-3/HANDOFF-2026-05-03-phase-3-kickoff.md` NS-T64 + NS-T65 (canary scope clarification 2026-05-08)
+
+### 3.2 Per-subscriber filtering on the change-event stream — CLOSED at Phase-3 G14-D wave-5a (PR #115 commit `4d3f688`) + Phase-3 G21-T3 PR #147 partial-revoke
+
+**Closure narrative:** F6 SUBSCRIBE per-subscriber filtering is the same item by another name as §2.2 above; both were named separately during planning (one in phase-2-backlog.md §1 carry list, one in phase-3-backlog.md §2.2). Closed at G14-D wave-5a + G21-T3 partial-revoke; full closure narrative + file:line cites at §2.2 above. Cross-trust-boundary subscribers filter at delivery time per CLR-2 dual-layer recheck.
+
+**Source (historical):** [`phase-2-backlog.md`](./phase-2-backlog.md) §1, [`docs/SECURITY-POSTURE.md`](../SECURITY-POSTURE.md) §"Change-stream subscription bypasses capability read-checks."
 
 ---
 
@@ -446,15 +481,13 @@ Estimated touch size: ~300-600 LOC of test infrastructure across `bindings/napi/
 
 ## 6. SANDBOX runtime maturity
 
-### 6.0 D10 read-only-snapshot enforcement at the SANDBOX kv:write extension boundary (forward-pointer)
+### 6.0 D10 read-only-snapshot enforcement at SANDBOX kv:write boundary — OOS per CLAUDE.md baked-in #16 (conditional forward-pointer)
 
-**Phase 2b state:** R6-R3 r6-r3-arch-2 forward-pointer. Phase 2b's SANDBOX host-fn surface is read-only at the storage layer: `crates/benten-eval/src/sandbox/host_fns.rs::default_host_fns` ships ONLY `time`, `log`, and `kv:read`. There is no `kv:write` host-fn; therefore a Phase-2b SANDBOX module CANNOT bypass D10 read-only-snapshot contract via host_fns — there is no surface to bypass. PR #68 wired `is_read_only_snapshot()` enforcement at `crates/benten-engine/src/primitive_host.rs::put_node`; R6-R3 r6-r3-arch-1 fix-pass extended the same enforcement to `delete_node` via the shared `check_not_read_only_snapshot(op_name)` helper. Both checks fire on the dispatch-through-handler path that `engine.call(handler, ':...', ...)` exercises.
+**Disposition (retensed 2026-05-08):** OUT-OF-SCOPE per CLAUDE.md baked-in #16. SANDBOX modules do NOT duplicate other primitives' capabilities — `kv:write` / `kv:delete` / edge-mutating host-fns are explicitly NOT engine concerns; they would be parallel-write-pathways that bypass the WRITE primitive's capability gating + Inv-13 firing matrix + IVM materialization seam. Future agent proposals to add `kv:write` / `kv:delete` must be rejected with reference to baked-in #16 unless the proposal also re-opens commitment #1 (12 primitives are irreducible) — those decisions move together.
 
-**Phase 3 target:** when the iroh / capability-graph / federation work extends host_fns with `kv:write` (and any future `kv:delete` / edge-mutating host-fn), the read-only-snapshot enforcement MUST live AT the host-fn dispatch boundary in addition to `PrimitiveHost::put_node` / `delete_node`. The SANDBOX call site does NOT flow through the host's `put_node` / `delete_node` trait methods — it goes through the dedicated `kv:write` host-fn behavior bound directly to the wasmtime Linker. A naive wiring that proxies `kv:write` through `PrimitiveHost::put_node` would be safe; a wiring that calls `backend.put_node` directly (e.g. for performance-bypassing buffer/replay) would silently violate D10 against a `from_snapshot_blob`-backed engine.
+**Phase 2b state (historical):** R6-R3 r6-r3-arch-2 forward-pointer. Phase 2b's SANDBOX host-fn surface is read-only at the storage layer: `crates/benten-eval/src/sandbox/host_fns.rs::default_host_fns` ships ONLY `time`, `log`, `kv:read` (+ `random` per Phase-3 G17-A2 closure of Compromise #16). There is no `kv:write` host-fn; therefore a Phase-2b/3 SANDBOX module CANNOT bypass D10 read-only-snapshot contract via host_fns — there is no surface to bypass. PR #68 wired `is_read_only_snapshot()` enforcement at `crates/benten-engine/src/primitive_host.rs::put_node`; R6-R3 r6-r3-arch-1 fix-pass extended the same enforcement to `delete_node` via the shared `check_not_read_only_snapshot(op_name)` helper. Both checks fire on the dispatch-through-handler path that `engine.call(handler, ':...', ...)` exercises.
 
-**The architecturally-cheapest closure** is to either (a) route every storage-mutating host-fn through `PrimitiveHost::put_node` / `delete_node` so the existing helper fires, OR (b) have each host-fn closure independently invoke `Engine::is_read_only_snapshot()` before the backend call. Whichever path Phase-3 picks, the design call should be locked when `kv:write` lands so the seam doesn't reopen as a regression. Bundles cleanly with the broader §6.6 SANDBOX TS-bridge work AND §1.4 durable BlobBackend.
-
-**Touch size:** ~5-10 LOC at the host-fn build site, plus 1 regression test asserting `kv:write` from a SANDBOX module against a `from_snapshot_blob` engine surfaces `E_BACKEND_READ_ONLY` (mirrors the Phase-2b `delete_node` regression test landed alongside r6-r3-arch-1 in the engine-side integration suite).
+**Conditional forward-pointer (preserved):** if a future phase ships `kv:write` / `kv:delete` / edge-mutating host-fns (which would require re-opening baked-in #16 + commitment #1), the read-only-snapshot enforcement MUST live AT the host-fn dispatch boundary in addition to `PrimitiveHost::put_node` / `delete_node`. The architecturally-cheapest closure is to either (a) route every storage-mutating host-fn through `PrimitiveHost::put_node` / `delete_node` so the existing helper fires, OR (b) have each host-fn closure independently invoke `Engine::is_read_only_snapshot()` before the backend call. **No work to do today.**
 
 ### 6.1 ESC-16 fingerprint-collapse complete defense — CLOSED at Phase-3 wave-5c
 
@@ -656,7 +689,7 @@ Together they realize the cr-r4b-10 closure-narrative claim that `E_STREAM_HANDL
 
 **Sub-mechanism — GC-pressure-timeout polling fallback (§7.1.2.1):** for environments without `--expose-gc` (Node default + most browser-target runtimes), the FinalizationRegistry callback timing is non-deterministic. A bounded-retry polling fallback that fires the leak event on a configurable timeout (default ~5s) is a follow-up. Touch size: ~50-100 LOC TS + 2-3 test scenarios. Lands in a Phase-3 narrow-iter cycle (post-G19-C2 close); the 4 master scenarios are sufficient for §7.1.2's load-bearing observable-consequence contract per pim-2 §3.6b.
 
-### 7.1.3 UserView.snapshot() + onUpdate() runtime materialization (post-G8-B)
+### 7.1.3 UserView.snapshot() + onUpdate() runtime materialization — CLOSED at Phase-3 G19-C1 + G19-C1-fp wave-7
 
 **Phase 2b state:** G8-B (PR #28) shipped engine + DSL surface for user-registered IVM views. The TS-side `UserView` type is registered + dispatchable today, but the JS-observable runtime accessors (`view.snapshot()` returning current materialized state + `view.onUpdate()` returning an async iterator of incremental deltas) were red-phase-deferred. R6-FP Group 2 PR #61 `packages/engine/test/views.test.ts:32-50` `.skip` rationale names this entry as the destination.
 
@@ -713,7 +746,7 @@ Together they realize the cr-r4b-10 closure-narrative claim that `E_STREAM_HANDL
 
 **Phase 3 closure (G19-B R5 wave-7):** Investigation showed napi-rs v3.x already delivers `FnArgs<(A, B)>` as discrete splatted args (verified end-to-end via probe against the wave-6b napi cdylib). The pre-G19-B "single tuple-array" delivery shape belonged to an earlier napi-rs build. G19-B adopted r1-napi-4 path (b) tuned to the actual current behavior: `engine.ts::onChange / onChangeAs / onEmit` wrap the JS callback in a thin native wrapper that takes discrete args (`(seq: number, payload: Buffer)` / `(chanArg: string, payloadJson: string)`), preserves the user-callback's discrete-args contract, and adds the dx-r1-2b-4 / r6-dx-2 exception-isolation log path. The `Array.isArray(channel)` runtime tuple-detection branch in `emit_subscribe.test.ts` is retired (the splatted-args shape is the production reality). Pin coverage: `packages/engine/test/onChange_onEmit.test.ts` (3 tests — onEmit splat, onChange splat, retired-marker grep).
 
-### 7.8 Engine.emitEvent standalone surface — wire through EmitBroadcast bus
+### 7.8 Engine.emitEvent standalone surface — wire through EmitBroadcast bus — CLOSED at Phase-3 G19-B R5 wave-7 (G19-A 50 LOC folded per scope-real-05)
 
 **Phase 2b state:** `Engine.emitEvent(name, payload)` (TS at
 `packages/engine/src/engine.ts:1228-1248`) and the matching napi
@@ -847,6 +880,41 @@ R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift 
 - `.addl/phase-2b/dispatch-conventions.md` — full codification (gitignored; orchestrator-side standing rules)
 
 **Touch size for the residual:** ~30-50 LOC CI workflow + decision capture. NOT urgent (the per-implementer §3.4b discipline already covers the day-to-day case; CI infra is automation on top).
+
+---
+
+### 7.11b Phase-3 R4b pim-N candidates (R6-ratification queue) — **PHASE-3-CLOSE-BLOCKING (pre-tag R6 ratification)**
+
+**Origin:** Phase-3 R4b returned 5 BLOCKERs + 11 MAJORs + 19 MINORs across 7 lenses (2026-05-08). Multiple lenses independently named pim-N candidates beyond the 11 codified in Phase-2b. Listed here as named destination for R6-ratification per HARD RULE rule-12 (so they have a real home before R6 phase-close convergence council ratifies). Final codification target: `dispatch-conventions.md §3.X` once R6 lens-corroboration confirms the pattern. **All 5 pim-N candidates listed here MUST land at R6 ratification before tag (orchestrator-direct dispatch-conventions edits + memory file authoring).**
+
+**pim-12 candidate — R3-staged RED-PHASE pin → R5 un-ignore expected → R5 implementer skipped under wave-time pressure.**
+- Independently named by 3 R4b lenses (cryptography r4b-major-1 + capability-system r4b-cap-1 + wasmtime r4b-wsa-1/2). Architect r4b-1 + dist-systems ds-r4b-1 corroborate at MINOR/BLOCKER respectively.
+- 5-instance class across phases (Phase-1 R4 vacuous projection / Phase-1 R6→R7 catalogued-but-unfired error codes / Phase-2a G1-A false cargo green / Phase-2b R4b structural-vs-runtime gap / Phase-3 R4b RED-PHASE pins not un-ignored).
+- Fix path: codify at §3.6e or §3.5b new sub-rule. Wave-completion checklist MUST include un-ignore audit of all RED-PHASE pins citing the wave as un-ignore target. Reviewer briefs MUST verify landing-status + production-arm-presence, not just spec-pin presence.
+
+**pim-13 candidate — R7-equivalent spec-to-code-compliance audit at every phase-close as standing pattern.**
+- Origin: Phase-1 R7 invented this discipline; Phase-1 retrospective claims it was retired post-Phase-1 because "discipline merged into R6 verify-don't-trust-docs." Phase-3 R4b cluster suggests **the discipline has lapsed** — Phase-2b R6 was multi-round lens-based, not spec-to-code-walk; Phase-3 R6 will follow Phase-2b shape unless reactivated.
+- Fix path: revive R7-equivalent as standing companion to R6 phase-close convergence — walks every spec doc claim + every named compromise + every D-PHASE-N item to a code construction site at HEAD. Discipline lives in pim-13 §3.X codification + a `tools/spec-compliance-audit/` skill.
+
+**pim-2-amendment — Per-finding granularity for closure pins AND deferral destinations.**
+- Origin: Phase-3 R4b pattern-induction-meta-sweep r4b-pim-2-amendment (MAJOR forward-looking codification). 3+-recurrence threshold MET at HEAD (G21-T2 MAJOR-7 registry-clear-on-leave fix landed without per-finding pin + audit-6-1 wrong-surface coverage + audit-6-3 umbrella-section phantom-destination).
+- Fix path: codify §3.6b sub-rule 4 (~30-50 LOC dispatch-conventions edit) + FIX-NOW 3 specific instances (~50-70 LOC). Total batch ~80-120 LOC.
+
+**pim-18 candidate — SHAPE-not-SUBSTANCE 4-of-4 wave threshold.**
+- Origin: Phase-3 R5 G14-C / G15-A / G18-A / G17-A1 (the "4th SHAPE-not-SUBSTANCE 4-of-4 wave threshold" recurrence). Strengthened to 10-datapoint trend at R4b pattern-induction (8 consecutive zero-incident handoffs after G16-A→G16-C streak).
+- Fix path: codify §3.6e — implementer briefs MUST include "production call site enumeration" pre-flight item.
+
+**pim-codification-feedback-loop candidate — codification of standing rule doesn't auto-propagate to in-flight agent briefs.**
+- Origin: NS-T52 candidate from Phase-3 R4-close + 1 instance from G20-B fix-pass §3.5g-miss. Sub-threshold (1-2 instances).
+- Fix path: when a new pim-N is codified, sweep in-flight agent briefs + send updates to active agents OR explicitly note "this codification applies to NEW dispatches only."
+
+**Cross-references:**
+- `.addl/phase-3/r4b-pattern-induction.json` (pattern-induction-meta-sweep R4b output naming r4b-pim-2-amendment + pim-18 explicitly)
+- `.addl/phase-3/r4b-{cryptography,capability-system,wasmtime-sandbox}.json` (3-lens corroboration of pim-12 candidate)
+- `docs/history/PHASE-1.md §5` (R7 origin) + `docs/history/PHASE-2b.md §5` (pim-1 through pim-11 catalog)
+- Memory `feedback_pattern_induction_meta_sweep.md` (load-bearing operational tier; companion to known-pattern reduxes).
+
+**Touch size:** orchestrator-direct dispatch-conventions §3.X edits (~150-300 LOC across pim-12 / pim-13 / pim-18 / pim-2-amendment / pim-codification-feedback-loop) at R6 ratification + memory file authoring per pim if needed.
 
 ---
 
@@ -1320,3 +1388,70 @@ Phase-3 sync introduces iroh + Loro CRDT, which transitively pull in dep tails c
 - `deny.toml::[advisories].ignore` — the active ignore entries with reason text.
 - `.github/workflows/supply-chain.yml` — the CI invocation point.
 - `CONTRIBUTING.md::Supply chain` — the yank-response protocol.
+
+---
+
+## 10. Compromise registry forward-revisit (v1-assessment-window destinations)
+
+Per CLAUDE.md item #15 (v1-milestone-gate framing): Phases 1+2a+2b+3 minimum + post-Phase-3 PAUSE-AND-ASSESS step. The Compromises listed below are currently `Open` or `Open (architectural bound)` in `docs/SECURITY-POSTURE.md`; each has a documented architectural rationale for its current state but warrants explicit re-evaluation during the v1-assessment-window. This section is the named destination per HARD RULE rule-12 clause-(b) so each Compromise has a real home rather than drifting as "we'll think about it later."
+
+**v1-assessment-window scope reminder:** the post-Phase-3 PAUSE-AND-ASSESS is for surfacing genuine v1-shippable unknowns + reframing Phases 4-8 into pre-v1 / post-v1 buckets if needed. The Compromises here are NOT pre-decided as "must close before v1" — they're the **input set for the assessment**, not the verdict.
+
+### 10.1 Compromise #1 — TOCTOU window bound at CALL entry + ITERATE batch boundary
+
+- **Phase introduced:** 1
+- **Current state:** Open (bounded; documented threat model). Capability snapshot refreshes at commit + CALL entry + every `iterate_batch_boundary` (default 100 iters). Revocations between refresh points not visible to in-flight evaluations.
+- **Phase-3 Compromise #11 closure** (per-row read-gate at delivery time, IVM views) reduces the TOCTOU surface significantly for read paths but does not close the original write-path TOCTOU window.
+- **v1-assessment question:** v1 likely runs agentic / human-collaboration loops where "agent revoked mid-evaluation" matters. Is the 100-iter batch bound still right, or does v1 multi-tenant context want a tighter bound? Consider Phase-3 G14-D F6 SUBSCRIBE delivery-time cap-recheck pattern as the seam to extend into write paths.
+- **Touch size if revisit lands:** ~50-150 LOC depending on bound shape (per-iter check vs adaptive vs unchanged-with-doc-rationale).
+
+### 10.2 Compromise #5 — No write rate-limits; metric recorded only
+
+- **Phase introduced:** 1
+- **Current state:** Open (Phase 3+ closure target — capability-gated rate-limit-policy plug seam landed at Phase-3 G14-B but rate-limits themselves not Phase-3-scope).
+- **v1-assessment question:** v1 multi-tenant or public-facing deployments need rate-limits. Is per-capability rate-limiting correct shape, or should it be per-actor / per-tenant / per-grant-CID? The G14-B plug seam is generic-enough to support any of these; the v1-assessment needs to pick.
+- **Touch size if revisit lands:** ~100-300 LOC depending on rate-limit policy shape + storage backing (in-memory token-bucket vs durable counter).
+
+### 10.3 Compromise #6 — BLAKE3 128-bit effective collision resistance
+
+- **Phase introduced:** 1
+- **Current state:** Open (architectural bound). Documentation-only stance.
+- **Phase-1 commitment:** "Phase-3 UCAN-by-CID paths revisit." Phase-3 G21 typed-CALL shipped UCAN-by-CID via `ucan_validate_chain` + UCANBackend chain-walker. **Revisit narrative not landed.** Orphan-rescue surfaced 2026-05-08.
+- **v1-assessment question:** Either close the commitment in `SECURITY-POSTURE.md` Compromise #6 (BLAKE3 collision resistance is genuinely sufficient for UCAN-by-CID + brief rationale) OR open a real follow-up (e.g., move to BLAKE3-256 truncated to 256-bit-effective at UCAN-by-CID call sites if collision-resistance is genuinely v1-blocking).
+- **Touch size if revisit lands:** ~5-10 lines SECURITY-POSTURE.md update OR ~50-100 LOC if collision-bound widening adopted.
+
+### 10.4 Compromise #13 — System-zone reserved-prefix rejection surface
+
+- **Phase introduced:** 2a
+- **Current state:** Open (documented; minor-3). System-zone reserved-prefix rejection lives at write-path; Inv-11 stop-gap is `WriteContext::is_privileged` flag.
+- **v1-assessment question:** Phase-3 sync surfaces (Atrium replicas) introduce system-zone replication paths that need careful interaction with the reserved-prefix rejection. R4b dist-systems lens flagged Inv-13 row-4a/4b SPLIT classifier as the sync-time interaction point. Is the Phase-2a rejection surface still the right shape under multi-peer system-zone replication?
+- **Touch size if revisit lands:** ~50-100 LOC if shape changes; documentation-only update if shape holds.
+
+### 10.5 Compromise #14 — SANDBOX cold-start cost (no opt-in pool)
+
+- **Phase introduced:** 2b
+- **Current state:** Open (D3 RESOLVED — additive Phase-3 change if real-workload bottleneck).
+- **v1-assessment question:** v1 paper-prototype revalidation may surface a workload that triggers cold-start as a real bottleneck. If so, the additive change is an opt-in instance pool (`engine.sandbox_pool({ size: N, idle_timeout_ms: T })`) that pre-warms wasmtime instances. Decision is whether to land it pre-v1 or accept cold-start as v1-shippable.
+- **Touch size if revisit lands:** ~150-300 LOC for opt-in pool + tests.
+
+---
+
+## 11. Phase-1 deferred-orphan-rescue (2026-05-08 cross-phase audit)
+
+Items surfaced during 2026-05-08 cross-phase retrospective audit as orphans (Phase-1 deferrals never landed in Phases 2a/2b/3 R5 + not previously named in any backlog). Each gets a real home here per HARD RULE rule-12.
+
+### 11.1 `get_node_verified` read-path hash check — CLOSED at W9-T6 PR #142 (orphan-rescue audit was based on stale Phase-1 retrospective claim)
+
+(Cross-reference; full closure narrative at §1.6 above. Retensed 2026-05-08 after triage agent verified W9-T6 had already promoted base `get_node` to verify-on-read. The 2026-05-08 orphan-rescue audit was based on a stale Phase-1 retrospective that incorrectly claimed the work was never landed.)
+
+### 11.2 SHA-pin coverage gap audit — RESOLVED at PR #150 (2026-05-08; coverage was already 100% — orphan-rescue framing was incorrect)
+
+- **Origin:** Phase-2a §3.1 CI hardening pass committed to SHA-pin third-party GitHub Actions for supply-chain defense. Spot-check 2026-05-08 surfaced apparent `@master` / `@stable` / `@nightly` references in `.github/workflows/*.yml`.
+- **Audit outcome (PR #150 by sha-pin-sweep agent):** **SHA-pin coverage is and remains 100%.** The 2026-05-08 spot-check claim was a misread of inline version-tracking comments — every `# stable` / `# master` / `# nightly` in workflow files is an annotation describing where a SHA was resolved from, NOT an unsafe ref. Verified via `awk` extract of `uses:` directives stripping comments — zero non-SHA refs remaining. The original Phase-2a §3.1 item-3 commitment (commits `9e68f84` SHA-pin sweep + `e014653` v5 alignment, 2026-04-25) is verified ongoing; Dependabot rotates SHAs weekly via the github-actions package-ecosystem in `.github/dependabot.yml`.
+- **Minor improvements landed in PR #150:** `actions/checkout` v4.3.1 → v5.0.1 alignment in `branch-protection-spec-check.yml` (matches workspace-wide pin); comment clarification in `cargo-public-api.yml` (misleading `# nightly via @nightly` comment now clarifies SHA is action code from `stable` branch + `toolchain: nightly` selects compiler). Documented exceptions for `actions/upload-artifact` / `actions/download-artifact` / `actions/setup-node` major-version straddles (Dependabot globally-ignored to avoid Monday-morning PR storms; future planned upgrade wave on a purpose-built branch).
+- **Status:** RESOLVED.
+
+### 11.3 R7-equivalent spec-to-code-compliance audit standing pattern — see §7.11b above (pim-13 candidate)
+
+(Cross-reference; full entry at §7.11b.)
+
