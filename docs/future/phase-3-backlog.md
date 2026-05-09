@@ -704,6 +704,29 @@ The Rust-side anchor test `crates/benten-eval/tests/sandbox_severity_priority_g1
 
 **Touch size (actual at closure):** ~110 LOC drop, ~14 LOC add (call-site swaps + workspace-dep entry + retained known-vector roundtrip test against the new dep).
 
+### 6.13 AtriumConfig HLC skew_tolerance_ms operator-tuneable field (R6 fp Wave C1 mini-review c1-crypto-mr-2 BELONGS-NAMED-NOW)
+
+**Origin (2026-05-09 R6 fp Wave C1 cryptography mini-review):** `AtriumHandle::open` (`crates/benten-engine/src/engine_sync.rs:854`) hardcodes the default 5-min HLC skew tolerance via `Hlc::new(node_id, clock)` instead of `Hlc::with_skew_tolerance(node_id, clock, custom_tolerance)`. `AtriumConfig` exposes no `skew_tolerance_ms` field. Operators on high-latency-WAN federations (or specialized sync topologies that need tighter / looser bounds) cannot tune the skew window without forking the engine.
+
+**Disposition (Wave C1 fix-pass 2026-05-09):** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). The Wave C1 closure of hlc-r6-r1-1 MAJOR (`Hlc::update` per-row production wireup) is structurally complete with the 5-min default; the operator-tuneability is an additive surface that doesn't gate the closure. v1-window candidate.
+
+**Concrete fix-shape:**
+- (a) Add `AtriumConfig::skew_tolerance_ms: Option<u64>` field (None → 5-min default per `Hlc::DEFAULT_SKEW_TOLERANCE_MS`)
+- (b) Thread through `AtriumHandle::open` to call `Hlc::with_skew_tolerance(node_id, clock, tol)` when Some
+- (c) Test pin: `crates/benten-engine/tests/atrium_skew_tolerance_configurable.rs` (NEW): construct AtriumConfig with custom 30s tolerance; assert HLC update with 60s-ahead remote rejects (where 5-min default would accept)
+- (d) Update SECURITY-POSTURE.md operator-deployment narrative (Compromise #23 sibling) noting skew tolerance is operator-tuneable
+
+**Touch size:** ~30-50 LOC config + threading + ~50-80 LOC test pin.
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15 — non-blocking for Phase-3 close.
+
+**Cross-references:**
+- `crates/benten-engine/src/engine_sync.rs::AtriumHandle::open` (the hardcoded site)
+- `crates/benten-core/src/hlc.rs::Hlc::with_skew_tolerance` (the existing constructor)
+- R6 fp Wave C1 cryptography mini-review JSON: `.addl/phase-3/r6-fp-wave-c1-mini-review-cryptography.json::c1-crypto-mr-2`
+
+---
+
 ### 6.10 `random` host-fn deferral — workspace CSPRNG framework choice — CLOSED at Phase-3 G17-A2 wave-5b
 
 **Closure shape (Phase-3 G17-A2 wave-5b):** The workspace CSPRNG decision landed at R1 (D-PHASE-3-11 RESOLVED-at-R1) = `getrandom` direct (NOT `rand` ecosystem; NOT a deterministic seed). G17-A2 wires `random` into the codegen-default surface alongside `time` / `log` / `kv:read` (cap-string `host:random:read`, 4-segment shape mirroring `kv:read`; `cap_recheck = per_call`); the trampoline at `crates/benten-eval/src/primitives/sandbox.rs::register_default_host_fns` invokes `getrandom::getrandom` to fill the guest buffer. Per-call entropy budget defaults to **4096 bytes** (per r1-wsa-8); a manifest may override via the additive optional `host_fns.random.budget_bytes_per_call` field on `ModuleManifest`. Budget overrun fires the typed `E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED` variant (routed `ON_DENIED`). The validate-time deferral guard + `DEFERRED_HOST_FN_RANDOM_CAP_PREFIX` const are RETIRED; `crates/benten-eval/tests/sandbox_host_fn_random_deferred.rs` is deleted; new green-phase regression guards live at `crates/benten-eval/tests/random_host_fn.rs`. Compromise #16 → CLOSED at Phase-3 G17-A2 in `docs/SECURITY-POSTURE.md`. `host-functions.toml` now declares `[host_fn.random]` IMPLEMENTED.
