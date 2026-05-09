@@ -214,7 +214,10 @@ fn compromise_11_subscribe_delivery_gate_registers_with_independent_caprecheck_c
 }
 
 #[test]
-#[allow(clippy::too_many_lines, reason = "load-bearing dual-gate composition pin")]
+#[allow(
+    clippy::too_many_lines,
+    reason = "load-bearing dual-gate composition pin"
+)]
 fn compromise_11_both_gates_compose_observable_delivery_end_to_end() {
     // cap-r4-3 / r4b-cap-4 LOAD-BEARING composition pin (exit-criterion-6).
     //
