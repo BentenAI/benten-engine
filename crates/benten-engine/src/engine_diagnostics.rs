@@ -388,9 +388,21 @@ impl Engine {
     /// Append a new version Node to the chain rooted at `anchor`.
     ///
     /// Phase-3 G16-B-prime: persists the Node bytes via the underlying
-    /// `benten_graph` backend's `put_node` surface, then calls
-    /// `benten_core::version::append_version` to advance the chain
+    /// `benten_graph` backend's transactional `put_node` surface, then
+    /// calls `benten_core::version::append_version` to advance the chain
     /// (refusing forks via `benten_core::version::VersionError`).
+    ///
+    /// G16-B-E (Sub-item D — receiver-side ChangeEvent fan-out): the
+    /// put goes through `backend.transaction(|tx| tx.put_node(node))`
+    /// rather than the inherent `backend.put_node(node)` — the
+    /// transactional path is the one that fires ChangeEvents to
+    /// registered subscribers (the engine's `ChangeBroadcast` +
+    /// IVM-view subscribers), per `RedbBackend::with_transaction`'s
+    /// fan-out rule. Without this routing, `apply_atrium_merge`'s
+    /// receiver-side pin (`subscribe_change_events` ChangeProbe) would
+    /// observe ZERO events on a successful Loro merge — silently
+    /// breaking the plan §1 exit-criterion 1 contract ("ChangeEvent
+    /// fan-out + IVM-view materialization on the receiver").
     ///
     /// # Errors
     ///
@@ -405,8 +417,17 @@ impl Engine {
     ///   field is `pub(crate)`); the catch-all keeps future cross-
     ///   engine handle leaks honest.
     pub fn append_version(&self, anchor: &AnchorHandle, node: &Node) -> Result<Cid, EngineError> {
-        // Persist the new Node via the backend; CID is content-addressed.
-        let new_head = self.backend.put_node(node)?;
+        // G16-B-E Sub-item D: route through `backend.transaction` so
+        // registered ChangeBroadcast subscribers fan out (ChangeEvents
+        // for IVM-view materialization + engine-side `subscribe_change_events`
+        // probes). The inherent `backend.put_node` does NOT fire the
+        // fan-out (it bypasses `with_transaction`'s pending-events
+        // pipeline) — using the transactional surface preserves the
+        // receiver-side observability contract.
+        let new_head = self
+            .backend
+            .transaction(|tx| tx.put_node(node))
+            .map_err(EngineError::Graph)?;
         let mut store = benten_graph::MutexExt::lock_recover(&self.inner.anchor_store);
         let entry = store
             .get_mut(&anchor.name)

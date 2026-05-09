@@ -1685,8 +1685,8 @@ impl<B: GraphBackend> EngineGeneric<B> {
     }
 
     /// Phase-3 G14-D wave-5a (test surface): register the proof-chain
-    /// CID list to surface from [`Self::chain_for_actor`] for
-    /// `actor_cid`. Production code routes through the
+    /// CID list to surface from `Self::chain_for_actor` (engine-private
+    /// accessor) for `actor_cid`. Production code routes through the
     /// `CapabilityPolicy` chain accessor (G14-B durable UCAN backend);
     /// this helper exists for the WAIT-resume snapshot-hash test pins
     /// that need to pre-populate the live chain.

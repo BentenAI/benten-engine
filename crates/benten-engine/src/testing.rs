@@ -556,7 +556,7 @@ pub fn testing_make_subscriber_id(label: &str) -> benten_core::SubscriberId {
 /// `E_WAIT_TTL_EXPIRED` typed error live in a separate Phase-3 brief
 /// (see wave-8 brief §"Carry-forwards explicitly NOT in wave-8"). The
 /// `_ttl_hours` argument is preserved on the helper signature so the
-/// future D12 lift can widen [`WaitMetadata`] without churning every
+/// future D12 lift can widen `WaitMetadata` without churning every
 /// fixture call site.
 ///
 /// The returned metadata is structurally complete (round-trips byte-for-
@@ -975,7 +975,7 @@ impl crate::Engine {
 
     /// ESC-9: synchronous engine dispatch entry-point used to detect
     /// host-fn re-entry. Today this delegates straight to
-    /// [`Engine::call`] so the integration test can drive a
+    /// `Engine::call` so the integration test can drive a
     /// re-entrant dispatch without spinning a tokio runtime; the
     /// underlying re-entry guard fires inside the dispatcher when
     /// nested SANDBOX calls trip
@@ -1001,7 +1001,7 @@ impl crate::Engine {
     /// machinery the engine consults at module-load is downstream of
     /// this helper; the helper itself only mutates the buffer so a
     /// caller can hand the corrupted bytes to
-    /// [`Engine::register_module_bytes`] and assert the load-time
+    /// `Engine::register_module_bytes` and assert the load-time
     /// rejection fires.
     ///
     /// The "forge" is a fixed marker pattern that the engine's
