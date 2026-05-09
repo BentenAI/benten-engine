@@ -56,6 +56,20 @@ slow-timeout = { period = "60s", terminate-after = 6 }
 filter = 'test(=prop_wait_ttl_no_silent_expiry_in_resume)'
 slow-timeout = { period = "60s", terminate-after = 6 }
 
+# UCAN attenuation proptests (1000 cases each per PR #162's reduction
+# from 2000 → 1000 to fit MSRV 1.95 cells inside 180s) still cross the
+# 180s boundary on `macos-x86_64 @ stable` (Intel Mac stable runners
+# under sustained CPU contention). `terminate-after = 6` gives 360s
+# wall clock — same per-test design rationale as the WAIT-TTL override
+# above. Preserves 1000-case thoroughness without further reducing
+# coverage. Surfaced 2026-05-09 PR #163 G16-D wave-6b (rerun) when
+# `macos-x86_64 @ stable` TIMEOUTed where MSRV 1.95 (post-PR #162) +
+# linux + macos-arm64 stable cells all passed — confirming runner-CPU-
+# contention sensitivity that the global 180s default doesn't tolerate.
+[[profile.ci.overrides]]
+filter = 'test(=prop_ucan_chain_attenuation_never_widens) | test(=prop_ucan_chain_time_window_never_widens)'
+slow-timeout = { period = "60s", terminate-after = 6 }
+
 # G20-B Phase-3-close §8.3 architectural pin invokes `cargo doc
 # --workspace --no-deps` from a test process. macos-x86_64 @ 1.95.0
 # reproducibly timed out at default 180s (macos-arm64 + linux runners
