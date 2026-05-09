@@ -1361,6 +1361,27 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 
 ---
 
+### 7.19 devserver_in_flight_evaluations_complete_before_reload timing race on linux-arm64 1.95.0
+
+**Origin (2026-05-09 PR #156 CI):** the `tools/benten-dev/tests/devserver_in_flight_completes.rs::devserver_in_flight_evaluations_complete_before_reload` test failed on the `build+test linux-arm64 @ 1.95.0` CI cell with `assertion left == right failed: in-flight eval must complete on pre-reload version. left: "v2", right: "v1"` at line 76. Sister cell `build+test linux-arm64 @ stable` was GREEN on the same commit; rerun of the failed cell on the same commit was GREEN — confirms timing flake, not regression.
+
+**Test shape:** thread A is parked in a `slow_transform` gate; main thread reloads handler from v1 → v2; thread A is released and should resolve against its CAPTURED v1 snapshot. The race window: between release-of-thread-A and snapshot-readback, the test occasionally observes v2 instead of v1 — meaning the version-snapshot capture-vs-readback ordering is not strictly serialized on linux-arm64 1.95.0 (or the slow-transform gate doesn't fully guarantee the v1 snapshot is captured BEFORE the release fires).
+
+**Likely root cause (not yet root-caused):** the `slow_transform` gate may release before the v1 snapshot is fully committed to the per-thread eval-state; on linux-arm64 1.95.0 with slightly different scheduler / atomic-ordering behavior than `@ stable`, the race surfaces. Affects `tools/benten-dev/src/` devserver hot-reload version-capture logic.
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Pre-existing timing race (not introduced by PR #155 / PR #156); confirmed flake-shape via successful rerun. Lands here as the named v1-window destination so the issue isn't ambiently dropped.
+
+**Fix shape (when this lands):** investigate the `slow_transform` gate semantics in `tools/benten-dev/tests/devserver_in_flight_completes.rs` + the version-snapshot-capture site in `tools/benten-dev/src/`. Likely a sync-fence is missing OR the test should use a stronger barrier (e.g., explicit `Arc<Barrier>` instead of polling-based wait) to guarantee snapshot capture happens BEFORE the gate release.
+
+**Phase target:** orchestrator-direct fix-pass batch alongside other Phase-3-close residuals OR pre-tag sweep. Low priority — flake, not blocker; rerun-on-failure cycles around it cheaply.
+
+**Cross-references:**
+- `tools/benten-dev/tests/devserver_in_flight_completes.rs` (test file; lines 60-90 are the gate-release + assert window)
+- `tools/benten-dev/src/` devserver hot-reload version-capture site (specific file path TBD at fix time)
+- PR #156 build+test linux-arm64 @ 1.95.0 run `25592063410` job `75131324528` (failure that surfaced this entry; rerun GREEN on same commit confirms flake)
+
+---
+
 ### 7.18 hlc_clock_skew_within_tolerance parallel-test race (shared `static MOCK_MS`) — CLOSED 2026-05-09 (orchestrator-direct fix-pass batch)
 
 **Origin (2026-05-09 PR #155 G16-B-prime CI):** the `cargo-llvm-cov` workflow on PR #155's fix-pass commit `ca16b37` failed with `update_within_custom_tolerance_accepts` panicking `assertion left == right failed: left: 1000000, right: 50500` at line 50. The expected value (`50_500`) matched the test's local `MOCK_MS.store(50_000, ...)` write; the actual value (`1_000_000`) matched a sibling test's write. The same fix-pass commit was previously GREEN on coverage at canary commit `76b8eba`, confirming flake — not regression.
