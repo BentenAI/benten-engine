@@ -38,6 +38,10 @@ mod tests {
             // Phase-2b G7-B (D20 additive) — default sandbox_depth = 0
             // keeps the Phase-2a fixture CID stable.
             sandbox_depth: 0,
+            // Phase-3 G16-B Inv-14 sync-boundary additions — defaults
+            // (None / None / 0) preserve the Phase-2a fixture CID per
+            // the additive-extension discipline.
+            ..Default::default()
         };
         let cid = frame.cid().expect("attribution frame cid");
         assert_eq!(cid.to_string(), FIXTURE_CID);

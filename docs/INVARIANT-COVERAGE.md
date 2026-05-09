@@ -29,7 +29,7 @@ status" section below). The two Phase-1 stubs are now removed.
 | 11 | System-zone reserved-prefix reject — user code cannot READ/WRITE system labels | 2a | `invariants::system_zone` (G5-B-i) + Engine::put_node_with_context dispatch | `crates/benten-engine/tests/inv_11_*.rs` |
 | 12 | Aggregate validation catch-all — multi-invariant violations roll up | 1 | `RegistrationError::Invariant12Aggregate` | `structural.rs` aggregate-error tests |
 | 13 | Immutability — User WRITE re-puts of an already-persisted CID fire `E_INV_IMMUTABILITY` | 2a | `invariants::immutability` + `WriteAuthority` firing matrix | `crates/benten-engine/tests/inv_13_*.rs` |
-| 14 | Causal attribution — every primitive frame carries an `AttributionFrame` | 2a | `evaluator::attribution` runtime threading + `ATTRIBUTION_PROPERTY_KEY` registration check | `crates/benten-eval/tests/attribution_*.rs`, `crates/benten-engine/tests/attribution_*.rs` |
+| 14 | Causal attribution — every primitive frame carries an `AttributionFrame` (Phase-3 G16-B device-grain extension: `peer_did_set` + `device_did` + `sync_hop_depth` slots — see "Inv-14 Phase-3 G16-B device-grain extension" below) | 2a / 3 | `evaluator::attribution` runtime threading + `ATTRIBUTION_PROPERTY_KEY` registration check + `crates/benten-engine/src/engine_sync.rs` sync-merge frame construction (G16-B) | `crates/benten-eval/tests/attribution_*.rs`, `crates/benten-engine/tests/attribution_*.rs`, G16-B sync-merge round-trip suite |
 
 ---
 
@@ -140,6 +140,49 @@ variant (mirrored at the engine boundary as
 at `crates/benten-ivm/tests/algorithm_b_drift_detector.rs` (5 pins,
 1 000 cases each) drives the merged `Algorithm::register` surface
 end-to-end + reports incremental-vs-rebuild parity.
+
+---
+
+## Inv-14 Phase-3 G16-B device-grain extension
+
+Phase-3 G16-B widens `AttributionFrame` with three additive sync-boundary
+slots so causal attribution carries device-grain + peer-grain provenance
+across CRDT merges:
+
+- **`peer_did_set: Option<BTreeSet<Did>>`** — `Some(set)` when the frame
+  originates from a Loro CRDT merge; captures contributing peer DIDs
+  observed via `benten_sync::crdt::LoroDoc::winning_attribution`. `None`
+  for purely-local writes. The peer-node-id → DID resolution lives in
+  `crates/benten-engine/src/engine_sync.rs` against the local trust
+  store.
+- **`device_did: Option<Did>`** — device-grain attribution per the
+  D-PHASE-3-25 device-heterogeneity contract. `None` for legacy / local
+  writes; `Some(did)` for sync-attributed or device-DID-attested writes.
+  Lets multi-device users (laptop ↔ phone-OS-app ↔ desktop, per
+  commitment #17) distinguish per-device origins inside a single
+  per-user Atrium.
+- **`sync_hop_depth: u32`** — bounded merge-hop counter (default cap
+  `SYNC_HOP_DEPTH_CAP = 8`, mirrors Inv-4's sandbox-depth precedent).
+  Increments at each CRDT merge hop; the typed
+  `ErrorCode::SyncHopDepthExceeded` fires at the merge seam when a
+  merge would push the depth past the cap.
+
+**Phase-2a CID stability preserved.** All three slots elide from the
+canonical Node encoding when default (`None` / `0`) via
+`serde(default, skip_serializing_if = ...)`. A purely-local frame
+canonicalises to the exact Phase-2a 3- / 4-key Node and produces the
+pinned schema-fixture CID
+(`bafyr4ig26oo2jmvq47wewho4sdpiscjpluvpzev3uerleuj2rtl63r7c5a`); any
+non-default value adds the slot and produces a distinct CID — the
+content-addressing security claim is "a sync-bearing attribution chain
+is content-distinguishable from a purely-local chain."
+
+**Construction discipline.** Test / bench / legacy callsites use
+`AttributionFrame { ..Default::default() }` to spread the new slots;
+production callsites in `engine_sync.rs` populate the sync slots
+explicitly at the CRDT merge seam. The `Default` impl is intentionally
+test-/bench-shaped (all-zero CIDs); production paths construct frames
+explicitly per the WRITE-path discipline.
 
 ---
 

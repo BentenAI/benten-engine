@@ -1015,12 +1015,14 @@ impl PrimitiveHost for Engine {
                     handler_cid: handler,
                     capability_grant_cid: noauth_zero_grant_cid(),
                     sandbox_depth: nested_depth,
+                    ..Default::default()
                 },
                 None => benten_eval::AttributionFrame {
                     actor_cid: noauth_pseudo_actor_cid(),
                     handler_cid: zero,
                     capability_grant_cid: noauth_zero_grant_cid(),
                     sandbox_depth: nested_depth,
+                    ..Default::default()
                 },
             }
         };

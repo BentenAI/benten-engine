@@ -1422,7 +1422,13 @@ impl<B: GraphBackend> EngineGeneric<B> {
         proof_chain_cids: &[Cid],
         historical_policy_metadata: Vec<u8>,
     ) -> Result<(), EngineError> {
-        let cap_snapshot_hash = crate::cap_snapshot_hash::compute(actor_cid, proof_chain_cids);
+        // Phase-3 G16-B canary (r4b-cap-2 transition): legacy 2-input
+        // call shape preserved while suspend-side capture of
+        // revocation_set + policy_backend_tag is wired in the
+        // post-canary wave. Identical to
+        // `compute(actor, chain, empty_revocations, no_auth_tag)`.
+        let cap_snapshot_hash =
+            crate::cap_snapshot_hash::compute_legacy(actor_cid, proof_chain_cids);
         let snapshot = benten_eval::suspension_store::CapSnapshot {
             cap_snapshot_hash,
             historical_policy_metadata,
@@ -2784,6 +2790,7 @@ impl Engine {
                 handler_cid: *handler_cid,
                 capability_grant_cid: crate::primitive_host::noauth_zero_grant_cid(),
                 sandbox_depth: 0,
+                ..Default::default()
             };
             // G12-A: route through the budget-aware capturing variant so
             // the terminal `TraceStep::BudgetExhausted` row pushed by the

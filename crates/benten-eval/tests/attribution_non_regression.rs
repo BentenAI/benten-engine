@@ -33,6 +33,7 @@ fn attribution_frame_extension_preserves_phase_2a_sec_r6r1_01_inv_14_wiring() {
         handler_cid: zero_cid(),
         capability_grant_cid: zero_cid(),
         sandbox_depth: 0,
+        ..Default::default()
     };
     let cid_zero = frame_zero.cid().expect("default frame encodes");
     assert_eq!(
@@ -47,7 +48,7 @@ fn attribution_frame_extension_preserves_phase_2a_sec_r6r1_01_inv_14_wiring() {
     //    correct).
     let frame_one = AttributionFrame {
         sandbox_depth: 1,
-        ..frame_zero
+        ..frame_zero.clone()
     };
     let cid_one = frame_one.cid().expect("depth-1 frame encodes");
     assert_ne!(

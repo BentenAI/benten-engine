@@ -58,6 +58,7 @@ fn inv_4_runtime_arm_fires_when_depth_exceeds_max() {
         capability_grant_cid: zero_cid(),
         // Depth 3 > max 2 — runtime arm trips.
         sandbox_depth: 3,
+        ..Default::default()
     };
 
     let result = sandbox::execute(&bytes, manifest_ref, &registry, config, &[], &attribution);
@@ -99,6 +100,7 @@ fn inv_4_runtime_arm_admits_depth_equal_to_max() {
         capability_grant_cid: zero_cid(),
         // Depth 4 == max 4 — admitted. The next level (5) would trip.
         sandbox_depth: 4,
+        ..Default::default()
     };
 
     let result = sandbox::execute(&bytes, manifest_ref, &registry, config, &[], &attribution);

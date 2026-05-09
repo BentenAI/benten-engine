@@ -53,6 +53,7 @@ fn invariant_4_sandbox_depth_crosses_call_boundary() {
         handler_cid: zero_cid(),
         capability_grant_cid: zero_cid(),
         sandbox_depth: 1,
+        ..Default::default()
     };
     let res1 = execute(
         &bytes,
@@ -70,7 +71,7 @@ fn invariant_4_sandbox_depth_crosses_call_boundary() {
     // depth=2 admits at boundary.
     let f2 = AttributionFrame {
         sandbox_depth: 2,
-        ..f1
+        ..f1.clone()
     };
     let res2 = execute(
         &bytes,
@@ -88,7 +89,7 @@ fn invariant_4_sandbox_depth_crosses_call_boundary() {
     // depth=3 trips (the CALL chain has saturated past max=2).
     let f3 = AttributionFrame {
         sandbox_depth: 3,
-        ..f1
+        ..f1.clone()
     };
     let err = execute(
         &bytes,
@@ -133,6 +134,7 @@ fn invariant_4_end_to_end_with_attribution_frame() {
         handler_cid: handler_a,
         capability_grant_cid: grant_a,
         sandbox_depth: 1,
+        ..Default::default()
     };
     // After CALL inheritance: actor stays actor_a, handler shifts to
     // handler_b, grant stays grant_a (cap-attenuation chain), depth
@@ -142,6 +144,7 @@ fn invariant_4_end_to_end_with_attribution_frame() {
         handler_cid: handler_b,
         capability_grant_cid: grant_a,
         sandbox_depth: 2,
+        ..Default::default()
     };
     // Frame for a different actor (X dispatches a DIFFERENT chain).
     let frame_other_actor = AttributionFrame {
@@ -149,6 +152,7 @@ fn invariant_4_end_to_end_with_attribution_frame() {
         handler_cid: handler_a,
         capability_grant_cid: grant_a,
         sandbox_depth: 1,
+        ..Default::default()
     };
 
     let cid_outer = frame_outer.cid().expect("outer encodes");
@@ -168,6 +172,7 @@ fn invariant_4_end_to_end_with_attribution_frame() {
         handler_cid: zero_cid(),
         capability_grant_cid: zero_cid(),
         sandbox_depth: 0,
+        ..Default::default()
     };
     assert_eq!(
         frame_default.cid().unwrap().to_base32(),

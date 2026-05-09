@@ -31,6 +31,7 @@ fn sandbox_end_to_end() {
         handler_cid: zero,
         capability_grant_cid: zero,
         sandbox_depth: 0,
+        ..Default::default()
     };
     let res = execute(
         &bytes,
@@ -78,6 +79,7 @@ fn sandbox_no_state_persists_across_calls() {
         handler_cid: zero,
         capability_grant_cid: zero,
         sandbox_depth: 0,
+        ..Default::default()
     };
     let grant = vec![
         "host:compute:log".to_string(),

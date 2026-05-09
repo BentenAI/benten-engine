@@ -49,12 +49,14 @@ fn exec_state_payload_has_attribution_chain_not_3_tuple() {
                 handler_cid: zero_cid(),
                 capability_grant_cid: zero_cid(),
                 sandbox_depth: 0,
+                ..Default::default()
             },
             AttributionFrame {
                 actor_cid: zero_cid(),
                 handler_cid: zero_cid(),
                 capability_grant_cid: zero_cid(),
                 sandbox_depth: 0,
+                ..Default::default()
             },
         ],
         pinned_subgraph_cids: Vec::new(),

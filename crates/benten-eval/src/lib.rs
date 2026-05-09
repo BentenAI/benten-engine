@@ -929,6 +929,12 @@ pub struct StepResult {
 /// EVERY trace row carries from Phase-2a G3-A/G4-A/G5-B (didn't
 /// land); pairs with the broader Phase-3 trace-discipline pass.
 #[derive(Debug, Clone)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "Phase-3 G16-B canary: AttributionFrame grew with peer_did_set/device_did/sync_hop_depth fields \
+              (Inv-14 device-grain at sync boundary). Boxing `Option<AttributionFrame>` here would force \
+              an allocation on every Step row; the size delta is acceptable until profile data shows it."
+)]
 pub enum TraceStep {
     /// A single primitive execution row (Phase 1 baseline shape preserved
     /// as struct-variant).

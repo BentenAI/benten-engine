@@ -37,6 +37,7 @@ fn dummy_attribution() -> AttributionFrame {
         handler_cid: zero,
         capability_grant_cid: zero,
         sandbox_depth: 0,
+        ..Default::default()
     }
 }
 

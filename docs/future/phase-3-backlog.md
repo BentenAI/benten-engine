@@ -647,6 +647,26 @@ The Rust-side anchor test `crates/benten-eval/tests/sandbox_severity_priority_g1
 
 ---
 
+### 6.12 G16-B post-canary residuals (Version Node mint + e2e composition observer + device-CID production threading)
+
+**Status:** OPEN — NAMED-NOW destination for items deferred from G16-B canary (PR `wave-g16-b-a-canary`). Three residuals tracked here; each is structural-surface-adjacent work the canary's parallel-3 wave (G16-B-B/C/D) consumes.
+
+**Origin:** G16-B canary (wave-g16-b-a-canary) brief at `.addl/phase-3/WAVE-G16-B-CANARY-BRIEF.md` lands the structural surfaces (AttributionFrame field extensions; cap_snapshot_hash 4-input signature; WriteContext/ReadContext device_cid; AtriumError::SyncHopDepthExceeded variant; `merge_remote_change_with_hop_depth` returning a `SyncMergeAttribution` seed). Three downstream surfaces pinned-RED at canary scope; each needs a Phase-1-backbone surface (anchor store / chunk-bypass / write-path engine threading) the canary explicitly defers.
+
+**Items:**
+
+1. **Version Node mint after Loro merge (`AtriumHandle` → `Engine` engine-side glue).** The G16-B canary surfaces the `SyncMergeAttribution` seed (peer node-ids + new sync_hop_depth) at `merge_remote_change_with_hop_depth`. The engine-side wave-6b implementer wires the mint of a new Version Node via the existing Anchor + Version + CURRENT pattern (per arch-r1-4 D-C HYBRID). Pre-G16-B-B `Engine::create_anchor` / `append_version` are Phase-1 stubs (`E_NOT_IMPLEMENTED`); G16-B post-canary wires the anchor store + the engine-side merge callback. RED-PHASE test pins to un-ignore at this wave (in `crates/benten-engine/tests/loro_version_chain.rs` + `sync_replica_attribution.rs`): `merge_loro_change_creates_versioned_anchor` + `sync_replica_write_attribution_carries_device_did_alongside_parent` + `sync_replica_attribution_frame_sync_hop_depth_bounded_with_e_sync_hop_depth_exceeded` (incoming hop-depth currently always 0 at the merge entry; G16-D wave-6b handshake protocol surfaces the carrier).
+
+2. **Compromise #11 deepest e2e composition pin (chunk-bypass observer).** `crates/benten-engine/tests/ivm_view_subscribe_compose.rs::compromise_11_both_gates_compose_observable_delivery_end_to_end` is RED-PHASE pending an engine-side test surface that exposes ChangeEvent.anchor_cid directly to test callbacks (the production OnChangeCallback receives chunked-encoded CBOR bytes; parsing in the test layer is brittle). Two options: (a) introduce a `test_subscribe_observable_change_events` engine helper that bypasses chunk encoding; (b) ship a CBOR parser at the test scope. The structural composition pin (`compromise_11_materialization_deny_wins_over_delivery_admit_at_view_layer`) lands at canary scope and asserts mat-deny wins; the deepest end-to-end observation is this residual.
+
+3. **Production-runtime threading of `device_cid` through engine WriteContext construction sites.** G16-B canary lands the structural `WriteContext.device_cid` + `ReadContext.device_cid` fields; production engine write-path call sites (`engine_diagnostics.rs::transaction commit hook`, `primitive_host.rs::WriteContext synthesis`) populate the field at construction time when a device-DID-attestation is present. Test pin at `crates/benten-caps/tests/device_dispatch.rs::capability_policy_per_device_cid_dispatch_observable_in_runtime_arm` is RED-PHASE waiting for this wiring.
+
+**Touch estimate:** Item (1) ~300-500 LOC engine-side anchor store wiring + ~150 LOC merge callback. Item (2) ~50-150 LOC test surface + un-ignore. Item (3) ~30-80 LOC threading + un-ignore. Combined: ~500-800 LOC across G16-B-B/C/D parallel wave.
+
+**Convergence target:** All three test pins un-ignored + GREEN-PHASE before R6 phase-close convergence council. The structural surfaces landed at canary mean wave-6b wiring does NOT need to refactor existing types — purely additive.
+
+---
+
 ## 7. Observability + diagnostic completeness
 
 ### 7.1 SANDBOX execution metrics propagation (Compromise #17 reinforcement)

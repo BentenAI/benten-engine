@@ -123,6 +123,27 @@ pub struct WriteContext {
     /// Phase 2a G2-B / ucca-9 / arch-r1-2: authority under which the write
     /// runs. Defaults to [`WriteAuthority::User`].
     pub authority: WriteAuthority,
+    /// Phase-3 G16-B canary (r4b-cap-3 BLOCKER closure): device-grain
+    /// CID context per D-PHASE-3-25 device-heterogeneity contract.
+    ///
+    /// `None` for non-attested writes (legacy / local). `Some(cid)` for
+    /// attested writes — the CID of the device's signed attestation
+    /// envelope at the boundary the engine consults
+    /// (cf. `benten_id::device_attestation::DeviceAttestation`).
+    /// Heterogeneous policies (per D-PHASE-3-25) dispatch on this field
+    /// to surface different decisions for "desktop X writes" vs
+    /// "phone X writes" under the SAME logical actor identity.
+    ///
+    /// Backward-compat: pre-G16-B callers leave the field `None` via
+    /// `Default`; existing policies that ignore the field continue to
+    /// work unchanged. New heterogeneous policies opt-in via match.
+    ///
+    /// Engine-side production-runtime threading lands in the post-canary
+    /// wave (the engine write-path call sites populate the field at
+    /// `WriteContext`-construction time per the
+    /// `crates/benten-caps/tests/device_dispatch.rs::capability_policy_per_device_cid_dispatch_observable_in_runtime_arm`
+    /// pin's concrete-shape narrative).
+    pub device_cid: Option<Cid>,
 }
 
 impl WriteContext {
@@ -139,6 +160,7 @@ impl WriteContext {
             actor_hint: Some("synthetic-actor".into()),
             pending_ops: Vec::new(),
             authority: WriteAuthority::User,
+            device_cid: None,
         }
     }
 
@@ -172,6 +194,13 @@ pub struct ReadContext {
     pub actor_hint: Option<String>,
     /// Actor CID identity (Phase 3). Reserved.
     pub actor_cid: Option<Cid>,
+    /// Phase-3 G16-B canary (r4b-cap-3 BLOCKER closure): device-grain
+    /// CID context paired with [`WriteContext::device_cid`]. `None` for
+    /// non-attested reads; `Some(cid)` for reads originating from a
+    /// device that presented a `DeviceAttestation` envelope at the
+    /// thin-client / sync seam. Per D-PHASE-3-25, heterogeneous policies
+    /// dispatch on this field for per-device READ scoping.
+    pub device_cid: Option<Cid>,
 }
 
 impl ReadContext {
@@ -183,6 +212,7 @@ impl ReadContext {
             target_cid: None,
             actor_hint: Some("synthetic-actor".into()),
             actor_cid: None,
+            device_cid: None,
         }
     }
 
@@ -203,6 +233,7 @@ impl ReadContext {
             target_cid: Some(cid),
             actor_hint: None,
             actor_cid: None,
+            device_cid: None,
         }
     }
 
@@ -223,6 +254,7 @@ impl ReadContext {
             target_cid: None,
             actor_hint: None,
             actor_cid: None,
+            device_cid: None,
         }
     }
 }

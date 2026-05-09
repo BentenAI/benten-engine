@@ -574,11 +574,21 @@ pub enum ErrorCode {
     /// store via the `cap_recheck.rs` G13-pre-C scaffold. Maps to
     /// `E_SYNC_REVOKED_DURING_SESSION`.
     SyncRevokedDuringSession,
-    /// G14-D wave-5a (ds-r4r2-2 closure): an inbound sync-replica
-    /// AttributionFrame chain exceeded the documented hop-depth bound
-    /// (mirrors Inv-4 sandbox_depth). Defends against DOS/chain-bloat
-    /// attacks where an adversarial peer constructs a long false chain.
-    /// Maps to `E_SYNC_HOP_DEPTH_EXCEEDED`.
+    /// G14-D wave-5a (ds-r4r2-2 closure) + G16-B wave-6b (ds-r4b-1
+    /// BLOCKER closure): an inbound sync-replica `AttributionFrame`
+    /// chain exceeded the documented hop-depth bound
+    /// (`benten_eval::exec_state::SYNC_HOP_DEPTH_CAP`, default 8;
+    /// mirrors Inv-4 sandbox_depth precedent). Per D-PHASE-3-25
+    /// sync-hop-depth-bounded contract, propagation chains longer than
+    /// the cap reject at the merge seam — a compromised device cannot
+    /// indefinitely re-broadcast attestations to amplify reach.
+    /// Construction site at
+    /// `crates/benten-engine/src/engine_sync.rs::AtriumHandle::merge_remote_change`.
+    /// Distinct from [`ErrorCode::SyncDivergentCidRejected`]
+    /// (system-zone reject per Inv-13 row-4b) and
+    /// [`ErrorCode::HandshakeReplayWithinBoundedWindow`] (HLC replay
+    /// window). Maps to `E_SYNC_HOP_DEPTH_EXCEEDED`. Routes to
+    /// `ON_ERROR`. Composes with Inv-14 device-grain attribution.
     SyncHopDepthExceeded,
     /// G14-D wave-5a: thin-client connection attempt was rejected
     /// because the connecting tab presented no device-attestation OR

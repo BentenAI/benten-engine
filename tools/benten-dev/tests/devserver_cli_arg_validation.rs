@@ -245,6 +245,10 @@ fn inspect_state_with_valid_envelope_bytes_exits_0() {
             // Phase 2b G7-B / D20: AttributionFrame.sandbox_depth: u8
             // INHERITED across CALL boundaries (default 0 outside SANDBOX).
             sandbox_depth: 0,
+            // Phase-3 G16-B sync-boundary fields default to None/0 for
+            // purely-local frames — the canonical Node encoding elides
+            // these slots so the Phase-2a schema-fixture CID stays stable.
+            ..Default::default()
         }],
         pinned_subgraph_cids: Vec::new(),
         context_binding_snapshots: Vec::new(),
