@@ -1,38 +1,40 @@
-# Security Posture — Benten Engine (Phase 2b close)
+# Security Posture — Benten Engine (Phase 3 close)
 
-This document records the security claims Benten makes through Phase 2b
+This document records the security claims Benten makes through Phase 3
 close and the known compromises those claims rest on. Each Phase-1
 compromise is tied back to `.addl/phase-1/00-implementation-plan.md`
 (R1 Triage Addendum); Phase-2b additions are tied back to
-`.addl/phase-2b/00-implementation-plan.md`. This document is the
-written, referenceable form.
+`.addl/phase-2b/00-implementation-plan.md`; Phase-3 additions
+(Compromise #22 + #23) are tied back to `.addl/phase-3/00-implementation-plan.md`.
+This document is the written, referenceable form.
 
-## Phase 2b close — final compromise table
+## Phase 3 close — final compromise table
 
 | # | Title | Phase | Status |
 |---|-------|-------|--------|
-| 1 | TOCTOU window bound at CALL entry + ITERATE batch boundary | 1 | Open (bounded; documented threat model) |
+| 1 | TOCTOU window bound at CALL entry + ITERATE batch boundary | 1 | Open (bounded; documented threat model). **Revisit at v1-window** per phase-3-backlog §10.1. |
 | 2 | Symmetric-None + diagnostic capability (Option C) | 1 | **CLOSED** at Phase 2a 5d-J |
 | 3 | `ErrorCode` enum lives in `benten-core` | 1 | **CLOSED** at Phase 1 R6 |
-| 4 | WASM runtime is compile-check only | 1 | **CLOSED** at Phase 2b G7 (this phase) |
-| 5 | No write rate-limits; metric recorded only | 1 | Open (Phase 3+) |
-| 6 | BLAKE3 128-bit effective collision resistance | 1 | Open (architectural bound) |
+| 4 | WASM runtime is compile-check only | 1 | **CLOSED** at Phase 2b G7 |
+| 5 | No write rate-limits; metric recorded only | 1 | Open (architectural). **Revisit at v1-window** per phase-3-backlog §10.2. |
+| 6 | BLAKE3 128-bit effective collision resistance | 1 | Open (architectural bound). **Revisit at v1-window** per phase-3-backlog §10.3. |
 | 7 | `[[bin]]` `required-features` gating | 1 | **CLOSED** at Phase 1 R6 |
 | 8 | `Engine::call` bypasses the evaluator for CRUD handlers | 1 | **CLOSED** at Phase 2a G4-A |
-| 9 | Dedup writes pure-read (sec-r1-4 / atk-3) | 1 | **CLOSED** at Phase 2b G12-E (this phase) |
-| 10 | Resume-time capability re-verification | 2a | **CLOSED** at Phase 2b G12-E (this phase) |
+| 9 | Dedup writes pure-read (sec-r1-4 / atk-3) | 1 | **CLOSED** at Phase 2b G12-E |
+| 10 | Resume-time capability re-verification | 2a | **CLOSED** at Phase 2b G12-E |
 | 11 | IVM views coarse-grained read-gate | 2a | **CLOSED** at Phase-3 G15-A wave-5a (per-row `IvmViewReadGate` + addendum at G20-A3 documenting `read_view_with` heuristic bound) |
-| 12 | `DurabilityMode::Group` gate 5 — engine-surface default flip + bench CI promotion | 1 | **CLOSED** at Phase 3 G13-E (this phase) |
-| 13 | System-zone reserved-prefix rejection surface | 2a | Open (documented; minor-3) |
-| 14 | SANDBOX cold-start cost (no opt-in pool) | 2b | Open (D3 RESOLVED — additive Phase-3 change if real-workload bottleneck) |
-| 15 | `register_runtime` reserved with deferred error | 2b | Deferred to Phase 8 (marketplace) |
+| 12 | `DurabilityMode::Group` gate 5 — engine-surface default flip + bench CI promotion | 1 | **CLOSED** at Phase 3 G13-E |
+| 13 | System-zone reserved-prefix rejection surface | 2a | Open (documented; minor-3). **Revisit at v1-window** per phase-3-backlog §10.4. |
+| 14 | SANDBOX cold-start cost (no opt-in pool) | 2b | Open (D3 RESOLVED — additive Phase-3 change if real-workload bottleneck). **Revisit at v1-window** per phase-3-backlog §10.5. |
+| 15 | `register_runtime` reserved with deferred error | 2b | Deferred to Phase 8 (marketplace) — named destination per phase-3-backlog. |
 | 16 | `random` host-fn deferred (no CSPRNG framework chosen) | 2b | **CLOSED** at Phase-3 G17-A2 wave-5b (CSPRNG via `getrandom` direct + capability-gated entropy budget per call: 4096 bytes default + per-manifest override at `host_fns.random.budget_bytes_per_call` per r1-wsa-8; constant-time cap-policy check per sec-r1-3) |
 | 17 | In-memory module-bytes registry (`Engine::register_module_bytes`) | 2b | **CLOSED** at Phase-3 G14-C wave-4b (durable `RedbBlobBackend` + CID-validating entry point) |
 | 18 | In-memory handler-version chain (`Engine::register_subgraph_replace`) | 2b | **CLOSED** at Phase-3 G14-C wave-4b (durable `system:HandlerVersion` zone + extensible canonical-bytes encoding per arch-r1-4 / D-C) |
 | 19 | Browser-target persistent storage absent — manifests in-memory only on `wasm32-unknown-unknown` | 2b | **PARTIALLY CLOSED** at Phase-3 G18-A wave-5a (IndexedDB schema + handler scaffolding; full closure deferred per phase-3-backlog §4.3) |
 | 20 | Cross-browser determinism CI cadence not yet established | 2b | **PARTIALLY CLOSED** at Phase-3 G18-A wave-5a (Playwright matrix workflow exists; fixture bodies deferred per phase-3-backlog §4.3) |
 | 21 | Module manifest minimal CID-pin in Phase 2b; full Ed25519 deferred | 2b | **CLOSED** at Phase-3 G14-C wave-4b (Ed25519 sign + UCAN-proof-chain primary + publisher-key-registry fallback per D-PHASE-3-20 + crypto-minor-5) |
-| 22 | Peer-DID + connection metadata leakage to public iroh relays | 3 | Introduced at Phase 3 (Phase 7 Garden-relay closure target) |
+| 22 | Peer-DID + connection metadata leakage to public iroh relays | 3 | Introduced at Phase 3 (Phase 7 Garden-relay closure target). **Revisit at v1-window** per phase-3-backlog §10 (Phase-7 Garden-relays primary closure path; Phase-9 hardened-deployment fallback). |
+| 23 | Wire device-attestation envelope cryptographic closure | 3 | **CLOSED** at Phase-3 G16-D wave-6b fix-pass (cryptographic shape CLOSED inline; **operator-deployment `FreshnessPolicy` override REQUIRED for production** — see body) |
 
 **Phase-2b net delta:** Compromises #4 + #9 + #10 closed (3 net
 closures); 8 new Phase-2b deferrals enumerated (#14, #15, #16, #17,
@@ -112,6 +114,11 @@ Benten uses **BLAKE3-256** specifically (multihash code `0x1e`), not SHA-256 (`0
 - Pure content integrity inside Benten peer networks — where every peer speaks BLAKE3 — is unaffected.
 
 **Phase-N reconsideration triggers:** If Benten ever commits to "content must be verifiable on default public IPFS gateways without plugin-level BLAKE3 support" as an adoption requirement, revisit with Option C (dual-hash) or Option D (boundary translation). Until then, Option A stands.
+
+**Revisit at v1-window** (per `docs/future/phase-3-backlog.md` §10.3):
+- *Question to ask:* Does the v1 deployment posture (full peer + thin compute surfaces per CLAUDE.md baked-in #17) introduce content-addressing surfaces that require post-quantum-floor collision resistance — i.e., do any v1 audit assumptions rest on `2^128` being out of reach for nation-state adversaries with future quantum hardware?
+- *What changed pre-v1 vs Phase-1 framing:* the threat model widened from single-machine engine to multi-device Atriums + thin-client adjacents (browsers, edge runtimes); content-addressing identity now feeds DID-bound capability chains + UCAN-by-CID grants whose forgery cost matters for cap-policy integrity.
+- *No-action option:* keep BLAKE3-256 as the architectural floor; document the post-quantum reconsideration as a Phase-N+ trigger (parallel to the IPFS-gateway trigger above). The 128-bit bound is sufficient for the personal-AI-assistants threat model + standard-classical-adversary v1 audit.
 
 ---
 
@@ -347,6 +354,11 @@ The counters increment regardless of whether a capability policy is plumbed in �
 - Bounded memory for the per-scope map. Scope keys derive from user-supplied Node labels, so an adversarial writer who creates Nodes with (say) 10k distinct fresh labels will grow the map to 10k entries. Phase-3's rate-limit pass adds eviction; Phase-1 accepts the unbounded-growth surface because (a) realistic label cardinality is bounded, and (b) the attack class is identical to spamming distinct CIDs in the backend, which the operator already has to manage.
 
 **Phase-2 / Phase-3 revisit:** Phase-2 introduces a policy-layer budget trait so `CapabilityPolicy` implementations can enforce per-actor rate limits. Phase-3 ties the identity shape (actor Cid) to the budget so the rate is scoped correctly across a federation, and adds eviction for the per-scope counter map.
+
+**Revisit at v1-window** (per `docs/future/phase-3-backlog.md` §10.2):
+- *Question to ask:* Does the personal-AI-assistants threat model (CLAUDE.md three-pillar §2 adoption) produce write-flood attack surfaces that can reach the engine ingress through the cap-policy permit gate? If yes: does a per-actor rate-limit (now that `benten-id` ships actor-Cid identity) close the flood vector without breaking legitimate bulk-import / federation-replay workflows?
+- *What changed pre-v1 vs Phase-1 framing:* `benten-id` actor-Cid identity now exists (Phase-3 G14-A); the per-scope counter map persists across Phase-3 (still no eviction). Eviction + per-actor budget threads through the same `CapabilityPolicy` gate that Phase-3 hardened end-to-end.
+- *LOC estimate at v1-window:* ~150-300 (per-actor budget enum on `CapabilityPolicy` + eviction policy on the per-scope counter map + integration tests for budget-exhaustion `ON_DENIED` routing).
 
 **Regression tests:**
 - `writes_committed_metric_is_recorded` + `per_capability_write_metrics_increment` + `denied_writes_surface_on_denied_metric` in `crates/benten-engine/tests/metrics.rs` pin the Rust recording shape.
@@ -1147,6 +1159,11 @@ DX polish; no security gap.
 `E_INV_SYSTEM_ZONE`; `SYSTEM_ZONE_PREFIXES` at
 `crates/benten-engine/src/system_zones.rs`.
 
+**Revisit at v1-window** (per `docs/future/phase-3-backlog.md` §10.4):
+- *Question to ask:* Does the v1 DSL surface (TS DSL + napi + future-DX layers) hit the TRANSFORM-computed-CID system-zone-prefix slip-through often enough that the runtime-probe-only path produces confusing operator UX? If yes: does a runtime TRANSFORM-result reserved-prefix probe (raised symmetrically at WRITE-staging, not just registration) close the DX gap?
+- *What changed pre-v1 vs Phase-2a framing:* Inv-13 row-4 SPLIT classifier (G16-B sync-receive arm) now enforces system-zone immutability at the merge boundary, so the security gap is closed; remaining work is purely DX-level error-message clarity for the TRANSFORM-concat case.
+- *LOC estimate at v1-window:* ~50-100 (runtime-staging reserved-prefix probe + typed `E_INV_SYSTEM_ZONE_RUNTIME_PREFIX` variant + integration test).
+
 ---
 
 ### Compromise #14 — SANDBOX cold-start cost (no opt-in pool) — Phase-2b additive
@@ -1614,6 +1631,11 @@ End-to-end *content* confidentiality is preserved (iroh's QUIC payload is encryp
 
 **Cross-refs.** `tests/phase_3_workspace/security_posture_compromises.rs::compromise_22_public_relay_metadata_leakage_introduced_at_phase_3_close_with_named_phase_7_garden_relay_destination` (R3-pinned RED-PHASE assertion); `tests/phase_3_workspace/security_posture_phase_3_close.rs::security_posture_phase_3_close_compromise_table_present` (G20-B FINAL phase-close compromise-table presence pin); `docs/FULL-ROADMAP.md` §Phase 7 (Gardens — relay infrastructure as a Garden resource); CLAUDE.md baked-in #17 (full peer vs thin compute surface deployment shapes). Origin: Phase-3 R4 large-council Round-1 networking lens (finding `net-r4-r1-1`) cross-corroborated by the security-auditor + pattern-induction lenses; 3-lens cross-corroboration triggered the BELONGS-NAMED-NOW disposition under HARD RULE rule-12 clause-b.
 
+**Revisit at v1-window** (per `docs/future/phase-3-backlog.md` §10; Phase-7 Garden-relays primary closure path; Phase-9 hardened-deployment fallback):
+- *Question to ask:* Does v1's deployment posture (full peer + thin compute surface per CLAUDE.md baked-in #17) ship with public iroh relays as the *only* sync path, or does v1 require operators with adversarial-relay threat models to self-host? Does the v1 audit need a "default-on metadata-leak warning" UX surface (in DSL / napi / Engine builder) so adopters self-classify against the relay-metadata threat?
+- *What changed pre-v1 vs Phase-3 framing:* Phase 7 Garden-relays + Phase 9 hardened-deployment cargo-feature flag are still future scope; the public-relay leak is the live reality at v1 unless operators self-host. The v1 readiness audit must surface this with operator-facing UX, not just SECURITY-POSTURE.md prose.
+- *No-action option:* keep public-iroh-relays as the default at v1 with the current honest disclosure prose; document operator self-host as the conservative deployment recommendation; defer Garden-relay infrastructure to Phase 7. Phase-9 hardened-deployment cargo feature gating remains the brutal-but-correct fallback if Phase 7 slips.
+
 ---
 
 ### Compromise #23 — Wire device-attestation envelope cryptographic closure narrative — CLOSED at Phase-3 G16-D wave-6b fix-pass
@@ -1642,7 +1664,7 @@ End-to-end *content* confidentiality is preserved (iroh's QUIC payload is encryp
 
 **Backward-compat preservation.** V1-shipped peers (and test fixtures that bypass the wire envelope by calling `apply_atrium_merge` directly) emit `attestation = None` envelopes; the receiver-side `verify` is a no-op for these and `apply_atrium_merge` falls back to the local engine's `device_cid` for the `AttributionFrame.device_did` slot. The two pre-existing pinned-CID fixtures (`sync_replica_attribution_carries_device_did_alongside_parent` + `sync_replica_explicit_actor_cid_decouples_from_device_cid`) still pass with the legacy `device-cid:<hex>` shape — no rebake required at this fix-pass.
 
-**Operator-deployment residual: `FreshnessPolicy` production override.** The `Engine::set_acceptor` setter currently uses `FreshnessPolicy::seconds(u64::MAX)` as its test-grade default, which is permissive (no time-window pruning of the nonce store). Production deployments MUST override via `set_acceptor` with a concrete time-bound (e.g., `FreshnessPolicy::seconds(86_400)` for a 24h replay window) BEFORE participating in adversarial sync. Otherwise the nonce-store grows unbounded under sustained traffic AND the replay-resistance window becomes ungated. This is an operator-configuration concern, not a wire-format gap; the cryptographic primitives compose correctly under any `FreshnessPolicy` choice, but the choice itself is operationally load-bearing for production deployments. Documented in `Engine::set_acceptor` rustdoc + this Compromise #23 narrative; verify via per-deployment audit at v1-window assessment.
+**OPERATOR ACTION REQUIRED — `FreshnessPolicy` production override (operator-deployment residual).** The `Engine::set_acceptor` setter currently uses `FreshnessPolicy::seconds(u64::MAX)` as its test-grade default, which is permissive (no time-window pruning of the nonce store). Production deployments MUST override via `set_acceptor` with a concrete time-bound (e.g., `FreshnessPolicy::seconds(86_400)` for a 24h replay window) BEFORE participating in adversarial sync. Otherwise the nonce-store grows unbounded under sustained traffic AND the replay-resistance window becomes ungated. This is an operator-configuration concern, not a wire-format gap; the cryptographic primitives compose correctly under any `FreshnessPolicy` choice, but the choice itself is operationally load-bearing for production deployments. Documented in `Engine::set_acceptor` rustdoc + this Compromise #23 narrative; verify via per-deployment audit at v1-window assessment.
 
 **Posture claim.** Wave-6b's initial wire-shape introduction was scoped to "structural transport landing"; the fix-pass closes the trust-model layer in the SAME phase. Operators reading this section see the full narrative: the wave first landed a benignly-functional transport, then closed the cryptographic gaps in the same window. Defends against the failure shape "compromise silently introduced at phase-close while wire-attestation forgery is undocumented."
 
