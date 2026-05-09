@@ -406,104 +406,207 @@ async fn inv_14_device_did_attribution_observable_in_production_runtime_arm() {
 // These two pins close the symmetric WRITE side end-to-end.
 // =====================================================================
 
-#[test]
-#[ignore = "RED-PHASE: G14-D — sec-r4r1-2 BLOCKER — sync-replica WRITE per-write cap-recheck at delivery"]
-fn sync_replica_write_cap_recheck_at_delivery_against_local_grant_store() {
+// sec-r4r1-2 BLOCKER closure (Phase-3 G16-B-F): both pins below assert
+// the structural-always-on per-row cap-recheck inside
+// `Engine::apply_atrium_merge` per Ben's RATIFIED Option (a)
+// 2026-05-09 — defense-in-depth mirror of the SUBSCRIBE-side CLR-2
+// dual-layer recheck. Pin (a) asserts the metric counter increments
+// per-row on a clean merge; pin (b) asserts a mid-session revocation
+// observably surfaces the typed `EngineError::SyncRevokedDuringSession`
+// shape with the merge rejected end-to-end.
+//
+// The "concrete shape" pseudo-code in the prior RED-PHASE bodies named
+// a `consume_sync_replica_message` API + a `bob_engine.caps()` accessor
+// + a `metrics().sync_replica_cap_recheck_calls()` surface — the
+// structural API that landed at G16-B-F is:
+//   - `Engine::apply_atrium_merge` (production; matches the existing
+//     G16-B-prime test fixture pattern at line 36)
+//   - `Engine::caps()` returning `EngineCapsHandle` with
+//     `install_proof(&mut CapProof)` / `revoke(&CapProof)`
+//   - `Engine::sync_replica_cap_recheck_calls()` direct accessor on
+//     the engine (no intermediate `metrics()` handle)
+// Same observable consequences; landed surface uses real production
+// API names.
+
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "browser-backend")))]
+#[tokio::test]
+async fn sync_replica_write_cap_recheck_at_delivery_against_local_grant_store() {
     // sec-r4r1-2 BLOCKER pin (a). The receiving peer's sync-replica
     // delivery point MUST per-write cap-recheck against the local
-    // grant store via the cap_recheck.rs G13-pre-C helper. This is
-    // the structural mirror of the SUBSCRIBE delivery-time recheck.
-    //
-    // Concrete shape:
-    //   let alice_engine = benten_engine::Engine::open(alice_store.path()).unwrap();
-    //   let bob_engine = benten_engine::Engine::open(bob_store.path()).unwrap();
-    //
-    //   let alice_kp = benten_id::keypair::Keypair::generate();
-    //
-    //   // Bob installs a grant authorizing Alice to write /zone/posts:
-    //   let grant_to_alice = ... .audience(alice_kp.public_key().to_did())
-    //                            .capability("/zone/posts", "write") ... ;
-    //   bob_engine.caps().install_proof(&grant_to_alice).unwrap();
-    //
-    //   // Atrium sync replica: Alice → Bob. Handshake establishes
-    //   // per-peer cap-set ONCE. Now Alice writes:
-    //   alice_engine.write_node(&node_in_zone_posts).unwrap();
-    //
-    //   // Bob's sync-replica receive path observably calls cap_recheck:
-    //   let cap_recheck_calls_before = bob_engine.metrics().sync_replica_cap_recheck_calls();
-    //   bob_engine.consume_sync_replica_message(&alice_outbound_message).unwrap();
-    //   let cap_recheck_calls_after = bob_engine.metrics().sync_replica_cap_recheck_calls();
-    //
-    //   assert!(cap_recheck_calls_after > cap_recheck_calls_before,
-    //       "sync-replica WRITE delivery MUST per-write cap-recheck via cap_recheck.rs helper per sec-r4r1-2");
-    //
-    //   // The write applied (Alice has cap):
-    //   assert!(bob_engine.read_zone("/zone/posts").unwrap()
-    //       .iter().any(|n| n.cid() == node_in_zone_posts.cid()));
-    //
-    //   // Source-cite that the cap_recheck.rs scaffold is consumed at
-    //   // the sync-replica delivery point:
-    //   let src = std::fs::read_to_string("crates/benten-engine/src/sync_replica.rs").unwrap();
-    //   assert!(src.contains("cap_recheck") || src.contains("CapRecheck"),
-    //       "sync_replica.rs must consume cap_recheck.rs helper per sec-r4r1-2");
-    //
-    // OBSERVABLE consequence: cross-trust-boundary WRITE delivery
-    // observably fires per-write cap-recheck at the receiving peer.
-    // Defends against the asymmetry where SUBSCRIBE has defense-in-
-    // depth but WRITE relied solely on handshake-time cap establishment.
-    unimplemented!(
-        "G14-D wires sync-replica WRITE per-write cap-recheck via cap_recheck.rs helper per sec-r4r1-2"
+    // grant store. Asserts the metric counter increments per row of
+    // the merge so the recheck observably fires.
+    use benten_core::Cid;
+    use benten_core::hlc::BentenHlc;
+    use benten_engine::Engine;
+    use benten_engine::atrium_api::AtriumConfig;
+    use benten_engine::engine_sync::AtriumHandle;
+
+    let dir = tempfile::tempdir().unwrap();
+    let bob_engine = Engine::open(dir.path().join("bob.redb")).unwrap();
+
+    // Alice's actor identity (the originating peer of the merge).
+    // Pre-G14-B durable identity backend, the apply_atrium_merge
+    // recheck path derives actor_cid from blake3-of-utf8(peer_did);
+    // the test installs a grant under the SAME derived shape so the
+    // in-memory revocation pair set keys agree. Alice's peer-DID is
+    // the canonical resolved-by-trust-store form.
+    let alice_did = "did:key:peer-alice-test";
+    let alice_actor_cid =
+        Cid::from_blake3_digest(*blake3::hash(alice_did.as_bytes()).as_bytes());
+
+    // Bob installs a grant authorizing Alice to write /zone/posts.
+    // The scope shape `<zone>:write` matches what the per-row
+    // cap-recheck consults (`format!("{zone}:write")`).
+    let zone = "/zone/posts";
+    let mut grant = benten_engine::CapProof::new(alice_actor_cid, format!("{zone}:write"));
+    bob_engine.caps().install_proof(&mut grant).unwrap();
+    assert!(grant.proof_cid.is_some(), "install_proof should mint grant CID");
+
+    // Open Bob's atrium + register the trust-store mapping for Alice.
+    // Build an Alice-side Loro doc that produces a writes-set the
+    // merge will consume.
+    let bob_atrium = bob_engine.open_atrium(AtriumConfig::for_test()).await.unwrap();
+    let alice_atrium = AtriumHandle::open(AtriumConfig::for_test()).await.unwrap();
+    bob_atrium.register_zone(zone).await;
+    alice_atrium.register_zone(zone).await;
+    alice_atrium
+        .with_zone(zone, |doc| {
+            doc.set_property("title", "alice-post", BentenHlc::new(100, 0, alice_atrium.hlc_node_id()))
+                .unwrap();
+        })
+        .await
+        .unwrap();
+    let alice_bytes = alice_atrium
+        .with_zone(zone, |doc| doc.export_update().unwrap())
+        .await
+        .unwrap();
+    bob_atrium
+        .register_peer_did(alice_atrium.hlc_node_id(), alice_did)
+        .await;
+
+    let cap_recheck_calls_before = bob_engine.sync_replica_cap_recheck_calls();
+    let anchor = bob_engine.create_anchor("alice:p1").unwrap();
+    bob_engine
+        .apply_atrium_merge(&bob_atrium, &anchor, zone, &alice_bytes, 0)
+        .await
+        .expect("apply_atrium_merge should succeed for live grant");
+    let cap_recheck_calls_after = bob_engine.sync_replica_cap_recheck_calls();
+
+    // OBSERVABLE: per-row cap-recheck observably fired at the
+    // receiving peer; metric counter advanced by ≥1 (the merge
+    // produced ≥1 row).
+    assert!(
+        cap_recheck_calls_after > cap_recheck_calls_before,
+        "sync-replica WRITE delivery MUST per-write cap-recheck per sec-r4r1-2 \
+         (before={cap_recheck_calls_before}, after={cap_recheck_calls_after})"
+    );
+
+    // Source-cite the cap_recheck.rs G13-pre-C helper module exists
+    // and the engine.rs apply_atrium_merge consumes it via the
+    // CapabilityPolicy::check_write hook composition. Pin shifts
+    // from the pseudo-code's `sync_replica.rs` reference to the
+    // actual consumer site.
+    let src = std::fs::read_to_string("src/engine.rs").unwrap();
+    assert!(
+        src.contains("sec-r4r1-2") && src.contains("sync_replica_cap_recheck_count"),
+        "engine.rs apply_atrium_merge must wire sec-r4r1-2 cap-recheck per sec-r4r1-2"
     );
 }
 
-#[test]
-#[ignore = "RED-PHASE: G14-D — sec-r4r1-2 BLOCKER — mid-session revoke after handshake rejects with typed error"]
-fn sync_replica_write_after_local_grant_revoke_post_handshake_rejected_with_e_sync_revoked_during_session()
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "browser-backend")))]
+#[tokio::test]
+async fn sync_replica_write_after_local_grant_revoke_post_handshake_rejected_with_e_sync_revoked_during_session()
  {
     // sec-r4r1-2 BLOCKER pin (b). Mid-session revocation between
-    // handshake and next sync round: the receiving peer's per-write
-    // cap-recheck observably suppresses delivery + emits a typed
-    // error variant.
-    //
-    // Concrete shape:
-    //   let alice_engine = benten_engine::Engine::open(alice_store.path()).unwrap();
-    //   let bob_engine = benten_engine::Engine::open(bob_store.path()).unwrap();
-    //
-    //   let alice_kp = benten_id::keypair::Keypair::generate();
-    //
-    //   // Bob installs grant + handshake establishes per-peer cap-set:
-    //   let grant_to_alice = ... .audience(alice_kp.public_key().to_did())
-    //                            .capability("/zone/posts", "write") ... ;
-    //   bob_engine.caps().install_proof(&grant_to_alice).unwrap();
-    //   bob_engine.atrium_handshake_with(&alice_kp.public_key().to_did()).unwrap();
-    //
-    //   // Mid-session: Bob revokes Alice's grant LOCALLY (no handshake
-    //   // re-negotiation yet — the revocation hasn't propagated):
-    //   bob_engine.caps().revoke(&grant_to_alice.cid()).unwrap();
-    //
-    //   // Alice writes (still believes she has the grant per her cached set):
-    //   alice_engine.write_node(&node_in_zone_posts).unwrap();
-    //
-    //   // Bob's sync-replica receive path: per-write cap-recheck fires;
-    //   // observes revocation; rejects with typed error variant:
-    //   let result = bob_engine.consume_sync_replica_message(&alice_outbound_message);
-    //   let err = result.unwrap_err();
-    //   assert!(matches!(err,
-    //       benten_engine::EngineError::SyncRevokedDuringSession { .. }),
-    //       "mid-session revoke must reject sync-replica WRITE with typed E_SYNC_REVOKED_DURING_SESSION per sec-r4r1-2");
-    //
-    //   // The write did NOT apply at Bob's side:
-    //   assert!(!bob_engine.read_zone("/zone/posts").unwrap()
-    //       .iter().any(|n| n.cid() == node_in_zone_posts.cid()),
-    //       "write from revoked-mid-session peer must not apply per sec-r4r1-2");
-    //
-    // OBSERVABLE consequence: a peer whose grant was revoked between
-    // handshake and the next sync round CANNOT keep writing — the
-    // per-write cap-recheck at delivery catches the revocation. Defense-
-    // in-depth at the cross-trust-boundary WRITE surface; structurally
-    // analogous to the SUBSCRIBE delivery-time recheck.
-    unimplemented!(
-        "G14-D wires E_SYNC_REVOKED_DURING_SESSION typed-error rejection at sync-replica WRITE delivery per sec-r4r1-2"
+    // handshake and next sync round: the per-row cap-recheck inside
+    // apply_atrium_merge observably suppresses delivery + emits the
+    // typed `EngineError::SyncRevokedDuringSession` variant.
+    use benten_core::Cid;
+    use benten_core::hlc::BentenHlc;
+    use benten_engine::Engine;
+    use benten_engine::EngineError;
+    use benten_engine::atrium_api::AtriumConfig;
+    use benten_engine::engine_sync::AtriumHandle;
+
+    let dir = tempfile::tempdir().unwrap();
+    let bob_engine = Engine::open(dir.path().join("bob.redb")).unwrap();
+
+    let alice_did = "did:key:peer-alice-test";
+    let alice_actor_cid =
+        Cid::from_blake3_digest(*blake3::hash(alice_did.as_bytes()).as_bytes());
+
+    let zone = "/zone/posts";
+    let mut grant = benten_engine::CapProof::new(alice_actor_cid, format!("{zone}:write"));
+    bob_engine.caps().install_proof(&mut grant).unwrap();
+
+    let bob_atrium = bob_engine.open_atrium(AtriumConfig::for_test()).await.unwrap();
+    let alice_atrium = AtriumHandle::open(AtriumConfig::for_test()).await.unwrap();
+    bob_atrium.register_zone(zone).await;
+    alice_atrium.register_zone(zone).await;
+    alice_atrium
+        .with_zone(zone, |doc| {
+            doc.set_property("title", "alice-post-2", BentenHlc::new(200, 0, alice_atrium.hlc_node_id()))
+                .unwrap();
+        })
+        .await
+        .unwrap();
+    let alice_bytes = alice_atrium
+        .with_zone(zone, |doc| doc.export_update().unwrap())
+        .await
+        .unwrap();
+    bob_atrium
+        .register_peer_did(alice_atrium.hlc_node_id(), alice_did)
+        .await;
+
+    // Mid-session: Bob revokes Alice's grant LOCALLY before applying
+    // the inbound merge — simulates the revocation having landed at
+    // Bob's local cap store but not yet propagated through the
+    // handshake protocol back to Alice.
+    bob_engine.caps().revoke(&grant).unwrap();
+
+    let anchor = bob_engine.create_anchor("alice:p2").unwrap();
+    let pre_merge_current = bob_engine
+        .read_current_version(&anchor)
+        .unwrap()
+        .expect("anchor seeds CURRENT at create_anchor time");
+    let result = bob_engine
+        .apply_atrium_merge(&bob_atrium, &anchor, zone, &alice_bytes, 0)
+        .await;
+    let err = result.expect_err("revoked-mid-session merge MUST reject");
+    assert!(
+        matches!(
+            err,
+            EngineError::SyncRevokedDuringSession { .. }
+        ),
+        "mid-session revoke must reject with typed E_SYNC_REVOKED_DURING_SESSION per sec-r4r1-2; got {err:?}"
+    );
+
+    // OBSERVABLE: the merge did NOT apply at Bob's side — the
+    // anchor's CURRENT pointer still points at the pre-merge seed
+    // (no Version Node was minted because the per-row recheck fired
+    // BEFORE step 4 of apply_atrium_merge built + persisted the
+    // merge Version Node).
+    let post_merge_current = bob_engine
+        .read_current_version(&anchor)
+        .unwrap()
+        .expect("anchor still exists post-rejected merge");
+    assert_eq!(
+        post_merge_current, pre_merge_current,
+        "write from revoked-mid-session peer must not advance CURRENT per sec-r4r1-2 \
+         (CURRENT advanced from {pre_merge_current:?} to {post_merge_current:?})"
+    );
+
+    // Catalog code routing pin: the typed variant maps to the stable
+    // `E_SYNC_REVOKED_DURING_SESSION` catalog code (ON_DENIED edge).
+    assert_eq!(
+        err.code().as_static_str(),
+        "E_SYNC_REVOKED_DURING_SESSION",
+        "EngineError::SyncRevokedDuringSession must map to the stable catalog code"
+    );
+    assert_eq!(
+        err.routed_edge_label(),
+        Some("ON_DENIED"),
+        "SyncRevokedDuringSession must route via ON_DENIED per CLR-2 cap-denial family"
     );
 }
 

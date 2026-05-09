@@ -1206,14 +1206,21 @@ impl Engine {
             self.sync_replica_cap_recheck_count
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-            // Per-row revocation check: if `(actor_cid, zone)` is in the
-            // in-memory revocation set, reject the entire merge before
-            // the Version Node is minted. The merge is atomic — partial
-            // application would leave the zone in an inconsistent state
-            // relative to the originating peer's expected post-merge
-            // bytes, so a single revoked row vetoes the whole merge.
+            // Per-row revocation check: if `(actor_cid, scope)` is in
+            // the in-memory revocation set under EITHER the bare zone
+            // form OR the `<zone>:write` action-scoped form, reject
+            // the entire merge before the Version Node is minted. The
+            // merge is atomic — partial application would leave the
+            // zone in an inconsistent state relative to the
+            // originating peer's expected post-merge bytes, so a
+            // single revoked row vetoes the whole merge. Checking
+            // BOTH zone-shapes lets `EngineCapsHandle::revoke` be
+            // ergonomic with a `:write`-scoped CapProof while the
+            // merge boundary names just the bare zone.
+            let zone_write = format!("{zone}:write");
             if let Some(actor_cid) = peer_actor_cid
-                && self.is_actor_revoked_for_zone(&actor_cid, zone)
+                && (self.is_actor_revoked_for_zone(&actor_cid, zone)
+                    || self.is_actor_revoked_for_zone(&actor_cid, &zone_write))
             {
                 let peer_did = atrium
                     .resolve_peer_dids(&seed.peer_node_ids)
