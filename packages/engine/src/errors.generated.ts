@@ -154,6 +154,7 @@ export const CATALOG_CODES = [
   "E_CAP_UCAN_AUDIENCE_MISMATCH",
   "E_ATRIUM_RELAY_UNREACHABLE",
   "E_ATRIUM_TRANSPORT_DEGRADED",
+  "E_ATRIUM_INACTIVE",
   "E_SYNC_DIVERGENT_CID_REJECTED",
   "E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW",
   "E_WAIT_TTL_EXPIRED",
@@ -1985,6 +1986,21 @@ export class EAtriumTransportDegraded extends BentenError {
 }
 
 /**
+ * E_ATRIUM_INACTIVE
+ *
+ * Thrown at: `crates/benten-engine/src/engine_sync.rs::AtriumHandle::merge_remote_change` (inbound sync) + outbound fan-out paths (publish-view-result + share-doc-update + close-share) when `is_active` flag is `false`. Mapped from `AtriumError::InvalidState` typed variant via `engine_sync.rs::AtriumError::code`.
+ * Message template: "atrium handle is in graceful-leave state: {operation} requires rejoin()"
+ */
+export class EAtriumInactive extends BentenError {
+  static readonly code = "E_ATRIUM_INACTIVE";
+  static readonly fixHint = "An `AtriumHandle` was used after `leave()` flipped its `is_active` flag to false but before `rejoin()` flipped it back. The handle is in a graceful-leave quiesced state — distinct from `E_ATRIUM_TRANSPORT_DEGRADED` (transport-layer degrade) because the iroh endpoint remains bound + the lifecycle change is intentional (operator-initiated, not a fault). Distinct from `E_ATRIUM_RELAY_UNREACHABLE` (relay unavailability) because the relay link was never lost. Call `AtriumHandle::rejoin()` to re-activate; calling `rejoin()` is idempotent (no-op if already active). Routes to `ON_ERROR`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_ATRIUM_INACTIVE", "An `AtriumHandle` was used after `leave()` flipped its `is_active` flag to false but before `rejoin()` flipped it back. The handle is in a graceful-leave quiesced state — distinct from `E_ATRIUM_TRANSPORT_DEGRADED` (transport-layer degrade) because the iroh endpoint remains bound + the lifecycle change is intentional (operator-initiated, not a fault). Distinct from `E_ATRIUM_RELAY_UNREACHABLE` (relay unavailability) because the relay link was never lost. Call `AtriumHandle::rejoin()` to re-activate; calling `rejoin()` is idempotent (no-op if already active). Routes to `ON_ERROR`.", message, context);
+    this.name = "EAtriumInactive";
+  }
+}
+
+/**
  * E_SYNC_DIVERGENT_CID_REJECTED
  *
  * Thrown at: `crates/benten-engine/src/engine_sync.rs::AtriumError::DivergentCidRejected` (Phase-3 G16-B wave-6b; ds-4 Inv-13 row-4 SPLIT). PRE-merge classifier at `engine_sync.rs::merge_remote_change` walks `SYSTEM_ZONE_PREFIXES` and rejects divergent CIDs targeting system-zone paths before applying any Loro state. Mapped via `engine_sync.rs::AtriumError::code` to the stable code.
@@ -2279,6 +2295,7 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_CAP_UCAN_AUDIENCE_MISMATCH": ECapUcanAudienceMismatch,
   "E_ATRIUM_RELAY_UNREACHABLE": EAtriumRelayUnreachable,
   "E_ATRIUM_TRANSPORT_DEGRADED": EAtriumTransportDegraded,
+  "E_ATRIUM_INACTIVE": EAtriumInactive,
   "E_SYNC_DIVERGENT_CID_REJECTED": ESyncDivergentCidRejected,
   "E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW": EHandshakeReplayWithinBoundedWindow,
   "E_WAIT_TTL_EXPIRED": EWaitTtlExpired,

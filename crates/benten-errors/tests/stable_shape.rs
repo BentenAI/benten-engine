@@ -194,6 +194,12 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // `crates/benten-sync/src/errors.rs::AtriumTransportError::code`.
     ErrorCode::AtriumRelayUnreachable,
     ErrorCode::AtriumTransportDegraded,
+    // Phase-3 G16-B-G wave (Atrium leave/rejoin lifecycle): handle
+    // is in graceful-leave quiesced state; transport remains bound.
+    // Construction site:
+    // `crates/benten-engine/src/engine_sync.rs::AtriumHandle::merge_remote_change`
+    // (+ outbound fan-out paths) when `is_active` flag is false.
+    ErrorCode::AtriumInactive,
     // Phase-3 G16-B wave-6b (ds-4 Inv-13 row-4b): sync-replica
     // frame targeting a system-zone / Anchor-immutable path with a
     // divergent CID. Construction site:
@@ -467,6 +473,7 @@ fn variant_count_is_pinned() {
     // Post-G16-B-A canary: + SyncHopDepthExceeded = 105. The hardcoded
     // count below tracks `ALL_CATALOG_VARIANTS.len()` exactly.
     // Post-G16-B-B-rest sub-item D: + UcanClockNotInjected = 106
+    // Post-G16-B-G mini-review fp: + AtriumInactive = 107
     // (DEFAULT_NOW_SECS=0 fail-closed inversion at the
     // `UcanGroundedPolicy` chain-walker boundary).
     // Post-G16-B-F (sec-r4r1-2 BLOCKER closure): + SyncRevokedDuringSession = 107
