@@ -206,6 +206,24 @@ construction sites (`engine_diagnostics.rs::transaction` commit hook
 `CapabilityPolicy` impls can dispatch per-device under the SAME
 logical-actor identity per D-PHASE-3-25.
 
+**Phase-3 G16-D wave-6b on-the-wire device-DID-attestation envelope
+(plan §1 exit-criterion 16 closure).** `AtriumHandle::set_local_device_did`
+binds a device-DID to the handle for on-the-wire emission;
+`sync_subgraph` + `accept_sync_subgraph` emit a DAG-CBOR
+`DeviceAttestationEnvelope` (v1; carrying `Option<String> device_did`)
+BEFORE the Loro CRDT export on each leg. Receivers stash the inbound
+envelope's `device_did` into a per-zone `last_received_remote_device_did`
+slot; `Engine::apply_atrium_merge` populates `AttributionFrame.device_did`
+from the wire envelope's declared DID (preferred) and falls back to
+the local engine's `device_cid` only when no envelope was received
+(legacy / pre-G16-D peer / direct-test path that bypasses
+`sync_subgraph`). This closes the multi-device-same-identity exit
+criterion: two devices on the same actor identity sync as a single
+principal while AttributionFrame preserves DEVICE-grain provenance per
+Inv-14, defending against the "compromised device cannot be quarantined
+surgically" failure shape. Pinned end-to-end at
+`tests/integration/atrium_two_device.rs::atrium_two_device_same_identity_selective_zone_sync`.
+
 ---
 
 ## What "active" means in this table

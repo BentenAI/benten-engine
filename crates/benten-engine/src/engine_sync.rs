@@ -661,9 +661,8 @@ impl AtriumHandle {
         // Receive remote envelope FIRST, then remote Loro export, in
         // the same order the connect-side emitted them.
         let remote_envelope_bytes = conn.recv_bytes().await?;
-        let remote_envelope = DeviceAttestationEnvelope::from_canonical_bytes(
-            &remote_envelope_bytes,
-        )?;
+        let remote_envelope =
+            DeviceAttestationEnvelope::from_canonical_bytes(&remote_envelope_bytes)?;
         // Receive remote state.
         let remote_bytes = conn.recv_bytes().await?;
         // Stash the remote-device-DID before merge so apply_atrium_merge
@@ -696,9 +695,8 @@ impl AtriumHandle {
         // emits envelope-then-export, so accept-side consumes
         // envelope-then-export.
         let remote_envelope_bytes = conn.recv_bytes().await?;
-        let remote_envelope = DeviceAttestationEnvelope::from_canonical_bytes(
-            &remote_envelope_bytes,
-        )?;
+        let remote_envelope =
+            DeviceAttestationEnvelope::from_canonical_bytes(&remote_envelope_bytes)?;
         let remote_bytes = conn.recv_bytes().await?;
         // Stash the remote-device-DID before merge so apply_atrium_merge
         // can consume it via `last_received_remote_device_did`.

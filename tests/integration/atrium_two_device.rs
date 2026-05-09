@@ -79,10 +79,8 @@ async fn atrium_two_device_same_identity_selective_zone_sync() {
     // Step 1: Spin up two engines under the SAME actor_cid (account
     // identity) but DIFFERENT device_cids (laptop + phone).
     let actor_cid = Cid::from_blake3_digest(*blake3::hash(ACTOR_BYTES).as_bytes());
-    let laptop_device_cid =
-        Cid::from_blake3_digest(*blake3::hash(LAPTOP_DEVICE_BYTES).as_bytes());
-    let phone_device_cid =
-        Cid::from_blake3_digest(*blake3::hash(PHONE_DEVICE_BYTES).as_bytes());
+    let laptop_device_cid = Cid::from_blake3_digest(*blake3::hash(LAPTOP_DEVICE_BYTES).as_bytes());
+    let phone_device_cid = Cid::from_blake3_digest(*blake3::hash(PHONE_DEVICE_BYTES).as_bytes());
     assert_ne!(
         laptop_device_cid, phone_device_cid,
         "two-device pin requires distinct device CIDs"
