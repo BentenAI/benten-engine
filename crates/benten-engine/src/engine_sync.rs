@@ -285,6 +285,18 @@ impl DeviceAttestationEnvelope {
     /// Maximum supported wire-format version at this build. Receivers
     /// tolerate `version <= MAX_WIRE_VERSION`; newer versions reject
     /// with [`AtriumError::InvalidState`] (caller must upgrade).
+    ///
+    /// ## V1 → V2 cross-version compat (ds-fp-mr-g16dw6b-MINOR-1)
+    ///
+    /// V2 introduces signed-attestation + payload-hash + session-nonce
+    /// + envelope-signature fields without `#[serde(default)]` shims;
+    /// canonical-bytes-decoding a V1-emitted envelope into a V2 struct
+    /// would error at field absence. In practice this is harmless: V1
+    /// was never deployed (the V1 → V2 promotion lands inside the
+    /// SAME Phase-3 fix-pass that introduces the wire envelope; no
+    /// V1 peer exists in the wild). The version-rejection is honest:
+    /// V1 senders against V2 receivers fail at decode rather than
+    /// silently round-tripping unsigned bytes.
     pub const MAX_WIRE_VERSION: u8 = 2;
 
     /// Construct a legacy `attestation = None` envelope (no signed
