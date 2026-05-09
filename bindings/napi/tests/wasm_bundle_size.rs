@@ -97,7 +97,7 @@ fn gzip_size(raw: &[u8]) -> usize {
 }
 
 #[test]
-#[ignore = "RED-PHASE: full per-contributor twiggy/wasm-tools symbol-weight extraction lands at G14-A1 + G14-B + G18-A as their respective contributions land; G13-C lands the BrowserBackend contributor budget pin"]
+#[ignore = "RED-PHASE: per-contributor twiggy/wasm-tools symbol-weight extraction belongs at phase-3-backlog §4.3 G18-A-followup substantial wave (~500-1000 LOC; PARTIALLY CLOSED Compromise #19/#20 narrative at SECURITY-POSTURE.md per R6 fp Wave B PR #166). The §4.4 Bundle-content audit pins (forbidden-symbol blocklist) closed at R6 fp Wave B; this pin is the orthogonal symbol-weight half. Un-ignore once §4.3 lands."]
 fn wasm_r1_7_phase_3_bundle_delta_within_budget() {
     // br-r4-r1-3 / br-r4-r2-2 MAJOR pin (per-contributor regression
     // detection). The aggregate 600KB cap pin
