@@ -68,8 +68,8 @@ jobs:
 
     steps:
       - name: Checkout
-        # actions/checkout@v4 → resolved 2026-04-25
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        # actions/checkout@v5 → matches workspace-wide pin standardised in 9e68f84/e014653; bumped 2026-05-08 supply-chain audit
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Resolve strict-mode flag
         id: strict
