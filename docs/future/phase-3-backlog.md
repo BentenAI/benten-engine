@@ -1361,6 +1361,25 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 
 ---
 
+### 7.18 hlc_clock_skew_within_tolerance parallel-test race (shared `static MOCK_MS`) — CLOSED 2026-05-09 (orchestrator-direct fix-pass batch)
+
+**Origin (2026-05-09 PR #155 G16-B-prime CI):** the `cargo-llvm-cov` workflow on PR #155's fix-pass commit `ca16b37` failed with `update_within_custom_tolerance_accepts` panicking `assertion left == right failed: left: 1000000, right: 50500` at line 50. The expected value (`50_500`) matched the test's local `MOCK_MS.store(50_000, ...)` write; the actual value (`1_000_000`) matched a sibling test's write. The same fix-pass commit was previously GREEN on coverage at canary commit `76b8eba`, confirming flake — not regression.
+
+**Root cause:** the previous test file declared a single `static MOCK_MS: AtomicU64` shared across the four `#[test]` functions in the same test binary. `cargo test` runs the four tests in parallel by default (no `serial-globals` test-group override since this binary isn't in `.config/nextest.toml`'s serial group, and `cargo-llvm-cov` shells out to plain `cargo test --tests` which doesn't honor nextest groups even when configured). One test's `MOCK_MS.store(1_000_000)` won the last-write race against another test's `MOCK_MS.store(50_000)` between the second test's store and its `hlc.update(&remote)` call. Coverage instrumentation slowed tests enough to widen the race window.
+
+**Same root-cause class as §7.16 (CLOSED 2026-05-08 with `ctx_with_isolated_store` per-test isolation pattern).** That closure's signal-name → envelope-CID-collision shape didn't apply here, but the meta-pattern (process-shared mutable state colliding across parallel-scheduled tests in the same binary) is identical.
+
+**Closure shape (2026-05-09):** replaced the single shared `static MOCK_MS: AtomicU64` with four per-test `static MOCK_DEFAULT/MOCK_CUSTOM/MOCK_BOUNDARY/MOCK_PAST: AtomicU64` + four bare `fn` wrappers. The `Hlc::new` API takes a `fn() -> u64` bare pointer (not `impl Fn`), so each test had to own its own `static` + free `fn` (an `Arc<AtomicU64>` + closure shape doesn't coerce to `fn`). Each test's mock-clock state now lives in its own static regardless of harness scheduling.
+
+**Verification:** `cargo test -p benten-core --test hlc_clock_skew_within_tolerance` 60/60 consecutive runs PASS post-fix; subsequent `cargo-llvm-cov` runs on `main` should show no further `update_within_custom_tolerance_accepts` reds.
+
+**Cross-references:**
+- `crates/benten-core/tests/hlc_clock_skew_within_tolerance.rs` (per-test static decomposition; replaces the prior shared `MOCK_MS`)
+- §7.16 closure pattern (per-test isolated state injection) — reference precedent
+- PR #155 cargo-llvm-cov run `25591002108` job `75128549720` (failure that surfaced this entry)
+
+---
+
 ### 7.17 routed_edge_label classification hardening (carry list)
 
 **Origin (Pre-R4b 2026-05-08):** the `wait_signal_shape_optional_typing.rs::wait_signal_shape_mismatch_fires_typed_error_routed_on_error` test currently `#[ignore]`'s with a destination naming this row. The test asserts that a typed-shape mismatch routes to `WaitSignalShapeMismatch` rather than registration-time `None` routing when the wait signal carries a routed edge label.
@@ -1458,6 +1477,19 @@ Per CLAUDE.md item #15 (v1-milestone-gate framing): Phases 1+2a+2b+3 minimum + p
 - **Current state:** Open (D3 RESOLVED — additive Phase-3 change if real-workload bottleneck).
 - **v1-assessment question:** v1 paper-prototype revalidation may surface a workload that triggers cold-start as a real bottleneck. If so, the additive change is an opt-in instance pool (`engine.sandbox_pool({ size: N, idle_timeout_ms: T })`) that pre-warms wasmtime instances. Decision is whether to land it pre-v1 or accept cold-start as v1-shippable.
 - **Touch size if revisit lands:** ~150-300 LOC for opt-in pool + tests.
+
+### 10.6 napi cdylib production-build symbol-table scan + Cargo feature-graph closure assertion (r4-r1-wsa-3 LOAD-BEARING half of pim-2 §3.6b)
+
+- **Phase introduced:** 3 (R4b-r2 pin authored at G17-A1 wave-5b; never un-ignored)
+- **Origin:** r4b-wsa-5 (Phase-3 R4b wasmtime-sandbox lens, 2026-05-07): the prior `napi_cdylib_production_build_does_not_export_testing_helper_symbols` pin (formerly in `crates/benten-eval/tests/cfg_gating_audit.rs`, deleted 2026-05-09 in this batch) was the LOAD-BEARING half of the pim-2 §3.6b end-to-end shape per r4-r1-wsa-3. The 3 sibling source-cite pins in the same file were superseded by `crates/benten-eval/tests/sandbox_helpers_no_widening.rs` at G20-A1 wave-8a (file-level cfg gate + Cargo.toml default-off + pub-item-gating); the symbol-table-scan + Cargo feature-graph closure pin is **NOT covered** by the sibling — sandbox_helpers_no_widening.rs only audits source-side cfg-gating, NOT Cargo feature-graph composition that could transitively activate `benten-eval/test-helpers` from `bindings/napi`'s production feature set.
+- **Disposition (orchestrator-direct fix-pass batch, 2026-05-09):** the 3 superseded sibling pins in `cfg_gating_audit.rs` deleted; the `napi_cdylib_production_build_does_not_export_testing_helper_symbols` pin delegated here as the named v1-gate destination per HARD RULE rule-12 clause-(b). The architectural-absence checks at HEAD (sandbox_helpers_no_widening.rs file-level cfg gate + Cargo.toml default-off audit) close the easy regression vectors; this entry is the harder Cargo-feature-graph regression vector for v1-window investment.
+- **v1-assessment question:** is the symbol-table-scan + feature-graph defense-in-depth pin worth ~50-80 LOC + a CI workflow add (release-cdylib build + platform-conditional `nm`/`dumpbin` + toml-rs feature-graph closure walk)? Phase-3 architectural-absence checks already catch every realistic source-side regression; this pin defends against the harder Cargo-feature-graph composition regression where (e.g.) `bindings/napi.test-helpers = ["benten-eval/test-helpers"]` ends up in `bindings/napi`'s default features array.
+- **Touch size if revisit lands:** ~50-80 LOC test body + ~20-40 LOC CI workflow stanza for release cdylib build + platform-conditional symbol-table dump + (likely) Cargo feature-graph closure walk via `toml` crate.
+
+**Cross-references:**
+- `crates/benten-eval/tests/sandbox_helpers_no_widening.rs::sandbox_escape_helpers_no_widening_of_production_attack_surface` (the architectural-absence check that covers the easy regression vectors at HEAD)
+- `bindings/napi/Cargo.toml` (the production cdylib whose feature-graph closure must NOT transitively activate `benten-eval/test-helpers`)
+- Phase-2a `sec-r6r2-02` precedent (the named regression vector this pin would defend)
 
 ---
 
