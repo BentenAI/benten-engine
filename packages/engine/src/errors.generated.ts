@@ -163,6 +163,7 @@ export const CATALOG_CODES = [
   "E_TYPED_CALL_INVALID_INPUT",
   "E_TYPED_CALL_CAP_DENIED",
   "E_TYPED_CALL_DISPATCH_ERROR",
+  "E_UCAN_CLOCK_NOT_INJECTED",
   "E_RESERVED_HANDLER_NAMESPACE",
 ] as const;
 
@@ -2119,6 +2120,21 @@ export class ETypedCallDispatchError extends BentenError {
 }
 
 /**
+ * E_UCAN_CLOCK_NOT_INJECTED
+ *
+ * Thrown at: `crates/benten-caps/src/ucan_grounded.rs::UcanGroundedPolicy::typed_cap_permitted_by_proof` (Phase-3 G16-B-B-rest sub-item D). The fail-closed branch is the load-bearing assertion at the policy boundary; the `chain_has_time_bounds` helper at the same site distinguishes "chain depends on wallclock" from "chain is unbounded."
+ * Message template: "UCAN chain-walker invoked with no clock injected (now_secs=0 sentinel) against a chain with time-bounded delegations; inject a real clock via with_now_for_test (or wait for WriteContext::now threading per phase-3-backlog §2.3 (i))"
+ */
+export class EUcanClockNotInjected extends BentenError {
+  static readonly code = "E_UCAN_CLOCK_NOT_INJECTED";
+  static readonly fixHint = "The `UcanGroundedPolicy` chain-walker observed the `DEFAULT_NOW_SECS = 0` sentinel against a UCAN chain that carries time-bounded delegations (`nbf > 0` OR `exp > 0`). Pre-fail-closed-fix the chain-walker silently fail-OPENed: it walked tokens against `now=0`, so a forged chain with `nbf=0` + `exp > 0` accepted whenever the rest of the chain-walk passed (no operator-visible surface signaling the missing-clock misconfiguration). The inversion at G16-B-B-rest sub-item D fail-CLOSES with this typed code so the caller MUST inject a real wallclock. Production callers will inject via the `WriteContext::now`-threading work named in `docs/future/phase-3-backlog.md §2.3 (i)`; tests inject via `UcanGroundedPolicy::with_now_for_test`. A chain WITHOUT time bounds (`nbf=0` AND `exp` unset) is safe to walk at the sentinel and does NOT trigger this code.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_UCAN_CLOCK_NOT_INJECTED", "The `UcanGroundedPolicy` chain-walker observed the `DEFAULT_NOW_SECS = 0` sentinel against a UCAN chain that carries time-bounded delegations (`nbf > 0` OR `exp > 0`). Pre-fail-closed-fix the chain-walker silently fail-OPENed: it walked tokens against `now=0`, so a forged chain with `nbf=0` + `exp > 0` accepted whenever the rest of the chain-walk passed (no operator-visible surface signaling the missing-clock misconfiguration). The inversion at G16-B-B-rest sub-item D fail-CLOSES with this typed code so the caller MUST inject a real wallclock. Production callers will inject via the `WriteContext::now`-threading work named in `docs/future/phase-3-backlog.md §2.3 (i)`; tests inject via `UcanGroundedPolicy::with_now_for_test`. A chain WITHOUT time bounds (`nbf=0` AND `exp` unset) is safe to walk at the sentinel and does NOT trigger this code.", message, context);
+    this.name = "EUcanClockNotInjected";
+  }
+}
+
+/**
  * E_RESERVED_HANDLER_NAMESPACE
  *
  * Thrown at: `crates/benten-engine/src/engine.rs::register_subgraph` + `register_subgraph_replace` (Phase-3 G21-T3 §2.5(d) fold-in; corr-minor-3 carry from G21-T1 fp-mini-review). Fires BEFORE invariant validation / subgraph CID derivation so a misnamed registration has zero observable side effect on engine state.
@@ -2272,5 +2288,6 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_TYPED_CALL_INVALID_INPUT": ETypedCallInvalidInput,
   "E_TYPED_CALL_CAP_DENIED": ETypedCallCapDenied,
   "E_TYPED_CALL_DISPATCH_ERROR": ETypedCallDispatchError,
+  "E_UCAN_CLOCK_NOT_INJECTED": EUcanClockNotInjected,
   "E_RESERVED_HANDLER_NAMESPACE": EReservedHandlerNamespace,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;

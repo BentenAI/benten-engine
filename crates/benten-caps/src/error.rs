@@ -200,6 +200,30 @@ pub enum CapError {
         reason: String,
     },
 
+    /// G16-B-B-rest sub-item D: `UcanGroundedPolicy` chain-walker observed
+    /// a UCAN chain carrying time-bounded delegations (`nbf`/`exp` set)
+    /// while `now_secs` was at the `DEFAULT_NOW_SECS = 0` sentinel —
+    /// no real wallclock has been injected. Pre-fail-closed-fix the
+    /// chain-walker would have silently passed time checks against
+    /// `now=0` (chains with `nbf > 0` produced `NotYetValid` per-link
+    /// rejection, masking the clock-not-injected failure as
+    /// "chain-not-yet-active" — fail-OPEN against a forged chain that
+    /// happened to have `nbf=0`). The inversion fail-CLOSES at the
+    /// chain-walker entry: if `now_secs == 0` AND the chain has any
+    /// time-bounded delegation, abort with this typed code so the
+    /// caller surfaces the misconfiguration rather than silently
+    /// accepting whichever default disposition.
+    ///
+    /// See `crates/benten-caps/src/ucan_grounded.rs::DEFAULT_NOW_SECS`
+    /// + phase-3-backlog §2.3 (i) for the `WriteContext::now`-threading
+    /// work that lights up the real-clock production path.
+    #[error(
+        "UCAN chain-walker invoked with no clock injected (now_secs=0 sentinel) against a \
+         chain with time-bounded delegations; inject a real clock via with_now_for_test \
+         (or wait for WriteContext::now threading per phase-3-backlog §2.3 (i))"
+    )]
+    UcanClockNotInjected,
+
     /// G14-B: rate-limit policy plug rejected a write because the
     /// per-actor writes/sec/zone bucket exceeded its budget (per D-F
     /// + D-PHASE-3-26).
@@ -259,6 +283,7 @@ impl CapError {
             CapError::UcanAttenuationViolated { .. } => ErrorCode::CapUcanAttenuationViolated,
             CapError::UcanAudienceMismatch { .. } => ErrorCode::CapUcanAudienceMismatch,
             CapError::BackendStorage { .. } => ErrorCode::CapBackendStorage,
+            CapError::UcanClockNotInjected => ErrorCode::UcanClockNotInjected,
             CapError::RateLimitExceeded { .. } => ErrorCode::CapRateLimitExceeded,
             CapError::PeerBandwidthExceeded { .. } => ErrorCode::CapPeerBandwidthExceeded,
         }

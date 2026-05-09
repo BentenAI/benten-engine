@@ -129,20 +129,34 @@ fn ucan_chain_walk_propagates_nbf_exp_through_attenuation() {
         .expiry(now + 60)
         .sign(&root);
 
-    // Child claims long validity — but parent already expired.
+    // Child claims same exp — does NOT widen parent's window. Chain is
+    // structurally valid; only the per-link time-window check at
+    // `now + 120` (past parent.exp) drives the rejection. This pin
+    // asserts that parent expiry observably propagates through the
+    // chain even when the child does not widen.
+    //
+    // (Before G16-B-B-rest sub-item B time-window narrowing landed,
+    // a child claiming a wider exp than the parent silently passed
+    // structural validation and only the per-link time-window check
+    // caught the rejection. The narrowing pin
+    // `crates/benten-caps/tests/ucan_chain_window_narrowing.rs::
+    // ucan_chain_rejects_child_expires_after_parent` covers the
+    // child-widens-parent case explicitly; this pin covers the
+    // sister case where the child does NOT widen but the
+    // wallclock has rolled past the inherited expiry.)
     let child = Ucan::builder()
         .issuer(delegate.public_key().to_did().as_str())
         .audience(leaf_aud.public_key().to_did().as_str())
         .capability("/zone/posts", "read")
         .not_before(now - 1)
-        .expiry(now + 86_400)
+        .expiry(now + 60) // matches parent — no widening
         .proof(parent.clone())
         .sign(&delegate);
 
     let err = validate_chain_at(&[child, parent], now + 120).unwrap_err();
     assert!(
         matches!(err, UcanError::Expired { .. }),
-        "expected Expired (parent), got {err:?}"
+        "expected Expired (per-link time-window check propagating parent's expiry), got {err:?}"
     );
 }
 
