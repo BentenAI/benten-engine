@@ -56,6 +56,8 @@ use benten_engine::engine_sync::AtriumHandle;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
+use crate::identity::{JsDeviceAttestation, JsKeypair};
+
 /// G21-T2 fp-mini-review MAJOR-5 closure — a process-singleton tokio
 /// runtime shared across every JsAtrium handle.
 ///
@@ -321,40 +323,152 @@ impl JsAtrium {
         Ok(())
     }
 
-    /// Leave the atrium — tears down the per-session state.
+    /// Leave the atrium — tear down per-session sync participation
+    /// while preserving the underlying iroh transport so a subsequent
+    /// [`JsAtrium::rejoin`] can resume on the same handle.
     ///
-    /// G21-T2 fp-mini-review MAJOR-4 closure: drives the engine-side
-    /// `AtriumHandle::close().await` through the shared runtime
-    /// (see `js_atrium_runtime()` at the top of this file). Pre-fp-
-    /// mini-review the napi `leave()` body merely cleared
-    /// `engine_atrium = None`; iroh's `Endpoint::close()` does NOT
-    /// fire from synchronous Drop, so in-flight datagrams may not
-    /// flush and OS sockets may linger. Calling `close().await`
-    /// explicitly closes the endpoint cleanly.
+    /// R6-FP Wave A Sub-A1 (`napi-r6-r1-1`) closure semantic shift:
+    /// pre-Wave-A `leave()` drove `AtriumHandle::close(self)` which
+    /// CONSUMED the handle + tore down the iroh `Endpoint`, leaving
+    /// JS callers no path back to participation without rebuilding the
+    /// Engine. Wave A flips this to drive the non-consuming
+    /// [`AtriumHandle::leave`] (Phase-3 §6.12 item 7 — flips
+    /// `is_active` to false; iroh endpoint stays bound; per-zone Loro
+    /// state survives). The `engine_atrium` handle is RETAINED in
+    /// state so `rejoin()` can flip the flag back to true.
+    ///
+    /// Engine-side guarantee (per `engine_sync.rs` rustdoc on
+    /// `AtriumHandle::leave`): inbound merges + outbound publish/share/
+    /// close-share paths return `AtriumError::InvalidState` (mapped to
+    /// `E_ATRIUM_INACTIVE`) while inactive, without touching the
+    /// underlying transport.
     ///
     /// Trust + declared-attestation rosters survive across
-    /// leave/rejoin per the engine-side persistence contract; only
-    /// joined-state resets.
+    /// leave/rejoin per the engine-side persistence contract; only the
+    /// `is_active` flag transitions.
+    ///
+    /// Idempotent: a `leave()` on an already-inactive handle is a no-op.
+    ///
+    /// G21-T2 fp-mini-review MAJOR-4 history: an earlier revision of
+    /// this method routed through `close().await` for clean
+    /// `Endpoint::close()` flush semantics; preserved here is the
+    /// shared-runtime drive (no per-call runtime construction) for the
+    /// same iroh-background-task lifetime reasons documented at
+    /// `js_atrium_runtime()`.
     #[napi]
     pub fn leave(&self) -> Result<()> {
-        // Take the engine_atrium handle out of state under the lock
-        // (so a concurrent `is_joined` cannot observe a half-torn-
-        // down state). Then drive `close().await` outside the lock
-        // because `close` is async + can take a few hundred ms to
-        // flush in-flight datagrams.
         let handle_opt = {
             let mut state = self.state.lock().expect("atrium state mutex");
             state.joined_no_engine = false;
-            state.engine_atrium.take()
+            // Wave A: clone (NOT take) — the handle survives so
+            // `rejoin()` can resume on it.
+            state.engine_atrium.clone()
         };
         if let Some(handle) = handle_opt {
-            // `AtriumHandle::close(self)` consumes the handle so the
-            // last Arc-clone drops + the underlying iroh Endpoint
-            // shuts down. Awaiting on the shared runtime ensures the
-            // shutdown completes before `leave()` returns.
-            js_atrium_runtime().block_on(handle.close());
+            // Non-consuming engine-side `leave()` flips the
+            // `is_active` flag to false. Currently infallible per the
+            // engine-side rustdoc; the result-shape is preserved for
+            // future versions that may surface drain-failure reasons.
+            js_atrium_runtime()
+                .block_on(handle.leave())
+                .map_err(|e| {
+                    napi::Error::new(
+                        Status::GenericFailure,
+                        format!("E_ATRIUM_LEAVE_FAILED: leave failed: {e:?}"),
+                    )
+                })?;
         }
         Ok(())
+    }
+
+    /// R6-FP Wave A Sub-A1 closure (`napi-r6-r1-1`) — non-consuming
+    /// graceful re-engagement counterpart to [`JsAtrium::leave`].
+    ///
+    /// When the JsAtrium was constructed via `Engine.atrium(...)` AND a
+    /// previous `join()` populated an engine-side `AtriumHandle`,
+    /// drives [`AtriumHandle::leave`] then re-engages via
+    /// [`AtriumHandle::rejoin`]. Pre-G16-B-G the napi surface
+    /// previously exposed only `leave()`; JS callers had no way to
+    /// resume sync on the same handle without dropping + rebuilding the
+    /// whole engine-side iroh transport.
+    ///
+    /// G16-B-G engine-side semantics (Phase-3 §6.12 item 7): the iroh
+    /// endpoint stays bound across `leave()` / `rejoin()` cycles +
+    /// per-zone Loro state survives, so the next inbound merge
+    /// reconciles deterministically via Loro's natural delta-state
+    /// replay. Trust-store + declared-attestation tables also survive,
+    /// preserving causal-history continuity per the R4b dist-systems
+    /// lens carry.
+    ///
+    /// For the test-only `JsAtrium::create(...)` path (no engine-side
+    /// handle), flips the in-memory `joined_no_engine` flag back to
+    /// true so the existing TS round-trip pins keep working.
+    ///
+    /// Idempotent: a `rejoin()` on an already-active handle is a no-op
+    /// (the engine-side handle's `is_active` flag is already `true`).
+    #[napi]
+    pub fn rejoin(&self) -> Result<()> {
+        let engine_atrium = {
+            let mut state = self.state.lock().expect("atrium state mutex");
+            // Test-only `create()` path (no engine reference): flip the
+            // in-memory flag back to true so the existing TS round-trip
+            // pins observe `isActive === true` post-rejoin. Idempotent
+            // for already-joined-no-engine handles.
+            if state.engine.is_none() {
+                state.joined_no_engine = true;
+                return Ok(());
+            }
+            state.engine_atrium.clone()
+        };
+        if let Some(handle) = engine_atrium {
+            // Drive engine-side `rejoin()` through the shared runtime
+            // (see `js_atrium_runtime()` rationale at the top of this
+            // file). `AtriumHandle::rejoin` is idempotent + currently
+            // infallible; the result-shape is preserved for future
+            // versions that may surface re-bind failure.
+            js_atrium_runtime()
+                .block_on(handle.rejoin())
+                .map_err(|e| {
+                    napi::Error::new(
+                        Status::GenericFailure,
+                        format!("E_ATRIUM_REJOIN_FAILED: rejoin failed: {e:?}"),
+                    )
+                })?;
+        }
+        // If the engine reference exists but `engine_atrium` is None
+        // (meaning the engine-bound JsAtrium was never joined to begin
+        // with), `rejoin()` is a no-op — callers must drive `join()`
+        // first to populate the handle.
+        Ok(())
+    }
+
+    /// R6-FP Wave A Sub-A1 closure (`napi-r6-r1-1`) — observable
+    /// accessor for the Phase-3 §6.12 item 7 `is_active` lifecycle
+    /// flag.
+    ///
+    /// Returns `true` when this handle is participating in Atrium sync
+    /// (post-`join()` / post-`rejoin()`); `false` after `leave()` until
+    /// the next `rejoin()`. Mirrors [`AtriumHandle::is_active`] —
+    /// operators consume this from JS to gate UI affordances +
+    /// observability dashboards on peer-churn lifecycle state.
+    ///
+    /// Distinct from [`JsAtrium::is_joined`] (the existing getter),
+    /// which records whether this handle ever transitioned through
+    /// `join()` once. `is_joined` is sticky-true after the first
+    /// `join()`; `is_active` flips false on each `leave()` + true on
+    /// each `rejoin()`.
+    ///
+    /// For the test-only `JsAtrium::create(...)` path (no engine-side
+    /// handle), reflects the in-memory `joined_no_engine` flag so the
+    /// existing TS pins keep working without an engine instance.
+    #[napi(getter)]
+    pub fn is_active(&self) -> bool {
+        let state = self.state.lock().expect("atrium state mutex");
+        if let Some(handle) = state.engine_atrium.as_ref() {
+            handle.is_active()
+        } else {
+            state.joined_no_engine
+        }
     }
 
     /// List peers currently trusted in this atrium.
@@ -458,5 +572,196 @@ impl JsAtrium {
     pub fn list_declared_device_attestations(&self) -> Vec<DeviceAttestationDeclaration> {
         let state = self.state.lock().expect("atrium state mutex");
         state.declared_attestations.clone()
+    }
+
+    // ========================================================================
+    // R6-FP Wave A Sub-A2 closure (`napi-r6-r1-2`)
+    // ========================================================================
+    //
+    // Per CLAUDE.md baked-in #17, JS-driven full peers (Tauri / Electron
+    // / Node-AI-assistant deployments) are first-class. The G16-D wave-6b
+    // setters (`set_local_device_did` / `set_local_device_keypair` /
+    // `set_local_device_attestation` / `set_acceptor`) shipped engine-
+    // side at PR #163 but were Rust-only — JS-driven peers fell back to
+    // the legacy unsigned `device-cid:<hex>` envelope (no on-the-wire
+    // device-DID attestation) regardless of what attestation the JS
+    // caller wanted to bind.
+    //
+    // The four setters below close that gap. Each requires a prior
+    // `join()` on an engine-bound JsAtrium (constructed via
+    // `Engine.atrium(...)`); they return E_ATRIUM_NOT_JOINED otherwise,
+    // matching the engine-side requirement that the underlying
+    // `AtriumHandle` exists before its setters can fire.
+
+    /// R6-FP Wave A Sub-A2 (`napi-r6-r1-2`) — bind the local
+    /// device-DID for emission in the on-the-wire
+    /// [`benten_engine::engine_sync::DeviceAttestationEnvelope`].
+    ///
+    /// Mirrors [`AtriumHandle::set_local_device_did`]. Pass an empty
+    /// string to clear the binding (next outbound sync emits an
+    /// envelope with `device_did = None`); any non-empty string is
+    /// stored verbatim. Idempotent / replaceable — calling twice with
+    /// different DIDs replaces the slot.
+    ///
+    /// Composes with [`JsAtrium::set_local_device_keypair`] +
+    /// [`JsAtrium::set_local_device_attestation`]: when ALL three +
+    /// the attestation are bound, the wire envelope emitted is SIGNED
+    /// (V2 shape) — covering `(version, attestation, payload_hash,
+    /// session_nonce)` so the receiver can verify DID binding,
+    /// replay-resistance, and frame-pair payload-hash.
+    ///
+    /// Errors with `E_ATRIUM_NOT_JOINED` if called before `join()`.
+    #[napi]
+    pub fn set_local_device_did(&self, device_did: String) -> Result<()> {
+        let handle = self.engine_atrium_or_err("set_local_device_did")?;
+        let did_opt = if device_did.is_empty() {
+            None
+        } else {
+            Some(device_did)
+        };
+        js_atrium_runtime().block_on(handle.set_local_device_did(did_opt));
+        Ok(())
+    }
+
+    /// R6-FP Wave A Sub-A2 (`napi-r6-r1-2`) — bind the local device's
+    /// secret keypair for signing outbound device-attestation envelope
+    /// frames.
+    ///
+    /// Mirrors [`AtriumHandle::set_local_device_keypair`]. Pass a
+    /// `Keypair` to bind; pass nothing (call
+    /// [`JsAtrium::clear_local_device_keypair`]) to clear.
+    ///
+    /// Per `crypto-blocker-1`, [`benten_id::keypair::Keypair`] is
+    /// non-`Clone`; the napi `JsKeypair` wrapper duplicates via the
+    /// audited DAG-CBOR seed envelope path
+    /// (`export_seed_envelope` + `from_dag_cbor_envelope`). The bound
+    /// keypair lives engine-side under
+    /// `AtriumInner::local_device_keypair` (zeroize-on-drop).
+    ///
+    /// Independent of the iroh-endpoint keypair (held at
+    /// `AtriumInner::peer_keypair`); production deployments typically
+    /// pass the same conceptual keypair to both — but the seam is
+    /// preserved so forgery-test fixtures can drive mismatched cases.
+    ///
+    /// Errors with `E_ATRIUM_NOT_JOINED` if called before `join()`.
+    #[napi]
+    pub fn set_local_device_keypair(&self, keypair: &JsKeypair) -> Result<()> {
+        let handle = self.engine_atrium_or_err("set_local_device_keypair")?;
+        let kp = keypair.duplicate_via_envelope()?;
+        js_atrium_runtime().block_on(handle.set_local_device_keypair(Some(kp)));
+        Ok(())
+    }
+
+    /// R6-FP Wave A Sub-A2 (`napi-r6-r1-2`) — clear the local device's
+    /// signing keypair binding.
+    ///
+    /// After clearing, outbound envelopes fall back to the unsigned
+    /// legacy shape until a fresh keypair is bound via
+    /// [`JsAtrium::set_local_device_keypair`].
+    ///
+    /// Errors with `E_ATRIUM_NOT_JOINED` if called before `join()`.
+    #[napi]
+    pub fn clear_local_device_keypair(&self) -> Result<()> {
+        let handle = self.engine_atrium_or_err("clear_local_device_keypair")?;
+        js_atrium_runtime().block_on(handle.set_local_device_keypair(None));
+        Ok(())
+    }
+
+    /// R6-FP Wave A Sub-A2 (`napi-r6-r1-2`) — bind the local device's
+    /// signed [`benten_id::device_attestation::DeviceAttestation`]
+    /// for embedding in the outbound envelope.
+    ///
+    /// Mirrors [`AtriumHandle::set_local_device_attestation`]. When
+    /// the attestation is bound AND
+    /// [`JsAtrium::set_local_device_keypair`] has bound the device's
+    /// keypair, outbound `sync_subgraph` / `accept_sync_subgraph`
+    /// frames are SIGNED (V2 shape).
+    ///
+    /// Convenience: also updates the local device-DID slot (per the
+    /// engine-side rustdoc — `attestation.device_did` propagates to
+    /// `AtriumHandle::local_device_did`) so legacy callers reading
+    /// that slot observe the same identity.
+    ///
+    /// Errors with `E_ATRIUM_NOT_JOINED` if called before `join()`.
+    #[napi]
+    pub fn set_local_device_attestation(
+        &self,
+        attestation: &JsDeviceAttestation,
+    ) -> Result<()> {
+        let handle = self.engine_atrium_or_err("set_local_device_attestation")?;
+        let att = attestation.inner_clone();
+        js_atrium_runtime().block_on(handle.set_local_device_attestation(Some(att)));
+        Ok(())
+    }
+
+    /// R6-FP Wave A Sub-A2 (`napi-r6-r1-2`) — clear the local device's
+    /// attestation binding.
+    ///
+    /// After clearing, outbound envelopes fall back to the unsigned
+    /// legacy shape until a fresh attestation is bound via
+    /// [`JsAtrium::set_local_device_attestation`].
+    ///
+    /// Errors with `E_ATRIUM_NOT_JOINED` if called before `join()`.
+    #[napi]
+    pub fn clear_local_device_attestation(&self) -> Result<()> {
+        let handle = self.engine_atrium_or_err("clear_local_device_attestation")?;
+        js_atrium_runtime().block_on(handle.set_local_device_attestation(None));
+        Ok(())
+    }
+
+    /// R6-FP Wave A Sub-A2 (`napi-r6-r1-2`) — install a custom
+    /// [`benten_id::device_attestation::Acceptor`] for inbound envelope
+    /// verification, parameterised by a freshness window in seconds.
+    ///
+    /// Mirrors [`AtriumHandle::set_acceptor`] with a JS-friendly
+    /// constructor surface — the full Rust `Acceptor` struct (carrying
+    /// the nonce-store mutex + revocation list + optional expected-
+    /// parent gate) is not directly exposed across the napi boundary;
+    /// instead, this setter constructs a fresh acceptor with the given
+    /// `freshness_window_secs` (matching the existing
+    /// `JsDeviceAttestation::accept_at` pattern).
+    ///
+    /// `freshness_window_secs = 0` rejects any attestation older than
+    /// `now`; very large values (up to `u64::MAX`) accept-any-age.
+    /// Production deployments typically configure a window matching
+    /// the local UCAN backend's calibration (post-promotion) +
+    /// optionally seed a revocation list — the latter requires the
+    /// future [`JsAtrium::set_acceptor_with_revocations`] surface
+    /// which composes a `DeviceRevocation` napi shape (BELONGS-NAMED-
+    /// NOW per HARD RULE rule-12 to `docs/future/phase-3-backlog.md`
+    /// §3 acceptor-extension surface — kept out of this Wave to keep
+    /// the LOC budget honest).
+    ///
+    /// Errors with `E_ATRIUM_NOT_JOINED` if called before `join()`.
+    #[napi]
+    pub fn set_acceptor(&self, freshness_window_secs: u32) -> Result<()> {
+        let handle = self.engine_atrium_or_err("set_acceptor")?;
+        let acceptor = benten_id::device_attestation::Acceptor::new(
+            benten_id::device_attestation::FreshnessPolicy::seconds(
+                u64::from(freshness_window_secs),
+            ),
+        );
+        js_atrium_runtime().block_on(handle.set_acceptor(acceptor));
+        Ok(())
+    }
+}
+
+impl JsAtrium {
+    /// R6-FP Wave A Sub-A2 helper — borrow the engine-bound
+    /// `AtriumHandle`, returning an `E_ATRIUM_NOT_JOINED` napi error
+    /// when the handle hasn't been populated by `join()` yet (or when
+    /// the JsAtrium was constructed via the test-only
+    /// `JsAtrium::create(...)` ctor with no engine reference).
+    fn engine_atrium_or_err(&self, op: &'static str) -> Result<AtriumHandle> {
+        let state = self.state.lock().expect("atrium state mutex");
+        match state.engine_atrium.as_ref() {
+            Some(handle) => Ok(handle.clone()),
+            None => Err(napi::Error::new(
+                Status::GenericFailure,
+                format!(
+                    "E_ATRIUM_NOT_JOINED: {op} requires a prior join() on an engine-bound Atrium handle"
+                ),
+            )),
+        }
     }
 }
