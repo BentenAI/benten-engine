@@ -73,9 +73,8 @@ async fn iroh_bidirectional_sync(zone: &str, dialer: &AtriumHandle, accepter: &A
     let accepter_addr = accepter.loopback_addr().expect("accepter loopback addr");
     let accepter_clone = accepter.clone();
     let zone_owned = zone.to_string();
-    let accept_task = tokio::spawn(async move {
-        accepter_clone.accept_sync_subgraph(&zone_owned).await
-    });
+    let accept_task =
+        tokio::spawn(async move { accepter_clone.accept_sync_subgraph(&zone_owned).await });
     // Tiny pause so the accept task is parked on `accept_next` before
     // the dialer's connect arrives (mirrors the existing two-peer pin).
     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -275,10 +274,12 @@ async fn apply_atrium_merge_advances_anchor_chain_and_drains_change_events_on_re
 
     // Anchor-chain advance assertion: the anchor's CURRENT pointer now
     // points at the new merge-Version Node CID.
-    let current = peer_b_engine.read_current_version(&anchor).unwrap().unwrap();
+    let current = peer_b_engine
+        .read_current_version(&anchor)
+        .unwrap()
+        .unwrap();
     assert_eq!(
-        current,
-        new_cid,
+        current, new_cid,
         "anchor CURRENT pointer must advance to the new merge-Version Node CID after apply_atrium_merge"
     );
 }
@@ -315,8 +316,8 @@ async fn atrium_partial_partition_asymmetric_reachability_observable_state_expli
     // panicking.
     let phantom_keypair = benten_id::keypair::Keypair::generate();
     let phantom_pubkey_bytes = phantom_keypair.public_key().to_bytes();
-    let phantom_endpoint_id = iroh::EndpointId::from_bytes(&phantom_pubkey_bytes)
-        .expect("phantom endpoint id construct");
+    let phantom_endpoint_id =
+        iroh::EndpointId::from_bytes(&phantom_pubkey_bytes).expect("phantom endpoint id construct");
     let phantom_addr = iroh::EndpointAddr::new(phantom_endpoint_id);
 
     // Bound the connect with a tokio timeout so a regression that
@@ -394,4 +395,3 @@ async fn atrium_partial_partition_asymmetric_reachability_observable_state_expli
         "after a partial-partition (A↔B works; A↔phantom fails), the A↔B path MUST remain functional"
     );
 }
-

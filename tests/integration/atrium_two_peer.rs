@@ -29,7 +29,7 @@
 //! return zero events, OR the anchor CURRENT pointer would not
 //! advance.
 
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, clippy::too_many_lines)]
 #![cfg(not(target_arch = "wasm32"))]
 
 use std::time::Duration;

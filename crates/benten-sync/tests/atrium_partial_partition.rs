@@ -54,10 +54,11 @@ async fn atrium_partial_partition_asymmetric_reachability_observable_state_expli
         tokio::time::sleep(Duration::from_millis(50)).await;
         conn.close();
     });
-    let conn_a_b = tokio::time::timeout(Duration::from_secs(15), peer_a.connect_to_addr(peer_b_addr))
-        .await
-        .expect("a→b connect did not time out")
-        .expect("a→b connect");
+    let conn_a_b =
+        tokio::time::timeout(Duration::from_secs(15), peer_a.connect_to_addr(peer_b_addr))
+            .await
+            .expect("a→b connect did not time out")
+            .expect("a→b connect");
     conn_a_b.send_bytes(b"a-reaches-b").await.expect("send a→b");
     let received = tokio::time::timeout(Duration::from_secs(15), rx)
         .await

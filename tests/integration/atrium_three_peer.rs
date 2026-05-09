@@ -16,7 +16,7 @@
 //!   sibling pin landed here at R4-FP/R3-C; remains RED-PHASE for
 //!   G14-D wave-6b pairing).
 
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, clippy::too_many_lines)]
 #![cfg(not(target_arch = "wasm32"))]
 
 use std::time::Duration;

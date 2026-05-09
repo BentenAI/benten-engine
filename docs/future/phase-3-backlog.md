@@ -332,27 +332,35 @@
 
 **Source:** [`docs/VISION.md`](../VISION.md) "Atriums (Phase 3 committed) — peer-to-peer direct connections."
 
-### 3.1-followup Substantive end-to-end multi-peer iroh sync (Phase-3-close-blocking per Ben 2026-05-08)
+### 3.1-followup Substantive end-to-end multi-peer iroh sync — CLOSED at G16-B-E (2026-05-09)
 
-**Origin:** R4b distributed-systems lens flagged that the iroh transport + multi-peer end-to-end sync test pins remain RED-PHASE at HEAD `7a6c36a`. Plan §1 exit-criterion 1 mandates "Two full peer instances of `benten-engine` ... sync a shared subgraph bidirectionally over iroh transport" + the named end-to-end pins (`atrium_two_peer_bidirectional_sync` + `atrium_three_peer_loro_convergence_under_concurrent_writes` + `atrium_two_process_bidirectional_sync_end_to_end` + `atrium_partial_partition_asymmetric_reachability_observable_state_explicit`).
+**Origin:** R4b distributed-systems lens flagged that the iroh transport + multi-peer end-to-end sync test pins remained RED-PHASE at HEAD `7a6c36a`. Plan §1 exit-criterion 1 mandated "Two full peer instances of `benten-engine` ... sync a shared subgraph bidirectionally over iroh transport" + the named end-to-end pins.
 
-**Phase-3-close target:** Wire end-to-end iroh transport between two `benten-engine` peers + drive the named test pins green. Composes on top of the canary G16-B-A structural-surface contract (AttributionFrame extensions + LoroDoc::winning_attribution → AttributionFrame engine glue) — once the canary lands, the iroh transport substantive work has the cross-peer attribution seams it needs.
+**Closure:** G16-B-E wave landed substantive end-to-end iroh transport between full-peer `benten-engine` instances + drove the canonical pins green. Phase-3 exit-criteria 1 + 15 closed end-to-end.
 
-**Touch size estimate:** ~800-1500 LOC. Components:
-- iroh `Endpoint` connect/listen wiring at `crates/benten-sync/src/transport.rs` (G16-A canary already shipped the scaffold; substantive connect+exchange remains)
-- Per-zone Loro CRDT message-exchange protocol over iroh streams
-- Two-peer + three-peer integration test harness (probably under `tests/integration/atrium_*`)
-- ChangeEvent fan-out to receiver-side IVM materialization
-- Asymmetric reachability + relay-fallback test pins
-- Cross-process two-process variant
+**What landed (G16-B-E commits on `wave-g16-b-e`):**
 
-**Why Phase-3-close-blocking:** plan §1 exit-criterion 1 + criterion 15 (Atrium as working sociotechnical unit) + criterion 16 (multi-device support for a single identity) all literally require this end-to-end. Ben confirmed 2026-05-08: "end-to-end multi-peer iroh sync is definitely part of phase 3."
+- **Sub-item D — receiver-side ChangeEvent fan-out** (`crates/benten-engine/src/engine_diagnostics.rs::Engine::append_version`): routed the new-Version-Node put through `backend.transaction(|tx| tx.put_node(node))` rather than the inherent `backend.put_node`. The transactional path is the one that fans `ChangeEvent`s out to registered subscribers — without it `apply_atrium_merge`'s receiver-side `subscribe_change_events` ChangeProbe would observe ZERO events on a successful Loro merge.
+- **Sub-items A + B + C — iroh-transport substantive multi-peer pins:**
+  - `crates/benten-engine/tests/atrium_g16_b_e_substantive_e2e.rs::three_peer_loro_convergence_via_iroh_transport_concurrent_writes` (3-peer iroh-transport convergence; distinct from the pre-G16-B-E `atrium_lifecycle.rs::three_peer_loro_convergence_under_concurrent_writes` which exercised only `merge_remote_change` direct calls).
+  - `crates/benten-engine/tests/atrium_g16_b_e_substantive_e2e.rs::apply_atrium_merge_advances_anchor_chain_and_drains_change_events_on_receiver` (receiver-side Sub-item-D pin asserting ChangeProbe drains the merge-Version CID).
+  - `tests/integration/atrium_two_peer.rs::atrium_two_peer_bidirectional_sync` — exit-criterion 1 LOAD-BEARING; un-ignored.
+  - `tests/integration/atrium_three_peer.rs::atrium_three_peer_loro_convergence_under_concurrent_writes` — exit-criterion 15 LOAD-BEARING + C-10; un-ignored.
+- **Sub-item E — asymmetric reachability typed-error pin:**
+  - `crates/benten-sync/tests/atrium_partial_partition.rs::atrium_partial_partition_asymmetric_reachability_observable_state_explicit` un-ignored against the iroh transport surface directly. Surfaces `AtriumTransportError` mapped to `benten_errors::ErrorCode::AtriumTransportDegraded` per net-blocker-2 + net-major-3.
+  - `crates/benten-engine/tests/atrium_g16_b_e_substantive_e2e.rs::atrium_partial_partition_asymmetric_reachability_observable_state_explicit` engine-side companion (works alongside the prior A↔B leg + asserts post-partial-partition the A↔B path remains functional).
 
-**Wave shape:** likely a separate G16-B-E or G16-C wave dispatched after G16-B-substantive (canary + parallel-3) merges. The structural surface from canary G16-B-A is the precondition; G16-B-E rides on top.
+**Items still RED-PHASE / scoped elsewhere:**
+
+- `tests/integration/atrium_two_process.rs::atrium_two_process_bidirectional_sync_end_to_end` — scope-real-22 cross-process variant, scoped to G16-D wave-6b (handshake protocol body + cross-process driver are coupled).
+- `tests/integration/atrium_two_device.rs::atrium_two_device_same_identity_selective_zone_sync` — exit-criterion 16 multi-device-same-identity; awaits B-prime `device_did` attestation envelope-on-the-wire flow at G16-D wave-6b (the engine-side recording + RED-PHASE pin landed at G21-T3; the on-the-wire emission lands at G16-D wave-6b).
+- `tests/integration/atrium_three_peer.rs::atrium_three_peer_concurrent_writes_under_partial_revoke_with_offline_reconnect_converges` — ds-r4-1 Byzantine-class proptest; pairs with G14-D wave-6b cap-recheck-at-delivery + G16-C MST-diff-on-reconnect drain ordering surfaces.
+- `crates/benten-sync/tests/transport_loopback.rs::iroh_transport_relay_fallback_when_holepunch_fails` + `iroh_transport_holepunch_smoke` — scope-real-10 CI-conditional gating; G16-D wave-6b un-ignores once iroh test-fixture (synthetic NAT + relay endpoint) wires per pim-4 §3.10 wave-paired closure.
 
 **Cross-references:**
-- ds-r4b-1 finding in `.addl/phase-3/r4b-distributed-systems.json` (BLOCKER origin)
-- `.addl/phase-3/00-implementation-plan.md §1` exit criteria 1 / 15 / 16
+- ds-r4b-1 finding in `.addl/phase-3/r4b-distributed-systems.json` (BLOCKER closed at G16-B-E)
+- `.addl/phase-3/00-implementation-plan.md §1` exit criteria 1 ✅ + 15 ✅ + 16 ⏳ G16-D-wave-6b (multi-device-same-identity awaits device-attestation-envelope on-the-wire)
+- `.addl/phase-3/WAVE-G16-B-E-BRIEF.md` (wave brief; spec sources)
 - `.addl/phase-3/HANDOFF-2026-05-03-phase-3-kickoff.md` NS-T64 + NS-T65 (canary scope clarification 2026-05-08)
 
 ### 3.2 Per-subscriber filtering on the change-event stream — CLOSED at Phase-3 G14-D wave-5a (PR #115 commit `4d3f688`) + Phase-3 G21-T3 PR #147 partial-revoke
