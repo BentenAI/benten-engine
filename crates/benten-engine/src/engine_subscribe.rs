@@ -499,6 +499,103 @@ impl Engine {
             false
         }
     }
+
+    /// G16-B-D Compromise #11 deepest-pin helper: subscribe with an
+    /// observer that receives the eval-side [`EvalChangeEvent`]
+    /// directly — bypassing the production
+    /// [`OnChangeCallback`] adapter that wraps `payload_bytes` into a
+    /// [`Chunk`]. Lets test pins assert on `anchor_cid` / `kind` /
+    /// `actor_cid` / `labels` without a CBOR parser at the test scope.
+    ///
+    /// Mirrors the production [`Engine::on_change_with_cap_recheck`]
+    /// composition (delivery-time cap-recheck closure threaded through
+    /// the same eval-side `DeliveryCapRecheck` bridge), so the deepest
+    /// e2e composition pin verifies BOTH gates (G15-A materialization
+    /// + G14-D delivery) compose against a real subscription with
+    /// observable per-event delivery.
+    ///
+    /// ## Cfg-gating discipline (echoes `sandbox_helpers_no_widening`)
+    ///
+    /// Strictly cfg-gated under `cfg(any(test, feature = "test-helpers"))`.
+    /// The helper does NOT widen the production surface — it routes
+    /// through the same `register_on_change` registry as the
+    /// production path and the same delivery walk fires it; only the
+    /// callback-shape adapter is different (eval-side callback delivered
+    /// raw rather than mapped to `Chunk`).
+    ///
+    /// # Errors
+    /// See [`Engine::on_change_with_cap_recheck`].
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn testing_subscribe_observable_change_events(
+        &self,
+        pattern: &str,
+        observer: Arc<dyn Fn(&EvalChangeEvent) + Send + Sync + 'static>,
+        actor: &benten_core::Cid,
+        cap_recheck: crate::cap_recheck::CapRecheckFn,
+    ) -> Result<Subscription, EngineError> {
+        if pattern.is_empty() {
+            return Err(EngineError::Other {
+                code: ErrorCode::SubscribePatternInvalid,
+                message: "testing_subscribe_observable_change_events: pattern must be non-empty"
+                    .into(),
+            });
+        }
+        // Bridge engine-side CapRecheckFn (PrincipalId + zone + cid)
+        // → eval-side DeliveryCapRecheck (eval ChangeEvent), matching
+        // the production `on_change_with_cap_recheck` bridge above.
+        let principal = crate::cap_recheck::PrincipalId::from_actor_cid(*actor);
+        let zone_hint = pattern.split(':').next().unwrap_or("").to_string();
+        let inner_for_check = Arc::clone(&self.inner);
+        let actor_cid = *actor;
+        let recheck_arc = cap_recheck;
+        let bridged: benten_eval::primitives::subscribe::DeliveryCapRecheck =
+            Arc::new(move |event: &EvalChangeEvent| -> bool {
+                if !inner_for_check.is_actor_active(&actor_cid) {
+                    return false;
+                }
+                (recheck_arc)(&principal, zone_hint.as_str(), &event.anchor_cid)
+            });
+
+        // Eval-side callback delivers the raw ChangeEvent — no Chunk
+        // wrapping — so observers can assert anchor_cid / labels / kind.
+        let cb_for_eval: benten_eval::primitives::subscribe::OnChangeDeliveryCallback = {
+            let observer = Arc::clone(&observer);
+            Arc::new(move |event: &EvalChangeEvent| {
+                observer(event);
+            })
+        };
+
+        let eval_pattern = if pattern.contains('*') || pattern.contains('?') {
+            ChangePattern::LabelGlob(pattern.to_string())
+        } else {
+            ChangePattern::AnchorPrefix(pattern.to_string())
+        };
+
+        let active = Arc::new(AtomicBool::new(true));
+        let max_delivered_seq = Arc::new(AtomicU64::new(0));
+        let id = register_on_change(
+            eval_pattern,
+            EvalSubscribeCursor::Latest,
+            cb_for_eval,
+            Some(bridged),
+            Arc::clone(&active),
+            Arc::clone(&max_delivered_seq),
+        )
+        .map_err(|e| EngineError::Other {
+            code: e.error_code(),
+            message: format!(
+                "testing_subscribe_observable_change_events: registration failed: {e}"
+            ),
+        })?;
+
+        Ok(Subscription {
+            active,
+            max_delivered_seq,
+            pattern: pattern.to_string(),
+            cursor: SubscribeCursor::Latest,
+            registry_id: Some(id),
+        })
+    }
 }
 
 #[cfg(test)]

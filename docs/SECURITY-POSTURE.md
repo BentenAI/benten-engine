@@ -929,17 +929,35 @@ device-grain composition story alongside the Phase-3 sync-merge path:
   consumes for SUBSCRIBE delivery, so the layered defense is wired
   through one shared dispatch. Stands GREEN at canary scope.
 
-**Deferred deeper-e2e pin** —
-`compromise_11_both_gates_compose_observable_delivery_end_to_end`
-remains RED-PHASE pending the engine-side test surface that exposes
-ChangeEvent.anchor_cid directly (the production `OnChangeCallback`
-receives chunked-encoded CBOR; parsing in the test layer is brittle).
-Tracked at `docs/future/phase-3-backlog.md` §6.12 item 2 with two
-options: (a) introduce a `test_subscribe_observable_change_events`
-engine helper that bypasses chunk encoding; (b) ship a CBOR parser at
-the test scope. The structural composition pins above are sufficient
-for canary-scope mat-deny-wins coverage; the deepest end-to-end
-observation is the residual.
+**Phase-3 G16-B-D deepest-pin closure (2026-05-09).** The deepest
+end-to-end composition pin —
+`compromise_11_both_gates_compose_observable_delivery_end_to_end` —
+is GREEN at G16-B-D using Option (a): a new
+`Engine::testing_subscribe_observable_change_events` helper that
+exposes the eval-side `ChangeEvent` directly to test callbacks
+(bypassing the chunk-encoding bridge that the production
+`OnChangeCallback` adapter applies). The helper is strictly cfg-gated
+under `cfg(any(test, feature = "test-helpers"))` and lives in the
+same `engine_subscribe.rs` module as the production
+`on_change_with_cap_recheck`, sharing the same eval-side
+`DeliveryCapRecheck` bridge — so the test surface does NOT widen the
+production surface (echoes `sandbox_helpers_no_widening.rs` discipline;
+see `docs/future/phase-3-backlog.md` §10.6 for the harder Cargo-feature-
+graph defense-in-depth that may carry to v1-gate).
+
+The pin asserts the load-bearing dual-gate composition shape:
+
+- mat-admit ∩ delivery-admit = {row_A} (admitted by BOTH gates → in view AND delivered)
+- mat-deny ∩ delivery-admit = {row_B} (mat-denied → suppressed at view layer; delivery-admitted → delivered to observer; proves delivery layer is independent of mat layer)
+- mat-admit ∩ delivery-deny = {row_C} (delivery-denied → suppressed at delivery; mat-admitted → still in view; proves delivery-deny wins over mat-admit)
+
+End-to-end intersection (rows admitted by BOTH layers) = {row_A}, the
+load-bearing closure assertion of the dual-gate composition narrative.
+
+The would-fail-if-no-op'd discipline (pim-2 §3.6b) is satisfied
+because the per-row CapRecheckFn closures distinguishably differ from
+the structural pins above — the test would fail if either gate were
+silently no-op'd in a future regression.
 
 **Sync-grain interaction.** Compromise #11's row-level gate composes
 with the Phase-3 G16-B `AttributionFrame` extensions
