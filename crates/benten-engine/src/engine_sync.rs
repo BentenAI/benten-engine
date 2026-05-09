@@ -68,6 +68,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use tokio::sync::Mutex;
 
@@ -213,6 +214,22 @@ struct AtriumInner {
     /// `node-id:NNN` synthetic strings so the AttributionFrame still
     /// carries provenance per pim-2 end-to-end pin discipline.
     peer_did_registry: Mutex<BTreeMap<u64, String>>,
+    /// Phase-3 G16-B-prime (§6.12 item 7): peer-churn lifecycle flag.
+    ///
+    /// `true` after [`AtriumHandle::open`] / [`AtriumHandle::open_with_keypair`]
+    /// + after [`AtriumHandle::rejoin`]; `false` after
+    /// [`AtriumHandle::leave`]. While `false`, sync-touching surfaces
+    /// (`sync_subgraph` / `accept_sync_subgraph` / `merge_remote_change`)
+    /// reject with [`AtriumError::InvalidState`]. The iroh endpoint
+    /// stays bound across `leave()`/`rejoin()` cycles so the same handle
+    /// can resume without rebinding the underlying socket.
+    ///
+    /// Idempotency contract: `leave()` on an already-inactive handle is
+    /// a no-op; `rejoin()` on an already-active handle is a no-op. The
+    /// Loro CRDT state in `zones` survives across the
+    /// leave-rejoin window so post-rejoin merges reconcile via
+    /// CRDT-natural delta-state replay.
+    is_active: AtomicBool,
 }
 
 /// Phase-3 G21-T2 §D — declared device-attestation envelope recorded
@@ -301,6 +318,7 @@ impl AtriumHandle {
                 peer_keypair: keypair,
                 declared_device_attestations: Mutex::new(BTreeMap::new()),
                 peer_did_registry: Mutex::new(BTreeMap::new()),
+                is_active: AtomicBool::new(true),
             }),
         })
     }
@@ -443,6 +461,7 @@ impl AtriumHandle {
         zone: &str,
         remote_addr: iroh::EndpointAddr,
     ) -> AtriumResult<()> {
+        self.ensure_active("sync_subgraph")?;
         let conn = self.inner.endpoint.connect_to_addr(remote_addr).await?;
         self.sync_subgraph_over(zone, &conn).await
     }
@@ -457,6 +476,7 @@ impl AtriumHandle {
     ///
     /// As [`AtriumHandle::sync_subgraph`].
     pub async fn sync_subgraph_over(&self, zone: &str, conn: &Connection) -> AtriumResult<()> {
+        self.ensure_active("sync_subgraph_over")?;
         // Export local state for this zone.
         let local_export = {
             let zones = self.inner.zones.lock().await;
@@ -486,6 +506,7 @@ impl AtriumHandle {
     /// As [`AtriumHandle::sync_subgraph`] plus
     /// [`AtriumError::Transport`] on accept-side failure.
     pub async fn accept_sync_subgraph(&self, zone: &str) -> AtriumResult<Connection> {
+        self.ensure_active("accept_sync_subgraph")?;
         let conn = self.inner.endpoint.accept_next().await?;
         // Accept-side mirrors connect-side: receive remote, then send local.
         // Receive remote first to keep the protocol symmetric across
@@ -581,6 +602,11 @@ impl AtriumHandle {
         bytes: &[u8],
         incoming_hop_depth: u32,
     ) -> AtriumResult<SyncMergeAttribution> {
+        // §6.12 item 7 peer-churn lifecycle: reject inbound merges
+        // when the handle is in the post-`leave()` quiesced state. The
+        // check fires BEFORE row-4 SPLIT so a leave-then-merge attempt
+        // does not mutate the Loro doc state.
+        self.ensure_active("merge_remote_change_with_hop_depth")?;
         // row-4 SPLIT classification: walk the zone path against the
         // system-zone prefix list. The crdt-layer op_log_targets
         // surface gives us per-container granularity; for G16-B
@@ -635,6 +661,106 @@ impl AtriumHandle {
         let mut prefix = [0u8; 8];
         prefix.copy_from_slice(&pk_bytes[..8]);
         benten_core::hlc::BentenHlc::node_id_from_peer_id_bytes(prefix)
+    }
+
+    /// Phase-3 §6.12 item 7: observable accessor for the
+    /// `is_active` lifecycle flag.
+    ///
+    /// Returns `true` when the handle is participating in Atrium sync
+    /// (post-`open` / post-`rejoin`); `false` after a `leave()` until the
+    /// next `rejoin()`. Operators consume this to gate UI affordances
+    /// + observability dashboards on the peer-churn lifecycle state.
+    #[must_use]
+    pub fn is_active(&self) -> bool {
+        self.inner.is_active.load(Ordering::SeqCst)
+    }
+
+    /// Phase-3 §6.12 item 7: gate sync-touching surfaces on the
+    /// `is_active` flag. Returns [`AtriumError::InvalidState`] when the
+    /// handle is in the post-`leave()` quiesced state.
+    fn ensure_active(&self, op: &'static str) -> AtriumResult<()> {
+        if self.inner.is_active.load(Ordering::SeqCst) {
+            Ok(())
+        } else {
+            Err(AtriumError::InvalidState {
+                reason: format!("atrium handle is inactive (post-leave); {op} requires rejoin()"),
+            })
+        }
+    }
+
+    /// Phase-3 §6.12 item 7: non-consuming graceful tear-down.
+    ///
+    /// Flips the [`AtriumHandle::is_active`] flag to `false`. While
+    /// inactive, the sync-touching surfaces
+    /// ([`AtriumHandle::sync_subgraph`] / [`AtriumHandle::accept_sync_subgraph`]
+    /// / [`AtriumHandle::merge_remote_change`] /
+    /// [`AtriumHandle::merge_remote_change_with_hop_depth`]) return
+    /// [`AtriumError::InvalidState`] without touching the underlying
+    /// transport — defending against orphaned ChangeEvent fan-out per
+    /// the R4b dist-systems lens carry.
+    ///
+    /// The iroh endpoint stays bound + the per-zone Loro documents
+    /// survive in-memory so [`AtriumHandle::rejoin`] can resume on
+    /// the same handle without re-binding the underlying socket. This
+    /// is the peer-churn-friendly counterpart to the consuming
+    /// [`AtriumHandle::close`] surface.
+    ///
+    /// Idempotent: a `leave()` on an already-inactive handle is a no-op.
+    ///
+    /// # Errors
+    ///
+    /// Currently infallible (returns `Ok(())` always); the result-shape
+    /// is preserved for future versions that may surface drain-failure
+    /// reasons (e.g. an outbound subscription that refused to release
+    /// its registration cleanly).
+    #[allow(clippy::unused_async)]
+    pub async fn leave(&self) -> AtriumResult<()> {
+        // SeqCst per the §6.12 item 7 contract — the flag transition
+        // strictly precedes any subsequent merge-time check across
+        // arbitrary task scheduling.
+        self.inner.is_active.store(false, Ordering::SeqCst);
+        // Outbound subscription registrations + ChangeEvent fan-out
+        // surfaces drop here. Today the engine_sync.rs surface does
+        // NOT carry an in-flight subscription registry (the eval-side
+        // `ON_CHANGE_REGISTRY` is process-scoped per `phase-3-backlog`
+        // §6.12 item 8); when the per-handle subscription registry
+        // lands (item 8 option-(b) refactor), this site drops the
+        // handle's outbound entries from that registry. Until then the
+        // flag-flip alone suffices to gate fan-out at the merge seam.
+        Ok(())
+    }
+
+    /// Phase-3 §6.12 item 7: idempotent re-establishment on the same
+    /// handle.
+    ///
+    /// Flips the [`AtriumHandle::is_active`] flag back to `true`,
+    /// re-enabling the sync-touching surfaces. The iroh endpoint stays
+    /// bound across `leave()` / `rejoin()` cycles; the per-zone Loro
+    /// documents survive in-memory across the leave-rejoin window so
+    /// the next inbound merge reconciles state via Loro's natural
+    /// delta-state replay (CRDT idempotency under repeated application
+    /// of the same bytes).
+    ///
+    /// Continuity guarantee: the trust-store
+    /// (`peer_did_registry`) + the declared device-attestation table
+    /// + the per-zone Loro state ALL survive across `leave()` /
+    /// `rejoin()`. An `AttributionFrame::peer_did_set` minted on a
+    /// post-rejoin merge therefore observes the same peer-DID
+    /// resolutions as a pre-leave merge would have — preserving causal
+    /// history continuity per the R4b dist-systems lens carry.
+    ///
+    /// Idempotent: a `rejoin()` on an already-active handle is a no-op.
+    ///
+    /// # Errors
+    ///
+    /// Currently infallible (returns `Ok(())` always); the result-shape
+    /// is preserved for future versions that may surface re-bind
+    /// failure (e.g. when a future `close()`-then-`rejoin()` sequence
+    /// has to re-bind the iroh endpoint).
+    #[allow(clippy::unused_async)]
+    pub async fn rejoin(&self) -> AtriumResult<()> {
+        self.inner.is_active.store(true, Ordering::SeqCst);
+        Ok(())
     }
 
     /// Close the Atrium handle + tear down the iroh endpoint.
