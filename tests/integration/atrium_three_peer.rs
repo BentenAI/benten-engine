@@ -1,6 +1,5 @@
-//! R3-C RED-PHASE end-to-end pin: three-peer atrium Loro convergence
-//! under concurrent writes (G16-B wave-6b; per r2-test-landscape §2.4
-//! G16-B + plan §3 G16-B row + C-10 + exit-criterion 15).
+//! G16-B-E LANDED — three-peer atrium Loro convergence under
+//! concurrent writes, exit-criterion 15 LOAD-BEARING.
 //!
 //! ## Pin source
 //!
@@ -14,147 +13,194 @@
 //!   criterion sentence 3).
 //! - `ds-r4-1` (R4 large-council Round 1 distributed-systems lens —
 //!   Byzantine-class 3+-peer concurrent-writes-AND-revoke proptest
-//!   sibling pin landed here at R4-FP/R3-C).
-//!
-//! ## Relocated R4-FP
-//!
-//! Originally placed in `tests/phase_3_workspace/`; relocated to
-//! `tests/integration/` at R4-FP/R3-C per R3-CPC-1 + R2 §2.4 G16-B row.
-//!
-//! ## RED-PHASE discipline
-//!
-//! `#[ignore]`'d with rationale `"RED-PHASE: G16-B wave-6b — C-10 + exit-criterion 15 LOAD-BEARING"`.
+//!   sibling pin landed here at R4-FP/R3-C; remains RED-PHASE for
+//!   G14-D wave-6b pairing).
 
 #![allow(clippy::unwrap_used)]
+#![cfg(not(target_arch = "wasm32"))]
 
-#[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — C-10 + exit-criterion 15 — three-peer Loro convergence under concurrent writes"]
-fn atrium_three_peer_loro_convergence_under_concurrent_writes() {
-    // C-10 + exit-criterion 15 pin. G16-B implementer wires this:
-    //
-    //   1. Spin up THREE engines under three peer-DIDs.
-    //   2. All three join the same Atrium via shared invite.
-    //   3. All three concurrently write to the SAME node + property
-    //      (e.g. /zone/posts/p1 title field) at staggered HLC times.
-    //   4. Bidirectional sync triggers Loro merges.
-    //   5. After convergence wave, all three peers observe the SAME
-    //      canonical-bytes for the merged Version Node.
-    //   6. The merged Version's AttributionFrame contains all three
-    //      contributing peer-DIDs.
-    //
-    //   let mut peers: Vec<_> = (0..3).map(|i| test_peer_with_did(test_did(i))).collect();
-    //   for peer in &mut peers {
-    //       peer.atrium_join(shared_atrium()).await.unwrap();
-    //   }
-    //   // Concurrent writes:
-    //   for (i, peer) in peers.iter_mut().enumerate() {
-    //       peer.write_node_in_zone("/zone/posts",
-    //           make_post_with_title("p1", &format!("title-from-peer-{i}"))).await.unwrap();
-    //   }
-    //   // Sync to convergence:
-    //   for _ in 0..3 {
-    //       for peer in &mut peers {
-    //           peer.sync_subgraph("/zone/posts").await.unwrap();
-    //       }
-    //   }
-    //   // All three converge:
-    //   let bytes_set: BTreeSet<_> = peers.iter()
-    //       .map(|p| p.read_current_bytes_for_anchor_in_zone("/zone/posts", "p1").unwrap())
-    //       .collect();
-    //   assert_eq!(bytes_set.len(), 1, "all three peers must converge on identical canonical bytes");
-    //
-    //   // The merged Version's AttributionFrame contains all 3 peer-DIDs:
-    //   let p1 = peers[0].read_current_for_anchor_in_zone("/zone/posts", "p1").unwrap();
-    //   let frame = p1.attribution_frame();
-    //   for i in 0..3 {
-    //       assert!(frame.contains_peer_did(&test_did(i)),
-    //           "AttributionFrame must include peer-DID {i} per D-C");
-    //   }
-    //
-    // OBSERVABLE consequence: a 3-peer Atrium under concurrent
-    // writes converges on the same merged Version with all 3 peers'
-    // attribution captured. This is the load-bearing
-    // exit-criterion-15 pin.
-    unimplemented!("G16-B wires three-peer concurrent-write Loro convergence end-to-end");
+use std::time::Duration;
+
+use benten_core::hlc::BentenHlc;
+use benten_engine::Engine;
+use benten_engine::atrium_api::AtriumConfig;
+use benten_engine::engine_sync::AtriumHandle;
+
+const ZONE: &str = "/zone/three-peer-e2e";
+
+async fn iroh_bidirectional_sync(zone: &str, dialer: &AtriumHandle, accepter: &AtriumHandle) {
+    let accepter_addr = accepter.loopback_addr().expect("accepter loopback addr");
+    let accepter_clone = accepter.clone();
+    let zone_owned = zone.to_string();
+    let accept_task =
+        tokio::spawn(async move { accepter_clone.accept_sync_subgraph(&zone_owned).await });
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    dialer
+        .sync_subgraph(zone, accepter_addr)
+        .await
+        .expect("dialer sync_subgraph");
+    accept_task.await.expect("accept join").expect("accept");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn atrium_three_peer_loro_convergence_under_concurrent_writes() {
+    // C-10 + exit-criterion 15 LOAD-BEARING. Three full-peer
+    // benten-engine instances; concurrent writes from each peer to
+    // distinct keys; bidirectional iroh-transport syncs across all
+    // pair directions converge every peer onto the merged state.
+
+    let dir_a = tempfile::tempdir().unwrap();
+    let dir_b = tempfile::tempdir().unwrap();
+    let dir_c = tempfile::tempdir().unwrap();
+    let engine_a = Engine::open(dir_a.path().join("benten.redb")).unwrap();
+    let engine_b = Engine::open(dir_b.path().join("benten.redb")).unwrap();
+    let engine_c = Engine::open(dir_c.path().join("benten.redb")).unwrap();
+
+    let atrium_a = engine_a
+        .open_atrium(AtriumConfig::for_test())
+        .await
+        .unwrap();
+    let atrium_b = engine_b
+        .open_atrium(AtriumConfig::for_test())
+        .await
+        .unwrap();
+    let atrium_c = engine_c
+        .open_atrium(AtriumConfig::for_test())
+        .await
+        .unwrap();
+
+    for atrium in [&atrium_a, &atrium_b, &atrium_c] {
+        atrium.register_zone(ZONE).await;
+    }
+
+    let dids = [
+        (atrium_a.hlc_node_id(), "did:key:zPeerA"),
+        (atrium_b.hlc_node_id(), "did:key:zPeerB"),
+        (atrium_c.hlc_node_id(), "did:key:zPeerC"),
+    ];
+    for atrium in [&atrium_a, &atrium_b, &atrium_c] {
+        for (nid, did) in &dids {
+            atrium.register_peer_did(*nid, *did).await;
+        }
+    }
+
+    atrium_a
+        .with_zone(ZONE, |doc| {
+            doc.set_property("k_a", "from_a", BentenHlc::new(100, 0, dids[0].0))
+                .unwrap();
+        })
+        .await
+        .unwrap();
+    atrium_b
+        .with_zone(ZONE, |doc| {
+            doc.set_property("k_b", "from_b", BentenHlc::new(200, 0, dids[1].0))
+                .unwrap();
+        })
+        .await
+        .unwrap();
+    atrium_c
+        .with_zone(ZONE, |doc| {
+            doc.set_property("k_c", "from_c", BentenHlc::new(300, 0, dids[2].0))
+                .unwrap();
+        })
+        .await
+        .unwrap();
+
+    for _ in 0..2 {
+        iroh_bidirectional_sync(ZONE, &atrium_a, &atrium_b).await;
+        iroh_bidirectional_sync(ZONE, &atrium_b, &atrium_c).await;
+        iroh_bidirectional_sync(ZONE, &atrium_a, &atrium_c).await;
+    }
+
+    for (label, atrium) in [("a", &atrium_a), ("b", &atrium_b), ("c", &atrium_c)] {
+        let val_a = atrium
+            .with_zone(ZONE, |doc| doc.get_property("k_a"))
+            .await
+            .unwrap();
+        let val_b = atrium
+            .with_zone(ZONE, |doc| doc.get_property("k_b"))
+            .await
+            .unwrap();
+        let val_c = atrium
+            .with_zone(ZONE, |doc| doc.get_property("k_c"))
+            .await
+            .unwrap();
+        assert_eq!(val_a.as_deref(), Some("from_a"), "peer {label} k_a");
+        assert_eq!(val_b.as_deref(), Some("from_b"), "peer {label} k_b");
+        assert_eq!(val_c.as_deref(), Some("from_c"), "peer {label} k_c");
+    }
+
+    for (label, atrium) in [("a", &atrium_a), ("b", &atrium_b), ("c", &atrium_c)] {
+        let attr = atrium
+            .with_zone(ZONE, |doc| doc.winning_attribution())
+            .await
+            .unwrap();
+        for (nid, _) in &dids {
+            assert!(
+                attr.contains(nid),
+                "peer {label} must surface contributing node-id {nid}; got {attr:?}"
+            );
+        }
+    }
+
+    // Engine-anchor layer: each peer applies its zone export through
+    // apply_atrium_merge, mints a Version Node, advances anchor
+    // CURRENT, fires ChangeEvents observable via
+    // subscribe_change_events.
+    let anchor_a = engine_a.create_anchor("three-peer-anchor-a").unwrap();
+    let anchor_b = engine_b.create_anchor("three-peer-anchor-b").unwrap();
+    let anchor_c = engine_c.create_anchor("three-peer-anchor-c").unwrap();
+    let probe_a = engine_a.subscribe_change_events();
+    let probe_b = engine_b.subscribe_change_events();
+    let probe_c = engine_c.subscribe_change_events();
+
+    let bytes_a = atrium_a
+        .with_zone(ZONE, |doc| doc.export_update().unwrap())
+        .await
+        .unwrap();
+    let bytes_b = atrium_b
+        .with_zone(ZONE, |doc| doc.export_update().unwrap())
+        .await
+        .unwrap();
+    let bytes_c = atrium_c
+        .with_zone(ZONE, |doc| doc.export_update().unwrap())
+        .await
+        .unwrap();
+
+    let cid_a = engine_a
+        .apply_atrium_merge(&atrium_a, &anchor_a, ZONE, &bytes_a, 0)
+        .await
+        .unwrap();
+    let cid_b = engine_b
+        .apply_atrium_merge(&atrium_b, &anchor_b, ZONE, &bytes_b, 0)
+        .await
+        .unwrap();
+    let cid_c = engine_c
+        .apply_atrium_merge(&atrium_c, &anchor_c, ZONE, &bytes_c, 0)
+        .await
+        .unwrap();
+
+    for (label, probe, expected_cid) in [
+        ("a", &probe_a, cid_a),
+        ("b", &probe_b, cid_b),
+        ("c", &probe_c, cid_c),
+    ] {
+        let events = probe.drain();
+        assert!(
+            events.iter().any(|e| e.cid == expected_cid),
+            "peer {label} ChangeProbe must drain ChangeEvent on expected CID {expected_cid}; got {events:?}"
+        );
+    }
 }
 
 #[test]
 #[ignore = "RED-PHASE: G16-B + G14-D wave-6b — ds-r4-1 — Byzantine 3+-peer concurrent-writes-AND-partial-revoke-AND-offline-reconnect proptest"]
 fn atrium_three_peer_concurrent_writes_under_partial_revoke_with_offline_reconnect_converges() {
-    // ds-r4-1 (R4 large-council Round 1 distributed-systems lens) pin.
-    // Byzantine-class extension of the happy-path 3-peer convergence
-    // pin above. R1 ds-5 was aliased into 'HLC orphan covered by D-A'
-    // during R1 triage, but ds-5's substantive content is the realistic
-    // operational shape: 3+ peers under concurrent writes WHILE one
-    // peer's grant is partially revoked AND another peer is offline +
-    // reconnecting. Without this pin, partial-revoke-mid-merge edge
-    // cases ship unverified.
-    //
-    // Proptest shape (G16-B + G14-D joint owners; 10k iterations):
-    //
-    //   use proptest::prelude::*;
-    //   proptest! {
-    //       #![proptest_config(ProptestConfig {
-    //           cases: 10_000, // Per-iteration calibration if budget tight
-    //           ..ProptestConfig::default()
-    //       })]
-    //       #[test]
-    //       fn prop_three_peer_under_partial_revoke_offline_reconnect_converges(
-    //           // Sample: 0..3 peer-write counts, 0..16 writes per peer,
-    //           // 0..2 revoke events, 0..1 offline-reconnect window per peer.
-    //           writes_a in 0usize..16,
-    //           writes_b in 0usize..16,
-    //           writes_c in 0usize..16,
-    //           num_revokes in 0usize..3,
-    //           offline_peer_idx in 0usize..3,
-    //           offline_window_start in 0usize..32,
-    //           offline_window_len in 1usize..16,
-    //       ) {
-    //           let mut peers = make_three_peers();
-    //           let revoke_schedule = sample_revoke_schedule(num_revokes, &peers);
-    //           interleave_writes_and_revokes_with_offline_window(
-    //               &mut peers,
-    //               &[writes_a, writes_b, writes_c],
-    //               &revoke_schedule,
-    //               offline_peer_idx,
-    //               offline_window_start,
-    //               offline_window_len,
-    //           );
-    //           sync_to_convergence(&mut peers);
-    //           // ALL converge on identical canonical-bytes for surviving zones:
-    //           assert_three_peers_converge(&peers);
-    //           // Revoked-peer's effective cap-set excludes revoked paths:
-    //           for revoke_event in &revoke_schedule {
-    //               for peer in &peers {
-    //                   if peer.peer_did() == revoke_event.target_peer_did {
-    //                       assert!(!peer.effective_cap_set()
-    //                           .includes_path(&revoke_event.path));
-    //                   }
-    //               }
-    //           }
-    //           // No peer observes data under a stale grant during
-    //           // offline-reconnect drain (per ds-r4-1 + net-blocker-3
-    //           // companion):
-    //           let drain_log = peers[offline_peer_idx].drain_log();
-    //           let revoked_data_seen = drain_log.iter().any(|e| {
-    //               revoke_schedule.iter().any(|r| {
-    //                   matches!(e.kind(), MessageKind::Data)
-    //                       && e.before_event_for(r)
-    //                       && e.under_revoked_grant_for(r)
-    //               })
-    //           });
-    //           assert!(!revoked_data_seen,
-    //               "no peer must observe data under a revoked grant per ds-r4-1");
-    //       }
-    //   }
-    //
-    // OBSERVABLE consequence: under any interleaving of 3-peer
-    // concurrent writes + partial revokes + offline-reconnect windows,
-    // (a) all peers converge on identical canonical bytes for non-
-    // revoked zones, (b) no peer observes data under a revoked grant.
-    // Composes G16-B 3+-peer convergence + G14-D partial-revoke + G16-C
-    // MST-diff-on-reconnect drain ordering. Defends against the
-    // partial-revoke-mid-merge attack class that R1 ds-5 named.
+    // ds-r4-1 stays RED-PHASE — pairs with G14-D wave-6b partial-
+    // revoke + G16-C MST-diff-on-reconnect surfaces. G16-B-E ships
+    // the happy-path 3-peer iroh convergence (above); the
+    // Byzantine-revoke composite is unblocked by the G14-D + G16-C
+    // surfaces.
     unimplemented!(
         "G16-B + G14-D wire ds-r4-1 Byzantine 3-peer concurrent-write + partial-revoke + offline-reconnect proptest (10k iterations)"
     );

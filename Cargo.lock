@@ -3574,6 +3574,12 @@ version = "0.0.0"
 [[package]]
 name = "phase-3-integration-tests"
 version = "0.0.0"
+dependencies = [
+ "benten-core",
+ "benten-engine",
+ "tempfile",
+ "tokio",
+]
 
 [[package]]
 name = "phase-3-workspace-tests"
