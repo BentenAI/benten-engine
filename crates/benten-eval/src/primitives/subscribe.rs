@@ -978,6 +978,17 @@ pub type DeliveryCapRecheck = Arc<dyn Fn(&ChangeEvent) -> bool + Send + Sync + '
 /// converts.
 pub type OnChangeDeliveryCallback = Arc<dyn Fn(&ChangeEvent) + Send + Sync + 'static>;
 
+/// Phase-3 R6-FP Wave-C1 (cap-r6-r1-1 / r4b-cap-6 closure): optional
+/// stream-termination notification callback fired ONCE when the
+/// per-event delivery-time cap-recheck returns `false` (CLR-2 §11
+/// dual-layer recheck) and the subscription is auto-cancelled. The
+/// callback receives the typed [`crate::EvalError::SubscribeRevokedMidStream`]
+/// that JS/TS consumers can route on (via the engine-layer adapter
+/// that bridges this notification to the napi error envelope or to
+/// a `Subscription::termination_reason` field). `None` for
+/// subscriptions that opt out of typed-termination observability.
+pub type TerminationNotifyCallback = Arc<dyn Fn(&crate::EvalError) + Send + Sync + 'static>;
+
 /// One ad-hoc onChange registration row.
 struct OnChangeEntry {
     pattern: ChangePattern,
@@ -996,10 +1007,43 @@ struct OnChangeEntry {
     /// `seq <= horizon_at_register` predate the registration and are
     /// skipped for `Latest` cursor mode.
     horizon_at_register: u64,
+    /// Phase-3 R6-FP Wave-C1 (cap-r6-r1-1 / r4b-cap-6 closure): optional
+    /// stream-termination notification fired ONCE when the cap-recheck
+    /// auto-cancels the subscription. Engine-layer adapter binds this
+    /// to the `Subscription::termination_reason` field + bridges the
+    /// typed `EvalError::SubscribeRevokedMidStream` to the napi error
+    /// envelope so JS/TS consumers observe `err.code ===
+    /// 'E_SUBSCRIBE_REVOKED_MID_STREAM'` per CLR-2 typed-error contract.
+    termination_notify: Option<TerminationNotifyCallback>,
+    /// Phase-3 R6-FP Wave-C1: shared termination-reason slot. Populated
+    /// with `Some(ErrorCode::SubscribeRevokedMidStream)` when the
+    /// cap-recheck fires the auto-cancel path. Engine-side
+    /// `Subscription::termination_reason()` reads this slot so the
+    /// JS/TS consumer can distinguish revoke-auto-cancel from
+    /// buffer-overflow / GC / cursor-skip / engine-shutdown drops.
+    termination_reason: Arc<std::sync::Mutex<Option<ErrorCode>>>,
 }
 
 static ON_CHANGE_REGISTRY: std::sync::LazyLock<Mutex<HashMap<SubscriberId, OnChangeEntry>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Phase-3 R6-FP Wave-C1 (cap-r6-r1-1 / r4b-cap-6 closure): cumulative
+/// process-wide count of SUBSCRIBE / on_change cap-recheck-driven
+/// terminations. Bumped exactly once per auto-cancel firing. Mirrors
+/// the `Engine::sync_replica_cap_recheck_calls` observability shape;
+/// pim-2 §3.6b end-to-end discipline pins assert this counter
+/// increments when the typed `E_SUBSCRIBE_REVOKED_MID_STREAM` fires.
+static SUBSCRIBE_REVOKED_MID_STREAM_COUNT: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+/// Read the cumulative count of SUBSCRIBE cap-recheck-driven
+/// terminations fired across the process lifetime. Test pins +
+/// operator dashboards consume this for the typed-error
+/// observability contract closure (cap-r6-r1-1 / r4b-cap-6).
+#[must_use]
+pub fn subscribe_revoked_mid_stream_count() -> u64 {
+    SUBSCRIBE_REVOKED_MID_STREAM_COUNT.load(std::sync::atomic::Ordering::Relaxed)
+}
 
 /// Register an ad-hoc onChange consumer with the process-wide registry.
 /// Returns the `SubscriberId` keyed under, which the engine-layer
@@ -1009,6 +1053,13 @@ static ON_CHANGE_REGISTRY: std::sync::LazyLock<Mutex<HashMap<SubscriberId, OnCha
 /// # Errors
 /// Surfaces pattern-validation failures at the same code points
 /// `register_inner` would.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Phase-3 R6-FP Wave-C1 widened by 2 args (typed-termination notify + reason \
+              slot) per cap-r6-r1-1 / r4b-cap-6 closure. The arg shape is the load-bearing \
+              registry contract; collapsing into a struct would scatter the call-site \
+              wireup across two crates without a corresponding clarity win."
+)]
 pub fn register_on_change(
     pattern: ChangePattern,
     cursor: SubscribeCursor,
@@ -1016,6 +1067,19 @@ pub fn register_on_change(
     cap_recheck: Option<DeliveryCapRecheck>,
     active: Arc<std::sync::atomic::AtomicBool>,
     max_delivered_seq: Arc<std::sync::atomic::AtomicU64>,
+    // Phase-3 R6-FP Wave-C1 (cap-r6-r1-1 / r4b-cap-6 closure): optional
+    // typed-termination notify shape. Fired ONCE when the cap-recheck
+    // auto-cancels the subscription so the consumer observes the
+    // typed `EvalError::SubscribeRevokedMidStream` rather than a
+    // silent stream-end. `None` for subscriptions that opt out.
+    termination_notify: Option<TerminationNotifyCallback>,
+    // Phase-3 R6-FP Wave-C1: shared termination-reason slot bound at
+    // registration time so the engine-side `Subscription` handle can
+    // surface `Subscription::termination_reason()` after the
+    // cap-recheck fires the auto-cancel. Defaults to `None` (no
+    // termination yet); flipped to `Some(SubscribeRevokedMidStream)`
+    // by the publish loop when the recheck returns `false`.
+    termination_reason: Arc<std::sync::Mutex<Option<ErrorCode>>>,
 ) -> Result<SubscriberId, SubscribeError> {
     pattern.validate().map_err(|code| match code {
         ErrorCode::SubscribePatternInvalid => SubscribeError::PatternInvalid,
@@ -1064,6 +1128,8 @@ pub fn register_on_change(
         max_delivered_seq,
         cap_recheck,
         horizon_at_register: horizon,
+        termination_notify,
+        termination_reason,
     };
     ON_CHANGE_REGISTRY
         .lock()
@@ -1191,6 +1257,8 @@ pub fn publish_change_event_with_labels(labels: &[String], event: ChangeEvent) {
                         max_delivered_seq: Arc::clone(&e.max_delivered_seq),
                         cap_recheck: e.cap_recheck.clone(),
                         horizon_at_register: e.horizon_at_register,
+                        termination_notify: e.termination_notify.clone(),
+                        termination_reason: Arc::clone(&e.termination_reason),
                     },
                 )
             })
@@ -1239,6 +1307,54 @@ pub fn publish_change_event_with_labels(labels: &[String], event: ChangeEvent) {
         if let Some(check) = &entry.cap_recheck
             && !(check)(&event)
         {
+            // Phase-3 R6-FP Wave-C1 (cap-r6-r1-1 / r4b-cap-6 closure):
+            // typed-error emission for the auto-cancel path. Per
+            // CLR-2 §11 dual-layer recheck, the typed
+            // `E_SUBSCRIBE_REVOKED_MID_STREAM` MUST surface to the
+            // consumer so JS/TS callers distinguish 'cap-revoke
+            // auto-cancel' from buffer-overflow / GC / cursor-skip /
+            // engine-shutdown drops. Three composing surfaces:
+            //   (a) bump the process-wide observability counter
+            //       so test pins assert the typed-error firing
+            //       observably (pim-2 §3.6b production-flow drive);
+            //   (b) populate the shared `termination_reason` slot
+            //       with `ErrorCode::SubscribeRevokedMidStream` so
+            //       the engine-side `Subscription::termination_reason()`
+            //       accessor returns the typed code;
+            //   (c) fire the optional `termination_notify` callback
+            //       with the typed `EvalError::SubscribeRevokedMidStream`
+            //       so engine adapters can bridge the typed shape
+            //       through to the napi error envelope (engine-layer
+            //       wireup binds this when `on_change_with_cap_recheck`
+            //       installs the recheck closure).
+            SUBSCRIBE_REVOKED_MID_STREAM_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            // (b) shared termination-reason slot — populated only if
+            //     not already set so a duplicate-fire (the publish
+            //     walk visits this entry again before the GC sweep
+            //     completes) does not overwrite the original cause.
+            if let Ok(mut slot) = entry.termination_reason.lock()
+                && slot.is_none()
+            {
+                *slot = Some(ErrorCode::SubscribeRevokedMidStream);
+            }
+            // (c) typed-termination notify — fire ONCE per the CLR-2
+            //     contract. The callback receives the typed
+            //     `EvalError::SubscribeRevokedMidStream` carrying
+            //     hex-rendered actor + anchor so JS/TS consumers
+            //     route on the typed shape. Catch panics so a
+            //     misbehaving consumer does not take down the
+            //     publish thread (mirrors the existing callback
+            //     panic-catch precedent below).
+            if let Some(notify) = entry.termination_notify.as_ref() {
+                let typed = crate::EvalError::SubscribeRevokedMidStream {
+                    actor_cid: None,
+                    anchor_cid: Some(event.anchor_cid.to_base32()),
+                };
+                let notify = Arc::clone(notify);
+                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    notify(&typed);
+                }));
+            }
             // Cap was revoked mid-stream — auto-cancel the subscription
             // (D5 contract). Flip the active flag so the next walk GCs it.
             entry.active.store(false, Ordering::SeqCst);

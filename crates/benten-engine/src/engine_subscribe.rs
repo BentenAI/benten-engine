@@ -113,6 +113,18 @@ pub struct Subscription {
     /// registry slot. `None` for handles constructed via
     /// `testing_open_subscription_for_test` (no registry slot to free).
     registry_id: Option<SubscriberId>,
+    /// Phase-3 R6-FP Wave-C1 (cap-r6-r1-1 / r4b-cap-6 closure): shared
+    /// termination-reason slot populated by the eval-side publish
+    /// loop's auto-cancel path with
+    /// [`ErrorCode::SubscribeRevokedMidStream`] when the per-event
+    /// delivery-time cap-recheck returns `false`. The
+    /// [`Subscription::termination_reason`] accessor reads this slot
+    /// so JS/TS consumers can distinguish 'cap-revoke auto-cancel'
+    /// from buffer-overflow / GC / cursor-skip / engine-shutdown
+    /// drops per the CLR-2 §11 typed-error contract. `None` for
+    /// handles whose subscription was unsubscribed cleanly (no
+    /// recheck-failure).
+    termination_reason: Arc<std::sync::Mutex<Option<ErrorCode>>>,
 }
 
 impl std::fmt::Debug for Subscription {
@@ -154,6 +166,22 @@ impl Subscription {
     #[must_use]
     pub fn max_delivered_seq(&self) -> u64 {
         self.max_delivered_seq.load(Ordering::SeqCst)
+    }
+
+    /// Phase-3 R6-FP Wave-C1 (cap-r6-r1-1 / r4b-cap-6 closure): typed
+    /// termination reason populated by the eval-side publish loop
+    /// when the per-event delivery-time cap-recheck returns `false`.
+    /// Returns `Some(ErrorCode::SubscribeRevokedMidStream)` after
+    /// the auto-cancel firing; `None` for handles whose subscription
+    /// was unsubscribed cleanly (consumer-driven close / Drop) or
+    /// dropped for non-revocation reasons (cursor-skip /
+    /// engine-shutdown). Per CLR-2 §11 the typed-error observability
+    /// contract for JS/TS consumers reads this slot through the
+    /// napi binding so consumers route on
+    /// `err.code === 'E_SUBSCRIBE_REVOKED_MID_STREAM'`.
+    #[must_use]
+    pub fn termination_reason(&self) -> Option<ErrorCode> {
+        self.termination_reason.lock().ok().and_then(|g| g.clone())
     }
 
     /// Explicitly release the subscription. Idempotent.
@@ -437,6 +465,13 @@ impl Engine {
             }
         };
 
+        // Phase-3 R6-FP Wave-C1 (cap-r6-r1-1 / r4b-cap-6 closure): bind
+        // the shared termination-reason slot so the eval-side publish
+        // loop's auto-cancel path can populate it with
+        // `ErrorCode::SubscribeRevokedMidStream` and the engine-side
+        // `Subscription::termination_reason()` accessor reads the same
+        // slot.
+        let termination_reason = Arc::new(std::sync::Mutex::new(None));
         let id = register_on_change(
             eval_pattern,
             eval_cursor,
@@ -444,6 +479,8 @@ impl Engine {
             cap_recheck,
             Arc::clone(&active),
             Arc::clone(&max_delivered_seq),
+            None,
+            Arc::clone(&termination_reason),
         )
         .map_err(|e| EngineError::Other {
             code: e.error_code(),
@@ -456,6 +493,7 @@ impl Engine {
             pattern: pattern.to_string(),
             cursor,
             registry_id: Some(id),
+            termination_reason,
         })
     }
 
@@ -480,6 +518,7 @@ impl Engine {
             pattern: pattern.to_string(),
             cursor,
             registry_id: None,
+            termination_reason: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -573,6 +612,7 @@ impl Engine {
 
         let active = Arc::new(AtomicBool::new(true));
         let max_delivered_seq = Arc::new(AtomicU64::new(0));
+        let termination_reason = Arc::new(std::sync::Mutex::new(None));
         let id = register_on_change(
             eval_pattern,
             EvalSubscribeCursor::Latest,
@@ -580,6 +620,8 @@ impl Engine {
             Some(bridged),
             Arc::clone(&active),
             Arc::clone(&max_delivered_seq),
+            None,
+            Arc::clone(&termination_reason),
         )
         .map_err(|e| EngineError::Other {
             code: e.error_code(),
@@ -594,6 +636,7 @@ impl Engine {
             pattern: pattern.to_string(),
             cursor: SubscribeCursor::Latest,
             registry_id: Some(id),
+            termination_reason,
         })
     }
 }

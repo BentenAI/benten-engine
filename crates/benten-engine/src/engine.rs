@@ -1209,12 +1209,74 @@ impl Engine {
             .first()
             .map(|did| Cid::from_blake3_digest(*blake3::hash(did.as_bytes()).as_bytes()))
             .or_else(|| self.effective_actor_cid());
-        for (key, _stamped) in &writes {
+        for (key, stamped) in &writes {
             // Bump the per-row recheck counter — observable via
             // `Engine::sync_replica_cap_recheck_calls`. Pinned in
             // `sync_replica_attribution.rs::sync_replica_write_cap_recheck_at_delivery_against_local_grant_store`.
             self.sync_replica_cap_recheck_count
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+            // Phase-3 R6-FP Wave-C1 (ds-r6-1 / hlc-r6-r1-1 / sec-r4r2-1
+            // closure): per-row inbound HLC skew classifier. Calls
+            // `Hlc::update` against the row's wire HLC; on
+            // `CoreError::HlcSkewExceeded` rejects the entire merge
+            // (atomic-merge contract — a single skew-exceeding row
+            // vetoes the whole merge per the existing per-row
+            // revocation precedent). Defends against an adversarial
+            // peer manipulating its local HLC to inject future-
+            // timestamped writes that would bias LWW resolution +
+            // forge revocation-vs-data ordering per
+            // `attack_hlc_skew_revocation_ordering.rs`.
+            //
+            // Composes with the existing `Hlc::update`-internal contract
+            // (`benten-core/src/hlc.rs::update`): the local clock is
+            // NOT mutated when the skew check rejects, so a rejected
+            // merge leaves the local HLC state pristine for the next
+            // legitimate frame.
+            // Phase-3 R6-FP Wave-C1 (ds-r6-1 closure): Inv-13 row-4
+            // SPLIT op-by-op classifier — any property key inside an
+            // otherwise-applicable user-zone op-log that begins with
+            // a system-zone prefix rejects at dispatch with
+            // `E_SYNC_DIVERGENT_CID_REJECTED`. Defends against an
+            // adversarial peer crafting a Loro op-log whose merge
+            // bytes are valid at the CRDT layer but whose keys
+            // mutate Anchor-immutable Node properties per Inv-13's
+            // structural immutability invariant. Mirrors the
+            // existing whole-zone `zone_is_system_zone` row-4b
+            // dispatch but at finer per-key granularity per the
+            // sec-r4r2-1 / `attack_loro_op_log_inv_13.rs` recommendation.
+            for prefix in crate::system_zones::SYSTEM_ZONE_PREFIXES {
+                if key.starts_with(prefix) {
+                    return Err(EngineError::Other {
+                        code: ErrorCode::SyncDivergentCidRejected,
+                        message: format!(
+                            "apply_atrium_merge: Loro op-log row key '{key}' inside zone \
+                             '{zone}' targets system-zone prefix '{prefix}' — Inv-13 row-4b \
+                             dispatch reject (sec-r4r2-1 attack-vector defense)"
+                        ),
+                    });
+                }
+            }
+            atrium
+                .inner_inbound_hlc_skew_classifier_count()
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let remote_hlc: benten_core::hlc::BentenHlc = stamped.hlc.clone().into();
+            if let Err(benten_core::CoreError::HlcSkewExceeded {
+                local_physical_ms,
+                remote_physical_ms,
+                tolerance_ms,
+            }) = atrium.local_hlc().update(&remote_hlc)
+            {
+                return Err(EngineError::Other {
+                    code: ErrorCode::SyncHlcDrift,
+                    message: format!(
+                        "apply_atrium_merge: inbound HLC skew exceeded for zone {zone} \
+                         (remote_physical_ms={remote_physical_ms} \
+                         local_physical_ms={local_physical_ms} \
+                         tolerance_ms={tolerance_ms})"
+                    ),
+                });
+            }
 
             // Per-row revocation check: if `(actor_cid, scope)` is in
             // the in-memory revocation set under EITHER the bare zone

@@ -281,6 +281,25 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // `crates/benten-engine/src/engine_sync.rs::DeviceAttestationEnvelope::verify`.
     // Joins the `ON_DENIED` routing family per CLR-2 dual-layer recheck.
     ErrorCode::DeviceAttestationForged,
+    // Phase-3 R6-FP Wave-C1 (ds-r6-1 / sec-r4r2-1 attack-vector
+    // pin closure): sync-frame trust-boundary rejection codes.
+    //   `SyncHashMismatch` — MST-diff entry's declared CID does not
+    //     match BLAKE3(payload). Construction site at
+    //     `crates/benten-sync/src/mst.rs::Mst::apply_entries` (already
+    //     wired) + the engine receive-boundary surface that drives
+    //     `tests/attack_mst_diff_cid_mismatch.rs` end-to-end.
+    //   `SyncHlcDrift` — inbound sync frame HLC `physical_ms` exceeds
+    //     local clock by more than the skew-tolerance window.
+    //     Construction site at
+    //     `crates/benten-engine/src/engine.rs::apply_atrium_merge`
+    //     per-row HLC verification loop (calls
+    //     `benten_core::hlc::Hlc::update`).
+    //   `SyncCapUnverified` — inbound sync frame WRITE without a
+    //     verifiable cap-chain. Reserved-but-not-yet-emitted shape
+    //     companion to `SyncRevokedDuringSession`.
+    ErrorCode::SyncHashMismatch,
+    ErrorCode::SyncHlcDrift,
+    ErrorCode::SyncCapUnverified,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -494,8 +513,16 @@ fn variant_count_is_pinned() {
     // criterion 16 per Ben ratification 2026-05-09): + DeviceAttestationForged
     // = 109 (signed wire envelope verification — DID forgery / replay /
     // frame-pair payload-hash binding rejection at `apply_atrium_merge`).
+    // Post-R6-FP Wave-C1 (ds-r6-1 / sec-r4r2-1 attack-vector pin closure):
+    // + SyncHashMismatch + SyncHlcDrift + SyncCapUnverified = 112 (MST-diff
+    // declared-vs-computed CID mismatch + inbound-sync-frame HLC skew
+    // rejection at apply_atrium_merge per-row Hlc::update + reserved
+    // companion to SyncRevokedDuringSession). Wave-C2 (parallel) adds 2
+    // more ErrorCodes (DSL); whichever of C1/C2 merges second bumps count
+    // from 112 to 114 per dispatch-conventions §3.5g sequential-merge
+    // resolution pattern.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 109,
+        CATALOG_VARIANT_COUNT, 112,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

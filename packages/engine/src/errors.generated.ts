@@ -654,7 +654,7 @@ export class ESyncHlcDrift extends BentenError {
 /**
  * E_SYNC_CAP_UNVERIFIED
  *
- * Thrown at: Sync-receive
+ * Thrown at: Sync-receive (reserved companion to `E_SYNC_REVOKED_DURING_SESSION` per Phase-3 R6-FP Wave-C1 — covers the missing-or-malformed cap-chain case where a peer never had a valid grant; the revoked-mid-session case fires `E_SYNC_REVOKED_DURING_SESSION` from `apply_atrium_merge`'s per-row recheck. The `SyncCapUnverified` construction site lands when the handshake-time cap-chain validator wires through; until then the variant is reachability-ignored as a forward-compat catalog reservation.)
  * Message template: "Received WRITE lacks valid capability chain from {peer}"
  */
 export class ESyncCapUnverified extends BentenError {

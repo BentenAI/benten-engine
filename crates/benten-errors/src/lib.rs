@@ -749,6 +749,53 @@ pub enum ErrorCode {
     /// `KeypairError` / `UcanError` / `VcError` that bubbles out of
     /// the typed-CALL dispatch boundary). Routes to `ON_ERROR`.
     TypedCallDispatchError,
+    /// Phase-3 R6-FP Wave-C1 (ds-r6-1 closure): an inbound MST-diff
+    /// entry's payload bytes hashed to a CID different from the
+    /// declared CID on the entry. Per sec-r4r2-1 attack-vector pin
+    /// `attack_mst_diff_cid_mismatch.rs`, the application-layer
+    /// rehash check at `benten_sync::mst::Mst::apply_entries` /
+    /// `benten_engine::engine_sync::AtriumHandle::merge_remote_change` /
+    /// the engine's `consume_sync_replica_mst_diff` boundary
+    /// rejects entries whose declared CID does not match
+    /// `BLAKE3(payload)`. Defends against MITM-crafted MST entries
+    /// that pass transport-level structural checks but carry forged
+    /// content under a legitimate CID. Distinct from
+    /// [`ErrorCode::SyncDivergentCidRejected`] (which is for
+    /// divergent-but-internally-consistent CIDs across peers; this
+    /// code names declared-vs-computed mismatch on a single entry).
+    /// Maps to `E_SYNC_HASH_MISMATCH`. Routes to `ON_DENIED` per the
+    /// cap-denial / trust-boundary-rejection family precedent
+    /// (an MST-diff entry whose declared CID does not match its bytes
+    /// is a content-addressing trust-boundary violation).
+    SyncHashMismatch,
+    /// Phase-3 R6-FP Wave-C1 (ds-r6-1 / sec-r4r2-1 closure): an
+    /// inbound sync frame carried an HLC stamp whose `physical_ms`
+    /// exceeded the local clock by more than the configured
+    /// skew-tolerance window. Defends against an adversarial peer
+    /// manipulating its local HLC to inject future-timestamped writes
+    /// that bias LWW resolution + forge revocation-vs-data ordering.
+    /// Construction site at
+    /// `crates/benten-engine/src/engine.rs::apply_atrium_merge`'s
+    /// per-row HLC verification loop, which calls
+    /// `benten_core::hlc::Hlc::update` against each row's wire HLC
+    /// and rejects on `CoreError::HlcSkewExceeded`. Distinct from
+    /// [`ErrorCode::HlcSkewExceeded`] (single-clock skew detection
+    /// inside `benten-core`; same routing family) — this code names
+    /// the SYNC-boundary surface specifically so audit pipelines can
+    /// route on it independently of in-process clock-skew
+    /// observations. Maps to `E_SYNC_HLC_DRIFT`. Routes to
+    /// `ON_DENIED` per the sync-trust-boundary rejection family.
+    SyncHlcDrift,
+    /// Phase-3 R6-FP Wave-C1 (ds-r6-1 / sec-r4r2-1 closure): an
+    /// inbound sync frame carried a WRITE without a verifiable
+    /// capability chain from the originating peer. Mirrors the
+    /// `SyncRevokedDuringSession` shape but covers the
+    /// missing-or-malformed cap-chain case (the peer never had a
+    /// valid grant, vs `SyncRevokedDuringSession` where the grant
+    /// existed but was revoked between handshake and delivery).
+    /// Maps to `E_SYNC_CAP_UNVERIFIED`. Routes to `ON_DENIED` per
+    /// the cap-denial family precedent.
+    SyncCapUnverified,
     /// Phase-3 G21-T3 §2.5(d): a user attempted to register a
     /// handler whose `handler_id` starts with the reserved
     /// `engine:typed:` namespace. The eval-side dispatch fork
@@ -976,6 +1023,9 @@ impl ErrorCode {
             ErrorCode::TypedCallDispatchError => "E_TYPED_CALL_DISPATCH_ERROR",
             // Phase-3 G21-T3 §2.5(d) — reserved handler-id namespace
             ErrorCode::ReservedHandlerNamespace => "E_RESERVED_HANDLER_NAMESPACE",
+            ErrorCode::SyncHashMismatch => "E_SYNC_HASH_MISMATCH",
+            ErrorCode::SyncHlcDrift => "E_SYNC_HLC_DRIFT",
+            ErrorCode::SyncCapUnverified => "E_SYNC_CAP_UNVERIFIED",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -1076,7 +1126,17 @@ impl ErrorCode {
             // cap-denial routing family per the same precedent as
             // `CapDenied` / `SandboxHostFnDenied` (the dispatching
             // grant lacked the per-op required capability).
-            | ErrorCode::TypedCallCapDenied => Some("ON_DENIED"),
+            | ErrorCode::TypedCallCapDenied
+            // Phase-3 R6-FP Wave-C1 (ds-r6-1 / sec-r4r2-1 closure):
+            // sync-frame trust-boundary rejections — declared-CID-vs-
+            // computed-CID mismatch (content-addressing trust violation),
+            // inbound HLC skew (LWW-bias / revocation-vs-data ordering
+            // forgery), and missing/malformed cap-chain on inbound writes
+            // — all join the cap-denial / trust-boundary rejection family
+            // per the same routing precedent as `SyncRevokedDuringSession`.
+            | ErrorCode::SyncHashMismatch
+            | ErrorCode::SyncHlcDrift
+            | ErrorCode::SyncCapUnverified => Some("ON_DENIED"),
 
             // Not-found family — explicit ON_NOT_FOUND. SANDBOX manifest +
             // host-fn lookup miss join here per ESC-15 + D1 random-deferred
@@ -1481,6 +1541,11 @@ impl ErrorCode {
             "E_TYPED_CALL_DISPATCH_ERROR" => ErrorCode::TypedCallDispatchError,
             // Phase-3 G21-T3 §2.5(d) — reserved handler-id namespace.
             "E_RESERVED_HANDLER_NAMESPACE" => ErrorCode::ReservedHandlerNamespace,
+            // Phase-3 R6-FP Wave-C1 (ds-r6-1 / sec-r4r2-1 closure) —
+            // sync-frame trust-boundary rejection codes.
+            "E_SYNC_HASH_MISMATCH" => ErrorCode::SyncHashMismatch,
+            "E_SYNC_HLC_DRIFT" => ErrorCode::SyncHlcDrift,
+            "E_SYNC_CAP_UNVERIFIED" => ErrorCode::SyncCapUnverified,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }

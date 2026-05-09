@@ -72,10 +72,25 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use tokio::sync::Mutex;
 
+use benten_core::hlc::Hlc;
 use benten_id::keypair::Keypair;
 use benten_sync::crdt::{CrdtError, LoroDoc};
 use benten_sync::peer_id::PeerId;
 use benten_sync::transport::{Connection, Endpoint, TransportKind, TransportStatus};
+
+/// Phase-3 R6-FP Wave-C1 (ds-r6-1 closure): system-time-backed
+/// physical-clock callback for `Hlc::update` at the Atrium row-4a
+/// inbound-sync-frame skew classifier. Returns wall-clock milliseconds
+/// since UNIX_EPOCH. Saturating-on-error so a clock that briefly
+/// returns `Err` (e.g. cross-boundary into pre-1970 epochs) does not
+/// poison the merge boundary; the saturating-zero floor pairs with
+/// the asymmetric `Hlc::update` skew check (rejects future-skew but
+/// never rejects past-skew per Kulkarni-Demirbas algorithm).
+fn system_time_ms_for_atrium_hlc() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
+}
 
 use crate::atrium_api::{AtriumConfig, AtriumMode, SyncStatus};
 use crate::system_zones::SYSTEM_ZONE_PREFIXES;
@@ -143,6 +158,49 @@ pub enum AtriumError {
         /// Operator-readable cause naming which of the three failure
         /// modes fired.
         reason: String,
+    },
+
+    /// Phase-3 R6-FP Wave-C1 (ds-r6-1 / sec-r4r2-1 attack-vector closure):
+    /// an inbound sync-replica row carried an HLC stamp whose
+    /// `physical_ms` exceeded the local clock by more than the
+    /// configured skew-tolerance window. Defends against an adversarial
+    /// peer manipulating its local HLC to inject future-timestamped
+    /// writes that would bias LWW resolution + forge revocation-vs-data
+    /// ordering. Construction site at
+    /// `crates/benten-engine/src/engine.rs::apply_atrium_merge`'s
+    /// per-row [`Hlc::update`] verification loop. Carries observable
+    /// diagnostic state so operators can distinguish skew detection
+    /// from transport-level rejection. Maps to
+    /// [`benten_errors::ErrorCode::SyncHlcDrift`]; routes to
+    /// `ON_DENIED`.
+    #[error(
+        "atrium inbound HLC skew exceeded: remote_physical_ms={remote_physical_ms} \
+         local_physical_ms={local_physical_ms} tolerance_ms={tolerance_ms}"
+    )]
+    HlcSkewExceeded {
+        /// Local physical clock reading at the merge boundary.
+        local_physical_ms: u64,
+        /// Remote HLC `physical_ms` carried on the offending row.
+        remote_physical_ms: u64,
+        /// Configured skew-tolerance window in milliseconds.
+        tolerance_ms: u64,
+    },
+
+    /// Phase-3 R6-FP Wave-C1 (ds-r6-1 / sec-r4r2-1 attack-vector closure):
+    /// an inbound MST-diff entry's payload bytes hashed to a CID
+    /// different from the declared CID on the entry. Defends against
+    /// MITM-crafted MST entries that pass transport-level structural
+    /// checks but carry forged content under a legitimate CID. Maps to
+    /// [`benten_errors::ErrorCode::SyncHashMismatch`]; routes to
+    /// `ON_DENIED`.
+    #[error(
+        "atrium MST-diff entry CID-byte mismatch: declared={declared_cid} computed={computed_cid}"
+    )]
+    MstEntryCidByteMismatch {
+        /// Declared CID rendered as hex.
+        declared_cid: String,
+        /// Computed CID (BLAKE3 of payload bytes) rendered as hex.
+        computed_cid: String,
     },
 }
 
@@ -549,6 +607,10 @@ impl AtriumError {
             AtriumError::DeviceAttestationForged { .. } => {
                 benten_errors::ErrorCode::DeviceAttestationForged
             }
+            AtriumError::HlcSkewExceeded { .. } => benten_errors::ErrorCode::SyncHlcDrift,
+            AtriumError::MstEntryCidByteMismatch { .. } => {
+                benten_errors::ErrorCode::SyncHashMismatch
+            }
         }
     }
 }
@@ -673,6 +735,32 @@ struct AtriumInner {
     /// per-zone after a successful merge so a stale envelope does not
     /// leak into a later merge that didn't get a fresh wire envelope.
     last_received_remote_device_did: Mutex<BTreeMap<String, Option<String>>>,
+    /// Phase-3 R6-FP Wave-C1 (ds-r6-1 / hlc-r6-r1-1 closure): the
+    /// local HLC clock used by the inbound-sync-frame skew classifier
+    /// at [`crate::Engine::apply_atrium_merge`]'s per-row
+    /// [`Hlc::update`] call. Bound at handle-open time with the
+    /// peer-derived `node_id` + the wall-clock-backed
+    /// [`system_time_ms_for_atrium_hlc`] physical clock + the default
+    /// 5-minute skew tolerance. A row whose remote HLC `physical_ms`
+    /// exceeds local clock by more than the tolerance window rejects
+    /// with [`AtriumError::HlcSkewExceeded`] mapping to
+    /// [`benten_errors::ErrorCode::SyncHlcDrift`] — the merge is
+    /// atomic, so a single skew-exceeding row vetoes the whole merge
+    /// per the existing per-row cap-recheck precedent (sec-r4r1-2 closure
+    /// at G16-B-F PR #161 / `EngineError::SyncRevokedDuringSession`).
+    /// Defends against an adversarial peer manipulating its local HLC
+    /// to inject future-timestamped writes that bias LWW resolution +
+    /// forge revocation-vs-data ordering per sec-r4r2-1 attack-vector
+    /// pin `attack_hlc_skew_revocation_ordering.rs`.
+    local_hlc: Hlc,
+    /// Phase-3 R6-FP Wave-C1: cumulative count of inbound sync-frame
+    /// HLC verifications fired by [`crate::Engine::apply_atrium_merge`]'s
+    /// per-row `Hlc::update` loop. Mirrors the existing
+    /// `sync_replica_cap_recheck_count` shape — observable so test pins
+    /// + operator dashboards can assert the classifier observably fires
+    /// per row (defends against silent no-op per pim-2 §3.6b
+    /// production-flow-drive end-to-end discipline).
+    inbound_hlc_skew_classifier_count: std::sync::atomic::AtomicU64,
 }
 
 /// Phase-3 G21-T2 §D — declared device-attestation envelope recorded
@@ -754,6 +842,16 @@ impl AtriumHandle {
                 Endpoint::bind_loopback_with_keypair(&keypair).await?
             }
         };
+        // Phase-3 R6-FP Wave-C1 (ds-r6-1 closure): derive HLC node-id
+        // from the peer-keypair public-key prefix per the existing
+        // `BentenHlc::node_id_from_peer_id_bytes` convention so the
+        // local Hlc + the per-write LWW HLC stamps both observe the
+        // same identity for this peer.
+        let pk_bytes = keypair.public_key().to_bytes();
+        let mut prefix = [0u8; 8];
+        prefix.copy_from_slice(&pk_bytes[..8]);
+        let hlc_node_id = benten_core::hlc::BentenHlc::node_id_from_peer_id_bytes(prefix);
+        let local_hlc = Hlc::new(hlc_node_id, system_time_ms_for_atrium_hlc);
         Ok(Self {
             inner: Arc::new(AtriumInner {
                 endpoint,
@@ -773,6 +871,8 @@ impl AtriumHandle {
                 acceptor: Mutex::new(benten_id::device_attestation::Acceptor::new(
                     benten_id::device_attestation::FreshnessPolicy::seconds(u64::MAX),
                 )),
+                local_hlc,
+                inbound_hlc_skew_classifier_count: std::sync::atomic::AtomicU64::new(0),
             }),
         })
     }
@@ -1387,6 +1487,41 @@ impl AtriumHandle {
         let mut prefix = [0u8; 8];
         prefix.copy_from_slice(&pk_bytes[..8]);
         benten_core::hlc::BentenHlc::node_id_from_peer_id_bytes(prefix)
+    }
+
+    /// Phase-3 R6-FP Wave-C1 (ds-r6-1 closure): accessor for the
+    /// per-handle HLC clock used by the inbound-sync-frame skew
+    /// classifier. Tests can use this to observe the local clock state
+    /// (`now()` / `node_id()` / `skew_tolerance_ms()`) but should not
+    /// drive `update()` directly — the `apply_atrium_merge` per-row
+    /// loop owns the production wireup.
+    #[must_use]
+    pub fn local_hlc(&self) -> &Hlc {
+        &self.inner.local_hlc
+    }
+
+    /// Phase-3 R6-FP Wave-C1 (ds-r6-1 closure): cumulative count of
+    /// inbound sync-frame HLC verifications fired by
+    /// [`crate::Engine::apply_atrium_merge`]'s per-row `Hlc::update`
+    /// loop. Mirrors the `sync_replica_cap_recheck_calls` shape per
+    /// pim-2 §3.6b end-to-end discipline — observable counter so test
+    /// pins assert the classifier observably fires per row.
+    #[must_use]
+    pub fn inbound_hlc_skew_classifier_calls(&self) -> u64 {
+        self.inner
+            .inbound_hlc_skew_classifier_count
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Phase-3 R6-FP Wave-C1 (ds-r6-1 closure) — internal accessor for
+    /// the per-row HLC verification counter that
+    /// [`crate::Engine::apply_atrium_merge`] increments on every
+    /// inbound row. Crate-public so the engine module can bump the
+    /// counter without exposing the inner Arc; external callers read
+    /// the value through [`Self::inbound_hlc_skew_classifier_calls`].
+    #[must_use]
+    pub(crate) fn inner_inbound_hlc_skew_classifier_count(&self) -> &std::sync::atomic::AtomicU64 {
+        &self.inner.inbound_hlc_skew_classifier_count
     }
 
     /// Phase-3 §6.12 item 7: observable accessor for the
