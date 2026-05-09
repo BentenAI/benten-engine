@@ -161,6 +161,20 @@ serde_ipld_dagcbor = { workspace = true }
 # verified manifests from full peers). Mirrors the G13-C / G14-A1 /
 # G14-B native-only-target-dep pattern.
 benten-id = { path = "../benten-id" }
+# Phase-3 G16-D wave-6b fix-pass (cryptographic-attestation closure for
+# criterion 16): `engine_sync.rs::DeviceAttestationEnvelope::verify`
+# directly calls `ed25519_dalek::Verifier::verify` against the public
+# key resolved from `attestation.device_did`, performs constant-time
+# `subtle::ConstantTimeEq` on the BLAKE3 payload-hash for frame-pair
+# binding, and uses `getrandom::fill` for the per-envelope session
+# nonce. All three are transitively available through `benten-id` but
+# named here as direct deps so the call sites are explicit + the
+# wave-6b-fp surface can be groutable. Native-only (with the rest of
+# this section) per the same `engine_sync.rs` cfg-gating that scopes
+# the Atrium surface to full peers.
+ed25519-dalek = { workspace = true }
+subtle = { workspace = true }
+getrandom = { workspace = true }
 # Phase-3 G21-T1 — `typed_call_dispatch::build_seed_envelope` constructs
 # the `{version, alg, secret_bytes: Bytes(32)}` DAG-CBOR envelope shape
 # that `Keypair::from_dag_cbor_envelope` expects. `serde_bytes` keeps

@@ -1069,6 +1069,14 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** `crates/benten-engine/src/engine.rs::apply_atrium_merge` per-row apply loop (Phase-3 G16-B-F; sec-r4r1-2 BLOCKER closure; CLR-2 mirror of SUBSCRIBE-side `E_SUBSCRIBE_REVOKED_MID_STREAM`).
 - **Phase:** 3 G16-B-F
 
+### E_DEVICE_ATTESTATION_FORGED
+
+- **Message:** "device attestation envelope verification failed: {reason}"
+- **Context:** `{ reason: String, zone: String }`
+- **Fix:** An inbound on-the-wire `DeviceAttestationEnvelope` (Phase-3 G16-D wave-6b) failed cryptographic verification at the sync-merge boundary. Three failure modes surface this single typed code: (a) **DID forgery** — the envelope's signature does not verify against the public key resolved from the declared `attestation.device_did`; (b) **parent-attestation chain rejection** — the embedded `benten_id::DeviceAttestation` was rejected by the receiver's `Acceptor::accept_at` (bad parent signature, expired freshness window via `FreshnessPolicy`, replayed nonce, revoked device-DID); (c) **frame-pair binding violation** — the envelope's signed `payload_hash` does not match the BLAKE3 hash of the Loro export payload received in the same exchange (MITM frame-substitution defense). All three reject with this single code so audit pipelines route on the wire-attestation boundary uniformly. Re-handshake from a non-revoked, non-replayed device-DID issued by the local trust-store's parent. Distinct from `E_THIN_CLIENT_AUTH_REJECTED` (browser-tab attestation boundary) and `E_SYNC_REVOKED_DURING_SESSION` (mid-session local-grant revocation). Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-engine/src/engine_sync.rs::DeviceAttestationEnvelope::verify` (Phase-3 G16-D wave-6b fix-pass; cryptographic-attestation closure for criterion 16 per Ben ratification 2026-05-09). Composes the existing hardened `benten_id::DeviceAttestation` + `Acceptor::accept_at` + `FreshnessPolicy` primitives at the wire boundary rather than introducing parallel unsigned transport (per pim-N-cand-crypto-attestation-transport-reuse).
+- **Phase:** 3 G16-D wave-6b fp
+
 ### E_SYNC_HOP_DEPTH_EXCEEDED
 
 <!-- reachability: ignore -->
