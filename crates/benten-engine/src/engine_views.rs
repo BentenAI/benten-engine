@@ -307,9 +307,16 @@ impl Engine {
         if let Some(policy) = self.policy.as_deref()
             && !label_hint.is_empty()
         {
+            // Phase-3 G16-B-prime fp (consumer-audit closure of cor-1 /
+            // cap-g16bp-3): thread the engine's configured device-DID-
+            // attestation CID into the IVM read-gate ReadContext so
+            // heterogeneous policies dispatch per-device on read-paths
+            // per D-PHASE-3-25.
+            let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
             let ctx = benten_caps::ReadContext {
                 label: label_hint.clone(),
                 target_cid: None,
+                device_cid,
                 ..Default::default()
             };
             if let Err(CapError::DeniedRead { .. }) = policy.check_read(&ctx) {

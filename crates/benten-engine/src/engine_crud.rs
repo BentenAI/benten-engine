@@ -111,9 +111,17 @@ impl Engine {
         // empty-label path (introspection reads) so this stays
         // backwards-compatible for hand-constructed Nodes.
         if let Some(policy) = self.policy.as_deref() {
+            // Phase-3 G16-B-prime fp (consumer-audit closure of cor-1 /
+            // cap-g16bp-3): thread the engine's configured device-DID-
+            // attestation CID into get_node's primary read-gate
+            // ReadContext so heterogeneous policies dispatch per-device
+            // per D-PHASE-3-25. Default-None for legacy / non-attested
+            // engines.
+            let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
             let ctx = benten_caps::ReadContext {
                 label,
                 target_cid: Some(*cid),
+                device_cid,
                 ..Default::default()
             };
             if let Err(CapError::DeniedRead { .. }) = policy.check_read(&ctx) {
@@ -205,9 +213,14 @@ impl Engine {
             return Ok(false);
         };
         let label = node.labels.first().cloned().unwrap_or_default();
+        // Phase-3 G16-B-prime fp (consumer-audit closure of cor-1 /
+        // cap-g16bp-3): thread device-DID-attestation CID into
+        // edge-read symmetric denial-probe ReadContext.
+        let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
         let ctx = benten_caps::ReadContext {
             label,
             target_cid: Some(*cid),
+            device_cid,
             ..Default::default()
         };
         Ok(matches!(

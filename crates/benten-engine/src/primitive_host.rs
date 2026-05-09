@@ -515,14 +515,25 @@ impl PrimitiveHost for Engine {
         // context; external PrimitiveHost callers hitting this method
         // land on the branch that matches the `(label, target_cid)`
         // pair.
+        // Phase-3 G16-B-prime fp (consumer-audit closure of cor-1 /
+        // cap-g16bp-3): thread the engine's configured device-DID-
+        // attestation CID into the dual-shape (label+target_cid)
+        // ReadContext branch so user-subgraph reads dispatch per-device
+        // per D-PHASE-3-25. The two by_*_only constructor branches
+        // populate device_cid via ReadContext::Default which is None;
+        // typed callers can opt-in via the dual-shape branch.
         let ctx = match (label.is_empty(), target_cid) {
             (true, Some(cid)) => benten_caps::ReadContext::by_cid_only(*cid),
             (_, None) => benten_caps::ReadContext::by_label_only(label),
-            (false, Some(cid)) => benten_caps::ReadContext {
-                label: label.to_string(),
-                target_cid: Some(*cid),
-                ..Default::default()
-            },
+            (false, Some(cid)) => {
+                let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
+                benten_caps::ReadContext {
+                    label: label.to_string(),
+                    target_cid: Some(*cid),
+                    device_cid,
+                    ..Default::default()
+                }
+            }
         };
         self.check_read_ctx(&ctx)
     }
@@ -587,8 +598,15 @@ impl PrimitiveHost for Engine {
         }
 
         if let Some(policy) = self.policy() {
+            // Phase-3 G16-B-prime (§6.12 item 3): thread the engine's
+            // configured device-DID-attestation CID into the
+            // primitive-host check_capability path so heterogeneous
+            // policies can dispatch per-device per D-PHASE-3-25.
+            // `None` for legacy / non-attested engines.
+            let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
             let ctx = benten_caps::WriteContext {
                 label: required.to_string(),
+                device_cid,
                 ..Default::default()
             };
             if let Err(c) = policy.check_write(&ctx) {

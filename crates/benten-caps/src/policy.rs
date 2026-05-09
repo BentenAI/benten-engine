@@ -141,7 +141,7 @@ pub struct WriteContext {
     /// Engine-side production-runtime threading lands in the post-canary
     /// wave (the engine write-path call sites populate the field at
     /// `WriteContext`-construction time per the
-    /// `crates/benten-caps/tests/device_dispatch.rs::capability_policy_per_device_cid_dispatch_observable_in_runtime_arm`
+    /// `crates/benten-engine/tests/device_cid_runtime_arm.rs::capability_policy_per_device_cid_dispatch_observable_in_runtime_arm`
     /// pin's concrete-shape narrative).
     pub device_cid: Option<Cid>,
 }

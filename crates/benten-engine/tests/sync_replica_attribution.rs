@@ -31,33 +31,210 @@
 
 #![allow(clippy::unwrap_used)]
 
-#[test]
-#[ignore = "RED-PHASE: G14-D — exploration-device-mesh — sync-replica attribution carries device DID"]
-fn sync_replica_write_attribution_carries_device_did_alongside_parent() {
-    // exploration-device-mesh pin. G14-D implementer wires this:
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "browser-backend")))]
+#[tokio::test]
+async fn sync_replica_write_attribution_carries_device_did_alongside_parent() {
+    // exploration-device-mesh GREEN-PHASE pin (G16-B-prime closure).
     //
-    //   let parent_kp = benten_id::keypair::Keypair::generate();
-    //   let device_kp = benten_id::keypair::Keypair::generate();
-    //   let envelope = benten_id::device_attestation::CapabilityEnvelope::default();
-    //   let attestation = benten_id::device_attestation::DeviceAttestation::issue(
-    //       &parent_kp, device_kp.public_key().to_did(), envelope).unwrap();
-    //
-    //   let engine = benten_engine::Engine::open_for_device(store_dir.path(),
-    //       parent_kp.clone(), device_kp, attestation).unwrap();
-    //
-    //   // Engine writes a node:
-    //   let cid = engine.write_node(&node).unwrap();
-    //
-    //   // Attribution frame attached to the write Node carries BOTH DIDs:
-    //   let frame = engine.fetch_attribution_frame(&cid).unwrap();
-    //   assert_eq!(frame.parent_did(), parent_kp.public_key().to_did());
-    //   assert_eq!(frame.device_did(), Some(device_kp.public_key().to_did()));
-    //
-    // OBSERVABLE consequence: the attribution frame on a sync-replica
-    // write observably carries device-grain identity. Defends against
-    // the "compromised device cannot be isolated" failure shape.
-    unimplemented!(
-        "G14-D wires AttributionFrame carrying both parent_did + device_did at sync replica write"
+    // OBSERVABLE consequence: the AttributionFrame minted at a sync-
+    // replica merge boundary carries BOTH the parent (actor / peer)
+    // DID identity and the device-grain identity per Inv-14 + the
+    // exploration-device-mesh contract. Defends against the
+    // "compromised device cannot be isolated" failure shape.
+    use benten_core::Cid;
+    use benten_core::hlc::BentenHlc;
+    use benten_engine::Engine;
+    use benten_engine::atrium_api::AtriumConfig;
+    use benten_engine::engine_sync::AtriumHandle;
+
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
+
+    // Configure the engine's device-CID — the post-merge AttributionFrame
+    // carries this slot (encoded as `device-cid:<hex>` per the
+    // engine's internal device-DID convention pre-G16-D handshake
+    // protocol body).
+    let device_cid = Cid::from_blake3_digest(*blake3::hash(b"device:laptop").as_bytes());
+    engine.set_device_cid(Some(device_cid));
+
+    let peer_a = engine.open_atrium(AtriumConfig::for_test()).await.unwrap();
+    let peer_b = AtriumHandle::open(AtriumConfig::for_test()).await.unwrap();
+    let zone = "/zone/posts";
+    peer_a.register_zone(zone).await;
+    peer_b.register_zone(zone).await;
+    peer_b
+        .with_zone(zone, |doc| {
+            doc.set_property("title", "x", BentenHlc::new(200, 0, peer_b.hlc_node_id()))
+                .unwrap();
+        })
+        .await
+        .unwrap();
+    let bytes = peer_b
+        .with_zone(zone, |doc| doc.export_update().unwrap())
+        .await
+        .unwrap();
+    peer_a
+        .register_peer_did(peer_b.hlc_node_id(), "did:key:peer-b-test")
+        .await;
+
+    let anchor = engine.create_anchor("post:p1").unwrap();
+    let merged_cid = engine
+        .apply_atrium_merge(&peer_a, &anchor, zone, &bytes, 0)
+        .await
+        .unwrap();
+
+    // Read back the merged Version Node + the attribution_frame_cid
+    // slot. The slot's value is the CID of an AttributionFrame whose
+    // `device_did` is `Some("device-cid:<hex>")` (parent identity =
+    // merging engine; device identity = engine's set_device_cid).
+    let merged = engine.get_node(&merged_cid).unwrap().unwrap();
+    let frame_cid_bytes = match merged.properties.get("attribution_frame_cid") {
+        Some(benten_core::Value::Bytes(b)) => b.clone(),
+        other => panic!("expected Bytes for attribution_frame_cid, got {other:?}"),
+    };
+    // The frame CID MUST differ from a pure-default (no device_did,
+    // no peer_did_set) frame, proving device_did + peer_did_set
+    // landed in the canonical bytes.
+    let default_cid = benten_eval::AttributionFrame::default().cid().unwrap();
+    assert_ne!(
+        frame_cid_bytes,
+        default_cid.as_bytes().to_vec(),
+        "AttributionFrame on sync-replica merge MUST be content-distinguishable \
+         from a default frame (carries device_did + peer_did_set)"
+    );
+    // The device-DID slot is populated; reconstruct the frame the
+    // engine would have minted post-G16-B-prime apply_atrium_merge.
+    // Per the engine's contract POST G16-B-prime fp (cap-g16bp-1 /
+    // Ben's RATIFIED Option A 2026-05-08):
+    //   - actor_cid = `effective_actor_cid()` which falls back to
+    //     device_cid when set_actor_cid has not been called (single-
+    //     user single-device case, exercised here).
+    //   - handler_cid + capability_grant_cid all-zero pre-handler-
+    //     attribution-flow landing.
+    //   - sandbox_depth=0; sync slots carry the merge seed.
+    let frame_with_device = benten_eval::AttributionFrame {
+        actor_cid: device_cid,
+        handler_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        capability_grant_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        sandbox_depth: 0,
+        device_did: Some(format!("device-cid:{device_cid}")),
+        peer_did_set: Some(std::collections::BTreeSet::from([
+            "did:key:peer-b-test".to_string()
+        ])),
+        sync_hop_depth: 1,
+    };
+    let expected = frame_with_device.cid().unwrap();
+    assert_eq!(
+        frame_cid_bytes,
+        expected.as_bytes().to_vec(),
+        "frame CID matches the expected (device_did + peer_did_set + hop_depth=1) shape"
+    );
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "browser-backend")))]
+#[tokio::test]
+async fn sync_replica_explicit_actor_cid_decouples_from_device_cid() {
+    // Phase-3 G16-B-prime fp closure (cap-g16bp-1 / Ben's RATIFIED
+    // Option A 2026-05-08):
+    //   When `set_actor_cid(Some(actor))` is called, the
+    //   AttributionFrame.actor_cid minted by apply_atrium_merge MUST
+    //   carry the EXPLICIT actor identity, NOT the device identity.
+    //   Defends against the failure shape where actor_cid + device_did
+    //   are conflated at sync-merge boundaries (would lose Phase-4+
+    //   AI-agent / handler-attribution principal identity).
+    use benten_core::Cid;
+    use benten_core::hlc::BentenHlc;
+    use benten_engine::Engine;
+    use benten_engine::atrium_api::AtriumConfig;
+    use benten_engine::engine_sync::AtriumHandle;
+
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
+
+    // Distinct actor and device identities — the load-bearing input.
+    let device_cid = Cid::from_blake3_digest(*blake3::hash(b"device:laptop").as_bytes());
+    let actor_cid = Cid::from_blake3_digest(*blake3::hash(b"actor:user-parent").as_bytes());
+    assert_ne!(
+        device_cid, actor_cid,
+        "test inputs must differ to assert decoupling"
+    );
+    engine.set_device_cid(Some(device_cid));
+    engine.set_actor_cid(Some(actor_cid));
+
+    let peer_a = engine.open_atrium(AtriumConfig::for_test()).await.unwrap();
+    let peer_b = AtriumHandle::open(AtriumConfig::for_test()).await.unwrap();
+    let zone = "/zone/posts";
+    peer_a.register_zone(zone).await;
+    peer_b.register_zone(zone).await;
+    peer_b
+        .with_zone(zone, |doc| {
+            doc.set_property("title", "x", BentenHlc::new(200, 0, peer_b.hlc_node_id()))
+                .unwrap();
+        })
+        .await
+        .unwrap();
+    let bytes = peer_b
+        .with_zone(zone, |doc| doc.export_update().unwrap())
+        .await
+        .unwrap();
+    peer_a
+        .register_peer_did(peer_b.hlc_node_id(), "did:key:peer-b-test")
+        .await;
+
+    let anchor = engine.create_anchor("post:p2").unwrap();
+    let merged_cid = engine
+        .apply_atrium_merge(&peer_a, &anchor, zone, &bytes, 0)
+        .await
+        .unwrap();
+
+    let merged = engine.get_node(&merged_cid).unwrap().unwrap();
+    let frame_cid_bytes = match merged.properties.get("attribution_frame_cid") {
+        Some(benten_core::Value::Bytes(b)) => b.clone(),
+        other => panic!("expected Bytes for attribution_frame_cid, got {other:?}"),
+    };
+
+    // The expected frame uses the EXPLICIT actor_cid + device-cid-string
+    // device_did. If the engine wrongly conflated the two we'd get
+    // a CID matching the device-as-actor frame instead.
+    let expected_correct = benten_eval::AttributionFrame {
+        actor_cid,
+        handler_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        capability_grant_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        sandbox_depth: 0,
+        device_did: Some(format!("device-cid:{device_cid}")),
+        peer_did_set: Some(std::collections::BTreeSet::from([
+            "did:key:peer-b-test".to_string()
+        ])),
+        sync_hop_depth: 1,
+    }
+    .cid()
+    .unwrap();
+    let conflated_wrong = benten_eval::AttributionFrame {
+        actor_cid: device_cid,
+        handler_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        capability_grant_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        sandbox_depth: 0,
+        device_did: Some(format!("device-cid:{device_cid}")),
+        peer_did_set: Some(std::collections::BTreeSet::from([
+            "did:key:peer-b-test".to_string()
+        ])),
+        sync_hop_depth: 1,
+    }
+    .cid()
+    .unwrap();
+
+    assert_eq!(
+        frame_cid_bytes,
+        expected_correct.as_bytes().to_vec(),
+        "AttributionFrame.actor_cid MUST carry the explicitly-set \
+         actor identity per cap-g16bp-1 Option A. NOT the device CID."
+    );
+    assert_ne!(
+        frame_cid_bytes,
+        conflated_wrong.as_bytes().to_vec(),
+        "regression-guard: the conflated (actor_cid == device_cid) \
+         frame would be wrong — assertion would fail if the fallback \
+         path ignored set_actor_cid()."
     );
 }
 
@@ -256,10 +433,96 @@ fn sync_replica_write_after_local_grant_revoke_post_handshake_rejected_with_e_sy
 // canonical bytes; pinned-CID fixtures rebake at that wave.
 // =====================================================================
 
-#[test]
-#[ignore = "RED-PHASE: G14-D — ds-r4r2-2 — sync_hop_depth bounded; E_SYNC_HOP_DEPTH_EXCEEDED on overflow (mirrors Inv-4 sandbox_depth)"]
-fn sync_replica_attribution_frame_sync_hop_depth_bounded_with_e_sync_hop_depth_exceeded() {
-    // ds-r4r2-2 pin (closes ds-r4-5). G14-D / G16-B implementer wires:
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "browser-backend")))]
+#[tokio::test]
+async fn sync_replica_attribution_frame_sync_hop_depth_bounded_with_e_sync_hop_depth_exceeded() {
+    // ds-r4r2-2 GREEN-PHASE pin (G16-B-prime closure).
+    //
+    // OBSERVABLE consequence: AttributionFrame.sync_hop_depth bounds
+    // peer-hop chain depth at 8 (mirroring Inv-4 sandbox_depth);
+    // overflow rejects with typed E_SYNC_HOP_DEPTH_EXCEEDED through
+    // the engine's apply_atrium_merge orchestration; bounded depth
+    // is observable in the minted Version Node's AttributionFrame.
+    //
+    // The G16-B canary established the bound at the Atrium handle
+    // layer (`merge_remote_change_with_hop_depth`); this pin closes
+    // the engine-orchestrated path observably.
+    use benten_core::hlc::BentenHlc;
+    use benten_engine::Engine;
+    use benten_engine::atrium_api::AtriumConfig;
+    use benten_engine::engine_sync::AtriumHandle;
+
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
+    let peer_a = engine.open_atrium(AtriumConfig::for_test()).await.unwrap();
+    let peer_b = AtriumHandle::open(AtriumConfig::for_test()).await.unwrap();
+    let zone = "/zone/posts";
+    peer_a.register_zone(zone).await;
+    peer_b.register_zone(zone).await;
+    peer_b
+        .with_zone(zone, |doc| {
+            doc.set_property("title", "x", BentenHlc::new(200, 0, peer_b.hlc_node_id()))
+                .unwrap();
+        })
+        .await
+        .unwrap();
+    let bytes = peer_b
+        .with_zone(zone, |doc| doc.export_update().unwrap())
+        .await
+        .unwrap();
+
+    let anchor = engine.create_anchor("post:hop1").unwrap();
+
+    // (i) hop_depth advances on incoming hop_depth = 0 → out depth 1.
+    let merged_cid_1 = engine
+        .apply_atrium_merge(&peer_a, &anchor, zone, &bytes, 0)
+        .await
+        .unwrap();
+    let merged_1 = engine.get_node(&merged_cid_1).unwrap().unwrap();
+    match merged_1.properties.get("sync_hop_depth") {
+        Some(benten_core::Value::Int(d)) => assert_eq!(*d, 1, "hop=0 → out=1"),
+        other => panic!("expected Int sync_hop_depth, got {other:?}"),
+    }
+
+    // (ii) hop_depth = SYNC_HOP_DEPTH_CAP rejects with the typed
+    // error code at the orchestrator boundary.
+    let result = engine
+        .apply_atrium_merge(
+            &peer_a,
+            &anchor,
+            zone,
+            &bytes,
+            benten_eval::exec_state::SYNC_HOP_DEPTH_CAP,
+        )
+        .await;
+    let err = result.expect_err("hop-depth at-or-above cap MUST reject");
+    assert!(
+        matches!(err.code(), benten_errors::ErrorCode::SyncHopDepthExceeded),
+        "rejection MUST surface E_SYNC_HOP_DEPTH_EXCEEDED, got: {err:?}"
+    );
+
+    // (iii) bounded depth observable via the constant.
+    assert_eq!(
+        benten_eval::exec_state::SYNC_HOP_DEPTH_CAP,
+        8,
+        "documented bound is 8 hops (mirrors Inv-4 sandbox_depth)"
+    );
+}
+
+// =====================================================================
+// LEGACY pin commentary (preserved as documentation; the GREEN-PHASE
+// pin above replaces this — the prior unimplemented!() body cited
+// `Engine::open_for_device` / `DurableStoreInspector` / per-peer
+// fetch_attribution_frame APIs that don't exist at engine scope.
+// G16-B-prime's apply_atrium_merge orchestration closes ds-r4r2-2 via
+// observable AttributionFrame slots on the minted Version Node).
+// =====================================================================
+
+#[allow(dead_code)]
+#[doc(hidden)]
+fn _sync_replica_attribution_frame_sync_hop_depth_legacy_design_notes() {
+    // ds-r4r2-2 historical pin shape — preserved for review traceability.
+    // G14-D / G16-B implementer notes:
     //
     //   use benten_engine::{AttributionFrame, EngineError, ErrorCode};
     //
@@ -337,8 +600,5 @@ fn sync_replica_attribution_frame_sync_hop_depth_bounded_with_e_sync_hop_depth_e
     // an adversarial peer constructs a long false chain. Composes
     // G14-D AttributionFrame surface + G16-B sync-replica delivery +
     // canonical-bytes-pinning per D-PHASE-3-19a.
-    unimplemented!(
-        "G14-D / G16-B wires AttributionFrame.sync_hop_depth bound + E_SYNC_HOP_DEPTH_EXCEEDED \
-         typed variant per ds-r4r2-2 (mirrors Inv-4 sandbox_depth precedent)"
-    );
+    // (Body intentionally empty — preserved for design traceability.)
 }
