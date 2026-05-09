@@ -230,6 +230,15 @@ blake3 = { workspace = true }
 name = "sandbox_metrics"
 required-features = ["test-helpers"]
 
+# Phase-3 G16-B-D — Compromise #11 deepest e2e composition pin uses
+# `Engine::testing_subscribe_observable_change_events` which lives behind
+# `cfg(any(test, feature = "test-helpers"))`. Pinning the integration test
+# to `required-features = ["test-helpers"]` so the symbol is present at
+# link time (same discipline as `sandbox_metrics`).
+[[test]]
+name = "ivm_view_subscribe_compose"
+required-features = ["test-helpers"]
+
 [[bench]]
 name = "roundtrip"
 harness = false

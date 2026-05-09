@@ -238,46 +238,146 @@ async fn sync_replica_explicit_actor_cid_decouples_from_device_cid() {
     );
 }
 
-#[test]
-#[ignore = "RED-PHASE: G14-D — sec-r1-6 — Inv-14 device-DID attribution observable in production runtime"]
-fn inv_14_device_did_attribution_observable_in_production_runtime_arm() {
-    // sec-r1-6 pin. The device-grain attribution MUST be observable
-    // in the PRODUCTION runtime arm, not just in test fixtures or
-    // dev-only feature flags. Per §3.6b pim-2, this pin closes the
-    // sentinel-presence concern: a #[cfg(test)] gate that emits the
-    // device DID does not satisfy this assertion.
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "browser-backend")))]
+#[tokio::test]
+async fn inv_14_device_did_attribution_observable_in_production_runtime_arm() {
+    // sec-r1-6 GREEN-PHASE pin (G16-B-D closure repurposing per the
+    // brief). Demonstrates Inv-14's device-grain attribution is
+    // observable in PRODUCTION-runtime durable bytes — not gated
+    // behind a test-only feature.
     //
-    // Implementer wires:
+    // Pre-G16-B-D the pin assumed a `DurableStoreInspector` API + a
+    // `Engine::open_production` constructor that don't exist. The
+    // brief redirects to using existing GREEN sibling pin pattern:
+    // durable readback via `engine.get_node(...).properties.get(
+    // "attribution_frame_cid")` after dropping + re-opening the
+    // engine, which proves the attribution lives in durable bytes
+    // (not in-memory only).
     //
-    //   // 1. Build engine WITHOUT test-only feature flags:
-    //   let engine = benten_engine::Engine::open_production(store_dir.path(),
-    //       parent_kp, device_kp, attestation).unwrap();
+    // OBSERVABLE consequence (production-arm-without-test-feature):
+    //   1. Open engine; set device_cid; drive sync-replica merge
+    //      through the production `apply_atrium_merge` path.
+    //   2. Drop engine — store contents persisted to redb.
+    //   3. Re-open the SAME store_dir in a FRESH Engine (different
+    //      process scope; no in-memory carry-over).
+    //   4. `get_node(merged_cid)` returns the merged Version Node
+    //      with `attribution_frame_cid` slot populated by canonical
+    //      bytes whose AttributionFrame contains `device_did =
+    //      Some("device-cid:<hex>")` for the originating device.
     //
-    //   // 2. Drive a write through the production path:
-    //   let cid = engine.write_node(&node).unwrap();
-    //
-    //   // 3. Re-open the durable store WITHOUT the writing engine's
-    //   //    process scope (proves attribution is in durable bytes,
-    //   //    not in-memory only):
-    //   drop(engine);
-    //   let inspector = benten_engine::DurableStoreInspector::open(store_dir.path()).unwrap();
-    //   let frame_bytes = inspector.fetch_attribution_frame_bytes(&cid).unwrap();
-    //   let frame = benten_engine::AttributionFrame::from_canonical_bytes(&frame_bytes).unwrap();
-    //   assert_eq!(frame.device_did(), Some(device_kp.public_key().to_did()),
-    //       "device DID MUST be observable in durable bytes per Inv-14 + sec-r1-6");
-    //
-    //   // 4. Source-cite check that the production codepath actually
-    //   //    threads the device DID (not just the frame containing
-    //   //    a None placeholder):
-    //   let src = std::fs::read_to_string("crates/benten-engine/src/runtime/write_path.rs").unwrap();
-    //   assert!(src.contains("device_did:") || src.contains("device_did ="),
-    //       "production write_path.rs must reference device_did at the frame-construction site");
-    //
-    // OBSERVABLE consequence: Inv-14's device-grain enforcement is
-    // present in production-runtime-arm bytes — not gated behind a
-    // test-only feature. Closes the pim-2 end-to-end pin requirement.
-    unimplemented!(
-        "G14-D wires Inv-14 device-DID attribution observable in production-runtime durable bytes"
+    // Per §3.6b pim-2: the assertion is would-fail-if-no-op'd
+    // because if the production write path stamped only the actor
+    // (not device_did), the post-reopen frame CID would equal a
+    // device-less-frame CID, which the test asserts does NOT match.
+    use benten_core::Cid;
+    use benten_core::hlc::BentenHlc;
+    use benten_engine::Engine;
+    use benten_engine::atrium_api::AtriumConfig;
+    use benten_engine::engine_sync::AtriumHandle;
+
+    let dir = tempfile::tempdir().unwrap();
+    let store_path = dir.path().join("benten.redb");
+
+    let device_cid = Cid::from_blake3_digest(*blake3::hash(b"device:production").as_bytes());
+
+    // Phase 1: open engine, configure device_cid, drive merge.
+    let merged_cid = {
+        let engine = Engine::open(&store_path).unwrap();
+        engine.set_device_cid(Some(device_cid));
+
+        let peer_a = engine.open_atrium(AtriumConfig::for_test()).await.unwrap();
+        let peer_b = AtriumHandle::open(AtriumConfig::for_test()).await.unwrap();
+        let zone = "/zone/posts";
+        peer_a.register_zone(zone).await;
+        peer_b.register_zone(zone).await;
+        peer_b
+            .with_zone(zone, |doc| {
+                doc.set_property(
+                    "title",
+                    "production-x",
+                    BentenHlc::new(300, 0, peer_b.hlc_node_id()),
+                )
+                .unwrap();
+            })
+            .await
+            .unwrap();
+        let bytes = peer_b
+            .with_zone(zone, |doc| doc.export_update().unwrap())
+            .await
+            .unwrap();
+        peer_a
+            .register_peer_did(peer_b.hlc_node_id(), "did:key:peer-prod")
+            .await;
+
+        let anchor = engine.create_anchor("post:p1").unwrap();
+        let cid = engine
+            .apply_atrium_merge(&peer_a, &anchor, zone, &bytes, 0)
+            .await
+            .unwrap();
+
+        // Drop everything to flush to the durable store.
+        drop(engine);
+        cid
+    };
+
+    // Phase 2: re-open the SAME store in a FRESH Engine (proves
+    // attribution lives in durable bytes, not process-scoped memory).
+    let reopened = Engine::open(&store_path).unwrap();
+    let merged = reopened
+        .get_node(&merged_cid)
+        .unwrap()
+        .expect("merged Version Node MUST be queryable after engine re-open");
+
+    let frame_cid_bytes = match merged.properties.get("attribution_frame_cid") {
+        Some(benten_core::Value::Bytes(b)) => b.clone(),
+        other => panic!(
+            "post-reopen merged Node MUST carry attribution_frame_cid in durable \
+             bytes per Inv-14 + sec-r1-6; got {other:?}"
+        ),
+    };
+
+    // Reconstruct the frame the production-arm path is contracted to
+    // mint (per cap-g16bp-1 RATIFIED Option A) and assert match.
+    let expected_frame = benten_eval::AttributionFrame {
+        actor_cid: device_cid,
+        handler_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        capability_grant_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        sandbox_depth: 0,
+        device_did: Some(format!("device-cid:{device_cid}")),
+        peer_did_set: Some(std::collections::BTreeSet::from([
+            "did:key:peer-prod".to_string()
+        ])),
+        sync_hop_depth: 1,
+    };
+    let expected_cid = expected_frame.cid().unwrap();
+    assert_eq!(
+        frame_cid_bytes,
+        expected_cid.as_bytes().to_vec(),
+        "post-reopen frame CID MUST match the (device_did + peer_did_set + hop_depth=1) \
+         shape, proving Inv-14 device-grain attribution lives in PRODUCTION-arm durable \
+         bytes (not test-only / in-memory only)"
+    );
+
+    // Defense-in-depth: a frame that omits device_did would yield a
+    // distinct CID. Assert it doesn't accidentally collide.
+    let device_less_frame = benten_eval::AttributionFrame {
+        actor_cid: device_cid,
+        handler_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        capability_grant_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        sandbox_depth: 0,
+        device_did: None, // <- the would-fail-if-no-op'd dimension
+        peer_did_set: Some(std::collections::BTreeSet::from([
+            "did:key:peer-prod".to_string()
+        ])),
+        sync_hop_depth: 1,
+    };
+    let device_less_cid = device_less_frame.cid().unwrap();
+    assert_ne!(
+        frame_cid_bytes,
+        device_less_cid.as_bytes().to_vec(),
+        "would-fail-if-no-op'd: if production path failed to stamp device_did, \
+         the post-reopen frame CID would equal the device-less variant — \
+         this assertion catches that regression"
     );
 }
 

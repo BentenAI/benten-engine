@@ -376,14 +376,140 @@ async fn loro_merged_node_is_graph_encoded_not_opaque_crdt_blob() {
 // items + the G16-B-D dispatch brief.
 // =====================================================================
 
-#[test]
-#[ignore = "DEFERRED: G16-B-D distributed-systems wave — multi-Anchor cross-Atrium merge harness"]
-fn loro_merge_produces_new_version_node_in_anchor_chain() {
-    // Pin-rephrasing for cross-lens visibility. Closes once the
-    // cross-Atrium harness `apply_concurrent_loro_merge_across_atrium`
-    // lands at G16-B-D wave (multi-Anchor merge replay across N
-    // anchors). Single-Anchor case is covered by
-    // `merge_loro_change_creates_versioned_anchor` above.
+#[tokio::test]
+async fn loro_merge_produces_new_version_node_in_anchor_chain() {
+    // G16-B-D LOAD-BEARING multi-Anchor pin (cross-lens visibility for
+    // the multi-Anchor cross-Atrium harness shape, complementing the
+    // single-Anchor `merge_loro_change_creates_versioned_anchor` above).
+    //
+    // OBSERVABLE consequence:
+    //   - Two distinct Anchors over two distinct zones each receive an
+    //     independent Loro merge from a remote peer.
+    //   - Each Anchor's chain advances independently (post-merge
+    //     CURRENT differs across the two anchors).
+    //   - walk_versions on each Anchor yields its own merged Version
+    //     CID; cross-anchor cross-talk is absent (an anchor's chain
+    //     does NOT contain the other anchor's merged Version).
+    //
+    // Replay safety: re-applying the SAME remote bytes to the same
+    // anchor MUST be idempotent (CRDT merge semantics) — CURRENT
+    // does not advance, no new Version Node minted on duplicate apply.
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
+
+    let peer_a = engine.open_atrium(AtriumConfig::for_test()).await.unwrap();
+    let peer_b = AtriumHandle::open(AtriumConfig::for_test()).await.unwrap();
+
+    let zone_posts = "/zone/posts";
+    let zone_comments = "/zone/comments";
+    peer_a.register_zone(zone_posts).await;
+    peer_a.register_zone(zone_comments).await;
+    peer_b.register_zone(zone_posts).await;
+    peer_b.register_zone(zone_comments).await;
+
+    let peer_b_node_id = peer_b.hlc_node_id();
+    peer_a
+        .register_peer_did(peer_b_node_id, format!("did:key:peer-b:{peer_b_node_id}"))
+        .await;
+
+    // Remote peer B writes to BOTH zones with distinct content.
+    peer_b
+        .with_zone(zone_posts, |doc| {
+            doc.set_property(
+                "title",
+                "post-from-B",
+                BentenHlc::new(100, 0, peer_b_node_id),
+            )
+            .unwrap();
+        })
+        .await
+        .unwrap();
+    peer_b
+        .with_zone(zone_comments, |doc| {
+            doc.set_property(
+                "body",
+                "comment-from-B",
+                BentenHlc::new(200, 0, peer_b_node_id),
+            )
+            .unwrap();
+        })
+        .await
+        .unwrap();
+
+    let posts_bytes = peer_b
+        .with_zone(zone_posts, |doc| doc.export_update().unwrap())
+        .await
+        .unwrap();
+    let comments_bytes = peer_b
+        .with_zone(zone_comments, |doc| doc.export_update().unwrap())
+        .await
+        .unwrap();
+
+    // Two distinct Anchors, one per zone.
+    let anchor_posts = engine.create_anchor("post:p1").unwrap();
+    let anchor_comments = engine.create_anchor("comment:c1").unwrap();
+
+    let merged_posts_cid = engine
+        .apply_atrium_merge(&peer_a, &anchor_posts, zone_posts, &posts_bytes, 0)
+        .await
+        .expect("multi-Anchor: apply_atrium_merge for posts zone");
+    let merged_comments_cid = engine
+        .apply_atrium_merge(&peer_a, &anchor_comments, zone_comments, &comments_bytes, 0)
+        .await
+        .expect("multi-Anchor: apply_atrium_merge for comments zone");
+
+    // OBSERVABLE consequence (i): each anchor's CURRENT advances to
+    // its own merged Version CID — cross-anchor isolation.
+    assert_ne!(
+        merged_posts_cid, merged_comments_cid,
+        "multi-Anchor: distinct anchors over distinct zones MUST yield \
+         distinct merged Version CIDs"
+    );
+    let posts_current = engine.read_current_version(&anchor_posts).unwrap().unwrap();
+    let comments_current = engine
+        .read_current_version(&anchor_comments)
+        .unwrap()
+        .unwrap();
+    assert_eq!(posts_current, merged_posts_cid);
+    assert_eq!(comments_current, merged_comments_cid);
+
+    // OBSERVABLE consequence (ii): walk_versions on each anchor yields
+    // its OWN merged Version, not the other anchor's.
+    let posts_chain: Vec<_> = engine.walk_versions(&anchor_posts).unwrap().collect();
+    let comments_chain: Vec<_> = engine.walk_versions(&anchor_comments).unwrap().collect();
+    assert!(
+        posts_chain.contains(&merged_posts_cid),
+        "posts chain MUST contain its merged Version CID"
+    );
+    assert!(
+        !posts_chain.contains(&merged_comments_cid),
+        "posts chain MUST NOT contain comments-anchor's Version CID \
+         (cross-anchor isolation): posts_chain={posts_chain:?}"
+    );
+    assert!(
+        comments_chain.contains(&merged_comments_cid),
+        "comments chain MUST contain its merged Version CID"
+    );
+    assert!(
+        !comments_chain.contains(&merged_posts_cid),
+        "comments chain MUST NOT contain posts-anchor's Version CID \
+         (cross-anchor isolation): comments_chain={comments_chain:?}"
+    );
+
+    // OBSERVABLE consequence (iii): replay safety — re-applying the
+    // SAME remote bytes to the same anchor is idempotent at the CRDT
+    // level. CURRENT does not advance further (Loro merge of
+    // already-applied bytes is a no-op).
+    let _replay = engine
+        .apply_atrium_merge(&peer_a, &anchor_posts, zone_posts, &posts_bytes, 0)
+        .await
+        .expect("idempotent replay must succeed");
+    let posts_current_after_replay = engine.read_current_version(&anchor_posts).unwrap().unwrap();
+    assert_eq!(
+        posts_current_after_replay, merged_posts_cid,
+        "replay safety: re-applying the same Loro update bytes MUST NOT \
+         advance CURRENT past the original merged Version"
+    );
 }
 
 #[test]
