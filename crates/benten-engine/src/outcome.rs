@@ -567,20 +567,32 @@ impl TraceStep {
     }
 }
 
-/// Handle to an Anchor (version-chain identity). **Phase 1 stub.**
+/// Handle to an Anchor (version-chain identity).
 ///
-/// TODO(phase-3 — version-chain non-zero-sized shape): a non-zero-sized
-/// shape that carries the anchor id lands when `create_anchor` /
-/// `append_version` gain real implementations (R-nit-07). Carried
-/// from Phase-2 generic marker; pairs with §1.5 Compromise #18
-/// durable handler-version chain.
-#[derive(Debug, Clone)]
+/// Phase-3 G16-B-prime: the handle carries the anchor name (the key
+/// the engine's in-memory anchor store uses to locate the
+/// [`benten_core::version::Anchor`] + current-head pair). Pre-G16-B-prime
+/// this was a Phase-1 zero-sized stub; the live shape now resolves anchor
+/// state when paired with the originating `Engine`.
+///
+/// Pairs with §1.5 Compromise #18 durable handler-version chain — the
+/// in-memory anchor store the handle indexes into is durable-promotable
+/// alongside the §1.1 GraphBackend umbrella trait work.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnchorHandle {
-    #[allow(
-        dead_code,
-        reason = "Phase-1 stub retains the shape; Phase-2 adds anchor-id fields"
-    )]
-    pub(crate) _phase1_stub: (),
+    /// The anchor name the handle was minted under. Engine consumes this
+    /// as the key into [`crate::engine::EngineInner::anchor_store`].
+    pub(crate) name: String,
+}
+
+impl AnchorHandle {
+    /// Read-only accessor for the anchor name. Operator-visible so log /
+    /// dashboard surfaces can name the anchor without crossing the
+    /// engine API boundary.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
 }
 
 /// Outcome of a [`crate::Engine::register_subgraph_replace`] call. Phase 2b

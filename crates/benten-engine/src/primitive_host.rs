@@ -587,8 +587,15 @@ impl PrimitiveHost for Engine {
         }
 
         if let Some(policy) = self.policy() {
+            // Phase-3 G16-B-prime (§6.12 item 3): thread the engine's
+            // configured device-DID-attestation CID into the
+            // primitive-host check_capability path so heterogeneous
+            // policies can dispatch per-device per D-PHASE-3-25.
+            // `None` for legacy / non-attested engines.
+            let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
             let ctx = benten_caps::WriteContext {
                 label: required.to_string(),
+                device_cid,
                 ..Default::default()
             };
             if let Err(c) = policy.check_write(&ctx) {

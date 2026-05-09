@@ -298,6 +298,47 @@ pub(crate) struct EngineInner {
     /// `test_markers` so the production cdylib does not ship it.
     #[cfg(any(test, feature = "test-helpers"))]
     pub(crate) testing_persistent_subscribers: std::sync::Mutex<Vec<benten_core::SubscriberId>>,
+
+    /// Phase-3 G16-B-prime (§6.12 item 1): in-memory anchor store keyed
+    /// by anchor name. Each entry carries a [`benten_core::version::Anchor`]
+    /// (the prior-threaded chain) plus the most-recently-appended head CID
+    /// (the CURRENT pointer). Populated by [`crate::Engine::create_anchor`]
+    /// + [`crate::Engine::append_version`] / the engine-side Loro merge
+    /// callback ([`crate::Engine::apply_atrium_merge`]).
+    ///
+    /// Production-grade durability of this map (survives engine restart)
+    /// is gated on §1.1 GraphBackend umbrella trait — pre-§1.1 it lives
+    /// in-memory only. The anchor names map 1:1 with logical Anchor
+    /// identities; cloning an anchor across this map's iteration shares
+    /// chain state (the inner `Arc<Mutex<...>>` discipline of
+    /// [`benten_core::version::Anchor`]).
+    pub(crate) anchor_store: std::sync::Mutex<BTreeMap<String, AnchorEntry>>,
+
+    /// Phase-3 G16-B-prime (§6.12 item 3): the local engine's
+    /// device-DID-attestation CID, used to populate
+    /// [`benten_caps::WriteContext::device_cid`] +
+    /// [`benten_caps::ReadContext::device_cid`] at engine-internal
+    /// construction sites. `None` for non-attested / legacy / pre-
+    /// device-attestation engines; `Some(cid)` for engines whose owner
+    /// wired in a [`benten_id::device_attestation::DeviceAttestation`]
+    /// CID via [`crate::Engine::set_device_cid`].
+    pub(crate) device_cid: std::sync::Mutex<Option<Cid>>,
+}
+
+/// Phase-3 G16-B-prime (§6.12 item 1): one entry in the engine's
+/// in-memory anchor store. Pairs the prior-threaded
+/// [`benten_core::version::Anchor`] with the most-recent head CID
+/// (the CURRENT pointer the engine answers from
+/// [`crate::Engine::read_current_version`]).
+#[derive(Clone)]
+pub(crate) struct AnchorEntry {
+    /// The prior-threaded Anchor identity (chain history lives behind the
+    /// inner `Arc<Mutex<...>>`).
+    pub(crate) anchor: benten_core::version::Anchor,
+    /// Most-recently-appended head CID. Equals `anchor.head` immediately
+    /// after [`crate::Engine::create_anchor`]; advances with every
+    /// successful [`crate::Engine::append_version`] call.
+    pub(crate) current: Cid,
 }
 
 /// Phase-3 G19-C2 wave-7 (§7.1): per-invocation high-water tracker
@@ -359,6 +400,8 @@ impl EngineInner {
             sandbox_metrics: std::sync::Mutex::new(BTreeMap::new()),
             #[cfg(any(test, feature = "test-helpers"))]
             testing_persistent_subscribers: std::sync::Mutex::new(Vec::new()),
+            anchor_store: std::sync::Mutex::new(BTreeMap::new()),
+            device_cid: std::sync::Mutex::new(None),
         }
     }
 
@@ -965,6 +1008,133 @@ impl Engine {
         config: crate::atrium_api::AtriumConfig,
     ) -> Result<crate::engine_sync::AtriumHandle, crate::engine_sync::AtriumError> {
         crate::engine_sync::AtriumHandle::open(config).await
+    }
+
+    /// Phase-3 G16-B-prime (§6.12 item 1): apply an inbound Loro CRDT
+    /// merge frame against `zone` under `anchor`, mint a new Version
+    /// Node carrying the resulting [`benten_eval::AttributionFrame`],
+    /// and advance the anchor's CURRENT pointer.
+    ///
+    /// This is the engine-side completion of the row-4a (user-data) sync
+    /// path the [`crate::engine_sync::AtriumHandle::merge_remote_change_with_hop_depth`]
+    /// canary surfaced. The flow:
+    ///
+    /// 1. Apply the CRDT merge via `merge_remote_change_with_hop_depth`,
+    ///    receiving a [`crate::engine_sync::SyncMergeAttribution`] seed
+    ///    (peer node-ids + new sync_hop_depth).
+    /// 2. Resolve peer node-ids → peer-DIDs via the local trust-store
+    ///    ([`crate::engine_sync::AtriumHandle::resolve_peer_dids`]); fall
+    ///    back to raw `node-id:NNN` strings for unresolvable ids.
+    /// 3. Read the post-merge zone state via Loro's `all_writes` (the
+    ///    full key/value snapshot the merge produced).
+    /// 4. Construct a new "version" Node carrying the merged props +
+    ///    a serialized [`benten_eval::AttributionFrame`] populated with
+    ///    `peer_did_set`, `device_did` (from
+    ///    [`Self::device_cid`] indirectly — the engine's own device-DID
+    ///    if attestation-bound), and `sync_hop_depth`.
+    /// 5. Persist the Node via the engine's
+    ///    [`crate::Engine::append_version`] which (a) puts the Node bytes
+    ///    via `GraphBackend::put_node`, (b) calls
+    ///    [`benten_core::version::append_version`] to advance the chain
+    ///    refusing forks, (c) updates the anchor entry's CURRENT.
+    ///
+    /// Returns the CID of the newly-minted merge Version Node.
+    ///
+    /// # Errors
+    ///
+    /// - [`crate::engine_sync::AtriumError`] on merge / hop-depth /
+    ///   row-4b reject failures (mapped to [`EngineError::Other`] with
+    ///   the underlying [`crate::engine_sync::AtriumError::code`]).
+    /// - [`EngineError::Other`] (carrying [`ErrorCode::NotFound`]) when
+    ///   the anchor handle is unknown to this engine.
+    /// - [`EngineError::Graph`] / [`EngineError::Other`]
+    ///   ([`ErrorCode::VersionBranched`] / [`ErrorCode::VersionUnknownPrior`])
+    ///   on backend put or version-chain append failure.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn apply_atrium_merge(
+        &self,
+        atrium: &crate::engine_sync::AtriumHandle,
+        anchor: &crate::outcome::AnchorHandle,
+        zone: &str,
+        bytes: &[u8],
+        incoming_hop_depth: u32,
+    ) -> Result<Cid, EngineError> {
+        // 1. Apply the CRDT merge.
+        let seed = atrium
+            .merge_remote_change_with_hop_depth(zone, bytes, incoming_hop_depth)
+            .await
+            .map_err(|e| EngineError::Other {
+                code: e.code(),
+                message: e.to_string(),
+            })?;
+
+        // 2. Resolve peer node-ids → DIDs via the trust-store.
+        let peer_did_set = atrium.resolve_peer_dids(&seed.peer_node_ids).await;
+
+        // 3. Snapshot the post-merge zone state (Loro all_writes).
+        let writes = atrium
+            .with_zone(zone, |doc| doc.all_writes())
+            .await
+            .map_err(|e| EngineError::Other {
+                code: e.code(),
+                message: e.to_string(),
+            })?;
+
+        // 4. Build the merge Version Node. Properties carry the merged
+        //    string values + a serialized AttributionFrame slot ("attribution_frame_cid")
+        //    that future readers consult to verify peer-DID provenance.
+        //
+        //    The AttributionFrame is constructed at engine-call boundary
+        //    so the device-DID slot reflects the local engine's
+        //    device-attestation state at merge time (Phase-3 contract:
+        //    "attribution captures the merging peer's device identity",
+        //    where the merging peer = local engine).
+        let device_did = self.device_cid().map(|cid| {
+            // Hex-render the device-CID bytes as the device DID surface
+            // for the AttributionFrame. Pre-G16-D handshake protocol body
+            // landing, this is the internal-engine convention for the
+            // device-DID-string slot; the production trust-store will
+            // promote this to a `did:key:` resolution once the device-
+            // attestation envelope-on-the-wire flow lands.
+            format!("device-cid:{cid}")
+        });
+        let attribution = benten_eval::AttributionFrame {
+            actor_cid: self
+                .device_cid()
+                .unwrap_or_else(|| Cid::from_blake3_digest([0u8; 32])),
+            handler_cid: Cid::from_blake3_digest([0u8; 32]),
+            capability_grant_cid: Cid::from_blake3_digest([0u8; 32]),
+            sandbox_depth: 0,
+            peer_did_set: if peer_did_set.is_empty() {
+                None
+            } else {
+                Some(peer_did_set)
+            },
+            device_did,
+            sync_hop_depth: seed.sync_hop_depth,
+        };
+        let attribution_cid = attribution.cid().map_err(|e| EngineError::Other {
+            code: ErrorCode::Serialize,
+            message: format!("AttributionFrame::cid encode failed: {e}"),
+        })?;
+
+        // 5. Build + persist the Node.
+        let mut props: BTreeMap<String, Value> = BTreeMap::new();
+        for (key, stamped) in writes {
+            props.insert(format!("loro:{key}"), Value::text(stamped.value));
+        }
+        props.insert(
+            "attribution_frame_cid".into(),
+            Value::Bytes(attribution_cid.as_bytes().to_vec()),
+        );
+        props.insert(
+            "sync_hop_depth".into(),
+            Value::Int(i64::from(seed.sync_hop_depth)),
+        );
+        props.insert("zone".into(), Value::text(zone.to_string()));
+        let merge_node = Node::new(vec!["version".into()], props);
+        let cid = self.append_version(anchor, &merge_node)?;
+        Ok(cid)
     }
 
     /// Phase-3 G21-T2 — dispatch a typed-CALL op directly through the

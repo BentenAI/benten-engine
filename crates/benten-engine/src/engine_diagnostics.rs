@@ -67,9 +67,18 @@ impl Engine {
                                 _ => None,
                             })
                             .unwrap_or_default();
+                        // Phase-3 G16-B-prime (§6.12 item 3): thread the
+                        // engine's configured device-DID-attestation CID
+                        // through to the policy. `None` for legacy /
+                        // non-attested engines preserves prior behavior;
+                        // `Some(cid)` lets heterogeneous policies dispatch
+                        // per device per D-PHASE-3-25.
+                        let device_cid =
+                            *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
                         let ctx = benten_caps::WriteContext {
                             label: primary_label,
                             pending_ops: ops,
+                            device_cid,
                             ..Default::default()
                         };
                         if let Err(cap_err) = p.check_write(&ctx) {
@@ -323,43 +332,164 @@ impl Engine {
         })
     }
 
-    // -------- Version chains (Phase 1 stubs) --------
+    // -------- Version chains (Phase-3 G16-B-prime: real wireup) --------
 
-    /// Create a new version-chain anchor under `name`. Phase 1 stub —
-    /// returns `E_NOT_IMPLEMENTED` until Phase 2 wires the anchor
-    /// store.
-    pub fn create_anchor(&self, _name: &str) -> Result<AnchorHandle, EngineError> {
-        Err(EngineError::NotImplemented {
-            feature: "create_anchor — Phase 2",
+    /// Create a new version-chain anchor under `name`.
+    ///
+    /// Phase-3 G16-B-prime (§6.12 item 1): the engine mints a fresh
+    /// [`benten_core::version::Anchor`] rooted at a name-derived seed
+    /// CID + records it in the in-memory anchor store. Subsequent
+    /// [`Self::append_version`] calls thread the prior head per the
+    /// `core::version` contract; [`Self::read_current_version`]
+    /// answers the CURRENT pointer.
+    ///
+    /// The seed CID is derived deterministically from the name (BLAKE3
+    /// of `b"benten-anchor-seed:" || name`); two engines that call
+    /// `create_anchor("post:p1")` produce the same seed CID
+    /// independently, but the anchor STATE is per-engine (unbounded
+    /// concurrent appends across two processes is a Phase-3+ sync
+    /// concern; G16-B-prime's in-memory anchor store covers the
+    /// single-engine case). Re-creating an anchor under a name that
+    /// already exists is a no-op (returns the existing handle), keeping
+    /// the call idempotent across replays.
+    ///
+    /// # Errors
+    ///
+    /// Currently infallible at engine scope (the in-memory store cannot
+    /// fail at insert); the `Result` shape is kept so the durable-
+    /// promotion at §1.1 GraphBackend umbrella can introduce I/O
+    /// errors without breaking call sites.
+    pub fn create_anchor(&self, name: &str) -> Result<AnchorHandle, EngineError> {
+        let seed_cid = anchor_seed_cid_for_name(name);
+        let mut store = benten_graph::MutexExt::lock_recover(&self.inner.anchor_store);
+        store.entry(name.to_string()).or_insert_with(|| {
+            let anchor = benten_core::version::Anchor::new(seed_cid);
+            crate::engine::AnchorEntry {
+                anchor,
+                current: seed_cid,
+            }
+        });
+        Ok(AnchorHandle {
+            name: name.to_string(),
         })
     }
 
     /// Append a new version Node to the chain rooted at `anchor`.
-    /// Phase 1 stub — returns `E_NOT_IMPLEMENTED`.
-    pub fn append_version(&self, _anchor: &AnchorHandle, _node: &Node) -> Result<Cid, EngineError> {
-        Err(EngineError::NotImplemented {
-            feature: "append_version — Phase 2",
-        })
+    ///
+    /// Phase-3 G16-B-prime: persists the Node bytes via the underlying
+    /// `benten_graph` backend's `put_node` surface, then calls
+    /// `benten_core::version::append_version` to advance the chain
+    /// (refusing forks via `benten_core::version::VersionError`).
+    ///
+    /// # Errors
+    ///
+    /// - [`EngineError::Graph`] on backend put failure.
+    /// - [`EngineError::Other`] (carrying [`ErrorCode::VersionBranched`]
+    ///   or [`ErrorCode::VersionUnknownPrior`]) when the chain refuses
+    ///   the append (concurrent fork or an unobserved prior head).
+    /// - [`EngineError::Other`] (carrying [`ErrorCode::NotFound`])
+    ///   when the anchor handle's name is not in the engine's anchor
+    ///   store. Pre-G16-B-prime call sites that constructed
+    ///   `AnchorHandle` outside `create_anchor` cannot exist (the
+    ///   field is `pub(crate)`); the catch-all keeps future cross-
+    ///   engine handle leaks honest.
+    pub fn append_version(&self, anchor: &AnchorHandle, node: &Node) -> Result<Cid, EngineError> {
+        // Persist the new Node via the backend; CID is content-addressed.
+        let new_head = self.backend.put_node(node)?;
+        let mut store = benten_graph::MutexExt::lock_recover(&self.inner.anchor_store);
+        let entry = store
+            .get_mut(&anchor.name)
+            .ok_or_else(|| EngineError::Other {
+                code: ErrorCode::NotFound,
+                message: format!("anchor not found: '{}'", anchor.name),
+            })?;
+        let prior = entry.current;
+        // append_version refuses forks (Branched) + unknown priors via
+        // the prior-threaded API.
+        benten_core::version::append_version(&entry.anchor, &prior, &new_head).map_err(|e| {
+            EngineError::Other {
+                code: e.code(),
+                message: e.to_string(),
+            }
+        })?;
+        entry.current = new_head;
+        Ok(new_head)
     }
 
     /// Read the CID of the version currently pointed at by `anchor`.
-    /// Phase 1 stub — returns `E_NOT_IMPLEMENTED`.
-    pub fn read_current_version(&self, _anchor: &AnchorHandle) -> Result<Option<Cid>, EngineError> {
-        Err(EngineError::NotImplemented {
-            feature: "read_current_version — Phase 2",
-        })
+    ///
+    /// Phase-3 G16-B-prime: returns the CURRENT head from the engine's
+    /// anchor store. `None` would indicate the anchor was created but
+    /// no [`Self::append_version`] has landed yet — the post-
+    /// G16-B-prime contract is "anchors always carry a head" (the seed
+    /// at create-time), so this call returns `Some(seed)` after
+    /// `create_anchor` and the most-recent appended head thereafter.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EngineError::Other`] (carrying
+    /// [`ErrorCode::NotFound`]) when the handle's name is not in
+    /// the engine's anchor store.
+    pub fn read_current_version(&self, anchor: &AnchorHandle) -> Result<Option<Cid>, EngineError> {
+        let store = benten_graph::MutexExt::lock_recover(&self.inner.anchor_store);
+        let entry = store.get(&anchor.name).ok_or_else(|| EngineError::Other {
+            code: ErrorCode::NotFound,
+            message: format!("anchor not found: '{}'", anchor.name),
+        })?;
+        Ok(Some(entry.current))
+    }
+
+    /// Phase-3 G16-B-prime (§6.12 item 3): set the local engine's
+    /// device-DID-attestation CID. Subsequent
+    /// [`benten_caps::WriteContext`] / [`benten_caps::ReadContext`]
+    /// constructions inside engine-internal call sites populate the
+    /// `device_cid` field with this value, letting heterogeneous
+    /// `CapabilityPolicy` impls dispatch per-device under the SAME
+    /// logical-actor identity per D-PHASE-3-25.
+    ///
+    /// Pass `None` to clear (default state). Pass `Some(cid)` after
+    /// validating a [`benten_id::device_attestation::DeviceAttestation`]
+    /// envelope at the engine boundary; the CID is the content-addressed
+    /// identifier of that envelope.
+    ///
+    /// **Production threading:** the engine's diagnostics
+    /// (`engine_diagnostics.rs::transaction`) commit hook + the
+    /// primitive-host (`primitive_host.rs::check_capability`)
+    /// pre-write cap-check arm both populate `device_cid` from this
+    /// setter. Legacy engines that never call this setter behave as
+    /// before (`device_cid: None`).
+    pub fn set_device_cid(&self, device_cid: Option<Cid>) {
+        let mut g = benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
+        *g = device_cid;
+    }
+
+    /// Phase-3 G16-B-prime: read the engine's configured
+    /// device-DID-attestation CID. Round-trip companion to
+    /// [`Self::set_device_cid`].
+    #[must_use]
+    pub fn device_cid(&self) -> Option<Cid> {
+        *benten_graph::MutexExt::lock_recover(&self.inner.device_cid)
     }
 
     /// Walk the full version-chain history under `anchor`, yielding
-    /// each ancestor CID in order. Phase 1 stub — returns
-    /// `E_NOT_IMPLEMENTED`.
+    /// each ancestor CID in order (oldest → newest, including the
+    /// seed head).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EngineError::Other`] (carrying
+    /// [`ErrorCode::NotFound`]) when the handle's name is not in
+    /// the engine's anchor store.
     pub fn walk_versions(
         &self,
-        _anchor: &AnchorHandle,
+        anchor: &AnchorHandle,
     ) -> Result<std::vec::IntoIter<Cid>, EngineError> {
-        Err(EngineError::NotImplemented {
-            feature: "walk_versions — Phase 2",
-        })
+        let store = benten_graph::MutexExt::lock_recover(&self.inner.anchor_store);
+        let entry = store.get(&anchor.name).ok_or_else(|| EngineError::Other {
+            code: ErrorCode::NotFound,
+            message: format!("anchor not found: '{}'", anchor.name),
+        })?;
+        Ok(benten_core::version::walk_versions(&entry.anchor))
     }
 
     /// Phase 2a G9-A-cont: record a target iteration at which `grant`
@@ -403,4 +533,22 @@ impl Engine {
         self.create_node(&node)
             .expect("fixture insertion via NoAuth backend")
     }
+}
+
+/// Phase-3 G16-B-prime helper (§6.12 item 1): derive a deterministic
+/// seed CID for an anchor name. Used by [`Engine::create_anchor`] so two
+/// engines that mint an anchor under the same name agree on the
+/// pre-append seed CID. Pre-existing anchor names are stable across
+/// engine restarts because the seed is name-derived, not random.
+///
+/// The blake3 prefix `b"benten-anchor-seed:"` namespaces this derivation
+/// off other content-addressed CIDs in the system (Node bodies, Edge
+/// bodies, capability grants) so the seed cannot collide with a
+/// real-content CID for any practical input.
+fn anchor_seed_cid_for_name(name: &str) -> Cid {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"benten-anchor-seed:");
+    hasher.update(name.as_bytes());
+    let digest = *hasher.finalize().as_bytes();
+    Cid::from_blake3_digest(digest)
 }

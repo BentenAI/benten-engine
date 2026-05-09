@@ -132,25 +132,11 @@ fn capability_policy_treats_missing_device_cid_as_legacy_actor_only_path() {
     );
 }
 
-#[test]
-#[ignore = "RED-PHASE: G16-B-B engine write-path threading of device_cid into WriteContext at construction sites. Closes cap-r4-4 (c) end-to-end. Structural surface landed at G16-B canary."]
-fn capability_policy_per_device_cid_dispatch_observable_in_runtime_arm() {
-    // cap-r4-4 (c) pin (pim-2 production-runtime-arm assertion). The
-    // device_cid field MUST be threaded from the production write-path
-    // call site to the policy invocation — not just a struct field
-    // that no production caller populates.
-    //
-    // Concrete shape: drive `engine.write_node(...)` against an engine
-    // configured with a recording policy + a known device-DID; assert
-    // the policy observed the device_cid in the WriteContext.
-    //
-    // Structural surface (the field on WriteContext + ReadContext) is
-    // landed at G16-B canary. Production-runtime threading via
-    // engine.rs / primitive_host.rs WriteContext-construction sites
-    // lands in the G16-B-B parallel wave (per the wave brief).
-    unimplemented!(
-        "G16-B-B wires production runtime threading of device_cid through the engine \
-         write-path WriteContext construction sites. Tracking issue at \
-         docs/future/phase-3-backlog.md (G16-B post-canary residual)."
-    );
-}
+// Note: the production-runtime-arm assertion that drives
+// `engine.write_node(...)` through a recording policy + the engine's
+// configured device_cid lives at
+// `crates/benten-engine/tests/device_cid_runtime_arm.rs` because it
+// requires the `benten-engine` dependency. This file's
+// `capability_policy_per_device_cid_dispatch_observable_in_runtime_arm`
+// (a + b structural pins above) covers the structural-surface side
+// of the contract; the engine-side pin closes pim-2 end-to-end.

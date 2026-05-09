@@ -184,6 +184,28 @@ explicitly at the CRDT merge seam. The `Default` impl is intentionally
 test-/bench-shaped (all-zero CIDs); production paths construct frames
 explicitly per the WRITE-path discipline.
 
+**Phase-3 G16-B-prime engine-side merge callback (§6.12 item 1
+closure).** The engine's `apply_atrium_merge` orchestration entry
+point composes the structural surface with the in-memory anchor
+store: after `AtriumHandle::merge_remote_change_with_hop_depth`
+returns a `SyncMergeAttribution` seed, the engine resolves
+peer node-ids → peer-DIDs via `AtriumHandle::resolve_peer_dids`
+(local trust-store lookup with `node-id:NNN` fallback), constructs an
+`AttributionFrame` populated with `peer_did_set` / `device_did`
+(from `Engine::device_cid`) / `sync_hop_depth`, and mints a new
+"version" Node via `Engine::append_version` against the named
+anchor. The Anchor's CURRENT pointer advances atomically via the
+prior-threaded `benten_core::version::append_version` discipline.
+
+**Phase-3 G16-B-prime device-DID threading (§6.12 item 3 closure).**
+`Engine::set_device_cid` configures the engine's
+device-DID-attestation CID; the engine's two production WriteContext
+construction sites (`engine_diagnostics.rs::transaction` commit hook
++ `primitive_host.rs::check_capability`) populate
+`WriteContext.device_cid` from this setter so heterogeneous
+`CapabilityPolicy` impls can dispatch per-device under the SAME
+logical-actor identity per D-PHASE-3-25.
+
 ---
 
 ## What "active" means in this table

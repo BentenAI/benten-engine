@@ -200,6 +200,19 @@ struct AtriumInner {
     /// `crates/benten-sync/src/handshake_wire.rs::HandshakeFrame` builder
     /// once the broader G16-D wave-6b handshake protocol body lands.
     declared_device_attestations: Mutex<BTreeMap<String, DeclaredDeviceAttestation>>,
+    /// Phase-3 G16-B-prime (§6.12 deferred surface decision #3): trust-
+    /// store mapping from CRDT peer node-id → resolved peer-DID. The
+    /// engine populates this map as remote peers handshake (the
+    /// handshake protocol body work lands at G16-D wave-6b; until then
+    /// callers register entries explicitly via
+    /// [`AtriumHandle::register_peer_did`]).
+    ///
+    /// On a successful row-4a merge, [`AtriumHandle::resolve_peer_dids`]
+    /// translates the [`SyncMergeAttribution::peer_node_ids`] set to
+    /// peer-DIDs by walking this map; unresolved node-ids fall back to
+    /// `node-id:NNN` synthetic strings so the AttributionFrame still
+    /// carries provenance per pim-2 end-to-end pin discipline.
+    peer_did_registry: Mutex<BTreeMap<u64, String>>,
 }
 
 /// Phase-3 G21-T2 §D — declared device-attestation envelope recorded
@@ -287,6 +300,7 @@ impl AtriumHandle {
                 zones: Mutex::new(BTreeMap::new()),
                 peer_keypair: keypair,
                 declared_device_attestations: Mutex::new(BTreeMap::new()),
+                peer_did_registry: Mutex::new(BTreeMap::new()),
             }),
         })
     }
@@ -316,6 +330,53 @@ impl AtriumHandle {
     pub async fn list_declared_device_attestations(&self) -> Vec<DeclaredDeviceAttestation> {
         let tbl = self.inner.declared_device_attestations.lock().await;
         tbl.values().cloned().collect()
+    }
+
+    /// Phase-3 G16-B-prime (§6.12 deferred surface decision #3):
+    /// register a peer-DID for a CRDT peer node-id.
+    ///
+    /// G16-B-prime scope: the registration is a manual hook — tests
+    /// + integration scenarios populate the trust-store explicitly so
+    /// the merge-callback path in
+    /// [`crate::Engine::apply_atrium_merge`] resolves
+    /// [`SyncMergeAttribution::peer_node_ids`] to real DID strings
+    /// (vs the `node-id:NNN` fallback). G16-D wave-6b's handshake
+    /// protocol body wires the production path: as remote peers
+    /// complete handshake, the handshake body inserts the
+    /// `peer_node_id → did:key:...` mapping here without manual
+    /// registration.
+    pub async fn register_peer_did(&self, peer_node_id: u64, did: impl Into<String>) {
+        let mut reg = self.inner.peer_did_registry.lock().await;
+        reg.insert(peer_node_id, did.into());
+    }
+
+    /// Phase-3 G16-B-prime: resolve a set of CRDT peer node-ids to
+    /// peer-DID strings.
+    ///
+    /// For each node-id: looks up the local trust-store
+    /// (`peer_did_registry`); falls back to a synthetic
+    /// `node-id:NNN` decimal-string if no resolved DID is registered.
+    /// The fallback ensures the
+    /// [`benten_eval::AttributionFrame::peer_did_set`] carries SOMETHING
+    /// per the pim-2 end-to-end-pin discipline — defending against the
+    /// failure mode where the AttributionFrame is left empty when the
+    /// trust-store hasn't yet learned the peer.
+    ///
+    /// Returns a `BTreeSet<String>` so the AttributionFrame's
+    /// canonical bytes are deterministic across calls.
+    pub async fn resolve_peer_dids(
+        &self,
+        peer_node_ids: &std::collections::BTreeSet<u64>,
+    ) -> std::collections::BTreeSet<String> {
+        let reg = self.inner.peer_did_registry.lock().await;
+        peer_node_ids
+            .iter()
+            .map(|nid| {
+                reg.get(nid)
+                    .cloned()
+                    .unwrap_or_else(|| format!("node-id:{nid}"))
+            })
+            .collect()
     }
 
     /// The local peer's [`PeerId`] (Ed25519 pubkey == iroh EndpointId
