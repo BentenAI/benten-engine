@@ -779,8 +779,8 @@ pub enum ErrorCode {
     /// `Engine::register_subgraph` / `Engine::register_crud`. Construction
     /// sites at the unregistered-handler boundary in
     /// `crates/benten-engine/src/engine.rs` + `engine_stream.rs`. Mirrors
-    /// the TS-side `EDslUnregisteredHandler` thrown by
-    /// `packages/engine/src/engine.ts::call` so a Rust callsite emitting
+    /// the TS-side `EDslUnregisteredHandler` thrown by the `call` method
+    /// on `packages/engine/src/engine.ts::Engine` so a Rust callsite emitting
     /// this code surfaces the same typed `BentenError` subclass on the
     /// wire. Routes to `ON_NOT_FOUND` (the handler-id namespace miss is
     /// a registry lookup failure, joining the `NotFound` /

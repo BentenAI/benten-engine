@@ -487,7 +487,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Message:** "DSL value does not match expected shape: {reason}"
 - **Context:** `{ reason: string, received: unknown }`
 - **Fix:** Check the DSL API documentation for the expected shape.
-- **Thrown at:** TypeScript DSL wrapper (`packages/engine/src/dsl.ts::EDslInvalidShape`) AND Rust DSL compiler (`crates/benten-dsl-compiler/src/lib.rs` — object/pair shape validation in the parser/emit pass) AND Rust engine (`crates/benten-engine/src/engine.rs::register_subgraph` — SANDBOX numeric-budget shape validation walk per `docs/SANDBOX-LIMITS.md` §2).
+- **Thrown at:** TypeScript DSL wrapper (`packages/engine/src/errors.generated.ts::EDslInvalidShape`, used from `packages/engine/src/dsl.ts` builder methods) AND Rust DSL compiler (`crates/benten-dsl-compiler/src/lib.rs` — object/pair shape validation in the parser/emit pass) AND Rust engine (`crates/benten-engine/src/engine.rs::register_subgraph` — SANDBOX numeric-budget shape validation walk per `docs/SANDBOX-LIMITS.md` §2).
 - **Phase:** 1 (TS DSL builder methods) / 3 (Rust dsl-compiler + engine register-time validation; promoted to first-class Rust ErrorCode at R6 fp Wave C2 per dx-r6-r1-1). Routes to `ON_ERROR`.
 
 ### E_DSL_UNREGISTERED_HANDLER
@@ -495,7 +495,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Message:** "No handler registered for '{handler_id}'"
 - **Context:** `{ handler_id: string, suggestions: string[] }`
 - **Fix:** Check spelling; register via `engine.registerSubgraph(handler)` or `engine.registerSubgraph(crud('<label>'))`.
-- **Thrown at:** TypeScript DSL wrapper (`packages/engine/src/engine.ts::call` near-match suggestion path) AND Rust engine (`crates/benten-engine/src/engine.rs` — `dispatch_call_with_mode_and_trace`, `dispatch_call_inner`, `handler_to_mermaid`, `handler_predecessors`, `emit_with_handler`, `subscribe_with_handler`; `crates/benten-engine/src/engine_stream.rs::call_stream`).
+- **Thrown at:** TypeScript DSL wrapper (`call` method near-match suggestion path on `packages/engine/src/engine.ts::Engine`) AND Rust engine (`crates/benten-engine/src/engine.rs` — `dispatch_call_with_mode_and_trace`, `dispatch_call_inner`, `handler_to_mermaid`, `handler_predecessors`, `emit_with_handler`, `subscribe_with_handler`; `crates/benten-engine/src/engine_stream.rs::call_stream`).
 - **Phase:** 1 (TS) / 3 (Rust engine call/dispatch boundary; promoted to first-class Rust ErrorCode at R6 fp Wave C2 per dx-r6-r1-1). Routes to `ON_NOT_FOUND`.
 
 ### E_HOST_NOT_FOUND

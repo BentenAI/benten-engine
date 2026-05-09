@@ -2450,7 +2450,7 @@ impl Engine {
             if !matches!(node.kind, benten_eval::PrimitiveKind::Sandbox) {
                 continue;
             }
-            for &key in &["fuel", "wallclock_ms", "wallclock", "output_limit_bytes"] {
+            for &key in &["fuel", "wallclock_ms", "output_limit"] {
                 let Some(prop) = node.property(key) else {
                     continue;
                 };
@@ -3208,9 +3208,9 @@ impl Engine {
         let Some(handler_cid) = handler_cid_opt else {
             // R6 fp Wave C2 (dx-r6-r1-1): typed `DslUnregisteredHandler`
             // mirrors the TS-side `EDslUnregisteredHandler` thrown by
-            // `packages/engine/src/engine.ts::call`'s
-            // `knownHandlers.has(handlerId)` short-circuit. Routes via
-            // `ON_NOT_FOUND`.
+            // `packages/engine/src/engine.ts::Engine`'s `call` method
+            // via the `knownHandlers.has(handlerId)` short-circuit.
+            // Routes via `ON_NOT_FOUND`.
             return Err(EngineError::Other {
                 code: ErrorCode::DslUnregisteredHandler,
                 message: format!("handler not registered: {handler_id}"),

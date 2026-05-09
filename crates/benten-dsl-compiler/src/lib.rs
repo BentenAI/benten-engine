@@ -710,15 +710,24 @@ fn emit(handler: HandlerAst) -> Result<CompiledSubgraph, CompileError> {
 /// subclass (`EDslInvalidShape`) regardless of whether the offending
 /// handler was authored via the TS DSL builder or via this Rust dsl-
 /// compiler. Today the pass enforces SANDBOX integer-typed properties
-/// (`fuel`, `wallclock_ms`, `wallclock`, `output_limit_bytes`) per
-/// `docs/SANDBOX-LIMITS.md`. Future shape rules append to this single
-/// pass so the typed-error surface stays narrow.
+/// (`fuel`, `wallclock_ms`, `output_limit`) per
+/// `docs/SANDBOX-LIMITS.md`. Property names are the CANONICAL eval-side
+/// snake_case form per the 24th-p/c-drift acceptance criterion enforced
+/// at `crates/benten-eval/tests/sandbox_handler_args.rs` (the camelCase
+/// `wallclockMs` / `outputLimitBytes` TS-surface form is translated by
+/// `packages/engine/src/dsl.ts::translateSandboxArgs` to the canonical
+/// snake_case form BEFORE crossing the napi boundary; the Rust-side
+/// validator therefore validates the canonical names only). Future
+/// shape rules append to this single pass so the typed-error surface
+/// stays narrow.
 fn validate_shapes(handler: &HandlerAst) -> Result<(), CompileError> {
     use benten_core::Value;
     /// SANDBOX numeric-budget property names (per `docs/SANDBOX-LIMITS.md` §2).
     /// Each MUST be a non-negative integer; non-int / negative-int / non-numeric
-    /// values trip `E_DSL_INVALID_SHAPE`.
-    const SANDBOX_INT_PROPS: &[&str] = &["fuel", "wallclock_ms", "wallclock", "output_limit_bytes"];
+    /// values trip `E_DSL_INVALID_SHAPE`. Names are the canonical eval-side
+    /// snake_case form consumed by
+    /// `crates/benten-engine/src/primitive_host.rs::execute_sandbox`.
+    const SANDBOX_INT_PROPS: &[&str] = &["fuel", "wallclock_ms", "output_limit"];
 
     for p in &handler.primitives {
         if matches!(p.kind, PrimitiveKind::Sandbox) {

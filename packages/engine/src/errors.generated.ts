@@ -954,7 +954,7 @@ export class EVersionUnknownPrior extends BentenError {
 /**
  * E_DSL_INVALID_SHAPE
  *
- * Thrown at: TypeScript DSL wrapper (`packages/engine/src/dsl.ts::EDslInvalidShape`) AND Rust DSL compiler (`crates/benten-dsl-compiler/src/lib.rs` — object/pair shape validation in the parser/emit pass) AND Rust engine (`crates/benten-engine/src/engine.rs::register_subgraph` — SANDBOX numeric-budget shape validation walk per `docs/SANDBOX-LIMITS.md` §2).
+ * Thrown at: TypeScript DSL wrapper (`packages/engine/src/errors.generated.ts::EDslInvalidShape`, used from `packages/engine/src/dsl.ts` builder methods) AND Rust DSL compiler (`crates/benten-dsl-compiler/src/lib.rs` — object/pair shape validation in the parser/emit pass) AND Rust engine (`crates/benten-engine/src/engine.rs::register_subgraph` — SANDBOX numeric-budget shape validation walk per `docs/SANDBOX-LIMITS.md` §2).
  * Message template: "DSL value does not match expected shape: {reason}"
  */
 export class EDslInvalidShape extends BentenError {
@@ -969,7 +969,7 @@ export class EDslInvalidShape extends BentenError {
 /**
  * E_DSL_UNREGISTERED_HANDLER
  *
- * Thrown at: TypeScript DSL wrapper (`packages/engine/src/engine.ts::call` near-match suggestion path) AND Rust engine (`crates/benten-engine/src/engine.rs` — `dispatch_call_with_mode_and_trace`, `dispatch_call_inner`, `handler_to_mermaid`, `handler_predecessors`, `emit_with_handler`, `subscribe_with_handler`; `crates/benten-engine/src/engine_stream.rs::call_stream`).
+ * Thrown at: TypeScript DSL wrapper (`call` method near-match suggestion path on `packages/engine/src/engine.ts::Engine`) AND Rust engine (`crates/benten-engine/src/engine.rs` — `dispatch_call_with_mode_and_trace`, `dispatch_call_inner`, `handler_to_mermaid`, `handler_predecessors`, `emit_with_handler`, `subscribe_with_handler`; `crates/benten-engine/src/engine_stream.rs::call_stream`).
  * Message template: "No handler registered for '{handler_id}'"
  */
 export class EDslUnregisteredHandler extends BentenError {
