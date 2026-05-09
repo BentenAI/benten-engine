@@ -162,7 +162,7 @@ impl AtriumError {
             AtriumError::DivergentCidRejected { .. } => {
                 benten_errors::ErrorCode::SyncDivergentCidRejected
             }
-            AtriumError::InvalidState { .. } => benten_errors::ErrorCode::AtriumTransportDegraded,
+            AtriumError::InvalidState { .. } => benten_errors::ErrorCode::AtriumInactive,
             AtriumError::SyncHopDepthExceeded { .. } => {
                 benten_errors::ErrorCode::SyncHopDepthExceeded
             }
@@ -695,9 +695,10 @@ impl AtriumHandle {
     /// ([`AtriumHandle::sync_subgraph`] / [`AtriumHandle::accept_sync_subgraph`]
     /// / [`AtriumHandle::merge_remote_change`] /
     /// [`AtriumHandle::merge_remote_change_with_hop_depth`]) return
-    /// [`AtriumError::InvalidState`] without touching the underlying
-    /// transport — defending against orphaned ChangeEvent fan-out per
-    /// the R4b dist-systems lens carry.
+    /// [`AtriumError::InvalidState`] (mapped to `E_ATRIUM_INACTIVE`)
+    /// without touching the underlying transport. Inbound merges are
+    /// gated at the merge seam by `ensure_active`; outbound publish /
+    /// share / close-share paths are likewise gated.
     ///
     /// The iroh endpoint stays bound + the per-zone Loro documents
     /// survive in-memory so [`AtriumHandle::rejoin`] can resume on
@@ -707,26 +708,44 @@ impl AtriumHandle {
     ///
     /// Idempotent: a `leave()` on an already-inactive handle is a no-op.
     ///
+    /// # Outbound subscription drop scope (current limitation)
+    ///
+    /// `engine_sync.rs` does NOT today carry a per-handle outbound
+    /// subscription registry — the eval-side `ON_CHANGE_REGISTRY`
+    /// (`crates/benten-eval/src/primitives/subscribe.rs`) is process-
+    /// scoped (`LazyLock<Mutex<HashMap>>`), shared across all engine
+    /// instances in the process. `leave()` therefore CANNOT
+    /// independently revoke outbound `Engine::subscribe_change_events`
+    /// registrations bound through the eval-side registry — the flag-
+    /// flip only gates the Atrium-handle-owned sync surfaces.
+    ///
+    /// In-process subscription cross-talk is mitigated separately by
+    /// the F6 `is_actor_active` cap-recheck at SUBSCRIBE delivery time
+    /// (per phase-3-backlog §2.2 / §3.2), which auto-cancels deliveries
+    /// to revoked actors. That guard fires on cap revocation, NOT on
+    /// lifecycle changes — so a `leave()`d handle whose actor is still
+    /// active will still observe its eval-side subscriptions firing
+    /// (until the per-engine subscription registry refactor lands per
+    /// §6.12 item 8 option-(b)).
+    ///
     /// # Errors
     ///
     /// Currently infallible (returns `Ok(())` always); the result-shape
     /// is preserved for future versions that may surface drain-failure
     /// reasons (e.g. an outbound subscription that refused to release
-    /// its registration cleanly).
+    /// its registration cleanly once item 8 option-(b) lands).
     #[allow(clippy::unused_async)]
     pub async fn leave(&self) -> AtriumResult<()> {
         // SeqCst per the §6.12 item 7 contract — the flag transition
         // strictly precedes any subsequent merge-time check across
         // arbitrary task scheduling.
         self.inner.is_active.store(false, Ordering::SeqCst);
-        // Outbound subscription registrations + ChangeEvent fan-out
-        // surfaces drop here. Today the engine_sync.rs surface does
-        // NOT carry an in-flight subscription registry (the eval-side
-        // `ON_CHANGE_REGISTRY` is process-scoped per `phase-3-backlog`
-        // §6.12 item 8); when the per-handle subscription registry
-        // lands (item 8 option-(b) refactor), this site drops the
-        // handle's outbound entries from that registry. Until then the
-        // flag-flip alone suffices to gate fan-out at the merge seam.
+        // Per the rustdoc above: the flag-flip alone gates the Atrium-
+        // handle-owned sync surfaces (inbound merge + outbound publish/
+        // share/close-share). It does NOT touch the eval-side
+        // `ON_CHANGE_REGISTRY` (process-scoped); per-handle outbound
+        // subscription drop lands when §6.12 item 8 option-(b) lifts the
+        // registry to engine-instance scope.
         Ok(())
     }
 

@@ -1115,6 +1115,14 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** `crates/benten-sync/src/transport.rs::Endpoint::*` (Phase-3 G16-A wave-6 connection-establishment + send/recv paths; net-blocker-2 BLOCKER). Also fires from `crates/benten-sync/src/handshake_wire.rs::HandshakeFrame::from_canonical_bytes` when the wire-format frame is missing required fields per net-blocker-4 BLOCKER. Mapped from the `AtriumTransportError::TransportDegraded` / `AtriumTransportError::HandshakeWireFormat` typed variants via `crates/benten-sync/src/errors.rs::AtriumTransportError::code`.
 - **Phase:** 3 G16-A
 
+### E_ATRIUM_INACTIVE
+
+- **Message:** "atrium handle is in graceful-leave state: {operation} requires rejoin()"
+- **Context:** `{ operation: String }`
+- **Fix:** An `AtriumHandle` was used after `leave()` flipped its `is_active` flag to false but before `rejoin()` flipped it back. The handle is in a graceful-leave quiesced state — distinct from `E_ATRIUM_TRANSPORT_DEGRADED` (transport-layer degrade) because the iroh endpoint remains bound + the lifecycle change is intentional (operator-initiated, not a fault). Distinct from `E_ATRIUM_RELAY_UNREACHABLE` (relay unavailability) because the relay link was never lost. Call `AtriumHandle::rejoin()` to re-activate; calling `rejoin()` is idempotent (no-op if already active). Routes to `ON_ERROR`.
+- **Thrown at:** `crates/benten-engine/src/engine_sync.rs::AtriumHandle::merge_remote_change` (inbound sync) + outbound fan-out paths (publish-view-result + share-doc-update + close-share) when `is_active` flag is `false`. Mapped from `AtriumError::InvalidState` typed variant via `engine_sync.rs::AtriumError::code`.
+- **Phase:** 3 G16-B-G
+
 ### E_SYNC_DIVERGENT_CID_REJECTED
 
 - **Message:** "sync replica frame rejected: system-zone target {zone} carries divergent CID {observed_cid} (Anchor-immutable per Inv-13 row-4b)"
