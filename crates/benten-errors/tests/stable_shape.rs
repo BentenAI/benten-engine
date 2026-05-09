@@ -256,6 +256,16 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // CRDT merge seam; carries the observed depth + cap diagnostic
     // fields. Mirrors the Inv-4 sandbox-depth precedent.
     ErrorCode::SyncHopDepthExceeded,
+    // Phase-3 G16-B-F (sec-r4r1-2 BLOCKER closure): mid-session
+    // revocation typed-error variant fired by `apply_atrium_merge`'s
+    // per-write cap-recheck when the originating peer's local grant
+    // was revoked between handshake and the next sync round.
+    // Construction site at
+    // `crates/benten-engine/src/engine.rs::apply_atrium_merge`'s
+    // per-row apply loop; mirrors the SUBSCRIBE-side
+    // `SubscribeRevokedMidStream` shape per CLR-2 dual-layer recheck
+    // architecture.
+    ErrorCode::SyncRevokedDuringSession,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -459,8 +469,10 @@ fn variant_count_is_pinned() {
     // Post-G16-B-B-rest sub-item D: + UcanClockNotInjected = 106
     // (DEFAULT_NOW_SECS=0 fail-closed inversion at the
     // `UcanGroundedPolicy` chain-walker boundary).
+    // Post-G16-B-F (sec-r4r1-2 BLOCKER closure): + SyncRevokedDuringSession = 107
+    // (mid-session revocation typed-error at sync-replica WRITE delivery).
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 106,
+        CATALOG_VARIANT_COUNT, 107,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
