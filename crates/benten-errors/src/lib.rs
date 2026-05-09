@@ -587,6 +587,29 @@ pub enum ErrorCode {
     /// store via the `cap_recheck.rs` G13-pre-C scaffold. Maps to
     /// `E_SYNC_REVOKED_DURING_SESSION`.
     SyncRevokedDuringSession,
+    /// G16-D wave-6b fix-pass (cryptographic-attestation closure for
+    /// criterion 16 per Ben ratification 2026-05-09): an inbound
+    /// on-the-wire `DeviceAttestationEnvelope` failed cryptographic
+    /// verification. Surfaces at
+    /// `crates/benten-engine/src/engine_sync.rs::DeviceAttestationEnvelope::verify`
+    /// for any of: (a) device-DID forgery (envelope signature does not
+    /// verify against the public key resolved from the declared
+    /// `attestation.device_did`); (b) parent-attestation chain rejection
+    /// via `benten_id::Acceptor::accept_at` (bad parent signature,
+    /// expired freshness window, replayed nonce, revoked device); (c)
+    /// frame-pair binding violation (the envelope's signed
+    /// `payload_hash` does not match the BLAKE3 hash of the Loro export
+    /// payload received in the same exchange). All three failure modes
+    /// reject with this single typed code so audit pipelines can route
+    /// on the wire-attestation boundary uniformly. Joins the cap-denial
+    /// routing family (`ON_DENIED`) per CLR-2 dual-layer recheck — a
+    /// forged or replayed envelope is a capability-boundary violation,
+    /// not a transport degrade. Distinct from
+    /// [`ErrorCode::ThinClientAuthRejected`] (browser-tab attestation
+    /// boundary) and [`ErrorCode::SyncRevokedDuringSession`]
+    /// (mid-session local-grant revocation). Maps to
+    /// `E_DEVICE_ATTESTATION_FORGED`.
+    DeviceAttestationForged,
     /// G14-D wave-5a (ds-r4r2-2 closure) + G16-B wave-6b (ds-r4b-1
     /// BLOCKER closure): an inbound sync-replica `AttributionFrame`
     /// chain exceeded the documented hop-depth bound
@@ -932,6 +955,7 @@ impl ErrorCode {
             ErrorCode::CapSnapshotHashMismatch => "E_CAP_SNAPSHOT_HASH_MISMATCH",
             ErrorCode::SubscribeRevokedMidStream => "E_SUBSCRIBE_REVOKED_MID_STREAM",
             ErrorCode::SyncRevokedDuringSession => "E_SYNC_REVOKED_DURING_SESSION",
+            ErrorCode::DeviceAttestationForged => "E_DEVICE_ATTESTATION_FORGED",
             ErrorCode::SyncHopDepthExceeded => "E_SYNC_HOP_DEPTH_EXCEEDED",
             ErrorCode::ThinClientAuthRejected => "E_THIN_CLIENT_AUTH_REJECTED",
             ErrorCode::StorageQuotaExceeded => "E_STORAGE_QUOTA_EXCEEDED",
@@ -1045,6 +1069,7 @@ impl ErrorCode {
             | ErrorCode::CapSnapshotHashMismatch
             | ErrorCode::SubscribeRevokedMidStream
             | ErrorCode::SyncRevokedDuringSession
+            | ErrorCode::DeviceAttestationForged
             | ErrorCode::SyncHopDepthExceeded
             | ErrorCode::ThinClientAuthRejected
             // Phase-3 G21-T1 — typed-CALL cap-denial joins the
@@ -1431,6 +1456,7 @@ impl ErrorCode {
             "E_CAP_SNAPSHOT_HASH_MISMATCH" => ErrorCode::CapSnapshotHashMismatch,
             "E_SUBSCRIBE_REVOKED_MID_STREAM" => ErrorCode::SubscribeRevokedMidStream,
             "E_SYNC_REVOKED_DURING_SESSION" => ErrorCode::SyncRevokedDuringSession,
+            "E_DEVICE_ATTESTATION_FORGED" => ErrorCode::DeviceAttestationForged,
             "E_SYNC_HOP_DEPTH_EXCEEDED" => ErrorCode::SyncHopDepthExceeded,
             "E_THIN_CLIENT_AUTH_REJECTED" => ErrorCode::ThinClientAuthRejected,
             // Phase-3 G18-A wave-5a — IndexedDB QuotaExceededError →

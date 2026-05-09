@@ -127,6 +127,23 @@ pub enum AtriumError {
         /// The configured cap.
         cap: u32,
     },
+
+    /// G16-D wave-6b fix-pass (cryptographic-attestation closure for
+    /// criterion 16 per Ben ratification 2026-05-09): an inbound
+    /// on-the-wire [`DeviceAttestationEnvelope`] failed cryptographic
+    /// verification. Three failure modes surface this single variant:
+    /// (a) device-DID forgery (envelope signature does not verify
+    /// against the public key resolved from the declared
+    /// `attestation.device_did`); (b) parent-attestation chain
+    /// rejection via `benten_id::Acceptor::accept_at`; (c) frame-pair
+    /// payload-hash binding violation (MITM swap defense).
+    /// Maps to [`benten_errors::ErrorCode::DeviceAttestationForged`].
+    #[error("atrium device-attestation envelope verification failed: {reason}")]
+    DeviceAttestationForged {
+        /// Operator-readable cause naming which of the three failure
+        /// modes fired.
+        reason: String,
+    },
 }
 
 /// Phase-3 G16-B canary (ds-r4b-1 BLOCKER closure): the
@@ -150,6 +167,369 @@ pub struct SyncMergeAttribution {
     /// merge boundary (= incoming_hop_depth + 1, bounded by
     /// [`benten_eval::exec_state::SYNC_HOP_DEPTH_CAP`]).
     pub sync_hop_depth: u32,
+    /// Phase-3 G16-D wave-6b: device-DID-attestation observed on the
+    /// wire envelope from the remote peer (the device that ORIGINATED
+    /// the writes carried in this merge). `None` when the remote peer
+    /// did not declare a device-DID at sync time (legacy / pre-G16-D
+    /// peers). Consumed by [`crate::Engine::apply_atrium_merge`] to
+    /// populate [`benten_eval::AttributionFrame::device_did`] with the
+    /// originating-device identity rather than the local merging-engine's
+    /// own device-CID. Closes plan §1 exit-criterion 16 (multi-device
+    /// support for a single identity) by giving cross-device merges
+    /// the device-grain provenance Inv-14 names.
+    pub remote_device_did: Option<String>,
+}
+
+/// Phase-3 G16-D wave-6b: on-the-wire device-DID-attestation envelope.
+///
+/// Emitted by [`AtriumHandle::sync_subgraph`] /
+/// [`AtriumHandle::accept_sync_subgraph`] BEFORE the Loro CRDT export
+/// payload so the receiver can populate
+/// [`benten_eval::AttributionFrame::device_did`] from the originating
+/// device's declared identity (rather than the receiver's own
+/// `device_cid`). The envelope is DAG-CBOR encoded for canonical-bytes
+/// determinism + cross-platform parity with the rest of the on-wire
+/// envelope shapes (e.g. [`benten_sync::handshake_wire::HandshakeFrame`]).
+///
+/// ## Cryptographic-attestation closure (V2; Phase-3 G16-D wave-6b fix-pass)
+///
+/// Per Ben ratification 2026-05-09, the wire envelope is signed +
+/// replay-resistant + frame-pair-bound. Three composing surfaces:
+///
+/// 1. **DID forgery defense**: the embedded
+///    `benten_id::DeviceAttestation` is signed by the parent-DID's
+///    keypair (the user-identity issuing the device's capability
+///    envelope). The envelope itself carries an additional
+///    `envelope_signature` produced by the originating device's
+///    keypair over the canonical bytes of `(version, attestation,
+///    payload_hash, session_nonce)`. The receiver:
+///    - Verifies `envelope_signature` against the public key resolved
+///      from `attestation.device_did` (links the wire frame to the
+///      keypair the attestation names — a peer cannot impersonate
+///      another device's DID without holding that device's secret key).
+///    - Verifies the embedded attestation via
+///      `benten_id::Acceptor::accept_at` (parent signature, freshness
+///      window, nonce-store replay defense, revocation list).
+/// 2. **Replay defense**: each envelope carries a fresh 32-byte
+///    `session_nonce` (independent of the attestation's parent-issued
+///    nonce). The signed `envelope_signature` covers `session_nonce`,
+///    so a captured envelope cannot be replayed verbatim against a
+///    different sync session — the receiver-side `Acceptor::accept_at`
+///    additionally rejects replay of the same parent-issued
+///    attestation nonce.
+/// 3. **Frame-pair binding defense**: the envelope's signed
+///    `payload_hash` is `BLAKE3(loro_export_bytes)` for the Loro
+///    payload that follows on the wire. The receiver computes the
+///    BLAKE3 of the inbound Loro payload and rejects with
+///    [`benten_errors::ErrorCode::DeviceAttestationForged`] if the
+///    hashes differ — defends against a MITM swapping the payload
+///    while preserving the envelope (or vice versa).
+///
+/// All three failure modes reject with the single typed code
+/// [`benten_errors::ErrorCode::DeviceAttestationForged`] so audit
+/// pipelines route on the wire-attestation boundary uniformly.
+///
+/// ## Backward-compat with `attestation = None`
+///
+/// Pre-G16-D-fp peers / handles with no declared device-attestation
+/// emit `attestation = None` + an empty `envelope_signature`. Receivers
+/// tolerate this for backward-compat with the G16-B-E / G16-D-pre-fp
+/// shipped wire shape — the receiver-side
+/// [`crate::Engine::apply_atrium_merge`] falls back to the local
+/// engine's `device_cid` for the [`benten_eval::AttributionFrame::device_did`]
+/// slot exactly as in V1. Production Atrium peers that have completed
+/// device-DID enrollment SHOULD always emit `attestation = Some(_)`;
+/// the heterogeneous-cap-envelope filter (phase-3-backlog §6.12 item 8)
+/// keys per-zone write rejection on `attestation.is_some()` + the
+/// envelope's declared capability scopes.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DeviceAttestationEnvelope {
+    /// Wire-format version. `2` for G16-D wave-6b-fp-era envelopes
+    /// (carries signed attestation + payload-hash + session-nonce +
+    /// envelope-signature). `1` is the legacy shape carrying only
+    /// `device_did: Option<String>`; a V2 receiver decodes V1 by
+    /// treating the embedded `attestation` as `None`.
+    pub version: u8,
+    /// Signed parent → device-DID attestation, or `None` when the
+    /// local handle has not been bound to a device-attestation envelope
+    /// (pre-G16-D-fp legacy / test fixture path). Composes the existing
+    /// hardened `benten_id::DeviceAttestation` + `Acceptor::accept_at`
+    /// surface; not a parallel transport.
+    pub attestation: Option<benten_id::device_attestation::DeviceAttestation>,
+    /// `BLAKE3(loro_export_bytes)` for the Loro payload that follows
+    /// this envelope on the wire. The signed `envelope_signature`
+    /// covers this hash so a MITM cannot swap the payload while
+    /// preserving the envelope. All-zero when `attestation` is `None`
+    /// (the legacy fallback path is purely advisory; binding is moot
+    /// when no attestation is asserted).
+    pub payload_hash: [u8; 32],
+    /// Fresh 32-byte session nonce (independent of the parent-issued
+    /// attestation nonce). Defends against verbatim envelope replay.
+    /// All-zero when `attestation` is `None`.
+    pub session_nonce: [u8; 32],
+    /// Ed25519 signature by the originating device's keypair over the
+    /// canonical bytes of `(version, attestation, payload_hash,
+    /// session_nonce)`. Verified at receive against the public key
+    /// resolved from `attestation.device_did`. Empty `Vec` when
+    /// `attestation` is `None`.
+    pub envelope_signature: Vec<u8>,
+}
+
+impl DeviceAttestationEnvelope {
+    /// Current wire-format version for the device-attestation envelope.
+    /// V2 carries signed attestation + payload-hash + session-nonce +
+    /// envelope-signature; V1 (legacy) carried only `device_did:
+    /// Option<String>`.
+    pub const WIRE_VERSION: u8 = 2;
+
+    /// Maximum supported wire-format version at this build. Receivers
+    /// tolerate `version <= MAX_WIRE_VERSION`; newer versions reject
+    /// with [`AtriumError::InvalidState`] (caller must upgrade).
+    ///
+    /// ## V1 → V2 cross-version compat (ds-fp-mr-g16dw6b-MINOR-1)
+    ///
+    /// V2 introduces signed-attestation + payload-hash + session-nonce
+    /// + envelope-signature fields without `#[serde(default)]` shims;
+    /// canonical-bytes-decoding a V1-emitted envelope into a V2 struct
+    /// would error at field absence. In practice this is harmless: V1
+    /// was never deployed (the V1 → V2 promotion lands inside the
+    /// SAME Phase-3 fix-pass that introduces the wire envelope; no
+    /// V1 peer exists in the wild). The version-rejection is honest:
+    /// V1 senders against V2 receivers fail at decode rather than
+    /// silently round-tripping unsigned bytes.
+    pub const MAX_WIRE_VERSION: u8 = 2;
+
+    /// Construct a legacy `attestation = None` envelope (no signed
+    /// attestation; receiver falls back to its own `device_cid`).
+    /// Used by handles that have not been bound via
+    /// [`AtriumHandle::set_local_device_attestation`] OR by test
+    /// fixtures that bypass the wire envelope flow.
+    ///
+    /// ## Legacy-fallback security semantics (ds-mr-g16dw6b-MINOR-2)
+    ///
+    /// A peer that emits `attestation = None` (or that omits the
+    /// envelope entirely on a backward-compat sync) causes the
+    /// receiver's `Engine::apply_atrium_merge` to fall back to its
+    /// OWN `device_cid` for the post-merge `AttributionFrame.device_did`.
+    /// This breaks Inv-14 device-grain provenance for bytes received
+    /// from non-attesting peers — the receiver attributes inbound
+    /// writes to ITSELF at the device-grain.
+    ///
+    /// The fallback is acceptable for backward-compat with pre-G16-D-fp
+    /// peers + the two pre-existing pinned-CID fixtures
+    /// (`sync_replica_attribution.rs::sync_replica_*`) that bypass the
+    /// wire envelope path. Production deployments with adversarial-
+    /// peer threat models SHOULD override the receiver-side
+    /// `set_acceptor` with a `FreshnessPolicy` that rejects stale
+    /// attestations + a parent-DID expected-issuer gate. The
+    /// heterogeneous-cap-envelope filter at phase-3-backlog §6.12
+    /// item 9 will additionally enforce an envelope-required
+    /// per-zone write filter — at that point, `attestation = None`
+    /// envelopes will reject at the cap-recheck boundary rather than
+    /// falling back silently.
+    #[must_use]
+    pub fn new_unsigned() -> Self {
+        Self {
+            version: Self::WIRE_VERSION,
+            attestation: None,
+            payload_hash: [0u8; 32],
+            session_nonce: [0u8; 32],
+            envelope_signature: Vec::new(),
+        }
+    }
+
+    /// Construct a SIGNED envelope binding the supplied
+    /// device-attestation to the upcoming Loro payload + a fresh
+    /// session nonce.
+    ///
+    /// The `device_keypair` MUST hold the secret key matching the
+    /// public key encoded in `attestation.device_did` (same bytes the
+    /// `did:key:<base58>` form resolves to). Mismatch is detected at
+    /// receive (`envelope_signature` fails to verify against the DID's
+    /// resolved public key) and surfaces as
+    /// [`benten_errors::ErrorCode::DeviceAttestationForged`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtriumError::InvalidState`] if DAG-CBOR encoding of
+    /// the signature input fails (impossible under valid fixed-shape
+    /// inputs; result-shape preserves explicit-failure semantics).
+    pub fn new_signed(
+        attestation: benten_id::device_attestation::DeviceAttestation,
+        loro_payload: &[u8],
+        device_keypair: &benten_id::keypair::Keypair,
+    ) -> AtriumResult<Self> {
+        let payload_hash: [u8; 32] = *blake3::hash(loro_payload).as_bytes();
+        let mut session_nonce = [0u8; 32];
+        // Fresh per-envelope OS-CSPRNG nonce — defends against verbatim
+        // envelope replay across sessions. Composes with the parent-
+        // issued attestation nonce that `Acceptor::accept_at` consumes.
+        getrandom::getrandom(&mut session_nonce).map_err(|e| AtriumError::InvalidState {
+            reason: format!("DeviceAttestationEnvelope nonce generation failed: {e}"),
+        })?;
+        let mut env = Self {
+            version: Self::WIRE_VERSION,
+            attestation: Some(attestation),
+            payload_hash,
+            session_nonce,
+            envelope_signature: Vec::new(),
+        };
+        let sig_input = env.signature_input_bytes()?;
+        let sig = device_keypair.sign(&sig_input);
+        env.envelope_signature = sig.to_bytes().to_vec();
+        Ok(env)
+    }
+
+    /// Canonical bytes covered by `envelope_signature` — `(version,
+    /// attestation, payload_hash, session_nonce)` in DAG-CBOR. Excludes
+    /// the signature itself (signature self-reference hygiene; mirrors
+    /// `benten_id::device_attestation::canonical_bytes` precedent).
+    fn signature_input_bytes(&self) -> AtriumResult<Vec<u8>> {
+        #[derive(serde::Serialize)]
+        struct SigInput<'a> {
+            version: u8,
+            attestation: &'a Option<benten_id::device_attestation::DeviceAttestation>,
+            payload_hash: &'a [u8; 32],
+            session_nonce: &'a [u8; 32],
+        }
+        serde_ipld_dagcbor::to_vec(&SigInput {
+            version: self.version,
+            attestation: &self.attestation,
+            payload_hash: &self.payload_hash,
+            session_nonce: &self.session_nonce,
+        })
+        .map_err(|e| AtriumError::InvalidState {
+            reason: format!("DeviceAttestationEnvelope signature input encode failed: {e}"),
+        })
+    }
+
+    /// Borrow the originating device's declared DID, if any.
+    #[must_use]
+    pub fn declared_device_did(&self) -> Option<&str> {
+        self.attestation.as_ref().map(|a| a.device_did.as_str())
+    }
+
+    /// Encode this envelope as DAG-CBOR canonical bytes for on-wire
+    /// emission.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtriumError::InvalidState`] if DAG-CBOR encoding fails
+    /// (impossible for the fixed-shape envelope under valid inputs;
+    /// the result-shape preserves explicit-failure semantics).
+    pub fn to_canonical_bytes(&self) -> AtriumResult<Vec<u8>> {
+        serde_ipld_dagcbor::to_vec(self).map_err(|e| AtriumError::InvalidState {
+            reason: format!("DeviceAttestationEnvelope encode failed: {e}"),
+        })
+    }
+
+    /// Decode a [`DeviceAttestationEnvelope`] from on-wire bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtriumError::InvalidState`] if the bytes do not decode
+    /// as a valid envelope OR if the wire-format version is newer than
+    /// this build understands (`version > MAX_WIRE_VERSION`). Per
+    /// crypto-minor-5 fix-pass, version validation is mandatory.
+    pub fn from_canonical_bytes(bytes: &[u8]) -> AtriumResult<Self> {
+        let env: Self =
+            serde_ipld_dagcbor::from_slice(bytes).map_err(|e| AtriumError::InvalidState {
+                reason: format!("DeviceAttestationEnvelope decode failed: {e}"),
+            })?;
+        if env.version > Self::MAX_WIRE_VERSION {
+            return Err(AtriumError::InvalidState {
+                reason: format!(
+                    "DeviceAttestationEnvelope version {} exceeds MAX_WIRE_VERSION {} (newer peer; \
+                     upgrade local build to consume the wire shape)",
+                    env.version,
+                    Self::MAX_WIRE_VERSION
+                ),
+            });
+        }
+        Ok(env)
+    }
+
+    /// Verify the envelope cryptographically + assert frame-pair
+    /// binding to the inbound Loro payload.
+    ///
+    /// Three failure modes all surface
+    /// [`AtriumError::DeviceAttestationForged`]:
+    ///
+    /// 1. `envelope_signature` does not verify against the public key
+    ///    resolved from `attestation.device_did`.
+    /// 2. `acceptor.accept_at(&attestation, now)` rejects the
+    ///    parent-attestation chain (bad parent signature, expired
+    ///    freshness window, replayed nonce, revoked device).
+    /// 3. `BLAKE3(loro_payload) != self.payload_hash` (frame-pair
+    ///    swap defense).
+    ///
+    /// `attestation = None` envelopes (pre-G16-D-fp legacy / test
+    /// fixture path) skip verification — backward-compat with the
+    /// V1-shipped wire shape; the receiver falls back to its own
+    /// `device_cid` per `Engine::apply_atrium_merge` semantics.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtriumError::DeviceAttestationForged`] on any of the
+    /// three failure modes above.
+    pub fn verify(
+        &self,
+        loro_payload: &[u8],
+        acceptor: &benten_id::device_attestation::Acceptor,
+        now_secs: u64,
+    ) -> AtriumResult<()> {
+        let Some(attestation) = self.attestation.as_ref() else {
+            return Ok(());
+        };
+        // (1) Envelope signature against device-DID's resolved pubkey.
+        let device_did = benten_id::did::Did::from_string_unchecked(attestation.device_did.clone());
+        let device_pk = device_did
+            .resolve()
+            .map_err(|e| AtriumError::DeviceAttestationForged {
+                reason: format!("device DID resolution failed: {e:?}"),
+            })?;
+        let sig_input =
+            self.signature_input_bytes()
+                .map_err(|e| AtriumError::DeviceAttestationForged {
+                    reason: format!("envelope signature-input encode failed: {e}"),
+                })?;
+        let sig_bytes: [u8; 64] = self.envelope_signature.as_slice().try_into().map_err(|_| {
+            AtriumError::DeviceAttestationForged {
+                reason: format!(
+                    "envelope signature has wrong length: got {}, expected 64",
+                    self.envelope_signature.len()
+                ),
+            }
+        })?;
+        let sig = ed25519_dalek::Signature::from_bytes(&sig_bytes);
+        ed25519_dalek::Verifier::verify(device_pk.as_verifying_key(), &sig_input, &sig).map_err(
+            |_| AtriumError::DeviceAttestationForged {
+                reason: "envelope signature does not verify against device DID's pubkey \
+                         (DID forgery / wrong-key signing)"
+                    .into(),
+            },
+        )?;
+        // (2) Parent-attestation chain via Acceptor (signature +
+        //     freshness + nonce-store replay + revocation).
+        acceptor.accept_at(attestation, now_secs).map_err(|e| {
+            AtriumError::DeviceAttestationForged {
+                reason: format!("attestation chain rejected: {e:?}"),
+            }
+        })?;
+        // (3) Frame-pair payload-hash binding.
+        let observed: [u8; 32] = *blake3::hash(loro_payload).as_bytes();
+        // Constant-time equality on the hash defends against subtle
+        // timing-channel inference of the expected hash bytes.
+        use subtle::ConstantTimeEq;
+        if observed.ct_eq(&self.payload_hash).unwrap_u8() != 1 {
+            return Err(AtriumError::DeviceAttestationForged {
+                reason: "envelope payload_hash != BLAKE3(received Loro payload) — \
+                         frame-pair binding violation (MITM swap defense)"
+                    .into(),
+            });
+        }
+        Ok(())
+    }
 }
 
 impl AtriumError {
@@ -165,6 +545,9 @@ impl AtriumError {
             AtriumError::InvalidState { .. } => benten_errors::ErrorCode::AtriumInactive,
             AtriumError::SyncHopDepthExceeded { .. } => {
                 benten_errors::ErrorCode::SyncHopDepthExceeded
+            }
+            AtriumError::DeviceAttestationForged { .. } => {
+                benten_errors::ErrorCode::DeviceAttestationForged
             }
         }
     }
@@ -230,6 +613,66 @@ struct AtriumInner {
     /// leave-rejoin window so post-rejoin merges reconcile via
     /// CRDT-natural delta-state replay.
     is_active: AtomicBool,
+    /// Phase-3 G16-D wave-6b: this handle's local device-DID, emitted
+    /// in the on-the-wire [`DeviceAttestationEnvelope`] sent at the
+    /// front of every [`AtriumHandle::sync_subgraph`] /
+    /// [`AtriumHandle::accept_sync_subgraph`] exchange. Populated
+    /// explicitly via [`AtriumHandle::set_local_device_did`] (typically
+    /// after the local device-attestation envelope has been verified).
+    /// Defaults to `None` (no device declared on the wire); receivers
+    /// observe `device_did = None` envelopes and fall back to the
+    /// receiver's own `device_cid` per pim-2 end-to-end-pin discipline.
+    ///
+    /// **G16-D wave-6b fix-pass note:** when
+    /// [`Self::local_device_attestation`] is `Some(_)` AND
+    /// [`Self::local_device_keypair`] is `Some(_)`, the wire envelope
+    /// emitted is signed (V2 shape — see
+    /// [`DeviceAttestationEnvelope::new_signed`]). When either is
+    /// `None`, the legacy unsigned shape (`new_unsigned`) is emitted +
+    /// `local_device_did` is the only carrier of the device-DID for
+    /// receiver-side fallback (the receiver's local `device_cid`
+    /// continues to win in the `Engine::apply_atrium_merge` fallback
+    /// path).
+    local_device_did: Mutex<Option<String>>,
+    /// Phase-3 G16-D wave-6b fix-pass: the local device's signed
+    /// `benten_id::DeviceAttestation` (parent → device-DID binding).
+    /// Embedded into the outbound [`DeviceAttestationEnvelope`] when
+    /// [`Self::local_device_keypair`] is also bound; `None` falls back
+    /// to the legacy unsigned envelope shape.
+    local_device_attestation: Mutex<Option<benten_id::device_attestation::DeviceAttestation>>,
+    /// Phase-3 G16-D wave-6b fix-pass: the local device's secret keypair,
+    /// used to sign outbound [`DeviceAttestationEnvelope`] frames over
+    /// `(version, attestation, payload_hash, session_nonce)`. Defaults
+    /// to `None`; bound via [`AtriumHandle::set_local_device_keypair`].
+    /// Distinct from [`AtriumInner::peer_keypair`] (the iroh-endpoint
+    /// keypair derived at handle-open time) — production deployments
+    /// typically use the same keypair for both, but the surfaces are
+    /// kept separate so test fixtures can drive distinct cases (e.g.
+    /// forgery test with mismatched device-DID vs envelope-signing
+    /// keypair).
+    local_device_keypair: Mutex<Option<benten_id::keypair::Keypair>>,
+    /// Phase-3 G16-D wave-6b fix-pass: the local Acceptor used to
+    /// verify inbound [`DeviceAttestationEnvelope`] attestation chains
+    /// (signature + freshness + nonce-store replay defense + revocation
+    /// list). Defaults to a `FreshnessPolicy::seconds(u64::MAX)` accept-
+    /// any-age acceptor — production deployments override via
+    /// [`AtriumHandle::set_acceptor`] with the trust-store's parent-DID
+    /// + a calibrated freshness window. The Acceptor's nonce-store is
+    /// replay-defense state for the Atrium handle's lifetime; cross-
+    /// handle replay is bounded by per-attestation issuance scope.
+    acceptor: Mutex<benten_id::device_attestation::Acceptor>,
+    /// Phase-3 G16-D wave-6b: most-recently-received remote
+    /// device-DID-envelope keyed by zone. Populated by
+    /// [`AtriumHandle::sync_subgraph`] /
+    /// [`AtriumHandle::accept_sync_subgraph`] when the inbound envelope
+    /// declares a `device_did`. Consumed by
+    /// [`crate::Engine::apply_atrium_merge`] to populate
+    /// [`benten_eval::AttributionFrame::device_did`] with the
+    /// ORIGINATING device's identity (so post-merge attribution
+    /// reflects the writer's device, not the receiver's). Cleared
+    /// per-zone after a successful merge so a stale envelope does not
+    /// leak into a later merge that didn't get a fresh wire envelope.
+    last_received_remote_device_did: Mutex<BTreeMap<String, Option<String>>>,
 }
 
 /// Phase-3 G21-T2 §D — declared device-attestation envelope recorded
@@ -319,8 +762,214 @@ impl AtriumHandle {
                 declared_device_attestations: Mutex::new(BTreeMap::new()),
                 peer_did_registry: Mutex::new(BTreeMap::new()),
                 is_active: AtomicBool::new(true),
+                local_device_did: Mutex::new(None),
+                last_received_remote_device_did: Mutex::new(BTreeMap::new()),
+                local_device_attestation: Mutex::new(None),
+                local_device_keypair: Mutex::new(None),
+                // Default Acceptor: accept-any-age + no revocations + no
+                // expected-parent gate (replay defense via nonce-store
+                // is always-on regardless). Production deployments
+                // override via `set_acceptor`.
+                acceptor: Mutex::new(benten_id::device_attestation::Acceptor::new(
+                    benten_id::device_attestation::FreshnessPolicy::seconds(u64::MAX),
+                )),
             }),
         })
+    }
+
+    /// Phase-3 G16-D wave-6b: bind a local device-DID for emission in
+    /// the on-the-wire [`DeviceAttestationEnvelope`].
+    ///
+    /// Callers typically invoke this AFTER the local device-attestation
+    /// envelope has been verified (production flow) OR with a fixed
+    /// test-DID for two-device same-identity selective-zone-sync
+    /// integration tests. Setting `None` clears the binding (next
+    /// outbound sync emits an envelope with `device_did = None`).
+    ///
+    /// The binding is idempotent / replaceable — calling twice with
+    /// different DIDs replaces the slot. This composes with
+    /// [`crate::Engine::set_device_cid`] (which sets the engine-side
+    /// `device_cid` slot consumed by `apply_atrium_merge` for the
+    /// LOCAL-merging-engine fallback path); this setter governs the
+    /// REMOTE-receiver-observed device-DID.
+    pub async fn set_local_device_did(&self, did: Option<String>) {
+        let mut g = self.inner.local_device_did.lock().await;
+        *g = did;
+    }
+
+    /// Phase-3 G16-D wave-6b: read the local device-DID currently bound
+    /// for on-the-wire emission. Round-trip companion to
+    /// [`AtriumHandle::set_local_device_did`].
+    pub async fn local_device_did(&self) -> Option<String> {
+        self.inner.local_device_did.lock().await.clone()
+    }
+
+    /// Phase-3 G16-D wave-6b fix-pass: bind the local device's signed
+    /// `benten_id::DeviceAttestation` for embedding in the outbound
+    /// [`DeviceAttestationEnvelope`].
+    ///
+    /// When the attestation is bound AND
+    /// [`AtriumHandle::set_local_device_keypair`] has bound the
+    /// device's keypair, the wire envelope emitted by `sync_subgraph` /
+    /// `accept_sync_subgraph` is SIGNED (V2 shape) — covering
+    /// `(version, attestation, payload_hash, session_nonce)` so the
+    /// receiver can verify DID binding + replay-resistance + frame-pair
+    /// payload-hash.
+    ///
+    /// Convenience: also updates [`AtriumHandle::local_device_did`]
+    /// from `attestation.device_did` so legacy callers reading that
+    /// slot observe the same identity.
+    pub async fn set_local_device_attestation(
+        &self,
+        attestation: Option<benten_id::device_attestation::DeviceAttestation>,
+    ) {
+        let did = attestation.as_ref().map(|a| a.device_did.clone());
+        *self.inner.local_device_attestation.lock().await = attestation;
+        *self.inner.local_device_did.lock().await = did;
+    }
+
+    /// Phase-3 G16-D wave-6b fix-pass: bind the local device's secret
+    /// keypair for signing outbound [`DeviceAttestationEnvelope`]
+    /// frames. Independent of the iroh-endpoint keypair (held at
+    /// `AtriumInner::peer_keypair`); production deployments typically
+    /// pass the same keypair to both — but the seam is preserved so
+    /// forgery-test fixtures can drive mismatched cases.
+    pub async fn set_local_device_keypair(&self, keypair: Option<benten_id::keypair::Keypair>) {
+        *self.inner.local_device_keypair.lock().await = keypair;
+    }
+
+    /// Phase-3 G16-D wave-6b fix-pass: install a custom
+    /// `benten_id::Acceptor` for inbound envelope verification.
+    ///
+    /// The Acceptor governs (a) freshness policy (`now - issued_at <=
+    /// window`); (b) nonce-store replay defense; (c) revocation list;
+    /// (d) optional expected-parent gate. Production deployments
+    /// configure the Acceptor with the trust-store's parent-DID + a
+    /// calibrated freshness window after the local UCAN backend
+    /// promotes — pre-promotion the default
+    /// `FreshnessPolicy::seconds(u64::MAX)` accept-any-age acceptor
+    /// keeps the wire-envelope signature + payload-binding defenses
+    /// load-bearing while leaving freshness-window enforcement to the
+    /// caller's discretion.
+    pub async fn set_acceptor(&self, acceptor: benten_id::device_attestation::Acceptor) {
+        *self.inner.acceptor.lock().await = acceptor;
+    }
+
+    /// Build the outbound envelope for a given Loro payload — signed
+    /// when both [`AtriumInner::local_device_attestation`] +
+    /// [`AtriumInner::local_device_keypair`] are bound, unsigned-legacy
+    /// otherwise.
+    async fn build_outbound_envelope(
+        &self,
+        loro_payload: &[u8],
+    ) -> AtriumResult<DeviceAttestationEnvelope> {
+        let attestation = self.inner.local_device_attestation.lock().await.clone();
+        match attestation {
+            Some(attestation) => {
+                // Signed path — requires keypair binding. If not bound,
+                // fall back to unsigned (rationale: a handle that has
+                // an attestation but no keypair cannot sign; emitting
+                // an attestation without a verifiable signature would
+                // be misleading — the receiver would treat it as
+                // signed-but-broken and reject).
+                let kp_guard = self.inner.local_device_keypair.lock().await;
+                if let Some(keypair) = kp_guard.as_ref() {
+                    DeviceAttestationEnvelope::new_signed(attestation, loro_payload, keypair)
+                } else {
+                    Ok(DeviceAttestationEnvelope::new_unsigned())
+                }
+            }
+            None => Ok(DeviceAttestationEnvelope::new_unsigned()),
+        }
+    }
+
+    /// Verify an inbound envelope against the upcoming Loro payload +
+    /// the handle's installed Acceptor. Returns the verified
+    /// device-DID (if signed) or `None` (legacy unsigned).
+    async fn verify_inbound_envelope(
+        &self,
+        envelope: &DeviceAttestationEnvelope,
+        loro_payload: &[u8],
+    ) -> AtriumResult<Option<String>> {
+        let acceptor = self.inner.acceptor.lock().await;
+        let now_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        envelope.verify(loro_payload, &acceptor, now_secs)?;
+        Ok(envelope.declared_device_did().map(|s| s.to_string()))
+    }
+
+    /// Phase-3 G16-D wave-6b: read the most-recently-received remote
+    /// device-DID for a zone (the `device_did` carried in the inbound
+    /// [`DeviceAttestationEnvelope`] of the latest
+    /// [`AtriumHandle::sync_subgraph`] /
+    /// [`AtriumHandle::accept_sync_subgraph`] for that zone).
+    ///
+    /// Returns `Some(Some(did))` when a fresh envelope declared a
+    /// device-DID; `Some(None)` when a fresh envelope declared
+    /// `device_did = None` (legacy / pre-G16-D peer); `None` when no
+    /// envelope has been received for the zone yet (or the slot was
+    /// cleared post-merge).
+    ///
+    /// ## Side-channel slot-coupling contract (ds-mr-g16dw6b-MINOR-1)
+    ///
+    /// This slot is populated by `sync_subgraph` /
+    /// `accept_sync_subgraph` and CONSUMED then CLEARED by
+    /// `Engine::apply_atrium_merge` per zone. The expected call shape
+    /// is **exactly one `sync_subgraph` followed by exactly one
+    /// `apply_atrium_merge` per zone** — production paths follow this
+    /// shape (the engine's apex orchestrator owns the round-trip).
+    ///
+    /// Deviations have observable but bounded consequences:
+    ///
+    /// - **Two `sync_subgraph` calls before any `apply_atrium_merge`:**
+    ///   the second envelope's `device_did` overwrites the first's.
+    ///   The first envelope's device-DID is silently lost — but the
+    ///   Loro merge itself still applies (CRDT replay-safety). The
+    ///   AttributionFrame for the first merge inherits the second
+    ///   sync's device-DID; correctness depends on operator intent.
+    /// - **Two `apply_atrium_merge` calls after one `sync_subgraph`:**
+    ///   the second mint observes `None` (slot was cleared by the
+    ///   first) and falls back to the local engine's `device_cid`
+    ///   per the legacy unsigned-envelope path. The second mint
+    ///   carries the LOCAL device's identity, NOT the originator's.
+    ///   Correct semantics for "self-driven re-application" but
+    ///   subtle if the caller intended a fresh originating-peer
+    ///   transmission.
+    ///
+    /// ## Concurrent same-zone race (ds-mr-g16dw6b-MINOR-3)
+    ///
+    /// The slot is keyed `BTreeMap<String, Option<String>>`. Two
+    /// peers running `accept_sync_subgraph` + `sync_subgraph_over`
+    /// against the SAME zone simultaneously race at the
+    /// `tbl.insert(zone, ...)` site — the second call's insert
+    /// overwrites the first's slot before either's apply consumes
+    /// it. Mitigations available (per-zone merge mutex; struct-shaped
+    /// envelope + bytes guarded by oneshot consumption) but not
+    /// currently in place. Production paths use serial accept-then-
+    /// sync per zone; concurrent same-zone two-peer is undefined w.r.t.
+    /// AttributionFrame.device_did binding (the Loro merge itself
+    /// remains correct + idempotent — only the device-DID-slot is
+    /// racy). Cross-zone concurrent merges from a single handle are
+    /// safe (distinct keys; no race).
+    pub async fn last_received_remote_device_did(&self, zone: &str) -> Option<Option<String>> {
+        self.inner
+            .last_received_remote_device_did
+            .lock()
+            .await
+            .get(zone)
+            .cloned()
+    }
+
+    /// Phase-3 G16-D wave-6b: clear the per-zone last-received
+    /// remote-device-DID slot. Called by
+    /// [`crate::Engine::apply_atrium_merge`] after the post-merge
+    /// AttributionFrame has consumed the slot, so a subsequent merge
+    /// that did NOT get a fresh wire envelope cannot inherit the prior
+    /// envelope's device-DID.
+    pub(crate) async fn clear_last_received_remote_device_did(&self, zone: &str) {
+        let mut g = self.inner.last_received_remote_device_did.lock().await;
+        g.remove(zone);
     }
 
     /// Phase-3 G21-T2 §D audit-6-3 — record a declared
@@ -477,7 +1126,10 @@ impl AtriumHandle {
     /// As [`AtriumHandle::sync_subgraph`].
     pub async fn sync_subgraph_over(&self, zone: &str, conn: &Connection) -> AtriumResult<()> {
         self.ensure_active("sync_subgraph_over")?;
-        // Export local state for this zone.
+        // Export local state for this zone FIRST so the outbound
+        // envelope can sign over BLAKE3(local_export) — frame-pair
+        // binding (G16-D wave-6b fix-pass cryptographic-attestation
+        // closure).
         let local_export = {
             let zones = self.inner.zones.lock().await;
             let doc = zones.get(zone).ok_or_else(|| AtriumError::InvalidState {
@@ -485,10 +1137,41 @@ impl AtriumHandle {
             })?;
             doc.export_update()?
         };
+        // Phase-3 G16-D wave-6b fp: build a SIGNED envelope (when
+        // attestation + keypair are bound) carrying the parent-signed
+        // attestation + BLAKE3(local_export) payload-hash + fresh
+        // session nonce + device-keypair signature. Receiver verifies
+        // all three at receive (DID forgery / replay / frame-pair
+        // swap defenses).
+        let envelope_bytes = self
+            .build_outbound_envelope(&local_export)
+            .await?
+            .to_canonical_bytes()?;
+        conn.send_bytes(&envelope_bytes).await?;
         // Send local state to remote.
         conn.send_bytes(&local_export).await?;
+        // Receive remote envelope FIRST, then remote Loro export, in
+        // the same order the connect-side emitted them.
+        let remote_envelope_bytes = conn.recv_bytes().await?;
+        let remote_envelope =
+            DeviceAttestationEnvelope::from_canonical_bytes(&remote_envelope_bytes)?;
         // Receive remote state.
         let remote_bytes = conn.recv_bytes().await?;
+        // G16-D wave-6b fp: cryptographic verification at receive —
+        // signature + parent-chain Acceptor + payload-hash binding.
+        // Surfaces `AtriumError::DeviceAttestationForged` on any of the
+        // three failure modes; legacy unsigned envelopes (attestation
+        // = None) skip verification per backward-compat contract.
+        let verified_remote_did = self
+            .verify_inbound_envelope(&remote_envelope, &remote_bytes)
+            .await?;
+        // Stash the remote-device-DID (post-verification) before merge
+        // so apply_atrium_merge can consume it via
+        // `last_received_remote_device_did`.
+        {
+            let mut tbl = self.inner.last_received_remote_device_did.lock().await;
+            tbl.insert(zone.to_string(), verified_remote_did);
+        }
         // Apply via merge-dispatch (fires Inv-13 row-4 SPLIT).
         self.merge_remote_change(zone, &remote_bytes).await?;
         Ok(())
@@ -508,10 +1191,30 @@ impl AtriumHandle {
     pub async fn accept_sync_subgraph(&self, zone: &str) -> AtriumResult<Connection> {
         self.ensure_active("accept_sync_subgraph")?;
         let conn = self.inner.endpoint.accept_next().await?;
-        // Accept-side mirrors connect-side: receive remote, then send local.
-        // Receive remote first to keep the protocol symmetric across
-        // both sides.
+        // Accept-side mirrors connect-side: receive remote envelope +
+        // export FIRST, then send local envelope + export. Connect-side
+        // emits envelope-then-export, so accept-side consumes
+        // envelope-then-export.
+        let remote_envelope_bytes = conn.recv_bytes().await?;
+        let remote_envelope =
+            DeviceAttestationEnvelope::from_canonical_bytes(&remote_envelope_bytes)?;
         let remote_bytes = conn.recv_bytes().await?;
+        // G16-D wave-6b fp: cryptographic verification at receive —
+        // signature + parent-chain Acceptor + payload-hash binding.
+        let verified_remote_did = self
+            .verify_inbound_envelope(&remote_envelope, &remote_bytes)
+            .await?;
+        // Stash the remote-device-DID (post-verification) before merge
+        // so apply_atrium_merge can consume it via
+        // `last_received_remote_device_did`.
+        {
+            let mut tbl = self.inner.last_received_remote_device_did.lock().await;
+            tbl.insert(zone.to_string(), verified_remote_did);
+        }
+        // Phase-3 G16-D wave-6b: emit local envelope BEFORE the Loro
+        // export, mirroring connect-side ordering. Build the envelope
+        // AFTER export-update so the signed payload-hash binds to the
+        // exact bytes we will send (frame-pair binding).
         let local_export = {
             let zones = self.inner.zones.lock().await;
             let doc = zones.get(zone).ok_or_else(|| AtriumError::InvalidState {
@@ -519,6 +1222,11 @@ impl AtriumHandle {
             })?;
             doc.export_update()?
         };
+        let envelope_bytes = self
+            .build_outbound_envelope(&local_export)
+            .await?
+            .to_canonical_bytes()?;
+        conn.send_bytes(&envelope_bytes).await?;
         conn.send_bytes(&local_export).await?;
         // Apply received bytes after sending our own — order matches
         // connect-side so both sides converge on the same merged state.
@@ -644,9 +1352,27 @@ impl AtriumHandle {
         // the new sync-hop-depth. Engine-side wave-6b consumes this
         // seed when minting a new Version Node post-merge.
         let peer_node_ids = doc.winning_attribution();
+        drop(zones);
+        // Phase-3 G16-D wave-6b: surface the remote-device-DID stashed
+        // by `sync_subgraph` / `accept_sync_subgraph` (or `None` when
+        // the merge was driven directly via `apply_atrium_merge`
+        // without a wire-side envelope, e.g. test fixtures that bypass
+        // the iroh transport). The receiver-side
+        // `Engine::apply_atrium_merge` consumes this slot to populate
+        // `AttributionFrame.device_did` with the originating-device
+        // identity, closing exit-criterion 16.
+        let remote_device_did = self
+            .inner
+            .last_received_remote_device_did
+            .lock()
+            .await
+            .get(zone)
+            .cloned()
+            .unwrap_or(None);
         Ok(SyncMergeAttribution {
             peer_node_ids,
             sync_hop_depth: next_depth,
+            remote_device_did,
         })
     }
 

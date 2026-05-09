@@ -272,6 +272,15 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // `SubscribeRevokedMidStream` shape per CLR-2 dual-layer recheck
     // architecture.
     ErrorCode::SyncRevokedDuringSession,
+    // Phase-3 G16-D wave-6b fix-pass (cryptographic-attestation closure
+    // for criterion 16): typed code surfaced when an inbound
+    // on-the-wire `DeviceAttestationEnvelope` fails cryptographic
+    // verification (DID forgery / parent-chain rejection via
+    // `benten_id::Acceptor::accept_at` / frame-pair payload-hash
+    // binding violation). Construction site at
+    // `crates/benten-engine/src/engine_sync.rs::DeviceAttestationEnvelope::verify`.
+    // Joins the `ON_DENIED` routing family per CLR-2 dual-layer recheck.
+    ErrorCode::DeviceAttestationForged,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -481,8 +490,12 @@ fn variant_count_is_pinned() {
     // bumped from 107 → 108 at PR #161 rebase due to PR #159 G16-B-G
     // landing E_ATRIUM_INACTIVE first; CATALOG_VARIANT_COUNT collision
     // resolution per known sequential-merge pattern).
+    // Post-G16-D wave-6b fix-pass (cryptographic-attestation closure for
+    // criterion 16 per Ben ratification 2026-05-09): + DeviceAttestationForged
+    // = 109 (signed wire envelope verification — DID forgery / replay /
+    // frame-pair payload-hash binding rejection at `apply_atrium_merge`).
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 108,
+        CATALOG_VARIANT_COUNT, 109,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

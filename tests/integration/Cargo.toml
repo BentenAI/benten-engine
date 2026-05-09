@@ -61,6 +61,11 @@ path = "atrium_two_device.rs"
 [dependencies]
 benten-core = { path = "../../crates/benten-core" }
 benten-engine = { path = "../../crates/benten-engine" }
+benten-eval = { path = "../../crates/benten-eval" }
+# G16-D wave-6b fp — atrium_two_device.rs constructs real device DIDs +
+# signed DeviceAttestation envelopes via benten-id surface.
+benten-id = { path = "../../crates/benten-id" }
+blake3 = "1"
 tempfile = "3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "sync"] }
 

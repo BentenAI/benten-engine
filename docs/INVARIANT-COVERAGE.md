@@ -206,6 +206,58 @@ construction sites (`engine_diagnostics.rs::transaction` commit hook
 `CapabilityPolicy` impls can dispatch per-device under the SAME
 logical-actor identity per D-PHASE-3-25.
 
+**Phase-3 G16-D wave-6b on-the-wire device-DID-attestation envelope
+(plan §1 exit-criterion 16 closure) — cryptographic-attestation closure
+at G16-D wave-6b fix-pass.** The handle binds a signed
+`benten_id::DeviceAttestation` (parent → device-DID binding) +
+device-keypair via `AtriumHandle::set_local_device_attestation` +
+`AtriumHandle::set_local_device_keypair`; `sync_subgraph` +
+`accept_sync_subgraph` emit a DAG-CBOR `DeviceAttestationEnvelope`
+(V2 shape: `(version, attestation, payload_hash, session_nonce,
+envelope_signature)`) BEFORE the Loro CRDT export on each leg. The
+receiver-side `DeviceAttestationEnvelope::verify` enforces three
+defenses cryptographically: (1) the envelope signature verifies
+against the public key resolved from `attestation.device_did` (DID
+forgery defense — a peer cannot impersonate another device's DID
+without holding that device's secret key); (2) the embedded
+attestation passes `benten_id::Acceptor::accept_at` (parent signature
++ freshness window + nonce-store replay defense + revocation list);
+(3) `BLAKE3(received_payload) == envelope.payload_hash` via
+constant-time comparison (frame-pair binding — MITM cannot swap
+envelope/payload pairs). All three failure modes reject with
+`E_DEVICE_ATTESTATION_FORGED` (`ON_DENIED` routing).
+`Engine::apply_atrium_merge` populates `AttributionFrame.device_did`
+from the verified wire envelope's declared DID (preferred) and falls
+back to the local engine's `device_cid` only when no envelope was
+received (legacy V1 / pre-G16-D peer / direct-test path that bypasses
+`sync_subgraph`).
+
+**Inv-14 device-grain attribution is now LOAD-BEARING under
+adversarial-peer assumptions** (was advisory at PR #163 V1 shape; the
+fix-pass closes the cryptographic gaps so the device-grain provenance
+defense survives forged-DID / replay / frame-pair-swap attacks). The
+"compromised device cannot be quarantined surgically" failure shape is
+now defended at the cryptographic boundary, not via cooperating-peer
+assumptions. Pinned end-to-end at:
+
+- `tests/integration/atrium_two_device.rs::atrium_two_device_same_identity_selective_zone_sync`
+  (multi-device GREEN-path with REAL signed attestations).
+- `tests/integration/atrium_two_device.rs::forged_device_did_rejected_at_envelope_verify`
+  (DID forgery rejection — `E_DEVICE_ATTESTATION_FORGED`).
+- `tests/integration/atrium_two_device.rs::replayed_envelope_rejected_by_acceptor_nonce_store`
+  (parent-issued attestation nonce replay rejection).
+- `tests/integration/atrium_two_device.rs::frame_pair_payload_swap_rejected_by_payload_hash_binding`
+  (BLAKE3 frame-pair binding violation rejection).
+- `tests/integration/atrium_two_device.rs::future_wire_version_rejected_at_decode`
+  (decode-time version validation; closes cryptography MINOR-5).
+
+The legacy unsigned shape (V1 `attestation = None`) is preserved for
+backward-compat with pre-G16-D-fp peers + the two pre-existing
+pinned-CID fixtures (`sync_replica_attribution_carries_device_did_alongside_parent`
++ `sync_replica_explicit_actor_cid_decouples_from_device_cid`) that
+bypass the wire envelope path. See SECURITY-POSTURE.md Compromise #23
+for the full closure narrative.
+
 ---
 
 ## What "active" means in this table

@@ -1296,20 +1296,42 @@ impl Engine {
         //    string values + a serialized AttributionFrame slot ("attribution_frame_cid")
         //    that future readers consult to verify peer-DID provenance.
         //
-        //    The AttributionFrame is constructed at engine-call boundary
-        //    so the device-DID slot reflects the local engine's
-        //    device-attestation state at merge time (Phase-3 contract:
-        //    "attribution captures the merging peer's device identity",
-        //    where the merging peer = local engine).
-        let device_did = self.device_cid().map(|cid| {
-            // Hex-render the device-CID bytes as the device DID surface
-            // for the AttributionFrame. Pre-G16-D handshake protocol body
-            // landing, this is the internal-engine convention for the
-            // device-DID-string slot; the production trust-store will
-            // promote this to a `did:key:` resolution once the device-
-            // attestation envelope-on-the-wire flow lands.
-            format!("device-cid:{cid}")
-        });
+        //    Phase-3 G16-D wave-6b: the device-DID slot reflects the
+        //    ORIGINATING device's identity (the peer that produced the
+        //    inbound writes), preferring the on-the-wire
+        //    DeviceAttestationEnvelope's declared `device_did` when
+        //    present (the typical production / multi-device path).
+        //    Falls back to the local engine's `device_cid` slot when
+        //    the inbound envelope did not declare a device-DID (legacy
+        //    pre-G16-D peer / test fixture that bypasses the wire
+        //    envelope), preserving Phase-3 single-user single-device
+        //    behavior + the receiver-side device-CID introspection
+        //    used by post-fix doc-coupling pim-2 end-to-end pins.
+        //
+        //    Closes plan §1 exit-criterion 16 (multi-device support
+        //    for a single identity): two devices on the SAME identity
+        //    sync as a single principal while AttributionFrame
+        //    preserves DEVICE-grain provenance per Inv-14.
+        let device_did = match seed.remote_device_did.clone() {
+            Some(remote) => Some(remote),
+            None => self.device_cid().map(|cid| {
+                // Hex-render the device-CID bytes as the device DID
+                // surface fallback. Pre-G16-D handshake protocol body
+                // landing, this is the internal-engine convention for
+                // the device-DID-string slot; the production
+                // trust-store promotes to `did:key:` resolution once
+                // the device-attestation envelope flow has surfaced
+                // the originating-peer's declared DID (the preferred
+                // branch above).
+                format!("device-cid:{cid}")
+            }),
+        };
+        // G16-D wave-6b: clear the per-zone remote-device-DID slot so a
+        // subsequent merge that did NOT receive a fresh wire envelope
+        // cannot inherit the prior envelope's device-DID. The slot is
+        // re-populated by the next `sync_subgraph` /
+        // `accept_sync_subgraph` exchange.
+        atrium.clear_last_received_remote_device_did(zone).await;
         // Phase-3 G16-B-prime fp (cap-g16bp-1 / Ben's RATIFIED Option A
         // 2026-05-08): source the AttributionFrame.actor_cid from
         // `effective_actor_cid` — falls back to device_cid when no
