@@ -140,8 +140,7 @@ async fn atrium_two_device_same_identity_selective_zone_sync() {
     let phone_kp = Keypair::generate();
     let laptop_device_did = Did::from_public_key(laptop_kp.public_key());
     let phone_device_did = Did::from_public_key(phone_kp.public_key());
-    let laptop_attestation =
-        issue_full_peer_attestation(&parent_kp, laptop_device_did.clone());
+    let laptop_attestation = issue_full_peer_attestation(&parent_kp, laptop_device_did.clone());
     let phone_attestation = issue_full_peer_attestation(&parent_kp, phone_device_did.clone());
 
     let dir_laptop = tempfile::tempdir().unwrap();
@@ -505,7 +504,8 @@ async fn frame_pair_payload_swap_rejected_by_payload_hash_binding() {
         "frame-pair binding violation MUST surface E_DEVICE_ATTESTATION_FORGED"
     );
     assert!(
-        format!("{err}").contains("frame-pair binding") || format!("{err}").contains("payload_hash"),
+        format!("{err}").contains("frame-pair binding")
+            || format!("{err}").contains("payload_hash"),
         "expected frame-pair-binding rejection, got {err}"
     );
 }
