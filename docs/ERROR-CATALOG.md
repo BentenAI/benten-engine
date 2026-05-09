@@ -1191,6 +1191,14 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** `crates/benten-engine/src/primitive_host.rs::dispatch_typed_call` (Phase-3 G21-T1). Per-op error mapping promotes the underlying typed error from `benten-id` / `benten-core` to this code with the op name + a brief `reason` string for diagnostic routing.
 - **Phase:** 3 G21-T1
 
+### E_UCAN_CLOCK_NOT_INJECTED
+
+- **Message:** "UCAN chain-walker invoked with no clock injected (now_secs=0 sentinel) against a chain with time-bounded delegations; inject a real clock via with_now_for_test (or wait for WriteContext::now threading per phase-3-backlog §2.3 (i))"
+- **Context:** `{}` (no structured payload — the violation is at the policy boundary, not at any specific token)
+- **Fix:** The `UcanGroundedPolicy` chain-walker observed the `DEFAULT_NOW_SECS = 0` sentinel against a UCAN chain that carries time-bounded delegations (`nbf > 0` OR `exp > 0`). Pre-fail-closed-fix the chain-walker silently fail-OPENed: it walked tokens against `now=0`, so a forged chain with `nbf=0` + `exp > 0` accepted whenever the rest of the chain-walk passed (no operator-visible surface signaling the missing-clock misconfiguration). The inversion at G16-B-B-rest sub-item D fail-CLOSES with this typed code so the caller MUST inject a real wallclock. Production callers will inject via the `WriteContext::now`-threading work named in `docs/future/phase-3-backlog.md §2.3 (i)`; tests inject via `UcanGroundedPolicy::with_now_for_test`. A chain WITHOUT time bounds (`nbf=0` AND `exp` unset) is safe to walk at the sentinel and does NOT trigger this code.
+- **Thrown at:** `crates/benten-caps/src/ucan_grounded.rs::UcanGroundedPolicy::typed_cap_permitted_by_proof` (Phase-3 G16-B-B-rest sub-item D). The fail-closed branch is the load-bearing assertion at the policy boundary; the `chain_has_time_bounds` helper at the same site distinguishes "chain depends on wallclock" from "chain is unbounded."
+- **Phase:** 3 G16-B-B-rest
+
 ### E_RESERVED_HANDLER_NAMESPACE
 
 - **Message:** "register_subgraph: handler_id `{handler_id}` is in the reserved `engine:typed:` namespace; this prefix is the typed-CALL registry (see CLAUDE.md baked-in #16 + phase-3-backlog §2.5(d)). E_RESERVED_HANDLER_NAMESPACE"

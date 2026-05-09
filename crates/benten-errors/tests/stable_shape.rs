@@ -169,6 +169,11 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::CapBackendStorage,
     ErrorCode::CapRateLimitExceeded,
     ErrorCode::CapPeerBandwidthExceeded,
+    // Phase-3 G16-B-B-rest sub-item D: `UcanGroundedPolicy` chain-walker
+    // fail-closed when no real wallclock has been injected against a
+    // chain with time-bounded delegations. Construction site:
+    // `crates/benten-caps/src/ucan_grounded.rs`.
+    ErrorCode::UcanClockNotInjected,
     // Phase-3 G18-A wave-5a (D-PHASE-3-27 / br-r1-2 BLOCKER): IndexedDB
     // QuotaExceededError mapping at the browser thin-client cache write
     // boundary. Construction site: `bindings/napi/src/browser_indexeddb.rs`.
@@ -451,8 +456,11 @@ fn variant_count_is_pinned() {
     // Post-G21-T3 §2.5(d): + ReservedHandlerNamespace = 104.
     // Post-G16-B-A canary: + SyncHopDepthExceeded = 105. The hardcoded
     // count below tracks `ALL_CATALOG_VARIANTS.len()` exactly.
+    // Post-G16-B-B-rest sub-item D: + UcanClockNotInjected = 106
+    // (DEFAULT_NOW_SECS=0 fail-closed inversion at the
+    // `UcanGroundedPolicy` chain-walker boundary).
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 105,
+        CATALOG_VARIANT_COUNT, 106,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

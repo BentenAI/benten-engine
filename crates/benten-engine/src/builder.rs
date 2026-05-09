@@ -60,6 +60,17 @@ pub struct EngineBuilder {
     /// verbatim alias for the grant-backed builder so UCAN proof-chain
     /// validation never fired under `PolicyKind::Ucan`.
     use_ucan_grounded: bool,
+    /// G16-B-B-rest sub-item D: test-only clock injection for the
+    /// `UcanGroundedPolicy` chain-walker. When `Some(now_secs)`, the
+    /// policy uses the supplied epoch-seconds value as `now_secs`
+    /// instead of the `DEFAULT_NOW_SECS = 0` sentinel. Production
+    /// callers leave this `None` until `WriteContext::now` threading
+    /// lands per `docs/future/phase-3-backlog.md §2.3 (i)`. Tests that
+    /// install time-bounded UCAN proofs via `install_ucan_proof` MUST
+    /// inject a positive value here (or the chain-walker fail-closes
+    /// with `E_UCAN_CLOCK_NOT_INJECTED` per the inversion at G16-B-B-rest
+    /// sub-item D).
+    ucan_grounded_now_secs: Option<u64>,
     /// Upper bound on the in-memory change-event buffer. `None` defaults to
     /// [`CHANGE_STREAM_MAX_BUFFERED`]. See r6-sec-5.
     change_stream_capacity: Option<usize>,
@@ -101,6 +112,7 @@ impl EngineBuilder {
             use_grant_backed: false,
             allow_revocation: false,
             use_ucan_grounded: false,
+            ucan_grounded_now_secs: None,
             change_stream_capacity: None,
             monotonic_source: None,
             time_source: None,
@@ -238,6 +250,30 @@ impl EngineBuilder {
         // UcanGroundedPolicy wrap at assemble time.
         self.use_grant_backed = true;
         self.use_ucan_grounded = true;
+        self
+    }
+
+    /// G16-B-B-rest sub-item D test-only escape valve: pin a static
+    /// `now_secs` (epoch seconds) for the `UcanGroundedPolicy`
+    /// chain-walker so integration tests can install time-bounded
+    /// UCAN proofs without tripping the
+    /// [`benten_caps::CapError::UcanClockNotInjected`] fail-closed
+    /// branch.
+    ///
+    /// Production callers leave this unset (the
+    /// `DEFAULT_NOW_SECS = 0` sentinel surfaces the
+    /// "no clock injected" misconfiguration). The `WriteContext::now`
+    /// threading work named at `docs/future/phase-3-backlog.md §2.3 (i)`
+    /// will replace this static-clock fixture with a real-clock
+    /// injection on every chain-walk.
+    ///
+    /// Composes with [`Self::capability_policy_ucan_durable`] — calling
+    /// this method without that one is a no-op (the
+    /// `UcanGroundedPolicy` wrap doesn't fire unless
+    /// `use_ucan_grounded` is set).
+    #[must_use]
+    pub fn ucan_grounded_now_for_test(mut self, now_secs: u64) -> Self {
+        self.ucan_grounded_now_secs = Some(now_secs);
         self
     }
 
@@ -548,11 +584,16 @@ impl EngineBuilder {
                     // revocation + typed-cap-claim mapping).
                     let ucan_backend =
                         Arc::new(benten_caps::UCANBackend::new(Arc::clone(&backend)));
+                    let mut policy =
+                        benten_caps::UcanGroundedPolicy::new(grant_backed, ucan_backend);
+                    if let Some(now_secs) = self.ucan_grounded_now_secs {
+                        // G16-B-B-rest sub-item D: tests inject a
+                        // static clock so time-bounded UCAN proofs
+                        // walk cleanly past the fail-closed branch.
+                        policy = policy.with_now_for_test(now_secs);
+                    }
                     (
-                        Some(Box::new(benten_caps::UcanGroundedPolicy::new(
-                            grant_backed,
-                            ucan_backend,
-                        )) as Box<dyn CapabilityPolicy>),
+                        Some(Box::new(policy) as Box<dyn CapabilityPolicy>),
                         false,
                     )
                 } else {

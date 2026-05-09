@@ -104,20 +104,45 @@ impl<B: GraphBackend> std::fmt::Debug for UcanGroundedPolicy<B> {
     }
 }
 
-/// Default `now` for chain-walker time-window validation. Picked at
-/// epoch=0 so present-day fixtures with `nbf=0` and any positive
-/// `exp` accept by default; tests override via
-/// [`UcanGroundedPolicy::with_now_for_test`].
+/// Sentinel `now` value indicating "no real wallclock has been
+/// injected." Picked at `0` (epoch start) so the fail-closed branch
+/// in [`UcanGroundedPolicy::typed_cap_permitted_by_proof`] can
+/// distinguish "caller injected `now=0`" from "caller did not inject
+/// at all" — by convention production callers MUST inject a positive
+/// epoch-seconds value via [`UcanGroundedPolicy::with_now_for_test`]
+/// (or the eventual `WriteContext::now` threading per
+/// phase-3-backlog §2.3 (i)). A test that explicitly wants the
+/// sentinel-driven fail-closed path leaves the default; a test that
+/// wants successful chain-walk against time-bounded chains injects
+/// a non-zero value.
 ///
-/// Why `0` rather than year-9999: the chain-walker rejects with
-/// `Expired` whenever `now >= exp`. Picking a sentinel near year-9999
-/// means present-day fixtures with reasonable `exp` values get
-/// rejected because their exp is below the sentinel. Picking `0`
-/// (epoch start) means any token with `nbf <= 0` and `exp > 0`
-/// accepts — the discipline-focused default given the
-/// `WriteContext::now`-threading work named in phase-3-backlog
-/// §2.3 (i) lights up the real-clock path.
+/// ## Fail-closed inversion (G16-B-B-rest sub-item D)
+///
+/// Pre-inversion the chain-walker silently accepted `now_secs == 0`
+/// against any chain. For a chain whose tokens all have `nbf=0`, the
+/// time-window check passed; for a chain with `nbf > 0`, the
+/// chain-walker rejected with `NotYetValid` per-link, but iteration
+/// continued to the next proof — masking the underlying
+/// "no clock injected" misconfiguration as a benign "chain not yet
+/// active." A forged chain with `nbf=0` would silently accept against
+/// the sentinel.
+///
+/// The inversion: at chain-walker entry, if `now_secs == 0` AND the
+/// chain has any time-bounded delegation (`nbf > 0` OR `exp > 0`),
+/// fail-CLOSED with [`CapError::UcanClockNotInjected`]. Callers MUST
+/// inject a real wallclock to validate time-bounded chains.
 const DEFAULT_NOW_SECS: u64 = 0;
+
+/// Returns `true` if any token in `chain` carries a non-zero `nbf` or
+/// `exp` (time-bounded delegation). Used by the fail-closed branch in
+/// [`UcanGroundedPolicy::typed_cap_permitted_by_proof`] to distinguish
+/// "chain has time bounds + no clock = misconfiguration" from
+/// "chain is unbounded + no clock = safe to walk."
+fn chain_has_time_bounds(chain: &[benten_id::ucan::Ucan]) -> bool {
+    chain.iter().any(|token| {
+        token.claims.nbf.is_some_and(|nbf| nbf > 0) || token.claims.exp.is_some_and(|exp| exp > 0)
+    })
+}
 
 impl<B: GraphBackend> UcanGroundedPolicy<B> {
     /// Construct a `UcanGroundedPolicy` composing the supplied
@@ -171,7 +196,21 @@ impl<B: GraphBackend> UcanGroundedPolicy<B> {
             //    today the durable store holds singleton tokens via
             //    `install_proof`.
             let chain = std::slice::from_ref(proof);
-            // 2. Chain-walker fires signature + time-window +
+            // 2. Fail-closed inversion (G16-B-B-rest sub-item D): if
+            //    no real wallclock has been injected (now_secs at the
+            //    DEFAULT_NOW_SECS=0 sentinel) AND this chain has any
+            //    time-bounded delegation (nbf>0 OR exp>0), refuse to
+            //    validate. The pre-inversion fail-OPEN path silently
+            //    walked tokens against now=0; a forged chain with
+            //    nbf=0 + exp>0 would have accepted whenever the rest
+            //    of the chain-walk passed, with no operator-visible
+            //    surface signaling the missing-clock misconfiguration.
+            //    Bubble the typed error so the caller knows to inject
+            //    a clock.
+            if self.now_secs == DEFAULT_NOW_SECS && chain_has_time_bounds(chain) {
+                return Err(CapError::UcanClockNotInjected);
+            }
+            // 3. Chain-walker fires signature + time-window +
             //    attenuation + revocation. Failure of ANY step =
             //    "this chain does not permit"; iterate to next.
             if self.ucan.validate_chain_at(chain, self.now_secs).is_err() {
@@ -277,7 +316,9 @@ mod tests {
         let token = build_ucan(&kp, "typed:crypto", "sign", 0, 253_402_300_798);
         backend.install_proof(&token).unwrap();
 
-        let policy = fresh_policy(Arc::clone(&backend));
+        // G16-B-B-rest sub-item D: inject a real wallclock so the
+        // fail-closed branch does NOT fire (token has `exp > 0`).
+        let policy = fresh_policy(Arc::clone(&backend)).with_now_for_test(1_000_000_000);
         let ctx = WriteContext {
             label: "cap:typed:crypto-sign".to_string(),
             scope: "cap:typed:crypto-sign".to_string(),
@@ -297,7 +338,10 @@ mod tests {
         let token = build_ucan(&kp, "typed:crypto", "verify", 0, 253_402_300_798);
         backend.install_proof(&token).unwrap();
 
-        let policy = fresh_policy(Arc::clone(&backend));
+        // G16-B-B-rest sub-item D: inject a real wallclock so the
+        // forged-cap-claim assertion exercises the typed-cap mapping
+        // path rather than the upstream fail-closed path.
+        let policy = fresh_policy(Arc::clone(&backend)).with_now_for_test(1_000_000_000);
         let ctx = WriteContext {
             label: "cap:typed:crypto-sign".to_string(),
             scope: "cap:typed:crypto-sign".to_string(),
@@ -343,6 +387,85 @@ mod tests {
         assert!(
             policy.check_write(&ctx).is_err(),
             "no proofs + grant-backed deny = denial (BLOCKER-2 fail-closed)"
+        );
+    }
+
+    /// G16-B-B-rest sub-item D fail-closed pin (pim-2 §3.6b):
+    /// `DEFAULT_NOW_SECS=0` against a chain with time-bounded
+    /// delegations MUST fail-closed with the typed
+    /// `UcanClockNotInjected` error rather than silently fail-OPEN
+    /// (pre-inversion) or silently fail-deny (sentinel-presence-only).
+    /// Would-FAIL-if-no-op'd: removing the
+    /// `chain_has_time_bounds` check or short-circuit branch in
+    /// `typed_cap_permitted_by_proof` returns `Ok(false)` and the
+    /// outer `check_write` surfaces a generic `CapError::Denied` from
+    /// the GrantBackedPolicy fall-through — observable difference: the
+    /// `code()` flips from `E_UCAN_CLOCK_NOT_INJECTED` to `E_CAP_DENIED`.
+    #[test]
+    fn default_now_secs_zero_fails_closed_when_chain_has_time_bounds() {
+        let backend = Arc::new(fresh_backend());
+        let kp = Keypair::generate();
+        // Build a UCAN with a non-zero exp (time-bounded delegation).
+        let token = build_ucan(&kp, "typed:crypto", "sign", 0, 253_402_300_798);
+        backend.install_proof(&token).unwrap();
+
+        // Default policy — no clock injected; now_secs at sentinel 0.
+        let policy = fresh_policy(Arc::clone(&backend));
+        let ctx = WriteContext {
+            label: "cap:typed:crypto-sign".to_string(),
+            scope: "cap:typed:crypto-sign".to_string(),
+            ..Default::default()
+        };
+
+        let err = policy
+            .check_write(&ctx)
+            .expect_err("fail-closed: DEFAULT_NOW_SECS=0 + time-bounded chain MUST surface typed clock-not-injected");
+        // Distinguishing assertion: typed code is `E_UCAN_CLOCK_NOT_INJECTED`,
+        // NOT the generic `E_CAP_DENIED` that the pre-inversion path returned.
+        assert_eq!(
+            err.code(),
+            benten_errors::ErrorCode::UcanClockNotInjected,
+            "fail-closed branch MUST surface E_UCAN_CLOCK_NOT_INJECTED \
+             (got: {:?}); a different code means the inversion silently \
+             accepted or fell through to grant-backed denial",
+            err.code()
+        );
+    }
+
+    /// G16-B-B-rest sub-item D companion: a chain with NO time bounds
+    /// (`nbf=0` AND no `exp`) is safe to walk even at the
+    /// `DEFAULT_NOW_SECS=0` sentinel — fail-closed only fires when the
+    /// chain actually depends on a wallclock.
+    ///
+    /// The test uses `Ucan::builder` directly (rather than the
+    /// `build_ucan` helper, which always sets `not_before` + `expiry`)
+    /// to construct an unbounded token.
+    #[test]
+    fn default_now_secs_zero_walks_chain_when_no_time_bounds() {
+        let backend = Arc::new(fresh_backend());
+        let kp = Keypair::generate();
+        // Build a token with NO nbf / exp — a "no time bounds" chain.
+        // (Ucan::builder defaults to None for both per crates/benten-id/src/ucan.rs.)
+        let token = Ucan::builder()
+            .issuer(kp.public_key().to_did().as_str().to_string())
+            .audience(kp.public_key().to_did().as_str().to_string())
+            .capability("typed:crypto", "sign")
+            .sign(&kp);
+        backend.install_proof(&token).unwrap();
+
+        let policy = fresh_policy(Arc::clone(&backend));
+        let ctx = WriteContext {
+            label: "cap:typed:crypto-sign".to_string(),
+            scope: "cap:typed:crypto-sign".to_string(),
+            ..Default::default()
+        };
+
+        // No time bounds → fail-closed branch does NOT fire → chain
+        // walks cleanly → leaf claim maps to required cap → permit.
+        assert!(
+            policy.check_write(&ctx).is_ok(),
+            "chain WITHOUT time bounds + DEFAULT_NOW_SECS=0 MUST walk cleanly \
+             (fail-closed branch only fires for time-bounded chains)"
         );
     }
 

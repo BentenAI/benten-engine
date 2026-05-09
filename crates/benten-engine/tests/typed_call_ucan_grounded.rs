@@ -39,9 +39,15 @@ use benten_id::ucan::Ucan;
 
 fn fresh_engine_ucan_durable() -> (tempfile::TempDir, Engine) {
     let dir = tempfile::tempdir().unwrap();
+    // G16-B-B-rest sub-item D: integration tests install proofs with
+    // long-future `exp` values; pin a static now far below those so
+    // chain-walks pass the time-window check without tripping the
+    // `DEFAULT_NOW_SECS=0` fail-closed branch. The expired-proof test
+    // overrides via its own `now` parameter.
     let engine = Engine::builder()
         .path(dir.path().join("benten.redb"))
         .capability_policy_ucan_durable()
+        .ucan_grounded_now_for_test(1_000_000_000)
         .build()
         .unwrap();
     (dir, engine)

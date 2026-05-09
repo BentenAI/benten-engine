@@ -490,6 +490,48 @@ fn validate_chain_inner(
                     });
                 }
             }
+
+            // 5. Time-window narrowing (G16-B-B-rest sub-item B/A
+            // closure of cap-r4-2 (a)/(b) MAJOR + tcc-r1-5 R3-A): the
+            // child's `[nbf, exp]` window MUST be a SUBSET of every
+            // ancestor's window. Widening rejects with
+            // `AttenuationViolated` (joining the same cap-attenuation
+            // family — the time-window axis is a sister attenuation
+            // dimension to authority).
+            //
+            // - `child.nbf < parent.nbf` = child claims earlier
+            //   activation than parent allows (backdating attack).
+            // - `child.exp > parent.exp` = child claims later expiry
+            //   than parent allows (forward-dating attack).
+            //
+            // Implementation: an absent child bound is treated as
+            // unbounded on that axis (nbf=0 / exp=u64::MAX) which the
+            // narrowing check then compares against the parent's
+            // explicit bound. An absent parent bound is treated as
+            // unbounded — the parent did not constrain that axis, so
+            // the child cannot widen what was never narrowed.
+            let child_nbf = token.claims.nbf.unwrap_or(0);
+            let child_exp = token.claims.exp.unwrap_or(u64::MAX);
+            let parent_nbf = parent.claims.nbf.unwrap_or(0);
+            let parent_exp = parent.claims.exp.unwrap_or(u64::MAX);
+            if child_nbf < parent_nbf {
+                return Err(UcanError::AttenuationViolated {
+                    link_index: idx + 1,
+                    child_cap: format!(
+                        "(time-window: child.nbf={child_nbf} < parent.nbf={parent_nbf})"
+                    ),
+                    parent_caps: vec![format!("(time-window: parent allows nbf >= {parent_nbf})")],
+                });
+            }
+            if child_exp > parent_exp {
+                return Err(UcanError::AttenuationViolated {
+                    link_index: idx + 1,
+                    child_cap: format!(
+                        "(time-window: child.exp={child_exp} > parent.exp={parent_exp})"
+                    ),
+                    parent_caps: vec![format!("(time-window: parent allows exp <= {parent_exp})")],
+                });
+            }
         }
     }
 

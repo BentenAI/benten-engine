@@ -541,6 +541,19 @@ pub enum ErrorCode {
     /// store. Surfaces a layered backend I/O failure to the policy
     /// hook caller. Maps to `E_CAP_BACKEND_STORAGE`.
     CapBackendStorage,
+    /// G16-B-B-rest (sub-item D): the chain-walker observed a UCAN
+    /// chain with time-bounded delegations (`nbf`/`exp` set) BUT no
+    /// real wallclock was injected — `UcanGroundedPolicy::now_secs` is
+    /// at the `DEFAULT_NOW_SECS = 0` sentinel. The default would
+    /// silently fail-OPEN against a chain with `nbf > 0` (treats
+    /// `now=0 < nbf` as "not-yet-valid" but iteration continues); the
+    /// inversion fail-CLOSES with this typed code so callers MUST
+    /// inject a real clock via `with_now_for_test` (or the
+    /// `WriteContext::now`-threading work named in phase-3-backlog
+    /// §2.3 (i)). Maps to `E_UCAN_CLOCK_NOT_INJECTED`. Routes to
+    /// `ON_DENIED` (cap-denial family — the chain cannot be validated
+    /// without a clock; the safe disposition is denial).
+    UcanClockNotInjected,
     /// G14-B: rate-limit policy plug rejected a write because the
     /// per-actor writes/sec/zone bucket exceeded its budget (per D-F /
     /// D-PHASE-3-26). Maps to `E_CAP_RATE_LIMIT_EXCEEDED`.
@@ -902,6 +915,7 @@ impl ErrorCode {
             ErrorCode::CapUcanAttenuationViolated => "E_CAP_UCAN_ATTENUATION_VIOLATED",
             ErrorCode::CapUcanAudienceMismatch => "E_CAP_UCAN_AUDIENCE_MISMATCH",
             ErrorCode::CapBackendStorage => "E_CAP_BACKEND_STORAGE",
+            ErrorCode::UcanClockNotInjected => "E_UCAN_CLOCK_NOT_INJECTED",
             ErrorCode::CapRateLimitExceeded => "E_CAP_RATE_LIMIT_EXCEEDED",
             ErrorCode::CapPeerBandwidthExceeded => "E_CAP_PEER_BANDWIDTH_EXCEEDED",
             ErrorCode::CapSnapshotHashMismatch => "E_CAP_SNAPSHOT_HASH_MISMATCH",
@@ -1005,6 +1019,12 @@ impl ErrorCode {
             | ErrorCode::CapUcanAudienceMismatch
             | ErrorCode::CapRateLimitExceeded
             | ErrorCode::CapPeerBandwidthExceeded
+            // G16-B-B-rest sub-item D: chain-walker fail-closed when
+            // no real clock was injected against a time-bounded chain.
+            // Joins the cap-denial family per the same routing
+            // precedent — the safe disposition for "cannot validate"
+            // is "deny".
+            | ErrorCode::UcanClockNotInjected
             // G14-D wave-5a: cap-recheck-driven family — snapshot-hash
             // mismatch at WAIT-resume, F6 SUBSCRIBE per-event recheck
             // termination, sync-replica per-write recheck rejection,
@@ -1392,6 +1412,7 @@ impl ErrorCode {
             "E_CAP_UCAN_ATTENUATION_VIOLATED" => ErrorCode::CapUcanAttenuationViolated,
             "E_CAP_UCAN_AUDIENCE_MISMATCH" => ErrorCode::CapUcanAudienceMismatch,
             "E_CAP_BACKEND_STORAGE" => ErrorCode::CapBackendStorage,
+            "E_UCAN_CLOCK_NOT_INJECTED" => ErrorCode::UcanClockNotInjected,
             "E_CAP_RATE_LIMIT_EXCEEDED" => ErrorCode::CapRateLimitExceeded,
             "E_CAP_PEER_BANDWIDTH_EXCEEDED" => ErrorCode::CapPeerBandwidthExceeded,
             "E_CAP_SNAPSHOT_HASH_MISMATCH" => ErrorCode::CapSnapshotHashMismatch,

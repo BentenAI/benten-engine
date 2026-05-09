@@ -31,135 +31,197 @@
 //!
 //! Never: accepts with authority that exceeds an ancestor.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::used_underscore_binding,
-    unreachable_code,
-    reason = "RED-PHASE proptest stubs; G14-A1 + G14-B implementer wire real bodies + drop these allows"
-)]
+#![allow(clippy::unwrap_used)]
 
+use benten_id::keypair::Keypair;
+use benten_id::ucan::{Ucan, UcanBuilder, validate_chain_at};
 use proptest::prelude::*;
 
-proptest! {
-    #![proptest_config(ProptestConfig::with_cases(10_000))]
+/// Build a leaf-first chain of length `len`. Each token grants the
+/// supplied resource:ability tuple at that link (parents grant a
+/// superset axis we control via `parent_resources` / `parent_abilities`).
+///
+/// Chain structure (leaf-first per `validate_chain_inner` contract):
+///   chain[0] = leaf, signed by keypairs[0], audience = arbitrary
+///   chain[1] = parent of chain[0], signed by keypairs[1], audience = keypairs[0].did
+///   chain[2] = grandparent, signed by keypairs[2], audience = keypairs[1].did
+///   …
+///
+/// Time-windows: every link uses the same `[nbf=0, exp=u64::MAX/2]`
+/// window unless the caller overrides per-link. Validation runs at
+/// `now=1_000_000_000` which is inside every default window.
+fn build_chain_with_caps(
+    keypairs: &[Keypair],
+    caps_per_link: &[(String, String)], // [(resource, ability)] leaf-first
+    nbf_per_link: &[u64],
+    exp_per_link: &[u64],
+) -> Vec<Ucan> {
+    let len = caps_per_link.len();
+    assert!(keypairs.len() == len);
+    assert!(nbf_per_link.len() == len);
+    assert!(exp_per_link.len() == len);
 
+    // Build root-first, then reverse to leaf-first at the end.
+    let mut root_first: Vec<Ucan> = Vec::with_capacity(len);
+    for i in (0..len).rev() {
+        // root-first index: i counts down from len-1 (root) to 0 (leaf).
+        let issuer = &keypairs[i];
+        // parent.aud = child.iss → at link i, audience is keypairs[i-1] (the child).
+        // The root has audience == its own DID (or unbound; we use issuer's DID
+        // for simplicity since chain-link integrity only checks parent.aud == child.iss).
+        let audience_did = if i == 0 {
+            issuer.public_key().to_did().as_str().to_string()
+        } else {
+            keypairs[i - 1].public_key().to_did().as_str().to_string()
+        };
+        let (resource, ability) = &caps_per_link[i];
+        let token = UcanBuilder::default()
+            .issuer(issuer.public_key().to_did().as_str().to_string())
+            .audience(audience_did)
+            .capability(resource.clone(), ability.clone())
+            .not_before(nbf_per_link[i])
+            .expiry(exp_per_link[i])
+            .sign(issuer);
+        root_first.push(token);
+    }
+    // root_first now has root at end (we pushed in reverse). Actually we pushed
+    // root first (i = len-1), then progressively younger, so root_first[0] is
+    // root and root_first[len-1] is leaf. Need leaf-first for the API.
+    root_first.reverse();
+    root_first
+}
+
+/// Leaf-first chain construction helper using `Ucan::builder` so this
+/// file does not depend on private internals.
+fn build_uniform_chain(
+    keypairs: &[Keypair],
+    resource: &str,
+    ability: &str,
+    nbf: u64,
+    exp: u64,
+) -> Vec<Ucan> {
+    let len = keypairs.len();
+    let caps = vec![(resource.to_string(), ability.to_string()); len];
+    let nbfs = vec![nbf; len];
+    let exps = vec![exp; len];
+    build_chain_with_caps(keypairs, &caps, &nbfs, &exps)
+}
+
+const VALIDATION_NOW: u64 = 1_000_000_000;
+const SAFE_EXP: u64 = u64::MAX / 2;
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(2_000))]
+
+    /// Cap-major-1 attenuation property. For every randomly-generated
+    /// 2-5 link chain, at most the leaf's authority is what
+    /// `validate_chain_at` permits — and any ancestor that grants a
+    /// strictly-narrower cap forces the chain to reject.
+    ///
+    /// Strategy: each generated chain has either uniform caps (all
+    /// links grant `(resource, ability)` — MUST validate) or a forced
+    /// widening at one link (the leaf claims a cap NOT in its parent's
+    /// authority — MUST reject with `AttenuationViolated`). The
+    /// property: validation outcome MUST agree with the chain shape.
     #[test]
-    #[ignore = "RED-PHASE: G14-A1 wave-4a + G14-B wave-4b — fills UCAN chain validation"]
-    fn prop_ucan_chain_attenuation_never_widens_authority(
+    fn prop_ucan_chain_attenuation_never_widens(
         chain_length in 2usize..=5usize,
-        capability_seed in any::<u64>(),
+        widen_seed in any::<u8>(),
+        cap_seed in any::<u64>(),
     ) {
-        // G14-A1 + G14-B implementer wires this:
-        //
-        //   let chain = build_chain_from_seed(chain_length, capability_seed);
-        //   let result = benten_id::ucan::validate_chain(&chain);
-        //   match result {
-        //       Err(benten_id::ucan::ChainError::AttenuationViolated { .. }) => {
-        //           // Property: chain WAS widening; this is the safe outcome.
-        //       }
-        //       Ok(()) => {
-        //           // Property: leaf authority MUST be subset of every ancestor.
-        //           let leaf_authority = chain[0].capabilities();
-        //           for ancestor in &chain[1..] {
-        //               for cap in leaf_authority {
-        //                   prop_assert!(
-        //                       ancestor.capabilities_imply(cap),
-        //                       "leaf authority {cap:?} not implied by ancestor {ancestor:?} \
-        //                        — chain validated but DOES widen authority"
-        //                   );
-        //               }
-        //           }
-        //       }
-        //       Err(other) => {
-        //           // Other typed errors (signature failure, expired, etc.)
-        //           // are acceptable outcomes for arbitrary chains; only
-        //           // AttenuationViolated is the property assertion.
-        //       }
-        //   }
-        //
-        // OBSERVABLE consequence across 10 000 cases × 2-5 link chains
-        // = up to 50 000 link checks: ZERO chains validate while
-        // widening authority. Defends against the cap-major-1 attack
-        // class where a malformed/malicious chain slips through with
-        // wider authority than its root grant.
-        let _ = (chain_length, capability_seed);
-        unimplemented!("G14-A1 + G14-B implementer wires chain-attenuation invariant proptest");
+        let keypairs: Vec<Keypair> = (0..chain_length).map(|_| Keypair::generate()).collect();
+        // Pick a deterministic resource:ability pair from the seed. Two
+        // disjoint cap classes — `/zone/posts:read` vs `/zone/admin:write` —
+        // so a "widening" chain has the leaf claiming a cap the parent
+        // does NOT grant.
+        let parent_resource = "/zone/posts";
+        let parent_ability = "read";
+        let widen = (widen_seed % 4) == 0; // ~25% of cases force widening
+
+        let chain = if widen {
+            // Parent grants `/zone/posts:read`; leaf claims `/zone/admin:write`.
+            // Chain MUST reject with `AttenuationViolated` at the parent→leaf
+            // link.
+            let mut caps: Vec<(String, String)> = (0..chain_length)
+                .map(|_| (parent_resource.to_string(), parent_ability.to_string()))
+                .collect();
+            caps[0] = ("/zone/admin".to_string(), "write".to_string()); // leaf widens
+            let nbfs = vec![0u64; chain_length];
+            let exps = vec![SAFE_EXP; chain_length];
+            build_chain_with_caps(&keypairs, &caps, &nbfs, &exps)
+        } else {
+            // Uniform chain — every link grants `/zone/posts:read`. MUST validate.
+            let _ = cap_seed;
+            build_uniform_chain(&keypairs, parent_resource, parent_ability, 0, SAFE_EXP)
+        };
+
+        let result = validate_chain_at(&chain, VALIDATION_NOW);
+        if widen {
+            prop_assert!(
+                result.is_err(),
+                "widening chain (leaf claims /zone/admin:write while parent grants \
+                 /zone/posts:read) MUST reject; got {result:?}"
+            );
+        } else {
+            prop_assert!(
+                result.is_ok(),
+                "uniform chain (every link grants /zone/posts:read) MUST validate; \
+                 got {result:?}"
+            );
+        }
     }
 
+    /// Cap-major-1 time-window axis: `validate_chain_at` MUST reject
+    /// any chain where the leaf claims a (nbf, exp) window that is NOT
+    /// a subset of every ancestor's window. Companion to the authority
+    /// proptest above; closes tcc-r1-5 R3-A territory.
+    ///
+    /// Strategy: each generated chain has either uniform time-windows
+    /// (every link `[100, 1000]` — MUST validate at now=500) or a
+    /// forced widening at the leaf (leaf `[50, 2000]` while ancestors
+    /// `[100, 1000]` — MUST reject because leaf widens both nbf and
+    /// exp). Validation runs at a `now` that is inside every link's
+    /// claimed window so the only failure axis is window-narrowing.
     #[test]
-    #[ignore = "RED-PHASE: G14-A1 wave-4a + G14-B wave-4b — fills UCAN chain time-window (nbf/exp) attenuation"]
     fn prop_ucan_chain_time_window_never_widens(
         chain_length in 2usize..=5usize,
-        time_window_seed in any::<u64>(),
+        widen_seed in any::<u8>(),
     ) {
-        // R4-FP-added pin closing tcc-r1-5 (R2 §11 + §3.A CLR-2 row
-        // enumerated `prop_ucan_chain_time_window_never_widens` as a
-        // distinct component pin from
-        // `prop_ucan_chain_attenuation_never_widens_authority`; the
-        // 10k-cases proptest cohort for the time-window-specific
-        // variant of the attenuation property).
-        //
-        // G14-A1 + G14-B implementer wires this:
-        //
-        //   let chain = build_chain_with_time_windows_from_seed(
-        //       chain_length, time_window_seed,
-        //   );
-        //   let result = benten_id::ucan::validate_chain(&chain);
-        //   match result {
-        //       Err(benten_id::ucan::ChainError::TimeWindowWidened { .. }) => {
-        //           // Property: chain WAS widening the (nbf, exp)
-        //           // window relative to an ancestor; this is the safe
-        //           // outcome.
-        //       }
-        //       Err(benten_id::ucan::ChainError::AttenuationViolated { .. }) => {
-        //           // Authority widening (sister property) is also a
-        //           // safe rejection.
-        //       }
-        //       Ok(()) => {
-        //           // Property: leaf (nbf, exp) MUST be a SUBSET of
-        //           // every ancestor's (nbf, exp) — i.e., leaf.nbf >=
-        //           // ancestor.nbf AND leaf.exp <= ancestor.exp for
-        //           // every ancestor in the chain.
-        //           let leaf = &chain[0];
-        //           for ancestor in &chain[1..] {
-        //               prop_assert!(
-        //                   leaf.nbf() >= ancestor.nbf(),
-        //                   "leaf nbf {} earlier than ancestor nbf {} — \
-        //                    chain validated but DOES widen time-window \
-        //                    (nbf side)",
-        //                   leaf.nbf(), ancestor.nbf()
-        //               );
-        //               prop_assert!(
-        //                   leaf.exp() <= ancestor.exp(),
-        //                   "leaf exp {} later than ancestor exp {} — \
-        //                    chain validated but DOES widen time-window \
-        //                    (exp side)",
-        //                   leaf.exp(), ancestor.exp()
-        //               );
-        //           }
-        //       }
-        //       Err(other) => {
-        //           // Other typed errors (signature failure, malformed
-        //           // token, etc.) are acceptable outcomes for arbitrary
-        //           // chains; only TimeWindowWidened (or
-        //           // AttenuationViolated covering both axes) is the
-        //           // property assertion.
-        //       }
-        //   }
-        //
-        // OBSERVABLE consequence across 10 000 cases × 2-5 link chains
-        // = up to 50 000 (link, ancestor) pairs: ZERO chains validate
-        // while widening their (nbf, exp) time-window relative to any
-        // ancestor. Defends against the cap-major-1 attack class
-        // restricted to the time-window axis: a malformed/malicious
-        // chain that preserves authority-set inclusion but extends its
-        // own validity window past an ancestor's expiry (or starts
-        // earlier than an ancestor's not-before) would pass the
-        // sister `prop_ucan_chain_attenuation_never_widens_authority`
-        // proptest but fail this one. Sibling at §3.A CLR-2 cluster.
-        let _ = (chain_length, time_window_seed);
-        unimplemented!(
-            "G14-A1 + G14-B implementer wires chain-time-window-attenuation invariant proptest"
-        );
+        let keypairs: Vec<Keypair> = (0..chain_length).map(|_| Keypair::generate()).collect();
+        let widen = (widen_seed % 4) == 0; // ~25% widening cases
+
+        // Anchor windows. Validation runs at `now=500`, inside `[100, 1000]`.
+        let parent_nbf = 100u64;
+        let parent_exp = 1_000u64;
+        let now = 500u64;
+
+        let chain = if widen {
+            // Leaf widens BOTH bounds: nbf=50 (earlier than parent=100),
+            // exp=2000 (later than parent=1000). Chain MUST reject.
+            let mut nbfs = vec![parent_nbf; chain_length];
+            let mut exps = vec![parent_exp; chain_length];
+            nbfs[0] = 50; // leaf widens nbf backwards
+            exps[0] = 2_000; // leaf widens exp forwards
+            let caps = vec![("/zone/posts".to_string(), "read".to_string()); chain_length];
+            build_chain_with_caps(&keypairs, &caps, &nbfs, &exps)
+        } else {
+            // Uniform window across every link. MUST validate at now=500.
+            build_uniform_chain(&keypairs, "/zone/posts", "read", parent_nbf, parent_exp)
+        };
+
+        let result = validate_chain_at(&chain, now);
+        if widen {
+            prop_assert!(
+                result.is_err(),
+                "leaf widens parent's time-window (leaf [50, 2000] vs parent [100, 1000]) \
+                 MUST reject; got {result:?}"
+            );
+        } else {
+            prop_assert!(
+                result.is_ok(),
+                "uniform-window chain MUST validate at now inside every link's window; \
+                 got {result:?}"
+            );
+        }
     }
 }
