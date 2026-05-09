@@ -369,14 +369,12 @@ impl JsAtrium {
             // `is_active` flag to false. Currently infallible per the
             // engine-side rustdoc; the result-shape is preserved for
             // future versions that may surface drain-failure reasons.
-            js_atrium_runtime()
-                .block_on(handle.leave())
-                .map_err(|e| {
-                    napi::Error::new(
-                        Status::GenericFailure,
-                        format!("E_ATRIUM_LEAVE_FAILED: leave failed: {e:?}"),
-                    )
-                })?;
+            js_atrium_runtime().block_on(handle.leave()).map_err(|e| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    format!("E_ATRIUM_LEAVE_FAILED: leave failed: {e:?}"),
+                )
+            })?;
         }
         Ok(())
     }
@@ -426,14 +424,12 @@ impl JsAtrium {
             // file). `AtriumHandle::rejoin` is idempotent + currently
             // infallible; the result-shape is preserved for future
             // versions that may surface re-bind failure.
-            js_atrium_runtime()
-                .block_on(handle.rejoin())
-                .map_err(|e| {
-                    napi::Error::new(
-                        Status::GenericFailure,
-                        format!("E_ATRIUM_REJOIN_FAILED: rejoin failed: {e:?}"),
-                    )
-                })?;
+            js_atrium_runtime().block_on(handle.rejoin()).map_err(|e| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    format!("E_ATRIUM_REJOIN_FAILED: rejoin failed: {e:?}"),
+                )
+            })?;
         }
         // If the engine reference exists but `engine_atrium` is None
         // (meaning the engine-bound JsAtrium was never joined to begin
@@ -684,10 +680,7 @@ impl JsAtrium {
     ///
     /// Errors with `E_ATRIUM_NOT_JOINED` if called before `join()`.
     #[napi]
-    pub fn set_local_device_attestation(
-        &self,
-        attestation: &JsDeviceAttestation,
-    ) -> Result<()> {
+    pub fn set_local_device_attestation(&self, attestation: &JsDeviceAttestation) -> Result<()> {
         let handle = self.engine_atrium_or_err("set_local_device_attestation")?;
         let att = attestation.inner_clone();
         js_atrium_runtime().block_on(handle.set_local_device_attestation(Some(att)));
@@ -737,9 +730,9 @@ impl JsAtrium {
     pub fn set_acceptor(&self, freshness_window_secs: u32) -> Result<()> {
         let handle = self.engine_atrium_or_err("set_acceptor")?;
         let acceptor = benten_id::device_attestation::Acceptor::new(
-            benten_id::device_attestation::FreshnessPolicy::seconds(
-                u64::from(freshness_window_secs),
-            ),
+            benten_id::device_attestation::FreshnessPolicy::seconds(u64::from(
+                freshness_window_secs,
+            )),
         );
         js_atrium_runtime().block_on(handle.set_acceptor(acceptor));
         Ok(())
