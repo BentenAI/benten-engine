@@ -145,16 +145,14 @@ harness = false
 name = "transform_expression_latency"
 harness = false
 
-# Phase 2b R3-B SANDBOX bench skeletons (G7-A / G7-C). The
-# `phase_2b_landed` feature flag gating these benches at R3 was retired
-# at G20-B Phase-3-close (audit-3-mr-1) — Phase 2b shipped at
-# `phase-2b-close` 2026-05-03 and the bench bodies compile cleanly
-# under default features. `sandbox_fuel` retains its scaffold body
-# pending full Store+Instance+invocation measurement landing.
+# Phase 2b R3-B SANDBOX bench (G7-A). The `phase_2b_landed` feature
+# flag gating this bench at R3 was retired at G20-B Phase-3-close
+# (audit-3-mr-1) — Phase 2b shipped at `phase-2b-close` 2026-05-03 and
+# the bench body compiles cleanly under default features. The sibling
+# `sandbox_fuel` skeleton was removed at pre-v1 Class-E fix-pass
+# 2026-05-09 (empty bench body never measured anything; per-host-fn
+# fuel-cost measurement is a future addition once the SANDBOX runtime
+# matures Store+Instance+invocation lifecycle profiling).
 [[bench]]
 name = "sandbox_cold_start"
-harness = false
-
-[[bench]]
-name = "sandbox_fuel"
 harness = false

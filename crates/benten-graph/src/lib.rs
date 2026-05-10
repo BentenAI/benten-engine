@@ -262,6 +262,14 @@ impl RedbBackend {
     ///
     /// G11-A Wave 3a CFG-GATING M2: stub is gated behind `any(test,
     /// feature = "testing")`.
+    ///
+    /// TODO(phase-3-backlog §7.21): this counter is a no-op stub
+    /// returning 0 unconditionally because `get_node_label_only` is
+    /// currently implemented as full-decode-then-project rather than a
+    /// prefix-bounded read. When the prefix-bounded fast-path lands
+    /// (gating wave: phase-3-backlog §7.21), wire real byte-counter
+    /// instrumentation here and re-introduce the `<= 128` assertion in
+    /// `tests/get_node_label_only.rs`.
     #[cfg(any(test, feature = "testing"))]
     pub fn read_bytes_since_reset(&self) -> usize {
         0
