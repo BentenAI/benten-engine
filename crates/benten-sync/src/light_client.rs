@@ -22,7 +22,11 @@
 //! Mode-(b) range-query proof + mode-(c) signed-checkpoint are OOS
 //! for Phase-3; architectural-absence pins live at
 //! `tests/light_client_distinct.rs`. Phase-4+ light-client extensions
-//! per docs/future/v1-gate-refactor.md Phase-4 Benten Platform v1 re-open mode-(b) + mode-(c).
+//! per `docs/future/phase-3-backlog.md §12` + `docs/FULL-ROADMAP.md`
+//! Phase 4 (Benten Platform v1) re-open mode-(b) + mode-(c). The
+//! original v1-gate-refactor.md §7b registry retired 2026-05-10 to
+//! `docs/archive/v1-gate-refactor-RATIFIED-2026-05-10.md` post
+//! ratification.
 //!
 //! ## Distinct from MST diff per ROADMAP-2
 //!
