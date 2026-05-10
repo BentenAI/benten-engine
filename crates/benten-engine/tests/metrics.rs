@@ -208,6 +208,21 @@ fn metrics_snapshot_lifts_phase_3_observability_counters() {
         metrics.keys().collect::<Vec<_>>(),
     );
 
+    // STREAM active-count — R6 R2 obs-r6-r2-1 partial-close lift
+    // (engine_diagnostics.rs ~L312-316). Phase-2b stream surface; same
+    // structural-shape contract as the SUBSCRIBE/EMIT/sync_replica arms
+    // above (key surfaces zero pre-stream-open, value increments on
+    // call_stream + decrements on Drop). Defends against silent
+    // regression of the lift via per-family split / feature-gate /
+    // refactor — pim-2 §3.6b sub-rule 4 closure-pin per-finding
+    // granularity. Closes obs-final-1.
+    assert!(
+        metrics.contains_key("benten.stream.active_count"),
+        "metrics_snapshot must surface STREAM active_count; \
+         keys present: {:?}",
+        metrics.keys().collect::<Vec<_>>(),
+    );
+
     // SANDBOX per-handler high-water keys are populated lazily on first
     // SANDBOX invocation — without exercising the SANDBOX surface here
     // (which requires registering a wasm module, out of scope for this
