@@ -375,6 +375,19 @@
 - `.addl/phase-3/WAVE-G16-B-E-BRIEF.md` (wave brief; spec sources)
 - `.addl/phase-3/HANDOFF-2026-05-03-phase-3-kickoff.md` NS-T64 + NS-T65 (canary scope clarification 2026-05-08)
 
+### 3.3 napi `Acceptor` extension surface — revocation list + expected-parent gate
+
+**Source:** R6-FP Wave A Sub-A2 BELONGS-NAMED-NOW per HARD RULE rule-12.
+
+**Phase-3-close state:** `bindings/napi/src/atrium.rs::JsAtrium::set_acceptor` exposes the freshness-window-only Acceptor ctor (constructed via `benten_id::device_attestation::Acceptor::new(FreshnessPolicy::seconds(window))`). Two further Acceptor ctor surfaces exist Rust-side that the napi boundary does NOT yet expose:
+
+1. **`Acceptor::new_with_revocations(freshness, Vec<DeviceRevocation>)`** — pre-populated revocation list. JS callers cannot today install custom revocation rosters at the napi boundary; the per-Acceptor revocation surface is therefore Rust-only. Composing this requires a `JsDeviceRevocation` napi class (mirrors `benten_id::device_attestation::DeviceRevocation::issue` with parent-keypair signing).
+2. **`Acceptor::with_parent_lookup(expected_parent: Did)`** — gates inbound attestations on issuer-DID equality with a configured expected parent. JS callers cannot today install expected-parent gating; the surface is Rust-only.
+
+**Phase-N target:** add `JsDeviceRevocation` napi class + `JsAtrium::set_acceptor_with_revocations(freshness_window_secs, revocations: Vec<&JsDeviceRevocation>)` + `JsAtrium::set_acceptor_with_parent_lookup(parent_did: String)` napi methods. Round-trip TS pin asserting JS-installed revocation roster rejects pre-revoked device-DIDs at handshake.
+
+**Phase carrier:** post-Phase-3 (no Phase-3 carrier; out of v1-milestone-gate critical path per CLAUDE.md baked-in #15 — full peers can fall back to engine-direct configuration during the test runner setup).
+
 ### 3.2 Per-subscriber filtering on the change-event stream — CLOSED at Phase-3 G14-D wave-5a (PR #115 commit `4d3f688`) + Phase-3 G21-T3 PR #147 partial-revoke
 
 **Closure narrative:** F6 SUBSCRIBE per-subscriber filtering is the same item by another name as §2.2 above; both were named separately during planning (one in phase-2-backlog.md §1 carry list, one in phase-3-backlog.md §2.2). Closed at G14-D wave-5a + G21-T3 partial-revoke; full closure narrative + file:line cites at §2.2 above. Cross-trust-boundary subscribers filter at delivery time per CLR-2 dual-layer recheck.
@@ -447,7 +460,7 @@ Estimated touch size: ~300-600 LOC of test infrastructure across `bindings/napi/
 
 **Touch size:** ~500-1000 LOC total (a-half ~200-400 + b-half ~300-600).
 
-### 4.4 Bundle-content audit pins (R4b architecture / wasm-bundle lens — G16-B-D sub-item D carry)
+### 4.4 Bundle-content audit pins — CLOSED at Phase-3 R6 fix-pass Wave B
 
 **Origin:** R4b architecture / wasm-bundle lens (Phase-3 G16-B-D pre-dispatch brief sub-item D, 2026-05-09) flagged that the wasm32-unknown-unknown bundle MUST be auditable to NOT contain (per CLAUDE.md baked-in #17 — full peer vs thin compute surface):
 - iroh transport bytes (full peer–only)
@@ -455,19 +468,18 @@ Estimated touch size: ~300-600 LOC of test infrastructure across `bindings/napi/
 - redb backend bytes (full peer–only)
 - SANDBOX runtime / wasmtime bytes (full peer–only)
 
-**Phase-3 G16-B-D state (2026-05-09):** No bundle-content audit pins exist at HEAD. Existing browser-target tests (`crates/benten-graph/tests/browser_backend.rs`, `crates/benten-graph/tests/blob_backend_trait_browser_target_compatible_signatures.rs`) verify the in-RAM `BrowserBackend` shape but do NOT verify symbol-section absence of forbidden crates. **NAMED-NOW destination** per HARD RULE rule-12 clause-(b). Rationale for FIX-NOW deferred: bundle-content audits require CI infrastructure (running `cargo build --target wasm32-unknown-unknown -p bindings/napi --features browser-backend` + `wasm-objdump -x` parsing + symbol-section grep against a forbidden-symbol blocklist), which is a substantive CI workflow surgery beyond the G16-B-D LOC budget (~300-600).
+**Status:** **CLOSED** at Phase-3 R6 fix-pass Wave B per R6 R1 br-r6-r1-1 BLOCKER + ds-r6-2 MAJOR convergence-council ratification. The closure landed all three concrete fix-shape clauses:
 
-**Concrete fix-shape:**
-- (a) Add a `wasm-bundle-content-audit.yml` GitHub Actions workflow (or extend `wasm-browser.yml` cross-browser-determinism job) that:
-  - Builds the wasm32-unknown-unknown bundle.
-  - Runs `wasm-objdump -x bundle.wasm | grep -E '(loro|iroh|redb|wasmtime)'`.
-  - Asserts the grep produces ZERO matches; emits the failure with a list of leaked symbols if any are found.
-- (b) Add a Rust-side workflow-pin test at `bindings/napi/tests/wasm_bundle_content_audit_workflow_pin.rs` asserting the workflow file's audit step exists + cites the 4 forbidden crate prefixes (echoes the `cross_browser_determinism_workflow_pins.rs` pattern).
-- (c) Add a documentation pin at `docs/future/phase-3-backlog.md` §4.4 (this entry) cross-referenced from `docs/SECURITY-POSTURE.md` Compromise #17 / Compromise #20 closure narrative once the audit lands.
+- **(a) `wasm-browser.yml` bundle-content audit step.** Extended the existing `bundle-and-smoke` job with a `Bundle-content audit (forbidden symbols per CLAUDE.md baked-in #17)` step that runs `wasm-objdump -x` against the produced `.wasm` artifact + greps for the 4 forbidden crate prefixes (`loro` / `iroh` / `redb` / `wasmtime`) + asserts ZERO matches. The step installs `wabt` (WebAssembly Binary Toolkit) for `wasm-objdump`. A regression that pulled any of the 4 forbidden crate prefixes into the wasm32 bundle fails CI immediately with the matched-symbol output.
+- **(b) Rust-side workflow-pin test.** `bindings/napi/tests/wasm_bundle_content.rs` un-ignored with workflow-pin bodies that assert the audit step exists + cites the 4 forbidden prefixes (5 tests: `loro_not_in_browser_bundle_per_baked_in_17`, `iroh_not_in_browser_bundle_per_baked_in_17`, `redb_not_in_browser_bundle_per_baked_in_17`, `wasmtime_not_in_browser_bundle_per_baked_in_17`, `bundle_content_audit_step_asserts_zero_forbidden_symbols`). Follows the `cross_browser_determinism_workflow_pins.rs` pattern.
+- **(c) Documentation cross-reference.** `docs/SECURITY-POSTURE.md` Compromise #19 + #20 narratives reference §4.3 (G18-A-followup); this §4.4 entry retensed to CLOSED.
 
-**Touch size:** ~80-150 LOC test + workflow YAML (smaller half) OR ~50-80 LOC workflow YAML extension + ~30-60 LOC Rust workflow-pin test + 1 docs cross-reference (larger half is the workflow surgery if the audit lives in its own job vs extending the existing matrix). **OPEN — to be closed at a dedicated wasm-bundle-audit wave OR folded into G16-B-E iroh-substantive wave (which already touches the wasm-bundle-conformance side) before R6 phase-close convergence council.**
+**Defense-in-depth shape (now LIVE).** Three rungs defend CLAUDE.md baked-in #17 thin-client surface commitment:
+1. **Source-side cfg-gating** — `crates/benten-sync/src/lib.rs` `compile_error!` for `target_arch = "wasm32"` + Cargo.toml `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`. Pinned by `crates/benten-sync/tests/wasm32_excluded.rs::benten_sync_does_not_compile_for_wasm32_unknown_unknown_per_thin_client_commitment`.
+2. **Cargo feature-graph closure** — no transitive activation of full-peer crates from the browser-bundle root. Pinned by `bindings/napi/tests/feature_graph_closure_no_test_helpers_in_production.rs` (also closes §10.6 v1-window destination — see below).
+3. **Built-bundle symbol-section audit** — `wasm-objdump -x` + forbidden-symbol grep in `wasm-browser.yml`. Pinned by `bindings/napi/tests/wasm_bundle_content.rs`.
 
-**Convergence target:** Phase-3-close-blocking iff R4b architecture lens names this as a CLOSURE-PHASE-3 BLOCKER. Otherwise carry to v1-milestone-gate sweep per CLAUDE.md baked-in #15.
+**Companion closure (ds-r6-3 MAJOR — at-build-time wasm32-refusal CI cell).** `.github/workflows/wasm-checks.yml` `benten-sync-refuses-wasm32` job runs `cargo check --target wasm32-unknown-unknown -p benten-sync` + asserts the build FAILS with `compile_error!` macro firing + classifier verifies the failure cites `compile_error!` / `baked-in #17` / `target_arch` (not an unrelated dep-graph break). Pinned by `crates/benten-sync/tests/wasm32_excluded.rs::benten_sync_wasm32_refusal_pinned_in_ci_workflow_per_ds_r6_3_closure`.
 
 ---
 
@@ -1058,16 +1070,37 @@ R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift 
 - Fix path: codify §3.6e — implementer briefs MUST include "production call site enumeration" pre-flight item.
 
 **pim-codification-feedback-loop candidate — codification of standing rule doesn't auto-propagate to in-flight agent briefs.**
-- Origin: NS-T52 candidate from Phase-3 R4-close + 1 instance from G20-B fix-pass §3.5g-miss. Sub-threshold (1-2 instances).
+- Origin: NS-T52 candidate from Phase-3 R4-close + 1 instance from G20-B fix-pass §3.5g-miss + 1 self-reference instance at R6 R1 (the R6 R1 ratification batch's in-flight R4b-residual fix-pass + sibling R6 R1 lenses operated against pre-ratification rules). Sub-threshold (1-2 → 2-3 instances; STILL sub-3-recurrence; track only).
 - Fix path: when a new pim-N is codified, sweep in-flight agent briefs + send updates to active agents OR explicitly note "this codification applies to NEW dispatches only."
+- **Status 2026-05-09 (R6 R1 sub-threshold-track-only verdict):** sub-3-recurrence; codify if/when 3rd recurrence fires.
+
+**pim-cryptographic-attestation-transport-reuse candidate — wire-shape needs trust-model closure → COMPOSE existing hardened primitives, NOT introduce parallel unsigned transport.**
+- Origin: G16-D wave-6b fp V2 envelope (parent-signed attestation + Acceptor + FreshnessPolicy + payload-hash binding composed at the wire boundary instead of introducing parallel unsigned transport). Named in g16d6b-fp-corr mini-review as WORTH_R6_RATIFICATION_AS_pim-13_CANDIDATE; renumbered sub-threshold-track-only at R6 R1.
+- 1 instance currently. Sub-3-recurrence threshold; ratify only if 2 more instances surface in Phase-4+ networking work (heterogeneous-cap-envelope per §6.12 item 9, peer-DID rotation envelopes, handler-attestation envelopes).
+- Fix path: codify §3.6 extension (or new §3.6g) when 3rd recurrence fires, naming the COMPOSE-existing-hardened-primitives-at-wire-boundary discipline.
+- **Status 2026-05-09 (R6 R1 sub-threshold-track-only verdict):** track at this entry; codify if/when 3rd recurrence fires.
+
+**pim-atomic-multi-MAJOR-fix-pass-scope-expansion candidate — N findings sharing canonical-bytes shape → atomic landing preferred over wave-splitting.**
+- Origin: G16-D wave-6b fp (4 findings: DID forgery + replay + frame-pair-binding + version validation, all sharing one canonical-bytes shape). Fix-pass scope expanded from ~200-400 LOC to ~850 LOC; JUSTIFIED-NOT-GOLD-PLATING because splitting would ship an unstable intermediate V1.5 shape on disk.
+- 1 instance currently. Sub-3-recurrence threshold; track at this entry.
+- Fix path: codify §3.6 extension when 3rd recurrence fires, naming the atomic-landing-when-shared-canonical-bytes-shape discipline. Composes with `feedback_subtrack_sizing_heuristic` + `feedback_canary_first_parallel_implementation`.
+- **Status 2026-05-09 (R6 R1 sub-threshold-track-only verdict):** track at this entry; codify if/when 3rd recurrence fires.
+
+**fix-pass-mini-review-json-schema candidate — fix-pass mini-reviews demonstrate higher structural depth than R5 group-implementation mini-reviews.**
+- Origin: g16d6b-fp-corr mini-review JSON structure (`prior_findings_closure` + `would_fail_if_no_opd` 4-of-4 axes + `section_3_5g_4_surface_atomic_update` 5-of-5 surfaces + `section_3_5b_HARDENED_post_fix_doc_coupling` + `loc_scope_validation` + `phantom_destination_check` + `criterion_X_closure_verdict` + `lens_focus_coverage`). 1-2 instances at fix-pass depth.
+- Sub-3-recurrence threshold; track at this entry. Codify at dispatch-conventions §3.8 extension if/when 3rd fix-pass exhibits the same structural depth.
+- **Status 2026-05-09 (R6 R1 sub-threshold-track-only verdict):** track at this entry; codify if/when 3rd recurrence fires.
 
 **Cross-references:**
 - `.addl/phase-3/r4b-pattern-induction.json` (pattern-induction-meta-sweep R4b output naming r4b-pim-2-amendment + pim-18 explicitly)
 - `.addl/phase-3/r4b-{cryptography,capability-system,wasmtime-sandbox}.json` (3-lens corroboration of pim-12 candidate)
+- `.addl/phase-3/r6-r1-pattern-induction.json` (R6 R1 ratification recommendations naming the 4 ratify-inline pim-Ns + 4 sub-threshold-track-only candidates)
 - `docs/history/PHASE-1.md §5` (R7 origin) + `docs/history/PHASE-2b.md §5` (pim-1 through pim-11 catalog)
 - Memory `feedback_pattern_induction_meta_sweep.md` (load-bearing operational tier; companion to known-pattern reduxes).
 
 **Touch size:** orchestrator-direct dispatch-conventions §3.X edits (~150-300 LOC across pim-12 / pim-13 / pim-18 / pim-2-amendment / pim-codification-feedback-loop) at R6 ratification + memory file authoring per pim if needed.
+
+**Status 2026-05-09 (R6 R1 ratification batch CLOSED for the 4 ratify-inline candidates):** pim-2-amendment codified at dispatch-conventions §3.6b sub-rule 4 + memory `feedback_pim_2_amendment_per_finding_granularity`; pim-12 codified at dispatch-conventions §3.6e + memory `feedback_pim_12_red_phase_staged_pin_un_ignore_discipline`; pim-13 codified at dispatch-conventions §3.12 + memory `feedback_pim_13_r7_spec_to_code_compliance_audit`; pim-18 codified at dispatch-conventions §3.6f + memory `feedback_pim_18_shape_not_substance_pre_flight`. The 4 sub-threshold-track-only candidates (pim-codification-feedback-loop + pim-cryptographic-attestation-transport-reuse + pim-atomic-multi-MAJOR-fix-pass-scope-expansion + fix-pass-mini-review-json-schema) remain at this §7.11b entry pending 3rd-recurrence fire.
 
 ---
 
@@ -1673,18 +1706,22 @@ Per CLAUDE.md item #15 (v1-milestone-gate framing): Phases 1+2a+2b+3 minimum + p
 - **v1-assessment question:** v1 paper-prototype revalidation may surface a workload that triggers cold-start as a real bottleneck. If so, the additive change is an opt-in instance pool (`engine.sandbox_pool({ size: N, idle_timeout_ms: T })`) that pre-warms wasmtime instances. Decision is whether to land it pre-v1 or accept cold-start as v1-shippable.
 - **Touch size if revisit lands:** ~150-300 LOC for opt-in pool + tests.
 
-### 10.6 napi cdylib production-build symbol-table scan + Cargo feature-graph closure assertion (r4-r1-wsa-3 LOAD-BEARING half of pim-2 §3.6b)
+### 10.6 napi cdylib Cargo feature-graph closure assertion — CLOSED at Phase-3 R6 fix-pass Wave B (r4-r1-wsa-3 LOAD-BEARING half of pim-2 §3.6b)
 
 - **Phase introduced:** 3 (R4b-r2 pin authored at G17-A1 wave-5b; never un-ignored)
-- **Origin:** r4b-wsa-5 (Phase-3 R4b wasmtime-sandbox lens, 2026-05-07): the prior `napi_cdylib_production_build_does_not_export_testing_helper_symbols` pin (formerly in `crates/benten-eval/tests/cfg_gating_audit.rs`, deleted 2026-05-09 in this batch) was the LOAD-BEARING half of the pim-2 §3.6b end-to-end shape per r4-r1-wsa-3. The 3 sibling source-cite pins in the same file were superseded by `crates/benten-eval/tests/sandbox_helpers_no_widening.rs` at G20-A1 wave-8a (file-level cfg gate + Cargo.toml default-off + pub-item-gating); the symbol-table-scan + Cargo feature-graph closure pin is **NOT covered** by the sibling — sandbox_helpers_no_widening.rs only audits source-side cfg-gating, NOT Cargo feature-graph composition that could transitively activate `benten-eval/test-helpers` from `bindings/napi`'s production feature set.
-- **Disposition (orchestrator-direct fix-pass batch, 2026-05-09):** the 3 superseded sibling pins in `cfg_gating_audit.rs` deleted; the `napi_cdylib_production_build_does_not_export_testing_helper_symbols` pin delegated here as the named v1-gate destination per HARD RULE rule-12 clause-(b). The architectural-absence checks at HEAD (sandbox_helpers_no_widening.rs file-level cfg gate + Cargo.toml default-off audit) close the easy regression vectors; this entry is the harder Cargo-feature-graph regression vector for v1-window investment.
-- **v1-assessment question:** is the symbol-table-scan + feature-graph defense-in-depth pin worth ~50-80 LOC + a CI workflow add (release-cdylib build + platform-conditional `nm`/`dumpbin` + toml-rs feature-graph closure walk)? Phase-3 architectural-absence checks already catch every realistic source-side regression; this pin defends against the harder Cargo-feature-graph composition regression where (e.g.) `bindings/napi.test-helpers = ["benten-eval/test-helpers"]` ends up in `bindings/napi`'s default features array.
-- **Touch size if revisit lands:** ~50-80 LOC test body + ~20-40 LOC CI workflow stanza for release cdylib build + platform-conditional symbol-table dump + (likely) Cargo feature-graph closure walk via `toml` crate.
+- **Origin:** r4b-wsa-5 (Phase-3 R4b wasmtime-sandbox lens, 2026-05-07): the prior `napi_cdylib_production_build_does_not_export_testing_helper_symbols` pin (formerly in `crates/benten-eval/tests/cfg_gating_audit.rs`, deleted 2026-05-09 in this batch) was the LOAD-BEARING half of the pim-2 §3.6b end-to-end shape per r4-r1-wsa-3. The 3 sibling source-cite pins in the same file were superseded by `crates/benten-eval/tests/sandbox_helpers_no_widening.rs` at G20-A1 wave-8a (file-level cfg gate + Cargo.toml default-off + pub-item-gating); the symbol-table-scan + Cargo feature-graph closure pin was **NOT covered** by the sibling — `sandbox_helpers_no_widening.rs` only audits source-side cfg-gating, NOT Cargo feature-graph composition that could transitively activate `benten-eval/test-helpers` from `bindings/napi`'s production feature set.
+- **Status:** **CLOSED** at Phase-3 R6 fix-pass Wave B per R6 R1 br-r6-r1-3 MAJOR convergence-council ratification. The Cargo feature-graph closure pin landed at `bindings/napi/tests/feature_graph_closure_no_test_helpers_in_production.rs` (4 tests):
+  - `napi_default_feature_does_not_include_test_helpers` — declarative pin: `default = [...]` does NOT directly include `test-helpers`.
+  - `napi_default_feature_closure_does_not_activate_test_helpers_transitively` — LOAD-BEARING transitive-closure walk: features reachable from `bindings/napi.default` MUST NOT include `test-helpers`, `benten-eval/test-helpers`, or `benten-engine/test-helpers`. Walks the in-crate features table via the workspace `toml` dep (parse-only) + tracks both in-crate references (recurse) and cross-crate references (`<crate>/<feat>` form, recorded for assertion).
+  - `napi_test_helpers_feature_only_reachable_when_explicitly_opted_in` — symmetric LIVE-PATH pin: `test-helpers` IS reachable from itself + DOES transitively activate `benten-engine/test-helpers` (so the feature is not vestigial; ensures we're testing the right thing).
+  - `napi_napi_export_default_feature_closure_uses_only_production_features` — closure-purity pin: no test-only features (`in-process-test`, `test-helpers`) appear in the default closure.
+- **Symbol-table-scan rung deferred (not in this closure).** The release-cdylib build + platform-conditional `nm`/`dumpbin` symbol-table-dump rung was the *harder* half of the original §10.6 framing. The Cargo feature-graph closure pin (defense-in-depth rung 2) catches every Cargo-feature-graph regression vector that the symbol-table-scan would catch; the symbol-table-scan adds value only if a release-cdylib build accidentally exports testing-helper symbols WITHOUT a feature-graph activation (i.e., a hand-written `pub` that bypasses feature gating entirely). The `crates/benten-eval/tests/sandbox_helpers_no_widening.rs` file-level cfg gate + pub-item-gating audit closes that regression vector at the source layer (defense-in-depth rung 1). The CI symbol-table-scan rung remains a v1-window-candidate hardening if release-cdylib defense-in-depth audit ratifies it as net-new value over the source + feature-graph rungs.
 
 **Cross-references:**
-- `crates/benten-eval/tests/sandbox_helpers_no_widening.rs::sandbox_escape_helpers_no_widening_of_production_attack_surface` (the architectural-absence check that covers the easy regression vectors at HEAD)
-- `bindings/napi/Cargo.toml` (the production cdylib whose feature-graph closure must NOT transitively activate `benten-eval/test-helpers`)
-- Phase-2a `sec-r6r2-02` precedent (the named regression vector this pin would defend)
+- `crates/benten-eval/tests/sandbox_helpers_no_widening.rs::sandbox_escape_helpers_no_widening_of_production_attack_surface` (defense-in-depth rung 1 — file-level cfg gate + Cargo.toml default-off audit)
+- `bindings/napi/tests/feature_graph_closure_no_test_helpers_in_production.rs` (defense-in-depth rung 2 — Cargo feature-graph closure walk; CLOSED at this entry)
+- `bindings/napi/Cargo.toml` (the production cdylib whose feature-graph closure does NOT transitively activate `benten-eval/test-helpers`)
+- Phase-2a `sec-r6r2-02` precedent (the named regression vector this pin defends)
 
 ---
 

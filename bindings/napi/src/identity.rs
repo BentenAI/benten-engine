@@ -49,6 +49,26 @@ pub struct JsKeypair {
     inner: RustKeypair,
 }
 
+impl JsKeypair {
+    /// Crate-internal duplicator for cross-module use (e.g.
+    /// `bindings/napi/src/atrium.rs::JsAtrium::set_local_device_keypair`
+    /// per R6-FP Wave A Sub-A2).
+    ///
+    /// Per `crypto-blocker-1`, [`benten_id::keypair::Keypair`]
+    /// deliberately does NOT implement [`Clone`] — secret bytes cannot
+    /// be silently duplicated. The audited path is
+    /// [`Keypair::export_seed_envelope`] +
+    /// [`Keypair::from_dag_cbor_envelope`]; this helper encapsulates
+    /// that round-trip so the napi `JsAtrium` setter can produce an
+    /// owned `Keypair` for the engine-side `set_local_device_keypair`
+    /// API. Not exposed across the napi boundary.
+    pub(crate) fn duplicate_via_envelope(&self) -> Result<RustKeypair> {
+        let envelope = self.inner.export_seed_envelope();
+        RustKeypair::from_dag_cbor_envelope(&envelope)
+            .map_err(|e| Error::from_reason(format!("keypair envelope re-import failed: {e}")))
+    }
+}
+
 #[napi]
 impl JsKeypair {
     /// Generate a fresh keypair from the OS CSPRNG.
@@ -283,6 +303,17 @@ fn envelope_from_str(
         online_uptime,
         runs_atrium_peer,
     })
+}
+
+impl JsDeviceAttestation {
+    /// Crate-internal accessor for cross-module use (e.g.
+    /// `bindings/napi/src/atrium.rs::JsAtrium::set_local_device_attestation`
+    /// per R6-FP Wave A Sub-A2). Clones the inner Rust attestation so
+    /// the caller can hand it to engine-side setters that take an owned
+    /// `DeviceAttestation`. Not exposed across the napi boundary.
+    pub(crate) fn inner_clone(&self) -> RustDeviceAttestation {
+        self.inner.clone()
+    }
 }
 
 #[napi]
