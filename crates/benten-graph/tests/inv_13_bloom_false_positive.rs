@@ -14,9 +14,8 @@
 //!   cache-warming invariant.
 //! - Bloom cache does not short-circuit correctness on an empty store.
 //!
-//! R3 red-phase contract: R5 (G2-A) lands the bloom filter cache and the
-//! forced-collision test hook. These tests compile; they fail because
-//! `RedbBackend::force_bloom_positive_for_test` does not exist yet.
+//! Pinned at R5 (G2-A): the bloom filter cache + the forced-collision
+//! test hook (`RedbBackend::force_bloom_positive_for_test`) shipped.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 

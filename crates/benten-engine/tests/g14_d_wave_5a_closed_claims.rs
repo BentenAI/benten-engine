@@ -24,8 +24,8 @@
 //! The RED-PHASE pins in `subscribe_cap_recheck.rs`,
 //! `wait_resume_cross_process.rs`, etc. continue to assert the
 //! end-to-end UCAN-chain integration that depends on G14-B's durable
-//! grant-store accessor. That accessor lands in a follow-up wave; the
-//! G14-D infrastructure shipped here is the seam those pins consume.
+//! grant-store accessor. That accessor shipped at PR #109; the G14-D
+//! infrastructure shipped here is the seam those pins consume.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 

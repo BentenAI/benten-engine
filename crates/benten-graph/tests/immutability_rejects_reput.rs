@@ -3,9 +3,8 @@
 //! existence cache covers the fast-path; exact-check fallback covers bloom
 //! false positives; cache warms on first put.
 //!
-//! TDD red-phase: `WriteAuthority`, the bloom cache, and the immutability
-//! branch do not yet exist on `RedbBackend`. Tests will fail to compile until
-//! G2-A + G2-B land.
+//! Pinned at G2-A + G2-B: `WriteAuthority`, the bloom cache, and the
+//! immutability branch shipped on `RedbBackend`.
 //!
 //! Owner: rust-test-writer-unit (R2 landscape §2.3, plan §9.11 rows 1-2).
 

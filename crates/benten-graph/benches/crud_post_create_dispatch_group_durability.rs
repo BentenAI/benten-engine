@@ -13,9 +13,9 @@
 //! delta becomes non-zero (redb exposes real grouped-commit OR Benten adds
 //! its own write-batching layer), gate 5 re-enters scope.
 //!
-//! Phase 2a R3 red-phase: the bench routes through a Phase-2a helper that
-//! `todo!()`s until G2-A wires the durability-mode-aware put path. Today's
-//! iteration panics; the bench compiles.
+//! G2-A wired the durability-mode-aware put path; the Phase-2a helper
+//! that previously `todo!()`d is fully implemented and the bench
+//! exercises both `Group` and `Immediate` paths.
 //!
 //! ```text
 //! BENCH_ID = crud_post_create_dispatch_group_durability

@@ -46,19 +46,16 @@ mod integration {
     // Typed-error refactor acceptance: `EvalError::Sandbox` variant
     // surfaces `E_SANDBOX_MODULE_NOT_INSTALLED` end-to-end.
     pub mod sandbox_module_not_installed_emits_typed_error;
-    // ---- Phase 2b R3 (red-phase) — gated on `phase_2b_landed` feature.
-    // CI's required-check fleet does NOT enable this feature, so the
-    // submodules whose bodies reach into R5-pending APIs are excluded
-    // from the integration-test binary build during R3-consolidation.
-    // R5 implementer briefs flip the feature on per-group as their
-    // surfaces land. See `.addl/phase-2b/r3-consolidation.md` §4.
+    // ---- Phase 2b R3 (originated red-phase; `phase_2b_landed` gate
+    // retired pre-R4b). Submodules below align with the production
+    // surfaces shipped at phase-2b-close + Phase-3 wave-5b.
     //
     // R3-A (G6-B integration) — STREAM + SUBSCRIBE engine-shape integration.
     // G6-B (mini-review cr-g6b-mr-2 fix-pass): ungated. The module bodies
-    // are rewritten to align with G6-B's actual implemented surface; tests
-    // that can pass against the G6-B stub are live, tests that require
-    // G6-A's executor body are `#[ignore]`d with explicit pending-on
-    // markers per the file headers.
+    // align with G6-B's actual implemented surface; tests that can pass
+    // against the G6-B stub are live, tests that require G6-A's executor
+    // body are `#[ignore]`d with explicit pending-on markers per the
+    // file headers.
     pub mod engine_stream; // G6-B exit-1 + dx-r1-2b STREAM
     pub mod engine_subscribe; // G6-B exit-1 + dx-r1-2b SUBSCRIBE
     pub mod esc_subscribe_integration; // wave-8c-subscribe-infra ESC-7/-9/-10/-13/-14
@@ -73,13 +70,13 @@ mod integration {
     pub mod sandbox_in_crud; // G7-A plan §4 SANDBOX integration
     pub mod stream_into_sandbox; // G7-A wsa-18 + arch-pre-r1-9
 
-    // R3-E (red-phase) — WASM target + SuspensionStore + WAIT TTL:
-    // Phase-3 G20-A3 wave-8a: un-gated — `bindings/napi/dist/browser/`
-    // artifact path now committed (placeholder seed; CI overwrites
-    // with production bundle) so the bundle-size + node-binary
-    // exclusion checks compile + run regardless of the
-    // `phase_2b_landed` flag (which gates pre-G6-A SUBSCRIBE/STREAM
-    // surfaces — orthogonal to this file's wasm-r1-7 cap pin).
+    // R3-E — WASM target + SuspensionStore + WAIT TTL: G20-A3 wave-8a
+    // ungated; `bindings/napi/dist/browser/` artifact path committed
+    // (placeholder seed; CI overwrites with production bundle) so the
+    // bundle-size + node-binary exclusion checks compile + run by
+    // default. (`phase_2b_landed` gate retired pre-R4b across the
+    // integration suite; remaining R3-pending surfaces use direct
+    // `#[ignore]` markers instead.)
     pub mod browser_target_bundle_size; // wasm-r1-7 (≤500KB gz cap)
     // Phase-3 G20-A2 wave-8a — `phase_2b_landed` cfg gate retired
     // for cross_process_wait_resume per the file header rationale
@@ -96,7 +93,6 @@ mod integration {
     // helper + body un-ignored.
     pub mod sandbox_compile_time_disabled_on_wasm32; // sec-pre-r1-05 + wasm-r1-3
     pub mod snapshot_blob_round_trip; // D10 export/import round-trip
-    // Pre-R4b cleanup: `phase_2b_landed` gate retired across the suite.
     // The four `testing_*` helpers (`testing_make_wait_spec_with_ttl_hours`,
     // `testing_call_to_suspend`, `testing_suspension_store_has_wait`,
     // `testing_advance_wait_clock`) + `Engine::resume_with_meta` +

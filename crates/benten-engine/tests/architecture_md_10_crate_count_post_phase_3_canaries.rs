@@ -1,18 +1,17 @@
 //! Phase-3 R4-FP orchestrator-direct (renamed 2026-05-05) —
 //! `docs/ARCHITECTURE.md` 10-crate count drift detector.
 //!
-//! TDD red-phase. Pin source: architect-r1 carry item (the
-//! `benten-dsl-compiler` crate landed at Phase-2b G12-B taking the
-//! workspace from 7 → 8 crates; Phase-3 R3-A + R3-C added
-//! `benten-id` + `benten-sync` as canary stubs taking it 8 → 10).
-//! ARCHITECTURE.md must enumerate all 10 crates by name with
-//! `benten-sync` flagged native-only per CLAUDE.md baked-in #17.
+//! Pin source: architect-r1 carry item (the `benten-dsl-compiler` crate
+//! landed at Phase-2b G12-B taking the workspace from 7 → 8 crates;
+//! Phase-3 R3-A + R3-C added `benten-id` + `benten-sync` as canary
+//! stubs taking it 8 → 10). ARCHITECTURE.md enumerates all 10 crates
+//! by name with `benten-sync` flagged native-only per CLAUDE.md
+//! baked-in #17.
 //!
 //! **Renamed from `architecture_md_8_crate_count_after_dsl_compiler.rs`**
 //! at the cite-drift detector source-of-truth bump (8 → 10) per
 //! `tools/cite-drift-detector/src/lib.rs::numeric_claims_source_of_truth`.
-//! Test still `#[ignore]`'d per `docs/future/phase-3-backlog.md §7.3.A.5`;
-//! body lift to executable is a Phase-3 deliverable.
+//! Test runs by default; body lift to executable shipped at Phase-3.
 //!
 //! Drift discipline: doc-as-source-of-truth on the workspace shape
 //! must agree with the actual `crates/` directory layout. Without

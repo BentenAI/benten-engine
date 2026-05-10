@@ -2,10 +2,9 @@
 //! fast-path reads the label-only projection of a stored Node, used by the
 //! Inv-11 runtime probe.
 //!
-//! TDD red-phase: the fast-path method does not yet exist. Tests will fail to
-//! compile until G5-B-i lands the reader.
+//! G5-B-i shipped the fast-path reader.
 //!
-//! FROZEN interface — shape-pinned so Phase-2b keeps backward-compat.
+//! FROZEN interface — shape-pinned for backward-compat at and beyond Phase-2b.
 //!
 //! Owner: rust-test-writer-unit (R2 landscape §2.3 G5-B-i / Major #1).
 

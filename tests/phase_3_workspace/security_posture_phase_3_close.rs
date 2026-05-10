@@ -57,7 +57,7 @@ fn security_posture_phase_3_close_compromise_table_present() {
 
     // Every Phase-3-CLOSED compromise must be marked CLOSED in its
     // section heading + cite a Phase-3 G-N reference (traceability).
-    for compromise in [2_u32, 10, 11, 12, 16, 17, 18, 19, 20, 21] {
+    for compromise in [2_u32, 10, 11, 12, 16, 17, 18, 19, 20, 21, 23] {
         let section = extract_compromise_section(&posture, compromise);
         let lc = section.to_lowercase();
         assert!(
