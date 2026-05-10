@@ -49,3 +49,62 @@ jobs:
         # selects the BrowserBackend Engine alias arm + the matching
         # cfg-gated benten-engine consumer paths.
         run: cargo check --target wasm32-unknown-unknown -p benten-napi --features benten-engine/browser-backend --no-default-features
+
+  # ---------------------------------------------------------------------------
+  # Phase-3 R6 fix-pass Wave B (closes ds-r6-3 MAJOR per
+  # `.addl/phase-3/r6-r1-distributed-systems.json`): at-build-time
+  # assertion that `benten-sync` REFUSES to compile for
+  # wasm32-unknown-unknown per CLAUDE.md baked-in #17.
+  #
+  # The source-of-truth manifest grep at
+  # `crates/benten-sync/tests/wasm32_excluded.rs` is defense-in-depth
+  # rung 1 (declarative — checks Cargo.toml + lib.rs strings). This
+  # CI cell is rung 2: the build itself MUST fail with the
+  # `compile_error!` macro firing. A regression that removed the
+  # compile_error! while keeping the cfg-gate (or vice versa) would
+  # silently regress one rung; both rungs together close the
+  # defense-in-depth.
+  # ---------------------------------------------------------------------------
+  benten-sync-refuses-wasm32:
+    name: benten-sync refuses to compile for wasm32-unknown-unknown
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Install Rust toolchain (stable + wasm32-unknown-unknown)
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      - name: cargo check benten-sync for wasm32 MUST FAIL with compile_error!
+        # Per CLAUDE.md baked-in #17 (full peer vs thin compute surface):
+        # benten-sync (the iroh + Loro Atrium sync crate) is FULL-PEER-ONLY
+        # and MUST NOT compile for wasm32-unknown-unknown. The
+        # `compile_error!` macro at `crates/benten-sync/src/lib.rs` fires
+        # immediately on any wasm32 build attempt with a clear error
+        # citing the architectural commitment.
+        #
+        # We invert the exit code: cargo check MUST fail, AND its
+        # stderr MUST mention `compile_error!` / `baked-in #17` so we
+        # know the failure is the architectural gate firing (not some
+        # unrelated dep-graph break).
+        #
+        # Closes ds-r6-3 MAJOR per phase-3-backlog §10 v1-window.
+        run: |
+          set -uo pipefail
+          if output=$(cargo check --target wasm32-unknown-unknown -p benten-sync 2>&1); then
+            echo "::error::benten-sync MUST NOT compile for wasm32-unknown-unknown per CLAUDE.md baked-in #17 — but cargo check succeeded! The compile_error! gate at crates/benten-sync/src/lib.rs has been removed or bypassed."
+            echo "$output"
+            exit 1
+          fi
+          # Verify the failure was the architectural gate, not something else.
+          if ! echo "$output" | grep -q -E "(compile_error!|baked-in #17|target_arch)"; then
+            echo "::error::benten-sync wasm32 build failed BUT not for the expected architectural reason. The compile_error! macro at crates/benten-sync/src/lib.rs MUST be the failure source. Got:"
+            echo "$output"
+            exit 1
+          fi
+          echo "PASSED: benten-sync correctly refuses to compile for wasm32-unknown-unknown via compile_error! gate per CLAUDE.md baked-in #17 (defense-in-depth rung 2)."
