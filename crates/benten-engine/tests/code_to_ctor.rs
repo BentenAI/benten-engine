@@ -145,9 +145,8 @@ fn code_to_ctor_no_e_unknown_fallback_for_known_code() {
             .map(|(i, p)| {
                 if i == 0 {
                     p.to_string()
-                } else if let Some((_, expansion)) = compound_stem_expansions
-                    .iter()
-                    .find(|(stem, _)| *stem == p)
+                } else if let Some((_, expansion)) =
+                    compound_stem_expansions.iter().find(|(stem, _)| *stem == p)
                 {
                     (*expansion).to_string()
                 } else {
