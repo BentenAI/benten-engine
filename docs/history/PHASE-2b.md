@@ -251,7 +251,7 @@ The closing texture: all four "structural-but-not-runtime" R4b BLOCKERs (SANDBOX
 
 ## § 5. Process lessons / pim-N catalog
 
-The Phase 2b R6 council surfaced 11 named process-improvement-mechanisms (pim-1 through pim-11). All but pim-6's CI-infrastructure half were codified inline in `.addl/phase-2b/dispatch-conventions.md` post-tag.
+The Phase 2b R6 council surfaced 11 named process-improvement-mechanisms (pim-1 through pim-11). All but pim-6's CI-infrastructure half were codified inline in `.addl/dispatch-conventions.md` post-tag (originally at `.addl/phase-2b/dispatch-conventions.md`; relocated to `.addl/` root post Phase-3 pre-v1 cleanup 2026-05-10 since the conventions are project-wide active, not phase-2b-specific).
 
 ### pim-1 — Doc-lag-on-code-fix (§3.5b post-fix doc-coupling pre-flight HARDENED)
 

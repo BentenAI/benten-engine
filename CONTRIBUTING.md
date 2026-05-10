@@ -10,7 +10,7 @@ Thanks for your interest. This repo is under active development; contributions a
 
 ## Prerequisites
 
-- Rust 2024 edition. MSRV is **1.89** (bounded by `redb` 4's floor); dev version is **1.94+** (pinned to `stable` in `rust-toolchain.toml`, which auto-installs on first cargo invocation).
+- Rust 2024 edition. MSRV is **1.95** (bumped during Phase 2b wave-8e for the `Duration::from_secs` lint cascade closure; the floor was previously `redb` 4's 1.89 minimum). The dev toolchain is pinned to `stable` in `rust-toolchain.toml`, which auto-installs on first cargo invocation.
 - Node.js 22+ and npm (for the TypeScript bindings and integration tests).
 - `cargo-nextest`: `cargo install cargo-nextest`.
 - **Regenerating SANDBOX `.wasm` test fixtures:** no host tooling required. Run `cargo bench-wat-rebake` (alias defined in `.cargo/config.toml`); the regenerator uses the workspace-locked `wat` crate (`=1.248.0` per `[workspace.dependencies] wat` in the root `Cargo.toml`) so the produced bytes round-trip cross-platform without depending on a host `wabt` install. The committed `.wasm` bytes under `crates/benten-eval/tests/fixtures/sandbox/` are the canonical CI input; the drift detector enforces equality.

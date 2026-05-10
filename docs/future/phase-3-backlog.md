@@ -1089,7 +1089,7 @@ R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift 
 - `.addl/phase-2b/r6-r4-pattern-induction-meta-sweep.json` — pim-6 / pim-7 origin findings
 - `.addl/phase-2b/r6-r5-pattern-induction-meta-sweep.json` — pim-8 / pim-9 / pim-10 origin findings
 - `.addl/phase-2b/r6-r5-narrow-pim-meta.json` — pim-11 origin finding
-- `.addl/phase-2b/dispatch-conventions.md` — full codification (gitignored; orchestrator-side standing rules)
+- `.addl/dispatch-conventions.md` — full codification (gitignored; orchestrator-side standing rules)
 
 **Touch size for the residual:** ~30-50 LOC CI workflow + decision capture. NOT urgent (the per-implementer §3.4b discipline already covers the day-to-day case; CI infra is automation on top).
 
@@ -1220,7 +1220,7 @@ R6-R4 narrow-iteration producer/consumer-deep-sweep surfaced the 21st p/c drift 
 **Touch size:** ~80-150 LOC (derivation fn + 1 test + rustdoc edits + Cargo.toml dep add). Risk surface: low — additive, gated behind the same source-of-truth fn the existing tests already validate.
 
 **Cross-references:**
-- `.addl/phase-2b/dispatch-conventions.md::§3.5c amendment 2026-05-05 — NEW shape (iii) tools-as-meta-spec`
+- `.addl/dispatch-conventions.md::§3.5c amendment 2026-05-05 — NEW shape (iii) tools-as-meta-spec`
 - `.addl/phase-3/r4-r1-pattern-induction.json` (pim-12 4th-instance + NEW shape iii origin finding)
 - `tools/cite-drift-detector/src/lib.rs::numeric_claims_source_of_truth` (current hardcode site)
 - `tools/cite-drift-detector/tests/numeric_claim_drift_lint_finds_known_drift_fixture.rs` (companion fixture; tracks the lint mechanism not the truth values, so the derivation upgrade is transparent to it)
@@ -1643,7 +1643,7 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 **Cross-references:**
 - `tools/cite-drift-detector/src/lib.rs` (the detector implementation)
 - `.github/workflows/cite-drift.yml` (the CI workflow)
-- `.addl/phase-2b/dispatch-conventions.md::§3.5b HARDENED point 3` (the high-churn-surface symbol-cite enforcement rule)
+- `.addl/dispatch-conventions.md::§3.5b HARDENED point 3` (the high-churn-surface symbol-cite enforcement rule)
 - §7.12 + §7.12b (this doc) — workspace-aware numeric-claim source-of-truth + file-tree-gap closure (both addressed at W9-T4)
 
 ---

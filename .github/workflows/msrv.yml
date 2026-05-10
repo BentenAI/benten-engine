@@ -21,7 +21,7 @@
 #   1.91 → 1.95 (Phase 2b wave-8e — `Duration::from_mins`/`from_hours` stab)
 #
 # Also verifies the canonical fixture CID remains stable at MSRV — the cheap
-# determinism gate from SPIKE-phase-1-stack-RESULTS.md.
+# determinism gate from docs/archive/spikes/SPIKE-phase-1-stack-RESULTS.md.
 
 name: msrv
 
