@@ -99,52 +99,41 @@ fn engine_emit_event_no_longer_returns_e_primitive_not_implemented() {
 }
 
 #[test]
-#[ignore = "phase-3-backlog §7.3.D — napi EmitBroadcast bus per-replica filter under cross-trust-boundary. G14-D wave-5a + G19-B wave-7 + G16-D wave-6b ALL shipped (PR #115 + #127 + #163); test body pins specific napi EmitBroadcast cross-trust-boundary filter contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
+#[ignore = "DISAGREE-WITH-EXPLANATION (HARD RULE clause-c) — cross-trust-boundary 2-peer Atrium fan-out scenario cannot drive through `benten_napi::testing::emit_event_round_trip` (single-engine harness; no peer-replica sync surface). Engine-side coverage is GREEN at `crates/benten-engine/tests/emit_broadcast_replicas.rs::emit_broadcast_bus_fan_out_under_cross_trust_boundary_replicas_via_per_subscriber_filtering` (R3-B; G14-D-tagged) — that pin drives the cross-trust-boundary per-subscriber filter directly against the engine's `EmitBroadcast` bus. The napi shim at `bindings/napi/src/lib.rs::Engine::emit_event` is zero-policy delegation to `Engine::emit_event` (G19-B wave-7). Cross-trust-boundary semantics require Atrium-replica sync (G16-D wave-6b) which is engine-layer; the napi boundary contributes zero policy logic. Asymmetry-shape defense (peer-A's cap-recheck would authoritatively pass-or-fail for peer-B's subscribers) is structurally engine-layer; napi-side observation cannot meaningfully add coverage. Original pin's reference to a 2-peer harness via `emit_event_round_trip` is not implementable without adding multi-engine plumbing to the rlib testing surface (production-code change out of Class A scope). Companion engine-side GREEN pin remains load-bearing per pim-2 §3.6b."]
 fn napi_emit_broadcast_bus_fan_out_under_cross_trust_boundary_replicas_via_per_subscriber_filtering()
  {
-    // stream-r1-7 + stream-r4r1-3 cross-wave coordination pin.
+    // RE-DISPOSITION RATIONALE (pre-v1 Class A un-ignore, 2026-05-10):
     //
-    // ## Cross-wave ownership (stream-r4r1-3 RECOMMEND)
+    // Original RED-PHASE body asked for a 2-peer scenario:
+    //   peer-A emits an event;
+    //   peer-A has subscriber S_A (cap-pass);
+    //   peer-B has subscriber S_B (cap-fail at peer-B's filter).
+    // Assert: S_A receives, S_B does NOT.
     //
-    // Three implementer waves contribute to making this test green;
-    // the test is un-ignored by the LAST of the three:
+    // The napi rlib testing surface
+    // (`benten_napi::testing::emit_event_round_trip`) opens a SINGLE
+    // in-memory engine. Driving the 2-peer scenario from the napi-side
+    // integration test would require adding multi-engine + sync-replica
+    // plumbing to the production-code testing module — out of Class A
+    // scope (no production-code modifications).
     //
-    //   - G14-D wave-5a: per-subscriber filtering at delivery
-    //     (cap_recheck closure consulting durable grant store).
-    //   - G19-B wave-7: EmitBroadcast standalone surface
-    //     (engine.emitEvent → EmitBroadcast bus publish path).
-    //   - G16-D wave-6b: Atrium-replica sync replication (the bus
-    //     fans out across replicas for cross-trust-boundary delivery).
+    // The cross-trust-boundary semantics are STRUCTURALLY engine-layer:
+    // peer-A's authoritative filter vs peer-B's per-replica filter
+    // composition runs on the engine's `EmitBroadcast` bus. The napi
+    // adapter at `bindings/napi/src/lib.rs::Engine::emit_event` is a
+    // zero-policy delegation — there is no napi-side widening surface
+    // a regression could exploit that the engine-side pin doesn't
+    // already protect.
     //
-    // Per pim-4 §3.10 wave-pairing protocol, **G16-D wave-6b** is the
-    // un-ignore wave (the last of the three required-implementer waves
-    // — sync-replication is the load-bearing seam that ties the other
-    // two waves together at runtime).
+    // GREEN engine-side coverage:
+    //   crates/benten-engine/tests/emit_broadcast_replicas.rs
+    //   ::emit_broadcast_bus_fan_out_under_cross_trust_boundary_replicas_via_per_subscriber_filtering
     //
-    // ## Test-name disambiguation (stream-r4r1-3)
-    //
-    // This is the napi-side end-to-end pin; the engine-side sibling
-    // pin lives at
-    // `crates/benten-engine/tests/emit_broadcast_replicas.rs::emit_broadcast_bus_fan_out_under_cross_trust_boundary_replicas_via_per_subscriber_filtering`
-    // (R3-B; G14-D-tagged). Renamed from the duplicate engine-side
-    // name to disambiguate per pim-7 §3.5 dim #5 (duplicate test names
-    // across crates are a future drift hazard); the napi-side prefix
-    // `napi_` preserves the cross-binding ownership signal.
-    //
-    // G14-D + G19-B + G16-D implementer wires this (un-ignored at G16-D
-    // wave-6b — see cross-wave ownership note above):
-    //   // Two-peer Atrium fan-out scenario:
-    //   //   peer-A emits an event;
-    //   //   peer-A has subscriber S_A (cap-pass);
-    //   //   peer-B has subscriber S_B (cap-fail at the replica's
-    //   //   per-subscriber filter, NOT at peer-A's authoritative filter).
-    //   // Assert: S_A receives the payload; S_B does NOT, because the
-    //   // per-replica filter fires independently and S_B's filter denies.
-    //   //
-    //   // Defends against the asymmetry shape (peer-A's cap-recheck
-    //   // would authoritatively pass-or-fail for peer-B's subscribers,
-    //   // a cross-trust-boundary leak).
-    unimplemented!(
-        "G16-D wave-6b un-ignores; G14-D + G19-B prerequisites land per-subscriber filter + EmitBroadcast publish path"
+    // The 2-peer test name is preserved here for retrospective
+    // traceability; the test stays `#[ignore]`-with-DISAGREE since the
+    // body is structurally not implementable at this layer.
+    panic!(
+        "see #[ignore] rationale — DISAGREE-WITH-EXPLANATION; engine-side GREEN pin at \
+         crates/benten-engine/tests/emit_broadcast_replicas.rs is the load-bearing site"
     );
 }

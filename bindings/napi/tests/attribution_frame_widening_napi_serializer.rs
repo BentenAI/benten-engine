@@ -44,7 +44,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "phase-3-backlog §7.3.D — napi AttributionFrame serializer emits peerDidSet + deviceDid + deviceCid camelCase keys. G14-D wave-5a + G16-B wave-6b + G16-D wave-6b ALL shipped (PRs #115/#126/#163); test body pins specific napi-side AttributionFrame camelCase serializer contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
+#[ignore = "PRODUCTION GAP SURFACED at pre-v1 Class A un-ignore (2026-05-10) — `bindings/napi/src/trace.rs::trace_step_to_json` consumes only `attr.actor_cid / handler_cid / capability_grant_cid / sandbox_depth` (lines 69-112); does NOT emit `peer_did_set` / `device_did` / `device_cid` from the `AttributionFrame` Phase-3 widening. Rust producer (`crates/benten-eval/src/exec_state.rs::AttributionFrame` lines 95+101 + `AttributionFrame::cbor_props` lines 214-224) populates these fields; engine-side `crates/benten-engine/src/outcome.rs::TraceStep::Step.attribution: Option<AttributionFrame>` carries them to the napi consumer. The napi `trace_step_to_json` is the CONSUMER GAP. THIS IS A REAL PRODUCER/CONSUMER DRIFT INSTANCE (Instance 25 per the test docstring; Phase-2b Instance 18 sandboxDepth shape recurrence). Un-ignore requires production-code fix at `bindings/napi/src/trace.rs` (out of Class A scope: 'do NOT modify production code in bindings/napi/src/'). Production fix = ~25 LOC adding peer_did_set→`peerDidSet` (Vec<String>→JSON array), device_did→`deviceDid` (Option<Did>→Option<String>), device_cid→`deviceCid` (Option<Cid>→Option<base32-str>), with skip-on-default per AttributionFrame::cbor_props discipline. SURFACED FOR ORCHESTRATOR DECISION — proper destination is a follow-on orchestrator-direct fix-pass at `bindings/napi/src/trace.rs` + sibling un-ignore of this pin + `packages/engine/test/attribution_frame_widening.test.ts` skipped end-to-end pins (which depend on the napi serializer emitting these keys)."]
 fn napi_attribution_frame_serializer_emits_phase_3_peer_did_set_device_did_device_cid_camel_case_keys()
  {
     // pcds-r4-r1-1 LOAD-BEARING napi-companion pin per pim-2 §3.6b.
@@ -87,7 +87,7 @@ fn napi_attribution_frame_serializer_emits_phase_3_peer_did_set_device_did_devic
 }
 
 #[test]
-#[ignore = "phase-3-backlog §7.3.D — napi AttributionFrame serializer omits Phase-3 widening fields when absent. G14-D + G16-B all shipped; test body pins specific undefined-vs-null pre-emption contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
+#[ignore = "PRODUCTION GAP SURFACED at pre-v1 Class A un-ignore (2026-05-10) — companion to the sibling pin above. `bindings/napi/src/trace.rs::trace_step_to_json` does NOT emit `peerDidSet` / `deviceDid` / `deviceCid` keys at all (production consumer gap), so the omit-when-default discipline cannot be tested until the emit half ships. Same scope/destination as the sibling pin above (orchestrator-direct fix-pass at `bindings/napi/src/trace.rs`). The omit-when-default contract follows the existing `AttributionFrame::cbor_props` discipline at `crates/benten-eval/src/exec_state.rs:210-228` (skip when `peer_did_set: None` / `device_did: None`); the napi serializer fix must mirror that discipline. SURFACED FOR ORCHESTRATOR DECISION."]
 fn napi_attribution_frame_serializer_omits_phase_3_widening_fields_when_unset() {
     // Companion pre-emption pin: when the Phase-3 widening fields are
     // absent on the Rust producer side (e.g. local-only non-sync-replica

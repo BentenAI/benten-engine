@@ -436,7 +436,7 @@ fn browser_target_with_runs_sandbox_true_claim_rejected_at_attestation_construct
 }
 
 #[test]
-#[ignore = "phase-3-backlog §7.3.D — device-attestation UCAN chain-construction-time rejection. G14-B + G14-C + G14-A2 all shipped; test body pins UCAN chain-construction-rejection contract; un-ignore at §2.1-followup ssi external UCAN/VC spec compatibility re-evaluation outcome (G16-D wave-6b PR #163 shipped) per Wave-E rationale-only sweep."]
+#[ignore = "phase-3-backlog §2.1-followup `ssi` external UCAN/VC spec compatibility re-evaluation at G16 Atrium handshake — production prerequisite NOT YET shipped at HEAD. The `Ucan::builder().with_attestation_lookup(...)` construction-time gate + `DelegationError::AudienceEnvelopeIncompatibleWithCapability` typed error do NOT exist (only mentioned in `crates/benten-id/src/ucan.rs:33-37` doc comment; no symbol). `validate_chain_with_attestations` (validate-side seam) DOES exist at `crates/benten-id/src/ucan.rs:602` — runtime gate before trust-graph dispatch. Construction-time rejection composes with §2.1-followup re-evaluation outcome (G16-D wave-6b PR #163 shipped 2026-05-09; cryptography-reviewer dispatch pending). Un-ignore at §2.1-followup re-evaluation that determines `ssi` integration is needed (or, if hand-rolled remains, the `with_attestation_lookup` chain-construction-time path lands as a benten-id-internal extension)."]
 fn ucan_delegation_to_browser_target_for_sandbox_handler_rejected_at_chain_construction_not_invocation()
  {
     // br-r4-r1-4 / br-r4-r2-3 MAJOR cross-wave pin. The chain-

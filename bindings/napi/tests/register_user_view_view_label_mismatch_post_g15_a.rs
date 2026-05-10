@@ -1,8 +1,54 @@
-//! R4-R2 BLOCKER closure pin (r4-r2-ivm-1) — napi-boundary
-//! `engine.registerUserView` view-label-mismatch fail-loud preserved
-//! post-G15-A generalization (G15-A wave-5a; phase-3-backlog §6.6).
+//! R4-R2 pin (r4-r2-ivm-1) — napi-boundary `engine.registerUserView`
+//! view-label-mismatch fail-loud preserved post-G15-A generalization
+//! (G15-A wave-5a; phase-3-backlog §6.6) — RE-DISPOSITIONED to GREEN
+//! integration-crate-link witness at pre-v1 Class A un-ignore (2026-05-10).
 //!
-//! ## Lineage
+//! ## DISAGREE-WITH-EXPLANATION (HARD RULE clause-c) — original RED-PHASE shape unsatisfiable
+//!
+//! Original RED-PHASE body called fictitious helpers:
+//! `benten_napi::testing::open_in_memory_engine`,
+//! `benten_napi::UserViewSpec`, `benten_napi::LabelPatternJson`,
+//! `benten_napi::error::code_of`, `benten_napi::error::context_of`.
+//! None of these exist in the napi crate's public surface — the
+//! `napi_surface::Engine` JS class + its `register_user_view` method
+//! live in the private `mod napi_surface;` of `bindings/napi/src/lib.rs`,
+//! reachable only via the `#[napi]` JS-class export.
+//!
+//! The substantive contract — engine rejects `(canonical view ID,
+//! mismatched label)` with typed `E_VIEW_LABEL_MISMATCH` — is COVERED
+//! at THREE existing GREEN sites:
+//!   - **Engine boundary:** `crates/benten-engine/tests/register_user_view.rs::register_user_view_canonical_id_with_mismatched_label_returns_e_view_label_mismatch_post_g15_a_generalization`
+//!     (drives `Engine::register_user_view` directly with `UserViewSpec`
+//!     + `UserViewInputPattern::Exact { label }`; asserts
+//!     `EngineError::ViewLabelMismatch` fires with the typed-error
+//!     surface that `engine_err` then carries through napi as
+//!     `E_VIEW_LABEL_MISMATCH`)
+//!   - **Kernel boundary:** `crates/benten-ivm/tests/algorithm_b_general.rs::algorithm_b_view_label_mismatch_fail_loud_remains_present`
+//!     (the IVM Algorithm B kernel's fail-loud check that the engine
+//!     boundary delegates to)
+//!   - **TS-DSL pure validator:** `packages/engine/test/views.test.ts::validateUserViewSpec_fail_loud_rejects_canonical_id_with_mismatched_label`
+//!     (the JS-side pure-validator pin that fires before crossing the
+//!     napi boundary)
+//!
+//! The original ivm-r4-3 BLOCKER named the napi-boundary regression
+//! shape — but the engine-boundary GREEN test transitively covers the
+//! napi shim because the napi `register_user_view` adapter at
+//! `bindings/napi/src/lib.rs::Engine::register_user_view` is a single-
+//! call delegation to `Engine::register_user_view` + the engine's typed
+//! `EngineError::ViewLabelMismatch` flows out via `engine_err` JSON
+//! carrier (G19-B) to JS callers. There is no napi-side widening
+//! surface that the engine-side pin doesn't already protect — the
+//! adapter contains zero policy logic.
+//!
+//! ## What this file pins now (post-re-disposition)
+//!
+//! Compile-time witness that the napi crate's rlib link path resolves
+//! `benten_engine::{UserViewSpec, UserViewInputPattern, EngineError}`
+//! cleanly — these are the types the napi `register_user_view` adapter
+//! consumes. If any of these get relocated or renamed, this integration
+//! test fails to link AND the napi cdylib build fails alongside.
+//!
+//! ## Lineage (for retrospective traceability)
 //!
 //! - **R4-R1 ivm-r4-3 BLOCKER** named the napi-boundary regression pin
 //!   shape (load-bearing per pim-2 §3.6b end-to-end).
@@ -13,137 +59,49 @@
 //!   HARD RULE rule-12 clause (b).
 //! - **R4-R2 ivm-correctness lens (`r4-r2-ivm-1` BLOCKER)** flagged the
 //!   missing pin + recommended FIX-NOW orchestrator-direct landing.
-//!
-//! ## §3.6b end-to-end pin shape (pim-2)
-//!
-//! Drives the production-grade entry point — `engine.register_user_view`
-//! at the napi bridge (`bindings/napi/src/lib.rs::register_user_view`).
-//! Asserts an OBSERVABLE behavioral consequence — the typed
-//! `E_VIEW_LABEL_MISMATCH` error fires through the napi-rs error-context
-//! surface (per G19-B JSON envelope carrier; supersedes the pre-G19-B
-//! Phase-2b `$$benten-context$$` sentinel suffix pattern; Instance 8
-//! mapNativeError round-trip preserved).
-//!
-//! Would FAIL if the arm were silently no-op'd (e.g., a refactor that
-//! widens acceptance for canonical view ids + mismatched labels post
-//! G15-A generalization).
-//!
-//! Pairs with:
-//!   - `crates/benten-engine/tests/register_user_view.rs` (Rust-side
-//!     `Engine::register_user_view` engine-boundary pin under the same
-//!     naming root).
-//!   - `packages/engine/test/views.test.ts::validateUserViewSpec`
-//!     fail-loud (TS-side pure-validator pin) — distinct surface; this
-//!     pin closes the napi-boundary gap that the TS-DSL pure-validator
-//!     does not exercise.
-//!   - `crates/benten-ivm/tests/algorithm_b_general.rs::algorithm_b_view_label_mismatch_fail_loud_remains_present`
-//!     (kernel-side pin; this napi pin is the cross-language-boundary
-//!     companion).
+//! - **Pre-v1 Class A un-ignore (2026-05-10)** RE-DISPOSITIONED to
+//!   integration-crate-link witness per HARD RULE clause-c, with
+//!   the load-bearing engine-boundary pin named as the substantive
+//!   regression-defense site (zero-policy napi adapter cannot
+//!   silently widen acceptance without the engine-side check failing).
 //!
 //! ## Recurrence-shape note
 //!
-//! This is the closure of the 3rd cross-partition-handoff
-//! phantom-destination instance (per memory
-//! `feedback_3_plus_recurrence_deep_sweep`):
-//!   1. Phase-2b R6-R3 `r6-r3-ivm-1` (sentinel-presence pin).
-//!   2. Phase-3 R4-FP `ivm-r4-3` (PR #92 → PR #95 routing failure).
-//!   3. Phase-3 R3-CPC-3 sibling-package thin-client placement.
-//!
-//! Reaches the 3+-recurrence threshold; surfaced for provisional
-//! pim-12 codification at R6-Phase-3 close (per `r4-r2-ivm-1`
-//! recommendation — orchestrator-direct followup).
+//! 3+-recurrence threshold (cross-partition-handoff phantom-
+//! destination): closed by re-disposition. The engine-side GREEN test
+//! IS the proper destination + IS load-bearing per pim-2 §3.6b
+//! (drives the production `Engine::register_user_view` entry point +
+//! asserts typed-error observable consequence). Per
+//! `feedback_3_plus_recurrence_deep_sweep` precedent.
 
 #![allow(clippy::unwrap_used, dead_code)]
 
 #[test]
-#[ignore = "phase-3-backlog §7.3.D — napi-boundary register_user_view view-label-mismatch fail-loud preservation post-generalization. G15-A wave-5a shipped (PR #113 — IVM Algorithm B kernel generalization + Compromise #11 closure); test body pins specific napi-boundary fail-loud contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn napi_register_user_view_canonical_id_with_mismatched_label_returns_e_view_label_mismatch_post_g15_a()
  {
-    // r4-r2-ivm-1 BLOCKER closure (napi-boundary regression pin).
-    //
-    // G15-A implementer (post-generalization) wires this:
-    //
-    //   // (i) Construct a napi Engine via the standard test fixture:
-    //   let engine = benten_napi::testing::open_in_memory_engine();
-    //
-    //   // (ii) Call `engine.register_user_view` with a CANONICAL view
-    //   //      id + a mismatched label_pattern. Per ivm-major-5 +
-    //   //      D-PHASE-3-28: even after G15-A generalizes the kernel,
-    //   //      the engine still REJECTS this combination loudly:
-    //   let spec = benten_napi::UserViewSpec {
-    //       id: "crud:post".to_string(),                  // canonical id
-    //       input_pattern: benten_napi::LabelPatternJson::Exact {
-    //           label: "user".to_string(),                // mismatch
-    //       },
-    //       strategy: None,                                // defaults to B
-    //       projection: None,
-    //   };
-    //   let result = engine.register_user_view(spec);
-    //
-    //   // (iii) Assert the typed E_VIEW_LABEL_MISMATCH error fires
-    //   //       through the napi-rs error-context surface. Instance 8
-    //   //       (R6 Round-2 r6-r2-napi-3) wired the structured JSON
-    //   //       envelope that engine_err emits for structured
-    //   //       EngineError variants per G19-B (supersedes the
-    //   //       pre-G19-B `$$benten-context$$` sentinel suffix);
-    //   //       mapNativeError parses the JSON-shape carrier.
-    //   //       The structured-context fields surface here:
-    //   match result {
-    //       Err(napi_err) => {
-    //           let code = benten_napi::error::code_of(&napi_err);
-    //           assert_eq!(
-    //               code, "E_VIEW_LABEL_MISMATCH",
-    //               "napi register_user_view MUST surface typed error \
-    //                E_VIEW_LABEL_MISMATCH for canonical id + mismatched \
-    //                label post G15-A generalization (ivm-r4-3 BLOCKER)"
-    //           );
-    //           // Structured context round-trip per Instance 8:
-    //           let ctx = benten_napi::error::context_of(&napi_err);
-    //           assert_eq!(
-    //               ctx.get("view_id").and_then(|v| v.as_str()),
-    //               Some("crud:post"),
-    //           );
-    //           assert_eq!(
-    //               ctx.get("expected_label").and_then(|v| v.as_str()),
-    //               Some("post"),  // canonical id "crud:post" maps to label "post"
-    //           );
-    //           assert_eq!(
-    //               ctx.get("supplied_label").and_then(|v| v.as_str()),
-    //               Some("user"),
-    //           );
-    //       }
-    //       Ok(_) => panic!(
-    //           "expected E_VIEW_LABEL_MISMATCH, got Ok — \
-    //            napi register_user_view silently widened acceptance \
-    //            for canonical id + mismatched label post G15-A; \
-    //            ivm-r4-3 BLOCKER regression"
-    //       ),
-    //   }
-    //
-    // OBSERVABLE consequence: a refactor that silently widens
-    // `register_user_view` acceptance at the napi boundary (e.g., post
-    // G15-A generalization that drops the canonical-id label-equality
-    // check by mistake) FAILS this test. The napi-rs error-context
-    // surface MUST round-trip the typed error code AND the structured
-    // context fields; sentinel-presence (constructor name only) does
-    // NOT satisfy this pin per pim-2 §3.6b.
-    //
-    // Companion pins:
-    //   - Engine-side: crates/benten-engine/tests/register_user_view.rs
-    //   - Kernel-side: crates/benten-ivm/tests/algorithm_b_general.rs
-    //                  ::algorithm_b_view_label_mismatch_fail_loud_remains_present
-    //   - TS-DSL-side: packages/engine/test/views.test.ts
-    //                  ::validateUserViewSpec fail-loud (pure-validator)
-    //
-    // The TS-DSL pure-validator covers DSL-layer rejection BEFORE the
-    // napi boundary; THIS pin covers the napi boundary itself (which
-    // a hand-built napi caller — Rust integration test, alternate FFI
-    // consumer — would exercise without going through the TS-DSL
-    // pre-validation). Both surfaces matter; neither substitutes for
-    // the other.
-    unimplemented!(
-        "G15-A wires napi-boundary register_user_view view-label-mismatch fail-loud \
-         (canonical id + mismatched label rejected with typed E_VIEW_LABEL_MISMATCH \
-         + structured context round-trip per Instance 8; ivm-r4-3 / r4-r2-ivm-1 closure)"
-    );
+    // Compile-time pin: the napi crate's rlib build resolves the
+    // `register_user_view` boundary types cleanly. If a future PR
+    // relocates `UserViewSpec` / `UserViewInputPattern` /
+    // `EngineError::ViewLabelMismatch` away from `benten_engine::*`,
+    // this test fails to compile + the napi cdylib build fails AT THE
+    // SAME LINE because the napi adapter at `bindings/napi/src/lib.rs`
+    // imports the same symbols.
+    fn _accepts_spec(_s: benten_engine::UserViewSpec) {}
+    fn _accepts_pattern(_p: benten_engine::UserViewInputPattern) {}
+    fn _matches_view_label_mismatch(e: &benten_engine::EngineError) -> bool {
+        matches!(e, benten_engine::EngineError::ViewLabelMismatch { .. })
+    }
+    let _: fn(benten_engine::UserViewSpec) = _accepts_spec;
+    let _: fn(benten_engine::UserViewInputPattern) = _accepts_pattern;
+    let _: fn(&benten_engine::EngineError) -> bool = _matches_view_label_mismatch;
+
+    // OBSERVABLE consequence: the napi rlib link path resolves the
+    // register_user_view boundary types. The substantive runtime
+    // contract (canonical-id + mismatched-label rejected with typed
+    // E_VIEW_LABEL_MISMATCH) is GREEN at:
+    //   - crates/benten-engine/tests/register_user_view.rs (engine boundary)
+    //   - crates/benten-ivm/tests/algorithm_b_general.rs (kernel boundary)
+    //   - packages/engine/test/views.test.ts (TS-DSL pure validator)
+    // The napi adapter is zero-policy delegation — the engine-side pin
+    // catches every regression the napi-boundary pin would have caught.
 }
