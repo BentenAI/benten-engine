@@ -68,9 +68,11 @@ The trap-callback emits exactly one error code even when multiple axes breached 
 
 The SANDBOX executor depends on `wasmtime`, which **does not target wasm32**. The engine cannot embed a nested wasm runtime when the engine itself is compiled to wasm32 for browser execution. The compile-time gate `#[cfg(not(target_arch = "wasm32"))]` removes the executor module from the wasm32 build entirely.
 
-**Browser-build behaviour:**
+**Architectural framing (per CLAUDE.md baked-in #16 + #17):** SANDBOX is a **full-peer-only** primitive. Full peers are native Rust on user-owned hardware (laptop / phone-OS app / desktop) and host the wasmtime runtime. Thin compute surfaces (browser tab / Phase-9+ edge worker / WinterTC-compatible runtimes generally) compile to wasm32 and **do NOT host SANDBOX** — they author handlers and route SANDBOX invocation through to a full peer via authenticated thin-client protocol (Phase 3 P2P sync surface, shipped at tag `phase-3-close`).
 
-- The DSL surface (`subgraph(...).sandbox(...)`) **stays present** on wasm32 builds. Authoring is still a valid use-case in browsers — the resulting subgraph ships over the wire (Phase 3 P2P sync) for execution against a Node-resident peer.
+**Browser/wasm32-thin-client behaviour:**
+
+- The DSL surface (`subgraph(...).sandbox(...)`) **stays present** on wasm32 builds. Authoring is still a valid use-case in thin compute surfaces — the resulting subgraph ships over the wire (Phase 3 P2P sync) for execution against a full peer.
 - Registration of a SANDBOX-bearing handler **succeeds** on wasm32. Registration is pure shape-validation; it doesn't execute the wasm module.
 - **Invocation** of a SANDBOX-bearing handler on a wasm32 engine surfaces the typed error `E_SANDBOX_UNAVAILABLE_ON_WASM` at execution time (the moment the evaluator walk reaches the SANDBOX node), not at registration or handler-lookup time.
 
@@ -78,7 +80,7 @@ The SANDBOX executor depends on `wasmtime`, which **does not target wasm32**. Th
 
 > "SANDBOX is unavailable in browser/wasm32 builds. Author handlers in browser context for execution against a Node-WASI peer (Phase 3 P2P sync — see ARCHITECTURE.md). For local development without a peer, run the engine via @benten/engine in a Node.js process."
 
-This text is load-bearing — operators reading the error must see (a) the failure mode, (b) the architectural escape hatch (Phase 3 P2P routing to a Node peer), and (c) the local-development workaround (run the engine in Node, not the browser). Renaming or shortening the text requires the wsa-14 test to be updated in the same commit.
+This text is load-bearing — operators reading the error must see (a) the failure mode, (b) the architectural escape hatch (Phase 3 P2P routing to a full peer), and (c) the local-development workaround (run the engine in Node, not the browser). Renaming or shortening the text requires the wsa-14 test to be updated in the same commit. The "Node-WASI peer" wording is preserved verbatim because the test asserts byte-for-byte equality; conceptually it names the same thing as a "full peer" in CLAUDE.md baked-in #17 terminology — a native Rust engine instance that hosts the wasmtime SANDBOX runtime.
 
 The companion napi-side gate `bindings/napi/src/sandbox.rs` is `#[cfg(not(target_arch = "wasm32"))]`-gated at compile time so the `sandbox_target_supported` symbol literally does not exist in a wasm32-built napi cdylib (per sec-pre-r1-05's compile-time discipline). A complementary `#[cfg(target_arch = "wasm32")]` stub returns the same `E_SANDBOX_UNAVAILABLE_ON_WASM` typed error so a caller that reaches the symbol via dynamic dispatch still sees the actionable text.
 
