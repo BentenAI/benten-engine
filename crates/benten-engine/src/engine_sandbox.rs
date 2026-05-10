@@ -105,6 +105,15 @@ pub struct SandboxNodeDescription {
     /// fuel budget without driving instrumentation. `None` means the node
     /// has not yet been invoked.
     pub fuel_consumed_high_water: Option<u64>,
+    /// Cumulative high-water mark of guest output bytes emitted by this
+    /// node across every invocation since registration. R6 fp Wave C2
+    /// (closes obs-r6r1-1 MAJOR — 25th producer/consumer drift instance):
+    /// the field was recorded at `engine.rs::record_sandbox_metric` but
+    /// dropped at `describe_sandbox_node_for_handler`, breaking the
+    /// Phase-3 §7.1 trio (fuel + output + wallclock) — only 2-of-3
+    /// reached the napi/TS consumer surface. Threading the field here
+    /// closes the gap. `None` means the node has not yet been invoked.
+    pub output_consumed_high_water: Option<u64>,
     /// Wallclock duration in milliseconds of the most recent invocation.
     /// `None` until the first call returns.
     pub last_invocation_ms: Option<u64>,
@@ -241,6 +250,11 @@ impl Engine {
                     wallclock_ms: metrics.wallclock_ms,
                     output_limit_bytes: metrics.output_limit_bytes,
                     fuel_consumed_high_water: metrics.fuel_consumed_high_water,
+                    // R6 fp Wave C2 (obs-r6r1-1 closure): thread the
+                    // 25th p/c drift instance — output_consumed_high_water
+                    // is recorded at record_sandbox_metric but was being
+                    // dropped here pre-Wave-C2.
+                    output_consumed_high_water: metrics.output_consumed_high_water,
                     last_invocation_ms: metrics.last_invocation_ms,
                 })
             }

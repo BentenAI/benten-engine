@@ -379,8 +379,8 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 ### E_NOT_FOUND
 
 - **Message:** "Requested entity not found: {kind} {identifier}"
-- **Context:** `{ kind: "node"|"edge"|"anchor"|"handler"|"view"|"grant", identifier: string }`
-- **Fix:** Generic not-found — version-chain anchor miss, unregistered handler lookup, unknown view id, etc. Check that the caller has the correct CID / id; for handlers, confirm `registerSubgraph` / `registerCrud` ran successfully.
+- **Context:** `{ kind: "node"|"edge"|"anchor"|"view"|"grant", identifier: string }`
+- **Fix:** Generic not-found — version-chain anchor miss, unknown view id, missing grant lookup, etc. Check that the caller has the correct CID / id. For unregistered-handler lookups specifically (post R6 fp Wave C2 / dx-r6-r1-1), the engine emits the more-specific `E_DSL_UNREGISTERED_HANDLER` instead so JS callers see the matching `EDslUnregisteredHandler` typed BentenError subclass.
 - **Thrown at:** Engine lookups
 - **Phase:** 1
 
@@ -487,16 +487,16 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Message:** "DSL value does not match expected shape: {reason}"
 - **Context:** `{ reason: string, received: unknown }`
 - **Fix:** Check the DSL API documentation for the expected shape.
-- **Thrown at:** DSL wrapper (TypeScript layer, before engine call)
-- **Phase:** 1 (TS-only — never surfaces from the Rust engine)
+- **Thrown at:** TypeScript DSL wrapper (`packages/engine/src/errors.generated.ts::EDslInvalidShape`, used from `packages/engine/src/dsl.ts` builder methods) AND Rust DSL compiler (`crates/benten-dsl-compiler/src/lib.rs` — object/pair shape validation in the parser/emit pass) AND Rust engine (`crates/benten-engine/src/engine.rs::register_subgraph` — SANDBOX numeric-budget shape validation walk per `docs/SANDBOX-LIMITS.md` §2).
+- **Phase:** 1 (TS DSL builder methods) / 3 (Rust dsl-compiler + engine register-time validation; promoted to first-class Rust ErrorCode at R6 fp Wave C2 per dx-r6-r1-1). Routes to `ON_ERROR`.
 
 ### E_DSL_UNREGISTERED_HANDLER
 
 - **Message:** "No handler registered for '{handler_id}'"
 - **Context:** `{ handler_id: string, suggestions: string[] }`
 - **Fix:** Check spelling; register via `engine.registerSubgraph(handler)` or `engine.registerSubgraph(crud('<label>'))`.
-- **Thrown at:** DSL wrapper
-- **Phase:** 1 (TS-only — never surfaces from the Rust engine)
+- **Thrown at:** TypeScript DSL wrapper (`call` method near-match suggestion path on `packages/engine/src/engine.ts::Engine`) AND Rust engine (`crates/benten-engine/src/engine.rs` — `dispatch_call_with_mode_and_trace`, `dispatch_call_inner`, `handler_to_mermaid`, `handler_predecessors`, `emit_with_handler`, `subscribe_with_handler`; `crates/benten-engine/src/engine_stream.rs::call_stream`).
+- **Phase:** 1 (TS) / 3 (Rust engine call/dispatch boundary; promoted to first-class Rust ErrorCode at R6 fp Wave C2 per dx-r6-r1-1). Routes to `ON_NOT_FOUND`.
 
 ### E_HOST_NOT_FOUND
 

@@ -189,6 +189,14 @@ impl std::fmt::Display for Diagnostic {
 pub(crate) const E_DSL_PARSE_ERROR: &str = "E_DSL_PARSE_ERROR";
 pub(crate) const E_DSL_UNKNOWN_PRIMITIVE: &str = "E_DSL_UNKNOWN_PRIMITIVE";
 pub(crate) const E_DSL_MISSING_RESPOND: &str = "E_DSL_MISSING_RESPOND";
+/// Phase-3 R6 fp Wave C2 (closes dx-r6-r1-1 MAJOR — DSL orphan code half):
+/// shape validation rejected a primitive's typed property (e.g. SANDBOX
+/// `fuel` declared as a string instead of an integer). Mirrors the
+/// TS-side `EDslInvalidShape` thrown from `packages/engine/src/dsl.ts`
+/// builder methods so a Rust callsite emitting this surfaces the same
+/// typed `BentenError` subclass on the wire. Drift-detect reachability
+/// path: `crates/benten-dsl-compiler/src/lib.rs::emit::validate_shapes`.
+pub(crate) const E_DSL_INVALID_SHAPE: &str = "E_DSL_INVALID_SHAPE";
 
 // ---------------------------------------------------------------------------
 // AST
@@ -644,6 +652,13 @@ impl<'a> Parser<'a> {
 fn emit(handler: HandlerAst) -> Result<CompiledSubgraph, CompileError> {
     use benten_core::OperationNode;
 
+    // Shape-validation pass — fires `E_DSL_INVALID_SHAPE` for typed-property
+    // mis-declarations a downstream consumer (engine register_subgraph /
+    // wasmtime config) would otherwise reject with a less-actionable error.
+    // R6 fp Wave C2 (dx-r6-r1-1 MAJOR closure half): brings the Rust dsl-
+    // compiler in line with the TS-side `EDslInvalidShape` contract.
+    validate_shapes(&handler)?;
+
     if !handler
         .primitives
         .iter()
@@ -685,6 +700,69 @@ fn emit(handler: HandlerAst) -> Result<CompiledSubgraph, CompileError> {
         subgraph: sg,
         primitives,
     })
+}
+
+/// Phase-3 R6 fp Wave C2 (dx-r6-r1-1 MAJOR closure half): shape-validation
+/// pass over the parsed AST that catches typed-property mis-declarations
+/// before the engine sees them. Surfaces `E_DSL_INVALID_SHAPE` (the
+/// catalog-only TS-side code, now a first-class Rust ErrorCode) so JS
+/// callers consuming the diagnostic see the same typed `BentenError`
+/// subclass (`EDslInvalidShape`) regardless of whether the offending
+/// handler was authored via the TS DSL builder or via this Rust dsl-
+/// compiler. Today the pass enforces SANDBOX integer-typed properties
+/// (`fuel`, `wallclock_ms`, `output_limit`) per
+/// `docs/SANDBOX-LIMITS.md`. Property names are the CANONICAL eval-side
+/// snake_case form per the 24th-p/c-drift acceptance criterion enforced
+/// at `crates/benten-eval/tests/sandbox_handler_args.rs` (the camelCase
+/// `wallclockMs` / `outputLimitBytes` TS-surface form is translated by
+/// `packages/engine/src/dsl.ts::translateSandboxArgs` to the canonical
+/// snake_case form BEFORE crossing the napi boundary; the Rust-side
+/// validator therefore validates the canonical names only). Future
+/// shape rules append to this single pass so the typed-error surface
+/// stays narrow.
+fn validate_shapes(handler: &HandlerAst) -> Result<(), CompileError> {
+    use benten_core::Value;
+    /// SANDBOX numeric-budget property names (per `docs/SANDBOX-LIMITS.md` §2).
+    /// Each MUST be a non-negative integer; non-int / negative-int / non-numeric
+    /// values trip `E_DSL_INVALID_SHAPE`. Names are the canonical eval-side
+    /// snake_case form consumed by
+    /// `crates/benten-engine/src/primitive_host.rs::execute_sandbox`.
+    const SANDBOX_INT_PROPS: &[&str] = &["fuel", "wallclock_ms", "output_limit"];
+
+    for p in &handler.primitives {
+        if matches!(p.kind, PrimitiveKind::Sandbox) {
+            for &key in SANDBOX_INT_PROPS {
+                if let Some(v) = p.properties.get(key) {
+                    match v {
+                        Value::Int(n) if *n >= 0 => {}
+                        Value::Int(n) => {
+                            return Err(CompileError::Emit(Diagnostic {
+                                error_code: E_DSL_INVALID_SHAPE,
+                                message: format!(
+                                    "sandbox primitive `{}` property must be a non-negative integer (got {n}); see docs/SANDBOX-LIMITS.md §2",
+                                    key
+                                ),
+                                line: None,
+                                column: None,
+                            }));
+                        }
+                        other => {
+                            return Err(CompileError::Emit(Diagnostic {
+                                error_code: E_DSL_INVALID_SHAPE,
+                                message: format!(
+                                    "sandbox primitive `{}` property must be a non-negative integer (got {:?}); see docs/SANDBOX-LIMITS.md §2",
+                                    key, other
+                                ),
+                                line: None,
+                                column: None,
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn id_for(kind: PrimitiveKind, idx: usize) -> String {
@@ -753,6 +831,48 @@ mod inline_tests {
     fn unbalanced_brace_is_typed_parse_error() {
         let err = compile_str("handler 'h' { read('post') -> respond").unwrap_err();
         assert!(matches!(err, CompileError::Parse(_)));
+    }
+
+    /// R6 fp Wave C2 (closes dx-r6-r1-1 MAJOR — DSL orphan-code half):
+    /// SANDBOX `fuel` declared as a string trips the typed
+    /// `E_DSL_INVALID_SHAPE` Emit-error rather than surviving to the
+    /// engine where wasmtime would surface a less-actionable rejection.
+    /// Mirrors the TS-side `EDslInvalidShape` thrown from the dsl.ts
+    /// builder methods so JS callers see the same typed BentenError
+    /// regardless of which DSL surface authored the handler.
+    #[test]
+    fn sandbox_fuel_declared_as_string_is_typed_invalid_shape() {
+        let src = "handler 'h' { sandbox('mod', { fuel: 'high' }) -> respond }";
+        let err = compile_str(src).unwrap_err();
+        assert!(
+            matches!(err, CompileError::Emit(_)),
+            "fuel-as-string trips Emit-shape error, got {err:?}"
+        );
+        assert_eq!(
+            err.diagnostic().unwrap().error_code,
+            E_DSL_INVALID_SHAPE,
+            "must surface E_DSL_INVALID_SHAPE typed code"
+        );
+    }
+
+    #[test]
+    fn sandbox_negative_fuel_is_typed_invalid_shape() {
+        let src = "handler 'h' { sandbox('mod', { fuel: -1 }) -> respond }";
+        let err = compile_str(src).unwrap_err();
+        assert!(
+            matches!(err, CompileError::Emit(_)),
+            "negative fuel trips Emit-shape error, got {err:?}"
+        );
+        assert_eq!(err.diagnostic().unwrap().error_code, E_DSL_INVALID_SHAPE,);
+    }
+
+    #[test]
+    fn sandbox_valid_integer_fuel_compiles() {
+        // Sanity counterpart — integer fuel is the documented happy path.
+        let src = "handler 'h' { sandbox('mod', { fuel: 500000 }) -> respond }";
+        let c = compile_str(src).expect("integer fuel must compile");
+        assert_eq!(c.primitives.len(), 2);
+        assert_eq!(c.primitives[0].kind, PrimitiveKind::Sandbox);
     }
 
     #[test]

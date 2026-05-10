@@ -779,9 +779,9 @@ export class EBackendNotFound extends BentenError {
  */
 export class ENotFound extends BentenError {
   static readonly code = "E_NOT_FOUND";
-  static readonly fixHint = "Generic not-found — version-chain anchor miss, unregistered handler lookup, unknown view id, etc. Check that the caller has the correct CID / id; for handlers, confirm `registerSubgraph` / `registerCrud` ran successfully.";
+  static readonly fixHint = "Generic not-found — version-chain anchor miss, unknown view id, missing grant lookup, etc. Check that the caller has the correct CID / id. For unregistered-handler lookups specifically (post R6 fp Wave C2 / dx-r6-r1-1), the engine emits the more-specific `E_DSL_UNREGISTERED_HANDLER` instead so JS callers see the matching `EDslUnregisteredHandler` typed BentenError subclass.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_NOT_FOUND", "Generic not-found — version-chain anchor miss, unregistered handler lookup, unknown view id, etc. Check that the caller has the correct CID / id; for handlers, confirm `registerSubgraph` / `registerCrud` ran successfully.", message, context);
+    super("E_NOT_FOUND", "Generic not-found — version-chain anchor miss, unknown view id, missing grant lookup, etc. Check that the caller has the correct CID / id. For unregistered-handler lookups specifically (post R6 fp Wave C2 / dx-r6-r1-1), the engine emits the more-specific `E_DSL_UNREGISTERED_HANDLER` instead so JS callers see the matching `EDslUnregisteredHandler` typed BentenError subclass.", message, context);
     this.name = "ENotFound";
   }
 }
@@ -954,7 +954,7 @@ export class EVersionUnknownPrior extends BentenError {
 /**
  * E_DSL_INVALID_SHAPE
  *
- * Thrown at: DSL wrapper (TypeScript layer, before engine call)
+ * Thrown at: TypeScript DSL wrapper (`packages/engine/src/errors.generated.ts::EDslInvalidShape`, used from `packages/engine/src/dsl.ts` builder methods) AND Rust DSL compiler (`crates/benten-dsl-compiler/src/lib.rs` — object/pair shape validation in the parser/emit pass) AND Rust engine (`crates/benten-engine/src/engine.rs::register_subgraph` — SANDBOX numeric-budget shape validation walk per `docs/SANDBOX-LIMITS.md` §2).
  * Message template: "DSL value does not match expected shape: {reason}"
  */
 export class EDslInvalidShape extends BentenError {
@@ -969,7 +969,7 @@ export class EDslInvalidShape extends BentenError {
 /**
  * E_DSL_UNREGISTERED_HANDLER
  *
- * Thrown at: DSL wrapper
+ * Thrown at: TypeScript DSL wrapper (`call` method near-match suggestion path on `packages/engine/src/engine.ts::Engine`) AND Rust engine (`crates/benten-engine/src/engine.rs` — `dispatch_call_with_mode_and_trace`, `dispatch_call_inner`, `handler_to_mermaid`, `handler_predecessors`, `emit_with_handler`, `subscribe_with_handler`; `crates/benten-engine/src/engine_stream.rs::call_stream`).
  * Message template: "No handler registered for '{handler_id}'"
  */
 export class EDslUnregisteredHandler extends BentenError {
