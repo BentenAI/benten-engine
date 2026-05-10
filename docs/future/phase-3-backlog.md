@@ -363,6 +363,19 @@
 - `.addl/phase-3/WAVE-G16-B-E-BRIEF.md` (wave brief; spec sources)
 - `.addl/phase-3/HANDOFF-2026-05-03-phase-3-kickoff.md` NS-T64 + NS-T65 (canary scope clarification 2026-05-08)
 
+### 3.3 napi `Acceptor` extension surface — revocation list + expected-parent gate
+
+**Source:** R6-FP Wave A Sub-A2 BELONGS-NAMED-NOW per HARD RULE rule-12.
+
+**Phase-3-close state:** `bindings/napi/src/atrium.rs::JsAtrium::set_acceptor` exposes the freshness-window-only Acceptor ctor (constructed via `benten_id::device_attestation::Acceptor::new(FreshnessPolicy::seconds(window))`). Two further Acceptor ctor surfaces exist Rust-side that the napi boundary does NOT yet expose:
+
+1. **`Acceptor::new_with_revocations(freshness, Vec<DeviceRevocation>)`** — pre-populated revocation list. JS callers cannot today install custom revocation rosters at the napi boundary; the per-Acceptor revocation surface is therefore Rust-only. Composing this requires a `JsDeviceRevocation` napi class (mirrors `benten_id::device_attestation::DeviceRevocation::issue` with parent-keypair signing).
+2. **`Acceptor::with_parent_lookup(expected_parent: Did)`** — gates inbound attestations on issuer-DID equality with a configured expected parent. JS callers cannot today install expected-parent gating; the surface is Rust-only.
+
+**Phase-N target:** add `JsDeviceRevocation` napi class + `JsAtrium::set_acceptor_with_revocations(freshness_window_secs, revocations: Vec<&JsDeviceRevocation>)` + `JsAtrium::set_acceptor_with_parent_lookup(parent_did: String)` napi methods. Round-trip TS pin asserting JS-installed revocation roster rejects pre-revoked device-DIDs at handshake.
+
+**Phase carrier:** post-Phase-3 (no Phase-3 carrier; out of v1-milestone-gate critical path per CLAUDE.md baked-in #15 — full peers can fall back to engine-direct configuration during the test runner setup).
+
 ### 3.2 Per-subscriber filtering on the change-event stream — CLOSED at Phase-3 G14-D wave-5a (PR #115 commit `4d3f688`) + Phase-3 G21-T3 PR #147 partial-revoke
 
 **Closure narrative:** F6 SUBSCRIBE per-subscriber filtering is the same item by another name as §2.2 above; both were named separately during planning (one in phase-2-backlog.md §1 carry list, one in phase-3-backlog.md §2.2). Closed at G14-D wave-5a + G21-T3 partial-revoke; full closure narrative + file:line cites at §2.2 above. Cross-trust-boundary subscribers filter at delivery time per CLR-2 dual-layer recheck.
