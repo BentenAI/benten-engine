@@ -1551,6 +1551,24 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 
 ---
 
+### 7.20 sandbox_escape_attempts_denied + sandbox_output workspace clippy --all-targets compile errors (G20-B PR #143 introduction; surfaced 2026-05-09 R6 fp Wave D mini-review)
+
+**Origin:** R6 fp Wave D mini-review (correctness lens, `wave-d-corr-2` MINOR) discovered `cargo clippy --all-targets` workspace-wide has compile errors at `crates/benten-eval/tests/sandbox_escape_attempts_denied.rs` (`benten_eval::testing` unresolved import) + `crates/benten-eval/tests/sandbox_output.rs` (`SandboxConfig.testing_inject_attack` field missing). Last-touched at G20-B PR #143 (commit `9db5729` 2026-05-08; the §11 11-line drift-detector lint sweep). Pre-existing on main HEAD `0b8d6c5`; NOT introduced by Wave D.
+
+**Disposition (HARD RULE clause-(b) BELONGS-NAMED-NOW):** the test compile errors only surface under `--all-targets` workspace clippy AND are gated behind `cfg(test)` + `feature = "test-helpers"` paths that don't ship in production. CI uses targeted feature-flag invocations that don't trip these errors. The §3.5h orchestrator-direct workspace pre-push has been catching it locally as a pre-existing issue across multiple Phase-3 R5/R6 fix-passes; agents disposed it as "pre-existing, not this wave's regression."
+
+**Fix-shape:** locate the missing `benten_eval::testing` re-export OR `SandboxConfig.testing_inject_attack` field; either re-introduce per the original G20-B intent OR retire the test references that depend on the removed surface. Touch size: ~30-60 LOC investigation + ~10 LOC fix.
+
+**Phase target:** R6 phase-close convergence-round residuals (bundle with R6 R2 cap-EXEMPT findings if R2 surfaces additional adjacent gaps); OR Phase-3-close pre-tag orchestrator-direct fix-pass batch.
+
+**Cross-references:**
+- `crates/benten-eval/tests/sandbox_escape_attempts_denied.rs` (`benten_eval::testing` unresolved import sites)
+- `crates/benten-eval/tests/sandbox_output.rs` (`SandboxConfig.testing_inject_attack` field-missing sites)
+- G20-B PR #143 commit `9db5729` (origin point per Wave D mini-review forensics)
+- R6 fp Wave D mini-review forensics surfaced this row at commit `ee8dad1` (Wave D primary commit on this branch).
+
+---
+
 ### 7.17 routed_edge_label classification hardening (carry list)
 
 **Origin (Pre-R4b 2026-05-08):** the `wait_signal_shape_optional_typing.rs::wait_signal_shape_mismatch_fires_typed_error_routed_on_error` test currently `#[ignore]`'s with a destination naming this row. The test asserts that a typed-shape mismatch routes to `WaitSignalShapeMismatch` rather than registration-time `None` routing when the wait signal carries a routed edge label.

@@ -4,13 +4,19 @@ Terms that have specific meaning in Benten. Alphabetical.
 
 ---
 
+**Acceptor** — The Phase-3 freshness + nonce-store + revocation-list seam consumed by `DeviceAttestationEnvelope::verify`. Lives at `benten_id::Acceptor::accept_at`; composes a parent-chain signature check, a configurable replay-window (`FreshnessPolicy`), and a parent-issued nonce store. The Acceptor is one of the three cryptographic defenses #23 closes (alongside envelope-signature + payload-hash binding). Operator-deployment residual: the engine ships with `FreshnessPolicy::seconds(u64::MAX)` as a test-grade default; production deployments override via `Engine::set_acceptor` with a concrete time-bound — see [`SECURITY-POSTURE.md`](SECURITY-POSTURE.md) Compromise #23.
+
+**actor_cid** — Phase-3 attribution slot decoupled from `device_cid`. Identifies the *logical* actor (the user / Atrium principal) whose authority the write claims, independent of which device emitted the write. Pinned by `sync_replica_explicit_actor_cid_decouples_from_device_cid` (see `crates/benten-sync/tests/sync_replica_attribution.rs`). The decoupling lets multi-device users (laptop ↔ phone-OS-app ↔ desktop, per CLAUDE.md baked-in #17) carry consistent actor identity across heterogeneous devices.
+
 **ADDL** — Agent-Driven Development Lifecycle. The project's development methodology: plan → critic review → test planning → test writing → test review → implementation → mini-review → quality council. Referenced in commit messages.
 
-**Algorithm B** — The IVM (Incremental View Maintenance) strategy Benten selects for most views: dependency-tracked incremental maintenance. Phase 1 shipped five hand-written views; Phase 2b production-registered Algorithm B with per-view strategy selection (`Strategy::A` / `Strategy::B`) at `Engine::create_user_view` for the 5 canonical view IDs `AlgorithmBView` supports natively. User-defined view IDs declaring `Strategy::B` fall back to `ContentListingView` until the Phase-3 generalization lift (see [`docs/future/phase-3-backlog.md`](future/phase-3-backlog.md) §5).
+**Algorithm B** — The IVM (Incremental View Maintenance) strategy Benten selects for most views: dependency-tracked incremental maintenance. Phase 1 shipped five hand-written views; Phase 2b production-registered Algorithm B with per-view strategy selection (`Strategy::A` / `Strategy::B`) at `Engine::create_user_view` for the 5 canonical view IDs `AlgorithmBView` supports natively. Phase-3 G15-A generalized Algorithm B beyond the canonical-view fallback: user-defined view IDs declaring `Strategy::B` now run a generic single-loop kernel (`benten_ivm::algorithm_b::GenericKernel`) keyed on `(label_pattern, projection)`. See [`docs/ARCHITECTURE.md`](ARCHITECTURE.md).
 
 **Anchor (Anchor Node)** — A Node with stable identity that never changes. External edges point to anchors, not to versions. The anchor has a `CURRENT` edge to its latest Version Node. See "Version chain."
 
-**Attribution** — The Phase-2a Inv-14 contract that every executed `TraceStep` carries an `AttributionFrame` naming the actor (principal CID), handler (registered subgraph CID), and the head-of-chain capability grant CID that authorized the step. Stamped automatically by the DSL on every emitted Operation Node and threaded through the evaluator runtime; opt-out is a Phase-6 affordance, not a Phase-2a one. Missing or malformed frames fire `E_INV_ATTRIBUTION` at registration or runtime.
+**Atrium** — The Phase-3 P2P-sync social unit: a per-user (or per-group) trust boundary inside which member devices sync content + capability state through iroh transport + Loro CRDT merge + MST diff. Each Atrium has a member set of DIDs (one per principal) and a device set (multiple devices per principal). The engine surface is `benten_engine::engine_sync::AtriumHandle` (per `crates/benten-engine/src/engine_sync.rs`); the underlying transport + CRDT lives in `benten-sync`. See [`ARCHITECTURE.md`](ARCHITECTURE.md) §benten-sync and [`SECURITY-POSTURE.md`](SECURITY-POSTURE.md) Compromise #22 (public iroh-relay metadata leak) + Compromise #23 (wire device-attestation envelope).
+
+**Attribution** — The Phase-2a Inv-14 contract that every executed `TraceStep` carries an `AttributionFrame` naming the actor (principal CID), handler (registered subgraph CID), and the head-of-chain capability grant CID that authorized the step. Stamped automatically by the DSL on every emitted Operation Node and threaded through the evaluator runtime; opt-out is a Phase-6 affordance, not a Phase-2a one. Missing or malformed frames fire `E_INV_ATTRIBUTION` at registration or runtime. **Phase-3 widened Inv-14** with three additive sync-boundary slots — `peer_did_set` / `device_did` / `sync_hop_depth` — populated at the CRDT merge boundary; see "device-DID," "peer_did_set," "sync_hop_depth," and [`INVARIANT-COVERAGE.md`](INVARIANT-COVERAGE.md) §"Inv-14 Phase-3 G16-B device-grain extension."
 
 **`benten-dsl-compiler`** — The Phase-2b crate (G12-B addition) that compiles textual handler-DSL source into a `SubgraphSpec` ready for `Engine::register_subgraph`. Sibling of `benten-engine`; depends only on `benten-core` so it preserves the arch-1 dep break. Used by `packages/engine-devserver` to route hot-reload edits through the canonical engine path rather than parallel infrastructure.
 
@@ -26,21 +32,37 @@ Terms that have specific meaning in Benten. Alphabetical.
 
 **CURRENT pointer** — An Edge from an Anchor Node to its latest Version Node. Atomic update moves the pointer within a storage transaction, giving versioned entities "single latest" semantics while preserving history.
 
+**BentenHlc** — The concrete Phase-3 HLC type implementing `benten_core::hlc::Hlc`. Carries `(physical_secs, logical_counter)` and resolves causal ordering across Atrium peers under bounded skew. The `sec-r4r1-2` BLOCKER closure (PR #161) exercises BentenHlc at the sync-replica WRITE per-row cap-recheck boundary. See "HLC."
+
 **DAG-CBOR** — The IPLD subset of CBOR with canonical (map-keys-sorted, no indefinite-length) encoding. The on-the-wire format for content-addressed Nodes. Implemented via `serde_ipld_dagcbor`.
+
+**device-DID** — The device-grain attribution carrier per the D-PHASE-3-25 device-heterogeneity contract. A `did:key`-shaped identifier (one per device) bound by parent-issued `DeviceAttestation` to a parent identity. Populated in `AttributionFrame.device_did` for sync-attributed and device-DID-attested writes; lets multi-device users distinguish per-device origins inside a single per-user Atrium. See "DeviceAttestation" + "DeviceAttestationEnvelope."
+
+**DeviceAttestation** — The `benten_id::DeviceAttestation` surface — a parent-issued capability envelope binding a device's public key to the parent identity (a signed certificate of the form "parent attests this `device_did` is mine"). Verified at chain-construction time via `benten_id::Acceptor`; consumed by `DeviceAttestationEnvelope` at sync-time. See "DeviceAttestationEnvelope" and `crates/benten-id/src/device_attestation.rs`.
+
+**DeviceAttestationEnvelope** — The Phase-3 G16-D wave-6b on-the-wire envelope shape carrying signed `payload_hash` + `session_nonce` alongside the embedded `DeviceAttestation`. Defined at `crates/benten-engine/src/engine_sync.rs::DeviceAttestationEnvelope`. The V2 wire shape is `(version, attestation, payload_hash, session_nonce, envelope_signature)`; `verify` enforces three cryptographic defenses: (1) envelope-signature against the device's resolved public key (DID forgery defense); (2) `Acceptor::accept_at` (parent-chain signature + freshness window + nonce-store replay defense); (3) constant-time `BLAKE3(payload) == envelope.payload_hash` (frame-pair binding). All three failure modes reject with `E_DEVICE_ATTESTATION_FORGED`. See [`SECURITY-POSTURE.md`](SECURITY-POSTURE.md) Compromise #23 for the full closure narrative.
 
 **Edge** — A typed directional link between two Nodes. Labels include `NEXT` (control flow), `ON_ERROR`, `ON_NOT_FOUND`, `GRANTED_TO`, `CURRENT`, etc.
 
 **ExecutionStateEnvelope** — The DAG-CBOR-serialized shape a Phase-2a WAIT primitive produces when suspending. Carries the frame stack, pinned subgraph CIDs, resumption principal, and context bindings needed to resume atomically across process boundaries. Envelope CID is content-addressed for tamper detection.
 
+**FreshnessPolicy** — The operator-configurable replay-window for the `Acceptor`'s nonce store (`benten_id::FreshnessPolicy`). Phase-3 ships with a test-grade `FreshnessPolicy::seconds(u64::MAX)` default (no time-window pruning); production deployments MUST override via `Engine::set_acceptor` with a concrete time-bound (e.g., `FreshnessPolicy::seconds(86_400)` for a 24h replay window) BEFORE participating in adversarial sync. See [`SECURITY-POSTURE.md`](SECURITY-POSTURE.md) Compromise #23 "operator-deployment residual."
+
+**Full peer** — The Phase-3 deployment shape that IS a sync participant: native Rust on user-owned hardware (laptop / phone OS app / desktop / future Benten Runtime instances). Carries durable storage (redb), full Atrium sync participation (iroh + Loro CRDT in `benten-sync`), SANDBOX runtime (wasmtime), persistent UCAN grant store. Contrast with "Thin compute surface." Per CLAUDE.md baked-in #17 deployment-shape commitment.
+
 **Handler** — A registered subgraph that acts as an entry point for external calls. `crud('post')` produces a handler with five actions.
 
-**HLC** — Hybrid Logical Clock. Monotonic timestamps combining physical and logical clocks, used for causal ordering. Relevant in Phase 3 (P2P sync) and in Phase-2a capability wall-clock revocation paths. Implemented directly in `benten-core::hlc` (per Phase-3 G14-pre-D landing 2026-05-04; rationale at the module rustdoc — `uhlc` crate evaluated and rejected for `async-std` + `no_std` + async-return-shape mismatch).
+**HLC** — Hybrid Logical Clock. Monotonic timestamps combining physical and logical clocks, used for causal ordering. Relevant in Phase 3 (P2P sync) and in Phase-2a capability wall-clock revocation paths. Implemented directly in `benten-core::hlc` (per Phase-3 G14-pre-D landing 2026-05-04; rationale at the module rustdoc — `uhlc` crate evaluated and rejected for `async-std` + `no_std` + async-return-shape mismatch). See "BentenHlc" for the concrete type used at sync-replica WRITE boundaries.
 
 **Invariant** — A structural or runtime check the engine enforces. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full 14-invariant list and their phase landing.
 
-**iroh** — The P2P networking library (QUIC, dial-by-public-key, NAT traversal with relay fallback) used in Phase 3.
+**iroh** — The P2P networking library (QUIC, dial-by-public-key, NAT traversal with relay fallback) used in Phase 3. Substantively wired in `benten-sync` (`crates/benten-sync/src/transport.rs`); the Phase-3 `ATRIUM_ALPN` is advertised over iroh's QUIC connection establishment. Public-iroh-relay metadata leakage is honestly disclosed at [`SECURITY-POSTURE.md`](SECURITY-POSTURE.md) Compromise #22.
+
+**Loro / Loro CRDT** — The per-property LWW + HLC-ordering CRDT used in `benten-sync` for device-to-device merge. Loro's `LoroDoc` is wrapped in `benten_sync::crdt::InnerLoroDoc`; `winning_attribution` collects the contributing peer DIDs into `peer_did_set` at merge time. Phase-3 G15-B + G16-B wired Loro substantively into the production sync pipeline.
 
 **Module manifest** — The Phase-2b `ModuleManifest` shape (`benten-engine::module_manifest::ModuleManifest`) that declares one or more WASM modules (name + version + content CID + capability requirements + migration steps + optional signature). Installed via `engine.installModule({manifest, manifestCid})`; see [`MODULE-MANIFEST.md`](MODULE-MANIFEST.md) for the schema and [`SECURITY-POSTURE.md`](SECURITY-POSTURE.md) Compromise #19 for the in-memory persistence boundary that lifts in Phase 3.
+
+**MST / Merkle Search Tree** — The Phase-3 sync diff structure used to locate divergent subtrees between Atrium peers efficiently. Each node carries a CID over its (key, value, child-CIDs) tuple; identical CIDs prove identical subtrees, letting peers exchange only the differing branches. Wired in `benten-sync` alongside Loro CRDT merge; the MST diff yields the candidate write set that the receiver's `apply_atrium_merge` then runs through per-row cap-recheck (per Compromise #2 §G16-B-F sub-narrative).
 
 **Multiplicative budget** — The Phase-2a Inv-8 cumulative iteration budget. Computed at registration time as the worst-case product of `ITERATE.max` values and non-isolated `CALL` callee bounds along any DAG path through the handler. Caps the worst-case iteration space so nested `ITERATE` + `CALL` combinations cannot trigger combinatorial explosion. `CALL { isolated: true }` resets the cumulative for the callee frame (the callee runs under its own grant's bound). Default registration-time bound: `DEFAULT_INV_8_BUDGET = 500_000`. Exceeding fires `E_INV_ITERATE_BUDGET` at registration; the runtime flat budget (`DEFAULT_ITERATION_BUDGET = 100_000`) remains as a Phase-1 backstop.
 
@@ -58,7 +80,17 @@ Terms that have specific meaning in Benten. Alphabetical.
 
 **Operation subgraph** — A handler represented as a DAG of Operation Nodes. Bounded (max depth, max fan-out, max Nodes, iteration budget). Deterministically evaluable. Content-hashed. Immutable once registered.
 
+**peer_did_set** — The `BTreeSet<Did>` attribution slot on `AttributionFrame`, populated at the Loro CRDT merge boundary. `Some(set)` when the frame originates from a sync merge (captures contributing peer DIDs observed via `benten_sync::crdt::LoroDoc::winning_attribution`); `None` for purely-local writes. The peer-node-id → DID resolution lives in `crates/benten-engine/src/engine_sync.rs` against the local trust store. See "Attribution."
+
+**PublisherRegistry** — The Phase-3 durable manifest-signing publisher key registry per Compromise #21 closure (G14-C wave-4b). Maps publisher DIDs to Ed25519 public keys; consulted at module-manifest verification time as the fallback path when the manifest's UCAN proof-chain doesn't already attest the publisher. See [`SECURITY-POSTURE.md`](SECURITY-POSTURE.md) Compromise #21.
+
 **redb** — The Phase-1 embedded key-value store: pure Rust, ACID, MVCC (concurrent readers with single writer), crash-safe via copy-on-write B-trees.
+
+**sec-r4r1-2** — Phase-3 R4 round-1 BLOCKER finding closed at G16-B-F (PR #161): structural-always-on per-row cap-recheck inside `apply_atrium_merge` at the sync-replica WRITE boundary. Pinned via `sync_replica_cap_recheck_count` AtomicU64 observability counter + `E_SYNC_REVOKED_DURING_SESSION` typed code. Cited as the canonical example of CLR-2 dual-layer recheck symmetry in `docs/SECURITY-POSTURE.md` Compromise #2 §G16-B-F sub-narrative.
+
+**sync_hop_depth** — Inv-14 device-grain extension; bounded merge-hop counter (default cap `SYNC_HOP_DEPTH_CAP = 8`, mirrors Inv-4's sandbox-depth precedent). Increments at each CRDT merge hop; the typed `ErrorCode::SyncHopDepthExceeded` fires at the merge seam when a merge would push the depth past the cap. Defends against unbounded replay across an Atrium peer mesh. See [`INVARIANT-COVERAGE.md`](INVARIANT-COVERAGE.md) §"Inv-14 Phase-3 G16-B device-grain extension."
+
+**Thin compute surface** — The Phase-3 wasm32 deployment shape (browser tab + edge worker / WinterTC-compatible runtime) that is NOT a sync participant. Stateless reads against snapshot data; writes go via fetch to a Full peer. Excludes Loro / iroh / SANDBOX / direct sync state from the bundle. IndexedDB persistence (where target supports it) is for snapshot cache + manifest-store, NOT full sync state. Per CLAUDE.md baked-in #17 deployment-shape commitment. Contrast with "Full peer."
 
 **SANDBOX** — The WASM computation escape hatch (landed Phase 2b, wasmtime-backed, fuel-metered, no re-entrancy, default 1 MiB output ceiling per call).
 
