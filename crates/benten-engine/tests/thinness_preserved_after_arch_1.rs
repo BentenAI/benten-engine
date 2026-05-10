@@ -133,6 +133,9 @@ fn thin_engine_wait_api_is_either_unavailable_or_no_op() {
                         | ErrorCode::NotImplemented
                         | ErrorCode::DuplicateHandler
                         | ErrorCode::NotFound
+                        // R6 fp Wave C2: handler-not-registered now
+                        // surfaces typed `DslUnregisteredHandler`.
+                        | ErrorCode::DslUnregisteredHandler
                 ),
                 "thin WAIT refusal must be typed, got {:?}",
                 e.code()

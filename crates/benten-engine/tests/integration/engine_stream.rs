@@ -82,18 +82,24 @@ fn engine_open_stream_crud_handler_rejects_with_typed_error() {
 
 #[test]
 fn engine_call_stream_unregistered_handler_returns_not_found() {
-    // Pin: pre-G6-A the engine still verifies the handler is registered
-    // so callers get a useful E_NOT_FOUND early instead of an opaque
-    // "stream did nothing" outcome.
+    // Pin: the engine verifies the handler is registered so callers get
+    // a useful early typed error rather than an opaque "stream did
+    // nothing" outcome.
+    //
+    // R6 fp Wave C2 (dx-r6-r1-1): typed `E_DSL_UNREGISTERED_HANDLER`
+    // (was `E_NOT_FOUND` pre-Wave-C2) mirrors the TS-side
+    // `EDslUnregisteredHandler` thrown at the `engine.callStream(...)`
+    // boundary so streaming + non-streaming dispatch surface the same
+    // typed error. Still routes via `ON_NOT_FOUND` per the catalog.
     let (engine, _d) = open_engine();
     let err = engine
         .call_stream("nonexistent_handler", "act", Node::empty())
         .unwrap_err();
     match err {
         EngineError::Other { code, .. } => {
-            assert_eq!(code, ErrorCode::NotFound);
+            assert_eq!(code, ErrorCode::DslUnregisteredHandler);
         }
-        other => panic!("expected NotFound, got {other:?}"),
+        other => panic!("expected DslUnregisteredHandler, got {other:?}"),
     }
 }
 

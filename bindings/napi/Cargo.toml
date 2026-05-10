@@ -150,6 +150,15 @@ tokio = { version = "1", default-features = false, features = ["rt-multi-thread"
 [build-dependencies]
 napi-build = "2"
 
+[dev-dependencies]
+# Phase-3 R6 fix-pass Wave B (§10.6 closure): walk
+# `bindings/napi/Cargo.toml` feature graph to assert the production
+# cdylib's default-feature closure does NOT transitively activate
+# `benten-eval/test-helpers` or `benten-engine/test-helpers`. Workspace
+# pin set at workspace `[workspace.dependencies]` (parse-only feature
+# set; ~70KB compile cost, dev-only).
+toml = { workspace = true }
+
 # Phase-3 G19-B (§7.2 + §7.8): the `benten_error_context` + `emit_event`
 # integration tests reach into `benten_napi::testing` (the rlib-only
 # helper surface). Same `in-process-test` gate as `input_validation`

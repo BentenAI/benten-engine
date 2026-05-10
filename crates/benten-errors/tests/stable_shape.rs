@@ -281,6 +281,19 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // `crates/benten-engine/src/engine_sync.rs::DeviceAttestationEnvelope::verify`.
     // Joins the `ON_DENIED` routing family per CLR-2 dual-layer recheck.
     ErrorCode::DeviceAttestationForged,
+    // Phase-3 R6 fp Wave C2 (dx-r6-r1-1): DSL orphan-code closure.
+    // `DslInvalidShape` — DSL-layer shape validation rejected a value
+    // that did not match the expected structural shape. Construction
+    // site: `crates/benten-dsl-compiler/src/lib.rs` (object/pair shape
+    // validation in the parser/emit pass). Routes to `ON_ERROR`.
+    // `DslUnregisteredHandler` — engine call/dispatch boundary
+    // referenced an unregistered handler-id. Construction sites in
+    // `crates/benten-engine/src/engine.rs` + `engine_stream.rs`
+    // (5 sites: `dispatch_call_with_mode_and_trace`, `dispatch_call_inner`,
+    // `handler_to_mermaid`, `handler_predecessors`, `call_stream`).
+    // Routes to `ON_NOT_FOUND` (joins `NotFound` / `BackendNotFound`).
+    ErrorCode::DslInvalidShape,
+    ErrorCode::DslUnregisteredHandler,
     // Phase-3 R6-FP Wave-C1 (ds-r6-1 / sec-r4r2-1 attack-vector
     // pin closure): sync-frame trust-boundary rejection codes.
     //   `SyncHashMismatch` — MST-diff entry's declared CID does not
@@ -513,16 +526,23 @@ fn variant_count_is_pinned() {
     // criterion 16 per Ben ratification 2026-05-09): + DeviceAttestationForged
     // = 109 (signed wire envelope verification — DID forgery / replay /
     // frame-pair payload-hash binding rejection at `apply_atrium_merge`).
-    // Post-R6-FP Wave-C1 (ds-r6-1 / sec-r4r2-1 attack-vector pin closure):
-    // + SyncHashMismatch + SyncHlcDrift + SyncCapUnverified = 112 (MST-diff
-    // declared-vs-computed CID mismatch + inbound-sync-frame HLC skew
-    // rejection at apply_atrium_merge per-row Hlc::update + reserved
-    // companion to SyncRevokedDuringSession). Wave-C2 (parallel) adds 2
-    // more ErrorCodes (DSL); whichever of C1/C2 merges second bumps count
-    // from 112 to 114 per dispatch-conventions §3.5g sequential-merge
-    // resolution pattern.
+    //
+    // Phase-3 R6 fix-pass Wave C2 (dx-r6-r1-1 MAJOR — DSL orphan-code
+    // closure half): + DslInvalidShape + DslUnregisteredHandler = 111
+    // (catalog-only TS-DSL codes promoted to first-class Rust ErrorCode
+    // variants with production construction sites in
+    // `benten-dsl-compiler` + `benten-engine::engine`).
+    //
+    // Phase-3 R6-FP Wave-C1 sequential-merge resolution (ds-r6-1 /
+    // sec-r4r2-1 attack-vector pin closure): + SyncHashMismatch +
+    // SyncHlcDrift + SyncCapUnverified = 114 (MST-diff declared-vs-
+    // computed CID mismatch + inbound-sync-frame HLC skew rejection
+    // at apply_atrium_merge per-row Hlc::update + reserved companion
+    // to SyncRevokedDuringSession). C1 merges after C2 per
+    // dispatch-conventions §3.5g sequential-merge resolution pattern;
+    // count moves 109 → 111 (C2) → 114 (C1).
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 112,
+        CATALOG_VARIANT_COUNT, 114,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

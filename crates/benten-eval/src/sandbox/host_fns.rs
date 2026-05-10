@@ -189,17 +189,16 @@ pub fn default_host_fns() -> Arc<BTreeMap<String, HostFnSpec>> {
 /// via [`HostFnSpec::validate_requires`] (cr-g7a-mr-5 fix-pass: every
 /// codegen entry SHOULD validate; a build-time typo is caught here).
 ///
-/// **Phase-3 forward-pointer (R6-R3 r6-r3-arch-2):** Phase 2b's host-fn
-/// table is read-only at the storage layer (only `time`, `log`, `kv:read`).
-/// When Phase 3 extends the table with `kv:write` (and any future
-/// `kv:delete` / edge-mutating host-fn), the D10 read-only-snapshot
-/// invariant requires every storage-mutating host-fn to either (a) flow
-/// through `PrimitiveHost::put_node` / `delete_node` (which hit the shared
-/// `check_not_read_only_snapshot` helper) OR (b) independently invoke
-/// `Engine::is_read_only_snapshot()` before the backend call. A direct
-/// `backend.put_node(...)` call from a host-fn closure would silently
-/// bypass D10 against a `from_snapshot_blob`-backed engine. See
-/// [`docs/future/phase-3-backlog.md` §6.0](../../../../docs/future/phase-3-backlog.md).
+/// **Architectural floor (CLAUDE.md baked-in #16, ratified 2026-05-04):**
+/// the host-fn table is compute-only — `kv:write` / `kv:delete` /
+/// edge-mutating host-fns will NOT be added. Storage mutation flows
+/// exclusively through the engine WRITE primitive (gated by
+/// `CapabilityPolicy` + Inv-13 firing matrix + IVM materialization seam).
+/// SANDBOX is the escape hatch for compute that wasm runtime is needed
+/// for (heavy math, ML inference, custom transformers); it is NOT a
+/// bypass for what other primitives already do. The architectural-absence
+/// regression-test pin lives at
+/// `crates/benten-eval/tests/host_fn_no_storage_mutating_per_baked_in_16.rs`.
 fn build_default_host_fns() -> Arc<BTreeMap<String, HostFnSpec>> {
     let mut table: BTreeMap<String, HostFnSpec> = BTreeMap::new();
 

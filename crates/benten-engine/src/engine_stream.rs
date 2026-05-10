@@ -580,8 +580,14 @@ impl Engine {
         {
             let handlers = benten_graph::MutexExt::lock_recover(&self.inner.handlers);
             if !handlers.contains_key(handler_id) {
+                // R6 fp Wave C2 (dx-r6-r1-1): typed
+                // `DslUnregisteredHandler` mirrors the TS-side
+                // `EDslUnregisteredHandler` thrown at the
+                // `engine.callStream(...)` boundary in
+                // `packages/engine/src/engine.ts` so streaming + non-
+                // streaming dispatch surface the same typed error.
                 return Err(EngineError::Other {
-                    code: ErrorCode::NotFound,
+                    code: ErrorCode::DslUnregisteredHandler,
                     message: format!("call_stream: handler not registered: {handler_id}"),
                 });
             }

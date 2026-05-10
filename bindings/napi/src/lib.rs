@@ -1131,18 +1131,28 @@ mod napi_surface {
                             Some(n) => n.to_string(),
                             None => "null".to_string(),
                         };
+                        // R6 fp Wave C2 (obs-r6r1-1 closure — 25th p/c
+                        // drift instance): thread `outputConsumedHighWater`
+                        // through the napi JSON template so the Phase-3
+                        // §7.1 trio (fuel + output + wallclock) reaches
+                        // the TS consumer surface.
+                        let output_consumed_high_water = match desc.output_consumed_high_water {
+                            Some(n) => n.to_string(),
+                            None => "null".to_string(),
+                        };
                         let last_invocation_ms = match desc.last_invocation_ms {
                             Some(n) => n.to_string(),
                             None => "null".to_string(),
                         };
                         Ok(Some(format!(
-                            r#"{{"moduleCid":"{}","manifestId":{},"fuel":{},"wallclockMs":{},"outputLimitBytes":{},"fuelConsumedHighWater":{},"lastInvocationMs":{}}}"#,
+                            r#"{{"moduleCid":"{}","manifestId":{},"fuel":{},"wallclockMs":{},"outputLimitBytes":{},"fuelConsumedHighWater":{},"outputConsumedHighWater":{},"lastInvocationMs":{}}}"#,
                             desc.module_cid.to_base32(),
                             manifest,
                             desc.fuel,
                             desc.wallclock_ms,
                             desc.output_limit_bytes,
                             fuel_consumed_high_water,
+                            output_consumed_high_water,
                             last_invocation_ms,
                         )))
                     }

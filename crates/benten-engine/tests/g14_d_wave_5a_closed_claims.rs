@@ -140,7 +140,9 @@ fn emit_handler_id_router_routing_observably_differs_from_default_fan_out_end_to
     assert_eq!(routes[0].0, "emit:evt:named");
     assert_eq!(routes[0].1, "h_a");
 
-    // Negative pin — Named route to a nonexistent handler rejects:
+    // Negative pin — Named route to a nonexistent handler rejects.
+    // R6 fp Wave C2 (dx-r6-r1-1): typed `DslUnregisteredHandler` (was
+    // `NotFound`) mirrors the TS-side `EDslUnregisteredHandler`.
     let err = e
         .emit_with_handler(
             "evt:bad",
@@ -149,7 +151,7 @@ fn emit_handler_id_router_routing_observably_differs_from_default_fan_out_end_to
         )
         .unwrap_err();
     assert!(
-        matches!(err, benten_engine::EngineError::Other { code, .. } if code == ErrorCode::NotFound)
+        matches!(err, benten_engine::EngineError::Other { code, .. } if code == ErrorCode::DslUnregisteredHandler)
     );
 }
 
@@ -186,11 +188,13 @@ fn subscribe_with_handler_rejects_empty_pattern_and_unregistered_handler() {
     assert!(
         matches!(err, benten_engine::EngineError::Other { code, .. } if code == ErrorCode::SubscribePatternInvalid)
     );
+    // R6 fp Wave C2 (dx-r6-r1-1): typed `DslUnregisteredHandler` (was
+    // `NotFound`) mirrors the TS-side `EDslUnregisteredHandler`.
     let err = e
         .subscribe_with_handler("/zone/posts", HandlerRoute::Named("missing".into()))
         .unwrap_err();
     assert!(
-        matches!(err, benten_engine::EngineError::Other { code, .. } if code == ErrorCode::NotFound)
+        matches!(err, benten_engine::EngineError::Other { code, .. } if code == ErrorCode::DslUnregisteredHandler)
     );
 }
 

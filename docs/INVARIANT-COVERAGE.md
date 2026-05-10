@@ -1,14 +1,23 @@
-# Invariant Coverage — Phase 2b Close
+# Invariant Coverage — Phase 3 Close
 
 CLAUDE.md commits to **14 invariants** governing the Benten engine.
 This document tracks per-invariant enforcement state, the enforcing
 crate, and the regression suite that pins it.
 
-**Phase 2b status:** 14 of 14 invariants enforced. Inv-4 + Inv-7 went
+**Phase 3 status:** 14 of 14 invariants enforced. Inv-4 + Inv-7 went
 ACTIVE in Phase 2b alongside the SANDBOX runtime (registration arm
 landed in G7-B; runtime arm landed across waves 8b + 8h with a bounded
 honest-disclosure for Inv-4 — see the "Inv-4 + Inv-7 runtime arm
-status" section below). The two Phase-1 stubs are now removed.
+status" section below). Phase 3 extended Inv-13 with the row-4 SPLIT
+classifier (user-zone vs system-zone divergent-CID handling at the
+sync-receive boundary; `crates/benten-sync/src/crdt.rs` +
+`crates/benten-engine/tests/inv_13_dispatch.rs`) and widened Inv-14
+with three additive sync-boundary attribution slots (`peer_did_set` /
+`device_did` / `sync_hop_depth`); the on-the-wire device-DID
+attestation envelope (G16-D wave-6b) makes Inv-14 device-grain
+attribution **LOAD-BEARING under adversarial-peer assumptions** — see
+the "Inv-14 Phase-3 G16-B device-grain extension" section below for
+the full retense.
 
 ---
 
@@ -273,4 +282,4 @@ A row is **active** iff:
    bypasses it without explicit named-compromise documentation in
    `docs/SECURITY-POSTURE.md`).
 
-All 14 invariants meet (1) (2) (3) at Phase 2b close.
+All 14 invariants meet (1) (2) (3) at Phase 3 close.

@@ -1,45 +1,75 @@
 name: WASM Browser (wasm32-unknown-unknown)
 
-# Phase 2b G10-A-browser — wasm32-unknown-unknown bundle build +
-# headless-browser smoke. Owns the browser-target half of the WASM
-# matrix; sister to `wasm-runtime.yml` (wasm32-wasip1 + wasmtime) and
-# `wasm-conformance.yml` (SANDBOX escape-attempt fixture suite, wasip1
-# only). Compromise #N+8 + #N+9 are both load-bearing here — see the
-# header notes below.
+# Phase-3 R6 fix-pass Wave B — wasm32-unknown-unknown bundle build +
+# bundle-content audit (CLAUDE.md baked-in #17 defense-in-depth rung 3)
+# + size cap. Owns the browser-target half of the WASM matrix; sister
+# to `wasm-runtime.yml` (wasm32-wasip1 + wasmtime), `wasm-conformance.yml`
+# (SANDBOX escape-attempt fixture suite, wasip1 only), and
+# `cross-browser-determinism.yml` (Playwright matrix landed at G18-A
+# wave-5a per Compromise #20 closure narrative; per-PR cadence).
 #
 # Pin sources:
 #   - .addl/phase-2b/00-implementation-plan.md §3 G10-A-browser
-#   - .addl/phase-2b/00-implementation-plan.md §10 Compromise #N+8
-#     (browser-persistent-storage absent in 2b — in-memory manifest
-#     store ONLY; IndexedDB-backed persistent store deferred to
-#     Phase-3)
-#   - .addl/phase-2b/00-implementation-plan.md §10 Compromise #N+9
-#     (cross-browser-determinism CI cadence — only wasm32-wasip1 is
-#     fixture-CID-pinned in 2b CI per-PR; browser-bundle determinism
-#     is checked only at release-era cadence here, NOT per-PR)
-#   - wasm-r1-1 (dual-target split: wasip1 + browser)
-#   - wasm-r1-6 (browser bundle MUST NOT contain the napi node binary)
-#   - wasm-r1-7 (≤500KB gzipped browser-bundle cap)
+#     (original Phase-2b landing).
+#   - .addl/phase-3/00-implementation-plan.md §3 G18-A wave-5a
+#     (cross-browser determinism workflow split-out).
+#   - docs/future/phase-3-backlog.md §4.4 (R6 fix-pass Wave B
+#     bundle-content audit, this commit).
+#   - docs/future/phase-3-backlog.md §4.3 (G18-A-followup IndexedDB
+#     plumbing + Playwright fixture authoring — V1-WINDOW NAMED).
+#   - docs/SECURITY-POSTURE.md Compromise #19 (browser persistent
+#     storage — PARTIALLY CLOSED; full closure deferred to G18-A-followup).
+#   - docs/SECURITY-POSTURE.md Compromise #20 (cross-browser determinism
+#     CI cadence — PARTIALLY CLOSED; full closure deferred to G18-A-followup).
+#   - wasm-r1-1 (dual-target split: wasip1 + browser).
+#   - wasm-r1-6 (browser bundle MUST NOT contain the napi node binary).
+#   - wasm-r1-7 (≤600KB gzipped browser-bundle cap; raised from 500KB
+#     during Phase-2b wave-8j bundle bisect).
 #
 # ---------------------------------------------------------------------------
-# Compromise #N+8 enforcement (storage-contract layer)
+# CLAUDE.md baked-in #17 — bundle-content audit (defense-in-depth rung 3)
 # ---------------------------------------------------------------------------
 #
-# Module manifests on wasm32-unknown-unknown are in-memory ONLY.
-# `bindings/napi/src/wasm_browser.rs::BrowserManifestStore::is_persistent`
-# returns `false` on every Phase-2b build. The headless-browser smoke
-# job exercises a manifest install + page-reload simulation to assert
-# the manifest set does NOT survive an Engine drop. The bundle-time
-# defence-in-depth: the smoke job greps the built `.wasm` artifact's
-# string table for `IDBDatabase` / `localStorage` / `web_sys::Storage`
-# references — any hit fails the workflow. (The native-test-time
-# defence-in-depth lives in
-# `bindings/napi/tests/wasm32_unknown_unknown_module_manifest_in_memory_only_no_indexeddb_persistence.rs`,
-# which checks the napi crate's `[dependencies]` table for forbidden
-# dep names.)
+# Per CLAUDE.md baked-in #17 (full peer vs thin compute surface), the
+# browser bundle is a THIN-CLIENT VIEW — Loro CRDT, iroh networking,
+# redb durable backend, and wasmtime SANDBOX runtime are NATIVE-ONLY.
+# Three rungs of defense-in-depth defend the architectural commitment:
+#
+#   1. Source-side cfg-gating — `crates/benten-sync/src/lib.rs`
+#      `compile_error!` for `target_arch = "wasm32"` + Cargo.toml
+#      `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`.
+#      Pinned by `crates/benten-sync/tests/wasm32_excluded.rs`.
+#   2. Cargo feature-graph closure — no transitive activation of
+#      full-peer crates from the browser-bundle root. Pinned by
+#      `bindings/napi/tests/feature_graph_closure_no_test_helpers_in_production.rs`.
+#   3. Built-bundle symbol-section audit — the `bundle-content audit
+#      (forbidden symbols per baked-in #17)` step below runs
+#      `wasm-objdump -x` against the produced `.wasm` artifact and
+#      asserts ZERO matches against the forbidden-symbol blocklist
+#      (loro / iroh / redb / wasmtime). Pinned by
+#      `bindings/napi/tests/wasm_bundle_content.rs`.
+#
+# A regression where a future feature on a sibling crate transitively
+# pulls iroh-net or loro-internal into the wasm32 dep-graph would be
+# silently accepted by rungs 1 + 2 IF the feature-graph walk missed the
+# cell; rung 3 closes the gap by inspecting the actual emitted bytes.
 #
 # ---------------------------------------------------------------------------
-# Compromise #20 — CLOSED at Phase-3 G18-A wave-5a
+# Compromise #19 transitional IDB string-table guard
+# ---------------------------------------------------------------------------
+#
+# At HEAD the wasm32 IDB plumbing (`web-sys` / `js-sys` / `wasm-bindgen-futures`
+# adapters in `bindings/napi/src/browser_indexeddb.rs::apply_migration_step`)
+# is a stub deferred to G18-A-followup per phase-3-backlog §4.3.
+# `BrowserManifestStore::is_persistent()` returns `false` honestly. The
+# `IDBDatabase` / `localStorage` / `web_sys::Storage` string-table guard
+# stays ACTIVE as a fail-closed defense against accidental persistence
+# symbol leakage ahead of the named G18-A-followup wave; it retires (or
+# flips to a positive-presence assertion) when that wave wires real IDB
+# bindings into the bundle.
+#
+# ---------------------------------------------------------------------------
+# Compromise #20 — cross-browser determinism cadence (RETIRED here)
 # ---------------------------------------------------------------------------
 #
 # Phase-2b deferred cross-browser determinism CI to release-era cadence
@@ -49,24 +79,15 @@ name: WASM Browser (wasm32-unknown-unknown)
 # matrix workflow lands per-PR cadence with flake-budget retry policy
 # (1 retry on browser-launch failure; budget = 3 launches per 24h;
 # promotion-to-required after 30 days informational green per br-r1-10).
-# The matrix asserts canonical-bytes determinism + CID-pin equivalence
+# That workflow asserts canonical-bytes determinism + CID-pin equivalence
 # across Chromium / Gecko / WebKit per br-r1-4 WHAT FAILS framing +
 # IndexedDB schema-migration round-trip + 1000-key no-data-loss sweep
 # per D-PHASE-3-27 + QuotaExceededError → E_STORAGE_QUOTA_EXCEEDED
-# mapping per br-r1-2 BLOCKER.
+# mapping per br-r1-2.
 #
-# This workflow's per-PR scope at G18-A:
-#   - bundle build + ≤600KB gzip cap (carried from Phase-2b)
-#   - Compromise #N+8 / Compromise #19 transitional bundle string-
-#     table check is RETIRED at G18-A — IDB symbols are now
-#     load-bearing in the bundle (the IndexedDB persistence layer
-#     is the production path per CLAUDE.md baked-in #17 thin-client
-#     scope).
-#
-# The legacy `cross-browser-determinism` job below is RETIRED at G18-A
-# (replaced by the dedicated workflow). Removing it via a follow-up
-# cleanup commit avoids workflow-id churn at the branch-protection
-# layer for this PR; the placeholder body below remains a no-op.
+# The legacy `cross-browser-determinism` job below is a NO-OP placeholder
+# kept to avoid workflow-id churn at the branch-protection layer; it is
+# RETIRED in spirit (replaced by `cross-browser-determinism.yml`).
 #
 # ---------------------------------------------------------------------------
 # Trigger discipline (METH-13)
@@ -240,9 +261,64 @@ jobs:
             --test indexeddb_schema \
             --test cross_browser_determinism_workflow_pins
 
-      - name: Compromise #N+8 — bundle string-table check (ACTIVE at G18-A; retires at G18-A-followup)
-        # G18-A wave-5a HONEST DISCLOSURE — Compromise #19 PARTIALLY
-        # CLOSED. The IndexedDB schema + handler scaffolding landed at
+      - name: Install wabt (wasm-objdump for bundle-content audit)
+        # `wasm-objdump` ships in the WebAssembly Binary Toolkit (wabt).
+        # Apt provides a recent-enough version for symbol-section walking;
+        # we don't need the full wabt feature set, just `wasm-objdump -x`.
+        run: sudo apt-get install -y wabt
+
+      - name: Bundle-content audit (forbidden symbols per CLAUDE.md baked-in #17)
+        # CLAUDE.md baked-in #17 defense-in-depth rung 3 — built-bundle
+        # symbol-section audit. Closes R6 br-r6-r1-1 BLOCKER + ds-r6-2
+        # MAJOR per `.addl/phase-3/r6-r1-browser-wasm-bundle.json` +
+        # `r6-r1-distributed-systems.json`. Closes phase-3-backlog §4.4
+        # NAMED-NOW destination.
+        #
+        # The browser bundle MUST NOT contain symbols from the 4
+        # forbidden full-peer-only crate prefixes per CLAUDE.md
+        # baked-in #17 (full peer vs thin compute surface):
+        #
+        #   - `loro` / `loro-internal` — full-peer CRDT
+        #   - `iroh` / `iroh-net` / `iroh-blobs` — full-peer networking
+        #   - `redb` — full-peer durable backend
+        #   - `wasmtime` — SANDBOX runtime (full-peer only)
+        #
+        # `wasm-objdump -x` walks all sections (imports / exports /
+        # custom name section when present / function names). We grep
+        # the dump output for the 4 forbidden prefixes and fail
+        # immediately on any match. Pinned by
+        # `bindings/napi/tests/wasm_bundle_content.rs`.
+        run: |
+          set -euo pipefail
+          bundle=bindings/napi/dist/browser/benten_engine.wasm
+          if [ ! -f "$bundle" ]; then
+            echo "::error::expected bundle artifact at $bundle"
+            exit 1
+          fi
+          dump=$(wasm-objdump -x "$bundle")
+          # Forbidden-symbol blocklist. Strings checked include both
+          # crate-prefix forms (e.g. `loro_`, `loro::`) and namespaced
+          # mangled forms (`iroh_net::`, `iroh_blobs::`). The grep is
+          # case-insensitive to catch both `Loro` (Rust type names) and
+          # `loro_` (function manglings).
+          forbidden=( "loro" "iroh" "redb" "wasmtime" )
+          fail=0
+          for sym in "${forbidden[@]}"; do
+            if echo "$dump" | grep -i -F -q "$sym"; then
+              echo "::error::browser bundle MUST NOT contain forbidden symbol prefix '$sym' per CLAUDE.md baked-in #17 (full peer vs thin compute surface). Loro / iroh / redb / wasmtime are full-peer-only; browser bundle is thin-client cache only."
+              echo "Matching wasm-objdump output:"
+              echo "$dump" | grep -i -F "$sym" | head -10
+              fail=1
+            fi
+          done
+          if [ "$fail" -eq 1 ]; then
+            exit 1
+          fi
+          echo "Bundle-content audit PASSED: no loro / iroh / redb / wasmtime symbols leaked into the wasm32-unknown-unknown browser bundle (CLAUDE.md baked-in #17 defense-in-depth rung 3)."
+
+      - name: IDB / localStorage string-table guard (Compromise #19 transitional)
+        # HONEST DISCLOSURE per Compromise #19 PARTIALLY CLOSED. The
+        # IndexedDB schema + handler scaffolding landed at
         # `bindings/napi/src/browser_indexeddb.rs` BUT the wasm32
         # `web-sys` / `js-sys` / `wasm-bindgen-futures` plumbing is
         # deferred to G18-A-followup wave per
@@ -268,67 +344,46 @@ jobs:
           if [ "$fail" -eq 1 ]; then
             exit 1
           fi
-          echo "string-table guard PASSED at G18-A — no IDB / localStorage symbols leaked into the bundle (wasm32 IDB plumbing deferred to G18-A-followup)"
+          echo "string-table guard PASSED — no IDB / localStorage symbols leaked into the bundle (wasm32 IDB plumbing deferred to G18-A-followup)"
 
-      - name: Headless-browser smoke (placeholder)
-        # The full headless-browser smoke harness (Playwright / wasm-bindgen-test
-        # against a fresh Chromium) is a follow-up to this initial
-        # workflow wire. The bundle-and-size-cap assertions above are
-        # the load-bearing must-pass for the initial G10-A-browser
-        # landing. The harness step will assert (in order):
-        #   1. The bundle loads in a fresh Chromium page.
-        #   2. `engine.browserRuntimeAvailable() === true` post-load.
-        #   3. A manifest install + page reload sequence shows the
-        #      manifest set does NOT survive (Compromise #N+8 runtime
-        #      enforcement).
-        # Until the harness lands, this step records the deferred
-        # work explicitly so the gap is visible at every CI run.
+      - name: Headless-browser smoke (deferred to G18-A-followup wave per phase-3-backlog §4.3)
+        # The full headless-browser smoke harness is the Playwright
+        # matrix at `.github/workflows/cross-browser-determinism.yml`
+        # (landed at Phase-3 G18-A wave-5a per Compromise #20 closure
+        # narrative). The 11 fixture bodies that drive each matrix cell
+        # are deferred to the named G18-A-followup wave per
+        # `docs/future/phase-3-backlog.md` §4.3 (IndexedDB plumbing +
+        # Playwright fixture authoring; ~500-1000 LOC total estimate).
+        # Until that wave lands, this step records the deferred work
+        # so the gap is visible at every CI run.
         run: |
-          echo "::warning::headless-browser smoke harness not yet wired."
-          echo "Bundle build + size cap + Compromise #N+8 string-table"
-          echo "check are the load-bearing G10-A-browser must-pass for"
-          echo "this initial workflow wire. Harness wiring is a follow-up."
+          echo "::warning::headless-browser smoke harness deferred to G18-A-followup wave per docs/future/phase-3-backlog.md §4.3 (IndexedDB plumbing + Playwright fixture authoring). The cross-browser-determinism.yml workflow's 11 matrix cells are STRUCTURAL anchors at HEAD; fixture bodies land at G18-A-followup."
+          echo "Load-bearing must-pass for this workflow at HEAD: bundle build + ≤600KB gzip cap + bundle-content audit (CLAUDE.md baked-in #17 defense-in-depth rung 3) + Compromise #19 transitional IDB guard."
 
   # -------------------------------------------------------------------------
-  # Release-era cadence: cross-browser determinism check.
+  # Legacy `cross-browser-determinism` job — RETIRED at Phase-3 G18-A
+  # wave-5a (replaced by `.github/workflows/cross-browser-determinism.yml`
+  # per-PR Playwright matrix per Compromise #20 closure narrative).
   #
-  # Compromise #N+9: per-PR cross-browser CID pinning is premature
-  # given per-engine bytecode + JIT non-determinism. This job runs
-  # ONLY on release events + manual dispatch.
+  # Kept here as a no-op placeholder ONLY to avoid workflow-id churn
+  # at the branch-protection layer. Future cleanup commit will remove
+  # the job entirely once branch-protection settles.
   # -------------------------------------------------------------------------
-  cross-browser-determinism:
-    name: cross-browser determinism (release-era cadence)
+  cross-browser-determinism-retired:
+    name: cross-browser determinism (RETIRED — see cross-browser-determinism.yml)
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     needs: bundle-and-smoke
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        browser: [chromium, firefox, webkit]
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-
-      - name: Placeholder — release-era cross-browser determinism
-        # The full cross-browser determinism harness loads the bundle
-        # in each browser, exercises the canonical fixture, and
-        # asserts the resulting CID matches the wasm32-wasip1
-        # canonical-CID baseline (the Phase-1 fixture CID
-        # bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda).
-        #
-        # Per Compromise #N+9: this is INTENTIONALLY a release-era
-        # cadence check, NOT a per-PR check. A drift here at release
-        # time is the signal to either (a) close Compromise #N+9 by
-        # landing the engine-side determinism work, or (b) re-scope
-        # the cross-browser determinism guarantee.
+      - name: Retirement notice
+        # Per `docs/SECURITY-POSTURE.md` Compromise #20 closure narrative:
+        # the per-PR cross-browser determinism Playwright matrix landed
+        # at Phase-3 G18-A wave-5a in
+        # `.github/workflows/cross-browser-determinism.yml`. This legacy
+        # release-era-cadence job is RETIRED; it remains as a no-op
+        # only to avoid workflow-id churn at the branch-protection layer.
         run: |
-          echo "::warning::cross-browser determinism harness for ${{ matrix.browser }}"
-          echo "is not yet wired. Compromise #N+9 documents the deferred"
-          echo "shape: per-engine bytecode + JIT non-determinism makes a"
-          echo "per-PR cross-browser CID pin premature."
-          echo ""
-          echo "When implemented, this matrix leg MUST:"
-          echo "  - install the browser via Playwright / appropriate setup action"
-          echo "  - load bindings/napi/dist/browser/benten_engine.wasm.gz"
-          echo "  - exercise the Phase-1 canonical fixture"
-          echo "  - assert the produced CID matches the wasip1 baseline"
+          echo "::warning::This legacy cross-browser-determinism job is RETIRED."
+          echo "The active per-PR Playwright matrix lives at .github/workflows/cross-browser-determinism.yml"
+          echo "per Phase-3 G18-A wave-5a Compromise #20 closure (docs/SECURITY-POSTURE.md)."

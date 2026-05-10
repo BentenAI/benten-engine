@@ -246,6 +246,34 @@ The TOCTOU window between capability check and capability use is bounded at CALL
 
 **Defense:** Closed via the diagnostic capability (Option C) approach. Cross-reference: `docs/SECURITY-POSTURE.md` Compromise #2.
 
+### 3.10 — No engine-ingress write rate-limits (Compromise #5)
+
+**Defense:** Mitigated-by-recording (engine-side WRITE counter metric exists; no rate-limit enforcement). Per-call SANDBOX bounds (fuel / wallclock / memory / output) + UCAN cap-set time-windows defend SANDBOX + cap-grounded write paths; engine-ingress (transport / napi / DSL) writes have no per-source rate limit. **Status:** Open architectural; **Revisit at v1-window** per `docs/future/phase-3-backlog.md` §10.2. Cross-reference: `docs/SECURITY-POSTURE.md` Compromise #5.
+
+### 3.11 — BLAKE3 128-bit effective collision resistance (Compromise #6)
+
+**Defense:** Mitigated-by-construction (multihash `0x1e` BLAKE3-256 produces 128-bit effective collision resistance via Wagner's birthday bound; treated as the architectural floor for content-addressing identity). The 128-bit floor is sufficient for the personal-AI-assistants threat model targeted by Phases 1-3; cross-Atrium adversarial collision-search is bounded by Phase-3 cap-policy + UCAN-chain attribution. **Status:** Open architectural bound; **Revisit at v1-window** per `docs/future/phase-3-backlog.md` §10.3. Cross-reference: `docs/SECURITY-POSTURE.md` Compromise #6.
+
+### 3.12 — System-zone reserved-prefix DX rejection surface (Compromise #13)
+
+**Defense:** Mitigated-by-DX-only (no security gap). Inv-11 enforces system-zone reserved-prefix rejection at the WRITE registration boundary; the open compromise is about DX surfacing of the rejection (typed-error message clarity, not enforcement gap). Reserved-prefix tampering is blocked at Inv-11 + Inv-13 row-4b sync-receive divergent-CID classifier. **Status:** Open DX gap; **Revisit at v1-window** per `docs/future/phase-3-backlog.md` §10.4. Cross-reference: `docs/SECURITY-POSTURE.md` Compromise #13.
+
+### 3.13 — SANDBOX cold-start cost (no opt-in pool) (Compromise #14)
+
+**Defense:** Performance-only / no security gap. SANDBOX cold-start latency (D22 thresholds in `docs/SANDBOX-LIMITS.md`) is performance-budget concern; no security primitive depends on instance-pooling. **Status:** Open performance; **Revisit at v1-window** per `docs/future/phase-3-backlog.md` §10.5. Cross-reference: `docs/SECURITY-POSTURE.md` Compromise #14.
+
+### 3.14 — `register_runtime` Phase-8 deferral (Compromise #15)
+
+**Defense:** Phase-8-deferred named destination (marketplace). The reserved-with-deferred-error API surface returns `EvalError::SubsystemDisabled` at registration; no runtime path exposes uninitialized state. **Status:** Deferred to Phase 8 (marketplace). Cross-reference: `docs/SECURITY-POSTURE.md` Compromise #15.
+
+### 3.15 — iroh-relay public metadata leakage (Compromise #22)
+
+**Defense:** Phase-7-deferred named destination (Garden-relay closure path). Honestly disclosed at Phase-3 close; cross-referenced at §2.5 above (MR-1..MR-3 attack vectors). **Status:** Open; **Revisit at v1-window** per `docs/future/phase-3-backlog.md` §10 (Phase-7 Garden-relays primary closure path; Phase-9 hardened-deployment fallback). Cross-reference: `docs/SECURITY-POSTURE.md` Compromise #22; matrix §2.5.
+
+### 3.16 — Wire device-attestation envelope cryptographic closure (Compromise #23)
+
+**Defense:** **CLOSED at Phase-3 G16-D wave-6b fix-pass** (cryptographic shape; operator-deployment `FreshnessPolicy` override REQUIRED for production). DeviceAttestationEnvelope V2 binds Ed25519 envelope-signature + parent-chain Acceptor::accept_at + BLAKE3 payload-hash binding. Cross-referenced at §2.4 (DA-1..DA-9 attack vectors) + §2.5 cross-refs. Three defense modes: (a) DID forgery rejection via envelope-signature; (b) replay rejection via Acceptor freshness window + nonce store; (c) frame-pair binding via constant-time `BLAKE3(payload) == envelope.payload_hash` check. Operator-deployment residual: production deployments must override `Engine::set_acceptor` with concrete time-bound `FreshnessPolicy` BEFORE participating in adversarial sync. Cross-reference: `docs/SECURITY-POSTURE.md` Compromise #23; matrix §2.4 + §2.5.
+
 ---
 
 ## Audit instructions (R6 phase-close completeness check)

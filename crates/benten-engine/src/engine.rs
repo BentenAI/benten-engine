@@ -584,6 +584,17 @@ impl EngineInner {
         guard.get(handler_id).cloned()
     }
 
+    /// R6 fp Wave C2 (obs-r6r1-2 closure): snapshot every per-handler
+    /// SANDBOX metrics record so `engine_diagnostics::metrics_snapshot`
+    /// can fan out namespaced keys for operator dashboards. Returns the
+    /// (handler_id → metrics) map cloned out from under the lock so the
+    /// caller can format keys without holding the metric lock during
+    /// f64 conversion + string formatting.
+    pub(crate) fn sandbox_metric_snapshot_all(&self) -> BTreeMap<String, SandboxNodeMetrics> {
+        let guard = self.sandbox_metrics.lock_recover();
+        guard.clone()
+    }
+
     /// Phase-3 wave-5c §6.1-followup task #5 — clone the Arc'd
     /// revoked-actors set so the SANDBOX `live_cap_check` callback
     /// can observe revocations that arrive mid-call. Closes ESC-9
@@ -1855,8 +1866,9 @@ impl<B: GraphBackend> EngineGeneric<B> {
                 // Verify the handler is registered.
                 let handlers = benten_graph::MutexExt::lock_recover(&self.inner.handlers);
                 if !handlers.contains_key(handler_id.as_str()) {
+                    // R6 fp Wave C2 (dx-r6-r1-1).
                     return Err(EngineError::Other {
-                        code: benten_errors::ErrorCode::NotFound,
+                        code: benten_errors::ErrorCode::DslUnregisteredHandler,
                         message: format!("emit_with_handler: handler not registered: {handler_id}"),
                     });
                 }
@@ -1922,8 +1934,9 @@ impl<B: GraphBackend> EngineGeneric<B> {
             crate::handler_router::HandlerRoute::Named(handler_id) => {
                 let handlers = benten_graph::MutexExt::lock_recover(&self.inner.handlers);
                 if !handlers.contains_key(handler_id.as_str()) {
+                    // R6 fp Wave C2 (dx-r6-r1-1).
                     return Err(EngineError::Other {
-                        code: benten_errors::ErrorCode::NotFound,
+                        code: benten_errors::ErrorCode::DslUnregisteredHandler,
                         message: format!(
                             "subscribe_with_handler: handler not registered: {handler_id}"
                         ),
@@ -2484,6 +2497,46 @@ impl Engine {
                         node.id, raw
                     ),
                 });
+            }
+        }
+        // R6 fp Wave C2 (dx-r6-r1-1 MAJOR closure half): SANDBOX
+        // numeric-budget shape validation. Mirrors the dsl-compiler's
+        // `validate_shapes` pass on the engine boundary so non-DSL
+        // registration paths (programmatic `Subgraph::with_node`
+        // construction, fixture loaders) reject mis-typed properties
+        // with the same typed `E_DSL_INVALID_SHAPE` surface. Properties
+        // listed in `docs/SANDBOX-LIMITS.md` §2 MUST be non-negative
+        // integers; anything else trips the typed error rather than
+        // surfacing as an opaque wasmtime config rejection downstream.
+        for node in sg.nodes() {
+            if !matches!(node.kind, benten_eval::PrimitiveKind::Sandbox) {
+                continue;
+            }
+            for &key in &["fuel", "wallclock_ms", "output_limit"] {
+                let Some(prop) = node.property(key) else {
+                    continue;
+                };
+                match prop {
+                    Value::Int(n) if *n >= 0 => {}
+                    Value::Int(n) => {
+                        return Err(EngineError::Other {
+                            code: ErrorCode::DslInvalidShape,
+                            message: format!(
+                                "register_subgraph: SANDBOX node `{}` property `{}` must be a non-negative integer (got {}); see docs/SANDBOX-LIMITS.md §2: E_DSL_INVALID_SHAPE",
+                                node.id, key, n,
+                            ),
+                        });
+                    }
+                    other => {
+                        return Err(EngineError::Other {
+                            code: ErrorCode::DslInvalidShape,
+                            message: format!(
+                                "register_subgraph: SANDBOX node `{}` property `{}` must be a non-negative integer (got {:?}); see docs/SANDBOX-LIMITS.md §2: E_DSL_INVALID_SHAPE",
+                                node.id, key, other,
+                            ),
+                        });
+                    }
+                }
             }
         }
         // 5d-J workstream 3: parse every TRANSFORM node's expression at
@@ -3061,8 +3114,12 @@ impl Engine {
             guard.get(handler_id).copied()
         };
         let Some(handler_cid) = handler_cid else {
+            // R6 fp Wave C2 (dx-r6-r1-1): typed `DslUnregisteredHandler`
+            // mirrors the TS-side `EDslUnregisteredHandler` contract so
+            // operators routing on `ON_NOT_FOUND` see the same typed
+            // dispatch from Rust + TS code paths.
             return Err(EngineError::Other {
-                code: ErrorCode::NotFound,
+                code: ErrorCode::DslUnregisteredHandler,
                 message: format!("handler not registered: {handler_id}"),
             });
         };
@@ -3079,7 +3136,7 @@ impl Engine {
                 .0
         } else {
             return Err(EngineError::Other {
-                code: ErrorCode::NotFound,
+                code: ErrorCode::DslUnregisteredHandler,
                 message: format!("unknown handler: {handler_id}"),
             });
         };
@@ -3104,8 +3161,11 @@ impl Engine {
             guard.get(handler_id).copied()
         };
         let Some(handler_cid) = handler_cid else {
+            // R6 fp Wave C2 (dx-r6-r1-1): typed `DslUnregisteredHandler`
+            // routes through `ON_NOT_FOUND` mirroring the TS-side
+            // `EDslUnregisteredHandler` contract.
             return Err(EngineError::Other {
-                code: ErrorCode::NotFound,
+                code: ErrorCode::DslUnregisteredHandler,
                 message: format!("handler not registered: {handler_id}"),
             });
         };
@@ -3120,7 +3180,7 @@ impl Engine {
                 .0
         } else {
             return Err(EngineError::Other {
-                code: ErrorCode::NotFound,
+                code: ErrorCode::DslUnregisteredHandler,
                 message: format!("unknown handler: {handler_id}"),
             });
         };
@@ -3208,8 +3268,13 @@ impl Engine {
             guard.get(handler_id).copied()
         };
         let Some(handler_cid) = handler_cid_opt else {
+            // R6 fp Wave C2 (dx-r6-r1-1): typed `DslUnregisteredHandler`
+            // mirrors the TS-side `EDslUnregisteredHandler` thrown by
+            // `packages/engine/src/engine.ts::Engine`'s `call` method
+            // via the `knownHandlers.has(handlerId)` short-circuit.
+            // Routes via `ON_NOT_FOUND`.
             return Err(EngineError::Other {
-                code: ErrorCode::NotFound,
+                code: ErrorCode::DslUnregisteredHandler,
                 message: format!("handler not registered: {handler_id}"),
             });
         };
@@ -3303,8 +3368,10 @@ impl Engine {
         } else if let Some(label) = handler_id.strip_prefix("crud:") {
             self.subgraph_for_crud(label, op, &input, handler_cid)?
         } else {
+            // R6 fp Wave C2 (dx-r6-r1-1): typed `DslUnregisteredHandler`
+            // — handler-id has no spec AND is not a `crud:` synth.
             return Err(EngineError::Other {
-                code: ErrorCode::NotFound,
+                code: ErrorCode::DslUnregisteredHandler,
                 message: format!("unknown handler: {handler_id}"),
             });
         };

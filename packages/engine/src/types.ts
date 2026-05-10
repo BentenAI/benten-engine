@@ -914,6 +914,19 @@ export interface SandboxNodeDescription {
    */
   fuelConsumedHighWater: number | "unknown";
   /**
+   * Cumulative high-water mark of guest output bytes emitted by this
+   * node across every invocation since registration.
+   *
+   * R6 fp Wave C2 (closes obs-r6r1-1 MAJOR — 25th producer/consumer
+   * drift instance): the field is recorded at
+   * `engine.rs::record_sandbox_metric` and now reaches the TS consumer
+   * via the `describeSandboxNode` napi bridge JSON template. Returns
+   * `"unknown"` when the napi cdylib lacks the `test-helpers` bridge
+   * OR when no SANDBOX invocation has been recorded for the handler.
+   * Closes the Phase-3 §7.1 trio (fuel + output + wallclock).
+   */
+  outputConsumedHighWater: number | "unknown";
+  /**
    * Wallclock duration of the most recent invocation in milliseconds.
    *
    * Phase 2b: ALWAYS `"unknown"` — metrics are not tracked at the

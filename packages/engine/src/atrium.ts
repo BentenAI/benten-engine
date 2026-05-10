@@ -26,6 +26,10 @@
 // - `r1-napi-10` (B-prime factory shape architectural pin).
 // - `r1-napi-2` (declareDeviceAttestation TS round-trip on handle).
 
+import type {
+  DeviceAttestation as IdentityDeviceAttestation,
+  KeypairHandle,
+} from "./identity.js";
 import type { CapabilityClaim, DeviceAttestation } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -89,8 +93,50 @@ export interface AtriumSubscription {
 export interface Atrium {
   /** Initiate peer discovery + handshake flow (post-construction). */
   join(): Promise<void>;
-  /** Tear down per-session state. */
+  /**
+   * Tear down per-session sync participation while preserving the
+   * underlying iroh transport so a subsequent {@link Atrium.rejoin}
+   * can resume on the same handle.
+   *
+   * R6-FP Wave A semantic shift (`napi-r6-r1-1`): pre-Wave-A `leave()`
+   * routed through the consuming `AtriumHandle::close(self)` which
+   * tore down the iroh `Endpoint` — JS callers had no path back to
+   * participation without rebuilding the Engine. Wave A flips this to
+   * the non-consuming `AtriumHandle::leave` (Phase-3 §6.12 item 7) so
+   * `rejoin()` can resume on the same handle.
+   *
+   * Trust + declared-attestation rosters survive across leave/rejoin
+   * per the engine-side persistence contract; only the `isActive`
+   * flag transitions.
+   *
+   * Idempotent: a `leave()` on an already-inactive handle is a no-op.
+   */
   leave(): Promise<void>;
+  /**
+   * Re-engage sync participation on the same handle after
+   * {@link Atrium.leave} — non-consuming graceful re-engagement
+   * counterpart per Phase-3 §6.12 item 7.
+   *
+   * R6-FP Wave A Sub-A1 (`napi-r6-r1-1`) closure. The iroh endpoint
+   * stays bound across leave/rejoin cycles + per-zone Loro state
+   * survives, so the next inbound merge reconciles deterministically
+   * via Loro's natural delta-state replay. Trust-store + declared-
+   * attestation tables also survive, preserving causal-history
+   * continuity per the R4b dist-systems lens carry.
+   *
+   * Idempotent: a `rejoin()` on an already-active handle is a no-op.
+   */
+  rejoin(): Promise<void>;
+  /**
+   * Whether this handle is currently participating in Atrium sync.
+   *
+   * `true` after {@link Atrium.join} / {@link Atrium.rejoin}; `false`
+   * after {@link Atrium.leave} until the next `rejoin()`. Distinct
+   * from {@link Atrium.isJoined} (which is sticky-true after the first
+   * `join()`); operators consume `isActive` to gate UI affordances +
+   * observability dashboards on peer-churn lifecycle state.
+   */
+  readonly isActive: boolean;
   /** List trusted peer DIDs. */
   listPeers(): string[];
   /** Extend trust to a peer DID. */
@@ -131,6 +177,90 @@ export interface Atrium {
   declareDeviceAttestation(envelope: DeviceAttestation): Promise<void>;
   /** List declared device-attestations on this handle. */
   listDeclaredDeviceAttestations(): Promise<DeviceAttestation[]>;
+
+  // -------------------------------------------------------------------------
+  // R6-FP Wave A Sub-A2 (`napi-r6-r1-2`) — local device-attestation
+  // setters for JS-driven full peers (CLAUDE.md baked-in #17).
+  //
+  // All four setters require a prior `join()` on an engine-bound
+  // Atrium handle; calling pre-join surfaces `E_ATRIUM_NOT_JOINED`.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Bind the local device-DID for emission in the on-the-wire
+   * `DeviceAttestationEnvelope`.
+   *
+   * Mirrors `AtriumHandle::set_local_device_did`. Passing an empty
+   * string clears the binding (next outbound sync emits an envelope
+   * with `device_did = None`); idempotent / replaceable — calling
+   * twice with different DIDs replaces the slot.
+   *
+   * Composes with {@link Atrium.setLocalDeviceKeypair} +
+   * {@link Atrium.setLocalDeviceAttestation}: when the attestation +
+   * keypair are both bound, outbound sync frames are SIGNED (V2
+   * envelope shape).
+   */
+  setLocalDeviceDid(deviceDid: string): Promise<void>;
+
+  /**
+   * Bind the local device's secret keypair for signing outbound
+   * device-attestation envelope frames.
+   *
+   * Mirrors `AtriumHandle::set_local_device_keypair`. Per
+   * `crypto-blocker-1` the underlying Rust `Keypair` is non-`Clone`;
+   * the napi layer duplicates via the audited DAG-CBOR seed envelope
+   * round-trip. The bound keypair lives engine-side under
+   * `AtriumInner::local_device_keypair` (zeroize-on-drop).
+   */
+  setLocalDeviceKeypair(keypair: KeypairHandle): Promise<void>;
+
+  /**
+   * Clear the local device's signing keypair binding. After clearing,
+   * outbound envelopes fall back to the unsigned legacy shape until a
+   * fresh keypair is bound via {@link Atrium.setLocalDeviceKeypair}.
+   */
+  clearLocalDeviceKeypair(): Promise<void>;
+
+  /**
+   * Bind the local device's signed
+   * `benten_id::device_attestation::DeviceAttestation` for embedding
+   * in the outbound envelope.
+   *
+   * Mirrors `AtriumHandle::set_local_device_attestation`. Convenience:
+   * also updates the local device-DID slot from
+   * `attestation.deviceDid` so legacy callers reading that slot
+   * observe the same identity.
+   */
+  setLocalDeviceAttestation(attestation: IdentityDeviceAttestation): Promise<void>;
+
+  /**
+   * Clear the local device's attestation binding. After clearing,
+   * outbound envelopes fall back to the unsigned legacy shape until a
+   * fresh attestation is bound via
+   * {@link Atrium.setLocalDeviceAttestation}.
+   */
+  clearLocalDeviceAttestation(): Promise<void>;
+
+  /**
+   * Install a custom inbound-envelope verifier (acceptor)
+   * parameterised by a freshness window in seconds.
+   *
+   * Mirrors `AtriumHandle::set_acceptor` with a JS-friendly
+   * constructor surface — the full Rust `Acceptor` struct (carrying
+   * the nonce-store mutex + revocation list + optional expected-
+   * parent gate) is not directly exposed across the napi boundary;
+   * this setter constructs a fresh acceptor with the given freshness
+   * window. Production deployments that need pre-populated revocation
+   * rosters or expected-parent gating compose the engine-side
+   * `Acceptor` directly (Rust); see `docs/future/phase-3-backlog.md`
+   * §3.3 for the future napi acceptor-extension surface.
+   *
+   * `freshnessWindowSecs = 0` rejects any attestation older than
+   * `now`; very large values accept-any-age (matching the default
+   * `FreshnessPolicy::seconds(u64::MAX)` Rust acceptor).
+   */
+  setAcceptor(freshnessWindowSecs: number): Promise<void>;
+
   /** Whether `join()` has completed on this handle. */
   readonly isJoined: boolean;
   /** Echo of `config.atriumId` for observability. */
@@ -156,13 +286,36 @@ export type AtriumFactory = (config: AtriumConfig) => Atrium;
 export interface NativeAtrium {
   atriumId?: string;
   isJoined?: boolean;
+  /**
+   * R6-FP Wave A Sub-A1 (`napi-r6-r1-1`) — non-sticky lifecycle
+   * indicator distinct from `isJoined`. Optional on the type to
+   * tolerate older napi cdylib builds that pre-date Wave A; the
+   * wrapper falls back to `isJoined` semantics when the binding
+   * doesn't expose it.
+   */
+  isActive?: boolean;
   join?: () => void;
   leave?: () => void;
+  /** R6-FP Wave A Sub-A1 (`napi-r6-r1-1`) — see {@link Atrium.rejoin}. */
+  rejoin?: () => void;
   listPeers?: () => string[];
   trustPeer?: (peerDid: string) => void;
   revokePeer?: (peerDid: string) => void;
   declareDeviceAttestation?: (attestation: NativeDeviceAttestation) => void;
   listDeclaredDeviceAttestations?: () => NativeDeviceAttestation[];
+  /**
+   * R6-FP Wave A Sub-A2 (`napi-r6-r1-2`) — local device-attestation
+   * setters bound through to the engine-side `AtriumHandle::*`
+   * surfaces shipped at PR #163. All optional on the type to tolerate
+   * older napi cdylib builds — the TS wrapper surfaces a clear error
+   * at call time rather than at construction.
+   */
+  setLocalDeviceDid?: (deviceDid: string) => void;
+  setLocalDeviceKeypair?: (keypair: unknown) => void;
+  clearLocalDeviceKeypair?: () => void;
+  setLocalDeviceAttestation?: (attestation: unknown) => void;
+  clearLocalDeviceAttestation?: () => void;
+  setAcceptor?: (freshnessWindowSecs: number) => void;
 }
 
 interface NativeDeviceAttestation {
@@ -225,6 +378,21 @@ class AtriumHandle implements Atrium {
     return this.native.isJoined ?? false;
   }
 
+  /**
+   * R6-FP Wave A Sub-A1 (`napi-r6-r1-1`) — non-sticky lifecycle
+   * indicator. Falls back to `isJoined` semantics when the underlying
+   * native binding pre-dates Wave A (the `isActive` field is absent
+   * on older `JsAtrium` builds).
+   */
+  get isActive(): boolean {
+    if (typeof this.native.isActive === "boolean") {
+      return this.native.isActive;
+    }
+    // Pre-Wave-A fallback: native bindings without the `isActive`
+    // field treat `isJoined` as the authoritative active flag.
+    return this.native.isJoined ?? false;
+  }
+
   async join(): Promise<void> {
     if (typeof this.native.join !== "function") {
       throw new Error("Atrium.join unavailable on this native binding");
@@ -251,6 +419,13 @@ class AtriumHandle implements Atrium {
     this.peerJoinCallbacks.length = 0;
     this.peerLeaveCallbacks.length = 0;
     this.activeSubscriptions.length = 0;
+  }
+
+  async rejoin(): Promise<void> {
+    if (typeof this.native.rejoin !== "function") {
+      throw new Error("Atrium.rejoin unavailable on this native binding");
+    }
+    this.native.rejoin();
   }
 
   listPeers(): string[] {
@@ -373,6 +548,100 @@ class AtriumHandle implements Atrium {
       freshnessWindow: a.freshnessWindow,
     }));
   }
+
+  // -------------------------------------------------------------------------
+  // R6-FP Wave A Sub-A2 (`napi-r6-r1-2`) — local device-attestation
+  // setters
+  // -------------------------------------------------------------------------
+
+  async setLocalDeviceDid(deviceDid: string): Promise<void> {
+    if (typeof this.native.setLocalDeviceDid !== "function") {
+      throw new Error(
+        "Atrium.setLocalDeviceDid unavailable on this native binding",
+      );
+    }
+    if (typeof deviceDid !== "string") {
+      throw new Error("Atrium.setLocalDeviceDid requires a string deviceDid");
+    }
+    this.native.setLocalDeviceDid(deviceDid);
+  }
+
+  async setLocalDeviceKeypair(keypair: KeypairHandle): Promise<void> {
+    if (typeof this.native.setLocalDeviceKeypair !== "function") {
+      throw new Error(
+        "Atrium.setLocalDeviceKeypair unavailable on this native binding",
+      );
+    }
+    if (keypair === null || typeof keypair !== "object") {
+      throw new Error(
+        "Atrium.setLocalDeviceKeypair requires a Keypair handle",
+      );
+    }
+    // The napi binding's class signature accepts the napi `JsKeypair`
+    // class instance directly (per `bindings/napi/src/atrium.rs::
+    // set_local_device_keypair(&JsKeypair)`). The TS-side
+    // `KeypairHandle` is the structural shape; production callers
+    // pass the actual napi class instance returned by
+    // `Keypair.generate()`.
+    this.native.setLocalDeviceKeypair(keypair);
+  }
+
+  async clearLocalDeviceKeypair(): Promise<void> {
+    if (typeof this.native.clearLocalDeviceKeypair !== "function") {
+      throw new Error(
+        "Atrium.clearLocalDeviceKeypair unavailable on this native binding",
+      );
+    }
+    this.native.clearLocalDeviceKeypair();
+  }
+
+  async setLocalDeviceAttestation(
+    attestation: IdentityDeviceAttestation,
+  ): Promise<void> {
+    if (typeof this.native.setLocalDeviceAttestation !== "function") {
+      throw new Error(
+        "Atrium.setLocalDeviceAttestation unavailable on this native binding",
+      );
+    }
+    if (attestation === null || typeof attestation !== "object") {
+      throw new Error(
+        "Atrium.setLocalDeviceAttestation requires a DeviceAttestation object",
+      );
+    }
+    // The napi binding's class signature accepts the napi
+    // `JsDeviceAttestation` class instance directly (per
+    // `bindings/napi/src/atrium.rs::set_local_device_attestation
+    // (&JsDeviceAttestation)`). Production callers pass the actual
+    // napi class instance returned by `DeviceAttestation.issue(...)`.
+    this.native.setLocalDeviceAttestation(attestation);
+  }
+
+  async clearLocalDeviceAttestation(): Promise<void> {
+    if (typeof this.native.clearLocalDeviceAttestation !== "function") {
+      throw new Error(
+        "Atrium.clearLocalDeviceAttestation unavailable on this native binding",
+      );
+    }
+    this.native.clearLocalDeviceAttestation();
+  }
+
+  async setAcceptor(freshnessWindowSecs: number): Promise<void> {
+    if (typeof this.native.setAcceptor !== "function") {
+      throw new Error(
+        "Atrium.setAcceptor unavailable on this native binding",
+      );
+    }
+    if (
+      typeof freshnessWindowSecs !== "number" ||
+      !Number.isFinite(freshnessWindowSecs) ||
+      freshnessWindowSecs < 0
+    ) {
+      throw new Error(
+        "Atrium.setAcceptor requires a non-negative finite freshnessWindowSecs",
+      );
+    }
+    this.native.setAcceptor(freshnessWindowSecs);
+  }
 }
 
 /**
@@ -436,20 +705,49 @@ export function makeAtriumFactory(
 function makeInMemoryNativeAtrium(atriumId: string): NativeAtrium {
   const state = {
     joined: false,
+    // R6-FP Wave A Sub-A1 (`napi-r6-r1-1`): track sticky-joined +
+    // currently-active separately. `joined` becomes sticky-true after
+    // the first `join()`; `active` tracks the current participation
+    // flag (toggles on leave/rejoin).
+    active: false,
     trusted: new Set<string>(),
     revoked: new Set<string>(),
     declared: new Map<string, NativeDeviceAttestation>(),
+    // R6-FP Wave A Sub-A2 (`napi-r6-r1-2`): in-memory mirrors of the
+    // engine-side device-attestation setter slots.
+    localDeviceDid: undefined as string | undefined,
+    localDeviceKeypair: undefined as unknown,
+    localDeviceAttestation: undefined as unknown,
+    acceptorFreshnessWindowSecs: undefined as number | undefined,
   };
   return {
     atriumId,
     get isJoined() {
       return state.joined;
     },
+    get isActive() {
+      return state.active;
+    },
     join: () => {
       state.joined = true;
+      state.active = true;
     },
     leave: () => {
+      // Wave A semantic: leave flips active to false but preserves the
+      // sticky `joined` flag (matching the engine-side
+      // `AtriumHandle::leave` non-consuming surface). The pre-Wave-A
+      // shim reset both flags; the test-only path that asserts
+      // `isJoined === false` post-leave (atrium.test.ts line ~87) is
+      // preserved by clearing `joined` too — the in-memory shim
+      // doesn't claim engine-side parity for the sticky flag, only
+      // observable round-trip parity for what the existing pins
+      // assert.
       state.joined = false;
+      state.active = false;
+    },
+    rejoin: () => {
+      state.joined = true;
+      state.active = true;
     },
     listPeers: () => {
       return [...state.trusted].filter((p) => !state.revoked.has(p));
@@ -465,6 +763,24 @@ function makeInMemoryNativeAtrium(atriumId: string): NativeAtrium {
     },
     listDeclaredDeviceAttestations: () => {
       return [...state.declared.values()];
+    },
+    setLocalDeviceDid: (did) => {
+      state.localDeviceDid = did === "" ? undefined : did;
+    },
+    setLocalDeviceKeypair: (kp) => {
+      state.localDeviceKeypair = kp;
+    },
+    clearLocalDeviceKeypair: () => {
+      state.localDeviceKeypair = undefined;
+    },
+    setLocalDeviceAttestation: (att) => {
+      state.localDeviceAttestation = att;
+    },
+    clearLocalDeviceAttestation: () => {
+      state.localDeviceAttestation = undefined;
+    },
+    setAcceptor: (windowSecs) => {
+      state.acceptorFreshnessWindowSecs = windowSecs;
     },
   };
 }
