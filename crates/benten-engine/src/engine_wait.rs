@@ -62,7 +62,7 @@
 //! Only once all four steps pass does the evaluator take the resume path
 //! and produce a terminal `Outcome`.
 
-use benten_caps::WriteContext as CapWriteContext;
+use benten_caps::{CapError, ReadContext, WriteContext as CapWriteContext};
 use benten_core::{Cid, Node, Value};
 use benten_errors::ErrorCode;
 use benten_eval::{
@@ -1008,22 +1008,107 @@ impl Engine {
         Ok(self.backend().get_node_label_only(cid)?)
     }
 
-    /// Phase 2a G2-A: engine-level `put_node` that respects the configured
-    /// capability policy + Inv-13 matrix.
+    /// Engine-internal write surface — hash `node` (CIDv1 over labels +
+    /// properties only), store it, and return its CID. Closes
+    /// `docs/future/phase-3-backlog.md §13.7` item (a).
+    ///
+    /// Per CLAUDE.md baked-in commitment #18 (plugin trust model), this
+    /// is the engine-internal counterpart to [`Engine::create_node`]:
+    /// it routes through the same backend transaction (so ChangeEvents
+    /// + IVM materialization fire on commit) but skips the
+    /// user-facing Inv-11 system-zone label rejection at the API
+    /// surface. The storage-layer Inv-11 guard
+    /// (`benten-graph/src/redb_backend.rs::guard_system_zone_node`)
+    /// stays as defence-in-depth, so a misuse from engine-internal
+    /// code still surfaces `E_SYSTEM_ZONE_WRITE` rather than silently
+    /// landing a privileged Node.
+    ///
+    /// Engine internals (the evaluator's WRITE replay path, bench +
+    /// integration scaffolding that seeds Nodes without driving a
+    /// full handler dispatch) consume this surface; plugin authors
+    /// **never call this directly** — they author graph nodes and
+    /// the evaluator dispatches.
     ///
     /// # Errors
-    /// Returns [`EngineError`] on policy denial / Inv-13 firing.
-    pub fn put_node(&self, _node: &Node) -> Result<Cid, EngineError> {
-        todo!("Phase 2a G2-A: implement engine.put_node")
+    /// Returns [`EngineError`] on backend / transaction failure, or
+    /// `E_BACKEND_READ_ONLY` when invoked against a snapshot-blob
+    /// engine.
+    pub fn put_node(&self, node: &Node) -> Result<Cid, EngineError> {
+        if self.is_read_only_snapshot() {
+            return Err(EngineError::Other {
+                code: ErrorCode::BackendReadOnly,
+                message: "backend is read-only: put_node rejected (snapshot-blob engine)"
+                    .to_string(),
+            });
+        }
+        Ok(self.backend().transaction(|tx| tx.put_node(node))?)
     }
 
-    /// Phase 2a G4-A: engine-level read that consults the active policy
-    /// (Option C path). Benches call this with a single `cid` arg.
+    /// Engine-level read attributed to the supplied principal. Closes
+    /// `docs/future/phase-3-backlog.md §13.7` item (b) — the Option-C
+    /// flanking entry-point per sec-r1-5 that consults
+    /// [`benten_caps::CapabilityPolicy::check_read`] at the engine
+    /// boundary with the caller's principal CID threaded through
+    /// [`benten_caps::ReadContext::actor_cid`].
+    ///
+    /// Mirrors the [`Engine::call_as`] precedent: the public entry
+    /// point for any read attributed to a non-trusted principal. Per
+    /// CLAUDE.md baked-in commitment #18, the evaluator threads the
+    /// active principal through this surface when dispatching a
+    /// plugin's read; plugin authors **never call this directly** —
+    /// they author graph nodes and the evaluator is the only caller
+    /// of `_as`.
+    ///
+    /// # Inv-11 + Option-C denial semantics
+    ///
+    /// The runtime probe mirrors [`Engine::get_node`]: (1) a missing
+    /// CID returns `Ok(None)`; (2) a resolved Node whose primary label
+    /// lands inside a system-zone prefix returns `Ok(None)`
+    /// regardless of the principal (Inv-11 cannot be overridden by
+    /// the cap policy); (3) the principal-threaded `ReadContext` is
+    /// then handed to `policy.check_read` — a `CapError::DeniedRead`
+    /// collapses to `Ok(None)` per named compromise #2 (Option C:
+    /// symmetric None — denial is indistinguishable from miss at the
+    /// public API).
+    ///
+    /// The load-bearing differentiator from [`Engine::get_node`] is
+    /// `actor_cid: Some(*principal)` on the `ReadContext` — that
+    /// surface passes `actor_cid: None` (no caller identity in scope);
+    /// this surface is the explicit `_as`-principal entry point.
     ///
     /// # Errors
-    /// Returns [`EngineError`] on denial / backend failure.
-    pub fn read_node_with_policy(&self, _cid: &Cid) -> Result<Option<Node>, EngineError> {
-        todo!("Phase 2a G4-A: Option C flanking-method plumbing per sec-r1-5")
+    /// Returns [`EngineError`] on backend failure. Cap denial
+    /// collapses to `Ok(None)`; it does NOT surface as an error.
+    pub fn read_node_as(&self, principal: &Cid, cid: &Cid) -> Result<Option<Node>, EngineError> {
+        let Some(node) = self.backend().get_node(cid)? else {
+            return Ok(None);
+        };
+        // Phase-2a Inv-11 runtime probe (mirror of `Engine::get_node`):
+        // probe the RESOLVED Node's first label against the engine-side
+        // system-zone prefix list. Applied before the cap-policy gate
+        // so the policy's verdict cannot override Inv-11.
+        let label = node.labels.first().cloned().unwrap_or_default();
+        if crate::primitive_host::is_system_zone_label(&label) {
+            return Ok(None);
+        }
+        if let Some(policy) = self.policy() {
+            // Thread the engine's configured device-DID-attestation
+            // CID (D-PHASE-3-25 heterogeneous-policy dispatch) AND
+            // the caller's principal CID into the read-gate
+            // ReadContext.
+            let device_cid = self.device_cid();
+            let ctx = ReadContext {
+                label,
+                target_cid: Some(*cid),
+                actor_cid: Some(*principal),
+                device_cid,
+                ..Default::default()
+            };
+            if let Err(CapError::DeniedRead { .. }) = policy.check_read(&ctx) {
+                return Ok(None);
+            }
+        }
+        Ok(Some(node))
     }
 
     /// Phase 2a G2-B test-only: resolve `(handler_id, op)` to its registered
@@ -1229,14 +1314,45 @@ impl Engine {
         self.call(handler_id, op, node)
     }
 
-    /// Phase 2a G4-A test-only: grant a read capability for Option-C
-    /// flanking-method tests. Takes the target CID; the principal + scope
-    /// default to the Phase-2a test harness defaults.
+    /// Test/bench-only: grant a read capability for the supplied
+    /// target CID. Closes `docs/future/phase-3-backlog.md §13.7`
+    /// item (c).
+    ///
+    /// Looks up the Node's primary label via
+    /// [`Engine::get_node_label_only`], derives the
+    /// `store:<label>:read` scope (mirroring
+    /// [`benten_caps::GrantBackedPolicy`]'s `derive_read_scope`),
+    /// creates a synthetic `test-read-grant-helper` principal, and
+    /// installs the grant via [`Engine::grant_capability`]. The
+    /// returned `Cid` is the minted `system:CapabilityGrant` Node's
+    /// CID so callers can revoke surgically.
+    ///
+    /// Gated behind `cfg(any(test, feature = "test-helpers"))` so the
+    /// helper is not present in production builds — mirrors
+    /// [`Engine::testing_force_reregister_with_different_cid`] and
+    /// the `testing_*` accessor pattern.
     ///
     /// # Errors
-    /// Returns [`EngineError`] on capability grant failure.
-    pub fn grant_read_capability_for_testing(&self, _cid: &Cid) -> Result<Cid, EngineError> {
-        todo!("Phase 2a G4-A: test-only read-grant path for Option C flanking-methods")
+    /// Returns [`EngineError`] on backend lookup / grant failure, or
+    /// `E_NOT_FOUND` if the target CID is missing from the backend.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn grant_read_capability_for_testing(&self, cid: &Cid) -> Result<Cid, EngineError> {
+        let label = self
+            .backend()
+            .get_node_label_only(cid)?
+            .ok_or_else(|| EngineError::Other {
+                code: ErrorCode::NotFound,
+                message: format!("grant_read_capability_for_testing: target CID not found {cid:?}"),
+            })?;
+        let scope = if label.is_empty() {
+            "store:read".to_string()
+        } else {
+            format!("store:{label}:read")
+        };
+        // Mint a synthetic principal so the grant is addressable
+        // (`grant_capability` requires a concrete actor CID).
+        let principal = self.create_principal("test-read-grant-helper")?;
+        self.grant_capability(&principal, scope)
     }
 
     // ---- Benchmark helpers (Phase 2a G2-B subgraph_cache_hit) ------------
@@ -1293,27 +1409,16 @@ impl Engine {
         debug_assert!(miss.is_none(), "post-reregister probe must miss the cache");
     }
 
-    // ---- Benchmark helpers (Phase 2a descope-witness G2-A) ---------------
-
-    /// Phase 2a arch-r1-1: DurabilityMode::Group-vs-Immediate measurement
-    /// surface stub on `Engine`. **Not wired to any bench or test** — the
-    /// `crud_post_create_dispatch_group_durability` bench routes through
-    /// the `RedbBackend`-level helper
-    /// (`benten_graph::RedbBackend::benchmark_helper_crud_post_create_dispatch`)
-    /// instead, which was wired at Phase-3 G13-E. This `Engine`-level
-    /// stub remains as a future surface for engine-level (post-IVM,
-    /// post-capability-policy) per-write-class durability comparisons; it
-    /// has zero callers today.
-    pub fn benchmark_helper_crud_post_create_dispatch(
-        &self,
-        _durability: benten_graph::DurabilityMode,
-    ) {
-        todo!(
-            "Engine-level descope-witness stub; zero callers. The bench at \
-             crates/benten-graph/benches/crud_post_create_dispatch_group_durability.rs \
-             routes through the RedbBackend-level helper."
-        )
-    }
+    // The Phase-2a engine-level descope-witness stub
+    // `benchmark_helper_crud_post_create_dispatch` was deleted under
+    // `docs/future/phase-3-backlog.md §13.7` item (d) — it had zero
+    // callers, panicked via `todo!()`, and violated CLAUDE.md §"No
+    // deprecated aliases or backward-compat shims". The active
+    // durability bench at
+    // `crates/benten-graph/benches/crud_post_create_dispatch_group_durability.rs`
+    // routes through
+    // `benten_graph::RedbBackend::benchmark_helper_crud_post_create_dispatch`
+    // directly.
 }
 
 /// R6FP-Group-1 (r6-mpc-1): Map an `EvalError` returned by

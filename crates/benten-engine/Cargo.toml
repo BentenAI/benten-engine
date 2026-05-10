@@ -268,6 +268,11 @@ harness = false
 [[bench]]
 name = "option_c_evaluator_path_overhead"
 harness = false
+# §13.7 closure: bench seeds via `Engine::grant_read_capability_for_testing`
+# which lives behind `cfg(any(test, feature = "test-helpers"))` so the
+# helper is not present in production builds (same discipline as
+# `sandbox_metrics` + `ivm_view_subscribe_compose` tests above).
+required-features = ["test-helpers"]
 
 [[bench]]
 name = "subgraph_cache_hit"

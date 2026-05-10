@@ -2202,12 +2202,12 @@ The Phase-3-close pre-v1 cleanup window (post tag `phase-3-close` 2026-05-10) ra
 - `crates/benten-engine/tests/integration/wait_resume_determinism.rs`
 - `crates/benten-engine/tests/mermaid_wait_rendering.rs`
 
-`crates/benten-engine/Cargo.toml` `default = []` means `cargo test` runs with the feature OFF — these have NOT been run since Phase-2a (the originating phase). Several are headline exit-criterion tests (`inv_8_11_13_14_firing.rs` ↔ Phase-2a §1 exit-criterion 2 "four new invariants firing"; `wait_resume_determinism.rs` ↔ Phase-2a §1 exit-criterion 1 "WAIT-resume determinism"). The Cargo.toml comment names a ghost "next Phase-2b R6 wave" that no longer exists — that's a phantom-destination shape per HARD RULE clause-(b). The 7 integration files all transitively call into `Engine::put_node` / `Engine::read_node_with_policy` / `Engine::grant_read_capability_for_testing` at `crates/benten-engine/src/engine_wait.rs:1011-1026` which are still `todo!()` stubs — so the gate cannot lapse cleanly UNTIL the §13.7 un-stubbing lands.
+`crates/benten-engine/Cargo.toml` `default = []` means `cargo test` runs with the feature OFF — these have NOT been run since Phase-2a (the originating phase). Several are headline exit-criterion tests (`inv_8_11_13_14_firing.rs` ↔ Phase-2a §1 exit-criterion 2 "four new invariants firing"; `wait_resume_determinism.rs` ↔ Phase-2a §1 exit-criterion 1 "WAIT-resume determinism"). The Cargo.toml comment names a ghost "next Phase-2b R6 wave" that no longer exists — that's a phantom-destination shape per HARD RULE clause-(b). The 7 integration files all transitively call into `Engine::put_node` / `Engine::read_node_as` (renamed from `read_node_with_policy` at §13.7 closure) / `Engine::grant_read_capability_for_testing` — un-stubbed 2026-05-10 in the Class-B β PR — so the gate is now eligible to lapse per the closure plan below.
 
-**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Couples to §13.7. v1-assessment-window candidate; this entry is the registered destination for the phantom "next Phase-2b R6 wave" reference.
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Couples to §13.7. v1-assessment-window candidate; this entry is the registered destination for the phantom "next Phase-2b R6 wave" reference. §13.7 hard dependency closed 2026-05-10 in the Class-B β pre-v1 PR (production stubs now `Engine::put_node` + `Engine::read_node_as` + test-helpers-gated `Engine::grant_read_capability_for_testing`); the gated tests can now be un-ignored per fix-shape (b)+(c) below — but that gated-test un-ignore wave stays scoped here under §13.6, not retroactively folded into §13.7.
 
 **Concrete fix-shape:**
-- (a) Land §13.7 first (un-stub `Engine::put_node` + `Engine::read_node_with_policy` + `Engine::grant_read_capability_for_testing` so the gated tests can actually run).
+- (a) §13.7 landed 2026-05-10 (un-stubbed `Engine::put_node` + `Engine::read_node_as` (renamed from `read_node_with_policy`) + test-helpers-gated `Engine::grant_read_capability_for_testing`). The gated tests' `Engine::call_as` / `register_crud_with_grants` / `testing_insert_user_post` consumers may surface additional gaps when un-ignored.
 - (b) Per-file audit: for each of the 8 gated files, un-gate + run. If the test passes against the un-stubbed production fns, drop the `#![cfg(...)]` line. If the test surfaces an unanticipated assertion gap, file a child entry naming the gap + the Phase-N destination.
 - (c) Once all 8 files are un-gated, delete the `phase_2a_pending_apis` feature declaration from `crates/benten-engine/Cargo.toml`.
 - (d) Update `docs/history/PHASE-2a.md` retrospective with the actual exit-criterion verification dates (currently exit-criteria 1 + 2 are doc-claimed but never test-verified post-phase-2a-close).
@@ -2217,14 +2217,16 @@ The Phase-3-close pre-v1 cleanup window (post tag `phase-3-close` 2026-05-10) ra
 **Phase target:** v1-assessment-window per CLAUDE.md item #15. Dependency on §13.7 is hard (cannot un-gate until production fns un-stub).
 
 **Cross-references:**
-- `crates/benten-engine/Cargo.toml` `phase_2a_pending_apis` feature declaration (lines 64-82 carry the phantom-destination comment).
-- `crates/benten-engine/src/engine_wait.rs:1011-1026` (§13.7 un-stubbing site — hard dependency).
-- §13.7 (paired carry — un-stubbing wave).
+- `crates/benten-engine/Cargo.toml` `phase_2a_pending_apis` feature declaration (lines 64-82 carry the phantom-destination comment; closure window now open since §13.7 landed 2026-05-10).
+- `crates/benten-engine/src/engine_wait.rs::Engine::put_node` + `Engine::read_node_as` + `Engine::grant_read_capability_for_testing` (§13.7 un-stubbing landed 2026-05-10).
+- §13.7 (paired carry — un-stubbing wave; CLOSED 2026-05-10).
 - `docs/history/PHASE-2a.md` (the retrospective that names exit-criteria 1 + 2 as DONE).
 
 ---
 
-### 13.7 engine_wait.rs `todo!()` un-stubbing — `Engine::put_node` + Option-C flanking-method (Class-B β `read_node_as` work)
+### 13.7 engine_wait.rs `todo!()` un-stubbing — `Engine::put_node` + Option-C flanking-method (Class-B β `read_node_as` work) — **CLOSED 2026-05-10 (pre-v1 Class-B β PR)**
+
+**Closure summary (2026-05-10):** All four `todo!()` stubs closed in the Class-B β pre-v1 cleanup PR. `Engine::put_node` routes through `backend.transaction(|tx| tx.put_node(node))` with snapshot-blob read-only guard. `Engine::read_node_with_policy` was renamed to `Engine::read_node_as(principal, cid)` per CLAUDE.md baked-in #18 — public surface threads the caller's principal CID through `ReadContext::actor_cid` and consults `policy.check_read`; Inv-11 system-zone probe runs before the cap gate so privileged labels collapse to `Ok(None)` regardless of principal; cap denial collapses to `Ok(None)` per named compromise #2 (Option C symmetric None). `Engine::grant_read_capability_for_testing` lives behind `cfg(any(test, feature = "test-helpers"))` and mints a synthetic `test-read-grant-helper` principal then installs a `store:<label>:read` grant via `Engine::grant_capability`. `Engine::benchmark_helper_crud_post_create_dispatch` was DELETED per CLAUDE.md §"No deprecated aliases" (zero callers; the live bench uses the `RedbBackend`-level helper directly). The `option_c_evaluator_path_overhead` bench was migrated to `read_node_as` and pinned `required-features = ["test-helpers"]`. SECURITY-POSTURE.md + ARCHITECTURE.md retensed to remove the "implementation lands in pre-v1 cleanup window" prose. Item (f) un-ignoring the 8 `phase_2a_pending_apis`-gated tests stays open under **§13.6** (this PR only landed the engine-side surface; the gated-test un-ignore is the next coupled wave).
 
 **Origin:** Phase-3-close pre-v1 triage (2026-05-10 test-review `skipped-tests-audit.json::todo_in_production_src` cluster + per-crate `benten-engine-2.json::be2-major-1`). Four `todo!()` stubs in production source at `crates/benten-engine/src/engine_wait.rs`:
 

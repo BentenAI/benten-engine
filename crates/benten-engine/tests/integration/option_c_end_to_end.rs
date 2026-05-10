@@ -144,10 +144,11 @@ fn option_c_read_node_respects_check_read() {
     let cid = seed_denied_post(&engine);
 
     // Under the grant-backed policy, a caller without the read grant
-    // receives symmetric None (Option C). Exercised via the evaluator's
-    // read-capability gate (read_node_with_policy), NOT the raw backend.
+    // receives symmetric None (Option C). Exercised via the engine's
+    // principal-threaded `read_node_as` flanking surface (§13.7
+    // closure), NOT the raw backend.
     let got = engine
-        .read_node_with_policy(&cid)
+        .read_node_as(&alice, &cid)
         .expect("read path is infallible under Option C — denial collapses to None");
     assert!(
         got.is_none(),

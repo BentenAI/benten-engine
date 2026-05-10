@@ -1760,17 +1760,20 @@ The trust model is layered:
 **Engine-side surface.** The evaluator's read pathway threads the active
 principal through `Engine::read_node_as(principal, cid)` — the public surface
 for any read attributed to a non-trusted principal. Engine internals (IVM,
-sync, view materialization, audit, change-event fanout) call `Engine::read_node(cid)`
-— `pub(crate)`, no permission check, no overhead on hot paths. Plugin authors
-do not call either function directly: they author graph nodes; the evaluator is
-the only caller of `_as`. Mirrors the established `Engine::call_as` precedent
-at `crates/benten-engine/src/engine.rs::call_as`. **Implementation lands in the
-pre-v1 cleanup window** (closing Phase-2a-era debt: the 4 `todo!()` stubs at
-`crates/benten-engine/src/engine_wait.rs:1011-1026` — `put_node` +
-`read_node_with_policy` + the test-only read-grant helper + the bench-helper
-sibling — are the migration target). The engine surface is independent of the
-Phase-4 plugin manifest schema; both can be designed and shipped without
-sequencing dependencies.
+sync, view materialization, audit, change-event fanout) reach the unchecked
+storage read via `self.backend.get_node(cid)` directly — the backend field
++ accessor are both `pub(crate)`, so external crates physically cannot bypass
+the policy gate. Plugin authors do not call either path directly: they
+author graph nodes; the evaluator is the only caller of `_as`. Mirrors the
+established `Engine::call_as` precedent at
+`crates/benten-engine/src/engine.rs::call_as`. **Implementation landed in
+the pre-v1 cleanup window** (closing Phase-2a-era debt: the 4 `todo!()`
+stubs at `crates/benten-engine/src/engine_wait.rs:1011-1311` — `put_node`
++ `read_node_with_policy` (renamed to `read_node_as`) + the test-only
+read-grant helper + the dead bench-helper sibling — closed under
+`docs/future/phase-3-backlog.md §13.7`). The engine surface is independent
+of the Phase-4 plugin manifest schema; both can be designed and shipped
+without sequencing dependencies.
 
 **Private namespaces.** A plugin's writes go to a DID-scoped namespace whose
 cap is held by the plugin's DID. Manifest `shares=none` for that namespace
