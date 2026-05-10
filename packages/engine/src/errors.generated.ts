@@ -404,9 +404,9 @@ export class ECapRevokedMidEval extends BentenError {
  */
 export class ECapNotImplemented extends BentenError {
   static readonly code = "E_CAP_NOT_IMPLEMENTED";
-  static readonly fixHint = "Distinct from `E_CAP_DENIED` — this signals operator misconfiguration (configured a capability backend that isn't implemented yet), not an authorization failure. `UCANBackend` ships as a stub in Phase 1 and fully in Phase 3. Configure `NoAuthBackend` for embedded/local-only use, or provide a custom `CapabilityPolicy` impl. Routes to the subgraph's `ON_ERROR` edge, not `ON_DENIED`.";
+  static readonly fixHint = "Distinct from `E_CAP_DENIED` — this signals operator misconfiguration (configured a capability backend whose `check_write` arm isn't implemented for the requested phase), not an authorization failure. The Phase-3 `UCANBackend` ships durable + LIVE at G21-T2 audit-6-1 closure (the napi-side `PolicyKind::Ucan` wires to `EngineBuilder::capability_policy_ucan_durable()`); the historical Phase-1 stub form returned this code on the first WRITE prior to G14-B-promotion. Operators on bespoke backends still see this code if their custom `CapabilityPolicy` impl lacks the `check_write` arm; the canonical alternatives are `NoAuthBackend` for embedded/local-only use or layering on top of `GrantBackedPolicy`. Routes to the subgraph's `ON_ERROR` edge, not `ON_DENIED`.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_CAP_NOT_IMPLEMENTED", "Distinct from `E_CAP_DENIED` — this signals operator misconfiguration (configured a capability backend that isn't implemented yet), not an authorization failure. `UCANBackend` ships as a stub in Phase 1 and fully in Phase 3. Configure `NoAuthBackend` for embedded/local-only use, or provide a custom `CapabilityPolicy` impl. Routes to the subgraph's `ON_ERROR` edge, not `ON_DENIED`.", message, context);
+    super("E_CAP_NOT_IMPLEMENTED", "Distinct from `E_CAP_DENIED` — this signals operator misconfiguration (configured a capability backend whose `check_write` arm isn't implemented for the requested phase), not an authorization failure. The Phase-3 `UCANBackend` ships durable + LIVE at G21-T2 audit-6-1 closure (the napi-side `PolicyKind::Ucan` wires to `EngineBuilder::capability_policy_ucan_durable()`); the historical Phase-1 stub form returned this code on the first WRITE prior to G14-B-promotion. Operators on bespoke backends still see this code if their custom `CapabilityPolicy` impl lacks the `check_write` arm; the canonical alternatives are `NoAuthBackend` for embedded/local-only use or layering on top of `GrantBackedPolicy`. Routes to the subgraph's `ON_ERROR` edge, not `ON_DENIED`.", message, context);
     this.name = "ECapNotImplemented";
   }
 }
@@ -687,12 +687,12 @@ export class EValueFloatNan extends BentenError {
  * Thrown at: Value construction / deserialization
  * Message template: "Floating-point value is non-finite (Infinity / -Infinity); Value::Float requires finite numbers"
  */
-export class EValueFloatNonfinite extends BentenError {
+export class EValueFloatNonFinite extends BentenError {
   static readonly code = "E_VALUE_FLOAT_NONFINITE";
   static readonly fixHint = "DAG-CBOR's canonical form rejects ±Infinity. Clamp to a finite bound or use `Value::Null`.";
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_VALUE_FLOAT_NONFINITE", "DAG-CBOR's canonical form rejects ±Infinity. Clamp to a finite bound or use `Value::Null`.", message, context);
-    this.name = "EValueFloatNonfinite";
+    this.name = "EValueFloatNonFinite";
   }
 }
 
@@ -1722,12 +1722,12 @@ export class EReloadSubscriberUnsubscribed extends BentenError {
  * Thrown at: `bindings/napi/src/devserver.rs::devserver_stopped` (helper used by every devserver method that requires the dev-server to be running). R6 Round-2 r6-r2-napi-1 promoted this from a hand-typed `"E_DEVSERVER_STOPPED"` string to a typed catalog variant so JS callers get `EDevServerStopped` typed dispatch.
  * Message template: "dev-server has been stopped — call .start() before further operations"
  */
-export class EDevserverStopped extends BentenError {
+export class EDevServerStopped extends BentenError {
   static readonly code = "E_DEVSERVER_STOPPED";
   static readonly fixHint = "A devserver napi method was called after `DevServer.stop()` flipped the in-memory state to stopped. Restart the dev-server via `.start()` before invoking further operations, or construct a fresh `DevServer` instance.";
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_DEVSERVER_STOPPED", "A devserver napi method was called after `DevServer.stop()` flipped the in-memory state to stopped. Restart the dev-server via `.start()` before invoking further operations, or construct a fresh `DevServer` instance.", message, context);
-    this.name = "EDevserverStopped";
+    this.name = "EDevServerStopped";
   }
 }
 
@@ -2224,7 +2224,7 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_SYNC_HLC_DRIFT": ESyncHlcDrift,
   "E_SYNC_CAP_UNVERIFIED": ESyncCapUnverified,
   "E_VALUE_FLOAT_NAN": EValueFloatNan,
-  "E_VALUE_FLOAT_NONFINITE": EValueFloatNonfinite,
+  "E_VALUE_FLOAT_NONFINITE": EValueFloatNonFinite,
   "E_CID_PARSE": ECidParse,
   "E_CID_UNSUPPORTED_CODEC": ECidUnsupportedCodec,
   "E_CID_UNSUPPORTED_HASH": ECidUnsupportedHash,
@@ -2293,7 +2293,7 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_BACKEND_READ_ONLY": EBackendReadOnly,
   "E_SANDBOX_UNAVAILABLE_ON_WASM": ESandboxUnavailableOnWasm,
   "E_RELOAD_SUBSCRIBER_UNSUBSCRIBED": EReloadSubscriberUnsubscribed,
-  "E_DEVSERVER_STOPPED": EDevserverStopped,
+  "E_DEVSERVER_STOPPED": EDevServerStopped,
   "E_STORAGE_QUOTA_EXCEEDED": EStorageQuotaExceeded,
   "E_HLC_SKEW_EXCEEDED": EHlcSkewExceeded,
   "E_CAP_UCAN_EXPIRED": ECapUcanExpired,

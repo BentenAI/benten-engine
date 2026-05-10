@@ -169,6 +169,7 @@ impl Engine {
     ///   per-row cap-recheck calls fired by `apply_atrium_merge`'s
     ///   structural-always-on per-write loop (G16-B-F sec-r4r1-2 closure).
     #[must_use]
+    #[allow(clippy::too_many_lines)] // Sequential lift of independent observability counters; splitting harms read-top-to-bottom narrative.
     pub fn metrics_snapshot(&self) -> BTreeMap<String, f64> {
         let mut out = BTreeMap::new();
         let n = self
@@ -291,6 +292,27 @@ impl Engine {
             out.insert(
                 "benten.sync_replica.cap_recheck_calls".to_string(),
                 recheck_calls as f64,
+            );
+        }
+
+        // R6 fp Wave-C2 follow-up (obs-r6-r2-1 sibling-class closure):
+        // lift the Phase-2b STREAM `active_stream_count` accessor into
+        // the canonical operator-dashboard bag so metrics_snapshot is
+        // complete across the 12-primitive observability surface.
+        // (The Phase-3 sync-frame `inbound_hlc_skew_classifier_calls`
+        // accessor sits on `AtriumHandle` rather than `Engine`; lifting
+        // it requires per-atrium iteration + filed at phase-3-backlog
+        // §6.13a as v1-window follow-up coupling to the existing
+        // AtriumConfig.skew_tolerance_ms operator-tuneable carry.)
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "active_stream_count is a usize counter bounded by per-process producer-bridge handle count; lossy f64 cast acceptable for operator-dashboard surface"
+        )]
+        {
+            let active_streams = self.active_stream_count();
+            out.insert(
+                "benten.stream.active_count".to_string(),
+                active_streams as f64,
             );
         }
 

@@ -30,7 +30,7 @@ export {
   ECidParse,
   ECidUnsupportedCodec,
   ECidUnsupportedHash,
-  EDevserverStopped,
+  EDevServerStopped,
   EDslInvalidShape,
   EDslUnregisteredHandler,
   EDuplicateHandler,
@@ -84,7 +84,7 @@ export {
   EUnknownView,
   EViewLabelMismatch,
   EValueFloatNan,
-  EValueFloatNonfinite,
+  EValueFloatNonFinite,
   EVersionBranched,
   EVersionUnknownPrior,
   EWaitSignalShapeMismatch,
@@ -109,7 +109,7 @@ import {
   ECidParse,
   ECidUnsupportedCodec,
   ECidUnsupportedHash,
-  EDevserverStopped,
+  EDevServerStopped,
   EDslInvalidShape,
   EDslUnregisteredHandler,
   EDuplicateHandler,
@@ -162,7 +162,7 @@ import {
   EUnknownView,
   EViewLabelMismatch,
   EValueFloatNan,
-  EValueFloatNonfinite,
+  EValueFloatNonFinite,
   EVersionBranched,
   EVersionUnknownPrior,
   EWaitSignalShapeMismatch,
@@ -218,7 +218,7 @@ const CODE_TO_CTOR: Record<string, BentenErrorCtor> = {
   E_DSL_INVALID_SHAPE: EDslInvalidShape,
   E_DSL_UNREGISTERED_HANDLER: EDslUnregisteredHandler,
   E_VALUE_FLOAT_NAN: EValueFloatNan,
-  E_VALUE_FLOAT_NONFINITE: EValueFloatNonfinite,
+  E_VALUE_FLOAT_NONFINITE: EValueFloatNonFinite,
   E_CID_PARSE: ECidParse,
   E_CID_UNSUPPORTED_CODEC: ECidUnsupportedCodec,
   E_CID_UNSUPPORTED_HASH: ECidUnsupportedHash,
@@ -270,10 +270,10 @@ const CODE_TO_CTOR: Record<string, BentenErrorCtor> = {
   // the napi devserver paths surfacing `E_RELOAD_SUBSCRIBER_UNSUBSCRIBED:`
   // / `E_DEVSERVER_STOPPED:` round-trip as the synthetic `E_UNKNOWN`
   // fallback rather than `EReloadSubscriberUnsubscribed` /
-  // `EDevserverStopped`, defeating the original promotion's purpose.
+  // `EDevServerStopped`, defeating the original promotion's purpose.
   // 16th instance of the producer/consumer drift pattern; folded into
   // the §7.6 Phase-3 codegen lift to prevent recurrence at source.
-  E_DEVSERVER_STOPPED: EDevserverStopped,
+  E_DEVSERVER_STOPPED: EDevServerStopped,
   E_RELOAD_SUBSCRIBER_UNSUBSCRIBED: EReloadSubscriberUnsubscribed,
   // Phase-3 G14-pre-D: HLC skew rejection. Wired into CODE_TO_CTOR at
   // landing time per pim-1 / §3.5b doc-coupling pre-flight (the producer

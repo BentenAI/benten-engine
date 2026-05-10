@@ -284,24 +284,20 @@ all three Phase-2b primitives plus four Phase-3 Atrium examples
 
 ## Joining an Atrium (Phase 3)
 
-> **Note (Phase-3-close honest state).** The durable Phase-3 UCAN
-> backend ships in Rust at `crates/benten-caps/src/backends/ucan.rs`
-> (struct `UCANBackend`). The TS-surface `PolicyKind.Ucan` enum
-> variant is wired in the napi binding at
-> `bindings/napi/src/lib.rs::PolicyKind::Ucan`, but at Phase-3 close
-> the binding still routes to the Phase-1 `UcanBackend` stub which
-> returns `E_CAP_NOT_IMPLEMENTED` on the first WRITE. End-to-end
-> Atrium examples that use `PolicyKind.Ucan` (the four runners listed
-> below — `atrium-peer-mgmt.ts`, `atrium-sync-trigger.ts`,
-> `ucan-grant-flow.ts`, `did-resolution.ts`) compile, type-check, and
-> import cleanly against the documented public surface (the
+> **Note (Phase-3-close state).** The durable Phase-3 UCAN backend
+> ships in Rust at `crates/benten-caps/src/backends/ucan.rs` (struct
+> `UCANBackend`). The TS-surface `PolicyKind.Ucan` enum variant is
+> wired in the napi binding at `bindings/napi/src/lib.rs` via
+> `EngineBuilder::capability_policy_ucan_durable()` (G21-T2 audit-6-1
+> closure) — runtime end-to-end is LIVE. The four end-to-end Atrium
+> runner examples below (`atrium-peer-mgmt.ts`,
+> `atrium-sync-trigger.ts`, `ucan-grant-flow.ts`,
+> `did-resolution.ts`) execute against the durable backend; the
 > companion Vitest pin `packages/engine/test/atrium_examples.test.ts`
-> verifies the SHAPE half), but a write-touching call (`callAs`,
-> `engine.atrium(...).join()` paths that materialize state, etc.)
-> will surface `E_CAP_NOT_IMPLEMENTED` until the napi-UCAN-wireup
-> lands. That wireup is named at
-> [`docs/future/phase-3-backlog.md` §2.3 (G21 T2)](future/phase-3-backlog.md);
-> the runtime end-to-end half flips GREEN at G21 T2 close.
+> verifies the SHAPE half. Phase-3-close exit criterion 1 (two
+> full-peer iroh sync) + criterion 15 (3+-peer concurrent-write
+> convergence) + criterion 16 (multi-device cryptographic-attestation
+> closure) all GREEN at tag `phase-3-close`.
 
 An **Atrium** is a peer-to-peer-synchronized graph shared by a small
 set of full-peer engines (a user's laptop + phone-OS app + desktop;

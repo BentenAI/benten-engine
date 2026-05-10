@@ -513,7 +513,7 @@ async fn loro_merge_produces_new_version_node_in_anchor_chain() {
 }
 
 #[test]
-#[ignore = "DEFERRED: G16-D wave-6b — SUBSCRIBE fan-out from Loro merge per cag-r4-6 MINOR"]
+#[ignore = "phase-3-backlog §6.12 (G16-B post-canary residuals) — cag-r4-6 MINOR SUBSCRIBE fan-out from Loro merge. G16-D wave-6b SHIPPED at PR #163; G16-B-prime engine-side merge mints Version Node via append_version (which fires standard ChangeEvent path) but explicit zone-keyed SUBSCRIBE notification on Loro-merge boundaries is the §6.12 deliverable; un-ignore at the §6.12 landing wave per Wave-E rationale-only sweep follow-up (R6 R2 corr-r6-r2-1 closure)."]
 fn loro_merge_fires_subscribe_notification_on_affected_zone_per_charter_9() {
     // cag-r4-6 MINOR pin. SUBSCRIBE fan-out from Loro merges requires
     // the engine's merge-callback to wire through the SUBSCRIBE

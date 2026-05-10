@@ -87,7 +87,38 @@ function extractBullet(body: string, label: string): string | null {
 }
 
 /**
+ * Compound-stem expansions for wire codes whose underscored part is a
+ * 2-token compound that the Rust `ErrorCode` enum spells in inner-PascalCase.
+ *
+ * Background (R6 R2 dx-r6-r2-2): the Rust enum follows Rust naming
+ * conventions where compound nouns are spelled with internal capitals
+ * (`DevServerStopped`, `ValueFloatNonFinite`). The wire-code form
+ * (`E_DEVSERVER_STOPPED`, `E_VALUE_FLOAT_NONFINITE`) collapses the
+ * compound to a single all-caps token because `_` is the wire-code
+ * separator. The default `toClassName` collapser maps each underscored
+ * part to first-cap+lower-rest, which produces `EDevserverStopped` /
+ * `EValueFloatNonfinite` — drift from the Rust enum's `DevServerStopped`
+ * / `ValueFloatNonFinite`. This map preserves wire-code stability +
+ * Rust enum convention by special-casing the compound stems back to
+ * their inner-PascalCase form.
+ *
+ * Add a new entry here when ratifying a fresh ErrorCode whose Rust
+ * enum spelling is an inner-PascalCase compound. The
+ * `EDevServerStopped` / `EValueFloatNonFinite` parity meta-test
+ * (in `packages/engine/src/errors.test.ts`) pins the surface against
+ * silent drift.
+ */
+const COMPOUND_STEM_EXPANSIONS: Record<string, string> = {
+  DEVSERVER: "DevServer",
+  NONFINITE: "NonFinite",
+};
+
+/**
  * Convert `E_CAP_DENIED` -> `ECapDenied` (PascalCase class name).
+ *
+ * Compound stems registered in `COMPOUND_STEM_EXPANSIONS` are mapped
+ * to their inner-PascalCase form (e.g. `DEVSERVER` -> `DevServer`,
+ * `NONFINITE` -> `NonFinite`); other parts use first-cap + rest-lower.
  */
 function toClassName(code: string): string {
   // E_CAP_DENIED -> [E, CAP, DENIED] -> ECapDenied
@@ -95,6 +126,8 @@ function toClassName(code: string): string {
     .split("_")
     .map((part, idx) => {
       if (idx === 0) return part; // keep `E` as-is
+      const compound = COMPOUND_STEM_EXPANSIONS[part];
+      if (compound !== undefined) return compound;
       return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
     })
     .join("");

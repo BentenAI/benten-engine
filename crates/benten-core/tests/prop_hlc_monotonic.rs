@@ -21,15 +21,24 @@ use benten_core::hlc::{BentenHlc, Hlc};
 use proptest::prelude::*;
 
 // The `Hlc::new` API takes a `fn() -> u64` (not a closure or trait object),
-// so the mock state lives in a module-level static. Each proptest run reads
-// from + writes to the same static; serialization is fine because proptest
-// runs cases sequentially in a single thread by default. Do NOT enable
-// proptest's parallel runner against this test file.
+// so each mock-clock state lives in its own module-level static. Per-test
+// statics (NOT a single shared `MOCK_PHYSICAL_MS` across proptests)
+// preclude cross-test interference under any future schedule that might
+// run the proptest binary's tests in parallel — defends structurally
+// rather than via comment-only constraint. Sibling decomposition applied
+// to the inline `mod tests` at `crates/benten-core/src/hlc.rs:380+` per
+// phase-3-backlog §7.18 closure (R6 R2 hlc-r6-r2-2 sibling-site closure).
 
-static MOCK_PHYSICAL_MS: AtomicU64 = AtomicU64::new(0);
+// ---- prop_hlc_now_is_strictly_monotonic ----
+static MOCK_PROP_NOW_MS: AtomicU64 = AtomicU64::new(0);
+fn prop_now_clock() -> u64 {
+    MOCK_PROP_NOW_MS.load(Ordering::SeqCst)
+}
 
-fn mock_clock() -> u64 {
-    MOCK_PHYSICAL_MS.load(Ordering::SeqCst)
+// ---- prop_hlc_tight_loop_is_strictly_monotonic ----
+static MOCK_PROP_TIGHT_LOOP_MS: AtomicU64 = AtomicU64::new(0);
+fn prop_tight_loop_clock() -> u64 {
+    MOCK_PROP_TIGHT_LOOP_MS.load(Ordering::SeqCst)
 }
 
 /// Strategy: a sequence of physical-clock deltas. Each delta is signed in
@@ -60,8 +69,8 @@ proptest! {
     ) {
         // Reset the mock to a known starting point — different cases must
         // not share `last_emitted` state.
-        MOCK_PHYSICAL_MS.store(1_000_000, Ordering::SeqCst);
-        let hlc = Hlc::new(0xABCD_EF01_2345_6789, mock_clock);
+        MOCK_PROP_NOW_MS.store(1_000_000, Ordering::SeqCst);
+        let hlc = Hlc::new(0xABCD_EF01_2345_6789, prop_now_clock);
 
         // Always sample once before any deltas — pins the initial physical_ms.
         let first = hlc.now();
@@ -70,11 +79,11 @@ proptest! {
         for (advance, magnitude) in deltas {
             // Apply the property-generated delta to the mock clock.
             if advance {
-                MOCK_PHYSICAL_MS.fetch_add(u64::from(magnitude), Ordering::SeqCst);
+                MOCK_PROP_NOW_MS.fetch_add(u64::from(magnitude), Ordering::SeqCst);
             } else {
-                let cur = MOCK_PHYSICAL_MS.load(Ordering::SeqCst);
+                let cur = MOCK_PROP_NOW_MS.load(Ordering::SeqCst);
                 let new_val = cur.saturating_sub(u64::from(magnitude));
-                MOCK_PHYSICAL_MS.store(new_val, Ordering::SeqCst);
+                MOCK_PROP_NOW_MS.store(new_val, Ordering::SeqCst);
             }
             let next = hlc.now();
             // Strict monotonicity invariant — load-bearing for Loro
@@ -95,8 +104,8 @@ proptest! {
     /// logical-counter bump path.
     #[test]
     fn prop_hlc_tight_loop_is_strictly_monotonic(n in 2usize..256) {
-        MOCK_PHYSICAL_MS.store(2_000_000, Ordering::SeqCst);
-        let hlc = Hlc::new(1, mock_clock);
+        MOCK_PROP_TIGHT_LOOP_MS.store(2_000_000, Ordering::SeqCst);
+        let hlc = Hlc::new(1, prop_tight_loop_clock);
         let stamps: Vec<BentenHlc> = (0..n).map(|_| hlc.now()).collect();
         for w in stamps.windows(2) {
             prop_assert!(

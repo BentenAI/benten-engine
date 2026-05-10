@@ -751,6 +751,28 @@ The Rust-side anchor test `crates/benten-eval/tests/sandbox_severity_priority_g1
 
 ---
 
+### 6.13a Per-atrium HLC skew classifier counter lifted into Engine::metrics_snapshot (R6 R2 obs-r6-r2-1 sibling-class — partial close)
+
+**Origin (2026-05-10 R6 R2 observability lens):** sibling-class to the closed `obs-r6-r1-2` (Phase-3 observables in `metrics_snapshot`). The Phase-3 `Hlc::update` per-row classifier counter is reachable via `AtriumHandle::inbound_hlc_skew_classifier_calls` on each atrium handle but lives per-Atrium rather than as an Engine-level cumulative counter. Pre-tag fix-pass landed the Phase-2b `active_stream_count` lift (Engine-level surface); the per-atrium HLC counter requires per-atrium iteration in `metrics_snapshot` + per-atrium key-namespacing.
+
+**Disposition (R6 R2 pre-tag fix-pass 2026-05-10):** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Couples to §6.13 (AtriumConfig.skew_tolerance_ms operator-tuneable) since both surfaces touch the same per-atrium HLC config + observability shape. v1-window candidate.
+
+**Concrete fix-shape:**
+- (a) In `Engine::metrics_snapshot`, iterate `self.inner.atriums` (or whatever the atrium registry shape becomes post §6.13) and emit per-atrium keys: `benten.sync.atrium.<atrium_id>.inbound_hlc_skew_classifier_calls`
+- (b) Mirror the per-handler SANDBOX metric pattern (existing precedent in `metrics_snapshot`)
+- (c) Test pin: extend the Wave-C2 metrics_snapshot regression test with assertions on the new per-atrium key shape
+
+**Touch size:** ~30-50 LOC including test pin extension.
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15 — non-blocking for Phase-3 close. Bundle with §6.13 since both surfaces want the same atrium-iteration shape.
+
+**Cross-references:**
+- `crates/benten-engine/src/engine_diagnostics.rs::Engine::metrics_snapshot` (the lift site)
+- `crates/benten-engine/src/engine_sync.rs::AtriumHandle::inbound_hlc_skew_classifier_calls` (the per-atrium counter)
+- §6.13 (AtriumConfig.skew_tolerance_ms — paired carry)
+
+---
+
 ### 6.10 `random` host-fn deferral — workspace CSPRNG framework choice — CLOSED at Phase-3 G17-A2 wave-5b
 
 **Closure shape (Phase-3 G17-A2 wave-5b):** The workspace CSPRNG decision landed at R1 (D-PHASE-3-11 RESOLVED-at-R1) = `getrandom` direct (NOT `rand` ecosystem; NOT a deterministic seed). G17-A2 wires `random` into the codegen-default surface alongside `time` / `log` / `kv:read` (cap-string `host:random:read`, 4-segment shape mirroring `kv:read`; `cap_recheck = per_call`); the trampoline at `crates/benten-eval/src/primitives/sandbox.rs::register_default_host_fns` invokes `getrandom::getrandom` to fill the guest buffer. Per-call entropy budget defaults to **4096 bytes** (per r1-wsa-8); a manifest may override via the additive optional `host_fns.random.budget_bytes_per_call` field on `ModuleManifest`. Budget overrun fires the typed `E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED` variant (routed `ON_DENIED`). The validate-time deferral guard + `DEFERRED_HOST_FN_RANDOM_CAP_PREFIX` const are RETIRED; `crates/benten-eval/tests/sandbox_host_fn_random_deferred.rs` is deleted; new green-phase regression guards live at `crates/benten-eval/tests/random_host_fn.rs`. Compromise #16 → CLOSED at Phase-3 G17-A2 in `docs/SECURITY-POSTURE.md`. `host-functions.toml` now declares `[host_fn.random]` IMPLEMENTED.
@@ -1613,22 +1635,32 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 
 ---
 
-### 7.18 hlc_clock_skew_within_tolerance parallel-test race (shared `static MOCK_MS`) — CLOSED 2026-05-09 (orchestrator-direct fix-pass batch)
+### 7.18 HLC mock-clock parallel-test race (shared `static MOCK_TIME_MS`) — CLOSED across 3 sibling sites 2026-05-09 (integration test PR #155 fix-pass + inline `mod tests` + prop_hlc_monotonic R6 R2 pre-tag fix-pass batch)
 
 **Origin (2026-05-09 PR #155 G16-B-prime CI):** the `cargo-llvm-cov` workflow on PR #155's fix-pass commit `ca16b37` failed with `update_within_custom_tolerance_accepts` panicking `assertion left == right failed: left: 1000000, right: 50500` at line 50. The expected value (`50_500`) matched the test's local `MOCK_MS.store(50_000, ...)` write; the actual value (`1_000_000`) matched a sibling test's write. The same fix-pass commit was previously GREEN on coverage at canary commit `76b8eba`, confirming flake — not regression.
 
-**Root cause:** the previous test file declared a single `static MOCK_MS: AtomicU64` shared across the four `#[test]` functions in the same test binary. `cargo test` runs the four tests in parallel by default (no `serial-globals` test-group override since this binary isn't in `.config/nextest.toml`'s serial group, and `cargo-llvm-cov` shells out to plain `cargo test --tests` which doesn't honor nextest groups even when configured). One test's `MOCK_MS.store(1_000_000)` won the last-write race against another test's `MOCK_MS.store(50_000)` between the second test's store and its `hlc.update(&remote)` call. Coverage instrumentation slowed tests enough to widen the race window.
+**Root cause:** the test binary declared a single `static MOCK_MS: AtomicU64` shared across multiple `#[test]` functions in the same binary. `cargo test` runs tests in parallel by default (no `serial-globals` test-group override since this binary isn't in `.config/nextest.toml`'s serial group, and `cargo-llvm-cov` shells out to plain `cargo test --tests` which doesn't honor nextest groups even when configured). One test's `MOCK_MS.store(N₁)` won the last-write race against another test's `MOCK_MS.store(N₂)` between the second test's store and its `hlc.update(&remote)` call. Coverage instrumentation slowed tests enough to widen the race window.
 
 **Same root-cause class as §7.16 (CLOSED 2026-05-08 with `ctx_with_isolated_store` per-test isolation pattern).** That closure's signal-name → envelope-CID-collision shape didn't apply here, but the meta-pattern (process-shared mutable state colliding across parallel-scheduled tests in the same binary) is identical.
 
-**Closure shape (2026-05-09):** replaced the single shared `static MOCK_MS: AtomicU64` with four per-test `static MOCK_DEFAULT/MOCK_CUSTOM/MOCK_BOUNDARY/MOCK_PAST: AtomicU64` + four bare `fn` wrappers. The `Hlc::new` API takes a `fn() -> u64` bare pointer (not `impl Fn`), so each test had to own its own `static` + free `fn` (an `Arc<AtomicU64>` + closure shape doesn't coerce to `fn`). Each test's mock-clock state now lives in its own static regardless of harness scheduling.
+**Closure shape — 3 sibling sites (per pim-2-amendment §3.6b sub-rule 4 sibling-site enumeration discipline):**
 
-**Verification:** `cargo test -p benten-core --test hlc_clock_skew_within_tolerance` 60/60 consecutive runs PASS post-fix; subsequent `cargo-llvm-cov` runs on `main` should show no further `update_within_custom_tolerance_accepts` reds.
+1. **Integration test sister at `crates/benten-core/tests/hlc_clock_skew_within_tolerance.rs` — CLOSED 2026-05-09 PR #155 fix-pass.** Replaced the single shared `static MOCK_MS: AtomicU64` with four per-test `static MOCK_DEFAULT/MOCK_CUSTOM/MOCK_BOUNDARY/MOCK_PAST: AtomicU64` + four bare `fn` wrappers. The `Hlc::new` API takes a `fn() -> u64` bare pointer (not `impl Fn`), so each test had to own its own `static` + free `fn` (an `Arc<AtomicU64>` + closure shape doesn't coerce to `fn`). Each test's mock-clock state now lives in its own static regardless of harness scheduling.
+
+2. **Inline `mod tests` at `crates/benten-core/src/hlc.rs:380+` — CLOSED 2026-05-09 R6 R2 pre-tag fix-pass batch (orchestrator-direct).** The original §7.18 closure narrative addressed only the integration test sister; the inline unit tests retained a single shared `static MOCK_TIME_MS` across 9 `#[test]` fns with cross-test reset values 1_000 / 2_000 / 5_000 / 10_000 / 100_000 / 7_000. PR #168 cargo-llvm-cov flake panicking `left:2000/right:10000` matched the cross-test contention between `now_bumps_logical_when_physical_clock_stalls` (`reset_mock(2_000)` line 420) and `update_within_tolerance_advances_local` (`reset_mock(10_000)` line 451) sharing the same shared static. Decomposed into 7 per-test `static MOCK_NOW_ADV_TIME_MS / MOCK_NOW_BUMPS_TIME_MS / MOCK_NOW_REWIND_TIME_MS / MOCK_UPDATE_WITHIN_TIME_MS / MOCK_UPDATE_BEYOND_TIME_MS / MOCK_SKEW_CODE_TIME_MS / MOCK_THREE_WAY_TIME_MS` + 7 bare `fn` wrappers (per pim-2-amendment §3.6b sub-rule 4 per-finding granularity: each test owns its mock state). Surfaced as R6 R2 hlc-r6-r2-1 by the hlc-clocks lens deep-verify walk.
+
+3. **Proptest at `crates/benten-core/tests/prop_hlc_monotonic.rs` — CLOSED 2026-05-09 R6 R2 pre-tag fix-pass batch (orchestrator-direct).** Two proptests previously shared a single `static MOCK_PHYSICAL_MS: AtomicU64`, with the cross-test serialization preserved by a comment-only constraint ("Do NOT enable proptest's parallel runner against this test file"). Decomposed into per-proptest `static MOCK_PROP_NOW_MS` / `MOCK_PROP_TIGHT_LOOP_MS` + 2 bare `fn` wrappers; the constraint is now structural (each proptest's state lives in its own static) rather than comment-defended. Surfaced as R6 R2 hlc-r6-r2-2 by the hlc-clocks lens deep-verify walk.
+
+**Verification:** `cargo test -p benten-core --test hlc_clock_skew_within_tolerance` 60/60 consecutive runs PASS post-fix; `cargo test -p benten-core --lib hlc::tests` 10/10 PASS post-decomposition; `cargo test -p benten-core --test prop_hlc_monotonic` 2/2 PASS post-decomposition. Subsequent `cargo-llvm-cov` runs on `main` should show no further `MOCK_*` mock-clock cross-test contention reds.
 
 **Cross-references:**
-- `crates/benten-core/tests/hlc_clock_skew_within_tolerance.rs` (per-test static decomposition; replaces the prior shared `MOCK_MS`)
+- `crates/benten-core/tests/hlc_clock_skew_within_tolerance.rs` (per-test static decomposition; sibling site 1)
+- `crates/benten-core/src/hlc.rs:380+` inline `mod tests` (per-test static decomposition; sibling site 2)
+- `crates/benten-core/tests/prop_hlc_monotonic.rs` (per-proptest static decomposition; sibling site 3)
 - §7.16 closure pattern (per-test isolated state injection) — reference precedent
-- PR #155 cargo-llvm-cov run `25591002108` job `75128549720` (failure that surfaced this entry)
+- PR #155 cargo-llvm-cov run `25591002108` job `75128549720` (failure that surfaced sibling site 1)
+- PR #168 cargo-llvm-cov flake `left:2000/right:10000` (failure that surfaced sibling site 2 at R6 R2)
+- pim-2-amendment §3.6b sub-rule 4 per-finding granularity for closure pins + sibling-site enumeration (the discipline that caught the missing sibling sites at R6 R2)
 
 ---
 

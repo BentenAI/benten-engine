@@ -312,34 +312,31 @@ pub trait CapabilityPolicy: Send + Sync {
     /// # Phase-1 wiring caveat
     ///
     /// The evaluator reads its batch cadence from
-    /// `benten_eval::PrimitiveHost::iterate_batch_boundary`, not from the
-    /// configured `CapabilityPolicy`. In Phase 1 the default engine
-    /// `PrimitiveHost` implementation does NOT delegate to the policy's
-    /// override, so customising this value on a bespoke
-    /// `CapabilityPolicy` will not affect the evaluator's actual refresh
-    /// cadence. This method is therefore a policy-level constant in
-    /// Phase 1, consulted by capability-aware tooling that inspects the
-    /// policy directly.
-    ///
-    /// TODO(phase-3 — iterate-batch-boundary policy delegation): wire
-    /// the engine's `PrimitiveHost::iterate_batch_boundary` to delegate
-    /// to the configured `CapabilityPolicy::iterate_batch_boundary` so
-    /// the policy override becomes load-bearing end-to-end. Carried
-    /// from Phase-2 generic marker; pairs with §2.1 Durable UCAN
-    /// backend wave.
+    /// `benten_eval::PrimitiveHost::iterate_batch_boundary` —
+    /// the engine's default `PrimitiveHost` implementation now
+    /// delegates to this policy method via
+    /// `benten_caps::evaluator_delegation::iterate_batch_boundary_for`
+    /// (consumer wired at
+    /// `crates/benten-engine/src/primitive_host.rs::PrimitiveHost::iterate_batch_boundary`),
+    /// so customising this value on a bespoke `CapabilityPolicy`
+    /// affects the evaluator's actual refresh cadence end-to-end.
     ///
     /// Lowering this bound increases capability-check load; raising it
     /// widens the TOCTOU window. Keep in lockstep with the named compromise
     /// prose in `.addl/phase-1/r1-triage.md` if the default is ever
     /// adjusted.
-    // TODO(phase-3 — wall-clock TOCTOU ceiling): honor wall-clock
-    // bound in addition to iteration count per R4b compromise #1
-    // tightening (auditor finding g4-p2-uc-2). A TRANSFORM-heavy or
-    // CALL-heavy handler at 1 iter/10sec pushes past 10 minutes
-    // between refreshes under iteration-count alone; the first real
-    // capability backend MUST additionally enforce a wall-clock
-    // ceiling (min(iteration_count, wall_clock_seconds), default
-    // ≤300s). Carried from Phase-2 generic marker; pairs with §2.1.
+    //
+    // The companion wall-clock TOCTOU ceiling (per R4b compromise #1
+    // tightening, auditor finding g4-p2-uc-2 — a TRANSFORM-heavy or
+    // CALL-heavy handler at 1 iter/10sec pushes past 10 minutes between
+    // refreshes under iteration-count alone; the first real capability
+    // backend MUST additionally enforce a wall-clock ceiling
+    // `min(iteration_count, wall_clock_seconds)`, default ≤300s) is
+    // exposed via `wallclock_refresh_ceiling` below; the evaluator
+    // consumer for THAT half is registered at
+    // `phase-3-backlog §2.3 (ii)` (v1-assessment-window co-routed with
+    // §10.1 Compromise #1 TOCTOU window bound; shared
+    // iterate-batch-boundary cap-recheck cadence mechanism).
     fn iterate_batch_boundary(&self) -> usize {
         DEFAULT_BATCH_BOUNDARY
     }
@@ -353,7 +350,12 @@ pub trait CapabilityPolicy: Send + Sync {
     /// TODO(phase-3 — wallclock-refresh-ceiling evaluator wire-up):
     /// wire into the evaluator's refresh path so the override becomes
     /// load-bearing end-to-end. Carried from Phase-2a G9-A (didn't
-    /// land); pairs with §2.1.
+    /// land); registered at `phase-3-backlog §2.3 (ii)` (v1-assessment-
+    /// window co-routed with §10.1 Compromise #1 TOCTOU window bound;
+    /// shared iterate-batch-boundary cap-recheck cadence mechanism).
+    /// Helper at `benten_caps::lib::wallclock_refresh_ceiling_for`
+    /// exists; consumer impl on `PrimitiveHost` is the §2.3 (ii)
+    /// deliverable.
     fn wallclock_refresh_ceiling(&self) -> core::time::Duration {
         core::time::Duration::from_mins(5)
     }

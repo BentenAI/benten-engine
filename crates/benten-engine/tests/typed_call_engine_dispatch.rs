@@ -29,6 +29,8 @@ use benten_engine::Engine;
 use benten_errors::ErrorCode;
 use benten_eval::{PrimitiveHost, PrimitiveKind, TypedCallOp, primitives::call};
 
+mod common;
+
 fn fresh_engine() -> (tempfile::TempDir, Engine) {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
@@ -294,28 +296,19 @@ fn did_resolve_round_trips_via_keypair_generate() {
 #[test]
 fn ucan_validate_chain_returns_true_for_well_formed_chain() {
     let (_dir, engine) = fresh_engine();
-    use benten_id::keypair::Keypair;
-    use benten_id::ucan::Ucan;
-
-    // Build a single-link UCAN chain (issuer → audience).
-    let issuer_kp = Keypair::generate();
-    let audience_kp = Keypair::generate();
-    let issuer_did = issuer_kp.public_key().to_did();
-    let audience_did = audience_kp.public_key().to_did();
-
-    let ucan = Ucan::builder()
-        .issuer_did(&issuer_did)
-        .audience_did(&audience_did)
-        .capability("zone:user", "write")
-        .not_before(1_000)
-        .expiry(2_000_000_000)
-        .sign(&issuer_kp);
-
-    let bytes = serde_ipld_dagcbor::to_vec(&ucan).expect("Ucan DAG-CBOR encode must succeed");
+    // Single-link UCAN chain (issuer → audience) granting zone:user:write
+    // over [1_000, 2_000_000_000]. Helper at `tests/common/ucan_fixtures.rs`
+    // collapses the keypair-generation + builder + sign + DAG-CBOR encode
+    // prelude (DX-3 closure per phase-3-backlog §2.5(f)).
+    let chain =
+        common::ucan_fixtures::single_link_chain("zone:user", "write", Some(1_000), 2_000_000_000);
 
     let input = map_value(&[
-        ("tokens", Value::List(vec![Value::Bytes(bytes)])),
-        ("audience", Value::Text(audience_did.as_str().to_string())),
+        ("tokens", Value::List(vec![Value::Bytes(chain.bytes)])),
+        (
+            "audience",
+            Value::Text(chain.audience_did.as_str().to_string()),
+        ),
         ("capability", Value::Text("zone:user:write".to_string())),
         ("now", Value::Int(1_500_000)),
     ]);
@@ -338,22 +331,16 @@ fn ucan_validate_chain_returns_true_for_well_formed_chain() {
 fn ucan_validate_chain_returns_false_with_reason_on_audience_mismatch() {
     let (_dir, engine) = fresh_engine();
     use benten_id::keypair::Keypair;
-    use benten_id::ucan::Ucan;
 
-    let issuer_kp = Keypair::generate();
-    let audience_kp = Keypair::generate();
+    // Build the chain bound to one audience, then assert against a
+    // *different* audience DID in the input map (cross-atrium replay
+    // defense). Helper handles the chain prelude; the audience-swap is
+    // the test-specific contract.
+    let chain = common::ucan_fixtures::single_link_chain("zone:user", "write", None, 2_000_000_000);
     let other_kp = Keypair::generate();
-    let ucan = Ucan::builder()
-        .issuer_did(&issuer_kp.public_key().to_did())
-        .audience_did(&audience_kp.public_key().to_did())
-        .capability("zone:user", "write")
-        .expiry(2_000_000_000)
-        .sign(&issuer_kp);
-
-    let bytes = serde_ipld_dagcbor::to_vec(&ucan).unwrap();
 
     let input = map_value(&[
-        ("tokens", Value::List(vec![Value::Bytes(bytes)])),
+        ("tokens", Value::List(vec![Value::Bytes(chain.bytes)])),
         // Wrong audience — defends cross-atrium replay.
         (
             "audience",
@@ -641,29 +628,20 @@ fn typed_call_namespace_pre_empts_user_handler_registry_for_unknown_op() {
 #[test]
 fn ucan_validate_chain_returns_false_when_leaf_att_does_not_grant_required_capability() {
     let (_dir, engine) = fresh_engine();
-    use benten_id::keypair::Keypair;
-    use benten_id::ucan::Ucan;
 
-    let issuer_kp = Keypair::generate();
-    let audience_kp = Keypair::generate();
-    let audience_did = audience_kp.public_key().to_did();
-
-    // Forge a structurally-sound chain bound to the right audience
-    // but granting only `zone:posts:read` — the caller asks for
-    // `zone:user:write`, which the leaf does NOT name.
-    let ucan = Ucan::builder()
-        .issuer_did(&issuer_kp.public_key().to_did())
-        .audience_did(&audience_did)
-        .capability("zone:posts", "read")
-        .not_before(1_000)
-        .expiry(2_000_000_000)
-        .sign(&issuer_kp);
-
-    let bytes = serde_ipld_dagcbor::to_vec(&ucan).unwrap();
+    // Forge a structurally-sound chain bound to the right audience but
+    // granting only `zone:posts:read` — the caller asks for
+    // `zone:user:write`, which the leaf does NOT name (sec-major-1
+    // defense-in-depth pin).
+    let chain =
+        common::ucan_fixtures::single_link_chain("zone:posts", "read", Some(1_000), 2_000_000_000);
 
     let input = map_value(&[
-        ("tokens", Value::List(vec![Value::Bytes(bytes)])),
-        ("audience", Value::Text(audience_did.as_str().to_string())),
+        ("tokens", Value::List(vec![Value::Bytes(chain.bytes)])),
+        (
+            "audience",
+            Value::Text(chain.audience_did.as_str().to_string()),
+        ),
         // Cap NOT granted by the leaf's `att` (leaf grants
         // zone:posts:read; we ask for zone:user:write).
         ("capability", Value::Text("zone:user:write".to_string())),
@@ -699,25 +677,18 @@ fn ucan_validate_chain_returns_false_when_leaf_att_does_not_grant_required_capab
 #[test]
 fn ucan_validate_chain_returns_true_when_leaf_att_grants_required_capability() {
     let (_dir, engine) = fresh_engine();
-    use benten_id::keypair::Keypair;
-    use benten_id::ucan::Ucan;
 
-    let issuer_kp = Keypair::generate();
-    let audience_kp = Keypair::generate();
-    let audience_did = audience_kp.public_key().to_did();
-
-    let ucan = Ucan::builder()
-        .issuer_did(&issuer_kp.public_key().to_did())
-        .audience_did(&audience_did)
-        .capability("zone:posts", "read")
-        .not_before(1_000)
-        .expiry(2_000_000_000)
-        .sign(&issuer_kp);
-    let bytes = serde_ipld_dagcbor::to_vec(&ucan).unwrap();
+    // sec-major-1 happy path: same chain shape as the negative pin
+    // above, but the caller asks for the cap the leaf actually grants.
+    let chain =
+        common::ucan_fixtures::single_link_chain("zone:posts", "read", Some(1_000), 2_000_000_000);
 
     let input = map_value(&[
-        ("tokens", Value::List(vec![Value::Bytes(bytes)])),
-        ("audience", Value::Text(audience_did.as_str().to_string())),
+        ("tokens", Value::List(vec![Value::Bytes(chain.bytes)])),
+        (
+            "audience",
+            Value::Text(chain.audience_did.as_str().to_string()),
+        ),
         ("capability", Value::Text("zone:posts:read".to_string())),
         ("now", Value::Int(1_500_000)),
     ]);

@@ -116,7 +116,7 @@ fn walk_files(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
 }
 
 #[test]
-#[ignore = "G16-B wave-6b + G16-D wave-6b — cag-2 — persistent state graph-encoded — wave-paired pim-4 §3.10 closure"]
+#[ignore = "phase-3-backlog §7.3.D — cag-2 persistent-state graph-encoded pin. G16-B wave-6b SHIPPED at PR #155; G16-D wave-6b SHIPPED at PR #163. Test body panic!() pins the load-bearing claim that atrium membership / sync-cursor / peer-roster persistent state is queryable through standard graph + IVM surfaces (Charter 4 symmetry); un-ignore at the §7.3.D `benten-sync` test-bodies cluster landing wave (cross-process atrium driver scaffolding) per Wave-E rationale-only sweep."]
 fn benten_sync_persistent_state_graph_encoded() {
     // cag-2 pin. G16-B wave-6b lands the Atrium-membership shape +
     // sync-cursor (the load-bearing Loro CRDT persistent state); G16-D
@@ -134,7 +134,7 @@ fn benten_sync_persistent_state_graph_encoded() {
 }
 
 #[test]
-#[ignore = "G16-B wave-6b — cag-r4-3 MAJOR — sync cursor as graph Node keyed by (peer_did, zone)"]
+#[ignore = "phase-3-backlog §7.3.D — cag-r4-3 MAJOR sync-cursor graph-encoding pin. G16-B wave-6b SHIPPED at PR #155; test body pins HLC-checkpoint-per-peer-per-zone as graph Node keyed by (peer_did, zone) (NOT KVBackend.put with composite key — Charter 4 per-shape granularity); un-ignore at the §7.3.D `benten-sync` test-bodies cluster landing wave per Wave-E rationale-only sweep."]
 fn atrium_sync_cursor_persisted_as_graph_node_keyed_by_peer_did_zone() {
     // cag-r4-3 MAJOR pin (Charter 4 per-shape granularity for
     // sync-cursor). HLC checkpoints per-peer per-zone are the
@@ -151,7 +151,7 @@ fn atrium_sync_cursor_persisted_as_graph_node_keyed_by_peer_did_zone() {
 }
 
 #[test]
-#[ignore = "G16-D wave-6b — cag-r4-3 MAJOR — grant-cross-reference via graph Edge, not side table"]
+#[ignore = "phase-3-backlog §7.3.D — cag-r4-3 MAJOR grant-cross-reference graph-encoding pin. G16-D wave-6b SHIPPED at PR #163; test body pins UCAN grant scoping as graph Edge from grant Node to Atrium Node (NOT KVBackend.put with composite key — Charter 4 per-shape granularity); un-ignore at the §7.3.D `benten-sync` test-bodies cluster landing wave per Wave-E rationale-only sweep."]
 fn atrium_grant_cross_reference_via_graph_edge_not_side_table() {
     // cag-r4-3 MAJOR pin (Charter 4 per-shape granularity for
     // grant-cross-reference). UCAN grants scoped to which Atriums

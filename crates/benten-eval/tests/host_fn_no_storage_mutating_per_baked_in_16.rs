@@ -17,22 +17,28 @@
 //!
 //! ## Why this pin exists
 //!
-//! Phase-2b shipped 3 host-fns: time, log, kv:read (all read-only or
-//! compute-only). The architectural commitment per CLAUDE.md baked-in
-//! #16 is that SANDBOX never gains storage-mutating host-fns —
-//! mutation flows through the engine's WRITE primitive (with capability
-//! pre-check + IVM invalidation + attribution-frame recording),
-//! NEVER through SANDBOX guests calling host-fns that bypass these
-//! controls.
+//! Phase-2b shipped 3 host-fns (time, log, kv:read); Phase-3 G17-A2
+//! added a 4th (random) — the Phase-3-close runtime surface is
+//! `[time, log, kv:read, random]`, all read-only or compute-only
+//! (per CLAUDE.md baked-in #16 — ratified Phase-2b post-R5 2026-05-04).
+//! The architectural commitment is that SANDBOX never gains storage-
+//! mutating host-fns: mutation flows through the engine's WRITE
+//! primitive (with capability pre-check + IVM invalidation + attribution-
+//! frame recording), NEVER through SANDBOX guests calling host-fns
+//! that bypass these controls. Future agent proposals to add
+//! `kv:write` / `kv:delete` / `edge:create` / `edge:delete` /
+//! `edge:update` / `transaction:*` host-fns must be REJECTED with
+//! reference to baked-in #16 unless the proposal also re-opens
+//! commitment #1 (12 primitives are irreducible) — those decisions
+//! move together.
 //!
-//! The risk surfaced by r4-r1-wsa-2: `crates/benten-eval/src/sandbox/host_fns.rs:169`
-//! contains a prose comment about future kv:write addition. The
-//! comment is HONEST documentation ("when Phase 3 extends the table
-//! with kv:write"), but it proves the regression vector is live in
-//! implementer intuition — a future contributor adds kv:write to
-//! `host-functions.toml` for an apparently-good reason ("the app needs
-//! to write a small index from the sandbox") and bypasses the
-//! architectural commitment without any test surfacing the violation.
+//! The regression vector this pin defends against: a future contributor
+//! adds a forbidden mutating host-fn name to `host-functions.toml`
+//! for an apparently-good reason ("the app needs to write a small
+//! index from the sandbox") and bypasses the architectural commitment
+//! without any other test surfacing the violation. This pin reads the
+//! TOML + the runtime registration table at compile-time / test-time
+//! and FAILS LOUDLY before the change is reviewable as additive.
 //!
 //! This pin asserts the FORBIDDEN list is absent from BOTH:
 //! 1. `host-functions.toml` (the source-of-truth declarations)
@@ -163,10 +169,10 @@ fn sandbox_host_fn_surface_compute_only_no_kv_write_no_kv_delete_no_edge_mutatin
     //   // contain that exact string):
     //   for forbidden in FORBIDDEN_HOST_FN_NAMES {
     //       let name_literal = format!("\"{}\"", forbidden);
-    //       // Allow the name to appear in COMMENTS (the existing prose
-    //       // at host_fns.rs:169 mentions kv:write in a comment about
-    //       // future-Phase commitment); reject only if registered in a
-    //       // production code path.
+    //       // Allow the name to appear in COMMENTS (the source narrative
+    //       // around host_fns.rs registration may name forbidden tokens
+    //       // for documentation purposes — e.g. citing baked-in #16);
+    //       // reject only if registered in a production code path.
     //       //
     //       // Cleaner shape (implementer pins): parse the file via `syn`
     //       // and walk fn default_host_fns()'s body; assert no registration

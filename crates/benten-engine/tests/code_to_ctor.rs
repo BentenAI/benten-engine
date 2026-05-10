@@ -129,6 +129,15 @@ fn code_to_ctor_no_e_unknown_fallback_for_known_code() {
     // scripts/codegen-errors.ts). Verify the class declaration exists
     // AND the map references that class — proves the typed-ctor path
     // is wired (no E_UNKNOWN shortcut).
+    // R6 R2 fp Wave-C2 (dx-r6-r2-2 closure): compound-stem expansions
+    // mirror `COMPOUND_STEM_EXPANSIONS` in `scripts/codegen-errors.ts`.
+    // Add an entry here when ratifying a fresh ErrorCode whose Rust
+    // enum spelling is an inner-PascalCase compound. Pinned by
+    // `packages/engine/src/errors.test.ts` parity meta-test against
+    // silent drift.
+    let compound_stem_expansions: &[(&str, &str)] =
+        &[("DEVSERVER", "DevServer"), ("NONFINITE", "NonFinite")];
+
     for code in &catalog {
         let class_name = code
             .split('_')
@@ -136,6 +145,10 @@ fn code_to_ctor_no_e_unknown_fallback_for_known_code() {
             .map(|(i, p)| {
                 if i == 0 {
                     p.to_string()
+                } else if let Some((_, expansion)) =
+                    compound_stem_expansions.iter().find(|(stem, _)| *stem == p)
+                {
+                    (*expansion).to_string()
                 } else {
                     let mut chars = p.chars();
                     match chars.next() {

@@ -184,9 +184,9 @@ pub fn default_host_fns() -> Arc<BTreeMap<String, HostFnSpec>> {
     Arc::clone(TABLE.get_or_init(build_default_host_fns))
 }
 
-/// One-shot constructor invoked exactly once by [`default_host_fns`]
-/// through its [`OnceLock`]. Validates each entry's `requires` cap-string
-/// via [`HostFnSpec::validate_requires`] (cr-g7a-mr-5 fix-pass: every
+/// One-shot constructor invoked exactly once by `default_host_fns`
+/// through its `OnceLock`. Validates each entry's `requires` cap-string
+/// via `HostFnSpec::validate_requires` (cr-g7a-mr-5 fix-pass: every
 /// codegen entry SHOULD validate; a build-time typo is caught here).
 ///
 /// **Architectural floor (CLAUDE.md baked-in #16, ratified 2026-05-04):**

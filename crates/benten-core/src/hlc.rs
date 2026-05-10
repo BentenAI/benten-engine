@@ -381,31 +381,34 @@ mod tests {
     extern crate std;
     use core::sync::atomic::{AtomicU64, Ordering};
 
-    // Deterministic mock clock — the `fn() -> u64` signature precludes
-    // closure capture, so the mock state lives in a `static`. Each test
-    // module gets its own mock to avoid cross-test interference; tests
-    // that need parallel-safe mocks construct a fresh `Hlc` with a
-    // private static counter.
+    // Deterministic mock clock — the `fn() -> u64` bare-fn-pointer
+    // signature precludes closure capture, so each mock-clock state
+    // must live in a `static`. Per-test statics (NOT a single shared
+    // `MOCK_TIME_MS`) avoid cross-test interference under
+    // parallel-scheduled `cargo test` (default scheduler) +
+    // `cargo-llvm-cov` (which shells out to plain `cargo test --tests`
+    // and does NOT honor nextest test-groups). Sibling decomposition
+    // applied to the integration sister at
+    // `crates/benten-core/tests/hlc_clock_skew_within_tolerance.rs`
+    // per phase-3-backlog §7.18 closure (R6 R2 hlc-r6-r2-1 sibling-
+    // site closure: PR #168 cargo-llvm-cov flake `left:2000/right:10000`
+    // matched the cross-test reset-value contention between
+    // `now_bumps_logical_when_physical_clock_stalls` (reset_mock(2_000))
+    // and `update_within_tolerance_advances_local`
+    // (reset_mock(10_000)) sharing the prior single `MOCK_TIME_MS`).
 
-    static MOCK_TIME_MS: AtomicU64 = AtomicU64::new(1_000);
-    fn mock_clock() -> u64 {
-        MOCK_TIME_MS.load(Ordering::SeqCst)
-    }
-
-    fn reset_mock(at: u64) {
-        MOCK_TIME_MS.store(at, Ordering::SeqCst);
-    }
-
-    fn advance_mock(by: u64) {
-        MOCK_TIME_MS.fetch_add(by, Ordering::SeqCst);
+    // ---- now_advances_when_physical_clock_advances ----
+    static MOCK_NOW_ADV_TIME_MS: AtomicU64 = AtomicU64::new(1_000);
+    fn now_adv_clock() -> u64 {
+        MOCK_NOW_ADV_TIME_MS.load(Ordering::SeqCst)
     }
 
     #[test]
     fn now_advances_when_physical_clock_advances() {
-        reset_mock(1_000);
-        let hlc = Hlc::new(0xAAAA, mock_clock);
+        MOCK_NOW_ADV_TIME_MS.store(1_000, Ordering::SeqCst);
+        let hlc = Hlc::new(0xAAAA, now_adv_clock);
         let a = hlc.now();
-        advance_mock(50);
+        MOCK_NOW_ADV_TIME_MS.fetch_add(50, Ordering::SeqCst);
         let b = hlc.now();
         assert!(
             b > a,
@@ -415,10 +418,16 @@ mod tests {
         assert_eq!(b.logical(), 0, "logical resets to 0 on physical advance");
     }
 
+    // ---- now_bumps_logical_when_physical_clock_stalls ----
+    static MOCK_NOW_BUMPS_TIME_MS: AtomicU64 = AtomicU64::new(2_000);
+    fn now_bumps_clock() -> u64 {
+        MOCK_NOW_BUMPS_TIME_MS.load(Ordering::SeqCst)
+    }
+
     #[test]
     fn now_bumps_logical_when_physical_clock_stalls() {
-        reset_mock(2_000);
-        let hlc = Hlc::new(0xBBBB, mock_clock);
+        MOCK_NOW_BUMPS_TIME_MS.store(2_000, Ordering::SeqCst);
+        let hlc = Hlc::new(0xBBBB, now_bumps_clock);
         let a = hlc.now();
         let b = hlc.now();
         let c = hlc.now();
@@ -430,26 +439,38 @@ mod tests {
         assert!(a < b && b < c);
     }
 
+    // ---- now_holds_steady_when_physical_clock_rewinds ----
+    static MOCK_NOW_REWIND_TIME_MS: AtomicU64 = AtomicU64::new(5_000);
+    fn now_rewind_clock() -> u64 {
+        MOCK_NOW_REWIND_TIME_MS.load(Ordering::SeqCst)
+    }
+
     #[test]
     fn now_holds_steady_when_physical_clock_rewinds() {
         // Adversarial NTP slew: wallclock jumps backward between calls.
         // The HLC must NOT regress; it bumps the logical counter from
         // the last emitted physical_ms instead.
-        reset_mock(5_000);
-        let hlc = Hlc::new(0xCCCC, mock_clock);
+        MOCK_NOW_REWIND_TIME_MS.store(5_000, Ordering::SeqCst);
+        let hlc = Hlc::new(0xCCCC, now_rewind_clock);
         let a = hlc.now();
         assert_eq!(a.physical_ms(), 5_000);
-        reset_mock(4_000);
+        MOCK_NOW_REWIND_TIME_MS.store(4_000, Ordering::SeqCst);
         let b = hlc.now();
         assert!(b > a, "rewind must not produce a regressed HLC");
         assert_eq!(b.physical_ms(), 5_000, "physical_ms held at last emit");
         assert_eq!(b.logical(), 1, "logical bumped under rewind");
     }
 
+    // ---- update_within_tolerance_advances_local ----
+    static MOCK_UPDATE_WITHIN_TIME_MS: AtomicU64 = AtomicU64::new(10_000);
+    fn update_within_clock() -> u64 {
+        MOCK_UPDATE_WITHIN_TIME_MS.load(Ordering::SeqCst)
+    }
+
     #[test]
     fn update_within_tolerance_advances_local() {
-        reset_mock(10_000);
-        let hlc = Hlc::new(0xDDDD, mock_clock);
+        MOCK_UPDATE_WITHIN_TIME_MS.store(10_000, Ordering::SeqCst);
+        let hlc = Hlc::new(0xDDDD, update_within_clock);
         let local_a = hlc.now();
         // Remote ahead by 1 second — well within the 5-minute default.
         let remote = BentenHlc::new(11_000, 7, 0xEEEE);
@@ -461,10 +482,16 @@ mod tests {
         assert_eq!(local_b.node_id(), 0xDDDD, "node_id stays local");
     }
 
+    // ---- update_beyond_tolerance_fires_skew_exceeded_and_does_not_mutate ----
+    static MOCK_UPDATE_BEYOND_TIME_MS: AtomicU64 = AtomicU64::new(100_000);
+    fn update_beyond_clock() -> u64 {
+        MOCK_UPDATE_BEYOND_TIME_MS.load(Ordering::SeqCst)
+    }
+
     #[test]
     fn update_beyond_tolerance_fires_skew_exceeded_and_does_not_mutate() {
-        reset_mock(100_000);
-        let hlc = Hlc::new(0xFFFF, mock_clock);
+        MOCK_UPDATE_BEYOND_TIME_MS.store(100_000, Ordering::SeqCst);
+        let hlc = Hlc::new(0xFFFF, update_beyond_clock);
         let _local_a = hlc.now();
         // Remote claims it's 6 minutes in the future — beyond the 5 min default.
         let far_future = 100_000 + 6 * 60 * 1000;
@@ -491,10 +518,16 @@ mod tests {
         );
     }
 
+    // ---- skew_exceeded_maps_to_e_hlc_skew_exceeded_catalog_code ----
+    static MOCK_SKEW_CODE_TIME_MS: AtomicU64 = AtomicU64::new(1_000);
+    fn skew_code_clock() -> u64 {
+        MOCK_SKEW_CODE_TIME_MS.load(Ordering::SeqCst)
+    }
+
     #[test]
     fn skew_exceeded_maps_to_e_hlc_skew_exceeded_catalog_code() {
-        reset_mock(1_000);
-        let hlc = Hlc::with_skew_tolerance(1, mock_clock, 100);
+        MOCK_SKEW_CODE_TIME_MS.store(1_000, Ordering::SeqCst);
+        let hlc = Hlc::with_skew_tolerance(1, skew_code_clock, 100);
         let remote = BentenHlc::new(50_000, 0, 2);
         let err = hlc.update(&remote).unwrap_err();
         assert_eq!(err.code(), ErrorCode::HlcSkewExceeded);
@@ -526,13 +559,19 @@ mod tests {
         assert_eq!(id, 0x1234_5678_9abc_def0);
     }
 
+    // ---- three_way_tie_picks_max_logical_plus_one ----
+    static MOCK_THREE_WAY_TIME_MS: AtomicU64 = AtomicU64::new(7_000);
+    fn three_way_clock() -> u64 {
+        MOCK_THREE_WAY_TIME_MS.load(Ordering::SeqCst)
+    }
+
     #[test]
     fn three_way_tie_picks_max_logical_plus_one() {
         // Local + remote both at the same physical_ms as the wallclock,
         // with different logical values. The post-update logical should
         // be max(local.logical, remote.logical) + 1.
-        reset_mock(7_000);
-        let hlc = Hlc::new(1, mock_clock);
+        MOCK_THREE_WAY_TIME_MS.store(7_000, Ordering::SeqCst);
+        let hlc = Hlc::new(1, three_way_clock);
         let _ = hlc.now(); // local: (7000, 0, 1)
         let _ = hlc.now(); // local: (7000, 1, 1)
         let _ = hlc.now(); // local: (7000, 2, 1)

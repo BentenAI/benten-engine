@@ -722,7 +722,7 @@ impl JsAtrium {
     /// Production deployments typically configure a window matching
     /// the local UCAN backend's calibration (post-promotion) +
     /// optionally seed a revocation list — the latter requires the
-    /// future [`JsAtrium::set_acceptor_with_revocations`] surface
+    /// future `JsAtrium::set_acceptor_with_revocations` surface
     /// which composes a `DeviceRevocation` napi shape (BELONGS-NAMED-
     /// NOW per HARD RULE rule-12 to `docs/future/phase-3-backlog.md`
     /// §3 acceptor-extension surface — kept out of this Wave to keep
