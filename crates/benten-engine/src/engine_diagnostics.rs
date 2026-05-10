@@ -169,6 +169,7 @@ impl Engine {
     ///   per-row cap-recheck calls fired by `apply_atrium_merge`'s
     ///   structural-always-on per-write loop (G16-B-F sec-r4r1-2 closure).
     #[must_use]
+    #[allow(clippy::too_many_lines)] // Sequential lift of independent observability counters; splitting harms read-top-to-bottom narrative.
     pub fn metrics_snapshot(&self) -> BTreeMap<String, f64> {
         let mut out = BTreeMap::new();
         let n = self
