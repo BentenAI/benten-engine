@@ -54,8 +54,40 @@ use benten_eval::primitives::subscribe::{
     register_on_change, subscribe_revoked_mid_stream_count,
 };
 
+/// Process-wide mutex serializing the pre/post snapshots of the
+/// `subscribe_revoked_mid_stream_count()` global counter across the two
+/// tests in this file. Without this guard, the auto-cancel firing in
+/// `cap_recheck_failing_mid_stream_...` (the +1 increment) can land
+/// between the `pre_count` and `post_count` captures of
+/// `freshly_registered_on_change_termination_reason_slot_is_none` under
+/// parallel test execution — and the race window widens substantially
+/// under `cargo-llvm-cov` coverage instrumentation (the recurring flake
+/// runtime-incident this serializer closes).
+///
+/// pim-N-test-isolation §3.13 / `feedback_pim_test_isolation_process_scoped_shared_state`
+/// "Don't apply when" clause #1: the counter is GENUINELY
+/// process-scoped production observability state (consumed by operator
+/// dashboards + the typed-error contract), NOT mock-injection state.
+/// Per-test static decomposition does not apply; mutex-guarded
+/// ordering does. Mirrors the existing precedent at
+/// `crates/benten-eval/tests/sandbox_basic.rs::MODULE_CACHE_TEST_SERIALIZER`
+/// (R6-R3 r6-r3-cr-2 closure — module-cache size snapshots across
+/// parallel SANDBOX tests).
+static REVOKED_MID_STREAM_COUNT_TEST_SERIALIZER: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[test]
 fn cap_recheck_failing_mid_stream_populates_subscription_termination_reason_with_typed_code() {
+    // Serialize against the sibling test's pre/post counter window —
+    // see `REVOKED_MID_STREAM_COUNT_TEST_SERIALIZER` rationale above.
+    let _serial_guard = REVOKED_MID_STREAM_COUNT_TEST_SERIALIZER
+        .lock()
+        .unwrap_or_else(|poisoned| {
+            // Poisoning means a prior test panicked while holding the
+            // guard; the global counter state is recoverable for our
+            // purposes (we read pre/post deltas, not absolute values),
+            // so consume the poison + proceed.
+            poisoned.into_inner()
+        });
     // cap-r6-r1-1 / r4b-cap-6 attack-vector pin (R6-FP Wave-C1
     // closure). Drives the eval-side auto-cancel block end-to-end:
     //
@@ -180,6 +212,17 @@ fn freshly_registered_on_change_termination_reason_slot_is_none() {
     // `Some(SubscribeRevokedMidStream)` for every subscription
     // (false-positive pollution that would defeat the typed-error
     // observability contract).
+    //
+    // Serialize against the sibling test's pre/post counter window —
+    // see `REVOKED_MID_STREAM_COUNT_TEST_SERIALIZER` rationale above.
+    // Without this guard, the sibling test's +1 auto-cancel increment
+    // can land between this test's `pre_count` and `post_count`
+    // captures, producing the spurious "left:1 / right:0" assertion
+    // failure (the cargo-llvm-cov coverage-instrumentation flake).
+    let _serial_guard = REVOKED_MID_STREAM_COUNT_TEST_SERIALIZER
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+
     let active = Arc::new(AtomicBool::new(true));
     let max_seq = Arc::new(AtomicU64::new(0));
     let termination_reason = Arc::new(std::sync::Mutex::new(None));
