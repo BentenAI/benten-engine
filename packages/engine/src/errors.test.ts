@@ -7,6 +7,36 @@ import * as errors from "@benten/engine/errors";
 import { mapNativeError } from "@benten/engine/errors";
 
 describe("typed error classes", () => {
+  it("compound_stem_class_names_preserve_inner_pascal_case_per_rust_enum_parity", () => {
+    // R6 R2 dx-r6-r2-2 closure: wire codes whose underscored part is a
+    // 2-token compound (DEVSERVER, NONFINITE) must produce class names
+    // matching the Rust enum's inner-PascalCase form (DevServerStopped,
+    // ValueFloatNonFinite) — NOT the default first-cap+rest-lower form
+    // (DevserverStopped, ValueFloatNonfinite). The codegen at
+    // `scripts/codegen-errors.ts` carries a `COMPOUND_STEM_EXPANSIONS`
+    // table that maps these stems to the inner-PascalCase form. This
+    // pin defends against silent drift if a future codegen edit drops
+    // the special-case map or the Rust enum spelling shifts without
+    // a matching codegen update.
+    expect(errors.EDevServerStopped).toBeTypeOf("function");
+    expect(new errors.EDevServerStopped("test").code).toBe(
+      "E_DEVSERVER_STOPPED",
+    );
+    expect(errors.EValueFloatNonFinite).toBeTypeOf("function");
+    expect(new errors.EValueFloatNonFinite("test").code).toBe(
+      "E_VALUE_FLOAT_NONFINITE",
+    );
+    // Negative parity: the pre-fix spellings MUST NOT exist as exports
+    // (silent drift defense — if the special-case map ever gets dropped
+    // these names would re-appear).
+    expect(
+      (errors as Record<string, unknown>).EDevserverStopped,
+    ).toBeUndefined();
+    expect(
+      (errors as Record<string, unknown>).EValueFloatNonfinite,
+    ).toBeUndefined();
+  });
+
   it("typed_error_classes_generated_from_catalog", () => {
     // Spot-check a handful of codes from ERROR-CATALOG.md.
     expect(errors.ECapDenied).toBeTypeOf("function");
@@ -125,7 +155,7 @@ describe("typed error classes", () => {
       "E_DEVSERVER_STOPPED: devserver method called after stop()",
     );
     const typed = mapNativeError(sim);
-    expect(typed).toBeInstanceOf(errors.EDevserverStopped);
+    expect(typed).toBeInstanceOf(errors.EDevServerStopped);
     expect(typed.code).toBe("E_DEVSERVER_STOPPED");
   });
 

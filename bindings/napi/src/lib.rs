@@ -566,6 +566,15 @@ mod napi_surface {
         /// napi boundary. This factory closes that BLOCKER —
         /// `engine.atrium({}).join()` from JS/TS now drives a real
         /// engine-side `AtriumHandle`.
+        ///
+        /// **Deferred-bind semantics.** This factory is synchronous
+        /// and does NOT open the Atrium — actual opening (iroh
+        /// `Endpoint` bind + per-zone Loro CRDT init) happens on the
+        /// first `.join()` call. The `is_joined()` getter returns
+        /// `false` until `.join()` succeeds; the synchronous
+        /// `atrium_id` getter echoes `config.atriumId` regardless of
+        /// join state (it does NOT report a placeholder value pre-
+        /// join — the configured ID is the canonical handle identity).
         #[napi(js_name = "atrium")]
         pub fn atrium(&self, config: crate::atrium::AtriumConfig) -> crate::atrium::JsAtrium {
             crate::atrium::JsAtrium::from_engine(config, Arc::clone(&self.inner))

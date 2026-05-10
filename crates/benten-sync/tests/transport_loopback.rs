@@ -204,7 +204,7 @@ async fn iroh_transport_loopback_reports_loopback_status() {
 }
 
 #[tokio::test]
-#[ignore = "G16-D wave-6b — scope-real-10 — relay-fallback gated on iroh-test-fixture availability"]
+#[ignore = "phase-3-backlog §7.3.D — scope-real-10 relay-fallback pin. G16-D wave-6b SHIPPED at PR #163; iroh test-fixture (synthetic NAT + relay endpoint) for the relay-fallback assertion gates this test — un-ignore once the test-fixture lands at the §7.3.D `benten-sync` test-bodies cluster landing wave (or the §6.12 G16-B post-canary residuals destination) per Wave-E rationale-only sweep."]
 async fn iroh_transport_relay_fallback_when_holepunch_fails() {
     // scope-real-10 + plan §3 G16-A pin. When holepunch fails (simulated
     // by binding both peers behind synthetic NATs), iroh falls back
@@ -232,7 +232,7 @@ async fn iroh_transport_relay_fallback_when_holepunch_fails() {
 }
 
 #[tokio::test]
-#[ignore = "G16-D wave-6b — scope-real-10 — holepunch smoke CI-conditional, gated on relay infrastructure"]
+#[ignore = "phase-3-backlog §7.3.D — scope-real-10 holepunch-smoke CI-conditional pin. G16-D wave-6b SHIPPED at PR #163; gated on relay infrastructure availability in CI runner (synthetic NAT scenario + iroh test-fixture); un-ignore at the §7.3.D `benten-sync` test-bodies cluster landing wave (or the §6.12 G16-B post-canary residuals destination) per Wave-E rationale-only sweep."]
 async fn iroh_transport_holepunch_smoke() {
     // scope-real-10 pin. Holepunch smoke: two endpoints behind
     // simulated NATs negotiate a direct connection via iroh's
