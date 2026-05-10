@@ -33,12 +33,19 @@
 //! POLICY = fail-on-regression
 //! ```
 //!
-//! Workload: three representative expressions covering the common
-//! shape mix observed in `docs/validation/paper-prototype-handlers.md`:
-//!   (a) a simple projection (`$input.title`),
-//!   (b) a coerce-and-default (`$input.limit ?? 10`),
-//!   (c) a nested field access with a conditional
-//!       (`$input.author.name ? $input.author.name : "anonymous"`).
+//! Workload: three representative projection expressions covering the
+//! common shape mix observed in `docs/validation/paper-prototype-handlers.md`:
+//!   (a) a simple top-level projection (`$input.title`),
+//!   (b) a sibling top-level projection (`$input.limit`),
+//!   (c) a nested two-level field access (`$input.author.name`).
+//!
+//! Note: earlier drafts of this doc-comment described a `??` coerce-
+//! and-default shape and a ternary conditional. Those shapes are NOT
+//! in the workload — `??` is rejected by the grammar's positive-
+//! allowlist (Class 23) and the ternary form was never added. The
+//! doc was retensed at pre-v1 Class-E fix-pass 2026-05-09 to honestly
+//! describe the three projection shapes the `expressions` array
+//! actually exercises.
 //!
 //! The bench drives the parser only — the evaluator's TRANSFORM
 //! execution path is measured separately by `ten_node_handler`'s

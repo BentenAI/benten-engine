@@ -1729,6 +1729,24 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 
 **Phase target:** R6 phase-close convergence-round residuals (bundle with §7.16 if both surface in same round).
 
+### 7.21 RedbBackend::get_node_label_only prefix-bounded fast-path optimization (named-but-not-shipped)
+
+**Origin (pre-v1 Class-E per-crate test review 2026-05-09):** `crates/benten-graph/tests/get_node_label_only.rs::graph_get_node_label_only_returns_first_label_for_stored_node` (renamed in this fix-pass from the prior `graph_get_node_label_only_fast_path_reads_prefix_only` name) historically asserted `bytes_read <= 128` against the test-only `read_bytes_since_reset` hook. The hook at `crates/benten-graph/src/lib.rs::read_bytes_since_reset` is a no-op stub that returns `0` unconditionally — the `<= 128` assertion was vacuously satisfied + the test name lied about the property pinned. The Phase-2a `get_node_label_only` implementation is full-decode-then-project, NOT prefix-bounded: it reads the entire stored Node bytes, decodes via DAG-CBOR, returns the first label. The pre-v1 fix-pass dropped the vacuous assertion + retensed the test name + module-doc to honestly describe what's pinned at HEAD (SHAPE: returns first label for stored Node).
+
+**Future target:** lift `get_node_label_only` to a prefix-bounded read that streams just enough bytes from the redb value to decode the leading `labels[0]` field. With label-only reads firing on hot paths (Inv-11 runtime probe + future label-routing dispatch), the I/O reduction matters. Concrete shape:
+- Wire real byte-counter instrumentation at `RedbBackend::read_bytes_since_reset` (currently the no-op stub with the TODO marker pointing here).
+- Implement a streaming DAG-CBOR decoder that reads a bounded prefix (~64-128 bytes typical for single-label Nodes) — bail with full-decode fallback on prefix-overflow.
+- Re-introduce the `<= 128` assertion in `tests/get_node_label_only.rs` (revert the rename + restore the `bytes_read` assertion arm).
+- Add a sibling assertion that verifies fallback fires correctly when a multi-KB Node is stored with a leading label past the 128-byte prefix bound.
+
+**Phase target:** Phase 3 IVM Algorithm B generalization (§5.1) is the natural bundling site — the umbrella `GraphBackend` trait that §1.2 / §5.1 introduce is the right surface to attach the streaming-decode capability to. If §5.1 lands without lifting this, carry forward to Phase 4+ (heuristic per `feedback_engine_primitives_vs_application_layer.md` — the optimization is engine-internal, not application composition).
+
+**Touch size:** ~80-150 LOC streaming decoder + ~40 LOC byte-counter wiring + ~30 LOC test restoration.
+
+**Cross-refs:**
+- `crates/benten-graph/src/lib.rs::read_bytes_since_reset` carries a TODO marker pointing here as the gating wave.
+- §1.2 `SnapshotBlobBackend` direct-wire / §5.1 IVM Algorithm B generalization for the umbrella `GraphBackend` trait coupling.
+
 ---
 
 ## 8. Phase 3 plan-doc opening checklist

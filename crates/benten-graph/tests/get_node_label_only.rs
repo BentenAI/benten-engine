@@ -23,29 +23,26 @@ fn put_sample(backend: &RedbBackend, labels: Vec<String>, title: &str) -> benten
     backend.put_node_with_context(&node, &ctx).expect("put")
 }
 
-/// SHAPE-PIN: validates the struct shape for Phase-2b forward-compat.
-/// Does NOT validate firing semantics (those land in Phase 2b).
+/// SHAPE-PIN: validates that `get_node_label_only` returns the first label
+/// of a stored Node — i.e. the projection shape the Inv-11 runtime probe
+/// consumes. Does NOT validate any prefix-bounded I/O property: the
+/// current Phase-2a implementation is full-decode-then-project, and the
+/// `read_bytes_since_reset` instrumentation is a no-op stub (see
+/// `crates/benten-graph/src/lib.rs::read_bytes_since_reset`). The
+/// prefix-bounded fast-path optimization is a named-but-not-shipped
+/// future refinement carried at `docs/future/phase-3-backlog.md` §7.21.
 #[test]
-fn graph_get_node_label_only_fast_path_reads_prefix_only() {
+fn graph_get_node_label_only_returns_first_label_for_stored_node() {
     let dir = tempfile::tempdir().expect("tempdir");
     let backend = RedbBackend::open_or_create(dir.path().join("fast.redb")).expect("open");
 
     let cid = put_sample(&backend, vec!["Post".into()], "fast-path");
 
-    // Reset I/O counter (test-only hook) so we can assert the fast path
-    // reads only the label prefix, not the whole Node.
-    backend.reset_read_byte_counter();
     let label = backend
         .get_node_label_only(&cid)
         .expect("fast path")
         .expect("Some label");
     assert_eq!(label, "Post");
-
-    let bytes_read = backend.read_bytes_since_reset();
-    assert!(
-        bytes_read <= 128,
-        "fast-path must read at most 128 bytes; read {bytes_read}"
-    );
 }
 
 #[test]
