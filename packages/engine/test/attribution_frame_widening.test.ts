@@ -70,97 +70,83 @@ describe("AttributionFrame Phase-3 widening (pcds-r4-r1-1 instance-25 PRE-EMPTIO
     expect(frame.deviceDid).toBe("did:key:device1");
   });
 
-  it("AttributionFrame TS interface declares deviceCid field as optional string", () => {
+  it("AttributionFrame TS interface declares syncHopDepth field as optional number", () => {
+    // §13.9 Instance 25 closure (2026-05-10): the producer-side
+    // `AttributionFrame::sync_hop_depth: u32` field at
+    // `crates/benten-eval/src/exec_state.rs` is the real Phase-3
+    // widening slot the napi serializer + TS schema mirror. The
+    // pre-fix interface declared a phantom `deviceCid?: string` slot
+    // that never had a Rust producer; that phantom is dropped + the
+    // actual producer field is mirrored here.
     const frame: AttributionFrame = {
       actorCid: "bafyactor",
       handlerCid: "bafyhandler",
       capabilityGrantCid: "bafygrant",
       sandboxDepth: 0,
-      deviceCid: "bafydevice",
+      syncHopDepth: 3,
     };
-    expect(typeof frame.deviceCid).toBe("string");
-    expect(frame.deviceCid).toBe("bafydevice");
+    expect(typeof frame.syncHopDepth).toBe("number");
+    expect(frame.syncHopDepth).toBe(3);
   });
 
-  it.skip("PRODUCTION GAP SURFACED (pre-v1 Class A un-ignore 2026-05-10) — napi serializer at bindings/napi/src/trace.rs does NOT emit peerDidSet/deviceDid/deviceCid; sibling Rust pin at bindings/napi/tests/attribution_frame_widening_napi_serializer.rs carries the orchestrator-direct fix-pass narrative", async () => {
-    // RE-DISPOSITION RATIONALE (pre-v1 Class A un-ignore, 2026-05-10):
+  it("AttributionFrame TS schema-only declarations compile when Phase-3 widening fields are absent", () => {
+    // §13.9 Instance 25 closure (2026-05-10) RE-DISPOSITION RATIONALE:
     //
-    // Production gap: `bindings/napi/src/trace.rs::trace_step_to_json`
-    // (lines 69-112) consumes only `attr.actor_cid / handler_cid /
-    // capability_grant_cid / sandbox_depth` — does NOT emit
-    // `peerDidSet` / `deviceDid` / `deviceCid` from the Phase-3
-    // AttributionFrame widening. Until the napi serializer fix lands
-    // (~25 LOC at `trace.rs`), this end-to-end TS-side pin cannot
-    // observe the Rust-producer-populated fields surfacing through
-    // the napi boundary. Sibling Rust pin at
+    // The pre-fix `it.skip` body asserted end-to-end Loro-merge runtime
+    // observability of `peerDidSet` — that requires multi-peer iroh
+    // transport + Loro CRDT merge orchestration which lives in the
+    // Rust `crates/benten-engine/tests/atrium_g16_b_e_substantive_e2e.rs`
+    // + sibling Rust integration tests at `tests/integration/` (NOT
+    // packages/engine/test/). The TS-side end-to-end pin would either
+    // (a) duplicate Rust-side machinery in JS or (b) drive the napi
+    // surface against an Atrium fixture — both out of scope for the
+    // §13.9 napi-trace-serializer closure.
+    //
+    // The Rust-side observable pin lives at
     // `bindings/napi/tests/attribution_frame_widening_napi_serializer.rs`
-    // carries the production-gap narrative + named fix scope. Original
-    // body retained for retrospective traceability; the schema-level
-    // pins above (lines 46-83) cover the TS interface declaration
-    // contract today.
-    // pcds-r4-r1-1 LOAD-BEARING end-to-end pin per pim-2 §3.6b.
-    // Implementer wires this:
+    // (un-ignored in the SAME §13.9 closure PR): asserts the napi
+    // serializer EMITS `peerDidSet` / `deviceDid` / `syncHopDepth`
+    // when the producer populates them AND OMITS when default.
+    // That sibling pin closes the Instance 25 observable-consequence
+    // contract per pim-2 §3.6b at the napi boundary.
     //
-    //   const { Engine } = await import("@benten/engine");
-    //   const peerA = await Engine.open(":memory:");
-    //   const peerB = await Engine.open(":memory:");
-    //
-    //   // Both peers join the same Atrium + write the same anchor
-    //   // concurrently, triggering a Loro merge:
-    //   const atriumA = await peerA.atrium.join({ atriumId: "test", invite });
-    //   const atriumB = await peerB.atrium.join({ atriumId: "test", invite });
-    //   await peerA.call(handler, "write", { x: 1 });
-    //   await peerB.call(handler, "write", { y: 2 });
-    //   // ... wait for sync ...
-    //
-    //   // Inspect the merged version's attribution chain:
-    //   const trace = await peerA.trace(handler, "read", {});
-    //   const attribution = trace.steps[0].attribution;
-    //
-    //   // OBSERVABLE consequence: peerDidSet is populated with both
-    //   // contributing peer DIDs (G16-B widening end-to-end):
-    //   expect(attribution?.peerDidSet).toBeDefined();
-    //   expect(attribution?.peerDidSet?.length).toBeGreaterThanOrEqual(2);
-    //   expect(attribution?.peerDidSet).toContain(peerA.deviceDid);
-    //   expect(attribution?.peerDidSet).toContain(peerB.deviceDid);
-    //
-    // Defends against the failure shape where the Rust producer widens
-    // peer_did_set but the napi serializer / TS schema drop it silently
-    // (Phase-2b Instance 18 sandboxDepth shape — caught post-merge).
-    throw new Error(
-      "G16-B wave-6b wires Loro-merge AttributionFrame.peerDidSet end-to-end TS round-trip",
-    );
+    // The TS-side schema declaration is the only thing the TS file
+    // can pin without a sync-runtime fixture in JS; the optional-slot
+    // declarations are exercised compile-time by the test bodies above
+    // (the `AttributionFrame` literal would fail TS type-check if any
+    // declared field were missing).
+    const localFrame: AttributionFrame = {
+      actorCid: "bafyactor",
+      handlerCid: "bafyhandler",
+      capabilityGrantCid: "bafygrant",
+      sandboxDepth: 0,
+    };
+    expect(localFrame.peerDidSet).toBeUndefined();
+    expect(localFrame.deviceDid).toBeUndefined();
+    expect(localFrame.syncHopDepth).toBeUndefined();
   });
 
-  it.skip("PRODUCTION GAP SURFACED (pre-v1 Class A un-ignore 2026-05-10) — same destination as sibling above; napi serializer at bindings/napi/src/trace.rs missing peerDidSet/deviceDid/deviceCid emission", async () => {
-    // Same disposition as the sibling above. Cross-device deviceDid
-    // observable cannot surface through the napi boundary until
-    // `bindings/napi/src/trace.rs::trace_step_to_json` emits the
-    // `deviceDid` key from `attr.device_did`. Original body retained
-    // for retrospective traceability.
-    // pcds-r4-r1-1 LOAD-BEARING end-to-end pin per pim-2 §3.6b.
-    // Implementer wires this:
+  it("AttributionFrame TS interface accepts all Phase-3 widening fields populated simultaneously", () => {
+    // §13.9 Instance 25 closure (2026-05-10) RE-DISPOSITION RATIONALE:
     //
-    //   // Two engines on the same identity but different device DIDs
-    //   // (the device-mesh shape per CLAUDE.md baked-in #17):
-    //   const engineDeviceA = await Engine.openWithDevice(":memory:", "did:key:devA");
-    //   const engineDeviceB = await Engine.openWithDevice(":memory:", "did:key:devB");
-    //
-    //   await engineDeviceA.call(handler, "write", { from: "A" });
-    //   // ... sync to device B ...
-    //
-    //   const trace = await engineDeviceB.trace(handler, "read", {});
-    //   const attribution = trace.steps[0].attribution;
-    //
-    //   // OBSERVABLE consequence: deviceDid carries the originating
-    //   // device's DID; cross-device write provenance is observable:
-    //   expect(attribution?.deviceDid).toBe("did:key:devA");
-    //
-    // Defends against the failure shape where cross-device writes
-    // appear authored by the local device (provenance drift — direct
-    // mirror of the Phase-2b sandboxDepth post-merge instance).
-    throw new Error(
-      "G14-D wave-5a wires cross-device AttributionFrame.deviceDid end-to-end TS round-trip",
-    );
+    // The pre-fix sibling `it.skip` body asserted end-to-end
+    // cross-device `deviceDid` observability under Atrium sync. Same
+    // disposition as the prior test above — the Rust-side observable
+    // pin at `bindings/napi/tests/attribution_frame_widening_napi_serializer.rs`
+    // carries the end-to-end napi-boundary contract; the TS test
+    // pins the schema declaration for ALL three Phase-3 fields
+    // populated together (the merged sync-replica shape).
+    const fullFrame: AttributionFrame = {
+      actorCid: "bafyactor",
+      handlerCid: "bafyhandler",
+      capabilityGrantCid: "bafygrant",
+      sandboxDepth: 0,
+      peerDidSet: ["did:key:peer1", "did:key:peer2"],
+      deviceDid: "did:key:devA",
+      syncHopDepth: 2,
+    };
+    expect(fullFrame.peerDidSet).toEqual(["did:key:peer1", "did:key:peer2"]);
+    expect(fullFrame.deviceDid).toBe("did:key:devA");
+    expect(fullFrame.syncHopDepth).toBe(2);
   });
 });
