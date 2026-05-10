@@ -293,6 +293,34 @@ is in-memory or engine-backed.
 
 Everything the engine uses at runtime is in the graph: capability grants (`CapabilityGrant` Nodes with `GRANTED_TO` edges), registered handlers (content-addressed subgraphs, immutable once registered), IVM view definitions (ViewDefinition Nodes with a strategy property), user preferences, change-event queues. The engine does not read configuration from YAML or a config service; it reads Nodes.
 
+## Plugins and engine extensions
+
+Two distinct categories of "extensibility" — different shapes, different trust models, different surfaces. Both are first-class. Per CLAUDE.md baked-in commitments #18 and #19.
+
+### App-level plugins — subgraphs
+
+A plugin is a **subgraph of operation Nodes** — handlers, materializers, SANDBOX nodes, READ/WRITE/etc. — packaged as content-addressed graph: importable, shareable, replicatable, and editable across Atriums. There is no separate plugin runtime; the engine evaluator walks plugin subgraphs the same way it walks any other handler.
+
+**Identity.** Each plugin has its own DID + an attenuated UCAN delegated by the user at install. Walks of plugin subgraphs run with the plugin's principal active; capability checks fire against the plugin's UCAN chain.
+
+**Trust model — three layers.**
+
+1. **User-as-root.** Every cap chain traces back to a user-issued root. P2P plugin discovery (Phase 8) does not weaken this — the user-mint root is still the trust anchor.
+2. **Install-time manifest.** Two halves: `requires` (caps the plugin needs) and `shares` (policy for what other plugins are allowed to receive). Both are signed by the plugin author so they cannot drift post-install. The user reviews the manifest and consents to the *envelope*, not to each runtime access.
+3. **Runtime delegation within the manifest envelope.** Plugin A can delegate a UCAN to plugin B if and only if B's request fits A's manifest `shares` policy. The CapabilityPolicy backend validates the chain at access-time: chain-traces-to-user-root + each delegation step fits source policy + requested cap is within attenuation envelope.
+
+**Engine-side surface.** The evaluator's read pathway threads the active principal through `Engine::read_node_as(principal, cid)` — the public surface for any read attributed to a non-trusted principal. Engine internals (IVM, sync, view materialization, audit) call `Engine::read_node(cid)` — `pub(crate)`, no permission check, no overhead on hot paths. Plugin authors do not call either function: they author graph nodes; the evaluator is the only caller of `_as`. Mirrors the existing `Engine::call_as` precedent. Implementation lands in the **pre-v1 cleanup window** (the 4 `todo!()` stubs at `crates/benten-engine/src/engine_wait.rs:1011-1026` are the migration target — closing Phase-2a-era debt; independent of Phase-4 plugin manifest schema decisions).
+
+**Private namespaces.** A plugin's writes go to a DID-scoped namespace whose cap is held by the plugin's DID. Manifest `shares=none` for that namespace blocks delegation; the engine refuses to issue cross-plugin caps for it. Gives plugins a sovereign space (AI agents' working memory, intermediate state) without breaking the cross-plugin sharing model — same machinery, different policy.
+
+### Engine-level extensions — Rust crates
+
+Compile-time linked into the engine binary. Rare. For custom IVM strategies, alternate transports (post-iroh — shaped relays, Nostr, Tor), alternate persistence backends (post-redb — sled, fjall, cloud-KV), custom signature schemes (post-Ed25519 — X25519, BLS, post-quantum), performance-critical primitives that need raw Rust speed beyond SANDBOX.
+
+**Trust model.** "You compiled this into your engine binary." Same trust posture as Benten core itself. No UCAN, no manifest, no `read_node_as` boundary. An engine extension that wants to violate invariants can — the boundary is `cargo` and code review, not the type system.
+
+**Audience.** People building the platform itself, not app users. The two categories are intentionally separate worlds; trust models do not transfer between them in either direction.
+
 ---
 
 For the paths this will take next, see [`HOW-IT-WORKS.md`](HOW-IT-WORKS.md) "The path from here." For every error the engine surfaces, see [`ERROR-CATALOG.md`](ERROR-CATALOG.md).

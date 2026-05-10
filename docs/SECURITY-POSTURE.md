@@ -1720,3 +1720,126 @@ the CI-1 deferral.
 at commit SHAs (rather than mutable tag/branch refs). Dependabot rotates
 weekly via `.github/dependabot.yml`'s github-actions ecosystem entry.
 Closes the CI-3 deferral.
+
+---
+
+## Plugin trust model (Phase-3-close pre-v1 commitment)
+
+**Ratified 2026-05-10.** Pre-v1-cleanup architectural commitment fixing the trust
+model for app-level plugins ahead of Phase-4 plugin-manifest + admin-UI work.
+Two distinct extensibility categories with deliberately separate trust shapes:
+
+### App-level plugins — three-layer consent
+
+App-level plugins are **subgraphs** of operation Nodes (handlers, materializers,
+SANDBOX nodes), content-addressed and shared peer-to-peer through Atriums. Each
+plugin has its own DID + an attenuated UCAN delegated by the user at install
+time. The engine evaluator walks plugin subgraphs the same way it walks any
+handler, with the active principal switched to the plugin's identity for the
+walk's duration.
+
+The trust model is layered:
+
+1. **User-as-root.** Every capability chain traces back to a user-issued root
+   grant. Phase-8 P2P plugin discovery does not weaken this — a signed,
+   content-addressed plugin manifest is still rooted in user consent at install.
+   No object-capability-style "possession of a token IS the right" semantics
+   above the user's mint operation.
+2. **Install-time manifest envelope.** The manifest carries `requires` (caps the
+   plugin needs) and `shares` (policy for what other plugins are allowed to
+   receive from this one). Both are signed by the plugin author so they cannot
+   drift post-install. The user reviews the manifest and consents to the
+   *envelope*, not to each runtime access. This is the v1 install UX surface.
+3. **Runtime UCAN delegation within manifest envelope.** Plugin A may delegate a
+   UCAN to plugin B if and only if B's request fits A's manifest `shares`
+   policy. The CapabilityPolicy backend validates the chain at access-time:
+   chain traces to user-root + each delegation step fits source plugin's policy
+   + requested cap is within attenuation envelope. Plugin-to-plugin delegation
+   inside the envelope does not require additional user prompts.
+
+**Engine-side surface.** The evaluator's read pathway threads the active
+principal through `Engine::read_node_as(principal, cid)` — the public surface
+for any read attributed to a non-trusted principal. Engine internals (IVM,
+sync, view materialization, audit, change-event fanout) call `Engine::read_node(cid)`
+— `pub(crate)`, no permission check, no overhead on hot paths. Plugin authors
+do not call either function directly: they author graph nodes; the evaluator is
+the only caller of `_as`. Mirrors the established `Engine::call_as` precedent
+at `crates/benten-engine/src/engine.rs::call_as`. **Implementation lands in the
+pre-v1 cleanup window** (closing Phase-2a-era debt: the 4 `todo!()` stubs at
+`crates/benten-engine/src/engine_wait.rs:1011-1026` — `put_node` +
+`read_node_with_policy` + the test-only read-grant helper + the bench-helper
+sibling — are the migration target). The engine surface is independent of the
+Phase-4 plugin manifest schema; both can be designed and shipped without
+sequencing dependencies.
+
+**Private namespaces.** A plugin's writes go to a DID-scoped namespace whose
+cap is held by the plugin's DID. Manifest `shares=none` for that namespace
+blocks delegation; the engine refuses to issue cross-plugin caps for it.
+Provides a sovereign space for plugin internals (AI agents' working memory,
+intermediate state, scratchpads) without breaking the cross-plugin sharing
+model — same UCAN machinery, different policy.
+
+**Threat model.**
+
+- **Scope creep at install** — defended by signed manifest. The user reviews
+  the manifest at install; later changes require the user re-consent on
+  upgrade. Author cannot retroactively widen the envelope.
+- **Plugin-to-plugin smuggling** — defended by manifest `shares` policy
+  validation at delegation time. Plugin A cannot mint a cap to plugin B that
+  exceeds A's manifest envelope; the policy backend rejects the chain.
+- **Object-capability bypass** (a malicious plugin tries to construct a cap
+  out of thin air) — defended by chain-traces-to-user-root validation. Any
+  cap presented at access time must trace back to a user-mint root. There is
+  no engine sentinel principal callable from outside the engine crate.
+- **Engine-internal-as-principal forgery** (a plugin tries to call the
+  evaluator's unchecked read path) — defended by `pub(crate)` visibility on
+  `Engine::read_node`. The Rust compiler refuses cross-crate calls; plugin
+  subgraph nodes cannot directly invoke the function regardless.
+
+**Trajectory alignment.** v1 (Phase 4) — small N, user reviews each manifest,
+simple. Phase 6 (AI agents) — an assistant declares "I integrate with calendar
+/ notes / email" in its manifest; user consents at install; the agent runs
+autonomously without per-action prompts. Phase 8 (decentralized plugin
+discovery) — plugins are signed by author, content-addressed, discovered
+through Atrium peer groups; users trust the signed manifest, not a central
+registry.
+
+**What this rules out.**
+
+- *Pure user-as-root with per-action prompts.* Notification fatigue;
+  combinatorial explosion as N plugins grow; AI-agent ergonomics fail.
+- *Pure UCAN-native peer delegation without the envelope.* "I installed plugin
+  A; I did not agree to A handing my data to plugin B." User loses meaningful
+  control after install.
+- *Plugin runtime separate from the engine evaluator.* No JS loader / FFI
+  bridge / embedded interpreter. Plugins are graph; the evaluator is the only
+  runtime.
+
+### Engine-level extensions — compile-time trust
+
+Engine extensions are **Rust crates** linked into the engine binary at compile
+time. For custom IVM strategies, alternate transports (post-iroh — shaped
+relays, Tor, Nostr), alternate persistence backends (post-redb — sled, fjall,
+cloud-KV), custom signature schemes (post-Ed25519 — X25519, BLS, post-quantum),
+performance-critical primitives that need raw Rust speed beyond SANDBOX.
+
+**Trust posture.** "You compiled this into your engine binary." Same trust as
+Benten core. There is no UCAN, no manifest envelope, no `read_node_as`
+boundary. An engine extension that wants to violate invariants can — the
+boundary is `cargo` and code review, not the type system.
+
+**Audience.** People building the platform itself, not app users. The two
+extensibility categories are intentionally separate worlds; trust models do
+not transfer between them in either direction. Future proposals to extend the
+app-level plugin trust model to engine-level extensions (or vice versa) must
+be rejected with reference to the architectural commitment captured here.
+
+**Cross-refs.** `docs/ARCHITECTURE.md` "Plugins and engine extensions" (the
+architectural surface); `docs/HOW-IT-WORKS.md` "Plugins, in plain English"
+(the orientation tour); `docs/GLOSSARY.md` ("App-level plugin," "Engine
+extension," "Manifest envelope," "Plugin DID," "Plugin manifest");
+`crates/benten-engine/src/engine_wait.rs:1011-1026` (the four `todo!()` stubs
+that are β-shaped — the migration target for the read-side gating
+implementation, which lands as pre-v1 cleanup independently of the Phase-4
+plugin-manifest schema work); `crates/benten-engine/src/engine.rs::call_as`
+(the precedent the read-side mirror follows).
