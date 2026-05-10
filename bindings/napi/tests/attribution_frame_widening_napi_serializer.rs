@@ -44,7 +44,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G14-D wave-5a + G16-B wave-6b — napi AttributionFrame serializer emits peerDidSet + deviceDid + deviceCid camelCase keys (pcds-r4-r1-1 instance-25 PRE-EMPTION)"]
+#[ignore = "phase-3-backlog §7.3.D — napi AttributionFrame serializer emits peerDidSet + deviceDid + deviceCid camelCase keys. G14-D wave-5a + G16-B wave-6b + G16-D wave-6b ALL shipped (PRs #115/#126/#163); test body pins specific napi-side AttributionFrame camelCase serializer contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn napi_attribution_frame_serializer_emits_phase_3_peer_did_set_device_did_device_cid_camel_case_keys()
  {
     // pcds-r4-r1-1 LOAD-BEARING napi-companion pin per pim-2 §3.6b.
@@ -87,7 +87,7 @@ fn napi_attribution_frame_serializer_emits_phase_3_peer_did_set_device_did_devic
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-D wave-5a + G16-B wave-6b — napi AttributionFrame serializer omits Phase-3 widening fields when absent (pre-empts undefined-vs-null drift)"]
+#[ignore = "phase-3-backlog §7.3.D — napi AttributionFrame serializer omits Phase-3 widening fields when absent. G14-D + G16-B all shipped; test body pins specific undefined-vs-null pre-emption contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn napi_attribution_frame_serializer_omits_phase_3_widening_fields_when_unset() {
     // Companion pre-emption pin: when the Phase-3 widening fields are
     // absent on the Rust producer side (e.g. local-only non-sync-replica

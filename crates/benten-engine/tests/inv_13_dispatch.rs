@@ -36,12 +36,12 @@
 //!
 //! ## RED-PHASE discipline
 //!
-//! `#[ignore]`'d with rationale `"RED-PHASE: G16-B wave-6b dispatches Inv-13 row-4"`.
+//! `#[ignore]`'d with rationale pointing to phase-3-backlog §7.3.D STALE-RATIONALE sweep #2; destination §3.1-followup multi-peer iroh sync (CLOSED at G16-B-E PR #160).
 
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — ds-4 — Inv-13 row-4a Loro-merge-applicable resolves"]
+#[ignore = "phase-3-backlog §7.3.D — Inv-13 row-4a Loro-merge-applicable resolves. G16-B wave-6b shipped Loro CRDT integration; test body pins Inv-13 row-4a dispatch contract; un-ignore at §3.1-followup landing (CLOSED at G16-B-E PR #160; test driver authoring tracked at next Phase-3-close orchestrator-direct fix-pass batch) per Wave-E rationale-only sweep."]
 fn inv_13_row_4a_loro_merge_applicable_user_data_resolves_via_d_c_version_chain() {
     // ds-4 + D-PHASE-3-23 pin. G16-B implementer wires this against
     // a fixture where two peers under sync-replica trust write
@@ -77,7 +77,7 @@ fn inv_13_row_4a_loro_merge_applicable_user_data_resolves_via_d_c_version_chain(
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — ds-4 + sec-r1-2 — Inv-13 row-4b system-zone immutability"]
+#[ignore = "phase-3-backlog §7.3.D — Inv-13 row-4b system-zone immutability. G16-B wave-6b shipped Loro integration; test body pins Inv-13 row-4b system-zone-write rejection; un-ignore at §3.1-followup landing per Wave-E rationale-only sweep."]
 fn inv_13_row_4b_system_zone_anchor_immutable_divergent_cid_rejects_with_e_sync_divergent_cid_rejected()
  {
     // ds-4 + sec-r1-2 pin. System-zone / Anchor-immutable data is

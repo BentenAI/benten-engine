@@ -50,7 +50,7 @@ fn did_rotate_keypair_emits_superseded_by_attestation_chain() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-B durable UCAN backend wires propagation; G14-A2 establishes attestation shape only"]
+#[ignore = "phase-3-backlog §7.3.D — DID-rotation propagation through durable UCAN backend. G14-B PR #109 + G14-A2 PR #108 both shipped (durable backend + attestation shape); test body pins specific DID-rotation propagation contract that composes with §2.1-followup ssi external UCAN/VC spec compatibility re-evaluation at G16 Atrium handshake (re-evaluation point at G16-D wave-6b shipped 2026-05-09 PR #163). Body un-ignore at §2.1-followup re-evaluation outcome per Wave-E rationale-only sweep."]
 fn did_rotation_propagates_revocation_to_ucan_backend() {
     // crypto-major-3 cross-wave pin — the G14-B durable UCAN backend
     // consumes the rotation event + revokes pre-rotation UCANs at

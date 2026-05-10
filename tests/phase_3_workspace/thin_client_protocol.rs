@@ -34,7 +34,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G14-D + G18-A — thin-client snapshot read via fetch GET (D-PHASE-3-N)"]
+#[ignore = "phase-3-backlog §7.3.D — thin-client snapshot read via fetch GET. G14-D wave-5a + G18-A wave-5a shipped (PARTIAL closure at G18-A; full closure at §4.3 G18-A-followup destination); test body pins fetch-GET protocol contract; un-ignore at §4.3 landing per Wave-E rationale-only sweep."]
 fn thin_client_snapshot_read_via_fetch_get_against_full_peer_endpoint() {
     // D-PHASE-3-N protocol-shape pin per baked-in #17. G14-D + G18-A
     // implementer wires this:
@@ -61,7 +61,7 @@ fn thin_client_snapshot_read_via_fetch_get_against_full_peer_endpoint() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-D + G18-A — thin-client write via POST with device-DID auth header (D-PHASE-3-N)"]
+#[ignore = "phase-3-backlog §7.3.D — thin-client write via POST with device-DID auth header. G14-D + G18-A + G16-D wave-6b shipped (device-DID handshake protocol body PR #163); test body pins POST protocol contract; un-ignore at §4.3 G18-A-followup landing per Wave-E rationale-only sweep."]
 fn thin_client_write_via_post_with_device_did_auth_header() {
     // D-PHASE-3-N + Inv-14 device-grain pin. Implementer wires this:
     //
@@ -94,7 +94,7 @@ fn thin_client_write_via_post_with_device_did_auth_header() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-D + G18-A — thin-client SSE/WebSocket ChangeEvent stream (D-PHASE-3-N)"]
+#[ignore = "phase-3-backlog §7.3.D — thin-client SSE/WebSocket ChangeEvent stream. G14-D + G18-A shipped; test body pins SSE/WebSocket protocol contract; un-ignore at §4.3 G18-A-followup landing per Wave-E rationale-only sweep."]
 fn thin_client_change_event_stream_via_sse_or_websocket_from_full_peer() {
     // D-PHASE-3-N + F6 SUBSCRIBE pin. Implementer wires this:
     //
@@ -135,7 +135,7 @@ fn thin_client_change_event_stream_via_sse_or_websocket_from_full_peer() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-D + G18-A — F6 SUBSCRIBE filtering applied at thin-client edge by full peer (D-PHASE-3-N)"]
+#[ignore = "phase-3-backlog §7.3.D — F6 SUBSCRIBE filtering at thin-client edge. G14-D wave-5a + G18-A shipped F6 + IndexedDB persistence; test body pins F6-at-edge protocol contract; un-ignore at §4.3 G18-A-followup landing per Wave-E rationale-only sweep."]
 fn thin_client_f6_subscribe_filtering_applied_at_full_peer_edge_not_thin_client() {
     // D-PHASE-3-N + exit-criterion 3 pin. Implementer wires this:
     //
@@ -167,7 +167,7 @@ fn thin_client_f6_subscribe_filtering_applied_at_full_peer_edge_not_thin_client(
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-D + G18-A — browser tab as thin-client view into full peer end-to-end (exit-criterion 19)"]
+#[ignore = "phase-3-backlog §7.3.D — browser tab as thin-client view into full peer end-to-end (exit-criterion 19). G14-D + G18-A shipped; test body pins exit-criterion-19 e2e contract; un-ignore at §4.3 G18-A-followup landing per Wave-E rationale-only sweep."]
 fn integration_atrium_browser_tab_as_thin_client_view_into_full_peer_e2e() {
     // exit-criterion 19 pin (the LOAD-BEARING end-to-end thin-client
     // browser test). Implementer wires this:

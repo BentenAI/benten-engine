@@ -28,7 +28,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G14-D — cap-r4-5 — cap_recheck closure non-blocking under grant-store contention"]
+#[ignore = "phase-3-backlog §7.3.D — cap_recheck closure non-blocking under grant-store contention. G14-D wave-5a shipped cap_recheck closure-shape; test body pins concurrency-non-blocking observable contract; un-ignore at §2.3 (i) WriteContext threading landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn cap_recheck_closure_does_not_block_change_broadcast_fan_out_under_grant_store_contention() {
     // cap-r4-5 pin. The cap_recheck closure consults an in-memory
     // snapshot, not a blocking redb read; ChangeBroadcast fan-out

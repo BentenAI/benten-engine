@@ -16,7 +16,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G20-B wave-8b — paper-prototype revalidation Phase-3 re-run doc present"]
+#[ignore = "phase-3-backlog §7.3.D — paper-prototype revalidation Phase-3 re-run doc present. G20-B wave-8b shipped (PR #143); paper-prototype revalidation at G21-T3 PR #147 (8.0% SANDBOX rate verdict); test body pins doc-presence assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn paper_prototype_revalidation_phase_3_re_run_doc_present() {
     // G20-B doc-presence pin. Implementer wires this:
     //
@@ -39,7 +39,7 @@ fn paper_prototype_revalidation_phase_3_re_run_doc_present() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G20-B wave-8b — SANDBOX rate ≤ 30% on Phase-3 corpus (exit-criterion 14)"]
+#[ignore = "phase-3-backlog §7.3.D — SANDBOX rate ≤ 30% on Phase-3 corpus. G21-T3 PR #147 closed paper-prototype Phase-3 runtime-wired pin at 8.0% (well below 30% ceiling); test body pins exit-criterion-14 assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn sandbox_rate_under_30_percent_phase_3_corpus() {
     // exit-criterion 14 pin. G20-B implementer wires this:
     //

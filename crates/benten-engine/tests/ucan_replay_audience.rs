@@ -25,7 +25,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G14-D — CLR-2 — cross-atrium UCAN proof-chain replay rejection at engine"]
+#[ignore = "phase-3-backlog §7.3.D — cross-atrium UCAN proof-chain replay rejection at engine. G14-D wave-5a shipped F6 SUBSCRIBE + cap_snapshot_hash; test body pins cross-atrium replay-rejection contract that composes with §2.3 (i) WriteContext audience threading (v1-assessment-window). Body un-ignore at §2.3 (i) landing per Wave-E rationale-only sweep."]
 fn ucan_proof_chain_replay_against_different_atrium_peer_rejected_via_audience_binding() {
     // CLR-2 cluster pin. G14-D implementer wires this:
     //

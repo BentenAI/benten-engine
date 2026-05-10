@@ -49,7 +49,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G14-C — sec-r4r1-1 BLOCKER (a) — install rejects when signing UCAN revoked between sign and install"]
+#[ignore = "phase-3-backlog §7.3.D — manifest temporal binding (a) install rejects when signing UCAN revoked between sign and install. G14-C wave-4b shipped Compromise #17/#18/#21 closures (PR #110); test body pins specific revoke-between-sign-and-install defensive contract; un-ignore at §2.3 (i) WriteContext threading landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn manifest_install_rejected_when_signing_ucan_revoked_between_sign_and_install() {
     // sec-r4r1-1 BLOCKER (a) pin. The signing UCAN proof chain MUST
     // be re-validated at install-time against the durable revocation
@@ -95,7 +95,7 @@ fn manifest_install_rejected_when_signing_ucan_revoked_between_sign_and_install(
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-C — sec-r4r1-1 BLOCKER (b) — install-time consults UCAN nbf/exp at install-wallclock"]
+#[ignore = "phase-3-backlog §7.3.D — manifest temporal binding (b) install-time consults UCAN nbf/exp at install-wallclock. G14-C shipped; test body pins UCAN nbf/exp install-time-consultation contract; un-ignore at §2.3 (i) landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn manifest_signature_install_time_consults_ucan_nbf_exp_on_signing_chain() {
     // sec-r4r1-1 BLOCKER (b) pin. Install-time chain-walk applies
     // UCAN nbf/exp at install-time wallclock, NOT at sign-time. This
@@ -144,7 +144,7 @@ fn manifest_signature_install_time_consults_ucan_nbf_exp_on_signing_chain() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-C — sec-r4r1-1 BLOCKER (c) — install rejects replay with same nonce"]
+#[ignore = "phase-3-backlog §7.3.D — manifest temporal binding (c) install rejects replay with same nonce. G14-C shipped; test body pins replay-rejection-by-nonce contract; un-ignore at §2.3 (i) landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn manifest_install_rejects_replay_with_same_nonce() {
     // sec-r4r1-1 BLOCKER (c) pin. The manifest envelope carries a
     // nonce + sign-time; reinstall with the same nonce rejects via a
@@ -184,7 +184,7 @@ fn manifest_install_rejects_replay_with_same_nonce() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-C — sec-r4r1-1 BLOCKER (d) — newer-signed manifest supersedes older"]
+#[ignore = "phase-3-backlog §7.3.D — manifest temporal binding (d) newer-signed manifest supersedes older. G14-C shipped; test body pins newer-supersedes-older contract; un-ignore at §2.3 (i) landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn manifest_install_newer_signed_manifest_supersedes_older() {
     // sec-r4r1-1 BLOCKER (d) pin. Supersession ordering is
     // well-defined: a newer-signed manifest (later sign-time within

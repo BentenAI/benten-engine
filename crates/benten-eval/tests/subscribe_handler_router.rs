@@ -26,7 +26,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G14-D — seq-major-8 LOAD-BEARING — handler-id-router routes change events"]
+#[ignore = "phase-3-backlog §7.3.D — handler-id-router routes change events. G14-D wave-5a shipped the production handler-id-router seam at crates/benten-eval/src/primitives/subscribe.rs; test body pins specific routing-behavior contract that needs driver authoring; un-ignore at §2.3 (i) WriteContext threading landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn subscribe_handler_id_router_routes_change_event_through_named_handler() {
     // seq-major-8 LOAD-BEARING pin. G14-D implementer wires this:
     //

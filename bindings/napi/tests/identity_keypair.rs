@@ -19,7 +19,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G14-A1 wave-4a introduces bindings/napi/src/identity.rs"]
+#[ignore = "phase-3-backlog §7.3.D — napi identity_keypair surface. G14-A1 wave-4a shipped (PR #107) — bindings/napi/src/identity.rs lives at HEAD; test body pins specific napi-side round-trip contract that needs driver authoring; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn engine_napi_identity_keypair_round_trip() {
     // r1-napi-1 MAJOR pin. G14-A1 implementer wires this:
     //

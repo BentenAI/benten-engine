@@ -25,7 +25,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G14-D — plan §3 G14-D — persisted policy metadata against historical state"]
+#[ignore = "phase-3-backlog §7.3.D — WAIT resume policy: persisted policy metadata against historical state. G14-D wave-5a shipped F6 SUBSCRIBE filtering + cap_snapshot_hash (PR #115); test body pins WAIT-resume policy-metadata-against-historical-state defensive contract; un-ignore at §2.3 (i) WriteContext threading landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn wait_resume_persisted_policy_metadata_against_historical_state() {
     // plan §3 G14-D pin. G14-D implementer wires this:
     //

@@ -25,7 +25,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G14-D — seq-major-8 — EMIT handler-id-router routes events"]
+#[ignore = "phase-3-backlog §7.3.D — EMIT handler-id-router routes events. G14-D wave-5a shipped the production handler-id-router seam at crates/benten-eval/src/primitives/emit.rs; test body pins specific routing-behavior contract that needs driver authoring; un-ignore at §2.3 (i) WriteContext threading landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn emit_handler_id_router_routes_emit_event_through_named_handler() {
     // seq-major-8 pin. G14-D implementer wires this:
     //
@@ -56,7 +56,7 @@ fn emit_handler_id_router_routes_emit_event_through_named_handler() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-D — stream-r1-2 — EMIT routing differs from default fan-out end-to-end"]
+#[ignore = "phase-3-backlog §7.3.D — EMIT routing differs from default fan-out end-to-end. G14-D wave-5a shipped production EMIT routing; test body pins handler-id-router-vs-fanout differential observable contract that needs driver authoring; un-ignore at §2.3 (i) WriteContext threading landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn emit_handler_id_router_routing_observably_differs_from_default_fan_out_end_to_end() {
     // stream-r1-2 LOAD-BEARING pin. The router must produce
     // OBSERVABLY DIFFERENT execution traces depending on the

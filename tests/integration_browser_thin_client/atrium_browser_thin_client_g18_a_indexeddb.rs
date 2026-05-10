@@ -44,7 +44,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G18-A wave-5a wires IndexedDB cache + tab-reopen-cache-hit semantic per exit-criterion 19"]
+#[ignore = "phase-3-backlog §7.3.D — IndexedDB cache + tab-reopen-cache-hit semantic. G18-A wave-5a shipped PARTIAL closure (PR #114); full wasm32-IndexedDB plumbing tracked at §4.3 G18-A-followup destination; test body pins specific cache-semantic contract; un-ignore at §4.3 landing per Wave-E rationale-only sweep."]
 fn integration_atrium_browser_tab_as_thin_client_view_into_full_peer_e2e_g18_a_cache_side() {
     // exit-criterion 19 + D-PHASE-3-N + CLAUDE.md baked-in #17 pin.
     //
@@ -87,7 +87,7 @@ fn integration_atrium_browser_tab_as_thin_client_view_into_full_peer_e2e_g18_a_c
 }
 
 #[test]
-#[ignore = "RED-PHASE: G14-D + G18-A wave-5 — authenticated thin-client view per exit-criterion 19"]
+#[ignore = "phase-3-backlog §7.3.D — authenticated thin-client view. G14-D + G18-A shipped; test body pins exit-criterion-19 authenticated-view contract; un-ignore at §4.3 G18-A-followup landing per Wave-E rationale-only sweep."]
 fn browser_tab_thin_client_authenticated_view_into_full_peer_g18_a_cache_side() {
     // exit-criterion 19 pin (G18-A cache-side companion to R3-B's
     // G14-D auth-side body). G18-A implementer:

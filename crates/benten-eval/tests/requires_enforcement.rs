@@ -45,7 +45,7 @@ use benten_errors::ErrorCode;
 ///     the caller's grant does NOT include `admin:write`, so the WRITE is
 ///     denied with `E_CAP_DENIED` routed via `ON_DENIED`.
 #[test]
-#[ignore = "Phase 3 — per-primitive cap enforcement (Inv-13) deferred per docs/future/phase-3-backlog.md §2.1 (Durable UCAN backend wave). GrantBackedPolicy IS wired for static check_write, but per-primitive enforcement (Invariant 13 — each op step's `requires` re-checked individually) requires (a) `policy_with_grants(&[...])` in testing returning a real grant-backed policy instance, (b) `handler_declaring_read_but_writing_admin` populated subgraph, (c) evaluator calling check_write/check_read per-op step, not only at replay."]
+#[ignore = "phase-3-backlog §7.3.D — per-primitive cap enforcement (Inv-13) at evaluator runtime. §2.1 Durable UCAN backend CLOSED at G14-B PR #109 commit 496e144 (validate_chain_for_audience_at accessor lives at crates/benten-caps/src/backends/ucan.rs:487); the per-primitive Inv-13 enforcement piece composes with §2.3 (i) WriteContext audience + clock threading work (v1-assessment-window). Body un-ignore at §2.3 (i) landing per Wave-E rationale-only sweep — needs (a) policy_with_grants test helper backed by durable UCANBackend, (b) populated subgraph for read-but-writing-admin pin, (c) evaluator per-op-step cap check."]
 fn handler_with_understated_requires_denies_excess_writes() {
     let dir = tempfile::tempdir().unwrap();
     // The test subject has `post:read` granted but NOT `admin:write`.
@@ -93,7 +93,7 @@ fn handler_with_understated_requires_denies_excess_writes() {
 /// `requires`. The outer grant is `post:read`; the intersection with
 /// `admin:write` is empty; the inner WRITE fires `E_CAP_DENIED`.
 #[test]
-#[ignore = "Phase 3 — CALL attenuation (intersection of outer grant ∩ callee requires) deferred per docs/future/phase-3-backlog.md §2.1 (Durable UCAN backend wave). GrantBackedPolicy IS wired, but CALL attenuation needs (a) `policy_with_grants(&[...])` testing helper wired to grant-backed, (b) `handler_with_call_attenuation_escalation` populated CALL subgraph, (c) evaluator attenuating the capability context at CALL entry when `isolated: false`."]
+#[ignore = "phase-3-backlog §7.3.D — CALL attenuation (intersection of outer grant ∩ callee requires). §2.1 Durable UCAN backend CLOSED at G14-B PR #109; CALL attenuation composes with §2.3 (i) WriteContext audience + clock threading (v1-assessment-window). Body un-ignore at §2.3 (i) landing per Wave-E rationale-only sweep — needs (a) policy_with_grants test helper, (b) populated CALL subgraph, (c) evaluator CALL-entry attenuation when isolated: false."]
 fn handler_cannot_escalate_via_call_attenuation() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()

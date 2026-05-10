@@ -50,7 +50,7 @@ const DEFAULT_BATCH_BOUNDARY: u32 = benten_caps::DEFAULT_BATCH_BOUNDARY as u32;
 ///   - the error is `E_CAP_REVOKED_MID_EVAL`, NOT `E_CAP_DENIED` and NOT
 ///     `E_CAP_REVOKED` (reserved for Phase 3 sync revocation).
 #[test]
-#[ignore = "Phase 3 — TOCTOU-at-ITERATE-boundary test deferred per docs/future/phase-3-backlog.md §2.1 (Durable UCAN backend wave brings the per-batch cap-snapshot-refresh cluster). GrantBackedPolicy IS wired, but the TOCTOU-at-ITERATE-boundary test requires (a) `iterate_write_handler(n)` producing a real ITERATE subgraph (currently a stub), (b) `schedule_revocation_at_iteration` API on GrantReader, (c) per-batch cap snapshot refresh inside the evaluator's ITERATE step with E_CAP_REVOKED_MID_EVAL mapping."]
+#[ignore = "phase-3-backlog §7.3.D — TOCTOU-at-ITERATE-boundary cap-snapshot refresh. §2.1 Durable UCAN backend CLOSED at G14-B PR #109; the per-batch cap-snapshot-refresh cluster composes with §2.3 (ii) cap-r4-8 evaluator-delegation runtime-arm instrumentation + §10.1 Compromise #1 TOCTOU window bound (co-routed v1-assessment-window). Body un-ignore at §2.3 (ii) + §10.1 co-routed landing per Wave-E rationale-only sweep — needs (a) iterate_write_handler(n) populated subgraph, (b) schedule_revocation_at_iteration API on GrantReader, (c) per-batch cap snapshot refresh in evaluator ITERATE step."]
 fn capability_revoked_mid_iteration_denies_subsequent_batches() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
@@ -104,7 +104,7 @@ fn capability_revoked_mid_iteration_denies_subsequent_batches() {
 /// revocation. If Phase 2 closes this window (per-iter cap check), this test
 /// will need to flip its assertion.
 #[test]
-#[ignore = "Phase 3 — TOCTOU-at-ITERATE-boundary test deferred per docs/future/phase-3-backlog.md §2.1 (Durable UCAN backend wave brings the per-batch cap-snapshot-refresh cluster). GrantBackedPolicy IS wired, but the TOCTOU-at-ITERATE-boundary test requires (a) `iterate_write_handler(n)` producing a real ITERATE subgraph (currently a stub), (b) `schedule_revocation_at_iteration` API on GrantReader, (c) per-batch cap snapshot refresh inside the evaluator's ITERATE step with E_CAP_REVOKED_MID_EVAL mapping."]
+#[ignore = "phase-3-backlog §7.3.D — TOCTOU-at-ITERATE-boundary cap-snapshot refresh. §2.1 Durable UCAN backend CLOSED at G14-B PR #109; the per-batch cap-snapshot-refresh cluster composes with §2.3 (ii) cap-r4-8 evaluator-delegation runtime-arm instrumentation + §10.1 Compromise #1 TOCTOU window bound (co-routed v1-assessment-window). Body un-ignore at §2.3 (ii) + §10.1 co-routed landing per Wave-E rationale-only sweep — needs (a) iterate_write_handler(n) populated subgraph, (b) schedule_revocation_at_iteration API on GrantReader, (c) per-batch cap snapshot refresh in evaluator ITERATE step."]
 fn writes_in_current_batch_are_not_retroactively_denied() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()

@@ -19,7 +19,7 @@
 //!
 //! ## RED-PHASE discipline
 //!
-//! `#[ignore]`'d with rationale `"RED-PHASE: G15-B wave-5a retenses INVARIANT-COVERAGE.md"`.
+//! `#[ignore]`'d with rationale pointing to phase-3-backlog §7.3.D STALE-RATIONALE sweep #2; destination next Phase-3-close orchestrator-direct fix-pass batch (G15-B + W9-T1 §5.1 closed).
 
 #![allow(clippy::unwrap_used)]
 

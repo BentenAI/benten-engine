@@ -34,7 +34,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — D2 — host:atrium:publish_view_result cap REQUIRED for publishing snapshot"]
+#[ignore = "phase-3-backlog §7.3.D — host:atrium:publish_view_result cap REQUIRED for publishing snapshot. G16-B wave-6b shipped the production Atrium API surface; test body pins specific cap-required-for-publish defensive contract that needs driver authoring; un-ignore at §6.12 G16-B post-canary residuals landing (per-device write filter v1-assessment-window scope) per Wave-E rationale-only sweep."]
 fn host_atrium_publish_view_result_cap_required_for_publishing() {
     // D2 trust-mode pattern 1: cap-required-for-publishing.
     //
@@ -74,7 +74,7 @@ fn host_atrium_publish_view_result_cap_required_for_publishing() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — D2 — host:atrium:publish_view_result consumer-side UCAN-chain check at delivery"]
+#[ignore = "phase-3-backlog §7.3.D — host:atrium:publish_view_result consumer-side UCAN-chain check at delivery. G16-B wave-6b shipped Atrium delivery surface; test body pins consumer-side UCAN-chain check defensive contract; un-ignore at §6.12 G16-B post-canary residuals landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn host_atrium_publish_view_result_cap_consumer_side_check_against_ucan_chain() {
     // D2 trust-mode pattern 2: consumer-side check.
     //
@@ -120,7 +120,7 @@ fn host_atrium_publish_view_result_cap_consumer_side_check_against_ucan_chain() 
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — D2 — host:atrium:publish_view_result trust-anyone via wildcard UCAN"]
+#[ignore = "phase-3-backlog §7.3.D — host:atrium:publish_view_result trust-anyone via wildcard UCAN. G16-B wave-6b shipped Atrium API; test body pins wildcard-UCAN trust-anyone shape that needs driver authoring; un-ignore at §6.12 G16-B post-canary residuals landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn host_atrium_publish_view_result_cap_trust_anyone_via_wildcard_ucan() {
     // D2 trust-mode pattern 3: trust-anyone (wildcard UCAN).
     //
@@ -167,7 +167,7 @@ fn host_atrium_publish_view_result_cap_trust_anyone_via_wildcard_ucan() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — D2 — host:atrium:publish_view_result trust-allowlist via specific UCANs"]
+#[ignore = "phase-3-backlog §7.3.D — host:atrium:publish_view_result trust-allowlist via specific UCANs. G16-B wave-6b shipped Atrium API; test body pins specific-UCAN-allowlist shape that needs driver authoring; un-ignore at §6.12 G16-B post-canary residuals landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn host_atrium_publish_view_result_cap_trust_allowlist_via_specific_ucans() {
     // D2 trust-mode pattern 4: trust-allowlist (specific UCANs).
     //
@@ -222,7 +222,7 @@ fn host_atrium_publish_view_result_cap_trust_allowlist_via_specific_ucans() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G16-B wave-6b — D2 — host:atrium:publish_view_result trust-no-one via no delegation → recompute locally"]
+#[ignore = "phase-3-backlog §7.3.D — host:atrium:publish_view_result trust-no-one via no delegation → recompute locally. G16-B wave-6b shipped Atrium API; test body pins trust-no-one + local-recompute fallback shape; un-ignore at §6.12 G16-B post-canary residuals landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn host_atrium_publish_view_result_cap_trust_no_one_via_no_delegation_recompute_locally() {
     // D2 trust-mode pattern 5: trust-no-one.
     //

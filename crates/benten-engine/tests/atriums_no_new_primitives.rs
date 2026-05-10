@@ -19,7 +19,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G20-B wave-8b — Atriums compose via existing primitives, no new PrimitiveKind variants"]
+#[ignore = "phase-3-backlog §7.3.D — Atriums compose via existing primitives, no new PrimitiveKind variants. G20-B wave-8b shipped (PR #143); structural invariant verifiable at HEAD (benten-core PrimitiveKind enum + benten-eval PrimitiveOp variants unchanged). Test body pins structural invariant; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn atriums_compose_via_existing_primitives_no_new_primitive_kind_variants() {
     // CLAUDE.md baked-in #1 architectural pin. G20-B implementer wires this:
     //
@@ -50,7 +50,7 @@ fn atriums_compose_via_existing_primitives_no_new_primitive_kind_variants() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G20-B wave-8b — Atrium example handlers compose from 12 primitives only (cag-4)"]
+#[ignore = "phase-3-backlog §7.3.D — Atrium example handlers compose from 12 primitives only. G20-B wave-8b shipped; test body pins handler-composition structural invariant; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn atrium_examples_handlers_compose_entirely_from_existing_12_primitives_no_engine_call_outside_subgraph()
  {
     // cag-4 architectural pin. G20-B implementer wires this:
@@ -112,7 +112,7 @@ fn atrium_examples_handlers_compose_entirely_from_existing_12_primitives_no_engi
 }
 
 #[test]
-#[ignore = "RED-PHASE: G20-B wave-8b — exit-criterion 13: no new structural invariants (cag-3)"]
+#[ignore = "phase-3-backlog §7.3.D — exit-criterion 13: no new structural invariants. G20-B wave-8b shipped; test body pins exit-criterion 13 structural invariant; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn exit_criterion_13_no_new_structural_invariants_companion_to_no_new_primitive_kind() {
     // cag-3 architectural pin. G20-B implementer wires this:
     //

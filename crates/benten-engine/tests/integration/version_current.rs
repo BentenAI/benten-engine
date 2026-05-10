@@ -24,7 +24,7 @@ fn version(n: u32) -> Node {
 }
 
 #[test]
-#[ignore = "Phase 3 — version-chain anchor-lifecycle deferred per docs/future/phase-3-backlog.md §1.5 (Compromise #18 durable handler-version chain). Engine::create_anchor / append_version / read_current_version are anchor-lifecycle APIs; the O(1) View-5 wire-through through Engine lands in Phase-3."]
+#[ignore = "phase-3-backlog §7.3.D — version-chain anchor-lifecycle. §1.5 Compromise #18 durable handler-version chain CLOSED at G14-C wave-4b (PR #110); Engine::create_anchor / append_version / read_current_version anchor-lifecycle APIs live at HEAD. Test body pins specific O(1) View-5 wire-through contract; un-ignore at §5.1-followup-a landing per Wave-E rationale-only sweep."]
 fn version_current_o1_resolution_at_every_step() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
@@ -66,7 +66,7 @@ fn version_current_o1_resolution_at_every_step() {
 }
 
 #[test]
-#[ignore = "Phase 3 — version-chain anchor-lifecycle deferred per docs/future/phase-3-backlog.md §1.5 (Compromise #18 durable handler-version chain). Engine::create_anchor / append_version are anchor-lifecycle APIs; synchronous View-5 updates through Engine land in Phase-3."]
+#[ignore = "phase-3-backlog §7.3.D — version-chain anchor-lifecycle synchronous View-5 updates. §1.5 Compromise #18 CLOSED at G14-C; anchor-lifecycle APIs live at HEAD. Test body pins specific synchronous View-5 update contract; un-ignore at §5.1-followup-a landing per Wave-E rationale-only sweep."]
 fn version_current_updates_synchronously_with_append() {
     // Protects against a regression where View 5 lags append by one ChangeEvent
     // (visible to crud list consumers but invisible to version-chain callers).

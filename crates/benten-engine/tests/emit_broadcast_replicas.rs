@@ -26,7 +26,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G14-D — stream-r1-7 — EMIT broadcast cross-trust-boundary per-subscriber filter"]
+#[ignore = "phase-3-backlog §7.3.D — EMIT broadcast cross-trust-boundary per-subscriber filter. G14-D wave-5a + G19-B wave-7 shipped EmitBroadcast bus + per-subscriber filter; test body pins specific cross-trust-boundary filter contract; un-ignore at §2.3 (i) WriteContext threading landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn emit_broadcast_bus_fan_out_under_cross_trust_boundary_replicas_via_per_subscriber_filtering() {
     // stream-r1-7 pin. G14-D implementer wires this with two engine
     // instances simulating cross-trust-boundary replicas:

@@ -25,7 +25,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G14-D — stream-r1-1 — in-flight event cap-recheck race"]
+#[ignore = "phase-3-backlog §7.3.D — in-flight event cap-recheck race. G14-D wave-5a shipped F6 SUBSCRIBE filtering + cap_snapshot_hash; test body pins in-flight cap-recheck race defensive contract; un-ignore at §2.3 (i) WriteContext threading landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn cap_recheck_delivery_already_in_flight_event_minted_matched_cursor_passed_before_revoke_observable()
  {
     // stream-r1-1 pin. G14-D implementer wires this with a controlled

@@ -25,7 +25,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE: G14-D — crypto-major-6 — subscription path terminates when device DID revoked"]
+#[ignore = "phase-3-backlog §7.3.D — subscription path terminates when device DID revoked. G14-D wave-5a + G16-D wave-6b shipped F6 SUBSCRIBE filtering + on-the-wire device-DID-attestation envelope; test body pins device-DID-revoke termination defensive contract; un-ignore at §2.3 (i) WriteContext threading landing (v1-assessment-window) per Wave-E rationale-only sweep."]
 fn subscribe_subscription_path_terminated_when_device_did_revoked() {
     // crypto-major-6 pin. G14-D implementer wires this:
     //
