@@ -751,6 +751,28 @@ The Rust-side anchor test `crates/benten-eval/tests/sandbox_severity_priority_g1
 
 ---
 
+### 6.13a Per-atrium HLC skew classifier counter lifted into Engine::metrics_snapshot (R6 R2 obs-r6-r2-1 sibling-class — partial close)
+
+**Origin (2026-05-10 R6 R2 observability lens):** sibling-class to the closed `obs-r6-r1-2` (Phase-3 observables in `metrics_snapshot`). The Phase-3 `Hlc::update` per-row classifier counter is reachable via `AtriumHandle::inbound_hlc_skew_classifier_calls` on each atrium handle but lives per-Atrium rather than as an Engine-level cumulative counter. Pre-tag fix-pass landed the Phase-2b `active_stream_count` lift (Engine-level surface); the per-atrium HLC counter requires per-atrium iteration in `metrics_snapshot` + per-atrium key-namespacing.
+
+**Disposition (R6 R2 pre-tag fix-pass 2026-05-10):** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Couples to §6.13 (AtriumConfig.skew_tolerance_ms operator-tuneable) since both surfaces touch the same per-atrium HLC config + observability shape. v1-window candidate.
+
+**Concrete fix-shape:**
+- (a) In `Engine::metrics_snapshot`, iterate `self.inner.atriums` (or whatever the atrium registry shape becomes post §6.13) and emit per-atrium keys: `benten.sync.atrium.<atrium_id>.inbound_hlc_skew_classifier_calls`
+- (b) Mirror the per-handler SANDBOX metric pattern (existing precedent in `metrics_snapshot`)
+- (c) Test pin: extend the Wave-C2 metrics_snapshot regression test with assertions on the new per-atrium key shape
+
+**Touch size:** ~30-50 LOC including test pin extension.
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15 — non-blocking for Phase-3 close. Bundle with §6.13 since both surfaces want the same atrium-iteration shape.
+
+**Cross-references:**
+- `crates/benten-engine/src/engine_diagnostics.rs::Engine::metrics_snapshot` (the lift site)
+- `crates/benten-engine/src/engine_sync.rs::AtriumHandle::inbound_hlc_skew_classifier_calls` (the per-atrium counter)
+- §6.13 (AtriumConfig.skew_tolerance_ms — paired carry)
+
+---
+
 ### 6.10 `random` host-fn deferral — workspace CSPRNG framework choice — CLOSED at Phase-3 G17-A2 wave-5b
 
 **Closure shape (Phase-3 G17-A2 wave-5b):** The workspace CSPRNG decision landed at R1 (D-PHASE-3-11 RESOLVED-at-R1) = `getrandom` direct (NOT `rand` ecosystem; NOT a deterministic seed). G17-A2 wires `random` into the codegen-default surface alongside `time` / `log` / `kv:read` (cap-string `host:random:read`, 4-segment shape mirroring `kv:read`; `cap_recheck = per_call`); the trampoline at `crates/benten-eval/src/primitives/sandbox.rs::register_default_host_fns` invokes `getrandom::getrandom` to fill the guest buffer. Per-call entropy budget defaults to **4096 bytes** (per r1-wsa-8); a manifest may override via the additive optional `host_fns.random.budget_bytes_per_call` field on `ModuleManifest`. Budget overrun fires the typed `E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED` variant (routed `ON_DENIED`). The validate-time deferral guard + `DEFERRED_HOST_FN_RANDOM_CAP_PREFIX` const are RETIRED; `crates/benten-eval/tests/sandbox_host_fn_random_deferred.rs` is deleted; new green-phase regression guards live at `crates/benten-eval/tests/random_host_fn.rs`. Compromise #16 → CLOSED at Phase-3 G17-A2 in `docs/SECURITY-POSTURE.md`. `host-functions.toml` now declares `[host_fn.random]` IMPLEMENTED.

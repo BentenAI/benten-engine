@@ -294,6 +294,27 @@ impl Engine {
             );
         }
 
+        // R6 fp Wave-C2 follow-up (obs-r6-r2-1 sibling-class closure):
+        // lift the Phase-2b STREAM `active_stream_count` accessor into
+        // the canonical operator-dashboard bag so metrics_snapshot is
+        // complete across the 12-primitive observability surface.
+        // (The Phase-3 sync-frame `inbound_hlc_skew_classifier_calls`
+        // accessor sits on `AtriumHandle` rather than `Engine`; lifting
+        // it requires per-atrium iteration + filed at phase-3-backlog
+        // §6.13a as v1-window follow-up coupling to the existing
+        // AtriumConfig.skew_tolerance_ms operator-tuneable carry.)
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "active_stream_count is a usize counter bounded by per-process producer-bridge handle count; lossy f64 cast acceptable for operator-dashboard surface"
+        )]
+        {
+            let active_streams = self.active_stream_count();
+            out.insert(
+                "benten.stream.active_count".to_string(),
+                active_streams as f64,
+            );
+        }
+
         out
     }
 

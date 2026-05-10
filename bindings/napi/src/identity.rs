@@ -54,11 +54,11 @@ impl JsKeypair {
     /// `bindings/napi/src/atrium.rs::JsAtrium::set_local_device_keypair`
     /// per R6-FP Wave A Sub-A2).
     ///
-    /// Per `crypto-blocker-1`, [`benten_id::keypair::Keypair`]
-    /// deliberately does NOT implement [`Clone`] — secret bytes cannot
+    /// Per `crypto-blocker-1`, `benten_id::keypair::Keypair`
+    /// deliberately does NOT implement `Clone` — secret bytes cannot
     /// be silently duplicated. The audited path is
-    /// [`Keypair::export_seed_envelope`] +
-    /// [`Keypair::from_dag_cbor_envelope`]; this helper encapsulates
+    /// `Keypair::export_seed_envelope` +
+    /// `Keypair::from_dag_cbor_envelope`; this helper encapsulates
     /// that round-trip so the napi `JsAtrium` setter can produce an
     /// owned `Keypair` for the engine-side `set_local_device_keypair`
     /// API. Not exposed across the napi boundary.
@@ -422,7 +422,7 @@ impl JsDeviceAttestation {
     }
 
     /// Accept under a freshness policy (in seconds). Convenience
-    /// wrapper around [`Acceptor::accept_at`] using `now_secs`.
+    /// wrapper around `Acceptor::accept_at` using `now_secs`.
     /// Returns `true` on accept; throws on rejection (carries the
     /// typed error code in the message).
     #[napi]
