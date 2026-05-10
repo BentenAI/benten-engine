@@ -1853,3 +1853,16 @@ Items surfaced during 2026-05-08 cross-phase retrospective audit as orphans (Pha
 
 (Cross-reference; full entry at §7.11b.)
 
+---
+
+## 12. Phase-4 Benten Platform v1 deferrals (rehomed from v1-gate-refactor.md §7b on 2026-05-10 ratification)
+
+**Origin:** the now-retired `docs/future/v1-gate-refactor.md` §7b registry was the original named destination for these Phase-3 → Phase-4 deferrals during wave-6+ implementation. On 2026-05-10 ratification, v1-gate-refactor.md retired to `docs/archive/v1-gate-refactor-RATIFIED-2026-05-10.md`; its §7b table re-homes here (the tracked public companion to the gitignored `docs/FULL-ROADMAP.md` Phase 4 entry which also names these deferrals).
+
+| Origin | Surface | Notes |
+|---|---|---|
+| G16-C wave-6b (PR #124) | Light-client mode-(b) range-query proof | ds-r4r2-3 Phase-3 commits to mode-(a) only (single-CID inclusion proof). Mode-(b) extends light-client API to range queries (multi-CID Merkle proofs). Architectural-absence pin lives at `crates/benten-sync/tests/light_client_distinct.rs::light_client_mode_b_range_query_proof_oos_phase_3_deferred_to_phase_4`. |
+| G16-C wave-6b (PR #124) | Light-client mode-(c) signed checkpoint | ds-r4r2-3. Mode-(c) extends light-client to verify against signed root checkpoints (peer-signed published roots; trust-graph extension). Architectural-absence pin at `crates/benten-sync/tests/light_client_distinct.rs::light_client_mode_c_signed_checkpoint_oos_phase_3_deferred_to_phase_4`. |
+| G16-D wave-6b (PR #125) | Handshake response-leg via fresh iroh connection or bi-directional stream | Per g16-d-mr-2: `handshake_round_trip_over_iroh_loopback_transport` drives initiate via real iroh `Connection::send_bytes` / `recv_bytes` but returns the response via in-process `tokio::spawn` task join (honestly disclosed inline at `crates/benten-sync/tests/handshake.rs::handshake_round_trip_over_iroh_loopback_transport`). Strengthening pin: open a fresh peer_b → peer_a connection for the response, OR use a bi-directional stream on the same connection. Current pin's load-bearing assertion (handshake protocol body composes with G16-A's iroh transport SEAM) is end-to-end via the initiate leg; strengthening makes both legs end-to-end. |
+| G16-D wave-6b (PR #125) | napi `JsAtrium` shim retire (parallel-write-path → engine-routed cap-gated calls) | Per g16-d-mr-4: `bindings/napi/src/atrium.rs::JsAtrium` mutates `Mutex<AtriumHandleState>` at the napi shim layer. Parallel-write-path-shape per CLAUDE.md baked-in #16 — was intentionally interim during wave-6b parallel-3 split. The body MUST swap to `Arc<benten_engine::Atrium>` + route every mutation through engine WRITE primitive + cap policy. Recommended invariant: regression test asserting `Mutex<AtriumHandleState>` is no longer present in `bindings/napi/src/atrium.rs`. |
+
