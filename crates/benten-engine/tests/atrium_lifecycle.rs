@@ -241,11 +241,10 @@ async fn loro_merge_produces_attribution_frame_seed_for_anchor_version_chain() {
     // (contributing peer-`node_id`s after sync-merge) is the
     // load-bearing CRDT-layer exit. The Anchor + Version + CURRENT
     // mint that consumes this seed lives in the engine's
-    // version-chain mint path (Phase-1 shipped); the **wire-up of
-    // sync-merge → new-Version-Node mint** is BELONGS-NAMED-NOW to
-    // a follow-on G14-D engine integration task per HARD RULE
-    // rule-12 (b). G16-B canary scope is the SEED via
-    // `LoroDoc::winning_attribution`.
+    // version-chain mint path (Phase-1 shipped); the wire-up of
+    // sync-merge → new-Version-Node mint shipped at G16-D PR #163
+    // (criterion 16 cryptographic closure). G16-B canary scope is the
+    // SEED via `LoroDoc::winning_attribution`.
     let peer_a = AtriumHandle::open(AtriumConfig::for_test()).await.unwrap();
     let peer_b = AtriumHandle::open(AtriumConfig::for_test()).await.unwrap();
     peer_a.register_zone("/zone/v").await;

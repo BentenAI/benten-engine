@@ -41,9 +41,12 @@
 //! `invariants/budget.rs` owns the logic; registration-time check
 //! computes cumulative per CALL-isolation boundary.
 //!
-//! **Red-phase contract.** G4-A lands multiplicative cumulative + isolated-
-//! CALL reset semantics. Today Inv-8 fires only the Phase-1 scalar + nest-
-//! depth-3 stopgap. Test asserts the bypass is blocked; fails today.
+//! **Landed contract.** G4-A shipped multiplicative cumulative + isolated-
+//! CALL reset semantics structurally (per-call reset in
+//! `primitive_host.rs::dispatch_call_inner`); the integration-body
+//! pin remains `#[ignore]`'d per phase-3-backlog §7.3.C row 2 until
+//! the next budget-axis property-coverage hardening round (v1-window).
+//! Test asserts the bypass is blocked.
 //!
 //! R3 writer: `rust-test-writer-security` (Phase 2a).
 

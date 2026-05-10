@@ -1,20 +1,19 @@
-//! R3-A RED-PHASE pin: `BlobBackend` (G13-pre-B trait scaffold) consumed
-//! under generic-cascade by G14-C engine integration (forward-looking
-//! cross-wave seam pin).
+//! R3-A pin: `BlobBackend` (G13-pre-B trait scaffold) consumed
+//! under generic-cascade by G14-C engine integration (cross-wave seam pin).
 //!
 //! Pin source: R3-A scope per dispatch brief — the `BlobBackend` trait
-//! ships at G13-pre-B (already merged on origin/main); G14-C
-//! `register_module_bytes` consumes it under generic-cascade. This test
-//! pins the seam pre-G14-C so the consumer-side surface is locked.
+//! shipped at G13-pre-B; G14-C `register_module_bytes` consumes it under
+//! generic-cascade. This test pins the seam so the consumer-side surface
+//! stays locked.
 //!
 //! ## Why this exists
 //!
 //! Mirrors the G13-pre-B `blob_backend_trait_object_safety_per_d_resolution.rs`
 //! pattern (positive-direction generic-cascade smoke), but specifically
 //! pins a CONSUMER-shape function signature — the kind of function
-//! G14-C will ship at `Engine::register_module_bytes`'s storage-side
-//! call site. The test compiles AGAINST THE CURRENT scaffold (no G14-C
-//! code yet) so the seam is verified before the consumer wave starts.
+//! G14-C ships at `Engine::register_module_bytes`'s storage-side call
+//! site. The test compiles against the trait scaffold so the seam stays
+//! verified.
 
 #![allow(dead_code, clippy::unwrap_used)]
 

@@ -336,8 +336,8 @@ async fn atrium_partial_partition_asymmetric_reachability_observable_state_expli
         ),
         Ok(Err(err)) => {
             // The connect surfaces a typed error per net-blocker-2.
-            // The exact error code may be either AtriumTransportDegraded
-            // (transport-layer degrade) — both signal the
+            // The expected error code is AtriumTransportDegraded
+            // (transport-layer degrade) — signalling the
             // observable-explicit-state contract per net-major-3.
             let code = err.code();
             assert_eq!(

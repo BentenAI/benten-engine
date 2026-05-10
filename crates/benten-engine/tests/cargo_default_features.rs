@@ -4,7 +4,7 @@
 //! Pin sources (per r2-test-landscape §2.1 G13-B + arch-r1-9):
 //!
 //! - `crates/benten-engine/tests/cargo_default_features.rs::cargo_workspace_default_features_yields_engine_generic_redbbackend` — arch-r1-9 (G13-B GREEN)
-//! - `crates/benten-engine/tests/cargo_default_features.rs::cargo_browser_backend_feature_yields_engine_generic_browserbackend` — arch-r1-9 (G13-C STILL RED)
+//! - `crates/benten-engine/tests/cargo_default_features.rs::cargo_browser_backend_feature_yields_engine_generic_browserbackend` — arch-r1-9 (G13-C GREEN)
 //!
 //! ## What arch-r1-9 pins
 //!
@@ -16,10 +16,10 @@
 //! "an engine" means for downstream consumers absent explicit feature
 //! opt-in.
 //!
-//! G13-B lands the redb default-alias pin; the browser-backend pin
-//! stays `#[ignore]`'d until G13-C wave-3 introduces the
+//! G13-B shipped the redb default-alias pin; G13-C wave-3 shipped the
 //! `BrowserBackend` impl + the `browser-backend` cargo feature on
-//! benten-engine that re-points the alias.
+//! benten-engine that re-points the alias. Both pins run by default;
+//! the browser-backend type-equality witness is feature-gated.
 
 #![allow(clippy::unwrap_used, clippy::used_underscore_items)]
 

@@ -6,9 +6,9 @@
 //! an immediate fsync so revocation ordering is not reordered by a grouped-
 //! commit window. Survives the enum-preservation refactor above.
 //!
-//! TDD red-phase: the inspection API
-//! (`RedbBackend::last_put_node_durability_for_label`) does not yet exist.
-//! Tests will fail to compile until G2-A lands the branch-on-label logic.
+//! Pinned at G2-A: the inspection API
+//! (`RedbBackend::last_put_node_durability_for_label`) shipped with the
+//! branch-on-label logic.
 //!
 //! Owner: rust-test-writer-unit (R2 landscape §2.3, plan §3 G2-A).
 

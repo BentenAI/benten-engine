@@ -18,9 +18,8 @@
 //! - Row 5 (WAIT-resume stale-pin pre-check) lives in
 //!   `wait_resume_stale_pin_rejects_before_write.rs` (also this partition).
 //!
-//! R3 red-phase contract: R5 (G2-A / G5-A) lands the matrix-aware `put_node`
-//! path plus the `WriteAuthority` enum + `WriteContext::authority` field.
-//! These tests compile; they fail because the matrix is not wired.
+//! Pinned at R5 (G2-A / G5-A): the matrix-aware `put_node` path plus the
+//! `WriteAuthority` enum + `WriteContext::authority` field shipped.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 

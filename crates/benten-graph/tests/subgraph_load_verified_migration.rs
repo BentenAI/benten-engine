@@ -13,9 +13,8 @@
 //! - A CID-present-but-bytes-decode-fail surfaces `E_SERIALIZE`, not a panic.
 //! - A CID-missing path returns `Ok(None)` (clean miss), not an error.
 //!
-//! R3 red-phase contract: R5 (G2-A / G5-A) introduces
-//! `RedbBackend::load_subgraph_verified(cid)`. Tests compile; they fail
-//! because the method does not exist yet.
+//! Pinned at R5 (G2-A / G5-A): `RedbBackend::load_subgraph_verified(cid)`
+//! shipped.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
