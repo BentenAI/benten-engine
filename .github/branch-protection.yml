@@ -13,13 +13,23 @@
 # === Apply runbook ===
 #
 # Step 1 (one-shot, requires PAT with `repo` admin scope or fine-grained
-# token with "Administration: Read and write" on this repo):
+# token with "Administration: Read and write" on this repo).
+#
+# Preferred (yq):
 #
 #   gh api -X PUT /repos/BentenAI/benten-engine/branches/main/protection \
 #     --input <(yq -o=json '.protection' .github/branch-protection.yml)
 #
-# (`yq` v4+ via `brew install yq`. Alternative: hand-translate the spec
-# below to JSON; the structure mirrors the API verbatim.)
+# (`yq` v4+ via `brew install yq`.)
+#
+# No-yq alternative (PyYAML — preinstalled on macOS system Python and
+# most dev workstations; install via `pip3 install pyyaml` if missing):
+#
+#   python3 -c "import yaml,json; json.dump(yaml.safe_load(open('.github/branch-protection.yml'))['protection'], open('/tmp/bp.json','w'))" \
+#     && gh api -X PUT /repos/BentenAI/benten-engine/branches/main/protection --input /tmp/bp.json
+#
+# (Hand-translating the spec to JSON also works; the structure mirrors
+# the API verbatim.)
 #
 # Verify:
 #
@@ -56,16 +66,18 @@
 protection:
   # ---- Required status checks ----
   #
-  # Frozen 5-check set (ci-decisions-2026-04-22.md §4). Each entry below
-  # is a JOB context string as it renders in the Checks tab — branch-
-  # protection matches against context strings, not workflow names.
+  # Each entry below is a JOB context string as it renders in the Checks
+  # tab — branch-protection matches against context strings, not
+  # workflow names. (Verified against actual rendered names via
+  # `gh pr checks <PR>`; matrix legs render as "<job-name> (<leg>)" and
+  # plain jobs render as their `name:` field verbatim.)
   #
   # Aggregator-job pattern: where a workflow has a `needs:`-chained
   # umbrella job, only the umbrella is required (it will only succeed
   # if its dependencies succeeded). For matrix jobs without an
   # umbrella, every leg's rendered context must be listed.
   #
-  # Workflow → required context mapping:
+  # === Phase-2a-era frozen set (ci-decisions-2026-04-22.md §4) ===
   #
   #   ci.yml:
   #     - "cross-leg byte-equality gate (T9)"  (needs: build-and-test, wasm-runtime)
@@ -88,17 +100,84 @@ protection:
   #     - "Cargo.lock integrity"
   #     (NOT requiring `weekly-audit-issue` — schedule-only, never runs on PR.)
   #
+  # === Phase-2b/3 additions (added in pre-v1 cleanup) ===
+  #
+  # Pre-v1 CI-coverage doc-review lens flagged the spec as frozen at
+  # Phase-2a §4. The gates below became load-bearing during Phase 2b
+  # (SANDBOX + WASM compute) and Phase 3 (P2P sync + thin-client posture)
+  # but were never promoted to required-status. All are always-run on
+  # PRs (no path filters) so requiring them does not block doc-only PRs.
+  #
+  #   bundle-size.yml:
+  #     - "browser bundle size — RED-PHASE STUB"
+  #       Enforces CLAUDE.md baked-in #17 thin-client posture
+  #       (≤600KB gzipped browser bundle cap; rung 3 of 3-rung defense).
+  #
+  #   cross-process-graph.yml:
+  #     - "benten-graph cross-process CID roundtrip"
+  #       Cross-process determinism — a load-bearing Phase-1 invariant
+  #       still active through Phase 3 sync; was previously listed as
+  #       informational pending path-conditional-required, but always-runs.
+  #
+  #   cross-browser-determinism.yml:
+  #     - "determinism / chromium"
+  #     - "determinism / firefox"
+  #     - "determinism / webkit"
+  #     - "cid_pin equivalence across three browsers (compare reduce)"
+  #       Phase-3 thin-client posture — same canonical CID across all
+  #       three major browser engines + reduce-stage equivalence.
+  #
+  #   wasm-conformance.yml:
+  #     - "SANDBOX adversarial fixture suite — wasm32-wasip1"
+  #       Phase-2b SANDBOX runtime adversarial conformance.
+  #
+  #   wasm-browser.yml:
+  #     - "bundle + size cap + headless smoke"
+  #       Phase-3 thin-client posture (CLAUDE.md baked-in #17 rung 3
+  #       sibling — bundle build + size cap + smoke verification).
+  #
+  #   wasm-checks.yml:
+  #     - "T8 benten-napi wasm32-unknown-unknown"
+  #     - "benten-sync refuses to compile for wasm32-unknown-unknown"
+  #       The latter is the 3-rung baked-in #17 defense rung 1
+  #       (compile-time refusal of sync code in browser bundle).
+  #
+  #   wasm-runtime.yml:
+  #     - "wasm32-wasip1 build (benten-core, benten-graph)"
+  #     - "canonical CID — native vs wasm32-wasip1 invariant"
+  #     - "wasm32-wasip1 smoke — benten-core test under wasmtime"
+  #       Multi-target invariant proof (canonical bytes preserved across
+  #       native / wasm32-wasip1) + wasmtime runtime smoke.
+  #
+  #   multi-arch-cargo-check.yml:
+  #     - "cargo check (linux-x86_64)"
+  #     - "cargo check (linux-arm64)"
+  #     - "cargo check (macos-arm64)"
+  #     - "cargo check (macos-x86_64)"
+  #     - "AArch64 SANDBOX runtime (macos-14 / Apple M1)"
+  #       Phase-2b multi-platform support gates (T4 architecture
+  #       diversity + AArch64 SANDBOX runtime cell).
+  #
+  # === Excluded (and why) ===
+  #
   # CodeQL (`codeql.yml`) is NOT required per ci-decisions-2026-04-22.md §4
   # — informational only via Code-scanning alerts.
   #
-  # Phase-conditional checks (`arch-1-dep-break.yml`,
+  # Path-filtered workflows (`arch-1-dep-break.yml`,
   # `inv-11-system-zone-drift.yml`, `host-error-wire-safety.yml`,
-  # `cross-process-graph.yml`) are NOT required — they're path-conditional-
-  # required once GitHub Rulesets API supports path-gating on required
-  # checks. Until then they remain informational.
+  # `bench-threshold-drift.yml`) are NOT required — making them required
+  # would block doc-only PRs (paths gate prevents the workflow from
+  # running at all on those PRs, and GitHub treats absent-required as
+  # blocking). Pending path-conditional-required support in GitHub
+  # Rulesets API.
+  #
+  # Schedule-only workflows (`fuzz.yml`, `mutants.yml`,
+  # `supply-chain-seeded-test.yml`, `weekly-audit-issue` job in
+  # supply-chain.yml) are NOT required — they never run on PR.
   required_status_checks:
     strict: true   # branches must be up-to-date before merging
     contexts:
+      # === Phase-2a-era frozen set ===
       # ci.yml
       - "cross-leg byte-equality gate (T9)"
       - "create-benten-app cold install"
@@ -114,6 +193,33 @@ protection:
       - "cargo-deny (licenses / bans / advisories / sources)"
       - "cargo-audit (belt-and-suspenders)"
       - "Cargo.lock integrity"
+      # === Phase-2b/3 additions ===
+      # bundle-size.yml
+      - "browser bundle size — RED-PHASE STUB"
+      # cross-process-graph.yml
+      - "benten-graph cross-process CID roundtrip"
+      # cross-browser-determinism.yml
+      - "determinism / chromium"
+      - "determinism / firefox"
+      - "determinism / webkit"
+      - "cid_pin equivalence across three browsers (compare reduce)"
+      # wasm-conformance.yml
+      - "SANDBOX adversarial fixture suite — wasm32-wasip1"
+      # wasm-browser.yml
+      - "bundle + size cap + headless smoke"
+      # wasm-checks.yml
+      - "T8 benten-napi wasm32-unknown-unknown"
+      - "benten-sync refuses to compile for wasm32-unknown-unknown"
+      # wasm-runtime.yml
+      - "wasm32-wasip1 build (benten-core, benten-graph)"
+      - "canonical CID — native vs wasm32-wasip1 invariant"
+      - "wasm32-wasip1 smoke — benten-core test under wasmtime"
+      # multi-arch-cargo-check.yml
+      - "cargo check (linux-x86_64)"
+      - "cargo check (linux-arm64)"
+      - "cargo check (macos-arm64)"
+      - "cargo check (macos-x86_64)"
+      - "AArch64 SANDBOX runtime (macos-14 / Apple M1)"
 
   # ---- Pull-request review requirements ----
   #
@@ -146,7 +252,8 @@ protection:
   #
   # The rule applies to Ben (admin) too. Without `enforce_admins: true`
   # an admin push could bypass all the above; with it on, even Ben must
-  # open a PR + wait for the 10 required checks.
+  # open a PR + wait for all required status checks (Phase-2a frozen
+  # set + Phase-2b/3 additions enumerated above).
   enforce_admins: true
 
   # ---- Signed commits ----
