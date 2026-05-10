@@ -105,8 +105,8 @@ function extractBullet(body: string, label: string): string | null {
  * Add a new entry here when ratifying a fresh ErrorCode whose Rust
  * enum spelling is an inner-PascalCase compound. The
  * `EDevServerStopped` / `EValueFloatNonFinite` parity meta-test
- * (in `packages/engine/test/error-class-name-parity.test.ts`) pins
- * the surface against silent drift.
+ * (in `packages/engine/src/errors.test.ts`) pins the surface against
+ * silent drift.
  */
 const COMPOUND_STEM_EXPANSIONS: Record<string, string> = {
   DEVSERVER: "DevServer",

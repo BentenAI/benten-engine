@@ -108,7 +108,7 @@ Terms that have specific meaning in Benten. Alphabetical.
 
 **Transaction primitive** — An engine-provided begin/commit/rollback cycle wrapping all WRITEs in a subgraph evaluation. If any WRITE fails, all WRITEs in the transaction roll back atomically.
 
-**Typed-CALL** — The Phase-3 G21 dispatch surface for the 10 engine-known fixed-shape ops (ed25519_sign / ed25519_verify / keypair_generate / keypair_from_seed / blake3_hash / multibase_encode / multibase_decode / did_resolve / ucan_validate_chain / vc_verify). Reserved handler-id namespace `engine:typed:`; closed registry (no user-extensibility — see [`TYPED-CALL.md`](TYPED-CALL.md)). Each op declares required cap + determinism class + input/output shape. Consumed via `Engine::typed_call` (Rust) / `engine.typedCall()` (napi+DSL).
+**Typed-CALL** — The Phase-3 G21 dispatch surface for the 10 engine-known fixed-shape ops (ed25519_sign / ed25519_verify / keypair_generate / keypair_from_seed / blake3_hash / multibase_encode / multibase_decode / did_resolve / ucan_validate_chain / vc_verify). Reserved handler-id namespace `engine:typed:`; closed registry (no user-extensibility — see [`TYPED-CALL.md`](TYPED-CALL.md)). Each op declares required cap + determinism class + input/output shape. Consumed via the standard CALL primitive with `target = engine:typed:<op>` (Rust path goes through `<Engine as benten_eval::PrimitiveHost>::dispatch_typed_call`; `Engine::dispatch_typed_call_public` is the direct-invocation helper) or via `engine.typedCall()` sugar in the napi/TS DSL.
 
 **UCAN** — User-Controlled Authorization Networks. Capability-based auth tokens. Phase 3 ships UCAN as a `benten-caps` policy backend alongside the default `NoAuthBackend` and the existing `GrantBackedPolicy`.
 
