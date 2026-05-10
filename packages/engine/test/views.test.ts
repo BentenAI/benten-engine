@@ -34,25 +34,40 @@ import type {
 } from "@benten/engine";
 
 describe("engine.registerUserView", () => {
-  it.skip("Phase 3 (post-G8-B view.snapshot() AsyncIterable wire-through) — round-trip create + snapshot materialization", async () => {
-    // BLOCKER (r6-napi-2 closure): G8-B shipped + Engine.registerUserView
-    // is wired through the napi boundary; the underlying engine-side
-    // view materialization works (Rust integration test
-    // `crates/benten-engine/tests/user_view_strategy_b_default.rs`
-    // pins it). The TS-side gap is `UserView.snapshot()` returning an
-    // empty AsyncIterable stub (the `snapshot()` method on the
-    // `UserView` impl in `packages/engine/src/views.ts` returning the
-    // `emptyAsyncIterable()` factory; symbol form per R6-R4
-    // r6-r4-cp-5 + `dispatch-conventions.md` §3.5b — the prior
-    // `views.ts:123/:126` line cites drifted to `:168/:182` post
-    // wave-8) and `UserView.onUpdate(cb)` returning a no-op
-    // subscription. Both are forward-compatibility stubs awaiting the
-    // Phase-3 IVM materialization wire-through that surfaces real
-    // rows + real diffs via napi.
+  it.skip("DISAGREE-WITH-EXPLANATION (HARD RULE clause-c): redundant with GREEN graceful-fallback + ViewDelta-shape pins; phase-3-backlog §7.1.3 CLOSED-AT-G19-C1+G19-C1-fp", async () => {
+    // RE-DISPOSITION RATIONALE (pre-v1 Class A un-ignore, 2026-05-10):
     //
-    // Named destination: `docs/future/phase-3-backlog.md` (R6-FP
-    // Group 4 enrichment) — entry titled "UserView.snapshot() +
-    // onUpdate() runtime materialization (post-G8-B)" tracks the lift.
+    // Original RED-PHASE body asserted end-to-end IVM materialization
+    // through `engine.registerUserView` → `registerSubgraph(crud("post"))`
+    // → 3x `engine.call(...)` → `for await (row of view.snapshot())`.
+    // Body uses `{} as never` placeholder for the subgraph spec (broken
+    // type-cast — would not run).
+    //
+    // phase-3-backlog §7.1.3 (CLOSED-AT-G19-C1 + G19-C1-fp wave-7):
+    // (a) `view.snapshot()` AsyncIterable + (b) `view.onUpdate()`
+    // AsyncIterableIterator BOTH SHIPPED. The substantive runtime
+    // contract is covered at the GREEN pins below in this file:
+    //   - "graceful-fallback (no runtime shim) — iterator yields zero
+    //     deltas + closes cleanly" (line 293) — drives runtime: null
+    //     branch (pre-G19-C1 cdylib path).
+    //   - "yields deltas wrapped in ViewDelta { kind: 'change', payload }
+    //     shape" (line 367) — drives the buildOnUpdateIterator runtime
+    //     dispatch with a stub runtime, asserts the wrapper shape.
+    //   - "cancellation via iterator.return() stops polling cleanly"
+    //     (line 317) — drives the iterator.return() lifecycle.
+    //   - "native-binding fault during drainUpdates closes iterator
+    //     cleanly" (line 410) — drives the error-recovery path.
+    // Plus Rust-side end-to-end at
+    //   `crates/benten-engine/tests/user_view_strategy_b_default.rs` +
+    //   the §7.1.3 CLOSURE narrative names `user_view_snapshot_returns_current_materialized_rows`
+    //   (Rust integration) as the production-runtime end-to-end pin.
+    //
+    // The end-to-end skipped scenario adds nothing the GREEN pins
+    // don't already cover at finer grain (the runtime shim stub IS the
+    // materialization seam; the engine-side Rust integration test IS
+    // the materialization runtime). Keeping skipped with
+    // DISAGREE-WITH-EXPLANATION; redundant body retained below for
+    // retrospective traceability.
     const engine = await Engine.open(":memory:");
 
     const spec: UserViewSpec = {
@@ -249,13 +264,17 @@ describe("engine.registerUserView", () => {
 });
 
 describe("UserView.onUpdate", () => {
-  it.skip("Phase 3 (post-G8-B view.onUpdate() wire-through) — async iterator yields ViewDeltas for matching writes", async () => {
-    // BLOCKER (r6-napi-2 closure): pre-G8-A the runtime materialization
-    // path is not lit up, so the iterator yields zero deltas + closes
-    // cleanly. Same Phase-3 named-destination as the snapshot test
-    // above. Post-G8-A this test goes GREEN end-to-end: the for-await
-    // loop receives one ViewDelta per write that matches the view's
-    // input pattern.
+  it.skip("DISAGREE-WITH-EXPLANATION (HARD RULE clause-c): redundant with GREEN ViewDelta-shape + cancellation pins; phase-3-backlog §7.1.3 CLOSED-AT-G19-C1+G19-C1-fp", async () => {
+    // RE-DISPOSITION RATIONALE (pre-v1 Class A un-ignore, 2026-05-10):
+    //
+    // Same disposition as the sibling `it.skip` above. The end-to-end
+    // engine.call → onUpdate ViewDelta scenario is covered at finer
+    // grain by the GREEN pins below (lines 293/317/367/410) which drive
+    // the runtime shim's `drainUpdates` path with controllable stubs;
+    // the engine-side Rust integration test
+    // (`user_view_strategy_b_default.rs`) drives the IVM materialization
+    // runtime directly. Body retained below for retrospective trace-
+    // ability; phase-3-backlog §7.1.3 marked CLOSED-AT-G19-C1+G19-C1-fp.
     const engine = await Engine.open(":memory:");
 
     const view = await engine.registerUserView({

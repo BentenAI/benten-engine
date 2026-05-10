@@ -50,7 +50,7 @@ fn did_rotate_keypair_emits_superseded_by_attestation_chain() {
 }
 
 #[test]
-#[ignore = "phase-3-backlog §7.3.D — DID-rotation propagation through durable UCAN backend. G14-B PR #109 + G14-A2 PR #108 both shipped (durable backend + attestation shape); test body pins specific DID-rotation propagation contract that composes with §2.1-followup ssi external UCAN/VC spec compatibility re-evaluation at G16 Atrium handshake (re-evaluation point at G16-D wave-6b shipped 2026-05-09 PR #163). Body un-ignore at §2.1-followup re-evaluation outcome per Wave-E rationale-only sweep."]
+#[ignore = "phase-3-backlog §2.1-followup `ssi` external UCAN/VC spec compatibility re-evaluation — production prerequisite NOT YET shipped at HEAD. `crates/benten-caps/` does NOT consume `benten_id::did_rotation::RotationLog`; the durable UCAN backend `benten_caps::backends::ucan::UCANBackend` chain-walker has no rotation-event consumption seam. G14-B PR #109 shipped the durable backend (`UCANBackend<B>`) + the in-RAM `RotationLog` helper at `crates/benten-id/src/did_rotation.rs:167` exists, but the integration where rotation events propagate from `did_rotation::rotate_keypair` → durable backend → chain-walker rejection of pre-rotation UCANs is NOT wired. crypto-major-3 cross-wave pin; un-ignore at §2.1-followup re-evaluation outcome (G16-D wave-6b PR #163 shipped 2026-05-09; cryptography-reviewer dispatch pending; rotation-propagation seam composes with the re-evaluation outcome since `ssi` integration would re-shape the chain-walker)."]
 fn did_rotation_propagates_revocation_to_ucan_backend() {
     // crypto-major-3 cross-wave pin — the G14-B durable UCAN backend
     // consumes the rotation event + revokes pre-rotation UCANs at

@@ -82,7 +82,22 @@ describe("AttributionFrame Phase-3 widening (pcds-r4-r1-1 instance-25 PRE-EMPTIO
     expect(frame.deviceCid).toBe("bafydevice");
   });
 
-  it.skip("RED-PHASE: G16-B wave-6b — runtime AttributionFrame from Loro merge carries peerDidSet end-to-end", async () => {
+  it.skip("PRODUCTION GAP SURFACED (pre-v1 Class A un-ignore 2026-05-10) — napi serializer at bindings/napi/src/trace.rs does NOT emit peerDidSet/deviceDid/deviceCid; sibling Rust pin at bindings/napi/tests/attribution_frame_widening_napi_serializer.rs carries the orchestrator-direct fix-pass narrative", async () => {
+    // RE-DISPOSITION RATIONALE (pre-v1 Class A un-ignore, 2026-05-10):
+    //
+    // Production gap: `bindings/napi/src/trace.rs::trace_step_to_json`
+    // (lines 69-112) consumes only `attr.actor_cid / handler_cid /
+    // capability_grant_cid / sandbox_depth` — does NOT emit
+    // `peerDidSet` / `deviceDid` / `deviceCid` from the Phase-3
+    // AttributionFrame widening. Until the napi serializer fix lands
+    // (~25 LOC at `trace.rs`), this end-to-end TS-side pin cannot
+    // observe the Rust-producer-populated fields surfacing through
+    // the napi boundary. Sibling Rust pin at
+    // `bindings/napi/tests/attribution_frame_widening_napi_serializer.rs`
+    // carries the production-gap narrative + named fix scope. Original
+    // body retained for retrospective traceability; the schema-level
+    // pins above (lines 46-83) cover the TS interface declaration
+    // contract today.
     // pcds-r4-r1-1 LOAD-BEARING end-to-end pin per pim-2 §3.6b.
     // Implementer wires this:
     //
@@ -117,7 +132,12 @@ describe("AttributionFrame Phase-3 widening (pcds-r4-r1-1 instance-25 PRE-EMPTIO
     );
   });
 
-  it.skip("RED-PHASE: G14-D wave-5a — runtime AttributionFrame from cross-device sync replica carries deviceDid end-to-end", async () => {
+  it.skip("PRODUCTION GAP SURFACED (pre-v1 Class A un-ignore 2026-05-10) — same destination as sibling above; napi serializer at bindings/napi/src/trace.rs missing peerDidSet/deviceDid/deviceCid emission", async () => {
+    // Same disposition as the sibling above. Cross-device deviceDid
+    // observable cannot surface through the napi boundary until
+    // `bindings/napi/src/trace.rs::trace_step_to_json` emits the
+    // `deviceDid` key from `attr.device_did`. Original body retained
+    // for retrospective traceability.
     // pcds-r4-r1-1 LOAD-BEARING end-to-end pin per pim-2 §3.6b.
     // Implementer wires this:
     //

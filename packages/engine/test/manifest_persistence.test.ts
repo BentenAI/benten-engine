@@ -30,7 +30,24 @@
 import { describe, it, expect } from "vitest";
 
 describe("R3-D G18-A — browser module-manifest persistence end-to-end", () => {
-  it.skip("RED-PHASE: G18-A wave-5a wires IndexedDB manifest persistence + page-reload survival per plan §3 G18-A", () => {
+  it.skip("phase-3-backlog §4.3 G18-A-followup: IndexedDB integration + Playwright fixture authoring (production prerequisite NOT YET shipped at HEAD; G18-A wave-5a is PARTIAL per phase-3-backlog §4.2)", () => {
+    // RE-DISPOSITION RATIONALE (pre-v1 Class A un-ignore, 2026-05-10):
+    //
+    // G18-A wave-5a (PR #114) shipped PARTIAL per phase-3-backlog §4.2
+    // closure narrative: schema + handler scaffolding landed at
+    // `bindings/napi/src/browser_indexeddb.rs` +
+    // `bindings/napi/src/browser_blob_store.rs`; the wasm32 `web-sys`
+    // / `js-sys` / `wasm-bindgen-futures` plumbing arms of
+    // `apply_migration_step` + `close_database` are stubs.
+    // `BrowserManifestStore::is_persistent()` returns `false` HONESTLY
+    // until §4.3 G18-A-followup wires the wasm32 IDB plumbing
+    // end-to-end. Page-reload survival requires both (a) the wasm32
+    // IDB calls + (b) Playwright fixture authoring (or fake-indexeddb
+    // under vitest) — neither at HEAD. Destination NAMED: phase-3-backlog
+    // §4.3 (existing entry; covers both halves under one named scope).
+    // Test stays `.skip` until §4.3 G18-A-followup lands; un-ignore
+    // sits at the §4.3 implementer-wave's LANDING boundary, not at
+    // some phantom "next orchestrator-direct fix-pass batch."
     // plan §3 G18-A pin. G18-A implementer wires this:
     //
     //   import { Engine } from "@benten/engine";

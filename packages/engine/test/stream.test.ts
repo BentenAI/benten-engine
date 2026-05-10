@@ -17,10 +17,19 @@ import { Engine, subgraph } from "@benten/engine";
 import type { Chunk, StreamHandle } from "@benten/engine";
 
 describe("engine.callStream", () => {
-  // TODO(wave-8c-stream-infra-mr-S4): re-enable once `Chunk` widens from
-  // `Buffer` to include `seq` (or test pivots to consuming raw chunks).
-  // The wave-8c-stream-infra runtime IS correct; this red-phase test
-  // assumes a TS surface that doesn't exist in current `types.ts`.
+  // DISAGREE-WITH-EXPLANATION (HARD RULE clause-c) — pre-v1 Class A
+  // un-ignore (2026-05-10): assumes `chunk.seq` field on `Chunk` type
+  // that does not exist (`packages/engine/src/types.ts:1081`:
+  // `export type Chunk = Buffer;` — no `seq` field). Original TODO
+  // referenced phantom destination `wave-8c-stream-infra-mr-S4`
+  // (Phase-2b internal label; no matching phase-3-backlog entry).
+  // `Chunk = Buffer` widening to expose `seq` is NOT in phase-3-backlog
+  // (no §10.5 STREAM widening entry; would be a new public API surface
+  // architectural decision). Substantive STREAM contract (chunks
+  // delivered in order; for-await break releases producer) is GREEN at
+  // the sibling "for-await break releases producer (no orphan)" test
+  // below (line 43) which drives `engine.callStream` end-to-end without
+  // assuming a `seq` field on the chunk shape.
   it.skip("yields chunks in seq order with for-await", async () => {
     const engine = await Engine.open(":memory:");
     const sg = subgraph("counter")
@@ -64,10 +73,21 @@ describe("engine.callStream", () => {
     await engine.close();
   });
 
-  // TODO(wave-8c-stream-infra-mr-S4): re-enable once `StreamHandle` exposes
-  // a `.closed` getter (or test pivots to `isDrained()` semantics). The
-  // wave-8c-stream-infra runtime's `close()` IS idempotent; this red-phase
-  // test assumes a TS surface that doesn't exist in current `types.ts`.
+  // DISAGREE-WITH-EXPLANATION (HARD RULE clause-c) — pre-v1 Class A
+  // un-ignore (2026-05-10): assumes `handle.closed` getter on
+  // `StreamHandle` that does not exist (`packages/engine/src/types.ts:1113-1129`:
+  // `StreamHandle` has `next()` + `close()` only; no `closed` field).
+  // Original TODO referenced phantom destination `wave-8c-stream-infra-mr-S4`.
+  // The `close()` idempotency contract IS server-side enforced; the
+  // public TS surface deliberately does NOT expose `.closed` (per the
+  // honest-downgrade narrative at phase-3-backlog §6.2 — `engine.openStream`
+  // and `engine.callStream` are functionally indistinguishable from the
+  // JS caller's perspective today; the `requires_explicit_close`
+  // flag is server-side). `.closed`-getter widening is NOT in the
+  // public surface plan; future-shape would require a phase-3-backlog
+  // entry for "StreamHandle.closed getter (or isDrained() semantics)
+  // exposure". Substantive contract (close idempotency + producer
+  // release) is GREEN at "for-await break releases producer (no orphan)".
   it.skip("openStream explicit close idempotent", async () => {
     const engine = await Engine.open(":memory:");
     const sg = subgraph("infinite-2")
@@ -89,15 +109,17 @@ describe("engine.callStream", () => {
     await engine.close();
   });
 
-  // TODO(wave-8c-stream-infra-mr-S4): re-enable once `Chunk` widens from
-  // `Buffer` to include `seq` (or this test pivots to counting received
-  // chunks rather than reading their `.seq` field). Same widening pin as
-  // the sibling skipped "yields chunks in seq order with for-await" test
-  // above — both tests assume a TS surface (`Chunk.seq`) that doesn't
-  // exist in current `types.ts` (where `Chunk = Buffer`). The wave-8c
-  // runtime IS correct + threads the principal correctly; the principal-
-  // threading observable is currently the cap-grant resolution, not the
-  // chunk shape.
+  // DISAGREE-WITH-EXPLANATION (HARD RULE clause-c) — pre-v1 Class A
+  // un-ignore (2026-05-10): assumes `chunk.seq` field that does not
+  // exist on `Chunk = Buffer`. Original TODO referenced phantom
+  // destination `wave-8c-stream-infra-mr-S4`. The `callStreamAs`
+  // principal-threading observable is the CAPABILITY-GRANT resolution
+  // (cap-grant fires under the named principal vs the engine default),
+  // NOT the chunk shape. Cap-grant resolution under principal is GREEN
+  // at `packages/engine/test/atrium_examples.test.ts` (callAs cap-grant
+  // round-trip pins) + `crates/benten-engine/tests/grant_backed_policy_*.rs`
+  // suite. Chunk-shape widening (`Chunk.seq` exposure) is NOT in
+  // phase-3-backlog as a planned public-API extension.
   it.skip("callStreamAs threads principal", async () => {
     // Mirrors callAs / callWithSuspensionAs naming pattern; cap-grant on the
     // STREAM source resolves under the named principal not the engine default.

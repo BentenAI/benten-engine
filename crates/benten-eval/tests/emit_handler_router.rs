@@ -25,7 +25,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "phase-3-backlog §7.3.D — EMIT handler-id-router routes events. G14-D wave-5a shipped the production handler-id-router seam at crates/benten-eval/src/primitives/emit.rs; test body pins specific routing-behavior contract that needs driver authoring; un-ignore at §2.3 (i) WriteContext threading landing (v1-assessment-window) per Wave-E rationale-only sweep."]
+#[ignore = "phase-3-backlog §2.3 (i) WriteContext audience + clock threading — production prerequisite NOT YET shipped at HEAD (NAMED destination = v1-assessment-window per CLAUDE.md item #15). Sibling rationale to `crates/benten-eval/tests/subscribe_handler_router.rs::subscribe_handler_id_router_routes_change_event_through_named_handler`. Handler-id-router seam (`HandlerRoute::Named`) shipped at G14-D wave-5a + GREEN sentinel-presence at `crates/benten-engine/tests/g14_d_wave_5a_closed_claims.rs::emit_handler_id_router_routing_observably_differs_from_default_fan_out_end_to_end`; deeper end-to-end through actual handler-execution requires WriteContext threading axes (1)/(2)/(3) per §2.3 (i). Un-ignore at v1-assessment-window outcome. CROSS-CRATE TEST-NAME-DUPLICATION: distinct from the GREEN engine-side pin (different test name; sibling-shape)."]
 fn emit_handler_id_router_routes_emit_event_through_named_handler() {
     // seq-major-8 pin. G14-D implementer wires this:
     //
@@ -56,7 +56,7 @@ fn emit_handler_id_router_routes_emit_event_through_named_handler() {
 }
 
 #[test]
-#[ignore = "phase-3-backlog §7.3.D — EMIT routing differs from default fan-out end-to-end. G14-D wave-5a shipped production EMIT routing; test body pins handler-id-router-vs-fanout differential observable contract that needs driver authoring; un-ignore at §2.3 (i) WriteContext threading landing (v1-assessment-window) per Wave-E rationale-only sweep."]
+#[ignore = "phase-3-backlog §2.3 (i) WriteContext threading — production prerequisite NOT YET shipped at HEAD. The end-to-end execution-trace differential (Named route vs DefaultFanOut route producing observably different probe-Node side-effects) requires actual handler EXECUTION which requires WriteContext threading per §2.3 (i). The seam-level differential is GREEN at `crates/benten-engine/tests/g14_d_wave_5a_closed_claims.rs::emit_handler_id_router_routing_observably_differs_from_default_fan_out_end_to_end` (which checks `log.default_fan_out_count()` vs `log.named_routes()` — the route-log differential, not the runtime-execution differential). Un-ignore at §2.3 (i) v1-assessment-window outcome. NAME-DUPLICATION: identical to the engine-side GREEN pin (drift hazard per pim-7 §3.5 dim #5; the eval-side pin is the FUTURE runtime-execution differential the engine-side pin's route-log assertion doesn't cover)."]
 fn emit_handler_id_router_routing_observably_differs_from_default_fan_out_end_to_end() {
     // stream-r1-2 LOAD-BEARING pin. The router must produce
     // OBSERVABLY DIFFERENT execution traces depending on the

@@ -66,7 +66,7 @@ fn ucan_chain_attenuation_rejects_overgrant() {
 }
 
 #[test]
-#[ignore = "phase-3-backlog §7.3.D — RevocationSet + validate_chain_with_revocations durable-backend integration. G14-B wave-4b shipped (PR #109 commit 496e144); RevocationSet + validate_chain_with_revocations production code lives at HEAD; test body pins specific revocation-set integration contract; un-ignore at §2.1-followup ssi external UCAN/VC spec compatibility re-evaluation outcome per Wave-E rationale-only sweep."]
+#[ignore = "phase-3-backlog §2.1-followup `ssi` external UCAN/VC spec compatibility re-evaluation — production prerequisite NOT YET shipped at HEAD. `validate_chain_with_revocations` symbol does NOT exist (only mentioned in `crates/benten-id/src/ucan.rs:32` + `:36` doc comments; no concrete `pub fn validate_chain_with_revocations(...)` in the file). The G14-A1 chain-walk (`validate_chain_at`) is in-memory + does NOT consult a durable revocation set. G14-B PR #109 shipped the durable `UCANBackend<B>` but did NOT extend the chain-walker with a `RevocationSet` consumption arm — that lift composes with §2.1-followup re-evaluation outcome (would `ssi`-integration re-shape the revocation surface? cryptography-reviewer dispatch pending)."]
 fn ucan_chain_revocation_propagates() {
     // Stays #[ignore]'d until G14-B's UCANBackend lands the
     // revocation store + `validate_chain_with_revocations` entry

@@ -70,7 +70,23 @@ describe("DeviceAttestation TS interface present (pcds-r4-r1-2 instance-26 PRE-E
     expect(typeof claim.ability).toBe("string");
   });
 
-  it.skip("RED-PHASE: G14-A2 + G16-D — engine.atrium.declareDeviceAttestation accepts typed envelope and round-trips via napi typed struct", async () => {
+  it.skip("DISAGREE-WITH-EXPLANATION (HARD RULE clause-c): redundant with atrium.test.ts:164-184 GREEN end-to-end pin under D-PHASE-3-15 D1 ratified factory shape", async () => {
+    // RE-DISPOSITION RATIONALE (pre-v1 Class A un-ignore, 2026-05-10):
+    //
+    // Original RED-PHASE body assumed `engine.atrium.declareDeviceAttestation(envelope)`
+    // namespace shape (engine.atrium.* method). D-PHASE-3-15 D1
+    // ratified the FACTORY form: `engine.atrium({config})` returns a
+    // typed handle on which `.declareDeviceAttestation(...)` lives.
+    // The end-to-end round-trip pin under the ratified factory shape
+    // is GREEN at:
+    //   `packages/engine/test/atrium.test.ts:164-184`
+    //   ::"atrium.declareDeviceAttestation TS round-trip per CLAUDE.md baked-in #17"
+    // which drives `atrium({atriumId}).declareDeviceAttestation(envelope)`
+    // → `.listDeclaredDeviceAttestations()` round-trip with the SAME
+    // envelope shape this skipped test specifies, asserting deviceDid +
+    // capabilities[0].path/ability + freshnessWindow round-trip
+    // verbatim. Body below retained for retrospective traceability;
+    // its `engine.atrium.*` namespace shape is no longer the API.
     // pcds-r4-r1-2 LOAD-BEARING end-to-end pin per pim-2 §3.6b.
     // G14-A2 + G16-D implementer wires this:
     //
