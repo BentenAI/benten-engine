@@ -425,6 +425,31 @@ pub enum EvalError {
         /// Brief diagnostic reason from the underlying op.
         reason: String,
     },
+
+    /// Phase-3 R6-FP Wave-C1 (cap-r6-r1-1 / r4b-cap-6 closure): a
+    /// SUBSCRIBE / on_change subscription was terminated mid-stream
+    /// because the per-event delivery-time cap-recheck closure
+    /// returned `false` (CLR-2 §11 dual-layer recheck). Distinct from
+    /// `EvalError::Capability(CapError::Revoked)` (in-flight cap
+    /// rejection at primitive evaluation) — this variant names the
+    /// stream-termination boundary observable to the consumer side.
+    /// Maps to `ErrorCode::SubscribeRevokedMidStream`. Carries the
+    /// dispatching actor + the change-event anchor so JS/TS consumers
+    /// distinguish 'cap-revoke auto-cancel' from buffer-overflow / GC
+    /// / cursor-skip / engine-shutdown drops.
+    #[error("subscribe: revoked mid-stream (actor_cid={actor_cid:?} anchor_cid={anchor_cid:?})")]
+    SubscribeRevokedMidStream {
+        /// Hex-rendered actor CID whose grant was revoked. `None`
+        /// when the recheck closure does not surface the actor (the
+        /// closure shape is `Fn(&ChangeEvent) -> bool`; closures that
+        /// internally consult an actor surface return the actor in
+        /// the diagnostic carrier — wired through the
+        /// `engine_subscribe.rs` adapter).
+        actor_cid: Option<String>,
+        /// Hex-rendered change-event anchor CID. Identifies the row
+        /// whose delivery triggered the recheck-fail.
+        anchor_cid: Option<String>,
+    },
 }
 
 impl EvalError {
@@ -468,6 +493,7 @@ impl EvalError {
             EvalError::TypedCallInvalidInput { .. } => ErrorCode::TypedCallInvalidInput,
             EvalError::TypedCallCapDenied { .. } => ErrorCode::TypedCallCapDenied,
             EvalError::TypedCallDispatchError { .. } => ErrorCode::TypedCallDispatchError,
+            EvalError::SubscribeRevokedMidStream { .. } => ErrorCode::SubscribeRevokedMidStream,
         }
     }
 }

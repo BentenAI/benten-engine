@@ -1,145 +1,122 @@
-//! R4-R2-FP/B RED-PHASE pin for sec-r4r2-1 / sec-r4r1-5 attack-vector
-//! cluster (R4 R1 security-auditor MAJOR; carry through R4-R1 + R4-FP
-//! merge cycle).
+//! R6-FP Wave-C1 (ds-r6-1 closure) — sec-r4r2-1 attack-vector pin
+//! un-ignored against the live production rehash check at
+//! [`benten_sync::mst::Mst::apply_entries`].
 //!
-//! ## Pin source
-//!
-//! - sec-r4r1-5 MAJOR pin (b): `mst_diff_entry_with_cid_byte_mismatch_rejected_at_application_layer`.
-//! - sec-r4r2-1 MAJOR (carry; r4-r2-security.json:25-32).
-//! - cross-corroborates with distributed-systems-reviewer lens
-//!   (sync-trust-boundary attack-vector cluster) per
-//!   r4-r2-security.json:96 process_notes.
+//! Pre-Wave-C1 this test was RED-PHASE under
+//! `#[ignore = "RED-PHASE: G16-C wave-6b lands MST diff
+//! application-layer CID-byte verification"]` with an `unimplemented!()`
+//! body. The application-layer rehash check has been live in
+//! `benten_sync::mst::Mst::apply_entries` since G16-B canary; this fix
+//! pass un-ignores the integration-test pin so it drives the same
+//! production path the engine receive-boundary will plumb when
+//! `consume_sync_replica_mst_diff` lands.
 //!
 //! ## What this defends against
 //!
 //! An adversarial peer crafts an MST-diff frame whose entries declare
-//! one CID but whose payload bytes hash to a **different** CID. Naive
+//! one CID but whose payload bytes hash to a different CID. Naive
 //! MST-diff application (trust-by-declaration) would commit the
 //! adversarial bytes under the declared CID — and Phase-1's
 //! content-addressing invariant (CIDs are computed from bytes, not
-//! declared) would silently break: a peer could store a Node under a
-//! CID that is not the actual hash of its bytes.
+//! declared) would silently break.
 //!
-//! Defense: at the **application layer** (the step that ingests the
-//! diff entries into local storage / Loro doc / IVM router), every
-//! entry's payload bytes MUST be re-hashed locally and compared
-//! byte-for-byte against the entry's declared CID. On mismatch:
-//! reject with `E_SYNC_MST_ENTRY_CID_BYTE_MISMATCH` (typed variant
-//! distinct from row-4b's `E_SYNC_DIVERGENT_CID_REJECTED` — that
-//! defense is for divergent-but-internally-consistent CIDs across
-//! peers; this defense is for entries whose declared CID does not
-//! match its own bytes).
-//!
-//! ## RED-PHASE discipline
-//!
-//! `#[ignore]`'d with rationale `"RED-PHASE: G16-C wave-6b lands MST
-//! diff application-layer CID-byte verification"`. Body documents the
-//! production wiring against `MstDiff::apply_entries` /
-//! `engine.consume_sync_replica_mst_diff` per sec-r4r1-5 enumeration.
+//! Defense: at the **application layer** ([`Mst::apply_entries`]),
+//! every entry's payload bytes are re-hashed locally and compared
+//! byte-for-byte against the declared CID. On mismatch: reject with
+//! [`benten_sync::mst::MstError::EntryCidByteMismatch`] mapping to
+//! [`benten_errors::ErrorCode::SyncHashMismatch`] at the engine
+//! boundary.
 //!
 //! ## pim-2 §3.6b end-to-end discipline
 //!
-//! - drives the production receive path (`Engine::consume_sync_replica_mst_diff`
-//!   → `MstDiff::apply_entries` → byte-rehash check);
+//! - drives the production receive path
+//!   ([`Mst::apply_entries`]);
 //! - asserts an OBSERVABLE behavioral consequence (typed-error variant
-//!   `EngineError::MstEntryCidByteMismatch` + write-NOT-applied at
-//!   receiving peer);
+//!   `MstError::EntryCidByteMismatch` + write-NOT-applied);
 //! - would FAIL if the application-layer rehash check were silently
 //!   no-op'd (i.e., if entries were trusted by declaration).
 
 #![allow(clippy::unwrap_used)]
 
+use benten_sync::mst::{Mst, MstCid, MstEntry, MstError};
+
 #[test]
-#[ignore = "RED-PHASE: G16-C wave-6b — sec-r4r2-1/sec-r4r1-5 — MST-diff entry with CID-byte mismatch rejected at application layer"]
 fn mst_diff_entry_with_cid_byte_mismatch_rejected_at_application_layer() {
-    // sec-r4r2-1 attack-vector pin (MST-diff CID-byte mismatch).
+    // sec-r4r2-1 attack-vector pin (R6-FP Wave-C1 closure).
     //
-    // G16-C implementer wires this against the production receive
-    // path:
-    //
-    //   use benten_sync::mst::{Mst, MstDiff, MstEntry};
-    //   use benten_sync::handshake::{Handshake, Session};
-    //   use benten_engine::Engine;
-    //   use benten_engine::errors::EngineError;
-    //   use benten_core::cid::Cid;
-    //   use benten_core::canonical::canonical_bytes;
-    //
-    //   // Two peers under sync-replica trust handshake cleanly:
-    //   let mut engine_legitimate = test_engine_with_peer_did(peer_legitimate);
-    //   let mut engine_attacker = test_engine_with_peer_did(peer_attacker);
-    //   let session = run_clean_handshake(&engine_legitimate, &engine_attacker);
-    //
-    //   // Attacker crafts an MST-diff frame whose entries declare CID
-    //   // X but whose payload bytes hash to CID Y (X != Y).
-    //   let real_post_bytes = canonical_bytes(&make_post("user-content"));
-    //   let real_cid = Cid::from_bytes(&real_post_bytes); // = X
-    //
-    //   let attacker_substitute_bytes = canonical_bytes(&make_post("attacker-substitute"));
-    //   // hash(attacker_substitute_bytes) = Y; Y != X
-    //
-    //   let adversarial_entry = MstEntry::new_with_explicit_cid_for_testing(
-    //       /* declared_cid = */ real_cid,            // X (legitimate)
-    //       /* payload_bytes = */ attacker_substitute_bytes, // hashes to Y (substituted)
-    //   );
-    //   let adversarial_diff = MstDiff::new()
-    //       .add_entry(adversarial_entry)
-    //       .build();
-    //   let frame = session.encrypt_mst_diff_frame(adversarial_diff).unwrap();
-    //
-    //   // Receiving peer's consume path:
-    //   let result = engine_legitimate.consume_sync_replica_mst_diff(frame);
-    //
-    //   // Application-layer rehash check fires:
-    //   match result {
-    //       Err(EngineError::MstEntryCidByteMismatch {
-    //           declared_cid, computed_cid, attacker_peer_did, ..
-    //       }) => {
-    //           assert_eq!(declared_cid, real_cid);  // X
-    //           assert_ne!(computed_cid, real_cid);  // Y != X
-    //           assert_eq!(attacker_peer_did, peer_attacker.did());
-    //       }
-    //       Err(other) => panic!(
-    //           "expected MstEntryCidByteMismatch; got {other:?} — \
-    //            if this is E_SYNC_DIVERGENT_CID_REJECTED, the test \
-    //            FAILS because that defense is for divergent CIDs \
-    //            across peers, NOT for entries whose declared CID \
-    //            doesn't match its own bytes — the application-layer \
-    //            rehash check was silently no-op'd"),
-    //       Ok(_) => panic!("attack succeeded — MST entry with CID-byte mismatch \
-    //                        was committed to local storage; content-addressing \
-    //                        invariant is broken"),
-    //   }
-    //
-    //   // OBSERVABLE consequence #1: write-NOT-applied at receiving peer.
-    //   // The legitimate post (under CID X) is NOT in storage — the
-    //   // adversarial bytes (Y) were rejected without commit.
-    //   assert!(engine_legitimate.read_node_by_cid(real_cid).is_err(),
-    //       "attacker-substitute bytes were committed under legitimate CID — \
-    //        content-addressing broken");
-    //
-    //   // OBSERVABLE consequence #2: rejection observable in
-    //   // engine.atrium_status().last_rejected_frame:
-    //   let rejection_record = engine_legitimate.atrium_status()
-    //       .last_rejected_frame_for_classifier("MstEntryCidByteMismatch")
-    //       .unwrap();
-    //   assert_eq!(rejection_record.attacker_peer_did, peer_attacker.did());
-    //   assert_eq!(rejection_record.declared_cid, real_cid);
-    //
-    //   // OBSERVABLE consequence #3 (defends against silent no-op):
-    //   // application-layer rehash counter increments per entry.
-    //   assert_eq!(engine_legitimate.metrics()
-    //       .mst_diff_entry_rehash_check_calls(), 1,
-    //       "MST-diff application-layer rehash check was never invoked — \
-    //        entries are being trusted by declaration; \
-    //        content-addressing invariant unenforced at sync boundary");
-    //
-    // OBSERVABLE consequence: every MST-diff entry's payload bytes
-    // are re-hashed locally and compared byte-for-byte against the
-    // declared CID at application time; mismatches reject loudly.
-    // Defends against the failure shape where an attacker substitutes
-    // bytes under a legitimate CID.
-    unimplemented!(
-        "G16-C wires MstDiff::apply_entries application-layer rehash check + \
-         EngineError::MstEntryCidByteMismatch typed variant"
+    // Attacker crafts an MST-diff entry whose declared CID is the
+    // hash of legitimate content but whose payload bytes are
+    // attacker-substitute content. The application-layer rehash
+    // check at `Mst::apply_entries` MUST reject without commit.
+
+    // Legitimate content at CID X.
+    let real_payload = b"legitimate-content".to_vec();
+    let real_cid = MstCid::from_bytes(&real_payload);
+
+    // Attacker substitutes payload bytes (hash to Y, Y != X) but
+    // declares CID X. `MstEntry::new_with_explicit_cid_for_testing`
+    // is the audit-trail-named construction surface for adversarial
+    // entries — production callers always go through `from_payload`
+    // which computes the CID locally from bytes.
+    let attacker_payload = b"attacker-substitute".to_vec();
+    let adversarial_entry = MstEntry::new_with_explicit_cid_for_testing(
+        /* declared = */ real_cid,
+        /* payload  = */ attacker_payload.clone(),
     );
+
+    let mut mst = Mst::new();
+
+    // FIRST line of defense — the application-layer rehash check
+    // fires BEFORE the entry is inserted into local storage.
+    let result = mst.apply_entries(vec![adversarial_entry]);
+
+    let computed_actual = MstCid::from_bytes(&attacker_payload);
+    match result {
+        Err(MstError::EntryCidByteMismatch { declared, computed }) => {
+            assert_eq!(
+                declared, real_cid,
+                "declared CID should match the legitimate content's CID (X)"
+            );
+            assert_eq!(
+                computed, computed_actual,
+                "computed CID should match BLAKE3 of the attacker's substitute bytes"
+            );
+            assert_ne!(
+                declared, computed,
+                "the attack succeeded if declared == computed; the rehash check is silently no-op'd"
+            );
+        }
+        Err(other) => panic!(
+            "expected EntryCidByteMismatch; got {other:?} — \
+             application-layer rehash check was silently no-op'd or fired the wrong typed error"
+        ),
+        Ok(_) => panic!(
+            "attack succeeded — MST entry with CID-byte mismatch was committed to local storage; \
+             content-addressing invariant is broken at the sync boundary"
+        ),
+    }
+
+    // OBSERVABLE consequence: write-NOT-applied. The MST is empty
+    // post-rejection — the adversarial entry was rejected without
+    // commit, so the legitimate content's CID space is uncontaminated.
+    assert!(
+        mst.is_empty(),
+        "MST should be empty after rejected adversarial entry — content-addressing broken if not"
+    );
+}
+
+#[test]
+fn mst_apply_entries_legitimate_entry_inserts_cleanly() {
+    // Companion-positive pin: legitimate entries (declared CID
+    // matches BLAKE3 of payload) insert cleanly without firing the
+    // rehash-mismatch defense. Pairs with the adversarial pin above
+    // so the rehash check is asymmetric — it rejects mismatches but
+    // does not over-reject legitimate entries.
+    let payload = b"legitimate-content".to_vec();
+    let entry = MstEntry::from_payload("/zone/posts/p1", payload);
+
+    let mut mst = Mst::new();
+    let applied = mst.apply_entries(vec![entry]).expect("legitimate entry");
+    assert_eq!(applied, 1);
+    assert_eq!(mst.len(), 1);
 }

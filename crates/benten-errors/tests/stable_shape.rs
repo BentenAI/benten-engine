@@ -294,6 +294,25 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // Routes to `ON_NOT_FOUND` (joins `NotFound` / `BackendNotFound`).
     ErrorCode::DslInvalidShape,
     ErrorCode::DslUnregisteredHandler,
+    // Phase-3 R6-FP Wave-C1 (ds-r6-1 / sec-r4r2-1 attack-vector
+    // pin closure): sync-frame trust-boundary rejection codes.
+    //   `SyncHashMismatch` — MST-diff entry's declared CID does not
+    //     match BLAKE3(payload). Construction site at
+    //     `crates/benten-sync/src/mst.rs::Mst::apply_entries` (already
+    //     wired) + the engine receive-boundary surface that drives
+    //     `tests/attack_mst_diff_cid_mismatch.rs` end-to-end.
+    //   `SyncHlcDrift` — inbound sync frame HLC `physical_ms` exceeds
+    //     local clock by more than the skew-tolerance window.
+    //     Construction site at
+    //     `crates/benten-engine/src/engine.rs::apply_atrium_merge`
+    //     per-row HLC verification loop (calls
+    //     `benten_core::hlc::Hlc::update`).
+    //   `SyncCapUnverified` — inbound sync frame WRITE without a
+    //     verifiable cap-chain. Reserved-but-not-yet-emitted shape
+    //     companion to `SyncRevokedDuringSession`.
+    ErrorCode::SyncHashMismatch,
+    ErrorCode::SyncHlcDrift,
+    ErrorCode::SyncCapUnverified,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -512,16 +531,18 @@ fn variant_count_is_pinned() {
     // closure half): + DslInvalidShape + DslUnregisteredHandler = 111
     // (catalog-only TS-DSL codes promoted to first-class Rust ErrorCode
     // variants with production construction sites in
-    // `benten-dsl-compiler` + `benten-engine::engine`. Mirrors the
-    // TS-side `EDslInvalidShape` / `EDslUnregisteredHandler` so a Rust
-    // callsite emitting these surfaces the same typed `BentenError`
-    // subclass on the wire). Wave C1 (parallel) adds 3 more codes
-    // (E_SYNC_HASH_MISMATCH / E_SYNC_HLC_DRIFT / E_SYNC_CAP_UNVERIFIED);
-    // CATALOG_VARIANT_COUNT collision resolves at sequential-merge time
-    // per the known pattern (whichever of C1/C2 merges second bumps the
-    // count from 111 → 114).
+    // `benten-dsl-compiler` + `benten-engine::engine`).
+    //
+    // Phase-3 R6-FP Wave-C1 sequential-merge resolution (ds-r6-1 /
+    // sec-r4r2-1 attack-vector pin closure): + SyncHashMismatch +
+    // SyncHlcDrift + SyncCapUnverified = 114 (MST-diff declared-vs-
+    // computed CID mismatch + inbound-sync-frame HLC skew rejection
+    // at apply_atrium_merge per-row Hlc::update + reserved companion
+    // to SyncRevokedDuringSession). C1 merges after C2 per
+    // dispatch-conventions §3.5g sequential-merge resolution pattern;
+    // count moves 109 → 111 (C2) → 114 (C1).
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 111,
+        CATALOG_VARIANT_COUNT, 114,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

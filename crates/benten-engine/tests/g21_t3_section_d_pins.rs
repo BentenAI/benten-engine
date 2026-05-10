@@ -81,6 +81,7 @@ fn map_value(pairs: &[(&str, Value)]) -> Value {
 /// The eval-side path runs today; this pin proves the partial-
 /// revoke contract through the existing closure surface.
 #[test]
+#[allow(clippy::too_many_lines)] // Round-1/Round-2/Round-3 narrative is the test contract.
 fn subscribe_partial_revoke_via_cap_recheck_closure_cancels_only_affected_path() {
     use benten_core::change_stream::{ChangeEvent, ChangeKind};
     use benten_eval::primitives::subscribe::{
@@ -126,6 +127,8 @@ fn subscribe_partial_revoke_via_cap_recheck_closure_cancels_only_affected_path()
         Some(recheck_a),
         Arc::clone(&active_a),
         Arc::clone(&max_seq_a),
+        None,
+        Arc::new(std::sync::Mutex::new(None)),
     )
     .unwrap();
     let id_b = register_on_change(
@@ -135,6 +138,8 @@ fn subscribe_partial_revoke_via_cap_recheck_closure_cancels_only_affected_path()
         Some(recheck_b),
         Arc::clone(&active_b),
         Arc::clone(&max_seq_b),
+        None,
+        Arc::new(std::sync::Mutex::new(None)),
     )
     .unwrap();
 
