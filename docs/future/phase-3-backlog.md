@@ -1764,6 +1764,152 @@ When Phase 3 pre-R1 opens, the planning agent should:
 
 ---
 
+### 8.2 CI tooling: bench-source/threshold drift-lint
+
+**Origin:** Phase-3-close pre-v1 triage (2026-05-10 doc-review `accuracy-ci-tooling.json::ci-r5`). `docs/BENCHMARKING.md` notes that bench-source `THRESHOLD_NS` constants live in two places (the bench file's own comment narrative + the workflow-yaml `check_gate` invocation argument) and "there is no drift-lint today." The phase-2-backlog §8.2 closure (cross-doc numeric-claim drift via `cite-drift-detector`) covers documentation-string drift but does NOT cover the narrower bench-source-vs-yaml-argument drift surface.
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). v1-window candidate (non-blocking for Phase-3 close).
+
+**Concrete fix-shape:**
+- (a) Extend `tools/cite-drift-detector` with a new lint mode that walks `crates/*/benches/*.rs` for `const THRESHOLD_NS: u64 = N;` patterns + walks `.github/workflows/*.yml` for `check_gate` invocations + asserts the numeric values match. ALTERNATIVELY a small `tools/bench-threshold-drift` standalone since the bench-source ↔ yaml-argument lint shape differs from the doc-string lint shape.
+- (b) Add a CI workflow step that runs the lint pre-merge.
+- (c) Test pin: a deliberate one-off bench/yaml mismatch in a unit test fixture asserts the lint fires.
+
+**Touch size:** ~80-150 LOC (Rust binary or extension to existing `cite-drift-detector` + ~30 LOC workflow + ~50 LOC test fixture).
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15.
+
+**Cross-references:**
+- `docs/BENCHMARKING.md` L51 (the "no drift-lint today" disclosure; couples to a wording retense in the FIX-NOW-INLINE doc cluster removing the stale `(backlog §8.2 footprint)` cite that pointed at the now-closed phase-2-backlog §8.2).
+- `bench_thresholds.toml` + sibling per-bench `*_thresholds.toml` (extensibility couples to §8.4).
+- phase-2-backlog §8.2 (CLOSED at Phase-3 G13-pre-A; covers a different drift surface).
+
+---
+
+### 8.3 CI workflow consolidation cleanup post-v1 (RETIRED stub-job removals)
+
+**Origin:** Phase-3-close pre-v1 triage (2026-05-10 test-review `CI-coverage-vs-test-files.json::ci-cov-r1-8`). `.github/workflows/wasm-browser.yml` carries a leftover `cross-browser determinism (RETIRED — see cross-browser-determinism.yml)` job kept alive purely to flag-fly the old status-context name so the prior required-check name keeps rendering green. The canonical replacement at `.github/workflows/cross-browser-determinism.yml` has been live since Phase-3 G18; the stub-job's only purpose is name-continuity if branch-protection ever required the old context name.
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Non-blocking for Phase-3 close (the stub-job runs cheaply + does not affect correctness); v1-window candidate so it doesn't stay forever.
+
+**Concrete fix-shape:**
+- (a) Audit branch-protection spec at `.github/branch-protection-spec.json` post-PR-#175 application to confirm no required-context references the RETIRED name.
+- (b) If confirmed clean, delete the stub-job from `wasm-browser.yml`.
+- (c) Sweep sibling RETIRED stubs introduced by Phase-2b/3 workflow renames (audit `.github/workflows/*.yml` for `RETIRED` comments + drop those whose canonical replacement is verified live).
+
+**Touch size:** ~20-50 LOC across 1-3 workflow files.
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15. Couples to PR #175 branch-protection-spec application: the cleanup only safely lands AFTER branch protection is applied + the required-context list is verified.
+
+**Cross-references:**
+- `.github/workflows/wasm-browser.yml` (the stub-job site).
+- `.github/workflows/cross-browser-determinism.yml` (the canonical replacement).
+- PR #175 (branch-protection-spec ratification — sets up the precondition for safe stub-job removal).
+
+---
+
+### 8.4 Multi-bench threshold matrix extensibility
+
+**Origin:** Phase-3-close pre-v1 triage (2026-05-10 test-review `bench-config-perf.json::bench-r6-4`). `bench_thresholds.toml` was framed as the canonical workspace-root catalog of per-platform numeric ceilings but after 4 months only `sandbox_cold_start` populates it. The other 26 benches either embed thresholds inline as `const THRESHOLD_NS: u64 = N` (multiplicative_budget=1000ns, get_node_label_only=1000ns, transform_expression=10000ns, wait_suspend_resume=50000ns) or carry no numeric threshold at all. `crates/benten-ivm/benches/algorithm_b_within_20pct_gate.rs` reads from a separate per-bench `algorithm_b_thresholds.toml`. CI inflates by a blanket `BENTEN_BENCH_GATE_MULTIPLIER=3` multiplier — works but loses per-platform calibration headroom.
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). v1-window candidate.
+
+**Concrete fix-shape (one of two):**
+- (a) **Populate the catalog.** Migrate the 4 numerically-gated benches' inline `THRESHOLD_NS` constants into `bench_thresholds.toml` per-platform sections (`[multiplicative_budget.linux-x86_64]`, etc.). Retire `BENTEN_BENCH_GATE_MULTIPLIER` blanket inflation in favor of per-platform numbers. Each bench's source-side comment becomes "thresholds live in `bench_thresholds.toml`; cite §8.2 drift-lint."
+- (b) **Retract the catalog framing.** Update `bench_thresholds.toml` opening comment to acknowledge the file is `sandbox_cold_start`-specific (other benches use inline constants by design); align `BENCHMARKING.md` to match.
+
+Couples to §8.2 (drift-lint): option (a) materially increases the lint surface; option (b) narrows it. Pick (a) at v1-window iff per-platform calibration headroom is a real v1 deliverable; otherwise (b).
+
+**Touch size:** Option (a) ~200-400 LOC migration + ~50 LOC `BENCHMARKING.md` retense + ~30 LOC drift-lint extension. Option (b) ~30 LOC framing retraction.
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15.
+
+**Cross-references:**
+- `bench_thresholds.toml` (the catalog).
+- `crates/benten-ivm/benches/algorithm_b_within_20pct_gate.rs` + `crates/benten-ivm/benches/algorithm_b_thresholds.toml` (the per-bench sibling pattern).
+- §8.2 (drift-lint coupling).
+
+---
+
+### 8.5 Proptest case-count recalibration post-v1
+
+**Origin:** Phase-3-close pre-v1 triage (2026-05-10 test-review `bench-config-perf.json::bench-r6-6`). At least 11 proptest sites carry case-count reductions below the workspace 10k convention, each with a justifying inline comment citing observed wall-clock cost:
+- `crates/benten-caps/tests/proptest_attenuation.rs` (256 default; `PROPTEST_CASES=1024` in CI).
+- `crates/benten-id/tests/prop_ucan_attenuation.rs` (1000 cases; PR #162 reduction from 2000 for MSRV 1.95 wall-clock).
+- `crates/benten-engine/tests/proptest_wait_ttl.rs` (256 engine-boundary; sibling pure-eval at 10k per G20-A2 wave-8a mr-7).
+- `crates/benten-eval/tests/proptest_sandbox_isolation.rs` (256; bumped from 64 at G20-B audit-3-mr-3; security-critical).
+- `crates/benten-eval/tests/proptest_sandbox_fuel.rs` (256; full wasmtime instantiation cost).
+- `crates/benten-graph/tests/in_memory_backend_equiv_to_redb.rs` (1024; slow-timeout-overridden in `nextest.toml`).
+- `crates/benten-ivm/tests/algorithm_b_drift_detector.rs` (1000 cases across 5 separate `proptest!` blocks).
+- `crates/benten-id/tests/prop_no_state_leak.rs` / `prop_ucan_window.rs` / `prop_keypair_generate.rs` (1000 each).
+- `crates/benten-id/tests/keypair_seed.rs` + browser-backend property tests (2000 each).
+
+Each reduction is documented + corroborated by a sibling test or env-override path; NONE is speculative. Phase-3-close is a natural inflection to re-check whether (i) PR #162's UCAN attenuation 2000→1000 reduction can be lifted now that `nextest.toml` slow-timeout overrides at 360s give headroom; (ii) sandbox isolation/fuel 256 can rise toward 512 or 1024 since the wasmtime instance cache is amortized across cases.
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Non-blocking for v1 (the reductions are documented + each carries a corroborating sibling); surface as tracked work rather than gate the tag.
+
+**Concrete fix-shape:**
+- (a) Per-site re-measurement under the current `nextest.toml` slow-timeout overrides + the post-Phase-3 wasmtime cache discipline.
+- (b) Bump each site to the next-higher case-count tier (256→512, 1000→2000, etc.) that fits within the slow-timeout budget; document the bump rationale inline.
+- (c) Codify the workspace convention: "case-counts < 10k must cite a measured wall-clock cost AND a sibling-pin at the higher tier OR an env-override path."
+
+**Touch size:** ~50-100 LOC across the 11 sites (case-count bump + inline rationale retense).
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15.
+
+**Cross-references:**
+- `nextest.toml` (slow-timeout overrides — couples to the per-site re-measurement budget).
+- `crates/benten-id/tests/prop_ucan_attenuation.rs` (PR #162's documented reduction; the canonical "raise post-MSRV" candidate).
+
+---
+
+### 8.6 CI: enable `diag` feature in selected workflow
+
+**Origin:** Phase-3-close pre-v1 triage (2026-05-10 test-review `feature-flag-matrix.json::ff-r6-3`). The `diag` Cargo feature is declared on `benten-eval` (gating `Subgraph::to_mermaid` rendering + engine.trace observability surface) but `grep '\-\-features.*diag' .github/workflows/*.yml` returns zero hits. `bindings/napi` does NOT pull `diag` via its own default (`default = []`); production-code paths under `cfg(feature = "diag")` (e.g. `crates/benten-eval/src/subgraph_ext.rs`) are unexercised in CI. Regression on a `cfg(feature = "diag")` arm would escape pre-merge gates.
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Non-blocking for Phase-3 close (the surface is observability-only, not security-load-bearing); v1-window candidate.
+
+**Concrete fix-shape (one of two):**
+- (a) Extend a representative existing workflow (likely `napi-vitest.yml` or a fresh `diag-coverage.yml`) with one step `cargo test --package benten-eval --features diag` to exercise the gated code paths.
+- (b) Document the deliberate decision in `.addl/ci-decisions-*.md` stating the `diag` feature is operator-runtime only + does not warrant CI coverage; align `Cargo.toml` comments accordingly.
+
+**Touch size:** ~10-30 LOC workflow extension (option a) OR ~20 LOC documentation (option b).
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15.
+
+**Cross-references:**
+- `crates/benten-eval/Cargo.toml` (the `diag` feature declaration).
+- `crates/benten-eval/src/subgraph_ext.rs` (production `cfg(feature = "diag")` call site for `Subgraph::to_mermaid`).
+- §8.7 (CI tools/* TS coverage — sibling "feature/test not gated in CI" pattern).
+
+---
+
+### 8.7 CI: tools/* TypeScript test coverage (create-benten-app, benten-dev)
+
+**Origin:** Phase-3-close pre-v1 triage (2026-05-10 test-review `per-crate/workspace-tools.json::ws-r6r2-2 + ws-r6r2-3`). Two `tools/*` vitest harnesses are NOT exercised by any CI workflow:
+
+- `tools/create-benten-app/test/scaffolder.test.ts` — vitest harness pinning the scaffolder + a load-bearing meta-test `scaffolder_smoke_test_asserts_all_seven_exit_criteria` that counts `it(` blocks in the TEMPLATE `smoke.test.ts` to catch silent drift dropping a Phase-1/Phase-2a exit-criterion test. The CI cold-install job (`.github/workflows/ci.yml`) runs `node bin.mjs test-project --skip-install` followed by the generated project's `npm run test`, but does NOT invoke the scaffolder's OWN vitest harness — so if the template silently drifts to 6 `it(` blocks (or 8), the meta-test cannot fire.
+
+- `tools/benten-dev/test/inspect_state_pretty_prints.test.ts` — vitest harness for the `benten-dev inspect-state` JS-CLI thin wrapper (re-enabled at Phase-3 G20-A3 wave-8a per `tests/phase_3_workspace/cargo_vet_policy_phase_3.rs::inspect_state_pretty_prints_un_ignored` un-ignore intent). `.github/workflows/devserver-vitest.yml` explicitly enumerates two test files (`devserver.test.ts` + `hotreload_preserves_cap_grants.test.ts`); the third file in the same directory is omitted.
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Non-blocking for Phase-3 close (the surfaces are tools-tier dev DX, not engine-runtime correctness); v1-window candidate. Closes pim-6's CI-infrastructure half partial residual (named at §7.11).
+
+**Concrete fix-shape:**
+- (a) Extend `.github/workflows/devserver-vitest.yml` line `npx vitest run tools/benten-dev/test/devserver.test.ts tools/benten-dev/test/hotreload_preserves_cap_grants.test.ts` to append `tools/benten-dev/test/inspect_state_pretty_prints.test.ts` as a third positional arg. Trivial single-line edit; no new workflow needed.
+- (b) Either extend the cold-install workflow at `.github/workflows/ci.yml` with a `cd tools/create-benten-app && npx vitest run` step, OR add a new `scaffolder-vitest.yml` workflow modeled on `devserver-vitest.yml`. The vitest harness's own pre-condition is `node bin.mjs test-project --skip-install` succeeded (so the cold-install step must precede).
+
+**Touch size:** Option (a) ~3 LOC. Option (b) ~30-60 LOC.
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15.
+
+**Cross-references:**
+- `tools/create-benten-app/test/scaffolder.test.ts` (the meta-test pinning template `it(` count == 7).
+- `tools/benten-dev/test/inspect_state_pretty_prints.test.ts` (the JS-CLI thin-wrapper contract pin).
+- `.github/workflows/devserver-vitest.yml` (the target file for the trivial edit).
+- §7.11 (pim-6 CI-infrastructure half partial residual; this entry closes the tools/* slice).
+
+---
+
 ## 9. Security-advisory carries (transitive deps; closure-tracked here)
 
 Phase-3 sync introduces iroh + Loro CRDT, which transitively pull in dep tails carrying RUSTSEC advisories the project does not directly create. These are documented + ignored in `deny.toml::[advisories].ignore` so CI's cargo-deny job stays GREEN; this row is the named destination for closure tracking per HARD RULE rule-12 disposition (b).
@@ -1852,6 +1998,29 @@ Per CLAUDE.md item #15 (v1-milestone-gate framing): Phases 1+2a+2b+3 minimum + p
 
 ---
 
+### 10.7 Drift-detector tooling: widen scope to `bindings/napi/src/`
+
+**Origin:** Phase-3-close pre-v1 triage (2026-05-10 test-review `error-code-coverage.json::ecc-2`). The `tools/cite-drift-detector` ErrorCode-coverage walk scopes to `crates/*/src/` and misses ErrorCode construction sites in `bindings/napi/src/` (`browser_indexeddb.rs::StorageQuotaExceeded`, `devserver.rs::ReloadSubscriberUnsubscribed`, `devserver.rs::DevServerStopped`) and in `bindings/napi/src/lib.rs::testing` (the future B8 `InputLimit` home). Stale `<!-- reachability: ignore -->` annotations in `docs/ERROR-CATALOG.md` exist partly because the detector cannot see the actual construction sites in `bindings/napi/src/` and so cannot tell whether a variant is genuinely unreachable or just out-of-scope.
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Non-blocking for Phase-3 close (the drift-detector is a pre-merge defense-in-depth; the missing scope means the manual `<!-- reachability: ignore -->` annotations need uniform rationale text but do not produce silent regressions); v1-window candidate.
+
+**Concrete fix-shape (one of two):**
+- (a) **Widen the detector scan path.** Extend `tools/cite-drift-detector` to include `bindings/napi/src/` (alongside the existing `crates/*/src/` walk). The walk shape is unchanged; only the path-glob widens. Concrete touch: ~5-10 LOC in the detector's source-tree-walk function + ~30 LOC test fixture asserting an `EngineError::StorageQuotaExceeded` construction in `bindings/napi/src/browser_indexeddb.rs` is now detected.
+- (b) **Keep narrow scope + uniform rationale.** Audit `docs/ERROR-CATALOG.md` for the 3 affected variants (`StorageQuotaExceeded`, `ReloadSubscriberUnsubscribed`, `DevServerStopped`) + harmonize their `<!-- reachability: ignore -->` rationale text to a single canonical phrasing ("construction site in `bindings/napi/src/` outside `cite-drift-detector` scope"). Cheaper but loses the automated detection benefit.
+
+**Touch size:** Option (a) ~50-80 LOC. Option (b) ~30 LOC.
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15. Couples to §8.2 (drift-lint extension surface) — if §8.2 lands first, the napi-src widening is a sibling extension within the same tool.
+
+**Cross-references:**
+- `tools/cite-drift-detector/src/main.rs` (the detector entry point + path-glob configuration).
+- `bindings/napi/src/browser_indexeddb.rs` (the un-scanned `StorageQuotaExceeded` construction site).
+- `bindings/napi/src/devserver.rs` (the un-scanned `ReloadSubscriberUnsubscribed` + `DevServerStopped` construction sites).
+- `docs/ERROR-CATALOG.md` (the `<!-- reachability: ignore -->` annotation surface).
+- §8.2 (drift-lint coupling).
+
+---
+
 ## 11. Phase-1 deferred-orphan-rescue (2026-05-08 cross-phase audit)
 
 Items surfaced during 2026-05-08 cross-phase retrospective audit as orphans (Phase-1 deferrals never landed in Phases 2a/2b/3 R5 + not previously named in any backlog). Each gets a real home here per HARD RULE rule-12.
@@ -1884,3 +2053,302 @@ Items surfaced during 2026-05-08 cross-phase retrospective audit as orphans (Pha
 | G16-D wave-6b (PR #125) | Handshake response-leg via fresh iroh connection or bi-directional stream | Per g16-d-mr-2: `handshake_round_trip_over_iroh_loopback_transport` drives initiate via real iroh `Connection::send_bytes` / `recv_bytes` but returns the response via in-process `tokio::spawn` task join (honestly disclosed inline at `crates/benten-sync/tests/handshake.rs::handshake_round_trip_over_iroh_loopback_transport`). Strengthening pin: open a fresh peer_b → peer_a connection for the response, OR use a bi-directional stream on the same connection. Current pin's load-bearing assertion (handshake protocol body composes with G16-A's iroh transport SEAM) is end-to-end via the initiate leg; strengthening makes both legs end-to-end. |
 | G16-D wave-6b (PR #125) | napi `JsAtrium` shim retire (parallel-write-path → engine-routed cap-gated calls) | Per g16-d-mr-4: `bindings/napi/src/atrium.rs::JsAtrium` mutates `Mutex<AtriumHandleState>` at the napi shim layer. Parallel-write-path-shape per CLAUDE.md baked-in #16 — was intentionally interim during wave-6b parallel-3 split. The body MUST swap to `Arc<benten_engine::Atrium>` + route every mutation through engine WRITE primitive + cap policy. Recommended invariant: regression test asserting `Mutex<AtriumHandleState>` is no longer present in `bindings/napi/src/atrium.rs`. |
 
+## 13. Phase-4 carries from pre-v1 triage (2026-05-10 doc + test review)
+
+The Phase-3-close pre-v1 cleanup window (post tag `phase-3-close` 2026-05-10) ran a 314-finding doc-review + test-review pass. Of the dispositions, 71 finding lines landed BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b) and cluster into the entries below. None are Phase-3-close-blocking; each is named for the v1-assessment-window per CLAUDE.md item #15 so the carry has a registered destination instead of drifting as "we'll get to it." Source triage at `.addl/phase-3/triage-2026-05-10-doc-and-test-review.md`.
+
+### 13.1 Phase-4 doc surface: AtriumHandle/AtriumConfig operator-facing reference
+
+**Origin:** Phase-3-close pre-v1 triage (2026-05-10 doc-review `completeness.json::comp-r1-2`). `AtriumHandle` + `AtriumConfig` are the engine's headline Phase-3 deliverables (peer mesh + device attestation + caps surface) but the public method surface is documented across 5+ docs without a single operator-facing reference. Methods include `open`, `join`, `leave`, `rejoin`, `is_active`, `trust_peer`, `revoke_peer`, `list_peers`, `subscribe`, `declare_device_attestation`, `set_local_device_keypair`, `set_local_device_attestation`, `set_acceptor`, `sync_subgraph`, `sync_subgraph_over`, `accept_sync_subgraph`, `inbound_hlc_skew_classifier_calls`, plus the Wave-C1 HLC surface + `Engine::caps()` returning `EngineCapsHandle`. Coverage today: `docs/QUICKSTART.md` walkthrough names 6-8 methods; `docs/ARCHITECTURE.md` mentions the factory shape; `docs/ENGINE-SPEC.md` names the type; `docs/GLOSSARY.md` defines individual surfaces; `docs/future/phase-3-backlog.md §3.3 + §6.13` document Acceptor + skew-tolerance carries; `docs/SECURITY-POSTURE.md` Compromise #23 names `set_acceptor` + `FreshnessPolicy`. NO doc enumerates the full public method surface. Sibling pattern: `docs/HOST-FUNCTIONS.md` exists for a smaller 4-host-fn surface; `docs/TYPED-CALL.md` exists for the 10 typed-CALL ops. Atrium has more surface than either with no equivalent reference.
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). v1-assessment-window candidate; operator-facing API reference is load-bearing for v1-window early adopters integrating Atriums.
+
+**Concrete fix-shape:**
+- (a) NEW `docs/ATRIUM.md` (or extend `docs/ENGINE-SPEC.md` §11 with an Atrium-API subsection — pick the file whose cross-reference graph anchors better at v1-window time).
+- (b) Full API method table: signature + docstring summary + cross-reference to `crates/benten-engine/src/engine_sync.rs` source location.
+- (c) "Operator deployment checklist" section: `set_acceptor` + `FreshnessPolicy` production override per Compromise #23 + `skew_tolerance_ms` tuning per §6.13 + `require_signed_envelope` per §6.12.
+- (d) Thin-client subscription protocol surface (D-PHASE-3-30 — current narrative lives only in HANDOFF).
+- (e) Cross-references to QUICKSTART walkthrough + GLOSSARY + SECURITY-POSTURE Compromise #22/#23.
+
+**Touch size:** ~300-500 LOC new doc (or equivalent §11 extension to ENGINE-SPEC).
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15. Couples to §13.2 (the benten-id reference sibling) — both anchor the v1-window operator-doc surface and benefit from landing together.
+
+**Cross-references:**
+- `crates/benten-engine/src/engine_sync.rs` (the implementation surface to document).
+- `docs/QUICKSTART.md` (existing walkthrough — reference target).
+- `docs/SECURITY-POSTURE.md` Compromise #22 / #23 (operator-deployment context).
+- §3.3 + §6.13 (Acceptor + skew-tolerance operator surfaces).
+- §6.12 (`DeviceAttestationEnvelope` + envelope-validation operator-deployment narrative).
+- §13.2 (paired carry — `benten-id` reference doc).
+
+---
+
+### 13.2 Phase-4 doc surface: `benten-id` consolidated public API reference
+
+**Origin:** Phase-3-close pre-v1 triage (2026-05-10 doc-review `completeness.json::comp-r1-3`). Sibling to §13.1. `benten-id` is the 9th crate and headlines the Phase-3 identity stack. Public surface: `Keypair` (with zeroize + non-clone discipline per `docs/ATTACK-SURFACE-MATRIX.md` TC-CARRY-1); `did:key` `Did` + `resolve`; `Ucan` claim envelope + `validate_chain_inner` / `validate_chain_with_attestations` / `validate_chain_with_rotation_log`; `Vc` issuance + `verify` with credentialStatus; `MultiSigSurface` trait + `Ed25519SingleKey` impl; `DeviceAttestation` + `DeviceRevocation` + `Acceptor` + `Acceptor::new_with_revocations` + `Acceptor::with_parent_lookup` + `FreshnessPolicy`; `RotationLog` + `superseded_by` attestation. Coverage today: `docs/ARCHITECTURE.md` crate-block prose summarizes; `docs/ATTACK-SURFACE-MATRIX.md` §2.4 enumerates DA-1..DA-9 attack vectors with cross-references to source; `docs/GLOSSARY.md` has entries for `Acceptor` / `DeviceAttestation` / `DeviceAttestationEnvelope` / `FreshnessPolicy` / `device-DID`; `docs/TYPED-CALL.md` cross-references `benten-id` at 4 of 10 typed-call dispatches. NO consolidated `docs/IDENTITY.md` exists. The crate architecture note ("no edges back to graph/eval/engine, so the identity surface is reusable outside the engine if needed") implies a real audience of Rust-side users integrating `benten-id` directly — they have no user-facing reference today.
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). v1-assessment-window candidate; same operator-facing reference pattern as §13.1.
+
+**Concrete fix-shape:**
+- (a) NEW `docs/IDENTITY.md` (or extend `docs/ARCHITECTURE.md` `benten-id` crate-block with an API subsection — pick whichever anchors the cross-reference graph better at v1-window time).
+- (b) Enumerate: `Keypair` (with zeroize discipline note) + `Did` + `Ucan` API surface + `Vc` API surface + `MultiSigSurface` + `DeviceAttestation` chain (parent-issued + `Acceptor::accept_at` verify + revocation + rotation) + cross-references to attack-surface entries.
+- (c) Resolves the §13.3 surface-gap by giving `Acceptor::new_with_revocations` + `Acceptor::with_parent_lookup` + `DeviceRevocation::issue` a documented user-facing home (Rust-side users have NO reference today for these constructors — only rustdoc).
+
+**Touch size:** ~300-500 LOC new doc (or equivalent ARCHITECTURE.md extension).
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15. Couples to §13.1 (paired carry).
+
+**Cross-references:**
+- `crates/benten-id/src/lib.rs` (the crate root + re-export surface).
+- `crates/benten-id/src/device_attestation.rs` (Acceptor + DeviceAttestation + DeviceRevocation).
+- `crates/benten-id/src/did_rotation.rs` (RotationLog + is_did_superseded).
+- `crates/benten-id/src/ucan.rs` (chain-walker entry points).
+- `docs/ATTACK-SURFACE-MATRIX.md` §2.4 (DA-1..DA-9 cross-reference target).
+- §13.1 (paired carry — `AtriumHandle`/`AtriumConfig` reference doc).
+- §13.3 (covered by this entry's documentation surface).
+
+---
+
+### 13.3 Phase-4 napi-surface widening: `Acceptor::new_with_revocations` + `DeviceRevocation::issue` + parent-lookup acceptor expose to napi
+
+**Origin:** Phase-3-close pre-v1 triage (2026-05-10 doc-review `completeness.json::comp-r1-7`). §3.3 of this backlog already documents that `JsAtrium::set_acceptor` exposes ONLY the freshness-window-only `Acceptor::new` constructor — `Acceptor::new_with_revocations` + `Acceptor::with_parent_lookup` + the `DeviceRevocation::issue` constructor remain Rust-side only. Closure-shape for §3.3 (the parent entry) targets the napi widening; this entry registers the parity TS-side: `packages/engine/test/atrium.test.ts` carries a partial shim for `setAcceptor` but cannot exercise the revocation-aware variant.
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Tracks as a sibling of §3.3; resolved end-to-end when §3.3 napi widening lands. v1-assessment-window candidate.
+
+**Concrete fix-shape:**
+- (a) Expand `bindings/napi/src/atrium.rs` `JsAtrium::set_acceptor` to accept a second ctor-arm carrying `revocations: Vec<DeviceRevocation>` (mirrors `Acceptor::new_with_revocations`).
+- (b) Add a `JsAtrium::set_acceptor_with_parent_lookup` ctor surface for the parent-DID expectation arm.
+- (c) Expose `DeviceRevocation::issue` via `napi::JsDeviceRevocation` thin wrapper (allows test-time + operator-driven revocation construction from TS).
+- (d) `§3.5g` cross-language rule-mirror discipline: every new napi surface mirrors into `packages/engine/src/types.ts` + sibling TS-side type tests.
+- (e) Test pins at `bindings/napi/tests/acceptor_revocations_napi_round_trip.rs` (NEW) + `packages/engine/test/atrium_acceptor_with_revocations.test.ts` (NEW).
+
+**Touch size:** ~100-200 LOC napi-side + ~50-80 LOC TS-side + ~100 LOC tests.
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15. Couples to §3.3 (parent entry; closure-shape overlaps).
+
+**Cross-references:**
+- `crates/benten-id/src/device_attestation.rs::Acceptor::new_with_revocations` (the Rust-side ctor to mirror).
+- `crates/benten-id/src/device_attestation.rs::Acceptor::with_parent_lookup` (sibling ctor to mirror).
+- `crates/benten-id/src/device_attestation.rs::DeviceRevocation::issue` (the revocation constructor to expose).
+- `bindings/napi/src/atrium.rs` (the napi target surface).
+- §3.3 (parent entry — same closure wave).
+- §13.2 (the user-facing doc home for these surfaces).
+
+---
+
+### 13.4 Phase-4 doc-architecture refactor (PRIMER+HOW-IT-WORKS+VISION redundancy + ARCHITECTURE+ENGINE-SPEC overlap + 4-doc positioning consolidation)
+
+**Origin:** Phase-3-close pre-v1 triage (2026-05-10 doc-review `consolidation-or-split.json::cs-r1-1 + cs-r1-2 + cs-r1-3`). Three structural-overlap findings cluster into a single doc-architecture refactor:
+
+- **cs-r1-1 (MAJOR, entry-tier 3-doc redundancy):** `docs/PRIMER.md` (10.9KB) + `docs/HOW-IT-WORKS.md` (13.4KB) + `docs/VISION.md` (12.5KB) all independently enumerate the 12 primitives, independently explain the code-as-graph thesis, and independently carry a "what-Benten-is-not" disclaim. PRIMER + HOW-IT-WORKS overlap >70% on content shape; VISION layers the three-pillar business framing on top of the same engine narrative. Recommend MERGE — collapse PRIMER + HOW-IT-WORKS into a single canonical plain-English entry doc (keep PRIMER name per CLAUDE.md reading list); VISION stays separate (distinct audience: business / strategy critics).
+- **cs-r1-2 (MAJOR, technical-spec-tier overlap):** `docs/ARCHITECTURE.md` (19.4KB, 11 sections) and `docs/ENGINE-SPEC.md` (48.3KB, 18 sections) cover the same surface at different verbosities. Both target "depth: Rust engineers building the engine"; ENGINE-SPEC is the older / more-comprehensive / oldest cross-reference target (frequently cited from PLATFORM-DESIGN + BUSINESS-PLAN + .addl plans); ARCHITECTURE is a newer condensation. ENGINE-SPEC §15 "Open Questions" is largely resolved per its own status banner; ENGINE-SPEC §13 "Migration from Thrum V3" duplicates PLATFORM-DESIGN §2. Recommend MERGE — fold ARCHITECTURE.md INTO ENGINE-SPEC.md (delete ARCHITECTURE; rename ENGINE-SPEC sections to absorb the request-flow + devserver narratives). Alternative SPLIT-with-sharper-boundaries possible if the merge would create a 70KB monolith.
+- **cs-r1-3 (MAJOR, positioning-tier 4-doc surplus):** `docs/BUSINESS-PLAN.md` (27KB) + `docs/PLATFORM-DESIGN.md` (36KB) + `docs/VISION.md` (12.5KB) + `docs/FULL-ROADMAP.md` (20.8KB) is 4 positioning docs for an unreleased private project. BUSINESS-PLAN status is "WORKING DRAFT" with no active investor audience; PLATFORM-DESIGN status banner names "before Phase 3 implementation" which has CLOSED. Recommend SPLIT-AND-ARCHIVE: (a) BUSINESS-PLAN → MOVE to `docs/future/` (Credits is Phase 8 distant) or extract current-state summary into VISION § + archive rest; (b) PLATFORM-DESIGN → SPLIT — sync/Atrium content folds into NEW `docs/SYNC.md` (or into ENGINE-SPEC §11+ if cs-r1-2 MERGE happens); §4-§5 governance + build-order fold into FULL-ROADMAP; §6-§8 "Exploratory" moves to `docs/future/`; PLATFORM-DESIGN.md retires; (c) VISION + FULL-ROADMAP stay canonical. Net: 4 docs → 2 canonical + 1 archived + 1 retired.
+
+**Disposition (cumulative):** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Each finding individually qualifies as OUT-OF-SCOPE for the Phase-3-close pre-tag sweep (substantive doc-architecture refactor, not retense); cumulatively they motivate a dedicated v1-window doc-architecture wave. The Phase-3-close pre-tag sweep does the retense+jargon-strip pass on the CURRENT docs (per the FIX-NOW-INLINE clusters in the triage report); the structural consolidation lands in this v1-window entry.
+
+**Concrete fix-shape:**
+- (a) v1-window doc-architecture-refactor wave with its own R1 + mini-review (the cross-reference impact across the codebase makes a single-pass risky).
+- (b) Order: (1) cs-r1-1 entry-tier merge (PRIMER absorbs HOW-IT-WORKS) — smallest cross-reference impact. (2) cs-r1-3 positioning-tier consolidation (BUSINESS-PLAN moves; PLATFORM-DESIGN splits) — touches cross-references in CLAUDE.md, README, FULL-ROADMAP. (3) cs-r1-2 technical-spec-tier merge (ARCHITECTURE folds into ENGINE-SPEC) — highest cross-reference impact (PLATFORM-DESIGN cites; multiple .addl plans cite).
+- (c) Cross-reference impact assessment up-front: grep every doc + every `.addl/` plan + every code-comment that names `ARCHITECTURE.md` / `HOW-IT-WORKS.md` / `PLATFORM-DESIGN.md` / `BUSINESS-PLAN.md` and audit the touch surface.
+- (d) Per-merge migration commit: doc-content move + cross-reference sweep in a single commit; status banner update in a sibling commit.
+- (e) Update CLAUDE.md "Key Reading for Fresh Agents" list when ordering changes.
+
+**Touch size:** ~1000-2500 LOC of doc-content moves + ~300-500 LOC cross-reference sweep across the codebase. Single-wave is structurally large but mechanically simple.
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15. Couples to §13.1 + §13.2 (the v1-window doc-architecture wave naturally absorbs the AtriumHandle + benten-id reference-doc authoring at the same time).
+
+**Cross-references:**
+- `docs/PRIMER.md` + `docs/HOW-IT-WORKS.md` + `docs/VISION.md` (cs-r1-1 entry tier).
+- `docs/ARCHITECTURE.md` + `docs/ENGINE-SPEC.md` (cs-r1-2 technical-spec tier).
+- `docs/BUSINESS-PLAN.md` + `docs/PLATFORM-DESIGN.md` + `docs/VISION.md` + `docs/FULL-ROADMAP.md` (cs-r1-3 positioning tier).
+- §13.1 + §13.2 (paired v1-window doc-authoring waves).
+
+---
+
+### 13.5 napi/TS engine-bound test parity (Wave A shim-only coverage residual)
+
+**Origin:** Phase-3-close pre-v1 triage (2026-05-10 test-review `end-to-end-pin-discipline.json::wave-a-napi-r6-r1-shim-only-coverage` + per-crate `packages-engine-ts.json::pe-ts-9`). R6-FP Wave A (PR #165) shipped TS-side vitest pins for napi-r6-r1-1 (rejoin/isActive round-trip) + napi-r6-r1-2 (4 device-attestation setters) in `packages/engine/test/atrium.test.ts`. These exercise the in-memory `inMemoryFactory()` TS shim, NOT the engine-bound napi cdylib. The shim mirrors the napi field layout but if the napi binding regressed (e.g., `set_local_device_did` wired but didn't actually call into `AtriumHandle::set_local_device_did`), the vitest pin would still pass against the shim. Engine-side substantive coverage exists at `crates/benten-engine/tests/atrium_leave_rejoin.rs` (`peer_leave_then_rejoin_reconciles_state_via_loro_merge`), so the regression-defense story is structurally covered — but the napi-boundary parity gap remains.
+
+**Disposition (per R6-final commit `355b58b`):** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). The shape was EXPLICITLY-DISPOSITIONED at R6-final per HARD RULE clause-(a) OUT-OF-SCOPE-WITH-EXPLANATION at the time (pre-existing structural pattern across all 23 `bindings/napi/tests/*.rs` files; bulk rewrite is order-of-magnitude scope inflation). This entry registers the v1-window successor work: a future-phase audit re-evaluating whether the napi-boundary parity gap warrants a coordinated bulk rewrite OR a per-test focused widening as new napi surfaces land.
+
+**Concrete fix-shape:**
+- (a) Audit the 23 `bindings/napi/tests/*.rs` shim-only sites + classify into (i) genuinely SHIM-ONLY-BY-DESIGN (the engine-side coverage substantively defends the contract) vs (ii) GAPS-WITH-NO-ENGINE-SIDE-PIN (the napi-boundary IS the regression-defense surface).
+- (b) For (i): annotate the test rationale inline ("shim-only by design; engine-side pin at `crates/<…>::<symbol>`") + add a workspace-wide drift-defense lint that asserts every shim-only test cites its engine-side counterpart.
+- (c) For (ii): bulk-rewrite to engine-bound (via napi-rs in-process test harness or via a built-cdylib + spawn-child pattern); OR if the regression-defense story is too thin, add the missing engine-side pin and downgrade the napi-side to shim-only.
+- (d) Codify the audit pattern as a Pattern-N pim entry in `.addl/dispatch-conventions.md` (mirror of pim-18 §3.6f SHAPE-not-SUBSTANCE pre-flight at the napi/TS boundary).
+
+**Touch size:** Audit alone ~10-20 LOC + classification doc. Per-test widening ~50-150 LOC per gap site; total varies by gap count.
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15. Couples to pim-18 §3.6f (the audit is a sibling discipline at the napi/TS-boundary slice).
+
+**Cross-references:**
+- `packages/engine/test/atrium.test.ts` Wave-A R6-FP describe blocks (the shim-only sites).
+- `crates/benten-engine/tests/atrium_leave_rejoin.rs::peer_leave_then_rejoin_reconciles_state_via_loro_merge` (the engine-side substantive coverage).
+- `.addl/dispatch-conventions.md` §3.6f pim-18 (sibling discipline).
+- §6.12 item 8 (sibling shim-vs-engine boundary discussion — `ON_CHANGE_REGISTRY` process-scoped global).
+
+---
+
+### 13.6 `phase_2a_pending_apis` feature lapsing (couples to §13.7)
+
+**Origin:** Phase-3-close pre-v1 triage (2026-05-10 test-review `feature-flag-matrix.json::ff-r6-4` + per-crate `benten-engine-2.json::be2-major-2`). The `phase_2a_pending_apis` Cargo feature gates 8 integration tests in `crates/benten-engine` via `#![cfg(feature = "phase_2a_pending_apis")]` at file-top:
+- `crates/benten-engine/tests/integration/wait_inside_wait_serializes_correctly.rs`
+- `crates/benten-engine/tests/integration/write_authority_lift.rs`
+- `crates/benten-engine/tests/integration/wallclock_toctou_revokes_mid_iterate.rs`
+- `crates/benten-engine/tests/integration/wait_signal_shape_optional_typing.rs`
+- `crates/benten-engine/tests/integration/inv_8_11_13_14_firing.rs`
+- `crates/benten-engine/tests/integration/option_c_end_to_end.rs`
+- `crates/benten-engine/tests/integration/wait_resume_determinism.rs`
+- `crates/benten-engine/tests/mermaid_wait_rendering.rs`
+
+`crates/benten-engine/Cargo.toml` `default = []` means `cargo test` runs with the feature OFF — these have NOT been run since Phase-2a (the originating phase). Several are headline exit-criterion tests (`inv_8_11_13_14_firing.rs` ↔ Phase-2a §1 exit-criterion 2 "four new invariants firing"; `wait_resume_determinism.rs` ↔ Phase-2a §1 exit-criterion 1 "WAIT-resume determinism"). The Cargo.toml comment names a ghost "next Phase-2b R6 wave" that no longer exists — that's a phantom-destination shape per HARD RULE clause-(b). The 7 integration files all transitively call into `Engine::put_node` / `Engine::read_node_with_policy` / `Engine::grant_read_capability_for_testing` at `crates/benten-engine/src/engine_wait.rs:1011-1026` which are still `todo!()` stubs — so the gate cannot lapse cleanly UNTIL the §13.7 un-stubbing lands.
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Couples to §13.7. v1-assessment-window candidate; this entry is the registered destination for the phantom "next Phase-2b R6 wave" reference.
+
+**Concrete fix-shape:**
+- (a) Land §13.7 first (un-stub `Engine::put_node` + `Engine::read_node_with_policy` + `Engine::grant_read_capability_for_testing` so the gated tests can actually run).
+- (b) Per-file audit: for each of the 8 gated files, un-gate + run. If the test passes against the un-stubbed production fns, drop the `#![cfg(...)]` line. If the test surfaces an unanticipated assertion gap, file a child entry naming the gap + the Phase-N destination.
+- (c) Once all 8 files are un-gated, delete the `phase_2a_pending_apis` feature declaration from `crates/benten-engine/Cargo.toml`.
+- (d) Update `docs/history/PHASE-2a.md` retrospective with the actual exit-criterion verification dates (currently exit-criteria 1 + 2 are doc-claimed but never test-verified post-phase-2a-close).
+
+**Touch size:** ~50-100 LOC across 8 file headers + Cargo.toml feature declaration + retrospective retense. Per-file test-run debugging budget varies if tests surface real assertion gaps.
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15. Dependency on §13.7 is hard (cannot un-gate until production fns un-stub).
+
+**Cross-references:**
+- `crates/benten-engine/Cargo.toml` `phase_2a_pending_apis` feature declaration (lines 64-82 carry the phantom-destination comment).
+- `crates/benten-engine/src/engine_wait.rs:1011-1026` (§13.7 un-stubbing site — hard dependency).
+- §13.7 (paired carry — un-stubbing wave).
+- `docs/history/PHASE-2a.md` (the retrospective that names exit-criteria 1 + 2 as DONE).
+
+---
+
+### 13.7 engine_wait.rs `todo!()` un-stubbing — `Engine::put_node` + Option-C flanking-method (Class-B β `read_node_as` work)
+
+**Origin:** Phase-3-close pre-v1 triage (2026-05-10 test-review `skipped-tests-audit.json::todo_in_production_src` cluster + per-crate `benten-engine-2.json::be2-major-1`). Four `todo!()` stubs in production source at `crates/benten-engine/src/engine_wait.rs`:
+
+- `:1017` — `pub fn Engine::put_node` returns `todo!("Phase 2a G2-A: implement engine.put_node")`. Live callers exist via `crates/benten-engine/benches/option_c_evaluator_path_overhead.rs` (3 invocation sites) + `crates/benten-engine/tests/integration/option_c_end_to_end.rs:149-150`. The bench panics on first iteration if ever run. The Phase-2a G2-A landing reference is stale — Phase-2a closed at tag `phase-2a-close` and the work was never wired.
+- `:1026` — `pub fn Engine::read_node_with_policy` returns `todo!("Phase 2a G4-A: Option C flanking-method plumbing per sec-r1-5")`. Blocks `option_c_end_to_end.rs::option_c_read_node_respects_check_read` which calls `.expect(...)` on it.
+- `:1239` — `pub fn Engine::grant_read_capability_for_testing` returns `todo!("Phase 2a G4-A: test-only read-grant path for Option C flanking-methods")`. Called by `option_c_evaluator_path_overhead.rs` (bench).
+- `:1311` — `pub fn Engine::benchmark_helper_crud_post_create_dispatch` returns `todo!("Engine-level descope-witness stub; zero callers...")`. Documented stub naming the actually-used `RedbBackend`-level helper. MINOR; could either be deleted per CLAUDE.md §5 "no deprecated aliases" OR documented as the canonical engine-level entry point.
+
+All four rationale strings name "Phase 2a" landings that have closed without un-stubbing. Stubs are not gated behind a feature flag (the *tests* are gated via `phase_2a_pending_apis` per §13.6, but the production stubs are unguarded). The Option-C surface is the natural Phase-3 implementation point: the read-policy threading via `ReadContext` already exists (per §6.12 item 3 closure) so the missing piece is the `read_node_as`-style flanking entry that consults `policy.check_read` at the engine boundary rather than just at the eval boundary.
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Couples to §13.6 (the `phase_2a_pending_apis` gate cannot lapse until this un-stubbing lands) + §2.3 (i) (WriteContext threading sibling). v1-assessment-window candidate; named "Class-B β `read_node_as` work" in the night-shift handoff (`HANDOFF-2026-05-10-phase-3-close-night-shift.md`).
+
+**Concrete fix-shape:**
+- (a) `Engine::put_node` — wire to `EngineGeneric::backend.put_node_with_context` with a synthetic `WriteContext` constructed from the engine's current actor/device CIDs. Test-only surface (the production WRITE path is via `dispatch` + handler subgraphs); the bench + integration callers are exercising the type-shape contract.
+- (b) `Engine::read_node_with_policy` — implement the Option-C flanking-method per sec-r1-5: construct a `ReadContext` carrying the supplied `CapabilityPolicy` + actor CID; call into `EngineGeneric::backend.get_node_verified` with the context; consult `policy.check_read` on the resolved Node's zone + Node-kind. Returns `Result<Node, EngineError>` with `EngineError::ReadDenied` mapping to `ErrorCode::ReadDenied` if `check_read` denies. This closes the Option-C contract end-to-end (current Phase-3 state has `check_read` consulted at eval-boundary only; engine-boundary is the missing flanking method).
+- (c) `Engine::grant_read_capability_for_testing` — test-only grant-installer that uses the existing `Engine::caps().install_proof(...)` plumbing under a test-helpers cfg-gate (mirrors the `test-helpers` feature pattern at `bindings/napi`).
+- (d) `Engine::benchmark_helper_crud_post_create_dispatch` — per CLAUDE.md §5 "no deprecated aliases" rule, either delete or wire to the `RedbBackend` helper. Recommend delete + retense any rustdoc that named the engine-level entry point.
+- (e) §3.5g cross-language rule-mirror discipline: if any new napi surface (test-helpers feature) mirrors the un-stubbed Rust surface, update `bindings/napi` + TS types accordingly.
+- (f) Un-ignore the 8 `phase_2a_pending_apis`-gated tests + the broken `option_c_evaluator_path_overhead.rs` bench in lockstep (§13.6 closure).
+
+**Touch size:** ~300-600 LOC across `benten-engine` + (if test-helpers surface widens) `bindings/napi` + integration tests + bench un-blocking. Per `HANDOFF-2026-05-10-phase-3-close-night-shift.md` § Class-B β implementer estimate.
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15; pre-v1 cleanup, NOT Phase 4. Couples to §13.6 + §2.3 (i).
+
+**Cross-references:**
+- `crates/benten-engine/src/engine_wait.rs:1011-1026` + `:1239` + `:1311` (the un-stubbing sites).
+- `crates/benten-engine/benches/option_c_evaluator_path_overhead.rs` (broken bench; un-blocks).
+- `crates/benten-engine/tests/integration/option_c_end_to_end.rs` (gated test; un-blocks).
+- `crates/benten-engine/src/engine_caps.rs::EngineCapsHandle::install_proof` (existing surface for the grant-installer wiring).
+- §13.6 (paired carry — feature-gate lapsing).
+- §2.3 (i) (sibling WriteContext threading work).
+- §6.12 item 3 (precedent: ReadContext device_cid threading).
+- §13.8 (sibling: `EngineCapsHandle` direct-test pin gap couples to the test-helpers surface widened here).
+
+---
+
+### 13.8 Public-API direct-test pin gap (~12 surfaces: `DeviceAttestationEnvelope`, `AtriumHandle::last_received_remote_device_did`, `EngineCapsHandle`, `RotationLog`, `Acceptor::new_with_revocations`, etc.)
+
+**Origin:** Phase-3-close pre-v1 triage (2026-05-10 test-review `test-coverage-by-surface.json` BLOCKER + ~12 MAJOR untested-surface entries + 5 shape-only entries). The Phase-3 R6 phase-close convergence council closed cumulative coverage holistically; this entry catalogs the per-surface direct-pin gaps that remain at HEAD `355b58b`:
+
+**BLOCKER tier (direct-pin gap on cryptographic-attestation closure):**
+- `DeviceAttestationEnvelope::new_unsigned` / `new_signed` / `declared_device_did` / `to_canonical_bytes` / `from_canonical_bytes` / `verify` at `crates/benten-engine/src/engine_sync.rs:304-510` — 6-method public surface shipped at PR #163 G16-D wave-6b. Zero direct test usage outside `/src/`; only exercised implicitly through `Engine::open_atrium` + `apply_atrium_merge` integration. `crates/benten-sync/tests/wire_envelope.rs` is `#[ignore]`'d with deferral to v1-assessment-window. NO round-trip pin (canonical_bytes → from_canonical_bytes), NO constructor unit test, NO signature-verify failure-path test at the type's own surface. Pim-2 §3.6b SUBSTANTIVE-arm closure-pin concern: PR #163 closed exit-criterion 16 cryptographic-attestation but the type's direct surface was not pinned with a substantive-arm-exercising test.
+
+**MAJOR tier (direct-pin gaps on Phase-3 observability + cap-handle + sync-handle surfaces):**
+- `AtriumHandle::last_received_remote_device_did(zone)` at `crates/benten-engine/src/engine_sync.rs` — public observability accessor for inbound device-DID; zero test calls; regression silently breaks operator-tooling observability.
+- `AtriumHandle::sync_subgraph_over(zone, conn)` — caller-supplied-`Connection` variant of `sync_subgraph`; high-level path is tested 9× but this variant has zero direct test usage; future refactor to connection-borrowing semantics could silently regress.
+- `JsAtrium::set_local_device_keypair` / `set_local_device_attestation` / `set_acceptor` / `clear_local_device_keypair` / `clear_local_device_attestation` at `bindings/napi/src/atrium.rs` — PR #165 Wave-A R6-FP closure-claim for napi-r6-r1-2; zero napi-side tests in `bindings/napi/test{,s}/`; only TS-level coverage via `inMemoryFactory()` stubs (does NOT cross the napi boundary). Per pim-18 §3.6f SHAPE-not-SUBSTANCE: production-call-site enumeration is zero. Couples to §13.5.
+- `bindings/napi/tests/device_attestation.rs::engine_declare_device_attestation_round_trip_via_napi` — RED-PHASE pin still `#[ignore]`'d with `unimplemented!()` body. Per pim-12 §3.6e: PR #165 napi setters shipped but this round-trip test was not un-ignored or body-filled. Couples to §13.9 (Instance 25 fix unblocks it; also requires authored driver body).
+- `EmitSubscription` / `Subscription::on_change_as_with_cursor` at `crates/benten-engine/src/engine_subscribe.rs` — capability-actor-aware + cursor-resume combination variant; zero test usage. The plain `on_change_as` + `on_change_with_cursor` variants are tested (2 each) but the COMBINATION — the precise surface needed for thin-client + replicated subscribe with cap-recheck — is unpinned.
+- Wave-C1 attack-* tests at `crates/benten-sync/tests/attack_hlc_skew_revocation_ordering.rs` + `attack_loro_op_log_inv_13.rs` + `attack_mst_diff_cid_mismatch.rs` — PR #170 (Wave-C1 R6-FP) claimed closure but rationale comments inside still reference the prior `unimplemented!()` shape. Substantive-arm verification needed.
+
+**MINOR tier (rationale-pin gaps; not load-bearing for v1 but caught at audit):**
+- `Acceptor::with_parent_lookup` at `crates/benten-id/src/device_attestation.rs` — used via the freshness-window constructor; the parent-lookup arm is exercised through `accept_at` integration but no direct round-trip test of the constructor's typed-shape contract. Couples to §13.3 + §13.2.
+- `DeviceAttestation::issue_with_nonce` — variant used by `DeviceAttestationEnvelope::new_signed` for session-nonce replay defense; only the wrapper path is tested; explicit pin would catch nonce-encoding regressions.
+- `Mst::reconstruct_root` at `crates/benten-sync/src/mst.rs` — defensive Merkle-root reconstruction; zero direct test usage; the reconstruct-equals-cached invariant is not pinned.
+- `AuthenticatedHandshake::local_grant_to_remote` / `remote_grant_to_local` at `crates/benten-sync/src/handshake.rs` — bidirectional UCAN grant chain accessors; covered indirectly via `effective_cap_set` + `intersection_validates_against_ucan_chain` but the typed accessors themselves not asserted.
+- `StreamHandle::empty_closed` / `open_with_pending_error` at `crates/benten-engine/src/engine_stream.rs` — 2 of 5 public constructors have zero test usage.
+- `ConnectionHealth::healthy` / `degraded` constructors — public ctor variants used only internally; the `for_test()` variant is heavily used (61×) but the production constructors not asserted.
+- `Engine::historical_policy_metadata_hint` at `crates/benten-engine/src/engine_caps.rs` — public static accessor; zero test usage; may be Phase-1-residual or Phase-3-future API (review for dead-code candidate or intended-public pin).
+- `host:log` host function output assertion at `crates/benten-eval/src/sandbox/host_fns.rs` — log host-fn name appears in cap-table tests + WAT fixtures but no test asserts the operator-observable log output (e.g., calling `host:log` writes to a tracing sink with the correct fields). Per CLAUDE.md baked-in #16 "log for operator observability" — observability surface unverified.
+
+**Shape-only tier (cross-boundary parity gaps):**
+- `JsAtrium` device-attestation setters TS-DSL side at `packages/engine/test/atrium.test.ts` — SHAPE-only via `inMemoryFactory()` stubs. Couples to §13.5.
+- `DeviceAttestation` TS interface presence at `packages/engine/test/device_attestation_ts_interface_present.test.ts` — compile-time type-test only; end-to-end SHAPE-only across both layers because the napi round-trip pin in `bindings/napi/tests/device_attestation.rs` is itself ignored.
+- Atrium TS-DSL `trustPeer` / `revokePeer` / `listPeers` — validates the in-memory shim; does not call into napi `JsAtrium`; Phase-3 thin-client peer-discovery production path is unpinned at the napi boundary. Couples to §13.5.
+- `DeviceAttestationEnvelope` wire-content per-message-kind at `crates/benten-sync/tests/wire_envelope.rs` — whole file `#[ignore]`'d with deferral to v1-assessment-window; PR #163 closed exit-criterion 16 cryptographic-attestation but the wire-content per-message-kind contract has no live pin. Couples to BLOCKER-tier entry above.
+- `Mst::with_tampered_node` — single callsite (in `attack_mst_diff_cid_mismatch` surface area); the tampering itself (does the helper actually corrupt a node?) is not unit-tested.
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). v1-assessment-window candidate; some surfaces (BLOCKER + MAJOR tier) are closer to "should land before v1 ratifies the Phase-3-shipped surfaces"; MINOR tier is genuinely v1-window.
+
+**Concrete fix-shape:**
+- (a) BLOCKER `DeviceAttestationEnvelope` direct unit test (~80 LOC at `crates/benten-engine/tests/device_attestation_envelope_direct_surface.rs` NEW): constructor unit test + canonical-bytes round-trip + signature-verify failure-path. Mentioned in `HANDOFF-2026-05-10-phase-3-close-night-shift.md` Cluster 7 as ~100 LOC scoped.
+- (b) MAJOR observability accessor pin for `last_received_remote_device_did` (~30 LOC): test that drives the populated-after-merge path + asserts the accessor reads the expected DID. Mentioned in HANDOFF Cluster 7 as `AtriumHandle.last_received_remote_device_did` pin.
+- (c) MAJOR `EmitSubscription`/`on_change_as_with_cursor` combined-arm test (~80 LOC): exercise actor-aware + cursor-resume combination needed for thin-client + replicated subscribe with cap-recheck.
+- (d) MAJOR Wave-C1 attack-* substantive-arm audit (~variable LOC): verify the `unimplemented!()`-rationale comments inside have been replaced by substantive assertions; if not, fix-pass.
+- (e) MINOR/shape-only entries audited as a batch — each gets a per-surface disposition (un-ignore + body-fill OR add MINOR pin OR DISAGREE-WITH-EXPLANATION).
+
+**Touch size:** ~80 LOC BLOCKER + ~30 LOC + ~80 LOC + ~variable MAJOR audit + ~200-400 LOC MINOR-batch ≈ ~500-700 LOC total cluster.
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15. BLOCKER + MAJOR tier should ideally land in the Phase-3-close pre-v1 cleanup window per `HANDOFF-2026-05-10-phase-3-close-night-shift.md` Cluster 7.
+
+**Cross-references:**
+- `crates/benten-engine/src/engine_sync.rs` (`DeviceAttestationEnvelope` + `AtriumHandle` observability surfaces).
+- `crates/benten-engine/src/engine_subscribe.rs` (`on_change_as_with_cursor` combined surface).
+- `crates/benten-sync/tests/attack_*.rs` (Wave-C1 substantive-arm audit).
+- `crates/benten-sync/tests/wire_envelope.rs` (deferred wire-content pin).
+- `bindings/napi/tests/device_attestation.rs` (still-ignored round-trip; couples to §13.9).
+- `crates/benten-engine/tests/atrium_leave_rejoin.rs` (existing substantive coverage that defends related contracts).
+- §13.5 (paired napi/TS shim-vs-engine parity sibling).
+- §13.7 (paired carry; `EngineCapsHandle` direct-test couples to the test-helpers surface widened there).
+- §13.9 (paired carry; napi round-trip un-ignore depends on Instance 25 fix).
+- `HANDOFF-2026-05-10-phase-3-close-night-shift.md` Cluster 7 (the orchestrator-fed closure batch).
+
+---
+
+### 13.9 Instance 25 producer/consumer drift — `bindings/napi/src/trace.rs` drops 3 `AttributionFrame` fields
+
+**Origin:** Phase-3-close pre-v1 triage (2026-05-10 test-review per-crate `packages-engine-ts.json::pe-ts-4`) + PR #179 description (`fix(class-a-un-ignore)` 2026-05-10 surfaced the production gap as a separate fix-pass).
+
+`bindings/napi/src/trace.rs::trace_step_to_json` drops three Phase-3 `AttributionFrame` widening fields (`peer_did_set` / `device_did` / `device_cid`) when serializing for trace JSON. The fields ARE populated at the Rust producer (`crates/benten-eval/src/exec_state.rs` widening sites) and threaded through `TraceStep::Step.attribution: Option<AttributionFrame>` at `crates/benten-engine/src/outcome.rs`, but the napi consumer at `trace.rs` drops them silently. This is the Phase-3 sibling of the Phase-2b Instance 18 `sandboxDepth` drift (caught at R6 R3 r6-r3-pcds-1). The Phase-3 attribution-frame widening introduced a sibling instance the original audit missed; it brings the cumulative producer/consumer drift tally to 25 LANDED instances (24 Phase-2b baseline + Instance 25 = R3-D wsa-1 architectural drift-pin closed by PR #95) PLUS this Instance 25-sibling (named by the same number in the night-shift handoff for continuity since the original Instance 25 was the SANDBOX `output_limit_bytes` vs `output_limit` mismatch from R3-D; the trace.rs gap is a NEW instance with the same numeric label in the handoff's local tally space).
+
+Four `bindings/napi/tests/attribution_frame_widening_napi_serializer.rs` tests + 2 `packages/engine/test/attribution_frame_widening.test.ts` `it.skip` tests are GATED ON this production gap — they cannot un-ignore until `trace.rs` mirrors the producer's full field set.
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). v1-assessment-window candidate (pre-v1 cleanup, NOT Phase 4); explicitly named in `HANDOFF-2026-05-10-phase-3-close-night-shift.md` Cluster 7 as ~25 LOC scoped fix.
+
+**Concrete fix-shape:**
+- (a) Extend `bindings/napi/src/trace.rs::trace_step_to_json` (currently dropping fields at lines ~69-112) to mirror `AttributionFrame::cbor_props` at `crates/benten-eval/src/exec_state.rs` — emit the 3 Phase-3 widening fields (`peer_did_set` / `device_did` / `device_cid`) with skip-on-default discipline (omit when `peer_did_set.is_empty()` + `device_did.is_none()` + `device_cid.is_none()` to preserve trace-JSON cleanliness for non-sync runs).
+- (b) Un-ignore the 4 napi-side tests at `bindings/napi/tests/attribution_frame_widening_napi_serializer.rs` + un-ignore the 2 TS-side `it.skip` tests at `packages/engine/test/attribution_frame_widening.test.ts`.
+- (c) `§3.5g` cross-language rule-mirror discipline: verify TS `AttributionFrame` type at `packages/engine/src/types.ts` carries the 3 widening fields (it already does per Phase-3 G14-D widening; this entry is the consumer fix that brings the napi serializer in line with the type contract).
+- (d) Add a workspace-wide regression-defense lint: every public `AttributionFrame` field MUST be enumerated in (i) `cbor_props` Rust serializer + (ii) `trace_step_to_json` napi serializer + (iii) `AttributionFrame` TS type. Mirror discipline matches pim-`pim_cross_language_rule_mirror` (`feedback_pim_cross_language_rule_mirror.md`).
+
+**Touch size:** ~25 LOC `trace.rs` fix + ~20 LOC test un-ignores + (optional) ~50-100 LOC drift-defense lint.
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15. Per HANDOFF Cluster 7 — co-routes with §13.8 BLOCKER (`DeviceAttestationEnvelope` direct unit test) + `views.test.ts` un-ignore in a single fix-pass PR.
+
+**Cross-references:**
+- `bindings/napi/src/trace.rs::trace_step_to_json` (the producer/consumer drift site).
+- `crates/benten-eval/src/exec_state.rs` (the producer of `AttributionFrame::cbor_props`).
+- `crates/benten-engine/src/outcome.rs::TraceStep` (the threading site).
+- `bindings/napi/tests/attribution_frame_widening_napi_serializer.rs` (the 4 gated tests un-ignored after the fix).
+- `packages/engine/test/attribution_frame_widening.test.ts` (the 2 TS-side `it.skip` tests un-ignored after the fix).
+- `packages/engine/src/types.ts` (`AttributionFrame` TS type — already widened; this entry brings the napi serializer in line).
+- Phase-2b R6 R3 `r6-r3-pcds-1` precedent (Instance 18 `sandboxDepth` drift — the Phase-2b sibling of this gap).
+- §3.5g cross-language rule-mirror discipline + `feedback_pim_cross_language_rule_mirror.md` memory entry.
+- §13.8 (paired carry; co-routes in HANDOFF Cluster 7 closure batch).
+
+---
