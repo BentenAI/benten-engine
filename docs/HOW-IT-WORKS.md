@@ -72,6 +72,33 @@ Two Benten machines with the same set of Nodes agree bit-for-bit on what everyth
 
 Content addressing also shapes security. The default read posture returns `null` for both "not found" and "access denied" — a byte-identical response, so an unauthorized caller cannot distinguish existence from permission by probing CIDs. Explicit diagnostic methods gated behind a debug capability exist for operators who need to distinguish the two.
 
+## Plugins, in plain English
+
+When a software platform talks about "plugins," it usually means binary blobs the platform loads at runtime — JS bundles, Python modules, Rust dynamic libraries. Benten's plugins are different: a plugin is just **more graph**.
+
+Concretely: a plugin is a *subgraph* — a bundle of operation Nodes (handlers, materializers, the SANDBOX nodes those use, edges connecting them) packaged for sharing. You install a plugin the same way you install any other subgraph: it gets a CID, the user grants it capabilities, and the engine's evaluator walks it when its handlers are called. There is no separate plugin runtime. There is no JS loader, no FFI bridge, no embedded interpreter. The same evaluator that runs your `crud('post')` handler runs the plugin's handlers.
+
+Two things follow from this:
+
+**Plugins are content-addressed and shareable through Atriums.** A plugin's CID is the cryptographic hash of its bytes. Two users running "the same plugin" mean it bit-for-bit. You can publish a plugin into your Atrium peer group; someone in the group can install it and verify they got what you sent. There is no central plugin registry — discovery is peer-to-peer, the same way your data is.
+
+**Each plugin has its own identity.** A plugin gets a DID (a cryptographic identifier). When you install it, your engine grants it an attenuated UCAN — a capability token that says "this plugin can do these things on my behalf, but not more." The engine checks that token on every read and write the plugin's subgraph triggers.
+
+How does the user stay in control without being prompted on every action? **A two-step consent model:**
+
+1. **Install-time manifest.** Every plugin ships a manifest with two halves:
+    - **Requires:** caps the plugin needs to function ("read my notes," "write to a sandbox", "use the time host-fn").
+    - **Shares:** policy for what *other* plugins it will hand caps to ("any AI assistant," "plugins from this author," "none").
+   Both halves are signed by the plugin author. The user reviews the manifest at install time and either consents to the envelope or declines.
+
+2. **Runtime delegation inside the envelope.** Once installed, plugins can delegate caps to each other within their manifest's `shares` policy without further user prompts. If your AI assistant plugin needs to read your calendar plugin's data, the calendar's manifest decides whether the AI gets a cap; the engine validates the chain. The user is involved at install, not on every access.
+
+This is the shape that makes Phase-6 AI assistants work. An AI assistant declares in its manifest "I integrate with calendar, notes, email"; the user reviews and consents at install; the assistant runs autonomously across all three without further dialog boxes. It is also the shape that survives Phase-8 decentralized plugin discovery: plugins are signed by their author and content-addressed, so users trust the *manifest signature* directly rather than relying on a central registry to police anything.
+
+There is a second, rarer category: **engine extensions** — Rust crates compiled into the engine binary. These are for things like a custom persistence backend or a new transport — extensions that change the engine itself. They have no UCAN, no manifest, no install flow; you compile them in or you don't. They are for platform builders, not app users. The two categories — app-level plugins (subgraphs, content-addressed, sharable) and engine-level extensions (Rust crates, compile-time, trusted-by-build) — stay deliberately separate.
+
+The plugin-manifest schema and install / upgrade / share flows land in Phase 4 (Benten Platform v1). The engine surface that backs them — the evaluator's principal-aware read path — lands earlier as pre-v1 cleanup, since it's independent of the manifest decisions. Today the engine has the foundational pieces (DID + UCAN + content-addressed subgraphs); the principal-aware read surface and the manifest schema layer on top in that order.
+
 ## What the engine is not
 
 - **Not Turing complete.** Every handler terminates. The escape hatch for genuine compute — arbitrary TypeScript, ML inference, an image resize — is SANDBOX (WASM via wasmtime, fuel-metered).
