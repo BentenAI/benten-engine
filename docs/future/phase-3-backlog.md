@@ -2516,3 +2516,17 @@ Test pins (pim-2 §3.6b end-to-end + regression guard):
 - `packages/engine/test/ucan_grant_flow.test.ts > PolicyKind.Ucan + revokeCapability denies a previously-permitted write` — the originally-failing vitest, now passing. The full JS-surface end-to-end arc: grant → callAs succeeds → revokeCapability → callAs denies with `E_CAP_DENIED`.
 
 ---
+
+## §14. Phase 3.5 carries (v1-assessment-window-bound)
+
+§14 is the destination for Phase 3.5 R6 phase-close convergence carries + dogfood-validation findings that are dispositioned BELONGS-NAMED-NOW per HARD RULE 12 clause-(b). §13 carries Phase-4-bound items surfaced during the Phase-3-close pre-v1 cleanup window; §14 carries Phase-3.5-bound items surfaced during Phase 3.5's own R6 council + the dogfood-validation human-exercised gate.
+
+Phase 3.5 plan-doc (`.addl/phase-3.5/00-implementation-plan.md`) routes findings here from:
+- Wave-7 dogfood validation gate UX findings (when dispositioned BELONGS-NAMED-NOW; FIX-NOW-INLINE findings dispatch immediately)
+- R6 phase-close convergence council carries that don't gate the `phase-3.5-close` tag (v1-assessment-window-bound)
+
+Couples to CLAUDE.md baked-in #15 (v1-milestone-gate). v1-assessment-window opens at Phase 4 close per CLAUDE.md #15; Phase 3.5 carries here are work that will be ingested at that window alongside Phase 4 carries.
+
+(Section seeded 2026-05-11 as part of Phase 3.5 pre-R1 triage — closes phantom-destination BLOCKER `meth-r1-1` per HARD RULE 12 clause-(b). Entries will land as R6 + dogfood findings are dispositioned during Phase 3.5 implementation.)
+
+---
