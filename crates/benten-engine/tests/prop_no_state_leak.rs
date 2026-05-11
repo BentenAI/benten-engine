@@ -28,7 +28,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(1_000))]
 
     #[test]
-    #[ignore = "phase-3-backlog §7.3.D — prop-no-state-leak across EngineGeneric<B> generic-cascade. G13-B wave-2 shipped Engine<B: GraphBackend> generic-cascade + napi cdylib erasure (PR commit 4238ed7); test body pins property no-state-leak invariant across the generic cascade; un-ignore deferred to phase-3-backlog §7.3.D destination (§4.4 Bundle-content audit pins shipped at Phase-3 R6 fix-pass Wave B)."]
+    #[ignore = "phase-3-backlog §7.3.D — prop-no-state-leak across EngineGeneric<B> generic-cascade. G13-B shipped Engine<B: GraphBackend> generic-cascade + napi cdylib erasure (PR commit 4238ed7); test body pins property no-state-leak invariant across the generic cascade; un-ignore deferred to phase-3-backlog §7.3.D destination."]
     fn prop_engine_generic_no_state_leak_across_backend_substitution(
         write_count_a in 0u32..16,
         write_count_b in 0u32..16,

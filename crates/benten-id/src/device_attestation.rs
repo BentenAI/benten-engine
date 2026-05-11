@@ -148,6 +148,17 @@ pub struct DeviceAttestation {
     /// Issuance epoch seconds.
     pub issued_at: u64,
     /// 64-byte Ed25519 signature by the parent keypair.
+    ///
+    /// **Visibility is load-bearing.** The
+    /// `acceptor_rejects_attestation_with_forged_signature` integration
+    /// test at `crates/benten-id/tests/device_attestation.rs` mutates
+    /// this field directly (`attestation.signature[0] ^= 0x01`) to
+    /// drive the negative-pin path. Canonical-bytes round-trip support
+    /// (serde-derived serialize/deserialize) also relies on direct
+    /// field access. Narrowing this field to `pub(crate)` or routing
+    /// it through a setter would silently break the test + the
+    /// canonical-bytes contract — update both in lockstep with any
+    /// such change.
     pub signature: Vec<u8>,
 }
 

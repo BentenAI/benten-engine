@@ -49,7 +49,18 @@ fn keypair_secret_bytes_zeroized_on_drop() {
     }
     // Source-grep: assert that ZeroizeOnDrop is derived on
     // SecretKey in src/keypair.rs (the guarantee is the derive,
-    // not a runtime memory-poke).
+    // not a runtime memory-poke). Extract the immediately-preceding
+    // `#[derive(...)]` line via the same `derive_line` pattern that
+    // `keypair_secret_does_not_implement_clone` uses below — pinning
+    // the IMMEDIATE-preceding derive eliminates two failure modes
+    // that a fixed-width preceding-window would silently miss:
+    //   (a) a long doc-comment between the derive and `pub struct`
+    //       (legitimate refactor; would have made `ZeroizeOnDrop`
+    //        fall outside a 120-char window, false-positive failure);
+    //   (b) a sibling struct ahead of SecretKey within the window
+    //       carrying its own `ZeroizeOnDrop` derive (would have
+    //       passed the grep without `SecretKey` actually deriving it,
+    //       false-positive success).
     let src_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("src")
         .join("keypair.rs");
@@ -57,14 +68,22 @@ fn keypair_secret_bytes_zeroized_on_drop() {
     let idx = src
         .find("pub struct SecretKey")
         .expect("SecretKey definition present");
-    let preceding = &src[idx.saturating_sub(120)..idx];
+    // Walk the preceding text backwards (line-by-line) and grab the
+    // first attribute line (`#[...]`). This is the SecretKey's
+    // immediately-preceding derive line.
+    let preceding = &src[..idx];
+    let derive_line = preceding
+        .lines()
+        .rev()
+        .find(|l| l.trim_start().starts_with("#["))
+        .unwrap_or("");
     assert!(
-        preceding.contains("ZeroizeOnDrop"),
-        "SecretKey MUST derive ZeroizeOnDrop per crypto-blocker-1; got preceding 120 chars: {preceding}"
+        derive_line.contains("ZeroizeOnDrop"),
+        "SecretKey MUST derive ZeroizeOnDrop per crypto-blocker-1; got derive line: {derive_line}"
     );
     assert!(
-        preceding.contains("Zeroize"),
-        "SecretKey MUST derive Zeroize per crypto-blocker-1; got preceding 120 chars: {preceding}"
+        derive_line.contains("Zeroize"),
+        "SecretKey MUST derive Zeroize per crypto-blocker-1; got derive line: {derive_line}"
     );
 }
 
@@ -145,22 +164,53 @@ fn keypair_secret_redacted_from_debug_display() {
 
 #[test]
 fn keypair_secret_real_debug_redacts() {
-    // Direct test of the actual SecretKey Debug impl (not the probe
-    // wrapper above). Format an actual `SecretKey` and confirm the
-    // bytes don't leak.
+    // crypto-blocker-1. Exercise the PRODUCTION SecretKey::Debug impl
+    // end-to-end via the Keypair::Debug path. `Keypair::Debug` (at
+    // crates/benten-id/src/keypair.rs:357-369) calls `SecretKey::Debug`
+    // (at src/keypair.rs:107-111) as the `secret` struct-field, which
+    // is the only externally-reachable Debug surface for the secret
+    // material. A regression that changes SecretKey::Debug to write
+    // `"SecretKey({hex})"` instead of `"SecretKey([REDACTED 32 bytes])"`
+    // would surface here as a real format!() output containing
+    // secret-hex.
     let kp = Keypair::generate();
     let secret_bytes = kp.secret_bytes_for_test();
     let secret_hex = hex::encode(secret_bytes);
-    // Round-trip through `from_seed_bytes` to get an owned
-    // `SecretKey` we can format directly. (Construction goes through
-    // Keypair to honor the no-Clone discipline.)
+
+    // Direct call to the production Keypair::Debug path.
+    let kp_dbg = format!("{kp:?}");
+    assert!(
+        !kp_dbg.contains(&secret_hex),
+        "Keypair Debug MUST NOT leak secret bytes; got: {kp_dbg}"
+    );
+    assert!(
+        kp_dbg.contains("REDACTED"),
+        "Keypair Debug MUST explicitly mark the secret redaction; got: {kp_dbg}"
+    );
+
+    // Round-trip through `from_seed_bytes` to verify a freshly-imported
+    // Keypair (different construction path) also redacts. The two paths
+    // (generate vs from_seed_bytes) share the SecretKey::Debug impl,
+    // but pinning both arms means a refactor that splits the construction
+    // paths cannot accidentally diverge their Debug shapes.
     let envelope = kp.export_seed_envelope();
     let kp2 = Keypair::from_seed_bytes(&envelope).unwrap();
-    let dbg = format!("{:?}", kp2.public_key());
-    // Public key debug should not contain secret hex.
+    let kp2_dbg = format!("{kp2:?}");
     assert!(
-        !dbg.contains(&secret_hex),
-        "PublicKey Debug must not contain secret bytes"
+        !kp2_dbg.contains(&secret_hex),
+        "Keypair Debug via from_seed_bytes MUST NOT leak secret bytes; got: {kp2_dbg}"
+    );
+    assert!(
+        kp2_dbg.contains("REDACTED"),
+        "Keypair Debug via from_seed_bytes MUST mark redaction; got: {kp2_dbg}"
+    );
+
+    // PublicKey side-channel: the public key's own Debug must not
+    // contain secret hex either.
+    let pk_dbg = format!("{:?}", kp2.public_key());
+    assert!(
+        !pk_dbg.contains(&secret_hex),
+        "PublicKey Debug must not contain secret bytes; got: {pk_dbg}"
     );
     // Verify SecretKey type literally exists at the public surface.
     let _: fn(&[u8]) -> Result<Keypair, _> = Keypair::from_seed_bytes;
@@ -176,7 +226,10 @@ fn keypair_clone_does_not_widen_lifetime() {
     let pk_owned = {
         let kp = Keypair::generate();
         kp.public_key().clone()
-    }; // kp dropped + zeroized here
+    }; // kp dropped here; PublicKey is owned and remains usable.
+    // (Zeroize-on-drop runs as a side-effect of the drop, but this
+    // test does NOT observe that — see `keypair_secret_bytes_zeroized_on_drop`
+    // for the source-grep evidence that ZeroizeOnDrop is derived.)
     // pk_owned is still usable:
     let did = pk_owned.to_did();
     assert!(did.as_str().starts_with("did:key:z"));

@@ -12,6 +12,18 @@
 //! (when the hash algorithm, canonical serialization, or canonical test Node
 //! is deliberately changed), set the environment variable
 //! `BENTEN_D2_BOOTSTRAP=1`.
+//!
+//! **Cross-architecture coverage scope.** This test asserts cross-process
+//! determinism against a SAME-architecture fixture — the same rustc / OS /
+//! target triple produces identical canonical CIDs across invocations.
+//! True cross-architecture determinism (`linux-x86_64` ↔ `macos-aarch64` ↔
+//! `wasm32-unknown-unknown`) is enforced by the CI matrix running this same
+//! test (+ the static `CANONICAL_CID` literal at
+//! `crates/benten-core/tests/node_cid.rs`) under every supported target,
+//! not by spawning subprocesses from this test body. A future contributor
+//! tempted to expand this test toward a within-process cross-arch sweep
+//! would be moving in the wrong direction: the property is already covered
+//! at the right layer (the CI test matrix).
 
 #![allow(
     clippy::unwrap_used,

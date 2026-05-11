@@ -126,7 +126,17 @@ fn keypair_import_path_does_not_log_seed_bytes_via_tracing() {
         .expect("from_seed_bytes_inner present");
     // Scan ~2000 chars of fn body (generous; the fn is ~40 lines).
     let body = &src[fn_idx..src.len().min(fn_idx + 2000)];
-    for tracing_macro in &["tracing::trace!", "tracing::debug!", "tracing::info!"] {
+    // Cover all 5 tracing severity levels (trace/debug/info/warn/error)
+    // per crypto-major-5: the contract is "NO tracing events containing
+    // secret bytes". A contributor adding `tracing::warn!("seed bytes: {seed:?}")`
+    // on the EnvelopeMalformed path would otherwise slip past this audit.
+    for tracing_macro in &[
+        "tracing::trace!",
+        "tracing::debug!",
+        "tracing::info!",
+        "tracing::warn!",
+        "tracing::error!",
+    ] {
         assert!(
             !body.contains(tracing_macro),
             "from_seed_bytes_inner MUST NOT emit {tracing_macro} (secret-bytes leak per crypto-major-5)"
