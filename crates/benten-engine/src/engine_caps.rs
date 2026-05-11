@@ -218,6 +218,88 @@ impl Engine {
         Ok(())
     }
 
+    /// Phase-3.5 §13.11 closure: revoke a previously-granted capability
+    /// identified by its grant CID. Resolves the grant Node by CID,
+    /// extracts its `scope` property, then writes the matching
+    /// `system:CapabilityRevocation` Node via [`Engine::revoke_capability`].
+    ///
+    /// This is the canonical seam for callers that hold a grant CID
+    /// (e.g. the napi binding's `revokeCapability(grantCid, actor)`
+    /// surface). The pre-3.5 napi path passed `grant_cid` AS the scope
+    /// string to the engine's `revoke_capability`, producing a
+    /// `system:CapabilityRevocation` Node with `scope = "<cid>"` —
+    /// which the `crate::builder::BackendGrantReader::revoked_scopes`
+    /// walker never matched against the actual write scope
+    /// (`store:post:write` et al.), silently fail-OPENing every
+    /// post-revoke write. Routing through this method preserves the
+    /// scope-keyed revocation contract that
+    /// `benten_caps::grant_backed::GrantBackedPolicy::check_write`
+    /// consumes.
+    ///
+    /// # Errors
+    ///
+    /// - [`EngineError::SubsystemDisabled`] when caps are disabled.
+    /// - [`EngineError::Other`] with `benten_errors::ErrorCode::NotFound` when the
+    ///   grant CID does not resolve to a stored Node, when the Node is
+    ///   not a `system:CapabilityGrant`, or when its `scope` property
+    ///   is missing / wrong-typed.
+    pub fn revoke_capability_by_grant_cid<A>(
+        &self,
+        grant_cid: &Cid,
+        actor: A,
+    ) -> Result<(), EngineError>
+    where
+        A: RevokeSubject,
+    {
+        if !self.caps_enabled {
+            return Err(EngineError::SubsystemDisabled {
+                subsystem: "capabilities",
+            });
+        }
+        // Engine-privileged backend read — `Engine::get_node` would
+        // collapse system-zone Nodes to `Ok(None)` per Inv-11 runtime
+        // probe. We reach through `self.backend.get_node` directly
+        // (same pattern as the system-zone privileged write path).
+        let Some(node) = self
+            .backend
+            .get_node(grant_cid)
+            .map_err(EngineError::Graph)?
+        else {
+            return Err(EngineError::Other {
+                code: benten_errors::ErrorCode::NotFound,
+                message: format!(
+                    "revoke_capability_by_grant_cid: grant CID {} not found in backend",
+                    grant_cid.to_base32()
+                ),
+            });
+        };
+        if !node.labels.iter().any(|l| l == "system:CapabilityGrant") {
+            return Err(EngineError::Other {
+                code: benten_errors::ErrorCode::NotFound,
+                message: format!(
+                    "revoke_capability_by_grant_cid: CID {} is not a system:CapabilityGrant Node \
+                     (got labels: {:?})",
+                    grant_cid.to_base32(),
+                    node.labels
+                ),
+            });
+        }
+        let scope = match node.properties.get("scope") {
+            Some(Value::Text(s)) => s.clone(),
+            _ => {
+                return Err(EngineError::Other {
+                    code: benten_errors::ErrorCode::NotFound,
+                    message: format!(
+                        "revoke_capability_by_grant_cid: grant Node {} missing or wrong-typed \
+                         `scope` property",
+                        grant_cid.to_base32()
+                    ),
+                });
+            }
+        };
+        self.revoke_capability(actor, scope.as_str())
+    }
+
     /// Create an IVM view registration. Writes a `system:IVMView` Node via the
     /// engine-privileged path AND — when IVM is enabled AND the view id
     /// names the content-listing view family — registers a live

@@ -2465,7 +2465,7 @@ Four `bindings/napi/tests/attribution_frame_widening_napi_serializer.rs` tests +
 
 ---
 
-### 13.11 UCAN revocation observance production gap — `UcanGroundedPolicy.revokeCapability` post-revoke deny path
+### 13.11 UCAN revocation observance production gap — `UcanGroundedPolicy.revokeCapability` post-revoke deny path ✅ CLOSED (Phase 3.5 Track B, pre-3.5-ucan-revocation-observance-fix)
 
 **Origin:** Phase-3-close pre-v1 cleanup green-up sweep (2026-05-11). The vitest-investigation agent that closed PR #196 (3 chronic vitest failures + clippy lint) surfaced a 4th chronically-failing vitest test NOT in the original brief:
 
@@ -2503,5 +2503,16 @@ A third (less-likely) candidate: the revocation entry has the wrong shape (e.g.,
 - Phase-3 G16-B-B-rest (PR #158) — durable UCAN backend landing.
 - Phase-3 G16-B-F (PR #161) — structural-always-on per-row cap-recheck inside `apply_atrium_merge`; defense-in-depth layer that masks this gap during cross-peer sync but doesn't fix it for same-peer revoke-then-write sequences.
 - CLAUDE.md baked-in #15 (v1-milestone-gate; couples to Phase-4 pre-R1 prep timing).
+
+**Closure (Phase 3.5 Track B, branch `pre-3.5-ucan-revocation-observance-fix`):**
+
+Root cause: **candidate #2 (namespace mismatch)** — the napi `revokeCapability(grantCid, actor)` surface invoked `Engine::revoke_capability(actor, grant_cid)`, passing the grant CID **AS the scope string**. The engine wrote a `system:CapabilityRevocation` Node with `scope = "<cid_string>"`, but `BackendGrantReader::revoked_scopes` matches revocations by scope-string equality (`"store:post:write"`, etc.). The revocation Node was correctly persisted but **never matched any real write scope** — every post-revoke `callAs` silently fail-OPENed via the grant-backed policy's `has_unrevoked_grant_for_scope`. Neither candidate #1 (stale cache) nor #3 (scope-key shape) — the cap-reader has no cache; the entry shape was correct for *its* (wrong) scope value.
+
+Fix shape: added `Engine::revoke_capability_by_grant_cid(grant_cid: &Cid, actor)` in `crates/benten-engine/src/engine_caps.rs` — resolves the grant Node via `self.backend.get_node`, extracts the `scope: Text` property, then routes through the existing `revoke_capability(actor, scope)` path. Returns typed `E_NOT_FOUND` when the CID is unknown, names a non-`system:CapabilityGrant` Node, or lacks a typed `scope` property. The napi `revoke_capability` now calls the new method with the parsed CID + actor. The engine's `(actor, scope)`-shaped `revoke_capability` API is unchanged — Rust callers (and the few existing tests that pass the scope string directly) are untouched.
+
+Test pins (pim-2 §3.6b end-to-end + regression guard):
+- `crates/benten-engine/tests/revoke_capability_by_grant_cid.rs::revoke_capability_by_grant_cid_denies_post_revoke_write` — end-to-end pin through the grant-backed policy: `register_crud("post")` + `grant_capability(actor, "store:post:write")` + pre-revoke `call(post:create)` routes through OK edge + `revoke_capability_by_grant_cid(grant_cid, actor)` + post-revoke `call(post:create)` routes through `ON_DENIED` with `E_CAP_DENIED`. Would-FAIL-if-no-op'd: reverting the seam to pre-3.5 napi semantics (write `scope = "<cid>"`) restores the silent fail-OPEN observable at this assertion.
+- `revoke_capability_by_grant_cid_unknown_cid_errors_not_found` + `revoke_capability_by_grant_cid_wrong_label_errors_not_found` — negative pins: a CID that does not resolve to a stored Node OR resolves to a non-`system:CapabilityGrant` Node surfaces a typed `E_NOT_FOUND` rather than silently writing a malformed revocation entry. Protects against future regressions that revert to "stuff the CID in as scope" without erroring on lookup miss.
+- `packages/engine/test/ucan_grant_flow.test.ts > PolicyKind.Ucan + revokeCapability denies a previously-permitted write` — the originally-failing vitest, now passing. The full JS-surface end-to-end arc: grant → callAs succeeds → revokeCapability → callAs denies with `E_CAP_DENIED`.
 
 ---
