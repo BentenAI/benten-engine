@@ -25,7 +25,7 @@
     "@benten/engine": "file:../engine"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@types/node": "^20.19.40",
     "typescript": "^5.6.0",
     "vitest": "^4.1.5"
   }
