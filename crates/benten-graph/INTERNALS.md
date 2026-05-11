@@ -482,7 +482,7 @@ itself implements via Arc-counted page references. Both satisfy
 hold a snapshot across `.await` points. The two snapshot impls thus look
 different at the struct level but match at the contract level.
 
-## 8. Phase 3.5 + Phase 4 expectations
+## 8. Phase 4-Foundation + Phase 4-Meta expectations
 
 The materializer (Phase-3.5 or Phase-4 territory, depending on how the
 v1-gate framing lands) will read graphs heavily and will care about three

@@ -385,7 +385,7 @@ The architectural-absence pins at `tests/light_client_distinct.rs` for modes (b)
 
 ---
 
-## 8. Phase 3.5 + Phase 4 expectations
+## 8. Phase 4-Foundation + Phase 4-Meta expectations
 
 **Admin UI v0 (Phase 4 v1 platform-shippable per CLAUDE.md #15).** The admin UI needs to be reachable across Atrium peers — so a user managing their personal Benten instance can pull up the same admin UI on their laptop, phone OS app, or a peer device they trust. This exercises:
 

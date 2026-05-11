@@ -1794,8 +1794,10 @@ model — same UCAN machinery, different policy.
   `Engine::read_node`. The Rust compiler refuses cross-crate calls; plugin
   subgraph nodes cannot directly invoke the function regardless.
 
-**Trajectory alignment.** v1 (Phase 4) — small N, user reviews each manifest,
-simple. Phase 6 (AI agents) — an assistant declares "I integrate with calendar
+**Trajectory alignment.** v1 (Phase 4 — Phase 4-Foundation ships the
+manifest schema + admin UI v0 + install-time consent; Phase 4-Meta layers
+self-composing admin on top) — small N, user reviews each manifest, simple.
+Phase 6 (AI agents) — an assistant declares "I integrate with calendar
 / notes / email" in its manifest; user consents at install; the agent runs
 autonomously without per-action prompts. Phase 8 (decentralized plugin
 discovery) — plugins are signed by author, content-addressed, discovered

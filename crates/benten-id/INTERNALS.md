@@ -221,13 +221,13 @@ The crate sits clean. Identity is foundational by nature — it can't compose fr
 
 ---
 
-## 8. Phase 3.5 + Phase 4 expectations
+## 8. Phase 4-Foundation + Phase 4-Meta expectations
 
 Several knowable forward-looking surfaces touch this crate:
 
-**Phase 3.5 (UCAN revocation observance closure — already shipped via PR #109 / Track B).** Per `docs/future/phase-3-backlog.md §13.11`, the root cause traced through the durable `benten-caps` UCANBackend (scope-string namespace mismatch in `revokeCapability` invocation), not this crate. But `validate_chain_with_device_revocations` + `validate_chain_with_rotation_log` here are the upstream surfaces that the durable observance composes against. If §2.1-followup's `ssi`-integration re-evaluation lands, the chain-walker may grow a `validate_chain_with_revocations(chain, revocation_set)` entry — there's currently a doc-comment reference in `ucan.rs:32-36` mentioning the symbol but no body. The RED-PHASE-`#[ignore]`'d tests in `ucan.rs::ucan_chain_revocation_propagates` + `did_rotation.rs::did_rotation_propagates_revocation_to_ucan_backend` are pinned to that wave with rationale.
+**Phase 4-Foundation (UCAN revocation observance closure — already shipped via PR #109 / Track B).** Per `docs/future/phase-3-backlog.md §13.11`, the root cause traced through the durable `benten-caps` UCANBackend (scope-string namespace mismatch in `revokeCapability` invocation), not this crate. But `validate_chain_with_device_revocations` + `validate_chain_with_rotation_log` here are the upstream surfaces that the durable observance composes against. If §2.1-followup's `ssi`-integration re-evaluation lands, the chain-walker may grow a `validate_chain_with_revocations(chain, revocation_set)` entry — there's currently a doc-comment reference in `ucan.rs:32-36` mentioning the symbol but no body. The RED-PHASE-`#[ignore]`'d tests in `ucan.rs::ucan_chain_revocation_propagates` + `did_rotation.rs::did_rotation_propagates_revocation_to_ucan_backend` are pinned to that wave with rationale.
 
-**Phase 4 plugin manifest schema (CLAUDE.md item #18).** The per-plugin DID + UCAN model lives on this crate's surface. Each plugin gets a `Did` (via `Keypair::generate` + `PublicKey::to_did`). The plugin manifest's `requires` + `shares` halves will be signed by the plugin author — the signing primitive IS `Keypair::sign` over canonical-bytes of the manifest. Manifest verification at install time uses `verify` flow. The user-as-root → install-time-manifest → runtime-delegation chain (CLAUDE.md #18 layers a/b/c) routes:
+**Phase 4-Foundation plugin manifest schema (CLAUDE.md item #18).** The per-plugin DID + UCAN model lives on this crate's surface. Each plugin gets a `Did` (via `Keypair::generate` + `PublicKey::to_did`). The plugin manifest's `requires` + `shares` halves will be signed by the plugin author — the signing primitive IS `Keypair::sign` over canonical-bytes of the manifest. Manifest verification at install time uses `verify` flow. The user-as-root → install-time-manifest → runtime-delegation chain (CLAUDE.md #18 layers a/b/c) routes:
 - (a) user-as-root: `Keypair` for the user identity, `Did` is the chain anchor.
 - (b) install-time manifest: signed by plugin author keypair; verified against author's DID at install (`vc.rs` shape is well-positioned — VC's `issuer` + `credentialSubject` model maps clean to "plugin author claims X about plugin").
 - (c) runtime delegation: UCAN chain — `Ucan::builder` + `validate_chain_for_capability`. The `caps_match_or_subsume` subsume relation is what the runtime-delegation gate will evaluate.
@@ -236,7 +236,7 @@ The `MultiSigSurface` trait is positioned for the v1-assessment-window identity-
 
 **Admin UI v0 (Phase 4).** UCAN delegation paths from user → plugin will exercise the typed-CALL `ucan_validate_chain` entry that composes here via `validate_chain_for_capability`. The defense-in-depth that `validate_chain_for_capability` adds (leaf-`att` check beyond audience + chain + time) is what closes the "structurally-sound chain that names wrong cap" hole — load-bearing as the admin UI grows the per-action-grant surface.
 
-**Device-DID cross-machine sync (already shipped).** Compromise #23 + `DeviceAttestationEnvelope V2` shipped at G16-D wave-6b PR #163. The `Acceptor` runtime gate is the boundary; Phase 4 admin UI exposes `set_local_device_attestation` + `set_acceptor` on `AtriumHandle` (per phase-3-backlog §2136 retrospective comment about the `AtriumHandle` surface lacking a single doc-reference). The capability-envelope `runs_sandbox / holds_zones / online_uptime / runs_atrium_peer` shape is forward-stable.
+**Device-DID cross-machine sync (already shipped).** Compromise #23 + `DeviceAttestationEnvelope V2` shipped at G16-D wave-6b PR #163. The `Acceptor` runtime gate is the boundary; Phase 4-Foundation admin UI exposes `set_local_device_attestation` + `set_acceptor` on `AtriumHandle` (per phase-3-backlog §2136 retrospective comment about the `AtriumHandle` surface lacking a single doc-reference). The capability-envelope `runs_sandbox / holds_zones / online_uptime / runs_atrium_peer` shape is forward-stable.
 
 ---
 

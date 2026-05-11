@@ -136,11 +136,11 @@ This crate is one of the cleanest expressions of the thin-engine principle in th
 
 The crate is a leaf in the dependency graph and pure data; it doesn't itself express engine composition. But it earns its keep relative to commitment #1 (12 primitives irreducible) and commitment #16 (SANDBOX doesn't bypass other primitives) by being the *contract surface* the engine uses to refuse compositions that would violate those commitments — e.g. `E_SANDBOX_NESTED_DISPATCH_DENIED` is what makes "SANDBOX → CALL → SANDBOX cap-laundering" a typed refusal rather than a runtime degrade. Same for `E_RESERVED_HANDLER_NAMESPACE` (rejects user handlers in the `engine:typed:` prefix per commitment #16), `E_VIEW_STRATEGY_A_REFUSED` / `E_VIEW_STRATEGY_C_RESERVED` (refuses user views from claiming engine-only strategies per the IVM seam), and the 14 `InvXxx` codes that enforce the 14 structural invariants at registration time. The catalog is the engine's "what compositions are illegal" vocabulary; growing the catalog is how the engine teaches itself new ways to say no.
 
-## 8. Phase 3.5 + Phase 4 expectations
+## 8. Phase 4-Foundation + Phase 4-Meta expectations
 
 The crate will mint new variants for every new error class the engine learns to recognize. Specifically:
 
-- **Phase 3.5 / pre-v1 cleanup window** (already mid-flight per CLAUDE.md status at HEAD `5cab780`): the Class B β `read_node_as` work landed at PR #184. If the read-path principal threading surfaces new denial conditions (e.g. plugin attempting to read outside its manifest envelope), expect 1-2 new `E_PLUGIN_READ_*` variants. The 4 `todo!()` stubs at `crates/benten-engine/src/engine_wait.rs:1011-1026` were named in CLAUDE.md item #18 as the β migration target; once they fire real code, the typed error surface they emit lands here.
+- **Phase 4-Foundation / pre-v1 cleanup window** (already mid-flight per CLAUDE.md status at HEAD `5cab780`): the Class B β `read_node_as` work landed at PR #184. If the read-path principal threading surfaces new denial conditions (e.g. plugin attempting to read outside its manifest envelope), expect 1-2 new `E_PLUGIN_READ_*` variants. The 4 `todo!()` stubs at `crates/benten-engine/src/engine_wait.rs:1011-1026` were named in CLAUDE.md item #18 as the β migration target; once they fire real code, the typed error surface they emit lands here.
 
 - **Phase 4 — plugin manifest schema + per-plugin DID/UCAN + layered consent** (per CLAUDE.md baked-in #18). Each layer mints catalog entries:
   - Install-time manifest validation: `E_PLUGIN_MANIFEST_INVALID`, `E_PLUGIN_MANIFEST_UNSIGNED`, `E_PLUGIN_MANIFEST_REQUIRES_EXCEEDS_USER_GRANT`.

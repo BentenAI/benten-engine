@@ -552,7 +552,7 @@ the bench gate.
 ## 7. Thin-engine + composable-graph philosophy check
 
 IVM is the **materializer of state from event stream** — it's a close cousin
-to the materializer pipeline Phase 3.5 / Phase 4 wants to build (per
+to the materializer pipeline Phase 4-Foundation / Phase 4-Meta wants to build (per
 FULL-ROADMAP.md §92-98: "Schema → subgraph compiler → materializer → render
 output"). Reading this crate through that lens surfaces several
 architectural observations:
@@ -698,9 +698,9 @@ router)" in `subscriber.rs` becomes load-bearing.
 
 ---
 
-## 8. Phase 3.5 + Phase 4 expectations
+## 8. Phase 4-Foundation + Phase 4-Meta expectations
 
-The Phase 4 materializer pipeline (per `docs/FULL-ROADMAP.md`: "Schema →
+The Phase 4-Foundation materializer pipeline (per `docs/FULL-ROADMAP.md`: "Schema →
 subgraph compiler → materializer → render output") will be parallel to IVM
 in spirit. The architectural question is **whether the materializer
 composes USING IVM views, or is a sibling system.** Three sketches:
@@ -782,7 +782,7 @@ evaluator walks. That would unify materialization with handlers + plugins
 under "code-as-graph", but it also re-opens the question of what the
 incremental-index layer is FOR if the evaluator can recompute on demand.
 
-A Phase 3.5 / Phase 4 pre-R1 question for Ben: does the materializer
+A Phase 4-Foundation / Phase 4-Meta pre-R1 question for Ben: does the materializer
 COMPOSE USING IVM (extending `Projection`), live ALONGSIDE IVM (parallel
 subscriber), or REPLACE IVM (subgraphs replace incremental indices)?
 
@@ -814,7 +814,7 @@ subscriber), or REPLACE IVM (subgraphs replace incremental indices)?
 
 - **Subscriber pattern-based pre-filtering is named Phase-3 TODO and
   hasn't moved.** Every view sees every event with internal filter. Fine
-  at 5 + a handful of user views; at "Phase 4 materializer registers 50
+  at 5 + a handful of user views; at "Phase 4-Foundation materializer registers 50
   schemas → 50 views" scale this becomes a problem. The TODO has been
   carried since Phase 2.
 
