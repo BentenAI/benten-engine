@@ -1,10 +1,10 @@
 # Typed-CALL — engine-known dispatch surface
 
-**Status:** Phase-3 G21-T1 (engine-side dispatch surface landed; PR #145, main `0d2d8e1`). T2 wires the napi/DSL surface; T3 lands handler examples + paper-prototype + the reserved-namespace registration reject.
+**Status:** Phase 3 — engine-side dispatch surface, napi/DSL bindings, and reserved-namespace registration reject all LIVE at `phase-3-close`.
 
 This document is the canonical engineer-facing reference for **typed-CALL**, the engine's registry of named operations dispatched through the existing CALL primitive.
 
-Typed-CALL is **NOT a new primitive.** The 12-primitive commitment (`CLAUDE.md` baked-in #1) holds. Typed-CALL is a *seam* on top of the CALL primitive: when a CALL operation node's `target` (handler id) starts with the reserved [`TYPED_CALL_PREFIX`](#reserved-namespace) of `engine:typed:`, the eval-side dispatch fork routes the call through the typed-CALL registry instead of the user-handler registry.
+Typed-CALL is **NOT a new primitive.** The 12-primitive commitment holds. Typed-CALL is a *seam* on top of the CALL primitive: when a CALL operation node's `target` (handler id) starts with the reserved [`TYPED_CALL_PREFIX`](#reserved-namespace) of `engine:typed:`, the eval-side dispatch fork routes the call through the typed-CALL registry instead of the user-handler registry.
 
 ---
 

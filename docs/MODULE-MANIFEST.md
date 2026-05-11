@@ -1,21 +1,22 @@
 # Module Manifest
 
-**Phase 2b G10-B.** Format spec for `ModuleManifest`, the data structure
-the engine consumes when installing a Wasm module bundle.
+**Status:** Phase 2b — format spec for `ModuleManifest`, the data
+structure the engine consumes when installing a Wasm module bundle.
 
-> **Status:** Phase 2b shipped the canonical-bytes format + minimal CID-pin
-> integrity gate (D16-RESOLVED-FURTHER). Phase 3 G14-C closed Compromise #21
-> (Ed25519 manifest signing landed: `signature: Option<ManifestSignature>`
-> populated at install time; signature verified against the publisher DID
-> via `benten-id`'s claim envelope before the module is registered).
-> Phase 3 G14-C also closed Compromise #17 (durable `BlobBackend` over redb;
-> wasm bytes registered with `Engine::register_module_bytes` survive engine
-> restart) and Compromise #18 (durable handler-version chain via
-> `core::version::Anchor`). Phase 3 G18-A landed the wasm32 IndexedDB
-> manifest-store + blob-cache (PARTIALLY closed Compromise #19 — wasm32
-> arms of `apply_migration_step` + `close_database` remain stubs; until
-> those wire, `BrowserManifestStore::is_persistent()` returns `false`
-> honestly per the disclosure principle Compromise #19 articulated).
+> Phase 2b shipped the canonical-bytes format + minimal CID-pin
+> integrity gate. Phase 3 closed Compromise #21 (Ed25519 manifest
+> signing landed: `signature: Option<ManifestSignature>` populated at
+> install time; signature verified against the publisher DID via
+> `benten-id`'s claim envelope before the module is registered).
+> Phase 3 also closed Compromise #17 (durable `BlobBackend` over redb;
+> wasm bytes registered with `Engine::register_module_bytes` survive
+> engine restart) and Compromise #18 (durable handler-version chain
+> via `core::version::Anchor`). Phase 3 landed the wasm32 IndexedDB
+> manifest-store + blob-cache (PARTIALLY closed Compromise #19 —
+> wasm32 arms of `apply_migration_step` + `close_database` remain
+> stubs; until those wire, `BrowserManifestStore::is_persistent()`
+> returns `false` honestly per the disclosure principle Compromise
+> #19 articulated).
 
 ---
 
@@ -28,8 +29,8 @@ distribution. One manifest declares:
 - One or more **modules** (Wasm bytes addressed by their CID).
 - Per-module **`requires`** capability list — the host functions the
   module's imports will resolve against.
-- (Phase-3 G18-A landed) **migrations** the install runner should execute (browser-side migration step apply remains stubbed pending the wasm32 IndexedDB `apply_migration_step` arm; Compromise #19 partial closure).
-- (Phase-3 G14-C landed) an **Ed25519 signature** field — populated by `manifest_signing::sign_manifest`, verified by `verify_manifest_with_mode` + `PublisherRegistry` at install time (Compromise #21 closure).
+- (Phase 3) **migrations** the install runner should execute (browser-side migration step apply remains stubbed pending the wasm32 IndexedDB `apply_migration_step` arm; Compromise #19 partial closure).
+- (Phase 3) an **Ed25519 signature** field — populated by `manifest_signing::sign_manifest`, verified by `verify_manifest_with_mode` + `PublisherRegistry` at install time (Compromise #21 closure).
 
 The manifest itself is a small, content-addressed, canonically-encoded
 blob — **NOT** the WebAssembly bytes. The Wasm bytes are referenced by
@@ -73,7 +74,7 @@ The manifest joins the rest of the stack on it.
 
 Operators and module authors author manifests in whatever ergonomic
 format their editor handles best. A thin compiler (lives outside this
-crate — see `benten-dsl-compiler` / G7-A's `host-functions.toml` codegen
+crate — see `benten-dsl-compiler` and the `host-functions.toml` codegen
 pattern) parses the dev-time source and emits canonical DAG-CBOR bytes.
 The CID is then BLAKE3-of-the-canonical-bytes wrapped in the standard
 Benten CIDv1 envelope.
@@ -90,11 +91,11 @@ pub struct ModuleManifest {
     pub version: String,             // "0.0.1" (semver-shaped, not parsed)
     pub modules: Vec<ModuleManifestEntry>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub migrations: Vec<MigrationStep>,    // Phase-3 G18-A — landed (wasm32 stub)
+    pub migrations: Vec<MigrationStep>,    // Phase 3 — landed (wasm32 stub)
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub host_fns: Option<HostFnsOverride>, // Phase-3 G17-A2 — additive
+    pub host_fns: Option<HostFnsOverride>, // Phase 3 — additive
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub signature: Option<ManifestSignature>, // Phase-3 G14-C — landed (Compromise #21)
+    pub signature: Option<ManifestSignature>, // Phase 3 — landed (Compromise #21)
 }
 
 pub struct ModuleManifestEntry {
@@ -103,19 +104,18 @@ pub struct ModuleManifestEntry {
     pub requires: Vec<String>,  // ["host:compute:time", "host:fs:read"]
 }
 
-// Phase-3 G17-A2 — per-host-fn overrides (CLAUDE.md baked-in #16
-// closure / Compromise #16). Additive optional carriers for fields
-// the codegen-default surface ships with a default value.
+// Phase 3 — per-host-fn overrides (Compromise #16 closure). Additive
+// optional carriers for fields the codegen-default surface ships with
+// a default value.
 pub struct HostFnsOverride {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub random: Option<RandomHostFnOverride>,
 }
 
 pub struct RandomHostFnOverride {
-    /// Per-call entropy budget in bytes. Codegen default is 4096
-    /// (per r1-wsa-8). Manifests MAY tighten or widen this for the
-    /// modules they declare; overrun fires
-    /// `E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED`.
+    /// Per-call entropy budget in bytes. Codegen default is 4096.
+    /// Manifests MAY tighten or widen this for the modules they
+    /// declare; overrun fires `E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub budget_bytes_per_call: Option<u64>,
 }
@@ -125,15 +125,15 @@ The TypeScript shape (`packages/engine/src/types.ts`) mirrors this
 field-for-field. Parity is asserted by
 `packages/engine/test/manifest_schema_parity.test.ts`.
 
-### 3.1 The `signature: Option<ManifestSignature>` field (Phase-3 G14-C — landed)
+### 3.1 The `signature: Option<ManifestSignature>` field (Phase 3 — landed)
 
-Phase 3 G14-C landed Ed25519 manifest signing end-to-end (Compromise
-#21 closed). `manifest_signing::sign_manifest` populates the field
-when an installer signs a manifest; `Engine::install_module(manifest,
+Phase 3 landed Ed25519 manifest signing end-to-end (Compromise #21
+closed). `manifest_signing::sign_manifest` populates the field when an
+installer signs a manifest; `Engine::install_module(manifest,
 expected_cid, verify_args)` invokes `verify_manifest_with_mode`
 BEFORE persisting, with `PublisherRegistry` providing the audience-bound
 publisher-key lookup. UCAN-proof-chain primary + publisher-key-registry
-fallback per D-PHASE-3-20.
+fallback.
 
 The `skip_serializing_if = "Option::is_none"` attribute remains
 **load-bearing** for backward-compat: when `None` (an unsigned
@@ -146,16 +146,16 @@ stable across the Phase-2b → Phase-3 transition.
 A signed re-issuance gets a **distinct** CID (it carries the
 populated `signature` field, so its canonical bytes differ).
 
-### 3.1.5 The `host_fns: Option<HostFnsOverride>` field (Phase-3 G17-A2)
+### 3.1.5 The `host_fns: Option<HostFnsOverride>` field (Phase 3)
 
 The `host_fns` field is an **additive optional** override carrier.
 Currently the only declared sub-field is `random.budget_bytes_per_call`,
 which lets a manifest tighten or widen the per-call entropy budget for
-the `random` host-fn (codegen default = 4096 bytes per r1-wsa-8). All
-sub-fields are `Option<T>` with `skip_serializing_if = Option::is_none`;
-when every field is `None`, the entire struct is omitted from canonical
-bytes, so a manifest with no overrides has the SAME CID before and
-after this G17-A2 schema lift (D9 forward-compat).
+the `random` host-fn (codegen default = 4096 bytes). All sub-fields are
+`Option<T>` with `skip_serializing_if = Option::is_none`; when every
+field is `None`, the entire struct is omitted from canonical bytes, so
+a manifest with no overrides has the SAME CID before and after this
+schema lift (forward-compat preserved).
 
 Example TOML dev-time source declaring a tighter random budget:
 
@@ -181,9 +181,9 @@ single-invocation request larger than 1024 bytes fires
 ### 3.2 The `migrations` field on wasm32-unknown-unknown
 
 Browser engines (`wasm32-unknown-unknown`) shipped in-memory-only
-manifest persistence through Phase 2b. Phase 3 G18-A landed an
+manifest persistence through Phase 2b. Phase 3 landed an
 IndexedDB-backed `BrowserManifestStore` + `IndexedDbBlobBackend`
-(snapshot-cache scope per CLAUDE.md baked-in #17 thin-compute-surface
+(snapshot-cache scope, under the engine's thin-compute-surface
 posture). Compromise #19 is PARTIALLY closed — the wasm32 arms of
 `apply_migration_step` + `close_database` remain stubs today, so
 `BrowserManifestStore::is_persistent()` and
@@ -260,9 +260,9 @@ Installed manifests are persisted to the `system:ModuleManifest` zone
 via the engine's privileged write path (mirrors `grant_capability`).
 The Node carries the canonical-bytes blob under property `manifest_cbor`
 so an Atrium sync replica can rehydrate without re-encoding. Phase 3
-G14-C also landed a durable `BlobBackend` (Compromise #17 closure)
-so the underlying wasm bytes referenced by `modules[*].cid` survive
-engine restart on native targets.
+also landed a durable `BlobBackend` (Compromise #17 closure) so the
+underlying wasm bytes referenced by `modules[*].cid` survive engine
+restart on native targets.
 
 ---
 
@@ -320,11 +320,11 @@ table.
 
 | # | Description | Status |
 |---|---|---|
-| #17 | In-memory module-bytes registry (no durable BlobBackend) | CLOSED at Phase-3 G14-C |
-| #18 | In-memory handler-version chain | CLOSED at Phase-3 G14-C |
-| #19 | Browser-target persistent storage absent — manifests in-memory only on `wasm32-unknown-unknown` | PARTIALLY CLOSED at Phase-3 G18-A (wasm32 stubs remain for migration-apply + close-database) |
-| #20 | Cross-browser determinism CI cadence not yet established | PARTIALLY CLOSED at Phase-3 G18-A |
-| #21 | Module manifest Ed25519 signing | CLOSED at Phase-3 G14-C |
+| #17 | In-memory module-bytes registry (no durable BlobBackend) | CLOSED in Phase 3 |
+| #18 | In-memory handler-version chain | CLOSED in Phase 3 |
+| #19 | Browser-target persistent storage absent — manifests in-memory only on `wasm32-unknown-unknown` | PARTIALLY CLOSED in Phase 3 (wasm32 stubs remain for migration-apply + close-database) |
+| #20 | Cross-browser determinism CI cadence not yet established | PARTIALLY CLOSED in Phase 3 |
+| #21 | Module manifest Ed25519 signing | CLOSED in Phase 3 |
 
 ---
 

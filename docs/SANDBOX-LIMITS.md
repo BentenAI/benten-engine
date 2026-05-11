@@ -101,7 +101,6 @@ The platform skew is real: macOS arm64 page-fault overhead on the JIT path and W
 ## 7. Cross-references
 
 - `docs/HOST-FUNCTIONS.md` — host-function manifest, capability resolution, named-manifest registry.
-- `docs/SECURITY-POSTURE.md` Compromise #4 (CLOSED at G7 land) — the live SANDBOX runtime supersedes the Phase-1 compile-check-only posture.
+- `docs/SECURITY-POSTURE.md` Compromise #4 (CLOSED in Phase 2b) — the live SANDBOX runtime supersedes the Phase-1 compile-check-only posture.
 - `docs/ERROR-CATALOG.md` — full text of every `E_SANDBOX_*` and `E_INV_SANDBOX_*` code listed above.
 - `docs/ARCHITECTURE.md` — SANDBOX primitive in the 12-primitive set; per-call instance lifecycle.
-- `.addl/phase-2b/00-implementation-plan.md` §3 G7 + §5 D17/D21/D22/D24 — engineering rationale.

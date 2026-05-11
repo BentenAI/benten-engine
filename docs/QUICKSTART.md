@@ -40,13 +40,9 @@ import { postHandlers } from "./handlers.js";
 const engine = await Engine.open(".benten/my-app.redb");
 const handler = await engine.registerSubgraph(postHandlers);
 // `handler.id` is "crud:post" — the engine derives it as `crud:<label>` for
-// crud()-registered handlers (see `Engine::register_crud` at
-// `crates/benten-engine/src/engine.rs::register_crud`; symbol cite per
-// `dispatch-conventions.md` §3.5b high-churn-surface preference — line
-// cites in `engine.rs` drifted across waves 4-8). The most resilient pattern
-// is to capture the returned handle and pass `handler.id` to `engine.call`
-// (as below), so future label-format changes don't break call sites. The
-// action is the second argument to `engine.call`.
+// crud()-registered handlers. Capture the returned handle and pass
+// `handler.id` to `engine.call` (as below) so future label-format tweaks
+// don't break call sites. The action is the second argument to `engine.call`.
 
 // Create
 const created = await engine.call(handler.id, "post:create", {
@@ -98,7 +94,7 @@ The default `PolicyKind.NoAuth` permits everything (the embedded / single-user m
 
 Under a grant-backed policy, a denied read returns `null` — byte-identical with a genuine miss. That's deliberate: an unauthorized caller cannot distinguish existence from permission by probing CIDs.
 
-This symmetric-None surface now covers more than just `Engine::get_node`: Phase 2a G4-A threaded Option C into the evaluator dispatch itself, so a READ primitive inside a user subgraph observes the same collapse (denied → `null`, backend miss → `null`) through `PrimitiveHost::check_read_capability`. Handlers running through `engine.call(...)` honour the same honest-no boundary end-to-end — there is no evaluator-side backdoor around the public-API contract.
+This symmetric-None surface covers more than just `Engine::get_node`: Phase 2a threaded the same collapse into the evaluator dispatch itself, so a READ primitive inside a user subgraph observes the same behaviour (denied → `null`, backend miss → `null`) through `PrimitiveHost::check_read_capability`. Handlers running through `engine.call(...)` honour the same honest-no boundary end-to-end — there is no evaluator-side backdoor around the public-API contract.
 
 If you're the operator and need to tell "denied" apart from "not found" (debugging a missing grant, for example), grant yourself the `store:debug:read` capability and call `engine.diagnoseRead`:
 
@@ -235,7 +231,7 @@ the engine error channel; the handler stays subscribed (an erroring
 event doesn't poison the subscription) and the next event drives a
 fresh frame. Cursor durability — the "where in the change-event
 stream did this subscriber leave off" — is persisted by the
-G12-E generalised SuspensionStore.
+generalised SuspensionStore.
 
 ## Calling out to WASM (SANDBOX — Phase 2b)
 
@@ -288,16 +284,16 @@ all three Phase-2b primitives plus four Phase-3 Atrium examples
 > ships in Rust at `crates/benten-caps/src/backends/ucan.rs` (struct
 > `UCANBackend`). The TS-surface `PolicyKind.Ucan` enum variant is
 > wired in the napi binding at `bindings/napi/src/lib.rs` via
-> `EngineBuilder::capability_policy_ucan_durable()` (G21-T2 audit-6-1
-> closure) — runtime end-to-end is LIVE. The four end-to-end Atrium
-> runner examples below (`atrium-peer-mgmt.ts`,
-> `atrium-sync-trigger.ts`, `ucan-grant-flow.ts`,
-> `did-resolution.ts`) execute against the durable backend; the
-> companion Vitest pin `packages/engine/test/atrium_examples.test.ts`
-> verifies the SHAPE half. Phase-3-close exit criterion 1 (two
-> full-peer iroh sync) + criterion 15 (3+-peer concurrent-write
-> convergence) + criterion 16 (multi-device cryptographic-attestation
-> closure) all GREEN at tag `phase-3-close`.
+> `EngineBuilder::capability_policy_ucan_durable()` — runtime
+> end-to-end is LIVE. The four end-to-end Atrium runner examples
+> below (`atrium-peer-mgmt.ts`, `atrium-sync-trigger.ts`,
+> `ucan-grant-flow.ts`, `did-resolution.ts`) execute against the
+> durable backend; the companion Vitest pin
+> `packages/engine/test/atrium_examples.test.ts` verifies the SHAPE
+> half. Phase-3-close exit criteria 1 (two full-peer iroh sync), 15
+> (3+-peer concurrent-write convergence), and 16 (multi-device
+> cryptographic-attestation closure) are all GREEN at tag
+> `phase-3-close`.
 
 An **Atrium** is a peer-to-peer-synchronized graph shared by a small
 set of full-peer engines (a user's laptop + phone-OS app + desktop;
@@ -318,8 +314,8 @@ const engine = await Engine.openWithPolicy(
   PolicyKind.Ucan,
 );
 
-// `engine.atrium` is a callable factory (D1 B-prime per Ben's
-// 2026-05-05 ratification). Each call returns a fresh handle.
+// `engine.atrium` is a callable factory; each call returns a fresh
+// handle.
 const family = engine.atrium({ atriumId: "family" });
 await family.join();
 
@@ -331,7 +327,7 @@ const peers = family.listPeers();
 console.log(peers); // ["did:key:z6Mk...", ...]
 
 // Subscribe to a path; handler fires on each ChangeEvent the full
-// peer routes through F6 cap-recheck.
+// peer routes through the cap-recheck pipeline.
 const sub = await family.subscribe("/zone/posts", (event) => {
   console.log("post changed", event);
 });
@@ -387,12 +383,13 @@ Live:
 - `engine.callStream()` AsyncIterable + `engine.openStream()`
 - Reactive SUBSCRIBE handlers driven off the change-event bus
 - SANDBOX primitive with wasmtime host + named-manifest registry +
-  durable `BlobBackend` (Phase-3 G14-C closed Compromise #17)
-- Durable handler-version chain via `core::version::Anchor` (Phase-3
-  G14-C closed Compromise #18)
-- Algorithm B generalized at G15-A — user-defined view IDs run under
-  `Strategy::B` with their actual label patterns rather than being
-  coerced to `ContentListingView` semantics (Compromise #11 closed)
+  durable `BlobBackend` (Phase 3 closed Compromise #17)
+- Durable handler-version chain via `core::version::Anchor` (Phase 3
+  closed Compromise #18)
+- Algorithm B generalized in Phase 3 — user-defined view IDs run
+  under `Strategy::B` with their actual label patterns rather than
+  being coerced to `ContentListingView` semantics (Compromise #11
+  closed)
 - Atriums — peer-to-peer sync between full peers (laptop / phone-OS app /
   desktop) over iroh QUIC + Merkle Search Tree diff + Loro CRDT merge
 - Browser-as-thin-client — wasm32 engines participate as views into
@@ -400,14 +397,14 @@ Live:
   wasm32 bundle; optional IndexedDB cache for snapshot data
 - Verify-on-read at every Node-bytes surface — `RedbBackend::get_node`
   routes through `Node::load_verified(cid, &bytes)` so on-disk tamper
-  fires `E_INV_CONTENT_HASH` rather than returning the wrong-but-decodable
-  Node (W9-T6 closure)
+  fires `E_INV_CONTENT_HASH` rather than returning the
+  wrong-but-decodable Node
 
 Not yet live:
 
 - Marketplace / dynamic manifest registration (`register_runtime` reserved with `E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED`; Phase 8)
 - Garden-controlled iroh relays (Phase 7) — until then, public iroh relays leak peer-DID + connection-metadata at the transport layer (Compromise #22)
-- Inv-4 runtime depth-threading — both arms fully active. The ESC-10 adversarial integration test stays `#[ignore]`'d pending the `testing_call_engine_dispatch` host-fn helper per `docs/future/phase-3-backlog.md` §7.3.A.7 — the runtime defense is wired; only the adversarial-test driver is paper-only. See `docs/INVARIANT-COVERAGE.md` "Inv-4 + Inv-7 runtime arm status" for the wiring trace.
+- Inv-4 runtime depth-threading — both arms fully active. One adversarial integration test stays `#[ignore]`'d pending a `testing_call_engine_dispatch` host-fn helper — the runtime defense is wired; only the adversarial-test driver is paper-only. See `docs/INVARIANT-COVERAGE.md` "Inv-4 + Inv-7 runtime arm status" for the wiring trace.
 
 If something in the "live" list doesn't behave as documented, file an issue.
 
