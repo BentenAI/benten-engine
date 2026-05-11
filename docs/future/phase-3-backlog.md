@@ -2461,4 +2461,47 @@ Four `bindings/napi/tests/attribution_frame_widening_napi_serializer.rs` tests +
 - `.addl/_archive/phase-3/` (frozen-in-time R1/R2/R3/R4/R4b/R5/R6 round artifacts feeding the retrospective).
 - `HANDOFF-2026-05-11-night-shift-stop.md` (mid-session compact-survival snapshot with the full PR + commit sequence).
 
+**Update 2026-05-11 (pre-v1 cleanup window close):** ✅ **CLOSED** by PR #193 `docs(phase-3-retrospective): canonical Phase-3 narrative + changelog + key takeaways + backlog + pim-N catalog + decisions baked in`. `docs/history/PHASE-3.md` shipped (286 LOC, 6 sections matching PHASE-2b.md template). Section retained here for backlog provenance.
+
+---
+
+### 13.11 UCAN revocation observance production gap — `UcanGroundedPolicy.revokeCapability` post-revoke deny path
+
+**Origin:** Phase-3-close pre-v1 cleanup green-up sweep (2026-05-11). The vitest-investigation agent that closed PR #196 (3 chronic vitest failures + clippy lint) surfaced a 4th chronically-failing vitest test NOT in the original brief:
+
+```
+packages/engine/test/ucan_grant_flow.test.ts >
+  PolicyKind.Ucan + revokeCapability denies a previously-permitted write
+```
+
+Pre-revoke `callAs` correctly succeeds; post-revoke `callAs` should return `E_CAP_DENIED` but instead succeeds.
+
+**Suspected production gap (load-bearing for multi-device cap-attenuation model).** Two candidate root causes — both cross `benten-caps` ↔ `benten-engine` boundaries:
+
+1. **`has_unrevoked_grant_for_scope` reads stale state.** The UCAN grant store may carry the revocation entry, but the policy's `check_write` (or sibling read path) may consult a cached/snapshot view that hasn't been invalidated. Verify the cache-invalidation seam at the revocation-write boundary.
+2. **`revokeCapability` writes to a different table than the policy reads.** Phase-3 G16-B-B-rest landed the durable UCAN backend store; if `revokeCapability` writes the revocation entry to one namespace + the policy's grant-lookup walks a different namespace, the revocation is silently dropped. Verify table-name parity at both call sites.
+
+A third (less-likely) candidate: the revocation entry has the wrong shape (e.g., scope-match-key mismatch between issue + revoke entry).
+
+**Why this is security-perimeter, not CI-green-noise.** UCAN revocation observance is the load-bearing defense against post-grant-then-revoke privilege escalation. The multi-device sync model + the Phase-3 G16-B-F structural-always-on per-row cap-recheck inside `apply_atrium_merge` BOTH depend on the revocation observance path working correctly. A latent gap means a revoked principal could continue to write past revocation until the next session-refresh OR until a different write path catches the deny (defense-in-depth via the merge-time recheck). Real correctness gap, not a presentation gap.
+
+**Acceptance criterion:** the failing vitest must transition red → green via PRODUCTION FIX (not test-drift). The fix must include:
+- Identification of the root cause (cache invalidation vs table-name mismatch vs scope-match-key shape).
+- Production code fix at the appropriate seam.
+- End-to-end test pin per pim-2 §3.6b — observable consequence (would-FAIL-if-no-op'd) that exercises the full grant → revoke → callAs-denied arc.
+- Negative pin / regression guard so future regressions surface at the same test.
+
+**Touch size estimate:** ~80-200 LOC depending on whether the fix is at the policy-cache seam (smaller) or requires a table-name unification + migration (larger). Production fix only — the failing vitest assertion is correct as-stated.
+
+**Phase target:** Phase 4 pre-R1 prep, BLOCKER-priority. Should NOT land as a v1-tag-blocker (the gap exists at HEAD `bca4a55` and v1 tag is post-Phase-4); but SHOULD land early in Phase 4 pre-R1 so it doesn't sit silently for the duration of Phase-4 plugin manifest schema work (which builds ON the UCAN cap-attenuation chain — a leaky revocation observance during Phase-4 plugin work would compound).
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Surfaced by the green-up agent who correctly applied clause-(c) DISAGREE-WITH-EXPLANATION on bundling into the green-up sweep's mechanical-retense scope (this is an investigation, not a retense). Named here with full root-cause hypotheses + acceptance criterion so a dedicated Phase-4-pre-R1 investigation dispatch can pick it up without prep-work overhead.
+
+**Cross-references:**
+- PR #196 (`fix(green-up): close 3 chronic vitest failures + retense Phase-3-stub framing`) — agent's discovery report carries the diagnostic context.
+- `packages/engine/test/ucan_grant_flow.test.ts` — the failing test.
+- Phase-3 G16-B-B-rest (PR #158) — durable UCAN backend landing.
+- Phase-3 G16-B-F (PR #161) — structural-always-on per-row cap-recheck inside `apply_atrium_merge`; defense-in-depth layer that masks this gap during cross-peer sync but doesn't fix it for same-peer revoke-then-write sequences.
+- CLAUDE.md baked-in #15 (v1-milestone-gate; couples to Phase-4 pre-R1 prep timing).
+
 ---
