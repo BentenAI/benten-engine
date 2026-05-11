@@ -2558,3 +2558,25 @@ Couples to CLAUDE.md baked-in #15 (v1-milestone-gate). v1-assessment-window open
 - CLAUDE.md baked-in #17 (full peer vs thin compute surface — arbitrary-web-content rendering is most naturally a full-peer feature; browser tabs / edge workers don't host the renderer).
 
 ---
+
+### 15.2 Handler-call-graph cycle detection at handler-registration time
+
+**Origin:** Ben framing 2026-05-11 conversation (Phase 4-Foundation scoping turn). Cross-handler dispatch via `call_handler` (handler A → call_handler → handler B → call_handler → handler A) currently fails LATE-BINDING: a cycle in the call graph is only detected at runtime when iteration-budget exhaustion fires `E_ITER_BUDGET_EXHAUSTED`. The defense is correct (fail-loud, bounded resource consumption) but is fail-late — a cycle is not detected at the point of handler-registration / install, even though all the information needed for static cycle detection is in hand at that moment.
+
+**Why deferred to Phase 4-Meta (not Foundation):** static cycle detection becomes load-bearing once **plugin installs make cross-handler dispatch common** — i.e., once Phase 4-Foundation's G24-D plugin-manifest landing opens the door to user-installable subgraphs that may compose multiple handler-registering plugins together (composition / meta-plugin pattern per D-4F-14). In Phase 4-Foundation itself, handlers are still authored largely in-tree (admin UI v0 + a small set of bundled plugins); the late-binding `E_ITER_BUDGET_EXHAUSTED` defense remains adequate. Phase 4-Meta inherits this entry as its first "stop being lazy about cycle detection" cleanup.
+
+**Acceptance criteria when this lands:**
+- New seam: `crates/benten-engine/src/handler_cycle_detector.rs` — pure-function topological-walk over the handler-registration graph at install/registration time; emits typed `E_HANDLER_CYCLE_DETECTED` if a cycle is found.
+- Hook into `Engine::register_subgraph` + the plugin install path (G24-D `module_ecosystem::install`) to run the detector BEFORE persisting the registration. Reject install + surface the cycle to the user with the offending handler-call-edges enumerated.
+- Test pin: a 2-handler cycle (A → B → A) fails install with `E_HANDLER_CYCLE_DETECTED`; a 3-handler cycle (A → B → C → A) same; a deep handler-call DAG without cycle passes install.
+- Regression-guard: confirm `E_ITER_BUDGET_EXHAUSTED` still fires for the (now-narrower) class of runtime dynamic-cycle creation — e.g., a handler that conditionally dispatches based on input-data — which static detection cannot reach.
+- LOC estimate: ~50-100 LOC production (topological walk + install-path hook) + ~80-150 LOC test.
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Phase 4-Foundation does NOT block on this; the late-binding `E_ITER_BUDGET_EXHAUSTED` defense covers the threat-correctness boundary. Phase 4-Meta is the right time to add the static detector at the install path: by then, cross-handler dispatch is common (per the unified workflow-IS-plugin-IS-subgraph shape per D-4F-14), and "install fails fast on a cycle" is a meaningful UX improvement over "install succeeds; first call exhausts the iteration budget and surfaces a confusing error."
+
+**Couples to:**
+- `crates/benten-engine` `call_handler` primitive + iteration-budget enforcement (the current fail-late defense).
+- Phase 4-Foundation G24-D `module_ecosystem::install` path (the install-time hook surface).
+- CLAUDE.md baked-in #4 ("not Turing complete: DAGs only. Bounded iteration.") — static cycle detection at install time is the natural enforcement of the DAG-only commitment at the cross-handler boundary.
+
+---
