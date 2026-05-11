@@ -1,22 +1,13 @@
-//! R3-E RED-PHASE pin for G20-A3 §7.3.A.8 Component-Model decision
-//! (wave-8a; conditional per D-PHASE-3-6 + D-PHASE-3-16).
+//! Architectural pin for the Component-Model decision
+//! (D-PHASE-3-6 + D-PHASE-3-16).
 //!
-//! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.8 G20-A3 +
-//! `.addl/phase-3/00-implementation-plan.md` §3 G20-A3 must-pass column):
-//!
-//! - `tests/component_model_phase3_decision_lands_per_d_phase_3_6` — D-PHASE-3-6
-//!
-//! ## What G20-A3 establishes (D-PHASE-3-6 + D-PHASE-3-16)
-//!
-//! Per D-PHASE-3-6 RESOLVED-at-R1 conditional (per scope-real-20):
-//! - IF held cut: ~30-50 LOC test rationale rewrite, naming
-//!   "Phase 4+ Thrum-driven OR wasmtime-Component-Model-GA" as the
-//!   destination per D-PHASE-3-16 named destination.
-//! - IF reopened: ~150-250 LOC across G17-A1 folding + bodies + Cargo.toml
-//!   feature wiring.
-//!
-//! Either way, the architectural pin asserts that the decision LANDED
-//! and is reflected in the codebase.
+//! The Component-Model integration was HELD CUT — destination
+//! "Phase 4+ Thrum-driven OR wasmtime-Component-Model-GA" per
+//! D-PHASE-3-16. The structural sibling pin at
+//! `component_model_phase3_decision_lands_per_d_phase_3_6.rs` asserts
+//! the decision is reflected in `docs/ARCHITECTURE.md` via Cargo.toml
+//! + roadmap walks. The test body in this file is a redundant driver
+//! placeholder; the substantive load is carried by the sibling.
 
 #![allow(clippy::unwrap_used)]
 

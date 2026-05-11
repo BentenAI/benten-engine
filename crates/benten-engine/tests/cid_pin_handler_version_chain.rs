@@ -1,11 +1,8 @@
-//! G14-C wave-4b: handler-version chain pinned-CID sites
-//! (D-PHASE-3-19a + D28-precedent).
+//! Handler-version chain pinned-CID sites (D-PHASE-3-19a +
+//! D28-precedent).
 //!
-//! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.2 G14-C
-//! row + §3.B CLR-1 cluster): each test pins the canonical-bytes
-//! encoding of the handler-version chain at distinct call-sites.
-//!
-//! Per §3.6b pim-2 these tests drive the production
+//! Each test pins the canonical-bytes encoding of the handler-version
+//! chain at a distinct call-site. The tests drive the production
 //! `Engine::register_subgraph` / `register_subgraph_replace` paths and
 //! assert the canonical-bytes encoding produces a STABLE per-input
 //! CID (the load-bearing CID-stability property). Because the
@@ -14,14 +11,13 @@
 //! baked-in #4), the per-site pins assert byte-identical canonical
 //! encoding round-trips for distinct content shapes.
 //!
-//! Placeholder-CID literals from R3-B are removed: instead of
-//! committing a string the encoder may rebake later, each test
-//! computes the CID from the canonical bytes at runtime + asserts the
-//! computed CID is stable across two invocations of the same encoder
-//! over the same input. This is the strongest CID-stability property
-//! the encoding contract demands; literal-string pins land at the
-//! R6-stabilization wave when the encoding is frozen for downstream
-//! catalog publish.
+//! Rather than committing a placeholder-CID string the encoder may
+//! rebake later, each test computes the CID from the canonical bytes
+//! at runtime + asserts the computed CID is stable across two
+//! invocations of the same encoder over the same input. This is the
+//! strongest CID-stability property the encoding contract demands;
+//! literal-string pins are reserved for a future stabilization pass
+//! when the encoding is frozen for downstream catalog publish.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -104,10 +100,10 @@ fn canonical_bytes_handler_version_chain_pinned_cid_sandbox_subgraph() {
 
 #[test]
 fn canonical_bytes_handler_version_chain_pinned_cid_with_attribution_frame() {
-    // arch-r1-4 / D-C cluster: a handler-version Node bearing a
-    // future attribution-frame property uses the same encoder; its
-    // CID is stable across encoder runs even though the property
-    // bag differs from the no-frame baseline.
+    // Handler-version Node bearing an attribution-frame property
+    // uses the same encoder; its CID is stable across encoder runs
+    // even though the property bag differs from the no-frame
+    // baseline.
     use benten_core::{Node, Value};
     use benten_engine::handler_versions::HANDLER_VERSION_LABEL;
 
@@ -118,7 +114,7 @@ fn canonical_bytes_handler_version_chain_pinned_cid_with_attribution_frame() {
     props.insert("seq".into(), Value::Int(0));
     props.insert(
         "loro_merge_attribution".into(),
-        Value::Text("future-G16-B-frame".into()),
+        Value::Text("attribution-frame-payload-v1".into()),
     );
     let node_a = Node::new(vec![HANDLER_VERSION_LABEL.to_string()], props.clone());
     let node_b = Node::new(vec![HANDLER_VERSION_LABEL.to_string()], props);
