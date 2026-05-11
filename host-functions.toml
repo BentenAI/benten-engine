@@ -4,9 +4,11 @@
 # `crates/benten-eval/src/sandbox/host_fns.rs` (a single .rs, NOT codegen
 # output) and kept in lockstep by drift detectors at
 # `crates/benten-engine/tests/host_functions_*.rs`. The build.rs codegen
-# pipeline is aspirational (deferred per `#[ignore]`'d tests at
+# pipeline is aspirational; hand-mirroring is the current discipline.
+# Drift-detector tests at
 # `crates/benten-eval/tests/sandbox_capability_intersection_at_init.rs`
-# + `sandbox_named_manifest.rs`).
+# + `sandbox_named_manifest.rs` are live assertions enforcing parity
+# between this TOML and the Rust shape.
 # Per D9-RESOLVED, the canonical-bytes encoding for cross-CID stability
 # is DAG-CBOR; this file is the dev-ergonomic source that ENCODES INTO
 # canonical bytes via the manifest's CBOR serialization.
