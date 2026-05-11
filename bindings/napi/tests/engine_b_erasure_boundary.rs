@@ -43,7 +43,7 @@
 //! napi `napi_surface::Engine` wraps — which IS publicly reachable from
 //! the integration test and carries the same structural contract.
 
-#![allow(clippy::unwrap_used, dead_code)]
+#![allow(clippy::unwrap_used, clippy::no_effect_underscore_binding, dead_code)]
 
 #[test]
 fn engine_b_napi_binding_erases_at_cdylib_boundary_only() {
