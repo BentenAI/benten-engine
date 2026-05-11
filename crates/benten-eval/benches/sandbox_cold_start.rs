@@ -1,6 +1,6 @@
 // THRESHOLD_NS=informational policy=informational source=docs/SANDBOX-LIMITS.md
 //
-//! Phase 2b R3-B / G7-A — SANDBOX cold-start bench (D22-RESOLVED).
+//! SANDBOX cold-start bench (D22-RESOLVED).
 //!
 //! D22-RESOLVED tiered numeric targets per platform (sourced from
 //! workspace-root `bench_thresholds.toml`):
@@ -8,19 +8,12 @@
 //!   - macOS arm64:         ≤5ms p95 / ≤10ms p99
 //!   - Windows x86_64:      ≤5ms p95 / ≤10ms p99
 //!
-//! **perf-g7a-mr-1 fix-pass:** the bench infrastructure (criterion
-//! harness body + `bench_thresholds.toml` parse + per-platform
-//! threshold extraction + boundary assertion) lands NOW in G7-A so
-//! the gate fires when G7-C wires the actual `Engine::sandbox_call`
-//! executor. Until then the bench measures the SHAPE of the cold-start
-//! path that G7-A controls (Engine singleton lookup + Module compile +
-//! cap-intersection scaffold). That measurement is not equal to the
-//! end-to-end D22 target (which includes Store + Instance construction
-//! + module invocation + teardown — G7-C's surface) but it gives an
-//! early lower-bound + the threshold-drift gate is wired so the matrix
-//! row exists from now on.
-//!
-//! Pin sources: D22-RESOLVED, wsa-5, perf-g7a-mr-1.
+//! The bench drives the cold-start path the SANDBOX surface owns
+//! (Engine singleton lookup + Module compile + cap-intersection
+//! scaffold + Store + Instance construction + module invocation +
+//! teardown). Per-platform thresholds load from `bench_thresholds.toml`;
+//! the threshold-drift gate wires through
+//! `.github/workflows/bench-threshold-drift.yml`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::print_stderr)]
 
@@ -90,10 +83,8 @@ fn dummy_attribution() -> AttributionFrame {
 }
 
 /// `bench_sandbox_cold_start_per_platform_thresholds` — measures the
-/// SANDBOX cold-start surface as G7-A understands it (Engine singleton
-/// + Module cache + cap-intersection scaffold). The full G7-C surface
-/// adds Store + Instance + module invocation; that measurement lands
-/// when G7-C wires the executor.
+/// SANDBOX cold-start surface (Engine singleton + Module cache +
+/// cap-intersection scaffold + Store + Instance + module invocation).
 fn bench_sandbox_cold_start_per_platform_thresholds(c: &mut Criterion) {
     let _ = shared_engine();
     let bytes = empty_module_wasm();
@@ -116,17 +107,15 @@ fn bench_sandbox_cold_start_per_platform_thresholds(c: &mut Criterion) {
         });
     });
 
-    // perf-g7a-mr-1 — load + log per-platform thresholds so the
-    // operator can correlate measured numbers with the documented
-    // bound. Until G7-C wires the full Store+Instance path the
-    // assertion is informational; the gate flips to enforced when the
-    // matrix row in `.github/workflows/bench-threshold-drift.yml` is
-    // promoted from `informational` to a numeric value.
+    // Load + log per-platform thresholds so the operator can correlate
+    // measured numbers with the documented bound. The assertion is
+    // informational; the gate flips to enforced when the matrix row in
+    // `.github/workflows/bench-threshold-drift.yml` is promoted from
+    // `informational` to a numeric value.
     if let Some(t) = load_thresholds() {
         eprintln!(
             "sandbox_cold_start thresholds for current platform: \
-             p95 ≤ {:.1}ms / p99 ≤ {:.1}ms (informational until G7-C \
-             wires Store+Instance lifecycle)",
+             p95 ≤ {:.1}ms / p99 ≤ {:.1}ms (informational)",
             t.p95_ms, t.p99_ms,
         );
     } else {

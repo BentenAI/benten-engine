@@ -1,15 +1,10 @@
-//! Phase 2b G7-A — D20 sandbox_depth inheritance regression test.
+//! D20 sandbox_depth inheritance regression test.
 //!
-//! **wsa-g7a-mr-7 fix-pass:** D20-RESOLVED makes load-bearing the
-//! property that `AttributionFrame.sandbox_depth` INHERITS across CALL
-//! boundaries (not reset). G7-A's scaffold has `SandboxConfig.max_nest_depth`
-//! defaulted to 4 but the AttributionFrame schema slot for the depth
-//! counter is added by G7-B PR #32 (which extends `exec_state.rs`'s
-//! AttributionFrame with `sandbox_depth: u8`).
-//!
-//! This test STAYS `#[ignore]` until the cross-PR coordination resolves
-//! (either G7-B merges first + this PR rebases, or this PR merges first
-//! + G7-B rebases). Pointer is named-specific to G7-B PR #32.
+//! Pins the property that `AttributionFrame.sandbox_depth` INHERITS
+//! across CALL boundaries (not reset). `SandboxConfig.max_nest_depth`
+//! defaults to 4; `exec_state.rs`'s `AttributionFrame` carries
+//! `sandbox_depth: u8`. Test asserts 4 nested SANDBOX calls through
+//! CALL boundaries observe an inherited (non-reset) depth counter.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 #![cfg(not(target_arch = "wasm32"))]

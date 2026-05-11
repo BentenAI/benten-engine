@@ -1,12 +1,12 @@
-//! Phase 2a R3 security — Inv-8 isolated-CALL budget bypass attempt
+//! Inv-8 isolated-CALL budget bypass attempt
 //! (code-as-graph Major #2 / §9.12 addendum).
 //!
 //! **Attack class.** Inv-8 multiplicative cumulative budget composes
 //! through ITERATE + CALL: the static registration-time ceiling is the
 //! product of declared ITERATE.max values along every DAG path, multiplied
-//! through CALL. But CALL has two semantics: `isolated: true` (default,
-//! per validated decision #4 — callee runs under its own grant) and
-//! `isolated: false` (callee inherits caller's context).
+//! through CALL. But CALL has two semantics: `isolated: true` (default —
+//! callee runs under its own grant) and `isolated: false` (callee inherits
+//! caller's context).
 //!
 //! Code-as-graph Major #2 locks:
 //! - `isolated: true` CALL RESETS the budget to the callee grant's bound.
@@ -36,19 +36,18 @@
 //! **Impact.** Privileged callee's budget exhaustion via parent looping;
 //! budget-bounded cost-of-service model breaks.
 //!
-//! **Recommended mitigation.** §9.12 addendum: `isolated: true` resets
-//! to callee grant's declared bound; `isolated: false` inherits. G4-A's
+//! **Mitigation.** §9.12 addendum: `isolated: true` resets to callee
+//! grant's declared bound; `isolated: false` inherits.
 //! `invariants/budget.rs` owns the logic; registration-time check
 //! computes cumulative per CALL-isolation boundary.
 //!
-//! **Landed contract.** G4-A shipped multiplicative cumulative + isolated-
-//! CALL reset semantics structurally (per-call reset in
-//! `primitive_host.rs::dispatch_call_inner`); the integration-body
-//! pin remains `#[ignore]`'d per phase-3-backlog §7.3.C row 2 until
-//! the next budget-axis property-coverage hardening round (v1-window).
-//! Test asserts the bypass is blocked.
-//!
-//! R3 writer: `rust-test-writer-security` (Phase 2a).
+//! **Landed contract.** Multiplicative cumulative + isolated-CALL reset
+//! semantics are live structurally (per-call reset in
+//! `primitive_host.rs::dispatch_call_inner`); the integration body
+//! that drives a parent CALL with isolated-CALL inside ITERATE is
+//! deferred per phase-3-backlog §7.3.C row 2 (next budget-axis
+//! property-coverage hardening round). Test asserts the bypass is
+//! blocked.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 

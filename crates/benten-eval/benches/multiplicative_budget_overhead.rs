@@ -8,7 +8,7 @@
 //! `ten_node_handler_eval` number, and the §9.12 fairness constraint that
 //! budget probes are hot-path on every CALL / ITERATE traversal edge.
 //!
-//! **Gate policy:** CI-GATED — regressions fail the `phase-2a-exit-criteria`
+//! **Gate policy:** CI-GATED — regressions fail the exit-criteria
 //! workflow. Threshold is <1 µs median on dev hardware (M-class Apple
 //! silicon / recent x86 server cores). Noisy CI runners get a 3× cushion
 //! applied via the `BENTEN_BENCH_GATE_MULTIPLIER` env var; the baseline
@@ -25,16 +25,14 @@
 //! POLICY = fail-on-regression
 //! ```
 //!
-//! ## G4-A landed — real probe
+//! ## Real probe
 //!
-//! G4-A lands the multiplicative budget walker in
-//! `benten_eval::invariants::budget::compute_cumulative`. The bench now
+//! The multiplicative budget walker lives at
+//! `benten_eval::invariants::budget::compute_cumulative`. The bench
 //! drives that walker against a pre-constructed 3-level nested ITERATE
 //! subgraph (representative of the plan §4.4 paper-prototype average)
 //! per iteration, so the reported median is the real per-subgraph
-//! boundary-check cost. The `testing::multiplicative_budget_probe`
-//! stub that previously stood in for this measurement is gone (G11-A
-//! EVAL wave-1 dead-code sweep).
+//! boundary-check cost.
 
 #![allow(
     clippy::unwrap_used,

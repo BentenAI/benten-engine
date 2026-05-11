@@ -1,5 +1,5 @@
-//! Phase 2a G2-B / arch-r1-5 informational bench: AST cache hit/miss latency
-//! for the `(handler_id, op, subgraph_cid)` key tuple.
+//! Informational bench: AST cache hit/miss latency for the
+//! `(handler_id, op, subgraph_cid)` key tuple.
 //!
 //! Three measurement cases:
 //! 1. Cold path — no cache entry; full subgraph decode.
@@ -7,13 +7,10 @@
 //! 3. Invalidation after re-registration under a different `subgraph_cid`
 //!    (dx-r1-5 contract).
 //!
-//! R3 red-phase: the bench body routes through
-//! `Engine::benchmark_helper_subgraph_cache_*` stubs that `todo!()` until
-//! G2-B lands the cache wire-through. The bench compiles today; iteration
-//! panics when the inner helper is invoked.
-//!
-//! Informational (not CI-gated); R5 G2-B flips it live once the cache
-//! round-trip is wired.
+//! The bench body routes through `Engine::benchmark_helper_subgraph_cache_*`
+//! helpers; those helpers are pre-cache-wire-through stubs (the bench
+//! compiles today; iteration panics when the inner helper is invoked).
+//! Informational (not CI-gated) until the cache round-trip is wired.
 //!
 //! ```text
 //! BENCH_ID = subgraph_cache_hit/*
