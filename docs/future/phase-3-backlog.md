@@ -1535,6 +1535,7 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 **Closure shape (Phase-3 G20-A3 wave-8a):** Each rationale rewritten or test un-ignored per below:
 
 - `proptest_exec_state_round_trip.rs:49` — rationale rewritten to point at "Phase 3+ anytime backlog" with reassessment cadence = v1-assessment-window per CLAUDE.md baked-in #15. Body remains deferred (the proptest is a strengthening pass over the existing structural unit-tests at `crates/benten-eval/src/exec_state.rs` which already pin round-trip equality).
+  - **Pre-condition for un-ignore (benten-eval-1-2 amendment, 2026-05-11):** when this proptest is un-ignored, the un-ignore wave MUST set `#![proptest_config(ProptestConfig::with_cases(10_000))]` at the file top to honor the module-doc's "10k cases" narrative (lines 32-33). Current `ProptestConfig::default()` yields 256 cases. Either the un-ignore lands with the config override OR the module-doc retenses to match — but the discrepancy must not survive un-ignore. Source: `.addl/phase-3-test-review/per-crate/benten-eval-1.json` finding `benten-eval-1-2`.
 - `inv_8_isolated_call_budget_bypass.rs:57` — rationale rewritten to point at "Phase 3+ anytime backlog" with same reassessment cadence. Body remains deferred (the per-call budget reset on isolated-CALL is in `primitive_host.rs::dispatch_call_inner`; the integration body lands in the next round of budget-axis property-coverage hardening).
 - `sandbox_escape_attempts_denied.rs:311 + :328` (Component-Model ESC-11/-12) — covered by §7.3.A.8 above (rewritten 2026-05-05 to D-PHASE-3-16 named destination; HELD CUT per D-PHASE-3-6).
 - `sandbox_escape_attempts_denied.rs:377` (forged-cap-claim-section helper) — owned by §7.3.A.7 cluster (G20-A1 wave-8a).
@@ -1902,6 +1903,61 @@ Each reduction is documented + corroborated by a sibling test or env-override pa
 - `tools/benten-dev/test/inspect_state_pretty_prints.test.ts` (the JS-CLI thin-wrapper contract pin).
 - `.github/workflows/devserver-vitest.yml` (the target file for the trivial edit).
 - §7.11 (pim-6 CI-infrastructure half partial residual; this entry closes the tools/* slice).
+
+---
+
+### 8.8 Bench perf-gate enforcement coherence — THRESHOLD_NS matrix vs source policy vs CI-runner gate
+
+**Origin:** Phase-3-close pre-v1 triage (2026-05-11 test-review `bench-config-perf.json` findings `bench-r6-1` / `bench-r6-2` / `bench-r6-3`). Three benches exhibit incoherence between (i) the `.github/workflows/bench-threshold-drift.yml` matrix value, (ii) the bench-source `// THRESHOLD_NS=...` machine-readable comment + policy field, and (iii) what CI actually runs as a fail-on-regression gate. The drift-detector only checks that (i) matches (ii)'s VALUE — it does NOT check policy field coherence, nor does it verify a CI step exists that measures the bench median against the threshold.
+
+**Concrete instances:**
+
+- **bench-r6-1 (MAJOR) — `transform_expression_latency` + `wait_suspend_resume_latency` declared numeric but unenforced.** `bench-threshold-drift.yml` lines 57-58 carry `transform_expression_latency.rs=10000` + `wait_suspend_resume_latency.rs=50000` as numeric ceilings. `phase-2a-exit-criteria.yml` lines 232-233 only `check_gate` invocations are `multiplicative_budget_overhead/boundary_check_per_node` + `get_node_label_only/hot_cache` — `grep -r 'transform_expression_latency\|wait_suspend_resume_latency' .github/` returns ONLY the drift-matrix rows. A regression that takes parse latency from 10µs to 100µs (10×) passes CI green; only nightly Criterion artifact review catches it.
+
+- **bench-r6-2 (MAJOR) — `wait_suspend_resume_latency` source/matrix policy field mismatch.** Source `wait_suspend_resume_latency.rs:108` carries `policy=informational` but matrix encodes a numeric `50000`. The drift detector only compares the value field, not the policy field — incoherent encoding passes silently.
+
+- **bench-r6-3 (MAJOR) — `sandbox_cold_start.rs` threshold contract stale post-G7-C.** Bench source line 1 still carries `policy=informational` with rationale "informational until G7-C lands"; G7-C shipped at Phase-2b (PR #36, commit `468b3ab`). `bench_thresholds.toml` lines 30-40 carry calibrated per-platform numeric thresholds (linux 2/5ms, macos-aarch64 5/10ms) but the bench body's assertion (line 121) is informational-warning-only. Any cold-start regression at HEAD is silently absorbed despite per-platform calibration being present.
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Surfaced as a coordinated bundle because the three findings share a common architectural call: do we wire CI-runner perf-gate enforcement for these benches (option a), or downgrade matrix entries to `informational` + retense the source-side policy comments to match (option b)? The architectural call belongs to Ben — option (a) introduces shared-GitHub-runner-variance false-positive risk (the `BENTEN_BENCH_GATE_MULTIPLIER=3` mitigation has tradeoffs documented at `bench-r6-10`); option (b) accepts that PR-trigger perf-gate coverage stays narrow (`multiplicative_budget_overhead` + `get_node_label_only` only, ~7% of 27 benches). Non-blocking for Phase-3 close (the surfaces are perf observability, not security or correctness load-bearing).
+
+**Concrete fix-shape (one of two, picked at v1-assessment-window):**
+- (a) Extend `.github/workflows/phase-2a-exit-criteria.yml` `perf-gates` job to add `check_gate` invocations for the three benches; flip `sandbox_cold_start.rs` matrix entry from `informational` → numeric (matching `bench_thresholds.toml` per-platform values); retense bench-source policy comments accordingly. ~30-60 LOC across 1 workflow + 3 bench sources.
+- (b) Downgrade `bench-threshold-drift.yml` matrix entries for `transform_expression_latency` + `wait_suspend_resume_latency` from numeric to `informational`; reconcile `sandbox_cold_start` bench-source rationale to current state ("matrix entry remains `informational` for shared-runner variance reasons; calibrated per-platform thresholds in `bench_thresholds.toml` provide the operator-side trend signal"). ~20 LOC across 1 workflow + 2-3 bench sources.
+
+**Touch size:** Option (a) ~30-60 LOC. Option (b) ~20 LOC.
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15. Couples to §8.4 (multi-bench threshold matrix extensibility) — if §8.4 lands first, per-bench per-platform encoding is the natural target shape for option (a).
+
+**Cross-references:**
+- `.github/workflows/bench-threshold-drift.yml` lines 53-99 (the matrix declaration block).
+- `.github/workflows/phase-2a-exit-criteria.yml` `perf-gates` job (the `check_gate` invocation site).
+- `crates/benten-eval/benches/transform_expression_latency.rs:30,66` (source-side THRESHOLD_NS + policy).
+- `crates/benten-eval/benches/wait_suspend_resume_latency.rs:27,108` (same).
+- `crates/benten-eval/benches/sandbox_cold_start.rs:1` (same).
+- `bench_thresholds.toml` lines 30-40 (per-platform sandbox_cold_start ceilings already calibrated).
+- §8.2 (CI tooling: bench-source/threshold drift-lint — sibling drift surface; covers the comment-vs-matrix-value axis but NOT the policy-field-coherence axis OR the runner-gate-coverage axis).
+- §8.4 (multi-bench threshold matrix extensibility — natural carrier for option a's per-platform encoding).
+
+---
+
+### 8.9 napi cdylib test-helper symbol-table-scan companion (defense-in-depth verification layer)
+
+**Origin:** Phase-3-close pre-v1 triage (2026-05-11 test-review `bindings-napi.json::napi-r4b-10`). `bindings/napi/tests/feature_graph_closure_no_test_helpers_in_production.rs` walks Cargo.toml feature-graph at parse time to defend against test-helpers (`engine_err_message`, `make_giant_map`, `make_cbor_bomb` from `input_validation.rs`) leaking into the production cdylib — this is the PREVENTION layer. The Phase-2a `sec-r6r2-02` precedent that motivated this defense was specifically about test-helper symbols leaking; the matching VERIFICATION layer would be a symbol-table-scan on the BUILT cdylib that greps for those known helper names. Currently only prevention exists.
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Non-blocking for Phase-3 close (the prevention layer is sufficient at HEAD; symbol-scan is the defense-in-depth complement). The recommendation itself notes "OR document phase-3-backlog entry for it" as a valid disposition.
+
+**Concrete fix-shape:**
+- Add `bindings/napi/tests/napi_cdylib_no_test_helpers_in_production.rs` symbol-table-scan: build the production cdylib (default features); grep for known test-helper symbol names (`engine_err_message`, `make_giant_map`, `make_cbor_bomb` + any names added under `cfg(feature = "testing-input-helpers")`); assert zero hits. Same shape as `bindings/napi/tests/wasm_bundle_content.rs` but for the napi cdylib instead of the browser wasm bundle.
+
+**Touch size:** ~80 LOC test + ~10 LOC CI workflow extension to run the test under release-mode build artifact.
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15.
+
+**Cross-references:**
+- `bindings/napi/tests/feature_graph_closure_no_test_helpers_in_production.rs` (the prevention layer).
+- `bindings/napi/src/input_validation.rs` (the test-helper symbol catalog at `cfg(feature = "testing-input-helpers")`).
+- `bindings/napi/tests/wasm_bundle_content.rs` (the structural precedent for symbol-table scanning).
+- §4.4 (bundle-content audit pins — Phase-3 R6 fix-pass Wave B closure; same defense-in-depth pattern but for wasm browser bundle).
 
 ---
 

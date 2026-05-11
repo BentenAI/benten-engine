@@ -28,7 +28,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "phase-3-backlog §7.3.D — no-unauthorized-dyn-error: Engine<B> generic cascade SINGLE authorized erasure site. G13-B wave-2 shipped napi cdylib erasure boundary; test body pins specific erasure-site-uniqueness audit; un-ignore deferred to phase-3-backlog §7.3.D destination (§4.4 Bundle-content audit pins shipped at Phase-3 R6 fix-pass Wave B)."]
+#[ignore = "phase-3-backlog §7.3.D — no-unauthorized-dyn-error: Engine<B> generic cascade SINGLE authorized erasure site. G13-B shipped the napi cdylib erasure boundary; test body pins the specific erasure-site-uniqueness audit; un-ignore deferred to phase-3-backlog §7.3.D destination."]
 fn no_unauthorized_box_dyn_std_error_at_engine_boundary() {
     // G13-B implementer wires this:
     //

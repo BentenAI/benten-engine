@@ -50,6 +50,20 @@ use proptest::prelude::*;
 /// Time-windows: every link uses the same `[nbf=0, exp=u64::MAX/2]`
 /// window unless the caller overrides per-link. Validation runs at
 /// `now=1_000_000_000` which is inside every default window.
+///
+/// ## Slice-form chain-walk dependency (pin)
+///
+/// `crates/benten-id/src/ucan.rs::validate_chain_inner` walks the
+/// supplied slice positionally — `chain[idx]`'s parent is
+/// `chain[idx+1]`, and `claims.prf` is NOT consulted. Every link built
+/// here has empty `prf`. If a future tightening adds a check that the
+/// slice and `prf` agree (e.g. cag-r4-2 / W3C UCAN spec-conformance
+/// hardening at the sync layer), the chains this builder produces will
+/// fail with a `MalformedClaims` / `PrfChainMismatch` error unrelated
+/// to the attenuation property under test — and that failure would
+/// look like a false-positive proptest failure rather than a build-
+/// side bug. Update this builder in lockstep with any such tightening
+/// (call `.proof(parent.clone())` on each non-root link).
 fn build_chain_with_caps(
     keypairs: &[Keypair],
     caps_per_link: &[(String, String)], // [(resource, ability)] leaf-first
