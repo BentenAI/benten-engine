@@ -103,7 +103,7 @@ This is the shape that makes Phase-6 AI assistants work. An AI assistant declare
 
 There is a second, rarer category: **engine extensions** — Rust crates compiled into the engine binary. These are for things like a custom persistence backend or a new transport — extensions that change the engine itself. They have no UCAN, no manifest, no install flow; you compile them in or you don't. They are for platform builders, not app users. The two categories — app-level plugins (subgraphs, content-addressed, sharable) and engine-level extensions (Rust crates, compile-time, trusted-by-build) — stay deliberately separate.
 
-The plugin-manifest schema and install / upgrade / share flows land in Phase 4 (Benten Platform v1). The engine surface that backs them — the evaluator's principal-aware read path — lands earlier as pre-v1 cleanup, since it's independent of the manifest decisions. Today the engine has the foundational pieces (DID + UCAN + content-addressed subgraphs); the principal-aware read surface and the manifest schema layer on top in that order.
+The plugin-manifest schema and install / upgrade / share flows land in Phase 4-Foundation (Benten Platform v1 foundation). The engine surface that backs them — the evaluator's principal-aware read path — shipped at PR #184 in the pre-v1 cleanup window, since it's independent of the manifest decisions. Today the engine has the foundational pieces (DID + UCAN + content-addressed subgraphs + principal-aware read surface); the manifest schema layers on top in Phase 4-Foundation.
 
 ## What the engine is not
 

@@ -2116,9 +2116,9 @@ Items surfaced during 2026-05-08 cross-phase retrospective audit as orphans (Pha
 
 ---
 
-## 12. Phase-4 Benten Platform v1 deferrals (rehomed from v1-gate-refactor.md §7b on 2026-05-10 ratification)
+## 12. Phase-4 Benten Platform v1 deferrals (rehomed from v1-gate-refactor.md §7b on 2026-05-10 ratification; phase-rename 2026-05-11 — Phase 4 covers Phase 4-Foundation + Phase 4-Meta)
 
-**Origin:** the now-retired `docs/future/v1-gate-refactor.md` §7b registry was the original named destination for these Phase-3 → Phase-4 deferrals during wave-6+ implementation. On 2026-05-10 ratification, v1-gate-refactor.md retired to `docs/archive/v1-gate-refactor-RATIFIED-2026-05-10.md`; its §7b table re-homes here (the tracked public companion to the gitignored `docs/FULL-ROADMAP.md` Phase 4 entry which also names these deferrals).
+**Origin:** the now-retired `docs/future/v1-gate-refactor.md` §7b registry was the original named destination for these Phase-3 → Phase-4 deferrals during wave-6+ implementation. On 2026-05-10 ratification, v1-gate-refactor.md retired to `docs/archive/v1-gate-refactor-RATIFIED-2026-05-10.md`; its §7b table re-homes here (the tracked public companion to the `docs/FULL-ROADMAP.md` Phase 4 entries which also name these deferrals). Per 2026-05-11 phase-rename, light-client modes (b)+(c) land in Phase 4-Meta inheritance from Phase-3-deferred items; the other entries route to Phase 4-Foundation or Phase 4-Meta per individual item context.
 
 | Origin | Surface | Notes |
 |---|---|---|
@@ -2127,9 +2127,11 @@ Items surfaced during 2026-05-08 cross-phase retrospective audit as orphans (Pha
 | G16-D wave-6b (PR #125) | Handshake response-leg via fresh iroh connection or bi-directional stream | Per g16-d-mr-2: `handshake_round_trip_over_iroh_loopback_transport` drives initiate via real iroh `Connection::send_bytes` / `recv_bytes` but returns the response via in-process `tokio::spawn` task join (honestly disclosed inline at `crates/benten-sync/tests/handshake.rs::handshake_round_trip_over_iroh_loopback_transport`). Strengthening pin: open a fresh peer_b → peer_a connection for the response, OR use a bi-directional stream on the same connection. Current pin's load-bearing assertion (handshake protocol body composes with G16-A's iroh transport SEAM) is end-to-end via the initiate leg; strengthening makes both legs end-to-end. |
 | G16-D wave-6b (PR #125) | napi `JsAtrium` shim retire (parallel-write-path → engine-routed cap-gated calls) | Per g16-d-mr-4: `bindings/napi/src/atrium.rs::JsAtrium` mutates `Mutex<AtriumHandleState>` at the napi shim layer. Parallel-write-path-shape per CLAUDE.md baked-in #16 — was intentionally interim during wave-6b parallel-3 split. The body MUST swap to `Arc<benten_engine::Atrium>` + route every mutation through engine WRITE primitive + cap policy. Recommended invariant: regression test asserting `Mutex<AtriumHandleState>` is no longer present in `bindings/napi/src/atrium.rs`. |
 
-## 13. Phase-4 carries from pre-v1 triage (2026-05-10 doc + test review)
+## 13. Phase-4 carries from pre-v1 triage (2026-05-10 doc + test review; phase-rename 2026-05-11 — Phase 4 now covers Phase 4-Foundation + Phase 4-Meta)
 
 The Phase-3-close pre-v1 cleanup window (post tag `phase-3-close` 2026-05-10) ran a 314-finding doc-review + test-review pass. Of the dispositions, 71 finding lines landed BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b) and cluster into the entries below. None are Phase-3-close-blocking; each is named for the v1-assessment-window per CLAUDE.md item #15 so the carry has a registered destination instead of drifting as "we'll get to it." Source triage at `.addl/phase-3/triage-2026-05-10-doc-and-test-review.md`.
+
+**Phase-rename context (2026-05-11):** Section headers below carry the original "Phase-4 doc surface" / "Phase-4 napi-surface widening" framing from before the 2026-05-11 phase-rename. Most entries route specifically to **Phase 4-Foundation** (the substantive engineering phase: plugin manifest schema, admin UI v0, decentralized registry, materializer, schema-driven rendering, module ecosystem tooling at scale, full napi-surface widening) or to the **v1-assessment-window** (the gate between Phase 4-Meta close and the `v1` tag). Phase 4-Meta inherits Phase-3-deferred items (wasmtime Component-Model re-evaluation, engine impl-block generic-cascade lift, light-client modes (b)+(c)) plus the self-composing admin meta-circular work. Individual entries below note specific destinations where they're clear; otherwise, "Phase 4" reads as "Phase 4-Foundation or v1-assessment-window per entry context."
 
 ### 13.1 Phase-4 doc surface: AtriumHandle/AtriumConfig operator-facing reference
 
@@ -2465,7 +2467,7 @@ Four `bindings/napi/tests/attribution_frame_widening_napi_serializer.rs` tests +
 
 ---
 
-### 13.11 UCAN revocation observance production gap — `UcanGroundedPolicy.revokeCapability` post-revoke deny path ✅ CLOSED (Phase 3.5 Track B, pre-3.5-ucan-revocation-observance-fix)
+### 13.11 UCAN revocation observance production gap — `UcanGroundedPolicy.revokeCapability` post-revoke deny path ✅ CLOSED (Phase 4-Foundation Track B, formerly "Phase 3.5 Track B"; branch `pre-3.5-ucan-revocation-observance-fix` — branch name retained for historical fidelity)
 
 **Origin:** Phase-3-close pre-v1 cleanup green-up sweep (2026-05-11). The vitest-investigation agent that closed PR #196 (3 chronic vitest failures + clippy lint) surfaced a 4th chronically-failing vitest test NOT in the original brief:
 
@@ -2493,7 +2495,7 @@ A third (less-likely) candidate: the revocation entry has the wrong shape (e.g.,
 
 **Touch size estimate:** ~80-200 LOC depending on whether the fix is at the policy-cache seam (smaller) or requires a table-name unification + migration (larger). Production fix only — the failing vitest assertion is correct as-stated.
 
-**Phase target:** Phase 4 pre-R1 prep, BLOCKER-priority. Should NOT land as a v1-tag-blocker (the gap exists at HEAD `bca4a55` and v1 tag is post-Phase-4); but SHOULD land early in Phase 4 pre-R1 so it doesn't sit silently for the duration of Phase-4 plugin manifest schema work (which builds ON the UCAN cap-attenuation chain — a leaky revocation observance during Phase-4 plugin work would compound).
+**Phase target:** Phase 4-Foundation pre-R1 prep, BLOCKER-priority. Should NOT land as a v1-tag-blocker (the gap exists at HEAD `bca4a55` and v1 tag is post-Phase-4-Meta); but SHOULD land early in Phase 4-Foundation pre-R1 so it doesn't sit silently for the duration of Phase-4-Foundation plugin manifest schema work (which builds ON the UCAN cap-attenuation chain — a leaky revocation observance during Phase-4-Foundation plugin work would compound). (NOTE: This entry was CLOSED at PR #199 during the pre-v1 cleanup window, before Phase 4-Foundation opened. Phase-target description retained for provenance.)
 
 **Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Surfaced by the green-up agent who correctly applied clause-(c) DISAGREE-WITH-EXPLANATION on bundling into the green-up sweep's mechanical-retense scope (this is an investigation, not a retense). Named here with full root-cause hypotheses + acceptance criterion so a dedicated Phase-4-pre-R1 investigation dispatch can pick it up without prep-work overhead.
 
@@ -2504,7 +2506,7 @@ A third (less-likely) candidate: the revocation entry has the wrong shape (e.g.,
 - Phase-3 G16-B-F (PR #161) — structural-always-on per-row cap-recheck inside `apply_atrium_merge`; defense-in-depth layer that masks this gap during cross-peer sync but doesn't fix it for same-peer revoke-then-write sequences.
 - CLAUDE.md baked-in #15 (v1-milestone-gate; couples to Phase-4 pre-R1 prep timing).
 
-**Closure (Phase 3.5 Track B, branch `pre-3.5-ucan-revocation-observance-fix`):**
+**Closure (Phase 4-Foundation Track B, branch `pre-3.5-ucan-revocation-observance-fix` — branch name retained for historical fidelity from the original "Phase 3.5" framing pre-rename 2026-05-11):**
 
 Root cause: **candidate #2 (namespace mismatch)** — the napi `revokeCapability(grantCid, actor)` surface invoked `Engine::revoke_capability(actor, grant_cid)`, passing the grant CID **AS the scope string**. The engine wrote a `system:CapabilityRevocation` Node with `scope = "<cid_string>"`, but `BackendGrantReader::revoked_scopes` matches revocations by scope-string equality (`"store:post:write"`, etc.). The revocation Node was correctly persisted but **never matched any real write scope** — every post-revoke `callAs` silently fail-OPENed via the grant-backed policy's `has_unrevoked_grant_for_scope`. Neither candidate #1 (stale cache) nor #3 (scope-key shape) — the cap-reader has no cache; the entry shape was correct for *its* (wrong) scope value.
 
@@ -2517,16 +2519,42 @@ Test pins (pim-2 §3.6b end-to-end + regression guard):
 
 ---
 
-## §14. Phase 3.5 carries (v1-assessment-window-bound)
+## §14. Phase 4-Foundation carries (v1-assessment-window-bound)
 
-§14 is the destination for Phase 3.5 R6 phase-close convergence carries + dogfood-validation findings that are dispositioned BELONGS-NAMED-NOW per HARD RULE 12 clause-(b). §13 carries Phase-4-bound items surfaced during the Phase-3-close pre-v1 cleanup window; §14 carries Phase-3.5-bound items surfaced during Phase 3.5's own R6 council + the dogfood-validation human-exercised gate.
+§14 is the destination for Phase 4-Foundation R6 phase-close convergence carries + dogfood-validation findings that are dispositioned BELONGS-NAMED-NOW per HARD RULE 12 clause-(b). §13 carries Phase-4-bound items surfaced during the Phase-3-close pre-v1 cleanup window; §14 carries Phase-4-Foundation-bound items surfaced during Phase 4-Foundation's own R6 council + the dogfood-validation human-exercised gate. (Section originally framed "Phase 3.5 carries" pre-rename 2026-05-11; renamed to Phase 4-Foundation carries on rename ratification.)
 
-Phase 3.5 plan-doc (`.addl/phase-3.5/00-implementation-plan.md`) routes findings here from:
+Phase 4-Foundation plan-doc (`.addl/phase-4-foundation/00-implementation-plan.md`) routes findings here from:
 - Wave-7 dogfood validation gate UX findings (when dispositioned BELONGS-NAMED-NOW; FIX-NOW-INLINE findings dispatch immediately)
-- R6 phase-close convergence council carries that don't gate the `phase-3.5-close` tag (v1-assessment-window-bound)
+- R6 phase-close convergence council carries that don't gate the `phase-4-foundation-close` tag (v1-assessment-window-bound)
 
-Couples to CLAUDE.md baked-in #15 (v1-milestone-gate). v1-assessment-window opens at Phase 4 close per CLAUDE.md #15; Phase 3.5 carries here are work that will be ingested at that window alongside Phase 4 carries.
+Couples to CLAUDE.md baked-in #15 (v1-milestone-gate). v1-assessment-window opens at Phase 4-Meta close per CLAUDE.md #15; Phase 4-Foundation carries here are work that will be ingested at that window alongside Phase 4-Meta carries.
 
-(Section seeded 2026-05-11 as part of Phase 3.5 pre-R1 triage — closes phantom-destination BLOCKER `meth-r1-1` per HARD RULE 12 clause-(b). Entries will land as R6 + dogfood findings are dispositioned during Phase 3.5 implementation.)
+(Section seeded 2026-05-11 as part of Phase 4-Foundation pre-R1 triage — originally "Phase 3.5 pre-R1 triage" — closes phantom-destination BLOCKER `meth-r1-1` per HARD RULE 12 clause-(b). Entries will land as R6 + dogfood findings are dispositioned during Phase 4-Foundation implementation.)
+
+---
+
+## §15. Phase 4-Meta / v1-assessment-window / Phase 5 candidates
+
+§15 is the destination for items that don't gate Phase 4-Foundation but earn a named home for downstream reassessment. Each entry names a candidate destination band ("Phase 4-Meta," "v1-assessment-window," or "Phase 5+"); the actual landing window is reassessed when the named cadence opens.
+
+### 15.1 Servo / Verso / Wry-with-Verso readiness for arbitrary-web-content rendering
+
+**Origin:** Ben framing 2026-05-11 conversation post-phase-rename — "We probably do want the ability to render arbitrary web-content for extensions that interface with search results and navigating to/saving arbitrary web-pages(/their content to your graph)." Surfaces a renderer-backend criterion broader than admin-UI rendering: the platform should be able to render arbitrary open-web content (search-result pages, third-party sites loaded inside an extension flow, full-page navigation captures saved to the user's graph as content) for extensions whose value depends on engaging with the open web.
+
+**Phase target:** Phase 4-Meta / v1-assessment-window / Phase 5+ candidate (band reassessed at each cadence open). Phase 4-Foundation ships admin-UI rendering against the materializer pipeline + Servo-via-Tauri-Verso path (per the Phase 4-Foundation renderer-backend deliverable in FULL-ROADMAP.md). Arbitrary-web-content rendering is a strict superset of admin-UI rendering — Foundation's renderer-backend choice covers the platform's own output; this entry covers everything Foundation doesn't.
+
+**Current ecosystem readiness (2026-05-11):** As of Servo 0.1.0 (April 2026), Servo's "arbitrary web content from open internet" path has known compatibility gaps with widely-deployed websites — Servo's engine does not yet pass enough of Web Platform Tests at the long tail of real-site complexity to be a drop-in renderer for arbitrary navigation. Tauri+Verso integration via `tauri-runtime-verso` is openly framed by its maintainers as "not as feature rich as Tauri's production backends [Wry/webkit2gtk/etc] yet" — usable for controlled-content rendering (the admin UI v0 path) but not yet a peer of the platform-native WebView for arbitrary-site rendering. Wry-with-Verso (using Verso as a Wry backend alternative) is in early integration.
+
+**Acceptance criteria when this becomes addressable:**
+- Servo or its successor passes a credible threshold of WPT-arbitrary-site cases (target: top-1000 web traffic compatibility ≥ 85% by smoke metric).
+- A maintained Tauri + Verso (or Wry + Verso) integration path exists with Tauri-runtime-verso parity to Wry on rendering correctness for arbitrary navigation.
+- OR an alternative open-web-renderer-with-no-Chromium-baggage emerges (post-Servo / non-Servo path).
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Phase 4-Foundation does not block on this; Phase 4-Foundation's renderer-backend choice (browser-wasm32 primary + Tauri 2.x wrapper secondary) covers the admin UI v0 rendering surface. Arbitrary-web-content extensions become viable as Servo/Verso readiness matures.
+
+**Couples to:**
+- `docs/future/benten-runtime.md` (WinterTC-compliant edge host — the eventual Phase 9+ exploratory direction is content-rendering-against-anywhere).
+- `docs/VISION.md` exploratory adoption story (extensions that work with the open web are part of "the assistant + tools you build engage with your real life," not just your local graph).
+- CLAUDE.md baked-in #17 (full peer vs thin compute surface — arbitrary-web-content rendering is most naturally a full-peer feature; browser tabs / edge workers don't host the renderer).
 
 ---

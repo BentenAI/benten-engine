@@ -145,7 +145,7 @@ The same audits surface frictions where the philosophy bends or where the code i
 
 This is the engine's capability/invariant policy stretched into the storage layer. The right abstraction is a pre-write hook trait (`CapabilityPolicy`) at the engine layer; today the storage layer carries the policy directly. The TODO at `crates/benten-graph/src/lib.rs:797` ("phase-3 — write-authority/is_privileged coherence") flags that the two axes can drift.
 
-**v1-gate prominence: medium.** The shape works today; the cleanup is hygiene. Phase 4 plugin manifests will pressure this surface harder because manifest-declared `requires` caps may not match the `store:<label>:write` shape that `GrantBackedPolicy` hard-codes today.
+**v1-gate prominence: medium.** The shape works today; the cleanup is hygiene. Phase 4-Foundation plugin manifests will pressure this surface harder because manifest-declared `requires` caps may not match the `store:<label>:write` shape that `GrantBackedPolicy` hard-codes today.
 
 ### Storage-layer indexes that should be user-defined views
 
@@ -185,7 +185,7 @@ CLAUDE.md baked-in #19 explicitly contemplates engine-level extensions for alter
 
 **`benten-caps::GrantBackedPolicy`** derives scope from label-only via `format!("store:{label}:write")`. Phase-1 CRUD zero-config maps every `crud('post')` write to `store:post:write`; any future namespace (e.g. `host:atrium:publish_view_result`, plugin manifests) must pre-populate `ctx.scope` at the engine layer. The bifurcation is a smell — there's no single source-of-truth that says "for primary-label X, the required scope is Y."
 
-**Phase 4 plugin manifests** (CLAUDE.md baked-in #18) make this worse: a plugin's manifest declares a `requires` cap that may not match the `store:<label>:write` shape at all. Either the policy needs to learn manifest-aware scope derivation, or the manifest-time scope must be threaded through `WriteContext::scope` at the registration boundary.
+**Phase 4-Foundation plugin manifests** (CLAUDE.md baked-in #18) make this worse: a plugin's manifest declares a `requires` cap that may not match the `store:<label>:write` shape at all. Either the policy needs to learn manifest-aware scope derivation, or the manifest-time scope must be threaded through `WriteContext::scope` at the registration boundary.
 
 **v1-gate prominence: high.** This is a real Phase-4 prerequisite. The audit names it explicitly as the v1-gate work.
 
@@ -224,14 +224,14 @@ Three crates carry files that are past comfortable readability:
 
 This is the single most prominent "load-bearing-yet-placeholder" surface in the workspace. The kernel architecture is ready for richer projections; the enum is the gating shape.
 
-**v1-gate prominence: high** for v1 (Phase 4) if the materializer composes USING IVM views (Sketch A in § 5). **Low** if the materializer is a sibling subscriber (Sketch B).
+**v1-gate prominence: high** for v1 (Phase 4-Foundation) if the materializer composes USING IVM views (Sketch A in § 5). **Low** if the materializer is a sibling subscriber (Sketch B).
 
 ### Other named surface concerns
 
 - **`benten-ivm::ViewQuery`** is one un-typed record carrying every field any view needs (`label`, `limit`, `offset`, `anchor_id`, `entity_cid`, `event_name`). Every view ignores most of them. Pattern mismatches surface as `E_IVM_PATTERN_MISMATCH`. A typed-per-view variant is named in the docstring but hasn't landed. **v1-gate prominence: medium.**
 - **`benten-ivm`'s `Strategy::C` (Z-set / DBSP)** is reserved-not-implemented forever-deferred. Either commit to a phase or rename to `Strategy::Reserved`. **v1-gate prominence: low.**
 - **`benten-ivm`'s Phase-1 `rebuild()` doesn't replay events.** Every view's `rebuild` clears state and resets the budget; none replay the change-event log. The audit names this as a real correctness gap. **v1-gate prominence: medium.**
-- **`benten-sync` light-client `MerkleProof` is O(n) not O(log n).** Tree-shaped path is named for Phase 4. The bandwidth-saving still holds because payload bytes aren't in the proof. **v1-gate prominence: low.**
+- **`benten-sync` light-client `MerkleProof` is O(n) not O(log n).** Tree-shaped path is named for Phase 4-Meta (couples to light-client modes (b)+(c) deferral). The bandwidth-saving still holds because payload bytes aren't in the proof. **v1-gate prominence: low.**
 - **`benten-sync`'s handshake nonce-cache for replay-protection.** The bounded-window math catches captured-off-wire replays older than the window; it does NOT catch a replay within the window if the nonce hasn't been cached. **v1-gate prominence: medium.**
 - **`benten-caps::GrantBackedPolicy::wildcard_variants` is O(2^N).** For an N-segment scope, up to 2^N candidate parent-scope spellings are queried. Bounded to N ≤ 6. **v1-gate prominence: low.**
 - **`benten-dsl-compiler::validate_shapes` only knows about SANDBOX.** Structured for appending rules, currently covers one. **v1-gate prominence: low.**
@@ -249,7 +249,7 @@ Two architectural forks surface across the per-crate audits. Both are pre-Phase-
 
 **Sketch A — Materializer is built on top of IVM views.** A schema (content-type definition) compiles into a `ViewDefinition` (or several). The materializer registers those as user views via `Algorithm::register` and walks the change stream into them. Reads from the materializer are reads from the IVM view. Pros: reuses every piece of `benten-ivm`. `GenericKernel`'s `(label_pattern, projection)` shape already covers a non-trivial slice. `BudgetTracker`'s stale-with-last-known-good is exactly the contract a render layer wants. Cons: `Projection::AllProps` is the only variant — real schema-driven projections (joins, edge-traversal, computed fields, reshape to non-Node output) all need `Projection` to be a much richer enum.
 
-**Sketch B — Materializer is a sibling subscriber.** The materializer is its own `impl ChangeSubscriber`, parallel to the IVM `Subscriber`, holding its own state shapes that don't fit `ViewResult`'s `Cids / Current / Rules` enum. Pros: clean separation; materializer is free to be as expressive as Phase 4 needs without contorting the IVM trait. Cons: code duplication. Both subscribers re-implement panic isolation, budget tracking, fan-out, stale-with-last-known-good. The existing `Subscriber` could be lifted to a generic shape that both consume, but that's a non-trivial refactor.
+**Sketch B — Materializer is a sibling subscriber.** The materializer is its own `impl ChangeSubscriber`, parallel to the IVM `Subscriber`, holding its own state shapes that don't fit `ViewResult`'s `Cids / Current / Rules` enum. Pros: clean separation; materializer is free to be as expressive as Phase 4-Foundation needs without contorting the IVM trait. Cons: code duplication. Both subscribers re-implement panic isolation, budget tracking, fan-out, stale-with-last-known-good. The existing `Subscriber` could be lifted to a generic shape that both consume, but that's a non-trivial refactor.
 
 **Sketch C — Materializer uses the engine evaluator + handler subgraphs.** CLAUDE.md #18 frames plugins as "subgraphs of the engine's own operation primitives." The materializer could similarly be a subgraph that the evaluator walks on every write — a TRANSFORM node consuming the changed Node, an EMIT node broadcasting rendered output. IVM views are then orthogonal: the materializer subgraph could read FROM an IVM view as one of its inputs, but it doesn't live in `benten-ivm`. Pros: maximally aligned with CLAUDE.md #3 (code-as-graph). New materializer logic ships as new subgraphs/handlers, not new Rust crates. Plugin trust model trivially extends. Cons: read latency might be higher (evaluator walk per read vs `BTreeMap::range` on a pre-materialized index).
 
@@ -261,7 +261,7 @@ The `benten-engine` audit's § 8 flags D-3.5-2 picking "(b) engine-side sub-modu
 
 Phase-3-backlog hasn't surfaced a finding here. The current shape is: a handler-call cycle would only fail at iteration-budget exhaustion (Inv-8 multiplicative budget). That's correct in the sense of "not infinite loops" but unhelpfully late as a diagnostic — the operator sees `E_INV_ITERATE_BUDGET` rather than "you have a cycle handler-A → handler-B → handler-A".
 
-The right shape is likely a registration-time cross-handler dependency walker that runs when any handler is registered or replaced; it would extend the existing per-subgraph cycle detection into the handler-call graph. Phase 4 (admin UI v0) is where this becomes operator-visible.
+The right shape is likely a registration-time cross-handler dependency walker that runs when any handler is registered or replaced; it would extend the existing per-subgraph cycle detection into the handler-call graph. Phase 4-Foundation (admin UI v0) is where this becomes operator-visible.
 
 ---
 
@@ -275,7 +275,7 @@ Every concrete v1-gate candidate surfaced by the 10 per-crate audits, tabulated.
 | `benten-errors` | `parse_cap_string` returns `Err(CapDenied)` for empty/malformed — conflates parse-failure with denial | low | Mint `E_CAP_STRING_MALFORMED` variant |
 | `benten-errors` | `PartialEq<ErrorCode> for str` (bare `str`) + sibling impls — test-shim leaking into public API | low | Audit which test sites depend on which direction; drop unused half |
 | `benten-errors` | `lib.rs` at 1666 LOC, monotonic-growing | low | Defer; future split into per-family modules |
-| `benten-errors` | No `serde` integration | low (medium for Phase 4) | Add `serde` feature-flag (off by default) when Phase 4 plugin manifests need wire-encoded ErrorCode |
+| `benten-errors` | No `serde` integration | low (medium for Phase 4-Foundation) | Add `serde` feature-flag (off by default) when Phase 4-Foundation plugin manifests need wire-encoded ErrorCode |
 | `benten-errors` | No `#[derive(Hash)]` | low | Add if a consumer needs `HashMap` keying |
 | `benten-core` | Two coexisting Anchor shapes (`u64`-id vs Cid-head-threaded) | medium | Pick canonical shape per `TODO(phase-3 — version surface consolidation)` |
 | `benten-core` | `U64_CHAINS` unbounded process-global table | medium | Build caller-owned `AnchorStore` handle |
@@ -287,24 +287,24 @@ Every concrete v1-gate candidate surfaced by the 10 per-crate audits, tabulated.
 | `benten-graph` | `Group` durability collapses to `Immediate` at redb mapping | low | Tracking only — redb upstream issue |
 | `benten-graph` | Storage-layer label/property indexes that could be user-defined views | low-medium | Defer to materializer / IVM-view-driven replacement (see § 5) |
 | `benten-graph` | `BlobError::CidMismatch.code()` returns `Unknown("E_MODULE_BYTES_CID_MISMATCH")` | low | Admit catalog enum variant |
-| `benten-graph` | `Transaction::transaction` always rejects nested | low | Savepoints / partial rollback design — Phase 4+ |
+| `benten-graph` | `Transaction::transaction` always rejects nested | low | Savepoints / partial rollback design — Phase 4-Meta or later |
 | `benten-ivm` | `Projection` has one variant (`AllProps`) — placeholder for materializer | high | Lift enum: `PropSubset`, `Computed`, `Reshape` |
 | `benten-ivm` | `ViewQuery` is one un-typed record over-broad | medium | Typed-per-view variant per docstring |
 | `benten-ivm` | `dispatch_for` + `is_canonical_view_id` are `pub` but documented INTERNAL | low | Narrow to `pub(crate)` after re-export sweep |
 | `benten-ivm` | Phase-1 `rebuild()` doesn't replay events | medium | Phase-3+ event-replay infrastructure |
 | `benten-ivm` | `Strategy::C` (Z-set / DBSP) reserved-not-implemented forever-deferred | low | Commit to phase OR rename to `Strategy::Reserved` |
-| `benten-ivm` | Subscriber pattern-based pre-filtering Phase-3 TODO unmoved | low (medium at Phase 4 scale) | Becomes load-bearing when N user views >> 5 |
+| `benten-ivm` | Subscriber pattern-based pre-filtering Phase-3 TODO unmoved | low (medium at Phase 4-Foundation scale) | Becomes load-bearing when N user views >> 5 |
 | `benten-ivm` | `Subscriber::on_change` uses `eprintln!` for non-fatal errors | low | `tracing` migration |
 | `benten-ivm` | `for_id_with_budget` for `content_listing` non-`"post"` label silently drops budget | low | Lift constructor to accept `(label, budget)` together |
-| `benten-ivm` | Budget arithmetic per-view-local, not subscriber-wide | low (medium at Phase 4 scale) | Pattern-based pre-filtering router (above) covers most of this |
+| `benten-ivm` | Budget arithmetic per-view-local, not subscriber-wide | low (medium at Phase 4-Foundation scale) | Pattern-based pre-filtering router (above) covers most of this |
 | `benten-caps` | `UcanGroundedPolicy` scope-string surface uses `cap:typed:*` prefix as routing key | medium | Thread audience DIDs end-to-end so chain-walker grounds arbitrary scopes (`phase-3-backlog §2.3 (i)`) |
 | `benten-caps` | `DEFAULT_NOW_SECS = 0` sentinel + clock-injection discipline | medium | `WriteContext::now` threading (`phase-3-backlog §2.3 (i)`) |
-| `benten-caps` | `GrantBackedPolicy` derives scope from `store:<label>:write` only | high | Manifest-aware scope derivation for Phase 4 plugin manifests |
+| `benten-caps` | `GrantBackedPolicy` derives scope from `store:<label>:write` only | high | Manifest-aware scope derivation for Phase 4-Foundation plugin manifests |
 | `benten-caps` | `GrantReader::has_unrevoked_grant_for_scope` is scope-string-keyed (§13.11 root cause) | medium | Add CID-keyed companion method |
 | `benten-caps` | `wildcard_variants` is O(2^N) | low | Wildcard-aware `GrantReader` query (single call) |
 | `benten-caps` | `LegacyUcanStubBackend` retention timeline | low | Retire when Phase-1 tests migrate to durable backend |
 | `benten-caps` | `InMemoryRateLimitPolicy` is the only concrete plug | low | Distributed token-bucket for Phase 6+ marketplace traffic |
-| `benten-caps` | `UCANBackend::iter_installed_proofs` silently skips decode failures | low | Decide disposition when forward-compat envelope shapes arrive (Phase 4+) |
+| `benten-caps` | `UCANBackend::iter_installed_proofs` silently skips decode failures | low | Decide disposition when forward-compat envelope shapes arrive (Phase 4-Foundation or later) |
 | `benten-eval` | `HostError::to_wire_bytes` Phase-2a placeholder format | low | Phase-3 DAG-CBOR versioned envelope upgrade |
 | `benten-eval` | `WAIT regular-walk path's `signal_derived_placeholder` principal binding | low | Phase-3 eval/engine `Outcome` unification (`lib.rs:208` TODO) |
 | `benten-eval` | `TraceStep` boundary-variant + attribution-threading completion | low | Required-on-every-variant contract |
@@ -328,7 +328,7 @@ Every concrete v1-gate candidate surfaced by the 10 per-crate audits, tabulated.
 | `benten-dsl-compiler` | `validate_shapes` covers only SANDBOX integer-typed properties | low | Append rules as shape-validation pattern grows |
 | `benten-dsl-compiler` | Cargo.toml description says "~200-300 LOC, 4 public items" — drift | low | Update description |
 | `benten-dsl-compiler` | No fuzz / proptest coverage of parser | low-medium | Add property test ("parses ⇒ round-trips through canonical-bytes with stable CID") |
-| `benten-dsl-compiler` | `branch(...)` / `iterate(...)` predicate/body captured as opaque text | low | Phase 4+ predicate-semantics work |
+| `benten-dsl-compiler` | `branch(...)` / `iterate(...)` predicate/body captured as opaque text | low | Phase 4-Meta or later predicate-semantics work |
 | `benten-engine` | `engine.rs` at 4471 LOC | low | Hygiene split: peel `register_subgraph*` to `engine_register.rs` |
 | `benten-engine` | `engine_sync.rs` at 1805 LOC | low | Split `engine_sync_attestation.rs` from `AtriumHandle` proper |
 | `benten-engine` | Generic-cascade lift — most methods on resolved-alias `impl Engine` block | medium | `phase-3-backlog §1.2-followup` + v1-assessment-window per CLAUDE.md #15 |
@@ -397,46 +397,51 @@ Distinct from § 4 "philosophy leaks" — these are surfaces where the code work
 
 ---
 
-## § 8. Phase 3.5 + Phase 4 readiness assessment
+## § 8. Phase 4-Foundation + Phase 4-Meta readiness assessment
 
-The workspace is **broadly ready** for Phase 3.5 (materializer + schema-rendering + admin UI v0) with one architectural decision and a small number of per-crate prerequisites.
+The workspace is **broadly ready** for Phase 4-Foundation (materializer + schema-rendering + admin UI v0 + full plugin manifest + decentralized registry) with one architectural decision and a small number of per-crate prerequisites. *Phase rename note 2026-05-11: former "Phase 3.5" → Phase 4-Foundation; former "Phase 4" → Phase 4-Meta. Phase 4-Foundation absorbs substantial scope from the original Phase 4 (plugin manifest full schema + decentralized registry + admin UI v0 + materializer + schema-rendering + module ecosystem tooling at scale + IVM-subgraph generalization). Phase 4-Meta retains self-composing admin meta-circular work + Phase-3-deferred items + v1-assessment-window items.*
 
-### Architectural decision before Phase 3.5 R5
+### Architectural decision before Phase 4-Foundation R5
 
-**Materializer-vs-IVM relationship.** Per § 5, the three sketches (A/B/C) are real architectural forks. The `benten-engine` audit's § 8 notes that D-3.5-2 is currently positioned as "(b) engine-side sub-module, sibling to `engine_views.rs`" — that's closest to Sketch A's lighter cousin. But the question of whether `Projection` lifts to a richer enum (Sketch A) vs. the materializer holds its own state shapes (Sketch B) vs. the materializer is composed from subgraphs (Sketch C) is still open. This is a Ben-level question, not an orchestrator-level decision.
+**Materializer-vs-IVM relationship.** Per § 5, the three sketches (A/B/C) are real architectural forks. The `benten-engine` audit's § 8 notes that D-3.5-2 (now a Phase-4-Foundation D-point) is currently positioned as "(b) engine-side sub-module, sibling to `engine_views.rs`" — that's closest to Sketch A's lighter cousin. But the question of whether `Projection` lifts to a richer enum (Sketch A) vs. the materializer holds its own state shapes (Sketch B) vs. the materializer is composed from subgraphs (Sketch C) is still open. This is a Ben-level question, not an orchestrator-level decision. The IVM-subgraph generalization (per FULL-ROADMAP.md Phase 4-Foundation deliverable) couples to this decision — if the materializer is composed from subgraph-shaped IVM views (Sketch C), the generalization is the substrate; if the materializer is a sibling subscriber (Sketch B), the generalization stands on its own.
 
-### Per-crate touchpoints that need to land BEFORE Phase 3.5 R5
+### Per-crate touchpoints that need to land BEFORE Phase 4-Foundation R5
 
 These are concrete prerequisites the materializer / admin UI work would surface if dispatched naively:
 
 - **`benten-ivm::Projection` enum lift** (if Sketch A is chosen). The current `AllProps` placeholder cannot support schema-driven joins, computed fields, or non-Node reshape. The kernel architecture is ready; the enum is the gating shape. The audit names this as the "single most prominent load-bearing-yet-placeholder surface in the workspace."
 - **`benten-caps::GrantBackedPolicy` scope derivation** to admit non-CRUD scopes (manifest-declared `requires` caps that don't fit `store:<label>:write`). Threaded through `WriteContext::scope` at the registration boundary.
-- **Class B β `read_node_as` semantics confirmed end-to-end** (CLAUDE.md baked-in #18). Shipped at PR #184 per the current CLAUDE.md status. The audit notes the 4 `todo!()` stubs cited in the brief are CLOSED at HEAD. Worth re-verifying as Phase 3.5 R5 dispatch enters.
+- **Class B β `read_node_as` semantics confirmed end-to-end** (CLAUDE.md baked-in #18). Shipped at PR #184 per the current CLAUDE.md status. The audit notes the 4 `todo!()` stubs cited in the brief are CLOSED at HEAD. Worth re-verifying as Phase 4-Foundation R5 dispatch enters.
 
-### Per-crate gaps that Phase 3.5 will surface
+### Per-crate gaps that Phase 4-Foundation will surface
 
-These are gaps that won't block dispatch but will become tangible inside Phase 3.5 work:
+These are gaps that won't block dispatch but will become tangible inside Phase 4-Foundation work:
 
 - **`benten-ivm::ViewQuery` un-typedness.** Materializer-registered views may want per-view query types; the current un-typed `ViewQuery` is fragile when N views with different field expectations register.
 - **`benten-ivm::Phase-1 rebuild()` doesn't replay events.** Admin UI v0 would observe this if a materialized view trips its budget on first install and rebuilds to empty rather than to the recovered state.
-- **`benten-eval`'s SUBSCRIBE pattern-based pre-filtering router** (named Phase-3 TODO, unmoved). Becomes load-bearing at "Phase 4 materializer registers 50 schemas → 50 views" scale.
+- **`benten-eval`'s SUBSCRIBE pattern-based pre-filtering router** (named Phase-3 TODO, unmoved). Becomes load-bearing at "Phase 4-Foundation materializer registers 50 schemas → 50 views" scale.
 - **Storage-layer indexes** (`benten-graph::get_by_label` / `get_by_property`) as the materializer's read-path entry. Cross-label property queries are out of scope today; "everything tagged urgent" has no path without a second index.
 
-### v1-gate items that should land DURING Phase 3.5 vs deferred to Phase 4 / v1-assessment-window
+### v1-gate items that should land DURING Phase 4-Foundation vs deferred to Phase 4-Meta / v1-assessment-window
 
-**Land during Phase 3.5:**
+**Land during Phase 4-Foundation (substantive engineering):**
 
 - Materializer architectural decision (sketches A/B/C).
 - `benten-ivm::Projection` lift if Sketch A.
+- IVM-subgraph generalization (lift the 5 hand-written views to subgraph-shaped views).
 - `benten-caps` scope derivation for non-CRUD scopes.
 - Handler-call-graph cycle detection (admin UI will surface this).
-
-**Defer to Phase 4 (plugin manifests + admin UI v0 + extension architecture):**
-
 - Per-plugin DID + UCAN delegation surfaces in `benten-id` and `benten-caps`.
 - Manifest-aware scope derivation in `benten-caps`.
 - Per-plugin private-namespace caps (probably an extension axis on `GrantBackedPolicy`).
 - Plugin manifest schema in `benten-core` (signed manifest envelope + `requires` / `shares` halves).
+- Full plugin install/upgrade/share flow + decentralized self-discovered registry on top of Atriums.
+
+**Defer to Phase 4-Meta (self-composing admin meta-circular + Phase-3-deferred items + v1-assessment-window prep):**
+
+- Self-composing admin work that requires the Foundation v0 to be live first.
+- wasmtime Component-Model re-evaluation (Phase-3-deferred per IFF clause).
+- Light-client mode-(b) range-query proof + mode-(c) signed checkpoint (Phase-3-deferred per ds-r4r2-3).
 
 **Defer to v1-assessment-window:**
 
@@ -457,11 +462,11 @@ These are gaps that won't block dispatch but will become tangible inside Phase 3
 
 ## § 9. Open questions for Ben
 
-Flat list of the most-impactful unresolved decisions across all 10 crates. Roughly priority-ordered for the pre-Phase-3.5-R5 + pre-Phase-4 windows.
+Flat list of the most-impactful unresolved decisions across all 10 crates. Roughly priority-ordered for the pre-Phase-4-Foundation-R5 + pre-Phase-4-Meta windows.
 
-1. **D-3.5-2 materializer location + composition shape.** Sketch A (extend `benten-ivm`'s `Projection` enum + register materializer views as user views) vs Sketch B (sibling subscriber, new crate or new module) vs Sketch C (materializers are subgraphs the evaluator walks). The audit positions the current plan as "(b) engine-side sub-module" but the underlying composition-vs-sibling-vs-subgraph question hasn't been codified. This is the single biggest pre-Phase-3.5 decision.
+1. **D-4F-2 materializer location + composition shape (formerly D-3.5-2).** Sketch A (extend `benten-ivm`'s `Projection` enum + register materializer views as user views) vs Sketch B (sibling subscriber, new crate or new module) vs Sketch C (materializers are subgraphs the evaluator walks). The audit positions the current plan as "(b) engine-side sub-module" but the underlying composition-vs-sibling-vs-subgraph question hasn't been codified. This is the single biggest pre-Phase-4-Foundation decision.
 
-2. **D-3.5-3 schema-rendering compiler location.** JSON-Schema-flavored shape vs DSL-extension in `benten-dsl-compiler`. The DSL compiler is currently 895 LOC of single-purpose handler-DSL → Subgraph compiler. Extending it to a second pipeline (schema → renderable graph) roughly doubles its scope; alternatively a `benten-schema-compiler` sibling crate keeps each compiler narrow. Which better fits the "code-as-graph" philosophy (CLAUDE.md #3)?
+2. **D-4F-3 schema-rendering compiler location (formerly D-3.5-3).** JSON-Schema-flavored shape vs DSL-extension in `benten-dsl-compiler`. The DSL compiler is currently 895 LOC of single-purpose handler-DSL → Subgraph compiler. Extending it to a second pipeline (schema → renderable graph) roughly doubles its scope; alternatively a `benten-schema-compiler` sibling crate keeps each compiler narrow. Which better fits the "code-as-graph" philosophy (CLAUDE.md #3)?
 
 3. **`benten-graph` storage-layer label/property indexes as user-defined views.** Phase-1 baked them in for boot-time engine paths (capability grants, version chains). Moving them out requires the materializer / IVM-view-driven replacement to be live before engine boot. Is the storage-layer thinness slip worth resolving for v1, or is "engine-boot indexes are special" the right durable shape?
 
@@ -469,13 +474,13 @@ Flat list of the most-impactful unresolved decisions across all 10 crates. Rough
 
 5. **`benten-id` `MultiSigSurface` extension surface for post-quantum / hardware-key futures.** Ed25519 is hardcoded throughout. CLAUDE.md #19 trust model (compile-time-linked Rust crates) makes a heavy-lift refactor acceptable when it lands. Should the trait extension point land for v1 (the cag-5 + D-PHASE-3-24 commitment is to defer the concrete protocol; the trait could ship without choosing one) or defer entirely until a concrete need lands?
 
-6. **Handler-call-graph cycle detection at registration time.** Currently the only cycle defense is Inv-8 multiplicative budget exhaustion at runtime. Admin UI v0 will surface this. Add a registration-time cross-handler dependency walker in `benten-engine` for v1, or accept that cycles surface only as `E_INV_ITERATE_BUDGET` until Phase 4?
+6. **Handler-call-graph cycle detection at registration time.** Currently the only cycle defense is Inv-8 multiplicative budget exhaustion at runtime. Admin UI v0 will surface this. Add a registration-time cross-handler dependency walker in `benten-engine` for v1, or accept that cycles surface only as `E_INV_ITERATE_BUDGET` until Phase 4-Foundation?
 
-7. **`benten-ivm::ViewQuery` typed-per-view variant** (named in docstring, not landed despite views being stable since Phase 1). Phase 4 materializer-registered views will benefit. Land in Phase 3.5 alongside the `Projection` lift, or defer to a Phase 4 design pass?
+7. **`benten-ivm::ViewQuery` typed-per-view variant** (named in docstring, not landed despite views being stable since Phase 1). Phase 4-Foundation materializer-registered views will benefit. Land in Phase 4-Foundation alongside the `Projection` lift, or defer to a Phase 4-Meta design pass?
 
-8. **`benten-engine` impl-block generic-cascade lift.** Named in `phase-3-backlog §1.2-followup` and in the v1-assessment-window per CLAUDE.md #15. The wasm32 `EngineGeneric<BrowserBackend>` would benefit from sharing more code. Mid-Phase-3.5 (when surfaces are still in flux) vs. pre-v1-tag (when surfaces are frozen)?
+8. **`benten-engine` impl-block generic-cascade lift.** Named in `phase-3-backlog §1.2-followup` and in the v1-assessment-window per CLAUDE.md #15. The wasm32 `EngineGeneric<BrowserBackend>` would benefit from sharing more code. Mid-Phase-4-Foundation (when surfaces are still in flux) vs. pre-v1-tag (when surfaces are frozen)?
 
-9. **`benten-core` two-Anchor-shape consolidation.** `u64`-id and Cid-head-threaded both ship; R5 G7 was supposed to pick a canonical shape and didn't. Phase 4 anchor-store-with-GC work would force the issue. Resolve in Phase 3.5 or in Phase 4 alongside the anchor-store landing?
+9. **`benten-core` two-Anchor-shape consolidation.** `u64`-id and Cid-head-threaded both ship; R5 G7 was supposed to pick a canonical shape and didn't. Phase 4-Foundation anchor-store-with-GC work (if introduced for the plugin / registry surfaces) would force the issue. Resolve in Phase 4-Foundation or in Phase 4-Meta alongside the anchor-store landing?
 
 10. **`benten-ivm::Strategy::C` disposition.** Reserved-not-implemented forever-deferred. Either commit to a phase (Z-set / DBSP is a real algorithmic family) or rename to `Strategy::Reserved` with a string payload so the variant doesn't accumulate semantic weight without a plan.
 

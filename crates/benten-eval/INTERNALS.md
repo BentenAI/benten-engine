@@ -1,6 +1,6 @@
 # benten-eval INTERNALS
 
-A plain-English deep-dive into `crates/benten-eval/`. Audience: a fresh agent or human reviewer trying to understand what this crate is, what it owns, where its boundaries are, and what to watch for in Phase 3.5 / Phase 4. Companion to `docs/ARCHITECTURE.md` + `docs/ENGINE-SPEC.md` + `docs/HOW-IT-WORKS.md`.
+A plain-English deep-dive into `crates/benten-eval/`. Audience: a fresh agent or human reviewer trying to understand what this crate is, what it owns, where its boundaries are, and what to watch for in Phase 4-Foundation / Phase 4-Meta. Companion to `docs/ARCHITECTURE.md` + `docs/ENGINE-SPEC.md` + `docs/HOW-IT-WORKS.md`.
 
 Total source: ~15.7k LOC across 51 `.rs` files (src) + 5 benches + ~120 integration test files (~17.4k LOC of tests). This is the second-largest crate in the workspace after `benten-engine` and it is the crate where the project's load-bearing architectural commitments physically live.
 
@@ -327,10 +327,10 @@ I did not find: a new primitive sneaking in (none); SANDBOX host-fn surface expa
 
 ---
 
-## 8. Phase 3.5 + Phase 4 expectations
+## 8. Phase 4-Foundation + Phase 4-Meta expectations
 
 ### Materializer pipeline
-The materializer pipeline (turning declarative view definitions into IVM strategies the engine can run incrementally) is LIKELY to land either here, in a new sibling crate, or split across this crate + `benten-ivm`. Two reasons it might end up here: (a) materializers compile to subgraph specs that the existing evaluator walks (composition-through-primitives discipline); (b) the evaluator already owns the TRANSFORM expression compiler in `src/expr/`, which is the natural place to extend with a "compile expr to IVM strategy" pass. Two reasons it might NOT end up here: (a) the evaluator stays ignorant of `benten-ivm`'s internals by design (`Strategy` is named at the engine boundary but the per-strategy logic lives in `benten-ivm`); (b) materialization is conceptually a phase that happens AHEAD of evaluation, not during it. If the materializer compiles down to operation Node subgraphs the evaluator walks (rather than to runtime IVM strategy objects), Phase 3.5 work physically lives in `src/materializer/` here or in a new `benten-materializer` crate that imports `benten-eval` + `benten-ivm` and produces subgraph specs.
+The materializer pipeline (turning declarative view definitions into IVM strategies the engine can run incrementally) is LIKELY to land either here, in a new sibling crate, or split across this crate + `benten-ivm`. Two reasons it might end up here: (a) materializers compile to subgraph specs that the existing evaluator walks (composition-through-primitives discipline); (b) the evaluator already owns the TRANSFORM expression compiler in `src/expr/`, which is the natural place to extend with a "compile expr to IVM strategy" pass. Two reasons it might NOT end up here: (a) the evaluator stays ignorant of `benten-ivm`'s internals by design (`Strategy` is named at the engine boundary but the per-strategy logic lives in `benten-ivm`); (b) materialization is conceptually a phase that happens AHEAD of evaluation, not during it. If the materializer compiles down to operation Node subgraphs the evaluator walks (rather than to runtime IVM strategy objects), Phase 4-Foundation work physically lives in `src/materializer/` here or in a new `benten-materializer` crate that imports `benten-eval` + `benten-ivm` and produces subgraph specs.
 
 ### Schema-driven rendering compiler
 The Phase-4 rendering compiler (declarative schema → handler subgraph) is the same composition shape as the materializer. It emits subgraph specs; this evaluator walks them. The right question at Phase-4 design time is whether the compiler lives in a sibling crate (clean separation; depends on `benten-eval` for the subgraph types) or whether it lives in the DSL layer (`bindings/dsl` or equivalent TypeScript) and produces JSON which gets deserialised on the Rust side. Either way `benten-eval`'s public shape doesn't change.

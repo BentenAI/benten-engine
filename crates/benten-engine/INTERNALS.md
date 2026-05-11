@@ -313,11 +313,11 @@ All benches use `harness = false` (Criterion CLI flag pass-through).
 
 ---
 
-## 8. Phase 3.5 + Phase 4 expectations
+## 8. Phase 4-Foundation + Phase 4-Meta expectations
 
 ### 8a. Materializer (G23-B)
 
-Per D-3.5-2 option (b), the schema-driven rendering materializer compiler lives as a sub-module of `benten-engine` rather than a new crate. The materializer consumes `SubgraphSpec` produced by `benten-dsl-compiler` and renders schema-driven views. The likely module location is `crates/benten-engine/src/materializer.rs` (or `materializer/mod.rs` if it grows tabular complexity) — sibling to `engine_views.rs`. It will compose `IvmViewReadGate` for per-row gating, `cap_recheck` for the closure shape, and `UserViewSpec` for the registration surface. No new public root API surface — materializer registration goes through `register_user_view` with a new `UserViewInputPattern::Materialized` variant.
+Per D-4F-2 option (b), the schema-driven rendering materializer compiler lives as a sub-module of `benten-engine` rather than a new crate. The materializer consumes `SubgraphSpec` produced by `benten-dsl-compiler` and renders schema-driven views. The likely module location is `crates/benten-engine/src/materializer.rs` (or `materializer/mod.rs` if it grows tabular complexity) — sibling to `engine_views.rs`. It will compose `IvmViewReadGate` for per-row gating, `cap_recheck` for the closure shape, and `UserViewSpec` for the registration surface. No new public root API surface — materializer registration goes through `register_user_view` with a new `UserViewInputPattern::Materialized` variant.
 
 ### 8b. Schema-driven rendering compiler
 
@@ -339,7 +339,7 @@ CLOSED at HEAD via `EngineCapsHandle::revoke_capability_by_grant_cid` (new metho
 
 ## 9. Open questions / unresolved internals
 
-- **Where does materializer live exactly?** D-3.5-2 picks "(b) engine-side sub-module"; the module name + the existing `engine_views.rs` neighbor positioning is the natural shape, but the materializer's compiler-vs-runtime split has not been mapped to a specific file. Open question for Phase-3.5 R1.
+- **Where does materializer live exactly?** D-4F-2 picks "(b) engine-side sub-module"; the module name + the existing `engine_views.rs` neighbor positioning is the natural shape, but the materializer's compiler-vs-runtime split has not been mapped to a specific file. Open question for Phase-3.5 R1.
 - **Cycle detection in the subgraph walker?** Currently the evaluator runs over a DAG (Inv-2 forbids cycles + Inv-7 forbids self-loops). User-registered subgraphs walk the static `SubgraphSpec` at register time and the invariant battery rejects cycles. But at materialization time + during `register_subgraph_replace` hot-reload, no cycle detection runs over the broader graph of handler-CID → handler-CID call edges (the `call_handler` cross-handler dispatch). Phase-3-backlog has not surfaced a finding here; it's worth flagging that handler-call graphs could form cycles that would only fail at iteration-budget exhaustion.
 - **Generic-cascade lift (`Engine = EngineGeneric<RedbBackend>` vs full generic).** Phase-3-backlog §1.2-followup names "impl-block cascade" as the carried-forward work. At HEAD, the resolved-alias `impl Engine` block carries ~all of the dispatch core; the `impl<B: GraphBackend> EngineGeneric<B>` block carries constructors + a small number of cross-module accessors + the WAIT TTL GC entry points. The cleanest cascade requires the umbrella `GraphBackend` trait to surface `register_module_bytes` / `get_by_label` / `get_by_property` / closure-based `transaction(|tx| ...)` paths uniformly — currently those are inherent to `RedbBackend`. The v1-assessment-window per CLAUDE.md baked-in #15 includes "engine impl-block generic-cascade lift" as a named pre-tag cleanup.
 - **Materializer + subgraph-cache key.** The current `SubgraphCache` keys on `(handler_id, op, subgraph_cid)`. A materializer subgraph that walks per-row would benefit from a cache keyed on something finer (likely `(view_id, row_label, row_cid)`); the existing key shape may or may not generalize. Open until materializer R1.
