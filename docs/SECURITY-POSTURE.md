@@ -1,12 +1,8 @@
 # Security Posture — Benten Engine (Phase 3 close)
 
 This document records the security claims Benten makes through Phase 3
-close and the known compromises those claims rest on. Each Phase-1
-compromise is tied back to `.addl/phase-1/00-implementation-plan.md`
-(R1 Triage Addendum); Phase-2b additions are tied back to
-`.addl/phase-2b/00-implementation-plan.md`; Phase-3 additions
-(Compromise #22 + #23) are tied back to `.addl/phase-3/00-implementation-plan.md`.
-This document is the written, referenceable form.
+close and the known compromises those claims rest on. This document is
+the written, referenceable form.
 
 ## Phase 3 close — final compromise table
 
@@ -116,7 +112,7 @@ Benten uses **BLAKE3-256** specifically (multihash code `0x1e`), not SHA-256 (`0
 **Phase-N reconsideration triggers:** If Benten ever commits to "content must be verifiable on default public IPFS gateways without plugin-level BLAKE3 support" as an adoption requirement, revisit with Option C (dual-hash) or Option D (boundary translation). Until then, Option A stands.
 
 **Revisit at v1-window** (per `docs/future/phase-3-backlog.md` §10.3):
-- *Question to ask:* Does the v1 deployment posture (full peer + thin compute surfaces per CLAUDE.md baked-in #17) introduce content-addressing surfaces that require post-quantum-floor collision resistance — i.e., do any v1 audit assumptions rest on `2^128` being out of reach for nation-state adversaries with future quantum hardware?
+- *Question to ask:* Does the v1 deployment posture (full peer + thin compute surfaces) introduce content-addressing surfaces that require post-quantum-floor collision resistance — i.e., do any v1 audit assumptions rest on `2^128` being out of reach for nation-state adversaries with future quantum hardware?
 - *What changed pre-v1 vs Phase-1 framing:* the threat model widened from single-machine engine to multi-device Atriums + thin-client adjacents (browsers, edge runtimes); content-addressing identity now feeds DID-bound capability chains + UCAN-by-CID grants whose forgery cost matters for cap-policy integrity.
 - *No-action option:* keep BLAKE3-256 as the architectural floor; document the post-quantum reconsideration as a Phase-N+ trigger (parallel to the IPFS-gateway trigger above). The 128-bit bound is sufficient for the personal-AI-assistants threat model + standard-classical-adversary v1 audit.
 
@@ -327,7 +323,7 @@ The cold-start cost is bounded by the D22 tiered numerics (≤2 ms p95 / ≤5 ms
 - **EMIT engine wrapper** at `crates/benten-engine/src/primitive_host.rs::emit_event` was previously a documented no-op (`Phase-1 EMIT is a no-op at the host level`); a handler with a standalone EMIT primitive (no backing WRITE) silently dropped the payload. Wave-8h wired EMIT to publish through a dedicated `EmitBroadcast` channel (separate from the `ChangeBroadcast` channel which carries storage WRITE events). Public API: `Engine::subscribe_emit_events`. The two channels are intentionally separate — extending `benten_graph::ChangeEvent` with an emit variant would conflate two distinct event shapes (storage commits vs handler-emitted events) that currently serve different downstream consumers (IVM views + cap-recheck pipelines vs ad-hoc observers + log shippers). Phase-3 may converge them when iroh sync introduces a unified P2P event stream; until then the two channels stay distinct and `EmitBroadcast` lives in `crates/benten-engine/src/emit_broadcast.rs`.
 - **IVM Algorithm B production registration** at `crates/benten-engine/src/engine_views.rs` was previously a `ContentListingView` fallback for every `Strategy::B`-declared user view (the view ran on the Phase-1 ContentListingView shape regardless of the spec's declared Strategy::B). Wave-8h wired the dispatch to construct `AlgorithmBView::for_id(spec.id())` for the 5 canonical view IDs that `AlgorithmBView` supports natively. **Phase-3 G15-A + G15-B + R5 wave-9 W9-T1 closure:** the non-canonical-view fallback is RETIRED — `Algorithm::register` (and the budget-aware sibling `Algorithm::register_with_budget`) instantiates a generic single-loop kernel (`GenericKernel`) for non-canonical view ids keyed on `(label_pattern, projection)`. The Phase-2b coverage compromise no longer applies: non-canonical view IDs no longer silently coerce to `ContentListingView`. The drift-detector proptest harness (`crates/benten-ivm/tests/algorithm_b_drift_detector.rs`, 5 pins × 1 000 cases each) is the verification surface for "incremental updates equal from-scratch rebuild" parity across the merged kernel. Closure tracking + cross-references in [`docs/future/phase-3-backlog.md` §5.1](../docs/future/phase-3-backlog.md).
 
-**Cross-refs.** `docs/SANDBOX-LIMITS.md` (axes + per-platform cold-start); `docs/HOST-FUNCTIONS.md` (host-fn surface); `.addl/phase-2b/00-implementation-plan.md` §3 G7-A/B/C + §5 D3 / D17 / D20 / D21 / D22 / D24 + §sec-pre-r1-12 / sec-pre-r1-13; `.addl/phase-2b/wave-8-brief.md` §8b + §8h + §8d-narrative; `.addl/phase-2b/r4b-followup-primitive-executor-docs-vs-code-audit.json` (the post-impl audit that surfaced the wire-through gaps).
+**Cross-refs.** `docs/SANDBOX-LIMITS.md` (axes + per-platform cold-start); `docs/HOST-FUNCTIONS.md` (host-fn surface).
 
 ---
 
@@ -356,7 +352,7 @@ The counters increment regardless of whether a capability policy is plumbed in �
 **Phase-2 / Phase-3 revisit:** Phase-2 introduces a policy-layer budget trait so `CapabilityPolicy` implementations can enforce per-actor rate limits. Phase-3 ties the identity shape (actor Cid) to the budget so the rate is scoped correctly across a federation, and adds eviction for the per-scope counter map.
 
 **Revisit at v1-window** (per `docs/future/phase-3-backlog.md` §10.2):
-- *Question to ask:* Does the personal-AI-assistants threat model (CLAUDE.md three-pillar §2 adoption) produce write-flood attack surfaces that can reach the engine ingress through the cap-policy permit gate? If yes: does a per-actor rate-limit (now that `benten-id` ships actor-Cid identity) close the flood vector without breaking legitimate bulk-import / federation-replay workflows?
+- *Question to ask:* Does the personal-AI-assistants threat model produce write-flood attack surfaces that can reach the engine ingress through the cap-policy permit gate? If yes: does a per-actor rate-limit (now that `benten-id` ships actor-Cid identity) close the flood vector without breaking legitimate bulk-import / federation-replay workflows?
 - *What changed pre-v1 vs Phase-1 framing:* `benten-id` actor-Cid identity now exists (Phase-3 G14-A); the per-scope counter map persists across Phase-3 (still no eviction). Eviction + per-actor budget threads through the same `CapabilityPolicy` gate that Phase-3 hardened end-to-end.
 - *LOC estimate at v1-window:* ~150-300 (per-actor budget enum on `CapabilityPolicy` + eviction policy on the per-scope counter map + integration tests for budget-exhaustion `ON_DENIED` routing).
 
@@ -474,7 +470,8 @@ the GrantBackedPolicy derived-scope check exercised by
 subscriber path. This is a deliberate Phase-1 simplification, not a bug:
 
 - **The Engine instance is itself the security boundary.** Phase 1 ships
-  the embedded / single-process trust model (`docs/VISION.md`, pillar 1).
+  the embedded / single-process trust model (the engine lives in the
+  caller's address space; there is no daemon).
   Every caller of `subscribe_change_events` is already trusted with full
   read access to the backing store — they could open the `redb` file
   directly and observe the same data. Gating the subscribe surface would
@@ -837,9 +834,9 @@ operator must explicitly hand the envelope to a new engine
 instance and accept that the re-check semantics change. No
 silent regression.
 
-**Cross-refs.** plan §9.1 resume protocol; G3-A ExecutionState
-envelope; G5-B-i Decision 4; `.addl/phase-2b/00-scope-outline.md`
-§7a; G12-E PR (CLOSED at Phase 2b G12-E).
+**Cross-refs.** Phase-2a resume protocol; the `ExecutionState`
+envelope shape; the Phase-2b SuspensionStore landing (closed at Phase
+2b).
 
 ---
 
@@ -1187,9 +1184,8 @@ only).
 2. **Closes the "trusted boundary" sub-question entirely** — no need
    to define subgraph-annotation vs cap-grant vs engine-builder vs
    manifest-bound semantics for opt-in.
-3. **CLAUDE.md §5: don't add features for hypothetical future
-   requirements** — no data shows cold-start is a real workload
-   problem at Phase 2b close.
+3. **Don't add features for hypothetical future requirements** — no
+   data shows cold-start is a real workload problem at Phase 2b close.
 4. **Misuse vector is real** — a developer slapping `pool: true`
    without understanding isolation implications is a silent security
    regression; pre-1.0 should not ship that footgun.
@@ -1201,9 +1197,8 @@ The G11-2b paper-prototype revalidation
 (`docs/PAPER-PROTOTYPE-REVALIDATION.md`) at 16.7% SANDBOX rate gives
 no signal that cold-start is a hot path for typical workloads.
 
-**Cross-refs.** D3-RESOLVED in `.addl/phase-2b/00-implementation-plan.md`;
-`docs/SANDBOX-LIMITS.md` per-call defaults; per-call scope
-clarification per wsa-20 (Engine + Module shared, Store + Instance
+**Cross-refs.** `docs/SANDBOX-LIMITS.md` per-call defaults; per-call
+scope clarification (Engine + Module shared, Store + Instance
 per-call).
 
 ---
@@ -1381,8 +1376,8 @@ rehydrates the in-memory active set via
 `Engine::rehydrate_module_bytes_from_zone`. The trait surface is
 defined at `crates/benten-graph/src/backends/blob_backend_trait.rs`;
 the redb-native impl at `crates/benten-graph/src/backends/blob_backend.rs`;
-the IndexedDB-browser impl deferred to G18-A wave-5a per
-CLAUDE.md baked-in #17 (thin-client commitment).
+the IndexedDB-browser impl landed in Phase 3 under the engine's
+thin-client commitment (browser tabs hold snapshot cache only).
 
 **Cross-refs.** `crates/benten-engine/src/engine.rs::register_module_bytes`
 docstring; `crates/benten-engine/src/engine_modules.rs::install_module`
@@ -1476,7 +1471,7 @@ umbrella trait (PHASE-3-BUNDLE-1).
 
 ### Compromise #19 — Browser-target persistent storage — PARTIALLY CLOSED at Phase-3 G18-A wave-5a
 
-**Status:** **PARTIALLY CLOSED** at Phase-3 G18-A wave-5a (this commit); **FULL CLOSURE** deferred to G18-A-followup wave (per `docs/future/phase-3-backlog.md` §4.3) when the wasm32 `web-sys` / `js-sys` / `wasm-bindgen-futures` plumbing lands. **Partially closed via:** IndexedDB schema + handler scaffolding per CLAUDE.md baked-in #17 thin-client commitment + D-PHASE-3-27 schema-versioning + br-r1-2 BLOCKER scaffolding.
+**Status:** **PARTIALLY CLOSED** at Phase 3; **FULL CLOSURE** deferred per `docs/future/phase-3-backlog.md` §4.3 (when the wasm32 `web-sys` / `js-sys` / `wasm-bindgen-futures` plumbing lands). **Partially closed via:** IndexedDB schema + handler scaffolding under the engine's thin-client commitment, plus schema-versioning groundwork.
 
 **What landed at G18-A (scaffolding half).** Two new modules ship the persistence-layer architectural surface on `wasm32-unknown-unknown`:
 
@@ -1488,7 +1483,7 @@ umbrella trait (PHASE-3-BUNDLE-1).
 - The wasm32 `web-sys` / `js-sys` / `wasm-bindgen-futures` deps that issue real `IDBDatabase.open` / `IDBObjectStore.put` / `IDBObjectStore.get` calls. The wasm32 arms of `apply_migration_step` + `close_database` are stubs today. Until those wire, `BrowserManifestStore::is_persistent()` and `IndexedDbBlobBackend::is_persistent()` BOTH return `false` honestly per the disclosure principle Compromise #19 originally articulated ("honest disclosure protects operators from assuming durability where none exists").
 - The `BlobBackend` trait integration through the `Engine::open_with_browser_blob_backend(...)` constructor. The handle ships; the engine wire-up is the follow-up scope.
 
-**Per CLAUDE.md baked-in #17 thin-client commitment.** The IndexedDB schema declares ONLY thin-client surfaces (`module_manifest_store` + `blob_cache`) — full-sync state (`loro_doc`, `iroh_peers`, `sync_cursor`, `atrium_full_state`) is explicitly absent and forbidden by the architectural pin at `bindings/napi/tests/indexeddb_schema.rs::indexeddb_persistence_thin_client_cache_only_per_baked_in_17`. Browser tabs participate in sync as authenticated thin-client views into a user's full peer per D-PHASE-3-30 (G14-D thin-client subscription); they do NOT carry sync state of their own. This pin lands at G18-A regardless of whether the wasm32 plumbing has wired yet.
+**Thin-client commitment.** The IndexedDB schema declares ONLY thin-client surfaces (`module_manifest_store` + `blob_cache`) — full-sync state (`loro_doc`, `iroh_peers`, `sync_cursor`, `atrium_full_state`) is explicitly absent and forbidden by the architectural pin at `bindings/napi/tests/indexeddb_schema.rs::indexeddb_persistence_thin_client_cache_only_per_baked_in_17`. Browser tabs participate in sync as authenticated thin-client views into a user's full peer; they do NOT carry sync state of their own.
 
 **OPFS deferral per D-PHASE-3-27 / br-r1-11.** IndexedDB is primary at G18-A (broad browser support); OPFS / File System Access API is deferred to post-Phase-3. Future Phase-4+ may add an `OpfsBlobStore` sibling via the `BlobBackend` trait surface.
 
@@ -1599,7 +1594,7 @@ verification arm is additive — no wire-format break.
 
 **Renumbering note.** This was `Compromise #N+5` in `docs/MODULE-MANIFEST.md`'s local table prior to R6 phase-close; lifted to global #21 here.
 
-**Cross-refs.** `docs/MODULE-MANIFEST.md` §6 + §7; `docs/ERROR-CATALOG.md::E_MODULE_MANIFEST_CID_MISMATCH`; D16 + D9 in `.addl/phase-2b/00-implementation-plan.md`.
+**Cross-refs.** `docs/MODULE-MANIFEST.md` §6 + §7; `docs/ERROR-CATALOG.md::E_MODULE_MANIFEST_CID_MISMATCH`.
 
 ---
 
@@ -1623,16 +1618,16 @@ End-to-end *content* confidentiality is preserved (iroh's QUIC payload is encryp
 - *Ships at Phase 3:* an adversary running or compromising a public iroh relay can build a social graph of who-connects-to-whom across Atriums using the engine's default sync transport. This is a metadata-correlation attack class, not a content-disclosure class. The CIDs being exchanged stay encrypted.
 - *Deferred to Phase 7 / 9:* relay-trust posture. Until Garden-relays land, operators with stricter metadata threat models (whistle-blowers, journalists, threatened communities) MUST self-host iroh relay infrastructure for their Atriums or use the engine's full peer (laptop / phone-OS app) shape exclusively on trusted networks where NAT traversal is not needed.
 
-**Phase 7 promotion path.** Wire Garden-protocol relays per the Phase-7 Gardens design: relay infrastructure becomes a first-class Garden resource (a Garden-controlled iroh relay node, accessible only to Atrium members of the Garden, with its operator-set being the Garden's quorum of admins rather than n0 / community). The Atrium-config surface gains a `relays: Vec<RelayDescriptor>` field where each `RelayDescriptor` is either `PublicIroh` (current default — the leaky path with a documented warning) or `GardenRelay { garden_id, relay_did }`. The Atrium join handshake (D-PHASE-3-25 heterogeneity contract; CLAUDE.md baked-in #17 thin-client posture) extends with a relay-trust negotiation step where peers agree on the relay set before falling back to public infrastructure.
+**Phase 7 promotion path.** Wire Garden-protocol relays per the Phase-7 Gardens design: relay infrastructure becomes a first-class Garden resource (a Garden-controlled iroh relay node, accessible only to Atrium members of the Garden, with its operator-set being the Garden's quorum of admins rather than n0 / community). The Atrium-config surface gains a `relays: Vec<RelayDescriptor>` field where each `RelayDescriptor` is either `PublicIroh` (current default — the leaky path with a documented warning) or `GardenRelay { garden_id, relay_did }`. The Atrium join handshake (per the device-heterogeneity contract and the engine's thin-client posture) extends with a relay-trust negotiation step where peers agree on the relay set before falling back to public infrastructure.
 
 **Phase 9 hardened-deployment fallback.** If Phase 7 Garden-relays slip, the Phase-9 hardened deployment posture takes the conservative path: *no* public iroh relays in production builds; full peers MUST be on networks reachable directly OR through self-hosted relays. The hardened-deployment cargo feature flag gates the public-iroh-relay code paths out entirely. This is the brutal but correct fallback if Garden-relays don't land.
 
 **Posture claim.** Compromise IS introduced at Phase 3 close — the public-relay metadata leak goes from theoretical (no P2P sync at Phase 2b) to live (Atriums actually sync through iroh). Operators reading SECURITY-POSTURE.md see this honestly disclosed alongside the named closure target rather than discovering it via post-Phase-3 surveillance. Defends against the failure shape "compromise silently introduced at phase-close while metadata leakage is undocumented."
 
-**Cross-refs.** `tests/phase_3_workspace/security_posture_compromises.rs::compromise_22_public_relay_metadata_leakage_introduced_at_phase_3_close_with_named_phase_7_garden_relay_destination` (R3-pinned RED-PHASE assertion); `tests/phase_3_workspace/security_posture_phase_3_close.rs::security_posture_phase_3_close_compromise_table_present` (G20-B FINAL phase-close compromise-table presence pin); `docs/FULL-ROADMAP.md` §Phase 7 (Gardens — relay infrastructure as a Garden resource); CLAUDE.md baked-in #17 (full peer vs thin compute surface deployment shapes). Origin: Phase-3 R4 large-council Round-1 networking lens (finding `net-r4-r1-1`) cross-corroborated by the security-auditor + pattern-induction lenses; 3-lens cross-corroboration triggered the BELONGS-NAMED-NOW disposition under HARD RULE rule-12 clause-b.
+**Cross-refs.** `tests/phase_3_workspace/security_posture_compromises.rs::compromise_22_public_relay_metadata_leakage_introduced_at_phase_3_close_with_named_phase_7_garden_relay_destination` (RED-PHASE assertion); `tests/phase_3_workspace/security_posture_phase_3_close.rs::security_posture_phase_3_close_compromise_table_present` (phase-close compromise-table presence pin). Phase 7 Gardens own relay infrastructure as a Garden resource; the engine's deployment-shape commitment (full peer vs thin compute surface) is described in `docs/ARCHITECTURE.md`.
 
 **Revisit at v1-window** (per `docs/future/phase-3-backlog.md` §10; Phase-7 Garden-relays primary closure path; Phase-9 hardened-deployment fallback):
-- *Question to ask:* Does v1's deployment posture (full peer + thin compute surface per CLAUDE.md baked-in #17) ship with public iroh relays as the *only* sync path, or does v1 require operators with adversarial-relay threat models to self-host? Does the v1 audit need a "default-on metadata-leak warning" UX surface (in DSL / napi / Engine builder) so adopters self-classify against the relay-metadata threat?
+- *Question to ask:* Does v1's deployment posture (full peer + thin compute surface) ship with public iroh relays as the *only* sync path, or does v1 require operators with adversarial-relay threat models to self-host? Does the v1 audit need a "default-on metadata-leak warning" UX surface (in DSL / napi / Engine builder) so adopters self-classify against the relay-metadata threat?
 - *What changed pre-v1 vs Phase-3 framing:* Phase 7 Garden-relays + Phase 9 hardened-deployment cargo-feature flag are still future scope; the public-relay leak is the live reality at v1 unless operators self-host. The v1 readiness audit must surface this with operator-facing UX, not just SECURITY-POSTURE.md prose.
 - *No-action option:* keep public-iroh-relays as the default at v1 with the current honest disclosure prose; document operator self-host as the conservative deployment recommendation; defer Garden-relay infrastructure to Phase 7. Phase-9 hardened-deployment cargo feature gating remains the brutal-but-correct fallback if Phase 7 slips.
 
@@ -1689,7 +1684,7 @@ End-to-end pin lives at `crates/benten-graph/tests/get_node_verifies_content_has
 
 **Out of scope (already defended elsewhere).** Cross-peer Node ingestion is defended by `Mst::apply_entries` per-entry rehash (sec-r4r2-1) — every entry's `payload` is BLAKE3-rehashed and compared byte-for-byte against the declared `cid` before insertion. Subgraph-load is defended by `Subgraph::load_verified_with_cid` (`RedbBackend::load_subgraph_verified` graph-layer wrapper). W9-T6 closes the remaining `Node`-read on-disk surface.
 
-**Performance.** BLAKE3 over canonical DAG-CBOR Node bytes adds ~3-10 µs per `get_node` call on Apple Silicon (the budget Ben accepted at the §6.2 ratification). Hot-loop callers (IVM materialise, repeated rehydration) absorb the cost; if future perf measurement shows the cost is load-bearing, an internal escape hatch (e.g. `get_node_unverified` for trusted callers that have already verified upstream) can be added with documented justification per CLAUDE.md "Don't design for hypothetical future requirements." No `get_node_verified` opt-in shipped — verify-on-read is unconditional.
+**Performance.** BLAKE3 over canonical DAG-CBOR Node bytes adds ~3-10 µs per `get_node` call on Apple Silicon (the budget accepted at the §6.2 ratification). Hot-loop callers (IVM materialise, repeated rehydration) absorb the cost; if future perf measurement shows the cost is load-bearing, an internal escape hatch (e.g. `get_node_unverified` for trusted callers that have already verified upstream) can be added with documented justification — but no `get_node_verified` opt-in shipped today (verify-on-read is unconditional).
 
 **Cross-refs.** `crates/benten-graph/src/redb_backend.rs::get_node` (the verify-on-read site); `crates/benten-graph/src/lib.rs::corrupt_node_bytes_for_test` (test-only tamper hook); `crates/benten-graph/tests/get_node_verifies_content_hash_on_read.rs` (end-to-end pin); `docs/ERROR-CATALOG.md::E_INV_CONTENT_HASH` (Thrown-at line enumerates all three firing surfaces); `docs/future/phase-2-backlog.md` §6.2 (closure narrative); `crates/benten-sync/src/mst.rs::Mst::apply_entries` (sec-r4r2-1 cross-peer ingest precedent that this PR mirrors at the on-disk boundary).
 
