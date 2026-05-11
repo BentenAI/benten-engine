@@ -665,13 +665,17 @@ mod napi_surface {
         #[napi]
         pub fn revoke_capability(&self, grant_cid: String, actor: String) -> napi::Result<()> {
             let grant = parse_cid(&grant_cid)?;
-            // `actor` is the principal issuing the revoke. The engine's
-            // `revoke_capability` takes a subject impl that can be an
-            // actor string; we pass it straight through so Phase-2 can
-            // resolve it to a principal CID via its policy backend.
-            let _ = grant;
+            // Phase-3.5 §13.11 closure: the engine's `revoke_capability`
+            // takes `(actor, scope)`. Pre-3.5 this napi path passed
+            // `grant_cid` AS the scope, producing a
+            // `system:CapabilityRevocation` Node with `scope = "<cid>"`
+            // that the `BackendGrantReader` walker never matched
+            // against the actual write scope — every post-revoke write
+            // fail-OPENed silently. Route through the engine's
+            // grant-CID-resolving seam so the revocation Node carries
+            // the grant's actual `scope` property.
             self.inner
-                .revoke_capability(actor.as_str(), grant_cid.as_str())
+                .revoke_capability_by_grant_cid(&grant, actor.as_str())
                 .map_err(engine_err)
         }
 
