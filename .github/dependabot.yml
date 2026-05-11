@@ -138,3 +138,13 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # Per-action floors for the human-driven major bumps that landed in
+      # prior PRs. Without these, the minor-and-patch group would track
+      # the lower major still pinned in some workflows and generate
+      # downgrade PRs (see PR #136 closed 2026-05-11 — would have
+      # unwound the v7/v8 manual bumps). Workflow consistency cleanup
+      # (some files still on v4 majors) is tracked as Phase 3.5 Track B.
+      - dependency-name: "actions/upload-artifact"
+        versions: ["< 7"]
+      - dependency-name: "actions/download-artifact"
+        versions: ["< 8"]
