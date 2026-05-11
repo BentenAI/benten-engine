@@ -1004,9 +1004,9 @@ export class EHostNotFound extends BentenError {
  */
 export class EHostWriteConflict extends BentenError {
   static readonly code = "E_HOST_WRITE_CONFLICT";
-  static readonly fixHint = "Reserved HostError discriminant. Fires when a host-level compare-and-swap write detects a concurrent mutation. Surface is frozen at Phase 2a; first firing site in Phase 3 sync.";
+  static readonly fixHint = "Reserved HostError discriminant. Fires when a host-level compare-and-swap write detects a concurrent mutation. Surface is frozen at Phase 2a; firing site deferred to v1-assessment-window.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_HOST_WRITE_CONFLICT", "Reserved HostError discriminant. Fires when a host-level compare-and-swap write detects a concurrent mutation. Surface is frozen at Phase 2a; first firing site in Phase 3 sync.", message, context);
+    super("E_HOST_WRITE_CONFLICT", "Reserved HostError discriminant. Fires when a host-level compare-and-swap write detects a concurrent mutation. Surface is frozen at Phase 2a; firing site deferred to v1-assessment-window.", message, context);
     this.name = "EHostWriteConflict";
   }
 }
@@ -1014,14 +1014,14 @@ export class EHostWriteConflict extends BentenError {
 /**
  * E_HOST_BACKEND_UNAVAILABLE
  *
- * Thrown at: `PrimitiveHost` implementation (G1-B)
+ * Thrown at: `PrimitiveHost` implementations + `benten_eval::resume_with_meta` (Phase-2a discriminant; Phase-3 firing sites listed above).
  * Message template: "Host-boundary backend unavailable: {detail}"
  */
 export class EHostBackendUnavailable extends BentenError {
   static readonly code = "E_HOST_BACKEND_UNAVAILABLE";
-  static readonly fixHint = "Reserved HostError discriminant. Fires when the underlying storage backend is offline (I/O error, disk full, network partition). Retry with exponential backoff; if persistent, inspect the storage layer.";
+  static readonly fixHint = "Fires when the underlying storage backend is offline (I/O error, disk full, network partition) OR as the eval-layer fail-loud surface for missing WAIT metadata (the engine layer promotes this to the typed `E_WAIT_METADATA_MISSING` at `engine_wait.rs::map_resume_eval_error`; the eval-side code stays `HostBackendUnavailable` as the broader generic-backend-unavailable surface). Retry with exponential backoff; if persistent, inspect the storage layer.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_HOST_BACKEND_UNAVAILABLE", "Reserved HostError discriminant. Fires when the underlying storage backend is offline (I/O error, disk full, network partition). Retry with exponential backoff; if persistent, inspect the storage layer.", message, context);
+    super("E_HOST_BACKEND_UNAVAILABLE", "Fires when the underlying storage backend is offline (I/O error, disk full, network partition) OR as the eval-layer fail-loud surface for missing WAIT metadata (the engine layer promotes this to the typed `E_WAIT_METADATA_MISSING` at `engine_wait.rs::map_resume_eval_error`; the eval-side code stays `HostBackendUnavailable` as the broader generic-backend-unavailable surface). Retry with exponential backoff; if persistent, inspect the storage layer.", message, context);
     this.name = "EHostBackendUnavailable";
   }
 }
@@ -1929,7 +1929,7 @@ export class EDeviceAttestationForged extends BentenError {
 /**
  * E_SYNC_HOP_DEPTH_EXCEEDED
  *
- * Thrown at: sync-replica chain-bound check (Phase-3 G14-D wave-5a; ds-r4r2-2 closure). Wave-paired construction site lands alongside the sync-receive surface.
+ * Thrown at: `crates/benten-engine/src/engine_sync.rs::AtriumHandle::walk_chain` constructs `Err(AtriumError::SyncHopDepthExceeded)` at the chain-bound checks (lines ~1437 + ~1442); the routing arm at `engine_sync.rs::604` maps `AtriumError::SyncHopDepthExceeded` to `ErrorCode::SyncHopDepthExceeded`. Originally reserved at G14-D wave-5a; production firing site landed in Phase-3 sync.
  * Message template: "sync: chain hop depth {depth} exceeds bound {bound}"
  */
 export class ESyncHopDepthExceeded extends BentenError {

@@ -142,10 +142,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_CAP_REVOKED_MID_EVAL
 
-> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 2b. The frozen code surface that the evaluator's batch-boundary recheck will return once refresh-point-5 wiring lands. TOCTOU integration tests construct it today; the production firing site is deferred (see `.addl/phase-2a/00-implementation-plan.md` G9-A residuals).
-
-<!-- reachability: ignore -->
-<!-- Rationale: Phase-1 named compromise #1 (TOCTOU window). `CapError::RevokedMidEval` is the frozen code surface that the evaluator's batch-boundary recheck will return once wired in R5 (see `crates/benten-caps/src/error.rs` docstring + `crates/benten-engine/tests/integration/cap_toctou.rs`). Construction sites live in TOCTOU integration tests today; drift-detect correctly flags the production gap. Remove this annotation when the evaluator's refresh-point-5 wiring lands in R5/G9-A. -->
+> **Status (Phase-3-close):** firing in production. The evaluator's batch-boundary capability re-check returns `CapError::RevokedMidEval` from the `ON_DENIED` arm at `crates/benten-engine/src/primitive_host.rs::check_capability` (the `benten_caps::CapError::RevokedMidEval` construction site at the scheduled-revocation check), with the mid-evaluation grant-revocation seam wired at `crates/benten-engine/src/engine_diagnostics.rs::schedule_revocation_at_iteration`. Originally reserved at Phase-2a per Compromise #1; refresh-point-5 wiring landed in Phase 2b.
 
 - **Message:** "Capability {grant_id} was revoked during ongoing evaluation at {revoked_at}"
 - **Context:** `{ grant_id: NodeId, revoked_at: HlcTimestamp, batch_boundary: number }`
@@ -162,10 +159,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_CAP_REVOKED
 
-> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 3. Surfaces from `sync-receive` when a peer propagates a revocation; the Atrium sync stack lands with `benten-sync` in Phase 3. The catalog entry pins the wire code so peer-emitted `E_CAP_REVOKED` round-trips through the Phase-1 enum without collapsing to `ErrorCode::Unknown(_)`.
-
-<!-- reachability: ignore -->
-<!-- Rationale: Phase-3 sync-subsystem code. `CapError::Revoked` surfaces from `sync-receive` when a peer propagates a revocation over the Atrium wire; the Atrium stack lands in Phase 3 with `benten-sync`. Kept as the stable wire code the Phase-1 `ErrorCode` enum round-trips so `E_CAP_REVOKED` strings arriving from a newer peer don't collapse to `ErrorCode::Unknown(_)`. Remove this annotation when `benten-sync` wires the first `Err(CapError::Revoked)` construction site. -->
+> **Status (Phase-3-close):** firing in production. `CapError::Revoked` is returned by the durable `UCANBackend` revocation arm at `crates/benten-caps/src/backends/ucan.rs::validate_chain_at` (three construction sites covering durable-revocation lookup, parent-attestation-rejected, and freshness-window-expired paths). Originally reserved at Phase-2a as the wire code for peer-emitted revocations; the Atrium sync stack at `benten-sync` consumes the same code path on `sync-receive`.
 
 - **Message:** "Capability {grant_id} was revoked at {revoked_at}"
 - **Context:** `{ grant_id: NodeId, revoked_at: HlcTimestamp }`
@@ -181,7 +175,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_WRITE_CONFLICT
 
-> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 2b (native call path). Phase-1/2a runtime surface is edge-routed via `ON_CONFLICT`; the engine stamps the code on the routed step. The Rust `EvalError::WriteConflict` variant is reserved for the Phase-2b native call path.
+> **Status (Phase-3-close):** firing in production via the edge-routed `ON_CONFLICT` arm (see `crates/benten-engine/src/primitive_host.rs::outcome_from_terminal_with_cid`, `"ON_CONFLICT"` match arm). The Rust `EvalError::WriteConflict` enum variant remains reserved (no `Err(EvalError::WriteConflict)` construction site in `crates/*/src/`); a future native call path will surface the same code via the enum lift. Drift-detector reachability is `ignore` on the enum variant only.
 
 <!-- reachability: ignore -->
 
@@ -275,10 +269,10 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_INPUT_LIMIT
 
-> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 2b (napi/B8 wave). The napi boundary's bounded streaming decoder is explicitly deferred (see the in-source acknowledgement at `bindings/napi/src/lib.rs::testing::deserialize_value_from_js_like`). The catalog entry pins the shape; the production firing site lands with the Phase-2b napi/B8 wave.
+> **Status (Phase-3-close):** the production firing site lives at the napi boundary (`bindings/napi/src/`). The drift-detector scans `crates/*/src/` only (per `phase-3-backlog §10.7` — v1-window scope widening), so the `reachability: ignore` annotation below reflects the structural scanner asymmetry, not a missing firing site.
 
 <!-- reachability: ignore -->
-<!-- Rationale: R5 G8-B/B8 follow-up. The napi boundary's bounded streaming decoder (size/depth/bytes/CID-shape enforcement) is explicitly deferred — see the in-source acknowledgement at `bindings/napi/src/lib.rs::testing::deserialize_value_from_js_like` ("B8 harness's assertions about `ErrorCode::InputLimit` stay red until R5"). Drift-detect only scans `crates/*/src/`; the real firing site will live in `bindings/napi/src/` anyway, so this entry would need re-annotating rather than unignoring. Remove this annotation if/when a `crates/`-resident construction site is added (e.g., a shared limits module in `benten-core`). -->
+<!-- Rationale: construction site lives in `bindings/napi/src/` (the bounded streaming decoder enforcing size / depth / bytes / CID-shape limits). The drift-detector's scan path scopes to `crates/*/src/` — same scanner asymmetry as E_RELOAD_SUBSCRIBER_UNSUBSCRIBED + E_DEVSERVER_STOPPED + E_STORAGE_QUOTA_EXCEEDED below. Remove this annotation if/when (a) a `crates/`-resident construction site is added (e.g., a shared limits module in `benten-core`) OR (b) `phase-3-backlog §10.7` widens the detector's scan path to include `bindings/napi/src/`. -->
 
 - **Message:** "Napi boundary input exceeds {limit_kind} limit: {actual} > {max}"
 - **Context:** `{ limit_kind: "map_size"|"list_size"|"bytes_len"|"text_len"|"nesting_depth"|"subgraph_bytes"|"node_count"|"edge_count", actual: number, max: number }`
@@ -504,7 +498,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_HOST_NOT_FOUND
 
-> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 3 sync.
+> **Status (Phase-3-close):** still reserved. No production `Err(HostError::NotFound)` construction site in `crates/*/src/` at Phase-3-close; the typed code remains on the wire-stable surface for forward-compat. Re-target deferral phase: **v1-assessment-window** per CLAUDE.md item #15 (HostError firing-site closure couples to broader `PrimitiveHost` reserved-discriminant lift).
 
 <!-- reachability: ignore -->
 
@@ -512,35 +506,33 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Context:** `{ kind: string, identifier: string }`
 - **Fix:** Reserved HostError discriminant. Surfaces from `PrimitiveHost` impls when the requested entity is not in the backend. Distinct from `E_NOT_FOUND` because it carries the host-layer boundary (preserves the `benten-eval` → `benten-graph` arch-1 dep break).
 - **Thrown at:** `PrimitiveHost` implementation (G1-B)
-- **Phase:** 2a (shape reserved; first firing site in Phase 3 sync — drift-detector reachability is `ignore` until then)
+- **Phase:** 2a (shape reserved; firing site deferred to v1-assessment-window per CLAUDE.md item #15 — drift-detector reachability is `ignore` until then)
 
 ### E_HOST_WRITE_CONFLICT
 
-> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 3 sync.
+> **Status (Phase-3-close):** still reserved. No production construction site in `crates/*/src/`. Re-target deferral phase: **v1-assessment-window** per CLAUDE.md item #15 (HostError firing-site closure couples to broader `PrimitiveHost` reserved-discriminant lift).
 
 <!-- reachability: ignore -->
 
 - **Message:** "Host-boundary optimistic-concurrency conflict on {target}"
 - **Context:** `{ target: string }`
-- **Fix:** Reserved HostError discriminant. Fires when a host-level compare-and-swap write detects a concurrent mutation. Surface is frozen at Phase 2a; first firing site in Phase 3 sync.
+- **Fix:** Reserved HostError discriminant. Fires when a host-level compare-and-swap write detects a concurrent mutation. Surface is frozen at Phase 2a; firing site deferred to v1-assessment-window.
 - **Thrown at:** `PrimitiveHost` implementation (G1-B)
-- **Phase:** 2a (reserved — fires in Phase 3; drift-detector reachability is `ignore` until then)
+- **Phase:** 2a (reserved — firing site deferred to v1-assessment-window per CLAUDE.md item #15; drift-detector reachability is `ignore` until then)
 
 ### E_HOST_BACKEND_UNAVAILABLE
 
-> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 3 sync.
-
-<!-- reachability: ignore -->
+> **Status (Phase-3-close):** firing in production. Construction sites at `crates/benten-engine/src/engine_wait.rs` (eval-side missing-metadata fail-loud lift), `crates/benten-eval/src/primitives/wait.rs::resume_with_meta` (`meta: None` arm), `crates/benten-eval/src/primitives/subscribe.rs::SubscribeError::BackendUnavailable` mapping, and `crates/benten-engine/src/thin_client_subscribe.rs::ThinClientError::Engine` lift.
 
 - **Message:** "Host-boundary backend unavailable: {detail}"
 - **Context:** `{ detail: string }`
-- **Fix:** Reserved HostError discriminant. Fires when the underlying storage backend is offline (I/O error, disk full, network partition). Retry with exponential backoff; if persistent, inspect the storage layer.
-- **Thrown at:** `PrimitiveHost` implementation (G1-B)
-- **Phase:** 2a (reserved — fires in Phase 3; drift-detector reachability is `ignore` until then)
+- **Fix:** Fires when the underlying storage backend is offline (I/O error, disk full, network partition) OR as the eval-layer fail-loud surface for missing WAIT metadata (the engine layer promotes this to the typed `E_WAIT_METADATA_MISSING` at `engine_wait.rs::map_resume_eval_error`; the eval-side code stays `HostBackendUnavailable` as the broader generic-backend-unavailable surface). Retry with exponential backoff; if persistent, inspect the storage layer.
+- **Thrown at:** `PrimitiveHost` implementations + `benten_eval::resume_with_meta` (Phase-2a discriminant; Phase-3 firing sites listed above).
+- **Phase:** 2a discriminant; first firing sites landed in Phase 2b/3.
 
 ### E_HOST_CAPABILITY_REVOKED
 
-> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 3 sync.
+> **Status (Phase-3-close):** still reserved. No production construction site in `crates/*/src/`. The Phase-3 sync-side revocation surface is `E_SYNC_REVOKED_DURING_SESSION` (host-boundary-distinct path); `E_HOST_CAPABILITY_REVOKED` remains the reserved HostError discriminant for in-process host-layer revocation. Re-target deferral phase: **v1-assessment-window** per CLAUDE.md item #15.
 
 <!-- reachability: ignore -->
 
@@ -548,11 +540,11 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Context:** `{ grant_cid: Cid }`
 - **Fix:** Reserved HostError discriminant. Fires when a host-level capability check observes a revocation between resolve and use. Retry after re-granting.
 - **Thrown at:** `PrimitiveHost` implementation (G1-B)
-- **Phase:** 2a (reserved — fires in Phase 3; drift-detector reachability is `ignore` until then)
+- **Phase:** 2a (reserved — firing site deferred to v1-assessment-window per CLAUDE.md item #15; drift-detector reachability is `ignore` until then)
 
 ### E_HOST_CAPABILITY_EXPIRED
 
-> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 3 sync.
+> **Status (Phase-3-close):** still reserved. No production construction site in `crates/*/src/`. Re-target deferral phase: **v1-assessment-window** per CLAUDE.md item #15.
 
 <!-- reachability: ignore -->
 
@@ -560,7 +552,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Context:** `{ grant_cid: Cid, expired_at: string }`
 - **Fix:** Reserved HostError discriminant. Fires when a host-level capability check observes the grant's TTL has elapsed. Re-grant with a longer TTL or refresh the cap.
 - **Thrown at:** `PrimitiveHost` implementation (G1-B)
-- **Phase:** 2a (reserved — fires in Phase 3; drift-detector reachability is `ignore` until then)
+- **Phase:** 2a (reserved — firing site deferred to v1-assessment-window per CLAUDE.md item #15; drift-detector reachability is `ignore` until then)
 
 ### E_EXEC_STATE_TAMPERED
 
@@ -634,7 +626,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_CAP_WALLCLOCK_EXPIRED
 
-> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 2b. `CapError::WallclockExpired` is the upstream alias; the firing site is reserved at G9-A refresh-point-5 and is not yet wired (see `.addl/phase-2a/00-implementation-plan.md` G9-A residuals).
+> **Status (Phase-3-close):** still reserved. `CapError::WallclockExpired` has the catalog mapping arm at `crates/benten-caps/src/error.rs::code` (the `CapError::WallclockExpired => ErrorCode::CapWallclockExpired` arm) but no production `Err(CapError::WallclockExpired)` construction site in `crates/*/src/` at Phase-3-close. Re-target deferral phase: **v1-assessment-window** per CLAUDE.md item #15 (G9-A refresh-point-5 wallclock-bound enforcement composes with the §10.1 Compromise #1 TOCTOU window bound re-evaluation).
 
 <!-- reachability: ignore -->
 
@@ -686,7 +678,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_WAIT_SIGNAL_SHAPE_MISMATCH
 
-> **⚠️ Not firing in production.** Reserved at Phase-2a; first firing site lands in Phase 2b (alongside the broader G3-B DX signal-payload typing landing). Integration test at `crates/benten-engine/tests/integration/wait_signal_shape_optional_typing.rs` exercises the surface; the production firing site is reserved.
+> **Status (Phase-3-close):** still reserved. No production `Err(...)` construction site in `crates/*/src/` at Phase-3-close. Integration test at `crates/benten-engine/tests/integration/wait_signal_shape_optional_typing.rs` exercises the SURFACE; the routed_edge_label classification harmonization required for the WAIT-resume shape-mismatch arm is tracked at `docs/future/phase-3-backlog.md §7.17` (routed_edge_label classification hardening — bundles the un-ignore of the `wait_signal_shape_mismatch_fires_typed_error_routed_on_error` test pin).
 
 <!-- reachability: ignore -->
 
@@ -1083,14 +1075,11 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_SYNC_HOP_DEPTH_EXCEEDED
 
-<!-- reachability: ignore -->
-<!-- Rationale: Phase-3 G14-D wave-5a ships the catalog code + ON_DENIED routing + from_string round-trip. The production construction site (inbound sync-replica AttributionFrame chain exceeding the documented hop-depth bound) wires at the sync-receive validation boundary in a follow-up wave; G14-D delivers the catalog seam and the Inv-4-mirror error-code surface. Remove this annotation when `benten-sync` wires the first construction site at the chain-bound check. -->
-
 - **Message:** "sync: chain hop depth {depth} exceeds bound {bound}"
 - **Context:** `{ depth: usize, bound: usize }`
 - **Fix:** An inbound sync-replica AttributionFrame chain exceeded the documented hop-depth bound (mirrors Inv-4 `sandbox_depth`). Defends against DOS/chain-bloat where an adversarial peer constructs an unbounded false chain. The peer should either issue against a shorter chain or re-handshake with a fresh authority root. Routes to `ON_DENIED`.
-- **Thrown at:** sync-replica chain-bound check (Phase-3 G14-D wave-5a; ds-r4r2-2 closure). Wave-paired construction site lands alongside the sync-receive surface.
-- **Phase:** 3 G14-D
+- **Thrown at:** `crates/benten-engine/src/engine_sync.rs::AtriumHandle::walk_chain` constructs `Err(AtriumError::SyncHopDepthExceeded)` at the chain-bound checks (lines ~1437 + ~1442); the routing arm at `engine_sync.rs::604` maps `AtriumError::SyncHopDepthExceeded` to `ErrorCode::SyncHopDepthExceeded`. Originally reserved at G14-D wave-5a; production firing site landed in Phase-3 sync.
+- **Phase:** 3 G14-D (firing site landed Phase-3 sync)
 
 ### E_THIN_CLIENT_AUTH_REJECTED
 

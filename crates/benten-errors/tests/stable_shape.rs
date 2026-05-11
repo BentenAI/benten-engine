@@ -313,6 +313,24 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::SyncHashMismatch,
     ErrorCode::SyncHlcDrift,
     ErrorCode::SyncCapUnverified,
+    // Phase-3 G21-T1: typed-CALL dispatch surface. Four catalog variants
+    // for the typed-CALL boundary at `crates/benten-engine/src/engine.rs`
+    // typed-CALL registry dispatch. Closes the pre-v1 triage `ecc-3`
+    // observation (TypedCall* family was present in the enum + catalog
+    // arms but missing from this round-trip list).
+    //   `TypedCallUnknownOp` — typed-CALL op-name miss against the
+    //     registered typed-CALL op set. Routes to `ON_ERROR`.
+    //   `TypedCallInvalidInput` — typed-CALL input shape failed the
+    //     op's input-schema validation. Routes to `ON_ERROR`.
+    //   `TypedCallCapDenied` — typed-CALL dispatch rejected by the
+    //     host's `check_capability` hook against the op's declared
+    //     per-op cap. Routes to `ON_DENIED`.
+    //   `TypedCallDispatchError` — typed-CALL op-internal error
+    //     bubbled out of the dispatch boundary. Routes to `ON_ERROR`.
+    ErrorCode::TypedCallUnknownOp,
+    ErrorCode::TypedCallInvalidInput,
+    ErrorCode::TypedCallCapDenied,
+    ErrorCode::TypedCallDispatchError,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -541,8 +559,14 @@ fn variant_count_is_pinned() {
     // to SyncRevokedDuringSession). C1 merges after C2 per
     // dispatch-conventions §3.5g sequential-merge resolution pattern;
     // count moves 109 → 111 (C2) → 114 (C1).
+    //
+    // Phase-3-close pre-v1 triage (2026-05-10 `ecc-3` FIX-NOW-INLINE):
+    // + TypedCallUnknownOp + TypedCallInvalidInput + TypedCallCapDenied
+    // + TypedCallDispatchError = 118 (typed-CALL dispatch family was
+    // already in the enum + catalog `as_str` / `from_str` arms; only
+    // this round-trip list was missing them).
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 114,
+        CATALOG_VARIANT_COUNT, 118,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
