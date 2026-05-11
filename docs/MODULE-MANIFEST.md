@@ -196,16 +196,38 @@ accept the same manifest without error.
 
 ---
 
-## 4. Install — `Engine::install_module(manifest, expected_cid)`
+## 4. Install — `Engine::install_module(manifest, expected_cid, verify_args)`
 
 ```rust
-let cid = engine.install_module(manifest, expected_cid)?;
+use benten_engine::module_manifest::{ManifestVerifyArgs, ManifestVerifyMode};
+
+// Unsigned manifest path (no signature required):
+let cid = engine.install_module(
+    manifest,
+    expected_cid,
+    ManifestVerifyArgs::new(ManifestVerifyMode::Unsigned),
+)?;
+
+// Signed manifest path — Ed25519 + UCAN-proof-chain primary +
+// publisher-key-registry fallback per D-PHASE-3-20:
+let cid = engine.install_module(
+    manifest,
+    expected_cid,
+    ManifestVerifyArgs::new(ManifestVerifyMode::Any).with_publisher_registry(&registry),
+)?;
 ```
 
 The `expected_cid` arg is **REQUIRED** — not `Option<Cid>`, not a
 defaulted builder method (D16-RESOLVED-FURTHER). The compile-time
 requirement closes the lazy-developer footgun where a one-arg
 `install_module(m)` overload would silently compute-and-trust the CID.
+
+The third `verify_args: ManifestVerifyArgs<'_>` parameter gates the
+Phase-3 signature-verification path (Compromise #21 closure). The
+`ManifestVerifyMode` variants are: `Unsigned` (only accept manifests
+with no signature; reject signed manifests), `Any` (accept signed-or-
+unsigned), `All` (require a valid signature). See §3.1 for the signature
+surface.
 
 ### 4.1 Mismatch error shape — operator-actionable diff
 

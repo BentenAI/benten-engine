@@ -322,7 +322,7 @@ into `SandboxConfig::random_budget_bytes_per_call` at SANDBOX dispatch
 
 | Artifact | Path | Role |
 |----------|------|------|
-| Source-of-truth TOML | [`host-functions.toml`](../host-functions.toml) | Authoritative — drives drift detectors. Codegen `build.rs` pipeline is aspirational (deferred to Phase-3+ per the `#[ignore]`'d tests at `crates/benten-eval/tests/sandbox_capability_intersection_at_init.rs:119` + `sandbox_named_manifest.rs:5`); current state is hand-mirrored. |
+| Source-of-truth TOML | [`host-functions.toml`](../host-functions.toml) | Authoritative — drives drift detectors. Codegen `build.rs` pipeline is aspirational; the current discipline is hand-mirroring this TOML into the Rust registry sites listed below. Drift-detector tests at `crates/benten-eval/tests/sandbox_capability_intersection_at_init.rs` + `sandbox_named_manifest.rs` are live assertions that enforce parity against the hand-mirrored Rust shape. |
 | Hand-mirrored host shim | `crates/benten-eval/src/sandbox/host_fns.rs` | The actual file — a single `.rs` (not codegen output), kept in lockstep with the TOML by drift detectors |
 | Operator doc | `docs/HOST-FUNCTIONS.md` (this file) | Surface contract for handler authors |
 | TOML→MD drift detector | `crates/benten-engine/tests/host_functions_doc_drift_against_toml.rs` | Asserts every TOML entry has a doc section |
