@@ -1698,21 +1698,16 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 
 ---
 
-### 7.20 sandbox_escape_attempts_denied + sandbox_output workspace clippy --all-targets compile errors (G20-B PR #143 introduction; surfaced 2026-05-09 R6 fp Wave D mini-review)
+### 7.20 sandbox_escape_attempts_denied + sandbox_output workspace clippy --all-targets compile errors — CLOSED AT PHASE-3 R5 (DUPLICATE-OF-DESIGN-INTENT)
 
-**Origin:** R6 fp Wave D mini-review (correctness lens, `wave-d-corr-2` MINOR) discovered `cargo clippy --all-targets` workspace-wide has compile errors at `crates/benten-eval/tests/sandbox_escape_attempts_denied.rs` (`benten_eval::testing` unresolved import) + `crates/benten-eval/tests/sandbox_output.rs` (`SandboxConfig.testing_inject_attack` field missing). Last-touched at G20-B PR #143 (commit `9db5729` 2026-05-08; the §11 11-line drift-detector lint sweep). Pre-existing on main HEAD `0b8d6c5`; NOT introduced by Wave D.
+**Origin:** R6 fp Wave D mini-review (correctness lens, `wave-d-corr-2` MINOR) flagged `cargo clippy --all-targets` workspace-wide compile errors at `crates/benten-eval/tests/sandbox_escape_attempts_denied.rs` + `crates/benten-eval/tests/sandbox_output.rs`.
 
-**Disposition (HARD RULE clause-(b) BELONGS-NAMED-NOW):** the test compile errors only surface under `--all-targets` workspace clippy AND are gated behind `cfg(test)` + `feature = "test-helpers"` paths that don't ship in production. CI uses targeted feature-flag invocations that don't trip these errors. The §3.5h orchestrator-direct workspace pre-push has been catching it locally as a pre-existing issue across multiple Phase-3 R5/R6 fix-passes; agents disposed it as "pre-existing, not this wave's regression."
-
-**Fix-shape:** locate the missing `benten_eval::testing` re-export OR `SandboxConfig.testing_inject_attack` field; either re-introduce per the original G20-B intent OR retire the test references that depend on the removed surface. Touch size: ~30-60 LOC investigation + ~10 LOC fix.
-
-**Phase target:** R6 phase-close convergence-round residuals (bundle with R6 R2 cap-EXEMPT findings if R2 surfaces additional adjacent gaps); OR Phase-3-close pre-tag orchestrator-direct fix-pass batch.
+**Status (Phase-3-close, retensed 2026-05-10 per pre-v1 triage `ff-r6-1` + `benten-eval-1-4`):** **CLOSED — duplicate of design-intent.** The `SandboxConfig.testing_inject_attack` field is **PRESENT at HEAD** (`crates/benten-eval/src/primitives/sandbox.rs:109` + `:903`) — Wave D mini-review's "field missing" claim was stale at the time it was written. The remaining `cargo clippy --all-targets` failure pattern (workspace-wide without testing features) is **by-design** per `ff-r6-6` (production-safety-by-construction): the testing module is gated `cfg(any(test, feature = "testing"))` so production never compiles it, and CI invariantly threads the `--features benten-eval/testing,benten-engine/test-helpers` combo through every workspace invocation. The §7.20 expectation that workspace `cargo clippy --all-targets` be clean **without** testing features is incompatible with the production-safety design and is dismissed as DUPLICATE-OF-DESIGN-INTENT.
 
 **Cross-references:**
-- `crates/benten-eval/tests/sandbox_escape_attempts_denied.rs` (`benten_eval::testing` unresolved import sites)
-- `crates/benten-eval/tests/sandbox_output.rs` (`SandboxConfig.testing_inject_attack` field-missing sites)
-- G20-B PR #143 commit `9db5729` (origin point per Wave D mini-review forensics)
-- R6 fp Wave D mini-review forensics surfaced this row at commit `ee8dad1` (Wave D primary commit on this branch).
+- `crates/benten-eval/src/primitives/sandbox.rs:109` (the `testing_inject_attack` field that the Wave D mini-review claimed was missing — actually present).
+- `.addl/phase-3-test-review/feature-flag-matrix.json` findings `ff-r6-1` + `ff-r6-6` (the verification points: field-PRESENT at HEAD + workspace-clippy-no-features by-design).
+- `.addl/phase-3-test-review/per-crate/benten-eval-1.json` finding `benten-eval-1-4` (the coupled observation about this §'s staleness).
 
 ---
 
@@ -2018,6 +2013,29 @@ Per CLAUDE.md item #15 (v1-milestone-gate framing): Phases 1+2a+2b+3 minimum + p
 - `bindings/napi/src/devserver.rs` (the un-scanned `ReloadSubscriberUnsubscribed` + `DevServerStopped` construction sites).
 - `docs/ERROR-CATALOG.md` (the `<!-- reachability: ignore -->` annotation surface).
 - §8.2 (drift-lint coupling).
+
+### 10.8 `envelope-cache-test-grade` Cargo feature retire — final cleanup
+
+**Origin:** Phase-3-close pre-v1 triage (2026-05-10 test-review `feature-flag-matrix.json::ff-r6-2`). The `envelope-cache-test-grade` feature is RETIRED at Phase-2b G12-E (commit `crates/benten-engine/Cargo.toml:39-48`) — the durable `SuspensionStore` replaced the test-grade `ENVELOPE_CACHE` static — but the empty feature declaration + its transitive include in the `test-helpers` feature still occupy slots, and the test `crates/benten-engine/tests/envelope_cache_test_grade_feature_retired.rs` pins the zero-consumer state.
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Non-blocking for Phase-3 close (the regression test already pins zero-live-consumer state); v1-window cleanup candidate.
+
+**Concrete fix-shape:**
+- Remove line 48 `envelope-cache-test-grade = []` from `crates/benten-engine/Cargo.toml`.
+- Remove `"envelope-cache-test-grade"` from the `test-helpers` array on line 60 of the same file.
+- Update `crates/benten-engine/tests/sec_r6r2_02_test_helpers_gating_preserved_under_g12_c_migration.rs` lines 23 + 25 (currently expect the feature name in `#[cfg(...)]` string literals) — either retire those string-literal expectations OR adjust to expect the post-retire form.
+- Retire `crates/benten-engine/tests/envelope_cache_test_grade_feature_retired.rs` (its post-retire purpose is satisfied — there is no longer a feature to assert is retired) OR rewrite to assert the Cargo.toml no longer declares the feature at all.
+- Update `bindings/napi/Cargo.toml` if it referenced the feature (verified at retire time).
+
+**Touch size:** ~20-40 LOC across Cargo.toml + 2 test files.
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15. Cheap mechanical cleanup; bundle with other Cargo-feature-graph retires at v1-window.
+
+**Cross-references:**
+- `crates/benten-engine/Cargo.toml:39-60` (feature declaration + test-helpers transitive include).
+- `crates/benten-engine/tests/envelope_cache_test_grade_feature_retired.rs` (regression test pinning zero-consumer state).
+- `crates/benten-engine/tests/sec_r6r2_02_test_helpers_gating_preserved_under_g12_c_migration.rs:23,25` (string-literal references to the feature name).
+- `.addl/phase-3-test-review/feature-flag-matrix.json` finding `ff-r6-2` (origin disposition).
 
 ---
 

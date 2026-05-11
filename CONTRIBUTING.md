@@ -17,12 +17,16 @@ Thanks for your interest. This repo is under active development; contributions a
 
 ## Setup
 
+The repo is private pre-OSS-launch (see `docs/FULL-ROADMAP.md` §Phase 8/9+); contributors need to request access before the `git clone` below resolves.
+
 ```sh
 git clone https://github.com/BentenAI/benten-engine.git
 cd benten-engine
 cargo build --workspace
-cargo nextest run --workspace
+cargo t
 ```
+
+`cargo t` is the workspace-locked alias defined in `.cargo/config.toml`; it expands to `cargo nextest run --workspace --features benten-eval/testing,benten-engine/test-helpers`. Running plain `cargo test` / `cargo nextest run` without those features skips the Inv-8 integration tests with a compile error — the test-helpers features unlock test-only Engine surfaces (`backend_for_test`, `engine_wait::ENVELOPE_CACHE` helpers, `register_test_callee`) that the production cdylib does not expose. The `cargo test-all` alias is a synonym.
 
 The test suite is designed for `cargo nextest`. See "Why nextest is load-bearing" below.
 
@@ -33,7 +37,7 @@ Run locally:
 ```sh
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo nextest run --workspace
+cargo t
 ```
 
 CI runs the same checks plus cross-target determinism, supply-chain hygiene, invariant drift detection, and doc-build with warnings-as-errors. The determinism workflow computes the canonical fixture CID on Linux/macOS/Windows; any drift is a merge blocker.
