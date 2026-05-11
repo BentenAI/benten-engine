@@ -88,7 +88,7 @@ describe("BentenDevServer (Wave-8f JS surface)", () => {
       const server = new BentenDevServer({ projectRoot: dir });
       await server.start();
       // `teleport` is not a known primitive — must surface E_DSL_*.
-      let captured: Error | undefined;
+      let captured: (Error & { code?: string; fixHint?: string }) | undefined;
       try {
         await server.registerHandler(
           "oops",
@@ -96,10 +96,20 @@ describe("BentenDevServer (Wave-8f JS surface)", () => {
           "handler 'oops' { teleport -> respond }",
         );
       } catch (err) {
-        captured = err as Error;
+        captured = err as Error & { code?: string; fixHint?: string };
       }
       expect(captured).toBeDefined();
-      expect(captured?.message).toMatch(/E_DSL_/);
+      // Pre-v1 green-up: post-G19-B the typed code rides on
+      // `BentenError.code` (or surfaces in `.fixHint` when the
+      // catalog code is a DSL-orphan not yet in the canonical
+      // `ErrorCode` enum — `E_DSL_UNKNOWN_PRIMITIVE` is one of the
+      // ghost DSL codes the compiler emits; `mapNativeError`
+      // synthesises a generic `BentenError` whose `.fixHint`
+      // carries the unknown-code disposition). Either path is a
+      // green signal that the typed Diagnostic propagated.
+      const code = captured?.code ?? "";
+      const fixHint = captured?.fixHint ?? "";
+      expect(/E_DSL_/.test(code) || /E_DSL_/.test(fixHint)).toBe(true);
       await server.stop();
     } finally {
       cleanup();

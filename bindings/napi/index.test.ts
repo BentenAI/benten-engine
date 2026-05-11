@@ -351,14 +351,23 @@ describe("napi engine — extended surface", () => {
     }
   });
 
-  it("openWithPolicy(Ucan) opens; handler dispatch surfaces the Phase-3 stub error", () => {
-    // The UcanBackend stub exists so operators who wire it via a config
-    // receive a clean typed error naming Phase 3 rather than silent
-    // misbehavior. Opening must succeed. Direct `createNode` does NOT
-    // trigger the capability hook in Phase 1 (the hook runs at tx-commit
-    // inside the evaluator per crates/benten-engine/src/lib.rs#1959);
-    // dispatching through a registered handler is the path that invokes
-    // `policy.check_write` and therefore the UCAN stub.
+  it("openWithPolicy(Ucan) opens; unauthorized handler dispatch is denied by the durable UCAN policy", () => {
+    // Pre-G21-T2 framing: the UcanBackend was a `LegacyUcanStubBackend`
+    // returning `E_CAP_NOT_IMPLEMENTED` on every check (the "Phase-3 stub
+    // error"). Post-G21-T2 (audit-6-1 closure) the `Ucan` policy kind
+    // routes through the real durable
+    // `benten_caps::UcanGroundedPolicy` (UCANBackend proof-chain
+    // validator + grant-store reads); an unauthorized call now correctly
+    // surfaces `E_CAP_DENIED` rather than the stub `not implemented`
+    // sentinel. The flip from the stub code to the typed cap-denial is
+    // the GREEN signal that the durable backend is live; this test
+    // asserts the GREEN-phase shape.
+    //
+    // Opening must succeed. Direct `createNode` does NOT trigger the
+    // capability hook in Phase 1 (the hook runs at tx-commit inside the
+    // evaluator per crates/benten-engine/src/lib.rs#1959); dispatching
+    // through a registered handler is the path that invokes
+    // `policy.check_write` and therefore the UCAN durable backend.
     const dir2 = mkdtempSync(join(tmpdir(), "benten-napi-ucan-"));
     try {
       const e = native.Engine.openWithPolicy(
@@ -367,7 +376,7 @@ describe("napi engine — extended surface", () => {
       );
       const handlerId = e.registerCrud("post");
       expect(typeof handlerId).toBe("string");
-      // The call outcome may surface the Phase-3 stub as either a thrown
+      // The call outcome may surface the cap-denial as either a thrown
       // napi error or a non-ok Outcome with an errorCode. Accept both to
       // stay resilient across the evaluator's error-propagation shape.
       let surfaced: string | undefined;
@@ -378,7 +387,11 @@ describe("napi engine — extended surface", () => {
       } catch (err: any) {
         surfaced = String(err?.message ?? err);
       }
-      expect(surfaced).toMatch(/E_CAP_NOT_IMPLEMENTED|NotImplemented|UCAN|capability/i);
+      expect(surfaced).toMatch(/E_CAP_DENIED|denied|capability/i);
+      // Negative pin: the legacy stub code MUST NOT fire post-G21-T2 —
+      // its presence would mean the durable backend regressed back to
+      // the stub.
+      expect(surfaced).not.toMatch(/E_CAP_NOT_IMPLEMENTED/);
     } finally {
       rmSync(dir2, { recursive: true, force: true });
     }
