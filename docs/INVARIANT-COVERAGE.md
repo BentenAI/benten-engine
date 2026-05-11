@@ -114,7 +114,7 @@ have been removed; Inv-4 + Inv-7 are now first-class active rows.
 │ Inv-14 ATTRIBUTION_PROPERTY_KEY decl   │                                         │
 └────────────────────────────────────────┴─────────────────────────────────────────┘
 
-* Inv-4 runtime counter — fully wired at R6FP-G1 (PR #62). Both
+- Inv-4 runtime counter — fully wired at R6FP-G1 (PR #62). Both
   registration arm + runtime arm are active at Phase 2b close. See
   §"Inv-4 + Inv-7 runtime arm status" above for the wiring trace.
 ```
