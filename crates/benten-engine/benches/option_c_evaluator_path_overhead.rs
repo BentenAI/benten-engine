@@ -30,12 +30,14 @@
 //! review; R4b decides whether to promote to CI-gated once the numbers
 //! stabilise across several PRs.
 //!
-//! ## Red-phase TDD
+//! ## Surface (closed by `docs/future/phase-3-backlog.md §13.7`)
 //!
-//! `Engine::read_node_with_policy` / `get_by_label_with_policy` etc. are
-//! G4-A deliverables. At R3 they return `todo!()`; the bench panics on
-//! first iteration until G4-A lands. Once landed, the measurement
-//! becomes real.
+//! `Engine::read_node_as(principal, cid)` is the Option-C flanking
+//! entry-point that consults `CapabilityPolicy::check_read` with the
+//! caller's principal threaded through `ReadContext::actor_cid`. The
+//! pre-§13.7 name `read_node_with_policy` was renamed to align with
+//! the `Engine::call_as` precedent and to match the CLAUDE.md
+//! baked-in #18 plugin-trust-model surface name.
 
 #![allow(
     clippy::unwrap_used,
@@ -88,14 +90,19 @@ fn bench_read_threaded_noauth(c: &mut Criterion) {
         .unwrap();
     let node = canonical_test_node();
     let cid = engine.put_node(&node).expect("seed node");
+    // §13.7 closure: `read_node_as` requires a principal CID. The
+    // NoAuth policy ignores it but we still need a concrete CID for
+    // the type-shape contract.
+    let principal = engine
+        .create_principal("bench-noauth-reader")
+        .expect("seed principal");
 
     let mut group = c.benchmark_group("option_c_evaluator_path_overhead");
     group.warm_up_time(Duration::from_secs(1));
     group.measurement_time(Duration::from_secs(3));
     group.bench_function("read_threaded_noauth", |b| {
         b.iter(|| {
-            // G4-A deliverable — returns todo!() at R3.
-            let n = engine.read_node_with_policy(black_box(&cid));
+            let n = engine.read_node_as(black_box(&principal), black_box(&cid));
             let _ = black_box(n);
         });
     });
@@ -119,13 +126,22 @@ fn bench_read_threaded_grant_backed(c: &mut Criterion) {
     engine
         .grant_read_capability_for_testing(&cid)
         .expect("seed grant");
+    // The grant helper minted a `test-read-grant-helper` principal
+    // under-the-hood. The grant-backed policy doesn't bind the read
+    // gate to a specific actor CID (any unrevoked grant for the
+    // `store:<label>:read` scope permits the read), so a fresh
+    // bench-side principal CID exercises the typed surface without
+    // re-seeding.
+    let principal = engine
+        .create_principal("bench-grant-backed-reader")
+        .expect("seed principal");
 
     let mut group = c.benchmark_group("option_c_evaluator_path_overhead");
     group.warm_up_time(Duration::from_secs(1));
     group.measurement_time(Duration::from_secs(3));
     group.bench_function("read_threaded_grant_backed", |b| {
         b.iter(|| {
-            let n = engine.read_node_with_policy(black_box(&cid));
+            let n = engine.read_node_as(black_box(&principal), black_box(&cid));
             let _ = black_box(n);
         });
     });
