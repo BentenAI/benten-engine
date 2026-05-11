@@ -248,6 +248,45 @@ Content is serialized via `serde_ipld_dagcbor` — the IPLD subset of CBOR with 
 
 The evaluator does not know IVM exists. Views are materialized Nodes; reads hit them via the normal read path.
 
+### Registering a user-defined view
+
+Callers extend IVM beyond the 5 canonical views by constructing a
+`UserViewSpec` and calling `Engine::register_user_view` (durable) or
+`Engine::create_user_view` (transient). The public surface:
+
+- **`UserViewSpec::builder()`** — fluent builder requiring `id` +
+  `input_pattern`; `strategy` defaults to `Strategy::B`.
+  `Strategy::A` is reserved for the 5 hand-written Phase-1 views and
+  `Strategy::C` for post-Phase-3; both are refused at registration
+  time with typed errors.
+- **`UserViewInputPattern`** — two-variant selector vocabulary:
+  `Label(String)` (every change event whose Node carries the
+  matching label) and `AnchorPrefix(String)` (every change event
+  whose anchor id starts with the given prefix). Canonical view ids
+  require `Label` and are fail-loud on `AnchorPrefix`
+  (`E_VIEW_LABEL_MISMATCH`).
+- **Projection** lives on the kernel side at
+  `benten_ivm::algorithm_b::{Algorithm::register,
+  Algorithm::register_with_budget}` — the engine wraps the
+  user-facing builder into a `(view_id, label_pattern, projection)`
+  triple that instantiates the generic single-loop kernel
+  (`GenericKernel`) for non-canonical ids.
+- **Budget semantics:** `register_with_budget(view_id, pattern,
+  projection, budget: u64)` caps per-update work; each matching
+  write consumes one budget unit and exhaustion fires the
+  budget-exhausted outcome. `budget == u64::MAX` is the
+  effectively-unbounded sentinel.
+- Reads route through `Engine::read_view` /
+  `Engine::read_view_with(ReadViewOptions)`; strict mode fires
+  `E_IVM_VIEW_STALE` when materialization is behind the latest write.
+
+The TS DSL surface mirrors the Rust shape one-for-one via
+`packages/engine/src/views.ts::validateUserViewSpec`, with napi
+round-tripping the field names. The drift-detector proptest at
+`crates/benten-ivm/tests/algorithm_b_drift_detector.rs` runs
+incremental-vs-rebuild parity end-to-end so generalised Algorithm B
+is held to the same correctness bar as the canonical kernels.
+
 ## Capabilities
 
 `benten-caps` defines a pre-write hook trait:

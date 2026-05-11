@@ -350,7 +350,9 @@ device-DID-signed auth header for writes + Server-Sent-Events for
 ChangeEvent streams). See the four runnable examples shipped at
 `packages/engine/examples/`:
 
-- `atrium-peer-mgmt.ts` — invite, list, role transitions, eviction.
+- `atrium-peer-mgmt.ts` — `join`, `trustPeer`, `listPeers`,
+  `revokePeer`, peer-lifecycle hooks (`onPeerJoin` / `onPeerLeave`),
+  `leave`.
 - `atrium-sync-trigger.ts` — manual + scheduled sync; observe MST
   diff stats.
 - `ucan-grant-flow.ts` — minting, attenuating, revoking UCAN grants
