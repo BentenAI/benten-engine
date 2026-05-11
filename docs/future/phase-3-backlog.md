@@ -2378,3 +2378,31 @@ Four `bindings/napi/tests/attribution_frame_widening_napi_serializer.rs` tests +
 - §13.8 (paired carry; co-routes in HANDOFF Cluster 7 closure batch).
 
 ---
+
+### 13.10 `docs/history/PHASE-3.md` retrospective authoring
+
+**Origin:** Phase-3-close pre-v1 triage (2026-05-10 doc-review `consolidation-or-split.json::cs-r1-10`). CLAUDE.md §"Key Reading for Fresh Agents" item 19 references `docs/history/PHASE-3.md` as the canonical Phase-3 retrospective, but the file does not yet exist. The three sibling retrospectives (`PHASE-1.md` 347 lines, `PHASE-2a.md` 305 lines, `PHASE-2b.md` 450 lines) establish the template: § 1 Narrative journal + § 2 Changelog highlights + § 3 Key takeaways + § 4 Backlog state + § 5 pim-N catalog (where applicable) + § 6 Decisions baked-in.
+
+**Phase-3 retrospective candidate scope:**
+- Phase-3-pre-R1 dispatch (waves G13/G14/G15/G16/G17/G18/G19), R1 pre-implementation 5-lens spec review (architect / security / wasm-target / IVM / sync-distributed-systems), R2 test-landscape synthesis, R3 7-track red-phase, R3-consolidation, R4 5-lens test review, R4-FP, R4b post-implementation test review.
+- R5 implementation arc across waves 1-9 (G16-A canary → G16-B/C/D body → G16-D wave-6b on-the-wire device-DID-attestation V2 → wave-9 9-track typed-CALL + sync-attack defenses).
+- R6 phase-close convergence council 3 rounds (R1 18-lens × 49 cumulative findings → R2 22 → final 0).
+- Plan §1 exit criteria 1 + 15 + 16 closure narrative (two-peer iroh sync at PR #160; 3+-peer convergence at PR #160; multi-device with cryptographic device-DID attestation at PR #163 wave-6b).
+- Compromises closed: #11 (G15-A), #12 (G13-E wave-3), #16 (random host-fn G17-A2 wave-5b), #17 (in-memory module-bytes G14-C wave-4b), #18 (handler-version chain G14-C wave-4b), #19 partial (browser-target persistence G18-A wave-5a), #20 (3-rung baked-in #17 defense R6-FP Wave B), #21+ (device-DID attestation).
+- Workspace transition 8 → 10 crates (`benten-id` 9th, `benten-sync` 10th native-only); CATALOG_VARIANT_COUNT 109 → 118 (5 new sync/atrium codes + 4 TypedCall* family); plugin/extension architecture (CLAUDE.md baked-in #18 + #19) ratified during pre-v1 cleanup window; Class B β `read_node_as` shipped pre-v1 (PR #184).
+- pim-N catalog: pim-12 (RED-PHASE staged-pin un-ignore §3.6e) + pim-13 (R7-equivalent spec-to-code-compliance audit §3.12) + pim-18 (SHAPE-not-SUBSTANCE pre-flight §3.6f) + pim-2-amendment (per-finding granularity §3.6b sub-rule 4) + pim-cross-language-rule-mirror (§3.5g rename) + pim-cite-drift-fp1-recurrence (§3.5h MANDATORY-PRE-MERGE) + pim-test-isolation-process-scoped-shared-state (§3.13).
+- Decisions baked-in this phase: CLAUDE.md #16 (SANDBOX surface minimum-viable), #17 (full peer vs thin compute surface), #18 (plugin trust model — three-layer consent), #19 (engine-level extensions — compile-time trust), v1-gate-refactor (v1 covers Phases 1+2a+2b+3+4).
+
+**Touch size:** ~400-500 LOC (matching PHASE-2b.md's 450-line shape).
+
+**Phase target:** v1-assessment-window per CLAUDE.md item #15 (couples to v1-gate retrospective overall posture). NOT pre-v1-tag-blocking — the CLAUDE.md reference can be retensed to "in flight" until the retrospective lands.
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Authoring a 500-LOC narrative retrospective in this cross-doc-retense cluster blows the cluster's mechanical-retense scope budget; the work is named here with concrete sub-sections + template + sizing so a dedicated authoring task lands the retrospective without prep-work overhead.
+
+**Cross-references:**
+- `docs/history/PHASE-1.md` / `PHASE-2a.md` / `PHASE-2b.md` (template precedents).
+- `CLAUDE.md` §"Key Reading for Fresh Agents" item 19 (the load-bearing cross-reference).
+- `.addl/_archive/phase-3/` (frozen-in-time R1/R2/R3/R4/R4b/R5/R6 round artifacts feeding the retrospective).
+- `HANDOFF-2026-05-11-night-shift-stop.md` (mid-session compact-survival snapshot with the full PR + commit sequence).
+
+---

@@ -355,6 +355,16 @@ Compile-time linked into the engine binary. Rare. For custom IVM strategies, alt
 
 **Audience.** People building the platform itself, not app users. The two categories are intentionally separate worlds; trust models do not transfer between them in either direction.
 
+## Thin-client surface — three-rung defense
+
+The browser wasm32 bundle commits to a thin-client posture: it holds in-RAM cache + IndexedDB snapshot data + manifest-store, but contains no `iroh` transport, no `loro` CRDT bytes, no `redb` durable backend, and no `wasmtime` SANDBOX runtime. Full peers (native Rust on user-owned hardware) are the sync participants; the browser tab reads against snapshot data and writes via fetch to a full peer. The architectural commitment is defended at three rungs so a regression at any one rung is caught by another:
+
+1. **Source-side cfg-gating.** `crates/benten-sync/src/lib.rs` fires `compile_error!` for `target_arch = "wasm32"`, and Cargo.toml restricts the crate's dependency block to `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`. A wasm32 build attempt fails at compile time, not at runtime. Pinned by `crates/benten-sync/tests/wasm32_excluded.rs`.
+2. **Cargo feature-graph closure.** No transitive activation of full-peer-only crates from the browser-bundle root crate, even via shared workspace features. Pinned by `bindings/napi/tests/feature_graph_closure_no_test_helpers_in_production.rs`.
+3. **Built-bundle symbol-section audit.** CI's `wasm-browser.yml` runs `wasm-objdump -x` against the produced `.wasm` artifact and asserts zero matches for the four forbidden crate prefixes (`loro`, `iroh`, `redb`, `wasmtime`). A regression that pulls any forbidden crate into the bundle fails CI immediately with the matched-symbol output. Pinned by `bindings/napi/tests/wasm_bundle_content.rs`.
+
+The companion `wasm-checks.yml` `benten-sync-refuses-wasm32` cell additionally asserts that `cargo check --target wasm32-unknown-unknown -p benten-sync` fails with the `compile_error!` macro firing — covering the case where the source-side cfg-gating gets accidentally removed but feature-graph closure happens to still hold.
+
 ---
 
 For the paths this will take next, see [`HOW-IT-WORKS.md`](HOW-IT-WORKS.md) "The path from here." For every error the engine surfaces, see [`ERROR-CATALOG.md`](ERROR-CATALOG.md).

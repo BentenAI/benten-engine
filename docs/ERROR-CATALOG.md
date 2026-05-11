@@ -2,6 +2,8 @@
 
 **Status:** Specification. Error codes and messages are reserved here before implementation so that every error the engine can produce has a stable code and a fix hint.
 
+**Catalog size at Phase-3-close:** 118 stable error codes total. The authoritative count lives in `crates/benten-errors/tests/stable_shape.rs` as `CATALOG_VARIANT_COUNT`; CI's drift test asserts the value matches the `ErrorCode` enum's `ALL_CATALOG_VARIANTS` length so adding a variant without updating this doc fails CI. Phase 3 added five new codes for Atrium sync attack defenses, device-attestation forgery, and engine cap-state observability (`E_SYNC_REVOKED_DURING_SESSION`, `E_DEVICE_ATTESTATION_FORGED`, `E_ATRIUM_INACTIVE`, plus three SYNC codes landed in R6 fix-pass Wave C1); Phase-3-close pre-v1 cleanup added the four `E_TYPED_CALL_*` family codes for the typed-CALL dispatch surface.
+
 **Motivation:** The DX critic (2026-04-14 review) identified that the spec discussed error *edge types* (`ON_DENIED`, `ON_NOT_FOUND`, etc.) but had zero discussion of runtime error *messages* or codes. Meanwhile the 14 structural invariants will each fire rejection errors at registration time. Without a catalog, developers will hit "validation failed" with no context. This document is the contract.
 
 ## Format
