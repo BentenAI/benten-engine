@@ -91,6 +91,10 @@ let outcome = engine.call("engine:typed:blake3_hash", "default", input_value)?;
 // outcome.value: { hash: Bytes(32) }
 ```
 
+### Direct (napi-engine-bound)
+
+The napi binding routes `engine.typedCall(...)` through `Engine::dispatch_typed_call_public` at `crates/benten-engine/src/engine.rs`. That entry mirrors the eval-side `execute_typed_call` cap-check arm (per-op `cap:typed:*` grant check) before invoking the underlying `PrimitiveHost::dispatch_typed_call` — so the napi path can't bypass the capability gate that the in-graph CALL primitive enforces.
+
 ### TypeScript DSL
 
 The napi/DSL surface exposes a typed call:

@@ -72,6 +72,12 @@ Two Benten machines with the same set of Nodes agree bit-for-bit on what everyth
 
 Content addressing also shapes security. The default read posture returns `null` for both "not found" and "access denied" — a byte-identical response, so an unauthorized caller cannot distinguish existence from permission by probing CIDs. Explicit diagnostic methods gated behind a debug capability exist for operators who need to distinguish the two.
 
+## Operator surfaces: caps + observability
+
+Capability administration is reached via `engine.caps()`, which returns an `EngineCapsHandle` exposing `create_principal`, `grant_capability`, `revoke_capability`, `install_ucan_proof`, and a `create_view` helper for materialized-view registration. Each method routes through the same pre-write capability policy the evaluator uses, so administrative grants and runtime checks see one consistent grant graph; revocation is durable and propagates through the cap-recheck cascade on the next read.
+
+Operational observability lives next to it: `engine.metrics_snapshot()` returns a `BTreeMap<String, f64>` of counter / gauge / histogram-summary metrics covering sync hop depth, SANDBOX cold-start latency, view-materialization budget consumption, cap-recheck cache hit/miss counts, and the Phase-3 sync-receive failure counters (`E_SYNC_FORGED_DEVICE_ATTESTATION`, `E_SYNC_REVOKED_DURING_SESSION`, etc.). The map shape is intentionally flat so it composes cleanly with Prometheus / OpenTelemetry exporters built on top by an operator-side plugin.
+
 ## Plugins, in plain English
 
 When a software platform talks about "plugins," it usually means binary blobs the platform loads at runtime — JS bundles, Python modules, Rust dynamic libraries. Benten's plugins are different: a plugin is just **more graph**.

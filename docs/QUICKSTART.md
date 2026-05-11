@@ -335,6 +335,26 @@ const sub = await family.subscribe("/zone/posts", (event) => {
 // Tear down the per-session state when done.
 await sub.unsubscribe();
 await family.leave();
+
+// The handle survives leave: rejoin re-establishes peer discovery
+// against the surviving trust-store + device-attestation table, so
+// AttributionFrame.peer_did_set continuity is preserved across the
+// leave/rejoin cycle. Use `isActive()` to gate calls that require
+// the handle's iroh endpoint to be running.
+if (!family.isActive()) {
+  await family.rejoin();
+}
+
+// Multi-device attestation: declare this device's signed envelope
+// before peers will accept its writes as originating from this
+// identity. The envelope is an Ed25519-signed structure that binds
+// device-DID to identity-DID with a payload-hash + session-nonce
+// for replay defense.
+await family.declareDeviceAttestation({
+  envelope: signedDeviceAttestationEnvelope, // produced by
+                                              // `Acceptor::accept_at`
+                                              // on the identity side
+});
 ```
 
 A full peer is the durable Atrium participant — the Rust crate set

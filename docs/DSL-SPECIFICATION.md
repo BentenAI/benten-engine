@@ -142,6 +142,15 @@ Two tests defend against drift recurrence:
 
 Together these make the 6-Args drift fix structural rather than per-instance.
 
+## Typed-CALL on the DSL surface (Phase 3)
+
+Phase 3 introduced typed-CALL — a closed engine-side registry of engine-known ops (Ed25519 sign / verify, BLAKE3 hash, multibase encode / decode, DID resolve, UCAN chain validation, VC verify, keypair generation) reachable through the CALL primitive without enlarging the twelve-primitive vocabulary. The DSL exposes typed-CALL in two equivalent shapes:
+
+- **Convenience surface:** `engine.typedCall("blake3_hash", { data: bytes })`. The napi binding routes through `Engine::dispatch_typed_call_public`, which mirrors the eval-side cap-check (per-op `cap:typed:*`) before invoking the underlying op.
+- **In-graph CALL with reserved prefix:** a CALL operation Node whose `target` is `engine:typed:blake3_hash` and whose `input` map carries the op-specific shape. The eval-side `execute_typed_call` fork routes through the same registry. This shape is what `subgraph(...).call({ target: "engine:typed:..." }).build()` produces.
+
+Both shapes hit the same dispatch implementation and the same capability gate. The DSL does NOT expose typed-CALL as a separate primitive — keeping the twelve-primitive commitment intact while making engine-known fixed-shape compute ergonomically reachable. See [`TYPED-CALL.md`](TYPED-CALL.md) for the closed op registry and the per-op input/output shapes.
+
 ## Cross-references
 
 - `crates/benten-eval/src/primitives/<p>.rs::execute` — eval-side
