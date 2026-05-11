@@ -159,14 +159,24 @@ export interface AttributionFrame {
    */
   deviceDid?: string;
   /**
-   * Phase-3 G14-D widening (pcds-r4-r1-1 instance-25 PRE-EMPTION):
-   * optional CID of the device-attestation envelope that authorized
-   * the step's device-DID claim. Populated when the runtime resolves
-   * the device DID against a registered DeviceAttestation (see
-   * [`DeviceAttestation`]); absent when the step originated from the
-   * Atrium-membership root device.
+   * Phase-3 G16-B widening (§13.9 Instance 25 closure 2026-05-10):
+   * Loro CRDT merge-hop depth — increments by 1 at each `apply_atrium_merge`
+   * boundary the underlying anchor traversed. `0` (omitted) for purely-
+   * local writes; `>=1` for sync-merged writes. Bounded by
+   * `benten_eval::SYNC_HOP_DEPTH_CAP` (default 8); overflow surfaces
+   * as `E_SYNC_HOP_DEPTH_EXCEEDED` at the producer. Mirrors the Rust
+   * producer's `AttributionFrame::sync_hop_depth: u32` field at
+   * `crates/benten-eval/src/exec_state.rs::AttributionFrame`.
+   *
+   * The pre-fix TS interface declared a phantom `deviceCid?: string`
+   * slot inherited from an earlier design that never landed on the
+   * producer side (Rust `AttributionFrame` carries `sync_hop_depth: u32`
+   * here, not a `device_cid` slot). The phantom is dropped + the real
+   * producer field is mirrored in this fix-pass. The §13.9 brief +
+   * sibling test docstrings reference the legacy `deviceCid` name; the
+   * actual closure mirrors what the Rust producer carries.
    */
-  deviceCid?: string;
+  syncHopDepth?: number;
 }
 
 /**

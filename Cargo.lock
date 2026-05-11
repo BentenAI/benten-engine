@@ -411,6 +411,7 @@ dependencies = [
  "benten-dsl-compiler",
  "benten-engine",
  "benten-errors",
+ "benten-eval",
  "benten-id",
  "benten-ivm",
  "blake3",

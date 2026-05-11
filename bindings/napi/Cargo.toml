@@ -158,6 +158,17 @@ napi-build = "2"
 # pin set at workspace `[workspace.dependencies]` (parse-only feature
 # set; ~70KB compile cost, dev-only).
 toml = { workspace = true }
+# §13.9 Instance 25 closure (2026-05-10): the inline unit tests at
+# `src/trace.rs::tests` construct `benten_eval::AttributionFrame`
+# instances directly so the napi serializer's Phase-3 widening
+# emission (peer_did_set / device_did / sync_hop_depth) can be pinned
+# with would-FAIL-if-no-op'd discipline (pim-2 §3.6b). The producer
+# type is NOT re-exported by `benten-engine` — `AttributionFrame`
+# lives at `benten_eval::AttributionFrame` and the engine's
+# `TraceStep::Step.attribution` carries it without a re-export. Adding
+# the dep here (dev-only) avoids promoting the engine's re-export
+# surface for a test-only consumer.
+benten-eval = { path = "../../crates/benten-eval" }
 
 # Phase-3 G19-B (§7.2 + §7.8): the `benten_error_context` + `emit_event`
 # integration tests reach into `benten_napi::testing` (the rlib-only
