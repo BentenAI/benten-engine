@@ -1,9 +1,10 @@
-//! 5d-J workstream 5 — `HandlerPredecessors::predecessors_of` real impl.
+//! `HandlerPredecessors::predecessors_of` real-impl pin.
 //!
-//! Prior to this workstream the method returned an always-empty slice.
-//! Now it walks the registered subgraph's edge list and surfaces the
-//! real topological predecessors, keyed by the same CID derivation
-//! `Engine::trace` uses for each TraceStep's `node_cid`.
+//! The method walks the registered subgraph's edge list and surfaces
+//! the real topological predecessors, keyed by the same CID derivation
+//! `Engine::trace` uses for each TraceStep's `node_cid`. (An earlier
+//! implementation returned an always-empty slice; this test defends
+//! against regression to that shape.)
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 

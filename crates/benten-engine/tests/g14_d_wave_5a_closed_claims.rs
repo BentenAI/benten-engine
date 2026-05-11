@@ -1,31 +1,31 @@
-//! G14-D wave-5a closed-claim test pins (per pim-2 §3.6b).
+//! Closed-claim test pins for the engine's SUBSCRIBE-cap-recheck +
+//! handler-id-router + cap-snapshot-hash + thin-client seams (per
+//! `.addl/dispatch-conventions.md` §3.6b end-to-end discipline).
 //!
-//! These pins drive PRODUCTION entry points that G14-D wave-5a wired:
+//! These pins drive PRODUCTION entry points:
 //!
-//! - `Engine::on_change_with_cap_recheck` — F6 SUBSCRIBE per-event cap
-//!   recheck composing the `cap_recheck.rs` G13-pre-C scaffold.
+//! - `Engine::on_change_with_cap_recheck` — SUBSCRIBE per-event cap
+//!   recheck composing the `cap_recheck.rs` scaffold.
 //! - `Engine::emit_with_handler` + `Engine::subscribe_with_handler` —
-//!   handler-id-router seam (seq-major-8 + stream-r1-2).
+//!   handler-id-router seam.
 //! - `Engine::put_cap_snapshot_for_envelope` +
 //!   `Engine::resume_from_bytes_*` — `cap_snapshot_hash` cross-process
-//!   binding per CLR-2 + Compromise #10.
+//!   binding (Compromise #10 closure).
 //! - `ThinClientConnection::connect` — thin-client SSE/WebSocket
-//!   subscription seam per D-PHASE-3-30 + CLAUDE.md baked-in #17.
+//!   subscription seam (per D-PHASE-3-30 + CLAUDE.md baked-in #17).
 //! - `cap_snapshot_hash::compute` / `verify` — pure-function
-//!   binding-helper per CLR-2.
+//!   binding-helper.
 //!
-//! Per pim-2 §3.6b every test in this file:
+//! Every test in this file:
 //!
 //! 1. Drives the production-grade entry point (no `testing_*` bypass).
 //! 2. Asserts an OBSERVABLE behavioral consequence of the arm firing.
-//! 3. Would FAIL if the arm were silently no-op'd back to its
-//!    pre-G14-D shape.
+//! 3. Would FAIL if the arm were silently no-op'd.
 //!
-//! The RED-PHASE pins in `subscribe_cap_recheck.rs`,
-//! `wait_resume_cross_process.rs`, etc. continue to assert the
-//! end-to-end UCAN-chain integration that depends on G14-B's durable
-//! grant-store accessor. That accessor shipped at PR #109; the G14-D
-//! infrastructure shipped here is the seam those pins consume.
+//! The end-to-end UCAN-chain integration consumed by sibling pins in
+//! `subscribe_cap_recheck.rs`, `wait_resume_cross_process.rs`, etc.
+//! depends on the durable grant-store accessor (shipped at PR #109).
+//! The seams pinned here are what those sibling pins consume.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 

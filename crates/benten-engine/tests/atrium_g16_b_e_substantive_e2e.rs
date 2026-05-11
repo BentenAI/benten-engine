@@ -1,29 +1,21 @@
-//! G16-B-E LANDED — Substantive end-to-end multi-peer iroh sync pins.
+//! Substantive end-to-end multi-peer iroh sync pins.
 //!
-//! ## Pin sources
-//!
-//! - plan §1 exit-criterion 1 (two full peers sync over iroh — full
-//!   ChangeEvent fan-out + IVM materialisation on receiver).
-//! - plan §1 exit-criterion 15 (Atrium as working sociotechnical unit
-//!   — three peers join, exchange, propagate writes across the trust
-//!   group).
-//! - plan §1 exit-criterion 16 (multi-device support for a single
-//!   identity — same shape as 3-peer convergence with one DID owning
-//!   multiple devices; exit-criterion-1 + 15 cover this together with
-//!   the AttributionFrame.device_did slot from B-prime).
-//! - `docs/future/phase-3-backlog.md` §3.1-followup (Phase-3-close-
-//!   blocking work-surface specification).
+//! Covers the multi-peer sync exit criteria: two full peers sync over
+//! iroh (full ChangeEvent fan-out + IVM materialisation on receiver);
+//! three peers join, exchange, and propagate writes across the trust
+//! group; multi-device support for a single identity (one DID owning
+//! multiple devices, attested via `AttributionFrame.device_did`).
 //!
 //! ## What this file pins
 //!
 //! Three substantive multi-peer scenarios that compose:
 //!
-//! 1. Three real iroh-transport peers + concurrent writes per zone
-//!    on each → bidirectional iroh sync between every pair → all
-//!    three converge to the same merged state. Distinct from the
-//!    pre-G16-B-E `three_peer_loro_convergence_under_concurrent_writes`
-//!    pin (which exercised direct `merge_remote_change` calls); this
-//!    pin drives the **iroh-transport bytes** end-to-end.
+//! 1. Three real iroh-transport peers + concurrent writes per zone on
+//!    each → bidirectional iroh sync between every pair → all three
+//!    converge to the same merged state. Distinct from
+//!    `three_peer_loro_convergence_under_concurrent_writes` (which
+//!    exercises direct `merge_remote_change` calls); this pin drives
+//!    the **iroh-transport bytes** end-to-end.
 //!
 //! 2. Receiver-side `apply_atrium_merge` end-to-end pin: peer A writes
 //!    via `Engine::create_anchor` + `append_version`, exports the
@@ -32,26 +24,27 @@
 //!    Node minted on peer-B's anchor chain; (b) AttributionFrame
 //!    populated with peer-A's DID + peer-A's HLC node-id; (c) peer-B's
 //!    `subscribe_change_events` ChangeProbe drains the post-merge
-//!    NodePut event (Sub-item D — receiver-side ChangeEvent fan-out).
+//!    NodePut event (receiver-side ChangeEvent fan-out).
 //!
 //! 3. Asymmetric reachability: peer A connects to peer B; peer B
 //!    accepts. peer A then attempts to connect to a non-existent /
 //!    unreachable peer-C address; the connect surfaces a typed
 //!    `AtriumError::Transport` with `code() = AtriumTransportDegraded`
-//!    (mapping `PeerConnectFailed`). Closes Sub-item E + the
+//!    (mapping `PeerConnectFailed`) at the
 //!    `atrium_partial_partition_asymmetric_reachability_observable_state_explicit`
 //!    surface — observable-state-explicit-via-typed-error rather than
 //!    silent timeout.
 //!
-//! ## pim-2 §3.6b end-to-end discipline
+//! ## End-to-end discipline (per `.addl/dispatch-conventions.md` §3.6b)
 //!
 //! Every pin in this file would FAIL if the sync arm silently no-op'd:
 //! the convergence pin asserts byte-identity of post-merge state across
 //! all three peers (a no-op merge would leave the third peer's state
 //! lagging); the apply_atrium_merge pin asserts the receiver-side
-//! anchor advances + the ChangeProbe drains a real event; the asymmetric-
-//! reachability pin asserts a typed error at the connect boundary
-//! (a silent timeout would surface a different error variant or a hang).
+//! anchor advances + the ChangeProbe drains a real event; the
+//! asymmetric-reachability pin asserts a typed error at the connect
+//! boundary (a silent timeout would surface a different error variant
+//! or a hang).
 
 #![cfg(all(not(target_arch = "wasm32"), not(feature = "browser-backend")))]
 #![allow(clippy::unwrap_used)]

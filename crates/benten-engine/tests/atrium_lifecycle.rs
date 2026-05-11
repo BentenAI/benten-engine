@@ -1,15 +1,7 @@
-//! G16-B wave-6b LANDED — Atrium open/close lifecycle + two-peer
-//! bidirectional sync (load-bearing exit-criterion-1 pin).
+//! Atrium open/close lifecycle + two-peer bidirectional sync
+//! (load-bearing exit-criterion-1 pin).
 //!
-//! ## Pin sources
-//!
-//! - r2-test-landscape §2.4 G16-B rows
-//!   `atrium_open_close_lifecycle` +
-//!   `atrium_sync_subgraph_two_peer_bidirectional`.
-//! - plan §3 G16-B row.
-//! - plan §"What success looks like" exit-criterion 1.
-//!
-//! ## pim-2 §3.6b end-to-end discipline
+//! ## End-to-end discipline (per `.addl/dispatch-conventions.md` §3.6b)
 //!
 //! Drives the production `Engine`-side `AtriumHandle::open` /
 //! `sync_subgraph` / `accept_sync_subgraph` API end-to-end via the
@@ -237,14 +229,14 @@ async fn loro_merged_node_is_graph_encoded_not_opaque_crdt_blob() {
 
 #[tokio::test]
 async fn loro_merge_produces_attribution_frame_seed_for_anchor_version_chain() {
-    // D-C / D-PHASE-3-22 / arch-r1-4 pin: the AttributionFrame SEED
-    // (contributing peer-`node_id`s after sync-merge) is the
-    // load-bearing CRDT-layer exit. The Anchor + Version + CURRENT
-    // mint that consumes this seed lives in the engine's
-    // version-chain mint path (Phase-1 shipped); the wire-up of
-    // sync-merge → new-Version-Node mint shipped at G16-D PR #163
-    // (criterion 16 cryptographic closure). G16-B canary scope is the
-    // SEED via `LoroDoc::winning_attribution`.
+    // AttributionFrame SEED pin: the CRDT-layer contribution of
+    // peer-`node_id`s after sync-merge is the load-bearing exit that
+    // feeds the engine's Anchor + Version + CURRENT mint path. This
+    // file pins the SEED produced by `LoroDoc::winning_attribution`;
+    // the substantive end-to-end pin that the sync-merge advances a
+    // peer's anchor chain + drains ChangeEvents lives at
+    // `atrium_g16_b_e_substantive_e2e.rs::apply_atrium_merge_*`
+    // (Compromise #23 closure).
     let peer_a = AtriumHandle::open(AtriumConfig::for_test()).await.unwrap();
     let peer_b = AtriumHandle::open(AtriumConfig::for_test()).await.unwrap();
     peer_a.register_zone("/zone/v").await;
