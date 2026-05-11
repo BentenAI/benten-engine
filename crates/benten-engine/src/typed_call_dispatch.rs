@@ -324,6 +324,20 @@ fn ucan_validate_chain(input: &Value) -> Result<Value, EvalError> {
             });
         }
     };
+    // Pre-v1 green-up: reject empty tokens list at dispatch site (parity
+    // with `TypedCallOp::validate_input` in `benten-eval`, which the
+    // engine-side dispatcher does NOT call — each op-handler validates
+    // independently). An empty chain has no leaf to validate against the
+    // declared audience/capability; surfacing `E_TYPED_CALL_INVALID_INPUT`
+    // here matches the vitest pin
+    // `ucan_validate_chain rejects empty tokens list with E_TYPED_CALL_INVALID_INPUT`
+    // at `packages/engine/test/typed_call.test.ts`.
+    if token_bytes_list.is_empty() {
+        return Err(EvalError::TypedCallInvalidInput {
+            op_name: TypedCallOp::UcanValidateChain.name(),
+            reason: "tokens list must not be empty".to_string(),
+        });
+    }
     let audience_str = expect_text(map, "audience")?;
     let capability_str = expect_text(map, "capability")?;
     let now: u64 = match map.get("now") {

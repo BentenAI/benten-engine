@@ -132,15 +132,25 @@ describe("G21-T2 typed-CALL DSL + napi exposure", () => {
     };
     // Bytes flow through napi as numeric-keyed objects → Uint8Array
     // shape on both sides; convert defensively for type compat.
-    const privBytes = Buffer.from(Object.values(kp.private_key) as number[]);
-    const pubBytes = Buffer.from(Object.values(kp.public_key) as number[]);
-    const message = Buffer.from("phase-3-g21-t2-typed-call");
+    //
+    // Pre-v1 green-up: use `Uint8Array` (not `Buffer`) for napi inbound
+    // bytes — Node's `Buffer` extends `Uint8Array` but carries extra
+    // prototype methods that napi-rs's `serde_json::Value` decoder
+    // treats as JS functions and rejects with
+    // "JS functions cannot be represented as a serde_json::Value".
+    // Same constraint pinned at
+    // `bindings/napi/index.test.ts:445-450 (Uint8Array round-trips...)`.
+    const privBytes = new Uint8Array(Object.values(kp.private_key) as number[]);
+    const pubBytes = new Uint8Array(Object.values(kp.public_key) as number[]);
+    const message = new Uint8Array(
+      Buffer.from("phase-3-g21-t2-typed-call"),
+    );
 
     const signRes = (await engine.typedCall("ed25519_sign", {
       private_key: privBytes,
       message,
     })) as { signature: Uint8Array };
-    const sigBytes = Buffer.from(Object.values(signRes.signature) as number[]);
+    const sigBytes = new Uint8Array(Object.values(signRes.signature) as number[]);
     expect(sigBytes.length).toBe(64);
 
     const verifyOk = (await engine.typedCall("ed25519_verify", {
@@ -151,7 +161,7 @@ describe("G21-T2 typed-CALL DSL + napi exposure", () => {
     expect(verifyOk.valid).toBe(true);
 
     // Tampered message: valid: false (would FAIL if dispatch were a no-op).
-    const tampered = Buffer.from(message);
+    const tampered = new Uint8Array(message);
     tampered[0] = tampered[0] ^ 0xff;
     const verifyBad = (await engine.typedCall("ed25519_verify", {
       public_key: pubBytes,
@@ -173,7 +183,10 @@ describe("G21-T2 typed-CALL DSL + napi exposure", () => {
   it("keypair_from_seed is deterministic", async () => {
     const engine = await openOrSkip();
     if (!engine) return;
-    const seed = Buffer.alloc(32, 7);
+    // Pre-v1 green-up: `Uint8Array` rather than `Buffer.alloc(...)` for
+    // napi-rs `serde_json::Value` compat (see ed25519_sign test rationale).
+    const seed = new Uint8Array(32);
+    seed.fill(7);
     const kp1 = await engine.typedCall("keypair_from_seed", { seed });
     const kp2 = await engine.typedCall("keypair_from_seed", { seed });
     expect(JSON.stringify(kp1)).toEqual(JSON.stringify(kp2));
@@ -183,9 +196,9 @@ describe("G21-T2 typed-CALL DSL + napi exposure", () => {
     const engine = await openOrSkip();
     if (!engine) return;
     const out = (await engine.typedCall("blake3_hash", {
-      data: Buffer.from("abc"),
+      data: new Uint8Array(Buffer.from("abc")),
     })) as { hash: Uint8Array };
-    const hashBytes = Buffer.from(Object.values(out.hash) as number[]);
+    const hashBytes = new Uint8Array(Object.values(out.hash) as number[]);
     // Known BLAKE3("abc") prefix (first 4 bytes published in spec).
     expect(hashBytes.length).toBe(32);
     expect(hashBytes[0]).toBe(0x64);
@@ -196,7 +209,7 @@ describe("G21-T2 typed-CALL DSL + napi exposure", () => {
   it("multibase_encode + multibase_decode round-trip base32 ('b') and base58btc ('z')", async () => {
     const engine = await openOrSkip();
     if (!engine) return;
-    const data = Buffer.from([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    const data = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     for (const base of ["b", "z"]) {
       const enc = (await engine.typedCall("multibase_encode", {
         data,
@@ -207,8 +220,11 @@ describe("G21-T2 typed-CALL DSL + napi exposure", () => {
         encoded: enc.encoded,
       })) as { data: Uint8Array; base: string };
       expect(dec.base).toBe(base);
-      const decBytes = Buffer.from(Object.values(dec.data) as number[]);
-      expect(decBytes.equals(data)).toBe(true);
+      const decBytes = new Uint8Array(Object.values(dec.data) as number[]);
+      expect(decBytes.length).toBe(data.length);
+      for (let i = 0; i < data.length; i += 1) {
+        expect(decBytes[i]).toBe(data[i]);
+      }
     }
   });
 
@@ -218,10 +234,16 @@ describe("G21-T2 typed-CALL DSL + napi exposure", () => {
     const kp = (await engine.typedCall("keypair_generate", {})) as {
       public_key: Uint8Array;
     };
-    const pubBytes = Buffer.from(Object.values(kp.public_key) as number[]);
+    const pubBytes = new Uint8Array(Object.values(kp.public_key) as number[]);
     // multibase-encode under 'z' to build a synthetic did:key string.
+    const multicodecPrefix = new Uint8Array([0xed, 0x01]);
+    const didKeyPayload = new Uint8Array(
+      multicodecPrefix.length + pubBytes.length,
+    );
+    didKeyPayload.set(multicodecPrefix, 0);
+    didKeyPayload.set(pubBytes, multicodecPrefix.length);
     const enc = (await engine.typedCall("multibase_encode", {
-      data: Buffer.concat([Buffer.from([0xed, 0x01]), pubBytes]),
+      data: didKeyPayload,
       base: "z",
     })) as { encoded: string };
     const did = `did:key:${enc.encoded}`;
@@ -230,8 +252,11 @@ describe("G21-T2 typed-CALL DSL + napi exposure", () => {
       public_key: Uint8Array;
     };
     expect(out.method).toBe("key");
-    const resolvedPub = Buffer.from(Object.values(out.public_key) as number[]);
-    expect(resolvedPub.equals(pubBytes)).toBe(true);
+    const resolvedPub = new Uint8Array(Object.values(out.public_key) as number[]);
+    expect(resolvedPub.length).toBe(pubBytes.length);
+    for (let i = 0; i < pubBytes.length; i += 1) {
+      expect(resolvedPub[i]).toBe(pubBytes[i]);
+    }
   });
 
   it("ucan_validate_chain rejects empty tokens list with E_TYPED_CALL_INVALID_INPUT", async () => {
@@ -249,8 +274,15 @@ describe("G21-T2 typed-CALL DSL + napi exposure", () => {
       captured = err;
     }
     expect(captured).not.toBeNull();
-    const e = captured as Error;
-    expect(e.message).toMatch(/E_TYPED_CALL_INVALID_INPUT|tokens/);
+    // Post-G19-B JSON envelope shape: typed code surfaces on
+    // `BentenError.code` (not regex-extracted from `.message`). Either
+    // the catalog code OR the human reason "tokens" wording is acceptable
+    // — both are observable consequences of the dispatch-site reject.
+    const e = captured as { code?: string; message?: string };
+    expect(
+      e.code === "E_TYPED_CALL_INVALID_INPUT" ||
+        /tokens/i.test(e.message ?? ""),
+    ).toBe(true);
   });
 
   it("ucan_validate_chain returns valid:false on a forged single-token chain (observable consequence)", async () => {
@@ -261,7 +293,7 @@ describe("G21-T2 typed-CALL DSL + napi exposure", () => {
     let captured: unknown = null;
     try {
       const out = (await engine.typedCall("ucan_validate_chain", {
-        tokens: [Buffer.from([1, 2, 3])],
+        tokens: [new Uint8Array([1, 2, 3])],
         audience: "did:key:z...",
         capability: "zone:write",
         now: 1_000_000,
@@ -274,10 +306,12 @@ describe("G21-T2 typed-CALL DSL + napi exposure", () => {
     // valid UCAN chain"; the engine MUST surface that, not silently
     // accept.
     if (captured !== null) {
-      const e = captured as Error;
-      expect(e.message).toMatch(
-        /E_TYPED_CALL_DISPATCH_ERROR|E_TYPED_CALL_INVALID_INPUT|invalid/i,
-      );
+      const e = captured as { code?: string; message?: string };
+      expect(
+        e.code === "E_TYPED_CALL_DISPATCH_ERROR" ||
+          e.code === "E_TYPED_CALL_INVALID_INPUT" ||
+          /invalid/i.test(e.message ?? ""),
+      ).toBe(true);
     }
   });
 
@@ -287,7 +321,7 @@ describe("G21-T2 typed-CALL DSL + napi exposure", () => {
     let captured: unknown = null;
     try {
       const out = (await engine.typedCall("vc_verify", {
-        credential: Buffer.from([1, 2, 3]),
+        credential: new Uint8Array([1, 2, 3]),
         expected_issuer_did: "did:key:zMalformed",
         now: 1_000_000,
       })) as { valid: boolean };
@@ -296,8 +330,11 @@ describe("G21-T2 typed-CALL DSL + napi exposure", () => {
       captured = err;
     }
     if (captured !== null) {
-      const e = captured as Error;
-      expect(e.message).toMatch(/E_TYPED_CALL_DISPATCH_ERROR|invalid/i);
+      const e = captured as { code?: string; message?: string };
+      expect(
+        e.code === "E_TYPED_CALL_DISPATCH_ERROR" ||
+          /invalid/i.test(e.message ?? ""),
+      ).toBe(true);
     }
   });
 
@@ -318,8 +355,10 @@ describe("G21-T2 typed-CALL DSL + napi exposure", () => {
       captured = err;
     }
     expect(captured).not.toBeNull();
-    const e = captured as Error;
-    expect(e.message).toMatch(/E_TYPED_CALL_UNKNOWN_OP/);
+    // Post-G19-B JSON envelope: typed code on `BentenError.code`, not
+    // regex-extracted from message.
+    const e = captured as { code?: string };
+    expect(e.code).toBe("E_TYPED_CALL_UNKNOWN_OP");
   });
 
   it("invalid input shape surfaces E_TYPED_CALL_INVALID_INPUT", async () => {
@@ -330,13 +369,16 @@ describe("G21-T2 typed-CALL DSL + napi exposure", () => {
       // ed25519_sign requires private_key (32 bytes) + message; we
       // omit message entirely.
       await engine.typedCall("ed25519_sign", {
-        private_key: Buffer.alloc(32),
+        private_key: new Uint8Array(32),
       } as never);
     } catch (err) {
       captured = err;
     }
     expect(captured).not.toBeNull();
-    const e = captured as Error;
-    expect(e.message).toMatch(/E_TYPED_CALL_INVALID_INPUT|message/);
+    const e = captured as { code?: string; message?: string };
+    expect(
+      e.code === "E_TYPED_CALL_INVALID_INPUT" ||
+        /message/i.test(e.message ?? ""),
+    ).toBe(true);
   });
 });
