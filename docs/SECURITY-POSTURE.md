@@ -31,6 +31,8 @@ the written, referenceable form.
 | 21 | Module manifest minimal CID-pin in Phase 2b; full Ed25519 deferred | 2b | **CLOSED** at Phase-3 G14-C wave-4b (Ed25519 sign + UCAN-proof-chain primary + publisher-key-registry fallback per D-PHASE-3-20 + crypto-minor-5) |
 | 22 | Peer-DID + connection metadata leakage to public iroh relays | 3 | Introduced at Phase 3 (Phase 7 Garden-relay closure target). **Revisit at v1-window** per phase-3-backlog §10 (Phase-7 Garden-relays primary closure path; Phase-9 hardened-deployment fallback). |
 | 23 | Wire device-attestation envelope cryptographic closure | 3 | **CLOSED** at Phase-3 G16-D wave-6b fix-pass (cryptographic shape CLOSED inline; **operator-deployment `FreshnessPolicy` override REQUIRED for production** — see body) |
+| 24 | Wallclock fail-closed posture (no default-clock-zero expiration bypass) | 3 | **CLOSED** at Phase-3 G16-B-B-rest (PR #158); engine refuses to initialize UCAN backend without explicit clock injection — surfaces `E_UCAN_CLOCK_NOT_INJECTED` |
+| 25 | HLC-monotonic enforcement at sync layer (adversarial-peer wallclock-injection defense) | 3 | **CLOSED** at Phase-3 sync-attack test family (HLC monotonicity + nonce-cache for replay defense + HLC bound inside signed envelope) |
 
 **Phase-2b net delta:** Compromises #4 + #9 + #10 closed (3 net
 closures); 8 new Phase-2b deferrals enumerated (#14, #15, #16, #17,
@@ -1664,6 +1666,57 @@ End-to-end *content* confidentiality is preserved (iroh's QUIC payload is encryp
 **Posture claim.** Wave-6b's initial wire-shape introduction was scoped to "structural transport landing"; the fix-pass closes the trust-model layer in the SAME phase. Operators reading this section see the full narrative: the wave first landed a benignly-functional transport, then closed the cryptographic gaps in the same window. Defends against the failure shape "compromise silently introduced at phase-close while wire-attestation forgery is undocumented."
 
 **Cross-refs.** `crates/benten-engine/src/engine_sync.rs::DeviceAttestationEnvelope::verify` (envelope signature + Acceptor + payload-hash composition); `crates/benten-engine/src/engine_sync.rs::DeviceAttestationEnvelope::new_signed` (signing path); `crates/benten-id/src/device_attestation.rs::Acceptor::accept_at` (composed primitive); `tests/integration/atrium_two_device.rs::forged_device_did_rejected_at_envelope_verify` (DID forgery rejection pin); `tests/integration/atrium_two_device.rs::replayed_envelope_rejected_by_acceptor_nonce_store` (replay defense pin); `tests/integration/atrium_two_device.rs::frame_pair_payload_swap_rejected_by_payload_hash_binding` (frame-pair binding pin); `tests/integration/atrium_two_device.rs::future_wire_version_rejected_at_decode` (version validation pin); `docs/ERROR-CATALOG.md::E_DEVICE_ATTESTATION_FORGED` (typed-code surface); `docs/INVARIANT-COVERAGE.md::Inv-14` (device-grain attribution narrative honesty retense). Origin: post-PR-#163 mini-review (cryptography lens findings g16d6b-crypto-1/2/3/4 + correctness lens g16d6b-corr-2/3 + dist-systems lens MINOR-2 honest-disclosure) cross-corroborated; closed inline at the same wave per Ben ratification 2026-05-09 (NOT v1-window-deferred).
+
+---
+
+### Compromise #24 — Wallclock fail-closed posture (no default-clock-zero expiration bypass) — CLOSED at Phase-3 G16-B-B-rest
+
+**Status:** CLOSED at Phase-3 G16-B-B-rest (PR #158, 2026-05-09). Earlier shape (pre-G16-B-B-rest) used `DEFAULT_NOW_SECS = 0` as an implicit fallback at `UcanGroundedPolicy`; any code path that constructed a `UcanGroundedPolicy`-evaluating chain WITHOUT injecting a wall-clock would silently evaluate the chain at epoch second zero — which falsely admitted expired UCANs (their `expires_at` invariably > 0; clock 0 vs expiry N always passes the "not yet expired" check). The G16-B-B-rest closure inverts the fall-back: any chain with `nbf > 0` OR `exp > 0` against `now_secs == 0` aborts with the typed `CapError::UcanClockNotInjected` (`E_UCAN_CLOCK_NOT_INJECTED`) rather than silently passing.
+
+**Class.** Fail-open clock regression at any cap-evaluating surface. Sibling to Compromise #1 (TOCTOU bounded windows) at the cap-policy layer rather than the evaluator layer.
+
+**Closure shape.**
+
+- `crates/benten-caps/src/ucan_grounded.rs` — `DEFAULT_NOW_SECS = 0` remains as a sentinel constant, but the policy now refuses chains-with-time-bounds when `now_secs == 0` (the inversion). The `chain_has_time_bounds` helper drives the check.
+- `crates/benten-engine/src/builder.rs` — engine builder threads explicit `clock_inject` parameter; `Engine::open` refuses to initialize the UCAN backend without a clock when a `UcanGroundedPolicy` is configured (rustdoc at `builder.rs:66-71`).
+- Typed error `CapError::UcanClockNotInjected` → `ErrorCode::E_UCAN_CLOCK_NOT_INJECTED` (catalog entry).
+
+**Threat model closed.**
+
+- *Pre-closure:* a developer wires `UcanGroundedPolicy` into an engine without injecting a wallclock; engine silently uses clock=0; ALL UCAN proofs with positive expiration timestamps pass as "not yet expired" regardless of when they were minted. Effective bypass of the entire UCAN expiration model. Failure mode is INVISIBLE in normal tests — every expired proof admits without warning.
+- *Post-closure:* the same misconfiguration surfaces typed `E_UCAN_CLOCK_NOT_INJECTED` at the first chain evaluation. Developer cannot ship a UCAN-using engine without confronting clock injection. Production code MUST inject a real wallclock; test code injects via `with_now_for_test`.
+
+**Test pin.** `crates/benten-engine/tests/typed_call_ucan_grounded.rs` (5 tests; the `expired_proof` test asserts the fail-closed branch fires when `DEFAULT_NOW_SECS=0` AND the chain has time bounds).
+
+**Production discipline (couples to Phase 4-Foundation).** Every new cap-evaluating surface in Phase 4-Foundation (admin UI install path; materializer pipeline; plugin manifest verify; schema compiler walk-time gating) MUST thread injected clock. Source-side discipline: no `SystemTime::now()` / `Instant::now()` in the four new crate surfaces; CI grep audit catches regressions per `.addl/dispatch-conventions.md` §3.5g cross-language-rule-mirror application. The transparent-clock-injection-at-manifest-load-surface ratification (per Phase 4-Foundation D-4F-15, Ben Q6 2026-05-11) inherits this discipline at engine-side rather than requiring plugin authors to thread clock themselves.
+
+**Cross-refs.** `crates/benten-caps/src/ucan_grounded.rs::UcanGroundedPolicy` (the fail-closed inversion); `crates/benten-caps/src/ucan_grounded.rs::DEFAULT_NOW_SECS` (the sentinel constant); `crates/benten-engine/src/builder.rs::with_now` + `crates/benten-engine/src/builder.rs::with_now_for_test` (the injection surface); `crates/benten-engine/tests/typed_call_ucan_grounded.rs::expired_proof_against_default_now_secs_zero_fails_closed` (load-bearing test pin); `docs/ERROR-CATALOG.md::E_UCAN_CLOCK_NOT_INJECTED` (typed-code surface); `docs/future/phase-3-backlog.md §2.3 (i)` (the v1-assessment-window deliverable that retires the sentinel by threading `WriteContext::now` through every cap-evaluating call site — current state is operator-discipline via injection at builder; future state is per-call wallclock binding).
+
+---
+
+### Compromise #25 — HLC-monotonic enforcement at sync layer (adversarial-peer wallclock-injection defense) — CLOSED at Phase-3 sync-attack test family
+
+**Status:** CLOSED at Phase-3 sync attack-test family. The defense composes three Phase-3-shipped primitives at the sync boundary: HLC-monotonic enforcement (peer cannot publish HLC values that go backward beyond their own previous publication); nonce-cache (per-session nonce store rejects replay of previously-seen sync envelopes); HLC bound inside the signed device-attestation envelope V2 (per Compromise #23 — the envelope's signature covers the HLC values, so adversarial wallclock-injection at the envelope layer is detected at signature-verify time before reaching the application-layer Loro merge).
+
+**Class.** Adversarial-peer-controlled wallclock injection at the sync transport layer. Distinct from Compromise #24 (engine-internal clock injection discipline) — this compromise addresses a peer-controlled threat surface rather than an in-process developer-configuration surface. Sibling to Compromise #23 at the HLC-payload boundary rather than the device-attestation-envelope boundary.
+
+**Closure shape (three composed defenses).**
+
+1. **HLC-monotonic enforcement** at `crates/benten-sync/src/handshake.rs` + `apply_atrium_merge` path. Inbound sync frames carry HLC values; the receiver's HLC oracle tracks per-peer max-seen HLC; frames whose HLC is below a peer's previous max are rejected with typed `E_HLC_SKEW_EXCEEDED`. Test pin at `crates/benten-sync/tests/attack_hlc_skew_revocation_ordering.rs` (the `hlc_skew_exceeded_in_inbound_sync_frame_rejected_with_e_hlc_skew_exceeded` test exercises an adversarial peer attempting to publish revocation-ordering past a previously-seen HLC bound; receiver rejects).
+2. **Nonce-cache for replay defense** at the device-attestation `Acceptor::accept_at` path (per Compromise #23 closure). Each envelope carries a 32-byte session-nonce; the receiver's nonce-store rejects replay of any nonce already seen within the `FreshnessPolicy` window. Defends against captured-envelope-replay-with-stale-HLC.
+3. **HLC bound inside signed envelope** — the device-attestation envelope V2's signed bytes include HLC fields. An adversarial peer cannot mutate HLC without invalidating the signature. Combined with defense 1, this means an adversarial peer can publish at-most their own honest HLC values (forging HLC requires forging the envelope signature, which requires holding the peer's secret key).
+4. **G16-B-F structural-always-on per-row cap-recheck (PR #161)** — even if an adversarial peer manages to push a frame that passes defenses 1-3 (e.g., a peer with a legitimately-issued cap that has since been revoked re-shares an old frame), the per-row cap-recheck at `apply_atrium_merge` denies the merge against the current revocation state. Defense in depth.
+
+**Threat model closed.**
+
+- *Pre-closure (theoretical):* an adversarial peer pumps HLC values to suppress concurrent honest writes (HLC LWW resolution favors higher HLC); replays previously-captured envelopes to retroactively re-introduce already-revoked authority; injects fabricated HLC to forge causality.
+- *Post-closure:* all three vectors close. HLC monotonicity bounds adversarial publishing to the peer's own honest progression. Nonce-cache rejects exact-bytes replay. Signed envelope binds HLC to peer identity (cannot forge HLC without forging envelope signature → requires secret-key holding). Per-row cap-recheck denies merges against revoked authority even if a frame passes envelope verification.
+
+**Test pins (Phase-3 sync-attack family).** `crates/benten-sync/tests/attack_hlc_skew_revocation_ordering.rs` (HLC-skew + revocation-ordering); `crates/benten-sync/tests/attack_loro_op_log_inv_13.rs` (Loro op-log integrity under attack); `crates/benten-sync/tests/attack_mst_diff_cid_mismatch.rs` (MST CID-mismatch attack class); also exercised end-to-end at `crates/benten-engine/tests/integration/atrium_two_device.rs` (the device-attestation envelope V2 narrative tests cover the HLC-bound-inside-signature shape).
+
+**Posture claim.** Adversarial-peer wallclock-injection IS a real threat class — the engine's sync layer cannot trust peers to publish honest HLC values, just as it cannot trust them to declare honest device-DIDs (Compromise #23). The defense composes Phase-3-shipped primitives at sync receive time + at the cap-recheck boundary; no net-new mechanism is needed at Phase-4-Foundation. Future plugin-share boundary (Phase-4-Foundation G24-D) inherits these defenses transparently — plugin-share is just Atrium-share with a manifest envelope on top.
+
+**Cross-refs.** `crates/benten-sync/tests/attack_hlc_skew_revocation_ordering.rs` (HLC skew + monotonicity + revocation ordering test pins); `crates/benten-sync/src/handshake.rs` + `crates/benten-sync/src/handshake_wire.rs` (HLC + nonce defenses in the handshake state machine); `crates/benten-sync/src/errors.rs::E_HLC_SKEW_EXCEEDED` (typed error); `crates/benten-engine/src/engine_sync.rs::DeviceAttestationEnvelope::verify` (envelope signature covering HLC fields; Compromise #23 cross-reference); `crates/benten-engine/src/apply_atrium_merge` (G16-B-F structural-always-on per-row cap-recheck PR #161; defense-in-depth). Plugin-share boundary in Phase 4-Foundation (G24-D plan §3) inherits via `plugin_share` calling through the same sync infrastructure.
 
 ---
 
