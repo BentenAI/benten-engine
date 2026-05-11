@@ -9,18 +9,16 @@
 //! **Target source:** ENGINE-SPEC §5 TRANSFORM — "< 10 µs per expression
 //! on dev hardware." TRANSFORM sits on the hot path of every handler
 //! that does any kind of data shaping between READ and WRITE / RESPOND.
-//! Post Phase-3 G19-E (wave-7b — `phase-2-backlog.md` §9.2 closure),
-//! the engine consults a per-handler AST cache via
+//! The engine consults a per-handler AST cache via
 //! `PrimitiveHost::cached_transform_ast` so production dispatch skips
 //! the parse step entirely; this bench exercises the parser in
 //! isolation (cache-miss / cold path) to keep the regression signal on
 //! the grammar's positive-allowlist walker as new built-ins land.
 //!
-//! **Gate policy:** CI-GATED — regressions fail the Phase-2a exit-
-//! criteria workflow. Baseline threshold is <10 µs median on dev
-//! hardware (M-class Apple silicon / recent x86 server cores). Noisy
-//! CI runners apply the workspace-standard
-//! `BENTEN_BENCH_GATE_MULTIPLIER` envelope.
+//! **Gate policy:** CI-GATED — regressions fail the exit-criteria
+//! workflow. Baseline threshold is <10 µs median on dev hardware
+//! (M-class Apple silicon / recent x86 server cores). Noisy CI runners
+//! apply the workspace-standard `BENTEN_BENCH_GATE_MULTIPLIER` envelope.
 //!
 //! **Threshold encoding (machine-readable):** the gate workflow reads
 //! the `median_ns` field from Criterion's JSON output and fails if the
@@ -38,14 +36,6 @@
 //!   (a) a simple top-level projection (`$input.title`),
 //!   (b) a sibling top-level projection (`$input.limit`),
 //!   (c) a nested two-level field access (`$input.author.name`).
-//!
-//! Note: earlier drafts of this doc-comment described a `??` coerce-
-//! and-default shape and a ternary conditional. Those shapes are NOT
-//! in the workload — `??` is rejected by the grammar's positive-
-//! allowlist (Class 23) and the ternary form was never added. The
-//! doc was retensed at pre-v1 Class-E fix-pass 2026-05-09 to honestly
-//! describe the three projection shapes the `expressions` array
-//! actually exercises.
 //!
 //! The bench drives the parser only — the evaluator's TRANSFORM
 //! execution path is measured separately by `ten_node_handler`'s

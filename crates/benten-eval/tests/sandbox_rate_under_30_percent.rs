@@ -1,34 +1,18 @@
-//! Phase 2b R4-FP B-4 — paper-prototype SANDBOX rate gate (STAGED CHECK).
+//! Paper-prototype SANDBOX rate gate (staged check).
 //!
-//! TDD red-phase. Pin source: plan §1 exit-criterion #1 + D11-RESOLVED
-//! (hybrid single-sample + 3-5 cohort) + arch-pre-r1-4 STAGED CHECK
-//! (cheap dry-run rate prediction at G7 close; ~30 min manual
-//! classification of canonical fixture vocabulary against the new
-//! SANDBOX surface).
+//! Cohort definition: the canonical fixture vocabulary is the union of
+//! (a) the Phase-1 8 primitives (READ, WRITE, TRANSFORM, BRANCH, ITERATE,
+//! WAIT, CALL, RESPOND), (b) the Phase-2b additions (EMIT, SUBSCRIBE,
+//! STREAM, SANDBOX), and (c) the paper-prototype handler set. The
+//! classifier marks each handler as "needs SANDBOX" or "expressible
+//! without SANDBOX"; the rate is `count(needs_sandbox) / count(total)`
+//! and must be ≤ 30%.
 //!
-//! **This is the load-bearing test of exit-criterion #1.** A high
-//! G11-2b measurement would be a phase-close hard-fail with no
-//! recourse; the staged check at G7 close gives ≥4-week remediation
-//! runway. R2 §6 + qa-r4-08 flagged this as the absent gate.
-//!
-//! Cohort definition (per R2 §11.2 #3 + D11): the canonical fixture
-//! vocabulary is the union of (a) Phase-1 8 primitives (READ, WRITE,
-//! TRANSFORM, BRANCH, ITERATE, WAIT, CALL, RESPOND), (b) Phase-2b
-//! additions (EMIT, SUBSCRIBE, STREAM, SANDBOX), and (c) the
-//! orchestrator-confirmed paper-prototype handler set. The classifier
-//! marks each handler as "needs SANDBOX" or "expressible without
-//! SANDBOX"; the rate is `count(needs_sandbox) / count(total)` and
-//! must be ≤ 30%.
-//!
-//! The classification body is `todo!()` here; R5 G7-A close-out
-//! (paired with G11-2b-A) populates the actual handler list +
-//! per-handler classification rationale + records the rate to
-//! `docs/PAPER-PROTOTYPE-REVALIDATION.md`. The companion test
-//! `sandbox_rate_full_revalidation_g11_2b.rs` re-runs this check at
-//! G11-2b close against the full revised vocabulary.
-//!
-//! Owned by R3-E surface row (CI workflow tests); test landed by
-//! R4-FP B-4 fix-pass.
+//! `canonical_fixture_vocabulary()` is populated against the live SANDBOX
+//! surface; the rate assertion fires by default. The companion test
+//! `sandbox_rate_full_revalidation_g11_2b.rs` re-runs this check against
+//! the full revised vocabulary; `sandbox_rate_phase_3_revalidation.rs`
+//! re-checks against `docs/PAPER-PROTOTYPE-REVALIDATION.md`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 #![allow(unused_imports, dead_code, unused_variables)]

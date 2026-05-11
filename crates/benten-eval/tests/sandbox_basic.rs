@@ -1,12 +1,8 @@
-//! Phase 2b R3-B — SANDBOX core unit tests (G7-A).
+//! SANDBOX core unit tests.
 //!
-//! **cr-g7a-mr-1 fix-pass:** 2 of 4 tests FLIPPED from `#[ignore]`
-//! `todo!()` to live assertions against the G7-A-landed surface.
-//! The remaining 2 (`sandbox_end_to_end`, `sandbox_no_state_persists_across_calls`)
-//! need G7-C engine integration to fire — markers re-pointed to PR #33.
-//!
-//! Pin sources: plan §3 G7-A, wsa-15 (rename), wsa-20 (Engine singleton +
-//! Module cache), D3-RESOLVED (per-call instance lifecycle), D22-precondition.
+//! Pins the per-call instance lifecycle (D3-RESOLVED), the Engine
+//! singleton + Module cache, and the end-to-end primitive-level
+//! `sandbox::execute` surface against the production SANDBOX runtime.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 #![cfg(not(target_arch = "wasm32"))]
