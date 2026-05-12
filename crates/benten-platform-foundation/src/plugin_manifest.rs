@@ -48,7 +48,11 @@ pub struct PluginManifest {
 impl PluginManifest {
     /// Validate the manifest envelope against schema rules + signature.
     ///
-    /// **Stub.** G24-D fills.
+    /// **Stub.** G24-D fills with a typed error path (likely
+    /// `Result<(), benten_errors::ErrorCode>` or a typed
+    /// `PluginManifestError`). At R3 RED-PHASE the return type is
+    /// intentionally minimal-shape so test pins compile.
+    #[allow(clippy::result_unit_err)]
     pub fn validate(&self) -> Result<(), ()> {
         unimplemented!("R3 RED-PHASE stub — G24-D fills validation logic")
     }
