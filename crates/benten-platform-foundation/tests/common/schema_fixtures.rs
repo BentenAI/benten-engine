@@ -43,7 +43,7 @@
 //! identity without depending on a runtime symbol that doesn't exist yet.
 
 #![allow(dead_code)] // RED-PHASE: helpers referenced by downstream families'
-                    // R3 pins; some unused in Family D itself.
+// R3 pins; some unused in Family D itself.
 
 /// 8-label vocabulary (D-4F-NEW-TYPED-FIELD-NODE-VOCAB).
 pub const VOCAB_LABELS: &[&str] = &[
