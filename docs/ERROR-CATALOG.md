@@ -4,6 +4,16 @@
 
 **Catalog size at Phase-3-close:** 118 stable error codes total. The authoritative count lives in `crates/benten-errors/tests/stable_shape.rs` as `CATALOG_VARIANT_COUNT`; CI's drift test asserts the value matches the `ErrorCode` enum's `ALL_CATALOG_VARIANTS` length so adding a variant without updating this doc fails CI. Phase 3 added five new codes for Atrium sync attack defenses, device-attestation forgery, and engine cap-state observability (`E_SYNC_REVOKED_DURING_SESSION`, `E_DEVICE_ATTESTATION_FORGED`, `E_ATRIUM_INACTIVE`, plus three SYNC codes landed in R6 fix-pass Wave C1); Phase-3-close pre-v1 cleanup added the four `E_TYPED_CALL_*` family codes for the typed-CALL dispatch surface.
 
+**Catalog size expectation at Phase-4-Foundation-close: 135** stable error codes total (118 + 17 net new). The 17 new codes land in 3 cohorts via the **companion-with-canary routing** discipline (per `.addl/phase-4-foundation/00-implementation-plan.md §1.0 + §6 pim-N candidates`) — each cohort is added to this catalog AT the canary wave that mints them, not bundled at G26-A end-of-phase. Atomic Rust + TS update via `.addl/dispatch-conventions.md §3.5g` cross-language rule-mirror. The 3 cohorts:
+
+| Cohort | Canary wave | New ErrorCodes |
+|---|---|---|
+| **Schema vocabulary + compiler** | G23-A | `E_SCHEMA_VALIDATION_FAILED`, `E_SCHEMA_EMIT_NEW_PRIMITIVE_REJECTED`, `E_SCHEMA_SANDBOX_HOST_FN_REJECTED`, `E_SCHEMA_VOCAB_INVALID_LABEL`, `E_SCHEMA_VOCAB_EDGE_MISMATCH`, `E_SCHEMA_VOCAB_SCALAR_UNKNOWN`, `E_SCHEMA_VOCAB_REF_TARGET_MISSING`, `E_SCHEMA_VOCAB_CYCLE_REJECTED`, `E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING` (9 codes) |
+| **Materializer pipeline** | G23-B | `E_MATERIALIZER_CAP_DENIED`, `E_MATERIALIZER_SCHEMA_MISMATCH`, `E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE` (3 codes) |
+| **Plugin manifest + lifecycle** | G24-D | `E_PLUGIN_MANIFEST_INVALID`, `E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID`, `E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID`, `E_PLUGIN_CONTENT_PEER_KEY_ROTATED`, `E_PLUGIN_AUTHOR_NOT_TRUSTED`, `E_PLUGIN_INSTALL_CONSENT_REQUIRED`, `E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE`, `E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN`, `E_PLUGIN_CONTENT_CID_MISMATCH`, `E_PLUGIN_NEW_VERSION_AVAILABLE`, `E_PLUGIN_HETEROGENEITY_INCOMPATIBLE`, `E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED`, `E_DEVICE_ATTESTATION_FORGED_AT_PLUGIN_SHARE`, `E_PLUGIN_LIBRARY_INDEX_TAMPER`, `E_REGISTRY_DISCOVERY_TIMEOUT` (15 codes; arch-r1-3 conflated `E_PLUGIN_MANIFEST_SIGNATURE_INVALID` split into 3 typed codes — USER_SIGNATURE / PEER_SIGNATURE / PEER_KEY_ROTATED) |
+
+Total: 9 + 3 + 15 = 27 minted at canaries; the final 118 → 135 delta accounts for the prior plan's overlap (the post-triage adjustment is +17 net new vs the pre-triage estimate of 12-13). Code-shape (message template + context fields + fix hint) for each new code lands per-canary in this catalog at the canary's companion-doc PR; not filled in at this revision.
+
 **Motivation:** The DX critic (2026-04-14 review) identified that the spec discussed error *edge types* (`ON_DENIED`, `ON_NOT_FOUND`, etc.) but had zero discussion of runtime error *messages* or codes. Meanwhile the 14 structural invariants will each fire rejection errors at registration time. Without a catalog, developers will hit "validation failed" with no context. This document is the contract.
 
 ## Format

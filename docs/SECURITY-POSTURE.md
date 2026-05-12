@@ -1857,6 +1857,60 @@ discovery) — plugins are signed by author, content-addressed, discovered
 through Atrium peer groups; users trust the signed manifest, not a central
 registry.
 
+**Phase-4-Foundation R1-triage refinements (2026-05-11 night).** The base
+three-layer model survives unchanged; the implementation specifics for the
+plugin-identity model are refined:
+
+- **Four distinct identity concepts** (D-4F-12 retense per
+  `.addl/phase-4-foundation/r1-triage.md` Q4): Content-CID (what the plugin
+  IS) + peer-DID signature on original content (provenance; `benten-id`
+  RotationLog handles peer-DID rotation) + plugin-DID minted at install
+  (UCAN audience AND constrained issuer within manifest envelope; per
+  D-4F-16 `did:key:...` shape with engine-held Ed25519 keypair via OsRng,
+  per-install fresh) + user-DID (trust anchor + signs install records).
+  Cross-plugin/schema references use **content-CID, not author-DID**
+  (`accepts_content: [hash, ...]`).
+- **NO Benten-project-key infrastructure.** User-DID signs install records
+  (the user is the source of install consent). Peer-DID signs original
+  content (provenance). No central project key infrastructure for plugin
+  signing.
+- **Manifest schema versioning DROPPED** (D-4F-13). CID covers shape;
+  pull-not-push obviates a schema-version field; T10-upgrade defense list
+  no longer includes "manifest-schema-version-downgrade."
+- **Plugin manifest v0 — Phase 4-Foundation implementation state.**
+  Manifest envelope verified at every load (T5a defense-in-depth verify
+  points: boot + per-load + per-Atrium-merge per sec-4f-r1-9). Cap-change-
+  triggered fresh consent for all upgrades (silent within-lineage subset;
+  full re-consent if `requires` GREW; cross-fork = user-initiated merge).
+  Meta-plugin composition cycle detection AS REJECTION at install time
+  (new ErrorCode `E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED`); handler-call-
+  graph cycle detection at handler-registration time stays Phase 4-Meta
+  per `docs/future/phase-3-backlog.md §15.2`.
+- **Compromise #11 (IVM views coarse-grained read-gate) closure floor
+  REAFFIRMED** against the new materializer surface. Materializer SHARES
+  `IvmViewReadGate` machinery (D-4F-NEW-MATERIALIZER-READ-GATE resolved
+  option SHARE — materializer view IS an IVM view per D-4F-2). The
+  Compromise #11 closure does not regress with the new surface.
+- **Compromise #24 (wallclock fail-closed) + Compromise #25 (HLC-monotonic
+  sync) REAFFIRMED** against new manifest-load surface (clock injection is
+  transparent at engine-side per D-4F-15; HLC-monotonic-strict acceptance
+  for peer-DID rotation per sec-4f-r1-10 T9b race-defense).
+- **MVP rotation mechanism — Phase 4-Foundation** (ratification #6):
+  `SelfRevocation` attestation + out-of-band new-key trust. Old-key signs
+  timestamped revocation; propagates via Atrium sync; peers reject content
+  signed by revoked key after revocation timestamp. **Kith** (working name;
+  Phase 5+ exploratory) is the richer decentralized-identity-and-attestation
+  substrate that would supersede the MVP; scaffold at
+  `docs/future/kith-decentralized-identity.md`.
+- **Decentralized self-discovered registry → Phase 4-Meta** (ratification #3).
+  Phase 4-Foundation v0 uses direct content-addressed-share over Atriums
+  (out-of-band handshake; user pulls from peer they trust). T10-discover
+  threat surface FULLY N/A for v0; carries to `docs/future/phase-4-backlog.md
+  §3.1`.
+
+Full plan + implementation seams at `docs/PLUGIN-MANIFEST.md` (Phase-4-
+Foundation companion doc).
+
 **What this rules out.**
 
 - *Pure user-as-root with per-action prompts.* Notification fatigue;
