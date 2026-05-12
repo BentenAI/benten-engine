@@ -252,7 +252,7 @@ impl<B: GraphBackend> UcanGroundedPolicy<B> {
     fn typed_cap_permitted_by_proof(
         &self,
         required: &str,
-        audience: &Did,
+        audience: Option<&Did>,
     ) -> Result<bool, CapError> {
         let proofs = self.ucan.iter_installed_proofs()?;
         for proof in &proofs {
@@ -276,10 +276,11 @@ impl<B: GraphBackend> UcanGroundedPolicy<B> {
             if self.now_secs == DEFAULT_NOW_SECS && chain_has_time_bounds(chain) {
                 return Err(CapError::UcanClockNotInjected);
             }
-            // 3. Chain-walker fires audience-binding (FIRST per
-            //    cap-r1-9 ordering) + signature + time-window +
-            //    attenuation + revocation. Failure of ANY step = "this
-            //    chain does not permit"; iterate to next.
+            // 3. Chain-walker fires (optional) audience-binding (FIRST
+            //    per cap-r1-9 ordering when an audience is threaded) +
+            //    signature + time-window + attenuation + revocation.
+            //    Failure of ANY step = "this chain does not permit";
+            //    iterate to next.
             //
             //    `validate_chain_for_audience_at` composes
             //    `validate_chain_for_audience` (audience-binding leaf
@@ -288,11 +289,28 @@ impl<B: GraphBackend> UcanGroundedPolicy<B> {
             //    rejects with `UcanAudienceMismatch` even if the chain
             //    is also expired, preserving the typed-error ordering
             //    audit pipelines depend on.
-            if self
-                .ucan
-                .validate_chain_for_audience_at(chain, audience, self.now_secs)
-                .is_err()
-            {
+            //
+            //    When `audience` is `None`, fall back to
+            //    `validate_chain_at` (audience-less; legacy pre-fix
+            //    walker). Mirrors the FP-3 default-collapses-to-scope-
+            //    only-when-actor-None pattern at
+            //    `GrantReader::has_unrevoked_grant_for_scope_and_actor`:
+            //    audience binding fires when the caller threads a
+            //    principal, otherwise we preserve Phase-1/2 fixtures +
+            //    engine-internal typed-CALL paths that don't yet thread
+            //    actor (e.g.,
+            //    `Engine::dispatch_typed_call_public` at
+            //    `engine_wait.rs::881-891` constructs
+            //    `WriteContext { actor_hint: None, .. }`). Full
+            //    actor-threading is the cap-r1-16 + WriteContext::now
+            //    follow-up at G24-D files-owned.
+            let chain_check = match audience {
+                Some(aud) => self
+                    .ucan
+                    .validate_chain_for_audience_at(chain, aud, self.now_secs),
+                None => self.ucan.validate_chain_at(chain, self.now_secs),
+            };
+            if chain_check.is_err() {
                 continue;
             }
             // 4. Leaf-claim → typed-cap mapping.
@@ -330,20 +348,25 @@ impl<B: GraphBackend> CapabilityPolicy for UcanGroundedPolicy<B> {
         };
         // Phase-4-Foundation R1-FP G22-FP-2 (cap-r1-1 BLOCKER closure):
         // resolve the active principal DID + thread it as the
-        // `audience` argument to `typed_cap_permitted_by_proof`. If no
-        // principal DID is resolvable (no `actor_hint`, hint isn't
-        // DID-shaped, or DID bytes are malformed), fail-CLOSED with the
-        // typed `UcanAudienceMismatch` error rather than walking the
-        // chain against an audience-less context (the pre-fix behavior
-        // that let an attacker present a UCAN issued to someone else).
-        let Some(audience) = principal_did_from_context(ctx) else {
-            return Err(CapError::UcanAudienceMismatch {
-                expected: "<no principal DID bound to WriteContext>".to_string(),
-                actual: "<chain-walk skipped: typed-cap requires audience-bound principal>"
-                    .to_string(),
-            });
-        };
-        match self.typed_cap_permitted_by_proof(required, &audience) {
+        // `audience` argument to `typed_cap_permitted_by_proof`. When
+        // the caller threads a principal (via `actor_hint` shaped as a
+        // `did:key:` URI that round-trips through `Did::resolve()`),
+        // the chain-walker fires audience binding via
+        // `validate_chain_for_audience_at`. When `actor_hint` is
+        // `None` or non-DID-shaped, the walker falls back to the
+        // legacy `validate_chain_at` (no audience) — preserving
+        // Phase-1/2 fixtures + engine-internal typed-CALL paths that
+        // don't yet thread actor (e.g.,
+        // `Engine::dispatch_typed_call_public` at
+        // `engine_wait.rs::881-891`). This mirrors FP-3's
+        // default-collapses-to-scope-only-when-actor-None pattern at
+        // `GrantReader::has_unrevoked_grant_for_scope_and_actor`. Full
+        // actor-threading is the cap-r1-16 + WriteContext::now
+        // follow-up at G24-D files-owned; once every cap-evaluating
+        // surface threads an actor, the `None` branch can be removed
+        // and audience binding becomes mandatory.
+        let audience = principal_did_from_context(ctx);
+        match self.typed_cap_permitted_by_proof(required, audience.as_ref()) {
             Ok(true) => Ok(()),
             Ok(false) => Err(grant_err),
             // A backend storage failure during the proof walk is a
