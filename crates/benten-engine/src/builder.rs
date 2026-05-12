@@ -22,7 +22,7 @@ use benten_caps::{
     CAPABILITY_GRANT_LABEL, CapError, CapabilityPolicy, GrantBackedPolicy, GrantReader,
     NoAuthBackend,
 };
-use benten_core::Value;
+use benten_core::{Cid, Value};
 use benten_errors::ErrorCode;
 use benten_eval::{HlcTimeSource, InstantMonotonicSource, MonotonicSource, TimeSource};
 use benten_graph::{ChangeSubscriber, RedbBackend};
@@ -881,6 +881,18 @@ impl BackendGrantReader {
 
 impl GrantReader for BackendGrantReader {
     fn has_unrevoked_grant_for_scope(&self, scope: &str) -> Result<bool, CapError> {
+        // Phase 4-Foundation R1 cap-r1-2 / cap-r1-10: this scope-only
+        // path remains the no-actor-context fallback. `check_write`
+        // continues to call it; `check_read` now routes through the
+        // principal-aware override below.
+        self.has_unrevoked_grant_for_scope_and_actor(scope, None)
+    }
+
+    fn has_unrevoked_grant_for_scope_and_actor(
+        &self,
+        scope: &str,
+        actor_cid: Option<&Cid>,
+    ) -> Result<bool, CapError> {
         let revoked = self.revoked_scopes()?;
         if revoked.contains(scope) {
             return Ok(false);
@@ -914,6 +926,29 @@ impl GrantReader for BackendGrantReader {
                         matches!(node.properties.get("revoked"), Some(Value::Bool(true)));
                     if explicitly_revoked {
                         continue;
+                    }
+                    // Phase 4-Foundation R1 cap-r1-2 BLOCKER + cap-r1-10
+                    // closure: principal binding. When the caller threads
+                    // an `actor_cid`, only grants whose stored `actor`
+                    // property matches are considered. A grant issued to
+                    // user-B does NOT permit user-A's read — this closes
+                    // the cross-principal-permission bug where
+                    // `check_read` was wildcard-enumerating by scope only.
+                    // When `actor_cid` is `None` the call collapses to the
+                    // scope-only check (legacy / Phase-1 / Phase-2
+                    // fixtures + NoAuthBackend default-permit path).
+                    //
+                    // The grant Node persists `actor` via `actor.as_value()`
+                    // (`GrantSubject::as_value`) which is `Value::Bytes`
+                    // for a CID-shaped subject; bytes equal `cid.as_bytes()`.
+                    if let Some(want) = actor_cid {
+                        let actor_bytes = match node.properties.get("actor") {
+                            Some(Value::Bytes(b)) => b.as_slice(),
+                            _ => continue, // malformed grant — skip
+                        };
+                        if actor_bytes != want.as_bytes() {
+                            continue;
+                        }
                     }
                     return Ok(true);
                 }
