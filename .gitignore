@@ -118,6 +118,8 @@ docs/BENCHMARKING.md
 docs/future/*
 !docs/future/phase-2-backlog.md
 !docs/future/phase-3-backlog.md
+!docs/future/phase-4-backlog.md
+!docs/future/kith-decentralized-identity.md
 !docs/future/v1-gate-refactor.md
 crates/benten-graph/benches/README.md
 crates/README.md
