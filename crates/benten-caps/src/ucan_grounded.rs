@@ -68,12 +68,50 @@
 use std::sync::Arc;
 
 use benten_graph::GraphBackend;
+use benten_id::did::Did;
 
 use crate::backends::UCANBackend;
 use crate::error::CapError;
 use crate::grant_backed::GrantBackedPolicy;
 use crate::policy::{CapabilityPolicy, ReadContext, WriteContext};
 use crate::typed_cap_mapping::typed_cap_for_ucan_claim;
+
+/// `did:key:` URI prefix; used by [`principal_did_from_context`] to
+/// recognize when [`WriteContext::actor_hint`] carries a DID-shaped
+/// principal identifier vs a non-DID hint string.
+const DID_KEY_PREFIX: &str = "did:key:";
+
+/// Resolve the active principal DID from a [`WriteContext`].
+///
+/// Phase-4-Foundation R1-FP G22-FP-2 (cap-r1-1 BLOCKER closure): the
+/// audience-binding gate in [`UcanGroundedPolicy::typed_cap_permitted_by_proof`]
+/// requires a typed [`Did`] handle to thread into
+/// [`UCANBackend::validate_chain_for_audience_at`]. Until the
+/// `WriteContext::actor_cid → Did` resolution helper lands (cap-r1-16
+/// seam — needs an identity-store with CID-keyed DID lookup at the
+/// engine boundary), we source the principal from
+/// [`WriteContext::actor_hint`] — the documented "DID / VC identity
+/// placeholder" field per the [`policy::WriteContext`] module-doc.
+///
+/// Returns `Some(did)` if `actor_hint` is `Some(s)`, `s` starts with
+/// `did:key:`, AND `Did::resolve()` round-trips (the bytes parse to a
+/// valid `did:key`). Returns `None` otherwise (no hint / non-DID hint /
+/// malformed DID) — the caller's fail-closed branch surfaces typed
+/// `CapError::UcanAudienceMismatch` for the missing-principal case so
+/// the engine boundary cannot silently accept a UCAN against an
+/// audience-less context (the cap-r1-1 BLOCKER pre-fix behavior).
+fn principal_did_from_context(ctx: &WriteContext) -> Option<Did> {
+    let hint = ctx.actor_hint.as_deref()?;
+    if !hint.starts_with(DID_KEY_PREFIX) {
+        return None;
+    }
+    let did = Did::from_string_unchecked(hint.to_string());
+    // Round-trip check: the string MUST parse to a valid pubkey via
+    // `Did::resolve` — otherwise it's a malformed `did:key:` string
+    // masquerading as a principal, and we treat it as no-principal
+    // (fail-closed at the caller).
+    did.resolve().ok().map(|_| did)
+}
 
 /// Composed `CapabilityPolicy` consulting both
 /// [`GrantBackedPolicy`] and [`UCANBackend`] proof-chain validation.
@@ -177,17 +215,45 @@ impl<B: GraphBackend> UcanGroundedPolicy<B> {
     }
 
     /// Probe whether ANY persisted UCAN proof grants the supplied
-    /// `cap:typed:*` requirement at `now_secs`. Returns `Ok(true)` on
-    /// a single permitting chain; `Ok(false)` if no chain permits +
-    /// no errors arose; bubbles the typed `CapError` for backend
-    /// storage failures.
+    /// `cap:typed:*` requirement at `now_secs`, bound to the active
+    /// principal `audience` DID.
     ///
-    /// A chain that fails the chain-walker (bad signature / expired /
-    /// attenuation-violation / revoked) is treated as "this chain
-    /// does not permit" — iteration continues to the next proof. A
-    /// proof whose leaf-claim maps to the required typed-cap AND
-    /// passes `validate_chain_at` permits.
-    fn typed_cap_permitted_by_proof(&self, required: &str) -> Result<bool, CapError> {
+    /// ## Phase-4-Foundation R1-FP G22-FP-2 (cap-r1-1 + cap-r1-9 BLOCKER closure)
+    ///
+    /// Pre-fix the chain-walker dispatched to
+    /// [`UCANBackend::validate_chain_at`] — signature + `nbf`/`exp`
+    /// time-window + attenuation only. **No audience binding.** A
+    /// malicious actor could present a UCAN issued to *someone else*
+    /// (audience = victim's DID) and have it accepted — defeats UCAN's
+    /// audience semantics, the first-line cross-atrium-replay defense
+    /// (CLR-2). The cap-r1-1 R1 finding flagged this as a BLOCKER.
+    ///
+    /// Post-fix the gate composes
+    /// [`UCANBackend::validate_chain_for_audience_at`] which fires the
+    /// `validate_chain_for_audience` audience-binding check
+    /// **before** the time-window walk (cap-r1-9 ordering: a
+    /// wrong-audience replay against an expired chain surfaces the
+    /// typed [`CapError::UcanAudienceMismatch`], NOT a time-window
+    /// error — matches the Phase-3 G14-A2
+    /// `validate_chain_for_capability` ordering precedent at
+    /// `crates/benten-id/src/ucan.rs::validate_chain_inner` lines
+    /// 397-410 where audience-binding is the first gate).
+    ///
+    /// Returns `Ok(true)` on a single permitting chain;
+    /// `Ok(false)` if no chain permits + no errors arose; bubbles the
+    /// typed `CapError` for backend storage failures.
+    ///
+    /// A chain that fails the chain-walker (audience mismatch / bad
+    /// signature / expired / attenuation-violation / revoked) is
+    /// treated as "this chain does not permit" — iteration continues to
+    /// the next proof, mirroring the pre-fix iteration shape. A proof
+    /// whose audience matches `audience`, whose chain-walk passes, AND
+    /// whose leaf-claim maps to the required typed-cap permits.
+    fn typed_cap_permitted_by_proof(
+        &self,
+        required: &str,
+        audience: &Did,
+    ) -> Result<bool, CapError> {
         let proofs = self.ucan.iter_installed_proofs()?;
         for proof in &proofs {
             // 1. Single-token chain treated as `[proof]`. Multi-token
@@ -210,13 +276,26 @@ impl<B: GraphBackend> UcanGroundedPolicy<B> {
             if self.now_secs == DEFAULT_NOW_SECS && chain_has_time_bounds(chain) {
                 return Err(CapError::UcanClockNotInjected);
             }
-            // 3. Chain-walker fires signature + time-window +
-            //    attenuation + revocation. Failure of ANY step =
-            //    "this chain does not permit"; iterate to next.
-            if self.ucan.validate_chain_at(chain, self.now_secs).is_err() {
+            // 3. Chain-walker fires audience-binding (FIRST per
+            //    cap-r1-9 ordering) + signature + time-window +
+            //    attenuation + revocation. Failure of ANY step = "this
+            //    chain does not permit"; iterate to next.
+            //
+            //    `validate_chain_for_audience_at` composes
+            //    `validate_chain_for_audience` (audience-binding leaf
+            //    check) BEFORE `validate_chain_at` (time-window +
+            //    signature walk) — so a UCAN with the wrong audience
+            //    rejects with `UcanAudienceMismatch` even if the chain
+            //    is also expired, preserving the typed-error ordering
+            //    audit pipelines depend on.
+            if self
+                .ucan
+                .validate_chain_for_audience_at(chain, audience, self.now_secs)
+                .is_err()
+            {
                 continue;
             }
-            // 3. Leaf-claim → typed-cap mapping.
+            // 4. Leaf-claim → typed-cap mapping.
             for cap in &proof.claims.att {
                 if let Some(group) = typed_cap_for_ucan_claim(&cap.resource, &cap.ability)
                     && group.cap_string() == required
@@ -249,7 +328,22 @@ impl<B: GraphBackend> CapabilityPolicy for UcanGroundedPolicy<B> {
             // denial stands.
             return Err(grant_err);
         };
-        match self.typed_cap_permitted_by_proof(required) {
+        // Phase-4-Foundation R1-FP G22-FP-2 (cap-r1-1 BLOCKER closure):
+        // resolve the active principal DID + thread it as the
+        // `audience` argument to `typed_cap_permitted_by_proof`. If no
+        // principal DID is resolvable (no `actor_hint`, hint isn't
+        // DID-shaped, or DID bytes are malformed), fail-CLOSED with the
+        // typed `UcanAudienceMismatch` error rather than walking the
+        // chain against an audience-less context (the pre-fix behavior
+        // that let an attacker present a UCAN issued to someone else).
+        let Some(audience) = principal_did_from_context(ctx) else {
+            return Err(CapError::UcanAudienceMismatch {
+                expected: "<no principal DID bound to WriteContext>".to_string(),
+                actual: "<chain-walk skipped: typed-cap requires audience-bound principal>"
+                    .to_string(),
+            });
+        };
+        match self.typed_cap_permitted_by_proof(required, &audience) {
             Ok(true) => Ok(()),
             Ok(false) => Err(grant_err),
             // A backend storage failure during the proof walk is a
@@ -312,21 +406,28 @@ mod tests {
         let backend = Arc::new(fresh_backend());
         let kp = Keypair::generate();
         // Build a UCAN whose leaf-claim grants `typed:crypto:sign` →
-        // maps to `cap:typed:crypto-sign`.
+        // maps to `cap:typed:crypto-sign`. `build_ucan` sets both
+        // issuer + audience to the keypair's own DID.
         let token = build_ucan(&kp, "typed:crypto", "sign", 0, 253_402_300_798);
         backend.install_proof(&token).unwrap();
 
         // G16-B-B-rest sub-item D: inject a real wallclock so the
         // fail-closed branch does NOT fire (token has `exp > 0`).
         let policy = fresh_policy(Arc::clone(&backend)).with_now_for_test(1_000_000_000);
+        // G22-FP-2 cap-r1-1 BLOCKER closure: `actor_hint` carries the
+        // active principal DID; the chain's audience MUST match this
+        // DID for the gate to permit. Using the keypair's own DID
+        // matches `build_ucan`'s audience.
         let ctx = WriteContext {
             label: "cap:typed:crypto-sign".to_string(),
             scope: "cap:typed:crypto-sign".to_string(),
+            actor_hint: Some(kp.public_key().to_did().as_str().to_string()),
             ..Default::default()
         };
         assert!(
             policy.check_write(&ctx).is_ok(),
-            "valid proof granting cap:typed:crypto-sign MUST permit"
+            "valid proof granting cap:typed:crypto-sign MUST permit \
+             when principal DID matches chain audience"
         );
     }
 
@@ -342,9 +443,13 @@ mod tests {
         // forged-cap-claim assertion exercises the typed-cap mapping
         // path rather than the upstream fail-closed path.
         let policy = fresh_policy(Arc::clone(&backend)).with_now_for_test(1_000_000_000);
+        // G22-FP-2 cap-r1-1 BLOCKER closure: principal DID matches
+        // audience so the test exercises the typed-cap mapping path
+        // (NOT the upstream audience-mismatch path).
         let ctx = WriteContext {
             label: "cap:typed:crypto-sign".to_string(),
             scope: "cap:typed:crypto-sign".to_string(),
+            actor_hint: Some(kp.public_key().to_did().as_str().to_string()),
             ..Default::default()
         };
         assert!(
@@ -363,9 +468,15 @@ mod tests {
         backend.install_proof(&token).unwrap();
 
         let policy = fresh_policy(Arc::clone(&backend)).with_now_for_test(200);
+        // G22-FP-2 cap-r1-1 BLOCKER closure: principal DID matches
+        // audience so the test exercises the time-window path (NOT
+        // the upstream audience-mismatch path). The audience-binding
+        // gate passes; the chain-walker time-window check then rejects
+        // (expired) per the original BLOCKER-2 assertion.
         let ctx = WriteContext {
             label: "cap:typed:crypto-sign".to_string(),
             scope: "cap:typed:crypto-sign".to_string(),
+            actor_hint: Some(kp.public_key().to_did().as_str().to_string()),
             ..Default::default()
         };
         assert!(
@@ -379,9 +490,15 @@ mod tests {
     fn typed_cap_proof_denies_when_no_proofs_installed() {
         let backend = Arc::new(fresh_backend());
         let policy = fresh_policy(Arc::clone(&backend));
+        // G22-FP-2 cap-r1-1 BLOCKER closure: any DID — there are no
+        // proofs to bind against; the audience-mismatch path doesn't
+        // fire (no chain to walk). The grant-backed denial bubbles via
+        // `typed_cap_permitted_by_proof` returning `Ok(false)`.
+        let kp = Keypair::generate();
         let ctx = WriteContext {
             label: "cap:typed:crypto-sign".to_string(),
             scope: "cap:typed:crypto-sign".to_string(),
+            actor_hint: Some(kp.public_key().to_did().as_str().to_string()),
             ..Default::default()
         };
         assert!(
@@ -411,9 +528,14 @@ mod tests {
 
         // Default policy — no clock injected; now_secs at sentinel 0.
         let policy = fresh_policy(Arc::clone(&backend));
+        // G22-FP-2 cap-r1-1 BLOCKER closure: principal DID matches
+        // chain audience so the audience-mismatch gate passes through
+        // to the time-bound clock-not-injected check (the path this
+        // test pins).
         let ctx = WriteContext {
             label: "cap:typed:crypto-sign".to_string(),
             scope: "cap:typed:crypto-sign".to_string(),
+            actor_hint: Some(kp.public_key().to_did().as_str().to_string()),
             ..Default::default()
         };
 
@@ -454,9 +576,13 @@ mod tests {
         backend.install_proof(&token).unwrap();
 
         let policy = fresh_policy(Arc::clone(&backend));
+        // G22-FP-2 cap-r1-1 BLOCKER closure: principal DID matches
+        // chain audience so the audience-binding gate passes; this
+        // test pins the no-time-bounds clean-walk path.
         let ctx = WriteContext {
             label: "cap:typed:crypto-sign".to_string(),
             scope: "cap:typed:crypto-sign".to_string(),
+            actor_hint: Some(kp.public_key().to_did().as_str().to_string()),
             ..Default::default()
         };
 
