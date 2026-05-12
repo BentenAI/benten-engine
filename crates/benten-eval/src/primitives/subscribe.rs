@@ -965,10 +965,52 @@ pub fn next_engine_seq() -> u64 {
     ENGINE_SEQ.fetch_add(1, Ordering::Relaxed)
 }
 
-/// Cap-recheck closure shape. Returns `true` if delivery should proceed,
-/// `false` if the principal's caps have been revoked / no longer cover the
-/// event's anchor (D5 cap-recheck-at-delivery).
-pub type DeliveryCapRecheck = Arc<dyn Fn(&ChangeEvent) -> bool + Send + Sync + 'static>;
+/// Cap-recheck outcome (Phase 4-Foundation R1-FP wave-1 G22-FP-1 option-D
+/// ratification, 2026-05-12).
+///
+/// Replaces the prior `bool` return shape so the cap-recheck callback can
+/// distinguish three observably-different outcomes per delivery boundary:
+///
+/// - [`CapRecheckOutcome::Keep`] — deliver this event (the happy path;
+///   replaces the prior `true` return).
+/// - [`CapRecheckOutcome::Drop`] — silently elide THIS event from the
+///   delivery stream; stream stays open; no error; no termination notify;
+///   no `SUBSCRIBE_REVOKED_MID_STREAM_COUNT` bump. NEW semantic introduced
+///   for the per-Node admin-UI per-cap-revocation UX path: the principal
+///   no longer has read coverage for the specific anchor, but the
+///   subscription itself remains active so future events the principal
+///   still covers continue delivering. Closes sec-4f-r1-1 BLOCKER +
+///   mat-r1-4 (per-Node fail-soft elision; the cap-r1-9 closure ordering
+///   corollary).
+/// - [`CapRecheckOutcome::Cancel`] — whole-subscription terminate; preserve
+///   the Phase-3 R6-FP Wave-C1 SHIPPED contract (typed
+///   `EvalError::SubscribeRevokedMidStream` + `termination_notify` callback
+///   + `entry.active.store(false)` + `unregister_on_change`). Used when
+///   the principal as a whole was revoked (vs. per-event-coverage
+///   revocation) and the subscription cannot continue. Replaces the prior
+///   `false` return.
+///
+/// The eval-side publish loop dispatches on the enum; Phase-3 SHIPPED
+/// behavior is preserved end-to-end via the `Cancel` arm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CapRecheckOutcome {
+    /// Deliver this event (replaces prior `true`).
+    Keep,
+    /// Silently elide this event; stream stays open (NEW per option-D).
+    Drop,
+    /// Auto-cancel whole subscription with typed
+    /// `EvalError::SubscribeRevokedMidStream` (replaces prior `false`;
+    /// preserves Phase-3 R6-FP Wave-C1 SHIPPED contract).
+    Cancel,
+}
+
+/// Cap-recheck closure shape. Returns a [`CapRecheckOutcome`] per event:
+/// `Keep` to deliver, `Drop` to silently elide this event (stream stays
+/// open), `Cancel` to auto-cancel the whole subscription with the typed
+/// `E_SUBSCRIBE_REVOKED_MID_STREAM` shape (D5 cap-recheck-at-delivery +
+/// option-D 2026-05-12 per-Node-vs-whole-actor split).
+pub type DeliveryCapRecheck =
+    Arc<dyn Fn(&ChangeEvent) -> CapRecheckOutcome + Send + Sync + 'static>;
 
 /// Ad-hoc onChange consumer callback shape (the engine-layer
 /// `Engine::on_change` registers these). Mirrors
@@ -1304,62 +1346,99 @@ pub fn publish_change_event_with_labels(labels: &[String], event: ChangeEvent) {
             continue;
         }
         // D5 delivery-time cap re-check.
-        if let Some(check) = &entry.cap_recheck
-            && !(check)(&event)
-        {
-            // Phase-3 R6-FP Wave-C1 (cap-r6-r1-1 / r4b-cap-6 closure):
-            // typed-error emission for the auto-cancel path. Per
-            // CLR-2 §11 dual-layer recheck, the typed
-            // `E_SUBSCRIBE_REVOKED_MID_STREAM` MUST surface to the
-            // consumer so JS/TS callers distinguish 'cap-revoke
-            // auto-cancel' from buffer-overflow / GC / cursor-skip /
-            // engine-shutdown drops. Three composing surfaces:
-            //   (a) bump the process-wide observability counter
-            //       so test pins assert the typed-error firing
-            //       observably (pim-2 §3.6b production-flow drive);
-            //   (b) populate the shared `termination_reason` slot
-            //       with `ErrorCode::SubscribeRevokedMidStream` so
-            //       the engine-side `Subscription::termination_reason()`
-            //       accessor returns the typed code;
-            //   (c) fire the optional `termination_notify` callback
-            //       with the typed `EvalError::SubscribeRevokedMidStream`
-            //       so engine adapters can bridge the typed shape
-            //       through to the napi error envelope (engine-layer
-            //       wireup binds this when `on_change_with_cap_recheck`
-            //       installs the recheck closure).
-            SUBSCRIBE_REVOKED_MID_STREAM_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            // (b) shared termination-reason slot — populated only if
-            //     not already set so a duplicate-fire (the publish
-            //     walk visits this entry again before the GC sweep
-            //     completes) does not overwrite the original cause.
-            if let Ok(mut slot) = entry.termination_reason.lock()
-                && slot.is_none()
-            {
-                *slot = Some(ErrorCode::SubscribeRevokedMidStream);
+        //
+        // Phase 4-Foundation R1-FP wave-1 G22-FP-1 option-D ratification
+        // (2026-05-12, sec-4f-r1-1 BLOCKER closure): the cap-recheck
+        // callback now returns a `CapRecheckOutcome` enum with three
+        // arms. `Keep` falls through to the deliver path; `Drop`
+        // silently elides this event while keeping the subscription
+        // active (NEW per-Node fail-soft semantic for the admin-UI
+        // per-cap-revocation UX); `Cancel` preserves the Phase-3
+        // R6-FP Wave-C1 SHIPPED whole-subscription terminate path.
+        if let Some(check) = &entry.cap_recheck {
+            match (check)(&event) {
+                CapRecheckOutcome::Keep => {
+                    // Fall through to the deliver path below.
+                }
+                CapRecheckOutcome::Drop => {
+                    // NEW (option-D): silently elide this event; stream
+                    // stays open. NO counter bump, NO termination
+                    // notify, NO `entry.active.store(false)`, NO
+                    // unregister. The principal's coverage for this
+                    // specific anchor has lapsed but the subscription
+                    // as a whole is still alive — future events the
+                    // principal still covers continue delivering. The
+                    // dedup gate is also NOT bumped (the event was
+                    // not delivered, so a later seq-based replay can
+                    // still cover it under a different cursor mode).
+                    continue;
+                }
+                CapRecheckOutcome::Cancel => {
+                    // Phase-3 R6-FP Wave-C1 (cap-r6-r1-1 / r4b-cap-6
+                    // closure) SHIPPED behaviour, identical to the
+                    // pre-option-D `cap_recheck=false` path. Per
+                    // CLR-2 §11 dual-layer recheck, the typed
+                    // `E_SUBSCRIBE_REVOKED_MID_STREAM` MUST surface
+                    // to the consumer so JS/TS callers distinguish
+                    // 'cap-revoke auto-cancel' from buffer-overflow
+                    // / GC / cursor-skip / engine-shutdown drops.
+                    // Three composing surfaces:
+                    //   (a) bump the process-wide observability
+                    //       counter so test pins assert the typed-
+                    //       error firing observably (pim-2 §3.6b
+                    //       production-flow drive);
+                    //   (b) populate the shared `termination_reason`
+                    //       slot with `ErrorCode::SubscribeRevokedMidStream`
+                    //       so the engine-side
+                    //       `Subscription::termination_reason()`
+                    //       accessor returns the typed code;
+                    //   (c) fire the optional `termination_notify`
+                    //       callback with the typed
+                    //       `EvalError::SubscribeRevokedMidStream`
+                    //       so engine adapters can bridge the typed
+                    //       shape through to the napi error envelope
+                    //       (engine-layer wireup binds this when
+                    //       `on_change_with_cap_recheck` installs
+                    //       the recheck closure).
+                    SUBSCRIBE_REVOKED_MID_STREAM_COUNT
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    // (b) shared termination-reason slot — populated
+                    //     only if not already set so a duplicate-fire
+                    //     (the publish walk visits this entry again
+                    //     before the GC sweep completes) does not
+                    //     overwrite the original cause.
+                    if let Ok(mut slot) = entry.termination_reason.lock()
+                        && slot.is_none()
+                    {
+                        *slot = Some(ErrorCode::SubscribeRevokedMidStream);
+                    }
+                    // (c) typed-termination notify — fire ONCE per the
+                    //     CLR-2 contract. The callback receives the
+                    //     typed `EvalError::SubscribeRevokedMidStream`
+                    //     carrying hex-rendered actor + anchor so
+                    //     JS/TS consumers route on the typed shape.
+                    //     Catch panics so a misbehaving consumer
+                    //     does not take down the publish thread
+                    //     (mirrors the existing callback panic-catch
+                    //     precedent below).
+                    if let Some(notify) = entry.termination_notify.as_ref() {
+                        let typed = crate::EvalError::SubscribeRevokedMidStream {
+                            actor_cid: None,
+                            anchor_cid: Some(event.anchor_cid.to_base32()),
+                        };
+                        let notify = Arc::clone(notify);
+                        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            notify(&typed);
+                        }));
+                    }
+                    // Cap was revoked mid-stream — auto-cancel the
+                    // subscription (D5 contract). Flip the active
+                    // flag so the next walk GCs it.
+                    entry.active.store(false, Ordering::SeqCst);
+                    unregister_on_change(&id);
+                    continue;
+                }
             }
-            // (c) typed-termination notify — fire ONCE per the CLR-2
-            //     contract. The callback receives the typed
-            //     `EvalError::SubscribeRevokedMidStream` carrying
-            //     hex-rendered actor + anchor so JS/TS consumers
-            //     route on the typed shape. Catch panics so a
-            //     misbehaving consumer does not take down the
-            //     publish thread (mirrors the existing callback
-            //     panic-catch precedent below).
-            if let Some(notify) = entry.termination_notify.as_ref() {
-                let typed = crate::EvalError::SubscribeRevokedMidStream {
-                    actor_cid: None,
-                    anchor_cid: Some(event.anchor_cid.to_base32()),
-                };
-                let notify = Arc::clone(notify);
-                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    notify(&typed);
-                }));
-            }
-            // Cap was revoked mid-stream — auto-cancel the subscription
-            // (D5 contract). Flip the active flag so the next walk GCs it.
-            entry.active.store(false, Ordering::SeqCst);
-            unregister_on_change(&id);
-            continue;
         }
         // Bump dedup state + invoke the callback. Catch panics so a
         // misbehaving consumer doesn't take down the publishing thread.

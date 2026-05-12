@@ -568,9 +568,16 @@ impl EngineBuilder {
 
         let caps_enabled = !self.without_caps;
         let ivm_enabled = !self.without_ivm;
-        let (policy, using_noauth): (Option<Box<dyn CapabilityPolicy>>, bool) = if caps_enabled {
+        // Phase 4-Foundation R1-FP wave-1 G22-FP-1 option-D (2026-05-12):
+        // the public builder API (`capability_policy(p: Box<dyn ...>)`)
+        // remains `Box` so ~40 test + downstream callers stay unchanged;
+        // here at assemble time we convert `Box → Arc::from(box)` so the
+        // engine's internal storage is `Arc<dyn CapabilityPolicy>` and
+        // the cap-recheck closure in `Engine::on_change_as_with_cursor`
+        // can capture a clonable handle for per-event `check_read`.
+        let (policy, using_noauth): (Option<Arc<dyn CapabilityPolicy>>, bool) = if caps_enabled {
             if let Some(explicit) = self.policy {
-                (Some(explicit), false)
+                (Some(Arc::from(explicit)), false)
             } else if self.use_grant_backed {
                 let reader: Arc<dyn GrantReader> =
                     Arc::new(BackendGrantReader::new(Arc::clone(&backend)));
@@ -592,15 +599,15 @@ impl EngineBuilder {
                         // walk cleanly past the fail-closed branch.
                         policy = policy.with_now_for_test(now_secs);
                     }
-                    (Some(Box::new(policy) as Box<dyn CapabilityPolicy>), false)
+                    (Some(Arc::new(policy) as Arc<dyn CapabilityPolicy>), false)
                 } else {
                     (
-                        Some(Box::new(grant_backed) as Box<dyn CapabilityPolicy>),
+                        Some(Arc::new(grant_backed) as Arc<dyn CapabilityPolicy>),
                         false,
                     )
                 }
             } else {
-                (Some(Box::new(NoAuthBackend::new())), true)
+                (Some(Arc::new(NoAuthBackend::new())), true)
             }
         } else {
             (None, false)

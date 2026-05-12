@@ -300,29 +300,80 @@ impl Engine {
                 message: "on_change: pattern must be a non-empty event-name glob".into(),
             });
         }
-        // Capture the actor + the engine's policy availability in a
-        // closure the registry walks at delivery time. The policy is
-        // consulted via `Engine` reference; we hold an `Arc<EngineInner>`
-        // (already shared) plus the actor CID. For NoAuth-equivalent
-        // configurations we still let deliveries through (the closure
-        // returns `true` when no policy is configured).
+        // Phase 4-Foundation R1-FP wave-1 G22-FP-1 option-D (2026-05-12,
+        // sec-4f-r1-1 BLOCKER closure): the cap-recheck closure now
+        // returns `CapRecheckOutcome`. Two-gate composition:
+        //
+        //   - Whole-actor-revoke (`is_actor_active=false`) → `Cancel`.
+        //     Preserves Phase-3 R6-FP Wave-C1 SHIPPED termination
+        //     contract (`E_SUBSCRIBE_REVOKED_MID_STREAM` + termination
+        //     notify + auto-unregister) for the case where the actor
+        //     as a whole was revoked and the subscription cannot
+        //     continue.
+        //   - Per-event `CapabilityPolicy::check_read` denial → `Drop`.
+        //     NEW per-Node fail-soft semantic: this specific event's
+        //     anchor is no longer covered, but the subscription
+        //     itself stays active — future events the principal still
+        //     covers continue delivering. The admin-UI per-cap-
+        //     revocation UX path (cap-r1-9 closure ordering corollary;
+        //     closes sec-4f-r1-1 BLOCKER + mat-r1-4 materializer-
+        //     subscribe seam ordering).
+        //
+        // The policy lives behind `Arc<dyn CapabilityPolicy>` on the
+        // engine (per the Box→Arc migration that landed alongside
+        // option-D). Capturing the Arc into the closure is the cheap
+        // shared-handle path. For NoAuth-equivalent configurations
+        // (policy=None), the closure short-circuits to `Keep` — the
+        // pre-option-D no-gate-at-all behaviour.
         let actor_cid = *actor;
         let inner_for_check = Arc::clone(&self.inner);
-        let cap_recheck: benten_eval::primitives::subscribe::DeliveryCapRecheck =
-            Arc::new(move |_event: &EvalChangeEvent| -> bool {
-                // Phase-2b cap-recheck-at-delivery scaffolding: confirm
-                // the actor is still observable in the engine's view of
-                // the world. Deeper grant-resolution lands once the
-                // GrantBackedPolicy rear-loads SUBSCRIBE-shape grant
-                // queries; pre-that, we route through the actor-active
-                // flag the inner state already tracks (the test path
-                // exercises this via `testing_revoke_actor`). This
-                // closure intentionally avoids holding any locks across
-                // the callback boundary so a misbehaving callback can't
-                // poison the registry.
-                let _ = (&actor_cid, &inner_for_check);
-                inner_for_check.is_actor_active(&actor_cid)
-            });
+        let policy_handle: Option<Arc<dyn benten_caps::CapabilityPolicy>> =
+            self.policy.as_ref().map(Arc::clone);
+        let cap_recheck: benten_eval::primitives::subscribe::DeliveryCapRecheck = Arc::new(
+            move |event: &EvalChangeEvent| -> benten_eval::primitives::subscribe::CapRecheckOutcome {
+                use benten_eval::primitives::subscribe::CapRecheckOutcome;
+                // (1) Whole-actor-revoke gate (defense-in-depth, retained
+                //     for Phase-3 SHIPPED tests + sibling consumers that
+                //     route through `testing_revoke_actor`). On revoke
+                //     we issue `Cancel` so the SHIPPED typed-error +
+                //     auto-cancel + observability-counter contract
+                //     continues to fire.
+                if !inner_for_check.is_actor_active(&actor_cid) {
+                    return CapRecheckOutcome::Cancel;
+                }
+                // (2) Per-event `CapabilityPolicy::check_read` gate (NEW
+                //     option-D). Build a `ReadContext` from the event:
+                //     `actor_cid` from the active principal (the
+                //     `actor` arg captured into this closure);
+                //     `label` from the event's first label (per
+                //     `benten_core::change_stream::ChangeEvent.labels`);
+                //     `target_cid` set to the event's anchor; the
+                //     other fields (`device_cid`, `actor_hint`) left
+                //     unset — they aren't substantive inputs to the
+                //     per-event Drop path. On `Err(_)` we return
+                //     `Drop` (silently elide; stream stays open). On
+                //     `Ok(())` we return `Keep` (deliver).
+                if let Some(policy) = policy_handle.as_ref() {
+                    let label = event.labels.first().cloned().unwrap_or_default();
+                    let ctx = benten_caps::ReadContext {
+                        actor_cid: Some(actor_cid),
+                        label,
+                        target_cid: Some(event.anchor_cid),
+                        device_cid: None,
+                        actor_hint: None,
+                    };
+                    match policy.check_read(&ctx) {
+                        Ok(()) => CapRecheckOutcome::Keep,
+                        Err(_) => CapRecheckOutcome::Drop,
+                    }
+                } else {
+                    // No policy configured (NoAuth-equivalent): deliver
+                    // every event — matches the pre-option-D
+                    // `is_actor_active=true` happy path.
+                    CapRecheckOutcome::Keep
+                }
+            },
+        );
         self.register_on_change_internal(pattern, cursor, callback, Some(cap_recheck))
     }
 
@@ -365,17 +416,32 @@ impl Engine {
         let recheck_arc = cap_recheck;
         let inner_for_check = Arc::clone(&self.inner);
         let actor_cid = *actor;
-        let bridged: benten_eval::primitives::subscribe::DeliveryCapRecheck =
-            Arc::new(move |event: &EvalChangeEvent| -> bool {
+        // Phase 4-Foundation R1-FP wave-1 G22-FP-1 option-D (2026-05-12):
+        // bridge the engine-level `CapRecheckFn` (PrincipalId + zone +
+        // CID → bool) into the new `CapRecheckOutcome` enum return.
+        // Per F6 dual-layer:
+        //   (1) Coarse actor-active gate → `Cancel` (Phase-3 SHIPPED
+        //       termination contract).
+        //   (2) Per-event row recheck false → `Cancel` (this consumer
+        //       path historically auto-cancels on revoke per F6
+        //       LOAD-BEARING + Compromise #2 D5; consumers who want
+        //       per-Node fail-soft elision route through the new
+        //       `on_change_as_with_cursor` path instead).
+        //   (3) Per-event row recheck true → `Keep`.
+        let bridged: benten_eval::primitives::subscribe::DeliveryCapRecheck = Arc::new(
+            move |event: &EvalChangeEvent| -> benten_eval::primitives::subscribe::CapRecheckOutcome {
+                use benten_eval::primitives::subscribe::CapRecheckOutcome;
                 let _ = (&inner_for_check, &actor_cid);
-                // F6 dual-layer per CLR-2 / cap-major-2:
-                //   1. Coarse actor-active check (defense-in-depth).
-                //   2. Per-event row recheck via CapRecheckFn.
                 if !inner_for_check.is_actor_active(&actor_cid) {
-                    return false;
+                    return CapRecheckOutcome::Cancel;
                 }
-                (recheck_arc)(&principal, zone_hint.as_str(), &event.anchor_cid)
-            });
+                if (recheck_arc)(&principal, zone_hint.as_str(), &event.anchor_cid) {
+                    CapRecheckOutcome::Keep
+                } else {
+                    CapRecheckOutcome::Cancel
+                }
+            },
+        );
         self.register_on_change_internal(pattern, SubscribeCursor::Latest, callback, Some(bridged))
     }
 
@@ -587,13 +653,24 @@ impl Engine {
         let inner_for_check = Arc::clone(&self.inner);
         let actor_cid = *actor;
         let recheck_arc = cap_recheck;
-        let bridged: benten_eval::primitives::subscribe::DeliveryCapRecheck =
-            Arc::new(move |event: &EvalChangeEvent| -> bool {
+        // Phase 4-Foundation R1-FP wave-1 G22-FP-1 option-D (2026-05-12):
+        // mirror the production `on_change_with_cap_recheck` bridge —
+        // `Cancel` on whole-actor-revoke or per-event-row-recheck=false,
+        // `Keep` on per-event-row-recheck=true. Test-helper composition
+        // preserves the SHIPPED contract.
+        let bridged: benten_eval::primitives::subscribe::DeliveryCapRecheck = Arc::new(
+            move |event: &EvalChangeEvent| -> benten_eval::primitives::subscribe::CapRecheckOutcome {
+                use benten_eval::primitives::subscribe::CapRecheckOutcome;
                 if !inner_for_check.is_actor_active(&actor_cid) {
-                    return false;
+                    return CapRecheckOutcome::Cancel;
                 }
-                (recheck_arc)(&principal, zone_hint.as_str(), &event.anchor_cid)
-            });
+                if (recheck_arc)(&principal, zone_hint.as_str(), &event.anchor_cid) {
+                    CapRecheckOutcome::Keep
+                } else {
+                    CapRecheckOutcome::Cancel
+                }
+            },
+        );
 
         // Eval-side callback delivers the raw ChangeEvent — no Chunk
         // wrapping — so observers can assert anchor_cid / labels / kind.
