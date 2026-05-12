@@ -128,7 +128,7 @@ Meta-plugin composition cycle detection runs at install (per post-R1-triage Q2 r
 
 ### §4.2 Uninstall
 
-`crates/benten-platform-foundation/src/plugin_lifecycle.rs::uninstall_plugin` (G24-D-FP-1):
+The G24-D-FP-1 `uninstall_plugin` seam (forthcoming in `crates/benten-platform-foundation`):
 
 1. Enumerate all user-DID-issued grants WHERE `audience=plugin-DID`; revoke each.
 2. Cascade plugin-DID's own downstream UCAN delegations (enumerate grants issued BY plugin-DID; revoke each).
