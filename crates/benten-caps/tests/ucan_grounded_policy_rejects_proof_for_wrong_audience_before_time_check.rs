@@ -127,7 +127,8 @@ fn valid_audience_plus_valid_time_window_permits() {
     let active_did = kp.public_key().to_did().as_str().to_string();
 
     // Chain audience = active principal DID; time window: [0, far future].
-    let token = build_ucan_for_audience(&kp, &active_did, "typed:crypto", "sign", 0, 253_402_300_798);
+    let token =
+        build_ucan_for_audience(&kp, &active_did, "typed:crypto", "sign", 0, 253_402_300_798);
     backend.install_proof(&token).unwrap();
 
     let policy = fresh_policy(Arc::clone(&backend), 1_000_000_000);
