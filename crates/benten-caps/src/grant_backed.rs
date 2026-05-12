@@ -29,6 +29,8 @@
 
 use std::sync::Arc;
 
+use benten_core::Cid;
+
 use crate::error::CapError;
 use crate::policy::{CapabilityPolicy, PendingOp, ReadContext, WriteContext};
 
@@ -69,6 +71,46 @@ pub trait GrantReader: Send + Sync {
             }
         }
         Ok(false)
+    }
+
+    /// Phase 4-Foundation R1 cap-r1-2 / cap-r1-10: principal-aware grant
+    /// lookup. Returns `true` iff the backend contains at least one
+    /// unrevoked `system:CapabilityGrant` Node whose `scope` property
+    /// equals `scope` AND whose `grantee` matches `actor_cid`.
+    ///
+    /// When `actor_cid` is `None` the call collapses to the scope-only
+    /// [`Self::has_unrevoked_grant_for_scope`] behavior — preserving
+    /// pre-Phase-4 semantics for callers that do not yet thread an actor
+    /// (Phase-1 / Phase-2 fixtures + the
+    /// [`crate::NoAuthBackend`] default-permit path).
+    ///
+    /// # Why a separate method instead of `Option<&Cid>` on the base call
+    ///
+    /// The default impl delegates to the existing scope-only method so
+    /// every external `GrantReader` implementation (test fixtures, the
+    /// `benten-engine` `BackendGrantReader`, the
+    /// [`crate::ucan_grounded`] backend) continues to compile + behave
+    /// exactly as before — the unbounded-permit semantics that Phase-1
+    /// shipped are preserved by construction. Implementations that DO
+    /// have actor-aware grant storage (the engine's
+    /// `BackendGrantReader`) override this method to filter on the
+    /// stored `grantee` property.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapError::Denied`] when the backend read fails.
+    fn has_unrevoked_grant_for_scope_and_actor(
+        &self,
+        scope: &str,
+        actor_cid: Option<&Cid>,
+    ) -> Result<bool, CapError> {
+        // Default impl: ignore `actor_cid` and fall back to the scope-only
+        // path. This preserves NoAuthBackend semantics AND any GrantReader
+        // implementation that has not yet been taught to filter on
+        // grantee. Backends that DO store grantee binding (notably the
+        // engine's `BackendGrantReader`) override.
+        let _ = actor_cid;
+        self.has_unrevoked_grant_for_scope(scope)
     }
 }
 
@@ -309,9 +351,25 @@ impl CapabilityPolicy for GrantBackedPolicy {
         let scope = Self::derive_read_scope(&ctx.label);
         // r6b-dx-C1: same wildcard enumeration used by `check_write` — a
         // grant of `store:post:*` satisfies a required `store:post:read`.
+        //
+        // Phase 4-Foundation R1 cap-r1-2 BLOCKER + cap-r1-10 dual-gate:
+        // consult `ctx.actor_cid` via the principal-aware reader method.
+        // Pre-fix `check_read` wildcard-enumerated grants against `scope`
+        // alone — user-A who lacked `store:post:read` would still see a
+        // permit if ANY peer (user-B) held the same scope under the same
+        // backend, because the scope-only reader has no actor binding.
+        // The new method filters by `grantee == actor_cid`.
+        //
+        // When `ctx.actor_cid` is `None` the underlying reader method
+        // collapses to the scope-only path (default-trait-impl
+        // delegation), which preserves NoAuthBackend semantics and the
+        // Phase-1 / Phase-2 fixtures that pre-date actor threading.
         let mut granted = false;
         for candidate in wildcard_variants(&scope) {
-            if self.grants.has_unrevoked_grant_for_scope(&candidate)? {
+            if self
+                .grants
+                .has_unrevoked_grant_for_scope_and_actor(&candidate, ctx.actor_cid.as_ref())?
+            {
                 granted = true;
                 break;
             }
