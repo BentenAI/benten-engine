@@ -241,6 +241,7 @@ dependencies = [
  "benten-errors",
  "benten-graph",
  "benten-id",
+ "benten-platform-foundation",
  "blake3",
  "criterion",
  "proptest",
