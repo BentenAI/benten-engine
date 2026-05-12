@@ -1,0 +1,132 @@
+# Phase 4-Foundation backlog
+
+**Status:** scaffolded 2026-05-11 as Phase 4-Foundation R1 pre-dispatch artifact (per meth-r1r1-1 closure of phantom-destination concern). Mirrors `phase-3-backlog.md` shape.
+
+**Purpose:** named destination for Phase 4-Foundation R6 phase-close convergence carries + dogfood-validation findings + cross-phase carries that surface during Phase 4-Foundation implementation.
+
+Couples to:
+- `docs/future/phase-3-backlog.md` — Phase 4-bound carries surfaced before Phase 4-Foundation opened
+- `docs/future/phase-3-backlog.md §14` — Phase 4-Foundation carries that fall to v1-assessment-window after Phase 4-Meta close
+- `docs/future/phase-3-backlog.md §15.2` — handler-call-graph cycle detection (Phase 4-Meta-bound; couples to plugin install/registration time)
+- `docs/future/kith-decentralized-identity.md` — exploratory decentralized-identity-and-attestation system (Phase 5+ candidate)
+
+---
+
+## §1. R6 phase-close convergence carries
+
+Phase 4-Foundation R6 phase-close council will produce findings that don't gate the `phase-4-foundation-close` tag. Those land here as carries to Phase 4-Meta OR v1-assessment-window.
+
+(Entries land during Phase 4-Foundation R6 — none at this writing.)
+
+---
+
+## §2. Dogfood validation gate carries
+
+Ben's dogfood validation (wave-7 in plan §2 sequencing) will produce UX + interaction findings beyond the FIX-NOW-INLINE scope. Those land here per HARD RULE 12 clause-(b).
+
+(Entries land during Phase 4-Foundation R5+ — none at this writing.)
+
+---
+
+## §3. Phase 4-Foundation → Phase 4-Meta carries
+
+Architectural decisions made during Phase 4-Foundation that explicitly defer related work to Phase 4-Meta land here for tracking.
+
+### §3.1 Decentralized self-discovered registry
+
+**Origin:** Phase 4-Foundation R1 (2026-05-11). Plan §3 originally scoped decentralized self-discovered registry as part of D-4F-1 FULL plugin manifest scope; R1 lenses (plugin-architecture-reviewer + distributed-systems-reviewer + threat-model §8 Q1 cross-cite) surfaced internal contradiction with §3.X T10 deferring discover-flow defenses to Phase 4-Meta. Ben ratified 2026-05-11 evening: **move decentralized self-discovered registry to Phase 4-Meta.** Phase 4-Foundation admin UI v0 installs plugins via direct content-addressed-share over Atriums (peer-to-peer; user pulls from peer they trust).
+
+**Phase 4-Meta scope:** decentralized registry surface (Atrium-substrate publish/subscribe; signed + content-addressed manifest discovery; trust-graph extension); admin UI discovery affordance (search/browse plugins from peers in your network).
+
+**Couples to:** §3.2 Kith (richer identity-and-attestation substrate that the registry's trust-graph would build on).
+
+### §3.2 Kith — decentralized identity & attestation system (EXPLORATORY)
+
+**Origin:** Ben's framing 2026-05-11 evening conversation, during Q6 (peer-DID rotation propagation) discussion. The base Phase-3 peer-DID + RotationLog primitive is insufficient for handling key-rotation in a hostile-old-key scenario. Ben proposed a richer decentralized-identity substrate: "X has designated Y as Z" relational-attestation graph + per-relationship privacy controls + organizational attestations (Gardens/Groves, schools, certifying bodies) + UCAN-mediated contextual sharing.
+
+**Full scope:** see `docs/future/kith-decentralized-identity.md` (exploratory scope-stub).
+
+**Phase target:** **Phase 5+ or its own dedicated design-spike phase**, NOT Phase 4-Foundation (too large; Phase 4-Foundation uses a simpler "old-key revocation attestation + out-of-band new-key trust" MVP rotation mechanism per Q6 ratification).
+
+**Phase 4-Foundation MVP rotation mechanism:**
+- Old-key signs a `SelfRevocation` attestation marking itself as revoked (timestamped). Propagates via Atrium sync. Peers reject content signed by the old key after the revocation timestamp.
+- New-key trust is NOT transferable from old key. Each peer re-establishes trust via out-of-band side-channel (same channel used for initial bootstrap).
+- Grace window during rotation.
+
+This MVP doesn't defeat the purpose of rotation (it doesn't ask receivers to trust the old key for new-key establishment) — it just propagates revocation cleanly.
+
+### §3.3 Self-composing admin UI (meta-circular full scope)
+
+**Origin:** carried from original Phase 4 scope; Phase 4-Foundation ships admin UI v0 that lets users edit workflows + composed views THROUGH it, but does NOT make the admin UI's own subgraph user-editable through itself. That meta-circular self-composing capability is Phase 4-Meta-bound.
+
+### §3.4 Phase 4-Meta inherited carries from Phase 3
+
+- wasmtime Component-Model re-evaluation (Phase-3 D-PHASE-3-6 + D-PHASE-3-16 + r1-wsa-12)
+- Engine impl-block generic-cascade lift (Phase-3 §1.2-followup)
+- Light-client mode-(b) range-query proof (ds-r4r2-3)
+- Light-client mode-(c) signed checkpoint (ds-r4r2-3)
+- Handler-call-graph cycle detection at handler-registration time (`phase-3-backlog §15.2`)
+
+---
+
+## §4. Phase 4-Foundation Track B (Class-of-bug audits + cleanups)
+
+Plan G27 wave covers these; entries here for cross-reference.
+
+### §4.1 UCAN class-of-bug audit across napi cap-* entry points
+
+Per D-4F-5 ratification (Phase 4-Foundation Track B). Lateral sweep across napi cap-management entry points for scope-vs-CID-passed-as-string class of mistakes (same root cause as §13.11 fix at PR #199). Plan G27-A wave.
+
+### §4.2 `benten-caps::GrantBackedPolicy::derive_write_scope` lift
+
+Currently hard-codes `store:<label>:write` derivation; thread scope through `WriteContext::scope` (already exists for `UcanGroundedPolicy::check_write`; not yet for `GrantBackedPolicy::check_write`). Plan G27-B wave.
+
+### §4.3 `GrantReader::has_unrevoked_grant_for_grant_cid(&Cid)` CID-keyed companion
+
+Per §13.11 structural lesson — the scope-keyed `has_unrevoked_grant_for_scope(scope: &str)` lacks CID-keyed counterpart at the trait surface, which is what enabled the original `revokeCapability(grantCid, actor)` silent fail-OPEN. Add CID-keyed companion at the trait surface so CID is the canonical typed handle even at the reader API. Plan G27-C wave.
+
+### §4.4 Manifest scope grammar at G27-D
+
+Define mapping from manifest `requires` / `shares` to scope strings; story for `private:<plugin_did>:*` interaction with `wildcard_variants`; install-time-vs-check-time decision. Per cap-r1-3 closure.
+
+---
+
+## §5. Phase 4-Foundation Track A (implementation work surfaced post-R1)
+
+R1-FP work items that emerged from R1 critic round (production-vs-plan gaps). These are Phase 4-Foundation implementation, not deferred carries — listed here for traceability.
+
+### §5.1 UCAN audience binding at `UcanGroundedPolicy::permits_typed_proof_for`
+
+`crates/benten-caps/src/ucan_grounded.rs:191-216` currently calls `validate_chain_at` without audience binding. Add audience-binding wiring per cap-r1-1. ~100-200 LOC + tests. Closes load-bearing BLOCKER for the four-identity-concepts model.
+
+### §5.2 `actor_cid` consulted on reads at `GrantBackedPolicy::check_read`
+
+`crates/benten-caps/src/grant_backed.rs:296-327` currently wildcard-enumerates against scope-only. Add `ctx.actor_cid` consultation per cap-r1-2. ~50-100 LOC. Closes materializer dual-gate substance gap.
+
+### §5.3 SUBSCRIBE-delivery cap-recheck closure
+
+`crates/benten-engine/src/engine_subscribe.rs::Engine::on_change_as_with_cursor` (lines 290-327) is scaffold-only — calls `is_actor_active` not per-event `CapabilityPolicy::check_read`. Closure per sec-4f-r1-1; ~100-200 LOC. Closes admin UI dogfood path (d) revoke-cap-mid-session.
+
+### §5.4 `plugin_lifecycle.rs` uninstall-cascade seam
+
+Per plugin-arch-r1-2; ~150-300 LOC. Prevents orphan delegated-cap accumulation at uninstall time.
+
+### §5.5 `manifest_envelope_chain_validation.rs` seam
+
+Per plugin-arch-r1-3; ~200-300 LOC. Wires CLAUDE.md #18 Layer 3 runtime-delegation-within-manifest-envelope structurally.
+
+---
+
+## §6. Doc retense + ErrorCode catalog work
+
+### §6.1 ERROR-CATALOG.md companion-with-canary routing
+
+Per doc-r1-1 + doc-r1-2: 17+ new ErrorCodes for Phase 4-Foundation mint across waves (3 schema + 3 materializer + 9 plugin + new G27 surface). ERROR-CATALOG.md retense MUST land COMPANION-WITH-CANARY per wave, not bundled at G26-A. CATALOG_VARIANT_COUNT expected bump 118 → ~135.
+
+### §6.2 INTERNALS.md retense for new surfaces
+
+Per cross-lens doc-engineer findings: `benten-platform-foundation/INTERNALS.md` (NEW; 12th workspace crate), `benten-renderer-tauri/INTERNALS.md` (NEW; 12th-or-13th crate), updates to `benten-ivm/INTERNALS.md` (post IVM-subgraph generalization), `benten-engine/INTERNALS.md` (post audience-binding + actor_cid wiring + SUBSCRIBE-cap-recheck closure), `benten-caps/INTERNALS.md` (post Q5 plugin-DID-keyed signing-key infrastructure).
+
+---
+
+(Section structure additive; entries land as Phase 4-Foundation work surfaces them.)

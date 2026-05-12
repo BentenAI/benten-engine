@@ -1678,7 +1678,7 @@ End-to-end *content* confidentiality is preserved (iroh's QUIC payload is encryp
 **Closure shape.**
 
 - `crates/benten-caps/src/ucan_grounded.rs` — `DEFAULT_NOW_SECS = 0` remains as a sentinel constant, but the policy now refuses chains-with-time-bounds when `now_secs == 0` (the inversion). The `chain_has_time_bounds` helper drives the check.
-- `crates/benten-engine/src/builder.rs` — engine builder threads explicit `clock_inject` parameter; `Engine::open` refuses to initialize the UCAN backend without a clock when a `UcanGroundedPolicy` is configured (rustdoc at `builder.rs:66-71`).
+- `crates/benten-engine/src/builder.rs` — engine builder threads explicit clock-inject through the `crates/benten-engine/src/builder.rs::EngineBuilder` `ucan_grounded_now_secs` field; `Engine::open` refuses to initialize the UCAN backend without a clock when a `UcanGroundedPolicy` is configured (rustdoc on the field documents the inversion).
 - Typed error `CapError::UcanClockNotInjected` → `ErrorCode::E_UCAN_CLOCK_NOT_INJECTED` (catalog entry).
 
 **Threat model closed.**
@@ -1686,11 +1686,11 @@ End-to-end *content* confidentiality is preserved (iroh's QUIC payload is encryp
 - *Pre-closure:* a developer wires `UcanGroundedPolicy` into an engine without injecting a wallclock; engine silently uses clock=0; ALL UCAN proofs with positive expiration timestamps pass as "not yet expired" regardless of when they were minted. Effective bypass of the entire UCAN expiration model. Failure mode is INVISIBLE in normal tests — every expired proof admits without warning.
 - *Post-closure:* the same misconfiguration surfaces typed `E_UCAN_CLOCK_NOT_INJECTED` at the first chain evaluation. Developer cannot ship a UCAN-using engine without confronting clock injection. Production code MUST inject a real wallclock; test code injects via `with_now_for_test`.
 
-**Test pin.** `crates/benten-engine/tests/typed_call_ucan_grounded.rs` (5 tests; the `expired_proof` test asserts the fail-closed branch fires when `DEFAULT_NOW_SECS=0` AND the chain has time bounds).
+**Test pin.** `crates/benten-caps/src/ucan_grounded.rs::default_now_secs_zero_fails_closed_when_chain_has_time_bounds` (inline test asserts the fail-closed branch fires when `DEFAULT_NOW_SECS=0` AND the chain has time bounds) + companion `default_now_secs_zero_walks_chain_when_no_time_bounds` (asserts the unbounded-chain branch remains permissive so the sentinel doesn't false-positive on time-unbounded grants).
 
 **Production discipline (couples to Phase 4-Foundation).** Every new cap-evaluating surface in Phase 4-Foundation (admin UI install path; materializer pipeline; plugin manifest verify; schema compiler walk-time gating) MUST thread injected clock. Source-side discipline: no `SystemTime::now()` / `Instant::now()` in the four new crate surfaces; CI grep audit catches regressions per `.addl/dispatch-conventions.md` §3.5g cross-language-rule-mirror application. The transparent-clock-injection-at-manifest-load-surface ratification (per Phase 4-Foundation D-4F-15, Ben Q6 2026-05-11) inherits this discipline at engine-side rather than requiring plugin authors to thread clock themselves.
 
-**Cross-refs.** `crates/benten-caps/src/ucan_grounded.rs::UcanGroundedPolicy` (the fail-closed inversion); `crates/benten-caps/src/ucan_grounded.rs::DEFAULT_NOW_SECS` (the sentinel constant); `crates/benten-engine/src/builder.rs::with_now` + `crates/benten-engine/src/builder.rs::with_now_for_test` (the injection surface); `crates/benten-engine/tests/typed_call_ucan_grounded.rs::expired_proof_against_default_now_secs_zero_fails_closed` (load-bearing test pin); `docs/ERROR-CATALOG.md::E_UCAN_CLOCK_NOT_INJECTED` (typed-code surface); `docs/future/phase-3-backlog.md §2.3 (i)` (the v1-assessment-window deliverable that retires the sentinel by threading `WriteContext::now` through every cap-evaluating call site — current state is operator-discipline via injection at builder; future state is per-call wallclock binding).
+**Cross-refs.** `crates/benten-caps/src/ucan_grounded.rs::UcanGroundedPolicy` (the fail-closed inversion); `crates/benten-caps/src/ucan_grounded.rs::DEFAULT_NOW_SECS` (the sentinel constant); `crates/benten-caps/src/ucan_grounded.rs::with_now_for_test` (the injection-at-builder surface; production injection threads through the same `now_secs` field via the policy builder); `crates/benten-caps/src/ucan_grounded.rs::default_now_secs_zero_fails_closed_when_chain_has_time_bounds` (load-bearing test pin asserting the fail-closed branch fires when `DEFAULT_NOW_SECS=0` AND the chain has time bounds); `docs/ERROR-CATALOG.md::E_UCAN_CLOCK_NOT_INJECTED` (typed-code surface); `docs/future/phase-3-backlog.md §2.3 (i)` (the v1-assessment-window deliverable that retires the sentinel by threading `WriteContext::now` through every cap-evaluating call site — current state is operator-discipline via injection at builder; future state is per-call wallclock binding).
 
 ---
 
@@ -1716,7 +1716,7 @@ End-to-end *content* confidentiality is preserved (iroh's QUIC payload is encryp
 
 **Posture claim.** Adversarial-peer wallclock-injection IS a real threat class — the engine's sync layer cannot trust peers to publish honest HLC values, just as it cannot trust them to declare honest device-DIDs (Compromise #23). The defense composes Phase-3-shipped primitives at sync receive time + at the cap-recheck boundary; no net-new mechanism is needed at Phase-4-Foundation. Future plugin-share boundary (Phase-4-Foundation G24-D) inherits these defenses transparently — plugin-share is just Atrium-share with a manifest envelope on top.
 
-**Cross-refs.** `crates/benten-sync/tests/attack_hlc_skew_revocation_ordering.rs` (HLC skew + monotonicity + revocation ordering test pins); `crates/benten-sync/src/handshake.rs` + `crates/benten-sync/src/handshake_wire.rs` (HLC + nonce defenses in the handshake state machine); `crates/benten-sync/src/errors.rs::E_HLC_SKEW_EXCEEDED` (typed error); `crates/benten-engine/src/engine_sync.rs::DeviceAttestationEnvelope::verify` (envelope signature covering HLC fields; Compromise #23 cross-reference); `crates/benten-engine/src/apply_atrium_merge` (G16-B-F structural-always-on per-row cap-recheck PR #161; defense-in-depth). Plugin-share boundary in Phase 4-Foundation (G24-D plan §3) inherits via `plugin_share` calling through the same sync infrastructure.
+**Cross-refs.** `crates/benten-sync/tests/attack_hlc_skew_revocation_ordering.rs` (HLC skew + monotonicity + revocation ordering test pins); `crates/benten-sync/src/handshake.rs` + `crates/benten-sync/src/handshake_wire.rs` (HLC + nonce defenses in the handshake state machine); `crates/benten-errors/src/lib.rs::ErrorCode` (the `HlcSkewExceeded` variant of the typed `ErrorCode` enum; stable-code string `E_HLC_SKEW_EXCEEDED`); `crates/benten-engine/src/engine_sync.rs::DeviceAttestationEnvelope::verify` (envelope signature covering HLC fields; Compromise #23 cross-reference); `crates/benten-engine/src/apply_atrium_merge` (G16-B-F structural-always-on per-row cap-recheck PR #161; defense-in-depth). Plugin-share boundary in Phase 4-Foundation (G24-D plan §3) inherits via `plugin_share` calling through the same sync infrastructure.
 
 ---
 
@@ -1856,6 +1856,60 @@ autonomously without per-action prompts. Phase 8 (decentralized plugin
 discovery) — plugins are signed by author, content-addressed, discovered
 through Atrium peer groups; users trust the signed manifest, not a central
 registry.
+
+**Phase-4-Foundation R1-triage refinements (2026-05-11 night).** The base
+three-layer model survives unchanged; the implementation specifics for the
+plugin-identity model are refined:
+
+- **Four distinct identity concepts** (D-4F-12 retense per
+  `.addl/phase-4-foundation/r1-triage.md` Q4): Content-CID (what the plugin
+  IS) + peer-DID signature on original content (provenance; `benten-id`
+  RotationLog handles peer-DID rotation) + plugin-DID minted at install
+  (UCAN audience AND constrained issuer within manifest envelope; per
+  D-4F-16 `did:key:...` shape with engine-held Ed25519 keypair via OsRng,
+  per-install fresh) + user-DID (trust anchor + signs install records).
+  Cross-plugin/schema references use **content-CID, not author-DID**
+  (`accepts_content: [hash, ...]`).
+- **NO Benten-project-key infrastructure.** User-DID signs install records
+  (the user is the source of install consent). Peer-DID signs original
+  content (provenance). No central project key infrastructure for plugin
+  signing.
+- **Manifest schema versioning DROPPED** (D-4F-13). CID covers shape;
+  pull-not-push obviates a schema-version field; T10-upgrade defense list
+  no longer includes "manifest-schema-version-downgrade."
+- **Plugin manifest v0 — Phase 4-Foundation implementation state.**
+  Manifest envelope verified at every load (T5a defense-in-depth verify
+  points: boot + per-load + per-Atrium-merge per sec-4f-r1-9). Cap-change-
+  triggered fresh consent for all upgrades (silent within-lineage subset;
+  full re-consent if `requires` GREW; cross-fork = user-initiated merge).
+  Meta-plugin composition cycle detection AS REJECTION at install time
+  (new ErrorCode `E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED`); handler-call-
+  graph cycle detection at handler-registration time stays Phase 4-Meta
+  per `docs/future/phase-3-backlog.md §15.2`.
+- **Compromise #11 (IVM views coarse-grained read-gate) closure floor
+  REAFFIRMED** against the new materializer surface. Materializer SHARES
+  `IvmViewReadGate` machinery (D-4F-NEW-MATERIALIZER-READ-GATE resolved
+  option SHARE — materializer view IS an IVM view per D-4F-2). The
+  Compromise #11 closure does not regress with the new surface.
+- **Compromise #24 (wallclock fail-closed) + Compromise #25 (HLC-monotonic
+  sync) REAFFIRMED** against new manifest-load surface (clock injection is
+  transparent at engine-side per D-4F-15; HLC-monotonic-strict acceptance
+  for peer-DID rotation per sec-4f-r1-10 T9b race-defense).
+- **MVP rotation mechanism — Phase 4-Foundation** (ratification #6):
+  `SelfRevocation` attestation + out-of-band new-key trust. Old-key signs
+  timestamped revocation; propagates via Atrium sync; peers reject content
+  signed by revoked key after revocation timestamp. **Kith** (working name;
+  Phase 5+ exploratory) is the richer decentralized-identity-and-attestation
+  substrate that would supersede the MVP; scaffold at
+  `docs/future/kith-decentralized-identity.md`.
+- **Decentralized self-discovered registry → Phase 4-Meta** (ratification #3).
+  Phase 4-Foundation v0 uses direct content-addressed-share over Atriums
+  (out-of-band handshake; user pulls from peer they trust). T10-discover
+  threat surface FULLY N/A for v0; carries to `docs/future/phase-4-backlog.md
+  §3.1`.
+
+Full plan + implementation seams at `docs/PLUGIN-MANIFEST.md` (Phase-4-
+Foundation companion doc).
 
 **What this rules out.**
 

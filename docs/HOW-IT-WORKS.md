@@ -88,7 +88,16 @@ Two things follow from this:
 
 **Plugins are content-addressed and shareable through Atriums.** A plugin's CID is the cryptographic hash of its bytes. Two users running "the same plugin" mean it bit-for-bit. You can publish a plugin into your Atrium peer group; someone in the group can install it and verify they got what you sent. There is no central plugin registry — discovery is peer-to-peer, the same way your data is.
 
-**Each plugin has its own identity.** A plugin gets a DID (a cryptographic identifier). When you install it, your engine grants it an attenuated UCAN — a capability token that says "this plugin can do these things on my behalf, but not more." The engine checks that token on every read and write the plugin's subgraph triggers.
+**Each plugin has its own identity — actually four distinct identity concepts that don't get conflated.** Phase 4-Foundation ratified the four-identity-concepts model (CLAUDE.md baked-in #18 "Implementation refinements ratified 2026-05-11"). They are:
+
+1. **Content-CID** — what the plugin IS, bit-for-bit. Two users running "the same plugin" mean it bit-for-bit because the CID is the cryptographic hash of the plugin's bytes.
+2. **Peer-DID signature on the original content** — provenance: who originally authored or shared this content. Verifiable; `benten-id` RotationLog handles peer-DID key rotation.
+3. **Plugin-DID** — minted fresh by your engine at install time. A `did:key:...` shape with an engine-held Ed25519 keypair (you don't manage it). Plugin-DID acts as the UCAN audience for caps you grant the plugin AND as a constrained issuer if the plugin re-delegates to other plugins within its manifest envelope.
+4. **User-DID** — your trust anchor. You sign install records (committing your consent locally) and issue UCAN caps with `audience=plugin-DID`.
+
+When you install a plugin, your engine grants the plugin-DID an attenuated UCAN — a capability token that says "this plugin can do these things on my behalf, but not more." The engine checks that token on every read and write the plugin's subgraph triggers. Plugin-DID has no inherent authority — its issuance is bounded by what your manifest envelope allows + the chain must still trace back to a user-DID-issued root grant.
+
+**Cross-plugin and cross-schema references use content-CID, not author-DID.** A plugin that says `accepts_content: [<schema_cid>, ...]` is naming the bytes it will accept; key rotations don't break these references.
 
 How does the user stay in control without being prompted on every action? **A two-step consent model:**
 
@@ -103,7 +112,15 @@ This is the shape that makes Phase-6 AI assistants work. An AI assistant declare
 
 There is a second, rarer category: **engine extensions** — Rust crates compiled into the engine binary. These are for things like a custom persistence backend or a new transport — extensions that change the engine itself. They have no UCAN, no manifest, no install flow; you compile them in or you don't. They are for platform builders, not app users. The two categories — app-level plugins (subgraphs, content-addressed, sharable) and engine-level extensions (Rust crates, compile-time, trusted-by-build) — stay deliberately separate.
 
-The plugin-manifest schema and install / upgrade / share flows land in Phase 4-Foundation (Benten Platform v1 foundation). The engine surface that backs them — the evaluator's principal-aware read path — shipped at PR #184 in the pre-v1 cleanup window, since it's independent of the manifest decisions. Today the engine has the foundational pieces (DID + UCAN + content-addressed subgraphs + principal-aware read surface); the manifest schema layers on top in Phase 4-Foundation.
+The plugin-manifest schema and install / upgrade / share flows land in Phase 4-Foundation (Benten Platform v1 foundation). The engine surface that backs them — the evaluator's principal-aware read path — shipped at PR #184 in the pre-v1 cleanup window, since it's independent of the manifest decisions. Today the engine has the foundational pieces (DID + UCAN + content-addressed subgraphs + principal-aware read surface); the manifest schema layers on top in Phase 4-Foundation. See [`PLUGIN-MANIFEST.md`](PLUGIN-MANIFEST.md) for the full schema spec.
+
+**A plugin is a workflow is a subgraph.** They're the same shape; manifest presence is what distinguishes a plugin from a workflow. Promoting a workflow to a plugin = adding a manifest. The plugin library subgraph holds all your installed versions + forks (content-addressed; cheap); your active graph holds references to specific plugin-versions you're using now; switching active version = updating the reference. Composition is recursive: meta-plugins reference sub-plugins. Versioning extends the Phase-1 anchor + Version Node pattern to DAG-shape (forks land on branches; CURRENT can point at any branch tip; per-device-local).
+
+**Update model is pull-not-push.** Receiver-controlled; the engine never auto-pulls a plugin update. Updates are content-addressed; if the CID changes, the shape changed; if `requires` GREW, full re-consent fires; otherwise silent. Plugin discovery in Phase 4-Foundation v0 is direct content-addressed-share over Atriums (out-of-band handshake; user pulls from a peer they trust). Decentralized self-discovered registry is Phase 4-Meta scope per `docs/future/phase-4-backlog.md §3.1`.
+
+**Admin UI v0 is the first plugin.** Phase 4-Foundation ships an admin UI that is itself a content-addressed shareable subgraph installed via signed manifest envelope. See [`ADMIN-UI.md`](ADMIN-UI.md) for the user flows + the 4-category navigation IA (Plugins / Workflows / Content Types / Views) over the unified subgraph substrate.
+
+**Key rotation** has an MVP at Phase 4-Foundation (`SelfRevocation` attestation + out-of-band new-key trust). A richer decentralized-identity-and-attestation substrate ("**Kith**" working name; Phase 5+ exploratory) would supersede the MVP if it lands; scaffold at [`docs/future/kith-decentralized-identity.md`](future/kith-decentralized-identity.md). Phase 4-Foundation does not depend on Kith — the MVP rotation suffices for v1.
 
 ## What the engine is not
 

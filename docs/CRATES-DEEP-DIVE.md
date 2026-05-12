@@ -143,7 +143,7 @@ The same audits surface frictions where the philosophy bends or where the code i
 - The redb durability tier (`EnginePrivileged` forces `Immediate`, `SyncReplica` forces `None`, `User` honors configured).
 - The Inv-13 5-row dispatch matrix (user-reput → `E_INV_IMMUTABILITY`; engine-privileged reput → silent dedup).
 
-This is the engine's capability/invariant policy stretched into the storage layer. The right abstraction is a pre-write hook trait (`CapabilityPolicy`) at the engine layer; today the storage layer carries the policy directly. The TODO at `crates/benten-graph/src/lib.rs:797` ("phase-3 — write-authority/is_privileged coherence") flags that the two axes can drift.
+This is the engine's capability/invariant policy stretched into the storage layer. The right abstraction is a pre-write hook trait (`CapabilityPolicy`) at the engine layer; today the storage layer carries the policy directly. The TODO in `crates/benten-graph/src/lib.rs` ("phase-3 — write-authority/is_privileged coherence") flags that the two axes can drift.
 
 **v1-gate prominence: medium.** The shape works today; the cleanup is hygiene. Phase 4-Foundation plugin manifests will pressure this surface harder because manifest-declared `requires` caps may not match the `store:<label>:write` shape that `GrantBackedPolicy` hard-codes today.
 
@@ -194,9 +194,9 @@ CLAUDE.md baked-in #19 explicitly contemplates engine-level extensions for alter
 Each per-crate audit surfaces a small handful of stale comments or unresolved TODOs:
 
 - `benten-errors::parse_cap_string` doc-comment still says "Phase 2a stub" + "Real parser lands in G4-A" despite G4-A having closed.
-- `benten-core::lib.rs:711` carries `TODO(phase-3 — anchorstore + GC)` on `U64_CHAINS` unbounded growth.
+- `crates/benten-core/src/lib.rs::U64_CHAINS` carries `TODO(phase-3 — anchorstore + GC)` on unbounded growth.
 - `benten-core` has two coexisting `Anchor` shapes (`u64`-id and Cid-head-threaded) with `TODO(phase-3 — version surface consolidation)` markers; R5 G7 was supposed to pick a canonical shape and didn't.
-- `benten-graph::lib.rs:797` carries `TODO(phase-3 — write-authority/is_privileged coherence)`.
+- `crates/benten-graph/src/lib.rs` carries `TODO(phase-3 — write-authority/is_privileged coherence)` (storage-layer two-axes drift risk; tracked in §13.x of phase-3-backlog).
 - `benten-graph`'s in-transaction flag is per-`Arc<RedbBackend>` (mini-review g3-ce-7 proposed keying on canonical DB path; carried).
 - `benten-graph::next_tx_id` is process-lifetime-only (mini-review g3-ce-8 proposed persisting; carried).
 - `benten-ivm::lib.rs` has three Phase-3 TODOs: per-view Criterion benches, cascade create→delete (now closed), and rebuild-equivalence event-replay (still open).
@@ -306,7 +306,7 @@ Every concrete v1-gate candidate surfaced by the 10 per-crate audits, tabulated.
 | `benten-caps` | `InMemoryRateLimitPolicy` is the only concrete plug | low | Distributed token-bucket for Phase 6+ marketplace traffic |
 | `benten-caps` | `UCANBackend::iter_installed_proofs` silently skips decode failures | low | Decide disposition when forward-compat envelope shapes arrive (Phase 4-Foundation or later) |
 | `benten-eval` | `HostError::to_wire_bytes` Phase-2a placeholder format | low | Phase-3 DAG-CBOR versioned envelope upgrade |
-| `benten-eval` | `WAIT regular-walk path's `signal_derived_placeholder` principal binding | low | Phase-3 eval/engine `Outcome` unification (`lib.rs:208` TODO) |
+| `benten-eval` | `WAIT regular-walk path's `signal_derived_placeholder` principal binding | low | Phase-3 eval/engine `Outcome` unification (`crates/benten-eval/src/lib.rs` TODO on `eval/engine Outcome unification`) |
 | `benten-eval` | `TraceStep` boundary-variant + attribution-threading completion | low | Required-on-every-variant contract |
 | `benten-eval` | `subscribe.rs` at 1740 LOC + `sandbox.rs` at 1722 LOC | low | Hygiene split; defer past v1 |
 | `benten-eval` | `SubscribeError::CapabilityDenied` collapses into `SubscribeDeliveryFailed` ErrorCode | low | Future cap-denied-at-register vs at-delivery split |

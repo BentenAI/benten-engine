@@ -6,14 +6,19 @@ For plain-English orientation, start with [`HOW-IT-WORKS.md`](HOW-IT-WORKS.md). 
 
 ---
 
-## Ten crates
+## Twelve crates (post-Phase-4-Foundation)
 
-The Rust workspace ships ten Rust crates plus the napi bindings + the
+The Rust workspace ships twelve Rust crates plus the napi bindings + the
 TypeScript DSL wrapper. The 8 → 10 crate transition completed in
 Phase 3 — `benten-id` (9th, identity + claims) and `benten-sync`
 (10th, sync runtime — native-only) landed and were filled in across
-Phase 3's implementation cluster. The narrative below is the final
-Phase-3-close shape.
+Phase 3's implementation cluster.
+
+**Phase 4-Foundation adds two more crates** per the post-R1-triage ratification (`r1-triage.md` §1 ratification #1):
+- `benten-platform-foundation` (11th — schema-driven rendering compiler + materializer + plugin manifest + `Renderer` trait abstraction; this crate is intentionally broader than other crates because it's the v1 platform-shippable surface — narrower 3-4-crate decomposition rejected per arch-r1-8 closure).
+- `benten-renderer-tauri` (12th — Tauri 2.x renderer engine extension per CLAUDE.md baked-in #19; compile-time linked; user trust = "you compiled this in"; distinct from app-level plugins which are subgraphs).
+
+The narrative below is the final Phase-4-Foundation-close shape (NB: the 12-crate count + new crate narratives land at G26-A retense; treat sections naming "ten crates" as historical until G26-A applies).
 
 ```
 crates/
@@ -94,6 +99,16 @@ packages/
 A workspace test pin verifies all ten crate names + the `native-only`
 annotation on `benten-sync` are present in this document, so the
 Phase-3-close shape described above is the durable narrative.
+Phase-4-Foundation adds 2 more crates per ratification #1:
+- `benten-platform-foundation/` — schema-rendering compiler + materializer
+  pipeline + plugin manifest (FULL scope per D-4F-1) + `Renderer` trait
+  abstraction. Hosts `BrowserRender` (browser-wasm32) as default impl.
+- `benten-renderer-tauri/` — Tauri 2.x renderer as engine extension per
+  CLAUDE.md #19 (compile-time linked; same trust posture as Benten core).
+  IpcAllowlist + CSP + per-method cap-binding + in-process IPC protocol.
+
+Post-Phase-4-Foundation workspace pin extends crate-count guard to **12**
+crates; ARCHITECTURE.md retense at G26-A reflects final shape.
 
 The crate graph is DAG-shaped:
 
