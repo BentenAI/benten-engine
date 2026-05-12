@@ -929,7 +929,7 @@ impl GrantReader for BackendGrantReader {
                     }
                     // Phase 4-Foundation R1 cap-r1-2 BLOCKER + cap-r1-10
                     // closure: principal binding. When the caller threads
-                    // an `actor_cid`, only grants whose stored `grantee`
+                    // an `actor_cid`, only grants whose stored `actor`
                     // property matches are considered. A grant issued to
                     // user-B does NOT permit user-A's read — this closes
                     // the cross-principal-permission bug where
@@ -937,12 +937,16 @@ impl GrantReader for BackendGrantReader {
                     // When `actor_cid` is `None` the call collapses to the
                     // scope-only check (legacy / Phase-1 / Phase-2
                     // fixtures + NoAuthBackend default-permit path).
+                    //
+                    // The grant Node persists `actor` via `actor.as_value()`
+                    // (`GrantSubject::as_value`) which is `Value::Bytes`
+                    // for a CID-shaped subject; bytes equal `cid.as_bytes()`.
                     if let Some(want) = actor_cid {
-                        let grantee_bytes = match node.properties.get("grantee") {
+                        let actor_bytes = match node.properties.get("actor") {
                             Some(Value::Bytes(b)) => b.as_slice(),
                             _ => continue, // malformed grant — skip
                         };
-                        if grantee_bytes != want.as_bytes() {
+                        if actor_bytes != want.as_bytes() {
                             continue;
                         }
                     }

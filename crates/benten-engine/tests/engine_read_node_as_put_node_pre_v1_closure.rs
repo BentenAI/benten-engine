@@ -271,9 +271,17 @@ fn grant_read_capability_for_testing_permits_read_after_grant() {
         "pre-grant: read must be denied (collapsed to None); got {pre:?}"
     );
 
-    // Install the grant via the test-helpers surface.
+    // Install the grant via the test-helpers surface, bound to a
+    // specific reader principal. Phase 4-Foundation R1-FP G22-FP-3
+    // (cap-r1-2 closure) made `check_read` principal-aware, so the
+    // grant + the subsequent read MUST use the same actor CID. The
+    // helper signature carries the principal arg explicitly to make
+    // this binding visible.
+    let reader_after = engine
+        .create_principal("grant-helper-reader-after")
+        .expect("seed");
     let grant_cid = engine
-        .grant_read_capability_for_testing(&cid)
+        .grant_read_capability_for_testing(&cid, &reader_after)
         .expect("grant install must succeed");
     // The minted grant CID must differ from the target's CID — a
     // no-op stub returning the input CID would fail this pin.
@@ -283,12 +291,10 @@ fn grant_read_capability_for_testing_permits_read_after_grant() {
          not echo the target CID"
     );
 
-    // After the grant: any reader principal observes the Node (the
-    // grant-backed policy permits any unrevoked `store:post:read`
-    // grant regardless of the specific actor CID).
-    let reader_after = engine
-        .create_principal("grant-helper-reader-after")
-        .expect("seed");
+    // After the grant: the bound reader principal observes the Node
+    // (the grant-backed policy now permits this specific actor's
+    // unrevoked `store:post:read` grant per cap-r1-2 principal-aware
+    // closure).
     let post = engine
         .read_node_as(&reader_after, &cid)
         .expect("read_node_as infallible")

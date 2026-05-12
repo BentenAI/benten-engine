@@ -1315,17 +1315,31 @@ impl Engine {
     }
 
     /// Test/bench-only: grant a read capability for the supplied
-    /// target CID. Closes `docs/future/phase-3-backlog.md §13.7`
-    /// item (c).
+    /// target CID to a specific `principal`. Closes
+    /// `docs/future/phase-3-backlog.md §13.7` item (c).
     ///
     /// Looks up the Node's primary label via
     /// [`Engine::get_node_label_only`], derives the
     /// `store:<label>:read` scope (mirroring
-    /// [`benten_caps::GrantBackedPolicy`]'s `derive_read_scope`),
-    /// creates a synthetic `test-read-grant-helper` principal, and
-    /// installs the grant via [`Engine::grant_capability`]. The
-    /// returned `Cid` is the minted `system:CapabilityGrant` Node's
-    /// CID so callers can revoke surgically.
+    /// [`benten_caps::GrantBackedPolicy`]'s `derive_read_scope`), and
+    /// installs the grant via [`Engine::grant_capability`] against the
+    /// supplied principal. The returned `Cid` is the minted
+    /// `system:CapabilityGrant` Node's CID so callers can revoke
+    /// surgically.
+    ///
+    /// ## Phase 4-Foundation R1-FP G22-FP-3 (cap-r1-2 BLOCKER closure)
+    ///
+    /// Pre-fix the helper minted its own synthetic
+    /// `test-read-grant-helper` principal and granted to that actor.
+    /// Callers then read with a *different* principal and the
+    /// scope-only `check_read` would still permit — because the
+    /// pre-fix [`benten_caps::GrantBackedPolicy::check_read`] ignored
+    /// `actor_cid`. The cap-r1-2 closure made `check_read`
+    /// principal-aware (filtering by stored `grantee` property), so
+    /// granting to a synthetic helper-actor no longer permits reads as
+    /// a different actor. Callers MUST now thread the same `principal`
+    /// for both grant + subsequent reads. The helper signature carries
+    /// the principal arg explicitly to make the binding visible.
     ///
     /// Gated behind `cfg(any(test, feature = "test-helpers"))` so the
     /// helper is not present in production builds — mirrors
@@ -1336,7 +1350,11 @@ impl Engine {
     /// Returns [`EngineError`] on backend lookup / grant failure, or
     /// `E_NOT_FOUND` if the target CID is missing from the backend.
     #[cfg(any(test, feature = "test-helpers"))]
-    pub fn grant_read_capability_for_testing(&self, cid: &Cid) -> Result<Cid, EngineError> {
+    pub fn grant_read_capability_for_testing(
+        &self,
+        cid: &Cid,
+        principal: &Cid,
+    ) -> Result<Cid, EngineError> {
         let label = self
             .backend()
             .get_node_label_only(cid)?
@@ -1349,10 +1367,7 @@ impl Engine {
         } else {
             format!("store:{label}:read")
         };
-        // Mint a synthetic principal so the grant is addressable
-        // (`grant_capability` requires a concrete actor CID).
-        let principal = self.create_principal("test-read-grant-helper")?;
-        self.grant_capability(&principal, scope)
+        self.grant_capability(principal, scope)
     }
 
     // ---- Benchmark helpers (Phase 2a G2-B subgraph_cache_hit) ------------

@@ -122,19 +122,15 @@ fn bench_read_threaded_grant_backed(c: &mut Criterion) {
     let node = canonical_test_node();
     let cid = engine.put_node(&node).expect("seed node");
 
-    // Seed a grant so the policy returns `permit` (not denied).
-    engine
-        .grant_read_capability_for_testing(&cid)
-        .expect("seed grant");
-    // The grant helper minted a `test-read-grant-helper` principal
-    // under-the-hood. The grant-backed policy doesn't bind the read
-    // gate to a specific actor CID (any unrevoked grant for the
-    // `store:<label>:read` scope permits the read), so a fresh
-    // bench-side principal CID exercises the typed surface without
-    // re-seeding.
+    // Phase 4-Foundation R1-FP G22-FP-3 (cap-r1-2 BLOCKER closure):
+    // grants now bind to a specific actor; the bench seeds the grant
+    // for the same principal that will read.
     let principal = engine
         .create_principal("bench-grant-backed-reader")
         .expect("seed principal");
+    engine
+        .grant_read_capability_for_testing(&cid, &principal)
+        .expect("seed grant");
 
     let mut group = c.benchmark_group("option_c_evaluator_path_overhead");
     group.warm_up_time(Duration::from_secs(1));
