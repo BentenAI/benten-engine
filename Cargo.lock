@@ -437,6 +437,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "benten-renderer-tauri"
+version = "0.1.0"
+dependencies = [
+ "benten-core",
+ "benten-engine",
+ "benten-errors",
+ "benten-platform-foundation",
+]
+
+[[package]]
 name = "benten-sync"
 version = "0.1.0"
 dependencies = [
