@@ -821,7 +821,17 @@ pub struct EngineGeneric<B: GraphBackend> {
     pub(crate) backend: Arc<B>,
     /// Configured capability policy. `None` collapses to
     /// `NoAuthBackend`-equivalent behavior (every commit permitted).
-    pub(crate) policy: Option<Box<dyn CapabilityPolicy>>,
+    ///
+    /// Phase 4-Foundation R1-FP wave-1 G22-FP-1 option-D (2026-05-12):
+    /// migrated `Box<dyn CapabilityPolicy>` → `Arc<dyn CapabilityPolicy>`
+    /// so the cap-recheck closure built in
+    /// [`Engine::on_change_as_with_cursor`] can capture a clonable handle
+    /// to the policy and consult `CapabilityPolicy::check_read` per
+    /// event. The public builder API (`capability_policy(p: Box<...>)`)
+    /// remains Box for caller compatibility — the builder converts
+    /// `Box → Arc::from(box)` at `assemble()` time so the ~40 test +
+    /// downstream callers don't change.
+    pub(crate) policy: Option<Arc<dyn CapabilityPolicy>>,
     /// True if `.without_caps()` was passed to the builder. Controls whether
     /// `grant_capability` / `revoke_capability` refuse honestly rather than
     /// silently no-op.
@@ -1602,7 +1612,7 @@ impl<B: GraphBackend> EngineGeneric<B> {
     )]
     pub(crate) fn from_parts(
         backend: Arc<B>,
-        policy: Option<Box<dyn CapabilityPolicy>>,
+        policy: Option<Arc<dyn CapabilityPolicy>>,
         caps_enabled: bool,
         ivm_enabled: bool,
         broadcast: Arc<ChangeBroadcast>,
@@ -1631,7 +1641,7 @@ impl<B: GraphBackend> EngineGeneric<B> {
     #[allow(clippy::too_many_arguments, reason = "builder plumbing")]
     pub(crate) fn from_parts_with_clocks(
         backend: Arc<B>,
-        policy: Option<Box<dyn CapabilityPolicy>>,
+        policy: Option<Arc<dyn CapabilityPolicy>>,
         caps_enabled: bool,
         ivm_enabled: bool,
         broadcast: Arc<ChangeBroadcast>,

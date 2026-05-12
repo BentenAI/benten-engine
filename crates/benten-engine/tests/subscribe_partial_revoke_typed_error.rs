@@ -50,8 +50,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use benten_core::Cid;
 use benten_errors::ErrorCode;
 use benten_eval::primitives::subscribe::{
-    ChangeEvent, ChangeKind, ChangePattern, OnChangeDeliveryCallback, SubscribeCursor,
-    register_on_change, subscribe_revoked_mid_stream_count,
+    CapRecheckOutcome, ChangeEvent, ChangeKind, ChangePattern, OnChangeDeliveryCallback,
+    SubscribeCursor, register_on_change, subscribe_revoked_mid_stream_count,
 };
 
 /// Process-wide mutex serializing the pre/post snapshots of the
@@ -106,15 +106,22 @@ fn cap_recheck_failing_mid_stream_populates_subscription_termination_reason_with
 
     let pre_count = subscribe_revoked_mid_stream_count();
 
-    // Cap-recheck closure: returns true on first call, false on
-    // subsequent calls. State held in an AtomicU64 so the closure
-    // can mutate without a Mutex.
+    // Cap-recheck closure: returns `Keep` on first call, `Cancel` on
+    // subsequent calls (Phase 4-Foundation G22-FP-1 option-D migration:
+    // this test pins the SHIPPED whole-subscription auto-cancel path,
+    // so the post-revoke outcome is `Cancel` — the option-D semantic
+    // equivalent of the prior `false`). State held in an AtomicU64
+    // so the closure can mutate without a Mutex.
     let recheck_calls = Arc::new(AtomicU64::new(0));
     let recheck = {
         let calls = Arc::clone(&recheck_calls);
-        Arc::new(move |_event: &ChangeEvent| -> bool {
+        Arc::new(move |_event: &ChangeEvent| -> CapRecheckOutcome {
             let n = calls.fetch_add(1, Ordering::SeqCst);
-            n == 0 // true on first call (n=0); false on subsequent
+            if n == 0 {
+                CapRecheckOutcome::Keep
+            } else {
+                CapRecheckOutcome::Cancel
+            }
         })
     };
 

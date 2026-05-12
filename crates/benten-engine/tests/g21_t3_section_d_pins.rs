@@ -85,8 +85,8 @@ fn map_value(pairs: &[(&str, Value)]) -> Value {
 fn subscribe_partial_revoke_via_cap_recheck_closure_cancels_only_affected_path() {
     use benten_core::change_stream::{ChangeEvent, ChangeKind};
     use benten_eval::primitives::subscribe::{
-        ChangePattern, DeliveryCapRecheck, OnChangeDeliveryCallback, SubscribeCursor,
-        next_engine_seq, publish_change_event_with_labels, register_on_change,
+        CapRecheckOutcome, ChangePattern, DeliveryCapRecheck, OnChangeDeliveryCallback,
+        SubscribeCursor, next_engine_seq, publish_change_event_with_labels, register_on_change,
         unregister_on_change,
     };
 
@@ -108,11 +108,18 @@ fn subscribe_partial_revoke_via_cap_recheck_closure_cancels_only_affected_path()
         b_calls_cb.fetch_add(1, Ordering::SeqCst);
     });
 
-    let recheck_a: DeliveryCapRecheck = Arc::new(|_evt: &ChangeEvent| true);
+    let recheck_a: DeliveryCapRecheck = Arc::new(|_evt: &ChangeEvent| CapRecheckOutcome::Keep);
     let revoked_clone = Arc::clone(&b_revoked);
     let recheck_b: DeliveryCapRecheck = Arc::new(move |_evt: &ChangeEvent| {
-        // Returns true while cap is held; flips false on revoke.
-        !revoked_clone.load(Ordering::SeqCst)
+        // Phase 4-Foundation G22-FP-1 option-D: returns `Keep` while cap
+        // is held; flips to `Cancel` on revoke (whole-subscription
+        // terminate path — this test pins the SHIPPED behaviour, which
+        // matches the prior `false` → auto-cancel semantic).
+        if revoked_clone.load(Ordering::SeqCst) {
+            CapRecheckOutcome::Cancel
+        } else {
+            CapRecheckOutcome::Keep
+        }
     });
 
     let active_a = Arc::new(AtomicBool::new(true));
