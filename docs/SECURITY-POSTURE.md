@@ -1,10 +1,14 @@
-# Security Posture — Benten Engine (Phase 3 close)
+# Security Posture — Benten Engine (Phase 4-Foundation close)
 
-This document records the security claims Benten makes through Phase 3
-close and the known compromises those claims rest on. This document is
-the written, referenceable form.
+This document records the security claims Benten makes through Phase
+4-Foundation close and the known compromises those claims rest on. This
+document is the written, referenceable form. The Phase-3-close table
+below is preserved verbatim (Phase 3 surfaces remain LOAD-BEARING under
+the post-Phase-4-Foundation engineering); Compromise #26 (Phase-4-Foundation
+manifest-envelope recheck at the sync merge boundary) is appended at
+the end of the table narrative.
 
-## Phase 3 close — final compromise table
+## Phase 4-Foundation close — compromise table
 
 | # | Title | Phase | Status |
 |---|-------|-------|--------|
@@ -33,6 +37,9 @@ the written, referenceable form.
 | 23 | Wire device-attestation envelope cryptographic closure | 3 | **CLOSED** at Phase-3 G16-D wave-6b fix-pass (cryptographic shape CLOSED inline; **operator-deployment `FreshnessPolicy` override REQUIRED for production** — see body) |
 | 24 | Wallclock fail-closed posture (no default-clock-zero expiration bypass) | 3 | **CLOSED** at Phase-3 G16-B-B-rest (PR #158); engine refuses to initialize UCAN backend without explicit clock injection — surfaces `E_UCAN_CLOCK_NOT_INJECTED` |
 | 25 | HLC-monotonic enforcement at sync layer (adversarial-peer wallclock-injection defense) | 3 | **CLOSED** at Phase-3 sync-attack test family (HLC monotonicity + nonce-cache for replay defense + HLC bound inside signed envelope) |
+| 26 | Manifest-envelope recheck at sync merge boundary (Phase-4-Foundation plugin-DID principal extension) | 4-Foundation | **CLOSED** at Phase-4-Foundation R4b-FP-1 Seam 3 (post-Q4 ratification 2026-05-13). `apply_atrium_merge` revalidates the manifest-envelope chain against the locally-stored manifest before admitting plugin-attributed writes, in addition to the per-row `CapabilityPolicy::pre_write` check. Closes the loophole where a peer's locally-cached manifest could authorise a write that the receiver's current manifest no longer permits. See body. |
+
+**Phase-4-Foundation delta:** Compromise #26 is the sole net-new addition. The remaining surfaces (#1-25) inherit Phase-3 posture unchanged. Phase-4-Foundation engineering shipped without introducing a sixth-class principal type at the evaluator boundary — the plugin-DID principal extension routes through the existing `CapabilityPolicy` + manifest-envelope-chain-validation seams.
 
 **Phase-2b net delta:** Compromises #4 + #9 + #10 closed (3 net
 closures); 8 new Phase-2b deferrals enumerated (#14, #15, #16, #17,
@@ -1945,8 +1952,47 @@ be rejected with reference to the architectural commitment captured here.
 architectural surface); `docs/HOW-IT-WORKS.md` "Plugins, in plain English"
 (the orientation tour); `docs/GLOSSARY.md` ("App-level plugin," "Engine
 extension," "Manifest envelope," "Plugin DID," "Plugin manifest");
-`crates/benten-engine/src/engine_wait.rs:1011-1026` (the four `todo!()` stubs
-that are β-shaped — the migration target for the read-side gating
-implementation, which lands as pre-v1 cleanup independently of the Phase-4
-plugin-manifest schema work); `crates/benten-engine/src/engine.rs::call_as`
-(the precedent the read-side mirror follows).
+`crates/benten-engine/src/engine_wait.rs::read_node_as` (the Class B β
+surface, SHIPPED at PR #184 during the pre-v1 cleanup window — closing
+Phase-2a-era debt; the four `todo!()` stubs at the historic
+`engine_wait.rs:1011-1026` addresses are CLOSED at HEAD with the real
+implementations of `get_node_label_only` / `put_node` / `read_node_as`
+/ `resolve_subgraph_cid_for_test`); `crates/benten-engine/src/engine.rs::call_as`
+(the precedent the read-side mirror follows). The Phase-4-Foundation plugin
+manifest schema work shipped independently of the Class B β surface; both
+landed in the same pre-Phase-4-Foundation-close window.
+
+### Compromise #26 — Manifest-envelope recheck at sync merge boundary — CLOSED at Phase-4-Foundation R4b-FP-1 (Seam 3)
+
+**Status.** CLOSED at Phase-4-Foundation R4b-FP-1 Seam 3 (post-Q4
+ratification 2026-05-13). The merge-receive boundary recomputes the
+manifest-envelope chain against the locally-stored manifest before
+admitting plugin-attributed writes, in addition to the per-row
+`CapabilityPolicy::pre_write` check that fires inside
+`apply_atrium_merge` (Compromise #2 sync-replica sub-narrative;
+G16-B-F PR #161).
+
+**Class.** Cross-boundary policy-recheck on sync ingress. Sibling to
+Compromise #25 (HLC-monotonic at sync layer) but at the
+manifest-envelope-shape boundary rather than the wallclock-injection
+boundary. The cap-policy check already covered the leaf grant; the
+manifest-envelope recheck closes the loophole where a plugin-attributed
+write could arrive from a peer whose locally-stored manifest envelope
+no longer authorises the operation (e.g. user revoked + republished
+the manifest with `shares` narrowed between the peer's last-seen and
+the merge ingress).
+
+**Closure shape.** `apply_atrium_merge` calls
+`manifest_envelope_chain_validation::validate_against_local_manifest`
+before the per-row cap-recheck; failures reject with `E_CAP_DENIED`
++ the `Layer: 2` tag in the failure trace so the operator log
+distinguishes envelope-shape denials from leaf-grant denials. The
+shape composes with Compromise #25 (HLC + envelope + nonce store
+defenses) — the envelope verifies cryptographically THEN the manifest
+shape is rechecked THEN the per-row leaf grant is rechecked. No
+new ErrorCode required.
+
+**Cross-refs.** R4b-FP-1 implementer brief (`r4b/fp-1` branch); Inv-14
+plugin-DID principal extension (INVARIANT-COVERAGE.md); G24-D-FP-2
+manifest envelope chain validation seam
+(`crates/benten-caps/src/manifest_envelope_chain_validation.rs`).

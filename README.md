@@ -80,7 +80,7 @@ Phase 1 shipped 2026-04-21. Phase 2a closed at tag `phase-2a-close` (2026-04-25)
 
 ```
 benten-engine/
-├── crates/          # 10-crate Rust workspace (see ARCHITECTURE)
+├── crates/          # 12-crate Rust workspace (see ARCHITECTURE)
 ├── bindings/napi/   # Node.js bindings (native + WASM) via napi-rs v3
 ├── packages/engine/ # TypeScript DSL wrapper (@benten/engine)
 ├── tools/           # create-benten-app scaffolder + dev tooling

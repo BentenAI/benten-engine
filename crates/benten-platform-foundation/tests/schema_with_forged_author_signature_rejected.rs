@@ -39,7 +39,7 @@ mod common;
 #[test]
 #[ignore = "DESTINATION-REMAPPED post-R1-triage per HARD RULE 12 clause-(b) BELONGS-NAMED-NOW: T9a defense lives at PLUGIN-MANIFEST namespace (G24-D), NOT schema-namespace (G23-B). \
 JSON schemas in the ingest dialect are static type definitions — they are not peer-signed + don't rotate + don't carry attestation chains. Plugin manifests are the surface that carries peer-DID provenance per CLAUDE.md #18 four-identity-concepts. \
-Substantive defense for T9a (forged peer-DID signature) already shipped at G24-D's plugin_manifest::sign_manifest + verify_peer_signature + covered by g24d_substantive_pipeline.rs::plugin_manifest_peer_did_signature_round_trip (PASS at HEAD post-batch-2). \
+Substantive defense for T9a (forged peer-DID signature) already shipped at G24-D's plugin_manifest::sign_manifest + verify_peer_signature + covered by g24d_substantive_pipeline.rs::full_install_pipeline_real_signatures_succeeds + g24d_substantive_pipeline.rs::install_pipeline_rejects_substituted_content (both PASS at HEAD post-batch-2). \
 Per phase-4-foundation-backlog §4.12: this pin is retained as forward-looking documentation should schema-level provenance ever be needed. Un-ignore is N/A — defense lives at the manifest surface."]
 fn schema_with_forged_peer_did_signature_rejected_at_materializer_entry() {
     // G23-B wave wires this. Substantive shape:

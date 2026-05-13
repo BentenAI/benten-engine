@@ -269,6 +269,45 @@ for the full closure narrative.
 
 ---
 
+## Inv-14 Phase-4-Foundation plugin-DID principal extension
+
+Phase-4-Foundation extends the principal-type matrix Inv-14 covers
+without altering the device-grain LOAD-BEARING posture. App-level
+plugins (CLAUDE.md baked-in #18) run their subgraphs under a freshly
+minted `plugin_did` distinct from the user-DID and from any other
+plugin's DID. The evaluator's read pathway threads the active
+principal via `Engine::read_node_as(principal, cid)` (Class B β
+SHIPPED at PR #184); writes attributed to a plugin carry the
+plugin-DID in `AttributionFrame.actor_cid`.
+
+The matrix Inv-14 must cover post-Phase-4-Foundation:
+
+| Principal type | actor_cid carries | Authorization seam |
+|----------------|-------------------|--------------------|
+| User (local) | user-DID | `CapabilityPolicy::pre_write` |
+| User (sync-merged) | user-DID | per-row recheck inside `apply_atrium_merge` |
+| Device (multi-device sync) | user-DID + `device_did` | `Acceptor::accept_at` + `DeviceAttestationEnvelope::verify` |
+| Plugin (app-level subgraph) | plugin-DID | `CapabilityPolicy::pre_write` + `manifest_envelope_chain_validation` (Layer-2 envelope + Layer-3 UCAN delegation) |
+| Plugin via materializer-read | plugin-DID | `MaterializerEngine::read_node_as` + `MaterializerCapRecheck` (dual-gate per sec-3.5-r1-1) |
+
+No new ErrorCode is required for the plugin-principal extension —
+`E_CAP_DENIED` covers the deny path uniformly; the layer that denied
+is observable via the cap-chain trace. The `manifest_envelope_chain_validation`
+seam (`crates/benten-caps/src/manifest_envelope_chain_validation.rs`,
+G24-D-FP-2) joins manifest-envelope-shape enforcement with the UCAN
+chain validator without introducing a sixth-class principal type at
+the evaluator boundary.
+
+The R4b-FP-1 Seam 3 `apply_atrium_merge` envelope-recheck (post-Q4
+ratification 2026-05-13) is tracked as **Compromise #26 (Phase-4-Foundation
+manifest-envelope recheck on merge boundary)** — see
+[`SECURITY-POSTURE.md`](SECURITY-POSTURE.md) "Compromise #26" for the
+full narrative. Inv-14 doesn't gain a new device-grain slot; the
+recheck happens before the AttributionFrame is constructed on the
+receiver side, so the frame remains the invariant's source of truth.
+
+---
+
 ## What "active" means in this table
 
 A row is **active** iff:

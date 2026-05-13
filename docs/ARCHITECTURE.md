@@ -12,13 +12,21 @@ The Rust workspace ships twelve Rust crates plus the napi bindings + the
 TypeScript DSL wrapper. The 8 → 10 crate transition completed in
 Phase 3 — `benten-id` (9th, identity + claims) and `benten-sync`
 (10th, sync runtime — native-only) landed and were filled in across
-Phase 3's implementation cluster.
+Phase 3's implementation cluster. **Phase 4-Foundation extended the
+workspace to twelve crates** per the post-R1-triage ratification
+(`r1-triage.md` §1 ratification #1):
 
-**Phase 4-Foundation adds two more crates** per the post-R1-triage ratification (`r1-triage.md` §1 ratification #1):
-- `benten-platform-foundation` (11th — schema-driven rendering compiler + materializer + plugin manifest + `Renderer` trait abstraction; this crate is intentionally broader than other crates because it's the v1 platform-shippable surface — narrower 3-4-crate decomposition rejected per arch-r1-8 closure).
-- `benten-renderer-tauri` (12th — Tauri 2.x renderer engine extension per CLAUDE.md baked-in #19; compile-time linked; user trust = "you compiled this in"; distinct from app-level plugins which are subgraphs).
+- `benten-platform-foundation` (11th — schema-driven rendering
+  compiler + materializer pipeline + plugin manifest + `Renderer` trait
+  abstraction. This crate is intentionally broader than other crates
+  because it's the v1 platform-shippable surface — narrower three-or-four
+  separate platform crates rejected per arch-r1-8 closure).
+- `benten-renderer-tauri` (12th — Tauri 2.x renderer engine extension
+  per CLAUDE.md baked-in #19; compile-time linked; user trust = "you
+  compiled this in"; distinct from app-level plugins which are
+  subgraphs).
 
-The narrative below is the final Phase-4-Foundation-close shape (NB: the 12-crate count + new crate narratives land at G26-A retense; treat sections naming "ten crates" as historical until G26-A applies).
+The narrative below is the Phase-4-Foundation-close shape.
 
 ```
 crates/
@@ -79,6 +87,35 @@ crates/
                         # subscriber. Phase 3 added the Atrium DSL
                         # session-handle
                         # `engine.atrium({config}).join()`.
+  benten-platform-foundation/
+                        # 11th crate (Phase 4-Foundation). The v1
+                        # platform-shippable surface. Hosts the
+                        # schema-driven rendering compiler
+                        # (typed-field-Node vocabulary → renderable
+                        # SubgraphSpec), the materializer pipeline
+                        # (HtmlJsonMaterializer + IVM-subgraph
+                        # generalisation), the full plugin manifest
+                        # surface (install-time consent + per-plugin
+                        # DID + manifest envelope chain validation +
+                        # private namespace caps + DAG-shape
+                        # versioning), the admin UI v0 plugin
+                        # subgraph + 4-category navigation IA, and
+                        # the `Renderer` trait abstraction with
+                        # `BrowserRender` (browser-wasm32) as default
+                        # impl. Per arch-r1-8 closure, the crate is
+                        # intentionally broader than other crates
+                        # because every part of it composes into one
+                        # platform-shippable boundary.
+  benten-renderer-tauri/
+                        # 12th crate (Phase 4-Foundation). Tauri 2.x
+                        # renderer ENGINE EXTENSION per CLAUDE.md
+                        # baked-in #19: compile-time linked Rust crate
+                        # implementing the `Renderer` trait for
+                        # embedded-webview deployment shape (c).
+                        # IpcAllowlist + CSP + per-method cap-binding
+                        # + in-process IPC protocol. Trust = "you
+                        # compiled this in." NOT an app-level plugin
+                        # subgraph.
 
 bindings/
   napi/             # Node.js bindings via napi-rs v3. Compiles to a
@@ -96,19 +133,11 @@ packages/
                     # over the napi surface.
 ```
 
-A workspace test pin verifies all ten crate names + the `native-only`
-annotation on `benten-sync` are present in this document, so the
-Phase-3-close shape described above is the durable narrative.
-Phase-4-Foundation adds 2 more crates per ratification #1:
-- `benten-platform-foundation/` — schema-rendering compiler + materializer
-  pipeline + plugin manifest (FULL scope per D-4F-1) + `Renderer` trait
-  abstraction. Hosts `BrowserRender` (browser-wasm32) as default impl.
-- `benten-renderer-tauri/` — Tauri 2.x renderer as engine extension per
-  CLAUDE.md #19 (compile-time linked; same trust posture as Benten core).
-  IpcAllowlist + CSP + per-method cap-binding + in-process IPC protocol.
-
-Post-Phase-4-Foundation workspace pin extends crate-count guard to **12**
-crates; ARCHITECTURE.md retense at G26-A reflects final shape.
+A workspace test pin verifies all twelve crate names + the
+`native-only` annotation on `benten-sync` are present in this document
+(see `crates/benten-engine/tests/architecture_md_12_crate_count_post_phase_4_foundation_canaries.rs`),
+so the Phase-4-Foundation-close shape described above is the durable
+narrative.
 
 The crate graph is DAG-shaped:
 
@@ -129,7 +158,7 @@ Each crate has one responsibility. A reader can use `benten-engine` with `NoAuth
 
 ## Bindings and tooling
 
-Beyond the ten Rust crates, the workspace ships two ancillary trees that exist
+Beyond the twelve Rust crates, the workspace ships two ancillary trees that exist
 to make the engine reachable from JavaScript and to keep developer onboarding
 ten minutes from `npx` to a green test:
 
