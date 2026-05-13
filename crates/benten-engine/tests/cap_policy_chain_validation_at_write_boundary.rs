@@ -36,7 +36,7 @@
 mod common;
 
 #[test]
-#[ignore = "RED-PHASE: G24-B-FP wires synchronous write-boundary chain validation; un-ignore at G24-B-FP landing. Pin source: r4-triage §1 r4-tc-1 + threat-model §T4 step 2 defense-in-depth."]
+#[ignore = "DESTINATION-REMAPPED at R6-FP-BF per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW. G24-B-FP closed the workflow editor surface; the synchronous write-boundary chain validator that fires per pre-WRITE admit-check is NOT YET WIRED. Named destination: docs/future/phase-4-backlog.md §4.23 (Phase-4-Meta user-DID root-chain write-boundary validator). Pin source: r4-triage §1 r4-tc-1 + threat-model §T4 step 2 defense-in-depth; substantive shape preserved in body."]
 fn cap_policy_chain_validation_fires_at_synchronous_write_boundary() {
     // G24-B-FP wave wires this. Substantive shape:
     //

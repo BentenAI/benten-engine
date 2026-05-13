@@ -20,8 +20,9 @@ mod schema_fixtures;
 
 // Un-ignored at G23-A wave-4 (2026-05-12 canary). At canary the ingest
 // dialect set is `{Canonical}`; the JSON-Schema-standard translator
-// (`IngestDialect::JsonSchemaStandard`) lands at G23-A wave-4b. This pin
-// exercises the canonical (identity) path to lock the
+// (`IngestDialect::JsonSchemaStandard`) lands at Phase-4-Meta per
+// `docs/future/phase-4-backlog.md` §4.6 (strict input-dialect work).
+// This pin exercises the canonical (identity) path to lock the
 // `IngestDialect::translate_to_canonical` shape.
 #[test]
 fn schema_compiler_ingest_dialect_parses_json_schema_to_canonical_subgraph_form() {

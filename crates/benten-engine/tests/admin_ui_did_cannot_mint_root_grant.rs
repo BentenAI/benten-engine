@@ -33,7 +33,7 @@
 mod common;
 
 #[test]
-#[ignore = "RED-PHASE: G24-B-FP wires grant-mint issuer-is-user-DID check; un-ignore at G24-B-FP landing. Pin source: r4-triage §1 r4-tc-1 + threat-model §T4 step 3."]
+#[ignore = "DESTINATION-REMAPPED at R6-FP-BF per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW. G24-B-FP closed the workflow editor surface; the synchronous write-boundary chain validator that enforces grant-mint issuer-is-user-DID at admit-time is NOT YET WIRED. Named destination: docs/future/phase-4-backlog.md §4.23 (Phase-4-Meta user-DID root-chain write-boundary validator). Pin source: r4-triage §1 r4-tc-1 + threat-model §T4 step 3; substantive shape preserved in body."]
 fn admin_ui_did_attempt_to_mint_root_grant_surfaces_e_not_user_root() {
     // G24-B-FP wave wires this. Substantive shape:
     //

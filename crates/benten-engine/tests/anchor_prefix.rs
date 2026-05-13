@@ -40,7 +40,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "phase-3-backlog §7.3.D — anchor-prefix prefix-matching. G15-B closed at §5.1 IVM Algorithm B (W9-T1); test body pins post-G15-B prefix-matching invariant contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
+#[ignore = "phase-3-backlog §7.3.D — anchor-prefix prefix-matching. G15-B closed at §5.1 IVM Algorithm B (W9-T1); test body pins post-G15-B prefix-matching invariant contract; un-ignore at Phase-4-Foundation pre-tag sweep per docs/future/phase-4-backlog.md §4.29 (HARD RULE 12 clause-(b))."]
 fn anchor_prefix_matches_prefix_not_equality() {
     // plan §3 G15-B pin. G15-B implementer wires this against the
     // new PrefixMatcher selector type:
@@ -72,7 +72,7 @@ fn anchor_prefix_matches_prefix_not_equality() {
 }
 
 #[test]
-#[ignore = "phase-3-backlog §7.3.D — anchor-prefix no-silent-equality-coerce invariant. G15-B closed; test body pins specific equality-coerce-rejection invariant; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
+#[ignore = "phase-3-backlog §7.3.D — anchor-prefix no-silent-equality-coerce invariant. G15-B closed; test body pins specific equality-coerce-rejection invariant; un-ignore at Phase-4-Foundation pre-tag sweep per docs/future/phase-4-backlog.md §4.29 (HARD RULE 12 clause-(b))."]
 fn anchor_prefix_no_silent_label_equality_coerce() {
     // plan §3 G15-B pin. G15-B explicitly REJECTS the silent coerce
     // back to label-equality. If a future refactor accidentally

@@ -1,21 +1,7 @@
 //! cap-r1-16 pin — resolve_did_for_cid round-trip.
-//!
-//! Per plan §3 G24-F + cap-r1-16: thin-client session needs to
-//! resolve the device-DID associated with a CID claim during
-//! handshake. Round-trip: given a CID, resolve to the device-DID
-//! that holds the canonical bytes.
 
 #[test]
-#[ignore = "RED-PHASE: G24-D wave wires resolve_did_for_cid; un-ignore at G24-D landing"]
+#[ignore = "DESTINATION-REMAPPED at R6-FP-BF per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW. `benten_id::resolve_did_for_cid` round-trip surface was never minted at G24-D (G24-D shipped plugin_did::mint + cap-r1-16 was triaged into G24-F's DidKeyedSession::resolve; the standalone seam `resolve_did_for_cid` is a separate Phase-4-Meta concern coupled to RotationLog rehydration). Named destination: docs/future/phase-4-backlog.md §4.26 (Phase-4-Meta RotationLog rehydration at engine open + resolve_did_for_cid round-trip)."]
 fn resolve_did_for_cid_returns_owning_device_did_round_trip() {
-    // Future surface:
-    //   benten_id::resolve_did_for_cid(cid: &Cid, registry:
-    //     &DidRegistry) -> Result<Did, IdError>
-    // round-trips through the device-DID attestation envelope V2
-    // (Phase-3 G16-D wave-6b shipped). Cap-r1-16 closure verifies the
-    // resolution path is reachable from the cap-policy layer.
-    //
-    // FAILS-IF-NO-OP because thin-client cap-policy needs this seam
-    // to attribute reads against the correct device-DID principal.
-    panic!("RED-PHASE: G24-D wave must wire resolve_did_for_cid round-trip");
+    // Substantive surface lands at §4.26. Body deferred.
 }

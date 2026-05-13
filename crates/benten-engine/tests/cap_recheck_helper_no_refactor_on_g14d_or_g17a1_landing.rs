@@ -256,7 +256,7 @@ fn allow_all_and_deny_all_remain_pub_at_module_root() {
 /// Producer (engine-side helper) + consumer (eval-side runtime) name-
 /// alignment verified at runtime test time.
 #[test]
-#[ignore = "phase-3-backlog §7.3.D — cap-recheck-helper translation-layer closure-shape pin. G14-D wave-5a + G17-A1 wave-5b both shipped (PR #115 + #117); test body pins specific DeliveryCapRecheck ↔ CapRecheckFn name-alignment + decision-parity invariant; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
+#[ignore = "phase-3-backlog §7.3.D — cap-recheck-helper translation-layer closure-shape pin. G14-D wave-5a + G17-A1 wave-5b both shipped (PR #115 + #117); test body pins specific DeliveryCapRecheck ↔ CapRecheckFn name-alignment + decision-parity invariant; un-ignore at Phase-4-Foundation pre-tag sweep per docs/future/phase-4-backlog.md §4.29 (HARD RULE 12 clause-(b))."]
 fn cap_recheck_helper_consumed_with_change_event_to_principal_zone_cid_translation_shape_documented()
  {
     // G14-D implementer wires this:

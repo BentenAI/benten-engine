@@ -28,7 +28,7 @@
 mod common;
 
 #[test]
-#[ignore = "RED-PHASE: G24-B-FP wires user-initiated path verification; un-ignore at G24-B-FP landing. Pin source: r4-triage §1 r4-tc-1 + threat-model §T4 regression-guard."]
+#[ignore = "DESTINATION-REMAPPED at R6-FP-BF per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW. G24-B-FP closed the workflow editor surface; the synchronous write-boundary chain validator's positive arm is NOT YET WIRED. Named destination: docs/future/phase-4-backlog.md §4.23 (Phase-4-Meta user-DID root-chain write-boundary validator). Pin source: r4-triage §1 r4-tc-1 + threat-model §T4 regression-guard; substantive shape preserved in body."]
 fn admin_ui_v0_user_initiated_write_with_user_root_chain_succeeds() {
     // G24-B-FP wave wires this. Substantive shape:
     //

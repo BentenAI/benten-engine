@@ -899,6 +899,25 @@ impl SubgraphBuilder {
         self
     }
 
+    /// Append an explicit edge between two existing handles with a
+    /// caller-supplied edge label. Used by Phase 4-Foundation
+    /// `schema_compiler::emit` to wire the 6 vocabulary edges
+    /// (`FIELD` / `ITEM_TYPE` / `KEY_TYPE` / `VALUE_TYPE` / `REF_TARGET`
+    /// / `VARIANT`) per D-4F-NEW-TYPED-FIELD-NODE-VOCAB. Defaults
+    /// to `add_edge` (label = `"next"`) preserved for engine-internal
+    /// chain-formation; the labeled variant is consumed by the
+    /// materializer walk so collection / ref / variant edge types are
+    /// recoverable from the emitted Subgraph.
+    pub fn add_edge_labeled(
+        &mut self,
+        from: NodeHandle,
+        to: NodeHandle,
+        label: impl Into<String>,
+    ) -> &mut Self {
+        self.edges.push((from, to, label.into()));
+        self
+    }
+
     fn iterate_depth_of(&self, h: NodeHandle) -> usize {
         self.iterate_depth.get(h.0 as usize).copied().unwrap_or(0)
     }

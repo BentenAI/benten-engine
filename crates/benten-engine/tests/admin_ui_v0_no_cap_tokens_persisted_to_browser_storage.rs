@@ -21,74 +21,99 @@
 
 mod common;
 
+/// Un-ignored at Phase-4-Foundation R6-FP-BF (closes R6 R1
+/// test-coverage-auditor tc-1 cluster). Grep-asserts the
+/// `packages/admin-ui-v0/src/` TS tree contains zero browser-storage
+/// writes whose first argument (the key) starts with a cap-token-shaped
+/// prefix. PRODUCTION SUBSTANCE: walks the same TS source the admin UI
+/// shape (b) browser-wasm32 bundle compiles from; any future regression
+/// that adds e.g. `localStorage.setItem("cap_xxx", ...)` fails this pin.
 #[test]
-#[ignore = "phase-4-foundation R3 RED-PHASE — G24-F wave-7 wires this. Pin source: r2-test-landscape.md §2.11 row 3 + T2 defense 2. Grep-assert: no cap-token-related write to any browser-storage surface in admin UI source."]
 fn admin_ui_v0_no_cap_tokens_persisted_to_browser_storage() {
-    // G24-F wave wires this. Substantive shape:
-    //
-    //   let admin_ui_ts_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //       .join("..")
-    //       .join("..")
-    //       .join("packages")
-    //       .join("admin-ui-v0")
-    //       .join("src");
-    //
-    //   // Cap-token-related identifier prefixes that MUST NOT appear
-    //   // as keys of any browser-storage write per T2 defense 2:
-    //   let forbidden_key_prefixes = [
-    //       "cap_", "ucan_", "secret_", "key_", "private_key", "grant_",
-    //   ];
-    //
-    //   // Browser-storage write surfaces:
-    //   let storage_write_patterns = [
-    //       "localStorage.setItem(",
-    //       "sessionStorage.setItem(",
-    //       "document.cookie",
-    //       "indexedDB",
-    //   ];
-    //
-    //   for entry in walkdir::WalkDir::new(&admin_ui_ts_root) {
-    //       let entry = entry.unwrap();
-    //       if !entry.file_type().is_file() { continue; }
-    //       let src = std::fs::read_to_string(entry.path()).unwrap();
-    //
-    //       // For each storage write surface, find call sites + inspect
-    //       // their first argument (the key) for forbidden prefix:
-    //       for storage_pat in &storage_write_patterns {
-    //           let mut idx = 0_usize;
-    //           while let Some(pos) = src[idx..].find(storage_pat) {
-    //               let abs = idx + pos;
-    //               // Extract the first arg (between `(` and `,`):
-    //               let arg_start = abs + storage_pat.len();
-    //               let arg_window = &src[arg_start..(arg_start + 60).min(src.len())];
-    //               let first_arg = arg_window
-    //                   .split(',')
-    //                   .next()
-    //                   .unwrap_or("")
-    //                   .trim()
-    //                   .trim_matches('\'')
-    //                   .trim_matches('"');
-    //
-    //               for prefix in &forbidden_key_prefixes {
-    //                   assert!(
-    //                       !first_arg.starts_with(prefix),
-    //                       "Admin UI MUST NOT persist cap-token-shaped \
-    //                        key `{}` to browser storage per T2 defense 2; \
-    //                        found in {} at {}",
-    //                       first_arg, entry.path().display(), abs,
-    //                   );
-    //               }
-    //
-    //               idx = abs + storage_pat.len();
-    //           }
-    //       }
-    //   }
-    //
-    // OBSERVABLE consequence: cap tokens stay at the full peer. Even
-    // a successful XSS gets only an opaque, origin-bound, time-bound
-    // session token — no cap-bytes to exfiltrate.
-    unimplemented!(
-        "G24-F wires admin UI no-cap-tokens-in-browser-storage grep-assert \
-         per T2 defense 2"
+    let admin_ui_ts_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("packages")
+        .join("admin-ui-v0")
+        .join("src");
+    assert!(
+        admin_ui_ts_root.is_dir(),
+        "admin UI v0 TS source tree must exist at {} for this pin to be \
+         meaningful; if the TS package was moved, retarget the path",
+        admin_ui_ts_root.display()
+    );
+
+    let forbidden_key_prefixes = ["cap_", "ucan_", "secret_", "key_", "private_key", "grant_"];
+    let storage_write_patterns = [
+        "localStorage.setItem(",
+        "sessionStorage.setItem(",
+        "document.cookie",
+        "indexedDB.open(",
+    ];
+
+    // Walk the TS source tree.
+    fn walk(dir: &std::path::Path, storage_patterns: &[&str], forbidden: &[&str]) -> Vec<String> {
+        let mut violations = Vec::new();
+        let entries = match std::fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return violations,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                violations.extend(walk(&path, storage_patterns, forbidden));
+                continue;
+            }
+            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+            if !matches!(ext, "ts" | "tsx" | "js" | "mjs" | "cjs") {
+                continue;
+            }
+            let src = match std::fs::read_to_string(&path) {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            for storage_pat in storage_patterns {
+                let mut idx = 0_usize;
+                while let Some(pos) = src[idx..].find(storage_pat) {
+                    let abs = idx + pos;
+                    let arg_start = abs + storage_pat.len();
+                    let arg_end = (arg_start + 60).min(src.len());
+                    let arg_window = &src[arg_start..arg_end];
+                    let first_arg = arg_window
+                        .split(',')
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .trim_matches('\'')
+                        .trim_matches('"');
+                    for prefix in forbidden {
+                        if first_arg.starts_with(prefix) {
+                            violations.push(format!(
+                                "{}:{}: `{}` starts with forbidden cap-token \
+                                 prefix `{}`",
+                                path.display(),
+                                abs,
+                                first_arg,
+                                prefix
+                            ));
+                        }
+                    }
+                    idx = abs + storage_pat.len();
+                }
+            }
+        }
+        violations
+    }
+
+    let violations = walk(
+        &admin_ui_ts_root,
+        &storage_write_patterns,
+        &forbidden_key_prefixes,
+    );
+    assert!(
+        violations.is_empty(),
+        "Admin UI v0 MUST NOT persist cap-token-shaped keys to any \
+         browser-storage surface per T2 defense 2; found violations: {:?}",
+        violations
     );
 }

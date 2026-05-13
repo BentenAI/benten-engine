@@ -622,6 +622,52 @@ where
 }
 
 // =====================================================================
+// Schema-author trust-list enforcement (R6 R1 sdr-r6-r1-2 closure)
+// =====================================================================
+
+/// Enforce a manifest's `requires_schema_authors` trust-list against a
+/// schema's peer-DID author.
+///
+/// Per Ben Q3 ratification (Phase-4-Foundation R1 triage): default
+/// EMPTY trust-list (None or empty Vec) returns Ok — the user has not
+/// constrained authorship. When the manifest's `requires_schema_authors`
+/// is `Some(list)` AND non-empty AND `schema_author_did` is NOT in the
+/// list, returns `E_PLUGIN_AUTHOR_NOT_TRUSTED` (re-uses the existing
+/// plugin-author trust-list ErrorCode — schema authorship is the same
+/// trust class).
+///
+/// **Where this should be called:** at schema-compile entry or at
+/// admin UI v0 install-time (when the install path knows the schema's
+/// author DID from manifest signature provenance). The v1 admin UI
+/// (Phase-4-Foundation) ships with default-trust-empty so this helper
+/// is a no-op on all v1 install paths; the user-prompt UX surface that
+/// surfaces `ProvenanceOutcome::UserPromptRequired` for untrusted
+/// authors is named in `docs/future/phase-4-backlog.md` §4.19
+/// (Phase-4-Meta carry).
+///
+/// # Errors
+///
+/// `E_PLUGIN_AUTHOR_NOT_TRUSTED` when `schema_author_did` is outside
+/// a non-empty `requires_schema_authors`.
+pub fn validate_schema_author_within_manifest_envelope(
+    schema_author_did: &Did,
+    manifest: &PluginManifest,
+) -> Result<(), ErrorCode> {
+    match &manifest.requires_schema_authors {
+        // None OR empty Vec — default EMPTY (Ben Q3 default-empty).
+        None => Ok(()),
+        Some(list) if list.is_empty() => Ok(()),
+        Some(list) => {
+            if list.contains(schema_author_did) {
+                Ok(())
+            } else {
+                Err(ErrorCode::PluginAuthorNotTrusted)
+            }
+        }
+    }
+}
+
+// =====================================================================
 // Signing helper
 // =====================================================================
 

@@ -85,10 +85,10 @@ fn schema_compiler_typed_field_vocab_composes_over_12_primitives_no_extension() 
     // Per-fixture compositional coverage. The G23-A canary supplies
     // canonical / minimal / benign fixtures exercising
     // SchemaRoot+FieldScalar+FieldList+FieldRef. FieldObject /
-    // FieldMap / FieldEnum / FieldUnion per-label coverage lands at
-    // G23-A wave-4b (per-label fixtures); at canary we exercise the
-    // 4 labels the existing fixtures touch and assert no non-canonical
-    // primitive emerges.
+    // FieldMap / FieldEnum / FieldUnion per-label coverage lands per
+    // `docs/future/phase-4-backlog.md` §4.6 (per-label fixtures); at
+    // canary we exercise the 4 labels the existing fixtures touch and
+    // assert no non-canonical primitive emerges.
     let fixtures: Vec<(&str, &[u8])> = vec![
         (
             "SchemaRoot/FieldScalar",

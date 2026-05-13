@@ -3,19 +3,12 @@
 //! Plugin Y attempts to issue itself a UCAN cap for plugin X's
 //! `admin-ui-private` namespace. Cap-policy backend MUST refuse —
 //! private-namespace scope is structurally `shares: none`.
-//!
-//! Surface: `crates/benten-caps/src/private_namespace_policy.rs` (NEW).
 
 #[test]
-#[ignore = "RED-PHASE: G24-D wave wires private_namespace_policy::reject_cross_plugin; un-ignore at G24-D landing"]
+#[ignore = "DESTINATION-REMAPPED at R6-FP-BF per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW. The substantive cross-plugin private-namespace delegation refusal landed at `crates/benten-platform-foundation/src/manifest_envelope_chain_validation.rs::private_namespace_cap_across_plugins_rejected` (R4b-FP-2 closure under §5.5). The standalone `private_namespace_policy::reject_cross_plugin` symbol was never minted — cluster lives at manifest_envelope_chain_validation. Named destination: docs/future/phase-4-backlog.md §4.28 (Phase-4-Meta private-namespace cross-plugin delegation policy substantive arm)."]
 fn private_namespace_cap_rejects_cross_plugin_delegation_at_policy_layer() {
-    // Future surface:
-    //   private_namespace_policy::check_delegation(from_plugin, to_
-    //     plugin, cap_scope) -> Result
-    // returns ErrorCode::PluginPrivateNamespaceDelegationForbidden
-    // when cap_scope matches `private:*` AND from_plugin != to_plugin.
-    //
-    // FAILS-IF-NO-OP because no-op admits any cap that the source
-    // plugin's UCAN chain signature-verifies for.
-    panic!("RED-PHASE: G24-D wave must wire private_namespace_policy");
+    // Substantive test exists at
+    // `crates/benten-platform-foundation/tests/manifest_envelope_chain_validation.rs::
+    //  private_namespace_cap_across_plugins_rejected`. This pin defers
+    // to that surface; un-ignore + retarget at §4.28 close.
 }

@@ -41,7 +41,7 @@
 mod common;
 
 #[test]
-#[ignore = "RED-PHASE: G24-D-FP-1 wires uninstall_plugin cascade end-to-end; un-ignore at G24-D-FP-1 landing. Pin source: r4-triage §2 r4-tc-5 + threat-model §T10 LOAD-BEARING end-to-end."]
+#[ignore = "DESTINATION-REMAPPED at R6-FP-BF per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW. uninstall_plugin cascade shipped at plugin_lifecycle.rs:191 (R4b-FP-1); the engine-side session-subscription cascade integration (uninstall fires CancelOnRevoke for active session subscriptions tied to the plugin DID) is NOT YET WIRED — depends on §4.22 thin-client bridge surface. Named destination: docs/future/phase-4-backlog.md §4.22 (Phase-4-Meta thin-client bridge — session-subscription cascade integration). Pin source: r4-triage §2 r4-tc-5 + threat-model §T10 LOAD-BEARING; substantive shape preserved in body."]
 fn admin_ui_v0_uninstall_revokes_active_session_subscriptions_end_to_end() {
     // G24-D-FP-1 wave wires this. Substantive shape:
     //

@@ -19,7 +19,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "phase-3-backlog §7.3.D — Atriums compose via existing primitives, no new PrimitiveKind variants. G20-B wave-8b shipped (PR #143); structural invariant verifiable at HEAD (benten-core PrimitiveKind enum + benten-eval PrimitiveOp variants unchanged). Test body pins structural invariant; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
+#[ignore = "phase-3-backlog §7.3.D — Atriums compose via existing primitives, no new PrimitiveKind variants. G20-B wave-8b shipped (PR #143); structural invariant verifiable at HEAD (benten-core PrimitiveKind enum + benten-eval PrimitiveOp variants unchanged). Test body pins structural invariant; un-ignore at Phase-4-Foundation pre-tag sweep per docs/future/phase-4-backlog.md §4.29 (HARD RULE 12 clause-(b))."]
 fn atriums_compose_via_existing_primitives_no_new_primitive_kind_variants() {
     // CLAUDE.md baked-in #1 architectural pin. G20-B implementer wires this:
     //
@@ -50,7 +50,7 @@ fn atriums_compose_via_existing_primitives_no_new_primitive_kind_variants() {
 }
 
 #[test]
-#[ignore = "phase-3-backlog §7.3.D — Atrium example handlers compose from 12 primitives only. G20-B wave-8b shipped; test body pins handler-composition structural invariant; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
+#[ignore = "phase-3-backlog §7.3.D — Atrium example handlers compose from 12 primitives only. G20-B wave-8b shipped; test body pins handler-composition structural invariant; un-ignore at Phase-4-Foundation pre-tag sweep per docs/future/phase-4-backlog.md §4.29 (HARD RULE 12 clause-(b))."]
 fn atrium_examples_handlers_compose_entirely_from_existing_12_primitives_no_engine_call_outside_subgraph()
  {
     // cag-4 architectural pin. G20-B implementer wires this:
@@ -111,22 +111,42 @@ fn atrium_examples_handlers_compose_entirely_from_existing_12_primitives_no_engi
     );
 }
 
+/// cag-3 architectural pin. Un-ignored at R6-FP-BF (closes
+/// 3plus-r6-r1-1 + R6 R1 test-coverage-auditor tc-3 stale §7.3.D
+/// citation). OBSERVABLE consequence: Phase 3 + Phase 4-Foundation
+/// close without inventing new structural invariants — schemas +
+/// materializers compose from existing ones.
 #[test]
-#[ignore = "phase-3-backlog §7.3.D — exit-criterion 13: no new structural invariants. G20-B wave-8b shipped; test body pins exit-criterion 13 structural invariant; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
 fn exit_criterion_13_no_new_structural_invariants_companion_to_no_new_primitive_kind() {
-    // cag-3 architectural pin. G20-B implementer wires this:
-    //
-    //   let inv_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //       .join("..").join("..").join("docs").join("INVARIANT-COVERAGE.md");
-    //   let inv_doc = std::fs::read_to_string(&inv_path).unwrap();
-    //
-    //   // Count invariant-table rows. Phase-1 baseline: 14 invariants.
-    //   let count = count_invariant_rows(&inv_doc);
-    //   assert_eq!(count, 14,
-    //       "INVARIANT-COVERAGE.md must list exactly 14 invariants at \
-    //        Phase-3 close per exit-criterion 13 (got {})", count);
-    //
-    // OBSERVABLE consequence: Phase 3 closes without inventing new
-    // structural invariants — Atriums compose from existing ones.
-    unimplemented!("G20-B wires INVARIANT-COVERAGE.md 14-invariant pin");
+    let inv_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("docs")
+        .join("INVARIANT-COVERAGE.md");
+    let inv_doc = std::fs::read_to_string(&inv_path).unwrap_or_else(|e| {
+        panic!(
+            "INVARIANT-COVERAGE.md must exist at {} (got: {})",
+            inv_path.display(),
+            e
+        )
+    });
+
+    // Count invariant-table rows. The coverage table uses pipe-form
+    // rows of shape `| <N> | <Invariant> | <Phase> | <Enforcer> | <Tests> |`.
+    let count = inv_doc
+        .lines()
+        .filter(|l| {
+            let t = l.trim_start();
+            t.starts_with("| ") && {
+                let after = &t[2..];
+                after.chars().next().is_some_and(|c| c.is_ascii_digit())
+            }
+        })
+        .count();
+    assert_eq!(
+        count, 14,
+        "INVARIANT-COVERAGE.md must list exactly 14 invariants per \
+         CLAUDE.md baked-in commitment + Phase-3 exit-criterion 13 \
+         (got {count})"
+    );
 }
