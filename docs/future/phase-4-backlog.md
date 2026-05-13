@@ -497,6 +497,16 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 methodology-critic meth-r6-r1-3 +
 
 Estimated scope: ~10-30 LOC dispatch-conventions + JSON patch for `pim-n-meta-sweep.json` (orchestrator-direct).
 
+### §4.32 `validate_schema_author_within_manifest_envelope` runtime production-wiring (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-FP-BF mini-review r6fp-bf-mr-1). R6-FP-BF landed the `validate_schema_author_within_manifest_envelope` helper at `crates/benten-platform-foundation/src/plugin_manifest.rs` along with a 4-case test pin that exercises the helper in isolation. The helper has **zero production callers** at HEAD; the call-site wiring (`schema_compile`-time consultation OR `install_plugin`-time consultation of `manifest.requires_schema_authors` against the schema's signing peer-DID) deferred to Phase-4-Meta.
+
+**Couples to §4.19** (`accept_atrium_share` cross-peer install seam) — cross-peer schema introduction is the natural integration point for runtime author trust enforcement; v1 admin UI v0 ships with default-empty trust-list per Ben Q3 ratification (sdr-r6-r1-2 partial closure: helper-shipped, wiring-deferred).
+
+**Acceptance:** add 2-3 production call sites (likely at `install_plugin` Step 4 consent gate + `schema_compile` boundary if the manifest scope guards a schema graph); add end-to-end test exercising real install flow + verifying rejection on untrusted-author schema; remove the helper's "Phase-4-Meta carry" caveat from rustdoc once wired.
+
+Estimated scope: ~50-100 LOC + 2 integration test pins.
+
 ---
 
 ## §5. Phase 4-Foundation Track A (implementation work surfaced post-R1)
