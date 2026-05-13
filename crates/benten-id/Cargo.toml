@@ -20,6 +20,13 @@ bench = false
 # (rejects the forbidden set). The allowed set below covers crypto-blocker-1 /
 # crypto-major-2 / crypto-major-4 / crypto-major-5 / crypto-minor-3.
 [dependencies]
+# G27-C wave (Phase 4-Foundation §4.3): `benten-core::Cid` is the typed
+# handle the new `grant_reader::GrantReader::has_unrevoked_grant_for_grant_cid`
+# trait method takes. `benten-core` is the foundational data-shape crate +
+# is NOT in the arch-r1-10 forbidden set (benten-graph / benten-engine /
+# benten-eval / benten-caps / benten-ivm / benten-sync / benten-dsl-compiler).
+# Mirrors the precedent at `crates/benten-caps/Cargo.toml` line 21.
+benten-core = { path = "../benten-core" }
 # Ed25519 signing + verifying (plan §3 G14-A1 row).
 ed25519-dalek = { workspace = true }
 # Secret-bytes hygiene (crypto-blocker-1 BLOCKER): `Zeroize` +

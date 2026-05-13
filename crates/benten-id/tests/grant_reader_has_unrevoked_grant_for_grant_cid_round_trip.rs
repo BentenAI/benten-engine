@@ -50,12 +50,12 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-// RED-PHASE: at HEAD `benten_id::grant_reader` doesn't exist; the
-// `use` line below intentionally fails to compile until G27-C lands
-// the module. The implementer un-ignores this test + drops the
-// `#[cfg]` gate at G27-C wave-time.
+// GREEN-PHASE (G27-C un-ignored 2026-05-11): `benten_id::grant_reader`
+// landed at this wave; the cfg(any()) gate dropped + the inner test
+// invoked by the outer `#[test]`. The pin asserts the round-trip
+// shape (pre-revoke true → post-revoke false) on the canonical
+// CID-keyed surface.
 
-#[cfg(any())]
 mod red_phase_compile_witness {
     use benten_core::Cid;
     use benten_id::grant_reader::GrantReader;
@@ -99,14 +99,13 @@ mod red_phase_compile_witness {
         node.cid().unwrap()
     }
 
-    #[test]
-    fn round_trip() {
+    pub fn round_trip() {
         let grant_cid = synthetic_cid(b"grant-1");
         let mut reader = InMemoryReader {
             grants: HashSet::new(),
             revocations: HashSet::new(),
         };
-        reader.grants.insert(grant_cid.clone());
+        reader.grants.insert(grant_cid);
 
         assert!(
             reader
@@ -114,7 +113,7 @@ mod red_phase_compile_witness {
                 .expect("reader ok")
         );
 
-        reader.revocations.insert(grant_cid.clone());
+        reader.revocations.insert(grant_cid);
         assert!(
             !reader
                 .has_unrevoked_grant_for_grant_cid(&grant_cid)
@@ -123,14 +122,11 @@ mod red_phase_compile_witness {
     }
 }
 
-/// RED-PHASE outer test — fires loudly when un-ignored before the
-/// `grant_reader` module exists in `benten-id`.
+/// GREEN-PHASE (G27-C un-ignored 2026-05-11): invokes the inner
+/// `round_trip()` test that exercises the CID-keyed companion's
+/// pre-revoke / post-revoke shape on the canonical in-memory
+/// implementation.
 #[test]
-#[ignore = "RED-PHASE: G27-C — un-ignore at G27-C wave-time AFTER `benten_id::grant_reader::GrantReader::has_unrevoked_grant_for_grant_cid` lands; drop the cfg(any()) gate on the inner module"]
 fn benten_id_grant_reader_has_unrevoked_grant_for_grant_cid_round_trip() {
-    panic!(
-        "RED-PHASE: G27-C — `benten_id::grant_reader::GrantReader` module + \
-         `has_unrevoked_grant_for_grant_cid(&Cid)` companion must land first; \
-         then drop the cfg(any()) gate above + invoke `red_phase_compile_witness::round_trip()`."
-    );
+    red_phase_compile_witness::round_trip();
 }
