@@ -1252,6 +1252,10 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 
 ### E_PLUGIN_CONTENT_PEER_KEY_ROTATED
 
+> **⚠️ Reserved at Phase 4-Foundation G24-D; production firing path wires at G24-D-FP-2 / Phase 4-Meta RotationLog integration.** The variant + atomic Rust+TS mirror lands at G24-D wave per §3.5g; the install-pipeline branch that consults `benten-id::did_rotation::RotationLog` and surfaces this warning lives in the unscaled-future of admin-UI-v0 + plugin manifest hardening.
+
+<!-- reachability: ignore -->
+
 - **Message:** "plugin content peer-DID key rotated (matched by RotationLog)"
 - **Fix:** Surfaces as WARNING at install (not hard-reject by default per D-4F-12). Admin UI displays the rotation chain; user may proceed or decline.
 - **Thrown at:** install pipeline at `crates/benten-platform-foundation/src/module_ecosystem.rs` + `benten-id::did_rotation::RotationLog` consultation.
@@ -1265,6 +1269,10 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 - **Phase:** 4-Foundation G24-D
 
 ### E_PLUGIN_INSTALL_CONSENT_REQUIRED
+
+> **⚠️ Reserved at Phase 4-Foundation G24-D; production firing path wires at admin-UI-v0 install flow (couples to G24-A consent surface).** The variant lands at G24-D wave per §3.5g; the install-pipeline gate that requires a verified InstallRecord before library insertion is the admin-UI-v0 install flow's Layer-1 gate per CLAUDE.md #18.
+
+<!-- reachability: ignore -->
 
 - **Message:** "plugin install attempted without user consent (missing or unverified InstallRecord)"
 - **Fix:** User-DID must sign an `InstallRecord` referencing the manifest CID before the plugin enters the library. CLAUDE.md #18 Layer 1 user-as-root anchor.
@@ -1315,12 +1323,20 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 
 ### E_PLUGIN_DEVICE_ATTESTATION_FORGED
 
+> **⚠️ Reserved at Phase 4-Foundation G24-D; production firing path wires at `benten-sync` plugin-share boundary.** The variant lands at G24-D wave per §3.5g + Ben's R4-triage §7 renaming (kept `E_PLUGIN_*` family prefix). The sync-layer call site consults `benten-id::device_attestation::Acceptor` during cross-peer plugin share; integration lands at the admin-UI-v0 sync-share flow.
+
+<!-- reachability: ignore -->
+
 - **Message:** "device-DID attestation envelope failed verification at the plugin-share boundary"
 - **Fix:** Renamed from earlier `E_DEVICE_ATTESTATION_FORGED_AT_PLUGIN_SHARE` per Ben's R4-triage §7 ratification (keeps `E_PLUGIN_*` family prefix). Plugin authors share from full peers with valid device-DIDs; this code surfaces forged device-attestation envelopes during cross-peer share, distinct from the existing Phase-3 sync-layer `E_DEVICE_ATTESTATION_FORGED`.
 - **Thrown at:** plugin-share path in `benten-sync` consulting `benten-id::device_attestation::Acceptor`.
 - **Phase:** 4-Foundation G24-D
 
 ### E_PLUGIN_LIBRARY_INDEX_TAMPER
+
+> **⚠️ Reserved at Phase 4-Foundation G24-D; production firing path wires at the redb-backed `ManifestStore` integrity check.** The variant lands at G24-D wave per §3.5g; the durable persistence layer (post-in-memory `PluginLibrary`) consults this variant when stored entries fail hash verification or active-references point to absent CIDs.
+
+<!-- reachability: ignore -->
 
 - **Message:** "plugin library index tampering detected"
 - **Fix:** Integrity check fired: hash mismatch on stored entries, or active-reference pointing to absent CID. Rebuild the library index from durable storage / re-sync from trusted peer.
