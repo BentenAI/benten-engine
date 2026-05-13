@@ -152,6 +152,10 @@ export const CATALOG_CODES = [
   "E_DEVICE_ATTESTATION_FORGED",
   "E_SYNC_HOP_DEPTH_EXCEEDED",
   "E_THIN_CLIENT_AUTH_REJECTED",
+  "E_THIN_CLIENT_HANDSHAKE_INVALID",
+  "E_THIN_CLIENT_CHALLENGE_REPLAY",
+  "E_THIN_CLIENT_ORIGIN_MISMATCH",
+  "E_THIN_CLIENT_SESSION_EXPIRED",
   "E_CAP_UCAN_AUDIENCE_MISMATCH",
   "E_ATRIUM_RELAY_UNREACHABLE",
   "E_ATRIUM_TRANSPORT_DEGRADED",
@@ -1957,6 +1961,66 @@ export class EThinClientAuthRejected extends BentenError {
 }
 
 /**
+ * E_THIN_CLIENT_HANDSHAKE_INVALID
+ *
+ * Thrown at: `crates/benten-engine/src/thin_client.rs::DidKeyedSession::establish_session` (Phase-4-Foundation G24-F wave). Construction sites for the three sub-causes: (a) challenge-nonce-unknown lookup miss; (b) `expires_at_unix_secs` staleness check; (c) `SignatureVerifier` callback returning `Err`.
+ * Message template: "thin-client handshake invalid: {reason}"
+ */
+export class EThinClientHandshakeInvalid extends BentenError {
+  static readonly code = "E_THIN_CLIENT_HANDSHAKE_INVALID";
+  static readonly fixHint = "A DID-keyed handshake at the `DidKeyedSession::establish_session` boundary failed signature verification, named an unknown challenge nonce, or named a challenge whose TTL had elapsed (default `challenge_ttl_secs = 60`). Per `docs/admin-ui-v0-threat-model.md` §T2 defense 1 + br-r1-1: every thin-client (browser tab / Tauri-embedded webview per CLAUDE.md baked-in #17 shapes b + c) MUST establish a session by signing a fresh server-minted challenge with the claimed principal DID's private key; the full peer verifies the signature against the resolved `did:key` public key. Resolution: re-handshake from a fresh challenge with a private key that resolves through `did:key` to the public key claimed by `principal_did`. Distinct from `E_THIN_CLIENT_CHALLENGE_REPLAY` (same nonce re-used after consumption) and `E_THIN_CLIENT_AUTH_REJECTED` (G14-D device-attestation auth boundary — different layer). Routes to `ON_DENIED`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_THIN_CLIENT_HANDSHAKE_INVALID", "A DID-keyed handshake at the `DidKeyedSession::establish_session` boundary failed signature verification, named an unknown challenge nonce, or named a challenge whose TTL had elapsed (default `challenge_ttl_secs = 60`). Per `docs/admin-ui-v0-threat-model.md` §T2 defense 1 + br-r1-1: every thin-client (browser tab / Tauri-embedded webview per CLAUDE.md baked-in #17 shapes b + c) MUST establish a session by signing a fresh server-minted challenge with the claimed principal DID's private key; the full peer verifies the signature against the resolved `did:key` public key. Resolution: re-handshake from a fresh challenge with a private key that resolves through `did:key` to the public key claimed by `principal_did`. Distinct from `E_THIN_CLIENT_CHALLENGE_REPLAY` (same nonce re-used after consumption) and `E_THIN_CLIENT_AUTH_REJECTED` (G14-D device-attestation auth boundary — different layer). Routes to `ON_DENIED`.", message, context);
+    this.name = "EThinClientHandshakeInvalid";
+  }
+}
+
+/**
+ * E_THIN_CLIENT_CHALLENGE_REPLAY
+ *
+ * Thrown at: `crates/benten-engine/src/thin_client.rs::DidKeyedSession::establish_session` (Phase-4-Foundation G24-F wave). The `consumed_nonces` set is bounded by `SessionConfig::max_consumed_nonces` (default 4096); the substantive replay window is the challenge TTL, not the set size.
+ * Message template: "thin-client challenge already consumed (replay rejected)"
+ */
+export class EThinClientChallengeReplay extends BentenError {
+  static readonly code = "E_THIN_CLIENT_CHALLENGE_REPLAY";
+  static readonly fixHint = "A DID-keyed handshake presented a challenge nonce that was already consumed by an earlier successful handshake. The challenge nonce is single-use; even if the signature cryptographically verifies, a previously-consumed nonce rejects on the second presentation. Defends `docs/admin-ui-v0-threat-model.md` §T2 defense 1 captured-replay attack class — a hostile origin capturing the network exchange via a transparent proxy and replaying it later. Resolution: re-handshake from a fresh challenge via `DidKeyedSession::emit_challenge` (each call mints a new random 32-byte nonce). Distinct from `E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW` (Atrium sync handshake bounded-window HLC defense — different layer). Routes to `ON_DENIED`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_THIN_CLIENT_CHALLENGE_REPLAY", "A DID-keyed handshake presented a challenge nonce that was already consumed by an earlier successful handshake. The challenge nonce is single-use; even if the signature cryptographically verifies, a previously-consumed nonce rejects on the second presentation. Defends `docs/admin-ui-v0-threat-model.md` §T2 defense 1 captured-replay attack class — a hostile origin capturing the network exchange via a transparent proxy and replaying it later. Resolution: re-handshake from a fresh challenge via `DidKeyedSession::emit_challenge` (each call mints a new random 32-byte nonce). Distinct from `E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW` (Atrium sync handshake bounded-window HLC defense — different layer). Routes to `ON_DENIED`.", message, context);
+    this.name = "EThinClientChallengeReplay";
+  }
+}
+
+/**
+ * E_THIN_CLIENT_ORIGIN_MISMATCH
+ *
+ * Thrown at: `crates/benten-engine/src/thin_client.rs::DidKeyedSession::establish_session` (handshake-time defense) + `DidKeyedSession::resolve` (per-request defense; called by the thin-client bridge on every engine routed call). Per CLAUDE.md baked-in #17, shape (b) HTTP/fetch and shape (c) Tauri-embedded webview IPC share the SAME `DidKeyedSession` contract — only the wire transport is swapped (per `docs/ADMIN-UI.md` §4.3 br-r1-14).
+ * Message template: "thin-client origin mismatch: bound={bound} presented={presented}"
+ */
+export class EThinClientOriginMismatch extends BentenError {
+  static readonly code = "E_THIN_CLIENT_ORIGIN_MISMATCH";
+  static readonly fixHint = "A thin-client request presented a session token bound to a different origin than the request's actual origin. Per `docs/admin-ui-v0-threat-model.md` §T2 defense 3 + sec-4f-r1-5: every session token carries the origin it was minted against; per-request structural recheck (Family F1 gap #2 closure) enforces origin pinning on EVERY engine call through the thin-client bridge, not just at session establishment. Defends both: (a) cross-origin handshake — a hostile origin trying to mint a session pointing at a victim's principal; and (b) mid-session token leak — a token leaked via XSS / debugger / accidental copy-paste presented from a hostile origin after the session has been in legitimate use. Resolution: the request is routed from the wrong origin; re-establish a fresh session via DID-keyed handshake from the correct origin. The full peer does NOT auto-invalidate the original token on cross-origin attempt (avoids self-inflicted DoS where a hostile probe knocks legit sessions offline). Routes to `ON_DENIED`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_THIN_CLIENT_ORIGIN_MISMATCH", "A thin-client request presented a session token bound to a different origin than the request's actual origin. Per `docs/admin-ui-v0-threat-model.md` §T2 defense 3 + sec-4f-r1-5: every session token carries the origin it was minted against; per-request structural recheck (Family F1 gap #2 closure) enforces origin pinning on EVERY engine call through the thin-client bridge, not just at session establishment. Defends both: (a) cross-origin handshake — a hostile origin trying to mint a session pointing at a victim's principal; and (b) mid-session token leak — a token leaked via XSS / debugger / accidental copy-paste presented from a hostile origin after the session has been in legitimate use. Resolution: the request is routed from the wrong origin; re-establish a fresh session via DID-keyed handshake from the correct origin. The full peer does NOT auto-invalidate the original token on cross-origin attempt (avoids self-inflicted DoS where a hostile probe knocks legit sessions offline). Routes to `ON_DENIED`.", message, context);
+    this.name = "EThinClientOriginMismatch";
+  }
+}
+
+/**
+ * E_THIN_CLIENT_SESSION_EXPIRED
+ *
+ * Thrown at: `crates/benten-engine/src/thin_client.rs::DidKeyedSession::resolve` (Phase-4-Foundation G24-F wave). The token's `expires_at_unix_secs` is checked against the engine's `ClockFn` hook (production: `SystemTime::now`; tests: deterministic test clock).
+ * Message template: "thin-client session expired: expires_at={expires_at} now={now}"
+ */
+export class EThinClientSessionExpired extends BentenError {
+  static readonly code = "E_THIN_CLIENT_SESSION_EXPIRED";
+  static readonly fixHint = "A thin-client request presented a session token whose wallclock expiry has elapsed (default `SessionConfig::session_ttl_secs = 3600`, one hour). Per `docs/admin-ui-v0-threat-model.md` §T2 defense 2 time-bound clause: session tokens carry an explicit expiry; a leaked token from a log file weeks later is NOT usable. Also surfaces on fabricated / unknown token ids (the full peer maps token-id-unknown to the same code so audit pipelines route on a single \"token rejected\" boundary rather than multiplexing across families). Resolution: re-handshake via fresh challenge — `DidKeyedSession::emit_challenge` → sign → `establish_session`. Distinct from `E_THIN_CLIENT_HANDSHAKE_INVALID` (handshake-time challenge-expiry; different lifecycle phase). Routes to `ON_DENIED`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_THIN_CLIENT_SESSION_EXPIRED", "A thin-client request presented a session token whose wallclock expiry has elapsed (default `SessionConfig::session_ttl_secs = 3600`, one hour). Per `docs/admin-ui-v0-threat-model.md` §T2 defense 2 time-bound clause: session tokens carry an explicit expiry; a leaked token from a log file weeks later is NOT usable. Also surfaces on fabricated / unknown token ids (the full peer maps token-id-unknown to the same code so audit pipelines route on a single \"token rejected\" boundary rather than multiplexing across families). Resolution: re-handshake via fresh challenge — `DidKeyedSession::emit_challenge` → sign → `establish_session`. Distinct from `E_THIN_CLIENT_HANDSHAKE_INVALID` (handshake-time challenge-expiry; different lifecycle phase). Routes to `ON_DENIED`.", message, context);
+    this.name = "EThinClientSessionExpired";
+  }
+}
+
+/**
  * E_CAP_UCAN_AUDIENCE_MISMATCH
  *
  * Thrown at: `crates/benten-caps/src/backends/ucan.rs::UCANBackend::validate_chain_for_audience_at` (Phase-3 G14-B mini-review fix-pass; CLR-2 audience-binding pinned at the durable chain-walk seam). Constant-time DID-bytes comparison via `subtle::ConstantTimeEq` at the `benten_id::ucan::validate_chain_for_audience` upstream.
@@ -2309,6 +2373,10 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_DEVICE_ATTESTATION_FORGED": EDeviceAttestationForged,
   "E_SYNC_HOP_DEPTH_EXCEEDED": ESyncHopDepthExceeded,
   "E_THIN_CLIENT_AUTH_REJECTED": EThinClientAuthRejected,
+  "E_THIN_CLIENT_HANDSHAKE_INVALID": EThinClientHandshakeInvalid,
+  "E_THIN_CLIENT_CHALLENGE_REPLAY": EThinClientChallengeReplay,
+  "E_THIN_CLIENT_ORIGIN_MISMATCH": EThinClientOriginMismatch,
+  "E_THIN_CLIENT_SESSION_EXPIRED": EThinClientSessionExpired,
   "E_CAP_UCAN_AUDIENCE_MISMATCH": ECapUcanAudienceMismatch,
   "E_ATRIUM_RELAY_UNREACHABLE": EAtriumRelayUnreachable,
   "E_ATRIUM_TRANSPORT_DEGRADED": EAtriumTransportDegraded,
