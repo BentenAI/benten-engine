@@ -313,6 +313,21 @@ impl CapabilityPolicy for GrantBackedPolicy {
         // leaves `ctx.scope` empty per `WriteContext::default()`); see
         // `tests/grant_backed_policy_existing_store_label_write_paths_unchanged.rs`
         // for the backward-compat regression guard.
+        //
+        // G27-B mini-review MINOR (per `.addl/phase-4-foundation/r5-g27-b-mini-review.json`
+        // finding `r5g27b-mr-2`): the override path SHORT-CIRCUITS per-op
+        // derivation entirely, including the `system:*` skip + read-before-
+        // delete idempotent-miss semantics. Currently the SOLE call site that
+        // sets `ctx.scope` with potentially-populated `pending_ops` is
+        // `Engine::wait_resume_action` at `engine_wait.rs::884` (path:
+        // `wait:resume` scope; `pending_ops` empty in practice). Future call
+        // sites that combine an explicit `ctx.scope` with a mixed `pending_ops`
+        // batch (e.g., regular op + `system:*` op) MUST audit whether the
+        // higher-grain override is the intended semantic — the policy no
+        // longer enforces caps per-op when both are set. See
+        // `tests/grant_backed_policy_scope_overrides_pending_op_label_derivation.rs`
+        // for the substantive arm of the override-with-non-empty-pending_ops
+        // path.
         let scopes: Vec<String> = if !ctx.scope.is_empty() {
             vec![ctx.scope.clone()]
         } else if ctx.pending_ops.is_empty() {
